@@ -4,10 +4,13 @@ use super::*;
 use vectorcraft_geom::Point;
 use vectorcraft_tools::{PointerEvent, PointerKind, ToolKey};
 
+mod actionset;
 pub(super) mod adjust;
+mod ai_open_path;
 mod appearance;
 mod areafit;
 mod assets;
+mod assets_3d;
 mod attributes;
 mod bboxrotate;
 mod blendfidelity;
@@ -30,6 +33,7 @@ mod colorize;
 pub(super) mod colormgmt;
 mod colorthemes;
 mod colourfonts;
+mod compare;
 mod compound_shape;
 mod compoundpaint;
 mod constrain_new;
@@ -40,6 +44,7 @@ mod cut;
 mod dashalign;
 mod distort;
 mod docsetup;
+mod document_move;
 mod draw2;
 mod dynamic_symbols;
 mod editcolors;
@@ -49,6 +54,7 @@ mod envelope;
 mod envelope_distort;
 mod envelope_edit;
 pub(super) mod expand;
+mod expand_symbols;
 mod eyedropper;
 mod file;
 mod fileinfo;
@@ -65,7 +71,9 @@ mod gradient;
 mod gradpanel;
 mod gradpresets;
 mod gradspan;
+mod guide_clipboard;
 mod halftone;
+mod history_document;
 mod history_mem;
 mod ids_without_selection;
 mod inline;
@@ -105,6 +113,7 @@ mod paintproxy;
 mod panelcmds;
 mod paragraphs;
 mod params;
+mod path_menu_enabled;
 mod pathops;
 mod pathtype;
 mod pattern;
@@ -116,6 +125,7 @@ mod persp_planes;
 pub(super) mod persp_select;
 mod persp_text;
 mod perspgrid;
+mod pixelalign;
 mod place;
 mod placed_document;
 mod plugins;
@@ -135,12 +145,14 @@ mod recolor;
 mod recovery;
 mod reflecthit;
 mod registration;
+mod repeat_edit;
 mod save;
 mod saveoptions;
 mod scalestrokes;
 mod scripts;
 mod select_ids_first;
 mod shaper;
+mod shapetools;
 mod shortcutset;
 mod simplify_part;
 mod slices;
@@ -154,9 +166,11 @@ mod strokeux;
 mod stylelib;
 mod stylepanel;
 mod styles;
+mod svgfilter;
 mod swatchcmds;
 mod swatches;
 mod swatchlib;
+mod symbol_nine_slice;
 mod symbolbounds;
 mod symboledit;
 mod symbollib;
@@ -3605,6 +3619,95 @@ fn given_targets_are_used_as_given_and_range_style_takes_the_selected_type() {
     s.execute("select.all", &json!({})).unwrap();
     assert!(s.execute("text.setRangeStyle", &json!({"start": 0, "end": 3, "size": 40})).is_err(), "two type objects: which one?");
     assert!(s.execute("text.setRangeStyle", &json!({"id": "two", "size": 40})).is_err());
+}
+
+/// #785: commands whose `ids` or `id` the shared check doesn't read (it reads `id` where it stands
+/// for `ids` of one) refuse one that isn't an object id. They don't act on the selection, the
+/// current layer or a new object instead, and the document, the selection and the undo history
+/// stay as they are.
+#[test]
+fn malformed_ids_are_refused_by_commands_that_default_to_the_selection() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 80.0, 60.0);
+    let b = rect(&mut s, 140.0, 120.0, 80.0, 60.0);
+    let graph = s.execute("graph.create", &json!({"type": "column", "x": 400, "y": 300, "width": 120, "height": 80, "rows": [[1, 2]]})).unwrap();
+    let text = s.execute("text.create", &json!({"x": 10, "y": 60, "text": "type", "size": 30})).unwrap()["id"].clone();
+    let ids = [json!([a.0, "x"]), json!(3)];
+    let id = [json!("2"), json!("$1.id"), json!(2.5), json!("abc"), json!(true), json!({})];
+    let commands = [
+        ("object.blend.make", json!({}), "ids", &ids[..], json!([a.0, b.0])),
+        ("object.envelope.makeWithWarp", json!({}), "ids", &ids[..], json!([a.0, b.0])),
+        ("graph.setData", json!({"rows": [[3, 4]]}), "id", &id[..], json!([graph["id"]])),
+        ("imageTrace.make", json!({}), "id", &id[..], json!([a.0])),
+        ("perspective.plane.matchObject", json!({}), "id", &id[..], json!([a.0])),
+        ("perspective.editText", json!({}), "id", &id[..], json!([a.0])),
+        ("layer.clippingMask.toggle", json!({}), "id", &id[..], json!([a.0, b.0])),
+        ("layer.newSublayer", json!({}), "parent", &id[..], json!([a.0])),
+        ("object.isolate", json!({}), "id", &id[..], json!([a.0])),
+        ("graphicStyle.new", json!({"name": "From a"}), "id", &id[..], json!([a.0])),
+        ("charStyle.new", json!({"name": "From type"}), "id", &id[..], json!([text])),
+        ("paraStyle.new", json!({"name": "From type"}), "id", &id[..], json!([text])),
+        ("charStyle.apply", json!({"name": "[Normal Character Style]"}), "id", &id[..], json!([text])),
+        ("type.step", json!({"attribute": "size"}), "id", &id[..], json!([text])),
+        ("layer.releaseToLayers", json!({"build": true}), "id", &id[..], json!([a.0])),
+        ("layer.locate", json!({}), "id", &id[..], json!([a.0])),
+        ("transparency.editOpacityMask", json!({}), "id", &id[..], json!([a.0])),
+        ("transparency.viewOpacityMask", json!({}), "id", &id[..], json!([a.0])),
+        ("links.info", json!({}), "id", &id[..], json!([a.0])),
+        ("links.unembed", json!({}), "id", &id[..], json!([a.0])),
+        ("links.goTo", json!({}), "id", &id[..], json!([a.0])),
+        ("shaper.release", json!({}), "id", &id[..], json!([a.0])),
+        ("shaper.expand", json!({}), "id", &id[..], json!([a.0])),
+        ("image.info", json!({}), "id", &id[..], json!([a.0])),
+        ("symbol.edit", json!({}), "id", &id[..], json!([a.0])),
+        ("object.blend.spine.addAnchor", json!({"x": 120, "y": 110}), "id", &id[..], json!([a.0])),
+        ("path.curvature", json!({"points": [[0, 0], [50, 40], [100, 0]]}), "id", &id[..], json!([a.0])),
+        ("css.export", json!({"unnamed": true}), "id", &id[..], json!([a.0])),
+    ];
+    let mut wrong = vec![];
+    for (cmd, params, key, values, selected) in commands {
+        s.execute("select.set", &json!({"ids": selected})).unwrap();
+        for bad in values {
+            let mut p = params.clone();
+            if let Some(p) = p.as_object_mut() {
+                p.insert(key.into(), bad.clone());
+            }
+            let (doc, selection, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().selection.clone(), s.doc().unwrap().history.undo.len());
+            let r = s.execute(cmd, &p);
+            let named = |e: &str| e.contains("object id") || e.contains("step reference") || e.contains(&format!("`{key}` must be"));
+            let refused = r.as_ref().err().map(|e| e.to_string()).is_some_and(|e| named(&e));
+            let same = s.doc().unwrap().doc == doc && s.doc().unwrap().selection == selection && s.doc().unwrap().history.undo.len() == undo;
+            if !(refused && same) {
+                wrong.push(format!("{cmd} {p}: {r:?}, document unchanged: {same}"));
+            }
+            if !same {
+                let st = s.doc_mut().unwrap();
+                (st.doc, st.selection) = (doc, selection);
+                st.history.undo.truncate(undo);
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// An omitted or null `id` still means the selection, and an object id names that object.
+/// `effect.apply` with the effect given as `id` (its older key) still applies it to the selection,
+/// as one undo step.
+#[test]
+fn an_omitted_id_still_means_the_selection_and_effect_apply_takes_an_effect_as_id() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 80.0, 60.0);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    for p in [json!({}), json!({"id": null}), json!({"id": a.0})] {
+        assert_eq!(s.execute("layer.locate", &p).unwrap()["id"], a.0, "{p}");
+    }
+    for p in [json!({"unnamed": true}), json!({"id": null, "unnamed": true}), json!({"id": a.0, "unnamed": true})] {
+        assert_eq!(s.execute("css.export", &p).unwrap()["rules"], 1, "{p}");
+    }
+    let undo = s.doc().unwrap().history.undo.len();
+    let r = s.execute("effect.apply", &json!({"id": "stylize.dropShadow"})).unwrap();
+    assert_eq!(r["ids"], json!([a.0]));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
 }
 
 #[test]

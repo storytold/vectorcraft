@@ -101,6 +101,33 @@ impl<K: Hash + Eq + Clone, V, S: BuildHasher + Default> FrameCache<K, V, S> {
         Some(&s.value)
     }
 
+    /// Read an entry only when it matches `accept`; rejected entries keep their previous age so
+    /// another document's object with the same id cannot prevent their eviction.
+    pub(crate) fn get_if<Q>(&mut self, k: &Q, stamp: u64, accept: impl FnOnce(&V) -> bool) -> Option<&V>
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
+        let s = self.map.get_mut(k)?;
+        if !accept(&s.value) {
+            return None;
+        }
+        self.clock += 1;
+        (s.stamp, s.used) = (stamp, self.clock);
+        Some(&s.value)
+    }
+
+    /// Drop the entry for `k`.
+    pub(crate) fn remove<Q>(&mut self, k: &Q)
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
+        if let Some(s) = self.map.remove(k) {
+            self.bytes -= s.bytes;
+        }
+    }
+
     /// Keep `value` (about `bytes` bytes) as `k`, used in frame `stamp`, replacing any entry for
     /// `k`. Least recently used entries of earlier frames make room; returns false when they can't
     /// (the value isn't kept then).
@@ -196,7 +223,6 @@ impl<K: Hash + Eq + Clone, V, S: BuildHasher + Default> FrameCache<K, V, S> {
         self.bytes
     }
 
-    #[cfg(test)]
     pub(crate) fn contains_key<Q>(&self, k: &Q) -> bool
     where
         K: Borrow<Q>,

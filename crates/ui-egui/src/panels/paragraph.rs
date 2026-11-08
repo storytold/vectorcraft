@@ -77,9 +77,15 @@ fn para_cmd(app: &mut VectorcraftApp, cmd: &str, p: Value) {
 pub(crate) fn run_on_paragraphs(app: &mut VectorcraftApp, cmd: &str, mut p: Value) -> Result<Value, String> {
     if let Some((id, a, b)) = super::character::text_editing(app) {
         super::character::end_typing(app);
-        p["ids"] = json!([id.0]);
-        p["start"] = json!(a);
-        p["end"] = json!(b);
+        match super::character::text_story(app) {
+            // After Select All in threaded text: every paragraph of every frame.
+            Some(story) => p["ids"] = json!(story.iter().map(|f| f.0).collect::<Vec<_>>()),
+            None => {
+                p["ids"] = json!([id.0]);
+                p["start"] = json!(a);
+                p["end"] = json!(b);
+            }
+        }
     }
     app.run(cmd, p)
 }
@@ -164,9 +170,33 @@ fn collect_text_alignment(text: &vectorcraft_doc::TextObject, range: Option<(usi
     record(index, &plain, start, end) // Includes empty text and the paragraph after a final newline.
 }
 
+/// The frames of the threaded story whose whole text the Type tool has selected after Select All
+/// ([`super::character::text_story`]), in thread order.
+fn story_texts(app: &VectorcraftApp) -> Option<Vec<&vectorcraft_doc::TextObject>> {
+    let st = app.session.active()?;
+    let story = super::character::text_story(app)?;
+    Some(
+        story
+            .into_iter()
+            .filter_map(|id| match st.doc.node(id).map(|n| &n.kind) {
+                Some(NodeKind::Text(t)) => Some(t.as_ref()),
+                _ => None,
+            })
+            .collect(),
+    )
+}
+
 /// Visit every paragraph the Paragraph panel acts on.
 fn visit_paragraphs(app: &VectorcraftApp, mut f: impl FnMut(&ParaStyle)) {
     let Some(st) = app.session.active() else { return };
+    if let Some(texts) = story_texts(app) {
+        for t in texts {
+            for i in 0..t.paragraph_count() {
+                f(t.para_at(i));
+            }
+        }
+        return;
+    }
     if let Some((id, a, b)) = super::character::text_editing(app)
         && let Some(NodeKind::Text(text)) = st.doc.node(id).map(|n| &n.kind)
     {
@@ -288,6 +318,9 @@ fn selected_paragraph_direction(app: &VectorcraftApp, fallback: &ParaStyle) -> O
     let default = Some(resolved_rtl(app, fallback));
     let Some(st) = app.session.active() else { return default };
     let mut shared = None;
+    if let Some(texts) = story_texts(app) {
+        return if texts.into_iter().all(|t| collect_text_direction(t, None, &mut shared)) { shared.or(default) } else { None };
+    }
     if let Some((id, a, b)) = super::character::text_editing(app)
         && let Some(NodeKind::Text(text)) = st.doc.node(id).map(|n| &n.kind)
     {
@@ -322,6 +355,9 @@ fn selected_alignment(app: &VectorcraftApp, fallback: &ParaStyle) -> Option<Just
     let default = Some(shown_alignment(fallback.justify, fallback.direction == Some(ParaDirection::RightToLeft)));
     let Some(st) = app.session.active() else { return default };
     let mut shared = None;
+    if let Some(texts) = story_texts(app) {
+        return if texts.into_iter().all(|t| collect_text_alignment(t, None, &mut shared)) { shared.or(default) } else { None };
+    }
     if let Some((id, a, b)) = super::character::text_editing(app)
         && let Some(NodeKind::Text(text)) = st.doc.node(id).map(|n| &n.kind)
     {
@@ -344,12 +380,64 @@ fn selected_alignment(app: &VectorcraftApp, fallback: &ParaStyle) -> Option<Just
 /// The seven alignment buttons shared by Paragraph and Properties; no button is selected
 /// when the paragraphs they act on have differing displayed alignments.
 pub fn alignment_buttons(app: &mut VectorcraftApp, ui: &mut Ui, para: &ParaStyle, size: f32) {
+    first_alignment_buttons(app, ui, para, size, ALIGNMENTS.len());
+}
+
+/// The first `count` of the [`ALIGNMENTS`] buttons.
+fn first_alignment_buttons(app: &mut VectorcraftApp, ui: &mut Ui, para: &ParaStyle, size: f32, count: usize) {
     let shown = selected_alignment(app, para);
-    for (j, icon, tip, id) in ALIGNMENTS {
+    for (j, icon, tip, id) in ALIGNMENTS.into_iter().take(count) {
         if widgets::icon_button(ui, icon, tip, shown == Some(j), size).clicked() {
             para_cmd(app, "text.setStyle", json!({"justify": id}));
         }
     }
+}
+
+/// The Control bar's alignment buttons: Align left, Align center and Align right. The public
+/// documentation has the Control panel format paragraphs while type is selected, with a way to the
+/// Paragraph panel (<https://helpx.adobe.com/illustrator/using/formatting-paragraphs.html>), and
+/// its alignment buttons align text as the Paragraph panel's do
+/// (<https://helpx.adobe.com/illustrator/using/align-text.html>). The bar keeps to the three that
+/// don't justify, for its room; all seven are in the Paragraph options the link opens.
+const CONTROL_BAR_ALIGNMENTS: usize = 3;
+
+/// The spacing between the Control bar's alignment buttons, as in the Paragraph panel's row.
+const CONTROL_BAR_BUTTON_SPACING: f32 = 3.0;
+
+/// The width of the Paragraph panel in the Control bar's popover, as the Character panel's.
+const CONTROL_BAR_POPOVER_WIDTH: f32 = 260.0;
+
+/// The Control bar's Paragraph link, as it is drawn and measured.
+fn control_bar_link_text(ui: &Ui) -> egui::RichText {
+    egui::RichText::new(tl!("Paragraph:")).size(12.0).color(Tokens::get(ui.ctx()).text).underline()
+}
+
+/// The Control bar's paragraph controls while type is selected or edited (#5372), after its
+/// Character controls: the Paragraph link, which opens the Paragraph panel in a popover under it,
+/// and the Align left, Align center and Align right buttons, `size` points square as the bar's others. `reserve` gives the room the controls
+/// after them keep, asked only when type is selected: short of room, the buttons are left out,
+/// then the link too. Returns whether the link shows.
+pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui, size: f32, reserve: impl FnOnce(&Ui) -> f32) -> bool {
+    let Some((_, para)) = text_style(app) else { return false };
+    let text = control_bar_link_text(ui);
+    let link_width = widgets::text_width(ui, text.clone());
+    let room = ui.available_width() - reserve(ui);
+    let link_room = link_width + ui.spacing().item_spacing.x;
+    if room < link_room {
+        return false;
+    }
+    let link = ui.link(text).on_hover_text(tl!("Paragraph options"));
+    widgets::popover(&link, link.clicked(), |ui| {
+        ui.set_width(CONTROL_BAR_POPOVER_WIDTH);
+        show(app, ui);
+    });
+    if room >= link_room + (size + CONTROL_BAR_BUTTON_SPACING) * CONTROL_BAR_ALIGNMENTS as f32 {
+        let spacing = ui.spacing().item_spacing.x;
+        ui.spacing_mut().item_spacing.x = CONTROL_BAR_BUTTON_SPACING;
+        first_alignment_buttons(app, ui, &para, size, CONTROL_BAR_ALIGNMENTS);
+        ui.spacing_mut().item_spacing.x = spacing;
+    }
+    true
 }
 
 /// Type › Bullets and Numbering › Apply Bullets (`type.applyBullets {bullet?}`): the paragraphs of
@@ -740,11 +828,19 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
 
 /// Reset Panel: the paragraphs the panel acts on ([`format`]) take Auto alignment, no list, no
 /// indents or paragraph spacing, Hyphenate off with the default Hyphenation and Justification
-/// options, Auto direction, Bottom-to-Bottom Leading, Regular burasagari, the Hard kinsoku set, the
-/// Every-line Composer, Roman Hanging Punctuation off and no kashidas.
+/// options, Auto direction, Bottom-to-Bottom Leading, the Line-end Punctuation Half Width Mojikumi
+/// Set, Regular burasagari, the Hard kinsoku set, the Every-line Composer, Roman Hanging
+/// Punctuation off, no kashidas and no tab stops, as one undo step named Reset Panel (inside an
+/// undo group that is already open, as part of its step).
 fn reset_panel(app: &mut VectorcraftApp) {
     let h = HyphenationOptions::default();
     let j = vectorcraft_doc::JustificationOptions::default();
+    // The Type tool's typing session stays an undo step of its own.
+    super::character::end_typing(app);
+    let open = app.session.active().is_some_and(|st| st.undo_group.is_some());
+    if !open {
+        app.session.begin_named_undo_group(Some("Reset Panel".into()));
+    }
     para_cmd(app, "text.setStyle", json!({"justify": "auto"}));
     format(
         app,
@@ -754,10 +850,16 @@ fn reset_panel(app: &mut VectorcraftApp) {
             "hyphenLimit": h.hyphen_limit, "hyphenationZone": h.zone, "hyphenateCapitalized": h.capitalized, "kashida": "none",
             "wordSpacing": j.word_spacing, "letterSpacing": j.letter_spacing, "glyphScaling": j.glyph_scaling,
             "autoLeading": j.auto_leading, "singleWordJustification": "fullJustify",
-            "direction": "auto", "leadingModel": "romanBaseline", "burasagari": "standard", "kinsoku": "hard", "composer": "everyLine",
-            "romanHangingPunctuation": false
+            "direction": "auto", "leadingModel": "romanBaseline", "mojikumi": "lineEndHalf", "burasagari": "standard", "kinsoku": "hard",
+            "composer": "everyLine", "romanHangingPunctuation": false
         }),
     );
+    para_cmd(app, "text.tabs.clear", json!({}));
+    // Closes the active document's undo group only, so an undo group open in another document
+    // stays open.
+    if !open && let Some(st) = app.session.active_mut() {
+        st.undo_group = None;
+    }
 }
 
 #[cfg(test)]

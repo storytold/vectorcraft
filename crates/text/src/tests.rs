@@ -3,6 +3,7 @@ use kurbo::{Affine, Shape};
 use vectorcraft_doc::{CharStyle, Justify, TextKind, TextRun};
 use vectorcraft_geom::PathData;
 
+mod alternates;
 mod axes;
 mod bidi;
 mod bitmaps;
@@ -15,9 +16,12 @@ mod hang;
 mod inline;
 mod joiners;
 mod justify;
+mod kept_layouts;
+mod ligature_carets;
 mod path_joins;
 mod ruby;
 mod scripts;
+mod shape_plans;
 mod snap;
 mod svg_glyphs;
 mod sysfonts;
@@ -552,6 +556,113 @@ fn multiple_runs_and_styles() {
     assert_eq!(l.glyphs[3].run, 1);
     assert!(l.lines[0].ascent > 30.0);
     assert_ne!(l.glyphs[0].font_id, l.glyphs[3].font_id);
+}
+
+/// Each run's glyphs are set in its own style's face, and each empty paragraph's line takes the
+/// ascent and descent of its own style's face: families mixed in a paragraph, a missing family that
+/// falls back, a style the family does not have, and a change of family in the middle of a
+/// paragraph.
+#[test]
+fn each_run_and_paragraph_takes_its_own_face() {
+    let styles = [
+        serif(30.0),
+        CharStyle { font_family: "No Such Family".into(), font_style: "Bold".into(), ..style(10.0) },
+        CharStyle { font_family: "Inter".into(), font_style: "Bold Italic".into(), ..style(20.0) },
+        CharStyle { font_family: "JetBrains Mono".into(), ..style(14.0) },
+        style(16.0),
+    ];
+    let run = |text: &str, i: usize| TextRun::new(text, styles[i].clone());
+    let mut t = point("", style(10.0));
+    t.runs = vec![run("Ab", 0), run("cd\n", 1), run("\n", 2), run("\n", 3), run("xy", 1), run("zw", 4), run("Qr", 2)];
+    let l = layout(db(), &t);
+    let faces: Vec<_> = styles.iter().map(|st| db().style_face(st).unwrap()).collect();
+    let face_of_run = [0, 1, 2, 3, 1, 4, 2];
+    let text = t.plain_text();
+    let drawn: Vec<_> = l.glyphs.iter().filter(|g| text.get(g.byte..).is_some_and(|s| s.starts_with(char::is_alphabetic))).collect();
+    assert_eq!(drawn.len(), 10);
+    for g in drawn {
+        assert_eq!(g.font_id, faces[face_of_run[g.run]].id(), "run {}", g.run);
+    }
+    assert_eq!(l.lines.len(), 4);
+    for (line, i) in [(1, 2), (2, 3)] {
+        let (face, size) = (&faces[i], styles[i].size);
+        let (ascent, descent) = (face.ascent * size / face.upem, face.descent * size / face.upem);
+        assert!((l.lines[line].ascent - ascent).abs() < 1e-9, "line {line}: {} versus {ascent}", l.lines[line].ascent);
+        assert!((l.lines[line].descent - descent).abs() < 1e-9, "line {line}: {} versus {descent}", l.lines[line].descent);
+    }
+    assert_ne!(faces[2].id(), faces[3].id());
+}
+
+/// Faces kept per run lay text out exactly as looking each face up again at every use does
+/// ([`crate::layout::layout_faces_per_call`]): the same glyphs, positions, bounds and baselines,
+/// with mixed families, a missing family that falls back, Bold and Italic asked of families
+/// without those styles (their closest style stands in), and families that change in the middle of
+/// a paragraph, in point, vertical, area and path type.
+#[test]
+fn faces_kept_per_run_lay_out_as_faces_looked_up_at_each_use() {
+    let styles = [
+        serif(24.0),
+        CharStyle { font_family: "No Such Family".into(), ..style(12.0) },
+        CharStyle { font_family: "Source Serif 4".into(), font_style: "Bold".into(), ..style(18.0) },
+        CharStyle { font_family: "Inter".into(), font_style: "Italic".into(), ..style(20.0) },
+        CharStyle { font_family: "JetBrains Mono".into(), font_style: "Bold Italic".into(), ..style(14.0) },
+        style(16.0),
+    ];
+    let matched = [(1, FontMatch::Missing), (2, FontMatch::Style), (3, FontMatch::Style), (4, FontMatch::Style)];
+    for (i, m) in matched {
+        let st = &styles[i];
+        assert_eq!(db().resolve(&st.font_family, &st.font_style).map(|(_, m)| m), Some(m), "{} {}", st.font_family, st.font_style);
+    }
+    let style_of_run = [0, 1, 2, 3, 4, 2, 4, 5, 3, 1];
+    let texts = ["Ab ", "cd ef\n", "\n", "gh ", "ij", " kl\n", "\n", "mn ", "op ", "qr"];
+    let runs: Vec<_> = texts.into_iter().zip(style_of_run).map(|(text, i)| TextRun::new(text, styles[i].clone())).collect();
+    let mut horizontal = point("", style(10.0));
+    horizontal.runs = runs;
+    let mut vertical = horizontal.clone();
+    vertical.vertical = true;
+    let mut wrapped = area("", style(10.0), Rect::new(0.0, 0.0, 60.0, 400.0), Justify::Left);
+    wrapped.runs = horizontal.runs.clone();
+    let mut on_path = horizontal.clone();
+    let path = kurbo::Line::new((0.0, 0.0), (400.0, 60.0)).to_path(0.1);
+    on_path.kind = TextKind::OnPath { path: PathData::from_bezpath(&path), start: 0.0, end: None };
+    let mut empty_path = on_path.clone();
+    empty_path.runs = vec![TextRun::new("", styles[1].clone())];
+    let glyph = |g: &PositionedGlyph| {
+        let b = g.outline.bounding_box();
+        (g.font_id, g.gid, g.run, g.byte, g.line, [g.origin.x, g.origin.y, g.advance, g.width, b.x0, b.y0, b.x1, b.y1], g.xf.as_coeffs())
+    };
+    let line = |l: &LineInfo| [l.baseline, l.first_baseline, l.ascent, l.descent, l.x0, l.x1];
+    for (name, t) in [("point", &horizontal), ("vertical", &vertical), ("area", &wrapped), ("path", &on_path), ("empty path", &empty_path)] {
+        let kept = layout(db(), t);
+        let looked_up = crate::layout::layout_faces_per_call(db(), t);
+        assert_eq!(kept.glyphs.iter().map(glyph).collect::<Vec<_>>(), looked_up.glyphs.iter().map(glyph).collect::<Vec<_>>(), "{name}: glyphs");
+        assert_eq!(kept.lines.iter().map(line).collect::<Vec<_>>(), looked_up.lines.iter().map(line).collect::<Vec<_>>(), "{name}: lines");
+        assert_eq!(kept.bounds, looked_up.bounds, "{name}: bounds");
+        assert_eq!(kept.line_xf, looked_up.line_xf, "{name}: line transform");
+        assert_eq!(kept.overflow, looked_up.overflow, "{name}: overflow");
+    }
+    // The stand-in faces set the glyphs of the runs that ask for a missing family or style.
+    let l = layout(db(), &horizontal);
+    let text = horizontal.plain_text();
+    let drawn: Vec<_> = l.glyphs.iter().filter(|g| text.get(g.byte..).is_some_and(|s| s.starts_with(char::is_alphabetic))).collect();
+    assert_eq!(drawn.len(), 18);
+    for g in drawn {
+        assert_eq!(Some(g.font_id), db().style_face(&styles[style_of_run[g.run]]).map(|f| f.id()), "run {}", g.run);
+    }
+    assert_eq!(l.lines.len(), 5);
+}
+
+#[test]
+fn many_paragraphs_of_their_own_runs_lay_out_in_linear_time() {
+    // 20,000 one-letter paragraphs, each a run of its own: every paragraph looking through every
+    // run would be 400 million steps.
+    let n = 20_000;
+    let mut t = point("", style(10.0));
+    t.runs = (0..n).map(|i| TextRun { text: "a\n".into(), style: style(if i % 2 == 0 { 10.0 } else { 11.0 }), inline: None }).collect();
+    let start = std::time::Instant::now();
+    let l = layout(db(), &t);
+    assert!(start.elapsed() < std::time::Duration::from_secs(60), "{:?}", start.elapsed());
+    assert!(l.glyphs.iter().any(|g| g.run == n - 1));
 }
 
 #[test]

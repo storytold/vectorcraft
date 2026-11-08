@@ -11,6 +11,15 @@ pub(super) fn affine(a: af::Affine) -> Affine {
     Affine::new(a.0)
 }
 
+/// Are all of `p`'s points, mapped by `to_doc`, finite and within `MAX_COORD` of the origin?
+pub(super) fn path_in_range(p: &af::Path, to_doc: Affine) -> bool {
+    let ok = |q: &af::Point| {
+        let d = to_doc * kurbo::Point::new(q.x, q.y);
+        [d.x, d.y].iter().all(|v| v.is_finite() && v.abs() <= crate::MAX_COORD)
+    };
+    p.subpaths.iter().all(|s| ok(&s.start) && s.segments.iter().flatten().all(ok))
+}
+
 impl Builder {
     pub(super) fn layer_with(&mut self, name: Option<&str>, children: Vec<Arc<Node>>) -> Arc<Node> {
         let id = self.doc.alloc_id();
@@ -106,6 +115,12 @@ impl Builder {
                 self.warn("objects beyond the document range VectorCraft supports (left out)");
                 return None;
             }
+        }
+        // So must its vector mask, which becomes a clipping path: every control point, not just
+        // the finite ones a bounding box takes.
+        if n.mask.as_ref().is_some_and(|m| !path_in_range(m, to_doc)) {
+            self.warn("objects beyond the document range VectorCraft supports (left out)");
+            return None;
         }
         let n = &*self.overlaid(n);
         // Register before descending so nested artboards keep their document order. Inside an
@@ -250,5 +265,27 @@ impl Builder {
             out.appearance.effects.extend(fx);
         }
         Some(Arc::new(out))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn path(points: &[(f64, f64)]) -> af::Path {
+        let p = |&(x, y): &(f64, f64)| af::Point { x, y };
+        let start = p(&points[0]);
+        let segments = points[1..].iter().map(|q| [start, p(q), p(q)]).collect();
+        af::Path { subpaths: vec![af::SubPath { start, segments, closed: true }] }
+    }
+
+    /// A mask's control points are checked as mapped into the document, NaN ones included.
+    #[test]
+    fn mask_paths_must_stay_in_the_document_range() {
+        let k = Affine::scale(0.75);
+        assert!(path_in_range(&path(&[(0.0, 0.0), (100.0, 0.0), (100.0, 100.0)]), k));
+        assert!(!path_in_range(&path(&[(0.0, 0.0), (1.0e7, 0.0)]), k));
+        assert!(!path_in_range(&path(&[(0.0, 0.0), (f64::NAN, 0.0)]), k));
+        assert!(!path_in_range(&path(&[(0.0, 0.0), (1.0, 1.0)]), Affine::scale(1.0e9)));
     }
 }

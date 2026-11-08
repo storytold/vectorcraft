@@ -90,6 +90,24 @@ impl Paths {
 /// object and look the next one up, again and again).
 const MISSES_PER_REBUILD: u32 = 4;
 
+thread_local! {
+    /// [`tree_walks`] of this thread.
+    static TREE_WALKS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// How many times lookups by id on this thread have walked a document's tree, reading up to all of
+/// its nodes: one count per search of the tree and per rebuild of the cache. An edit that looks its
+/// objects up one at a time counts about one walk per object; one that looks them all up at once
+/// counts a few.
+pub fn tree_walks() -> u64 {
+    TREE_WALKS.get()
+}
+
+/// Adds one to [`tree_walks`].
+pub(crate) fn note_tree_walk() {
+    TREE_WALKS.set(TREE_WALKS.get().saturating_add(1));
+}
+
 /// The cache, shared by clones of a document (each checks every path it uses against its own tree).
 #[derive(Default)]
 pub struct IdIndex(RwLock<Option<Arc<Paths>>>, std::sync::atomic::AtomicU32);
@@ -125,6 +143,7 @@ impl IdIndex {
                 }
             }
         }
+        note_tree_walk();
         let mut out = Paths::default();
         walk(layers, u32::MAX, &mut out);
         let out = Arc::new(out);

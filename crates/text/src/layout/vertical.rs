@@ -1,14 +1,24 @@
 use super::flow::flow;
 use super::region::Region;
-use super::{Affine, Ctx, Punct, Range, Rect, SGlyph, Tcy, TextLayout, TextObject, VerticalAlign, is_cjk, punct};
+use super::{Affine, Ctx, Punct, Range, Rect, SGlyph, Tcy, TextLayout, TextObject, VerticalAlign, continues_cluster, is_cjk, punct};
 
 /// System Layout on or Fractional Widths off: each character that takes space advances by a whole
 /// number of points, at least one, so small type does not collapse onto itself. A zero advance (a
-/// tate-chu-yoko continuation, a zero-width mark) stays zero.
+/// tate-chu-yoko continuation, a zero-width mark) stays zero. Right to left, a cluster with manual
+/// kerning moves by the difference the kerning makes to its rounded advance, so the rounding
+/// changes the space before the next character in reading order and not the space after the one
+/// before it.
 pub(super) fn whole_character_widths(glyphs: &mut [SGlyph]) {
-    for g in glyphs {
-        if g.adv.is_finite() && g.adv > 0.0 {
-            g.adv = g.adv.round().max(1.0);
+    let whole = |adv: f64| if adv.is_finite() && adv > 0.0 { adv.round().max(1.0) } else { adv };
+    for cluster in glyphs.chunk_by_mut(|a, b| continues_cluster(Some(a), Some(b))) {
+        // The cluster's last glyph carries the manual kerning in its advance.
+        let (adv, shift) = cluster.last().map_or((0.0, 0.0), |g| (g.adv, g.kern_shift));
+        let rounded_shift = Some(whole(adv) - whole(adv - shift)).filter(|s| s.is_finite()).unwrap_or(shift);
+        for g in cluster {
+            g.adv = whole(g.adv);
+            if shift != 0.0 {
+                g.kern_shift = rounded_shift;
+            }
         }
     }
 }
@@ -20,10 +30,11 @@ pub(super) fn whole_character_widths(glyphs: &mut [SGlyph]) {
 ///
 /// Manual (Character panel menu › Tate-chu-yoko): any characters marked `tateChuYoko`, including
 /// one character, letters and numbers longer than three digits. Marked characters are taken
-/// before the automatic digit rule.
+/// before the automatic digit rule. A marked block moves by the Tate-chu-yoko Settings Up/Down
+/// and Left/Right of its first character; an automatic block does not move.
 /// <https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html>
-pub(super) fn tate_chu_yoko(g: &mut [SGlyph], style: impl Fn(&SGlyph) -> (f64, bool)) {
-    let manual: Vec<bool> = g.iter().map(|gl| gl.ch != '\u{2028}' && style(gl).1).collect();
+pub(super) fn tate_chu_yoko(g: &mut [SGlyph], style: impl Fn(&SGlyph) -> TcyStyle) {
+    let manual: Vec<bool> = g.iter().map(|gl| gl.ch != '\u{2028}' && style(gl).marked).collect();
     let digits: Vec<bool> = g.iter().map(|gl| gl.inline.is_none() && gl.ch.is_ascii_digit()).collect();
     let mut i = 0;
     while i < g.len() {
@@ -32,8 +43,8 @@ pub(super) fn tate_chu_yoko(g: &mut [SGlyph], style: impl Fn(&SGlyph) -> (f64, b
             while manual.get(end).copied().unwrap_or(false) {
                 end += 1;
             }
-            let em = style(&g[i]).0;
-            place_tcy_block(&mut g[i..end], em);
+            let first = style(&g[i]);
+            place_tcy_block(&mut g[i..end], first.size, (first.up, first.right));
             i = end;
             continue;
         }
@@ -46,21 +57,31 @@ pub(super) fn tate_chu_yoko(g: &mut [SGlyph], style: impl Fn(&SGlyph) -> (f64, b
             end += 1;
         }
         if (2..=3).contains(&(end - i)) {
-            let em = style(&g[i]).0;
-            place_tcy_block(&mut g[i..end], em);
+            let em = style(&g[i]).size;
+            place_tcy_block(&mut g[i..end], em, (0.0, 0.0));
         }
         i = end;
     }
 }
 
-/// Lay `g` across one em of the column. The first glyph takes the em; the rest share its cell.
-fn place_tcy_block(g: &mut [SGlyph], em: f64) {
+/// What [`tate_chu_yoko`] reads from a glyph's character style: its size, whether it is marked
+/// Tate-chu-yoko, and its Tate-chu-yoko Settings Up/Down and Left/Right in points.
+pub(super) struct TcyStyle {
+    pub size: f64,
+    pub marked: bool,
+    pub up: f64,
+    pub right: f64,
+}
+
+/// Lay `g` across one em of the column, moved by `(up, right)` points. The first glyph takes the
+/// em; the rest share its cell.
+fn place_tcy_block(g: &mut [SGlyph], em: f64, (up, right): (f64, f64)) {
     let width: f64 = g.iter().map(|gl| gl.adv).sum();
     let squeeze = if width > em && width > 0.0 { em / width } else { 1.0 };
     let mut ink = 0.0;
     for (k, gl) in g.iter_mut().enumerate() {
         let adv = gl.adv;
-        gl.tcy = Some(Tcy { pen: if k == 0 { 0.0 } else { em }, ink, width, squeeze });
+        gl.tcy = Some(Tcy { pen: if k == 0 { 0.0 } else { em }, ink, width, squeeze, up, right });
         gl.adv = if k == 0 { em } else { 0.0 };
         ink += adv;
     }
@@ -122,6 +143,17 @@ fn is_japanese_letter(c: char) -> bool {
         )
         && c != '・'
         && punct(c).is_none()
+}
+
+impl TextLayout {
+    /// Whether Line-end Punctuation Half Width (Mojikumi) can set type laid out as this layout
+    /// differently from Mojikumi None: `text`, the type's plain text, or one of the layout's list
+    /// markers holds Japanese punctuation or a Japanese letter, the only characters it spaces.
+    /// When it holds neither, the type lays out the same with either setting.
+    pub fn mojikumi_applies(&self, text: &str) -> bool {
+        let spaced = |c: char| punct(c).is_some() || is_japanese_letter(c);
+        text.chars().any(spaced) || self.markers.iter().any(|m| m.text.chars().any(spaced))
+    }
 }
 
 /// A Latin letter or digit (or another script's letter), set proportionally.
@@ -192,6 +224,20 @@ pub(super) fn upright_cell(g: &SGlyph) -> f64 {
     match g.face.vertical_glyph(g.gid) {
         Some((advance, _)) => advance * g.sy,
         None => (g.face.advance(g.gid) * g.sx).max(g.face.units_per_em() * g.sx),
+    }
+}
+
+/// An upright glyph's cell in font units, as [`upright_cell`] and [`upright_centre`] place it before
+/// its size: (its length down the column, the height of its top above the baseline). From the
+/// font's vertical metrics, else at least one em long, centred on the ideographic em box.
+pub(super) fn upright_extent(g: &SGlyph) -> (f64, f64) {
+    match g.face.vertical_glyph(g.gid) {
+        Some((advance, origin)) => (advance, origin),
+        None => {
+            let em = g.face.units_per_em();
+            let cell = g.face.advance(g.gid).max(em);
+            (cell, EM_CENTER * em + cell * 0.5)
+        }
     }
 }
 

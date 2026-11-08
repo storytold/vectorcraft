@@ -19,7 +19,7 @@ use vectorcraft_render::proof;
 
 #[cfg(not(target_arch = "wasm32"))]
 use super::EngineError;
-use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, color_value, has_doc, str_param, targets};
+use super::{CommandSpec, Result, Session, always, bad, cmd, color_value, has_doc, switch_or, targets, text_param};
 
 /// `Document.unknown` key under which files before format v3 kept the assigned profiles (migrated
 /// to `Document::color_profiles` on load).
@@ -77,7 +77,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Convert Color",
             [],
             None,
-            "{color, to: \"rgb\"|\"cmyk\"|\"gray\"|\"lab\", intent?} → {model, values, hex, lab: [L,a,b], outOfGamut, deltaE}",
+            "{color (#rrggbbaa and #rgba are refused), to: \"rgb\"|\"cmyk\"|\"gray\"|\"lab\", intent?} → {model, values, hex, lab: [L,a,b], outOfGamut, deltaE}",
             always,
             convert_color
         ),
@@ -86,7 +86,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Gamut Warning",
             [],
             None,
-            "{ids?|id?, colors?: [color]} colours that can't be printed in the working CMYK (selection, or the whole document when nothing is selected) → {checked, outOfGamut: [{hex, deltaE, count}]}",
+            "{ids?|id?, colors?: [color] (#rrggbbaa and #rgba are refused)} colours that can't be printed in the working CMYK (selection, or the whole document when nothing is selected) → {checked, outOfGamut: [{hex, deltaE, count}]}",
             has_doc,
             gamut_check
         ),
@@ -100,7 +100,7 @@ pub fn specs() -> Vec<CommandSpec> {
             proof_setup
         ),
         cmd!(query "view.proofColors", "Proof Colors", ["View"], None, "{on?: bool (default: toggle)} → proof state", always, |s, p| {
-            toggle_view(s, p, |v, on| v.proof_colors = on.unwrap_or(!v.proof_colors))
+            toggle_view(s, p, "view.proofColors", |v, on| v.proof_colors = on.unwrap_or(!v.proof_colors))
         }),
         cmd!(
             query "view.overprintPreview",
@@ -109,7 +109,7 @@ pub fn specs() -> Vec<CommandSpec> {
             Some("Cmd+Alt+Shift+Y"),
             "{on?: bool (default: toggle)} → proof state",
             always,
-            |s, p| toggle_view(s, p, |v, on| v.overprint = on.unwrap_or(!v.overprint))
+            |s, p| toggle_view(s, p, "view.overprintPreview", |v, on| v.overprint = on.unwrap_or(!v.overprint))
         ),
         cmd!(
             query "view.separationsPreview",
@@ -143,10 +143,19 @@ pub fn specs() -> Vec<CommandSpec> {
 }
 
 fn intent_param(p: &Value, cmd: &str) -> Result<Option<Intent>> {
-    match str_param(p, "intent") {
+    match text_param(p, "intent", cmd)? {
         None => Ok(None),
         Some(i) => Intent::parse(i).map(Some).ok_or_else(|| bad(cmd, format!("unknown intent `{i}`"))),
     }
+}
+
+/// The true or false `p` gives for `key`, or `None` when `p` leaves it out or gives null. Any other
+/// value is an error, as [`switch_or`] reads it.
+fn on_param(p: &Value, key: &str, cmd: &str) -> Result<Option<bool>> {
+    if p.get(key).is_none_or(Value::is_null) {
+        return Ok(None);
+    }
+    switch_or(p, key, false, cmd).map(Some)
 }
 
 fn settings_json(st: &ColorSettings) -> Value {
@@ -171,16 +180,16 @@ fn color_settings(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "edit.colorSettings";
     let mut st = cms::active_settings();
     let before = st.clone();
-    if let Some(v) = str_param(p, "rgb") {
+    if let Some(v) = text_param(p, "rgb", C)? {
         st.rgb = cms::canonical_name(v).to_string();
     }
-    if let Some(v) = str_param(p, "cmyk") {
+    if let Some(v) = text_param(p, "cmyk", C)? {
         st.cmyk = cms::canonical_name(v).to_string();
     }
     if let Some(i) = intent_param(p, C)? {
         st.intent = i;
     }
-    st.bpc = bool_or(p, "bpc", st.bpc);
+    st.bpc = switch_or(p, "bpc", st.bpc, C)?;
     if st != before {
         cms::set_active(&st).map_err(|e| bad(C, e.to_string()))?;
         touch_all(s);
@@ -191,7 +200,7 @@ fn color_settings(s: &mut Session, p: &Value) -> Result<Value> {
 #[cfg(not(target_arch = "wasm32"))]
 fn load_profile(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "color.loadProfile";
-    let path = str_param(p, "path").ok_or_else(|| bad(C, "missing `path`"))?;
+    let path = text_param(p, "path", C)?.ok_or_else(|| bad(C, "missing `path`"))?;
     crate::file_access::check_read(path).map_err(EngineError::Other)?;
     let bytes = crate::store::read_capped(std::path::Path::new(path), crate::store::MAX_PROFILE_FILE).map_err(|e| bad(C, format!("{path}: {e}")))?;
     let info = cms::register_icc(&bytes, None).map_err(|e| bad(C, e.to_string()))?;
@@ -209,7 +218,7 @@ fn load_profile(s: &mut Session, p: &Value) -> Result<Value> {
 /// Forget a profile `color.loadProfile` loaded, and the copy that is kept of it.
 fn remove_profile(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "color.removeProfile";
-    let name = str_param(p, "name").ok_or_else(|| bad(C, "missing `name`"))?;
+    let name = text_param(p, "name", C)?.ok_or_else(|| bad(C, "missing `name`"))?;
     let info = cms::profiles().into_iter().find(|i| i.name == name).ok_or_else(|| bad(C, format!("no profile named `{name}`")))?;
     if info.builtin {
         return Err(bad(C, format!("`{name}` is a built-in profile and stays")));
@@ -289,7 +298,7 @@ pub enum Grays {
 impl Grays {
     /// The `grays` param of `cmd`: `"profile"` (default) or `"black"`.
     pub(crate) fn param(cmd: &str, p: &Value) -> Result<Self> {
-        match str_param(p, "grays").map(str::to_ascii_lowercase).as_deref() {
+        match text_param(p, "grays", cmd)?.map(str::to_ascii_lowercase).as_deref() {
             None | Some("profile") => Ok(Grays::Profile),
             Some("black") => Ok(Grays::Black),
             Some(g) => Err(bad(cmd, format!("grays must be \"profile\" or \"black\", not `{g}`"))),
@@ -302,34 +311,155 @@ impl Grays {
 /// colour through the colour settings.
 pub(crate) fn convert_mode(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "file.documentColorMode";
-    let mode = match str_param(p, "mode").map(str::to_ascii_lowercase).as_deref() {
+    let mode = match p.get("mode").and_then(Value::as_str).map(str::to_ascii_lowercase).as_deref() {
         Some("cmyk") => ColorMode::Cmyk,
         Some("rgb") => ColorMode::Rgb,
         _ => return Err(bad(C, "mode must be \"cmyk\" or \"rgb\"")),
     };
     let intent = intent_param(p, C)?;
     let grays = Grays::param(C, p)?;
+    let convert = switch_or(p, "convert", true, C)?;
     // Choosing the mode the document already has (the checked menu item) is not an edit.
     if s.doc()?.doc.color_mode == mode {
         return Ok(json!({ "changed": 0 }));
     }
-    let convert = bool_or(p, "convert", true);
     let mut changed = 0usize;
     s.edit("Document Color Mode", |d, _| {
         changed = set_color_mode(d, mode, convert, intent, grays);
         Ok(())
     })?;
+    if convert {
+        if s.in_interaction() && s.batch_stash.is_none() {
+            if let Some(it) = &mut s.doc_mut()?.interaction {
+                it.deferred_color_mode = Some(DeferredColorMode { mode, intent, grays });
+            }
+        } else {
+            let before = new_art_colors_before(s)?;
+            convert_new_art_colors(s, mode, intent, grays)?;
+            record_new_art_colors(s, before)?;
+        }
+    } else if s.batch_stash.is_some() || s.doc()?.undo_group.is_some() {
+        let before = new_art_colors_before(s)?;
+        record_new_art_colors(s, before)?;
+    }
     Ok(json!({ "changed": changed }))
 }
 
-/// Put `d` in color `mode` and, with `convert`, convert every color of its art (opacity masks
-/// included), symbols, graph designs, pattern tiles (the tile that pattern editing's Cancel puts
-/// back included), graphic styles, brushes (their art and a Hue Shift key color) and swatches
-/// through the color settings (`intent`, default: theirs) → how many colors of the art (opacity
-/// masks included), symbols, graph designs and pattern tiles changed; the colors of graphic
-/// styles and brushes convert without being counted. Gray colors stay
-/// Gray (they print on the black plate in either mode); RGB grays are colors like any other and
-/// separate through the CMYK profile, unless `grays` puts them on the black plate. Lab colors
+/// The validated conversion choices of the current tentative color-mode preview.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct DeferredColorMode {
+    mode: ColorMode,
+    intent: Option<Intent>,
+    grays: Grays,
+}
+
+/// Complete the deferred new-art conversion before the interaction becomes an Undo step.
+pub(crate) fn commit_new_art_colors(s: &mut Session) -> Result<()> {
+    let pending =
+        s.doc()?.interaction.as_ref().filter(|it| it.preview.is_some() && it.color_mode_paints.is_none()).and_then(|it| it.deferred_color_mode);
+    if let Some(DeferredColorMode { mode, intent, grays }) = pending {
+        let before = new_art_colors_before(s)?;
+        convert_new_art_colors(s, mode, intent, grays)?;
+        record_new_art_colors(s, before)?;
+    }
+    Ok(())
+}
+
+fn record_new_art_colors(s: &mut Session, before: vectorcraft_tools::PaintDefaults) -> Result<()> {
+    let after = s.paint.clone();
+    if before != after || s.batch_stash.is_some() || s.doc()?.undo_group.is_some() {
+        let st = s.doc_mut()?;
+        let slot = if let Some(it) = &mut st.interaction {
+            Some(&mut it.color_mode_paints)
+        } else {
+            st.history.undo.last_mut().map(|e| &mut e.color_mode_paints)
+        };
+        if let Some(slot) = slot {
+            match slot {
+                Some((_, end)) => *end = after,
+                slot => *slot = Some((before, after)),
+            }
+        }
+        if st.interaction.is_none() {
+            if let Some(e) = st.history.undo.last_mut() {
+                e.recost_paints();
+            }
+            st.history.trim();
+        }
+    }
+    Ok(())
+}
+
+fn new_art_colors_before(s: &Session) -> Result<vectorcraft_tools::PaintDefaults> {
+    let st = s.doc()?;
+    Ok(st.undo_group.as_ref().map(|g| &g.paint).or_else(|| st.interaction.as_ref().map(|it| &it.paint)).cloned().unwrap_or_else(|| s.paint.clone()))
+}
+
+/// Convert the fill and stroke that new art takes, and the colors of its template appearance
+/// (paints and effect colors), as [`set_color_mode`] converted the active document's art. The
+/// command records their original values for Undo. Previews defer this until acceptance;
+/// a batch converts immediately and restores the values itself when it fails.
+fn convert_new_art_colors(s: &mut Session, mode: ColorMode, intent: Option<Intent>, grays: Grays) -> Result<()> {
+    let d = &s.doc()?.doc;
+    let bases = global_bases(d);
+    let conv = mode_converter(mode, intent, grays);
+    let mut f = |col: &Color, link: proof::Link| mode_color(col, link, &bases, &conv);
+    map_paint_colors(&mut s.paint.fill, &mut f);
+    map_paint_colors(&mut s.paint.stroke, &mut f);
+    if let Some(a) = s.paint.appearance.as_mut() {
+        for it in &mut a.items {
+            let paint = match it {
+                vectorcraft_doc::AppearanceItem::Fill(l) => &mut l.paint,
+                vectorcraft_doc::AppearanceItem::Stroke(l) => &mut l.paint,
+            };
+            map_paint_colors(paint, &mut f);
+        }
+        map_effect_colors(a, &mut f);
+    }
+    Ok(())
+}
+
+/// How Document Color Mode converts a color to `mode` through the color settings (`intent`,
+/// default: theirs): Gray and Lab colors stay as they are; with `grays` on the black plate, an RGB
+/// gray becomes K only in CMYK.
+fn mode_converter(mode: ColorMode, intent: Option<Intent>, grays: Grays) -> impl Fn(&Color) -> Color {
+    let c = cms::active();
+    let intent = intent.unwrap_or(c.settings().intent);
+    let model = if mode == ColorMode::Cmyk { Model::Cmyk } else { Model::Rgb };
+    let k_only = model == Model::Cmyk && grays == Grays::Black;
+    move |col: &Color| match col {
+        Color::Gray { .. } | Color::Lab { .. } => *col,
+        // Grey ink percentage, then K only (a Gray colour's CMYK).
+        Color::Rgb { .. } if k_only && Neutral::of(col).is_some() => c.convert(&c.convert(col, Model::Gray, intent), Model::Cmyk, intent),
+        _ => c.convert(col, model, intent),
+    }
+}
+
+/// The name and color of each global swatch of `d`, for [`mode_color`].
+fn global_bases(d: &vectorcraft_doc::Document) -> Vec<(String, Color)> {
+    d.swatches_iter().filter_map(|w| Some((w.name.clone(), d.global_color(&w.name)?))).collect()
+}
+
+/// The color Document Color Mode gives `col` (swatch link `link`): a tint of a global swatch in
+/// `bases` (already converted) is that swatch's color at its tint; any other color goes through
+/// `conv` ([`mode_converter`]).
+fn mode_color(col: &Color, link: proof::Link, bases: &[(String, Color)], conv: &dyn Fn(&Color) -> Color) -> Color {
+    match link.and_then(|(name, tint)| Some((bases.iter().find(|(n, _)| n == name)?, tint))) {
+        Some(((_, base), tint)) if tint < 1.0 => base.tinted(tint),
+        _ => conv(col),
+    }
+}
+
+/// Put `d` in color `mode` and, with `convert`, convert every color of its art (opacity masks,
+/// effect colors and the series paints and label styles that graphs keep included), symbols,
+/// graph designs, pattern tiles (the tile that pattern editing's Cancel puts back included),
+/// graphic styles (their effects included), brushes (their art and a Hue Shift key color) and
+/// swatches through the color settings (`intent`, default: theirs) → how many colors of the art
+/// (opacity masks, effect colors and graphs' paints included), symbols, graph designs and pattern
+/// tiles changed; the colors of graphic styles and brushes convert without being counted. Gray
+/// colors stay Gray (they print on the black plate in either mode); RGB grays are colors like any
+/// other and separate through the CMYK profile, unless `grays` puts them on the black plate
+/// ([`mode_converter`]). Lab colors
 /// (spot color definitions) are device independent and fit either mode. A tint of a global
 /// swatch becomes the converted swatch's color at its tint. Document Color Mode and
 /// `document.open {colorMode}` both convert this way.
@@ -338,16 +468,7 @@ pub(crate) fn set_color_mode(d: &mut vectorcraft_doc::Document, mode: ColorMode,
     if !convert {
         return 0;
     }
-    let c = cms::active();
-    let intent = intent.unwrap_or(c.settings().intent);
-    let model = if mode == ColorMode::Cmyk { Model::Cmyk } else { Model::Rgb };
-    let k_only = model == Model::Cmyk && grays == Grays::Black;
-    let conv = |col: &Color| match col {
-        Color::Gray { .. } | Color::Lab { .. } => *col,
-        // Grey ink percentage, then K only (a Gray colour's CMYK).
-        Color::Rgb { .. } if k_only && Neutral::of(col).is_some() => c.convert(&c.convert(col, Model::Gray, intent), Model::Cmyk, intent),
-        _ => c.convert(col, model, intent),
-    };
+    let conv = mode_converter(mode, intent, grays);
     for sw in d.swatches_iter_mut() {
         match &mut sw.paint {
             Paint::Solid { color, .. } => *color = conv(color),
@@ -360,13 +481,10 @@ pub(crate) fn set_color_mode(d: &mut vectorcraft_doc::Document, mode: ColorMode,
         }
     }
     // Tints are their converted swatch's colour at their tint (exact ink percentages).
-    let bases: Vec<(String, Color)> = d.swatches_iter().filter_map(|w| Some((w.name.clone(), d.global_color(&w.name)?))).collect();
+    let bases = global_bases(d);
     let changed = std::cell::Cell::new(0usize);
     let mut count = |col: &Color, link: proof::Link| {
-        let n = match link.and_then(|(name, tint)| Some((bases.iter().find(|(n, _)| n == name)?, tint))) {
-            Some(((_, base), tint)) if tint < 1.0 => base.tinted(tint),
-            _ => conv(col),
-        };
+        let n = mode_color(col, link, &bases, &conv);
         if n != *col {
             changed.set(changed.get() + 1);
         }
@@ -384,12 +502,15 @@ pub(crate) fn set_color_mode(d: &mut vectorcraft_doc::Document, mode: ColorMode,
     }
     // The reply counts the colors of the document's art only, not those of the graphic styles and brushes.
     let in_art = changed.get();
-    for it in d.graphic_styles.iter_mut().flat_map(|g| &mut g.appearance.items) {
-        let paint = match it {
-            vectorcraft_doc::AppearanceItem::Fill(l) => &mut l.paint,
-            vectorcraft_doc::AppearanceItem::Stroke(l) => &mut l.paint,
-        };
-        map_paint_colors(paint, &mut count);
+    for g in &mut d.graphic_styles {
+        for it in &mut g.appearance.items {
+            let paint = match it {
+                vectorcraft_doc::AppearanceItem::Fill(l) => &mut l.paint,
+                vectorcraft_doc::AppearanceItem::Stroke(l) => &mut l.paint,
+            };
+            map_paint_colors(paint, &mut count);
+        }
+        map_effect_colors(&mut g.appearance, &mut count);
     }
     // Convert each brush's art. A Hue Shift key color takes the converted color of the art color
     // it matches (a tint of a global swatch included), so the key still matches the converted art;
@@ -438,19 +559,28 @@ pub(crate) fn set_color_mode(d: &mut vectorcraft_doc::Document, mode: ColorMode,
     in_art
 }
 
-/// [`proof::map_node_colors`] over `n`'s subtree and the art of every opacity mask in it.
+/// [`proof::map_node_colors`] over `n`'s subtree, then [`map_more_colors`].
 fn map_art_colors(n: &mut vectorcraft_doc::Node, f: &mut dyn FnMut(&Color, proof::Link) -> Color) {
     proof::map_node_colors(n, f);
-    map_mask_colors(n, f);
+    map_more_colors(n, f);
 }
 
-fn map_mask_colors(n: &mut vectorcraft_doc::Node, f: &mut dyn FnMut(&Color, proof::Link) -> Color) {
-    if let Some(mask) = n.extras_if_any().and_then(|e| e.mask.as_deref_mut()) {
-        map_art_colors(Arc::make_mut(&mut mask.art), f);
+/// `f` applied to the colors in `n`'s subtree that [`proof::map_node_colors`] does not visit: the
+/// effect colors ([`map_effect_colors`]), the series paints and label styles a graph keeps
+/// ([`map_graph_colors`]) and the art of every opacity mask.
+fn map_more_colors(n: &mut vectorcraft_doc::Node, f: &mut dyn FnMut(&Color, proof::Link) -> Color) {
+    map_effect_colors(&mut n.appearance, f);
+    if let Some(e) = n.extras_if_any() {
+        if let Some(g) = e.graph.as_deref_mut() {
+            map_graph_colors(g, f);
+        }
+        if let Some(mask) = e.mask.as_deref_mut() {
+            map_art_colors(Arc::make_mut(&mut mask.art), f);
+        }
     }
     if let Some(ch) = n.children_mut() {
         for c in ch.iter_mut() {
-            map_mask_colors(Arc::make_mut(c), f);
+            map_more_colors(Arc::make_mut(c), f);
         }
     }
 }
@@ -461,13 +591,57 @@ fn matches_key(c: &Color, key: &Color) -> bool {
     c.to_rgb().iter().zip(key.to_rgb()).map(|(a, b)| (a - b).abs()).sum::<f32>() < 0.02
 }
 
-/// `f` applied to a solid paint's color or a gradient's stop colors, given their swatch link.
+/// `f` applied to the `color` of each effect in appearance `a` (the object's effects and those of
+/// each fill and stroke) that has one ([`super::params::effect_color`]). An effect that draws its
+/// default color stores the new color as its own. The light colors of the 3D effects stay as they
+/// are.
+fn map_effect_colors(a: &mut vectorcraft_doc::Appearance, f: &mut dyn FnMut(&Color, proof::Link) -> Color) {
+    let items = a.items.iter_mut().flat_map(|i| i.effects_mut().iter_mut());
+    for e in a.effects.iter_mut().chain(items) {
+        if !(e.params.is_object() || e.params.is_null()) {
+            continue;
+        }
+        let Some(color) = super::params::effect_color(&e.id, &e.params) else { continue };
+        let n = f(&color, None);
+        if n == color {
+            continue;
+        }
+        match &mut e.params {
+            Value::Object(m) => {
+                m.insert("color".into(), json!(n));
+            }
+            p => *p = json!({ "color": n }),
+        }
+    }
+}
+
+/// `f` applied to the series paints and the label styles that graph `g` keeps, which its marks and
+/// labels take each time it is drawn again.
+fn map_graph_colors(g: &mut vectorcraft_doc::GraphSpec, f: &mut dyn FnMut(&Color, proof::Link) -> Color) {
+    for p in g.series_paints.iter_mut() {
+        for paint in [&mut p.fill, &mut p.stroke].into_iter().flatten() {
+            map_paint_colors(paint, f);
+        }
+    }
+    let styles = &mut g.label_styles;
+    for st in [&mut styles.values, &mut styles.categories, &mut styles.legend].into_iter().flatten() {
+        map_paint_colors(&mut st.fill, f);
+        map_paint_colors(&mut st.stroke, f);
+    }
+}
+
+/// `f` applied to solid, gradient-stop and freeform-control colors, with any swatch link.
 fn map_paint_colors(p: &mut Paint, f: &mut dyn FnMut(&Color, proof::Link) -> Color) {
     match p {
         Paint::Solid { color, swatch, tint } => *color = f(color, swatch.as_deref().map(|s| (s, *tint))),
         Paint::Gradient(g) => {
             for st in &mut g.gradient.stops {
                 st.color = f(&st.color, st.swatch.as_deref().map(|s| (s, st.tint)));
+            }
+            if let Some(freeform) = &mut g.freeform {
+                for point in &mut freeform.points {
+                    point.color = f(&point.color, None);
+                }
             }
         }
         _ => {}
@@ -489,7 +663,7 @@ fn convert_color(_: &mut Session, p: &Value) -> Result<Value> {
     let c = cms::active();
     let intent = intent_param(p, C)?.unwrap_or(c.settings().intent);
     let lab = c.lab(&col);
-    let (model, vals) = match str_param(p, "to").unwrap_or("rgb") {
+    let (model, vals) = match text_param(p, "to", C)?.unwrap_or("rgb") {
         "rgb" => ("rgb", values(&c.convert(&col, Model::Rgb, intent))),
         "cmyk" => ("cmyk", values(&c.convert(&col, Model::Cmyk, intent))),
         "gray" | "grayscale" => ("gray", values(&c.convert(&col, Model::Gray, intent))),
@@ -509,8 +683,14 @@ fn convert_color(_: &mut Session, p: &Value) -> Result<Value> {
 
 fn gamut_check(s: &mut Session, p: &Value) -> Result<Value> {
     let mut cols: Vec<Color> = vec![];
-    if let Some(a) = p.get("colors").and_then(Value::as_array) {
-        cols.extend(a.iter().filter_map(color_value));
+    let colors = p.get("colors").filter(|v| !v.is_null());
+    if let Some(v) = colors.filter(|v| !v.is_array()) {
+        return Err(bad("color.gamutCheck", format!("`colors` must be an array of colors, not {v}")));
+    }
+    if let Some(a) = colors.and_then(Value::as_array) {
+        for v in a {
+            cols.push(color_value(v).ok_or_else(|| bad("color.gamutCheck", format!("bad color {v}")))?);
+        }
     } else {
         let st = s.doc()?;
         let ids = targets(s, p)?;
@@ -561,7 +741,7 @@ fn view_json(v: &proof::ProofView) -> Value {
 fn proof_setup(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "view.proofSetup";
     let mut v = proof::view();
-    if let Some(t) = str_param(p, "target") {
+    if let Some(t) = text_param(p, "target", C)? {
         let t = ProofTarget::parse(t).ok_or_else(|| bad(C, format!("unknown proof target `{t}`")))?;
         if let ProofTarget::Cmyk(name) = &t
             && !cms::profile(name).is_some_and(|k| k.kind == cms::ProfileKind::Cmyk)
@@ -573,8 +753,8 @@ fn proof_setup(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(i) = intent_param(p, C)? {
         v.setup.intent = i;
     }
-    v.setup.simulate_paper = bool_or(p, "simulatePaper", v.setup.simulate_paper);
-    if let Some(on) = p.get("proof").and_then(Value::as_bool) {
+    v.setup.simulate_paper = switch_or(p, "simulatePaper", v.setup.simulate_paper, C)?;
+    if let Some(on) = on_param(p, "proof", C)? {
         v.proof_colors = on;
     }
     proof::set_view(v.clone());
@@ -582,9 +762,10 @@ fn proof_setup(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(view_json(&v))
 }
 
-fn toggle_view(s: &mut Session, p: &Value, f: impl FnOnce(&mut proof::ProofView, Option<bool>)) -> Result<Value> {
+fn toggle_view(s: &mut Session, p: &Value, cmd: &str, f: impl FnOnce(&mut proof::ProofView, Option<bool>)) -> Result<Value> {
+    let on = on_param(p, "on", cmd)?;
     let mut v = proof::view();
-    f(&mut v, p.get("on").and_then(Value::as_bool));
+    f(&mut v, on);
     proof::set_view(v.clone());
     touch_all(s);
     Ok(view_json(&v))
@@ -612,16 +793,23 @@ fn separations(s: &mut Session, p: &Value) -> Result<Value> {
         .map(|d| proof::plates(&d.doc).into_iter().map(|p| p.name).collect())
         .unwrap_or_else(|| cms::PROCESS_PLATES.iter().map(|s| s.to_string()).collect());
     let check = |n: &str| if all.iter().any(|a| a == n) { Ok(n.to_string()) } else { Err(bad(C, format!("unknown plate `{n}`"))) };
-    if let Some(on) = p.get("on").and_then(Value::as_bool) {
+    if let Some(on) = on_param(p, "on", C)? {
         v.separations = if on { Some(v.separations.take().unwrap_or_else(|| all.clone())) } else { None };
     }
-    if let Some(a) = p.get("plates").and_then(Value::as_array) {
-        v.separations = Some(a.iter().filter_map(Value::as_str).map(check).collect::<Result<Vec<_>>>()?);
+    match p.get("plates") {
+        None | Some(Value::Null) => {}
+        Some(Value::Array(a)) if a.iter().all(Value::is_string) => {
+            v.separations = Some(a.iter().filter_map(Value::as_str).map(check).collect::<Result<Vec<_>>>()?);
+        }
+        Some(_) => {
+            let key = "plates";
+            return Err(bad(C, format!("`{key}` must be an array of these names: {}", all.join(", "))));
+        }
     }
-    if let Some(n) = str_param(p, "only") {
+    if let Some(n) = text_param(p, "only", C)? {
         v.separations = Some(vec![check(n)?]);
     }
-    if let Some(n) = str_param(p, "toggle") {
+    if let Some(n) = text_param(p, "toggle", C)? {
         let n = check(n)?;
         let vis = v.separations.get_or_insert_with(|| all.clone());
         if let Some(i) = vis.iter().position(|x| *x == n) {
@@ -637,8 +825,8 @@ fn separations(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn set_spot(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "swatch.setSpot";
-    let name = str_param(p, "name").ok_or_else(|| bad(C, "missing `name`"))?.to_string();
-    let spot = bool_or(p, "spot", true);
+    let name = text_param(p, "name", C)?.ok_or_else(|| bad(C, "missing `name`"))?.to_string();
+    let spot = switch_or(p, "spot", true, C)?;
     let sw = s.doc()?.doc.swatch(&name).ok_or_else(|| bad(C, format!("no swatch `{name}`")))?;
     if !matches!(sw.paint, Paint::Solid { .. }) {
         return Err(bad(C, "only solid-colour swatches can be spot colours"));

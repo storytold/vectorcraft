@@ -87,7 +87,11 @@ impl BuilderMap {
                 })
                 .collect()
         };
-        Self { shapes, regions: faces_of(arr.regions), lines: bounded(arr.lines), edges: bounded(arr.edges) }
+        // A line keeps its pieces under the outline of a closed path or along a line in front of
+        // it, so a merge or an erase removes them as it does the rest of the line. The pieces in
+        // front come first, so a hit where pieces lie on each other takes the one in front.
+        let lines = arr.lines.into_iter().chain(arr.lines_under).collect();
+        Self { shapes, regions: faces_of(arr.regions), lines: bounded(lines), edges: bounded(arr.edges) }
     }
 
     /// The region containing `p`.
@@ -123,10 +127,13 @@ impl BuilderMap {
     }
 
     /// The line piece or edge within `piece_tol` of `p` that [`Self::hit`] gives (None without
-    /// `piece_tol`).
+    /// `piece_tol`). Where a line lies under an edge, the one in front is hit.
     fn piece_hit(&self, p: Point, piece_tol: Option<f64>) -> Option<Hit> {
+        let key = |pieces: &[(po::Shape, Rect)], i: usize| pieces.get(i).map(|(s, _)| s.key);
         piece_tol.and_then(|t| match (piece_near(&self.lines, p, t), piece_near(&self.edges, p, t)) {
-            (Some(l), Some(e)) if e.0 < l.0 => Some(Hit::Edge(e.1)),
+            (Some(l), Some(e)) if e.0 < l.0 - 1e-6 * t || (e.0 <= l.0 + 1e-6 * t && key(&self.edges, e.1) > key(&self.lines, l.1)) => {
+                Some(Hit::Edge(e.1))
+            }
             (Some(l), _) => Some(Hit::Line(l.1)),
             (None, e) => e.map(|e| Hit::Edge(e.1)),
         })
@@ -554,9 +561,15 @@ pub fn hatch(path: &BezPath, gap: f64) -> BezPath {
         y1 = y1.max(a.y.max(c.y));
     }
     let gap = gap.max((y1 - y0) / 400.0).max(1e-6);
-    let mut y = (y0 / gap).floor() * gap + gap * 0.5;
+    let start = (y0 / gap).floor() * gap + gap * 0.5;
     let mut xs: Vec<f64> = vec![];
-    while y < y1 {
+    // Counted, not summed: far from the origin `y + gap` can round back to `y`. The gap is at least
+    // a 400th of the height, so 402 lines cover it.
+    for i in 0..402u32 {
+        let y = start + f64::from(i) * gap;
+        if y.partial_cmp(&y1) != Some(std::cmp::Ordering::Less) {
+            break;
+        }
         xs.clear();
         for (a, c) in &edges {
             if (a.y <= y) != (c.y <= y) {
@@ -568,7 +581,6 @@ pub fn hatch(path: &BezPath, gap: f64) -> BezPath {
             out.move_to(unrot(Point::new(pair[0], y)));
             out.line_to(unrot(Point::new(pair[1], y)));
         }
-        y += gap;
     }
     out
 }

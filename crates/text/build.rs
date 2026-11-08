@@ -81,6 +81,7 @@ fn craft_fonts(dir: &Path) -> Result<String, String> {
     println!("cargo::rerun-if-changed={}", manifest.display());
     let text = std::fs::read_to_string(&manifest).map_err(|e| format!("{}: {e}", manifest.display()))?;
     let wasm = std::env::var("CARGO_CFG_TARGET_ARCH").is_ok_and(|a| a == "wasm32");
+    let root = dir.canonicalize().map_err(|e| format!("{}: {e}", dir.display()))?;
     let mut out = String::new();
     for line in text.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')) {
         let f: Vec<&str> = line.split(" | ").map(str::trim).collect();
@@ -91,6 +92,10 @@ fn craft_fonts(dir: &Path) -> Result<String, String> {
             continue;
         }
         let path = dir.join(file).canonicalize().map_err(|e| format!("{file}: {e}"))?;
+        // The manifest is supplier data: embed only regular files inside the checkout.
+        if !path.starts_with(&root) || !path.is_file() {
+            return Err(format!("{file}: not a file inside the font checkout"));
+        }
         println!("cargo::rerun-if-changed={}", path.display());
         let scripts: Vec<String> = scripts.split(',').map(|s| format!("{:?}", s.trim())).collect();
         let _ = writeln!(

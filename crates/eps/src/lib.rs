@@ -28,7 +28,12 @@
 //! - `import`: the PostScript interpreter.
 //! - `print`: print jobs as PostScript files ([`print()`]), their pages drawn by `scene`.
 //! - `legacy_ai`: legacy `.ai` files of version 7 ([`export_legacy_ai`]), with their layers and groups.
+//! - `ai_editing`: the editing copy of the art a PDF-compatible `.ai` file carries
+//!   ([`export_ai_editing`], [`ai_private_data`]).
+//! - `ai_ops`: the path and line style operators those two write.
 
+mod ai_editing;
+mod ai_ops;
 mod import;
 mod latin;
 mod legacy_ai;
@@ -37,8 +42,12 @@ mod ps;
 mod scene;
 mod tiff;
 
-pub use import::{Imported, POSTSCRIPT_ERRORS, ai_alone, family_style, import, import_trusting, import_with, is_loss, layered_ai, page};
-pub use legacy_ai::{HiddenObjects, LegacyAiOptions, LegacyAiOutput, export_legacy_ai};
+pub use ai_editing::{AiEditingOptions, AiEditingOutput, CREATOR_VERSION, export_ai_editing, private_data as ai_private_data};
+pub use import::{
+    AiLayers, Imported, POSTSCRIPT_ERRORS, ai_alone, ai_alone_on_page, ai_layers_alone, ai_opened_artboard, family_style, import, import_trusting,
+    import_with, is_loss, layered_ai, layered_ai_from, page,
+};
+pub use legacy_ai::{HiddenObjects, LegacyAiOptions, LegacyAiOutput, export_legacy_ai, writes_image_mask};
 pub use print::{PrintJob, PrintPage, print};
 
 use vectorcraft_doc::Document;

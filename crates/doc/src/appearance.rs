@@ -10,10 +10,12 @@ mod stroke_style;
 
 pub(crate) use layers::HEAD_REACH;
 pub use layers::{Effect, FillLayer, StrokeGradientMode, StrokeLayer, stroke_paint_bounds};
-pub use profile::{PressureProfile, ProfilePreset, SavedProfile, WidthProfile};
+pub use profile::{AngleProfile, PressureProfile, ProfilePreset, SavedProfile, WidthProfile};
 pub use stroke_style::{ArrowAlign, Arrowhead, Dash, LineCap, LineJoin, StrokeAlign};
 
 /// One entry of the appearance stack.
+// A stroke takes 328 bytes and a fill 104; an appearance holds a few of each.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum AppearanceItem {
@@ -126,11 +128,15 @@ impl Appearance {
     pub fn stroke_mut(&mut self) -> Option<&mut StrokeLayer> {
         self.items.iter_mut().rev().find_map(|i| if let AppearanceItem::Stroke(s) = i { Some(s) } else { None })
     }
-    /// This appearance for other art: the pen pressure its strokes were drawn with stays with them.
+    /// This appearance for other art: the pen pressure, tilt, bearing and rotation its strokes
+    /// were drawn with stay with them.
     pub fn without_pressure(mut self) -> Self {
         for it in &mut self.items {
             if let AppearanceItem::Stroke(s) = it {
                 s.pressure = None;
+                s.tilt = None;
+                s.bearing = None;
+                s.rotation = None;
             }
         }
         self
@@ -290,6 +296,28 @@ impl Appearance {
             scale(e, s);
         }
     }
+    /// The id of Effect › SVG Filters' effect, whose `origin` parameter is a point of the document.
+    pub const SVG_FILTER: &str = "svg.filter";
+
+    /// Does any effect (the object's or a fill's or stroke's) hold an SVG filter?
+    pub fn has_svg_filter(&self) -> bool {
+        self.effects.iter().chain(self.items.iter().flat_map(|i| i.effects().iter())).any(|e| e.id == Self::SVG_FILTER)
+    }
+
+    /// Move the `origin` of every SVG filter effect (where its user space starts in the document)
+    /// by `a`, as the object it is on moves.
+    pub fn transform_svg_filters(&mut self, a: kurbo::Affine) {
+        let items = self.items.iter_mut().flat_map(|i| i.effects_mut().iter_mut());
+        for e in self.effects.iter_mut().chain(items).filter(|e| e.id == Self::SVG_FILTER) {
+            let at =
+                |i: usize| e.params.get("origin").and_then(|o| o.get(i)).and_then(serde_json::Value::as_f64).filter(|v| v.is_finite()).unwrap_or(0.0);
+            let p = a * kurbo::Point::new(at(0), at(1));
+            if p.x.is_finite() && p.y.is_finite() && e.params.is_object() {
+                e.params["origin"] = serde_json::json!([p.x, p.y]);
+            }
+        }
+    }
+
     /// Gradient paints of the fills and strokes.
     fn gradients_mut(&mut self) -> impl Iterator<Item = &mut vectorcraft_color::GradientPaint> {
         self.items.iter_mut().filter_map(|i| match i {
@@ -502,6 +530,27 @@ impl Appearance {
         self.items.insert(to, it);
         let now_below = if below { to <= others_below } else { to < others_below };
         self.set_contents_at(others_below + usize::from(now_below));
+        Some(to)
+    }
+    /// Move items `from` (ascending paint-order indices, no repeats) as one block, in their order,
+    /// so the lowest lands at `to` (clamped); returns it. The contents stay between the same unmoved
+    /// items; a block landing right at them keeps its lowest item's side. None (and nothing changed)
+    /// when an index is missing.
+    pub fn move_items(&mut self, from: &[usize], to: usize) -> Option<usize> {
+        let (&first, _) = from.split_first()?;
+        if from.iter().any(|i| *i >= self.items.len()) {
+            return None;
+        }
+        let below = first < self.contents_at();
+        // From the top down, so the lower indices stay valid; then back in order.
+        let mut block: Vec<AppearanceItem> = from.iter().rev().filter_map(|&i| self.remove_item(i)).collect();
+        block.reverse();
+        let others_below = self.contents_at();
+        let to = to.min(self.items.len());
+        let m = block.len();
+        self.items.splice(to..to, block);
+        let now_below = if below { to <= others_below } else { to < others_below };
+        self.set_contents_at(others_below + if now_below { m } else { 0 });
         Some(to)
     }
 }

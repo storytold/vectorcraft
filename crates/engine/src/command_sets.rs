@@ -24,10 +24,12 @@ pub const FIT_ACTIVE_ARTBOARD: [&str; 2] = ["artboard.fitToArt", "artboard.fitTo
 
 /// `(command, param)` pairs the journal records only so a replay reproduces the original run
 /// (dates from the clock: `cmd::clock_date`; the artboards the app passes to the
-/// [`ON_ACTIVE_ARTBOARD`] and [`FIT_ACTIVE_ARTBOARD`] commands and to a batch; the view's center
-/// the app passes to Edit Symbol); an action leaves them out ([`Session::journal_for_action`]).
-const REPLAY_ONLY: [(&str, &str); 16] = [
+/// [`ON_ACTIVE_ARTBOARD`] and [`FIT_ACTIVE_ARTBOARD`] commands and to a batch; the artboards the
+/// Artboard tool had selected for its commands; the view's center the app passes to Edit Symbol);
+/// an action leaves them out ([`Session::journal_for_action`]).
+const REPLAY_ONLY: [(&str, &str); 22] = [
     ("file.new", "created"),
+    ("edit.newDocumentFromState", "created"),
     ("document.save", "modified"),
     ("file.saveAs", "modified"),
     ("edit.pasteInPlace", "artboard"),
@@ -39,6 +41,11 @@ const REPLAY_ONLY: [(&str, &str); 16] = [
     ("artboard.fitToArt", "index"),
     ("artboard.fitToArt", "indices"),
     ("artboard.fitToSelection", "index"),
+    ("artboard.duplicate", "selectedArtboards"),
+    ("artboard.copy", "selectedArtboards"),
+    ("artboard.cut", "selectedArtboards"),
+    ("artboard.rename", "selectedArtboards"),
+    ("artboard.switchOrientation", "selectedArtboards"),
     ("select.allOnArtboard", "artboard"),
     ("symbol.edit", "artboard"),
     ("symbol.edit", "viewCenter"),
@@ -93,6 +100,11 @@ const WAIT_FOR_TOOL_EDIT: &[&str] = &[
 pub fn waits_for_tool_edit(id: &str) -> bool {
     find_command(id).is_some_and(|spec| spec.journal || WAIT_FOR_TOOL_EDIT.contains(&id))
 }
+
+/// Journaled commands that write a file and change nothing in the document: with an object of a
+/// dynamic symbol instance's art selected, they read the instance as queries do
+/// ([`crate::Session::execute`]).
+pub(crate) const JOURNALED_READS: &[&str] = &["css.export"];
 
 /// Commands that act on the selection and take `ids` by selecting them first (`select.set`, with
 /// its checks), then running as on the selection: the result and the selection afterwards are the

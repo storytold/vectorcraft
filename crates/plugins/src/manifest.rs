@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
 use crate::dialog::ParamUi;
+use crate::permissions::{self, API_LEVEL, PROGRESS_API, Permission};
 use crate::{Error, Result};
 
 /// Longest manifest the host reads.
@@ -113,6 +114,33 @@ pub enum ParamSpec {
         #[serde(default = "list_max")]
         max_items: usize,
     },
+    /// A color (a color button that opens a color picker). Its default, and a value passed to
+    /// `plugin.run`, is a color object as paints hold one (`{"model": "rgb", "r", "g", "b"}`, or
+    /// `cmyk`, `gray`, `lab`) or a hex string (`"#3a7bd5"`); the plug-in always gets a color object.
+    Color {
+        /// As the manifest gives it (`null`: black), read with [`color_value`] when used, so a hex
+        /// default follows the working RGB space in use then, not the one at install.
+        #[serde(default)]
+        default: Value,
+    },
+}
+
+/// A color parameter's value: a color object, or a hex string (display sRGB, converted into the
+/// active working RGB space as the color picker's choices are), its components clamped into range.
+pub fn color_value(v: &Value) -> Option<vectorcraft_color::Color> {
+    use vectorcraft_color::{Color, cms};
+    let c = match v {
+        Value::String(s) => match Color::from_hex(s)? {
+            Color::Rgb { r, g, b } => {
+                let [r, g, b] = cms::active().srgb_to_rgb([r, g, b]);
+                Color::rgb(r, g, b)
+            }
+            other => other,
+        },
+        Value::Object(_) => serde_json::from_value(v.clone()).ok()?,
+        _ => return None,
+    };
+    Some(crate::objects::clamp_color(c))
 }
 
 fn int_min() -> i64 {
@@ -126,6 +154,12 @@ fn text_max() -> usize {
 }
 fn list_max() -> usize {
     16
+}
+fn first_api() -> u32 {
+    1
+}
+fn is_first_api(api: &u32) -> bool {
+    *api == 1
 }
 
 /// One declared parameter: what it holds, and how dialogs show it. In the manifest both are keys of
@@ -154,6 +188,7 @@ impl ParamSpec {
             ParamSpec::Choice { options, default } => json!(default.clone().or_else(|| options.first().cloned()).unwrap_or_default()),
             ParamSpec::Text { default, max_length } => json!(default.chars().take(*max_length).collect::<String>()),
             ParamSpec::NumberList { min, max, default, .. } => json!(default.iter().map(|x| x.clamp(*min, *max)).collect::<Vec<f64>>()),
+            ParamSpec::Color { default } => serde_json::to_value(color_value(default).unwrap_or_default()).unwrap_or_default(),
         }
     }
 
@@ -172,6 +207,9 @@ impl ParamSpec {
                     return bad("default is not one of the options");
                 }
                 Ok(())
+            }
+            ParamSpec::Color { default } if !default.is_null() && color_value(default).is_none() => {
+                bad("a color default must be a color object or a hex string such as \"#3a7bd5\"")
             }
             ParamSpec::Text { default, max_length } if !(1..=MAX_TEXT).contains(max_length) || default.chars().count() > *max_length => {
                 bad(&format!("`maxLength` must be 1-{MAX_TEXT}, and the default no longer"))
@@ -205,6 +243,13 @@ pub struct Manifest {
     pub description: String,
     #[serde(default)]
     pub author: String,
+    /// The plug-in API level it was built for, 1 to [`API_LEVEL`] (1 when left out).
+    #[serde(default = "first_api", skip_serializing_if = "is_first_api")]
+    pub api: u32,
+    /// The permissions it asks for ([`crate::permissions`]), which the user approves when it is
+    /// installed. Left out, it gets the ones its kind implies ([`Permission::implied`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub permissions: Option<Vec<String>>,
     /// Parameters in declaration (dialog) order; a JSON object `{"name": spec, …}` in the manifest.
     #[serde(default, deserialize_with = "ordered_params", serialize_with = "params_as_object")]
     pub params: Vec<(String, Param)>,
@@ -238,6 +283,8 @@ impl Manifest {
             kind: Kind::Filter,
             description: String::new(),
             author: String::new(),
+            api: 1,
+            permissions: None,
             params: Vec::new(),
             extensions: Vec::new(),
             budget: Budget::Light,
@@ -256,6 +303,15 @@ impl Manifest {
         }
         if self.version.len() > 32 || self.description.len() > 1024 || self.author.len() > 128 {
             return Err(Error::Manifest("`version`, `description` or `author` is too long".into()));
+        }
+        if !(1..=API_LEVEL).contains(&self.api) {
+            return Err(Error::Manifest(format!("`api` is {}; this host implements plug-in API levels 1 to {API_LEVEL}", self.api)));
+        }
+        if let Some(names) = &self.permissions
+            && permissions::validate(self.kind, names)?.contains(&Permission::Progress)
+            && self.api < PROGRESS_API
+        {
+            return Err(Error::Manifest(format!("permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}")));
         }
         self.validate_extensions()?;
         match (self.budget, self.kind) {
@@ -321,6 +377,7 @@ impl Manifest {
                 ParamSpec::NumberList { min, max, min_items, max_items, .. } => {
                     format!("{k}: {min_items} to {max_items} numbers {min}..{max} ({})", p.spec.default_value())
                 }
+                ParamSpec::Color { default } => format!("{k}: color object or hex ({})", color_value(default).unwrap_or_default().to_hex()),
             })
             .collect();
         format!("{{{}}}", parts.join(", "))
@@ -329,6 +386,19 @@ impl Manifest {
     /// Every parameter at its default value.
     pub fn defaults(&self) -> Map<String, Value> {
         self.params.iter().map(|(k, p)| (k.clone(), p.spec.default_value())).collect()
+    }
+
+    /// What the plug-in may do: the permissions it lists, else the ones its kind implies.
+    pub fn permissions(&self) -> Vec<Permission> {
+        match &self.permissions {
+            Some(names) => permissions::validate(self.kind, names).unwrap_or_default(),
+            None => Permission::implied(self.kind).to_vec(),
+        }
+    }
+
+    /// Does installing it need the user's approval: does it list permissions?
+    pub fn asks_permissions(&self) -> bool {
+        self.permissions.as_ref().is_some_and(|p| !p.is_empty())
     }
 
     /// Validates user `params` against the schema: missing keys take their defaults, numbers are
@@ -381,6 +451,10 @@ impl Manifest {
                     }
                     let numbers: Option<Vec<f64>> = items.iter().map(|x| x.as_f64().filter(|f| f.is_finite()).map(|f| f.clamp(*min, *max))).collect();
                     json!(numbers.ok_or_else(|| wrong("a list of numbers"))?)
+                }
+                ParamSpec::Color { .. } => {
+                    let c = color_value(v).ok_or_else(|| wrong("a color object or a hex string such as \"#3a7bd5\""))?;
+                    serde_json::to_value(c).map_err(|e| Error::Params(format!("`{k}`: {e}")))?
                 }
             };
             out.insert(k.clone(), resolved);
@@ -559,6 +633,47 @@ mod tests {
         }
     }
 
+    /// A manifest lists the permissions it asks for, checked against its kind; without the key it
+    /// gets the ones its kind implies, as plug-ins did before manifests listed them, and needs no
+    /// approval. `api` is 1 when left out, and a later level is refused.
+    #[test]
+    fn permissions_and_api_level() {
+        let listed = Manifest::parse(br#"{"id":"a","name":"x","kind":"filter","api":1,"permissions":["doc.write","doc.read"]}"#).unwrap();
+        assert_eq!(listed.permissions(), [Permission::DocRead, Permission::DocWrite]);
+        assert!(listed.asks_permissions());
+        assert_eq!(serde_json::to_value(&listed).unwrap()["permissions"], json!(["doc.write", "doc.read"]));
+        assert!(serde_json::to_value(&listed).unwrap().get("api").is_none(), "level 1 isn't written back");
+        let plain = Manifest::parse(br#"{"id":"a","name":"x","kind":"filter"}"#).unwrap();
+        assert_eq!((plain.api, plain.asks_permissions()), (1, false));
+        assert_eq!(plain.permissions(), [Permission::DocRead, Permission::DocWrite, Permission::State]);
+        assert!(serde_json::to_value(&plain).unwrap().get("permissions").is_none());
+        let effect = Manifest::parse(br#"{"id":"a","name":"x","kind":"effect"}"#).unwrap();
+        assert_eq!(effect.permissions(), [Permission::DocRead, Permission::EffectRender]);
+        let exporter = Manifest::parse(br#"{"id":"a","name":"x","kind":"exporter","extensions":["plt"]}"#).unwrap();
+        assert_eq!(exporter.permissions(), [Permission::DocRead, Permission::ExportWrite]);
+        assert!(!Manifest::parse(br#"{"id":"a","name":"x","kind":"filter","permissions":[]}"#).unwrap().asks_permissions());
+        // Level 2 adds `progress`, which only a level-2 manifest may list.
+        let level2 = Manifest::parse(br#"{"id":"a","name":"x","kind":"filter","api":2,"permissions":["progress","doc.read"]}"#).unwrap();
+        assert_eq!((level2.api, level2.permissions()), (2, vec![Permission::DocRead, Permission::Progress]));
+        assert_eq!(serde_json::to_value(&level2).unwrap()["api"], json!(2));
+        let plain2 = Manifest::parse(br#"{"id":"a","name":"x","kind":"filter","api":2}"#).unwrap();
+        assert!(!plain2.permissions().contains(&Permission::Progress), "never implied");
+        for (bad, says) in [
+            (r#"{"id":"a","name":"x","kind":"filter","permissions":["doc.read","net.fetch"]}"#, "unknown permission `net.fetch`"),
+            (r#"{"id":"a","name":"x","kind":"filter","permissions":["ui.panel"]}"#, "reserved"),
+            (r#"{"id":"a","name":"x","kind":"effect","permissions":["doc.read"]}"#, "effect.render"),
+            (r#"{"id":"a","name":"x","kind":"filter","permissions":"doc.read"}"#, "manifest"),
+            (r#"{"id":"a","name":"x","kind":"filter","permissions":["progress"]}"#, "`progress` needs plug-in API level 2"),
+            (r#"{"id":"a","name":"x","kind":"filter","api":1,"permissions":["progress"]}"#, "`progress` needs plug-in API level 2"),
+            (r#"{"id":"a","name":"x","kind":"filter","api":3}"#, "`api` is 3"),
+            (r#"{"id":"a","name":"x","kind":"filter","api":0}"#, "`api` is 0"),
+            (r#"{"id":"a","name":"x","kind":"filter","api":-1}"#, "manifest"),
+        ] {
+            let e = Manifest::parse(bad.as_bytes()).unwrap_err().to_string();
+            assert!(e.contains(says), "{bad}: {e}");
+        }
+    }
+
     #[test]
     fn strings_and_number_lists_resolve_like_the_other_types() {
         let m = Manifest::parse(
@@ -578,6 +693,67 @@ mod tests {
             m.params_doc(),
             r#"{label: string of at most 8 ("Rose"), angles: 1 to 3 numbers 0..360 ([45.0,135.0]), free: string of at most 256 ("")}"#
         );
+    }
+
+    /// A color's default and value may be a color object or a hex string; the plug-in always gets
+    /// a color object, its components clamped. Without a default it is black.
+    #[test]
+    fn colors_resolve_to_color_objects() {
+        let m = Manifest::parse(
+            br##"{"id":"org.example.grid","name":"Grid","kind":"filter","params":{
+                "line":{"type":"color","default":"#ff0000"},
+                "ink":{"type":"color","default":{"model":"cmyk","c":1,"m":0,"y":0,"k":2}},
+                "plain":{"type":"color"}}}"##,
+        )
+        .unwrap();
+        assert_eq!(
+            Value::Object(m.defaults()),
+            json!({"line": {"model": "rgb", "r": 1.0, "g": 0.0, "b": 0.0},
+                   "ink": {"model": "cmyk", "c": 1.0, "m": 0.0, "y": 0.0, "k": 1.0},
+                   "plain": {"model": "rgb", "r": 0.0, "g": 0.0, "b": 0.0}})
+        );
+        let p = m.resolve_params(&json!({"line": "#0000ff", "ink": {"model": "gray", "k": 0.5}})).unwrap();
+        assert_eq!(p["line"], json!({"model": "rgb", "r": 0.0, "g": 0.0, "b": 1.0}));
+        assert_eq!(p["ink"], json!({"model": "gray", "k": 0.5}));
+        for bad in [json!({"line": "not a color"}), json!({"line": 3}), json!({"line": {"model": "hsv", "h": 1}})] {
+            assert!(m.resolve_params(&bad).is_err(), "{bad}");
+        }
+        assert!(m.params_doc().starts_with("{line: color object or hex (#ff0000)"));
+        assert!(Manifest::parse(br#"{"id":"a","name":"x","kind":"filter","params":{"c":{"type":"color","default":"nope"}}}"#).is_err());
+    }
+
+    /// A hex color is display sRGB: in a wide-gamut working RGB space it becomes the working RGB
+    /// color that shows as that hex, read when used, while the manifest keeps the default as written.
+    #[test]
+    fn hex_colors_follow_the_working_rgb_space() {
+        const CHILD: &str = "VECTORCRAFT_TEST_PLUGIN_COLOR_PROFILE";
+        if std::env::var_os(CHILD).is_none() {
+            // Color settings are process-wide: exercise this profile in a separate test process.
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "manifest::tests::hex_colors_follow_the_working_rgb_space", "--nocapture"])
+                .env(CHILD, "1")
+                .output()
+                .unwrap();
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            assert!(
+                output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+                "isolated color profile test failed:\n{stdout}\n{}",
+                String::from_utf8_lossy(&output.stderr),
+            );
+            return;
+        }
+        use vectorcraft_color::{Color, cms};
+        let m =
+            Manifest::parse(br##"{"id":"org.example.grid","name":"Grid","kind":"filter","params":{"line":{"type":"color","default":"#3a7bd5"}}}"##)
+                .unwrap();
+        cms::set_active(&cms::ColorSettings { rgb: cms::WIDE_GAMUT_RGB.into(), ..Default::default() }).unwrap();
+        for c in [m.defaults()["line"].clone(), m.resolve_params(&json!({"line": "#3a7bd5"})).unwrap()["line"].clone()] {
+            let c: Color = serde_json::from_value(c).unwrap();
+            assert_ne!(c, Color::rgb8(0x3a, 0x7b, 0xd5), "converted into the working space");
+            assert_eq!(c.to_hex(), "#3a7bd5", "shows as the hex given");
+        }
+        assert_eq!(serde_json::to_value(&m).unwrap()["params"]["line"]["default"], json!("#3a7bd5"), "kept as written");
+        cms::set_active(&cms::ColorSettings::default()).unwrap();
     }
 
     #[test]

@@ -133,6 +133,15 @@ fn geometry_effects_are_deterministic() {
     }
 }
 
+/// The effects that symbol art across 9-slice guides draws once around all its cells are raster
+/// effects that do not reshape it.
+#[test]
+fn nine_slice_painted_effects_are_raster_effects() {
+    for id in vectorcraft_doc::PAINTED_EFFECTS {
+        assert!(is_raster(id) && !is_geometry(id), "{id}");
+    }
+}
+
 #[test]
 fn open_paths_stay_open() {
     let line = PathData::single(SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(50.0, 20.0), Point::new(100.0, 0.0)], false));
@@ -396,6 +405,54 @@ fn stacked_effects_on_art_stay_within_the_anchor_budget() {
     // One Roughen alone makes 10 × 556: the budget binds, and goes to the paths in turn.
     assert!(total > 4_000 && total <= 5_000, "{total}");
     assert_eq!(reshaped, 10);
+}
+
+/// A path that keeps its shape because its Transform effect would pass the budget keeps the
+/// gradients that paint the art as a whole in place too, also with Scale Strokes & Effects on.
+#[test]
+fn art_past_the_budget_keeps_its_own_gradients_in_place() {
+    use std::sync::Arc;
+
+    use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    use vectorcraft_doc::{AppearanceItem, FillLayer, NodeId, color::Paint};
+    let id = NodeId(9);
+    let stops = vec![GradientStop::new(0.0, vectorcraft_color::Color::BLACK), GradientStop::new(1.0, vectorcraft_color::Color::WHITE)];
+    let geom = GradientGeom { start: (0.0, 50.0).into(), end: (100.0, 50.0).into(), aspect: 1.0, focal: None };
+    let placed = Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..GradientPaint::new(Gradient::new(GradientKind::Linear, stops)) }));
+    let circle = || Arc::new(Node::path(id, shapes::ellipse(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default()));
+    // The group's own fill, a gradient placed across the circle, after `carry` moves it.
+    let own_end = |carry: &crate::Carry| {
+        let mut ap = Appearance::default();
+        ap.items.push(AppearanceItem::Fill(FillLayer::new(placed.clone())));
+        carry.apply(&mut ap);
+        match ap.fill_paint() {
+            Paint::Gradient(g) => g.geom.map(|g| g.end.x),
+            _ => None,
+        }
+    };
+    for params in [json!({"scaleH": 1000, "scaleV": 1000}), json!({"scaleH": 1000, "scaleV": 1000, "strokes": true})] {
+        let grow = fx("distort.transform", params.clone());
+        let mut art = Node::group(id, vec![circle()]);
+        let carry = crate::reshape::reshape_leaves_within(&mut art, &[&grow], Budget::EFFECTS);
+        let end = own_end(&carry).unwrap();
+        assert!((end - 550.0).abs() < 1e-6, "{params}: within the budget the group's gradient grows with the circle: {end}");
+        // No room beyond what the circle costs: scaled up, it would be drawn with more lines.
+        let mut art = Node::group(id, vec![circle()]);
+        let carry = crate::reshape::reshape_leaves_within(&mut art, &[&grow], Budget { anchors: usize::MAX, lines: 0 });
+        let b = art.geometric_bounds().unwrap();
+        assert!(b.width() < 101.0 && b.height() < 101.0, "{params}: the circle keeps its shape: {b:?}");
+        assert_eq!(own_end(&carry), Some(100.0), "{params}: the group's gradient stays where it was placed");
+        // A group inside the art whose square took the effect moves its own gradient all the same.
+        let square = Arc::new(Node::path(NodeId(3), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default()));
+        let mut inner = Node::group(NodeId(2), vec![square]);
+        inner.appearance.items.push(AppearanceItem::Fill(FillLayer::new(placed.clone())));
+        let mut art = Node::group(id, vec![circle(), Arc::new(inner)]);
+        let carry = crate::reshape::reshape_leaves_within(&mut art, &[&grow], Budget { anchors: usize::MAX, lines: 0 });
+        assert_eq!(own_end(&carry), Some(100.0), "{params}: the art's own gradient stays");
+        let inner = &art.children().unwrap()[1];
+        let Paint::Gradient(g) = inner.appearance.fill_paint() else { panic!("a gradient") };
+        assert!((g.geom.unwrap().end.x - 550.0).abs() < 1e-6, "{params}: the inner group's gradient: {:?}", g.geom);
+    }
 }
 
 /// #3578: a large Roughen draws each of its points as many lines; they stay within the budget,
@@ -934,6 +991,18 @@ fn round_corners_keeps_where_a_closed_path_starts() {
 }
 
 #[test]
+fn twist_turns_clockwise_for_positive_angles() {
+    // A positive angle turns clockwise, a negative one counterclockwise
+    // (https://helpx.adobe.com/illustrator/desktop/manage-objects/reshape-transform-objects/distort-and-transform-effects-in-illustrator.html).
+    // The document's y runs down, so clockwise on the page takes a point right of the center down.
+    let right = PathData::single(SubPath::polyline(&[Point::new(55.0, 50.0), Point::new(56.0, 50.0)], false));
+    let bounds = Rect::new(0.0, 0.0, 100.0, 100.0);
+    let turned = |angle: f64| apply_geometry(&[fx("distort.twist", json!({"angle": angle}))], &right, bounds).subpaths[0].anchors[0].p;
+    assert!(turned(45.0).y > 50.5, "{:?}", turned(45.0));
+    assert!(turned(-45.0).y < 49.5, "{:?}", turned(-45.0));
+}
+
+#[test]
 fn twist_fixes_the_outer_circle_and_rotates_inside() {
     let out = run("distort.twist", json!({"angle": 0}), &square());
     assert_eq!(out, square());
@@ -1210,14 +1279,29 @@ fn a_repeat_of_a_symbol_whose_art_is_a_repeat_shares_the_instance_budget() {
 
 #[test]
 fn a_distance_parameters_range_comes_from_its_documentation() {
-    assert_eq!(length_range("pixelate.colorHalftone", "maxRadius"), Some(4.0..=127.0));
+    assert_eq!(length_range("stylize.glowingEdges", "edgeWidth"), Some(1.0..=14.0));
+    // A distance documented without a range, and unknown effects and parameters, have none.
+    assert_eq!(length_range("path.offsetPath", "offset"), None);
+    assert_eq!(length_range("stylize.glowingEdges", "edgeBrightness"), None);
+    assert_eq!(length_range("no.such", "edgeWidth"), None);
+}
+
+#[test]
+fn color_halftones_radius_is_in_raster_pixels_not_a_distance() {
+    // Pixels of the Document Raster Effects resolution, as public documentation gives it (#3260):
+    // no unit setting changes it, so it isn't a distance in points.
+    assert_eq!(raster_px_range("pixelate.colorHalftone", "maxRadius"), Some(4.0..=127.0));
+    assert!(!is_length("pixelate.colorHalftone", "maxRadius", false));
+    assert_eq!(length_range("pixelate.colorHalftone", "maxRadius"), None);
+    assert_eq!(raster_px_range("pixelate.colorHalftone", "channel1"), None);
+    assert_eq!(raster_px_range("stylize.glowingEdges", "edgeWidth"), None);
     // The effect applies the range's floor to a radius below it.
     assert_eq!(
         crate::pixel::parse("pixelate.colorHalftone", &json!({"maxRadius": 1})),
         crate::pixel::parse("pixelate.colorHalftone", &json!({"maxRadius": 4}))
     );
-    // A distance documented without a range, and unknown effects and parameters, have none.
-    assert_eq!(length_range("path.offsetPath", "offset"), None);
-    assert_eq!(length_range("pixelate.colorHalftone", "channel1"), None);
-    assert_eq!(length_range("no.such", "maxRadius"), None);
+    // Scale Strokes & Effects scales it with the object, as it does distances.
+    let mut e = crate::new_effect("pixelate.colorHalftone", &json!({"maxRadius": 10})).unwrap();
+    crate::scale_effect(&mut e, 2.0);
+    assert_eq!((e.params["maxRadius"].as_f64(), e.params["channel1"].as_f64()), (Some(20.0), Some(108.0)));
 }
