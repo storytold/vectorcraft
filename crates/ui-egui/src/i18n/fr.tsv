@@ -5841,7 +5841,7 @@ axis	Y Axis	Axe Y
 @msg	permission `{shown}` is listed twice	l’autorisation `{shown}` figure deux fois
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	l’autorisation `{shown}` est réservée à une future API de module externe ; cet hôte ne l’accorde pas
 @msg	only a filter declares `inputs`	seul un filtre déclare `inputs`
-@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` désigne un type d’objet inconnu `{shown}` : utilisez type, image ou symbolInstance
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` désigne un type d’objet inconnu `{shown}` : utilisez type, image ou symbolInstance
 @msg	`inputs` lists `{shown}` twice	`inputs` mentionne `{shown}` deux fois
 @msg	`inputs` needs `api` 2 or later	`inputs` nécessite `api` 2 ou plus
 @msg	`inputs` needs the permission `doc.read`	`inputs` nécessite l’autorisation `doc.read`
