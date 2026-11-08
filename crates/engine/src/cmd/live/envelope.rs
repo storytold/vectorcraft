@@ -84,7 +84,7 @@ pub(super) fn env_make_mesh(s: &mut Session, p: &Value) -> Result<Value> {
     let roots = roots_param(s, p)?;
     let st = s.doc()?;
     let nodes: Vec<Arc<Node>> = roots.iter().filter_map(|id| st.doc.node(*id).cloned()).map(Arc::new).collect();
-    let src = live::nodes_bounds(&nodes).ok_or_else(|| bad(C, "selection has no bounds"))?;
+    let src = live::envelope_content_bounds(&nodes).ok_or_else(|| bad(C, "selection has no bounds"))?;
     let kind = EnvelopeKind::Mesh { rows, cols, points: live::grid_points(src, rows, cols), handles: vec![] };
     let defaults = envelope_defaults(s);
     let id = s.edit("Make Envelope", |d, sel| wrap(d, sel, &roots, |id, content| envelope(id, content, kind, defaults)))?;

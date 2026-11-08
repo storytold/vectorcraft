@@ -41,6 +41,7 @@ pub use fontdb::{
     style_weight, system_font_dirs, user_font_dirs,
 };
 pub use hyphen::{hyphenation_exceptions, set_hyphenation_exceptions};
+pub use layout::{envelope_ink, register_envelope_ink};
 use std::sync::Arc;
 pub use svg_glyph::{SvgGlyphReader, set_svg_glyph_reader};
 
@@ -438,6 +439,20 @@ impl TextLayout {
         // Ruby is covered by its line's ascent, but its ink can overhang sideways past the line.
         let ruby = self.ruby.iter().map(outlined);
         let inlines = self.inlines.iter().map(|i| Some(i.bounds));
+        glyphs.chain(ruby).chain(inlines).flatten().reduce(|a, b| a.union(b))
+    }
+    /// The box of [`Self::ink_bounds`]' ink with text space mapped by `m`: the glyph and ruby
+    /// outlines are mapped point by point, so a rotated or sheared `m` gives the outlines' own
+    /// bounds. Images, color glyphs and inline graphics count by their mapped boxes.
+    pub fn ink_bounds_in(&self, m: Affine) -> Option<Rect> {
+        let outlined = |g: &PositionedGlyph| (!g.outline.elements().is_empty()).then(|| (m * &g.outline).bounding_box());
+        let glyphs = self.glyphs.iter().flat_map(|g| {
+            let image = g.placed_image().map(|(image, xf)| (m * xf).transform_rect_bbox(image.rect()));
+            let colour = g.colour.as_ref().and_then(|c| c.geometric_bounds()).map(|b| (m * g.xf).transform_rect_bbox(b));
+            [outlined(g), image, colour]
+        });
+        let ruby = self.ruby.iter().map(outlined);
+        let inlines = self.inlines.iter().map(|i| Some(m.transform_rect_bbox(i.bounds)));
         glyphs.chain(ruby).chain(inlines).flatten().reduce(|a, b| a.union(b))
     }
     /// All glyph outlines combined (e.g. for Create Outlines).
