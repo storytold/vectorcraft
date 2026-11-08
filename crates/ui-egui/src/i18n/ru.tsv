@@ -4837,6 +4837,7 @@ axis	Both	Оба
 @msg	object ids are non-negative integers, not {v}	идентификаторы объектов — неотрицательные целые числа, а не {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} должно быть массивом идентификаторов объектов, которые являются неотрицательными целыми числами
 @msg	invalid object id {value}: expected a non-negative integer	недопустимый идентификатор объекта {value}: ожидается неотрицательное целое число
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	элемент {index} в `{key}` равен {value}, а не идентификатору объекта (неотрицательному целому числу)
 @msg	no such object id {value}	объект с идентификатором {value} не существует
 @msg	id {value} is a layer, not an object	идентификатор {value} относится к слою, а не к объекту
 @msg	id {value} is a layer, not an object; move layers with layer.move	идентификатор {value} относится к слою, а не к объекту; перемещайте слои с помощью layer.move

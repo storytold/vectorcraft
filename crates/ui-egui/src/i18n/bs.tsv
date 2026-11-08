@@ -5014,6 +5014,7 @@ imageTrace	Outline	Obris
 @msg	object ids are non-negative integers, not {v}	ID-ovi objekata su nenegativni cijeli brojevi, a ne {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} mora biti niz nenegativnih cjelobrojnih ID-ova objekata
 @msg	invalid object id {value}: expected a non-negative integer	nevažeći ID objekta {value}: očekuje se nenegativan cijeli broj
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	stavka {index} u `{key}` je {value}, a ne ID objekta (nenegativan cijeli broj)
 @msg	no such object id {value}	nema objekta s ID-om {value}
 @msg	id {value} is a layer, not an object	id {value} je sloj, a ne objekat
 @msg	id {value} is a layer, not an object; move layers with layer.move	id {value} je sloj, a ne objekat; slojeve pomjerajte s layer.move

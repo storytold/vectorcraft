@@ -403,7 +403,10 @@ counterparts, `image.info`, `links.info`, `links.goTo`, `links.unembed`, `shaper
 `transparency.editOpacityMask`, `transparency.viewOpacityMask`, `symbol.edit`, the `object.blend.spine.*` commands
 and `path.curvature`) refuse an `id` that is not a non-negative integer (`"abc"`, `"5"`, `true`) with an error and
 change nothing; an omitted or null `id` keeps the default. A command that leaves out an object selected inside a
-selected group also leaves it out when `ids` list it together with a group that holds it.
+selected group also leaves it out when `ids` list it together with a group that holds it. Every command that takes
+`ids` (or `slices`, for the slice commands) refuses a list with an entry that is not a non-negative integer, or a value
+that is not a list, and changes nothing; it does not act on the other entries. The error for an entry names the key,
+the entry's index (from 0) and its value: "`ids` entry 1 is true, not a non-negative integer object id".
 
 Paint values (`fill`, `stroke`) accept `"#rrggbb"`, `"none"`, `[r,g,b]` (0..1), `{"c","m","y","k"}`, `{"gray"}`,
 or a full `paint.setFill` params object (`{"gradient": …}`, `{"swatch": "name"}`).
@@ -4937,7 +4940,8 @@ The Slice tool (`slice`, Shift+K) and the Slice Selection tool (`sliceSelection`
 `object.slice.create {x, y, width, height}` (the Slice tool's drag; it snaps to ruler guides), `object.slice.select
 {slices?, toggle?}`, `object.slice.move {slices?, dx, dy}` (an object slice moves its object),
 `object.slice.setRect {id, x, y, width, height}` (user slices) and `object.slice.delete {slices?}`. Slice ids are user
-slice ids and the ids of objects with an object slice.
+slice ids and the ids of objects with an object slice. `object.slice.select` with `slices` left out or null deselects
+the slices.
 
 ```json
 {"name":"run_command","arguments":{"command":"object.slice.create","params":{"x":0,"y":0,"width":200,"height":80}}}

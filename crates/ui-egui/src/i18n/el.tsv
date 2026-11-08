@@ -4759,6 +4759,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	object ids are non-negative integers, not {v}	τα αναγνωριστικά αντικειμένων πρέπει να είναι μη αρνητικοί ακέραιοι, όχι {v}
 @msg	{key} must be an array of non-negative integer object ids	{key}: πρέπει να είναι πίνακας αναγνωριστικών αντικειμένων που είναι μη αρνητικοί ακέραιοι
 @msg	invalid object id {value}: expected a non-negative integer	μη έγκυρο αναγνωριστικό αντικειμένου {value}: αναμένεται μη αρνητικός ακέραιος
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	το στοιχείο {index} του `{key}` είναι {value}, όχι αναγνωριστικό αντικειμένου (μη αρνητικός ακέραιος)
 @msg	no such object id {value}	δεν υπάρχει αντικείμενο με αναγνωριστικό {value}
 @msg	id {value} is a layer, not an object	το αναγνωριστικό {value} είναι επίπεδο, όχι αντικείμενο
 @msg	id {value} is a layer, not an object; move layers with layer.move	το αναγνωριστικό {value} είναι επίπεδο, όχι αντικείμενο· μετακινήστε τα επίπεδα με το layer.move

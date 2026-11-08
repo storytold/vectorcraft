@@ -15,11 +15,14 @@ impl Session {
         r
     }
 
-    /// Error, under the command's own id, at the first of `ids` that is malformed, names no node, or
-    /// names a layer or sublayer: a command in [`SELECTS_GIVEN_IDS`] acts on objects.
+    /// Error, under the command's own id, at the first of `ids` that is malformed, else at the first
+    /// that names no node or names a layer or sublayer: a command in [`SELECTS_GIVEN_IDS`] acts on
+    /// objects.
     fn check_given_ids(&self, id: &str, params: &Value) -> Result<()> {
         let (Some(st), Some(ids)) = (self.active(), params.get("ids")) else { return Ok(()) };
         let Some(given) = ids.as_array() else { return cmd::checked_ids_param(self, params, "ids", id).map(drop) };
+        // A malformed entry anywhere in the list is refused first, under the key and the entry.
+        cmd::ids_param(params, "ids", id)?;
         for value in given {
             let node = cmd::checked_id(self, value, id)?;
             if st.doc.node(node).is_some_and(|n| n.is_layer()) {
@@ -64,6 +67,13 @@ impl Session {
         }
         if SELECTS_GIVEN_IDS.contains(&id) {
             self.check_given_ids(id, params)?;
+        }
+        // An `ids` list with an entry that is not an object id, or an `ids` that is not a list, is
+        // refused under the command's id before the menu check, which would otherwise run on the
+        // other entries or on the selection. This holds with no document open too, where commands
+        // such as `effect.list` still run.
+        if cmd::params::takes_key(spec.params, "ids") {
+            cmd::ids_param(params, "ids", id)?;
         }
         // Clear's menu needs a selection; an agent supplying explicit targets only needs a
         // document. The command validates those targets before making any edit.

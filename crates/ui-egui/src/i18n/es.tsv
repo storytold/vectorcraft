@@ -4798,6 +4798,7 @@ axis	Both	Ambos
 @msg	object ids are non-negative integers, not {v}	los identificadores de objeto son enteros no negativos, no {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} debe ser una lista de identificadores de objeto que sean enteros no negativos
 @msg	invalid object id {value}: expected a non-negative integer	identificador de objeto no válido {value}: se esperaba un entero no negativo
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	la entrada {index} de `{key}` es {value}, no un identificador de objeto (un entero no negativo)
 @msg	no such object id {value}	no existe el objeto con el identificador {value}
 @msg	id {value} is a layer, not an object	el identificador {value} es una capa, no un objeto
 @msg	id {value} is a layer, not an object; move layers with layer.move	el identificador {value} es una capa, no un objeto; mueva las capas con layer.move

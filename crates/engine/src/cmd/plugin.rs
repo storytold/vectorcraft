@@ -141,7 +141,7 @@ impl FilterRun {
         let st = s.doc()?;
         // While an object of a dynamic symbol instance's art is selected, the selection is refused,
         // as `selected_roots` refuses it.
-        let selected = match ids_param(p, "ids") {
+        let selected = match ids_param(p, "ids", C)? {
             Some(ids) => ids,
             None => {
                 super::edit::refuse_symbol_part(s)?;

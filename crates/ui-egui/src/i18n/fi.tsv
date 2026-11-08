@@ -4983,6 +4983,7 @@ imageTrace	Outline	Ääriviiva
 @msg	object ids are non-negative integers, not {v}	objektitunnukset ovat ei-negatiivisia kokonaislukuja, ei {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} on oltava taulukko objektitunnuksia, jotka ovat ei-negatiivisia kokonaislukuja
 @msg	invalid object id {value}: expected a non-negative integer	virheellinen objektitunnus {value}: odotettiin ei-negatiivista kokonaislukua
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	`{key}`-luettelon kohde {index} on {value}, ei objektitunnus (ei-negatiivinen kokonaisluku)
 @msg	no such object id {value}	objektia tunnuksella {value} ei ole
 @msg	id {value} is a layer, not an object	tunnus {value} on taso, ei objekti
 @msg	id {value} is a layer, not an object; move layers with layer.move	tunnus {value} on taso, ei objekti; siirrä tasoja komennolla layer.move

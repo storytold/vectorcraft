@@ -74,6 +74,52 @@ fn object_filter_recolours_the_selection_as_one_undo_step() {
     assert!(matches!(s.execute("plugin.run", &json!({"id": DESATURATE_ID, "amount": "all"})), Err(EngineError::BadParams { .. })));
 }
 
+/// `plugin.run` refuses an `ids` list with an entry that is not an object id, with an error naming
+/// the key, the entry and its value, and changes nothing. With `ids` left out or null the filter
+/// runs on the selection, as it does on the list of the selection.
+#[test]
+fn object_filter_ids_entries_must_be_ids_and_ids_left_out_take_the_selection() {
+    // A session with the plug-in, a red and a blue rectangle, and the red one selected. The
+    // document has no creation date, so documents made in different seconds compare equal.
+    let fresh = || {
+        let mut s = Session::new();
+        run(&mut s, "file.new", json!({"width": 400, "height": 200, "created": null}));
+        install(&mut s, DESATURATE);
+        let a = rect(&mut s, 10.0, "#ff0000");
+        let b = rect(&mut s, 40.0, "#0000ff");
+        run(&mut s, "select.set", json!({"ids": [a.0]}));
+        (s, a, b)
+    };
+    let (_, a, b) = fresh();
+    for (bad, entry) in [(json!(["abc"]), r#"entry 0 is "abc""#), (json!([a.0, true]), "entry 1 is true"), (json!([{}]), "entry 0 is {}")] {
+        let (mut s, ..) = fresh();
+        let st = s.doc().unwrap();
+        let before = (st.doc.clone(), st.selection.clone(), st.history.undo.len());
+        let r = s.execute("plugin.run", &json!({"id": DESATURATE_ID, "amount": 100, "ids": bad}));
+        let want = format!("`ids` {entry}, not a non-negative integer object id");
+        assert!(matches!(&r, Err(EngineError::BadParams { cmd, msg }) if cmd == "plugin.run" && *msg == want), "{bad}: {r:?}");
+        let st = s.doc().unwrap();
+        assert!((st.doc.clone(), st.selection.clone(), st.history.undo.len()) == before, "{bad}: something changed");
+    }
+    let gray = |s: &Session, id: NodeId| {
+        let [r, g, b] = node(s, id).appearance.fill_paint().color().unwrap().to_rgb_uncalibrated();
+        (r - g).abs() < 1e-6 && (g - b).abs() < 1e-6
+    };
+    let mut docs = vec![];
+    for ids in [None, Some(Value::Null), Some(json!([a.0]))] {
+        let (mut s, ..) = fresh();
+        let mut p = json!({"id": DESATURATE_ID, "amount": 100});
+        if let Some(ids) = &ids {
+            p["ids"] = ids.clone();
+        }
+        let r = run(&mut s, "plugin.run", p);
+        assert_eq!(r["ids"], json!([a.0]), "{ids:?}");
+        assert!(gray(&s, a) && !gray(&s, b), "{ids:?}: only the selected rectangle turns gray");
+        docs.push(s.doc().unwrap().doc.clone());
+    }
+    assert!(docs.windows(2).all(|w| w[0] == w[1]), "left out, null and the selection's list give the same document");
+}
+
 #[test]
 fn object_filters_add_replace_and_generate_objects() {
     let mut s = session();

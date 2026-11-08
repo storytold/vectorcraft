@@ -4840,6 +4840,7 @@ axis	Both	Entrambi
 @msg	object ids are non-negative integers, not {v}	gli ID oggetto sono interi non negativi, non {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} deve essere un array di ID oggetto interi non negativi
 @msg	invalid object id {value}: expected a non-negative integer	ID oggetto {value} non valido: è richiesto un intero non negativo
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	la voce {index} di `{key}` è {value}, non un ID oggetto (intero non negativo)
 @msg	no such object id {value}	nessun oggetto con ID {value}
 @msg	id {value} is a layer, not an object	l’ID {value} è un livello, non un oggetto
 @msg	id {value} is a layer, not an object; move layers with layer.move	l’ID {value} è un livello, non un oggetto; sposta i livelli con layer.move

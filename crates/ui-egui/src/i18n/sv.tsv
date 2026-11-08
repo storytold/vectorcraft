@@ -4715,6 +4715,7 @@ axis	Both	Båda
 @msg	object ids are non-negative integers, not {v}	objekt-id:n är icke-negativa heltal, inte {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} måste vara en array med objekt-id:n som är icke-negativa heltal
 @msg	invalid object id {value}: expected a non-negative integer	ogiltigt objekt-id {value}: ett icke-negativt heltal förväntades
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	post {index} i `{key}` är {value}, inte ett objekt-id (ett icke-negativt heltal)
 @msg	no such object id {value}	det finns inget objekt med id {value}
 @msg	id {value} is a layer, not an object	id {value} är ett lager, inte ett objekt
 @msg	id {value} is a layer, not an object; move layers with layer.move	id {value} är ett lager, inte ett objekt; flytta lager med layer.move

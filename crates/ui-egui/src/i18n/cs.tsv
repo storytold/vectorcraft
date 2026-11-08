@@ -5081,6 +5081,7 @@ imageTrace	Outline	Obrys
 @msg	object ids are non-negative integers, not {v}	ID objektů jsou nezáporná celá čísla, ne {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} musí být pole ID objektů, která jsou nezáporná celá čísla
 @msg	invalid object id {value}: expected a non-negative integer	neplatné ID objektu {value}: očekává se nezáporné celé číslo
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	položka {index} v `{key}` je {value}, nikoli ID objektu (nezáporné celé číslo)
 @msg	no such object id {value}	objekt s ID {value} neexistuje
 @msg	id {value} is a layer, not an object	ID {value} je vrstva, nikoli objekt
 @msg	id {value} is a layer, not an object; move layers with layer.move	ID {value} je vrstva, nikoli objekt; vrstvy přesunete pomocí layer.move

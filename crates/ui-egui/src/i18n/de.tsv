@@ -4735,6 +4735,7 @@ theme	Appearance	Erscheinungsbild
 @msg	object ids are non-negative integers, not {v}	Objekt-IDs sind nicht negative ganze Zahlen, nicht {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} muss ein Array von Objekt-IDs sein, die nicht negative ganze Zahlen sind
 @msg	invalid object id {value}: expected a non-negative integer	ungültige Objekt-ID {value}: erwartet wird eine nicht negative ganze Zahl
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	Eintrag {index} von `{key}` ist {value}, keine Objekt-ID (nicht negative ganze Zahl)
 @msg	no such object id {value}	kein Objekt mit der ID {value}
 @msg	id {value} is a layer, not an object	die ID {value} ist eine Ebene, kein Objekt
 @msg	id {value} is a layer, not an object; move layers with layer.move	die ID {value} ist eine Ebene, kein Objekt; verschieben Sie Ebenen mit layer.move

@@ -6379,6 +6379,7 @@
 @msg	invalid image data for `{0}`	`{0}` के लिए अमान्य इमेज डेटा
 @msg	invalid native panel set	अमान्य मूल पैनल सेट
 @msg	invalid object id {value}: expected a non-negative integer	अमान्य ऑब्जेक्ट id {value}: एक गैर-नकारात्मक पूर्णांक की उम्मीद
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	`{key}` की प्रविष्टि {index} {value} है, गैर-नकारात्मक पूर्णांक ऑब्जेक्ट id नहीं
 @msg	Invalid panel layout; restored the default dock	अमान्य पैनल लेआउट; डिफ़ॉल्ट डॉक पुनर्स्थापित किया गया
 @msg	invalid parameter name {k}	अमान्य पैरामीटर नाम {k}
 @msg	invalid parameters for `{cmd}`: {msg}	`{cmd}` के लिए अमान्य पैरामीटर: {msg}

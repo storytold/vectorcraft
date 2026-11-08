@@ -4704,6 +4704,7 @@ imageTrace	Outline	Kontur
 @msg	object ids are non-negative integers, not {v}	objekt-id'er er ikke-negative heltal, ikke {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} skal være et array af objekt-id'er, der er ikke-negative heltal
 @msg	invalid object id {value}: expected a non-negative integer	ugyldigt objekt-id {value}: et ikke-negativt heltal var forventet
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	element {index} i `{key}` er {value}, ikke et objekt-id (et ikke-negativt heltal)
 @msg	no such object id {value}	der findes intet objekt med id {value}
 @msg	automation filesystem access is not granted: read authority is absent: {path}	automatiseringens adgang til filsystemet er ikke tildelt: læserettighed mangler: {path}
 @msg	automation filesystem access is not granted: write authority is absent: {path}	automatiseringens adgang til filsystemet er ikke tildelt: skriverettighed mangler: {path}
