@@ -13,6 +13,11 @@ const TEMPLATE_EXTS: &[&str] = &["vctemplate", "ait", "vectorcraft", "drawcraft"
 /// (`.jsx`, `.jsxinc`, `.jsxbin`) shows its check (Check Script…). → `document.open`'s result for
 /// a document opened now (its `warnings` say what didn't come in as it was), else null.
 pub fn open_bytes(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<String>) -> Result<Value, String> {
+    open_bytes_with(app, name, bytes, path, &Value::Null)
+}
+
+/// [`open_bytes`], a document opening with `document.open`'s params `p`.
+fn open_bytes_with(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<String>, p: &Value) -> Result<Value, String> {
     let opens = opens_as(name);
     // A WebAssembly plug-in is installed.
     if opens == Some(OpensAs::Plugin) {
@@ -53,7 +58,7 @@ pub fn open_bytes(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Opti
     {
         return Ok(Value::Null);
     }
-    open_document(app, name, bytes, path, &Value::Null)
+    open_document(app, name, bytes, path, p)
 }
 
 /// The kinds of file File → Open installs, imports, checks, shows in the library panel or the
@@ -436,9 +441,19 @@ pub fn open_path(app: &mut VectorcraftApp, path: &str) -> Result<Value, String> 
     open_file(app, path, false)
 }
 
+/// [`open_path`], with `params` for the importer plug-in that opens the file, if one does.
+pub fn open_path_with(app: &mut VectorcraftApp, path: &str, params: &Value) -> Result<Value, String> {
+    open_file_with(app, path, false, &json!({ "params": params }))
+}
+
 /// [`open_path`]; with `background`, a document (not a file that installs, imports or asks
 /// first) is decoded off the UI thread ([`crate::opening::start`]).
 pub(crate) fn open_file(app: &mut VectorcraftApp, path: &str, background: bool) -> Result<Value, String> {
+    open_file_with(app, path, background, &Value::Null)
+}
+
+/// [`open_file`], a document opening with `document.open`'s params `p`.
+fn open_file_with(app: &mut VectorcraftApp, path: &str, background: bool, p: &Value) -> Result<Value, String> {
     // Automation confined to some folders reaches no file outside them, open in a tab or not.
     vectorcraft_engine::file_access::check_read(path)?;
     // File › Open, Open Recent, the Home screen, a drop and the Finder all focus a document that
@@ -487,7 +502,7 @@ pub(crate) fn open_file(app: &mut VectorcraftApp, path: &str, background: bool) 
             Err(back) => bytes = back,
         }
     }
-    let r = open_bytes(app, path, &bytes, Some(path.to_string()))?;
+    let r = open_bytes_with(app, path, &bytes, Some(path.to_string()), p)?;
     note_recent(app, path);
     Ok(r)
 }

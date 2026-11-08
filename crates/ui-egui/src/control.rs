@@ -449,7 +449,14 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
                 let params = p.get("params").filter(|v| !v.is_null()).cloned().unwrap_or_else(|| json!({}));
                 wrap(app.run("file.openWith", json!({"path": s("path"), "importer": importer, "params": params})))
             }
-            None => wrap(app.run("file.open", json!({"path": s("path")}))),
+            // `params` go to the importer File › Open picks for the file, as in `document.open`.
+            None => {
+                let mut open = json!({"path": s("path")});
+                if let Some(params) = p.get("params").filter(|v| !v.is_null()) {
+                    open["params"] = params.clone();
+                }
+                wrap(app.run("file.open", open))
+            }
         },
         "app.save" | "app.export" => {
             let mut p = if p.is_object() { p.clone() } else { json!({}) };

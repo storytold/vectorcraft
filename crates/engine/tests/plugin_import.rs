@@ -249,9 +249,10 @@ fn the_importer_is_given_its_parameters_and_the_file_s_name() {
     let mut s = Session::new();
     let params = r#"{"density":{"type":"number","min":0,"max":10,"default":4}}"#;
     let needles = [r#""mode":"import""#, r#""extension":"tsc""#, r#""name":"Shapes""#, r#""density":10.0"#];
-    for needle in needles {
+    for (i, needle) in needles.into_iter().enumerate() {
         // RECT when the parameters hold the needle; the file, which isn't JSON, otherwise.
-        install(&mut s, &tpl::when_given(&tpl::importer("test.params", r#"["tsc"]"#, params), Given::Params, needle, RECT));
+        let wasm = wat::parse_str(tpl::when_given(&tpl::importer("test.params", r#"["tsc"]"#, params), Given::Params, needle, RECT)).unwrap();
+        s.execute("plugin.install", &json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "replace": i > 0})).unwrap();
         let r = open(&mut s, "Shapes.tsc", b"not json", json!({"params": {"density": 12}}));
         assert_eq!(r.map(|r| r["format"].clone()).map_err(|e| e.to_string()), Ok(json!("plugin.test.params")), "{needle}");
     }

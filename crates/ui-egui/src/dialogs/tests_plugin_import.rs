@@ -142,6 +142,14 @@ fn open_with_asks_for_an_importer_s_parameters_and_passes_them_on() {
     assert!(r.get("error").is_some(), "the defaults (density 4) don't open the file: {r}");
     assert_ne!(kind(&app), Some(plugin::IMPORT_KIND));
     assert_eq!(app.session.documents().len(), 3);
+
+    // Without `importer`, `params` go to the importer File › Open picks for the file.
+    let other = dir.join("b.tup");
+    std::fs::write(&other, "not json").unwrap();
+    let other = other.to_string_lossy().into_owned();
+    let r = control(&mut app, json!({"path": other, "params": {"density": 7}}));
+    assert_eq!(r["result"]["format"], "plugin.test.ui.importparams", "{r}");
+    assert_eq!(app.session.documents().len(), 4);
     app.run("plugin.remove", json!({"id": "test.ui.importparams"})).unwrap();
     let _ = std::fs::remove_dir_all(&dir);
 }

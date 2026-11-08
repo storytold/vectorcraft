@@ -28,7 +28,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "file.open",
         "Open…",
         "Cmd+O",
-        "{path?} → with a path, document.open's result {index, title, format, warnings, …} (null when a dialog asks first or a library loads)",
+        "{path?, params?} → with a path, document.open's result {index, title, format, warnings, …} (null when a dialog asks first or a library loads); `params` are the parameters of the importer plug-in that opens the file",
     ),
     (
         "file.openWith",

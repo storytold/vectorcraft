@@ -142,7 +142,7 @@ capability model proposed for PhotoCraft plug-ins
 
 | Permission | Kinds | What it allows |
 |---|---|---|
-| `doc.read` | all | Read the objects it is given. |
+| `doc.read` | filter, effect, exporter | Read the objects it is given. |
 | `doc.write` | filter | Change, add and delete objects in the document. |
 | `state` | filter | Keep data of its own with the document (`documentData`). |
 | `effect.render` | effect | Change how the objects its effect is applied to are drawn. |

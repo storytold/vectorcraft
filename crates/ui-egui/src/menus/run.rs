@@ -107,7 +107,10 @@ fn run_ui_part1(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             Ok(Value::Null)
         }
         "file.open" => match s("path") {
-            Some(path) => io::open_path(app, &path),
+            Some(path) => match p.get("params").filter(|v| !v.is_null()) {
+                Some(params) => io::open_path_with(app, &path, params),
+                None => io::open_path(app, &path),
+            },
             None => io::open_dialog(app).map(|_| Value::Null),
         },
         "file.openWith" => io::open_with(app, p),
