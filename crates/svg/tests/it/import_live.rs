@@ -657,6 +657,62 @@ fn an_exported_filter_image_has_an_xlink_reference() {
     }
 }
 
+/// SVG export writes a filter only in a form SVG import reads back. A filter at the size limit,
+/// whose id or region written out would make it longer, is left out of the SVG with the other pixel
+/// effects (exports that turn pixel effects into images draw it as an image), and the SVG opens
+/// without a filter that import can't read.
+#[test]
+fn an_exported_filter_is_one_import_reads_back() {
+    let max = vectorcraft_doc::SvgFilter::MAX_XML;
+    let close = r#""/><feComposite in2="SourceGraphic" operator="in"/></filter>"#;
+    let short_id = r##"<filter id="r"><feFlood flood-color="#ff0000" result=""##;
+    let measured =
+        r##"<filter id="r" filterUnits="userSpaceOnUse" x="-10%" y="-10%" width="120%" height="120%"><feFlood flood-color="#ff0000" result=""##;
+    for open in [short_id, measured] {
+        let xml = format!("{open}{}{close}", "a".repeat(max - open.len() - close.len()));
+        let d = filtered_rect(&xml);
+        assert_eq!(effects(&d).len(), 1);
+        let svg = export(&d, &ExportOptions::default());
+        assert!(!svg.contains("<filter"), "{open}");
+        let (_, w) = import_with_report(&svg).unwrap();
+        assert!(w.is_empty(), "{open}: {w:?}");
+    }
+    // A shorter one is written and read back.
+    let xml = format!("{short_id}{}{close}", "a".repeat(max - 64 - short_id.len() - close.len()));
+    let svg = export(&filtered_rect(&xml), &ExportOptions::default());
+    let (back, w) = import_with_report(&svg).unwrap();
+    assert!(w.is_empty(), "{w:?}");
+    assert_eq!(effects(&back).iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["svg.filter"]);
+}
+
+/// With the Latin-1 encoding, export writes each character past U+00FF as a character reference,
+/// which import counts as text. A filter is measured with those references in either encoding: one
+/// that passes the limit with them is left out of both, and one that fits with them is written live
+/// in Latin-1 and read back.
+#[test]
+fn an_exported_filter_counts_the_references_latin1_writes() {
+    let open = r##"<filter id="r"><feFlood flood-color="#ff0000" result=""##;
+    let close = r#""/><feComposite in2="SourceGraphic" operator="in"/></filter>"#;
+    let max = vectorcraft_doc::SvgFilter::MAX_XML;
+    let latin1 = ExportOptions { encoding: vectorcraft_svg::Encoding::Latin1, ..ExportOptions::default() };
+    // `国` takes three bytes as UTF-8 and eight as `&#x56FD;`.
+    let xml = format!("{open}{}{close}", "\u{56FD}".repeat((max / 2 - open.len() - close.len()) / 3));
+    let d = filtered_rect(&xml);
+    assert_eq!(effects(&d).len(), 1);
+    assert!(!export(&d, &ExportOptions::default()).contains("<filter"), "its references pass the limit");
+    let svg = export(&d, &latin1);
+    assert!(!svg.contains("<filter"), "its references pass the limit");
+    let (_, w) = import_with_report(&svg).unwrap();
+    assert!(w.is_empty(), "{w:?}");
+    // One that fits with its references.
+    let xml = format!("{open}{}{close}", "\u{56FD}".repeat((max - 64 - open.len() - close.len()) / 8));
+    let svg = export(&filtered_rect(&xml), &latin1);
+    assert!(svg.contains("&#x56FD;"), "the references are written");
+    let (back, w) = import_with_report(&svg).unwrap();
+    assert!(w.is_empty(), "{w:?}");
+    assert_eq!(effects(&back).iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["svg.filter"]);
+}
+
 /// SVG 1.1 has no `feDropShadow`: export writes the SVG 1.1 primitives it stands for, which draw
 /// as the canvas draws the shadow and import back as a filter that draws the same.
 #[test]
