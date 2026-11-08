@@ -5372,6 +5372,39 @@ fn a_path_with_several_gradient_fills_comes_in_as_itself_where_its_look_places_t
     assert!(flat.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", flat.warnings);
 }
 
+/// A stack of solid colours comes in live too: a path whose style is a solid fill under a stroke
+/// without a brush at 50 % Screen comes in as itself with both, each with its own transparency.
+#[test]
+fn a_path_with_a_solid_fill_under_a_screened_stroke_comes_in_as_itself() {
+    let stroke = "/BasicFilter :\n(Stroke Style Filter) 0 0 /Filter ,\n1 /Visible ,\n2 /FillOrStroke ,\n/Dictionary : /NotRecorded ,\n\
+                  /StrokeStyle : 0 R\n0 1 1 0 1 0 0 XA\n0 J 0 j 2 w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n";
+    let over = "/BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n\
+                /FillStyle : 0 O\n1 (B) 0 0 0 1 1 0 0 1 0 0 Bg\n0 1 Xd\n/Def ;\n (FillStyle) ,\n";
+    let style = two_gradient_style("A", "B");
+    assert!(style.contains(over));
+    let style = style.replace(over, stroke).replace("1 (A) 0 0 0 1 1 0 0 1 0 0 Bg\n", "0 0 0 1 0 0 0 Xa\n");
+    let rect = rect_path(0.0, 0.0, 100.0, 50.0);
+    let hidden_rect = rect.replace('\n', "\n%_");
+    let square = format!("0 Ae\nu\n0 0 0 1 0 0 0 Xa\n{rect}f\n0 1 1 0 1 0 0 XA\n2 w\n{rect}S\nU\n%_{hidden_rect}f\n1 (Glow) XW\n");
+    let r = read_ok(&format!("%AI9_BeginArtStyles\n{style}%AI9_EndArtStyles\n{}", layer(&square)));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the object, not its look: {a:#?}");
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    let items: Vec<_> = a[0]
+        .appearance
+        .items
+        .iter()
+        .map(|i| match i {
+            AppearanceItem::Fill(f) => ("fill", matches!(f.paint, Paint::Solid { .. }), f.opacity, f.blend),
+            AppearanceItem::Stroke(s) => {
+                ("stroke", matches!(s.paint, Paint::Solid { .. }) && s.brush.is_none() && s.width == 2.0, s.opacity, s.blend)
+            }
+        })
+        .collect();
+    assert_eq!(items, [("fill", true, 1.0, BlendMode::Normal), ("stroke", true, 0.5, BlendMode::Screen)]);
+}
+
 /// An art style named `name` (its bytes as written) that fills with colour `xa` (`c m y k r g b Xa`).
 fn fill_style(name: &str, xa: &str) -> String {
     fill_style_with(name, xa, "")
