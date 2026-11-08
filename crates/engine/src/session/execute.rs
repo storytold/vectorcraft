@@ -162,8 +162,8 @@ impl Session {
     }
 
     /// Record `key: value` in the running top-level command's journal entry (or its interaction's
-    /// preview, or its step in a batch) unless its params give `key`: a value it resolved from the
-    /// preferences or the clock.
+    /// preview, or its step in a batch) unless its params give `key` (a null gives nothing): a value
+    /// it resolved from the preferences or the clock.
     pub fn note_journal(&mut self, key: &str, value: Value) {
         if self.depth == self.note_depth {
             self.journal_note.insert(key.to_string(), value);
@@ -231,9 +231,14 @@ impl Session {
     pub(super) fn noted(&mut self, params: &Value) -> Value {
         let mut note = std::mem::take(&mut self.journal_note);
         match params {
-            // The params' own values win.
+            // The params' own values win, except a null: it reads as a key left out, so the
+            // noted value is the one the command resolved.
             Value::Object(m) if !note.is_empty() => {
-                note.extend(m.clone());
+                for (k, v) in m {
+                    if !v.is_null() || !note.contains_key(k) {
+                        note.insert(k.clone(), v.clone());
+                    }
+                }
                 Value::Object(note)
             }
             Value::Null if !note.is_empty() => Value::Object(note),

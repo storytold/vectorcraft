@@ -485,6 +485,11 @@ fn artboard_commands_refuse_a_boolean_or_number_given_as_text() {
         ("artboard.duplicate", "art", json!({"index": 0, "art": "false"})),
         ("artboard.copy", "art", json!({"index": 0, "art": "true"})),
         ("artboard.cut", "art", json!({"index": 1, "art": 0})),
+        ("artboard.move", "lockedAndHidden", json!({"index": 0, "dx": 10, "moveArt": true, "lockedAndHidden": "true"})),
+        ("artboard.duplicate", "lockedAndHidden", json!({"index": 0, "lockedAndHidden": "true"})),
+        ("artboard.copy", "lockedAndHidden", json!({"index": 0, "lockedAndHidden": 1})),
+        ("artboard.cut", "lockedAndHidden", json!({"index": 1, "lockedAndHidden": 0})),
+        ("artboard.rearrange", "lockedAndHidden", json!({"spacing": 100, "lockedAndHidden": "true"})),
     ]
     .into_iter()
     .map(|(cmd, key, p)| not_a_switch(cmd, p, key))
@@ -959,6 +964,86 @@ fn art_also_on_a_locked_artboard_stays_when_another_artboard_moves() {
     s.prefs.move_locked_with_artboard = true;
     let moved = s.execute("artboard.move", &json!({"index": 0, "dx": 0, "dy": 1000, "moveArt": true})).unwrap();
     assert_eq!(ids(&moved["moved"]), [free.0, held.0], "with the preference on, it moves");
+}
+
+/// Two artboards with the Artboard tool on the second, which holds a plain, a locked and a hidden
+/// rectangle, under prefs moveLockedWithArtboard `on`.
+fn locked_art_session(on: bool) -> Session {
+    let mut s = session();
+    s.execute("artboard.new", &json!({})).unwrap();
+    let mut shape = |x: u32| s.execute("shape.rectangle", &json!({"x": x, "y": 10, "width": 40, "height": 20})).unwrap()["id"].clone();
+    let (_, locked, hidden) = (shape(840), shape(900), shape(960));
+    s.execute("object.lock", &json!({"ids": [locked]})).unwrap();
+    s.execute("object.hide", &json!({"ids": [hidden]})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.select_tool("artboard", ViewInfo::default()).unwrap();
+    s.set_tool_option("selected", &json!([1]));
+    s.prefs.move_locked_with_artboard = on;
+    s
+}
+
+/// The bounds of every object in the document, and how many objects the clipboard holds.
+fn art_and_clipboard(s: &Session) -> (Vec<Option<vectorcraft_geom::Rect>>, usize) {
+    let mut art = vec![];
+    for layer in &s.doc().unwrap().doc.layers {
+        layer.walk(&mut |n| {
+            if !n.is_layer() {
+                art.push(n.geometric_bounds());
+            }
+        });
+    }
+    (art, s.clipboard.nodes.len())
+}
+
+/// A command that takes art with an artboard journals whether locked and hidden art went along, so
+/// a replay under the other preference takes the same art, in one undo step.
+#[test]
+fn artboard_commands_journal_the_locked_art_preference() {
+    let run = |on: bool, cmd: &str, p: &serde_json::Value| {
+        let mut s = locked_art_session(on);
+        s.execute(cmd, p).unwrap();
+        (art_and_clipboard(&s), s.journal.last().unwrap().clone())
+    };
+    let mut differ = vec![];
+    for (cmd, p) in [
+        ("artboard.duplicate", json!({"index": 1, "art": true})),
+        ("artboard.copy", json!({"index": 1, "art": true})),
+        ("artboard.cut", json!({"index": 1, "art": true})),
+        ("artboard.move", json!({"index": 1, "dx": 0, "dy": 1000, "moveArt": true})),
+        ("artboard.move", json!({"index": 1, "dx": 0, "dy": 1000, "moveArt": true, "copy": true})),
+        ("artboard.rearrange", json!({"layout": "row", "spacing": 100})),
+        ("edit.copy", json!({})),
+        ("edit.cut", json!({})),
+        // A null reads as a key left out.
+        ("artboard.duplicate", json!({"index": 1, "art": true, "lockedAndHidden": null})),
+        ("artboard.rearrange", json!({"layout": "row", "spacing": 100, "lockedAndHidden": null})),
+        ("edit.cut", json!({"lockedAndHidden": null})),
+    ] {
+        let (with, (id_with, p_with)) = run(true, cmd, &p);
+        let (without, (id_without, p_without)) = run(false, cmd, &p);
+        assert_ne!(with, without, "{cmd} {p}: an omitted param reads the preference");
+        if run(false, &id_with, &p_with).0 != with {
+            differ.push(format!("{cmd} {p}, replayed with the preference off"));
+        }
+        if run(true, &id_without, &p_without).0 != without {
+            differ.push(format!("{cmd} {p}, replayed with the preference on"));
+        }
+
+        let mut s = locked_art_session(true);
+        let (doc, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+        s.execute(cmd, &p).unwrap();
+        if !cmd.ends_with("copy") {
+            assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "{cmd} {p}: one undo step");
+            s.execute("edit.undo", &json!({})).unwrap();
+            assert_eq!(s.doc().unwrap().doc, doc, "{cmd} {p}: undone");
+        }
+    }
+    assert!(differ.is_empty(), "{differ:#?}");
+    // With the Artboard tool chosen, a bad value is refused as it is by the command run.
+    let mut s = locked_art_session(false);
+    let calls: Vec<_> =
+        ["edit.copy", "edit.cut"].map(|cmd| crate::tests::not_a_switch(cmd, json!({"lockedAndHidden": "true"}), "lockedAndHidden")).to_vec();
+    assert_eq!(crate::tests::not_refused(&mut s, &calls), Vec::<String>::new());
 }
 
 /// A locked artboard keeps its place and size: `artboard.setProps` refuses a new rectangle but
