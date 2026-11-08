@@ -642,6 +642,10 @@ impl Interp<'_> {
         // Set as type in the descendant's font, under the composite font's matrix.
         let c = code_char(&g.font.borrow(), g.code);
         let Ok(byte) = u8::try_from(u32::from(c)) else { return Ok(Vec2::ZERO) };
+        // Scaling the descendant copies its dictionary for every character: charged by its size,
+        // so a huge font dictionary shown in a loop runs out of the budget.
+        let entries = g.font.borrow().len();
+        self.spend(entries as u64)?;
         let saved = self.g.font.replace(transformed(&g.font, g.outer));
         let r = match paint {
             Draw::Fill => {

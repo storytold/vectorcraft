@@ -130,16 +130,57 @@ fn measuring_type42_descendants_in_a_loop_runs_out_of_the_budget() {
 }
 
 /// A descendant whose TrueType data can't be read (an `sfnts` element that isn't a string, after
-/// 32 MB of strings) is read once, not again for every character a loop measures.
+/// 32 MB of strings) is read once, not again for every character measured: copying its strings
+/// costs about 130,000 operations, so 1,000 measures finish only if it is copied once (reading
+/// it each time would need 130 million, over the budget of 50 million).
 #[test]
 fn unreadable_type42_data_is_read_once() {
-    super::tests::runs_out_of_budget(
+    super::tests::check(
         "10 dict begin /FontName /Bad def /FontType 42 def /FontMatrix [1 0 0 1 0 0] def /FontBBox [0 0 1 1] def /PaintType 0 def\n\
          /Encoding 256 array def 0 1 255 { Encoding exch /.notdef put } for\n\
          /CharStrings 1 dict def CharStrings /.notdef 0 put /sfnts [ 0 1 7 { pop 4000000 string } for 0 ] def FontName currentdict end definefont pop\n\
          16 dict begin /FontName /Comp def /FontType 0 def /FontMatrix [1 0 0 1 0 0] def /FMapType 2 def\n\
          /Encoding [0] def /FDepVector [/Bad findfont] def FontName currentdict end definefont pop\n\
-         /Comp findfont 50 scalefont setfont { (\\000\\001) stringwidth pop pop } loop",
+         /Comp findfont 50 scalefont setfont 1000 { (\\000\\001) stringwidth pop pop } repeat true",
+    );
+}
+
+/// A Type 3 descendant draws and measures its glyphs with its own procedure, under the composite
+/// font's matrix: here 50 pt and twice as wide, so a glyph 500 × 700 units wide (600 units
+/// apart) is 50 × 35 pt, 60 pt apart (PLRM 3rd ed., §5.10: a descendant's glyphs are under the
+/// composite font's matrix as well as its own).
+#[test]
+fn type3_descendants_draw_and_measure_under_the_composite_matrix() {
+    let fonts = "8 dict begin /FontName /T3 def /FontType 3 def /FontMatrix [0.001 0 0 0.001 0 0] def /FontBBox [0 0 1000 1000] def\n\
+                 /Encoding 256 array def 0 1 255 { Encoding exch /.notdef put } for Encoding 1 /box put\n\
+                 /BuildChar { exch begin 1 eq { 600 0 0 0 500 700 setcachedevice 0 0 500 700 rectfill } { 0 0 setcharwidth } ifelse end } def\n\
+                 FontName currentdict end definefont pop\n\
+                 16 dict begin /FontName /Comp def /FontType 0 def /FontMatrix [2 0 0 1 0 0] def /FMapType 2 def\n\
+                 /Encoding [0] def /FDepVector [/T3 findfont] def FontName currentdict end definefont pop\n\
+                 /Comp findfont 50 scalefont setfont";
+    let r = read(&format!("{fonts} 0 0 1 setrgbcolor 10 20 moveto (\\000\\001\\000\\001) show"));
+    let paths: Vec<_> = all(&r.document).into_iter().filter(|n| matches!(n.kind, NodeKind::Path { .. })).collect();
+    assert_eq!(paths.len(), 2, "{:?}", r.warnings);
+    let (a, b) = (bounds(&paths[0]), bounds(&paths[1]));
+    for g in [a, b] {
+        assert!((g.width() - 50.0).abs() < 0.01 && (g.height() - 35.0).abs() < 0.01, "{g:?}");
+    }
+    assert!((a.x0 - 10.0).abs() < 0.01 && (b.x0 - 70.0).abs() < 0.01, "{a:?} {b:?}");
+    let check = |cond: &str| super::tests::check(&format!("{fonts} {cond}"));
+    check("(\\000\\001\\000\\001) stringwidth pop 120 sub abs 0.01 lt");
+    check("newpath 10 20 moveto (\\000\\001) true charpath currentpoint pop 70 sub abs 0.01 lt");
+}
+
+/// A descendant found by name is scaled for each character it sets: copying a huge font
+/// dictionary for every character counts against the operation budget, so a `loop` of it stops.
+#[test]
+fn a_huge_named_descendant_in_a_loop_runs_out_of_the_budget() {
+    super::tests::runs_out_of_budget(
+        "200000 dict begin 0 1 199999 { dup def } for /FontName /Big def /FontType 1 def /FontMatrix [0.001 0 0 0.001 0 0] def\n\
+         FontName currentdict end definefont pop\n\
+         16 dict begin /FontName /Comp def /FontType 0 def /FontMatrix [1 0 0 1 0 0] def /FMapType 2 def\n\
+         /Encoding [0] def /FDepVector [/Big findfont] def FontName currentdict end definefont pop\n\
+         /Comp findfont 50 scalefont setfont { (\\000A) stringwidth pop pop } loop",
     );
 }
 
