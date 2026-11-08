@@ -1036,11 +1036,36 @@ fn moves_with(object: &Node, st: &crate::import::ai::style::ArtStyle) -> bool {
         })
 }
 
+/// Can group `object` take style `st`'s own fills and strokes? A group (not a clipping group or a
+/// compound shape) whose style is one fill and one stroke at most in solid colours: they paint
+/// every member's outline, below or above the members as the style's contents row says, as a
+/// group's own fills and strokes do here (`vectorcraft_effects::group`). A gradient or a pattern on a group lies across the
+/// group in a way its drawn look doesn't say, so such a group keeps its drawn look. So does one
+/// with a member reshaped by a live effect of its own ([`reshaped`]): the group's fills and strokes
+/// paint its members' outlines as they are, not as the effect draws them.
+fn group_paints(object: &Node, st: &crate::import::ai::style::ArtStyle) -> bool {
+    use crate::import::ai::style::StyleItem;
+    st.simple
+        && matches!(object.kind, NodeKind::Group { clip: false, .. })
+        && !object.is_compound_shape()
+        && st.items.iter().all(|i| matches!(i, StyleItem::Fill(_) | StyleItem::Stroke { brush: None, .. }))
+        && !object.children().into_iter().flatten().any(|c| reshaped(c, 1))
+}
+
+/// Does `n` or anything in it (to [`MAX_DEPTH`]) have a visible effect that reshapes its outline
+/// (a geometry effect, or Pathfinder, which draws its result instead of the members)? Deeper than
+/// that counts as yes.
+fn reshaped(n: &Node, depth: usize) -> bool {
+    depth > MAX_DEPTH
+        || n.appearance.effects.iter().any(|e| e.visible && (vectorcraft_effects::is_geometry(&e.id) || vectorcraft_effects::is_pathfinder(&e.id)))
+        || n.children().into_iter().flatten().any(|c| reshaped(c, depth + 1))
+}
+
 /// What [`placed_paints`] keys a pattern's name with, apart from the gradients' names.
 const PATTERN_KEY: &str = "\u{1}pattern ";
 
 /// `object`'s appearance with style `st`, its drawn look `look`: `None` when the style isn't one
-/// this reads, asks a group for fills or strokes, has Pathfinder effects on anything but a group
+/// this reads, asks a group for fills or strokes it doesn't take ([`group_paints`]), has Pathfinder effects on anything but a group
 /// with no fills or strokes, or moves the outline of an object it isn't read on ([`moves_with`]).
 fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, paints: &StylePaints) -> Option<Appearance> {
     use crate::import::ai::style::StyleItem;
@@ -1050,7 +1075,7 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
     if !st.plain
         || matches!(object.kind, NodeKind::SymbolInstance { .. })
         || (!slot && !st.simple)
-        || (object.is_container() && !slot && !matches!(object.kind, NodeKind::Compound { .. }) && !st.items.is_empty())
+        || (object.is_container() && !slot && !matches!(object.kind, NodeKind::Compound { .. }) && !st.items.is_empty() && !group_paints(object, st))
         || (st.pathfinder
             && (slot || !st.items.is_empty() || object.is_compound_shape() || !matches!(object.kind, NodeKind::Group { clip: false, .. })))
         || (!slot && st.moves_outline() && !moves_with(object, st))
@@ -1332,6 +1357,49 @@ mod tests {
 
     fn square(id: u64, fill: Paint) -> Arc<Node> {
         Arc::new(Node::path(NodeId(id), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::basic(fill, Paint::None, 0.0)))
+    }
+
+    /// A group whose member (here a group in it) is moved by a live Transform effect doesn't take
+    /// a fill of its own: that would paint the member where it was, not where it is drawn.
+    #[test]
+    fn a_group_with_a_reshaped_member_takes_no_fill_of_its_own() {
+        use crate::import::ai::style::{ArtStyle, StyleItem};
+        use vectorcraft_color::Color;
+        let st = ArtStyle { simple: true, items: vec![StyleItem::Fill(Paint::solid(Color::rgb(0.0, 0.0, 1.0)))], ..ArtStyle::default() };
+        let plain = Node::group(NodeId(1), vec![square(2, Paint::solid(Color::rgb(1.0, 0.0, 0.0)))]);
+        assert!(group_paints(&Node::group(NodeId(3), vec![Arc::new(plain.clone())]), &st));
+        let mut moved = plain;
+        let mut merged = moved.clone();
+        let transform = vectorcraft_effects::new_effect("distort.transform", &serde_json::json!({ "moveH": 5.0 })).unwrap();
+        moved.appearance.effects.push(transform);
+        assert!(!group_paints(&Node::group(NodeId(3), vec![Arc::new(moved)]), &st));
+        // Nor one whose member draws a Pathfinder result in place of its own members.
+        merged.appearance.effects.push(vectorcraft_effects::new_effect("pathfinder.add", &serde_json::json!({})).unwrap());
+        assert!(!group_paints(&Node::group(NodeId(3), vec![Arc::new(merged.clone())]), &st));
+        // An effect that is hidden doesn't reshape the member: the group still takes its fill.
+        for e in &mut merged.appearance.effects {
+            e.visible = false;
+        }
+        assert!(group_paints(&Node::group(NodeId(3), vec![Arc::new(merged)]), &st));
+    }
+
+    /// A clipping group, and a compound shape, don't take a fill of their own: they keep their drawn look.
+    #[test]
+    fn a_clipping_group_or_a_compound_shape_takes_no_fill_of_its_own() {
+        use crate::import::ai::style::{ArtStyle, StyleItem};
+        use vectorcraft_color::Color;
+        let st = ArtStyle { simple: true, items: vec![StyleItem::Fill(Paint::solid(Color::rgb(0.0, 0.0, 1.0)))], ..ArtStyle::default() };
+        let members = || vec![square(1, Paint::solid(Color::rgb(1.0, 0.0, 0.0))), square(2, Paint::solid(Color::rgb(1.0, 0.0, 0.0)))];
+        assert!(group_paints(&Node::group(NodeId(3), members()), &st));
+        let mut clipping = Node::group(NodeId(3), members());
+        if let NodeKind::Group { clip, .. } = &mut clipping.kind {
+            *clip = true;
+        }
+        assert!(!group_paints(&clipping, &st));
+        let mut compound = Node::group(NodeId(3), members());
+        compound.extras_mut().compound_shape = true;
+        assert!(compound.is_compound_shape());
+        assert!(!group_paints(&compound, &st));
     }
 
     /// An image draws no stroke, so an image with a brush in its art style keeps its drawn look.
