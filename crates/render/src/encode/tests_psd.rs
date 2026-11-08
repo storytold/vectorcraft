@@ -321,3 +321,12 @@ fn the_profile_and_the_size_limit() {
     let err = Renderer::new().export_region(&doc, doc.artboards[0].rect, RasterFormat::Psd, &o).unwrap_err();
     assert!(err.contains(&MAX_SIDE.to_string()), "{err}");
 }
+
+#[test]
+fn long_unicode_name_is_cut_on_a_character_boundary() {
+    let mut b = DocBuilder::new(100.0, 60.0);
+    b.layer(&("a".repeat(254) + "😀"));
+    b.rect(Rect::new(0.0, 0.0, 5.0, 5.0), Color::rgb8(0, 0, 0), |_| {});
+    let file = export(&b.build(), &opts(PsdOptions::default()));
+    assert_eq!(parse(&file).records.last().unwrap().name, "a".repeat(254));
+}

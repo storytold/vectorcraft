@@ -62,6 +62,14 @@ pub struct Session {
     /// While Cmd lends `tool` (a selection tool) for a drag: the tool it was lent to, which comes
     /// back as it was at the release ([`Session::pointer`]).
     pub(crate) lender: Option<Box<dyn Tool>>,
+    /// The selection of the active document (its uid) as Cmd lent `tool`: what the lent tool's
+    /// gesture found, so that one that leaves it as it was picks nothing.
+    pub(crate) selection_at_lend: Option<(u64, vectorcraft_doc::Selection)>,
+    /// The selection a lent tool's gesture changed and left as it gave `lender` back, in the
+    /// document (its uid) it was made in: while it is still that document's selection, the anchors
+    /// in it are ones picked, not the Pen's last anchor, and Copy and Cut take them with the Pen or
+    /// Curvature tool back too (#6123).
+    pub(crate) lent_selection: Option<(u64, vectorcraft_doc::Selection)>,
     /// The selection tool chosen last (Selection, Direct Selection or Group Selection): the one Cmd
     /// lends the other tools. None until one is chosen.
     pub(crate) last_selection_tool: Option<&'static str>,
@@ -249,6 +257,9 @@ pub struct Session {
     /// The Global Edit Options Start Global Edit matches with (`select.globalEditOptions`); not
     /// saved.
     pub global_edit_options: cmd::globaledit::Options,
+    /// Set while [`Session::tool_typed_text`] passes keyboard input to the active tool
+    /// ([`vectorcraft_tools::ToolContext::typed_from_keyboard`]).
+    keyboard_text: bool,
 }
 
 impl Default for Session {
