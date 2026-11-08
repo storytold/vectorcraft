@@ -1,7 +1,7 @@
 //! CSS classes on imported elements come back on export, beside the generated `cls-N` classes.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 use usvg::roxmltree;
-use vectorcraft_svg::{ExportOptions, Styling, export, import};
+use vectorcraft_svg::{ExportOptions, Profile, Styling, export, import};
 
 const SRC: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><g id="grp" class="wrap  big"><rect id="r" class="hero hero cls-7" width="20" height="20" fill="red"/><circle id="c" r="5" fill="blue"/></g></svg>"#;
 
@@ -35,4 +35,11 @@ fn class_names_with_colons_slashes_and_no_break_spaces_are_kept() {
     let src = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"10\" height=\"10\"><rect id=\"r\" class=\"hover:bg-blue w-1/2 a\u{a0}b\" width=\"5\" height=\"5\" fill=\"red\"/></svg>";
     let out = export(&import(src).unwrap(), &ExportOptions::default());
     assert_eq!(class_of(&out, "r").as_deref(), Some("hover:bg-blue w-1/2 a\u{a0}b"));
+}
+
+#[test]
+fn the_tiny_profile_keeps_imported_classes() {
+    let out = export(&import(SRC).unwrap(), &ExportOptions { profile: Profile::Tiny12, ..ExportOptions::default() });
+    assert_eq!(class_of(&out, "grp").as_deref(), Some("wrap big"), "{out}");
+    assert_eq!(class_of(&out, "r").as_deref(), Some("hero"), "{out}");
 }

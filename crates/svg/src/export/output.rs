@@ -211,7 +211,8 @@ impl Writer<'_> {
             .map(String::as_str)
             .filter(|c| !c.is_empty() && !c.chars().any(|ch| ch.is_control() || matches!(ch, '\u{fffe}' | '\u{ffff}')))
             .collect();
-        if !classes.is_empty() && !self.tiny() {
+        // SVG Tiny 1.2 has `class` among its core attributes, so every profile writes them.
+        if !classes.is_empty() {
             out.push_str(&format!(" class=\"{}\"", xml_attr_escape(&classes.join(" "))));
         }
         let mut keys = HashSet::new();
