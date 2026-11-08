@@ -7797,6 +7797,118 @@ fn a_brushs_art_takes_the_patterns_defined_before_it() {
     assert!(matches!(fill(&s.art), Paint::Pattern { ref pattern, .. } if pattern == "Dots"), "{:?}", r.warnings);
 }
 
+/// A spot color that only a brush's art uses comes in as a swatch, and the art's process colors
+/// count toward the document's color mode, as a pattern's do.
+#[test]
+fn a_brushs_art_brings_its_spot_colors_and_color_mode() {
+    let section = format!("%AI8_BeginBrushPattern\n(Dot art)\n0 A\n0 1 1 0 (Ink) 0 x\n{}f\n%AI8_EndBrushPattern\n", rect_path(0.0, 0.0, 4.0, 4.0));
+    let r = read_ok(&format!("{section}{}{}", plugin_object(SCATTER, "Spray", SPRAY), layer("")));
+    let lib = vectorcraft_brush::library(&r.doc);
+    assert!(matches!(brush_named(&lib, "Spray"), vectorcraft_brush::BrushKind::Scatter(_)), "{:?}", r.warnings);
+    let ink = r.doc.swatch("Ink").map(|s| (s.paint.color(), s.global, s.spot));
+    assert_eq!(ink, Some((Some(Color::cmyk(0.0, 1.0, 1.0, 0.0)), true, true)), "{:?}", r.warnings);
+    assert_eq!(r.doc.color_mode, ColorMode::Cmyk);
+    // Art that isn't kept brings nothing.
+    let odd = "%AI8_BeginBrushPattern\n(Odd art)\n0 1 1 0 (Lost ink) 0 x\n0 0 m\n1 1 L\nnotanoperator\nf\n%AI8_EndBrushPattern\n";
+    let r = read_ok(&format!("{odd}{}{}", plugin_object(SCATTER, "Odd", &SPRAY.replace("Dot art", "Odd art")), layer("")));
+    assert!(r.doc.swatch("Lost ink").is_none());
+    assert_eq!(r.doc.color_mode, ColorMode::Rgb);
+    // Nor does art that only a brush left out uses (a pattern brush).
+    let tile = "%AI8_BeginBrushPattern\n(Tile one)\n0 A\n0 1 1 0 (Fence ink) 0 x\n0 0 m\n4 0 L\n4 4 L\nf\n%AI8_EndBrushPattern\n";
+    let r = read_ok(&format!("{tile}{}{}", plugin_object(PATTERN_BRUSH, "Fence", FENCE), layer("")));
+    assert!(vectorcraft_brush::library(&r.doc).is_empty(), "{:?}", r.warnings);
+    assert!(r.doc.swatch("Fence ink").is_none());
+    assert_eq!(r.doc.color_mode, ColorMode::Rgb);
+}
+
+/// A spot color that the page's art and a brush's art both define keeps the page's value, and a
+/// brush art section that a later one of the same name replaces brings none of its colors.
+#[test]
+fn a_brushs_art_colors_come_after_the_pages_and_a_replaced_sections_bring_nothing() {
+    let section = |ink: &str, color: &str| {
+        format!("%AI8_BeginBrushPattern\n(Dot art)\n0 A\n{color} ({ink}) 0 x\n{}f\n%AI8_EndBrushPattern\n", rect_path(0.0, 0.0, 4.0, 4.0))
+    };
+    let page = layer(&format!("0 0 1 0 (Ink) 0 x\n{}f", rect_path(0.0, 0.0, 10.0, 10.0)));
+    let body = format!("{}{}{}{page}", section("Gone ink", "1 0 0 0"), section("Ink", "0 1 1 0"), plugin_object(SCATTER, "Spray", SPRAY));
+    let r = read_ok(&body);
+    assert!(matches!(brush_named(&vectorcraft_brush::library(&r.doc), "Spray"), vectorcraft_brush::BrushKind::Scatter(_)));
+    assert_eq!(r.doc.swatch("Ink").and_then(|s| s.paint.color()), Some(Color::cmyk(0.0, 0.0, 1.0, 0.0)), "{:?}", r.warnings);
+    assert!(r.doc.swatch("Gone ink").is_none());
+}
+
+/// The art of a file's brushes brings each color name's first definition once, and at most
+/// [`super::brush::MAX_BRUSH_ART_COLORS`] names; the colors it leaves out still count toward the
+/// color mode, and art that no brush uses, or that a later section replaces, takes no places.
+#[test]
+fn brush_art_keeps_each_color_name_once_and_a_bounded_number_of_names() {
+    let open = |sections: &[(&str, &str)]| {
+        let defs: String = sections
+            .iter()
+            .map(|(name, colors)| {
+                format!("%AI8_BeginBrushPattern\n({name})\n0 A\n{colors}{}f\n%AI8_EndBrushPattern\n", rect_path(0.0, 0.0, 4.0, 4.0))
+            })
+            .collect();
+        let mist = plugin_object(SCATTER, "Mist", &SPRAY.replace("Dot art", "Dash art"));
+        read_ok(&format!("{defs}{}{mist}{}", plugin_object(SCATTER, "Spray", SPRAY), layer(""))).doc
+    };
+    let max = super::brush::MAX_BRUSH_ART_COLORS;
+    let ink = "0 1 1 0 (Ink) 0 x\n";
+    let many: String = (0..max).map(|i| format!("1 0 0 0 (Name {i}) 0 x\n")).collect();
+    // One name repeated takes one place.
+    let doc = open(&[("Dot art", &format!("{}{ink}", "1 0 0 0 (Same) 0 x\n".repeat(max)))]);
+    assert!(doc.swatch("Same").is_some() && doc.swatch("Ink").is_some());
+    // Different names fill the places: the name past them is left out, and its color still counts.
+    let doc = open(&[("Dot art", &format!("{many}{ink}"))]);
+    assert!(doc.swatch("Name 0").is_some() && doc.swatch("Ink").is_none());
+    assert_eq!(doc.color_mode, ColorMode::Cmyk);
+    // The places are shared by the art of every brush, and a name in the art of two takes one.
+    let doc = open(&[("Dot art", &many), ("Dash art", ink)]);
+    assert_eq!(vectorcraft_brush::library(&doc).len(), 2);
+    assert!(doc.swatch("Name 0").is_some() && doc.swatch("Ink").is_none());
+    let half: String = many.lines().take(max / 2).map(|l| format!("{l}\n")).collect();
+    let doc = open(&[("Dot art", &half), ("Dash art", &format!("{half}{ink}"))]);
+    assert!(doc.swatch("Name 0").is_some() && doc.swatch("Ink").is_some());
+    // The color operators of every brush's art take places before the gradient stops of any.
+    let stops: String = (0..max / 250)
+        .map(|g| {
+            let named: String = (0..250).map(|s| format!("%_0 0 1 0 (Stop {g} {s}) 0 0 5 1 6 50 {} Bs\n", s * 100 / 250)).collect();
+            format!("%AI5_BeginGradient: (G{g})\n(G{g}) 0 250 Bd\n[\n<00FF>\n0\n{named}BD\n%AI5_EndGradient\n")
+        })
+        .collect();
+    let doc = open(&[("Dot art", &stops), ("Dash art", ink)]);
+    assert!(doc.swatch("Stop 0 0").is_some() && doc.swatch("Ink").is_some(), "{:?}", doc.swatch("Stop 0 0"));
+    // Art that no brush uses, and art that a later section of its name replaces, take no places.
+    let doc = open(&[("Other art", &many), ("Dot art", &many), ("Dot art", ink)]);
+    assert!(doc.swatch("Ink").is_some() && doc.swatch("Name 0").is_none());
+}
+
+/// A global process color that only a brush's art defines with its color operator stays a process
+/// color when a gradient of the file names it as a stop, as the page's own definition does (#1771).
+#[test]
+fn a_brushs_art_defines_a_process_color_that_a_gradient_stop_names() {
+    let defs = "%AI5_BeginGradient: (Brand)\n(Brand) 0 2 Bd\n[\n<00FF>\n0\n\
+                %_0.93 0.1 0 0 (Test Cyan) 0 0 5 1 6 50 0 Bs\n%_0 0 0 0 1 0 0 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
+    let section = format!(
+        "%AI8_BeginBrushPattern\n(Dot art)\n0 A\n0.93 0.1 0 0 (Test Cyan) 0 0 Xk\n{}f\n%AI8_EndBrushPattern\n",
+        rect_path(0.0, 0.0, 4.0, 4.0)
+    );
+    let doc = read_ok(&format!("{defs}{section}{}{}", plugin_object(SCATTER, "Spray", SPRAY), layer(""))).doc;
+    assert!(matches!(brush_named(&vectorcraft_brush::library(&doc), "Spray"), vectorcraft_brush::BrushKind::Scatter(_)));
+    let sw = doc.swatch("Test Cyan").unwrap();
+    assert!(sw.global && !sw.spot, "a global process color, not an ink: {sw:?}");
+}
+
+/// A brush art section inside a symbol's definition isn't kept, so its spot colors make no swatch.
+#[test]
+fn brush_art_inside_a_symbol_brings_no_colors() {
+    let section =
+        format!("%AI8_BeginBrushPattern\n(Dot art)\n0 A\n0 1 1 0 (Hidden ink) 0 x\n{}f\n%AI8_EndBrushPattern\n", rect_path(0.0, 0.0, 4.0, 4.0));
+    let body = format!("{}{}{}", symbol("S", &format!("{section}{}", dot()), 5), plugin_object(SCATTER, "Spray", SPRAY), layer(""));
+    let r = read_ok(&body);
+    assert!(r.doc.symbols.iter().any(|s| s.name == "S"), "{:?}", r.warnings);
+    assert!(r.doc.swatch("Hidden ink").is_none());
+}
+
 /// A brush's art filled with a pattern defined in the version 7 form places the tiles with the
 /// fill's offset, scale, rotation, reflection and shear operands, and a brush whose art has such a
 /// fill without all nine of them isn't read.
