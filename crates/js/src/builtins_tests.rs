@@ -370,6 +370,38 @@ fn a_heap_limit_smaller_than_the_built_ins_still_installs_every_built_in() {
 }
 
 #[test]
+fn to_locale_string_calls_to_string_on_the_boxed_value() {
+    assert_eq!(
+        string(
+            "Object.defineProperty(Object.getPrototypeOf(Object(5)), 'toString', {value: function () { 'use strict'; return typeof this; }}); \
+             Object.prototype.toLocaleString.call(5)"
+        ),
+        "object"
+    );
+}
+
+#[test]
+fn array_methods_overwriting_elements_need_no_heap_for_new_ones() {
+    // With the heap exactly at its limit, an array method's write over an existing element
+    // succeeds, and a write that adds an element stops with the heap limit.
+    use crate::heap::key;
+    use crate::interp::Abrupt;
+    use crate::value::Value;
+    let mut realm = small(Limits::default());
+    assert_eq!(realm.run("var a = [1, 2]; 0"), Ok(JsValue::Number(0.0)));
+    let interp = realm.interp();
+    let global = interp.global;
+    let a = match interp.get_from(global, &key("a"), &Value::Object(global)) {
+        Ok(Value::Object(a)) => a,
+        other => panic!("{other:?}"),
+    };
+    interp.collect_garbage();
+    interp.limits.heap_bytes = interp.heap.bytes;
+    assert!(crate::builtins::put_at(interp, a, 0.0, Value::Number(5.0)).is_ok());
+    assert!(matches!(crate::builtins::put_at(interp, a, 2.0, Value::Number(5.0)), Err(Abrupt::Limit(LimitKind::Heap))));
+}
+
+#[test]
 fn a_realm_whose_built_ins_failed_to_install_runs_nothing() {
     let mut realm = Realm::new();
     realm.interp().install_error = Some("the built-ins could not be installed: test".into());

@@ -159,12 +159,17 @@ fn has_at(interp: &mut Interp, o: ObjId, k: f64) -> JsResult<bool> {
 /// The estimated bytes a new element adds.
 const ELEMENT_BYTES: usize = PROP_BYTES + 32 + 2 * 10;
 
-/// `o[k] = v` as the array methods assign: a failure throws. `v` stays rooted while heap is
-/// reserved for it, since the caller may hold it nowhere else.
-fn put_at(interp: &mut Interp, o: ObjId, k: f64, v: Value) -> JsResult<()> {
+/// `o[k] = v` as the array methods assign: a failure throws. When `o` has no own property `k`, `v`
+/// stays rooted while heap is reserved for the new element, since the caller may hold it nowhere
+/// else; overwriting an own property reserves nothing.
+pub(crate) fn put_at(interp: &mut Interp, o: ObjId, k: f64, v: Value) -> JsResult<()> {
+    let k = key_of(k);
+    if interp.heap.object(o).is_some_and(|obj| obj.props.contains(&k)) {
+        return interp.put(o, k, v, true);
+    }
     interp.rooted(std::slice::from_ref(&v), |i| {
         i.reserve_heap(ELEMENT_BYTES)?;
-        i.put(o, key_of(k), v.clone(), true)
+        i.put(o, k.clone(), v.clone(), true)
     })
 }
 
@@ -357,11 +362,12 @@ fn object_to_string(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> J
 
 fn object_to_locale_string(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
     let o = interp.to_object(&this)?;
-    let f = interp.get_from(o, &key("toString"), &this)?;
+    let receiver = Value::Object(o);
+    let f = interp.get_from(o, &key("toString"), &receiver)?;
     if !interp.is_callable(&f) {
         return Err(interp.type_error("toString is not a function"));
     }
-    interp.call(&f, &this, &[])
+    interp.call(&f, &receiver, &[])
 }
 
 fn object_value_of(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
