@@ -3894,7 +3894,7 @@ theme	Appearance	Erscheinungsbild
 # names and values in backticks or code (`colorModel rgb`, `document.export`) stay as they are.
 @msg	no library `{id}`	keine Bibliothek `{id}`
 @msg	select some type first	wählen Sie zuerst Text aus
-@msg	kerning must be a number, "auto", or "optical"	Kerning muss eine Zahl, „auto“ oder „optical“ sein
+@msg	kerning must be a number, "auto", or "optical"	kerning muss eine Zahl, „auto“ oder „optical“ sein
 @msg	the selection has no gradient fill	die Auswahl hat keinen Flächenverlauf
 @msg	the selection has no gradient stroke	die Auswahl hat keinen Konturverlauf
 @msg	the selection has no pattern fill	die Auswahl hat kein Flächenmuster
@@ -4915,12 +4915,12 @@ theme	Appearance	Erscheinungsbild
 	Resize panel window	Bedienfeldfenster skalieren
 	Resize panels	Bedienfelder skalieren
 @msg	Invalid panel layout; restored the default dock	Ungültige Bedienfeldanordnung; Standarddock wiederhergestellt
-@msg	action is required	Eine Aktion ist erforderlich
-@msg	anchor must name a registered panel	Der Anker muss ein registriertes Bedienfeld benennen
+@msg	action is required	action ist erforderlich
+@msg	anchor must name a registered panel	anchor muss ein registriertes Bedienfeld benennen
 @msg	before must name a panel	before muss ein Bedienfeld benennen
 @msg	docking action contains an unknown panel or an excessive split path	Die Docking-Aktion enthält ein unbekanntes Bedienfeld oder einen zu langen Teilungspfad
 @msg	group must be true or false	group muss true oder false sein
-@msg	panel is not in a dock group	Bedienfeld ist in keiner Dock-Gruppe
+@msg	panel is not in a dock group	panel ist in keiner Dock-Gruppe
 @msg	only a dock group above or below others collapses, not one beside another	nur eine Dock-Gruppe über oder unter anderen lässt sich minimieren, nicht eine daneben
 @msg	icon must be true or false	icon muss true oder false sein
 @msg	icon only docks a panel in the icon column, with no anchor	icon dockt ein Bedienfeld nur in der Symbolspalte an, ohne anchor
