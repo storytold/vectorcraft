@@ -29,10 +29,12 @@ pub fn tool_icon(name: &str) -> &'static str {
         "tool-pen-delete" => "pen-tool-delete",
         "tool-anchor" => "dc-anchor",
         "tool-curvature" => "spline",
-        "tool-type" => "type",
+        "tool-type" => "dc-type",
         "tool-type-area" => "dc-type-area",
         "tool-type-path" => "dc-type-path",
         "tool-type-vertical" => "dc-type-vertical",
+        "tool-type-vertical-area" => "dc-type-vertical-area",
+        "tool-type-vertical-path" => "dc-type-vertical-path",
         "tool-touch-type" => "dc-touch-type",
         "tool-line" => "dc-line",
         "tool-arc" => "dc-arc",
@@ -83,6 +85,7 @@ pub fn tool_icon(name: &str) -> &'static str {
         "tool-eyedropper" => "pipette",
         "tool-measure" => "dc-measure",
         "tool-dimension" => "dc-dimension",
+        "tool-contour" => "dc-contour",
         "tool-blend" => "dc-blend",
         "tool-objects-on-path" => "dc-objects-on-path",
         "tool-symbol" => "dc-symbol-sprayer",
@@ -185,6 +188,45 @@ mod tests {
         let pathfinder = String::from_utf8_lossy(include_bytes!("../../../assets/icons/dc-pathfinder.svg"));
         assert_ne!(appearance.as_bytes(), pathfinder.as_bytes());
         assert!(appearance.contains("<circle") && !pathfinder.contains("<circle"), "appearance should read as a list, not overlapping squares");
+    }
+
+    // Regression test for #479: the Add and Delete Anchor Point tools' icons were drawn apart from
+    // the Pen tool's, so the three tools didn't read as one family. They are the Pen's pen with a
+    // plus or a minus beside it.
+    #[test]
+    fn the_add_and_delete_anchor_tool_icons_are_the_pen_icon_with_a_badge() {
+        let svg = |tool: &str| {
+            let name = tool_icon(tool);
+            let (_, bytes) =
+                crate::icon_data::ICONS.iter().find(|(n, _)| *n == name).unwrap_or_else(|| panic!("{tool} maps to {name}, which isn't an icon"));
+            String::from_utf8_lossy(bytes).into_owned()
+        };
+        let shapes =
+            |svg: &str| svg.lines().map(|l| l.trim().to_string()).filter(|l| l.starts_with("<path") || l.starts_with("<circle")).collect::<Vec<_>>();
+        let pen = shapes(&svg("tool-pen"));
+        assert!(!pen.is_empty(), "the Pen's icon has shapes");
+        let (add, delete) = (shapes(&svg("tool-pen-add")), shapes(&svg("tool-pen-delete")));
+        for (tool, icon) in [("tool-pen-add", &add), ("tool-pen-delete", &delete)] {
+            for shape in &pen {
+                assert!(icon.contains(shape), "{tool}'s icon lacks the Pen's {shape}");
+            }
+            assert!(icon.len() > pen.len(), "{tool}'s icon has a badge of its own");
+        }
+        assert_ne!(add, delete, "plus and minus differ");
+    }
+
+    /// The seven type tools each have an icon of their own, drawn for VectorCraft (the vertical
+    /// Area and Path tools used to borrow the horizontal ones' icons).
+    #[test]
+    fn every_type_tool_has_its_own_icon_with_the_same_t() {
+        let tools = ["type", "areaType", "typeOnPath", "verticalType", "verticalAreaType", "verticalTypeOnPath", "touchType"];
+        let names: Vec<&str> = tools.iter().map(|id| tool_icon(vectorcraft_tools::catalog::tool_info(id).unwrap().icon)).collect();
+        let unique: std::collections::BTreeSet<_> = names.iter().collect();
+        assert_eq!(unique.len(), tools.len(), "{names:?}");
+        for name in &names {
+            assert!(name.starts_with("dc-"), "{name} is drawn for VectorCraft");
+            assert!(exists(name), "{name}");
+        }
     }
 
     #[test]

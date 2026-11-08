@@ -1,10 +1,11 @@
 //! `vectorcraft-cli`: VectorCraft from the command line.
 //!
 //! ```text
-//! vectorcraft-cli mcp [--connect 127.0.0.1:7979 | --headless] [--automation-read-root DIR] [--automation-write-root DIR]
-//! vectorcraft-cli run [--in FILE] [--cmd id [--params '{json}']]... [--export out.svg]... [--scale 2]
+//! vectorcraft-cli --safe-mode SUBCOMMAND ...
+//! vectorcraft-cli mcp [--connect 127.0.0.1:7979 | --headless] [--automation-read-root DIR]... [--automation-write-root DIR]...
+//! vectorcraft-cli run [--in FILE] [--cmd id [--params '{json}'] | --commands FILE|-]... [--export out.svg]... [--scale 2] [--ppi 300]
 //! vectorcraft-cli commands
-//! vectorcraft-cli convert IN OUT [--scale 2] [--artboard 0 | --range 1-3,5] [--outline-text] [--decimals N] [--replace-lossy] [--editing-data] [--ai-version 7|pdf] [--hidden-objects layer|omit|visible] [--transparent-images flatten|omit]
+//! vectorcraft-cli convert IN OUT [--scale 2] [--ppi 300] [--artboard 0 | --range 1-3,5] [--outline-text] [--decimals N] [--replace-lossy] [--editing-data] [--preserve-editing] [--ai-version 7|pdf] [--hidden-objects layer|omit|visible] [--transparent-images flatten|omit]
 //! vectorcraft-cli info FILE
 //! vectorcraft-cli bench FILE [--size 2880x1800] [--iters 5]
 //! vectorcraft-cli perf [--paths 50000] [--deep]
@@ -46,9 +47,13 @@ mod perf;
 #[path = "../../vectorcraft/src/prefs_dir.rs"]
 mod prefs_dir;
 /// The desktop app's DirectWrite font lister, shared: exports and MCP find the same fonts.
-#[cfg(all(windows, not(target_vendor = "win7")))]
+#[cfg(windows)]
 #[path = "../../vectorcraft/src/system_fonts.rs"]
 mod system_fonts;
+/// The desktop app's affinity-mask reader, shared: renders start workers only for usable cores.
+#[cfg(windows)]
+#[path = "../../vectorcraft/src/windows_cores.rs"]
+mod windows_cores;
 
 use serde_json::{Value, json};
 use vectorcraft_engine::file_access::{self, AutomationRoots};
@@ -68,27 +73,38 @@ const USAGE: &str = "\
 vectorcraft-cli — VectorCraft automation
 
 USAGE:
-  vectorcraft-cli mcp [--connect ADDR | --headless] [--automation-read-root DIR] [--automation-write-root DIR]
+  vectorcraft-cli --safe-mode SUBCOMMAND ...
+      Run any subcommand without plug-ins: none loads or runs, and plug-in commands report that
+      Safe Mode is on. Plug-ins stay installed. `--safe-mode mcp` serves a headless session and
+      does not take --connect.
+
+  vectorcraft-cli mcp [--connect ADDR | --headless] [--automation-read-root DIR]... [--automation-write-root DIR]...
       Run the MCP server on stdio. Default: connect to a running app at 127.0.0.1:7979
       (vectorcraft --control 7979), falling back to a headless in-process session.
       --automation-read-root / --automation-write-root confine the files the agent's commands read
       (open, place, relink, library loads…) and write (save, export, package, library saves…) to
-      DIR, links followed; a root left out grants none of its access. They imply --headless: a
-      running app enforces its own (vectorcraft --control PORT --automation-read-root DIR …).
+      DIR, links followed; each may be given more than once, a path inside any of its folders being
+      allowed, and a kind left out grants none of its access. They imply --headless: a running app
+      enforces its own (vectorcraft --control PORT --automation-read-root DIR …).
 
-  vectorcraft-cli run [--in FILE] [--cmd ID [--params JSON]]... [--export FILE]... [--scale N]
+  vectorcraft-cli run [--in FILE] [--cmd ID [--params JSON] | --commands FILE|-]... [--export FILE]... [--scale N] [--ppi N]
       Headless batch: open FILE (any readable format) or start a new document, run commands in
       order, export each FILE in the format its extension picks (see Writable formats; a .ait FILE
-      is a template, written as file.saveAsTemplate writes it). --scale sizes raster exports
-      (pixels per point, default 1); other formats leave it out. Prints one JSON result per step.
+      is a template, written as file.saveAsTemplate writes it). Raster exports use the document's
+      raster effects resolution unless --scale (pixels per point) or --ppi (pixels per inch, wins
+      over --scale) is given; other formats leave them out. Prints one JSON result per step.
+      --commands reads steps from FILE, or from standard input for -, where it stands among the
+      --cmd and --export steps: a JSON array of {\"command\": ID, \"params\": {...}} (or \"id\" for
+      \"command\"), or one such object per line (JSON Lines), at most 64 MiB and 100000 steps.
+      Errors name the step, counting from 0 as \"$N\" references do.
 
   vectorcraft-cli commands
       Print the command catalogue as JSON.
 
-  vectorcraft-cli convert IN OUT [--scale N] [--artboard I | --range R] [--outline-text] [--decimals N] [--replace-lossy] [--editing-data] [--ai-version 7|pdf] [--hidden-objects layer|omit|visible] [--transparent-images flatten|omit]
+  vectorcraft-cli convert IN OUT [--scale N] [--ppi N] [--artboard I | --range R] [--outline-text] [--decimals N] [--replace-lossy] [--editing-data] [--preserve-editing] [--ai-version 7|pdf] [--hidden-objects layer|omit|visible] [--transparent-images flatten|omit]
       Open IN (any readable format) and export OUT in the format its extension picks (see Writable
-      formats). --scale sizes a raster OUT (pixels per point, default 1); other formats leave it
-      out. --artboard is 0-based, --range 1-based (\"1-3,5\"); a PDF gets every artboard
+      formats). Raster resolution: --ppi, else 72 times --scale, else the document's raster effects
+      resolution; other formats leave them out. --artboard is 0-based, --range 1-based (\"1-3,5\"); a PDF gets every artboard
       unless one of them is given, EPS the bounds of the art, the other formats the first artboard.
       A .ait OUT is a template of every artboard, written as file.saveAsTemplate writes it (not with
       --artboard or --range).
@@ -98,8 +114,11 @@ USAGE:
       IN left things out (hidden text, art or layers it could not read; the notes say which) unless
       --replace-lossy is given. --editing-data opens a .ai or an EPS with editing data from its editing copy
       even where that draws differently from its PDF part or page (which can be older), as long as
-      it can be read. The
-      result has the export's warnings, and importWarnings for what reading IN left out.
+      it can be read. A PDF OUT omits the embedded native document unless --preserve-editing is
+      given (the app's Save As PDF still defaults to keeping it). With --preserve-editing, when the
+      attachment is written the result's warnings say so (it is left out, with its own warning, for
+      --artboard or a --range without every artboard).
+      The result has the export's warnings, and importWarnings for what reading IN left out.
       --ai-version 7 writes a .ai as the legacy version 7 (layers, groups and type kept; one file
       per artboard, OUT-<artboard>.ai when there are several; default pdf, PDF-compatible), with
       --hidden-objects (default layer: a hidden layer above each layer's hidden objects; omit;
@@ -115,12 +134,17 @@ USAGE:
       Render FILE (any readable format) fitted to WxH (default 2880x1800) and print ms per frame
       (warm), multithreaded and single-threaded.
 
-  vectorcraft-cli perf [--paths N] [--deep]
+  vectorcraft-cli perf [--paths N] [--deep] [--native-io [--artboards 1..4]]
       Check the performance budgets (render, pan, hit test, save/load, SVG, Pathfinder, handle
       and segment drags) on a synthetic N-path document (default 50000). Exits non-zero if a
       budget is exceeded, unless the report says the machine is busy. --deep also times work with
       no budget yet and prints memory use (the working set on Windows), with the peak so far on
       Windows and Linux.
+      --native-io instead measures the application's native save/open commands (one warmup,
+      five samples, no disk I/O), including preview, PDF, compression and API base64 costs.
+      It reports the default and explicit PDF opt-out, with and without preview/compression;
+      --artboards repeats the same artwork
+      on 1 to 4 overlapping artboards. This mode allows at most 50000 paths.
 ";
 
 /// The usage text plus the formats `document.open` reads and `document.export` writes.
@@ -129,26 +153,58 @@ fn usage() -> String {
     format!("{USAGE}\nReadable formats: .{}\nWritable formats: .{}\n", OPEN_EXTS.join(", ."), export_extensions().join(", ."))
 }
 
+/// Does a subcommand's `args` ask for the usage? `--help` or `-h` counts where an option goes, not as
+/// the value of one of the `valued` options before it, so `run --cmd -h` keeps `-h` for `--cmd`. The
+/// subcommands check this before they parse or read anything else.
+fn help_requested(args: &[String], valued: &[&str]) -> bool {
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--help" | "-h" => return true,
+            a if valued.contains(&a) => {
+                it.next();
+            }
+            _ => {}
+        }
+    }
+    false
+}
+
+/// Prints the usage, for `help`, `--help` and `-h`.
+fn help() -> Result<(), String> {
+    out!("{}", usage());
+    Ok(())
+}
+
 fn main() -> ExitCode {
+    // Before the first render: the cores the process may run on.
+    #[cfg(windows)]
+    windows_cores::install();
     // Before any font lookup: the fonts font services load (#579).
-    #[cfg(all(windows, not(target_vendor = "win7")))]
+    #[cfg(windows)]
     system_fonts::install();
     #[cfg(target_os = "macos")]
     mac_fonts::install();
     prefs_dir::install_fonts();
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
+    // Before any subcommand attaches the plug-in folder.
+    let safe_mode = args.first().is_some_and(|a| a == "--safe-mode");
+    if safe_mode {
+        args.remove(0);
+        vectorcraft_engine::cmd::plugin::start_in_safe_mode();
+    }
     let r = match args.first().map(String::as_str) {
-        Some("mcp") => mcp(&args[1..]),
+        // `commands` and `info` take no options, so `--help` or `-h` anywhere after them prints the
+        // usage. The other subcommands check for it themselves.
+        Some("commands" | "info") if help_requested(&args[1..], &[]) => help(),
+        Some("mcp") => mcp(&args[1..], safe_mode),
         Some("run") => run(&args[1..]),
         Some("commands") => commands(),
         Some("convert") => convert(&args[1..]),
         Some("info") => info(&args[1..]),
         Some("bench") => bench(&args[1..]),
         Some("perf") => perf::run(&args[1..]),
-        Some("-h" | "--help" | "help") | None => {
-            out!("{}", usage());
-            Ok(())
-        }
+        Some("-h" | "--help" | "help") | None => help(),
         Some("-V" | "--version") => {
             outln!("vectorcraft-cli {}", env!("CARGO_PKG_VERSION"));
             Ok(())
@@ -174,10 +230,15 @@ fn with_stores(mut h: Headless) -> Headless {
     h
 }
 
-fn mcp(args: &[String]) -> Result<(), String> {
+/// `mcp`. With `--safe-mode` (`safe_mode`) it serves a headless session: a running app loads its own
+/// plug-ins, so `--connect` is refused and the default does not connect.
+fn mcp(args: &[String], safe_mode: bool) -> Result<(), String> {
+    if help_requested(args, &["--connect", "--automation-read-root", "--automation-write-root"]) {
+        return help();
+    }
     let mut connect: Option<String> = None;
     let mut headless = false;
-    let (mut read_root, mut write_root): (Option<String>, Option<String>) = (None, None);
+    let (mut read_roots, mut write_roots): (Vec<String>, Vec<String>) = (vec![], vec![]);
     let mut it = args.iter();
     while let Some(a) = it.next() {
         // The roots also come as `--flag=DIR`, as the other Craft apps take them.
@@ -190,10 +251,7 @@ fn mcp(args: &[String]) -> Result<(), String> {
             "--headless" => headless = true,
             "--automation-read-root" | "--automation-write-root" => {
                 let dir = inline.or_else(|| it.next().cloned()).ok_or_else(|| format!("{flag} needs a folder"))?;
-                let slot = if flag == "--automation-read-root" { &mut read_root } else { &mut write_root };
-                if slot.replace(dir).is_some() {
-                    return Err(format!("{flag} is given twice: it takes one folder"));
-                }
+                if flag == "--automation-read-root" { read_roots.push(dir) } else { write_roots.push(dir) }
             }
             other => return Err(format!("unknown mcp option `{other}`")),
         }
@@ -201,18 +259,22 @@ fn mcp(args: &[String]) -> Result<(), String> {
     if headless && connect.is_some() {
         return Err("use either --connect or --headless".into());
     }
-    let roots = AutomationRoots::new(read_root.as_deref().map(Path::new), write_root.as_deref().map(Path::new))?;
+    if safe_mode && connect.is_some() {
+        return Err("--safe-mode runs a headless session without plug-ins; a running app loads its own: start it with `vectorcraft --safe-mode --control <port>`".into());
+    }
+    let read: Vec<&Path> = read_roots.iter().map(Path::new).collect();
+    let write: Vec<&Path> = write_roots.iter().map(Path::new).collect();
+    let roots = AutomationRoots::new(&read, &write)?;
     if roots.is_some() && connect.is_some() {
-        return Err("--automation-read-root and --automation-write-root confine the headless server; a running app enforces its own roots:                     start it with `vectorcraft --control <port> --automation-read-root <dir> --automation-write-root <dir>`"
+        return Err("--automation-read-root and --automation-write-root confine the headless server; a running app enforces its own roots: start it with `vectorcraft --control <port> --automation-read-root <dir> --automation-write-root <dir>`"
             .into());
     }
     let backend: Box<dyn Backend> = if let Some(roots) = roots {
         // Every thread of this process, not only the server's: nothing reaches past the roots.
         file_access::confine_process(roots.clone());
-        let show = |root: Option<&Path>| root.map_or_else(|| "none".to_string(), |r| r.display().to_string());
-        eprintln!("vectorcraft-cli: files confined: read root {}, write root {}", show(roots.read_root()), show(roots.write_root()));
+        eprintln!("vectorcraft-cli: files confined: {}", roots.describe());
         Box::new(Headless::with_document().with_automation_roots(Some(roots)))
-    } else if headless {
+    } else if headless || safe_mode {
         Box::new(with_stores(Headless::with_document()))
     } else if let Some(addr) = connect {
         // Explicit address: fail loudly if the app isn't there.
@@ -240,9 +302,15 @@ fn commands() -> Result<(), String> {
 }
 
 fn convert(args: &[String]) -> Result<(), String> {
+    let valued =
+        ["--scale", "-s", "--ppi", "--artboard", "-a", "--range", "-r", "--decimals", "--ai-version", "--hidden-objects", "--transparent-images"];
+    if help_requested(args, &valued) {
+        return help();
+    }
     let mut files = vec![];
-    let (mut scale, mut artboard, mut range, mut outline_text, mut replace_lossy, mut editing_data) =
-        (1.0f64, None::<u64>, None::<String>, false, false, false);
+    let (mut scale, mut artboard, mut range, mut outline_text, mut replace_lossy, mut editing_data, mut preserve_editing) =
+        (None::<f64>, None::<u64>, None::<String>, false, false, false, false);
+    let mut ppi = None::<f64>;
     let mut decimals = None::<u64>;
     // Legacy `.ai` options, passed on as the export's own (`aiVersion`, `hiddenObjects`,
     // `transparentImages`); the engine checks their values.
@@ -250,13 +318,22 @@ fn convert(args: &[String]) -> Result<(), String> {
     let mut it = args.iter();
     while let Some(a) = it.next() {
         match a.as_str() {
-            "--scale" | "-s" => scale = it.next().and_then(|v| v.parse().ok()).ok_or("--scale needs a number")?,
+            "--scale" | "-s" => scale = Some(it.next().and_then(|v| v.parse().ok()).ok_or("--scale needs a number")?),
+            "--ppi" => {
+                ppi = Some(
+                    it.next()
+                        .and_then(|v| v.parse().ok())
+                        .filter(|n: &f64| n.is_finite() && *n > 0.0)
+                        .ok_or("--ppi needs a positive finite number")?,
+                );
+            }
             "--artboard" | "-a" => artboard = Some(it.next().and_then(|v| v.parse().ok()).ok_or("--artboard needs an index")?),
             "--range" | "-r" => range = Some(it.next().cloned().ok_or("--range needs artboards such as 1-3,5")?),
             "--outline-text" => outline_text = true,
             "--decimals" => decimals = Some(it.next().and_then(|v| v.parse::<u64>().ok()).ok_or("--decimals needs a number")?),
             "--replace-lossy" => replace_lossy = true,
             "--editing-data" => editing_data = true,
+            "--preserve-editing" => preserve_editing = true,
             "--ai-version" => legacy.push(("aiVersion", it.next().cloned().ok_or("--ai-version needs 7 or pdf")?)),
             "--hidden-objects" => legacy.push(("hiddenObjects", it.next().cloned().ok_or("--hidden-objects needs layer, omit or visible")?)),
             "--transparent-images" => legacy.push(("transparentImages", it.next().cloned().ok_or("--transparent-images needs flatten or omit")?)),
@@ -282,9 +359,12 @@ fn convert(args: &[String]) -> Result<(), String> {
         // A conversion keeps hidden layers and objects, written hidden, where the format can (SVG,
         // PSD).
         let params = json!({"path": output, "artboard": artboard, "range": range, "outlineText": outline_text, "hiddenLayers": true, "acknowledgeLoss": replace_lossy});
-        let mut params = with_pixel_scale(params, &output, scale);
+        let mut params = with_pixel_scale(params, &output, scale, ppi);
         if let Some(decimals) = decimals {
             params["decimals"] = json!(decimals);
+        }
+        if vectorcraft_engine::cmd::fileio::format_for_name(&output).is_some_and(|f| f.id == "pdf") {
+            params["preserveEditing"] = json!(preserve_editing);
         }
         ("document.export", params)
     };
@@ -297,6 +377,25 @@ fn convert(args: &[String]) -> Result<(), String> {
     if let (Some(w), Some(out)) = (opened.get("warnings").filter(|w| w.as_array().is_some_and(|a| !a.is_empty())), r.as_object_mut()) {
         out.insert("importWarnings".into(), w.clone());
     }
+    if preserve_editing
+        && vectorcraft_engine::cmd::fileio::format_for_name(&output).is_some_and(|f| f.id == "pdf")
+        && let Some(obj) = r.as_object_mut()
+    {
+        // The export leaves the attachment out (with this warning) for --artboard or a --range
+        // without every artboard; otherwise it writes it. Read that from the result, not the file.
+        let skipped = vectorcraft_engine::cmd::fileio::pdf::EDITING_NEEDS_EVERY_ARTBOARD;
+        let embedded = !obj.get("warnings").and_then(Value::as_array).is_some_and(|w| w.iter().any(|w| w.as_str() == Some(skipped)));
+        if embedded {
+            let note = "The PDF embeds the native VectorCraft document as an attachment (preserveEditing).";
+            if let Some(Value::Array(w)) = obj.get_mut("warnings") {
+                if !w.iter().any(|w| w.as_str() == Some(note)) {
+                    w.push(json!(note));
+                }
+            } else {
+                obj.insert("warnings".into(), json!([note]));
+            }
+        }
+    }
     outln!("{r}");
     Ok(())
 }
@@ -306,12 +405,17 @@ fn is_template(path: &str) -> bool {
     vectorcraft_engine::cmd::fileio::format_for_name(path).is_some_and(|f| f.id == "ait")
 }
 
-/// The export `params` for `path`, with `--scale` (pixels per point) when its format is raster.
+/// The export `params` for `path`, with explicit raster resolution options only for raster formats.
 /// DXF has a `scale` of its own (drawing units per unit), which would resize the drawing and leave
 /// its units unset.
-fn with_pixel_scale(mut params: Value, path: &str, scale: f64) -> Value {
+fn with_pixel_scale(mut params: Value, path: &str, scale: Option<f64>, ppi: Option<f64>) -> Value {
     if vectorcraft_engine::cmd::fileio::writable_format(None, Some(path)).is_ok_and(|f| f.raster) {
-        params["scale"] = json!(scale);
+        if let Some(scale) = scale {
+            params["scale"] = json!(scale);
+        }
+        if let Some(ppi) = ppi {
+            params["ppi"] = json!(ppi);
+        }
     }
     params
 }
@@ -338,31 +442,144 @@ enum Step {
     Export(String),
 }
 
+/// Most bytes `run --commands` reads from a file or standard input: the steps are untrusted input.
+const MAX_COMMANDS_BYTES: u64 = 64 * 1024 * 1024;
+/// Most steps one `run --commands` takes.
+const MAX_COMMANDS_STEPS: usize = 100_000;
+
+/// The text of `--commands source`: the file `source`, or standard input for `-`, refused past
+/// [`MAX_COMMANDS_BYTES`].
+fn read_commands(source: &str) -> Result<String, String> {
+    use std::io::Read;
+    let mut bytes = vec![];
+    let read = if source == "-" {
+        std::io::stdin().lock().take(MAX_COMMANDS_BYTES + 1).read_to_end(&mut bytes)
+    } else {
+        std::fs::File::open(source).and_then(|f| f.take(MAX_COMMANDS_BYTES + 1).read_to_end(&mut bytes))
+    };
+    read.map_err(|e| format!("--commands {source}: {e}"))?;
+    if bytes.len() as u64 > MAX_COMMANDS_BYTES {
+        return Err(format!("--commands {source}: more than {} MiB of steps", MAX_COMMANDS_BYTES / (1024 * 1024)));
+    }
+    String::from_utf8(bytes).map_err(|_| format!("--commands {source}: not UTF-8 text"))
+}
+
+/// The steps of `--commands source` from its `text`: a JSON array of `{"command": ID, "params":
+/// {…}}` objects (`"id"` may stand for `"command"`, as in MCP's `command_batch`), or one such object
+/// per line (JSON Lines, blank lines skipped). `first` is the run's index of the first of them
+/// (the `N` of `"$N"`), which an error names with the entry's place in the text.
+fn parse_commands(source: &str, text: &str, first: usize) -> Result<Vec<Step>, String> {
+    // Notepad on Windows starts UTF-8 files with a byte order mark.
+    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
+    let too_many = || format!("--commands {source}: more than {MAX_COMMANDS_STEPS} steps");
+    // Each entry with where it is in the text: its line for JSON Lines.
+    let mut entries: Vec<(Option<usize>, Value)> = vec![];
+    if text.trim_start().starts_with('[') {
+        let v: Value = serde_json::from_str(text).map_err(|e| format!("--commands {source}: {e}"))?;
+        let Value::Array(items) = v else { return Err(format!("--commands {source}: not a JSON array")) };
+        if items.len() > MAX_COMMANDS_STEPS {
+            return Err(too_many());
+        }
+        entries.extend(items.into_iter().map(|v| (None, v)));
+    } else {
+        for (n, line) in text.lines().enumerate().filter(|(_, l)| !l.trim().is_empty()) {
+            if entries.len() == MAX_COMMANDS_STEPS {
+                return Err(too_many());
+            }
+            let v = serde_json::from_str(line).map_err(|e| format!("--commands {source}: step {} (line {}): {e}", first + entries.len(), n + 1))?;
+            entries.push((Some(n + 1), v));
+        }
+    }
+    entries
+        .into_iter()
+        .enumerate()
+        .map(|(k, (line, v))| {
+            command_step(v).map_err(|e| {
+                let place = line.map_or_else(|| format!("entry {}", k + 1), |l| format!("line {l}"));
+                format!("--commands {source}: step {} ({place}): {e}", first + k)
+            })
+        })
+        .collect()
+}
+
+/// The step of one `--commands` entry, `{"command": ID, "params": {…}}`.
+fn command_step(v: Value) -> Result<Step, String> {
+    let Value::Object(mut o) = v else { return Err("a step must be an object such as {\"command\": \"select.all\", \"params\": {}}".into()) };
+    let id = match (o.remove("command"), o.remove("id")) {
+        (Some(Value::String(id)), None) | (None, Some(Value::String(id))) => id,
+        (Some(_), Some(_)) => return Err("give `command` or `id`, not both".into()),
+        (None, None) => return Err("no `command`".into()),
+        _ => return Err("`command` must be a string, a command id".into()),
+    };
+    let params = match o.remove("params") {
+        None | Some(Value::Null) => json!({}),
+        Some(p @ Value::Object(_)) => p,
+        Some(_) => return Err(format!("`params` of {id} must be a JSON object")),
+    };
+    if let Some(key) = o.keys().next() {
+        return Err(format!("unknown key `{key}`: a step has `command` (or `id`) and `params`"));
+    }
+    Ok(Step::Cmd(id, params))
+}
+
 fn run(args: &[String]) -> Result<(), String> {
+    let valued = ["--in", "-i", "--cmd", "-c", "--params", "-p", "--commands", "--export", "-o", "--scale", "-s", "--ppi"];
+    if help_requested(args, &valued) {
+        return help();
+    }
     let mut input: Option<String> = None;
     let mut steps: Vec<Step> = vec![];
-    let mut scale = 1.0;
+    // The step of the `--cmd` just given, which a `--params` sets.
+    let mut params_for: Option<usize> = None;
+    let mut stdin_read = false;
+    let mut scale = None::<f64>;
+    let mut ppi = None::<f64>;
     let mut it = args.iter();
     while let Some(a) = it.next() {
         let mut val = |what: &str| it.next().cloned().ok_or_else(|| format!("{a} needs {what}"));
         match a.as_str() {
             "--in" | "-i" => input = Some(val("a file")?),
-            "--cmd" | "-c" => steps.push(Step::Cmd(val("a command id")?, json!({}))),
+            "--cmd" | "-c" => {
+                steps.push(Step::Cmd(val("a command id")?, json!({})));
+                params_for = Some(steps.len() - 1);
+            }
             "--params" | "-p" => {
                 let raw = val("JSON")?;
                 let p: Value = serde_json::from_str(&raw).map_err(|e| format!("--params {raw}: {e}"))?;
                 if !p.is_object() {
                     return Err(format!("--params must be a JSON object, got {raw}"));
                 }
-                match steps.last_mut() {
+                match params_for.and_then(|i| steps.get_mut(i)) {
                     Some(Step::Cmd(_, params)) => *params = p,
                     _ => return Err("--params must follow a --cmd".into()),
                 }
             }
-            "--export" | "-o" => steps.push(Step::Export(val("a file")?)),
+            "--commands" => {
+                let source = val("a file, or - for standard input")?;
+                if source == "-" && std::mem::replace(&mut stdin_read, true) {
+                    return Err("--commands - is given twice: standard input is read once".into());
+                }
+                let text = read_commands(&source)?;
+                let read = parse_commands(&source, &text, steps.len())?;
+                steps.extend(read);
+                params_for = None;
+            }
+            "--export" | "-o" => {
+                steps.push(Step::Export(val("a file")?));
+                params_for = None;
+            }
             "--scale" | "-s" => {
                 let raw = val("a number")?;
-                scale = raw.parse::<f64>().map_err(|_| format!("--scale {raw}: not a number"))?;
+                scale = Some(raw.parse::<f64>().map_err(|_| format!("--scale {raw}: not a number"))?);
+            }
+            "--ppi" => {
+                let raw = val("a number")?;
+                ppi = Some(
+                    raw.parse::<f64>()
+                        .ok()
+                        .filter(|n| n.is_finite() && *n > 0.0)
+                        .ok_or_else(|| format!("--ppi {raw}: needs a positive finite number"))?,
+                );
             }
             other => return Err(format!("unknown run option `{other}`")),
         }
@@ -394,10 +611,12 @@ fn run(args: &[String]) -> Result<(), String> {
     // Each step's result, for later steps to refer to (`"$1.id"`, see `vectorcraft_engine::steps`).
     let mut results = vec![];
     for step in steps {
+        // The step's index, as `"$N"` names its result.
+        let n = results.len();
         let r = match step {
             Step::Cmd(id, params) => {
-                let params = vectorcraft_engine::steps::resolve(&params, &results).map_err(|e| format!("{id}: {e}"))?;
-                let r = h.call("engine.execute", json!({"command": id, "params": params})).map_err(|e| format!("{id}: {e}"))?;
+                let params = vectorcraft_engine::steps::resolve(&params, &results).map_err(|e| format!("step {n} ({id}): {e}"))?;
+                let r = h.call("engine.execute", json!({"command": id, "params": params})).map_err(|e| format!("step {n} ({id}): {e}"))?;
                 emit(json!({"step": "cmd", "command": id, "result": r}))?;
                 r
             }
@@ -405,9 +624,9 @@ fn run(args: &[String]) -> Result<(), String> {
                 let r = if is_template(&path) {
                     h.call("engine.execute", json!({"command": "file.saveAsTemplate", "params": {"path": path, "format": "ait"}}))
                 } else {
-                    h.call("app.export", with_pixel_scale(json!({"path": path}), &path, scale))
+                    h.call("app.export", with_pixel_scale(json!({"path": path}), &path, scale, ppi))
                 };
-                let r = r.map_err(|e| format!("export {path}: {e}"))?;
+                let r = r.map_err(|e| format!("step {n}: export {path}: {e}"))?;
                 emit(json!({"step": "export", "result": r}))?;
                 r
             }
@@ -418,6 +637,9 @@ fn run(args: &[String]) -> Result<(), String> {
 }
 
 fn bench(args: &[String]) -> Result<(), String> {
+    if help_requested(args, &["--size", "--iters"]) {
+        return help();
+    }
     let mut file = None;
     let (mut w, mut h, mut iters) = (2880u32, 1800u32, 5u32);
     let mut it = args.iter();

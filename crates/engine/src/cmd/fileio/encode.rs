@@ -14,9 +14,10 @@ use vectorcraft_render::encode::quantize::{Dither, PaletteOptions, Reduction};
 use vectorcraft_render::encode::tiff::{ByteOrder, TiffOptions};
 use vectorcraft_render::encode::{RasterExportOptions, RasterFormat, bmp, psd, tga};
 
-use super::super::*;
+use super::super::{EngineError, Result, bad, color_value, parse_range};
 use super::Format;
 use super::imagemap::{self, MapKind};
+use super::screens::ScreenSize;
 
 const C: &str = "document.export";
 
@@ -147,6 +148,10 @@ struct RasterOptions {
     scale: Option<f64>,
     /// Pixels per inch (wins over `scale`).
     ppi: Option<f64>,
+    /// The width of each file in pixels (wins over `height`, `ppi` and `scale`).
+    width: Option<f64>,
+    /// The height of each file in pixels (wins over `ppi` and `scale`).
+    height: Option<f64>,
     quality: Option<u8>,
     background: Option<Value>,
     anti_alias: Option<String>,
@@ -179,18 +184,36 @@ struct RasterOptions {
     rich_black: Option<bool>,
 }
 
+/// `ppi` with its scale kept within 0.01–64 pixels per point.
+fn clamped_ppi(ppi: f64) -> f64 {
+    (ppi / 72.0).clamp(0.01, 64.0) * 72.0
+}
+
 impl RasterOptions {
-    /// The render and encoder settings: `ppi`, else 72 × `scale`, within 0.01–64 pixels per point;
+    /// The pixel size each file is scaled to: `width`, else `height`; `None` when neither is set.
+    fn pixel_size(&self) -> Result<Option<ScreenSize>> {
+        let checked = |key: &str, n: f64| {
+            if n.is_finite() && n > 0.0 { Ok(n) } else { Err(bad(C, format!("{key} must be a positive number, not {n}"))) }
+        };
+        match (self.width, self.height) {
+            (Some(w), _) => checked("width", w).map(|w| Some(ScreenSize::Width(w))),
+            (None, Some(h)) => checked("height", h).map(|h| Some(ScreenSize::Height(h))),
+            (None, None) => Ok(None),
+        }
+    }
+
+    /// The render and encoder settings: `ppi`, else 72 × `scale`, else the document's resolution,
+    /// within 0.01–64 pixels per point;
     /// `background`, else `page` (the document's background).
-    fn settings(&self, page: Option<[u8; 3]>) -> Result<RasterExportOptions> {
+    fn settings(&self, page: Option<[u8; 3]>, document_ppi: f64) -> Result<RasterExportOptions> {
         if let Some(ppi) = self.ppi.filter(|p| !(p.is_finite() && *p > 0.0)) {
             return Err(bad(C, format!("ppi must be a positive number, not {ppi}")));
         }
-        let ppi = self.ppi.unwrap_or(72.0 * self.scale.unwrap_or(1.0));
+        let ppi = self.ppi.unwrap_or_else(|| self.scale.map_or(document_ppi, |scale| 72.0 * scale));
         let color_model = parse(self.color_model.as_deref(), jpeg::ColorModel::from_id, "colorModel", "rgb, cmyk or gray")?;
         let embed_icc = self.embed_icc.unwrap_or(true);
         Ok(RasterExportOptions {
-            ppi: (ppi / 72.0).clamp(0.01, 64.0) * 72.0,
+            ppi: clamped_ppi(ppi),
             background: match &self.background {
                 Some(v) => background(v).map_err(|e| bad(C, e))?,
                 None => page,
@@ -340,7 +363,17 @@ pub(super) fn single_artboard(doc: &Document, rect: Rect, name: &str) -> Documen
 
 /// `d` with one artboard, `rect`.
 pub(crate) fn with_single_artboard(mut d: Document, rect: Rect, name: &str) -> Document {
-    d.artboards = vec![Artboard { id: 1, name: name.into(), rect, locked: false, show_center_mark: false, show_cross_hairs: false, color: None }];
+    d.artboards = vec![Artboard {
+        id: 1,
+        name: name.into(),
+        rect,
+        locked: false,
+        show_center_mark: false,
+        show_cross_hairs: false,
+        show_video_safe_areas: false,
+        video_ruler_pixel_aspect_ratio: 1.0,
+        color: None,
+    }];
     d
 }
 
@@ -388,7 +421,10 @@ pub fn encode(doc: &Document, format: &str, p: &Value) -> Result<Vec<u8>> {
 /// font; PDF, EPS, SVG, EMF, WMF and the raster formats: type that doesn't fit its frame).
 pub fn encode_with_warnings(doc: &Document, format: &str, p: &Value) -> Result<(Vec<u8>, Vec<String>)> {
     let f = super::writable(C, Some(format), None)?;
-    encode_all(doc, f.id, p)?.single(f)
+    let enc = encode_all(doc, f.id, p)?;
+    // The error for a version 7 .ai of several artboards names the legacy .ai.
+    let legacy = f.id == "ai" && super::legacy_ai::wanted(C, f, p)?;
+    enc.single(&if legacy { super::legacy_ai::named(f) } else { *f })
 }
 
 /// [`encode`], with every file the export writes.
@@ -509,8 +545,8 @@ fn encode_files(doc: &Document, f: &Format, p: &Value) -> Result<Encoded> {
             // New Document → Background Contents: White makes the export opaque, unless `background`
             // says otherwise (JPEG has no alpha: white either way).
             let page = (doc.setup.background == vectorcraft_doc::Background::White).then_some([255; 3]);
-            let settings = o.settings(page)?;
-            let scale = settings.scale();
+            let mut settings = o.settings(page, doc.raster_ppi())?;
+            let size = o.pixel_size()?;
             let format = match f.id {
                 "png" => RasterFormat::Png,
                 "jpg" => RasterFormat::Jpeg,
@@ -533,6 +569,9 @@ fn encode_files(doc: &Document, f: &Format, p: &Value) -> Result<Encoded> {
                 (RasterFormat::Jpeg, Some(m)) => MapKind::from_id(m).ok_or_else(|| bad(C, format!("imageMap `{m}`: none, client or server")))?,
                 _ => MapKind::None,
             };
+            // The artboards' background colors, behind the art (a transparent background too).
+            let filled = super::export::with_artboard_fills(doc, p, chosen.iter().copied()).map_err(|e| bad(C, e))?;
+            let doc = &*filled;
             let mut enc = Encoded::default();
             let mut renderer = vectorcraft_render::Renderer::new();
             let total = chosen.len() as u64;
@@ -540,6 +579,11 @@ fn encode_files(doc: &Document, f: &Format, p: &Value) -> Result<Encoded> {
                 vectorcraft_doc::cancel::check()?;
                 vectorcraft_doc::cancel::progress(done as u64, total, &format!("Rendering artboard {} of {total}", done + 1));
                 let region = doc.artboards.get(b).ok_or_else(|| bad(C, format!("no artboard {}", b + 1)))?.rect;
+                // `width` or `height`: each file gets the scale that makes its region that size.
+                if let Some(size) = size {
+                    settings.ppi = clamped_ppi(72.0 * size.scale_for(C, region)?);
+                }
+                let scale = settings.scale();
                 check_format_size(f, region.width() * scale, region.height() * scale)?;
                 vectorcraft_render::raster_size(region, scale).map_err(|e| bad(C, e))?;
                 enc.maps.extend(imagemap::build(doc, region, scale, map, enc.files.len()));

@@ -1,0 +1,1006 @@
+{
+  "brightness": "MediumDark",
+  "dock_tab": "Layers",
+  "dock_collapsed": false,
+  "open_panel": null,
+  "control_bar": false,
+  "toolbar": true,
+  "toolbar_double": false,
+  "toolbar_advanced": false,
+  "task_bar": true,
+  "slot_tool": {},
+  "floating_flyouts": [],
+  "toolbar_edits": {
+    "basic": null,
+    "advanced": null
+  },
+  "toolbar_show": {
+    "fill_stroke": true,
+    "coloring": true,
+    "draw_mode": true,
+    "screen_mode": true
+  },
+  "floating_panels": [
+    {
+      "panels": [
+        "color",
+        "stroke"
+      ],
+      "active": 1,
+      "pos": [
+        300.0,
+        120.0
+      ],
+      "width": 300.0
+    },
+    {
+      "panels": [
+        "gradient"
+      ],
+      "active": 0,
+      "pos": [
+        640.0,
+        100.0
+      ],
+      "width": 300.0,
+      "column": 1
+    },
+    {
+      "panels": [
+        "transparency"
+      ],
+      "active": 0,
+      "pos": [
+        640.0,
+        100.0
+      ],
+      "width": 300.0,
+      "column": 1
+    },
+    {
+      "panels": [
+        "align"
+      ],
+      "active": 0,
+      "pos": [
+        300.0,
+        560.0
+      ],
+      "width": 300.0,
+      "collapsed": true
+    },
+    {
+      "panels": [
+        "pathfinder"
+      ],
+      "active": 0,
+      "pos": [
+        640.0,
+        500.0
+      ],
+      "width": 300.0,
+      "column": 2,
+      "docked": 1
+    },
+    {
+      "panels": [
+        "transform"
+      ],
+      "active": 0,
+      "pos": [
+        640.0,
+        500.0
+      ],
+      "width": 300.0,
+      "column": 2,
+      "docked": 1
+    }
+  ],
+  "docking": {
+    "root": {
+      "Split": {
+        "axis": "Vertical",
+        "size": {
+          "Ratio": 0.5
+        },
+        "first": {
+          "Tabs": {
+            "panels": [
+              "properties",
+              "layers"
+            ],
+            "active": 1
+          }
+        },
+        "second": {
+          "Tabs": {
+            "panels": [
+              "swatches"
+            ],
+            "active": 0
+          }
+        }
+      }
+    },
+    "floating": [
+      {
+        "panels": [
+          "color",
+          "stroke"
+        ],
+        "active": 1,
+        "rect": [
+          300.0,
+          120.0,
+          300.0,
+          400.0
+        ]
+      },
+      {
+        "panels": [
+          "gradient"
+        ],
+        "active": 0,
+        "rect": [
+          640.0,
+          100.0,
+          300.0,
+          400.0
+        ]
+      },
+      {
+        "panels": [
+          "transparency"
+        ],
+        "active": 0,
+        "rect": [
+          640.0,
+          100.0,
+          300.0,
+          400.0
+        ]
+      },
+      {
+        "panels": [
+          "align"
+        ],
+        "active": 0,
+        "rect": [
+          300.0,
+          560.0,
+          300.0,
+          400.0
+        ]
+      },
+      {
+        "panels": [
+          "pathfinder"
+        ],
+        "active": 0,
+        "rect": [
+          640.0,
+          500.0,
+          300.0,
+          400.0
+        ]
+      },
+      {
+        "panels": [
+          "transform"
+        ],
+        "active": 0,
+        "rect": [
+          640.0,
+          500.0,
+          300.0,
+          400.0
+        ]
+      }
+    ]
+  },
+  "docking_hidden": {
+    "align": {
+      "floating": null,
+      "anchor": "properties",
+      "placement": {
+        "Tab": {
+          "before": null
+        }
+      },
+      "size": null,
+      "stack": null,
+      "sibling": []
+    },
+    "color": {
+      "floating": null,
+      "anchor": "properties",
+      "placement": {
+        "Tab": {
+          "before": null
+        }
+      },
+      "size": null,
+      "stack": null,
+      "sibling": []
+    },
+    "gradient": {
+      "floating": null,
+      "anchor": "properties",
+      "placement": {
+        "Tab": {
+          "before": null
+        }
+      },
+      "size": null,
+      "stack": null,
+      "sibling": []
+    },
+    "pathfinder": {
+      "floating": null,
+      "anchor": "properties",
+      "placement": {
+        "Tab": {
+          "before": null
+        }
+      },
+      "size": null,
+      "stack": null,
+      "sibling": []
+    },
+    "stroke": {
+      "floating": null,
+      "anchor": "properties",
+      "placement": {
+        "Tab": {
+          "before": null
+        }
+      },
+      "size": null,
+      "stack": null,
+      "sibling": []
+    },
+    "symbols": {
+      "floating": null,
+      "anchor": "swatches",
+      "placement": {
+        "Tab": {
+          "before": null
+        }
+      },
+      "size": null,
+      "stack": null,
+      "sibling": []
+    },
+    "transform": {
+      "floating": null,
+      "anchor": "properties",
+      "placement": {
+        "Tab": {
+          "before": null
+        }
+      },
+      "size": null,
+      "stack": null,
+      "sibling": []
+    },
+    "transparency": {
+      "floating": null,
+      "anchor": "properties",
+      "placement": {
+        "Tab": {
+          "before": null
+        }
+      },
+      "size": null,
+      "stack": null,
+      "sibling": []
+    }
+  },
+  "docking_icons": [
+    "align",
+    "color",
+    "gradient",
+    "libraries",
+    "pathfinder",
+    "stroke",
+    "transform",
+    "transparency"
+  ],
+  "docking_collapsed": [
+    "swatches"
+  ],
+  "dock_width": 380.0,
+  "toolbar_pos": null,
+  "status_bar": true,
+  "dock": true,
+  "view": {
+    "rulers": false,
+    "video_rulers": false,
+    "grid": false,
+    "guides": true,
+    "smart_guides": true,
+    "bounding_box": true,
+    "outline": false,
+    "pixel_preview": false,
+    "snap_to_grid": false,
+    "snap_to_point": true,
+    "artboards": true,
+    "edges": true,
+    "trim_view": false,
+    "corner_widgets": true,
+    "snap_to_pixel": false,
+    "snap_to_glyph": false,
+    "text_threads": true,
+    "gradient_annotator": true,
+    "live_paint_gaps": false,
+    "hidden_chars": false,
+    "templates": true
+  },
+  "dialog": null,
+  "flyout": null,
+  "group_tool": [
+    "selection",
+    "directSelection",
+    "magicWand",
+    "lasso",
+    "pen",
+    "curvature",
+    "type",
+    "lineSegment",
+    "rectangle",
+    "paintbrush",
+    "shaper",
+    "eraser",
+    "rotate",
+    "scale",
+    "width",
+    "freeTransform",
+    "shapeBuilder",
+    "perspectiveGrid",
+    "mesh",
+    "gradient",
+    "eyedropper",
+    "blend",
+    "dimension",
+    "symbolSprayer",
+    "columnGraph",
+    "artboard",
+    "hand",
+    "zoom"
+  ],
+  "status": "quit",
+  "palette_open": false,
+  "palette_query": "",
+  "draw_mode": 0,
+  "about": false,
+  "action_sets": [
+    {
+      "name": "Default Actions",
+      "actions": [
+        {
+          "name": "Duplicate and Offset 10 pt",
+          "steps": [
+            [
+              "object.move",
+              {
+                "copy": true,
+                "dx": 10,
+                "dy": 10
+              }
+            ]
+          ]
+        },
+        {
+          "name": "Unite and Simplify",
+          "steps": [
+            [
+              "object.pathfinder.unite",
+              {}
+            ],
+            [
+              "object.path.simplify",
+              {
+                "tolerance": 0.5
+              }
+            ]
+          ]
+        },
+        {
+          "name": "Center on Artboard",
+          "steps": [
+            [
+              "object.align",
+              {
+                "horizontal": "center",
+                "to": "artboard",
+                "vertical": "center"
+              }
+            ]
+          ]
+        },
+        {
+          "name": "Outline Text",
+          "steps": [
+            [
+              "type.createOutlines",
+              {}
+            ]
+          ]
+        },
+        {
+          "name": "Rotate 90° CW",
+          "steps": [
+            [
+              "object.rotate",
+              {
+                "angle": -90
+              }
+            ]
+          ]
+        },
+        {
+          "name": "Reflect Horizontal",
+          "steps": [
+            [
+              "object.reflect",
+              {
+                "axis": "vertical"
+              }
+            ]
+          ]
+        }
+      ]
+    }
+  ],
+  "shortcut_overrides": {},
+  "shortcut_set": "VectorCraft Defaults",
+  "workspace": "Migration Test",
+  "custom_workspaces": [
+    {
+      "name": "Migration Test",
+      "controlBar": false,
+      "rulers": false,
+      "toolbar": true,
+      "toolbarDouble": false,
+      "toolbarAdvanced": false,
+      "taskBar": true,
+      "dock": true,
+      "dockTab": "Layers",
+      "dockCollapsed": false,
+      "openPanel": null,
+      "statusBar": true,
+      "floatingFlyouts": [],
+      "floatingPanels": [
+        {
+          "panels": [
+            "color",
+            "stroke"
+          ],
+          "active": 1,
+          "pos": [
+            300.0,
+            120.0
+          ],
+          "width": 300.0
+        },
+        {
+          "panels": [
+            "gradient"
+          ],
+          "active": 0,
+          "pos": [
+            640.0,
+            100.0
+          ],
+          "width": 300.0,
+          "column": 1
+        },
+        {
+          "panels": [
+            "transparency"
+          ],
+          "active": 0,
+          "pos": [
+            640.0,
+            100.0
+          ],
+          "width": 300.0,
+          "column": 1
+        },
+        {
+          "panels": [
+            "align"
+          ],
+          "active": 0,
+          "pos": [
+            300.0,
+            560.0
+          ],
+          "width": 300.0,
+          "collapsed": true
+        },
+        {
+          "panels": [
+            "pathfinder"
+          ],
+          "active": 0,
+          "pos": [
+            640.0,
+            500.0
+          ],
+          "width": 300.0,
+          "column": 2,
+          "docked": 1
+        },
+        {
+          "panels": [
+            "transform"
+          ],
+          "active": 0,
+          "pos": [
+            640.0,
+            500.0
+          ],
+          "width": 300.0,
+          "column": 2,
+          "docked": 1
+        }
+      ],
+      "docking": {
+        "root": {
+          "Split": {
+            "axis": "Vertical",
+            "size": {
+              "Ratio": 0.5
+            },
+            "first": {
+              "Tabs": {
+                "panels": [
+                  "properties",
+                  "layers"
+                ],
+                "active": 1
+              }
+            },
+            "second": {
+              "Tabs": {
+                "panels": [
+                  "swatches"
+                ],
+                "active": 0
+              }
+            }
+          }
+        },
+        "floating": [
+          {
+            "panels": [
+              "color",
+              "stroke"
+            ],
+            "active": 1,
+            "rect": [
+              300.0,
+              120.0,
+              300.0,
+              400.0
+            ]
+          },
+          {
+            "panels": [
+              "gradient"
+            ],
+            "active": 0,
+            "rect": [
+              640.0,
+              100.0,
+              300.0,
+              400.0
+            ]
+          },
+          {
+            "panels": [
+              "transparency"
+            ],
+            "active": 0,
+            "rect": [
+              640.0,
+              100.0,
+              300.0,
+              400.0
+            ]
+          },
+          {
+            "panels": [
+              "align"
+            ],
+            "active": 0,
+            "rect": [
+              300.0,
+              560.0,
+              300.0,
+              400.0
+            ]
+          },
+          {
+            "panels": [
+              "pathfinder"
+            ],
+            "active": 0,
+            "rect": [
+              640.0,
+              500.0,
+              300.0,
+              400.0
+            ]
+          },
+          {
+            "panels": [
+              "transform"
+            ],
+            "active": 0,
+            "rect": [
+              640.0,
+              500.0,
+              300.0,
+              400.0
+            ]
+          }
+        ]
+      },
+      "dockingHidden": {
+        "align": {
+          "floating": null,
+          "anchor": "properties",
+          "placement": {
+            "Tab": {
+              "before": null
+            }
+          },
+          "size": null,
+          "stack": null,
+          "sibling": []
+        },
+        "color": {
+          "floating": null,
+          "anchor": "properties",
+          "placement": {
+            "Tab": {
+              "before": null
+            }
+          },
+          "size": null,
+          "stack": null,
+          "sibling": []
+        },
+        "gradient": {
+          "floating": null,
+          "anchor": "properties",
+          "placement": {
+            "Tab": {
+              "before": null
+            }
+          },
+          "size": null,
+          "stack": null,
+          "sibling": []
+        },
+        "pathfinder": {
+          "floating": null,
+          "anchor": "properties",
+          "placement": {
+            "Tab": {
+              "before": null
+            }
+          },
+          "size": null,
+          "stack": null,
+          "sibling": []
+        },
+        "stroke": {
+          "floating": null,
+          "anchor": "properties",
+          "placement": {
+            "Tab": {
+              "before": null
+            }
+          },
+          "size": null,
+          "stack": null,
+          "sibling": []
+        },
+        "symbols": {
+          "floating": null,
+          "anchor": "swatches",
+          "placement": {
+            "Tab": {
+              "before": null
+            }
+          },
+          "size": null,
+          "stack": null,
+          "sibling": []
+        },
+        "transform": {
+          "floating": null,
+          "anchor": "properties",
+          "placement": {
+            "Tab": {
+              "before": null
+            }
+          },
+          "size": null,
+          "stack": null,
+          "sibling": []
+        },
+        "transparency": {
+          "floating": null,
+          "anchor": "properties",
+          "placement": {
+            "Tab": {
+              "before": null
+            }
+          },
+          "size": null,
+          "stack": null,
+          "sibling": []
+        }
+      },
+      "dockingIcons": [
+        "align",
+        "color",
+        "gradient",
+        "libraries",
+        "pathfinder",
+        "stroke",
+        "transform",
+        "transparency"
+      ],
+      "dockingCollapsed": [
+        "swatches"
+      ],
+      "toolbarPos": null,
+      "dockWidth": 380.0
+    }
+  ],
+  "recent_files": [],
+  "recent_fonts": [],
+  "favorite_fonts": [],
+  "engine_prefs": {
+    "aicbMode": "preserveAppearance",
+    "alignmentGuides": true,
+    "anchorPathLabels": true,
+    "anchorSize": 3,
+    "animatedZoom": true,
+    "antiAliasedArtwork": true,
+    "antiAliasedBitmaps": false,
+    "appendConverted": true,
+    "autoCollapseIconPanels": false,
+    "autoSizeAreaType": false,
+    "autosaveInterval": 2,
+    "autosaveRecovery": true,
+    "backgroundExport": true,
+    "backgroundSave": true,
+    "baselineShiftIncrement": 2.0,
+    "blackOnScreen": "accurate",
+    "blackOutput": "accurate",
+    "canvasColor": "matchUi",
+    "constrainAngle": 0.0,
+    "constrainProportions": false,
+    "constructionAngles": "90° & 45° Angles",
+    "constructionGuides": true,
+    "copyAicb": false,
+    "copyAsPdf": false,
+    "copyAsSvg": true,
+    "cornerRadius": 12.0,
+    "ctrlClickSelectsBehind": true,
+    "curvatureRubberBand": true,
+    "disableAutoAddDelete": false,
+    "displayPrintSize": false,
+    "distanceGuides": true,
+    "doubleClickToIsolate": true,
+    "eyedropper": {
+      "apply": {
+        "appearance": {
+          "fill": {
+            "color": true,
+            "overprint": true,
+            "transparency": true
+          },
+          "stroke": {
+            "cap": true,
+            "color": true,
+            "dash": true,
+            "join": true,
+            "miter": true,
+            "overprint": true,
+            "transparency": true,
+            "weight": true
+          },
+          "transparency": true
+        },
+        "character": true,
+        "paragraph": true
+      },
+      "pickUp": {
+        "appearance": {
+          "fill": {
+            "color": true,
+            "overprint": true,
+            "transparency": true
+          },
+          "stroke": {
+            "cap": true,
+            "color": true,
+            "dash": true,
+            "join": true,
+            "miter": true,
+            "overprint": true,
+            "transparency": true,
+            "weight": true
+          },
+          "transparency": true
+        },
+        "character": true,
+        "paragraph": true
+      },
+      "sampleSize": 1
+    },
+    "fontNamesInEnglish": true,
+    "fontPreview": true,
+    "fontPreviewSize": "medium",
+    "fontsFolder": "",
+    "gpuPerformance": true,
+    "gpuPreference": "automatic",
+    "gridColor": "#c8c8c8",
+    "gridStyle": "lines",
+    "gridSubdivisions": 8,
+    "gridlineEvery": 72.0,
+    "gridsInBack": true,
+    "guideColor": "#4affff",
+    "guideStyle": "lines",
+    "handleStyle": "solid",
+    "hideCornerWidgetAbove": 177.0,
+    "highlightAlternateGlyphs": false,
+    "highlightAnchorsOnHover": true,
+    "historyStates": 500,
+    "hyphenationExceptions": "",
+    "hyphenationLanguage": "English: USA",
+    "identifyObjectsBy": "objectName",
+    "interfaceLanguage": "auto",
+    "japaneseCropMarks": false,
+    "keyboardIncrement": 1.0,
+    "largeTabs": false,
+    "linuxDisplayServer": "automatic",
+    "lowResProxyEps": false,
+    "measurementLabels": true,
+    "missingGlyphProtection": true,
+    "moveLockedWithArtboard": false,
+    "newArtBasic": true,
+    "numbersWithoutUnitsArePoints": true,
+    "objectHighlighting": true,
+    "objectSelectionByPathOnly": false,
+    "openDocumentsAsTabs": true,
+    "overrideCharColor": true,
+    "pasteOffset": 10.0,
+    "pasteTextFormatting": "keep",
+    "patternTileEdgeColor": "#4f80ff",
+    "penRubberBand": true,
+    "perspectiveWidget": {
+      "position": "topLeft",
+      "show": true
+    },
+    "placeholderText": true,
+    "pluginsFolder": "",
+    "realTimeDrawing": true,
+    "recentFilesCount": 20,
+    "recentFontsCount": 10,
+    "recoveryFolder": "",
+    "recoveryOffForComplex": false,
+    "renderThreads": -1,
+    "scaleCorners": false,
+    "scaleCursorWithUi": false,
+    "scaleStrokes": false,
+    "scratchPrimary": "Startup",
+    "scratchSecondary": "None",
+    "scrubNumericFields": true,
+    "selectSameTintPercent": false,
+    "selectionTolerance": 3.0,
+    "showEastAsianOptions": false,
+    "showHandlesMultipleAnchors": true,
+    "showHomeScreen": true,
+    "showIndicOptions": false,
+    "showPixelGrid": true,
+    "showSliceNumbers": true,
+    "showToolTips": true,
+    "singleCornerRadius": true,
+    "sliceLineColor": "#ff3f3f",
+    "smartGuideColor": "#ff3dfc",
+    "snapPerpendicular": true,
+    "snapTangent": true,
+    "snapToPointTolerance": 2.0,
+    "snappingTolerance": 4.0,
+    "spacingGuides": true,
+    "systemTitleBar": false,
+    "templatesFolder": "",
+    "toolGroupLabels": false,
+    "touchGestures": true,
+    "touchWorkspace": true,
+    "trackingIncrement": 20.0,
+    "trackpadRotateView": true,
+    "transformPatternTiles": false,
+    "transformToolsGuides": true,
+    "typeSelectionByPathOnly": false,
+    "typeSizeIncrement": 2.0,
+    "uiAccent": "coral",
+    "uiBrightness": "mediumDark",
+    "uiColorScheme": "modern",
+    "uiScaling": 1.0,
+    "unitsAsianType": "points",
+    "unitsGeneral": "points",
+    "unitsStroke": "points",
+    "unitsType": "points",
+    "updateLinks": "askWhenModified",
+    "useCompression": false,
+    "usePreciseCursors": false,
+    "usePreviewBounds": false,
+    "zoomToSelection": true,
+    "zoomWithMouseWheel": false
+  },
+  "color_guide": {
+    "variation": "tintsShades",
+    "steps": 4,
+    "amount": 50.0
+  },
+  "library_panels": [],
+  "flattener_preview": {
+    "highlight": "none",
+    "overprints": "preserve",
+    "preset": "Medium Resolution",
+    "options": {
+      "balance": 75.0,
+      "lineArtPpi": 300.0,
+      "gradientPpi": 300.0,
+      "textToOutlines": false,
+      "strokesToOutlines": false,
+      "clipComplexRegions": false,
+      "antiAlias": true,
+      "preserveAlpha": false,
+      "preserveOverprints": true
+    },
+    "showOptions": false
+  },
+  "color_guide_limit": "",
+  "align_to": "selection",
+  "color_mode": null,
+  "color_hide_options": false,
+  "svg_options": null,
+  "place_link": true,
+  "dxf_options": null,
+  "eps_options": null,
+  "offset_path": null,
+  "simplify": null,
+  "move_options": null,
+  "dxf_import": null,
+  "layers_panel": {
+    "layersOnly": false,
+    "locateSelected": false,
+    "rowSize": 26.0,
+    "thumbLayers": true,
+    "thumbGroups": true,
+    "thumbObjects": true
+  },
+  "image_trace_advanced": true,
+  "image_trace_preview": true,
+  "window": {
+    "pos": [
+      80,
+      64
+    ],
+    "size": [
+      1440.0,
+      872.0
+    ],
+    "maximized": false
+  }
+}

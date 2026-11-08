@@ -17,6 +17,8 @@ const MAX_DEPTH: u32 = 12;
 const MAX_ELEMENTS: usize = 200_000;
 /// The highest spline degree read.
 const MAX_DEGREE: usize = 11;
+/// Spline weights below this fraction of the largest are read as this fraction.
+const MIN_RELATIVE_WEIGHT: f64 = 1e-100;
 
 /// A polyline vertex: its point and the bulge of the segment that starts there (the tangent of a
 /// quarter of the arc's angle; positive turns counter-clockwise).
@@ -121,7 +123,9 @@ struct H {
 
 impl H {
     fn lerp(self, o: Self, t: f64) -> Self {
-        Self { x: self.x + (o.x - self.x) * t, y: self.y + (o.y - self.y) * t, w: self.w + (o.w - self.w) * t }
+        // Exact at both ends, so a weight far smaller than its neighbour's doesn't cancel to 0.
+        let s = 1.0 - t;
+        Self { x: self.x * s + o.x * t, y: self.y * s + o.y * t, w: self.w * s + o.w * t }
     }
     fn point(self) -> Option<Point> {
         (self.w.abs() > 1e-300).then(|| Point::new(self.x / self.w, self.y / self.w)).filter(|p| p.x.is_finite() && p.y.is_finite())
@@ -139,7 +143,11 @@ pub(crate) fn nurbs(degree: usize, knots: &[f64], ctrl: &[Point], weights: Optio
     if knots.windows(2).any(|w| w[1] < w[0]) {
         return None;
     }
-    let weight = |i: usize| weights.and_then(|w| w.get(i)).copied().filter(|w| *w > 0.0 && w.is_finite()).unwrap_or(1.0);
+    let raw = |i: usize| weights.and_then(|w| w.get(i)).copied().filter(|w| *w > 0.0 && w.is_finite()).unwrap_or(1.0);
+    // Scaling all weights alike leaves the curve unchanged: relative to the largest, so tiny ones
+    // don't underflow, and floored so a weight tiny next to the others can't either.
+    let max_w = (0..n).map(raw).fold(0.0, f64::max);
+    let weight = |i: usize| (raw(i) / max_w).max(MIN_RELATIVE_WEIGHT);
     let hs: Vec<H> = ctrl.iter().enumerate().map(|(i, p)| H { x: p.x * weight(i), y: p.y * weight(i), w: weight(i) }).collect();
     let rational = (0..n).any(|i| (weight(i) - weight(0)).abs() > 1e-12);
     let (lo, hi) = ctrl.iter().fold((Point::new(f64::MAX, f64::MAX), Point::new(f64::MIN, f64::MIN)), |(lo, hi), p| {
@@ -225,6 +233,11 @@ fn fit(bp: &mut BezPath, bez: &[H], t0: f64, t1: f64, tol: f64, depth: u32) -> O
     let (p3, d3) = eval(bez, t1)?;
     let h = (t1 - t0) / 3.0;
     let (c1, c2) = (p0 + d0 * h, p3 - d3 * h);
+    // Non-finite tangents never fit, so splitting wouldn't help: a line.
+    if ![c1, c2].iter().all(|p| p.x.is_finite() && p.y.is_finite()) {
+        bp.line_to(p3);
+        return Some(());
+    }
     let cubic = kurbo::CubicBez::new(p0, c1, c2, p3);
     let close = (1..8).all(|i| {
         let s = f64::from(i) / 8.0;
@@ -369,6 +382,21 @@ mod tests {
             let near = bp.segments().map(|s| kurbo::ParamCurveNearest::nearest(&s, p, 1e-9).distance_sq.sqrt()).fold(f64::MAX, f64::min);
             assert!(near < 0.01, "error {near}");
         }
+    }
+
+    #[test]
+    fn tiny_spline_weights_flatten_to_a_handful_of_pieces() {
+        // Degree 5, three knot spans: fitted, not exact.
+        let ctrl: Vec<Point> = (0..8).map(|i| Point::new(f64::from(i) * 10.0, if i % 2 == 0 { 0.0 } else { 30.0 })).collect();
+        let knots = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 2.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0];
+        let normal = nurbs(5, &knots, &ctrl, Some(&[1.0; 8])).unwrap().elements().len();
+        // Scaling every weight alike leaves the curve as it is.
+        let tiny = nurbs(5, &knots, &ctrl, Some(&[1e-200; 8])).unwrap().elements().len();
+        assert!(tiny <= normal + 8, "normal weights: {normal} elements, 1e-200 weights: {tiny} elements");
+        // Weights tiny next to the others don't split every span to the limit either.
+        let mixed = [1.0, 1e-200, 1.0, 1e-200, 1.0, 1e-200, 1.0, 1e-200];
+        let mixed = nurbs(5, &knots, &ctrl, Some(&mixed)).unwrap().elements().len();
+        assert!(mixed < 500, "mixed weights: {mixed} elements");
     }
 
     #[test]

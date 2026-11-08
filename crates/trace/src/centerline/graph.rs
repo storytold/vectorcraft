@@ -68,18 +68,26 @@ fn build_with_limits(g: &Grid, dist: &[f32], max_nodes: usize, max_branches: usi
     {
         return None;
     }
+    let degree: Vec<u8> = (0..n).map(|i| if g.on.get(i) == Some(&true) { g.degree(i) as u8 } else { 0 }).collect();
+    let (node_of, mut graph) = build_nodes(g, dist, &degree, max_nodes)?;
+    let mut visited = vec![false; n];
+    add_node_branches(g, dist, &node_of, &mut graph, &mut visited, max_branches)?;
+    add_ring_branches(g, dist, &degree, &node_of, &mut graph, &mut visited, max_branches)?;
+    Some(graph)
+}
+
+fn build_nodes(g: &Grid, dist: &[f32], degree: &[u8], max_nodes: usize) -> Option<(Vec<usize>, Graph)> {
     let dval = |i: usize| f64::from(dist.get(i).copied().unwrap_or(0.0)).sqrt();
-    let deg: Vec<u8> = (0..n).map(|i| if g.on.get(i) == Some(&true) { g.degree(i) as u8 } else { 0 }).collect();
-    let mut node_of = vec![usize::MAX; n];
+    let mut node_of = vec![usize::MAX; g.on.len()];
     let mut graph = Graph::default();
     // Ends on their own; touching junction pixels together, deepest pixel first on ties.
     for i in g.interior() {
-        let degree = *deg.get(i)?;
-        if g.on.get(i) != Some(&true) || degree == 2 || *node_of.get(i)? != usize::MAX {
+        let pixel_degree = *degree.get(i)?;
+        if g.on.get(i) != Some(&true) || pixel_degree == 2 || *node_of.get(i)? != usize::MAX {
             continue;
         }
         // Isolated pixels cannot form a stroke; leave them to the existing fill path.
-        if degree == 0 {
+        if pixel_degree == 0 {
             continue;
         }
         if graph.nodes.len() >= max_nodes.min(MAX_NODES) {
@@ -88,40 +96,45 @@ fn build_with_limits(g: &Grid, dist: &[f32], max_nodes: usize, max_branches: usi
         let id = graph.nodes.len();
         *node_of.get_mut(i)? = id;
         let mut members = vec![i];
-        if degree > 2 {
-            let mut k = 0;
-            while let Some(&p) = members.get(k) {
-                k += 1;
-                for q in g.neighbours(p) {
-                    if *node_of.get(q)? == usize::MAX && *deg.get(q)? > 2 {
-                        *node_of.get_mut(q)? = id;
-                        members.push(q);
+        if pixel_degree > 2 {
+            let mut cursor = 0;
+            while let Some(&pixel) = members.get(cursor) {
+                cursor += 1;
+                for neighbour in g.neighbours(pixel) {
+                    if *node_of.get(neighbour)? == usize::MAX && *degree.get(neighbour)? > 2 {
+                        *node_of.get_mut(neighbour)? = id;
+                        members.push(neighbour);
                     }
                 }
             }
         }
         let best = members.into_iter().max_by(|&a, &b| dval(a).total_cmp(&dval(b)).then(b.cmp(&a)))?;
-        graph.nodes.push(Node { pos: g.centre(best), r: (dval(best) - 0.5).max(0.5), junction: degree > 2 });
+        graph.nodes.push(Node { pos: g.centre(best), r: (dval(best) - 0.5).max(0.5), junction: pixel_degree > 2 });
     }
+    Some((node_of, graph))
+}
+
+fn add_node_branches(g: &Grid, dist: &[f32], node_of: &[usize], graph: &mut Graph, visited: &mut [bool], max_branches: usize) -> Option<()> {
+    let dval = |i: usize| f64::from(dist.get(i).copied().unwrap_or(0.0)).sqrt();
     let mut seen_edge = BTreeSet::new();
-    let mut visited = vec![false; n];
-    for p in g.interior() {
-        let a = *node_of.get(p)?;
-        if a == usize::MAX {
+    let n = visited.len();
+    for pixel in g.interior() {
+        let node = *node_of.get(pixel)?;
+        if node == usize::MAX {
             continue;
         }
-        for q in g.neighbours(p) {
-            let b = *node_of.get(q)?;
-            if b == a {
+        for neighbour in g.neighbours(pixel) {
+            let next_node = *node_of.get(neighbour)?;
+            if next_node == node {
                 continue;
             }
-            if b != usize::MAX {
-                if seen_edge.insert((p.min(q), p.max(q))) {
+            if next_node != usize::MAX {
+                if seen_edge.insert((pixel.min(neighbour), pixel.max(neighbour))) {
                     graph.push_branch(
                         Branch {
-                            pts: vec![graph.nodes.get(a)?.pos, graph.nodes.get(b)?.pos],
-                            d: vec![dval(p), dval(q)],
-                            ends: [Some(a), Some(b)],
+                            pts: vec![graph.nodes.get(node)?.pos, graph.nodes.get(next_node)?.pos],
+                            d: vec![dval(pixel), dval(neighbour)],
+                            ends: [Some(node), Some(next_node)],
                             closed: false,
                         },
                         max_branches,
@@ -129,66 +142,80 @@ fn build_with_limits(g: &Grid, dist: &[f32], max_nodes: usize, max_branches: usi
                 }
                 continue;
             }
-            if *visited.get(q)? {
+            if *visited.get(neighbour)? {
                 continue;
             }
-            let mut px = vec![p];
-            let (mut prev, mut cur) = (p, q);
+            let mut pixels = vec![pixel];
+            let (mut previous, mut current) = (pixel, neighbour);
             let mut guard = n;
-            while *node_of.get(cur)? == usize::MAX && guard > 0 {
+            while *node_of.get(current)? == usize::MAX && guard > 0 {
                 guard -= 1;
-                *visited.get_mut(cur)? = true;
-                px.push(cur);
-                let Some(next) = g.neighbours(cur).find(|&m| m != prev && (visited.get(m) == Some(&false) || node_of.get(m) != Some(&usize::MAX)))
-                else {
+                *visited.get_mut(current)? = true;
+                pixels.push(current);
+                let Some(next) = g.neighbours(current).find(|&candidate| {
+                    candidate != previous && (visited.get(candidate) == Some(&false) || node_of.get(candidate) != Some(&usize::MAX))
+                }) else {
                     break;
                 };
-                (prev, cur) = (cur, next);
+                (previous, current) = (current, next);
             }
             if guard == 0 {
                 return None;
             }
-            let end = (*node_of.get(cur)? != usize::MAX).then_some(*node_of.get(cur)?);
+            let end = (*node_of.get(current)? != usize::MAX).then_some(*node_of.get(current)?);
             if end.is_some() {
-                px.push(cur);
+                pixels.push(current);
             }
-            let mut pts: Vec<Point> = px.iter().map(|&i| g.centre(i)).collect();
-            let d = px.into_iter().map(dval).collect();
-            *pts.first_mut()? = graph.nodes.get(a)?.pos;
-            if let Some(e) = end {
-                *pts.last_mut()? = graph.nodes.get(e)?.pos;
+            let mut points: Vec<Point> = pixels.iter().map(|&i| g.centre(i)).collect();
+            let distances = pixels.into_iter().map(dval).collect();
+            *points.first_mut()? = graph.nodes.get(node)?.pos;
+            if let Some(end) = end {
+                *points.last_mut()? = graph.nodes.get(end)?.pos;
             }
-            graph.push_branch(Branch { pts, d, ends: [Some(a), end], closed: false }, max_branches)?;
+            graph.push_branch(Branch { pts: points, d: distances, ends: [Some(node), end], closed: false }, max_branches)?;
         }
     }
-    // Rings never reached from a node.
-    for s in g.interior() {
-        if g.on.get(s) != Some(&true) || deg.get(s) != Some(&2) || *visited.get(s)? || *node_of.get(s)? != usize::MAX {
+    Some(())
+}
+
+fn add_ring_branches(
+    g: &Grid,
+    dist: &[f32],
+    degree: &[u8],
+    node_of: &[usize],
+    graph: &mut Graph,
+    visited: &mut [bool],
+    max_branches: usize,
+) -> Option<()> {
+    let dval = |i: usize| f64::from(dist.get(i).copied().unwrap_or(0.0)).sqrt();
+    let n = visited.len();
+    for start in g.interior() {
+        if g.on.get(start) != Some(&true) || degree.get(start) != Some(&2) || *visited.get(start)? || *node_of.get(start)? != usize::MAX {
             continue;
         }
-        let mut px = vec![];
-        let (mut prev, mut cur) = (usize::MAX, s);
+        let mut pixels = vec![];
+        let (mut previous, mut current) = (usize::MAX, start);
         let mut closed = false;
         let mut guard = n;
         while guard > 0 {
             guard -= 1;
-            *visited.get_mut(cur)? = true;
-            px.push(cur);
-            let Some(next) = g.neighbours(cur).find(|&m| m != prev && visited.get(m) == Some(&false)) else {
-                closed = g.neighbours(cur).any(|m| m == s) && px.len() > 2;
+            *visited.get_mut(current)? = true;
+            pixels.push(current);
+            let Some(next) = g.neighbours(current).find(|&candidate| candidate != previous && visited.get(candidate) == Some(&false)) else {
+                closed = g.neighbours(current).any(|neighbour| neighbour == start) && pixels.len() > 2;
                 break;
             };
-            (prev, cur) = (cur, next);
+            (previous, current) = (current, next);
         }
         if guard == 0 {
             return None;
         }
         graph.push_branch(
-            Branch { pts: px.iter().map(|&i| g.centre(i)).collect(), d: px.into_iter().map(dval).collect(), ends: [None, None], closed },
+            Branch { pts: pixels.iter().map(|&i| g.centre(i)).collect(), d: pixels.into_iter().map(dval).collect(), ends: [None, None], closed },
             max_branches,
         )?;
     }
-    Some(graph)
+    Some(())
 }
 
 impl Graph {

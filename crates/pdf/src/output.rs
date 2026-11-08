@@ -350,14 +350,17 @@ impl ColorOut {
 
     /// `pdf` with the output intent and Trapped entries, and a PDF/X file's identification
     /// ([`crate::pdfx`]) → (the file, warnings).
-    pub(crate) fn write_catalog(&self, pdf: Vec<u8>) -> Result<(Vec<u8>, Vec<String>), PdfError> {
-        let Some(cat) = &self.catalog else { return Ok((pdf, vec![])) };
+    pub(crate) fn write_catalog(&self, pdf: Vec<u8>, display_doc_title: bool) -> Result<(Vec<u8>, Vec<String>), PdfError> {
+        let cat = self.catalog.as_ref();
+        if cat.is_none() && !display_doc_title {
+            return Ok((pdf, vec![]));
+        }
         let xref = Xref::read(&pdf).ok_or_else(|| PdfError::Write("the written PDF has no cross-reference table".into()))?;
         let mut patch = Patch::new(&xref);
         let mut warnings = vec![];
         let root = xref.trailer_ref(&pdf, b"/Root").and_then(|n| xref.dict(&pdf, n));
         let Some(root) = root else { return Err(PdfError::Write("the written PDF has no catalog".into())) };
-        if let Some(OutputIntent { id, condition, registry, info, profile }) = &cat.intent {
+        if let Some(OutputIntent { id, condition, registry, info, profile }) = cat.and_then(|c| c.intent.as_ref()) {
             if crate::lab_spot::find(pdf.get(root.0..root.1).unwrap_or_default(), b"/OutputIntents", 0).is_some() {
                 warnings.push("the file has an output intent already: the one asked for is left out".into());
             } else {
@@ -388,9 +391,12 @@ impl ColorOut {
                 patch.replace(root.0, root.0, format!("/OutputIntents[{oi} 0 R]").into_bytes());
             }
         }
+        if display_doc_title && crate::lab_spot::find(pdf.get(root.0..root.1).unwrap_or_default(), b"/ViewerPreferences", 0).is_none() {
+            patch.replace(root.0, root.0, b"/ViewerPreferences<</DisplayDocTitle true>>".to_vec());
+        }
         let info = xref.trailer_ref(&pdf, b"/Info").and_then(|n| xref.dict(&pdf, n));
         let mut entries = String::new();
-        if let Some(trapped) = cat.trapped
+        if let Some(trapped) = cat.and_then(|c| c.trapped)
             && info.is_none_or(|(s, e)| crate::lab_spot::find(pdf.get(s..e).unwrap_or_default(), b"/Trapped", 0).is_none())
         {
             entries.push_str(if trapped { "/Trapped/True" } else { "/Trapped/False" });
@@ -404,7 +410,7 @@ impl ColorOut {
                 patch.trailer_entry(format!("/Info {n} 0 R").as_bytes());
             }
         }
-        crate::pdfx::xmp(&pdf, &xref, root, &mut patch, self.standard, cat.trapped == Some(true))?;
+        crate::pdfx::xmp(&pdf, &xref, root, &mut patch, self.standard, cat.and_then(|c| c.trapped) == Some(true))?;
         Ok((patch.apply(&pdf, &xref)?, warnings))
     }
 }

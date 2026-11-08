@@ -12,7 +12,7 @@ use vectorcraft_color::Color;
 use vectorcraft_doc::LAYER_COLORS;
 use vectorcraft_tools::builder::LP_SELECT_WIDTH_RANGE;
 
-use super::tile_edge_color::resolve;
+use super::tile_edge_color::{checked, resolve};
 use super::{DialogSpec, form, run_and_close};
 use crate::state::Dialog;
 use crate::{VectorcraftApp, widgets};
@@ -67,15 +67,18 @@ fn body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let (min, max) = LP_SELECT_WIDTH_RANGE;
     let v = d.f64("width", min);
     widgets::label_row(ui, tl!("Width:"), LABEL_W, |ui| {
-        if let Some(x) = widgets::plain_field(ui, "lp-select-width", v, "px", 0, 72.0) {
-            d.fields.insert("width".into(), json!(x.round().clamp(min, max)));
+        if let Some(x) = widgets::range_field(ui, "lp-select-width", v, min..=max, "px", 0, 72.0) {
+            d.fields.insert("width".into(), json!(x));
         }
     });
     false
 }
 
-/// OK: set the tool's options.
+/// OK: set the tool's options, or an error for a `color` that is not a color.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    if d.fields.contains_key("color") {
+        checked(&d.str("color"))?;
+    }
     let values: Map<String, Value> = KEYS.iter().filter_map(|k| Some((k.to_string(), d.fields.get(*k)?.clone()))).collect();
     run_and_close(app, "tool.setOption", json!({ "tool": TOOL, "values": values }))
 }
@@ -138,5 +141,25 @@ mod tests {
         app.run("tool.options", json!({"tool": TOOL})).unwrap();
         let d = app.ui.dialog.as_ref().unwrap();
         assert_eq!((d.bool("selectFills"), d.str("color")), (false, "#4fff4f".to_string()));
+    }
+
+    /// A highlight color with an alpha part is refused and leaves the tool's options as they were;
+    /// `#rrggbb` still sets them.
+    #[test]
+    fn a_color_with_an_alpha_part_is_refused() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app.run("tool.options", json!({"tool": TOOL})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("color".into(), json!("#ff000080"));
+        d.fields.insert("width".into(), json!(8));
+        let err = super::super::confirm(&mut app).unwrap_err();
+        assert_eq!(err, "`#ff000080` is not a colour (#rrggbb or a preset name)");
+        assert!(app.ui.dialog.is_some(), "the dialog stays open");
+        let o = app.session.tool_options_of(TOOL);
+        assert_eq!((o["color"].as_str(), o["width"].as_f64()), (Some("#ff2a2a"), Some(4.0)), "nothing changes");
+        app.ui.dialog.as_mut().unwrap().fields.insert("color".into(), json!("#ff0000"));
+        super::super::confirm(&mut app).unwrap();
+        assert_eq!(app.session.tool_options_of(TOOL)["color"], json!("#ff0000"));
     }
 }

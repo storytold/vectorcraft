@@ -19,13 +19,17 @@ pub fn text_outliner() -> Outliner<'static> {
     Some(&outline_text)
 }
 
-/// Type outlined, or a symbol instance as its symbol's art (from `doc`) placed by the instance.
-fn outline(doc: Option<&Document>, n: &Node) -> Option<Node> {
+/// Type outlined, or a symbol instance as its symbol's art (from `doc`) placed by the instance,
+/// through the symbol's 9-slice guides when it has them ([`Document::place_symbol_art`], `None`
+/// past its object limit). As an [`OutlineHook`](crate::OutlineHook), it gives compound shapes and
+/// Pathfinder operations the symbol instances among their members.
+pub fn outline_object(doc: Option<&Document>, n: &Node) -> Option<Node> {
     match &n.kind {
         NodeKind::SymbolInstance { symbol, xf } => {
-            let sym = doc?.symbols.iter().find(|s| s.name == *symbol)?;
-            let mut art = (*sym.art).clone();
-            art.transform(*xf, false);
+            let doc = doc?;
+            let sym = doc.symbols.iter().find(|s| s.name == *symbol)?;
+            let art = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n);
+            let art = doc.place_symbol_art(symbol, &art, *xf)?;
             Some(Node::group(n.id, vec![Arc::new(art)]))
         }
         _ => outline_text(n),
@@ -35,9 +39,11 @@ fn outline(doc: Option<&Document>, n: &Node) -> Option<Node> {
 /// Run `f` with the hooks live evaluation needs; symbols and patterns come from `doc` (without a
 /// document, symbol instances and pattern tiles stay as they are).
 fn with_hooks<R>(doc: Option<&Document>, f: impl FnOnce(Hooks) -> R) -> R {
-    let outline = |n: &Node| outline(doc, n);
+    // Envelopes map type from its glyphs here too, without an engine session.
+    vectorcraft_text::register_envelope_ink();
+    let outline = |n: &Node| outline_object(doc, n);
     let tiles = |name: &str, xf: Affine, region: Rect| Some(doc?.pattern(name)?.instances_in(xf, region));
-    f(Hooks { outline: Some(&outline), appearance: Some(&bake_appearance), pattern: Some(&tiles) })
+    f(Hooks { outline: Some(&outline), appearance: Some(&bake_appearance), pattern: Some(&tiles), symbols: doc })
 }
 
 /// One level of evaluation of live object `n` ([`live::expand_live_hooks`]).

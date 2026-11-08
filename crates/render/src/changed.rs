@@ -1,5 +1,7 @@
-//! What draws differently after an edit, so a view can draw again only there.
+//! What draws differently after an edit, or once placed documents' bitmaps are ready, so a view
+//! can draw again only there.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use vectorcraft_doc::{Document, Node, NodeKind, SymbolBoxes};
@@ -12,6 +14,66 @@ pub enum Changed {
     /// This area of the document, outside of which every pixel draws as before.
     Area(Rect),
     Everything,
+}
+
+impl Changed {
+    /// What may draw differently after this change and `other`: everything when either is,
+    /// else both areas.
+    pub fn and(self, other: Changed) -> Changed {
+        match (self, other) {
+            (Changed::Everything, _) | (_, Changed::Everything) => Changed::Everything,
+            (Changed::Area(a), Changed::Area(b)) => Changed::Area(a.union(b)),
+            (Changed::Area(a), Changed::Nothing) | (Changed::Nothing, Changed::Area(a)) => Changed::Area(a),
+            (Changed::Nothing, Changed::Nothing) => Changed::Nothing,
+        }
+    }
+}
+
+/// What draws differently in `doc` once the bitmaps of the placed documents' `files` are ready
+/// ([`crate::placed_document::made_between`]): the bounds of everything the objects that show
+/// them paint, measured as [`changed`] measures an object that changed. Everything when the art
+/// of a symbol, a graph design, a pattern or a brush shows one of them (it draws wherever it is
+/// used), or while a pattern is edited.
+pub fn placed_area(doc: &Document, files: &HashSet<String>) -> Changed {
+    if files.is_empty() {
+        return Changed::Nothing;
+    }
+    let mut elsewhere =
+        doc.symbols.iter().map(|s| &s.art).chain(doc.graph_designs.iter().map(|g| &g.art)).chain(doc.patterns.iter().flat_map(|p| &p.art));
+    if doc.pattern_edit.is_some()
+        || elsewhere.any(|n| shows(n, files))
+        || vectorcraft_brush::library(doc).iter().any(|b| b.art().into_iter().any(|n| shows(n, files)))
+    {
+        return Changed::Everything;
+    }
+    let symbols = doc.symbol_boxes();
+    let mut area = None;
+    for layer in &doc.layers {
+        add_placed(&symbols, layer, files, &mut area);
+    }
+    area.map_or(Changed::Nothing, Changed::Area)
+}
+
+/// Does `n`, a member of it or the art of an opacity mask in it show one of `files`?
+fn shows(n: &Node, files: &HashSet<String>) -> bool {
+    matches!(&n.kind, NodeKind::PlacedDocument(p) if files.contains(&p.key))
+        || n.extras().mask.as_ref().is_some_and(|m| shows(&m.art, files))
+        || n.children().is_some_and(|c| c.iter().any(|c| shows(c, files)))
+}
+
+/// Add to `area` what `n` paints where it shows one of `files`: each member of a group or layer
+/// whose members draw each on their own (unless its opacity mask shows one), and any other object
+/// whole.
+fn add_placed(symbols: &SymbolBoxes, n: &Node, files: &HashSet<String>, area: &mut Option<Rect>) {
+    match members(n) {
+        Some(children) if !n.extras().mask.as_ref().is_some_and(|m| shows(&m.art, files)) => {
+            for c in children {
+                add_placed(symbols, c, files, area);
+            }
+        }
+        _ if shows(n, files) => *area = vectorcraft_geom::union_opt(*area, crate::brush_fx::cull_bounds(symbols, n)),
+        _ => {}
+    }
 }
 
 /// What may draw differently in `new` than in `old`, the version before an edit: the bounds of
@@ -69,8 +131,9 @@ impl Diff<'_> {
     }
 
     /// A group or layer that only its members changed in, without a clipping mask or effects of
-    /// its own that draw from all of them, changed where they did. Any other object that changed
-    /// counts whole, before and after.
+    /// its own that draw from all of them, changed where they did. A path or compound path that
+    /// only had anchors moved changed around them ([`moved_anchors`]). Any other object that
+    /// changed counts whole, before and after.
     fn node(&mut self, old: &Arc<Node>, new: &Arc<Node>) {
         if Arc::ptr_eq(old, new) {
             return;
@@ -79,6 +142,15 @@ impl Diff<'_> {
             && same_but_members(old, new)
         {
             self.children(a, b);
+        } else if let Some((area, moved, anchors)) = moved_anchors(old, new) {
+            if moved <= FEW_MOVED && anchors >= MANY_ANCHORS {
+                self.add(area);
+            } else {
+                // The object's box before and after holds every pixel that changed too, and so
+                // does where the two overlap.
+                let whole = vectorcraft_geom::union_opt(crate::brush_fx::cull_bounds(&self.old, old), crate::brush_fx::cull_bounds(&self.new, new));
+                self.add(area.zip(whole).map(|(a, w)| a.intersect(w)));
+            }
         } else {
             self.add_old(Some(old));
             self.add_new(Some(new));
@@ -117,4 +189,146 @@ fn same_but_members(a: &Node, b: &Node) -> bool {
         n
     };
     strip(a) == strip(b)
+}
+
+/// The largest size of a coordinate, in points, that [`moved_anchors`] measures: past it, a path
+/// drawn at a high zoom may stop being drawn at all (`crate::node_checks::drawable`).
+const MOVED_LIMIT: f64 = 1e6;
+
+/// The most anchors of an object that may move for [`Diff::node`] to take the area round them
+/// without also measuring the whole object before and after, which costs as much as its anchors.
+const FEW_MOVED: usize = 64;
+
+/// The fewest anchors of an object that [`Diff::node`] leaves unmeasured whole when at most
+/// [`FEW_MOVED`] of them moved.
+const MANY_ANCHORS: usize = 1024;
+
+/// What path or compound path `old` changed in `new` when only anchors of its paths moved (in
+/// place, with as many anchors in each subpath, each closed or open as before): the box of the
+/// anchors and handles of every segment that starts or ends at a moved anchor, and of the line
+/// that closes the fill of an open subpath at a moved end, before and after, grown by the farthest
+/// its strokes reach (`None` when no anchor moved), how many anchors moved and how many it has.
+/// Outside that box the path's segments, their fill and their strokes' joints stay as they were.
+/// None when anything else changed, when it paints with something its whole shape decides
+/// (effects, an opacity mask, a paint other than a solid color, dashes, a width profile,
+/// arrowheads or a brush), or when a coordinate measured is not finite or larger in size than
+/// [`MOVED_LIMIT`].
+fn moved_anchors(old: &Node, new: &Node) -> Option<(Option<Rect>, usize, usize)> {
+    if !same_but_anchors(old, new) || !local_paint(old) {
+        return None;
+    }
+    let (area, moved, anchors) = match (&old.kind, &new.kind) {
+        (NodeKind::Path { path: a, .. }, NodeKind::Path { path: b, .. }) => moved_in(a, b)?,
+        (NodeKind::Compound { children: a, .. }, NodeKind::Compound { children: b, .. }) => {
+            let (mut area, mut moved, mut anchors) = (None, 0, 0);
+            for (x, y) in a.iter().zip(b) {
+                if Arc::ptr_eq(x, y) {
+                    anchors += y.path_data().map_or(0, |p| p.anchor_count());
+                    continue;
+                }
+                match (&x.kind, &y.kind) {
+                    (NodeKind::Path { path: p, .. }, NodeKind::Path { path: q, .. }) if same_but_anchors(x, y) => {
+                        let (a, m, n) = moved_in(p, q)?;
+                        (area, moved, anchors) = (vectorcraft_geom::union_opt(area, a), moved + m, anchors + n);
+                    }
+                    _ => return None,
+                }
+            }
+            (area, moved, anchors)
+        }
+        _ => return None,
+    };
+    let reach = old.appearance.outset();
+    Some((area.map(|r| r.inflate(reach, reach)), moved, anchors))
+}
+
+/// Are `a` and `b` the same but for where the anchors of their paths are: two paths, or two
+/// compound paths with the same members by id, without extras, live shapes, guides or clipping?
+fn same_but_anchors(a: &Node, b: &Node) -> bool {
+    let Node { id, name, visible, locked, opacity, blend, isolate, knockout, knockout_shape, appearance, kind, bbox_angle, extras } = a;
+    let kinds = match (kind, &b.kind) {
+        (
+            NodeKind::Path { path: p, rule: r, live: None, clipping: false, guide: false },
+            NodeKind::Path { path: q, rule: s, live: None, clipping: false, guide: false },
+        ) => {
+            r == s
+                && p.subpaths.len() == q.subpaths.len()
+                && p.subpaths.iter().zip(&q.subpaths).all(|(x, y)| x.anchors.len() == y.anchors.len() && x.closed == y.closed)
+        }
+        (NodeKind::Compound { children: c, rule: r }, NodeKind::Compound { children: d, rule: s }) => {
+            r == s && c.len() == d.len() && c.iter().zip(d).all(|(x, y)| x.id == y.id)
+        }
+        _ => false,
+    };
+    let none = vectorcraft_doc::Extras::default();
+    kinds
+        && *id == b.id
+        && *name == b.name
+        && *visible == b.visible
+        && *locked == b.locked
+        && *opacity == b.opacity
+        && *blend == b.blend
+        && *isolate == b.isolate
+        && *knockout == b.knockout
+        && *knockout_shape == b.knockout_shape
+        && *appearance == b.appearance
+        && *bbox_angle == b.bbox_angle
+        && *extras == none
+        && b.extras == none
+}
+
+/// Does `n` paint each pixel from the segments near it alone: no effects, every visible fill and
+/// stroke a solid color, and no stroke with dashes, a width profile, pressure, tilt, bearing or
+/// rotation, arrowheads, a brush or effects?
+fn local_paint(n: &Node) -> bool {
+    use vectorcraft_doc::AppearanceItem;
+    let solid = |p: &vectorcraft_color::Paint| matches!(p, vectorcraft_color::Paint::Solid { .. } | vectorcraft_color::Paint::None);
+    n.appearance.effects.is_empty()
+        && !crate::fx::has_fx(n)
+        && !crate::fx::has_object_fx(n)
+        && n.appearance.items.iter().all(|i| match i {
+            AppearanceItem::Fill(f) => solid(&f.paint) && f.effects.is_empty(),
+            AppearanceItem::Stroke(s) => {
+                solid(&s.paint)
+                    && s.effects.is_empty()
+                    && s.dash.is_none()
+                    && s.profile.is_none()
+                    && s.pressure.is_none()
+                    && s.tilt.is_none()
+                    && s.bearing.is_none()
+                    && s.rotation.is_none()
+                    && s.start_arrow.is_none()
+                    && s.end_arrow.is_none()
+                    && s.brush.is_none()
+            }
+        })
+}
+
+/// The box of the anchors and handles of the segments that start or end at an anchor that moved
+/// from `a` to `b` (paths with the same subpaths, by anchor count and closing), and the ends of
+/// the line that closes the fill of an open subpath at a moved end, in both (`None` when none
+/// moved), how many moved and how many anchors `b` has. None when one of those coordinates is not
+/// finite or larger in size than [`MOVED_LIMIT`].
+fn moved_in(a: &vectorcraft_geom::PathData, b: &vectorcraft_geom::PathData) -> Option<(Option<Rect>, usize, usize)> {
+    let (mut area, mut moved, mut anchors): (Option<Rect>, usize, usize) = (None, 0, 0);
+    for (x, y) in a.subpaths.iter().zip(&b.subpaths) {
+        let n = x.anchors.len();
+        anchors += n;
+        for i in (0..n).filter(|&i| x.anchors[i] != y.anchors[i]) {
+            moved += 1;
+            // The anchors before and after it, round the end of an open subpath too: its fill
+            // closes it with a line from the last anchor to the first.
+            let (before, after) = ((i + n - 1) % n, (i + 1) % n);
+            for sp in [x, y] {
+                let (at, from, to) = (&sp.anchors[i], &sp.anchors[before], &sp.anchors[after]);
+                for p in [at.p, at.h_in, at.h_out, from.p, from.h_out, to.p, to.h_in] {
+                    if !(p.x.abs() <= MOVED_LIMIT && p.y.abs() <= MOVED_LIMIT) {
+                        return None;
+                    }
+                    area = Some(area.map_or(Rect::from_points(p, p), |r| r.union_pt(p)));
+                }
+            }
+        }
+    }
+    Some((area, moved, anchors))
 }

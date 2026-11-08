@@ -144,8 +144,8 @@ fn divide_section(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, keys:
                 if widgets::radio_button(ui, labels[1], !by_size, enabled) {
                     d.fields.insert(mode.into(), json!("count"));
                 }
-                if let Some(n) = widgets::plain_field(ui, ("divide", count), d.f64(count, 2.0), "", 0, 50.0) {
-                    d.fields.insert(count.into(), json!(n.round().max(1.0) as u64));
+                if let Some(n) = widgets::range_field(ui, ("divide", count), d.f64(count, 2.0), 1.0..=f64::INFINITY, "", 0, 50.0) {
+                    d.fields.insert(count.into(), json!(n as u64));
                 }
                 widgets::dim_label(ui, labels[1]);
             });

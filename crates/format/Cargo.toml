@@ -10,14 +10,16 @@ workspace = true
 
 [dependencies]
 vectorcraft-doc = { workspace = true }
-serde = { workspace = true }
+craft-vectorcraft-format = { workspace = true }
+serde ={ workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 flate2 = { workspace = true }
 
-# A plain fsync where a volume refuses the full flush (`sync_file`, atomic.rs). Already in
-# Cargo.lock (tempfile), so this adds no new crate.
-[target.'cfg(target_vendor = "apple")'.dependencies]
+# A plain fsync where a volume refuses the full flush (`sync_file`, atomic.rs), and the replaced
+# file's access ACL on Linux (`keep_permissions`). Already in Cargo.lock (tempfile), so this adds
+# no new crate.
+[target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["std", "fs"] }
 
 [dev-dependencies]

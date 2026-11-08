@@ -13,9 +13,11 @@
 //! fill them ([`gradient_slices`]); Outline Stroke turns the strip into a gradient mesh
 //! ([`gradient_meshes`]).
 
+use std::collections::VecDeque;
+
 use kurbo::{BezPath, Point, Shape, Vec2};
 use vectorcraft_doc::color::{Gradient, GradientGeom, GradientPaint, Paint};
-use vectorcraft_doc::live::{H_DOWN, H_LEFT, H_RIGHT, H_UP, lerp_color};
+use vectorcraft_doc::live::{H_DOWN, H_LEFT, H_RIGHT, H_UP};
 use vectorcraft_doc::{GradientMesh, LineJoin, MeshPoint, StrokeAlign, StrokeGradientMode, StrokeLayer};
 use vectorcraft_geom::FillRule;
 
@@ -78,14 +80,26 @@ struct Lay<'a> {
     st: &'a StrokeLayer,
     /// Half the stroked width ([`aligned_width`]).
     hw: f64,
-    /// How far ribs reach either side of the path where nothing wider is near.
-    cover: f64,
+    /// How far ribs reach past the stroke's edge.
     margin: f64,
     /// How far a strip runs on past the start and end of an open subpath (caps and heads).
     ext: (f64, f64),
 }
 
 impl Lay<'_> {
+    /// How far the stroke reaches either side of the path at fraction `t` of a subpath: its wider
+    /// side, just before or just after a step there.
+    fn half(&self, t: f64) -> f64 {
+        let Some(p) = &self.st.profile else { return self.hw };
+        let ((bl, br), (al, ar)) = p.around(t);
+        self.hw * bl.max(br).max(al).max(ar).max(0.0)
+    }
+
+    /// How far a rib at fraction `t` reaches either side of the path to cover the stroke there.
+    fn cover(&self, t: f64) -> f64 {
+        self.half(t) + self.margin
+    }
+
     /// The across band at fraction `t` of a subpath whose visible side is `side` (`Some(true)`:
     /// left; `None`: both, a centred stroke).
     fn band(&self, t: f64, side: Option<bool>) -> (f64, f64) {
@@ -147,10 +161,11 @@ fn strips(bp: &BezPath, rule: FillRule, st: &StrokeLayer, tol: f64, margin: f64,
     if !(hw > 0.0 && hw.is_finite()) {
         return vec![];
     }
-    let full = hw * st.profile_max();
     let heads = (st.head_reach(false), st.head_reach(true));
-    let cap = cap_extent(st.cap, 2.0 * full);
-    let lay = Lay { st, hw, cover: full + margin, margin, ext: (cap.max(heads.0) + margin, cap.max(heads.1) + margin) };
+    let mut lay = Lay { st, hw, margin, ext: (0.0, 0.0) };
+    // Caps reach as far past the ends as the stroke is wide there.
+    let cap = |t: f64| cap_extent(st.cap, 2.0 * lay.half(t));
+    lay.ext = (cap(0.0).max(heads.0) + margin, cap(1.0).max(heads.1) + margin);
     let subs = subpaths(bp);
     let count = subs.len();
     let mut out = vec![];
@@ -165,7 +180,8 @@ fn strips(bp: &BezPath, rule: FillRule, st: &StrokeLayer, tol: f64, margin: f64,
             // A subpath of no length: a dot (round and projecting caps paint it).
             1 => {
                 let (d, b, e) = (Vec2::new(1.0, 0.0), lay.band(0.0, side), lay.ext.0.max(lay.ext.1));
-                vec![Rib::square(pts[0] - d * e, d, lay.cover, 0.0, b), Rib::square(pts[0] + d * e, d, lay.cover, 0.0, b)]
+                let r = lay.cover(0.0);
+                vec![Rib::square(pts[0] - d * e, d, r, 0.0, b), Rib::square(pts[0] + d * e, d, r, 0.0, b)]
             }
             _ => {
                 let total = length(&pts, closed);
@@ -174,10 +190,21 @@ fn strips(bp: &BezPath, rule: FillRule, st: &StrokeLayer, tol: f64, margin: f64,
                 }
                 let steps = if max_dt < 1.0 { (1.0 / max_dt).ceil() as usize } else { 1 };
                 let profile = st.profile.iter().flat_map(|p| p.points.iter().map(|q| q.0));
-                let at: Vec<f64> =
-                    marks.iter().copied().chain(profile).chain((1..steps).map(|i| i as f64 / steps as f64)).map(|t| t * total).collect();
+                let heads = if closed { (0.0, 0.0) } else { heads };
+                // Where an arrowhead's reach ends gets a rib of its own, so the ribs that reach
+                // across a head run all the way there instead of narrowing towards the next corner
+                // from the head's tip, which leaves the corners of its base outside (#5964).
+                let head_ends = [heads.0, total - heads.1].into_iter().filter(|&s| s > 0.0 && s < total);
+                let at: Vec<f64> = marks
+                    .iter()
+                    .copied()
+                    .chain(profile)
+                    .chain((1..steps).map(|i| i as f64 / steps as f64))
+                    .map(|t| t * total)
+                    .chain(head_ends)
+                    .collect();
                 let (pts, _) = split_at(&pts, &corner, closed, &at);
-                strip(&lay, &pts, closed, total, side, if closed { (0.0, 0.0) } else { heads })
+                strip(&lay, &pts, closed, total, side, heads)
             }
         };
         out.push(ribs);
@@ -204,9 +231,37 @@ fn strip(lay: &Lay, pts: &[Point], closed: bool, total: f64, side: Option<bool>,
     let n = pts.len();
     let seg_count = if closed { n } else { n - 1 };
     let dir: Vec<Vec2> = (0..seg_count).map(|i| unit(pts[(i + 1) % n] - pts[i])).collect();
-    // Ribs near an arrowhead reach across it.
-    let reach = |s: f64| {
-        let mut r = lay.cover;
+    // How far each point is from the next, and along the subpath.
+    let seg: Vec<f64> = (0..n).map(|i| pts[i].distance(pts[(i + 1) % n])).collect();
+    let along: Vec<f64> = seg
+        .iter()
+        .scan(0.0, |s, l| {
+            let at = *s;
+            *s += l;
+            Some(at)
+        })
+        .collect();
+    // How far the ribs at point `i` reach: past the stroke there and on its way to the points
+    // either side, where it is no wider than at one of the two (each side of a width profile
+    // stays between its widths at the points of a span, and its points have points here). The
+    // caps and dots of a dashed stroke reach along the path as far as it is wide where they sit,
+    // so there the ribs cover the widest the stroke gets that far either way. Not as far as the
+    // stroke is wide anywhere: where a stroke crosses or runs close by itself, a narrow part
+    // reaching that far would paint over a wide part beside it (#5960). The start of a closed
+    // subpath is also its end. Ribs near an arrowhead reach across it.
+    let cover: Vec<f64> = (0..n).map(|i| if closed && i == 0 { lay.cover(0.0).max(lay.cover(1.0)) } else { lay.cover(along[i] / total) }).collect();
+    let window = match lay.st.dash {
+        Some(_) if lay.st.profile.is_some() => cap_extent(lay.st.cap, 2.0 * lay.hw * lay.st.profile_max()),
+        _ => 0.0,
+    };
+    let ahead = widest_ahead(&cover, &seg, closed, window);
+    // Behind a point is ahead of it on the subpath run backwards.
+    let back_seg: Vec<f64> = (0..n).map(|i| seg[(2 * n - 2 - i) % n]).collect();
+    let back_cover: Vec<f64> = cover.iter().rev().copied().collect();
+    let behind: Vec<f64> = widest_ahead(&back_cover, &back_seg, closed, window).into_iter().rev().collect();
+    let reach = |i: usize| {
+        let mut r = cover[i].max(ahead[i]).max(behind[i]);
+        let s = along[i];
         if heads.0 > 0.0 && s <= heads.0 {
             r = r.max(heads.0 + lay.margin);
         }
@@ -216,29 +271,69 @@ fn strip(lay: &Lay, pts: &[Point], closed: bool, total: f64, side: Option<bool>,
         r
     };
     let mut out = Vec::with_capacity(n + 4);
-    let mut s = 0.0;
     if !closed {
         let (d, b) = (dir[0], lay.band(0.0, side));
-        out.push(Rib::square(pts[0] - d * lay.ext.0, d, reach(0.0), 0.0, b));
-        out.push(Rib::square(pts[0], d, reach(0.0), 0.0, b));
-        s = pts[0].distance(pts[1]);
+        out.push(Rib::square(pts[0] - d * lay.ext.0, d, reach(0), 0.0, b));
+        out.push(Rib::square(pts[0], d, reach(0), 0.0, b));
     }
     let (first, last) = if closed { (0, n) } else { (1, n - 1) };
     for i in first..last {
         let v = i % n;
-        let t = s / total;
-        let ribs = lay.turn(pts[v], dir[(v + seg_count - 1) % seg_count], dir[v % seg_count], reach(s), t, lay.band(t, side));
+        let t = along[v] / total;
+        let ribs = lay.turn(pts[v], dir[(v + seg_count - 1) % seg_count], dir[v % seg_count], reach(v), t, lay.band(t, side));
         // A closed subpath starts after the fan of its first corner and ends with it.
         let skip = if closed && i == 0 { ribs.len() - 1 } else { 0 };
         out.extend(ribs.into_iter().skip(skip));
-        s += pts[v].distance(pts[(v + 1) % n]);
     }
     if closed {
-        out.extend(lay.turn(pts[0], dir[seg_count - 1], dir[0], reach(total), 1.0, lay.band(1.0, side)));
+        out.extend(lay.turn(pts[0], dir[seg_count - 1], dir[0], reach(0), 1.0, lay.band(1.0, side)));
     } else {
         let (d, b) = (dir[seg_count - 1], lay.band(1.0, side));
-        out.push(Rib::square(pts[n - 1], d, reach(total), 1.0, b));
-        out.push(Rib::square(pts[n - 1] + d * lay.ext.1, d, reach(total), 1.0, b));
+        out.push(Rib::square(pts[n - 1], d, reach(n - 1), 1.0, b));
+        out.push(Rib::square(pts[n - 1] + d * lay.ext.1, d, reach(n - 1), 1.0, b));
+    }
+    out
+}
+
+/// For each of the points of a subpath, how far the ribs of the points ahead of it reach
+/// (`cover`), out to the first point more than `window` along (or the end of an open subpath,
+/// or once round a closed one): `seg[i]` is how far point `i` is from the next (past the last,
+/// the first when `closed`). Both ends of the window only move forward, so a queue of the
+/// points that reach farther than every point after them gives each maximum, and a subpath
+/// costs time in proportion to its points however many a window spans.
+pub(super) fn widest_ahead(cover: &[f64], seg: &[f64], closed: bool, window: f64) -> Vec<f64> {
+    let n = cover.len().min(seg.len());
+    if n == 0 {
+        return vec![];
+    }
+    // A closed subpath's points ahead are numbered on round it once more.
+    let last = if closed { 2 * n - 1 } else { n - 1 };
+    let mut pos = Vec::with_capacity(last + 1);
+    let mut s = 0.0;
+    for k in 0..=last {
+        pos.push(s);
+        s += seg[k % n];
+    }
+    let mut out = Vec::with_capacity(n);
+    let mut queue: VecDeque<usize> = VecDeque::new();
+    let mut next = 1;
+    for i in 0..n {
+        next = next.max(i + 1);
+        let stop = if closed { i + n } else { last };
+        let mut past = next > i + 1 && pos[next - 1] - pos[i] > window;
+        while !past && next <= stop {
+            let r = cover[next % n];
+            while queue.back().is_some_and(|&k| cover[k % n] <= r) {
+                queue.pop_back();
+            }
+            queue.push_back(next);
+            past = pos[next] - pos[i] > window;
+            next += 1;
+        }
+        while queue.front().is_some_and(|&k| k <= i) {
+            queue.pop_front();
+        }
+        out.push(queue.front().map_or(0.0, |&k| cover[k % n]));
     }
     out
 }
@@ -375,7 +470,7 @@ pub fn written_slices(bp: &BezPath, rule: FillRule, st: &StrokeLayer, outlines: 
 /// stroke's outline), coloured as [`gradient_slices`] paint it.
 pub fn gradient_meshes(bp: &BezPath, rule: FillRule, st: &StrokeLayer, g: &Gradient) -> Vec<GradientMesh> {
     let across = st.gradient_mode == StrokeGradientMode::Across;
-    let color = |t: f64| g.sample_with(t.clamp(0.0, 1.0) as f32, lerp_color);
+    let color = |t: f64| g.sample_keep_model(t.clamp(0.0, 1.0) as f32);
     // Along: a column at each stop (colours are linear between columns), close enough to look smooth.
     let marks: Vec<f64> = if across { vec![] } else { g.expanded_stops().iter().map(|s| s.0 as f64).collect() };
     let max_dt = match (across, st.profile.is_some()) {

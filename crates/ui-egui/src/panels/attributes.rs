@@ -27,7 +27,7 @@ fn state(app: &VectorcraftApp, ctx: &egui::Context) -> (AttributesInfo, bool) {
     let Some(st) = app.session.active() else { return Default::default() };
     let sel = &st.selection.objects;
     let key: Key = (st.uid, st.revision, sel.len(), sel.first().copied(), sel.last().copied());
-    let id = egui::Id::new("attr-state");
+    let id = egui::Id::unique("attr-state");
     if let Some((k, v)) = ctx.data(|d| d.get_temp::<(Key, (AttributesInfo, bool))>(id))
         && k == key
     {
@@ -123,7 +123,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         widgets::divider(ui);
         widgets::subheader(ui, tl!("Note:"));
         ui.add_enabled_ui(has, |ui| {
-            if let Some(n) = widgets::text_field(ui, "attr-note", info.note.as_deref(), ui.available_width(), 3) {
+            if let Some(n) = widgets::text_field_named(ui, "attr-note", Some(tl!("Note:")), info.note.as_deref(), ui.available_width(), 3) {
                 set(app, json!({ "note": n }));
             }
         });

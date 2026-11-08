@@ -25,6 +25,9 @@ pub fn stops_json(stops: &[GradientStop]) -> Value {
                 if let Some(n) = &s.swatch {
                     v["swatch"] = json!(n);
                     v["tint"] = json!(s.tint * 100.0);
+                    if let Some(p) = s.plates {
+                        v["plates"] = json!(p);
+                    }
                 }
                 v
             })
@@ -68,6 +71,12 @@ pub fn gradient_params(g: &GradientPaint) -> Value {
     }
     if let Some(f) = &g.freeform {
         v["freeform"] = freeform_json(f);
+    }
+    if g.gradient.dither {
+        v["dither"] = json!(true);
+    }
+    if !g.gradient.method.is_classic() {
+        v["method"] = json!(g.gradient.method.label().to_lowercase());
     }
     v
 }

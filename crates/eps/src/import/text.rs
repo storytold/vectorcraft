@@ -168,9 +168,13 @@ impl Interp<'_> {
             ResourceForAll => self.resource_for_all()?,
             Show | AShow | WidthShow | AWidthShow | XShow | YShow | XYShow | KShow => {
                 let (s, spacing) = self.show_operands(op)?;
-                match self.type3_font() {
-                    Some(font) => self.show_type3(&font, &s, &spacing)?,
-                    None => self.show(&s)?,
+                if let Some(glyphs) = self.composite_glyphs(&s) {
+                    self.show_composite(&glyphs, &spacing)?;
+                } else {
+                    match self.type3_font() {
+                        Some(font) => self.show_type3(&font, &s, &spacing)?,
+                        None => self.show(&s)?,
+                    }
                 }
             }
             CShow => {
@@ -273,6 +277,13 @@ impl Interp<'_> {
 
     /// How far `s` moves the current point (user space).
     fn width_of(&mut self, s: &[u8]) -> Res<Vec2> {
+        if let Some(glyphs) = self.composite_glyphs(s) {
+            let mut w = Vec2::ZERO;
+            for g in &glyphs {
+                w += self.composite_glyph(g, Point::new(w.x, w.y), Draw::No)?;
+            }
+            return Ok(w);
+        }
         let Some(font) = self.type3_font() else { return Ok(self.set_type(s, Point::ZERO)?.2) };
         let mut w = Vec2::ZERO;
         for &code in s {
@@ -287,19 +298,7 @@ impl Interp<'_> {
         for (i, &code) in s.iter().enumerate() {
             let at = self.user_point()?;
             let w = self.type3_glyph(font, Glyph::Code(code), at, true)?;
-            let d = match spacing {
-                Spacing::Plain | Spacing::Kern(_) => w,
-                Spacing::Add(a, c) => w + *a + c.filter(|(ch, _)| *ch == i64::from(code)).map_or(Vec2::ZERO, |(_, v)| v),
-                Spacing::Widths(v, op) => {
-                    let n = |k: usize| v.get(k).copied();
-                    match op {
-                        Op::XShow => n(i).map(|x| Vec2::new(x, 0.0)),
-                        Op::YShow => n(i).map(|y| Vec2::new(0.0, y)),
-                        _ => n(2 * i).zip(n(2 * i + 1)).map(|(x, y)| Vec2::new(x, y)),
-                    }
-                    .unwrap_or(w)
-                }
-            };
+            let d = spacing.advance(i, i64::from(code), w);
             self.g.cur = Some(self.xf() * (at + d));
             if let (Spacing::Kern(p), Some(next)) = (spacing, s.get(i + 1)) {
                 self.push(Obj::Int(i64::from(code)))?;
@@ -315,10 +314,15 @@ impl Interp<'_> {
     /// Glyph `glyph` of Type 3 font `font` drawn by its `BuildGlyph` (or `BuildChar`) procedure at
     /// user point `at` (only measured unless `paint`) → its width (user space).
     fn type3_glyph(&mut self, font: &DictRef, glyph: Glyph, at: Point, paint: bool) -> Res<Vec2> {
+        self.type3_glyph_in(font, glyph, at, paint, Affine::IDENTITY)
+    }
+
+    /// [`Self::type3_glyph`] for a descendant of a composite font whose matrix is `outer`.
+    fn type3_glyph_in(&mut self, font: &DictRef, glyph: Glyph, at: Point, paint: bool, outer: Affine) -> Res<Vec2> {
         let (fm, build_glyph, build_char, encoding) = {
             let f = font.borrow();
             let get = |k: &str| f.get(&Key::name(k)).cloned();
-            let fm = get("FontMatrix").and_then(|o| o.items().and_then(|i| matrix_of(&i.borrow()))).unwrap_or(Affine::scale(0.001));
+            let fm = outer * font_matrix(&f, 0.001);
             (fm, get("BuildGlyph"), get("BuildChar"), get("Encoding"))
         };
         let code_of = |name: &str| -> Option<u8> {
@@ -402,11 +406,16 @@ impl Interp<'_> {
         };
         let f = font.borrow();
         let name = f.get(&Key::name("FontName")).and_then(Obj::text).map_or_else(|| DEFAULT_FONT.to_string(), |n| n.to_string());
-        let m = f.get(&Key::name("FontMatrix")).and_then(|o| o.items().and_then(|i| matrix_of(&i.borrow()))).unwrap_or(Affine::scale(0.001));
-        // Type 1 glyphs are in 1000-unit space; a Type 42 font's glyph space is one unit an em
-        // (its FontMatrix, usually the identity, is already the em's).
-        let units = if f.get(&Key::name("FontType")).and_then(Obj::as_num) == Some(42.0) { 1.0 } else { 1000.0 };
-        Ok((name, m * Affine::scale(units)))
+        // A composite font's glyphs are its descendants', in their glyph space under its matrix
+        // (PLRM 3rd ed., §5.10 "Composite Fonts"): the first descendant stands for them all.
+        if font_type(&f) == Some(0.0) {
+            let first = f.get(&Key::name("FDepVector")).and_then(|v| v.items()?.get(0));
+            if let Some(Obj::Dict(d)) = first {
+                let d = d.borrow();
+                return Ok((name, font_matrix(&f, 1.0) * font_matrix(&d, 0.001) * Affine::scale(units(&d))));
+            }
+        }
+        Ok((name, font_matrix(&f, 0.001) * Affine::scale(units(&f))))
     }
 
     /// `s` (read as Latin-1) set in the current font at user point `at`: point type placed there,
@@ -451,6 +460,14 @@ impl Interp<'_> {
 
     /// `charpath`: the glyph outlines of `s` added to the path.
     fn char_path(&mut self, s: &[u8]) -> Res {
+        if let Some(glyphs) = self.composite_glyphs(s) {
+            for g in &glyphs {
+                let at = self.user_point()?;
+                let w = self.composite_glyph(g, at, Draw::Path)?;
+                self.g.cur = Some(self.xf() * (at + w));
+            }
+            return Ok(());
+        }
         let at = self.user_point()?;
         let (t, layout, adv) = self.set_type(s, at)?;
         for g in &layout.glyphs {
@@ -484,6 +501,240 @@ enum Glyph {
     Name(Rc<str>),
 }
 
+impl Spacing {
+    /// How far glyph `i` (character code `code`, width `w`) moves the current point.
+    fn advance(&self, i: usize, code: i64, w: Vec2) -> Vec2 {
+        match self {
+            Self::Plain | Self::Kern(_) => w,
+            Self::Add(a, c) => w + *a + c.filter(|(ch, _)| *ch == code).map_or(Vec2::ZERO, |(_, v)| v),
+            Self::Widths(v, op) => {
+                let n = |k: usize| v.get(k).copied();
+                match op {
+                    Op::XShow => n(i).map(|x| Vec2::new(x, 0.0)),
+                    Op::YShow => n(i).map(|y| Vec2::new(0.0, y)),
+                    _ => n(2 * i).zip(n(2 * i + 1)).map(|(x, y)| Vec2::new(x, y)),
+                }
+                .unwrap_or(w)
+            }
+        }
+    }
+}
+
+/// A character of a composite font: the descendant font that draws it, its code there, and the
+/// composite font's matrix (over the descendant's own).
+struct Mapped {
+    font: DictRef,
+    /// The byte that picked the descendant (the font number).
+    pick: u8,
+    code: u8,
+    outer: Affine,
+}
+
+/// What drawing a glyph does with it.
+#[derive(Clone, Copy, PartialEq)]
+enum Draw {
+    /// Fills it (`show`).
+    Fill,
+    /// Adds its outline to the current path (`charpath`).
+    Path,
+    /// Only measures it (`stringwidth`).
+    No,
+}
+
+/// Font `f`'s `FontType`.
+fn font_type(f: &Dict) -> Option<f64> {
+    f.get(&Key::name("FontType")).and_then(Obj::as_num)
+}
+
+/// Font `f`'s matrix, `default` times the identity when it has none.
+fn font_matrix(f: &Dict, default: f64) -> Affine {
+    f.get(&Key::name("FontMatrix")).and_then(|o| o.items().and_then(|i| matrix_of(&i.borrow()))).unwrap_or(Affine::scale(default))
+}
+
+/// Font `f`'s glyph units in its matrix's space: Type 1 glyphs are in 1000-unit space; a Type 42
+/// font's glyph space is one unit an em (its FontMatrix, usually the identity, is already the
+/// em's).
+fn units(f: &Dict) -> f64 {
+    if font_type(f) == Some(42.0) { 1.0 } else { 1000.0 }
+}
+
+impl Interp<'_> {
+    /// The characters of `s` in the current font when it is a composite font with the 8/8 mapping
+    /// (`FMapType` 2: a byte picking the descendant through `Encoding` and `FDepVector`, then the
+    /// code in it: PLRM 3rd ed., §5.10.1 "Type 0 Font Dictionaries"); `None` for other fonts and
+    /// mappings, which are set as type in the font of the composite font's name.
+    fn composite_glyphs(&self, s: &[u8]) -> Option<Vec<Mapped>> {
+        let font = self.g.font.clone()?;
+        let f = font.borrow();
+        if font_type(&f) != Some(0.0) || f.get(&Key::name("FMapType")).and_then(Obj::as_num) != Some(2.0) {
+            return None;
+        }
+        let (encoding, fonts) = (f.get(&Key::name("Encoding"))?.items()?.clone(), f.get(&Key::name("FDepVector"))?.items()?.clone());
+        let (encoding, fonts) = (encoding.borrow(), fonts.borrow());
+        let outer = font_matrix(&f, 1.0);
+        let mut out = Vec::with_capacity(s.len() / 2);
+        for &[pick, code] in s.as_chunks::<2>().0 {
+            let index = encoding.get(usize::from(pick)).and_then(Obj::as_num).filter(|i| *i >= 0.0 && i.fract() == 0.0);
+            // A character whose descendant is missing (or not a base font) shows nothing.
+            if let Some(Obj::Dict(d)) = index.and_then(|i| fonts.get(i as usize))
+                && font_type(&d.borrow()) != Some(0.0)
+            {
+                out.push(Mapped { font: d.clone(), pick, code, outer });
+            }
+        }
+        Some(out)
+    }
+
+    /// The characters of a composite font shown at the current point, spaced as `spacing` says.
+    fn show_composite(&mut self, glyphs: &[Mapped], spacing: &Spacing) -> Res {
+        let start = self.out.drawn.len();
+        let mut text = String::new();
+        for (i, g) in glyphs.iter().enumerate() {
+            let at = self.user_point()?;
+            let w = self.composite_glyph(g, at, Draw::Fill)?;
+            // `widthshow` and `awidthshow` match a composite font's character by its font number
+            // times 256 plus its code (PLRM 3rd ed., `widthshow` in chapter 8).
+            let d = spacing.advance(i, i64::from(g.pick) * 256 + i64::from(g.code), w);
+            self.g.cur = Some(self.xf() * (at + d));
+            let c = code_char(&g.font.borrow(), g.code);
+            if c != '\u{2022}' {
+                text.push(c);
+            }
+        }
+        if text.trim().is_empty()
+            && let Some(name) = self.g.font.as_ref().and_then(|f| f.borrow().get(&Key::name("FontName")).and_then(Obj::text))
+        {
+            text = name.to_string();
+        }
+        self.group_glyphs(start, &text);
+        Ok(())
+    }
+
+    /// Character `g` of a composite font at user point `at`, drawn by its descendant: a Type 3
+    /// font's procedure, a Type 42 font's TrueType outline, else as type in the font of the
+    /// descendant's name (the character its glyph name stands for) → its width (user space).
+    fn composite_glyph(&mut self, g: &Mapped, at: Point, paint: Draw) -> Res<Vec2> {
+        let builds = {
+            let f = g.font.borrow();
+            font_type(&f) == Some(3.0) && (f.contains_key(&Key::name("BuildGlyph")) || f.contains_key(&Key::name("BuildChar")))
+        };
+        if builds {
+            return self.type3_glyph_in(&g.font, Glyph::Code(g.code), at, paint == Draw::Fill, g.outer);
+        }
+        let fm = g.outer * font_matrix(&g.font.borrow(), 1.0);
+        if let Some((outline, advance)) = self.type42_glyph(&g.font, g.code)? {
+            // Measuring a glyph reads its outline too, so `stringwidth` in a loop pays for it.
+            self.spend((outline.elements().len() as u64).saturating_add(16))?;
+            if paint != Draw::No {
+                let mut p = outline;
+                p.apply_affine(self.xf() * Affine::translate(at.to_vec2()) * fm);
+                if paint == Draw::Fill {
+                    self.fill_path(p, vectorcraft_geom::FillRule::NonZero)?;
+                } else {
+                    if self.g.path.elements().len().saturating_add(p.elements().len()) > super::graphics::MAX_PATH {
+                        return Err(PsError::Limit("a path has too many points"));
+                    }
+                    self.g.path.extend(p);
+                }
+            }
+            return Ok(fm * Point::new(advance, 0.0) - fm * Point::ZERO);
+        }
+        // Set as type in the descendant's font, under the composite font's matrix.
+        let c = code_char(&g.font.borrow(), g.code);
+        let Ok(byte) = u8::try_from(u32::from(c)) else { return Ok(Vec2::ZERO) };
+        // Scaling the descendant copies its dictionary for every character: charged by its size,
+        // so a huge font dictionary shown in a loop runs out of the budget.
+        let entries = g.font.borrow().len();
+        self.spend(entries as u64)?;
+        let saved = self.g.font.replace(transformed(&g.font, g.outer));
+        let r = match paint {
+            Draw::Fill => {
+                self.g.cur = Some(self.xf() * at);
+                self.show(&[byte]).and_then(|()| self.user_point()).map(|p| p - at)
+            }
+            Draw::Path => {
+                self.g.cur = Some(self.xf() * at);
+                self.char_path(&[byte]).and_then(|()| self.user_point()).map(|p| p - at)
+            }
+            Draw::No => self.set_type(&[byte], at).map(|t| t.2),
+        };
+        self.g.font = saved;
+        r
+    }
+
+    /// Glyph `code` of Type 42 font `font` from the TrueType font it carries: its outline and
+    /// width in its glyph space (ems), or `None` when it isn't a Type 42 font with one.
+    fn type42_glyph(&mut self, font: &DictRef, code: u8) -> Res<Option<(vectorcraft_geom::BezPath, f64)>> {
+        let (sfnts, gid) = {
+            let f = font.borrow();
+            if font_type(&f) != Some(42.0) {
+                return Ok(None);
+            }
+            let Some(Obj::Array { items: sfnts, .. }) = f.get(&Key::name("sfnts")).cloned() else { return Ok(None) };
+            let name = glyph_name(&f, code);
+            let strings = f.get(&Key::name("CharStrings")).and_then(|c| match c {
+                Obj::Dict(d) => Some(d.clone()),
+                _ => None,
+            });
+            let gid = strings
+                .and_then(|d| {
+                    let d = d.borrow();
+                    d.get(&Key::name(&name)).or_else(|| d.get(&Key::name(".notdef"))).and_then(Obj::as_num)
+                })
+                .filter(|g| (0.0..=f64::from(u16::MAX)).contains(g))
+                .map_or(0, |g| g as u32);
+            (sfnts, gid)
+        };
+        // The least recently used font goes first: a hit moves to the end.
+        let data = match self.type42.iter().position(|(k, _)| k.same(&sfnts)) {
+            Some(i) => {
+                let hit = self.type42.remove(i);
+                let data = hit.1.clone();
+                self.type42.push(hit);
+                data
+            }
+            None => {
+                // Joining the strings visits each element and copies its bytes, whether or not
+                // the font can then be read: charged first, as other bulk copies are.
+                let (elements, bytes) = super::type42::font_size(&sfnts.borrow());
+                self.spend_bytes(bytes)?;
+                self.spend((elements / 16) as u64)?;
+                // Fonts whose data can't be read are kept too, so they are copied only once.
+                let data = super::type42::font_data(&sfnts.borrow()).map(Rc::new);
+                if let Some(d) = &data
+                    && self.type42_counted.insert(sfnts.clone())
+                {
+                    self.alloc(d.len())?;
+                }
+                if self.type42.len() >= MAX_TYPE42 {
+                    self.type42.remove(0);
+                }
+                self.type42.push((sfnts, data.clone()));
+                data
+            }
+        };
+        let Some(data) = data else { return Ok(None) };
+        Ok(super::type42::glyph(&data, gid))
+    }
+}
+
+/// Most Type 42 fonts whose TrueType data is kept between glyphs.
+const MAX_TYPE42: usize = 16;
+
+/// The character code `code` of font `f` stands for: its glyph name's, or the code read as
+/// Latin-1 when the font names no glyph for it (a font found by name, whose program isn't run).
+fn code_char(f: &Dict, code: u8) -> char {
+    match &*glyph_name(f, code) {
+        ".notdef" => char::from(code),
+        name => glyph_char(name),
+    }
+}
+
+/// The glyph name font `f`'s `Encoding` gives code `code` (`.notdef` without one).
+fn glyph_name(f: &Dict, code: u8) -> Rc<str> {
+    f.get(&Key::name("Encoding")).and_then(|e| e.items()?.get(usize::from(code))).and_then(|o| o.text()).unwrap_or_else(|| Rc::from(".notdef"))
+}
+
 /// A font scaled or transformed by `m` (`scalefont`, `makefont`).
 fn transformed(font: &DictRef, m: Affine) -> DictRef {
     let mut d = font.borrow().clone();
@@ -499,6 +750,7 @@ fn glyph_char(name: &str) -> char {
         return c;
     }
     if let Some(hex) = name.strip_prefix("uni").or_else(|| name.strip_prefix('u'))
+        && hex.chars().all(|c| c.is_ascii_hexdigit())
         && let Some(c) = u32::from_str_radix(hex, 16).ok().and_then(char::from_u32)
     {
         return c;
@@ -506,5 +758,18 @@ fn glyph_char(name: &str) -> char {
     match name {
         "space" => ' ',
         _ => '\u{2022}',
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::glyph_char;
+
+    #[test]
+    fn glyph_char_rejects_plus_in_hex() {
+        assert_eq!(glyph_char("uni20AC"), '€');
+        assert_eq!(glyph_char("u1F600"), '\u{1F600}');
+        assert_eq!(glyph_char("uni+041"), '\u{2022}');
+        assert_eq!(glyph_char("u+41"), '\u{2022}');
     }
 }

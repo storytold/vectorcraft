@@ -15,7 +15,7 @@ use vectorcraft_pathops::BoolOp;
 use super::draw2::{components, erase_outline, ids_json, replace_with_pieces};
 use super::edit::selected_roots;
 use super::pathops::{Beside, node_path};
-use super::*;
+use super::{CommandSpec, Result, Session, bad, cmd, finite_numbers, has_selection, point_param, str_param};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -138,8 +138,12 @@ fn cut_targets(s: &Session) -> Result<Vec<NodeId>> {
 /// What a cut does to one object: its new pieces (none deletes it).
 type Plan = Vec<(NodeId, Vec<PathData>)>;
 
-/// Run `cut` on every target's geometry (`None`: unchanged) and apply the result as one undo step.
-fn run_cut(s: &mut Session, cmd: &str, label: &str, cut: &dyn Fn(&PathData, FillRule) -> Option<Vec<PathData>>) -> Result<Value> {
+/// What a cut makes of one object: its pieces (`None`: unchanged), or the pathops refusal.
+type Cut = std::result::Result<Option<Vec<PathData>>, po::PathOpsError>;
+
+/// Run `cut` on every target's geometry (`None`: unchanged) and apply the result as one undo step. A shape the
+/// booleans refuse (too complex, too far out) fails the command with the art untouched: it is not "nothing on that side".
+fn run_cut(s: &mut Session, cmd: &str, label: &str, cut: &dyn Fn(&PathData, FillRule) -> Cut) -> Result<Value> {
     let targets = cut_targets(s)?;
     if targets.is_empty() {
         return Err(bad(cmd, "select paths or compound paths"));
@@ -151,7 +155,8 @@ fn run_cut(s: &mut Session, cmd: &str, label: &str, cut: &dyn Fn(&PathData, Fill
         if pd.subpaths.iter().flat_map(|sp| &sp.anchors).any(|a| !(a.p.x.is_finite() && a.p.y.is_finite())) {
             return Err(bad(cmd, "paths contain invalid coordinates"));
         }
-        if let Some(pieces) = cut(&pd, rule) {
+        let pieces = cut(&pd, rule).map_err(|e| bad(cmd, format!("the cut cannot be made on this art: {e}")))?;
+        if let Some(pieces) = pieces {
             plan.push((id, pieces));
         }
     }
@@ -184,9 +189,9 @@ fn reach(pd: &PathData) -> Rect {
 }
 
 /// `pd ∩ region`, dropping slivers.
-fn intersect(pd: &PathData, rule: FillRule, region: &PathData) -> PathData {
-    let r = po::boolean(pd, rule, region, FillRule::NonZero, BoolOp::Intersect);
-    if po::area(&r, FillRule::NonZero) <= 1e-6 { PathData::default() } else { r }
+fn intersect(pd: &PathData, rule: FillRule, region: &PathData) -> std::result::Result<PathData, po::PathOpsError> {
+    let r = po::try_boolean(pd, rule, region, FillRule::NonZero, BoolOp::Intersect, po::DEFAULT_PRECISION)?;
+    Ok(if po::try_area(&r, FillRule::NonZero)? <= 1e-6 { PathData::default() } else { r })
 }
 
 // ---------- Line Cut ----------
@@ -198,24 +203,26 @@ fn line_cut(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// `pd` split by the line: the pieces on both sides, `None` when the line misses it.
-fn split_by_line(pd: &PathData, rule: FillRule, axis: &Axis) -> Option<Vec<PathData>> {
+fn split_by_line(pd: &PathData, rule: FillRule, axis: &Axis) -> Cut {
     if pd.is_closed() {
         let around = reach(pd);
-        let a = intersect(pd, rule, &axis.half_plane(1.0, around));
-        let b = intersect(pd, rule, &axis.half_plane(-1.0, around));
+        let a = intersect(pd, rule, &axis.half_plane(1.0, around))?;
+        let b = intersect(pd, rule, &axis.half_plane(-1.0, around))?;
         if a.is_empty() || b.is_empty() {
-            return None;
+            return Ok(None);
         }
-        return Some(components(&a).into_iter().chain(components(&b)).collect());
+        return Ok(Some(components(&a).into_iter().chain(components(&b)).collect()));
     }
     // Open paths: the parts on each side (each pass removes the other side).
-    let a = erase_outline(pd, &|q| axis.side(q) < 0.0)?;
-    let b = erase_outline(pd, &|q| axis.side(q) >= 0.0)?;
-    Some(if pd.subpaths.len() == 1 {
+    let (Some(a), Some(b)) = (erase_outline(pd, f64::INFINITY, &|q| axis.side(q) < 0.0), erase_outline(pd, f64::INFINITY, &|q| axis.side(q) >= 0.0))
+    else {
+        return Ok(None);
+    };
+    Ok(Some(if pd.subpaths.len() == 1 {
         a.into_iter().chain(b).collect()
     } else {
         vec![PathData::new(a.into_iter().chain(b).flat_map(|p| p.subpaths).collect())]
-    })
+    }))
 }
 
 // ---------- Rectangle Cut ----------
@@ -238,23 +245,34 @@ fn rect_cut(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// `pd` cropped to `rect`: `None` when it lies inside, no pieces when it lies outside.
-fn crop(pd: &PathData, rule: FillRule, rect: Rect) -> Option<Vec<PathData>> {
-    let b = pd.bounds()?;
+fn crop(pd: &PathData, rule: FillRule, rect: Rect) -> Cut {
+    let Some(b) = pd.bounds() else { return Ok(None) };
     if rect.inflate(1e-9, 1e-9).contains_rect(b) {
-        return None;
+        return Ok(None);
     }
     if pd.is_closed() {
-        let r =
-            intersect(pd, rule, &polygon(&[rect.origin(), Point::new(rect.x1, rect.y0), Point::new(rect.x1, rect.y1), Point::new(rect.x0, rect.y1)]));
-        return Some(if r.is_empty() { vec![] } else { vec![r] });
+        // Wholly outside: nothing is left, whatever the booleans would make of the rectangle's coordinates.
+        if rect.intersect(b).is_zero_area() {
+            return Ok(Some(vec![]));
+        }
+        let r = intersect(
+            pd,
+            rule,
+            &polygon(&[rect.origin(), Point::new(rect.x1, rect.y0), Point::new(rect.x1, rect.y1), Point::new(rect.x0, rect.y1)]),
+        )?;
+        return Ok(Some(if r.is_empty() { vec![] } else { vec![r] }));
     }
     let inside = rect.inflate(1e-9, 1e-9);
-    let pieces = erase_outline(pd, &|q| !(q.x >= inside.x0 && q.x <= inside.x1 && q.y >= inside.y0 && q.y <= inside.y1))?;
-    Some(if pd.subpaths.len() == 1 || pieces.is_empty() {
+    // Sampled at least every half of the rectangle's shorter side, so a line through it is found.
+    let step = rect.width().min(rect.height()) / 2.0;
+    let Some(pieces) = erase_outline(pd, step, &|q| !(q.x >= inside.x0 && q.x <= inside.x1 && q.y >= inside.y0 && q.y <= inside.y1)) else {
+        return Ok(None);
+    };
+    Ok(Some(if pd.subpaths.len() == 1 || pieces.is_empty() {
         pieces
     } else {
         vec![PathData::new(pieces.into_iter().flat_map(|p| p.subpaths).collect())]
-    })
+    }))
 }
 
 // ---------- Mirror & Cut ----------
@@ -285,7 +303,7 @@ fn mirror_cut(s: &mut Session, p: &Value) -> Result<Value> {
         other => return Err(bad(C, format!("unknown axis `{other}` (vertical|horizontal|free)"))),
     };
     let sign = keep_sign(&axis, str_param(p, "keep")).map_err(|e| bad(C, e))?;
-    run_cut(s, C, "Mirror & Cut", &|pd, rule| Some(mirror(pd, rule, &axis, sign)))
+    run_cut(s, C, "Mirror & Cut", &|pd, rule| mirror(pd, rule, &axis, sign).map(Some))
 }
 
 /// The sign of [`Axis::side`] on the side `keep` names (default: left, or top when the axis runs
@@ -307,22 +325,22 @@ fn keep_sign(axis: &Axis, keep: Option<&str>) -> std::result::Result<f64, String
 }
 
 /// The kept half of `pd` and its reflection, joined (no pieces when nothing is on the kept side).
-fn mirror(pd: &PathData, rule: FillRule, axis: &Axis, sign: f64) -> Vec<PathData> {
+fn mirror(pd: &PathData, rule: FillRule, axis: &Axis, sign: f64) -> std::result::Result<Vec<PathData>, po::PathOpsError> {
     let m = axis.reflection();
     if pd.is_closed() {
-        let kept = intersect(pd, rule, &axis.half_plane(sign, reach(pd)));
+        let kept = intersect(pd, rule, &axis.half_plane(sign, reach(pd)))?;
         if kept.is_empty() {
-            return vec![];
+            return Ok(vec![]);
         }
-        let joined = po::boolean(&kept, FillRule::NonZero, &kept.transformed(m), FillRule::NonZero, BoolOp::Union);
-        return if joined.is_empty() { vec![] } else { vec![joined] };
+        let joined = po::try_boolean(&kept, FillRule::NonZero, &kept.transformed(m), FillRule::NonZero, BoolOp::Union, po::DEFAULT_PRECISION)?;
+        return Ok(if joined.is_empty() { vec![] } else { vec![joined] });
     }
-    let kept = match erase_outline(pd, &|q| axis.side(q) * sign < 0.0) {
+    let kept = match erase_outline(pd, f64::INFINITY, &|q| axis.side(q) * sign < 0.0) {
         Some(pieces) => pieces.into_iter().flat_map(|p| p.subpaths).collect(),
         None => pd.subpaths.clone(),
     };
     let subs: Vec<SubPath> = kept.iter().flat_map(|sp| mirror_open(sp, axis, m)).collect();
-    if subs.is_empty() { vec![] } else { vec![PathData::new(subs)] }
+    Ok(if subs.is_empty() { vec![] } else { vec![PathData::new(subs)] })
 }
 
 /// An open run and its reflection, joined where its ends touch the axis (closed when both do);
@@ -396,5 +414,29 @@ mod tests {
         let sp = SubPath::new(vec![Anchor::corner(Point::new(10.0, 0.0)), Anchor::corner(Point::new(50.0, 40.0))], false);
         let out = mirror_open(&sp, &axis, axis.reflection());
         assert_eq!((out.len(), out[0].closed, out[0].anchors.len()), (1, false, 3));
+    }
+
+    /// A shape the booleans refuse (here: so far from the origin that the sweep tolerance exceeds the precision) is an error,
+    /// not "no pieces": that would make Mirror & Cut delete it and Rectangle Cut crop it to nothing.
+    #[test]
+    fn a_shape_the_booleans_refuse_is_an_error_not_no_pieces() {
+        let far = polygon(&[
+            Point::new(1e15, 1e15),
+            Point::new(1e15 + 100.0, 1e15),
+            Point::new(1e15 + 100.0, 1e15 + 100.0),
+            Point::new(1e15, 1e15 + 100.0),
+        ]);
+        let axis = Axis { p: Point::ZERO, d: Vec2::new(0.0, 1.0) };
+        let refused = Some(po::PathOpsError::Degenerate);
+        assert_eq!(mirror(&far, FillRule::NonZero, &axis, 1.0).err(), refused);
+        assert_eq!(split_by_line(&far, FillRule::NonZero, &axis).err(), refused);
+        // A rectangle that far out, against art near the origin, still crops it to nothing.
+        let far_rect = Rect::new(1e15, 1e15, 1e15 + 100.0, 1e15 + 100.0);
+        let near_art = polygon(&[Point::new(0.0, 0.0), Point::new(10.0, 0.0), Point::new(10.0, 10.0), Point::new(0.0, 10.0)]);
+        assert_eq!(crop(&near_art, FillRule::NonZero, far_rect).unwrap(), Some(vec![]));
+        // Near the origin the same cuts work.
+        let near = polygon(&[Point::new(-50.0, 0.0), Point::new(50.0, 0.0), Point::new(50.0, 100.0), Point::new(-50.0, 100.0)]);
+        assert_eq!(mirror(&near, FillRule::NonZero, &axis, 1.0).unwrap().len(), 1);
+        assert_eq!(split_by_line(&near, FillRule::NonZero, &axis).unwrap().map(|p| p.len()), Some(2));
     }
 }

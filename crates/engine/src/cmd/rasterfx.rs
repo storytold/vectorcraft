@@ -11,8 +11,9 @@
 //! images with the same helpers.
 //!
 //! SVG has filters for shadows, glows, blurs and feathers but none for the Photoshop-style
-//! effects (Radial Blur, Unsharp Mask…) or Rasterize: SVG export turns only the objects carrying
-//! one of those into images the same way ([`flatten_pixel_effects`]).
+//! effects (Radial Blur, Unsharp Mask…) or Rasterize. Darkness shadows also need rendered images
+//! when source colors or gradients cannot be represented by an RGB component-transfer filter.
+//! SVG export prepares these images with [`flatten_pixel_effects`].
 
 use std::sync::Arc;
 
@@ -26,7 +27,7 @@ use vectorcraft_geom::{Affine, FillRule, PathData, Rect};
 use vectorcraft_render::effects::{self, RasterFx};
 use vectorcraft_render::{AntiAlias, RenderOptions};
 
-use super::*;
+use super::{CommandSpec, Result, Session, bad, cmd, has_doc};
 
 mod report;
 use report::FlattenReport;
@@ -192,8 +193,10 @@ pub(crate) fn effect_image(out: &mut Document, whole: &Node, knockout: Option<&N
     if !area.is_finite() {
         return None;
     }
-    // Whole pixels, and no larger than 64 Mpx.
-    let scale = scale.min((64.0e6 / area.max(1.0)).sqrt());
+    // Whole pixels, no larger than 64 Mpx, and no side longer than the renderer can address
+    // (a long thin object stays within the area but not within a side).
+    let side = f64::from(vectorcraft_render::MAX_RASTER_SIDE) - 2.0;
+    let scale = scale.min((64.0e6 / area.max(1.0)).sqrt()).min(side / b.width().max(b.height()).max(1.0));
     if !(scale.is_finite() && scale > 0.0) {
         return None;
     }
@@ -223,7 +226,15 @@ pub(crate) fn effect_image(out: &mut Document, whole: &Node, knockout: Option<&N
     let xf = Affine::translate(region.origin().to_vec2()) * Affine::scale(1.0 / scale);
     let mut image = Node::new(
         id,
-        NodeKind::Image(Box::new(ImageObject { key, width: img.width, height: img.height, xf, link: None, placement: Default::default() })),
+        NodeKind::Image(Box::new(ImageObject {
+            key,
+            width: img.width,
+            height: img.height,
+            xf,
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        })),
     );
     image.name = Some("Raster effect".into());
     Some(image)
@@ -340,7 +351,9 @@ fn rasterize_effect_image(d: &mut Document, n: &Node) -> Option<Node> {
     whole.appearance.effects.remove(at);
     (whole.opacity, whole.blend) = (1.0, Default::default());
     whole.extras_mut().mask = None;
-    let image = super::menucmds::rasterize_art(d, vec![whole], &p, "object.rasterize").ok()?;
+    // shortcut: expanded Rasterize effects stay RGB, as the object keeps its own opacity mask and the
+    // image's transparency would need one too; upgrade when CMYK images carry alpha.
+    let image = super::menucmds::rasterize_art(d, vec![whole], &p, "object.rasterize", false).ok()?;
     Some(image.into_node(d))
 }
 
@@ -442,9 +455,9 @@ fn placed_symbol(d: &Document, n: &Node) -> Option<Node> {
 enum Which {
     /// Every raster effect (PDF).
     All,
-    /// Objects with a Photoshop-style effect or Rasterize, which SVG can't draw (with all their
-    /// raster effects).
-    Pixel,
+    /// Effects SVG cannot represent faithfully, with their other raster effects; `filters`: the SVG
+    /// written has filters (SVG Tiny 1.2 has none).
+    Pixel { cmyk: bool, filters: bool },
 }
 
 /// Has `n` (its own, its fills' or strokes') raster effects `which` turns into an image?
@@ -452,8 +465,38 @@ fn imaged(n: &Node, which: Which) -> bool {
     let fx = raster_fx(n);
     match which {
         Which::All => !fx.is_empty(),
-        Which::Pixel => fx.iter().any(|f| matches!(f, RasterFx::Pixel(_) | RasterFx::Rasterize(_))),
+        Which::Pixel { cmyk, filters } => {
+            // An SVG filter that is the object's last effect, and its only pixel effect, stays a filter.
+            let pixels = fx.iter().filter(|f| matches!(f, RasterFx::Pixel(_) | RasterFx::Rasterize(_))).count();
+            let live = filters
+                && pixels == 1
+                && effects::svg_filter::writes_live(&n.appearance.effects)
+                && fx.iter().any(|f| matches!(f, RasterFx::Pixel(effects::PixelFx::Svg(s)) if s.in_points() && (!s.measured() || fx.len() == 1) && s.writes_as_svg11()));
+            (pixels > 0 && !live)
+                || (fx.iter().any(|f| matches!(f, RasterFx::DropShadow { darkness: Some(_), .. })) && (cmyk || !simple_rgb_shadow_source(n, &fx)))
+        }
     }
+}
+
+/// A filter on one uniform RGB paint can express the source-color adjustment exactly.
+/// Other paints need the existing rendered-effect image to keep their source-model semantics.
+fn simple_rgb_shadow_source(n: &Node, fx: &[RasterFx]) -> bool {
+    if !vectorcraft_color::cms::active().rgb_is_srgb() || !matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) || fx.len() != 1 {
+        return false;
+    }
+    // Other effects can generate varying source colors even from a single plain paint.
+    let only_shadow = std::iter::once(&n.appearance.effects)
+        .chain(n.appearance.items.iter().map(AppearanceItem::effects))
+        .flatten()
+        .all(|e| !e.visible || e.id == "stylize.dropShadow");
+    if !only_shadow || n.extras().mask.is_some() {
+        return false;
+    }
+    let mut paints = n.appearance.items.iter().filter(|i| effects::paints(i));
+    let Some(item) = paints.next() else {
+        return false;
+    };
+    paints.next().is_none() && matches!(item.paint(), Paint::Solid { color: vectorcraft_color::Color::Rgb { .. }, swatch: None, .. })
 }
 
 /// Does `n` hold raster effects that `which` turns into images: its own, its fills' and strokes',
@@ -556,7 +599,13 @@ pub fn flatten_raster_effects(doc: &Document) -> Option<Document> {
 /// Mask…) or Rasterize are images as [`flatten_raster_effects`] makes them (SVG export: its
 /// filters draw the other raster effects live), or `None` when there are none.
 pub fn flatten_pixel_effects(doc: &Document) -> Option<Document> {
-    flatten(doc, &mut FlattenReport::new(Which::Pixel, doc))
+    flatten_pixel_effects_for(doc, true)
+}
+
+/// [`flatten_pixel_effects`] for SVG that has filters (`filters`) or not (SVG Tiny 1.2): without
+/// them an SVG filter (Effect › SVG Filters) also makes its object an image.
+pub fn flatten_pixel_effects_for(doc: &Document, filters: bool) -> Option<Document> {
+    flatten(doc, &mut FlattenReport::new(Which::Pixel { cmyk: doc.color_mode == ColorMode::Cmyk, filters }, doc))
 }
 
 fn flatten(doc: &Document, report: &mut FlattenReport) -> Option<Document> {

@@ -1,6 +1,6 @@
 # Bulgarian (bg) catalog. Same format as zh-hant.tsv:  context <TAB> source <TAB> translation
 # (empty context = a plain UI string; `@id` = a command id; `@plural` = "one|other" English forms,
-# translated as two Bulgarian forms "one|other"; see `plural` in i18n/mod.rs).
+# translated as two Bulgarian forms "one|other"; see `plural` in i18n.rs).
 #
 # Clean-room: every entry is written from the plain meaning of VectorCraft's English labels, in
 # ordinary Bulgarian vocabulary of vector illustration (работна област, път, опорна точка,
@@ -70,6 +70,11 @@
 	3 Color Job…	Задача с 3 цвята…
 	30° Angles	Ъгли от 30°
 	3D and Materials	3D и материали
+	Plane	Равнина
+	Extrude	Избутване
+	Revolve	Завъртане около ос
+	Inflate	Издуване
+	Select objects, then pick an object type to give them a 3D effect.	Изберете обекти, след това изберете тип обект, за да им придадете 3D ефект.
 	3D Ribbon	3D лента
 	45° Angles	Ъгли от 45°
 	60° Angles	Ъгли от 60°
@@ -151,7 +156,6 @@
 	All Artwork Above	Всички графични елементи отгоре
 	All Caps	Всички главни букви
 	All Categories	Всички категории
-	All colours are within the CMYK gamut	Всички цветове са в CMYK цветовата гама
 	All on Active Artboard	Всички на активната работна област
 	All on Same Layers	Всички на същите слоеве
 	All printer's marks	Всички печатарски марки
@@ -167,6 +171,8 @@
 	Anchor Point	Опорна точка
 	Anchor Point Tool	Инструмент „Опорна точка“
 	Anchor Points	Опорни точки
+	"In" Control Points	„Входящи“ контролни точки
+	"Out" Control Points	„Изходящи“ контролни точки
 	Anchor Points, Handle, and Bounding Box Display	Показване на опорни точки, манипулатори и ограничителна рамка
 	Anchor/Path Labels	Етикети на опорни точки/пътища
 	Anchors:	Опорни точки:
@@ -180,6 +186,8 @@
 	Anti-aliased Artwork	Загладено произведение
 	Anti-aliasing:	Заглаждане:
 	Any Kind	Всякакъв вид
+	Font Technology	Технология на шрифта
+font-technology	Variable	Променливи
 	Appearance	Външен вид
 	Appearance Attribute	Атрибут на външния вид
 	Appearance Item	Елемент на външния вид
@@ -199,7 +207,7 @@
 	Apply Paragraph Style	Прилагане на стил на абзац
 	Apply SVG Filter…	Прилагане на SVG филтър…
 	Apply to All	Прилагане към всички
-	Apply to All ({count} more missing)	Прилагане към всички (още {count} липсващи)
+@plural	Apply to All ({n} more missing)|Apply to All ({n} more missing)	Прилагане към всички (още {n} липсващ)|Прилагане към всички (още {n} липсващи)
 	Arc	Дъга
 	Arc Lower…	Дъга надолу…
 	Arc Tool	Инструмент „Дъга“
@@ -264,6 +272,13 @@
 	Average…	Усредняване…
 	Axis:	Ос:
 	Background Color:	Цвят на фона:
+	Show Center Mark	Показване на централен знак
+	Show Cross Hairs	Показване на кръстосани линии
+	Show Video Safe Areas	Показване на безопасните видеозони
+	Video Ruler Pixel Aspect Ratio:	Пропорция на пиксела на видеолинийките:
+	Fade Region Outside Artboard	Затъмняване на областта извън работната област
+	Update While Dragging	Обновяване при плъзгане
+	Hide Video Rulers	Скриване на видеолинийките
 	Background Contents	Съдържание на фона
 	Background Contents:	Съдържание на фона:
 	Background:	Фон:
@@ -274,6 +289,9 @@
 	Basic Latin	Основни латински
 	Batch	Пакет
 	Begin Recording	Начало на запис
+	Exclude from playback	Изключване от изпълнението
+	Include in playback	Включване в изпълнението
+	Include Action Steps	Включване на стъпки от действие
 	Bend:	Извиване:
 	Bevel Join	Заоблено съединение
 	Bitmap	Битова мащабна графика
@@ -322,7 +340,6 @@
 	Brush Affects:	Четката влияе върху:
 	Brush Definition	Дефиниция на четка
 	Brush Libraries	Библиотеки с четки
-	Brush Libraries (on the roadmap)	Библиотеки с четки (планирани)
 	Brush Options…	Опции за четката…
 	Brush Strokes	Щрихи с четка
 	Brushes	Четки
@@ -332,6 +349,23 @@
 	Built-in presets don't change: New… starts an editable copy.	Вградените предварителни настройки не се променят: „Ново…“ създава редактируемо копие.
 	Bulge…	Издуване…
 	Bullet	Булет
+	Bullets	Булети
+	Bullets and Numbering	Булети и номериране
+	Apply Bullets	Прилагане на булети
+	Numbered List	Номериран списък
+	Apply Numbers	Прилагане на номериране
+	Bullets and Numbering…	Булети и номериране…
+	Numbers	Номера
+	Level:	Ниво:
+	Bullet Character:	Знак за булет:
+	Number Style:	Стил на номерата:
+	Left Indent:	Ляв отстъп:
+	First Line Indent:	Отстъп на първия ред:
+	Convert to Text	Конвертиране в текст
+	Filled Dot	Плътна точка
+	Dash	Тире
+	Hollow Circle	Празен кръг
+	Filled Square	Плътен квадрат
 	Butt Cap	Плосък край
 	Byte Order:	Подредба на байтовете:
 	Calligraphic	Калиграфски
@@ -477,7 +511,7 @@
 	Collect in New Layer	Събиране в нов слой
 	Collect Links in a Separate Folder	Събиране на връзките в отделна папка
 	Color	Цвят
-	Color (,)	Цвят (,)
+	Color (, or Shift+,)	Цвят (, или Shift+,)
 	Color Adjustments	Цветови корекции
 	Color bars	Цветови скали
 	Color blindness – Deuteranopia-type	Цветна слепота – тип девтеранопия
@@ -532,6 +566,7 @@
 	Complexity:	Сложност:
 	Composite colours are converted to it; separations separate with it when it is a CMYK profile.	Композитните цветове се конвертират в него; сепарациите се сепарират с него, когато е CMYK профил.
 	Compound Path	Съставен път
+	Compound Shape	Съставна фигура
 	Compress (RLE)	Компресиране (RLE)
 	Compress text and line art	Компресиране на текст и линеарна графика
 	Compression	Компресия
@@ -575,7 +610,6 @@
 	Convert to sRGB	Конвертиране в sRGB
 	Convert to Straight Lines	Преобразуване в прави линии
 	Convert:	Конвертиране:
-	Copied the CSS of {rules} object(s)	Копиран е CSS кодът на {rules} обект(а)
 	Copies:	Копия:
 	Copy	Копиране
 	Copy (make a transformed copy)	Копиране (създаване на трансформирано копие)
@@ -630,6 +664,13 @@
 	Create Report	Създаване на отчет
 	Create Slice	Създаване на отрязък
 	Create Sub-folders	Създаване на подпапки
+	Clear Selection	Изчистване на избора
+	Export PDFs As:	Експортиране на PDF като:
+	Single File	Един файл
+	Multiple Files	Няколко файла
+	Format Presets	Предварителни настройки на формата
+	Grid View	Изглед на мрежа
+	Selected: {n}, Total number of files to export: {m}	Избрани: {n}, общ брой файлове за експортиране: {m}
 	Create Text	Създаване на текст
 	Create Trim Marks	Създаване на режещи знаци
 	Created	Създадено
@@ -709,11 +750,23 @@
 	Delete Stop	Изтриване на репер
 	Delete Swatch	Изтриване на образец
 	Delete Symbol	Изтриване на символ
+	Delete the selected symbol?	Да се изтрие ли избраният символ?
+	Delete the selected symbols?	Да се изтрият ли избраните символи?
+	No unused symbols	Няма неизползвани символи
+	Delete Symbols	Изтриване на символи
+	One or more of the symbols are in use and cannot be deleted until their instances are expanded or deleted.	Един или повече от символите се използват и не могат да бъдат изтрити, докато екземплярите им не бъдат разширени или изтрити.
+	Expand Instances	Разширяване на екземплярите
+	Delete Instances	Изтриване на екземплярите
+	Yes	Да
+	No	Не
 	Delete Tab	Изтриване на табулация
 	Delete the graphic style “{name}”?	Изтриване на графичния стил „{name}“?
+	Delete Action Sets	Изтриване на набори от действия
+	Duplicate Action or Action Set	Дублиране на действие или набор от действия
+	Delete the action set “{name}” and its actions?	Изтриване на набора от действия „{name}“ и неговите действия?
+	Delete the selected action sets and their actions?	Изтриване на избраните набори от действия и техните действия?
 	Delete Theme	Изтриване на тема
 	Delete theme	Изтриване на тема
-	Delete these {count} swatches and groups?	Изтриване на тези {count} образца и групи?
 	Delete these {n} graphic styles?	Изтриване на тези {n} графични стила?
 	Delete this saved preset	Изтриване на тази запазена предварителна настройка
 	Delete this {n} graphic style?	Изтриване на този {n} графичен стил?
@@ -745,7 +798,6 @@
 	Discard Empty Type	Отхвърляне на празен текст
 	Discard Recovered Documents	Отхвърляне на възстановени документи
 	Discard White Overprint in Output	Премахване на бял надпечат при изход
-	Discarded {} recovered document(s)	Отхвърлени възстановени документи: {}
 	Discord	Discord
 	Discretionary Hyphen	Избираемо сричкопренасяне
 	Discretionary Ligatures	Избираеми лигатури
@@ -801,13 +853,19 @@
 	Double Right Quotation Marks	Двойни дясна кавичка
 	Double-click	Двойно щракване
 	Double-click to edit the characters' paint	Двойно щракване за редактиране на оцветяването на знаците
+	Click to edit	Щракнете за редактиране
+	Double-click to edit	Двойно щракване за редактиране
+	Alternates for Current Selection	Алтернативи за текущата селекция
+	Select a character with the Type tool to see its alternates.	Изберете знак с инструмента „Текст“, за да видите алтернативите му.
+	The selected character's font is not available.	Шрифтът на избрания знак не е наличен.
+	No alternates for the selected character.	Няма алтернативи за избрания знак.
+	Double-click to replace	Двойно щракване за замяна
 	Double-click to insert	Двойно щракване за вмъкване
 	Double-click to rename	Двойно щракване за преименуване
 	Double-click to target the contents	Двойно щракване за насочване към съдържанието
 	Download	Изтегляне
 	Download:	Изтегляне:
 	Downloaded {what}	Изтеглено: {what}
-	Downloaded {} file(s)	Изтеглени файлове: {}
 	Drag	Провлачване
 	Drag a handle	Провлачване на дръжка
 	Drag art here, or select it and click +. Hold Alt for one asset of several objects.	Провлачете графичен елемент тук или го изберете и щракнете върху +. Задръжте Alt за един актив от няколко обекта.
@@ -828,6 +886,7 @@
 	Duplicate Artboard	Дублиране на работна област
 	Copy Artboard	Копиране на работна област
 	Cut Artboard	Изрязване на работна област
+	Rename Artboards	Преименуване на работни области
 	Duplicate Artboards	Дублиране на работни области
 	Duplicate Brush	Дублиране на четка
 	Duplicate Character Style	Дублиране на стил на знаци
@@ -873,9 +932,10 @@
 	Edit Selection	Редактиране на селекцията
 	Edit Selection…	Редактиране на селекцията…
 	Edit Symbol	Редактиране на символ
+	Exit Symbol Editing Mode	Изход от режим на редактиране на символ
 	Edit Text	Редактиране на текст
 	Edit the applied effect, or add another one?	Да се редактира ли приведеният ефект или да се добави друг?
-	Edit the selected point's colour in the Color panel	Редактиране на цвета на избраната точка в панела Цвят
+	Edit the point	Редактиране на точката
 	Edit the stop	Редактиране на опорната точка
 	Edit Theme	Редактиране на тема
 	Edit theme	Редактиране на тема
@@ -907,8 +967,6 @@
 	Embed page thumbnails	Вграждане на миниатюри на страници
 	Embedded	Вградено
 	Embedded Image	Вградено изображение
-	Embedded {n} image(s)	Вградени са {n} изображения
-	Embedded {n} image(s); {missing} missing: relink them first	Вградени са {n} изображения; {missing} липсват: първо ги свържете наново
 	Emulsion:	Емулсия:
 	En Dash	Средно тире
 	En Space	Интервал „ен“
@@ -956,7 +1014,6 @@
 	Exit Isolation Mode	Излизане от режим на изолация
 	Expand	Разширяване
 	Expand Appearance	Разширяване на външния вид
-	Expand applies to compound shapes (Alt-click a shape mode) — on the roadmap	Разширяването се прилага към съставни фигури (Alt-клик върху режим на фигура) — в план-графика
 	Expand Brush Strokes	Разширяване на щрихи на четка
 	Expand Compound Shape	Разширяване на съставна фигура
 	Expand Gradient Mesh	Разширяване на градиентна мрежа
@@ -984,6 +1041,10 @@
 	Delete Export Preset	Изтриване на набор за експортиране
 	Export Presets	Набори за експортиране
 	Save Export Preset	Запазване на набор за експортиране
+	Export Export Presets	Експортиране на набори за експортиране
+	Export Preset…	Експортиране на набор…
+	Import Export Presets	Импортиране на набори за експортиране
+	Import Preset…	Импортиране на набор…
 	Export Layer	Експортиране на слой
 	Export Selection	Експортиране на избраното
 	All in One Folder	Всичко в една папка
@@ -1003,6 +1064,9 @@
 	Export As SVG…	Експортиране като SVG…
 	Export Asset	Експортиране на актив
 	Export Assets	Експортиране на активи
+	Export 3D Object	Експортиране на 3D обект
+	3D Export Format	Формат на 3D експортиране
+	Export 3D Assets	Експортиране на 3D активи
 	Export As…	Експортиране като…
 	Export CSS	Експортиране на CSS
 	Export CSS…	Експортиране на CSS…
@@ -1013,6 +1077,8 @@
 	Export for Screens Settings	Настройки за експортиране за екрани
 	Export for Screens…	Експортиране за екрани…
 	Export Keyboard Shortcuts…	Експортиране на клавишни комбинации…
+	Export Keyboard Shortcuts as Text…	Експортиране на клавишни комбинации като текст…
+	Export Text…	Експортиране на текст…
 	Export Option	Опция за експортиране
 	Export PDF	Експортиране в PDF
 	Export PDF Presets	Предварителни настройки за PDF
@@ -1027,10 +1093,8 @@
 	Export Transparency Flattener Presets	Експортиране на предварителни настройки за сплескване на прозрачност
 	Export {count} Selected	Експортиране на {count} избрани
 	Export:	Експортиране:
-	Exported {count} file(s) to {folder}	Експортирани са {count} файла в {folder}
 	Exported {path}	Експортирано: {path}
 	Exported {what}	Експортирано: {what}
-	Exported {what} with {} note(s): {first}	Експортирани са {what} с {} бележка/бележки: {first}
 	Exporting {}	Експортиране на {}
 	Export…	Експортиране…
 	Extrude & Bevel…	Избутване и фасетка…
@@ -1073,8 +1137,10 @@
 	Fill and Stroke	Запълване и щрих
 	Fill new strokes	Запълване на нови щрихове
 	Alt key toggles to Smooth Tool	Клавишът Alt превключва към инструмент „Гладкост“
+	Live curve fitting	Напасване на кривата в реално време
 	Fill Color	Цвят на запълване
 	Fill New Type Objects With Placeholder Text	Запълване на нови текстови обекти с примесен текст
+	Start Lists From Typed Markers	Започване на списъци от въведени маркери
 	Fill Rule	Правило за запълване
 	Fill with Placeholder Text	Запълване с примесен текст
 	Fill:	Запълване:
@@ -1085,6 +1151,7 @@
 	Find Font…	Търсене на шрифт…
 	Find Next	Търсене на следващ
 	Find Objects	Търсене на обекти
+	Compare with Image	Сравняване с изображение
 	First Page	Първа страница
 	First-line Left Indent	Ляв отстъп на първи ред
 	Fisheye…	Рибено око…
@@ -1140,6 +1207,7 @@
 	Flip Row Order	Обръщане реда на редовете
 	Flip Vertical	Вертикално обръщане
 	Float in Window	Плаващ прозорец
+	Float All in Windows	Всички в плаващи прозорци
 	Focal Fill	Фокусно запълване
 	Focal Stroke	Фокусен щрих
 	Folder	Папка
@@ -1193,6 +1261,9 @@
 	Hide Live Paint Gaps	Скриване на пролуките на динамичното оцветяване
 	Select Fills	Избиране на запълвания
 	Select Strokes	Избиране на щрихове
+	Paint Fills	Боядисване на запълвания
+	Paint Strokes	Боядисване на щрихове
+	Highlight	Маркиране
 	Gaussian Blur…	Гаусово размазване…
 	General	Общи
 	General › Placement › X	Общи › Разположение › X
@@ -1203,6 +1274,7 @@
 	Get Preferences	Извличане на предпочитания
 	Get Text Range	Вземане на текстов диапазон
 	Global	Глобален
+	Global Adjust	Глобална корекция
 	Global Brush Dimensions	Глобални размери на четката
 	Global Process Color	Глобален процесен цвят
 	Global Process Color, CMYK	Глобален процесен цвят, CMYK
@@ -1217,7 +1289,7 @@
 	GPL palettes keep solid colours only, as RGB.	Палитрите GPL запазват само плътни цветове като RGB.
 	GPU Performance	Производителност на графичния процесор
 	Gradient	Градиент
-	Gradient (.)	Градиент (.)
+	Gradient (. or Shift+.)	Градиент (. или Shift+.)
 	Gradient across stroke	Градиент напречно на щриха
 	Gradient along stroke	Градиент по дължината на щриха
 	Gradient and Mesh Resolution:	Разделителна способност на градиент и мрежа:
@@ -1276,6 +1348,8 @@
 	Grays	Сиви
 	Grays and Neutrals	Сиви и неутрални
 	Grayscale	Черно-бяло
+	High Color	Много цветове
+	Low Color	Малко цветове
 	Grayscale images	Черно-бели изображения
 	Greek & Cyrillic	Гръцки и кирилица
 	Green	Зелено
@@ -1299,6 +1373,10 @@
 	Hard Light	Твърда светлина
 	Hard Mix	Твърдо смесване
 	Harmony Rules:	Правила за хармония:
+	Segmented color wheel	Сегментирано цветово колело
+	Show smooth color wheel	Показване на плавно цветово колело
+	Show segmented color wheel	Показване на сегментирано цветово колело
+	Show color bars	Показване на цветни ленти
 	Harmony Sets	Набори от хармонии
 	Height	Височина
 	Height:	Височина:
@@ -1344,9 +1422,10 @@
 	Step Backward	Стъпка назад
 	Step Forward	Стъпка напред
 	Clear History	Изчистване на историята
+	New Document from State	Нов документ от състоянието
 	Set History Limit…	Задаване на ограничение на историята…
 	History States	Състояния на историята
-# History panel: the names of undo steps (`every_undo_label_is_translated`).
+# History panel: the names of undo steps (`untranslated_report` lists any that are missing).
 	Apply Data Set	Прилагане на набор от данни
 	Cancel Pattern Editing	Отказ от редактирането на мостра
 	Copy Appearance	Копиране на външния вид
@@ -1361,6 +1440,7 @@
 	Delete Guides	Изтриване на водачи
 	Delete Slice	Изтриване на отрязък
 	Delete Style	Изтриване на стил
+	Delete Styles	Изтриване на стилове
 	Delete Variables	Изтриване на променливи
 	Delete View	Изтриване на изглед
 	Done Editing Pattern	Край на редактирането на мостра
@@ -1393,6 +1473,8 @@
 	Objects on Path	Обекти по пътя
 	Attach	Прикрепяне
 	Objects on Path Options	Опции за обекти по пътя
+	Pivot:	Опорна точка:
+	Rotate:	Завъртане:
 	Objects on Path Tool	Инструмент „Обекти по пътя“
 	Attach Objects on Path	Прикрепяне на обекти към пътя
 	Expand Objects on Path	Разширяване на обекти по пътя
@@ -1472,6 +1554,12 @@
 	Image Trace	Трасиране на изображение
 	Image Tracing	Трасиране на изображения
 	Tracing Presets	Предварителни настройки за трасиране
+	Manage Presets	Управление на предварителните настройки
+	Save as New Preset…	Запази като нова предварителна настройка…
+	Rename…	Преименуване…
+	Rename Preset	Преименуване на предварителна настройка
+	Save Image Trace Preset	Запази предварителна настройка за трасиране на изображения
+	Delete Image Trace Preset	Изтриване на предварителна настройка за трасиране на изображения
 	Image Trace Presets	Предварителни настройки за трасиране на изображения
 	Image:	Изображение:
 	Images:	Изображения:
@@ -1486,6 +1574,7 @@
 	In Tangent Handles	Входящи управляващи точки
 	In the selected objects	В избраните обекти
 	Inches	Инчове
+	Include Artboard Fill	Включване на запълването на работната област
 	Include Blacks with CMY:	Включване на черни към CMY:
 	Include Bleed	Включване на изтичане
 	Include Cmy Blacks	Включване на CMYK черни
@@ -1538,6 +1627,10 @@
 	Join Tool	Инструмент „Свързване“
 	Justification…	Подравняване…
 	Justify all lines	Двустранно подравняване на всички редове
+	Align Top	Подравняване горе
+	Align Center	Подравняване в средата
+	Align Bottom	Подравняване долу
+	Justify Vertically	Двустранно вертикално подравняване
 	Justify with last line aligned center	Двустранно подравняване с центриран последен ред
 	Justify with last line aligned left	Двустранно подравняване с ляво подравнен последен ред
 	Justify with last line aligned right	Двустранно подравняване с дясно подравнен последен ред
@@ -1549,7 +1642,7 @@
 	Keep the pasted color as a new swatch with a numbered name.	Запазване на поставения цвят като нов образец с номерирано име.
 	Keep this row's colors (exclude)	Запазване на цветовете на този ред (изключване)
 	Keep:	Запазване:
-	Kerning (0 = Auto)	Кернинг (0 = Автоматично)
+	Kerning	Кернинг
 	Keyboard Increment	Стъпка с клавиатурата
 	Keyboard Shortcut Conflicts	Конфликти на клавишни комбинации
 	Keyboard Shortcut Set	Набор клавишни комбинации
@@ -1583,6 +1676,7 @@
 	Report copied	Отчетът е копиран
 	Line {line}	Ред {line}
 	Line {line}: {name}: {status}	Ред {line}: {name}: {status}
+	Read Action Set File	Четене на файл с набор от действия
 	Read Shortcut Set File	Четене на файл с набор от клавишни комбинации
 	Import Matches	Импортиране на съответствия
 	Remember Import Matches	Запомняне на съответствията при импортиране
@@ -1606,6 +1700,8 @@
 	Large Thumbnail View	Изглед с големи миниатюри
 	Large Thumbnails	Големи миниатюри
 	Lasso Tool	Инструмент „Ласо“
+	Enclosing Lasso Tool	Инструмент „Обхващащо ласо“
+	Enclosing Lasso	Обхващащо ласо
 	Last Effect: {name}	Посл. ефект: {name}
 	Last Effect: {}	Посл. ефект: {}
 	Last Effect…	Посл. ефект…
@@ -1641,6 +1737,7 @@
 	Ligatures are off while the text is tracked.	Лигатурите са изключени, докато текстът е с проследяване.
 	Light	Светло
 	Light Blue	Светлосиньо
+	Light Red	Светлочервено
 	Lighten	Изсветляване
 	Lightness	Светлина
 	Limit Color Guide to Library	Ограничаване на цветния справочник до библиотека
@@ -1689,6 +1786,9 @@
 	Live Paint Selection Tool	Инструмент за селекция на динамично оцветяване
 	Live Shape Properties	Свойства на динамична фигура
 	Load Color Profile…	Зареждане на файлов цвят…
+	Load Character Styles…	Зареждане на стилове на знаци…
+	Load Paragraph Styles…	Зареждане на стилове на абзац…
+	Load All Styles…	Зареждане на всички стилове…
 	Remove Color Profile…	Премахване на цветови профил…
 	Load Image into Clipboard	Зареждане на изображение в клипборда
 	Load Metafile into Clipboard	Зареждане на метафайл в клипборда
@@ -1743,6 +1843,7 @@
 	Manually	Ръчно
 	Mark as trapped	Маркиране като прехванато
 	Mark Older Files as [Converted] When Opened	Маркиране на по-стари файлове като [Конвертирани] при отваряне
+	Use System Defaults for Edit Original	Системни настройки по подразбиране за „Редактиране на оригинал“
 	Marker…	Маркер…
 	Marks	Маркери
 	Marks and Bleed	Маркери и изтичане
@@ -1796,6 +1897,7 @@
 	Miter Limit:	Ограничение на острите ъгли:
 	Mixed Appearances	Смесени изгледи
 	Mixed Objects	Смесени обекти
+	Mixed	Смесено
 	Mode:	Режим:
 	Model	Модел
 	Modified	Модифицирано
@@ -1804,6 +1906,7 @@
 	Modify	Модифициране
 	Mojikumi	Моджикуми
 	Insert Kashidas	Вмъкване на кашиди
+	Kashidas	Кашиди
 	Long	Дълго
 	Stylistic	Стилистично
 	Mojikumi Set	Набор Mojikumi
@@ -1834,6 +1937,7 @@
 	Move in Perspective	Преместване в перспектива
 	Move Locked and Hidden Artwork with Artboard	Преместване на заключени и скрити обекти с работната област
 	Move Mesh Point	Преместване на точка от мрежата
+	Move Mesh Points	Преместване на точки от мрежата
 	Move Plane	Преместване на равнина
 	Move Plane to Match Object	Преместване на равнината според обекта
 	Move Rows	Преместване на редове
@@ -1855,6 +1959,8 @@
 	Name:	Име:
 	Navigate	Навигация
 	Navigator	Навигатор
+	Navigator Panel Options	Опции за панела „Навигатор“
+	Draw Dashed Lines as Solid Lines	Изчертаване на прекъснатите линии като плътни
 	Needs the desktop app	Изисква десктоп приложение
 	Neutral Gradients	Неутрални градиенти
 	New	Нов
@@ -1885,6 +1991,10 @@
 	Outer Corner Tile	Плочка за външен ъгъл
 	Side Tile	Странична плочка
 	Inner Corner Tile	Плочка за вътрешен ъгъл
+	Auto-Centered	Авто-центрирана
+	Auto-Between	Авто-между
+	Auto-Sliced	Авто-срязана
+	Auto-Overlap	Авто-застъпване
 	Start Tile	Начална плочка
 	End Tile	Крайна плочка
 	Fit	Пълно прилягане
@@ -1906,6 +2016,8 @@
 	Roundness:	Закръгленост:
 	Fixed	Фиксирано
 	Pressure	Натиск
+	Tilt	Наклон
+	Bearing	Азимут
 	Shape:	Форма:
 	Bristle Length:	Дължина на косъма:
 	Bristle Density:	Плътност на косъмчетата:
@@ -1933,6 +2045,7 @@
 	Brush Art	Графика на четка
 	New Calligraphic Brush	Нова калиграфска четка
 	New Character Style	Нов стил на знак
+	New Character Style…	Нов стил на знак…
 	New Color Group	Нова цветова група
 	New Color Group…	Нова цветова група…
 	New Document Presets	Предварителни настройки за нов документ
@@ -1948,6 +2061,7 @@
 	New Opacity Masks Are Clipping	Новите маски за непрозрачност са изрязващи
 	New Opacity Masks Are Inverted	Новите маски за непрозрачност са инвертирани
 	New Paragraph Style	Нов стил на абзац
+	New Paragraph Style…	Нов стил на абзац…
 	New Pattern Brush from Selection	Нова щампова четка от селекцията
 	New PDF Preset	Нова предварителна настройка за PDF
 	New Print Preset	Нова предварителна настройка за печат
@@ -1961,9 +2075,20 @@
 	New View	Нов изглед
 	New View…	Нов изглед…
 	New Window	Нов прозорец
+	Next Document	Следващ документ
+	Previous Document	Предишен документ
 	New Without Dialog	Нов без диалогов прозорец
 	New Workspace	Ново работно пространство
 	New Workspace…	Ново работно пространство…
+	New Toolbar…	Нова лента с инструменти…
+	New Toolbar	Нова лента с инструменти
+	Show Toolbar	Показване на лента с инструменти
+	List Toolbars	Списък на лентите с инструменти
+	Manage Toolbars…	Управление на лентите с инструменти…
+	Manage Toolbars	Управление на лентите с инструменти
+	Rename Toolbar	Преименуване на лентата с инструменти
+	Duplicate Toolbar	Дублиране на лентата с инструменти
+	Delete Toolbar	Изтриване на лентата с инструменти
 	New {kind} Style…	Нов стил ({kind})…
 	New…	Нов…
 	Next	Следващ
@@ -2109,8 +2234,8 @@
 	Open Recent Files	Скорошни файлове
 	Open Swatch Library	Отваряне на библиотека с образци
 	Open the URL in the web browser	Отваряне на URL адреса в уеб браузъра
-	Opened with {} note(s): {}	Отворено с {} бележка(и): {}
 	Open…	Отваряне…
+	Optical	Оптично
 	Optical Margin Alignment	Подравняване по оптично поле
 	Optimize for fast web view	Оптимизиране за бърз уеб преглед
 	Optimized	Оптимизирано
@@ -2168,8 +2293,7 @@
 	Package	Пакет
 	Package collects a saved document with its linked files and fonts.	Пакетът събира запазен документ заедно с неговите свързани файлове и шрифтове.
 	Package created	Пакетът е създаден
-	Packaged {n} file(s) in {folder} {note}	Пакетирани са {n} файла в {folder}{note}
-	Packaged {n} file(s){note}	Пакетирани са {n} файла{note}
+@plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	Пакетиран е {n} файл в {folder} {note}|Пакетирани са {n} файла в {folder} {note}
 	Package…	Пакет…
 	Page	Страница
 	Page information	Информация за страница
@@ -2260,6 +2384,8 @@
 	Plates	Пластини
 	Platform:	Платформа:
 	Play Current Selection	Изпълнение на текущия избор
+	Save Actions…	Запазване на действия…
+	Load Actions…	Зареждане на действия…
 	Plug-in Info	Информация за приставката
 	Plug-ins	Приставки
 	Plug-in…	Приставка…
@@ -2352,6 +2478,20 @@
 	Arabic	Арабски
 	Hindi	Хинди
 	Farsi	Фарси
+digits	Devanagari	Деванагари
+digits	Bengali	Бенгалски
+digits	Gurmukhi	Гурмукхи
+digits	Gujarati	Гуджарати
+digits	Odia	Ория
+digits	Tamil	Тамилски
+digits	Telugu	Телугу
+digits	Kannada	Каннада
+digits	Malayalam	Малаялам
+	Proportional Lining	Пропорционални подравнени цифри
+	Position:	Позиция:
+	Default Position	Стандартна позиция
+	Numerator	Числител
+	Denominator	Знаменател
 	Proportional Oldstyle	Пропорционални стари цифри
 	Pucker & Bloat…	Свиване и раздуване…
 	Pucker Tool	Инструмент „Свиване“
@@ -2392,6 +2532,9 @@
 	Real World:	Реален свят:
 	Real-time Drawing and Editing	Чертане и редактиране в реално време
 	Rearrange All Artboards	Пренареждане на всички работни области
+	Rearrange	Пренареждане
+	Select All Artboards	Избиране на всички работни области
+	Switch Orientation	Смяна на ориентацията
 	Rearrange All	Пренареждане на всички
 	Layout Order:	Ред на оформление:
 	Change to Left-to-Right Layout	Превключване към подредба отляво надясно
@@ -2485,9 +2628,11 @@
 	Stop	Спиране
 	Searching…	Търсене…
 	Not found	Няма намерени резултати
-	{folders} folder(s) and {files} file(s) searched	Претърсени са {folders} папки и {files} файла
-	{count} folder(s) skipped, such as other apps' and the system's folders and hidden ones	Пропуснати са {count} папки (като системни папки, папки на други приложения и скрити папки)
-	{count} folder(s) or file(s) couldn't be read	{count} папки или файла не можаха да бъдат прочетени
+	{folders} and {files} searched	Претърсени са {folders} и {files}
+@plural	{n} folder|{n} folders	{n} папка|{n} папки
+@plural	{n} file|{n} files	{n} файл|{n} файла
+@plural	{n} folder skipped, such as another app's or the system's folder or a hidden one|{n} folders skipped, such as other apps' and the system's folders and hidden ones	Пропусната е {n} папка (като системни папки, папки на други приложения и скрити папки)|Пропуснати са {n} папки (като системни папки, папки на други приложения и скрити папки)
+@plural	{n} folder or file couldn't be read|{n} folders or files couldn't be read	{n} папка или файл не можа да бъде прочетен|{n} папки или файла не можаха да бъдат прочетени
 	The search stopped at its limit: search a smaller folder.	Търсенето спре поради достигане на лимита: потърсете в по-малка папка.
 	Copy only fonts you own or are licensed to install.	Копирайте само шрифтове, които притежавате или имате лиценз да инсталирате.
 	VectorCraft copies the fonts to {folder}.	VectorCraft копира шрифтовете в {folder}.
@@ -2506,9 +2651,14 @@
 	Relink	Свързване наново
 	Relink Linked Files to the Document	Свързване наново на свързаните файлове към документа
 	Relink to Folder…	Свързване наново към папка…
-	Relinked {n} image(s)	Свързани наново {n} изображения
-	Relinked {n} image(s); not in that folder: {}	Свързани наново {n} изображения; липсващи в тази папка: {}
-	Relinked {} image(s)	Свързани наново {} изображения
+	Each Link Separately	Всяка връзка поотделно
+	Selected Instances	Избраните екземпляри
+	All Instances	Всички екземпляри
+	Missing Links from This Folder	Липсващите връзки от тази папка
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} не е each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each и paths вървят заедно: paths изброява записи с ids и path вместо ids, path и folder
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	записът {i} в paths изисква path и ids (идентификатори на обекти, които няма друг запис)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder приема path: в папката на този файл се търсят другите липсващи връзки
 	Relink…	Свързване наново…
 	Find Linked Files	Търсене на свързани файлове
 	Find Linked Files in Folder…	Търсене на свързани файлове в папка…
@@ -2529,6 +2679,7 @@
 	Remove Plug-in	Премахване на добавка
 	Remove Selected Assets	Премахване на избраните активи
 	Remove Threading	Премахване на свързването
+	Break Thread	Прекъсване на свързването
 	Remove “{keyword}”	Премахване на „{keyword}“
 	Rename	Преименуване
 	Rename Asset	Преименуване на актива
@@ -2547,11 +2698,16 @@
 	Repeat Tab	Повтаряне на табулатора
 	Repeat {name}	Повтаряне на {name}
 	Replace	Замяна
+	Replace:	Замяна:
 	Replace Font	Замяна на шрифт
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Заменете го с друг файл или го игнорирайте: неговите изображения ще продължат да показват записания с документа преглед.
 	Replace Spine	Замяна на оста
 	Replace Symbol	Замяна на символ
+	Reset Transformation	Нулиране на трансформацията
 	Replace With Font	Замяна с шрифт
+	Replace With Font From	Замяна с шрифт от
+	Find In	Търсене в
+	System	Система
 	Replaces the saved preset of that name.	Заменя записаната предварителна настройка с това име.
 	Replace…	Замяна…
 	Require a password to open the document	Изискване на парола за отваряне на документа
@@ -2565,6 +2721,8 @@
 	Reset OpenType Features	Нулиране на OpenType характеристиките
 	Reset Panel	Нулиране на панела
 	Reset Preferences	Нулиране на настройките
+	Search Preferences	Търсене в настройките
+	No settings found	Няма намерени настройки
 	Reset Profiles	Нулиране на профилите
 	Reset Rotate View	Нулиране на изгледа на завъртане
 	Rotate View to Selection	Завъртане на изгледа спрямо селекцията
@@ -2587,7 +2745,6 @@
 	Restore every preference to its default (applied on OK)	Възстановяване на всички настройки по подразбиране (прилага се при ОПК)
 	Restore Recovered Documents	Възстановяване на възстановените документи
 	Restored documents open unsaved: save them to keep them.	Възстановените документи се отварят незаписани: запазете ги, за да ги съхраните.
-	Restored {} recovered document(s): save them to keep them	Възстановени са {} възстановени документ(и): запазете ги, за да ги съхраните
 	Restrict printing, editing and other tasks	Ограничаване на печата, редактирането и други задачи
 	Reverse Front to Back	Обръщане от преден към заден
 	Reverse Gradient	Обръщане на градиент
@@ -2620,6 +2777,7 @@
 	Rotate Tool	Инструмент „Завъртане“
 	Rotate View Tool	Инструмент „Завъртане на изглед“
 	Trackpad Gesture to Rotate View	Завъртане на изгледа с жест на тракпада
+	Hold a Tool Shortcut to Use the Tool Temporarily	Задържане на клавиша на инструмент за временното му използване
 	Rotate…	Завъртане…
 	Rotation	Завъртане
 	Roughen…	Грапавост…
@@ -2647,11 +2805,13 @@
 	Save a Copy	Запазване на копие
 	Save a Copy…	Запазване на копие…
 	Save As	Запазване като
+	Save As Preset…	Запази като предварителна настройка…
 	Save as PDF…	Запазване като PDF…
 	Save as preset:	Запази като предварителна настройка:
 	Save as Template	Запази като шаблон
 	Save as Template…	Запази като шаблон…
 	Save As…	Запази като…
+	Save Changes	Запази промените
 	Save changes to {name}	Запазване на промените в {name}
 	Save color group to Swatch panel	Запазване на цветовата група в панела „Образци“
 	Save Colors as Swatches	Запази цветовете като образци
@@ -2727,7 +2887,22 @@
 	Saved to User Defined: {}	Запазено в потребителски: {}
 	Saved View 1	Запазен изглед 1
 	Saved View 10	Запазен изглед 10
+	Saved View 11	Запазен изглед 11
+	Saved View 12	Запазен изглед 12
+	Saved View 13	Запазен изглед 13
+	Saved View 14	Запазен изглед 14
+	Saved View 15	Запазен изглед 15
+	Saved View 16	Запазен изглед 16
+	Saved View 17	Запазен изглед 17
+	Saved View 18	Запазен изглед 18
+	Saved View 19	Запазен изглед 19
 	Saved View 2	Запазен изглед 2
+	Saved View 20	Запазен изглед 20
+	Saved View 21	Запазен изглед 21
+	Saved View 22	Запазен изглед 22
+	Saved View 23	Запазен изглед 23
+	Saved View 24	Запазен изглед 24
+	Saved View 25	Запазен изглед 25
 	Saved View 3	Запазен изглед 3
 	Saved View 4	Запазен изглед 4
 	Saved View 5	Запазен изглед 5
@@ -2738,7 +2913,6 @@
 	Saved Views	Запазени изгледи
 	Saved {n} files beside {path}	Записани са {n} файла до {path}
 	Saved {path}	Записано: {path}
-	Saved {path} with {} note(s): {first}	Запазено {path} с {} бележка(и): {first}
 	Saves the current bars, toolbar and panel layout.	Запазва текущите ленти, лентата с инструменти и подредбата на панелите.
 	Save…	Запази…
 	Saving	Запазване
@@ -2818,6 +2992,11 @@
 	Selected Swatches	Избрани образци
 	Selected Swatches Only	Само избрани образци
 	Selection	Селекция
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Избор с рамка
+	Touching	Докоснати обекти
+	Fully Enclosed	Изцяло вътре
+	Drag Direction	Посока на плъзгане
 	Selection & Anchor Display	Показване на селекция и опорни точки
 	Selection Only	Само селекция
 	Selection Tool	Инструмент „Селекция“
@@ -2854,8 +3033,10 @@
 	Shape Builder Regions	Области на създателя на фигури
 	Shape Builder Tool	Инструмент „Създател на фигури“
 	Shape Effects	Ефекти за фигури
+	Shape Mode	Режим на фигура
 	Shape Modes:	Режими на фигури:
 	Shape Properties:	Свойства на фигурата:
+	Shape Properties	Свойства на фигурата
 	Shaper Tool	Инструмент „Shaper“
 	Shapes	Фигури
 	Shear	Срязване
@@ -2912,6 +3093,7 @@
 	Show Original Path	Показване на оригиналния път
 	Open this dialog with these settings next time	Отваряне на този прозорец с тези настройки следващия път
 	Auto-Simplify	Автоматично опростяване
+	Auto-Smooth	Автоматично изглаждане
 	Show Package	Показване на пакет
 	Show Panel	Показване на панел
 	Show Pattern Swatches	Показване на образци за мостра
@@ -2946,20 +3128,23 @@
 	Simplify	Опростяване
 	Simplify:	Опростяване:
 	Simplify…	Опростяване…
+	Smooth…	Изглаждане…
 	Simulate Colored Paper	Симулиране на цветна хартия
 	Simulate Paper	Симулиране на хартия
 	Double Column	Две колони
+	Keep Tools Beside the Canvas	Инструментите до платното
 	Single Left Quotation Mark	Лява единична кавичка
 	Single Quotes:	Единични кавички:
 	Single Right Quotation Mark	Дясна единична кавичка
 	Single-line Composer	Ред по ред композитор
+	Toggle Line Composer	Превключване на композитора на редове
 	Sixth Space	Шесто разстояние
 	Size	Размер
 	Size Tile to Art	Оразмеряване на плочката според обектите
-	Size/Leading	Размер/Интервал
+	Size/Leading	Размер/междуредие
 	Size:	Размер:
 	Ridges per segment:	Изпъкналости на сегмент:
-	Size: {size}  Tracking: {tracking}	Размер: {size}  Интервал: {tracking}
+	Size: {size}  Tracking: {tracking}	Размер: {size}  Разредка: {tracking}
 	Skew	Искавяване
 	Skin Tone Ramps	Градиенти за цвят на кожата
 	Skip Blank Artboards	Пропускане на празни работни области
@@ -2999,12 +3184,14 @@
 	Outlines	Контури
 	Outlines with Source Image	Контури с изходно изображение
 	Source Image	Изходно изображение
+	Press and hold to view the source image	Задръжте натиснато, за да видите изходното изображение
 	Image Trace View	Изглед на трасиране на изображение
 	Snap Options	Опции за прилепване
 	Snap to Glyph	Прилепване към глиф
 	Snap to Grid	Прилепване към мрежа
 	Snap to Pixel	Прилепване към пиксел
 	Precise Cursors	Прецизни курсори
+	Image Trace Preview	Преглед на трасирането на изображение
 	Snap to Point	Прилепване към точка
 	Snap to Unit	Прилепване към мерна единица
 	Snapping Tolerance	Толеранс на прилепване
@@ -3021,6 +3208,8 @@
 	Space Before Paragraph	Разстояние преди абзац
 	Spaces	Интервали
 	Spacing Guides	Водачи за разстояние
+	Invoke Distance Guides	Извикване на водачи за отстояния
+	Snap to Last Location	Прилепване към последното местоположение
 	Spacing:	Разстояние:
 	Spanish	Испански
 	Specified Distance	Упоменато разстояние
@@ -3063,9 +3252,16 @@
 	Stroke	Щрих
 	Stroke (X), double-click for the Color Picker	Щрих (X), щракнете двукратно за палитрата с цветове
 	Stroke Color	Цвят на щриха
+	Fill Gradient	Градиент на запълване
+	Stroke Gradient	Градиент на щриха
+	Fill Pattern	Мостра на запълване
+	Stroke Pattern	Мостра на щриха
+	Patterns	Мостри
 	Stroke Options	Опции на щриха
 	Character:	Знак:
+	Paragraph:	Абзац:
 	Character options	Опции на знака
+	Paragraph options	Опции за абзац
 	Stroke options	Опции на щриха
 	Transform options	Опции за трансформации
 	Stroke Weight	Дебелина на щриха
@@ -3107,6 +3303,8 @@
 	Swap Fill and Stroke (Shift+X)	Размяна на запълването и щриха (Shift+X)
 	Swap start and end arrowheads	Размяна на началната и крайната стрелка
 	Swap the selected object for the file, keeping its place and transform	Замяна на избрания обект с файла, като се запазват мястото и трансформациите му
+	Stylistic Alternates	Стилистични алтернативи
+	Set {n}	Набор {n}
 	Swash	Декоративен елемент
 	Swatch Conflict	Конфликт на образци
 	Swatch Conflicts	Конфликти на образци
@@ -3119,6 +3317,7 @@
 	Swatch Options…	Опции на образец…
 	Swatch Tiles	Плочки на образец
 	Swatches	Образци
+	Switch Units	Превключване на мерните единици
 	Switch workspace	Превключване на работната среда
 	Add Content	Добавяне на съдържание
 	Click to apply to the selected type	Щракнете, за да приложите към избрания текст
@@ -3157,8 +3356,8 @@
 	Graphic	Графика
 	Show all open documents	Показване на всички отворени документи
 	Symbol Instance	Екземпляр на символ
+	Link Block Series	Серия свързани блокове
 	Symbol Libraries	Библиотеки със символи
-	Symbol Libraries (on the roadmap)	Библиотеки със символи (в план-графика)
 	Symbol Screener Tool	Инструмент „Филтър на символи“
 	Symbol Scruncher Tool	Инструмент „Свиване на символи“
 	Symbol Shifter Tool	Инструмент „Преместване на символи“
@@ -3176,10 +3375,24 @@
 	Tabs	Табулатори
 	Tabular Lining	Таблични подравнени цифри
 	Tabular Oldstyle	Таблични стари цифри
+	Titling Alternates	Алтернативи за заглавия
 	Target	Цел
 	Target Contents	Целево съдържание
 	Target:	Цел:
 	Tate-chu-yoko	Тате-чу-йоко
+	Tate-chu-yoko Settings…	Настройки на Тате-чу-йоко…
+	Tate-chu-yoko Settings	Настройки на Тате-чу-йоко
+	Composite Fonts…	Съставни шрифтове…
+	Composite Fonts	Съставни шрифтове
+	Export Composite Fonts	Експортиране на съставни шрифтове
+	Import Composite Fonts	Импортиране на съставни шрифтове
+	Delete Font	Изтриване на шрифт
+	Kanji	Канджи
+	Kana	Кана
+	Numerals	Цифри
+	Scale at Center	Мащабиране от центъра
+	Up/Down:	Нагоре/надолу:
+	Left/Right:	Наляво/надясно:
 	Temperature	Температура
 	Temperature/Tint…	Температура/Нюанс…
 	Template	Шаблон
@@ -3188,6 +3401,7 @@
 	Templates…	Шаблони…
 	Text Displayed in Cell:	Текст, показван в клетката:
 	Text Export Options	Опции за експортиране на текст
+	Text Fill & Stroke Color	Цвят на запълване и щрих на текста
 	Text Fill Color	Цвят на запълване на текста
 	Text Import Options	Опции за импортиране на текст
 	Text Stroke Color	Цвят на щриха на текста
@@ -3286,6 +3500,13 @@
 	Transparent Background	Прозрачен фон
 	Transverse (the page a quarter turn on the paper)	Напречно (страницата е завъртена на четвърт оборот върху хартията)
 	Trap…	Застъпване…
+	Trap	Застъпване
+	Height/Width	Височина/ширина
+	Tint Reduction	Намаляване на тона
+	Traps with Process Color	Застъпвания с триадни цветове
+	Reverse Traps	Обратни застъпвания
+	Precision	Точност
+	Remove Redundant Points	Премахване на излишните точки
 	Trim	Изрязване
 	Trim mark weight:	Дебелина на маркировките за изрязване:
 	Trim marks	Маркировки за изрязване
@@ -3346,19 +3567,20 @@
 	Unlock Guides	Отключване на водачите
 	Unnamed Objects	Безименни обекти
 	Unprintable margin:	Непечатаемо поле:
+	Unselected Artwork	Неизбрани графични елементи
 	Unshift	Преместване назад (Unshift)
 	Untitled	Без заглавие
 	Update Link	Актуализиране на връзката
 	Update Links	Актуализиране на връзките
 	Update Changed Links	Актуализиране на променените връзки
 	Update Modified Links	Актуализиране на модифицираните връзки
-	Updated {} image(s)	Актуализирани са {} изображения
 	UPPERCASE	Главни букви
 	URL:	URL адрес:
 	Use 	Използване 
 	Use Artboards	Използване на работните области
 	Use Black Point Compensation	Използване на компенсация на черната точка
 	Use Compression	Използване на компресия
+	Include Editing Data for Other Apps	Включване на данни за редактиране за други приложения
 	Use document bleed settings	Използване на настройките за изтичане на документа
 	Use Even-Odd Fill Rule	Използване на правило за запълване четно-нечетно
 	Use Japanese Crop Marks	Използване на японски марки за изрязване
@@ -3516,14 +3738,21 @@
 	Zoom to Selection	Приближаване до селекцията
 	Zoom Tool	Инструмент „Мащаб“
 	Zoom with Mouse Wheel	Мащабиране с колелцето на мишката
+	Scroll Sideways with Cmd/Ctrl + Wheel	Хоризонтално превъртане с Cmd/Ctrl + колелцето
 	Scrub Numeric Fields by Dragging	Плъзгане на числени полета чрез влачене
-	{count} file(s) in {folder} {note}. Show the package folder?	{count} файл(а) в {folder}{note}. Показване на папката на пакета?
-	{count} linked file(s) not found	{count} свързан(и) файл(а) не са намерени
+@plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} файл в {folder} {note}. Показване на папката на пакета?|{n} файла в {folder} {note}. Показване на папката на пакета?
+@plural	{n} linked file not found|{n} linked files not found	{n} свързан файл не е намерен|{n} свързани файла не са намерени
+@msgplural	{n} linked file not found|{n} linked files not found	{n} свързан файл не е намерен|{n} свързани файла не са намерени
+@msg	fonts not copied: {fonts}	некопирани шрифтове: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	({n} свързан файл не е намерен)|({n} свързани файла не са намерени)
+@msg	(fonts not copied: {fonts})	(некопирани шрифтове: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	некопирани шрифтове: {fonts}
-	{count} linked image(s) changed since this document was saved. Show the new versions?	{count} свързано(и) изображение(я) е/са променено(и) след запазването на този документ. Показване на новите версии?
-	{count} linked image(s) changed on disk. Show the new versions?	{count} свързано(и) изображение(я) е/са променено(и) на диска. Показване на новите версии?
-	{count} more rules: Export writes every one.	{count} още правила: Експортът записва всяко едно.
-	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	{count} ненаименувани обекта са пропуснати: наименувайте ги или включете „Ненаименувани обекти“ в менюто на панела.
+@plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	{n} свързано изображение е променено след запазването на този документ. Показване на новата версия?|{n} свързани изображения са променени след запазването на този документ. Показване на новите версии?
+@plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} свързано изображение е променено на диска. Показване на новата версия?|{n} свързани изображения са променени на диска. Показване на новите версии?
+@plural	{n} more rule: Export writes it.|{n} more rules: Export writes every one.	Още {n} правило: Експортът го записва.|Още {n} правила: Експортът записва всяко едно.
+@plural	{n} unnamed object left out: name it, or turn on Unnamed Objects in the panel menu.|{n} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	{n} ненаименуван обект е пропуснат: наименувайте го или включете „Ненаименувани обекти“ в менюто на панела.|{n} ненаименувани обекта са пропуснати: наименувайте ги или включете „Ненаименувани обекти“ в менюто на панела.
 	{effect} is already applied	{effect} вече е приложен
 	{format} Options	Опции за {format}
 	{kind} Gradient	{kind} градиент
@@ -3545,6 +3774,8 @@ imageTrace	Outline	Контур
 @plural	{n} item|{n} items	{n} обект|{n} обекта
 @plural	Color Table ({n} color)|Color Table ({n} colors)	Цветна таблица ({n} цвят)|Цветна таблица ({n} цвята)
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	Изтриване на този графичен стил ({n})?|Изтриване на тези графични стилове ({n})?
+@plural	Delete this {n} brush?|Delete these {n} brushes?	Изтриване на тази четка ({n})?|Изтриване на тези четки ({n})?
+@plural	Delete this {n} swatch or group?|Delete these {n} swatches and groups?	Изтриване на този {n} образец или група?|Изтриване на тези {n} образца и групи?
 @plural	{n} Layer|{n} Layers	{n} слой|{n} слоя
 @plural	{n} Object|{n} Objects	{n} обект|{n} обекта
 @plural	{n} area highlighted|{n} areas highlighted	{n} осветена област|{n} осветени области
@@ -3622,8 +3853,8 @@ imageTrace	Outline	Контур
 	  — {n} characters from another font	  — {n} знака от друг шрифт
 	[Normal Character Style]	[Нормален стил на знак]
 	[Normal Paragraph Style]	[Нормален стил на абзац]
-	Top-to-Top Leading	Разстояние между редовете отгоре до горе
-	Bottom-to-Bottom Leading	Разстояние между редовете отдолу до долу
+	Top-to-Top Leading	Междуредие отгоре до горе
+	Bottom-to-Bottom Leading	Междуредие отдолу до долу
 	Burasagari	Бурасагари
 	Force	Принудително
 	About	Относно
@@ -3664,18 +3895,19 @@ axis	Horizontal	Хоризонтално
 axis	Vertical	Вертикално
 axis	Both	И двете
 	Drag to move	Плъзнете за преместване
-	Drag to move out of the set	Плъзнете, за да извадите от групата
 	Drag to float as a toolbar	Плъзнете, за да го направите плаваща лента с инструменти
 	Put back in the toolbar	Връщане в лентата с инструменти
 	Float Panel	Плаващ панел
 	Dock Panel	Закотвен панел
-	Drag to float the panel group	Плъзнете, за да направите групата от панели плаваща
-	Put back in the dock	Връщане в дока
+	Dock to Top	Закотвяне горе
+	Dock to Bottom	Закотвяне долу
+	Dock Control Bar	Закотвяне на контролната лента
 	Drag to float the toolbar	Плъзнете, за да направите лентата с инструменти плаваща
 	Drag to the window's left edge to dock	Плъзнете до левия ръб на прозореца за закотвяне
 	Float Tool Group	Плаваща група инструменти
 @msg	no library `{id}`	няма библиотека `{id}`
 @msg	select some type first	първо изберете текст
+@msg	kerning must be a number, "auto", or "optical"	kerning трябва да е число, „auto“ или „optical“
 @msg	{_1} has no {_2} style	{_1} няма стил {_2}
 @msg	a layer couldn't be read	слой не можа да бъде прочетен
 @msg	it has more than one artboard	има повече от една работна област
@@ -3698,12 +3930,12 @@ axis	Both	И двете
 @msg	Combine Slices: the slices have no bounds	Обединяване на парчета: парчетата нямат граници
 @msg	Convert to Artboards: selection has no area	Преобразуване в работни области: селекцията няма площ
 @msg	Convert to Shape: no rectangles or ellipses selected	Преобразуване в фигура: няма избрани правоъгълници или елипси
-@msg	Copied the CSS of {rules} object(s)	Копиран е CSS кодът на {rules} обект(а)
 @msg	Copied the script report	Копиран е отчетът за скрипта
 @msg	Corners edits the corners of a path	Ъглите редактират ъглите на пътя
 @msg	Couldn't copy to the system clipboard: {e}	Неуспешно копиране в системния клипборд: {e}
 @msg	Couldn't open {name}: {e}	Неуспешно отваряне на {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Неуспешно поставяне на {name}: документът, върху който беше пуснат, е затворен
+@msg	Couldn't place {name}: the document it was placed in was closed	Неуспешно поставяне на {name}: документът, в който се поставяше, е затворен
 @msg	Couldn't read {name}: {e}	Неуспешно четене на {name}: {e}
 @msg	Couldn't save recovery data: {e}	Неуспешно запазване на данните за възстановяване: {e}
 @msg	Create Outlines: select text objects	Създаване на контури: изберете текстови обекти
@@ -3714,13 +3946,11 @@ axis	Both	И двете
 @msg	direct-select anchor points to cut at (not the end points of open paths)	директно избиране на опорни точки за рязане (не крайните точки на отворени пътища)
 @msg	Divide Objects Below: select a path	Разделяне на обектите отдолу: изберете път
 @msg	Divide Objects Below: select exactly one path	Разделяне на обектите отдолу: изберете точно един път
-@msg	Downloaded {_1} file(s)	Изтеглени файлове: {_1}
 @msg	Downloaded {what}	Изтеглено: {what}
 @msg	Expand Appearance: the selection has a basic appearance	Разширяване на облика: селекцията има основен облик
 @msg	Expand: no brush strokes selected	Разширяване: няма избрани щрихи на четка
 @msg	Expand: no gradient fills	Разширяване: няма запълвания с градиент
 @msg	Expand: nothing to expand	Разширяване: няма нищо за разширяване
-@msg	Exported {count} file(s) to {folder}	Експортирани са {count} файла в {folder}
 @msg	Exported {path}	Експортирано: {path}
 @msg	Flatten Transparency: select objects to flatten	Сплескване на прозрачността: изберете обекти за сплескване
 @msg	Flatten Transparency: {e}	Сплескване на прозрачността: {e}
@@ -3729,6 +3959,7 @@ axis	Both	И двете
 @msg	Installed plug-in {_1}	Инсталирана добавка {_1}
 @msg	Internal error: {msg} (please report this bug)	Вътрешна грешка: {msg} (моля, докладвайте този софтуерен дефект)
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Обединяване в интерактивно боядисване: изберете група за интерактивно боядисване и пътищата за добавяне
+@msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	Интерактивното боядисване приема пътища и съставни пътища: първо преобразувайте текста, изображенията и другите обекти в пътища
 @msg	Live Paint: select paths or compound paths	Интерактивно боядисване: изберете пътища или съставни пътища
 @msg	Live Paint: these paths are too degenerate to paint	Интерактивно боядисване: тези пътища са твърде дегенерирали за боядисване
 @msg	Make Guides: select paths	Създаване на водачи: изберете пътища
@@ -3736,13 +3967,12 @@ axis	Both	И двете
 @msg	No saved views (View → New View…)	Няма запазени изгледи (Изглед → Нов изглед…)
 @msg	Offset Path: select paths	Отместване на път: изберете пътища
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Отместване на път: отместването не оставя нищо от избраните пътища (вътрешно отместване, по-голямо от фигурите)
-@msg	Opened with {_1} note(s): {_2}	Отворено с {_1} бележка(и): {_2}
 @msg	Opened {url}	Отворено: {url}
 @msg	Outline Stroke: no stroked paths selected	Преобразуване на щрих в контур: няма избрани пътища с щрих
 @msg	PDF settings are not an object	Настройките за PDF не са обект
+@msg	PDF security settings are not an object	Настройките за сигурност на PDF не са обект
 @msg	PDF writer error: {0}	Грешка на PDF записа: {0}
-@msg	Packaged {n} file(s) in {folder} {note}	Пакетирани са {n} файла в {folder}{note}
-@msg	Packaged {n} file(s){note}	Пакетирани са {n} файла{note}
+@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Пакетиран е {n} файл в {folder} ({note})|Пакетирани са {n} файла в {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Прегледът в браузър изисква настолното приложение (уеб версията изтегля файловете вместо това)
 @msg	Release Guides: no guides	Освобождаване на водачи: няма водачи
 @msg	Release: no layer to put the rectangle in	Освобождаване: няма слой, в който да се постави правоъгълникът
@@ -3854,20 +4084,21 @@ axis	Both	И двете
 @msg	already editing a pattern	мострата вече се редактира
 @msg	an object can't be read	обектът не може да бъде прочетен
 @msg	an object in perspective would leave the edited grid	обект в перспектива би напуснал редактираната мрежа
-@msg	antiAlias `{id}`: none, art or type	заглаждане `{id}`: няма, художествено или текстово
+@msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: none, art или type
 @msg	artboard {0} does not exist	работна област {0} не съществува
 @msg	at this scale the drawing is {w} × {h} pt, more than the canvas holds: choose a smaller scale or fit it to the artboard	при този мащаб чертежът е {w} × {h} pt, повече отколкото платното побира: изберете по-малък мащаб или го вгонесете в работната област
-@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	оста трябва да бъде "vertical", "horizontal" или ъгъл в градуси, а не `{v}`
+@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis трябва да бъде "vertical", "horizontal" или ъгъл в градуси, а не `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	фон {other}: прозрачен, бял, черен или цвят като "#ff8800"
 @msg	bad color {v}	грешен цвят {v}
+@msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio трябва да бъде число от 0,1 до 10
 @msg	bad colour `{hex}` (#rrggbb)	грешен цвят `{hex}` (#rrggbb)
 @msg	bad page tree	повредено дърво на страниците
 @msg	bad shortcut	грешен клавишен бърз път
 @msg	bad stream length	грешна дължина на потока
 @msg	bad trailer	грешен край (trailer)
-@msg	balance must be between 0 and 100	балансът трябва да бъде между 0 и 100
+@msg	balance must be between 0 and 100	balance трябва да бъде между 0 и 100
 @msg	batch step {_1} (`{id}`) failed: {e}	стъпка от пакет {_1} (`{id}`) неуспешна: {e}
-@msg	brightness must be dark|mediumDark|mediumLight|light	яркостта трябва да бъде dark|mediumDark|mediumLight|light
+@msg	brightness must be dark|mediumDark|mediumLight|light	brightness трябва да бъде dark|mediumDark|mediumLight|light
 @msg	can't encode the document: {0}	документът не може да бъде кодиран: {0}
 @msg	can't parse shortcut `{c}`	клавишният бърз път `{c}` не може да бъде разпознат
 @msg	can't parse shortcut `{s}` for `{k}`	клавишният бърз път `{s}` за `{k}` не може да бъде разпознат
@@ -3878,6 +4109,7 @@ axis	Both	И двете
 @msg	cannot split an open path at its end point	отворен път не може да бъде разделен в крайната му точка
 @msg	closing needs three anchors	затварянето изисква три опорни точки
 @msg	check an asset to export	изберете актив за експортиране
+@msg	check an artboard to export	изберете монтажна област за експортиране
 @msg	check a layer to export	отметнете слой за експортиране
 @msg	select the art to export first	първо изберете графиката за експортиране
 @msg	choice must be "merge" or "add", not `{choice}`	изборът трябва да бъде "merge" или "add", а не `{choice}`
@@ -3891,7 +4123,7 @@ axis	Both	И двете
 @msg	compound paths can only contain paths	съставните пътища могат да съдържат само пътища
 @msg	compressed (RLE) bitmaps can't be read yet	компресираните (RLE) битови карти все още не могат да бъдат четени
 @msg	damaged	повреден
-@msg	decimals must be {_1}–{_2} (got {_3})	десетичните знаци трябва да бъдат {_1}–{_2} (получени {_3})
+@msg	decimals must be {_1}–{_2} (got {_3})	decimals трябва да бъде {_1}–{_2} (получено {_3})
 @msg	divide into 1 to {MAX_PIECES} slices	разделяне на 1 до {MAX_PIECES} парчета
 @msg	effect {k} is `{_1}`, not `{id}`	ефектът {k} е `{_1}`, а не `{id}`
 @msg	empty brush stroke	празен щрих с четка
@@ -3909,9 +4141,9 @@ axis	Both	И двете
 @msg	an image has no pixels and was left out	изображение без пиксели беше пропуснато
 @msg	image data `{_1}` is missing	данните за изображение `{_1}` липсват
 @msg	image would be too large; lower the resolution	изображението ще бъде твърде голямо; намалете разделителната способност
-@msg	index must be a number or first, previous, next or last	индексът трябва да е число или first, previous, next или last
-@msg	index must be a number or first, previous, next or last, not `{other}`	индексът трябва да е число или first, previous, next или last, а не `{other}`
-@msg	index must be ≥ 0	индексът не може да е отрицателен
+@msg	index must be a number or first, previous, next or last	index трябва да е число или first, previous, next или last
+@msg	index must be a number or first, previous, next or last, not `{other}`	index трябва да е число или first, previous, next или last, а не `{other}`
+@msg	index must be ≥ 0	index трябва да е ≥ 0
 @msg	installing from a path is not available on the web; pass the module as `dataBase64`	инсталирането от път не е налично в уеб; предайте модула като `dataBase64`
 @msg	internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)	вътрешна грешка в `{cmd}`: {msg} (документът беше оставен в състоянието си отпреди; моля, докладвайте тази грешка)
 @msg	internal error: {msg} (please report this bug)	вътрешна грешка: {msg} (моля, докладвайте тази грешка)
@@ -3930,10 +4162,11 @@ axis	Both	И двете
 @msg	missing `id` (see plugin.list)	липсва `id` (вижте plugin.list)
 @msg	missing `name`	липсва `name`
 @msg	missing `tool`	липсва `tool`
+@msg	missing id	липсва id
 @msg	missing index	липсва индекс
 @msg	missing number `{key}`	липсва число `{key}`
 @msg	missing integer `{key}`	липсва цяло число `{key}`
-@msg	multiple windows land with M11.5	множество прозорци се зареждат с M11.5
+@msg	New Window isn't available yet: a document opens in one window	Нов прозорец още не е наличен: документът се отваря в един прозорец
 @msg	name the file	именувайте файла
 @msg	no CSS to copy: select objects with CSS of their own	няма CSS за копиране: изберете обекти със собствен CSS
 @msg	no Live Paint edge near that point	няма ръб за интерактивно оцветяване близо до тази точка
@@ -3962,9 +4195,11 @@ axis	Both	И двете
 @msg	no current layer	няма текущ слой
 @msg	no data	няма данни
 @msg	no dialog open	няма отворен диалогов прозорец
+@msg	the open dialog has no Reset	отвореният диалогов прозорец няма бутон „Нулиране“
 @msg	no document	няма документ
 @msg	no document open	няма отворен документ
 @msg	no effect applied yet	все още няма приложен ефект
+@msg	no Pathfinder operation applied yet	все още няма приложена операция на Pathfinder
 @msg	no effect at index {k}	няма ефект на индекс {k}
 @msg	no end record	няма краен запис
 @msg	no file manager here	няма файлов мениджър тук
@@ -3989,13 +4224,13 @@ axis	Both	И двете
 @msg	no point {i} (the gradient has {_1})	няма точка {i} (градиентът има {_1})
 @msg	no preset editor	няма редактор на предварителни настройки
 @msg	no previous transform	няма предишно трансформиране
-@msg	no print preset named `{base}`	няма предварителна настройка за печат с име „{base}“
-@msg	no print preset named `{name}`	няма предварителна настройка за печат с име „{name}“
+@msg	no print preset named `{base}`	няма предварителна настройка за печат с име `{base}`
+@msg	no print preset named `{name}`	няма предварителна настройка за печат с име `{name}`
 @msg	no print service	няма услуга за печат
 @msg	no revert command	няма команда за връщане
-@msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	няма запазен PDF просет с име „{name}“ (вградените настройки са само за четене: създайте нова от тях)
+@msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	няма запазен PDF просет с име `{name}` (вградените настройки са само за четене: създайте нова от тях)
 @msg	no saved presets	няма запазени предварителни настройки
-@msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	няма запазена предварителна настройка за печат с име „{name}“ ({DEFAULT_PRESET} е защитена: създайте нова от нея)
+@msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	няма запазена предварителна настройка за печат с име `{name}` ({DEFAULT_PRESET} е защитена: създайте нова от нея)
 @msg	no saved profiles	няма запазени профили
 @msg	no saved selection recalled	няма възстановена запазена селекция
 @msg	no saved selections	няма запазени селекции
@@ -4005,6 +4240,16 @@ axis	Both	И двете
 @msg	no selection bounds	няма граници на селекцията
 @msg	no slice selected	няма избран срез
 @msg	no such action	няма такова действие
+@msg	no such action set	няма такъв набор от действия
+@msg	the action sets changed; nothing was deleted	наборите от действия се промениха; нищо не беше изтрито
+@msg	no action set to save	няма набор от действия за запазване
+@msg	the action set file can't be read in full	файлът с набор от действия не може да се прочете изцяло
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Зареден е „{name}“: {n} стъпка е пропусната|Зареден е „{name}“: {n} стъпки са пропуснати
+@msg	not an action set file	не е файл с набор от действия
+@msg	the action set file is larger than 8 MiB	файлът с набор от действия е по-голям от 8 MiB
+@msg	the action set file holds more than 1,000 actions	файлът с набор от действия съдържа повече от 1000 действия
+@msg	the action set file needs a later version of VectorCraft	файлът с набор от действия изисква по-нова версия на VectorCraft
+@msg	an action in the action set file has more than 10,000 steps	действие във файла с набор от действия има повече от 10 000 стъпки
 @msg	no such anchor	няма такава опорна точка
 @msg	no such artboard	няма такава работна област
 @msg	the artboard is locked	работната област е заключена
@@ -4014,21 +4259,24 @@ axis	Both	И двете
 @msg	no such perspective grid preset	няма такава предварителна настройка за перспективна мрежа
 @msg	no such recent file	няма такъв скорошен файл
 @msg	no such recent font	няма такъв скорошен шрифт
+@msg	some text is hidden or locked, so its font wasn't replaced	част от текста е скрит или заключен, затова шрифтът му не беше заменен
 @msg	no such saved selection	няма такава запазена селекция
 @msg	no such segment	няма такъв сегмент
 @msg	no such spine point	няма такава точка от оста
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` трябва да е списък с най-много 10000 индекса на точки от оста
+@msg	`with` moves points, not a handle	`with` мести точки, не дръжка
 @msg	no such spine segment	няма такъв сегмент от оста
 @msg	no such subpath	няма такъв подпът
 @msg	no such user library	няма такава потребителска библиотека
 @msg	no such view	няма такъв изглед
 @msg	no such width point	няма такава точка за ширина
-@msg	no swatch `{name}`	няма образец „{name}“
-@msg	no swatch library `{l}` (see swatch.library.list)	няма библиотека с образци „{l}“ (вижте swatch.library.list)
+@msg	no swatch `{name}`	няма образец `{name}`
+@msg	no swatch library `{l}` (see swatch.library.list)	няма библиотека с образци `{l}` (вижте swatch.library.list)
 @msg	no symbol instances selected	няма избрани екземпляри на символ
 @msg	no target object has an opacity mask: select one or give `id`	никой целеви обект няма маска за непрозрачност: изберете един или задайте `id`
 @msg	no threaded text selected	няма избран свързан текст
 @msg	no user library folder here	тук няма папка с потребителска библиотека
-@msg	no user workspace `{from}`	няма потребителско работно пространство „{from}“
+@msg	no user workspace `{from}`	няма потребителско работно пространство `{from}`
 @msg	node {_1} is not text	възелът {_1} не е текст
 @msg	not a DXF drawing	не е DXF чертеж
 @msg	not a VectorCraft file: {0}	не е файл на VectorCraft: {0}
@@ -4041,8 +4289,10 @@ axis	Both	И двете
 @msg	not an EMF or WMF file	не е EMF или WMF файл
 @msg	not found	не е открито
 @msg	not in pattern editing mode	не е в режим на редактиране на мостра
+@msg	finish editing the pattern first	първо завършете редактирането на мострата
 @msg	nothing encoded	нищо не е кодирано
 @msg	nothing selected	нищо не е избрано
+@msg	nothing selected is in a group	нищо от избраното не е в група
 @msg	nothing to align	няма нищо за подравняване
 @msg	nothing to distort	няма нищо за изкривяване
 @msg	nothing to export: the document has no visible art (or turn on Use Artboards)	няма нищо за експортиране: документът няма видима графика (или включете „Използване на работни области“)
@@ -4052,6 +4302,7 @@ axis	Both	И двете
 @msg	nothing to save: the document has no visible art	няма нищо за запазване: документът няма видима графика
 @msg	nothing to undo	няма какво да се отмени
 @msg	no history to clear	няма история за изчистване
+@msg	no history state {v}	няма състояние в историята {v}
 @msg	nothing to warp	няма нищо за извиване
 @msg	nothing to wrap	няма нищо за обвиване
 @msg	object {0} cannot have children	обектът {0} не може да има дъщерни елементи
@@ -4063,11 +4314,12 @@ axis	Both	И двете
 @msg	path is already closed	пътят вече е затворен
 @msg	paths contain invalid coordinates	пътищата съдържат невалидни координати
 @msg	paths: give at least one file	пътища: посочете поне един файл
+@msg	replace: the object to replace was changed or deleted	замяна: обектът за замяна е променен или изтрит
 @msg	pattern missing	липсва мостра
 @msg	patterns nested too deeply are filled with mid-grey	мострите, вложени прекалено дълбоко, се запълват със средно сиво
-@msg	percent must be above 0 and at most 6400, not {p}	процентът трябва да е над 0 и най-много 6400, а не {p}
+@msg	percent must be above 0 and at most 6400, not {p}	percent трябва да е над 0 и най-много 6400, а не {p}
 @msg	pick a colour, gradient or pattern to save as a swatch	изберете цвят, градиент или мостра за запазване като образец
-@msg	plane must be left, right or ground	равнината трябва да е лява, дясна или земна
+@msg	plane must be left, right or ground	plane трябва да е left, right или ground
 @msg	plug-in ABI: {0}	ABI на плъгин: {0}
 @msg	plug-in exceeded its {0}	плъгинът надвиши своя {0}
 @msg	plug-in failed: {0}	плъгинът се провали: {0}
@@ -4086,8 +4338,8 @@ axis	Both	И двете
 @msg	result would exceed the canvas (coordinates out of range)	резултатът ще надвиши платното (координатите са извън обхвата)
 @msg	objects can't be nested more than 32 deep	 обектите не могат да бъдат вложени на повече от 32 нива
 @msg	the SVG's elements are nested more than {0} deep	 елементите на SVG са вложени на повече от {0} нива
-@msg	scale must be a number from {_1} to {_2}, not {_3}	мащабът трябва да е число от {_1} до {_2}, а не {_3}
-@msg	scale must be a number from {_1} to {_2}, not {s}	мащабът трябва да е число от {_1} до {_2}, а не {s}
+@msg	scale must be a number from {_1} to {_2}, not {_3}	scale трябва да е число от {_1} до {_2}, а не {_3}
+@msg	scale must be a number from {_1} to {_2}, not {s}	scale трябва да е число от {_1} до {_2}, а не {s}
 @msg	select (or target) objects whose appearance isn't basic	изберете (или насочете към) обекти, чийто изглед не е основен
 @msg	select a Live Paint group	изберете група за интерактивно оцветяване (Live Paint)
 @msg	select a blend	изберете преход (blend)
@@ -4099,6 +4351,8 @@ axis	Both	И двете
 @msg	select an Intertwine group	изберете група за преплитане (Intertwine)
 @msg	select a stroke with a variable width	изберете щрих с променлива дебелина
 @msg	select a symbol instance	изберете екземпляр на символ
+@msg	select instances of one symbol	изберете екземпляри на един символ
+@msg	a symbol can't hold an instance of itself	символ не може да съдържа свой собствен екземпляр
 @msg	select an Image Trace object	изберете обект за трасиране на изображение (Image Trace)
 @msg	could not decode image: {0}	изображението не може да бъде декодирано: {0}
 @msg	image is empty	изображението е празно
@@ -4109,6 +4363,7 @@ axis	Both	И двете
 @msg	select an object in perspective	изберете обект в перспектива
 @msg	select artwork (or a colour group) to recolor	изберете графика (или цветова група) за преоцветяване
 @msg	select at least two objects	изберете поне два обекта
+@msg	exit isolation mode first	първо излезте от режима на изолация
 @msg	select objects, not layers	изберете обекти, а не слоеве
 @msg	select one path, or give its `id`	изберете един път или задайте неговия `id`
 @msg	select paths to join	изберете пътища за обединяване
@@ -4161,10 +4416,14 @@ axis	Both	И двете
 @msg	the layer or group is locked	слойът или групата са заключени
 @msg	the guide is on a hidden or locked layer	водачът е в скрит или заключен слой
 @msg	the target layer is locked or hidden	целевият слой е заключен или скрит
+@msg	the object is hidden or locked	обектът е скрит или заключен
+@msg	the object is outside the isolated group	обектът е извън изолираната група
+@msg	type objects can't be isolated	текстовите обекти не могат да бъдат изолирани
 @msg	the layer to flatten into is hidden	слоят, в който се сплесква, е скрит
 @msg	the object already has an opacity mask	обектите вече имат маска за непрозрачност
 @msg	the object has no geometry	обектът няма геометрия
 @msg	the object has no opacity mask	обектът няма маска за непрозрачност
+@msg	stop editing the opacity mask first	първо спрете редактирането на маската за непрозрачност
 @msg	the object has no stroke	обектът няма щрих
 @msg	the object is beyond the plane's horizon	обектът е извън хоризонта на равнината
 @msg	the object isn't in perspective	обектът не е в перспектива
@@ -4195,6 +4454,7 @@ axis	Both	И двете
 @msg	tool shortcuts must be a single key (optionally with Shift)	клавишните комбинации за инструменти трябва да са един клавиш (по избор със Shift)
 @msg	truncated	съкратено
 @msg	unknown command `{0}`	непозната команда `{0}`
+@msg	unknown command `{0}`; did you mean `{1}`?	непозната команда `{0}`; имахте ли предвид `{1}`?
 @msg	unknown effect `{id}`	непознат ефект `{id}`
 @msg	unknown format	непознат формат
 @msg	unknown format `{f}` (Save writes {_1})	непознат формат `{f}` (Запазването записва {_1})
@@ -4217,6 +4477,9 @@ axis	Both	И двете
 @msg	unsupported: {0}	не се поддържа: {0}
 @msg	variables are locked	променливите са заключени
 @msg	variables that aren't text were left out: {kinds}	променливите, които не са текстови, бяха пропуснати: {kinds}
+@msg	a new document won't read these variables back with their kind: {names}	нов документ няма да прочете тези променливи обратно с техния вид: {names}
+@msg	a new document refuses this file because of these variables: {names}	нов документ отказва този файл заради тези променливи: {names}
+@msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	заглавието `{header}` за `{name}` ще бъде прочетено като променливата `{other}`: преименувайте едната от тях
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	файловете от версия {0} не могат да бъдат компресирани: само версия {COMPRESSED_SINCE} и по-нови отварят компресирани файлове
 @msg	width and height are at least 1 pixel	ширината и височината са най-малко 1 пиксел
 @msg	workspace name can't be empty	името на работното пространство не може да бъде празно
@@ -4228,9 +4491,7 @@ axis	Both	И двете
 @msg	{_1} font families available	наличности на шрифтови семейства: {_1}
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1} е динамичен ефект (Ефект › Добавки)
 @msg	{_1} is already used by {_2}	{_1} вече се използва от {_2}
-@msg	{_1} linked file(s) can't be read here: their previews show	свързаните файлове {_1} не могат да бъдат прочетени тук: показват се техните прегледи
-@msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	свързаните изображения {_1} са променени на диска: „Обновяване на връзките“ показва новите версии
-@msg	Updated {_1} linked file(s) changed on disk	Обновени са свързани файлове {_1}, променени на диска
+@msg	{_1} is reserved by the system	{_1} е запазено от системата
 @msg	{_1}: not saved, so not closed	{_1}: не е запазен, затова не е затворен
 @msg	{bpp}-bit bitmaps can't be read	{bpp}-битови битови масиви не могат да бъдат прочетени
 @msg	{command} didn't create an object	{command} не създаде обект
@@ -4249,6 +4510,7 @@ axis	Both	И двете
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Неуспешно поставяне на {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Неуспешно поставяне от клипборда: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	Неуспешно поставяне: документът, в който се поставяше, е затворен
 @msg	Saved {path} with {_1} note(s): {first}	{path} е запазен с {_1} бележка/и: {first}
 @msg	Exported {what} with {_1} note(s): {first}	{what} е експортиран с {_1} бележка/и: {first}
 @msg	Exported {what}	Експортирано: {what}
@@ -4256,15 +4518,37 @@ axis	Both	И двете
 @msg	Saving	Запазване
 @msg	Saving {_1}	Записване на {_1}
 @msg	Exporting {_1}	Експортиране на {_1}
+@msg	Packaging {_1}	Пакетиране на {_1}
+@msg	Placing {_1}	Вмъкване на {_1}
+@msg	Pasting	Поставяне
 @msg	Saving recovery data for {_1}	Записване на данни за възстановяване на {_1}
-@msg	Discarded {_1} recovered document(s)	Изхвърлени са {_1} възстановени документ(и)
-@msg	Restored {_1} recovered document(s): save them to keep them	Възстановени са {_1} документ(и): запазете ги, за да ги съхраните
-@msg	Embedded {n} image(s); {missing} missing: relink them first	Вградени са {n} изображения; {missing} липсват: първо ги свържете наново
-@msg	Embedded {n} image(s)	Вградени са {n} изображения
-@msg	Relinked {_1} image(s)	Презакачени са {_1} изображения
-@msg	Relinked {n} image(s)	Свързани наново {n} изображения
-@msg	Relinked {n} image(s); not in that folder: {_1}	Презакачени са {n} изображения; липсват в тази папка: {_1}
-@msg	Updated {_1} image(s)	Обновени са {_1} изображения
+@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Изхвърлен е {n} възстановен документ|Изхвърлени са {n} възстановени документа
+@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Възстановен е {n} документ: запазете го, за да го съхраните|Възстановени са {n} документа: запазете ги, за да ги съхраните
+@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Отворено с {n} бележка: {first}|Отворено с {n} бележки: {first}
+@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} е запазен с {n} бележка: {first}|{path} е запазен с {n} бележки: {first}
+@msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Вградено е {n} изображение; {missing} липсват: първо ги свържете наново|Вградени са {n} изображения; {missing} липсват: първо ги свържете наново
+@msgplural	Embedded {n} image|Embedded {n} images	Вградено е {n} изображение|Вградени са {n} изображения
+@msgplural	Relinked {n} image|Relinked {n} images	Свързано наново е {n} изображение|Свързани наново са {n} изображения
+@msgplural	Relinked {n} image; not in that folder: {names}|Relinked {n} images; not in that folder: {names}	Свързано наново е {n} изображение; липсват в тази папка: {names}|Свързани наново са {n} изображения; липсват в тази папка: {names}
+@msgplural	Relinked {n} image; {name} couldn't be relinked: {reason}|Relinked {n} images; {name} couldn't be relinked: {reason}	Свързано наново е {n} изображение; {name} не можа да бъде свързан наново: {reason}|Свързани наново са {n} изображения; {name} не можа да бъде свързан наново: {reason}
+@msgplural	Updated {n} image|Updated {n} images	Обновено е {n} изображение|Обновени са {n} изображения
+@msgplural	Replaced {n} image|Replaced {n} images	Заменено е {n} изображение|Заменени са {n} изображения
+@msgplural	Broke {n} link|Broke {n} links	Разкъсана е {n} връзка|Разкъсани са {n} връзки
+@msgplural	Broke {n} link; {missing} can't be read: relink or update them first|Broke {n} links; {missing} can't be read: relink or update them first	Разкъсана е {n} връзка; {missing} не могат да бъдат прочетени: първо ги свържете наново или ги обновете|Разкъсани са {n} връзки; {missing} не могат да бъдат прочетени: първо ги свържете наново или ги обновете
+@msgplural	{n} linked file can't be read here: its preview shows|{n} linked files can't be read here: their previews show	{n} свързан файл не може да бъде прочетен тук: показва се неговият преглед|{n} свързани файла не могат да бъдат прочетени тук: показват се техните прегледи
+@msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} изображение не може да бъде декодирано: показва се като зачеркната рамка|{n} изображения не могат да бъдат декодирани: показват се като зачеркнати рамки
+@msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} свързано изображение е променено на диска: „Обновяване на връзките“ показва новата версия|{n} свързани изображения са променени на диска: „Обновяване на връзките“ показва новите версии
+@msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Обновен е {n} свързан файл, променен на диска|Обновени са {n} свързани файла, променени на диска
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	документът задава изтичане, което този PDF/X файл пропуска: включете „Използване на настройките за изтичане на документа“
+@msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} е експортиран с {n} бележка: {first}|{what} е експортиран с {n} бележки: {first}
+@msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} шрифтов файл вече е в {folder}|{n} шрифтови файла вече са в {folder}
+@msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} шрифтов файл вече е в {folder}; {failed} не можаха да бъдат добавени: {reason}|{n} шрифтови файла вече са в {folder}; {failed} не можаха да бъдат добавени: {reason}
+@msgplural	{n} font isn't available here: its text shows in another font|{n} fonts aren't available here: their text shows in another font	{n} шрифт не е достъпен тук: текстът му се показва в друг шрифт|{n} шрифта не са достъпни тук: техният текст се показва в друг шрифт
+@msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	Копиран е CSS кодът на {n} обект|Копиран е CSS кодът на {n} обекта
+@msgplural	Downloaded {n} file|Downloaded {n} files	Изтеглен е {n} файл|Изтеглени са {n} файла
+@msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	Експортиран е {n} файл в {folder}|Експортирани са {n} файла в {folder}
+@msg	All colors are within the CMYK gamut	Всички цветове са в CMYK цветовата гама
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} цвят е извън CMYK цветовата гама|{n} цвята са извън CMYK цветовата гама
 @msg	Unembedded to {_1}	Извадено от вграждане в {_1}
 @msg	Reset {_1}	Нулирано: {_1}
 @msg	Sent to {_1}	Изпратено към {_1}
@@ -4290,7 +4574,15 @@ axis	Both	И двете
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	това не е лого с плътни цветове ({_1}% от плътните му зони съвпадат с малко на брой плътни цветове), затова режимът „Плоско лого“ ще превърне градиентите му в петна: използвайте режима „Цвят“
 @msg	`{what}` closes nothing	`{what}` не затваря нищо
 @msg	`{what}` closes something it didn't open	`{what}` затваря нещо, което не е отворило
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` е името на настройка от document.exportPresets.list
+@msg	no export preset `{n}` (see document.exportPresets.list)	няма настройка за експортиране `{n}` (вижте document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	няма запазени настройки за експортиране (посочете вградените в `names`)
+@msg	not an export presets file (format `{_1}`)	не е файл с настройки за експортиране (формат `{_1}`)
+@msg	not an export presets file: {e}	не е файл с настройки за експортиране: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
+@msg	`globalAdjust` must be an object	`globalAdjust` трябва да е обект
 @msg	a path has too many points	пътят има твърде много точки
+@msg	it ends inside a group or compound path	той завършва вътре в група или съставен път
 @msg	it ends inside a layer	той завършва вътре в слой
 @msg	it has art outside its layers	той има обекти извън своите слоеве
 @msg	it has more than {MAX_NODES} objects	той има повече от {MAX_NODES} обекта
@@ -4299,14 +4591,21 @@ axis	Both	И двете
 @msg	it has {_1}, which VectorCraft doesn't read from it yet	той съдържа {_1}, който VectorCraft все още не може да разчете
 @msg	its objects are nested too deeply	обектите му са вложени твърде дълбоко
 @msg	its section ending with `%{end}` doesn't end	разделът му, завършващ на `%{end}`, няма край
+@msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	четките, които VectorCraft все още не може да прочете, бяха пропуснати от панела „Четки“ ({_1})
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	обектите с множество запълвания или щрихове, ефекти или четки се появиха във вид на изрисувания си изглед ({_1}): тяхната поява все още не подлежи на редактиране
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	градиентът „{name}“ не е дефиниран във файла: заменен е с обикновен цвят
 @msg	an image VectorCraft can't read was left out	изображение, което VectorCraft не може да разчете, беше пропуснато
 @msg	an image whose data is cut short was left out	изображение с непълни данни беше пропуснато
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	вградено изображение от {_1} × {_2} пиксела беше намалено до {_3} × {_4} пиксела, за да се запазят слоевете
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	свързаните картини показват записания във файла предварителен преглед с ниска резолюция, докато файловете им бъдат намерени: презакачете ги в панела „Връзки“
+@msg	linked type areas past VectorCraft's limits were left out	свързаните текстови области извън ограниченията на VectorCraft бяха пропуснати
+@msg	type that changes writing direction inside a text object opens in the direction of its first character	текст, който сменя посоката на писане в рамките на текстов обект, се отваря в посоката на първия си знак
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	текст, използван като маска в свързани области, обтичащ текст или съставен път, не изрязва
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	свързаните картини без предварителен преглед във файла показват заместител, докато файловете им бъдат намерени: презакачете ги в панела „Връзки“
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	текстовите рамки за област в редове, твърде къси за шрифта, в който се показват, получиха по-високи рамки ({_1}): текстът им иначе нямаше да се види
 @msg	its editing data doesn't say where its art is	данните му за редактиране не посочват къде се намира неговата графика
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	този файл е записан без съвместимост с PDF и данните му за редактиране не могат да бъдат прочетени ({why})
+@msg	the PDF part couldn't be read ({_1}): the file opened from its editing data	PDF частта не можа да бъде прочетена ({_1}): файлът беше отворен от данните си за редактиране
 @msg	No fonts are missing in this document	В този документ няма липсващи шрифтове
 @msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft не търси в папките на други приложения или на системата: {path}
 @msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	VectorCraft не търси в папките Shared или Public в Users: {path}
@@ -4316,9 +4615,6 @@ axis	Both	И двете
 @msg	every search thread stopped on an internal error (please report this bug)	всяка нишка за търсене спря поради вътрешна грешка (моля, докладвайте този бъг)
 @msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	Папката със шрифтове на VectorCraft не е зададена тук: десктоп приложението и vectorcraft-cli я задават
 @msg	choose the font files to add	изберете шрифтовите файлове за добавяне
-@msg	{n} font file(s) are now in {folder}	{n} шрифтов(и) файл(а) вече са в {folder}
-@msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	{n} шрифтов(и) файл(а) вече са в {folder}; {failed} не можаха да бъдат добавени: {reason}
-@msg	{n} font(s) aren't available here: their text shows in another font	{n} шрифт(а) не са достъпни тук: техният текст се показва в друг шрифт
 @msg	not a file	не е файл
 @msg	not a font file	не е шрифтов файл
 @msg	that document is no longer open	този документ вече не е отворен
@@ -4327,7 +4623,6 @@ axis	Both	И двете
 @msg	every numbered name for it is taken in the Fonts folder	всяко номерирано име за него е заето в папката със шрифтове
 @msg	every numbered name for {name} is taken in the document's folder	всяко номерирано име за {name} е заето в папката на документа
 @msg	No linked files to look for	Няма свързани файлове за търсене
-@msg	Relinked {n} image(s); {name} couldn't be relinked: {reason}	Превързани са {n} изображения; {name} не можа да бъде превързан: {reason}
 	Services	Услуги
 	Hide VectorCraft	Скриване на VectorCraft
 	Zoom	Мащабиране
@@ -4344,6 +4639,7 @@ axis	Both	И двете
 	Shaper	Инструмент за форми
 	Expand Shaper Group	Разширяване на групата от форми
 	Release Shaper Group	Освобождаване на групата от форми
+	Remove from Shaper Group	Премахване от групата от форми
 	Select Shaper Face	Избиране на лице на формата
 	Drag art, colors and text styles here to reuse them across documents. Libraries are stored on this machine — no account required.	Плъзнете графика, цветове и текстови стилове тук, за да ги използвате повторно в различни документи. Библиотеките се съхраняват на това устройство — не се изисква акаунт.
 	1 Color Job	Задание с 1 цвят
@@ -4362,19 +4658,29 @@ axis	Both	И двете
 	Insert Inline Symbol	Вграждане на вграден символ
 	ICF Top/Right	ICF горе/дясно
 	ICF Bottom/Left	ICF долу/ляво
+	Show Font Height Options	Показване на опциите за височина на шрифта
+	Hide Font Height Options	Скриване на опциите за височина на шрифта
+	Set Font Height Reference	Задаване на референтна височина на шрифта
+	Em Box	Квадратна касетка (Em Box)
+	x-Height	Височина на x
+	ICF Box	Касетка ICF
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` е референцията за стъпка {r}, която се разрешава само от `run` и `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` трябва да бъде масив от идентификатори на обекти, а не {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` трябва да бъде масив от цветове, а не {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` трябва да бъде масив от индекси на опорни точки, а не {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: резултатът от стъпка {i} няма такава стойност (напишете $$ за литерален знак $)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: няма стъпка {i} преди тази (стъпките се броят от 0; напишете $$ за литерален знак $)
 @msg	object ids are non-negative integers, not {v}	идентификаторите на обектите са неотрицателни цели числа, а не {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} трябва да бъде масив от идентификатори на обекти, които са неотрицателни цели числа
 @msg	invalid object id {value}: expected a non-negative integer	невалиден идентификатор на обект {value}: очаква се неотрицателно цяло число
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	елемент {index} на `{key}` е {value}, а не идентификатор на обект (неотрицателно цяло число)
 @msg	no such object id {value}	няма обект с идентификатор {value}
 @msg	automation filesystem access is not granted: read authority is absent: {path}	достъпът на автоматизацията до файловата система не е разрешен: липсва право за четене: {path}
 @msg	automation filesystem access is not granted: write authority is absent: {path}	достъпът на автоматизацията до файловата система не е разрешен: липсва право за запис: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	пътят за автоматизация е отхвърлен: извън корена за четене {root}: {path}
+@msg	automation path rejected: outside the read roots {roots}: {path}	пътят за автоматизация е отхвърлен: извън корените за четене {roots}: {path}
 @msg	automation path rejected: outside the write root {root}: {path}	пътят за автоматизация е отхвърлен: извън корена за запис {root}: {path}
+@msg	automation path rejected: outside the write roots {roots}: {path}	пътят за автоматизация е отхвърлен: извън корените за запис {roots}: {path}
 @msg	automation path rejected: path is empty	пътят за автоматизация е отхвърлен: пътят е празен
 @msg	automation path rejected: a link that leads nowhere: {path}	пътят за автоматизация е отхвърлен: връзка, която не води доникъде: {path}
 @msg	automation path rejected: cannot resolve {path}: {e}	пътят за автоматизация е отхвърлен: не може да се разреши {path}: {e}
@@ -4446,6 +4752,9 @@ axis	Both	И двете
 effect	Soft	Меко
 	Edge	Роб
 	System Title Bar	Заглавна лента на системата
+	VectorCraft Title Bar on Every Desktop	Заглавна лента на VectorCraft на всеки работен плот
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Докато е зададена, променливата на средата VECTORCRAFT_TITLEBAR избира заглавната лента.
+	System Title Bar takes precedence over this option while it is on.	Докато е включена, „Заглавна лента на системата“ има предимство пред тази опция.
 	Value Axis	Ос на стойностите
 	On Left Side	От лявата страна
 	On Right Side	От дясната страна
@@ -4486,25 +4795,24 @@ effect	Soft	Меко
 	Resize panels	Преоразмеряване на панели
 	Resize panel window	Преоразмеряване на прозореца на панела
 @msg	Invalid panel layout; restored the default dock	Невалидно оформление на панела; възстановено е подразбиращото се разположение
-@msg	action is required	необходимо е действие
-@msg	anchor must name a registered panel	опорната точка трябва да указва регистриран панел
-@msg	before must name a panel	параметърът „преди“ трябва да указва панел
+@msg	action is required	action е задължителен
+@msg	anchor must name a registered panel	anchor трябва да указва регистриран панел
+@msg	before must name a panel	before трябва да указва панел
 @msg	docking action contains an unknown panel or an excessive split path	действието по закачане съдържа непознат панел или прекомерен път на разделяне
-@msg	group must be true or false	групата трябва да е истина или лъжа
-@msg	panel floats; collapse its group with window.panel.float {panel, collapsed}	панелът е плаващ; свийте групата му с window.panel.float {panel, collapsed}
-@msg	panel is not in a dock group	панелът не е в група на дока
+@msg	group must be true or false	group трябва да е true или false
+@msg	panel is not in a dock group	panel не е в група на дока
 @msg	only a dock group above or below others collapses, not one beside another	свива се само група на дока над или под други, не и такава до друга
-@msg	icon must be true or false	icon трябва да е истина или лъжа
+@msg	icon must be true or false	icon трябва да е true или false
 @msg	icon only docks a panel in the icon column, with no anchor	icon закачва панел само в колоната с икони, без anchor
 @msg	column docks a set as a dock column, with no anchor or icon	column закачва набор като колона на дока, без anchor или icon
 @msg	move requires a destination panel	преместването изисква целеви панел
 @msg	move requires an existing destination panel	преместването изисква съществуващ целеви панел
-@msg	onto must name a floating panel	параметърът „върху“ трябва да указва плаващ панел
+@msg	onto must name a floating panel	onto трябва да указва плаващ панел
 @msg	panel group is empty	групата от панели е празна
-@msg	panel must name a registered panel	панелът трябва да указва регистриран панел
+@msg	panel must name a registered panel	panel трябва да указва регистриран панел
 @msg	saved panel layout is invalid; reset the workspace first	запазеното оформление на панелите е невалидно; нулирайте работното пространство първо
-@msg	zone must be a string	зоната трябва да е низ
-@msg	zone must be tab, center, left, right, top or bottom	зоната трябва да бъде tab, center, left, right, top или bottom
+@msg	zone must be a string	zone трябва да е низ
+@msg	zone must be tab, center, left, right, top or bottom	zone трябва да бъде tab, center, left, right, top или bottom
 @msg	{key} must be a finite coordinate	{key} трябва да е крайна координата
 @msg	x and y must be provided together	x и y трябва да бъдат подадени заедно
 @msg	invalid restored panel group	невалидна възстановена група от панели
@@ -4717,6 +5025,7 @@ lighting	Light	Светлина
 	Brown	Кафяв
 	Business Card 3.5 × 2 in	Визитка 3,5 × 2 инча
 	Business Card 85 × 55 mm	Визитка 85 × 55 мм
+	Business Card 91 × 55 mm	Визитка 91 × 55 мм
 	CRLF (Windows)	CRLF (Windows)
 	Cap Height	Височина на главни букви
 	Chevron	Шеврон
@@ -5067,6 +5376,7 @@ file-filter	Flattener presets	Предварителни настройки за
 file-filter	PDF presets	Предварителни настройки за PDF
 file-filter	PDF-compatible .ai	Съвместими с PDF .ai файлове
 file-filter	Print presets	Предварителни настройки за печат
+file-filter	Export presets	Набори за експортиране
 file-filter	SVG Compressed	Компресиран SVG
 file-filter	Swatch libraries	Библиотеки с образци
 file-filter	Templates	Шаблони
@@ -5076,6 +5386,7 @@ mark-style	Japanese	Японски
 theme	Appearance	Външен вид
 	Load EPS into Clipboard	Зареждане на EPS в клипборда
 @msg	an image of {w} × {h} pixels is too large to draw	изображение с размери {w} × {h} пиксела е твърде голямо за рисуване
+@msg	an image of {w} × {h} pixels is shown at reduced size	изображение с размери {w} × {h} пиксела се показва в намален размер
 @msg	the image can't be read as a texture	изображението не може да бъде прочетено като текстура
 	Fill and Stroke Controls	Управление на запълването и щриха
 	Coloring Controls	Управление на оцветяването
@@ -5083,7 +5394,7 @@ theme	Appearance	Външен вид
 	Screen Mode Controls	Контроли за режим на екран
 	Drawer menu	Меню на чекмеджето
 	Toolbar: Show Controls	Лента с инструменти: Показване на контроли
-@msg	control must be fillStroke, coloring, drawMode or screenMode	 контролът трябва да бъде fillStroke, coloring, drawMode или screenMode
+@msg	control must be fillStroke, coloring, drawMode or screenMode	control трябва да бъде fillStroke, coloring, drawMode или screenMode
 @msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	 неизвестен контрол `{name}`: fillStroke, coloring, drawMode или screenMode
 @msg	give a fraction `t` from 0 to 1	 въведете дробно число `t` от 0 до 1
 @msg	give the path `id`	 въведете `id` на пътя
@@ -5193,12 +5504,14 @@ theme	Appearance	Външен вид
 	Keep selected	Запазване на избора
 	Merge only with selection	Сливане само с избраното
 	Consider Open Filled Paths as Closed	Отворените запълнени пътища се смятат за затворени
+	In Merge Mode, Clicking Stroke Splits the Path	В режим на сливане щракване върху щриха разделя пътя
 	Pick Color From:	Цвят от:
 	Artwork	Графика
 	Cursor Swatch Preview	Преглед на образеца до курсора
 	Selection:	Селекция:
 	Straight Line	Права линия
 	Highlight:	Открояване:
+	Stroke When Editable	Щрих, когато е редактируем
 	Sample Color from Screen	Взимане на цвят от екрана
 	The active document changed while the screen color sampler was open	Активният документ се промени, докато взимането на цвят от екрана беше отворено
 	This system has no screen color sampler	Тази система няма инструмент за взимане на цвят от екрана
@@ -5208,6 +5521,9 @@ theme	Appearance	Външен вид
 # Type › Reset Tracking and Kerning
 	Reset Tracking and Kerning	Нулиране на разредката и кернинга
 	Reset Horizontal Scale	Нулиране на хоризонталния мащаб
+	Highlight Font Name	Маркиране на името на шрифта
+	Highlight Kerning	Маркиране на кернинга
+	Highlight Tracking	Маркиране на разредката
 @msg	span must be "object" or "selection", got {v}	span трябва да е "object" или "selection", а не {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" поставя `gradient`, а не мостра
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" поставя градиент: задайте `gradient`
@@ -5217,6 +5533,11 @@ theme	Appearance	Външен вид
 	Import Data Sets…	Импортиране на набори от данни…
 	Export Data Sets…	Експортиране на набори от данни…
 	Load Variable Library…	Зареждане на библиотека с променливи…
+	Save Variable Library…	Запазване на библиотека с променливи…
+@msg	a variable library holds text variables, and the document has none	библиотеката с променливи съдържа текстови променливи, а документът няма такива
+@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	променливата `{name}` не може да бъде запазена в библиотека с променливи: преименувайте я така, че да започва с буква или `_`, без интервали и символи, различни от `-`, `_` и `.`
+@msg	data set `{name}` holds a control character, which a variable library can't hold	наборът от данни `{name}` съдържа управляващ знак, който библиотеката с променливи не може да съдържа
+@msg	data set `{name}` starts or ends with white space, which a variable library can't hold	наборът от данни `{name}` започва или завършва с интервал, който библиотеката с променливи не може да съдържа
 	Make Graph Dynamic	Динамична диаграма
 	Batch…	Пакет…
 	Source Folder:	Изходна папка:
@@ -5229,6 +5550,10 @@ theme	Appearance	Външен вид
 @msg	choose a source folder	изберете изходна папка
 @msg	open a document with data sets	отворете документ с набори от данни
 @msg	the action has no steps	действието няма стъпки
+@msg	the action has no included steps	действието няма включени стъпки
+@msg	no such action step	няма такава стъпка от действие
+@msg	included must be true or false	included трябва да бъде true или false
+@msg	others must be true or false	others трябва да бъде true или false
 	Registration:	Регистрация:
 # Layers panel filters (Filter Layers Panel Rows) and Color Panel Options
 	By Layer	По слой
@@ -5256,6 +5581,10 @@ theme	Appearance	Външен вид
 	Halftone Pattern	Полутонов шаблон
 	Torn Edges…	Разкъсани краища…
 	Torn Edges	Разкъсани краища
+	Conté Crayon…	Креда Конте…
+	Conté Crayon	Креда Конте
+	Foreground Level	Ниво на преден план
+	Background Level	Ниво на фон
 	Pattern Type	Тип шаблон
 	Dot	Точка
 # User Interface › Color Scheme
@@ -5266,6 +5595,15 @@ theme	Appearance	Външен вид
 	Export Type:	Тип на експортиране:
 	Movie Clip	Филмов клип
 @msg	name is empty	името е празно
+@msg	an action is already recording	вече се записва действие
+@msg	an action is already playing	вече се възпроизвежда действие
+@msg	the action stopped playing: its document is no longer active	действието спря: документът му вече не е активен
+@msg	speed must be accelerated, step or pause	speed трябва да е accelerated, step или pause
+@msg	seconds must be a whole number from 1 to 60	seconds трябва да е цяло число от 1 до 60
+@msg	no such function key	няма такъв функционален клавиш
+@msg	no such color	няма такъв цвят
+@msg	{_1} cannot be used on Windows	{_1} не може да се използва в Windows
+@msg	more than one action is named “{_1}”	повече от едно действие се казва „{_1}“
 @msg	no symbol named `{n}`	няма символ с име `{n}`
 	Smudge Stick…	Размазваща пръчка…
 	Smudge Stick	Размазваща пръчка
@@ -5298,8 +5636,13 @@ theme	Appearance	Външен вид
 	Persistent	Постоянна
 	Locate Library…	Намиране на библиотека…
 	Library Panel Options	Опции на панела с библиотека
+	Snapping	Прилепване
+	Snap to Tangent	Прилепване към допирателна
+	Snap to Perpendicular	Прилепване към перпендикуляр
+@msg	unknown snap option `{key}` (use {options})	неизвестна опция за прилепване `{key}` (използвайте {options})
 	Gap Length:	Дължина на пропуска:
 	Artboard {n} of {total}	Работна област {n} от {total}
+	File {n} of {total}	Файл {n} от {total}
 	Encoding and writing the file…	Кодиране и записване на файла…
 @plural	{n} more export waiting|{n} more exports waiting	Още {n} експортиране в изчакване|Още {n} експортирания в изчакване
 	Continue in Background	Продължаване във фонов режим
@@ -5310,7 +5653,7 @@ theme	Appearance	Външен вид
 	Word Spacing:	Разстояние между думите:
 	Letter Spacing:	Разстояние между буквите:
 	Glyph Scaling:	Мащабиране на знаците:
-	Auto Leading:	Автоматична междуредова разредка:
+	Auto Leading:	Автоматично междуредие:
 	Single Word Justification:	Подравняване на единична дума:
 	Full Justify	Пълно двустранно
 	Minimum must not exceed Desired, nor Desired Maximum.	Минималната стойност не може да надвишава желаната, нито желаната – максималната.
@@ -5323,7 +5666,10 @@ theme	Appearance	Външен вид
 	Effect Gallery	Галерия с ефекти
 	Filters	Филтри
 	Select artwork to apply effects	Изберете графика, за да приложите ефекти
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	променливите и наборите от данни на файла не бяха прочетени (променливи: {variables}, набори от данни: {data_sets}): панелът „Променливи“ не ги показва
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	не всички връзки на променливите във файла бяха прочетени (пропуснати връзки: {_1}): тези обекти не са свързани със своите променливи
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	библиотеката с променливи на файла беше прочетена частично (пропуснати записи: {_1}): панелът „Променливи“ показва останалите
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	библиотеката с променливи на файла не можа да бъде прочетена: панелът „Променливи“ не я показва
+@msg	a variable of unknown kind can't be bound to objects	променлива от неизвестен вид не може да бъде свързана с обекти
 # Select by Color (select.color)
 	Select by Color	Избиране по цвят
 	Move Anchor Point	Преместване на опорна точка
@@ -5348,6 +5694,8 @@ theme	Appearance	Външен вид
 	Water Paper	Мокра хартия
 	Ruby…	Руби…
 	Ruby	Руби
+	Geometric Guides	Геометрични водачи
+	Geometric Patterns	Геометрични мостри
 	Ease In	Плавно начало
 	Ease Out	Плавен край
 	Ease In Out	Плавно начало и край
@@ -5356,6 +5704,12 @@ theme	Appearance	Външен вид
 	Shift:	Изместване:
 	Fresco…	Фреска…
 	Fresco	Фреска
+	Lock Artboards	Заключване на работни области
+	Unlock Artboards	Отключване на работни области
+	Lock Selected	Заключване на избраните
+	Lock All Except Selected	Заключване на всички без избраните
+	Lock All	Заключване на всички
+	Unlock Selected	Отключване на избраните
 	Effect Gallery…	Галерия с ефекти…
 	Effect Gallery Dialog	Диалог „Галерия с ефекти“
 	Arc Segment Tool Options	Опции на инструмента „Дъгов сегмент“
@@ -5368,10 +5722,662 @@ theme	Appearance	Външен вид
 	Slope:	Наклон:
 axis	X Axis	X ос
 axis	Y Axis	Y ос
-@msg	Packaged {n} file(s) in {folder}	Пакетирани са {n} файла в {folder}
-@msg	Packaged {n} file(s) {note}	Пакетирани са {n} файла {note}
-@msg	Packaged {n} file(s)	Пакетирани са {n} файла
-	Packaged {n} file(s)	Пакетирани са {n} файла
-	Packaged {n} file(s) in {folder}	Пакетирани са {n} файла в {folder}
-	Packaged {n} file(s) {note}	Пакетирани са {n} файла {note}
-	{count} file(s) in {folder}. Show the package folder?	{count} файл(а) в {folder}. Показване на папката на пакета?
+@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Пакетиран е {n} файл в {folder}|Пакетирани са {n} файла в {folder}
+@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	Пакетиран е {n} файл {note}|Пакетирани са {n} файла {note}
+@msgplural	Packaged {n} file|Packaged {n} files	Пакетиран е {n} файл|Пакетирани са {n} файла
+@plural	Packaged {n} file|Packaged {n} files	Пакетиран е {n} файл|Пакетирани са {n} файла
+@plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Пакетиран е {n} файл в {folder}|Пакетирани са {n} файла в {folder}
+@plural	Packaged {n} file {note}|Packaged {n} files {note}	Пакетиран е {n} файл {note}|Пакетирани са {n} файла {note}
+@plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	{n} файл в {folder}. Показване на папката на пакета?|{n} файла в {folder}. Показване на папката на пакета?
+	Clockwise	По часовниковата стрелка
+	Dither	Дитъринг
+	Fine noise hides banding in the gradient fill	Фин шум скрива ивиците в градиентната запълка
+@msg	`dither` applies to gradient fills (stroke: false)	`dither` се прилага към градиентни запълки (stroke: false)
+@msg	`dither` applies to gradient fills (paint.setFill)	`dither` се прилага към градиентни запълки (paint.setFill)
+@msg	`dither` must be true or false	`dither` трябва да бъде true или false
+@msg	`method` must be classic or perceptual	`method` трябва да е classic или perceptual
+# Heavy plug-in filters (plugin.inspect, plug-in runs)
+	Install “{name}”, which asks for a heavy budget?	Да се инсталира ли „{name}“, който иска голям изчислителен бюджет?
+	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Всяко изпълнение може да продължи до {minutes} минути и да свърши {times} пъти повече работа, отколкото е позволено на другите приставки. То се изпълнява във фонов режим и можете да го откажете.
+	It may take minutes, so it runs in the background, where you can cancel it.	Това може да отнеме минути, затова се изпълнява във фонов режим, където можете да го откажете.
+	The plug-in is computing…	Приставката изчислява…
+	Inspect Plug-in	Проверка на приставка
+	Cancel Plug-in Run	Отказ от изпълнението на приставката
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	Да се инсталира ли „{name}“, който иска тези права?
+	ID: {id}	ID: {id}
+	Version: {version}	Версия: {version}
+	Install “{name}” in place of the plug-in with the same ID?	Да се инсталира ли „{name}“ на мястото на приставката със същия ID?
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Този файл не е приставката, инсталирана преди с този ID. Той получава настройките и кеша, пазени за този ID.
+	File SHA-256: {hash}	SHA-256 на файла: {hash}
+	Read the objects it is given	Четене на обектите, които получава
+	Change, add and delete objects in the document	Промяна, добавяне и изтриване на обекти в документа
+	Keep data of its own with the document	Съхраняване на собствени данни в документа
+	Change how the objects its effect is applied to are drawn	Промяна на начина, по който се рисуват обектите, към които е приложен ефектът му
+	Write the document as a file in its own format	Записване на документа като файл в собствен формат
+	Show its progress, see Cancel and write log lines	Показване на напредъка, разпознаване на отказ и записване на редове в дневника
+	Keep settings of its own	Съхраняване на собствени настройки
+	Keep a cache of its own, which you can clear	Съхраняване на собствен кеш, който можете да изчистите
+	Clear Plug-in Cache	Изчистване на кеша на добавката
+# Actions panel: action sets (#3712).
+	New Set…	Нов набор…
+	New Set	Нов набор
+	Set Options…	Опции на набора…
+	Set Options	Опции на набора
+	Action Options…	Опции на действието…
+	Action Options	Опции на действието
+	Playback Options…	Опции за възпроизвеждане…
+	Insert Stop…	Вмъкване на спиране…
+	Insert Stop	Вмъкване на спиране
+	Record Stop	Записване на спиране
+	Allow Continue	Разрешаване на продължаване
+	Continue	Продължаване
+	Continue Action	Продължаване на действието
+	Delete Action Step	Изтриване на стъпка от действието
+	Press Play Current Selection in the Actions panel to go on.	За да продължите, натиснете „Изпълнение на текущия избор“ в панела „Действия“.
+	Stop: {message}	Спиране: {message}
+@msg	no action is waiting at a stop	няма действие, което чака при спиране
+@msg	message must be text	message трябва да бъде текст
+@msg	allowContinue must be true or false	allowContinue трябва да бъде true или false
+@msg	Batch cannot play an action with a stop	Пакет не може да изпълни действие със спиране
+	Playback Options	Опции за възпроизвеждане
+	Accelerated	Ускорено
+	Step by Step	Стъпка по стъпка
+	Pause For	Пауза за
+	Rename Action	Преименуване на действие
+	New Action…	Ново действие…
+	New Action	Ново действие
+	Create New Action	Създаване на ново действие
+	Play Action	Изпълнение на действие
+	Action Set:	Набор от действия:
+	Function Key:	Функционален клавиш:
+	Record	Запис
+	Create New Set	Създаване на нов набор
+	Stop Global Edit	Край на глобалното редактиране
+	Global Edit Options	Опции за глобално редактиране
+	Leave Out of Global Edit	Изключване от глобалното редактиране
+@msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Глобалното редактиране работи с пътища, съставни пътища, екземпляри на символи и групи от тях
+	Match	Съвпадение
+	On Artboards	В работните области
+	All Artboards	Всички работни области
+	Include Objects On Canvas	Включване на обекти от платното
+@plural	Result: {n}|Results: {n}	Резултат: {n}|Резултати: {n}
+	Add to Symbols	Добавяне към символи
+	Basic Shapes	Основни фигури
+	Open Symbol Library	Отваряне на библиотека със символи
+	Save Symbol Library	Запазване на библиотека със символи
+	Save Symbol Library…	Запази библиотека със символи…
+	Save Symbols…	Запази символи…
+	Selected Symbols Only	Само избрани символи
+	Symbol Libraries Menu	Меню с библиотеки със символи
+	Symbol Library	Библиотека със символи
+	User Symbol Library 1	Потребителска библиотека със символи 1
+	User Symbol Library 2	Потребителска библиотека със символи 2
+	User Symbol Library 3	Потребителска библиотека със символи 3
+	User Symbol Library 4	Потребителска библиотека със символи 4
+	User Symbol Library 5	Потребителска библиотека със символи 5
+	User Symbol Library 6	Потребителска библиотека със символи 6
+	User Symbol Library 7	Потребителска библиотека със символи 7
+	User Symbol Library 8	Потребителска библиотека със символи 8
+	User Symbol Library 9	Потребителска библиотека със символи 9
+	User Symbol Library 10	Потребителска библиотека със символи 10
+	{w} × {h} pt	{w} × {h} pt
+@msg	Trap: select two or more objects filled with solid colours	Застъпване: изберете два или повече обекта, запълнени с плътни цветове
+@msg	Trap: no edges of different colours meet among the selected objects	Застъпване: сред избраните обекти няма допиращи се ръбове с различни цветове
+@msg	thickness must be from 0.01 to 5000 pt	thickness трябва да е от 0,01 до 5000 pt
+@msg	heightWidth must be from 1 to 1000 %	heightWidth трябва да е от 1 до 1000 %
+@msg	tintReduction must be from 0 to 100 %	tintReduction трябва да е от 0 до 100 %
+	Rectangular Grid Tool Options	Опции на инструмента „Правоъгълна мрежа“
+	Polar Grid Tool Options	Опции на инструмента „Полярна мрежа“
+	Fill Line	Запълване на линия
+	Pathfinder Options	Опции за търсач на пътища
+	Divide and Outline Will Remove Unpainted Artwork	„Разделяне“ и „Контур“ премахват небоядисаната графика
+@msg	precision must be from 0.001 to 10 pt	precision трябва да е от 0,001 до 10 pt
+@msg	`pathfinder` must be an object	`pathfinder` трябва да бъде обект
+	Add to Brushes	Добавяне към четки
+	Brush Library	Библиотека с четки
+	Save Brush Library	Запази библиотека с четки
+	Save Brushes…	Запази четки…
+	Open Brush Library	Отваряне на библиотека с четки
+	Selected Brushes Only	Само избрани четки
+	Brush Libraries Menu	Меню с библиотеки с четки
+	User Brush Library 1	Потребителска библиотека с четки 1
+	User Brush Library 2	Потребителска библиотека с четки 2
+	User Brush Library 3	Потребителска библиотека с четки 3
+	User Brush Library 4	Потребителска библиотека с четки 4
+	User Brush Library 5	Потребителска библиотека с четки 5
+	User Brush Library 6	Потребителска библиотека с четки 6
+	User Brush Library 7	Потребителска библиотека с четки 7
+	User Brush Library 8	Потребителска библиотека с четки 8
+	User Brush Library 9	Потребителска библиотека с четки 9
+	User Brush Library 10	Потребителска библиотека с четки 10
+	Art Ribbons	Арт ленти
+	Calligraphic Nibs	Калиграфски писци
+	Pattern Borders	Бордюри с мостри
+	Scatter Shapes	Разсеяни фигури
+	Save Brush Library…	Запази библиотека с четки…
+@msg	no empty artboards to delete	няма празни работни области за изтриване
+	Scale Presets	Пресети за мащаб
+# Object › Expand… dimmed until Expand Appearance (#3089).
+	Expand Appearance first (Object › Expand Appearance)	Първо разширете външния вид (Обект › Разширяване на външния вид)
+	Live preview	Преглед на живо
+# Align panel menu › Align to Glyph Bounds (#4231).
+	Point Text	Точков текст
+	Area Text	Текст в зона
+# Character panel menu › Show Snap to Glyph Options (#4232).
+	Show Snap to Glyph Options	Показване на опциите за прилепване към глиф
+	Hide Snap to Glyph Options	Скриване на опциите за прилепване към глиф
+	Snap to Glyph Options	Опции за прилепване към глиф
+	x-height	Височина на x
+	Glyph Bounds	Граници на глифа
+	Proximity Guides	Водачи за близост
+	Angular Guides	Ъглови водачи
+# Average & Join (Object › Path, Cmd+Alt+Shift+J).
+	Average & Join…	Усредняване и свързване…
+	Average & Join	Усредняване и свързване
+anchor	Points:	Точки:
+@msg	select two open path ends, or two open paths, to average and join	изберете два края на отворени пътища или два отворени пътя за усредняване и свързване
+
+# Artwork Cleanup add-on (Object › Plug-ins › Artwork Cleanup): its panel, tools, issue kinds and messages.
+	Artwork Cleanup	Почистване на графиката
+	Simplify Anchors (Keep Shape)…	Опростяване на опорните точки (запазване на формата)…
+	Health Check	Проверка на състоянието
+	Show Issue	Показване на проблема
+	Fix All Issues	Отстраняване на всички проблеми
+	Fix Issues	Отстраняване на проблемите
+	Deep Ungroup…	Разгрупиране на всички нива…
+	Rejoin Path Pieces…	Повторно свързване на части от пътища…
+	Document Health Check	Проверка на състоянието на документа
+	Check Selection	Проверка на селекцията
+	Check Document	Проверка на документа
+	No issues found.	Не са открити проблеми.
+	Changed since the last check.	Променено след последната проверка.
+	Fix Selected	Отстраняване на избраните
+	Fix All	Отстраняване на всички
+	Issues fixed: {count}	Отстранени проблеми: {count}
+	Open a document to check it for issues.	Отворете документ, за да го проверите за проблеми.
+	Empty Text	Празен текст
+	Unpainted Objects	Обекти без цвят
+	Zero-Opacity Objects	Обекти с нулева непрозрачност
+	Duplicate Objects	Дублирани обекти
+	Off-Artboard Art	Графика извън работните области
+	Duplicate Anchors	Дублирани опорни точки
+	Tiny Handles	Миниатюрни дръжки
+	Collinear Anchors	Колинеарни опорни точки
+	Nearly Coincident Anchors	Почти съвпадащи опорни точки
+	Nearly Closed Paths	Почти затворени пътища
+	Filled Open Paths	Запълнени отворени пътища
+	Needless Clipping Groups	Излишни групи за изрязване
+	Needless Compound Paths	Излишни съставни пътища
+	Needless Groups	Излишни групи
+	Empty Artboards	Празни работни области
+	Protect Corners	Защита на ъглите
+	Gap	Разстояние
+	Include Clip Groups	Включване на групите за изрязване
+@msg	`tolerance` must be from 1 to 100	`tolerance` трябва да е от 1 до 100
+@msg	`gap` must be from 0 to 6 pt	`gap` трябва да е от 0 до 6 pt
+@msg	Simplify Anchors: the paths have too many anchors to simplify at once	Опростяване на опорните точки: пътищата имат твърде много опорни точки, за да се опростят наведнъж
+@msg	Rejoin Path Pieces: too many paths to rejoin at once	Повторно свързване на части от пътища: твърде много пътища за свързване наведнъж
+@msg	None of these issues are left: check again	Не е останал нито един от тези проблеми: проверете отново
+@msg	`kinds` must be a list of issue kinds	`kinds` трябва да е списък с видове проблеми
+@msg	missing `kind`	липсва `kind`
+	Simplify Anchors (Keep Shape)	Опростяване на опорните точки (запазване на формата)
+	Deep Ungroup	Разгрупиране на всички нива
+	Rejoin Path Pieces	Повторно свързване на части от пътища
+
+# Color Effects add-on (Object › Plug-ins › Color Effects, Effect › Color Effects): its effects, panel and messages.
+	Color Effects	Цветови ефекти
+	Color Effects Panel	Панел „Цветови ефекти“
+	Exposure	Експонация
+	Exposure…	Експонация…
+	Desaturate	Обезцветяване
+	Adjustment	Корекция
+	Add as Effect	Добавяне като ефект
+	Apply as Filter	Прилагане като филтър
+	Select objects to adjust their colors.	Изберете обекти, за да коригирате цветовете им.
+	Brightness/Contrast	Яркост/Контраст
+	Hue/Saturation	Оттенък/Наситеност
+	Temperature/Tint	Температура/Нюанс
+@msg	`{id}` is not a colour adjustment	`{id}` не е цветова корекция
+@msg	missing `effect`	липсва `effect`
+@msg	`params` must be an object	`params` трябва да бъде обект
+# Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
+	Path Precision Tools	Инструменти за прецизни пътища
+	Anchor Eraser Brush	Четка за изтриване на опорни точки
+	Extend Path Tool	Инструмент „Удължаване на път“
+	Measure & Inspect Tool	Инструмент „Измерване и проверка“
+	Anchor Inspector	Инспектор на опорни точки
+	Add Points at Crossings	Добавяне на точки в пресичанията
+	Split at Crossings	Разделяне в пресичанията
+	Extend Path	Удължаване на път
+	Measure & Inspect	Измерване и проверка
+	Set Anchor	Задаване на опорна точка
+	Make Smooth	Направи гладка
+	Make Corner	Направи ъглова
+	Equalize Handles	Изравняване на дръжките
+	Remove Points, Keep Shape	Премахване на точки, запазване на формата
+	Add Points to Segments…	Добавяне на точки към сегменти…
+	Add Points to Segments	Добавяне на точки към сегменти
+	Open a document to edit its anchor points.	Отворете документ, за да редактирате опорните му точки.
+	Anchors selected: {count}	Избрани опорни точки: {count}
+	Direct-select anchor points to edit them.	Изберете опорните точки директно, за да ги редактирате.
+	In:	Вход:
+	Out:	Изход:
+	Add Points	Добавяне на точки
+	Points per segment	Точки на сегмент
+	Close Path:	Затваряне на пътя:
+	Keep Handles	Запазване на дръжките
+	Straight	Прав
+	Stretch Curve	Разтягане на кривата
+@msg	direct-select the anchor points to remove	изберете директно опорните точки за премахване
+@msg	select segments, or paths, to add points to	изберете сегменти или пътища, към които да се добавят точки
+@msg	select open paths to close	изберете отворени пътища за затваряне
+@msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	пътищата са твърде много или твърде заплетени, за да се намерят пресичанията им (най-много 10000 сегмента)
+@msg	the paths have too many anchors to edit at once	пътищата имат твърде много опорни точки, за да се редактират наведнъж
+# Path Precision Tools add-on: the Parametric Shape Tool, its panel, commands and messages.
+	Parametric Shape Tool	Инструмент „Параметрична форма“
+	Parametric Shape	Параметрична форма
+	Edit Parametric Shape	Редактиране на параметрична форма
+	Convert to Parametric Shape	Преобразуване в параметрична форма
+	Ring	Пръстен
+	Heart	Сърце
+	Gear	Зъбно колело
+	Speech Bubble	Балонче за реч
+	Count:	Брой:
+	Thickness:	Дебелина:
+	Inner Radius:	Вътрешен радиус:
+	Head:	Глава:
+	Shaft:	Стъбло:
+	Point:	Връх:
+	Tooth Height:	Височина на зъба:
+	Tail:	Опашка:
+	Tip:	Връх:
+	Open a document to draw parametric shapes.	Отворете документ, за да рисувате параметрични форми.
+	Select a parametric shape to edit it. With none selected, these set the next shape.	Изберете параметрична форма, за да я редактирате. Без избрана форма тези стойности важат за следващата.
+@msg	the object is not an editable parametric shape	обектът не е редактируема параметрична форма
+@msg	select plain rectangles, ellipses or regular polygons to convert	изберете обикновени правоъгълници, елипси или правилни многоъгълници за преобразуване
+@msg	the shape's numbers are out of range	стойностите на формата са извън допустимия обхват
+@msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	`kind` трябва да е едно от: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble
+@msg	`count` must be a whole number from 3 to 1000	`count` трябва да е цяло число от 3 до 1000
+@msg	`{key}` must be from {lo} to {hi}	`{key}` трябва да е от {lo} до {hi}
+# Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
+	Smart Pen	Интелигентно перо
+	Smart Pen Tool	Инструмент „Интелигентно перо“
+	Smart Pen Panel	Панел „Интелигентно перо“
+	Next Segment	Следващ сегмент
+	Curved	Крив
+	Retract Handles	Прибиране на дръжките
+	Close or Join	Затваряне или свързване
+	Open a document to draw with the Smart Pen.	Отворете документ, за да рисувате с интелигентното перо.
+	Straight or Curved Segment	Прав или крив сегмент
+@msg	the path is locked or hidden	пътят е заключен или скрит
+@msg	`id` is not a path	`id` не е път
+@msg	the path has no open subpath	пътят няма отворен подпът
+@msg	the subpath is closed	подпътят е затворен
+@msg	the subpath is closed or too short to close	подпътят е затворен или е твърде къс, за да се затвори
+@msg	the path is too short to remove a point from	пътят е твърде къс, за да се премахне точка от него
+@msg	the segment can't be bent that far	сегментът не може да се огъне толкова
+@msg	give `{a}` and `{b}`	задайте `{a}` и `{b}`
+@msg	`t` must be from 0 to 1	`t` трябва да е от 0 до 1
+@msg	`segment` must be "straight" or "curved"	`segment` трябва да е "straight" или "curved"
+@msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` трябва да е "free", "keepAngles" или "symmetric"
+@msg	`{key}` must be [x, y]	`{key}` трябва да е [x, y]
+
+# Color Effects add-on: Select by Color Kind.
+	Select by Color Kind	Избиране по вид цвят
+	Objects with Spot Colors	Обекти с плакатни цветове
+	Objects with Color Effects	Обекти с цветови ефекти
+	RGB Images	RGB изображения
+	CMYK Images	CMYK изображения
+	Grayscale Images	Изображения в нюанси на сивото
+@msg	`kind` must be spotColors, colorEffects, rgbImages, cmykImages or grayImages	`kind` трябва да е spotColors, colorEffects, rgbImages, cmykImages или grayImages
+
+# Color Effects add-on: Vector Halftone (Effect › Color Effects).
+	Dot Color from Art	Цвят на точките от илюстрацията
+
+# Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
+	Duotone…	Двутон…
+	Duotone	Двутон
+	Print Ink Fixes…	Корекции на мастилата за печат…
+	Print Ink Fixes	Корекции на мастилата за печат
+	Inks	Мастила
+	Tone 1	Тон 1
+	Tone 2	Тон 2
+	Tone 3	Тон 3
+	Tone 4	Тон 4
+	Curve	Крива
+	Reset to Linear	Връщане към линейна
+	Reset to Inverse	Връщане към обърната
+	Skip Objects with Spot Colors	Пропускане на обекти с плакатни цветове
+	Ink Limit	Лимит на мастилото
+	Exclude Pure Black	Без чисто черно
+	Remove White Overprint	Премахване на напечатването на бялото
+	Overprint Black	Напечатване на черното
+	Text Only	Само текст
+@msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	задайте `inkLimit`, `removeWhiteOverprint` или `overprintBlack`
+@msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Корекциите на мастилата за печат работят върху CMYK документи: първо изберете Файл › Цветен режим на документа › CMYK цвят
+@msg	`{key}` must be 0..{max}	`{key}` трябва да е 0..{max}
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Намиране на най-близкия образец…
+	Find Nearest Swatch	Намиране на най-близкия образец
+	Apply Nearest Swatch	Прилагане на най-близкия образец
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Прилагане на запълването към щриха
+	Apply Stroke to Fill	Прилагане на щриха към запълването
+	Select objects to find the swatches nearest their colors.	Изберете обекти, за да намерите най-близките до цветовете им образци.
+@msg	select objects or give `color`	изберете обекти или задайте `color`
+@msg	`color` is not a colour	`color` не е цвят
+# Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
+	Corner Tool	Инструмент „Ъгли“
+	Slide Anchor Along Path	Плъзгане на опорна точка по пътя
+	Set Corners	Задаване на ъгли
+	Remove Corners	Премахване на ъгли
+	Corners selected: {count}	Избрани ъгли: {count}
+	Apply to Selected Anchors	Прилагане към избраните опорни точки
+@msg	`radius` must be from 0 to 1000000 pt	`radius` трябва да е от 0 до 1000000 pt
+@msg	`t` must be a number from -0.98 to 0.98	`t` трябва да е число от -0.98 до 0.98
+@msg	choose anchors where two sides meet at an angle: only those take a corner	изберете опорни точки, където две страни се срещат под ъгъл: само те могат да имат ъгъл
+@msg	give `anchor`, the index of the anchor to slide	посочете `anchor`, индекса на опорната точка за плъзгане
+@msg	that anchor can't slide: an end of an open path has nowhere to go	тази опорна точка не може да се плъзга: краят на отворен път няма накъде да отиде
+# Path Precision Tools add-on: the Shared Edge Merge Tool and Keep Shared Points Together.
+	Shared Edge Merge Tool	Инструмент „Сливане на общ ръб“
+	Merge Shared Edge	Сливане на общ ръб
+	Keep Shared Points Together	Общите точки да остават заедно
+	Shared Edges	Общи ръбове
+	Coincidence:	Съвпадение:
+@msg	`a` and `b` must be two different paths	`a` и `b` трябва да са два различни пътя
+@msg	`diameter` must be from 0.25 to 200 pt	`diameter` трябва да е от 0.25 до 200 pt
+@msg	`tolerance` must be from 0 to 3 pt	`tolerance` трябва да е от 0 до 3 pt
+@msg	`follow` must be "average", "a" or "b"	`follow` трябва да е "average", "a" или "b"
+@msg	the paths have nothing to merge there	пътищата нямат какво да се слеят тук
+
+# Artwork Cleanup add-on: its text tools (Object › Plug-ins › Artwork Cleanup and the panel's Text row) and their messages.
+	Break Text	Разделяне на текст
+	Combine Point Text	Обединяване на точков текст
+	Join Point Text	Съединяване на точков текст
+	Remove Breaks	Премахване на прекъсвания
+	Split Text at Cursor	Разделяне на текст при курсора
+	Set Alignment, Keep Position	Задаване на подравняване със запазване на позицията
+	Reset Text Transform	Нулиране на трансформацията на текста
+	Replace Missing Fonts…	Замяна на липсващите шрифтове…
+	Replace Missing Fonts	Замяна на липсващите шрифтове
+	Remove Line Breaks	Премахване на прекъсванията на редове
+	Remove Paragraph Breaks	Премахване на прекъсванията на абзаци
+	Break Text into Lines	Разделяне на текста на редове
+	Break Text into Paragraphs	Разделяне на текста на абзаци
+	Break Text into Words	Разделяне на текста на думи
+	Break Text into Glyphs	Разделяне на текста на глифи
+	Reset Text Transform and Scale	Нулиране на трансформацията и мащаба на текста
+	Set Alignment, Keep Position:	Подравняване със запазване на позицията:
+	Break Text into:	Разделяне на текста на:
+	Split at Cursor	Разделяне при курсора
+	Reset Transform	Нулиране на трансформацията
+	Shift-click: break into paragraphs	Shift-щракване: разделяне на абзаци
+	Alt-click: reset the horizontal scale too	Alt-щракване: нулиране и на хоризонталния мащаб
+breakText	Lines	Редове
+breakText	Words	Думи
+breakText	Glyphs	Глифи
+@msg	Click in type with a Type tool to split it	Щракнете в текст с инструмента „Текст“, за да го разделите
+@msg	Too many type objects to change at once	Твърде много текстови обекти за промяна наведнъж
+@msg	Too many pieces to make at once	Твърде много части за създаване наведнъж
+@msg	Select horizontal point or area type whose text fits	Изберете хоризонтален точков текст или текст в зона, чийто текст се побира
+@msg	Nothing to split at the cursor	При курсора няма какво да се раздели
+@msg	Select two or more one-line point type objects on one baseline to combine	Изберете два или повече едноредови обекта с точков текст на една базова линия, за да ги обедините
+@msg	Select two or more one-line point type objects to join	Изберете два или повече едноредови обекта с точков текст, за да ги съедините
+@msg	No line breaks to remove	Няма прекъсвания на редове за премахване
+@msg	No paragraph breaks to remove	Няма прекъсвания на абзаци за премахване
+@msg	Too many breaks to remove at once	Твърде много прекъсвания за премахване наведнъж
+@msg	Select point type	Изберете точков текст
+@msg	The point type is aligned that way already	Точковият текст вече е подравнен така
+@msg	The point type has no transform to reset	Точковият текст няма трансформация за нулиране
+@msg	No fonts are missing	Няма липсващи шрифтове
+@msg	the replacement font is not available	заместващият шрифт не е наличен
+@msg	missing `align`	липсва `align`
+@msg	`by` must be lines, paragraphs, words or glyphs, not {other}	`by` трябва да е lines, paragraphs, words или glyphs, а не {other}
+@msg	`kind` must be "line" or "paragraph", not {other}	`kind` трябва да е "line" или "paragraph", а не {other}
+@msg	`align` must be "left", "center" or "right", not {other}	`align` трябва да е "left", "center" или "right", а не {other}
+	File + Number	Файл + номер
+	File + Data Set Name	Файл + име на набора от данни
+	Data Set Name	Име на набора от данни
+@msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` трябва да е `fileNumber`, `fileDataSetName` или `dataSetName`
+	Each data set saves over the same file, which keeps only the last data set.	Всеки набор от данни се записва върху същия файл, в който остава само последният набор от данни.
+@msg	save the document with Save As before Save and Close	запазете документа със „Запази като“ преди „Запази и затвори“
+@msg	no free data set file name in destination folder	Няма свободно име за файл на набор от данни в целевата папка
+
+# Path Precision Tools add-on: Path Effects (Effect › Path Effects).
+	Mode	Режим
+	Path Effects	Ефекти на пътя
+	Reverse Direction	Обръщане на посоката
+	Align to Corners and Ends	Подравняване към ъглите и краищата
+	Count	Брой
+	Max Count	Максимален брой
+	Start Length	Дължина в началото
+	Start Percent	Процент в началото
+	Start Shape	Форма в началото
+	End Length	Дължина в края
+	End Percent	Процент в края
+	End Shape	Форма в края
+	By Count	По брой
+	By Distance	По разстояние
+	Both	И двете
+	Shorter Than Length	По-къси от дължината
+	Dashes to Geometry	Тирета в геометрия
+	Dashes to Geometry…	Тирета в геометрия…
+	Add Anchors	Добавяне на опорни точки
+	Add Anchors…	Добавяне на опорни точки…
+	Smooth Anchors	Заглаждане на опорните точки
+	Smooth Anchors…	Заглаждане на опорните точки…
+	Simplify Anchors	Опростяване на опорните точки
+	Simplify Anchors…	Опростяване на опорните точки…
+	Split at Anchors	Разделяне в опорните точки
+	Split at Anchors…	Разделяне в опорните точки…
+	Extend Path…	Удължаване на път…
+	Close Path…	Затваряне на пътя…
+	Retract Handles…	Прибиране на дръжките…
+	Dash 1	Тире 1
+	Gap 1	Разстояние 1
+	Dash 2	Тире 2
+	Gap 2	Разстояние 2
+	Dash 3	Тире 3
+	Gap 3	Разстояние 3
+	Dash 4	Тире 4
+	Gap 4	Разстояние 4
+	Dash 5	Тире 5
+	Gap 5	Разстояние 5
+
+@msg	{_1}: they came in as the page's art	{_1}: те са внесени като изображението от страницата
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	изкривени текстови обекти, внесени като изображение, а не като редактируем текст: {_1}
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	обектите, изобразени различно от собствената страница на файла, са внесени като изображението от страницата: {_1}
+
+@msg	You must choose a side pattern.	Трябва да изберете страничен шаблон.
+@msg	invalid pattern tile choice	невалиден избор на плочка за шаблон
+@msg	no pattern named `{choice}`	няма шаблон с име `{choice}`
+	Delete the selected brushes?	Да се изтрият избраните четки?
+	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Щрихи използват една или повече от тези четки. Да се премахнат ли четките от тези щрихи и да се изтрият четките?
+	Remove Strokes	Премахване на щрихи
+# Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
+	Arrange Tools	Инструменти за подреждане
+	Arrange in Grid…	Подреждане в мрежа…
+	Arrange in Grid	Подреждане в мрежа
+	Swap Objects	Размяна на обекти
+	Swap Objects and Sizes	Размяна на обекти и размери
+	Replace with Top Object…	Замяна с горния обект…
+	Replace with Top Object	Замяна с горния обект
+	Set Size of Each…	Задаване на размер на всеки…
+	Set Size of Each	Задаване на размер на всеки
+@msg	select exactly two objects	изберете точно два обекта
+@msg	give `width` or `height`	задайте `width` или `height`
+# Arrange Tools add-on: Group Overlapping Objects.
+	Group Overlapping Objects	Групиране на припокриващи се обекти
+@msg	too many objects selected (at most 20000)	избрани са твърде много обекти (най-много 20000)
+# Path Precision Tools add-on: Divide into Dashes.
+	Divide into Dashes…	Разделяне на тирета…
+	Divide into Dashes	Разделяне на тирета
+	Dash:	Тире:
+	Gap:	Разстояние:
+	Fit to Corners and Ends	Напасване към ъгли и краища
+	Remove Gaps	Премахване на разстоянията
+@msg	that makes too many pieces (at most 100000): make the dashes longer	така се получават твърде много части (най-много 100000): удължете тиретата
+@msg	select paths, or segments, to divide	изберете пътища или сегменти за разделяне
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	Разширяване на тиретата в пътища
+@msg	select paths with dashed strokes to expand	изберете пътища с прекъснат щрих за разширяване
+# Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
+	Document Tools	Инструменти за документи
+	Save a Timestamped Copy	Запазване на копие с дата и час
+@msg	there is no clock here	тук няма часовник
+@msg	there is no clock here: give `time` (Unix seconds)	тук няма часовник: задайте `time` (Unix секунди)
+@msg	the document has never been saved: give `folder`	документът никога не е запазван: задайте `folder`
+@msg	every numbered name for the copy is taken	всички номерирани имена за копието са заети
+# Document Tools add-on: New Symbols from Layers and Convert Layers to Symbols.
+	New Symbols from Layers	Нови символи от слоевете
+	Convert Layers to Symbols	Превръщане на слоевете в символи
+@msg	{id} is no top-level layer	{id} не е слой от най-горно ниво
+	Marathi	Маратхи
+	Gujarati	Гуджарати
+	Bengali	Бенгалски
+	Punjabi	Пенджабски
+	Tamil	Тамилски
+	Telugu	Телугу
+	Kannada	Каннада
+	Malayalam	Малаялам
+	Odia	Ория
+	Urdu	Урду
+	VectorCraft {release} and later (version {n})	VectorCraft {release} и по-нови (версия {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	Експортиране на всички отворени документи като PDF
+	Export All Open Documents as SVG	Експортиране на всички отворени документи като SVG
+@msgplural	Exported {n} document|Exported {n} documents	Експортиран е {n} документ|Експортирани са {n} документа
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Експортиран е {n} документ; {title} не беше записан: {error}|Експортирани са {n} документа; {title} не беше записан: {error}
+# Document Tools add-on: Batch Trace Folder (#4921).
+	Batch Trace Folder	Пакетно трасиране на папка
+@msgplural	Traced {n} image|Traced {n} images	Трасирано е {n} изображение|Трасирани са {n} изображения
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	{n} изображение не можа да бъде трасирано|{n} изображения не можаха да бъдат трасирани
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	Трасирано е {n} изображение; нетрасирани: {failed}|Трасирани са {n} изображения; нетрасирани: {failed}
+# Symbol Options › Symbol Type (dynamic symbols)
+	Symbol Type:	Тип на символа:
+	Dynamic Symbol	Динамичен символ
+	Static Symbol	Статичен символ
+	Symbol Instance Appearance	Външен вид на екземпляра на символ
+	Reset Symbol Instance	Нулиране на екземпляра на символ
+@msg	type must be static or dynamic, not {v}	type трябва да е static или dynamic, а не {v}
+@msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` е статичен символ: първо задайте типа на символа на „Динамичен“
+@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	На път, съставен път или текст, избран в екземпляр на символ, могат да се променят само плътните цветове на запълването и контура
+@msg	path must be a list of child indices	path трябва да е списък с индекси на дъщерни обекти
+@msg	no object at path {shown} in the symbol's art	в графиката на символа няма обект на пътя {shown}
+@msg	give fill, stroke, opacity and/or blend	задайте fill, stroke, opacity и/или blend
+@msg	pass newName, registration, exportType, nineSlice and/or type	задайте newName, registration, exportType, nineSlice и/или type
+	Text Flow	Поток на текста
+	By Rows	По редове
+	By Columns	По колони
+# Arrange Tools add-on: Randomize Opacity.
+	Randomize Opacity…	Произволна непрозрачност…
+	Randomize Opacity	Произволна непрозрачност
+	Minimum:	Минимум:
+	Maximum:	Максимум:
+	Seed:	Начално число:
+@msg	`min` is greater than `max`	`min` е по-голямо от `max`
+# Arrange Tools add-on: Sort Objects.
+	Sort Objects…	Сортиране на обекти…
+	Sort Objects	Сортиране на обекти
+	Sort By:	Сортиране по:
+	Apply To:	Прилагане към:
+	Area	Площ
+	X Position	Позиция по X
+	Y Position	Позиция по Y
+	Stacking Order	Ред на подреждане
+	Small to Large	От малко към голямо
+	Large to Small	От голямо към малко
+	Distribute Evenly	Равномерно разпределение
+# Preferences > Units > East Asian Type: Q and Ha, the Japanese typesetting units (a quarter of a millimetre each), named the same in every language.
+	Q	Q
+	Ha	Ha
+	Create Swatch Legend	Създаване на легенда на образците
+	Create Swatch Legend…	Създаване на легенда на образците…
+	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Инструменти за текст
+	Text Tweaker…	Настройка на текста…
+	Text Tweaker	Настройка на текста
+	Attribute:	Атрибут:
+	From:	От:
+	To:	До:
+	Bow	Дъга
+	Spike	Връх
+	Skip Spaces	Пропускане на интервалите
+	Release Type on a Path…	Освобождаване на текст по пътя…
+	Release Type on a Path	Освобождаване на текст по пътя
+	Text and Path	Текст и път
+	Path Only	Само път
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Графиката е твърде голяма, за да се копира като изображение: другите приложения не получават PNG от нея
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Избиране по работни области
+	Select by Artboards…	Избиране по работни области…
+	Selection Tools	Инструменти за избиране
+	Search artboards	Търсене в работните области
+	Fully Inside	Изцяло вътре
+	Fully Outside	Изцяло извън
+	No artboards match.	Няма съвпадащи работни области.
+	Chosen: {n} of {total}	Избрани: {n} от {total}
+
+# Contour add-on
+	Contour	Очертание
+	Contour Tool	Инструмент „Очертание“
+	Sharp	Заостряне
+	Bake	Разшири
+	Turn the Contour into plain paths	Превръща очертанието в обикновени пътища
+	Set Corners…	Задаване на ъгли…
+	All Anchors	Всички опорни точки
+	Odd-Numbered Anchors	Нечетни опорни точки
+	Even-Numbered Anchors	Четни опорни точки
+	Minimum angle	Минимален ъгъл
+	Maximum angle	Максимален ъгъл
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Избиране на свързаните
+	Select Embedded	Избиране на вградените
+	Select Missing	Избиране на липсващите
+	Select Modified	Избиране на модифицираните
+	Select by Link Status	Избиране по състояние на връзката
+	Select by Link Status…	Избиране по състояние на връзката…
+	Search images	Търсене на изображения
+	No images match.	Няма съвпадащи изображения.
+@msgplural	Selected {n} linked image|Selected {n} linked images	Избрано е {n} свързано изображение|Избрани са {n} свързани изображения
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	Избрано е {n} вградено изображение|Избрани са {n} вградени изображения
+@msgplural	Selected {n} missing image|Selected {n} missing images	Избрано е {n} липсващо изображение|Избрани са {n} липсващи изображения
+@msgplural	Selected {n} modified image|Selected {n} modified images	Избрано е {n} модифицирано изображение|Избрани са {n} модифицирани изображения
+@msgplural	Selected {n} image|Selected {n} images	Избрано е {n} изображение|Избрани са {n} изображения
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; още {n} е скрито или заключено|{selected}; още {n} са скрити или заключени
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; още {n} е в шаблонен слой|{selected}; още {n} са в шаблонни слоеве
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; още {n} е извън изолираната група|{selected}; още {n} са извън изолираната група
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; още {n} не може да бъде избрано сега|{selected}; още {n} не могат да бъдат избрани сега
+
+# Compound Shapes add-on
+	Compound Shapes	Съставни фигури
+	Shape Mode Buttons Make Compound Shapes	Бутоните за режими на фигури създават съставни фигури
+
+# 3D Box add-on
+	3D Box	3D кутия
+	3D Box Tool	Инструмент за 3D кутия
+
+# Safe Mode
+	Safe Mode…	Безопасен режим…
+	Safe Mode	Безопасен режим
+	Help › Safe Mode…	Помощ › Безопасен режим…
+	Enable on Re-launch	Включване при следващо стартиране
+	The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it.	Последното стартиране на VectorCraft спря, докато се зареждаше добавката {name}. Възможно е тя да не е причината.
+	Disable and Continue	Изключване и продължаване
+	Start Normally	Нормално стартиране
+	Start in Safe Mode	Стартиране в безопасен режим
+	VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.	VectorCraft е в безопасен режим: добавките не се зареждат и не се изпълняват, докато не стартира нормално.
+	Disabled plug-ins	Изключени добавки
+	No plug-ins are disabled.	Няма изключени добавки.
+@msg	Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally	Безопасният режим е включен: добавките не се зареждат и не се изпълняват, докато VectorCraft не стартира нормално
+@msg	give `id` or `file` (see plugin.safeMode)	задайте `id` или `file` (вижте plugin.safeMode)
+@msg	that plug-in isn't disabled (see plugin.safeMode)	тази добавка не е изключена (вижте plugin.safeMode)
+@msg	Couldn't save the disabled plug-ins for the next launch	Изключените добавки не можаха да бъдат запазени за следващото стартиране
+@msg	Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode	Разширяване на облика: ефект на добавка в селекцията не може да бъде разширен в безопасен режим
+
+# Align to Pixel Grid
+	Align to Pixel Grid	Подравняване към пикселната мрежа

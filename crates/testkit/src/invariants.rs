@@ -13,7 +13,8 @@ pub fn doc_json(doc: &Document) -> Value {
 
 /// Tree invariants: ids unique, `node_count` equals the number of walked nodes, `next_id` above
 /// every id, top level made of layers, layers only at the top or inside layers, clip groups have
-/// a first child, compound children are paths.
+/// a first child, compound children are paths, no image holds its own pixels (the document keeps
+/// them).
 pub fn check_document(doc: &Document) -> Result<(), String> {
     let mut seen = HashSet::new();
     let mut walked = 0usize;
@@ -31,6 +32,9 @@ pub fn check_document(doc: &Document) -> Result<(), String> {
             }
             NodeKind::Compound { children, .. } if children.iter().any(|c| !matches!(c.kind, NodeKind::Path { .. })) && err.is_none() => {
                 err = Some(format!("compound {} has a non-path child", n.id));
+            }
+            NodeKind::Image(im) if im.pixels.is_some() && err.is_none() => {
+                err = Some(format!("image {} holds its own pixels", n.id));
             }
             _ => {}
         }

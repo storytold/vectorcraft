@@ -29,8 +29,8 @@ use vectorcraft_geom::{Affine, PathData, Rect, Shape, union_opt};
 use crate::group::has_own_paint;
 use crate::reshape::{geometry_effects, leaf_geometry};
 use crate::{
-    GeomContext, apply_geometry_with, evaluate_container, expanded_live_group, has_geometry, has_item_geometry, has_pathfinder, needs_outline,
-    outline_art, paints, reshape,
+    GeomContext, apply_geometry_with, evaluate_container, expanded_live_group, has_geometry, has_item_geometry, has_pathfinder, has_transform_art,
+    needs_outline, outline_art, paints, reshape,
 };
 
 /// Most symbol instances in one object whose art [`Drawn`] measures with its geometry effects:
@@ -186,7 +186,10 @@ impl<'s, 'd> Drawn<'s, 'd> {
         let inner = || n.children().is_some_and(|ch| ch.iter().any(|c| self.draws_geometry(c)));
         let painted = || has_own_paint(n) && inner();
         match &n.kind {
-            NodeKind::Group { .. } | NodeKind::Layer { .. } if reshapes(n) || painted() => evaluate_container(n),
+            NodeKind::Group { .. } | NodeKind::Layer { .. } if reshapes(n) || painted() => evaluate_container(Some(self.symbols.document()), n),
+            // A Transform effect that copies with a gradient, scales strokes or moves patterns makes
+            // objects of their own, as the renderer draws them.
+            NodeKind::Path { .. } | NodeKind::Compound { .. } if has_transform_art(n) => reshape(Some(self.symbols.document()), n, None),
             NodeKind::Path { .. } | NodeKind::Compound { .. } if reshapes(n) => path_art(n),
             NodeKind::SymbolInstance { symbol, .. } => {
                 if geometry_effects(n).is_empty() && !self.symbol_draws(symbol) {
@@ -196,9 +199,10 @@ impl<'s, 'd> Drawn<'s, 'd> {
                 self.left.set(left);
                 let art = self.symbols.measure_art(symbol, Arc::clone)?;
                 // An instance in perspective is projected by `reshape`.
-                reshape(n, Some(&*art)).or_else(|| outline_art(n, Some(&*art)))
+                let doc = Some(self.symbols.document());
+                reshape(doc, n, Some(&*art)).or_else(|| outline_art(doc, n, Some(&*art)))
             }
-            _ if reshapes(n) => reshape(n, None),
+            _ if reshapes(n) => reshape(Some(self.symbols.document()), n, None),
             NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Repeat(_) if inner() => {
                 Some(expanded_live_group(Some(self.symbols.document()), n))
             }

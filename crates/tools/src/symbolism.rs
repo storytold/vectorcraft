@@ -11,7 +11,7 @@ use serde_json::{Value, json};
 use vectorcraft_geom::{Point, Shape};
 
 use crate::draw2::{FEEDBACK, GestureTool, points_json};
-use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
+use crate::{Action, Cursor, MAX_STROKE_SAMPLES, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey, previews_at};
 
 /// Create a symbolism tool or the brush-aware Paintbrush (None = not one of ours).
 pub fn create(id: &str) -> Option<Box<dyn Tool>> {
@@ -26,6 +26,8 @@ pub fn create(id: &str) -> Option<Box<dyn Tool>> {
 pub struct SymbolismTool {
     id: &'static str,
     points: Vec<Point>,
+    /// How many points the last preview had ([`previews_at`] thins previews of a long drag).
+    previewed: usize,
     active: bool,
     hover: Option<Point>,
     alt: bool,
@@ -53,7 +55,19 @@ impl SymbolismTool {
             "symbolStyler" => "symbolStyler",
             _ => "symbolSprayer",
         };
-        Self { id, points: vec![], active: false, hover: None, alt: false, diameter: 80.0, intensity: 5.0, density: 5.0, symbol: None, style: None }
+        Self {
+            id,
+            points: vec![],
+            previewed: 0,
+            active: false,
+            hover: None,
+            alt: false,
+            diameter: 80.0,
+            intensity: 5.0,
+            density: 5.0,
+            symbol: None,
+            style: None,
+        }
     }
 
     fn label(&self) -> &'static str {
@@ -103,6 +117,19 @@ impl SymbolismTool {
     }
 }
 
+impl SymbolismTool {
+    /// Ends the drag: what is committed is the last preview, so the whole drag is shown first.
+    fn finish(&mut self, cx: &ToolContext) -> Vec<Action> {
+        self.active = false;
+        let stale = (self.previewed != self.points.len()).then(|| {
+            let (c, v) = self.command(cx);
+            Action::Preview(c, v)
+        });
+        self.points.clear();
+        stale.into_iter().chain([Action::Commit]).collect()
+    }
+}
+
 impl Tool for SymbolismTool {
     fn id(&self) -> &'static str {
         self.id
@@ -116,6 +143,7 @@ impl Tool for SymbolismTool {
         match ev.kind {
             PointerKind::Down => {
                 self.points = vec![p];
+                self.previewed = 1;
                 self.active = true;
                 self.alt = ev.mods.alt;
                 let (c, v) = self.command(cx);
@@ -124,18 +152,19 @@ impl Tool for SymbolismTool {
             PointerKind::Drag if self.active => {
                 // Sprayer: thin the samples to a fraction of the brush; others: every few pixels.
                 let step = if self.id == "symbolSprayer" { (self.diameter * 0.15).max(cx.tol(3.0)) } else { cx.tol(3.0) };
-                if self.points.last().is_some_and(|l| l.distance(p) < step) {
+                // Each preview carries every point so far: a long drag stops growing and previews less often.
+                if self.points.len() >= MAX_STROKE_SAMPLES || self.points.last().is_some_and(|l| l.distance(p) < step) {
                     return vec![];
                 }
                 self.points.push(p);
+                if !previews_at(self.points.len()) {
+                    return vec![];
+                }
+                self.previewed = self.points.len();
                 let (c, v) = self.command(cx);
                 vec![Action::Preview(c, v)]
             }
-            PointerKind::Up if self.active => {
-                self.active = false;
-                self.points.clear();
-                vec![Action::Commit]
-            }
+            PointerKind::Up if self.active => self.finish(cx),
             _ => vec![],
         }
     }
@@ -157,11 +186,9 @@ impl Tool for SymbolismTool {
         }
         vec![]
     }
-    fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
+    fn deactivate(&mut self, cx: &ToolContext) -> Vec<Action> {
         if self.active {
-            self.active = false;
-            self.points.clear();
-            return vec![Action::Commit];
+            return self.finish(cx);
         }
         vec![]
     }
@@ -261,6 +288,9 @@ impl Tool for BrushPaintTool {
             self.inner.set_option(key, v);
         }
     }
+    fn wants_samples(&self) -> bool {
+        self.inner.wants_samples()
+    }
     fn busy(&self) -> bool {
         self.inner.busy()
     }
@@ -288,6 +318,39 @@ mod tests {
         assert!(matches!(&a[0], Action::Preview(c, v) if c == "symbol.spray" && v["points"].as_array().unwrap().len() == 2));
         assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 51.0, 0.0)).is_empty(), "thinned");
         assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 51.0, 0.0)), vec![Action::Commit]);
+        assert!(!t.busy());
+    }
+
+    #[test]
+    fn a_long_drag_previews_less_often_and_commits_all_of_it() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let cx = cx(&d, &s, &p);
+        let mut t = SymbolismTool::new("symbolShifter");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 0.0, 0.0));
+        let n = 7 * crate::PREVIEW_ALL_UNTIL + 1; // not a point that previews
+        let previews = (1..n).filter(|&i| !t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 50.0 * i as f64, 0.0)).is_empty()).count();
+        assert!(previews < n * 3 / 4, "{previews} previews of {n} points");
+        let up = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 0.0, 0.0));
+        let last = up.iter().rev().nth(1);
+        assert!(matches!(last, Some(Action::Preview(_, v)) if v["points"].as_array().unwrap().len() == n), "{up:?}");
+        assert_eq!(up.last(), Some(&Action::Commit));
+    }
+
+    #[test]
+    fn switching_tools_mid_drag_previews_the_whole_drag_before_committing() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let cx = cx(&d, &s, &p);
+        let mut t = SymbolismTool::new("symbolShifter");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 0.0, 0.0));
+        let n = 7 * crate::PREVIEW_ALL_UNTIL + 1; // not a point that previews
+        for i in 1..n {
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 50.0 * i as f64, 0.0));
+        }
+        let a = t.deactivate(&cx);
+        assert!(matches!(a.first(), Some(Action::Preview(_, v)) if v["points"].as_array().unwrap().len() == n), "{a:?}");
+        assert_eq!(a.last(), Some(&Action::Commit));
         assert!(!t.busy());
     }
 

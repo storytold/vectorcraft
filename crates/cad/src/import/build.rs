@@ -3,7 +3,7 @@
 //! dimensions, as groups), and colours, lineweights, linetypes and transparency resolved through
 //! layers and blocks.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -23,12 +23,29 @@ const PT_PER_MM: f64 = 72.0 / 25.4;
 const THINNEST: f64 = 0.25;
 /// The most objects an import makes.
 const MAX_NODES: usize = 2_000_000;
+/// The most block work an import does, whatever it produces: one per insert copy drawn, and one
+/// per item of the block looked at for it (art on hidden layers too).
+const MAX_VISITS: usize = if cfg!(test) { 1_000_000 } else { 20_000_000 };
+/// The most path elements an import makes (blocks drawn as art are copied for every placement).
+const MAX_ELEMENTS: usize = if cfg!(test) { 1_000_000 } else { 4_000_000 };
+/// The most dash lengths an import keeps (every dashed path holds its own copy of its pattern).
+const MAX_DASH_VALUES: usize = if cfg!(test) { 1_000 } else { 4_000_000 };
+/// The most bytes of text, font names and symbol names an import copies into objects (a block's
+/// text and name are copied for every placement).
+const MAX_TEXT_BYTES: usize = if cfg!(test) { 64 << 10 } else { 64 << 20 };
+/// The longest font family a text style may name; a longer one is not a font, and is set in the
+/// default.
+const MAX_FAMILY_BYTES: usize = 256;
 /// How far from the origin art may lie (points): the canvas.
 pub(crate) const MAX_EXTENT: f64 = 4.0e6;
 
 const NESTED: &str = "blocks nested more than 8 deep, or inside themselves, are left out";
 const XREFS: &str = "blocks referencing other drawings (external references) are left out";
 const TOO_MANY: &str = "the drawing has more than 2,000,000 objects: the rest are left out";
+const TOO_MANY_POINTS: &str = "the drawing has more than 4,000,000 path points: the rest are left out";
+const TOO_MUCH_BLOCK_WORK: &str = "the drawing's blocks take too much work to place: the rest are left out";
+const TOO_MANY_DASHES: &str = "the drawing has more dashed lines than can be kept: the rest are drawn solid";
+const TOO_MUCH_TEXT: &str = "the drawing has more than 64 MB of text and block names: the rest are left out";
 
 /// What a block's art takes from the insert that places it: its colour, lineweight, linetype
 /// and opacity where the art says "by block", and its layer for art on layer 0.
@@ -52,6 +69,9 @@ pub(crate) struct Build<'d, 'a> {
     sensitive: HashMap<String, bool>,
     /// Symbol names by block and what it inherits (`None`: the block has no art).
     symbols: HashMap<(String, Inherit), Option<String>>,
+    /// Names of the symbols made so far, and the next suffix to try for each label.
+    symbol_names: HashSet<String>,
+    next_suffix: HashMap<String, usize>,
     /// Blocks being drawn, outermost first.
     stack: Vec<String>,
     /// Document space per drawing unit, and its symbols' (no translation).
@@ -60,6 +80,12 @@ pub(crate) struct Build<'d, 'a> {
     /// Lineweights are multiplied by this.
     lw_scale: f64,
     nodes: usize,
+    visits: usize,
+    /// Path elements made so far.
+    elements: usize,
+    /// Dash lengths and text bytes kept so far.
+    dash_values: usize,
+    text_bytes: usize,
     warnings: Vec<String>,
 }
 
@@ -108,11 +134,17 @@ impl<'d, 'a> Build<'d, 'a> {
             bounds: HashMap::new(),
             sensitive: HashMap::new(),
             symbols: HashMap::new(),
+            symbol_names: HashSet::new(),
+            next_suffix: HashMap::new(),
             stack: vec![],
             map: Affine::IDENTITY,
             symbol_map: Affine::IDENTITY,
             lw_scale: 1.0,
             nodes: 0,
+            visits: 0,
+            elements: 0,
+            dash_values: 0,
+            text_bytes: 0,
             warnings: vec![],
         }
     }
@@ -120,6 +152,20 @@ impl<'d, 'a> Build<'d, 'a> {
     fn warn(&mut self, w: &str) {
         if !self.warnings.iter().any(|x| x == w) {
             self.warnings.push(w.to_string());
+        }
+    }
+
+    /// Take `bytes` of text from [`MAX_TEXT_BYTES`]; false (with a warning) when they don't fit.
+    fn charge_text(&mut self, bytes: usize) -> bool {
+        match self.text_bytes.checked_add(bytes).filter(|t| *t <= MAX_TEXT_BYTES) {
+            Some(t) => {
+                self.text_bytes = t;
+                true
+            }
+            None => {
+                self.warn(TOO_MUCH_TEXT);
+                false
+            }
         }
     }
 
@@ -362,7 +408,8 @@ impl<'d, 'a> Build<'d, 'a> {
         let k = self.d.header.ltscale * p.ltscale * scale;
         // Dashes (positive), gaps (negative) and dots (0), merged into dash, gap, dash, gap…
         let mut out: Vec<f64> = vec![];
-        for v in pattern {
+        // (A linetype has a few elements; every path keeps its own copy of the dashes.)
+        for v in pattern.iter().take(64) {
             let dash = *v >= 0.0;
             let len = v.abs() * k;
             match out.len().is_multiple_of(2) {
@@ -442,11 +489,20 @@ impl<'d, 'a> Build<'d, 'a> {
     }
 
     fn path(&mut self, bp: &BezPath, fill: bool, width: f64, p: &Props, map: Affine, inh: &Inherit) -> Option<Node> {
+        let n = bp.elements().len();
+        if self.elements.saturating_add(n) > MAX_ELEMENTS {
+            self.warn(TOO_MANY_POINTS);
+            return None;
+        }
+        self.elements += n;
         let mut bp = bp.clone();
         bp.apply_affine(map);
         super::curve::bounds(&bp)?;
         let paint = Paint::solid(rgb_color(self.rgb(p, inh)));
         let scale = map.determinant().abs().sqrt();
+        let path = PathData::from_bezpath(&bp);
+        // A compound path's loops each keep a copy of its appearance, beside its own.
+        let copies = if path.subpaths.len() > 1 { path.subpaths.len() + 1 } else { 1 };
         let appearance = if fill {
             Appearance::basic(paint, Paint::None, 0.0)
         } else {
@@ -462,18 +518,30 @@ impl<'d, 'a> Build<'d, 'a> {
             if let Some(AppearanceItem::Stroke(s)) = ap.items.last_mut()
                 && let Some((dash, dots)) = self.dash(&self.linetype(p, inh), p, scale)
             {
-                s.dash = Some(dash);
-                if dots {
-                    s.cap = LineCap::Round;
+                match dash.pattern.len().checked_mul(copies).and_then(|v| self.dash_values.checked_add(v)).filter(|n| *n <= MAX_DASH_VALUES) {
+                    Some(n) => {
+                        self.dash_values = n;
+                        s.dash = Some(dash);
+                        if dots {
+                            s.cap = LineCap::Round;
+                        }
+                    }
+                    None => self.warn(TOO_MANY_DASHES),
                 }
             }
             ap
         };
         let rule = if fill { FillRule::EvenOdd } else { FillRule::NonZero };
-        let path = PathData::from_bezpath(&bp);
         let kind = |path: PathData| NodeKind::Path { path, rule, live: None, clipping: false, guide: false };
         let mut n = if path.subpaths.len() > 1 {
-            // Several loops (a hatch with islands) paint as one compound path.
+            // Several loops (a hatch with islands) paint as one compound path. Each loop is an
+            // object of its own, so it counts against the node limit like any other (`item`
+            // counts the compound path itself).
+            if self.nodes.saturating_add(path.subpaths.len()) >= MAX_NODES {
+                self.warn(TOO_MANY);
+                return None;
+            }
+            self.nodes += path.subpaths.len();
             let children = path
                 .subpaths
                 .into_iter()
@@ -498,10 +566,15 @@ impl<'d, 'a> Build<'d, 'a> {
         if !(s > 1e-12 && s.is_finite()) {
             return None;
         }
-        let family = t.family.clone().or_else(|| self.d.styles.get(&t.style).filter(|f| !f.is_empty()).cloned());
+        let d = self.d;
+        let family = t.family.as_deref().or_else(|| d.styles.get(&t.style).map(String::as_str).filter(|f| !f.is_empty()));
+        let family = family.filter(|f| f.len() <= MAX_FAMILY_BYTES);
+        if !self.charge_text(t.text.len().saturating_add(family.map_or(0, str::len))) {
+            return None;
+        }
         let default = CharStyle::default();
         let style = CharStyle {
-            font_family: family.unwrap_or(default.font_family.clone()),
+            font_family: family.map_or_else(|| default.font_family.clone(), str::to_string),
             size: t.height / CAP_HEIGHT * s,
             h_scale: t.width * 100.0,
             leading: t.leading.map(|l| l * s),
@@ -529,6 +602,13 @@ impl<'d, 'a> Build<'d, 'a> {
         for cell in &ins.cells {
             let node = match &symbol {
                 Some(name) => {
+                    if self.nodes >= MAX_NODES {
+                        self.warn(TOO_MANY);
+                        break;
+                    }
+                    if !self.charge_text(name.len()) {
+                        break;
+                    }
                     let xf = map * *cell * self.symbol_map.inverse();
                     self.nodes += 1;
                     Some(Node::new(self.doc.alloc_id(), NodeKind::SymbolInstance { symbol: name.clone(), xf }))
@@ -552,7 +632,19 @@ impl<'d, 'a> Build<'d, 'a> {
 
     /// The art of block `name` drawn by `map`, as one object.
     fn art(&mut self, name: &str, map: Affine, inh: &Inherit, depth: u32) -> Option<Node> {
-        let items = self.block(name)?;
+        if self.visits >= MAX_VISITS {
+            self.warn(TOO_MUCH_BLOCK_WORK);
+            return None;
+        }
+        let items = self.block(name);
+        // Each placement looks at every item of the block, drawn or not (art on a hidden layer
+        // makes nothing, so the node budget doesn't bound it).
+        self.visits = self.visits.saturating_add(1 + items.as_ref().map_or(0, |i| i.len()));
+        if self.visits > MAX_VISITS {
+            self.warn(TOO_MUCH_BLOCK_WORK);
+            return None;
+        }
+        let items = items?;
         if !self.enter(name, depth) {
             return None;
         }
@@ -582,11 +674,16 @@ impl<'d, 'a> Build<'d, 'a> {
         let base = self.d.blocks.get(name).map_or(Point::ZERO, |b| b.base);
         let map = self.symbol_map * Affine::translate(-base.to_vec2());
         let art = self.art(name, map, &key.1, depth);
-        let made = art.map(|art| {
+        let made = art.and_then(|art| {
             let label = self.d.blocks.get(name).map_or(name, |b| b.name.as_str());
-            let symbol = unique(label, |n| self.doc.symbols.iter().any(|s| s.name == n));
-            self.doc.symbols.push(Symbol { name: symbol.clone(), art: Arc::new(art) });
-            symbol
+            // The symbol keeps its name: text, as its instances' copies of it are.
+            if !self.charge_text(label.len()) {
+                return None;
+            }
+            let symbol = unique(label, &mut self.next_suffix, &self.symbol_names);
+            self.symbol_names.insert(symbol.clone());
+            self.doc.symbols.push(Symbol { dynamic: false, name: symbol.clone(), art: Arc::new(art) });
+            Some(symbol)
         });
         self.symbols.insert(key, made.clone());
         made
@@ -611,10 +708,17 @@ fn rgb_color([r, g, b]: [u8; 3]) -> Color {
     Color::rgb8(r, g, b)
 }
 
-/// `base`, or `base 2`, `base 3`… when taken.
-fn unique(base: &str, taken: impl Fn(&str) -> bool) -> String {
-    if !taken(base) {
+/// `base`, or `base 2`, `base 3`… when taken; `next` remembers where each base left off.
+fn unique(base: &str, next: &mut HashMap<String, usize>, taken: &HashSet<String>) -> String {
+    if !taken.contains(base) {
         return base.to_string();
     }
-    (2..).map(|i| format!("{base} {i}")).find(|n| !taken(n)).unwrap_or_else(|| base.to_string())
+    let i = next.entry(base.to_string()).or_insert(2);
+    loop {
+        let name = format!("{base} {i}");
+        *i += 1;
+        if !taken.contains(&name) {
+            return name;
+        }
+    }
 }

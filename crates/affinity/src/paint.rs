@@ -121,10 +121,16 @@ pub struct Stroke {
     pub dash: Option<(Vec<f64>, f64)>,
     /// Painted below the fill instead of above it.
     pub behind: bool,
+    /// The pressure curve: (position 0..1 along the path, width as a fraction of `width`) in
+    /// order along the path, `None` for a stroke of the same width all along.
+    pub profile: Option<Vec<(f64, f64)>>,
 }
 
 /// Gradient stops per gradient.
 const MAX_STOPS: usize = 1024;
+
+/// Dash and gap lengths per dash pattern (a pattern has a few; strokes and text runs copy theirs).
+const MAX_DASHES: usize = 64;
 
 fn floats(v: &Value) -> Option<Vec<f64>> {
     match v {
@@ -136,6 +142,14 @@ fn floats(v: &Value) -> Option<Vec<f64>> {
 
 /// A colour object (`RGBA`, `HSLA`, `CMYK`, `GRAY`, `LABA`, `Pant`).
 pub(crate) fn color(r: &mut Reader, id: ObjId) -> Option<Color> {
+    color_within(r, id, 0)
+}
+
+/// The most spot colours that stand for one another followed.
+const MAX_SPOT_CHAIN: u32 = 8;
+
+/// [`color`], `depth` spot colours deep: one that stands for itself (or a ring of them) ends here.
+fn color_within(r: &mut Reader, id: ObjId, depth: u32) -> Option<Color> {
     let s = r.s;
     let class = s.class(id)?;
     let col = || -> Option<Vec<f64>> {
@@ -167,7 +181,13 @@ pub(crate) fn color(r: &mut Reader, id: ObjId) -> Option<Color> {
         }
         b"Pant" => {
             r.warn("spot colours (imported as their RGB equivalent)");
-            return s.obj(id, b"srgb").and_then(|c| color(r, c)).or_else(|| s.obj(id, b"base").and_then(|c| color(r, c)));
+            if depth >= MAX_SPOT_CHAIN {
+                return None;
+            }
+            return s
+                .obj(id, b"srgb")
+                .and_then(|c| color_within(r, c, depth + 1))
+                .or_else(|| s.obj(id, b"base").and_then(|c| color_within(r, c, depth + 1)));
         }
         b"RegC" => Color::Cmyk { c: 1.0, m: 1.0, y: 1.0, k: 1.0, a: 1.0 },
         _ => {
@@ -177,7 +197,7 @@ pub(crate) fn color(r: &mut Reader, id: ObjId) -> Option<Color> {
     })
 }
 
-fn hsl(h: f64, s: f64, l: f64) -> (f64, f64, f64) {
+pub(crate) fn hsl(h: f64, s: f64, l: f64) -> (f64, f64, f64) {
     let c = (1.0 - (2.0 * l - 1.0).abs()) * s;
     let hp = (h.rem_euclid(1.0)) * 6.0;
     let x = c * (1.0 - (hp % 2.0 - 1.0).abs());
@@ -218,12 +238,13 @@ pub(crate) fn descriptor(r: &mut Reader, id: ObjId, local: Affine) -> Option<Pai
             };
             let grad = s.obj(fill, b"Grad")?;
             let cols = s.objs(grad, b"Cols");
-            let posn: Vec<Vec<f64>> = match s.field(grad, b"Posn") {
-                Some(Value::Array(a)) => a.iter().filter_map(floats).collect(),
-                _ => Vec::new(),
+            // Convert only the positions that pair with a colour, as shared attributes repeat this per run.
+            let posn: &[Value] = match s.field(grad, b"Posn") {
+                Some(Value::Array(a)) => a,
+                _ => &[],
             };
             let mut stops = Vec::new();
-            for (c, p) in cols.iter().zip(&posn).take(MAX_STOPS) {
+            for (c, p) in cols.iter().zip(posn.iter().filter_map(floats)).take(MAX_STOPS) {
                 let color = color(r, *c)?;
                 let offset = p.first().copied().filter(|v| v.is_finite()).unwrap_or(0.0).clamp(0.0, 1.0);
                 let bias = p.get(1).copied().filter(|v| v.is_finite()).unwrap_or(0.5).clamp(0.0, 1.0);
@@ -283,7 +304,7 @@ pub(crate) fn node_paint(r: &mut Reader, id: ObjId, local: Affine) -> (Vec<Paint
     (fills, stroke.into_iter().collect())
 }
 
-fn stroke(r: &mut Reader, pen: ObjId, ldsc: ObjId, local: Affine, behind: bool) -> Option<Stroke> {
+pub(crate) fn stroke(r: &mut Reader, pen: ObjId, ldsc: ObjId, local: Affine, behind: bool) -> Option<Stroke> {
     let s = r.s;
     let paint = descriptor(r, pen, local)?;
     if paint == Paint::None {
@@ -295,6 +316,13 @@ fn stroke(r: &mut Reader, pen: ObjId, ldsc: ObjId, local: Affine, behind: bool) 
     let scales = s.bool(ldsc, b"LDSc").unwrap_or(true);
     let width = if scales { weight * local.scale() } else { weight };
     let data = s.bytes(lsty, b"Data").unwrap_or_default();
+    // Byte 10 is the stroke's style: 0 none, 1 solid, 2 dashed, 3 a brush. A shape without a
+    // stroke still stores one (black, 1 px wide), with style 0. Identified on two documents their
+    // owner made, where every such stroke is invisible in Affinity's own PDF export, and checked
+    // against the public corpus's thumbnails.
+    if data.get(10) == Some(&0) {
+        return None;
+    }
     let miter_limit = data.get(0..8).and_then(|b| b.try_into().ok()).map(f64::from_le_bytes).filter(|m| m.is_finite() && *m >= 1.0).unwrap_or(4.0);
     // Cap and join bytes are only partly understood: (0, 0) is butt/miter in every clean sample;
     // (2, 2) ends plain lines square and brush lines round; joins import round, which never
@@ -312,6 +340,10 @@ fn stroke(r: &mut Reader, pen: ObjId, ldsc: ObjId, local: Affine, behind: bool) 
         _ => Align::Center,
     };
     let dash = match s.field(lsty, b"Patn") {
+        Some(Value::Array(a)) if a.len() > MAX_DASHES => {
+            r.warn("dash patterns of more than 64 lengths (imported as solid lines)");
+            None
+        }
         Some(Value::Array(a)) if data.get(10) == Some(&2) || !a.is_empty() => {
             let mut v: Vec<f64> = a.iter().filter_map(|x| if let Value::Float(f) = x { Some(*f) } else { None }).collect();
             while v.len() >= 2 && v.iter().rev().take(2).all(|x| *x == 0.0) {
@@ -322,8 +354,50 @@ fn stroke(r: &mut Reader, pen: ObjId, ldsc: ObjId, local: Affine, behind: bool) 
         }
         _ => None,
     };
-    if s.obj(lsty, b"Brus").is_some() || s.obj(ldsc, b"LDeP").is_some() {
-        r.warn("brush and pressure strokes (imported as plain strokes)");
+    if s.obj(lsty, b"Brus").is_some() {
+        r.warn("brush strokes (imported as plain strokes)");
     }
-    Some(Stroke { paint, width, cap, join, miter_limit, align, dash, behind })
+    // The pressure curve sets the width along the path; one at full width all along is a plain
+    // stroke. Every curve read counts against the document's points: one at full width counts its
+    // points, and one that can't be read counts the most a curve may have. Once the points are
+    // used up the rest are not read.
+    const BEYOND: &str = "pressure strokes beyond the pressure points one document may hold (imported as plain strokes)";
+    let ldep = s.obj(ldsc, b"LDeP");
+    if ldep.is_some() && r.budget.pressure == 0 {
+        r.warn(BEYOND);
+    }
+    let profile = match ldep.filter(|_| r.budget.pressure > 0).map(|p| crate::geometry::pressure(r, p)) {
+        Some(Some(points)) => match r.budget.pressure.checked_sub(points.len()) {
+            Some(left) => {
+                r.budget.pressure = left;
+                (!points.iter().all(|(_, w)| (w - 1.0).abs() < 1e-9)).then_some(points)
+            }
+            None => {
+                r.budget.pressure = 0;
+                r.warn(BEYOND);
+                None
+            }
+        },
+        Some(None) => {
+            r.budget.pressure = r.budget.pressure.saturating_sub(crate::geometry::MAX_PRESSURE_CURVE_POINTS);
+            r.warn("pressure strokes whose pressure curve can't be read (imported as plain strokes)");
+            None
+        }
+        None => None,
+    };
+    Some(Stroke { paint, width, cap, join, miter_limit, align, dash, behind, profile })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hsl_lightness_1_is_white_and_0_is_black() {
+        assert_eq!(hsl(0.0, 1.0, 1.0), (1.0, 1.0, 1.0));
+        assert_eq!(hsl(0.5, 1.0, 1.0), (1.0, 1.0, 1.0));
+        assert_eq!(hsl(0.0, 1.0, 0.0), (0.0, 0.0, 0.0));
+        let (r, g, b) = hsl(0.0, 1.0, 0.5);
+        assert!((r - 1.0).abs() < 1e-6 && g.abs() < 1e-6 && b.abs() < 1e-6);
+    }
 }

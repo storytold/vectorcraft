@@ -12,7 +12,7 @@ use std::sync::atomic::Ordering;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-use crate::state::{Dialog, DockTab, FloatingFlyout, FloatingPanels, UiState};
+use crate::state::{CustomToolbar, Dialog, DockTab, FloatingFlyout, FloatingPanels, UiState};
 use crate::theme::Tokens;
 use crate::{VectorcraftApp, widgets};
 
@@ -21,6 +21,9 @@ use crate::{VectorcraftApp, widgets};
 pub struct Workspace {
     pub name: String,
     pub control_bar: bool,
+    /// The Control bar is docked to the bottom of the window (built-in workspaces, and workspaces
+    /// saved without this field: the top).
+    pub control_bar_bottom: bool,
     pub rulers: bool,
     pub toolbar: bool,
     pub toolbar_double: bool,
@@ -34,24 +37,35 @@ pub struct Workspace {
     pub status_bar: bool,
     /// Tool groups torn off the toolbar into floating strips (built-in workspaces: none).
     pub floating_flyouts: Vec<FloatingFlyout>,
-    /// Panels dragged out of the dock, where they float (built-in workspaces: none).
+    /// Floating panel groups in workspaces saved before the canvas joined `docking`; read only
+    /// to convert them ([`crate::layout_migration`]).
+    #[serde(skip_serializing)]
     pub floating_panels: Vec<FloatingPanels>,
-    /// Custom docking tree, including floating tab groups.
+    /// The workspace's own panel layout; none: the default layout from its flags.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub docking: Option<craft_ui::docking::Layout<String>>,
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub docking_hidden: std::collections::BTreeMap<String, craft_ui::docking::Location<String>>,
-    /// Panels whose saved return destination is the iconic rail.
-    #[serde(default, skip_serializing_if = "std::collections::BTreeSet::is_empty")]
+    /// Tabs closed together by a panel shortcut.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub docking_hidden_groups: Vec<Vec<String>>,
+    /// Panels dropped on the icon column, in older workspaces (read only).
+    #[serde(default, skip_serializing)]
     pub docking_icons: std::collections::BTreeSet<String>,
-    /// The panels shown by dock groups collapsed to their tabs.
-    #[serde(default, skip_serializing_if = "std::collections::BTreeSet::is_empty")]
+    /// The panels shown by dock groups collapsed to their tabs, in older workspaces (read only).
+    #[serde(default, skip_serializing)]
     pub docking_collapsed: std::collections::BTreeSet<String>,
     /// Where the Tools panel floats (built-in workspaces: docked).
     pub toolbar_pos: Option<[f32; 2]>,
-    /// Main dock column width in screen points (#1753).
+    /// The docked Tools panel sits beside the canvas, inside any left-side panels (built-in
+    /// workspaces and workspaces saved without it: at the window's left edge).
+    pub tools_beside_canvas: bool,
+    /// Main dock column width in screen points while `docking` is none (#1753).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dock_width: Option<f32>,
+    /// The toolbars made with New Toolbar in this workspace (built-in workspaces: none).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub toolbars: Vec<CustomToolbar>,
 }
 
 impl Default for Workspace {
@@ -137,7 +151,8 @@ pub fn builtins() -> Vec<Workspace> {
 
 /// Preferences › Devices › Enable Touch Workspace (#394): on, a touch screen switches to the Touch
 /// workspace; off, or when no touch screen is reported, the workspace before that switch is
-/// restored if Touch was entered automatically.
+/// restored if Touch was entered automatically. Each switch keeps the layout it leaves and brings
+/// back the one it returns to as it was left, as Window › Workspace does.
 pub fn sync_touch_workspace(app: &mut VectorcraftApp, touch_screen: bool) {
     let auto = app.session.prefs.touch_workspace && touch_screen;
     if auto {
@@ -145,15 +160,13 @@ pub fn sync_touch_workspace(app: &mut VectorcraftApp, touch_screen: bool) {
             if app.ui.touch_workspace_restore.is_none() {
                 app.ui.touch_workspace_restore = Some(app.ui.workspace.clone());
             }
-            if let Some(w) = find(&app.ui, TOUCH) {
-                apply(&mut app.ui, &w);
-            }
+            // Touch is built in, so the switch finds it.
+            let _ = switch(&mut app.ui, TOUCH);
         }
     } else if app.ui.touch_workspace_restore.is_some() && app.ui.workspace == TOUCH {
         let back = app.ui.touch_workspace_restore.take().filter(|n| find(&app.ui, n).is_some()).unwrap_or_else(|| ESSENTIALS.to_string());
-        if let Some(w) = find(&app.ui, &back) {
-            apply(&mut app.ui, &w);
-        }
+        // `back` names a workspace that exists (or Essentials), so the switch finds it.
+        let _ = switch(&mut app.ui, &back);
     } else if !auto {
         app.ui.touch_workspace_restore = None;
     }
@@ -168,6 +181,7 @@ pub fn capture(ui: &UiState, name: &str) -> Workspace {
     Workspace {
         name: name.into(),
         control_bar: ui.control_bar,
+        control_bar_bottom: ui.control_bar_bottom,
         rulers: ui.view.rulers,
         toolbar: ui.toolbar,
         toolbar_double: ui.toolbar_double,
@@ -179,19 +193,23 @@ pub fn capture(ui: &UiState, name: &str) -> Workspace {
         open_panel: ui.open_panel.clone(),
         status_bar: ui.status_bar,
         floating_flyouts: ui.floating_flyouts.clone(),
-        floating_panels: ui.floating_panels.clone(),
+        floating_panels: Vec::new(),
         docking: ui.docking.clone(),
         docking_hidden: ui.docking_hidden.clone(),
-        docking_icons: ui.docking_icons.clone(),
-        docking_collapsed: ui.docking_collapsed.clone(),
+        docking_hidden_groups: ui.docking_hidden_groups.clone(),
+        docking_icons: Default::default(),
+        docking_collapsed: Default::default(),
         toolbar_pos: ui.toolbar_pos,
+        tools_beside_canvas: ui.tools_beside_canvas,
         dock_width: ui.dock_width,
+        toolbars: ui.custom_toolbars.clone(),
     }
 }
 
 /// Apply a workspace's layout flags (brightness, prefs, shortcuts etc. untouched).
 pub fn apply(ui: &mut UiState, w: &Workspace) {
     ui.control_bar = w.control_bar;
+    ui.control_bar_bottom = w.control_bar_bottom;
     ui.view.rulers = w.rulers;
     ui.toolbar = w.toolbar;
     ui.toolbar_double = w.toolbar_double;
@@ -204,16 +222,20 @@ pub fn apply(ui: &mut UiState, w: &Workspace) {
     ui.open_panel = w.open_panel.clone();
     ui.status_bar = w.status_bar;
     ui.floating_flyouts = w.floating_flyouts.clone();
-    ui.floating_panels = w.floating_panels.clone();
     ui.docking_generation = ui.docking_generation.wrapping_add(1);
     ui.docking = w.docking.clone().filter(crate::panel_docking::valid);
     ui.docking_hidden = w.docking_hidden.clone();
-    ui.docking_icons = w.docking_icons.iter().filter(|id| crate::state::rail_panel(id).is_some()).take(64).cloned().collect();
-    ui.docking_collapsed = w.docking_collapsed.iter().filter(|id| crate::menus::normalize_panel(id) == Some(id.as_str())).take(64).cloned().collect();
+    ui.docking_hidden_groups = w.docking_hidden_groups.clone();
     ui.toolbar_pos = w.toolbar_pos;
+    ui.tools_beside_canvas = w.tools_beside_canvas;
     ui.dock_width = w.dock_width;
-    ui.dock_width_pending = true;
-    FloatingPanels::sanitize(&mut ui.floating_panels, &mut ui.toolbar_pos);
+    crate::state::sanitize_toolbar_pos(&mut ui.toolbar_pos);
+    ui.custom_toolbars = w.toolbars.clone();
+    crate::custom_toolbars::sanitize(&mut ui.custom_toolbars);
+    // The drawer edits a toolbar of the workspace left: it closes.
+    if ui.drawer_toolbar.take().is_some() {
+        ui.tools_drawer = false;
+    }
     ui.flyout = None;
     ui.workspace = w.name.clone();
 }
@@ -243,8 +265,24 @@ pub fn switch(ui: &mut UiState, name: &str) -> Result<String, String> {
 pub fn reset(ui: &mut UiState) -> String {
     let w = find_saved(ui, &ui.workspace.clone()).unwrap_or_default();
     ui.workspace_changes.retain(|x| !x.name.eq_ignore_ascii_case(&w.name));
+    // The toolbars made with New Toolbar stay in the workspace they were made in.
+    let toolbars = std::mem::take(&mut ui.custom_toolbars);
     apply(ui, &w);
+    ui.custom_toolbars = toolbars;
     w.name
+}
+
+/// Keep the toolbars made with New Toolbar in the current workspace's changes, and nothing else of
+/// its layout that its changes do not already hold.
+fn keep_toolbars(ui: &mut UiState) {
+    let Some(saved) = find_saved(ui, &ui.workspace.clone()) else { return };
+    if let Some(w) = ui.workspace_changes.iter_mut().find(|x| x.name.eq_ignore_ascii_case(&saved.name)) {
+        w.toolbars = ui.custom_toolbars.clone();
+    } else if saved.toolbars != ui.custom_toolbars {
+        ui.workspace_changes.push(Workspace { toolbars: ui.custom_toolbars.clone(), ..saved });
+        let over = ui.workspace_changes.len().saturating_sub(64);
+        ui.workspace_changes.drain(..over);
+    }
 }
 
 /// A workspace by name as saved (user workspaces shadow nothing: names are unique across both lists).
@@ -276,7 +314,11 @@ pub fn save_as(ui: &mut UiState, name: &str) -> Result<(), String> {
         return Err(format!("`{name}` is a built-in workspace; choose another name"));
     }
     // The changes go into the workspace saved, which starts with none; the one left keeps the
-    // changes it had (none of these).
+    // changes it had (none of these), and the toolbars made with New Toolbar, which the workspace
+    // saved starts with a copy of.
+    if !ui.workspace.eq_ignore_ascii_case(name) {
+        keep_toolbars(ui);
+    }
     // A user workspace of that name in another case is replaced, as `find_saved` would find it.
     let w = capture(ui, name);
     match ui.custom_workspaces.iter_mut().find(|x| x.name.eq_ignore_ascii_case(name)) {
@@ -433,7 +475,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let (mut ok, mut cancel) = (false, false);
     let mut action: Option<(&str, Value)> = None;
     let manage = d.kind == "manageWorkspaces";
-    crate::dialogs::modal::show(ctx, "Workspace", egui::Id::new("dialog-workspace"), -40.0, 22, |ui| {
+    crate::dialogs::modal::show(ctx, "Workspace", egui::Id::unique("dialog-workspace"), -40.0, 22, |ui| {
         ui.set_width(340.0);
         crate::dialogs::modal::heading(ui, if manage { tl!("Manage Workspaces") } else { tl!("New Workspace") });
         ui.add_space(12.0);
@@ -455,7 +497,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             let sel = d.str("selected");
             ui.horizontal(|ui| {
                 let mut name = d.str("name");
-                if ui.add(egui::TextEdit::singleline(&mut name).desired_width(180.0)).changed() {
+                if ui.add(egui::TextEdit::singleline(&mut name).align(egui::Align2::LEFT_CENTER).desired_width(180.0)).changed() {
                     d.fields.insert("name".into(), json!(name));
                 }
                 if ui.button(tl!("New")).on_hover_text(tl!("Save the current layout under this name")).clicked() {
@@ -474,7 +516,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             ui.horizontal(|ui| {
                 ui.label(egui::RichText::new(tl!("Name:")).color(t.text_dim));
                 let mut name = d.str("name");
-                let r = ui.add(egui::TextEdit::singleline(&mut name).desired_width(240.0));
+                let r = ui.add(egui::TextEdit::singleline(&mut name).align(egui::Align2::LEFT_CENTER).desired_width(240.0));
                 if r.changed() {
                     d.fields.insert("name".into(), json!(name));
                 }
@@ -482,7 +524,10 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             ui.label(egui::RichText::new(tl!("Saves the current bars, toolbar and panel layout.")).color(t.text_dim).size(11.0));
         }
         ui.add_space(16.0);
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        // As wide as the fields and as tall as the buttons, as in `dialogs::show`: a right-to-left
+        // layout would take all the height left in the window and center the buttons in it.
+        let row = egui::vec2(ui.min_rect().width(), ui.spacing().interact_size.y);
+        ui.allocate_ui_with_layout(row, egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if widgets::primary_button(ui, tl!("OK")).clicked() {
                 ok = true;
             }
@@ -562,14 +607,19 @@ mod tests {
         // Changes made in it after saving (a panel moved, the control bar shown)…
         ui.control_bar = true;
         ui.dock_tab = DockTab::Layers;
-        ui.docking_icons.insert("layers".into());
-        ui.docking_collapsed.insert("layers".into());
+        let mut layout = crate::panel_docking::default_layout(&ui);
+        if let Some(craft_ui::docking::Node::Split { second, .. }) = layout.root.as_mut()
+            && let craft_ui::docking::Node::Dock { columns, .. } = second.as_mut()
+        {
+            columns[0].groups[0].minimized = true;
+        }
+        ui.docking = Some(layout.clone());
         // …are still there after switching away and back.
         switch(&mut ui, ESSENTIALS).unwrap();
-        assert!(!ui.control_bar && ui.docking_icons.is_empty() && ui.docking_collapsed.is_empty(), "Essentials comes as saved");
+        assert!(!ui.control_bar && ui.docking.is_none(), "Essentials comes as saved");
         switch(&mut ui, "Görkem").unwrap();
-        assert!(ui.control_bar && ui.dock_tab == DockTab::Layers && ui.docking_icons.contains("layers"));
-        assert!(ui.docking_collapsed.contains("layers"), "its collapsed group too");
+        assert!(ui.control_bar && ui.dock_tab == DockTab::Layers);
+        assert_eq!(ui.docking, Some(layout), "its panel layout too");
         // Built-in workspaces remember theirs too.
         switch(&mut ui, ESSENTIALS).unwrap();
         ui.status_bar = false;
@@ -583,7 +633,7 @@ mod tests {
         assert!(ui.control_bar);
         // Reset Görkem: back to the way it was saved.
         assert_eq!(reset(&mut ui), "Görkem");
-        assert!(!ui.control_bar && ui.docking_icons.is_empty());
+        assert!(!ui.control_bar && ui.docking.is_none());
         switch(&mut ui, ESSENTIALS).unwrap();
         switch(&mut ui, "Görkem").unwrap();
         assert!(!ui.control_bar, "a reset workspace stays reset");
@@ -723,11 +773,29 @@ mod tests {
         let wide = find(&ui, "Wide").unwrap();
         apply(&mut ui, &wide);
         assert_eq!(ui.dock_width, Some(420.0));
-        assert!(ui.dock_width_pending);
         let narrow = find(&ui, "Narrow").unwrap();
         apply(&mut ui, &narrow);
         assert_eq!(ui.dock_width, Some(260.0));
         let back: UiState = serde_json::from_value(serde_json::to_value(&ui).unwrap()).unwrap();
         assert_eq!(back.custom_workspaces[1].dock_width, Some(260.0));
+    }
+
+    /// A workspace keeps the edge the Control bar is docked to, and one saved without it docks the
+    /// bar at the top.
+    #[test]
+    fn saved_workspaces_restore_the_control_bar_edge() {
+        let mut ui = UiState { control_bar: true, control_bar_bottom: true, ..Default::default() };
+        save_as(&mut ui, "Bottom").unwrap();
+        switch(&mut ui, ESSENTIALS).unwrap();
+        assert!(!ui.control_bar_bottom, "Essentials docks the bar at the top");
+        switch(&mut ui, "Bottom").unwrap();
+        assert!(ui.control_bar_bottom, "the saved workspace docks it at the bottom");
+        let back: UiState = serde_json::from_value(serde_json::to_value(&ui).unwrap()).unwrap();
+        assert!(back.control_bar_bottom && back.custom_workspaces[0].control_bar_bottom, "both survive the preferences' JSON");
+        let mut old = serde_json::to_value(&back.custom_workspaces[0]).unwrap();
+        assert!(old.as_object_mut().unwrap().remove("controlBarBottom").is_some());
+        let old: Workspace = serde_json::from_value(old).unwrap();
+        apply(&mut ui, &old);
+        assert!(ui.control_bar && !ui.control_bar_bottom, "an older workspace docks the bar at the top");
     }
 }

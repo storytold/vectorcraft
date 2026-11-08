@@ -48,8 +48,10 @@ fn image_doc(img: image::RgbaImage, frame: Rect) -> Option<Document> {
     let key = blob.content_key();
     doc.images.insert(key.clone(), blob);
     let xf = Affine::scale_non_uniform(frame.width() / f64::from(w), frame.height() / f64::from(h));
-    let mut n =
-        Node::new(doc.alloc_id(), NodeKind::Image(Box::new(ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default() })));
+    let mut n = Node::new(
+        doc.alloc_id(),
+        NodeKind::Image(Box::new(ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default(), pixels: None })),
+    );
     n.name = Some("Preview".into());
     let layer = doc.layers.first().map(|l| l.id)?;
     doc.insert(Some(layer), 0, n).ok()?;
@@ -97,7 +99,16 @@ fn epsi(ps: &[u8]) -> Option<image::RgbaImage> {
         }
         hex.extend(l.strip_prefix('%')?.bytes().filter(u8::is_ascii_hexdigit));
     }
+    hex.truncate(row * h * 2);
+    // A trailing half byte would decode padded with zero: the preview is cut short, so none.
+    if hex.len() % 2 != 0 {
+        return None;
+    }
     let bytes = super::lex::hex_decode(&hex)?;
+    // A preview with its samples missing is none, not a blank image of the size it claims.
+    if bytes.len() < row * h {
+        return None;
+    }
     let max = (1u32 << depth) - 1;
     let mut img = image::RgbaImage::new(w as u32, h as u32);
     for (x, y, px) in img.enumerate_pixels_mut() {

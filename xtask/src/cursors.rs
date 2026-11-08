@@ -7,7 +7,7 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
-pub const ENUM_FILE: &str = "crates/tools/src/lib.rs";
+pub const ENUM_FILE: &str = "crates/tools/src/cursor.rs";
 pub const MANIFEST: &str = "crates/tools/src/cursors.toml";
 
 pub fn run(root: &Path) -> Result<(), String> {

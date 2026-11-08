@@ -4,16 +4,22 @@
 //! Every operation counts against a budget and procedures nest only so deep, so a looping or
 //! recursing program ends with [`PsError::Limit`] instead of hanging.
 
+use std::cell::RefCell;
+use std::collections::HashSet;
 use std::rc::Rc;
 
 use vectorcraft_geom::Affine;
 
+use super::data::Stream;
 use super::graphics::{GState, Out};
-use super::lex::{IMMEDIATE, Lexer};
+use super::lex::{IMMEDIATE, Lexer, number};
 use super::obj::{Dict, DictRef, Key, Obj, Op, PsError, Res, Shared, ps_err};
 
-/// Most operations one file may run.
+/// Most operations one file may run, whatever its length.
 const MAX_OPS: u64 = 50_000_000;
+/// More operations a file may run for each byte of its program: a large file that draws a lot
+/// runs proportionally more, and stays bounded by its length.
+const OPS_PER_BYTE: u64 = 64;
 /// Deepest procedure nesting.
 const MAX_DEPTH: u32 = 400;
 /// Most operands on the stack.
@@ -24,6 +30,8 @@ pub(crate) const MAX_ALLOC: usize = 1 << 22;
 const MAX_DICTS: usize = 1000;
 /// Most saved graphics states.
 pub(crate) const MAX_GSAVE: usize = 1000;
+/// Most read-only procedures remembered (see `Interp::readonly`); each keeps its procedure.
+const MAX_READONLY: usize = 1 << 16;
 /// Most memory (bytes) a program may ask for in all: strings, arrays, decoded data, images,
 /// saved paths.
 const MAX_MEMORY: usize = 1 << 30;
@@ -32,6 +40,9 @@ pub(crate) struct Interp<'a> {
     /// The list of the arrays and dictionaries made since this started ([`super::obj::track`]).
     made: u64,
     pub lex: Lexer<'a>,
+    /// The files being run (`cvx exec`), innermost last: the program reads from the last one, and
+    /// it is `currentfile` while it runs.
+    pub running: Vec<Rc<RefCell<Stream>>>,
     pub stack: Vec<Obj>,
     pub dicts: Vec<DictRef>,
     system: DictRef,
@@ -47,6 +58,8 @@ pub(crate) struct Interp<'a> {
     resources: DictRef,
     depth: u32,
     ops: u64,
+    /// Most operations this program may run: [`MAX_OPS`] and [`OPS_PER_BYTE`] for each byte.
+    max_ops: u64,
     /// Bytes asked for so far (see [`MAX_MEMORY`]).
     allocated: usize,
     seed: u32,
@@ -60,12 +73,23 @@ pub(crate) struct Interp<'a> {
     pub fault: Option<Fault>,
     /// The width a Type 3 glyph procedure gave (`setcachedevice`, `setcharwidth`).
     pub glyph_width: Option<[f64; 2]>,
+    /// The TrueType data of the Type 42 fonts drawn so far, by their `sfnts` array (see
+    /// `type42`; `None` when it can't be read), the most recently used last.
+    pub type42: Type42Cache,
+    /// The `sfnts` arrays whose TrueType data has been counted against [`MAX_MEMORY`]: a font
+    /// read again after it left `type42` doesn't count again.
+    pub type42_counted: HashSet<Shared<Obj>>,
     pub g: GState,
     pub saved: Vec<GState>,
     pub out: Out,
     /// The program is in the legacy Illustrator format: its group operators `u` … `U` (at the top
     /// level, whatever its prolog defines them as) are groups (see the module docs of `import`).
     pub illustrator: bool,
+    /// Procedures that are read-only: those `bind` went into inside another procedure, and those
+    /// given to `readonly`, `executeonly` or `noaccess`. `bind` leaves them alone (PLRM 3rd ed.,
+    /// `bind` in chapter 8), so a procedure bound when it was defined keeps the names it didn't
+    /// bind then, whatever operators they name by the time a later procedure that holds it is bound.
+    readonly: HashSet<Shared<Obj>>,
 }
 
 /// Where a PostScript error was raised: the operator that raised it (none for an unknown name)
@@ -75,6 +99,9 @@ pub(crate) struct Fault {
     pub op: Option<&'static str>,
     pub procs: Vec<Rc<str>>,
 }
+
+/// The TrueType data of Type 42 fonts by their `sfnts` array (see [`Interp::type42`]).
+pub(crate) type Type42Cache = Vec<(Shared<Obj>, Option<Rc<Vec<u8>>>)>;
 
 /// Most procedure names a [`Fault`] keeps.
 const FAULT_PROCS: usize = 3;
@@ -105,13 +132,18 @@ impl<'a> Interp<'a> {
     pub fn new(src: &'a [u8], g: GState, out: Out) -> Self {
         let made = super::obj::track();
         let system = new_dict();
+        // The standard encodings are also instances of the Encoding category, the same arrays
+        // (PLRM 3rd ed., §3.9.2 and `findencoding`, <https://www.adobe.com/jp/print/postscript/pdfs/PLRM.pdf>).
+        let encodings = new_dict();
         {
             let mut d = system.borrow_mut();
             for (op, name) in Op::ALL {
                 d.insert(Key::name(name), Obj::Op(*op));
             }
             for name in ["StandardEncoding", "ISOLatin1Encoding"] {
-                d.insert(Key::name(name), encoding());
+                let e = encoding();
+                d.insert(Key::name(name), e.clone());
+                encodings.borrow_mut().insert(Key::name(name), e);
             }
             // An integer, as interpreters have it (`systemdict /languagelevel get 2 ge`): run, the
             // name pushes it all the same.
@@ -122,6 +154,7 @@ impl<'a> Interp<'a> {
             CATEGORIES.split_whitespace().map(|c| (Key::name(c), Obj::dict(Dict::from([(Key::name("Category"), Obj::name(c))])))).collect();
         let resources = new_dict();
         resources.borrow_mut().insert(Key::name("Category"), Obj::dict(categories));
+        resources.borrow_mut().insert(Key::name("Encoding"), Obj::Dict(encodings));
         let fonts = new_dict();
         system.borrow_mut().insert(Key::name("FontDirectory"), Obj::Dict(fonts.clone()));
         for name in ["GlobalFontDirectory", "SharedFontDirectory"] {
@@ -145,6 +178,7 @@ impl<'a> Interp<'a> {
         Self {
             made,
             lex: Lexer::new(src),
+            running: vec![],
             stack: vec![],
             dicts: vec![system.clone(), global.clone(), user.clone()],
             system,
@@ -157,16 +191,20 @@ impl<'a> Interp<'a> {
             resources,
             depth: 0,
             ops: 0,
+            max_ops: MAX_OPS.saturating_add((src.len() as u64).saturating_mul(OPS_PER_BYTE)),
             allocated: 0,
             seed: 1,
             saves: vec![],
             journal: vec![],
             fault: None,
             glyph_width: None,
+            type42: vec![],
+            type42_counted: HashSet::new(),
             g,
             saved: vec![],
             out,
             illustrator: false,
+            readonly: HashSet::new(),
         }
     }
 
@@ -333,11 +371,17 @@ impl<'a> Interp<'a> {
         self.spend(1)
     }
 
-    /// Count `ops` operations' worth of work against [`MAX_OPS`]: what an operator that costs
+    /// Charge for work on `n` bytes or objects in one operator: one operation per 256, as `search`
+    /// charges per 64 bytes, so a loop of big copies runs out of the budget.
+    pub fn spend_bytes(&mut self, n: usize) -> Res {
+        self.spend((n / 256) as u64)
+    }
+
+    /// Count `ops` operations' worth of work against the budget (`max_ops`): what an operator that costs
     /// far more than one operation (laying out type) does in a loop has to end too.
     pub fn spend(&mut self, ops: u64) -> Res {
         self.ops = self.ops.saturating_add(ops);
-        if self.ops > MAX_OPS {
+        if self.ops > self.max_ops {
             return Err(PsError::Limit("the program runs too long"));
         }
         Ok(())
@@ -376,12 +420,15 @@ impl<'a> Interp<'a> {
     pub fn call(&mut self, v: Obj) -> Res {
         match v {
             Obj::Array { items, exec: true } => self.run_proc(&items),
-            Obj::File { stream, exec: true } => match self.program_of(&stream)? {
-                Some(program) => self.run_program(&program),
-                None => Ok(()),
-            },
+            Obj::File { stream, exec: true } => self.run_file(&stream),
             Obj::ExecStr(s) => self.run_program(&s.to_vec()),
-            Obj::Op(op) => self.op(op),
+            // Through the depth guard: `stopped` and the like call back into here.
+            Obj::Op(op) => {
+                self.enter()?;
+                let r = self.op(op);
+                self.depth -= 1;
+                r
+            }
             Obj::Exec(name) => {
                 self.enter()?;
                 let r = match self.lookup(&name) {
@@ -410,7 +457,35 @@ impl<'a> Interp<'a> {
         r
     }
 
-    /// Run `program` (what is left of an executable file, an executable string), token by token.
+    /// Run file `f` (`cvx exec`), reading its objects from it as it goes. While it runs it is
+    /// `currentfile`, the topmost file being run (PLRM 3rd ed., `currentfile`, <https://www.adobe.com/jp/print/postscript/pdfs/PLRM.pdf>),
+    /// so data the program reads from there (an inline image's samples) comes from `f`, after the
+    /// object that reads it. The program's own file is being run already.
+    fn run_file(&mut self, f: &Rc<RefCell<Stream>>) -> Res {
+        if matches!(&*f.borrow(), Stream::Current) {
+            return Ok(());
+        }
+        // Its data, decoded from the program it was made over, before it becomes the program.
+        self.materialize(f)?;
+        self.enter()?;
+        self.running.push(f.clone());
+        let r = loop {
+            match self.next_in(f) {
+                Ok((Some(o), immediate)) => {
+                    if let Err(e) = self.scanned(o, immediate).and_then(|o| self.exec_token(o)) {
+                        break Err(e);
+                    }
+                }
+                Ok((None, _)) => break Ok(()),
+                Err(e) => break Err(e),
+            }
+        };
+        self.running.pop();
+        self.depth -= 1;
+        r
+    }
+
+    /// Run `program` (an executable string), token by token.
     fn run_program(&mut self, program: &[u8]) -> Res {
         self.enter()?;
         let mut lex = Lexer::new(program);
@@ -496,6 +571,138 @@ impl<'a> Interp<'a> {
         })
     }
 
+    fn arithmetic(&mut self, op: Op) -> Res {
+        let (b, a) = (self.pop()?, self.pop()?);
+        let integer = match (&a, &b) {
+            (Obj::Int(x), Obj::Int(y)) => match op {
+                Op::Add => x.checked_add(*y).map(Obj::Int),
+                Op::Sub => x.checked_sub(*y).map(Obj::Int),
+                _ => x.checked_mul(*y).map(Obj::Int),
+            },
+            _ => None,
+        };
+        let result = match integer {
+            Some(value) => value,
+            None => {
+                let (x, y) = (a.as_num().ok_or(PsError::Ps("typecheck", String::new()))?, b.as_num().ok_or(PsError::Ps("typecheck", String::new()))?);
+                let value = match op {
+                    Op::Add => x + y,
+                    Op::Sub => x - y,
+                    _ => x * y,
+                };
+                if !value.is_finite() {
+                    return ps_err("undefinedresult", "");
+                }
+                Obj::Real(value)
+            }
+        };
+        self.push(result)
+    }
+
+    fn math_function(&mut self, op: Op) -> Res {
+        let result = match op {
+            Op::Sqrt => self.pop_num()?.sqrt(),
+            Op::Sin => self.pop_num()?.to_radians().sin(),
+            Op::Cos => self.pop_num()?.to_radians().cos(),
+            Op::Ln => self.pop_num()?.ln(),
+            Op::Log => self.pop_num()?.log10(),
+            Op::Exp => {
+                let [base, exponent] = self.nums()?;
+                base.powf(exponent)
+            }
+            _ => {
+                let [num, den] = self.nums()?;
+                num.atan2(den).to_degrees().rem_euclid(360.0)
+            }
+        };
+        if !result.is_finite() {
+            return ps_err("undefinedresult", "");
+        }
+        self.push(Obj::Real(result))
+    }
+
+    fn logical_op(&mut self, op: Op) -> Res {
+        let (b, a) = (self.pop()?, self.pop()?);
+        let result = match (a, b) {
+            (Obj::Bool(x), Obj::Bool(y)) => Obj::Bool(match op {
+                Op::And => x && y,
+                Op::Or => x || y,
+                _ => x ^ y,
+            }),
+            (Obj::Int(x), Obj::Int(y)) => Obj::Int(match op {
+                Op::And => x & y,
+                Op::Or => x | y,
+                _ => x ^ y,
+            }),
+            _ => return ps_err("typecheck", ""),
+        };
+        self.push(result)
+    }
+
+    fn for_loop(&mut self) -> Res {
+        let p = self.pop_proc()?;
+        let (limit, inc, init) = (self.pop()?, self.pop()?, self.pop()?);
+        match (&init, &inc, &limit) {
+            (Obj::Int(i0), Obj::Int(d), Obj::Int(l)) => {
+                let (mut i, d, l) = (*i0, *d, *l);
+                while (d >= 0 && i <= l) || (d < 0 && i >= l) {
+                    self.push(Obj::Int(i))?;
+                    if !self.body(&p)? {
+                        break;
+                    }
+                    i = i.checked_add(d).ok_or(PsError::Ps("rangecheck", String::new()))?;
+                    if d == 0 {
+                        self.tick()?;
+                    }
+                }
+            }
+            _ => {
+                let n = |o: &Obj| o.as_num().filter(|v| v.is_finite()).ok_or(PsError::Ps("typecheck", String::new()));
+                let (i0, d, l) = (n(&init)?, n(&inc)?, n(&limit)?);
+                let mut k = 0.0;
+                loop {
+                    let i = i0 + d * k;
+                    if !((d >= 0.0 && i <= l) || (d < 0.0 && i >= l)) {
+                        break;
+                    }
+                    self.push(Obj::Real(i))?;
+                    if !self.body(&p)? {
+                        break;
+                    }
+                    k += 1.0;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn search_string(&mut self, op: Op) -> Res {
+        let seek = self.pop_str()?.to_vec();
+        let s = self.pop_str()?;
+        let text = s.to_vec();
+        self.spend((text.len() / 64) as u64)?;
+        let at = if op == Op::Search { super::lex::find(&text, &seek) } else { text.starts_with(&seek).then_some(0) };
+        match at {
+            Some(i) => {
+                let o = Obj::Str(s);
+                if op == Op::Search {
+                    self.push_interval(o.clone(), i + seek.len(), text.len() - i - seek.len())?;
+                    self.push_interval(o.clone(), i, seek.len())?;
+                    self.push_interval(o, 0, i)?;
+                } else {
+                    self.push_interval(o.clone(), seek.len(), text.len() - seek.len())?;
+                    self.push_interval(o, 0, seek.len())?;
+                }
+                self.push(Obj::Bool(true))?;
+            }
+            None => {
+                self.push(Obj::Str(s))?;
+                self.push(Obj::Bool(false))?;
+            }
+        }
+        Ok(())
+    }
+
     fn op_inner(&mut self, op: Op) -> Res {
         use Op::*;
         match op {
@@ -523,6 +730,7 @@ impl<'a> Interp<'a> {
                 let n = self.pop_count()?;
                 let at = self.stack.len().checked_sub(n).ok_or(PsError::Ps("rangecheck", String::new()))?;
                 if n > 0 {
+                    self.spend_bytes(n)?;
                     let k = j.rem_euclid(n as i64) as usize;
                     if let Some(s) = self.stack.get_mut(at..) {
                         s.rotate_right(k);
@@ -549,33 +757,11 @@ impl<'a> Interp<'a> {
                 self.pop_to_mark()?;
             }
             CountToMark => {
+                self.spend_bytes(self.stack.len())?;
                 let n = self.stack.iter().rev().position(|o| matches!(o, Obj::Mark)).ok_or(PsError::Ps("unmatchedmark", String::new()))?;
                 self.push(Obj::Int(n as i64))?;
             }
-            Add | Sub | Mul => {
-                let (b, a) = (self.pop()?, self.pop()?);
-                let r = match (&a, &b) {
-                    (Obj::Int(x), Obj::Int(y)) => match op {
-                        Add => x.checked_add(*y).map(Obj::Int),
-                        Sub => x.checked_sub(*y).map(Obj::Int),
-                        _ => x.checked_mul(*y).map(Obj::Int),
-                    },
-                    _ => None,
-                };
-                let r = match r {
-                    Some(r) => r,
-                    None => {
-                        let (x, y) =
-                            (a.as_num().ok_or(PsError::Ps("typecheck", String::new()))?, b.as_num().ok_or(PsError::Ps("typecheck", String::new()))?);
-                        Obj::Real(match op {
-                            Add => x + y,
-                            Sub => x - y,
-                            _ => x * y,
-                        })
-                    }
-                };
-                self.push(r)?;
-            }
+            Add | Sub | Mul => self.arithmetic(op)?,
             Div => {
                 let [a, b] = self.nums()?;
                 if b == 0.0 {
@@ -593,27 +779,7 @@ impl<'a> Interp<'a> {
                 Obj::Real(r) => self.push(Obj::Real(if op == Neg { -r } else { r.abs() }))?,
                 _ => return ps_err("typecheck", ""),
             },
-            Sqrt | Sin | Cos | Exp | Ln | Log | Atan => {
-                let r = match op {
-                    Sqrt => self.pop_num()?.sqrt(),
-                    Sin => self.pop_num()?.to_radians().sin(),
-                    Cos => self.pop_num()?.to_radians().cos(),
-                    Ln => self.pop_num()?.ln(),
-                    Log => self.pop_num()?.log10(),
-                    Exp => {
-                        let [b, e] = self.nums()?;
-                        b.powf(e)
-                    }
-                    _ => {
-                        let [num, den] = self.nums()?;
-                        num.atan2(den).to_degrees().rem_euclid(360.0)
-                    }
-                };
-                if !r.is_finite() {
-                    return ps_err("undefinedresult", "");
-                }
-                self.push(Obj::Real(r))?;
-            }
+            Sqrt | Sin | Cos | Exp | Ln | Log | Atan => self.math_function(op)?,
             Round | Floor | Ceiling | Truncate => match self.pop()? {
                 Obj::Int(i) => self.push(Obj::Int(i))?,
                 Obj::Real(r) => self.push(Obj::Real(match op {
@@ -626,7 +792,7 @@ impl<'a> Interp<'a> {
             },
             Cvi => {
                 let v = match self.pop()? {
-                    Obj::Str(s) => String::from_utf8_lossy(&s.borrow()).trim().parse::<f64>().map_err(|_| PsError::Ps("typecheck", String::new()))?,
+                    Obj::Str(s) => string_number(&s.borrow())?,
                     o => o.as_num().ok_or(PsError::Ps("typecheck", String::new()))?,
                 };
                 if !(v.is_finite() && v.abs() < 9e15) {
@@ -636,7 +802,7 @@ impl<'a> Interp<'a> {
             }
             Cvr => {
                 let v = match self.pop()? {
-                    Obj::Str(s) => String::from_utf8_lossy(&s.borrow()).trim().parse::<f64>().map_err(|_| PsError::Ps("typecheck", String::new()))?,
+                    Obj::Str(s) => string_number(&s.borrow())?,
                     o => o.as_num().ok_or(PsError::Ps("typecheck", String::new()))?,
                 };
                 self.push_num(v)?;
@@ -668,23 +834,7 @@ impl<'a> Interp<'a> {
                 };
                 self.push(Obj::Bool(r))?;
             }
-            And | Or | Xor => {
-                let (b, a) = (self.pop()?, self.pop()?);
-                let r = match (a, b) {
-                    (Obj::Bool(x), Obj::Bool(y)) => Obj::Bool(match op {
-                        And => x && y,
-                        Or => x || y,
-                        _ => x ^ y,
-                    }),
-                    (Obj::Int(x), Obj::Int(y)) => Obj::Int(match op {
-                        And => x & y,
-                        Or => x | y,
-                        _ => x ^ y,
-                    }),
-                    _ => return ps_err("typecheck", ""),
-                };
-                self.push(r)?;
-            }
+            And | Or | Xor => self.logical_op(op)?,
             Not => match self.pop()? {
                 Obj::Bool(b) => self.push(Obj::Bool(!b))?,
                 Obj::Int(i) => self.push(Obj::Int(!i))?,
@@ -692,7 +842,7 @@ impl<'a> Interp<'a> {
             },
             Bitshift => {
                 let (s, v) = (self.pop_int()?, self.pop_int()?);
-                let r = if s >= 0 { v.checked_shl(s.min(63) as u32) } else { v.checked_shr((-s).min(63) as u32) };
+                let r = if s >= 0 { v.checked_shl(s.min(63) as u32) } else { v.checked_shr(s.saturating_neg().min(63) as u32) };
                 self.push(Obj::Int(r.unwrap_or(0)))?;
             }
             True => self.push(Obj::Bool(true))?,
@@ -713,41 +863,7 @@ impl<'a> Interp<'a> {
                 let pick = if self.pop_bool()? { yes } else { no };
                 self.call(pick)?;
             }
-            For => {
-                let p = self.pop_proc()?;
-                let (limit, inc, init) = (self.pop()?, self.pop()?, self.pop()?);
-                match (&init, &inc, &limit) {
-                    (Obj::Int(i0), Obj::Int(d), Obj::Int(l)) => {
-                        let (mut i, d, l) = (*i0, *d, *l);
-                        while (d >= 0 && i <= l) || (d < 0 && i >= l) {
-                            self.push(Obj::Int(i))?;
-                            if !self.body(&p)? {
-                                break;
-                            }
-                            i = i.checked_add(d).ok_or(PsError::Ps("rangecheck", String::new()))?;
-                            if d == 0 {
-                                self.tick()?;
-                            }
-                        }
-                    }
-                    _ => {
-                        let n = |o: &Obj| o.as_num().filter(|v| v.is_finite()).ok_or(PsError::Ps("typecheck", String::new()));
-                        let (i0, d, l) = (n(&init)?, n(&inc)?, n(&limit)?);
-                        let mut k = 0.0;
-                        loop {
-                            let i = i0 + d * k;
-                            if !((d >= 0.0 && i <= l) || (d < 0.0 && i >= l)) {
-                                break;
-                            }
-                            self.push(Obj::Real(i))?;
-                            if !self.body(&p)? {
-                                break;
-                            }
-                            k += 1.0;
-                        }
-                    }
-                }
-            }
+            For => self.for_loop()?,
             Repeat => {
                 let p = self.pop_proc()?;
                 let n = self.pop_int()?;
@@ -815,6 +931,9 @@ impl<'a> Interp<'a> {
             }
             Cvn => {
                 let s = self.pop_str()?;
+                self.spend_bytes(s.len())?;
+                // The name is a copy of the string (a bigger one when bytes are replaced).
+                self.alloc(s.len().saturating_mul(3))?;
                 let n: Rc<str> = Rc::from(String::from_utf8_lossy(&s.borrow()).as_ref());
                 self.push(Obj::Name(n))?;
             }
@@ -835,10 +954,9 @@ impl<'a> Interp<'a> {
                 }
                 self.push_interval(Obj::Str(s), 0, text.len())?;
             }
-            ReadOnly | ExecuteOnly | NoAccess | SetPacking | SetGlobal | SetObjectFormat => {
-                if matches!(op, SetPacking | SetGlobal | SetObjectFormat) {
-                    self.pop()?;
-                }
+            ReadOnly | ExecuteOnly | NoAccess => self.restrict_access(),
+            SetPacking | SetGlobal | SetObjectFormat => {
+                self.pop()?;
             }
             Rcheck | Wcheck => {
                 self.pop()?;
@@ -919,8 +1037,14 @@ impl<'a> Interp<'a> {
                 let src = self.pop()?;
                 let at = self.pop_count()?;
                 let written = match (self.pop()?, src) {
-                    (Obj::Array { items, .. }, Obj::Array { items: from, .. }) => items.write(at, &from.to_vec()),
-                    (Obj::Str(s), Obj::Str(from)) => s.write(at, &from.to_vec()),
+                    (Obj::Array { items, .. }, Obj::Array { items: from, .. }) => {
+                        self.spend_bytes(from.len())?;
+                        items.write(at, &from.to_vec())
+                    }
+                    (Obj::Str(s), Obj::Str(from)) => {
+                        self.spend_bytes(from.len())?;
+                        s.write(at, &from.to_vec())
+                    }
                     _ => return ps_err("typecheck", ""),
                 };
                 if !written {
@@ -943,30 +1067,7 @@ impl<'a> Interp<'a> {
                 self.stack.truncate(at);
                 self.push(Obj::Array { items, exec: false })?;
             }
-            Search | AnchorSearch => {
-                let seek = self.pop_str()?.to_vec();
-                let s = self.pop_str()?;
-                let text = s.to_vec();
-                let at = if op == Search { super::lex::find(&text, &seek) } else { text.starts_with(&seek).then_some(0) };
-                match at {
-                    Some(i) => {
-                        let o = Obj::Str(s);
-                        if op == Search {
-                            self.push_interval(o.clone(), i + seek.len(), text.len() - i - seek.len())?;
-                            self.push_interval(o.clone(), i, seek.len())?;
-                            self.push_interval(o, 0, i)?;
-                        } else {
-                            self.push_interval(o.clone(), seek.len(), text.len() - seek.len())?;
-                            self.push_interval(o, 0, seek.len())?;
-                        }
-                        self.push(Obj::Bool(true))?;
-                    }
-                    None => {
-                        self.push(Obj::Str(s))?;
-                        self.push(Obj::Bool(false))?;
-                    }
-                }
-            }
+            Search | AnchorSearch => self.search_string(op)?,
             NewDict => {
                 self.pop_count()?;
                 self.push(Obj::dict(Default::default()))?;
@@ -1005,10 +1106,10 @@ impl<'a> Interp<'a> {
                 self.insert(&d, k, Some(v))?;
             }
             Known => {
-                let k = self.pop()?.key().ok_or(PsError::Ps("typecheck", String::new()))?;
+                let k = self.pop()?;
                 let d = self.pop_dict()?;
-                let known = d.borrow().contains_key(&k);
-                self.push(Obj::Bool(known))?;
+                let found = known(&d, &k)?;
+                self.push(Obj::Bool(found))?;
             }
             Where => {
                 let k = self.pop()?.key().ok_or(PsError::Ps("typecheck", String::new()))?;
@@ -1050,7 +1151,7 @@ impl<'a> Interp<'a> {
             Bind => {
                 let o = self.pop()?;
                 if let Obj::Array { items, .. } = &o {
-                    self.bind(items, 0);
+                    self.bind(items, 0)?;
                 }
                 self.push(o)?;
             }
@@ -1096,9 +1197,12 @@ impl<'a> Interp<'a> {
             PdfMark => {
                 self.pop_to_mark()?;
             }
+            // True for a simple object, and for a composite one in global VM (PLRM 3rd ed., `gcheck`);
+            // every composite here is in local VM. Procsets that copy values into global VM leave
+            // alone those whose `gcheck` is true, such as a halftone's numbers.
             Gcheck | Scheck => {
-                self.pop()?;
-                self.push(Obj::Bool(false))?;
+                let simple = !self.pop()?.is_composite();
+                self.push(Obj::Bool(simple))?;
             }
             CurrentShared => self.push(Obj::Bool(false))?,
             SetShared | SetVmThreshold | VmReclaim | Echo => {
@@ -1147,6 +1251,7 @@ impl<'a> Interp<'a> {
 
     /// The objects above the topmost mark, which is removed.
     fn pop_to_mark(&mut self) -> Res<Vec<Obj>> {
+        self.spend_bytes(self.stack.len())?;
         let at = self.stack.iter().rposition(|o| matches!(o, Obj::Mark)).ok_or(PsError::Ps("unmatchedmark", String::new()))?;
         let items = self.stack.split_off(at + 1);
         self.stack.pop();
@@ -1166,7 +1271,11 @@ impl<'a> Interp<'a> {
                 }
             }
             Obj::Array { items, exec } => {
-                let from = self.pop_array()?.to_vec();
+                let source = self.pop_array()?;
+                // Its elements are read and written: work in proportion, and a copy held meanwhile.
+                self.spend(source.len() as u64)?;
+                self.alloc(source.len().saturating_mul(std::mem::size_of::<Obj>()))?;
+                let from = source.to_vec();
                 if !items.write(0, &from) {
                     return ps_err("rangecheck", "copy");
                 }
@@ -1174,6 +1283,7 @@ impl<'a> Interp<'a> {
             }
             Obj::Str(s) => {
                 let from = self.pop_str()?.to_vec();
+                self.spend_bytes(from.len())?;
                 if !s.write(0, &from) {
                     return ps_err("rangecheck", "copy");
                 }
@@ -1241,11 +1351,13 @@ impl<'a> Interp<'a> {
 
     /// Replace the names in a procedure that stand for operators by the operators, down through
     /// nested procedures.
-    fn bind(&mut self, items: &Shared<Obj>, depth: u32) {
-        if depth > 64 {
-            return;
+    fn bind(&mut self, items: &Shared<Obj>, depth: u32) -> Res {
+        if depth > 64 || self.readonly.contains(items) {
+            return Ok(());
         }
         for i in 0..items.len() {
+            // Procedures that hold one another twice would be visited exponentially often.
+            self.tick()?;
             match items.get(i) {
                 Some(Obj::Exec(name)) => {
                     if let Some(o @ Obj::Op(_)) = self.lookup(&name) {
@@ -1253,9 +1365,31 @@ impl<'a> Interp<'a> {
                         items.write(i, &[o]);
                     }
                 }
-                Some(Obj::Array { items: inner, exec: true }) if !inner.shares(items) => self.bind(&inner, depth + 1),
+                Some(Obj::Array { items: inner, exec: true }) if !inner.shares(items) => {
+                    self.bind(&inner, depth + 1)?;
+                    // `bind` makes each procedure it goes into read-only.
+                    self.mark_readonly(inner);
+                }
                 _ => {}
             }
+        }
+        Ok(())
+    }
+
+    /// `readonly`, `executeonly`, `noaccess`: the object stays on the stack; a procedure is
+    /// recorded as read-only, the only access the reader keeps (for `bind`).
+    fn restrict_access(&mut self) {
+        if let Some(Obj::Array { items, exec: true }) = self.stack.last() {
+            let items = items.clone();
+            self.mark_readonly(items);
+        }
+    }
+
+    /// Record procedure `items` as read-only, for [`Self::bind`]. Past [`MAX_READONLY`] of them
+    /// the rest stay writable: a later `bind` may then bind their names, as it did before.
+    fn mark_readonly(&mut self, items: Shared<Obj>) {
+        if self.readonly.len() < MAX_READONLY {
+            self.readonly.insert(items);
         }
     }
 
@@ -1354,10 +1488,32 @@ impl<'a> Interp<'a> {
 }
 
 /// An array or string index.
+/// The number a string holds by the PostScript syntax (`cvi`, `cvr`: PLRM 3rd ed., chapter 8),
+/// radix numbers such as `16#20` included.
+fn string_number(s: &[u8]) -> Res<f64> {
+    let text = String::from_utf8_lossy(s);
+    match number(text.trim_matches(|c: char| c.is_ascii_whitespace() || c == '\0')) {
+        Some(Obj::Int(i)) => Ok(i as f64),
+        Some(Obj::Real(r)) => Ok(r),
+        _ => ps_err("typecheck", ""),
+    }
+}
+
 fn index(k: &Obj) -> Res<usize> {
     match *k {
         Obj::Int(i) if i >= 0 => Ok(i as usize),
         _ => ps_err("rangecheck", "an index"),
+    }
+}
+
+/// `known`: a key may be any object but null (PLRM 3rd ed., §3.3.9, <https://www.adobe.com/jp/print/postscript/pdfs/PLRM.pdf>),
+/// and one that can't be a key here (an array, a dictionary, a real with a fraction) is in no
+/// dictionary, since `put` here refuses it.
+fn known(d: &DictRef, k: &Obj) -> Res<bool> {
+    match k.key() {
+        Some(key) => Ok(d.borrow().contains_key(&key)),
+        None if matches!(k, Obj::Null) => ps_err("typecheck", "known"),
+        None => Ok(false),
     }
 }
 

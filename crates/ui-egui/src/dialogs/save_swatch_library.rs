@@ -7,7 +7,8 @@
 //! (there is a user library folder).
 //!
 //! The name and Save To rows and the saving are shared with Save Graphic Style Library
-//! ([`super::save_style_library`]).
+//! ([`super::save_style_library`]), Save Symbol Library ([`super::save_symbol_library`]) and Save
+//! Brush Library ([`super::save_brush_library`]).
 
 use serde_json::{Value, json};
 use vectorcraft_color::palette_io::PaletteFormat;

@@ -11,7 +11,7 @@ use vectorcraft_scriptcheck::{Limits, Loaded, Loader, Report};
 /// The ids a reply can hold, for the windows that show it.
 pub use vectorcraft_scriptcheck::{IncludeStatus, Need, OUTSIDE, PROBLEMS};
 
-use super::*;
+use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, str_param};
 
 /// The extensions of the scripts File › Open shows a check for.
 pub const EXTS: &[&str] = &["jsx", "jsxinc", "jsxbin"];
@@ -62,7 +62,7 @@ impl Loader for Folder {
 
 /// The bytes the base64 text `b64` holds, up to `max` and a few more: only the text they take is
 /// decoded.
-fn decode_head(b64: &str, max: usize) -> Option<Vec<u8>> {
+pub(super) fn decode_head(b64: &str, max: usize) -> Option<Vec<u8>> {
     let chars = max.div_ceil(3).saturating_mul(4);
     let mut kept = 0usize;
     let end = b64

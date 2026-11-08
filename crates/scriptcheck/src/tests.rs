@@ -2,6 +2,7 @@
 
 use proptest::prelude::*;
 
+use crate::catalog::FeatureId;
 use crate::lex::{Lexer, T};
 use crate::*;
 
@@ -95,7 +96,7 @@ fn each_feature_is_found_where_it_is_and_nowhere_else() {
         assert_eq!(r.kind, Kind::Script, "{with}");
         let f = feature(&r, id).unwrap_or_else(|| panic!("{id} not found in {with:?}: {:?}", r.features));
         assert_eq!(f.lines, [1], "{with}");
-        let need = catalog::need(id).unwrap_or_else(|| panic!("{id} sets no need"));
+        let need = FeatureId::ALL.iter().find(|f| f.id() == *id).map(|f| f.need()).unwrap_or_else(|| panic!("{id} sets no need"));
         assert!(r.needs.contains(&need), "{with}: {:?}", r.needs);
         let r = report(without);
         assert!(feature(&r, id).is_none(), "{id} found in {without:?}");
@@ -103,14 +104,20 @@ fn each_feature_is_found_where_it_is_and_nowhere_else() {
 }
 
 #[test]
-fn every_feature_id_has_a_need_and_a_case() {
-    assert!(FEATURES.windows(2).all(|w| w[0] < w[1]), "FEATURES is sorted, as the report lists them");
-    for id in FEATURES {
-        assert!(catalog::need(id).is_some(), "{id}");
-        assert!(FEATURE_CASES.iter().any(|(case, ..)| case == id), "{id} has no case");
+fn features_are_listed_in_alphabetical_order_of_their_ids() {
+    let ids: Vec<&str> = FeatureId::ALL.iter().map(|f| f.id()).collect();
+    assert!(ids.windows(2).all(|w| w[0] < w[1]), "{ids:?}");
+    assert!(FeatureId::ALL.windows(2).all(|w| w[0] < w[1]), "the enum is declared in the order of its ids");
+}
+
+#[test]
+fn every_feature_id_has_a_case() {
+    for f in FeatureId::ALL {
+        let id = f.id();
+        assert!(FEATURE_CASES.iter().any(|(case, ..)| *case == id), "{id} has no case");
     }
     for (id, ..) in FEATURE_CASES {
-        assert!(FEATURES.contains(id), "{id} isn't in FEATURES");
+        assert!(FeatureId::ALL.iter().any(|f| f.id() == *id), "{id} isn't a FeatureId");
     }
     let unique = |ids: &[&str]| ids.iter().collect::<std::collections::BTreeSet<_>>().len() == ids.len();
     assert!(unique(PROBLEMS) && unique(OUTSIDE));
@@ -481,21 +488,131 @@ fn compound_assignments_and_increments_empty_a_name() {
     );
 }
 
+/// The lines of the `filesWritten` use in `r`, empty when it has none, and the member names, for a
+/// script whose other uses are not under test.
+fn written_lines_and_members(r: &Report) -> (Vec<usize>, Vec<&str>) {
+    let lines = r.outside.iter().flat_map(|o| {
+        assert_eq!(o.id, "filesWritten");
+        o.lines.iter().copied()
+    });
+    (lines.collect(), r.members.iter().map(|m| m.name.as_str()).collect())
+}
+
+/// `(name, script, lines of the files written, members)`: what a name holds after a value that goes
+/// on past its parentheses or past a call, or that is a comma expression or a grouped value.
+const HELD_VALUE_CASES: &[(&str, &str, &[usize], &[&str])] = &[
+    (
+        "a_value_that_goes_on_on_the_next_line_is_not_what_the_name_holds",
+        concat!(
+            "var a = new File(p);\n",
+            "var b = a\n  .name;\n",
+            "b.remove();\n",
+            "var d = app.activeDocument\n  + 'x';\n",
+            "d.acmeName;\n",
+            "var c = a\nc.remove();\n",
+            "var e = app.activeDocument\ne.acmeLayers;\n",
+        ),
+        &[9],
+        &["app.activeDocument", "app.activeDocument.acmeLayers"],
+    ),
+    // A comma expression in parentheses is the value of its last operand (ECMA-262 3rd edition,
+    // section 11.14).
+    (
+        "a_comma_expression_in_parentheses_is_its_last_operand",
+        concat!(
+            "var d = (0, app.activeDocument);\n",
+            "d.acmeName;\n",
+            "var f = (x, (new File(p)));\n",
+            "f.remove();\n",
+            "var g = (new File(p), 0);\n",
+            "g.remove();\n",
+            "var e = ((app.activeDocument), 0);\n",
+            "e.acmeLayers;\n",
+            "var k = (a = 1, f);\n",
+            "k.remove();\n",
+        ),
+        &[4, 10],
+        &["app.activeDocument", "app.activeDocument.acmeName"],
+    ),
+    // Parentheses that hold only the start of the value, or a value that goes on after them, leave the
+    // name holding nothing the check follows, as a call's argument list does.
+    (
+        "a_value_that_only_begins_in_parentheses_is_not_what_the_name_holds",
+        concat!(
+            "var f = new File(p);\n",
+            "var x = (app.activeDocument).name;\n",
+            "x.acmeLayers;\n",
+            "var y = (f).name;\n",
+            "y.remove();\n",
+            "var doc = ((app.activeDocument) + 1);\n",
+            "doc.acmeName;\n",
+            "var g = (new File(p).name);\n",
+            "g.remove();\n",
+            "var h = (new File(p))\n  .name;\n",
+            "h.remove();\n",
+            "var k = (File.name);\nnew File(p);\n",
+            "k.remove();\n",
+            "var flag = (File === File(p));\n",
+            "flag.remove();\n",
+            "var c = (f)(1), z = foo(new File(p));\n",
+            "c.remove(); z.remove();\n",
+            "var u = (x;\ny, new File(p));\n",
+            "u.remove();\n",
+        ),
+        &[],
+        &["app.activeDocument"],
+    ),
+    // The name holds a grouped value from the token after its last `)`: the next statement reads it, a
+    // function's own variable holds it only inside the function, and grouped values inside a function in
+    // parentheses don't change what the outer name holds.
+    (
+        "a_grouped_value_is_held_from_the_token_after_its_parentheses",
+        concat!(
+            "var doc = (app.activeDocument)\n",
+            "doc.acmeName;\n",
+            "function test() { var d2 = (app.activeDocument) }\n",
+            "d2.acmeLayers;\n",
+            "var f = (new File(File(p).fsName));\n",
+            "f.remove();\n",
+            "var lib = (function () { var sel = (selection); return sel.length; })();\n",
+            "var w = new File(p);\n",
+            "w = (function () { var inner = (q); return inner; });\n",
+            "w.remove();\n",
+        ),
+        &[6],
+        &["app.activeDocument", "app.activeDocument.acmeName", "selection", "selection.length"],
+    ),
+    // A value without parentheses that starts with `File` or `Folder` is what the name holds only when
+    // nothing follows the call, the dialog or the place, as in parentheses.
+    (
+        "a_file_value_that_goes_on_is_not_what_the_name_holds",
+        concat!(
+            "var a = File(p) && {remove: function () {}};\n",
+            "a.remove();\n",
+            "var b = new File(p).name;\n",
+            "b.remove();\n",
+            "var c = new File(p)\n  .parent;\n",
+            "c.remove();\n",
+            "var d = Folder.temp + '/x', e = File.openDialog('Pick') || other;\n",
+            "d.remove(); e.remove();\n",
+            "var g = File(p) == null, h = File, k = File.saveDialog;\n",
+            "g.remove(); h.remove(); k.remove();\n",
+        ),
+        &[],
+        &[],
+    ),
+];
+
+const HELD_VALUE_CASE_COUNT: usize = 5;
+
 #[test]
-fn a_value_that_goes_on_on_the_next_line_is_not_what_the_name_holds() {
-    let r = report(concat!(
-        "var a = new File(p);\n",
-        "var b = a\n  .name;\n",
-        "b.remove();\n",
-        "var d = app.activeDocument\n  + 'x';\n",
-        "d.acmeName;\n",
-        "var c = a\nc.remove();\n",
-        "var e = app.activeDocument\ne.acmeLayers;\n",
-    ));
-    let outside: Vec<(&str, &[usize])> = r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect();
-    assert_eq!(outside, [("filesWritten", &[9][..])]);
-    let members: Vec<&str> = r.members.iter().map(|m| m.name.as_str()).collect();
-    assert_eq!(members, ["app.activeDocument", "app.activeDocument.acmeLayers"]);
+fn a_name_holds_what_the_value_it_was_given_ends_as() {
+    assert_eq!(HELD_VALUE_CASES.len(), HELD_VALUE_CASE_COUNT);
+    for &(name, src, lines, members) in HELD_VALUE_CASES {
+        let r = report(src);
+        let (got_lines, got_members) = written_lines_and_members(&r);
+        assert_eq!((got_lines.as_slice(), got_members.as_slice()), (lines, members), "{name}");
+    }
 }
 
 /// A value in grouping parentheses, nested to any depth, is what the name holds (ECMA-262 3rd
@@ -522,9 +639,8 @@ fn a_value_in_grouping_parentheses_is_what_the_name_holds() {
     )
     .to_string();
     let r = report(&(src + &deep));
-    let outside: Vec<(&str, &[usize])> = r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect();
-    assert_eq!(outside, [("filesWritten", &[2, 4, 8, 9, 11, 12, 13, 17][..])]);
-    let members: Vec<&str> = r.members.iter().map(|m| m.name.as_str()).collect();
+    let (lines, members) = written_lines_and_members(&r);
+    assert_eq!(lines, [2, 4, 8, 9, 11, 12, 13, 17]);
     assert_eq!(members, ["app.activeDocument", "app.activeDocument.acmeLayers", "selection", "selection.length"]);
 }
 
@@ -588,100 +704,6 @@ fn a_call_on_a_file_in_grouping_parentheses_is_followed() {
     assert_eq!(feature(&r, "file.read").map(|f| f.lines.as_slice()), Some(&[11][..]));
 }
 
-/// A comma expression in parentheses is the value of its last operand (ECMA-262 3rd edition,
-/// section 11.14).
-#[test]
-fn a_comma_expression_in_parentheses_is_its_last_operand() {
-    let r = report(concat!(
-        "var d = (0, app.activeDocument);\n",
-        "d.acmeName;\n",
-        "var f = (x, (new File(p)));\n",
-        "f.remove();\n",
-        "var g = (new File(p), 0);\n",
-        "g.remove();\n",
-        "var e = ((app.activeDocument), 0);\n",
-        "e.acmeLayers;\n",
-        "var k = (a = 1, f);\n",
-        "k.remove();\n",
-    ));
-    let outside: Vec<(&str, &[usize])> = r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect();
-    assert_eq!(outside, [("filesWritten", &[4, 10][..])]);
-    let members: Vec<&str> = r.members.iter().map(|m| m.name.as_str()).collect();
-    assert_eq!(members, ["app.activeDocument", "app.activeDocument.acmeName"]);
-}
-
-/// Parentheses that hold only the start of the value, or a value that goes on after them, leave the
-/// name holding nothing the check follows, as a call's argument list does.
-#[test]
-fn a_value_that_only_begins_in_parentheses_is_not_what_the_name_holds() {
-    let r = report(concat!(
-        "var f = new File(p);\n",
-        "var x = (app.activeDocument).name;\n",
-        "x.acmeLayers;\n",
-        "var y = (f).name;\n",
-        "y.remove();\n",
-        "var doc = ((app.activeDocument) + 1);\n",
-        "doc.acmeName;\n",
-        "var g = (new File(p).name);\n",
-        "g.remove();\n",
-        "var h = (new File(p))\n  .name;\n",
-        "h.remove();\n",
-        "var k = (File.name);\nnew File(p);\n",
-        "k.remove();\n",
-        "var flag = (File === File(p));\n",
-        "flag.remove();\n",
-        "var c = (f)(1), z = foo(new File(p));\n",
-        "c.remove(); z.remove();\n",
-        "var u = (x;\ny, new File(p));\n",
-        "u.remove();\n",
-    ));
-    assert!(r.outside.is_empty(), "{:?}", r.outside);
-    let members: Vec<&str> = r.members.iter().map(|m| m.name.as_str()).collect();
-    assert_eq!(members, ["app.activeDocument"]);
-}
-
-/// The name holds a grouped value from the token after its last `)`: the next statement reads it, a
-/// function's own variable holds it only inside the function, and grouped values inside a function in
-/// parentheses don't change what the outer name holds.
-#[test]
-fn a_grouped_value_is_held_from_the_token_after_its_parentheses() {
-    let r = report(concat!(
-        "var doc = (app.activeDocument)\n",
-        "doc.acmeName;\n",
-        "function test() { var d2 = (app.activeDocument) }\n",
-        "d2.acmeLayers;\n",
-        "var f = (new File(File(p).fsName));\n",
-        "f.remove();\n",
-        "var lib = (function () { var sel = (selection); return sel.length; })();\n",
-        "var w = new File(p);\n",
-        "w = (function () { var inner = (q); return inner; });\n",
-        "w.remove();\n",
-    ));
-    let outside: Vec<(&str, &[usize])> = r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect();
-    assert_eq!(outside, [("filesWritten", &[6][..])]);
-    let members: Vec<&str> = r.members.iter().map(|m| m.name.as_str()).collect();
-    assert_eq!(members, ["app.activeDocument", "app.activeDocument.acmeName", "selection", "selection.length"]);
-}
-
-/// A value without parentheses that starts with `File` or `Folder` is what the name holds only when
-/// nothing follows the call, the dialog or the place, as in parentheses.
-#[test]
-fn a_file_value_that_goes_on_is_not_what_the_name_holds() {
-    let r = report(concat!(
-        "var a = File(p) && {remove: function () {}};\n",
-        "a.remove();\n",
-        "var b = new File(p).name;\n",
-        "b.remove();\n",
-        "var c = new File(p)\n  .parent;\n",
-        "c.remove();\n",
-        "var d = Folder.temp + '/x', e = File.openDialog('Pick') || other;\n",
-        "d.remove(); e.remove();\n",
-        "var g = File(p) == null, h = File, k = File.saveDialog;\n",
-        "g.remove(); h.remove(); k.remove();\n",
-    ));
-    assert!(r.outside.is_empty(), "{:?}", r.outside);
-}
-
 /// The name holds a value without parentheses from the token that ends it: the next statement reads
 /// it, the value itself reads what the name held before, a function's own variable holds it only
 /// inside the function, a preprocessor line or the end of a file ends it, and a line break after a
@@ -707,9 +729,8 @@ fn a_file_value_is_held_from_the_token_that_ends_it() {
         "s.remove();\n",
     );
     let r = check("main.jsx", src.as_bytes(), Some(&mut m), &Limits::default());
-    let outside: Vec<(&str, &[usize])> = r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect();
-    assert_eq!(outside, [("filesWritten", &[2, 5, 11, 13, 16][..])]);
-    let members: Vec<&str> = r.members.iter().map(|m| m.name.as_str()).collect();
+    let (lines, members) = written_lines_and_members(&r);
+    assert_eq!(lines, [2, 5, 11, 13, 16]);
     assert_eq!(members, ["app.activeDocument", "app.activeDocument.fullName"]);
 }
 
@@ -1461,7 +1482,8 @@ fn include_lines_share_the_folders_of_the_include_path_before_them() {
     }
     let limits = Limits::default();
     let mut acc = report::Acc::new(&limits);
-    let scan = analyze::scan(&src, None, std::rc::Rc::from([]), &analyze::Known::default(), &mut acc);
+    let declared = analyze::declarations(&src, &mut acc);
+    let scan = analyze::scan(&src, &declared, None, std::rc::Rc::from([]), &analyze::Known::default(), &mut acc);
     let (first, rest) = scan.includes.split_first().unwrap();
     assert_eq!((first.paths.len(), rest.len()), (64, 999));
     assert!(rest.iter().all(|i| std::rc::Rc::ptr_eq(&i.paths, &first.paths)), "one list of folders, not a copy for each line");
@@ -1734,4 +1756,64 @@ proptest! {
         prop_assert!(m.asked.len() <= lookups, "{} paths looked up: {:?}", m.asked.len(), m.asked);
         prop_assert!(r.includes.iter().all(|i| i.status != IncludeStatus::NotRead));
     }
+}
+
+/// A function that writes to a variable the global code assigns a File object after it: the
+/// variable declaration is hoisted, so the function writes a file, with a loader and without one.
+#[test]
+fn a_variable_assigned_after_the_function_using_it_holds_its_value() {
+    let src = "function g(){ f.write('x'); }  var f = new File('a');";
+    let without = report(src);
+    let with = check("test.jsx", src.as_bytes(), Some(&mut mem(&[])), &Limits::default());
+    assert!(feature(&without, "file.write").is_some(), "{:?}", without.features);
+    assert!(feature(&with, "file.write").is_some(), "{:?}", with.features);
+}
+
+/// Script-like text with functions that use variables the code after them assigns, a chain of them
+/// taking more than one scan to settle.
+fn hoisting_text() -> impl Strategy<Value = String> {
+    let pieces = prop::sample::select(vec![
+        "function g(){ ",
+        "function h(){ ",
+        "}",
+        "f.write('x'); ",
+        "b.remove(); ",
+        "e.acmeItems.add(); ",
+        "b = a; ",
+        "var a = f; ",
+        "var f = new File('a'); ",
+        "var d = app.activeDocument; ",
+        "var e = d; ",
+        "e = d.acmeLayers; ",
+        "f = d; ",
+    ]);
+    (prop::collection::vec(pieces, 0..30), script_text()).prop_map(|(v, tail)| v.concat() + &tail)
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(512))]
+
+    /// A script that includes nothing gets the same report with a loader and without one.
+    #[test]
+    fn a_script_without_includes_reports_the_same_with_and_without_a_loader(text in hoisting_text()) {
+        let mut without = report(&text);
+        prop_assume!(without.includes.is_empty());
+        let mut with = check("test.jsx", text.as_bytes(), Some(&mut mem(&[])), &Limits::default());
+        without.steps = 0;
+        with.steps = 0;
+        prop_assert_eq!(without, with);
+    }
+}
+
+/// Chains of variables a function assigns before the code after it assigns their source take a
+/// scan each to settle: the script is read at most seven times.
+#[test]
+fn variables_that_settle_over_several_scans_stay_linear() {
+    let mut src = String::new();
+    for i in 0..150 {
+        src += &format!("function a{i}(){{ e{i} = d{i}; }} function b{i}(){{ d{i} = c{i}; }} function c{i}(){{ c{i} = b{i}; }} ");
+        src += &format!("function d{i}(){{ b{i} = a{i}; }} var a{i} = new File('x');\n");
+    }
+    let r = report(&src);
+    assert!(r.steps <= 9 * src.len() + 16, "{} steps for {} bytes", r.steps, src.len());
 }

@@ -231,11 +231,11 @@ impl Obj {
         Self::Dict(DictRef::new(d))
     }
 
-    /// The number this is (integers and reals).
+    /// The number this is (integers and finite reals: a NaN or infinite real is not a number).
     pub fn as_num(&self) -> Option<f64> {
         match *self {
             Self::Int(i) => Some(i as f64),
-            Self::Real(r) => Some(r),
+            Self::Real(r) if r.is_finite() => Some(r),
             _ => None,
         }
     }
@@ -285,6 +285,11 @@ impl Obj {
             Self::Save(_) => "savetype",
             Self::GState(_) => "gstatetype",
         }
+    }
+
+    /// A composite object, whose value lives in VM; the others are simple (PLRM 3rd ed., §3.3.1).
+    pub fn is_composite(&self) -> bool {
+        matches!(self, Self::Str(_) | Self::ExecStr(_) | Self::Array { .. } | Self::Dict(_) | Self::File { .. } | Self::Save(_) | Self::GState(_))
     }
 }
 
@@ -365,6 +370,16 @@ impl<T: Clone + Held> Shared<T> {
     }
 }
 
+/// Equal when [`Shared::same`]: the same storage and run of it (the identity of a PostScript
+/// composite object, not its contents).
+impl<T: Held> PartialEq for Shared<T> {
+    fn eq(&self, o: &Self) -> bool {
+        Rc::ptr_eq(&self.buf, &o.buf) && self.at == o.at && self.len == o.len
+    }
+}
+
+impl<T: Held> Eq for Shared<T> {}
+
 /// Hashes what [`Shared::same`] compares: the storage and the run of it.
 impl<T: Held> Hash for Shared<T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -405,6 +420,13 @@ pub(crate) enum PsError {
 }
 
 pub(crate) type Res<T = ()> = Result<T, PsError>;
+
+/// `v` limited to the range between `a` and `b` (in either order). Unlike `f64::clamp` this never
+/// panics: when one bound is NaN the range collapses to the other bound (both NaN gives `v`), and a
+/// NaN `v` gives the lower bound.
+pub(crate) fn clamp_between(v: f64, a: f64, b: f64) -> f64 {
+    v.max(a.min(b)).min(a.max(b))
+}
 
 /// A PostScript error raised at `at`.
 pub(crate) fn ps_err<T>(name: &'static str, at: &str) -> Res<T> {

@@ -5,7 +5,8 @@
 //!   width profiles, fitted or dotted dashes as the canvas's filled outlines and brushed strokes
 //!   as their brush art), opacity and blend modes (transparency groups),
 //!   clip groups, linear/radial gradients (shadings), pattern fills and strokes as their tiles and
-//!   freeform gradients as images (clipped to what they paint), embedded images (resampled and
+//!   freeform and Perceptual gradients and dithered gradient fills as images at the raster
+//!   effects resolution (clipped to what they paint), embedded images (resampled and
 //!   compressed as the Compression settings say) and text as outlined glyph paths, or as real
 //!   text in embedded subset fonts (Advanced). Colours are converted, tagged with ICC profiles and
 //!   given an output intent as the Output settings say. Hidden objects,
@@ -16,7 +17,8 @@
 //!   printer's marks around it (the media box), drawn in Registration. [`PdfSettings`] is the Save PDF
 //!   dialog's model (standard, compatibility, General, Compression, Marks and Bleeds, Output,
 //!   Advanced, Security); options the writer doesn't apply yet come back as warnings. With Preserve
-//!   Editing the native document rides along as an embedded file ([`editing()`]). Each page can
+//!   Editing the native document rides along as an embedded file ([`editing()`]), and the first
+//!   page can carry a `.ai` file's editing copy of the art ([`PrivateData`]). Each page can
 //!   carry a thumbnail ([`Thumbnail`], drawn by the caller), and Fast Web View writes a linearised
 //!   file (still linearised when encrypted). A PDF 1.3 file ([`PdfSettings::pdf13`]) must be flat:
 //!   the app flattens the document first, and the writer refuses transparency that is left.
@@ -62,6 +64,7 @@ mod output;
 mod pages;
 mod patch;
 mod pdfx;
+mod piece_info;
 mod post;
 mod presets;
 mod print;
@@ -73,11 +76,19 @@ pub use editing::{EDITING_FILE, Editing, LEGACY_EDITING_FILE, editing, editing_w
 pub use encrypt::Encryption;
 pub use export::{export, export_with_report, page_areas};
 pub use file_info::{FileInfo, file_info};
+#[cfg(any(test, feature = "read-count"))]
+pub use import::imports_of;
 pub use import::{
     INVISIBLE_TEXT_NOTE, OFF_ARTBOARD_NOTE, OUTLINED_TEXT_NOTE, PAST_PAGE_NOTE, UNMATCHED_GLYPHS_NOTE, UNNAMED_CHARACTERS_NOTE, holds_outlines,
-    import, import_with_report, is_glyph_outlines, is_outlines_note,
+    import, import_opened, import_with_report, is_glyph_outlines, is_outlines_note,
 };
-pub use pages::{PageInfo, PdfInfo, has_illustrator_data, illustrator_data, info, is_postscript};
+#[cfg(any(test, feature = "read-count"))]
+pub use pages::reads_of;
+pub use pages::{
+    IllustratorData, Opened, PageInfo, PdfInfo, TrimPages, has_illustrator_data, illustrator_data, illustrator_data_without_pdf_part, info,
+    is_postscript, open_pdf,
+};
+pub use piece_info::{PRIVATE_CHUNK, PrivateData};
 pub use post::{THUMBNAIL_SIZE, Thumbnail};
 pub use presets::*;
 pub use print::*;
@@ -93,12 +104,16 @@ pub struct PdfOptions {
     pub artboards: Option<Vec<usize>>,
     /// Document title for the metadata; `None` = the document's title.
     pub title: Option<String>,
+    /// Ask PDF viewers to display the document title instead of the file name.
+    pub display_doc_title: bool,
     /// Creation date as Unix seconds (UTC); `None` = now (native) / omitted (wasm). PDF/A needs a date.
     pub created: Option<i64>,
     /// Modification date as Unix seconds (UTC); `None` = the creation date.
     pub modified: Option<i64>,
     /// The native document (`.vectorcraft` bytes) Preserve Editing embeds.
     pub native: Option<Vec<u8>>,
+    /// The editing copy of the art for every page's `PieceInfo`, as a `.ai` file carries it.
+    pub private_data: Option<PrivateData>,
     /// The pages drawn small, in page order: what Embed Page Thumbnails embeds (the writer
     /// doesn't draw; [`page_areas`] says what each page shows).
     pub thumbnails: Vec<Thumbnail>,
@@ -242,74 +257,6 @@ impl From<craft_pdf::write::WriteError> for PdfError {
 }
 
 #[cfg(test)]
+use tests::{import_fidelity as tests_import_fidelity, live_text as tests_live_text, stroke as tests_stroke};
+#[cfg(test)]
 mod tests;
-#[cfg(test)]
-mod tests_blend;
-#[cfg(test)]
-mod tests_charstroke;
-#[cfg(test)]
-mod tests_cmykblend;
-#[cfg(test)]
-mod tests_cmykimages;
-#[cfg(test)]
-mod tests_compression;
-#[cfg(test)]
-mod tests_dashalign;
-#[cfg(test)]
-mod tests_editing;
-#[cfg(test)]
-mod tests_encrypt;
-#[cfg(test)]
-mod tests_file_info;
-#[cfg(test)]
-mod tests_focal;
-#[cfg(test)]
-mod tests_fx;
-#[cfg(test)]
-mod tests_import_color;
-#[cfg(test)]
-mod tests_import_fidelity;
-#[cfg(test)]
-mod tests_import_layers;
-#[cfg(test)]
-mod tests_import_lines;
-#[cfg(test)]
-mod tests_import_options;
-#[cfg(test)]
-mod tests_import_overprint;
-#[cfg(test)]
-mod tests_layers;
-#[cfg(test)]
-mod tests_live_text;
-#[cfg(test)]
-mod tests_marks;
-#[cfg(test)]
-mod tests_output;
-#[cfg(test)]
-mod tests_pdf13;
-#[cfg(test)]
-mod tests_pdfx;
-#[cfg(test)]
-mod tests_presets;
-#[cfg(test)]
-mod tests_print;
-#[cfg(test)]
-mod tests_printadvanced;
-#[cfg(test)]
-mod tests_realtext;
-#[cfg(test)]
-mod tests_settings;
-#[cfg(test)]
-mod tests_stroke;
-#[cfg(test)]
-mod tests_strokeout;
-#[cfg(test)]
-mod tests_textstroke;
-#[cfg(test)]
-mod tests_webview;
-
-#[cfg(test)]
-mod tests_reader_streaming;
-
-#[cfg(test)]
-mod tests_reader_compat;

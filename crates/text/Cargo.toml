@@ -28,6 +28,9 @@ icu_segmenter = "2.3"
 # Grapheme clusters (a Thai consonant with its vowel and tone marks, an accented letter, an emoji
 # sequence) for caret movement; MIT OR Apache-2.0, already in the build.
 unicode-segmentation = "1.13"
+# Draws COLR colour glyphs whose paints documents have no form for (sweep gradients, compositing
+# modes) into images: the canvas's renderer, already in the build.
+vello_cpu = { workspace = true }
 # Builds a small variable font for tests (`test_fonts`; no font file is committed). MIT OR
 # Apache-2.0, already in the build through subsetter.
 write-fonts = { version = "0.48", optional = true }

@@ -87,10 +87,10 @@ pub(super) fn fields(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     // Per handle: whether it is held or hovered, and whether it has the keyboard focus.
     let mut states = [(false, false); 4];
     for (i, corner) in c.iter_mut().enumerate() {
-        let id = ui.id().with(("free-distort-corner", i));
+        let id = ui.scope_id().with(("free-distort-corner", i));
         let at = pad.clamp(to_screen(*corner));
         let resp = ui.interact(Rect::from_center_size(at, Vec2::splat(GRAB)), id, Sense::click_and_drag());
-        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), names[i]));
+        resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), names[i]));
         if resp.drag_started() || resp.clicked() {
             resp.request_focus();
         }
@@ -132,7 +132,7 @@ pub(super) fn fields(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     let reset = ui
         .add_enabled_ui(c != IDENTITY, |ui| {
             let r = widgets::flat_button(ui, tl!("Reset"), 64.0);
-            r.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), tl!("Reset")));
+            r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!("Reset")));
             r
         })
         .inner;

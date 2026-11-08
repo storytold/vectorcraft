@@ -1,18 +1,42 @@
 //! The wasmi host: loading, instantiating and calling a plug-in under resource limits.
 
 use wasmi::{
-    Config, EnforcedLimits, Engine, Instance, Linker, Memory, Module, Store, StoreLimits, StoreLimitsBuilder, TypedFunc, TypedResumableCall,
-    WasmParams, WasmResults,
+    Config, CustomFuelCosts, EnforcedLimits, Engine, Instance, Memory, Module, Store, StoreLimitsBuilder, TypedFunc, TypedResumableCall, WasmParams,
+    WasmResults,
 };
 
+use crate::host::{self, Deadline, Host, Report, Run};
 use crate::manifest::{MAX_MANIFEST_BYTES, Manifest};
-use crate::{Error, Result};
+use crate::permissions::Permission;
+use crate::{Error, Kind, Result};
 
 /// The plug-in ABI version this host implements (`vc_abi_version` must return it).
 pub const ABI_VERSION: i32 = 1;
 
 /// Fuel handed out per slice; between slices the host checks the deadline.
 const FUEL_SLICE: u64 = 20_000_000;
+
+/// wasmi's fuel costs, but compiling costs nothing. wasmi compiles a function when it is first
+/// called, and charges the run that calls it by the function's size. When the slice a run was in
+/// ran out meanwhile, wasmi ended the run with an error, not an out-of-fuel pause the host resumes:
+/// a first run failed with `Limit("instruction budget")` and most of its budget left, as where the
+/// slices fell decided. So a run pays for its own instructions only, as many on a first run as on
+/// the next. Copying keeps wasmi's default cost, a unit for every 64 bytes.
+const FUEL_COSTS: CustomFuelCosts = CustomFuelCosts { bytes_copied_per_fuel: 64, fuel_per_bytes_translated: 0, fuel_per_bytes_validated: 0 };
+
+/// Instructions a heavy filter's run may use besides [`Limits::fuel_per_byte`] for each byte of
+/// input ([`crate::Budget::Heavy`]): 20 times a light one's. Its output's size can't add to it:
+/// the host learns that only once the run has ended.
+pub const HEAVY_FUEL: u64 = 1_000_000_000;
+
+/// Wall-clock budget of a heavy filter's run, in milliseconds (native builds).
+pub const HEAVY_WALL_TIME_MS: u64 = 300_000;
+
+/// A heavy run's budget as people read it: (minutes it may take, times the instructions a light
+/// run gets).
+pub fn heavy_terms() -> (u64, u64) {
+    (HEAVY_WALL_TIME_MS / 60_000, HEAVY_FUEL / Limits::default().fuel_base.max(1))
+}
 
 /// Resource limits for running plug-ins.
 #[derive(Clone, Debug, PartialEq)]
@@ -32,6 +56,11 @@ pub struct Limits {
     /// Wall-clock budget for one run, in milliseconds. Native builds only: the web build has no
     /// monotonic clock in `std`, so the fuel budget alone bounds it there.
     pub wall_time_ms: u64,
+    /// The most a heavy filter ([`crate::Budget::Heavy`]) is given instead of `fuel_base` and
+    /// `wall_time_ms`: what the host allows, which the module's manifest can ask for but never
+    /// raise. Set them to `fuel_base` and `wall_time_ms` to give heavy filters nothing more.
+    pub heavy_fuel: u64,
+    pub heavy_wall_time_ms: u64,
 }
 
 impl Default for Limits {
@@ -44,6 +73,8 @@ impl Default for Limits {
             fuel_per_byte: 4_000,
             max_recursion_depth: 1024,
             wall_time_ms: 60_000,
+            heavy_fuel: HEAVY_FUEL,
+            heavy_wall_time_ms: HEAVY_WALL_TIME_MS,
         }
     }
 }
@@ -56,6 +87,7 @@ pub struct Plugin {
     module: Module,
     limits: Limits,
     size: usize,
+    hash: String,
     source: Option<String>,
     serial: u64,
 }
@@ -66,33 +98,10 @@ impl std::fmt::Debug for Plugin {
     }
 }
 
-/// When a run must stop (native: a wall-clock deadline).
-struct Deadline {
-    #[cfg(not(target_arch = "wasm32"))]
-    at: std::time::Instant,
-}
-
-impl Deadline {
-    fn new(limits: &Limits) -> Self {
-        #[cfg(target_arch = "wasm32")]
-        let _ = limits;
-        Self {
-            #[cfg(not(target_arch = "wasm32"))]
-            at: std::time::Instant::now() + std::time::Duration::from_millis(limits.wall_time_ms),
-        }
-    }
-    fn check(&self) -> Result<()> {
-        #[cfg(not(target_arch = "wasm32"))]
-        if std::time::Instant::now() >= self.at {
-            return Err(Error::Limit("time budget".into()));
-        }
-        Ok(())
-    }
-}
-
-/// One live instance: a store with its own memory limit, and the module's exports.
+/// One live instance: a store with its own memory limit and the run's state, and the module's
+/// exports.
 struct Live {
-    store: Store<StoreLimits>,
+    store: Store<Host>,
     instance: Instance,
     memory: Memory,
 }
@@ -122,8 +131,11 @@ fn wasm_err(e: wasmi::Error) -> Error {
 type RunArgs = (i32, i32, i32, i32);
 
 impl Plugin {
-    /// Validates and loads a module: checks the ABI version, the exports and reads the manifest.
+    /// Validates and loads a module: checks the ABI version, the exports and reads the manifest, and
+    /// checks that each host import it asks for is one the host offers ([`crate::host::IMPORTS`])
+    /// and its manifest allows. In Safe Mode nothing is loaded ([`Error::SafeMode`]).
     pub fn load(bytes: &[u8], limits: Limits) -> Result<Plugin> {
+        crate::safe_mode::check()?;
         if bytes.len() > limits.max_module_bytes {
             return Err(Error::Module(format!("module is {} bytes (limit {})", bytes.len(), limits.max_module_bytes)));
         }
@@ -131,19 +143,20 @@ impl Plugin {
             return Err(Error::Module("not a WebAssembly binary (missing \\0asm header)".into()));
         }
         let mut config = Config::default();
-        config.consume_fuel(true).enforced_limits(EnforcedLimits::strict()).set_max_recursion_depth(limits.max_recursion_depth.max(16));
+        config
+            .consume_fuel(true)
+            .fuel_cost(FUEL_COSTS)
+            .enforced_limits(EnforcedLimits::strict())
+            .set_max_recursion_depth(limits.max_recursion_depth.max(16));
         let engine = Engine::new(&config);
         let module = Module::new(&engine, bytes).map_err(|e| Error::Module(e.to_string()))?;
-        if let Some(imp) = module.imports().next() {
-            return Err(Error::Abi(format!(
-                "the module imports `{}.{}`, but plug-ins get no host imports (no WASI, files or network)",
-                imp.module(),
-                imp.name()
-            )));
-        }
-        let mut p = Plugin { manifest: Manifest::placeholder(), engine, module, limits, size: bytes.len(), source: None, serial: 0 };
-        let deadline = Deadline::new(&p.limits);
-        let mut live = p.instantiate()?;
+        let imports = host::check_imports(&module)?;
+        let hash = crate::permissions::sha256_hex(bytes);
+        let mut p = Plugin { manifest: Manifest::placeholder(), engine, module, limits, size: bytes.len(), hash, source: None, serial: 0 };
+        let deadline = Deadline::new(p.limits.wall_time_ms);
+        // The manifest isn't read yet: every host import is linked, what it reports is dropped and
+        // there is no storage to reach.
+        let mut live = p.instantiate(Run::new("", false, false, deadline), &crate::permissions::ALL, &mut Report::default())?;
         let version: TypedFunc<(), i32> = live.func("vc_abi_version")?;
         let v = p.call(&mut live, &version, (), p.limits.fuel_base, &deadline)?;
         if v != ABI_VERSION {
@@ -156,6 +169,13 @@ impl Plugin {
             e => e,
         })?;
         p.manifest = Manifest::parse(&text)?;
+        host::check_granted(&p.manifest, &imports)?;
+        // A heavy filter's runs get the larger budget the host allows for one, which the host
+        // lets the user allow or refuse before installing it.
+        if p.manifest.budget == crate::Budget::Heavy {
+            p.limits.fuel_base = p.limits.fuel_base.max(p.limits.heavy_fuel);
+            p.limits.wall_time_ms = p.limits.wall_time_ms.max(p.limits.heavy_wall_time_ms);
+        }
         // The other exports must exist with the right types.
         live.func::<i32, i32>("vc_alloc")?;
         live.func::<RunArgs, i64>("vc_run")?;
@@ -175,6 +195,10 @@ impl Plugin {
     pub fn size(&self) -> usize {
         self.size
     }
+    /// The module's SHA-256, in lower-case hexadecimal.
+    pub fn hash(&self) -> &str {
+        &self.hash
+    }
     /// Where the module was loaded from, if it came from a file.
     pub fn source(&self) -> Option<&str> {
         self.source.as_deref()
@@ -192,15 +216,24 @@ impl Plugin {
         self.serial = serial;
     }
 
-    fn instantiate(&self) -> Result<Live> {
+    /// A new instance for `run`, with the host imports of the permissions `granted` linked. When the
+    /// module's start function fails, what it reported through the host imports goes to `report`.
+    fn instantiate(&self, run: Run, granted: &[Permission], report: &mut Report) -> Result<Live> {
         let limits =
             StoreLimitsBuilder::new().memory_size(self.limits.max_memory_bytes).memories(1).tables(4).table_elements(100_000).instances(1).build();
-        let mut store = Store::new(&self.engine, limits);
-        store.limiter(|l| l);
-        // The start function (if any) runs on this fuel.
-        store.set_fuel(self.limits.fuel_base).map_err(wasm_err)?;
-        let linker = Linker::<StoreLimits>::new(&self.engine);
-        let instance = linker.instantiate_and_start(&mut store, &self.module).map_err(wasm_err)?;
+        let mut store = Store::new(&self.engine, Host { limits, run });
+        store.limiter(|h| &mut h.limits);
+        // The start function (if any) runs on one slice of fuel: it runs before `call` can check
+        // the deadline or a cancel between slices, so a heavy budget would let it run for minutes.
+        store.set_fuel(self.limits.fuel_base.min(FUEL_SLICE)).map_err(wasm_err)?;
+        let linker = host::linker(&self.engine, granted);
+        let instance = match linker.instantiate_and_start(&mut store, &self.module) {
+            Ok(instance) => instance,
+            Err(e) => {
+                *report = std::mem::take(&mut store.data_mut().run.report);
+                return Err(wasm_err(e));
+            }
+        };
         let memory =
             instance.get_memory(&store, "memory").ok_or_else(|| Error::Abi("the module must export its linear memory as `memory`".into()))?;
         Ok(Live { store, instance, memory })
@@ -208,6 +241,12 @@ impl Plugin {
 
     /// Calls `f` with at most `fuel` instructions, in slices, checking the deadline and the
     /// caller's cancellation ([`vectorcraft_doc::cancel`]) between them.
+    ///
+    /// wasmi pauses before an instruction that the store's fuel can't pay for, and charges nothing
+    /// for it. It charges a `memory.fill` or `memory.copy` for its whole length before writing, so
+    /// up to that cost can be left in the store at a pause. Each slice tops the store up to the
+    /// slice size, keeping that fuel, and a run ends with the instruction budget only when the
+    /// store's fuel and the rest of the budget together can't pay for the next instruction.
     fn call<P: WasmParams, R: WasmResults>(&self, live: &mut Live, f: &TypedFunc<P, R>, params: P, fuel: u64, deadline: &Deadline) -> Result<R> {
         let mut left = fuel;
         let give = left.min(FUEL_SLICE);
@@ -220,14 +259,16 @@ impl Plugin {
                 TypedResumableCall::HostTrap(_) => return Err(Error::Trap("unexpected host trap".into())),
                 TypedResumableCall::OutOfFuel(inv) => {
                     let need = inv.required_fuel();
-                    if left == 0 || need > left {
+                    let held = live.store.get_fuel().map_err(wasm_err)?;
+                    let total = held.saturating_add(left);
+                    if need > total {
                         return Err(Error::Limit("instruction budget".into()));
                     }
                     deadline.check()?;
                     vectorcraft_doc::cancel::check().map_err(|_| Error::Cancelled)?;
-                    let give = left.min(FUEL_SLICE.max(need));
-                    left -= give;
-                    live.store.set_fuel(give).map_err(wasm_err)?;
+                    let fill = total.min(FUEL_SLICE.max(need)).max(held);
+                    left -= fill - held;
+                    live.store.set_fuel(fill).map_err(wasm_err)?;
                     call = inv.resume(&mut live.store).map_err(wasm_err)?;
                 }
             }
@@ -240,23 +281,46 @@ impl Plugin {
         self.run_limited(input, params, &self.limits)
     }
 
-    /// [`Plugin::run`] with other time and instruction budgets (live effects get a shorter one).
+    /// [`Plugin::run`] with other time and instruction budgets (live effects get a shorter one). In
+    /// Safe Mode nothing runs ([`Error::SafeMode`]), even a plug-in installed before it was on.
     pub fn run_limited(&self, input: &[u8], params: &[u8], limits: &Limits) -> Result<Vec<u8>> {
-        // wasmi reports misbehaving modules as errors; a panic would be a bug in it, and must
-        // still not take the document down (native builds; wasm aborts on panic anyway).
-        let run = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.run_inner(input, params, limits)));
-        run.map_err(|_| Error::Trap("the runtime panicked".into()))?
+        self.run_reporting(input, params, limits).0
     }
 
-    fn run_inner(&self, input: &[u8], params: &[u8], limits: &Limits) -> Result<Vec<u8>> {
+    /// [`Plugin::run_limited`], and what the run reported through the host imports: its last
+    /// progress report and its log lines, which also go to the app's log under its id. Its storage
+    /// imports reach the storage of its id ([`crate::registry::storage`]). Inside a
+    /// [`vectorcraft_doc::cancel::scope`] its progress goes to the scope's sink (a live effect's
+    /// doesn't) and `vc_cancelled` sees the scope's Cancel.
+    pub fn run_reporting(&self, input: &[u8], params: &[u8], limits: &Limits) -> (Result<Vec<u8>>, Report) {
+        let mut report = Report::default();
+        if let Err(e) = crate::safe_mode::check() {
+            return (Err(e), report);
+        }
+        // wasmi reports misbehaving modules as errors; a panic would be a bug in it, and must
+        // still not take the document down (native builds; wasm aborts on panic anyway).
+        let run = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.run_inner(input, params, limits, &mut report)));
+        (run.map_err(|_| Error::Trap("the runtime panicked".into())).and_then(|r| r), report)
+    }
+
+    fn run_inner(&self, input: &[u8], params: &[u8], limits: &Limits, report: &mut Report) -> Result<Vec<u8>> {
         let total = input.len().checked_add(params.len()).filter(|b| *b <= i32::MAX as usize && *b <= self.limits.max_memory_bytes / 2);
         total.ok_or_else(|| Error::Limit("memory budget (the selection is too large to hand over)".into()))?;
-        let deadline = Deadline::new(limits);
-        let mut live = self.instantiate()?;
+        let deadline = Deadline::new(limits.wall_time_ms);
+        let m = &self.manifest;
+        let run = Run::new(&m.id, m.kind != Kind::Effect, true, deadline).with_storage(crate::registry::storage(&m.id));
+        let mut live = self.instantiate(run, &m.permissions(), report)?;
+        let out = self.run_live(&mut live, input, params, limits, &deadline);
+        *report = std::mem::take(&mut live.store.data_mut().run.report);
+        out
+    }
+
+    /// Hands `input` and `params` to the instance `live` and runs `vc_run` → the output JSON bytes.
+    fn run_live(&self, live: &mut Live, input: &[u8], params: &[u8], limits: &Limits, deadline: &Deadline) -> Result<Vec<u8>> {
         let alloc: TypedFunc<i32, i32> = live.func("vc_alloc")?;
         let run: TypedFunc<RunArgs, i64> = live.func("vc_run")?;
         let place = |live: &mut Live, bytes: &[u8]| -> Result<usize> {
-            let ptr = self.call(live, &alloc, bytes.len().max(1) as i32, limits.fuel_base, &deadline)? as u32 as usize;
+            let ptr = self.call(live, &alloc, bytes.len().max(1) as i32, limits.fuel_base, deadline)? as u32 as usize;
             if ptr == 0 {
                 return Err(Error::Failed("vc_alloc returned 0 (out of memory)".into()));
             }
@@ -265,10 +329,14 @@ impl Plugin {
             live.memory.data_mut(&mut live.store).get_mut(ptr..end).ok_or_else(outside)?.copy_from_slice(bytes);
             Ok(ptr)
         };
-        let iptr = place(&mut live, input)?;
-        let pptr = place(&mut live, params)?;
+        let iptr = place(live, input)?;
+        let pptr = place(live, params)?;
         let fuel = limits.fuel_base.saturating_add((input.len() as u64).saturating_mul(limits.fuel_per_byte));
-        let packed = self.call(&mut live, &run, (iptr as i32, input.len() as i32, pptr as i32, params.len() as i32), fuel, &deadline)?;
+        let packed = self.call(live, &run, (iptr as i32, input.len() as i32, pptr as i32, params.len() as i32), fuel, deadline)?;
+        // A cancelled run, or one past its time budget, changes nothing, also when the plug-in saw
+        // `vc_cancelled` and returned.
+        vectorcraft_doc::cancel::check().map_err(|_| Error::Cancelled)?;
+        deadline.check()?;
         if packed < 0 {
             return Err(Error::Failed(format!("vc_run returned error code {packed}")));
         }

@@ -22,7 +22,7 @@ impl ArcPath {
         let mut segs = Vec::new();
         let mut cum = 0.0;
         for s in path.to_bezpath().segments() {
-            let l = s.arclen(ACCURACY);
+            let l = crate::path::measured_arclen(&s, ACCURACY);
             if l.is_finite() && l > 1e-9 {
                 segs.push((s, cum, l));
                 cum += l;
@@ -51,7 +51,8 @@ impl ArcPath {
         let s = if self.closed && self.len > 0.0 { s.rem_euclid(self.len) } else { s.clamp(0.0, self.len) };
         let i = self.segs.partition_point(|(_, c, _)| *c <= s).saturating_sub(1);
         let Some(&(seg, c, l)) = self.segs.get(i) else { return (Point::ZERO, Vec2::new(1.0, 0.0)) };
-        let t = seg.inv_arclen((s - c).min(l), ACCURACY).clamp(0.0, 1.0);
+        // (The solver's precision is relative to the segment's length: a long one needs a looser one.)
+        let t = seg.inv_arclen((s - c).min(l), ACCURACY.max(l * 1e-9)).clamp(0.0, 1.0);
         let p = seg.eval(t);
         let (t0, t1) = ((t - 1e-4).max(0.0), (t + 1e-4).min(1.0));
         let d = seg.eval(t1) - seg.eval(t0);

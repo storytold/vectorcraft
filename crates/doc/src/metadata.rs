@@ -105,7 +105,13 @@ fn pinned_or(get: impl Fn(&str) -> Option<String>, clock: impl Fn() -> Option<i6
 /// seconds since the epoch. `None` when it is unset, blank, negative or not an integer, and then
 /// the clock decides — an export is never refused over the environment.
 fn stamp_from_env(get: impl Fn(&str) -> Option<String>) -> Option<i64> {
-    get("SOURCE_DATE_EPOCH")?.trim().parse::<i64>().ok().filter(|t| *t >= 0)
+    let value = get("SOURCE_DATE_EPOCH")?;
+    let value = value.trim();
+    // `i64::from_str` also takes a leading `+`, which `date +%s` never prints.
+    if value.is_empty() || !value.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    value.parse::<i64>().ok()
 }
 
 /// The current time as Unix seconds (UTC); `None` where the platform has no clock (the web build).
@@ -193,7 +199,7 @@ mod tests {
         assert_eq!(stamp_from_env(env(Some("1791208980"))), Some(1_791_208_980));
         assert_eq!(stamp_from_env(env(Some("0"))), Some(0));
         assert_eq!(stamp_from_env(env(Some("  1791208980  "))), Some(1_791_208_980));
-        for bad in ["", "   ", "-1", "later", "1791208980.5", "1e9", "99999999999999999999"] {
+        for bad in ["", "   ", "-1", "later", "1791208980.5", "1e9", "+1791208980", "+0", "99999999999999999999"] {
             assert_eq!(stamp_from_env(env(Some(bad))), None, "{bad:?}");
         }
         assert_eq!(stamp_from_env(env(None)), None, "unset");

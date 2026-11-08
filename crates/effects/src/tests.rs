@@ -4,6 +4,9 @@ use vectorcraft_geom::{Affine, PathData, Point, Rect, Shape, SubPath, shapes};
 
 use super::*;
 
+mod scale;
+mod transformfx;
+
 fn fx(id: &str, params: Value) -> Effect {
     Effect { id: id.into(), params, visible: true }
 }
@@ -127,6 +130,15 @@ fn geometry_effects_are_deterministic() {
         let a = run(id, params.clone(), &sq);
         let b = run(id, params, &sq);
         assert_eq!(a, b, "{id} is not deterministic");
+    }
+}
+
+/// The effects that symbol art across 9-slice guides draws once around all its cells are raster
+/// effects that do not reshape it.
+#[test]
+fn nine_slice_painted_effects_are_raster_effects() {
+    for id in vectorcraft_doc::PAINTED_EFFECTS {
+        assert!(is_raster(id) && !is_geometry(id), "{id}");
     }
 }
 
@@ -262,6 +274,7 @@ fn stacked_transform_copies_stay_within_the_image_budget() {
                 xf: Affine::translate((10.0, 0.0)),
                 link: None,
                 placement: Default::default(),
+                pixels: None,
             })),
         )
     };
@@ -284,7 +297,375 @@ fn stacked_transform_copies_stay_within_the_image_budget() {
     assert_eq!(count(&art), 25);
     let mut g = Node::group(id, vec![Arc::new(image())]);
     g.appearance.effects.push(fx("distort.transform", json!({"moveH": 70, "copies": 1000})));
-    assert_eq!(count(&evaluate_container(&g).unwrap()), 1001);
+    assert_eq!(count(&evaluate_container(None, &g).unwrap()), 1001);
+}
+
+/// What `effects` make of `path` within `budget`.
+fn within(effects: &[Effect], path: &PathData, budget: Budget) -> PathData {
+    apply_geometry_within(effects, path, path.bounds().unwrap(), &GeomContext::default(), budget)
+}
+
+/// What `effects` make of `path` within a budget of `max` anchors (and any number of lines).
+fn anchors_within(effects: &[Effect], path: &PathData, max: usize) -> PathData {
+    within(effects, path, Budget { anchors: max, lines: usize::MAX })
+}
+
+/// #3578: stacked Roughens multiply their points (up to 2000 a segment); the anchors they make
+/// stay within the budget, each Roughen spacing its points further apart where it must.
+#[test]
+fn stacked_roughens_stay_within_the_anchor_budget() {
+    let rough = fx("distort.roughen", json!({"size": 10000, "relative": false, "detail": 100}));
+    let outs: Vec<PathData> = (1..=3).map(|n| anchors_within(&vec![rough.clone(); n], &square(), 10_000)).collect();
+    let counts: Vec<usize> = outs.iter().map(PathData::anchor_count).collect();
+    // 100 pt sides at 100 points per inch: 139 points each, within the budget.
+    assert_eq!(counts[0], 4 * 139);
+    assert_eq!(outs[0], run("distort.roughen", rough.params.clone(), &square()));
+    assert!(counts[1..].iter().all(|&c| c > 5_000 && c <= 10_000), "{counts:?}");
+    // The third Roughen still roughens, with its points spaced to fit.
+    assert_ne!(outs[2], outs[1]);
+    assert!(outs.iter().all(all_finite));
+}
+
+/// #3578: stacked Zig Zags multiply their points (up to 101 a segment); each segment gets as many
+/// ridges as fit the budget.
+#[test]
+fn stacked_zig_zags_stay_within_the_anchor_budget() {
+    let zig = fx("distort.zigZag", json!({"ridges": 100, "points": "corner"}));
+    let counts: Vec<usize> = (1..=3).map(|n| anchors_within(&vec![zig.clone(); n], &square(), 10_000).anchor_count()).collect();
+    // 4 × 101 points; then 23 ridges a segment fit (404 × 24); then none, each point displaced.
+    assert_eq!(counts, [404, 9_696, 9_696]);
+    let twice = anchors_within(&vec![zig.clone(); 2], &square(), 10_000);
+    assert_ne!(anchors_within(&vec![zig.clone(); 3], &square(), 10_000), twice);
+    // An open path's end point counts as well.
+    let line = PathData::single(SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(100.0, 0.0)], false));
+    assert_eq!(anchors_within(&[zig], &line, 30).anchor_count(), 30, "the start, 28 ridges and the end");
+}
+
+/// #3578: every effect that multiplies anchors builds within the budget, stacked or not, and one
+/// that doesn't (Round Corners doubles them) is left out where it would pass it.
+#[test]
+fn stacked_geometry_effects_stay_within_the_anchor_budget() {
+    let star = shapes::star(Point::new(150.0, 100.0), 70.0, 32.0, 5, 0.0);
+    for (id, params) in [
+        ("distort.roughen", json!({"size": 50, "detail": 100})),
+        ("distort.zigZag", json!({"ridges": 100, "size": 30})),
+        ("distort.twist", json!({"angle": 3600})),
+        ("distort.freeDistort", json!({"corners": [[0.3, -2], [1, 0], [4, 1], [0, 3]]})),
+        ("warp.twist", json!({"bend": 100})),
+        ("distort.transform", json!({"copies": 1000, "moveH": 1})),
+    ] {
+        for n in 1..=4 {
+            let out = anchors_within(&vec![fx(id, params.clone()); n], &star, 2_000);
+            assert!(out.anchor_count() <= 2_000 && all_finite(&out), "{id} × {n}: {}", out.anchor_count());
+        }
+    }
+    let zig = fx("distort.zigZag", json!({"ridges": 100, "points": "corner"}));
+    let full = anchors_within(&[zig.clone(), zig.clone()], &square(), 10_000);
+    let round = fx("stylize.roundCorners", json!({"radius": 1}));
+    assert_eq!(anchors_within(&[zig.clone(), zig.clone(), round.clone()], &square(), 10_000), full);
+    assert_ne!(anchors_within(&[zig, round], &square(), 10_000), run("distort.zigZag", json!({"ridges": 100, "points": "corner"}), &square()));
+}
+
+/// #3578: a path with more anchors than the budget keeps its count as its budget: effects that
+/// add none apply, and the others add none.
+#[test]
+fn a_path_past_the_anchor_budget_still_takes_effects() {
+    let star = shapes::star(Point::new(150.0, 100.0), 70.0, 32.0, 25, 0.0);
+    let n = star.anchor_count();
+    for (id, params) in [
+        ("distort.tweak", json!({})),
+        ("distort.roughen", json!({"detail": 100})),
+        ("distort.zigZag", json!({"ridges": 100})),
+        ("distort.twist", json!({"angle": 90})),
+    ] {
+        let out = anchors_within(&[fx(id, params)], &star, 10);
+        assert_eq!(out.anchor_count(), n, "{id}");
+        assert_ne!(out, star, "{id}");
+    }
+}
+
+/// #3578: the effects on type, symbols and images reshape all their paths within one budget.
+#[test]
+fn stacked_effects_on_art_stay_within_the_anchor_budget() {
+    use std::sync::Arc;
+
+    use vectorcraft_doc::NodeId;
+    let id = NodeId(9);
+    let leaf = |x: f64| Arc::new(Node::path(id, shapes::rectangle(Rect::new(x, 0.0, x + 100.0, 100.0)), Appearance::default()));
+    let mut art = Node::group(id, (0..10).map(|k| leaf(k as f64 * 120.0)).collect());
+    let rough = fx("distort.roughen", json!({"size": 50, "detail": 100}));
+    crate::reshape::reshape_leaves_within(&mut art, &[&rough, &rough, &rough], Budget { anchors: 5_000, lines: usize::MAX });
+    let mut total = 0;
+    let mut reshaped = 0;
+    for c in art.children().into_iter().flatten() {
+        let path = c.path_data().unwrap();
+        total += path.anchor_count();
+        reshaped += usize::from(path.anchor_count() > 4);
+    }
+    // One Roughen alone makes 10 × 556: the budget binds, and goes to the paths in turn.
+    assert!(total > 4_000 && total <= 5_000, "{total}");
+    assert_eq!(reshaped, 10);
+}
+
+/// A path that keeps its shape because its Transform effect would pass the budget keeps the
+/// gradients that paint the art as a whole in place too, also with Scale Strokes & Effects on.
+#[test]
+fn art_past_the_budget_keeps_its_own_gradients_in_place() {
+    use std::sync::Arc;
+
+    use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    use vectorcraft_doc::{AppearanceItem, FillLayer, NodeId, color::Paint};
+    let id = NodeId(9);
+    let stops = vec![GradientStop::new(0.0, vectorcraft_color::Color::BLACK), GradientStop::new(1.0, vectorcraft_color::Color::WHITE)];
+    let geom = GradientGeom { start: (0.0, 50.0).into(), end: (100.0, 50.0).into(), aspect: 1.0, focal: None };
+    let placed = Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..GradientPaint::new(Gradient::new(GradientKind::Linear, stops)) }));
+    let circle = || Arc::new(Node::path(id, shapes::ellipse(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default()));
+    // The group's own fill, a gradient placed across the circle, after `carry` moves it.
+    let own_end = |carry: &crate::Carry| {
+        let mut ap = Appearance::default();
+        ap.items.push(AppearanceItem::Fill(FillLayer::new(placed.clone())));
+        carry.apply(&mut ap);
+        match ap.fill_paint() {
+            Paint::Gradient(g) => g.geom.map(|g| g.end.x),
+            _ => None,
+        }
+    };
+    for params in [json!({"scaleH": 1000, "scaleV": 1000}), json!({"scaleH": 1000, "scaleV": 1000, "strokes": true})] {
+        let grow = fx("distort.transform", params.clone());
+        let mut art = Node::group(id, vec![circle()]);
+        let carry = crate::reshape::reshape_leaves_within(&mut art, &[&grow], Budget::EFFECTS);
+        let end = own_end(&carry).unwrap();
+        assert!((end - 550.0).abs() < 1e-6, "{params}: within the budget the group's gradient grows with the circle: {end}");
+        // No room beyond what the circle costs: scaled up, it would be drawn with more lines.
+        let mut art = Node::group(id, vec![circle()]);
+        let carry = crate::reshape::reshape_leaves_within(&mut art, &[&grow], Budget { anchors: usize::MAX, lines: 0 });
+        let b = art.geometric_bounds().unwrap();
+        assert!(b.width() < 101.0 && b.height() < 101.0, "{params}: the circle keeps its shape: {b:?}");
+        assert_eq!(own_end(&carry), Some(100.0), "{params}: the group's gradient stays where it was placed");
+        // A group inside the art whose square took the effect moves its own gradient all the same.
+        let square = Arc::new(Node::path(NodeId(3), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default()));
+        let mut inner = Node::group(NodeId(2), vec![square]);
+        inner.appearance.items.push(AppearanceItem::Fill(FillLayer::new(placed.clone())));
+        let mut art = Node::group(id, vec![circle(), Arc::new(inner)]);
+        let carry = crate::reshape::reshape_leaves_within(&mut art, &[&grow], Budget { anchors: usize::MAX, lines: 0 });
+        assert_eq!(own_end(&carry), Some(100.0), "{params}: the art's own gradient stays");
+        let inner = &art.children().unwrap()[1];
+        let Paint::Gradient(g) = inner.appearance.fill_paint() else { panic!("a gradient") };
+        assert!((g.geom.unwrap().end.x - 550.0).abs() < 1e-6, "{params}: the inner group's gradient: {:?}", g.geom);
+    }
+}
+
+/// A hidden path in a layer that keeps its shape past the budget does not hold the layer's
+/// gradients in place: the layer's bounds leave it out, so the layer's own gradient moves with
+/// the visible art under a Transform effect and Free Distort, as does the art's when the layer is
+/// the art.
+#[test]
+fn a_hidden_path_past_the_budget_leaves_a_layers_gradients_free_to_move() {
+    use std::sync::Arc;
+
+    use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    use vectorcraft_doc::{AppearanceItem, FillLayer, LayerColor, NodeId, NodeKind, color::Paint};
+    let stops = vec![GradientStop::new(0.0, vectorcraft_color::Color::BLACK), GradientStop::new(1.0, vectorcraft_color::Color::WHITE)];
+    let geom = GradientGeom { start: (0.0, 50.0).into(), end: (100.0, 50.0).into(), aspect: 1.0, focal: None };
+    let placed = Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..GradientPaint::new(Gradient::new(GradientKind::Linear, stops)) }));
+    let end = |ap: &Appearance| match ap.fill_paint() {
+        Paint::Gradient(g) => g.geom.map(|g| g.end.x),
+        _ => None,
+    };
+    // A layer with a visible square and a hidden circle, both 0..100, and a gradient fill of its own.
+    let layer = || {
+        let square = Arc::new(Node::path(NodeId(3), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default()));
+        let mut circle = Node::path(NodeId(4), shapes::ellipse(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default());
+        circle.visible = false;
+        let mut layer = Node::layer(NodeId(2), "Layer 1", LayerColor::Preset(0));
+        if let NodeKind::Layer { children, .. } = &mut layer.kind {
+            *children = vec![square, Arc::new(circle)];
+        }
+        layer.appearance.items.push(AppearanceItem::Fill(FillLayer::new(placed.clone())));
+        layer
+    };
+    // No room beyond what the paths cost: the square takes each effect, the circle would be drawn
+    // with more lines and keeps its shape.
+    let budget = Budget { anchors: usize::MAX, lines: 0 };
+    // Each scales the art ten times about its center: 0..100 becomes -450..550.
+    let corners = json!({"corners": [[-4.5, -4.5], [5.5, -4.5], [5.5, 5.5], [-4.5, 5.5]]});
+    for grow in [fx("distort.transform", json!({"scaleH": 1000, "scaleV": 1000})), fx("distort.freeDistort", corners)] {
+        let mut art = layer();
+        let carry = crate::reshape::reshape_leaves_within(&mut art, &[&grow], budget);
+        let circle = art.children().unwrap()[1].geometric_bounds().unwrap();
+        assert!(circle.width() < 101.0, "{}: the hidden circle keeps its shape: {circle:?}", grow.id);
+        let square = art.children().unwrap()[0].geometric_bounds().unwrap();
+        assert!((square.x1 - 550.0).abs() < 1e-6, "{}: the square takes the effect: {square:?}", grow.id);
+        let mut own = Appearance::clone(&art.appearance);
+        carry.apply(&mut own);
+        assert_eq!(end(&own), Some(550.0), "{}: the layer's gradient, as the art", grow.id);
+        let mut art = Node::group(NodeId(9), vec![Arc::new(layer())]);
+        crate::reshape::reshape_leaves_within(&mut art, &[&grow], budget);
+        assert_eq!(end(&art.children().unwrap()[0].appearance), Some(550.0), "{}: the layer's gradient, inside the art", grow.id);
+    }
+}
+
+/// A freeform gradient whose points were edited (its vector still fitted to the bounds) moves its
+/// points with a Transform effect and Free Distort, on a path, on a group inside the art and on the
+/// art itself, as a placed gradient does.
+#[test]
+fn edited_freeform_points_follow_a_transform_effect_and_free_distort() {
+    use std::sync::Arc;
+
+    use vectorcraft_color::{Color, Freeform, FreeformPoint, Gradient, GradientKind, GradientPaint};
+    use vectorcraft_doc::{AppearanceItem, FillLayer, NodeId, color::Paint};
+    let mut ramp = GradientPaint::new(Gradient { kind: GradientKind::Freeform, ..Gradient::default() });
+    let pt = |x: f64, c| FreeformPoint::new(Point::new(x, 50.0), c);
+    ramp.set_freeform(Freeform { points: vec![pt(0.0, Color::BLACK), pt(100.0, Color::WHITE)], ..Default::default() });
+    assert!(ramp.geom.is_none() && !ramp.is_placed());
+    let freeform = Paint::Gradient(Box::new(ramp));
+    let xs = |ap: &Appearance| match ap.fill_paint() {
+        Paint::Gradient(g) => g.freeform.as_ref().map(|f| f.points.iter().map(|p| p.at.x).collect::<Vec<_>>()),
+        _ => None,
+    };
+    let square = |ap: Appearance| Arc::new(Node::path(NodeId(3), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), ap));
+    // Each moves the art 30 pt right.
+    let corners = json!({"corners": [[0.3, 0.0], [1.3, 0.0], [1.3, 1.0], [0.3, 1.0]]});
+    for e in [fx("distort.transform", json!({"moveH": 30})), fx("distort.freeDistort", corners)] {
+        let mut inner = Node::group(NodeId(2), vec![square(Appearance::default())]);
+        inner.appearance.items.push(AppearanceItem::Fill(FillLayer::new(freeform.clone())));
+        let mut art = Node::group(NodeId(9), vec![square(Appearance::basic(freeform.clone(), Paint::None, 0.0)), Arc::new(inner)]);
+        art.appearance.items.push(AppearanceItem::Fill(FillLayer::new(freeform.clone())));
+        let carry = crate::reshape::reshape_leaves_within(&mut art, &[&e], Budget::EFFECTS);
+        let members = art.children().unwrap();
+        assert_eq!(xs(&members[0].appearance), Some(vec![30.0, 130.0]), "{}: the path's points", e.id);
+        assert_eq!(xs(&members[1].appearance), Some(vec![30.0, 130.0]), "{}: the inner group's points", e.id);
+        let mut own = Appearance::clone(&art.appearance);
+        carry.apply(&mut own);
+        assert_eq!(xs(&own), Some(vec![30.0, 130.0]), "{}: the art's own points", e.id);
+    }
+}
+
+/// #3578: a large Roughen draws each of its points as many lines; they stay within the budget,
+/// the Roughen built again with fewer points where they wouldn't.
+#[test]
+fn large_roughens_stay_within_the_line_budget() {
+    let rough = fx("distort.roughen", json!({"size": 10000, "relative": false, "detail": 100}));
+    let budget = Budget { anchors: 100_000, lines: 200_000 };
+    let once = within(std::slice::from_ref(&rough), &square(), budget);
+    assert_eq!(once, run("distort.roughen", rough.params.clone(), &square()), "within both budgets");
+    let twice = within(&[rough.clone(), rough], &square(), budget);
+    let cost = Budget::of(&twice);
+    assert!(budget.fits(cost) && cost.lines > 100_000, "{cost:?}");
+    assert!(cost.anchors < 10_000 && twice != once, "the second Roughen with fewer points: {cost:?}");
+    // Art of small curves draws its anchors as a few lines each: the anchors bind first.
+    let zig = fx("distort.zigZag", json!({"ridges": 100, "size": 2}));
+    let out = within(&[zig.clone(), zig], &square(), Budget { anchors: 10_000, lines: 100_000 });
+    assert!(out.anchor_count() > 9_000 && util::line_estimate(&out) < 50_000, "{}", util::line_estimate(&out));
+}
+
+/// Straight segments are one line each, and a curve as many as Wang's formula takes at 0.25 px.
+#[test]
+fn line_estimate_counts_the_lines_a_path_is_drawn_with() {
+    assert_eq!(util::line_estimate(&square()), 4);
+    let circle = shapes::ellipse(Rect::new(0.0, 0.0, 100.0, 100.0));
+    assert_eq!(util::line_estimate(&circle), 4 * 9, "a quarter circle of 50 pt in 9 lines");
+    let big = shapes::ellipse(Rect::new(0.0, 0.0, 10_000.0, 10_000.0));
+    assert_eq!(util::line_estimate(&big), 4 * 84, "100 times as large: about 10 times the lines");
+}
+
+/// #3578: the issue's input, a large rectangle with three max-detail Roughens of the largest
+/// size, at the real budgets: two million anchors of it were 141 million lines to draw.
+#[test]
+fn three_max_detail_roughens_stay_within_the_effect_budget() {
+    let rough = fx("distort.roughen", json!({"size": 10000, "relative": false, "detail": 100}));
+    let rect = shapes::rectangle(Rect::new(0.0, 0.0, 1000.0, 1000.0));
+    let out = apply_geometry(&vec![rough.clone(); 3], &rect, rect.bounds().unwrap());
+    let cost = Budget::of(&out);
+    assert!(Budget::EFFECTS.fits(cost) && cost.lines > MAX_EFFECT_LINES / 2, "{cost:?}");
+    assert_ne!(out, apply_geometry(&[rough], &rect, rect.bounds().unwrap()), "more than one Roughen applies");
+}
+
+#[test]
+fn transform_copies_before_offset_path_evaluates_without_ram_spike() {
+    let effects = [
+        fx("distort.transform", json!({"moveH": -0.66, "moveV": 0.66, "copies": 30})),
+        fx("path.offsetPath", json!({"offset": 10.0, "joins": "round"})),
+    ];
+    let path = shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0));
+    let start = std::time::Instant::now();
+    let out = apply_geometry(&effects, &path, path.bounds().unwrap());
+    let elapsed = start.elapsed();
+    assert!(elapsed < std::time::Duration::from_secs(2), "elapsed: {:?}", elapsed);
+    assert_eq!(out.subpaths.len(), 31);
+}
+
+#[test]
+fn reshape_leaves_within_optimizes_transform_before_terminal_offset_path() {
+    use std::sync::Arc;
+    use vectorcraft_doc::{Appearance, Node, NodeId};
+
+    let id = NodeId(10);
+    let leaf = |x: f64| Arc::new(Node::path(id, shapes::rectangle(Rect::new(x, 0.0, x + 20.0, 20.0)), Appearance::default()));
+    let mut art = Node::group(id, (0..5).map(|k| leaf(k as f64 * 30.0)).collect());
+    let transform = fx("distort.transform", json!({"moveH": 2.0, "moveV": 2.0, "copies": 10}));
+    let offset = fx("path.offsetPath", json!({"offset": 4.0, "joins": "round"}));
+
+    let start = std::time::Instant::now();
+    crate::reshape::reshape_leaves_within(&mut art, &[&transform, &offset], Budget::EFFECTS);
+    let elapsed = start.elapsed();
+    assert!(elapsed < std::time::Duration::from_secs(2));
+
+    let children = art.children().unwrap();
+    assert_eq!(children.len(), 5);
+    for c in children {
+        let (p, _) = crate::reshape::leaf_geometry(c).unwrap();
+        // Base rectangle offset once, then copied 10 times -> 11 subpaths
+        assert_eq!(p.subpaths.len(), 11);
+    }
+}
+
+#[test]
+fn reshape_leaves_within_preserves_order_when_not_terminal_or_not_style_safe() {
+    use std::sync::Arc;
+    use vectorcraft_doc::{Appearance, Node, NodeId, NodeKind};
+
+    let id = NodeId(11);
+    // 1. EvenOdd fill rule: preserving order causes Transform copies to union in Offset Path into 1 subpath.
+    let mut leaf = Node::path(id, shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0)), Appearance::default());
+    if let NodeKind::Path { rule, .. } = &mut leaf.kind {
+        *rule = FillRule::EvenOdd;
+    }
+    let mut art_evenodd = Node::group(id, vec![Arc::new(leaf)]);
+    let transform = fx("distort.transform", json!({"moveH": 2.0, "moveV": 2.0, "copies": 2}));
+    let offset = fx("path.offsetPath", json!({"offset": 4.0}));
+    crate::reshape::reshape_leaves_within(&mut art_evenodd, &[&transform, &offset], Budget::EFFECTS);
+    let p = art_evenodd.children().unwrap()[0].path_data().unwrap();
+    assert_eq!(p.subpaths.len(), 1, "EvenOdd does not swap; copies union into 1 outer subpath");
+
+    // 2. Non-terminal Offset Path: followed by Round Corners, must preserve order.
+    let leaf_round = Arc::new(Node::path(id, shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0)), Appearance::default()));
+    let mut art_round = Node::group(id, vec![leaf_round]);
+    let round_corners = fx("stylize.roundCorners", json!({"radius": 2.0}));
+    crate::reshape::reshape_leaves_within(&mut art_round, &[&transform, &offset, &round_corners], Budget::EFFECTS);
+    let p = art_round.children().unwrap()[0].path_data().unwrap();
+    assert_eq!(p.subpaths.len(), 1, "Non-terminal Offset Path does not swap; copies union into 1 outer subpath");
+
+    // 3. Non-round join (e.g. miter): preserving order is required as corners differ (#4145).
+    let leaf_miter = Arc::new(Node::path(id, shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0)), Appearance::default()));
+    let mut art_miter = Node::group(id, vec![leaf_miter]);
+    let offset_miter = fx("path.offsetPath", json!({"offset": 4.0, "joins": "miter"}));
+    crate::reshape::reshape_leaves_within(&mut art_miter, &[&transform, &offset_miter], Budget::EFFECTS);
+    let p = art_miter.children().unwrap()[0].path_data().unwrap();
+    assert_eq!(p.subpaths.len(), 1, "Miter join does not swap; copies union into 1 outer subpath");
+}
+
+#[test]
+fn consecutive_transforms_before_terminal_offset_path_all_move_after() {
+    let t1 = fx("distort.transform", json!({"moveH": 1.0, "moveV": 0.0, "copies": 2}));
+    let t2 = fx("distort.transform", json!({"moveH": 0.0, "moveV": 1.0, "copies": 3}));
+    let offset = fx("path.offsetPath", json!({"offset": 4.0, "joins": "round"}));
+
+    let opt = crate::geometry::optimize_geometry_effects(&[&t1, &t2, &offset], true);
+    assert_eq!(opt.len(), 3);
+    assert_eq!(opt[0].id, "path.offsetPath");
+    assert_eq!(opt[1].id, "distort.transform");
+    assert_eq!(opt[2].id, "distort.transform");
 }
 
 #[test]
@@ -311,11 +692,12 @@ fn transform_on_a_group_moves_and_copies_its_images() {
             xf: Affine::translate((10.0, 0.0)),
             link: None,
             placement: Default::default(),
+            pixels: None,
         })),
     );
     let mut g = Node::group(id, vec![Arc::new(sq), Arc::new(image)]);
     g.appearance.effects.push(fx("distort.transform", json!({"moveH": 70, "copies": 2})));
-    let art = evaluate_container(&g).unwrap();
+    let art = evaluate_container(None, &g).unwrap();
     let mut xs = vec![];
     image_xs(&art, &mut xs);
     xs.sort_by(f64::total_cmp);
@@ -332,11 +714,12 @@ fn transform_on_a_group_moves_and_copies_its_images() {
                 xf: Affine::translate((10.0, 0.0)),
                 link: None,
                 placement: Default::default(),
+                pixels: None,
             })),
         ))],
     );
     g.appearance.effects.push(fx("distort.transform", json!({"scaleH": 50, "scaleV": 50, "reference": 8})));
-    let art = evaluate_container(&g).unwrap();
+    let art = evaluate_container(None, &g).unwrap();
     let mut xs = vec![];
     image_xs(&art, &mut xs);
     // The bounds are the image itself, so the bottom-right reference is its own: it halves in place.
@@ -361,11 +744,11 @@ fn transform_on_a_group_moves_and_copies_its_symbol_instances() {
     };
     let mut g = Node::group(id, vec![Arc::new(Node::path(id, square(), Appearance::default())), Arc::new(instance())]);
     g.appearance.effects.push(fx("distort.transform", json!({"moveH": 70, "copies": 2})));
-    assert_eq!(xs(&evaluate_container(&g).unwrap()), [5.0, 75.0, 145.0], "the instance and its two copies, 70 pt apart");
+    assert_eq!(xs(&evaluate_container(None, &g).unwrap()), [5.0, 75.0, 145.0], "the instance and its two copies, 70 pt apart");
     // Without copies the instance itself takes the transform, as a path does.
     let mut g = Node::group(id, vec![Arc::new(instance())]);
     g.appearance.effects.push(fx("distort.transform", json!({"moveH": 70})));
-    assert_eq!(xs(&evaluate_container(&g).unwrap()), [75.0]);
+    assert_eq!(xs(&evaluate_container(None, &g).unwrap()), [75.0]);
 }
 
 /// Images and symbol instances share the copy budget: copies of one leave less room for the other.
@@ -384,6 +767,7 @@ fn images_and_symbol_instances_share_the_copy_budget() {
             xf: Affine::translate((10.0, 0.0)),
             link: None,
             placement: Default::default(),
+            pixels: None,
         })),
     );
     let instance = Node::new(id, NodeKind::SymbolInstance { symbol: "s".into(), xf: Affine::IDENTITY });
@@ -413,13 +797,14 @@ fn transform_copies_of_images_stop_at_the_reach_limit() {
             xf: Affine::translate((10.0, 0.0)),
             link: None,
             placement: Default::default(),
+            pixels: None,
         })),
     );
     let mut g = Node::group(id, vec![Arc::new(image)]);
     // The largest move: every copy is 1e7 pt further right, so the 100th would end past 1e9.
     g.appearance.effects.push(fx("distort.transform", json!({"moveH": 1.0e7, "copies": 1000})));
     let mut xs = vec![];
-    image_xs(&evaluate_container(&g).unwrap(), &mut xs);
+    image_xs(&evaluate_container(None, &g).unwrap(), &mut xs);
     assert_eq!(xs.len(), 100, "the image and the 99 copies that stay within reach");
     assert!(xs.iter().all(|x| x + 40.0 <= 1.0e9));
 }
@@ -692,6 +1077,18 @@ fn round_corners_keeps_where_a_closed_path_starts() {
 }
 
 #[test]
+fn twist_turns_clockwise_for_positive_angles() {
+    // A positive angle turns clockwise, a negative one counterclockwise
+    // (https://helpx.adobe.com/illustrator/desktop/manage-objects/reshape-transform-objects/distort-and-transform-effects-in-illustrator.html).
+    // The document's y runs down, so clockwise on the page takes a point right of the center down.
+    let right = PathData::single(SubPath::polyline(&[Point::new(55.0, 50.0), Point::new(56.0, 50.0)], false));
+    let bounds = Rect::new(0.0, 0.0, 100.0, 100.0);
+    let turned = |angle: f64| apply_geometry(&[fx("distort.twist", json!({"angle": angle}))], &right, bounds).subpaths[0].anchors[0].p;
+    assert!(turned(45.0).y > 50.5, "{:?}", turned(45.0));
+    assert!(turned(-45.0).y < 49.5, "{:?}", turned(-45.0));
+}
+
+#[test]
 fn twist_fixes_the_outer_circle_and_rotates_inside() {
     let out = run("distort.twist", json!({"angle": 0}), &square());
     assert_eq!(out, square());
@@ -768,6 +1165,17 @@ fn scribble_reads_its_earlier_single_variation() {
         json!({"overlapVariation": 3, "spacingVariation": 1})
     );
     assert!(default_params("stylize.scribble").unwrap().get("variation").is_none());
+}
+
+#[test]
+fn scribble_settings_presets_are_distinct_and_recognized() {
+    let presets = crate::scribble_settings();
+    assert_eq!(presets.len(), 11);
+    assert_eq!(presets[0].id, "default");
+    assert_eq!(crate::scribble_setting_id(&presets[0].params), Some("default"));
+    assert_eq!(crate::scribble_setting_id(&presets[9].params), Some("tight"));
+    let custom = json!({"angle": 30.0, "overlap": 0.0, "overlapVariation": 0.5, "strokeWidth": 3.0, "curviness": 5.0, "curvinessVariation": 0.0, "spacing": 4.0, "spacingVariation": 0.5});
+    assert_eq!(crate::scribble_setting_id(&custom), None);
 }
 
 #[test]
@@ -913,4 +1321,73 @@ fn bench_catalog_lookup() {
         n += crate::merged_params("stylize.dropShadow", &serde_json::Value::Null).as_object().unwrap().len();
     }
     eprintln!("10k lookups: {:?} ({n})", t.elapsed());
+}
+
+#[test]
+fn a_repeat_of_a_symbol_whose_art_is_a_repeat_shares_the_instance_budget() {
+    use std::sync::Arc;
+    use vectorcraft_doc::{Document, NodeId, RepeatKind, RepeatSpec, Symbol};
+    let unit = || {
+        Arc::new(Node::path(
+            NodeId(0),
+            PathData::single(SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(1.0, 0.0), Point::new(1.0, 1.0)], true)),
+            Appearance::default(),
+        ))
+    };
+    let grid = |source: Arc<Node>, n: u32| {
+        let mut g = RepeatSpec::grid(vec![source], 0.0, 0.0);
+        if let RepeatKind::Grid { rows, cols, .. } = &mut g.kind {
+            *rows = n;
+            *cols = n;
+        }
+        g
+    };
+    let repeat = |r: RepeatSpec| Arc::new(Node::new(NodeId(0), NodeKind::Repeat(r)));
+    let instance = |name: &str| Arc::new(Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: name.into(), xf: Affine::IDENTITY }));
+    let mut d = Document::new(100.0, 100.0);
+    // A 500 × 500 grid as a symbol's art, directly and inside a group; a symbol holding itself.
+    d.symbols.push(Symbol { dynamic: false, name: "Grid".into(), art: repeat(grid(unit(), 500)) });
+    d.symbols.push(Symbol { dynamic: false, name: "Grouped".into(), art: Arc::new(Node::group(NodeId(0), vec![repeat(grid(unit(), 500))])) });
+    d.symbols.push(Symbol { dynamic: false, name: "Loop".into(), art: Arc::new(Node::group(NodeId(0), vec![unit(), instance("Loop")])) });
+    d.symbols.push(Symbol { dynamic: false, name: "Small".into(), art: repeat(grid(unit(), 3)) });
+    // A 3 × 3 grid of an instance of each: each copy draws 250,000 instances, so one copy fits.
+    for name in ["Grid", "Grouped"] {
+        let outer = Node::new(NodeId(0), NodeKind::Repeat(grid(instance(name), 3)));
+        let kept = expand_live(Some(&d), &outer).len();
+        assert!(kept <= 1, "{name}: {kept} copies of 250,000 instances");
+    }
+    // A symbol holding itself counts no Repeats, and small nests keep every instance.
+    let looped = Node::new(NodeId(0), NodeKind::Repeat(grid(instance("Loop"), 3)));
+    assert_eq!(expand_live(Some(&d), &looped).len(), 9);
+    let small = Node::new(NodeId(0), NodeKind::Repeat(RepeatSpec::mirror(vec![instance("Small")], 90.0, 5.0)));
+    assert_eq!(expand_live(Some(&d), &small).len(), 2);
+}
+
+#[test]
+fn a_distance_parameters_range_comes_from_its_documentation() {
+    assert_eq!(length_range("stylize.glowingEdges", "edgeWidth"), Some(1.0..=14.0));
+    // A distance documented without a range, and unknown effects and parameters, have none.
+    assert_eq!(length_range("path.offsetPath", "offset"), None);
+    assert_eq!(length_range("stylize.glowingEdges", "edgeBrightness"), None);
+    assert_eq!(length_range("no.such", "edgeWidth"), None);
+}
+
+#[test]
+fn color_halftones_radius_is_in_raster_pixels_not_a_distance() {
+    // Pixels of the Document Raster Effects resolution, as public documentation gives it (#3260):
+    // no unit setting changes it, so it isn't a distance in points.
+    assert_eq!(raster_px_range("pixelate.colorHalftone", "maxRadius"), Some(4.0..=127.0));
+    assert!(!is_length("pixelate.colorHalftone", "maxRadius", false));
+    assert_eq!(length_range("pixelate.colorHalftone", "maxRadius"), None);
+    assert_eq!(raster_px_range("pixelate.colorHalftone", "channel1"), None);
+    assert_eq!(raster_px_range("stylize.glowingEdges", "edgeWidth"), None);
+    // The effect applies the range's floor to a radius below it.
+    assert_eq!(
+        crate::pixel::parse("pixelate.colorHalftone", &json!({"maxRadius": 1})),
+        crate::pixel::parse("pixelate.colorHalftone", &json!({"maxRadius": 4}))
+    );
+    // Scale Strokes & Effects scales it with the object, as it does distances.
+    let mut e = crate::new_effect("pixelate.colorHalftone", &json!({"maxRadius": 10})).unwrap();
+    crate::scale_effect(&mut e, 2.0);
+    assert_eq!((e.params["maxRadius"].as_f64(), e.params["channel1"].as_f64()), (Some(20.0), Some(108.0)));
 }

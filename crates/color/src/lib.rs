@@ -16,7 +16,7 @@ pub mod swatch;
 
 pub use blend::BlendMode;
 pub use freeform::{Freeform, FreeformMode, FreeformPoint};
-pub use gradient::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+pub use gradient::{Gradient, GradientGeom, GradientKind, GradientMethod, GradientPaint, GradientStop};
 pub use libraries::SwatchLibrary;
 pub use swatch::{Swatch, SwatchGroup, default_swatches};
 
@@ -111,6 +111,16 @@ impl Color {
     pub fn out_of_gamut(&self) -> bool {
         cms::active().out_of_gamut(self)
     }
+    /// The colour exactly, as a key: its model and its components' bits (colours that only look
+    /// alike, as a grey and the same RGB grey, differ).
+    pub fn key(&self) -> [u32; 5] {
+        match *self {
+            Color::Rgb { r, g, b } => [0, r.to_bits(), g.to_bits(), b.to_bits(), 0],
+            Color::Cmyk { c, m, y, k } => [1, c.to_bits(), m.to_bits(), y.to_bits(), k.to_bits()],
+            Color::Gray { k } => [2, k.to_bits(), 0, 0, 0],
+            Color::Lab { l, a, b } => [3, l.to_bits(), a.to_bits(), b.to_bits(), 0],
+        }
+    }
     pub fn to_rgba8(&self, alpha: f32) -> [u8; 4] {
         let [r, g, b] = self.to_rgb();
         let q = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
@@ -146,6 +156,8 @@ impl Color {
         } else {
             60.0 * ((r - g) / d + 4.0)
         };
+        // f32 rounding in rem_euclid can yield exactly 360; wrap back to 0.
+        let h = if h >= 360.0 { 0.0 } else { h };
         let s = if max <= 0.0 { 0.0 } else { d / max };
         [h, s, max]
     }
@@ -378,6 +390,18 @@ impl Paint {
             _ => None,
         }
     }
+    /// This stroke paint as the fill of the stroke's outline, so the outline looks as the stroke
+    /// did: without dither, which strokes ignore ([`GradientPaint::draws_as_pixels`]).
+    pub fn stroke_as_fill(&self) -> Paint {
+        match self {
+            Paint::Gradient(g) if g.gradient.dither => {
+                let mut g = g.clone();
+                g.gradient.dither = false;
+                Paint::Gradient(g)
+            }
+            p => p.clone(),
+        }
+    }
     /// The Registration colour: 100% of every ink, linked to [`swatch::REGISTRATION`].
     pub fn registration() -> Self {
         Paint::Solid { color: Color::cmyk(1.0, 1.0, 1.0, 1.0), swatch: Some(swatch::REGISTRATION.into()), tint: 1.0 }
@@ -425,6 +449,12 @@ impl Paint {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hue_below_360() {
+        let h = Color::Rgb { r: 1.0, g: 0.0, b: 1e-7 }.to_hsb()[0];
+        assert!((0.0..360.0).contains(&h), "hue {h}");
+    }
 
     #[test]
     fn hex_roundtrip() {

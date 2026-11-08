@@ -80,7 +80,7 @@ fn whole_period(stops: &[GradientStop]) -> Vec<GradientStop> {
 
 /// A period mirrored: the stops in reverse, each midpoint measured from the other side.
 fn mirror(period: &[GradientStop]) -> Vec<GradientStop> {
-    let mut g = Gradient { kind: GradientKind::Linear, stops: period.to_vec() };
+    let mut g = Gradient::new(GradientKind::Linear, period.to_vec());
     g.reverse();
     g.stops
 }

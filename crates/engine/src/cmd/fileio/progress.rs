@@ -8,10 +8,13 @@
 //! renderer stops drawing and keeps no half-drawn pattern tile or effect raster. Encoders that
 //! make one file in one go report nothing: the frontend shows them as busy and checks
 //! [`Progress::cancelled`] itself before writing, so a cancelled export never writes a file.
+//! Export for Screens ([`super::ScreenExport::write`]) reports one step per file instead, keeps
+//! its encoders' reports out, and stops before the next file, so the files it wrote before the
+//! cancel stay.
 
 use std::rc::Rc;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use vectorcraft_doc::cancel::{self, CancelToken, ProgressSink};
 
@@ -21,11 +24,31 @@ pub struct Progress {
     token: CancelToken,
     done: AtomicU64,
     total: AtomicU64,
+    /// The steps are files (Export for Screens), not artboards.
+    files: bool,
+    /// The last report came from a plug-in ([`vectorcraft_plugins::host::PROGRESS_STEP`]): its
+    /// steps are its own, shown as a share of the work.
+    share: AtomicBool,
 }
 
 impl Progress {
     pub fn new() -> Arc<Self> {
         Arc::new(Self::default())
+    }
+
+    /// A [`Progress`] whose steps are files: the export of [`super::ScreenExport::write`].
+    pub fn of_files() -> Arc<Self> {
+        Arc::new(Self { files: true, ..Self::default() })
+    }
+
+    /// Are the steps files rather than artboards?
+    pub fn counts_files(&self) -> bool {
+        self.files
+    }
+
+    /// Are the steps a plug-in's own, which only a share of the work done describes?
+    pub fn counts_share(&self) -> bool {
+        self.share.load(Ordering::Relaxed)
     }
 
     /// `(steps done, steps in all)`; `total` is 0 while the export can't say (one file made in one go).
@@ -53,7 +76,8 @@ impl Progress {
 /// Run `f` with `progress`'s token in effect on this thread and the steps reported to it.
 pub fn scope<R>(progress: &Arc<Progress>, f: impl FnOnce() -> R) -> R {
     let to = Arc::clone(progress);
-    let sink: ProgressSink = Rc::new(move |done, total, _| {
+    let sink: ProgressSink = Rc::new(move |done, total, what| {
+        to.share.store(what == vectorcraft_plugins::host::PROGRESS_STEP, Ordering::Relaxed);
         to.total.store(total, Ordering::Relaxed);
         to.done.store(done, Ordering::Relaxed);
     });
@@ -78,5 +102,15 @@ mod tests {
         let r = scope(&p, || super::super::encode_all(&doc, "png", &serde_json::json!({"useArtboards": true})));
         assert!(matches!(r, Err(crate::EngineError::Cancelled)), "{:?}", r.err());
         assert!(!cancel::is_cancelled(), "the scope ended");
+    }
+
+    /// A plug-in's reports count as a share of the work, not as artboards or files.
+    #[test]
+    fn a_plugin_s_reports_count_as_a_share_of_the_work() {
+        let p = Progress::new();
+        scope(&p, || cancel::progress(1, 4, "artboard"));
+        assert_eq!((p.counts(), p.counts_share()), ((1, 4), false));
+        scope(&p, || cancel::progress(3, 8, vectorcraft_plugins::host::PROGRESS_STEP));
+        assert_eq!((p.counts(), p.counts_share()), ((3, 8), true));
     }
 }

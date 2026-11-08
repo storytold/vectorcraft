@@ -19,7 +19,29 @@ pub fn open_tool_dialog(app: &mut VectorcraftApp, kind: &str, p: Value) {
         "star" => {
             Dialog::new(kind, json!({"x": x, "y": y, "radius1": "50 pt", "radius2": "25 pt", "points": app.session.tool_options_of(kind)["points"]}))
         }
-        "lineSegment" => Dialog::new(kind, json!({"x": x, "y": y, "length": "100 pt", "angle": 0})),
+        // The Line Segment Tool Options: Length, Angle and Fill Line as the tool keeps them.
+        "lineSegment" => {
+            let o = app.session.tool_options_of(kind);
+            let fill = o.get("fillLine").and_then(Value::as_bool).unwrap_or(false);
+            Dialog::new(
+                kind,
+                json!({"x": x, "y": y, "length": pt(o.get("length")), "angle": o.get("angle").cloned().unwrap_or(json!(0)), "fillLine": fill}),
+            )
+        }
+        "spiral" => {
+            let options = app.session.tool_options_of(kind);
+            Dialog::new(
+                kind,
+                json!({
+                    "x": x,
+                    "y": y,
+                    "radius": "50 pt",
+                    "decay": options.get("decay").cloned().unwrap_or(json!(80.0)),
+                    "segments": options.get("segments").cloned().unwrap_or(json!(10)),
+                    "clockwise": options.get("clockwise").cloned().unwrap_or(json!(true)),
+                }),
+            )
+        }
         "arc" => {
             let opts = app.session.tool_options_of(kind);
             let closed = opts.get("closed").and_then(Value::as_bool).unwrap_or(false);
@@ -42,16 +64,20 @@ pub fn open_tool_dialog(app: &mut VectorcraftApp, kind: &str, p: Value) {
             super::shapes::arc_pin_to_anchor(&mut d);
             d
         }
-        // The grids: the tool's stored options (divider counts and skews, switches) at the default size.
+        // The grids: the tool's stored options (Default Size, Reference Point, divider counts and
+        // skews, switches).
         "rectangularGrid" | "polarGrid" => {
             let mut obj = match app.session.tool_options_of(kind) {
                 Value::Object(o) => o,
                 _ => serde_json::Map::new(),
             };
-            for (key, value) in [("__anchorX", json!(x)), ("__anchorY", json!(y)), ("width", json!("100 pt")), ("height", json!("100 pt"))] {
-                obj.insert(key.into(), value);
-            }
-            obj.insert("reference".into(), json!(0));
+            obj.insert("__anchorX".into(), json!(x));
+            obj.insert("__anchorY".into(), json!(y));
+            // The Default Size in points, as typed lengths.
+            let (w, h) = (pt(obj.get("width")), pt(obj.get("height")));
+            obj.insert("width".into(), w);
+            obj.insert("height".into(), h);
+            obj.entry("reference").or_insert(json!(0));
             let mut d = Dialog::new(kind, Value::Object(obj));
             grid_pin_to_anchor(&mut d);
             d
@@ -135,4 +161,9 @@ pub fn open_tool_dialog(app: &mut VectorcraftApp, kind: &str, p: Value) {
         _ => return,
     };
     app.ui.dialog = Some(d);
+}
+
+/// A stored length option (points) as a dialog's typed length, `"N pt"`; 100 pt when unset.
+fn pt(v: Option<&Value>) -> Value {
+    json!(format!("{} pt", v.and_then(Value::as_f64).filter(|n| n.is_finite()).unwrap_or(100.0)))
 }

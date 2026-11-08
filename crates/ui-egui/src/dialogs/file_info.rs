@@ -174,7 +174,7 @@ fn chips(ui: &mut egui::Ui, d: &mut Dialog) {
             ui.painter().galley(egui::pos2(rect.left() + 9.0, rect.center().y - galley.size().y / 2.0), galley, t.text_strong);
             let x = egui::Rect::from_center_size(egui::pos2(rect.right() - 11.0, rect.center().y), egui::vec2(14.0, 14.0));
             let resp = ui
-                .interact(x, ui.id().with(("keyword-remove", i)), egui::Sense::click())
+                .interact(x, ui.scope_id().with(("keyword-remove", i)), egui::Sense::click())
                 .on_hover_text(crate::i18n::fmt(tl!("Remove “{keyword}”"), &[("keyword", k.as_str())]));
             icons::paint(ui, "x", x.shrink(2.0), if resp.hovered() { t.text_strong } else { t.text_dim });
             if resp.clicked() {

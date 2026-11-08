@@ -1,10 +1,10 @@
 //! Linked dimensions: generated groups share the existing text/path render and export pipeline.
-use super::*;
+use super::{CommandSpec, EngineError, Result, Session, cmd, has_doc};
 use serde_json::{Value, json};
 use std::sync::Arc;
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::dimension::{ArrowStyle, Dimension, DimensionMode, DimensionOptions, DimensionSource, LineType, TextAlignment, TextPosition};
-use vectorcraft_doc::{Appearance, Arrowhead, CharStyle, Dash, Document, Node, NodeId, NodeKind, TextObject};
+use vectorcraft_doc::{Appearance, Arrowhead, CharStyle, ColorMode, Dash, Document, Node, NodeId, NodeKind, TextObject};
 use vectorcraft_geom::{Affine, BezPath, PathData, Point, Vec2};
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -195,11 +195,69 @@ fn replace(doc: &mut Document, id: NodeId, dim: Dimension) -> Result<()> {
     Ok(())
 }
 
+/// A dimension whose live link [`end_links`] ended, as it was before.
+pub(crate) struct EndedLink {
+    id: NodeId,
+    recipe: Dimension,
+    art: Vec<Arc<Node>>,
+}
+
+/// The dimensions under `roots` or holding one of them. A dimension can be listed more than once.
+pub(crate) fn reached(doc: &Document, roots: &[NodeId]) -> Vec<NodeId> {
+    let mut ids = Vec::new();
+    for n in roots.iter().filter_map(|r| doc.node(*r)) {
+        n.walk(&mut |c| {
+            if c.extras().dimension.is_some() {
+                ids.push(c.id);
+            }
+        });
+        if doc.dimensions {
+            let holders = doc.ancestry(n.id).unwrap_or_default();
+            ids.extend(holders.into_iter().filter(|id| doc.node(*id).is_some_and(|h| h.extras().dimension.is_some())));
+        }
+    }
+    ids
+}
+
+impl EndedLink {
+    /// Is the art this dimension measures, changed from `before` to `after`, still art it can link to?
+    pub(crate) fn source_kept(&self, before: &Document, after: &Document) -> bool {
+        !self.recipe.source.as_ref().is_some_and(|s| s.topology_changed(before, after)) && self.recipe.clone().resolve(after).is_ok()
+    }
+}
+
+/// The [`reached`] dimensions become plain groups, whose art does not redraw or follow what it
+/// measured. A command that replaces art calls this before it changes anything, since replacing
+/// the art a dimension measures would remove the dimension, and then [`restore_unchanged`].
+pub(crate) fn end_links(doc: &mut Document, roots: &[NodeId]) -> Vec<EndedLink> {
+    let mut ended = Vec::new();
+    for id in reached(doc, roots) {
+        let Some(n) = doc.node_mut(id) else { continue };
+        let art = n.children().cloned().unwrap_or_default();
+        if let Some(recipe) = n.extras_mut().dimension.take() {
+            ended.push(EndedLink { id, recipe: *recipe, art });
+        }
+    }
+    ended
+}
+
+/// The dimensions in `ended` whose art is as it was are live again.
+pub(crate) fn restore_unchanged(doc: &mut Document, ended: Vec<EndedLink>) {
+    for e in ended {
+        if doc.node(e.id).and_then(Node::children).is_some_and(|art| *art == e.art)
+            && let Some(n) = doc.node_mut(e.id)
+        {
+            n.extras_mut().dimension = Some(Box::new(e.recipe));
+            doc.dimensions = true;
+        }
+    }
+}
+
 /// Called inside every edit, so dimensions and their undo history stay in step with the art they
 /// measure. Returns at once in documents without dimensions.
-pub(crate) fn refresh(before: &Document, doc: &mut Document) -> Result<()> {
+pub(crate) fn refresh(before: &Document, doc: &mut Document) -> Result<bool> {
     if !doc.dimensions {
-        return Ok(());
+        return Ok(false);
     }
     let mut dimensions = Vec::new();
     doc.walk(|n| {
@@ -208,6 +266,7 @@ pub(crate) fn refresh(before: &Document, doc: &mut Document) -> Result<()> {
         }
     });
     doc.dimensions = !dimensions.is_empty();
+    let mut changed = false;
     for (id, old) in dimensions {
         let mut next = old.clone();
         let moved = next.moved.take();
@@ -215,6 +274,7 @@ pub(crate) fn refresh(before: &Document, doc: &mut Document) -> Result<()> {
             // A deleted/degenerate source has no valid measurement. Remove its annotation in
             // this same undo step instead of keeping a silently wrong number.
             doc.remove(id)?;
+            changed = true;
             continue;
         }
         // Moved on its own (the art it measures stayed put): it keeps its new place.
@@ -227,15 +287,65 @@ pub(crate) fn refresh(before: &Document, doc: &mut Document) -> Result<()> {
                 next.moved = None;
             }
         }
-        if next != old || before.node(id).and_then(|n| n.extras().dimension.as_deref()).is_some_and(|d| d != &next) {
+        // A new document colour mode (Document Color Mode) redraws every dimension in it.
+        if next != old
+            || before.color_mode != doc.color_mode
+            || before.node(id).and_then(|n| n.extras().dimension.as_deref()).is_some_and(|d| d != &next)
+        {
             replace(doc, id, next)?;
+            changed = true;
         }
     }
-    Ok(())
+    Ok(changed)
 }
 
-fn paint(c: [u8; 3]) -> Paint {
-    Paint::solid(Color::rgb8(c[0], c[1], c[2]))
+/// Redraw the dimensions of an opened document whose art isn't in its colour mode: files saved
+/// before dimensions followed the colour mode have RGB dimensions in CMYK documents. A dimension
+/// that can't be redrawn keeps the art it has.
+pub(crate) fn conform(doc: &mut Document) {
+    if !doc.dimensions {
+        return;
+    }
+    let mode = doc.color_mode;
+    let off_mode = |c: &Color| match mode {
+        ColorMode::Rgb => matches!(c, Color::Cmyk { .. }),
+        ColorMode::Cmyk => matches!(c, Color::Rgb { .. }),
+    };
+    let mut stale = Vec::new();
+    doc.walk(|n| {
+        if let Some(d) = &n.extras().dimension {
+            let mut off = false;
+            n.walk(&mut |c| {
+                off |= [c.appearance.fill_paint(), c.appearance.stroke_paint()].iter().filter_map(|p| p.color()).any(|c| off_mode(&c));
+                // The label's characters carry their own fill.
+                if let NodeKind::Text(t) = &c.kind {
+                    off |= t.runs.iter().filter_map(|r| r.style.fill.color()).any(|c| off_mode(&c));
+                }
+            });
+            if off {
+                stale.push((n.id, (**d).clone()));
+            }
+        }
+    });
+    for (id, d) in stale {
+        // An error leaves this dimension as it was; the others are still redrawn.
+        let _ = replace(doc, id, d);
+    }
+}
+
+/// Option colour `c` as a paint in the document's colour model: in a CMYK document black is K
+/// only (a rich four-ink black would print a black dimension in every plate) and other colours
+/// convert through the active colour settings.
+fn paint(c: [u8; 3], mode: ColorMode) -> Paint {
+    let rgb = Color::rgb8(c[0], c[1], c[2]);
+    Paint::solid(match mode {
+        ColorMode::Rgb => rgb,
+        ColorMode::Cmyk if c == [0, 0, 0] => Color::cmyk(0.0, 0.0, 0.0, 1.0),
+        ColorMode::Cmyk => {
+            let cms = vectorcraft_color::cms::active();
+            cms.convert(&rgb, vectorcraft_color::cms::Model::Cmyk, cms.settings().intent)
+        }
+    })
 }
 fn line(a: Point, b: Point) -> BezPath {
     let mut p = BezPath::new();
@@ -244,10 +354,10 @@ fn line(a: Point, b: Point) -> BezPath {
     p
 }
 
-fn appearance(o: &DimensionOptions, ext: bool, arrows: bool) -> Appearance {
+fn appearance(o: &DimensionOptions, mode: ColorMode, ext: bool, arrows: bool) -> Appearance {
     let (color, width, kind) =
         if ext { (o.extension_color, o.extension_weight, o.extension_type) } else { (o.line_color, o.line_weight, o.line_type) };
-    let mut a = Appearance::basic(Paint::None, paint(color), width);
+    let mut a = Appearance::basic(Paint::None, paint(color, mode), width);
     if let Some(st) = a.stroke_mut() {
         st.dash = match kind {
             LineType::Dashed => Some(Dash { pattern: vec![width * 5.0, width * 3.0], ..Default::default() }),
@@ -285,6 +395,7 @@ fn along(o: &DimensionOptions) -> f64 {
 fn artwork(doc: &mut Document, d: &Dimension, old: &[NodeId]) -> Result<Vec<Arc<Node>>> {
     d.validate().map_err(error)?;
     let o = &d.options;
+    let mode = doc.color_mode;
     let label = d.label().map_err(error)?;
     let mut paths: Vec<(BezPath, Appearance)> = Vec::new();
     let mut angle = 0.0;
@@ -301,11 +412,11 @@ fn artwork(doc: &mut Document, d: &Dimension, old: &[NodeId]) -> Result<Vec<Arc<
         for i in 1..=64 {
             arc.line_to(on(i as f64 / 64.0));
         }
-        paths.push((arc, appearance(o, false, true)));
+        paths.push((arc, appearance(o, mode, false, true)));
         if !o.hide_extensions {
             for p in [d.a, d.b] {
                 let dir = (p - d.vertex) / (p - d.vertex).hypot();
-                paths.push((line(d.vertex + dir * o.extension_offset, d.vertex + dir * (r + o.extension_length)), appearance(o, true, false)));
+                paths.push((line(d.vertex + dir * o.extension_offset, d.vertex + dir * (r + o.extension_length)), appearance(o, mode, true, false)));
             }
         }
         let dir = Vec2::from_angle(start + sweep * along(o));
@@ -333,7 +444,7 @@ fn artwork(doc: &mut Document, d: &Dimension, old: &[NodeId]) -> Result<Vec<Arc<
         };
         if d.mode == DimensionMode::Linear && !o.hide_extensions {
             for (p, q) in [(d.a, a), (d.b, b)] {
-                paths.push((line(p + outward * o.extension_offset, q + outward * o.extension_length), appearance(o, true, false)));
+                paths.push((line(p + outward * o.extension_offset, q + outward * o.extension_length), appearance(o, mode, true, false)));
             }
         }
         angle = u.atan2();
@@ -342,13 +453,13 @@ fn artwork(doc: &mut Document, d: &Dimension, old: &[NodeId]) -> Result<Vec<Arc<
         }
         let shift = o.text_offset + o.font_size * 0.5;
         text_at = a.lerp(b, along(o)) + outward * if away { shift } else { -shift };
-        paths.push((line(a, b), appearance(o, false, true)));
+        paths.push((line(a, b), appearance(o, mode, false, true)));
     }
     let style = CharStyle {
         font_family: o.font_family.clone(),
         font_style: o.font_style.clone(),
         size: o.font_size,
-        fill: paint(o.text_color),
+        fill: paint(o.text_color, mode),
         ..Default::default()
     };
     let mut text = TextObject::point(Point::ZERO, &label, style);
@@ -366,7 +477,7 @@ fn artwork(doc: &mut Document, d: &Dimension, old: &[NodeId]) -> Result<Vec<Arc<
     }
     let id = old.get(children.len()).copied().unwrap_or_else(|| doc.alloc_id());
     let mut node = Node::new(id, NodeKind::Text(Box::new(text)));
-    node.appearance = Appearance::basic(paint(o.text_color), Paint::None, 0.0).into();
+    node.appearance = Appearance::basic(paint(o.text_color, mode), Paint::None, 0.0).into();
     children.push(Arc::new(node));
     Ok(children)
 }

@@ -23,13 +23,16 @@ impl Rng {
     }
 }
 
+/// The synthetic document's page, in points.
+const SYNTHETIC_PAGE: (f64, f64) = (1600.0, 1200.0);
+
 /// `n` mixed paths (ellipses with strokes, translucent rectangles, stroked stars) on a 1600×1200 page.
 pub fn synthetic(n: usize) -> Result<Document, String> {
-    let mut d = Document::new(1600.0, 1200.0);
+    let mut d = Document::new(SYNTHETIC_PAGE.0, SYNTHETIC_PAGE.1);
     let l = d.layers.first().map(|l| l.id);
     let mut r = Rng(42);
     for i in 0..n {
-        let (x, y, s) = (r.next() * 1600.0, r.next() * 1200.0, 3.0 + r.next() * 22.0);
+        let (x, y, s) = (r.next() * SYNTHETIC_PAGE.0, r.next() * SYNTHETIC_PAGE.1, 3.0 + r.next() * 22.0);
         let c = Color::rgb(r.next() as f32, r.next() as f32, r.next() as f32);
         let id = d.alloc_id();
         let mut node = match i % 3 {
@@ -59,6 +62,61 @@ fn median_ms(runs: usize, mut f: impl FnMut()) -> f64 {
         .collect();
     v.sort_by(f64::total_cmp);
     v.get(v.len() / 2).copied().unwrap_or(0.0)
+}
+
+/// Exercise the application's native save/open commands, including previews, PDF output,
+/// compression and API base64 conversion. Session setup and validation are outside timing.
+/// Five measured runs follow one warmup; no filesystem or GPU window is involved.
+fn native_io(doc: &Document) -> Result<(), String> {
+    for (label, compatible, preview) in [
+        ("default options", None, false),
+        ("PDF disabled", Some(false), false),
+        ("preview+gzip", None, true),
+        ("preview+gzip, PDF disabled", Some(false), true),
+    ] {
+        let mut session = vectorcraft_engine::Session::new();
+        session.add_document(doc.clone(), None);
+        let mut params = json!({"format":"vectorcraft","modified":null,"preview":preview,"compress":preview});
+        if let Some(value) = compatible {
+            params["pdfCompatible"] = json!(value);
+        }
+        let (mut saves, mut opens) = (Vec::new(), Vec::new());
+        let (mut size, mut has_pdf, mut compressed) = (0, false, false);
+        for run in 0..6 {
+            let start = Instant::now();
+            let saved = session.execute("file.saveAs", &params).map_err(|e| e.to_string())?;
+            let save_ms = start.elapsed().as_secs_f64() * 1000.0;
+            let data = saved["dataBase64"].as_str().ok_or("native save returned no dataBase64")?;
+            let bytes = vectorcraft_format::base64_decode(data).ok_or("native save returned invalid base64")?;
+            size = bytes.len();
+            has_pdf = vectorcraft_format::pdf_content(&bytes).is_some();
+            if compatible == Some(false) && has_pdf {
+                return Err("native save ignored the explicit PDF opt-out".into());
+            }
+            compressed = vectorcraft_format::is_compressed(&bytes);
+            if compressed != preview || vectorcraft_format::preview(&bytes).is_some() != preview {
+                return Err("native save did not apply the requested preview/compression options".into());
+            }
+            let args = json!({"name":"perf.vectorcraft","dataBase64":data});
+            let mut opened = vectorcraft_engine::Session::new();
+            let start = Instant::now();
+            opened.execute("document.open", &args).map_err(|e| e.to_string())?;
+            let open_ms = start.elapsed().as_secs_f64() * 1000.0;
+            if opened.doc().map_err(|e| e.to_string())?.doc.artboards.len() != doc.artboards.len() {
+                return Err("native round trip changed the artboard count".into());
+            }
+            if run > 0 {
+                saves.push(save_ms);
+                opens.push(open_ms);
+            }
+        }
+        saves.sort_by(f64::total_cmp);
+        opens.sort_by(f64::total_cmp);
+        let save = saves.get(2).copied().ok_or("no save measurements")?;
+        let open = opens.get(2).copied().ok_or("no open measurements")?;
+        outln!("  native {label}: save {save:.2} ms, open {open:.2} ms, {size} bytes, PDF {has_pdf}, compressed {compressed}");
+    }
+    Ok(())
 }
 
 /// 1-minute load average (macOS / Linux), if available.
@@ -113,7 +171,8 @@ fn edit_drags(n: usize) -> Result<(f64, f64), String> {
     let view = vectorcraft_engine::ViewInfo { zoom: 8.0, ..Default::default() };
     let err = |e: vectorcraft_engine::EngineError| e.to_string();
     let mut drag = |down: Point| -> Result<f64, String> {
-        let ev = |kind, y: f64| PointerEvent { kind, pos: down + Vec2::new(0.0, y), mods: Mods::default(), pressure: 1.0 };
+        let ev =
+            |kind, y: f64| PointerEvent { kind, pos: down + Vec2::new(0.0, y), mods: Mods::default(), backquote: false, pressure: 1.0, pen: None };
         s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 400]]})).map_err(err)?;
         s.select_tool("directSelection", view).map_err(err)?;
         let undo = s.doc().map_err(err)?.history.undo.len();
@@ -183,6 +242,48 @@ fn budget_row(name: &str, ms: f64, budget: f64, ok: bool) -> String {
     format!("  {name:<42} {ms:>8.2} ms {budget:>7.0} ms  {}", if ok { "ok" } else { "OVER" })
 }
 
+/// Tracked rows for pointing at things in an n-path document: what hovering, clicking, marquee
+/// selection and snapping cost when nothing narrows the search.
+fn pointing(n: usize, rows: &mut Vec<(String, f64)>) -> Result<(), String> {
+    use vectorcraft_engine::tools::{Mods, PointerEvent, PointerKind};
+    let err = |e: vectorcraft_engine::EngineError| e.to_string();
+    let mut s = vectorcraft_engine::Session::new();
+    s.add_document(synthetic(n)?, None);
+    let view = vectorcraft_engine::ViewInfo { zoom: 1.0, ..Default::default() };
+    s.select_tool("selection", view).map_err(err)?;
+    // Off the art (nothing under the pointer), the case every hover over empty canvas pays.
+    let off = Point::new(-200.0, -200.0);
+    let hover = |s: &mut vectorcraft_engine::Session| {
+        let _ = s.pointer(&PointerEvent::new(PointerKind::Move, off.x, off.y), view);
+        let _ = s.cursor(off, Mods::default(), view);
+    };
+    rows.push((format!("hover over empty canvas ({n} paths)"), median_ms(5, || hover(&mut s))));
+    s.execute("select.all", &json!({})).map_err(err)?;
+    rows.push((format!("hover over empty canvas, all selected ({n} paths)"), median_ms(5, || hover(&mut s))));
+    let doc = s.doc().map_err(err)?.doc.clone();
+    rows.push((format!("hit test, a miss ({n} paths)"), median_ms(5, || drop(hit::hit_test(&doc, off, hit::HitOptions::default())))));
+    let r = Rect::new(600.0, 450.0, 1000.0, 750.0);
+    rows.push((format!("marquee 400×300 ({n} paths)"), median_ms(5, || drop(hit::marquee(&doc, r, None, false)))));
+    let view_rect = Rect::new(0.0, 0.0, 1600.0, 1200.0);
+    rows.push((
+        format!("smart guide targets in view ({n} paths)"),
+        median_ms(5, || drop(vectorcraft_engine::tools::guides::Targets::collect(&doc, &[], Some(view_rect)))),
+    ));
+    // Adding one more object to a selection of half the document: the command a shift-click ends
+    // in, without the pointer handling and hit test before it.
+    let ids: Vec<u64> = doc.layers[0].children().map(|c| c.iter().map(|n| n.id.0).collect()).unwrap_or_default();
+    s.execute("select.set", &json!({"ids": ids[..ids.len() / 2]})).map_err(err)?;
+    let mut k = ids.len() / 2;
+    rows.push((
+        format!("select.toggle in a {}-object selection", ids.len() / 2),
+        median_ms(5, || {
+            k += 1;
+            let _ = s.execute("select.toggle", &json!({"id": ids[k % ids.len()]}));
+        }),
+    ));
+    Ok(())
+}
+
 /// `--deep`: tracked rows (no budget yet) for work the budgets above don't reach: editing a whole
 /// selection, live effects, every Pathfinder operation, typing in a long story, and memory, with
 /// the peak so far where `rss_mb` reads one.
@@ -212,7 +313,14 @@ fn deep(n: usize) -> Result<(), String> {
         let first = s.doc().map_err(err)?.selection.objects.first().copied();
         let at = first.and_then(|id| s.doc().ok()?.doc.node(id)?.geometric_bounds()).map(|b| b.center());
         if let Some(down) = at {
-            let ev = |kind, dx: f64| PointerEvent { kind, pos: down + Vec2::new(dx, 0.0), mods: Mods::default(), pressure: 1.0 };
+            let ev = |kind, dx: f64| PointerEvent {
+                kind,
+                pos: down + Vec2::new(dx, 0.0),
+                mods: Mods::default(),
+                backquote: false,
+                pressure: 1.0,
+                pen: None,
+            };
             s.select_tool("selection", view).map_err(err)?;
             s.pointer(&ev(PointerKind::Down, 0.0), view).map_err(err)?;
             let mut dx = 0.0;
@@ -271,6 +379,8 @@ fn deep(n: usize) -> Result<(), String> {
         }),
     ));
     note("after typing");
+    pointing(n, &mut rows)?;
+    note("after pointing");
     // Four embedded 24 MP photos drawn at fit page by three renderers, as the app's canvas, render
     // worker and a panel each draw them.
     {
@@ -282,7 +392,7 @@ fn deep(n: usize) -> Result<(), String> {
             let key = format!("photo {i}");
             d.images.insert(key.clone(), vectorcraft_doc::ImageBlob::new("image/png", photo));
             let xf = Affine::translate((f64::from(i % 2) * 800.0, f64::from(i / 2) * 600.0)) * Affine::scale(800.0 / 6000.0);
-            let image = vectorcraft_doc::ImageObject { key, width: 6000, height: 4000, xf, link: None, placement: Default::default() };
+            let image = vectorcraft_doc::ImageObject { key, width: 6000, height: 4000, xf, link: None, placement: Default::default(), pixels: None };
             let id = d.alloc_id();
             d.insert(l, usize::MAX, Node::new(id, vectorcraft_doc::NodeKind::Image(Box::new(image)))).map_err(|e| e.to_string())?;
         }
@@ -295,6 +405,27 @@ fn deep(n: usize) -> Result<(), String> {
         });
         rows.push(("render 4 embedded 24 MP photos with 3 renderers (cold)".into(), ms));
         note("after rendering the photos with 3 renderers");
+    }
+    // An SVG with one embedded picture opened from its text, as picture-heavy SVGs come: the
+    // importer's passes over the text before usvg reads it, most of which is the data URL. The
+    // picture is the synthetic page drawn at 1.25x (about 2 MB as a PNG; the row names its size);
+    // the hidden rectangle is a marker, so the prepass walks the tree as it does for a file that
+    // has one, instead of returning at its first check.
+    {
+        let k = 1.25;
+        let (w, h) = ((SYNTHETIC_PAGE.0 * k).round() as u32, (SYNTHETIC_PAGE.1 * k).round() as u32);
+        let photo = Renderer::new().render(&synthetic(3000)?, w, h, Affine::scale(k), &opts).to_png()?;
+        let data = vectorcraft_svg::base64_encode(&photo);
+        let svg = format!(
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}"><image width="{w}" height="{h}" href="data:image/png;base64,{data}"/><rect width="100" height="100" style="display:none"/></svg>"#
+        );
+        // One import checked first, so a failure is reported rather than timed; the same text
+        // imports the same way each time. Its document is kept for the memory reading.
+        let imported = vectorcraft_svg::import_with_report(&svg).map_err(|e| e.to_string())?;
+        let ms = median_ms(5, || drop(vectorcraft_svg::import_with_report(&svg)));
+        rows.push((format!("import SVG, one embedded {} KB PNG", photo.len() / 1024), ms));
+        note("after the import of an embedded picture");
+        drop(imported);
     }
     // Output hashes, to compare builds: the SVG export and a save → open → save round trip.
     let fnv = |b: &[u8]| b.iter().fold(0xcbf2_9ce4_8422_2325u64, |h, &x| (h ^ u64::from(x)).wrapping_mul(0x100_0000_01b3));
@@ -317,16 +448,36 @@ fn deep(n: usize) -> Result<(), String> {
 }
 
 pub fn run(args: &[String]) -> Result<(), String> {
+    if crate::help_requested(args, &["--paths", "--artboards"]) {
+        return crate::help();
+    }
     let mut n = 50_000usize;
     let mut want_deep = false;
+    let mut want_native = false;
+    let mut artboards = None::<usize>;
     let mut it = args.iter();
     while let Some(a) = it.next() {
         match a.as_str() {
             "--deep" => want_deep = true,
+            "--native-io" => want_native = true,
+            "--artboards" => {
+                artboards =
+                    Some(it.next().and_then(|v| v.parse().ok()).filter(|n| (1..=4).contains(n)).ok_or("--artboards needs a number from 1 to 4")?)
+            }
             "--paths" => n = it.next().and_then(|v| v.parse().ok()).ok_or("--paths needs a number")?,
             other => return Err(format!("unknown perf option `{other}`")),
         }
     }
+    if want_native && n > 50_000 {
+        return Err("--native-io allows at most 50000 paths".into());
+    }
+    if want_native && want_deep {
+        return Err("--native-io and --deep are separate measurement modes".into());
+    }
+    if artboards.is_some() && !want_native {
+        return Err("--artboards requires --native-io".into());
+    }
+    let artboards = artboards.unwrap_or(1);
     let cores = std::thread::available_parallelism().map_or(1, |c| c.get());
     // The figure is the 1-minute load average, or on Windows the cores busy over one second.
     #[cfg(not(windows))]
@@ -339,8 +490,20 @@ pub fn run(args: &[String]) -> Result<(), String> {
         outln!("WARNING: the machine is busy; wall-clock timings below are not trustworthy.");
     }
     let t = Instant::now();
-    let doc = synthetic(n)?;
+    let mut doc = synthetic(n)?;
     outln!("  (built in {:.0} ms)", t.elapsed().as_secs_f64() * 1000.0);
+    if want_native {
+        let first = doc.artboards.first().cloned().ok_or("synthetic document has no artboard")?;
+        // Overlapping artboards intentionally repeat the same paths on every PDF page.
+        for index in 1..artboards {
+            let mut page = first.clone();
+            page.id = first.id.checked_add(index as u32).ok_or("artboard id overflow")?;
+            page.name = format!("Perf {}", index + 1);
+            doc.artboards.push(page);
+        }
+        outln!("  application native I/O: {artboards} overlapping artboard(s), one warmup + five samples; medians; no disk I/O");
+        return native_io(&doc);
+    }
 
     let mut rows: Vec<(&str, f64, f64)> = vec![];
     let opts = RenderOptions::default();
@@ -433,6 +596,24 @@ pub fn run(args: &[String]) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn native_io_exercises_the_application_save_and_open_commands() {
+        native_io(&synthetic(3).unwrap()).unwrap();
+    }
+
+    #[test]
+    fn native_io_rejects_conflicting_modes_and_excessive_workloads() {
+        for (args, expected) in [
+            (vec!["--native-io", "--deep"], "separate measurement modes"),
+            (vec!["--native-io", "--paths", "50001"], "at most 50000"),
+            (vec!["--native-io", "--artboards", "5"], "1 to 4"),
+            (vec!["--artboards", "1"], "requires --native-io"),
+            (vec!["--artboards", "2"], "requires --native-io"),
+        ] {
+            assert!(run(&args.into_iter().map(str::to_owned).collect::<Vec<_>>()).unwrap_err().contains(expected));
+        }
+    }
 
     #[test]
     fn busy_share_leaves_out_idle_time() {

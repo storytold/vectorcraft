@@ -68,6 +68,8 @@ pub(super) struct Obj {
     pub content: Vec<V>,
     /// Vector art enclosed by `X=` … `X+` in an opacity-mask dictionary.
     pub art: Option<std::sync::Arc<vectorcraft_doc::Node>>,
+    /// What that art has that isn't read, reported once the mask is known to be enabled.
+    pub unread: Vec<String>,
 }
 
 impl Obj {

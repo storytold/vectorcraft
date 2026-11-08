@@ -92,6 +92,15 @@ pub fn check() -> Result<(), Cancelled> {
     if is_cancelled() { Err(Cancelled) } else { Ok(()) }
 }
 
+/// Run `f` with this thread's token still in effect and its progress reports dropped: for work
+/// that reports its own steps around calls that report theirs (each file of a batch export).
+pub fn quiet<T>(f: impl FnOnce() -> T) -> T {
+    match CURRENT.with(|c| c.borrow().as_ref().map(|s| s.token.clone())) {
+        Some(token) => scope(&token, None, f),
+        None => f(),
+    }
+}
+
 /// Report that `done` of `total` steps (0: unknown) are finished. A no-op outside a [`scope`]
 /// that has a sink.
 pub fn progress(done: u64, total: u64, what: &str) {
@@ -138,5 +147,26 @@ mod tests {
         assert!(r.is_err());
         progress(2, 3, "after");
         assert_eq!(*seen.borrow(), vec![(1, 3, "page".to_string())]);
+    }
+
+    #[test]
+    fn quiet_work_reports_nothing_and_can_still_be_cancelled() {
+        let seen = Rc::new(RefCell::new(vec![]));
+        let sink: ProgressSink = {
+            let seen = seen.clone();
+            Rc::new(move |d, t, w| seen.borrow_mut().push((d, t, w.to_string())))
+        };
+        let t = CancelToken::new();
+        scope(&t, Some(sink), || {
+            progress(0, 2, "file");
+            quiet(|| {
+                progress(0, 1, "artboard");
+                t.cancel();
+                assert_eq!(check(), Err(Cancelled));
+            });
+            progress(1, 2, "file");
+        });
+        assert_eq!(*seen.borrow(), vec![(0, 2, "file".to_string()), (1, 2, "file".to_string())]);
+        assert_eq!(quiet(check), Ok(()), "outside a scope nothing is cancelled");
     }
 }

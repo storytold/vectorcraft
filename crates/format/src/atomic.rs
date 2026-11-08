@@ -261,15 +261,46 @@ fn temp_path(target: &Path) -> io::Result<PathBuf> {
     Ok(target.with_file_name(format!(".{}.{}-{n}.tmp", name.to_string_lossy(), std::process::id())))
 }
 
-/// The replacement keeps the replaced file's permissions (Unix; Windows files have none to keep
-/// beyond read-only, which makes the save fail as writing in place would).
+/// The replacement keeps the replaced file's permissions, group and (Linux) access ACL: the same
+/// mode bits mean other people when the group differs, and an ACL can narrow who reads the file.
+/// When the group or the ACL can't be kept, the replacement is readable by its owner alone rather
+/// than by people the old file didn't let in. (Unix; Windows files have none to keep beyond
+/// read-only, which makes the save fail as writing in place would.)
 #[cfg(unix)]
 fn keep_permissions(target: &Path, tmp: &Path) -> io::Result<()> {
-    match std::fs::metadata(target) {
-        Ok(m) => std::fs::set_permissions(tmp, m.permissions()),
-        // A new file: the default permissions.
-        Err(_) => Ok(()),
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    // A new file: the default permissions.
+    let Ok(m) = std::fs::metadata(target) else { return Ok(()) };
+    let mut mode = m.permissions().mode();
+    let kept_group = std::fs::metadata(tmp).is_ok_and(|t| t.gid() == m.gid()) || std::os::unix::fs::chown(tmp, None, Some(m.gid())).is_ok();
+    if !kept_group || !keep_acl(target, tmp) {
+        mode &= !0o077;
     }
+    // After the ACL: the mode's group bits are its mask, kept as they were.
+    std::fs::set_permissions(tmp, std::fs::Permissions::from_mode(mode))
+}
+
+/// Give `tmp` the access ACL of `target`; `true` when it has none (or its volume keeps none).
+#[cfg(target_os = "linux")]
+fn keep_acl(target: &Path, tmp: &Path) -> bool {
+    use rustix::io::Errno;
+    const ACL: &str = "system.posix_acl_access";
+    let mut buf = vec![0u8; 64 << 10];
+    match rustix::fs::getxattr(target, ACL, &mut buf[..]) {
+        Ok(n) => buf.get(..n).is_some_and(|acl| rustix::fs::setxattr(tmp, ACL, acl, rustix::fs::XattrFlags::empty()).is_ok()),
+        // None to keep: drop the one `tmp` may have inherited from the folder's default ACL, which
+        // the old file's group bits (its mask) would otherwise open to the people it names.
+        Err(e) if e == Errno::NODATA => match rustix::fs::removexattr(tmp, ACL) {
+            Ok(()) => true,
+            Err(e) => e == Errno::NODATA || e == Errno::NOTSUP,
+        },
+        Err(e) => e == Errno::NOTSUP,
+    }
+}
+
+#[cfg(all(unix, not(target_os = "linux")))]
+fn keep_acl(_: &Path, _: &Path) -> bool {
+    true
 }
 
 #[cfg(not(unix))]
@@ -286,6 +317,24 @@ mod tests {
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         d
+    }
+
+    /// A replaced file that had no access ACL gets none from the folder's default ACL, whose named
+    /// users the old file's group bits would let in. (Skipped where `setfacl` or ACLs are missing.)
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_replacement_takes_no_inherited_acl_the_old_file_lacked() {
+        let d = dir("acl");
+        let f = d.join("doc.vectorcraft");
+        std::fs::write(&f, b"old").unwrap();
+        let set = std::process::Command::new("setfacl").args(["-d", "-m", "u:nobody:rw"]).arg(&d).status();
+        if !set.is_ok_and(|s| s.success()) {
+            return;
+        }
+        write_atomic(&f, b"new").unwrap();
+        let mut buf = vec![0u8; 4096];
+        assert_eq!(rustix::fs::getxattr(&f, "system.posix_acl_access", &mut buf[..]), Err(rustix::io::Errno::NODATA));
+        let _ = std::fs::remove_dir_all(&d);
     }
 
     /// The other files in `d` besides `keep`.

@@ -8,8 +8,8 @@
 //! edited; on a built-in preset they go back).
 
 use serde_json::{Value, json};
-use vectorcraft_engine::cmd::FlattenOptions;
 use vectorcraft_engine::cmd::flatten::{PRESET_EXTS, PRESET_FORMAT};
+use vectorcraft_engine::cmd::{FlattenOptions, FlattenerPreset};
 
 use super::flatten::{options_editor, put_options};
 use super::{DialogSpec, form};
@@ -35,10 +35,28 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     ..DialogSpec::FORM
 };
 
-/// Open the presets manager on `selected` (default: the first preset).
+/// Open the presets manager on `selected` (default: the first preset), holding its name and
+/// options.
 pub fn open(app: &mut VectorcraftApp, selected: Option<&str>) {
     let first = FlattenOptions::preset_label(FlattenOptions::PRESETS[0]).unwrap_or_default();
-    app.ui.dialog = Some(Dialog::new(KIND, json!({ "selected": selected.unwrap_or(first) })));
+    let mut d = Dialog::new(KIND, json!({ "selected": selected.unwrap_or(first) }));
+    show_selected(&app.session.flattener_presets(), &mut d);
+    app.ui.dialog = Some(d);
+}
+
+/// The index in `presets` of the preset `selected` names (the first when none), whose name and
+/// options the fields take when they hold another preset's.
+fn show_selected(presets: &[FlattenerPreset], d: &mut Dialog) -> usize {
+    let i = presets.iter().position(|p| p.name.eq_ignore_ascii_case(d.str("selected").trim())).unwrap_or(0);
+    if let Some(preset) = presets.get(i)
+        && d.str(SHOWN) != preset.name
+    {
+        put_options(&mut d.fields, &preset.options);
+        for k in ["selected", "name", SHOWN] {
+            d.fields.insert(k.into(), json!(preset.name));
+        }
+    }
+    i
 }
 
 /// What a button asked for, done once the list and fields are drawn.
@@ -54,14 +72,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let t = Tokens::get(ui.ctx());
     let presets = app.session.flattener_presets();
     let builtins = FlattenOptions::PRESETS.len();
-    let i = presets.iter().position(|p| p.name.eq_ignore_ascii_case(d.str("selected").trim())).unwrap_or(0);
+    let i = show_selected(&presets, d);
     let (preset, builtin) = (&presets[i], i < builtins);
-    if d.str(SHOWN) != preset.name {
-        put_options(&mut d.fields, &preset.options);
-        for k in ["selected", "name", SHOWN] {
-            d.fields.insert(k.into(), json!(preset.name));
-        }
-    }
     let mut act = None;
     let mut renaming = false;
     ui.horizontal_top(|ui| {

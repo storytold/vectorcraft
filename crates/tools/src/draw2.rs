@@ -10,17 +10,47 @@ mod gesture;
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{NodeId, NodeKind};
-use vectorcraft_geom::{Anchor, AnchorKind, BezPath, Point, SubPath, Vec2};
+use vectorcraft_geom::{Affine, Anchor, AnchorKind, BezPath, PathData, Point, SubPath, Vec2};
+use vectorcraft_pathops as po;
+use vectorcraft_pathops::{Cap, Join};
 
 use crate::{Action, Tool, ToolContext};
 
 pub use anchor::AnchorTool;
-pub use curvature::{CurvatureTool, EndCurve, curvature_close, curvature_extend, curvature_insert, curvature_move, curvature_smooth};
+pub use curvature::{
+    CurvatureTool, EndCurve, curvature_close, curvature_extend, curvature_insert, curvature_move, curvature_remove, curvature_smooth,
+};
 pub use family::FamilyTool;
 pub use gesture::GestureTool;
 
 /// Colour of tool feedback (Illustrator's selection blue).
 pub const FEEDBACK: [u8; 3] = [0x4f, 0x9d, 0xff];
+
+/// The lowest Fidelity the Pencil and Paintbrush take (#3328; screen pixels, points for the Blob
+/// Brush); the Smooth tool keeps [`SMOOTH_MIN_FIDELITY`].
+pub const MIN_FIDELITY: f64 = 0.01;
+
+/// The finest tolerance (points) `path.freehand` fits a Pencil or Paintbrush stroke at: the lowest
+/// Fidelity at the highest zoom (64000 %), whose screen pixels the tools send in points (#5729).
+pub const MIN_FIT_TOLERANCE: f64 = MIN_FIDELITY / 640.0;
+
+/// The lowest Fidelity (points) the Smooth tool takes.
+pub const SMOOTH_MIN_FIDELITY: f64 = 0.05;
+
+/// The lowest Fidelity tool `id` takes.
+pub fn min_fidelity(id: &str) -> f64 {
+    if id == "smooth" { SMOOTH_MIN_FIDELITY } else { MIN_FIDELITY }
+}
+
+/// The Blob Brush's or the Eraser's width at pen `pressure` (0..1) with Size set to Pressure: `size` −
+/// `variation` at the lightest pressure to `size` + `variation` at the heaviest, at least
+/// [`MIN_BRUSH_SIZE`].
+pub fn pressure_size(size: f64, variation: f64, pressure: f64) -> f64 {
+    (size + variation * (2.0 * pressure.clamp(0.0, 1.0) - 1.0)).max(MIN_BRUSH_SIZE)
+}
+
+/// The narrowest a Blob Brush or Eraser stroke gets, in points (their Size field's minimum).
+pub const MIN_BRUSH_SIZE: f64 = 0.1;
 
 /// Create a drawing tool by id (None = not one of ours).
 pub fn create(id: &str) -> Option<Box<dyn Tool>> {
@@ -202,6 +232,49 @@ pub fn polyline(pts: &[Point]) -> BezPath {
         }
     }
     bp
+}
+
+/// The map that takes a circle about the origin to the Eraser's tip of the same size: an ellipse
+/// whose long axis runs at `angle` degrees counter-clockwise on the page (y-down document space)
+/// and whose short axis is `roundness` percent of the long one (kept within 1–100).
+pub fn eraser_tip(angle: f64, roundness: f64) -> Affine {
+    ellipse_tip(angle, roundness.clamp(1.0, 100.0))
+}
+
+/// Map a round brush tip to a page-oriented ellipse. 0 percent Roundness is drawn as
+/// 0.1 percent so its inverse is defined.
+pub fn blob_tip(angle: f64, roundness: f64) -> Affine {
+    ellipse_tip(angle, roundness.clamp(0.1, 100.0))
+}
+
+fn ellipse_tip(angle: f64, roundness: f64) -> Affine {
+    let t = angle.to_radians();
+    let u = Vec2::new(t.cos(), -t.sin());
+    let v = Vec2::new(-u.y, u.x);
+    let r = roundness / 100.0;
+    let (xx, xy, yy) = (u.x * u.x + r * v.x * v.x, u.x * u.y + r * v.x * v.y, u.y * u.y + r * v.y * v.y);
+    Affine::new([xx, xy, xy, yy, 0.0, 0.0])
+}
+
+/// The area the Eraser's tip (`size` across its long axis, [`eraser_tip`]'s `angle` and
+/// `roundness`) covers along `pts`: a round stroke along the points squashed by the tip's map,
+/// stretched back.
+pub fn eraser_area(pts: &[Point], size: f64, angle: f64, roundness: f64) -> PathData {
+    swept_tip_area(pts, size, eraser_tip(angle, roundness))
+}
+
+/// The filled area covered by a Blob Brush's page-oriented elliptical tip.
+pub fn blob_area(pts: &[Point], size: f64, angle: f64, roundness: f64) -> PathData {
+    swept_tip_area(pts, size, blob_tip(angle, roundness))
+}
+
+fn swept_tip_area(pts: &[Point], size: f64, stretch: Affine) -> PathData {
+    let squash = stretch.inverse();
+    let mut round: Vec<Point> = pts.iter().map(|p| squash * *p).collect();
+    if let [p] = round[..] {
+        round.push(p + Vec2::new(0.01, 0.0));
+    }
+    po::outline_stroke(&PathData::single(SubPath::polyline(&round, false)), size, Cap::Round, Join::Round, 4.0).transformed(stretch)
 }
 
 /// Visit `n` and everything inside it, depth first in paint order, but a Shaper Group's original

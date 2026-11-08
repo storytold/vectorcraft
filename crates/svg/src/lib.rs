@@ -9,6 +9,10 @@
 //!   ([`Profile`]), optionally with the fonts type uses embedded as `@font-face` subsets.
 //! * [`import`] / [`import_with_report`] parse SVG with `usvg` and convert its normalized tree into
 //!   document nodes with all transforms baked into the geometry.
+//! * What other software keeps on an object survives the round trip: its `data-*` attributes and
+//!   its attributes in other applications' XML namespaces (`plotter:pen="2"`) are kept with the
+//!   object ([`vectorcraft_doc::ObjectAttributes`]), so they are copied, saved and deleted with it,
+//!   and export writes them back.
 //! * [`css_rules`] writes the CSS web pages style objects with (the CSS Properties panel): shapes'
 //!   paints as backgrounds and borders, type as fonts, shadows as `box-shadow`, each property
 //!   written as SVG export writes it in its style sheets.
@@ -32,6 +36,17 @@
 //!   their colour field (sampled as the canvas samples it) clipped to the shape or the stroke's
 //!   outline; on characters they are written as linear gradients. Gradients along or across
 //!   strokes are written as slices of linear gradients clipped to the stroke.
+//! * **Dithered gradient fills** are written as an `<image>` of the gradient with its noise, at
+//!   the document's raster effects resolution, clipped to the shape: Illustrator's documentation
+//!   describes dither as the gradient converted to pixels with subtle noise
+//!   (<https://helpx.adobe.com/illustrator/desktop/paint-and-fill/create-and-edit-gradients/control-dither-in-gradients.html>).
+//!   On characters the gradient stays a vector gradient, without dither (with a warning).
+//! * **Perceptual gradients** fill or stroke objects as an `<image>` of the gradient, at the
+//!   document's raster effects resolution, clipped to the shape or the stroke's outline: SVG
+//!   gradients mix linearly, and Illustrator's documentation says perceptual gradients are
+//!   rasterised in SVG
+//!   (<https://helpx.adobe.com/illustrator/desktop/paint-and-fill/create-and-edit-gradients/control-perceptual-interpolation-in-gradients.html>).
+//!   On characters they are written as linear gradients through stops on the perceptual curve.
 //! * **Symbol instances** the shared `<symbol>` would paint differently from the canvas (stained,
 //!   scaled with strokes, turned or scaled with effects, brushes or live objects, or holding
 //!   pattern paints or unlinked masks, which stay on the page) are written as their own art.
@@ -80,7 +95,9 @@
 #![forbid(unsafe_code)]
 
 mod css;
+mod entities;
 mod export;
+mod glyph;
 mod import;
 
 pub use css::{CssOptions, CssRule, CssSheet, CssUnits, css_rules};
@@ -190,6 +207,13 @@ pub struct ExportOptions {
     /// it (the engine's `artboard`/`range`/`useArtboards` params), so it is not deserialized.
     #[serde(skip)]
     pub artboard: Option<usize>,
+    /// The file is the one artboard `artboard` names, exported on its own (Export As with Use
+    /// Artboards, Export for Screens, Asset Export, an `artboard`/`range` param): its `<title>` is
+    /// the artboard's name, else (unnamed) the document's title (#3544). Off, the file stands for
+    /// the document (Save, Save As) and has the document's title. Callers set it with `artboard`,
+    /// so it is not deserialized either.
+    #[serde(skip)]
+    pub artboard_title: bool,
     pub styling: Styling,
     /// Decimal places for coordinates (1–7 in the dialog; default 3).
     pub decimals: u8,
@@ -225,6 +249,7 @@ impl Default for ExportOptions {
     fn default() -> Self {
         Self {
             artboard: Some(0),
+            artboard_title: false,
             styling: Styling::PresentationAttributes,
             decimals: 3,
             object_ids: ObjectIds::LayerNames,
@@ -308,13 +333,24 @@ pub struct LinkedImage {
     pub bytes: std::sync::Arc<Vec<u8>>,
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Clone, Debug, thiserror::Error)]
 pub enum SvgError {
     #[error("SVG parse error: {0}")]
     Parse(String),
     /// Its elements nest (references followed) deeper than the reader goes.
     #[error("the SVG's elements are nested more than {0} deep")]
     TooDeep(usize),
+    /// SVGZ data unpacks to more than the reader takes (a guard against decompression bombs).
+    #[error("SVG parse error: {0}")]
+    TooBig(String),
+    /// The SVG expands to more objects than the reader takes (a guard against `<use>` and
+    /// nested-image expansion bombs, #3564).
+    #[error("the SVG expands to more than {0} objects")]
+    TooLarge(usize),
+    /// The SVG expands to more nested SVG images than the reader takes (a guard against
+    /// nested-image expansion bombs, #3564).
+    #[error("the SVG expands to more than {0} nested SVG images")]
+    TooManyImages(usize),
 }
 
 /// Export a document as an SVG string (linked images are not returned: see [`export_full`]).
@@ -331,6 +367,8 @@ pub fn export_with_report(doc: &Document, opts: &ExportOptions) -> (String, Vec<
 /// Export a document as SVG plus the image files it links to. `native`: the document in the
 /// native format, embedded when [`ExportOptions::preserve_editing`] is on.
 pub fn export_full(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>) -> Output {
+    // Type in the document's composite fonts is drawn in them, whether or not an app has the document open.
+    let _lent = vectorcraft_text::FontDb::global().lend_composite_fonts(&doc.composite_fonts);
     export::export(doc, opts, native)
 }
 
@@ -351,7 +389,7 @@ pub struct Editing {
 /// The native document an SVG carries, if any, and whether the SVG was edited since.
 pub fn editing(svg: &str) -> Option<Editing> {
     // (An SVG nested too deep for the XML reader carries none: it isn't one of ours.)
-    if !svg.contains(EDITING_NS) || import::xml_too_deep(svg) {
+    if !svg.contains(EDITING_NS) || import::xml_too_deep(svg) || entities::expansion_too_large(svg) {
         return None;
     }
     let opts = usvg::roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() };
@@ -422,25 +460,33 @@ pub fn compress_bytes(svg: &[u8]) -> Vec<u8> {
 }
 
 /// Most bytes an SVGZ file may unpack to (a guard against decompression bombs).
-const MAX_SVGZ: u64 = 512 << 20;
+pub(crate) const MAX_SVGZ: u64 = 512 << 20;
 
 /// SVG text from SVG or SVGZ bytes: UTF-8, UTF-16 (after a byte order mark) or, when the XML
 /// declaration says so, ISO 8859-1.
 pub fn text_of(bytes: &[u8]) -> Result<std::borrow::Cow<'_, str>, SvgError> {
+    text_within(bytes, &std::sync::atomic::AtomicU64::new(0))
+}
+
+/// [`text_of`], SVGZ bytes unpacking within what `unpacked`, the bytes SVGZ data unpacked to so
+/// far, leaves of [`MAX_SVGZ`]. What they unpack to is added to it, whether or not it decodes.
+pub(crate) fn text_within<'a>(bytes: &'a [u8], unpacked: &std::sync::atomic::AtomicU64) -> Result<std::borrow::Cow<'a, str>, SvgError> {
     use std::io::Read as _;
+    use std::sync::atomic::Ordering;
     if !is_svgz(bytes) {
         return match decode(bytes)? {
             Decoded::Utf8(skip) => std::str::from_utf8(bytes.get(skip..).unwrap_or_default()).map(Into::into).map_err(|_| not_utf8()),
             Decoded::Text(t) => Ok(t.into()),
         };
     }
+    let most = MAX_SVGZ.saturating_sub(unpacked.load(Ordering::Relaxed));
     let mut raw = Vec::new();
-    flate2::read::GzDecoder::new(bytes)
-        .take(MAX_SVGZ + 1)
-        .read_to_end(&mut raw)
-        .map_err(|e| SvgError::Parse(format!("not a valid SVGZ file: {e}")))?;
-    if raw.len() as u64 > MAX_SVGZ {
-        return Err(SvgError::Parse(format!("the SVGZ file unpacks to more than {} MB", MAX_SVGZ >> 20)));
+    let read = flate2::read::GzDecoder::new(bytes).take(most.saturating_add(1)).read_to_end(&mut raw);
+    // Read before a failure is kept: it was unpacked too.
+    unpacked.fetch_add(raw.len() as u64, Ordering::Relaxed);
+    read.map_err(|e| SvgError::Parse(format!("not a valid SVGZ file: {e}")))?;
+    if raw.len() as u64 > most {
+        return Err(SvgError::TooBig(format!("the SVGZ file unpacks to more than {} MB", most >> 20)));
     }
     match decode(&raw)? {
         Decoded::Utf8(skip) => {
@@ -504,13 +550,28 @@ pub fn import_with_report(svg: &str) -> Result<(Document, Vec<String>), SvgError
     import_with(svg, &ImportOptions::default())
 }
 
-pub use import::MAX_ELEMENT_DEPTH;
+/// Effect › SVG Filters › Import SVG Filter: the `<filter>` elements of SVG text `svg` that an SVG
+/// filter effect takes, as (name, XML) in document order, up to `room` of them and leaving out the
+/// names `taken` says, and how many it doesn't take. Filters past `room` or named as `taken` says
+/// are not checked. The text is read with the limits on depth and entities that [`import`] reads
+/// documents with.
+pub fn svg_filters(svg: &str, room: usize, taken: impl Fn(&str) -> bool) -> Result<(Vec<(String, String)>, usize), SvgError> {
+    import::svg_filters(svg, room, taken)
+}
+
+pub use glyph::glyph_art;
+pub use import::{MAX_ELEMENT_DEPTH, MAX_FOREIGN, MAX_FOREIGN_VALUE, MAX_NESTED_SVG_IMAGES, MAX_NODES};
 
 /// Import an SVG document reading the files it links to as `opts` says, also returning warnings.
 pub fn import_with(svg: &str, opts: &ImportOptions) -> Result<(Document, Vec<String>), SvgError> {
+    import_within(svg, opts, MAX_NODES)
+}
+
+/// [`import_with`], capping the objects the document may expand to at `max_nodes`.
+pub fn import_within(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Result<(Document, Vec<String>), SvgError> {
     // usvg converts the tree by recursion, in large stack frames: the nesting it is given is
     // capped (`import::depth`), and it gets room for that cap whatever thread asks.
-    vectorcraft_doc::depth::with_deep_stack(|| import::import(svg, opts))
+    vectorcraft_doc::depth::with_deep_stack(|| import::import(svg, opts, max_nodes))
 }
 
 /// Reads a linked file: its bytes and the link to it (absolute path, size, time and hash), or
@@ -574,6 +635,49 @@ pub fn xml_escape(s: &str) -> String {
     o
 }
 
+/// [`push_num`] through integer arithmetic, for the values it writes the same as the decimal
+/// formatter: `decimals` of at most 9, and `v` scaled by 10^`decimals` below 2^53 and further from
+/// halfway between two integers than the scaling's rounding error. Returns false, writing nothing,
+/// for any other value.
+fn push_num_scaled(out: &mut String, v: f64, decimals: u8) -> bool {
+    const SCALE: [f64; 10] = [1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9];
+    let Some(&scale) = SCALE.get(usize::from(decimals)) else { return false };
+    // Each power of ten here is exact, so `x` is within half an ulp (`x * EPSILON / 2`) of |v| × 10^decimals.
+    let x = v.abs() * scale;
+    if x.is_nan() || x >= 9.0e15 {
+        return false;
+    }
+    let whole = x.floor();
+    let frac = x - whole;
+    if (frac - 0.5).abs() <= x * f64::EPSILON {
+        return false;
+    }
+    let mut n = whole as u64 + u64::from(frac > 0.5);
+    let places = usize::from(decimals);
+    // The digits of `n` from the last one, at least one more than `places` of them.
+    let mut digits = [0u8; 24];
+    let mut len = 0;
+    for d in digits.iter_mut() {
+        if n == 0 && len > places {
+            break;
+        }
+        *d = b'0' + (n % 10) as u8;
+        n /= 10;
+        len += 1;
+    }
+    let Some((fraction, int)) = digits.get(..len).and_then(|d| d.split_at_checked(places)) else { return false };
+    let zeros = fraction.iter().take_while(|&&d| d == b'0').count();
+    if v < 0.0 && (zeros < places || int.iter().any(|&d| d != b'0')) {
+        out.push('-');
+    }
+    out.extend(int.iter().rev().map(|&d| char::from(d)));
+    if zeros < places {
+        out.push('.');
+        out.extend(fraction.iter().skip(zeros).rev().map(|&d| char::from(d)));
+    }
+    true
+}
+
 /// Format a number with at most `decimals` places, trimming trailing zeros.
 pub fn fmt_num(v: f64, decimals: u8) -> String {
     let mut s = String::new();
@@ -585,6 +689,9 @@ pub fn fmt_num(v: f64, decimals: u8) -> String {
 pub fn push_num(out: &mut String, v: f64, decimals: u8) {
     use std::fmt::Write as _;
     let v = if v.is_finite() { v } else { 0.0 };
+    if push_num_scaled(out, v, decimals) {
+        return;
+    }
     let start = out.len();
     let _ = write!(out, "{:.*}", decimals as usize, v); // writing to a String can't fail
     let s = out.get(start..).unwrap_or_default();
@@ -623,5 +730,49 @@ mod tests {
     #[test]
     fn escaping() {
         assert_eq!(xml_escape("a<b>&\"'"), "a&lt;b&gt;&amp;&quot;&apos;");
+    }
+
+    /// `v` at `decimals` places by the decimal formatter, trailing zeros trimmed.
+    fn formatted(v: f64, decimals: u8) -> String {
+        let s = format!("{:.*}", usize::from(decimals), if v.is_finite() { v } else { 0.0 });
+        let s = if s.contains('.') { s.trim_end_matches('0').trim_end_matches('.') } else { &s };
+        if matches!(s, "-0" | "") { "0".into() } else { s.into() }
+    }
+
+    #[test]
+    fn numbers_match_the_decimal_formatter() {
+        let mut values =
+            vec![0.0, -0.0, 0.5, -0.5, 2.5, 0.0005, -0.0005, 1.0005, 0.125, 1e-12, 9.0e15, 4503599627370495.5, 1e20, f64::NAN, f64::INFINITY];
+        // Coordinates of every size, and values on and just off the halfway points between written numbers.
+        let mut seed = 0x2545_f491_4f6c_dd1d_u64;
+        for _ in 0..20_000 {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            let unit = (seed >> 11) as f64 / (1u64 << 53) as f64;
+            let v = (unit - 0.5) * 10f64.powi((seed % 13) as i32 - 3);
+            let tie = ((v * 1000.0).trunc() + 0.5) / 1000.0;
+            values.extend([v, tie, f64::from_bits(tie.to_bits() + 1), f64::from_bits(tie.to_bits() - 1)]);
+        }
+        for v in values {
+            for d in 0..=12 {
+                assert_eq!(fmt_num(v, d), formatted(v, d), "{v:e} at {d} decimals");
+            }
+        }
+    }
+
+    #[test]
+    fn coordinates_are_written_through_integers() {
+        for (v, d, want) in [(123.4567, 3, "123.457"), (-0.25, 3, "-0.25"), (-0.0004, 3, "0"), (1600.0, 3, "1600"), (7.0, 0, "7")] {
+            let mut s = String::new();
+            assert!(push_num_scaled(&mut s, v, d), "{v} at {d} decimals");
+            assert_eq!(s, want);
+        }
+        // Halfway as stored, too large, or too many places: the decimal formatter writes them.
+        for (v, d) in [(0.5, 0), (0.125, 2), (1e16, 0), (1.0, 10)] {
+            let mut s = String::new();
+            assert!(!push_num_scaled(&mut s, v, d), "{v} at {d} decimals");
+            assert!(s.is_empty());
+        }
     }
 }

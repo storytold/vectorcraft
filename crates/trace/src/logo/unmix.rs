@@ -5,6 +5,8 @@
 //! runs, so each pixel is instead explained as a mix of at most three classes, whichever mix
 //! reproduces the pixel best.
 
+use std::collections::{HashMap, HashSet};
+
 /// Premultiplied RGBA in `0..=1`.
 pub(crate) type Px = [f32; 4];
 
@@ -88,14 +90,17 @@ fn subsets(classes: &[[f64; 4]]) -> Vec<Subset> {
     out
 }
 
-/// How many pixels are not (nearly) exactly one class: the ones `unmix` has to work on.
+/// How many distinct pixel values are not (nearly) exactly one class: the ones `unmix` has to work
+/// on. A flat area whose color is near but not exactly a class counts once, however large it is.
 pub(crate) fn count_ambiguous(pix: &[Px], classes: &[[f64; 4]]) -> usize {
-    pix.iter()
-        .filter(|px| {
-            let p = [f64::from(px[0]), f64::from(px[1]), f64::from(px[2]), f64::from(px[3])];
-            !classes.iter().any(|cv| (0..4).map(|j| (p[j] - cv[j]).powi(2)).sum::<f64>().sqrt() < PURE)
-        })
-        .count()
+    let mut seen = HashSet::new();
+    for px in pix {
+        let p = [f64::from(px[0]), f64::from(px[1]), f64::from(px[2]), f64::from(px[3])];
+        if !classes.iter().any(|cv| (0..4).map(|j| (p[j] - cv[j]).powi(2)).sum::<f64>().sqrt() < PURE) {
+            seen.insert(px.map(f32::to_bits));
+        }
+    }
+    seen.len()
 }
 
 /// Coverage planes, one `width × height` plane per class (each pixel's weights sum to 1).
@@ -106,6 +111,9 @@ pub(crate) fn unmix(pix: &[Px], width: usize, height: usize, classes: &[[f64; 4]
     // Squared error left over by the best mix: large where no mix of the classes explains the pixel.
     let mut residual = vec![0.0f32; n];
     let subs = subsets(classes);
+    // Each distinct pixel value is mixed once: a flat area that is near but not exactly a class
+    // repeats one value.
+    let mut mixed: HashMap<[u32; 4], Mix> = HashMap::new();
     for (i, px) in pix.iter().take(n).enumerate() {
         let p = [f64::from(px[0]), f64::from(px[1]), f64::from(px[2]), f64::from(px[3])];
         // Fast path: a pixel that is (nearly) exactly one class.
@@ -122,52 +130,62 @@ pub(crate) fn unmix(pix: &[Px], width: usize, height: usize, classes: &[[f64; 4]
             }
             continue;
         }
-        // Best single class is the starting point; try every two- and three-class mix.
-        let mut best = (near.0, vec![(near.1, 1.0f64)]);
-        let mut best_penalty = 0.0;
-        for s in &subs {
-            let mut rhs = [0.0f64; 3];
-            for (j, r) in rhs.iter_mut().enumerate().take(s.n) {
-                *r = (0..4).map(|c| s.cols[j][c] * p[c]).sum::<f64>() + LAMBDA * LAMBDA;
-            }
-            let mut w = [0.0f64; 3];
-            for (a, wa) in w.iter_mut().enumerate().take(s.n) {
-                *wa = (0..s.n).map(|b| s.ninv[a * s.n + b] * rhs[b]).sum();
-            }
-            if w.iter().take(s.n).any(|&x| x < -0.02) {
-                continue;
-            }
-            let mut sum = 0.0;
-            for wa in w.iter_mut().take(s.n) {
-                *wa = wa.clamp(0.0, 1.0);
-                sum += *wa;
-            }
-            if sum < 1e-9 {
-                continue;
-            }
-            for wa in w.iter_mut().take(s.n) {
-                *wa /= sum;
-            }
-            let mut res = s.penalty;
-            for (c, &pc) in p.iter().enumerate() {
-                let m: f64 = (0..s.n).map(|j| w[j] * s.cols[j][c]).sum();
-                res += (pc - m).powi(2);
-            }
-            if res < best.0 {
-                best = (res, (0..s.n).map(|j| (s.idx[j], w[j])).collect());
-                best_penalty = s.penalty;
-            }
-        }
+        let (res, weights) = mixed.entry(px.map(f32::to_bits)).or_insert_with(|| best_mix(p, near, &subs));
         if let Some(r) = residual.get_mut(i) {
-            *r = (best.0 - best_penalty).max(0.0) as f32;
+            *r = *res;
         }
-        for (c, wv) in best.1 {
+        for &(c, wv) in weights.iter() {
             if let Some(v) = planes.get_mut(c).and_then(|pl| pl.get_mut(i)) {
-                *v = wv as f32;
+                *v = wv;
             }
         }
     }
     (planes, residual)
+}
+
+/// A pixel's mix: the squared error it leaves and each class's weight.
+type Mix = (f32, Vec<(usize, f32)>);
+
+/// The mix of at most three classes that reproduces `p` best, starting from the nearest single
+/// class `near` (squared distance, class).
+fn best_mix(p: [f64; 4], near: (f64, usize), subs: &[Subset]) -> Mix {
+    // Best single class is the starting point; try every two- and three-class mix.
+    let mut best = (near.0, vec![(near.1, 1.0f64)]);
+    let mut best_penalty = 0.0;
+    for s in subs {
+        let mut rhs = [0.0f64; 3];
+        for (j, r) in rhs.iter_mut().enumerate().take(s.n) {
+            *r = (0..4).map(|c| s.cols[j][c] * p[c]).sum::<f64>() + LAMBDA * LAMBDA;
+        }
+        let mut w = [0.0f64; 3];
+        for (a, wa) in w.iter_mut().enumerate().take(s.n) {
+            *wa = (0..s.n).map(|b| s.ninv[a * s.n + b] * rhs[b]).sum();
+        }
+        if w.iter().take(s.n).any(|&x| x < -0.02) {
+            continue;
+        }
+        let mut sum = 0.0;
+        for wa in w.iter_mut().take(s.n) {
+            *wa = wa.clamp(0.0, 1.0);
+            sum += *wa;
+        }
+        if sum < 1e-9 {
+            continue;
+        }
+        for wa in w.iter_mut().take(s.n) {
+            *wa /= sum;
+        }
+        let mut res = s.penalty;
+        for (c, &pc) in p.iter().enumerate() {
+            let m: f64 = (0..s.n).map(|j| w[j] * s.cols[j][c]).sum();
+            res += (pc - m).powi(2);
+        }
+        if res < best.0 {
+            best = (res, (0..s.n).map(|j| (s.idx[j], w[j])).collect());
+            best_penalty = s.penalty;
+        }
+    }
+    ((best.0 - best_penalty).max(0.0) as f32, best.1.into_iter().map(|(c, w)| (c, w as f32)).collect())
 }
 
 #[cfg(test)]
@@ -209,6 +227,21 @@ mod tests {
         let (_, res) = unmix(&pix, 2, 1, &classes());
         assert!(res[0] > 0.1, "unexplained pixel residual {}", res[0]);
         assert!(res[1] < 1e-3, "an explained blend residual {}", res[1]);
+    }
+
+    #[test]
+    fn a_repeated_color_near_a_class_is_counted_once_and_mixed_alike() {
+        // A flat area a few levels off red, a blend, and pure red and transparent pixels.
+        let off = [0.97, 0.02, 0.02, 1.0];
+        let mut pix = vec![off; 1000];
+        pix.extend([[0.3, 0.0, 0.7, 1.0], [1.0, 0.0, 0.0, 1.0], [0.0, 0.0, 0.0, 0.0]]);
+        assert_eq!(count_ambiguous(&pix, &classes()), 2);
+        let (pl, res) = unmix(&pix, pix.len(), 1, &classes());
+        assert!(pl[0][0] > 0.95, "red {}", pl[0][0]);
+        for i in 1..1000 {
+            assert_eq!((pl[0][i], pl[1][i], pl[2][i], res[i]), (pl[0][0], pl[1][0], pl[2][0], res[0]), "pixel {i}");
+        }
+        assert!((pl[0][1000] - 0.3).abs() < 0.02 && (pl[1][1000] - 0.7).abs() < 0.02);
     }
 
     #[test]

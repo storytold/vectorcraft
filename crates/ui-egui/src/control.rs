@@ -4,31 +4,41 @@
 //! - `engine.execute {command, params}` / `ui.menu.invoke {command|id, params}`: run any command
 //! - `engine.commands`: engine + UI commands with enablement
 //! - `document.inspect`: document summary; `ui.inspect`: UI state
+//! - `ui.docking`: the panel layout in use, the open flyout, the focused panel and the docking
+//!   controls' rects
 //! - `ui.menu.list`: flattened menu tree
 //! - `ui.contextMenu.list`: the canvas context menu for the current selection, flattened
 //! - `ui.tool.select {tool}`, `ui.tool.list`
-//! - `ui.pointer {events:[{kind: down|drag|up|move|doubleclick, x, y, space?: "doc"|"screen"}], mods?}`:
-//!   drive the active tool through the same path as the mouse
+//! - `ui.pointer {events:[{kind: down|drag|up|move|doubleclick, x, y, backquote?, space?: "doc"|"screen"}], mods?, backquote?}`:
+//!   drive the active tool through the same path as the mouse, after the synthetic input sent
+//!   before it was applied
 //! - `ui.key {key, shift?, alt?, cmd?}` / `ui.text {text}`: synthetic keyboard input
 //! - `ui.move {x, y}` / `ui.click {x, y, button?, count?, shift?…}` / `ui.drag {x, y, toX, toY, steps?}`:
 //!   real egui pointer input in screen points (reaches every widget: panels, flyouts, dialogs)
 //! - `ui.set {brightness?, panel?, dockTab?, rulers?, outline?, …}`
-//! - `ui.dialog.set {field, value}` / `ui.dialog.confirm` / `ui.dialog.cancel`
+//! - `ui.dialog.set {field, value}` or `{fields: [{field, value}…]}` (all or none; setting a field
+//!   the dialog does not read is an error that lists its fields: [`crate::dialogs::accepts_field`]) /
+//!   `ui.dialog.confirm` / `ui.dialog.cancel`
 //! - `ui.resize {width, height}`, `ui.focus`, `ui.screenshot {path?, data?}` (`data: true`: the PNG
 //!   comes back as `pngBase64` as well)
-//! - `ui.render {path?, scale?, artboard?, data?}`: render an artboard headlessly (`artboard`: its
-//!   0-based index, default the first; PNG; without a path, or with `data: true`, as `pngBase64`)
+//! - `ui.render {path?, scale?, artboard?, data?, traceViews?}`: render an artboard headlessly
+//!   (`artboard`: its 0-based index, default the first; PNG with the pixels of a PNG export on
+//!   white; `traceViews: true` draws Image Trace objects in their View, as the canvas does; without
+//!   a path, or with `data: true`, as `pngBase64`)
 //! - `app.open {path}` (any readable format) / `app.save {path?, svg?: {…SVG options}}` / `app.quit`
 //!   (`file.close`, `file.closeAll` and `app.quit` first open a `saveChanges` dialog for each
 //!   modified document: `ui.dialog.confirm` saves, set `discard: true` then confirm to discard)
 //! - `app.export {path?, format?, …document.export options}`: encoded by the engine, written through
 //!   the host; the document keeps its path. No path → `{dataBase64, format, bytes}` (as headless)
+//! - `wait: true` on `app.save` and `app.export`: the file is written before the reply, even with
+//!   Background Save or Background Export on. A `wait` other than true, false or null is refused
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 use std::sync::mpsc::Sender;
 
 use serde_json::{Value, json};
+use vectorcraft_render::encode::{RasterExportOptions, RasterFormat};
 use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
 
 use crate::VectorcraftApp;
@@ -39,6 +49,8 @@ pub(crate) const MAX_DRAG_STEPS: u64 = 256;
 pub(crate) const MAX_CLICK_COUNT: u64 = 16;
 pub(crate) const MAX_SYNTHETIC_EVENTS: usize = 1024;
 pub(crate) const MAX_CONTROL_REQUESTS_PER_FRAME: usize = 64;
+/// Most items one `ui.dialog.set {fields}` may store, as MCP `answer_dialog` allows.
+pub(crate) const MAX_DIALOG_FIELDS: usize = 256;
 
 fn input_count(p: &Value, key: &str, default: u64, max: u64) -> Result<usize, String> {
     let n = match p.get(key) {
@@ -50,6 +62,29 @@ fn input_count(p: &Value, key: &str, default: u64, max: u64) -> Result<usize, St
     }
     // Preserve legacy zero behaviour: both a zero count and zero steps still perform once.
     usize::try_from(n.max(1)).map_err(|_| format!("`{key}` is out of range"))
+}
+
+/// The fields one `ui.dialog.set` stores, in order: `{field, value?}`, or `{fields: [{field, value?}…]}`.
+/// Every item is checked before any is stored, so a refused item leaves the dialog as it was.
+fn dialog_fields(p: &Value) -> Result<Vec<(String, Value)>, String> {
+    let Some(list) = p.get("fields") else {
+        let f = p.get("field").and_then(Value::as_str).ok_or("missing `field`")?;
+        return Ok(vec![(f.to_string(), p.get("value").cloned().unwrap_or(Value::Null))]);
+    };
+    if p.get("field").is_some() {
+        return Err("give `field` or `fields`, not both".into());
+    }
+    let list = list.as_array().ok_or("`fields` must be a list of {field, value?}")?;
+    if list.len() > MAX_DIALOG_FIELDS {
+        return Err(format!("`fields` holds {} items; at most {MAX_DIALOG_FIELDS}", list.len()));
+    }
+    list.iter()
+        .enumerate()
+        .map(|(i, item)| {
+            let f = item.get("field").and_then(Value::as_str).ok_or_else(|| format!("fields {i}: missing string `field`"))?;
+            Ok((f.to_string(), item.get("value").cloned().unwrap_or(Value::Null)))
+        })
+        .collect()
 }
 
 fn reserve_synthetic(app: &mut VectorcraftApp, additional: usize) -> Result<(), String> {
@@ -66,7 +101,12 @@ pub struct ControlRequest {
     pub params: Value,
     pub reply: Sender<ControlResponse>,
     state: Arc<AtomicU8>,
+    /// Its place in the order requests were made ([`ControlRequest::next_seq`]).
+    seq: u64,
 }
+
+/// The sequence number of the next request made.
+static NEXT_SEQ: AtomicU64 = AtomicU64::new(0);
 
 /// A request's state: waiting to run, taken by the app ([`ControlRequest::claim`]), or given up
 /// by its caller before that ([`Ticket::give_up`]). It leaves `QUEUED` once, one way or the other.
@@ -89,12 +129,28 @@ impl Ticket {
 impl ControlRequest {
     pub fn new(method: impl Into<String>, params: Value) -> (Self, std::sync::mpsc::Receiver<ControlResponse>) {
         let (tx, rx) = std::sync::mpsc::channel();
-        (Self { method: method.into(), params, reply: tx, state: Arc::new(AtomicU8::new(QUEUED)) }, rx)
+        let seq = NEXT_SEQ.fetch_add(1, Ordering::SeqCst);
+        (Self { method: method.into(), params, reply: tx, state: Arc::new(AtomicU8::new(QUEUED)), seq }, rx)
+    }
+
+    /// The sequence number the next request made gets: every request made so far is before it.
+    pub fn next_seq() -> u64 {
+        NEXT_SEQ.load(Ordering::SeqCst)
+    }
+
+    /// Whether this request was made before the one numbered `seq`.
+    pub fn made_before(&self, seq: u64) -> bool {
+        self.seq < seq
     }
 
     /// The caller's handle on this request, to give it up with.
     pub fn ticket(&self) -> Ticket {
         Ticket(self.state.clone())
+    }
+
+    /// Whether its caller gave it up (it never runs), without taking it.
+    pub fn given_up(&self) -> bool {
+        self.state.load(Ordering::SeqCst) == GIVEN_UP
     }
 
     /// Take the request to run it → `false` when its caller gave it up meanwhile (don't run it).
@@ -136,10 +192,16 @@ pub fn all_commands(app: &VectorcraftApp) -> Value {
 
 pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
     let r = ctx.content_rect();
+    let mut ui = serde_json::to_value(&app.ui).unwrap_or_default();
+    // The old floating panels' record, kept only to read older preferences: `ui.docking` has
+    // the layout.
+    if let Some(fields) = ui.as_object_mut() {
+        fields.remove("floating_panels");
+    }
     json!({
         "tool": app.session.tool_id(),
         "toolOptions": app.session.tool_options(),
-        "ui": serde_json::to_value(&app.ui).unwrap_or_default(),
+        "ui": ui,
         // Not saved with the UI state, so not in `ui`: 0 normal … 3 Presentation Mode.
         "screenMode": app.ui.screen_mode,
         // The Contextual Task Bar: pinned (not saved either) and where it shows.
@@ -151,6 +213,24 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         "freeTransformWidget": crate::free_transform::rect(ctx).map(|r| json!([r.left(), r.top(), r.width(), r.height()])),
         "view": app.view().map(|v| serde_json::to_value(v).unwrap_or_default()),
         "canvasRect": app.canvas_rect.map(|c| json!([c.left(), c.top(), c.width(), c.height()])),
+        // Window › Arrange › Tile (not saved, so not in `ui`) and the panes the last frame drew:
+        // each one's document index, view number (Window › New Window) and rect. Canvas
+        // coordinates map to the current window's pane, inside its rulers and scroll bars
+        // (`canvasRect`).
+        "tiled": app.ui.tiled,
+        "panes": app.canvas.panes.last.iter().map(|(w, c)| json!({
+            "document": w.0,
+            "view": w.1,
+            "rect": [c.left(), c.top(), c.width(), c.height()],
+            "active": crate::doc_windows::current(app) == Some(*w),
+        })).collect::<Vec<_>>(),
+        // Window › Arrange › Float in Window: the floating windows' documents, by index. While the
+        // current one floats, `canvasRect` is in its window's coordinates.
+        "floating": crate::doc_windows::floating_windows(app).iter().map(|w| w.0).collect::<Vec<_>>(),
+        // Window › New Window: every window, as [document index, view number], in tab order, and
+        // the current one.
+        "windows": crate::doc_windows::windows(app),
+        "currentWindow": crate::doc_windows::current(app),
         "window": [r.width(), r.height()],
         "documents": app.session.documents().iter().map(|d| json!({"title": d.title(), "dirty": d.is_dirty()})).collect::<Vec<_>>(),
         "activeDocument": app.session.active_index(),
@@ -162,6 +242,9 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         "background": app.background.jobs.iter().filter(|j| !j.label.is_empty()).map(|j| j.label.as_str()).collect::<Vec<_>>(),
         // Documents still being read off the UI thread (File › Open, Open Recent): their paths.
         "opening": app.opening.pending.iter().map(|p| p.path.as_str()).collect::<Vec<_>>(),
+        // Files still being read off the UI thread for Place (the Place dialog's OK, drops): their
+        // names, in the order they are placed.
+        "placing": app.placing.pending.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(),
         // The screen color sampler is shown, waiting for the person at the computer
         // (`ui.sampleScreenColor`).
         "screenSampler": app.screen_sampler.is_some(),
@@ -211,45 +294,15 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
         "engine.commands" => ok(all_commands(app)),
         "document.inspect" => wrap(app.run("document.inspect", p.clone())),
         "ui.inspect" => ok(inspect(app, ctx)),
+        "ui.docking" => ok(crate::panel_docking::inspect(app, ctx)),
         "ui.menu.list" => ok(serde_json::to_value(crate::menus::menu_entries(app)).unwrap_or_default()),
         "ui.contextMenu.list" => ok(serde_json::to_value(crate::menus::context_entries(app)).unwrap_or_default()),
         "ui.tool.select" => wrap(app.run("tool.select", json!({"tool": s("tool").unwrap_or("")}))),
-        "ui.tool.list" => ok(serde_json::to_value(vectorcraft_tools::TOOL_GROUPS).unwrap_or_default()),
-        "ui.pointer" => {
-            let Some(events) = p.get("events").and_then(Value::as_array) else { return err("missing `events`") };
-            let base_mods: Mods = p.get("mods").and_then(|m| serde_json::from_value(m.clone()).ok()).unwrap_or_default();
-            let view = app.view_info();
-            let xf = app.canvas_rect.zip(app.view().copied()).map(|(rect, v)| Xf::new(rect, &v));
-            for e in events {
-                let kind = match e.get("kind").and_then(Value::as_str).unwrap_or("") {
-                    "down" => PointerKind::Down,
-                    "drag" => PointerKind::Drag,
-                    "up" => PointerKind::Up,
-                    "move" => PointerKind::Move,
-                    "doubleclick" | "dblclick" => PointerKind::DoubleClick,
-                    other => return err(format!("unknown pointer kind `{other}`")),
-                };
-                let x = e.get("x").and_then(Value::as_f64).unwrap_or(0.0);
-                let y = e.get("y").and_then(Value::as_f64).unwrap_or(0.0);
-                let pos = if e.get("space").and_then(Value::as_str) == Some("screen") {
-                    match xf {
-                        Some(xf) => xf.to_doc(egui::pos2(x as f32, y as f32)),
-                        None => return err("no canvas yet"),
-                    }
-                } else {
-                    vectorcraft_geom::Point::new(x, y)
-                };
-                let mods = e.get("mods").and_then(|m| serde_json::from_value(m.clone()).ok()).unwrap_or(base_mods);
-                crate::canvas::dispatch(app, &PointerEvent { kind, pos, mods, pressure: PointerEvent::json_pressure(e) }, view);
-                let hold = PointerEvent::json_hold(e);
-                if hold > 0.0 {
-                    let r = app.session.tool_tick(hold, view);
-                    crate::canvas::apply_requests(app, r);
-                }
-            }
-            ctx.request_repaint();
-            wrap(app.run("document.inspect", json!({})).map(|d| json!({"selection": d["selection"], "key": d["key"], "tool": app.session.tool_id()})))
+        "ui.tool.list" => {
+            let groups: Vec<_> = vectorcraft_tools::TOOL_GROUPS.iter().chain(vectorcraft_tools::addons::GROUPS).copied().collect();
+            ok(serde_json::to_value(groups).unwrap_or_default())
         }
+        "ui.pointer" => pointer_events(app, ctx, req),
         "ui.key" => {
             let Some(k) = s("key").and_then(key_from) else { return err("unknown or missing `key`") };
             if let Err(e) = reserve_synthetic(app, 2 + usize::from(s("text").is_some())) {
@@ -274,51 +327,7 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
             ctx.request_repaint();
             ok(Value::Null)
         }
-        "ui.click" | "ui.drag" => {
-            // Validate the entire expansion before appending even the initial move/press.
-            let steps = if req.method == "ui.drag" {
-                match input_count(p, "steps", 8, MAX_DRAG_STEPS) {
-                    Ok(n) => n,
-                    Err(e) => return err(e),
-                }
-            } else {
-                0
-            };
-            let count = match input_count(p, "count", 1, MAX_CLICK_COUNT) {
-                Ok(n) => n,
-                Err(e) => return err(e),
-            };
-            let Some(events) = count.checked_mul(2).and_then(|n| n.checked_add(steps)).and_then(|n| n.checked_add(1)) else {
-                return err("synthetic input event count is out of range");
-            };
-            if let Err(e) = reserve_synthetic(app, events) {
-                return err(e);
-            }
-            // Screen-space (egui points) pointer input through egui itself: reaches every widget.
-            let f = |k: &str| p.get(k).and_then(Value::as_f64).unwrap_or(0.0) as f32;
-            let button = match s("button") {
-                Some("right") | Some("secondary") => egui::PointerButton::Secondary,
-                _ => egui::PointerButton::Primary,
-            };
-            let modifiers = modifiers(p);
-            let a = egui::pos2(f("x"), f("y"));
-            let end = if req.method == "ui.drag" { egui::pos2(f("toX"), f("toY")) } else { a };
-            app.synthetic.push(egui::Event::PointerMoved(a));
-            app.synthetic.push(egui::Event::PointerButton { pos: a, button, pressed: true, modifiers });
-            if req.method == "ui.drag" {
-                for i in 1..=steps {
-                    let t = i as f32 / steps as f32;
-                    app.synthetic.push(egui::Event::PointerMoved(a + (end - a) * t));
-                }
-            }
-            app.synthetic.push(egui::Event::PointerButton { pos: end, button, pressed: false, modifiers });
-            for _ in 1..count {
-                app.synthetic.push(egui::Event::PointerButton { pos: end, button, pressed: true, modifiers });
-                app.synthetic.push(egui::Event::PointerButton { pos: end, button, pressed: false, modifiers });
-            }
-            ctx.request_repaint();
-            ok(Value::Null)
-        }
+        "ui.click" | "ui.drag" => synthetic_click(app, ctx, req),
         "ui.wheel" => {
             if let Err(e) = reserve_synthetic(app, 2) {
                 return err(e);
@@ -330,7 +339,13 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
             // Notches, not a flood: a turn stays within what a real wheel sends.
             let delta = egui::vec2(f("dx"), f("dy")).clamp(egui::Vec2::splat(-100.0), egui::Vec2::splat(100.0));
             app.synthetic.push(egui::Event::PointerMoved(egui::pos2(f("x"), f("y"))));
-            app.synthetic.push(egui::Event::MouseWheel { unit, delta, phase: egui::TouchPhase::Move, modifiers: modifiers(p) });
+            app.synthetic.push(egui::Event::MouseWheel {
+                unit,
+                delta,
+                phase: egui::TouchPhase::Move,
+                modifiers: modifiers(p),
+                source: egui::MouseWheelSource::Unknown,
+            });
             ctx.request_repaint();
             ok(Value::Null)
         }
@@ -342,50 +357,32 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
             ctx.request_repaint();
             ok(Value::Null)
         }
-        "ui.set" => {
-            let mut r = Ok(Value::Null);
-            if let Some(b) = s("brightness") {
-                r = app.run("window.brightness", json!({"brightness": b}));
-            }
-            if let Some(pn) = s("panel") {
-                r = app.run("window.panel", json!({"panel": pn}));
-            }
-            if let Some(st) = s("status") {
-                app.ui.status = st.to_string();
-            }
-            for (k, flag) in [
-                ("rulers", "view.rulers"),
-                ("outline", "view.outline"),
-                ("grid", "view.grid"),
-                ("smartGuides", "view.smartGuides"),
-                ("boundingBox", "view.boundingBox"),
-            ] {
-                if let Some(want) = p.get(k).and_then(Value::as_bool) {
-                    let cur = match k {
-                        "rulers" => app.ui.view.rulers,
-                        "outline" => app.ui.view.outline,
-                        "grid" => app.ui.view.grid,
-                        "smartGuides" => app.ui.view.smart_guides,
-                        _ => app.ui.view.bounding_box,
-                    };
-                    if cur != want {
-                        r = app.run(flag, json!({}));
-                    }
-                }
-            }
-            if let Some(v) = p.get("controlBar").and_then(Value::as_bool) {
-                app.ui.control_bar = v;
-            }
-            if p.get("closePanel").is_some() {
-                app.ui.open_panel = None;
-            }
-            wrap(r)
-        }
+        "ui.set" => set_ui(app, req),
         "ui.dialog.set" => match app.ui.dialog.as_mut() {
             Some(d) => {
-                let Some(f) = s("field") else { return err("missing `field`") };
-                d.fields.insert(f.to_string(), p.get("value").cloned().unwrap_or(Value::Null));
-                ok(serde_json::to_value(&*d).unwrap_or_default())
+                let fields = match dialog_fields(p) {
+                    Ok(fields) => fields,
+                    Err(e) => return err(e),
+                };
+                // Every field is checked before any is set, so a request sets all of them or none.
+                if let Some((f, _)) = fields.iter().find(|(f, _)| !crate::dialogs::accepts_field(d, f)) {
+                    let names = crate::dialogs::field_names(d).join(", ");
+                    return err(format!("the `{}` dialog has no field `{f}`; its fields: {names}", d.kind));
+                }
+                // In order: a field that sets others (an export preset) goes before the fields after it.
+                // A field that fails leaves the dialog as it was before the request.
+                let before = app.ui.dialog.clone();
+                for (f, value) in fields {
+                    let old = app.ui.dialog.as_ref().and_then(|d| d.fields.get(&f).cloned());
+                    if let Some(d) = app.ui.dialog.as_mut() {
+                        crate::dialogs::set_field(d, f.clone(), value);
+                    }
+                    if let Err(e) = crate::dialogs::field_set(app, &f, old.as_ref()) {
+                        app.ui.dialog = before;
+                        return err(e);
+                    }
+                }
+                ok(app.ui.dialog.as_ref().and_then(|d| serde_json::to_value(d).ok()).unwrap_or_default())
             }
             None => err("no dialog open"),
         },
@@ -425,7 +422,11 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
             if let Err(e) = vectorcraft_render::raster_size(r, scale) {
                 return err(e);
             }
-            let img = app.canvas.renderer.render_region(&doc, r, scale, true);
+            // Rendered with the options of a PNG export on white, so its pixels are the exported file's.
+            // `traceViews: true` draws Image Trace objects as their View shows them, as the canvas does.
+            let mut opts = RasterExportOptions { background: Some([255; 3]), ..Default::default() }.render_options(RasterFormat::Png);
+            opts.trace_views = p.get("traceViews").and_then(Value::as_bool) == Some(true);
+            let img = app.canvas.renderer.render_region_with(&doc, r, scale, &opts);
             let png = match img.to_png() {
                 Ok(png) => png,
                 Err(e) => return err(e),
@@ -443,16 +444,37 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
             }
         }
         "app.open" => wrap(app.run("file.open", json!({"path": s("path")}))),
-        "app.save" => wrap(app.run("file.save", if p.is_object() { p.clone() } else { json!({}) })),
-        "app.export" => match s("path") {
-            Some(path) => wrap(crate::io::export(app, s("format"), Some(path.to_string()), p)),
-            // No save dialog for an agent: the bytes come back, as in headless mode.
-            None => wrap(app.run("document.export", p.clone())),
-        },
+        "app.save" | "app.export" => {
+            let mut p = if p.is_object() { p.clone() } else { json!({}) };
+            // `wait: true`: the file is written before the reply, whatever Background Save and
+            // Background Export are set to, so the reply is the written file or the error.
+            let wait = match crate::menus::opt_bool(&p, "wait") {
+                Ok(w) => w == Some(true),
+                Err(e) => return err(e),
+            };
+            if let Some(o) = p.as_object_mut() {
+                o.remove("wait");
+            }
+            let method = req.method.as_str();
+            wrap(if wait { crate::background::in_foreground(app, |app| save_or_export(app, method, &p)) } else { save_or_export(app, method, &p) })
+        }
         // As the menu's Quit: `{"pending": "saveChanges"}` while a modified document is asked
         // about; otherwise null, and the host closes the window (#830).
         "app.quit" => wrap(app.run("app.quit", json!({}))),
         other => err(format!("unknown method `{other}`")),
+    }
+}
+
+/// `app.save` (`method`) or `app.export` with params `p`.
+fn save_or_export(app: &mut VectorcraftApp, method: &str, p: &Value) -> Result<Value, String> {
+    if method == "app.save" {
+        return app.run("file.save", p.clone());
+    }
+    let s = |k: &str| p.get(k).and_then(Value::as_str);
+    match s("path") {
+        Some(path) => crate::io::export(app, s("format"), Some(path.to_string()), p),
+        // No save dialog for an agent: the bytes come back, as in headless mode.
+        None => app.run("document.export", p.clone()),
     }
 }
 
@@ -464,12 +486,44 @@ fn with_data(mut result: Value, png: Option<&[u8]>) -> Value {
     result
 }
 
+/// The largest image whose PNG goes back in a `ui.screenshot` reply (`data: true`): the reply
+/// makes a straight-alpha copy, the encoded PNG and, for `data`, a base64 string (~1.33× the
+/// PNG), so this bounds that working set before any of it is allocated. A path-only capture keeps
+/// the shared 128 MiB image budget.
+pub(crate) const MAX_SCREENSHOT_PNG_REPLY_BYTES: usize = 64 * 1024 * 1024;
+
+/// The checked RGBA size of `w × h`, when it fits.
+fn screenshot_rgba_bytes(w: usize, h: usize) -> Option<usize> {
+    w.checked_mul(h).and_then(|n| n.checked_mul(4))
+}
+
 /// The reply to `ui.screenshot`: the window capture `image` written to `path`, and sent back as
 /// `pngBase64` with `data`.
 pub fn save_screenshot(app: &mut VectorcraftApp, image: &egui::ColorImage, path: Option<&str>, data: bool) -> Value {
+    save_screenshot_with_limit(app, image, path, data, MAX_SCREENSHOT_PNG_REPLY_BYTES)
+}
+
+/// [`save_screenshot`] with the inline-PNG encoding limit supplied, so a small image can exercise
+/// the over-limit path without allocating a multi-megapixel frame. The public function always uses
+/// [`MAX_SCREENSHOT_PNG_REPLY_BYTES`].
+pub(crate) fn save_screenshot_with_limit(
+    app: &mut VectorcraftApp,
+    image: &egui::ColorImage,
+    path: Option<&str>,
+    data: bool,
+    max_reply_bytes: usize,
+) -> Value {
     let [w, h] = image.size;
     if path.is_none() && !data {
         return json!({"ok": true, "result": {"width": w, "height": h}});
+    }
+    // A data-only reply has no second way to deliver the image, so refuse an oversized one before
+    // allocating its working set. A request that named a path still writes that file: only the
+    // inline copy is downgraded.
+    if data && path.is_none() && screenshot_rgba_bytes(w, h).is_none_or(|bytes| bytes > max_reply_bytes) {
+        return json!({"ok": false, "error": format!(
+            "a PNG reply of this {w}×{h} screenshot would exceed the {max_reply_bytes}-byte reply-encoding limit; write it to a path instead"
+        )});
     }
     let rgba: Vec<u8> = image.pixels.iter().flat_map(|c| c.to_array()).collect();
     let img = vectorcraft_render::Rendered { width: w as u32, height: h as u32, pixels: rgba };
@@ -477,7 +531,14 @@ pub fn save_screenshot(app: &mut VectorcraftApp, image: &egui::ColorImage, path:
         Ok(png) => png,
         Err(e) => return json!({"ok": false, "error": e}),
     };
-    let data = data.then_some(png.as_slice());
+    let reply_png = data && png.len() <= max_reply_bytes;
+    if data && !reply_png && path.is_none() {
+        return json!({"ok": false, "error": format!(
+            "this screenshot's PNG is {} bytes, over the {max_reply_bytes}-byte reply-encoding limit; write it to a path instead",
+            png.len()
+        )});
+    }
+    let data = reply_png.then_some(png.as_slice());
     let Some(path) = path else {
         return json!({"ok": true, "result": with_data(json!({"width": w, "height": h}), data)});
     };
@@ -491,182 +552,153 @@ pub fn save_screenshot(app: &mut VectorcraftApp, image: &egui::ColorImage, path:
 }
 
 #[cfg(test)]
-mod tests {
-    use serde_json::{Value, json};
-    use vectorcraft_engine::Session;
+mod tests;
 
-    use super::{ControlRequest, Outcome, handle};
-    use crate::{Services, VectorcraftApp};
-
-    fn input_request(app: &mut VectorcraftApp, method: &str, params: Value) -> Value {
-        let (req, _) = ControlRequest::new(method, params);
-        let Outcome::Done(r) = handle(app, &egui::Context::default(), &req) else { panic!("expected immediate reply") };
-        r
-    }
-
-    #[test]
-    fn control_input_rejects_excessive_counts_before_mutation() {
-        // Only modest over-limit values on the baseline: never exercise an unbounded loop.
-        for (method, params) in
-            [("ui.click", json!({"count": 17})), ("ui.drag", json!({"steps": 257})), ("ui.drag", json!({"steps": 2, "count": 17}))]
-        {
-            let mut app = VectorcraftApp::new(Session::new(), Services::default());
-            app.synthetic.push(egui::Event::Text("already queued".into()));
-            let before = format!("{:?}", app.synthetic);
-            let r = input_request(&mut app, method, params);
-            assert_eq!(r["ok"], false, "oversized input must be rejected: {r}");
-            assert_eq!(format!("{:?}", app.synthetic), before, "rejection must preserve the entire queue");
+/// `ui.pointer`: pointer events through the tools.
+fn pointer_events(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest) -> Outcome {
+    let p = &req.params;
+    let Some(events) = p.get("events").and_then(Value::as_array) else { return err("missing `events`") };
+    let base_mods: Mods = p.get("mods").and_then(|m| serde_json::from_value(m.clone()).ok()).unwrap_or_default();
+    let view = app.view_info();
+    let xf = app.canvas_rect.zip(app.view().copied()).map(|(rect, v)| Xf::new(rect, &v));
+    let held =
+        PointerEvent::json_backquote(p, false).and_then(|d| events.iter().map(|e| PointerEvent::json_backquote(e, d)).collect::<Result<Vec<_>, _>>());
+    let held = match held {
+        Ok(held) => held,
+        Err(e) => return err(e),
+    };
+    for (e, backquote) in events.iter().zip(held) {
+        let kind = match e.get("kind").and_then(Value::as_str).unwrap_or("") {
+            "down" => PointerKind::Down,
+            "drag" => PointerKind::Drag,
+            "up" => PointerKind::Up,
+            "move" => PointerKind::Move,
+            "doubleclick" | "dblclick" => PointerKind::DoubleClick,
+            other => return err(format!("unknown pointer kind `{other}`")),
+        };
+        let x = e.get("x").and_then(Value::as_f64).unwrap_or(0.0);
+        let y = e.get("y").and_then(Value::as_f64).unwrap_or(0.0);
+        let screen = e.get("space").and_then(Value::as_str) == Some("screen");
+        let pos = if screen {
+            match xf {
+                Some(xf) => xf.to_doc(egui::pos2(x as f32, y as f32)),
+                None => return err("no canvas yet"),
+            }
+        } else {
+            vectorcraft_geom::Point::new(x, y)
+        };
+        let mods = e.get("mods").and_then(|m| serde_json::from_value(m.clone()).ok()).unwrap_or(base_mods);
+        // A tilt given in screen axes leans the same way on the page as on the screen.
+        let pen = PointerEvent::json_pen(e).map(|q| match xf {
+            Some(xf) if screen => crate::canvas::pose_on_page(q, &xf),
+            _ => q,
+        });
+        crate::canvas::dispatch(app, &PointerEvent { kind, pos, mods, backquote, pressure: PointerEvent::json_pressure(e), pen }, view);
+        let hold = PointerEvent::json_hold(e);
+        if hold > 0.0 {
+            let r = app.session.tool_tick(hold, view);
+            crate::canvas::apply_requests(app, r);
         }
     }
+    ctx.request_repaint();
+    wrap(app.run("document.inspect", json!({})).map(|d| json!({"selection": d["selection"], "key": d["key"], "tool": app.session.tool_id()})))
+}
 
-    #[test]
-    fn control_input_respects_existing_queue_budget() {
-        let mut app = VectorcraftApp::new(Session::new(), Services::default());
-        app.synthetic = vec![egui::Event::PointerMoved(egui::pos2(1.0, 2.0)); 1023];
-        let before = format!("{:?}", app.synthetic);
-        let r = input_request(&mut app, "ui.click", json!({}));
-        assert_eq!(r["ok"], false, "a whole click must fit before any part is appended");
-        assert_eq!(format!("{:?}", app.synthetic), before);
-    }
-
-    #[test]
-    fn control_input_yields_control_channel_after_frame_budget() {
-        let (tx, rx) = std::sync::mpsc::channel();
-        let mut app = VectorcraftApp::new(Session::new(), Services::default()).with_control(rx);
-        let mut replies = vec![];
-        for _ in 0..65 {
-            let (req, reply) = ControlRequest::new("ui.move", json!({"x": 1, "y": 2}));
-            tx.send(req).unwrap();
-            replies.push(reply);
+/// `ui.click` and `ui.drag`: pointer input through egui itself.
+fn synthetic_click(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest) -> Outcome {
+    let p = &req.params;
+    let s = |k: &str| p.get(k).and_then(Value::as_str);
+    // Validate the entire expansion before appending even the initial move/press.
+    let steps = if req.method == "ui.drag" {
+        match input_count(p, "steps", 8, MAX_DRAG_STEPS) {
+            Ok(n) => n,
+            Err(e) => return err(e),
         }
-        app.drain_control(&egui::Context::default());
-        assert_eq!(replies.iter().filter(|r| r.try_recv().is_ok()).count(), 64);
-        assert_eq!(app.synthetic.len(), 64);
-        app.drain_control(&egui::Context::default());
-        assert_eq!(replies.last().unwrap().try_recv().unwrap()["ok"], true);
-        assert_eq!(app.synthetic.len(), 65);
+    } else {
+        0
+    };
+    let count = match input_count(p, "count", 1, MAX_CLICK_COUNT) {
+        Ok(n) => n,
+        Err(e) => return err(e),
+    };
+    let Some(events) = count.checked_mul(2).and_then(|n| n.checked_add(steps)).and_then(|n| n.checked_add(1)) else {
+        return err("synthetic input event count is out of range");
+    };
+    if let Err(e) = reserve_synthetic(app, events) {
+        return err(e);
     }
+    // Screen-space (egui points) pointer input through egui itself: reaches every widget.
+    let f = |k: &str| p.get(k).and_then(Value::as_f64).unwrap_or(0.0) as f32;
+    let button = match s("button") {
+        Some("right") | Some("secondary") => egui::PointerButton::Secondary,
+        _ => egui::PointerButton::Primary,
+    };
+    let modifiers = modifiers(p);
+    let a = egui::pos2(f("x"), f("y"));
+    let end = if req.method == "ui.drag" { egui::pos2(f("toX"), f("toY")) } else { a };
+    app.synthetic.push(egui::Event::PointerMoved(a));
+    app.synthetic.push(egui::Event::PointerButton { pos: a, button, pressed: true, modifiers });
+    if req.method == "ui.drag" {
+        for i in 1..=steps {
+            let t = i as f32 / steps as f32;
+            app.synthetic.push(egui::Event::PointerMoved(a + (end - a) * t));
+        }
+    }
+    app.synthetic.push(egui::Event::PointerButton { pos: end, button, pressed: false, modifiers });
+    for _ in 1..count {
+        app.synthetic.push(egui::Event::PointerButton { pos: end, button, pressed: true, modifiers });
+        app.synthetic.push(egui::Event::PointerButton { pos: end, button, pressed: false, modifiers });
+    }
+    ctx.request_repaint();
+    ok(Value::Null)
+}
 
-    #[test]
-    fn control_input_rejects_invalid_and_extreme_counts() {
-        for value in [json!(u64::MAX), json!(-1), json!(1.5), json!("2"), Value::Null] {
-            for (method, key) in [("ui.click", "count"), ("ui.drag", "count"), ("ui.drag", "steps")] {
-                let mut app = VectorcraftApp::new(Session::new(), Services::default());
-                app.synthetic.push(egui::Event::Text("pending".into()));
-                let before = format!("{:?}", app.synthetic);
-                let mut params = json!({});
-                params[key] = value.clone();
-                let r = input_request(&mut app, method, params);
-                assert_eq!(r["ok"], false, "{method}/{key}: {r}");
-                assert!(r["error"].as_str().unwrap().contains(key));
-                assert_eq!(format!("{:?}", app.synthetic), before);
+/// `ui.set`: view flags, panels and status.
+fn set_ui(app: &mut VectorcraftApp, req: &ControlRequest) -> Outcome {
+    let p = &req.params;
+    let s = |k: &str| p.get(k).and_then(Value::as_str);
+    // Outline is a setting of the active document's view: without one, nothing is set.
+    if p.get("outline").is_some_and(Value::is_boolean) && app.session.active().is_none() {
+        return err("no document");
+    }
+    let mut r = Ok(Value::Null);
+    if let Some(b) = s("brightness") {
+        r = app.run("window.brightness", json!({"brightness": b}));
+    }
+    if let Some(pn) = s("panel") {
+        r = app.run("window.panel", json!({"panel": pn}));
+    }
+    if let Some(st) = s("status") {
+        app.ui.status = st.to_string();
+    }
+    for (k, flag) in [
+        ("rulers", "view.rulers"),
+        ("outline", "view.outline"),
+        ("grid", "view.grid"),
+        ("smartGuides", "view.smartGuides"),
+        ("boundingBox", "view.boundingBox"),
+    ] {
+        if let Some(want) = p.get(k).and_then(Value::as_bool) {
+            let cur = match k {
+                "rulers" => app.ui.view.rulers,
+                "outline" => app.outline_view(),
+                "grid" => app.ui.view.grid,
+                "smartGuides" => app.ui.view.smart_guides,
+                _ => app.ui.view.bounding_box,
+            };
+            if cur != want {
+                r = app.run(flag, json!({}));
             }
         }
     }
-
-    #[test]
-    fn control_input_accepts_boundary_gestures_and_preserves_event_order() {
-        let mut app = VectorcraftApp::new(Session::new(), Services::default());
-        let r = input_request(
-            &mut app,
-            "ui.drag",
-            json!({"x": 2, "y": 3, "toX": 20, "toY": 30,
-            "steps": 256, "count": 16, "button": "right", "shift": true}),
-        );
-        assert_eq!(r["ok"], true);
-        assert_eq!(app.synthetic.len(), 289);
-        assert!(matches!(app.synthetic.first(), Some(egui::Event::PointerMoved(p)) if *p == egui::pos2(2.0, 3.0)));
-        assert!(
-            matches!(app.synthetic.get(1), Some(egui::Event::PointerButton { pressed: true, button: egui::PointerButton::Secondary, modifiers, .. }) if modifiers.shift)
-        );
-        assert!(matches!(app.synthetic.get(257), Some(egui::Event::PointerMoved(p)) if *p == egui::pos2(20.0, 30.0)));
-        assert!(matches!(app.synthetic.get(258), Some(egui::Event::PointerButton { pressed: false, .. })));
-        assert!(matches!(app.synthetic.last(), Some(egui::Event::PointerButton { pressed: false, pos, .. }) if *pos == egui::pos2(20.0, 30.0)));
-        for (method, params, events) in [
-            ("ui.click", json!({}), 3),
-            ("ui.click", json!({"count": 2}), 5),
-            ("ui.drag", json!({}), 11),
-            ("ui.drag", json!({"steps": 0, "count": 0}), 4),
-        ] {
-            app.synthetic.clear();
-            assert_eq!(input_request(&mut app, method, params)["ok"], true);
-            assert_eq!(app.synthetic.len(), events);
-        }
-        app.synthetic = vec![egui::Event::PointerMoved(egui::pos2(0.0, 0.0)); 1021];
-        assert_eq!(input_request(&mut app, "ui.click", json!({}))["ok"], true);
-        assert_eq!(app.synthetic.len(), 1024, "the exact queue boundary is permitted");
+    if let Some(v) = p.get("controlBar").and_then(Value::as_bool) {
+        app.ui.control_bar = v;
     }
-
-    #[test]
-    fn control_input_budget_covers_every_synthetic_method() {
-        for (method, params) in [
-            ("ui.key", json!({"key": "Enter", "text": "x"})),
-            ("ui.move", json!({})),
-            ("ui.wheel", json!({"dy": 1})),
-            ("ui.text", json!({"text": "hello"})),
-            ("ui.click", json!({})),
-            ("ui.drag", json!({"steps": 1})),
-        ] {
-            let mut app = VectorcraftApp::new(Session::new(), Services::default());
-            app.synthetic = vec![egui::Event::PointerMoved(egui::pos2(1.0, 2.0)); 1024];
-            let before = format!("{:?}", app.synthetic);
-            let r = input_request(&mut app, method, params);
-            assert_eq!(r["ok"], false, "{method}: {r}");
-            assert_eq!(format!("{:?}", app.synthetic), before);
-            app.synthetic.clear();
-            assert_eq!(input_request(&mut app, method, json!({"key": "Enter", "steps": 1}))["ok"], true, "queue space becomes usable after draining");
-        }
+    if let Some(v) = p.get("imageTracePreview").and_then(Value::as_bool) {
+        r = app.run("imageTrace.preview", json!({"on": v}));
     }
-
-    /// #1004: `ui.render` (the MCP `screenshot` of a connected app) renders the artboard asked
-    /// for, at the scale asked for; the first without one.
-    #[test]
-    fn render_takes_the_artboard_asked_for() {
-        let (tx, rx) = std::sync::mpsc::channel();
-        let mut app = VectorcraftApp::new(Session::new(), Services::default()).with_control(rx);
-        let mut request = |method: &str, params: Value| {
-            let (req, reply) = ControlRequest::new(method, params);
-            tx.send(req).unwrap();
-            app.drain_control(&egui::Context::default());
-            reply.try_recv().unwrap()
-        };
-        let new = json!({"width": 64, "height": 64, "units": "Points", "artboards": 2});
-        request("engine.execute", json!({"command": "file.new", "params": new}));
-        let board = json!({"index": 1, "x": 100, "y": 0, "width": 96, "height": 48});
-        let r = request("engine.execute", json!({"command": "artboard.setProps", "params": board}));
-        assert_eq!(r["ok"], true, "{r}");
-        for (params, size) in [
-            (json!({}), [64, 64]),
-            (json!({"artboard": 0}), [64, 64]),
-            (json!({"artboard": 1}), [96, 48]),
-            (json!({"artboard": 1, "scale": 0.5}), [48, 24]),
-        ] {
-            let r = request("ui.render", params.clone());
-            let got = [&r["result"]["width"], &r["result"]["height"]].map(Value::as_u64);
-            assert_eq!(got, size.map(Some), "{params}: {r}");
-        }
-        assert!(request("ui.render", json!({"artboard": 2}))["error"].is_string());
+    if p.get("closePanel").is_some() {
+        app.ui.open_panel = None;
     }
-
-    /// `ui.pointer` replies with the key object: a click on one of two selected objects makes it
-    /// the key, and a click on the key again lets it go.
-    #[test]
-    fn pointer_replies_name_the_key_object() {
-        let mut app = VectorcraftApp::new(Session::new(), Services::default());
-        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
-        let a = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
-        let b = app.run("shape.rectangle", json!({"x": 100, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
-        app.run("select.set", json!({"ids": [a, b]})).unwrap();
-        app.run("tool.select", json!({"tool": "selection"})).unwrap();
-        let ctx = egui::Context::default();
-        let click = |app: &mut VectorcraftApp| {
-            let events = json!([{"kind": "down", "x": 110, "y": 20}, {"kind": "up", "x": 110, "y": 20}]);
-            let (req, _) = ControlRequest::new("ui.pointer", json!({"events": events}));
-            let Outcome::Done(r) = handle(app, &ctx, &req) else { panic!("not done") };
-            assert_eq!(r["ok"], true, "{r}");
-            r["result"].get("key").cloned()
-        };
-        assert_eq!(click(&mut app), Some(b), "a click on a selected object makes it the key");
-        assert_eq!(click(&mut app), Some(Value::Null), "a click on the key again lets it go");
-    }
+    wrap(r)
 }

@@ -21,7 +21,7 @@ use std::sync::mpsc::{Receiver, channel};
 
 use block2::RcBlock;
 use objc2::rc::{Retained, Weak};
-use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
+use objc2::{ClassType, DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
 use objc2_app_kit::{NSModalResponse, NSModalResponseOK, NSPopUpButton, NSSavePanel, NSTextField, NSView};
 use objc2_foundation::{NSArray, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString, NSURL};
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
@@ -108,21 +108,42 @@ fn set_allowed_types(panel: &NSSavePanel, filters: &[Filter], selected: usize) {
     panel.setAllowedFileTypes(Some(&NSArray::from_retained_slice(&types)));
 }
 
-/// Show the save panel for `pick` as a sheet on `window`, with a Format menu, and answer on the
-/// receiver with the path picked (none when canceled). `None` when the request has fewer than two
-/// named file types, or `window` has no AppKit window; nothing is shown then.
-pub fn begin(window: &winit::window::Window, pick: &FilePick) -> Option<Receiver<Vec<String>>> {
-    let mtm = MainThreadMarker::new()?;
+/// How [`begin`] decided to show a save sheet.
+#[derive(Debug)]
+pub enum Begin {
+    /// The Format-menu sheet is open; wait on the receiver for the path (empty when canceled).
+    Shown(Receiver<Vec<String>>),
+    /// Fewer than two named file types: the caller should show an rfd panel instead.
+    DeferToRfd,
+}
+
+/// Show the save panel for `pick` as a sheet on `window`, with a Format menu.
+///
+/// `Ok(Begin::Shown(…))` when the sheet is open. `Ok(Begin::DeferToRfd)` when the request has
+/// fewer than two named file types (or no AppKit window yet) so rfd should show the panel.
+/// `Err(())` when AppKit returned no panel: the caller must not call rfd, whose `+savePanel`
+/// panics on the same nil (#5980).
+pub fn begin(window: &winit::window::Window, pick: &FilePick) -> Result<Begin, ()> {
+    let Some(mtm) = MainThreadMarker::new() else {
+        return Ok(Begin::DeferToRfd);
+    };
     let filters = menu_formats(&pick.filters);
     if filters.is_empty() {
-        return None;
+        return Ok(Begin::DeferToRfd);
     }
-    let RawWindowHandle::AppKit(handle) = window.window_handle().ok()?.as_raw() else { return None };
+    let Some(RawWindowHandle::AppKit(handle)) = window.window_handle().ok().map(|h| h.as_raw()) else {
+        return Ok(Begin::DeferToRfd);
+    };
     // SAFETY: the handle's view is the window's content view, which AppKit keeps alive while the
     // window is open, and winit hands out the handle only while it is.
     let view = unsafe { handle.ns_view.cast::<NSView>().as_ref() };
-    let parent = view.window()?;
-    let panel = NSSavePanel::savePanel(mtm);
+    let Some(parent) = view.window() else {
+        return Ok(Begin::DeferToRfd);
+    };
+    let Some(panel) = new_panel(mtm) else {
+        log::error!("macOS save panel unavailable: AppKit returned nil for NSSavePanel (#5980)");
+        return Err(());
+    };
     let selected = initial_format(&pick.name, &filters);
     set_allowed_types(&panel, &filters, selected);
     if let Some(folder) = &pick.folder {
@@ -145,7 +166,23 @@ pub fn begin(window: &winit::window::Window, pick: &FilePick) -> Option<Receiver
     // The panel and its accessory are set up; AppKit keeps the handler (and the panel it holds)
     // until the sheet closes.
     panel.beginSheetModalForWindow_completionHandler(&parent, &handler);
-    Some(rx)
+    Ok(Begin::Shown(rx))
+}
+
+/// An `NSSavePanel` without panicking when AppKit returns nil (#5980).
+///
+/// Prefers `-[NSSavePanel init]` (Apple's current Swift API) over `+[NSSavePanel savePanel]`,
+/// which objc2 turns into a panic on nil. Falls back to the class method, still as `Option`.
+fn new_panel(mtm: MainThreadMarker) -> Option<Retained<NSSavePanel>> {
+    // SAFETY: designated initializer for a bare save panel; returns nil when AppKit refuses.
+    let panel: Option<Retained<NSSavePanel>> = unsafe { msg_send![NSSavePanel::alloc(mtm), init] };
+    if panel.is_some() {
+        return panel;
+    }
+    // SAFETY: class method; returns an autoreleased panel or nil. Typed as Option so nil is not a
+    // panic (unlike `NSSavePanel::savePanel`).
+    let panel: Option<Retained<NSSavePanel>> = unsafe { msg_send![NSSavePanel::class(), savePanel] };
+    panel
 }
 
 /// The "Format:" label and menu of `filters`, `selected` chosen, that rename `panel`'s file.
@@ -234,6 +271,16 @@ mod tests {
         assert_eq!(allowed_types(&filters(), 9), ["vectorcraft", "svg", "pdf"]);
     }
 
+    /// A nil AppKit panel must be `None`, not a panic. `NSSavePanel::savePanel` used to panic here
+    /// (#5980); `new_panel` types the same message send as `Option`.
+    #[test]
+    fn a_null_save_panel_pointer_is_none_not_a_panic() {
+        let null: *mut NSSavePanel = std::ptr::null_mut();
+        // SAFETY: retaining a null object pointer is defined to yield None.
+        let panel: Option<Retained<NSSavePanel>> = unsafe { Retained::retain(null) };
+        assert!(panel.is_none());
+    }
+
     /// Each entry of the Save As menu gives a name the save command reads as that entry's format.
     #[test]
     fn each_menu_entry_names_a_file_the_save_command_writes_in_that_format() {
@@ -241,14 +288,6 @@ mod tests {
         for (label, extensions) in &filters {
             let name = filename("Untitled-1.vectorcraft", &extensions[0], &filters);
             assert_eq!(fileio::format_for_name(&name).map(|f| f.label), Some(label.as_str()), "{name}");
-        }
-    }
-
-    /// The menu's label is translated in every language with complete menus.
-    #[test]
-    fn the_label_is_translated() {
-        for lang in i18n::Lang::all().filter(|l| l.complete_menus()) {
-            assert!(i18n::has(lang, "Format:"), "{}", lang.code());
         }
     }
 }

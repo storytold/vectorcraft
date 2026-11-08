@@ -124,6 +124,16 @@ mod tests {
     }
 
     #[test]
+    fn a_tiny_stored_grid_draws_a_bounded_number_of_lines() {
+        // A stored grid can carry extreme values: the loop bound must not depend on a fixed
+        // tolerance swallowing the whole domain.
+        let g = PerspectiveGrid { cell: 1e-18, extent: 1e-18, height: 1e-18, ..PerspectiveGrid::normal(2, Rect::new(0.0, 0.0, 800.0, 600.0)) };
+        for pl in Plane::ALL {
+            assert!(g.lines(pl).len() <= 121 + 121, "at most 121 lines a way on {pl:?}");
+        }
+    }
+
+    #[test]
     fn colours_and_rulers_come_from_the_definition() {
         let mut g = grid();
         g.opacity = 40.0;

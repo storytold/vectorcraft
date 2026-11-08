@@ -19,13 +19,22 @@
 //! operand read so far at its depth, and a call on a File or Folder object in them (`(f).remove()`)
 //! is a call on the object. Nothing recurses.
 
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use crate::catalog;
+use crate::catalog::{self, FeatureId};
 use crate::directives;
 use crate::lex::{Lexer, T, Token, expr_after};
-use crate::report::{self, Acc};
+use crate::report::{self, Acc, OutsideId};
+use sig::{COMPOUND, LineBreaks, NEWER, Read, Sig, ends_value, for_in, goes_on_after, goes_on_with, is, member_mark, newer_number, unquote, word};
+
+mod declared;
+mod features;
+mod sig;
+
+pub(crate) use declared::{Declared, declarations};
+use features::platform_name;
 
 /// An `#include` line: what it names, its line, and the folders `#includepath` named at that point
 /// (one list, shared by every line it applies to).
@@ -76,34 +85,22 @@ pub(crate) struct Scan {
     pub known: Known,
 }
 
-/// Scan `src`: the script itself (`file` none) or a file it includes (`file`: its path inside the
-/// script's folder), with the `#includepath` folders `paths` in force at its start and its variables
-/// holding what `known` says.
-pub(crate) fn scan(src: &str, file: Option<&str>, paths: Rc<[String]>, known: &Known, acc: &mut Acc) -> Scan {
-    // A name written with `\u` escapes is read as the name it spells.
-    let unescaped = unescape_names(src, acc);
-    let src = unescaped.as_deref().unwrap_or(src);
-    let declared = declarations(src, acc);
+/// Scan `src` (already through [`unescaped`]): the script itself (`file` none) or a file it includes
+/// (`file`: its path inside the script's folder), with the names it declares (`declared`, from
+/// [`declarations`] on the same `src`), the `#includepath` folders `paths` in force at its start and
+/// its variables holding what `known` says.
+pub(crate) fn scan<'s>(src: &'s str, declared: &Declared<'s>, file: Option<&str>, paths: Rc<[String]>, known: &Known, acc: &mut Acc) -> Scan {
     let mut lexer = Lexer::new(src, acc.limits.nesting);
     let mut a = Analyzer::new(acc, file, paths, known, declared);
-    let mut nl = false;
+    let mut breaks = LineBreaks::default();
     for t in lexer.by_ref() {
         if let Some(code) = t.problem {
             a.problem(code, t.line);
         }
-        match t.kind {
-            T::Space => {}
-            // A comment with a line break in it ends a line, as a line break does.
-            T::Comment => nl |= t.text.contains(['\n', '\r', '\u{2028}', '\u{2029}']),
-            T::Newline => nl = true,
-            T::Directive => {
-                a.directive(&t);
-                nl = true;
-            }
-            _ => {
-                a.token(Sig::of(&t, nl));
-                nl = false;
-            }
+        match breaks.read(&t) {
+            Read::Skip => {}
+            Read::Directive => a.directive(&t),
+            Read::Token(sig) => a.token(sig),
         }
     }
     if let Some(line) = lexer.unclosed_xml {
@@ -119,8 +116,15 @@ pub(crate) fn scan(src: &str, file: Option<&str>, paths: Rc<[String]>, known: &K
 }
 
 /// `src` with the `\uXXXX` escapes in its names written as the characters they stand for (ECMA-262
-/// 3rd edition, section 7.6), or none when no name has one. An escape for a character no name may
-/// hold stays as written. Line breaks don't change, so every line keeps its number.
+/// 3rd edition, section 7.6), and `src` itself when no name has one. An escape for a character no
+/// name may hold stays as written. Line breaks don't change, so every line keeps its number.
+pub(crate) fn unescaped<'a>(src: Cow<'a, str>, acc: &mut Acc) -> Cow<'a, str> {
+    match unescape_names(&src, acc) {
+        Some(out) => Cow::Owned(out),
+        None => src,
+    }
+}
+
 fn unescape_names(src: &str, acc: &mut Acc) -> Option<String> {
     if !src.contains("\\u") {
         return None;
@@ -168,203 +172,6 @@ fn unescape_name(text: &str) -> String {
     }
     out.push_str(rest);
     out
-}
-
-/// A significant token: what it is, its text, its line, and whether a line break comes before it.
-#[derive(Clone, Copy, Debug)]
-struct Sig<'s> {
-    kind: T,
-    text: &'s str,
-    line: usize,
-    nl: bool,
-    /// The token ends a File or Folder object: the `)` that ends a call of `File` or `Folder` (with
-    /// or without `new`) or of `File.openDialog`, `File.saveDialog` or `Folder.selectDialog`, the
-    /// name in `Folder.temp` and the other places of [`catalog::FOLDER_PLACES`], or the `)` of
-    /// grouping parentheses that hold only such an object or a variable holding one (`(f)`).
-    file: bool,
-    /// A statement may start at the token ([`crate::lex::Token::stmt`]).
-    stmt: bool,
-    /// An expression may start at the token ([`crate::lex::Token::expr`]).
-    expr: bool,
-    /// The byte offset in the text where the token starts.
-    start: usize,
-}
-
-impl<'s> Sig<'s> {
-    /// The significant token `t`, after a line break when `nl` is set.
-    fn of(t: &Token<'s>, nl: bool) -> Self {
-        Sig { kind: t.kind, text: t.text, line: t.line, nl, file: false, stmt: t.stmt, expr: t.expr, start: t.start }
-    }
-
-    fn is(&self, punct: &str) -> bool {
-        self.kind == T::Punct && self.text == punct
-    }
-
-    fn word(&self, word: &str) -> bool {
-        self.kind == T::Ident && self.text == word
-    }
-}
-
-fn is(s: Option<Sig>, punct: &str) -> bool {
-    s.is_some_and(|s| s.is(punct))
-}
-
-fn word(s: Option<Sig>, w: &str) -> bool {
-    s.is_some_and(|s| s.word(w))
-}
-
-/// A token after which a name is a member, not a variable: `.`, `.@`, `..` and `::`.
-fn member_mark(s: Option<Sig>) -> bool {
-    s.is_some_and(|s| s.kind == T::Punct && matches!(s.text, "." | ".@" | ".." | "::"))
-}
-
-/// A token after which an expression goes on, also past a line break: a punctuator other than `)`,
-/// `]`, `}`, `++`, `--` and `;`, or `in`, `instanceof`, `typeof`, `new`, `delete` or `void`.
-fn goes_on_after(s: Option<Sig>) -> bool {
-    s.is_some_and(|s| match s.kind {
-        T::Punct => !matches!(s.text, ")" | "]" | "}" | "++" | "--" | ";"),
-        T::Ident => matches!(s.text, "in" | "instanceof" | "typeof" | "new" | "delete" | "void"),
-        _ => false,
-    })
-}
-
-/// A token that goes on with the expression on the line before when it starts a line: a
-/// punctuator other than `{`, `}`, `;`, `++`, `--`, `!` and `~`, or `in` or `instanceof`.
-fn goes_on_with(t: &Sig) -> bool {
-    match t.kind {
-        T::Punct => !matches!(t.text, "{" | "}" | ";" | "++" | "--" | "!" | "~"),
-        T::Ident => matches!(t.text, "in" | "instanceof"),
-        _ => false,
-    }
-}
-
-/// `t` is the `in` of `for (var name in …)`, which ends the `var` statement's declarations: it comes
-/// right after a name the statement declares (ECMA-262 3rd edition, section 12.6.4). Outside a `for`
-/// statement's parentheses, `in` can't stand there.
-fn for_in(t: &Sig, h0: Option<Sig>, h1: Option<Sig>) -> bool {
-    t.word("in") && h0.is_some_and(|s| s.kind == T::Ident) && (word(h1, "var") || is(h1, ","))
-}
-
-/// A token after which the value before it is complete: `;`, `,`, `:` (a conditional expression's
-/// colon, ECMA-262 3rd edition, section 11.12), `)`, `]` or `}`, or a token on a new line that
-/// doesn't go on with the expression.
-fn ends_value(t: &Sig) -> bool {
-    (t.nl && !goes_on_with(t)) || (t.kind == T::Punct && matches!(t.text, ";" | "," | ":" | ")" | "]" | "}"))
-}
-
-/// Punctuators of later syntax.
-const NEWER: &[&str] = &["=>", "...", "?.", "??", "**", "**=", "??=", "&&=", "||="];
-
-/// The compound assignment operators (ECMA-262 3rd edition, section 11.13.2): each gives the name a
-/// number or a string worked out from its old value.
-const COMPOUND: &[&str] = &["*=", "/=", "%=", "+=", "-=", "<<=", ">>=", ">>>=", "&=", "^=", "|="];
-
-/// A number in a later form: binary, octal (`0b1`, `0o7`), with separators (`1_000`) or big (`1n`).
-fn newer_number(text: &str) -> bool {
-    let b = text.as_bytes();
-    text.contains('_') || (b.len() > 1 && b.last() == Some(&b'n')) || matches!((b.first(), b.get(1)), (Some(b'0'), Some(b'b' | b'B' | b'o' | b'O')))
-}
-
-/// A string literal's value, its quotes removed and its escapes undone (`\n`, `\xHH`, `\uHHHH`,
-/// octal escapes, a backslash before a line break), up to `max` characters.
-fn unquote(text: &str, max: usize) -> String {
-    let mut chars = text.chars();
-    let body = match chars.next() {
-        Some(q @ ('"' | '\'')) => chars.as_str().strip_suffix(q).unwrap_or(chars.as_str()),
-        _ => text,
-    };
-    let mut out = String::new();
-    let mut n = 0;
-    let mut it = body.chars().peekable();
-    while n < max
-        && let Some(c) = it.next()
-    {
-        let c = if c == '\\' {
-            match it.next() {
-                None => break,
-                Some('n') => '\n',
-                Some('t') => '\t',
-                Some('r') => '\r',
-                Some('b') => '\u{8}',
-                Some('f') => '\u{c}',
-                Some('v') => '\u{b}',
-                // A legacy octal escape (ECMA-262 3rd edition, annex B.1.2): up to three digits
-                // after `\0` to `\3`, two after `\4` to `\7`.
-                Some(d @ '0'..='7') => {
-                    let mut v = d.to_digit(8).unwrap_or_default();
-                    for _ in 0..if v <= 3 { 2 } else { 1 } {
-                        match it.peek().and_then(|o| o.to_digit(8)) {
-                            Some(o) => {
-                                v = v * 8 + o;
-                                it.next();
-                            }
-                            None => break,
-                        }
-                    }
-                    char::from_u32(v).unwrap_or('\u{fffd}')
-                }
-                Some(x @ ('x' | 'u')) => {
-                    let digits = if x == 'x' { 2 } else { 4 };
-                    let mut v = 0u32;
-                    for _ in 0..digits {
-                        match it.peek().and_then(|d| d.to_digit(16)) {
-                            Some(d) => {
-                                v = v * 16 + d;
-                                it.next();
-                            }
-                            None => break,
-                        }
-                    }
-                    char::from_u32(v).unwrap_or('\u{fffd}')
-                }
-                Some('\r') => {
-                    if it.peek() == Some(&'\n') {
-                        it.next();
-                    }
-                    continue;
-                }
-                Some('\n' | '\u{2028}' | '\u{2029}') => continue,
-                Some(c) => c,
-            }
-        } else {
-            c
-        };
-        out.push(c);
-        n += 1;
-    }
-    out
-}
-
-/// A global name of the platform the report looks for (`$`, `File`, `Socket`, `alert`, `eval`…).
-fn platform_name(n: &str) -> bool {
-    matches!(
-        n,
-        catalog::DOLLAR
-            | catalog::LOCALIZE
-            | catalog::UNIT_VALUE
-            | catalog::FILE
-            | catalog::FOLDER
-            | catalog::WINDOW
-            | catalog::BRIDGE_TALK
-            | catalog::SOCKET
-            | catalog::EXTERNAL_OBJECT
-            | "eval"
-            | "Function"
-    ) || catalog::NOTIFY.contains(&n)
-        || catalog::XMP.contains(&n)
-        || catalog::XML.contains(&n)
-}
-
-/// The feature of a window of type `value` (`"dialog"`, or a resource string that starts with it).
-fn window_type(value: &str) -> &'static str {
-    let word = value.trim_start().split(|c: char| c.is_whitespace() || c == '{').next().unwrap_or_default();
-    if word.eq_ignore_ascii_case("dialog") {
-        "scriptui.dialog"
-    } else if word.eq_ignore_ascii_case("palette") {
-        "scriptui.palette"
-    } else {
-        "scriptui.window"
-    }
 }
 
 /// What the token after a few others decides.
@@ -643,202 +450,6 @@ impl Brackets {
     }
 }
 
-// ---------- the names declared, read before the analysis ----------
-
-/// The names a file's function bodies and its global code declare, read before the analysis. A
-/// function's `var` statements and the function declarations directly in its body make the names
-/// they declare the function's own before any statement in it runs, and the function declarations
-/// directly in the global code do the same for the whole file (ECMA-262 3rd edition, section
-/// 10.1.3). A `var` statement in the global code does not change a property the global object
-/// already has, such as the host's `alert` (sections 10.1.3, 10.1.5 and 10.2.1). The global code's
-/// `var` statements are not read here. A function declaration inside a block, which ECMAScript 3
-/// does not allow (sections 12.1 and 14), makes its name the script's own from where it stands.
-#[derive(Default)]
-struct Declared<'s> {
-    /// For each function body, by the offset of its `{` in the text, the names it declares, in the
-    /// order the bodies start.
-    bodies: Vec<(usize, Vec<&'s str>)>,
-    /// The names the function declarations directly in the global code declare.
-    global: HashSet<&'s str>,
-}
-
-/// A function body [`Declarations`] is reading: the bracket depth inside it, its entry in
-/// [`Declared::bodies`], the names it declares so far, and the bracket depth of the `var` statement
-/// the body is in, which goes on when the body closes.
-struct Body<'s> {
-    depth: usize,
-    index: usize,
-    names: HashSet<&'s str>,
-    var_depth: Option<usize>,
-}
-
-/// The pass that finds [`Declared`]. It follows brackets, function bodies and `var` statements by
-/// the rules [`Analyzer`] follows them by, so that both passes find the same function bodies.
-struct Declarations<'s, 'a, 'l> {
-    acc: &'a mut Acc<'l>,
-    brackets: Brackets,
-    /// The two significant tokens before this one, the latest first.
-    h: [Option<Sig<'s>>; 2],
-    /// `function` was read at this bracket depth, and its body's `{` is still to come.
-    function: Option<usize>,
-    /// The bracket depth of the `var` statement being read.
-    var_depth: Option<usize>,
-    /// `name =` was read, and the first token of the value is next (`true`: after `new`). As in
-    /// [`Analyzer::assignment`], that token doesn't start or end a `var` statement.
-    assign: Option<bool>,
-    /// The function bodies being read, the innermost last, up to [`crate::Limits::nesting`].
-    bodies: Vec<Body<'s>>,
-    /// The bracket depth inside the outermost function body past that limit being read. The names
-    /// declared inside it are not kept.
-    untracked: Option<usize>,
-    out: Declared<'s>,
-}
-
-/// What `src` declares ([`Declared`]), read in one pass over its tokens.
-fn declarations<'s>(src: &'s str, acc: &mut Acc) -> Declared<'s> {
-    let mut lexer = Lexer::new(src, acc.limits.nesting);
-    let mut d = Declarations {
-        acc,
-        brackets: Brackets::default(),
-        h: [None; 2],
-        function: None,
-        var_depth: None,
-        assign: None,
-        bodies: vec![],
-        untracked: None,
-        out: Declared::default(),
-    };
-    let mut nl = false;
-    for t in lexer.by_ref() {
-        match t.kind {
-            T::Space => {}
-            T::Comment => nl |= t.text.contains(['\n', '\r', '\u{2028}', '\u{2029}']),
-            T::Newline => nl = true,
-            T::Directive => {
-                d.directive();
-                nl = true;
-            }
-            _ => {
-                d.token(Sig::of(&t, nl));
-                nl = false;
-            }
-        }
-    }
-    let out = d.out;
-    acc.steps = acc.steps.saturating_add(lexer.steps);
-    out
-}
-
-impl<'s> Declarations<'s, '_, '_> {
-    fn depth(&self) -> usize {
-        self.brackets.depth()
-    }
-
-    fn token(&mut self, t: Sig<'s>) {
-        let [h0, h1] = self.h;
-        // As in [`Analyzer::token`], a line break ends a `var` statement when it is outside the
-        // statement's brackets, and the tokens on either side of it don't go on with the expression.
-        if t.nl && self.var_depth == Some(self.depth()) && !goes_on_after(h0) && !goes_on_with(&t) {
-            self.var_depth = None;
-        }
-        if t.kind == T::Punct {
-            self.bracket(&t);
-        } else if t.kind == T::Ident {
-            self.declaration(&t);
-        }
-        let depth = self.depth();
-        if let Some(after_new) = self.assign.take() {
-            if t.word("new") && !after_new {
-                self.assign = Some(true);
-            }
-        } else {
-            if t.word("var") {
-                self.var_depth = Some(depth);
-            }
-            if (t.is(";") || for_in(&t, h0, h1)) && self.var_depth == Some(depth) {
-                self.var_depth = None;
-            }
-            if t.is("=") && h0.is_some_and(|s| s.kind == T::Ident) && !member_mark(h1) && !is(h1, "@") {
-                self.assign = Some(false);
-            }
-        }
-        // `function` that isn't a property's name: its body's `{` comes after its name and
-        // parameters.
-        if t.word("function") && !member_mark(h0) && !word(h0, "function") {
-            self.function = Some(depth);
-        }
-        self.h = [Some(t), h0];
-    }
-
-    /// An open or close bracket, by the rules of [`Analyzer::bracket`]: the first `{` after
-    /// `function` at the depth of `function` opens the function's body.
-    fn bracket(&mut self, t: &Sig<'s>) {
-        match t.text {
-            "(" | "[" | "{" => {
-                let body = t.text == "{" && self.function.take() == Some(self.depth());
-                self.brackets.open(t, self.acc.limits.nesting);
-                if !body {
-                    return;
-                }
-                if self.bodies.len() < self.acc.limits.nesting {
-                    let index = self.out.bodies.len();
-                    self.out.bodies.push((t.start, vec![]));
-                    self.bodies.push(Body { depth: self.depth(), index, names: HashSet::new(), var_depth: self.var_depth.take() });
-                } else if self.untracked.is_none() {
-                    self.untracked = Some(self.depth());
-                }
-            }
-            ")" | "]" | "}" => {
-                if !self.brackets.close(t) {
-                    return;
-                }
-                let depth = self.depth();
-                if self.var_depth.is_some_and(|d| depth < d) {
-                    self.var_depth = None;
-                }
-                while let Some(body) = self.bodies.pop_if(|b| depth < b.depth) {
-                    self.var_depth = body.var_depth;
-                }
-                if self.untracked.is_some_and(|d| depth < d) {
-                    self.untracked = None;
-                }
-            }
-            _ => {}
-        }
-    }
-
-    /// The name `t`, when a `var` statement or a function declaration declares it: kept for the
-    /// innermost function body when the `var` statement is in that body or the declaration is
-    /// directly in it, and for the global code when the declaration is directly in the global code.
-    /// Each body keeps up to [`crate::Limits::entries`] names, and so does the global code.
-    fn declaration(&mut self, t: &Sig<'s>) {
-        let [h0, _] = self.h;
-        let depth = self.depth();
-        let var = word(h0, "var") || (is(h0, ",") && self.var_depth == Some(depth));
-        let function = word(h0, "function") && h0.is_some_and(|f| f.stmt);
-        if !(var || function) || self.untracked.is_some() {
-            return;
-        }
-        if let Some(body) = self.bodies.last_mut() {
-            if (var || body.depth == depth) && !body.names.contains(t.text) && self.acc.room(body.names.len()) {
-                body.names.insert(t.text);
-                if let Some((_, names)) = self.out.bodies.get_mut(body.index) {
-                    names.push(t.text);
-                }
-            }
-        } else if function && depth == 0 && !self.out.global.contains(t.text) && self.acc.room(self.out.global.len()) {
-            self.out.global.insert(t.text);
-        }
-    }
-
-    /// A preprocessor line ends the statement before it, as in [`Analyzer::directive`].
-    fn directive(&mut self) {
-        self.h = [None; 2];
-        self.var_depth = None;
-        self.assign = None;
-    }
-}
-
 struct Analyzer<'s, 'a, 'l> {
     acc: &'a mut Acc<'l>,
     file: Option<&'a str>,
@@ -864,7 +475,7 @@ struct Analyzer<'s, 'a, 'l> {
     /// The function bodies being read, the innermost last, up to [`crate::Limits::nesting`].
     scopes: Vec<Scope>,
     /// The names each function body and the global code declare, read before the analysis.
-    declared: Declared<'s>,
+    declared: &'a Declared<'s>,
     /// The first entry of `declared.bodies` whose body's `{` hasn't been read yet.
     next_body: usize,
     /// `function` was read at this bracket depth, and its body's `{` is still to come.
@@ -912,7 +523,7 @@ struct Analyzer<'s, 'a, 'l> {
 }
 
 impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
-    fn new(acc: &'a mut Acc<'l>, file: Option<&'a str>, paths: Rc<[String]>, known: &Known, declared: Declared<'s>) -> Self {
+    fn new(acc: &'a mut Acc<'l>, file: Option<&'a str>, paths: Rc<[String]>, known: &Known, declared: &'a Declared<'s>) -> Self {
         let global: Vec<&'s str> = declared.global.iter().copied().collect();
         let mut a = Analyzer {
             acc,
@@ -1096,13 +707,13 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                 self.acc.member(&c.path);
             }
             if c.path.strip_prefix("app.preferences").is_some_and(then) {
-                self.acc.feature("preferences", line);
+                self.acc.feature(FeatureId::Preferences, line);
                 if c.change_call || ending.is_some_and(|t| t.is("=")) {
-                    self.acc.outside("preferences", line, None);
+                    self.acc.outside(OutsideId::Preferences, line, None);
                 }
             }
             if ["app.name", "app.version"].iter().any(|p| c.path.strip_prefix(p).is_some_and(then)) {
-                self.acc.feature("hostCheck", line);
+                self.acc.feature(FeatureId::HostCheck, line);
             }
         }
         // A chain that an operand in a grouped value's parentheses starts with is complete: the
@@ -1181,15 +792,16 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         }
     }
 
-    /// The names [`Declared`] has for the function body whose `{` starts at `start`, taken once.
-    fn declared_in(&mut self, start: usize) -> Vec<&'s str> {
-        let bodies = &mut self.declared.bodies;
+    /// The names [`Declared`] has for the function body whose `{` starts at `start`.
+    fn declared_in(&mut self, start: usize) -> &'a [&'s str] {
+        let declared = self.declared;
+        let bodies = &declared.bodies;
         while bodies.get(self.next_body).is_some_and(|(at, _)| *at < start) {
             self.next_body += 1;
         }
-        match bodies.get_mut(self.next_body) {
-            Some((at, names)) if *at == start => std::mem::take(names),
-            _ => vec![],
+        match bodies.get(self.next_body) {
+            Some((at, names)) if *at == start => names,
+            _ => &[],
         }
     }
 
@@ -1356,7 +968,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                             self.keep_outer(&name);
                             self.unbind(&name);
                         }
-                        for name in self.declared_in(t.start) {
+                        for &name in self.declared_in(t.start) {
                             self.acc.steps = self.acc.steps.saturating_add(1);
                             self.hoist(name);
                         }
@@ -1726,310 +1338,6 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         }
     }
 
-    // ---------- features ----------
-
-    fn features(&mut self, t: &Sig<'s>) {
-        let line = self.agg(t.line);
-        let mut pending = std::mem::take(&mut self.pending);
-        // A platform name that no `:` follows stands for the platform's object.
-        if let Pending::Name(n, l) = pending {
-            pending = Pending::None;
-            if !t.is(":") {
-                self.platform(n, l);
-                pending = std::mem::take(&mut self.pending);
-            }
-        }
-        match pending {
-            Pending::None | Pending::Name(..) => {}
-            Pending::Window(l) => {
-                if t.is("(") {
-                    self.pending = Pending::WindowType(l);
-                } else {
-                    self.acc.feature("scriptui.window", l);
-                }
-            }
-            Pending::WindowType(l) => {
-                let feature = if t.kind == T::Str { window_type(&unquote(t.text, 64)) } else { "scriptui.window" };
-                self.acc.feature(feature, l);
-            }
-            Pending::Menu(l) => {
-                if t.kind == T::Str {
-                    self.pending = Pending::MenuString(l, t.text);
-                } else {
-                    self.menu(None, l);
-                }
-            }
-            Pending::MenuString(l, s) => self.menu(t.is(")").then_some(s), l),
-            Pending::Open(l) => {
-                if t.kind == T::Str {
-                    self.open_mode(&unquote(t.text, 2), l);
-                }
-            }
-        }
-        match t.kind {
-            T::Ident => self.name(t, line),
-            T::Punct => self.punct(t, line),
-            T::Str => self.string(t, line),
-            T::Xml => self.acc.feature("e4x", line),
-            _ => {}
-        }
-    }
-
-    /// A menu command run with the string literal `literal`, or with another value.
-    fn menu(&mut self, literal: Option<&str>, line: Option<usize>) {
-        match literal {
-            Some(s) => {
-                let value = unquote(s, self.acc.limits.echo.saturating_add(1));
-                self.acc.menu_string(&value, line);
-            }
-            None => self.acc.menu_dynamic(),
-        }
-        self.acc.feature("menuCommand", line);
-    }
-
-    fn open_mode(&mut self, mode: &str, line: Option<usize>) {
-        if mode.eq_ignore_ascii_case("r") {
-            self.acc.feature("file.read", line);
-        } else if let Some(m) = catalog::WRITE_MODES.iter().copied().find(|m| m.eq_ignore_ascii_case(mode)) {
-            self.acc.feature("file.write", line);
-            self.acc.outside("filesWritten", line, Some(m));
-        }
-    }
-
-    /// What a pending feature waits for that never came.
-    fn settle_pending(&mut self) {
-        let mut pending = std::mem::take(&mut self.pending);
-        if let Pending::Name(n, l) = pending {
-            self.platform(n, l);
-            pending = std::mem::take(&mut self.pending);
-        }
-        match pending {
-            Pending::Window(l) | Pending::WindowType(l) => self.acc.feature("scriptui.window", l),
-            Pending::Menu(l) | Pending::MenuString(l, _) => self.menu(None, l),
-            Pending::Open(_) | Pending::Name(..) | Pending::None => {}
-        }
-    }
-
-    /// The platform name `n`, used at `line` (a tally's line): the feature it is, and what it does
-    /// outside the document.
-    fn platform(&mut self, n: &'s str, line: Option<usize>) {
-        match n {
-            catalog::UNIT_VALUE => self.acc.feature("unitValue", line),
-            catalog::FILE | catalog::FOLDER => self.acc.feature("file.objects", line),
-            catalog::BRIDGE_TALK => {
-                self.acc.feature("bridgeTalk", line);
-                self.acc.outside("otherApps", line, None);
-            }
-            catalog::SOCKET => {
-                self.acc.feature("socket", line);
-                self.acc.outside("network", line, None);
-            }
-            catalog::EXTERNAL_OBJECT => {
-                self.acc.feature("externalObject", line);
-                self.acc.outside("nativeCode", line, None);
-            }
-            catalog::WINDOW => self.pending = Pending::Window(line),
-            _ if catalog::XMP.contains(&n) => self.acc.feature("xmp", line),
-            _ if catalog::XML.contains(&n) => self.acc.feature("xml", line),
-            _ => {}
-        }
-    }
-
-    fn name(&mut self, t: &Sig<'s>, line: Option<usize>) {
-        let [h0, h1, h2, _] = self.h;
-        let n = t.text;
-        if is(h0, ".") {
-            // A member: of `$`, `File` or `Folder` when they come first and are the platform's.
-            let own = &self.own_names;
-            let of = |name: &str| word(h1, name) && !member_mark(h2) && !own.contains(name);
-            if of(catalog::DOLLAR) {
-                if catalog::DOLLAR_ENV.contains(&n) {
-                    self.acc.feature("dollar.env", line);
-                    self.acc.outside("environment", line, None);
-                } else if n == catalog::DOLLAR_EVAL_FILE {
-                    self.acc.feature("dollar.evalFile", line);
-                    self.acc.outside("unseenCode", line, None);
-                } else if n == catalog::LOCALIZE {
-                    self.acc.feature("localize", line);
-                } else {
-                    self.acc.feature("dollar", line);
-                }
-            } else if (of(catalog::FILE) && catalog::FILE_DIALOGS.contains(&n)) || (of(catalog::FOLDER) && catalog::FOLDER_DIALOGS.contains(&n)) {
-                self.acc.feature("file.dialog", line);
-            } else if of(catalog::FOLDER) && catalog::FOLDER_PLACES.contains(&n) {
-                self.acc.feature("file.places", line);
-            }
-            if n == catalog::ON_DRAW {
-                self.acc.feature("scriptui.drawing", line);
-            }
-            if n == catalog::REFLECT {
-                self.acc.feature("reflection", line);
-            }
-            return;
-        }
-        if member_mark(h0) {
-            return;
-        }
-        if word(h0, "function") {
-            self.acc.declared(n);
-            if h0.is_some_and(|f| f.stmt) {
-                // A function declaration's name is a variable where the function is declared. A
-                // declaration directly in a function body or in the global code makes it one from the
-                // body's `{` or from the start of the file ([`Declared`]), and any other declaration
-                // makes it one from here.
-                if !self.hoisted(n) {
-                    self.keep_outer(n);
-                    self.unbind(n);
-                }
-            } else {
-                // A function expression's name is a variable inside the function only.
-                self.expression_name = Some(n.to_string());
-            }
-            return;
-        }
-        if n == "catch" {
-            // Its block's `{` comes after its parameter's parentheses.
-            self.catch = Some((self.depth(), None));
-        }
-        if n == "function" {
-            // Its body's `{` comes after its name and parameters.
-            self.function = Some(self.depth());
-            self.expression_name = None;
-            // `name = function`: the script's own function too.
-            if is(h0, "=")
-                && let Some(f) = h1.filter(|s| s.kind == T::Ident)
-            {
-                self.acc.declared(f.text);
-            }
-        }
-        if word(h0, "new") && n.starts_with(|c: char| c.is_ascii_uppercase()) && !catalog::CONSTRUCTORS.contains(&n) {
-            self.acc.type_name(n);
-        }
-        // A platform name stands for the platform's object, except where the script declares a
-        // variable, function or parameter of that name, and where it has a meaning of its own.
-        // Where a property key or a label may stand, the token after it decides.
-        if platform_name(n) && !self.declaring() && !self.own_names.contains(n) {
-            if h0.is_none() || [",", "{", ";", "}"].iter().any(|p| is(h0, p)) {
-                self.pending = Pending::Name(n, line);
-            } else {
-                self.platform(n, line);
-            }
-        }
-        match n {
-            // E4X: `default xml namespace = …` and `for each (…)`.
-            "namespace" if word(h0, "xml") && word(h1, "default") => self.acc.feature("e4x", line),
-            "each" if word(h0, "for") => self.acc.feature("e4x", line),
-            _ => {}
-        }
-    }
-
-    fn punct(&mut self, t: &Sig<'s>, line: Option<usize>) {
-        let [h0, h1, h2, h3] = self.h;
-        match t.text {
-            "(" => self.call(line),
-            // `Name.prototype["+"] = …` defines an operator.
-            "=" => {
-                let operator = h1.filter(|s| s.kind == T::Str).is_some_and(|s| catalog::OPERATORS.contains(&unquote(s.text, 4).as_str()));
-                if is(h0, "]") && operator && is(h2, "[") && word(h3, "prototype") {
-                    self.acc.feature("operatorOverloading", line);
-                }
-            }
-            // E4X: attributes (`x.@id`, `@*`), descendants (`x..item`) and qualified names (`ns::x`).
-            ".@" | ".." | "::" | "@" => self.acc.feature("e4x", line),
-            _ => {}
-        }
-    }
-
-    /// `(` after a name: a call.
-    fn call(&mut self, line: Option<usize>) {
-        let [h0, h1, h2, h3] = self.h;
-        let Some(callee) = h0.filter(|s| s.kind == T::Ident) else { return };
-        let n = callee.text;
-        if is(h1, ".") {
-            // The receiver is a variable holding a File or Folder object (not a property of the same
-            // name), or a File or Folder object made in place or held in grouping parentheses
-            // ([`Sig::file`]).
-            let file = h2.is_some_and(|r| r.file || (r.kind == T::Ident && !member_mark(h3) && self.files.contains(r.text)));
-            if n == catalog::MENU_COMMAND {
-                self.pending = Pending::Menu(line);
-            } else if n == catalog::OPEN && file {
-                self.pending = Pending::Open(line);
-            } else if catalog::DRAWING.contains(&n) {
-                self.acc.feature("scriptui.drawing", line);
-            } else if catalog::INSTANCE_DIALOGS.contains(&n) {
-                self.acc.feature("file.dialog", line);
-            } else if catalog::FOLDER_READS.contains(&n) || (file && catalog::FILE_READS.contains(&n)) {
-                self.acc.feature("file.read", line);
-            } else if file && catalog::FILE_WRITES.contains(&n) {
-                self.acc.feature("file.write", line);
-                self.acc.outside("filesWritten", line, None);
-            } else if n == catalog::EXECUTE {
-                self.acc.feature("file.execute", line);
-                self.acc.outside("filesOpened", line, None);
-            } else if catalog::ACTIONS.contains(&n) {
-                self.acc.feature("actions", line);
-            } else if n == catalog::SELECT_TOOL {
-                self.acc.feature("selectTool", line);
-            }
-        } else if !member_mark(h1) && !word(h1, "function") && !self.own_names.contains(n) {
-            if catalog::NOTIFY.contains(&n) {
-                self.acc.feature("notify", line);
-            } else if n == catalog::LOCALIZE {
-                self.acc.feature("localize", line);
-            } else if matches!(n, "eval" | "Function") {
-                self.acc.feature("dynamicCode", line);
-                self.acc.outside("unseenCode", line, None);
-            }
-        }
-    }
-
-    fn string(&mut self, t: &Sig<'s>, line: Option<usize>) {
-        let [h0, h1, h2, _] = self.h;
-        if t.text.contains(catalog::ACTION_TEXT) {
-            self.acc.feature("actions", line);
-        }
-        let compares = h0.is_some_and(|s| s.kind == T::Punct && matches!(s.text, "==" | "===" | "!=" | "!=="));
-        if compares && word(h1, "typename") && is(h2, ".") {
-            let name = unquote(t.text, self.acc.limits.echo.saturating_add(1));
-            self.acc.type_name(&name);
-        }
-    }
-
-    /// Syntax later than ECMAScript 3: reported once per construct and line.
-    fn newer(&mut self, t: &Sig<'s>) {
-        let [h0, h1, ..] = self.h;
-        let construct: Option<&'s str> = match t.kind {
-            T::Template => Some("`"),
-            T::Punct if NEWER.contains(&t.text) => Some(t.text),
-            T::Number if newer_number(t.text) => Some(t.text),
-            T::Other if t.text.len() > 1 && t.text.starts_with('#') => Some(t.text),
-            T::Ident if word(h0, "class") && !member_mark(h1) => Some("class"),
-            // `let name` declares a variable. ES3 reads `let` as a variable's name in `let = 1`,
-            // `let.x` and `let in o`.
-            T::Ident if word(h0, "let") && !t.nl && !member_mark(h1) && !matches!(t.text, "in" | "instanceof") => Some("let"),
-            T::Ident if t.text == "function" && word(h0, "async") && !t.nl => Some("async"),
-            _ => None,
-        };
-        if let Some(c) = construct
-            && self.last_newer != Some((t.line, c))
-        {
-            self.last_newer = Some((t.line, c));
-            self.acc.problem(report::NEWER_SYNTAX, Some(t.line), self.file, Some(c));
-        }
-    }
-
-    /// `import` or `export` starting a statement outside any bracket, unless a call, member or
-    /// property (`import(…)`, `export.x`, `import: 1`) follows: a module.
-    fn module_check(&mut self, t: &Sig<'s>) {
-        if std::mem::take(&mut self.module_candidate) && !(t.kind == T::Punct && matches!(t.text, "(" | "." | "=" | ":" | "," | ")")) {
-            self.module = true;
-        }
-        let starts = self.h[0].is_none() || t.nl || is(self.h[0], ";") || is(self.h[0], "}");
-        if t.kind == T::Ident && matches!(t.text, "import" | "export") && self.depth() == 0 && !member_mark(self.h[0]) && starts {
-            self.module_candidate = true;
-        }
-    }
-
     // ---------- preprocessor lines ----------
 
     fn directive(&mut self, t: &Token<'s>) {
@@ -2049,10 +1357,10 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             return;
         };
         let feature = match name {
-            "target" => "directive.target",
-            "include" | "includepath" => "directive.include",
-            "targetengine" => "directive.targetengine",
-            _ => "directive.other",
+            "target" => FeatureId::DirectiveTarget,
+            "include" | "includepath" => FeatureId::DirectiveInclude,
+            "targetengine" => FeatureId::DirectiveTargetengine,
+            _ => FeatureId::DirectiveOther,
         };
         let line = self.agg(t.line);
         self.acc.feature(feature, line);

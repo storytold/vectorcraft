@@ -4,6 +4,197 @@ use super::*;
 use vectorcraft_geom::Point;
 use vectorcraft_tools::{PointerEvent, PointerKind, ToolKey};
 
+mod actionset;
+pub(super) mod adjust;
+mod ai_open_path;
+mod appearance;
+mod areafit;
+mod assets;
+mod assets_3d;
+mod attributes;
+mod bboxrotate;
+mod blendfidelity;
+mod blendopts;
+mod blendspine;
+mod brushlib;
+mod brushsym;
+mod build;
+mod cancel;
+mod charstroke;
+pub(super) mod clip;
+mod clipboard;
+mod clipflavours;
+mod clippaint;
+mod cmdsplit;
+mod cmykflatten;
+mod colorguide;
+mod colorguidelib;
+mod colorize;
+pub(super) mod colormgmt;
+mod colorthemes;
+mod colourfonts;
+mod compare;
+mod compound_shape;
+mod compoundpaint;
+mod constrain_new;
+mod constrain_tools;
+mod containers;
+mod css;
+mod cut;
+mod dashalign;
+mod distort;
+mod docsetup;
+mod document_move;
+mod draw2;
+mod dynamic_symbols;
+mod editcolors;
+mod effectedit;
+mod emptytype;
+mod envelope;
+mod envelope_distort;
+mod envelope_edit;
+pub(super) mod expand;
+mod expand_symbols;
+mod eyedropper;
+mod file;
+mod fileinfo;
+mod flatpresets;
+mod flatpreview;
+mod flatten;
+mod focal;
+mod fontfiles;
+mod fontlist;
+mod freeform;
+mod globaledit;
+mod glyphbounds;
+mod gradient;
+mod gradpanel;
+mod gradpresets;
+mod gradspan;
+mod guide_clipboard;
+mod halftone;
+mod history_document;
+mod history_mem;
+mod ids_without_selection;
+mod inline;
+mod interactivity;
+mod intertwine;
+mod journal;
+mod keyguide;
+mod knockout;
+mod labspots;
+pub(super) mod large_edits;
+mod layerclip;
+mod layers;
+mod legacy_ai;
+mod library;
+mod link_paths;
+mod linked_stops;
+mod linkfiles;
+pub(super) mod links;
+pub(super) mod linkspanel;
+mod linkwatch;
+mod liquify;
+mod live;
+mod livecorners;
+mod maskview;
+pub(super) mod menucmds;
+mod nativefile;
+mod newart;
+mod newdoc;
+mod objects_on_path;
+mod objexpand;
+mod opacitymask;
+mod outlineobject;
+pub(super) mod outlinestroke;
+mod overprint;
+mod package;
+mod paintproxy;
+mod panelcmds;
+mod paragraphs;
+mod params;
+mod path_menu_enabled;
+mod pathops;
+mod pathtype;
+mod pattern;
+mod pdffidelity;
+mod pdfmarks;
+mod pdfpresets;
+mod pdfraster;
+mod persp_planes;
+pub(super) mod persp_select;
+mod persp_text;
+mod perspgrid;
+mod pixelalign;
+mod place;
+mod placed_document;
+mod plugins;
+mod prefs;
+mod previewbounds;
+mod print;
+mod printadvanced;
+mod printpresets;
+mod printpreview;
+mod printps;
+mod printtiling;
+mod proxyitems;
+mod puppetwarp;
+mod rasterfilters;
+mod rastersettings;
+mod recolor;
+mod recovery;
+mod reflecthit;
+mod registration;
+mod repeat_edit;
+mod save;
+mod saveoptions;
+mod scalestrokes;
+mod scripts;
+mod select_ids_first;
+mod shaper;
+mod shapetools;
+mod shortcutset;
+mod simplify_part;
+mod slices;
+mod smartguides;
+mod smooth_path;
+mod store;
+mod strokegeom;
+mod strokegradient;
+mod strokereach;
+mod strokeux;
+mod stylelib;
+mod stylepanel;
+mod styles;
+mod svgfilter;
+mod swatchcmds;
+mod swatches;
+mod swatchlib;
+mod symbol_nine_slice;
+mod symbolbounds;
+mod symboledit;
+mod symbollib;
+mod targeting;
+mod textcombos;
+mod textedit;
+pub(super) mod textimport;
+mod tileedge;
+mod tints;
+mod toolsettings;
+mod transformfx;
+mod transparencygrid;
+mod trap;
+mod typearea;
+mod typescale;
+mod typeundo;
+mod units;
+mod variables;
+mod webexport;
+mod widthpoints;
+mod widthprofiles;
+mod widthtool;
+mod xform;
+
 fn session() -> Session {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
@@ -88,6 +279,42 @@ fn unknown_and_disabled() {
     let mut s = Session::new();
     assert!(matches!(s.execute("nope", &json!({})), Err(EngineError::UnknownCommand(_))));
     assert!(matches!(s.execute("object.group", &json!({})), Err(EngineError::Disabled(..))));
+}
+
+#[test]
+fn unknown_command_names_the_nearest_id() {
+    let mut s = session();
+    for typo in ["select.al", "Select.All", "selcet.all"] {
+        let e = s.execute(typo, &json!({})).unwrap_err();
+        assert!(matches!(&e, EngineError::UnknownCommandNear(id, near) if id == typo && near == "select.all"), "{typo}: {e:?}");
+        assert_eq!(e.to_string(), format!("unknown command `{typo}`; did you mean `select.all`?"));
+    }
+    let e = s.execute("nope", &json!({})).unwrap_err();
+    assert!(matches!(&e, EngineError::UnknownCommand(id) if id == "nope"), "{e:?}");
+    assert_eq!(e.to_string(), "unknown command `nope`");
+    let e = s.execute("command.batch", &json!({"commands": [{"command": "select.al", "params": {}}]})).unwrap_err();
+    assert!(e.to_string().contains("did you mean `select.all`?"), "{e}");
+}
+
+#[test]
+fn a_long_unknown_command_id_is_answered_at_once() {
+    let mut s = session();
+    let long = "x".repeat(200_000);
+    let start = std::time::Instant::now();
+    assert!(matches!(s.execute(&long, &json!({})), Err(EngineError::UnknownCommand(_))));
+    let e = crate::check_params("file.new", &json!({ long.as_str(): 1 })).unwrap_err();
+    assert!(e.to_string().contains("the command takes:"), "{e}");
+    assert!(start.elapsed() < std::time::Duration::from_secs(2), "{:?}", start.elapsed());
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn action_batch_names_the_nearest_command_id() {
+    let mut s = session();
+    let e = s.execute("action.batch", &json!({"source": "dataSets", "commands": [{"command": "select.al"}]})).unwrap_err();
+    assert_eq!(e.to_string(), "invalid parameters for `action.batch`: commands[0]: unknown command `select.al`; did you mean `select.all`?");
+    let e = s.execute("action.batch", &json!({"source": "dataSets", "commands": [{"command": "nope"}]})).unwrap_err();
+    assert_eq!(e.to_string(), "invalid parameters for `action.batch`: commands[0]: unknown command `nope`");
 }
 
 #[test]
@@ -825,6 +1052,26 @@ fn selection_tool_drag_is_one_undo_step() {
     assert_eq!(s.doc().unwrap().doc.node(a).unwrap().geometric_bounds().unwrap().x0, 100.0);
 }
 
+/// The pointer button is held from a press or a drag until a release or a move. The Dimension
+/// tool stays busy after its first click with the button released, waiting for the second one.
+#[test]
+fn the_pointer_is_held_from_a_press_until_a_release_or_a_move() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    s.select_tool("dimension", v).unwrap();
+    let mut held = vec![];
+    for (kind, x) in [(PointerKind::Down, 100.0), (PointerKind::Drag, 100.0), (PointerKind::Up, 100.0)] {
+        s.pointer(&PointerEvent::new(kind, x, 100.0), v).unwrap();
+        held.push(s.pointer_held());
+    }
+    assert!(s.tool_busy(), "the first point waits for the second");
+    for (kind, x) in [(PointerKind::Move, 200.0), (PointerKind::Down, 300.0), (PointerKind::Drag, 310.0), (PointerKind::Move, 320.0)] {
+        s.pointer(&PointerEvent::new(kind, x, 100.0), v).unwrap();
+        held.push(s.pointer_held());
+    }
+    assert_eq!(held, [true, true, false, false, true, true, false]);
+}
+
 /// How many steps there are to undo and to redo, and whether the document has unsaved changes.
 pub(crate) fn history(s: &Session) -> (usize, usize, bool) {
     let st = s.doc().unwrap();
@@ -1233,6 +1480,7 @@ fn shape_commands_refuse_a_number_or_boolean_given_as_text() {
         ("shape.flare", with(&flare, "opacity", json!("50")), "opacity"),
         ("shape.flare", with(&flare, "largest", json!(true)), "largest"),
         ("shape.flare", with(&flare, "rays", json!("15")), "rays"),
+        ("shape.flare", with(&flare, "rotation", json!("90")), "rotation"),
         ("shape.flare", json!({"cx": 100, "cy": 100, "x2": "300", "y2": 300}), "x2"),
         ("shape.flare", with(&flare, "direction", json!("45")), "direction"),
         ("shape.flare", with(&flare, "seed", json!("7")), "seed"),
@@ -1443,6 +1691,71 @@ fn lock_hide_unlock_all_and_show_all_with_nothing_to_do_record_no_undo_step() {
         assert_eq!(history(&s), (before.0 + 1, 0, true), "{c} with a");
         s.execute("edit.undo", &json!({})).unwrap();
     }
+}
+
+/// Unlock All and Show All with `scope: "group"` unlock or show only the objects inside the groups
+/// that hold the selected objects: the group nearest above a selected object, or a selected group
+/// itself. With no selected object in a group they are refused and change nothing.
+#[test]
+fn unlock_all_and_show_all_within_the_groups_of_the_selection() {
+    let mut s = session();
+    let ids = |s: &mut Session, cmd: &str| NodeId(s.execute(cmd, &json!({})).unwrap()["id"].as_u64().unwrap());
+    let [a, b, m, k, h, s1, s2, j, j2] = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0].map(|i| rect(&mut s, i * 30.0, 0.0, 20.0, 20.0));
+    // `g` holds `m`, `k`, `h` and the group `sub`, which holds `s1` and `s2`; `other` holds `j` and `j2`.
+    s.execute("select.set", &json!({"ids": [s1.0, s2.0]})).unwrap();
+    let sub = ids(&mut s, "object.group");
+    s.execute("select.set", &json!({"ids": [m.0, k.0, h.0, sub.0]})).unwrap();
+    let g = ids(&mut s, "object.group");
+    s.execute("select.set", &json!({"ids": [j.0, j2.0]})).unwrap();
+    let other = ids(&mut s, "object.group");
+    for id in [a, k, s1, j] {
+        s.execute("layer.setProps", &json!({"id": id.0, "locked": true})).unwrap();
+    }
+    s.execute("layer.setProps", &json!({"id": h.0, "visible": false})).unwrap();
+    let locked = |s: &Session| [a, k, s1, j].map(|id| s.doc().unwrap().doc.node(id).unwrap().locked);
+    let group = json!({"scope": "group"});
+
+    // A member of `g`, or `g` itself, selected: `k` and `s1` inside `sub` are unlocked and selected.
+    for selected in [m, g] {
+        s.execute("select.set", &json!({"ids": [selected.0]})).unwrap();
+        let before = history(&s);
+        assert_eq!(s.execute("object.unlockAll", &group).unwrap(), json!({"count": 2}), "{selected:?}");
+        assert_eq!(locked(&s), [true, false, false, true], "{selected:?}");
+        assert_eq!(s.doc().unwrap().selection.objects, [k, s1], "{selected:?}");
+        assert_eq!(history(&s).0, before.0 + 1, "{selected:?}");
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    // `s2` selected: only `sub` counts. With `m` selected too, `sub`'s objects are taken once.
+    for (selected, count) in [(vec![s2.0], 1), (vec![m.0, s2.0], 2)] {
+        s.execute("select.set", &json!({"ids": selected})).unwrap();
+        assert_eq!(s.execute("object.unlockAll", &group).unwrap(), json!({"count": count}), "{selected:?}");
+        assert!(!s.doc().unwrap().doc.node(s1).unwrap().locked, "{selected:?}");
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    // Show All within `g` shows `h` and selects it; `other` holds nothing hidden.
+    s.execute("select.set", &json!({"ids": [m.0]})).unwrap();
+    assert_eq!(s.execute("object.showAll", &group).unwrap(), json!({"count": 1}));
+    assert_eq!(s.doc().unwrap().selection.objects, [h]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [other.0]})).unwrap();
+    assert_eq!(s.execute("object.showAll", &group).unwrap(), json!({"count": 0}));
+
+    // `b`, outside every group, or nothing selected: refused, and nothing changes.
+    for selected in [vec![b.0], vec![]] {
+        s.execute("select.set", &json!({"ids": selected})).unwrap();
+        let (doc, before) = (s.doc().unwrap().doc.clone(), history(&s));
+        for cmd in ["object.unlockAll", "object.showAll"] {
+            let e = s.execute(cmd, &group).unwrap_err();
+            assert!(matches!(&e, EngineError::Other(msg) if msg == "nothing selected is in a group"), "{cmd}: {e:?}");
+        }
+        assert!(s.doc().unwrap().doc == doc && history(&s) == before, "{selected:?}");
+    }
+    // Any other scope is refused; `scope: "document"` and no scope take the whole document.
+    let e = s.execute("object.unlockAll", &json!({"scope": "layer"})).unwrap_err();
+    assert!(matches!(&e, EngineError::BadParams { msg, .. } if msg == "`scope` must be one of document, group"), "{e:?}");
+    assert_eq!(s.execute("object.unlockAll", &json!({"scope": "document"})).unwrap(), json!({"count": 4}));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.execute("object.showAll", &json!({})).unwrap(), json!({"count": 1}));
 }
 
 /// Set Bounds with the current position and size records no undo step on a rotated object, with
@@ -2431,6 +2744,34 @@ fn an_isolated_compound_paths_member_moves_alone() {
     assert_eq!((x0(&s, outer), x0(&s, hole)), (5.0, 55.0), "the compound path selected: the whole ring");
 }
 
+/// The X, Y, W and H of the Properties and Transform panels run `object.setBounds`, which takes the
+/// same objects as the other transforms: a path of a compound path selected alone sets its own
+/// box and leaves the ring around it (#4046). The hole is off-centre, and a plain rectangle
+/// outside the ring keeps "everything moved" from passing.
+#[test]
+fn set_bounds_of_a_compound_paths_member_sets_only_that_path() {
+    let x = |s: &Session, id: NodeId| {
+        let b = s.doc().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap();
+        (b.x0, b.x1)
+    };
+    let mut s = session();
+    let (c, outer, hole) = isolated_ring(&mut s);
+    let other = rect(&mut s, 100.0, 0.0, 10.0, 10.0);
+    s.execute("select.set", &json!({"ids": [hole.0]})).unwrap();
+    s.execute("object.setBounds", &json!({"width": 20, "reference": 0})).unwrap();
+    assert_eq!((x(&s, outer), x(&s, hole)), ((0.0, 40.0), (10.0, 30.0)), "isolated: only the hole is wider");
+    s.execute("object.setBounds", &json!({"x": 25, "reference": 0})).unwrap();
+    assert_eq!((x(&s, outer), x(&s, hole)), ((0.0, 40.0), (25.0, 45.0)), "isolated: only the hole moved");
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [hole.0]})).unwrap();
+    s.execute("object.setBounds", &json!({"x": 12, "reference": 0})).unwrap();
+    assert_eq!((x(&s, outer), x(&s, hole)), ((0.0, 40.0), (12.0, 32.0)), "not isolated: still only the hole");
+    s.execute("select.set", &json!({"ids": [c.0]})).unwrap();
+    s.execute("object.setBounds", &json!({"x": 5, "reference": 0})).unwrap();
+    assert_eq!((x(&s, outer), x(&s, hole)), ((5.0, 45.0), (17.0, 37.0)), "the compound path selected: the whole ring");
+    assert_eq!(x(&s, other), (100.0, 110.0), "the rectangle outside never moves");
+}
+
 /// `depth` and `childLimit` slice a summary read; a level that shows fewer children
 /// than it has reports `childCount`, and invalid values are rejected, not reinterpreted.
 #[test]
@@ -2596,6 +2937,156 @@ fn document_find_searches_names_kinds_and_text() {
     assert_eq!(s.execute("document.find", &json!({"kind": "nope"})).unwrap()["total"], 0);
 }
 
+/// `document.find` filters by geometric bounds (inside or touching a rectangle, width, height,
+/// thickness and area) and by anchor count, and `select: true` selects the matches that can be
+/// selected.
+#[test]
+fn document_find_filters_by_geometry_and_selects() {
+    let mut s = session();
+    let big = rect(&mut s, 0.0, 0.0, 100.0, 100.0).0;
+    let sliver = rect(&mut s, 200.0, 0.0, 95.0, 0.9).0;
+    let star = s.execute("shape.star", &json!({"cx": 400, "cy": 50, "radius1": 40, "radius2": 20, "points": 5})).unwrap()["id"].as_u64().unwrap();
+    let left = rect(&mut s, 600.0, 0.0, 10.0, 10.0).0;
+    let right = rect(&mut s, 620.0, 0.0, 10.0, 10.0).0;
+    let compound = s.execute("object.compoundPath.make", &json!({"ids": [left, right]})).unwrap()["id"].as_u64().unwrap();
+    let hidden = rect(&mut s, 0.0, 300.0, 5.0, 5.0).0;
+    s.execute("object.hide", &json!({"ids": [hidden]})).unwrap();
+    let locked = rect(&mut s, 20.0, 300.0, 5.0, 5.0).0;
+    s.execute("object.lock", &json!({"ids": [locked]})).unwrap();
+    let dot = rect(&mut s, 40.0, 300.0, 5.0, 5.0).0;
+    let found = |s: &mut Session, p: Value| {
+        let v = s.execute("document.find", &p).unwrap();
+        let mut ids: Vec<u64> = v["matches"].as_array().unwrap().iter().map(|m| m["id"].as_u64().unwrap()).collect();
+        ids.sort_unstable();
+        assert_eq!(v["total"], ids.len(), "{p}");
+        ids
+    };
+    let sorted = |mut v: Vec<u64>| {
+        v.sort_unstable();
+        v
+    };
+
+    // Edges count as inside; a rectangle touching the bounds intersects them.
+    assert_eq!(found(&mut s, json!({"within": [0, 0, 100, 100]})), [big]);
+    assert_eq!(found(&mut s, json!({"within": [0, 0, 99, 100]})), Vec::<u64>::new());
+    assert_eq!(found(&mut s, json!({"intersects": [100, 0, 100, 0.5], "kind": "rectangle"})), sorted(vec![big, sliver]));
+    // Size: a thin sliver of either orientation, and the bounds' area.
+    assert_eq!(found(&mut s, json!({"maxThickness": 1})), [sliver]);
+    assert_eq!(found(&mut s, json!({"maxHeight": 1})), [sliver]);
+    assert_eq!(found(&mut s, json!({"minWidth": 90, "maxWidth": 96})), [sliver]);
+    assert_eq!(found(&mut s, json!({"minArea": 9000, "maxArea": 10000})), [big]);
+    assert_eq!(found(&mut s, json!({"maxArea": 30})), sorted(vec![hidden, locked, dot]));
+    // Anchors: a compound path counts its members' together; the layer never matches.
+    assert_eq!(found(&mut s, json!({"minAnchors": 10, "maxAnchors": 10})), [star]);
+    assert_eq!(found(&mut s, json!({"minAnchors": 8, "maxAnchors": 8})), [compound]);
+    let four = sorted(vec![big, sliver, left, right, hidden, locked, dot]);
+    assert_eq!(found(&mut s, json!({"maxAnchors": 4})), four);
+
+    // A find that only reads is not journaled; one that selects is, so an action replays it.
+    let journaled = s.journal.len();
+    s.execute("document.find", &json!({"maxAnchors": 4})).unwrap();
+    assert_eq!(s.journal.len(), journaled);
+    // select: every match except hidden, locked and compound members; the reply counts them.
+    let v = s.execute("document.find", &json!({"maxAnchors": 4, "select": true, "limit": 0})).unwrap();
+    assert_eq!(s.journal_for_action(journaled), [("document.find".to_string(), json!({"maxAnchors": 4, "select": true, "limit": 0}))]);
+    assert_eq!((v["total"].clone(), v["selected"].clone()), (json!(7), json!(3)));
+    let selection = |s: &Session| sorted(s.doc().unwrap().selection.objects.iter().map(|i| i.0).collect());
+    assert_eq!(selection(&s), sorted(vec![big, sliver, dot]));
+    // Without select the selection stays, and the reply has no `selected`.
+    let v = s.execute("document.find", &json!({"maxThickness": 1})).unwrap();
+    assert!(v.get("selected").is_none(), "{v}");
+    assert_eq!(selection(&s), sorted(vec![big, sliver, dot]));
+    // Select > Reselect repeats the find.
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("select.reselect", &json!({})).unwrap();
+    assert_eq!(selection(&s), sorted(vec![big, sliver, dot]));
+    // A compound path matched selects as itself.
+    s.execute("document.find", &json!({"minAnchors": 8, "maxAnchors": 8, "select": true})).unwrap();
+    assert_eq!(selection(&s), [compound]);
+    // Inside an isolated compound path its members are what selects.
+    s.execute("object.isolate", &json!({"id": compound})).unwrap();
+    let v = s.execute("document.find", &json!({"maxAnchors": 4, "select": true})).unwrap();
+    assert_eq!(v["selected"], 2);
+    assert_eq!(selection(&s), sorted(vec![left, right]));
+
+    for bad in [
+        json!({"within": [0, 0, -1, 5]}),
+        json!({"within": [0, 0, 1]}),
+        json!({"intersects": "everywhere"}),
+        json!({"minArea": -1}),
+        json!({"maxWidth": "5 pt"}),
+        json!({"minWidth": 5, "maxWidth": 1}),
+        json!({"minAnchors": 1.5}),
+        json!({"maxThickness": 1, "select": "yes"}),
+        json!({"select": true}),
+    ] {
+        assert!(s.execute("document.find", &bad).is_err(), "{bad}");
+    }
+}
+
+/// `document.find {select: true}` counts the objects it selected: a guide path that Lock Guides
+/// leaves out of the selection is a match, not a selected object.
+#[test]
+fn document_find_counts_the_objects_it_selected() {
+    let mut s = session();
+    let guide = rect(&mut s, 0.0, 0.0, 5.0, 5.0);
+    s.execute("select.set", &json!({"ids": [guide.0]})).unwrap();
+    s.execute("view.guides.make", &json!({})).unwrap();
+    rect(&mut s, 20.0, 0.0, 5.0, 5.0);
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    let v = s.execute("document.find", &json!({"maxArea": 30, "select": true})).unwrap();
+    assert_eq!((v["total"].clone(), v["selected"].clone()), (json!(2), json!(1)));
+    assert_eq!(s.doc().unwrap().selection.objects.len(), 1);
+}
+
+/// Select > Object reports the number of objects it selected: a guide path that Lock Guides
+/// leaves out is not counted.
+#[test]
+fn select_object_counts_the_objects_it_selected() {
+    let mut s = session();
+    let line = |s: &mut Session, x: f64| {
+        let id = s.execute("path.create", &json!({"anchors": [{"x": x, "y": 0}, {"x": x + 10.0, "y": 10}]})).unwrap()["id"].as_u64().unwrap();
+        s.execute("brush.apply", &json!({"name": "Charcoal", "ids": [id]})).unwrap();
+        id
+    };
+    let guide = line(&mut s, 0.0);
+    s.execute("select.set", &json!({"ids": [guide]})).unwrap();
+    s.execute("view.guides.make", &json!({})).unwrap();
+    line(&mut s, 20.0);
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    for cmd in ["select.object.openPaths", "select.object.brushStrokes"] {
+        let v = s.execute(cmd, &json!({})).unwrap();
+        assert_eq!((v["count"].clone(), s.doc().unwrap().selection.objects.len()), (json!(1), 1), "{cmd}");
+    }
+}
+
+/// The geometric filters of `document.find` match objects only: a layer or sublayer whose bounds
+/// fit is not a match, so `total` counts what `select: true` can select. The text filters still
+/// find layers.
+#[test]
+fn document_find_geometric_filters_leave_out_layers() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 5.0, 5.0).0;
+    let sub = s.execute("layer.newSublayer", &json!({})).unwrap()["id"].as_u64().unwrap();
+    let b = rect(&mut s, 10.0, 0.0, 5.0, 5.0).0;
+    assert_eq!(s.doc().unwrap().doc.parent_of(NodeId(b)), Some(NodeId(sub)));
+    let found = |s: &mut Session, p: Value| {
+        let v = s.execute("document.find", &p).unwrap();
+        let mut ids: Vec<u64> = v["matches"].as_array().unwrap().iter().map(|m| m["id"].as_u64().unwrap()).collect();
+        ids.sort_unstable();
+        assert_eq!(v["total"], ids.len(), "{p}");
+        ids
+    };
+    assert_eq!(found(&mut s, json!({"within": [0, 0, 15, 5]})), [a, b]);
+    assert_eq!(found(&mut s, json!({"intersects": [0, 0, 1, 1]})), [a]);
+    assert_eq!(found(&mut s, json!({"maxArea": 30})), [a, b]);
+    assert_eq!(found(&mut s, json!({"minWidth": 15})), Vec::<u64>::new());
+    assert_eq!(found(&mut s, json!({"kind": "layer", "within": [0, 0, 15, 5]})), Vec::<u64>::new());
+    assert_eq!(found(&mut s, json!({"kind": "layer"})).len(), 2);
+    let v = s.execute("document.find", &json!({"within": [0, 0, 15, 5], "select": true})).unwrap();
+    assert_eq!((v["total"].clone(), v["selected"].clone()), (json!(2), json!(2)));
+}
+
 /// Type reports the paint its characters show, and its own object-level paint apart from it.
 #[test]
 fn inspect_reports_the_paint_of_types_characters() {
@@ -2688,6 +3179,33 @@ fn flare_tool_two_step_gesture_is_one_undo() {
     assert!((centre.width() - 80.0).abs() < 0.5);
     let rays = children.iter().find(|c| c.name.as_deref() == Some("Rays")).unwrap();
     assert_eq!(rays.path_data().unwrap().subpaths.len(), 13);
+}
+
+/// `shape.flare`'s `rotation` turns the rays clockwise about the center, and leaves the halo, the
+/// center and the rings as they are.
+#[test]
+fn flare_rotation_turns_only_the_rays() {
+    use vectorcraft_geom::Affine;
+    let mut s = session();
+    let parts = |s: &mut Session, rotation: f64| {
+        let p = json!({"cx": 200, "cy": 200, "diameter": 60, "rays": 9, "rings": 4, "x2": 400, "y2": 300, "seed": 3, "rotation": rotation});
+        let id = NodeId(s.execute("shape.flare", &p).unwrap()["id"].as_u64().unwrap());
+        let NodeKind::Group { children, .. } = &s.doc().unwrap().doc.node(id).unwrap().kind else { panic!("flare is a group") };
+        children.iter().map(|c| (c.name.clone(), c.path_data().unwrap().clone())).collect::<Vec<_>>()
+    };
+    let plain = parts(&mut s, 0.0);
+    let turned = parts(&mut s, 90.0);
+    assert_eq!(plain.len(), turned.len());
+    let quarter = Affine::translate((200.0, 200.0)) * Affine::rotate(std::f64::consts::FRAC_PI_2) * Affine::translate((-200.0, -200.0));
+    for ((name, a), (_, b)) in plain.iter().zip(&turned) {
+        let pa: Vec<Point> = a.subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|k| k.p)).collect();
+        let pb: Vec<Point> = b.subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|k| k.p)).collect();
+        let want: Vec<Point> = if name.as_deref() == Some("Rays") { pa.iter().map(|&p| quarter * p).collect() } else { pa };
+        assert_eq!(pb.len(), want.len(), "{name:?}");
+        for (p, q) in pb.iter().zip(&want) {
+            assert!(p.distance(*q) < 1e-6, "{name:?}: {p:?} is not {q:?}");
+        }
+    }
 }
 
 #[test]
@@ -3019,6 +3537,46 @@ fn a_panicking_command_rolls_back_instead_of_crashing() {
     assert_eq!(s.journal.last().map(|j| j.0.as_str()), Some("shape.rectangle"));
 }
 
+/// A command that recorded an undo step and then panicked leaves Undo and Redo as they were.
+#[test]
+fn a_panic_after_an_edit_leaves_undo_and_redo_as_they_were() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 100.0, 50.0);
+    rect(&mut s, 200.0, 10.0, 50.0, 50.0);
+    s.execute("edit.undo", &json!({})).unwrap();
+    let (undo, redo) = (s.doc().unwrap().history.undo.len(), s.doc().unwrap().history.redo.len());
+    assert_eq!((undo, redo), (1, 1));
+    let r = s.run_guarded("test.panic", |s| {
+        s.execute("edit.clear", &json!({"ids": [a.0]}))?;
+        s.run_nested(|_| panic!("boom"))
+    });
+    assert!(matches!(r, Err(EngineError::Internal { .. })));
+    let st = s.doc().unwrap();
+    assert_eq!((st.history.undo.len(), st.history.redo.len()), (undo, redo));
+    assert!(st.doc.node(a).is_some());
+}
+
+/// A panic rolls back every document the command touched, and the active one stays the same.
+#[test]
+fn a_panic_rolls_back_other_documents_and_keeps_the_active_one() {
+    let mut s = session();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let second = rect(&mut s, 10.0, 10.0, 20.0, 20.0);
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    let first_uid = s.doc().unwrap().uid;
+    let second_before = s.docs[1].doc.clone();
+    let steps = s.docs[1].history.undo.len();
+    let r = s.run_guarded("test.panic", |s| {
+        s.docs[1].history.undo.clear();
+        Arc::make_mut(&mut s.docs[1].doc).remove(second)?;
+        s.run_nested(|_| panic!("boom"))
+    });
+    assert!(matches!(r, Err(EngineError::Internal { .. })));
+    assert!(Arc::ptr_eq(&s.docs[1].doc, &second_before));
+    assert_eq!(s.docs[1].history.undo.len(), steps);
+    assert_eq!(s.doc().unwrap().uid, first_uid);
+}
+
 /// New layers and sublayers share one "Layer N" numbering, whatever art the document holds, and
 /// never repeat a name.
 #[test]
@@ -3061,6 +3619,95 @@ fn given_targets_are_used_as_given_and_range_style_takes_the_selected_type() {
     s.execute("select.all", &json!({})).unwrap();
     assert!(s.execute("text.setRangeStyle", &json!({"start": 0, "end": 3, "size": 40})).is_err(), "two type objects: which one?");
     assert!(s.execute("text.setRangeStyle", &json!({"id": "two", "size": 40})).is_err());
+}
+
+/// #785: commands whose `ids` or `id` the shared check doesn't read (it reads `id` where it stands
+/// for `ids` of one) refuse one that isn't an object id. They don't act on the selection, the
+/// current layer or a new object instead, and the document, the selection and the undo history
+/// stay as they are.
+#[test]
+fn malformed_ids_are_refused_by_commands_that_default_to_the_selection() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 80.0, 60.0);
+    let b = rect(&mut s, 140.0, 120.0, 80.0, 60.0);
+    let graph = s.execute("graph.create", &json!({"type": "column", "x": 400, "y": 300, "width": 120, "height": 80, "rows": [[1, 2]]})).unwrap();
+    let text = s.execute("text.create", &json!({"x": 10, "y": 60, "text": "type", "size": 30})).unwrap()["id"].clone();
+    let ids = [json!([a.0, "x"]), json!(3)];
+    let id = [json!("2"), json!("$1.id"), json!(2.5), json!("abc"), json!(true), json!({})];
+    let commands = [
+        ("object.blend.make", json!({}), "ids", &ids[..], json!([a.0, b.0])),
+        ("object.envelope.makeWithWarp", json!({}), "ids", &ids[..], json!([a.0, b.0])),
+        ("graph.setData", json!({"rows": [[3, 4]]}), "id", &id[..], json!([graph["id"]])),
+        ("imageTrace.make", json!({}), "id", &id[..], json!([a.0])),
+        ("perspective.plane.matchObject", json!({}), "id", &id[..], json!([a.0])),
+        ("perspective.editText", json!({}), "id", &id[..], json!([a.0])),
+        ("layer.clippingMask.toggle", json!({}), "id", &id[..], json!([a.0, b.0])),
+        ("layer.newSublayer", json!({}), "parent", &id[..], json!([a.0])),
+        ("object.isolate", json!({}), "id", &id[..], json!([a.0])),
+        ("graphicStyle.new", json!({"name": "From a"}), "id", &id[..], json!([a.0])),
+        ("charStyle.new", json!({"name": "From type"}), "id", &id[..], json!([text])),
+        ("paraStyle.new", json!({"name": "From type"}), "id", &id[..], json!([text])),
+        ("charStyle.apply", json!({"name": "[Normal Character Style]"}), "id", &id[..], json!([text])),
+        ("type.step", json!({"attribute": "size"}), "id", &id[..], json!([text])),
+        ("layer.releaseToLayers", json!({"build": true}), "id", &id[..], json!([a.0])),
+        ("layer.locate", json!({}), "id", &id[..], json!([a.0])),
+        ("transparency.editOpacityMask", json!({}), "id", &id[..], json!([a.0])),
+        ("transparency.viewOpacityMask", json!({}), "id", &id[..], json!([a.0])),
+        ("links.info", json!({}), "id", &id[..], json!([a.0])),
+        ("links.unembed", json!({}), "id", &id[..], json!([a.0])),
+        ("links.goTo", json!({}), "id", &id[..], json!([a.0])),
+        ("shaper.release", json!({}), "id", &id[..], json!([a.0])),
+        ("shaper.expand", json!({}), "id", &id[..], json!([a.0])),
+        ("image.info", json!({}), "id", &id[..], json!([a.0])),
+        ("symbol.edit", json!({}), "id", &id[..], json!([a.0])),
+        ("object.blend.spine.addAnchor", json!({"x": 120, "y": 110}), "id", &id[..], json!([a.0])),
+        ("path.curvature", json!({"points": [[0, 0], [50, 40], [100, 0]]}), "id", &id[..], json!([a.0])),
+        ("css.export", json!({"unnamed": true}), "id", &id[..], json!([a.0])),
+    ];
+    let mut wrong = vec![];
+    for (cmd, params, key, values, selected) in commands {
+        s.execute("select.set", &json!({"ids": selected})).unwrap();
+        for bad in values {
+            let mut p = params.clone();
+            if let Some(p) = p.as_object_mut() {
+                p.insert(key.into(), bad.clone());
+            }
+            let (doc, selection, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().selection.clone(), s.doc().unwrap().history.undo.len());
+            let r = s.execute(cmd, &p);
+            let named = |e: &str| e.contains("object id") || e.contains("step reference") || e.contains(&format!("`{key}` must be"));
+            let refused = r.as_ref().err().map(|e| e.to_string()).is_some_and(|e| named(&e));
+            let same = s.doc().unwrap().doc == doc && s.doc().unwrap().selection == selection && s.doc().unwrap().history.undo.len() == undo;
+            if !(refused && same) {
+                wrong.push(format!("{cmd} {p}: {r:?}, document unchanged: {same}"));
+            }
+            if !same {
+                let st = s.doc_mut().unwrap();
+                (st.doc, st.selection) = (doc, selection);
+                st.history.undo.truncate(undo);
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// An omitted or null `id` still means the selection, and an object id names that object.
+/// `effect.apply` with the effect given as `id` (its older key) still applies it to the selection,
+/// as one undo step.
+#[test]
+fn an_omitted_id_still_means_the_selection_and_effect_apply_takes_an_effect_as_id() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 80.0, 60.0);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    for p in [json!({}), json!({"id": null}), json!({"id": a.0})] {
+        assert_eq!(s.execute("layer.locate", &p).unwrap()["id"], a.0, "{p}");
+    }
+    for p in [json!({"unnamed": true}), json!({"id": null, "unnamed": true}), json!({"id": a.0, "unnamed": true})] {
+        assert_eq!(s.execute("css.export", &p).unwrap()["rules"], 1, "{p}");
+    }
+    let undo = s.doc().unwrap().history.undo.len();
+    let r = s.execute("effect.apply", &json!({"id": "stylize.dropShadow"})).unwrap();
+    assert_eq!(r["ids"], json!([a.0]));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
 }
 
 #[test]
@@ -3145,7 +3792,7 @@ fn file_list_lists_a_folder_within_the_read_root() {
         json!([{"name": "a.pdf", "kind": "file", "size": 4}, {"name": "b.svg", "kind": "file", "size": 6}, {"name": "sub", "kind": "folder"}])
     );
     assert_eq!(r["truncated"], false);
-    let roots = crate::file_access::AutomationRoots::new(Some(&base.join("in")), None).unwrap().unwrap();
+    let roots = crate::file_access::AutomationRoots::new(&[&base.join("in")], &[]).unwrap().unwrap();
     crate::file_access::confine(Some(&roots), || {
         assert!(s.execute("file.list", &json!({"path": path("in/sub")})).is_ok());
         assert!(s.execute("file.list", &json!({"path": path("outside")})).is_err(), "outside the read root");

@@ -55,6 +55,9 @@ fn every_family_the_panels_draw_in_is_bound() {
         assert!(installed.is_empty(), "{installed:?}");
         let egui = egui::FontDefinitions::default();
         let proportional = &egui.families[&FontFamily::Proportional];
+        // egui 0.37 only bundles its faces with its `default_fonts` feature; this crate asks for
+        // it, since a dependency's dev-features do not reach us and an empty family lays out tofu.
+        assert!(!proportional.is_empty(), "egui's default fonts are not compiled in");
         assert!(named(theme::FONT_UI).starts_with(proportional));
         assert!(named(theme::FONT_UI_SEMIBOLD).starts_with(proportional));
         assert!(named(theme::FONT_MONO).starts_with(&egui.families[&FontFamily::Monospace]));

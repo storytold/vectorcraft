@@ -4,7 +4,8 @@
 //! pixels cached per renderer, a 24-megapixel photo would take 96 MB in each. Here they are kept
 //! once, keyed by the image's content (not the document's key for it, which another document may
 //! use for other pixels) and by what was made of them: greyscale (outline mode), recoloured by a
-//! colour adjustment, separated into ink planes, or shrunk ([`RenderOptions::image_mips`](crate::RenderOptions::image_mips)).
+//! colour adjustment, separated into ink planes, shown through Separations Preview's plates, or
+//! shrunk ([`RenderOptions::image_mips`](crate::RenderOptions::image_mips)).
 //!
 //! The store holds at most [`ImageStore::budget`] bytes, dropping the least recently used entries
 //! beyond that, except ones still held elsewhere (a render context drawing them): dropping those
@@ -14,13 +15,15 @@ use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, Mutex, MutexGuard, Weak};
 
 use vectorcraft_doc::ImageBlob;
+use vectorcraft_doc::cmyk::Inks;
 use vello_cpu::Pixmap;
 use vello_cpu::color::PremulRgba8;
 
 use crate::ink::Ink;
 
-/// Largest default budget of the shared image store, in bytes; less on machines with under 8 GiB
-/// of memory (an eighth of it). [`set_image_cache_budget`] changes it.
+/// Default budget of the shared image store, in bytes, where the installed memory can't be read.
+/// Elsewhere the default is a quarter of the installed memory, and on the web it is 256 MiB.
+/// [`set_image_cache_budget`] changes it.
 pub const IMAGE_CACHE_MAX: usize = 1 << 30;
 
 /// The default budget on the web (a tab's memory is tight).
@@ -31,19 +34,166 @@ fn default_budget() -> usize {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn default_budget() -> usize {
-    physical_memory().map_or(IMAGE_CACHE_MAX, |m| usize::try_from(m / 8).unwrap_or(usize::MAX).min(IMAGE_CACHE_MAX))
+    budget_for_reading(physical_memory())
 }
 
-/// Installed memory in bytes, where the system says without a native call (Linux).
+/// The default budget for a reading of the installed memory: [`IMAGE_CACHE_MAX`] when `memory` is
+/// `None` or 0, otherwise [`budget_for`] it.
+#[cfg(not(target_arch = "wasm32"))]
+fn budget_for_reading(memory: Option<u64>) -> usize {
+    memory.filter(|&m| m > 0).map_or(IMAGE_CACHE_MAX, budget_for)
+}
+
+/// The default budget on a machine with `memory` bytes installed: a quarter of it, and at most a
+/// quarter of the address space (on 32-bit builds).
+#[cfg(not(target_arch = "wasm32"))]
+fn budget_for(memory: u64) -> usize {
+    usize::try_from(memory / 4).unwrap_or(usize::MAX).min(usize::MAX / 4)
+}
+
+/// Installed memory in bytes, `None` where it isn't known (the web, other systems). Other crates
+/// size their own budgets from it.
+pub fn installed_memory() -> Option<u64> {
+    #[cfg(target_arch = "wasm32")]
+    return None;
+    #[cfg(not(target_arch = "wasm32"))]
+    physical_memory()
+}
+
+/// Installed memory in bytes (`MemTotal` in `/proc/meminfo`), or the memory limit of the process's
+/// cgroups where that is lower.
 #[cfg(target_os = "linux")]
 fn physical_memory() -> Option<u64> {
     let info = std::fs::read_to_string("/proc/meminfo").ok()?;
     let line = info.lines().find(|l| l.starts_with("MemTotal:"))?;
     let kib: u64 = line.split_whitespace().nth(1)?.parse().ok()?;
-    kib.checked_mul(1024)
+    let total = kib.checked_mul(1024)?;
+    let cgroups = std::fs::read_to_string("/proc/self/cgroup").unwrap_or_default();
+    let mounts = std::fs::read_to_string("/proc/self/mountinfo").unwrap_or_default();
+    Some(cgroup_limit(&cgroups, &mounts, |path| std::fs::read_to_string(path).ok()).map_or(total, |limit| limit.min(total)))
 }
 
-#[cfg(not(any(target_os = "linux", target_arch = "wasm32")))]
+/// The lowest memory limit of the cgroups listed in `/proc/self/cgroup` (`cgroups`) and of their
+/// ancestors within the mounted cgroup hierarchy: `memory.max` under cgroup v2 and
+/// `memory.limit_in_bytes` under cgroup v1. Each cgroup is looked up under the mount in
+/// `/proc/self/mountinfo` (`mounts`) whose root holds it, or under `/sys/fs/cgroup` (v2) or
+/// `/sys/fs/cgroup/memory` (v1) when `mounts` lists no mount of its hierarchy; a cgroup that no
+/// listed mount holds sets no limit. A mount whose root lies above the cgroup namespace's root
+/// (`/..`) gives the limit of its mount point alone. `read` reads a file; a file that can't be read, or that holds
+/// `max`, sets no limit.
+#[cfg(any(target_os = "linux", test))]
+fn cgroup_limit(cgroups: &str, mounts: &str, read: impl Fn(&str) -> Option<String>) -> Option<u64> {
+    let mut lowest: Option<u64> = None;
+    for line in cgroups.lines() {
+        let mut fields = line.splitn(3, ':');
+        let (Some(_), Some(controllers), Some(path)) = (fields.next(), fields.next(), fields.next()) else {
+            continue;
+        };
+        let v2 = controllers.is_empty();
+        if !v2 && !controllers.split(',').any(|c| c == "memory") {
+            continue;
+        }
+        let file = if v2 { "memory.max" } else { "memory.limit_in_bytes" };
+        let mounted = cgroup_mounts(mounts, v2);
+        // Every mount that holds the cgroup shows the same hierarchy; each may show more ancestors.
+        let holding: Vec<(String, String)> = if mounted.is_empty() {
+            vec![(path.to_owned(), (if v2 { "/sys/fs/cgroup" } else { "/sys/fs/cgroup/memory" }).to_owned())]
+        } else {
+            mounted
+                .into_iter()
+                .filter_map(|(root, point)| {
+                    let root = root.trim_end_matches('/');
+                    // A root of `..` steps is an ancestor of the cgroup namespace's root, so of every
+                    // cgroup listed: only the mount point's own limit can be read.
+                    if !root.is_empty() && root.split('/').skip(1).all(|step| step == "..") {
+                        return Some((String::new(), point));
+                    }
+                    let rest = path.strip_prefix(root).filter(|rest| rest.is_empty() || rest.starts_with('/'))?;
+                    Some((rest.to_owned(), point))
+                })
+                .collect()
+        };
+        for (relative, mount_point) in &holding {
+            let root = mount_point.trim_end_matches('/');
+            let mut dir = relative.trim_end_matches('/');
+            loop {
+                if let Some(limit) = read(&format!("{root}{dir}/{file}")).and_then(|s| s.trim().parse::<u64>().ok()) {
+                    lowest = Some(lowest.map_or(limit, |l| l.min(limit)));
+                }
+                match dir.rsplit_once('/') {
+                    Some((parent, _)) => dir = parent,
+                    None => break,
+                }
+            }
+        }
+    }
+    lowest
+}
+
+/// The root and the mount point of each cgroup v2 mount (`v2`) or cgroup v1 mount with the
+/// `memory` controller in `/proc/self/mountinfo` (`mounts`), with their octal escapes decoded.
+#[cfg(any(target_os = "linux", test))]
+fn cgroup_mounts(mounts: &str, v2: bool) -> Vec<(String, String)> {
+    mounts
+        .lines()
+        .filter_map(|line| {
+            let (before, after) = line.split_once(" - ")?;
+            let mut fields = before.split_whitespace().skip(3);
+            let (root, point) = (fields.next()?, fields.next()?);
+            let mut after = after.split_whitespace();
+            let (fs, _, options) = (after.next()?, after.next()?, after.next().unwrap_or(""));
+            let found = if v2 { fs == "cgroup2" } else { fs == "cgroup" && options.split(',').any(|o| o == "memory") };
+            found.then(|| (mountinfo_unescape(root), mountinfo_unescape(point)))
+        })
+        .collect()
+}
+
+/// A path field of `/proc/self/mountinfo` with its octal escapes (`\040` for a space) decoded.
+#[cfg(any(target_os = "linux", test))]
+fn mountinfo_unescape(field: &str) -> String {
+    let mut bytes = Vec::with_capacity(field.len());
+    let mut rest = field.as_bytes();
+    while let Some((&b, tail)) = rest.split_first() {
+        let code = match tail {
+            [a @ b'0'..=b'3', c @ b'0'..=b'7', d @ b'0'..=b'7', ..] if b == b'\\' => Some(((a - b'0') << 6) | ((c - b'0') << 3) | (d - b'0')),
+            _ => None,
+        };
+        match code {
+            Some(code) => {
+                bytes.push(code);
+                rest = tail.get(3..).unwrap_or_default();
+            }
+            None => {
+                bytes.push(b);
+                rest = tail;
+            }
+        }
+    }
+    String::from_utf8_lossy(&bytes).into_owned()
+}
+
+/// Installed memory in bytes (`GlobalMemoryStatusEx`).
+#[cfg(windows)]
+fn physical_memory() -> Option<u64> {
+    winsafe::GlobalMemoryStatusEx().ok().map(|m| m.ullTotalPhys)
+}
+
+/// Installed memory in bytes, as `sysctl` prints it (`hw.memsize` on macOS, `hw.physmem` on
+/// FreeBSD).
+#[cfg(any(target_os = "macos", target_os = "freebsd"))]
+fn physical_memory() -> Option<u64> {
+    let (sysctl, name) = if cfg!(target_os = "macos") { ("/usr/sbin/sysctl", "hw.memsize") } else { ("/sbin/sysctl", "hw.physmem") };
+    let out = std::process::Command::new(sysctl).args(["-n", name]).output().ok().filter(|o| o.status.success())?;
+    sysctl_bytes(&out.stdout)
+}
+
+/// The byte count `sysctl -n` prints for a memory size.
+#[cfg(any(target_os = "macos", target_os = "freebsd", test))]
+fn sysctl_bytes(out: &[u8]) -> Option<u64> {
+    std::str::from_utf8(out).ok()?.trim().parse().ok()
+}
+
+#[cfg(not(any(target_os = "linux", windows, target_os = "macos", target_os = "freebsd", target_arch = "wasm32")))]
 fn physical_memory() -> Option<u64> {
     None
 }
@@ -57,13 +207,20 @@ pub(crate) struct ImageKey {
     pub adjust: Option<u64>,
     /// Greyscale (outline mode).
     pub grey: bool,
+    /// Colorized with this display color ([`colorized`]).
+    pub tint: Option<[u8; 3]>,
     /// The ink plane painted ([`Ink::Display`]: the colours themselves).
     pub ink: Ink,
     /// Generations of the colour tables the pixels were made with (0 = none): a CMYK image's
     /// display table, and the separation table of ink planes (see `ink`).
     pub luts: (u64, u64),
+    /// Generation of the Separations Preview table the pixels show the visible plates through
+    /// (`proof::PlateLut`; 0 = none).
+    pub plates: u64,
     /// Halved this many times ([`half`]).
     pub mip: u8,
+    /// A [`TILE`]-pixel square of the pixels (column, row), when only part of them is made.
+    pub tile: Option<(u16, u16)>,
 }
 
 /// A blob's content key and whether it holds CMYK inks, worked out once per blob allocation, and
@@ -89,8 +246,16 @@ pub(crate) struct ImageStore {
     budget: usize,
     /// Request counter: the least recently used entries go first.
     tick: u64,
+    /// How many entries and undecodable notes have been added: it changes whenever the store
+    /// holds pixels, or notes an image as undecodable, that it did not before.
+    added: u64,
     /// [`BlobId`]s per blob byte buffer, by address (the `Weak` keeps it from being reused).
     ids: HashMap<usize, (Weak<Vec<u8>>, BlobId)>,
+    /// The content keys of images whose pixels can't be decoded ([`Undecoded::Unreadable`]), so
+    /// they aren't decoded again, each with whether [`newly_undecodable`] has counted it.
+    ///
+    /// [`Undecoded::Unreadable`]: crate::paint::Undecoded::Unreadable
+    undecodable: HashMap<Arc<str>, bool>,
 }
 
 fn pixmap_bytes(pm: &Pixmap) -> usize {
@@ -99,7 +264,29 @@ fn pixmap_bytes(pm: &Pixmap) -> usize {
 
 impl ImageStore {
     pub(crate) fn new(budget: usize) -> Self {
-        Self { entries: HashMap::new(), bytes: 0, budget, tick: 0, ids: HashMap::new() }
+        Self { entries: HashMap::new(), bytes: 0, budget, tick: 0, added: 0, ids: HashMap::new(), undecodable: HashMap::new() }
+    }
+
+    /// How many entries and undecodable notes have been added to the store.
+    pub(crate) fn added(&self) -> u64 {
+        self.added
+    }
+
+    /// Whether the image with content key `content` is known not to decode.
+    pub(crate) fn is_undecodable(&self, content: &str) -> bool {
+        self.undecodable.contains_key(content)
+    }
+
+    /// Note that the image with content key `content` can't be decoded. Past 1024 such images the
+    /// notes are dropped and those images are tried again.
+    pub(crate) fn set_undecodable(&mut self, content: Arc<str>) {
+        if self.undecodable.len() >= 1024 {
+            self.undecodable.clear();
+        }
+        if !self.undecodable.contains_key(&content) {
+            self.added += 1;
+            self.undecodable.insert(content, false);
+        }
     }
 
     /// The pixels of `key`, marked as just used.
@@ -134,9 +321,22 @@ impl ImageStore {
             return e.pm.clone();
         }
         self.bytes += pixmap_bytes(&pm);
+        self.added += 1;
         self.entries.insert(key, Entry { pm: pm.clone(), used: tick });
         self.evict();
         pm
+    }
+
+    /// Keep `pm` as `key` as [`ImageStore::insert`] does, holding no reference to it afterwards,
+    /// then drop entries over budget → whether the store holds `key`'s pixels. Pixels larger than
+    /// the budget are not kept.
+    pub(crate) fn keep(&mut self, key: ImageKey, pm: Arc<Pixmap>) -> bool {
+        if pixmap_bytes(&pm) > self.budget {
+            return false;
+        }
+        drop(self.insert(key.clone(), pm));
+        self.evict();
+        self.entries.contains_key(&key)
     }
 
     /// Drop the least recently used entries no one else holds until within budget.
@@ -155,6 +355,12 @@ impl ImageStore {
                 self.bytes = self.bytes.saturating_sub(pixmap_bytes(&e.pm));
             }
         }
+    }
+
+    /// Bytes of the entries someone besides the store holds (images being painted): eviction can't
+    /// free them.
+    pub(crate) fn pinned_bytes(&self) -> usize {
+        self.entries.values().filter(|e| Arc::strong_count(&e.pm) > 1).map(|e| pixmap_bytes(&e.pm)).sum()
     }
 
     pub(crate) fn set_budget(&mut self, budget: usize) {
@@ -206,6 +412,42 @@ pub fn image_cache_bytes() -> usize {
     store().bytes()
 }
 
+/// Keep `img`, the decoded pixels of `blob`, in the store as a renderer keeps the pixels it
+/// decodes, so the first render that draws `blob` uses them instead of decoding it. Returns whether
+/// `img` was kept or the store already held `blob`'s pixels. It returns false, without looking at
+/// the store, for a CMYK image and for pixels a renderer would refuse to decode: more than the
+/// decode allowance as RGBA, or more than fits beside the pixels being drawn now. The store then
+/// drops the least recently used entries beyond its budget, as it does whenever a renderer adds
+/// pixels, and returns false when that leaves `img` out: pixels larger than the budget are never
+/// kept.
+pub fn keep_decoded_image(blob: &ImageBlob, img: image::DynamicImage) -> bool {
+    let (key, lut, _) = crate::blobs::blob_key(blob);
+    if lut.is_some() || !crate::paint::within_allowance(img.width(), img.height()) {
+        return false;
+    }
+    let kept = store().get(&key);
+    let size = match kept {
+        Some(pm) => (pm.width(), pm.height()),
+        None => {
+            let Some(pm) = crate::paint::decoded_pixmap(img) else { return false };
+            let size = (pm.width(), pm.height());
+            if !store().keep(key, Arc::new(pm)) {
+                return false;
+            }
+            size
+        }
+    };
+    remember_size(blob, size);
+    true
+}
+
+/// Whether the store holds the decoded pixels of `blob` at full size.
+pub fn image_cached(blob: &ImageBlob) -> bool {
+    // The key first: working it out takes the store's lock too.
+    let (key, _, _) = crate::blobs::blob_key(blob);
+    store().peek(&key).is_some()
+}
+
 /// `blob`'s content key and kind, hashed and sniffed once per blob allocation.
 pub(crate) fn blob_id(blob: &ImageBlob) -> BlobId {
     if let Some(id) = store().known_id(&blob.bytes) {
@@ -223,24 +465,110 @@ pub(crate) fn remember_size(blob: &ImageBlob, size: (u16, u16)) {
     store().remember_size(&blob.bytes, size);
 }
 
+/// How many of `blobs` a renderer has found it can't decode (they draw nothing, or a crossed box
+/// with [`RenderOptions::mark_undecoded_images`](crate::RenderOptions::mark_undecoded_images)) that
+/// no earlier call counted: each such image is counted once in the process.
+pub fn newly_undecodable<'a>(blobs: impl IntoIterator<Item = &'a ImageBlob>) -> usize {
+    let mut s = store();
+    if s.undecodable.values().all(|counted| *counted) {
+        return 0;
+    }
+    let mut n = 0;
+    for blob in blobs {
+        let Some(id) = s.known_id(&blob.bytes) else { continue };
+        if let Some(counted) = s.undecodable.get_mut(&id.content)
+            && !*counted
+        {
+            *counted = true;
+            n += 1;
+        }
+    }
+    n
+}
+
 /// `pm` at half the size (rounded up), each pixel the mean of the 2×2 it covers (the last row and
 /// column repeat on odd sizes).
 pub(crate) fn half(pm: &Pixmap) -> Pixmap {
-    let (w, h) = (pm.width() as usize, pm.height() as usize);
+    let (data, ow, oh) = half_with(pm.data(), pm.width().into(), pm.height().into(), PremulRgba8 { r: 0, g: 0, b: 0, a: 0 }, |q| PremulRgba8 {
+        r: mean(q.map(|p| p.r)),
+        g: mean(q.map(|p| p.g)),
+        b: mean(q.map(|p| p.b)),
+        a: mean(q.map(|p| p.a)),
+    });
+    Pixmap::from_parts(data, ow as u16, oh as u16)
+}
+
+/// CMYK image ink amounts `inks` at half the size, as [`half`] halves pixels: each ink the mean
+/// of the 2×2 it covers. `None` only if the halved size were no CMYK image's, which a halved
+/// image's never is.
+pub(crate) fn half_inks(inks: &Inks) -> Option<Inks> {
+    let (w, h) = (usize::try_from(inks.width).ok()?, usize::try_from(inks.height).ok()?);
+    let (data, ow, oh) =
+        half_with(inks.data.as_chunks::<4>().0, w, h, [0; 4], |q| std::array::from_fn(|c| mean(q.map(|p| p.get(c).copied().unwrap_or(0)))));
+    Inks::new(u32::try_from(ow).ok()?, u32::try_from(oh).ok()?, data.into_flattened())
+}
+
+/// `w`×`h` texels `src` at half the size (rounded up, at least 1×1), each the `mean` of the 2×2
+/// it covers (the last row and column repeat on odd sizes; `blank` stands in for texels `src`
+/// is short of), and that size.
+fn half_with<T: Copy>(src: &[T], w: usize, h: usize, blank: T, mean: impl Fn([T; 4]) -> T) -> (Vec<T>, usize, usize) {
     let (ow, oh) = (w.div_ceil(2).max(1), h.div_ceil(2).max(1));
-    let src = pm.data();
-    let at = |x: usize, y: usize| {
-        src.get(y.min(h.saturating_sub(1)) * w + x.min(w.saturating_sub(1))).copied().unwrap_or(PremulRgba8 { r: 0, g: 0, b: 0, a: 0 })
-    };
-    let mut data = Vec::with_capacity(ow * oh);
-    for y in 0..oh {
-        for x in 0..ow {
-            let q = [at(2 * x, 2 * y), at(2 * x + 1, 2 * y), at(2 * x, 2 * y + 1), at(2 * x + 1, 2 * y + 1)];
-            let mean = |c: fn(&PremulRgba8) -> u8| ((q.iter().map(|p| u32::from(c(p))).sum::<u32>() + 2) / 4) as u8;
-            data.push(PremulRgba8 { r: mean(|p| p.r), g: mean(|p| p.g), b: mean(|p| p.b), a: mean(|p| p.a) });
+    let at = |x: usize, y: usize| src.get(y.min(h.saturating_sub(1)) * w + x.min(w.saturating_sub(1))).copied().unwrap_or(blank);
+    let data = (0..oh)
+        .flat_map(|y| (0..ow).map(move |x| (x, y)))
+        .map(|(x, y)| mean([at(2 * x, 2 * y), at(2 * x + 1, 2 * y), at(2 * x, 2 * y + 1), at(2 * x + 1, 2 * y + 1)]))
+        .collect();
+    (data, ow, oh)
+}
+
+/// The mean of four channel values, rounded to nearest.
+fn mean(v: [u8; 4]) -> u8 {
+    ((v.iter().map(|&c| u32::from(c)).sum::<u32>() + 2) / 4) as u8
+}
+
+/// The side of the squares whose colours are made one by one when only part of an image's
+/// pixels show ([`ImageKey::tile`]): a large photo zoomed in on is separated, colorized or proofed
+/// only where it shows.
+pub(crate) const TILE: u32 = 1024;
+
+/// The `w`×`h` pixels of `pm` from (`x`, `y`). `None` unless they lie inside `pm`.
+pub(crate) fn crop(pm: &Pixmap, x: u32, y: u32, w: u32, h: u32) -> Option<Pixmap> {
+    let (pw, ph) = (u32::from(pm.width()), u32::from(pm.height()));
+    if w == 0 || h == 0 || x.checked_add(w)? > pw || y.checked_add(h)? > ph {
+        return None;
+    }
+    let (stride, x, w) = (pw as usize, x as usize, w as usize);
+    let rows = pm.data().chunks_exact(stride).skip(y as usize).take(h as usize);
+    let data: Vec<PremulRgba8> = rows.flat_map(|row| row.get(x..x + w).unwrap_or_default().iter().copied()).collect();
+    (data.len() == w * h as usize).then(|| Pixmap::from_parts(data, w as u16, h as u16))
+}
+
+/// `src` copied into `dst` with its top left at (`x`, `y`), as far as `dst` reaches.
+pub(crate) fn paste(dst: &mut Pixmap, src: &Pixmap, x: usize, y: usize) {
+    let (dw, sw) = (usize::from(dst.width()), usize::from(src.width()));
+    let dst_rows = dst.data_mut().chunks_exact_mut(dw).skip(y);
+    for (to, from) in dst_rows.zip(src.data().chunks_exact(sw)) {
+        let row = to.get_mut(x..).unwrap_or_default();
+        let n = row.len().min(from.len());
+        if let (Some(to), Some(from)) = (row.get_mut(..n), from.get(..n)) {
+            to.copy_from_slice(from);
         }
     }
-    Pixmap::from_parts(data, ow as u16, oh as u16)
+}
+
+/// Pixels `pm` colorized with `rgb`: each pixel takes the color, as opaque as the pixel is dark
+/// (255 less its Rec. 709 luma) times its alpha, so white pixels are transparent.
+pub(crate) fn colorized(pm: &Pixmap, [r, g, b]: [u8; 3]) -> Pixmap {
+    let mut out = pm.clone();
+    for px in out.data_mut() {
+        // The luma of premultiplied components is the premultiplied luma: the alpha less it is
+        // the darkness times the alpha.
+        let luma = 0.2126 * px.r as f32 + 0.7152 * px.g as f32 + 0.0722 * px.b as f32;
+        let a = (px.a as f32 - luma).clamp(0.0, 255.0);
+        let mul = |c: u8| (c as f32 * a / 255.0).round() as u8;
+        *px = PremulRgba8 { r: mul(r), g: mul(g), b: mul(b), a: a.round() as u8 };
+    }
+    out
 }
 
 /// How many times to halve an image drawn with `m` (image pixels → device pixels): while a pixel
@@ -263,7 +591,7 @@ mod tests {
     use super::*;
 
     fn key(content: &str) -> ImageKey {
-        ImageKey { content: content.into(), adjust: None, grey: false, ink: Ink::Display, luts: (0, 0), mip: 0 }
+        ImageKey { content: content.into(), adjust: None, grey: false, tint: None, ink: Ink::Display, luts: (0, 0), plates: 0, mip: 0, tile: None }
     }
 
     #[test]
@@ -282,6 +610,180 @@ mod tests {
         s.set_budget(400);
         assert!(s.peek(&key("b")).is_none() && s.peek(&key("c")).is_some(), "now b goes first");
         assert_eq!(s.bytes(), 400);
+    }
+
+    /// Pixels kept for a first frame are dropped at once when the budget has no room for them,
+    /// since nothing draws them yet.
+    #[test]
+    fn kept_pixels_larger_than_the_budget_are_not_kept() {
+        // 10×10 pixmaps: 400 bytes each.
+        let mut s = ImageStore::new(300);
+        assert!(!s.keep(key("big"), Arc::new(Pixmap::new(10, 10))));
+        assert_eq!(s.bytes(), 0);
+        assert!(s.peek(&key("big")).is_none());
+        // Room for one: the older one, held by no one, goes.
+        let mut s = ImageStore::new(400);
+        assert!(s.keep(key("a"), Arc::new(Pixmap::new(10, 10))));
+        assert!(s.keep(key("b"), Arc::new(Pixmap::new(10, 10))));
+        assert!(s.peek(&key("a")).is_none() && s.peek(&key("b")).is_some());
+        assert_eq!(s.bytes(), 400);
+        // The one kept is held while drawn: a new one that doesn't fit beside it is dropped.
+        let held = s.get(&key("b"));
+        assert!(!s.keep(key("c"), Arc::new(Pixmap::new(10, 10))));
+        assert!(s.peek(&key("c")).is_none());
+        assert_eq!(s.bytes(), 400);
+        drop(held);
+    }
+
+    #[test]
+    #[cfg(target_pointer_width = "64")]
+    fn default_budget_is_a_quarter_of_installed_memory() {
+        assert_eq!(budget_for(16 << 30), 4 << 30);
+        assert_eq!(budget_for(64 << 30), 16 << 30, "no fixed ceiling");
+        assert_eq!(budget_for(2 << 30), 512 << 20);
+    }
+
+    #[test]
+    #[cfg(target_pointer_width = "64")]
+    fn budget_follows_the_memory_reading() {
+        assert_eq!(budget_for_reading(Some(2 << 30)), 512 << 20);
+        assert_eq!(budget_for_reading(Some(8 << 30)), 2 << 30);
+        assert_eq!(budget_for_reading(Some(64 << 30)), 16 << 30);
+        assert_eq!(budget_for_reading(None), IMAGE_CACHE_MAX, "memory that can't be read");
+        assert_eq!(budget_for_reading(Some(0)), IMAGE_CACHE_MAX, "memory that reads as 0");
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn images_past_the_budget_drop_the_least_recently_used() {
+        // 16 MiB installed (16 GiB scaled down): a 4 MiB budget, room for four 512 × 512 images.
+        let mut s = ImageStore::new(budget_for_reading(Some(16 << 20)));
+        for k in ["a", "b", "c", "d"] {
+            drop(s.insert(key(k), Arc::new(Pixmap::new(512, 512))));
+        }
+        assert_eq!(s.bytes(), 4 << 20, "four images fill the budget exactly");
+        assert!(["a", "b", "c", "d"].iter().all(|k| s.peek(&key(k)).is_some()));
+        drop(s.insert(key("e"), Arc::new(Pixmap::new(512, 512))));
+        assert_eq!(s.bytes(), 4 << 20);
+        assert!(s.peek(&key("a")).is_none(), "the oldest image is dropped");
+        assert!(["b", "c", "d", "e"].iter().all(|k| s.peek(&key(k)).is_some()));
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn an_image_larger_than_the_budget_is_kept_only_while_drawn() {
+        // 16 MiB installed: a 4 MiB budget. A 1,100 × 1,000 image takes 4.2 MiB.
+        let budget = budget_for_reading(Some(16 << 20));
+        let mut s = ImageStore::new(budget);
+        assert!(!s.keep(key("big"), Arc::new(Pixmap::new(1100, 1000))), "not kept for a later frame");
+        assert_eq!(s.bytes(), 0);
+        drop(s.insert(key("small"), Arc::new(Pixmap::new(512, 512))));
+        let drawn = s.insert(key("big"), Arc::new(Pixmap::new(1100, 1000)));
+        assert!(s.peek(&key("big")).is_some(), "kept while drawn");
+        assert!(s.peek(&key("small")).is_none(), "the other image is dropped to make room");
+        drop(drawn);
+        s.set_budget(budget);
+        assert!(s.peek(&key("big")).is_none(), "dropped once nothing draws it");
+        assert_eq!(s.bytes(), 0);
+    }
+
+    #[test]
+    #[cfg(any(target_os = "linux", windows, target_os = "macos", target_os = "freebsd"))]
+    fn installed_memory_is_read() {
+        // A cgroup's limit can be far below the installed memory.
+        assert!(physical_memory().is_some_and(|m| m > 0), "{:?}", physical_memory());
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn two_images_of_a_tenth_of_memory_each_stay_cached() {
+        // 16 MiB installed (16 GiB scaled down): two images of 1,600 KiB (640 × 640 pixels) take
+        // about a fifth of it.
+        let mut s = ImageStore::new(budget_for(16 << 20));
+        drop(s.insert(key("a"), Arc::new(Pixmap::new(640, 640))));
+        drop(s.insert(key("b"), Arc::new(Pixmap::new(640, 640))));
+        assert!(s.peek(&key("a")).is_some() && s.peek(&key("b")).is_some(), "neither image is decoded again");
+        assert_eq!(s.bytes(), 2 * 640 * 640 * 4);
+    }
+
+    #[test]
+    fn cgroup_limit_is_the_lowest_limit_of_the_cgroups_and_their_ancestors() {
+        let files = |list: &'static [(&'static str, &'static str)]| {
+            move |path: &str| list.iter().find(|(p, _)| *p == path).map(|(_, text)| (*text).to_owned())
+        };
+        let v2 = files(&[("/sys/fs/cgroup/user.slice/memory.max", "2147483648\n"), ("/sys/fs/cgroup/user.slice/app.scope/memory.max", "max\n")]);
+        assert_eq!(cgroup_limit("0::/user.slice/app.scope\n", "", v2), Some(2 << 30), "the parent's limit applies");
+        let v1 = files(&[("/sys/fs/cgroup/memory/memory.limit_in_bytes", "1073741824\n")]);
+        let v1_mounts = "30 25 0:26 / /sys/fs/cgroup/cpu rw - cgroup cgroup rw,cpu,cpuacct\n\
+                         31 25 0:27 /docker/1 /sys/fs/cgroup/memory rw,nosuid master:9 - cgroup cgroup rw,memory\n";
+        let cgroups = "4:cpu,cpuacct:/docker/1\n5:memory:/docker/1\n";
+        assert_eq!(cgroup_limit(cgroups, v1_mounts, v1), Some(1 << 30), "a container's own mount");
+        assert_eq!(cgroup_limit("0::/\n", "", files(&[("/sys/fs/cgroup/memory.max", "max\n")])), None, "no limit");
+        assert_eq!(cgroup_limit("", "", files(&[])), None);
+    }
+
+    #[test]
+    fn cgroup_limit_reads_a_subtree_mount_relative_to_its_root() {
+        let mounts = "25 1 0:22 / /proc rw - proc proc rw\n\
+                      40 25 0:30 /docker/id /sys/fs/cgroup rw,nosuid - cgroup2 cgroup2 rw,nsdelegate\n";
+        let files = [("/sys/fs/cgroup/worker/memory.max", "536870912\n"), ("/sys/fs/cgroup/memory.max", "4294967296\n")];
+        let read = |path: &str| files.iter().find(|(p, _)| *p == path).map(|(_, text)| (*text).to_owned());
+        assert_eq!(cgroup_limit("0::/docker/id/worker\n", mounts, read), Some(512 << 20), "the worker's own limit");
+        assert_eq!(cgroup_limit("0::/elsewhere\n", mounts, read), None, "no mount holds the cgroup");
+    }
+
+    #[test]
+    fn cgroup_limit_reads_the_mount_that_holds_the_cgroup() {
+        let mounts = "40 25 0:30 /other /mnt/other rw - cgroup2 cgroup2 rw\n\
+                      41 25 0:30 /docker/id /sys/fs/cgroup rw - cgroup2 cgroup2 rw\n";
+        let files = [("/mnt/other/memory.max", "1048576\n"), ("/sys/fs/cgroup/memory.max", "268435456\n")];
+        let read = |path: &str| files.iter().find(|(p, _)| *p == path).map(|(_, text)| (*text).to_owned());
+        assert_eq!(cgroup_limit("0::/docker/id\n", mounts, read), Some(256 << 20), "the unrelated subtree's limit is not read");
+        let both = "40 25 0:30 / /sys/fs/cgroup rw - cgroup2 cgroup2 rw\n\
+                    41 25 0:30 /parent/child /mnt/child rw - cgroup2 cgroup2 rw\n";
+        let files = [("/mnt/child/memory.max", "max\n"), ("/sys/fs/cgroup/parent/memory.max", "1073741824\n")];
+        let read = |path: &str| files.iter().find(|(p, _)| *p == path).map(|(_, text)| (*text).to_owned());
+        assert_eq!(cgroup_limit("0::/parent/child\n", both, read), Some(1 << 30), "the ancestor that only the full mount shows");
+    }
+
+    #[test]
+    fn cgroup_limit_reads_a_mount_above_the_namespace_root() {
+        let mounts = "40 25 0:30 /.. /sys/fs/cgroup rw - cgroup2 cgroup2 rw\n";
+        let files = [("/sys/fs/cgroup/memory.max", "1073741824\n"), ("/sys/fs/cgroup/worker/memory.max", "4096\n")];
+        let read = |path: &str| files.iter().find(|(p, _)| *p == path).map(|(_, text)| (*text).to_owned());
+        assert_eq!(cgroup_limit("0::/\n", mounts, read), Some(1 << 30), "the namespace root's ancestor");
+        assert_eq!(cgroup_limit("0::/worker\n", mounts, read), Some(1 << 30), "the cgroup's directory is hidden");
+        let v1 = "31 25 0:27 /../.. /sys/fs/cgroup/memory rw - cgroup cgroup rw,memory\n";
+        let files = [("/sys/fs/cgroup/memory/memory.limit_in_bytes", "536870912\n")];
+        let read = |path: &str| files.iter().find(|(p, _)| *p == path).map(|(_, text)| (*text).to_owned());
+        assert_eq!(cgroup_limit("5:memory:/\n", v1, read), Some(512 << 20));
+        let sibling = "40 25 0:30 /../other /sys/fs/cgroup rw - cgroup2 cgroup2 rw\n";
+        let files = [("/sys/fs/cgroup/memory.max", "1048576\n")];
+        let read = |path: &str| files.iter().find(|(p, _)| *p == path).map(|(_, text)| (*text).to_owned());
+        assert_eq!(cgroup_limit("0::/\n", sibling, read), None, "a sibling of the namespace root is not an ancestor");
+    }
+
+    #[test]
+    fn cgroup_mounts_lists_the_hierarchy_of_the_memory_limit() {
+        let mounts = "30 25 0:26 / /sys/fs/cgroup/cpu rw - cgroup cgroup rw,cpu\n\
+                      31 25 0:27 /a\\040b /sys/fs/cgroup/memory rw - cgroup cgroup rw,memory\n\
+                      32 25 0:28 / /sys/fs/cgroup/unified rw - cgroup2 cgroup2 rw\n";
+        assert_eq!(cgroup_mounts(mounts, false), [("/a b".to_owned(), "/sys/fs/cgroup/memory".to_owned())]);
+        assert_eq!(cgroup_mounts(mounts, true), [("/".to_owned(), "/sys/fs/cgroup/unified".to_owned())]);
+        assert!(cgroup_mounts("", true).is_empty());
+    }
+
+    #[test]
+    fn mountinfo_paths_have_their_escapes_decoded() {
+        assert_eq!(mountinfo_unescape(r"/a\040b\011c\012d\134e"), "/a b\tc\nd\\e");
+        assert_eq!(mountinfo_unescape(r"/plain\9x\04"), r"/plain\9x\04", "not an escape");
+    }
+
+    #[test]
+    fn sysctl_prints_the_memory_size_in_bytes() {
+        assert_eq!(sysctl_bytes(b"17179869184\n"), Some(16 << 30));
+        assert_eq!(sysctl_bytes(b""), None);
+        assert_eq!(sysctl_bytes(b"unknown oid 'hw.memsize'\n"), None);
     }
 
     #[test]

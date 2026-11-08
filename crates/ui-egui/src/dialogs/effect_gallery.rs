@@ -30,6 +30,7 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     preview: true,
     min_width: 720.0,
     max_width: Some(820.0),
+    inputs: |_| &["browseEffect", "browseParams"],
     ..DialogSpec::FORM
 };
 

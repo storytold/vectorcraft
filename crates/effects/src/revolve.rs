@@ -12,6 +12,24 @@ use crate::{GeomContext, apply_geometry_with, is_geometry, merged_params};
 
 pub const REVOLVE: &str = "threeD.revolve";
 
+/// Most bytes the copies of the object's paint in the faces may take together. Each face and the
+/// seam stroke around it gets a copy of the paint, so a gradient of many stops times tens of
+/// thousands of faces took gigabytes; past this the source path is drawn.
+const MAX_PAINT_COPIES: usize = 256 << 20;
+
+/// About the bytes one copy of `paint` takes.
+fn paint_bytes(paint: &Paint) -> usize {
+    use std::mem::size_of;
+    use vectorcraft_doc::color::{FreeformPoint, GradientStop};
+    let own = size_of::<Paint>();
+    let Paint::Gradient(g) = paint else { return own };
+    let freeform = g
+        .freeform
+        .as_ref()
+        .map_or(0, |f| f.points.len() * size_of::<FreeformPoint>() + f.lines.iter().map(|l| l.len() * size_of::<usize>()).sum::<usize>());
+    own + size_of::<vectorcraft_doc::color::GradientPaint>() + g.gradient.stops.len() * size_of::<GradientStop>() + freeform
+}
+
 fn visible(fx: &[Effect]) -> bool {
     fx.iter().any(|e| e.visible && e.id == REVOLVE)
 }
@@ -93,6 +111,10 @@ fn surface(
     let options = revolve_options(&merged_params(REVOLVE, &fx.params));
     let colored = options.light_color != [1.0; 3] || options.lights.is_some();
     let faces = vectorcraft_three_d::revolve(path, b, options).ok()?;
+    // A face's fill, its shadow and their seam strokes: up to four copies of the paint.
+    if faces.len().saturating_mul(4).saturating_mul(paint_bytes(&paint)) > MAX_PAINT_COPIES {
+        return None;
+    }
     // Visibility is an expansion option, never a change to live geometry or export baking.
     // Keep all faces for paints whose coverage we cannot prove opaque. A bounded visibility
     // failure also retains the complete surface rather than losing any of the user's art.
@@ -181,7 +203,7 @@ fn shading_paint(g: vectorcraft_three_d::ShadeGradient, color: impl Fn(f64) -> C
     use vectorcraft_doc::color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
     let stops =
         g.brightness.into_iter().enumerate().map(|(i, s)| GradientStop { opacity: opacity(s), ..GradientStop::new(i as f32, color(s)) }).collect();
-    let mut paint = GradientPaint::new(Gradient { kind: GradientKind::Linear, stops });
+    let mut paint = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
     paint.geom = Some(GradientGeom { start: g.start, end: g.end, aspect: 1.0, focal: None });
     Paint::Gradient(Box::new(paint))
 }
@@ -202,6 +224,48 @@ pub fn revolve_art(n: &Node) -> Option<Node> {
 /// Revolve's own Expand Appearance path. The shared command and UI remain unchanged.
 pub(crate) fn expand_revolve_art(n: &Node) -> Option<Node> {
     art(n, true)
+}
+
+/// The surfaces [`revolve_art`] draws, as meshes ([`crate::three_d_meshes`]): with the effect on
+/// the object, one in its top visible fill (else its stroke); with it on fills and strokes, one for
+/// each of them. Each mesh adds its triangles to `total` as it is built, and the first that takes
+/// `total` past `limit` stops with an error before the next is built.
+pub(crate) fn revolve_meshes(n: &Node, total: &mut usize, limit: usize) -> Result<Vec<crate::SolidMesh>, String> {
+    let path = profile(n).ok_or("Revolve currently requires a path or compound path")?;
+    let ctx = GeomContext::of(n);
+    let mesh = |path: &PathData, fx: &Effect, item: &AppearanceItem| -> Result<crate::SolidMesh, String> {
+        let b = path.bounds().ok_or("Revolve requires a profile with at least two anchors")?;
+        let (paint, opacity, _) = paint_of(item);
+        let mesh = vectorcraft_three_d::revolve_mesh(path, b, revolve_options(&merged_params(REVOLVE, &fx.params)))?;
+        Ok(crate::SolidMesh { mesh, color: crate::solids::mesh_color(&paint, opacity) })
+    };
+    if let Some(index) = n.appearance.effects.iter().position(|e| e.visible && e.id == REVOLVE) {
+        let before = n.appearance.effects.get(..index).unwrap_or_default();
+        let Some(fx) = n.appearance.effects.get(index) else { return Ok(vec![]) };
+        let path = geometry(&path, before, &ctx);
+        let item = n
+            .appearance
+            .items
+            .iter()
+            .rev()
+            .find(|i| matches!(i, AppearanceItem::Fill(_)) && crate::paints(i))
+            .or_else(|| n.appearance.items.iter().rev().find(|i| crate::paints(i)))
+            .ok_or("the revolved object has no fill or stroke")?;
+        let mut out = vec![];
+        crate::solids::keep_mesh(&mut out, total, mesh(&path, fx, item)?, limit)?;
+        return Ok(out);
+    }
+    let path = geometry(&path, &n.appearance.effects, &ctx);
+    let mut out = vec![];
+    for item in n.appearance.items.iter().filter(|i| crate::paints(i)) {
+        if let Some(index) = item.effects().iter().position(|e| e.visible && e.id == REVOLVE)
+            && let Some(fx) = item.effects().get(index)
+        {
+            let p = geometry(&path, item.effects().get(..index).unwrap_or_default(), &ctx.item(item));
+            crate::solids::keep_mesh(&mut out, total, mesh(&p, fx, item)?, limit)?;
+        }
+    }
+    Ok(out)
 }
 
 fn art(n: &Node, expand: bool) -> Option<Node> {

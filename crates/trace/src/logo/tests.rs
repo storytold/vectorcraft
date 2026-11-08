@@ -62,6 +62,9 @@ fn render(w: u32, h: u32, blur: f64, shade: impl Fn(f64, f64) -> Option<[u8; 3]>
 
 const RED: [u8; 3] = [210, 40, 50];
 const BLUE: [u8; 3] = [40, 80, 200];
+const LIGHT: [u8; 3] = [240, 240, 220];
+const SKY: [u8; 3] = [40, 120, 240];
+const WHITE: [u8; 3] = [255, 255, 255];
 
 fn logo_params() -> TraceParams {
     TraceParams {
@@ -205,6 +208,99 @@ fn the_named_palette_is_used_exactly_and_a_bad_one_is_an_error() {
     assert!(matches!(trace_within(&img, &bad, 1000), Err(TraceError::BadPalette(s)) if s == "red"));
 }
 
+/// The color of the topmost path at `p` (paths are listed bottom first).
+fn top_color(res: &TraceResult, p: Point) -> Option<[u8; 3]> {
+    res.paths.iter().rev().find(|t| t.path.to_bezpath().winding(p) != 0).map(|t| t.color)
+}
+
+#[test]
+fn logo_white_off_traces_only_the_named_colors() {
+    // A light disc in a black ring, a blue square on it, and two white spots.
+    let img = render(120, 120, 0.7, |x, y| {
+        let d = (x - 60.0).hypot(y - 60.0);
+        if (x - 32.0).hypot(y - 40.0) <= 6.0 || (x - 78.0).hypot(y - 86.0) <= 6.0 {
+            Some(WHITE)
+        } else if (45.0..=75.0).contains(&x) && (45.0..=75.0).contains(&y) {
+            Some(SKY)
+        } else if d <= 46.0 {
+            Some(LIGHT)
+        } else if d <= 50.0 {
+            Some([0, 0, 0])
+        } else {
+            None
+        }
+    });
+    let named = TraceParams { logo_colors: vec!["#000000".into(), "#F0F0DC".into(), "#2878F0".into()], ..logo_params() };
+    // By default white is a fourth color.
+    let res = trace(&img, &named);
+    assert_eq!(res.palette.len(), 4, "{:?}", res.palette);
+    assert_eq!(top_color(&res, Point::new(32.0, 40.0)), Some(WHITE));
+    // Without it, the three named colors only: the white spots take the light color.
+    let res = trace(&img, &TraceParams { logo_white: false, ..named.clone() });
+    assert_eq!(res.palette.len(), 3, "{:?}", res.palette);
+    assert!(!res.palette.contains(&WHITE));
+    for p in [Point::new(32.0, 40.0), Point::new(78.0, 86.0), Point::new(20.0, 60.0)] {
+        assert_eq!(top_color(&res, p), Some(LIGHT), "at {p:?}");
+    }
+    assert_eq!(top_color(&res, Point::new(60.0, 60.0)), Some(SKY));
+    assert_eq!(top_color(&res, Point::new(60.0, 12.0)), Some([0, 0, 0]));
+    assert!(!covered(&res, Point::new(5.0, 5.0)));
+    // Ignore White still leaves the white spots out.
+    let res = trace(&img, &TraceParams { logo_white: false, ignore_white: true, ..named.clone() });
+    for p in [Point::new(32.0, 40.0), Point::new(78.0, 86.0)] {
+        assert!(!covered(&res, p), "at {p:?}");
+    }
+    assert_eq!(top_color(&res, Point::new(20.0, 60.0)), Some(LIGHT));
+}
+
+#[test]
+fn logo_white_off_keeps_a_named_white_and_knockouts_as_holes() {
+    let disc = render(64, 64, 0.7, |x, y| ((x - 32.0).hypot(y - 32.0) <= 20.0).then_some(WHITE));
+    let only_white = TraceParams { logo_colors: vec!["#ffffff".into()], logo_white: false, ..logo_params() };
+    let res = trace(&disc, &only_white);
+    assert_eq!(res.paths.len(), 1);
+    assert_eq!(res.paths[0].color, WHITE);
+    // An enclosed transparent area stays a hole: there is no white to paint it with.
+    let ring = render(64, 64, 0.7, |x, y| (12.0..=25.0).contains(&(x - 32.0).hypot(y - 32.0)).then_some(BLUE));
+    let res = trace(&ring, &TraceParams { logo_colors: vec!["#2850c8".into()], logo_white: false, ..logo_params() });
+    assert_eq!(res.paths.len(), 1);
+    assert_eq!(res.paths[0].path.subpaths.len(), 2, "outer outline and a hole");
+    assert!(!covered(&res, Point::new(32.0, 32.0)), "the hole must be empty");
+    assert!(covered(&res, Point::new(32.0, 32.0 + 18.0)), "the ring itself is filled");
+}
+
+#[test]
+fn logo_white_off_gives_each_white_the_nearest_named_color() {
+    // Red and blue are equally far from white: the white disc takes the first one named.
+    let disc = render(64, 64, 0.7, |x, y| ((x - 32.0).hypot(y - 32.0) <= 20.0).then_some(WHITE));
+    let params = TraceParams { logo_colors: vec!["#ff0000".into(), "#0000ff".into()], logo_white: false, ..logo_params() };
+    let res = trace(&disc, &params);
+    assert_eq!(top_color(&res, Point::new(32.0, 32.0)), Some([255, 0, 0]));
+    assert!(!covered(&res, Point::new(5.0, 5.0)));
+    // Each white takes the named color nearest it, so two named whites both stay.
+    const OFF: [u8; 3] = [245, 245, 245];
+    let two = render(96, 64, 0.7, |x, y| {
+        if (x - 24.0).hypot(y - 32.0) <= 16.0 {
+            Some(OFF)
+        } else if (x - 72.0).hypot(y - 32.0) <= 16.0 {
+            Some(WHITE)
+        } else {
+            None
+        }
+    });
+    let params = TraceParams { logo_colors: vec!["#f5f5f5".into(), "#ffffff".into()], logo_white: false, ..logo_params() };
+    let res = trace(&two, &params);
+    assert_eq!(top_color(&res, Point::new(24.0, 32.0)), Some(OFF));
+    assert_eq!(top_color(&res, Point::new(72.0, 32.0)), Some(WHITE));
+    // A white square on blue keeps its edges where they are when it turns red.
+    let square = render(100, 100, 0.7, |x, y| Some(if (30.0..70.0).contains(&x) && (30.0..70.0).contains(&y) { WHITE } else { [0, 0, 255] }));
+    let res = trace(&square, &TraceParams { logo_colors: vec!["#ff0000".into(), "#0000ff".into()], logo_white: false, ..logo_params() });
+    for (inside, outside) in [(30.3, 29.7), (69.7, 70.3)] {
+        assert_eq!(top_color(&res, Point::new(inside, 50.0)), Some([255, 0, 0]), "at x {inside}");
+        assert_eq!(top_color(&res, Point::new(outside, 50.0)), Some([0, 0, 255]), "at x {outside}");
+    }
+}
+
 #[test]
 fn a_large_image_is_traced_at_reduced_size_and_scaled_back() {
     let (cx, cy, r) = (1200.0, 600.0, 400.0);
@@ -216,6 +312,63 @@ fn a_large_image_is_traced_at_reduced_size_and_scaled_back() {
     let b = res.paths[0].path.bounds().expect("bounds");
     for (got, want) in [(b.x0, cx - r), (b.x1, cx + r), (b.y0, cy - r), (b.y1, cy + r)] {
         assert!((got - want).abs() < 2.0, "{got} vs {want}");
+    }
+}
+
+/// A light square inset 50 px with slanted 2 px black lines across it, on a transparent background.
+fn lined_square(n: u32) -> Raster {
+    Raster::from_fn(n, n, |x, y| {
+        if !(50..n - 50).contains(&x) || !(50..n - 50).contains(&y) {
+            [0, 0, 0, 0]
+        } else if (i64::from(x) - i64::from(y) / 8).rem_euclid(40) < 2 {
+            [0, 0, 0, 255]
+        } else {
+            [240, 240, 220, 255]
+        }
+    })
+}
+
+#[test]
+fn a_trace_averaged_down_says_the_size_it_worked_at() {
+    let named = TraceParams { logo_colors: vec!["#000000".into(), "#F0F0DC".into()], ..logo_params() };
+    // 1025 px is over the working size: averaged down by 2, to 513 px.
+    let res = trace(&lined_square(1025), &named);
+    assert!(!res.paths.is_empty());
+    assert_eq!(res.worked_at, Some((513, 513)));
+    let res = trace(&lined_square(1024), &named);
+    assert!(!res.paths.is_empty());
+    assert_eq!(res.worked_at, None);
+}
+
+#[test]
+fn named_colors_a_few_levels_off_trace_an_image_up_to_1024_px_at_full_size() {
+    // A light disc in a dark ring with a blue square on it, hard edges, 800 px square, and a dark
+    // 2 px dot on the disc at odd pixels: averaged down by 2, the dot would be a quarter of each of
+    // four pixels and leave no shape.
+    let img = Raster::from_fn(800, 800, |x, y| {
+        let (fx, fy) = (f64::from(x) / 5.0, f64::from(y) / 5.0);
+        let d = (fx - 80.0).hypot(fy - 80.0);
+        if (401..=402).contains(&x) && (201..=202).contains(&y) {
+            [4, 4, 3, 255]
+        } else if (70.0..=110.0).contains(&fx) && (70.0..=110.0).contains(&fy) {
+            [34, 124, 250, 255]
+        } else if d <= 60.0 {
+            [252, 248, 227, 255]
+        } else if d <= 68.0 {
+            [4, 4, 3, 255]
+        } else {
+            [0, 0, 0, 0]
+        }
+    });
+    for (off, names) in [(8, ["#0C0C0B", "#F4F0DB", "#1A74F2"]), (12, ["#10100F", "#F0ECD7", "#1670EE"])] {
+        let p = TraceParams { logo_colors: names.iter().map(|s| s.to_string()).collect(), ..logo_params() };
+        let res = trace(&img, &p);
+        let color_at = |p: Point| res.paths.iter().rev().find(|t| t.path.to_bezpath().winding(p) != 0).map(|t| t.color);
+        assert_eq!(res.paths.len(), 4, "names {off} levels off");
+        let (dark, cream, blue) = ([4 + off, 4 + off, 3 + off], [252 - off, 248 - off, 227 - off], [34 - off, 124 - off, 250 - off]);
+        assert_eq!(color_at(Point::new(402.0, 202.0)), Some(dark), "names {off} levels off");
+        assert_eq!(color_at(Point::new(450.0, 450.0)), Some(blue), "names {off} levels off");
+        assert_eq!(color_at(Point::new(200.0, 400.0)), Some(cream), "names {off} levels off");
     }
 }
 
@@ -305,6 +458,24 @@ fn too_many_outlines_are_refused_not_silently_truncated() {
     // Specks under the noise threshold do not count towards the limit.
     let res = trace_within(&img, &TraceParams { noise: 200, ..logo_params() }, 1_000_000).expect("trace");
     assert!(res.paths.is_empty());
+}
+
+#[test]
+fn holes_that_are_not_cut_do_not_count_towards_the_outline_limit() {
+    // A blue field with 625 holes, each filled with red, white or green: more holes than the limit, fewer of each fill.
+    const GREEN: [u8; 3] = [40, 170, 60];
+    let img = render(125, 125, 0.0, |x, y| {
+        let (cx, cy) = (x.rem_euclid(5.0), y.rem_euclid(5.0));
+        if (1.0..4.0).contains(&cx) && (1.0..4.0).contains(&cy) {
+            Some([RED, [255, 255, 255], GREEN][((x / 5.0) as usize + (y / 5.0) as usize) % 3])
+        } else {
+            Some(BLUE)
+        }
+    });
+    let res = trace_within(&img, &logo_params(), 1_000_000).expect("trace");
+    assert!(res.paths.iter().any(|p| near(p.color, BLUE, 3)), "the blue field is traced");
+    // Under Ignore White the holes are cut, so they count.
+    assert!(matches!(trace_within(&img, &TraceParams { ignore_white: true, ..logo_params() }, 1_000_000), Err(TraceError::TooComplex { .. })));
 }
 
 #[test]
@@ -499,6 +670,60 @@ fn sparse_marks_on_paper_are_not_promoted_to_colours() {
     }
 }
 
+/// Bars two pixels wide (whole pixels of one color) on white beside a black disc, with the colors
+/// found: no pixel of a bar has a 3 × 3 neighborhood of its own color, and a gray bar is a blend of
+/// black and white. Light grays, a red and a pale yellow are found and traced in their own color. A
+/// gray bar darker than about `#9B9B9B` stays black: a black stroke 1 to 1.6 px wide on the pixel
+/// grid gives the same pixels. A single bar two pixels wide and three pixels long, down or across
+/// the image, is found in its color too.
+#[test]
+fn a_bar_two_pixels_wide_beside_black_art_is_found_in_its_color() {
+    const INK: [u8; 3] = [4, 4, 3];
+    let layouts = [
+        (
+            vec![(50..52, 8..50), (60..110, 30..32)],
+            vec![Point::new(51.0, 20.0), Point::new(51.0, 40.0), Point::new(70.0, 31.0), Point::new(100.0, 31.0)],
+        ),
+        (vec![(50..52, 20..23)], vec![Point::new(51.0, 21.5)]),
+        (vec![(70..73, 30..32)], vec![Point::new(71.5, 31.0)]),
+    ];
+    for (bars, points) in &layouts {
+        for (bar, want) in [
+            ([170u8, 170, 170], None),
+            ([200, 200, 200], None),
+            ([230, 230, 230], None),
+            ([210, 40, 50], None),
+            ([250, 230, 150], None),
+            ([128, 128, 128], Some(INK)),
+            ([51, 51, 51], Some(INK)),
+        ] {
+            if bars.len() == 1 && bar == [128, 128, 128] {
+                // Half ink and half paper, a single bar three pixels long is traced as paper.
+                continue;
+            }
+            let img = Raster::from_fn(120, 60, |x, y| {
+                let (fx, fy) = (f64::from(x) + 0.5, f64::from(y) + 0.5);
+                let c = if (fx - 25.0).hypot(fy - 28.0) <= 18.0 {
+                    INK
+                } else if bars.iter().any(|(xs, ys)| xs.contains(&x) && ys.contains(&y)) {
+                    bar
+                } else {
+                    [255, 255, 255]
+                };
+                [c[0], c[1], c[2], 255]
+            });
+            let res = trace(&img, &crate::preset("Flat Logo").unwrap());
+            let colour_at = |p: Point| res.paths.iter().rev().find(|t| t.path.to_bezpath().winding(p) != 0).map(|t| t.color);
+            let paths: Vec<_> = res.paths.iter().map(|t| (t.color, t.pixels)).collect();
+            let want = want.unwrap_or(bar);
+            for &at in points {
+                assert_eq!(colour_at(at), Some(want), "bars {bars:?}, bar {bar:?}: {at:?}; {paths:?}");
+            }
+            assert_eq!(colour_at(Point::new(25.0, 28.0)), Some(INK), "bars {bars:?}, bar {bar:?}: the disc; {paths:?}");
+        }
+    }
+}
+
 /// Three rows of thin anti-aliased "lettering" (rings, slants and bars 1.6 px wide) in red, blue
 /// and green on white. The lighter shades along the strokes' anti-aliased edges are blends of an
 /// ink with the paper, not colours of their own: the palette is the three inks and white.
@@ -533,5 +758,26 @@ fn anti_aliased_coloured_lettering_has_only_its_inks() {
     assert_eq!(colours.len(), 3, "palette {:?}", res.palette);
     for ink in INKS {
         assert!(colours.iter().any(|&c| near(c, ink, 12)), "{ink:?} missing from {:?}", res.palette);
+    }
+}
+
+/// An outline whose fit has no area is left out. A pixel-sized black and cream noise, with both
+/// colors named exactly, fits some specks to two anchors whose segments run along one line and
+/// others to one anchor, which has no segment.
+#[test]
+fn an_outline_fitted_without_area_is_left_out() {
+    use kurbo::ParamCurveArea;
+    let noise = render(96, 96, 0.0, |x, y| {
+        let n = ((x.floor() * 12.9898 + y.floor() * 78.233).sin() * 43758.5453).fract();
+        Some(if n > 0.5 { [4, 4, 3] } else { [252, 248, 227] })
+    });
+    let res = trace(&noise, &TraceParams { logo_colors: vec!["#040403".into(), "#FCF8E3".into()], ..logo_params() });
+    assert!(res.paths.len() > 1, "{} paths", res.paths.len());
+    for t in &res.paths {
+        for sp in &t.path.subpaths {
+            let origin = sp.anchors[0].p.to_vec2();
+            let area: f64 = (0..sp.segment_count()).map(|i| (kurbo::Affine::translate(-origin) * sp.segment(i)).signed_area()).sum();
+            assert!(area.abs() >= 1e-6, "a {:?} subpath of {} anchors with area {area:e}", t.color, sp.anchors.len());
+        }
     }
 }

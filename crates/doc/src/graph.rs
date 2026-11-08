@@ -127,7 +127,7 @@ impl crate::Document {
                 break;
             }
             let Some(name) = GraphDesign::clean_name(&d.name) else { continue };
-            if kept.iter().any(|k| k.name == name) || d.art.count() > GraphDesign::MAX_NODES {
+            if kept.iter().any(|k| k.name == name) || d.art.count_with_masks() > GraphDesign::MAX_NODES {
                 continue;
             }
             kept.push(GraphDesign { name, art: std::sync::Arc::new(GraphDesign::plain_art(&d.art)) });
@@ -314,6 +314,13 @@ pub struct SeriesPaint {
     /// Stroke weight in points, kept with [`Self::stroke`].
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stroke_width: Option<f64>,
+    /// Opacity (0..1) of the topmost fill of each path directly in the series group (graph designs keep their own),
+    /// taken from the topmost fill row edited on one of them. Absent: fully opaque.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fill_opacity: Option<f32>,
+    /// Opacity (0..1) of the topmost stroke of each path directly in the series group, as [`Self::fill_opacity`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stroke_opacity: Option<f32>,
 }
 
 /// Graph data and options. `rows` are categories (one per row of the Graph Data window), each

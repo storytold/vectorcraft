@@ -6,7 +6,8 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use craft_pdf::syntax::Pdf;
-use craft_pdf::syntax::object::{Array, Dict, Object, ObjectIdentifier, Stream, String as PdfString};
+use craft_pdf::syntax::object::{Array, Dict, MaybeRef, Object, ObjectIdentifier, Stream, String as PdfString};
+use craft_pdf::syntax::xref::XRef;
 use craft_pdf::write::backend as krilla;
 use krilla::embed::{AssociationKind, EmbeddedFile, MimeType};
 use krilla::metadata::DateTime;
@@ -81,7 +82,7 @@ pub(crate) fn editing_in(pdf: &Pdf) -> Option<Editing> {
     let xref = pdf.xref();
     let catalog = xref.get::<Dict<'_>>(xref.root_id())?;
     let tree = catalog.get::<Dict<'_>>(b"Names")?.get::<Dict<'_>>(b"EmbeddedFiles")?;
-    let spec = editing_spec(&tree, 0, &mut HashSet::new())?;
+    let spec = editing_spec(&tree, 0, &mut HashSet::new(), xref)?;
     let files = spec.get::<Dict<'_>>(b"EF")?;
     let stream = files.get::<Stream<'_>>(b"F").or_else(|| files.get::<Stream<'_>>(b"UF"))?;
     let data = stream.decoded().map(|d| d.into_owned()).unwrap_or_default();
@@ -97,7 +98,7 @@ pub(crate) fn editing_in(pdf: &Pdf) -> Option<Editing> {
 
 /// The file specification of the editing file in the name tree node `node`. `seen` holds the indirect
 /// nodes already searched, so a node shared by many `Kids` arrays is searched once, not once per path.
-fn editing_spec<'a>(node: &Dict<'a>, depth: usize, seen: &mut HashSet<ObjectIdentifier>) -> Option<Dict<'a>> {
+fn editing_spec<'a>(node: &Dict<'a>, depth: usize, seen: &mut HashSet<ObjectIdentifier>, xref: &'a XRef) -> Option<Dict<'a>> {
     if let Some(names) = node.get::<Array<'a>>(b"Names") {
         let mut items = names.iter::<Object<'a>>();
         while let (Some(_), Some(spec)) = (items.next(), items.next()) {
@@ -112,12 +113,15 @@ fn editing_spec<'a>(node: &Dict<'a>, depth: usize, seen: &mut HashSet<ObjectIden
         return None;
     }
     let kids = node.get::<Array<'a>>(b"Kids")?;
-    // Only a referenced kid can be shared (a direct kid's `obj_id` is the object holding it).
-    items(&kids).zip(kids.iter::<Dict<'a>>()).find_map(|(raw, kid)| {
-        if raw.as_obj_ref().is_some_and(|r| !seen.insert(r.into())) {
-            return None;
-        }
-        editing_spec(&kid, depth + 1, seen)
+    // Only a referenced kid can be shared (a direct kid's `obj_id` is the object holding it). The
+    // reference is checked before the kid is read, so a shared kid is read once.
+    items(&kids).find_map(|raw| {
+        let kid = match raw {
+            MaybeRef::Ref(r) if seen.insert(r.into()) => xref.get::<Dict<'a>>(r.into())?,
+            MaybeRef::NotRef(Object::Dict(kid)) => kid,
+            _ => return None,
+        };
+        editing_spec(&kid, depth + 1, seen, xref)
     })
 }
 
@@ -130,14 +134,40 @@ fn is_editing_file(spec: &Dict<'_>) -> bool {
     })
 }
 
-/// FNV-1a of the pages' media boxes and decoded content, as 16 hex digits.
+/// The most decoded page content [`page_hash`] reads in all (bytes).
+const MAX_HASHED: usize = 256 << 20;
+
+/// FNV-1a of the pages' media boxes and decoded content, as 16 hex digits. Past [`MAX_HASHED`]
+/// bytes of content in all (pages sharing a stream count it each time) a marker stands for the
+/// rest, so writing and reading a file hash it the same way within bounded work.
 fn page_hash(pdf: &Pdf) -> String {
     let fnv = |h: u64, bytes: &[u8]| bytes.iter().fold(h, |h, b| (h ^ u64::from(*b)).wrapping_mul(0x100000001b3));
+    let mut left = MAX_HASHED;
+    let mut content = |h: u64, stream: &Stream<'_>| {
+        if left > 0
+            && let Ok(data) = stream.decoded_within(left)
+            && data.len() < left
+        {
+            left -= data.len();
+            return fnv(h, &data);
+        }
+        left = 0;
+        fnv(h, b"\0past the hashed content")
+    };
     let mut h = 0xcbf29ce484222325;
     for page in pdf.pages().iter() {
         let b = page.media_box();
         h = fnv(h, format!("[{} {} {} {}]", b.x0, b.y0, b.x1, b.y1).as_bytes());
-        h = fnv(h, page.page_stream().unwrap_or_default());
+        // Decode into a temporary rather than through `Page::page_stream`, which keeps every
+        // page's copy for as long as the PDF lives, even when pages share one stream.
+        let contents = page.raw();
+        if let Some(stream) = contents.get::<Stream<'_>>(b"Contents") {
+            h = content(h, &stream);
+        } else if let Some(array) = contents.get::<Array<'_>>(b"Contents") {
+            for stream in array.iter::<Stream<'_>>() {
+                h = fnv(content(h, &stream), b" ");
+            }
+        }
     }
     format!("{h:016x}")
 }

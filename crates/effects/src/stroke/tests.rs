@@ -21,6 +21,11 @@ fn stroke(width: f64, f: impl FnOnce(&mut StrokeLayer)) -> StrokeLayer {
     st
 }
 
+#[test]
+fn dash_period_overflowing_to_infinity_is_solid() {
+    assert!(dash(&line(0.0, 60.0), &dashed(&[f64::MAX, f64::MAX], -1.0)).is_none());
+}
+
 fn dashed(pattern: &[f64], offset: f64) -> Dash {
     Dash { pattern: pattern.to_vec(), offset, align_corners: false }
 }
@@ -105,6 +110,80 @@ fn dashes_follow_arc_length_and_join_across_the_start_of_closed_paths() {
     assert!(dash(&line(0.0, 1e6), &dashed(&[0.001, 0.001], 0.0)).is_none());
 }
 
+/// The dashes of `d` as (start x, end x), for dashes along the x axis.
+fn spans_x(d: &Dashed) -> Vec<(f64, f64)> {
+    let mut out = vec![];
+    for el in d.path.elements() {
+        match el {
+            PathEl::MoveTo(p) => out.push((p.x, p.x)),
+            PathEl::LineTo(p) => {
+                if let Some(last) = out.last_mut() {
+                    last.1 = p.x;
+                }
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// Ten segments of 10 pt along the x axis from 0 to 100.
+fn steps() -> BezPath {
+    let mut b = BezPath::new();
+    b.move_to((0.0, 0.0));
+    for i in 1..=10 {
+        b.line_to((f64::from(i) * 10.0, 0.0));
+    }
+    b
+}
+
+/// Whether a segment lies outside x 30..60.
+fn outside(s: &PathSeg) -> bool {
+    s.start().x >= 60.0 || s.end().x <= 30.0
+}
+
+#[test]
+fn dashes_kept_on_some_segments_keep_the_phase_of_the_whole_line() {
+    // A period of 7 starting 2 into it: dashes at -2..2, 5..9, 12..16, …
+    let pattern = dashed(&[4.0, 3.0], 2.0);
+    let all = dash(&steps(), &pattern).unwrap();
+    let kept = dash_kept(&steps(), &pattern, &|s| outside(s)).unwrap();
+    // The dashes of the whole line, cut at x 30 and 60.
+    let cut: Vec<(f64, f64)> =
+        spans_x(&all).into_iter().flat_map(|(a, b)| [(a, b.min(30.0)), (a.max(60.0), b)]).filter(|(a, b)| b - a > 1e-9).collect();
+    let got = spans_x(&kept);
+    assert_eq!(got.len(), cut.len(), "{got:?} against {cut:?}");
+    for ((a, b), (c, d)) in got.iter().zip(&cut) {
+        assert!(near(*a, *c, 1e-9) && near(*b, *d, 1e-9), "{got:?} against {cut:?}");
+    }
+    // The dash after the gap starts where the whole line's does, at 61, not at 60.
+    assert!(got.iter().any(|(a, _)| near(*a, 61.0, 1e-9)), "{got:?}");
+    // Dots on segments left out are left out (the dot at 60 ends a segment left out).
+    let dots = dash_kept(&steps(), &dashed(&[0.0, 5.0], 0.0), &|s| outside(s)).unwrap();
+    let xs: Vec<f64> = dots.dots.iter().map(|d| d.at.x).collect();
+    let want = [0.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 65.0, 70.0, 75.0, 80.0, 85.0, 90.0, 95.0, 100.0];
+    assert!(xs.len() == want.len() && xs.iter().zip(want).all(|(x, w)| near(*x, w, 1e-9)), "{xs:?}");
+    // Keeping every segment is the whole line's dashing, and keeping none leaves nothing.
+    assert_eq!(dash_kept(&steps(), &pattern, &|_| true).unwrap().path, all.path);
+    let none = dash_kept(&steps(), &pattern, &|_| false).unwrap();
+    assert!(none.path.elements().is_empty() && none.dots.is_empty());
+    // A pattern too fine for the whole line draws it solid, however few segments are kept.
+    assert!(dash_kept(&line(0.0, 1e6), &dashed(&[0.001, 0.001], 0.0), &|s| s.start().x < 1.0).is_none());
+}
+
+#[test]
+fn a_closed_path_with_segments_left_out_is_dashed_in_open_pieces() {
+    // One dash all the way round: with the right side left out it is no longer closed.
+    let keep_left = |s: &PathSeg| s.start().x < 5.0 || s.end().x < 5.0;
+    let whole = dash_kept(&square(10.0), &dashed(&[100.0, 1.0], 0.0), &keep_left).unwrap();
+    assert!(!is_closed(&whole.path), "{:?}", whole.path.to_svg());
+    // The bottom side left out: of the 10 dashes, the one through the start point stays one dash,
+    // the one into the bottom side is cut and the two on it are left out.
+    let kept = dash_kept(&square(100.0), &dashed(&[20.0, 20.0], 10.0), &|s| s.start().y < 50.0 || s.end().y < 50.0).unwrap();
+    assert_eq!(moves(&kept.path), 8, "{}", kept.path.to_svg());
+    assert!(!kept.path.elements().iter().any(|e| matches!(e, PathEl::MoveTo(p) if p.distance(Point::ZERO) < 1e-9)), "{}", kept.path.to_svg());
+}
+
 #[test]
 fn dot_outlines_take_the_cap_shape_and_wind_like_stroked_dashes() {
     let dots = [Dot { at: Point::new(10.0, 0.0), dir: Vec2::new(1.0, 0.0), t: 0.0 }];
@@ -146,20 +225,23 @@ fn expand_stroke_region_of_a_round_line_stays_compact() {
     assert_eq!(dense_anchors, anchors, "colinear spine points should not add outline anchors");
 }
 
+/// A line's outline takes its width profile, its dashes (each reading the profile where it sits) or neither.
 #[test]
 fn line_outline_uses_the_profile_dashes_or_a_plain_stroke() {
     let l = line(0.0, 100.0);
     let plain = line_outline(&l, &stroke(10.0, |_| {}), 10.0, 1e-3);
     assert!(near(plain.area().abs(), 1000.0, 1e-6));
     let lens = line_outline(&l, &stroke(10.0, |s| s.profile = Some(WidthProfile::lens())), 10.0, 1e-3);
-    assert!(near(lens.area().abs(), 500.0, 1e-6));
-    // Each dash takes its widths from where it sits along the lens (0 → 1 → 0): the dash over
-    // 0..25 averages a quarter of the width, the one over 50..75 three quarters.
+    // The lens swells on a cubic, flat at the middle: 7/12 of the full-width band (#5714).
+    assert!(near(lens.area().abs(), 1000.0 * 7.0 / 12.0, 0.05));
+    // Each dash takes its widths from where it sits along the lens (0 → 1 → 0). Half of the lens
+    // rises as w(u) = u + u² − u³ (u from 0 to 1 across that half): the dash over 0..25 covers
+    // its first half, ∫₀^½ w = 29/192, the one over 50..75 the wider other half, 83/192.
     let st = stroke(10.0, |s| {
         s.profile = Some(WidthProfile::lens());
         s.dash = Some(dashed(&[25.0, 25.0], 0.0));
     });
-    assert!(near(line_outline(&l, &st, 10.0, 1e-3).area().abs(), 62.5 + 187.5, 1e-6));
+    assert!(near(line_outline(&l, &st, 10.0, 1e-3).area().abs(), 500.0 * (29.0 + 83.0) / 192.0, 0.05));
     assert!(line_outline(&BezPath::new(), &st, 10.0, 1e-3).elements().is_empty());
 }
 
@@ -420,5 +502,47 @@ fn a_stroke_narrower_than_the_shape_keeps_its_hole() {
         assert_ne!(outline.winding(Point::new(6.0, 0.0)), 0, "{join:?}");
         assert_ne!(outline.winding(Point::new(200.0, 0.0)), 0, "{join:?}: the small circle is solid");
         assert_eq!(moves(&outline), 3, "{join:?}: two contours for the ring, one for the blob");
+    }
+}
+
+/// A subpixel stroke must retain its geometric thickness even when the normal display tolerance
+/// is close to its weight. Original uneven circular arcs, independent of any user fixture.
+#[test]
+fn thin_curved_strokes_keep_their_width_between_notches() {
+    use kurbo::{CubicBez, ParamCurve, ParamCurveDeriv, Shape};
+    for (radius, degrees) in [(450.0, 47.0_f64), (438.0, 77.0), (450.0, 54.0)] {
+        let a = degrees.to_radians();
+        let k = 4.0 / 3.0 * (a / 4.0).tan();
+        let curve = CubicBez::new(
+            (radius, 0.0),
+            (radius, k * radius),
+            (radius * a.cos() + k * radius * a.sin(), radius * a.sin() - k * radius * a.cos()),
+            (radius * a.cos(), radius * a.sin()),
+        );
+        let mut line = BezPath::new();
+        line.move_to(curve.p0);
+        line.curve_to(curve.p1, curve.p2, curve.p3);
+        for width in [0.25, 1.0 / 3.0, 0.5, 1.0] {
+            let st = StrokeLayer::new(Paint::solid(Color::BLACK), width);
+            let outline = line_outline(&line, &st, width, 0.25);
+            for step in 1..40 {
+                let t = step as f64 / 40.0;
+                let p = curve.eval(t);
+                let tangent = curve.deriv().eval(t).to_vec2().normalize();
+                let normal = kurbo::Vec2::new(-tangent.y, tangent.x);
+                for side in [-1.0, 1.0] {
+                    assert_ne!(
+                        outline.winding(p + normal * (side * width * 0.45)),
+                        0,
+                        "missing inner band at radius {radius}, {degrees} degrees, width {width}, t {t}"
+                    );
+                    assert_eq!(
+                        outline.winding(p + normal * (side * width * 0.55)),
+                        0,
+                        "outside intended band at radius {radius}, {degrees} degrees, width {width}, t {t}"
+                    );
+                }
+            }
+        }
     }
 }

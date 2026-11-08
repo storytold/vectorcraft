@@ -3,7 +3,7 @@
 
 use serde_json::Value;
 
-use super::*;
+use super::{Point, Rect, Result, bad, bool_or, fileio, shapes, str_param};
 
 /// Text files as `file.place` reports them (not a format `document.open` reads).
 pub(super) const FORMAT: fileio::Format = fileio::Format {
@@ -96,7 +96,7 @@ fn decode(bytes: &[u8], o: TextOptions) -> String {
 }
 
 /// Byte `b` of Windows-1252.
-pub(super) fn windows_1252(b: u8) -> char {
+pub(in crate::cmd) fn windows_1252(b: u8) -> char {
     const HIGH: [char; 32] = [
         '€', '\u{81}', '‚', 'ƒ', '„', '…', '†', '‡', 'ˆ', '‰', 'Š', '‹', 'Œ', '\u{8D}', 'Ž', '\u{8F}', //
         '\u{90}', '‘', '’', '“', '”', '•', '–', '—', '˜', '™', 'š', '›', 'œ', '\u{9D}', 'ž', 'Ÿ',

@@ -8,19 +8,23 @@
 //! (`…settings as file.new`), or, naming none, any key (the options of the format an export picks). Objects inside a value aren't
 //! described key by key, so only the top level is checked.
 //!
-//! Callers outside the app (the control channel, MCP, the CLI) are answered with a parameter error
-//! for a key the description doesn't name ([`check_params`]): a misspelt `widht` no longer runs the
-//! command with its default. So are the `params` of an effect (#1592): `effect.apply` and
+//! [`Session::execute`] answers a key the description doesn't name with a parameter error
+//! ([`check_params`]), for every caller (the app, the control channel, MCP, the CLI) and for the
+//! commands a command runs, the steps of a `command.batch` or an `action.batch` included: a
+//! misspelled `widht` no longer runs the command with its default. So are the `params` of an
+//! effect (#1592): `effect.apply` and
 //! `effect.setParams` answer a key the effect doesn't take, or a value of another type than its
-//! default, with a parameter error ([`check_effect_params`]). [`Session::execute`] itself takes
-//! what it is given, so the journal of an older version still replays, except for an effect's
-//! `color` that the effect can't read and a Levels or Curves `channel` that the effect doesn't
-//! have, which `effect.apply` and `effect.setParams` refuse themselves ([`check_effect_color`],
-//! [`check_effect_channel`]).
+//! default, with a parameter error ([`check_effect_params`]).
+//!
+//! Saved steps play through [`Session::replay`] instead: a journal or an action recorded by an older
+//! version, with a key a command no longer reads or an effect parameter it no longer takes, still
+//! plays. Even there, an effect's `color` that the effect can't read and a Levels or Curves
+//! `channel` that the effect doesn't have are refused by `effect.apply` and `effect.setParams`
+//! themselves ([`check_effect_color`], [`check_effect_channel`]).
 
 use serde_json::Value;
 
-use super::{bad, find_command};
+use super::{bad, command_specs, find_command};
 use crate::Result;
 
 /// What a params description says about the keys of the params object.
@@ -161,6 +165,32 @@ pub(crate) fn takes_key(doc: &'static str, key: &str) -> bool {
     doc_keys(doc).is_ok_and(|parsed| parsed.keys.contains(&key)) || accepted(doc, 0).is_some_and(|keys| keys.contains(&key))
 }
 
+/// Does the description `doc` take `id` as `ids` of one object (`{ids?|id?}`, `{id?, ids?: …
+/// (instead of id)}`, `{id} or {ids: […]}`): it names both keys, and no params object of it names
+/// `ids` beside a required `id`, which is something else (`plugin.run {id, ids?}`: the plug-in's)?
+pub(crate) fn id_stands_for_ids(doc: &'static str) -> bool {
+    fn head(alternative: &str) -> &str {
+        alternative.split([':', '=', '(']).next().unwrap_or_default().trim()
+    }
+    if !takes_key(doc, "ids") || !takes_key(doc, "id") {
+        return false;
+    }
+    let mut rest = doc;
+    while let Ok((body, after)) = object_body(rest) {
+        let entries = split_top(body, ',');
+        let required_id = entries.iter().any(|e| split_top(e, '|').len() == 1 && head(e) == "id");
+        let names_ids = entries.iter().any(|e| split_top(e, '|').iter().any(|a| head(a).trim_end_matches('?').trim_end() == "ids"));
+        if required_id && names_ids {
+            return false;
+        }
+        match after.trim_start().strip_prefix("or ").or_else(|| after.trim_start().strip_prefix("| ")).filter(|r| r.starts_with('{')) {
+            Some(next) => rest = next,
+            None => break,
+        }
+    }
+    true
+}
+
 /// The edits (insert, delete, replace, swap of neighbours) that turn `a` into `b`, ignoring case.
 fn distance(a: &str, b: &str) -> usize {
     let (a, b): (Vec<char>, Vec<char>) = (a.chars().map(|c| c.to_ascii_lowercase()).collect(), b.chars().map(|c| c.to_ascii_lowercase()).collect());
@@ -182,8 +212,12 @@ fn distance(a: &str, b: &str) -> usize {
 
 /// The key of `keys` a misspelt `key` most likely meant: the nearest one, when it is near.
 fn nearest<'a>(key: &str, keys: &[&'a str]) -> Option<&'a str> {
-    let near = keys.iter().map(|k| (distance(key, k), *k)).min()?;
-    (near.0 <= (key.chars().count() / 3).max(1)).then_some(near.1)
+    let len = key.chars().count();
+    let most = (len / 3).max(1);
+    // A key whose length differs by more than `most` is more than `most` edits away and isn't
+    // measured.
+    let near = keys.iter().filter(|k| k.chars().count().abs_diff(len) <= most).map(|k| (distance(key, k), *k)).min()?;
+    (near.0 <= most).then_some(near.1)
 }
 
 /// `params` has only keys the description `doc` of command `id` names, or the parameter error
@@ -202,7 +236,7 @@ pub fn check_keys(id: &str, doc: &'static str, params: &Value) -> Result<()> {
 
 /// The parameter error of command `id` for `key`, which isn't one of `keys`: with the nearest of
 /// them, or all of them.
-fn unknown(id: &str, key: &str, keys: &[&str]) -> crate::EngineError {
+pub(crate) fn unknown(id: &str, key: &str, keys: &[&str]) -> crate::EngineError {
     bad(
         id,
         match nearest(key, keys) {
@@ -245,6 +279,29 @@ pub fn check_effect_params(id: &str, effect: &str, params: &Value) -> Result<()>
             _ => {}
         }
     }
+    // An SVG filter's XML is one drawable <filter> element.
+    if effect == vectorcraft_render::effects::SVG_FILTER
+        && let Some(xml) = given.get("xml")
+    {
+        let xml = xml.as_str().ok_or_else(|| bad(id, "`xml` must be a string"))?;
+        vectorcraft_render::effects::svg_filter::check(xml).map_err(|e| bad(id, e))?;
+    }
+    if effect == vectorcraft_render::effects::SVG_FILTER
+        && let Some(scale) = given.get("scale")
+        && !scale.as_f64().is_some_and(|k| (0.001..=1000.0).contains(&k))
+    {
+        return Err(bad(id, "`scale` must be a number from 0.001 to 1000"));
+    }
+    if effect == vectorcraft_render::effects::SVG_FILTER
+        && let Some(origin) = given.get("origin")
+        && !origin.as_array().is_some_and(|o| o.len() == 2 && o.iter().all(|v| v.as_f64().is_some_and(f64::is_finite)))
+    {
+        return Err(bad(id, "`origin` must be [x, y] in points"));
+    }
+    // Its name is the filter's id.
+    if effect == vectorcraft_render::effects::SVG_FILTER && given.contains_key("name") && !given.contains_key("xml") {
+        return Err(bad(id, "an SVG filter is named by its id: give `xml` with `name`"));
+    }
     check_effect_color(id, effect, params)?;
     check_effect_channel(id, effect, params)
 }
@@ -273,14 +330,28 @@ fn is_effect_color(v: &Value) -> bool {
 pub(crate) fn check_effect_color(id: &str, effect: &str, params: &Value) -> Result<()> {
     let key = "color";
     let Some(v) = params.get(key) else { return Ok(()) };
-    if effect.starts_with(vectorcraft_plugins::effect::PREFIX) {
-        return Ok(());
-    }
-    let takes_color = vectorcraft_render::effects::effect_info(effect).is_some_and(|info| info.defaults.get(key).is_some_and(Value::is_string));
-    if takes_color && !is_effect_color(v) {
+    if effect_takes_color(effect) && !is_effect_color(v) {
         return Err(bad(id, format!("`{key}` must be a #rrggbb color")));
     }
     Ok(())
+}
+
+/// Does built-in effect `effect` have a `color` parameter (one whose default is a string)? Plug-in
+/// effects have none here.
+pub(crate) fn effect_takes_color(effect: &str) -> bool {
+    !effect.starts_with(vectorcraft_plugins::effect::PREFIX)
+        && vectorcraft_render::effects::effect_info(effect).is_some_and(|info| info.defaults.get("color").is_some_and(Value::is_string))
+}
+
+/// The color that built-in effect `effect` draws with `params`: their `color`, else the effect's
+/// default color. `None` when the effect has no `color` parameter ([`effect_takes_color`]) or
+/// `params` hold a `color` it can't read ([`is_effect_color`]).
+pub(crate) fn effect_color(effect: &str, params: &Value) -> Option<vectorcraft_color::Color> {
+    if !effect_takes_color(effect) || params.get("color").is_some_and(|v| !is_effect_color(v)) {
+        return None;
+    }
+    let merged = vectorcraft_render::effects::merged_params(effect, params);
+    Some(vectorcraft_render::effects::color_param(&merged, vectorcraft_color::Color::BLACK))
 }
 
 /// The `channel` in `params` of Levels or Curves (`effect`), as command `id` was given it: a
@@ -409,7 +480,6 @@ pub const UNCHECKED: &[&str] = &[
     "shape.flare",
     "shape.polarGrid",
     "shape.rectangularGrid",
-    "stroke.set",
     "stroke.setAdvanced",
     "swatch.edit",
     "swatch.library.load",
@@ -430,10 +500,16 @@ pub const UNCHECKED: &[&str] = &[
     "webExport.settings",
 ];
 
-/// [`check_keys`] for an engine command, the steps of a `command.batch` included, and
+/// [`check_keys`] for an engine command, the steps of a `command.batch` or an `action.batch` included, and
 /// [`check_effect_params`] for the effect `effect.apply` adds. A command the engine doesn't have
 /// passes: running it reports that.
 pub fn check_params(id: &str, params: &Value) -> Result<()> {
+    check_params_in(id, params, false)
+}
+
+/// [`check_params`] for a step of a batch when `in_batch`: batches can't nest, so the steps of a
+/// `command.batch` or `action.batch` step aren't checked (running it reports that), however deep they go.
+fn check_params_in(id: &str, params: &Value, in_batch: bool) -> Result<()> {
     let Some(spec) = find_command(id) else { return Ok(()) };
     if let ("effect.apply" | "appearance.addEffect", Some(effect), Some(given)) =
         (id, params.get("effect").or_else(|| params.get("id")).and_then(Value::as_str), params.get("params"))
@@ -444,14 +520,29 @@ pub fn check_params(id: &str, params: &Value) -> Result<()> {
         return Ok(());
     }
     check_keys(id, spec.params, params)?;
-    if id == "command.batch" {
+    if matches!(id, "command.batch" | "action.batch") && !in_batch {
         for step in params.get("commands").and_then(Value::as_array).into_iter().flatten() {
             if let (Some(step_id), Some(step_params)) = (step.get("command").and_then(Value::as_str), step.get("params")) {
-                check_params(step_id, step_params)?;
+                check_params_in(step_id, step_params, true)?;
             }
         }
     }
     Ok(())
+}
+
+/// The command id a misspelled `id`, which names no command, most likely meant: the nearest one,
+/// when it is near (as [`check_keys`] matches a misspelled key).
+pub(crate) fn nearest_command(id: &str) -> Option<&'static str> {
+    let ids: Vec<&'static str> = command_specs().iter().map(|c| c.id).collect();
+    nearest(id, &ids)
+}
+
+/// The error for `id`, which names no command: with the nearest command id, when one is near.
+pub(crate) fn unknown_command(id: &str) -> crate::EngineError {
+    match nearest_command(id) {
+        Some(near) => crate::EngineError::UnknownCommandNear(id.to_string(), near.to_string()),
+        None => crate::EngineError::UnknownCommand(id.to_string()),
+    }
 }
 
 impl crate::Session {

@@ -3,6 +3,7 @@
 //! the size, position and maximized state saved with the UI preferences (`UiState::window`), moved
 //! onto a monitor that is still connected.
 
+use vectorcraft_ui_egui::DockMonitor;
 use vectorcraft_ui_egui::state::WindowGeometry;
 use winit::dpi::{LogicalSize, PhysicalPosition, PhysicalSize};
 
@@ -13,6 +14,9 @@ pub const MIN_SIZE: [f32; 2] = [800.0, 500.0];
 /// Room the first window leaves around itself for a taskbar, Dock or menu bar (the system doesn't
 /// say how much of the screen they take): a monitor with less room opens it maximized.
 const SCREEN_ROOM: [f32; 2] = [64.0, 128.0];
+
+/// Seconds between readings of the monitor list, which picks up a monitor connected while the app runs.
+const MONITORS_EVERY: f64 = 1.0;
 
 /// A monitor: its top-left corner and size in physical pixels, and its scale factor.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -67,6 +71,15 @@ impl Monitor {
             i32::try_from(want.max(lo).min(hi)).unwrap_or_default()
         })
     }
+
+    /// This monitor for floating panels, in the points egui reports for a window on it: physical
+    /// pixels divided by the monitor's scale factor and the UI zoom.
+    fn docking(&self, name: Option<String>, zoom: f32) -> DockMonitor {
+        let scale = self.scale * zoom;
+        let [x, y] = self.pos;
+        let [w, h] = self.size;
+        DockMonitor { name, rect: [x, y, w, h].map(|v| v as f32 / scale), scale }
+    }
 }
 
 /// Where the window opens: `saved` (the last session's geometry) kept on a connected monitor, else
@@ -109,8 +122,36 @@ fn fit(size: [f32; 2], room: [f32; 2]) -> [f32; 2] {
     std::array::from_fn(|i| size[i].min(room[i]).max(MIN_SIZE[i].min(room[i])).max(1.0))
 }
 
+/// Whether to list the monitors again: on the first frame, when the UI zoom changed, and at most
+/// every [`MONITORS_EVERY`] seconds while the app draws. `listed` holds the last list's time and zoom.
+pub fn monitors_due(listed: Option<(f64, f32)>, now: f64, zoom: f32) -> bool {
+    listed.is_none_or(|(at, listed_zoom)| listed_zoom != zoom || now - at >= MONITORS_EVERY)
+}
+
+/// The connected monitors for floating panels (`Services::dock_monitors`).
+pub fn dock_monitors(window: &winit::window::Window, zoom: f32) -> Vec<DockMonitor> {
+    let monitors: Vec<_> = window.available_monitors().map(|m| (Monitor::new(m.position(), m.size(), m.scale_factor()), m.name())).collect();
+    docking_list(&monitors, zoom, cfg!(target_os = "macos"))
+}
+
+/// The list for floating panels, empty when `monitors` have different scales and `shared_points` is
+/// false. macOS has one desktop of points. Elsewhere a new window multiplies its saved position by the
+/// scale of the monitor it is created on, which can put a window saved on another scale off every
+/// monitor. With an empty list craft-ui opens the window on the main window's monitor.
+///
+/// A name that two monitors share is left out, so craft-ui finds those monitors by their rects: macOS
+/// can give two displays of one model the same name.
+fn docking_list(monitors: &[(Monitor, Option<String>)], zoom: f32, shared_points: bool) -> Vec<DockMonitor> {
+    if !shared_points && monitors.windows(2).any(|pair| pair[0].0.scale != pair[1].0.scale) {
+        return Vec::new();
+    }
+    let unique = |name: &String| monitors.iter().filter(|(_, other)| other.as_ref() == Some(name)).count() == 1;
+    monitors.iter().map(|(monitor, name)| monitor.docking(name.clone().filter(unique), zoom)).collect()
+}
+
 /// Size and place the new window (eframe shows it after drawing the first frame) and return its
-/// geometry.
+/// geometry. On Linux the window may not be mapped yet, so [`apply_pending_maximize`] must run
+/// until the host reports maximized (fixes #3635).
 pub fn restore(window: &winit::window::Window, saved: Option<WindowGeometry>) -> WindowGeometry {
     let handles: Vec<_> = window.available_monitors().collect();
     let monitors: Vec<Monitor> = handles.iter().map(|m| Monitor::new(m.position(), m.size(), m.scale_factor())).collect();
@@ -121,22 +162,41 @@ pub fn restore(window: &winit::window::Window, saved: Option<WindowGeometry>) ->
     }
     // Returns the new size when it applies at once; either way the window gets it.
     let _ = window.request_inner_size(LogicalSize::new(g.size[0], g.size[1]));
+    #[cfg(not(target_os = "linux"))]
     if g.maximized {
         window.set_maximized(true);
     }
     g
 }
 
+/// Keep asking the host to maximize until it sticks, or give up after a few frames.
+pub fn apply_pending_maximize(window: &winit::window::Window, want: bool, tries: &mut u8) -> bool {
+    if !want {
+        return false;
+    }
+    if window.is_maximized() {
+        return false;
+    }
+    if *tries == 0 {
+        return false;
+    }
+    *tries -= 1;
+    window.set_maximized(true);
+    true
+}
+
 /// Per frame: remember the window's geometry for the next launch. Minimized or full screen keeps
 /// the last one; maximized only sets its flag, so un-maximizing next time restores the last size.
-pub fn track(ctx: &egui::Context, geometry: &mut Option<WindowGeometry>) {
+/// `host_maximized` is the window manager's idea of maximized when egui does not report it (#3635).
+pub fn track(ctx: &egui::Context, geometry: &mut Option<WindowGeometry>, host_maximized: Option<bool>) {
     let zoom = ctx.zoom_factor();
     ctx.input(|i| {
         let v = i.viewport();
         if v.minimized == Some(true) || v.fullscreen == Some(true) {
             return;
         }
-        if v.maximized == Some(true) {
+        let maximized = v.maximized == Some(true) || host_maximized == Some(true);
+        if maximized {
             if let Some(g) = geometry {
                 g.maximized = true;
             }
@@ -185,6 +245,51 @@ mod tests {
     }
 
     #[test]
+    fn floating_panels_get_monitors_in_the_points_a_window_on_them_reports() {
+        let dock = |m: Monitor, zoom| m.docking(Some("m".into()), zoom);
+        let plain = dock(monitor(1920, 0, 1920, 1080, 1.0), 1.0);
+        assert_eq!(plain, DockMonitor { name: Some("m".into()), rect: [1920.0, 0.0, 1920.0, 1080.0], scale: 1.0 });
+        // A window at (3000, 200) on this monitor reports (1500, 100).
+        let scaled = dock(monitor(1920, -200, 3840, 2160, 2.0), 1.0);
+        assert_eq!(scaled, DockMonitor { name: Some("m".into()), rect: [960.0, -100.0, 1920.0, 1080.0], scale: 2.0 });
+        // The UI zoom divides what egui reports as well.
+        let zoomed = dock(monitor(-2560, 0, 2560, 1440, 1.0), 1.25);
+        assert_eq!(zoomed, DockMonitor { name: Some("m".into()), rect: [-2048.0, 0.0, 2048.0, 1152.0], scale: 1.25 });
+    }
+
+    #[test]
+    fn monitors_of_different_scales_are_listed_only_on_a_desktop_of_shared_points() {
+        let named = |m: Monitor, name: &str| (m, Some(name.to_string()));
+        let same = [named(monitor(0, 0, 1920, 1080, 1.5), "a"), named(monitor(1920, 0, 1920, 1080, 1.5), "b")];
+        assert_eq!(docking_list(&same, 1.0, false).len(), 2);
+        let mixed = [named(monitor(0, 0, 3840, 2160, 2.0), "a"), named(monitor(3840, 0, 1920, 1080, 1.0), "b")];
+        assert_eq!(docking_list(&mixed, 1.0, false), Vec::new());
+        assert_eq!(docking_list(&mixed, 1.0, true).len(), 2);
+        assert_eq!(docking_list(&[], 1.0, false), Vec::new());
+    }
+
+    #[test]
+    fn a_name_that_two_monitors_share_is_left_out_of_the_list() {
+        let list = [
+            (monitor(0, 0, 1920, 1080, 1.0), Some("Monitor #1".to_string())),
+            (monitor(1920, 0, 1920, 1080, 1.0), Some("Monitor #1".to_string())),
+            (monitor(3840, 0, 1920, 1080, 1.0), Some("Monitor #2".to_string())),
+            (monitor(5760, 0, 1920, 1080, 1.0), None),
+        ];
+        let names: Vec<_> = docking_list(&list, 1.0, false).into_iter().map(|m| m.name).collect();
+        assert_eq!(names, [None, None, Some("Monitor #2".to_string()), None]);
+    }
+
+    #[test]
+    fn the_monitor_list_is_read_on_the_first_frame_then_once_a_second_or_on_a_zoom_change() {
+        assert!(monitors_due(None, 0.0, 1.0));
+        assert!(!monitors_due(Some((5.0, 1.0)), 5.0, 1.0));
+        assert!(!monitors_due(Some((5.0, 1.0)), 5.5, 1.0));
+        assert!(monitors_due(Some((5.0, 1.0)), 6.0, 1.0));
+        assert!(monitors_due(Some((5.0, 1.0)), 5.5, 1.25));
+    }
+
+    #[test]
     fn the_saved_window_comes_back_where_it_was() {
         let two = [monitor(0, 0, 2560, 1440, 1.0), monitor(2560, 0, 1920, 1080, 1.0)];
         for g in [saved(Some([100, 80]), [1200.0, 800.0], false), saved(Some([2700, 50]), [1000.0, 700.0], true), saved(None, [1000.0, 700.0], false)]
@@ -222,7 +327,7 @@ mod tests {
         let mut frame = |info: egui::ViewportInfo| {
             let mut input = egui::RawInput::default();
             input.viewports.insert(egui::ViewportId::ROOT, info);
-            ctx.run_ui(input, |ui| track(ui.ctx(), &mut geometry)).textures_delta.clear();
+            ctx.run_ui(input, |ui| track(ui.ctx(), &mut geometry, None)).textures_delta.clear();
             geometry
         };
         let rect = egui::Rect::from_min_size(egui::pos2(20.0, 30.0), egui::vec2(1000.0, 600.0));
@@ -252,5 +357,20 @@ mod tests {
         assert!(json.get("window").is_none());
         let back: vectorcraft_ui_egui::UiState = serde_json::from_value(json).unwrap();
         assert_eq!(back.window, None);
+    }
+
+    #[test]
+    fn the_host_maximized_flag_is_remembered_when_egui_does_not_report_it() {
+        let ctx = egui::Context::default();
+        let mut geometry = Some(WindowGeometry { pos: Some([10, 20]), size: [800.0, 600.0], maximized: false });
+        let rect = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(1920.0, 1080.0));
+        let mut input = egui::RawInput::default();
+        input.viewports.insert(
+            egui::ViewportId::ROOT,
+            egui::ViewportInfo { inner_rect: Some(rect), outer_rect: Some(rect), maximized: None, ..Default::default() },
+        );
+        let mut out = ctx.run_ui(input, |ui| track(ui.ctx(), &mut geometry, Some(true)));
+        out.textures_delta.clear();
+        assert_eq!(geometry, Some(WindowGeometry { pos: Some([10, 20]), size: [800.0, 600.0], maximized: true }));
     }
 }

@@ -5,8 +5,10 @@
 //! bottom. Called without a path (Object › Objects on Path › Attach) it chooses the Objects on Path
 //! tool, whose click on a path attaches the selected objects to that path. The objects go along the
 //! path column by column from left to right, top to bottom in each column, spread evenly from its
-//! first anchor and turned to follow it. `object.objectsOnPath.options` sets the group's Pivot and
-//! Rotate, and `object.objectsOnPath.expand` makes it a plain group.
+//! first anchor and turned to follow it. Pivot and Rotate come from the command's params, otherwise
+//! from the tool's options (Objects on Path Tool Options). `object.objectsOnPath.options` sets the
+//! group's Pivot, Rotate and Space (the distance between the objects along the path, and where the
+//! first one attaches), and `object.objectsOnPath.expand` makes it a plain group.
 //!
 //! After every edit, [`refresh`] puts the objects of each Objects on Path group that changed back
 //! on its path: editing the path moves them, an object moved on its own goes back to its place,
@@ -26,7 +28,7 @@ use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
 use vectorcraft_geom::Rect;
 
 use super::edit::{roots_of, selected_roots};
-use super::*;
+use super::{CommandSpec, EngineError, Result, Session, bad, check_numbers, checked_id, checked_ids_param, cmd, has_selection};
 
 /// The id of the Objects on Path tool.
 pub const TOOL: &str = "objectsOnPath";
@@ -38,7 +40,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Attach",
             ["Object", "Objects on Path"],
             None,
-            "{path?: id of the path to attach to (without it: choose the Objects on Path tool, whose click on a path attaches the selection to it), ids?: the objects to attach (default: the selection; the path is left out of it), pivot?: 0-8 (the reference point of each object that attaches to the path, row by row from the top left; default 4, the center), rotate?: degrees counter-clockwise from upright on the path (default 0)} put the objects and the path in an Objects on Path group: the path at the bottom, the objects spread evenly along it from its first anchor (the last one at the end of an open path) in their order on the canvas, column by column from left to right and top to bottom in each column, each turned to follow the path; editing the path moves them → {id}",
+            "{path?: id of the path to attach to (without it: choose the Objects on Path tool, whose click on a path attaches the selection to it), ids?: the objects to attach (default: the selection; the path is left out of it), pivot?: 0-8 (the reference point of each object that attaches to the path, row by row from the top left; default: the Objects on Path tool's Pivot, 4, the center, until its options change it), rotate?: degrees counter-clockwise from upright on the path (default: the tool's Rotate, 0 until its options change it)} put the objects and the path in an Objects on Path group: the path at the bottom, the objects spread evenly along it from its first anchor (the last one at the end of an open path) in their order on the canvas, column by column from left to right and top to bottom in each column, each turned to follow the path; editing the path moves them → {id}",
             has_selection,
             attach
         ),
@@ -47,7 +49,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Objects on Path Options",
             [],
             None,
-            "{ids?: Objects on Path groups or objects in them (default: the selection), pivot?: 0-8 (the reference point of each object that attaches to the path, row by row from the top left; 4: the center), rotate?: degrees counter-clockwise from upright on the path} set how the objects of the groups attach → {ids}",
+            "{ids?: Objects on Path groups or objects in them (default: the selection), pivot?: 0-8 (the reference point of each object that attaches to the path, row by row from the top left; 4: the center), rotate?: degrees counter-clockwise from upright on the path, spacing?: points along the path from each object's attachment point to the next one's (0 or more, kept to what the path has room for; or \"auto\", the default: spread evenly with the last object at the end of an open path), start?: points along the path from its first anchor to the first object's attachment point (default 0)} set how the objects of the groups attach and are spaced → {ids}",
             has_objects_on_path,
             options
         ),
@@ -80,9 +82,10 @@ fn groups_of(d: &Document, ids: &[NodeId]) -> Vec<NodeId> {
     out
 }
 
-/// The Objects on Path groups of the selection ([`groups_of`]).
+/// The Objects on Path groups of the selection ([`groups_of`]). None while an object of a dynamic
+/// symbol instance's art is selected.
 fn selected_groups(s: &Session) -> Vec<NodeId> {
-    s.active().map(|st| groups_of(&st.doc, &st.selection.objects)).unwrap_or_default()
+    s.active().filter(|st| st.selection.symbol_part.is_none()).map(|st| groups_of(&st.doc, &st.selection.objects)).unwrap_or_default()
 }
 
 /// The groups a command acts on: those of `ids` when given, otherwise those of the selection.
@@ -100,6 +103,7 @@ fn target_groups(s: &Session, p: &Value, cmd: &str) -> Result<Vec<NodeId>> {
 
 fn has_objects_on_path(s: &Session) -> std::result::Result<(), String> {
     has_selection(s)?;
+    super::edit::no_symbol_part(s)?;
     if selected_groups(s).is_empty() { Err("select an Objects on Path group".into()) } else { Ok(()) }
 }
 
@@ -200,7 +204,11 @@ fn attach(s: &mut Session, p: &Value) -> Result<Value> {
         return Ok(json!({ "tool": TOOL }));
     };
     let path = checked_id(s, path, C)?;
-    let (pivot, rotate) = pivot_rotate(p, C, CENTER, 0.0)?;
+    // Without them in `p`, the tool's options (Objects on Path Tool Options) give Pivot and Rotate.
+    let saved = s.tool_options_of(TOOL);
+    let tool_pivot = saved.get("pivot").and_then(Value::as_u64).filter(|n| *n <= 8).map_or(CENTER, |n| n as u8);
+    let tool_rotate = saved.get("rotate").and_then(Value::as_f64).filter(|r| r.is_finite()).map_or(0.0, |r| r.clamp(-360.0, 360.0));
+    let (pivot, rotate) = pivot_rotate(p, C, tool_pivot, tool_rotate)?;
     let roots = match p.get("ids") {
         Some(_) => roots_of(&s.doc()?.doc, checked_ids_param(s, p, "ids", C)?),
         None => selected_roots(s)?,
@@ -251,16 +259,37 @@ fn attach(s: &mut Session, p: &Value) -> Result<Value> {
 
 // ---------- Options ----------
 
+/// `spacing` and `start` from `p`, each checked: `spacing` takes points (0 or more) or `"auto"`
+/// (`None`), and `start` points along the path.
+fn spacing_start(p: &Value, cmd: &str, spacing: Option<f64>, start: f64) -> Result<(Option<f64>, f64)> {
+    let spacing = match p.get("spacing").filter(|v| !v.is_null()) {
+        None => spacing,
+        Some(Value::String(a)) if a == "auto" => None,
+        Some(v) => Some(
+            v.as_f64()
+                .filter(|g| g.is_finite() && *g >= 0.0)
+                .ok_or_else(|| bad(cmd, "`spacing` must be a number of points, 0 or more, or \"auto\""))?,
+        ),
+    };
+    let start = match p.get("start").filter(|v| !v.is_null()) {
+        None => start,
+        Some(v) => v.as_f64().filter(|s| s.is_finite()).ok_or_else(|| bad(cmd, "`start` must be a finite number"))?,
+    };
+    Ok((spacing, start))
+}
+
 fn options(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.objectsOnPath.options";
     let groups = target_groups(s, p, C)?;
     pivot_rotate(p, C, CENTER, 0.0)?;
+    spacing_start(p, C, None, 0.0)?;
     s.edit("Objects on Path Options", |d, _| {
         for g in &groups {
             let n = d.node_mut(*g).ok_or(EngineError::NoNode(*g))?;
             let Some(rec) = n.extras().objects_on_path.as_deref().cloned() else { continue };
             let (pivot, rotate) = pivot_rotate(p, C, rec.pivot, rec.rotate)?;
-            n.extras_mut().objects_on_path = Some(Box::new(ObjectsOnPath { pivot, rotate, ..rec }));
+            let (spacing, start) = spacing_start(p, C, rec.spacing, rec.start)?;
+            n.extras_mut().objects_on_path = Some(Box::new(ObjectsOnPath { pivot, rotate, spacing, start, ..rec }));
         }
         Ok(())
     })?;
@@ -285,13 +314,18 @@ fn expand(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// After an edit: put the objects of every Objects on Path group that changed back on its path
 /// ([`place`]), inner groups first. Only the parts of the tree that the edit changed are searched.
-pub(crate) fn refresh(before: &Document, doc: &mut Document) {
+/// Returns the groups that placing changed.
+pub(crate) fn refresh(before: &Document, doc: &mut Document) -> Vec<NodeId> {
     let mut groups = vec![];
     changed_groups(&before.layers, &doc.layers, &mut groups);
+    let mut placed = vec![];
     for id in groups.iter().rev() {
         follow_replacements(before, doc, *id);
-        place_in(doc, *id);
+        if place_in(doc, *id) {
+            placed.push(*id);
+        }
     }
+    placed
 }
 
 /// Members of the group `id` that the edit replaced with new art at the same index keep their
@@ -310,14 +344,17 @@ fn follow_replacements(before: &Document, doc: &mut Document, id: NodeId) {
 }
 
 /// [`place`] the Objects on Path group `id` of `doc`, measuring symbol instances by their art.
-fn place_in(doc: &mut Document, id: NodeId) {
-    let Some(n) = doc.node(id) else { return };
+/// Returns whether the group changed.
+fn place_in(doc: &mut Document, id: NodeId) -> bool {
+    let Some(n) = doc.node(id) else { return false };
     let mut g = n.clone();
     if place(&mut g, &doc.symbol_boxes())
         && let Some(slot) = doc.node_mut(id)
     {
         *slot = g;
+        return true;
     }
+    false
 }
 
 /// The Objects on Path groups among `after` and inside them that are not the same nodes as before

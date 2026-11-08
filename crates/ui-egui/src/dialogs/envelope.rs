@@ -135,8 +135,8 @@ fn percent(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {
 /// A whole number field row clamped to 1..50.
 fn count(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {
     widgets::label_row(ui, label, LABEL_W, |ui| {
-        if let Some(n) = widgets::plain_field(ui, ("env-count", key), d.f64(key, 4.0), "", 0, 60.0) {
-            set(d, key, json!(n.round().clamp(1.0, 50.0)));
+        if let Some(n) = widgets::range_field(ui, ("env-count", key), d.f64(key, 4.0), 1.0..=50.0, "", 0, 60.0) {
+            set(d, key, json!(n));
         }
     });
 }
