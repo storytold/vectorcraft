@@ -44,7 +44,8 @@ commands:
   stats [--exact] count tests and lines per crate (--exact: ask the test harness via `-- --list`)
   test262         fetch the pinned ECMAScript conformance suite into corpus/test262 (sha256
                   verified), parse its ES5 subset with vectorcraft-js and run the ES5 language
-                  tests its interpreter supports, printing the counts
+                  tests its interpreter supports and the String, Number, RegExp and Date
+                  built-ins tests, printing the counts
   web-fonts       copy the craft-fonts faces in crates/text/web-fonts.txt into the web site (the Trunk
                   post_build hook; a no-op without CRAFT_FONTS_DIR)
 ";
