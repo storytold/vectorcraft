@@ -317,7 +317,7 @@ Installers and executables are code-signed.
 
 | Build | File | Notes |
 |---|---|---|
-| Static site | `vectorcraft-web-<ver>.zip` | Runs in a modern browser; host it on any static server |
+| Static site | `vectorcraft-web-<ver>.zip` | Runs in a browser with WebAssembly SIMD (Chrome/Edge 91, Firefox 89, Safari 16.4 or newer), see `packaging/web/README.md`; host it on any static server |
 
 ## The Crafting Apps
 

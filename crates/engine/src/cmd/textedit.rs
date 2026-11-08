@@ -31,7 +31,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Bullets and Numbering",
             [],
             None,
-            "{id, at?: byte (default: the end of the text)} start a list from typed characters, what the Type tool runs when a space is typed on its own: when the text from the start of the paragraph that `at` is in up to `at` is \"1. \" or \"1) \" (a numbered list in 1, 2, 3), \"A. \" or \"A) \" (a numbered list in A, B, C), or \"* \", \"# \", \"> \" or \"+ \" (a bulleted list with the filled dot), and the paragraph is in no list, those characters are removed and the paragraph joins that list as one undo step (left and first-line indents of 0 become 18 and -18, as text.setFormat sets them); otherwise nothing changes → {id, started: bool, caret: byte (the paragraph's start when started, else `at`)}",
+            "{id, at?: byte (default: the end of the text)} start a list from typed characters, what the Type tool runs when a space is typed on its own: when the text from the start of the paragraph that `at` is in up to `at` is \"1. \" or \"1) \" (a numbered list in 1, 2, 3), \"A. \" or \"A) \" (a numbered list in A, B, C), \"* \" (a bulleted list with the filled dot), \"+ \" (the hollow circle), \"# \" (the filled square) or \"> \" (the dash), and the paragraph is in no list, those characters are removed and the paragraph joins that list as one undo step (left and first-line indents of 0 become 18 and -18, as text.setFormat sets them); otherwise nothing changes → {id, started: bool, caret: byte (the paragraph's start when started, else `at`)}",
             has_doc,
             start_list
         ),
@@ -1068,7 +1068,7 @@ fn set_range_style(s: &mut Session, p: &Value) -> Result<Value> {
             if sets_font {
                 // Empty text has one run, which the empty range styles. Characters that kept their font aren't the command's.
                 let styled = if a == b { t.runs.clone() } else { unprotected_runs(&t.runs, a, b, &kept) };
-                set.extend(styled.iter().map(|r| super::fonts::font_of(&r.style)));
+                set.extend(styled.iter().flat_map(super::fonts::run_fonts));
             }
             refresh_bounds(t);
             n = if *f == id { t.runs.len() } else { n };
@@ -1140,7 +1140,12 @@ fn glyph_target(t: &TextObject, p: &Value, c: &str) -> Result<(char, std::ops::R
                 return Err(bad(c, "an inline graphic has no glyphs"));
             }
             let db = vectorcraft_text::FontDb::global();
-            let face = db.style_face(&run.style).filter(|_| db.has_family(&run.style.font_family));
+            let face = match db.composite_resolve_at(&run.style.font_family, &run.text, start - at) {
+                // Type in a composite font: the character is drawn in the font of the part its
+                // grapheme cluster falls in.
+                Some((face, m)) => (m != vectorcraft_text::FontMatch::Missing).then_some(face),
+                None => db.style_face(&run.style).filter(|_| db.has_family(&run.style.font_family)),
+            };
             let face = face.ok_or_else(|| bad(c, format!("the font {} is not available", run.style.font_family)))?;
             return Ok((ch, start..start + ch.len_utf8(), face));
         }

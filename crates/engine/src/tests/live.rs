@@ -537,6 +537,25 @@ fn envelope_top_object_maps_corners() {
     assert!(close(b.x0, 350.0) && close(b.y1, 250.0));
 }
 
+/// Each piece of a top object's side takes a share of the content in proportion to its control
+/// polygon, spread by its curve parameter. The top side's two curves have polygons of 64.7 and
+/// 166.5, so the content's middle lands on the second curve at t = 0.3056, (482.6, 106.4); by
+/// length it would land at (493.7, 106.9), and by equal shares at the anchor (440, 100).
+#[test]
+fn envelope_top_object_shares_a_side_by_control_polygon_length() {
+    let mut s = session();
+    let left = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    let right = rect(&mut s, 200.0, 100.0, 100.0, 100.0);
+    let d = "M400 100 C410 80 430 80 440 100 C460 110 590 110 600 100 L600 200 L400 200 Z";
+    let t = id_of(&s.execute("path.create", &json!({ "d": d })).unwrap());
+    sel(&mut s, &[left, right, t]);
+    let e = id_of(&s.execute("object.envelope.makeWithTopObject", &json!({})).unwrap());
+    let pts = all_anchors(&live::expand_live(&node(&s, e)));
+    let near = |c: Point| pts.iter().map(|p| p.distance(c)).fold(f64::INFINITY, f64::min);
+    assert!(near(Point::new(482.6, 106.37)) < 0.5, "the middle of the top: {pts:?}");
+    assert!(near(Point::new(500.0, 200.0)) < 0.5, "the middle of the bottom: {pts:?}");
+}
+
 #[test]
 fn envelope_release_and_expand() {
     let mut s = session();

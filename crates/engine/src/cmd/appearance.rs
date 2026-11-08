@@ -126,7 +126,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Eyedropper",
             [],
             None,
-            "{source: id, ids?, pickUp?, apply? (trees as eyedropper.setOptions, merged over the Eyedropper Options for this call), reverse?: bool, append?: bool, defaultsOnly?: bool} copy the attributes both picked up and applied (by default the whole appearance stack, opacity and blend mode, and from type to type the character and paragraph attributes) from `source` to ids (default: highlighted characters while editing type, after Select All in a frame of threaded text the text of the story's frames, leaving out `source`, otherwise the object selection; highlighted characters reject enabled non-neutral object transparency), the fill, stroke and weight also to the paint defaults; `defaultsOnly` updates only paint defaults and cannot be combined with ids, reverse or append; `reverse` (Alt-click) copies from the first selected object (or ids) onto `source` instead, or with nothing selected what the Eyedropper picked up last (a click without Alt); `append` (Shift+Alt-click) adds the source's fills, strokes and effects on top of each target's stack; placed gradients land at the same place relative to each target's bounds (defaults: fitted to new art). On a path directly in a graph series, the graph also stores the paint, weight and opacity of the topmost visible fill and stroke (exceptions: docs/mcp.md) → {ids}",
+            "{source: id, ids?, pickUp?, apply? (trees as eyedropper.setOptions, merged over the Eyedropper Options for this call), reverse?: bool, append?: bool, defaultsOnly?: bool} copy the attributes both picked up and applied (by default the whole appearance stack, opacity and blend mode, and from type to type the character and paragraph attributes) from `source` to ids (default: highlighted characters while editing type, after Select All in a frame of threaded text the text of the story's frames, leaving out `source`, otherwise the object selection; highlighted characters reject enabled non-neutral object transparency), the fill, stroke and weight also to the paint defaults; `defaultsOnly` updates only paint defaults and cannot be combined with ids, reverse or append; `reverse` (Alt-click) copies from the first selected object (or ids) onto `source` instead, or with nothing selected what the Eyedropper picked up last (a click without Alt); `append` (Shift+Alt-click) adds the source's fills, strokes and effects on top of each target's stack; placed gradients land at the same place relative to each target's bounds (defaults: fitted to new art); with an object of a dynamic symbol instance selected by Direct Selection and no ids, reverse, append or defaultsOnly, that object takes the source's solid fill and stroke for this instance only, as the Eyedropper Options allow, and a sampled gradient or pattern, a source that is not a path, compound path or type, or options that pick up neither color, are refused. On a path directly in a graph series, the graph also stores the paint, weight and opacity of the topmost visible fill and stroke (exceptions: docs/mcp.md) → {ids}",
             has_doc,
             copy_from
         ),
@@ -598,6 +598,9 @@ fn add_item(s: &mut Session, p: &Value, fill: bool) -> Result<Value> {
                     n.appearance.items.push(item);
                     added.push((*id, fill));
                 }
+                if !fill {
+                    super::object::snap_if_aligned(n);
+                }
             }
         }
         super::graph::capture_series_opacity(d, &top_opacity_changed(&before, d, &ids));
@@ -620,6 +623,7 @@ fn clear_appearance(s: &mut Session, p: &Value) -> Result<Value> {
         for id in &ids {
             if let Some(n) = d.node_mut(*id) {
                 clear(n);
+                super::object::snap_if_aligned(n);
             }
         }
         let kept = super::graph::capture_series_opacity(d, &both_kinds(&ids));
@@ -661,6 +665,35 @@ fn painted_rows(d: &vectorcraft_doc::Document, rows: impl IntoIterator<Item = (N
     rows.into_iter().filter(|(id, fill)| d.node(*id).is_some_and(|n| !super::graph::shown_paint(n, *fill).0.is_none())).collect()
 }
 
+/// Store on the graph what an edit of `ids` (from `before` to `d`) leaves on the topmost visible fill and stroke of the
+/// series marks among them: a paint, weight or opacity that changed, and the paint (`paints`) and opacity (`opacities`) of
+/// the kinds of row the edit wrote, as (fill, stroke). With `top_only` the edit wrote the topmost row of each kind, which
+/// counts only when it is visible. Returns whether the stored paint changed.
+pub(super) fn capture_series_writes(
+    before: &vectorcraft_doc::Document,
+    d: &mut vectorcraft_doc::Document,
+    ids: &[NodeId],
+    paints: (bool, bool),
+    opacities: (bool, bool),
+    top_only: bool,
+) -> bool {
+    let top_shows = |d: &vectorcraft_doc::Document, id: NodeId, kind: bool| {
+        let items = d.node(id).map_or(&[][..], |n| &n.appearance.items[..]);
+        items.iter().rev().find(|it| it.is_fill() == kind).is_some_and(AppearanceItem::visible)
+    };
+    let written = |d: &vectorcraft_doc::Document, (fill, stroke): (bool, bool)| -> Vec<(NodeId, bool)> {
+        let rows = ids.iter().flat_map(|id| [fill.then_some((*id, true)), stroke.then_some((*id, false))]).flatten();
+        painted_rows(d, rows.filter(|(id, kind)| !top_only || top_shows(d, *id, *kind)))
+    };
+    let mut opacity_rows = top_opacity_changed(before, d, ids);
+    opacity_rows.extend(written(d, opacities));
+    let mut rows = top_paint_changed(before, d, ids);
+    rows.extend(written(d, paints));
+    let kept = super::graph::capture_series_opacity(d, &opacity_rows);
+    let painted = super::graph::capture_series_top_paints(d, &rows);
+    kept || painted
+}
+
 /// The kind of the row at `at` (fill `true`, stroke `false`) when it is the topmost visible row of that kind in `ap`.
 fn top_row_kind(ap: &Appearance, at: usize) -> Option<bool> {
     let fill = ap.items.get(at)?.is_fill();
@@ -698,9 +731,11 @@ fn transfer(s: &mut Session, p: &Value) -> Result<Value> {
         }
         to.appearance = ap;
         (to.opacity, to.blend, to.isolate, to.knockout, to.knockout_shape) = (src.opacity, src.blend, src.isolate, src.knockout, src.knockout_shape);
+        super::object::snap_if_aligned(to);
         if !copy && let Some(n) = d.node_mut(source) {
             clear(n);
             (n.isolate, n.knockout, n.knockout_shape) = (false, Default::default(), false);
+            super::object::snap_if_aligned(n);
         }
         let changed = if copy { vec![target] } else { vec![source, target] };
         let kept = super::graph::capture_series_opacity(d, &both_kinds(&changed));
@@ -759,6 +794,7 @@ fn reduce_basic(s: &mut Session, p: &Value) -> Result<Value> {
                     st.blend = BlendMode::Normal;
                     n.appearance.items.push(AppearanceItem::Stroke(st));
                 }
+                super::object::snap_if_aligned(n);
             }
         }
         let kept = super::graph::capture_series_opacity(d, &both_kinds(&ids));
@@ -818,6 +854,7 @@ fn set_item(s: &mut Session, p: &Value) -> Result<Value> {
             if let Some(v) = p.get("visible").and_then(Value::as_bool) {
                 *vis = v;
             }
+            super::object::snap_if_aligned(n);
             let items = &n.appearance.items;
             if let Some(fill) =
                 items.get(idx).map(AppearanceItem::is_fill).filter(|f| items.iter().rposition(|it| it.is_fill() == *f && it.visible()) == Some(idx))
@@ -878,6 +915,7 @@ fn remove_item(s: &mut Session, p: &Value) -> Result<Value> {
                 for &i in idx.iter().rev() {
                     n.appearance.remove_item(i);
                 }
+                super::object::snap_if_aligned(n);
             }
         }
         let kept = super::graph::capture_series_opacity(d, &top_opacity_changed(&before, d, &ids));
@@ -982,7 +1020,19 @@ fn show_all_hidden(s: &mut Session, p: &Value) -> Result<Value> {
     let roots = require_targets(s, p, "appearance.showAllHidden")?;
     let before = s.doc()?.doc.clone();
     let ids = s.edit("Show All Hidden Attributes", |d, _| {
-        let shown: Vec<NodeId> = roots.iter().copied().filter(|id| d.node_mut(*id).is_some_and(|n| n.appearance.show_all())).collect();
+        let shown: Vec<NodeId> = roots
+            .iter()
+            .copied()
+            .filter(|id| {
+                d.node_mut(*id).is_some_and(|n| {
+                    let shown = n.appearance.show_all();
+                    if shown {
+                        super::object::snap_if_aligned(n);
+                    }
+                    shown
+                })
+            })
+            .collect();
         if shown.is_empty() {
             return Err(EngineError::Other("Show All Hidden Attributes: nothing is hidden".into()));
         }
@@ -1136,6 +1186,42 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, "`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`"));
     }
     let attrs = s.prefs.eyedropper.attrs(p).map_err(|e| bad(C, e))?;
+    // An object of a dynamic symbol instance's art selected with Direct Selection takes the clicked
+    // object's solid fill and stroke, as the Eyedropper Options allow, for this instance only. A
+    // gradient or pattern sampled for it, a source that is not a path, compound path or type (a
+    // symbol instance's own appearance is empty), and options that pick up neither color are
+    // refused, and the paint defaults stay as they are. A path of a compound path stands for the
+    // compound path, which holds the paint.
+    if !reverse
+        && !append
+        && !defaults_only
+        && p.get("ids").is_none()
+        && let Some((id, path)) = super::brushsym::selected_part(s)?
+    {
+        let d = &s.doc()?.doc;
+        let src = Arc::new(d.node(super::path::compound_or_self(d, clicked)).ok_or(EngineError::NoNode(clicked))?.clone());
+        let (fill, stroke) = (super::paint::proxy_paint(&src, false, None), super::paint::proxy_paint(&src, true, None));
+        let a = attrs.appearance;
+        if !vectorcraft_doc::symbol_overrides::takes_part_paint(&src)
+            || !(a.fill.color || a.stroke.color)
+            || (a.fill.color && !super::paint::part_takes(&fill))
+            || (a.stroke.color && !super::paint::part_takes(&stroke))
+        {
+            return Err(super::brushsym::part_only());
+        }
+        super::brushsym::edit_part(s, id, &path, "Eyedropper", |o| {
+            if a.fill.color {
+                o.fill = Some(fill);
+            }
+            if a.stroke.color {
+                o.stroke = Some(stroke);
+            }
+        })?;
+        // The clicked object becomes the Eyedropper's sample, and new art takes its paint.
+        Picked::of(&src).to_defaults(s, &attrs.appearance);
+        s.eyedropper_sample = Some(src);
+        return Ok(json!({ "ids": [id.0] }));
+    }
     let range = if !defaults_only && !reverse && !append && p.get("ids").is_none() {
         super::textedit::editing_range(s)?.filter(|(_, a, b)| a != b)
     } else {
@@ -1144,7 +1230,7 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
     let selected = if defaults_only {
         vec![]
     } else {
-        match ids_param(p, "ids") {
+        match ids_param(p, "ids", C)? {
             Some(v) => outermost(&s.doc()?.doc, v),
             None => selected_roots(s)?,
         }
@@ -1343,6 +1429,7 @@ impl Picked {
             let placed = self.placed(n.geometric_bounds());
             n.appearance.items.extend(placed.items.into_iter().filter(|it| if it.is_fill() { ap.fill.color } else { ap.stroke.color }));
             n.appearance.effects.extend(placed.effects);
+            super::object::snap_if_aligned(n);
             return;
         }
         if let NodeKind::Text(t) = &mut n.kind {
@@ -1366,6 +1453,7 @@ impl Picked {
         } else {
             focal_attrs(&mut n.appearance, &placed, ap);
         }
+        super::object::snap_if_aligned(n);
     }
 }
 
