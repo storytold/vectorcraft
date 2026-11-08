@@ -1057,6 +1057,14 @@ font-technology	Variable	Değişken
 	Export As SVG…	SVG Olarak Dışa Aktar…
 	Export Asset	Varlığı Dışa Aktar
 	Export Assets	Varlıkları Dışa Aktar
+	Export 3D Object	3D Nesneyi Dışa Aktar
+	3D Export Format	3D Dışa Aktarma Biçimi
+	Export 3D Assets	3D Varlıkları Dışa Aktar
+@msg	{what} can't be exported in 3D: {e}	{what} 3D olarak dışa aktarılamıyor: {e}
+@msg	asset {id} isn't a 3D asset	{id} varlığı bir 3D varlık değil
+@msg	asset {id} is a 3D asset: assets.export3D writes it	{id} varlığı bir 3D varlık: onu assets.export3D yazar
+@msg	no 3D assets yet: collect an object with a 3D effect first (assets.add3D)	henüz 3D varlık yok: önce 3D efekti olan bir nesne toplayın (assets.add3D)
+@msg	select an object with a 3D effect (or give its ids)	3D efekti olan bir nesne seçin (veya kimliklerini verin)
 	Export As…	Farklı Dışa Aktar…
 	Export CSS	CSS'yi dışa aktar
 	Export CSS…	CSS'yi dışa aktar…
@@ -1127,6 +1135,7 @@ font-technology	Variable	Değişken
 	Merge only with selection	Yalnızca seçimle birleştir
 	Fill Color	Dolgu Rengi
 	Fill New Type Objects With Placeholder Text	Yeni Yazım Nesnelerini Yer Tutucu Metinle Doldurun
+	Start Lists From Typed Markers	Yazılan İşaretlerden Liste Başlat
 	Fill Rule	Doldurma Kuralı
 	Fill with Placeholder Text	Yer Tutucu Metinle Doldur
 	Fill:	Doldurun:
@@ -1137,6 +1146,7 @@ font-technology	Variable	Değişken
 	Find Font…	Yazı Tipi Bul…
 	Find Next	Sonrakini Bul
 	Find Objects	Nesneleri Bul
+	Compare with Image	Görüntüyle Karşılaştır
 	First Page	İlk Sayfa
 	First-line Left Indent	Birinci Satırda Sol Girinti
 	Fisheye…	Balıkgözü…
@@ -1551,6 +1561,7 @@ font-technology	Variable	Değişken
 	Report copied	Rapor kopyalandı
 	Line {line}	{line} Hattı
 	Line {line}: {name}: {status}	Hat {line}: {name}: {status}
+	Read Action Set File	Eylem Seti Dosyasını Oku
 	Read Shortcut Set File	Kısayol Seti Dosyasını Oku
 	Import Matches	Eşleşmeleri İçe Aktar
 	Remember Import Matches	İçe Aktarılan Eşleşmeleri Hatırla
@@ -2568,6 +2579,7 @@ digits	Malayalam	Malayalam
 	Reset Transformation	Dönüşümü Sıfırla
 	Replace With Font	Yazı Tipiyle Değiştir
 	Replace With Font From	Değiştirilecek Yazı Tipi Kaynağı
+	Find In	Arama yeri
 	System	Sistem
 	Replaces the saved preset of that name.	Bu adın kayıtlı ön ayarını değiştirir.
 	Replace…	Değiştir…
@@ -2888,6 +2900,11 @@ digits	Malayalam	Malayalam
 	Selected Swatches	Seçilen Renk Örnekleri
 	Selected Swatches Only	Yalnızca Seçilen Renk Örnekleri
 	Selection	Seçim
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Dikdörtgen seçim
+	Touching	Dokunulanlar
+	Fully Enclosed	Tamamen içeride
+	Drag Direction	Sürükleme yönü
 	Selection & Anchor Display	Seçim ve Bağlantı Ekranı
 	Selection Only	Yalnızca Seçim
 	Selection Tool	Seçim Aracı
@@ -3022,6 +3039,7 @@ digits	Malayalam	Malayalam
 	Simulate Colored Paper	Renkli Kağıdı Simüle Et
 	Simulate Paper	Kağıdı Simüle Et
 	Double Column	Çift Sütun
+	Keep Tools Beside the Canvas	Araçları Tuvalin Yanında Tut
 	Single Left Quotation Mark	Tek Sol Tırnak İşareti
 	Single Quotes:	Tek Alıntılar:
 	Single Right Quotation Mark	Tek Sağ Tırnak İşareti
@@ -3601,6 +3619,7 @@ digits	Malayalam	Malayalam
 	Zoom to Selection	Seçimi Yakınlaştır
 	Zoom Tool	Yakınlaştırma Aracı
 	Zoom with Mouse Wheel	Fare Tekerleği ile Yakınlaştırma
+	Scroll Sideways with Cmd/Ctrl + Wheel	Cmd/Ctrl + Tekerlek ile Yatay Kaydırma
 	Scrub Numeric Fields by Dragging	Sayısal Alanları Sürükleyerek Fırçalayın
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{folder} içinde {n} dosya {note}. Paket klasörü gösterilsin mi?
 @plural	{n} linked file not found|{n} linked files not found	{n} bağlantılı dosya bulunamadı
@@ -3947,7 +3966,7 @@ axis	Both	Her İkisi
 @msg	already editing a pattern	zaten bir desen düzenliyor
 @msg	an object can't be read	bir nesne okunamıyor
 @msg	an object in perspective would leave the edited grid	perspektifteki bir nesne düzenlenen ızgaradan ayrılır
-@msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: yok, resim veya tür
+@msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: none, art veya type
 @msg	artboard {0} does not exist	{0} çalışma yüzeyi mevcut değil
 @msg	at this scale the drawing is {w} × {h} pt, more than the canvas holds: choose a smaller scale or fit it to the artboard	bu ölçekte çizim {w} × {h} nk, kanvasın sığabileceğinden daha fazladır: daha küçük bir ölçek seçin veya çalışma yüzeyine sığdırın
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis "vertical", "horizontal" veya derece cinsinden bir açı olmalıdır, `{v}` değil
@@ -4017,6 +4036,11 @@ axis	Both	Her İkisi
 @msg	invalid image data for `{0}`	`{0}` için geçersiz resim verileri
 @msg	invalid parameters for `{cmd}`: {msg}	`{cmd}` için geçersiz parametreler: {msg}
 @msg	is not an image VectorCraft reads	VectorCraft'ın okuduğu bir resim değil
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: PNG, JPEG, WebP, TIFF veya BMP resmi değil
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	resim {iw} × {ih} piksel, çalışma yüzeyi bu genişlikte {rw} × {rh} piksel: oranları farklı
+@msg	`threshold` must be a number from 0 to 1	`threshold` 0 ile 1 arasında bir sayı olmalıdır
+@msg	background {v}: a color such as "#808080"	background {v}: "#808080" gibi bir renk
+@msg	comparing with an image file isn't available in the browser	bir resim dosyasıyla karşılaştırma tarayıcıda kullanılamaz
 @msg	it uses `{at}`, which VectorCraft's PostScript reader doesn't know	VectorCraft'ın PostScript okuyucusunun bilmediği `{at}`yi kullanıyor
 @msg	it uses `{at}`, which VectorCraft's PostScript reader doesn't know, in {procs}	{procs}'de VectorCraft'ın PostScript okuyucusunun bilmediği `{at}`yi kullanıyor
 @msg	its Windows metafile preview was opened instead, which may simplify the art	bunun yerine Windows meta dosyası önizlemesi açıldı, bu da işi basitleştirebilir
@@ -4110,6 +4134,8 @@ axis	Both	Her İkisi
 @msg	no such action set	öyle bir eylem seti yok
 @msg	the action sets changed; nothing was deleted	eylem setleri değişti; hiçbir şey silinmedi
 @msg	no action set to save	kaydedilecek eylem seti yok
+@msg	the action set file can't be read in full	eylem seti dosyası tamamen okunamıyor
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	“{name}” yüklendi: {n} adım atlandı
 @msg	not an action set file	bir eylem seti dosyası değil
 @msg	the action set file is larger than 8 MiB	eylem seti dosyası 8 MiB'den büyük
 @msg	the action set file holds more than 1,000 actions	eylem seti dosyası 1.000'den fazla eylem içeriyor
@@ -4547,6 +4573,9 @@ axis	Both	Her İkisi
 @msg	the Pixar file's image data is damaged	Pixar dosyasının görüntü verileri bozuk
 @msg	the JPEG 2000 file can't be read	JPEG 2000 dosyası okunamıyor
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000 dosyasında desteklenmeyen bir renk alanı veya JPX içeriği var
+@msg	the HEIC or HEIF file can't be read	HEIC veya HEIF dosyası okunamıyor
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC veya HEIF dosyası okunamayan türde bir görüntü içeriyor
+@msg	HEIC and HEIF images can't be opened in this build	HEIC ve HEIF görüntüleri bu derlemede açılamıyor
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD görüntüsü okunamayacak kadar büyük ({_1} × {_2} piksel)
 @msg	zipped 32-bit PSD image data with prediction can't be read	Tahmin içeren sıkıştırılmış 32 bit PSD görüntü verileri okunamıyor
 @msg	{depth}-bit PSD files in this colour mode can't be read	Bu renk modunda {depth}-bit PSD dosyaları okunamaz
@@ -4609,6 +4638,9 @@ axis	Both	Her İkisi
 effect	Soft	Yumuşak
 	Edge	Kenar
 	System Title Bar	Sistem Başlık Çubuğu
+	VectorCraft Title Bar on Every Desktop	Her Masaüstünde VectorCraft Başlık Çubuğu
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	VECTORCRAFT_TITLEBAR ortam değişkeni ayarlı olduğu sürece başlık çubuğunu o seçer.
+	System Title Bar takes precedence over this option while it is on.	Sistem Başlık Çubuğu açık olduğu sürece bu seçeneğe göre önceliklidir.
 	Value Axis	Değer Ekseni
 	On Left Side	Sol Tarafta
 	On Right Side	Sağ Tarafta
@@ -5706,6 +5738,9 @@ theme	Appearance	Görünüm
 @msg	library panel `{given}` isn't missing its library	`{given}` kitaplık panelinin kitaplığı eksik değil
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	Görüntü {_1} × {_2} piksel, bir kenarı {LARGE_TRACE_SIDE} değerinden büyük: izlenir, ancak daha yavaş. Daha düşük doğruluklu bir ön ayar veya görüntünün daha küçük bir kopyası daha hızlı izlenir.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	Görüntü {_3} × {_4} boyutundan küçültülerek {_1} × {_2} pikselde izlendi (en fazla {_5} megapiksel).
+@msg	byColor must be true or false	byColor true veya false olmalıdır
+@msg	byColor can't split Auto Grouping groups: trace without Auto Grouping	byColor, Otomatik Gruplama gruplarını bölemez: Otomatik Gruplama olmadan izleyin
+@msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	byColor, canlı Pathfinder efekti olan bir izlemeyi yeniden gruplayamaz: byColor olmadan genişletin
 	Gap Length:	Boşluk Uzunluğu:
 @msg	`colorGroup` needs `library: "document"`	`colorGroup` için `library: "document"` gerekir
 @msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` için `palette: "documentLibrary"` gerekir
@@ -6222,6 +6257,8 @@ breakText	Glyphs	Glifler
 	File + Data Set Name	Dosya + veri kümesi adı
 	Data Set Name	Veri kümesi adı
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` değeri `fileNumber`, `fileDataSetName` veya `dataSetName` olmalıdır
+	Each data set saves over the same file, which keeps only the last data set.	Her veri kümesi aynı dosyanın üzerine kaydedilir ve dosyada yalnızca son veri kümesi kalır.
+@msg	save the document with Save As before Save and Close	Kaydet ve Kapat'tan önce belgeyi Farklı Kaydet ile kaydedin
 @msg	no free data set file name in destination folder	Hedef klasörde veri kümesi için boş bir dosya adı yok
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).
@@ -6341,6 +6378,7 @@ breakText	Glyphs	Glifler
 	Reset Symbol Instance	Sembol Örneğini Sıfırla
 @msg	type must be static or dynamic, not {v}	type static veya dynamic olmalıdır, {v} değil
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` statik bir semboldür: önce Sembol Türünü Dinamik olarak ayarlayın
+@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	Bir sembol örneğinde seçilen yolun, bileşik yolun veya yazının yalnızca dolgu ve konturunun düz rengi değiştirilebilir
 @msg	path must be a list of child indices	path alt öğe dizinlerinden oluşan bir liste olmalıdır
 @msg	no object at path {shown} in the symbol's art	sembolün çiziminde {shown} yolunda nesne yok
 @msg	give fill, stroke, opacity and/or blend	fill, stroke, opacity ve/veya blend verin
@@ -6438,3 +6476,25 @@ breakText	Glyphs	Glifler
 # 3D Box add-on
 	3D Box	3B Kutu
 	3D Box Tool	3B Kutu Aracı
+
+# Safe Mode
+	Safe Mode…	Güvenli Mod…
+	Safe Mode	Güvenli Mod
+	Help › Safe Mode…	Yardım › Güvenli Mod…
+	Enable on Re-launch	Sonraki Başlatmada Etkinleştir
+	The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it.	VectorCraft'ın son başlatılması, {name} eklentisi yüklenirken durdu. Nedeni bu eklenti olmayabilir.
+	Disable and Continue	Devre Dışı Bırak ve Devam Et
+	Start Normally	Normal Başlat
+	Start in Safe Mode	Güvenli Modda Başlat
+	VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.	VectorCraft Güvenli Mod'da: normal başlatılana kadar hiçbir eklenti yüklenmez veya çalıştırılmaz.
+	Disabled plug-ins	Devre dışı eklentiler
+	No plug-ins are disabled.	Devre dışı bırakılmış eklenti yok.
+@msg	Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally	Güvenli Mod açık: VectorCraft normal başlatılana kadar eklentiler yüklenmez veya çalıştırılmaz
+@msg	give `id` or `file` (see plugin.safeMode)	`id` veya `file` belirtin (bkz. plugin.safeMode)
+@msg	that plug-in isn't disabled (see plugin.safeMode)	bu eklenti devre dışı değil (bkz. plugin.safeMode)
+@msg	Couldn't save the disabled plug-ins for the next launch	Devre dışı eklentiler bir sonraki başlatma için kaydedilemedi
+@msg	Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode	Görünümü Genişlet: seçimdeki bir eklenti efekti Güvenli Mod'da genişletilemez
+
+# Align to Pixel Grid
+	Align to Pixel Grid	Piksel Izgarasına Hizala
+@msg	only paths and compound paths can be aligned to the pixel grid	piksel ızgarasına yalnızca yollar ve bileşik yollar hizalanabilir

@@ -42,6 +42,8 @@ impl Session {
             journal: Journal::default(),
             tool: vectorcraft_tools::create("selection"),
             lender: None,
+            selection_at_lend: None,
+            lent_selection: None,
             last_selection_tool: None,
             last_view: ViewInfo::default(),
             preview_memo: Default::default(),
@@ -81,6 +83,7 @@ impl Session {
             batch_stash: None,
             batch_steps: None,
             batch_paint_docs: Vec::new(),
+            reading: false,
             place_hand_off: None,
             queue_hand_off: None,
             place_queue_roots: None,
@@ -109,6 +112,7 @@ impl Session {
             link_stamps: Default::default(),
             link_scan: None,
             global_edit_options: Default::default(),
+            keyboard_text: false,
         }
     }
 

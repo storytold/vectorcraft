@@ -906,6 +906,26 @@ fn a_color_named_as_a_palette_gradient_or_pattern_is_numbered() {
     assert_eq!(links, [Some("Brand 3".to_string()), Some("Brand 2".to_string())]);
 }
 
+/// A palette's gradient swatch holds its gradient without a link to a swatch, whether it is named
+/// by its gradient or has a name of its own, and the art filled with the gradient links to the
+/// swatch named by the gradient.
+#[test]
+fn a_palette_gradient_swatch_is_not_linked_to_itself() {
+    let gradient = "%AI5_BeginGradient: (Sky)\n(Sky) 0 2 Bd\n[\n%_1 0 50 0 Bs\n%_0 0 50 100 Bs\nBD\n%AI5_EndGradient\n";
+    let palette = "%AI5_BeginPalette\n0 0 Pb\nBb\n2 (Sky) 0 0 0 1 1 0 0 1 0 0 1 Bg\n0 BB\n(Sky)\nPc\n\
+                   Bb\n2 (Sky) 0 0 0 1 1 0 0 1 0 0 1 Bg\n0 BB\n(Brand)\nPc\nPB\n%AI5_EndPalette\n";
+    let filled = format!("Bb\n1 (Sky) 0 0 0 10 1 0 0 1 0 0 Bg\n{}f\n0 BB\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    let doc = read_ok(&format!("{gradient}{palette}{}", layer(&filled))).doc;
+    for name in ["Sky", "Brand"] {
+        let sw = doc.swatch(name).unwrap_or_else(|| panic!("no {name} swatch"));
+        let Paint::Gradient(g) = &sw.paint else { panic!("{sw:?}") };
+        assert_eq!(g.swatch, None, "{name}'s own paint");
+        assert_eq!(g.geom, None);
+        assert_eq!(g.gradient.stops.len(), 2);
+    }
+    assert!(matches!(fill(&art(&doc)[0]), Paint::Gradient(g) if g.swatch.as_deref() == Some("Sky")));
+}
+
 /// A palette's pattern swatch named by its pattern takes the name the pattern is shown with.
 #[test]
 fn a_palette_pattern_swatch_takes_its_patterns_shown_name() {
@@ -3286,6 +3306,211 @@ fn placed_files_of_other_paths_keep_images_of_their_own() {
     let keys: Vec<_> = art(&r.doc).iter().filter_map(|n| if let NodeKind::Image(im) = &n.kind { Some(im.key.clone()) } else { None }).collect();
     assert!(matches!(&keys[..], [a, b, c] if a != b && a == c), "{keys:?}");
     assert_eq!(r.doc.images.len(), 2);
+}
+
+/// A placed file followed by the dictionary `numbers` (`value /Int (key)` lines, on `%_` lines).
+fn placed_with(numbers: &[(&str, &str)]) -> Structure {
+    let preview = [&b"2 1 12 32 17 "[..], &[255, 255, 0, 0, 128, 0, 64, 0, 9, 9, 9, 9]].concat();
+    let entries: String = numbers.iter().map(|(key, v)| format!("%_{v} /Int ({key}) ,\r")).collect();
+    let dictionary = format!("%_/ArtDictionary :\r{entries}%_;\r%_\r");
+    read(&placed(true, "[5 0 0 -5 0 200]", "/art/flyer.pdf", Some(&preview), &dictionary)).unwrap()
+}
+
+#[test]
+fn a_placed_files_dictionary_names_the_page_and_box_it_shows() {
+    use vectorcraft_doc::PageBox;
+    const PAGE: &str = "AI11 PlacedPDFPageIndex";
+    const CROP: &str = "AI11 PlacedPDFCropTo";
+    for (crop, bounding, page_box) in [
+        ("0", false, PageBox::Art),
+        ("1", false, PageBox::Crop),
+        ("2", false, PageBox::Trim),
+        ("3", false, PageBox::Bleed),
+        ("4", false, PageBox::Media),
+        ("5", true, PageBox::Crop),
+    ] {
+        let r = placed_with(&[(PAGE, "3"), (CROP, crop)]);
+        let a = art(&r.doc);
+        let NodeKind::Image(im) = &a[0].kind else { panic!("{:?}", a[0].kind) };
+        assert_eq!(r.placed_pages.len(), 1, "{crop}");
+        let p = r.placed_pages[0];
+        assert_eq!((p.id, p.page, p.bounding, p.page_box, p.size), (a[0].id, 3, bounding, page_box, (4.0, 2.0)), "{crop}");
+        assert_eq!(r.doc.images.keys().collect::<Vec<_>>(), [&im.key], "{crop}: the preview is stored once, under the image's key");
+        assert!(r.doc.images[&im.key].is_proxy(), "{crop}");
+    }
+    // One entry alone: the first page, or the page's crop box.
+    let r = placed_with(&[(CROP, "4")]);
+    assert_eq!((r.placed_pages[0].page, r.placed_pages[0].page_box), (1, PageBox::Media));
+    let r = placed_with(&[(PAGE, "2")]);
+    assert_eq!((r.placed_pages[0].bounding, r.placed_pages[0].page_box), (false, PageBox::Crop));
+}
+
+#[test]
+fn a_placed_files_dictionary_it_cant_read_leaves_a_linked_image() {
+    const PAGE: &str = "AI11 PlacedPDFPageIndex";
+    const CROP: &str = "AI11 PlacedPDFCropTo";
+    let plain = placed_with(&[]);
+    let plain_key = {
+        let a = art(&plain.doc);
+        let NodeKind::Image(im) = &a[0].kind else { panic!("{:?}", a[0].kind) };
+        im.key.clone()
+    };
+    assert!(plain.placed_pages.is_empty());
+    for entries in [
+        vec![(PAGE, "0"), (CROP, "4")],
+        vec![(PAGE, "-1"), (CROP, "4")],
+        vec![(PAGE, "1.5"), (CROP, "4")],
+        vec![(PAGE, "1e30"), (CROP, "4")],
+        vec![(PAGE, "2"), (CROP, "6")],
+        vec![(PAGE, "2"), (CROP, "-1")],
+        vec![(PAGE, "2"), (CROP, "0.5")],
+        vec![(PAGE, "(2)"), (CROP, "4")],
+        vec![(PAGE, "2"), (CROP, "(4)")],
+        vec![(PAGE, "(2)")],
+    ] {
+        let r = placed_with(&entries);
+        assert!(r.placed_pages.is_empty(), "{entries:?}");
+        let a = art(&r.doc);
+        let NodeKind::Image(im) = &a[0].kind else { panic!("{entries:?}: {:?}", a[0].kind) };
+        assert_eq!((im.key.as_str(), im.link.as_ref().and_then(|l| l.page)), (plain_key.as_str(), None), "{entries:?}");
+    }
+}
+
+/// The dictionaries of the art in a placed file's opacity mask, read inside its own dictionary,
+/// don't speak for the placed file.
+#[test]
+fn a_placed_files_mask_art_leaves_its_page_to_the_placed_files_dictionary() {
+    let preview = [&b"2 1 12 32 17 "[..], &[255, 255, 0, 0, 128, 0, 64, 0, 9, 9, 9, 9]].concat();
+    let dictionary = "%_/ArtDictionary :\r%_/Mask :\r%_X=\r%_0 g\r%_0 0 m\r%_5 0 l\r%_5 -5 l\r%_f\r\
+                      %_/ArtDictionary :\r%_/XMLUID : (Inner) ; (AI10_ArtUID) ,\r%_;\r%_\r%_X+\r%_ (Art) ,\r%_; (AI9_Mask) ,\r\
+                      %_2 /Int (AI11 PlacedPDFPageIndex) ,\r%_4 /Int (AI11 PlacedPDFCropTo) ,\r%_;\r%_\r";
+    let r = read(&placed(true, "[5 0 0 -5 0 200]", "/art/flyer.pdf", Some(&preview), dictionary)).unwrap();
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:?}");
+    assert!(a[0].extras().mask.is_some(), "the mask is read");
+    assert_eq!(r.placed_pages.len(), 1);
+    assert_eq!((r.placed_pages[0].id, r.placed_pages[0].page_box), (a[0].id, vectorcraft_doc::PageBox::Media));
+}
+
+/// A placed file in a placed file's opacity mask, read before the outer file's dictionary closes,
+/// leaves the outer file's page to that dictionary.
+#[test]
+fn a_placed_file_in_a_placed_files_mask_leaves_the_outer_files_page() {
+    let preview = [&b"2 1 12 32 17 "[..], &[255, 255, 0, 0, 128, 0, 64, 0, 9, 9, 9, 9]].concat();
+    let mut inner =
+        b"%_%AI5_BeginPlace\r%_%%FileType: 1\r%_[5 0 0 -5 0 200] 10 20 14 22 4 4 0\r%_(/art/mask.pdf)`\r%_%AI26_BeginPlacedObjectPreview\r%_"
+            .to_vec();
+    inner.extend_from_slice(&preview);
+    inner.extend_from_slice(
+        b"\r%_%AI26_EndPlacedObjectPreview\r%_~\r%_%AI5_EndPlace\r%_/ArtDictionary :\r%_5 /Int (AI11 PlacedPDFPageIndex) ,\r%_;\r%_\r",
+    );
+    let mut dictionary = b"%_/ArtDictionary :\r%_/Mask :\r%_X=\r".to_vec();
+    dictionary.extend_from_slice(&inner);
+    dictionary
+        .extend_from_slice(b"%_X+\r%_ (Art) ,\r%_; (AI9_Mask) ,\r%_2 /Int (AI11 PlacedPDFPageIndex) ,\r%_4 /Int (AI11 PlacedPDFCropTo) ,\r%_;\r%_\r");
+    let data = placed(true, "[5 0 0 -5 0 200]", "/art/flyer.pdf", Some(&preview), "@@DICT@@");
+    let at = data.windows(8).position(|x| x == b"@@DICT@@").unwrap();
+    let data = [&data[..at], &dictionary[..], &data[at + 8..]].concat();
+    let r = read(&data).unwrap();
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:?}");
+    assert!(a[0].extras().mask.is_some(), "the mask is read");
+    let outer: Vec<_> = r.placed_pages.iter().filter(|p| p.id == a[0].id).collect();
+    assert_eq!(outer.len(), 1, "{:?}", r.placed_pages);
+    assert_eq!((outer[0].page, outer[0].page_box), (2, vectorcraft_doc::PageBox::Media));
+    assert!(r.placed_pages.iter().any(|p| p.id != a[0].id && p.page == 5), "the inner one names its own page: {:?}", r.placed_pages);
+}
+
+/// A placed file in a placed file's opacity mask that shows the same file with no page of its own
+/// keeps the preview they share when the outer one's dictionary names a page.
+#[test]
+fn a_placed_file_in_a_placed_files_mask_keeps_the_preview_they_share() {
+    let preview = [&b"2 1 12 32 17 "[..], &[255, 255, 0, 0, 128, 0, 64, 0, 9, 9, 9, 9]].concat();
+    let mut dictionary =
+        b"%_/ArtDictionary :\r%_/Mask :\r%_X=\r%_%AI5_BeginPlace\r%_%%FileType: 1\r%_[5 0 0 -5 0 200] 10 20 14 22 4 4 0\r%_(/art/flyer.pdf)`\r\
+          %_%AI26_BeginPlacedObjectPreview\r%_"
+            .to_vec();
+    dictionary.extend_from_slice(&preview);
+    dictionary.extend_from_slice(
+        b"\r%_%AI26_EndPlacedObjectPreview\r%_~\r%_%AI5_EndPlace\r%_X+\r%_ (Art) ,\r%_; (AI9_Mask) ,\r\
+          %_2 /Int (AI11 PlacedPDFPageIndex) ,\r%_;\r%_\r",
+    );
+    let data = placed(true, "[5 0 0 -5 0 200]", "/art/flyer.pdf", Some(&preview), "@@DICT@@");
+    let at = data.windows(8).position(|x| x == b"@@DICT@@").unwrap();
+    let data = [&data[..at], &dictionary[..], &data[at + 8..]].concat();
+    let r = read(&data).unwrap();
+    let a = art(&r.doc);
+    assert_eq!(r.placed_pages.len(), 1, "{:?}", r.placed_pages);
+    let mask = a[0].extras().mask.clone().expect("the mask is read");
+    let mut keys = vec![];
+    mask.art.walk(&mut |n| {
+        if let NodeKind::Image(im) = &n.kind {
+            keys.push(im.key.clone());
+        }
+    });
+    let [inner] = &keys[..] else { panic!("{keys:?}") };
+    assert!(r.doc.images.contains_key(inner), "the mask's image keeps its preview");
+    let NodeKind::Image(outer) = &a[0].kind else { panic!("{:?}", a[0].kind) };
+    assert!(r.doc.images.contains_key(&outer.key) && outer.key != *inner);
+}
+
+#[test]
+fn a_placed_file_with_its_box_written_backward_stays_a_linked_image() {
+    let preview = [&b"2 1 12 32 17 "[..], &[255, 255, 0, 0, 128, 0, 64, 0, 9, 9, 9, 9]].concat();
+    let dictionary = "%_/ArtDictionary :\r%_2 /Int (AI11 PlacedPDFPageIndex) ,\r%_4 /Int (AI11 PlacedPDFCropTo) ,\r%_;\r%_\r";
+    let data = placed(true, "[5 0 0 -5 0 200]", "/art/flyer.pdf", Some(&preview), dictionary);
+    let at = data.windows(11).position(|x| x == b"10 20 14 22").unwrap();
+    let data = [&data[..at], b"14 22 10 20", &data[at + 11..]].concat();
+    let r = read(&data).unwrap();
+    assert!(r.placed_pages.is_empty());
+    let a = art(&r.doc);
+    let NodeKind::Image(im) = &a[0].kind else { panic!("{:?}", a[0].kind) };
+    assert_eq!(im.link.as_ref().and_then(|l| l.page), None);
+}
+
+#[test]
+fn only_the_dictionary_right_after_a_placed_file_names_its_page() {
+    let preview = [&b"2 1 12 32 17 "[..], &[255, 255, 0, 0, 128, 0, 64, 0, 9, 9, 9, 9]].concat();
+    let dictionary = "%_/ArtDictionary :\r%_2 /Int (AI11 PlacedPDFPageIndex) ,\r%_4 /Int (AI11 PlacedPDFCropTo) ,\r%_;\r%_\r";
+    // After another object: that object's dictionary. Art with such a dictionary stays art.
+    let after = format!("0 g\r0 0 m\r5 0 l\r5 5 l\rf\r{dictionary}");
+    let r = read(&placed(true, "[5 0 0 -5 0 200]", "/art/flyer.pdf", Some(&preview), &after)).unwrap();
+    assert!(r.placed_pages.is_empty());
+    assert_eq!(art(&r.doc).len(), 2);
+    // A second dictionary after the first: the first one spoke for the placed file.
+    let after = format!("%_/ArtDictionary :\r%_(Photo) /String (AIArtName) ,\r%_;\r%_\r{dictionary}");
+    let r = read(&placed(true, "[5 0 0 -5 0 200]", "/art/flyer.pdf", Some(&preview), &after)).unwrap();
+    assert!(r.placed_pages.is_empty());
+    // Without a placed file before it, nothing happens.
+    let r = read(stream(&layer(&format!("0 g\r0 0 m\r5 0 l\r5 5 l\rf\r{dictionary}"))).as_bytes()).ok();
+    assert!(r.is_none_or(|r| r.placed_pages.is_empty()));
+}
+
+/// Two pages of a file with the same preview don't share a key: reading one page's file in would
+/// change the other's image.
+#[test]
+fn placed_pages_of_one_file_keep_images_of_their_own() {
+    let preview = [&b"2 1 12 32 17 "[..], &[255, 255, 0, 0, 128, 0, 64, 0, 9, 9, 9, 9]].concat();
+    let one =
+        placed(true, "[5 0 0 -5 0 200]", "/art/flyer.pdf", Some(&preview), "%_/ArtDictionary :\r%_1 /Int (AI11 PlacedPDFPageIndex) ,\r%_;\r%_\r");
+    let two =
+        placed(true, "[5 0 0 -5 0 200]", "/art/flyer.pdf", Some(&preview), "%_/ArtDictionary :\r%_2 /Int (AI11 PlacedPDFPageIndex) ,\r%_;\r%_\r");
+    let find = |d: &[u8], w: &[u8]| d.windows(w.len()).position(|x| x == w).unwrap();
+    let body = two[find(&two, b"%AI5_BeginPlace")..find(&two, b"LB\n%AI5_EndLayer")].to_vec();
+    let mut both = one.clone();
+    let at = find(&both, b"LB\n%AI5_EndLayer");
+    both.splice(at..at, body);
+    let r = read(&both).unwrap();
+    assert_eq!(r.placed_pages.len(), 2);
+    let keys: Vec<String> = art(&r.doc)
+        .iter()
+        .map(|n| match &n.kind {
+            NodeKind::Image(im) => im.key.clone(),
+            k => panic!("{k:?}"),
+        })
+        .collect();
+    assert_ne!(keys[0], keys[1]);
+    assert!(keys.iter().all(|k| r.doc.images.contains_key(k)) && r.doc.images.len() == 2, "{keys:?}");
 }
 
 #[test]
@@ -5727,6 +5952,74 @@ fn a_symbol_defined_before_the_art_styles_reads_its_styled_objects() {
     assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
 }
 
+/// `node` is the red square of [`styled_square`] read as itself with [`ART_STYLES`]' `Blue`: a blue
+/// fill and a drop shadow, not the look it draws.
+fn assert_blue_square(node: &Node) {
+    assert!(matches!(node.kind, NodeKind::Path { .. }), "the object, not its look: {node:#?}");
+    assert_eq!(fill(node).color(), Some(Color::rgb(0.0, 0.0, 1.0)));
+    let effects: Vec<_> = node.appearance.effects.iter().map(|e| e.id.as_str()).collect();
+    assert_eq!(effects, ["stylize.dropShadow"]);
+}
+
+/// An object in a pattern's art with an art style the file defines comes in as itself, as in a
+/// symbol's art, whichever section comes first.
+#[test]
+fn an_object_in_a_patterns_art_with_a_style_this_reads_comes_in_as_itself() {
+    let pattern = format!("%AI3_BeginPattern: (P)\n(P) 0 0 10 10\n0 A\n0 Xw\n{}E\n%AI3_EndPattern\n", styled_square("Blue"));
+    for body in [format!("{ART_STYLES}{pattern}{}", layer("")), format!("{pattern}{ART_STYLES}{}", layer(""))] {
+        let r = read_ok(&body);
+        let def = r.doc.pattern("P").unwrap_or_else(|| panic!("{:?} {:?}", r.unread, r.warnings));
+        let [square] = def.art.as_slice() else { panic!("{:#?}", def.art) };
+        assert_blue_square(square);
+        assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    }
+}
+
+/// The same in a pattern defined in the version 7 form: a layer's tile string holding the object.
+#[test]
+fn an_object_in_a_version_7_patterns_tile_with_a_style_this_reads_comes_in_as_itself() {
+    let tile = styled_square("Blue").replace('\n', "\r");
+    let layers = format!("(0 O 0 R 0 0 0 1 k 0 0 0 1 K) @\n(\r{tile}) &\n");
+    let s = pattern_read7(&format!("{ART_STYLES}{}", pattern7("Grid", &layers)), &pattern_layer7("Art", ""));
+    let def = s.doc.pattern("Grid").unwrap_or_else(|| panic!("{:?} {:?}", s.unread, s.warnings));
+    let [square] = def.art.as_slice() else { panic!("{:#?}", def.art) };
+    assert_blue_square(square);
+}
+
+/// An object in a brush's art with an art style the file defines comes in as itself, and the brush
+/// that uses the art is kept.
+#[test]
+fn an_object_in_a_brushs_art_with_a_style_this_reads_comes_in_as_itself() {
+    let section = format!("%AI8_BeginBrushPattern\n(Dot art)\n0 A\n{}%AI8_EndBrushPattern\n", styled_square("Blue"));
+    let r = read_ok(&format!("{section}{ART_STYLES}{}{}", plugin_object(SCATTER, "Spray", SPRAY), layer("")));
+    let lib = vectorcraft_brush::library(&r.doc);
+    let spray = lib.iter().find(|b| b.name == "Spray").unwrap_or_else(|| panic!("{:?}", r.warnings));
+    assert!(matches!(spray.kind, vectorcraft_brush::BrushKind::Scatter(_)), "{:?}", spray.kind);
+    let art = spray.art();
+    let [square] = art.as_slice() else { panic!("{art:#?}") };
+    assert_blue_square(square);
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+}
+
+/// An art styles section inside a symbol's, a pattern's or a brush's art is skipped: the file's own
+/// art styles still style the layers' objects read after the definition.
+#[test]
+fn art_styles_inside_a_definition_leave_the_files_art_styles_alone() {
+    let nested = format!("%AI9_BeginArtStyles\n{}%AI9_EndArtStyles\n", fill_style("Other", "0 0 0 0 1 0 0 Xa\n"));
+    let square = styled_square("Blue");
+    let definitions = [
+        symbols(&symbol("Tag", &format!("{nested}{square}"), 1)),
+        format!("%AI3_BeginPattern: (P)\n(P) 0 0 10 10\n0 A\n0 Xw\n{nested}{square}E\n%AI3_EndPattern\n"),
+        format!("%AI8_BeginBrushPattern\n(Dot art)\n0 A\n{nested}{square}%AI8_EndBrushPattern\n"),
+    ];
+    for definition in definitions {
+        let r = read_ok(&format!("{ART_STYLES}{definition}{}", layer(&square)));
+        let a = art(&r.doc);
+        let [object] = a.as_slice() else { panic!("{definition}: {a:#?}") };
+        assert_blue_square(object);
+    }
+}
+
 /// An art style named `name` (its bytes as written) that fills with colour `xa` (`c m y k r g b Xa`).
 fn fill_style(name: &str, xa: &str) -> String {
     fill_style_with(name, xa, "")
@@ -5827,6 +6120,30 @@ fn an_object_whose_transparency_differs_from_its_listed_style_is_not_linked() {
 }
 
 #[test]
+fn ai_import_registration_style_does_not_carry_over_previous_color_6205() {
+    // Regression test for #6205:
+    // A background shape sets a spot colour ("Shemen").
+    // A following object has an art style with [Registration] at 0% tint.
+    // The object must resolve the Registration style ([Registration] 0% / #ffffff)
+    // rather than falling back to the prior spot color.
+    let defs = [fill_style("RegWhite", "1 1 1 1 ([Registration]) 1 Xs\n")];
+    let background = format!("0 0.67 0.73 0.26 (Shemen) 0 0 Xx\n{}f\n", rect_path(0.0, 0.0, 100.0, 100.0));
+    let styled_obj = styled_square("RegWhite");
+    let content = format!("{background}{styled_obj}");
+    let r = read_ok(&format!("{}{}", styles_and_list(&defs, &["RegWhite"]), layer(&content)));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 2, "{a:#?}");
+    // First object is background in Shemen spot
+    let Paint::Solid { swatch: s0, .. } = fill(&a[0]) else { panic!("{:#?}", a[0]) };
+    assert_eq!(s0.as_deref(), Some("Shemen"));
+    // Second object is styled in RegWhite: [Registration] at 0% tint (#ffffff)
+    let Paint::Solid { swatch, tint, color } = fill(&a[1]) else { panic!("{:#?}", a[1]) };
+    assert_eq!(swatch.as_deref(), Some(vectorcraft_color::swatch::REGISTRATION));
+    assert_eq!(tint, 0.0);
+    assert_eq!(color, Color::cmyk(1.0, 1.0, 1.0, 1.0).tinted(0.0));
+}
+
+#[test]
 fn a_listed_style_keeps_its_transparency_and_links_objects_that_have_it() {
     let blend = "/BasicFilter :\n(Blend Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n\
                  /BlendStyle : 1 0.6 1 1 0 Xy\n0 J 0 j 1 w 10 M []0 d0 XR\n/Def ;\n (BlendStyle) ,\n; /Dict ;\n /Part ,\n";
@@ -5892,6 +6209,31 @@ fn an_object_in_a_symbols_art_with_a_listed_style_is_linked() {
     let art = &read_ok(&body).doc.symbols[0].art;
     assert!(matches!(art.kind, NodeKind::Group { .. }), "{art:#?}");
     assert_eq!(art.extras().graphic_style, Some(1), "{art:#?}");
+}
+
+#[test]
+fn an_object_in_a_patterns_art_with_a_listed_style_is_linked() {
+    let defs = styles_and_list(&[fill_style("Blue", "0 0 0 0 0 0 1 Xa\n")], &["Blue"]);
+    let pattern = format!("%AI3_BeginPattern: (P)\n(P) 0 0 10 10\n0 A\n0 Xw\n{}E\n%AI3_EndPattern\n", styled_square("Blue"));
+    let r = read_ok(&format!("{defs}{pattern}{}", layer("")));
+    assert_eq!(style_names(&r.doc), [("Blue".to_string(), 1)]);
+    let def = r.doc.pattern("P").unwrap_or_else(|| panic!("{:?}", r.warnings));
+    let [square] = def.art.as_slice() else { panic!("{:#?}", def.art) };
+    assert_eq!(fill(square).color(), Some(Color::rgb(0.0, 0.0, 1.0)));
+    assert_eq!(square.extras().graphic_style, Some(1), "{square:#?}");
+}
+
+#[test]
+fn an_object_in_a_version_7_patterns_tile_with_a_listed_style_is_linked() {
+    let defs = styles_and_list(&[fill_style("Blue", "0 0 0 0 0 0 1 Xa\n")], &["Blue"]);
+    let tile = styled_square("Blue").replace('\n', "\r");
+    let layers = format!("(0 O 0 R 0 0 0 1 k 0 0 0 1 K) @\n(\r{tile}) &\n");
+    let s = pattern_read7(&format!("{defs}{}", pattern7("Grid", &layers)), &pattern_layer7("Art", ""));
+    assert_eq!(style_names(&s.doc), [("Blue".to_string(), 1)]);
+    let def = s.doc.pattern("Grid").unwrap_or_else(|| panic!("{:?}", s.warnings));
+    let [square] = def.art.as_slice() else { panic!("{:#?}", def.art) };
+    assert_eq!(fill(square).color(), Some(Color::rgb(0.0, 0.0, 1.0)));
+    assert_eq!(square.extras().graphic_style, Some(1), "{square:#?}");
 }
 
 #[test]
@@ -6053,6 +6395,51 @@ fn a_path_with_a_pathfinder_effect_keeps_its_drawn_look() {
     let mut effects = 0;
     r.doc.walk(|n| effects += n.appearance.effects.len());
     assert_eq!(effects, 0);
+}
+
+#[test]
+fn an_object_with_bas_relief_comes_in_with_its_settings() {
+    // GUARDS: Bas Relief's settings block wasn't read, so the object came in as its drawn look.
+    let settings: Vec<u8> = [
+        &[0, 0, 0, 1][..],
+        b"Dtl ",
+        &[0; 4],
+        b"long",
+        &5i32.to_be_bytes(),
+        b"Smth",
+        &[0; 4],
+        b"long",
+        &9i32.to_be_bytes(),
+        b"LghD",
+        &0x2000u32.to_be_bytes(),
+        b"LghD",
+        b"LDTR",
+    ]
+    .concat();
+    let lines: String = crate::ps::ascii85(&settings).lines().map(|l| format!("%{l}\n")).collect();
+    let style = format!(
+        "%AI9_BeginArtStyles\n\
+        /KnownStyle :\n(Carved) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+        /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+        /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/FillStyle : 0 O\n0 0 0 0 0 0 1 Xa\n0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n\
+        /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n /Part ,\n\
+        /BasicFilter :\n(PSAdapter_plugin_BsRl) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/Binary : /ASCII85Decode ,\n{lines}; (data) ,\n\
+        {} /Int (dataSize) ,\n; /Dict ;\n /Part ,\n;\n\
+        %AI9_EndArtStyles\n",
+        settings.len()
+    );
+    let hidden_rect = rect_path(0.0, 0.0, 10.0, 10.0).replace('\n', "\n%_");
+    let art_ = format!("0 Ae\nu\n{RED}{}f\nU\n%_0 0 0 1 k\n%_{hidden_rect}f\n1 (Carved) XW\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    let r = read_ok(&format!("{style}{}", layer(&art_)));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1);
+    assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the object, not its look");
+    let [relief] = a[0].appearance.effects.as_slice() else { panic!("{:#?}", a[0].appearance) };
+    assert_eq!(
+        (relief.id.as_str(), &relief.params),
+        ("sketch.basRelief", &serde_json::json!({"detail": 5.0, "smoothness": 9.0, "lightDirection": "topRight"}))
+    );
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
 }
 
 #[test]
@@ -6736,16 +7123,21 @@ fn a_top_object_envelope_opens_live_with_its_outline() {
     bp.curve_to((120.0, 80.0), (80.0, 80.0), (40.0, 80.0));
     bp.curve_to((40.0, 60.0), (40.0, 40.0), (40.0, 20.0));
     bp.close_path();
-    let want = EnvelopeKind::TopObject { path: vectorcraft_geom::PathData::from_bezpath(&bp) };
+    let want = EnvelopeKind::TopObject { path: vectorcraft_geom::PathData::from_bezpath(&bp), corners: None };
     let r = read_ok(&layer(&envelope_of(&shape, ENVELOPE_KEYS, &envelope_content(), 3, &drawn_content(&want))));
     let a = art(&r.doc);
     assert_eq!(a.len(), 1, "{a:#?}");
     let (content, kind, ..) = live_envelope(&a[0]);
-    let EnvelopeKind::TopObject { path } = kind else { panic!("{kind:?}") };
+    let EnvelopeKind::TopObject { path, corners } = kind else { panic!("{kind:?}") };
     let anchors: Vec<Point> = path.subpaths.iter().flat_map(|s| s.anchors.iter().map(|a| a.p)).collect();
     for p in [(40.0, 20.0), (100.0, 5.0), (160.0, 20.0), (160.0, 80.0), (40.0, 80.0)] {
         assert!(anchors.iter().any(|q| (*q - Point::from(p)).hypot() < 1e-6), "{p:?} not in {anchors:?}");
     }
+    // The mesh's four corners are kept as the outline's corners.
+    let corners = corners.expect("the saved corners");
+    let at: Vec<Point> = corners.iter().map(|i| anchors[*i as usize]).collect();
+    let want_corners = [(40.0, 20.0), (160.0, 20.0), (160.0, 80.0), (40.0, 80.0)].map(Point::from);
+    assert!(at.iter().zip(want_corners).all(|(p, q)| (*p - q).hypot() < 1e-6), "{at:?}");
     // The curve through the anchor: its handles there run level.
     let mid = path.subpaths.iter().flat_map(|s| s.anchors.iter()).find(|a| (a.p - Point::new(100.0, 5.0)).hypot() < 1e-6).unwrap();
     assert!((mid.h_in.y - 5.0).abs() < 1e-6 && (mid.h_out.y - 5.0).abs() < 1e-6, "{mid:?}");
@@ -6977,7 +7369,7 @@ fn an_envelope_whose_contents_are_edited_opens_live_in_edit_contents() {
     bp.curve_to((120.0, 80.0), (80.0, 80.0), (40.0, 80.0));
     bp.curve_to((40.0, 60.0), (40.0, 40.0), (40.0, 20.0));
     bp.close_path();
-    let want = EnvelopeKind::TopObject { path: vectorcraft_geom::PathData::from_bezpath(&bp) };
+    let want = EnvelopeKind::TopObject { path: vectorcraft_geom::PathData::from_bezpath(&bp), corners: None };
     let keys = ENVELOPE_KEYS.replace("0 /Bool (AIDeformEditModeKey)", "1 /Bool (AIDeformEditModeKey)");
     let body = envelope_parts(&envelope_content(), &keys, &format!("0 g\n{mesh}"), 3, &drawn_content(&want));
     let r = read_ok(&layer(&body));
@@ -7304,6 +7696,53 @@ fn vector_opacity_mask_keeps_its_art_and_does_not_paint_as_a_sibling() {
     for broken in [mask.replace("%_X+\n", ""), mask.replace("%_U\n", ""), mask.replace("%_f", "%_unknownMaskOperator")] {
         assert!(read(stream(&layer(&format!("{owner}{broken}"))).as_bytes()).is_err());
     }
+}
+
+/// Mask art that sets no paint of its own paints with the paint before its dictionary: the writer
+/// leaves out paint that doesn't change. In a user's file, white letters were masked by a rectangle
+/// with no colour, which came in black and hid them.
+/// The unread pattern flags it also takes aren't covered here: an owner painted with a pattern the
+/// file doesn't have is unread itself, which hides whether its mask art is.
+#[test]
+fn opacity_mask_art_without_its_own_paint_takes_the_paint_before_its_dictionary() {
+    let paint = "0 0 0 0 k\n1 O\n0 1 0 0 K\n1 R\n2 w\n1 J\n1 j\n4 M\n[3 1] 0 d\n1 XR\n";
+    let owner = format!("{paint}{}B\n", rect_path(10.0, 20.0, 50.0, 60.0));
+    let hidden_rect = rect_path(10.0, 20.0, 30.0, 60.0).lines().map(|l| format!("%_{l}\n")).collect::<String>();
+    let mask = |own_paint: &str| {
+        format!("%_/ArtDictionary :\n%_/Mask :\n%_X=\n{own_paint}{hidden_rect}%_B\n%_X+\n%_(Art) ,\n%_1 /Bool (Clipping) ,\n%_; (AI9_Mask) ,\n%_;\n")
+    };
+    let fill_layer = |n: &Node| n.appearance.fill().cloned();
+    let stroke_layer = |n: &Node| n.appearance.stroke().cloned();
+    let rule = |n: &Node| match &n.kind {
+        NodeKind::Path { rule, .. } => Some(*rule),
+        _ => None,
+    };
+
+    let r = read_ok(&layer(&format!("{owner}{}", mask(""))));
+    let a = art(&r.doc);
+    let m = a[0].extras().mask.as_ref().unwrap();
+    // The owner has the paint set, none of it the default, so equal layers mean it was taken.
+    let (f, s) = (fill_layer(&a[0]).unwrap(), stroke_layer(&a[0]).unwrap());
+    assert!(f.overprint && s.overprint);
+    assert_eq!((s.width, s.cap, s.join, s.miter_limit), (2.0, LineCap::Round, LineJoin::Round, 4.0));
+    assert_eq!(s.dash.as_ref().map(|d| (d.pattern.clone(), d.offset)), Some((vec![3.0, 1.0], 0.0)));
+    assert_eq!(rule(&a[0]), Some(vectorcraft_geom::FillRule::EvenOdd));
+    assert_eq!(fill_layer(&m.art), Some(f));
+    assert_eq!(stroke_layer(&m.art), Some(s));
+    assert_eq!(rule(&m.art), rule(&a[0]));
+
+    // Paint the mask's art sets for itself stays in the mask: an object after the dictionary that
+    // sets none paints with the owner's.
+    let own = "%_1 g\n%_0 O\n%_0 G\n%_0 R\n%_5 w\n%_0 J\n%_0 j\n%_10 M\n%_[] 0 d\n%_0 XR\n";
+    let following = format!("{}B\n", rect_path(70.0, 20.0, 80.0, 30.0));
+    let r = read_ok(&layer(&format!("{owner}{}{following}", mask(own))));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 2);
+    let m = a[0].extras().mask.as_ref().unwrap();
+    assert_ne!(stroke_layer(&m.art), stroke_layer(&a[0]), "the mask's art has its own paint");
+    assert_eq!(fill_layer(&a[1]), fill_layer(&a[0]));
+    assert_eq!(stroke_layer(&a[1]), stroke_layer(&a[0]));
+    assert_eq!(rule(&a[1]), rule(&a[0]));
 }
 
 /// An opacity mask's art of one shown object is that object; other art is read into a group.

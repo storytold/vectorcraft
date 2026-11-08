@@ -29,6 +29,53 @@ fn named_panel_default_chords_toggle_their_panels() {
 }
 
 #[test]
+fn edit_function_keys_dispatch_outside_text_editing_only() {
+    if crate::keymap::platform().is_mac() {
+        return;
+    }
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let shape = app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
+    app.session.execute("select.set", &json!({"ids": [shape]})).unwrap();
+    crate::shortcut_editor::sync(&app.ui);
+    frame(&mut app, press(Key::F3, Modifiers::NONE));
+    assert_eq!(app.session.clipboard.nodes.len(), 1, "F3 copies the selection");
+    frame(&mut app, press(Key::F2, Modifiers::NONE));
+    assert!(app.session.active().unwrap().selection.objects.is_empty(), "F2 cuts the selection");
+    frame(&mut app, press(Key::F4, Modifiers::NONE));
+    assert_eq!(app.session.active().unwrap().selection.objects.len(), 1, "F4 pastes the copied object");
+
+    let id = app.session.execute("text.create", &json!({"x": 20, "y": 50, "text": "Hi"})).unwrap()["id"].as_u64().unwrap();
+    app.select_tool("type");
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    assert!(app.session.tool_wants_text());
+    for key in [Key::F2, Key::F3, Key::F4] {
+        frame(&mut app, press(key, Modifiers::NONE));
+        assert_eq!(text_and_layers(&mut app, id).0, "Hi", "{key:?} leaves edited text alone");
+        assert!(app.session.tool_wants_text(), "{key:?} keeps editing");
+    }
+
+    app.select_tool("selection");
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let ctx = egui::Context::default();
+    let mut field = String::from("Field text");
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+        let response = ui.text_edit_singleline(&mut field);
+        ui.ctx().memory_mut(|m| m.request_focus(response.id));
+    });
+    out.textures_delta.clear();
+    for key in [Key::F2, Key::F3, Key::F4] {
+        let mut out = ctx.run_ui(egui::RawInput { events: press(key, Modifiers::NONE), ..Default::default() }, |ui| {
+            handle(&mut app, ui.ctx());
+            ui.text_edit_singleline(&mut field);
+        });
+        out.textures_delta.clear();
+        assert_eq!(field, "Field text", "{key:?} leaves focused text alone");
+        assert_eq!(app.session.active().unwrap().selection.objects.len(), 1, "{key:?} leaves the canvas selection alone");
+    }
+}
+
+#[test]
 fn other_panel_shortcuts_keep_plain_panel_params() {
     for panel in ["character", "swatches"] {
         let hit = CommandRef { id: "window.panel".into(), params: json!({"panel": panel}) };

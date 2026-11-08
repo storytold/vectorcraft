@@ -1,5 +1,6 @@
 use super::{
-    CommandSpec, EngineError, NodeId, Result, SELECTS_GIVEN_IDS, Selection, Session, Value, cmd, find_command, given_ids, guard, strip_replay_only,
+    CommandSpec, EngineError, JOURNALED_READS, NodeId, Result, SELECTS_GIVEN_IDS, Selection, Session, Value, cmd, find_command, given_ids, guard,
+    strip_replay_only,
 };
 
 impl Session {
@@ -35,6 +36,13 @@ impl Session {
     /// Execute a command by id. This is THE entry point for every frontend.
     pub fn execute(&mut self, id: &str, params: &Value) -> Result<Value> {
         let spec = find_command(id).ok_or_else(|| cmd::params::unknown_command(id))?;
+        let outer = std::mem::replace(&mut self.reading, !spec.journal || JOURNALED_READS.contains(&id));
+        let r = self.execute_spec(spec, id, params);
+        self.reading = outer;
+        r
+    }
+
+    fn execute_spec(&mut self, spec: &'static CommandSpec, id: &str, params: &Value) -> Result<Value> {
         // A key the command's params description doesn't name is a parameter error (#1442), before
         // anything runs, for the commands other commands run too. A `command.batch` or an
         // `action.batch` checks its steps before the first one runs, and each step is checked again

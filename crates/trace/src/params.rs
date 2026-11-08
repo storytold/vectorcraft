@@ -110,9 +110,16 @@ pub struct TraceParams {
     /// Stroke: the widest feature (px) traced as a stroke.
     pub stroke_width: f64,
     /// Flat Logo mode: the flat colours (`#rrggbb`) to use; empty finds them automatically. White is
-    /// always traced on its own and cannot be named, colours closer than about 12 (RGB distance)
-    /// count as one, and at most ten are used. (Not `palette`: that is Color mode's colour source.)
+    /// traced on its own and cannot be named unless [`logo_white`](Self::logo_white) is off, colours
+    /// closer than about 12 (RGB distance) count as one, and at most ten are used. (Not `palette`:
+    /// that is Color mode's colour source.)
     pub logo_colors: Vec<String>,
+    /// Flat Logo mode with named `logo_colors`: `true` traces white (every channel 245 or more) as a
+    /// color of its own beside the named ones. `false` traces the named colors only: white areas
+    /// take the nearest of them, a named white or near-white is used as named, and enclosed
+    /// transparent areas stay holes. With the colors found automatically, white is always its own,
+    /// and with [`ignore_white`](Self::ignore_white) white areas are left out whatever this says.
+    pub logo_white: bool,
 }
 
 impl Default for TraceParams {
@@ -141,6 +148,7 @@ impl Default for TraceParams {
             strokes: false,
             stroke_width: 10.0,
             logo_colors: Vec::new(),
+            logo_white: true,
         }
     }
 }
