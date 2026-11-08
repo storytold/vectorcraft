@@ -384,7 +384,8 @@ fn edit_copy_after_a_paste_with_the_artboard_tool_replays_on_the_pasted_artboard
 }
 
 /// A recorded action keeps `edit.copy` and `edit.cut` as given, so when it plays they follow the tool
-/// chosen then, and a batch step records and leaves out the same values.
+/// chosen then, and a batch step records and leaves out the same values. The locked-art preference
+/// that the Artboard tool's copy notes stays in the action.
 #[test]
 fn edit_copy_and_cut_with_the_artboard_tool_record_nothing_for_an_action() {
     for id in ["edit.copy", "edit.cut"] {
@@ -392,7 +393,7 @@ fn edit_copy_and_cut_with_the_artboard_tool_record_nothing_for_an_action() {
         let start = second_artboard_selected(&mut s);
         s.execute(id, &json!({})).unwrap();
         let action = s.journal_for_action(start);
-        assert_eq!(action, [(id.to_string(), json!({}))], "{id}");
+        assert_eq!(action, [(id.to_string(), json!({"lockedAndHidden": false}))], "{id}");
         let mut played = Session::new();
         played.execute("file.new", &json!({"width": 400, "height": 200, "created": null})).unwrap();
         played.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 100, "height": 50})).unwrap();
@@ -405,9 +406,13 @@ fn edit_copy_and_cut_with_the_artboard_tool_record_nothing_for_an_action() {
         let start = second_artboard_selected(&mut s);
         let steps = json!([{"command": id, "params": {}}, {"command": "edit.paste", "params": {}}]);
         s.execute("command.batch", &json!({ "commands": steps })).unwrap();
-        assert_eq!(s.journal.last().unwrap().1["commands"][0]["params"], json!({"selectedArtboards": [1], "art": true, "lockedAndHidden": false}), "{id}");
+        assert_eq!(
+            s.journal.last().unwrap().1["commands"][0]["params"],
+            json!({"selectedArtboards": [1], "art": true, "lockedAndHidden": false}),
+            "{id}"
+        );
         assert_eq!(documents(&replayed(&s)), documents(&s), "{id}");
-        assert_eq!(s.journal_for_action(start)[0].1["commands"][0]["params"], json!({}), "{id}");
+        assert_eq!(s.journal_for_action(start)[0].1["commands"][0]["params"], json!({"lockedAndHidden": false}), "{id}");
     }
 }
 
