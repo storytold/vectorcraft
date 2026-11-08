@@ -95,7 +95,7 @@ fn help_bar_and_status_bar_render_independently() {
         }
         assert_eq!(shown.iter().any(|t| t == "?"), help && screen_mode < 3, "{help}/{status}/{screen_mode}: {shown:?}");
         assert_eq!(shown.iter().any(|t| t.contains("Saved recovery data")), status && screen_mode < 3, "{help}/{status}/{screen_mode}: {shown:?}");
-        let floor = ctx.data(|data| data.get_temp::<f32>(egui::Id::unique("menu_floor"))).unwrap();
+        let floor = ctx.data(|data| data.get_temp::<f32>(egui::Id::unique("menu_floor").with(ctx.viewport_id()))).unwrap();
         let expected = if screen_mode < 3 && (help || status) {
             let id = parent.unwrap().with(if help { "hint_bar" } else { "status_bar" });
             egui::containers::panel::PanelState::load(&ctx, id).unwrap().outer_rect.top()
@@ -1973,7 +1973,8 @@ fn menus_stop_above_a_control_bar_docked_at_the_bottom() {
     let ctx = egui::Context::default();
     let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0));
     let floor = |app: &mut crate::VectorcraftApp, status: bool, bottom: bool, screen_mode: u8| {
-        (app.ui.status_bar, app.ui.control_bar, app.ui.control_bar_bottom, app.ui.screen_mode) = (status, true, bottom, screen_mode);
+        (app.ui.status_bar, app.ui.help_bar, app.ui.control_bar, app.ui.control_bar_bottom, app.ui.screen_mode) =
+            (status, status, true, bottom, screen_mode);
         for _ in 0..3 {
             let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| {
                 app.logic(ui.ctx());
