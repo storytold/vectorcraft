@@ -7,7 +7,7 @@ use super::common::{
 use super::mesh::index_param;
 use super::{
     Affine, Anchor, Appearance, Arc, Beside, BlendDefaults, BlendOrientation, BlendSpacing, BlendSpec, Document, EngineError, Node, NodeId, NodeKind,
-    Paint, PathData, Point, Result, Session, Spine, Value, Vec2, bad, f64_req, id_param, json, live, number_or, ok, str_param, switch_or,
+    Paint, PathData, Point, Result, Session, Spine, Value, Vec2, bad, f64_req, json, live, number_or, ok, str_param, switch_or,
 };
 
 /// The first blend among `roots`.
@@ -160,7 +160,7 @@ fn edit_spine<T>(
     label: &str,
     f: impl FnOnce(&mut vectorcraft_geom::SubPath, &mut Vec<usize>, &mut [Arc<Node>]) -> Result<T>,
 ) -> Result<T> {
-    let id = match id_param(p, "id") {
+    let id = match crate::cmd::object_param(p, "id", cmd)? {
         Some(id) => id,
         None => *selected_of(s, is_blend).first().ok_or_else(|| bad(cmd, "select a blend or give `id`"))?,
     };

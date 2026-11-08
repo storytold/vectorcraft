@@ -4,7 +4,7 @@
 
 use vectorcraft_color::Paint;
 use vectorcraft_doc::marks::{MarkStyle, PrinterMarks, outset};
-use vectorcraft_doc::setup::MAX_BLEED;
+use vectorcraft_doc::setup::{MAX_BLEED, bleed_in_range};
 use vectorcraft_doc::{Document, Node, NodeId};
 use vectorcraft_geom::Rect;
 
@@ -34,6 +34,13 @@ impl PdfSettings {
     /// settings' own.
     pub fn bleed_of(&self, doc: &Document) -> [f64; 4] {
         self.bleed.of(doc)
+    }
+
+    /// A PDF/X file of `doc` has no bleed on a side where the document's bleed (Document Setup) has
+    /// one.
+    pub fn leaves_out_bleed(&self, doc: &Document) -> bool {
+        self.standard.is_pdfx()
+            && self.bleed_of(doc).into_iter().zip(bleed_in_range(doc.setup.bleed)).any(|(page, document)| page <= 0.0 && document > 0.0)
     }
 }
 

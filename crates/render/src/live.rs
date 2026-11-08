@@ -582,6 +582,7 @@ impl Renderer {
             ctx.set_transform(f.view);
             return;
         }
+        self.stats.view_sized += 1;
         ctx.set_transform(f.view);
         // Where a patch narrows to slivers, many quads share each pixel, each covering a little of it: their edges
         // composite to part coverage, and hard edges drop each one. An opaque patch is backed by its own outline in

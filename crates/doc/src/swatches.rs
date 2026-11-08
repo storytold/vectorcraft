@@ -7,6 +7,7 @@
 //! those links (and colours) wherever art and swatches hold them, copying only the nodes that
 //! change.
 
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use vectorcraft_color::swatch::REGISTRATION;
@@ -84,6 +85,12 @@ impl Document {
     /// The first of "base `from`", "base `from + 1`"… no swatch or colour group uses.
     fn numbered_swatch_name(&self, base: &str, from: usize) -> String {
         (from..).map(|i| format!("{base} {i}")).find(|n| !self.swatch_name_taken(n)).unwrap_or_else(|| base.to_string())
+    }
+    /// Names for several new swatches: [`FreeSwatchNames::take`] gives what
+    /// [`Document::free_swatch_name`] gives once the swatches named before it are added.
+    pub fn free_swatch_names(&self) -> FreeSwatchNames {
+        let taken = self.swatches_iter().map(|s| s.name.clone()).chain(self.swatch_groups.iter().map(|g| g.name.clone()));
+        FreeSwatchNames { taken: taken.chain([REGISTRATION.to_string()]).collect(), next: HashMap::new() }
     }
     /// The name a new swatch of `paint` gets by default, unused in the document: a colour's values
     /// ([`color_name`], made free like [`Document::free_swatch_name`]), or "New Gradient Swatch 1",
@@ -197,6 +204,52 @@ pub fn color_name(c: Color) -> String {
         Color::Gray { k } => format!("Gray K={}", pct(k)),
         // `+ 0.0` turns a rounded -0 into 0.
         Color::Lab { l, a, b } => format!("L={} a={} b={}", l.round() + 0.0, a.round() + 0.0, b.round() + 0.0),
+    }
+}
+
+/// The swatch and color group names of a document ([`Document::free_swatch_names`]) and the names
+/// handed out since, for naming many new swatches without searching the document for each name.
+#[derive(Clone, Debug)]
+pub struct FreeSwatchNames {
+    taken: HashSet<String>,
+    /// For each base and first number already numbered, the number its next numbered name is
+    /// looked for from: names are only ever added, so the numbers below it stay taken.
+    next: HashMap<(String, usize), usize>,
+}
+
+impl FreeSwatchNames {
+    /// `base`, or the first of "base 2", "base 3"… not taken, as [`Document::free_swatch_name`]
+    /// gives it; the name is taken from then on.
+    pub fn take(&mut self, base: &str) -> String {
+        let name = if self.taken.contains(base) { self.numbered(base, 2) } else { base.to_string() };
+        self.taken.insert(name.clone());
+        name
+    }
+    /// The name [`Document::new_swatch_name`] gives a new swatch of `paint`; the name is taken
+    /// from then on.
+    pub fn take_new(&mut self, paint: &Paint) -> String {
+        let base = match paint {
+            Paint::Solid { swatch: Some(n), tint, .. } if *tint < 1.0 => return self.take(&format!("{n} {}%", tint_percent(*tint))),
+            Paint::Solid { color, .. } => return self.take(&color_name(*color)),
+            Paint::Gradient(_) => "New Gradient Swatch",
+            _ => "New Pattern Swatch",
+        };
+        let name = self.numbered(base, 1);
+        self.taken.insert(name.clone());
+        name
+    }
+    /// Count `name` as taken (a swatch or color group added another way).
+    pub fn insert(&mut self, name: &str) {
+        self.taken.insert(name.to_string());
+    }
+    /// The first of "base `from`", "base `from + 1`"… not taken.
+    fn numbered(&mut self, base: &str, from: usize) -> String {
+        let key = (base.to_string(), from);
+        let start = self.next.get(&key).copied().unwrap_or(from);
+        let (i, name) =
+            (start..).map(|i| (i, format!("{base} {i}"))).find(|(_, n)| !self.taken.contains(n)).unwrap_or_else(|| (start, base.to_string()));
+        self.next.insert(key, i + 1);
+        name
     }
 }
 
@@ -417,6 +470,56 @@ mod tests {
         assert_eq!(d.free_swatch_name("Brand"), "Brand 2");
         assert_eq!(d.free_swatch_name("Mine"), "Mine 2", "colour groups share the namespace");
         assert_eq!(d.new_swatch_name(&Paint::solid(Color::rgb(1.0, 0.0, 0.0))), "R=255 G=0 B=0");
+    }
+
+    #[test]
+    fn free_swatch_names_match_naming_each_swatch_as_it_is_added() {
+        let (mut d, _, _) = doc();
+        let mut names = d.free_swatch_names();
+        for base in ["Brand", "Brand", "Mine", "Fresh", "Fresh", "Brand 2", "Brand", REGISTRATION, "Fresh 3", "Fresh", "Mine 2"] {
+            let want = d.free_swatch_name(base);
+            assert_eq!(names.take(base), want, "{base}");
+            d.swatches.push(Swatch { name: want, paint: Paint::solid(Color::BLACK), global: false, spot: false });
+        }
+        let added: Vec<&str> = d.swatches.iter().rev().take(11).rev().map(|w| w.name.as_str()).collect();
+        assert_eq!(
+            added,
+            ["Brand 2", "Brand 3", "Mine 2", "Fresh", "Fresh 2", "Brand 2 2", "Brand 4", "[Registration] 2", "Fresh 3", "Fresh 4", "Mine 2 2"]
+        );
+    }
+
+    #[test]
+    fn free_swatch_names_match_new_swatch_names_as_swatches_are_added() {
+        let (mut d, _, _) = doc();
+        let red = Color::rgb(1.0, 0.0, 0.0);
+        d.swatches.push(Swatch { name: "New Gradient Swatch 2".into(), paint: Paint::solid(red), global: false, spot: false });
+        let mut names = d.free_swatch_names();
+        // A name taken another way (a group made alongside) counts for both.
+        names.insert("R=255 G=0 B=0 3");
+        d.swatch_groups.push(SwatchGroup { name: "R=255 G=0 B=0 3".into(), swatches: vec![] });
+        let tint = Paint::Solid { color: red, swatch: Some("Brand".into()), tint: 0.4 };
+        let gradient = Paint::Gradient(Box::new(vectorcraft_color::GradientPaint::new(Default::default())));
+        let paints = [Paint::solid(red), Paint::solid(red), gradient.clone(), tint.clone(), Paint::solid(red), gradient.clone(), tint, gradient];
+        let mut added = vec![];
+        for paint in paints {
+            let want = d.new_swatch_name(&paint);
+            assert_eq!(names.take_new(&paint), want);
+            d.swatches.push(Swatch { name: want.clone(), paint, global: false, spot: false });
+            added.push(want);
+        }
+        assert_eq!(
+            added,
+            [
+                "R=255 G=0 B=0",
+                "R=255 G=0 B=0 2",
+                "New Gradient Swatch 1",
+                "Brand 40%",
+                "R=255 G=0 B=0 4",
+                "New Gradient Swatch 3",
+                "Brand 40% 2",
+                "New Gradient Swatch 4"
+            ]
+        );
     }
 
     #[test]

@@ -16,7 +16,7 @@ use super::edit::{duplicate_in, outermost, selected_roots, selected_roots_to_tra
 use super::opacitymask::percent;
 use super::{
     CommandSpec, Result, Session, bad, bool_or, check_numbers, check_switches, cmd, f64_or, f64_req, has_doc, has_multi, has_selection,
-    has_selection_or_guides, id_param, ids_param, matrix_param, ok, point_param, str_param, targets,
+    has_selection_or_guides, ids_param, matrix_param, object_param, ok, point_param, str_param, targets,
 };
 use crate::{EngineError, LastTransform};
 
