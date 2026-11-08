@@ -1508,7 +1508,16 @@ impl Interp {
                     this = args.first().cloned().unwrap_or(Value::Undefined);
                     args = self.list_from_array_like(&list)?;
                 }
-                Func::Native { f: native, .. } => return Ok(Prepared::Done(native(self, this, &args, false)?)),
+                Func::Native { f: native, .. } => {
+                    // A list from `apply` is not on the operand stack, and a native function can run
+                    // JavaScript that collects, so the arguments stay rooted for the call.
+                    let mark = self.temp_roots.len();
+                    self.temp_roots.push(this.clone());
+                    self.temp_roots.extend(args.iter().cloned());
+                    let r = native(self, this, &args, false);
+                    self.temp_roots.truncate(mark);
+                    return Ok(Prepared::Done(r?));
+                }
                 Func::Host { f: host, .. } => {
                     let js_args: Vec<crate::JsValue> = args.iter().map(|v| self.to_js_value(v)).collect();
                     return match host(&js_args) {

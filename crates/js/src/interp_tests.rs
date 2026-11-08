@@ -457,6 +457,19 @@ fn a_lower_heap_limit_applies_to_what_is_already_live() {
 }
 
 #[test]
+fn apply_keeps_its_arguments_alive_while_a_native_function_runs() {
+    // The first argument's toString makes 20,000 objects, more than a 1 MiB heap holds, so a
+    // collection runs before it returns. The second argument is reachable only from the list
+    // that apply read from the array-like object.
+    let mut realm = small(Limits { heap_bytes: 1 << 20, ..Limits::default() });
+    let src = "var list = {length: 2, \
+        get 0() { return {toString: function () { for (var i = 0; i < 20000; i++) ({i: i}); return 'a'; }}; }, \
+        get 1() { return {toString: function () { return 'return a * 2'; }}; }}; \
+        Function.apply(null, list)(21)";
+    assert_eq!(realm.run(src), Ok(JsValue::Number(42.0)));
+}
+
+#[test]
 fn to_number_skips_the_white_space_the_lexer_skips() {
     let mut realm = small(Limits::default());
     assert_eq!(realm.run("var n = +'\\u180E'; n !== n"), Ok(JsValue::Bool(true)), "U+180E is not white space");
