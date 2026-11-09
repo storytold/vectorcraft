@@ -421,7 +421,7 @@ impl Renderer {
 }
 
 /// Premultiplied RGBA `pixels` drawn over the solid color `background` (`[r, g, b, a]`, straight).
-fn over_background(pixels: &mut [u8], [r, g, b, a]: [u8; 4]) {
+pub(crate) fn over_background(pixels: &mut [u8], [r, g, b, a]: [u8; 4]) {
     let alpha = u32::from(a);
     let under = [u32::from(r) * alpha / 255, u32::from(g) * alpha / 255, u32::from(b) * alpha / 255, alpha];
     for p in pixels.as_chunks_mut::<4>().0 {

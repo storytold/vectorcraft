@@ -462,10 +462,10 @@ fn a_screen_outer_glow_is_in_raster_exports() {
     };
     for p in [json!({"format": "png", "background": "white"}), json!({"format": "jpg"})] {
         let px = pixel(p.clone());
-        assert!(px[0] > 235 && px[2] < 235, "{p}: yellow on white: {px:?}");
+        assert!(px[0] > 235 && px[1] > 235 && px[2] < 235, "{p}: yellow on white: {px:?}");
     }
     let px = pixel(json!({"format": "png", "background": "transparent"}));
-    assert!(px[3] > 0 && px[2] < 40, "the glow is in the transparent image: {px:?}");
+    assert!(px[3] > 0 && px[0] > 235 && px[1] > 235 && px[2] < 40, "the glow is yellow in the transparent image: {px:?}");
 }
 
 /// A group's own drop shadow is inside the crop of the group's selection export too.

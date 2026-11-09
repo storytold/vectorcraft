@@ -133,6 +133,48 @@ fn page_knockout_and_isolated_blending() {
     assert!(close(render(&d).pixel(30, 50), [0, 255, 255, 255]), "inverts the white object: {:?}", render(&d).pixel(30, 50));
 }
 
+/// On a white or blue background, every blend mode on the bare page gives the transparent
+/// render over that color (#6125).
+#[test]
+fn no_blend_mode_reads_the_background() {
+    for mode in Blend::ALL {
+        let mut d = Document::new(100.0, 100.0);
+        let mut red = half(&mut d, 10.0, (1.0, 0.0, 0.0));
+        red.blend = mode;
+        d.insert(Some(d.layers[0].id), 0, red).unwrap();
+        let clear = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default()).pixel(30, 50);
+        for bg in [[255, 255, 255, 255], [0, 0, 255, 255]] {
+            let got =
+                Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions { background: Some(bg), ..Default::default() }).pixel(30, 50);
+            let a = i32::from(clear[3]);
+            let want = [0, 1, 2].map(|c| (i32::from(clear[c]) * a + i32::from(bg[c]) * (255 - a)) / 255);
+            assert!((0..3).all(|c| (i32::from(got[c]) - want[c]).abs() <= 3) && got[3] == 255, "{mode:?} on {bg:?}: {got:?}, want {want:?}");
+        }
+    }
+}
+
+/// Premultiplied pixels of alpha 0, 128 and 255 over backgrounds of alpha 0, 128 and 255.
+#[test]
+fn over_background_composites_premultiplied_pixels() {
+    let over = |p: [u8; 4], a: u8| {
+        let mut px = p.to_vec();
+        crate::renderer::over_background(&mut px, [200, 100, 0, a]);
+        [px[0], px[1], px[2], px[3]]
+    };
+    const CLEAR: [u8; 4] = [0; 4];
+    const HALF: [u8; 4] = [64, 10, 100, 128];
+    const SOLID: [u8; 4] = [9, 8, 7, 255];
+    assert_eq!(over(CLEAR, 0), CLEAR);
+    assert_eq!(over(HALF, 0), HALF);
+    assert_eq!(over(SOLID, 0), SOLID);
+    assert_eq!(over(CLEAR, 128), [100, 50, 0, 128]);
+    assert_eq!(over(HALF, 128), [114, 35, 100, 192]);
+    assert_eq!(over(SOLID, 128), SOLID);
+    assert_eq!(over(CLEAR, 255), [200, 100, 0, 255]);
+    assert_eq!(over(HALF, 255), [164, 60, 100, 255]);
+    assert_eq!(over(SOLID, 255), SOLID);
+}
+
 #[test]
 fn page_knockout_looks_the_same_when_another_object_blends() {
     // With Page Knockout Group on, a Multiply square on the page makes the renderer draw the page
