@@ -95,12 +95,18 @@ impl eframe::App for App {
         // A ready update installs once the process has exited. The macOS exit below skips
         // dropping the app, so the helper is started here.
         self.app.start_pending_update();
+        #[cfg(target_os = "macos")]
+        super::mac_cursor::release();
         end_before_teardown(self.frames);
     }
 }
 
 impl App {
     fn logic_frame(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        #[cfg(target_os = "macos")]
+        if self.winit_window.as_ref().is_some_and(|w| !w.has_focus() || w.is_visible() == Some(false) || w.is_minimized() == Some(true)) {
+            super::mac_cursor::release();
+        }
         self.frames = ctx.cumulative_frame_nr();
         if let Some(why) = self.graphics_loss.take() {
             // eframe can't give a window a new device: the user saves and starts again.

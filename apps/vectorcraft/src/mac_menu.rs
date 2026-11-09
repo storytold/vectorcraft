@@ -31,6 +31,10 @@ use vectorcraft_ui_egui::native_menu::{self, Backend, Event, MenuBar, MenuRole, 
 // asynchronous menu presentation). Keep the native tracking state separate from egui popups.
 static TRACKING: AtomicBool = AtomicBool::new(false);
 
+pub(crate) fn is_tracking() -> bool {
+    TRACKING.load(Ordering::Relaxed)
+}
+
 fn observe_tracking(ctx: &egui::Context) {
     static INSTALL: Once = Once::new();
     INSTALL.call_once(|| {
@@ -41,13 +45,17 @@ fn observe_tracking(ctx: &egui::Context) {
             let repaint = ctx.clone();
             let block = RcBlock::new(move |_: std::ptr::NonNull<NSNotification>| {
                 TRACKING.store(tracking, Ordering::Relaxed);
+                if tracking {
+                    super::mac_cursor::release();
+                }
                 // Apply any deferred menu updates as soon as the tracking session ends.
                 if !tracking {
                     repaint.request_repaint();
                 }
             });
             // SAFETY: these are AppKit's notification names. The notification center retains
-            // the observer and block for the application's lifetime; callbacks update an atomic and request repaint.
+            // the observer and block for the application's lifetime; callbacks update tracking, restore
+            // owned cursor rectangles and request repaint.
             #[allow(unsafe_code)]
             unsafe {
                 NSNotificationCenter::defaultCenter().addObserverForName_object_queue_usingBlock(Some(name), None, None, &block);
