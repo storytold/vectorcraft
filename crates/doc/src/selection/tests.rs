@@ -410,6 +410,25 @@ fn baseline_prune(s: &mut Selection, doc: &Document) {
     if s.key.is_some() || s.objects.is_empty() || s.key_guide.is_some_and(|k| !s.guides.contains(&k)) {
         s.key_guide = None;
     }
+    // A picked symbol part stays only while its instance is selected alone, with no guides, and
+    // the part is still editable in a dynamic symbol's art.
+    let editable_part = |art: &crate::Node, path: &[u32]| {
+        crate::symbol_overrides::part(art, path).is_some_and(crate::symbol_overrides::takes_part_paint)
+            && (0..=path.len()).all(|k| crate::symbol_overrides::part(art, &path[..k]).is_some_and(|n| n.visible && !n.locked && !n.is_template()))
+    };
+    let part_kept = s.symbol_part.as_ref().is_some_and(|sp| {
+        s.objects == [sp.instance]
+            && s.guides.is_empty()
+            && found.get(&sp.instance).and_then(|p| doc.node_at(p)).is_some_and(|n| match &n.kind {
+                NodeKind::SymbolInstance { symbol, .. } => {
+                    doc.symbols.iter().find(|x| x.name == *symbol).is_some_and(|x| x.dynamic && editable_part(&x.art, &sp.path))
+                }
+                _ => false,
+            })
+    });
+    if !part_kept {
+        s.symbol_part = None;
+    }
 }
 
 #[test]
@@ -457,5 +476,17 @@ fn prune_matches_baseline_for_mixed_objects_anchors_and_guides() {
         let mut actual_empty = empty_sel.clone();
         actual_empty.prune(&d);
         assert_eq!(actual_empty, expected_empty, "empty selection mismatch on seed {seed}");
+
+        // 4. A picked symbol part must not slip through the object-only and empty fast paths.
+        for objects in [obj_only.objects.clone(), Vec::new()] {
+            let mut with_part = obj_only.clone();
+            with_part.objects = objects;
+            with_part.set_symbol_part(with_part.objects.first().copied().unwrap_or(NodeId(9999)), vec![0]);
+            let mut expected_part = with_part.clone();
+            baseline_prune(&mut expected_part, &d);
+            let mut actual_part = with_part.clone();
+            actual_part.prune(&d);
+            assert_eq!(actual_part, expected_part, "symbol part selection mismatch on seed {seed}");
+        }
     }
 }

@@ -253,13 +253,16 @@ impl Selection {
     }
     /// Drop ids that no longer exist or are no longer editable.
     pub fn prune(&mut self, doc: &Document) {
-        if self.objects.is_empty() && self.anchors.is_empty() && self.segments.is_empty() && self.key.is_none() && self.target.is_none() {
+        // The fast paths below don't look at a picked symbol part (it needs the symbol's art as well
+        // as the instance), so they are only taken while none is picked.
+        let plain = self.symbol_part.is_none();
+        if plain && self.objects.is_empty() && self.anchors.is_empty() && self.segments.is_empty() && self.key.is_none() && self.target.is_none() {
             self.guides.retain(|i| doc.guides.get(*i).is_some_and(|g| doc.guide_editable(g)));
             self.slices.retain(|id| doc.is_slice(*id));
             self.key_guide = None;
             return;
         }
-        if self.anchors.is_empty() && self.segments.is_empty() && self.key.is_none() && self.target.is_none() {
+        if plain && self.anchors.is_empty() && self.segments.is_empty() && self.key.is_none() && self.target.is_none() {
             if doc.has_lookup_cache() || self.objects.len() <= 16 {
                 self.objects.retain(|id| doc.node(*id).is_some());
             } else {
