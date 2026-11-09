@@ -1,6 +1,6 @@
 use super::{
     Affine, Arc, Document, EngineError, Homography, NodeId, NodeKind, PerspectiveGrid, Plane, Point, Result, Session, Value, bad, check_numbers,
-    check_switches, collect_points, duplicate_in, finite_numbers, id_param, ids_param, json, matrix_param, number_or, ok, outermost, persp,
+    check_switches, collect_points, duplicate_in, finite_numbers, json, matrix_param, named_id, named_ids, number_or, ok, outermost, persp,
     point_param, project_node, selected_roots, str_param, switch_or,
 };
 
@@ -92,7 +92,7 @@ fn plane_param(g: &PerspectiveGrid, p: &Value, cmd: &str) -> Result<Plane> {
 }
 
 pub(super) fn roots(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
-    match ids_param(p, "ids").or_else(|| id_param(p, "id").map(|i| vec![i])) {
+    match named_ids(p)? {
         Some(v) => Ok(outermost(&s.doc()?.doc, v)),
         None => selected_roots(s),
     }
@@ -285,7 +285,7 @@ pub(super) fn persp_move(s: &mut Session, p: &Value) -> Result<Value> {
     let constrain = switch_or(p, "constrain", false, C)?;
     // `snap_fix` uses Snap to Grid's setting for a `snap` that is not true or false.
     check_switches(p, &["snap"], C)?;
-    // Snap to Grid: a correction for the objects on the first one's plane and depth.
+    // Shift: the constrained end point, read on the first object's plane and depth.
     let snap_to = if constrain && !perp {
         let doc = &s.doc()?.doc;
         let g = grid_of(doc);
@@ -300,11 +300,20 @@ pub(super) fn persp_move(s: &mut Session, p: &Value) -> Result<Value> {
     } else {
         to
     };
-    let fix = if perp { None } else { crate::cmd::perspgrid::snap_fix(&s.doc()?.doc, &ids, p, (from, snap_to)) };
-    let snapped = move |pl: Plane, depth: f64, raw: vectorcraft_geom::Vec2| {
+    // With Snap to Grid, every object on the first one's plane, at any depth, moves by the first
+    // one's plane-space offset and its correction, so the objects keep their spacing on the plane.
+    let fix = if perp {
+        None
+    } else {
+        let doc = &s.doc()?.doc;
+        crate::cmd::perspgrid::snap_fix(doc, &ids, p, (from, snap_to))
+            .and_then(|(plane, depth, correction)| Some((plane, grid_of(doc).plane_delta(plane, depth, from, to)?, correction)))
+    };
+    let snapped = move |pl: Plane, raw: vectorcraft_geom::Vec2| {
+        let raw = fix.filter(|f| f.0 == pl).map_or(raw, |f| f.1);
         let (direction, dv) =
             if constrain { vectorcraft_tools::distort::perspective::constrain_move_delta(raw) } else { (vectorcraft_geom::Vec2::ZERO, raw) };
-        dv + fix.filter(|f| f.0 == pl && f.1 == depth).map_or(vectorcraft_geom::Vec2::ZERO, |f| {
+        dv + fix.filter(|f| f.0 == pl).map_or(vectorcraft_geom::Vec2::ZERO, |f| {
             if !constrain {
                 return f.2;
             }
@@ -325,7 +334,7 @@ pub(super) fn persp_move(s: &mut Session, p: &Value) -> Result<Value> {
             let to_depth = g.depth_at(pl, depth, from, to).ok_or_else(beyond_horizon)?;
             Ok((g.transform_map(pl, depth, Affine::IDENTITY, to_depth - depth).ok_or_else(beyond_horizon)?, to_depth))
         } else {
-            let dv = snapped(pl, depth, g.plane_delta(pl, depth, from, to).ok_or_else(beyond_horizon)?);
+            let dv = snapped(pl, g.plane_delta(pl, depth, from, to).ok_or_else(beyond_horizon)?);
             Ok((g.transform_map(pl, depth, Affine::translate(dv), 0.0).ok_or_else(beyond_horizon)?, depth))
         }
     };
@@ -336,7 +345,7 @@ pub(super) fn persp_move(s: &mut Session, p: &Value) -> Result<Value> {
         if perp {
             g.depth_at(pl, depth, from, to).is_some_and(|d| (d - depth).abs() <= 1e-9)
         } else {
-            g.plane_delta(pl, depth, from, to).map(|dv| snapped(pl, depth, dv)).is_some_and(|dv| dv.x.abs() <= 1e-9 && dv.y.abs() <= 1e-9)
+            g.plane_delta(pl, depth, from, to).map(|dv| snapped(pl, dv)).is_some_and(|dv| dv.x.abs() <= 1e-9 && dv.y.abs() <= 1e-9)
         }
     };
     let first_still = if copy { None } else { unmoved(s, &ids, still)? };
@@ -350,9 +359,7 @@ pub(super) fn persp_move(s: &mut Session, p: &Value) -> Result<Value> {
         let again = match perp {
             _ if first_still.is_some() => Some(json!({"matrix": matrix_json(Affine::IDENTITY), "copy": copy})),
             true => g.depth_at(pl, depth, from, to).map(|d| json!({"matrix": matrix_json(Affine::IDENTITY), "depth": d - depth, "copy": copy})),
-            false => {
-                g.plane_delta(pl, depth, from, to).map(|dv| json!({"matrix": matrix_json(Affine::translate(snapped(pl, depth, dv))), "copy": copy}))
-            }
+            false => g.plane_delta(pl, depth, from, to).map(|dv| json!({"matrix": matrix_json(Affine::translate(snapped(pl, dv))), "copy": copy})),
         };
         if let Some(a) = again {
             record_again(s, a)?;
@@ -478,9 +485,8 @@ pub(super) fn plane_move(s: &mut Session, p: &Value) -> Result<Value> {
 
 pub(super) fn plane_match(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
-    let id = id_param(p, "id")
-        .or_else(|| st.selection.objects.first().copied())
-        .ok_or_else(|| EngineError::Other("select an object in perspective".into()))?;
+    let id =
+        named_id(p)?.or_else(|| st.selection.objects.first().copied()).ok_or_else(|| EngineError::Other("select an object in perspective".into()))?;
     let mut g = grid_of(&st.doc);
     let (plane, depth) = g.attachment_of(&st.doc, id).ok_or_else(|| EngineError::Other("the object isn't in perspective".into()))?;
     g.set_offset(plane, depth);
@@ -586,8 +592,7 @@ pub fn perspective_click(s: &Session, cmd: &str, params: &Value, at: Point) -> O
 /// mode, to be edited; exiting isolation projects it again ([`finish_edit_text`]).
 pub(super) fn edit_text(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
-    let id =
-        id_param(p, "id").or_else(|| st.selection.objects.first().copied()).ok_or_else(|| EngineError::Other("select type in perspective".into()))?;
+    let id = named_id(p)?.or_else(|| st.selection.objects.first().copied()).ok_or_else(|| EngineError::Other("select type in perspective".into()))?;
     if !st.doc.node(id).is_some_and(|n| matches!(n.kind, NodeKind::Text(_)) && n.projection().is_some()) {
         return Err(EngineError::Other("select type in perspective".into()));
     }

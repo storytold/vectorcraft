@@ -134,6 +134,106 @@ fn white_black() -> Value {
 }
 
 #[test]
+fn a_placed_gradient_moved_by_a_transform_or_free_distort_expands_as_the_canvas_draws_it() {
+    // The object's own effect, and the fill's (the first appearance item).
+    let slant = json!({"corners": [[0.25, 0.0], [1.25, 0.0], [1.0, 1.0], [0.0, 1.0]]});
+    for (effect, params, item) in [
+        ("distort.transform", json!({"rotate": 90}), json!(null)),
+        ("distort.transform", json!({"rotate": 30, "scaleH": 60}), json!(null)),
+        ("distort.transform", json!({"rotate": 90}), json!(0)),
+        ("distort.freeDistort", slant.clone(), json!(null)),
+        ("distort.freeDistort", slant, json!(0)),
+    ] {
+        let mut s = session();
+        let id = gradient_rect(&mut s, Rect::new(40.0, 70.0, 160.0, 130.0), white_black(), false);
+        // Placed from a quarter of the way across to the right edge.
+        run(&mut s, "paint.setGradientGeom", json!({"start": [70, 100], "end": [160, 100], "stroke": false}));
+        let placed = s.doc().unwrap().doc.node(id).and_then(|n| match n.appearance.fill_paint() {
+            vectorcraft_color::Paint::Gradient(g) => g.geom,
+            _ => None,
+        });
+        assert!(placed.is_some(), "the fill's gradient is placed");
+        run(&mut s, "effect.apply", json!({"effect": effect, "params": params, "ids": [id.0], "item": item}));
+        let before = render(&s);
+        // Fill alone: the gradient becomes strips inside the outline the effect makes.
+        run(&mut s, "object.expand", json!({"object": false, "stroke": false, "steps": 64}));
+        let after = render(&s);
+        // The gradient moves with the rectangle on the canvas, and the strips follow it.
+        let diff = mean_diff(&before, &after);
+        assert!(diff < 1.0, "{effect} {params} on item {item}: mean difference {diff}");
+    }
+}
+
+/// A gradient fitted to the object turns with a Transform effect on the canvas, and Object › Expand
+/// of the fill makes strips that draw the same.
+#[test]
+fn a_fitted_gradient_turned_by_a_transform_expands_as_the_canvas_draws_it() {
+    // The gray level at (x, y).
+    let gray = |r: &vectorcraft_render::Rendered, x: usize, y: usize| r.pixels[(y * 200 + x) * 4] as i32;
+    // The object's own effect, and the fill's (the first appearance item).
+    for (params, item) in
+        [(json!({"rotate": 90}), json!(null)), (json!({"rotate": 90}), json!(0)), (json!({"rotate": 30, "scaleH": 60}), json!(null))]
+    {
+        let mut s = session();
+        let id = gradient_rect(&mut s, Rect::new(60.0, 60.0, 140.0, 140.0), white_black(), false);
+        run(&mut s, "effect.apply", json!({"effect": "distort.transform", "params": params, "ids": [id.0], "item": item}));
+        let before = render(&s);
+        if params["rotate"] == 90 {
+            // The white to black ramp runs up or down the turned square, not across it.
+            let (top, bottom) = (gray(&before, 100, 70), gray(&before, 100, 130));
+            let (left, right) = (gray(&before, 70, 100), gray(&before, 130, 100));
+            assert!((top - bottom).abs() > 100 && (left - right).abs() < 20, "{params} on item {item}: {top} {bottom} {left} {right}");
+        }
+        run(&mut s, "object.expand", json!({"object": false, "stroke": false, "steps": 64}));
+        let after = render(&s);
+        let diff = mean_diff(&before, &after);
+        assert!(diff < 1.0, "{params} on item {item}: mean difference {diff}");
+    }
+}
+
+#[test]
+fn a_placed_gradient_moved_by_a_warp_expands_as_the_canvas_draws_it() {
+    // The object's own effect, and the fill's (the first appearance item).
+    for (effect, params, item) in [
+        ("warp.arc", json!({"bend": 40}), json!(null)),
+        ("warp.bulge", json!({"bend": 40, "orientation": "vertical"}), json!(null)),
+        ("warp.inflate", json!({"bend": 40}), json!(0)),
+    ] {
+        let mut s = session();
+        let id = gradient_rect(&mut s, Rect::new(40.0, 70.0, 160.0, 130.0), white_black(), false);
+        // Placed from a quarter of the way across to the right edge.
+        run(&mut s, "paint.setGradientGeom", json!({"start": [70, 100], "end": [160, 100], "stroke": false}));
+        let placed = s.doc().unwrap().doc.node(id).and_then(|n| match n.appearance.fill_paint() {
+            vectorcraft_color::Paint::Gradient(g) => g.geom,
+            _ => None,
+        });
+        assert!(placed.is_some(), "the fill's gradient is placed");
+        run(&mut s, "effect.apply", json!({"effect": effect, "params": params, "ids": [id.0], "item": item}));
+        let before = render(&s);
+        // Fill alone: the gradient becomes strips inside the outline the warp makes.
+        run(&mut s, "object.expand", json!({"object": false, "stroke": false, "steps": 64}));
+        let after = render(&s);
+        let diff = mean_diff(&before, &after);
+        assert!(diff < 1.0, "{effect} {params} on item {item}: mean difference {diff}");
+        // The ramp's midpoint, 115 pt before the warp, moves and scales with the warped bounds.
+        let doc = &s.doc().unwrap().doc;
+        let b = doc.node(doc.layers[0].id).and_then(|l| l.geometric_bounds()).unwrap();
+        let want = b.x0 + (115.0 - 40.0) / 120.0 * b.width();
+        assert!((want - 115.0).abs() > 2.0, "{effect} {params}: the warp moves the midpoint ({b:?})");
+        let red = |x: usize| f64::from(after.pixels[(100 * 200 + x) * 4]);
+        // White turns dark once on row 100, and gradually, so the crossing is the ramp's midpoint
+        // and not an edge of the outline.
+        let crossings: Vec<usize> =
+            (b.x0.ceil() as usize + 3..b.x1.floor() as usize - 4).filter(|&x| red(x) >= 127.5 && red(x + 1) < 127.5).collect();
+        assert_eq!(crossings.len(), 1, "{effect} {params}: white turns dark once on row 100: {crossings:?}");
+        let x = crossings[0];
+        assert!(red(x - 2) - red(x + 3) < 100.0, "{effect} {params}: the ramp, not an edge: {} to {}", red(x - 2), red(x + 3));
+        let half = x as f64 + 0.5 + (red(x) - 127.5) / (red(x) - red(x + 1));
+        assert!((half - want).abs() < 1.0, "{effect} {params} on item {item}: the midpoint is at {half}, want {want}");
+    }
+}
+
+#[test]
 fn eight_strips_match_the_gradient_samples() {
     let mut s = session();
     gradient_rect(&mut s, Rect::new(20.0, 20.0, 180.0, 120.0), white_black(), false);
@@ -894,11 +994,12 @@ fn a_freeform_gradient_expands_with_the_inks_of_its_points() {
     for c in expanded(&mut s, 1.0) {
         assert!(close_inks(inks(c), [0.5, 0.2, 0.0, 0.1]), "{c:?}");
     }
-    // Cyan and black points mix as inks: cyan and black only, adding up to one.
+    // Cyan and black points mix as inks: cyan and black only, adding up to one. The gradient blends
+    // the points' display colors and the mesh blends their inks, so the two draw a little apart in between.
     let mut s = session();
     let (cyan, black) = (ink(1.0, 0.0, 0.0, 0.0), ink(0.0, 0.0, 0.0, 1.0));
     freeform_rect(&mut s, Rect::new(20.0, 20.0, 180.0, 180.0), [cyan.clone(), cyan.clone(), black.clone(), black]);
-    for c in expanded(&mut s, 5.0) {
+    for c in expanded(&mut s, 7.5) {
         let [c, m, y, k] = inks(c);
         assert!(m.abs() < 1e-5 && y.abs() < 1e-5 && (c + k - 1.0).abs() < 1e-5, "C{c} M{m} Y{y} K{k}");
     }

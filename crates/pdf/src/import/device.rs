@@ -363,7 +363,8 @@ impl<'a> Device<'a> for Builder<'_> {
         {
             f.group.get_or_insert(g);
         }
-        self.marked.push(group);
+        let current = group.or_else(|| self.current_group());
+        self.marked.push((group, current));
     }
 
     fn end_marked_content(&mut self) {
@@ -371,7 +372,7 @@ impl<'a> Device<'a> for Builder<'_> {
             return;
         }
         // The runs gathered within a layer's sequence are its art: finish them before it ends.
-        if self.marked.last().copied().flatten().is_some() {
+        if self.marked.last().is_some_and(|(group, _)| group.is_some()) {
             self.flush();
         }
         self.marked.pop();

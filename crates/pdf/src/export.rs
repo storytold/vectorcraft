@@ -33,6 +33,7 @@ use crate::{Compatibility, ExportReport, PdfError, PdfOptions, Standard};
 mod entry;
 mod exporter;
 mod images;
+mod links;
 mod nodes;
 mod paint;
 mod text;
@@ -44,6 +45,8 @@ pub use entry::{export, export_with_report, page_areas};
 use exporter::{MAX_COORD, writable, xf};
 #[cfg(test)]
 use images::{png_8_bit, png_16_bit};
+#[cfg(test)]
+pub(crate) use nodes::MEASURES;
 pub(crate) use writer::{Sheet, Writer};
 
 pub(crate) struct Exporter<'a> {
@@ -94,6 +97,9 @@ pub(crate) struct Exporter<'a> {
     layer_index: HashMap<usize, usize>,
     /// The address of the layer whose form is being drawn.
     in_layer: usize,
+    /// The paper of the page being drawn, in its drawing space: the box of each layer's form
+    /// covers it ([`crate::forms::layer_form`]).
+    paper: Rect,
     /// Overprinting fills and strokes are drawn as forms marked to overprint.
     pub overprint: bool,
     /// An overprinting fill or stroke was drawn so.

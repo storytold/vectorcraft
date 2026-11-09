@@ -288,7 +288,13 @@ fn keep_acl(target: &Path, tmp: &Path) -> bool {
     let mut buf = vec![0u8; 64 << 10];
     match rustix::fs::getxattr(target, ACL, &mut buf[..]) {
         Ok(n) => buf.get(..n).is_some_and(|acl| rustix::fs::setxattr(tmp, ACL, acl, rustix::fs::XattrFlags::empty()).is_ok()),
-        Err(e) => e == Errno::NODATA || e == Errno::NOTSUP,
+        // None to keep: drop the one `tmp` may have inherited from the folder's default ACL, which
+        // the old file's group bits (its mask) would otherwise open to the people it names.
+        Err(e) if e == Errno::NODATA => match rustix::fs::removexattr(tmp, ACL) {
+            Ok(()) => true,
+            Err(e) => e == Errno::NODATA || e == Errno::NOTSUP,
+        },
+        Err(e) => e == Errno::NOTSUP,
     }
 }
 
@@ -311,6 +317,24 @@ mod tests {
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         d
+    }
+
+    /// A replaced file that had no access ACL gets none from the folder's default ACL, whose named
+    /// users the old file's group bits would let in. (Skipped where `setfacl` or ACLs are missing.)
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_replacement_takes_no_inherited_acl_the_old_file_lacked() {
+        let d = dir("acl");
+        let f = d.join("doc.vectorcraft");
+        std::fs::write(&f, b"old").unwrap();
+        let set = std::process::Command::new("setfacl").args(["-d", "-m", "u:nobody:rw"]).arg(&d).status();
+        if !set.is_ok_and(|s| s.success()) {
+            return;
+        }
+        write_atomic(&f, b"new").unwrap();
+        let mut buf = vec![0u8; 4096];
+        assert_eq!(rustix::fs::getxattr(&f, "system.posix_acl_access", &mut buf[..]), Err(rustix::io::Errno::NODATA));
+        let _ = std::fs::remove_dir_all(&d);
     }
 
     /// The other files in `d` besides `keep`.

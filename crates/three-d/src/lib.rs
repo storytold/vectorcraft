@@ -11,10 +11,12 @@ mod visibility;
 pub use solid::{Bevel, BevelShape, Extrude, Facet, Inflate, View, extrude, inflate, inflate_together, plane};
 pub use visibility::{VisibleFace, visible_faces};
 mod shading;
-pub use shading::{LightGradient, RgbGradient, ShadeGradient};
+pub use shading::{ClassicShading, ClassicSurface, LightGradient, RgbGradient, ShadeGradient};
 mod lights;
 pub use lights::{Light, Lights, MAX_LIGHTS};
 mod caps;
+mod mesh;
+pub use mesh::{Mesh, extrude_mesh, inflate_meshes, plane_mesh, revolve_mesh};
 
 use vectorcraft_geom::{BezPath, ParamCurve, PathData, Point, Rect, Vec2, kurbo::ParamCurveDeriv};
 
@@ -447,7 +449,17 @@ fn project_face(vertices: &[V3], normals: Option<&[V3]>, o: Revolve, origin: Poi
 /// Evaluate a profile in document space. All subpaths share one axis from `bounds`.
 /// Invalid or excessively complex inputs return an error, never a partial surface.
 pub fn revolve(path: &PathData, bounds: Rect, options: Revolve) -> Result<Vec<Face>, String> {
+    revolve_faces(path, bounds, options, None)
+}
+
+/// [`revolve`], or with `mesh` the surface's faces before projection, kept there instead of drawn.
+fn revolve_faces(path: &PathData, bounds: Rect, options: Revolve, mut mesh: Option<&mut Vec<solid::Face3>>) -> Result<Vec<Face>, String> {
     let o = options.sanitized();
+    // A face kept for a mesh: its normal follows from its corners.
+    let keep = |mesh: &mut Vec<solid::Face3>, face: Vec<V3>, normal: V3| {
+        mesh.push((vec![face], normal));
+        if mesh.len() > MAX_FACES { Err("Revolve surface is too complex; reduce Segments or simplify the profile".to_string()) } else { Ok(()) }
+    };
     if ![bounds.x0, bounds.y0, bounds.x1, bounds.y1].iter().all(|v| v.is_finite() && v.abs() <= 1e8) {
         return Err("Revolve requires finite profile coordinates within 100 million points".into());
     }
@@ -543,6 +555,16 @@ pub fn revolve(path: &PathData, bounds: Rect, options: Revolve) -> Result<Vec<Fa
                 }
             }
         }
+        // For a mesh: which way the profile runs round the region it sweeps (closed against the
+        // axis at its ends when it is open), so the faces' normals point out of the solid.
+        let turn = {
+            let mut ring: Vec<(f64, f64)> = profile.iter().map(|p| (p.x - axis, p.y)).collect();
+            if let (false, Some(first), Some(last)) = (sp.closed, profile.first(), profile.last()) {
+                ring.extend([(0.0, last.y), (0.0, first.y)]);
+            }
+            let area: f64 = ring.iter().zip(ring.iter().cycle().skip(1)).take(ring.len()).map(|(p, q)| p.0 * q.1 - q.0 * p.1).sum();
+            if area < 0.0 { -1.0 } else { 1.0 }
+        };
         for (i, (pair, [ta, tb])) in profile.windows(2).zip(tangents).enumerate() {
             let [a, b] = pair else { continue };
             if ![a.x, a.y, b.x, b.y].iter().all(|v| v.is_finite() && v.abs() <= 1e8) {
@@ -550,6 +572,14 @@ pub fn revolve(path: &PathData, bounds: Rect, options: Revolve) -> Result<Vec<Fa
             }
             for j in 0..steps {
                 let [v0, v1, v2, v3] = [vertex(*a, j), vertex(*b, j), vertex(*b, j + 1), vertex(*a, j + 1)];
+                if let Some(mesh) = mesh.as_deref_mut() {
+                    // The edge's outward normal in the profile's plane (distance from the axis,
+                    // height), swept to the middle of the step.
+                    let (dr, dy) = ((b.x - a.x) * turn, (b.y - a.y) * turn);
+                    let (s, c) = (sweep * (j as f64 + 0.5) / steps as f64).sin_cos();
+                    keep(mesh, vec![v0, v1, v2, v3], o.rotate(V3(dy * c, -dr, dy * s)))?;
+                    continue;
+                }
                 let first = (i == 0).then(|| rings.first().and_then(Option::as_ref).and_then(|r| r.arcs.get(j))).flatten();
                 let last = (i + 2 == profile.len()).then(|| rings.last().and_then(Option::as_ref).and_then(|r| r.arcs.get(j))).flatten();
                 let projected = |vertices: &[V3], normals: Option<&[V3]>, edges: &[(usize, &caps::RingArc, bool)]| {
@@ -581,6 +611,17 @@ pub fn revolve(path: &PathData, bounds: Rect, options: Revolve) -> Result<Vec<Fa
                 } else {
                     1.0
                 };
+                if let Some(mesh) = mesh.as_deref_mut() {
+                    // The disk, or for a partial sweep the sector with its centre on the axis.
+                    let mut cap: Vec<V3> = (0..=steps).map(|j| vertex(*end, j)).collect();
+                    if o.angle >= 360.0 {
+                        cap.pop();
+                    } else {
+                        cap.insert(0, o.rotate(V3(0.0, end.y - center_y, 0.0)));
+                    }
+                    keep(mesh, cap, o.rotate(V3(0.0, outward, 0.0)))?;
+                    continue;
+                }
                 // Keep the original tessellation work budget, even though each cap
                 // now produces only one curved vector face.
                 emit(ring.face(bounds, o, light, outward)?, steps)?;

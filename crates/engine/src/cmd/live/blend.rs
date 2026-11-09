@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use super::common::{
     DEFAULT_DISTANCE, DEFAULT_STEPS, ease_param, fix_ids, ids_json, is_blend, orientation_param, percent_param, roots_param, selected_of,
     spacing_param, starts_param, wrap,
@@ -5,7 +7,7 @@ use super::common::{
 use super::mesh::index_param;
 use super::{
     Affine, Anchor, Appearance, Arc, Beside, BlendDefaults, BlendOrientation, BlendSpacing, BlendSpec, Document, EngineError, Node, NodeId, NodeKind,
-    Paint, PathData, Point, Result, Session, Spine, Value, Vec2, bad, f64_req, id_param, json, live, number_or, ok, str_param, switch_or,
+    Paint, PathData, Point, Result, Session, Spine, Value, Vec2, bad, f64_req, json, live, number_or, ok, str_param, switch_or,
 };
 
 /// The first blend among `roots`.
@@ -158,7 +160,7 @@ fn edit_spine<T>(
     label: &str,
     f: impl FnOnce(&mut vectorcraft_geom::SubPath, &mut Vec<usize>, &mut [Arc<Node>]) -> Result<T>,
 ) -> Result<T> {
-    let id = match id_param(p, "id") {
+    let id = match crate::cmd::object_param(p, "id", cmd)? {
         Some(id) => id,
         None => *selected_of(s, is_blend).first().ok_or_else(|| bad(cmd, "select a blend or give `id`"))?,
     };
@@ -180,6 +182,17 @@ fn finite_point(p: &Value, cmd: &str) -> Result<Point> {
     if q.x.is_finite() && q.y.is_finite() && q.x.abs() < 1e9 && q.y.abs() < 1e9 { Ok(q) } else { Err(bad(cmd, "x and y must be finite")) }
 }
 
+/// Most spine points `with` names.
+const MAX_SPINE_POINTS: usize = 10_000;
+
+/// The optional `with` list of spine point indexes (empty when absent).
+fn spine_points_param(p: &Value, cmd: &str) -> Result<Vec<usize>> {
+    let Some(v) = p.get("with").filter(|v| !v.is_null()) else { return Ok(vec![]) };
+    let wrong = || bad(cmd, "`with` must be a list of at most 10000 spine point indexes");
+    let list = v.as_array().filter(|l| l.len() <= MAX_SPINE_POINTS).ok_or_else(wrong)?;
+    list.iter().map(|i| i.as_u64().and_then(|i| usize::try_from(i).ok()).ok_or_else(wrong)).collect()
+}
+
 pub(super) fn spine_move_anchor(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.blend.spine.moveAnchor";
     let index = index_param(p, "anchor", C)?;
@@ -191,6 +204,11 @@ pub(super) fn spine_move_anchor(s: &mut Session, p: &Value) -> Result<Value> {
         Some(_) => return Err(bad(C, "handle must be in or out")),
     };
     let independent = switch_or(p, "independent", false, C)?;
+    let with = spine_points_param(p, C)?;
+    // Any `with`, even an empty list, asks to move points, which a handle drag doesn't.
+    if handle.is_some() && p.get("with").is_some_and(|v| !v.is_null()) {
+        return Err(bad(C, "`with` moves points, not a handle"));
+    }
     edit_spine(s, p, C, "Reshape Spine", |sp, anchors, keys| {
         let a = sp.anchors.get_mut(index).ok_or_else(|| bad(C, "no such spine point"))?;
         if let Some(out) = handle {
@@ -198,9 +216,13 @@ pub(super) fn spine_move_anchor(s: &mut Session, p: &Value) -> Result<Value> {
             return Ok(());
         }
         let delta = q - a.p;
-        a.translate(delta);
-        // The key objects on the point move with it.
-        for (k, _) in anchors.iter().enumerate().filter(|(_, a)| **a == index) {
+        // The other points selected with it (#5285) move as far.
+        let moved: BTreeSet<usize> = with.iter().copied().chain([index]).collect();
+        for &i in &moved {
+            sp.anchors.get_mut(i).ok_or_else(|| bad(C, "no such spine point"))?.translate(delta);
+        }
+        // The key objects on the points move with them.
+        for (k, _) in anchors.iter().enumerate().filter(|(_, a)| moved.contains(*a)) {
             if let Some(key) = keys.get_mut(k) {
                 Arc::make_mut(key).transform(Affine::translate(delta), false);
             }

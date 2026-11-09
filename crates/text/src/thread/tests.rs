@@ -144,6 +144,58 @@ fn paragraph_styles_flow_with_their_paragraphs() {
     assert_eq!(story_paras(&[&fa, &fb], &[false, false])[0].justify, Left);
 }
 
+#[test]
+fn empty_frames_do_not_replace_an_earlier_paragraph_style() {
+    let mut first = frame(0.0);
+    first.runs = vec![TextRun { text: "First".into(), style: CharStyle::default(), inline: None }];
+    first.set_all_paras(ParaStyle { justify: Justify::Right, ..Default::default() });
+    let middle = frame(200.0);
+    let last = frame(400.0);
+    assert_eq!(story_paras(&[&first, &middle, &last], &[true, false, false])[0].justify, Justify::Right);
+
+    // An empty frame between two parts of the same paragraph changes no style either.
+    let mut last_with_text = last.clone();
+    last_with_text.runs = vec![TextRun { text: "Tail".into(), style: CharStyle::default(), inline: None }];
+    assert_eq!(story_paras(&[&first, &middle, &last_with_text], &[true, false, false])[0].justify, Justify::Right);
+
+    let mut restyled_middle = middle.clone();
+    restyled_middle.set_all_paras(ParaStyle { justify: Justify::Center, ..Default::default() });
+    assert_eq!(story_paras(&[&first, &restyled_middle, &last], &[false, true, false])[0].justify, Justify::Center);
+}
+
+/// When the earlier frame ends with a paragraph break, a restyled empty frame keeps its style
+/// against an unedited empty frame after it. An unedited empty frame before it, a frame with
+/// text after it, or a restyled frame after it still gives the paragraph its own style.
+#[test]
+fn a_restyled_empty_frame_keeps_its_style_after_a_paragraph_break() {
+    let style = |j| ParaStyle { justify: j, ..Default::default() };
+    let mut first = frame(0.0);
+    first.runs = vec![TextRun { text: "First\n".into(), style: CharStyle::default(), inline: None }];
+    first.set_all_paras(style(Justify::Right));
+    let mut restyled = frame(200.0);
+    restyled.set_all_paras(style(Justify::Center));
+    let empty = frame(400.0);
+    let tail_style = |frames: &[&TextObject], wins: &[bool]| story_paras(frames, wins).last().map(|p| p.justify);
+
+    assert_eq!(tail_style(&[&first, &restyled, &empty], &[false, true, false]), Some(Justify::Center));
+    assert_eq!(tail_style(&[&first, &restyled, &empty, &empty], &[false, true, false, false]), Some(Justify::Center));
+    // An unedited empty frame before the restyled one gives way to it.
+    assert_eq!(tail_style(&[&first, &empty, &restyled, &empty], &[false, false, true, false]), Some(Justify::Center));
+    // A restyled first frame of an empty thread keeps its style as well.
+    assert_eq!(tail_style(&[&restyled, &empty, &empty], &[true, false, false]), Some(Justify::Center));
+
+    // Without an edit, the last empty frame still gives the empty paragraph its style.
+    assert_eq!(tail_style(&[&first, &restyled, &empty], &[false, false, false]), Some(Justify::Left));
+    // A later frame with text still gives the paragraph it holds its style.
+    let mut with_text = empty.clone();
+    with_text.runs = vec![TextRun { text: "Tail".into(), style: CharStyle::default(), inline: None }];
+    assert_eq!(tail_style(&[&first, &restyled, &with_text], &[false, true, false]), Some(Justify::Left));
+    // A later restyled frame wins over the earlier one.
+    let mut right = empty.clone();
+    right.set_all_paras(style(Justify::Right));
+    assert_eq!(tail_style(&[&first, &restyled, &right], &[false, true, true]), Some(Justify::Right));
+}
+
 /// Numbered list paragraphs count on from one frame to the next: the second frame's first
 /// whole paragraph takes the next number. A paragraph split between the frames has its number
 /// in the first frame only, and the paragraph after it takes the next number.
@@ -324,6 +376,40 @@ fn a_list_paragraph_continued_onto_a_path_has_no_bullet_there() {
     alone.runs = story;
     alone.set_paragraph_styles(vec![para]);
     assert_eq!(layout(db, &alone).markers.len(), 1);
+}
+
+/// List levels: each level's count runs on through the frames, a deeper level in the next
+/// frame going on with the count its paragraphs reached in the frame before.
+#[test]
+fn list_levels_count_on_through_the_frames() {
+    use vectorcraft_doc::text::{NumberStyle, ParaList};
+    let db = FontDb::global();
+    let (a, mut b) = (frame(0.0), frame(200.0));
+    b.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(200.0, 0.0, 320.0, 400.0)) };
+    let at = |level| ParaStyle {
+        list: Some(ParaList::numbered(NumberStyle::Arabic).at_level(level)),
+        left_indent: 18.0,
+        first_line_indent: -18.0,
+        ..Default::default()
+    };
+    let numbers = |f: &TextObject, s: &Slice| {
+        let mut t = f.clone();
+        t.runs = s.runs.clone();
+        t.set_paragraph_styles(s.paras.clone());
+        t.set_list_counts(s.list_counts());
+        layout(db, &t).markers.iter().map(|m| m.text.clone()).collect::<Vec<_>>()
+    };
+    // One item at level 1 and eleven at level 2: 1. then 1. to 11. through both frames.
+    let paras: Vec<ParaStyle> = (0..12).map(|i| at(if i == 0 { 1 } else { 2 })).collect();
+    let text = (1..=12).map(|i| format!("Item {i}")).collect::<Vec<_>>().join("\n");
+    let story = vec![TextRun { text, style: CharStyle::default(), inline: None }];
+    let parts = distribute(db, &[&a, &b], &story, &paras);
+    let first = numbers(&a, &parts[0]);
+    assert!((2..12).contains(&first.len()), "both frames hold items: {first:?}");
+    let both: Vec<String> = [first.clone(), numbers(&b, &parts[1])].concat();
+    let expected: Vec<String> = std::iter::once("1.".to_string()).chain((1..=11).map(|n| format!("{n}."))).collect();
+    assert_eq!(both, expected);
+    assert_eq!((parts[1].list_count, parts[1].list_level_counts.clone()), (1, vec![first.len() as u32 - 1]));
 }
 
 #[test]

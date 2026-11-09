@@ -286,6 +286,11 @@ impl Obj {
             Self::GState(_) => "gstatetype",
         }
     }
+
+    /// A composite object, whose value lives in VM; the others are simple (PLRM 3rd ed., §3.3.1).
+    pub fn is_composite(&self) -> bool {
+        matches!(self, Self::Str(_) | Self::ExecStr(_) | Self::Array { .. } | Self::Dict(_) | Self::File { .. } | Self::Save(_) | Self::GState(_))
+    }
 }
 
 /// The values of a string or an array: a run of storage that other strings or arrays may share
@@ -364,6 +369,16 @@ impl<T: Clone + Held> Shared<T> {
         Rc::ptr_eq(&self.buf, &o.buf)
     }
 }
+
+/// Equal when [`Shared::same`]: the same storage and run of it (the identity of a PostScript
+/// composite object, not its contents).
+impl<T: Held> PartialEq for Shared<T> {
+    fn eq(&self, o: &Self) -> bool {
+        Rc::ptr_eq(&self.buf, &o.buf) && self.at == o.at && self.len == o.len
+    }
+}
+
+impl<T: Held> Eq for Shared<T> {}
 
 /// Hashes what [`Shared::same`] compares: the storage and the run of it.
 impl<T: Held> Hash for Shared<T> {

@@ -1,6 +1,29 @@
 use super::*;
 use crate::theme;
 
+#[test]
+fn help_bar_toggle_is_independent_and_saved_in_workspaces() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    assert!(app.ui.help_bar);
+    assert_eq!(checked(&app, "window.helpBar", &Value::Null), Some(true));
+    assert_eq!(run_ui_command(&mut app, "window.helpBar", &Value::Null).unwrap().unwrap(), json!(false));
+    assert!(app.ui.status_bar);
+    assert_eq!(checked(&app, "window.helpBar", &Value::Null), Some(false));
+    let saved = crate::workspaces::capture(&app.ui, "No help");
+    let saved: crate::workspaces::Workspace = serde_json::from_value(serde_json::to_value(saved).unwrap()).unwrap();
+    app.ui.help_bar = true;
+    app.ui.status_bar = false;
+    crate::workspaces::apply(&mut app.ui, &saved);
+    assert!(!app.ui.help_bar && app.ui.status_bar);
+    assert_eq!(run_ui_command(&mut app, "window.helpBar", &Value::Null).unwrap().unwrap(), json!(true));
+    let legacy: crate::workspaces::Workspace = serde_json::from_value(json!({"name":"Old workspace"})).unwrap();
+    assert!(legacy.help_bar);
+    let restored: crate::state::UiState = serde_json::from_value(serde_json::to_value(&app.ui).unwrap()).unwrap();
+    assert!(restored.help_bar);
+    let (_, window) = menu_tree().into_iter().find(|(title, _)| *title == "Window").unwrap();
+    assert!(window.iter().any(|item| matches!(item, Item::Cmd("Help Bar", "window.helpBar", _))));
+}
+
 /// One headless frame of the in-window menu bar; returns its titles (left to right) as
 /// (rect, id of the title's popup).
 fn bar_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<(egui::Rect, egui::Id)> {
@@ -255,6 +278,43 @@ fn optical_margin_alignment_menu_unchecked_when_shared_flag_none() {
     assert_eq!(checked(&app, id, &Value::Null), Some(true));
 }
 
+/// Type › Orientation menu checks use `shared_text_flag`; mixed values leave both unchecked.
+#[test]
+fn type_orientation_menu_unchecked_when_shared_vertical_none() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let h = app.run("text.create", json!({"x": 10, "y": 40, "text": "H"})).unwrap()["id"].clone();
+    let v = app.run("text.create", json!({"x": 10, "y": 80, "text": "V", "vertical": true})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [h, v]})).unwrap();
+    assert_eq!(crate::panels::character::shared_text_flag(&app, |t| t.vertical), None);
+    assert_eq!(checked(&app, "type.orientation.vertical", &Value::Null), Some(false));
+    assert_eq!(checked(&app, "type.orientation.horizontal", &Value::Null), Some(false));
+    app.run("select.set", json!({"ids": [v]})).unwrap();
+    assert_eq!(checked(&app, "type.orientation.vertical", &Value::Null), Some(true));
+    assert_eq!(checked(&app, "type.orientation.horizontal", &Value::Null), Some(false));
+}
+
+#[test]
+fn type_orientation_menu_unchecked_for_three_object_mixed_selections() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let v0 = app.run("text.create", json!({"x": 10, "y": 40, "text": "v0", "vertical": true})).unwrap()["id"].clone();
+    let h1 = app.run("text.create", json!({"x": 10, "y": 80, "text": "h1"})).unwrap()["id"].clone();
+    let h2 = app.run("text.create", json!({"x": 10, "y": 120, "text": "h2"})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [v0.clone(), h1.clone(), h2.clone()]})).unwrap();
+    assert_eq!(checked(&app, "type.orientation.vertical", &Value::Null), Some(false));
+    assert_eq!(checked(&app, "type.orientation.horizontal", &Value::Null), Some(false));
+    let h0 = app.run("text.create", json!({"x": 10, "y": 160, "text": "h0"})).unwrap()["id"].clone();
+    let v1 = app.run("text.create", json!({"x": 10, "y": 200, "text": "v1", "vertical": true})).unwrap()["id"].clone();
+    let v2 = app.run("text.create", json!({"x": 10, "y": 240, "text": "v2", "vertical": true})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [h0.clone(), v1.clone(), v2.clone()]})).unwrap();
+    assert_eq!(checked(&app, "type.orientation.vertical", &Value::Null), Some(false));
+    assert_eq!(checked(&app, "type.orientation.horizontal", &Value::Null), Some(false));
+    app.run("select.set", json!({"ids": [v0.clone(), v1.clone(), v2.clone()]})).unwrap();
+    assert_eq!(checked(&app, "type.orientation.vertical", &Value::Null), Some(true));
+    assert_eq!(checked(&app, "type.orientation.horizontal", &Value::Null), Some(false));
+}
+
 #[test]
 fn panel_ids_are_case_insensitive_and_labels_work() {
     assert_eq!(normalize_panel("layers"), Some("layers"));
@@ -315,6 +375,22 @@ fn saved_views_store_and_restore_the_view() {
     assert_eq!((v.zoom, v.center.x, v.center.y), (3.0, 120.0, 80.0));
     // Unused slots stay out of the menu listing agents see.
     assert!(!menu_entries(&app).iter().any(|e| e.command.as_deref() == Some("view.goto2")));
+}
+
+/// Effect › 3D and Materials › 3D (Classic) › Extrude & Bevel (Classic)… opens its effect dialog,
+/// after Materials…, and nowhere else.
+#[test]
+fn classic_extrude_bevel_is_in_the_3d_classic_submenu() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let entries = menu_entries(&app);
+    let classic: Vec<_> = entries.iter().filter(|e| e.params.get("effect").and_then(Value::as_str) == Some("threeD.classicExtrude")).collect();
+    assert_eq!(classic.len(), 1, "listed once");
+    let e = classic[0];
+    assert_eq!(e.path, ["Effect", "3D and Materials", "3D (Classic)"]);
+    assert_eq!((e.label.as_str(), e.command.as_deref()), ("Extrude & Bevel (Classic)…", Some("effect.dialog")));
+    let at = |label: &str| entries.iter().position(|x| x.label == label && x.path.get(1).is_some_and(|p| p == "3D and Materials"));
+    assert!(at("Materials…").unwrap() < at("Extrude & Bevel (Classic)…").unwrap());
 }
 
 /// A document's 25 views are all listed at the bottom of the View menu, by name, and the last
@@ -468,6 +544,48 @@ fn update_selection_follows_save_selection_and_needs_a_recall() {
     invoke(&mut app, "select.update", json!({}));
     app.run("select.none", json!({})).unwrap();
     assert_eq!(app.run("select.recall1", json!({})).unwrap()["count"], 2);
+}
+
+#[test]
+fn select_same_link_block_series_selects_a_thread_from_the_menu() {
+    let mut app = app_with_a_rectangle();
+    let entry = menu_entries(&app).into_iter().find(|e| e.command.as_deref() == Some("select.same.linkBlockSeries")).expect("menu entry");
+    assert_eq!((entry.path, entry.label.as_str()), (vec!["Select".to_string(), "Same".to_string()], "Link Block Series"));
+    // A rectangle selected: no type, so the item is off.
+    assert!(!enabled(&app, "select.same.linkBlockSeries"));
+    let frame = |app: &mut VectorcraftApp, x: i32| {
+        app.run("text.create", json!({"x": x, "y": 40, "text": "words ".repeat(40), "area": {"width": 60, "height": 30}})).unwrap()["id"].clone()
+    };
+    let (a, b) = (frame(&mut app, 0), frame(&mut app, 100));
+    app.run("select.set", json!({"ids": [a.clone(), b.clone()]})).unwrap();
+    app.run("text.thread.create", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [b.clone()]})).unwrap();
+    assert!(enabled(&app, "select.same.linkBlockSeries"));
+    invoke(&mut app, "select.same.linkBlockSeries", json!({}));
+    let ids: Vec<u64> = app.session.active().unwrap().selection.objects.iter().map(|i| i.0).collect();
+    assert_eq!(json!(ids), json!([a, b]));
+}
+
+#[test]
+fn select_same_text_fill_and_stroke_color_follows_text_stroke_color_in_the_menu() {
+    let mut app = app_with_a_rectangle();
+    let entries = menu_entries(&app);
+    let at = |id: &str| entries.iter().position(|e| e.command.as_deref() == Some(id));
+    let entry = at("select.same.textFillAndStrokeColor").map(|i| &entries[i]).expect("menu entry");
+    assert_eq!((entry.path.clone(), entry.label.as_str()), (vec!["Select".to_string(), "Same".to_string()], "Text Fill & Stroke Color"));
+    assert_eq!(at("select.same.textStrokeColor").map(|i| i + 1), at("select.same.textFillAndStrokeColor"));
+    let text = |app: &mut VectorcraftApp, y: i32, fill: &str, stroke: &str| {
+        let id = app.run("text.create", json!({"x": 0, "y": y, "text": "type"})).unwrap()["id"].clone();
+        app.run("text.setRangeStyle", json!({"id": id.clone(), "start": 0, "end": 4, "fill": fill, "stroke": stroke})).unwrap();
+        id
+    };
+    let a = text(&mut app, 40, "#ff0000", "#0000ff");
+    let b = text(&mut app, 80, "#ff0000", "#0000ff");
+    let _ = text(&mut app, 120, "#ff0000", "#00ff00");
+    app.run("select.set", json!({"ids": [a.clone()]})).unwrap();
+    invoke(&mut app, "select.same.textFillAndStrokeColor", json!({}));
+    let ids: Vec<u64> = app.session.active().unwrap().selection.objects.iter().map(|i| i.0).collect();
+    assert_eq!(json!(ids), json!([a, b]));
 }
 
 #[test]
@@ -833,15 +951,17 @@ fn unlock_all_and_show_all_clicked_with_shift_alt_act_within_the_group() {
     }
 }
 
-/// #3724: Window › New Window is greyed out until VectorCraft can open a second window on a
-/// document, instead of being enabled and answering with an internal milestone note.
+/// #4116: Window › New Window is enabled with a document open and opens a second view of it; with
+/// no document open it is greyed out.
 #[test]
-fn new_window_is_disabled_until_it_opens_a_window() {
+fn new_window_opens_a_view_of_the_current_document() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    assert!(!enabled(&app, "window.newWindow"), "no document to open a window on");
+    assert_eq!(app.run("window.newWindow", json!({})).unwrap_err(), "no document open");
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
-    assert!(!enabled(&app, "window.newWindow"), "New Window is enabled but opens no window");
-    let e = app.run("window.newWindow", json!({})).unwrap_err();
-    assert!(!e.contains("M11.5"), "a user-facing message, not a milestone: {e}");
+    assert!(enabled(&app, "window.newWindow"));
+    assert_eq!(app.run("window.newWindow", json!({})).unwrap(), json!({"index": 0, "view": 2}));
+    assert_eq!(app.session.documents().len(), 1, "the same document, in a second window");
 }
 
 /// #4143: Window menu panels and panel submenus are listed in alphabetical order according to the

@@ -3,7 +3,9 @@ use super::{
     PlacedKey, Rect, RenderContext, Renderer, SUBSTITUTED, Shape, TextGeom, TextObject, blend_mode, blob_pixmap, depends_on_document, fx, holds_type,
     image_mip, ink, kurbo, lru, peniko, place, proof, stain_bits, text_geom, text_geom_snapped, vello_cpu,
 };
+use super::{AntiAlias, Pixmap, single_threaded_context};
 use crate::paint;
+use crate::{MAX_RASTER_SIDE, TypeAntiAlias, TypeEdgeEntry};
 
 impl Renderer {
     pub(super) fn draw_text(&mut self, ctx: &mut RenderContext, f: &Frame, n: &Node, t: &TextObject) {
@@ -66,6 +68,7 @@ impl Renderer {
         if let Some(e) = self.placed_arts.get(&key, self.stamp)
             && std::ptr::eq(e.art.as_ptr(), Arc::as_ptr(art))
             && e.fonts.is_none_or(|g| g == vectorcraft_text::FontDb::global().generation())
+            && e.slice.is_none()
         {
             return match &e.placed {
                 Some(placed) => (placed.clone(), true),
@@ -73,14 +76,70 @@ impl Renderer {
             };
         }
         let placed = place(art, xf, scale_strokes, inst);
+        let inserted = self.keep_placed(key, art, &placed, None);
+        (placed, inserted)
+    }
+
+    /// Symbol art `art` placed for instance `inst` (placed by `xf`) through 9-slice map `map`
+    /// ([`vectorcraft_doc::NineSliceMap::place`], stained by the instance), and whether it is kept,
+    /// when the frame's symbol budget (`used`, see [`vectorcraft_doc::charge_symbol_art`]) has room
+    /// for it. The art is kept between frames as [`Self::placed_art`] keeps it, under the same key
+    /// and only with the same map. Kept art is charged by its own object count, the art of its
+    /// opacity masks included ([`Node::count_with_masks`]), and is not placed
+    /// again; other art is charged by [`vectorcraft_doc::NineSliceMap::most_placed`] before it is
+    /// placed.
+    pub(super) fn sliced_art(
+        &mut self,
+        doc: &vectorcraft_doc::Document,
+        art: &Arc<Node>,
+        map: &vectorcraft_doc::NineSliceMap,
+        xf: Affine,
+        inst: &Node,
+        used: &mut u64,
+    ) -> Option<(Arc<Node>, bool)> {
+        let kept_kind = matches!(art.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }) || vectorcraft_doc::live::is_live(art);
+        let stain = stain_bits(vectorcraft_brush::stain(inst));
+        let key = (Arc::as_ptr(art) as usize, xf.as_coeffs().map(f64::to_bits), false, stain);
+        // As in `placed_art`, an instance with appearance changes of its own isn't kept.
+        let overridden = !inst.extras().symbol_overrides.is_empty();
+        let mut keeps = kept_kind && !overridden && !fx::has_object_fx(art);
+        if keeps
+            && let Some(e) = self.placed_arts.get(&key, self.stamp)
+            && std::ptr::eq(e.art.as_ptr(), Arc::as_ptr(art))
+            && e.fonts.is_none_or(|g| g == vectorcraft_text::FontDb::global().generation())
+            && e.slice.as_ref() == Some(map)
+        {
+            match e.placed.clone() {
+                Some(placed) => {
+                    let count = placed.count_with_masks() as u64;
+                    return vectorcraft_doc::charge_symbol_art(used, count, || ((placed, true), count));
+                }
+                None => keeps = false,
+            }
+        }
+        let stained = crate::brush_fx::instance_art(art, inst);
+        let most = map.most_placed(&stained, doc);
+        let placed = vectorcraft_doc::charge_symbol_art(used, most, || {
+            let placed = Arc::new(map.place(&stained, doc));
+            let count = placed.count_with_masks() as u64;
+            (placed, count)
+        })?;
+        let kept = keeps && self.keep_placed(key, art, &placed, Some(*map));
+        Some((placed, kept))
+    }
+
+    /// Keep `placed`, symbol art `art` as placed under `key` (through 9-slice map `slice`, when it
+    /// has one), unless `art` depends on the document ([`depends_on_document`]): then the entry
+    /// records that it is placed again in every frame. Whether `placed` is kept.
+    fn keep_placed(&mut self, key: PlacedKey, art: &Arc<Node>, placed: &Arc<Node>, slice: Option<vectorcraft_doc::NineSliceMap>) -> bool {
         let kept = (!depends_on_document(art)).then(|| placed.clone());
         let keeps = kept.is_some();
         let fonts = (keeps && holds_type(art)).then(|| vectorcraft_text::FontDb::global().generation());
         // The bytes count the key and the entry, the art's allocation that the weak reference
         // keeps, and the kept art.
         let bytes = size_of::<(PlacedKey, PlacedEntry, Node)>() + kept.as_deref().map_or(0, lru::node_bytes);
-        let inserted = self.placed_arts.insert(key, PlacedEntry { art: Arc::downgrade(art), placed: kept, fonts }, bytes, self.stamp);
-        (placed, keeps && inserted)
+        let inserted = self.placed_arts.insert(key, PlacedEntry { art: Arc::downgrade(art), placed: kept, fonts, slice }, bytes, self.stamp);
+        keeps && inserted
     }
 
     /// Cached glyph geometry for a text node (keyed by Arc identity like paths).
@@ -94,18 +153,51 @@ impl Renderer {
         let fonts = vectorcraft_text::FontDb::global().generation();
         if fonts != self.text_fonts {
             self.texts.clear();
+            self.text_ids.clear();
             self.char_strokes.clear();
             self.text_fonts = fonts;
         }
         let key = Arc::as_ptr(a) as usize;
-        if let Some((node, g)) = self.texts.get(&key, self.stamp)
-            && Arc::ptr_eq(node, a)
-        {
+        if let Some((_, g)) = self.texts.get_if(&key, self.stamp, |(node, _)| Arc::ptr_eq(node, a)) {
             return (g.clone(), true);
         }
+        if let Some(&previous) = self.text_ids.get(&a.id)
+            && let Some(g) = self
+                .texts
+                .get_if(&previous, self.stamp, |(node, _)| {
+                    let NodeKind::Text(old) = &node.kind else { return false };
+                    // Shrink Text to Fit searches document-point sizes, so a scale change can
+                    // alter layout. Translation leaves the glyphs in text space unchanged.
+                    if old.xf.as_coeffs()[..4] != t.xf.as_coeffs()[..4] {
+                        return false;
+                    }
+                    let mut comparable = (**old).clone();
+                    comparable.xf = t.xf;
+                    comparable == *t
+                })
+                .map(|(_, g)| g.clone())
+        {
+            // Kept under this node from here on: the next frames find it without comparing.
+            self.texts.remove(&previous);
+            let kept = self.keep_text(a, g.clone());
+            return (g, kept);
+        }
         let g = Arc::new(text_geom(t));
-        let kept = self.texts.insert(key, (a.clone(), g.clone()), g.bytes(), self.stamp);
+        let kept = self.keep_text(a, g.clone());
         (g, kept)
+    }
+
+    /// Keep glyph geometry `g` of text node `a`, as the latest of its id. Whether it was kept.
+    fn keep_text(&mut self, a: &Arc<Node>, g: Arc<TextGeom>) -> bool {
+        let key = Arc::as_ptr(a) as usize;
+        let bytes = g.bytes();
+        let kept = self.texts.insert(key, (a.clone(), g), bytes, self.stamp);
+        if kept {
+            self.text_ids.insert(a.id, key);
+        } else {
+            self.text_ids.remove(&a.id);
+        }
+        kept
     }
 
     /// Draw type `n` (`t`, laid out in `g`). The outlines of its character strokes are cached
@@ -130,6 +222,9 @@ impl Renderer {
                 self.draw_colour_glyph(ctx, f, art, t.xf);
             }
             self.draw_inlines(ctx, f, t, g);
+            return;
+        }
+        if t.anti_alias != TypeAntiAlias::Sharp && self.draw_type_edges(ctx, f, n, t, g, kept) {
             return;
         }
         let tb = t.xf.transform_rect_bbox(g.bounds);
@@ -203,6 +298,233 @@ impl Renderer {
         }
     }
 
+    /// Draw type `t` of node `n` (laid out in `g`) with its anti-aliasing method, None, Crisp or
+    /// Strong, on the pixels of the output ([`Frame::output`]): the type is drawn offscreen on those
+    /// pixels and placed back pixel for pixel. With None it is drawn with hard edges, so a pixel
+    /// takes the type's color where the type covers at least half of it. With Crisp and Strong each
+    /// group of its paints ([`type_paints`]: the object's own fills and strokes one at a time, and
+    /// the characters' fills and strokes) is drawn on its own as Sharp draws it, and again in
+    /// opaque black, which gives the share `c` of each pixel the group covers; the pixel's color and
+    /// opacity are then scaled by [`edge_coverage`] of `c` divided by `c`, so the opacity of the
+    /// paints is kept, and the groups are composited in the order they are drawn. A pixel that
+    /// every group covers wholly or not at all is the pixel Sharp draws. Where the output's pixels would number more than the frame's there
+    /// and more than [`fx::PIXEL_BUDGET`], or be more than [`MAX_RASTER_SIDE`] a side (a frame
+    /// drawn coarser than the output), the frame's own pixels are used.
+    ///
+    /// The pixels are kept (`type_edges`). In a later frame they are placed without drawing the
+    /// type offscreen while the object, the output's zoom and rotation, the method and edge
+    /// smoothing and what the type reads ([`Self::raster_inputs`]) are unchanged, the output has
+    /// moved by whole pixels, and the kept pixels hold every pixel the frame needs. After a pan,
+    /// the kept pixels are placed moved by it; after a pan that brings more of the type into view,
+    /// the type is drawn offscreen again. The outlines of its character strokes are cached when
+    /// `g` is kept in `texts` (`geom_kept`).
+    ///
+    /// Returns false, having drawn nothing, for type that is drawn as Sharp draws it: type with
+    /// inline graphics, type with color glyphs (bitmap or COLR), type whose own fills or strokes
+    /// include a brush stroke or a blend mode other than Normal, type that overprints while
+    /// Overprint Preview is on, and type that shows a substitution highlight on screen. Drawn
+    /// offscreen, those would blend with nothing or take the method on art that is not the
+    /// characters'. It also returns false for type whose offscreen drawing would be more than
+    /// [`MAX_RASTER_SIDE`] pixels a side or more than [`fx::PIXEL_BUDGET`] pixels in all.
+    fn draw_type_edges(&mut self, ctx: &mut RenderContext, f: &Frame, n: &Node, t: &TextObject, g: &Arc<TextGeom>, geom_kept: bool) -> bool {
+        if proof::overprints(f.opts) && t.runs.iter().any(|r| r.style.overprint_fill || r.style.overprint_stroke) {
+            return false;
+        }
+        let normal = vectorcraft_color::BlendMode::Normal;
+        let brush = |i: &AppearanceItem| matches!(i, AppearanceItem::Stroke(st) if st.brush.is_some());
+        if t.runs.iter().any(|r| r.inline.is_some()) || n.appearance.items.iter().any(|i| i.visible() && (i.blend() != normal || brush(i))) {
+            return false;
+        }
+        // Color glyphs paint their own pixels and layers, whose opacity is not the characters' coverage.
+        if !g.images.is_empty() || !g.colours.is_empty() {
+            return false;
+        }
+        if f.opts.highlight_substitutions {
+            let shows = |on: bool, path: &BezPath| on && !path.elements().is_empty();
+            if shows(f.opts.highlight_substituted_fonts, &g.substituted_fonts)
+                || shows(f.doc.setup.highlight_substituted_glyphs, &g.substituted_glyphs)
+                // Measured only when shown: it lays the text out again.
+                || (f.opts.highlight_alternate_glyphs && !g.alternate_glyphs(t).elements().is_empty())
+            {
+                return false;
+            }
+        }
+        // Where the type draws: its glyphs, grown by the farthest its strokes reach, besides its
+        // bounds (an area type frame's, or a point type estimate before it is laid out).
+        let glyphs = type_reach(n, t, g);
+        let reach = fx::cull_bounds(f.symbols, n).map_or(glyphs, |b| b.union(glyphs));
+        // This frame's pixels to the output's: a scale and an offset (a supersampled export's
+        // factor, an offscreen layer's crop).
+        let grid = f.output * f.view.inverse();
+        let [sx, _, _, sy, _, _] = grid.as_coeffs();
+        let reach = reach.inflate(2.0 * f.px / sx.abs().min(1.0), 2.0 * f.px / sy.abs().min(1.0));
+        let on = f.view.transform_rect_bbox(reach).intersect(Rect::new(0.0, 0.0, f64::from(ctx.width()), f64::from(ctx.height())));
+        if !on.is_finite() {
+            return false;
+        }
+        if on.width() <= 0.0 || on.height() <= 0.0 {
+            return true;
+        }
+        let grid = edge_grid(on, grid);
+        let output = grid * f.view;
+        let [sx, _, _, sy, _, _] = grid.as_coeffs();
+        let on = grid.transform_rect_bbox(on);
+        // Whole pixels of the output.
+        let (x0, y0) = (on.x0.floor(), on.y0.floor());
+        let (Ok(w), Ok(h)) = (u16::try_from((on.x1 - x0).ceil() as u64), u16::try_from((on.y1 - y0).ceil() as u64)) else { return false };
+        // (vello_cpu panics drawing near `u16::MAX` pixels a side.) Past the pixel budget the type
+        // is drawn as Sharp draws it.
+        if u32::from(w) > MAX_RASTER_SIDE || u32::from(h) > MAX_RASTER_SIDE || f64::from(w) * f64::from(h) > fx::PIXEL_BUDGET {
+            return false;
+        }
+        let view = Affine::translate((-x0, -y0)) * output;
+        let visible = view.inverse().transform_rect_bbox(Rect::new(0.0, 0.0, f64::from(w), f64::from(h)));
+        let px = 1.0 / view.determinant().abs().sqrt().max(1e-12);
+        let frame = Frame { mt: false, view, visible, px, output: view, ..*f };
+        let threshold = match t.anti_alias {
+            TypeAntiAlias::None => AntiAlias::None.threshold(),
+            // The frame's pixels are smaller than the output's in a supersampled export, whose art
+            // is smooth on the output's pixels (Art Optimized).
+            _ if sx.abs() < 0.999 || sy.abs() < 0.999 => None,
+            _ => f.opts.anti_alias.threshold(),
+        };
+        // Pixels kept from an earlier frame, for the type of the node itself (not a copy of its
+        // text): drawn on output pixels of the same size, rotation and phase, holding those needed.
+        let own = matches!(&n.kind, NodeKind::Text(o) if std::ptr::eq(&**o, t));
+        let key = (std::ptr::from_ref(n) as usize, f.ink);
+        let linear = fx::linear_key(output);
+        let shift = output.translation();
+        let settings = (t.anti_alias, threshold, f.opts.anti_alias, f.opts.precise, self.alpha.to_bits());
+        let inputs = own.then(|| self.raster_inputs(f, n, fx::Reads::of(n)));
+        let whole = |v: f64| (v - v.round()).abs() < 1e-6;
+        let kept = inputs.as_ref().and_then(|inputs| {
+            let e = self.type_edges.get(&key, self.stamp)?;
+            let d = shift - e.shift;
+            let (ox, oy) = (e.origin.0 + d.x.round(), e.origin.1 + d.y.round());
+            let (iw, ih) = (f64::from(e.image.width()), f64::from(e.image.height()));
+            let holds = ox <= x0 && oy <= y0 && ox + iw >= x0 + f64::from(w) && oy + ih >= y0 + f64::from(h);
+            let fits = e.linear == linear && e.settings == settings && whole(d.x) && whole(d.y) && holds && e.inputs == *inputs && e.node == *n;
+            fits.then(|| (e.image.clone(), ox, oy))
+        });
+        let (image, ox, oy) = match kept {
+            Some(kept) => kept,
+            None => {
+                let pm = self.draw_type_pixels(&frame, n, t, g, geom_kept, (w, h), threshold);
+                self.stats.type_edges += 1;
+                let image = Arc::new(pm);
+                if let Some(inputs) = inputs {
+                    let bytes = usize::from(w) * usize::from(h) * 4 + lru::node_bytes(n);
+                    let e = TypeEdgeEntry { node: n.clone(), linear, settings, inputs, shift, origin: (x0, y0), image: image.clone() };
+                    self.type_edges.insert(key, e, bytes, self.stamp);
+                }
+                (image, x0, y0)
+            }
+        };
+        ctx.set_transform(grid.inverse() * Affine::translate((ox, oy)));
+        // The pixmap maps onto the rect pixel for pixel, each one on a pixel of the output.
+        ctx.reset_paint_transform();
+        let sampler = peniko::ImageSampler { quality: peniko::ImageQuality::Low, ..Default::default() };
+        let (iw, ih) = (f64::from(image.width()), f64::from(image.height()));
+        ctx.set_paint(vello_cpu::Image { image: vello_cpu::ImageSource::Pixmap(image), sampler });
+        ctx.fill_rect(&Rect::new(0.0, 0.0, iw, ih));
+        ctx.set_transform(Affine::IDENTITY);
+        true
+    }
+
+    /// The pixels of type `t` of node `n` (laid out in `g`) with its anti-aliasing method, drawn
+    /// offscreen in `frame` on `w` × `h` pixels with edge threshold `threshold`
+    /// ([`Self::draw_type_edges`]). The outlines of its character strokes are cached when `g` is
+    /// kept in `texts` (`kept`).
+    #[allow(clippy::too_many_arguments)]
+    fn draw_type_pixels(
+        &mut self,
+        frame: &Frame,
+        n: &Node,
+        t: &TextObject,
+        g: &Arc<TextGeom>,
+        kept: bool,
+        (w, h): (u16, u16),
+        threshold: Option<u8>,
+    ) -> Pixmap {
+        let draw = |r: &mut Self, frame: &Frame, n: &Node, t: &TextObject| {
+            let mut off = single_threaded_context(w, h);
+            off.set_aliasing_threshold(threshold);
+            r.inside_layer(|r| r.draw_text_geom(&mut off, frame, n, t, g, kept));
+            off.flush();
+            let mut pm = Pixmap::new(w, h);
+            off.render_with(&mut pm, &mut r.resources, r.raster);
+            pm
+        };
+        let sharp = TextObject { anti_alias: TypeAntiAlias::Sharp, ..t.clone() };
+        if t.anti_alias == TypeAntiAlias::None {
+            return draw(self, frame, n, &sharp);
+        }
+        let black = |p: &mut vectorcraft_color::Paint| {
+            if !p.is_none() {
+                *p = vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK);
+            }
+        };
+        // A group of paints drawn on its own, its pixels taking the method from its own coverage,
+        // and that coverage.
+        let reshaped = |r: &mut Self, group: Option<&[TypePaint]>| {
+            let (pn, pt) = match group {
+                Some(keep) => type_paint_only(n, &sharp, keep),
+                None => (n.clone(), sharp.clone()),
+            };
+            let mut pm = draw(r, frame, &pn, &pt);
+            let (mut inked, mut ink) = (pn, pt);
+            for r in &mut ink.runs {
+                black(&mut r.style.fill);
+                black(&mut r.style.stroke);
+            }
+            for item in &mut inked.appearance.items {
+                black(item.paint_mut());
+                match item {
+                    AppearanceItem::Fill(fl) => fl.opacity = 1.0,
+                    AppearanceItem::Stroke(st) => st.opacity = 1.0,
+                }
+            }
+            // The coverage leaves out the opacity folded in from the object the type is drawn in
+            // (a translucent brushed path), which the pixels already take.
+            let folded = std::mem::replace(&mut r.alpha, 1.0);
+            let covered = draw(r, frame, &inked, &ink);
+            r.alpha = folded;
+            for (p, c) in pm.data_mut().iter_mut().zip(covered.data()) {
+                *p = edge_pixel(*p, c.a, t.anti_alias);
+            }
+            (pm, covered)
+        };
+        let groups: Vec<Option<Vec<TypePaint>>> = match type_paints(n, &sharp, g, self.alpha >= 1.0) {
+            Some(groups) => groups.into_iter().map(Some).collect(),
+            None => vec![None],
+        };
+        if groups.len() <= 1 {
+            return groups.first().map_or_else(|| Pixmap::new(w, h), |group| reshaped(self, group.as_deref()).0);
+        }
+        // Where every group covers a pixel wholly or not at all, the pixel is the type's as Sharp
+        // draws it. Elsewhere it is the groups composited in the order they are drawn, source over.
+        let mut pm = draw(self, frame, n, &sharp);
+        let mut sum = vec![[0.0f32; 4]; usize::from(w) * usize::from(h)];
+        let mut edge = vec![false; sum.len()];
+        for group in &groups {
+            let (layer, covered) = reshaped(self, group.as_deref());
+            for (((s, e), p), c) in sum.iter_mut().zip(&mut edge).zip(layer.data()).zip(covered.data()) {
+                *e |= c.a != 0 && c.a != 255;
+                let keep = 1.0 - f32::from(p.a) / 255.0;
+                for (v, c) in s.iter_mut().zip([p.r, p.g, p.b, p.a]) {
+                    *v = f32::from(c) + *v * keep;
+                }
+            }
+        }
+        for ((p, s), e) in pm.data_mut().iter_mut().zip(&sum).zip(&edge) {
+            if *e {
+                let [red, green, blue, a] = s.map(|v| v.round().clamp(0.0, 255.0) as u8);
+                *p = vello_cpu::color::PremulRgba8 { r: red.min(a), g: green.min(a), b: blue.min(a), a };
+            }
+        }
+        pm
+    }
+
     /// Paint some of type `n`'s own fills and strokes (`items`) on its glyph outlines `all`
     /// (document space; `tb` their bounds). Fills composite with their own opacity and blend mode;
     /// strokes take every stroke option, as on paths.
@@ -247,13 +569,14 @@ impl Renderer {
     /// decoded once and kept with the images' pixels.
     fn draw_glyph_image(&mut self, ctx: &mut RenderContext, f: &Frame, image: &vectorcraft_text::GlyphImage, xf: Affine) {
         let Some((key, pm)) = blob_pixmap(&image.blob, true) else { return };
-        let (key, pm) = ink::ink_image(&key, &pm, f.ink, Some(&image.blob), true);
-        let (key, pm) = match f.plates {
-            Some(lut) => proof::plate_image(lut, &key, &pm, Some(&image.blob), true),
-            None => (key, pm),
-        };
+        // Shrunk before it is inked, as images are (`draw_image_in`).
         let unit = f.view * xf * Affine::scale_non_uniform(image.width as f64, image.height as f64);
-        let pm = image_mip(&key, pm, unit);
+        let (key, pm) = image_mip(key, pm, unit);
+        let (key, pm) = ink::ink_image(&key, &pm, f.ink, Some(&image.blob), true);
+        let pm = match f.plates {
+            Some(lut) => proof::plate_image(lut, &key, &pm, Some(&image.blob), true).1,
+            None => pm,
+        };
         let sx = image.width as f64 / pm.width().max(1) as f64;
         let sy = image.height as f64 / pm.height().max(1) as f64;
         let quality = if f.opts.smooth_images { peniko::ImageQuality::Medium } else { peniko::ImageQuality::Low };
@@ -266,4 +589,126 @@ impl Renderer {
         ctx.fill_rect(&image.rect());
         ctx.reset_paint_transform();
     }
+}
+
+/// How much of a pixel (out of 255) type that covers `c` of it shows with anti-aliasing method
+/// `m`: `c` with Sharp; all of it from half coverage (127) up, else none, with None; `2c - 0.5`
+/// with Crisp; and `2c` with Strong; each kept between 0 and all.
+pub(crate) fn edge_coverage(m: TypeAntiAlias, c: u8) -> u8 {
+    let c = i32::from(c);
+    let shown = match m {
+        TypeAntiAlias::None => {
+            if c >= 127 {
+                255
+            } else {
+                0
+            }
+        }
+        TypeAntiAlias::Sharp => c,
+        TypeAntiAlias::Crisp => 2 * c - 128,
+        TypeAntiAlias::Strong => 2 * c,
+    };
+    shown.clamp(0, 255) as u8
+}
+
+/// Where (document space) type `t` of node `n`, laid out in `g`, paints: its glyphs grown by the
+/// farthest the characters' strokes reach in text space, transformed as the type is, then grown by
+/// the farthest the object's own strokes reach in document space. A stroke's reach takes in its
+/// miter spikes and square caps ([`StrokeLayer::reach`]).
+pub(crate) fn type_reach(n: &Node, t: &TextObject, g: &TextGeom) -> Rect {
+    let chars = t.runs.iter().filter(|r| r.style.has_stroke()).map(|r| r.style.stroke_layer().reach()).fold(0.0, f64::max);
+    let own = n.appearance.outset();
+    t.xf.transform_rect_bbox(g.bounds.inflate(chars, chars)).inflate(own, own)
+}
+
+/// The map from a frame's pixels to the pixels [`Renderer::draw_type_edges`] draws type on, for
+/// the region `on` of the frame's pixels: `grid`, which maps them to the output's, unless the
+/// output's pixels there would number more than the frame's and more than [`fx::PIXEL_BUDGET`],
+/// or be more than [`MAX_RASTER_SIDE`] a side, and then the frame's own pixels (the identity).
+pub(crate) fn edge_grid(on: Rect, grid: Affine) -> Affine {
+    let area = |r: Rect| r.width() * r.height();
+    let (out, side) = (grid.transform_rect_bbox(on), f64::from(MAX_RASTER_SIDE));
+    if area(out) > area(on).max(fx::PIXEL_BUDGET) || out.width() > side || out.height() > side { Affine::IDENTITY } else { grid }
+}
+
+/// One paint of type: one of the object's own fills and strokes (its index), or the fill or the
+/// stroke of a run (its index).
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum TypePaint {
+    Item(usize),
+    Fill(usize),
+    Stroke(usize),
+}
+
+/// Most groups of paints [`Renderer::draw_type_pixels`] draws one at a time ([`type_paints`]).
+const MAX_TYPE_PAINTS: usize = 8;
+
+/// The paints of type `t` of node `n` (laid out in `g`) in groups that
+/// [`Renderer::draw_type_pixels`] draws one at a time, in the order they are drawn: the object's
+/// own fills and strokes below the characters, the runs' fills and strokes, then the object's own
+/// fills and strokes above the characters. Each of the object's own fills and strokes is a group,
+/// and so is each fill and stroke of a run, except that fills and strokes of runs one after
+/// another in solid colors are one group when colors are drawn opaque (`opaque`). A run's stroke
+/// starts a new group rather than join its own fill's, so the stroke's edges inside the characters
+/// take the method too. Paints that draw nothing are left out. `None` for type with more than
+/// [`MAX_TYPE_PAINTS`] groups, which is drawn as one.
+fn type_paints(n: &Node, t: &TextObject, g: &TextGeom, opaque: bool) -> Option<Vec<Vec<TypePaint>>> {
+    let shown = |i: &AppearanceItem| i.visible() && !i.paint().is_none() && !matches!(i, AppearanceItem::Stroke(st) if st.width <= 0.0);
+    let items = &n.appearance.items;
+    let k = n.appearance.contents_at();
+    let mut groups: Vec<Vec<TypePaint>> = (0..k).filter(|j| shown(&items[*j])).map(|j| vec![TypePaint::Item(j)]).collect();
+    // Whether the last group holds run paints in opaque solid colors, which the next such paint joins.
+    let mut joins = false;
+    for (i, run) in t.runs.iter().enumerate() {
+        if g.run(i).elements().is_empty() {
+            continue;
+        }
+        let fill = (!run.style.fill.is_none()).then_some((TypePaint::Fill(i), &run.style.fill));
+        let stroke = run.style.has_stroke().then_some((TypePaint::Stroke(i), &run.style.stroke));
+        for (p, paint) in [fill, stroke].into_iter().flatten() {
+            let solid = opaque && matches!(paint, vectorcraft_color::Paint::Solid { .. });
+            // A run's fill and stroke overlap along every outline, so they never share a group.
+            let own_fill = matches!(p, TypePaint::Stroke(_)) && groups.last().is_some_and(|last| last.contains(&TypePaint::Fill(i)));
+            match groups.last_mut() {
+                Some(last) if joins && solid && !own_fill => last.push(p),
+                _ => groups.push(vec![p]),
+            }
+            joins = solid;
+        }
+    }
+    groups.extend((k..items.len()).filter(|j| shown(&items[*j])).map(|j| vec![TypePaint::Item(j)]));
+    (groups.len() <= MAX_TYPE_PAINTS).then_some(groups)
+}
+
+/// Node `n` and type `t` with every paint but those in `keep` taken away.
+fn type_paint_only(n: &Node, t: &TextObject, keep: &[TypePaint]) -> (Node, TextObject) {
+    let keep: std::collections::HashSet<TypePaint> = keep.iter().copied().collect();
+    let (mut n, mut t) = (n.clone(), t.clone());
+    for (j, item) in n.appearance.items.iter_mut().enumerate() {
+        if !keep.contains(&TypePaint::Item(j)) {
+            *item.paint_mut() = vectorcraft_color::Paint::None;
+        }
+    }
+    for (i, run) in t.runs.iter_mut().enumerate() {
+        if !keep.contains(&TypePaint::Fill(i)) {
+            run.style.fill = vectorcraft_color::Paint::None;
+        }
+        if !keep.contains(&TypePaint::Stroke(i)) {
+            run.style.stroke = vectorcraft_color::Paint::None;
+        }
+    }
+    (n, t)
+}
+
+/// Pixel `p` of type the anti-aliasing method `m` draws, where the type covers `c` (out of 255) of
+/// the pixel: its color and opacity scaled by [`edge_coverage`] of `c` divided by `c`. A pixel the
+/// type covers wholly or not at all is kept.
+fn edge_pixel(p: vello_cpu::color::PremulRgba8, c: u8, m: TypeAntiAlias) -> vello_cpu::color::PremulRgba8 {
+    if c == 0 || c == 255 {
+        return p;
+    }
+    let (to, c) = (u32::from(edge_coverage(m, c)), u32::from(c));
+    let scale = |v: u8| ((u32::from(v) * to + c / 2) / c).min(255) as u8;
+    let a = scale(p.a);
+    vello_cpu::color::PremulRgba8 { r: scale(p.r).min(a), g: scale(p.g).min(a), b: scale(p.b).min(a), a }
 }

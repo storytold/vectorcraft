@@ -59,7 +59,10 @@ fn an_effect_name_opens_its_dialog_prefilled_and_ok_edits_it_in_place() {
     let texts = frame_events(&ctx, &mut app, vec![], appearance::show);
     click(&ctx, &mut app, text_rect(&texts, "Roughen").center(), appearance::show);
     let d = app.ui.dialog.clone().expect("the effect's dialog");
-    assert_eq!((d.kind.as_str(), d.f64("size", 0.0), d.fields["__index"].clone()), ("effect", 9.0, json!(0)));
+    assert_eq!(
+        (d.kind.as_str(), d.f64("size", 0.0), d.fields["__index"].clone(), d.fields["__item"].clone()),
+        ("effect", 9.0, json!(0), Value::Null)
+    );
     // The dialog previews; OK keeps the new value on the same effect as one undo step.
     let mut out = ctx.run_ui(Default::default(), |ui| crate::dialogs::show(&mut app, ui.ctx()));
     out.textures_delta.clear();
@@ -115,9 +118,10 @@ fn choosing_an_applied_effect_asks_to_edit_it_or_add_another() {
     assert_eq!(app.run("effect.dialog", json!({"effect": "distort.roughen"})).unwrap(), json!({"pending": "effectExists"}));
     crate::dialogs::confirm(&mut app).unwrap();
     let d = app.ui.dialog.clone().unwrap();
-    assert_eq!((d.kind.as_str(), d.f64("size", 0.0), d.fields["__index"].clone(), d.fields["__item"].clone()), ("effect", 9.0, json!(0), json!(0)));
+    assert_eq!((d.kind.as_str(), d.f64("size", 0.0), d.fields["__index"].clone()), ("effect", 9.0, json!(0)));
     crate::dialogs::confirm(&mut app).unwrap();
     assert_eq!(effects(&app, Some(0)).len(), 1);
+    assert!(effects(&app, None).is_empty());
     // "Add New": a fresh dialog with the defaults, which adds a second one.
     app.run("effect.dialog", json!({"effect": "distort.roughen"})).unwrap();
     app.ui.dialog.as_mut().unwrap().fields.insert("discard".into(), json!(true));
@@ -203,7 +207,8 @@ fn shift_clicking_a_chip_opens_the_mixer_on_that_row() {
     // The chip sits 52 pt right of the label's start (label at EYE_W + 24, chip at EYE_W + 76).
     let label = text_rect(&texts, "Fill:");
     click_with(&ctx, &mut app, egui::pos2(label.left() + 52.0 + 9.0, label.center().y), egui::Modifiers::SHIFT);
-    assert_eq!(app.ui.open_panel.as_deref(), Some("color"));
+    // The Color panel opens as the row's popup.
+    assert_eq!(app.ui.transient_panel.as_deref(), Some("color"));
     assert_eq!(app.session.appearance_item(), Some(0));
 }
 

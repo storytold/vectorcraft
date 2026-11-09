@@ -339,6 +339,45 @@ fn overprinting_art_imports_as_it_was_drawn() {
     }
 }
 
+/// The `/BBox` of each form of the uncompressed `bytes`, in the order written.
+fn form_boxes(bytes: &[u8]) -> Vec<String> {
+    let text = String::from_utf8_lossy(bytes);
+    text.split("/Subtype/Form").skip(1).filter_map(|d| Some(d.split("/BBox[").nth(1)?.split(']').next()?.to_string())).collect()
+}
+
+/// #2181: a layer's form has a box round the paper and its art, not one 23 m across, and no
+/// form (a layer's, an overprinting one or invisible text's) keeps the empty clip far off the
+/// page that marked it while the file was written.
+#[test]
+fn layer_forms_have_real_boxes_and_no_marks() {
+    let mut d = overprinting(RED);
+    // Invisible text (neither fill nor stroke) and art across the paper's left edge.
+    let l = d.layers[0].id;
+    let style = CharStyle { size: 24.0, fill: Paint::None, ..Default::default() };
+    let t = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(200.0, 40.0), "Hid", style))));
+    let past = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(-50.0, 10.0, 5.0, 40.0)), Appearance::basic(Paint::solid(RED), Paint::None, 0.0));
+    d.insert(Some(l), 0, t).unwrap();
+    d.insert(Some(l), 0, past).unwrap();
+    let mut sub = Node::layer(d.alloc_id(), "Sub", LayerColor::Preset(1));
+    if let NodeKind::Layer { children, .. } = &mut sub.kind {
+        children.push(rect(&mut d, 250.0, BLUE).into());
+    }
+    d.insert(Some(l), 0, sub).unwrap();
+    let r = export(&d, json!({"createLayers": true, "compression": {"compressText": false}}));
+    let text = String::from_utf8_lossy(&r.bytes);
+    for mark in ["-32000 ", "-32001 ", "-32002 ", "32767"] {
+        assert!(!text.contains(mark), "{mark} is in the file: {text}");
+    }
+    assert!(text.contains("3 Tr") && text.contains("/VCop gs"), "invisible text and overprint are still written: {text}");
+    // The layer's form reaches the art across the left edge; its sublayer's covers the paper.
+    let boxes = form_boxes(&r.bytes);
+    assert!(boxes.contains(&"-50 0 300 100".to_string()) && boxes.contains(&"0 0 300 100".to_string()), "{boxes:?}");
+    // It still imports as it was drawn: a layer holding its sublayer, no clipping group.
+    let mut got = vec![];
+    tree(&import(&r.bytes).unwrap().layers, 0, &mut got);
+    assert!(got.contains(&"1 Sub true".to_string()) && got.contains(&format!("2 {:?}", Some(BLUE))), "{got:?}");
+}
+
 #[test]
 fn pdf_x1a_keeps_overprint() {
     let r = export(&overprinting(RED), json!({"standard": "pdfX1a", "compatibility": "1.4", "compression": {"compressText": false}}));

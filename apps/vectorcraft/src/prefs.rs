@@ -62,7 +62,12 @@ pub(crate) fn keep_prefs_copy(path: &std::path::Path, bytes: &[u8], stem: &str) 
     use std::io::Write as _;
     for n in 1..100u32 {
         let name = if n == 1 { format!("{stem}.json") } else { format!("{stem}-{n}.json") };
-        match std::fs::OpenOptions::new().write(true).create_new(true).open(path.with_file_name(name)) {
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        // The preferences hold recent document paths: the copy is owner-only, whatever the umask.
+        #[cfg(unix)]
+        std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+        match options.open(path.with_file_name(name)) {
             Ok(mut file) => {
                 if file.write_all(bytes).is_ok() {
                     return;
@@ -163,6 +168,11 @@ fn same_lasting(a: &serde_json::Value, b: &serde_json::Value) -> bool {
     }
 }
 
+/// Fields that a read fills in from other fields when the file lacks them
+/// (`vectorcraft_ui_egui::layout_migration`): `help_bar` follows `status_bar`. A save writes them
+/// whenever the file lacks them, so the next read does not fill them in again from a changed field.
+const DERIVED: &[&str] = &["help_bar"];
+
 /// `on_disk` with what changed from `base` to `mine` put over it: each top-level field of the UI
 /// state, and each engine preference (`engine_prefs`) on its own, so two windows that change
 /// different settings keep both. A field both changed takes this window's value (it saves last).
@@ -171,6 +181,11 @@ fn merge_changes(base: &serde_json::Value, mine: &serde_json::Value, on_disk: se
     let (Some(base), Some(mine), Value::Object(mut out)) = (base.as_object(), mine.as_object(), on_disk) else {
         return mine.clone();
     };
+    // The current Actions set (`action_set`, an index) is this window's when this window chose
+    // another one or the other window did not; otherwise it is the other window's.
+    let use_mine = chose_another_action_set(base, mine) || !chose_another_action_set(base, &out);
+    // The list the saved current set was chosen from.
+    let chosen_from = if use_mine { mine.get("action_sets").cloned() } else { out.get("action_sets").cloned() };
     let keys: std::collections::BTreeSet<&String> = base.keys().chain(mine.keys()).collect();
     for key in keys {
         if PASSING.contains(&key.as_str()) {
@@ -180,7 +195,7 @@ fn merge_changes(base: &serde_json::Value, mine: &serde_json::Value, on_disk: se
             continue;
         }
         let (was, now) = (base.get(key), mine.get(key));
-        if was == now {
+        if was == now || key == "action_set" {
             continue;
         }
         if key == "engine_prefs"
@@ -209,7 +224,100 @@ fn merge_changes(base: &serde_json::Value, mine: &serde_json::Value, on_disk: se
             }
         }
     }
+    for key in DERIVED {
+        if !out.contains_key(*key)
+            && let Some(v) = mine.get(*key)
+        {
+            out.insert((*key).to_string(), v.clone());
+        }
+    }
+    if use_mine {
+        match mine.get("action_set") {
+            Some(v) => {
+                out.insert("action_set".to_string(), v.clone());
+            }
+            None => {
+                out.remove("action_set");
+            }
+        }
+    }
+    keep_current_action_set(&mut out, chosen_from.as_ref());
     Value::Object(out)
+}
+
+/// Point the saved current Actions set (`action_set`) at the same set in the merged
+/// `action_sets` when the merge took the index from one window and the list from another
+/// ([`find_action_set`]). With no such set, no set is current.
+fn keep_current_action_set(out: &mut serde_json::Map<String, serde_json::Value>, chosen_from: Option<&serde_json::Value>) {
+    use serde_json::Value;
+    let Some(i) = out.get("action_set").and_then(Value::as_u64).and_then(|i| usize::try_from(i).ok()) else { return };
+    let merged = out.get("action_sets");
+    if merged == chosen_from {
+        return;
+    }
+    match find_action_set(chosen_from, i, merged) {
+        Some(j) => {
+            out.insert("action_set".to_string(), Value::from(j));
+        }
+        None => {
+            out.remove("action_set");
+        }
+    }
+}
+
+/// Was another Actions set made current from `base` to `now`? Recording into the current set,
+/// renaming it, deleting it, or deleting a set before it changes the list or the index without
+/// choosing another set.
+fn chose_another_action_set(base: &serde_json::Map<String, serde_json::Value>, now: &serde_json::Map<String, serde_json::Value>) -> bool {
+    use serde_json::Value;
+    let index = |v: &serde_json::Map<String, Value>| v.get("action_set").and_then(Value::as_u64).and_then(|i| usize::try_from(i).ok());
+    let (was, sets) = (base.get("action_sets"), now.get("action_sets"));
+    let (Some(i), Some(k)) = (index(base), index(now)) else {
+        return match (index(base), index(now)) {
+            (None, None) => false,
+            // No set is current: another set was chosen only if the current one is still there.
+            (Some(i), None) => find_action_set(was, i, sets).is_some(),
+            _ => true,
+        };
+    };
+    if was == sets {
+        return i != k;
+    }
+    if let Some(j) = find_action_set(was, i, sets) {
+        return j != k;
+    }
+    // The set at the same place changed while every other set stayed as it was: it was edited.
+    let edited_in_place = was
+        .and_then(Value::as_array)
+        .zip(sets.and_then(Value::as_array))
+        .is_some_and(|(was, sets)| was.len() == sets.len() && was.iter().zip(sets).enumerate().all(|(j, (a, b))| j == i || a == b));
+    !(i == k && edited_in_place)
+}
+
+/// Where the Actions set at index `i` of `old` is in `new` (two `action_sets` lists): found by
+/// its contents when no other set in either list has the same contents, otherwise by its name when
+/// no other set in either list has it.
+fn find_action_set(old: Option<&serde_json::Value>, i: usize, new: Option<&serde_json::Value>) -> Option<usize> {
+    use serde_json::Value;
+    let (old, new) = (old?.as_array()?, new?.as_array()?);
+    let set = old.get(i)?;
+    let only = |list: &[Value], same: &dyn Fn(&Value) -> bool| {
+        let mut found = list.iter().enumerate().filter(|(_, s)| same(s));
+        match (found.next(), found.next()) {
+            (Some((j, _)), None) => Some(j),
+            _ => None,
+        }
+    };
+    let same_contents = |s: &Value| s == set;
+    if only(old, &same_contents).is_some()
+        && let Some(j) = only(new, &same_contents)
+    {
+        return Some(j);
+    }
+    let name = set.get("name")?;
+    let same_name = |s: &Value| s.get("name") == Some(name);
+    only(old, &same_name)?;
+    only(new, &same_name)
 }
 
 /// The preferences file's contents: the UI state with the engine preferences.
@@ -221,6 +329,8 @@ pub(crate) fn prefs_bytes(app: &VectorcraftApp) -> serde_json::Result<Vec<u8>> {
 /// [`prefs_bytes`] as JSON.
 fn prefs_value(app: &VectorcraftApp) -> serde_json::Result<serde_json::Value> {
     let mut ui = app.ui.clone();
+    // An open dialog is never restored, and its fields can hold passwords (PDF import and save).
+    ui.dialog = None;
     ui.engine_prefs = app.session.prefs.to_json();
     serde_json::to_value(&ui)
 }
@@ -233,6 +343,17 @@ mod tests {
 
     /// Two windows open at once (#4625): the one that saves last keeps the other's changes and
     /// adds its own, instead of putting back the preferences it started from.
+    #[cfg(unix)]
+    #[test]
+    fn a_kept_preferences_copy_is_owner_only() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let temp = tempfile::Builder::new().prefix("vc-prefs-copy-").tempdir().unwrap();
+        let dir = temp.path();
+        super::keep_prefs_copy(&dir.join("ui.json"), b"{}", "ui.unreadable");
+        let mode = std::fs::metadata(dir.join("ui.unreadable.json")).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+    }
+
     #[test]
     fn a_window_saves_only_what_it_changed_over_another_windows_save() {
         let base = json!({"workspace": "Essentials", "toolbar": true, "engine_prefs": {"uiAccent": "blue", "uiScaling": 1.0}});
@@ -272,6 +393,126 @@ mod tests {
         let merged = merge_changes(&base, &mine, on_disk);
         assert_eq!(merged, json!({"status": "Opened", "dialog": null, "workspace": "Painting", "toolbar": false}));
         assert!(!same_lasting(&base, &mine));
+    }
+
+    /// A file from before the Help Bar setting: the read shows the Help Bar with the status bar.
+    /// After the status bar is hidden and the Help Bar left showing, the save writes `help_bar`,
+    /// so the next read does not hide it with the status bar. A value on disk is kept.
+    #[test]
+    fn a_help_bar_setting_the_file_lacks_is_saved() {
+        let base = json!({"status_bar": true, "help_bar": true});
+        let mine = json!({"status_bar": false, "help_bar": true});
+        let on_disk = json!({"status_bar": true});
+        assert_eq!(merge_changes(&base, &mine, on_disk), json!({"status_bar": false, "help_bar": true}));
+        // Another window saved its own Help Bar setting: it stays.
+        let on_disk = json!({"status_bar": true, "help_bar": false});
+        assert_eq!(merge_changes(&base, &mine, on_disk), json!({"status_bar": false, "help_bar": false}));
+    }
+
+    /// One window deleted the first Actions set and saved; this one made the second set current.
+    /// The saved index follows that set to its place in the merged list.
+    #[test]
+    fn the_current_action_set_follows_its_set_in_the_merged_list() {
+        let set = |name: &str| json!({"name": name, "actions": []});
+        let base = json!({"action_sets": [set("A"), set("B"), set("C")], "action_set": 0});
+        let on_disk = json!({"action_sets": [set("B"), set("C")]});
+        let mine = json!({"action_sets": [set("A"), set("B"), set("C")], "action_set": 1});
+        assert_eq!(merge_changes(&base, &mine, on_disk), json!({"action_sets": [set("B"), set("C")], "action_set": 0}));
+        // The other window also recorded into B: B is found by its name.
+        let on_disk = json!({"action_sets": [{"name": "B", "actions": [{"name": "Action 1", "steps": []}]}, set("C")]});
+        let merged = merge_changes(&base, &mine, on_disk);
+        assert_eq!(merged["action_set"], json!(0));
+        // The other window deleted B: no set is current.
+        let on_disk = json!({"action_sets": [set("A"), set("C")]});
+        assert_eq!(merge_changes(&base, &mine, on_disk), json!({"action_sets": [set("A"), set("C")]}));
+    }
+
+    /// This window deleted the first set while the index saved by the other window still stands.
+    #[test]
+    fn the_other_windows_current_action_set_follows_its_set() {
+        let set = |name: &str| json!({"name": name, "actions": []});
+        let base = json!({"action_sets": [set("A"), set("B"), set("C")]});
+        let on_disk = json!({"action_sets": [set("A"), set("B"), set("C")], "action_set": 2});
+        let mine = json!({"action_sets": [set("B"), set("C")]});
+        assert_eq!(merge_changes(&base, &mine, on_disk), json!({"action_sets": [set("B"), set("C")], "action_set": 1}));
+    }
+
+    /// The other window replaced or renamed the set this one made current (the saved sets do not
+    /// tell the two apart): no set is current.
+    #[test]
+    fn a_set_in_the_place_of_the_current_set_is_not_made_current() {
+        let set = |name: &str| json!({"name": name, "actions": []});
+        let base = json!({"action_sets": [set("A"), set("B"), set("C")]});
+        let on_disk = json!({"action_sets": [set("A"), set("D"), set("C")]});
+        let mine = json!({"action_sets": [set("A"), set("B"), set("C")], "action_set": 1});
+        assert_eq!(merge_changes(&base, &mine, on_disk).get("action_set"), None);
+        let on_disk = json!({"action_sets": [set("A"), set("C"), set("D")]});
+        assert_eq!(merge_changes(&base, &mine, on_disk).get("action_set"), None);
+    }
+
+    /// This window deleted a set and made the set now at the old index current: its choice is
+    /// saved, though the index is the same number.
+    #[test]
+    fn a_new_current_set_at_the_same_index_is_saved() {
+        let set = |name: &str| json!({"name": name, "actions": []});
+        let base = json!({"action_sets": [set("A"), set("B"), set("C")], "action_set": 1});
+        let on_disk = json!({"action_sets": [{"name": "A", "actions": [{"name": "Action 1", "steps": []}]}, set("B"), set("C")], "action_set": 1});
+        let mine = json!({"action_sets": [set("B"), set("C")], "action_set": 1});
+        assert_eq!(merge_changes(&base, &mine, on_disk), json!({"action_sets": [set("B"), set("C")], "action_set": 1}));
+    }
+
+    /// Recording into the current set does not choose it again: the other window's choice stays.
+    #[test]
+    fn recording_into_the_current_set_keeps_the_other_windows_choice() {
+        let set = |name: &str| json!({"name": name, "actions": []});
+        let recorded = json!({"name": "A", "actions": [{"name": "Action 1", "steps": []}]});
+        let base = json!({"action_sets": [set("A"), set("B"), set("C")], "action_set": 0});
+        let on_disk = json!({"action_sets": [set("A"), set("B"), set("C")], "action_set": 2});
+        let mine = json!({"action_sets": [recorded.clone(), set("B"), set("C")], "action_set": 0});
+        assert_eq!(merge_changes(&base, &mine, on_disk), json!({"action_sets": [recorded, set("B"), set("C")], "action_set": 2}));
+    }
+
+    /// Renaming the current set does not choose it again: the other window's choice stays. With no
+    /// other choice, the renamed set stays current.
+    #[test]
+    fn renaming_the_current_set_keeps_the_other_windows_choice() {
+        let set = |name: &str| json!({"name": name, "actions": []});
+        let base = json!({"action_sets": [set("A"), set("B"), set("C")], "action_set": 0});
+        let on_disk = json!({"action_sets": [set("A"), set("B"), set("C")], "action_set": 1});
+        let mine = json!({"action_sets": [set("A2"), set("B"), set("C")], "action_set": 0});
+        assert_eq!(merge_changes(&base, &mine, on_disk)["action_set"], json!(1));
+        assert_eq!(merge_changes(&base, &mine, base.clone())["action_set"], json!(0));
+    }
+
+    /// Deleting the current set does not override the other window's choice.
+    #[test]
+    fn deleting_the_current_set_keeps_the_other_windows_choice() {
+        let set = |name: &str| json!({"name": name, "actions": []});
+        let base = json!({"action_sets": [set("A"), set("B")], "action_set": 0});
+        let on_disk = json!({"action_sets": [set("A"), set("B")], "action_set": 1});
+        let mine = json!({"action_sets": [set("B")]});
+        assert_eq!(merge_changes(&base, &mine, on_disk), json!({"action_sets": [set("B")], "action_set": 0}));
+        assert_eq!(merge_changes(&base, &mine, base.clone()), json!({"action_sets": [set("B")]}));
+    }
+
+    /// Deleting a set before the current one moves its index without choosing it again.
+    #[test]
+    fn deleting_a_set_before_the_current_one_keeps_it_current() {
+        let set = |name: &str| json!({"name": name, "actions": []});
+        let base = json!({"action_sets": [set("A"), set("B"), set("C")], "action_set": 2});
+        let mine = json!({"action_sets": [set("B"), set("C")], "action_set": 1});
+        assert_eq!(merge_changes(&base, &mine, base.clone()), json!({"action_sets": [set("B"), set("C")], "action_set": 1}));
+    }
+
+    /// Two sets with the same contents: when the other window deleted the one this window made
+    /// current, the one left is not made current in its place.
+    #[test]
+    fn a_set_with_the_same_contents_does_not_take_the_place_of_the_current_set() {
+        let set = |name: &str| json!({"name": name, "actions": []});
+        let base = json!({"action_sets": [set("A"), set("A"), set("C")]});
+        let on_disk = json!({"action_sets": [set("A"), set("C")]});
+        let mine = json!({"action_sets": [set("A"), set("A"), set("C")], "action_set": 1});
+        assert_eq!(merge_changes(&base, &mine, on_disk), json!({"action_sets": [set("A"), set("C")]}));
     }
 
     #[test]

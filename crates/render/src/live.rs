@@ -477,7 +477,8 @@ impl Renderer {
         {
             self.live.evaluated += 1;
         }
-        let v: Expanded = match crate::effects::pathfinder_children(a, crate::effects::text_outliner()) {
+        let hook = |c: &Node| crate::effects::outline_object(Some(doc), c);
+        let v: Expanded = match crate::effects::pathfinder_children(a, Some(&hook)) {
             Some(children) => Arc::new(children),
             None => Arc::new(crate::effects::expand_live(Some(doc), a).into_iter().map(Arc::new).collect()),
         };
@@ -581,6 +582,7 @@ impl Renderer {
             ctx.set_transform(f.view);
             return;
         }
+        self.stats.view_sized += 1;
         ctx.set_transform(f.view);
         // Where a patch narrows to slivers, many quads share each pixel, each covering a little of it: their edges
         // composite to part coverage, and hard edges drop each one. An opaque patch is backed by its own outline in
