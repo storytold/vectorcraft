@@ -470,10 +470,9 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
                 o.remove("wait");
             }
             let method = req.method.as_str();
-            // The key check of `document.export` runs before the file is written.
-            if method == "app.export"
-                && let Err(e) = crate::menus::check_params(&app.session, "document.export", &p)
-            {
+            // The key check of `document.export` or `document.save` runs before the file is written.
+            let checked = if method == "app.export" { "document.export" } else { "document.save" };
+            if let Err(e) = crate::menus::check_params(&app.session, checked, &p) {
                 return err(e);
             }
             wrap(if wait { crate::background::in_foreground(app, |app| save_or_export(app, method, &p)) } else { save_or_export(app, method, &p) })
