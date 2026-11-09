@@ -332,6 +332,12 @@
 	Apply Bullets	Primijeni oznake
 	Numbered List	Numerisana lista
 	Apply Numbers	Primijeni brojeve
+	Bullets and Numbering…	Oznake i numerisanje…
+	Numbers	Brojevi
+	Bullet Character:	Znak oznake:
+	Number Style:	Stil broja:
+	Left Indent:	Lijeva uvlaka:
+	First Line Indent:	Uvlaka prvog reda:
 	Convert to Text	Pretvori u tekst
 	Filled Dot	Ispunjena tačka
 	Dash	Crtica
@@ -2732,6 +2738,10 @@ digits	Malayalam	Malajalam
 	< 1 sec	< 1 sek.
 	[Unnamed]	[Bez naziva]
 	Amount:	Količina:
+	Anti-aliasing Method	Metoda zaglađivanja ivica
+antiAlias	Sharp	Oštro
+	Crisp	Jasno
+	Strong	Snažno
 	Anti-aliasing:	Zaglađivanje ivica:
 	Artboard:	Radna ploča:
 	Color Table	Tabela boja
@@ -4354,6 +4364,7 @@ imageTrace	Outline	Obris
 @msg	Split Into Grid: select paths large enough for the grid	Podijeli u mrežu: odaberite putanje dovoljno velike za mrežu
 @msg	Targa files are RGB: colorModel rgb	Targa datoteke su RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Omotavanje teksta: odaberite objekat omotavanja
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` mora biti "none", "sharp", "crisp" ili "strong"
 @msg	`aspect` must be a number (%)	`aspect` mora biti broj (%)
 @msg	`at` must be [x, y]	`at` mora biti [x, y]
 @msg	`color` must be a colour	`color` mora biti boja
@@ -6309,6 +6320,16 @@ shape	Open	Otvoren
 @msg	path must be a list of child indices	path mora biti lista indeksa podređenih objekata
 @msg	no object at path {shown} in the symbol's art	nema objekta na putanji {shown} u grafici simbola
 @msg	give fill, stroke, opacity and/or blend	navedite fill, stroke, opacity i/ili blend
+@msg	{key} cannot be set on a guide	{key} se ne može postaviti na vodilicu
+@msg	{key} cannot be set on a blend	{key} se ne može postaviti na stapanje
+@msg	{key} cannot be set on an envelope	{key} se ne može postaviti na omotnicu
+@msg	{key} cannot be set on a gradient mesh	{key} se ne može postaviti na gradijentnu mrežu
+@msg	{key} cannot be set on a Repeat	{key} se ne može postaviti na ponavljanje
+@msg	{key} cannot be set on a placed document	{key} se ne može postaviti na postavljeni dokument
+@msg	{key} cannot be set on an Intertwine group	{key} se ne može postaviti na Intertwine grupu
+@msg	stroke cannot be set on a symbol instance	stroke se ne može postaviti na instancu simbola
+@msg	fill on a symbol instance must be a solid color or none	fill instance simbola mora biti puna boja ili none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} se ne može postaviti na sliku bez efekta „Pretvori u oblik“ ili „Objekat u obrisu“
 @msg	pass newName, registration, exportType, nineSlice and/or type	navedite newName, registration, exportType, nineSlice i/ili type
 	Text Flow	Tok teksta
 	By Rows	Po redovima
@@ -6338,6 +6359,7 @@ shape	Open	Otvoren
 	Create Swatch Legend	Kreiraj legendu uzoraka boja
 	Create Swatch Legend…	Kreiraj legendu uzoraka boja…
 	HEX	HEX
+	Help Bar	Traka pomoći
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	Alati za tekst
 	Text Tweaker…	Podešavanje teksta…

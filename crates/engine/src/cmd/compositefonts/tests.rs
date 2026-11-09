@@ -395,6 +395,150 @@ fn opened_document_measures_missing_composite_font_as_missing() {
     assert_eq!(actual.cached_bounds, Some(expected));
 }
 
+/// The native file of a document whose composite font `name` sets Roman at full size, with type
+/// "Ab12" set in it → (the file, the type's id, its width).
+fn full_roman_file(name: &str) -> (Vec<u8>, u64, f64) {
+    let mut s = session();
+    let mut full = font(name);
+    full["parts"]["roman"]["size"] = json!(100);
+    s.execute("type.compositeFonts.set", &json!({"fonts": [full]})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "Ab12", "size": 20, "font": name})).unwrap()["id"].as_u64().unwrap();
+    let width = text(&s, id).cached_bounds.unwrap().width();
+    (vectorcraft_format::save_file(&s.doc().unwrap().doc), id, width)
+}
+
+/// Type in a missing font that no composite font is named after keeps the bounds it was measured
+/// with when its file was read: opening the document does not lay it out again.
+#[test]
+fn opening_leaves_type_in_an_unrelated_missing_font_as_measured() {
+    let mut s = session();
+    s.execute("type.compositeFonts.set", &json!({"fonts": [font("CF Unrelated")]})).unwrap();
+    let id =
+        s.execute("text.create", &json!({"x": 10, "y": 50, "text": "Ab", "size": 20, "font": "No Such Family CF"})).unwrap()["id"].as_u64().unwrap();
+    let mut doc = (*s.doc().unwrap().doc).clone();
+    let kept = vectorcraft_geom::Rect::new(1.0, 2.0, 3.0, 4.0);
+    if let NodeKind::Text(t) = &mut doc.node_mut(NodeId(id)).unwrap().kind {
+        t.cached_bounds = Some(kept);
+    }
+    s.add_document(doc, None);
+    assert_eq!(text(&s, id).cached_bounds, Some(kept));
+}
+
+/// Text holding an inline graphic whose symbol's art is type in a composite font is measured with
+/// the graphic at the size the opened document's own definition gives it.
+#[test]
+fn opening_measures_inline_graphics_of_composite_type_in_its_own_definition() {
+    let mut s = session();
+    let mut full = font("CF Inline");
+    full["parts"]["roman"]["size"] = json!(100);
+    s.execute("type.compositeFonts.set", &json!({"fonts": [full]})).unwrap();
+    let art = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "Ab12", "size": 20, "font": "CF Inline"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("symbol.new", &json!({"name": "CF Inline Mark", "ids": [art]})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 150, "text": "x", "size": 20})).unwrap()["id"].as_u64().unwrap();
+    s.execute("text.insertInline", &json!({"id": id, "at": 0, "symbol": "CF Inline Mark"})).unwrap();
+    let width = text(&s, id).cached_bounds.unwrap().width();
+    let bytes = vectorcraft_format::save_file(&s.doc().unwrap().doc);
+    let mut s = session();
+    s.execute("type.compositeFonts.set", &json!({"fonts": [font("CF Inline")]})).unwrap();
+    let file = crate::cmd::fileio::read_for_open("inline.vectorcraft", &bytes, None, &json!({}), false, false).unwrap();
+    crate::cmd::fileio::open_read(&mut s, file).unwrap();
+    assert!((text(&s, id).cached_bounds.unwrap().width() - width).abs() < 1e-6);
+}
+
+/// Type read for opening while a composite font of its name was registered is measured again when
+/// it opens, even after the document that defined the font has closed in between.
+#[test]
+fn opening_measures_type_read_in_a_composite_font_closed_since() {
+    let mut s = session();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "Ab12", "size": 20, "font": "CF Gone"})).unwrap()["id"].as_u64().unwrap();
+    let bytes = vectorcraft_format::save_file(&s.doc().unwrap().doc);
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    s.execute("type.compositeFonts.set", &json!({"fonts": [font("CF Gone")]})).unwrap();
+    let file = crate::cmd::fileio::read_for_open("gone.vectorcraft", &bytes, None, &json!({}), false, false).unwrap();
+    assert!(s.close_document(1));
+    crate::cmd::fileio::open_read(&mut s, file).unwrap();
+    let actual = text(&s, id);
+    let expected = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &actual).bounds;
+    assert_eq!(actual.cached_bounds, Some(expected));
+}
+
+/// A file read for opening lays out its type in the composite fonts registered then (the front
+/// document's, which defines the name with Roman at half size); once the file opens, its type is
+/// measured again in its own.
+#[test]
+fn an_opened_file_measures_its_type_in_its_own_composite_fonts() {
+    let (bytes, id, width) = full_roman_file("CF Opened");
+    let mut s = session();
+    s.execute("type.compositeFonts.set", &json!({"fonts": [font("CF Opened")]})).unwrap();
+    let file = crate::cmd::fileio::read_for_open("opened.vectorcraft", &bytes, None, &json!({}), false, false).unwrap();
+    crate::cmd::fileio::open_read(&mut s, file).unwrap();
+    let actual = text(&s, id);
+    assert!((actual.cached_bounds.unwrap().width() - width).abs() < 1e-6);
+    let expected = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &actual).bounds;
+    assert_eq!(actual.cached_bounds, Some(expected));
+}
+
+/// A document replaced while in the back (File › Revert) is measured in its own composite fonts
+/// when it comes to the front, not in the front document's.
+#[test]
+fn a_document_replaced_in_the_back_is_measured_in_its_own_composite_fonts() {
+    let (bytes, id, width) = full_roman_file("CF Replaced");
+    let mut s = session();
+    s.execute("type.compositeFonts.set", &json!({"fonts": [font("CF Replaced")]})).unwrap();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    s.execute("type.compositeFonts.set", &json!({"fonts": [font("CF Replaced")]})).unwrap();
+    assert!(s.replace_document(0, vectorcraft_format::load(&bytes).unwrap()));
+    assert!(s.set_active(0));
+    let actual = text(&s, id);
+    assert!((actual.cached_bounds.unwrap().width() - width).abs() < 1e-6);
+    let expected = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &actual).bounds;
+    assert_eq!(actual.cached_bounds, Some(expected));
+}
+
+/// So is one that comes to the front because the front document closes.
+#[test]
+fn a_document_replaced_in_the_back_is_measured_when_the_front_one_closes() {
+    let (bytes, id, width) = full_roman_file("CF Closed");
+    let mut s = session();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    s.execute("type.compositeFonts.set", &json!({"fonts": [font("CF Closed")]})).unwrap();
+    assert!(s.replace_document(0, vectorcraft_format::load(&bytes).unwrap()));
+    assert!(s.close_document(1));
+    let actual = text(&s, id);
+    assert!((actual.cached_bounds.unwrap().width() - width).abs() < 1e-6);
+    let expected = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &actual).bounds;
+    assert_eq!(actual.cached_bounds, Some(expected));
+}
+
+/// A failed batch takes back the composite fonts it set, in the font database too.
+#[test]
+fn a_failed_batch_takes_back_its_composite_fonts() {
+    let db = vectorcraft_text::FontDb::global();
+    let mut s = session();
+    let steps = json!([
+        {"command": "type.compositeFonts.set", "params": {"fonts": [font("CF Failed Batch")]}},
+        {"command": "no.such.command"},
+    ]);
+    assert!(s.execute("command.batch", &json!({"commands": steps})).is_err());
+    assert!(names(&s).is_empty());
+    assert!(db.composite_font("CF Failed Batch").is_none());
+}
+
+/// A composite font whose edit is refused, because it makes selected type too wide for the canvas,
+/// is not left in the font database.
+#[test]
+fn a_refused_edit_takes_back_its_new_composite_font() {
+    let db = vectorcraft_text::FontDb::global();
+    let mut s = session();
+    let x = crate::MAX_COORD - 1000.0;
+    s.execute("text.create", &json!({"x": x, "y": 50, "text": "MMMMMMMM", "size": 100, "font": "CF Refused Edit"})).unwrap();
+    let wide = json!({"name": "CF Refused Edit", "parts": {"kanji": {"font": "Source Sans 3", "size": 400}}});
+    let e = s.execute("type.compositeFonts.set", &json!({"fonts": [wide]})).unwrap_err().to_string();
+    assert!(e.contains("exceed the canvas"), "{e}");
+    assert!(names(&s).is_empty());
+    assert!(db.composite_font("CF Refused Edit").is_none());
+}
+
 /// A loaded composite font cannot replace an installed family used by existing type.
 #[test]
 fn loaded_composite_font_cannot_take_an_installed_family_name() {

@@ -142,10 +142,11 @@ mod types;
 pub(crate) use art::join_and;
 use art::preview_png;
 pub use document::{
-    BindingRef, Brushes, PaletteSwatches, VariableRead, active_artboard, artboards, bindings_note, brushes, graphic_styles, palette, variables,
+    BindingRef, Brushes, PaletteSwatches, Symbols, VariableRead, active_artboard, artboards, bindings_note, brushes, graphic_styles, palette,
+    symbols, variables,
 };
 pub(crate) use document::{slot_frame, slot_of};
-pub(crate) use ops::read_art_style;
+pub(crate) use ops::{read_art_style, read_style_list, style_moves_with};
 #[cfg(test)]
 pub(crate) use raster::with_image_limits;
 pub(crate) use types::MAX_NODES;

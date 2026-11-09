@@ -1,6 +1,29 @@
 use super::*;
 use crate::theme;
 
+#[test]
+fn help_bar_toggle_is_independent_and_saved_in_workspaces() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    assert!(app.ui.help_bar);
+    assert_eq!(checked(&app, "window.helpBar", &Value::Null), Some(true));
+    assert_eq!(run_ui_command(&mut app, "window.helpBar", &Value::Null).unwrap().unwrap(), json!(false));
+    assert!(app.ui.status_bar);
+    assert_eq!(checked(&app, "window.helpBar", &Value::Null), Some(false));
+    let saved = crate::workspaces::capture(&app.ui, "No help");
+    let saved: crate::workspaces::Workspace = serde_json::from_value(serde_json::to_value(saved).unwrap()).unwrap();
+    app.ui.help_bar = true;
+    app.ui.status_bar = false;
+    crate::workspaces::apply(&mut app.ui, &saved);
+    assert!(!app.ui.help_bar && app.ui.status_bar);
+    assert_eq!(run_ui_command(&mut app, "window.helpBar", &Value::Null).unwrap().unwrap(), json!(true));
+    let legacy: crate::workspaces::Workspace = serde_json::from_value(json!({"name":"Old workspace"})).unwrap();
+    assert!(legacy.help_bar);
+    let restored: crate::state::UiState = serde_json::from_value(serde_json::to_value(&app.ui).unwrap()).unwrap();
+    assert!(restored.help_bar);
+    let (_, window) = menu_tree().into_iter().find(|(title, _)| *title == "Window").unwrap();
+    assert!(window.iter().any(|item| matches!(item, Item::Cmd("Help Bar", "window.helpBar", _))));
+}
+
 /// One headless frame of the in-window menu bar; returns its titles (left to right) as
 /// (rect, id of the title's popup).
 fn bar_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<(egui::Rect, egui::Id)> {

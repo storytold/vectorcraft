@@ -539,7 +539,8 @@ While a spiral is being dragged out with the Spiral tool, a `drag` event with `m
 spiral's inner end at the distance from the center it had on the first modified `drag` event, and the outer end follows
 the pointer. With `mods.alt` alone, dragging outward adds whole winds of four segments and dragging inward removes
 them. The fitted segment count rounds to the nearest whole wind from the count on the first Alt-only `drag`, within 2…1000.
-With `mods.cmd`, decay changes to fit within 5…99.99 %; it takes precedence when both modifiers are held. Switching
+Decay is the percentage retained after each full wind of four segments. With `mods.cmd`, decay changes to fit within
+5…99.99 %; it takes precedence when both modifiers are held. Switching
 back to Alt uses the current count as its new base while keeping the held inner end. The spiral drawn on release uses
 the new values, and they stay as the Spiral tool's `segments` and `decay` options for the next spiral:
 
@@ -570,16 +571,23 @@ stroke instead of the whole object: `run_command effect.apply {"effect": "path.o
 On a path directly inside a graph series, `appearance.setItem`, `appearance.addFill`, `appearance.addStroke`,
 `appearance.removeItem`, `appearance.moveItem`, `appearance.duplicateItem`, `appearance.clear`,
 `appearance.reduceToBasic`, `appearance.showAllHidden`, `appearance.transfer`, `appearance.copyFrom`, `paint.default`,
-`graphicStyle.apply` and `graphicStyle.redefine` (on the marks still linked to the style) store the paint, weight and
-opacity of the topmost visible fill and stroke on the graph. `graphicStyle.apply` with `add` stores only the kinds of row
-that are visible in the style. `paint.swap` stores the swapped paints and the stroke weight, keeps the stored opacity,
-and does not store a hidden topmost row that it swaps. The graph does not store the rest of a graphic style's look (more
-fill and stroke rows, effects, the object's opacity and blend mode, and the link to the style), and a mark loses it when
-the graph is drawn again. When the graph is drawn again, columns, bars, wedges, areas, markers and legend swatches take
-the stored fill and stroke. A thin line takes the stored stroke and has no fill. A Filled Lines band takes the stored
-fill, or the stored stroke when no fill is stored and that stroke has paint, and has a 0.25 pt black outline, so these
-commands do not store a stroke paint or weight for a series that draws a band. Except for `paint.swap`, they still store
-a stroke opacity set on a band, and the band's outline takes it. Graph designs keep their own paint. A row that had no
+`graphicStyle.apply` and `graphicStyle.redefine` (on the marks still linked to the style) store the paint, weight,
+opacity and blend mode of the topmost visible fill and stroke on the graph. `graphicStyle.apply` with `add` stores only
+the kinds of row that are visible in the style. `paint.swap` stores the swapped paints and the stroke weight, keeps the
+stored opacity and blend mode, and does not store a hidden topmost row that it swaps. `transparency.set` and
+`object.setProps` with an opacity or blend mode for the object, `appearance.clear`, `appearance.transfer`,
+`appearance.copyFrom` with Transparency picked up, `graphicStyle.apply` without `add` and `graphicStyle.redefine` store
+the object's opacity and blend mode on the graph, and the other commands above store them when they change them on a
+mark. The graph stores an opacity and blend mode as a pair, taken from the mark the command edited: a command that sets
+only the opacity of one mark's object or row also stores that mark's blend mode in place of the one another mark
+stored. Every path directly in the series takes the stored values when the graph is drawn again. The graph does not
+store the rest of a graphic style's look (more fill and stroke rows, effects, and the link to the style), and a mark
+loses it when the graph is drawn again. When the graph is drawn again, columns, bars, wedges, areas, markers and legend
+swatches take the stored fill and stroke. A thin line takes the stored stroke and has no fill. A Filled Lines band takes
+the stored fill, or the stored stroke when no fill is stored and that stroke has paint, and has a 0.25 pt black
+outline, so these commands do not store a stroke paint or weight for a series that draws a band. Except for
+`paint.swap`, they still store a stroke opacity and blend mode set on a band, and the band's outline takes them. Graph
+designs keep their own paint. A row that had no
 paint before the command and has none after it does not change what the graph stores. `paint.setFill`,
 `paint.setStroke`, `paint.none` and the commands that apply one paint kind to the other store the topmost row of the kind
 even when it is hidden, and store a stroke set on a band. `stroke.set`, `paint.editGradient` and the recolor commands do
@@ -1155,8 +1163,8 @@ refused before the command runs:
 → invalid parameters for `file.new`: unknown parameter `widht`; did you mean `width`?
 ```
 
-Only the top level is checked: the keys of an object inside a value (`artboardLayout: {…}`) are the command's to
-read. The one exception is an effect's `params`: `effect.apply` (and `appearance.addEffect`) and `effect.setParams`
+Only the top level is checked, except for the export commands below: the keys of an object inside a value
+(`artboardLayout: {…}`) are the command's to read. Another exception is an effect's `params`: `effect.apply` (and `appearance.addEffect`) and `effect.setParams`
 check them against the effect's own entry in `effect.list`, its `defaults` and the keys its `params` text names. A key
 the effect doesn't take, or a value of another type than its default (a string for a number, a number for a switch),
 is refused the same way:
@@ -1194,7 +1202,7 @@ A number outside the range the effect documents is still stored as given and cla
 plug-in effect's parameters are resolved against its manifest instead. `effect.setParams` as a step of
 `command.batch` is checked when the step runs, against the effects the steps before it added, and the batch then
 fails with no change. A description with a `…` entry takes more keys than it lists: those of the command it names
-(`…settings as file.new`), or any key when it names none, as `document.export` and `document.save` do for the options
+(`…settings as file.new`), or, except for the export commands below, any key when it names none, as `document.save` does for the options
 of the format they write (one object can carry several formats' options). A command that takes its own reply back
 (`document.setup`, `text.areaOptions`) says so the same way.
 
@@ -1202,6 +1210,21 @@ Saved actions aren't checked this way. When the Actions panel plays an action (P
 key, the Batch dialog or `ui.action.play`), a key a command no longer reads, recorded by an older version, is ignored
 and the action still plays. `Session::replay` plays a journal the same way. The command still refuses an effect
 `color` or `channel` it can't read.
+
+The export commands limit those keys. `document.export`, `document.exportSelection`, `document.serialize`, `app.export`
+and `file.export` refuse a key that no format takes, and ignore a key that only another format takes
+(`{"format": "pdf", "quality": 80}` writes the PDF). `document.exportPdf`, `document.pdfSettings` and `pdf.preset.save`
+refuse a key that PDF doesn't take, `document.exportEps` one that EPS doesn't take and `document.exportDxf` one that DXF
+doesn't take. Each of them refuses an unknown key inside an option object it takes (`marks`, `bleed`, `compression`,
+`output`, `advanced`, `security`, `flattener`), naming its path:
+
+```json
+{"id": "document.export", "params": {"format": "pdf", "marks": {"useDocumentBleed": true}}}
+→ invalid parameters for `document.export`: unknown parameter `marks.useDocumentBleed`; `marks` takes: …
+```
+
+A saved PDF preset that holds a key that is no longer read keeps loading. `document.save`, `file.saveAs`, `file.saveCopy`
+and `document.exportForScreens` don't apply this check.
 
 An unknown command id is matched the same way as an unknown parameter key: the error names the nearest command id when
 one is near, ignoring case. A step of `command.batch` or `action.batch` gets the same suggestion in its step error:
@@ -1797,9 +1820,14 @@ already walks Image Trace. Short agent entry points:
   art for itself only and stays linked. `symbol.instance.setAppearance {id?, path, fill?, stroke?, opacity?, blend?}`
   names the object by `path`, child indices in paint order from the art's root down through its groups (`[]` is the
   root; `[1, 0]` is the first object of the art's second member when that member is a group). `fill` and `stroke` take
-  a colour string or the paint params of `paint.setFill` (`color`, `none`, `swatch`, `tint`, `gradient`), `opacity` is
-  0..100 and `blend` a blend mode name; `null` gives one back to the symbol. It is refused for a static symbol and for
-  a path that names no object. On the canvas (VectorCraft's own rule), a Direct Selection click on an instance of a
+  a colour string or the paint params of `paint.setFill` (`color`, `none`, `swatch`, `tint`, `gradient`). Paths,
+  compound paths, type, groups and layers take both. A symbol instance takes a solid color or `none` as its fill,
+  which stains its art, and no gradient or pattern fill and no stroke. An image takes a fill or stroke only when that
+  fill or stroke has a Convert to Shape or Outline Object effect. A guide, blend, envelope, Repeat, Intertwine group,
+  gradient mesh or placed document takes neither. A refused fill or stroke (VectorCraft's own rule) gives an error
+  that names the key and the object, and nothing of the call is applied; `opacity`, `blend` and `null` are taken for
+  every object, so a stored change can be taken back. `opacity` is 0..100 and `blend` a blend mode name; `null` gives
+  one back to the symbol. It is refused for a static symbol and for a path that names no object. On the canvas (VectorCraft's own rule), a Direct Selection click on an instance of a
   dynamic symbol selects the path, compound path or type object of its art under the pointer and outlines it
   (`symbol.instance.selectPart {id, path}`; Alt or Shift selects the instance whole). While it is selected,
   `paint.setFill` and `paint.setStroke` with a solid color or none, `paint.invert` and `paint.complement` on a solid
@@ -1964,7 +1992,20 @@ already walks Image Trace. Short agent entry points:
   Export end the file name of a step with `format` in that `format`, in lower case and without a leading dot, when it
   is one of the format's extensions (`.svg` and `SVG` give `.svg`, `.JPEG` gives `.jpeg`), and otherwise in the
   format's first extension (`png8` gives `.png`, `template` gives `.vctemplate`). A step without `format` keeps the
-  source file's extension (`.vectorcraft` over data sets).
+  source file's extension (`.vectorcraft` over data sets). Override Export gives a `document.exportForScreens` or
+  `assets.export` step the `folder` `destinationFolder/<stem>`, in place of the step's own folder or an export
+  preset's: one folder for each source file, named after the file without its extension, or for each data set,
+  named as its files are (`datasetFileNaming`). Both names drop trailing periods and spaces (`a..svg` gives `a`). The export names
+  the files in it as it does outside Batch. When two source files have the same name without the extension
+  (`a.svg` and `sub/a.svg`, `a.svg` and `a.ai`, or `a.svg` and `a..svg`), the folder destination and the overrides
+  add `-2`, `-3`… to the name for each later file (compared without case), as for data sets. They also add it when a
+  later file's folder or file would have the name of a file or folder an earlier one wrote: with the folder
+  destination, `a.svg` is saved as `a.svg`, so the Export for Screens folder of `a.svg.svg` is `a.svg-2`. When
+  `destinationFolder` holds source files, only a file's own output takes its name, and no export folder takes the
+  name of a subfolder that holds source files: with `a..svg` and `a.svg` saved in place, `a..svg` is saved as
+  `a-2.svg` and `a.svg` over itself. A file's artboard files count as its files, as for data sets: with
+  `a.vectorcraft` and `a-Artboard-1.vectorcraft` saved in place with `separateArtboards`, `a.vectorcraft` is saved
+  as `a-2`.
 - Action set files: `ui.actionSet.save {set?: index, id?, path?}` writes the Actions panel's set at `set` (0 is the
   top set; by default the current set) with its actions to an action set file at `path`, else a picked file named
   after the set (the web downloads it), and returns `{path}`. `id` holds the panel's own set id, which the panel menu
@@ -2087,6 +2128,8 @@ already walks Image Trace. Short agent entry points:
   black ring around a white disc around a black dot, black gets two groups. `layer.releaseToLayers` on the expanded group then
   gives each group a sublayer. A trace made with `autoGrouping` is refused. Expanding by color also refuses a trace
   with a live Pathfinder effect.
+  With `keepColors` in `params`, the reply's `warnings` name each listed color that no traced color matches, and say
+  when nothing was traced.
   `imageTrace.presets.save {name?, newName?, preset?, enhanced?, params?}` saves tracing settings as a preset kept with
   the preferences: `params` over `preset`'s (default: the saved preset `name`, else Default), checked as `imageTrace.make`
   checks them; without `name` it is a new "Tracing Preset N", and `newName` renames a saved preset (the reply's
@@ -2432,7 +2475,10 @@ counts as a value left out except for `recolor.apply`'s `model` and a `map` row'
 
 Groups and layers carry fills, strokes and effects of their own, as in the reference app: their fills and strokes
 paint every member's geometry, and their effects apply to the members as one piece (one combined drop shadow; a
-Transform or Warp moves or bends the whole group). Their Contents row (type: Characters) is a slot in the stack:
+Transform or Warp moves or bends the whole group). Under a group's Warp, each placed gradient moves and scales from
+bounds before the warp to bounds after it: a path's or compound path's gradients use its own bounds, a nested group's
+own fills and strokes use the nested group's bounds, and the group's own fills and strokes use the group's bounds; a
+stroke uses those bounds inflated by the stroke. Their Contents row (type: Characters) is a slot in the stack:
 fills and strokes above it paint over the members (characters), those below under them; new items go above it
 (on an image, below it).
 `appearance.moveItem {"from": "contents", "to": n}` puts the row above the bottom `n` items, and an item move takes
@@ -2561,7 +2607,9 @@ what dragging a symbol out of the library panel onto the canvas does.
 `symbol.saveLibrary {path?, names?, name?, user?}` writes the document's symbols as a symbol library: a `.vectorcraft`
 document holding only them and what they use; without `path` it returns `{dataBase64}`, and `user: true` saves into
 the user library folder (category `user`, User Defined). `symbol.loadLibrary {path? | data? | dataBase64?, name?}`
-loads the symbols of any document VectorCraft opens as a library to add from; a file it can't read is an error.
+loads the symbols of any document VectorCraft opens as a library to add from (a `.ai` or EPS whose editing data holds
+symbols and no layers gives the symbols it defines, in the order of its symbol list); a file it can't read is an
+error.
 
 ## Brush libraries
 
@@ -3225,7 +3273,8 @@ names no earlier result as the previous primitive's result;
 and an `feComposite` operator SVG 1.1 lacks, or `edgeMode` on a primitive other than `feConvolveMatrix`, left out, as
 the canvas draws them. A filter with an `feBlend` mode SVG 1.1 lacks (`overlay` and the others), an `feDropShadow`
 whose `flood-color` is `currentColor` or with `primitiveUnits="objectBoundingBox"`, or more than 64 primitives once
-its shadows are expanded, has no SVG 1.1 form. In that case, otherwise, and with the SVG Tiny 1.2 profile, the object
+its shadows are expanded, has no SVG 1.1 form. Neither does a filter whose written form, with its region and id, is
+one SVG import would not read, such as one longer than 64 KB. In that case, otherwise, and with the SVG Tiny 1.2 profile, the object
 becomes an image. SVG import keeps a filter that the live effects (Drop Shadow, the
 glows, Gaussian Blur, Feather) can't express as an `svg.filter` effect holding the filter's XML, with `scale` and
 `origin` from the object's user space, unless that user space is turned, skewed or scaled past 0.001 to 1000 points
@@ -4393,6 +4442,13 @@ artboard it names is locked. When no artboard changes, the command records no un
 When a call to `artboard.duplicate`, `artboard.copy`, `artboard.cut`, `artboard.rename` or `artboard.switchOrientation`
 names no artboard, its journal entry records the artboards it acted on as `selectedArtboards`. A replay of the journal
 acts on those artboards, and a recorded action leaves the value out and acts on the selection when it plays.
+
+`edit.copy` and `edit.cut` with the Artboard tool chosen record the same `selectedArtboards`, and `art` beside it.
+`edit.copy {selectedArtboards: [n…], art?}` and `edit.cut {selectedArtboards: [n…], art?}` run `artboard.copy` and
+`artboard.cut` on those artboards whichever tool is chosen and whatever is selected, so a replay of the journal in a new
+session takes the same artboards. A value of `selectedArtboards` that names no artboard fails as `indices` does, and `art`
+that is not true or false fails. A recorded action leaves both values out: when it plays, `edit.copy` and `edit.cut` take
+artboards when the Artboard tool is chosen then, and the selection otherwise.
 
 `artboard.selectAll {}` chooses the Artboard tool when another tool is in use and selects every artboard. The active
 artboard stays active, the art's selection stays as it is, and no undo step is recorded → `{selected: [index…]}`, the
@@ -5972,13 +6028,37 @@ the text. Return at the end of a list item starts another item in the same list.
 set, and paragraph styles carry it: a style captured from a paragraph without a list turns the list off. Reset Panel
 turns it off. The change is one undo step.
 
+`text.setFormat {listAlign: "left"|"right"}` (Bullets and Numbering › Alignment) sets where the marker stands before
+the first line's text. With `"left"`, the default, the marker starts where the first line starts, at the left indent
+plus the first-line indent. With `"right"` the marker ends where the text starts, against the text. The text starts at
+the same place with either alignment, so numbers of different widths aligned right end at the same place, and a number
+that reaches past the left indent ends at the next tab stop, where the text starts. In a right-to-left list paragraph a
+marker aligned right starts where the text ends. `listAlign` sets the paragraphs that are in a list, and those that the
+same call puts in one; a paragraph in no list stays out of one. A list keeps its alignment when it changes between
+bullets and numbers, and a list that is turned off and on again starts aligned left. An unknown value is an error and
+changes nothing. The list saves the alignment (`"align": "right"`) only when it is right.
+
+`text.setFormat {listLevel: 1..9}` (Bullets and Numbering › Level) sets the level of the list paragraphs it touches, and
+of those that the same call puts in a list; a paragraph in no list stays out of one. The value is a whole number from 1
+to 9 (`2` or `2.0`); any other value is an error and changes nothing. Each level past the first
+sets the paragraph 18 pt further in than its left indent: its marker, its text and the lines it wraps to move together,
+and in a right-to-left list paragraph they move in from the right. A list keeps its level when it changes between
+bullets and numbers, and a list that is turned off and on again starts at level 1. The list saves the level
+(`"level": 3`) only when it is not 1. In the Type tool, Tab with the caret at the start of a list paragraph (before its
+first character, with nothing selected) runs `text.setFormat {listLevel}` with the next level, and Shift+Tab with the
+level before; each is one undo step, and the text is unchanged. Tab at level 9 and Shift+Tab at level 1 do nothing.
+Anywhere else, with characters selected, or in a paragraph in no list, Tab and Shift+Tab insert a tab.
+
 A numbered paragraph's number counts the numbered paragraphs of its story up to and including it: the count runs through
 consecutive list paragraphs, through the frames of threaded type in thread order, and starts again at 1 after a
 paragraph in no list. An empty paragraph has no number and is not counted, and a bulleted paragraph keeps its bullet and
-is not counted. Letters run from A to Z, then AA to ZZ, then AAA; roman numerals use IV, IX, XL, XC, CD and CM; 01 and
+is not counted. Each level counts its own numbers: a list paragraph that has text sets the counts of the levels
+deeper than its own back to 0, so a deeper numbered paragraph after it counts from 1, and a paragraph back at a
+shallower level goes on with that level's count. Letters run from A to Z, then AA to ZZ, then AAA; roman numerals use IV, IX, XL, XC, CD and CM; 01 and
 001 keep every digit past 99 and 999; letters and roman numerals past 3999 are written in Arabic digits. In a
 right-to-left paragraph the number reads left to right with its period at its left. Each threaded frame saves the count
-that its earlier frames carry into it (`listCount`, only when it is not 0). Type that is in no thread counts from 1:
+that its earlier frames carry into it at level 1 (`listCount`, only when it is not 0) and at the levels past it
+(`listLevelCounts`, level 2 first, only when one of them is not 0). Type that is in no thread counts from 1:
 after Remove Threading or Release Selection, in a frame converted to point type, and in every copy of a frame (pasted,
 duplicated, copied in the Layers panel, or taken out of a symbol or a placed file). A symbol made of a thread keeps the
 numbers in the symbol's art.
@@ -5999,12 +6079,29 @@ Type › Bullets and Numbering › Apply Bullets and the canvas context menu's B
 same menus runs `type.applyNumbers {number?}`. Without `number` it runs `text.setFormat {list: "number"}`, and with it
 it runs `text.setFormat {number}`.
 
+More Options at the end of the Paragraph panel's Bullets and Numbered List presets runs `ui.bulletsAndNumbering {tab?: "bullets"|"numbers"}`. It opens the Bullets and Numbering
+dialog (`bulletsAndNumbering`) on the paragraphs the Paragraph panel acts on, on that tab; without `tab` it opens on
+Numbers when the paragraphs are a numbered list and on Bullets otherwise. On both tabs the Level field, above the
+presets, holds the paragraphs' list level (1 to 9; 1 for paragraphs in no list). The Bullets tab has the five bullet
+presets and the Numbers tab has None and the seven number styles. The Position group has Alignment (Left or Right),
+Left Indent and First Line Indent. The dialog opens with the values the Paragraph panel shows; where the paragraphs
+differ, no preset is picked and the field is blank. Its fields are `tab`, `list` (`none`, `bullet` or `number`: the
+kind of the preset picked), `bullet`, `number`, `listAlign`, `listLevel`, `leftIndent` and `firstLineIndent` (points),
+and `ui.dialog.set` sets them, including those the dialog opened blank or without. The type shows the dialog's values while it is open. A preset picked for paragraphs that are in no list and have
+no indents fills in 18 pt and -18 pt, and None takes them out again while they are unchanged. OK runs `text.setFormat`
+with the values that changed, as one undo step, and Cancel puts the type back as it was. When a preset puts the
+paragraphs in a list, OK also sends the indents the dialog shows, and the paragraphs take them, 0 included. OK does not
+send an Alignment or Level change for paragraphs that stay in no list. With no type selected, or
+with an unknown `tab`, `ui.bulletsAndNumbering` is an error.
+
 Type › Bullets and Numbering › Convert to Text runs `type.convertListToText` on the selected type's paragraphs, or on
 those the Type tool's selection touches, and that runs `text.convertListToText {ids?, start?, end?}`. The marker of
 each list paragraph becomes characters at the start of the paragraph: the bullet, or the number and its period as the
 paragraph showed it, then a tab. They are set in the marker's font, size and color: the style of the paragraph's first
-character without the attributes the marker leaves out. The paragraph leaves its list. When the marker's tab went to
-the left indent, the paragraph gets a left-aligned tab stop without a leader there, in place of any stop there, so that
+character without the attributes the marker leaves out. The paragraph leaves its list. A paragraph at a list level
+past the first keeps the level's indent in its left indent, so its marker and text stay where they were. A marker aligned right
+(`listAlign` `right`) is written the same way: its characters go to the first line's start, where a marker aligned left
+is drawn, and the text after its tab stays where it was. When the marker's tab went to the left indent, the paragraph gets a left-aligned tab stop without a leader there, in place of any stop there, so that
 the text after the tab starts where it started after the marker. When the marker's tab went to a tab stop, the
 converted tab goes to the same place when that stop is left-aligned and no stop there or past it has a leader. When a
 stop there or past it has a leader or is not left-aligned, or a right, center or decimal stop lies between the marker
@@ -6048,6 +6145,9 @@ the paragraph's text now starts; when the text before `at` starts no list, nothi
 ```json
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"bullet":"square"}}}
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"number":"upperRoman"}}}
+{"name":"run_command","arguments":{"command":"text.setFormat","params":{"listAlign":"right"}}}
+{"name":"run_command","arguments":{"command":"text.setFormat","params":{"listLevel":2,"start":4,"end":4}}}
+{"name":"invoke_menu","arguments":{"command":"ui.bulletsAndNumbering","params":{"tab":"numbers"}}}
 {"name":"run_command","arguments":{"command":"text.convertListToText","params":{}}}
 ```
 
@@ -6075,6 +6175,38 @@ Setting superscript on subscript characters replaces the subscript, and setting 
 replaces the superscript. When `document.setup {superscript, subscript, smallCapsSize}` changes the proportions, the
 characters take the new ones. One undo step.
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"position":"superscript","smallCaps":false}}}
+
+## Anti-aliasing method
+
+`text.setFormat {antiAlias: "none"|"sharp"|"crisp"|"strong"}` (the selected type, or `ids`) sets the Character panel's
+Anti-aliasing Method, which decides how the edges of the characters are drawn as pixels: on the canvas, in raster exports
+(Export As PNG, JPEG and the other raster formats, Export for Screens, Save for Web) and when Object › Rasterize or
+Effect › Rasterize draws the type. The method belongs to the whole type object, and each frame of a thread keeps its
+own method: a `start`/`end` range sets the whole frame, and threading frames or opening a file keeps each frame's
+method. VectorCraft defines what each method does, on the pixels of the picture being drawn (the canvas at its zoom,
+an export at its resolution):
+
+- `sharp`, the default, draws each edge pixel with the share of it the type covers, as before.
+- `none` draws hard edges: a pixel takes the type's color where the type covers at least half of it, and nothing
+  elsewhere.
+- `crisp` draws a pixel the type covers by a share c at `2c - 0.5`, kept between 0 and 1, so the edges are about half as
+  wide.
+- `strong` draws a pixel the type covers by a share c at `2c`, at most 1, so the type looks heavier.
+
+The opacity of the type's paints stays as it is inside the characters. Type is drawn as Sharp draws it when it holds
+inline graphics or color glyphs (bitmap or COLR), when its own fills or strokes in the Appearance panel include a brush
+stroke or a blend mode other than Normal, when it overprints while Overprint Preview is on, and on the canvas while it
+shows a substitution highlight.
+With Preferences › General › Anti-aliased Artwork off, the canvas draws all its art with hard edges, type included, and
+so does an export whose own Anti-aliasing option is None. SVG, PDF and EPS export draw the type unchanged. The native
+document such a file carries (an EPS VectorCraft wrote, or an SVG or PDF saved with Preserve Editing) keeps each frame's
+method, and opening the file restores it.
+Reset Panel sets Sharp. Saved as `antiAlias` only when not `sharp`. One undo step.
+
+```json
+{"name":"run_command","arguments":{"command":"text.setFormat","params":{"antiAlias":"crisp"}}}
+```
+
 ## Character Alignment
 
 `text.setFormat {charAlign}` (the selected type, or `ids`) and `text.setRangeStyle {id, start, end, charAlign}` (a range)
@@ -6445,7 +6577,8 @@ under its id. One that lists `settings` or `cache` keeps settings or a cache of 
 (VectorCraft's own caps: 256 settings and 1 MiB, 512 MiB of cache): `plugin.list` and `plugin.info` give the cache's
 size as `cacheBytes`, `plugin.clearCache {id?}` empties the cache of one plug-in or of all of them and returns
 `{cleared: [id], bytesFreed}`, replacing a plug-in keeps both, and `plugin.remove` deletes both (also for an id that
-isn't installed but still has them). A module with other bytes than the plug-in installed with its id, or, with none
+isn't installed but still has them). Files it can't delete stay in the plug-in's folder renamed with `.removed`, where
+no plug-in reaches them, until a plug-in with that id is removed again ([plugins.md](plugins.md#settings-and-cache)). A module with other bytes than the plug-in installed with its id, or, with none
 installed, one whose id has settings or a cache in the
 `Plug-ins` folder (`needsReplace: true` in its `plugin.inspect` entry), installs only with `replace: true`: ask the
 user first, since it takes that plug-in's place and gets its settings and cache. Without it, `plugin.install` returns
@@ -6457,6 +6590,13 @@ anything else, or imports one of these without `api` 2 and the import's permissi
 permission names, and a `hash` that is not the module's SHA-256. `prefs.set` returns an error and
 changes nothing when a new `pluginsFolder` is missing, is not a folder or can't be listed. It does not check an empty
 value or the folder the preference already holds, and the web build does not check folders.
+A filter or live effect may declare commands of its own ([plugins.md](plugins.md#commands)): each is the command
+`plugin.<id>.<command>` while the plug-in is installed, listed by `command_list` and in its `plugin.list` entry
+(`commands: [{id, command, label, params, paramsSchema}]`). Run it with `{ids?, params?}` (its parameters may also
+be top-level keys): the parameters are checked before the plug-in runs, a run is one undo step named after the
+command, and a run that traps or runs out of its instruction budget returns an error that starts with the plug-in's
+name and the command's label and leaves the document and the undo history as they were. For `plugin.run` and plug-in
+commands, `ids` left out or null means the selection, and an `ids` that is not a list of object ids is an error.
 
 Safe Mode starts VectorCraft without plug-ins: `vectorcraft --safe-mode`, `vectorcraft-cli --safe-mode <subcommand>`, or
 the choice the desktop app offers when the last launch stopped while a plug-in was loading (Disable and Continue, Start
@@ -6493,6 +6633,7 @@ Disable and Continue can't save the plug-in it turns off, this launch skips it a
 {"name":"run_command","arguments":{"command":"plugin.install","params":{"path":"/plugins/desaturate.wasm"}}}
 {"name":"run_command","arguments":{"command":"plugin.run","params":{"id":"org.vectorcraft.example.desaturate","params":{"amount":60}}}}
 {"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"plugin.org.example.wobble","params":{"size":4}}}}
+{"name":"run_command","arguments":{"command":"plugin.org.example.tidy.grow","params":{"by":3}}}
 {"name":"run_command","arguments":{"command":"plugin.install","params":{"path":"/plugins/tiles-2.wasm","replace":true}}}
 {"name":"run_command","arguments":{"command":"plugin.clearCache","params":{"id":"org.example.tiles"}}}
 ```

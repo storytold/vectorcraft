@@ -204,6 +204,8 @@ impl Writer<'_> {
         if sym.dynamic || doc.symbol_export_type(name) != SymbolExportType::default() || doc.symbol_nine_slice(name).is_some() {
             self.warn(SYMBOL_OPTIONS);
         }
+        // The art's effects are its own, not those of a drawn look that first places it.
+        let in_look = std::mem::take(&mut self.in_look);
         self.defining_symbols.push(name.to_string());
         // The objects of this definition and of those it defines first.
         let before = self.charges();
@@ -220,6 +222,7 @@ impl Writer<'_> {
             self.defining_symbols.pop();
             self.keep_since(before);
             self.warn(SYMBOL_COUNT);
+            self.in_look = in_look;
             return false;
         }
         // The group that holds the art is an object of the definition ([`Self::take_objects`]);
@@ -305,6 +308,7 @@ impl Writer<'_> {
             (self.wrote_fixed, self.inner_scale),
         ) = saved;
         self.doc = page_doc;
+        self.in_look = in_look;
         let art = std::mem::replace(&mut self.body, art);
         self.defining_symbols.pop();
         if self.left_out_since(art_start) {

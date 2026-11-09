@@ -198,6 +198,10 @@
 	Anti-Alias	Suavizado
 	Anti-alias Rasters	Suavizar imágenes ráster
 	Anti-aliased Artwork	Ilustración suavizada
+	Anti-aliasing Method	Método de suavizado
+antiAlias	Sharp	Nítido
+	Crisp	Definido
+	Strong	Fuerte
 	Anti-aliasing:	Suavizado:
 	Any Kind	Cualquier tipo
 	Font Technology	Tecnología de fuente
@@ -367,6 +371,13 @@ font-technology	Variable	Variables
 	Apply Bullets	Aplicar viñetas
 	Numbered List	Lista numerada
 	Apply Numbers	Aplicar numeración
+	Bullets and Numbering…	Viñetas y numeración…
+	Numbers	Números
+	Level:	Nivel:
+	Bullet Character:	Carácter de viñeta:
+	Number Style:	Estilo de número:
+	Left Indent:	Sangría izquierda:
+	First Line Indent:	Sangría de primera línea:
 	Convert to Text	Convertir en texto
 	Filled Dot	Punto relleno
 	Dash	Guion
@@ -4102,6 +4113,7 @@ axis	Both	Ambos
 @msg	Targa files are RGB: colorModel rgb	los archivos Targa son RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Ceñir texto: selecciona un objeto para ceñir
 @msg	This shortcut file is in a form VectorCraft can't read.	Este archivo de métodos abreviados tiene un formato que VectorCraft no puede leer.
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` debe ser "none", "sharp", "crisp" o "strong"
 @msg	`aspect` must be a number (%)	`aspect` debe ser un número (%)
 @msg	`at` must be [x, y]	`at` debe ser [x, y]
 @msg	`color` must be a colour	`color` debe ser un color
@@ -5697,6 +5709,11 @@ mark-style	Japanese	Japonesas
 	Snap to Perpendicular	Ajustar a perpendicular
 @msg	unknown snap option `{key}` (use {options})	opción de ajuste desconocida `{key}` (use {options})
 	Gap Length:	Longitud del hueco:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	El modo Logotipo plano no usa keepColors: calca los colores indicados en logoColors o los colores que encuentra.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	No se calcó nada: ninguno de los colores que encontró el calco coincide con keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	No se calcó nada: Ignorar color omite todas las áreas de los colores que indica keepColors.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	No se calcó nada: los colores que coinciden con keepColors no producen ningún trazado.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: ninguno de los colores que encontró el calco coincide con {c}, así que no se calca nada de él.
 @msg	`colorGroup` needs `library: "document"`	`colorGroup` requiere `library: "document"`
 @msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` requiere `palette: "documentLibrary"`
 @msg	`colorGroup` needs `mode: "color"`	`colorGroup` requiere `mode: "color"`
@@ -5841,6 +5858,14 @@ axis	Y Axis	Eje Y
 @msg	unknown permission `{shown}`	permiso desconocido `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}” pide los permisos {asked}: instálalo con un `grant` que los incluya cuando el usuario lo acepte
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	a “{name}” no se le concedió `{p}`, que su resultado necesita: no se cambió nada
+@msg	a heavy filter runs in the background, so it can't declare `commands`	un filtro pesado se ejecuta en segundo plano, así que no puede declarar `commands`
+@msg	at most {MAX_COMMANDS} `commands`	como máximo {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	el comando {name} está declarado dos veces
+@msg	command {name}: `label` must be 1-64 printable characters	comando {name}: `label` debe tener 1-64 caracteres imprimibles
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	comando {name}: usa un id de 1-{MAX_COMMAND_ID} caracteres de a-z 0-9 _ que empiece por una letra
+@msg	command {name}: {e}	comando {name}: {e}
+@msg	only a filter or a live effect declares `commands`	solo un filtro o un efecto interactivo declara `commands`
+@msg	“{name}” › {label}: {e}	“{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	el módulo no tiene el SHA-256 que indica `hash`: no se instaló nada
 # Actions panel: action sets (#3712).
 	New Set…	Nuevo conjunto…
@@ -6384,6 +6409,16 @@ breakText	Glyphs	Glifos
 @msg	path must be a list of child indices	path debe ser una lista de índices de hijos
 @msg	no object at path {shown} in the symbol's art	no hay ningún objeto en la ruta {shown} del arte del símbolo
 @msg	give fill, stroke, opacity and/or blend	indique fill, stroke, opacity y/o blend
+@msg	{key} cannot be set on a guide	{key} no se puede definir en una guía
+@msg	{key} cannot be set on a blend	{key} no se puede definir en una fusión
+@msg	{key} cannot be set on an envelope	{key} no se puede definir en una envolvente
+@msg	{key} cannot be set on a gradient mesh	{key} no se puede definir en una malla de degradado
+@msg	{key} cannot be set on a Repeat	{key} no se puede definir en una repetición
+@msg	{key} cannot be set on a placed document	{key} no se puede definir en un documento colocado
+@msg	{key} cannot be set on an Intertwine group	{key} no se puede definir en un grupo entrelazado
+@msg	stroke cannot be set on a symbol instance	stroke no se puede definir en una instancia de símbolo
+@msg	fill on a symbol instance must be a solid color or none	el fill de una instancia de símbolo debe ser un color sólido o none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} no se puede definir en una imagen sin el efecto Convertir en forma o Contornear objeto
 @msg	pass newName, registration, exportType, nineSlice and/or type	indique newName, registration, exportType, nineSlice y/o type
 	Text Flow	Flujo de texto
 	By Rows	Por filas
@@ -6413,6 +6448,7 @@ breakText	Glyphs	Glifos
 	Create Swatch Legend	Crear leyenda de muestras
 	Create Swatch Legend…	Crear leyenda de muestras…
 	HEX	HEX
+	Help Bar	Barra de ayuda
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	Herramientas de texto
 	Text Tweaker…	Ajustador de texto…

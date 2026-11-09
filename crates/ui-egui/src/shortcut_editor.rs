@@ -235,6 +235,7 @@ pub fn command_for_key(key: &str) -> Option<&'static str> {
     let c = crate::keymap::lookup(&current().keymap, &vc_chord(key)?)?;
     vectorcraft_engine::command_specs()
         .iter()
+        .chain(vectorcraft_engine::cmd::plugin::command_specs())
         .map(|c| c.id)
         .chain(menus::UI_COMMANDS.iter().map(|c| c.0))
         .find(|id| *id == c.id && c.params.is_null())
@@ -387,6 +388,12 @@ pub(crate) fn snapshot() -> Arc<Snapshot> {
         .cloned()
         .chain(effects.iter().map(|e| Entry { key: format!("effect:{}", e.effect), label: e.label.clone(), group: e.group.clone(), is_tool: false }))
         .chain(filters.iter().map(|f| Entry { key: format!("plugin:{}", f.id), label: f.label.clone(), group: f.group.clone(), is_tool: false }))
+        .chain(vectorcraft_engine::cmd::plugin::command_specs().into_iter().map(|c| Entry {
+            key: c.id.into(),
+            label: c.label.into(),
+            group: c.menu.join(" › "),
+            is_tool: false,
+        }))
         .chain(tail.iter().cloned())
         .collect();
     let s = Arc::new(Snapshot { revision, effects, filters, entries });
@@ -404,7 +411,7 @@ pub fn entries() -> Arc<[Entry]> {
 }
 
 /// The entries no plug-in changes: (tools, commands and panels; UI commands). The Effect menu's
-/// items and Object › Plug-ins' filters go between them.
+/// items, Object › Plug-ins' filters and the plug-in commands go between them.
 fn fixed_entries() -> &'static (Vec<Entry>, Vec<Entry>) {
     static E: OnceLock<(Vec<Entry>, Vec<Entry>)> = OnceLock::new();
     E.get_or_init(|| {

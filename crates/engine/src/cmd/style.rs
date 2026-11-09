@@ -30,7 +30,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Apply Graphic Style",
             ["Window", "Graphic Styles"],
             None,
-            "{name, add?: bool, ids?|id? (layers too), target?: \"object\"|\"contents\"} give the objects (default: the selection; a group or layer itself, its fills and strokes painting its members and its effects applying to them as one piece; target contents: the objects inside instead) the style's appearance, opacity, blend mode, isolate and knockout, and link them to it (placed gradients land at the same place relative to each object's bounds); add: true (Alt-click) adds its fills, strokes and effects on top of the existing appearance instead and unlinks. On a path directly in a graph series, the graph also stores the paint, weight and opacity of the topmost visible fill and stroke (with `add`: of the kinds of row the style shows; exceptions: docs/mcp.md). With nothing selected (and no ids) the next object drawn takes the style instead (see appearance.newArt) → {newArt: true}",
+            "{name, add?: bool, ids?|id? (layers too), target?: \"object\"|\"contents\"} give the objects (default: the selection; a group or layer itself, its fills and strokes painting its members and its effects applying to them as one piece; target contents: the objects inside instead) the style's appearance, opacity, blend mode, isolate and knockout, and link them to it (placed gradients land at the same place relative to each object's bounds); add: true (Alt-click) adds its fills, strokes and effects on top of the existing appearance instead and unlinks. On a path directly in a graph series, the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke (with `add`: of the kinds of row the style shows) and, without `add`, the object's opacity and blend mode (exceptions: docs/mcp.md). With nothing selected (and no ids) the next object drawn takes the style instead (see appearance.newArt) → {newArt: true}",
             has_doc,
             style_apply
         ),
@@ -67,7 +67,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Redefine Graphic Style",
             ["Window", "Appearance"],
             None,
-            "{name?, id?} replace the style (default: the one the object was last linked to) with the look of object `id` or the first selected object; the objects still linked to it update, and that object becomes linked. On a linked path directly in a graph series, the graph also stores the paint, weight and opacity of the topmost visible fill and stroke (exceptions: docs/mcp.md) → {name}",
+            "{name?, id?} replace the style (default: the one the object was last linked to) with the look of object `id` or the first selected object; the objects still linked to it update, and that object becomes linked. On a linked path directly in a graph series, the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke and the object's opacity and blend mode (exceptions: docs/mcp.md) → {name}",
             has_doc,
             style_redefine
         ),
@@ -349,14 +349,14 @@ fn style_apply(s: &mut Session, p: &Value) -> Result<Value> {
             // The graph stores the rows of the kinds the style shows, now on top of each stack.
             let shows = |kind: bool| g.appearance.items.iter().any(|it| it.is_fill() == kind && it.visible());
             let kinds = (shows(true), shows(false));
-            super::appearance::capture_series_writes(&before, d, &ids, kinds, kinds, false);
+            super::appearance::capture_series_writes(&before, d, &ids, kinds, kinds, false, false);
         } else {
             d.graphic_style_id(i);
             let g = d.graphic_styles[i].clone();
             for id in &ids {
                 apply_style(d, *id, &g, chars);
             }
-            super::appearance::capture_series_writes(&before, d, &ids, (true, true), (true, true), false);
+            super::appearance::capture_series_writes(&before, d, &ids, (true, true), (true, true), false, true);
         }
         Ok(())
     })?;
@@ -476,7 +476,7 @@ fn style_redefine(s: &mut Session, p: &Value) -> Result<Value> {
         for nid in &follow {
             apply_style(d, *nid, &g, chars);
         }
-        super::appearance::capture_series_writes(&before, d, &follow, (true, true), (true, true), false);
+        super::appearance::capture_series_writes(&before, d, &follow, (true, true), (true, true), false, true);
         set_link(d, &[src], Some(id));
         Ok(())
     })?;

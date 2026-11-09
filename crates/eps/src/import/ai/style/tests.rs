@@ -1366,6 +1366,15 @@ fn convert_to_shape_settings_that_arent_read_keep_the_drawn_look() {
     assert!(!art_styles(data.as_bytes())["Odd"].plain);
 }
 
+#[test]
+fn warp_numbers_are_the_dialogs_order() {
+    for n in 1..=15 {
+        let style = warp_style(n).unwrap();
+        assert_eq!(warp_number(style), Some(n), "{style}");
+    }
+    assert_eq!((warp_style(0), warp_style(16), warp_number("arcs"), warp_number("")), (None, None, None, None));
+}
+
 /// A style as a writer checks it: the reader's appearance, with a gradient fill as the object's own,
 /// and nothing for styles it doesn't read.
 #[test]
@@ -1379,6 +1388,7 @@ fn a_style_is_read_as_a_writer_checks_it() {
     let got = read(&data, Some(&own)).unwrap();
     assert_eq!(got.appearance.items.len(), 1);
     assert_eq!(got.appearance.items[0].paint(), &own);
+    assert_eq!(got.transparency.map(|t| (t.0, t.1)), Some((0.5, BlendMode::Multiply)));
     assert!(got.simple && !got.pathfinder);
     // A gradient that isn't the object's own, a pattern, another name, two gradients: nothing.
     assert!(read(&data, None).is_none());
