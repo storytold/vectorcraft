@@ -5,13 +5,6 @@
 ## Feature submission evidence
 
 **Feature evidence last updated:** 2026-11-02.
-
-**PDF form gradients — 2026-11-08:** original synthetic Quartz checks reproduce the placement, direction and nested
-stop-opacity failures on main `65adb7b21` and pass with the rebased fix. The import/render round trip
-also passes; a translated-layer regression covers the interaction with the upstream layer-box
-repair (`crates/pdf/tests/gradient_forms.rs`). Stop opacity on translated artboards remains outside
-this coverage. No ranked gap or estimate is closed by this narrow export fix.
-
 | 2026-11-06 | minor | Opening a file that takes longer than 0.4 s shows a progress window: the file name, a moving bar (reading reports no steps), how many more files wait, Cancel (Esc; the file doesn't open) and Continue in Background (`file.cancelOpen`, `file.openInBackground`); it never opens over another dialog or progress window (part of #5930); scores and estimates unchanged |
 Raster rendering fits and preflattens curved stroke outlines more tightly only below four times the raster tolerance, retaining thin-band coverage without changing stroke weight or vector export geometry. Current cached character/object outlines, cropped long strokes, gradient clips and effect rasters share the helper; cropped-region reuse and guarded flattening remain. The unchanged `fractional_curved_strokes_retain_coverage_between_notches` regression covers fractional weights, rotation, phase, opacity and f32-rounded endpoints. This is a quality/cost tradeoff, not a speed claim. Scores and estimates unchanged.
 
@@ -878,7 +871,6 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 | 2026-10-29 | minor | G8: a blend makes at most 100,000 steps in all, the steps of blends nested in its keys and steps included; past it each pair of keys keeps the same share of its steps (#3579). No entry closed, estimates unchanged. |
 | 2026-10-26 | minor | G9: EPS save-back: an opened EPS saves back to its own path as EPS, keeping the chosen artboard's page frame and transparent margins and the complete editable VectorCraft document; Save's TIFF preview is capped at 1024 px (Export keeps 2048); partly read, preview-only or damaged-editing-data sources still need confirmation before they are overwritten. This narrows G9's save-back workflow only; its import-fidelity items (layer and group structure, guides, open speed, live objects) and estimate are unchanged, and writing Illustrator's own editing data stays out of scope (#868) |
 | 2026-10-26 | minor | G7: View › New View… / Edit Views… ([public source](https://helpx.adobe.com/illustrator/using/viewing-artwork.html)): the View menu lists every one of a document's 25 saved views (it listed 10), Edit Views… lists them to rename or delete in one undo step (`view.saved.edit {edits}`), and a file's views are checked when it opens; New View/Edit Views leave G7's missing list; estimate unchanged |
-| 2026-10-26 | minor | PDF form-gradient placement checked with Quartz on the shared writer; broader gaps unchanged. |
 | 2026-10-25 | minor | G4: a double-click on a threaded port with the Selection tool breaks the thread there (`text.thread.break {id, port}`): the story flows into the frames before the break, the frames after it are left empty and stay threaded with each other when two or more; a double-click on a port with no thread does nothing; estimate unchanged |
 | 2026-10-31 | minor | G1: Grid Repeat Options has a Preview checkbox (#2651); estimate unchanged. |
 | 2026-10-25 | minor | G1: a selected Grid Repeat shows handles: the one below the grid adds or removes rows, the one right of it columns, the one past its bottom-right corner both, and the sliders between the first two columns and rows set the horizontal and vertical spacing; each drag is one undo step and Escape cancels it (#2691); bounding-box handles keep priority where they meet; Radial Repeat handles remain; estimates unchanged. |
