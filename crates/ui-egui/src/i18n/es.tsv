@@ -5964,6 +5964,9 @@ axis	Y Axis	Eje Y
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all o un intervalo como 1, 3-5, no {v}
 	Add to Symbols	Agregar a símbolos
 	Basic Shapes	Formas básicas
+	Button	Botón
+	Panel	Panel
+	UI Frames	Marcos de IU
 	Open Symbol Library	Abrir biblioteca de símbolos
 	Save Symbol Library	Guardar biblioteca de símbolos
 	Save Symbol Library…	Guardar biblioteca de símbolos…

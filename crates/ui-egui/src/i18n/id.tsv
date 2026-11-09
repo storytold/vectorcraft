@@ -5848,6 +5848,9 @@ axis	Y Axis	Sumbu Y
 @plural	Result: {n}|Results: {n}	Hasil: {n}
 	Add to Symbols	Tambahkan ke simbol
 	Basic Shapes	Bentuk dasar
+	Button	Tombol
+	Panel	Panel
+	UI Frames	Bingkai UI
 	Open Symbol Library	Buka pustaka simbol
 	Save Symbol Library	Simpan pustaka simbol
 	Save Symbol Library…	Simpan pustaka simbol…

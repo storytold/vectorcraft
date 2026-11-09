@@ -5619,6 +5619,9 @@ axis	Y Axis	Вісь Y
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all або діапазон, наприклад 1, 3-5, а не {v}
 	Add to Symbols	Додати до символів
 	Basic Shapes	Базові фігури
+	Button	Кнопка
+	Panel	Панель
+	UI Frames	UI-рамки
 	Open Symbol Library	Відкрити бібліотеку символів
 	Save Symbol Library	Зберегти бібліотеку символів
 	Save Symbol Library…	Зберегти бібліотеку символів…

@@ -5704,6 +5704,9 @@ axis	Y Axis	Y 軸
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all または 1, 3-5 のような範囲を指定してください ({v} ではなく)
 	Add to Symbols	シンボルに追加
 	Basic Shapes	基本シェイプ
+	Button	ボタン
+	Panel	パネル
+	UI Frames	UIフレーム
 	Open Symbol Library	シンボルライブラリを開く
 	Save Symbol Library	シンボルライブラリを保存
 	Save Symbol Library…	シンボルライブラリを保存…
