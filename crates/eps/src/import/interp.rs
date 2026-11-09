@@ -15,8 +15,11 @@ use super::graphics::{GState, Out};
 use super::lex::{IMMEDIATE, Lexer, number};
 use super::obj::{Dict, DictRef, Key, Obj, Op, PsError, Res, Shared, ps_err};
 
-/// Most operations one file may run.
+/// Most operations one file may run, whatever its length.
 const MAX_OPS: u64 = 50_000_000;
+/// More operations a file may run for each byte of its program: a large file that draws a lot
+/// runs proportionally more, and stays bounded by its length.
+const OPS_PER_BYTE: u64 = 64;
 /// Deepest procedure nesting.
 const MAX_DEPTH: u32 = 400;
 /// Most operands on the stack.
@@ -55,6 +58,8 @@ pub(crate) struct Interp<'a> {
     resources: DictRef,
     depth: u32,
     ops: u64,
+    /// Most operations this program may run: [`MAX_OPS`] and [`OPS_PER_BYTE`] for each byte.
+    max_ops: u64,
     /// Bytes asked for so far (see [`MAX_MEMORY`]).
     allocated: usize,
     seed: u32,
@@ -68,6 +73,12 @@ pub(crate) struct Interp<'a> {
     pub fault: Option<Fault>,
     /// The width a Type 3 glyph procedure gave (`setcachedevice`, `setcharwidth`).
     pub glyph_width: Option<[f64; 2]>,
+    /// The TrueType data of the Type 42 fonts drawn so far, by their `sfnts` array (see
+    /// `type42`; `None` when it can't be read), the most recently used last.
+    pub type42: Type42Cache,
+    /// The `sfnts` arrays whose TrueType data has been counted against [`MAX_MEMORY`]: a font
+    /// read again after it left `type42` doesn't count again.
+    pub type42_counted: HashSet<Shared<Obj>>,
     pub g: GState,
     pub saved: Vec<GState>,
     pub out: Out,
@@ -88,6 +99,9 @@ pub(crate) struct Fault {
     pub op: Option<&'static str>,
     pub procs: Vec<Rc<str>>,
 }
+
+/// The TrueType data of Type 42 fonts by their `sfnts` array (see [`Interp::type42`]).
+pub(crate) type Type42Cache = Vec<(Shared<Obj>, Option<Rc<Vec<u8>>>)>;
 
 /// Most procedure names a [`Fault`] keeps.
 const FAULT_PROCS: usize = 3;
@@ -177,12 +191,15 @@ impl<'a> Interp<'a> {
             resources,
             depth: 0,
             ops: 0,
+            max_ops: MAX_OPS.saturating_add((src.len() as u64).saturating_mul(OPS_PER_BYTE)),
             allocated: 0,
             seed: 1,
             saves: vec![],
             journal: vec![],
             fault: None,
             glyph_width: None,
+            type42: vec![],
+            type42_counted: HashSet::new(),
             g,
             saved: vec![],
             out,
@@ -350,21 +367,27 @@ impl<'a> Interp<'a> {
         Ok(())
     }
 
+    /// Stop counting `bytes` the program no longer holds: buffers an operator made for itself and
+    /// freed before it returned. Never for what the program's own procedures allocated.
+    pub(crate) fn unalloc(&mut self, bytes: usize) {
+        self.allocated = self.allocated.saturating_sub(bytes);
+    }
+
     fn tick(&mut self) -> Res {
         self.spend(1)
     }
 
     /// Charge for work on `n` bytes or objects in one operator: one operation per 256, as `search`
     /// charges per 64 bytes, so a loop of big copies runs out of the budget.
-    fn spend_bytes(&mut self, n: usize) -> Res {
+    pub fn spend_bytes(&mut self, n: usize) -> Res {
         self.spend((n / 256) as u64)
     }
 
-    /// Count `ops` operations' worth of work against [`MAX_OPS`]: what an operator that costs
+    /// Count `ops` operations' worth of work against the budget (`max_ops`): what an operator that costs
     /// far more than one operation (laying out type) does in a loop has to end too.
     pub fn spend(&mut self, ops: u64) -> Res {
         self.ops = self.ops.saturating_add(ops);
-        if self.ops > MAX_OPS {
+        if self.ops > self.max_ops {
             return Err(PsError::Limit("the program runs too long"));
         }
         Ok(())

@@ -1,3 +1,4 @@
+use super::super::tests_long_popups::{PopupWindow, assert_last_row_scrolls_into_view, assert_short_list_does_not_scroll};
 use super::*;
 use crate::panels::library_panel;
 use egui::{Event, PointerButton, Pos2, Rect, vec2};
@@ -39,6 +40,30 @@ fn traced_app_with_ink(ink: u8) -> VectorcraftApp {
     app.run("file.place", json!({"name": "half.png", "dataBase64": data, "link": false})).unwrap();
     app.run("imageTrace.make", json!({"preset": "Default"})).unwrap();
     app
+}
+
+/// The Tracing Presets arrow at the right end of the Image Trace button.
+fn tracing_presets_arrow(window: &PopupWindow) -> Pos2 {
+    let label = window.text("Image Trace").expect("the Image Trace button");
+    Pos2::new(TRACE_BUTTON_W - 4.0, label.center().y)
+}
+
+/// The Image Trace button's list of presets grows with saved presets: with enough of them it stops
+/// inside a short window and the wheel reaches the last one. With only the built-in presets it does
+/// not scroll.
+#[test]
+fn a_long_tracing_preset_list_scrolls_inside_a_short_window() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    let draw = |app: &mut VectorcraftApp, ui: &mut Ui| trace_button(app, ui, TRACE_BUTTON_W);
+    let built_in = app.session.execute("imageTrace.presets", &json!({})).unwrap();
+    let name = |p: &Value| p["name"].as_str().unwrap().to_string();
+    let built_in = built_in["presets"].as_array().unwrap();
+    let (first, last) = (name(&built_in[0]), name(&built_in[built_in.len() - 1]));
+    assert_short_list_does_not_scroll(&mut app, draw, tracing_presets_arrow, &first, &last);
+    for n in 0..30 {
+        app.session.execute("imageTrace.presets.save", &json!({"name": format!("Saved {n}"), "preset": "Default"})).unwrap();
+    }
+    assert_last_row_scrolls_into_view(&mut app, 200.0, draw, tracing_presets_arrow, &first, "Saved 29");
 }
 
 #[test]
@@ -1190,6 +1215,111 @@ fn the_preset_list_is_read_once_for_each_change_of_the_saved_presets() {
     app.session.execute("imageTrace.presets.save", &json!({"name": "C", "newName": "D"})).unwrap();
     frame(&mut app, &ctx, vec![]);
     assert_eq!((reads(), shown_preset(&ctx)), (start + 4, "D".to_string()));
+}
+
+/// Choose `preset` from the Preset dropdown, which shows `shown`.
+fn choose_from_preset_menu(app: &mut VectorcraftApp, ctx: &egui::Context, shown: &str, preset: &str) {
+    let texts = frame(app, ctx, vec![]);
+    let combo = texts.iter().rfind(|(t, _)| t == shown).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{shown}` in {texts:?}"));
+    click_at(app, ctx, combo);
+    let texts = frame(app, ctx, vec![]);
+    let at = texts.iter().rfind(|(t, _)| t == preset).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{preset}` in {texts:?}"));
+    click_at(app, ctx, at);
+}
+
+/// Which preset buttons showed as selected at the last frame.
+fn selected_preset_buttons(ctx: &egui::Context) -> Vec<&'static str> {
+    preset_buttons()
+        .into_iter()
+        .filter(|(_, name)| ctx.data(|d| d.get_temp::<bool>(egui::Id::unique(("trace-preset-button", *name)))) == Some(true))
+        .map(|(_, name)| name)
+        .collect()
+}
+
+#[test]
+fn each_preset_button_traces_the_selected_object_again_with_its_preset() {
+    let mut app = traced_app_with_ink(100);
+    trace_and_open(&mut app, "Default");
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    frame(&mut app, &ctx, vec![]);
+    let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    for (label, preset) in [
+        ("Auto Color", "Auto Color"),
+        ("High Color", "High Fidelity Photo"),
+        ("Low Color", "Low Fidelity Photo"),
+        ("Grayscale", "Shades of Gray"),
+        ("Black and White", "Black and White Logo"),
+        ("Outline", "Outline"),
+    ] {
+        let steps = undo(&app);
+        click(&mut app, &ctx, label);
+        frame(&mut app, &ctx, vec![]);
+        assert_eq!(selected_trace(&app).unwrap().0, preset, "{label}");
+        assert_eq!(undo(&app), steps + 1, "{label} traces as one undo step");
+        let all = presets(&mut app, &ctx);
+        assert_eq!(target(&app).2.unwrap()["params"], find_preset(&all, preset).unwrap().1, "{label} traces with the preset's settings");
+        assert_eq!((shown_preset(&ctx), selected_preset_buttons(&ctx)), (preset.to_string(), vec![preset]), "{label}");
+    }
+    // Undo returns to the object's previous preset, and the buttons follow it.
+    app.run("edit.undo", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(selected_trace(&app).unwrap().0, "Black and White Logo");
+    assert_eq!(selected_preset_buttons(&ctx), ["Black and White Logo"]);
+}
+
+#[test]
+fn the_selected_preset_button_follows_the_preset_menu() {
+    let mut app = traced_app_with_ink(100);
+    trace_and_open(&mut app, "Default");
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    frame(&mut app, &ctx, vec![]);
+    assert!(selected_preset_buttons(&ctx).is_empty(), "Default has no button");
+    choose_from_preset_menu(&mut app, &ctx, "Default", "Shades of Gray");
+    assert_eq!(selected_trace(&app).unwrap().0, "Shades of Gray");
+    assert_eq!(selected_preset_buttons(&ctx), ["Shades of Gray"]);
+    choose_from_preset_menu(&mut app, &ctx, "Shades of Gray", "6 Colors");
+    assert_eq!(selected_trace(&app).unwrap().0, "6 Colors");
+    assert!(selected_preset_buttons(&ctx).is_empty(), "6 Colors has no button");
+    // A changed setting makes the preset Custom, and no button shows as selected.
+    click(&mut app, &ctx, "Outline");
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(selected_preset_buttons(&ctx), ["Outline"]);
+    click(&mut app, &ctx, "Preview");
+    click(&mut app, &ctx, "Fills");
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(shown_preset(&ctx), "Custom");
+    assert!(selected_preset_buttons(&ctx).is_empty());
+}
+
+#[test]
+fn a_preset_button_with_no_image_selected_changes_the_panel_settings_as_the_preset_menu_does() {
+    let blank = || {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app
+    };
+    let mut app = blank();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    frame(&mut app, &ctx, vec![]);
+    let steps = app.session.active().unwrap().history.undo.len();
+    click(&mut app, &ctx, "High Color");
+    frame(&mut app, &ctx, vec![]);
+    let by_button: TraceUi = pstate(&ctx, "image-trace");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), steps, "nothing is traced");
+    assert!(target(&app).2.is_none(), "no Image Trace object");
+    assert_eq!(selected_preset_buttons(&ctx), ["High Fidelity Photo"]);
+
+    let mut menu_app = blank();
+    let menu_ctx = egui::Context::default();
+    crate::theme::install_fonts(&menu_ctx);
+    choose_from_preset_menu(&mut menu_app, &menu_ctx, "Default", "High Fidelity Photo");
+    let by_menu: TraceUi = pstate(&menu_ctx, "image-trace");
+    assert_eq!(menu_app.session.active().unwrap().history.undo.len(), steps);
+    assert_eq!((by_button.preset, by_button.params), (by_menu.preset, by_menu.params));
 }
 
 #[test]

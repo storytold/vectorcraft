@@ -12,25 +12,27 @@ pub(super) fn filter_button(app: &mut VectorcraftApp, ui: &mut Ui) {
     let button = widgets::icon_button(ui, "dc-filter", tl!("Filter"), f.is_on(), 24.0);
     let mut set = None;
     egui::Popup::menu(&button).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
-        ui.horizontal(|ui| {
-            widgets::subheader(ui, tl!("Filter"));
-            ui.add_space(12.0);
-            if ui.add_enabled(f.is_on(), egui::Button::new(egui::RichText::new(tl!("Clear All")).size(12.5)).frame(false)).clicked() {
-                set = Some(json!({"objects": [], "layers": []}));
+        widgets::menu_scroll(ui, |ui| {
+            ui.horizontal(|ui| {
+                widgets::subheader(ui, tl!("Filter"));
+                ui.add_space(12.0);
+                if ui.add_enabled(f.is_on(), egui::Button::new(egui::RichText::new(tl!("Clear All")).size(12.5)).frame(false)).clicked() {
+                    set = Some(json!({"objects": [], "layers": []}));
+                }
+            });
+            widgets::subheader(ui, tl!("By Object"));
+            for (k, _) in ObjectKind::ALL {
+                if widgets::check(ui, k.label(), f.objects.contains(&k), true) {
+                    set = Some(json!({"objects": toggled(&ObjectKind::ALL, &f.objects, k)}));
+                }
+            }
+            widgets::subheader(ui, tl!("By Layer"));
+            for (s, _) in RowState::ALL {
+                if widgets::check(ui, s.label(), f.layers.contains(&s), true) {
+                    set = Some(json!({"layers": toggled(&RowState::ALL, &f.layers, s)}));
+                }
             }
         });
-        widgets::subheader(ui, tl!("By Object"));
-        for (k, _) in ObjectKind::ALL {
-            if widgets::check(ui, k.label(), f.objects.contains(&k), true) {
-                set = Some(json!({"objects": toggled(&ObjectKind::ALL, &f.objects, k)}));
-            }
-        }
-        widgets::subheader(ui, tl!("By Layer"));
-        for (s, _) in RowState::ALL {
-            if widgets::check(ui, s.label(), f.layers.contains(&s), true) {
-                set = Some(json!({"layers": toggled(&RowState::ALL, &f.layers, s)}));
-            }
-        }
     });
     if let Some(p) = set {
         app.run("ui.layersFilter", p).ok();
@@ -245,24 +247,28 @@ pub(super) fn collect_for_export_menu(ui: &mut Ui, enabled: bool, mut run: impl 
 /// the Select menu, then the active document's saved selections: choosing one recalls it.
 fn save_selection_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.menu_button(format!("   {}", tl!("Save Selection")), |ui| {
-        for (label, id) in [("Save Selection…", "select.save"), ("Update Selection", "select.update"), ("Edit Selection…", "select.editSaved")] {
-            if widgets::menu_item(ui, label, crate::menus::enabled(app, id), false) {
-                crate::menus::invoke(app, id, json!({}));
-                ui.close();
+        widgets::menu_scroll(ui, |ui| {
+            for (label, id) in [("Save Selection…", "select.save"), ("Update Selection", "select.update"), ("Edit Selection…", "select.editSaved")]
+            {
+                if widgets::menu_item(ui, label, crate::menus::enabled(app, id), false) {
+                    crate::menus::invoke(app, id, json!({}));
+                    ui.close();
+                }
             }
-        }
-        let names: Vec<String> = app.session.active().map(|d| d.doc.saved_selections.iter().map(|s| s.name.clone()).collect()).unwrap_or_default();
-        if !names.is_empty() {
-            ui.separator();
-        }
-        for name in names {
-            if widgets::menu_item_name(ui, &name, true, false) {
-                let selected = last_selected(app);
-                app.run("select.recall", json!({ "name": name })).ok();
-                see_selection(app, ui, selected);
-                ui.close();
+            let names: Vec<String> =
+                app.session.active().map(|d| d.doc.saved_selections.iter().map(|s| s.name.clone()).collect()).unwrap_or_default();
+            if !names.is_empty() {
+                ui.separator();
             }
-        }
+            for name in names {
+                if widgets::menu_item_name(ui, &name, true, false) {
+                    let selected = last_selected(app);
+                    app.run("select.recall", json!({ "name": name })).ok();
+                    see_selection(app, ui, selected);
+                    ui.close();
+                }
+            }
+        });
     });
 }
 

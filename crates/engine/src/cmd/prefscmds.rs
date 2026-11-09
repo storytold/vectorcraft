@@ -150,10 +150,19 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("scaleCorners", "General", "Options", "Scale Corners", bool),
     p!("scaleStrokes", "General", "Options", "Scale Strokes & Effects", bool),
     p!("zoomWithMouseWheel", "General", "Options", "Zoom with Mouse Wheel", bool),
+    p!("ctrlWheelScrollsSideways", "General", "Options", "Scroll Sideways with Cmd/Ctrl + Wheel", bool),
     p!("scrubNumericFields", "General", "Options", "Scrub Numeric Fields by Dragging", bool),
     p!("trackpadRotateView", "General", "Options", "Trackpad Gesture to Rotate View", bool),
+    p!("holdToolKeys", "General", "Options", "Hold a Tool Shortcut to Use the Tool Temporarily", bool),
     // Selection & Anchor Display
     p!("selectionTolerance", "Selection & Anchor Display", "Selection", "Tolerance", num(1.0, 8.0, "px")),
+    p!(
+        "marqueeSelection",
+        "Selection & Anchor Display",
+        "Selection",
+        "Marquee Selection",
+        choice(&[("touching", "Touching"), ("enclosed", "Fully Enclosed"), ("directional", "Drag Direction")])
+    ),
     p!("objectSelectionByPathOnly", "Selection & Anchor Display", "Selection", "Object Selection by Path Only", bool),
     p!("snapToPointTolerance", "Selection & Anchor Display", "Selection", "Snap to Point", num(1.0, 8.0, "px")),
     p!("ctrlClickSelectsBehind", "Selection & Anchor Display", "Selection", "Command Click to Select Objects Behind", bool),
@@ -206,6 +215,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("highlightAlternateGlyphs", "Type", "Options", "Highlight Alternate Glyphs", bool),
     p!("highlightSubstitutedFonts", "Type", "Options", "Highlight Substituted Fonts", bool),
     p!("placeholderText", "Type", "Options", "Fill New Type Objects With Placeholder Text", bool),
+    p!("typedLists", "Type", "Options", "Start Lists From Typed Markers", bool),
     p!("fontsFolder", "Type", "Options", "Additional Fonts Folder", text),
     // Units
     p!("unitsGeneral", "Units", "", "General", choice(UNITS)),
@@ -247,6 +257,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("measurementLabels", "Smart Guides", "Display Options", "Measurement Labels", bool),
     p!("spacingGuides", "Smart Guides", "Display Options", "Spacing Guides", bool),
     p!("distanceGuides", "Smart Guides", "Display Options", "Invoke Distance Guides", bool),
+    p!("snapToLastLocation", "Smart Guides", "Display Options", "Snap to Last Location", bool),
     p!("snappingTolerance", "Smart Guides", "", "Snapping Tolerance", num(0.0, 40.0, "pt")),
     p!("snapTangent", "Smart Guides", "Geometric Guides", "Snap to Tangent", bool),
     p!("snapPerpendicular", "Smart Guides", "Geometric Guides", "Snap to Perpendicular", bool),
@@ -338,6 +349,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("openDocumentsAsTabs", "User Interface", "", "Open Documents As Tabs", bool),
     p!("largeTabs", "User Interface", "", "Large Tabs", bool),
     p!("systemTitleBar", "User Interface", "", "System Title Bar", bool),
+    p!("appTitleBar", "User Interface", "", "VectorCraft Title Bar on Every Desktop", bool),
     p!("uiScaling", "User Interface", "UI Scaling", "Scale", num(0.75, 2.0, "×")),
     p!("scaleCursorWithUi", "User Interface", "UI Scaling", "Scale Cursor Proportional to UI", bool),
     // `auto` or a language code the shell registers (`zh-hant`); the shell shows it as a dropdown.
@@ -422,6 +434,9 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     // The Align panel menu's Align to Glyph Bounds: Align and Distribute measure type by its glyphs' ink.
     p!("alignGlyphBoundsPoint", "Type", "Align to Glyph Bounds", "Point Text", bool),
     p!("alignGlyphBoundsArea", "Type", "Align to Glyph Bounds", "Area Text", bool),
+    // Artboard Options › Global: the canvas darkens the area outside the artboards while the Artboard tool is active.
+    p!("fadeRegionOutsideArtboard", "General", "Artboard Options", "Fade Region Outside Artboard", bool),
+    p!("artboardUpdateWhileDragging", "General", "Artboard Options", "Update While Dragging", bool),
 ];
 
 pub fn spec(key: &str) -> Option<&'static PrefSpec> {
@@ -662,6 +677,12 @@ impl Session {
         // automation roots in force: a refused one keeps its value.
         for e in self.prefs.keep_folders(&mut p) {
             log::warn!("{e}");
+        }
+        // The edit the active tool computes on another thread is applied first (the Preferences
+        // dialog applies its settings here, outside a command). A failure to apply it was the
+        // edit's own, and the preferences apply all the same.
+        if self.depth == 0 {
+            let _ = self.finish_tool_edit_later();
         }
         let grid_changed = p.gridline_every != self.prefs.gridline_every || p.grid_subdivisions != self.prefs.grid_subdivisions;
         let history_changed = p.history_states != self.prefs.history_states;

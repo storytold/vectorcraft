@@ -1,6 +1,9 @@
 use super::options::{AntiAlias, RenderOptions};
 use super::threads::single_threaded_context;
-use super::{Affine, Arc, BezPath, Document, FillRule, HashMap, Ink, Node, Rect, RenderContext, StrokeLayer, SymbolBoxes, TextObject, kurbo, live};
+use super::{
+    Affine, Arc, BezPath, Document, FillRule, HashMap, Ink, Node, Pixmap, Rect, RenderContext, StrokeLayer, SymbolBoxes, TextObject, TypeAntiAlias,
+    fx, kurbo, live,
+};
 
 /// Hasher for pointer-keyed caches: a multiply-xorshift (SipHash showed up in frame profiles).
 #[derive(Default, Clone, Copy)]
@@ -116,6 +119,26 @@ pub(crate) struct PlacedEntry {
     pub(crate) slice: Option<vectorcraft_doc::NineSliceMap>,
 }
 
+/// Type drawn with an anti-aliasing method other than Sharp, as [`Renderer::draw_type_edges`] drew
+/// it offscreen on the pixels of the output ([`Frame::output`]).
+pub(crate) struct TypeEdgeEntry {
+    /// A copy of the type's object: the kept pixels are used only for an object equal to it.
+    pub(crate) node: Node,
+    /// The output's zoom and rotation ([`fx::linear_key`]).
+    pub(crate) linear: [u64; 4],
+    /// The method, the edge threshold, the frame's edge smoothing, whether the frame composites
+    /// precisely, and the opacity folded into the paints.
+    pub(crate) settings: (TypeAntiAlias, Option<u8>, AntiAlias, bool, u32),
+    /// What the type read from the document and the color settings ([`Renderer::raster_inputs`]).
+    pub(crate) inputs: fx::Inputs,
+    /// The output's offset: in a frame whose offset differs from it by whole pixels, the pixels are
+    /// placed moved by them.
+    pub(crate) shift: kurbo::Vec2,
+    /// The output pixel at the image's top-left corner.
+    pub(crate) origin: (f64, f64),
+    pub(crate) image: Arc<Pixmap>,
+}
+
 /// How deep inline graphics nest (text in a symbol shown inline in text…) before they draw nothing.
 pub(crate) const MAX_INLINE_DEPTH: u32 = 4;
 
@@ -137,9 +160,20 @@ pub struct FrameStats {
     /// The filtered contents, shadows and glows the frame drew at a drag's lower resolution
     /// ([`RenderOptions::dragging`]). [`Self::moved`] counts them too.
     pub previewed: usize,
+    /// What the frame drew in a way that depends on the frame's size: effect rasters and filter
+    /// layers cropped to it or made at a lower resolution, blending groups drawn as layers past its
+    /// offscreen budget, gradient meshes drawn quad by quad past the mesh buffer, and every filter
+    /// layer drawn on a single-threaded context: on a single-threaded renderer, or offscreen in a
+    /// group or an effect's raster. A part of the frame rendered on its own can draw that art with
+    /// other pixels than the whole frame does.
+    pub view_sized: usize,
     /// How many threads composed the frame from its two ink planes, in a CMYK document that shows
     /// transparency; 0 for other frames.
     pub ink_threads: usize,
+    /// The type objects the frame drew offscreen with an anti-aliasing method other than Sharp
+    /// ([`Renderer::draw_type_edges`]). Type drawn from the pixels an earlier frame kept is not
+    /// counted.
+    pub type_edges: usize,
     pub micros: u64,
 }
 
@@ -153,11 +187,16 @@ pub(crate) struct Frame<'a> {
     pub(crate) view: Affine,
     /// Visible region in document coordinates (for culling).
     pub(crate) visible: Rect,
-    /// Size of one output pixel in document units.
+    /// Size of one of this frame's pixels in document units.
     pub(crate) px: f64,
     pub(crate) opts: &'a RenderOptions,
     /// What colours paint as: screen colours, or one ink plane of a CMYK document (see [`ink`]).
     pub(crate) ink: Ink,
+    /// Document → pixels of the output being drawn: `view` itself, except while an export draws
+    /// its art at several times its size (the export's own pixels) and in offscreen layers (the
+    /// pixels they are placed back on). Type with an anti-aliasing method other than Sharp is
+    /// drawn on these pixels ([`Renderer::draw_type_edges`]).
+    pub(crate) output: Affine,
     /// With Separations Preview, the tables placed images show the visible plates through.
     pub(crate) plates: Option<&'a crate::proof::PlateLut>,
 }

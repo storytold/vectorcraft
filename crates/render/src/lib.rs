@@ -29,6 +29,7 @@ mod stroke;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use vectorcraft_doc::text::TypeAntiAlias;
 use vectorcraft_doc::{AppearanceItem, Document, Node, NodeId, NodeKind, StrokeAlign, StrokeLayer, SymbolBoxes, TextObject, TraceView};
 use vectorcraft_geom::{Affine, BezPath, FillRule, Rect, Shape};
 use vello_cpu::kurbo;
@@ -75,6 +76,12 @@ pub struct Renderer {
     /// The plug-in revision ([`effects::plugin_revision`]) that `geom`, `fx_geom` and `fx_arts` were
     /// last checked against (see [`Self::check_plugins`]).
     plugin_revision: u64,
+    /// Is a live-effect plug-in that paints its pieces installed (found when `plugin_revision`
+    /// changes)?
+    painting_plugins: bool,
+    /// The hash of the document's swatch and pattern names at the last check, kept while
+    /// `painting_plugins` holds (see [`Self::check_plugins`]).
+    paint_names: u64,
     /// Expanded stroke outlines keyed by ([`Self::stroke_owner`], stroke layer address, width bits,
     /// tolerance level): panning re-renders reuse them instead of re-expanding every stroke.
     strokes: PtrMap<StrokeKey, StrokeEntry>,
@@ -124,6 +131,9 @@ pub struct Renderer {
     /// Objects' content run through Photoshop-style effects, per object and content slot (see
     /// `fx`): kept only while drawn.
     pixel_fx: PtrMap<(usize, usize, Ink), fx::PixelEntry>,
+    /// Type drawn with an anti-aliasing method other than Sharp, per object and ink (see
+    /// [`Self::draw_type_edges`]).
+    type_edges: FrameCache<(usize, Ink), TypeEdgeEntry>,
     /// What the contents of those rasters read from the document, and the color settings, as last
     /// found for a frame (`stamp`) and document (address) (see [`Self::doc_inputs`]).
     doc_inputs: Option<((u64, usize), Arc<fx::DocInputs>)>,
@@ -224,9 +234,12 @@ mod renderer;
 mod text_geom;
 mod threads;
 
-pub use bounds::{drawn_bounds, drawn_outline, effect_bounds, painted_bounds};
+pub use bounds::{drawn_bounds, drawn_outline, drawn_outlines, effect_bounds, painted_bounds};
 pub use frame::FrameStats;
-use frame::{ClipEntry, ClipPaintEntry, Frame, FxArtEntry, GeomEntry, PlacedEntry, PlacedKey, PtrHasher, PtrMap, SliceEntry, StrokeEntry, StrokeKey};
+use frame::{
+    ClipEntry, ClipPaintEntry, Frame, FxArtEntry, GeomEntry, PlacedEntry, PlacedKey, PtrHasher, PtrMap, SliceEntry, StrokeEntry, StrokeKey,
+    TypeEdgeEntry,
+};
 #[cfg(test)]
 use frame::{OFFSCREEN_PIXELS, Slices};
 pub use geometry::region_pixels;
@@ -236,6 +249,8 @@ use node_checks::painted_items;
 pub use options::{AntiAlias, ISOLATION_DIM, MAX_RASTER_PIXELS, MAX_RASTER_SIDE, RenderOptions, Rendered, raster_size, supersample_factor};
 pub(crate) use paint::blend_mode;
 use paint::fill_rule;
+#[cfg(test)]
+use renderer::{edge_coverage, edge_grid, type_reach};
 use text_geom::TextGeom;
 #[cfg(test)]
 pub(crate) use text_geom::is_opentype_alternate;
