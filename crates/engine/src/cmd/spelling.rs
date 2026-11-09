@@ -200,7 +200,26 @@ fn dictionary_file_readable(path: &std::path::Path) -> std::result::Result<(), S
         Err(e) => Err(e.to_string()),
         Ok(m) if !m.is_file() => Err("it isn't a file".into()),
         Ok(m) if m.len() > MAX_DICTIONARY_FILE_BYTES => Err(format!("it is larger than {MAX_DICTIONARY_FILE_BYTES} bytes")),
-        Ok(_) => std::fs::File::open(path).map(drop).map_err(|e| e.to_string()),
+        Ok(_) => {
+            // Read it whole, as craft-proof will: a file that opens but then can't be read would
+            // read as no words there.
+            use std::io::Read;
+            let mut bytes = Vec::new();
+            let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
+            file.take(MAX_DICTIONARY_FILE_BYTES + 1).read_to_end(&mut bytes).map_err(|e| e.to_string())?;
+            if bytes.len() as u64 > MAX_DICTIONARY_FILE_BYTES {
+                return Err(format!("it is larger than {MAX_DICTIONARY_FILE_BYTES} bytes"));
+            }
+            Ok(())
+        }
+    }
+}
+
+/// After a failed save took a command's change back: take in the words the file holds again, so
+/// a word another window saved meanwhile, which the change had added too, stays.
+fn retake_file_words(s: &Session) {
+    if let Some(path) = s.dictionary_file.as_deref().filter(|p| dictionary_file_readable(p).is_ok()) {
+        craft_proof::load_user_dictionary(path);
     }
 }
 
@@ -231,6 +250,7 @@ fn add_word(s: &mut Session, p: &Value) -> Result<Value> {
         // Only this command's word: words the save took in from the file stay.
         if added {
             craft_proof::remove_word(&word);
+            retake_file_words(s);
         }
     })?;
     Ok(json!({ "word": word, "added": added }))
@@ -265,6 +285,7 @@ fn change_word(s: &mut Session, p: &Value) -> Result<Value> {
     save_dictionary(s, std::slice::from_ref(&word), C).inspect_err(|_| {
         if to_is_new {
             craft_proof::remove_word(&to);
+            retake_file_words(s);
         }
         craft_proof::add_word(&word);
     })?;
