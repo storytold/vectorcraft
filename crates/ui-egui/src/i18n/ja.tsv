@@ -76,6 +76,10 @@ digits	Malayalam	マラヤーラム数字
 	Stylistic	スタイリスティック
 	Mojikumi Set	文字組み
 	Kinsoku Set	禁則処理
+	Kinsoku Shori Type	禁則調整方式
+	Push In First	追い込み優先
+	Push Out First	追い出し優先
+	Push Out Only	追い出しのみ
 	Hard	強い禁則
 	Soft	弱い禁則
 	Latin	欧文
@@ -6275,6 +6279,24 @@ breakText	Glyphs	字形
 # 3D Box add-on
 	3D Box	3Dボックス
 	3D Box Tool	3Dボックスツール
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	このアプリケーションで開く
+	No importer plug-ins installed	読み込みプラグインはインストールされていません
+	Read files you open in its format and make documents from them	独自形式で開いたファイルの読み取りとドキュメントの作成
+@msg	{_1} is an importer (File › Open With)	{_1} は読み込みプラグインです (「ファイル › このアプリケーションで開く」から使用してください)
+@msg	missing `importer` (see document.formats)	`importer` がありません (document.formats を参照)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` にはプラグインの形式 ID を指定してください (document.formats を参照)
+@msg	“{shown}” opens {_1} files, not `{_2}`	「{shown}」が開くのは {_1} ファイルで、`{_2}` ではありません
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` は種類 `{_2}` のプラグインで、読み込みプラグインではありません
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` は種類 `{_2}` のプラグインで、書き出しプラグインではありません
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` は読み込みプラグインです: document.open {{"importer"}"}} でファイルを開いてください
+@msg	the importer returned no objects	読み込みプラグインがオブジェクトを返しませんでした
+@msg	an importer returns `objects` and `warnings`, not `{key}`	読み込みプラグインが返すのは `objects` と `warnings` で、`{key}` ではありません
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	ファイルが読み込みプラグインの読み取る {MAX_INPUT_BYTES} バイトを超えています
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	読み込みプラグインは `extensions` を 1～{MAX_EXTENSIONS} 個宣言します
+@msg	only an exporter or an importer declares `extensions`	`extensions` を宣言できるのは書き出しプラグインと読み込みプラグインだけです
+@msg	an importer always gets an import's budget: leave `budget` out	読み込みプラグインには常に読み込みの予算が割り当てられます: `budget` は省略してください
 
 # Safe Mode
 	Safe Mode…	セーフモード…

@@ -56,6 +56,9 @@ pub enum Permission {
     /// Write the document as a file in its own format (an exporter).
     #[serde(rename = "export.write")]
     ExportWrite,
+    /// Read a file the user opens and make a new document from it (an importer).
+    #[serde(rename = "import.read")]
+    ImportRead,
     /// Report how far a run has got, see that the user asked it to stop and write log lines: the
     /// host imports of API level 2 ([`crate::host::IMPORTS`]).
     #[serde(rename = "progress")]
@@ -69,12 +72,13 @@ pub enum Permission {
 }
 
 /// Every permission this host grants, in the order prompts list them.
-pub const ALL: [Permission; 8] = [
+pub const ALL: [Permission; 9] = [
     Permission::DocRead,
     Permission::DocWrite,
     Permission::State,
     Permission::EffectRender,
     Permission::ExportWrite,
+    Permission::ImportRead,
     Permission::Progress,
     Permission::Settings,
     Permission::Cache,
@@ -93,6 +97,7 @@ impl Permission {
             Permission::State => "state",
             Permission::EffectRender => "effect.render",
             Permission::ExportWrite => "export.write",
+            Permission::ImportRead => "import.read",
             Permission::Progress => "progress",
             Permission::Settings => "settings",
             Permission::Cache => "cache",
@@ -112,6 +117,7 @@ impl Permission {
             Permission::State => "Keep data of its own with the document",
             Permission::EffectRender => "Change how the objects its effect is applied to are drawn",
             Permission::ExportWrite => "Write the document as a file in its own format",
+            Permission::ImportRead => "Read files you open in its format and make documents from them",
             Permission::Progress => "Show its progress, see Cancel and write log lines",
             Permission::Settings => "Keep settings of its own",
             Permission::Cache => "Keep a cache of its own, which you can clear",
@@ -131,6 +137,7 @@ impl Permission {
             Kind::Filter => &[Permission::DocRead, Permission::DocWrite, Permission::State],
             Kind::Effect => &[Permission::DocRead, Permission::EffectRender],
             Kind::Exporter => &[Permission::DocRead, Permission::ExportWrite],
+            Kind::Importer => &[Permission::ImportRead],
         }
     }
 
@@ -146,12 +153,12 @@ impl Permission {
     }
 
     /// The permissions a plug-in of `kind` can't work without, which its list must hold: a live
-    /// effect and an exporter are always handed objects, and only draw or write. A filter may
-    /// leave any of its permissions out.
+    /// effect and an exporter are always handed objects, and only draw or write; an importer is
+    /// always handed the file being opened. A filter may leave any of its permissions out.
     fn required(kind: Kind) -> &'static [Permission] {
         match kind {
             Kind::Filter => &[],
-            Kind::Effect | Kind::Exporter => Permission::implied(kind),
+            Kind::Effect | Kind::Exporter | Kind::Importer => Permission::implied(kind),
         }
     }
 }
@@ -280,12 +287,16 @@ mod tests {
         assert_eq!(validate(Kind::Filter, false, &[]).unwrap(), []);
         assert!(validate(Kind::Effect, false, &list(&["doc.read", "effect.render"])).is_ok());
         assert!(validate(Kind::Exporter, false, &list(&["export.write", "doc.read"])).is_ok());
+        assert_eq!(validate(Kind::Importer, false, &list(&["import.read"])).unwrap(), [Permission::ImportRead]);
         // Any kind may list `progress`, which no kind implies.
         assert_eq!(validate(Kind::Filter, false, &list(&["progress", "doc.read"])).unwrap(), [Permission::DocRead, Permission::Progress]);
         assert!(validate(Kind::Effect, false, &list(&["doc.read", "effect.render", "progress"])).is_ok());
         assert!(validate(Kind::Effect, true, &list(&["doc.read", "effect.render", "progress"])).is_ok());
         assert!(validate(Kind::Exporter, false, &list(&["progress", "export.write", "doc.read"])).is_ok());
-        assert!([Kind::Filter, Kind::Effect, Kind::Exporter].iter().all(|k| !Permission::implied(*k).contains(&Permission::Progress)));
+        assert_eq!(validate(Kind::Importer, false, &list(&["progress", "import.read"])).unwrap(), [Permission::ImportRead, Permission::Progress]);
+        assert!(
+            [Kind::Filter, Kind::Effect, Kind::Exporter, Kind::Importer].iter().all(|k| !Permission::implied(*k).contains(&Permission::Progress))
+        );
         // So may `settings` and `cache`, which no kind implies either.
         assert_eq!(
             validate(Kind::Effect, false, &list(&["cache", "settings", "doc.read", "effect.render"])).unwrap(),
@@ -293,7 +304,7 @@ mod tests {
         );
         assert!(validate(Kind::Exporter, false, &list(&["settings", "export.write", "doc.read"])).is_ok());
         assert_eq!(validate(Kind::Filter, false, &list(&["cache"])).unwrap(), [Permission::Cache]);
-        for kind in [Kind::Filter, Kind::Effect, Kind::Exporter] {
+        for kind in [Kind::Filter, Kind::Effect, Kind::Exporter, Kind::Importer] {
             for commands in [false, true] {
                 assert!(HOST.iter().all(|p| p.applies(kind, commands) && !Permission::implied(kind).contains(p)));
             }
@@ -319,6 +330,10 @@ mod tests {
             (Kind::Exporter, false, &["export.write"], "needs the permission `doc.read`"),
             (Kind::Filter, false, &["cache", "cache"], "`cache` is listed twice"),
             (Kind::Filter, false, &["storage"], "unknown permission `storage`"),
+            (Kind::Importer, false, &["import.read", "doc.read"], "`doc.read` doesn't apply to a plug-in of kind `importer`"),
+            (Kind::Importer, true, &["import.read", "doc.write"], "`doc.write` doesn't apply to a plug-in of kind `importer`"),
+            (Kind::Importer, false, &[], "needs the permission `import.read`"),
+            (Kind::Exporter, false, &["export.write", "doc.read", "import.read"], "`import.read` doesn't apply to a plug-in of kind `exporter`"),
         ] {
             let e = validate(kind, commands, &list(names)).unwrap_err().to_string();
             assert!(e.contains(says), "{names:?}: {e}");

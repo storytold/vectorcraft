@@ -2038,6 +2038,7 @@ digits	Hindi	Hindi
 	Keywords:	Từ khóa:
 	Kind	Loại
 	Kinsoku Set	Bộ Kinsoku
+	Kinsoku Shori Type	Kiểu Kinsoku Shori
 	Knife	Dao
 	Knockout Group	Nhóm Knockout
 	Lab	Lab
@@ -2906,6 +2907,9 @@ mark-style	Japanese	Kiểu Nhật
 	Puppet Warp	Biến dạng con rối
 	Puppet Warp Pins	Ghim biến dạng con rối
 	Puppet Warp Tool	Công cụ Biến dạng con rối
+	Push In First	Đẩy vào trước
+	Push Out First	Đẩy ra trước
+	Push Out Only	Chỉ đẩy ra
 	Put back in the toolbar	Đặt trở lại vào thanh công cụ
 	Quality	Chất lượng
 	Quality {quality}	Chất lượng {quality}
@@ -6191,6 +6195,24 @@ breakText	Glyphs	Glyph
 # 3D Box add-on
 	3D Box	Hộp 3D
 	3D Box Tool	Công cụ Hộp 3D
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Mở bằng
+	No importer plug-ins installed	Không có plug-in nhập được cài đặt
+	Read files you open in its format and make documents from them	Đọc các tệp bạn mở theo định dạng của nó và tạo tài liệu từ chúng
+@msg	{_1} is an importer (File › Open With)	{_1} là plug-in nhập (Tệp › Mở bằng)
+@msg	missing `importer` (see document.formats)	thiếu `importer` (xem document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` phải là id định dạng của một plug-in (xem document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	“{shown}” mở tệp {_1}, không phải `{_2}`
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` là plug-in loại `{_2}`, không phải plug-in nhập
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` là plug-in loại `{_2}`, không phải plug-in xuất
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` là plug-in nhập: hãy mở tệp bằng document.open {{"importer"}"}}
+@msg	the importer returned no objects	plug-in nhập không trả về đối tượng nào
+@msg	an importer returns `objects` and `warnings`, not `{key}`	plug-in nhập trả về `objects` và `warnings`, không phải `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	tệp lớn hơn {MAX_INPUT_BYTES} byte mà plug-in nhập đọc
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	plug-in nhập khai báo từ 1 đến {MAX_EXTENSIONS} `extensions`
+@msg	only an exporter or an importer declares `extensions`	chỉ plug-in xuất hoặc nhập mới khai báo `extensions`
+@msg	an importer always gets an import's budget: leave `budget` out	plug-in nhập luôn nhận ngân sách của một lần nhập: hãy bỏ `budget`
 
 # Safe Mode
 	Safe Mode…	Chế độ an toàn…

@@ -1932,6 +1932,10 @@ digits	Malayalam	Malajálamské
 	Stylistic	Stylistický
 	Mojikumi Set	Sada Mojikumi
 	Kinsoku Set	Sada Kinsoku
+	Kinsoku Shori Type	Typ Kinsoku Shori
+	Push In First	Nejprve vtáhnout
+	Push Out First	Nejprve vysunout
+	Push Out Only	Pouze vysunout
 	Hard	Pevné
 	Right Indent	Odsazení zprava
 	Right-to-Left Paragraph Direction	Směr odstavce zprava doleva
@@ -6590,6 +6594,24 @@ breakText	Glyphs	Glyfy
 # 3D Box add-on
 	3D Box	3D kvádr
 	3D Box Tool	Nástroj 3D kvádr
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Otevřít pomocí
+	No importer plug-ins installed	Nejsou nainstalovány žádné importní zásuvné moduly
+	Read files you open in its format and make documents from them	Číst soubory, které otevřete v jeho formátu, a vytvářet z nich dokumenty
+@msg	{_1} is an importer (File › Open With)	{_1} je importní zásuvný modul (Soubor › Otevřít pomocí)
+@msg	missing `importer` (see document.formats)	chybí `importer` (viz document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` musí být ID formátu zásuvného modulu (viz document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	„{shown}“ otevírá soubory {_1}, ne `{_2}`
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` je zásuvný modul druhu `{_2}`, ne importní zásuvný modul
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` je zásuvný modul druhu `{_2}`, ne exportní zásuvný modul
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` je importní zásuvný modul: otevřete soubor pomocí document.open {{"importer"}"}}
+@msg	the importer returned no objects	importní zásuvný modul nevrátil žádné objekty
+@msg	an importer returns `objects` and `warnings`, not `{key}`	importní zásuvný modul vrací `objects` a `warnings`, ne `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	soubor je větší než {MAX_INPUT_BYTES} bajtů, které importní zásuvný modul čte
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	importní zásuvný modul deklaruje 1 až {MAX_EXTENSIONS} `extensions`
+@msg	only an exporter or an importer declares `extensions`	`extensions` deklaruje jen exportní nebo importní zásuvný modul
+@msg	an importer always gets an import's budget: leave `budget` out	importní zásuvný modul dostává vždy rozpočet importu: vynechte `budget`
 
 # Safe Mode
 	Safe Mode…	Nouzový režim…

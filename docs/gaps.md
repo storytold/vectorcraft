@@ -748,9 +748,14 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 ## G17 Ecosystem: third-party plug-ins
 
 - **Missing:** Illustrator's ecosystem is a C++ plug-in SDK and a large commercial plug-in market. VectorCraft
-  has sandboxed WebAssembly plug-ins for object filters, live effects and file formats it writes
-  ([plugins.md](plugins.md)) and MCP; missing are tool plug-ins, panel plug-ins, importers, a plug-in directory and
+  has sandboxed WebAssembly plug-ins for object filters, live effects and file formats it writes or reads
+  ([plugins.md](plugins.md)) and MCP; missing are tool plug-ins, panel plug-ins, a plug-in directory and
   any third-party plug-ins (#710).
+- **Done:** importer plug-ins (`"kind": "importer"`). A plug-in adds a read-only file format that File › Open lists
+  and File › Open With names; `document.open` uses it for a file no built-in format reads, or when `importer` names it.
+  It is given at most 128 MiB of the file and returns paths and compound paths, checked as a filter's output is, which
+  become a new document; nothing opens when it fails, declines or is cancelled. Engine, unit and headless Open With
+  regressions.
 - **Done:** exporter plug-ins (`"kind": "exporter"`). A plug-in adds a write-only file format that File › Export ›
   Export As lists after the built-in ones and `document.export` writes (`plugin.<id>`, or a path ending in one of its
   extensions). It is given the document as the native file's JSON and its parameters, with a larger budget than a

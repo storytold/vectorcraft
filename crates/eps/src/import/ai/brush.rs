@@ -28,7 +28,11 @@
 //!   [`vectorcraft_brush::ArtBrush`]'s `overlap: false`).
 //! - A Scatter, Art or Pattern brush's parameters are fields split by `/`: a number, the art's
 //!   section names (one for Scatter, five for Art and Pattern, empty where there is none, each
-//!   after a space for Art and Pattern), more fields, and last 15 numbers.
+//!   after a space for Art and Pattern), more fields, and last 15 numbers. Older files write
+//!   brushes with first number 1, one field fewer before the numbers and 8 numbers; an Art brush
+//!   with 8 numbers, whatever its first number, is read from its art's name alone (its numbers
+//!   aren't known, so it keeps the defaults and its paths their drawn look). A Pattern brush needs
+//!   only its first 3 numbers (its scale is the third).
 //!   - Scatter: the size (2, 3), spacing (5, 6) and scatter (8, 9) as (low, high) factors of the
 //!     art, the rotation in degrees (11, 12), how each varies (4, 7, 10, 13) and whether the
 //!     rotation follows the path (14), and 1 Tints (1).
@@ -312,11 +316,10 @@ pub(super) fn parse_tool_object(kind: Tool, name: &str, params: &str) -> Result<
                 })
                 .collect();
             let n = fields.last().and_then(|f| numbers(f)).ok_or(BrushError::Values)?;
-            let n: &[f64; 15] = n.as_slice().try_into().map_err(|_| BrushError::Values)?;
-            let [_, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, _] = n;
             let art = || tiles.first().cloned().flatten().ok_or(BrushError::NoArt);
             match kind {
                 Tool::Scatter => {
+                    let [_, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, _] = n.as_slice() else { return Err(BrushError::Values) };
                     let pct = |a: f64, b: f64| (a * 100.0, b * 100.0);
                     let values = [pct(*p2, *p3), pct(*p5, *p6), pct(*p8, *p9), (*p11, *p12)];
                     let codes = [*p4, *p7, *p10, *p13];
@@ -336,10 +339,20 @@ pub(super) fn parse_tool_object(kind: Tool, name: &str, params: &str) -> Result<
                     DraftKind::Scatter { brush, art: art()? }
                 }
                 Tool::Art => {
-                    let colorization = if *p2 == 1.0 { Colorization::Tints } else { Colorization::None };
-                    DraftKind::Art { brush: ArtBrush { colorization, ..ArtBrush::default() }, art: art()?, plain: art_is_plain(n) }
+                    // The older form's 8 numbers aren't known: its brush keeps the defaults and its
+                    // paths their drawn look. The count tells the form, not the first number.
+                    // Any other count isn't a form this reads.
+                    let (colorization, plain) = if let Ok(n15) = <&[f64; 15]>::try_from(n.as_slice()) {
+                        (if n15[1] == 1.0 { Colorization::Tints } else { Colorization::None }, art_is_plain(n15))
+                    } else if n.len() == 8 {
+                        (ArtBrush::default().colorization, false)
+                    } else {
+                        return Err(BrushError::Values);
+                    };
+                    DraftKind::Art { brush: ArtBrush { colorization, ..ArtBrush::default() }, art: art()?, plain }
                 }
                 _ => {
+                    let [_, _, p3, ..] = n.as_slice() else { return Err(BrushError::Values) };
                     let tiles: [Option<String>; 5] = tiles.try_into().map_err(|_| BrushError::Values)?;
                     DraftKind::Pattern { tiles, scale: p3 * 100.0 }
                 }

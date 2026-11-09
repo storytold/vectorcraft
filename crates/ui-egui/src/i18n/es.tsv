@@ -1996,6 +1996,10 @@ font-technology	Variable	Variables
 	Stylistic	Estilística
 	Mojikumi Set	Conjunto de mojikumi
 	Kinsoku Set	Conjunto de kinsoku
+	Kinsoku Shori Type	Tipo de kinsoku shori
+	Push In First	Primero hacia dentro
+	Push Out First	Primero hacia fuera
+	Push Out Only	Solo hacia fuera
 	Hard	Fuerte
 	Soft	Suave
 	Monitor RGB	RGB del monitor
@@ -6532,6 +6536,24 @@ breakText	Glyphs	Glifos
 # 3D Box add-on
 	3D Box	Caja 3D
 	3D Box Tool	Herramienta Caja 3D
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Abrir con
+	No importer plug-ins installed	No hay plugins de importación instalados
+	Read files you open in its format and make documents from them	Leer los archivos que abre en su formato y crear documentos a partir de ellos
+@msg	{_1} is an importer (File › Open With)	{_1} es un plugin de importación (Archivo › Abrir con)
+@msg	missing `importer` (see document.formats)	falta `importer` (consulte document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` debe ser el id de formato de un plugin (consulte document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	«{shown}» abre archivos {_1}, no `{_2}`
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` es un plugin de tipo `{_2}`, no un plugin de importación
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` es un plugin de tipo `{_2}`, no un plugin de exportación
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` es un plugin de importación: abra un archivo con document.open {{"importer"}"}}
+@msg	the importer returned no objects	el plugin de importación no devolvió ningún objeto
+@msg	an importer returns `objects` and `warnings`, not `{key}`	un plugin de importación devuelve `objects` y `warnings`, no `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	el archivo supera los {MAX_INPUT_BYTES} bytes que lee un plugin de importación
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	un plugin de importación declara de 1 a {MAX_EXTENSIONS} `extensions`
+@msg	only an exporter or an importer declares `extensions`	solo un plugin de exportación o de importación declara `extensions`
+@msg	an importer always gets an import's budget: leave `budget` out	un plugin de importación siempre recibe el presupuesto de una importación: omita `budget`
 
 # Safe Mode
 	Safe Mode…	Modo seguro…
