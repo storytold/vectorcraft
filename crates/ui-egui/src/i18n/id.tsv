@@ -6305,7 +6305,7 @@ breakText	Glyphs	Glif
 	Reset Symbol Instance	Atur ulang instans simbol
 @msg	type must be static or dynamic, not {v}	type harus static atau dynamic, bukan {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` adalah simbol statis: setel dulu jenis simbolnya ke Dinamis
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	Hanya warna solid isian dan goresan jalur, jalur majemuk, atau teks yang dipilih dalam instans simbol yang dapat diubah
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	Hanya isian, goresan, opacity, dan blend jalur, jalur majemuk, atau teks yang dipilih dalam instans simbol yang dapat diubah
 @msg	path must be a list of child indices	path harus berupa daftar indeks anak
 @msg	no object at path {shown} in the symbol's art	tidak ada objek di jalur {shown} dalam karya seni simbol
 @msg	give fill, stroke, opacity and/or blend	berikan fill, stroke, opacity dan/atau blend

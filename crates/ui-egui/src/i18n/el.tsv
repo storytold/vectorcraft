@@ -6461,7 +6461,7 @@ breakText	Glyphs	Γλύφοι
 	Reset Symbol Instance	Επαναφορά στιγμιότυπου συμβόλου
 @msg	type must be static or dynamic, not {v}	το type πρέπει να είναι static ή dynamic, όχι {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	το `{name}` είναι στατικό σύμβολο: ορίστε πρώτα τον τύπο συμβόλου σε Δυναμικό
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	Σε διαδρομή, σύνθετη διαδρομή ή κείμενο που έχει επιλεγεί σε στιγμιότυπο συμβόλου αλλάζει μόνο το συμπαγές χρώμα του γεμίσματος και της πινελιάς
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	Σε μια διαδρομή, σύνθετη διαδρομή ή κείμενο που έχει επιλεγεί σε στιγμιότυπο συμβόλου μπορούν να αλλάξουν μόνο το γέμισμα, η διαδρομή, η αδιαφάνεια και η ανάμειξη
 @msg	path must be a list of child indices	το path πρέπει να είναι λίστα δεικτών θυγατρικών αντικειμένων
 @msg	no object at path {shown} in the symbol's art	δεν υπάρχει αντικείμενο στη διαδρομή {shown} στο γραφικό του συμβόλου
 @msg	give fill, stroke, opacity and/or blend	δώστε fill, stroke, opacity ή/και blend
