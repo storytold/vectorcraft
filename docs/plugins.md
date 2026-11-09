@@ -269,10 +269,16 @@ the key as `(key, key_len)`, the UTF-8 bytes at `key` in its memory:
 A call that fails returns `-1` when the key has no value, `-2` when a key, value or buffer doesn't lie inside the
 module's memory, `-3` when the key is not a valid key, `-4` when the write would pass a cap (nothing changes), `-5`
 when there is nowhere to keep anything, `-6` when reading or writing the file failed, and `-7` when the run has used
-its 10,000 storage calls or its 1 GiB of storage reads and writes. Each call counts the bytes it reads and writes: a
-settings call the whole settings file it reads, and a set or delete also the whole file it writes; a cache call the
-entry it reads or writes. A read counts them even when the value doesn't fit and nothing is copied. A call that would
-pass the 1 GiB returns `-7` before it reads or writes anything.
+its 10,000 storage calls or its 1 GiB of storage reads and writes. Each call counts the bytes it reads and writes. A
+settings call counts the whole settings file when it reads the file, and a set or delete also counts the whole file
+when it writes the file; a cache call counts the entry it reads or writes. A read counts them even when the value
+doesn't fit and nothing is copied. A call that would pass the 1 GiB returns `-7` before it reads or writes anything.
+
+The app keeps the settings in memory after the first call and reads `settings.json` again only when the file's size
+or modified time differs from the last read or write. A get answered from memory reads no file and counts no bytes. A
+set to the value the key already has writes nothing. Every other set or delete writes the file before the call
+returns. A cache call reads or writes the whole entry in memory in one step, up to 64 MiB, and the run waits for it.
+A live effect runs while the art draws, so keep the entries it uses small.
 
 - A key is 1 to 64 characters from `A-Z`, `a-z`, `0-9`, `_` and `-`, and is not a Windows device name (`CON`, `PRN`,
   `AUX`, `NUL`, `COM0` to `COM9`, `LPT0` to `LPT9`, in any case). Keys differ in case: `tile` and `Tile` are two.
@@ -291,7 +297,9 @@ pass the 1 GiB returns `-7` before it reads or writes anything.
   (`plugin.install` with `replace: true`, after the user agreed) keeps the storage; `plugin.remove` deletes it, and a run of the plug-in still going gets `-5` from every storage call after that.
   `plugin.remove` first renames the folder (adding `.removed` to its name). When that fails, `plugin.remove` fails
   and the plug-in stays installed with its storage as it was. Files that can't be deleted after the rename stay in the
-  `.removed` folder, where no plug-in reaches them, and the next removal of a plug-in with that id deletes them.
+  `.removed` folder, where no plug-in reaches them. A later `plugin.remove` tries again to delete them when a plug-in
+  with that id is installed or a storage folder for the id exists, and that deletion can fail too. For an id that
+  isn't installed and has only a `.removed` folder, `plugin.remove` does not delete the folder and fails as not found.
   `plugin.remove` with the id of a plug-in that isn't installed deletes the storage kept for that id, when there is
   any.
   `plugin.clearCache` empties the cache and leaves the settings, and `plugin.list` and
