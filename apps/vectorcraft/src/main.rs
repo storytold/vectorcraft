@@ -533,7 +533,7 @@ fn main() -> std::process::ExitCode {
                 app.custom_titlebar = custom_titlebar;
                 app.desktop_frame = !custom_titlebar;
                 if let Some(port) = control_port {
-                    let rx = control_server::start(port, cc.egui_ctx.clone());
+                    let rx = control_server::start(port, cc.egui_ctx.clone(), app.session.changes.clone());
                     app = app.with_control(rx).with_automation_roots(roots.clone());
                     if let Some(roots) = &roots {
                         // Everywhere the app doesn't say whose work it is (worker threads), the

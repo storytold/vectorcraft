@@ -57,7 +57,7 @@ impl Default for ConnectionTimeouts {
     }
 }
 
-pub fn start(port: u16, ctx: egui::Context) -> Receiver<ControlRequest> {
+pub fn start(port: u16, ctx: egui::Context, changes: Arc<vectorcraft_engine::changes::DocumentChanges>) -> Receiver<ControlRequest> {
     let (tx, rx) = channel::<ControlRequest>();
     let listener = match TcpListener::bind(("127.0.0.1", port)) {
         Ok(l) => l,
@@ -69,7 +69,7 @@ pub fn start(port: u16, ctx: egui::Context) -> Receiver<ControlRequest> {
     eprintln!("vectorcraft: control server listening on 127.0.0.1:{port}");
     #[cfg(target_os = "macos")]
     keep_answering();
-    std::thread::spawn(move || accept_loop(listener, tx, ctx));
+    std::thread::spawn(move || accept_loop(listener, tx, ctx, changes));
     rx
 }
 
@@ -92,7 +92,7 @@ fn keep_answering() {
     std::mem::forget(activity);
 }
 
-fn accept_loop(listener: TcpListener, tx: Sender<ControlRequest>, ctx: egui::Context) {
+fn accept_loop(listener: TcpListener, tx: Sender<ControlRequest>, ctx: egui::Context, changes: Arc<vectorcraft_engine::changes::DocumentChanges>) {
     let open = Arc::new(AtomicUsize::new(0));
     for stream in listener.incoming().flatten() {
         let Some(slot) = acquire_slot(&open) else {
@@ -103,7 +103,7 @@ fn accept_loop(listener: TcpListener, tx: Sender<ControlRequest>, ctx: egui::Con
             }
             continue;
         };
-        if let Err(e) = spawn_connection(stream, tx.clone(), ctx.clone(), slot, ConnectionTimeouts::default()) {
+        if let Err(e) = spawn_connection(stream, tx.clone(), ctx.clone(), slot, ConnectionTimeouts::default(), changes.clone()) {
             eprintln!("vectorcraft: control worker failed to start: {e}");
         }
     }
@@ -137,10 +137,14 @@ fn spawn_connection(
     ctx: egui::Context,
     slot: ConnectionSlot,
     timeouts: ConnectionTimeouts,
+    changes: Arc<vectorcraft_engine::changes::DocumentChanges>,
 ) -> std::io::Result<std::thread::JoinHandle<()>> {
     std::thread::Builder::new().name("vectorcraft-control".into()).spawn(move || {
         let _slot = slot;
         serve_socket(stream, timeouts, |method, params| {
+            if method == "events.poll" {
+                return Some(changes.request(&params));
+            }
             let (req, rrx) = ControlRequest::new(method, params);
             let ticket = req.ticket();
             tx.send(req).ok()?;

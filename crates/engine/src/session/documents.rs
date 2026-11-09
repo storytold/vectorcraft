@@ -44,6 +44,7 @@ impl Session {
             fill_active: true,
             clipboard: Clipboard::default(),
             journal: Journal::default(),
+            changes: Arc::new(crate::changes::DocumentChanges::default()),
             tool: vectorcraft_tools::create("selection"),
             lender: None,
             tool_step: None,

@@ -19,6 +19,8 @@ bundled-fonts = ["vectorcraft-text/bundled-fonts"]
 heif = ["dep:heic-rs", "dep:rayon"]
 
 [dependencies]
+# Reuse the proposed shared bounded bus; native transport remains app-owned.
+craft-command = { git = "https://github.com/storytold/craft-libs", rev = "61db4a13ddd42a3727c8802168d90a0a2dafb9de" }
 # Which paths stored in documents may be opened.
 craft-docpath = { workspace = true }
 vectorcraft-geom = { workspace = true }

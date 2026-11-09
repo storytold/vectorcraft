@@ -169,7 +169,7 @@ fn timed_out_worker_returns_its_connection_slot() {
     let client = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
     let (stream, _) = listener.accept().unwrap();
     let (tx, _rx) = channel();
-    let worker = spawn_connection(stream, tx, egui::Context::default(), slot, short_timeouts()).unwrap();
+    let worker = spawn_connection(stream, tx, egui::Context::default(), slot, short_timeouts(), Default::default()).unwrap();
     let start = std::time::Instant::now();
     while open.load(Ordering::SeqCst) == MAX_CONNECTIONS && start.elapsed() < WAIT {
         std::thread::sleep(Duration::from_millis(10));
@@ -386,7 +386,7 @@ fn extra_connections_are_refused() {
     let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
     let addr = listener.local_addr().unwrap();
     let (tx, _rx) = channel::<ControlRequest>();
-    std::thread::spawn(move || accept_loop(listener, tx, egui::Context::default()));
+    std::thread::spawn(move || accept_loop(listener, tx, egui::Context::default(), Default::default()));
     // Idle connections are accepted in order and held open.
     let held: Vec<TcpStream> = (0..16).map(|_| TcpStream::connect(addr).unwrap()).collect();
     let mut extra = TcpStream::connect(addr).unwrap();

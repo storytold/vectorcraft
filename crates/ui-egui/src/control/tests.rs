@@ -12,6 +12,165 @@ fn input_request(app: &mut VectorcraftApp, method: &str, params: Value) -> Value
 }
 
 #[test]
+fn craftlink_conditional_properties_reject_stale_and_wrong_document() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x":0,"y":0,"width":10,"height":10})).unwrap()["id"].as_u64().unwrap();
+    let state = app.session.active().unwrap();
+    let (document, revision) = (state.uid, state.revision);
+    let params = json!({"command":"object.setProps","params":{"ids":[id],"name":"first"},"expected":{"document":document,"revision":revision}});
+    assert_eq!(input_request(&mut app, "engine.execute", params.clone())["ok"], true);
+    let doc = app.session.active().unwrap().doc.clone();
+    let current = app.session.active().unwrap().revision;
+    let cursor = app.session.changes.latest();
+    let history = app.session.active().unwrap().history.undo.len();
+    assert_eq!(input_request(&mut app, "engine.execute", params.clone())["ok"], false);
+    let mut wrong = params;
+    wrong["expected"] = json!({"document":document+1,"revision":current});
+    assert_eq!(input_request(&mut app, "engine.execute", wrong)["ok"], false);
+    assert_eq!(app.session.active().unwrap().doc, doc);
+    assert_eq!(app.session.active().unwrap().revision, current);
+    assert_eq!(app.session.active().unwrap().history.undo.len(), history);
+    assert_eq!(app.session.changes.latest(), cursor);
+}
+
+#[test]
+fn craftlink_malformed_guard_and_inactive_inspection_fail_closed() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let doc = app.session.active().unwrap().uid;
+    for expected in [json!(null), json!({}), json!({"document":doc,"revision":"bad"})] {
+        assert_eq!(input_request(&mut app, "engine.execute", json!({"command":"object.setProps","params":{},"expected":expected}))["ok"], false);
+    }
+    assert_eq!(input_request(&mut app, "engine.execute", json!({"command":"edit.undo","expected":{"document":doc,"revision":0}}))["ok"], false);
+    assert_eq!(input_request(&mut app, "document.inspect", json!({"document":doc+1}))["ok"], false);
+    let inspected = input_request(&mut app, "document.inspect", json!({"document":doc}));
+    assert_eq!(inspected["ok"], true);
+    assert_eq!(inspected["result"]["capabilities"]["conditionalExecute"], 1);
+}
+
+#[test]
+fn craftlink_pending_interaction_cannot_be_overwritten() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    app.run("file.new", json!({})).unwrap();
+    app.session.begin_interaction("Native preview").unwrap();
+    let state = app.session.active().unwrap();
+    let expected = json!({"document":state.uid,"revision":state.revision});
+    let before = state.doc.clone();
+    let result = input_request(&mut app, "engine.execute", json!({"command":"object.setProps","params":{},"expected":expected}));
+    assert_eq!(result["ok"], false);
+    assert!(app.session.active().unwrap().interaction.is_some());
+    assert_eq!(app.session.active().unwrap().doc, before);
+}
+
+#[test]
+fn craftlink_no_path_snapshot_returns_native_bytes_without_save_dialog() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let path = app.session.active().unwrap().path.clone();
+    let state = app.session.active().unwrap();
+    let expected = json!({"document":state.uid,"revision":state.revision});
+    let result = input_request(&mut app, "engine.execute", json!({"command":"file.saveCopy","params":{},"expected":expected}));
+    assert_eq!(result["ok"], true);
+    assert!(result["result"]["dataBase64"].as_str().is_some_and(|s| !s.is_empty()));
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(app.session.active().unwrap().path, path);
+    assert_eq!(app.session.active().unwrap().revision, expected["revision"].as_u64().unwrap());
+}
+
+#[test]
+fn craftlink_background_routing_preserves_foreground_and_native_history() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x":0,"y":0,"width":10,"height":10})).unwrap()["id"].as_u64().unwrap();
+    let uid = app.session.active().unwrap().uid;
+    let revision = app.session.active().unwrap().revision;
+    let old = app.session.active().unwrap().doc.clone();
+    app.run("file.new", json!({})).unwrap();
+    app.run("shape.rectangle", json!({"x":20,"y":20,"width":10,"height":10})).unwrap();
+    app.run("tool.select", json!({"tool":"type"})).unwrap();
+    let foreground = app.session.active().unwrap().uid;
+    let foreground_doc = app.session.active().unwrap().doc.clone();
+    let foreground_revision = app.session.active().unwrap().revision;
+    let paint = app.session.paint.clone();
+    let request = json!({"document":uid,"command":"object.setProps","params":{"ids":[id],"name":"Background","opacity":35},
+        "expected":{"document":uid,"revision":revision}});
+    let result = input_request(&mut app, "engine.execute", request.clone());
+    assert_eq!(result["ok"], true, "{result}");
+    assert_eq!(app.session.active().unwrap().uid, foreground);
+    assert_eq!(app.session.active().unwrap().revision, foreground_revision);
+    assert_eq!(app.session.active().unwrap().doc, foreground_doc);
+    assert_eq!(app.session.paint, paint);
+    assert_eq!(app.session.tool_id(), "type");
+    assert_eq!(input_request(&mut app, "engine.execute", request)["ok"], false);
+    let inspected = input_request(&mut app, "document.inspect", json!({"document":uid}));
+    assert_eq!(inspected["result"]["uid"], uid);
+    let snapshot = input_request(
+        &mut app,
+        "engine.execute",
+        json!({"document":uid,"command":"file.saveCopy","params":{},
+        "expected":{"document":uid,"revision":inspected["result"]["revision"]}}),
+    );
+    assert_eq!(snapshot["ok"], true, "{snapshot}");
+    assert!(snapshot["result"]["dataBase64"].as_str().is_some_and(|s| !s.is_empty()));
+    assert!(app.ui.dialog.is_none());
+    // Moving tabs changes indexes, never the addressed document or current tab.
+    app.session.move_document(0, 1);
+    assert_eq!(input_request(&mut app, "document.inspect", json!({"document":uid}))["result"]["uid"], uid);
+    assert_eq!(app.session.active().unwrap().uid, foreground);
+    app.session.set_active(1);
+    let updated = app.session.active().unwrap().doc.clone();
+    app.session.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(app.session.active().unwrap().doc, old);
+    app.session.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(app.session.active().unwrap().doc, updated);
+    app.session.execute("file.close", &json!({})).unwrap();
+    assert_eq!(input_request(&mut app, "document.inspect", json!({"document":uid}))["ok"], false);
+    assert_eq!(app.session.active().unwrap().uid, foreground);
+}
+
+#[test]
+fn craftlink_background_rejects_bad_targets_and_preserves_foreground_gesture() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x":0,"y":0,"width":10,"height":10})).unwrap()["id"].as_u64().unwrap();
+    let state = app.session.active().unwrap();
+    let (uid, revision, original) = (state.uid, state.revision, state.doc.clone());
+    app.run("file.new", json!({})).unwrap();
+    let foreground = app.session.active().unwrap().uid;
+    for params in
+        [json!({"name":"implicit"}), json!({"ids":[],"name":"empty"}), json!({"ids":[id],"locked":true}), json!({"ids":[99999999],"name":"missing"})]
+    {
+        let r = input_request(
+            &mut app,
+            "engine.execute",
+            json!({"document":uid,"command":"object.setProps","params":params,
+            "expected":{"document":uid,"revision":revision}}),
+        );
+        assert_eq!(r["ok"], false, "{r}");
+        assert_eq!(app.session.active().unwrap().uid, foreground);
+    }
+    assert_eq!(input_request(&mut app, "engine.execute", json!({"document":uid,"command":"file.close"}))["ok"], false);
+    assert_eq!(app.session.documents()[0].doc, original);
+    assert_eq!(app.session.documents()[0].revision, revision);
+    app.session.begin_interaction("Foreground drag").unwrap();
+    let foreground_doc = app.session.active().unwrap().doc.clone();
+    let foreground_revision = app.session.active().unwrap().revision;
+    let r = input_request(
+        &mut app,
+        "engine.execute",
+        json!({"document":uid,"command":"object.setProps","params":{"ids":[id],"opacity":5},
+        "expected":{"document":uid,"revision":revision}}),
+    );
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(app.session.active().unwrap().interaction.is_some());
+    assert_eq!(app.session.active().unwrap().uid, foreground);
+    assert_eq!(app.session.active().unwrap().doc, foreground_doc);
+    assert_eq!(app.session.active().unwrap().revision, foreground_revision);
+    assert_eq!(app.session.documents()[0].doc.node(vectorcraft_doc::NodeId(id)).unwrap().opacity, 0.05);
+}
+
+#[test]
 fn control_lists_and_selects_optional_addon_tools() {
     let mut app = VectorcraftApp::new(Session::new(), Services::default());
     let listed = input_request(&mut app, "ui.tool.list", json!({}));

@@ -968,6 +968,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "craft-command"
+version = "0.1.0"
+source = "git+https://github.com/storytold/craft-libs?rev=61db4a13ddd42a3727c8802168d90a0a2dafb9de#61db4a13ddd42a3727c8802168d90a0a2dafb9de"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "craft-docpath"
 version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb#9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb"
@@ -6462,6 +6471,7 @@ version = "0.21.0"
 dependencies = [
  "cfb",
  "chrono",
+ "craft-command",
  "craft-docpath",
  "crc32fast",
  "flate2",
