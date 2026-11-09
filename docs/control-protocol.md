@@ -246,6 +246,11 @@ Color Themes panel (`window.panel {panel: "colorThemes"}`): its Create tab makes
 My Themes tab lists the saved themes; every action runs a command (`colorTheme.save`, `colorTheme.delete`,
 `colorTheme.addToSwatches`, `swatch.newGroup` for the theme being made), and `colorTheme.list` reads the library.
 
+Color Wheel panel (`window.panel {panel: "colorWheel"}`): a hue ring around a saturation and brightness square. A
+pick runs the commands the Color panel's sliders run: `paint.setFill` or `paint.setStroke` with `keepModel`,
+`paint.editGradient` for a gradient's selected stop, and `paint.freeform.setPoint` for a freeform gradient's selected
+point (the first stop or point when none is selected).
+
 Edit Colors dialogs: `ui.colorBalanceDialog` opens Adjust Colors (`colorBalance`: fields `mode` `gray`/`rgb`/`cmyk`/
 `global`, the channels `r` `g` `b` / `c` `m` `y` `k` / `gray` / `tint` (global mode) from −100 to 100, `convert`, `fill`, `stroke`,
 `preview`) and `ui.saturateDialog` opens Saturate (`saturate`: `intensity` −100..100, `preview`). Both preview on the
@@ -338,7 +343,9 @@ when the app starts, off by default) turns off the desktop's frame and uses the 
 sessions where the desktop would draw the frame: X11 sessions, Wayland compositors that draw server-side decorations
 such as KDE Plasma, and a window opened through XWayland. System Title Bar and `VECTORCRAFT_TITLEBAR` (`app`, or
 `system` or `desktop`) take precedence over it. The checkbox is dimmed while either applies, and a note under it names
-each one that applies.
+each one that applies. `VECTORCRAFT_TITLEBAR` also takes precedence over System Title Bar for the run it is set in:
+`app` keeps the app bar as the title bar with System Title Bar on. While the variable is set, the Preferences dialog dims
+System Title Bar and its `__titlebarFromEnv` field is `true`.
 
 Fill/Stroke chips and panel shortcuts: the Control bar's and Properties' Fill and Stroke chips bring their proxy
 forward (`paint.toggleActive {fill}`) and open a popover with the Swatches panel (Shift-click: the Color panel's mixer);

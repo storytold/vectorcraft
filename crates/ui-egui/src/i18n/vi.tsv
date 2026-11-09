@@ -653,6 +653,11 @@ font-technology	Variable	Biến thiên
 	Color Table ({n} colors)	Bảng màu ({n} màu)
 	Color Theme	Bộ màu
 	Color Themes	Bộ màu
+	Color Wheel	Bánh xe màu
+	Hue ring	Vòng sắc độ
+	Saturation and brightness	Độ bão hòa và độ sáng
+	Color field	Vùng chọn màu
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Loại màu:
 	Color:	Màu:
 	Colorization	Tô màu
@@ -3927,6 +3932,8 @@ mark-style	Japanese	Kiểu Nhật
 	tile {number}	ô {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Các ô được đánh số từ ngang sang dọc; để trống phạm vi để in tất cả ô.
 	Tilt	Độ nghiêng
+	Copies per Sheet (as many as fit, in a grid)	Nhiều bản sao trên một tờ (xếp vừa bao nhiêu in bấy nhiêu, theo lưới)
+	Gutter:	Khoảng cách:
 	Tint	Tông màu
 	Tints	Sắc pha
 	Tints and Shades	Sắc pha và bóng

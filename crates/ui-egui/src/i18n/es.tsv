@@ -566,6 +566,11 @@ font-technology	Variable	Variables
 	Color Table ({n} colors)	Tabla de colores ({n} colores)
 	Color Theme	Tema de color
 	Color Themes	Temas de color
+	Color Wheel	Rueda de color
+	Hue ring	Anillo de tono
+	Saturation and brightness	Saturación y brillo
+	Color field	Campo de color
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Tipo de color:
 	Color:	Color:
 	Colorize	Colorear
@@ -3551,6 +3556,8 @@ digits	Malayalam	Malayálam
 	Tile Type:	Tipo de mosaico:
 	tile {number}	mosaico {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Los mosaicos se numeran de izquierda a derecha y luego hacia abajo; deja el rango vacío para todos.
+	Copies per Sheet (as many as fit, in a grid)	Copias por hoja (tantas como quepan, en cuadrícula)
+	Gutter:	Medianil:
 	Tint	Matiz
 	Tip extends past the end point	La punta se extiende más allá del punto final
 	Tip on the end point	Punta en el punto final

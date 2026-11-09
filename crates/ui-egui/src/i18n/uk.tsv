@@ -560,6 +560,11 @@ font-technology	Variable	Варіативні
 	Color Table ({n} colors)	Таблиця кольорів ({n} кольорів)
 	Color Theme	Колірна тема
 	Color Themes	Колірні теми
+	Color Wheel	Колірне коло
+	Hue ring	Кільце відтінків
+	Saturation and brightness	Насиченість і яскравість
+	Color field	Колірне поле
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Тип кольору:
 	Color:	Колір:
 	Colorize	Тонувати
@@ -3580,6 +3585,8 @@ effect	Points	Точки
 	Tile Type:	Тип плитки:
 	tile {number}	плитка {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Плитки нумеруються зліва направо, потім униз; Залишіть діапазон порожнім для всіх плиток.
+	Copies per Sheet (as many as fit, in a grid)	Копій на аркуш (скільки поміститься, сіткою)
+	Gutter:	Проміжок:
 	Tint	Відтінок
 	Tip extends past the end point	Кінчик виходить за кінцеву точку
 	Tip on the end point	Кінчик на кінцевій точці

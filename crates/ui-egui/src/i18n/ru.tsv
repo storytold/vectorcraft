@@ -564,6 +564,11 @@ font-technology	Variable	Вариативные
 	Color Table ({n} colors)	Цветовая таблица ({n} цветов)
 	Color Theme	Цветовая тема
 	Color Themes	Цветовые темы
+	Color Wheel	Цветовой круг
+	Hue ring	Кольцо оттенков
+	Saturation and brightness	Насыщенность и яркость
+	Color field	Цветовое поле
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Тип цвета:
 	Color:	Цвет:
 	Colorize	Тонировать
@@ -3582,6 +3587,7 @@ digits	Malayalam	Малаялам
 	Tile Type:	Тип плитки:
 	tile {number}	плитка {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Плитки нумеруются слева направо, затем вниз; оставьте диапазон пустым для всех плиток.
+	Copies per Sheet (as many as fit, in a grid)	Копий на лист (сколько поместится, сеткой)
 	Tint	Оттенок
 	Tip extends past the end point	Кончик выходит за конечную точку
 	Tip on the end point	Кончик на конечной точке

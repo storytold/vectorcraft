@@ -742,6 +742,11 @@ font-technology	Variable	Változó
 	Color Table ({n} colors)	Színtábla ({n} szín)
 	Color Theme	Színtéma
 	Color Themes	Színtémák
+	Color Wheel	Színkör
+	Hue ring	Színárnyalat-gyűrű
+	Saturation and brightness	Telítettség és fényesség
+	Color field	Színmező
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Színtípus:
 	Color:	Szín:
 	Colorization	Színezés
@@ -4225,6 +4230,7 @@ mark-style	Japanese	Japán
 	tile {number}	csempe {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	A csempék számozása vízszintesen, majd lefelé halad; az összes csempéhez hagyd üresen a tartományt.
 	Tilt	Dőlés
+	Copies per Sheet (as many as fit, in a grid)	Példány laponként (ahány elfér, rácsban)
 	Tint	Tónus
 	Tints	Tónusok
 	Tints and Shades	Tónusok és árnyalatok

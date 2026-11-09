@@ -567,6 +567,11 @@ font-technology	Variable	Variables
 	Color Table ({n} colors)	Table des couleurs ({n} couleurs)
 	Color Theme	Thème de couleurs
 	Color Themes	Thèmes de couleurs
+	Color Wheel	Roue chromatique
+	Hue ring	Anneau de teinte
+	Saturation and brightness	Saturation et luminosité
+	Color field	Champ de couleur
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Type de couleur :
 	Color:	Couleur :
 	Colorize	Coloriser
@@ -3542,6 +3547,7 @@ digits	Malayalam	Malayalam
 	Tile Range:	Plage de carreaux :
 	Tile Type:	Type de carreau :
 	tile {number}	carreau {number}
+	Copies per Sheet (as many as fit, in a grid)	Copies par feuille (autant qu’il en tient, en grille)
 	Tiles are numbered across, then down; leave the range empty for every tile.	Les carreaux sont numérotés de gauche à droite, puis de haut en bas ; laissez la plage vide pour tous les carreaux.
 	Tint	Teinte
 	Tip extends past the end point	La pointe dépasse le point d’extrémité
