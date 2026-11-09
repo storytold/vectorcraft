@@ -340,6 +340,14 @@ fn native(app: &VectorcraftApp, ctx: &egui::Context) -> bool {
     true
 }
 
+/// Gives the main window the keyboard when a floating document's OS window has it.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn focus_main_window(app: &VectorcraftApp, ctx: &egui::Context) {
+    if native(app, ctx) && app.ui.floating.iter().any(|w| w.focused) {
+        ctx.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Focus);
+    }
+}
+
 /// The OS window of document window `w`.
 fn viewport_id(w: &DocWindow) -> egui::ViewportId {
     egui::ViewportId::from_hash_of(("vectorcraft-document-window", w.uid, w.number))

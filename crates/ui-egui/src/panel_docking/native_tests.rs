@@ -642,6 +642,33 @@ fn a_modal_blocks_native_windows_and_takes_the_keyboard_from_them() {
     assert_eq!(h.app.session.tool_id(), "pen", "the window takes keys again once the modal closes");
 }
 
+/// The update prompt and the result window of a check block a floating panel's OS window as any
+/// modal does.
+#[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn the_update_dialogs_block_native_windows_and_take_the_keyboard_from_them() {
+    type Open = fn(&mut Harness);
+    let opens: [(&str, Open); 2] = [
+        ("the prompt", |h| crate::updates_ui::open_prompt_for_test(&mut h.app)),
+        ("the result window", |h| crate::updates_ui::open_result_window_for_test(&mut h.app, &h.ctx)),
+    ];
+    for (name, open) in opens {
+        let mut h = Harness::new();
+        let viewport = h.float("swatches");
+        open(&mut h);
+        h.frames(6);
+        let focus_commands = h.host.borrow().commands.iter().filter(|(id, c)| *id == ViewportId::ROOT && *c == ViewportCommand::Focus).count();
+        assert_eq!(focus_commands, 1, "{name}: the main window gets the keyboard");
+        h.key_in(viewport, Key::P);
+        assert_eq!(h.app.session.tool_id(), "selection", "{name}: a key typed in the blocked window does nothing");
+
+        crate::updates_ui::close_dialogs_for_test(&mut h.app);
+        h.frames(3);
+        h.key_in(viewport, Key::P);
+        assert_eq!(h.app.session.tool_id(), "pen", "{name}: the window takes keys again once the dialog closes");
+    }
+}
+
 /// The level and visibility a palette window takes under a dialog or a menu, and otherwise: a
 /// palette stays out of the way of anything drawn in the main window.
 #[test]

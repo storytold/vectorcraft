@@ -75,6 +75,21 @@ fn pen_app() -> VectorcraftApp {
     app
 }
 
+/// S let go while the update prompt is open leaves Scale chosen until the prompt closes.
+#[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn a_tool_key_let_go_behind_the_update_prompt_returns_after_it() {
+    let mut app = pen_app();
+    let keys = Keyboard::new();
+    keys.press_s(&mut app, 0.0);
+    crate::updates_ui::open_prompt_for_test(&mut app);
+    keys.release_s(&mut app, 1.0);
+    assert_eq!(app.session.tool_id(), "scale", "Scale stays behind the prompt");
+    crate::updates_ui::close_dialogs_for_test(&mut app);
+    keys.frame(&mut app, 1.1, vec![], None);
+    assert_eq!(app.session.tool_id(), "pen", "the Pen is back after the prompt");
+}
+
 /// S held from 0 s, its repeats at `repeats`, let go at `release`.
 fn hold_s(app: &mut VectorcraftApp, keys: &Keyboard, repeats: &[f64], release: f64) {
     keys.press_s(app, 0.0);
