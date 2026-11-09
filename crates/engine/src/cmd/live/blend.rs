@@ -488,6 +488,22 @@ fn reverse_spine(spec: &mut BlendSpec) {
     }
 }
 
+/// The path a Replace Spine selection gives: a path's own, else the first member path of a compound
+/// path. Only its first subpath becomes the spine ([`live::blend_spine`]), as for any path of
+/// several subpaths.
+fn replace_spine_path(n: &Node) -> Option<PathData> {
+    if let Some(path) = n.path_data() {
+        return Some(path.clone());
+    }
+    let mut first = None;
+    n.walk(&mut |c| {
+        if first.is_none() {
+            first = c.path_data().cloned();
+        }
+    });
+    first
+}
+
 pub(super) fn blend_replace_spine(s: &mut Session, _: &Value) -> Result<Value> {
     let blends = selected_of(s, is_blend);
     let st = s.doc()?;
@@ -498,13 +514,14 @@ pub(super) fn blend_replace_spine(s: &mut Session, _: &Value) -> Result<Value> {
         .copied()
         .find(|id| {
             !blends.contains(id)
-                && st.doc.node(*id).is_some_and(|n| n.path_data().is_some())
+                && st.doc.node(*id).is_some_and(|n| n.path_data().is_some() || matches!(n.kind, NodeKind::Compound { .. }))
                 && !blends.iter().any(|b| st.doc.ancestry(*id).unwrap_or_default().contains(b))
         })
         .ok_or_else(|| EngineError::Other("Replace Spine: select a blend and a path".into()))?;
     let Some(&b) = blends.first() else { return Err(EngineError::Other("Replace Spine: select a blend and a path".into())) };
     s.edit("Replace Spine", |d, sel| {
-        let spine = d.node(path).and_then(|n| n.path_data().cloned()).ok_or(EngineError::NoNode(path))?;
+        let spine =
+            d.node(path).and_then(replace_spine_path).ok_or_else(|| EngineError::Other("Replace Spine: the selected object has no path".into()))?;
         d.remove(path)?;
         if let Some(NodeKind::Blend { children, spec }) = d.node_mut(b).map(|n| &mut n.kind) {
             spec.spine = Some(spine);

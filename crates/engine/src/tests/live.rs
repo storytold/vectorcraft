@@ -424,6 +424,29 @@ fn blend_replace_spine_follows_path() {
     assert!(first.distance(Point::new(100.0, 300.0)) < 1.0, "{first:?}");
 }
 
+/// Replace Spine takes a compound path: its first member path is the spine (its first subpath, as
+/// for any path of several subpaths) and the compound path is consumed whole, not just that member.
+#[test]
+fn blend_replace_spine_uses_a_compound_paths_first_member() {
+    let mut s = session();
+    let (_, _, g) = blend(&mut s, json!({"steps": 5}));
+    let a = id_of(&s.execute("path.create", &json!({"d": "M100 300 C100 245 145 200 200 200"})).unwrap());
+    let b = id_of(&s.execute("path.create", &json!({"d": "M200 200 C255 200 300 245 300 300"})).unwrap());
+    sel(&mut s, &[a, b]);
+    let compound = id_of(&s.execute("object.compoundPath.make", &json!({})).unwrap());
+    let member = node(&s, compound).children().and_then(|c| c.first()).and_then(|p| p.path_data()).unwrap().subpaths[0].clone();
+    let (start, end) = (member.anchors.first().unwrap().p, member.anchors.last().unwrap().p);
+    sel(&mut s, &[g, compound]);
+    s.execute("object.blend.replaceSpine", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(compound).is_none(), "the compound path is consumed");
+    let st = steps_of(&s, g);
+    assert_eq!(st.len(), 7);
+    let first = st.first().unwrap().geometric_bounds().unwrap().center();
+    let last = st.last().unwrap().geometric_bounds().unwrap().center();
+    assert!(first.distance(start) < 1.0, "the keys start on the first member: {first:?} vs {start:?}");
+    assert!(last.distance(end) < 1.0, "and end on it, not on the other member: {last:?} vs {end:?}");
+}
+
 #[test]
 fn blend_align_to_path_rotates_steps() {
     let mut s = session();
