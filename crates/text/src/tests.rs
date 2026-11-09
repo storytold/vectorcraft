@@ -14,6 +14,7 @@ mod devanagari;
 mod embed;
 mod fit;
 mod hang;
+mod harakat;
 mod inline;
 mod joiners;
 mod justify;

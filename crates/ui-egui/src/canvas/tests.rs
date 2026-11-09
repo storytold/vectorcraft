@@ -10801,3 +10801,74 @@ fn a_ruler_double_click_follows_a_rotated_view() {
         }
     }
 }
+
+/// The real canvas decision must stay visible without a native host, with no painted glyph.
+#[cfg(target_os = "macos")]
+#[test]
+fn mac_cursor_canvas_without_host_keeps_visible_fallback() {
+    use crate::cursors::native_request;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let ctx = egui::Context::default();
+    let view = vectorcraft_engine::ViewInfo::default();
+    for (tool, expected) in [("selection", egui::CursorIcon::Default), ("type", egui::CursorIcon::Text), ("pen", egui::CursorIcon::Crosshair)] {
+        app.session.select_tool(tool, view).unwrap();
+        app.hover_doc = Some(Point::new(200.0, 150.0));
+        let output =
+            mac_cursor_headless(&ctx, egui::RawInput { events: vec![egui::Event::PointerMoved(pos2(200.0, 150.0))], ..Default::default() }, |ui| {
+                native_request::clear(ui.ctx());
+                canvas_cursor(&mut app, ui, view, true);
+            });
+        assert_eq!(output.platform_output.cursor_icon, expected, "{tool}: the fallback stays visible without a host");
+        assert!(output.platform_output.cursor_image.is_none());
+        assert!(output.shapes.iter().all(|s| matches!(s.shape, egui::Shape::Noop)), "no tool glyph is painted");
+        assert!(native_request::take(&ctx).is_some(), "{tool}: publish a native request");
+    }
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn mac_cursor_canvas_respects_precise_scaling_focus_and_presentation() {
+    use crate::cursors::native_request;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let view = vectorcraft_engine::ViewInfo::default();
+    app.session.select_tool("pen", view).unwrap();
+    app.hover_doc = Some(Point::new(200.0, 150.0));
+    let ctx = egui::Context::default();
+    ctx.set_zoom_factor(1.5);
+    let frame = |app: &mut VectorcraftApp, focused| {
+        let _ = mac_cursor_headless(
+            &ctx,
+            egui::RawInput { focused, events: vec![egui::Event::PointerMoved(pos2(200.0, 150.0))], ..Default::default() },
+            |ui| {
+                native_request::clear(ui.ctx());
+                canvas_cursor(app, ui, view, true);
+            },
+        );
+        native_request::take(&ctx)
+    };
+    let normal = frame(&mut app, true).unwrap();
+    app.run("prefs.set", json!({"key": "usePreciseCursors", "value": true})).unwrap();
+    let precise = frame(&mut app, true).unwrap();
+    assert_ne!(normal.key, precise.key);
+    let _ = mac_cursor_headless(&ctx, egui::RawInput { events: vec![egui::Event::PointerMoved(pos2(200.0, 150.0))], ..Default::default() }, |ui| {
+        native_request::request(ui.ctx(), Cursor::Crosshair, egui::CursorIcon::Crosshair, true, 1.0);
+    });
+    assert_eq!(native_request::take(&ctx).unwrap().key, precise.key);
+    app.run("prefs.set", json!({"key": "scaleCursorWithUi", "value": true})).unwrap();
+    let scaled = frame(&mut app, true).unwrap();
+    assert_ne!(scaled.key, precise.key);
+    assert!(scaled.bitmap.representations[0].size[0] > precise.bitmap.representations[0].size[0]);
+    assert!(frame(&mut app, false).is_none());
+    assert_eq!(frame(&mut app, true).unwrap().key, scaled.key);
+    app.ui.screen_mode = 3;
+    assert!(frame(&mut app, true).is_none());
+}
+
+#[cfg(target_os = "macos")]
+fn mac_cursor_headless(ctx: &egui::Context, input: egui::RawInput, draw: impl FnMut(&mut egui::Ui)) -> egui::FullOutput {
+    let mut output = ctx.run_ui(input, draw);
+    output.textures_delta.clear();
+    output
+}
