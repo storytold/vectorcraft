@@ -136,6 +136,7 @@ impl VectorcraftApp {
             system_paste_at: f64::NEG_INFINITY,
             clipboard_probe: None,
             picks: picks::Picks::default(),
+            original_editor: Default::default(),
             screen_sampler: None,
             font_check: None,
             #[cfg(not(target_arch = "wasm32"))]

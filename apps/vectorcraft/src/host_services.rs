@@ -378,6 +378,8 @@ pub(crate) fn services(parent: Parent, ui: egui::Context) -> Services {
         open_file: Some(Box::new(open_file)),
         // Edit Original of a raster image with Use System Defaults for Edit Original off (#5236).
         open_in_photocraft: Some(Box::new(open_in_photocraft)),
+        check_application: Some(Box::new(|p| check_app(std::path::Path::new(p)))),
+        open_in_application: Some(Box::new(open_in_application)),
         pick_folder: Some(Box::new(move || pick_now(PickRequest::Folder, &p4).into_iter().next())),
         // Sample Color from Screen: the system's color sampler.
         #[cfg(target_os = "macos")]
@@ -421,15 +423,32 @@ fn open_in_photocraft(path: &str) -> Result<bool, String> {
     explorer_safe(path)?;
     let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(std::path::PathBuf::from);
     let Some(app) = find_photocraft(home.as_deref(), std::env::var_os("PATH").as_deref()) else { return Ok(false) };
+    launch_application(&app, path)
+}
+
+/// A missing chosen editor falls back; invalid applications and failed launches remain errors.
+fn open_in_application(app: &str, path: &str) -> Result<bool, String> {
+    explorer_safe(path)?;
+    let app = std::path::Path::new(app);
+    match std::fs::metadata(app) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(e) => return Err(format!("cannot inspect {}: {e}", app.display())),
+        Ok(_) => {}
+    }
+    check_app(app)?;
+    launch_application(app, path)
+}
+
+fn launch_application(app: &std::path::Path, path: &str) -> Result<bool, String> {
     #[cfg(target_os = "macos")]
     let mut c = {
         let mut c = std::process::Command::new("open");
-        c.arg("-a").arg(&app).arg(path);
+        c.arg("-a").arg(app).arg(path);
         c
     };
     #[cfg(not(target_os = "macos"))]
     let mut c = {
-        let mut c = std::process::Command::new(&app);
+        let mut c = std::process::Command::new(app);
         c.arg(path);
         c
     };
@@ -600,6 +619,17 @@ mod open_with_tests {
     /// A fresh, empty folder under the system's temporary folder.
     fn scratch(name: &str) -> tempfile::TempDir {
         tempfile::Builder::new().prefix(&format!("vc-open-with-{name}-")).tempdir().unwrap()
+    }
+
+    #[test]
+    fn chosen_editor_only_falls_back_when_missing() {
+        let dir = scratch("chosen");
+        let missing = dir.path().join("Missing.exe");
+        assert!(!super::open_in_application(&missing.to_string_lossy(), "image with spaces.png").unwrap());
+        let doc = dir.path().join("notes.txt");
+        std::fs::write(&doc, "not an application").unwrap();
+        assert!(super::open_in_application(&doc.to_string_lossy(), "image.png").is_err());
+        assert!(super::open_in_application(&dir.path().to_string_lossy(), "image.png").is_err());
     }
 
     /// #5236: only an application counts as PhotoCraft, never a document, a folder or a missing

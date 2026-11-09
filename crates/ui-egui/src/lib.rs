@@ -53,6 +53,9 @@ pub mod layout_migration;
 pub mod menus;
 pub mod native_menu;
 pub mod opening;
+mod original_editor;
+#[doc(hidden)]
+pub use original_editor::Choice as OriginalEditorChoice;
 pub mod palette;
 mod panel_docking;
 pub mod panels;
@@ -235,6 +238,7 @@ pub struct VectorcraftApp {
     clipboard_probe: Option<clipboard_probe::Probe>,
     /// File dialogs shown off the UI thread and what runs again with their answers.
     pub(crate) picks: picks::Picks,
+    pub(crate) original_editor: original_editor::Draft,
     /// The screen color sampler shown and not answered yet, and where its color goes.
     pub(crate) screen_sampler: Option<screen_color::Waiting>,
     /// The look for fonts installed or removed meanwhile, running

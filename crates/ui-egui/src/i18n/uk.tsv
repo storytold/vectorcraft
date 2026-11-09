@@ -6260,3 +6260,7 @@ breakText	Glyphs	Гліфи
 	Align to Pixel Grid	Вирівняти за піксельною сіткою
 @msg	only paths and compound paths can be aligned to the pixel grid	за піксельною сіткою можна вирівняти лише контури і складені контури
 @msg	side is left or right, not `{s}`	side — це left або right, а не `{s}`
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Редагувати оригінал у:
+file-filter	Applications	Програми

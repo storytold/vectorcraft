@@ -6515,3 +6515,7 @@ breakText	Glyphs	Glify
 	Align to Pixel Grid	Wyrównaj do siatki pikseli
 @msg	only paths and compound paths can be aligned to the pixel grid	do siatki pikseli można wyrównać tylko ścieżki i ścieżki złożone
 @msg	side is left or right, not `{s}`	side to left lub right, a nie `{s}`
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Edytuj oryginał w:
+file-filter	Applications	Aplikacje

@@ -6602,3 +6602,7 @@ breakText	Glyphs	Glifos
 	Align to Pixel Grid	Alinear con cuadrícula de píxeles
 @msg	only paths and compound paths can be aligned to the pixel grid	solo los trazados y los trazados compuestos se pueden alinear con la cuadrícula de píxeles
 @msg	side is left or right, not `{s}`	side es left o right, no `{s}`
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Editar original con:
+file-filter	Applications	Aplicaciones

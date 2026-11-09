@@ -6441,3 +6441,7 @@ breakText	Glyphs	Glyffer
 # Align to Pixel Grid
 	Align to Pixel Grid	Juster efter pixelgitter
 @msg	side is left or right, not `{s}`	side er left eller right, ikke `{s}`
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Redigér original med:
+file-filter	Applications	Programmer

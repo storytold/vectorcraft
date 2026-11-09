@@ -223,11 +223,14 @@ pub(crate) fn open_in_app(app: &mut VectorcraftApp, path: &str) -> Result<(), St
 }
 
 /// Edit Original: open `path` in the system's default app for it, or with Preferences › File
-/// Handling › Use System Defaults for Edit Original off, in the app that made it (#5236): PhotoCraft
-/// for a raster image where it is installed. Any other file, or no PhotoCraft, uses the system's app.
+/// Handling › Use System Defaults for Edit Original off, in a native-picked raster editor (#5804),
+/// then PhotoCraft where installed (#5236). Other files, or no installed editor, use the system's app.
 pub(crate) fn open_original(app: &mut VectorcraftApp, path: &str) -> Result<(), String> {
     let ext = std::path::Path::new(path).extension().map(|e| e.to_string_lossy().into_owned()).unwrap_or_default();
     let raster = vectorcraft_engine::cmd::fileio::readable_format(&ext).is_some_and(|f| f.raster);
+    if !app.session.prefs.edit_original_system_defaults && raster && crate::original_editor::try_open(app, path)? {
+        return Ok(());
+    }
     if !app.session.prefs.edit_original_system_defaults
         && raster
         && let Some(open) = app.services.open_in_photocraft.as_mut()

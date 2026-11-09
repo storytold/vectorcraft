@@ -31,6 +31,9 @@ impl FilePick {
     }
 }
 
+pub type CheckApplicationFn = Box<dyn Fn(&str) -> Result<(), String>>;
+pub type OpenApplicationFn = Box<dyn FnMut(&str, &str) -> Result<bool, String>>;
+
 pub type PickOpen = Box<dyn FnMut(&FilePick) -> Option<String>>;
 
 pub type PickSave = Box<dyn FnMut(&FilePick) -> Option<String>>;
@@ -131,6 +134,10 @@ pub struct Services {
     /// with Preferences › File Handling › Use System Defaults for Edit Original off); `Ok(false)`
     /// when it isn't. Without it Edit Original uses `open_file`.
     pub open_in_photocraft: Option<OpenInFn>,
+    /// Validate a native-picked application before keeping it as the raster editor.
+    pub check_application: Option<CheckApplicationFn>,
+    /// Launch a native-picked application with one file argument; false only when absent.
+    pub open_in_application: Option<OpenApplicationFn>,
     /// Show a folder picker; returns its path (desktop: Relink to Folder, Package).
     pub pick_folder: Option<Box<dyn FnMut() -> Option<String>>>,
     /// Show the system's color sampler, which picks a color anywhere on the screen (macOS, and

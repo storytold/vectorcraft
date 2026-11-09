@@ -206,6 +206,20 @@ fn edit_original_opens_raster_images_in_photocraft_without_system_defaults() {
     assert_eq!(opened.borrow().len(), 4);
 }
 
+#[test]
+fn edit_original_with_chosen_editor_still_refuses_automation() {
+    let dir = Folder::new("chosen-automation");
+    let (mut app, linked, _) = app(&dir);
+    app.ui.original_editor = serde_json::from_value(json!({"path": "/Apps/Editor.exe"})).unwrap();
+    app.session.prefs.edit_original_system_defaults = false;
+    app.services.open_in_application = Some(Box::new(|_, _| panic!("automation must not launch an editor")));
+    app.ui.answering_control = true;
+    assert!(app.run("links.editOriginal", json!({"id": linked})).unwrap_err().contains("only the person"));
+    app.ui.answering_control = false;
+    app.synthetic_frame = true;
+    assert!(app.run("links.editOriginal", json!({"id": linked})).unwrap_err().contains("only the person"));
+}
+
 /// Edit Original hands only regular image and document files to the system's default app.
 #[test]
 fn edit_original_opens_image_and_document_files_only() {

@@ -24,6 +24,7 @@ pub const UI_FIELDS: &[(&str, &str, &str)] = &[
 const APP_TITLE_BAR_SHOWN: bool = cfg!(not(any(target_arch = "wasm32", target_os = "macos", target_os = "windows")));
 
 pub fn open(app: &mut VectorcraftApp, category: Option<&str>) {
+    crate::original_editor::open(app);
     // One field per preference key or group (the flattener presets have commands of their own).
     let mut fields: Map<String, Value> = app.session.prefs.to_json().as_object().cloned().unwrap_or_default();
     fields.retain(|k, _| vectorcraft_engine::cmd::prefscmds::spec(k).is_some() || PREF_GROUPS.contains(&k.as_str()));
@@ -206,6 +207,7 @@ pub fn confirm(app: &mut VectorcraftApp) -> Result<Value, String> {
     app.ui.view.smart_guides = d.fields.get("__smartGuides").and_then(Value::as_bool).unwrap_or(app.ui.view.smart_guides);
     app.ui.view.snap_to_grid = d.fields.get("__snapToGrid").and_then(Value::as_bool).unwrap_or(app.ui.view.snap_to_grid);
     app.ui.task_bar = d.fields.get("__taskBar").and_then(Value::as_bool).unwrap_or(app.ui.task_bar);
+    crate::original_editor::commit(app);
     app.ui.dialog = None;
     app.ui.engine_prefs = app.session.prefs.to_json();
     app.prefs_changed = true;
@@ -415,6 +417,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         });
     });
     if reset {
+        crate::original_editor::reset(app);
         for (k, v) in Prefs::default().to_json().as_object().cloned().unwrap_or_default() {
             d.fields.insert(k, v);
         }
@@ -427,6 +430,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
     app.ui.dialog = Some(d);
     if cancel {
+        crate::original_editor::cancel(app);
         app.ui.dialog = None;
     } else if ok && let Err(e) = confirm(app) {
         app.status(e);
@@ -512,6 +516,10 @@ fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, 
                     };
                     ui.label(egui::RichText::new(note).color(t.text_dim).size(11.0));
                 }
+            }
+            PrefKind::Bool if sp.key == "editOriginalSystemDefaults" => {
+                bool_row(ui, d, sp.key, sp.label);
+                crate::original_editor::show(ui, app, d);
             }
             PrefKind::Bool => bool_row(ui, d, sp.key, sp.label),
             PrefKind::Num { min, max, unit } => {

@@ -6694,3 +6694,7 @@ breakText	Glyphs	Merkit
 	Align to Pixel Grid	Tasaa pikseliruudukkoon
 @msg	only paths and compound paths can be aligned to the pixel grid	vain polut ja yhdistelmäpolut voi tasata pikseliruudukkoon
 @msg	side is left or right, not `{s}`	side on left tai right, ei `{s}`
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Muokkaa alkuperäistä sovelluksella:
+file-filter	Applications	Sovellukset

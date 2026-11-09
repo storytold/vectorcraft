@@ -6615,3 +6615,7 @@ breakText	Glyphs	Glifler
 	Align to Pixel Grid	Piksel Izgarasına Hizala
 @msg	only paths and compound paths can be aligned to the pixel grid	piksel ızgarasına yalnızca yollar ve bileşik yollar hizalanabilir
 @msg	side is left or right, not `{s}`	side left veya right olmalıdır, `{s}` değil
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Orijinali şununla düzenle:
+file-filter	Applications	Uygulamalar

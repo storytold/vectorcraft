@@ -6492,3 +6492,7 @@ breakText	Glyphs	Glyphs
 # Align to Pixel Grid
 	Align to Pixel Grid	Uitlijnen op pixelraster
 @msg	side is left or right, not `{s}`	side is left of right, niet `{s}`
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Origineel bewerken met:
+file-filter	Applications	Programma’s

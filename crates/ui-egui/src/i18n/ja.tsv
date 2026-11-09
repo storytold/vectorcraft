@@ -6345,3 +6345,7 @@ breakText	Glyphs	字形
 	Align to Pixel Grid	ピクセルグリッドに整合
 @msg	only paths and compound paths can be aligned to the pixel grid	ピクセルグリッドに整合できるのはパスと複合パスのみです
 @msg	side is left or right, not `{s}`	side は left または right です（`{s}` ではありません）
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	元のファイルを編集するアプリ:
+file-filter	Applications	アプリケーション
