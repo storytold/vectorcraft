@@ -74,7 +74,7 @@
 	CMYK Color	CMYK ფერი
 	RGB Color	RGB ფერი
 	File Info…	ფაილის ინფორმაცია…
-	Print…	დაბეჭდვა…
+	Print…	ბეჭდვა…
 	Edit	რედაქტირება
 	Undo	დაბრუნება
 	Redo	ხელახლა შესრულება
@@ -1259,7 +1259,7 @@ lighting	Light	სინათლე
 	Dashed	ტირეებიანი
 	Delete Selected Item	მონიშნული ელემენტის წაშლა
 	Double-click to edit the characters' paint	ორჯერ დაწკაპეთ სიმბოლოების შეღებვის რედაქტირებისთვის
-	Click to edit	დააწკაპეთ რედაქტირებისთვის
+	Click to edit	დაწკაპეთ დასარედაქტირებლად
 	Double-click to edit	ორჯერ დაწკაპეთ რედაქტირებისთვის
 	Double-click to target the contents	ორჯერ დაწკაპეთ შიგთავსის ასარჩევად
 	Drag onto art to apply this appearance	ჩაავლეთ ნახატზე ამ იერსახის გამოსაყენებლად
@@ -3010,7 +3010,7 @@ theme	Appearance	იერსახე
 	Reverse Order	რიგის შებრუნება
 	Show All Layers	ყველა შრის ჩვენება
 	Unlock All Layers	ყველა შრის განბლოკვა
-	English: USA	English: USA
+	English: USA	ინგლისური: აშშ
 	Move	გადატანა
 	Character Style	სიმბოლოს სტილი
 	Paragraph Style	აბზაცის სტილი
@@ -3427,7 +3427,7 @@ effect	Points	წერტილები
 	Discard Empty Type	ცარიელი ტექსტის მოცილება
 	Copyright	საავტორო უფლება
 	Other	სხვა
-	Print	დაბეჭდვა
+	Print	ბეჭდვა
 	Solid	მთლიანი
 	Difference	სხვაობა
 	Flatten Transparency	გამჭვირვალობის გაბრტყელება
@@ -3663,7 +3663,7 @@ font-technology	Variable	ცვლადი
 	Flip:	არეკვლა:
 	Spacing:	ინტერვალი:
 	Output	გამოტანა
-	Export…	ექსპორტი…
+	Export…	ექსპორტირება…
 	Import…	იმპორტი…
 	Load Profile…	პროფილის ჩატვირთვა…
 	Embedded	ჩაშენებული
@@ -4677,7 +4677,7 @@ font-technology	Variable	ცვლადი
 	Bicubic	ბიკუბური
 	Minimum	მინიმალური
 	Run Length	Run Length
-	Roman	Roman
+	Roman	რომაული
 	No conversion	გარდაქმნის გარეშე
 	Convert to destination	სამიზნეში გარდაქმნა
 	Convert to destination (preserve numbers)	სამიზნეში გარდაქმნა (რიცხვების შენარჩუნებით)
@@ -6152,7 +6152,7 @@ anchor	Points:	წერტილები:
 	Close Path:	ტრაექტორიის შეკვრა:
 	Keep Handles	სახელურების შენარჩუნება
 	Straight	სწორი
-	Stretch Curve	მრუდის გაჭიმვა
+	Stretch Curve	მრუდის გაწელვა
 @msg	direct-select the anchor points to remove	პირდაპირ მონიშნეთ მოსაცილებელი საყრდენი წერტილები
 @msg	select segments, or paths, to add points to	მონიშნეთ სეგმენტები ან ტრაექტორიები წერტილების დასამატებლად
 @msg	select open paths to close	მონიშნეთ შესაკრავი ღია ტრაექტორიები
@@ -6297,7 +6297,7 @@ anchor	Points:	წერტილები:
 	Join Point Text	წერტილის ტექსტის შეერთება
 	Remove Breaks	წყვეტების წაშლა
 	Split Text at Cursor	ტექსტის დაყოფა კურსორთან
-	Set Alignment, Keep Position	სწორების დაყენება მდებარეობის შენარჩუნებით
+	Set Alignment, Keep Position	სწორების დაყენება პოზიციის შენარჩუნებით
 	Reset Text Transform	ტექსტის გარდაქმნის ჩამოყრა
 	Replace Missing Fonts…	დაკარგული შრიფტების ჩანაცვლება…
 	Replace Missing Fonts	დაკარგული შრიფტების ჩანაცვლება
@@ -6308,7 +6308,7 @@ anchor	Points:	წერტილები:
 	Break Text into Words	ტექსტის დაყოფა სიტყვებად
 	Break Text into Glyphs	ტექსტის დაყოფა გლიფებად
 	Reset Text Transform and Scale	ტექსტის გარდაქმნისა და მასშტაბის ჩამოყრა
-	Set Alignment, Keep Position:	სწორების დაყენება მდებარეობის შენარჩუნებით:
+	Set Alignment, Keep Position:	სწორების დაყენება პოზიციის შენარჩუნებით:
 	Break Text into:	ტექსტის დაყოფა:
 	Split at Cursor	დაყოფა კურსორთან
 	Reset Transform	გარდაქმნის ჩამოყრა
@@ -6317,7 +6317,7 @@ anchor	Points:	წერტილები:
 breakText	Lines	სტრიქონები
 breakText	Words	სიტყვები
 breakText	Glyphs	გლიფები
-@msg	Click in type with a Type tool to split it	დასაყოფად დააწკაპუნეთ ტექსტში ტექსტის ხელსაწყოთი
+@msg	Click in type with a Type tool to split it	დასაყოფად დაწკაპეთ ტექსტში ტექსტის ხელსაწყოთი
 @msg	Too many type objects to change at once	ერთდროულად შესაცვლელად ძალიან ბევრი ტექსტური ობიექტია
 @msg	Too many pieces to make at once	ერთდროულად შესაქმნელად ძალიან ბევრი ნაწილია
 @msg	Select horizontal point or area type whose text fits	აირჩიეთ ჰორიზონტალური წერტილის ან არის ტექსტი, რომლის ტექსტიც ეტევა
@@ -6417,9 +6417,9 @@ breakText	Glyphs	გლიფები
 	Fit to Corners and Ends	კუთხეებსა და ბოლოებზე მორგება
 	Remove Gaps	ღრეჩოების მოცილება
 @msg	that makes too many pieces (at most 100000): make the dashes longer	ეს ძალიან ბევრ ნაწილს იძლევა (მაქსიმუმ 100000): გაზარდეთ ტირეების სიგრძე
-@msg	select paths, or segments, to divide	აირჩიეთ დასაყოფი კონტურები ან სეგმენტები
+@msg	select paths, or segments, to divide	აირჩიეთ დასაყოფი ტრაექტორიები ან სეგმენტები
 # Path Precision Tools add-on: Expand Dashes into Paths.
-	Expand Dashes into Paths	ტირეების კონტურებად გაშლა
+	Expand Dashes into Paths	ტირეების ტრაექტორიებად გაშლა
 @msg	select paths with dashed strokes to expand	აირჩიეთ გასაშლელი ტირეებიანი ხაზის კონტურები
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	დოკუმენტის ხელსაწყოები
@@ -6519,6 +6519,7 @@ font-script	Japanese	იაპონური
 	Japanese Double Postcard	იაპონური ორმაგი ღია ბარათი
 	Japanese Envelope #3	იაპონური კონვერტი #3
 	Japanese Envelope #4	იაპონური კონვერტი #4
+@msg	image '{key}' has no pixels and was left out	გამოსახულებას '{key}' პიქსელები არ აქვს და გამოტოვდა
 @msg	not an RTF file: it doesn't start with {\\rtf	RTF ფაილი არ არის: არ იწყება {\\rtf-ით
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	ტექსტის ხელსაწყოები
@@ -6530,6 +6531,54 @@ font-script	Japanese	იაპონური
 	Bow	რკალი
 	Spike	პიკი
 	Skip Spaces	ჰარების გამოტოვება
+
+# The strings the report listed as missing for ka.
+	1 Layer	შრე: 1
+	Art and Bright Colors	მხატვრული და კაშკაშა ფერები
+	Automate	ავტომატიზაცია
+	Color Table (4 colors)	ფერების ცხრილი (ფერი: 4)
+	Current Colors (0)	მიმდინარე ფერები (0)
+	Differences from VectorCraft Default:	განსხვავებები VectorCraft-ის ნაგულისხმევთან:
+	Differences from [Default]:	განსხვავებები [ნაგულისხმევი]-თან:
+	Dot Gain 15%	Dot Gain 15%
+	Expand 1 Selected	1 მონიშნული ობიექტის გაშლა
+	Graphic Styles (4)	გრაფიკული სტილები (4)
+	Gray Gamma 2.2	Gray Gamma 2.2
+	Part of ArtCraft. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono, Noto Sans SC (OFL). Icons: Lucide (ISC) + VectorCraft.	ArtCraft-ის ნაწილი. MIT OR Apache-2.0. შრიფტები: Source Sans 3, Inter, JetBrains Mono, Noto Sans SC (OFL). ხატულები: Lucide (ISC) + VectorCraft.
+	Phone 375×812	ტელეფონი 375×812
+	Photo Low Fidelity	დაბალი სიზუსტის ფოტო
+	Print & Proof	ბეჭდვა და კორექტურა
+	Printing & Proofing	ბეჭდვა და კორექტურა
+	RECENT (1)	ბოლოდროინდელი (1)
+	Reset Automation	Automation-ის ჩამოყრა
+	Reset Essentials Classic	Essentials Classic-ის ჩამოყრა
+	Reset Layout	Layout-ის ჩამოყრა
+	Reset Painting	Painting-ის ჩამოყრა
+	Reset Printing and Proofing	Printing and Proofing-ის ჩამოყრა
+	Reset Tracing	Tracing-ის ჩამოყრა
+	Reset Typography	Typography-ის ჩამოყრა
+	Reset Web	Web-ის ჩამოყრა
+	Restricted Colors	შეზღუდული ფერები
+	Right-click an item to move it into this group.	ამ ჯგუფში გადასატანად დაწკაპეთ ელემენტზე მარჯვენა ღილაკით.
+	Scale X	მასშტაბი X
+	Scale X:	მასშტაბი X:
+	Scale Y	მასშტაბი Y
+	Scale Y:	მასშტაბი Y:
+	Selected Styles Only (0)	მხოლოდ მონიშნული სტილები (0)
+	Selected Swatches Only (0)	მხოლოდ მონიშნული ფერის ნიმუშები (0)
+	Spot Colors (0)	სპოტ-ფერები (0)
+	Tablet 1024×768	პლანშეტი 1024×768
+	Video 1920×1080	ვიდეო 1920×1080
+	Video 3840×2160	ვიდეო 3840×2160
+	Web 1280×720	ვები 1280×720
+	[High Resolution]	[მაღალი გარჩევადობა]
+	[Low Resolution]	[დაბალი გარჩევადობა]
+	[Medium Resolution]	[საშუალო გარჩევადობა]
+	[PDF/X-1a:2001]	[PDF/X-1a:2001]
+	[PDF/X-3:2002]	[PDF/X-3:2002]
+	[PDF/X-4:2010]	[PDF/X-4:2010]
+	[VectorCraft Default]	[VectorCraft-ის ნაგულისხმევი]
+@msg	give corners of the path: anchors between two straight sides	მიუთითეთ ტრაექტორიის კუთხეები: საყრდენი წერტილები ორ სწორ გვერდს შორის
 	Release Type on a Path…	ტექსტის ტრაექტორიიდან მოხსნა…
 	Release Type on a Path	ტექსტის ტრაექტორიიდან მოხსნა
 	Text and Path	ტექსტი და ტრაექტორია
