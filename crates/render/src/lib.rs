@@ -1344,7 +1344,7 @@ impl Renderer {
             NodeKind::Image(im) => self.draw_image(ctx, f, im),
             NodeKind::SymbolInstance { symbol, xf } => {
                 if let Some(sym) = f.doc.symbols.iter().find(|s| &s.name == symbol) {
-                    let (art, kept) = self.placed_art(&sym.art, *xf, false, Some(n));
+                    let (art, kept) = self.placed_art(&sym.art, *xf, false, Some(n), Some((f.doc, symbol.as_str())));
                     let outer = std::mem::replace(&mut self.made_again, !kept);
                     self.draw_node(ctx, f, &art, true);
                     self.made_again = outer;
@@ -1725,7 +1725,8 @@ impl Renderer {
             let Some(art) = t.runs.get(ig.run).and_then(|r| r.inline.as_ref()) else { continue };
             let Some(sym) = f.doc.symbols.iter().find(|s| s.name == art.symbol) else { continue };
             // Strokes scale with the art (it is sized to the type, as in the SVG `<use>`).
-            let (node, kept) = self.placed_art(&sym.art, t.xf * ig.xf * f.doc.symbol_natural_xf(&art.symbol), true, None);
+            let (node, kept) =
+                self.placed_art(&sym.art, t.xf * ig.xf * f.doc.symbol_natural_xf(&art.symbol), true, None, Some((f.doc, art.symbol.as_str())));
             let outer = std::mem::replace(&mut self.made_again, !kept);
             self.draw_node(ctx, f, &node, true);
             self.made_again = outer;
@@ -1742,9 +1743,20 @@ impl Renderer {
     /// placed documents, live blends, envelopes or repeats, or raster effects
     /// ([`depends_on_document`]), and art that the cache has no room for. Art that holds type is
     /// placed again when the fonts change.
-    fn placed_art(&mut self, art: &Arc<Node>, xf: Affine, scale_strokes: bool, inst: Option<&Node>) -> (Arc<Node>, bool) {
+    fn placed_art(
+        &mut self,
+        art: &Arc<Node>,
+        xf: Affine,
+        scale_strokes: bool,
+        inst: Option<&Node>,
+        nine: Option<(&Document, &str)>,
+    ) -> (Arc<Node>, bool) {
+        // 9-slice placement depends on guides outside the art Arc: skip the frame cache.
+        if nine.is_some_and(|(d, name)| d.symbol_nine_slice(name).is_some()) {
+            return (place(art, xf, scale_strokes, inst, nine), false);
+        }
         if !matches!(art.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }) || fx::has_object_fx(art) {
-            return (place(art, xf, scale_strokes, inst), false);
+            return (place(art, xf, scale_strokes, inst, None), false);
         }
         let stain = stain_bits(inst.and_then(vectorcraft_brush::stain));
         let key = (Arc::as_ptr(art) as usize, xf.as_coeffs().map(f64::to_bits), scale_strokes, stain);
@@ -1754,10 +1766,10 @@ impl Renderer {
         {
             return match &e.placed {
                 Some(placed) => (placed.clone(), true),
-                None => (place(art, xf, scale_strokes, inst), false),
+                None => (place(art, xf, scale_strokes, inst, None), false),
             };
         }
-        let placed = place(art, xf, scale_strokes, inst);
+        let placed = place(art, xf, scale_strokes, inst, None);
         let kept = (!depends_on_document(art)).then(|| placed.clone());
         let keeps = kept.is_some();
         let fonts = (keeps && holds_type(art)).then(|| vectorcraft_text::FontDb::global().generation());
@@ -2149,13 +2161,23 @@ fn owns_stroke(n: &Node, st: &StrokeLayer) -> bool {
 }
 
 /// Symbol art `art` stained by instance `inst` ([`instance_art`]) and placed by `xf`, with
-/// strokes scaled by `xf` when `scale_strokes`.
-fn place(art: &Node, xf: Affine, scale_strokes: bool, inst: Option<&Node>) -> Arc<Node> {
+/// strokes scaled by `xf` when `scale_strokes`. With 9-slice on and axis-aligned scale+translate,
+/// [`Document::place_symbol_art`] keeps corner sizes.
+fn place(art: &Node, xf: Affine, scale_strokes: bool, inst: Option<&Node>, nine: Option<(&Document, &str)>) -> Arc<Node> {
     let mut placed = match inst {
         Some(i) => brush_fx::instance_art(art, i),
         None => art.clone(),
     };
-    placed.transform(xf, scale_strokes);
+    if let Some((doc, name)) = nine.filter(|(d, n)| d.symbol_nine_slice(n).is_some()) {
+        placed = doc.place_symbol_art(name, placed, xf);
+        if scale_strokes {
+            if let Some(k) = vectorcraft_doc::Scaling::factor(xf) {
+                placed.appearance.scale_strokes(k);
+            }
+        }
+    } else {
+        placed.transform(xf, scale_strokes);
+    }
     Arc::new(placed)
 }
 

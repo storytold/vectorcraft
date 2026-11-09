@@ -27,7 +27,7 @@ mod symbol_registration;
 pub use inline::{SYMBOL_HALF, SYMBOL_SIZES};
 pub use shared::Shared;
 pub use symbol_export_type::{SYMBOL_EXPORT_TYPE, SymbolExportType};
-pub use symbol_nine_slice::{SYMBOL_NINE_SLICE, SymbolNineSlice};
+pub use symbol_nine_slice::{NineSliceCells, SYMBOL_NINE_SLICE, SymbolNineSlice, axis_aligned_dst};
 pub use symbol_registration::{SYMBOL_REGISTRATION, SymbolRegistration};
 pub mod links;
 pub mod live;
@@ -1784,6 +1784,30 @@ impl Document {
         let g = self.symbol_nine_slice(from);
         self.set_symbol_nine_slice(from, None);
         self.set_symbol_nine_slice(to, g);
+    }
+
+    /// Symbol art `art` as an instance of `name` with transform `xf` draws it: with 9-slice guides
+    /// on and an axis-aligned scale+translate, corners keep their natural size; otherwise `xf` alone.
+    pub fn place_symbol_art(&self, name: &str, mut art: Node, xf: Affine) -> Node {
+        let Some(guides) = self.symbol_nine_slice(name) else {
+            art.transform(xf, false);
+            return art;
+        };
+        let natural = self.symbol_natural_xf(name);
+        art.transform(natural, false);
+        let Some(src) = art.geometric_bounds() else {
+            art.transform(natural.inverse(), false);
+            art.transform(xf, false);
+            return art;
+        };
+        let to_doc = xf * natural.inverse();
+        let Some(dst) = axis_aligned_dst(src, to_doc) else {
+            art.transform(natural.inverse(), false);
+            art.transform(xf, false);
+            return art;
+        };
+        guides.remap_node(src, dst, &mut art);
+        art
     }
 }
 

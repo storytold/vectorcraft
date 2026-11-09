@@ -782,3 +782,63 @@ fn symbol_nine_slice_guides_round_trip() {
     s.execute("symbol.delete", &json!({"name": "Box copy"})).unwrap();
     assert!(s.doc().unwrap().doc.unknown.get(vectorcraft_doc::SYMBOL_NINE_SLICE).is_none());
 }
+
+/// A scaled instance with 9-slice on keeps a corner badge's size; uniform scale would stretch it.
+#[test]
+fn scaled_instance_uses_nine_slice_when_guides_are_on() {
+    use vectorcraft_geom::Affine;
+    let mut s = session();
+    let panel = rect(&mut s, 0.0, 0.0, 90.0, 90.0);
+    let badge = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    select(&mut s, &[panel, badge]);
+    s.execute("object.group", &json!({})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Panel", "nineSlice": true})).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    let art = doc.symbols.iter().find(|sy| sy.name == "Panel").unwrap().art.as_ref().clone();
+    let xf = Affine::scale_non_uniform(180.0 / (2.0 * vectorcraft_doc::SYMBOL_HALF), 90.0 / (2.0 * vectorcraft_doc::SYMBOL_HALF));
+    let placed = doc.place_symbol_art("Panel", art, xf);
+    let badge_bounds = |n: &Node| -> Rect {
+        let mut best: Option<Rect> = None;
+        n.walk(&mut |c| {
+            if matches!(c.kind, NodeKind::Path { .. })
+                && let Some(b) = c.geometric_bounds()
+                && best.as_ref().is_none_or(|o| b.width() * b.height() < o.width() * o.height() && b.width() * b.height() > 1e-6)
+            {
+                best = Some(b);
+            }
+        });
+        best.expect("badge path")
+    };
+    let nine_b = badge_bounds(&placed);
+    assert!((nine_b.width() - 10.0).abs() < 0.75, "9-slice badge width should stay ~10, got {nine_b:?}");
+}
+
+/// Without 9-slice, the same scale stretches the corner badge with the instance.
+#[test]
+fn scaled_instance_without_nine_slice_uses_uniform_scale() {
+    use vectorcraft_geom::Affine;
+    let mut s = session();
+    let panel = rect(&mut s, 0.0, 0.0, 90.0, 90.0);
+    let badge = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    select(&mut s, &[panel, badge]);
+    s.execute("object.group", &json!({})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Panel"})).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    let art = doc.symbols.iter().find(|sy| sy.name == "Panel").unwrap().art.as_ref().clone();
+    let xf = Affine::scale_non_uniform(180.0 / (2.0 * vectorcraft_doc::SYMBOL_HALF), 90.0 / (2.0 * vectorcraft_doc::SYMBOL_HALF));
+    let placed = doc.place_symbol_art("Panel", art, xf);
+    let badge_bounds = |n: &Node| -> Rect {
+        let mut best: Option<Rect> = None;
+        n.walk(&mut |c| {
+            if matches!(c.kind, NodeKind::Path { .. })
+                && let Some(b) = c.geometric_bounds()
+                && best.as_ref().is_none_or(|o| b.width() * b.height() < o.width() * o.height() && b.width() * b.height() > 1e-6)
+            {
+                best = Some(b);
+            }
+        });
+        best.expect("badge path")
+    };
+    let b = badge_bounds(&placed);
+    assert!((b.width() - 20.0).abs() < 0.75, "uniform scale should double the 10pt badge, got {b:?}");
+}
