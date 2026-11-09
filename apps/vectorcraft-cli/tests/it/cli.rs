@@ -19,7 +19,7 @@ fn empty_dir(dir: std::path::PathBuf) -> std::path::PathBuf {
     dir
 }
 
-/// `run` refuses `plugin.install`'s `grant` unless the process was started with
+/// `run` and `mcp --headless` refuse `plugin.install`'s `grant` unless the process was started with
 /// `--allow-plugin-grants`, which `mcp` won't take with `--connect`.
 #[test]
 fn plugin_grants_need_the_start_up_flag() {
@@ -36,6 +36,39 @@ fn plugin_grants_need_the_start_up_flag() {
     assert!(shown.contains("--allow-plugin-grants"), "{shown}");
     let out = run(&["--allow-plugin-grants"]);
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+
+    let mcp_config = empty_dir(std::env::temp_dir().join(format!("vectorcraft-cli-test-mcp-grants-{}", std::process::id())));
+    let mcp_install = |extra: &[&str]| -> Value {
+        let mut child = Command::new(BIN)
+            .env("VECTORCRAFT_CONFIG_DIR", &mcp_config)
+            .args(["mcp", "--headless"])
+            .args(extra)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        {
+            let mut stdin = child.stdin.take().unwrap();
+            let params = json!({"dataBase64": module, "grant": ["doc.read"]});
+            for m in [
+                json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}),
+                json!({"jsonrpc":"2.0","method":"notifications/initialized"}),
+                json!({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"run_command","arguments":{"command":"plugin.install","params":params}}}),
+            ] {
+                writeln!(stdin, "{m}").unwrap();
+            }
+        }
+        let out = child.wait_with_output().unwrap();
+        assert!(out.status.success());
+        let replies: Vec<Value> = String::from_utf8(out.stdout).unwrap().lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+        replies.into_iter().find(|r| r["id"] == 2).unwrap()["result"].take()
+    };
+    let refused = mcp_install(&[]);
+    assert_eq!(refused["isError"], true, "without the flag: {refused}");
+    assert!(refused["content"][0]["text"].as_str().unwrap().contains("--allow-plugin-grants"), "{refused}");
+    let accepted = mcp_install(&["--allow-plugin-grants"]);
+    assert_eq!(accepted["isError"], false, "with the flag: {accepted}");
 
     let out = Command::new(BIN).args(["mcp", "--allow-plugin-grants", "--connect", "127.0.0.1:1"]).output().unwrap();
     assert!(!out.status.success());
