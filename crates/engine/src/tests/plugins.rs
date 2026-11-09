@@ -1542,6 +1542,67 @@ fn a_filter_does_only_what_its_permissions_allow() {
     assert_eq!(s.doc().unwrap().doc.plugin_data(stateless), Some(&json!({"pen": 1})));
 }
 
+/// A filter whose manifest lists `inputs` is also given the selected type, read-only: an echo
+/// changes nothing, and an output that leaves the type out or changes it is refused with the
+/// document and undo history as they were, handed in from a run made elsewhere too. A filter
+/// without `inputs` is not given the type and so never deletes it. Installing one that lists
+/// `inputs` needs the user's grant.
+#[test]
+fn read_only_kind_field_and_omission_refuse_without_undo() {
+    use cmd::plugin::FilterRun;
+    let mut s = session();
+    let r = rect(&mut s, 10.0, "#ff0000");
+    let t = NodeId(run(&mut s, "text.create", json!({"x": 10, "y": 80, "text": "Hi"}))["id"].as_u64().unwrap());
+    let reads =
+        |id: &str| format!(r#"{{"id":"{id}","name":"Test {id}","kind":"filter","api":2,"permissions":["doc.read","doc.write"],"inputs":["type"]}}"#);
+    // Each case installs another module under the same id, in place of the last (`replace: true`).
+    let install_wat = |s: &mut Session, src: &str| {
+        let data = vectorcraft_format::base64_encode(&wat::parse_str(src).unwrap());
+        run(s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read", "doc.write"], "replace": true}))
+    };
+    let echo = "test.engine.inputs.echo";
+    let module = tpl::module(&reads(echo), tpl::ECHO, "", 1);
+    let data = vectorcraft_format::base64_encode(&wat::parse_str(&module).unwrap());
+    let e = s.execute("plugin.install", &json!({"dataBase64": data})).unwrap_err().to_string();
+    assert!(e.contains("asks for the permissions doc.read, doc.write"), "{e}");
+    let listed = install_wat(&mut s, &module);
+    assert_eq!(listed["inputs"], json!(["type"]));
+    let p = |id: &str| json!({"id": id, "ids": [r.0, t.0]});
+    let before = s.doc().unwrap().doc.clone();
+    assert_eq!(run(&mut s, "plugin.run", p(echo))["ids"], json!([r.0, t.0]));
+    assert_eq!(s.doc().unwrap().doc.layers, before.layers, "an echo changes nothing");
+    for (output, says) in [
+        (json!({"objects": [{"id": r.0}]}), format!("objects (id {}): a read-only object was left out", t.0)),
+        (json!({"objects": [{"id": r.0}, {"id": t.0, "name": "Renamed"}]}), format!("objects[1] (id {}): read-only field 'name' changed", t.0)),
+        (json!({"objects": [{"id": r.0}, {"id": t.0}, {"type": "type", "path": triangle()}]}), "`type` must be \"path\" or \"compound\"".into()),
+    ] {
+        let id = "test.engine.inputs.bad";
+        install_wat(&mut s, &tpl::returning(&reads(id), &output.to_string()));
+        let (doc, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+        let e = s.execute("plugin.run", &p(id)).unwrap_err().to_string();
+        assert!(e.contains(&says), "{says}: {e}");
+        assert_eq!((&s.doc().unwrap().doc, s.doc().unwrap().history.undo.len()), (&doc, undo), "{output}");
+        // Handed in from a run made away from plugin.run, it is refused the same way.
+        let made = FilterRun::prepare(&s, &p(id)).unwrap();
+        let out = made.run().unwrap();
+        made.hand_in(&mut s, out);
+        let e = s.execute("plugin.run", &p(id)).unwrap_err().to_string();
+        assert!(e.contains(&says), "handed in: {e}");
+        assert_eq!((&s.doc().unwrap().doc, s.doc().unwrap().history.undo.len()), (&doc, undo), "handed in: {output}");
+    }
+    // Without `inputs` the type isn't given, so leaving it out keeps it.
+    let legacy = "test.engine.inputs.legacy";
+    install_wat(&mut s, &tpl::returning(&tpl::manifest(legacy, "filter", "{}"), &json!({"objects": [{"id": r.0, "name": "Kept"}]}).to_string()));
+    assert_eq!(run(&mut s, "plugin.run", p(legacy))["ids"], json!([r.0]));
+    assert_eq!(node(&s, r).name.as_deref(), Some("Kept"));
+    assert!(matches!(node(&s, t).kind, vectorcraft_doc::NodeKind::Text(_)), "the type stays");
+    // A manifest that lists `inputs` below `api` 2 doesn't install.
+    let old = format!(r#"{{"id":"{echo}","name":"Old","kind":"filter","inputs":["type"]}}"#);
+    let data = vectorcraft_format::base64_encode(&wat::parse_str(tpl::module(&old, tpl::ECHO, "", 1)).unwrap());
+    let e = s.execute("plugin.install", &json!({"dataBase64": data})).unwrap_err().to_string();
+    assert!(e.contains("`inputs` needs `api` 2"), "{e}");
+}
+
 /// What the user granted is kept in the plug-in store with the module: the next session installs
 /// the plug-in again without asking. A stored plug-in that lists permissions nobody granted it is
 /// skipped, even when another store granted it, and so is one in the Additional Plug-ins Folder
@@ -2390,9 +2451,14 @@ fn plugin_storage_writes_are_atomic(st: &dyn vectorcraft_plugins::storage::Stora
     std::fs::remove_file(&entry_copy).unwrap();
 }
 
+/// Gives the file at `path` the modified time `when`, whatever the file system's clock says.
+fn set_modified(path: &std::path::Path, when: std::time::SystemTime) {
+    std::fs::File::options().write(true).open(path).unwrap().set_modified(when).unwrap();
+}
+
 /// Each storage call is charged the bytes it reads and writes, before it does: a settings call the
-/// whole settings file it reads and the whole file it writes, a cache call the entry it reads or
-/// writes. A call that would pass what its meter has left fails and changes nothing.
+/// whole settings file when it reads the file and the whole file when it writes it, a cache call the
+/// entry it reads or writes. A call that would pass what its meter has left fails and changes nothing.
 fn plugin_storage_calls_are_charged_the_files_they_read_and_write() {
     use vectorcraft_plugins::storage::{Meter, StorageError};
     let folder = crate::tests_links::Folder::new("plugin-storage-meter");
@@ -2406,22 +2472,25 @@ fn plugin_storage_calls_are_charged_the_files_they_read_and_write() {
     st.set_setting("big", &[7; 60_000], &mut Meter::unlimited()).unwrap();
     st.set_setting("small", b"x", &mut Meter::unlimited()).unwrap();
 
-    // Reading a one-byte setting reads the whole file.
+    // A file another window changed is read whole, even for a one-byte setting.
+    let touch = || set_modified(&file, std::fs::metadata(&file).unwrap().modified().unwrap() + std::time::Duration::from_secs(1));
+    touch();
     let before = size();
     let mut m = Meter::unlimited();
     assert_eq!(st.setting("small", &mut m).unwrap(), Some(b"x".to_vec()));
     assert_eq!(m.used(), before);
-    // Setting it reads the file and writes it again, and so does deleting one.
+    // Setting it writes the file again, and so does deleting one.
     let mut m = Meter::unlimited();
     st.set_setting("small", b"yz", &mut m).unwrap();
-    assert_eq!(m.used(), before + size());
-    let (before, mut m) = (size(), Meter::unlimited());
+    assert_eq!(m.used(), size());
+    let mut m = Meter::unlimited();
     assert!(st.delete_setting("small", &mut m).unwrap());
-    assert_eq!(m.used(), before + size());
+    assert_eq!(m.used(), size());
     st.set_setting("small", b"y", &mut Meter::unlimited()).unwrap();
 
     // Less left than the file: nothing is read. Enough to read it but not to write it again:
     // nothing changes.
+    touch();
     let mut m = Meter::new(size() - 1);
     assert_eq!(st.setting("small", &mut m), Err(StorageError::Budget));
     assert_eq!(m.used(), 0);
@@ -2438,6 +2507,122 @@ fn plugin_storage_calls_are_charged_the_files_they_read_and_write() {
     assert_eq!(st.cache_entry("tile", &mut Meter::new(999)), Err(StorageError::Budget));
     assert_eq!(st.set_cache_entry("tile", &[2; 10], &mut Meter::new(9)), Err(StorageError::Budget));
     assert_eq!(st.cache_entry("tile", &mut Meter::unlimited()).unwrap().map(|v| v.len()), Some(1000));
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// A session with the plug-in `id` installed in a new store → its storage and the path of its
+/// settings file.
+fn storage_in(
+    s: &mut Session,
+    folder: &crate::tests_links::Folder,
+    id: &str,
+) -> (std::sync::Arc<dyn vectorcraft_plugins::storage::Storage>, std::path::PathBuf) {
+    s.attach_plugin_store(folder.0.clone());
+    install_storing(s, id, "");
+    (vectorcraft_plugins::registry::storage(id).unwrap(), crate::store::plugin_data_dir(&folder.0, id).join("settings.json"))
+}
+
+/// The settings stay in memory while the file keeps its size and modified time: a read doesn't open
+/// the file, a set to the value already there doesn't write it, a real change is in the file when
+/// the call returns, and a file with another time is read again.
+#[test]
+fn plugin_settings_are_read_from_memory_until_the_file_changes() {
+    use vectorcraft_plugins::storage::{Meter, StorageError};
+    let folder = crate::tests_links::Folder::new("plugin-storage-kept");
+    let id = "test.engine.storagekept";
+    let mut s = session();
+    let (st, file) = storage_in(&mut s, &folder, id);
+    st.set_setting("zoom", b"hello", &mut Meter::unlimited()).unwrap();
+    let written = std::fs::metadata(&file).unwrap().modified().unwrap();
+
+    // Other bytes of the same size and the same time: the storage can't tell, so what it answers
+    // shows that it did not read the file.
+    let other =
+        std::fs::read_to_string(&file).unwrap().replace(&vectorcraft_format::base64_encode(b"hello"), &vectorcraft_format::base64_encode(b"world"));
+    std::fs::write(&file, &other).unwrap();
+    set_modified(&file, written);
+    let mut m = Meter::unlimited();
+    assert_eq!(st.setting("zoom", &mut m).unwrap(), Some(b"hello".to_vec()));
+    assert_eq!(m.used(), 0, "answered from memory");
+
+    // Setting the value it has writes nothing: the file still holds the other bytes.
+    let mut m = Meter::unlimited();
+    st.set_setting("zoom", b"hello", &mut m).unwrap();
+    assert_eq!(m.used(), 0, "nothing to write");
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), other);
+
+    // Another time: read again.
+    set_modified(&file, written + std::time::Duration::from_secs(1));
+    let mut m = Meter::unlimited();
+    assert_eq!(st.setting("zoom", &mut m).unwrap(), Some(b"world".to_vec()));
+    assert_eq!(m.used(), other.len() as u64);
+
+    // A change reaches the file before the call returns, and a failed one is not kept.
+    st.set_setting("tile", b"x", &mut Meter::unlimited()).unwrap();
+    assert!(std::fs::read_to_string(&file).unwrap().contains("\"tile\""));
+    assert_eq!(st.set_setting("tile", b"y", &mut Meter::new(0)), Err(StorageError::Budget));
+    assert_eq!(st.setting("tile", &mut Meter::unlimited()).unwrap(), Some(b"x".to_vec()));
+    assert!(st.delete_setting("tile", &mut Meter::unlimited()).unwrap());
+    assert!(!std::fs::read_to_string(&file).unwrap().contains("\"tile\""));
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// `plugin.remove` drops what was kept: a file put back with the removed settings' size and time is
+/// read from disk by the storage of the id installed again.
+#[test]
+fn removing_a_plugin_drops_its_settings_from_memory() {
+    use vectorcraft_plugins::storage::Meter;
+    let folder = crate::tests_links::Folder::new("plugin-storage-kept-removed");
+    let id = "test.engine.storagekeptremoved";
+    let mut s = session();
+    let (st, file) = storage_in(&mut s, &folder, id);
+    st.set_setting("zoom", b"hello", &mut Meter::unlimited()).unwrap();
+    let (bytes, written) = (std::fs::read(&file).unwrap(), std::fs::metadata(&file).unwrap().modified().unwrap());
+    run(&mut s, "plugin.remove", json!({"id": id}));
+
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(&file, &bytes).unwrap();
+    set_modified(&file, written);
+    s.attach_plugin_storage(id);
+    let st = vectorcraft_plugins::registry::storage(id).unwrap();
+    let mut m = Meter::unlimited();
+    assert_eq!(st.setting("zoom", &mut m).unwrap(), Some(b"hello".to_vec()));
+    assert_eq!(m.used(), bytes.len() as u64, "read from the file");
+    s.remove_plugin_storage(id).unwrap();
+}
+
+/// The cache's total stays in memory while the cache folder keeps its time; a write and a clear
+/// update it, and removing an entry drops it. A file whose length changes behind the storage leaves
+/// the folder's time alone, so the total it reports shows that it did not list the folder.
+#[test]
+fn plugin_cache_total_is_kept_and_follows_writes_removals_and_clears() {
+    use vectorcraft_plugins::storage::Meter;
+    let folder = crate::tests_links::Folder::new("plugin-storage-kept-cache");
+    let id = "test.engine.storagekeptcache";
+    let mut s = session();
+    let (st, file) = storage_in(&mut s, &folder, id);
+    let cache = file.parent().unwrap().join("cache");
+    let m = &mut Meter::unlimited();
+    let grow = |name: &str, len: u64| std::fs::File::options().write(true).open(cache.join(name)).unwrap().set_len(len).unwrap();
+
+    st.set_cache_entry("tile", b"abc", m).unwrap();
+    grow("tile.bin", 10);
+    assert_eq!(st.cache_bytes(), 3, "the write set the total");
+    // A write lists the folder for its caps, and starts from what it finds.
+    st.set_cache_entry("more", b"12345", m).unwrap();
+    grow("more.bin", 5);
+    assert_eq!(st.cache_bytes(), 15);
+    assert!(st.remove_cache_entry("more").unwrap());
+    assert_eq!(st.cache_bytes(), 10, "after a removal the total comes from the folder");
+    grow("tile.bin", 20);
+    assert_eq!(st.cache_bytes(), 10, "and is kept again");
+    assert_eq!(st.clear_cache().unwrap(), 20);
+    assert_eq!(st.cache_bytes(), 0);
+
+    // A folder deleted behind the storage is noticed.
+    st.set_cache_entry("tile", b"abc", m).unwrap();
+    std::fs::remove_dir_all(&cache).unwrap();
+    assert_eq!(st.cache_bytes(), 0);
     run(&mut s, "plugin.remove", json!({"id": id}));
 }
 

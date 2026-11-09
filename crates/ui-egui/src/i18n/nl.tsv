@@ -668,6 +668,11 @@
 	Color	Kleur
 	Color Guide	Kleurhulp
 	Color Themes	Kleurthema's
+	Color Wheel	Kleurenwiel
+	Hue ring	Tintring
+	Saturation and brightness	Verzadiging en helderheid
+	Color field	Kleurveld
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	CSS Properties	CSS-eigenschappen
 	Document Info	Documentinfo
 	Flattener Preview	Afvlakvoorbeeld
@@ -2516,6 +2521,7 @@ digits	Malayalam	Malayalam
 	Tile Range:	Tegelbereik:
 	tile {number}	tegel {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Tegels worden van links naar rechts en vervolgens van boven naar beneden genummerd; laat het bereik leeg voor alle tegels.
+	Copies per Sheet (as many as fit, in a grid)	Kopieën per vel (zoveel als er passen, in een raster)
 	Transverse (the page a quarter turn on the paper)	Dwars (de pagina een kwartslag op het papier)
 	Unprintable margin:	Niet afdrukbare marge:
 	{pages} in all, {count} per copy	{pages} in totaal, {count} per exemplaar

@@ -511,6 +511,11 @@ antiAlias	Sharp	Nítido
 	Color Swatches	Amostras de Cor
 	Color Table	Tabela de Cores
 	Color Themes	Temas de Cores
+	Color Wheel	Roda de Cores
+	Hue ring	Anel de Tom
+	Saturation and brightness	Saturação e Brilho
+	Color field	Campo de Cor
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Tipo de Cor:
 	Color blindness – Deuteranopia-type	Daltonismo – tipo deuteranopia
 	Color blindness – Protanopia-type	Daltonismo – tipo protanopia
@@ -2916,6 +2921,7 @@ digits	Malayalam	Malaiala
 	Tile Range:	Intervalo de Blocos:
 	Tile Type:	Tipo de Bloco:
 	Tiles are numbered across, then down; leave the range empty for every tile.	Os blocos são numerados horizontalmente, depois para baixo; deixe o intervalo vazio para cada bloco.
+	Copies per Sheet (as many as fit, in a grid)	Cópias por Folha (quantas couberem, em grade)
 	Title Case	Tipo de Título
 	Toggle Fill/Stroke Focus	Alternar Foco de Preenchimento/Traçado
 	Toggle Selection	Alternar Seleção
@@ -5856,6 +5862,13 @@ axis	Y Axis	Eixo Y
 @msg	at most {MAX_PERMISSIONS} `permissions`	no máximo {MAX_PERMISSIONS} `permissions`
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	a permissão `{shown}` não se aplica a um plug-in do tipo `{_1}`
 @msg	permission `{shown}` is listed twice	a permissão `{shown}` aparece duas vezes
+@msg	only a filter declares `inputs`	somente um filtro declara `inputs`
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` cita um tipo de objeto desconhecido `{shown}`: use type, image ou symbolInstance
+@msg	`inputs` lists `{shown}` twice	`inputs` lista `{shown}` duas vezes
+@msg	`inputs` needs `api` 2 or later	`inputs` exige `api` 2 ou posterior
+@msg	`inputs` needs the permission `doc.read`	`inputs` exige a permissão `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	orçamento de memória (o objeto {_1} precisa de {size} bytes de entrada, restam {left})
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	orçamento de objetos (mais de {MAX_OBJECTS} objetos somente leitura)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	a permissão `{shown}` está reservada para uma API de plug-in futura; este host não a concede
 @msg	unknown permission `{shown}`	permissão desconhecida `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}” pede as permissões {asked}: instale-o com `grant` listando-as depois que o usuário concordar

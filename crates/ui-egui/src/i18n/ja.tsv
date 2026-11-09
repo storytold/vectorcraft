@@ -714,6 +714,11 @@ digits	Malayalam	マラヤーラム数字
 	Color	カラー
 	Color Guide	カラーガイド
 	Color Themes	カラーテーマ
+	Color Wheel	カラーホイール
+	Hue ring	色相リング
+	Saturation and brightness	彩度と明るさ
+	Color field	カラーフィールド
+	{name1} {value1}, {name2} {value2}	{name1} {value1}、{name2} {value2}
 	CSS Properties	CSS プロパティ
 	Document Info	ドキュメント情報
 	Flattener Preview	分割・統合プレビュー
@@ -3279,6 +3284,8 @@ mark-style	Japanese	日本式
 	Tile Range:	分割範囲:
 	Tile Type:	タイルの種類:
 	Tiles are numbered across, then down; leave the range empty for every tile.	タイルは左から右、上から下の順に番号が付きます。範囲を空にするとすべてのタイルが対象です。
+	Copies per Sheet (as many as fit, in a grid)	用紙ごとに複数コピー (収まるだけグリッド状に配置)
+	Gutter:	間隔:
 	Toggle Fill/Stroke Focus	塗り／線の切り替え
 	Toggle Selection	選択を切り替え
 	Toggle single/double column	1 列／2 列を切り替え
@@ -5622,6 +5629,13 @@ axis	Y Axis	Y 軸
 @msg	at most {MAX_PERMISSIONS} `permissions`	`permissions` は最大 {MAX_PERMISSIONS} 個です
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	権限 `{shown}` は種類 `{_1}` のプラグインには適用されません
 @msg	permission `{shown}` is listed twice	権限 `{shown}` が 2 回指定されています
+@msg	only a filter declares `inputs`	`inputs` を宣言できるのはフィルターだけです
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` に不明なオブジェクトの種類 `{shown}` があります。type、image、symbolInstance のいずれかを使ってください
+@msg	`inputs` lists `{shown}` twice	`inputs` に `{shown}` が 2 回指定されています
+@msg	`inputs` needs `api` 2 or later	`inputs` には `api` 2 以上が必要です
+@msg	`inputs` needs the permission `doc.read`	`inputs` には権限 `doc.read` が必要です
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	メモリ予算 (オブジェクト {_1} には {size} バイトの入力が必要ですが、残りは {left} です)
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	オブジェクト予算 ({MAX_OBJECTS} 個を超える読み取り専用オブジェクト)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	権限 `{shown}` は今後のプラグイン API 用に予約されています。このホストはこの権限を付与しません
 @msg	unknown permission `{shown}`	不明な権限 `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	「{name}」は権限 {asked} を求めています。ユーザーが同意したら、それらを列挙した `grant` を指定してインストールしてください

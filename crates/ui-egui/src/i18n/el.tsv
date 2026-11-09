@@ -526,6 +526,11 @@ font-technology	Variable	Μεταβλητές
 	Color Table ({n} colors)	Πίνακας χρωμάτων ({n} χρώματα)
 	Color Theme	Χρωματικό θέμα
 	Color Themes	Χρωματικά θέματα
+	Color Wheel	Χρωματικός τροχός
+	Hue ring	Δακτύλιος απόχρωσης
+	Saturation and brightness	Κορεσμός και φωτεινότητα
+	Color field	Πεδίο χρώματος
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Τύπος χρώματος:
 	Color:	Χρώμα:
 	Colorize	Χρωματισμός
@@ -3887,6 +3892,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Tile Type:	Τύπος πλακιδίου:
 	tile {number}	πλακίδιο {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Τα πλακίδια αριθμούνται πρώτα οριζόντια και έπειτα κατακόρυφα· αφήστε κενό το εύρος για όλα τα πλακίδια.
+	Copies per Sheet (as many as fit, in a grid)	Αντίγραφα ανά φύλλο (όσα χωρούν, σε πλέγμα)
 	Tip extends past the end point	Η αιχμή προεξέχει από το τελικό σημείο
 	Tip on the end point	Η αιχμή βρίσκεται στο τελικό σημείο
 	Title Case	Κεφαλαίο σε κάθε λέξη
@@ -5892,6 +5898,13 @@ axis	Y Axis	Άξονας Y
 @msg	at most {MAX_PERMISSIONS} `permissions`	το πολύ {MAX_PERMISSIONS} `permissions`
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	το δικαίωμα `{shown}` δεν ισχύει για πρόσθετο τύπου `{_1}`
 @msg	permission `{shown}` is listed twice	το δικαίωμα `{shown}` αναφέρεται δύο φορές
+@msg	only a filter declares `inputs`	μόνο ένα φίλτρο δηλώνει `inputs`
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	το `inputs` αναφέρει άγνωστο είδος αντικειμένου `{shown}`: χρησιμοποιήστε type, image ή symbolInstance
+@msg	`inputs` lists `{shown}` twice	το `inputs` αναφέρει το `{shown}` δύο φορές
+@msg	`inputs` needs `api` 2 or later	το `inputs` απαιτεί `api` 2 ή νεότερο
+@msg	`inputs` needs the permission `doc.read`	το `inputs` απαιτεί το δικαίωμα `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	προϋπολογισμός μνήμης (το αντικείμενο {_1} χρειάζεται {size} byte εισόδου, απομένουν {left})
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	προϋπολογισμός αντικειμένων (περισσότερα από {MAX_OBJECTS} αντικείμενα μόνο για ανάγνωση)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	το δικαίωμα `{shown}` είναι δεσμευμένο για μεταγενέστερο API προσθέτων· αυτός ο κεντρικός υπολογιστής δεν το παραχωρεί
 @msg	unknown permission `{shown}`	άγνωστο δικαίωμα `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	το «{name}» ζητά τα δικαιώματα {asked}: εγκαταστήστε το με ένα `grant` που τα απαριθμεί μόλις συμφωνήσει ο χρήστης

@@ -18,7 +18,8 @@
 //! a module does can panic or hang the host.
 //!
 //! Plug-ins see the document as JSON ([`objects`]): the selected paths and compound paths with
-//! their geometry, fills, strokes (gradients included) and opacity. An **object filter** returns
+//! their geometry, fills, strokes (gradients included) and opacity, and, for a filter that asks
+//! for them ([`InputKind`]), type, images and symbol instances to read. An **object filter** returns
 //! the objects to keep, change or add, applied to the document as one edit
 //! ([`objects::apply_output`]); a **live effect** ([`effect`]) rewrites one object's geometry each
 //! time it is drawn, from an appearance stack, and at `api` 2 may paint what it returns
@@ -49,7 +50,7 @@ pub mod wat;
 
 pub use dialog::ParamUi;
 pub use host::{LogLevel, LogLine, Report};
-pub use manifest::{Budget, Command, Kind, Manifest, Param, ParamSpec};
+pub use manifest::{Budget, Command, InputKind, Kind, Manifest, Param, ParamSpec};
 pub use runtime::{ABI_VERSION, HEAVY_FUEL, HEAVY_WALL_TIME_MS, Limits, Plugin, heavy_terms};
 
 /// What the host puts before a plug-in's id to name what it adds: its live effect

@@ -564,6 +564,11 @@ font-technology	Variable	Вариативные
 	Color Table ({n} colors)	Цветовая таблица ({n} цветов)
 	Color Theme	Цветовая тема
 	Color Themes	Цветовые темы
+	Color Wheel	Цветовой круг
+	Hue ring	Кольцо оттенков
+	Saturation and brightness	Насыщенность и яркость
+	Color field	Цветовое поле
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Тип цвета:
 	Color:	Цвет:
 	Colorize	Тонировать
@@ -3582,6 +3587,7 @@ digits	Malayalam	Малаялам
 	Tile Type:	Тип плитки:
 	tile {number}	плитка {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Плитки нумеруются слева направо, затем вниз; оставьте диапазон пустым для всех плиток.
+	Copies per Sheet (as many as fit, in a grid)	Копий на лист (сколько поместится, сеткой)
 	Tint	Оттенок
 	Tip extends past the end point	Кончик выходит за конечную точку
 	Tip on the end point	Кончик на конечной точке
@@ -5552,6 +5558,13 @@ axis	Y Axis	Ось Y
 @msg	at most {MAX_PERMISSIONS} `permissions`	не более {MAX_PERMISSIONS} `permissions`
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	разрешение `{shown}` не относится к модулю вида `{_1}`
 @msg	permission `{shown}` is listed twice	разрешение `{shown}` указано дважды
+@msg	only a filter declares `inputs`	`inputs` может объявлять только фильтр
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	в `inputs` указан неизвестный вид объекта `{shown}`: используйте type, image или symbolInstance
+@msg	`inputs` lists `{shown}` twice	в `inputs` `{shown}` указано дважды
+@msg	`inputs` needs `api` 2 or later	для `inputs` нужен `api` 2 или выше
+@msg	`inputs` needs the permission `doc.read`	для `inputs` нужно разрешение `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	бюджет памяти (объекту {_1} нужно {size} байт входных данных, осталось {left})
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	бюджет объектов (более {MAX_OBJECTS} объектов только для чтения)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	разрешение `{shown}` зарезервировано для будущего API модулей; этот хост его не выдаёт
 @msg	unknown permission `{shown}`	неизвестное разрешение `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	«{name}» запрашивает разрешения {asked}: установите его с `grant`, где они перечислены, когда пользователь согласится

@@ -705,6 +705,11 @@
 	Color	Barva
 	Color Guide	Průvodce barvami
 	Color Themes	Barevné motivy
+	Color Wheel	Barevné kolo
+	Hue ring	Prstenec odstínů
+	Saturation and brightness	Sytost a jas
+	Color field	Barevné pole
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	CSS Properties	Vlastnosti CSS
 	Document Info	Informace o dokumentu
 	Flattener Preview	Náhled sloučení
@@ -2714,6 +2719,7 @@ digits	Malayalam	Malajálamské
 	Tile Range:	Rozsah dlaždic:
 	tile {number}	dlaždice {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Dlaždice se číslují po řádcích, pak dolů; prázdný rozsah znamená všechny dlaždice.
+	Copies per Sheet (as many as fit, in a grid)	Kopie na list (kolik se vejde, v mřížce)
 	Transverse (the page a quarter turn on the paper)	Napříč (stránka otočená na papíře o čtvrt otáčky)
 	Unprintable margin:	Netisknutelný okraj:
 	{pages} in all, {count} per copy	celkem {pages}, na kopii {count}
@@ -5941,6 +5947,13 @@ axis	Y Axis	osa Y
 @msg	at most {MAX_PERMISSIONS} `permissions`	nejvýše {MAX_PERMISSIONS} `permissions`
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	oprávnění `{shown}` se nevztahuje na zásuvný modul druhu `{_1}`
 @msg	permission `{shown}` is listed twice	oprávnění `{shown}` je uvedeno dvakrát
+@msg	only a filter declares `inputs`	`inputs` deklaruje pouze filtr
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` uvádí neznámý druh objektu `{shown}`: použijte type, image nebo symbolInstance
+@msg	`inputs` lists `{shown}` twice	`inputs` uvádí `{shown}` dvakrát
+@msg	`inputs` needs `api` 2 or later	`inputs` vyžaduje `api` 2 nebo vyšší
+@msg	`inputs` needs the permission `doc.read`	`inputs` vyžaduje oprávnění `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	rozpočet paměti (objekt {_1} potřebuje {size} bajtů vstupu, zbývá {left})
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	rozpočet objektů (více než {MAX_OBJECTS} objektů jen pro čtení)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	oprávnění `{shown}` je vyhrazeno pro pozdější API zásuvných modulů; tento hostitel ho neuděluje
 @msg	unknown permission `{shown}`	neznámé oprávnění `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	„{name}“ žádá o oprávnění {asked}: nainstalujte ho s `grant`, který je uvádí, jakmile uživatel souhlasí
