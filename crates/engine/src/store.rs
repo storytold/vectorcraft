@@ -293,6 +293,9 @@ impl Session {
         let disabled =
             read_capped(&dir.join(DISABLED_FILE), safe_mode::MAX_DISABLED_FILE_BYTES).map(|b| safe_mode::parse_disabled_file(&b)).unwrap_or_default();
         safe_mode::set_disabled(disabled);
+        if self.plugin_dir.as_ref() != Some(&dir) {
+            self.ignored_plugin_grants.lock().unwrap_or_else(|e| e.into_inner()).clear();
+        }
         self.plugin_dir = Some(dir);
         self.load_stored_plugins();
     }
@@ -302,13 +305,14 @@ impl Session {
     /// file while it loads. A module that doesn't load, and one that lists permissions the grants
     /// there don't grant that very module ([`grant_covers`]), is skipped with a log record, and
     /// stays in the folder with its grant. A grant for an id whose stored module lists no
-    /// permissions is forgotten.
+    /// permissions is forgotten; one that can't be removed from the grants file doesn't count for
+    /// the rest of the session ([`Session::plugin_approver`]).
     pub fn load_stored_plugins(&mut self) {
         let Some(dir) = self.plugin_dir.clone() else { return };
         if safe_mode::active() {
             return;
         }
-        let grants = stored_grants(&dir);
+        let grants = self.counted_grants(&dir);
         let limits = vectorcraft_plugins::Limits::default();
         let mut left = MAX_PLUGIN_STORE;
         let mut asks_nothing = BTreeSet::new();
@@ -355,11 +359,17 @@ impl Session {
                 Err(e) => log::warn!("skipping the stored plug-in {}: {e}", path.display()),
             }
         }
-        let kept = read_grants(&dir).unwrap_or_default();
+        let kept = read_grants(&dir);
         for id in &asks_nothing {
             vectorcraft_plugins::registry::revoke(id);
-            if kept.grants.contains_key(id) || kept.other.iter().any(|e| e.get("id").and_then(serde_json::Value::as_str) == Some(id.as_str())) {
-                self.store_grant(id, None);
+            let named = match &kept {
+                Ok(file) => {
+                    file.grants.contains_key(id) || file.other.iter().any(|e| e.get("id").and_then(serde_json::Value::as_str) == Some(id.as_str()))
+                }
+                Err(e) => e.unread,
+            };
+            if named && !self.store_grant(id, None) && self.holds_plugin_grant(id) {
+                self.ignore_stored_grant(id);
             }
         }
     }
@@ -400,7 +410,8 @@ impl Session {
 
     /// Whether `plugin` installs without asking the user: it lists no permissions, or this very
     /// module (its id and SHA-256) was granted every one it lists, in the grants of the attached
-    /// plug-in store when there is one ([`grant_covers`]), else in this process's
+    /// plug-in store when there is one ([`grant_covers`]), not counting a grant that should be gone
+    /// and could not be removed ([`Session::ignore_stored_grant`]), else in this process's
     /// ([`vectorcraft_plugins::registry::approved`]).
     pub(crate) fn plugin_approved(&self, plugin: &vectorcraft_plugins::Plugin) -> bool {
         self.plugin_approver()(plugin)
@@ -409,7 +420,7 @@ impl Session {
     /// [`Session::plugin_approved`] for many plug-ins: reads the store's grants once, when it is
     /// made, and checks each plug-in against them.
     pub(crate) fn plugin_approver(&self) -> impl Fn(&vectorcraft_plugins::Plugin) -> bool + use<> {
-        let grants = self.plugin_dir.as_deref().map(stored_grants);
+        let grants = self.plugin_dir.as_deref().map(|dir| self.counted_grants(dir));
         move |plugin| {
             let m = plugin.manifest();
             match &grants {
@@ -417,6 +428,15 @@ impl Session {
                 _ => vectorcraft_plugins::registry::approved(plugin),
             }
         }
+    }
+
+    /// The grants kept in the plug-in store `dir` ([`stored_grants`]) without those this session
+    /// doesn't count ([`Session::ignore_stored_grant`]).
+    fn counted_grants(&self, dir: &Path) -> BTreeMap<String, vectorcraft_plugins::permissions::Grant> {
+        let ignored = self.ignored_plugin_grants.lock().unwrap_or_else(|e| e.into_inner());
+        let mut grants = stored_grants(dir);
+        grants.retain(|id, _| !ignored.contains(id));
+        grants
     }
 
     /// Write the module `bytes` of the plug-in `id` to the store → whether they went there (`false`
@@ -459,8 +479,24 @@ impl Session {
     /// are written back as they were, except one for `id`. A grants file that is too large, can't
     /// be read or doesn't hold a list is left as it is, with a log record, and nothing is recorded;
     /// so is one whose new content would be larger than `MAX_GRANTS_FILE`. → whether the store now
-    /// holds what was asked (`false` without a folder).
+    /// holds what was asked (`false` without a folder). When it does, the grant kept for `id` counts
+    /// again ([`Session::ignore_stored_grant`]).
     pub(crate) fn store_grant(&self, id: &str, grant: Option<vectorcraft_plugins::permissions::Grant>) -> bool {
+        let done = self.write_grant(id, grant);
+        if done {
+            self.ignored_plugin_grants.lock().unwrap_or_else(|e| e.into_inner()).remove(id);
+        }
+        done
+    }
+
+    /// Stop counting the store's grant for the plug-in `id` until [`Session::store_grant`] next
+    /// succeeds for it or another store is attached: for a grant that should be gone and could not
+    /// be removed, which would otherwise approve the bytes it covers.
+    pub(crate) fn ignore_stored_grant(&self, id: &str) {
+        self.ignored_plugin_grants.lock().unwrap_or_else(|e| e.into_inner()).insert(id.to_string());
+    }
+
+    fn write_grant(&self, id: &str, grant: Option<vectorcraft_plugins::permissions::Grant>) -> bool {
         let Some(dir) = &self.plugin_dir else { return false };
         let mut file = match read_grants(dir) {
             Ok(file) => file,

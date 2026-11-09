@@ -624,12 +624,18 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
         registry::revoke(&m.id);
         // When the write failed, the old stored module stays in the folder and needs its grant at
         // the next launch. A grant that can't be removed still approves the old bytes, so the store
-        // gets the module it held back, when that could be read. A grants file that is too large or
+        // gets the module it held back, when that could be read; when there is no module to go with
+        // the grant, the grant stops counting for this session. A grants file that is too large or
         // doesn't hold a list approves nothing, and the new module stays; one that can't be opened or
         // read may approve the old bytes once it reads again.
-        if stored && !s.store_grant(&m.id, None) && previous.is_ok() && s.holds_plugin_grant(&m.id) {
-            s.put_back_plugin(plugin.id(), previous.ok().flatten().as_deref());
-            stored = false;
+        if stored && !s.store_grant(&m.id, None) && s.holds_plugin_grant(&m.id) {
+            if !matches!(previous, Ok(Some(_))) {
+                s.ignore_stored_grant(&m.id);
+            }
+            if let Ok(held) = previous {
+                s.put_back_plugin(plugin.id(), held.as_deref());
+                stored = false;
+            }
         }
     }
     // It gets the settings and cache kept for its id.

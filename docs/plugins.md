@@ -218,11 +218,15 @@ capability model proposed for PhotoCraft plug-ins
   tries again. A refused install leaves the grant as it is. When an install of a module that lists no permissions can't
   write the module to the `Plug-ins` folder, or can't remove the grant from `grants.json`, the folder keeps the module
   it held and `grants.json` keeps the grant. The new module runs until the session ends. When the grant can't be
-  removed and the module already stored can't be read back, the new module stays in the folder. A `grants.json` larger
-  than 1 MiB, or one that is not a JSON list, grants nothing: the new module stays in the folder, and `plugin.remove`
-  removes the plug-in. A `grants.json` that can't be opened or read counts as a grant that can't be removed. When
-  VectorCraft loads the `Plug-ins` folder, it forgets any grant for an id whose stored module lists no permissions. In
-  Safe Mode, and for a stored module that the user disabled,
+  removed and the module already stored can't be read back, the new module stays in the folder, and the grant does not
+  count for the rest of the session. The grant also does not count when the folder held no module for that id. A
+  `grants.json` larger than 1 MiB, or one that is not a JSON list, grants nothing: the new module stays in the folder,
+  and `plugin.remove` removes the plug-in. A `grants.json` that can't be opened or read counts as a grant that can't be
+  removed. When VectorCraft loads the `Plug-ins` folder, it forgets any grant for an id whose stored module lists no
+  permissions. When it can't remove that grant from `grants.json`, or can't read the file, the grant does not count for
+  the rest of the session, or until the plug-in is granted again, including for the next load, which tries the removal
+  again. In Safe Mode, and for
+  a stored module that the user disabled,
   VectorCraft does not read the module, and `grants.json` keeps the grant for its id. The Additional Plug-ins Folder
   and `plugin.reload` do not change the `Plug-ins` folder: when they leave a module that lists no permissions under an
   id, the process forgets its own grant for that id, and a grant kept in `grants.json` stays with the stored module it

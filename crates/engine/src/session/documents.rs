@@ -77,6 +77,7 @@ impl Session {
             pdf_preset_dir: None,
             profile_dir: None,
             plugin_dir: None,
+            ignored_plugin_grants: Default::default(),
             plugin_output: None,
             recent_urls: vec![],
             trace_preset_changes: Default::default(),
