@@ -529,9 +529,9 @@ In this example the character and paragraph styles are cut short; a filter gets 
   it in paint order left, and a linked image (`linked: true`) have
   `pixelsOmitted: true` and no pixels; the host checks an image's size before it decodes the image. An image of any
   size also has `pixelsOmitted: true` when its data is missing from the document, when its width or height is 0, when
-  its data cannot be decoded (or needs more than 64 MiB of decoder memory, or is a TIFF the host rejects as too
-  large), or when the dimensions in its data differ from `pixelSize`. A plug-in checks `pixelsOmitted` before it
-  reads `pixelsBase64`, which is present only when `pixelsOmitted` is `false`. The host never
+  its data cannot be decoded (including a non-CMYK image whose decoder enforces the host's 64 MiB memory limit and
+  needs more, and a TIFF the host rejects as too large), or when the dimensions in its data differ from `pixelSize`.
+  A plug-in checks `pixelsOmitted` before it reads `pixelsBase64`, which is present only when `pixelsOmitted` is `false`. The host never
   reads a linked image's file for a filter and never gives its path.
 - A symbol instance (`"symbolInstance"`): `symbolId` is the name of the symbol it shows, with `missing: true` when the
   document has no symbol of that name. `overrides` is `{}`.
