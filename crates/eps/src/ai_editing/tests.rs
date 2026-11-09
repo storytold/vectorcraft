@@ -241,6 +241,11 @@ fn view(nodes: &[Arc<Node>], depth: usize, out: &mut Vec<String>) {
                 }
                 out.push(s);
             }
+            // The matrix is written to ten decimals.
+            NodeKind::SymbolInstance { symbol, xf } => {
+                let xf: Vec<String> = xf.as_coeffs().iter().map(|v| format!("{:.6}", v + 0.0)).collect();
+                out.push(format!("{head} instance {symbol:?} [{}] {} {:?}", xf.join(" "), r3(f64::from(n.opacity)), n.blend));
+            }
             other => out.push(format!("{head} {other:?}")),
         }
     }
@@ -602,8 +607,8 @@ fn hidden_layers_open_hidden() {
     assert!(text.contains("%AI5_NumLayers: 3\n%AI5_OpenViewLayers: 776\n"), "{text}");
 }
 
-/// A 200 × 100 document of a gradient fill, a compound path and an image, and what the data holds
-/// as plain paths: type and a symbol instance.
+/// A 200 × 100 document of a gradient fill, a compound path, an image and a symbol instance, and
+/// what the data holds as plain paths: type.
 fn unsupported() -> Document {
     let mut doc = Document::new(200.0, 100.0);
     let layer = doc.layers[0].id;
@@ -671,9 +676,7 @@ fn paths(nodes: &[Arc<Node>], out: &mut Vec<Node>) {
 fn art_the_slice_does_not_cover_is_written_as_plain_paths() {
     let doc = unsupported();
     let out = export_ai_editing(&doc, &opts()).unwrap();
-    for w in [writer::TYPE, writer::LIVE] {
-        assert!(out.warnings.iter().any(|x| x == w), "{w}: {:?}", out.warnings);
-    }
+    assert_eq!(out.warnings, [writer::TYPE]);
     let back = read_back(&doc);
     let layer = back.layers[0].children().unwrap();
     let kinds: Vec<&str> = layer
@@ -683,12 +686,13 @@ fn art_the_slice_does_not_cover_is_written_as_plain_paths() {
             NodeKind::Group { .. } => "group",
             NodeKind::Compound { .. } => "compound",
             NodeKind::Image(_) => "image",
+            NodeKind::SymbolInstance { .. } => "instance",
             _ => "other",
         })
         .collect();
-    assert_eq!(kinds, ["path", "compound", "image", "group", "group"]);
+    assert_eq!(kinds, ["path", "compound", "image", "group", "instance"]);
     let mut all = vec![];
-    paths(&layer[3..], &mut all);
+    paths(&layer[3..4], &mut all);
     assert!(all.iter().all(|n| matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. })));
     // The gradient as a gradient, drawing as it did.
     let bounds = Rect::new(10.0, 10.0, 30.0, 30.0);
@@ -802,11 +806,11 @@ fn a_scaled_nine_slice_symbol_instance_keeps_its_corner_size() {
     assert!(sizes.contains(&(200, 150)), "the frame is scaled: {sizes:?}");
 }
 
-/// Nested symbols whose instances multiply stop at [`vectorcraft_doc::MAX_SYMBOL_NODES`] objects of
-/// symbol art in all, with a warning.
+/// Nested symbols whose instances multiply, written as their art (on a large canvas), stop at
+/// [`vectorcraft_doc::MAX_SYMBOL_NODES`] objects of symbol art in all, with a warning.
 #[test]
 fn nested_symbol_instances_stop_at_the_symbol_art_limit() {
-    let mut doc = Document::new(200.0, 100.0);
+    let mut doc = Document::new(20000.0, 100.0);
     let layer = doc.layers[0].id;
     // Empty paths: counted, but written as nothing, so the test stays small; and one filled square.
     let empty = Arc::new(Node::path(doc.alloc_id(), PathData::new(vec![]), Appearance::default()));
@@ -824,7 +828,215 @@ fn nested_symbol_instances_stop_at_the_symbol_art_limit() {
     assert!(out.warnings.iter().any(|w| w == writer::SYMBOL_LIMIT), "{:?}", out.warnings);
     // 5,001 objects for the tree and each leaf: 3,198 leaves fit in 16,000,000.
     let text = String::from_utf8(out.program).unwrap();
-    assert_eq!(text.matches("\r\nf\r\n").count(), 3198, "the squares of the leaves written");
+    // On the layers; the symbols' definitions come before them, in the setup.
+    let layers = text.split_once("%%EndSetup").unwrap().1;
+    assert_eq!(layers.matches("\r\nf\r\n").count(), 3198, "the squares of the leaves written");
+}
+
+/// The documents [`the_writer_counts_objects_as_the_reader_reads_them`] writes: groups, compound
+/// paths, guides, sublayers, clipping groups and layers, painted clipping paths, opacity masks,
+/// gradients, pattern definitions and tiles, images, type, symbol definitions and instances,
+/// objects with art styles and objects bound to variables.
+fn counted() -> Vec<(&'static str, Document)> {
+    vec![
+        ("sample", sample()),
+        ("unsupported", unsupported()),
+        ("transparent", transparent()),
+        ("gradients and patterns", gradients_and_patterns()),
+        ("images", images_doc()),
+        ("typed", typed()),
+        ("variables", variables_doc()),
+        ("symbols", symbols_document()),
+        ("styles", styles_document()),
+        ("painted clips", painted_clips()),
+        ("blend", blend_doc()),
+    ]
+}
+
+/// A blend of two squares 20 pt apart with a step every 10 pt, written as its steps.
+fn blend_doc() -> Document {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let keys = vec![
+        Arc::new(square(&mut doc, Rect::new(10.0, 10.0, 12.0, 12.0), Color::gray(0.5))),
+        Arc::new(square(&mut doc, Rect::new(30.0, 10.0, 32.0, 12.0), Color::gray(0.5))),
+    ];
+    let spec = vectorcraft_doc::BlendSpec { spacing: vectorcraft_doc::BlendSpacing::Distance(10.0), ..Default::default() };
+    let blend = Node::new(doc.alloc_id(), NodeKind::Blend { children: keys, spec: Box::new(spec) });
+    doc.insert(Some(layer), usize::MAX, blend).unwrap();
+    doc
+}
+
+/// Clipping groups whose clipping paths are filled: a square with a color, and a ring (a path of
+/// two subpaths) with a color, with a gradient, and with a color and a gradient stroke.
+fn painted_clips() -> Document {
+    let mut doc = Document::new(260.0, 100.0);
+    let layer = doc.layers[0].id;
+    let ring = |x: f64| {
+        let mut p = shapes::rectangle(Rect::new(x, 10.0, x + 20.0, 30.0));
+        p.subpaths.extend(shapes::rectangle(Rect::new(x + 5.0, 15.0, x + 15.0, 25.0)).subpaths);
+        p
+    };
+    let g = Gradient::new(
+        GradientKind::Linear,
+        vec![GradientStop::new(0.0, Color::rgb(1.0, 1.0, 1.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 0.0))],
+    );
+    let shade = || Paint::Gradient(Box::new(GradientPaint::new(g.clone())));
+    let clips = [
+        (10.0, shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0)), solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None),
+        (70.0, ring(70.0), solid(Color::rgb(0.0, 0.0, 1.0)), Paint::None),
+        (130.0, ring(130.0), shade(), Paint::None),
+        (190.0, ring(190.0), solid(Color::rgb(0.0, 1.0, 0.0)), shade()),
+    ];
+    for (x, path, fill, stroke) in clips {
+        let mut clip = clipping(&mut doc, path);
+        let width = if matches!(stroke, Paint::None) { 0.0 } else { 2.0 };
+        clip.appearance = Appearance::basic(fill, stroke, width).into();
+        let inside = square(&mut doc, Rect::new(x - 5.0, 5.0, x + 10.0, 20.0), Color::gray(0.5));
+        let g = group(&mut doc, vec![clip, inside], true);
+        doc.insert(Some(layer), usize::MAX, g).unwrap();
+    }
+    doc
+}
+
+/// The writer counts the objects it writes as the reader counts the objects it reads: with room
+/// for as many objects as the reader reads, nothing is left out; with one less, art is left out,
+/// with a warning. With room for fewer, the reader never reads more objects than there is room for.
+#[test]
+fn the_writer_counts_objects_as_the_reader_reads_them() {
+    let objects = |out: &AiEditingOutput| crate::import::objects_read(&out.program).unwrap();
+    let limited = |out: &AiEditingOutput| out.warnings.iter().any(|w| w == writer::OBJECT_LIMIT);
+    for (name, doc) in counted() {
+        let all = export_ai_editing(&doc, &opts()).unwrap();
+        let read = objects(&all);
+        assert!(read > 0 && !limited(&all), "{name}: {read} objects, {:?}", all.warnings);
+        let room = export_within(&doc, &opts(), read).unwrap();
+        assert!(!limited(&room), "{name}: nothing is left out with room for {read} objects");
+        assert_eq!(room.program, all.program, "{name}");
+        for max in 0..read {
+            let out = export_within(&doc, &opts(), max).unwrap();
+            assert!(limited(&out), "{name}: art is left out with room for {max} of {read} objects");
+            assert!(objects(&out) <= max, "{name}: {} objects read with room for {max}", objects(&out));
+        }
+    }
+}
+
+/// An opacity mask whose art doesn't all fit within the object limit is left out with its art,
+/// and the object it masks is written without it; the art left out leaves room for the objects
+/// after it.
+#[test]
+fn a_mask_whose_art_passes_the_object_limit_is_left_out() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let mut masked = square(&mut doc, Rect::new(10.0, 10.0, 50.0, 50.0), Color::gray(0.5));
+    let a = square(&mut doc, Rect::new(0.0, 0.0, 30.0, 30.0), Color::rgb(1.0, 1.0, 1.0));
+    let b = square(&mut doc, Rect::new(30.0, 30.0, 60.0, 60.0), Color::rgb(1.0, 1.0, 1.0));
+    let art = group(&mut doc, vec![a, b], false);
+    masked.extras_mut().mask = Some(Box::new(OpacityMask::new(art, false)));
+    doc.insert(Some(layer), usize::MAX, masked).unwrap();
+    let after = square(&mut doc, Rect::new(100.0, 10.0, 140.0, 50.0), Color::gray(0.5));
+    doc.insert(Some(layer), usize::MAX, after).unwrap();
+    let text = |max: usize| {
+        let out = export_within(&doc, &opts(), max).unwrap();
+        let limited = out.warnings.iter().any(|w| w == writer::OBJECT_LIMIT);
+        (String::from_utf8_lossy(&out.program).replace("\r\n", "\n"), limited)
+    };
+    let read = crate::import::objects_read(&export_ai_editing(&doc, &opts()).unwrap().program).unwrap();
+    let (all, limited) = text(read);
+    assert!(!limited && all.contains("(AI9_Mask)"), "{all}");
+    let has_mask = |max: usize| text(max).0.contains("(AI9_Mask)");
+    let Some(fit) = (0..=read).find(|&max| has_mask(max)) else { panic!("the mask fits with room for {read} objects") };
+    assert!(fit > 2, "the mask needs room beyond the two squares: {fit}");
+    for max in fit..=read {
+        assert!(has_mask(max), "room for {max} of {read}, the mask fits in {fit}");
+    }
+    let (short, limited) = text(fit - 1);
+    assert!(limited);
+    assert!(!short.contains("(AI9_Mask)") && !short.contains("%_/ArtDictionary :\n%_/Mask"), "{short}");
+    assert_eq!(short.matches("\nf\n").count(), 2, "both squares are written: {short}");
+}
+
+/// A symbol's definition is written only when there is room for its instance too.
+#[test]
+fn a_symbol_definition_is_written_only_with_room_for_its_instance() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let a = square(&mut doc, Rect::new(0.0, 0.0, 10.0, 10.0), Color::gray(0.5));
+    let b = square(&mut doc, Rect::new(10.0, 10.0, 20.0, 20.0), Color::gray(0.5));
+    let art = group(&mut doc, vec![a, b], false);
+    doc.symbols.push(Symbol { dynamic: false, name: "Pair".into(), art: Arc::new(art) });
+    let placed = instance(&mut doc, "Pair", Affine::translate((50.0, 10.0)));
+    doc.insert(Some(layer), usize::MAX, placed).unwrap();
+    add_rect(&mut doc, Rect::new(100.0, 10.0, 110.0, 20.0));
+    let program = export_ai_editing(&doc, &opts()).unwrap().program;
+    let all = String::from_utf8_lossy(&program).replace("\r\n", "\n");
+    assert!(all.contains("%AI14_BeginSymbol") && all.contains("/SymbolInstance :"), "{all}");
+    let read = crate::import::objects_read(&program).unwrap();
+    for max in 0..read {
+        let out = export_within(&doc, &opts(), max).unwrap();
+        let text = String::from_utf8_lossy(&out.program).replace("\r\n", "\n");
+        let defined = text.contains("%AI14_BeginSymbol");
+        assert_eq!(defined, text.contains("/SymbolInstance :"), "room for {max} of {read}: {text}");
+        assert!(out.warnings.iter().any(|w| w == writer::OBJECT_LIMIT), "art is left out with room for {max} of {read} objects");
+        let objects = crate::import::objects_read(&out.program).unwrap();
+        assert!(objects <= max, "{objects} objects read with room for {max}");
+    }
+}
+
+/// The writer's limit is the reader's, which its warning names.
+#[test]
+fn the_object_limit_is_the_readers() {
+    assert_eq!(crate::import::MAX_EDITING_OBJECTS, 4_000_000);
+    assert!(writer::OBJECT_LIMIT.contains("4,000,000"));
+}
+
+/// Paths past the object limit are left out of a layer of many paths, with a warning: the paths
+/// that fit are written.
+#[test]
+fn paths_past_the_object_limit_are_left_out() {
+    let mut doc = Document::new(200.0, 100.0);
+    for i in 0..10 {
+        add_rect(&mut doc, Rect::new(f64::from(i) * 10.0, 0.0, f64::from(i) * 10.0 + 5.0, 5.0));
+    }
+    let out = export_within(&doc, &opts(), 6).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::OBJECT_LIMIT), "{:?}", out.warnings);
+    assert_eq!(crate::import::objects_read(&out.program).unwrap(), 6);
+    let text = String::from_utf8_lossy(&out.program).replace("\r\n", "\n");
+    assert_eq!(text.matches("\nf\n").count(), 6, "the first six paths are written");
+}
+
+/// On a canvas of the usual size, nested symbols whose instances multiply, written as their art in
+/// art cut to a clipping object, stop at [`vectorcraft_doc::MAX_SYMBOL_NODES`] objects of symbol art
+/// in all, with a warning.
+#[test]
+fn clipped_nested_symbol_instances_stop_at_the_symbol_art_limit() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    // Empty paths: counted, but written as nothing, so the test stays small; and one filled square.
+    let empty = Arc::new(Node::path(doc.alloc_id(), PathData::new(vec![]), Appearance::default()));
+    let mut members = vec![empty; 4999];
+    let square_art = shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0));
+    members.push(Arc::new(Node::path(doc.alloc_id(), square_art, Appearance::basic(solid(Color::gray(0.5)), Paint::None, 0.0))));
+    let leaves = Node::group(doc.alloc_id(), members);
+    doc.symbols.push(Symbol { dynamic: false, name: "Leaf".into(), art: Arc::new(leaves) });
+    let leaf = Arc::new(Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "Leaf".into(), xf: Affine::IDENTITY }));
+    let trees = Node::group(doc.alloc_id(), vec![leaf; 5000]);
+    doc.symbols.push(Symbol { dynamic: false, name: "Tree".into(), art: Arc::new(trees) });
+    let tree = Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "Tree".into(), xf: Affine::IDENTITY });
+    // A group as the clipping object cuts the art instead of clipping it with a path, so the
+    // instances in it are written as their art. Its square is unpainted, so the only filled squares
+    // are the leaves'.
+    let outline = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 50.0, 50.0)), Appearance::default());
+    let clip = group(&mut doc, vec![outline], false);
+    let clipped = group(&mut doc, vec![clip, tree], true);
+    doc.insert(Some(layer), usize::MAX, clipped).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::SYMBOL_LIMIT), "{:?}", out.warnings);
+    assert!(out.warnings.iter().any(|w| w == writer::SYMBOL_ART), "{:?}", out.warnings);
+    // 5,001 objects for the tree and each leaf: 3,198 leaves fit in 16,000,000.
+    let text = String::from_utf8(out.program).unwrap();
+    let layers = text.split_once("%%EndSetup").unwrap().1;
+    assert_eq!(layers.matches("\r\nf\r\n").count(), 3198, "the squares of the leaves written");
 }
 
 #[test]
@@ -900,7 +1112,7 @@ fn geometry_effects_in_a_symbol_are_written_as_their_result() {
     let instance = Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "Dot".into(), xf: Affine::translate((50.0, 20.0)) });
     doc.insert(Some(layer), usize::MAX, instance).unwrap();
     let back = read_back(&doc);
-    let b = back.layers[0].children().unwrap()[0].visual_bounds().unwrap();
+    let b = back.bounds_of_with(&[back.layers[0].children().unwrap()[0].id], true, &back.symbol_boxes()).unwrap();
     // The 10 pt square offset by 5 pt, at (50, 20).
     assert!((b.x0 - 45.0).abs() < 0.1 && (b.x1 - 65.0).abs() < 0.1 && (b.y0 - 15.0).abs() < 0.1 && (b.y1 - 35.0).abs() < 0.1, "{b:?}");
 }
@@ -925,7 +1137,8 @@ fn an_adjusted_image_in_a_symbol_is_written_in_its_adjusted_color() {
     doc.insert(Some(layer), usize::MAX, instance).unwrap();
     let back = read_back(&doc);
     let mut found = vec![];
-    pictures(&back, &back.layers, "", &mut found);
+    let art: Vec<Arc<Node>> = back.symbols.iter().map(|s| s.art.clone()).collect();
+    pictures(&back, &art, "", &mut found);
     assert_eq!(found.len(), 1, "the adjusted image is found");
     assert!(!found[0].ends_with("rgba [0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255]"), "the image is adjusted: {found:?}");
 }
@@ -1013,6 +1226,26 @@ fn the_active_artboard_follows_the_artboards() {
         let active = back.opened_artboard.and_then(|id| back.artboards.iter().position(|a| a.id == id)).unwrap_or(0);
         assert_eq!((back.artboards.len(), active), (3, index), "{opened:?}");
     }
+}
+
+/// The copy's active artboard read on its own, for a document restored from the file beside the
+/// copy: `None` for the first, and when the copy names an artboard that document doesn't have or
+/// can't be decoded.
+#[test]
+fn a_restored_document_opens_on_the_artboard_the_copy_names() {
+    let mut doc = Document::new(200.0, 100.0);
+    for (id, x0) in [(2, 250.0), (3, 500.0)] {
+        doc.artboards.push(Artboard { id, rect: Rect::new(x0, 0.0, x0 + 200.0, 100.0), ..doc.artboards[0].clone() });
+    }
+    let mut one_artboard = doc.clone();
+    one_artboard.artboards.truncate(1);
+    for (opened, read) in [(Some(3), Some(3)), (Some(2), Some(2)), (Some(1), None), (None, None), (Some(9), None)] {
+        doc.opened_artboard = opened;
+        let data = private_data(&doc, &opts()).unwrap().0.data;
+        assert_eq!(crate::ai_opened_artboard(&data, &doc), read, "{opened:?}");
+        assert_eq!(crate::ai_opened_artboard(&data, &one_artboard), None, "{opened:?}");
+    }
+    assert_eq!(crate::ai_opened_artboard(b"%AI24_ZStandard_Data not zstd", &doc), None);
 }
 
 /// A guide is its path followed by `(n) *` (closed) or `(N) *` (open), with no `(N) *` before
@@ -1206,6 +1439,7 @@ fn looks(nodes: &[Arc<Node>], depth: usize, out: &mut Vec<String>) {
             NodeKind::Group { clip, .. } => format!("group clip={clip}"),
             NodeKind::Path { clipping, .. } => format!("path clipping={clipping}"),
             NodeKind::Compound { .. } => "compound".into(),
+            NodeKind::SymbolInstance { symbol, .. } => format!("instance {symbol:?}"),
             _ => "other".into(),
         };
         let mut s = format!(
@@ -1376,8 +1610,8 @@ fn transparency_is_written_in_its_forms() {
     );
 }
 
-/// A clipping path filled and stroked keeps its stroke; the reader reads its fill as a path of
-/// its own under the clipped art, as the file's PDF page draws it.
+/// A clipping path filled and stroked is written with its fill and stroke, and reads back with
+/// both on the clipping path.
 #[test]
 fn a_painted_clipping_path_is_written_with_its_paint() {
     let mut doc = Document::new(200.0, 100.0);
@@ -1401,8 +1635,7 @@ fn a_painted_clipping_path_is_written_with_its_paint() {
     assert_eq!(
         painted,
         [
-            (true, None, Some(paint(&solid(Color::BLACK)))),
-            (false, Some(paint(&solid(Color::rgb(1.0, 1.0, 0.0)))), None),
+            (true, Some(paint(&solid(Color::rgb(1.0, 1.0, 0.0)))), Some(paint(&solid(Color::BLACK)))),
             (false, Some(paint(&solid(Color::rgb(0.0, 0.0, 1.0)))), None)
         ]
     );
@@ -1986,6 +2219,37 @@ fn gradients_and_patterns_are_read_back() {
     same_lines(&gradient_looks(&read_back(&doc)), &gradient_looks(&doc));
 }
 
+/// A new document's gradient swatches read back with the paint they were written with, not linked
+/// to a swatch, and art filled with one of them reads back linked to it.
+#[test]
+fn gradient_swatches_read_back_unlinked() {
+    let mut doc = Document::new(200.0, 100.0);
+    let Some(Paint::Gradient(sunset)) = doc.swatch("Sunset").map(|s| s.paint.clone()) else { panic!("no Sunset swatch") };
+    let layer = doc.layers[0].id;
+    let linked = gradient_paint(sunset.gradient.clone(), None, Some("Sunset"));
+    let rect = painted(&mut doc, shapes::rectangle(Rect::new(10.0, 10.0, 90.0, 50.0)), vec![AppearanceItem::Fill(FillLayer::new(linked))]);
+    doc.insert(Some(layer), usize::MAX, rect).unwrap();
+    let back = read_back(&doc);
+    let gradients = |d: &Document| -> Vec<String> {
+        d.swatches_iter()
+            .filter_map(|s| match &s.paint {
+                Paint::Gradient(g) => {
+                    Some(format!("{} {:?} stops={} geom={:?} swatch={:?}", s.name, g.gradient.kind, g.gradient.stops.len(), g.geom, g.swatch))
+                }
+                _ => None,
+            })
+            .collect()
+    };
+    let want = gradients(&doc);
+    assert_eq!(want.len(), 4, "{want:?}");
+    assert_eq!(gradients(&back), want);
+    let link = back.layers[0].children().and_then(|c| c.first()).map(|n| match n.appearance.items.first().map(AppearanceItem::paint) {
+        Some(Paint::Gradient(g)) => g.swatch.clone(),
+        other => panic!("{other:?}"),
+    });
+    assert_eq!(link, Some(Some("Sunset".to_string())));
+}
+
 #[test]
 fn gradients_and_patterns_write_the_same_bytes_again() {
     let doc = gradients_and_patterns();
@@ -2070,8 +2334,7 @@ fn gradients_and_patterns_are_written_in_their_forms() {
     assert!(art.contains(" p\n") && art.contains(" P\n"), "{art}");
 }
 
-/// A clipping path filled with a gradient keeps it: the reader reads it as the clipping path and
-/// its fill as a path of its own under the art.
+/// A clipping path filled with a gradient keeps it, and reads back with it.
 #[test]
 fn a_clipping_path_keeps_its_gradient() {
     let mut doc = Document::new(200.0, 100.0);
@@ -2087,7 +2350,9 @@ fn a_clipping_path_keeps_its_gradient() {
     assert!(text.contains("h\nW\nBb\n0 (Gradient) "), "{text}");
     let back = read_back(&doc);
     let NodeKind::Group { children, clip: true } = &back.layers[0].children().unwrap()[0].kind else { panic!("a clipping group") };
-    let fill = &children[1];
+    assert_eq!(children.len(), 2, "the clipping path and the art");
+    let fill = &children[0];
+    assert!(matches!(fill.kind, NodeKind::Path { clipping: true, .. }), "{:?}", fill.kind);
     let bounds = Rect::new(10.0, 10.0, 90.0, 60.0);
     let want = drawn(&doc, &gradient_paint(sunset(), None, None), bounds);
     assert_eq!(drawn(&back, fill.appearance.items[0].paint(), bounds), want);
@@ -3300,7 +3565,7 @@ fn type_lines(doc: &Document) -> Vec<String> {
         for r in &t.runs {
             let s = &r.style;
             out.push(format!(
-                "  run {:?} {} {} {} {:?} {} {} {} {} fill {} stroke {} {} caps={} small={:?} tcy={}",
+                "  run {:?} {} {} {} {:?} {} {} {} {} fill {} stroke {} {} caps={} small={:?} tcy={} roman={}",
                 r.text,
                 s.font_family,
                 s.font_style,
@@ -3316,8 +3581,129 @@ fn type_lines(doc: &Document) -> Vec<String> {
                 s.all_caps,
                 s.small_caps.map(r3),
                 s.tate_chu_yoko,
+                s.standard_vertical_roman,
             ));
         }
+    }
+    out
+}
+
+// ---------- symbols ----------
+
+const LEAF: Color = Color::Cmyk { c: 0.6, m: 0.0, y: 0.9, k: 0.1 };
+
+fn instance(doc: &mut Document, symbol: &str, xf: Affine) -> Node {
+    Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: symbol.into(), xf })
+}
+
+/// A `w` × `h` document whose swatches are one CMYK color (the default swatches' CMYK equivalents
+/// change at the fourth decimal when read back, so a second write would differ there).
+fn one_swatch_document(w: f64, h: f64) -> Document {
+    let mut doc = Document::new(w, h);
+    doc.swatches = vec![Swatch { name: "Leaf".into(), paint: solid(LEAF), global: false, spot: false }].into();
+    doc.swatch_groups = vec![].into();
+    doc
+}
+
+/// A 300 × 200 document of symbols. Its symbols, in the Symbols panel's order: `Spare`, a path no
+/// instance uses; `Pair`, a group of a red square and an instance of `Leaf` at half its size; `Leaf`,
+/// a group of a square in `LEAF` and an ellipse, its registration point the top left; `Shade`, a
+/// group of a rectangle filled with a gradient, a clipping group and an image, its registration
+/// point the bottom right; `Solo`, a group of one square, which no instance uses. Layer `Art`
+/// holds, bottom first: `Leaf` moved; `Leaf` turned 30° and scaled 1.5 by 0.5, named `Turned`; a
+/// hidden one; a locked one; one at 50% in Multiply; `Pair`; a group holding `Leaf`; a clipping
+/// group holding `Leaf`; `Leaf` with an opacity mask whose art holds an instance of `Leaf`; `Shade`;
+/// and sublayer `Inner` (60%, Screen), which holds `Pair` mirrored.
+fn symbols_document() -> Document {
+    use vectorcraft_color::gradient::GradientGeom;
+    let mut doc = Document::new(300.0, 200.0);
+    doc.swatches = vec![Swatch { name: "Leaf".into(), paint: solid(LEAF), global: false, spot: false }].into();
+    doc.swatch_groups = vec![].into();
+    doc.layers.clear();
+    let art_layer = doc.add_layer(Some("Art"));
+    // The symbols.
+    let spare = square(&mut doc, Rect::new(-5.0, -5.0, 5.0, 5.0), Color::gray(0.4));
+    let leaf_square = square(&mut doc, Rect::new(0.0, 0.0, 20.0, 20.0), LEAF);
+    let ellipse =
+        Node::path(doc.alloc_id(), shapes::ellipse(Rect::new(5.0, 10.0, 25.0, 30.0)), Appearance::basic(Paint::None, solid(Color::BLACK), 1.5));
+    let leaf = group(&mut doc, vec![leaf_square, ellipse], false);
+    let red = square(&mut doc, Rect::new(-10.0, -10.0, 10.0, 10.0), Color::rgb(1.0, 0.0, 0.0));
+    let small = instance(&mut doc, "Leaf", Affine::translate((15.0, -5.0)) * Affine::scale(0.5));
+    let pair = group(&mut doc, vec![red, small], false);
+    let geom = GradientGeom { start: (0.0, 0.0).into(), end: (40.0, 10.0).into(), aspect: 1.0, focal: None };
+    let shaded = painted(
+        &mut doc,
+        shapes::rectangle(Rect::new(0.0, 0.0, 40.0, 20.0)),
+        vec![AppearanceItem::Fill(FillLayer::new(gradient_paint(sunset(), Some(geom), None)))],
+    );
+    let edge = clipping(&mut doc, shapes::ellipse(Rect::new(0.0, 20.0, 20.0, 40.0)));
+    let inside = square(&mut doc, Rect::new(0.0, 25.0, 40.0, 35.0), Color::rgb(0.0, 0.0, 1.0));
+    let clipped = group(&mut doc, vec![edge, inside], true);
+    let pixels = png_of(image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(2, 1, vec![255, 0, 0, 255, 0, 128, 255, 255]).unwrap()));
+    let picture = image_node(&mut doc, ImageBlob::new("image/png", pixels), (2, 1), Affine::new([10.0, 0.0, 0.0, 10.0, 25.0, 25.0]), None);
+    let shade = group(&mut doc, vec![shaded, clipped, picture], false);
+    let lone = square(&mut doc, Rect::new(0.0, 0.0, 8.0, 8.0), Color::gray(0.2));
+    let solo = group(&mut doc, vec![lone], false);
+    for (name, art) in [("Spare", spare), ("Pair", pair), ("Leaf", leaf), ("Shade", shade), ("Solo", solo)] {
+        doc.symbols.push(Symbol { dynamic: false, name: name.into(), art: Arc::new(art) });
+    }
+    doc.set_symbol_registration("Leaf", vectorcraft_doc::SymbolRegistration(0));
+    doc.set_symbol_registration("Shade", vectorcraft_doc::SymbolRegistration(8));
+    // The instances.
+    let mut art = vec![instance(&mut doc, "Leaf", Affine::translate((10.0, 10.0)))];
+    let turned = Affine::translate((80.0, 20.0)) * Affine::rotate(30f64.to_radians()) * Affine::scale_non_uniform(1.5, 0.5);
+    art.push(named(instance(&mut doc, "Leaf", turned), "Turned"));
+    let mut hidden = instance(&mut doc, "Leaf", Affine::translate((130.0, 10.0)));
+    hidden.visible = false;
+    art.push(hidden);
+    let mut locked = instance(&mut doc, "Leaf", Affine::translate((160.0, 10.0)));
+    locked.locked = true;
+    art.push(locked);
+    art.push(see_through(instance(&mut doc, "Leaf", Affine::translate((190.0, 10.0))), 0.5, BlendMode::Multiply));
+    art.push(instance(&mut doc, "Pair", Affine::translate((240.0, 30.0))));
+    let grouped = instance(&mut doc, "Leaf", Affine::translate((10.0, 60.0)));
+    art.push(group(&mut doc, vec![grouped], false));
+    let window = clipping(&mut doc, shapes::rectangle(Rect::new(50.0, 60.0, 65.0, 75.0)));
+    let clipped = instance(&mut doc, "Leaf", Affine::translate((50.0, 60.0)));
+    art.push(group(&mut doc, vec![window, clipped], true));
+    let mask_leaf = instance(&mut doc, "Leaf", Affine::translate((90.0, 60.0)));
+    let mask_art = group(&mut doc, vec![mask_leaf], false);
+    let mut masked = instance(&mut doc, "Leaf", Affine::translate((90.0, 60.0)));
+    masked.extras_mut().mask = Some(Box::new(OpacityMask { art: Arc::new(mask_art), clip: true, invert: false, disabled: false, linked: true }));
+    art.push(masked);
+    art.push(instance(&mut doc, "Shade", Affine::translate((130.0, 60.0))));
+    for n in art {
+        doc.insert(Some(art_layer), usize::MAX, n).unwrap();
+    }
+    let inner = doc.add_layer(Some("Inner"));
+    let inner_node = doc.layers.iter().position(|l| l.id == inner).map(|i| doc.layers.remove(i)).unwrap();
+    doc.insert(Some(art_layer), usize::MAX, (*inner_node).clone()).unwrap();
+    let mirrored = instance(&mut doc, "Pair", Affine::new([-1.0, 0.0, 0.0, 1.0, 260.0, 120.0]));
+    doc.insert(Some(inner), usize::MAX, mirrored).unwrap();
+    // The sublayer's own transparency, after its last object, an instance.
+    let sub = doc.node_mut(inner).unwrap();
+    (sub.opacity, sub.blend) = (0.6, BlendMode::Screen);
+    doc
+}
+
+/// Each symbol of `doc` in its order: its name and registration point, then what its art draws, its
+/// objects as [`view`] shows them (points, handles, paint, strokes and instances), its images, and
+/// its objects' names, transparency and clipping.
+fn symbol_looks(doc: &Document) -> Vec<String> {
+    let mut out = vec![];
+    for s in doc.symbols.iter() {
+        out.push(format!("symbol {} {:?}", s.name, doc.symbol_registration(&s.name)));
+        let art = std::slice::from_ref(&s.art);
+        paints_of(doc, art, 1, &mut out);
+        let mut objects = vec![];
+        view(art, 1, &mut objects);
+        // Images are compared by `pictures`, gradients by `paints_of`.
+        out.extend(objects.into_iter().filter(|l| !l.contains(" Image(")).map(|l| match l.find(" fill(Gradient(") {
+            Some(at) => format!("{} fill(gradient)", &l[..at]),
+            None => l,
+        }));
+        pictures(doc, art, &s.name, &mut out);
+        looks(art, 1, &mut out);
     }
     out
 }
@@ -3341,6 +3727,62 @@ fn type_is_written_again_as_the_same_bytes() {
     let text = |p: &[u8]| text_document(&String::from_utf8_lossy(p).replace("\r\n", "\n"));
     assert_eq!(text(&again.program), text(&first.program));
     assert_eq!(String::from_utf8_lossy(&again.program), String::from_utf8_lossy(&first.program));
+}
+
+/// Standard Vertical Roman Alignment comes back on or off, in vertical type and in horizontal
+/// type, and Tate-chu-yoko stays as it was: each run's key 35 is 1 (Standard) when it's on, 2
+/// (rotated) when it's off and 3 for Tate-chu-yoko, and the document's defaults and the normal
+/// character style carry 1. Each object lays out as it did. A Tate-chu-yoko run with the
+/// setting on comes back without it, and that is reported.
+#[test]
+fn standard_vertical_roman_alignment_comes_back() {
+    use vectorcraft_doc::{CharStyle, TextObject, TextRun};
+    let plain = style(14.0, Color::BLACK);
+    let roman = CharStyle { standard_vertical_roman: true, ..plain.clone() };
+    let tcy = CharStyle { tate_chu_yoko: true, ..plain.clone() };
+    let mut doc = Document::new(200.0, 200.0);
+    let layer = doc.layers[0].id;
+    let mut down = TextObject::point(vectorcraft_geom::Point::new(150.0, 20.0), "", plain.clone());
+    down.runs = vec![TextRun::new("Up AB ", roman.clone()), TextRun::new("turned CD ", plain.clone()), TextRun::new("12", tcy.clone())];
+    down.vertical = true;
+    let mut across = TextObject::point(vectorcraft_geom::Point::new(20.0, 40.0), "", plain.clone());
+    across.runs = vec![TextRun::new("Marked ", roman.clone()), TextRun::new("plain", plain.clone())];
+    for t in [down, across] {
+        let n = text_node(&mut doc, t);
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    same_lines(&type_lines(&back), &type_lines(&doc));
+    let texts = |d: &Document| -> Vec<TextObject> {
+        d.layers[0].children().unwrap().iter().filter_map(|n| if let NodeKind::Text(t) = &n.kind { Some((**t).clone()) } else { None }).collect()
+    };
+    let flags = |t: &TextObject| t.runs.iter().map(|r| (r.style.standard_vertical_roman, r.style.tate_chu_yoko)).collect::<Vec<_>>();
+    let (written, read) = (texts(&doc), texts(&back));
+    assert_eq!(read.iter().map(flags).collect::<Vec<_>>(), [vec![(true, false), (false, false), (false, true)], vec![(true, false), (false, false)]]);
+    let origins = |t: &TextObject| {
+        vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).glyphs.iter().map(|g| (r3(g.origin.x), r3(g.origin.y))).collect::<Vec<_>>()
+    };
+    for (w, r) in written.iter().zip(&read) {
+        assert_eq!(origins(r), origins(w), "vertical={}", w.vertical);
+    }
+    let decoded = text_document(&program(&doc));
+    // Two runs on, two off and one Tate-chu-yoko; the defaults and the normal style add a 1 each.
+    for (key, count) in [("/35 1 ", 4), ("/35 2 ", 2), ("/35 3 ", 1)] {
+        assert_eq!(decoded.matches(key).count(), count, "{key}: {decoded}");
+    }
+    let normal = decoded.find("[Normal Character Style]").unwrap();
+    let sheet = &decoded[normal..decoded.find("[Normal Paragraph Style]").unwrap()];
+    assert!(sheet.contains("/35 1 "), "{sheet}");
+    // Key 35 holds one value: Tate-chu-yoko wins, and the setting it leaves out is reported.
+    let mut both = doc.clone();
+    let id = both.layers[0].children().unwrap()[0].id;
+    if let Some(NodeKind::Text(t)) = both.node_mut(id).map(|n| &mut n.kind) {
+        t.runs[2].style.standard_vertical_roman = true;
+    }
+    assert_eq!(export_ai_editing(&both, &opts()).unwrap().warnings, [writer::TYPE_ATTRIBUTES]);
+    assert_eq!(flags(&texts(&read_back(&both))[0])[2], (false, true));
 }
 
 /// The text document of program `text` (LF line ends), decoded, with its UTF-16 strings' zero
@@ -4131,4 +4573,2807 @@ fn type_with_an_opacity_mask_is_written_as_its_outlines() {
     let top = &back.layers[0].children().unwrap()[0];
     assert!(!matches!(top.kind, NodeKind::Text(_)));
     assert!(top.extras().mask.is_some());
+}
+
+#[test]
+fn symbols_and_their_instances_are_read_back() {
+    let doc = symbols_document();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    same_lines(&lines(&back), &lines(&doc));
+    same_lines(&all_looks(&back), &all_looks(&doc));
+    same_lines(&symbol_looks(&back), &symbol_looks(&doc));
+    // Each instance draws where it did: the symbols' art and the instances' places agree.
+    let boxes = |d: &Document| -> Vec<String> {
+        let b = d.symbol_boxes();
+        let mut ids = vec![];
+        d.walk(|n| {
+            if matches!(n.kind, NodeKind::SymbolInstance { .. }) {
+                ids.push(n.id);
+            }
+        });
+        ids.iter().map(|id| format!("{:?}", d.bounds_of_with(&[*id], true, &b).map(|r| [r.x0, r.y0, r.x1, r.y1].map(r3)))).collect()
+    };
+    same_lines(&boxes(&back), &boxes(&doc));
+}
+
+#[test]
+fn symbols_write_the_same_bytes_again() {
+    let doc = symbols_document();
+    let first = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(first.program, export_ai_editing(&doc, &opts()).unwrap().program);
+    assert_eq!(private_data(&doc, &opts()).unwrap().0, private_data(&doc, &opts()).unwrap().0);
+    let again = export_ai_editing(&read_back(&doc), &opts()).unwrap().program;
+    same_lines(&shown(&again).lines().map(String::from).collect::<Vec<_>>(), &shown(&first.program).lines().map(String::from).collect::<Vec<_>>());
+    assert_eq!(again, first.program);
+}
+
+#[test]
+fn symbols_are_written_in_their_forms() {
+    let p = program_shown(&symbols_document());
+    // The definitions in a non-printing block after the patterns, in the order the art first uses
+    // them (each after those its art uses), the others after them; and the list after the palette
+    // in the panel's order.
+    let defs = ["(Leaf)", "(Pair)", "(Shade)", "(Spare)", "(Solo)"].map(|n| p.find(&format!("%AI14_BeginSymbol\n{n}\n0 A\n0 Xw\n0 Ae\n")).unwrap());
+    assert!(defs.windows(2).all(|w| w[0] < w[1]), "{p}");
+    assert!(p.contains("%AI5_Begin_NonPrinting\nNp\n%AI14_BeginSymbol\n(Leaf)\n"), "{p}");
+    let list =
+        "%AI5_Begin_NonPrinting\nNp\n%AI24_BeginSymbolList\n(Spare)\n(Pair)\n(Leaf)\n(Shade)\n(Solo)\n%AI24_EndSymbolList\n%AI5_End_NonPrinting--\n";
+    let at = p.find(list).unwrap();
+    assert!(p.find("%AI5_EndPalette").unwrap() < at && at < p.find("%AI9_BeginDocumentData").unwrap(), "{p}");
+    // A group's registration point in its dictionary, before its state block; a path is written in
+    // a group of its own.
+    assert!(p.contains("U\n%_/ArtDictionary :\n%_1 /Int (AI13PatternRegistrationType) ,\n%_;\n%_\n9 () XW\n%AI10_EndSymbol\n"), "{p}");
+    assert!(p.contains("%_/ArtDictionary :\n%_9 /Int (AI13PatternRegistrationType) ,\n"), "{p}");
+    assert!(p.contains("%AI14_BeginSymbol\n(Spare)\n0 A\n0 Xw\n0 Ae\nu\n"), "{p}");
+    // A plain group of one object in a group of its own.
+    assert!(p.contains("%AI14_BeginSymbol\n(Solo)\n0 A\n0 Xw\n0 Ae\nu\nu\n"), "{p}");
+    assert!(p.contains("f\nU\n%_/ArtDictionary :\n%_5 /Int (AI13PatternRegistrationType) ,\n%_;\n%_\n9 () XW\n%AI10_EndSymbol\n"), "{p}");
+    // An instance on the page: its matrix takes the art to art space (y up from the artboard's top
+    // left), then its state block.
+    assert!(p.contains("/SymbolInstance :\n(Leaf) /SymbolRef ,\n1 0 0 -1 10 -10 /RTransformMatrix\n;\n9 () XW\n"), "{p}");
+    // Its name between the two, and its transparency as a group's.
+    assert!(p.contains("/RTransformMatrix\n;\n%_/ArtDictionary :\n%_/XMLUID : (Turned) ; (AI10_ArtUID) ,\n%_;\n%_\n9 () XW\n"), "{p}");
+    assert!(p.contains("1 0 0 -1 190 -10 /RTransformMatrix\n;\n1 0.5 0 2 0 Xy\n0 0 Xd\n6 () XW\n"), "{p}");
+    // In a symbol's art, about the canvas point of art space's origin (the template box's center
+    // is the canvas's).
+    let t: Vec<f64> = p.lines().find_map(|l| l.strip_prefix("%AI3_TemplateBox: ")).unwrap().split(' ').map(|v| v.parse().unwrap()).collect();
+    let (ox, oy) = (f64::from(CANVAS_SIZE) / 2.0 - t[0], f64::from(CANVAS_SIZE) / 2.0 + t[1]);
+    let nested = format!("(Leaf) /SymbolRef ,\n0.5 0 0 -0.5 {} {} /RTransformMatrix\n", ps::num(15.0 - ox), ps::num(oy + 5.0));
+    assert!(p.contains(&nested), "{nested}\n{p}");
+}
+
+/// Instances that the data can't hold as instances are written as their art, with a warning: a
+/// stained one, one of a symbol with 9-slice guides, one scaled almost flat, every one on the
+/// layers of a large canvas (whose symbols are still defined), one in a pattern's tile, one with a
+/// dynamic symbol's appearance changes and one in art cut to a clipping object that isn't a path.
+/// A symbol whose art holds an instance of itself is defined once, that instance as art.
+#[test]
+fn instances_the_data_cant_hold_are_written_as_their_art() {
+    let leaf = |doc: &mut Document| {
+        let art = square(doc, Rect::new(0.0, 0.0, 10.0, 10.0), LEAF);
+        doc.symbols.push(Symbol { dynamic: false, name: "Leaf".into(), art: Arc::new(art) });
+    };
+    let kinds = |d: &Document| -> Vec<&'static str> {
+        d.layers[0].children().unwrap().iter().map(|n| if matches!(n.kind, NodeKind::SymbolInstance { .. }) { "instance" } else { "art" }).collect()
+    };
+    // Stained.
+    let mut doc = Document::new(200.0, 100.0);
+    leaf(&mut doc);
+    let mut stained = instance(&mut doc, "Leaf", Affine::translate((50.0, 10.0)));
+    stained.appearance = Appearance::basic(solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0).into();
+    let plain = instance(&mut doc, "Leaf", Affine::translate((80.0, 10.0)));
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, stained).unwrap();
+    doc.insert(Some(layer), usize::MAX, plain).unwrap();
+    assert_eq!(export_ai_editing(&doc, &opts()).unwrap().warnings, [writer::SYMBOL_ART]);
+    assert_eq!(kinds(&read_back(&doc)), ["art", "instance"]);
+    // 9-slice guides.
+    doc.set_symbol_nine_slice("Leaf", Some(vectorcraft_doc::SymbolNineSlice::default()));
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(out.warnings, [writer::SYMBOL_ART, writer::SYMBOL_OPTIONS]);
+    let back = read_back(&doc);
+    assert_eq!((kinds(&back), back.symbols.len()), (vec!["art", "art"], 1));
+    // Scaled so flat that its matrix to ten decimals has no area.
+    let mut doc = Document::new(200.0, 100.0);
+    leaf(&mut doc);
+    let flat = instance(&mut doc, "Leaf", Affine::new([1e-11, 0.0, 0.0, 1.0, 50.0, 10.0]));
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, flat).unwrap();
+    assert_eq!(export_ai_editing(&doc, &opts()).unwrap().warnings, [writer::SYMBOL_ART]);
+    assert_eq!(kinds(&read_back(&doc)), ["art"]);
+    // A large canvas.
+    let mut doc = Document::new(20000.0, 100.0);
+    leaf(&mut doc);
+    let one = instance(&mut doc, "Leaf", Affine::translate((50.0, 10.0)));
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, one).unwrap();
+    assert_eq!(export_ai_editing(&doc, &opts()).unwrap().warnings, [writer::SYMBOL_ART]);
+    // The symbol is still defined, at its own size: the canvas's scale doesn't touch its art.
+    let back = read_back(&doc);
+    assert_eq!(kinds(&back), ["art"]);
+    assert_eq!(symbol_looks(&back), symbol_looks(&doc));
+    // A pattern a symbol's art and the layers both paint with: the layers' fill keeps it, the
+    // symbol's art has its tiles.
+    let dot = Arc::new(square(&mut doc, Rect::new(0.0, 0.0, 4.0, 4.0), Color::BLACK));
+    let mut dots = vectorcraft_doc::PatternDef::new("Dots", vec![dot]);
+    dots.tile = Rect::new(0.0, 0.0, 8.0, 8.0);
+    doc.patterns.push(dots);
+    let fill = || Appearance::basic(Paint::Pattern { pattern: "Dots".into(), xf: Affine::IDENTITY }, Paint::None, 0.0);
+    let patch = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 16.0, 16.0)), fill());
+    doc.symbols.push(Symbol { dynamic: false, name: "Patch".into(), art: Arc::new(patch) });
+    let filled = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(100.0, 10.0, 132.0, 42.0)), fill());
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, filled).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(out.warnings, [writer::SYMBOL_ART, writer::PATTERNS]);
+    let back = read_back(&doc);
+    let on_layer = back.layers[0].children().unwrap()[1].appearance.items[0].paint().clone();
+    assert!(matches!(on_layer, Paint::Pattern { .. }), "{on_layer:?}");
+    let patch = &back.symbols.iter().find(|s| s.name == "Patch").unwrap().art;
+    assert!(matches!(patch.kind, NodeKind::Group { .. }), "the symbol's art is its tiles: {:?}", patch.kind);
+    // A pattern's tile: the tile holds the symbol's art.
+    let mut doc = Document::new(200.0, 100.0);
+    leaf(&mut doc);
+    let tiled = instance(&mut doc, "Leaf", Affine::IDENTITY);
+    doc.patterns.push(vectorcraft_doc::PatternDef::new("Tiles", vec![Arc::new(tiled)]));
+    let fill = Appearance::basic(Paint::Pattern { pattern: "Tiles".into(), xf: Affine::IDENTITY }, Paint::None, 0.0);
+    let filled = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 50.0, 50.0)), fill);
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, filled).unwrap();
+    assert_eq!(export_ai_editing(&doc, &opts()).unwrap().warnings, [writer::SYMBOL_ART]);
+    let back = read_back(&doc);
+    let tile = &back.patterns.iter().find(|p| p.name == "Tiles").unwrap().art;
+    assert_eq!(tile.len(), 1);
+    assert_eq!(instances(&tile[0]), 0, "{:?}", tile[0].kind);
+    let NodeKind::Group { children, .. } = &tile[0].kind else { panic!("{:?}", tile[0].kind) };
+    assert_eq!(paints_of_nodes(&back, children), paints_of_nodes(&back, &[Arc::new(square(&mut doc, Rect::new(0.0, 0.0, 10.0, 10.0), LEAF))]));
+    // A symbol holding an instance of itself: defined once, that instance as its art.
+    let mut doc = Document::new(200.0, 100.0);
+    let looped_art = {
+        let me = instance(&mut doc, "Loop", Affine::translate((20.0, 0.0)));
+        let dot = square(&mut doc, Rect::new(0.0, 0.0, 5.0, 5.0), LEAF);
+        group(&mut doc, vec![dot, me], false)
+    };
+    doc.symbols.push(Symbol { dynamic: false, name: "Loop".into(), art: Arc::new(looped_art) });
+    let looped = instance(&mut doc, "Loop", Affine::translate((100.0, 10.0)));
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, looped).unwrap();
+    assert_eq!(export_ai_editing(&doc, &opts()).unwrap().warnings, [writer::SYMBOL_ART]);
+    let p = program(&doc);
+    assert_eq!(p.matches("%AI14_BeginSymbol\n(Loop)\n").count(), 1, "{p}");
+    assert_eq!(kinds(&read_back(&doc)), ["instance"]);
+    // Appearance changes of a dynamic symbol's instance.
+    let mut doc = Document::new(200.0, 100.0);
+    leaf(&mut doc);
+    doc.symbols[0].dynamic = true;
+    let mut changed = instance(&mut doc, "Leaf", Affine::translate((50.0, 10.0)));
+    changed.extras_mut().symbol_overrides =
+        vec![vectorcraft_doc::SymbolOverride { fill: Some(solid(Color::rgb(0.0, 1.0, 0.0))), ..Default::default() }];
+    let plain = instance(&mut doc, "Leaf", Affine::translate((80.0, 10.0)));
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, changed).unwrap();
+    doc.insert(Some(layer), usize::MAX, plain).unwrap();
+    assert_eq!(export_ai_editing(&doc, &opts()).unwrap().warnings, [writer::SYMBOL_ART, writer::SYMBOL_OPTIONS]);
+    let back = read_back(&doc);
+    assert_eq!(kinds(&back), ["art", "instance"]);
+    let green = back.layers[0].children().unwrap()[0].clone();
+    let drawn = paints_of_nodes(&back, &[green]);
+    assert!(drawn.iter().any(|l| l.contains("rgb 0.000 1.000 0.000")), "the change is drawn: {drawn:?}");
+    // Art cut to a clipping object that isn't a path.
+    let mut doc = Document::new(200.0, 100.0);
+    leaf(&mut doc);
+    let pixels = png_of(image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(2, 2, image::Rgba([0, 0, 255, 255]))));
+    let frame = image_node(&mut doc, ImageBlob::new("image/png", pixels), (2, 2), Affine::new([20.0, 0.0, 0.0, 20.0, 40.0, 0.0]), None);
+    let cut = instance(&mut doc, "Leaf", Affine::translate((45.0, 5.0)));
+    let clipped = group(&mut doc, vec![frame, cut], true);
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, clipped).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::SYMBOL_ART), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    assert_eq!(back.layers.iter().map(|l| instances(l)).sum::<usize>(), 0);
+    assert_eq!(back.symbols.len(), 1);
+}
+
+/// Symbols whose art paints with a pattern, directly, through a nested symbol, in an opacity mask
+/// and through an inline graphic: their definitions hold the pattern fills as tiles cut to the shape (the reader keeps no
+/// symbol whose art paints with a pattern), and their instances are written as their art, whose
+/// pattern fills keep the document's placement as the canvas draws them, each with a warning. An
+/// instance of a symbol without pattern paint stays an instance.
+#[test]
+fn symbols_with_pattern_fills_are_defined_with_tiles_and_placed_as_art() {
+    let mut doc = Document::new(200.0, 100.0);
+    // Tiles that cover the shape, so its tiles cut to it draw its box.
+    let dot = Arc::new(square(&mut doc, Rect::new(0.0, 0.0, 8.0, 8.0), Color::BLACK));
+    let mut dots = vectorcraft_doc::PatternDef::new("Dots", vec![dot]);
+    dots.tile = Rect::new(0.0, 0.0, 8.0, 8.0);
+    doc.patterns.push(dots);
+    let fill = || Appearance::basic(Paint::Pattern { pattern: "Dots".into(), xf: Affine::IDENTITY }, Paint::None, 0.0);
+    let patch = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 16.0, 16.0)), fill());
+    doc.symbols.push(Symbol { dynamic: false, name: "Patch".into(), art: Arc::new(patch) });
+    let inner = instance(&mut doc, "Patch", Affine::translate((20.0, 0.0)));
+    let edge = square(&mut doc, Rect::new(0.0, 0.0, 10.0, 10.0), LEAF);
+    let outer = group(&mut doc, vec![edge, inner], false);
+    doc.symbols.push(Symbol { dynamic: false, name: "Outer".into(), art: Arc::new(outer) });
+    let mask_art = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 12.0, 12.0)), fill());
+    let mut masked = square(&mut doc, Rect::new(0.0, 0.0, 12.0, 12.0), LEAF);
+    masked.extras_mut().mask = Some(Box::new(OpacityMask { art: Arc::new(mask_art), clip: true, invert: false, disabled: false, linked: true }));
+    doc.symbols.push(Symbol { dynamic: false, name: "Masked".into(), art: Arc::new(masked) });
+    let plain = square(&mut doc, Rect::new(0.0, 0.0, 10.0, 10.0), LEAF);
+    doc.symbols.push(Symbol { dynamic: false, name: "Plain".into(), art: Arc::new(plain) });
+    // Type holding `Patch` as an inline graphic.
+    let style = vectorcraft_doc::CharStyle { size: 18.0, fill: solid(Color::BLACK), ..vectorcraft_doc::CharStyle::default() };
+    let mut t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(0.0, 20.0), "A", style.clone());
+    t.runs.push(vectorcraft_doc::TextRun::inline(vectorcraft_doc::InlineArt::new("Patch"), style));
+    let typed = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+    doc.symbols.push(Symbol { dynamic: false, name: "Typed".into(), art: Arc::new(typed) });
+    let layer = doc.layers[0].id;
+    // Two instances of `Patch` a part of a tile apart.
+    for (name, x) in [("Patch", 10.0), ("Patch", 33.0), ("Outer", 60.0), ("Masked", 120.0), ("Plain", 140.0), ("Typed", 10.0)] {
+        let one = instance(&mut doc, name, Affine::translate((x, 10.0)));
+        doc.insert(Some(layer), usize::MAX, one).unwrap();
+    }
+    let filled = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(150.0, 10.0, 182.0, 42.0)), fill());
+    doc.insert(Some(layer), usize::MAX, filled).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::SYMBOL_ART) && out.warnings.iter().any(|w| w == writer::PATTERNS), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let names: Vec<&str> = back.symbols.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(names, ["Patch", "Outer", "Masked", "Plain", "Typed"]);
+    let patch = &back.symbols[0].art;
+    assert!(matches!(patch.kind, NodeKind::Group { .. }), "the symbol's art is its tiles: {:?}", patch.kind);
+    assert_eq!(instances(&back.symbols[1].art), 0, "the nested instance is its art");
+    let kids = back.layers[0].children().unwrap();
+    let kinds: Vec<bool> = kids.iter().map(|n| matches!(n.kind, NodeKind::SymbolInstance { .. })).collect();
+    assert_eq!(kinds, [false, false, false, false, true, false, false]);
+    // The pattern fills of both `Patch` instances and of the layers' path keep one placement.
+    let placements = |n: &Node| {
+        let mut out = vec![];
+        vectorcraft_doc::swatches::walk_with_masks(n, &mut |m| {
+            for it in m.appearance.items.iter() {
+                if let Paint::Pattern { xf, .. } = it.paint() {
+                    out.push(xf.as_coeffs().map(r3));
+                }
+            }
+        });
+        out
+    };
+    let layer_fill = placements(&kids[6]);
+    assert_eq!(layer_fill.len(), 1);
+    assert_eq!(placements(&kids[0]), layer_fill);
+    assert_eq!(placements(&kids[1]), layer_fill);
+    // Each instance draws where it did.
+    let boxes = |d: &Document| -> Vec<String> {
+        let b = d.symbol_boxes();
+        let ids: Vec<_> = d.layers[0].children().unwrap().iter().take(5).map(|n| n.id).collect();
+        ids.iter().map(|id| format!("{:?}", d.bounds_of_with(&[*id], true, &b).map(|r| [r.x0, r.y0, r.x1, r.y1].map(r3)))).collect()
+    };
+    same_lines(&boxes(&back), &boxes(&doc));
+}
+
+/// A symbol whose art paints with a pattern only through a brushed stroke, whose brush's art is
+/// filled with a pattern: the definition holds the tiles, and its instance is written as its art.
+#[test]
+fn symbols_painting_patterns_through_brush_art_are_placed_as_art() {
+    let mut doc = Document::new(200.0, 100.0);
+    let dot = Arc::new(square(&mut doc, Rect::new(0.0, 0.0, 8.0, 8.0), Color::BLACK));
+    let mut dots = vectorcraft_doc::PatternDef::new("Dots", vec![dot]);
+    dots.tile = Rect::new(0.0, 0.0, 8.0, 8.0);
+    doc.patterns.push(dots);
+    let fill = Appearance::basic(Paint::Pattern { pattern: "Dots".into(), xf: Affine::IDENTITY }, Paint::None, 0.0);
+    let art = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 40.0, 8.0)), fill);
+    let brush = vectorcraft_brush::Brush {
+        name: "Dotted".into(),
+        kind: vectorcraft_brush::BrushKind::Art(vectorcraft_brush::ArtBrush {
+            art,
+            colorization: vectorcraft_brush::Colorization::None,
+            ..Default::default()
+        }),
+    };
+    vectorcraft_brush::store(&mut doc, &[brush]);
+    let mut line =
+        Node::path(doc.alloc_id(), shapes::line((0.0, 0.0).into(), (60.0, 0.0).into()), Appearance::basic(Paint::None, solid(Color::BLACK), 4.0));
+    line.appearance.stroke_mut().unwrap().brush = Some("Dotted".into());
+    doc.symbols.push(Symbol { dynamic: false, name: "Brushed".into(), art: Arc::new(line) });
+    let layer = doc.layers[0].id;
+    let one = instance(&mut doc, "Brushed", Affine::translate((10.0, 40.0)));
+    doc.insert(Some(layer), usize::MAX, one).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::SYMBOL_ART), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    assert_eq!(back.symbols.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["Brushed"]);
+    assert_eq!(instances(&back.layers[0]), 0, "the instance is its art");
+}
+
+/// A symbol first defined from the drawn look of a group with a style, through a member's scatter
+/// brush, still warns that its art's own effects are left out, and so does a later instance of it.
+#[test]
+fn a_symbol_defined_inside_a_drawn_look_warns_of_its_own_effects() {
+    let mut doc = Document::new(200.0, 100.0);
+    let mut shadowed = square(&mut doc, Rect::new(0.0, 0.0, 6.0, 6.0), Color::BLACK);
+    shadowed.appearance = Appearance { effects: vec![drop_shadow()], ..Appearance::basic(black_fill(), Paint::None, 0.0) }.into();
+    doc.symbols.push(Symbol { dynamic: false, name: "Shadowed".into(), art: Arc::new(shadowed) });
+    let dot = square(&mut doc, Rect::new(0.0, 0.0, 6.0, 6.0), Color::BLACK);
+    let placed = instance(&mut doc, "Shadowed", Affine::translate((8.0, 0.0)));
+    let art = group(&mut doc, vec![dot, placed], false);
+    let brush = vectorcraft_brush::Brush {
+        name: "Scattered".into(),
+        kind: vectorcraft_brush::BrushKind::Scatter(vectorcraft_brush::Scatter {
+            art,
+            size: (100.0, 100.0),
+            spacing: (100.0, 100.0),
+            scatter: (0.0, 0.0),
+            rotation: (0.0, 0.0),
+            colorization: vectorcraft_brush::Colorization::None,
+            ..Default::default()
+        }),
+    };
+    vectorcraft_brush::store(&mut doc, &[brush]);
+    let mut line =
+        Node::path(doc.alloc_id(), shapes::line((10.0, 50.0).into(), (90.0, 50.0).into()), Appearance::basic(Paint::None, solid(Color::BLACK), 1.0));
+    line.appearance.stroke_mut().unwrap().brush = Some("Scattered".into());
+    let edge = square(&mut doc, Rect::new(10.0, 60.0, 30.0, 80.0), LEAF);
+    let mut styled = group(&mut doc, vec![line, edge], false);
+    styled.appearance = Appearance { effects: vec![drop_shadow()], ..Appearance::default() }.into();
+    put(&mut doc, named(styled, "Styled"));
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    let p = shown(&out.program);
+    assert!(p.contains("%AI14_BeginSymbol") && p.contains("1 (Anon 1) XW"), "{p}");
+    assert!(out.warnings.iter().any(|w| w == writer::EFFECTS), "{:?}", out.warnings);
+
+    let later = instance(&mut doc, "Shadowed", Affine::translate((150.0, 20.0)));
+    put(&mut doc, later);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::EFFECTS), "{:?}", out.warnings);
+}
+
+/// A symbol whose stroke is written as its outline (an outside stroke): a scaled instance, a scaled
+/// instance of a symbol holding it and a turned and mirrored instance are written as their art,
+/// which keeps the stroke the canvas draws; a moved instance stays an instance.
+#[test]
+fn scaled_instances_of_symbols_with_outlined_strokes_are_written_as_their_art() {
+    let mut doc = Document::new(200.0, 100.0);
+    let mut look = Appearance::basic(Paint::None, solid(Color::BLACK), 4.0);
+    look.stroke_mut().unwrap().align = vectorcraft_doc::StrokeAlign::Outside;
+    let framed = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), look);
+    doc.symbols.push(Symbol { dynamic: false, name: "Framed".into(), art: Arc::new(framed) });
+    let inner = instance(&mut doc, "Framed", Affine::IDENTITY);
+    let edge = square(&mut doc, Rect::new(20.0, 0.0, 30.0, 10.0), LEAF);
+    let outer = group(&mut doc, vec![inner, edge], false);
+    doc.symbols.push(Symbol { dynamic: false, name: "Outer".into(), art: Arc::new(outer) });
+    let layer = doc.layers[0].id;
+    let turned = Affine::translate((150.0, 20.0)) * Affine::rotate(0.5) * Affine::new([-1.0, 0.0, 0.0, 1.0, 0.0, 0.0]);
+    for (name, xf) in [
+        ("Framed", Affine::translate((40.0, 40.0)) * Affine::scale(2.0)),
+        ("Outer", Affine::translate((80.0, 10.0)) * Affine::scale(2.0)),
+        ("Framed", turned),
+        ("Framed", Affine::translate((170.0, 60.0))),
+    ] {
+        let one = instance(&mut doc, name, xf);
+        doc.insert(Some(layer), usize::MAX, one).unwrap();
+    }
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::SYMBOL_ART), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    assert_eq!(back.symbols.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["Framed", "Outer"]);
+    let kids = back.layers[0].children().unwrap();
+    let kinds: Vec<bool> = kids.iter().map(|n| matches!(n.kind, NodeKind::SymbolInstance { .. })).collect();
+    assert_eq!(kinds, [false, false, false, true]);
+    // Each draws where it did, with the stroke the canvas draws: 4 pt wide whatever the scale.
+    let boxes = |d: &Document| -> Vec<String> {
+        let b = d.symbol_boxes();
+        let ids: Vec<_> = d.layers[0].children().unwrap().iter().map(|n| n.id).collect();
+        ids.iter().map(|id| format!("{:?}", d.bounds_of_with(&[*id], true, &b).map(|r| [r.x0, r.y0, r.x1, r.y1].map(r3)))).collect()
+    };
+    let (got, want) = (boxes(&back), boxes(&doc));
+    same_lines(&[got[0].clone(), got[2].clone(), got[3].clone()], &[want[0].clone(), want[2].clone(), want[3].clone()]);
+    // `Outer` at twice its size from (80, 10): the frame's square is 20 pt from 80 with its 4 pt
+    // stroke outside, and the plain square is 40 to 60 pt in from it.
+    assert_eq!(got[1], format!("{:?}", Some([76.0, 6.0, 140.0, 34.0].map(r3))));
+}
+
+/// Scaled instances of a symbol holding a rounded rectangle with live corners, of one clipped by
+/// it, of one holding type, of one holding a blend and of one holding an instance written as its
+/// art (of a symbol with 9-slice guides), and instances that scale their symbol more than 100
+/// times (tiny, thin and stroked tiny objects, and a 10 pt square), are written as their art;
+/// instances that scale a 10 pt square a thousandth, scale an ellipse unevenly or only move stay
+/// instances.
+#[test]
+fn scaled_instances_of_symbols_drawn_only_at_their_own_size_are_written_as_their_art() {
+    let mut doc = Document::new(200.0, 100.0);
+    let live = vectorcraft_doc::LiveShape::Rectangle {
+        w: 100.0,
+        h: 100.0,
+        radii: [10.0; 4],
+        kinds: Default::default(),
+        radii_relative: false,
+        xf: Affine::IDENTITY,
+    };
+    let mut rounded = Node::new(
+        doc.alloc_id(),
+        NodeKind::Path { path: live.to_path(), rule: FillRule::NonZero, live: Some(Box::new(live)), clipping: false, guide: false },
+    );
+    rounded.appearance = Appearance::basic(solid(LEAF), Paint::None, 0.0).into();
+    // The same rounded rectangle clipping a square.
+    let mut frame = rounded.clone();
+    frame.id = doc.alloc_id();
+    let inside = square(&mut doc, Rect::new(0.0, 0.0, 100.0, 100.0), LEAF);
+    let clipped = group(&mut doc, vec![frame, inside], true);
+    doc.symbols.push(Symbol { dynamic: false, name: "Rounded".into(), art: Arc::new(rounded) });
+    doc.symbols.push(Symbol { dynamic: false, name: "Clipped".into(), art: Arc::new(clipped) });
+    // A tiny square with a 1 pt stroke.
+    let mut dot = square(&mut doc, Rect::new(0.0, 0.0, 0.00001, 0.00001), LEAF);
+    dot.appearance = Appearance::basic(solid(LEAF), solid(Color::BLACK), 1.0).into();
+    doc.symbols.push(Symbol { dynamic: false, name: "Dot".into(), art: Arc::new(dot) });
+    // A blend of two squares 20 pt apart with a step every 10 pt.
+    let keys =
+        vec![Arc::new(square(&mut doc, Rect::new(0.0, 0.0, 2.0, 2.0), LEAF)), Arc::new(square(&mut doc, Rect::new(20.0, 0.0, 22.0, 2.0), LEAF))];
+    let spec = vectorcraft_doc::BlendSpec { spacing: vectorcraft_doc::BlendSpacing::Distance(10.0), ..Default::default() };
+    let blend = Node::new(doc.alloc_id(), NodeKind::Blend { children: keys, spec: Box::new(spec) });
+    doc.symbols.push(Symbol { dynamic: false, name: "Steps".into(), art: Arc::new(blend) });
+    // A symbol holding an instance of one with 9-slice guides.
+    let frame = Arc::new(square(&mut doc, Rect::new(0.0, 0.0, 100.0, 100.0), LEAF));
+    let corner = Arc::new(square(&mut doc, Rect::new(0.0, 0.0, 10.0, 10.0), Color::BLACK));
+    let sliced = Node::group(doc.alloc_id(), vec![frame, corner]);
+    doc.symbols.push(Symbol { dynamic: false, name: "Sliced".into(), art: Arc::new(sliced) });
+    doc.set_symbol_nine_slice("Sliced", Some(vectorcraft_doc::SymbolNineSlice::default()));
+    let inner = instance(&mut doc, "Sliced", Affine::IDENTITY);
+    let holder = group(&mut doc, vec![inner], false);
+    doc.symbols.push(Symbol { dynamic: false, name: "Holder".into(), art: Arc::new(holder) });
+    let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(0.0, 10.0), "Hi", style(10.0, Color::BLACK));
+    let typed = text_node(&mut doc, t);
+    doc.symbols.push(Symbol { dynamic: false, name: "Typed".into(), art: Arc::new(typed) });
+    let tiny = square(&mut doc, Rect::new(0.0, 0.0, 0.00001, 0.00001), LEAF);
+    doc.symbols.push(Symbol { dynamic: false, name: "Tiny".into(), art: Arc::new(tiny) });
+    let thin = square(&mut doc, Rect::new(0.0, 0.0, 0.00001, 1.0), LEAF);
+    doc.symbols.push(Symbol { dynamic: false, name: "Thin".into(), art: Arc::new(thin) });
+    let plain = square(&mut doc, Rect::new(0.0, 0.0, 10.0, 10.0), LEAF);
+    doc.symbols.push(Symbol { dynamic: false, name: "Plain".into(), art: Arc::new(plain) });
+    let oval = vectorcraft_doc::LiveShape::Ellipse { w: 10.0, h: 6.0, pie: (0.0, 360.0), xf: Affine::IDENTITY };
+    let mut ellipse = Node::new(
+        doc.alloc_id(),
+        NodeKind::Path { path: oval.to_path(), rule: FillRule::NonZero, live: Some(Box::new(oval)), clipping: false, guide: false },
+    );
+    ellipse.appearance = Appearance::basic(solid(LEAF), Paint::None, 0.0).into();
+    doc.symbols.push(Symbol { dynamic: false, name: "Oval".into(), art: Arc::new(ellipse) });
+    let layer = doc.layers[0].id;
+    for (name, xf) in [
+        ("Rounded", Affine::new([0.3, 0.0, 0.0, 0.1, 10.0, 10.0])),
+        ("Typed", Affine::translate((50.0, 50.0)) * Affine::scale(3.0)),
+        ("Tiny", Affine::translate((100.0, 50.0)) * Affine::scale(1e6)),
+        ("Plain", Affine::translate((150.0, 50.0)) * Affine::scale(1e-3)),
+        ("Plain", Affine::translate((150.0, 60.0)) * Affine::scale(1e3)),
+        ("Oval", Affine::translate((170.0, 20.0)) * Affine::new([3.0, 0.0, 0.0, 1.0, 0.0, 0.0])),
+        ("Thin", Affine::translate((100.0, 70.0)) * Affine::new([1e6, 0.0, 0.0, 10.0, 0.0, 0.0])),
+        ("Clipped", Affine::new([0.3, 0.0, 0.0, 0.1, 10.0, 30.0])),
+        ("Dot", Affine::translate((120.0, 70.0)) * Affine::scale(1e6)),
+        ("Steps", Affine::translate((10.0, 80.0)) * Affine::scale(5.0)),
+        ("Holder", Affine::scale(2.0)),
+        ("Holder", Affine::translate((5.0, 5.0))),
+    ] {
+        let one = instance(&mut doc, name, xf);
+        doc.insert(Some(layer), usize::MAX, one).unwrap();
+    }
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::SYMBOL_ART), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let kids = back.layers[0].children().unwrap();
+    let kinds: Vec<bool> = kids.iter().map(|n| matches!(n.kind, NodeKind::SymbolInstance { .. })).collect();
+    assert_eq!(kinds, [false, false, false, true, false, true, false, false, false, false, false, true]);
+    let b = kids[6].visual_bounds().map(|r| [r.x0, r.y0, r.x1, r.y1].map(r3));
+    assert_eq!(b, Some([100.0, 70.0, 110.0, 80.0].map(r3)));
+    // The tiny square comes back 10 pt across, where the instance put it.
+    let b = kids[2].visual_bounds().map(|r| [r.x0, r.y0, r.x1, r.y1].map(r3));
+    assert_eq!(b, Some([100.0, 50.0, 110.0, 60.0].map(r3)));
+}
+
+/// A symbol whose art is a hidden path with two fills: the canvas draws a symbol's art even when
+/// its root is hidden, so the definition's root is written shown and the instance still draws.
+#[test]
+fn a_symbol_whose_root_is_hidden_still_draws() {
+    let mut doc = Document::new(200.0, 100.0);
+    let mut look = Appearance::basic(solid(LEAF), Paint::None, 0.0);
+    look.items.push(AppearanceItem::Fill(FillLayer::new(solid(Color::BLACK))));
+    let mut art = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), look);
+    art.visible = false;
+    doc.symbols.push(Symbol { dynamic: false, name: "Hidden".into(), art: Arc::new(art) });
+    let layer = doc.layers[0].id;
+    let one = instance(&mut doc, "Hidden", Affine::translate((20.0, 20.0)));
+    doc.insert(Some(layer), usize::MAX, one).unwrap();
+    let back = read_back(&doc);
+    let kids = back.layers[0].children().unwrap();
+    assert!(matches!(kids[0].kind, NodeKind::SymbolInstance { .. }));
+    let mut shown = 0;
+    vectorcraft_doc::swatches::walk_with_masks(&back.symbols[0].art, &mut |m| {
+        shown += usize::from(m.visible && matches!(m.kind, NodeKind::Path { .. }))
+    });
+    assert!(back.symbols[0].art.visible && shown > 0, "{:?}", back.symbols[0].art);
+}
+
+/// The number of symbol instances in `n` and its subtree.
+fn instances(n: &Node) -> usize {
+    let mut count = 0;
+    vectorcraft_doc::swatches::walk_with_masks(n, &mut |m| count += usize::from(matches!(m.kind, NodeKind::SymbolInstance { .. })));
+    count
+}
+
+/// What `nodes` draw ([`paints_of`]).
+fn paints_of_nodes(doc: &Document, nodes: &[Arc<Node>]) -> Vec<String> {
+    let mut out = vec![];
+    paints_of(doc, nodes, 1, &mut out);
+    out
+}
+
+/// An instance with isolation, knockout or knockout shape of its own is written as its art, which
+/// keeps them as a group's; a plain one beside it stays an instance.
+#[test]
+fn instances_with_a_groups_transparency_are_written_as_their_art() {
+    let mut doc = Document::new(200.0, 100.0);
+    let art = square(&mut doc, Rect::new(0.0, 0.0, 10.0, 10.0), LEAF);
+    doc.symbols.push(Symbol { dynamic: false, name: "Leaf".into(), art: Arc::new(art) });
+    let mut shape = instance(&mut doc, "Leaf", Affine::translate((10.0, 10.0)));
+    shape.knockout_shape = true;
+    let mut isolated = instance(&mut doc, "Leaf", Affine::translate((30.0, 10.0)));
+    isolated.isolate = true;
+    let mut knocks = instance(&mut doc, "Leaf", Affine::translate((50.0, 10.0)));
+    knocks.knockout = Knockout::On;
+    let plain = instance(&mut doc, "Leaf", Affine::translate((70.0, 10.0)));
+    let mut outer = group(&mut doc, vec![shape, isolated, knocks, plain], false);
+    outer.knockout = Knockout::On;
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, outer).unwrap();
+    assert_eq!(export_ai_editing(&doc, &opts()).unwrap().warnings, [writer::SYMBOL_ART]);
+    let back = read_back(&doc);
+    let kids = back.layers[0].children().unwrap()[0].children().unwrap().clone();
+    let states: Vec<_> = kids.iter().map(|n| (matches!(n.kind, NodeKind::SymbolInstance { .. }), n.knockout_shape, n.isolate, n.knockout)).collect();
+    assert_eq!(
+        states,
+        [
+            (false, true, false, Knockout::Neutral),
+            (false, false, true, Knockout::Neutral),
+            (false, false, false, Knockout::On),
+            (true, false, false, Knockout::Neutral)
+        ]
+    );
+    // Each group holds the symbol's art where the instance placed it.
+    for (i, k) in kids[..3].iter().enumerate() {
+        let b = k.geometric_bounds().unwrap();
+        assert_eq!([b.x0, b.y0, b.x1, b.y1].map(r3), [10.0 + 20.0 * i as f64, 10.0, 20.0 + 20.0 * i as f64, 20.0].map(r3));
+    }
+}
+
+/// A symbol's definition is the same wherever its first instance lies: one first met deep in
+/// opacity masks keeps its own masks and instances.
+#[test]
+fn a_symbol_first_used_deep_in_masks_is_defined_whole() {
+    let mut doc = Document::new(200.0, 100.0);
+    let leaf = square(&mut doc, Rect::new(0.0, 0.0, 10.0, 10.0), LEAF);
+    doc.symbols.push(Symbol { dynamic: false, name: "Leaf".into(), art: Arc::new(leaf) });
+    // `Deep`: a square with an opacity mask, and an instance of `Leaf`.
+    let mask_art = square(&mut doc, Rect::new(0.0, 0.0, 5.0, 5.0), Color::WHITE);
+    let mut veiled = square(&mut doc, Rect::new(0.0, 0.0, 20.0, 20.0), Color::BLACK);
+    veiled.extras_mut().mask = Some(Box::new(OpacityMask { art: Arc::new(mask_art), clip: true, invert: false, disabled: false, linked: true }));
+    let inner = instance(&mut doc, "Leaf", Affine::translate((5.0, 5.0)));
+    let deep = group(&mut doc, vec![veiled, inner], false);
+    doc.symbols.push(Symbol { dynamic: false, name: "Deep".into(), art: Arc::new(deep) });
+    // Its only instance, in the art of an opacity mask seven masks deep.
+    let mut art = instance(&mut doc, "Deep", Affine::translate((50.0, 20.0)));
+    for _ in 0..7 {
+        let mut holder = square(&mut doc, Rect::new(0.0, 0.0, 100.0, 100.0), Color::gray(0.5));
+        holder.extras_mut().mask = Some(Box::new(OpacityMask { art: Arc::new(art), clip: false, invert: false, disabled: false, linked: true }));
+        art = holder;
+    }
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, art).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::DEEP_MASKS || w == writer::SYMBOL_ART), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    same_lines(&symbol_looks(&back), &symbol_looks(&doc));
+    let deep = &back.symbols.iter().find(|s| s.name == "Deep").unwrap().art;
+    assert_eq!(instances(deep), 1);
+    let mut masks = 0;
+    deep.walk(&mut |n| masks += usize::from(n.extras().mask.is_some()));
+    assert_eq!(masks, 1);
+}
+
+/// Symbols past the 4,096 the reader keeps are left out, their instances written as their art.
+#[test]
+fn symbols_past_the_readers_count_are_left_out() {
+    let mut doc = Document::new(200.0, 100.0);
+    for i in 0..=crate::import::MAX_SYMBOLS {
+        let art = square(&mut doc, Rect::new(0.0, 0.0, 4.0, 4.0), Color::gray(0.5));
+        doc.symbols.push(Symbol { dynamic: false, name: format!("S{i}"), art: Arc::new(art) });
+    }
+    // An instance of each, in the panel's order: the last one's symbol is past the count.
+    let layer = doc.layers[0].id;
+    for i in 0..=crate::import::MAX_SYMBOLS {
+        let one = instance(&mut doc, &format!("S{i}"), Affine::translate((10.0, 10.0)));
+        doc.insert(Some(layer), usize::MAX, one).unwrap();
+    }
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(out.warnings, [writer::SYMBOL_COUNT, writer::SYMBOL_ART]);
+    let back = read_back(&doc);
+    assert_eq!(back.symbols.len(), crate::import::MAX_SYMBOLS);
+    assert!(back.symbols.iter().all(|s| s.name != format!("S{}", crate::import::MAX_SYMBOLS)));
+    let live = back.layers[0].children().unwrap().iter().map(|n| matches!(n.kind, NodeKind::SymbolInstance { .. })).collect::<Vec<_>>();
+    assert_eq!(live.len(), crate::import::MAX_SYMBOLS + 1);
+    assert!(live[..crate::import::MAX_SYMBOLS].iter().all(|l| *l) && !live[crate::import::MAX_SYMBOLS]);
+}
+
+/// With one place left under the reader's count, a symbol whose type holds an inline graphic with
+/// an instance of another symbol (found only as its art is written) takes the last place, and that
+/// instance is written as its art: no more definitions are written than the reader keeps.
+#[test]
+fn a_symbol_found_while_its_holder_is_written_keeps_within_the_readers_count() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    for i in 0..crate::import::MAX_SYMBOLS - 1 {
+        let art = square(&mut doc, Rect::new(0.0, 0.0, 4.0, 4.0), Color::gray(0.5));
+        doc.symbols.push(Symbol { dynamic: false, name: format!("S{i}"), art: Arc::new(art) });
+        let one = instance(&mut doc, &format!("S{i}"), Affine::translate((10.0, 10.0)));
+        doc.insert(Some(layer), usize::MAX, one).unwrap();
+    }
+    let style = vectorcraft_doc::CharStyle { size: 18.0, fill: solid(Color::BLACK), ..vectorcraft_doc::CharStyle::default() };
+    let mut t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(0.0, 20.0), "A", style.clone());
+    t.runs.push(vectorcraft_doc::TextRun::inline(vectorcraft_doc::InlineArt::new("Inner"), style));
+    let typed = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+    doc.symbols.push(Symbol { dynamic: false, name: "Typed".into(), art: Arc::new(typed) });
+    // The inline graphic's art holds an instance of a symbol of its own.
+    let deeper = square(&mut doc, Rect::new(0.0, 0.0, 4.0, 4.0), LEAF);
+    doc.symbols.push(Symbol { dynamic: false, name: "Deeper".into(), art: Arc::new(deeper) });
+    let nested = instance(&mut doc, "Deeper", Affine::translate((1.0, 1.0)));
+    let edge = square(&mut doc, Rect::new(0.0, 0.0, 2.0, 2.0), LEAF);
+    let inner = group(&mut doc, vec![edge, nested], false);
+    doc.symbols.push(Symbol { dynamic: false, name: "Inner".into(), art: Arc::new(inner) });
+    let one = instance(&mut doc, "Typed", Affine::translate((50.0, 50.0)));
+    doc.insert(Some(layer), usize::MAX, one).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    let program = String::from_utf8_lossy(&out.program);
+    assert_eq!(program.matches("%AI14_BeginSymbol").count(), crate::import::MAX_SYMBOLS);
+    let back = read_back(&doc);
+    assert_eq!(back.symbols.len(), crate::import::MAX_SYMBOLS);
+    assert!(back.symbols.iter().any(|s| s.name == "Typed"));
+    assert!(matches!(back.layers[0].children().unwrap().last().unwrap().kind, NodeKind::SymbolInstance { .. }));
+}
+
+/// A linked image in a symbol's art is embedded; a dynamic symbol and a symbol's export type are
+/// reported left out.
+#[test]
+fn symbol_options_and_linked_images_in_symbols_are_reported() {
+    let mut doc = Document::new(200.0, 100.0);
+    let pixels = png_of(image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(2, 2, image::Rgba([0, 0, 255, 255]))));
+    let link = vectorcraft_doc::LinkInfo { path: "/tmp/blue.png".into(), ..Default::default() };
+    let picture = image_node(&mut doc, ImageBlob::new("image/png", pixels), (2, 2), Affine::scale(5.0), Some(link));
+    doc.symbols.push(Symbol { dynamic: true, name: "Picture".into(), art: Arc::new(picture) });
+    let one = instance(&mut doc, "Picture", Affine::translate((50.0, 10.0)));
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, one).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(out.warnings, [writer::SYMBOL_OPTIONS, writer::LINKS_EMBEDDED]);
+    let p = program_shown(&doc);
+    assert!(p.contains("%AI5_BeginRaster") && !p.contains("%AI5_BeginPlace"), "{p}");
+    let back = read_back(&doc);
+    let NodeKind::Image(im) = &back.symbols[0].art.kind else { panic!("the symbol's image") };
+    assert!(im.link.is_none());
+    doc.symbols[0].dynamic = false;
+    doc.set_symbol_export_type("Picture", vectorcraft_doc::SymbolExportType::Graphic);
+    assert_eq!(export_ai_editing(&doc, &opts()).unwrap().warnings, [writer::SYMBOL_OPTIONS, writer::LINKS_EMBEDDED]);
+}
+
+/// Each of the nine registration points is written 1 to 9 by its place on the grid, row by row
+/// from the top left, and read back.
+#[test]
+fn every_registration_point_is_written_by_its_place() {
+    for (point, written, read) in (0..9).map(|r| (r, r + 1, r)) {
+        let mut doc = Document::new(200.0, 100.0);
+        let art = square(&mut doc, Rect::new(0.0, 0.0, 10.0, 10.0), LEAF);
+        doc.symbols.push(Symbol { dynamic: false, name: "Mark".into(), art: Arc::new(art) });
+        doc.set_symbol_registration("Mark", vectorcraft_doc::SymbolRegistration(point));
+        let p = program_shown(&doc);
+        assert!(p.contains(&format!("%_{written} /Int (AI13PatternRegistrationType) ,\n")), "{point}: {p}");
+        assert_eq!(read_back(&doc).symbol_registration("Mark"), vectorcraft_doc::SymbolRegistration(read), "{point}");
+    }
+}
+
+/// Symbols whose art is a group with a state of its own (a name, transparency, an opacity mask, a
+/// clipping group) come back with it; the registration point shares the group's dictionary.
+#[test]
+fn symbols_whose_art_is_a_group_with_a_state_come_back() {
+    let mut doc = one_swatch_document(200.0, 100.0);
+    let pair = |doc: &mut Document| {
+        let a = square(doc, Rect::new(0.0, 0.0, 10.0, 10.0), LEAF);
+        let b = square(doc, Rect::new(5.0, 5.0, 15.0, 15.0), Color::rgb(1.0, 0.0, 0.0));
+        vec![a, b]
+    };
+    let kids = pair(&mut doc);
+    let labeled = named(group(&mut doc, kids, false), "Label");
+    let kids = pair(&mut doc);
+    let faded = see_through(group(&mut doc, kids, false), 0.5, BlendMode::Multiply);
+    let kids = pair(&mut doc);
+    let mut masked = group(&mut doc, kids, false);
+    let mask_art = square(&mut doc, Rect::new(0.0, 0.0, 8.0, 8.0), Color::WHITE);
+    masked.extras_mut().mask = Some(Box::new(OpacityMask { art: Arc::new(mask_art), clip: true, invert: true, disabled: false, linked: true }));
+    let edge = clipping(&mut doc, shapes::ellipse(Rect::new(0.0, 0.0, 12.0, 12.0)));
+    let inside = square(&mut doc, Rect::new(0.0, 0.0, 20.0, 20.0), Color::rgb(0.0, 0.0, 1.0));
+    let window = group(&mut doc, vec![edge, inside], true);
+    let lone = square(&mut doc, Rect::new(0.0, 0.0, 6.0, 6.0), Color::gray(0.3));
+    let lone_named = named(group(&mut doc, vec![lone], false), "Lone");
+    for (name, art) in [("Labeled", labeled), ("Faded", faded), ("Masked", masked), ("Window", window), ("Lone", lone_named)] {
+        doc.symbols.push(Symbol { dynamic: false, name: name.into(), art: Arc::new(art) });
+        let one = instance(&mut doc, name, Affine::translate((20.0, 20.0)));
+        let layer = doc.layers[0].id;
+        doc.insert(Some(layer), usize::MAX, one).unwrap();
+    }
+    doc.set_symbol_registration("Labeled", vectorcraft_doc::SymbolRegistration(2));
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    same_lines(&symbol_looks(&back), &symbol_looks(&doc));
+    same_lines(&all_looks(&back), &all_looks(&doc));
+    assert_eq!(export_ai_editing(&back, &opts()).unwrap().program, out.program);
+    let p = program_shown(&doc);
+    // The name and the registration point in one dictionary, the group not wrapped again.
+    assert!(p.contains("%AI14_BeginSymbol\n(Labeled)\n0 A\n0 Xw\n0 Ae\nu\n0.6 0 0.9 0.1 k\n"), "{p}");
+    assert!(p.contains("%_/ArtDictionary :\n%_3 /Int (AI13PatternRegistrationType) ,\n%_/XMLUID : (Label) ; (AI10_ArtUID) ,\n%_;\n"), "{p}");
+}
+
+/// The names of symbols in every form a string takes: parentheses, a backslash, a slash, text
+/// outside ASCII, an empty name (which the reader names `Symbol`); two symbols of one name keep the
+/// first; an instance of a symbol the document doesn't have is an empty group, with a warning that
+/// says so.
+#[test]
+fn symbol_names_and_missing_symbols() {
+    let mut doc = Document::new(200.0, 100.0);
+    let names = ["Paren (a)", "Back\\slash", "Path/To", "Hoja ñ 葉", "", "Twice"];
+    for (i, name) in names.iter().chain(["Twice"].iter()).enumerate() {
+        let art = square(&mut doc, Rect::new(0.0, 0.0, 4.0 + i as f64, 4.0), Color::gray(0.5));
+        doc.symbols.push(Symbol { dynamic: false, name: (*name).into(), art: Arc::new(art) });
+    }
+    let layer = doc.layers[0].id;
+    for name in names {
+        let one = instance(&mut doc, name, Affine::translate((10.0, 10.0)));
+        doc.insert(Some(layer), usize::MAX, one).unwrap();
+    }
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let names = names.map(|n| if n.is_empty() { "Symbol" } else { n });
+    assert_eq!(back.symbols.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), names);
+    let refs: Vec<String> = back.layers[0]
+        .children()
+        .unwrap()
+        .iter()
+        .map(|n| match &n.kind {
+            NodeKind::SymbolInstance { symbol, .. } => symbol.clone(),
+            other => panic!("{other:?}"),
+        })
+        .collect();
+    assert_eq!(refs, names);
+    // The first symbol of a name is the one defined.
+    let twice = &back.symbols.iter().find(|s| s.name == "Twice").unwrap().art;
+    assert_eq!(paints_of_nodes(&back, std::slice::from_ref(twice)), paints_of_nodes(&doc, std::slice::from_ref(&doc.symbols[5].art)));
+    // A missing symbol.
+    let lost = instance(&mut doc, "Gone", Affine::translate((40.0, 10.0)));
+    doc.insert(Some(layer), usize::MAX, lost).unwrap();
+    assert_eq!(export_ai_editing(&doc, &opts()).unwrap().warnings, [writer::MISSING_SYMBOL]);
+    let back = read_back(&doc);
+    let last = back.layers[0].children().unwrap().last().unwrap().clone();
+    assert!(matches!(&last.kind, NodeKind::Group { children, clip: false } if children.is_empty()), "{:?}", last.kind);
+}
+
+/// On a large canvas, a symbol's art holding a gradient and a nested instance is defined at its own
+/// size and comes back as it was.
+#[test]
+fn a_symbol_with_a_gradient_and_an_instance_on_a_large_canvas_comes_back() {
+    use vectorcraft_color::gradient::GradientGeom;
+    let mut doc = Document::new(20000.0, 100.0);
+    let leaf = square(&mut doc, Rect::new(0.0, 0.0, 10.0, 10.0), LEAF);
+    doc.symbols.push(Symbol { dynamic: false, name: "Leaf".into(), art: Arc::new(leaf) });
+    let geom = GradientGeom { start: (0.0, 0.0).into(), end: (40.0, 10.0).into(), aspect: 1.0, focal: None };
+    let shaded = painted(
+        &mut doc,
+        shapes::rectangle(Rect::new(0.0, 0.0, 40.0, 20.0)),
+        vec![AppearanceItem::Fill(FillLayer::new(gradient_paint(sunset(), Some(geom), None)))],
+    );
+    let nested = instance(&mut doc, "Leaf", Affine::translate((25.0, 5.0)) * Affine::rotate(0.4));
+    let both = group(&mut doc, vec![shaded, nested], false);
+    doc.symbols.push(Symbol { dynamic: false, name: "Both".into(), art: Arc::new(both) });
+    let one = instance(&mut doc, "Both", Affine::translate((100.0, 10.0)));
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, one).unwrap();
+    assert_eq!(export_ai_editing(&doc, &opts()).unwrap().warnings, [writer::SYMBOL_ART]);
+    let back = read_back(&doc);
+    same_lines(&symbol_looks(&back), &symbol_looks(&doc));
+}
+
+/// Instance matrices of every kind (turned, sheared, mirrored, scaled near the smallest area the
+/// data keeps), nested in one another, are read back as written, and written again as the same
+/// bytes. The matrices come from a fixed seed.
+#[test]
+fn generated_instance_matrices_come_back() {
+    let mut seed = 0x2545_f491_4f6c_dd1du64;
+    let mut next = move || {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        (seed >> 11) as f64 / (1u64 << 53) as f64
+    };
+    for round in 0..40 {
+        let mut doc = one_swatch_document(300.0, 300.0);
+        let base = square(&mut doc, Rect::new(0.0, 0.0, 10.0, 10.0), LEAF);
+        doc.symbols.push(Symbol { dynamic: false, name: "S0".into(), art: Arc::new(base) });
+        let matrix = |next: &mut dyn FnMut() -> f64| {
+            // Four nested matrices together scale by at most 64, within the 100 an instance may.
+            let scale = 10f64.powf(next() * 3.0 - 3.0);
+            Affine::new([
+                (next() * 4.0 - 2.0) * scale,
+                (next() * 4.0 - 2.0) * scale,
+                (next() * 4.0 - 2.0) * scale,
+                (next() * 4.0 - 2.0) * scale,
+                next() * 300.0,
+                next() * 300.0,
+            ])
+        };
+        // A chain of symbols, each holding an instance of the one before.
+        for level in 1..4 {
+            let xf = matrix(&mut next);
+            let inner = instance(&mut doc, &format!("S{}", level - 1), xf);
+            let dot = square(&mut doc, Rect::new(0.0, 0.0, 3.0, 3.0), Color::gray(0.4));
+            let art = group(&mut doc, vec![dot, inner], false);
+            doc.symbols.push(Symbol { dynamic: false, name: format!("S{level}"), art: Arc::new(art) });
+        }
+        let layer = doc.layers[0].id;
+        for _ in 0..6 {
+            let pick = format!("S{}", (next() * 4.0) as usize % 4);
+            let xf = matrix(&mut next);
+            let one = instance(&mut doc, &pick, xf);
+            doc.insert(Some(layer), usize::MAX, one).unwrap();
+        }
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        let back = read_back(&doc);
+        // Each instance written as one comes back with its matrix to ten decimals.
+        let written = |d: &Document| {
+            let mut all = vec![];
+            for n in d.layers[0].children().unwrap().iter().chain(d.symbols.iter().map(|s| &s.art)) {
+                n.walk(&mut |m| {
+                    if let NodeKind::SymbolInstance { symbol, xf } = &m.kind {
+                        all.push((symbol.clone(), *xf));
+                    }
+                });
+            }
+            all
+        };
+        assert!(out.warnings.is_empty(), "round {round}: {:?}", out.warnings);
+        let (got, want) = (written(&back), written(&doc));
+        assert_eq!(got.len(), want.len(), "round {round}");
+        for (g, w) in got.iter().zip(&want) {
+            assert_eq!(g.0, w.0, "round {round}");
+            for (a, b) in g.1.as_coeffs().iter().zip(w.1.as_coeffs()) {
+                assert!((a - b).abs() <= 1e-9 * b.abs().max(1.0), "round {round}: {:?} {:?}", g.1, w.1);
+            }
+        }
+        let again = export_ai_editing(&back, &opts()).unwrap().program;
+        same_lines(&shown(&again).lines().map(String::from).collect::<Vec<_>>(), &shown(&out.program).lines().map(String::from).collect::<Vec<_>>());
+        assert_eq!(again, out.program, "round {round}");
+    }
+    // About the smallest area the data keeps: an instance whose matrix keeps it stays one, one
+    // whose matrix (to ten decimals) loses it is written as its art.
+    for (xf, live) in [
+        (Affine::new([1e-6, 0.0, 0.0, 1.1e-6, 50.0, 10.0]), true),
+        (Affine::new([1e-6, 0.0, 0.0, 0.9e-6, 50.0, 10.0]), false),
+        (Affine::new([1.0, 0.4, 2.5, 1.0000000001, 50.0, 10.0]), true),
+        (Affine::new([4e-11, 0.0, 0.0, 1e6, 50.0, 10.0]), false),
+    ] {
+        let mut doc = Document::new(200.0, 100.0);
+        let base = square(&mut doc, Rect::new(0.0, 0.0, 10.0, 10.0), LEAF);
+        doc.symbols.push(Symbol { dynamic: false, name: "S0".into(), art: Arc::new(base) });
+        let one = instance(&mut doc, "S0", xf);
+        let layer = doc.layers[0].id;
+        doc.insert(Some(layer), usize::MAX, one).unwrap();
+        let back = read_back(&doc);
+        assert_eq!(matches!(back.layers[0].children().unwrap()[0].kind, NodeKind::SymbolInstance { .. }), live, "{xf:?}");
+    }
+}
+
+/// Type in a symbol's art is written as its outlines (the reader reads no type there), so the
+/// symbol and its instance come back; type on the layers stays type.
+#[test]
+fn type_in_a_symbols_art_is_written_as_its_outlines() {
+    let mut doc = Document::new(200.0, 100.0);
+    let label = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(0.0, 20.0), "Tag", style(18.0, Color::BLACK));
+    let label = text_node(&mut doc, label);
+    doc.symbols.push(Symbol { dynamic: false, name: "Tag".into(), art: Arc::new(label) });
+    let one = instance(&mut doc, "Tag", Affine::translate((20.0, 20.0)));
+    let plain = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(10.0, 90.0), "Plain", style(18.0, Color::BLACK));
+    let plain = text_node(&mut doc, plain);
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, one).unwrap();
+    doc.insert(Some(layer), usize::MAX, plain).unwrap();
+    assert_eq!(export_ai_editing(&doc, &opts()).unwrap().warnings, [writer::TYPE]);
+    assert_eq!(program(&doc).matches("/AI11Text :").count(), 1);
+    let back = read_back(&doc);
+    assert_eq!(back.symbols.len(), 1);
+    assert!(matches!(back.layers[0].children().unwrap()[0].kind, NodeKind::SymbolInstance { .. }));
+}
+
+// ---------- art styles ----------
+
+/// Effect `id` with its defaults and `params` over them.
+fn fx(id: &str, params: serde_json::Value) -> vectorcraft_doc::Effect {
+    vectorcraft_effects::new_effect(id, &params).unwrap()
+}
+
+/// A path `name` over `r` filled with `fill` and stroked 2 pt in `stroke` (none when `Paint::None`),
+/// with `effects`.
+fn styled_rect(doc: &mut Document, name: &str, r: Rect, fill: Paint, stroke: Paint, effects: Vec<vectorcraft_doc::Effect>) -> Node {
+    let mut ap = Appearance::basic(fill, stroke, 2.0);
+    ap.effects = effects;
+    named(Node::path(doc.alloc_id(), shapes::rectangle(r), ap), name)
+}
+
+/// A 400 × 300 document whose objects keep their live effects as art styles: a drop shadow in a
+/// color and one by darkness, an inner and an outer glow in that order, Feather, Round Corners,
+/// Scribble, Convert to Shape, Offset Path, Outline Stroke on an open path, a drop shadow on a
+/// gradient fill and on a group with transparency, a hidden effect, Pathfinder › Add on a group, a
+/// hidden locked object, an opacity mask, an object linked to a graphic style; and a graphic style
+/// of its own with two fills, a stroke, item transparency and effects.
+fn styles_document() -> Document {
+    let mut doc = Document::new(400.0, 300.0);
+    let layer = doc.layers[0].id;
+    let add = |doc: &mut Document, n: Node| {
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    };
+    let red = solid(Color::rgb(0.9, 0.2, 0.1));
+    let blue = solid(Color::rgb(0.1, 0.3, 0.8));
+    let shadow = fx("stylize.dropShadow", serde_json::json!({"x": 6.0, "y": 4.0, "blur": 8.0, "opacity": 60.0, "color": "#203040"}));
+    let n = styled_rect(&mut doc, "Shadowed", Rect::new(10.0, 10.0, 60.0, 50.0), red.clone(), blue.clone(), vec![shadow.clone()]);
+    add(&mut doc, n);
+    let dark = fx("stylize.dropShadow", serde_json::json!({"shade": "darkness", "darkness": 40.0, "mode": "darken"}));
+    let n = styled_rect(&mut doc, "Darkened", Rect::new(70.0, 10.0, 120.0, 50.0), blue.clone(), Paint::None, vec![dark]);
+    add(&mut doc, n);
+    let glows = vec![
+        fx("stylize.innerGlow", serde_json::json!({"source": "center", "blur": 3.0})),
+        fx("stylize.outerGlow", serde_json::json!({"blur": 9.0, "opacity": 50.0})),
+    ];
+    let n = styled_rect(&mut doc, "Glowing", Rect::new(130.0, 10.0, 180.0, 50.0), red.clone(), Paint::None, glows);
+    add(&mut doc, n);
+    let n = styled_rect(
+        &mut doc,
+        "Soft",
+        Rect::new(190.0, 10.0, 240.0, 50.0),
+        blue.clone(),
+        Paint::None,
+        vec![fx("stylize.feather", serde_json::json!({"radius": 7.0}))],
+    );
+    add(&mut doc, n);
+    let round = fx("stylize.roundCorners", serde_json::json!({"radius": 9.0}));
+    let n = styled_rect(&mut doc, "Rounded", Rect::new(250.0, 10.0, 300.0, 50.0), red.clone(), blue.clone(), vec![round]);
+    add(&mut doc, n);
+    let n = styled_rect(
+        &mut doc,
+        "Scribbled",
+        Rect::new(310.0, 10.0, 360.0, 50.0),
+        blue.clone(),
+        Paint::None,
+        vec![fx("stylize.scribble", serde_json::json!({}))],
+    );
+    add(&mut doc, n);
+    let shape = fx("convertToShape.roundedRectangle", serde_json::json!({"relative": true, "extraW": 12.0, "extraH": 8.0, "radius": 5.0}));
+    let n = styled_rect(&mut doc, "Shaped", Rect::new(10.0, 70.0, 60.0, 110.0), red.clone(), Paint::None, vec![shape]);
+    add(&mut doc, n);
+    let offset = fx("path.offsetPath", serde_json::json!({"offset": 4.0, "joins": "miter", "miterLimit": 6.0}));
+    let n = styled_rect(&mut doc, "Offset", Rect::new(70.0, 70.0, 120.0, 110.0), blue.clone(), red.clone(), vec![offset]);
+    add(&mut doc, n);
+    let mut open = PathData::from_bezpath(&kurbo::BezPath::from_vec(vec![
+        kurbo::PathEl::MoveTo((130.0, 110.0).into()),
+        kurbo::PathEl::LineTo((180.0, 70.0).into()),
+    ]));
+    open.subpaths.iter_mut().for_each(|sp| sp.closed = false);
+    let mut ap = Appearance::basic(Paint::None, red.clone(), 6.0);
+    ap.effects = vec![fx("path.outlineStroke", serde_json::json!({}))];
+    let n = named(Node::path(doc.alloc_id(), open, ap), "Outlined");
+    add(&mut doc, n);
+    let ramp = Gradient {
+        kind: GradientKind::Linear,
+        stops: vec![GradientStop::new(0.0, Color::rgb(1.0, 1.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.6, 0.2))],
+        ..Gradient::default()
+    };
+    let graded = Paint::Gradient(Box::new(GradientPaint::new(ramp)));
+    let n = styled_rect(&mut doc, "Graded", Rect::new(190.0, 70.0, 240.0, 110.0), graded, Paint::None, vec![shadow.clone()]);
+    add(&mut doc, n);
+    let mut hidden_fx = fx("stylize.outerGlow", serde_json::json!({}));
+    hidden_fx.visible = false;
+    let mut quiet = styled_rect(&mut doc, "Quiet", Rect::new(250.0, 70.0, 300.0, 110.0), blue.clone(), Paint::None, vec![hidden_fx]);
+    quiet.visible = false;
+    quiet.locked = true;
+    add(&mut doc, quiet);
+    // A group with a shadow, transparency and a mask; a group merged by Pathfinder › Add.
+    let a = square(&mut doc, Rect::new(10.0, 130.0, 50.0, 170.0), Color::rgb(0.2, 0.6, 0.3));
+    let b = square(&mut doc, Rect::new(30.0, 150.0, 70.0, 190.0), Color::rgb(0.6, 0.2, 0.5));
+    let mut shaded = see_through(group(&mut doc, vec![a, b], false), 0.5, BlendMode::Multiply);
+    shaded.appearance = Appearance { effects: vec![shadow.clone()], ..Appearance::default() }.into();
+    let mask_art = square(&mut doc, Rect::new(10.0, 130.0, 70.0, 160.0), Color::gray(0.0));
+    shaded.extras_mut().mask = Some(OpacityMask { art: Arc::new(mask_art), clip: true, invert: false, disabled: false, linked: true }.into());
+    add(&mut doc, named(shaded, "Shaded group"));
+    let a = square(&mut doc, Rect::new(90.0, 130.0, 130.0, 170.0), Color::rgb(0.9, 0.6, 0.1));
+    let b = square(&mut doc, Rect::new(110.0, 150.0, 150.0, 190.0), Color::rgb(0.9, 0.6, 0.1));
+    let mut merged = group(&mut doc, vec![a, b], false);
+    merged.appearance = Appearance { effects: vec![fx("pathfinder.add", serde_json::json!({}))], ..Appearance::default() }.into();
+    add(&mut doc, named(merged, "Merged"));
+    // A graphic style of its own, and an object linked to one.
+    let mut fill_top = FillLayer::new(solid(Color::rgb(0.2, 0.2, 0.9)));
+    fill_top.opacity = 0.5;
+    fill_top.blend = BlendMode::Screen;
+    fill_top.effects = vec![fx("distort.twist", serde_json::json!({"angle": 30.0}))];
+    let style_ap = Appearance {
+        items: vec![
+            AppearanceItem::Fill(FillLayer::new(solid(Color::rgb(0.9, 0.9, 0.1)))),
+            AppearanceItem::Fill(fill_top),
+            AppearanceItem::Stroke(StrokeLayer::new(solid(Color::BLACK), 3.0)),
+        ],
+        effects: vec![fx("warp.arc", serde_json::json!({"bend": 30.0})), shadow],
+        // The contents over every fill and stroke.
+        contents_index: Some(3),
+    };
+    let mut layered = vectorcraft_doc::GraphicStyle::new("Layered", style_ap);
+    layered.id = 9;
+    layered.opacity = 0.8;
+    doc.graphic_styles.push(layered);
+    let sunshine = doc.graphic_style("Sunshine").unwrap().clone();
+    let mut linked_obj = Node::path(
+        doc.alloc_id(),
+        shapes::rectangle(Rect::new(170.0, 130.0, 220.0, 170.0)),
+        sunshine.appearance_on(&Node::group(vectorcraft_doc::NodeId(0), vec![])).into_owned(),
+    );
+    linked_obj.extras_mut().graphic_style = Some(sunshine.id);
+    add(&mut doc, named(linked_obj, "Sunny"));
+    doc
+}
+
+/// Each object's name, kind, transparency, state, mask and appearance, and whether it is linked to a
+/// graphic style (by name), compared with [`writer::same_appearance`] apart.
+fn style_view(doc: &Document) -> Vec<(String, Appearance)> {
+    let mut out = vec![];
+    for n in doc.layers.iter().flat_map(|l| l.children().cloned().unwrap_or_default()) {
+        let kind = match &n.kind {
+            NodeKind::Group { .. } => "group",
+            NodeKind::Path { .. } => "path",
+            NodeKind::Compound { .. } => "compound",
+            _ => "other",
+        };
+        let link = n.extras().graphic_style.and_then(|id| doc.graphic_style_by_id(id)).map(|g| g.name.clone());
+        let head = format!(
+            "{:?} {kind} {} {:?} isolate={} {:?} shown={} locked={} mask={} link={link:?} members={}",
+            n.name,
+            r3(f64::from(n.opacity)),
+            n.blend,
+            n.isolate,
+            n.knockout,
+            n.visible,
+            n.locked,
+            n.extras().mask.is_some(),
+            n.children().map_or(0, Vec::len)
+        );
+        out.push((head, (*n.appearance).clone()));
+    }
+    out
+}
+
+/// `ap` with its gradients' stops and kind only: their placement is the slice of gradients' (a
+/// gradient comes back placed on the object, named after its definition).
+fn unplaced(ap: &Appearance) -> Appearance {
+    let mut ap = ap.clone();
+    for item in ap.items.iter_mut() {
+        let paint = match item {
+            AppearanceItem::Fill(f) => &mut f.paint,
+            AppearanceItem::Stroke(s) => &mut s.paint,
+        };
+        if let Paint::Gradient(g) = paint {
+            (g.geom, g.swatch, g.angle) = (None, None, 0.0);
+        }
+    }
+    ap
+}
+
+fn same_styles(got: &Document, want: &Document) {
+    let (g, w) = (style_view(got), style_view(want));
+    same_lines(&g.iter().map(|(h, _)| h.clone()).collect::<Vec<_>>(), &w.iter().map(|(h, _)| h.clone()).collect::<Vec<_>>());
+    for ((h, a), (_, b)) in g.iter().zip(&w) {
+        assert!(writer::same_appearance(&unplaced(a), &unplaced(b)), "{h}:\n  got  {a:?}\n  want {b:?}");
+    }
+    same_lines(&outlines(got), &outlines(want));
+}
+
+/// The points of `doc`'s objects and of their opacity masks, each path's fill rule and each
+/// object's nesting, to the written precision.
+fn outlines(doc: &Document) -> Vec<String> {
+    fn walk(n: &Node, depth: usize, out: &mut Vec<String>) {
+        let mut points = |path: &PathData, rule: Option<FillRule>| {
+            let mut s = format!("{depth} {:?} {rule:?}", n.name);
+            for sp in &path.subpaths {
+                s += &format!(" [closed={}", sp.closed);
+                for a in &sp.anchors {
+                    s += &format!(" {:.2},{:.2}", a.p.x + 0.0, a.p.y + 0.0);
+                }
+                s += "]";
+            }
+            out.push(s);
+        };
+        match &n.kind {
+            NodeKind::Path { path, rule, .. } => points(path, Some(*rule)),
+            NodeKind::Compound { rule, children } => {
+                for c in children {
+                    points(c.path_data().unwrap(), Some(*rule));
+                }
+            }
+            NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } => {
+                out.push(format!("{depth} {:?} container", n.name));
+                for c in children {
+                    walk(c, depth + 1, out);
+                }
+            }
+            other => out.push(format!("{depth} {other:?}")),
+        }
+        if let Some(mask) = &n.extras().mask {
+            out.push(format!("{depth} mask clip={} invert={} disabled={} linked={}", mask.clip, mask.invert, mask.disabled, mask.linked));
+            // The reader holds a mask's art in a group.
+            match &mask.art.kind {
+                NodeKind::Group { children, .. } if children.len() == 1 => walk(&children[0], depth + 1, out),
+                _ => walk(&mask.art, depth + 1, out),
+            }
+        }
+    }
+    let mut out = vec![];
+    for l in doc.layers.iter() {
+        walk(l, 0, &mut out);
+    }
+    out
+}
+
+/// Fails with the lines where `got` and `want` differ in more than their numbers' last written
+/// decimal (a color read back from four decimals gives its other model's values again from them).
+fn near_lines(got: &str, want: &str) {
+    let near = |a: &str, b: &str| {
+        let (a, b): (Vec<&str>, Vec<&str>) = (a.split(' ').collect(), b.split(' ').collect());
+        a.len() == b.len()
+            && a.iter().zip(&b).all(|(x, y)| match (x.trim_start_matches("%_").parse::<f64>(), y.trim_start_matches("%_").parse::<f64>()) {
+                (Ok(x), Ok(y)) => (x - y).abs() <= 2e-3,
+                _ => x == y,
+            })
+    };
+    let (g, w): (Vec<&str>, Vec<&str>) = (got.lines().collect(), want.lines().collect());
+    let differ: Vec<String> = (0..g.len().max(w.len()))
+        .filter(|&i| !matches!((g.get(i), w.get(i)), (Some(a), Some(b)) if near(a, b)))
+        .map(|i| format!("line {i}:\n  got  {:?}\n  want {:?}", g.get(i), w.get(i)))
+        .collect();
+    assert!(differ.is_empty(), "{}", differ.join("\n"));
+}
+
+#[test]
+fn objects_with_live_effects_and_graphic_styles_are_read_back() {
+    let doc = styles_document();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::EFFECTS || w == writer::PANEL_STYLES), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    same_styles(&back, &doc);
+    // The panel's styles, in its order, with their appearance and transparency.
+    let names = |d: &Document| d.graphic_styles.iter().map(|g| g.name.clone()).collect::<Vec<_>>();
+    assert_eq!(names(&back), names(&doc));
+    for (g, w) in back.graphic_styles.iter().zip(doc.graphic_styles.iter()) {
+        assert!(writer::same_appearance(&g.appearance, &w.appearance), "{}:\n  got  {:?}\n  want {:?}", w.name, g.appearance, w.appearance);
+        assert_eq!(
+            (r3(f64::from(g.opacity)), g.blend, g.isolate, g.knockout),
+            (r3(f64::from(w.opacity)), w.blend, w.isolate, w.knockout),
+            "{}",
+            w.name
+        );
+    }
+    // A group's members come back as they were.
+    let members = |d: &Document, name: &str| {
+        let mut out = vec![];
+        let g = d.layers[0].children().unwrap().iter().find(|n| n.name.as_deref() == Some(name)).unwrap().clone();
+        view(g.children().unwrap(), 0, &mut out);
+        out
+    };
+    same_lines(&members(&back, "Shaded group"), &members(&doc, "Shaded group"));
+    same_lines(&members(&back, "Merged"), &members(&doc, "Merged"));
+}
+
+/// In a document with only a new document's graphic styles, an object linked to one of them keeps
+/// its link: the panel's styles are written.
+#[test]
+fn a_link_to_a_built_in_graphic_style_is_read_back() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let sunshine = doc.graphic_style("Sunshine").unwrap().clone();
+    let ap = sunshine.appearance_on(&Node::group(vectorcraft_doc::NodeId(0), vec![])).into_owned();
+    // Without a link, a new document's styles are not written.
+    let mut plain = doc.clone();
+    let unlinked = Node::path(plain.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 60.0, 50.0)), ap.clone());
+    plain.insert(Some(layer), usize::MAX, unlinked).unwrap();
+    assert!(!program(&plain).contains("%AI9_BeginArtStyleList"));
+    let mut sunny = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 60.0, 50.0)), ap);
+    sunny.extras_mut().graphic_style = Some(sunshine.id);
+    doc.insert(Some(layer), usize::MAX, named(sunny, "Sunny")).unwrap();
+    assert_eq!(doc.graphic_styles, Document::new(1.0, 1.0).graphic_styles);
+    let back = read_back(&doc);
+    same_styles(&back, &doc);
+    let n = &back.layers[0].children().unwrap()[0];
+    assert_eq!(n.extras().graphic_style.and_then(|id| back.graphic_style_by_id(id)).map(|g| g.name.as_str()), Some("Sunshine"));
+}
+
+#[test]
+fn art_styles_are_written_in_their_forms() {
+    let p = program_shown(&styles_document());
+    // The styles in a non-printing block after the symbols' and before the palette; the panel's in
+    // its order first, then the objects' own.
+    let styles = p.find("%AI5_Begin_NonPrinting\nNp\n%AI9_BeginArtStyles\n/KnownStyle :\n(Default Graphic Style) /Name ,\n/ActiveStyle :\n").unwrap();
+    assert!(styles < p.find("%AI5_BeginPalette").unwrap(), "{p}");
+    let list = "%AI5_Begin_NonPrinting\nNp\n%AI9_BeginArtStyleList\n(Default Graphic Style)\n(Black Outline)\n(Heavy Ink)\n(Sunshine)\n(Layered)\n%AI9_EndArtStyleList\n%AI5_End_NonPrinting--\n";
+    let at = p.find(list).unwrap();
+    assert!(p.find("%AI5_EndPalette").unwrap() < at && at < p.find("%AI9_BeginDocumentData").unwrap(), "{p}");
+    // A drop shadow on the object, after its stack and before its transparency.
+    assert!(
+        p.contains(
+            "/BasicFilter :\n(Adobe Drop Shadow) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n1 /Int (blnd) ,\n0.6 /Real (opac) ,\n\
+             4 /Real (vert) ,\n6 /Real (horz) ,\n4 /Real (blur) ,\n/FillStyle : 0 O\n"
+        ),
+        "{p}"
+    );
+    // The drawn look, its state block with the object's transparency, the object on `%_` lines
+    // painted with nothing, its name, and its style.
+    assert!(p.contains("U\n0 1 0 2 0 Xy\n0 0 Xd\n6 () XW\n%_0 XR\n%_0 1 0 0 0 Xy\n%_10 -10 m\n"), "{p}");
+    assert!(p.contains("%_n\n%_/ArtDictionary :\n%_/XMLUID : (Shadowed) ; (AI10_ArtUID) ,\n%_;\n%_\n1 (Anon 1) XW\n"), "{p}");
+    assert!(p.contains("%_n\n%_/ArtDictionary :\n%_/XMLUID : (Offset) ; (AI10_ArtUID) ,\n%_;\n%_\n1 (Anon "), "{p}");
+    // The object linked to a graphic style names it.
+    assert!(p.contains("%_/XMLUID : (Sunny) ; (AI10_ArtUID) ,\n%_;\n%_\n1 (Sunshine) XW\n"), "{p}");
+    // A group's members on `%_` lines, then its name and style.
+    assert!(p.contains("6 () XW\n%_u\n"), "{p}");
+    assert!(p.contains("%_U\n%_/ArtDictionary :\n%_/XMLUID : (Merged) ; (AI10_ArtUID) ,\n%_;\n%_\n1 (Anon "), "{p}");
+    // Objects of the same appearance share their style.
+    let two = {
+        let mut doc = Document::new(200.0, 100.0);
+        let shadow = fx("stylize.dropShadow", serde_json::json!({}));
+        for x in [10.0, 60.0] {
+            let n = styled_rect(&mut doc, "Twin", Rect::new(x, 10.0, x + 30.0, 40.0), solid(Color::BLACK), Paint::None, vec![shadow.clone()]);
+            let layer = doc.layers[0].id;
+            doc.insert(Some(layer), usize::MAX, n).unwrap();
+        }
+        program(&doc)
+    };
+    assert_eq!((two.matches("/KnownStyle :").count(), two.matches("1 (Anon 1) XW\n").count()), (1, 2), "{two}");
+    assert!(!two.contains("%AI9_BeginArtStyleList"), "{two}");
+}
+
+/// Objects whose appearance the reader wouldn't read with their style are written as their
+/// drawn look, with the warnings they were written with before; graphic styles it wouldn't read
+/// are left out with a warning; and a document without effects or styles of its own has no art
+/// styles.
+#[test]
+fn appearances_the_reader_wouldnt_read_are_their_drawn_look() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let shadow = fx("stylize.dropShadow", serde_json::json!({}));
+    // Two fills and an effect: the reader keeps such an object's drawn look.
+    let mut two = styled_rect(&mut doc, "Two fills", Rect::new(10.0, 10.0, 40.0, 40.0), solid(Color::BLACK), Paint::None, vec![shadow.clone()]);
+    let mut ap = (*two.appearance).clone();
+    ap.items.push(AppearanceItem::Fill(FillLayer { opacity: 0.5, ..FillLayer::new(solid(Color::WHITE)) }));
+    two.appearance = ap.into();
+    doc.insert(Some(layer), usize::MAX, two).unwrap();
+    // A warp on a path: the reader keeps a path's drawn look for it.
+    let warped = styled_rect(
+        &mut doc,
+        "Warped",
+        Rect::new(50.0, 10.0, 80.0, 40.0),
+        solid(Color::BLACK),
+        Paint::None,
+        vec![fx("warp.arc", serde_json::json!({}))],
+    );
+    doc.insert(Some(layer), usize::MAX, warped).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::EFFECTS), "{:?}", out.warnings);
+    let p = String::from_utf8(out.program).unwrap();
+    assert!(!p.contains("%AI9_BeginArtStyles") && !p.lines().any(|l| l.starts_with("1 (")), "{p}");
+    let back = read_back(&doc);
+    assert!(back.layers[0].children().unwrap().iter().all(|n| n.appearance.effects.is_empty()));
+    // A graphic style with a gradient: left out, the others listed.
+    let ramp = Gradient { stops: vec![GradientStop::new(0.0, Color::WHITE), GradientStop::new(1.0, Color::BLACK)], ..Gradient::default() };
+    let graded = Appearance::basic(Paint::Gradient(Box::new(GradientPaint::new(ramp))), Paint::None, 0.0);
+    doc.graphic_styles.push(vectorcraft_doc::GraphicStyle::new("Graded", graded));
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::PANEL_STYLES), "{:?}", out.warnings);
+    let p = String::from_utf8(out.program).unwrap().replace("\r\n", "\n");
+    assert!(p.contains("(Sunshine)\n%AI9_EndArtStyleList") && !p.contains("(Graded)"), "{p}");
+    // Nothing styled: no art styles.
+    assert!(!program(&sample()).contains("ArtStyle"));
+}
+
+/// A graphic style's opacity is read back within the written number's precision: the style and an
+/// object's link to it stay.
+#[test]
+fn a_graphic_styles_opacity_is_compared_at_the_written_precision() {
+    let mut doc = Document::new(200.0, 100.0);
+    let ap = Appearance::basic(solid(Color::BLACK), Paint::None, 1.0);
+    let mut g = vectorcraft_doc::GraphicStyle::new("Fine", ap.clone());
+    g.id = 1;
+    g.opacity = 0.123456;
+    *doc.graphic_styles = vec![g];
+    let mut n = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 60.0, 50.0)), ap);
+    n.opacity = 0.123456;
+    n.extras_mut().graphic_style = Some(1);
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::PANEL_STYLES), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    assert_eq!(back.graphic_styles.len(), 1);
+    assert!((back.graphic_styles[0].opacity - 0.123456).abs() < 1e-3);
+    assert_eq!(back.layers[0].children().unwrap()[0].extras().graphic_style, Some(back.graphic_styles[0].id));
+}
+
+/// A compound shape draws as one area, which an art style's object wouldn't keep: it and a group
+/// holding one are written as their drawn look, with a warning.
+#[test]
+fn compound_shapes_are_not_written_with_an_art_style() {
+    let shadow = || fx("stylize.dropShadow", serde_json::json!({}));
+    let shape = |doc: &mut Document| {
+        let a = square(doc, Rect::new(10.0, 10.0, 50.0, 50.0), Color::BLACK);
+        let b = square(doc, Rect::new(30.0, 30.0, 70.0, 70.0), Color::BLACK);
+        let mut g = group(doc, vec![a, b], false);
+        g.extras_mut().compound_shape = true;
+        g
+    };
+    let mut own = Document::new(200.0, 100.0);
+    let mut n = shape(&mut own);
+    n.appearance = Appearance { effects: vec![shadow()], ..Appearance::default() }.into();
+    let layer = own.layers[0].id;
+    own.insert(Some(layer), usize::MAX, n).unwrap();
+    let mut nested = Document::new(200.0, 100.0);
+    let member = shape(&mut nested);
+    let mut n = group(&mut nested, vec![member], false);
+    n.appearance = Appearance { effects: vec![shadow()], ..Appearance::default() }.into();
+    let layer = nested.layers[0].id;
+    nested.insert(Some(layer), usize::MAX, n).unwrap();
+    for doc in [own, nested] {
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert!(out.warnings.iter().any(|w| w == writer::EFFECTS), "{:?}", out.warnings);
+        assert!(!shown(&out.program).contains("1 (Anon 1) XW"));
+    }
+}
+
+/// Graphic styles the reader's style list wouldn't hold (a name over its limit, styles past its
+/// count) are left out with a warning, and an object linked to one has no link.
+#[test]
+fn graphic_styles_past_the_lists_limits_are_left_out() {
+    let plain = || Appearance::basic(solid(Color::BLACK), Paint::None, 1.0);
+    let styled = |name: String, id: u32| {
+        let mut g = vectorcraft_doc::GraphicStyle::new(name, plain());
+        g.id = id;
+        g
+    };
+    // A name one byte over the limit, among others.
+    let mut doc = Document::new(200.0, 100.0);
+    let long = "n".repeat(1025);
+    *doc.graphic_styles = vec![styled("Before".into(), 1), styled(long.clone(), 2), styled("After".into(), 3)];
+    let mut linked = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 60.0, 50.0)), plain());
+    linked.extras_mut().graphic_style = Some(2);
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, linked).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::PANEL_STYLES), "{:?}", out.warnings);
+    assert!(!shown(&out.program).contains(&long));
+    let back = read_back(&doc);
+    let names: Vec<&str> = back.graphic_styles.iter().map(|g| g.name.as_str()).collect();
+    assert_eq!(names, ["Before", "After"]);
+    assert_eq!(back.layers[0].children().unwrap()[0].extras().graphic_style, None);
+    // A name at the limit is kept.
+    let at_limit = "n".repeat(1024);
+    doc.graphic_styles[1].name = at_limit.clone();
+    assert!(read_back(&doc).graphic_styles.iter().any(|g| g.name == at_limit));
+    // Styles past the count.
+    let mut many = Document::new(200.0, 100.0);
+    *many.graphic_styles = (1..=4097).map(|i| styled(format!("Style {i}"), i)).collect();
+    let out = export_ai_editing(&many, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::PANEL_STYLES), "{:?}", out.warnings);
+    let back = read_back(&many);
+    assert_eq!(back.graphic_styles.len(), 4096);
+    assert_eq!(back.graphic_styles.last().map(|g| g.name.as_str()), Some("Style 4096"));
+}
+
+/// A member of a group whose Transform effect moves it is written where baking put it, not with
+/// its own effects where it was.
+#[test]
+fn a_styled_member_of_a_moved_group_stays_where_it_draws() {
+    fn left_of_paths(n: &Node) -> f64 {
+        let own = n.path_data().map_or(f64::INFINITY, |p| kurbo::Shape::bounding_box(&p.to_bezpath()).x0);
+        n.children().map_or(own, |c| c.iter().map(|m| left_of_paths(m)).fold(own, f64::min))
+    }
+    let mut doc = Document::new(300.0, 100.0);
+    let layer = doc.layers[0].id;
+    let shadow = fx("stylize.dropShadow", serde_json::json!({}));
+    let member = styled_rect(&mut doc, "Member", Rect::new(10.0, 10.0, 40.0, 40.0), solid(Color::BLACK), Paint::None, vec![shadow]);
+    let mut moved = group(&mut doc, vec![member], false);
+    moved.appearance = Appearance { effects: vec![fx("distort.transform", serde_json::json!({"moveH": 70.0}))], ..Appearance::default() }.into();
+    doc.insert(Some(layer), usize::MAX, moved).unwrap();
+    let back = read_back(&doc);
+    let left = left_of_paths(&back.layers[0]);
+    assert!((left - 80.0).abs() < 1e-3, "the art starts at x = {left}");
+}
+
+/// A hidden, locked styled group keeps its state when its members are shown and unlocked.
+#[test]
+fn a_styled_group_keeps_its_state_after_members_in_another() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let member = square(&mut doc, Rect::new(10.0, 10.0, 40.0, 40.0), Color::BLACK);
+    let mut shaded = group(&mut doc, vec![member], false);
+    shaded.appearance = Appearance { effects: vec![fx("stylize.dropShadow", serde_json::json!({}))], ..Appearance::default() }.into();
+    shaded.visible = false;
+    shaded.locked = true;
+    doc.insert(Some(layer), usize::MAX, shaded).unwrap();
+    let back = read_back(&doc);
+    let n = &back.layers[0].children().unwrap()[0];
+    assert!(matches!(n.kind, NodeKind::Group { .. }));
+    assert_eq!(n.appearance.effects.len(), 1);
+    assert!(!n.visible && n.locked, "visible {} locked {}", n.visible, n.locked);
+}
+
+/// Effects in a styled object's opacity mask are not its style's: leaving them out warns.
+#[test]
+fn effects_in_a_styled_objects_mask_are_warned_about() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let shadow = fx("stylize.dropShadow", serde_json::json!({}));
+    let mut n = styled_rect(&mut doc, "Masked", Rect::new(10.0, 10.0, 40.0, 40.0), solid(Color::BLACK), Paint::None, vec![shadow]);
+    let blurred = styled_rect(
+        &mut doc,
+        "Mask art",
+        Rect::new(10.0, 10.0, 40.0, 25.0),
+        solid(Color::gray(0.0)),
+        Paint::None,
+        vec![fx("blur.gaussian", serde_json::json!({}))],
+    );
+    n.extras_mut().mask = Some(OpacityMask { art: Arc::new(blurred), clip: true, invert: false, disabled: false, linked: true }.into());
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::EFFECTS), "{:?}", out.warnings);
+    assert!(shown(&out.program).contains("\n1 (Anon 1) XW\n"));
+}
+
+/// On a large canvas no art style is written (the reader scales the styles of a large canvas):
+/// objects with effects are written as their vector art with their geometry effects applied, with a
+/// warning.
+#[test]
+fn a_large_canvas_writes_no_art_styles() {
+    let mut doc = Document::new(20000.0, 100.0);
+    let n = styled_rect(
+        &mut doc,
+        "Far",
+        Rect::new(10.0, 10.0, 40.0, 40.0),
+        solid(Color::BLACK),
+        Paint::None,
+        vec![fx("stylize.feather", serde_json::json!({}))],
+    );
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::LARGE_CANVAS_STYLES), "{:?}", out.warnings);
+    assert!(!String::from_utf8(out.program).unwrap().contains("ArtStyle"));
+}
+
+#[test]
+fn art_styles_write_the_same_bytes_again() {
+    let doc = styles_document();
+    let first = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(shown(&first.program).contains("\n1 (Anon 1) XW\n"));
+    assert_eq!(first.program, export_ai_editing(&doc, &opts()).unwrap().program);
+    assert_eq!(private_data(&doc, &opts()).unwrap().0, private_data(&doc, &opts()).unwrap().0);
+    // What is read back is written as it was.
+    let again = export_ai_editing(&read_back(&doc), &opts()).unwrap().program;
+    near_lines(&rgb_without_cmyk(&shown(&again)), &rgb_without_cmyk(&shown(&first.program)));
+}
+
+/// `program` with the CMYK equivalents of plain RGB colors blanked out: the first four numbers of
+/// `c m y k r g b Xa` (or `XA`) and of an RGB gradient stop's `c m y k r g b 2 ... Bs`. Named and
+/// spot RGB colors (`... (name) tint Xk`, `Xx` and spot stops) are not blanked; the document this
+/// is used on has none. The Generic CMYK separation of a color at the edge of the press gamut can
+/// land on one of two results that differ by up to 0.01 when the RGB changes in its last float
+/// bits, as it does between the first save and the save of the reopened file, and the platform's
+/// float math decides which. The RGB values stay compared.
+fn rgb_without_cmyk(program: &str) -> String {
+    let blank = |line: &str| {
+        let (prefix, rest) = line.strip_prefix("%_").map_or(("", line), |r| ("%_", r));
+        let t: Vec<&str> = rest.split(' ').collect();
+        let color = t.len() == 8 && matches!(t[7], "Xa" | "XA");
+        let stop = t.len() > 8 && t[7] == "2" && t.last() == Some(&"Bs");
+        if color || stop { format!("{prefix}_ _ _ _ {}", t[4..].join(" ")) } else { line.to_string() }
+    };
+    program.lines().map(blank).collect::<Vec<_>>().join("\n")
+}
+
+/// `n` on the first layer of `doc`.
+fn put(doc: &mut Document, n: Node) {
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+}
+
+fn drop_shadow() -> vectorcraft_doc::Effect {
+    fx("stylize.dropShadow", serde_json::json!({}))
+}
+
+fn black_fill() -> Paint {
+    solid(Color::BLACK)
+}
+
+/// An even-odd compound path of a square inside a square, with `ap`.
+fn ring(doc: &mut Document, ap: Appearance) -> Node {
+    let outer = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(70.0, 10.0, 110.0, 50.0)), Appearance::default());
+    let inner = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(80.0, 20.0, 100.0, 40.0)), Appearance::default());
+    let mut n = Node::new(doc.alloc_id(), NodeKind::Compound { children: vec![Arc::new(outer), Arc::new(inner)], rule: FillRule::EvenOdd });
+    n.appearance = ap.into();
+    n
+}
+
+/// A path filled black with no stroke and `effects`.
+fn plain_rect(doc: &mut Document, name: &str, effects: Vec<vectorcraft_doc::Effect>) -> Node {
+    styled_rect(doc, name, Rect::new(10.0, 10.0, 50.0, 40.0), black_fill(), Paint::None, effects)
+}
+
+/// A 200 × 100 document's first object as it reads back from a document of only `n`.
+fn read_one(make: impl FnOnce(&mut Document) -> Node) -> (Arc<Node>, Vec<String>, String) {
+    let mut doc = Document::new(200.0, 100.0);
+    let n = make(&mut doc);
+    put(&mut doc, n);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    let back = read_back(&doc);
+    (back.layers[0].children().unwrap()[0].clone(), out.warnings, shown(&out.program))
+}
+
+/// A filled path or compound path with live effects that fills by the even-odd rule is written as its
+/// drawn look with a warning, since a style's fill fills by the non-zero rule. A stroke-only object
+/// keeps its style and its own fill rule. A filled even-odd object linked to a graphic style isn't
+/// written with that style, and its link is left out with a warning.
+#[test]
+fn a_filled_even_odd_object_is_written_as_its_drawn_look() {
+    let mut doc = Document::new(300.0, 100.0);
+    let mut odd = plain_rect(&mut doc, "Odd", vec![drop_shadow()]);
+    if let NodeKind::Path { rule, .. } = &mut odd.kind {
+        *rule = FillRule::EvenOdd;
+    }
+    put(&mut doc, odd);
+    let ap = Appearance { effects: vec![drop_shadow()], ..Appearance::basic(black_fill(), Paint::None, 0.0) };
+    let n = named(ring(&mut doc, ap), "Ring");
+    put(&mut doc, n);
+    let n = plain_rect(&mut doc, "Even", vec![drop_shadow()]);
+    put(&mut doc, n);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::EFFECTS), "{:?}", out.warnings);
+    let p = shown(&out.program);
+    assert_eq!((p.matches("/KnownStyle :").count(), p.matches("\n1 (Anon 1) XW\n").count()), (1, 1), "{p}");
+    assert!(!p.contains("1 /Bool (UseEvenOdd)"), "{p}");
+
+    let mut doc = Document::new(300.0, 100.0);
+    let ap = Appearance { effects: vec![drop_shadow()], ..Appearance::basic(Paint::None, solid(Color::BLACK), 2.0) };
+    let n = named(ring(&mut doc, ap), "Stroked");
+    put(&mut doc, n);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::EFFECTS), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    same_styles(&back, &doc);
+    assert!(matches!(back.layers[0].children().unwrap()[0].kind, NodeKind::Compound { rule: FillRule::EvenOdd, .. }));
+
+    let mut doc = Document::new(200.0, 100.0);
+    let ap = Appearance::basic(black_fill(), Paint::None, 0.0);
+    let mut g = vectorcraft_doc::GraphicStyle::new("Solid", ap.clone());
+    g.id = 7;
+    doc.graphic_styles.push(g);
+    let mut n = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 40.0)), ap);
+    n.extras_mut().graphic_style = Some(7);
+    if let NodeKind::Path { rule, .. } = &mut n.kind {
+        *rule = FillRule::EvenOdd;
+    }
+    put(&mut doc, n);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::STYLE_LINKS), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let n = &back.layers[0].children().unwrap()[0];
+    assert!(matches!(n.kind, NodeKind::Path { rule: FillRule::EvenOdd, .. }), "{n:?}");
+    assert_eq!(n.extras().graphic_style, None);
+}
+
+/// A compound path filled by the non-zero rule keeps its effects, its gradient fill and its link to
+/// a graphic style.
+#[test]
+fn a_compound_path_keeps_its_style() {
+    let mut doc = Document::new(300.0, 100.0);
+    let non_zero = |mut n: Node| {
+        if let NodeKind::Compound { rule, .. } = &mut n.kind {
+            *rule = FillRule::NonZero;
+        }
+        n
+    };
+    let ap = Appearance { effects: vec![drop_shadow()], ..Appearance::basic(black_fill(), solid(Color::WHITE), 2.0) };
+    let n = named(non_zero(ring(&mut doc, ap)), "Shadowed");
+    put(&mut doc, n);
+    let stops = vec![GradientStop::new(0.0, Color::WHITE), GradientStop::new(1.0, Color::BLACK)];
+    let graded = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+    let ap = Appearance { effects: vec![drop_shadow()], ..Appearance::basic(graded, Paint::None, 0.0) };
+    let n = named(non_zero(ring(&mut doc, ap)), "Graded");
+    put(&mut doc, n);
+    let sunshine = doc.graphic_style("Sunshine").unwrap().clone();
+    let ap = sunshine.appearance_on(&Node::group(vectorcraft_doc::NodeId(0), vec![])).into_owned();
+    let mut linked_ring = named(ring(&mut doc, ap), "Linked");
+    if let NodeKind::Compound { rule, .. } = &mut linked_ring.kind {
+        *rule = FillRule::NonZero;
+    }
+    linked_ring.extras_mut().graphic_style = Some(sunshine.id);
+    put(&mut doc, linked_ring);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::EFFECTS || w == writer::STYLE_LINKS), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    same_styles(&back, &doc);
+    assert!(back.layers[0].children().unwrap().iter().all(|n| matches!(n.kind, NodeKind::Compound { .. })));
+}
+
+/// A group holding an image is written as its drawn look: the image stays a placed file, once.
+#[test]
+fn a_group_holding_an_image_is_written_as_its_drawn_look() {
+    let mut doc = Document::new(200.0, 100.0);
+    let link = Some(vectorcraft_doc::LinkInfo::new("/tmp/ramp.png"));
+    let im = image_node(&mut doc, ImageBlob::png(rgb_png()), (3, 2), Affine::scale(10.0), link);
+    let mut g = group(&mut doc, vec![im], false);
+    g.appearance = Appearance { effects: vec![drop_shadow()], ..Appearance::default() }.into();
+    put(&mut doc, g);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::EFFECTS), "{:?}", out.warnings);
+    assert!(!out.warnings.iter().any(|w| w == writer::LINKS_EMBEDDED), "{:?}", out.warnings);
+    assert!(!shown(&out.program).contains("(Anon 1)"));
+    let back = read_back(&doc);
+    let g = &back.layers[0].children().unwrap()[0];
+    let member = g.children().map_or(g, |c| &c[0]);
+    let NodeKind::Image(im) = &member.kind else { panic!("{member:?}") };
+    assert!(im.link.is_some());
+}
+
+/// A link to a graphic style that isn't written warns; one that is written doesn't.
+#[test]
+fn a_link_left_out_warns() {
+    let warns = |make: &dyn Fn(&mut Document, u32) -> Node| {
+        let mut doc = Document::new(200.0, 100.0);
+        let ap = Appearance {
+            items: vec![AppearanceItem::Fill(FillLayer::new(black_fill())), AppearanceItem::Fill(FillLayer::new(solid(Color::WHITE)))],
+            ..Appearance::default()
+        };
+        let mut layered = vectorcraft_doc::GraphicStyle::new("Layered", ap);
+        layered.id = 7;
+        doc.graphic_styles.push(layered);
+        let mut plain = vectorcraft_doc::GraphicStyle::new("Plain", Appearance::basic(black_fill(), Paint::None, 0.0));
+        plain.id = 8;
+        doc.graphic_styles.push(plain);
+        let n = make(&mut doc, 7);
+        put(&mut doc, n);
+        let warned = export_ai_editing(&doc, &opts()).unwrap().warnings.iter().any(|w| w == writer::STYLE_LINKS);
+        (warned, read_back(&doc))
+    };
+    let linked = |mut n: Node, id: u32| {
+        n.extras_mut().graphic_style = Some(id);
+        n
+    };
+    // A style of two fills: a path isn't read with it.
+    let (warned, back) = warns(&|doc, id| {
+        let ap = doc.graphic_style_by_id(id).unwrap().appearance.clone();
+        linked(Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 40.0)), ap), id)
+    });
+    assert!(warned);
+    assert_eq!(back.layers[0].children().unwrap()[0].extras().graphic_style, None);
+    assert!(back.graphic_style("Layered").is_some());
+    // An image, a symbol instance and a knockout shape are never written with a style.
+    let (warned, _) = warns(&|doc, _| {
+        let art = square(doc, Rect::new(0.0, 0.0, 10.0, 10.0), Color::BLACK);
+        doc.symbols.push(Symbol { dynamic: false, name: "S".into(), art: Arc::new(art) });
+        linked(Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "S".into(), xf: Affine::translate((50.0, 20.0)) }), 8)
+    });
+    assert!(warned);
+    let (warned, _) = warns(&|doc, _| {
+        let mut n = plain_rect(doc, "Out", vec![]);
+        n.knockout_shape = true;
+        linked(n, 8)
+    });
+    assert!(warned);
+    // A group with a member the style can't hold.
+    let (warned, _) = warns(&|doc, _| {
+        let member = plain_rect(doc, "Member", vec![drop_shadow()]);
+        linked(group(doc, vec![member], false), 8)
+    });
+    assert!(warned);
+    // A group with an effect and a member linked to a style: the group keeps its effect, and the
+    // member's link is left out.
+    let (warned, back) = warns(&|doc, _| {
+        let member = linked(plain_rect(doc, "Member", vec![]), 8);
+        let mut g = group(doc, vec![member], false);
+        g.appearance = Appearance { effects: vec![drop_shadow()], ..Appearance::default() }.into();
+        g
+    });
+    assert!(warned);
+    let g = &back.layers[0].children().unwrap()[0];
+    assert_eq!(g.appearance.effects.len(), 1, "{g:?}");
+    assert_eq!(g.children().unwrap()[0].extras().graphic_style, None);
+    // A group whose link isn't written: its member keeps its own.
+    let (warned, back) = warns(&|doc, id| {
+        let plain = doc.graphic_style_by_id(id + 1).unwrap().appearance.clone();
+        let member = linked(Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 40.0)), plain), id + 1);
+        linked(group(doc, vec![member], false), id)
+    });
+    assert!(warned);
+    let g = &back.layers[0].children().unwrap()[0];
+    assert_eq!(g.extras().graphic_style, None);
+    let member = g.children().unwrap()[0].extras().graphic_style.unwrap();
+    assert_eq!(back.graphic_style_by_id(member).map(|s| s.name.as_str()), Some("Plain"));
+    // A link in a symbol's art.
+    let (warned, _) = warns(&|doc, _| {
+        let art = linked(square(doc, Rect::new(0.0, 0.0, 10.0, 10.0), Color::BLACK), 8);
+        doc.symbols.push(Symbol { dynamic: false, name: "S".into(), art: Arc::new(art) });
+        Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "S".into(), xf: Affine::translate((50.0, 20.0)) })
+    });
+    assert!(warned);
+    // A link that is kept.
+    let (warned, back) = warns(&|doc, id| {
+        let plain = doc.graphic_style_by_id(id + 1).unwrap().appearance.clone();
+        linked(Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 40.0)), plain), id + 1)
+    });
+    assert!(!warned);
+    let id = back.layers[0].children().unwrap()[0].extras().graphic_style.unwrap();
+    assert_eq!(back.graphic_style_by_id(id).map(|g| g.name.as_str()), Some("Plain"));
+}
+
+/// A panel with no style written warns that a new document's styles come back.
+#[test]
+fn an_empty_graphic_styles_panel_warns() {
+    let mut doc = Document::new(200.0, 100.0);
+    doc.graphic_styles.clear();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::PANEL_EMPTY), "{:?}", out.warnings);
+    assert!(!shown(&out.program).contains("ArtStyle"));
+    assert_eq!(read_back(&doc).graphic_styles, Document::new(1.0, 1.0).graphic_styles);
+    // Every style left out.
+    let stops = vec![GradientStop::new(0.0, Color::WHITE), GradientStop::new(1.0, Color::BLACK)];
+    let graded = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+    doc.graphic_styles.push(vectorcraft_doc::GraphicStyle::new("Graded", Appearance::basic(graded, Paint::None, 0.0)));
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::PANEL_EMPTY) && out.warnings.iter().any(|w| w == writer::PANEL_STYLES), "{:?}", out.warnings);
+    // A new document's styles aren't written and don't warn.
+    let out = export_ai_editing(&Document::new(200.0, 100.0), &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::PANEL_EMPTY), "{:?}", out.warnings);
+}
+
+/// A second style of one name is left out with a warning, and an object linked to it has no link.
+#[test]
+fn a_graphic_style_of_a_name_another_has_is_left_out() {
+    let mut doc = Document::new(200.0, 100.0);
+    let style = |id: u32, c: Color| {
+        let mut g = vectorcraft_doc::GraphicStyle::new("Twin", Appearance::basic(solid(c), Paint::None, 0.0));
+        g.id = id;
+        g
+    };
+    *doc.graphic_styles = vec![style(1, Color::BLACK), style(2, Color::WHITE)];
+    let mut n = styled_rect(&mut doc, "Second", Rect::new(10.0, 10.0, 50.0, 40.0), solid(Color::WHITE), Paint::None, vec![]);
+    n.extras_mut().graphic_style = Some(2);
+    put(&mut doc, n);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::PANEL_STYLES) && out.warnings.iter().any(|w| w == writer::STYLE_LINKS), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    assert_eq!(back.graphic_styles.len(), 1);
+    assert_eq!(back.graphic_styles[0].appearance.fill().and_then(|f| f.paint.color()), Some(Color::BLACK));
+    assert_eq!(back.layers[0].children().unwrap()[0].extras().graphic_style, None);
+}
+
+/// A path or compound path with no points writes nothing, with or without a style; a group with no
+/// members keeps its effects.
+#[test]
+fn objects_with_nothing_to_write_are_left_out() {
+    let mut doc = Document::new(200.0, 100.0);
+    let mut empty = plain_rect(&mut doc, "Empty", vec![drop_shadow()]);
+    if let NodeKind::Path { path, .. } = &mut empty.kind {
+        path.subpaths.clear();
+    }
+    put(&mut doc, empty);
+    let mut hollow = Node::new(doc.alloc_id(), NodeKind::Compound { children: vec![], rule: FillRule::NonZero });
+    hollow.appearance = Appearance { effects: vec![drop_shadow()], ..Appearance::basic(black_fill(), Paint::None, 0.0) }.into();
+    put(&mut doc, named(hollow, "Hollow"));
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::EFFECTS), "{:?}", out.warnings);
+    let p = shown(&out.program);
+    assert!(!p.contains("(Anon 1)") && !p.contains("(Empty)") && !p.contains("6 () XW"), "{p}");
+    assert_eq!(read_back(&doc).layers[0].children().unwrap().len(), 0);
+
+    let (n, ..) = read_one(|doc| {
+        let mut g = group(doc, vec![], false);
+        g.appearance = Appearance { effects: vec![drop_shadow()], ..Appearance::default() }.into();
+        named(g, "Bare")
+    });
+    assert_eq!((n.name.as_deref(), n.appearance.effects.len(), n.children().map(Vec::len)), (Some("Bare"), 1, Some(0)));
+}
+
+/// Outline Object, every Convert to Shape form and size, Offset Path's joins, Inner Glow's sources
+/// and a stroke's width profile, each on an object, read back as they are. Drop Shadow and the glows
+/// keep their colors, in CMYK too.
+#[test]
+fn every_effect_setting_written_on_an_object_is_read_back() {
+    use serde_json::json;
+    let cases = [
+        ("path.outlineObject", json!({})),
+        ("path.outlineStroke", json!({})),
+        ("convertToShape.rectangle", json!({"relative": true, "extraW": 6.0, "extraH": 4.0})),
+        ("convertToShape.rectangle", json!({"relative": false, "width": 30.0, "height": 20.0})),
+        ("convertToShape.roundedRectangle", json!({"relative": false, "width": 30.0, "height": 20.0, "radius": 3.0})),
+        ("convertToShape.roundedRectangle", json!({"relative": true, "extraW": 6.0, "extraH": 4.0, "radius": 3.0})),
+        ("convertToShape.ellipse", json!({"relative": false, "width": 30.0, "height": 20.0})),
+        ("path.offsetPath", json!({"offset": 3.0, "joins": "round", "miterLimit": 4.0})),
+        ("path.offsetPath", json!({"offset": -3.0, "joins": "bevel", "miterLimit": 4.0})),
+        ("path.offsetPath", json!({"offset": 3.0, "joins": "miter", "miterLimit": 9.0})),
+        ("stylize.innerGlow", json!({"source": "edge", "blur": 2.5, "opacity": 40.0, "mode": "screen", "color": "#102030"})),
+        ("stylize.innerGlow", json!({"source": "center", "blur": 2.5})),
+        ("stylize.outerGlow", json!({"blur": 7.5, "opacity": 33.333, "mode": "normal", "color": "#a0b0c0"})),
+        ("stylize.dropShadow", json!({"x": 1.25, "y": -2.5, "blur": 3.5, "opacity": 12.5, "mode": "overlay", "color": "#405060"})),
+        ("stylize.dropShadow", json!({"shade": "darkness", "darkness": 62.5, "x": 0.0, "y": 0.0, "blur": 0.0})),
+        ("stylize.feather", json!({"radius": 11.5})),
+        ("stylize.roundCorners", json!({"radius": 0.5})),
+        (
+            "stylize.scribble",
+            json!({"angle": 15.0, "overlap": 2.0, "overlapVariation": 1.0, "strokeWidth": 1.5, "curviness": 12.5, "curvinessVariation": 7.5, "spacing": 4.0, "spacingVariation": 1.5}),
+        ),
+    ];
+    for (id, params) in cases {
+        let effect = fx(id, params.clone());
+        let (n, warnings, p) = read_one(|doc| plain_rect(doc, "One", vec![effect.clone()]));
+        assert!(!warnings.iter().any(|w| w == writer::EFFECTS), "{id} {params}: {warnings:?}\n{p}");
+        assert_eq!(n.appearance.effects.len(), 1, "{id} {params}");
+        let (got, want) = (&n.appearance.effects[0], &effect);
+        assert_eq!(got.id, want.id);
+        let (g, w) = (vectorcraft_effects::merged_params(&got.id, &got.params), vectorcraft_effects::merged_params(&want.id, &want.params));
+        for (key, value) in w.as_object().unwrap() {
+            let read = g.get(key).unwrap_or(&serde_json::Value::Null);
+            match (key.as_str(), value.as_f64()) {
+                // A case the file doesn't keep: `seed` and the like, which the reader fills in as their defaults.
+                ("mode" | "shade" | "source" | "joins", _) => {
+                    let lower = |v: &serde_json::Value| v.as_str().unwrap_or_default().to_ascii_lowercase();
+                    assert_eq!(lower(read), lower(value), "{id} {key}");
+                }
+                ("color", _) => {
+                    let color = |p: &serde_json::Value| vectorcraft_effects::color_param(p, Color::BLACK).to_hex();
+                    assert_eq!(color(&g), color(&w), "{id}");
+                }
+                (_, Some(v)) => assert!((read.as_f64().unwrap() - v).abs() < 6e-3, "{id} {key}: {read} for {v}"),
+                _ => assert_eq!(read, value, "{id} {key}"),
+            }
+        }
+    }
+    // A relative Ellipse: the reader keeps the drawn look, which is the effect's result.
+    let effect = fx("convertToShape.ellipse", json!({"relative": true, "extraW": 6.0, "extraH": 4.0}));
+    let (n, _, p) = read_one(|doc| plain_rect(doc, "One", vec![effect.clone()]));
+    assert!(!p.contains("%AI9_BeginArtStyles"), "{p}");
+    assert!(n.appearance.effects.is_empty());
+    // A stroke's width profile.
+    let profile = vectorcraft_doc::WidthProfile { points: vec![(0.0, 1.0, 0.5), (0.5, 0.25, 0.75), (1.0, 0.0, 1.0)] };
+    let (n, warnings, p) = read_one(|doc| {
+        let mut stroke = StrokeLayer::new(black_fill(), 4.0);
+        stroke.profile = Some(profile.clone());
+        let ap = Appearance { items: vec![AppearanceItem::Stroke(stroke)], effects: vec![drop_shadow()], contents_index: None };
+        Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 40.0)), ap)
+    });
+    assert!(!warnings.iter().any(|w| w == writer::EFFECTS), "{warnings:?}");
+    assert!(p.contains("(BSVariableWidthTValuesArray)") && p.contains("(BSLeftWidthsArray)") && p.contains("(BSRightWidthsArray)"), "{p}");
+    assert_eq!(n.appearance.stroke().and_then(|s| s.profile.clone()), Some(profile));
+    // A CMYK document: a CMYK and a spot fill, a CMYK stroke, and an effect's CMYK color stay as they are.
+    let mut doc = Document::new(200.0, 100.0);
+    doc.color_mode = vectorcraft_doc::ColorMode::Cmyk;
+    let mut swatches = (*doc.swatches).clone();
+    swatches.push(Swatch { name: "Ink".into(), paint: solid(INK), global: true, spot: true });
+    swatches.push(Swatch { name: "Brand".into(), paint: solid(BRAND), global: true, spot: false });
+    doc.swatches = swatches.into();
+    let shadow = fx("stylize.dropShadow", json!({"color": serde_json::to_value(GOLD).unwrap()}));
+    let n = styled_rect(&mut doc, "Process", Rect::new(10.0, 10.0, 40.0, 40.0), solid(GOLD), solid(BRAND), vec![shadow.clone()]);
+    put(&mut doc, n);
+    let n = styled_rect(&mut doc, "Spot", Rect::new(50.0, 10.0, 80.0, 40.0), linked("Ink", INK, 0.5), Paint::None, vec![shadow.clone()]);
+    put(&mut doc, n);
+    let n = styled_rect(&mut doc, "Global", Rect::new(90.0, 10.0, 120.0, 40.0), linked("Brand", BRAND, 1.0), Paint::None, vec![shadow]);
+    put(&mut doc, n);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::EFFECTS), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    same_styles(&back, &doc);
+    for n in back.layers[0].children().unwrap() {
+        assert!(matches!(vectorcraft_effects::color_param(&n.appearance.effects[0].params, Color::BLACK), Color::Cmyk { .. }), "{n:?}");
+    }
+    let spot = &back.layers[0].children().unwrap()[1];
+    assert!(matches!(&spot.appearance.fill().unwrap().paint, Paint::Solid { swatch: Some(s), .. } if s == "Ink"), "{spot:?}");
+}
+
+/// Each effect a graphic style can hold, in a style of its own, reads back with its settings, whatever
+/// the writer's conversions to the file's units.
+#[test]
+fn every_effect_a_graphic_style_holds_is_read_back() {
+    use serde_json::json;
+    let mut cases = vec![
+        (
+            "distort.transform",
+            json!({"scaleH": 50.0, "scaleV": 150.0, "moveH": 12.5, "moveV": -7.5, "rotate": 30.0, "copies": 2, "reference": 8, "reflectX": true, "objects": false, "strokes": true, "patterns": true}),
+        ),
+        ("distort.freeDistort", json!({"corners": [[0.1, 0.05], [0.9, 0.1], [1.0, 1.0], [0.0, 0.8]]})),
+        ("distort.puckerBloat", json!({"amount": -40.0})),
+        ("distort.puckerBloat", json!({"amount": 60.0})),
+        ("distort.twist", json!({"angle": -45.0})),
+        ("distort.zigZag", json!({"size": 7.5, "relative": false, "ridges": 6, "points": "corner"})),
+        ("distort.zigZag", json!({"size": 25.0, "relative": true, "ridges": 3, "points": "smooth"})),
+        ("blur.gaussian", json!({"radius": 2.5})),
+    ];
+    let warps = [
+        "arc",
+        "arcLower",
+        "arcUpper",
+        "arch",
+        "bulge",
+        "shellLower",
+        "shellUpper",
+        "flag",
+        "wave",
+        "fish",
+        "rise",
+        "fisheye",
+        "inflate",
+        "squeeze",
+        "twist",
+    ];
+    let ids: Vec<String> = warps.iter().map(|w| format!("warp.{w}")).collect();
+    for id in &ids {
+        cases.push((id, json!({"bend": 30.0, "horizontal": -10.0, "vertical": 20.0, "orientation": "vertical"})));
+        cases.push((id, json!({"bend": -30.0, "horizontal": 0.0, "vertical": 0.0, "orientation": "horizontal"})));
+    }
+    for (id, params) in cases {
+        let effect = fx(id, params.clone());
+        let mut doc = Document::new(200.0, 100.0);
+        let mut g = vectorcraft_doc::GraphicStyle::new(
+            "Held",
+            Appearance { effects: vec![effect.clone()], ..Appearance::basic(black_fill(), Paint::None, 0.0) },
+        );
+        g.id = 3;
+        *doc.graphic_styles = vec![g];
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert!(!out.warnings.iter().any(|w| w == writer::PANEL_STYLES), "{id} {params}: {:?}", out.warnings);
+        let back = read_back(&doc);
+        let got = &back.graphic_styles[0].appearance.effects;
+        assert_eq!(got.len(), 1, "{id} {params}");
+        assert_eq!(got[0].id, effect.id);
+        let (g, w) = (vectorcraft_effects::merged_params(&got[0].id, &got[0].params), vectorcraft_effects::merged_params(&effect.id, &effect.params));
+        for (key, value) in w.as_object().unwrap() {
+            // Random isn't written, and a style with it isn't read; its seed is the default.
+            let read = g.get(key).unwrap_or(&serde_json::Value::Null);
+            match value {
+                serde_json::Value::Array(rows) => {
+                    let got = read.as_array().unwrap();
+                    assert_eq!(got.len(), rows.len(), "{id}");
+                    for (r, w) in got.iter().zip(rows) {
+                        for (r, w) in r.as_array().unwrap().iter().zip(w.as_array().unwrap()) {
+                            assert!((r.as_f64().unwrap() - w.as_f64().unwrap()).abs() < 6e-3, "{id} {key}: {read} for {value}");
+                        }
+                    }
+                }
+                serde_json::Value::Number(v) => assert!((read.as_f64().unwrap() - v.as_f64().unwrap()).abs() < 6e-3, "{id} {key}: {read} for {v}"),
+                serde_json::Value::String(v) => assert_eq!(read.as_str().map(str::to_ascii_lowercase), Some(v.to_ascii_lowercase()), "{id} {key}"),
+                _ => assert_eq!(read, value, "{id} {key}"),
+            }
+        }
+    }
+    // A Zig Zag with its 0 to 1 settings written under the size's own key, and a turn in radians.
+    let mut doc = Document::new(200.0, 100.0);
+    let effects = vec![
+        fx("distort.zigZag", json!({"size": 7.5, "relative": false, "ridges": 6, "points": "corner"})),
+        fx("distort.transform", json!({"moveV": -7.5, "rotate": 30.0})),
+    ];
+    doc.graphic_styles.push(vectorcraft_doc::GraphicStyle::new("Forms", Appearance { effects, ..Appearance::default() }));
+    let p = program_shown(&doc);
+    assert!(p.contains("7.5 /Real (amount) ,") && p.contains("0 /Real (roundness) ,"), "{p}");
+    assert!(p.contains("7.5 /Real (moveV_Pts) ,") && p.contains("0.5236 /Real (rotate_Radians) ,"), "{p}");
+}
+
+/// Every kind of appearance a style isn't written for is written as its drawn look, with a warning.
+#[test]
+fn appearances_written_as_their_drawn_look() {
+    type Make = Box<dyn Fn(&mut Document) -> Node>;
+    let cases: Vec<(&str, Make)> = vec![
+        (
+            "a pattern fill",
+            Box::new(|doc| {
+                let tile = square(doc, Rect::new(0.0, 0.0, 5.0, 5.0), Color::BLACK);
+                let mut dots = vectorcraft_doc::PatternDef::new("Dots", vec![Arc::new(tile)]);
+                dots.tile = Rect::new(0.0, 0.0, 10.0, 10.0);
+                doc.patterns.push(dots);
+                let fill = Paint::Pattern { pattern: "Dots".into(), xf: Affine::IDENTITY };
+                styled_rect(doc, "P", Rect::new(10.0, 10.0, 50.0, 40.0), fill, Paint::None, vec![drop_shadow()])
+            }),
+        ),
+        (
+            "an overprinting fill",
+            Box::new(|doc| {
+                let ap = Appearance {
+                    items: vec![AppearanceItem::Fill(FillLayer { overprint: true, ..FillLayer::new(black_fill()) })],
+                    effects: vec![drop_shadow()],
+                    contents_index: None,
+                };
+                Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 40.0)), ap)
+            }),
+        ),
+        (
+            "an overprinting stroke",
+            Box::new(|doc| {
+                let ap = Appearance {
+                    items: vec![AppearanceItem::Stroke(StrokeLayer { overprint: true, ..StrokeLayer::new(black_fill(), 2.0) })],
+                    effects: vec![drop_shadow()],
+                    contents_index: None,
+                };
+                Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 40.0)), ap)
+            }),
+        ),
+        (
+            "a gradient stroke",
+            Box::new(|doc| {
+                let stops = vec![GradientStop::new(0.0, Color::WHITE), GradientStop::new(1.0, Color::BLACK)];
+                let graded = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+                styled_rect(doc, "G", Rect::new(10.0, 10.0, 50.0, 40.0), Paint::None, graded, vec![drop_shadow()])
+            }),
+        ),
+        (
+            "a fill with an opacity of its own",
+            Box::new(|doc| {
+                let ap = Appearance {
+                    items: vec![AppearanceItem::Fill(FillLayer { opacity: 0.5, ..FillLayer::new(black_fill()) })],
+                    effects: vec![drop_shadow()],
+                    contents_index: None,
+                };
+                Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 40.0)), ap)
+            }),
+        ),
+        (
+            "a fill with an effect of its own",
+            Box::new(|doc| {
+                let fill = FillLayer { effects: vec![fx("stylize.feather", serde_json::json!({}))], ..FillLayer::new(black_fill()) };
+                let ap = Appearance { items: vec![AppearanceItem::Fill(fill)], ..Appearance::default() };
+                Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 40.0)), ap)
+            }),
+        ),
+        ("Pathfinder on a path", Box::new(|doc| plain_rect(doc, "P", vec![fx("pathfinder.add", serde_json::json!({}))]))),
+        (
+            "a group with a fill of its own",
+            Box::new(|doc| {
+                let member = square(doc, Rect::new(10.0, 10.0, 40.0, 40.0), Color::BLACK);
+                let mut g = group(doc, vec![member], false);
+                g.appearance = Appearance { effects: vec![drop_shadow()], ..Appearance::basic(solid(Color::WHITE), Paint::None, 0.0) }.into();
+                g
+            }),
+        ),
+        ("an effect the style doesn't hold", Box::new(|doc| plain_rect(doc, "B", vec![fx("blur.gaussian", serde_json::json!({}))]))),
+        (
+            "a group whose member's stroke is written as its outline",
+            Box::new(|doc| {
+                let mut stroke = StrokeLayer::new(solid(Color::BLACK), 4.0);
+                stroke.profile = Some(vectorcraft_doc::WidthProfile { points: vec![(0.0, 1.0, 0.5), (0.5, 0.25, 0.75), (1.0, 0.0, 1.0)] });
+                let ap = Appearance { items: vec![AppearanceItem::Stroke(stroke)], ..Appearance::default() };
+                let member = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 40.0, 40.0)), ap);
+                let mut g = group(doc, vec![member], false);
+                let effects = vec![fx("stylize.roundCorners", serde_json::json!({})), drop_shadow()];
+                g.appearance = Appearance { effects, ..Appearance::default() }.into();
+                g
+            }),
+        ),
+        (
+            "a group whose effects reshape a member filled with pattern tiles",
+            Box::new(|doc| {
+                let big = square(doc, Rect::new(-2.0, -2.0, 6.0, 6.0), Color::rgb(1.0, 0.0, 0.0));
+                let mut over = vectorcraft_doc::PatternDef::new("Over", vec![Arc::new(big)]);
+                over.tile = Rect::new(0.0, 0.0, 10.0, 10.0);
+                doc.patterns.push(over);
+                let tiles = Paint::Pattern { pattern: "Over".into(), xf: Affine::IDENTITY };
+                let member =
+                    Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(20.0, 20.0, 60.0, 60.0)), Appearance::basic(tiles, Paint::None, 0.0));
+                let mut g = group(doc, vec![member], false);
+                let offset = fx("path.offsetPath", serde_json::json!({"offset": 3.0}));
+                g.appearance = Appearance { effects: vec![offset, drop_shadow()], ..Appearance::default() }.into();
+                g
+            }),
+        ),
+        (
+            "a group whose effects reshape a member with a gradient that fits it",
+            Box::new(|doc| {
+                let stops = vec![GradientStop::new(0.0, Color::WHITE), GradientStop::new(1.0, Color::BLACK)];
+                let graded = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+                let member =
+                    Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(30.0, 10.0, 100.0, 40.0)), Appearance::basic(graded, Paint::None, 0.0));
+                let mut g = group(doc, vec![member], false);
+                let offset = fx("path.offsetPath", serde_json::json!({"offset": 15.0}));
+                g.appearance = Appearance { effects: vec![offset, drop_shadow()], ..Appearance::default() }.into();
+                g
+            }),
+        ),
+        (
+            "Define Knockout Shape",
+            Box::new(|doc| {
+                let mut n = plain_rect(doc, "K", vec![drop_shadow()]);
+                n.knockout_shape = true;
+                n
+            }),
+        ),
+    ];
+    for (what, make) in cases {
+        let mut doc = Document::new(200.0, 100.0);
+        let n = make(&mut doc);
+        put(&mut doc, n);
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert!(out.warnings.iter().any(|w| w == writer::EFFECTS), "{what}: {:?}", out.warnings);
+        let p = shown(&out.program);
+        assert!(!p.contains("%AI9_BeginArtStyles") && !p.contains("(Anon 1) XW"), "{what}:\n{p}");
+        let back = read_back(&doc);
+        let n = &back.layers[0].children().unwrap()[0];
+        assert!(n.appearance.effects.is_empty(), "{what}: {n:?}");
+    }
+}
+
+/// A link to a graphic style whose Transform moves the outline is kept on a path the reader reads
+/// that style on, and left out with a warning on a path with an opacity mask, which keeps its mask.
+#[test]
+fn a_link_to_a_style_that_moves_the_outline_is_kept_where_the_reader_reads_it() {
+    let make = |masked: bool| {
+        let mut doc = Document::new(200.0, 100.0);
+        let moved = fx("distort.transform", serde_json::json!({"copies": 0, "scaleH": 50.0}));
+        let ap = Appearance { effects: vec![moved], ..Appearance::basic(black_fill(), Paint::None, 0.0) };
+        let mut g = vectorcraft_doc::GraphicStyle::new("Moved", ap.clone());
+        g.id = 9;
+        doc.graphic_styles.push(g);
+        let mut n = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 40.0)), ap);
+        n.extras_mut().graphic_style = Some(9);
+        if masked {
+            let art = square(&mut doc, Rect::new(10.0, 10.0, 50.0, 25.0), Color::gray(0.5));
+            n.extras_mut().mask = Some(OpacityMask { art: Arc::new(art), clip: true, invert: false, disabled: false, linked: true }.into());
+        }
+        put(&mut doc, n);
+        doc
+    };
+    let doc = make(false);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::STYLE_LINKS), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let n = &back.layers[0].children().unwrap()[0];
+    assert_eq!(n.extras().graphic_style.and_then(|id| back.graphic_style_by_id(id)).map(|g| g.name.as_str()), Some("Moved"));
+
+    let doc = make(true);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::STYLE_LINKS), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let n = &back.layers[0].children().unwrap()[0];
+    assert_eq!(n.extras().graphic_style, None);
+    assert!(n.extras().mask.is_some(), "{n:?}");
+}
+
+/// Twist and Transform on an object that isn't linked to a graphic style are not written as a style
+/// of its own: the object reads back without live effects.
+#[test]
+fn distort_effects_on_an_unlinked_object_write_no_style() {
+    let cases = [fx("distort.twist", serde_json::json!({"angle": 30.0})), fx("distort.transform", serde_json::json!({"copies": 0, "moveH": 5.0}))];
+    for e in cases {
+        let what = e.id.clone();
+        let mut doc = Document::new(200.0, 100.0);
+        let n = plain_rect(&mut doc, "D", vec![e]);
+        put(&mut doc, n);
+        let p = shown(&export_ai_editing(&doc, &opts()).unwrap().program);
+        assert!(!p.contains("%AI9_BeginArtStyles") && !p.contains("(Anon 1) XW"), "{what}:\n{p}");
+        let back = read_back(&doc);
+        let n = &back.layers[0].children().unwrap()[0];
+        assert!(n.appearance.effects.is_empty(), "{what}: {n:?}");
+    }
+}
+
+/// A gradient fill that fits its object is placed on the outline its geometry effects draw: an
+/// object with Offset Path reads back with the gradient a plain object of the drawn size has.
+#[test]
+fn a_styled_objects_gradient_fits_its_drawn_outline() {
+    let stops = || vec![GradientStop::new(0.0, Color::WHITE), GradientStop::new(1.0, Color::BLACK)];
+    let graded = || Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops()))));
+    let first = |doc: &Document| doc.layers[0].children().unwrap()[0].clone();
+    let mut doc = Document::new(200.0, 100.0);
+    let offset = fx("path.offsetPath", serde_json::json!({"offset": 20.0, "joins": "miter"}));
+    let n = styled_rect(&mut doc, "G", Rect::new(50.0, 30.0, 100.0, 60.0), graded(), Paint::None, vec![offset]);
+    put(&mut doc, n);
+    let styled = first(&read_back(&doc));
+    assert_eq!(styled.appearance.effects.len(), 1);
+    let mut doc = Document::new(200.0, 100.0);
+    let n = styled_rect(&mut doc, "P", Rect::new(30.0, 10.0, 120.0, 80.0), graded(), Paint::None, vec![]);
+    put(&mut doc, n);
+    let plain = first(&read_back(&doc));
+    let geom = |n: &Node| match &n.appearance.fill().unwrap().paint {
+        Paint::Gradient(g) => {
+            let g = g.geom.unwrap();
+            format!("{:.2} {:.2} {:.2} {:.2} {:.2}", g.start.x, g.start.y, g.end.x, g.end.y, g.aspect)
+        }
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(geom(&styled), geom(&plain));
+}
+
+/// The effects of a pattern's tile art are its own: a styled group's drawn look that first uses the
+/// pattern still warns that the tile's Gaussian Blur is left out.
+#[test]
+fn effects_in_a_pattern_a_styled_look_uses_are_warned_about() {
+    let mut doc = Document::new(200.0, 100.0);
+    let dot = styled_rect(
+        &mut doc,
+        "Dot",
+        Rect::new(2.0, 2.0, 8.0, 8.0),
+        solid(Color::BLACK),
+        Paint::None,
+        vec![fx("blur.gaussian", serde_json::json!({}))],
+    );
+    let mut grid = vectorcraft_doc::PatternDef::new("Grid", vec![Arc::new(dot)]);
+    grid.tile = Rect::new(0.0, 0.0, 10.0, 10.0);
+    doc.patterns.push(grid);
+    let tiles = Paint::Pattern { pattern: "Grid".into(), xf: Affine::IDENTITY };
+    let member = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(20.0, 20.0, 60.0, 60.0)), Appearance::basic(tiles, Paint::None, 0.0));
+    let mut g = group(&mut doc, vec![member], false);
+    g.appearance = Appearance { effects: vec![drop_shadow()], ..Appearance::default() }.into();
+    put(&mut doc, g);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    let p = shown(&out.program);
+    assert!(p.contains("%AI3_BeginPattern") && p.contains("\n1 (Anon 1) XW\n"), "{p}");
+    assert!(out.warnings.iter().any(|w| w == writer::EFFECTS), "{:?}", out.warnings);
+}
+
+/// A style that isn't written defines no gradient: a hidden gradient fill that only the style
+/// would have held leaves no gradient the art uses.
+#[test]
+fn a_style_that_isnt_written_defines_no_gradient() {
+    let mut doc = Document::new(200.0, 100.0);
+    let stops = vec![GradientStop::new(0.0, Color::WHITE), GradientStop::new(1.0, Color::BLACK)];
+    let graded = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+    let ap = Appearance {
+        items: vec![
+            AppearanceItem::Fill(FillLayer { visible: false, ..FillLayer::new(graded) }),
+            AppearanceItem::Stroke(StrokeLayer::new(solid(Color::BLACK), 2.0)),
+        ],
+        effects: vec![fx("blur.gaussian", serde_json::json!({}))],
+        contents_index: None,
+    };
+    let n = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 40.0)), ap);
+    put(&mut doc, n);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    let p = shown(&out.program);
+    assert!(!p.contains("(Anon 1) XW"), "{p}");
+    assert!(p.contains("%%BeginSetup\n0 Bn\n"), "{p}");
+}
+
+/// An object in a plain group, a sublayer or a clipping group by a path keeps its style there. One
+/// in a symbol's art, in an opacity mask or in art cut to a clipping object other than a path is
+/// written as its drawn look, with a warning.
+#[test]
+fn where_a_styled_object_keeps_its_style() {
+    let inside = |doc: &mut Document| plain_rect(doc, "Inside", vec![drop_shadow()]);
+    let found = |doc: &Document| {
+        fn find(nodes: &[Arc<Node>]) -> Option<&Arc<Node>> {
+            nodes.iter().find_map(|n| if n.name.as_deref() == Some("Inside") { Some(n) } else { n.children().and_then(|c| find(c)) })
+        }
+        find(&doc.layers).cloned()
+    };
+    // In a plain group.
+    let mut doc = Document::new(200.0, 100.0);
+    let n = inside(&mut doc);
+    let g = group(&mut doc, vec![n], false);
+    put(&mut doc, g);
+    assert_eq!(found(&read_back(&doc)).unwrap().appearance.effects.len(), 1);
+    same_styles(&read_back(&doc), &doc);
+    // In a sublayer.
+    let mut doc = Document::new(200.0, 100.0);
+    let n = inside(&mut doc);
+    let mut sub = Node::layer(doc.alloc_id(), "Sub", LayerColor::Preset(1));
+    sub.children_mut().unwrap().push(Arc::new(n));
+    put(&mut doc, sub);
+    assert_eq!(found(&read_back(&doc)).unwrap().appearance.effects.len(), 1);
+    // In a clipping group.
+    let mut doc = Document::new(200.0, 100.0);
+    let clip = Node::new(
+        doc.alloc_id(),
+        NodeKind::Path {
+            path: shapes::rectangle(Rect::new(0.0, 0.0, 60.0, 60.0)),
+            rule: FillRule::NonZero,
+            live: None,
+            clipping: true,
+            guide: false,
+        },
+    );
+    let n = inside(&mut doc);
+    let g = group(&mut doc, vec![clip, n], true);
+    put(&mut doc, g);
+    assert_eq!(found(&read_back(&doc)).unwrap().appearance.effects.len(), 1);
+    // In a symbol's art: the instance keeps the symbol, the effects are left out.
+    let mut doc = Document::new(200.0, 100.0);
+    let n = inside(&mut doc);
+    doc.symbols.push(Symbol { dynamic: false, name: "S".into(), art: Arc::new(n) });
+    let instance = Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "S".into(), xf: Affine::translate((50.0, 20.0)) });
+    put(&mut doc, instance);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::EFFECTS), "{:?}", out.warnings);
+    assert!(!shown(&out.program).contains("(Anon 1) XW"));
+    // In an opacity mask.
+    let mut doc = Document::new(200.0, 100.0);
+    let art = inside(&mut doc);
+    let mut n = square(&mut doc, Rect::new(10.0, 10.0, 60.0, 60.0), Color::BLACK);
+    n.extras_mut().mask = Some(OpacityMask { art: Arc::new(art), clip: true, invert: false, disabled: false, linked: true }.into());
+    put(&mut doc, n);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::EFFECTS), "{:?}", out.warnings);
+    assert!(!shown(&out.program).contains("(Anon 1) XW"));
+    // In art cut to a clipping object other than a path: type.
+    let mut doc = Document::new(200.0, 100.0);
+    let t = vectorcraft_doc::TextObject::point(
+        vectorcraft_geom::Point::new(10.0, 70.0),
+        "Type",
+        vectorcraft_doc::CharStyle { size: 18.0, fill: solid(Color::BLACK), ..vectorcraft_doc::CharStyle::default() },
+    );
+    let t = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+    let n = inside(&mut doc);
+    let g = group(&mut doc, vec![t, n], true);
+    put(&mut doc, g);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::EFFECTS), "{:?}", out.warnings);
+    assert!(!shown(&out.program).contains("(Anon 1) XW"));
+}
+
+/// A styled group's members of every kind allowed come back as they were: a compound path, a named
+/// path, a hidden and a locked path, a nested group and a clipping group.
+#[test]
+fn a_styled_groups_members_of_each_kind_are_read_back() {
+    let mut doc = Document::new(200.0, 100.0);
+    let solid_ap = Appearance::basic(solid(Color::rgb(0.2, 0.4, 0.6)), Paint::None, 0.0);
+    let compound = named(ring(&mut doc, solid_ap.clone()), "Compound");
+    let plain = named(square(&mut doc, Rect::new(10.0, 10.0, 30.0, 30.0), Color::rgb(0.8, 0.1, 0.1)), "Named");
+    let mut quiet = named(square(&mut doc, Rect::new(30.0, 10.0, 50.0, 30.0), Color::rgb(0.1, 0.8, 0.1)), "Hidden");
+    quiet.visible = false;
+    let mut fixed = named(square(&mut doc, Rect::new(50.0, 10.0, 70.0, 30.0), Color::rgb(0.1, 0.1, 0.8)), "Locked");
+    fixed.locked = true;
+    let a = square(&mut doc, Rect::new(10.0, 40.0, 30.0, 60.0), Color::BLACK);
+    let nested = named(group(&mut doc, vec![a], false), "Nested");
+    let clip = Node::new(
+        doc.alloc_id(),
+        NodeKind::Path {
+            path: shapes::rectangle(Rect::new(40.0, 40.0, 60.0, 60.0)),
+            rule: FillRule::NonZero,
+            live: None,
+            clipping: true,
+            guide: false,
+        },
+    );
+    let b = square(&mut doc, Rect::new(40.0, 40.0, 80.0, 80.0), Color::WHITE);
+    let cut = named(group(&mut doc, vec![clip, b], true), "Cut");
+    let mut g = named(group(&mut doc, vec![compound, plain, quiet, fixed, nested, cut], false), "Holder");
+    g.appearance = Appearance { effects: vec![drop_shadow()], ..Appearance::default() }.into();
+    put(&mut doc, g);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::EFFECTS), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    same_styles(&back, &doc);
+    let members = |d: &Document| {
+        let mut out = vec![];
+        view(d.layers[0].children().unwrap()[0].children().unwrap(), 0, &mut out);
+        out
+    };
+    same_lines(&members(&back), &members(&doc));
+}
+
+/// What compares two appearances for the writer's checks and for these tests tells them apart.
+#[test]
+fn same_appearance_tells_appearances_apart() {
+    use serde_json::json;
+    let base = || Appearance {
+        items: vec![
+            AppearanceItem::Fill(FillLayer::new(solid(Color::rgb(0.5, 0.25, 0.75)))),
+            AppearanceItem::Stroke(StrokeLayer::new(black_fill(), 2.0)),
+        ],
+        effects: vec![fx("stylize.dropShadow", json!({"x": 10.0, "mode": "Multiply", "color": "#102030"}))],
+        contents_index: None,
+    };
+    let same = writer::same_appearance;
+    assert!(same(&base(), &base()));
+    // Within the written precision, a mode in another case and a color in another form.
+    let mut other = base();
+    other.effects[0].params["x"] = json!(10.005);
+    other.effects[0].params["mode"] = json!("multiply");
+    other.effects[0].params["color"] = serde_json::to_value(Color::from_hex("#102030").unwrap()).unwrap();
+    assert!(same(&other, &base()));
+    // A fill or stroke that doesn't paint.
+    let mut other = base();
+    other.items.push(AppearanceItem::Fill(FillLayer::new(Paint::None)));
+    assert!(same(&other, &base()));
+    type Change = Box<dyn Fn(&mut Appearance)>;
+    let change: Vec<Change> = vec![
+        Box::new(|a| a.effects[0].params["x"] = json!(10.01)),
+        Box::new(|a| a.effects[0].params["color"] = json!("#102031")),
+        Box::new(|a| a.effects[0].params["mode"] = json!("screen")),
+        Box::new(|a| a.effects[0].visible = false),
+        Box::new(|a| a.effects[0].id = "stylize.outerGlow".into()),
+        Box::new(|a| a.effects.clear()),
+        Box::new(|a| a.items.truncate(1)),
+        Box::new(|a| a.items.swap(0, 1)),
+        Box::new(|a| a.contents_index = Some(2)),
+        Box::new(|a| {
+            if let AppearanceItem::Fill(f) = &mut a.items[0] {
+                f.paint = solid(Color::rgb(0.5, 0.25, 0.76));
+            }
+        }),
+        Box::new(|a| {
+            if let AppearanceItem::Fill(f) = &mut a.items[0] {
+                f.opacity = 0.5;
+            }
+        }),
+        Box::new(|a| {
+            if let AppearanceItem::Stroke(s) = &mut a.items[1] {
+                s.width = 2.5;
+            }
+        }),
+    ];
+    for (i, f) in change.iter().enumerate() {
+        let mut other = base();
+        f(&mut other);
+        assert!(!same(&other, &base()), "change {i}");
+    }
+}
+
+/// A gradient fill in a style is placed as on an object without a style: a turned linear gradient
+/// and a radial one with a focal point, and on a first artboard away from the origin among several.
+#[test]
+fn a_styled_objects_gradient_is_placed_as_a_plain_objects_is() {
+    use vectorcraft_color::gradient::GradientGeom;
+    let stops = || vec![GradientStop::new(0.0, Color::WHITE), GradientStop::new(1.0, Color::rgb(0.1, 0.2, 0.8))];
+    let turned = GradientGeom { start: (120.0, 60.0).into(), end: (170.0, 90.0).into(), aspect: 1.0, focal: None };
+    let mut focal = GradientGeom { start: (140.0, 70.0).into(), end: (170.0, 70.0).into(), aspect: 0.5, focal: None };
+    focal.set_focal(Some((150.0, 65.0).into()));
+    let boards = [Rect::new(0.0, 0.0, 300.0, 200.0), Rect::new(100.0, 50.0, 400.0, 250.0)];
+    for (kind, geom) in [(GradientKind::Linear, turned), (GradientKind::Radial, focal)] {
+        for board in boards {
+            let paint = gradient_paint(Gradient::new(kind, stops()), Some(geom), None);
+            let make = |effects: Vec<vectorcraft_doc::Effect>| {
+                let mut doc = Document::new(300.0, 200.0);
+                doc.artboards[0].rect = board;
+                let second = doc.artboards[0].clone();
+                doc.artboards.push(Artboard { rect: board + vectorcraft_geom::Vec2::new(400.0, 0.0), ..second });
+                let n = styled_rect(&mut doc, "G", Rect::new(120.0, 60.0, 180.0, 100.0), paint.clone(), Paint::None, effects);
+                put(&mut doc, n);
+                doc
+            };
+            let (with, without) = (read_back(&make(vec![drop_shadow()])), read_back(&make(vec![])));
+            let (a, b) = (&with.layers[0].children().unwrap()[0], &without.layers[0].children().unwrap()[0]);
+            assert_eq!(a.appearance.effects.len(), 1);
+            let geom = |n: &Node| match &n.appearance.fill().unwrap().paint {
+                Paint::Gradient(g) => {
+                    let g = g.geom.unwrap();
+                    format!(
+                        "{:.2} {:.2} {:.2} {:.2} {:.2} {:?}",
+                        g.start.x,
+                        g.start.y,
+                        g.end.x,
+                        g.end.y,
+                        g.aspect,
+                        g.focal.map(|f| (r3(f.x), r3(f.y)))
+                    )
+                }
+                other => panic!("{other:?}"),
+            };
+            assert_eq!(geom(a), geom(b));
+            same_lines(&outlines(&with), &outlines(&without));
+        }
+    }
+}
+
+/// On a large canvas a document with only graphic styles, an object linked to one and an object with
+/// an effect all warn, and the object comes back as its drawn look at its place.
+#[test]
+fn a_large_canvas_writes_every_object_as_its_look() {
+    let warns = |doc: &Document| export_ai_editing(doc, &opts()).unwrap().warnings.iter().any(|w| w == writer::LARGE_CANVAS_STYLES);
+    let mut styles_only = Document::new(20000.0, 100.0);
+    styles_only.graphic_styles.push(vectorcraft_doc::GraphicStyle::new("Mine", Appearance::basic(black_fill(), Paint::None, 0.0)));
+    assert!(warns(&styles_only));
+    assert_eq!(read_back(&styles_only).graphic_style("Mine"), None);
+    let mut plain = Document::new(20000.0, 100.0);
+    let n = plain_rect(&mut plain, "None", vec![]);
+    put(&mut plain, n);
+    assert!(!warns(&plain));
+    let mut linked_doc = Document::new(20000.0, 100.0);
+    let id = linked_doc.graphic_style("Sunshine").unwrap().id;
+    let mut n = plain_rect(&mut linked_doc, "Linked", vec![]);
+    n.extras_mut().graphic_style = Some(id);
+    put(&mut linked_doc, n);
+    assert!(warns(&linked_doc));
+    assert_eq!(read_back(&linked_doc).layers[0].children().unwrap()[0].extras().graphic_style, None);
+    let mut shaded = Document::new(20000.0, 100.0);
+    let n = plain_rect(&mut shaded, "Shaded", vec![drop_shadow()]);
+    put(&mut shaded, n);
+    assert!(warns(&shaded));
+    let back = read_back(&shaded);
+    let n = &back.layers[0].children().unwrap()[0];
+    assert!(n.appearance.effects.is_empty());
+    let p = n.path_data().unwrap().subpaths[0].anchors[0].p;
+    assert!((p.x - 10.0).abs() < 1e-2 && (p.y - 10.0).abs() < 1e-2, "{p:?}");
+}
+
+// ---------- variables ----------
+
+/// A 200 × 100 document with variables: a text variable `name` bound to point type, a visibility
+/// variable `show` bound to an unnamed square and to a rectangle `Badge`, an image variable
+/// `picture` bound to a linked image, a graph variable `chart` and a variable of unknown kind
+/// `other`; the data sets `First` (two lines of text, hidden, a linked file in a folder with a space
+/// and a `%`) and `Second` (empty text, shown, a linked file on a drive), `Second` shown; the
+/// variables locked.
+fn variables_doc() -> Document {
+    use vectorcraft_doc::{DataSet, DataValue, Variable, VariableKind};
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let square = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0)), Appearance::basic(solid(GOLD), Paint::None, 0.0));
+    let mut badge =
+        Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(40.0, 10.0, 90.0, 30.0)), Appearance::basic(solid(BRAND), Paint::None, 0.0));
+    badge.name = Some("Badge".into());
+    let pic = image_node(
+        &mut doc,
+        ImageBlob::png(rgb_png()),
+        (3, 2),
+        Affine::new([10.0, 0.0, 0.0, 10.0, 100.0, 10.0]),
+        Some(vectorcraft_doc::LinkInfo::new("/tmp/a b/one.png")),
+    );
+    let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(10.0, 70.0), "Ann", style(18.0, Color::BLACK));
+    let t = text_node(&mut doc, t);
+    let ids = [square.id, badge.id, pic.id, t.id];
+    for n in [square, badge, pic, t] {
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    let vars = &mut doc.variables;
+    for (name, kind) in [
+        ("name", VariableKind::Text),
+        ("show", VariableKind::Visibility),
+        ("picture", VariableKind::Image),
+        ("chart", VariableKind::Graph),
+        ("other", VariableKind::Unknown),
+    ] {
+        vars.variables.push(Variable { name: name.into(), kind });
+    }
+    vars.bind(ids[0], "show");
+    vars.bind(ids[1], "show");
+    vars.bind(ids[2], "picture");
+    vars.bind(ids[3], "name");
+    let row = |name: &str, text: &str, show: bool, file: &str| DataSet {
+        name: name.into(),
+        values: [
+            ("name".to_string(), DataValue::Text(text.into())),
+            ("show".to_string(), DataValue::Visible(show)),
+            ("picture".to_string(), DataValue::Image(file.into())),
+        ]
+        .into(),
+    };
+    vars.datasets = vec![row("First", "Ann (one)\nLee & é", false, "/Users/test/Job 100%/pic.png"), row("Second", "", true, "C:\\Art\\two.png")];
+    vars.active_dataset = Some("Second".into());
+    vars.locked = true;
+    doc
+}
+
+/// The objects of `doc` bound to each variable, by kind and name, in document order.
+fn bound_objects(doc: &Document) -> Vec<String> {
+    let mut out = vec![];
+    for v in &doc.variables.variables {
+        for id in doc.variables.objects_of(&v.name) {
+            let n = doc.node(id).unwrap();
+            let kind = match &n.kind {
+                NodeKind::Image(im) => format!("image {:?}", im.link.as_ref().map(|l| l.path.clone())),
+                NodeKind::Path { .. } => "path".to_string(),
+                NodeKind::Text(t) => format!("type {:?}", t.runs.iter().map(|r| r.text.as_str()).collect::<String>()),
+                _ => "other".to_string(),
+            };
+            out.push(format!("{} → {kind} {:?}", v.name, n.name));
+        }
+    }
+    out
+}
+
+/// The warnings the reader gives about the variable library of `doc`'s editing data.
+fn library_notes(doc: &Document) -> Vec<String> {
+    let (_, warnings) = crate::ai_alone(&private_data(doc, &opts()).unwrap().0.data).unwrap();
+    warnings.into_iter().filter(|w| w.contains("variable")).collect()
+}
+
+#[test]
+fn variables_data_sets_and_bindings_are_read_back() {
+    let doc = variables_doc();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    assert_eq!(back.variables.variables, doc.variables.variables);
+    assert_eq!(back.variables.datasets, doc.variables.datasets);
+    assert_eq!(back.variables.active_dataset.as_deref(), Some("Second"));
+    assert!(back.variables.locked);
+    assert_eq!(bound_objects(&back), bound_objects(&doc));
+    assert_eq!(
+        bound_objects(&back),
+        ["name → type \"Ann\" None", "show → path None", "show → path Some(\"Badge\")", "picture → image Some(\"/tmp/a b/one.png\") None"]
+    );
+    assert_eq!(library_notes(&doc), Vec::<String>::new());
+    // The document read back is written the same way again.
+    let library = |p: String| p[p.find("%_/XMLNode :").unwrap()..p.find("(#document)").unwrap()].to_string();
+    assert_eq!(library(program_shown(&back)), library(program_shown(&doc)));
+}
+
+#[test]
+fn variables_and_data_sets_past_the_readers_caps_are_left_out() {
+    use vectorcraft_doc::{DataSet, Variable, VariableKind};
+    let mut doc = variables_doc();
+    for i in 0..300 {
+        doc.variables.variables.push(Variable { name: format!("extra{i}"), kind: VariableKind::Text });
+    }
+    for i in 0..1_000 {
+        doc.variables.datasets.push(DataSet { name: format!("Row {i}"), values: Default::default() });
+    }
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::LIMITS), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    assert_eq!(back.variables.variables[..], doc.variables.variables[..256]);
+    assert_eq!(back.variables.datasets[..], doc.variables.datasets[..1_000]);
+    assert_eq!(bound_objects(&back).len(), 4);
+    assert_eq!(library_notes(&doc), Vec::<String>::new());
+}
+
+/// Bindings that fill the reader's byte budget: the bindings past it are left out, and every
+/// variable and every binding written reads back.
+#[test]
+fn bindings_that_fill_the_readers_budget_keep_every_variable() {
+    use vectorcraft_doc::{Variable, VariableKind};
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let mut ids = vec![];
+    for i in 0..170 {
+        let mut n = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(1.0, 1.0, 2.0, 2.0)), Appearance::basic(solid(GOLD), Paint::None, 0.0));
+        n.name = Some(format!("o{i:0>249}"));
+        ids.push(n.id);
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    for v in 0..120 {
+        let name = format!("v{v:0>254}");
+        doc.variables.variables.push(Variable { name: name.clone(), kind: VariableKind::Visibility });
+        for id in &ids {
+            doc.variables.bind(*id, &name);
+        }
+    }
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::LIMITS), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    assert_eq!(back.variables.variables, doc.variables.variables);
+    let bound: usize = back.variables.bindings.values().map(|names| names.len()).sum();
+    assert!(bound > 0 && bound < 120 * 170, "{bound}");
+    assert_eq!(library_notes(&doc), Vec::<String>::new());
+}
+
+#[test]
+fn long_xml_ids_and_text_of_many_lines_are_left_out() {
+    use vectorcraft_doc::DataValue;
+    let mut doc = variables_doc();
+    let badge = doc.variables.objects_of("show")[1];
+    doc.node_mut(badge).unwrap().name = Some("_".repeat(60));
+    let lines = "\n".repeat(150_000);
+    doc.variables.datasets[0].values.insert("name".into(), DataValue::Text(lines));
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::LIMITS), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    assert_eq!(bound_objects(&back), ["name → type \"Ann\" None", "show → path None", "picture → image Some(\"/tmp/a b/one.png\") None"]);
+    assert_eq!(back.variables.datasets[0].values.get("name"), None);
+    assert_eq!(back.variables.datasets[1].values.get("name"), Some(&DataValue::Text(String::new())));
+    // Nothing is written that the reader leaves out.
+    assert_eq!(library_notes(&doc), Vec::<String>::new());
+}
+
+#[test]
+fn a_layer_bound_to_a_visibility_variable_is_reported_left_out() {
+    let mut doc = variables_doc();
+    assert!(export_ai_editing(&doc, &opts()).unwrap().warnings.iter().all(|w| w != writer::BINDINGS));
+    let layer = doc.layers[0].id;
+    doc.variables.bind(layer, "show");
+    assert!(export_ai_editing(&doc, &opts()).unwrap().warnings.iter().any(|w| w == writer::BINDINGS));
+    assert_eq!(bound_objects(&read_back(&doc)).len(), 4);
+}
+
+#[test]
+fn a_binding_to_an_object_no_longer_in_the_document_is_not_reported() {
+    let mut doc = variables_doc();
+    let gone = doc.alloc_id();
+    doc.variables.bind(gone, "show");
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    assert_eq!(bound_objects(&read_back(&doc)), bound_objects(&variables_doc()));
+}
+
+#[test]
+fn a_data_set_shown_that_is_not_written_is_reported_left_out() {
+    for active in [" Second", "Nope"] {
+        let mut doc = variables_doc();
+        doc.variables.active_dataset = Some(active.into());
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert_eq!(out.warnings, [writer::ACTIVE], "{active:?}");
+        assert_eq!(read_back(&doc).variables.active_dataset, None, "{active:?}");
+    }
+}
+
+#[test]
+fn a_locked_library_without_variables_stays_locked() {
+    let mut doc = Document::new(200.0, 100.0);
+    doc.variables.locked = true;
+    assert!(read_back(&doc).variables.locked);
+}
+
+#[test]
+fn names_the_reader_does_not_read_as_they_are_are_left_out() {
+    use vectorcraft_doc::{DataSet, Variable, VariableKind};
+    let mut doc = variables_doc();
+    for name in ["x".repeat(256), " padded".into(), String::new(), "show".into()] {
+        doc.variables.variables.push(Variable { name: name.clone(), kind: VariableKind::Text });
+        doc.variables.datasets.push(DataSet { name, values: Default::default() });
+    }
+    doc.variables.datasets.push(DataSet { name: "First".into(), values: Default::default() });
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::LIMITS), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let expected = variables_doc();
+    assert_eq!(back.variables.variables, expected.variables.variables);
+    let mut datasets = expected.variables.datasets.clone();
+    datasets.push(DataSet { name: "show".into(), values: Default::default() });
+    assert_eq!(back.variables.datasets, datasets);
+    assert_eq!(library_notes(&doc), Vec::<String>::new());
+}
+
+#[test]
+fn a_document_without_variables_has_no_library() {
+    let p = program(&sample());
+    assert!(!p.contains("XMLNode"));
+}
+
+#[test]
+fn an_unlocked_library_without_a_data_set_is_read_back() {
+    let mut doc = variables_doc();
+    doc.variables.datasets.clear();
+    doc.variables.active_dataset = None;
+    doc.variables.locked = false;
+    let back = read_back(&doc);
+    let expected = vectorcraft_doc::Variables { bindings: back.variables.bindings.clone(), ..(*doc.variables).clone() };
+    assert_eq!(*back.variables, expected);
+    assert_eq!(bound_objects(&back), bound_objects(&doc));
+}
+
+#[test]
+fn bindings_and_values_the_reader_cant_take_are_left_out() {
+    use vectorcraft_doc::{DataValue, VariableKind};
+    let mut doc = variables_doc();
+    let layer = doc.layers[0].id;
+    // Type of only white space is written as its outlines.
+    let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(10.0, 90.0), "   ", style(18.0, Color::BLACK));
+    let t = text_node(&mut doc, t);
+    let text_id = t.id;
+    doc.insert(Some(layer), usize::MAX, t).unwrap();
+    doc.variables.bind(text_id, "name");
+    doc.variables.variables.push(vectorcraft_doc::Variable { name: "a:b".into(), kind: VariableKind::Text });
+    let first = &mut doc.variables.datasets[0].values;
+    first.insert("chart".into(), DataValue::Graph("a,b\n1,2".into()));
+    first.insert("a:b".into(), DataValue::Text("lost".into()));
+    first.insert("picture".into(), DataValue::Image("/a:b/pic.png".into()));
+    let second = &mut doc.variables.datasets[1].values;
+    second.insert("picture".into(), DataValue::Image("relative/pic.png".into()));
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::BINDINGS), "{:?}", out.warnings);
+    assert!(out.warnings.iter().any(|w| w == writer::VALUES), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    assert_eq!(back.variables.objects_of("name").len(), 1);
+    assert_eq!(back.variables.datasets[0].values.get("chart"), None);
+    assert_eq!(back.variables.datasets[0].values.get("a:b"), None);
+    assert_eq!(back.variables.datasets[0].values.get("picture"), None);
+    assert_eq!(back.variables.datasets[1].values.get("picture"), None);
+    assert_eq!(bound_objects(&back).len(), 4);
 }

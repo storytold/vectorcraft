@@ -195,6 +195,11 @@ fn decode_within(r: &mut Reader, bitmap: ObjId, crop: (u32, u32, u32, u32), worl
         if let Some(name) = s.entry(bitmap, b"Bckg") {
             let width = s.int(bitmap, b"BmpW").and_then(|v| u32::try_from(v).ok()).unwrap_or(0);
             let height = s.int(bitmap, b"BmpH").and_then(|v| u32::try_from(v).ok()).unwrap_or(0);
+            // The whole source is decoded for every layer that reads it, so charge it all, not only the crop.
+            let Some(left) = r.budget.pixels.checked_sub(u64::from(width) * u64::from(height)) else {
+                return Err(Error::Limit("embedded image pixels"));
+            };
+            r.budget.pixels = left;
             match original(r, name).and_then(|bytes| source_pixels(&bytes, width, height)) {
                 Ok(pixels) => Some((width as usize, pixels)),
                 Err(Error::Limit(e)) => return Err(Error::Limit(e)),
@@ -318,8 +323,10 @@ fn grid(s: &stream::Stream, bitmap: ObjId, c: usize, bps: usize) -> (usize, usiz
     let height = s.int(bitmap, b"BmpH").and_then(|v| usize::try_from(v).ok()).unwrap_or(0);
     let tw = s.int(bitmap, &tag(b"TWi", c)).and_then(|v| usize::try_from(v).ok()).unwrap_or_else(|| width.saturating_mul(bps).div_ceil(TILE));
     let th = s.int(bitmap, &tag(b"THi", c)).and_then(|v| usize::try_from(v).ok()).unwrap_or_else(|| height.div_ceil(TILE));
+    // A grid larger than the bitmap has tiles no crop can reach: don't convert or scan them on every reference.
+    let tiles = width.saturating_mul(bps).div_ceil(TILE).saturating_mul(height.div_ceil(TILE));
     let states: Vec<u8> = match s.field(bitmap, &tag(b"Sta", c)) {
-        Some(Value::Array(a)) => a.iter().map(|v| if let Value::UInt(u) = v { u8::try_from(*u).unwrap_or(255) } else { 255 }).collect(),
+        Some(Value::Array(a)) => a.iter().take(tiles).map(|v| if let Value::UInt(u) = v { u8::try_from(*u).unwrap_or(255) } else { 255 }).collect(),
         _ => Vec::new(),
     };
     (tw, th, states)

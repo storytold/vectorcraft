@@ -179,7 +179,7 @@ fn fill_proxy_invert_recolors_a_colorized_gray_image_and_undo_restores_it() {
     let id = image(&mut s, "gray", gray(false));
     s.execute("paint.setFill", &json!({"color": "#336699"})).unwrap();
     let before = colorize(&s, id).unwrap();
-    assert_eq!(s.execute("paint.invert", &json!({})).unwrap(), json!({"changed": 1}));
+    assert_eq!(s.execute("paint.invert", &json!({})).unwrap(), json!({"changed": 1, "notChanged": {"locked": 0, "hidden": 0}}));
     assert_eq!(colorize(&s, id).and_then(|p| p.color()).map(|c| c.to_hex()), Some("#cc9966".into()));
     assert_eq!(s.proxy_paints().0.color().map(|c| c.to_hex()), Some("#cc9966".into()));
     s.execute("edit.undo", &json!({})).unwrap();
@@ -193,7 +193,7 @@ fn fill_proxy_complement_recolors_a_colorized_gray_image_and_undo_restores_it() 
     s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
     let before = colorize(&s, id).unwrap();
     let expected = Paint::solid(Color::rgb8(0, 255, 255));
-    assert_eq!(s.execute("paint.complement", &json!({})).unwrap(), json!({"changed": 1}));
+    assert_eq!(s.execute("paint.complement", &json!({})).unwrap(), json!({"changed": 1, "notChanged": {"locked": 0, "hidden": 0}}));
     assert_eq!(colorize(&s, id), Some(expected.clone()));
     assert_eq!(s.proxy_paints().0, expected);
     s.execute("edit.undo", &json!({})).unwrap();
@@ -209,7 +209,7 @@ fn stroke_proxy_invert_leaves_a_colorized_image_fill_unchanged() {
     let key = image_key(&s, id);
     s.execute("paint.setStroke", &json!({"color": "#ff0000"})).unwrap();
     assert_eq!(s.doc().unwrap().doc.node(id).unwrap().appearance.stroke().unwrap().paint.color(), Some(Color::rgb8(255, 0, 0)));
-    assert_eq!(s.execute("paint.invert", &json!({"stroke": true})).unwrap(), json!({"changed": 1}));
+    assert_eq!(s.execute("paint.invert", &json!({"stroke": true})).unwrap(), json!({"changed": 1, "notChanged": {"locked": 0, "hidden": 0}}));
     assert_eq!(s.doc().unwrap().doc.node(id).unwrap().appearance.stroke().unwrap().paint.color(), Some(Color::rgb8(0, 255, 255)));
     assert_eq!(colorize(&s, id), before);
     assert_eq!(image_key(&s, id), key);
@@ -223,7 +223,10 @@ fn edit_colors_invert_without_fill_recolors_a_colorized_images_stroke() {
     s.execute("paint.setStroke", &json!({"color": "#ff0000"})).unwrap();
     let before = colorize(&s, id);
     let key = image_key(&s, id);
-    assert_eq!(s.execute("edit.colors.invert", &json!({"fill": false, "stroke": true})).unwrap(), json!({"changed": 1}));
+    assert_eq!(
+        s.execute("edit.colors.invert", &json!({"fill": false, "stroke": true})).unwrap(),
+        json!({"changed": 1, "notChanged": {"locked": 0, "hidden": 0}})
+    );
     assert_eq!(s.doc().unwrap().doc.node(id).unwrap().appearance.stroke().unwrap().paint.color(), Some(Color::rgb8(0, 255, 255)));
     assert_eq!(colorize(&s, id), before);
     assert_eq!(image_key(&s, id), key);
@@ -251,7 +254,10 @@ fn edit_colors_recolors_an_image_colorize_with_pixels_excluded() {
     let id = image(&mut s, "gray", gray(false));
     s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
     let before = colorize(&s, id);
-    assert_eq!(s.execute("edit.colors.invert", &json!({"includeImages": false})).unwrap(), json!({"changed": 1}));
+    assert_eq!(
+        s.execute("edit.colors.invert", &json!({"includeImages": false})).unwrap(),
+        json!({"changed": 1, "notChanged": {"locked": 0, "hidden": 0}})
+    );
     assert_eq!(colorize(&s, id), Some(Paint::solid(Color::rgb8(0, 255, 255))));
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(colorize(&s, id), before);
@@ -264,7 +270,7 @@ fn edit_colors_invert_recolors_colorize_without_changing_pixels_and_undo_restore
     s.execute("paint.setFill", &json!({"color": "#336699"})).unwrap();
     let before = colorize(&s, id);
     let key = image_key(&s, id);
-    assert_eq!(s.execute("edit.colors.invert", &json!({})).unwrap(), json!({"changed": 1}));
+    assert_eq!(s.execute("edit.colors.invert", &json!({})).unwrap(), json!({"changed": 1, "notChanged": {"locked": 0, "hidden": 0}}));
     assert_eq!(colorize(&s, id).and_then(|p| p.color()).map(|c| c.to_hex()), Some("#cc9966".into()));
     assert_eq!(image_key(&s, id), key);
     s.execute("edit.undo", &json!({})).unwrap();
@@ -292,7 +298,7 @@ fn edit_colors_invert_without_fill_leaves_colorized_image_unchanged() {
     s.execute("paint.setFill", &json!({"color": "#336699"})).unwrap();
     let before = colorize(&s, id);
     let key = image_key(&s, id);
-    assert_eq!(s.execute("edit.colors.invert", &json!({"fill": false})).unwrap(), json!({"changed": 0}));
+    assert_eq!(s.execute("edit.colors.invert", &json!({"fill": false})).unwrap(), json!({"changed": 0, "notChanged": {"locked": 0, "hidden": 0}}));
     assert_eq!(colorize(&s, id), before);
     assert_eq!(image_key(&s, id), key);
 }
@@ -326,7 +332,7 @@ fn proxy_invert_recolors_a_colorized_image_and_another_fill_in_one_undo_step() {
     s.execute("paint.setFill", &json!({"color": "#0000ff"})).unwrap();
     s.execute("select.set", &json!({"ids": [id.0, shape.0]})).unwrap();
     let undo = s.doc().unwrap().history.undo.len();
-    assert_eq!(s.execute("paint.invert", &json!({})).unwrap(), json!({"changed": 2}));
+    assert_eq!(s.execute("paint.invert", &json!({})).unwrap(), json!({"changed": 2, "notChanged": {"locked": 0, "hidden": 0}}));
     assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
     assert_eq!(colorize(&s, id), Some(Paint::solid(Color::rgb8(0, 255, 255))));
     assert_eq!(s.doc().unwrap().doc.node(shape).unwrap().appearance.fill().unwrap().paint.color(), Some(Color::rgb8(255, 255, 0)));

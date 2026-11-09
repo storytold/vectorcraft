@@ -118,7 +118,7 @@ A file opened from the file manager (double-click, Open With, a drop on the exec
 
 ## Linux: Wayland and X11
 
-On GNOME/Wayland, enable **Preferences › User Interface › System Title Bar** and restart to use winit's font-free Adwaita window controls (`wayland-csd-adwaita-notitle`); the existing custom title bar remains the Linux default.
+On GNOME/Wayland, enable **Preferences › User Interface › System Title Bar** and restart to use winit's font-free Adwaita window controls (`wayland-csd-adwaita-notitle`); the existing custom title bar remains the Linux default. On X11, on a Wayland compositor that draws server-side decorations such as KDE Plasma, and in a window opened through XWayland, enable **Preferences › User Interface › VectorCraft Title Bar on Every Desktop** and restart to use the app bar as the title bar instead of the desktop's frame. `VECTORCRAFT_TITLEBAR=app`, `=system` or `=desktop` chooses the frame for one run and takes precedence over System Title Bar and VectorCraft Title Bar on Every Desktop.
 
 The window runs natively on Wayland (eframe's `wayland` feature) and on X11. On machines with two GPUs it renders on the one the desktop runs on unless Preferences say otherwise; see [Desktop graphics processor](#desktop-graphics-processor) (#502). The system clipboard (`apps/vectorcraft/src/clipboard.rs`) is arboard with its `wayland-data-control` feature:
 

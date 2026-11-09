@@ -470,6 +470,21 @@ fn numbers_in_threaded_frames_are_written_as_text_in_each_frame() {
     assert_markers_in_place(&d, &back, &drawn.iter().map(String::as_str).collect::<Vec<_>>(), 0.1);
 }
 
+/// The numbers of list paragraphs at a deeper level are written as text where the canvas draws
+/// them, 18 pt further in, each level with its own count.
+#[test]
+fn numbers_at_a_deeper_list_level_are_written_as_text_where_the_canvas_draws_them() {
+    let number = |level| Some(ParaList::numbered(NumberStyle::Arabic).at_level(level));
+    let d = doc(vec![listed("first\nsecond\nthird\nfourth", &[number(1), number(2), number(2), number(1)])]);
+    let origins = marker_origins(&d);
+    let x = |m: usize| origins.get(m).and_then(|o| o.first()).map_or(f64::NAN, |p| p.x);
+    assert!((x(1) - x(0) - 18.0).abs() < 1e-6 && (x(3) - x(0)).abs() < 1e-6, "{origins:?}");
+    let back = import_as(&pdf(&d, false).bytes, TextAs::Text);
+    let all = texts(&back).concat();
+    assert!(before(&all, "1.", "first") && before(&all, "2.", "third") && all.matches("2.").count() == 2, "{all}");
+    assert_markers_in_place(&d, &back, &["1.", "1.", "2.", "2."], 0.1);
+}
+
 /// A number set in oldstyle figures (the first character's OpenType features) is written as its
 /// digits, though the character map gives the digits other glyphs. The reopened type has no
 /// OpenType features and sets lining figures, so only where each number starts is compared.

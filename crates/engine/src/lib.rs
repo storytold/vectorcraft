@@ -62,6 +62,18 @@ pub struct Session {
     /// While Cmd lends `tool` (a selection tool) for a drag: the tool it was lent to, which comes
     /// back as it was at the release ([`Session::pointer`]).
     pub(crate) lender: Option<Box<dyn Tool>>,
+    /// The active document (its uid) and its [`History::step`] when the tool last handled a pointer
+    /// event or drew its overlays: when they differ at the next one, the tool is told first
+    /// ([`vectorcraft_tools::Tool::history_moved`]). None until the first.
+    pub(crate) tool_step: Option<(u64, (u64, u64))>,
+    /// The selection of the active document (its uid) as Cmd lent `tool`: what the lent tool's
+    /// gesture found, so that one that leaves it as it was picks nothing.
+    pub(crate) selection_at_lend: Option<(u64, vectorcraft_doc::Selection)>,
+    /// The selection a lent tool's gesture changed and left as it gave `lender` back, in the
+    /// document (its uid) it was made in: while it is still that document's selection, the anchors
+    /// in it are ones picked, not the Pen's last anchor, and Copy and Cut take them with the Pen or
+    /// Curvature tool back too (#6123).
+    pub(crate) lent_selection: Option<(u64, vectorcraft_doc::Selection)>,
     /// The selection tool chosen last (Selection, Direct Selection or Group Selection): the one Cmd
     /// lends the other tools. None until one is chosen.
     pub(crate) last_selection_tool: Option<&'static str>,
@@ -70,6 +82,9 @@ pub struct Session {
     /// cursor asked for again over an unchanged document and selection measures nothing again.
     pub(crate) preview_memo: vectorcraft_tools::select::PreviewMemo,
     depth: u32,
+    /// Set while saved steps play ([`Session::replay`]): [`Session::execute`] then takes keys the
+    /// command's params description doesn't name instead of refusing them.
+    replaying: bool,
     /// Set when the active tool panicked (see [`guard`]); reported by the next tool event.
     tool_panic: Option<EngineError>,
     /// How many times switching or closing documents, or replacing the active one, has started the
@@ -161,6 +176,16 @@ pub struct Session {
     /// has inherited the selection's appearance: the documents ([`DocState::uid`]) whose newest
     /// history step takes the colors the batch finally left.
     pub(crate) batch_paint_docs: Vec<u64>,
+    /// The composite fonts (lowercase names) that the open documents defined when the font
+    /// database was last brought in step with them ([`cmd::compositefonts::sync`]).
+    pub(crate) composite_names: Vec<String>,
+    /// Every composite font (lowercase name) this session has registered in the font database:
+    /// type read for opening may have been laid out in one that is gone by the time it opens.
+    pub(crate) composite_names_registered: std::collections::HashSet<String>,
+    /// While a command that changes nothing in the document runs (a query, or one of
+    /// [`command_sets::JOURNALED_READS`]): it reads the instance of an object selected in a symbol
+    /// instance's art.
+    pub(crate) reading: bool,
     /// While [`Session::place_read`] runs `file.place`: the file read for it, which the command
     /// places instead of reading the file; `None` otherwise.
     pub(crate) place_hand_off: Option<cmd::place::PlaceRead>,
@@ -228,9 +253,10 @@ pub struct Session {
     /// Where folder searches may go; `None`: this computer's rules ([`cmd::findfiles::Rules`]).
     /// Tests set it.
     pub search_rules: Option<cmd::findfiles::Rules>,
-    /// Canvas feedback cached for the pending deferred preview ([`Session::overlays`]); cleared
-    /// when the preview params change or the interaction ends.
-    pub(crate) deferred_overlay_cache: Option<(String, Value, Vec<vectorcraft_tools::Overlay>)>,
+    /// Canvas feedback cached for the pending deferred preview ([`Session::overlays`],
+    /// [`Session::deferred_transform_box`]); cleared when the preview params change or the
+    /// interaction ends.
+    pub(crate) deferred_overlay_cache: Option<tooling::DeferredFeedback>,
     /// The walker threads a folder search starts; `None`: [`cmd::findfiles::threads`]. Tests set
     /// it.
     pub search_threads: Option<usize>,
@@ -242,6 +268,9 @@ pub struct Session {
     /// The Global Edit Options Start Global Edit matches with (`select.globalEditOptions`); not
     /// saved.
     pub global_edit_options: cmd::globaledit::Options,
+    /// Set while [`Session::tool_typed_text`] passes keyboard input to the active tool
+    /// ([`vectorcraft_tools::ToolContext::typed_from_keyboard`]).
+    keyboard_text: bool,
 }
 
 impl Default for Session {

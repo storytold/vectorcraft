@@ -1,4 +1,5 @@
 use super::*;
+use vectorcraft_color::Color;
 
 #[test]
 fn a_variable_width_stroke_keeps_its_profile() {
@@ -1051,6 +1052,184 @@ fn a_hidden_fill_comes_in_hidden() {
     assert_eq!(st.looks.iter().map(|l| l.visible).collect::<Vec<_>>(), [false, true]);
 }
 
+/// A descriptor (version 1) of `fields`.
+fn descriptor(fields: &[Vec<u8>]) -> Vec<u8> {
+    [vec![0, 0, 0, 1], fields.concat()].concat()
+}
+
+fn long_field(key: &[u8; 4], v: i32) -> Vec<u8> {
+    [&key[..], &[0; 4], b"long", &v.to_be_bytes()].concat()
+}
+
+fn enum_field(key: &[u8; 4], kind: &[u8; 4], v: &[u8; 4]) -> Vec<u8> {
+    [&key[..], &0x2000u32.to_be_bytes(), kind, v].concat()
+}
+
+/// Bas Relief's fields: the filter-gallery code, `detail`, `smoothness` and the light direction `light`.
+fn relief_fields(detail: i32, smoothness: i32, light: &[u8; 4]) -> Vec<Vec<u8>> {
+    vec![enum_field(b"GEfk", b"GEft", b"BsRl"), long_field(b"Dtl ", detail), long_field(b"Smth", smoothness), enum_field(b"LghD", b"LghD", light)]
+}
+
+/// A settings block of `data`: the ASCII85 on comment lines, then `; (data) ,`.
+fn block(data: &[u8]) -> String {
+    let lines: String = crate::ps::ascii85(data).lines().map(|l| format!("%{l}\n")).collect();
+    format!("/Binary : /ASCII85Decode ,\n{lines}; (data) ,\n")
+}
+
+/// The style `name`: a black fill and Bas Relief on the object, whose dictionary holds `body`.
+fn relief_text(name: &str, body: &str) -> String {
+    let stack = compound("Stack Style Filter", &[fill("0 0 0 1 0 0 0 Xa"), basic("Conduit Filter", "")]);
+    let relief = basic("PSAdapter_plugin_BsRl", body);
+    format!("/KnownStyle :\n({name}) /Name ,\n/ActiveStyle :\n{}", compound("Chain Style Filter", &[stack, relief]))
+}
+
+/// The style of [`relief_text`].
+fn relief_style(body: &str) -> ArtStyle {
+    art_styles(relief_text("Relief", body).as_bytes()).remove("Relief").unwrap_or_default()
+}
+
+#[test]
+fn a_settings_block_without_its_end_leaves_the_next_style_alone() {
+    // GUARDS: the block's `~>` was looked for past its own lines, in the next style's block, which was skipped.
+    let data = descriptor(&relief_fields(8, 1, b"LDBt"));
+    let cut = format!("{}{} /Int (dataSize) ,\n", block(&data).replace("~>", ""), data.len());
+    let whole = format!("{}{} /Int (dataSize) ,\n", block(&data), data.len());
+    let styles = art_styles(format!("{}{}", relief_text("Cut", &cut), relief_text("Whole", &whole)).as_bytes());
+    assert!(styles["Cut"].effects.is_empty(), "{:?}", styles["Cut"]);
+    assert!(styles["Whole"].simple, "{:?}", styles["Whole"]);
+    assert_eq!(styles["Whole"].effects[0].params["detail"], json!(8.0));
+}
+
+#[test]
+fn a_settings_block_without_its_data_key_leaves_the_next_style_alone() {
+    // GUARDS: the tokens after the block's `;` were taken as its `(data)` key, the closing of its
+    // dictionary or the next style's `/KnownStyle` among them, and the next style was lost.
+    let data = descriptor(&relief_fields(8, 1, b"LDBt"));
+    let whole = format!("{}{} /Int (dataSize) ,\n", block(&data), data.len());
+    let keyless = block(&data).replace("(data) ,\n", "");
+    let next = relief_text("Whole", &whole);
+    // A style cut short right after its block's `;`, the next style's `/KnownStyle` following.
+    let short = relief_text("Cut", &keyless);
+    let short = short.get(..short.find("~>\n;").unwrap_or_default() + 4).unwrap_or_default();
+    for text in [
+        format!("{short}\n{next}"),
+        format!("{}{next}", relief_text("Cut", &keyless)),
+        format!("{}{next}", relief_text("Cut", &format!("{keyless}{} /Int (dataSize) ,\n", data.len()))),
+    ] {
+        let styles = art_styles(text.as_bytes());
+        assert!(styles.get("Whole").is_some_and(|s| s.simple), "{styles:?}");
+        assert_eq!(styles["Whole"].effects[0].params["detail"], json!(8.0));
+        assert!(!styles.get("Cut").is_some_and(|s| s.simple), "{styles:?}");
+    }
+}
+
+/// [`relief_style`] with the settings block of `data` and a `dataSize` of its length.
+fn relief_with(data: &[u8]) -> ArtStyle {
+    relief_style(&format!("{}300 /Int (PrevDres) ,\n{} /Int (dataSize) ,\n1 /Bool (go) ,\n", block(data), data.len()))
+}
+
+#[test]
+fn bas_relief_reads_its_settings_block() {
+    // GUARDS: the effect's defaults stood in for the settings, and an object other than type with it
+    // came in as its drawn look.
+    for (code, light) in [
+        (b"LDBt", "bottom"),
+        (b"LDBL", "bottomLeft"),
+        (b"LDLf", "left"),
+        (b"LDTL", "topLeft"),
+        (b"LDTp", "top"),
+        (b"LDTR", "topRight"),
+        (b"LDRg", "right"),
+        (b"LDBR", "bottomRight"),
+    ] {
+        let st = relief_with(&descriptor(&relief_fields(8, 1, code)));
+        assert!(st.plain && st.simple, "{st:?}");
+        let [e] = st.effects.as_slice() else { panic!("{st:?}") };
+        assert_eq!((e.id.as_str(), &e.params), ("sketch.basRelief", &json!({"detail": 8.0, "smoothness": 1.0, "lightDirection": light})));
+    }
+    // Without the filter-gallery code, and with the fields in another order.
+    let [_, detail, smoothness, light] = <[Vec<u8>; 4]>::try_from(relief_fields(15, 15, b"LDTp")).unwrap();
+    let st = relief_with(&descriptor(&[light, smoothness, detail]));
+    assert!(st.simple, "{st:?}");
+    assert_eq!(st.effects[0].params, json!({"detail": 15.0, "smoothness": 15.0, "lightDirection": "top"}));
+}
+
+#[test]
+fn bas_relief_without_a_settings_block_keeps_the_effects_defaults_on_type_only() {
+    let st = relief_style("300 /Int (PrevDres) ,\n");
+    assert!(st.plain && !st.simple, "{st:?}");
+    assert_eq!(st.effects[0].params, json!({"detail": 13.0, "smoothness": 3.0, "lightDirection": "bottom"}));
+}
+
+#[test]
+fn bas_relief_with_settings_not_read_here_keeps_the_drawn_look() {
+    let good = || relief_fields(8, 1, b"LDBt");
+    let with = |i: usize, field: Vec<u8>| {
+        let mut f = good();
+        f[i] = field;
+        descriptor(&f)
+    };
+    let cases: Vec<(&str, Vec<u8>)> = vec![
+        ("detail 0", with(1, long_field(b"Dtl ", 0))),
+        ("detail 16", with(1, long_field(b"Dtl ", 16))),
+        ("smoothness -1", with(2, long_field(b"Smth", -1))),
+        ("an unknown direction", with(3, enum_field(b"LghD", b"LghD", b"LDXx"))),
+        ("a direction of another type", with(3, enum_field(b"LghD", b"Dirc", b"LDBt"))),
+        ("a detail that isn't a whole number", with(1, [&b"Dtl "[..], &[0; 4], b"doub", &8.0f64.to_be_bytes()].concat())),
+        ("another effect's code", with(0, enum_field(b"GEfk", b"GEft", b"Crst"))),
+        ("an unknown key", [descriptor(&good()), long_field(b"Xtra", 1)].concat()),
+        ("a key twice", [descriptor(&good()), long_field(b"Dtl ", 8)].concat()),
+        ("a missing key", descriptor(&good()[..3])),
+        ("a byte after the last field", [descriptor(&good()), vec![0]].concat()),
+        ("a cut field", descriptor(&good()).split_last().unwrap().1.to_vec()),
+        ("version 2", [vec![0, 0, 0, 2], good().concat()].concat()),
+    ];
+    for (what, data) in cases {
+        let st = relief_with(&data);
+        assert!(!st.plain && !st.simple && st.effects.is_empty(), "{what}: {st:?}");
+    }
+    let data = descriptor(&good());
+    let encoded = block(&data);
+    for (what, body) in [
+        ("a wrong dataSize", format!("{encoded}{} /Int (dataSize) ,\n", data.len() + 1)),
+        ("no dataSize", encoded.clone()),
+        ("a dataSize of another kind", format!("{encoded}{} /Real (dataSize) ,\n", data.len())),
+        ("no ~>", format!("{}{} /Int (dataSize) ,\n", encoded.replace("~>", ""), data.len())),
+        ("a digit past u", format!("{}{} /Int (dataSize) ,\n", encoded.replacen("%", "%v", 2), data.len())),
+        ("a line without %", format!("{}{} /Int (dataSize) ,\n", encoded.replacen("\n%", "\n", 1), data.len())),
+        ("no (data) key", format!("{}{} /Int (dataSize) ,\n", encoded.replace("(data)", "(other)"), data.len())),
+        ("two blocks", format!("{encoded}{encoded}{} /Int (dataSize) ,\n", data.len())),
+    ] {
+        let st = relief_style(&body);
+        assert!(!st.plain && st.effects.is_empty(), "{what}: {st:?}");
+    }
+}
+
+#[test]
+fn settings_blocks_are_bounded() {
+    // More than the decoded limit, though its text is short (`z` is four zero bytes).
+    let zeros = format!("/Binary : /ASCII85Decode ,\n%{}~>\n; (data) ,\n4100 /Int (dataSize) ,\n", "z".repeat(1025));
+    assert!(relief_style(&zeros).effects.is_empty());
+    // An end further than the encoded limit.
+    let far = format!("/Binary : /ASCII85Decode ,\n{}%~>\n; (data) ,\n0 /Int (dataSize) ,\n", "%!!!!!\n".repeat(1000));
+    assert!(relief_style(&far).effects.is_empty());
+    // Objects nest two deep at most, and a descriptor holds 32 fields at most.
+    let object = |inner: Vec<u8>| [&b"Objc"[..], &0x8000_0000u32.to_be_bytes(), b"Clss", &(inner.len() as u32).to_be_bytes(), &inner].concat();
+    let two = descriptor(&[object(descriptor(&[object(descriptor(&[long_field(b"Valu", 1)]))]))]);
+    assert!(adapter::decode(&two).is_some());
+    let three = descriptor(&[object(descriptor(&[object(descriptor(&[object(descriptor(&[]))]))]))]);
+    assert!(adapter::decode(&three).is_none());
+    assert!(adapter::decode(&descriptor(&vec![long_field(b"Valu", 1); 32])).is_some());
+    assert!(adapter::decode(&descriptor(&vec![long_field(b"Valu", 1); 33])).is_none());
+    let long_object = [&b"Objc"[..], &0x8000_0000u32.to_be_bytes(), b"Clss", &u32::MAX.to_be_bytes()].concat();
+    assert!(adapter::decode(&descriptor(&[long_object])).is_none());
+    let nan = [&b"Valu"[..], &[0; 4], b"doub", &f64::NAN.to_be_bytes()].concat();
+    assert!(adapter::decode(&descriptor(&[nan])).is_none());
+    let flag = |b: u8| [&b"Valu"[..], &[0; 4], b"bool", &[b]].concat();
+    assert!(adapter::decode(&descriptor(&[flag(1)])).is_some());
+    assert!(adapter::decode(&descriptor(&[flag(2)])).is_none());
+}
+
 /// A Convert to Shape filter whose dictionary holds `keys`.
 fn shape(keys: &str) -> String {
     basic("Adobe Shape Effects", &format!("(Shape) /UnicodeString (DisplayString) ,\n{keys}"))
@@ -1185,4 +1364,92 @@ fn convert_to_shape_settings_that_arent_read_keep_the_drawn_look() {
     let data =
         format!("/KnownStyle :\n(Odd) /Name ,\n/ActiveStyle :\n{}", compound("Chain Style Filter", &[compound("Stack Style Filter", &[item])]));
     assert!(!art_styles(data.as_bytes())["Odd"].plain);
+}
+
+#[test]
+fn warp_numbers_are_the_dialogs_order() {
+    for n in 1..=15 {
+        let style = warp_style(n).unwrap();
+        assert_eq!(warp_number(style), Some(n), "{style}");
+    }
+    assert_eq!((warp_style(0), warp_style(16), warp_number("arcs"), warp_number("")), (None, None, None, None));
+}
+
+/// A style as a writer checks it: the reader's appearance, with a gradient fill as the object's own,
+/// and nothing for styles it doesn't read.
+#[test]
+fn a_style_is_read_as_a_writer_checks_it() {
+    let read = |data: &str, own: Option<&Paint>| crate::import::read_art_style(data.as_bytes(), "Odd", own);
+    let style = |kids: &[String]| format!("/KnownStyle :\n(Odd) /Name ,\n/ActiveStyle :\n{}", compound("Chain Style Filter", kids));
+    let gradient = fill("Bb\n1 (G) 0 0 0 1 1 0 0 1 0 0 1 Bg\n0 BB");
+    let stack = compound("Stack Style Filter", std::slice::from_ref(&gradient));
+    let data = style(&[stack, blend(1, 0.5)]);
+    let own = Paint::solid(vectorcraft_color::Color::WHITE);
+    let got = read(&data, Some(&own)).unwrap();
+    assert_eq!(got.appearance.items.len(), 1);
+    assert_eq!(got.appearance.items[0].paint(), &own);
+    assert_eq!(got.transparency.map(|t| (t.0, t.1)), Some((0.5, BlendMode::Multiply)));
+    assert!(got.simple && !got.pathfinder);
+    // A gradient that isn't the object's own, a pattern, another name, two gradients: nothing.
+    assert!(read(&data, None).is_none());
+    let pattern = style(&[compound("Stack Style Filter", &[fill("(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p")])]);
+    assert!(read(&pattern, None).is_none());
+    assert!(crate::import::read_art_style(data.as_bytes(), "Even", Some(&own)).is_none());
+    assert!(read(&style(&[compound("Stack Style Filter", &[gradient.clone(), gradient])]), Some(&own)).is_none());
+    // Damaged text: every cut of the style, and stray bytes, without a panic.
+    for cut in 0..data.len() {
+        let _ = read(data.get(..cut).unwrap_or_default(), Some(&own));
+    }
+    for junk in ["(", ")", ";", "/KnownStyle :\n(Odd) /Name ,\n;;;;", "/KnownStyle :\n(Odd) /Name ,\n/Array : 1 /Real , ; (x) ,"] {
+        let _ = read(junk, Some(&own));
+    }
+}
+
+#[test]
+fn art_styles_read_registration_and_named_colors() {
+    let reg_0 = fill("1 1 1 1 ([Registration]) 1 Xs");
+    let reg_100 = fill("1 1 1 1 ([Registration]) 0 Xs");
+    let reg_name = fill("1 1 1 1 /All 1 Xs");
+    let named_spot = fill("0 0.5 1 0 (Shemen) 0 0 Xx");
+    let stroke_reg = basic(
+        "Stroke Style Filter",
+        "/StrokeStyle : 0 R\n1 1 1 1 ([Registration]) 1 XS\n0 1 0 0 0 Xy\n0 J 0 j 1 w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n",
+    );
+    let data = format!(
+        "/KnownStyle :\n(Reg0) /Name ,\n/ActiveStyle :\n{}\n\
+         /KnownStyle :\n(Reg100) /Name ,\n/ActiveStyle :\n{}\n\
+         /KnownStyle :\n(RegName) /Name ,\n/ActiveStyle :\n{}\n\
+         /KnownStyle :\n(Shemen) /Name ,\n/ActiveStyle :\n{}\n\
+         /KnownStyle :\n(StrokeReg) /Name ,\n/ActiveStyle :\n{}\n",
+        compound("Chain Style Filter", &[compound("Stack Style Filter", &[reg_0])]),
+        compound("Chain Style Filter", &[compound("Stack Style Filter", &[reg_100])]),
+        compound("Chain Style Filter", &[compound("Stack Style Filter", &[reg_name])]),
+        compound("Chain Style Filter", &[compound("Stack Style Filter", &[named_spot])]),
+        compound("Chain Style Filter", &[compound("Stack Style Filter", &[stroke_reg])]),
+    );
+    let styles = art_styles(data.as_bytes());
+    let st0 = &styles["Reg0"];
+    assert!(st0.plain);
+    let [StyleItem::Fill(Paint::Solid { swatch, tint, color })] = st0.items.as_slice() else { panic!("{st0:?}") };
+    assert_eq!((swatch.as_deref(), *tint, *color), (Some(vectorcraft_color::swatch::REGISTRATION), 0.0, Color::cmyk(1.0, 1.0, 1.0, 1.0).tinted(0.0)));
+
+    let st100 = &styles["Reg100"];
+    assert!(st100.plain);
+    let [StyleItem::Fill(Paint::Solid { swatch, tint, color })] = st100.items.as_slice() else { panic!("{st100:?}") };
+    assert_eq!((swatch.as_deref(), *tint, *color), (Some(vectorcraft_color::swatch::REGISTRATION), 1.0, Color::cmyk(1.0, 1.0, 1.0, 1.0)));
+
+    let st_name = &styles["RegName"];
+    assert!(st_name.plain);
+    let [StyleItem::Fill(Paint::Solid { swatch, tint, .. })] = st_name.items.as_slice() else { panic!("{st_name:?}") };
+    assert_eq!((swatch.as_deref(), *tint), (Some(vectorcraft_color::swatch::REGISTRATION), 0.0));
+
+    let st_spot = &styles["Shemen"];
+    assert!(st_spot.plain);
+    let [StyleItem::Fill(Paint::Solid { swatch, tint, color })] = st_spot.items.as_slice() else { panic!("{st_spot:?}") };
+    assert_eq!((swatch.as_deref(), *tint, *color), (Some("Shemen"), 1.0, Color::cmyk(0.0, 0.5, 1.0, 0.0)));
+
+    let st_stroke = &styles["StrokeReg"];
+    assert!(st_stroke.plain);
+    let [StyleItem::Stroke { paint: Paint::Solid { swatch, tint, .. }, .. }] = st_stroke.items.as_slice() else { panic!("{st_stroke:?}") };
+    assert_eq!((swatch.as_deref(), *tint), (Some(vectorcraft_color::swatch::REGISTRATION), 0.0));
 }

@@ -5,7 +5,7 @@ use serde_json::Value;
 use crate::VectorcraftApp;
 
 #[cfg(not(target_arch = "wasm32"))]
-use craft_update::updater::{Action, Updater};
+use craft_update::updater::{Action, Status, Updater};
 #[cfg(not(target_arch = "wasm32"))]
 use craft_update::{CheckResultDialog, CheckResultResponse};
 
@@ -20,9 +20,9 @@ pub(crate) struct Runtime {
     /// The context of the last frame, to wake the UI when a check is queued from a menu callback.
     #[cfg(not(target_arch = "wasm32"))]
     repaint: Option<egui::Context>,
-    /// Whether the result of Help ▸ Check for Updates is in view.
-    pub(crate) manual_window_open: bool,
     /// The web build has no updater; its window only says so.
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) manual_window_open: bool,
     #[cfg(target_arch = "wasm32")]
     pub(crate) status_message: Option<String>,
 }
@@ -38,6 +38,7 @@ impl Default for Runtime {
             check_requested: false,
             #[cfg(not(target_arch = "wasm32"))]
             repaint: None,
+            #[cfg(target_arch = "wasm32")]
             manual_window_open: false,
             #[cfg(target_arch = "wasm32")]
             status_message: None,
@@ -51,13 +52,20 @@ impl VectorcraftApp {
     pub fn set_startup_update_check(&mut self, on: bool) {
         self.updates_rt.startup_check = on;
     }
+
+    /// Starts the install helper of an update that is ready, so it installs once the process has
+    /// exited (does nothing when no update is ready). Call it in `on_exit` when the process ends
+    /// there, since the app is then never dropped.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn start_pending_update(&mut self) {
+        self.updates_rt.updater.start_pending_update();
+    }
 }
 
 pub(crate) fn check(app: &mut VectorcraftApp) -> Result<Value, String> {
     #[cfg(not(target_arch = "wasm32"))]
     {
         app.updates_rt.check_requested = true;
-        app.updates_rt.manual_window_open = true;
         if let Some(ctx) = &app.updates_rt.repaint {
             ctx.request_repaint();
         }
@@ -87,10 +95,18 @@ pub(crate) fn tick(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let _ = (app, ctx);
 }
 
+/// Whether the check result window shows: for every status but idle (a requested check, and the
+/// first start after an update, which reports that it installed or why it failed), and never
+/// over the startup prompt.
+#[cfg(not(target_arch = "wasm32"))]
+fn result_window_shows(status: &Status, prompt_open: bool) -> bool {
+    !prompt_open && !matches!(status, Status::Idle)
+}
+
 pub(crate) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        // The restart helper is scheduled before the app closes, so no update starts over unsaved work.
+        // The close for a ready update waits until no document holds unsaved work.
         let clean = !crate::unsaved::any_dirty(app);
         match app.updates_rt.updater.show_if(ctx, clean) {
             Action::OpenUrl(url) => app.open_url(&url),
@@ -99,19 +115,14 @@ pub(crate) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         }
         // An available update goes to the prompt above, which replaces the result dialog.
         let rt = &mut app.updates_rt;
-        if rt.manual_window_open && rt.updater.prompt_open() {
-            rt.manual_window_open = false;
-        }
-        if rt.manual_window_open {
+        if result_window_shows(rt.updater.status(), rt.updater.prompt_open()) {
             match CheckResultDialog::new(&crate::UPDATE_APP, env!("CARGO_PKG_VERSION")).show(ctx, rt.updater.status()) {
                 CheckResultResponse::None => {}
-                CheckResultResponse::Close => rt.manual_window_open = false,
+                // Closing the dialog dismisses the outcome it showed.
+                CheckResultResponse::Close => rt.updater.dismiss_status(),
                 CheckResultResponse::CheckAgain => rt.updater.check_now(ctx),
+                CheckResultResponse::RestartToUpdate => rt.updater.restart_to_update(),
             }
-        }
-        // Closing the dialog dismisses the outcome it showed.
-        if !rt.manual_window_open {
-            rt.updater.dismiss_status();
         }
     }
 
@@ -142,13 +153,12 @@ pub(crate) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[cfg(not(target_arch = "wasm32"))]
-    use craft_update::updater::Status;
     use vectorcraft_engine::Session;
 
     #[test]
     fn default_runtime_is_idle() {
         let rt = Runtime::default();
+        #[cfg(target_arch = "wasm32")]
         assert!(!rt.manual_window_open);
         #[cfg(not(target_arch = "wasm32"))]
         {
@@ -156,6 +166,26 @@ mod tests {
             assert!(!rt.updater.prompt_open());
             assert_eq!(rt.updater.status(), &Status::Idle);
         }
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn result_window_shows_every_status_but_idle() {
+        let shown = [
+            Status::Checking,
+            Status::UpToDate,
+            Status::Failed("offline".into()),
+            Status::Installing,
+            Status::Ready,
+            Status::Managed,
+            Status::Updated("99.0.0".into()),
+            Status::InstallFailed("locked".into()),
+        ];
+        for status in &shown {
+            assert!(result_window_shows(status, false), "{status:?} shows");
+            assert!(!result_window_shows(status, true), "{status:?} waits for the prompt");
+        }
+        assert!(!result_window_shows(&Status::Idle, false));
     }
 
     #[test]

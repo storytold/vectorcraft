@@ -443,7 +443,21 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
                 None => ok(with_data(json!({"width": img.width, "height": img.height}), Some(&png))),
             }
         }
-        "app.open" => wrap(app.run("file.open", json!({"path": s("path")}))),
+        "app.open" => match p.get("importer").filter(|v| !v.is_null()) {
+            // The importer's parameters, else their defaults: automation gets no dialog asking for them.
+            Some(importer) => {
+                let params = p.get("params").filter(|v| !v.is_null()).cloned().unwrap_or_else(|| json!({}));
+                wrap(app.run("file.openWith", json!({"path": s("path"), "importer": importer, "params": params})))
+            }
+            // `params` go to the importer File › Open picks for the file, as in `document.open`.
+            None => {
+                let mut open = json!({"path": s("path")});
+                if let Some(params) = p.get("params").filter(|v| !v.is_null()) {
+                    open["params"] = params.clone();
+                }
+                wrap(app.run("file.open", open))
+            }
+        },
         "app.save" | "app.export" => {
             let mut p = if p.is_object() { p.clone() } else { json!({}) };
             // `wait: true`: the file is written before the reply, whatever Background Save and
@@ -456,6 +470,12 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
                 o.remove("wait");
             }
             let method = req.method.as_str();
+            // The key check of `document.export` runs before the file is written.
+            if method == "app.export"
+                && let Err(e) = crate::menus::check_params(&app.session, "document.export", &p)
+            {
+                return err(e);
+            }
             wrap(if wait { crate::background::in_foreground(app, |app| save_or_export(app, method, &p)) } else { save_or_export(app, method, &p) })
         }
         // As the menu's Quit: `{"pending": "saveChanges"}` while a modified document is asked

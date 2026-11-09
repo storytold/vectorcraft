@@ -39,9 +39,12 @@ pub fn outline_object(doc: Option<&Document>, n: &Node) -> Option<Node> {
 /// Run `f` with the hooks live evaluation needs; symbols and patterns come from `doc` (without a
 /// document, symbol instances and pattern tiles stay as they are).
 fn with_hooks<R>(doc: Option<&Document>, f: impl FnOnce(Hooks) -> R) -> R {
+    // Envelopes map type from its glyphs here too, without an engine session.
+    vectorcraft_text::register_envelope_ink();
     let outline = |n: &Node| outline_object(doc, n);
     let tiles = |name: &str, xf: Affine, region: Rect| Some(doc?.pattern(name)?.instances_in(xf, region));
-    f(Hooks { outline: Some(&outline), appearance: Some(&bake_appearance), pattern: Some(&tiles), symbols: doc })
+    let appearance = |n: &Node| bake_appearance(doc, n);
+    f(Hooks { outline: Some(&outline), appearance: Some(&appearance), pattern: Some(&tiles), symbols: doc })
 }
 
 /// One level of evaluation of live object `n` ([`live::expand_live_hooks`]).
