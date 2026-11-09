@@ -201,6 +201,7 @@ pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     ("attributes", "Attributes", "settings"),
     (crate::panels::svg_interactivity::ID, "SVG Interactivity", "spline-pointer"),
     ("colorThemes", "Color Themes", "sun"),
+    (crate::panels::color_wheel::ID, "Color Wheel", "circle"),
     (crate::panels::links::ID, "Links", "link"),
     (crate::panels::asset_export::ID, "Asset Export", "share-2"),
     (crate::panels::css_properties::ID, "CSS Properties", "globe"),
@@ -472,6 +473,7 @@ pub struct UiState {
     #[serde(default)]
     pub tools_beside_canvas: bool,
     pub status_bar: bool,
+    pub help_bar: bool,
     pub dock: bool,
     /// The bars that Tab (`window.dock`) hid, which the next Tab shows again; none when Tab has not
     /// hidden them since it last showed them, or a workspace was applied since.
@@ -1008,6 +1010,7 @@ impl Default for UiState {
             toolbar_pos: None,
             tools_beside_canvas: false,
             status_bar: true,
+            help_bar: true,
             dock: true,
             tab_hid: None,
             view: ViewFlags::default(),

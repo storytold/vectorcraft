@@ -184,6 +184,10 @@
 	Anti-Alias	Заглаждане
 	Anti-alias Rasters	Заглаждане на растери
 	Anti-aliased Artwork	Загладено произведение
+	Anti-aliasing Method	Метод на заглаждане
+antiAlias	Sharp	Остро
+	Crisp	Четко
+	Strong	Силно
 	Anti-aliasing:	Заглаждане:
 	Any Kind	Всякакъв вид
 	Font Technology	Технология на шрифта
@@ -547,6 +551,11 @@ font-technology	Variable	Променливи
 	Color Table ({n} colors)	Цветова таблица ({n} цвята)
 	Color Theme	Цветова тема
 	Color Themes	Цветови теми
+	Color Wheel	Цветно колело
+	Hue ring	Пръстен на оттенъка
+	Saturation and brightness	Насищане и яркост
+	Color field	Цветово поле
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Цветен тип:
 	Color:	Цвят:
 	Colorize	Оцветяване
@@ -1098,6 +1107,17 @@ font-technology	Variable	Променливи
 	Exporting {}	Експортиране на {}
 	Export…	Експортиране…
 	Extrude & Bevel…	Избутване и фасетка…
+	3D (Classic)	3D (класически)
+	Extrude & Bevel (Classic)…	Избутване и фасетка (класически)…
+	Surface	Повърхност
+	Wireframe	Телена рамка
+	No Shading	Без засенчване
+	Plastic	Пластмаса
+	Highlight Intensity	Интензивност на отблясъка
+	Highlight Size	Размер на отблясъка
+	Blend Steps	Стъпки на преливане
+	Shading Color	Цвят на засенчването
+	Draw Hidden Faces	Изчертаване на скритите страни
 	Eyedropper	Пипета
 	Eyedropper Applies:	Пипетата прилага:
 	Eyedropper Options	Опции за пипетата
@@ -1911,6 +1931,10 @@ font-technology	Variable	Променливи
 	Stylistic	Стилистично
 	Mojikumi Set	Набор Mojikumi
 	Kinsoku Set	Набор Kinsoku
+	Kinsoku Shori Type	Тип Kinsoku Shori
+	Push In First	Първо прибиране
+	Push Out First	Първо изтласкване
+	Push Out Only	Само изтласкване
 	Hard	Твърдо
 	Soft	Меко
 	Monitor RGB	RGB на монитора
@@ -3444,6 +3468,7 @@ digits	Malayalam	Малаялам
 	Tile Type:	Тип плочка:
 	tile {number}	плочка {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Плочките се номерират напречно, след това надолу; оставете диапазона празен за всяка плочка.
+	Copies per Sheet (as many as fit, in a grid)	Копия на лист (колкото се побират, в мрежа)
 	Tint	Оттенък
 	Tip extends past the end point	Връхът продължава след крайната точка
 	Tip on the end point	Връх върху крайната точка
@@ -3994,6 +4019,7 @@ axis	Both	И двете
 @msg	Targa files are RGB: colorModel rgb	Файловете Targa са RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Обгръщане на текст: изберете обгръщащ обект
 @msg	This shortcut file is in a form VectorCraft can't read.	 Този файл с преки пътища е във формат, който VectorCraft не може да прочете.
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` трябва да е "none", "sharp", "crisp" или "strong"
 @msg	`aspect` must be a number (%)	`aspect` трябва да бъде число (%)
 @msg	`at` must be [x, y]	`at` трябва да бъде [x, y]
 @msg	`color` must be a colour	`color` трябва да бъде цвят
@@ -6305,6 +6331,7 @@ breakText	Glyphs	Глифи
 	Create Swatch Legend	Създаване на легенда на образците
 	Create Swatch Legend…	Създаване на легенда на образците…
 	HEX	HEX
+	Help Bar	Лента за помощ
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	Инструменти за текст
 	Text Tweaker…	Настройка на текста…
@@ -6370,6 +6397,11 @@ breakText	Glyphs	Глифи
 # 3D Box add-on
 	3D Box	3D кутия
 	3D Box Tool	Инструмент за 3D кутия
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Отваряне с
+	No importer plug-ins installed	Няма инсталирани плъгини за импортиране
+	Read files you open in its format and make documents from them	Четене на файлове, които отваряте в неговия формат, и създаване на документи от тях
 
 # Safe Mode
 	Safe Mode…	Безопасен режим…

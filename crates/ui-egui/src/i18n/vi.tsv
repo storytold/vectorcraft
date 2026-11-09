@@ -216,6 +216,10 @@
 	Anti-Alias	Khử răng cưa
 	Anti-alias Rasters	Khử răng cưa ảnh raster
 	Anti-aliased Artwork	Tác phẩm khử răng cưa
+	Anti-aliasing Method	Phương pháp khử răng cưa
+antiAlias	Sharp	Sắc nét
+	Crisp	Rõ nét
+	Strong	Đậm
 	Anti-aliasing:	Khử răng cưa:
 	Any Kind	Bất kỳ loại
 	Font Technology	Công nghệ phông chữ
@@ -649,6 +653,11 @@ font-technology	Variable	Biến thiên
 	Color Table ({n} colors)	Bảng màu ({n} màu)
 	Color Theme	Bộ màu
 	Color Themes	Bộ màu
+	Color Wheel	Bánh xe màu
+	Hue ring	Vòng sắc độ
+	Saturation and brightness	Độ bão hòa và độ sáng
+	Color field	Vùng chọn màu
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Loại màu:
 	Color:	Màu:
 	Colorization	Tô màu
@@ -1293,6 +1302,17 @@ font-technology	Variable	Biến thiên
 	Exporting {}	Đang xuất {}
 	Export…	Xuất…
 	Extrude & Bevel…	Kéo dài & vát…
+	3D (Classic)	3D (cổ điển)
+	Extrude & Bevel (Classic)…	Kéo dài & vát (cổ điển)…
+	Surface	Bề mặt
+	Wireframe	Khung dây
+	No Shading	Không tô bóng
+	Plastic	Nhựa
+	Highlight Intensity	Cường độ điểm sáng
+	Highlight Size	Kích thước điểm sáng
+	Blend Steps	Số bước hòa trộn
+	Shading Color	Màu tô bóng
+	Draw Hidden Faces	Vẽ các mặt ẩn
 	Eyedropper	Ống hút màu
 	Sample Color from Screen	Lấy mẫu màu từ màn hình
 	This system has no screen color sampler	Hệ thống này không có công cụ lấy mẫu màu trên màn hình
@@ -2023,6 +2043,7 @@ digits	Hindi	Hindi
 	Keywords:	Từ khóa:
 	Kind	Loại
 	Kinsoku Set	Bộ Kinsoku
+	Kinsoku Shori Type	Kiểu Kinsoku Shori
 	Knife	Dao
 	Knockout Group	Nhóm Knockout
 	Lab	Lab
@@ -2891,6 +2912,9 @@ mark-style	Japanese	Kiểu Nhật
 	Puppet Warp	Biến dạng con rối
 	Puppet Warp Pins	Ghim biến dạng con rối
 	Puppet Warp Tool	Công cụ Biến dạng con rối
+	Push In First	Đẩy vào trước
+	Push Out First	Đẩy ra trước
+	Push Out Only	Chỉ đẩy ra
 	Put back in the toolbar	Đặt trở lại vào thanh công cụ
 	Quality	Chất lượng
 	Quality {quality}	Chất lượng {quality}
@@ -3908,6 +3932,8 @@ mark-style	Japanese	Kiểu Nhật
 	tile {number}	ô {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Các ô được đánh số từ ngang sang dọc; để trống phạm vi để in tất cả ô.
 	Tilt	Độ nghiêng
+	Copies per Sheet (as many as fit, in a grid)	Nhiều bản sao trên một tờ (xếp vừa bao nhiêu in bấy nhiêu, theo lưới)
+	Gutter:	Khoảng cách:
 	Tint	Tông màu
 	Tints	Sắc pha
 	Tints and Shades	Sắc pha và bóng
@@ -4291,6 +4317,7 @@ effect	Soft	Mềm
 lighting	Light	Đèn
 theme	Appearance	Giao diện
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" không phải là màu: viết dưới dạng #rrggbb
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` phải là "none", "sharp", "crisp" hoặc "strong"
 @msg	`aspect` must be a number (%)	`aspect` phải là một số (%)
 @msg	`at` must be [x, y]	`at` phải là [x, y]
 @msg	`color` must be a colour	`color` phải là một màu
@@ -4911,6 +4938,13 @@ theme	Appearance	Giao diện
 @msg	select an Image Trace object	hãy chọn đối tượng vector hóa ảnh
 @msg	select an object in perspective	hãy chọn đối tượng trong phối cảnh
 @msg	select artwork (or a colour group) to recolor	hãy chọn tác phẩm (hoặc nhóm màu) để tô lại
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	Đã tô màu lại xong; không thay đổi: {locked} và {hidden}
+@msg	Recolor completed; {objects} were left unchanged	Đã tô màu lại xong; không thay đổi: {objects}
+@msg	Recolor completed; {objects} was left unchanged	Đã tô màu lại xong; không thay đổi: {objects}
+@msg	1 locked object	1 đối tượng bị khóa
+@msg	{n} locked objects	{n} đối tượng bị khóa
+@msg	1 hidden object	1 đối tượng bị ẩn
+@msg	{n} hidden objects	{n} đối tượng bị ẩn
 @msg	select at least two objects	hãy chọn ít nhất hai đối tượng
 @msg	exit isolation mode first	hãy thoát chế độ cô lập trước
 @msg	select objects, not layers	hãy chọn đối tượng, không phải lớp
@@ -5018,6 +5052,10 @@ theme	Appearance	Giao diện
 @msg	the PSD file is cut short	tệp PSD bị cắt ngắn
 @msg	the PSD file's header is damaged	tiêu đề tệp PSD bị hỏng
 @msg	the PSD file's image data can't be read: {e}	dữ liệu ảnh tệp PSD không thể đọc được: {e}
+@msg	the JPEG XL file is cut short	tệp JPEG XL bị cắt ngắn
+@msg	the JPEG XL container is too large to read	vùng chứa JPEG XL quá lớn để đọc
+@msg	CMYK JPEG XL images can't be read	ảnh JPEG XL hệ màu CMYK không thể đọc được
+@msg	the JPEG XL file can't be read: {e}	tệp JPEG XL không thể đọc được: {e}
 @msg	the PSD file's image data uses an unknown compression ({m})	dữ liệu ảnh tệp PSD dùng nén không xác định ({m})
 @msg	the PCX file is cut short	tệp PCX bị cắt ngắn
 @msg	the PCX file's header is damaged	phần đầu của tệp PCX bị hỏng
@@ -5357,6 +5395,11 @@ theme	Appearance	Giao diện
 	Snap to Perpendicular	Hút vào đường vuông góc
 @msg	unknown snap option `{key}` (use {options})	tùy chọn hút không hợp lệ `{key}` (dùng {options})
 	Gap Length:	Độ dài khoảng hở:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Chế độ Logo phẳng không dùng keepColors: chế độ này dò các màu được nêu trong logoColors hoặc các màu nó tìm thấy.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Không có gì được dò: không màu nào mà quá trình dò tìm thấy khớp với keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Không có gì được dò: Bỏ qua màu bỏ đi mọi vùng của các màu mà keepColors liệt kê.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	Không có gì được dò: các màu khớp với keepColors không tạo ra đường dẫn nào.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: không màu nào mà quá trình dò tìm thấy khớp với {c}, nên không có gì của màu đó được dò.
 @msg	`colorGroup` needs `library: "document"`	`colorGroup` cần `library: "document"`
 @msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` cần `palette: "documentLibrary"`
 @msg	`colorGroup` needs `mode: "color"`	`colorGroup` cần `mode: "color"`
@@ -5494,16 +5537,33 @@ axis	Y Axis	Trục Y
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	mô-đun nhập `env.{name}`, thứ mà plug-in chỉ được dùng ở API plug-in cấp {PROGRESS_API} (`api` {PROGRESS_API}) và với quyền `{permission}`
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	mô-đun nhập `{from}.{name}`, thứ mà máy chủ không cung cấp: plug-in chỉ được nhập các hàm `env.vc_*` mà docs/plugins.md liệt kê (API plug-in cấp 2), không có WASI, tệp hay mạng
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` là {_1}; máy chủ này hỗ trợ các mức API plug-in từ 1 đến {API_LEVEL}
+@msg	`paintOutput` may only be true	`paintOutput` chỉ có thể là true
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` chỉ dành cho hiệu ứng trực tiếp (`kind` "effect") ở `api` 2
 @msg	`grant` must be a list of permission names	`grant` phải là danh sách tên quyền
 @msg	`grant` names an unknown permission `{shown}`	`grant` nêu một quyền không xác định `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	plug-in loại `{_1}` cần quyền `{_2}`
 @msg	at most {MAX_PERMISSIONS} `permissions`	tối đa {MAX_PERMISSIONS} `permissions`
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	quyền `{shown}` không áp dụng cho plug-in loại `{_1}`
 @msg	permission `{shown}` is listed twice	quyền `{shown}` được liệt kê hai lần
+@msg	only a filter declares `inputs`	chỉ bộ lọc mới khai báo `inputs`
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` nêu một loại đối tượng không xác định `{shown}`: dùng type, image hoặc symbolInstance
+@msg	`inputs` lists `{shown}` twice	`inputs` liệt kê `{shown}` hai lần
+@msg	`inputs` needs `api` 2 or later	`inputs` cần `api` 2 trở lên
+@msg	`inputs` needs the permission `doc.read`	`inputs` cần quyền `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	ngân sách bộ nhớ (đối tượng {_1} cần {size} byte đầu vào, còn lại {left})
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	ngân sách đối tượng (hơn {MAX_OBJECTS} đối tượng chỉ đọc)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	quyền `{shown}` được dành cho một API plug-in sau này; máy chủ này không cấp quyền đó
 @msg	unknown permission `{shown}`	quyền không xác định `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}” yêu cầu các quyền {asked}: hãy cài đặt với `grant` liệt kê chúng khi người dùng đồng ý
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	“{name}” chưa được cấp `{p}`, quyền mà đầu ra của nó cần: không có gì thay đổi
+@msg	a heavy filter runs in the background, so it can't declare `commands`	bộ lọc nặng chạy ở chế độ nền nên không thể khai báo `commands`
+@msg	at most {MAX_COMMANDS} `commands`	tối đa {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	lệnh {name} được khai báo hai lần
+@msg	command {name}: `label` must be 1-64 printable characters	lệnh {name}: `label` phải có 1-64 ký tự in được
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	lệnh {name}: hãy dùng id gồm 1-{MAX_COMMAND_ID} ký tự từ a-z 0-9 _ và bắt đầu bằng một chữ cái
+@msg	command {name}: {e}	lệnh {name}: {e}
+@msg	only a filter or a live effect declares `commands`	chỉ bộ lọc hoặc hiệu ứng trực tiếp mới khai báo `commands`
+@msg	“{name}” › {label}: {e}	“{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	mô-đun không có SHA-256 mà `hash` cho biết: không có gì được cài đặt
 # Actions panel: action sets (#3712).
 	New Set…	Bộ mới…
@@ -6089,6 +6149,7 @@ breakText	Glyphs	Glyph
 	Create Swatch Legend	Tạo chú giải mẫu màu
 	Create Swatch Legend…	Tạo chú giải mẫu màu…
 	HEX	HEX
+	Help Bar	Thanh trợ giúp
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	Công cụ văn bản
 	Text Tweaker…	Tinh chỉnh văn bản…
@@ -6154,6 +6215,24 @@ breakText	Glyphs	Glyph
 # 3D Box add-on
 	3D Box	Hộp 3D
 	3D Box Tool	Công cụ Hộp 3D
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Mở bằng
+	No importer plug-ins installed	Không có plug-in nhập được cài đặt
+	Read files you open in its format and make documents from them	Đọc các tệp bạn mở theo định dạng của nó và tạo tài liệu từ chúng
+@msg	{_1} is an importer (File › Open With)	{_1} là plug-in nhập (Tệp › Mở bằng)
+@msg	missing `importer` (see document.formats)	thiếu `importer` (xem document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` phải là id định dạng của một plug-in (xem document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	“{shown}” mở tệp {_1}, không phải `{_2}`
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` là plug-in loại `{_2}`, không phải plug-in nhập
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` là plug-in loại `{_2}`, không phải plug-in xuất
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` là plug-in nhập: hãy mở tệp bằng document.open {{"importer"}"}}
+@msg	the importer returned no objects	plug-in nhập không trả về đối tượng nào
+@msg	an importer returns `objects` and `warnings`, not `{key}`	plug-in nhập trả về `objects` và `warnings`, không phải `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	tệp lớn hơn {MAX_INPUT_BYTES} byte mà plug-in nhập đọc
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	plug-in nhập khai báo từ 1 đến {MAX_EXTENSIONS} `extensions`
+@msg	only an exporter or an importer declares `extensions`	chỉ plug-in xuất hoặc nhập mới khai báo `extensions`
+@msg	an importer always gets an import's budget: leave `budget` out	plug-in nhập luôn nhận ngân sách của một lần nhập: hãy bỏ `budget`
 
 # Safe Mode
 	Safe Mode…	Chế độ an toàn…

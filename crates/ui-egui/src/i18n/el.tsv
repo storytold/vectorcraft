@@ -178,6 +178,10 @@
 	Anti-Alias	Εξομάλυνση ακμών
 	Anti-alias Rasters	Εξομάλυνση ακμών εικόνων ράστερ
 	Anti-aliased Artwork	Γραφικά με εξομαλυμένες ακμές
+	Anti-aliasing Method	Μέθοδος εξομάλυνσης ακμών
+antiAlias	Sharp	Οξεία
+	Crisp	Καθαρή
+	Strong	Έντονη
 	Anti-aliasing:	Εξομάλυνση ακμών:
 	Any Kind	Οποιοσδήποτε τύπος
 	Font Technology	Τεχνολογία γραμματοσειράς
@@ -522,6 +526,11 @@ font-technology	Variable	Μεταβλητές
 	Color Table ({n} colors)	Πίνακας χρωμάτων ({n} χρώματα)
 	Color Theme	Χρωματικό θέμα
 	Color Themes	Χρωματικά θέματα
+	Color Wheel	Χρωματικός τροχός
+	Hue ring	Δακτύλιος απόχρωσης
+	Saturation and brightness	Κορεσμός και φωτεινότητα
+	Color field	Πεδίο χρώματος
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Τύπος χρώματος:
 	Color:	Χρώμα:
 	Colorize	Χρωματισμός
@@ -1076,6 +1085,17 @@ font-technology	Variable	Μεταβλητές
 	Exporting {}	Εξαγωγή {}
 	Export…	Εξαγωγή…
 	Extrude & Bevel…	Εξώθηση και λοξότμηση…
+	3D (Classic)	3D (κλασικό)
+	Extrude & Bevel (Classic)…	Εξώθηση και λοξότμηση (κλασικό)…
+	Surface	Επιφάνεια
+	Wireframe	Συρματόπλεγμα
+	No Shading	Χωρίς σκίαση
+	Plastic	Πλαστικό
+	Highlight Intensity	Ένταση ανταύγειας
+	Highlight Size	Μέγεθος ανταύγειας
+	Blend Steps	Βήματα ανάμειξης
+	Shading Color	Χρώμα σκίασης
+	Draw Hidden Faces	Σχεδίαση κρυφών εδρών
 	Eyedropper	Σταγονόμετρο (Eyedropper Tool)
 	Eyedropper Applies:	Το σταγονόμετρο εφαρμόζει:
 	Eyedropper Options	Επιλογές σταγονόμετρου
@@ -2280,6 +2300,7 @@ axis	Both	Και τα δύο
 @msg	Targa files are RGB: colorModel rgb	Τα αρχεία Targa είναι RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Αναδίπλωση κειμένου: επιλέξτε αντικείμενο αναδίπλωσης
 @msg	This shortcut file is in a form VectorCraft can't read.	Αυτό το αρχείο συντομεύσεων έχει μορφή που δεν μπορεί να διαβάσει το VectorCraft.
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	Το `antiAlias` πρέπει να είναι "none", "sharp", "crisp" ή "strong"
 @msg	`aspect` must be a number (%)	Το `aspect` πρέπει να είναι αριθμός (%)
 @msg	`at` must be [x, y]	Το `at` πρέπει να είναι [x, y]
 @msg	`color` must be a colour	Το `color` πρέπει να είναι χρώμα
@@ -2773,6 +2794,10 @@ theme	Appearance	Εμφάνιση
 	Stylistic	Στιλιστικό
 	Mojikumi Set	Σύνολο Mojikumi
 	Kinsoku Set	Σύνολο Kinsoku
+	Kinsoku Shori Type	Τύπος Kinsoku Shori
+	Push In First	Πρώτα προς τα μέσα
+	Push Out First	Πρώτα προς τα έξω
+	Push Out Only	Μόνο προς τα έξω
 	Mono	Μονοφωνικό
 	Monochrome images	Μονόχρωμες εικόνες
 	Monospaced	Σταθερού πλάτους
@@ -3867,6 +3892,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Tile Type:	Τύπος πλακιδίου:
 	tile {number}	πλακίδιο {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Τα πλακίδια αριθμούνται πρώτα οριζόντια και έπειτα κατακόρυφα· αφήστε κενό το εύρος για όλα τα πλακίδια.
+	Copies per Sheet (as many as fit, in a grid)	Αντίγραφα ανά φύλλο (όσα χωρούν, σε πλέγμα)
 	Tip extends past the end point	Η αιχμή προεξέχει από το τελικό σημείο
 	Tip on the end point	Η αιχμή βρίσκεται στο τελικό σημείο
 	Title Case	Κεφαλαίο σε κάθε λέξη
@@ -4459,6 +4485,13 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	select an image	επιλέξτε εικόνα
 @msg	select an object in perspective	επιλέξτε αντικείμενο σε προοπτική
 @msg	select artwork (or a colour group) to recolor	επιλέξτε σχέδιο (ή ομάδα χρωμάτων) για επαναχρωματισμό
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	Ο επαναχρωματισμός ολοκληρώθηκε· χωρίς αλλαγή: {locked} και {hidden}
+@msg	Recolor completed; {objects} were left unchanged	Ο επαναχρωματισμός ολοκληρώθηκε· χωρίς αλλαγή: {objects}
+@msg	Recolor completed; {objects} was left unchanged	Ο επαναχρωματισμός ολοκληρώθηκε· χωρίς αλλαγή: {objects}
+@msg	1 locked object	1 κλειδωμένο αντικείμενο
+@msg	{n} locked objects	{n} κλειδωμένα αντικείμενα
+@msg	1 hidden object	1 κρυφό αντικείμενο
+@msg	{n} hidden objects	{n} κρυφά αντικείμενα
 @msg	select at least two objects	επιλέξτε τουλάχιστον δύο αντικείμενα
 @msg	exit isolation mode first	βγείτε πρώτα από τη λειτουργία απομόνωσης
 @msg	select objects, not layers	επιλέξτε αντικείμενα, όχι επίπεδα
@@ -4811,6 +4844,10 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	the PSD file is cut short	το αρχείο PSD είναι περικομμένο
 @msg	the PSD file's header is damaged	η κεφαλίδα του αρχείου PSD είναι κατεστραμμένη
 @msg	the PSD file's image data can't be read: {e}	τα δεδομένα εικόνας PSD δεν μπορούν να διαβαστούν: {e}
+@msg	the JPEG XL file is cut short	το αρχείο JPEG XL είναι περικομμένο
+@msg	the JPEG XL container is too large to read	το κοντέινερ JPEG XL είναι πολύ μεγάλο για ανάγνωση
+@msg	CMYK JPEG XL images can't be read	οι εικόνες JPEG XL σε CMYK δεν διαβάζονται
+@msg	the JPEG XL file can't be read: {e}	το αρχείο JPEG XL δεν μπορεί να διαβαστεί: {e}
 	Create New Fields by	Δημιουργία νέων πεδίων κατά
 @msg	Imported library {name}	Εισήχθη η βιβλιοθήκη {name}
 	RGB:	RGB:
@@ -5714,6 +5751,11 @@ effect	Points	Σημεία
 	Snap to Perpendicular	Προσκόλληση σε κάθετο
 @msg	unknown snap option `{key}` (use {options})	άγνωστη επιλογή προσκόλλησης `{key}` (χρησιμοποιήστε {options})
 	Gap Length:	Μήκος κενού:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Η λειτουργία Επίπεδο λογότυπο δεν χρησιμοποιεί το keepColors: ανιχνεύει τα χρώματα που ορίζονται στο logoColors ή τα χρώματα που βρίσκει.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Δεν ανιχνεύτηκε τίποτα: κανένα από τα χρώματα που βρήκε η ανίχνευση δεν αντιστοιχεί στο keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Δεν ανιχνεύτηκε τίποτα: η Παράβλεψη χρώματος παραλείπει κάθε περιοχή των χρωμάτων που ορίζει το keepColors.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	Δεν ανιχνεύτηκε τίποτα: τα χρώματα που ταιριάζουν με το keepColors δεν δίνουν καμία διαδρομή.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: κανένα από τα χρώματα που βρήκε η ανίχνευση δεν αντιστοιχεί στο {c}, οπότε τίποτα από αυτό δεν ανιχνεύεται.
 @msg	`colorGroup` needs `library: "document"`	το `colorGroup` απαιτεί `library: "document"`
 @msg	`colorGroup` needs `palette: "documentLibrary"`	το `colorGroup` απαιτεί `palette: "documentLibrary"`
 @msg	`colorGroup` needs `mode: "color"`	το `colorGroup` απαιτεί `mode: "color"`
@@ -5848,16 +5890,33 @@ axis	Y Axis	Άξονας Y
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	η λειτουργική μονάδα εισάγει το `env.{name}`, το οποίο ένα πρόσθετο μπορεί να χρησιμοποιεί μόνο στο επίπεδο API προσθέτων {PROGRESS_API} (`api` {PROGRESS_API}) και με το δικαίωμα `{permission}`
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	η λειτουργική μονάδα εισάγει το `{from}.{name}`, το οποίο δεν προσφέρει ο κεντρικός υπολογιστής: ένα πρόσθετο μπορεί να εισάγει μόνο τις συναρτήσεις `env.vc_*` που απαριθμεί το docs/plugins.md (επίπεδο API προσθέτων 2) και κανένα WASI, αρχεία ή δίκτυο
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	το `api` είναι {_1}· αυτός ο κεντρικός υπολογιστής υποστηρίζει τα επίπεδα API προσθέτων 1 έως {API_LEVEL}
+@msg	`paintOutput` may only be true	Το `paintOutput` μπορεί να είναι μόνο true
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	το `paintOutput` ισχύει μόνο για ζωντανό εφέ (`kind` "effect") με `api` 2
 @msg	`grant` must be a list of permission names	το `grant` πρέπει να είναι λίστα ονομάτων δικαιωμάτων
 @msg	`grant` names an unknown permission `{shown}`	το `grant` αναφέρει άγνωστο δικαίωμα `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	ένα πρόσθετο τύπου `{_1}` χρειάζεται το δικαίωμα `{_2}`
 @msg	at most {MAX_PERMISSIONS} `permissions`	το πολύ {MAX_PERMISSIONS} `permissions`
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	το δικαίωμα `{shown}` δεν ισχύει για πρόσθετο τύπου `{_1}`
 @msg	permission `{shown}` is listed twice	το δικαίωμα `{shown}` αναφέρεται δύο φορές
+@msg	only a filter declares `inputs`	μόνο ένα φίλτρο δηλώνει `inputs`
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	το `inputs` αναφέρει άγνωστο είδος αντικειμένου `{shown}`: χρησιμοποιήστε type, image ή symbolInstance
+@msg	`inputs` lists `{shown}` twice	το `inputs` αναφέρει το `{shown}` δύο φορές
+@msg	`inputs` needs `api` 2 or later	το `inputs` απαιτεί `api` 2 ή νεότερο
+@msg	`inputs` needs the permission `doc.read`	το `inputs` απαιτεί το δικαίωμα `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	προϋπολογισμός μνήμης (το αντικείμενο {_1} χρειάζεται {size} byte εισόδου, απομένουν {left})
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	προϋπολογισμός αντικειμένων (περισσότερα από {MAX_OBJECTS} αντικείμενα μόνο για ανάγνωση)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	το δικαίωμα `{shown}` είναι δεσμευμένο για μεταγενέστερο API προσθέτων· αυτός ο κεντρικός υπολογιστής δεν το παραχωρεί
 @msg	unknown permission `{shown}`	άγνωστο δικαίωμα `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	το «{name}» ζητά τα δικαιώματα {asked}: εγκαταστήστε το με ένα `grant` που τα απαριθμεί μόλις συμφωνήσει ο χρήστης
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	στο «{name}» δεν παραχωρήθηκε το `{p}`, που χρειάζεται η έξοδός του: δεν άλλαξε τίποτα
+@msg	a heavy filter runs in the background, so it can't declare `commands`	ένα βαρύ φίλτρο εκτελείται στο παρασκήνιο, οπότε δεν μπορεί να δηλώνει `commands`
+@msg	at most {MAX_COMMANDS} `commands`	το πολύ {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	η εντολή {name} δηλώνεται δύο φορές
+@msg	command {name}: `label` must be 1-64 printable characters	εντολή {name}: το `label` πρέπει να έχει 1-64 εκτυπώσιμους χαρακτήρες
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	εντολή {name}: χρησιμοποιήστε αναγνωριστικό 1-{MAX_COMMAND_ID} χαρακτήρων από a-z 0-9 _ που αρχίζει με γράμμα
+@msg	command {name}: {e}	εντολή {name}: {e}
+@msg	only a filter or a live effect declares `commands`	μόνο ένα φίλτρο ή ένα δυναμικό εφέ δηλώνει `commands`
+@msg	“{name}” › {label}: {e}	«{name}» › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	η λειτουργική μονάδα δεν έχει το SHA-256 που δίνει το `hash`: δεν εγκαταστάθηκε τίποτα
 # Actions panel: action sets (#3712).
 	New Set…	Νέο σύνολο…
@@ -6440,6 +6499,7 @@ breakText	Glyphs	Γλύφοι
 	Create Swatch Legend	Δημιουργία υπομνήματος δειγμάτων χρωμάτων
 	Create Swatch Legend…	Δημιουργία υπομνήματος δειγμάτων χρωμάτων…
 	HEX	HEX
+	Help Bar	Γραμμή βοήθειας
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	Εργαλεία κειμένου
 	Text Tweaker…	Ρύθμιση κειμένου…
@@ -6505,6 +6565,24 @@ breakText	Glyphs	Γλύφοι
 # 3D Box add-on
 	3D Box	Κουτί 3D
 	3D Box Tool	Εργαλείο κουτιού 3D
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Άνοιγμα με
+	No importer plug-ins installed	Δεν έχουν εγκατασταθεί πρόσθετα εισαγωγής
+	Read files you open in its format and make documents from them	Ανάγνωση των αρχείων που ανοίγετε στη μορφή του και δημιουργία εγγράφων από αυτά
+@msg	{_1} is an importer (File › Open With)	το {_1} είναι πρόσθετο εισαγωγής (Αρχείο › Άνοιγμα με)
+@msg	missing `importer` (see document.formats)	λείπει το `importer` (δείτε document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	το `importer` πρέπει να είναι αναγνωριστικό μορφής πρόσθετου (δείτε document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	το «{shown}» ανοίγει αρχεία {_1}, όχι `{_2}`
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	το `{_1}` είναι πρόσθετο τύπου `{_2}`, όχι πρόσθετο εισαγωγής
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	το `{_1}` είναι πρόσθετο τύπου `{_2}`, όχι πρόσθετο εξαγωγής
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	το `{_1}` είναι πρόσθετο εισαγωγής: ανοίξτε ένα αρχείο με document.open {{"importer"}"}}
+@msg	the importer returned no objects	το πρόσθετο εισαγωγής δεν επέστρεψε κανένα αντικείμενο
+@msg	an importer returns `objects` and `warnings`, not `{key}`	ένα πρόσθετο εισαγωγής επιστρέφει `objects` και `warnings`, όχι `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	το αρχείο είναι μεγαλύτερο από τα {MAX_INPUT_BYTES} byte που διαβάζει ένα πρόσθετο εισαγωγής
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	ένα πρόσθετο εισαγωγής δηλώνει 1 έως {MAX_EXTENSIONS} `extensions`
+@msg	only an exporter or an importer declares `extensions`	μόνο ένα πρόσθετο εξαγωγής ή εισαγωγής δηλώνει `extensions`
+@msg	an importer always gets an import's budget: leave `budget` out	ένα πρόσθετο εισαγωγής παίρνει πάντα τον προϋπολογισμό μιας εισαγωγής: παραλείψτε το `budget`
 
 # Safe Mode
 	Safe Mode…	Ασφαλής λειτουργία…

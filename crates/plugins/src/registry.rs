@@ -56,11 +56,11 @@ pub fn revoke(id: &str) -> bool {
 }
 
 /// May `plugin` be installed without asking the user: does it list no permissions, or did the user
-/// already grant its id every permission it lists? A module with other bytes but no new permission
-/// needs no new approval.
+/// already grant this very module (its id and SHA-256) every permission it lists? A module with
+/// other bytes needs a new approval, even when it lists the same permissions.
 pub fn approved(plugin: &Plugin) -> bool {
     let m = plugin.manifest();
-    !m.asks_permissions() || granted(&m.id).is_some_and(|g| g.covers(&m.permissions()))
+    !m.asks_permissions() || granted(&m.id).is_some_and(|g| g.covers(&m.id, plugin.hash(), &m.permissions()))
 }
 
 /// Installs `plugin`, replacing one with the same id.
@@ -90,7 +90,9 @@ pub fn list() -> Vec<Arc<Plugin>> {
 
 /// Uninstalls `id`; false if it wasn't installed.
 pub fn remove(id: &str) -> bool {
-    let gone = PLUGINS.write().unwrap_or_else(|e| e.into_inner()).remove(id).is_some();
+    // The revision moves while the write lock is held, as in `install`.
+    let mut plugins = PLUGINS.write().unwrap_or_else(|e| e.into_inner());
+    let gone = plugins.remove(id).is_some();
     if gone {
         REVISION.fetch_add(1, Ordering::Relaxed);
     }
@@ -153,7 +155,7 @@ pub struct FolderReport {
 /// Installs every `*.wasm` directly in `dir` (not recursive), in file-name order. A bad module is
 /// reported and skipped, the others still load; so is a heavy one ([`crate::Budget::Heavy`]),
 /// which installs only once the user agrees, and one that lists permissions the user has not
-/// granted its id ([`approved`]).
+/// granted this very module ([`approved`]).
 #[cfg(not(target_arch = "wasm32"))]
 pub fn load_folder(dir: &std::path::Path) -> Result<FolderReport> {
     load_folder_where(dir, |_| Ok(()), approved)
@@ -212,4 +214,28 @@ pub fn load_folder_where(
         }
     }
     Ok(report)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A cache keyed by the revision can't store the old list under the new revision: an install
+    /// waiting for the set leaves the revision alone until it holds the set.
+    #[test]
+    fn an_install_changes_the_revision_only_while_it_holds_the_set() {
+        let plugin = Plugin::load(include_bytes!("../tests/fixtures/desaturate.wasm"), Limits::default()).unwrap();
+        let id = plugin.id().to_string();
+        let held = PLUGINS.read().unwrap_or_else(|e| e.into_inner());
+        let before = revision();
+        let installing = std::thread::spawn(move || install(plugin));
+        let moved = (0..1_000_000).any(|_| {
+            std::thread::yield_now();
+            revision() != before
+        });
+        drop(held);
+        installing.join().unwrap();
+        assert!(!moved, "the revision changed while the install waited for the set");
+        assert!(revision() > before && remove(&id));
+    }
 }

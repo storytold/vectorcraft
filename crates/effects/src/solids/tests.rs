@@ -45,10 +45,15 @@ fn every_solid_draws_shaded_faces_and_leaves_the_source_editable() {
         assert_eq!(n.path_data(), Some(&source), "{id}");
         assert!(!faces(&art).is_empty(), "{id}");
         // The faces are the fill's red or the stroke's black, shaded: never brighter, never another
-        // hue.
+        // hue. The classic Plastic surface, its default, also lightens a face toward white, which
+        // scales every channel's distance from white by the same factor and so keeps r - g to
+        // r - b at 6 to 7.
         for f in faces(&art) {
             let [r, g, b] = fill_rgb(f);
-            assert!(r <= 0.8 + 1e-6 && (g * 4.0 - r).abs() < 1e-4 && (b * 8.0 - r).abs() < 1e-4 || id == ROTATE, "{id}: {r} {g} {b}");
+            let shaded = r <= 0.8 + 1e-6 && (g * 4.0 - r).abs() < 1e-4 && (b * 8.0 - r).abs() < 1e-4;
+            let highlighted =
+                id == CLASSIC_EXTRUDE && [r, g, b].iter().all(|c| (0.0..=1.0).contains(c)) && ((r - g) * 7.0 - (r - b) * 6.0).abs() < 1e-4;
+            assert!(shaded || highlighted || id == ROTATE, "{id}: {r} {g} {b}");
         }
         // The art follows the source when it moves.
         let before = art.visual_bounds().unwrap();
@@ -325,7 +330,7 @@ fn export_and_expand_bake_faces_with_their_own_ids() {
         let mut n = square_node();
         n.id = d.alloc_id();
         n.appearance.effects.push(fx(id, json!({"bevel": "rounded"})));
-        assert_eq!(crate::bake_appearance(&n), solid_art(&n), "{id}");
+        assert_eq!(crate::bake_appearance(None, &n), solid_art(&n), "{id}");
         let mut stroke = |_: &mut Document, _: &PathData, _: FillRule, _: &StrokeLayer| None;
         let art = crate::expand_leaf(&mut d, &n, &mut stroke).unwrap();
         let mut ids = std::collections::HashSet::new();
@@ -351,7 +356,7 @@ fn a_twisted_tapered_hollow_inflate_exports_and_expands() {
     let params = json!({"twist": 120, "taper": 50, "cap": false, "bothSides": true, "rotationX": -20, "rotationY": 35});
     n.appearance.effects.push(fx(INFLATE, params));
     let art = solid_art(&n).unwrap();
-    assert_eq!(crate::bake_appearance(&n), Some(art.clone()));
+    assert_eq!(crate::bake_appearance(None, &n), Some(art.clone()));
     assert!(faces(&art).len() > 20, "{} faces", faces(&art).len());
     let mut stroke = |_: &mut Document, _: &PathData, _: FillRule, _: &StrokeLayer| None;
     let expanded = crate::expand_leaf(&mut d, &n, &mut stroke).unwrap();
@@ -594,4 +599,161 @@ fn a_3d_effect_on_a_group_turns_every_member_about_one_shared_axis() {
     let err = validate_solid(&g, EXTRUDE, &json!({})).unwrap_err();
     assert!(err.contains("clipping groups"), "{err}");
     assert!(solid_art(&g).is_none(), "drawn as the group it is");
+}
+
+/// The red square without its stroke, with Extrude & Bevel (Classic) and `params`.
+fn classic(params: Value) -> Node {
+    let mut n = square_node();
+    n.appearance.items.retain(|i| matches!(i, AppearanceItem::Fill(_)));
+    n.appearance.effects.push(fx(CLASSIC_EXTRUDE, params));
+    n
+}
+
+fn classic_faces(params: Value) -> Vec<Node> {
+    let art = solid_art(&classic(params)).unwrap();
+    faces(&art).into_iter().cloned().collect()
+}
+
+fn close3(a: [f32; 3], b: [f32; 3]) -> bool {
+    a.iter().zip(b).all(|(a, b)| (a - b).abs() < 1e-4)
+}
+
+#[test]
+fn classic_surfaces_draw_edges_flat_paint_soft_light_and_a_highlight() {
+    // Wireframe: the edges of every face, the hidden ones too, in the paint; no fills.
+    let wire = classic_faces(json!({"surface": "wireframe"}));
+    let plastic = classic_faces(json!({}));
+    assert_eq!(plastic.len(), 3, "a box shows three faces");
+    assert_eq!(wire.len(), 6, "and has six");
+    for f in &wire {
+        let [AppearanceItem::Stroke(s)] = &f.appearance.items[..] else { panic!("a stroke alone: {:?}", f.appearance.items) };
+        assert_eq!(s.paint, Paint::solid(RED));
+    }
+    // No Shading: every face in the art's own paint, a CMYK color kept as it is.
+    assert!(classic_faces(json!({"surface": "none"})).iter().all(|f| close3(fill_rgb(f), RED.to_rgb())));
+    let cmyk = Paint::solid(Color::Cmyk { c: 0.1, m: 0.9, y: 0.8, k: 0.0 });
+    let mut n = classic(json!({"surface": "none"}));
+    if let Some(AppearanceItem::Fill(f)) = n.appearance.items.first_mut() {
+        f.paint = cmyk.clone();
+    }
+    for f in faces(&solid_art(&n).unwrap()) {
+        let AppearanceItem::Fill(fill) = &f.appearance.items[0] else { panic!("a fill first") };
+        assert_eq!(fill.paint, cmyk);
+    }
+    // Diffuse: the red darkened toward black by how far each face turns from the light, so the
+    // faces differ but keep their hue.
+    let diffuse: Vec<[f32; 3]> = classic_faces(json!({"surface": "diffuse"})).iter().map(fill_rgb).collect();
+    assert!(diffuse.iter().all(|[r, g, b]| *r <= 0.8 + 1e-6 && (g * 4.0 - r).abs() < 1e-4 && (b * 8.0 - r).abs() < 1e-4), "{diffuse:?}");
+    assert!(diffuse.windows(2).any(|w| !close3(w[0], w[1])), "{diffuse:?}");
+    // Plastic: the same faces, one of them lightened toward white by the highlight.
+    let shiny: Vec<[f32; 3]> =
+        classic_faces(json!({"highlightIntensity": 100, "highlightSize": 100, "lightHeight": 60})).iter().map(fill_rgb).collect();
+    let soft: Vec<[f32; 3]> = classic_faces(json!({"surface": "diffuse", "lightHeight": 60})).iter().map(fill_rgb).collect();
+    assert!(shiny.iter().zip(&soft).any(|(s, d)| s[1] > d[1] + 0.01), "{shiny:?} {soft:?}");
+    assert!(shiny.iter().zip(&soft).all(|(s, d)| s[1] >= d[1] - 1e-4));
+    // Without highlight, Plastic shades as Diffuse.
+    let dull: Vec<[f32; 3]> = classic_faces(json!({"highlightIntensity": 0, "lightHeight": 60})).iter().map(fill_rgb).collect();
+    assert!(dull.iter().zip(&soft).all(|(a, b)| close3(*a, *b)));
+}
+
+#[test]
+fn classic_shading_color_blend_steps_and_lights() {
+    let base = json!({"surface": "diffuse", "ambient": 20});
+    let with = |extra: Value| {
+        let mut p = base.clone();
+        p.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        classic_faces(p).iter().map(fill_rgb).collect::<Vec<_>>()
+    };
+    // A custom shading color darkens toward that color; None keeps the paint.
+    assert!(with(json!({"shadingColor": "custom", "shadingCustom": "#0000ff"})).iter().any(|c| c[2] > c[0] / 8.0 + 0.01));
+    assert!(with(json!({"shadingColor": "none"})).iter().all(|c| close3(*c, RED.to_rgb())));
+    // One blend step: every face fully lit or fully in shadow.
+    let stepped = with(json!({"blendSteps": 1, "ambient": 0}));
+    assert!(stepped.iter().all(|c| close3(*c, RED.to_rgb()) || close3(*c, [0.0; 3])), "{stepped:?}");
+    // No light: the ambient share of the red. Two lights add up.
+    let dark = with(json!({"lightIntensity": 0, "blendSteps": 256}));
+    assert!(dark.iter().all(|c| (c[0] - 0.8 * 0.2).abs() < 0.01), "{dark:?}");
+    let one = with(json!({"lights": [{"intensity": 30}], "blendSteps": 256}));
+    let two = with(json!({"lights": [{"intensity": 30}, {"intensity": 30}], "blendSteps": 256}));
+    assert!(one.iter().zip(&two).all(|(a, b)| b[0] >= a[0] - 1e-4) && one.iter().zip(&two).any(|(a, b)| b[0] > a[0] + 0.01));
+    // Draw Hidden Faces keeps the faces turned away, drawn first.
+    assert_eq!(with(json!({"drawHiddenFaces": true})).len(), 6);
+}
+
+#[test]
+fn classic_bevel_height_extent_and_cap_shape_the_solid() {
+    let bounds = |p: Value| solid_art(&classic(p)).unwrap().visual_bounds().unwrap();
+    let front = json!({"rotationX": 0, "rotationY": 0, "rotationZ": 0, "bevel": "classic", "bevelHeight": 10});
+    let out = bounds(front.clone());
+    let mut inside = front.clone();
+    inside["bevelInside"] = json!(true);
+    // Straight on, a bevel added around the shape widens it; one carved into it keeps its size.
+    assert!(out.width() > 100.0 + 15.0, "{out:?}");
+    let carved = bounds(inside);
+    assert!((carved.width() - 100.0).abs() < 2.0, "{carved:?}");
+    // Hollow: no caps, so the walls seen from inside show too.
+    assert!(classic_faces(json!({"cap": false})).len() > classic_faces(json!({})).len());
+    // The depth sets how far back the solid goes.
+    let side = json!({"rotationX": 0, "rotationY": 90, "rotationZ": 0});
+    let mut deep = side.clone();
+    deep["depth"] = json!(120);
+    assert!((bounds(deep).width() - 120.0).abs() < 1.0);
+}
+
+/// A gradient fill with a transparent stop is shaded opaque and masked by its own transparency, so
+/// the shading does not cover the transparent part; an opaque gradient needs no mask.
+#[test]
+fn classic_shading_keeps_a_gradients_transparency() {
+    use vectorcraft_doc::color::{Gradient, GradientKind, GradientPaint, GradientStop};
+    for (end, masked) in [(0.25, true), (1.0, false)] {
+        let mut stop = GradientStop::new(1.0, RED);
+        stop.opacity = end;
+        let gradient = GradientPaint::new(Gradient::new(GradientKind::Linear, vec![GradientStop::new(0.0, RED), stop]));
+        let mut n = classic(json!({}));
+        if let Some(AppearanceItem::Fill(f)) = n.appearance.items.first_mut() {
+            f.paint = Paint::Gradient(Box::new(gradient));
+        }
+        let art = solid_art(&n).unwrap();
+        let surface = &art.children().unwrap()[0];
+        assert_eq!(surface.extras().mask.is_some(), masked, "{end}");
+        let mut opaque = true;
+        surface.walk(&mut |c| {
+            for item in &c.appearance.items {
+                if let AppearanceItem::Fill(f) = item
+                    && let Paint::Gradient(g) = &f.paint
+                {
+                    opaque &= g.gradient.stops.iter().all(|s| s.opacity == 1.0);
+                }
+            }
+        });
+        assert!(opaque, "{end}: the faces are drawn opaque");
+    }
+}
+
+#[test]
+fn classic_parameters_are_checked() {
+    let n = classic(json!({}));
+    let check = |p: Value| validate_solid(&n, CLASSIC_EXTRUDE, &crate::merged_params(CLASSIC_EXTRUDE, &p));
+    assert!(check(json!({})).is_ok());
+    assert!(check(json!({"surface": "wireframe", "shadingColor": "custom", "shadingCustom": "#12aBcd", "blendSteps": 256, "bevel": "ogee"})).is_ok());
+    for (p, says) in [
+        (json!({"surface": "glossy"}), "`surface` must be one of wireframe, none, diffuse, plastic"),
+        (json!({"shadingColor": "red"}), "`shadingColor` must be one of black, custom, none"),
+        (json!({"shadingCustom": "blue"}), "`shadingCustom` must be a #rrggbb color"),
+        (json!({"shadingCustom": "#fff"}), "`shadingCustom` must be a #rrggbb color"),
+        (json!({"depth": 2001}), "`depth` must be between 0 and 2000 (got 2001)"),
+        (json!({"bevelHeight": 0}), "`bevelHeight` must be between 1 and 100 (got 0)"),
+        (json!({"ambient": -1}), "`ambient` must be between 0 and 100 (got -1)"),
+        (json!({"blendSteps": 2.5}), "`blendSteps` must be a whole number between 1 and 256 (got 2.5)"),
+        (json!({"blendSteps": 0}), "`blendSteps` must be a whole number between 1 and 256 (got 0)"),
+        (json!({"highlightSize": "big"}), "`highlightSize` must be a number"),
+        (json!({"cap": "yes"}), "`cap` must be true or false"),
+        (json!({"drawHiddenFaces": 1}), "`drawHiddenFaces` must be true or false"),
+        (json!({"bevel": "fancy"}), "bevel must be none or one of"),
+        (json!({"twist": 10}), "unknown parameter `twist`"),
+        (json!({"lights": []}), "lights must contain one to ten lights"),
+    ] {
+        let err = check(p.clone()).unwrap_err();
+        assert!(err.starts_with(says), "{p}: {err}");
+    }
 }

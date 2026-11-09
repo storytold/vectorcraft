@@ -434,6 +434,17 @@
 	Inflate	Nadmuchanie
 	Select objects, then pick an object type to give them a 3D effect.	Zaznacz obiekty, a następnie wybierz typ obiektu, aby nadać im efekt 3D.
 	Extrude & Bevel…	Wyciągnięcie i fazowanie…
+	3D (Classic)	3D (klasyczne)
+	Extrude & Bevel (Classic)…	Wyciągnięcie i fazowanie (klasyczne)…
+	Surface	Powierzchnia
+	Wireframe	Szkielet
+	No Shading	Bez cieniowania
+	Plastic	Plastik
+	Highlight Intensity	Intensywność połysku
+	Highlight Size	Rozmiar połysku
+	Blend Steps	Kroki przejścia
+	Shading Color	Kolor cieniowania
+	Draw Hidden Faces	Rysuj ukryte ściany
 	Revolve…	Obrót…
 	Inflate…	Nadmuchanie…
 	Materials…	Materiały…
@@ -643,6 +654,11 @@
 	Color	Kolor
 	Color Guide	Przewodnik kolorów
 	Color Themes	Motywy kolorów
+	Color Wheel	Koło kolorów
+	Hue ring	Pierścień barwy
+	Saturation and brightness	Nasycenie i jasność
+	Color field	Pole koloru
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	CSS Properties	Właściwości CSS
 	Document Info	Informacje o dokumencie
 	Flattener Preview	Podgląd spłaszczania
@@ -1839,6 +1855,10 @@ digits	Malayalam	Malajalam
 	Stylistic	Stylistyczny
 	Mojikumi Set	Zestaw mojikumi
 	Kinsoku Set	Zestaw kinsoku
+	Kinsoku Shori Type	Typ kinsoku shori
+	Push In First	Najpierw wciągaj
+	Push Out First	Najpierw wypychaj
+	Push Out Only	Tylko wypychaj
 	Hard	Ścisły
 	Right Indent	Wcięcie z prawej
 	Right-to-Left Paragraph Direction	Kierunek akapitu od prawej do lewej
@@ -2612,6 +2632,8 @@ digits	Malayalam	Malajalam
 	Tile Range:	Zakres kafelków:
 	tile {number}	kafelek {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Kafelki są numerowane poziomo, a potem w dół; pozostaw zakres pusty dla wszystkich kafelków.
+	Copies per Sheet (as many as fit, in a grid)	Kopie na arkusz (tyle, ile się zmieści, w siatce)
+	Gutter:	Odstęp:
 	Transverse (the page a quarter turn on the paper)	Poprzecznie (strona obrócona o ćwierć obrotu na papierze)
 	Unprintable margin:	Margines niedrukowalny:
 	{pages} in all, {count} per copy	Razem: {pages}, na kopię: {count}
@@ -2677,6 +2699,10 @@ digits	Malayalam	Malajalam
 	< 1 sec	< 1 s
 	[Unnamed]	[Bez nazwy]
 	Amount:	Wartość:
+	Anti-aliasing Method	Metoda wygładzania
+antiAlias	Sharp	Ostre
+	Crisp	Wyraźne
+	Strong	Mocne
 	Anti-aliasing:	Wygładzanie:
 	Artboard:	Obszar kompozycji:
 	Color Table	Tablica kolorów
@@ -4241,6 +4267,7 @@ imageTrace	Outline	Kontur
 @msg	Split Into Grid: select paths large enough for the grid	Podziel na siatkę: zaznacz ścieżki wystarczająco duże dla siatki
 @msg	Targa files are RGB: colorModel rgb	Pliki Targa są w RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Oblewanie tekstem: zaznacz obiekt oblewany
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` musi mieć wartość "none", "sharp", "crisp" lub "strong"
 @msg	`aspect` must be a number (%)	`aspect` musi być liczbą (%)
 @msg	`at` must be [x, y]	`at` musi mieć postać [x, y]
 @msg	`color` must be a colour	`color` musi być kolorem
@@ -4644,6 +4671,13 @@ imageTrace	Outline	Kontur
 @msg	select an image	zaznacz obraz
 @msg	select an object in perspective	zaznacz obiekt w perspektywie
 @msg	select artwork (or a colour group) to recolor	zaznacz kompozycję (lub grupę kolorów), aby zmienić kolory
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	Zmiana kolorów zakończona; bez zmian: {locked} i {hidden}
+@msg	Recolor completed; {objects} were left unchanged	Zmiana kolorów zakończona; bez zmian: {objects}
+@msg	Recolor completed; {objects} was left unchanged	Zmiana kolorów zakończona; bez zmian: {objects}
+@msg	1 locked object	zablokowany obiekt (1)
+@msg	{n} locked objects	zablokowane obiekty ({n})
+@msg	1 hidden object	ukryty obiekt (1)
+@msg	{n} hidden objects	ukryte obiekty ({n})
 @msg	select at least two objects	zaznacz co najmniej dwa obiekty
 @msg	exit isolation mode first	najpierw wyjdź z trybu izolacji
 @msg	select objects, not layers	zaznacz obiekty, nie warstwy
@@ -4958,6 +4992,10 @@ imageTrace	Outline	Kontur
 @msg	the PSD file is cut short	plik PSD jest ucięty
 @msg	the PSD file's header is damaged	nagłówek pliku PSD jest uszkodzony
 @msg	the PSD file's image data can't be read: {e}	nie można odczytać danych obrazu pliku PSD: {e}
+@msg	the JPEG XL file is cut short	plik JPEG XL jest ucięty
+@msg	the JPEG XL container is too large to read	kontener JPEG XL jest zbyt duży, aby go odczytać
+@msg	CMYK JPEG XL images can't be read	nie można odczytać obrazów JPEG XL w trybie CMYK
+@msg	the JPEG XL file can't be read: {e}	nie można odczytać pliku JPEG XL: {e}
 @msg	Imported library {name}	Zaimportowano bibliotekę {name}
 @msg	Invalid panel layout; restored the default dock	Nieprawidłowy układ paneli; przywrócono domyślny dok
 @msg	action is required	wymagane jest action
@@ -5616,6 +5654,11 @@ mark-style	Japanese	Japońskie
 	Snap to Perpendicular	Przyciągaj do prostopadłych
 @msg	unknown snap option `{key}` (use {options})	nieznana opcja przyciągania `{key}` (użyj: {options})
 	Gap Length:	Długość przerwy:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Tryb Płaskie logo nie używa keepColors: obrysowuje kolory podane w logoColors lub kolory, które znajdzie.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Nic nie zostało obrysowane: żaden z kolorów znalezionych podczas obrysowania nie pasuje do keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Nic nie zostało obrysowane: Ignoruj kolor pomija każdy obszar kolorów wymienionych w keepColors.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	Nic nie zostało obrysowane: kolory pasujące do keepColors nie dają żadnych ścieżek.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: żaden z kolorów znalezionych podczas obrysowania nie pasuje do {c}, więc nic z niego nie jest obrysowywane.
 @msg	`colorGroup` needs `library: "document"`	`colorGroup` wymaga `library: "document"`
 @msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` wymaga `palette: "documentLibrary"`
 @msg	`colorGroup` needs `mode: "color"`	`colorGroup` wymaga `mode: "color"`
@@ -5750,16 +5793,33 @@ axis	Y Axis	Oś Y
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	moduł importuje `env.{name}`, którego wtyczka może używać tylko na poziomie API wtyczek {PROGRESS_API} (`api` {PROGRESS_API}) i z uprawnieniem `{permission}`
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	moduł importuje `{from}.{name}`, którego host nie udostępnia: wtyczka może importować tylko funkcje `env.vc_*` wymienione w docs/plugins.md (poziom API wtyczek 2), bez WASI, plików i sieci
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` ma wartość {_1}; ten host obsługuje poziomy API wtyczek od 1 do {API_LEVEL}
+@msg	`paintOutput` may only be true	`paintOutput` może mieć tylko wartość true
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` dotyczy tylko efektu na żywo (`kind` "effect") z `api` 2
 @msg	`grant` must be a list of permission names	`grant` musi być listą nazw uprawnień
 @msg	`grant` names an unknown permission `{shown}`	`grant` wymienia nieznane uprawnienie `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	wtyczka rodzaju `{_1}` potrzebuje uprawnienia `{_2}`
 @msg	at most {MAX_PERMISSIONS} `permissions`	najwyżej {MAX_PERMISSIONS} `permissions`
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	uprawnienie `{shown}` nie dotyczy wtyczki rodzaju `{_1}`
 @msg	permission `{shown}` is listed twice	uprawnienie `{shown}` występuje dwa razy
+@msg	only a filter declares `inputs`	tylko filtr deklaruje `inputs`
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` wymienia nieznany rodzaj obiektu `{shown}`: użyj type, image lub symbolInstance
+@msg	`inputs` lists `{shown}` twice	`inputs` wymienia `{shown}` dwa razy
+@msg	`inputs` needs `api` 2 or later	`inputs` wymaga `api` 2 lub nowszego
+@msg	`inputs` needs the permission `doc.read`	`inputs` wymaga uprawnienia `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	budżet pamięci (obiekt {_1} wymaga {size} bajtów danych wejściowych, pozostało {left})
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	budżet obiektów (ponad {MAX_OBJECTS} obiektów tylko do odczytu)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	uprawnienie `{shown}` jest zarezerwowane dla późniejszego API wtyczek; ten host go nie przyznaje
 @msg	unknown permission `{shown}`	nieznane uprawnienie `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	„{name}” prosi o uprawnienia {asked}: zainstaluj ją z `grant`, który je wymienia, gdy użytkownik się zgodzi
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	„{name}” nie otrzymała `{p}`, którego potrzebuje jej wynik: nic nie zmieniono
+@msg	a heavy filter runs in the background, so it can't declare `commands`	ciężki filtr działa w tle, więc nie może deklarować `commands`
+@msg	at most {MAX_COMMANDS} `commands`	najwyżej {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	polecenie {name} jest zadeklarowane dwa razy
+@msg	command {name}: `label` must be 1-64 printable characters	polecenie {name}: `label` musi mieć 1-64 drukowalnych znaków
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	polecenie {name}: użyj id z 1-{MAX_COMMAND_ID} znaków spośród a-z 0-9 _, zaczynającego się od litery
+@msg	command {name}: {e}	polecenie {name}: {e}
+@msg	only a filter or a live effect declares `commands`	`commands` deklaruje tylko filtr lub efekt na żywo
+@msg	“{name}” › {label}: {e}	„{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	moduł nie ma skrótu SHA-256 podanego w `hash`: nic nie zainstalowano
 # Actions panel: action sets (#3712).
 	New Set…	Nowy zestaw…
@@ -6343,6 +6403,7 @@ breakText	Glyphs	Glify
 	Create Swatch Legend	Utwórz legendę próbek
 	Create Swatch Legend…	Utwórz legendę próbek…
 	HEX	HEX
+	Help Bar	Pasek pomocy
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	Narzędzia tekstu
 	Text Tweaker…	Strojenie tekstu…
@@ -6408,6 +6469,24 @@ breakText	Glyphs	Glify
 # 3D Box add-on
 	3D Box	Bryła 3D
 	3D Box Tool	Narzędzie Bryła 3D
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Otwórz za pomocą
+	No importer plug-ins installed	Brak zainstalowanych wtyczek importu
+	Read files you open in its format and make documents from them	Odczytywać pliki otwierane w jego formacie i tworzyć z nich dokumenty
+@msg	{_1} is an importer (File › Open With)	{_1} to wtyczka importu (Plik › Otwórz za pomocą)
+@msg	missing `importer` (see document.formats)	brak `importer` (zobacz document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` musi być identyfikatorem formatu wtyczki (zobacz document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	„{shown}” otwiera pliki {_1}, a nie `{_2}`
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` to wtyczka rodzaju `{_2}`, a nie wtyczka importu
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` to wtyczka rodzaju `{_2}`, a nie wtyczka eksportu
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` to wtyczka importu: otwórz plik za pomocą document.open {{"importer"}"}}
+@msg	the importer returned no objects	wtyczka importu nie zwróciła żadnych obiektów
+@msg	an importer returns `objects` and `warnings`, not `{key}`	wtyczka importu zwraca `objects` i `warnings`, a nie `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	plik jest większy niż {MAX_INPUT_BYTES} bajtów, które odczytuje wtyczka importu
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	wtyczka importu deklaruje od 1 do {MAX_EXTENSIONS} `extensions`
+@msg	only an exporter or an importer declares `extensions`	`extensions` deklaruje tylko wtyczka eksportu lub importu
+@msg	an importer always gets an import's budget: leave `budget` out	wtyczka importu zawsze dostaje budżet importu: pomiń `budget`
 
 # Safe Mode
 	Safe Mode…	Tryb awaryjny…

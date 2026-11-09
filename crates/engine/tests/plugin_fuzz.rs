@@ -15,7 +15,7 @@ use proptest::prelude::*;
 use serde_json::{Map, Value, json};
 use vectorcraft_engine::Session;
 use vectorcraft_plugins::wat as tpl;
-use vectorcraft_plugins::{Error, Limits, Plugin};
+use vectorcraft_plugins::{Error, Kind, Limits, Plugin};
 use vectorcraft_testkit::catch_quiet;
 use vectorcraft_testkit::fixtures::rich_session;
 
@@ -65,6 +65,29 @@ fn arb_junk() -> impl Strategy<Value = Value> {
             prop::collection::btree_map("[a-z]{1,5}", inner, 0..3).prop_map(|m| Value::Object(m.into_iter().collect())),
         ]
     })
+}
+
+/// One entry of a manifest's `extensions`: valid, dotted, mixed-case, empty or too long, or junk.
+fn arb_extension() -> impl Strategy<Value = Value> {
+    prop_oneof![
+        4 => "[a-z0-9]{1,16}".prop_map(Value::from),
+        1 => prop::sample::select(vec![".fz", "FZ", "fZ", "a b", "", "x.y", "é", "a\u{202E}", "abcdefghijklmnopq"]).prop_map(Value::from),
+        1 => "[a-z0-9]{17,32}".prop_map(Value::from),
+        1 => arb_junk(),
+    ]
+}
+
+/// A manifest's `extensions`: `None` leaves the key out; otherwise an empty list, up to the eight
+/// allowed, too many, one repeated, or junk.
+fn arb_extensions() -> impl Strategy<Value = Option<Value>> {
+    prop_oneof![
+        1 => Just(None),
+        1 => Just(Some(json!([]))),
+        4 => prop::collection::vec(arb_extension(), 1..=8).prop_map(|l| Some(Value::Array(l))),
+        1 => prop::collection::vec(arb_extension(), 9..=12).prop_map(|l| Some(Value::Array(l))),
+        1 => "[a-z0-9]{1,8}".prop_map(|e| Some(json!([e, "fz", e]))),
+        1 => arb_junk().prop_map(Some),
+    ]
 }
 
 /// Numbers that tend to break arithmetic.
@@ -512,6 +535,50 @@ proptest! {
         renders(&s, &out)?;
     }
 
+    /// A live effect that declares `paintOutput` returning hostile pieces, on objects or on a fill:
+    /// drawing, export and Expand Appearance never crash.
+    #[test]
+    fn hostile_painted_effect_output_never_crashes(
+        objects in prop::collection::vec(arb_object(), 0..5),
+        junk in prop::option::weighted(0.1, arb_junk()),
+        on_fill in any::<bool>(),
+    ) {
+        let mut s = rich_session();
+        s.execute("select.all", &json!({})).unwrap();
+        let out = output(&objects, &[], junk);
+        let manifest = r#"{"id":"fuzz.painted","name":"Fuzz","version":"1","kind":"effect","api":2,"paintOutput":true,"params":{}}"#;
+        install(&mut s, &wat::parse_str(tpl::returning(manifest, &out)).unwrap()).unwrap();
+        let item = if on_fill { json!(0) } else { Value::Null };
+        let r = catch_quiet(|| s.execute("effect.apply", &json!({"effect": "plugin.fuzz.painted", "item": item})).map(|_| ()));
+        if let Err(msg) = r {
+            return Err(TestCaseError::fail(format!("panicked on {out}: {msg}")));
+        }
+        renders(&s, &out)?;
+        let r = catch_quiet(|| s.execute("effect.expandAppearance", &json!({})).map(|_| ()));
+        if let Err(msg) = r {
+            return Err(TestCaseError::fail(format!("expanding panicked on {out}: {msg}")));
+        }
+        renders(&s, &out)?;
+    }
+
+    /// An importer's hostile output (`document.open`) either opens a document that renders and
+    /// exports, or is an error that opens nothing.
+    #[test]
+    fn hostile_importer_output_never_crashes(
+        objects in prop::collection::vec(arb_object(), 0..5),
+        junk in prop::option::weighted(0.1, arb_junk()),
+    ) {
+        let mut s = Session::new();
+        let out = output(&objects, &[], junk);
+        install(&mut s, &wat::parse_str(tpl::returning(&tpl::importer("fuzz.importer", r#"["fzi"]"#, "{}"), &out)).unwrap()).unwrap();
+        let r = catch_quiet(|| s.execute("document.open", &json!({"name": "x.fzi", "dataBase64": ""})).map(|_| ()));
+        match r {
+            Err(msg) => return Err(TestCaseError::fail(format!("panicked on {out}: {msg}"))),
+            Ok(Err(_)) => prop_assert!(s.documents().is_empty(), "a failed open opened a document: {}", out),
+            Ok(Ok(())) => renders(&s, &out)?,
+        }
+    }
+
     #[test]
     fn bulk_memory_plugins_never_crash(case in arb_bulk_case(), fuel in arb_fuel()) {
         let r = catch_quiet(|| run_bulk(case, fuel)).map_err(|msg| TestCaseError::fail(format!("panicked on {case:?}: {msg}")))?;
@@ -566,17 +633,18 @@ proptest! {
         renders(&s, "after mutated modules")?;
     }
 
-    /// Manifests with hostile `permissions`, `api` and names (unknown, reserved and repeated
-    /// permissions, junk of every type, control and bidirectional override characters) parse to
-    /// an error or to a manifest whose permissions fit its kind, and installing one with a junk
-    /// `grant` ends as an error or an install, never a panic. A prompt never shows a hidden
+    /// Manifests with hostile `permissions`, `api`, names and `extensions` (unknown, reserved and
+    /// repeated permissions, junk of every type, control and bidirectional override characters,
+    /// extensions missing, dotted, mixed-case, repeated, too long or too many) parse to an error
+    /// or to a manifest whose permissions and extensions fit its kind, and installing one with a
+    /// junk `grant` ends as an error or an install, never a panic. A prompt never shows a hidden
     /// character from the name.
     #[test]
     fn hostile_manifest_permissions_never_crash(
-        kind in prop::sample::select(vec!["filter", "effect", "exporter"]),
+        kind in prop::sample::select(vec!["filter", "effect", "exporter", "importer"]),
         names in prop::collection::vec(
             prop_oneof![
-                prop::sample::select(vec!["doc.read", "doc.write", "state", "effect.render", "export.write", "progress", "ui.panel", ""]),
+                prop::sample::select(vec!["doc.read", "doc.write", "state", "effect.render", "export.write", "import.read", "progress", "ui.panel", ""]),
                 Just("doc.read\u{202E}"),
                 Just("\u{0007}"),
             ],
@@ -585,21 +653,43 @@ proptest! {
         permissions in prop::option::weighted(0.8, prop_oneof![Just(Value::Null), arb_junk()]),
         api in prop_oneof![2 => Just(json!(1)), 1 => Just(json!(2)), 1 => arb_junk()],
         name in prop_oneof![3 => "[a-z\u{202E}\u{2066}\u{200F} ]{1,64}", 1 => "[a-z\u{202E}\u{2066}\u{0007}\u{200F} ]{1,80}"],
-        grant in prop_oneof![Just(Value::Null), arb_junk(), Just(json!(["doc.read", "doc.write", "state", "effect.render", "export.write", "progress"]))],
+        grant in prop_oneof![
+            Just(Value::Null),
+            arb_junk(),
+            Just(json!(["doc.read", "doc.write", "state", "effect.render", "export.write", "import.read", "progress"]))
+        ],
+        extensions in prop::option::weighted(0.5, arb_extensions()),
     ) {
         let mut m = json!({"id": "fuzz.permissions", "name": name, "kind": kind, "api": api});
-        if kind == "exporter" {
-            m["extensions"] = json!(["fz"]);
+        // Hostile extensions come with a valid `api` and no `permissions`, so the parse reaches
+        // them. The other half of the cases keep a valid list and reach the other fields.
+        let hostile_extensions = extensions.is_some();
+        match extensions {
+            None if matches!(kind, "exporter" | "importer") => m["extensions"] = json!(["fz"]),
+            None | Some(None) => {}
+            Some(Some(hostile)) => m["extensions"] = hostile,
         }
-        m["permissions"] = match permissions {
-            Some(Value::Null) | None => json!(names),
-            Some(junk) => junk,
-        };
+        if hostile_extensions {
+            m["api"] = json!(1);
+        } else {
+            m["permissions"] = match permissions {
+                Some(Value::Null) | None => json!(names),
+                Some(junk) => junk,
+            };
+        }
         let text = m.to_string();
         let parsed = catch_quiet(|| vectorcraft_plugins::Manifest::parse(text.as_bytes()));
         let parsed = parsed.map_err(|msg| TestCaseError::fail(format!("panicked on {text}: {msg}")))?;
         if let Ok(man) = &parsed {
-            prop_assert!(man.permissions().iter().all(|p| p.applies(man.kind)), "{}", text);
+            prop_assert!(man.permissions().iter().all(|p| p.applies(man.kind, !man.commands.is_empty())), "{}", text);
+            let exts = &man.extensions;
+            if matches!(man.kind, Kind::Exporter | Kind::Importer) {
+                prop_assert!((1..=8).contains(&exts.len()), "{}", text);
+                prop_assert!(exts.iter().all(|e| (1..=16).contains(&e.len()) && e.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit())), "{}", text);
+                prop_assert!(exts.iter().enumerate().all(|(i, e)| !exts[..i].contains(e)), "{}", text);
+            } else {
+                prop_assert!(exts.is_empty(), "{}", text);
+            }
             let shown = vectorcraft_plugins::permissions::display_text(&man.name, vectorcraft_plugins::permissions::MAX_SHOWN_NAME);
             prop_assert!(!shown.chars().any(|c| c.is_control() || matches!(c, '\u{202E}' | '\u{2066}' | '\u{200F}')), "{}", shown);
             prop_assert!(shown.chars().count() <= vectorcraft_plugins::permissions::MAX_SHOWN_NAME);
@@ -615,6 +705,80 @@ proptest! {
         prop_assert!(!installed || parsed.is_ok(), "a manifest that doesn't parse installed: {}", text);
         vectorcraft_plugins::registry::remove("fuzz.permissions");
         vectorcraft_plugins::registry::revoke("fuzz.permissions");
+    }
+
+    /// Manifests with hostile `commands` (junk of every type, bad and repeated ids, labels with
+    /// control and bidirectional override characters, a `menu` naming another menu, junk
+    /// parameters) parse to an error or to commands whose menu labels show no hidden character and
+    /// that sit under Plug-ins alone; installing one and running each of its commands ends as an
+    /// error or an edit, never a panic, and the document then renders and exports.
+    #[test]
+    fn hostile_manifest_commands_never_crash(
+        kind in prop::sample::select(vec!["filter", "effect", "exporter", "importer"]),
+        entries in prop::collection::vec(
+            prop_oneof![
+                3 => (
+                    prop_oneof![Just(json!("grow")), Just(json!("a_1")), Just(json!("Grow")), Just(json!("")), Just(json!("a.b")), arb_junk()],
+                    prop_oneof![
+                        3 => "[a-zA-Z\u{202E}\u{2066}\u{200F} ]{0,70}".prop_map(Value::from),
+                        1 => "[a-z\u{0007}\n]{1,8}".prop_map(Value::from),
+                        1 => arb_junk(),
+                    ],
+                    prop_oneof![Just(Value::Null), Just(json!("File")), arb_junk()],
+                    prop_oneof![Just(Value::Null), Just(json!({"by": {"type": "number", "min": 0, "max": 10, "default": 2}})), arb_junk()],
+                )
+                    .prop_map(|(id, label, menu, params)| {
+                        let mut c = json!({"id": id, "label": label});
+                        if !menu.is_null() {
+                            c["menu"] = menu;
+                        }
+                        if !params.is_null() {
+                            c["params"] = params;
+                        }
+                        c
+                    }),
+                1 => arb_junk(),
+            ],
+            0..5,
+        ),
+        junk in prop::option::weighted(0.1, arb_junk()),
+        given in prop_oneof![Just(json!({})), Just(json!({"by": 3})), arb_junk()],
+    ) {
+        let mut m = json!({"id": "fuzz.commands", "name": "Fuzz \u{202E}Commands", "kind": kind});
+        if matches!(kind, "exporter" | "importer") {
+            m["extensions"] = json!(["fz"]);
+        }
+        m["commands"] = junk.unwrap_or(json!(entries));
+        let text = m.to_string();
+        let parsed = catch_quiet(|| vectorcraft_plugins::Manifest::parse(text.as_bytes()));
+        let parsed = parsed.map_err(|msg| TestCaseError::fail(format!("panicked on {text}: {msg}")))?;
+        if let Ok(man) = &parsed {
+            for c in &man.commands {
+                let shown = c.shown_label();
+                prop_assert!(!shown.chars().any(|ch| ch.is_control() || matches!(ch, '\u{202E}' | '\u{2066}' | '\u{200F}')), "{}", shown);
+                prop_assert!(shown.chars().count() <= vectorcraft_plugins::permissions::MAX_SHOWN_NAME);
+            }
+        }
+        let mut s = rich_session();
+        s.execute("select.all", &json!({})).unwrap();
+        let module = wat::parse_str(tpl::returning(&text, r#"{"objects":[]}"#)).unwrap();
+        let r = catch_quiet(|| {
+            let mut ran = vec![];
+            if install(&mut s, &module).is_ok() {
+                for c in s.commands().into_iter().filter(|c| c.id.starts_with("plugin.fuzz.commands.")) {
+                    ran.push((c.id, c.menu.clone()));
+                    let _ = s.execute(c.id, &given);
+                }
+            }
+            ran
+        });
+        let ran = r.map_err(|msg| TestCaseError::fail(format!("panicked running {text}: {msg}")))?;
+        prop_assert!(ran.is_empty() || parsed.is_ok(), "a manifest that doesn't parse installed: {}", text);
+        for (id, menu) in &ran {
+            prop_assert!(menu.len() == 3 && menu[1] == "Plug-ins" && matches!(menu[0], "Object" | "Effect"), "{id}: {menu:?}");
+        }
+        renders(&s, "after hostile commands")?;
+        vectorcraft_plugins::registry::remove("fuzz.commands");
     }
 
     /// A plug-in of API level 2 that calls the host imports with hostile arguments (any progress
@@ -660,6 +824,64 @@ proptest! {
         }
     }
 
+    /// Manifests with hostile `inputs` (unknown, repeated and oddly cased kinds, long lists, junk of
+    /// every type) with any `api`, kind and permissions parse to an error or to a filter at `api` 2
+    /// or later asking for each kind once, whose `permissions` list `doc.read` so that installing
+    /// it asks for approval. One that installs and echoes its input on a document
+    /// with type, images and symbols leaves the document as it was, and it still renders.
+    #[test]
+    fn hostile_manifest_inputs_never_crash(
+        kind in prop::sample::select(vec!["filter", "effect", "exporter"]),
+        names in prop::collection::vec(prop::sample::select(vec!["type", "image", "symbolInstance", "Type", "text", "path", ""]), 0..6),
+        long in prop::option::weighted(0.1, 4usize..300),
+        inputs in prop::option::weighted(0.8, prop_oneof![Just(Value::Null), arb_junk()]),
+        api in prop_oneof![2 => Just(json!(2)), 1 => Just(json!(1)), 1 => Just(json!(3)), 1 => arb_junk()],
+        permissions in prop_oneof![Just(Value::Null), Just(json!([])), Just(json!(["doc.read", "doc.write"])), Just(json!(["doc.write"]))],
+    ) {
+        let mut m = json!({"id": "fuzz.inputs", "name": "Inputs", "kind": kind, "api": api});
+        if kind == "exporter" {
+            m["extensions"] = json!(["fz"]);
+        }
+        if !permissions.is_null() {
+            m["permissions"] = permissions;
+        }
+        m["inputs"] = match (inputs, long) {
+            (_, Some(n)) => json!(vec!["image"; n]),
+            (Some(Value::Null) | None, None) => json!(names),
+            (Some(junk), None) => junk,
+        };
+        let text = m.to_string();
+        let parsed = catch_quiet(|| vectorcraft_plugins::Manifest::parse(text.as_bytes()));
+        let parsed = parsed.map_err(|msg| TestCaseError::fail(format!("panicked on {text}: {msg}")))?;
+        if let Ok(man) = &parsed {
+            let kinds = man.input_kinds();
+            prop_assert_eq!(kinds.len(), man.inputs.len(), "{}", text);
+            prop_assert!(kinds.iter().enumerate().all(|(i, k)| !kinds[..i].contains(k)), "{}", text);
+            prop_assert!(kinds.is_empty() || (man.kind == vectorcraft_plugins::Kind::Filter && man.api >= 2), "{}", text);
+            let reads = man.permissions.as_ref().is_some_and(|p| p.iter().any(|n| n == "doc.read"));
+            prop_assert!(kinds.is_empty() || (man.asks_permissions() && reads), "{}", text);
+        }
+        let mut s = rich_session();
+        let module = wat::parse_str(tpl::module(&text, tpl::ECHO, "", 1)).unwrap();
+        let data = vectorcraft_format::base64_encode(&module);
+        let grant = json!(["doc.read", "doc.write", "state", "effect.render", "export.write"]);
+        let before = s.doc().unwrap().doc.clone();
+        let r = catch_quiet(|| {
+            let installed = s.execute("plugin.install", &json!({"dataBase64": data, "grant": grant})).is_ok();
+            let _ = s.execute("select.all", &json!({}));
+            let ran = installed && s.execute("plugin.run", &json!({"id": "fuzz.inputs"})).is_ok();
+            (installed, ran)
+        });
+        let (installed, ran) = r.map_err(|msg| TestCaseError::fail(format!("panicked running {text}: {msg}")))?;
+        prop_assert!(!installed || parsed.is_ok(), "a manifest that doesn't parse installed: {}", text);
+        if ran {
+            prop_assert!(s.doc().unwrap().doc.layers == before.layers, "an echo changed the document: {}", text);
+        }
+        renders(&s, &text)?;
+        vectorcraft_plugins::registry::remove("fuzz.inputs");
+        vectorcraft_plugins::registry::revoke("fuzz.inputs");
+    }
+
     /// A plug-in that calls the storage imports with hostile keys (`..`, separators, device names,
     /// control characters, too long), values, lengths and pointers in and out of its memory runs to
     /// an output, never a panic; every call returns a length or a storage code, and the settings and
@@ -681,7 +903,17 @@ proptest! {
         use vectorcraft_plugins::host::STORAGE_BUDGET;
         use vectorcraft_plugins::storage::Meter;
         const FUNCS: [&str; 6] = ["vc_settings_get", "vc_settings_set", "vc_cache_read", "vc_cache_write", "vc_settings_delete", "vc_cache_clear"];
-        let folder = std::env::temp_dir().join(format!("vectorcraft-plugin-fuzz-storage-{}", std::process::id()));
+        // Each case starts with an empty store, and the store is deleted when the case ends, also
+        // when it fails.
+        struct Store(std::path::PathBuf);
+        impl Drop for Store {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+        let store = Store(std::env::temp_dir().join(format!("vectorcraft-plugin-fuzz-storage-{}", std::process::id())));
+        let _ = std::fs::remove_dir_all(&store.0);
+        let folder = store.0.clone();
         let mut s = Session::new();
         s.attach_plugin_store(folder.clone());
         let storing = |id: &str| format!(r#"{{"id":"{id}","name":"F","kind":"filter","api":2,"permissions":["settings","cache"]}}"#);
@@ -704,8 +936,11 @@ proptest! {
         let text: String = key.iter().map(|b| format!("\\{b:02x}")).collect();
         let imports = format!(r#"{} (data (i32.const 0x2000) "{text}")"#, tpl::STORAGE_IMPORTS);
         let wasm = wat::parse_str(tpl::with_imports(&storing("fuzz.storage"), &imports, &format!("(local $r i32) {body}"), r#"{"objects":[]}"#)).unwrap();
+        // A failed case leaves its module installed, and the cases that shrink it install others
+        // under the same id.
         let r = catch_quiet(|| {
-            s.execute("plugin.install", &json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "grant": grant})).map_err(|e| e.to_string())?;
+            s.execute("plugin.install", &json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "grant": grant, "replace": true}))
+                .map_err(|e| e.to_string())?;
             let p = vectorcraft_plugins::registry::get("fuzz.storage").ok_or("not installed")?;
             p.run(b"{\"objects\":[]}", b"{}").map_err(|e| e.to_string())
         });
