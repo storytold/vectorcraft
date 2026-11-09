@@ -600,7 +600,16 @@ impl Renderer {
             None if matches!(a.kind, NodeKind::Text(_) | NodeKind::Image(_) | NodeKind::Path { .. } | NodeKind::Compound { .. }) => (**a).clone(),
             None => effects::outline_art(Some(doc), a, symbol.as_ref()).unwrap_or_else(|| Node::group(a.id, vec![])),
         };
-        let art = if effects::has_revolve(a) || effects::has_solid(a) { effects::evaluate_container(Some(doc), &art).unwrap_or(art) } else { art };
+        let has_three_d = effects::has_revolve(a) || effects::has_solid(a);
+        let mut art = if has_three_d { effects::evaluate_container(Some(doc), &art).unwrap_or(art) } else { art };
+        // A 3D effect on a fill or stroke that built nothing (Revolve after Roughen, a solid too
+        // complex) draws the item as without it: left in the art, it would draw the art as an
+        // object with effects again, and that art again, without end.
+        if has_three_d && !three_d && !container {
+            for item in &mut art.appearance.items {
+                item.effects_mut().retain(|e| !effects::is_three_d(&e.id));
+            }
+        }
         // Vector Halftone samples the object with its colour adjustments: its dots keep their inks.
         let outer = if effects::addons::halftone::has_halftone(a) { None } else { effects::color_map(&a.appearance.effects) };
         let mut art = self.adjusted_art(doc, art, outer.as_ref());

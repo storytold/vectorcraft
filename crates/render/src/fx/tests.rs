@@ -1700,3 +1700,42 @@ fn an_image_inner_glow_follows_its_visible_pixels() {
         assert!(lum(img.pixel(60, 50)) < lum(img.pixel(51, 50)), "threads {threads}: fading inward");
     }
 }
+
+/// A 3D effect on a path's fill that builds nothing (Revolve after Roughen) draws the fill as
+/// without it, under the object's own effects too: the art made for the object is drawn without
+/// it, not as an object with effects again, and that art again, without end. With a raster effect
+/// the object draws from that art, where without the 3D effect it draws as a path: their edges
+/// differ a little. An Extrude may build.
+#[test]
+fn a_fills_3d_effect_that_builds_nothing_draws_the_fill_as_without_it() {
+    let rough = |detail: i64| Effect {
+        id: "distort.roughen".into(),
+        params: json!({"size": 10, "relative": false, "detail": detail, "points": "smooth"}),
+        visible: true,
+    };
+    let shadow = Effect { id: "stylize.dropShadow".into(), params: json!({}), visible: true };
+    let revolve = Effect { id: "threeD.revolve".into(), params: json!({}), visible: true };
+    let extrude = Effect { id: "threeD.extrude".into(), params: json!({"depth": 20.0}), visible: true };
+    for (object, fill, three) in [
+        (vec![shadow.clone()], rough(10), revolve.clone()),
+        (vec![], rough(10), revolve),
+        (vec![shadow], rough(60), extrude.clone()),
+        (vec![rough(60)], rough(60), extrude),
+    ] {
+        let draw = |three: Option<&Effect>| {
+            let mut d = doc_with(Rect::new(30.0, 30.0, 60.0, 60.0), Color::BLACK, vec![]);
+            let id = d.layers[0].children().unwrap()[0].id;
+            let n = d.node_mut(id).unwrap();
+            n.appearance.effects = object.clone();
+            n.appearance.fill_mut().unwrap().effects = [Some(&fill), three].into_iter().flatten().cloned().collect();
+            Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default()).pixels
+        };
+        let with = draw(Some(&three));
+        if three.id == "threeD.revolve" {
+            let without = draw(None);
+            let differ = with.iter().zip(&without).filter(|(a, b)| a != b).count();
+            let most = with.iter().zip(&without).map(|(a, b)| a.abs_diff(*b)).max().unwrap_or(0);
+            assert!(differ * 100 < with.len() && most <= 32, "{object:?}: {differ} channels differ, by up to {most}");
+        }
+    }
+}
