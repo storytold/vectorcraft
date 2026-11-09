@@ -1107,6 +1107,17 @@ font-technology	Variable	Variabel
 	Exporting {}	{} wird exportiert
 	Export…	Exportieren…
 	Extrude & Bevel…	Extrudieren und abgeflachte Kante…
+	3D (Classic)	3D (klassisch)
+	Extrude & Bevel (Classic)…	Extrudieren und abgeflachte Kante (klassisch)…
+	Surface	Oberfläche
+	Wireframe	Drahtmodell
+	No Shading	Keine Schattierung
+	Plastic	Kunststoff
+	Highlight Intensity	Glanzpunktintensität
+	Highlight Size	Glanzpunktgröße
+	Blend Steps	Angleichungsstufen
+	Shading Color	Schattierungsfarbe
+	Draw Hidden Faces	Verdeckte Flächen zeichnen
 	Eyedropper	Pipette
 	Sample Color from Screen	Farbe vom Bildschirm aufnehmen
 	This system has no screen color sampler	Dieses System hat keine Farbaufnahme vom Bildschirm
@@ -1982,6 +1993,10 @@ file-filter	Templates	Vorlagen
 	Stylistic	Stilistisch
 	Mojikumi Set	Mojikumi-Satz
 	Kinsoku Set	Kinsoku-Satz
+	Kinsoku Shori Type	Kinsoku-Shori-Typ
+	Push In First	Zuerst einziehen
+	Push Out First	Zuerst hinausschieben
+	Push Out Only	Nur hinausschieben
 	Hard	Hart
 	Soft	Weich
 	Monitor RGB	Monitor-RGB
@@ -6162,6 +6177,24 @@ breakText	Glyphs	Glyphen
 # 3D Box add-on
 	3D Box	3D-Quader
 	3D Box Tool	3D-Quader-Werkzeug
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Öffnen mit
+	No importer plug-ins installed	Keine Import-Plug-ins installiert
+	Read files you open in its format and make documents from them	Dateien lesen, die Sie in seinem Format öffnen, und daraus Dokumente erstellen
+@msg	{_1} is an importer (File › Open With)	{_1} ist ein Import-Plug-in (Datei › Öffnen mit)
+@msg	missing `importer` (see document.formats)	`importer` fehlt (siehe document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` muss die Format-ID eines Plug-ins sein (siehe document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	„{shown}“ öffnet {_1}-Dateien, nicht `{_2}`
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` ist ein Plug-in der Art `{_2}`, kein Import-Plug-in
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` ist ein Plug-in der Art `{_2}`, kein Export-Plug-in
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` ist ein Import-Plug-in: Öffnen Sie eine Datei mit document.open {{"importer"}"}}
+@msg	the importer returned no objects	das Import-Plug-in hat keine Objekte zurückgegeben
+@msg	an importer returns `objects` and `warnings`, not `{key}`	ein Import-Plug-in gibt `objects` und `warnings` zurück, nicht `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	die Datei ist größer als die {MAX_INPUT_BYTES} Byte, die ein Import-Plug-in liest
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	ein Import-Plug-in gibt 1 bis {MAX_EXTENSIONS} `extensions` an
+@msg	only an exporter or an importer declares `extensions`	nur ein Export- oder Import-Plug-in gibt `extensions` an
+@msg	an importer always gets an import's budget: leave `budget` out	ein Import-Plug-in erhält immer das Budget eines Imports: Lassen Sie `budget` weg
 
 # Safe Mode
 	Safe Mode…	Abgesicherter Modus…

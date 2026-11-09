@@ -53,6 +53,9 @@ pub enum Permission {
     /// Write the document as a file in its own format (an exporter).
     #[serde(rename = "export.write")]
     ExportWrite,
+    /// Read a file the user opens and make a new document from it (an importer).
+    #[serde(rename = "import.read")]
+    ImportRead,
     /// Report how far a run has got, see that the user asked it to stop and write log lines: the
     /// host imports of API level 2 ([`crate::host::IMPORTS`]).
     #[serde(rename = "progress")]
@@ -66,12 +69,13 @@ pub enum Permission {
 }
 
 /// Every permission this host grants, in the order prompts list them.
-pub const ALL: [Permission; 8] = [
+pub const ALL: [Permission; 9] = [
     Permission::DocRead,
     Permission::DocWrite,
     Permission::State,
     Permission::EffectRender,
     Permission::ExportWrite,
+    Permission::ImportRead,
     Permission::Progress,
     Permission::Settings,
     Permission::Cache,
@@ -90,6 +94,7 @@ impl Permission {
             Permission::State => "state",
             Permission::EffectRender => "effect.render",
             Permission::ExportWrite => "export.write",
+            Permission::ImportRead => "import.read",
             Permission::Progress => "progress",
             Permission::Settings => "settings",
             Permission::Cache => "cache",
@@ -109,6 +114,7 @@ impl Permission {
             Permission::State => "Keep data of its own with the document",
             Permission::EffectRender => "Change how the objects its effect is applied to are drawn",
             Permission::ExportWrite => "Write the document as a file in its own format",
+            Permission::ImportRead => "Read files you open in its format and make documents from them",
             Permission::Progress => "Show its progress, see Cancel and write log lines",
             Permission::Settings => "Keep settings of its own",
             Permission::Cache => "Keep a cache of its own, which you can clear",
@@ -128,6 +134,7 @@ impl Permission {
             Kind::Filter => &[Permission::DocRead, Permission::DocWrite, Permission::State],
             Kind::Effect => &[Permission::DocRead, Permission::EffectRender],
             Kind::Exporter => &[Permission::DocRead, Permission::ExportWrite],
+            Kind::Importer => &[Permission::ImportRead],
         }
     }
 
@@ -143,12 +150,12 @@ impl Permission {
     }
 
     /// The permissions a plug-in of `kind` can't work without, which its list must hold: a live
-    /// effect and an exporter are always handed objects, and only draw or write. A filter may
-    /// leave any of its permissions out.
+    /// effect and an exporter are always handed objects, and only draw or write; an importer is
+    /// always handed the file being opened. A filter may leave any of its permissions out.
     fn required(kind: Kind) -> &'static [Permission] {
         match kind {
             Kind::Filter => &[],
-            Kind::Effect | Kind::Exporter => Permission::implied(kind),
+            Kind::Effect | Kind::Exporter | Kind::Importer => Permission::implied(kind),
         }
     }
 }
@@ -234,6 +241,11 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
     Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect()
 }
 
+/// Is `s` a SHA-256 as [`sha256_hex`] writes it: 64 lower-case hexadecimal digits?
+fn is_sha256_hex(s: &str) -> bool {
+    s.len() == 64 && s.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+}
+
 /// What the user approved for a plug-in: its id, the SHA-256 of the module they approved
 /// ([`sha256_hex`]) and the permissions it was granted.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -244,9 +256,10 @@ pub struct Grant {
 }
 
 impl Grant {
-    /// Does it grant every one of `wanted`?
-    pub fn covers(&self, wanted: &[Permission]) -> bool {
-        wanted.iter().all(|w| self.permissions.contains(w))
+    /// Does it grant every one of `wanted` to the module with this `id` and SHA-256 `hash`? A grant
+    /// whose own hash is not a valid SHA-256 ([`sha256_hex`]) covers nothing.
+    pub fn covers(&self, id: &str, hash: &str, wanted: &[Permission]) -> bool {
+        self.id == id && is_sha256_hex(&self.hash) && self.hash == hash && wanted.iter().all(|w| self.permissions.contains(w))
     }
 }
 
@@ -271,12 +284,16 @@ mod tests {
         assert_eq!(validate(Kind::Filter, false, &[]).unwrap(), []);
         assert!(validate(Kind::Effect, false, &list(&["doc.read", "effect.render"])).is_ok());
         assert!(validate(Kind::Exporter, false, &list(&["export.write", "doc.read"])).is_ok());
+        assert_eq!(validate(Kind::Importer, false, &list(&["import.read"])).unwrap(), [Permission::ImportRead]);
         // Any kind may list `progress`, which no kind implies.
         assert_eq!(validate(Kind::Filter, false, &list(&["progress", "doc.read"])).unwrap(), [Permission::DocRead, Permission::Progress]);
         assert!(validate(Kind::Effect, false, &list(&["doc.read", "effect.render", "progress"])).is_ok());
         assert!(validate(Kind::Effect, true, &list(&["doc.read", "effect.render", "progress"])).is_ok());
         assert!(validate(Kind::Exporter, false, &list(&["progress", "export.write", "doc.read"])).is_ok());
-        assert!([Kind::Filter, Kind::Effect, Kind::Exporter].iter().all(|k| !Permission::implied(*k).contains(&Permission::Progress)));
+        assert_eq!(validate(Kind::Importer, false, &list(&["progress", "import.read"])).unwrap(), [Permission::ImportRead, Permission::Progress]);
+        assert!(
+            [Kind::Filter, Kind::Effect, Kind::Exporter, Kind::Importer].iter().all(|k| !Permission::implied(*k).contains(&Permission::Progress))
+        );
         // So may `settings` and `cache`, which no kind implies either.
         assert_eq!(
             validate(Kind::Effect, false, &list(&["cache", "settings", "doc.read", "effect.render"])).unwrap(),
@@ -284,7 +301,7 @@ mod tests {
         );
         assert!(validate(Kind::Exporter, false, &list(&["settings", "export.write", "doc.read"])).is_ok());
         assert_eq!(validate(Kind::Filter, false, &list(&["cache"])).unwrap(), [Permission::Cache]);
-        for kind in [Kind::Filter, Kind::Effect, Kind::Exporter] {
+        for kind in [Kind::Filter, Kind::Effect, Kind::Exporter, Kind::Importer] {
             for commands in [false, true] {
                 assert!(HOST.iter().all(|p| p.applies(kind, commands) && !Permission::implied(kind).contains(p)));
             }
@@ -310,6 +327,10 @@ mod tests {
             (Kind::Exporter, false, &["export.write"], "needs the permission `doc.read`"),
             (Kind::Filter, false, &["cache", "cache"], "`cache` is listed twice"),
             (Kind::Filter, false, &["storage"], "unknown permission `storage`"),
+            (Kind::Importer, false, &["import.read", "doc.read"], "`doc.read` doesn't apply to a plug-in of kind `importer`"),
+            (Kind::Importer, true, &["import.read", "doc.write"], "`doc.write` doesn't apply to a plug-in of kind `importer`"),
+            (Kind::Importer, false, &[], "needs the permission `import.read`"),
+            (Kind::Exporter, false, &["export.write", "doc.read", "import.read"], "`import.read` doesn't apply to a plug-in of kind `exporter`"),
         ] {
             let e = validate(kind, commands, &list(names)).unwrap_err().to_string();
             assert!(e.contains(says), "{names:?}: {e}");
@@ -342,10 +363,37 @@ mod tests {
 
     #[test]
     fn a_grant_covers_its_permissions_and_no_more() {
-        let g = Grant { id: "a".into(), hash: String::new(), permissions: vec![Permission::DocRead, Permission::DocWrite] };
-        assert!(g.covers(&[Permission::DocRead]));
-        assert!(g.covers(&[]));
-        assert!(!g.covers(&[Permission::State]));
-        assert!(!g.covers(&[Permission::DocRead, Permission::State]));
+        let hash = sha256_hex(b"module");
+        let g = Grant { id: "a".into(), hash: hash.clone(), permissions: vec![Permission::DocRead, Permission::DocWrite] };
+        assert!(g.covers("a", &hash, &[Permission::DocRead]));
+        assert!(g.covers("a", &hash, &[]));
+        assert!(!g.covers("a", &hash, &[Permission::State]));
+        assert!(!g.covers("a", &hash, &[Permission::DocRead, Permission::State]));
+    }
+
+    #[test]
+    fn a_grant_covers_only_the_module_that_was_approved() {
+        let hash = sha256_hex(b"module");
+        let wanted = [Permission::DocRead];
+        let g = Grant { id: "a".into(), hash: hash.clone(), permissions: vec![Permission::DocRead] };
+        assert!(g.covers("a", &hash, &wanted));
+        assert!(!g.covers("b", &hash, &wanted), "another id");
+        assert!(!g.covers("a", &sha256_hex(b"other"), &wanted), "other bytes");
+        assert!(!g.covers("a", &sha256_hex(b"other"), &[]), "other bytes, even when nothing is wanted");
+    }
+
+    /// Damaged data can't stand for every module, even when the hash asked about is just as damaged.
+    #[test]
+    fn a_grant_with_an_invalid_hash_covers_nothing() {
+        let upper = sha256_hex(b"module").to_uppercase();
+        let short = "ab".repeat(31);
+        let long = "ab".repeat(33);
+        let not_hex = "g".repeat(64);
+        let wide = "é".repeat(32);
+        for hash in ["", "00", upper.as_str(), short.as_str(), long.as_str(), not_hex.as_str(), wide.as_str()] {
+            let g = Grant { id: "a".into(), hash: hash.into(), permissions: vec![Permission::DocRead] };
+            assert!(!g.covers("a", hash, &[Permission::DocRead]), "{hash:?}");
+            assert!(!g.covers("a", hash, &[]), "{hash:?}");
+        }
     }
 }

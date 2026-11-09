@@ -451,7 +451,7 @@ pub(crate) fn load(app: &mut VectorcraftApp, load: &str, path: Option<String>) -
     let path = match path {
         Some(path) => path,
         None => {
-            let pick = crate::FilePick { filters: crate::FilePick::filters(fileio::open_filters()), ..Default::default() };
+            let pick = crate::FilePick { filters: crate::FilePick::filters(fileio::builtin_open_filters()), ..Default::default() };
             let Some(path) = crate::picks::open(app, &pick) else { return Ok(Value::Null) };
             path
         }

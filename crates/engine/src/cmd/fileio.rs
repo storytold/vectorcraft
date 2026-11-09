@@ -17,6 +17,8 @@
 //! - `eps`: EPS export options (flattened transparency, previews, the embedded document), `document.exportEps`.
 //! - `dxfimport`: the DXF options `document.open` and Place read, `document.dxfInfo`.
 //! - `metafile`: EMF and WMF export, open and place.
+//! - `importer`: files that importer plug-ins open (`document.open {importer}`, and extensions no
+//!   built-in format reads).
 //! - `mesh3d`: 3D assets as OBJ, glTF, USDA and USDZ mesh files (`assets.export3D`).
 //!
 //! [`FORMATS`] is the single list of formats (append-only); open dialogs use [`open_filters`],
@@ -31,6 +33,7 @@ mod encode;
 pub mod eps;
 mod export;
 pub(crate) mod imagemap;
+mod importer;
 pub mod jxlread;
 mod legacy_ai;
 mod load;
@@ -136,9 +139,10 @@ pub(crate) use export_names::{
 use export_names::{distinct_names_by, write_encoded};
 use formats::{ARTBOARD, ARTBOARDS, RANGE, USE_ARTBOARDS, import_name, writable};
 pub use formats::{
-    DOC_EXTS, DOCX_EXTS, FORMATS, Format, FormatOption, OPEN_EXTS, PLACE_EXTS, RTF_EXTS, TEXT_EXTS, UNASSOCIATED_EXTS, export_extensions, extension,
-    file_stem, format, format_for_name, has_own_title, library_open_filters, open_filters, place_filters, plugin_formats, read_extensions,
-    readable_format, readable_format_for_name, titled_for_export, writable_format,
+    DOC_EXTS, DOCX_EXTS, FORMATS, Format, FormatOption, OPEN_EXTS, PLACE_EXTS, RTF_EXTS, TEXT_EXTS, UNASSOCIATED_EXTS, builtin_open_filters,
+    export_extensions, extension, file_stem, format, format_for_name, has_own_title, importer_formats, library_open_filters, open_extensions,
+    open_filters, opens_as_other, opens_with_importer, place_filters, plugin_formats, read_extensions, readable_format, readable_format_for_name,
+    titled_for_export, writable_format,
 };
 
 #[cfg(test)]

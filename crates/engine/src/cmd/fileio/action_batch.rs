@@ -728,12 +728,12 @@ fn collect_files(folder: &str, include_subdirs: bool, depth: usize) -> Result<Ve
 
 #[cfg(not(target_arch = "wasm32"))]
 fn is_openable(path: &str) -> bool {
-    use super::{FORMATS, OPEN_EXTS, extension};
+    use super::{FORMATS, extension, open_extensions};
     let ext = extension(path);
     if ext.is_empty() {
         return false;
     }
-    OPEN_EXTS.iter().any(|e| *e == ext) || FORMATS.iter().any(|f| f.read && f.extensions.iter().any(|e| *e == ext))
+    open_extensions().iter().any(|e| *e == ext) || FORMATS.iter().any(|f| f.read && f.extensions.iter().any(|e| *e == ext))
 }
 
 #[cfg(test)]
