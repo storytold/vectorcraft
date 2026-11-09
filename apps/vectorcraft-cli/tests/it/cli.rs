@@ -19,6 +19,77 @@ fn empty_dir(dir: std::path::PathBuf) -> std::path::PathBuf {
     dir
 }
 
+/// `run` and `mcp --headless` refuse `plugin.install` with this param unless the process was started
+/// with `--allow-plugin-grants`.
+fn approval_param_needs_the_start_up_flag(key: &str, value: Value) {
+    let module = vectorcraft_format::base64_encode(include_bytes!("../../../../crates/plugins/tests/fixtures/desaturate.wasm"));
+    let steps = tmp(&format!("{key}.json"));
+    std::fs::write(&steps, json!([{"command": "plugin.install", "params": {"dataBase64": module, key: value}}]).to_string()).unwrap();
+    let config = empty_dir(std::env::temp_dir().join(format!("vectorcraft-cli-test-{key}-{}", std::process::id())));
+    let run = |extra: &[&str]| {
+        Command::new(BIN).env("VECTORCRAFT_CONFIG_DIR", &config).args(["run", "--commands", steps.to_str().unwrap()]).args(extra).output().unwrap()
+    };
+    let out = run(&[]);
+    assert!(!out.status.success());
+    let shown = String::from_utf8_lossy(&out.stderr).into_owned() + &String::from_utf8_lossy(&out.stdout);
+    assert!(shown.contains("--allow-plugin-grants"), "{shown}");
+    let out = run(&["--allow-plugin-grants"]);
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+
+    let mcp_config = empty_dir(std::env::temp_dir().join(format!("vectorcraft-cli-test-mcp-{key}-{}", std::process::id())));
+    let mcp_install = |extra: &[&str]| -> Value {
+        let mut child = Command::new(BIN)
+            .env("VECTORCRAFT_CONFIG_DIR", &mcp_config)
+            .args(["mcp", "--headless"])
+            .args(extra)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        {
+            let mut stdin = child.stdin.take().unwrap();
+            let params = json!({"dataBase64": module, key: value});
+            for m in [
+                json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}),
+                json!({"jsonrpc":"2.0","method":"notifications/initialized"}),
+                json!({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"run_command","arguments":{"command":"plugin.install","params":params}}}),
+            ] {
+                writeln!(stdin, "{m}").unwrap();
+            }
+        }
+        let out = child.wait_with_output().unwrap();
+        assert!(out.status.success());
+        let replies: Vec<Value> = String::from_utf8(out.stdout).unwrap().lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+        replies.into_iter().find(|r| r["id"] == 2).unwrap()["result"].take()
+    };
+    let refused = mcp_install(&[]);
+    assert_eq!(refused["isError"], true, "without the flag: {refused}");
+    assert!(refused["content"][0]["text"].as_str().unwrap().contains("--allow-plugin-grants"), "{refused}");
+    let accepted = mcp_install(&["--allow-plugin-grants"]);
+    assert_eq!(accepted["isError"], false, "with the flag: {accepted}");
+}
+
+/// `run` and `mcp --headless` refuse `plugin.install`'s `grant` and `allowHeavy` unless the process was
+/// started with `--allow-plugin-grants`, which `mcp` won't take with `--connect` or the automation roots.
+#[test]
+fn plugin_grants_need_the_start_up_flag() {
+    approval_param_needs_the_start_up_flag("grant", json!(["doc.read"]));
+    approval_param_needs_the_start_up_flag("allowHeavy", json!(true));
+
+    let out = Command::new(BIN).args(["mcp", "--allow-plugin-grants", "--connect", "127.0.0.1:1"]).output().unwrap();
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("--allow-plugin-grants applies to the headless server"));
+    let root = std::env::temp_dir();
+    for flag in ["--automation-read-root", "--automation-write-root"] {
+        let out = Command::new(BIN).args(["mcp", "--allow-plugin-grants", flag, root.to_str().unwrap()]).stdin(Stdio::null()).output().unwrap();
+        assert!(!out.status.success(), "{flag}");
+        assert!(String::from_utf8_lossy(&out.stderr).contains("--allow-plugin-grants can't be used with"), "{flag}");
+    }
+    let usage = Command::new(BIN).arg("help").output().unwrap();
+    assert!(String::from_utf8_lossy(&usage.stdout).contains("--allow-plugin-grants lets plugin.install's grant and allowHeavy take effect"));
+}
+
 #[test]
 fn commands_prints_catalogue() {
     let out = Command::new(BIN).arg("commands").output().unwrap();

@@ -358,9 +358,9 @@ fn details(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, b: &mut 
     let top = ui.cursor().top();
     ui.label(egui::RichText::new(tl!("PRESET DETAILS")).font(theme::semibold(11.0)).color(t.text_dim));
     ui.add_space(8.0);
-    form::caption(ui, tl!("Document Name"));
+    let caption = form::caption(ui, tl!("Document Name"));
     ui.horizontal(|ui| {
-        form::text(ui, d, "name", DETAILS - 50.0);
+        ui.label_inputs_by(caption.id, |ui| form::text(ui, d, "name", DETAILS - 50.0));
         save_button(app, ui, d);
     });
     if d.bool(SAVING) {
@@ -368,16 +368,16 @@ fn details(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, b: &mut 
     }
     ui.add_space(8.0);
     let unit = unit(d);
-    form::caption(ui, tl!("Width"));
+    let caption = form::caption(ui, tl!("Width"));
     ui.horizontal(|ui| {
-        form::length(ui, d, "width", unit, DETAILS - 124.0);
-        units_dropdown(ui, d, 112.0);
+        ui.label_inputs_by(caption.id, |ui| form::length(ui, d, "width", unit, DETAILS - 124.0));
+        ui.name_inputs(tl!("Units"), |ui| units_dropdown(ui, d, 112.0));
     });
     ui.add_space(4.0);
     ui.horizontal_top(|ui| {
         ui.vertical(|ui| {
-            form::caption(ui, tl!("Height"));
-            form::length(ui, d, "height", unit, 104.0);
+            let caption = form::caption(ui, tl!("Height"));
+            ui.label_inputs_by(caption.id, |ui| form::length(ui, d, "height", unit, 104.0));
         });
         ui.add_space(6.0);
         ui.vertical(|ui| {
@@ -386,16 +386,16 @@ fn details(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, b: &mut 
         });
         ui.add_space(6.0);
         ui.vertical(|ui| {
-            form::caption(ui, tl!("Artboards"));
-            artboards(ui, d, 76.0);
+            let caption = form::caption(ui, tl!("Artboards"));
+            ui.label_inputs_by(caption.id, |ui| artboards(ui, d, 76.0));
         });
     });
     ui.add_space(8.0);
     form::caption(ui, tl!("Bleed"));
     form::bleed(ui, d, unit, 52.0);
     ui.add_space(8.0);
-    form::caption(ui, tl!("Background Contents"));
-    background(ui, d, DETAILS - 34.0);
+    let caption = form::caption(ui, tl!("Background Contents"));
+    ui.label_inputs_by(caption.id, |ui| background(ui, d, DETAILS - 34.0));
     ui.add_space(8.0);
     advanced(ui, d, 110.0, DETAILS - 116.0);
     ui.add_space(12.0);
@@ -427,9 +427,10 @@ fn save_button(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
 /// Save Preset: the preset's name, Save and Cancel.
 fn save_row(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     ui.add_space(4.0);
-    form::caption(ui, tl!("Preset Name"));
+    let caption = form::caption(ui, tl!("Preset Name"));
     ui.horizontal(|ui| {
-        let enter = form::text_edit(ui, d, "presetName", DETAILS - 140.0).lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+        let name = ui.label_inputs_by(caption.id, |ui| form::text_edit(ui, d, "presetName", DETAILS - 140.0));
+        let enter = name.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
         if widgets::flat_button(ui, tl!("Save"), 54.0).clicked() || enter {
             let mut p: Map<String, Value> = PARAMS.iter().filter_map(|k| Some((k.to_string(), d.fields.get(*k)?.clone()))).collect();
             p.insert("name".into(), json!(d.str("presetName")));

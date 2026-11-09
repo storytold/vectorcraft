@@ -309,6 +309,9 @@ pub struct VectorcraftApp {
     /// This frame carries input the control channel injected ([`Self::raw_input_hook`]): it runs
     /// confined to [`Self::automation_roots`].
     synthetic_frame: bool,
+    /// The plug-in install the approval dialog asks about, kept out of the dialog's fields, which
+    /// `ui.dialog.set` writes.
+    pub(crate) pending_plugin_install: Option<dialogs::plugin::PendingInstall>,
     /// The pen end the canvas saw last and the tool its eraser end stands in for
     /// ([`stylus::sync_eraser_tool`]).
     pub(crate) pen_end: stylus::PenEnd,
