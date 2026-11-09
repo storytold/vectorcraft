@@ -24,8 +24,38 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     preview: true,
     // Load Texture… adds the texture it reads.
     passes: |d, field| field == vectorcraft_effects::pixel::TEXTURE_IMAGE && matches!(d.str("__effect").as_str(), GLASS | TEXTURIZER),
+    // OK could only fail the same way: off, beside the reason the dialog shows (#6140).
+    ok_enabled: Some(|_, d| !(vectorcraft_effects::is_three_d(&d.str("__effect")) && d.fields.contains_key(form::REFUSED))),
     ..DialogSpec::FORM
 };
+
+/// The field holding the values a 3D effect's dialog last tried with Preview off.
+const TRIED: &str = "__tried";
+
+/// A 3D effect refuses objects it can't build from and values it can't draw, in the dialog as OK
+/// would: shows why under Preview (#6140). With Preview off no preview has tried `params`, so they
+/// are tried here, when they change, and rolled back at once.
+fn three_d_refusal(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, cmd: &str, params: Value) {
+    if d.bool("preview") {
+        d.fields.remove(TRIED);
+    } else if d.fields.get(TRIED) != Some(&params) {
+        // A failure to begin leaves no interaction: the preview below then reports it.
+        let _ = app.session.begin_interaction(&d.str("__label"));
+        match app.session.preview(cmd, &params) {
+            Ok(_) => {
+                d.fields.remove(form::REFUSED);
+            }
+            Err(e) => form::note_refusal(d, &e),
+        }
+        // Only a try: without an interaction there is nothing to roll back.
+        let _ = app.session.cancel_interaction();
+        d.fields.insert(TRIED.into(), params);
+    }
+    if let Some(why) = d.fields.get(form::REFUSED).and_then(Value::as_str) {
+        ui.add_space(6.0);
+        ui.add(egui::Label::new(egui::RichText::new(why).color(Tokens::get(ui.ctx()).warning)).wrap());
+    }
+}
 
 /// The effect's name (`__label`, English) in the UI language: the catalog may carry it with or
 /// without its trailing ellipsis. A plug-in effect's name is shown as it is.
@@ -170,7 +200,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     if vectorcraft_effects::is_three_d(&id) {
         super::revolve::body(app, ui, d);
         let (cmd, params) = command(d);
-        form::preview(app, ui, d, &d.str("__label"), cmd, params);
+        form::preview(app, ui, d, &d.str("__label"), cmd, params.clone());
+        three_d_refusal(app, ui, d, cmd, params);
         return false;
     }
     // Plug-in effects get fields from their parameter schema; colour adjustments their sliders.
