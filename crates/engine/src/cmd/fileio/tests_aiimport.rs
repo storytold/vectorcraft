@@ -148,6 +148,53 @@ fn an_ai_file_opens_with_its_active_artboard() {
     assert_eq!(d.opened_artboard, Some(d.artboards[1].id), "{r}");
 }
 
+/// A `.ai` or `.ait` file VectorCraft wrote reopens, restored from the document it carries, on the
+/// artboard its editing copy names as active; without the copy, on the first artboard.
+#[test]
+fn a_restored_ai_file_opens_on_the_artboard_active_when_saved() {
+    let mut doc = vectorcraft_doc::Document::new(100.0, 100.0);
+    let first = doc.artboards[0].clone();
+    for (i, id) in [(1.0, 7), (2.0, 9)] {
+        let x0 = i * 150.0;
+        doc.artboards.push(vectorcraft_doc::Artboard { id, rect: vectorcraft_geom::Rect::new(x0, 0.0, x0 + 100.0, 100.0), ..first.clone() });
+    }
+    let mut s = Session::new();
+    // The view's artboard, one the document doesn't have, none, and the first.
+    for (active, opened, reopened) in
+        [(Some(7), None, Some(7)), (Some(99), Some(9), Some(9)), (None, Some(9), Some(9)), (Some(first.id), Some(9), None)]
+    {
+        for (cmd, format) in [("document.save", "ai"), ("file.saveAsTemplate", "ait")] {
+            let mut d = doc.clone();
+            d.opened_artboard = opened;
+            s.add_document(d, None);
+            s.doc_mut().unwrap().active_artboard = active;
+            let saved = s.execute(cmd, &json!({"format": format})).unwrap();
+            let bytes = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
+            let r = open(&mut s, &format!("again.{format}"), &bytes, json!({})).unwrap();
+            assert_eq!(r["restored"], json!(true), "{r}");
+            let d = &s.doc().unwrap().doc;
+            assert_eq!(d.artboards.iter().map(|a| a.id).collect::<Vec<_>>(), [first.id, 7, 9]);
+            assert_eq!(d.opened_artboard, reopened, "{format} {active:?} {opened:?}");
+        }
+    }
+    // A file saved without its PDF part still has the editing copy.
+    s.add_document(doc.clone(), None);
+    s.doc_mut().unwrap().active_artboard = Some(7);
+    let saved = s.execute("document.save", &json!({"format": "ai", "options": {"pdfCompatible": false}})).unwrap();
+    let bytes = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
+    let r = open(&mut s, "again.ai", &bytes, json!({})).unwrap();
+    assert_eq!(r["restored"], json!(true), "{r}");
+    assert_eq!(s.doc().unwrap().doc.opened_artboard, Some(7), "{r}");
+    // Without the editing copy, the file reopens on the first artboard.
+    s.add_document(doc.clone(), None);
+    s.doc_mut().unwrap().active_artboard = Some(7);
+    let saved = s.execute("document.save", &json!({"format": "ai", "options": {"editingData": false}})).unwrap();
+    let bytes = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
+    let r = open(&mut s, "again.ai", &bytes, json!({})).unwrap();
+    assert_eq!(r["restored"], json!(true), "{r}");
+    assert_eq!(s.doc().unwrap().doc.opened_artboard, None, "{r}");
+}
+
 /// A `.ai` save names the view's active artboard in its editing copy, else the one the document
 /// opened on, else the first; the file read from that copy opens on it.
 #[test]
@@ -396,6 +443,39 @@ fn a_graphic_style_library_in_a_ai_file_without_layers_loads_its_styles() {
     let doc = &s.doc().unwrap().doc;
     let styles: Vec<(&str, u32)> = doc.graphic_styles.iter().map(|g| (g.name.as_str(), g.id)).collect();
     assert_eq!(styles, [("Red", 1), ("Green", 2), ("Blue", 3)], "{r}");
+}
+
+/// A `.ai` symbol library (symbols and their list, no layers) opens with its symbols, and Other
+/// Library… in the Symbols panel lists them in the list's order.
+#[test]
+fn a_symbol_library_in_a_ai_file_without_layers_loads_its_symbols() {
+    let symbol = |name: &str, x: f64| {
+        format!(
+            "%AI14_BeginSymbol\n({name})\n0 A\n0 Xw\n0 Ae\nu\n0 1 1 0 1 0 0 Xa\n{x} 0 m\n{x} 4 L\n{} 4 L\n{} 0 L\nf\nU\n\
+             %_/ArtDictionary :\n%_5 /Int (AI13PatternRegistrationType) ,\n%_;\n%_\n9 () XW\n%AI10_EndSymbol\n",
+            x + 4.0,
+            x + 4.0
+        )
+    };
+    let symbols = format!(
+        "%AI5_Begin_NonPrinting\n{}{}{}%AI5_End_NonPrinting--\n%AI24_BeginSymbolList\n(Star)\n(Leaf)\n(Arrow)\n%AI24_EndSymbolList\n",
+        symbol("Arrow", 0.0),
+        symbol("Leaf", 10.0),
+        symbol("Star", 20.0)
+    );
+    let data = ai::editing_data(200.0, 100.0, &symbols);
+    let file = ai::ai(&compressed(data.as_bytes()), "1 0 0 rg 10 50 30 40 re f");
+    let mut s = Session::new();
+    let p = json!({"dataBase64": vectorcraft_format::base64_encode(&file), "name": "shapes.ai"});
+    let r = s.execute("symbol.loadLibrary", &p).unwrap();
+    assert_eq!((&r["name"], &r["count"]), (&json!("shapes"), &json!(3)), "{r}");
+    let lib = s.execute("symbol.library", &json!({"library": r["library"]})).unwrap();
+    let names: Vec<&str> = lib["symbols"].as_array().unwrap().iter().map(|g| g["name"].as_str().unwrap()).collect();
+    assert_eq!(names, ["Star", "Leaf", "Arrow"], "{lib}");
+    let r = open(&mut s, "shapes.ai", &file, json!({})).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    let names: Vec<&str> = doc.symbols.iter().map(|g| g.name.as_str()).collect();
+    assert_eq!(names, ["Star", "Leaf", "Arrow"], "{r}");
 }
 
 /// A 1-bit RGB image opens from the editing data in the colors its PDF part shows.
@@ -673,7 +753,7 @@ fn a_file_whose_pdf_part_cant_be_read_outlines_its_type_when_asked() {
     assert!(paths > 0, "the outlines are there: {r}");
 }
 
-/// An image too large to read from the editing data of a file whose PDF part can't be read is
+/// An image whose data is cut short in the editing data of a file whose PDF part can't be read is
 /// left out, and both notes say so.
 #[test]
 fn a_file_whose_pdf_part_cant_be_read_notes_an_image_left_out() {
@@ -682,7 +762,7 @@ fn a_file_whose_pdf_part_cant_be_read_notes_an_image_left_out() {
     let mut s = Session::new();
     let e = open(&mut s, name, &file, json!({"editingData": false})).unwrap_err().to_string();
     let r = open(&mut s, name, &file, json!({})).unwrap();
-    assert_eq!(r["warnings"], json!([unread_pdf_part(&e), "an image too large to read from the editing data was left out"]), "{r}");
+    assert_eq!(r["warnings"], json!([unread_pdf_part(&e), "an image whose data is cut short was left out"]), "{r}");
 }
 
 /// A copied file whose PDF part can't be read pastes the objects of its editing data when asked
@@ -940,6 +1020,21 @@ fn an_ai_file_saved_without_its_pdf_part_pastes_from_its_editing_data() {
     assert!(e.contains("without PDF compatibility") && e.contains("zlib"), "{e}");
     let e = s.execute("clipboard.importPdf", &json!({"dataBase64": plain})).unwrap_err().to_string();
     assert!(e.contains("placeholder"), "{e}");
+}
+
+/// `file.place` reads a `.ai` saved without its PDF part in the `legacyNameEncoding` it is given.
+#[test]
+fn an_ai_file_saved_without_its_pdf_part_places_in_the_encoding_picked() {
+    let mut data = ai::sample_data();
+    let at = data.windows(4).position(|w| w == b"Pair").unwrap();
+    // 빨강 in code page 949.
+    data.splice(at..at + 4, br"\273\241\260\255".iter().copied());
+    let file = vectorcraft_format::base64_encode(&ai::ai(&compressed(&data), PLACEHOLDER));
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let r = s.execute("file.place", &json!({"name": "art.ai", "dataBase64": file, "link": false, "legacyNameEncoding": "windows-949"})).unwrap();
+    let placed = s.doc().unwrap().doc.layers[0].children().unwrap()[0].clone();
+    assert_eq!(names(&placed.children().unwrap()[1..]), ["빨강", "Ring", "Window"], "{r}");
 }
 
 #[test]

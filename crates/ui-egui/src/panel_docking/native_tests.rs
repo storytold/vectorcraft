@@ -42,6 +42,8 @@ struct Host {
     time: f64,
     /// Every command sent to a window, in order.
     commands: Vec<(ViewportId, ViewportCommand)>,
+    /// The monitor size each window reports.
+    monitor_size: Option<egui::Vec2>,
 }
 
 impl Host {
@@ -51,6 +53,7 @@ impl Host {
             outer_rect: Some(rect),
             focused: Some(self.focus == id),
             native_pixels_per_point: Some(1.0),
+            monitor_size: self.monitor_size,
             ..Default::default()
         };
         std::iter::once((ViewportId::ROOT, info(ViewportId::ROOT, SCREEN.translate(ORIGIN.to_vec2()))))
@@ -199,6 +202,7 @@ impl Harness {
             focus: ViewportId::ROOT,
             time: 0.0,
             commands: Vec::new(),
+            monitor_size: None,
         }));
         let shared = host.clone();
         egui::Context::set_immediate_viewport_renderer(move |ctx, viewport| Host::render(&shared, ctx, viewport));
@@ -321,6 +325,217 @@ fn a_floated_panel_opens_its_own_os_window_where_the_backend_has_viewports() {
     assert!(tab, "its tab is drawn in the app window");
 }
 
+/// Sets the height of the OS window `viewport`, as a user's resize does.
+fn resize_window(h: &mut Harness, viewport: ViewportId, height: f32) {
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().rect.set_height(height);
+    h.frames(3);
+}
+
+/// A click on the `side` pt square button with the highest `rank` in the OS window `viewport`, and
+/// the frames its menu takes to settle. Returns where the button is.
+fn open_button_menu(h: &mut Harness, viewport: ViewportId, side: f32, rank: impl Fn(Pos2) -> f32) -> Pos2 {
+    let ctx = h.ctx.clone();
+    let menu = ctx
+        .viewport_for(viewport, |vp| {
+            vp.prev_pass.widgets.layers().flat_map(|(_, w)| w.iter()).map(|w| (w.rect, w.sense.senses_click())).collect::<Vec<_>>()
+        })
+        .into_iter()
+        .filter(|(rect, clicks)| *clicks && rect.size() == vec2(side, side))
+        .map(|(rect, _)| rect.center())
+        .max_by(|a, b| rank(*a).total_cmp(&rank(*b)))
+        .expect("the menu's button");
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([Event::PointerMoved(menu), button(menu, true), button(menu, false)]);
+    h.frames(8);
+    menu
+}
+
+/// A click on the ≡ button in the OS window `viewport`, the 16 pt square at the right end of the
+/// panel's tab strip. Returns where the button is.
+fn open_panel_menu(h: &mut Harness, viewport: ViewportId) -> Pos2 {
+    open_button_menu(h, viewport, 16.0, |at| at.x)
+}
+
+/// The rect of the text `wanted` in the last frame of the OS window `viewport`: the last one drawn,
+/// so a menu's item comes before a panel's text of the same name.
+fn text_rect(h: &Harness, viewport: ViewportId, wanted: &str) -> Option<Rect> {
+    h.host.borrow().windows.get(&viewport).unwrap().texts.iter().rfind(|(text, _)| text.trim() == wanted).map(|(_, rect)| *rect)
+}
+
+/// Turns the wheel down by `by` points with the pointer at `over` in the OS window `viewport`, and
+/// lets the scrolling finish.
+fn wheel_down(h: &mut Harness, viewport: ViewportId, over: Pos2, by: f32) {
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([
+        Event::PointerMoved(over),
+        Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: vec2(0.0, -by),
+            phase: egui::TouchPhase::Move,
+            modifiers: Default::default(),
+            source: egui::MouseWheelSource::Unknown,
+        },
+    ]);
+    h.frames(40);
+}
+
+/// A floating panel's window of each height keeps its ≡ menu inside it: the list scrolls, and the
+/// wheel brings the last item into the window. The list opens level with the button where the
+/// window has room for it, and does not slide up to fit. 100 pt is the shortest a window can be
+/// resized to, and there the list takes the whole window.
+#[test]
+fn a_long_panel_menu_scrolls_inside_a_short_native_window() {
+    for (height, level_with_the_button) in [(240.0, true), (100.0, false)] {
+        let mut h = Harness::new();
+        let viewport = h.float("layers");
+        resize_window(&mut h, viewport, height);
+        let menu = open_panel_menu(&mut h, viewport);
+        if level_with_the_button {
+            let first = text_rect(&h, viewport, "New Layer…").expect("the menu's first item");
+            assert!(first.top() >= menu.y - 16.0, "the first item at {first:?} is level with the button at {menu:?}");
+        }
+        let last_item = |h: &Harness| text_rect(h, viewport, "Dock Panel");
+        assert!(last_item(&h).is_none_or(|r| r.bottom() > height), "the {height} pt window starts at the top of the list");
+        wheel_down(&mut h, viewport, pos2(menu.x - 60.0, height - 30.0), 5000.0);
+        let item = last_item(&h).unwrap_or_else(|| panic!("the wheel brings the menu's last item into the {height} pt window"));
+        assert!(item.bottom() <= height, "the last item at {item:?} is inside the {height} pt window");
+    }
+}
+
+/// The Layers menu's Save Selection submenu lists every saved selection: in a short window the
+/// wheel brings the last one into view.
+#[test]
+fn a_long_panel_submenu_scrolls_inside_a_short_native_window() {
+    let mut h = Harness::new();
+    h.app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    h.app.run("select.all", json!({})).unwrap();
+    // A document keeps at most 25 saved selections.
+    for n in 0..25 {
+        h.app.run("select.save", json!({"name": format!("Saved {n}")})).unwrap();
+    }
+    assert_submenu_reaches_its_end(&mut h, "layers", 240.0, "Save Selection", "Saved 0", "Saved 24");
+}
+
+/// The Swatches menu's Open Swatch Library lists the libraries between its head and tail items.
+#[test]
+fn the_library_submenu_scrolls_inside_a_short_native_window() {
+    let mut h = Harness::new();
+    assert_submenu_reaches_its_end(&mut h, "swatches", 240.0, "Open Swatch Library", "Default Swatches", "Other Library…");
+}
+
+/// The Layers panel's Filter popup, under the topmost 24 pt button: the wheel brings its last row
+/// into a short window.
+#[test]
+fn the_layers_filter_popup_scrolls_inside_a_short_native_window() {
+    let mut h = Harness::new();
+    let viewport = h.float("layers");
+    resize_window(&mut h, viewport, 160.0);
+    open_button_menu(&mut h, viewport, 24.0, |at| -at.y);
+    let over = text_rect(&h, viewport, "By Object").expect("the popup's By Object heading");
+    assert!(text_rect(&h, viewport, "Hidden").is_none_or(|end| end.bottom() > 160.0), "the popup opens at the top of its list");
+    wheel_down(&mut h, viewport, over.center(), 5000.0);
+    let end = text_rect(&h, viewport, "Hidden").expect("the wheel brings the popup's last row into the window");
+    assert!(end.bottom() <= 160.0, "the last row at {end:?} is inside the window");
+}
+
+/// The Color Guide's Limit to Library popup, on the leftmost button of the bottom bar: with the
+/// window made short while the popup is open, the wheel moves the list up past its Document
+/// Swatches row.
+#[test]
+fn the_color_guide_library_popup_scrolls_inside_a_short_native_window() {
+    let mut h = Harness::new();
+    let viewport = h.float("colorGuide");
+    resize_window(&mut h, viewport, 320.0);
+    open_button_menu(&mut h, viewport, 24.0, |at| at.y * 1000.0 - at.x);
+    resize_window(&mut h, viewport, 100.0);
+    let first = text_rect(&h, viewport, "Document Swatches").expect("the popup's Document Swatches row");
+    wheel_down(&mut h, viewport, first.center(), 5000.0);
+    let moved = text_rect(&h, viewport, "Document Swatches").is_none_or(|row| row.top() < first.top());
+    assert!(moved, "the wheel scrolls the list that starts at {first:?}");
+}
+
+/// In an OS window of `panel`, `height` tall, scrolls the ≡ menu until its row `row` shows, clicks
+/// the row to open its submenu, turns the wheel over the submenu's item `first`, and checks that its
+/// item `last` comes into the window.
+fn assert_submenu_reaches_its_end(h: &mut Harness, panel: &str, height: f32, row: &str, first: &str, last: &str) {
+    let viewport = h.float(panel);
+    resize_window(h, viewport, height);
+    let menu = open_panel_menu(h, viewport);
+    let inside = |h: &Harness| text_rect(h, viewport, row).filter(|rect| rect.bottom() < height - 12.0);
+    for _ in 0..40 {
+        if inside(h).is_some() {
+            break;
+        }
+        wheel_down(h, viewport, pos2(menu.x - 60.0, height - 30.0), 40.0);
+    }
+    let at = inside(h).expect("the row that opens the submenu").center();
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([Event::PointerMoved(at), button(at, true), button(at, false)]);
+    h.frames(8);
+    let over = text_rect(h, viewport, first).expect("the submenu's first item");
+    assert!(text_rect(h, viewport, last).is_none_or(|end| end.bottom() > height), "the submenu opens at the top of its list");
+    for _ in 0..3 {
+        if text_rect(h, viewport, last).is_some() {
+            break;
+        }
+        wheel_down(h, viewport, pos2(over.center().x, height - 30.0), 5000.0);
+    }
+    let end = text_rect(h, viewport, last).expect("the submenu's last item");
+    assert!(end.bottom() <= height, "{last} at {end:?} is inside the {height} pt window");
+}
+
+/// A new launch on a desktop of `monitors`, with `saved` as the panel layout: where the window of
+/// the floating Swatches panel opens.
+fn reopened(saved: &craft_ui::docking::Layout<String>, monitors: &[crate::DockMonitor]) -> Rect {
+    let mut h = Harness::new();
+    h.host.borrow_mut().monitor_size = Some(vec2(1920.0, 1080.0));
+    h.app.services.dock_monitors = monitors.to_vec();
+    h.app.ui.docking = Some(saved.clone());
+    h.frames(3);
+    let viewport = h.viewport("swatches");
+    h.host.borrow().windows[&viewport].rect
+}
+
+/// Two monitors side by side, with the main window on the left one (#5582).
+#[test]
+fn a_floating_panel_reopens_on_the_monitor_where_it_was_left() {
+    let left = crate::DockMonitor { name: Some("left".into()), rect: [0.0, 0.0, 1920.0, 1080.0], scale: 1.0 };
+    let right = crate::DockMonitor { name: Some("right".into()), rect: [1920.0, 0.0, 1920.0, 1080.0], scale: 1.0 };
+    let both = [left.clone(), right.clone()];
+
+    let mut h = Harness::new();
+    h.host.borrow_mut().monitor_size = Some(vec2(1920.0, 1080.0));
+    h.app.services.dock_monitors = both.to_vec();
+    let viewport = h.float("swatches");
+    let size = h.host.borrow().windows[&viewport].rect.size();
+    let placed_at = pos2(2400.0, 300.0);
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().rect = Rect::from_min_size(placed_at, size);
+    // The layout follows the window after craft-ui's wait for a move to settle, half a second.
+    h.frames(30);
+
+    let layout = layout_of(&h.app.ui);
+    let window = &layout.floating[0];
+    assert_eq!(window.native.map(|[x, y, ..]| pos2(x, y)), Some(placed_at));
+    assert_eq!(window.monitor.as_ref(), Some(&right), "the window stores the monitor it is on");
+    // The preferences keep the layout as JSON.
+    let saved: craft_ui::docking::Layout<String> = serde_json::from_str(&serde_json::to_string(&layout).unwrap()).unwrap();
+
+    assert_eq!(reopened(&saved, &both).min, placed_at, "the monitor is connected: the saved place");
+
+    // The monitor got a new name and the same place.
+    let renamed = [left.clone(), crate::DockMonitor { name: Some("DP-2".into()), ..right.clone() }];
+    assert_eq!(reopened(&saved, &renamed).min, placed_at);
+
+    // A layout saved before the monitors were listed stores none.
+    let mut unstored = saved.clone();
+    unstored.floating[0].monitor = None;
+    assert_eq!(reopened(&unstored, &both).min, placed_at, "a place on a connected monitor is kept");
+
+    // The monitor is gone: the main window's monitor, at the same offset from its origin.
+    assert_eq!(reopened(&saved, std::slice::from_ref(&left)).min, pos2(placed_at.x - 1920.0, placed_at.y));
+
+    // No monitor list (a host that can't list them): onto the main window's monitor by egui's size.
+    let no_list = reopened(&saved, &[]);
+    assert_eq!(no_list.min, pos2(1920.0 - size.x, placed_at.y));
+}
+
 #[test]
 fn keys_typed_in_a_native_window_run_the_main_windows_shortcuts() {
     let mut h = Harness::new();
@@ -436,6 +651,170 @@ fn a_menu_of_the_menu_bar_lowers_the_palette_windows() {
         "and is hidden until the menu closes"
     );
 }
+
+/// The visibility and level commands the palette window `viewport` was sent, cleared after reading.
+fn take_palette_commands(h: &Harness, viewport: ViewportId) -> (Vec<bool>, Vec<egui::WindowLevel>) {
+    let commands = std::mem::take(&mut h.host.borrow_mut().commands);
+    let shown = commands
+        .iter()
+        .filter_map(|(id, command)| match command {
+            ViewportCommand::Visible(visible) if *id == viewport => Some(*visible),
+            _ => None,
+        })
+        .collect();
+    let levels = commands
+        .iter()
+        .filter_map(|(id, command)| match command {
+            ViewportCommand::WindowLevel(level) if *id == viewport => Some(*level),
+            _ => None,
+        })
+        .collect();
+    (shown, levels)
+}
+
+/// Opens the flyout of the group `tools` on the Tools panel.
+fn open_tool_flyout(h: &mut Harness, tools: &[&str]) {
+    h.app.ui.flyout = Some(0);
+    let tools: Vec<String> = tools.iter().map(|tool| tool.to_string()).collect();
+    h.ctx.data_mut(|d| {
+        d.insert_temp(egui::Id::unique("flyout-tools"), tools);
+        d.insert_temp(crate::toolbar::flyout_toolbar_id(), None::<String>);
+    });
+}
+
+/// A tool group's flyout is drawn in the main window, so a palette window over it hides until it
+/// closes (#5813), and takes its palette level again with the keyboard left where it was.
+#[test]
+fn a_tool_flyout_hides_the_palette_windows_until_it_closes() {
+    let mut h = Harness::new();
+    let viewport = h.float("navigator");
+    h.host.borrow_mut().focus = ViewportId::ROOT;
+    h.frames(2);
+    take_palette_commands(&h, viewport);
+    open_tool_flyout(&mut h, &["pen", "curvature"]);
+    h.frames(2);
+    let (shown, levels) = take_palette_commands(&h, viewport);
+    assert_eq!(shown, [false], "hidden while the flyout is open");
+    assert_eq!(levels, [egui::WindowLevel::Normal], "and out of the top level");
+    assert_eq!(h.app.ui.flyout, Some(0), "the flyout stays open");
+    h.frames(2);
+    assert_eq!(take_palette_commands(&h, viewport), (vec![], vec![]), "the commands go once");
+    h.app.ui.flyout = None;
+    h.frames(2);
+    let focus_commands = h.host.borrow().commands.iter().filter(|(_, command)| matches!(command, ViewportCommand::Focus)).count();
+    assert_eq!(focus_commands, 0, "nothing takes the keyboard");
+    let (shown, levels) = take_palette_commands(&h, viewport);
+    assert_eq!(shown, [true], "shown again when the flyout closes");
+    assert_eq!(levels, [egui::WindowLevel::AlwaysOnTop], "at its palette level");
+}
+
+/// The All Tools drawer is drawn in the main window too, so it hides a palette window the same way.
+#[test]
+fn the_all_tools_drawer_hides_the_palette_windows_until_it_closes() {
+    let mut h = Harness::new();
+    let viewport = h.float("navigator");
+    h.host.borrow_mut().focus = ViewportId::ROOT;
+    h.frames(2);
+    take_palette_commands(&h, viewport);
+    h.app.run("window.editToolbar", json!({"open": true})).unwrap();
+    h.frames(2);
+    assert_eq!(take_palette_commands(&h, viewport).0, [false], "hidden while the drawer is open");
+    h.app.run("window.editToolbar", json!({"open": false})).unwrap();
+    h.frames(2);
+    assert_eq!(take_palette_commands(&h, viewport).0, [true], "shown again when the drawer closes");
+}
+
+/// A flyout or a drawer left set while its toolbar is hidden does not draw, so the palette windows
+/// stay on screen.
+#[test]
+fn a_flyout_or_drawer_of_a_hidden_toolbar_leaves_the_palette_windows_shown() {
+    let mut h = Harness::new();
+    let viewport = h.float("navigator");
+    h.host.borrow_mut().focus = ViewportId::ROOT;
+    h.frames(2);
+    take_palette_commands(&h, viewport);
+    h.app.run("window.editToolbar", json!({"open": true})).unwrap();
+    h.frames(2);
+    assert_eq!(take_palette_commands(&h, viewport).0, [false], "hidden under the drawer");
+    h.app.run("window.toolbar", json!({})).unwrap();
+    h.frames(1);
+    assert!(!h.app.ui.toolbar && h.app.ui.tools_drawer, "the drawer is left set with the Tools panel hidden");
+    assert_eq!(take_palette_commands(&h, viewport).0, [true], "shown again: the drawer does not draw");
+    h.app.ui.tools_drawer = false;
+    h.app.run("window.toolbar", json!({})).unwrap();
+    open_tool_flyout(&mut h, &["pen", "curvature"]);
+    h.frames(2);
+    assert_eq!(take_palette_commands(&h, viewport).0, [false], "hidden under the flyout");
+    // Tab hides the toolbar and the panels, and Shift+Tab shows the panels alone.
+    h.app.run("window.dock", json!({})).unwrap();
+    h.app.run("window.panels", json!({})).unwrap();
+    h.frames(1);
+    assert!(!h.app.ui.toolbar && h.app.ui.flyout.is_some(), "the flyout is left set with the Tools panel hidden");
+    assert_eq!(take_palette_commands(&h, viewport).0, [true], "shown again: the flyout does not draw");
+}
+
+/// A strip torn off a flyout and a toolbar made with New Toolbar stay on screen like panels, so the
+/// palette windows stay shown beside them.
+#[test]
+fn a_torn_off_strip_or_a_new_toolbar_leaves_the_palette_windows_shown() {
+    let mut h = Harness::new();
+    let viewport = h.float("navigator");
+    h.host.borrow_mut().focus = ViewportId::ROOT;
+    h.frames(2);
+    take_palette_commands(&h, viewport);
+    // The commands go only on a change, so the drawer opening and closing shows the palette windows
+    // were on screen before the strip and the toolbar.
+    h.app.run("window.editToolbar", json!({"open": true})).unwrap();
+    h.frames(2);
+    assert_eq!(take_palette_commands(&h, viewport).0, [false], "hidden under the drawer");
+    h.app.run("window.editToolbar", json!({"open": false})).unwrap();
+    h.frames(2);
+    assert_eq!(take_palette_commands(&h, viewport).0, [true], "shown when the drawer closes");
+    h.app.run("window.floatTools", json!({"tool": "pen"})).unwrap();
+    h.app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+    h.frames(2);
+    let strips: Vec<&str> = h.app.ui.floating_flyouts.iter().filter_map(|strip| strip.tools.first().map(String::as_str)).collect();
+    assert_eq!(strips, ["pen"], "the Pen strip floats");
+    let toolbars: Vec<(&str, bool)> = h.app.ui.custom_toolbars.iter().map(|toolbar| (toolbar.name.as_str(), toolbar.shown)).collect();
+    assert_eq!(toolbars, [("Mine", true)], "the new toolbar shows");
+    assert_eq!(h.app.ui.flyout, None, "no flyout is open");
+    assert_eq!(take_palette_commands(&h, viewport), (vec![], vec![]), "the palette windows are left as they were");
+    h.app.run("window.editToolbar", json!({"open": true})).unwrap();
+    h.frames(2);
+    assert_eq!(take_palette_commands(&h, viewport).0, [false], "still shown: the drawer hides them again");
+}
+
+/// The frame in which a click elsewhere closes a flyout or the drawer shows the palette windows, as
+/// no later frame need come while the app is idle.
+#[test]
+fn a_click_elsewhere_shows_the_palette_windows_in_the_frame_it_closes_a_flyout() {
+    let mut h = Harness::new();
+    let viewport = h.float("navigator");
+    h.host.borrow_mut().focus = ViewportId::ROOT;
+    h.frames(2);
+    take_palette_commands(&h, viewport);
+    // On the dock: a press on the canvas closes a flyout later in its frame, and the release's frame
+    // shows the palette windows.
+    let at = pos2(1500.0, 700.0);
+    let button = |pressed| Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+    let click = |h: &mut Harness| {
+        h.frame(vec![Event::PointerMoved(at), button(true)]);
+        h.frame(vec![button(false)]);
+    };
+    open_tool_flyout(&mut h, &["pen", "curvature"]);
+    h.frames(2);
+    assert_eq!(take_palette_commands(&h, viewport).0, [false], "hidden under the flyout");
+    click(&mut h);
+    assert_eq!(h.app.ui.flyout, None, "the click closes the flyout");
+    assert_eq!(take_palette_commands(&h, viewport).0, [true], "shown in that frame");
+    h.app.run("window.editToolbar", json!({"open": true})).unwrap();
+    h.frames(2);
+    assert_eq!(take_palette_commands(&h, viewport).0, [false], "hidden under the drawer");
+    click(&mut h);
+    assert!(!h.app.ui.tools_drawer, "the click closes the drawer");
+    assert_eq!(take_palette_commands(&h, viewport).0, [true], "shown in that frame");
+}
+
 /// A modal dialog is drawn in the main window, so the palettes' OS windows leave their topmost
 /// level while it is open and take it back after, or the dialog would be covered by them.
 #[test]

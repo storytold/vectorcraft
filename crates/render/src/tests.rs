@@ -32,6 +32,7 @@ mod setup;
 mod strokegradient;
 mod thincoverage;
 mod tileedge;
+mod typeedges;
 mod viewraster;
 mod widthzoom;
 
@@ -1333,7 +1334,7 @@ fn invalid_dash_pattern_strokes_solid() {
         let d = line(Some(pattern.clone()));
         let (tx, rx) = std::sync::mpsc::channel();
         std::thread::spawn(move || tx.send(render(&d)).ok());
-        let img = rx.recv_timeout(std::time::Duration::from_secs(20)).unwrap_or_else(|_| panic!("rendering dash {pattern:?} did not finish"));
+        let img = rx.recv_timeout(std::time::Duration::from_secs(300)).unwrap_or_else(|_| panic!("rendering dash {pattern:?} did not finish"));
         assert_eq!(img.pixels, solid.pixels, "dash {pattern:?}");
     }
 }

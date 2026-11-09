@@ -453,9 +453,10 @@ fn simplify_slider_escape_puts_the_paths_back() {
     let undo_len = app.session.doc().unwrap().history.undo.len();
     crate::menus::invoke(&mut app, "object.path.simplify", json!({}));
     settle(&ctx, &mut app);
+    // Level 0's tolerance of 32 pt takes out the path's 0.1 pt zigzag; level 100's 1/32 pt keeps it.
     let (_, _, rail, _) = slider_strip(&ctx);
-    drag(&ctx, &mut app, rail, vec2(100.0, 0.0));
-    assert_eq!(simplify_preview(&app), json!({"level": 100.0}));
+    drag(&ctx, &mut app, rail + vec2(90.0, 0.0), vec2(-190.0, 0.0));
+    assert_eq!(simplify_preview(&app), json!({"level": 0.0}));
     assert_ne!(app.session.doc().unwrap().doc, before, "the preview changes the path");
     let escape = Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
     let input = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, SCREEN)), events: vec![escape], ..Default::default() };
