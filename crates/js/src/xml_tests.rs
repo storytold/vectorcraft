@@ -589,6 +589,109 @@ fn limits_cannot_be_caught_by_the_script() {
     assert_eq!(kind_of(TIGHT, "try { for (;;) (<a/>).toXMLString(); } catch (e) { 1 }"), RunErrorKind::Limit(LimitKind::Fuel));
 }
 
+/// Collects garbage and sets the heap limit to the live size plus the argument, so a script can
+/// run out of heap at a chosen charge. A negative argument puts the heap over its limit, which
+/// also happens when a lowered limit meets a larger heap.
+fn squeeze(
+    i: &mut crate::interp::Interp,
+    _: crate::value::Value,
+    args: &[crate::value::Value],
+    _: bool,
+) -> crate::interp::JsResult<crate::value::Value> {
+    i.collect_garbage();
+    if let Some(crate::value::Value::Number(spare)) = args.first() {
+        i.limits.heap_bytes = (i.heap.bytes as f64 + *spare) as usize;
+    }
+    Ok(crate::value::Value::Undefined)
+}
+
+/// Runs `setup`, then the action for each step from 0 until one completes, and after each stop
+/// asserts that `check` is true with the limits lifted. Returns how many runs stopped at `kind`.
+fn stops_with_the_tree_intact(setup: &str, action: impl Fn(usize) -> String, check: &str, kind: LimitKind, limit: impl Fn(usize) -> Limits) -> usize {
+    let mut r = realm();
+    let interp = r.interp();
+    let global = interp.global;
+    assert!(crate::builtins::method(interp, global, "squeeze", squeeze, 1).is_ok());
+    let mut stops = 0;
+    for step in 0..200_000 {
+        r.set_limits(Limits::default());
+        r.run(setup).unwrap();
+        r.set_limits(limit(step));
+        let action = action(step);
+        let got = r.run(&action);
+        r.set_limits(Limits::default());
+        assert_eq!(r.run(check), Ok(JsValue::Bool(true)), "{action}: {got:?}");
+        match got {
+            Ok(_) => return stops,
+            Err(e) if e.kind == RunErrorKind::Limit(kind) => stops += 1,
+            Err(_) => {}
+        }
+    }
+    panic!("{check} never completed");
+}
+
+/// Runs `action`, whose `SPARE` is replaced by a call that leaves each number of bytes free in
+/// turn, from 512 too few. Actions put it after the steps whose allocations a collection could
+/// free: an argument is evaluated after the callee is looked up.
+fn heap_stops(setup: &str, action: &str, check: &str) -> usize {
+    let action = |spare: usize| action.replace("SPARE", &format!("squeeze({})", spare as i64 - 512));
+    stops_with_the_tree_intact(setup, action, check, LimitKind::Heap, |_| Limits::default())
+}
+
+fn fuel_stops(setup: &str, action: &str, check: &str) -> usize {
+    stops_with_the_tree_intact(setup, |_| action.to_string(), check, LimitKind::Fuel, |fuel| Limits { fuel: fuel as u64, ..Limits::default() })
+}
+
+const MOVE_SETUP: &str = "var o = <o><b/><c/></o>; var t = <t/>; var n = o.b[0];";
+const MOVE_CHECK: &str =
+    "o.b.length() + t.b.length() === 1 && (o.b.length() === 0 || o.b[0].parent() === o) && (t.b.length() === 0 || t.b[0].parent() === t)";
+
+#[test]
+fn a_heap_limit_during_a_move_leaves_the_node_in_its_old_parent() {
+    for action in
+        ["t.appendChild((SPARE, n))", "t.prependChild((SPARE, n))", "t.insertChildAfter(null, (SPARE, n))", "t.insertChildBefore(null, (SPARE, n))"]
+    {
+        assert!(heap_stops(MOVE_SETUP, action, MOVE_CHECK) > 0, "{action}");
+    }
+}
+
+#[test]
+fn a_fuel_limit_during_a_move_leaves_the_node_in_its_old_parent() {
+    for action in ["t.appendChild(n)", "t.prependChild(n)"] {
+        assert!(fuel_stops(MOVE_SETUP, action, MOVE_CHECK) > 0, "{action}");
+    }
+    let replaced = "var l = t.*; l[0] = o.b[0]";
+    let setup = "var o = <o><b/><c/></o>; var t = <t><d/></t>;";
+    assert!(fuel_stops(setup, replaced, MOVE_CHECK) > 0);
+}
+
+#[test]
+fn a_heap_limit_on_replace_past_the_end_leaves_no_child_without_a_parent() {
+    let check = "var n = x.*.length(); if (n === 0) { true } else { \
+        var v = x.*[n - 1]; var name; try { v.appendChild(x); name = 'none' } catch (e) { name = e.name } v.parent() === x && name === 'TypeError' }";
+    let action = "x.replace({ toString: function () { SPARE; return '5'; } }, v)";
+    assert!(heap_stops("var x = <x/>; var v = <v/>;", action, check) > 0);
+}
+
+#[test]
+fn limits_during_deletes_and_puts_keep_the_other_nodes() {
+    let setup = "var x = <a p='1' q='2'><b>old</b><c/></a>;";
+    let others = "x.c.length() === 1 && x.@q == '2'";
+    for action in ["delete x.b", "delete x.@p", "x.@p = 'v'", "x.@n = 'v'", "x.b = 'v'"] {
+        assert!(fuel_stops(setup, action, others) > 0, "{action}");
+    }
+    let held = format!("{others} && x.b.length() === 1 && (x.b == 'old' || x.b == 'v') && x.b.*[0].parent() === x.b[0]");
+    assert!(fuel_stops(setup, "x.b = 'v'", &held) > 0);
+    assert!(heap_stops(setup, "x.b = (SPARE, 'v')", &held) > 0);
+}
+
+#[test]
+fn a_limit_during_normalize_does_not_repeat_text() {
+    let setup = "var x = <a/>; x.appendChild('p'); x.appendChild('q'); x.appendChild('r');";
+    let check = "x.toString() === 'pqr'";
+    assert!(fuel_stops(setup, "x.normalize()", check) > 0);
+}
+
 #[test]
 fn an_interrupt_stops_serialization() {
     let mut r = realm();
