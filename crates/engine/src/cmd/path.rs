@@ -1,6 +1,7 @@
 //! Path editing commands (used by the Pen and Direct Selection tools and Object → Path).
 
 use std::collections::BTreeSet;
+use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind, Scaling};
@@ -1206,6 +1207,11 @@ fn convert_anchors(s: &mut Session, p: &Value) -> Result<Value> {
     ok()
 }
 
+/// Delete direct-selected anchors or segments and whole selected objects in one edit.
+/// Leave surviving pieces selected, splitting ordinary contours into independent sibling objects.
+/// `p.guides: true` also removes the selected ruler guides in that edit; otherwise guides remain.
+/// Layers are retained, and an object removed with a selected ancestor is not removed twice.
+/// Returns JSON `null` on success; selection is replaced by the surviving object IDs.
 pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
     // `guides: true` (Cut, #3226): the selected ruler guides go in the same undo step.
     let with_guides = switch_or(p, "guides", false, "path.deleteAnchors")?;
@@ -1237,11 +1243,13 @@ pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
             if d.node(*id).is_none() {
                 continue;
             }
-            let remove_node = {
+            let original = deletion_source(d, *id)?;
+            let subpaths: Vec<SubPath> = {
                 let path = path_mut(d, *id)?;
+                let subpaths = std::mem::take(&mut path.subpaths);
                 if let Some(refs) = segments.get(id) {
                     // A segment pick cuts its connection, keeping every neighboring cubic.
-                    path.subpaths = std::mem::take(&mut path.subpaths)
+                    subpaths
                         .into_iter()
                         .enumerate()
                         .flat_map(|(si, sp)| {
@@ -1249,11 +1257,11 @@ pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
                             without_segments(sp, &cuts)
                         })
                         .filter(|s| s.anchors.len() >= 2)
-                        .collect();
+                        .collect()
                 } else {
                     // Remove every selected anchor against the original indexes, keeping surviving
                     // stretches separate rather than joining across deleted anchors.
-                    path.subpaths = std::mem::take(&mut path.subpaths)
+                    subpaths
                         .into_iter()
                         .enumerate()
                         .flat_map(|(si, sp)| {
@@ -1261,16 +1269,14 @@ pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
                             without_anchors(sp, &gone)
                         })
                         .filter(|s| s.anchors.len() >= 2)
-                        .collect();
+                        .collect()
                 }
-                path.subpaths.retain(|s| s.anchors.len() >= 2);
-                path.subpaths.is_empty()
             };
-            if remove_node {
+            if subpaths.is_empty() {
                 emptied.put(d, *id, vec![])?;
             } else {
-                // The remainder is selected whole, so the next Delete removes it.
-                survivors.push(*id);
+                // Every remaining piece is selected whole, so the next Delete removes them.
+                survivors.extend(replace_deleted_pieces(d, &mut emptied, original, subpaths)?);
             }
         }
         emptied.finish(d)?;
@@ -1278,6 +1284,47 @@ pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     ok()
+}
+
+/// Retain path `id` from `d` without copying its geometry before deletion takes its subpaths.
+/// The shared snapshot supplies the original path classification and, only if needed, gradient
+/// bounds after the working node's geometry has moved. Returns `NoNode` for a missing/non-path ID.
+pub(super) fn deletion_source(d: &Document, id: NodeId) -> Result<Arc<Node>> {
+    let (parent, index, _) = d.position(id).ok_or(EngineError::NoNode(id))?;
+    // Verify the cached position still names this path before retaining the shared node.
+    d.children(parent)
+        .and_then(|children| children.get(index))
+        .filter(|n| n.id == id && n.path_data().is_some())
+        .cloned()
+        .ok_or(EngineError::NoNode(id))
+}
+
+/// Replace the deleted path in `d` with the nonempty surviving runs in `subpaths`.
+/// `original` must be retained by [`deletion_source`] before taking the working node's geometry.
+/// An ordinary single-contour source becomes siblings; multi-subpath paths and compound members
+/// retain their node. Only actual splits pin unplaced gradients to `original`'s bounds; already
+/// placed gradients and connected remainders retain their placement behavior.
+///
+/// Returns the surviving IDs in `subpaths` order (the first keeps the source ID). The original
+/// node's geometry is updated immediately. Replacements are handed to `beside`, which may defer
+/// insertion; the caller must finish that [`Beside`] before using new IDs in `d`.
+/// Missing/invalid paths return an error.
+pub(super) fn replace_deleted_pieces(d: &mut Document, beside: &mut Beside, original: Arc<Node>, subpaths: Vec<SubPath>) -> Result<Vec<NodeId>> {
+    let id = original.id;
+    let single = original.path_data().is_some_and(|p| p.subpaths.len() == 1);
+    if single && compound_or_self(d, id) == id {
+        // Pin only actual splits: each new object's smaller bounds would otherwise refit its gradients.
+        if subpaths.len() > 1
+            && original.appearance.has_unplaced_gradient()
+            && let Some(bounds) = original.geometric_bounds()
+        {
+            d.node_mut(id).ok_or(EngineError::NoNode(id))?.appearance.pin_gradients(bounds);
+        }
+        super::draw2::replace_with_pieces(d, beside, id, subpaths.into_iter().map(PathData::single).collect())
+    } else {
+        path_mut(d, id)?.subpaths = subpaths;
+        Ok(vec![id])
+    }
 }
 
 /// Remove anchors and their incident segments, keeping each surviving stretch as an open path.
