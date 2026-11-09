@@ -5877,6 +5877,9 @@ axis	Y Axis	Y osa
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all ili raspon poput 1, 3-5, a ne {v}
 	Add to Symbols	Dodaj u simbole
 	Basic Shapes	Osnovni oblici
+	Button	Dugme
+	Panel	Panel
+	UI Frames	UI okviri
 	Open Symbol Library	Otvori biblioteku simbola
 	Save Symbol Library	Sačuvaj biblioteku simbola
 	Save Symbol Library…	Sačuvaj biblioteku simbola…

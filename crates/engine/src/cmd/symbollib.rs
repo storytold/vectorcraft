@@ -2,7 +2,7 @@
 //! of symbols the library panel shows. A library is a document holding the symbols with the
 //! resources they use (nested symbols, patterns, swatches, brushes, graphic styles, images) and
 //! their Symbol Options; saved, it is a native `.vectorcraft` file, which File › Open also opens.
-//! The built-in library is generated here ([`BUILTIN`]); User Defined ones are the `.vectorcraft`
+//! The built-in libraries are generated here ([`BUILTIN`]); User Defined ones are the `.vectorcraft`
 //! files in the user library folder ([`Libraries`]), and Other Library… loads the symbols of any
 //! document VectorCraft opens. `symbol.addFromLibrary` copies symbols into the document;
 //! `symbol.saveLibrary` writes the document's.
@@ -12,7 +12,7 @@ use std::sync::{Arc, LazyLock};
 
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, Symbol};
+use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, Symbol, SymbolNineSlice};
 use vectorcraft_geom::{Affine, Point, Rect, shapes};
 
 use super::brushsym::{CURRENT_SYMBOL, natural_size, normalize, place_xf, set_natural_size};
@@ -154,7 +154,10 @@ pub struct BuiltinSymbolLibrary {
 }
 
 /// The built-in symbol libraries, in menu order: original art generated in code.
-pub const BUILTIN: &[BuiltinSymbolLibrary] = &[BuiltinSymbolLibrary { id: "basic-shapes", name: "Basic Shapes", make: basic_shapes }];
+pub const BUILTIN: &[BuiltinSymbolLibrary] = &[
+    BuiltinSymbolLibrary { id: "basic-shapes", name: "Basic Shapes", make: basic_shapes },
+    BuiltinSymbolLibrary { id: "ui-frames", name: "UI Frames", make: ui_frames },
+];
 
 /// Built-in library `id`, made once.
 fn builtin_library(id: &str) -> Option<Arc<SymbolLibrary>> {
@@ -192,6 +195,28 @@ fn basic_shapes() -> SymbolLibrary {
     }
     doc.title = "Basic Shapes".into();
     SymbolLibrary { name: "Basic Shapes".into(), doc }
+}
+
+/// UI Frames: panel, button and bar HUD chrome with default 9-slice guides (original art).
+fn ui_frames() -> SymbolLibrary {
+    let frames = [
+        ("Panel", Rect::new(-48.0, -36.0, 48.0, 36.0), 10.0, "#2b3340", "#8aa0b8"),
+        ("Button", Rect::new(-36.0, -14.0, 36.0, 14.0), 8.0, "#3a6ea5", "#d7e6f5"),
+        ("Bar", Rect::new(-56.0, -10.0, 56.0, 10.0), 10.0, "#1f6b4a", "#b7e0c9"),
+    ];
+    let mut doc = Document::new(100.0, 100.0);
+    for (name, rect, radius, fill_hex, edge_hex) in frames {
+        let fill = Color::from_hex(fill_hex).unwrap_or(Color::BLACK);
+        let edge = Color::from_hex(edge_hex).unwrap_or(Color::BLACK);
+        let id = doc.alloc_id();
+        let art = Node::path(id, shapes::rounded_rectangle(rect, radius), Appearance::basic(Paint::solid(fill), Paint::solid(edge), 1.5));
+        let Ok((art, size, _)) = normalize(art) else { continue };
+        doc.symbols.push(Symbol { dynamic: false, name: name.into(), art: Arc::new(art) });
+        set_natural_size(&mut doc, name, Some(size));
+        doc.set_symbol_nine_slice(name, Some(SymbolNineSlice::default()));
+    }
+    doc.title = "UI Frames".into();
+    SymbolLibrary { name: "UI Frames".into(), doc }
 }
 
 /// An instance of symbol `name` (what the resource gathering follows).

@@ -84,8 +84,12 @@ fn the_builtin_library_is_original_art_generated_in_code() {
     let mut s = Session::new();
     let list = run(&mut s, "symbol.libraries", json!({}));
     let libs = list["libraries"].as_array().unwrap();
-    assert_eq!(libs.len(), 1, "{libs:?}");
+    assert_eq!(libs.len(), 2, "{libs:?}");
     assert_eq!((libs[0]["id"].as_str(), libs[0]["category"].as_str()), (Some("basic-shapes"), Some("builtIn")));
+    assert_eq!(
+        (libs[1]["id"].as_str(), libs[1]["name"].as_str(), libs[1]["category"].as_str()),
+        (Some("ui-frames"), Some("UI Frames"), Some("builtIn"))
+    );
     let lib = run(&mut s, "symbol.library", json!({"library": "basic shapes"}));
     let names: Vec<&str> = lib["symbols"].as_array().unwrap().iter().map(|x| x["name"].as_str().unwrap()).collect();
     assert_eq!(names, ["Circle", "Square", "Rounded Square", "Triangle", "Diamond", "Hexagon", "Star", "Burst", "Arrow"]);
@@ -93,6 +97,23 @@ fn the_builtin_library_is_original_art_generated_in_code() {
     let arrow = lib["symbols"].as_array().unwrap().iter().find(|x| x["name"] == "Arrow").unwrap();
     assert_eq!(arrow["size"], json!([48.0, 32.0]));
     assert!(s.execute("symbol.library", &json!({"library": "nope"})).is_err());
+}
+
+#[test]
+fn ui_frames_symbols_carry_default_nine_slice_when_added() {
+    let mut s = session();
+    let lib = run(&mut s, "symbol.library", json!({"library": "ui-frames"}));
+    let names: Vec<&str> = lib["symbols"].as_array().unwrap().iter().map(|x| x["name"].as_str().unwrap()).collect();
+    assert_eq!(names, ["Panel", "Button", "Bar"]);
+    let r = run(&mut s, "symbol.addFromLibrary", json!({"library": "ui-frames", "name": "Panel", "place": true, "x": 100.0, "y": 100.0}));
+    assert_eq!(r["added"], json!(["Panel"]));
+    assert!(r["placed"].as_u64().is_some());
+    let d = doc(&s);
+    assert_eq!(d.symbol_nine_slice("Panel"), Some(vectorcraft_doc::SymbolNineSlice::default()));
+    assert!(matches!(
+        d.node(NodeId(r["placed"].as_u64().unwrap())).map(|n| &n.kind),
+        Some(NodeKind::SymbolInstance { symbol, .. }) if symbol == "Panel"
+    ));
 }
 
 #[test]

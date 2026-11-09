@@ -6052,6 +6052,9 @@ axis	Y Axis	Y-akseli
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all tai alue, kuten 1, 3-5, ei {v}
 	Add to Symbols	Lisää symboleihin
 	Basic Shapes	Perusmuodot
+	Button	Painike
+	Panel	Paneeli
+	UI Frames	UI-kehykset
 	Open Symbol Library	Avaa symbolikirjasto
 	Save Symbol Library	Tallenna symbolikirjasto
 	Save Symbol Library…	Tallenna symbolikirjasto…
