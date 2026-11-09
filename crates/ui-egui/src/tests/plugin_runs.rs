@@ -13,6 +13,7 @@ use crate::{VectorcraftApp, dialogs, plugin_runs, theme};
 /// An app with a new 200 × 200 pt document.
 fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.allow_plugin_grants_from_requests();
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
     app
 }
@@ -71,10 +72,10 @@ fn installing_a_heavy_filter_asks_first() {
     let id = "test.ui.heavy.install";
     let bytes = heavy(id, 1, "{}");
     let r = app.run("ui.installPlugin", json!({"dataBase64": vectorcraft_format::base64_encode(&bytes), "name": "route.wasm"})).unwrap();
-    assert_eq!(r["pending"], dialogs::confirm::KIND);
-    let d = app.ui.dialog.as_ref().unwrap();
-    assert_eq!(d.str("message"), format!("Install “Test {id}”, which asks for a heavy budget?"));
-    assert!(d.str("detail").contains("up to 5 minutes and do 20 times the work"), "{}", d.str("detail"));
+    assert_eq!(r["pending"], dialogs::plugin::INSTALL_KIND);
+    let pending = app.pending_plugin_install.as_ref().unwrap();
+    assert_eq!(pending.message, format!("Install “Test {id}”, which asks for a heavy budget?"));
+    assert!(pending.detail.contains("up to 5 minutes and do 20 times the work"), "{}", pending.detail);
     assert!(registry::get(id).is_none(), "not before the user agrees");
     dialogs::confirm(&mut app).unwrap();
     assert_eq!(registry::get(id).map(|p| p.manifest().name.clone()), Some(format!("Test {id}")));
@@ -82,7 +83,7 @@ fn installing_a_heavy_filter_asks_first() {
     // File › Open of the .wasm asks too, and Cancel installs nothing.
     registry::remove(id);
     crate::io::open_bytes(&mut app, "route.wasm", &bytes, None).unwrap();
-    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(dialogs::confirm::KIND));
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(dialogs::plugin::INSTALL_KIND));
     dialogs::cancel(&mut app);
     assert!(registry::get(id).is_none());
 }

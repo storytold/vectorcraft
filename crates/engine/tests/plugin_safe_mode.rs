@@ -204,6 +204,7 @@ fn a_disabled_plug_in_whose_new_grant_cant_be_stored_stays_disabled() {
     let _f = fresh();
     let dir = tmp_dir("reinstall-no-grant");
     let mut s = launch(&dir);
+    s.allow_plugin_grants_from_requests();
     let manifest = r#"{"id":"test.sm.g","name":"Test","version":"1","kind":"filter","permissions":["doc.read"]}"#;
     let module = |out: &str| vectorcraft_format::base64_encode(&wat::parse_str(tpl::returning(manifest, out)).unwrap());
     s.execute("plugin.install", &json!({"dataBase64": module(r#"{"objects":[]}"#), "grant": ["doc.read"]})).unwrap();

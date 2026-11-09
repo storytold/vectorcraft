@@ -26,7 +26,15 @@ fn install_wat(s: &mut Session, src: &str) -> Value {
     install(s, &wat::parse_str(src).unwrap())
 }
 
+/// A session started to take `grant` and `allowHeavy` from requests, as most tests here install.
 fn session() -> Session {
+    let mut s = strict_session();
+    s.allow_plugin_grants_from_requests();
+    s
+}
+
+/// A session as MCP and the CLI have by default: `grant` and `allowHeavy` need an approval.
+fn strict_session() -> Session {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 400, "height": 200})).unwrap();
     s
@@ -2540,6 +2548,132 @@ fn a_level_2_filter_installs_with_progress_granted_and_reports_to_the_caller() {
     assert!(matches!(cancelled, Err(EngineError::Cancelled)), "{cancelled:?}");
     assert_eq!(shown.counts(), (0, 1000));
     run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// An approval of the module `wasm` with id `id`, its `permissions` and, if `heavy`, its budget.
+fn approval(id: &str, wasm: &[u8], permissions: &[&str], heavy: bool) -> crate::cmd::plugin::InstallApproval {
+    crate::cmd::plugin::InstallApproval {
+        id: id.into(),
+        hash: vectorcraft_plugins::permissions::sha256_hex(wasm),
+        permissions: permissions.iter().map(|p| p.to_string()).collect(),
+        heavy,
+    }
+}
+
+/// In a session that wasn't started to accept them, `grant` and `allowHeavy` are refused whichever
+/// way the command runs, a batch included, until an approval covers the module, its id, SHA-256 and
+/// permissions. An approval is spent by the first install, whatever it does. A hash already approved
+/// still installs.
+#[test]
+fn a_request_cannot_grant_what_only_a_person_approves() {
+    let mut s = strict_session();
+    let id = "test.engine.approval";
+    let wasm = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+    let data = vectorcraft_format::base64_encode(&wasm);
+    let refused = "take effect only in a session started with --allow-plugin-grants";
+    let e = s.execute("plugin.install", &json!({"dataBase64": data, "grant": ["doc.read"]})).unwrap_err().to_string();
+    assert!(e.contains(refused), "{e}");
+    let e = s.execute("plugin.install", &json!({"dataBase64": data})).unwrap_err().to_string();
+    assert!(e.contains("approve them in the desktop app") && e.contains("--allow-plugin-grants"), "{e}");
+    let batch = json!({"commands": [{"command": "plugin.install", "params": {"dataBase64": data, "grant": ["doc.read"]}}]});
+    let e = s.execute("command.batch", &batch).unwrap_err().to_string();
+    assert!(e.contains(refused), "a batch can't grant: {e}");
+    assert!(vectorcraft_plugins::registry::get(id).is_none());
+
+    // Approved for other bytes, for another id or for other permissions: refused, and spent.
+    let other = asking(id, r#"["doc.read"]"#, &json!({"objects": [{"name": "x"}]}));
+    for wrong in [
+        approval(id, &other, &["doc.read"], false),
+        approval("test.engine.approval.other", &wasm, &["doc.read"], false),
+        approval(id, &wasm, &["doc.read", "state"], false),
+    ] {
+        s.approve_plugin_install(wrong);
+        let e = s.execute("plugin.install", &json!({"dataBase64": data, "grant": ["doc.read"]})).unwrap_err().to_string();
+        assert!(e.contains(refused), "{e}");
+    }
+    assert!(vectorcraft_plugins::registry::get(id).is_none());
+
+    // The approval for this module installs it once.
+    s.approve_plugin_install(approval(id, &wasm, &["doc.read"], false));
+    run(&mut s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read"]}));
+    assert_eq!(vectorcraft_plugins::registry::granted(id).map(|g| g.hash), Some(vectorcraft_plugins::permissions::sha256_hex(&wasm)));
+    let e = s.execute("plugin.install", &json!({"dataBase64": data, "grant": ["doc.read"]})).unwrap_err().to_string();
+    assert!(e.contains(refused), "the approval was spent: {e}");
+    // A hash already approved installs without one.
+    run(&mut s, "plugin.install", json!({"dataBase64": data}));
+    run(&mut s, "plugin.remove", json!({"id": id}));
+
+    // A refused install spends the approval too.
+    s.approve_plugin_install(approval(id, &wasm, &["doc.read"], false));
+    let e = s.execute("plugin.install", &json!({"dataBase64": data, "grant": ["doc.read"], "hash": "0"})).unwrap_err().to_string();
+    assert!(e.contains("SHA-256"), "{e}");
+    let e = s.execute("plugin.install", &json!({"dataBase64": data, "grant": ["doc.read"]})).unwrap_err().to_string();
+    assert!(e.contains(refused), "{e}");
+    // So does one refused for its params.
+    s.approve_plugin_install(approval(id, &wasm, &["doc.read"], false));
+    s.execute("plugin.install", &json!({"dataBase64": data, "grant": "doc.read"})).unwrap_err();
+    let e = s.execute("plugin.install", &json!({"dataBase64": data, "grant": ["doc.read"]})).unwrap_err().to_string();
+    assert!(e.contains(refused), "{e}");
+
+    // The heavy budget needs its own agreement.
+    let heavy_id = "test.engine.approval.heavy";
+    let heavy_wasm = heavy(heavy_id, 1);
+    let heavy_data = vectorcraft_format::base64_encode(&heavy_wasm);
+    let e = s.execute("plugin.install", &json!({"dataBase64": heavy_data, "allowHeavy": true})).unwrap_err().to_string();
+    assert!(e.contains(refused), "{e}");
+    // Without a `permissions` list it has the ones its kind implies.
+    let inspected = run(&mut s, "plugin.inspect", json!({"dataBase64": heavy_data}));
+    let implied: Vec<&str> = inspected["permissions"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+    s.approve_plugin_install(approval(heavy_id, &heavy_wasm, &implied, false));
+    let e = s.execute("plugin.install", &json!({"dataBase64": heavy_data, "allowHeavy": true})).unwrap_err().to_string();
+    assert!(e.contains(refused), "an approval without the heavy budget doesn't cover it: {e}");
+    let e = s.execute("plugin.install", &json!({"dataBase64": heavy_data})).unwrap_err().to_string();
+    assert!(e.contains("approve it in the desktop app"), "{e}");
+    s.approve_plugin_install(approval(heavy_id, &heavy_wasm, &implied, true));
+    run(&mut s, "plugin.install", json!({"dataBase64": heavy_data, "allowHeavy": true}));
+    run(&mut s, "plugin.remove", json!({"id": heavy_id}));
+
+    // A session started to accept them takes them from requests.
+    s.allow_plugin_grants_from_requests();
+    run(&mut s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read"]}));
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// A module a person approved in the desktop app, recorded in the store's `grants.json`, installs
+/// from another session with that store and no flag and no `grant`. Other bytes under its id are
+/// refused there, with or without `grant`.
+#[test]
+fn a_module_approved_in_the_app_installs_from_a_strict_session_with_its_store() {
+    let folder = crate::tests_links::Folder::new("plugin-approval-store");
+    let id = "test.engine.approval.store";
+    let wasm = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+    let data = vectorcraft_format::base64_encode(&wasm);
+    let mut desktop = strict_session();
+    desktop.attach_plugin_store(folder.0.clone());
+    desktop.approve_plugin_install(approval(id, &wasm, &["doc.read"], false));
+    run(&mut desktop, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read"]}));
+    assert!(std::fs::read_to_string(folder.0.join("grants.json")).unwrap().contains(id), "recorded in the store");
+
+    // Another process starts with an empty registry and the store's grants.
+    let forget = || {
+        vectorcraft_plugins::registry::remove(id);
+        vectorcraft_plugins::registry::revoke(id);
+    };
+    forget();
+    let mut headless = strict_session();
+    headless.attach_plugin_store(folder.0.clone());
+    forget();
+    run(&mut headless, "plugin.install", json!({"dataBase64": data}));
+    assert_eq!(vectorcraft_plugins::registry::get(id).map(|p| p.hash().to_string()), Some(vectorcraft_plugins::permissions::sha256_hex(&wasm)));
+
+    let other = asking(id, r#"["doc.read"]"#, &json!({"objects": [{"name": "x"}]}));
+    let other_data = vectorcraft_format::base64_encode(&other);
+    let e = headless.execute("plugin.install", &json!({"dataBase64": other_data, "replace": true})).unwrap_err().to_string();
+    assert!(e.contains("approve them in the desktop app"), "{e}");
+    let e = headless.execute("plugin.install", &json!({"dataBase64": other_data, "replace": true, "grant": ["doc.read"]})).unwrap_err().to_string();
+    assert!(e.contains("take effect only in a session started with --allow-plugin-grants"), "{e}");
+    assert_eq!(vectorcraft_plugins::registry::get(id).map(|p| p.hash().to_string()), Some(vectorcraft_plugins::permissions::sha256_hex(&wasm)));
+    run(&mut headless, "plugin.remove", json!({"id": id}));
 }
 
 /// A filter run the caller cancels (MCP's `notifications/cancelled`, the app's Cancel) stops between

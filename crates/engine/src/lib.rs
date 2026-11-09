@@ -161,6 +161,12 @@ pub struct Session {
     /// A filter's output that a run made in the background handed in for `plugin.run` to apply
     /// ([`cmd::plugin::FilterRun::hand_in`]); the next `plugin.run` takes it.
     plugin_output: Option<cmd::plugin::HandedIn>,
+    /// What a person approved for the next `plugin.install` ([`Session::approve_plugin_install`]);
+    /// that install spends it, whatever it does.
+    plugin_install_approval: Option<cmd::plugin::InstallApproval>,
+    /// `plugin.install` takes `grant` and `allowHeavy` from any request
+    /// ([`Session::allow_plugin_grants_from_requests`]).
+    plugin_grants_from_requests: bool,
     /// URLs recently given in the Attributes panel (`attributes.set {url}`), newest first; not saved.
     pub recent_urls: Vec<String>,
     /// The saved tracing presets' revision and latest changes ([`Session::trace_presets_revision`]).
