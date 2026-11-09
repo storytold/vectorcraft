@@ -94,9 +94,7 @@ pub(crate) fn edit_part(s: &mut Session, id: NodeId, path: &[u32], label: &str, 
 /// or type while an object of a symbol instance's art is selected ([`selected_part`]), and of
 /// selecting any other object of the art.
 pub(crate) fn part_only() -> EngineError {
-    EngineError::Other(
-        "Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change".into(),
-    )
+    EngineError::Other("Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change".into())
 }
 
 pub(super) fn symbol_instance_select_part(s: &mut Session, p: &Value) -> Result<Value> {

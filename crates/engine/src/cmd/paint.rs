@@ -985,7 +985,7 @@ fn transparency(s: &mut Session, p: &Value) -> Result<Value> {
         let blend = match p.get("blend") {
             None => None,
             Some(Value::Null) => Some(None),
-                Some(b) => {
+            Some(b) => {
                 let name = b.as_str().ok_or_else(|| bad(C, "blend must be a mode name"))?;
                 Some(Some(BlendMode::parse(name).ok_or_else(|| bad(C, format!("unknown blend mode {b}")))?))
             }
