@@ -15,7 +15,7 @@
 
 **Stage: alpha** · next: beta, ~13 points (ready for real work ~62% → ~75%, and reliable `.ai` exchange) and ~170–270 h away
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-09 · **Change:** minor (Symbols area ~87% → ~88%: dynamic instance parts take opacity, blend, gradient and pattern on the canvas; G5 docs sync for Overlap and Pattern auto corners; previously minor: Tools stays beside the canvas with left-side panels; Hindi catalog draft complete under the translation tests; contributor loanword terminology reviewed; wider proofreading welcome; Compound Shapes add-on, beyond Illustrator; scores and estimates unchanged; Contour add-on, beyond Illustrator; scores and estimates unchanged; new gradients follow document color mode; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-10 · **Change:** minor (Raster effects 85% → 88%, gallery thumbnails and in-dialog preview in; headline numbers unchanged; Symbols area ~87% → ~88%: dynamic instance parts take opacity, blend, gradient and pattern on the canvas; G5 docs sync for Overlap and Pattern auto corners; previously minor: Tools stays beside the canvas with left-side panels; Hindi catalog draft complete under the translation tests; contributor loanword terminology reviewed; wider proofreading welcome; Compound Shapes add-on, beyond Illustrator; scores and estimates unchanged; Contour add-on, beyond Illustrator; scores and estimates unchanged; new gradients follow document color mode; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 VectorCraft is a clean-room, open-source, pure-Rust reimplementation of the Adobe Illustrator workflow. It runs
 on macOS, Windows, Linux, FreeBSD and the web (WASM), and agents can drive all of it over MCP, the CLI and a JSON
@@ -83,7 +83,7 @@ The dimension hours overlap (feature rows hold some UI, format and AI work), so 
 | Strokes, brushes, width profiles | 88% | 8–15 |
 | Appearance, transparency, graphic styles, masks | 97% | 1–2 |
 | Live vector effects | 85% | 4–8 |
-| Raster effects (Effect Gallery) — [effects-parity.md](docs/effects-parity.md) | 85% | 1–2 |
+| Raster effects (Effect Gallery) — [effects-parity.md](docs/effects-parity.md) | 88% | — |
 | 3D and Materials | ~25% | 30–55 |
 | Type core — [type-parity.md](docs/type-parity.md) | 80% | 14–19 |
 | Type advanced (CJK, spelling, Touch Type) | 50% | 20–28 |
@@ -131,8 +131,7 @@ Ranked; detail in [docs/roadmap.md](docs/roadmap.md) and [docs/gaps.md](docs/gap
 2. **`.ai` files from real users** (G9): layer structure, guides, speed: 10–20 h.
 3. **Launch and stability on real machines** (G10): 20–35 h.
 4. **Core-tool correctness** (G11: Shape Builder regions, Asset Export borders): 8–15 h.
-5. **Raster effects** (G2) alongside: the Effect Gallery's filter thumbnails and in-dialog preview area (the gallery and every Photoshop-style filter are in), 1–2 h.
-6. **Then:** type core and advanced type (G4), the Illustrator 2026 additions (G13), 3D (G3).
+5. **Then:** type core and advanced type (G4), the Illustrator 2026 additions (G13), 3D (G3). The Effect Gallery's filter thumbnails and in-dialog preview are in (G2).
 
 ## Progress log
 
@@ -226,6 +225,7 @@ The full earlier record of what landed is kept in [docs/roadmap.md](docs/roadmap
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-10 | minor | Raster effects: Effect Gallery thumbnails and an in-dialog preview (an original drawing through each filter). Features-table Raster effects 85% → 88%, hours 1–2 → none. Headline numbers unchanged, so the progress log is unchanged. |
 | 2026-11-02 | minor | Selection QoL: saved marquee modes, screen drag direction with a 3 px dead zone, and translated mode/E feedback (#5313); VectorCraft addition, scores and estimates unchanged. |
 | 2026-11-06 | minor | Hindi (`hi`): 7,877-row machine-assisted catalog, zero/one singular plurals, desktop font fallback and optional Devanagari craft-fonts fallback; all 55 translation tests pass; native review and a web font remain; scores and estimates unchanged |
 | 2026-11-05 | minor | Progress log row for the Type Tools add-on's Release Type on a Path (#5532); headline numbers unchanged. |

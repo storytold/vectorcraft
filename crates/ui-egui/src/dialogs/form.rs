@@ -966,6 +966,19 @@ fn rail_ends_w(ui: &mut egui::Ui, width: f32, (left, right): (&str, &str)) {
 /// The field where [`preview`] keeps the parameters it last previewed.
 pub(super) const PREVIEWED: &str = "__previewed";
 
+/// The field holding why the dialog's command last refused its values, for the dialog to show.
+pub(super) const REFUSED: &str = "__refused";
+
+/// Keeps why the command refused the dialog's values in [`REFUSED`]: a refused value's message is
+/// written for the user, so it goes without the command's id that the error's text puts before it.
+pub(super) fn note_refusal(d: &mut Dialog, e: &vectorcraft_engine::EngineError) {
+    let why = match e {
+        vectorcraft_engine::EngineError::BadParams { msg, .. } => msg.clone(),
+        other => other.to_string(),
+    };
+    d.fields.insert(REFUSED.into(), json!(why));
+}
+
 /// The Preview checkbox of a dialog that previews `cmd` on the canvas: while it is on, `params` run
 /// again on the interaction's snapshot whenever they differ from the last preview (whether a widget
 /// or `ui.dialog.set` changed them); turning it off rolls back.
@@ -1022,8 +1035,14 @@ pub(super) fn preview_now(app: &mut crate::VectorcraftApp, d: &mut Dialog, label
     if d.fields.get(PREVIEWED) != Some(&params) || !app.session.in_interaction() {
         let _ = app.session.begin_interaction(label);
         match app.session.preview(cmd, &params) {
-            Ok(r) => result = Some(r),
-            Err(e) => app.status(e.to_string()),
+            Ok(r) => {
+                d.fields.remove(REFUSED);
+                result = Some(r);
+            }
+            Err(e) => {
+                note_refusal(d, &e);
+                app.status(e.to_string());
+            }
         }
         d.fields.insert(PREVIEWED.into(), params);
     }
