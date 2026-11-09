@@ -188,9 +188,30 @@ fn word_param(p: &Value, key: &str, command: &str) -> Result<String> {
         .ok_or_else(|| bad(command, format!("`{key}` must be one word of at most {} characters", craft_proof::MAX_CUSTOM_WORD_CHARS)))
 }
 
-/// Write the custom dictionary to its file when the session has one, leaving out `removed`.
+/// Largest custom dictionary file taken in, in bytes: craft-proof reads no more of one (its
+/// `MAX_CUSTOM_FILE_BYTES`), so a larger file would lose its other words when written back.
+pub const MAX_DICTIONARY_FILE_BYTES: u64 = 1_000_000;
+
+/// Whether the custom dictionary file at `path` can be written over without losing words: it is
+/// missing (a first save creates it), or a file that can be read whole. Otherwise why not.
+fn dictionary_file_readable(path: &std::path::Path) -> std::result::Result<(), String> {
+    match std::fs::metadata(path) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e.to_string()),
+        Ok(m) if !m.is_file() => Err("it isn't a file".into()),
+        Ok(m) if m.len() > MAX_DICTIONARY_FILE_BYTES => Err(format!("it is larger than {MAX_DICTIONARY_FILE_BYTES} bytes")),
+        Ok(_) => std::fs::File::open(path).map(drop).map_err(|e| e.to_string()),
+    }
+}
+
+/// Write the custom dictionary to its file when the session has one, leaving out `removed`. A file
+/// that is there but can't be read whole is left alone rather than written over with only the
+/// words read. On an error the caller takes its own change back, so memory and file agree.
 fn save_dictionary(s: &Session, removed: &[String], command: &str) -> Result<()> {
     let Some(path) = &s.dictionary_file else { return Ok(()) };
+    if let Err(why) = dictionary_file_readable(path) {
+        return Err(bad(command, format!("the custom dictionary {} can't be read ({why}), so it is left as it is", path.display())));
+    }
     craft_proof::save_user_dictionary(path, removed)
         .map_err(|e| bad(command, format!("the custom dictionary couldn't be saved to {}: {e}", path.display())))
 }
@@ -206,7 +227,12 @@ fn add_word(s: &mut Session, p: &Value) -> Result<Value> {
     let word = word_param(p, "word", C)?;
     let added = !craft_proof::user_dictionary().contains(&word);
     craft_proof::add_word(&word);
-    save_dictionary(s, &[], C)?;
+    save_dictionary(s, &[], C).inspect_err(|_| {
+        // Only this command's word: words the save took in from the file stay.
+        if added {
+            craft_proof::remove_word(&word);
+        }
+    })?;
     Ok(json!({ "word": word, "added": added }))
 }
 
@@ -217,7 +243,7 @@ fn remove_word(s: &mut Session, p: &Value) -> Result<Value> {
     if !craft_proof::remove_word(&word) {
         return Err(bad(C, format!("`{word}` isn't in the custom dictionary")));
     }
-    save_dictionary(s, std::slice::from_ref(&word), C)?;
+    save_dictionary(s, std::slice::from_ref(&word), C).inspect_err(|_| craft_proof::add_word(&word))?;
     Ok(json!({ "word": word }))
 }
 
@@ -229,14 +255,19 @@ fn change_word(s: &mut Session, p: &Value) -> Result<Value> {
     if !craft_proof::user_dictionary().contains(&word) {
         return Err(bad(C, format!("`{word}` isn't in the custom dictionary")));
     }
-    let removed = if word == to {
-        vec![]
-    } else {
-        craft_proof::remove_word(&word);
-        craft_proof::add_word(&to);
-        vec![word]
-    };
-    save_dictionary(s, &removed, C)?;
+    if word == to {
+        save_dictionary(s, &[], C)?;
+        return Ok(json!({ "word": to }));
+    }
+    let to_is_new = !craft_proof::user_dictionary().contains(&to);
+    craft_proof::remove_word(&word);
+    craft_proof::add_word(&to);
+    save_dictionary(s, std::slice::from_ref(&word), C).inspect_err(|_| {
+        if to_is_new {
+            craft_proof::remove_word(&to);
+        }
+        craft_proof::add_word(&word);
+    })?;
     Ok(json!({ "word": to }))
 }
 
@@ -252,10 +283,16 @@ fn ignore_all(s: &mut Session, p: &Value) -> Result<Value> {
 
 impl Session {
     /// Keep the custom dictionary in the file at `path` (the desktop app's, beside its
-    /// preferences), and take in the words already there. A missing or unreadable file reads as
-    /// no words; a hostile one is capped by craft-proof.
+    /// preferences), and take in the words already there. A missing file reads as no words and is
+    /// created by the first save. A file that is there but can't be read whole is logged and left
+    /// as it is: changes to the dictionary are refused rather than written over it.
     pub fn attach_custom_dictionary(&mut self, path: std::path::PathBuf) {
-        craft_proof::load_user_dictionary(&path);
+        match dictionary_file_readable(&path) {
+            Ok(()) => {
+                craft_proof::load_user_dictionary(&path);
+            }
+            Err(why) => log::warn!("not reading the custom dictionary {}: {why}; it is left as it is", path.display()),
+        }
         self.dictionary_file = Some(path);
     }
 }

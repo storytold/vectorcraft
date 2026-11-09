@@ -3,6 +3,7 @@
 
 use serde_json::{Value, json};
 
+use crate::cmd::spelling::MAX_DICTIONARY_FILE_BYTES;
 use crate::*;
 
 /// A session with a new 400 × 400 document.
@@ -200,4 +201,46 @@ fn custom_dictionary_commands_refuse_what_isnt_one_word() {
     let mut empty = Session::new();
     assert!(empty.execute("text.spelling.ignoreAll", &json!({"word": "qzx"})).is_err(), "Ignore All needs a document");
     assert!(empty.execute("text.spelling.dictionary", &json!({})).is_ok(), "the dictionary is the app's");
+}
+
+/// Whether the custom dictionary holds `word`.
+fn in_dictionary(s: &mut Session, word: &str) -> bool {
+    run(s, "text.spelling.dictionary", json!({}))["words"].as_array().unwrap().contains(&json!(word))
+}
+
+#[test]
+fn a_dictionary_file_that_cant_be_read_whole_is_never_written_over() {
+    let dir = vectorcraft_testkit::temp_dir("spelling-unreadable");
+    // A folder where the file should be can't be read as one; a file past what craft-proof reads
+    // would lose its other words if written back.
+    let folder = dir.join("Custom Dictionary.txt");
+    std::fs::create_dir_all(&folder).unwrap();
+    let big = dir.join("big.txt");
+    let words = "qkzvxw\n".repeat((MAX_DICTIONARY_FILE_BYTES / 7 + 2) as usize);
+    std::fs::write(&big, &words).unwrap();
+    for path in [folder.clone(), big.clone()] {
+        let mut s = session();
+        s.attach_custom_dictionary(path.clone());
+        let e = s.execute("text.spelling.addWord", &json!({"word": "zkqvxw"})).unwrap_err().to_string();
+        assert!(e.contains("can't be read"), "{}: {e}", path.display());
+        assert!(!in_dictionary(&mut s, "zkqvxw"), "the refused word isn't kept either");
+    }
+    assert!(folder.is_dir());
+    assert_eq!(std::fs::read_to_string(&big).unwrap(), words, "the large file is as it was");
+}
+
+#[test]
+fn a_change_that_cant_be_saved_is_taken_back() {
+    let mut s = session();
+    run(&mut s, "text.spelling.addWord", json!({"word": "wkqzvx"}));
+    let dir = vectorcraft_testkit::temp_dir("spelling-rollback");
+    let folder = dir.join("Custom Dictionary.txt");
+    std::fs::create_dir_all(&folder).unwrap();
+    let mut failing = session();
+    failing.attach_custom_dictionary(folder);
+    assert!(failing.execute("text.spelling.removeWord", &json!({"word": "wkqzvx"})).is_err());
+    assert!(in_dictionary(&mut s, "wkqzvx"), "a delete that wasn't saved leaves the word");
+    assert!(failing.execute("text.spelling.changeWord", &json!({"word": "wkqzvx", "to": "wkqzvy"})).is_err());
+    assert!(in_dictionary(&mut s, "wkqzvx") && !in_dictionary(&mut s, "wkqzvy"), "a change that wasn't saved leaves the old word");
+    run(&mut s, "text.spelling.removeWord", json!({"word": "wkqzvx"}));
 }
