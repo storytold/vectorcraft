@@ -455,6 +455,7 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             Ok(Value::Null)
         }
         "window.control" => flag(&mut app.ui.control_bar),
+        "window.helpBar" => flag(&mut app.ui.help_bar),
         // The Control bar's panel menu and gripper: the edge of the window the bar docks to.
         "window.control.dock" => {
             let key = "edge";

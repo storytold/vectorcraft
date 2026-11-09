@@ -1182,6 +1182,13 @@ pub(crate) struct StyleRead {
     pub simple: bool,
     /// It has Effect › Pathfinder effects, which only a group with no fills or strokes is read with.
     pub pathfinder: bool,
+    /// The opacity, blending mode, isolation and knockout its blend filter gives.
+    pub transparency: Option<(f32, BlendMode, bool, Knockout)>,
+}
+
+/// The names a style list section gives graphic styles, as the reader reads them.
+pub(crate) fn read_style_list(section: &[u8]) -> Vec<String> {
+    crate::import::ai::style::art_style_list(section).iter().map(|raw| obj::text(raw)).filter(|name| !name.is_empty()).collect()
 }
 
 /// Art style `name` of `section` as the reader reads it ([`StyleRead`]): [`appearance_from_art_style`],
@@ -1200,7 +1207,14 @@ pub(crate) fn read_art_style(section: &[u8], name: &str, own_gradient: Option<&P
         }
     }
     let appearance = appearance_from_art_style(&st)?;
-    Some(StyleRead { appearance, simple: st.simple, pathfinder: st.pathfinder })
+    Some(StyleRead { appearance, simple: st.simple, pathfinder: st.pathfinder, transparency: st.transparency })
+}
+
+/// Is art style `name` of `section` read on `object` as far as an effect that moves the outline
+/// goes: the style has none, or `object` is one [`moves_with`] reads it on, as [`styled`] checks?
+/// `false` when the section doesn't define it.
+pub(crate) fn style_moves_with(section: &[u8], name: &str, object: &Node) -> bool {
+    crate::import::ai::style::art_styles(section).remove(name).is_some_and(|st| !st.moves_outline() || moves_with(object, &st))
 }
 
 /// A style's stroke as an appearance item (`None` for a fill).
