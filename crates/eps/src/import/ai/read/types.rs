@@ -11,8 +11,8 @@ pub(super) const MAX_SUBREADERS: usize = 32;
 /// Most operands on the stack.
 pub(super) const MAX_STACK: usize = 1 << 20;
 
-/// Most objects read.
-pub(super) const MAX_NODES: usize = 4_000_000;
+/// Most objects read. The `.ai` editing data writer writes no more ([`crate::import::MAX_EDITING_OBJECTS`]).
+pub(crate) const MAX_NODES: usize = 4_000_000;
 
 /// The most objects all the blends of one import may lay out to be checked (each twice) and made
 /// live; past it, blends keep their drawn steps.
@@ -21,17 +21,18 @@ pub(super) const BLEND_BUDGET: usize = 50_000;
 /// Most points in one path.
 pub(super) const MAX_POINTS: usize = 4_000_000;
 
-/// Largest image read (pixels).
+/// Largest placed file's preview read (pixels).
 pub(super) const MAX_PIXELS: u64 = 1 << 25;
 /// Most placed files whose other placement ([`super::Structure::placed_elsewhere`]) is kept.
 pub(super) const MAX_PLACED_ELSEWHERE: usize = 4096;
 
-/// The note for an image past [`MAX_PIXELS`]: the file then opens from its PDF part, which reads
-/// larger images (#1479), unless that part can't be read either; then the image is left out.
-pub const IMAGE_TOO_LARGE: &str = "an image too large to read from the editing data was left out";
+/// The note for an image past the hard limits ([`super::raster::Limits`]) in a file without page
+/// art to replace it.
+pub(super) const IMAGE_TOO_LARGE: &str = "an image too large to read from the editing data was left out";
 
-/// Most hex digits of an image's samples read from comment lines (CMYK and alpha at the largest size).
-pub(super) const MAX_HEX: usize = (MAX_PIXELS as usize) * 10;
+/// What an image past the hard limits is, as the notes name it: with page art, its box becomes
+/// that art (#1479).
+pub(super) const LARGE_IMAGES: &str = "very large images";
 
 /// Largest side of the document and its artboards (points).
 pub(super) const MAX_SIDE: f64 = 1e6;
@@ -281,8 +282,12 @@ pub(super) struct Raster {
     /// `XI`'s operands when its samples follow as hex in comment lines (`%FF00…`) up to
     /// `%AI5_EndRaster`, the form the version 7 specification documents (§8).
     pub(super) operands: Option<Vec<V>>,
-    /// Those hex digits.
-    pub(super) hex: Vec<u8>,
+    /// The bytes of those hex digits, up to `max`.
+    pub(super) samples: Vec<u8>,
+    /// The bytes of samples the image reads (0 when it isn't read).
+    pub(super) max: usize,
+    /// A digit waiting for its pair.
+    pub(super) half: Option<u8>,
 }
 
 /// A placed file's operands, from `` ` `` and its preview, until `~`.

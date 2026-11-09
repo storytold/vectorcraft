@@ -8,9 +8,10 @@ use craft_pdf::syntax::Pdf;
 use craft_pdf::syntax::object::{Array, Name, Object, Stream};
 use serde_json::json;
 use vectorcraft_color::cms::{self, DEVICE_CMYK, GENERIC_CMYK, SRGB};
+use vectorcraft_color::{Color, Freeform, FreeformPoint, Gradient, GradientKind, GradientPaint, Paint};
 use vectorcraft_doc::cmyk::Inks;
-use vectorcraft_doc::{ColorMode, Document, ImageBlob, ImageObject, Node, NodeKind};
-use vectorcraft_geom::Affine;
+use vectorcraft_doc::{Appearance, ColorMode, Document, ImageBlob, ImageObject, Node, NodeKind};
+use vectorcraft_geom::{Affine, Point, Rect, shapes};
 
 use crate::*;
 
@@ -469,6 +470,75 @@ fn a_pixelated_cmyk_image_with_its_grid_mask_asks_viewers_not_to_smooth_it() {
         assert!(!text.contains("/S/Luminosity"), "the mask is the image's /SMask");
         assert_eq!(text.contains("/Interpolate"), !pixelated, "pixelated: {pixelated}");
     }
+}
+
+/// A 100 × 100 pt document of `mode` whose square has a freeform fill of `a` on the left and `b`
+/// on the right, with those points at `opacity`.
+fn freeform_doc(mode: ColorMode, a: Color, b: Color, opacity: f32) -> Document {
+    let p = |x, c| FreeformPoint { opacity, ..FreeformPoint::new(Point::new(x, 50.0), c) };
+    let mut g = GradientPaint::new(Gradient { kind: GradientKind::Freeform, ..Default::default() });
+    g.freeform = Some(Freeform { points: vec![p(20.0, a), p(80.0, b)], ..Default::default() });
+    let mut d = Document::new_with_mode(100.0, 100.0, mode);
+    let square = Node::path(
+        d.alloc_id(),
+        shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)),
+        Appearance::basic(Paint::Gradient(Box::new(g)), Paint::None, 0.0),
+    );
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, square).unwrap();
+    d
+}
+
+#[test]
+fn freeform_gradients_of_cmyk_points_are_written_as_cmyk_images() {
+    let (cyan, black) = (Color::cmyk(1.0, 0.0, 0.0, 0.0), Color::cmyk(0.0, 0.0, 0.0, 1.0));
+    for mode in [ColorMode::Cmyk, ColorMode::Rgb] {
+        let d = freeform_doc(mode, cyan, black, 1.0);
+        let out = export_with_report(&d, &opts(json!({}))).unwrap();
+        let w = written(&out.bytes);
+        assert_eq!(w.len(), 1, "{mode:?}: opaque, no soft mask: {w:?}");
+        assert_eq!(w[0].space, "DeviceCMYK", "{mode:?}");
+        let back = import(&out.bytes).unwrap();
+        let inks = all_images(&back)[0].cmyk().unwrap();
+        let at = (inks.height as usize / 2 * inks.width as usize + inks.width as usize / 2) * 4;
+        assert!(close(&inks.data[at..at + 4], &[128, 0, 0, 128], 6), "{mode:?}: {:?}", &inks.data[at..at + 4]);
+    }
+    // Opacity goes in a soft mask, and the inks stay.
+    let w = written(&export_with_report(&freeform_doc(ColorMode::Cmyk, cyan, black, 0.5), &opts(json!({}))).unwrap().bytes);
+    assert_eq!(w.len(), 2, "the image and its soft mask: {w:?}");
+    assert!(w.iter().any(|i| i.space == "DeviceCMYK") && w.iter().any(|i| i.space == "DeviceGray"), "{w:?}");
+    // The Output settings convert the inks like any CMYK image's.
+    let d = freeform_doc(ColorMode::Cmyk, cyan, black, 1.0);
+    let w = written(&export_with_report(&d, &opts(json!({"output": {"conversion": "destination", "destination": SRGB}}))).unwrap().bytes);
+    assert_eq!(w.len(), 1, "{w:?}");
+    assert_ne!(w[0].space, "DeviceCMYK", "converted to RGB");
+}
+
+#[test]
+fn freeform_gradients_of_lab_points_are_written_as_their_lab_mix() {
+    let d = freeform_doc(ColorMode::Rgb, Color::lab(90.0, -60.0, 40.0), Color::lab(30.0, 60.0, -40.0), 1.0);
+    let out = export_with_report(&d, &opts(json!({}))).unwrap();
+    assert_eq!(written(&out.bytes)[0].space, "DeviceRGB");
+    let back = import(&out.bytes).unwrap();
+    let px = image::load_from_memory(&all_images(&back)[0].bytes).unwrap().to_rgba8();
+    let got = px.get_pixel(px.width() / 2, px.height() / 2).0;
+    let want = Color::lab(60.0, 0.0, 0.0).to_rgba8(1.0);
+    assert!(close(&got, &want, 6), "{got:?} vs {want:?}");
+}
+
+#[test]
+fn gray_freeform_points_are_written_as_black_ink_in_a_cmyk_document() {
+    let (a, b) = (Color::gray(0.2), Color::gray(0.8));
+    let out = export_with_report(&freeform_doc(ColorMode::Cmyk, a, b, 1.0), &opts(json!({}))).unwrap();
+    let w = written(&out.bytes);
+    assert_eq!(w[0].space, "DeviceCMYK", "{w:?}");
+    let back = import(&out.bytes).unwrap();
+    let inks = all_images(&back)[0].cmyk().unwrap();
+    let at = (inks.height as usize / 2 * inks.width as usize + inks.width as usize / 2) * 4;
+    assert!(close(&inks.data[at..at + 4], &[0, 0, 0, 128], 6), "{:?}", &inks.data[at..at + 4]);
+    // An RGB document writes them as an image in RGB.
+    let w = written(&export_with_report(&freeform_doc(ColorMode::Rgb, a, b, 1.0), &opts(json!({}))).unwrap().bytes);
+    assert_ne!(w[0].space, "DeviceCMYK", "{w:?}");
 }
 
 /// #2950: Press Quality converts to the document's profile with its numbers kept, so in a CMYK

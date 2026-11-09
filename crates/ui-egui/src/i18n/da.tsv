@@ -299,6 +299,13 @@
 	Apply Bullets	Anvend kugletegn
 	Numbered List	Nummereret liste
 	Apply Numbers	Anvend nummerering
+	Bullets and Numbering…	Kugletegn og nummerering…
+	Numbers	Tal
+	Level:	Niveau:
+	Bullet Character:	Kugletegn:
+	Number Style:	Talformat:
+	Left Indent:	Venstre indrykning:
+	First Line Indent:	Indrykning af første linje:
 	Convert to Text	Konvertér til tekst
 	Filled Dot	Udfyldt prik
 	Dash	Tankestreg
@@ -426,6 +433,17 @@
 	Inflate	Pust op
 	Select objects, then pick an object type to give them a 3D effect.	Markér objekter, og vælg derefter en objekttype for at give dem en 3D-effekt.
 	Extrude & Bevel…	Ekstrudér og facet…
+	3D (Classic)	3D (klassisk)
+	Extrude & Bevel (Classic)…	Ekstrudér og facet (klassisk)…
+	Surface	Overflade
+	Wireframe	Trådmodel
+	No Shading	Ingen skyggelægning
+	Plastic	Plastik
+	Highlight Intensity	Højlysintensitet
+	Highlight Size	Højlysstørrelse
+	Blend Steps	Overgangstrin
+	Shading Color	Skyggefarve
+	Draw Hidden Faces	Tegn skjulte flader
 	Revolve…	Omdrej…
 	Inflate…	Pust op…
 	Materials…	Materialer…
@@ -636,6 +654,11 @@
 	Color	Farve
 	Color Guide	Farveguide
 	Color Themes	Farvetemaer
+	Color Wheel	Farvehjul
+	Hue ring	Ring for farvetone
+	Saturation and brightness	Mætning og lysstyrke
+	Color field	Farvefelt
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	CSS Properties	CSS-egenskaber
 	Document Info	Dokumentoplysninger
 	Flattener Preview	Udjævningsforhåndsvisning
@@ -1435,6 +1458,15 @@ digits	Malayalam	Malayalam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Indstillinger for Tate-chu-yoko…
 	Tate-chu-yoko Settings	Indstillinger for Tate-chu-yoko
+	Composite Fonts…	Sammensatte skrifttyper…
+	Composite Fonts	Sammensatte skrifttyper
+	Export Composite Fonts	Eksportér sammensatte skrifttyper
+	Import Composite Fonts	Importér sammensatte skrifttyper
+	Delete Font	Slet skrifttype
+	Kanji	Kanji
+	Kana	Kana
+	Numerals	Tal
+	Scale at Center	Skalér fra midten
 	Up/Down:	Op/ned:
 	Left/Right:	Venstre/højre:
 	Underline	Understreget
@@ -1711,6 +1743,10 @@ digits	Malayalam	Malayalam
 	Stylistic	Stilistisk
 	Mojikumi Set	Mojikumi-sæt
 	Kinsoku Set	Kinsoku-sæt
+	Kinsoku Shori Type	Kinsoku Shori-type
+	Push In First	Skub ind først
+	Push Out First	Skub ud først
+	Push Out Only	Kun skub ud
 	Hard	Hård
 	Right Indent	Højre indrykning
 	Right-to-Left Paragraph Direction	Afsnitsretning fra højre mod venstre
@@ -2471,6 +2507,7 @@ digits	Malayalam	Malayalam
 	Tile Range:	Fliseinterval:
 	tile {number}	flise {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Fliser nummereres på tværs og derefter nedad; lad intervallet stå tomt for alle fliser.
+	Copies per Sheet (as many as fit, in a grid)	Kopier pr. ark (så mange der er plads til, i et gitter)
 	Transverse (the page a quarter turn on the paper)	På tværs (siden drejes en kvart omgang på papiret)
 	Unprintable margin:	Ikke-udskrivbar margen:
 	{pages} in all, {count} per copy	{pages} i alt, {count} pr. kopi
@@ -2541,6 +2578,10 @@ digits	Malayalam	Malayalam
 	< 1 sec	< 1 sek
 	[Unnamed]	[Unavngiven]
 	Amount:	Mængde:
+	Anti-aliasing Method	Antialiaseringsmetode
+antiAlias	Sharp	Skarp
+	Crisp	Klar
+	Strong	Kraftig
 	Anti-aliasing:	Antialiasering:
 	Artboard:	Tegnebræt:
 	Color Table	Farvetabel
@@ -4095,6 +4136,7 @@ imageTrace	Outline	Kontur
 @msg	Split Into Grid: select paths large enough for the grid	Opdel i gitter: markér kurver, der er store nok til gitteret
 @msg	Targa files are RGB: colorModel rgb	Targa-filer er RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Tekstombrydning: markér et ombrydningsobjekt
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` skal være "none", "sharp", "crisp" eller "strong"
 @msg	`aspect` must be a number (%)	`aspect` skal være et tal (%)
 @msg	`at` must be [x, y]	`at` skal være [x, y]
 @msg	`color` must be a colour	`color` skal være en farve
@@ -4668,6 +4710,7 @@ imageTrace	Outline	Kontur
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	gradienten »{name}« er ikke defineret i filen: der bruges en flad farve i stedet
 @msg	an image VectorCraft can't read was left out	et billede, som VectorCraft ikke kan læse, blev udeladt
 @msg	an image whose data is cut short was left out	et billede, hvis data er afkortet, blev udeladt
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	et indlejret billede på {_1} × {_2} pixel blev formindsket til {_3} × {_4} pixel for at bevare lagene
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	linkede billeder viser den gemte forhåndsvisning i lav opløsning, indtil deres filer findes: link dem igen i Links-panelet
 @msg	linked type areas past VectorCraft's limits were left out	sammenkædede tekstområder ud over VectorCrafts grænser blev udeladt
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	tekst, der skifter skriveretning inde i et tekstobjekt, åbnes i retningen for sit første tegn
@@ -4703,6 +4746,7 @@ imageTrace	Outline	Kontur
 @msg	object ids are non-negative integers, not {v}	objekt-id'er er ikke-negative heltal, ikke {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} skal være et array af objekt-id'er, der er ikke-negative heltal
 @msg	invalid object id {value}: expected a non-negative integer	ugyldigt objekt-id {value}: et ikke-negativt heltal var forventet
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	element {index} i `{key}` er {value}, ikke et objekt-id (et ikke-negativt heltal)
 @msg	no such object id {value}	der findes intet objekt med id {value}
 @msg	automation filesystem access is not granted: read authority is absent: {path}	automatiseringens adgang til filsystemet er ikke tildelt: læserettighed mangler: {path}
 @msg	automation filesystem access is not granted: write authority is absent: {path}	automatiseringens adgang til filsystemet er ikke tildelt: skriverettighed mangler: {path}
@@ -5744,6 +5788,8 @@ axis	Y Axis	Y-akse
 	Install “{name}”, which asks for these permissions?	Installér »{name}«, som beder om disse rettigheder?
 	ID: {id}	ID: {id}
 	Version: {version}	Version: {version}
+	Install “{name}” in place of the plug-in with the same ID?	Installér »{name}« i stedet for det plug-in, der har samme id?
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Denne fil er ikke det plug-in, der før var installeret med dette id. Den får de indstillinger og den cache, der er gemt for dette id.
 	File SHA-256: {hash}	Filens SHA-256: {hash}
 	Read the objects it is given	Læse de objekter, den får
 	Change, add and delete objects in the document	Ændre, tilføje og slette objekter i dokumentet
@@ -5751,6 +5797,9 @@ axis	Y Axis	Y-akse
 	Change how the objects its effect is applied to are drawn	Ændre, hvordan de objekter, dens effekt er anvendt på, tegnes
 	Write the document as a file in its own format	Skrive dokumentet som en fil i sit eget format
 	Show its progress, see Cancel and write log lines	Vise sin fremdrift, se en annullering og skrive logrækker
+	Keep settings of its own	Gemme sine egne indstillinger
+	Keep a cache of its own, which you can clear	Gemme sin egen cache, som du kan rydde
+	Clear Plug-in Cache	Ryd plug-in-cache
 # Actions panel: action sets (#3712).
 	New Set…	Nyt sæt…
 	New Set	Nyt sæt
@@ -6257,6 +6306,16 @@ breakText	Glyphs	Glyffer
 @msg	path must be a list of child indices	path skal være en liste over underordnede indekser
 @msg	no object at path {shown} in the symbol's art	intet objekt ved stien {shown} i symbolets grafik
 @msg	give fill, stroke, opacity and/or blend	angiv fill, stroke, opacity og/eller blend
+@msg	{key} cannot be set on a guide	{key} kan ikke angives for en hjælpelinje
+@msg	{key} cannot be set on a blend	{key} kan ikke angives for en blanding
+@msg	{key} cannot be set on an envelope	{key} kan ikke angives for en kuvert
+@msg	{key} cannot be set on a gradient mesh	{key} kan ikke angives for et gradientnet
+@msg	{key} cannot be set on a Repeat	{key} kan ikke angives for en gentagelse
+@msg	{key} cannot be set on a placed document	{key} kan ikke angives for et placeret dokument
+@msg	{key} cannot be set on an Intertwine group	{key} kan ikke angives for en sammenflettet gruppe
+@msg	stroke cannot be set on a symbol instance	stroke kan ikke angives for en symbolforekomst
+@msg	fill on a symbol instance must be a solid color or none	fill på en symbolforekomst skal være en ensfarvet farve eller none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} kan ikke angives for et billede uden effekten Konvertér til form eller Objekt til kontur
 @msg	pass newName, registration, exportType, nineSlice and/or type	angiv newName, registration, exportType, nineSlice og/eller type
 	Text Flow	Tekstflow
 	By Rows	Efter rækker
@@ -6286,6 +6345,7 @@ breakText	Glyphs	Glyffer
 	Create Swatch Legend	Opret farveprøveforklaring
 	Create Swatch Legend…	Opret farveprøveforklaring…
 	HEX	HEX
+	Help Bar	Hjælpelinje
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	Tekstværktøjer
 	Text Tweaker…	Tekstjustering…
@@ -6351,6 +6411,11 @@ breakText	Glyphs	Glyffer
 # 3D Box add-on
 	3D Box	3D-boks
 	3D Box Tool	3D-boksværktøj
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Åbn med
+	No importer plug-ins installed	Ingen import-plug-ins installeret
+	Read files you open in its format and make documents from them	Læse filer, du åbner i dens format, og lave dokumenter ud fra dem
 
 # Safe Mode
 	Safe Mode…	Sikker tilstand…

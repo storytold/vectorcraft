@@ -69,6 +69,10 @@ digits	Malayalam	말라얄람어
 	Stylistic	스타일
 	Mojikumi Set	모지쿠미 세트
 	Kinsoku Set	긴소쿠 세트
+	Kinsoku Shori Type	긴소쿠 처리 유형
+	Push In First	밀어 넣기 우선
+	Push Out First	밀어내기 우선
+	Push Out Only	밀어내기만
 	Hard	강하게
 	Soft	약하게
 	Latin	라틴어
@@ -348,6 +352,13 @@ digits	Malayalam	말라얄람어
 	Apply Bullets	글머리 기호 적용
 	Numbered List	번호 매기기 목록
 	Apply Numbers	번호 매기기 적용
+	Bullets and Numbering…	글머리 기호 및 번호 매기기…
+	Numbers	번호
+	Level:	수준:
+	Bullet Character:	글머리 기호 문자:
+	Number Style:	번호 스타일:
+	Left Indent:	왼쪽 들여쓰기:
+	First Line Indent:	첫 줄 들여쓰기:
 	Convert to Text	텍스트로 변환
 	Filled Dot	채운 점
 	Dash	대시
@@ -492,6 +503,17 @@ digits	Malayalam	말라얄람어
 	Inflate	부풀리기
 	Select objects, then pick an object type to give them a 3D effect.	개체를 선택한 다음 개체 유형을 골라 3D 효과를 적용하십시오.
 	Extrude & Bevel…	돌출 및 경사…
+	3D (Classic)	3D(클래식)
+	Extrude & Bevel (Classic)…	돌출 및 경사(클래식)…
+	Surface	표면
+	Wireframe	와이어프레임
+	No Shading	셰이딩 없음
+	Plastic	플라스틱
+	Highlight Intensity	하이라이트 강도
+	Highlight Size	하이라이트 크기
+	Blend Steps	혼합 단계
+	Shading Color	셰이딩 색상
+	Draw Hidden Faces	숨겨진 면 그리기
 	Revolve…	회전체…
 	Inflate…	부풀리기…
 	Materials…	재질…
@@ -685,6 +707,11 @@ digits	Malayalam	말라얄람어
 	Color	색상
 	Color Guide	색상 가이드
 	Color Themes	색상 테마
+	Color Wheel	색상환
+	Hue ring	색조 링
+	Saturation and brightness	채도 및 밝기
+	Color field	색상 필드
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	CSS Properties	CSS 속성
 	Document Info	문서 정보
 	Flattener Preview	병합 미리 보기
@@ -976,6 +1003,10 @@ digits	Malayalam	말라얄람어
 	Anti-alias	안티 앨리어싱
 	Anti-alias Rasters	래스터 안티 앨리어싱
 	Anti-aliased Artwork	안티 앨리어싱 아트워크
+	Anti-aliasing Method	안티 앨리어싱 방식
+antiAlias	Sharp	날카롭게
+	Crisp	또렷하게
+	Strong	강하게
 	Anti-aliasing:	안티 앨리어싱:
 	Appearance Item	모양새 항목
 	Appearance Panel	모양새 패널
@@ -3242,6 +3273,8 @@ mark-style	Japanese	일본식
 	Tile Range:	타일 범위:
 	Tile Type:	타일 유형:
 	Tiles are numbered across, then down; leave the range empty for every tile.	타일은 가로로 먼저, 이어서 세로로 번호가 매겨집니다. 모든 타일을 지정하려면 범위를 비워 두십시오.
+	Copies per Sheet (as many as fit, in a grid)	용지당 여러 매 (들어가는 만큼 격자로 배치)
+	Gutter:	간격:
 	Toggle Fill/Stroke Focus	칠/선 포커스 전환
 	Toggle Selection	선택 전환
 	Toggle single/double column	한 줄/두 줄 전환
@@ -3811,6 +3844,15 @@ file-filter	Templates	템플릿
 	Tate-chu-yoko	다테추요코
 	Tate-chu-yoko Settings…	다테추요코 설정…
 	Tate-chu-yoko Settings	다테추요코 설정
+	Composite Fonts…	합성 글꼴…
+	Composite Fonts	합성 글꼴
+	Export Composite Fonts	합성 글꼴 내보내기
+	Import Composite Fonts	합성 글꼴 가져오기
+	Delete Font	글꼴 삭제
+	Kanji	한자
+	Kana	가나
+	Numerals	숫자
+	Scale at Center	중심에서 크기 조정
 	Up/Down:	위/아래:
 	Left/Right:	왼쪽/오른쪽:
 	Temperature	색온도
@@ -4193,6 +4235,7 @@ theme	Appearance	외관
 @msg	no point {i} (the gradient has {_1})	점 {i}이(가) 없습니다(그레이디언트의 점 수: {_1})
 @msg	no segment {segment} on line {line}	선 {line}에 세그먼트 {segment}이(가) 없습니다
 @msg	unknown freeform mode `{m}` (points, lines)	알 수 없는 자유형 모드 `{m}`(points, lines)
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias`는 "none", "sharp", "crisp" 또는 "strong"이어야 합니다
 @msg	`aspect` must be a number (%)	`aspect`는 숫자(%)여야 합니다
 @msg	`gradient` must be an object	`gradient`는 개체여야 합니다
 @msg	`groupColors` must be an array	`groupColors`는 배열이어야 합니다
@@ -4389,6 +4432,7 @@ theme	Appearance	외관
 @msg	an image VectorCraft can't read was left out	VectorCraft가 읽을 수 없는 이미지는 제외했습니다
 @msg	graphs come in as plain art, without their data or settings	그래프는 데이터와 설정 없이 일반 아트로 가져왔습니다
 @msg	an image whose data is cut short was left out	데이터가 잘린 이미지는 제외했습니다
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	레이어를 유지하기 위해 {_1} × {_2} 픽셀의 포함된 이미지를 {_3} × {_4} 픽셀로 줄였습니다
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	연결된 그림은 해당 파일을 찾을 때까지 파일에 저장된 저해상도 미리 보기로 표시됩니다: 링크 패널에서 다시 연결하세요
 @msg	linked type areas past VectorCraft's limits were left out	VectorCraft 한도를 넘는 연결된 문자 영역은 제외되었습니다
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	문자 개체 안에서 쓰기 방향이 바뀌는 문자는 첫 글자의 방향으로 열립니다
@@ -4586,6 +4630,13 @@ theme	Appearance	외관
 @msg	print settings are not an object	인쇄 설정이 개체가 아닙니다
 @msg	no colour group `{g}`	색상 그룹 `{g}`이(가) 없습니다
 @msg	select artwork (or a colour group) to recolor	리컬러할 아트웍(또는 색상 그룹)을 선택하세요
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	색상 재지정이 완료되었습니다. 변경되지 않음: {locked}, {hidden}
+@msg	Recolor completed; {objects} were left unchanged	색상 재지정이 완료되었습니다. 변경되지 않음: {objects}
+@msg	Recolor completed; {objects} was left unchanged	색상 재지정이 완료되었습니다. 변경되지 않음: {objects}
+@msg	1 locked object	잠긴 개체 1개
+@msg	{n} locked objects	잠긴 개체 {n}개
+@msg	1 hidden object	숨겨진 개체 1개
+@msg	{n} hidden objects	숨겨진 개체 {n}개
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	브라우저에서 미리 보기는 데스크톱 앱이 필요합니다(웹에서는 파일을 다운로드합니다)
 @msg	no file system here	여기에는 파일 시스템이 없습니다
 @msg	nothing to preview	미리 볼 항목이 없습니다
@@ -4807,6 +4858,7 @@ theme	Appearance	외관
 @msg	object ids are non-negative integers, not {v}	개체 id는 음이 아닌 정수여야 하며 {v}은(는) 안 됩니다
 @msg	{key} must be an array of non-negative integer object ids	{key}은(는) 음이 아닌 정수인 개체 id의 배열이어야 합니다
 @msg	invalid object id {value}: expected a non-negative integer	개체 id {value}이(가) 올바르지 않습니다: 음이 아닌 정수여야 합니다
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	`{key}`의 항목 {index}은(는) {value}이며, 음이 아닌 정수인 개체 id가 아닙니다
 @msg	no such object id {value}	id가 {value}인 개체가 없습니다
 @msg	id {value} is a layer, not an object	id {value}은(는) 개체가 아닌 레이어입니다
 @msg	id {value} is a layer, not an object; move layers with layer.move	id {value}은(는) 개체가 아닌 레이어입니다. 레이어는 layer.move로 이동하세요
@@ -4842,6 +4894,10 @@ theme	Appearance	외관
 @msg	the PSD file is cut short	PSD 파일이 잘려 있습니다
 @msg	the PSD file's header is damaged	PSD 파일의 헤더가 손상되었습니다
 @msg	the PSD file's image data can't be read: {e}	PSD 파일의 이미지 데이터를 읽을 수 없습니다: {e}
+@msg	the JPEG XL file is cut short	JPEG XL 파일이 잘려 있습니다
+@msg	the JPEG XL container is too large to read	JPEG XL 컨테이너가 너무 커서 읽을 수 없습니다
+@msg	CMYK JPEG XL images can't be read	CMYK JPEG XL 이미지는 읽을 수 없습니다
+@msg	the JPEG XL file can't be read: {e}	JPEG XL 파일을 읽을 수 없습니다: {e}
 	Video	비디오
 	De-Interlace…	디인터레이스…
 	De-Interlace	디인터레이스
@@ -5319,6 +5375,11 @@ lighting	Light	광원
 	Snap to Perpendicular	수직선에 스냅
 @msg	unknown snap option `{key}` (use {options})	알 수 없는 스냅 옵션 `{key}` ({options} 중에서 사용하세요)
 	Gap Length:	간격 길이:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	단색 로고 모드는 keepColors를 사용하지 않습니다. logoColors에 지정한 색상 또는 찾은 색상을 추적합니다.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	아무것도 추적하지 않았습니다. 추적에서 찾은 색상 중 keepColors({_1})와 일치하는 색상이 없습니다.
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	아무것도 추적하지 않았습니다. 색상 무시가 keepColors에 나열된 색상의 모든 영역을 제외합니다.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	아무것도 추적하지 않았습니다. keepColors와 일치하는 색상에서 패스가 만들어지지 않습니다.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: 추적에서 찾은 색상 중 {c}와 일치하는 색상이 없어 이 색상은 추적하지 않습니다.
 @msg	`colorGroup` needs `library: "document"`	`colorGroup`에는 `library: "document"`가 필요합니다
 @msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup`에는 `palette: "documentLibrary"`가 필요합니다
 @msg	`colorGroup` needs `mode: "color"`	`colorGroup`에는 `mode: "color"`가 필요합니다
@@ -5438,6 +5499,9 @@ axis	Y Axis	Y축
 	Install “{name}”, which asks for these permissions?	이 권한을 요청하는 “{name}”을(를) 설치하시겠습니까?
 	ID: {id}	ID: {id}
 	Version: {version}	버전: {version}
+	Install “{name}” in place of the plug-in with the same ID?	같은 ID의 플러그인 대신 “{name}”을(를) 설치하시겠습니까?
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	이 파일은 이전에 이 ID로 설치된 플러그인이 아닙니다. 이 ID에 보관된 설정과 캐시를 받습니다.
+@msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	“{name}”은(는) ID {_1}의 플러그인과 다른 모듈이며 그 플러그인에 보관된 설정과 캐시를 받게 됩니다. 사용자가 동의하면 `replace: true`로 설치하세요
 	File SHA-256: {hash}	파일 SHA-256: {hash}
 	Read the objects it is given	전달받은 개체 읽기
 	Change, add and delete objects in the document	문서의 개체 변경, 추가 및 삭제
@@ -5445,11 +5509,16 @@ axis	Y Axis	Y축
 	Change how the objects its effect is applied to are drawn	효과가 적용된 개체가 그려지는 방식 변경
 	Write the document as a file in its own format	문서를 자체 형식의 파일로 쓰기
 	Show its progress, see Cancel and write log lines	진행률 표시, 취소 감지 및 로그 줄 쓰기
-@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	`progress` 권한에는 플러그인 API 수준 {PROGRESS_API}이(가) 필요합니다. `api` {PROGRESS_API}을(를) 지정하십시오
+	Keep settings of its own	자체 설정 보관
+	Keep a cache of its own, which you can clear	지울 수 있는 자체 캐시 보관
+	Clear Plug-in Cache	플러그인 캐시 지우기
+@msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	`{permission}` 권한에는 플러그인 API 수준 {PROGRESS_API}이(가) 필요합니다. `api` {PROGRESS_API}을(를) 지정하십시오
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	모듈이 `env.{name}`을(를) 호스트와 다른 형식으로 가져옵니다. 호스트의 형식은 {signature}입니다
-@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	모듈이 `env.{name}`을(를) 가져오지만, 플러그인은 이를 플러그인 API 수준 {PROGRESS_API}(`api` {PROGRESS_API})에서 `progress` 권한이 있을 때만 사용할 수 있습니다
-@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	모듈이 호스트가 제공하지 않는 `{from}.{name}`을(를) 가져옵니다. 플러그인은 `env.vc_progress`, `env.vc_cancelled`, `env.vc_log`(플러그인 API 수준 2)만 가져올 수 있으며 WASI, 파일, 네트워크는 사용할 수 없습니다
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	모듈이 `env.{name}`을(를) 가져오지만, 플러그인은 이를 플러그인 API 수준 {PROGRESS_API}(`api` {PROGRESS_API})에서 `{permission}` 권한이 있을 때만 사용할 수 있습니다
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	모듈이 호스트가 제공하지 않는 `{from}.{name}`을(를) 가져옵니다. 플러그인은 docs/plugins.md에 나열된 `env.vc_*` 함수(플러그인 API 수준 2)만 가져올 수 있으며 WASI, 파일, 네트워크는 사용할 수 없습니다
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api`가 {_1}입니다. 이 호스트는 플러그인 API 수준 1부터 {API_LEVEL}까지 지원합니다
+@msg	`paintOutput` may only be true	`paintOutput`에는 true만 지정할 수 있습니다
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput`은 `api` 2의 라이브 효과(`kind` "effect")에만 쓸 수 있습니다
 @msg	`grant` must be a list of permission names	`grant`는 권한 이름 목록이어야 합니다
 @msg	`grant` names an unknown permission `{shown}`	`grant`에 알 수 없는 권한 `{shown}`이(가) 있습니다
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` 종류의 플러그인에는 `{_2}` 권한이 필요합니다
@@ -5460,6 +5529,14 @@ axis	Y Axis	Y축
 @msg	unknown permission `{shown}`	알 수 없는 권한 `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}”은(는) {asked} 권한을 요청합니다. 사용자가 동의하면 이를 나열한 `grant`로 설치하세요
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	“{name}”에 출력에 필요한 `{p}` 권한이 부여되지 않았습니다. 아무것도 변경되지 않았습니다
+@msg	a heavy filter runs in the background, so it can't declare `commands`	무거운 필터는 백그라운드에서 실행되므로 `commands`를 선언할 수 없습니다
+@msg	at most {MAX_COMMANDS} `commands`	`commands`는 최대 {MAX_COMMANDS}개입니다
+@msg	command {name} is declared twice	명령 {name}이(가) 두 번 선언되었습니다
+@msg	command {name}: `label` must be 1-64 printable characters	명령 {name}: `label`은 인쇄 가능한 문자 1-64자여야 합니다
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	명령 {name}: a-z 0-9 _로 이루어지고 문자로 시작하는 1-{MAX_COMMAND_ID}자 ID를 사용하세요
+@msg	command {name}: {e}	명령 {name}: {e}
+@msg	only a filter or a live effect declares `commands`	필터나 라이브 효과만 `commands`를 선언합니다
+@msg	“{name}” › {label}: {e}	“{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	모듈의 SHA-256이 `hash`에 지정된 값과 다릅니다. 아무것도 설치되지 않았습니다
 # Actions panel: action sets (#3712).
 	New Set…	새 세트…
@@ -6006,6 +6083,16 @@ breakText	Glyphs	글리프
 @msg	path must be a list of child indices	path는 자식 인덱스 목록이어야 합니다
 @msg	no object at path {shown} in the symbol's art	심볼 아트의 경로 {shown}에 개체가 없습니다
 @msg	give fill, stroke, opacity and/or blend	fill, stroke, opacity 및/또는 blend를 지정하세요
+@msg	{key} cannot be set on a guide	안내선에는 {key}을(를) 설정할 수 없습니다
+@msg	{key} cannot be set on a blend	블렌드에는 {key}을(를) 설정할 수 없습니다
+@msg	{key} cannot be set on an envelope	엔벨로프에는 {key}을(를) 설정할 수 없습니다
+@msg	{key} cannot be set on a gradient mesh	그레이디언트 메시에는 {key}을(를) 설정할 수 없습니다
+@msg	{key} cannot be set on a Repeat	반복에는 {key}을(를) 설정할 수 없습니다
+@msg	{key} cannot be set on a placed document	가져온 문서에는 {key}을(를) 설정할 수 없습니다
+@msg	{key} cannot be set on an Intertwine group	교차 그룹에는 {key}을(를) 설정할 수 없습니다
+@msg	stroke cannot be set on a symbol instance	심볼 인스턴스에는 stroke를 설정할 수 없습니다
+@msg	fill on a symbol instance must be a solid color or none	심볼 인스턴스의 fill은 단색 또는 none이어야 합니다
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	모양으로 변환 또는 개체 윤곽선화 효과가 없는 이미지에는 {key}을(를) 설정할 수 없습니다
 @msg	pass newName, registration, exportType, nineSlice and/or type	newName, registration, exportType, nineSlice 및/또는 type을 지정하세요
 	Text Flow	텍스트 흐름
 	By Rows	행 방향
@@ -6035,6 +6122,7 @@ breakText	Glyphs	글리프
 	Create Swatch Legend	견본 범례 만들기
 	Create Swatch Legend…	견본 범례 만들기…
 	HEX	HEX
+	Help Bar	도움말 표시줄
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	텍스트 도구
 	Text Tweaker…	텍스트 조정…
@@ -6100,6 +6188,24 @@ breakText	Glyphs	글리프
 # 3D Box add-on
 	3D Box	3D 상자
 	3D Box Tool	3D 상자 도구
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	연결 프로그램
+	No importer plug-ins installed	설치된 가져오기 플러그인 없음
+	Read files you open in its format and make documents from them	자체 형식으로 연 파일을 읽고 문서로 만들기
+@msg	{_1} is an importer (File › Open With)	{_1}은(는) 가져오기 플러그인입니다(파일 › 연결 프로그램)
+@msg	missing `importer` (see document.formats)	`importer`가 없습니다(document.formats 참조)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer`는 플러그인의 형식 ID여야 합니다(document.formats 참조)
+@msg	“{shown}” opens {_1} files, not `{_2}`	“{shown}”은(는) {_1} 파일을 엽니다. `{_2}`은(는) 열지 않습니다
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}`은(는) `{_2}` 종류의 플러그인이며 가져오기 플러그인이 아닙니다
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}`은(는) `{_2}` 종류의 플러그인이며 내보내기 플러그인이 아닙니다
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}`은(는) 가져오기 플러그인입니다: document.open {{"importer"}"}}로 파일을 여세요
+@msg	the importer returned no objects	가져오기 플러그인이 개체를 반환하지 않았습니다
+@msg	an importer returns `objects` and `warnings`, not `{key}`	가져오기 플러그인은 `{key}`가 아닌 `objects`와 `warnings`를 반환합니다
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	파일이 가져오기 플러그인이 읽는 {MAX_INPUT_BYTES}바이트보다 큽니다
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	가져오기 플러그인은 `extensions`를 1~{MAX_EXTENSIONS}개 선언합니다
+@msg	only an exporter or an importer declares `extensions`	`extensions`는 내보내기 또는 가져오기 플러그인만 선언합니다
+@msg	an importer always gets an import's budget: leave `budget` out	가져오기 플러그인은 항상 가져오기 예산을 받습니다: `budget`을 생략하세요
 
 # Safe Mode
 	Safe Mode…	안전 모드…

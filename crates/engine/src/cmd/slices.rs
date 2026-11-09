@@ -204,7 +204,7 @@ impl Session {
 /// The slices a command acts on: `slices` (ids that must all be slices), else the selected ones.
 fn slice_targets(s: &Session, p: &Value, cmd: &str) -> Result<Vec<NodeId>> {
     let st = s.doc()?;
-    match ids_param(p, "slices") {
+    match ids_param(p, "slices", cmd)? {
         Some(ids) => match ids.iter().find(|id| !st.doc.is_slice(**id)) {
             Some(id) => Err(bad(cmd, format!("{id} is not a slice"))),
             None => Ok(dedup(ids)),
@@ -290,7 +290,7 @@ pub(crate) fn options_json(o: &SliceOptions) -> Value {
 // ---------- Object → Slice ----------
 
 fn make(s: &mut Session, p: &Value) -> Result<Value> {
-    let ids = match ids_param(p, "ids") {
+    let ids = match ids_param(p, "ids", "object.slice.make")? {
         Some(ids) => super::edit::outermost(&s.doc()?.doc, ids),
         None => super::edit::selected_roots(s)?,
     };
@@ -734,7 +734,8 @@ fn delete(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn select(s: &mut Session, p: &Value) -> Result<Value> {
-    let ids = slice_targets(s, &json!({ "slices": p.get("slices").cloned().unwrap_or(json!([])) }), "object.slice.select")?;
+    let slices = p.get("slices").filter(|v| !v.is_null()).cloned().unwrap_or(json!([]));
+    let ids = slice_targets(s, &json!({ "slices": slices }), "object.slice.select")?;
     let toggle = bool_or(p, "toggle", false);
     s.select(|_, sel| {
         let mut now = if toggle { sel.slices.clone() } else { vec![] };

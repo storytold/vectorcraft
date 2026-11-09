@@ -74,7 +74,7 @@
 	CMYK Color	CMYK ფერი
 	RGB Color	RGB ფერი
 	File Info…	ფაილის ინფორმაცია…
-	Print…	დაბეჭდვა…
+	Print…	ბეჭდვა…
 	Edit	რედაქტირება
 	Undo	დაბრუნება
 	Redo	ხელახლა შესრულება
@@ -266,6 +266,13 @@
 	Apply Bullets	ბურთულების გამოყენება
 	Numbered List	დანომრილი სია
 	Apply Numbers	დანომრვის გამოყენება
+	Bullets and Numbering…	ბურთულები და დანომრვა…
+	Numbers	ნომრები
+	Level:	დონე:
+	Bullet Character:	ბურთულის სიმბოლო:
+	Number Style:	ნომრის სტილი:
+	Left Indent:	მარცხენა შეწევა:
+	First Line Indent:	პირველი სტრიქონის შეწევა:
 	Convert to Text	ტექსტად გარდაქმნა
 	Filled Dot	სავსე წერტილი
 	Dash	ტირე
@@ -391,6 +398,17 @@
 	Inflate	გაბერვა
 	Select objects, then pick an object type to give them a 3D effect.	აირჩიეთ ობიექტები, შემდეგ აირჩიეთ ობიექტის ტიპი, რომ მათ 3D ეფექტი მიეცეთ.
 	Extrude & Bevel…	ამოწევა და წაკვეთა…
+	3D (Classic)	3D (კლასიკური)
+	Extrude & Bevel (Classic)…	ამოწევა და წაკვეთა (კლასიკური)…
+	Surface	ზედაპირი
+	Wireframe	მავთულის ჩარჩო
+	No Shading	დაჩრდილვის გარეშე
+	Plastic	პლასტიკური
+	Highlight Intensity	ელვარების ინტენსივობა
+	Highlight Size	ელვარების ზომა
+	Blend Steps	შერევის საფეხურები
+	Shading Color	დაჩრდილვის ფერი
+	Draw Hidden Faces	დამალული წახნაგების დახატვა
 	Revolve…	ბრუნვა…
 	Inflate…	გაბერვა…
 	Materials…	მასალები…
@@ -588,6 +606,11 @@
 	Color	ფერი
 	Color Guide	ფერის გზამკვლევი
 	Color Themes	ფერის თემები
+	Color Wheel	ფერთა წრე
+	Hue ring	ფერის ტონის რგოლი
+	Saturation and brightness	გაჯერება და სიკაშკაშე
+	Color field	ფერის ველი
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	CSS Properties	CSS თვისებები
 	Document Info	დოკუმენტის ინფორმაცია
 	Flattener Preview	გაბრტყელების წინასწარი ნახვა
@@ -1252,7 +1275,7 @@ lighting	Light	სინათლე
 	Dashed	ტირეებიანი
 	Delete Selected Item	მონიშნული ელემენტის წაშლა
 	Double-click to edit the characters' paint	ორჯერ დაწკაპეთ სიმბოლოების შეღებვის რედაქტირებისთვის
-	Click to edit	დააწკაპეთ რედაქტირებისთვის
+	Click to edit	დაწკაპეთ დასარედაქტირებლად
 	Double-click to edit	ორჯერ დაწკაპეთ რედაქტირებისთვის
 	Double-click to target the contents	ორჯერ დაწკაპეთ შიგთავსის ასარჩევად
 	Drag onto art to apply this appearance	ჩაავლეთ ნახატზე ამ იერსახის გამოსაყენებლად
@@ -1360,6 +1383,15 @@ digits	Malayalam	მალაიალამური
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Tate-chu-yoko პარამეტრები…
 	Tate-chu-yoko Settings	Tate-chu-yoko პარამეტრები
+	Composite Fonts…	კომპოზიტური შრიფტები…
+	Composite Fonts	კომპოზიტური შრიფტები
+	Export Composite Fonts	კომპოზიტური შრიფტების ექსპორტი
+	Import Composite Fonts	კომპოზიტური შრიფტების იმპორტი
+	Delete Font	შრიფტის წაშლა
+	Kanji	კანძი
+	Kana	კანა
+	Numerals	ციფრები
+	Scale at Center	ცენტრიდან მასშტაბირება
 	Up/Down:	ზემოთ/ქვემოთ:
 	Left/Right:	მარცხნივ/მარჯვნივ:
 	Underline	ხაზგასმული
@@ -1619,6 +1651,10 @@ digits	Malayalam	მალაიალამური
 	Stylistic	სტილისტური
 	Mojikumi Set	Mojikumi-ის ნაკრები
 	Kinsoku Set	Kinsoku-ის ნაკრები
+	Kinsoku Shori Type	Kinsoku Shori-ის ტიპი
+	Push In First	ჯერ შეტანა
+	Push Out First	ჯერ გატანა
+	Push Out Only	მხოლოდ გატანა
 	Hard	მკაცრი
 	Right Indent	მარჯვენა შეწევა
 	Right-to-Left Paragraph Direction	აბზაცის მიმართულება მარჯვნიდან მარცხნივ
@@ -2437,6 +2473,10 @@ digits	Malayalam	მალაიალამური
 	< 1 sec	< 1 წმ
 	[Unnamed]	[უსახელო]
 	Amount:	რაოდენობა:
+	Anti-aliasing Method	ანტიალიასინგის მეთოდი
+antiAlias	Sharp	მკვეთრი
+	Crisp	მკაფიო
+	Strong	ძლიერი
 	Anti-aliasing:	ანტიალიასინგი:
 	Artboard:	სამუშაო დაფა:
 	Color Table	ფერების ცხრილი
@@ -2990,7 +3030,7 @@ theme	Appearance	იერსახე
 	Reverse Order	რიგის შებრუნება
 	Show All Layers	ყველა შრის ჩვენება
 	Unlock All Layers	ყველა შრის განბლოკვა
-	English: USA	English: USA
+	English: USA	ინგლისური: აშშ
 	Move	გადატანა
 	Character Style	სიმბოლოს სტილი
 	Paragraph Style	აბზაცის სტილი
@@ -3407,7 +3447,7 @@ effect	Points	წერტილები
 	Discard Empty Type	ცარიელი ტექსტის მოცილება
 	Copyright	საავტორო უფლება
 	Other	სხვა
-	Print	დაბეჭდვა
+	Print	ბეჭდვა
 	Solid	მთლიანი
 	Difference	სხვაობა
 	Flatten Transparency	გამჭვირვალობის გაბრტყელება
@@ -3643,7 +3683,7 @@ font-technology	Variable	ცვლადი
 	Flip:	არეკვლა:
 	Spacing:	ინტერვალი:
 	Output	გამოტანა
-	Export…	ექსპორტი…
+	Export…	ექსპორტირება…
 	Import…	იმპორტი…
 	Load Profile…	პროფილის ჩატვირთვა…
 	Embedded	ჩაშენებული
@@ -3878,6 +3918,7 @@ font-technology	Variable	ცვლადი
 @msg	Split Into Grid: select paths large enough for the grid	ბადედ გაყოფა: მონიშნეთ ბადისთვის საკმარისად დიდი ტრაექტორიები
 @msg	Targa files are RGB: colorModel rgb	Targa ფაილები RGB-ა: colorModel rgb
 @msg	Text Wrap: select a wrap object	ტექსტის შემოვლება: მონიშნეთ შემოსავლელი ობიექტი
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` უნდა იყოს "none", "sharp", "crisp" ან "strong"
 @msg	`aspect` must be a number (%)	`aspect` უნდა იყოს რიცხვი (%)
 @msg	`at` must be [x, y]	`at` უნდა იყოს [x, y]
 @msg	`color` must be a colour	`color` უნდა იყოს ფერი
@@ -4245,6 +4286,13 @@ font-technology	Variable	ცვლადი
 @msg	select an image	მონიშნეთ გამოსახულება
 @msg	select an object in perspective	მონიშნეთ ობიექტი პერსპექტივაში
 @msg	select artwork (or a colour group) to recolor	მონიშნეთ ხელახლა შესაფერადებელი ნახატი (ან ფერთა ჯგუფი)
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	ხელახლა შეფერადება დასრულდა; უცვლელი დარჩა: {locked} და {hidden}
+@msg	Recolor completed; {objects} were left unchanged	ხელახლა შეფერადება დასრულდა; უცვლელი დარჩა: {objects}
+@msg	Recolor completed; {objects} was left unchanged	ხელახლა შეფერადება დასრულდა; უცვლელი დარჩა: {objects}
+@msg	1 locked object	1 ჩაკეტილი ობიექტი
+@msg	{n} locked objects	{n} ჩაკეტილი ობიექტი
+@msg	1 hidden object	1 დამალული ობიექტი
+@msg	{n} hidden objects	{n} დამალული ობიექტი
 @msg	select at least two objects	მონიშნეთ ორი ობიექტი მაინც
 @msg	exit isolation mode first	ჯერ გამოდით იზოლაციის რეჟიმიდან
 @msg	select objects, not layers	მონიშნეთ ობიექტები და არა შრეები
@@ -4472,6 +4520,7 @@ font-technology	Variable	ცვლადი
 @msg	an image VectorCraft can't read was left out	გამოსახულება, რომელსაც VectorCraft ვერ კითხულობს, გამოტოვებულია
 @msg	graphs come in as plain art, without their data or settings	დიაგრამები შემოდის როგორც ჩვეულებრივი გრაფიკა, მათი მონაცემებისა და პარამეტრების გარეშე
 @msg	an image whose data is cut short was left out	გამოსახულება, რომლის მონაცემებიც შეკვეცილია, გამოტოვებულია
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	ჩაშენებული გამოსახულება ზომით {_1} × {_2} პიქსელი შემცირდა {_3} × {_4} პიქსელამდე, რომ შრეები შენარჩუნდეს
 @msg	its editing data doesn't say where its art is	მისი რედაქტირების მონაცემები არ მიუთითებს, სად არის მისი ნახატი
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	ეს ფაილი PDF-თავსებადობის გარეშეა შენახული და მისი რედაქტირების მონაცემების წაკითხვა ვერ ხერხდება ({why})
 @msg	the PDF part couldn't be read ({_1}): the file opened from its editing data	PDF ნაწილის წაკითხვა ვერ მოხერხდა ({_1}): ფაილი რედაქტირების მონაცემებიდან გაიხსნა
@@ -4499,6 +4548,7 @@ font-technology	Variable	ცვლადი
 @msg	object ids are non-negative integers, not {v}	ობიექტების id არაუარყოფითი მთელი რიცხვებია და არა {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} უნდა იყოს ობიექტების id-ების მასივი, სადაც ყოველი id არაუარყოფითი მთელი რიცხვია
 @msg	invalid object id {value}: expected a non-negative integer	ობიექტის არასწორი id {value}: მოსალოდნელია არაუარყოფითი მთელი რიცხვი
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	`{key}`-ის ელემენტი {index} არის {value} და არა ობიექტის id (არაუარყოფითი მთელი რიცხვი)
 @msg	no such object id {value}	ობიექტი id-ით {value} არ არსებობს
 @msg	id {value} is a layer, not an object	id {value} შრეა და არა ობიექტი
 @msg	id {value} is a layer, not an object; move layers with layer.move	id {value} შრეა და არა ობიექტი; შრეების გადასატანად გამოიყენეთ layer.move
@@ -4534,6 +4584,10 @@ font-technology	Variable	ცვლადი
 @msg	the PSD file is cut short	PSD ფაილი შეკვეცილია
 @msg	the PSD file's header is damaged	PSD ფაილის სათაური დაზიანებულია
 @msg	the PSD file's image data can't be read: {e}	PSD ფაილის გამოსახულების მონაცემების წაკითხვა ვერ ხერხდება: {e}
+@msg	the JPEG XL file is cut short	JPEG XL ფაილი შეკვეცილია
+@msg	the JPEG XL container is too large to read	JPEG XL კონტეინერი წასაკითხად ზედმეტად დიდია
+@msg	CMYK JPEG XL images can't be read	CMYK JPEG XL გამოსახულებების წაკითხვა ვერ ხერხდება
+@msg	the JPEG XL file can't be read: {e}	JPEG XL ფაილის წაკითხვა ვერ ხერხდება: {e}
 @msg	Imported library {name}	შემოტანილია ბიბლიოთეკა {name}
 @msg	Invalid panel layout; restored the default dock	პანელების განლაგება არასწორია; აღდგენილია ნაგულისხმევი დოკი
 @msg	action is required	action აუცილებელია
@@ -4654,7 +4708,7 @@ font-technology	Variable	ცვლადი
 	Bicubic	ბიკუბური
 	Minimum	მინიმალური
 	Run Length	Run Length
-	Roman	Roman
+	Roman	რომაული
 	No conversion	გარდაქმნის გარეშე
 	Convert to destination	სამიზნეში გარდაქმნა
 	Convert to destination (preserve numbers)	სამიზნეში გარდაქმნა (რიცხვების შენარჩუნებით)
@@ -5579,6 +5633,11 @@ imageTrace	Outline	კონტური
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	„შენახვა“ წერს ფორმატს {_1} და არა {_2}: ამისთვის გამოიყენეთ file.saveAsTemplate
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	გამოსახულება არის {_1} × {_2} პიქსელი, ანუ ერთ მხარეზე {LARGE_TRACE_SIDE}-ზე მეტი: ის ვექტორიზდება, მაგრამ უფრო ნელა. ნაკლები სიზუსტის პრესეტი ან გამოსახულების უფრო პატარა ასლი უფრო სწრაფად ვექტორიზდება.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	გამოსახულება ვექტორიზდა {_1} × {_2} პიქსელზე, შემცირდა {_3} × {_4}-დან (მაქსიმუმ {_5} მეგაპიქსელი).
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	ბრტყელი ლოგოს რეჟიმი keepColors-ს არ იყენებს: ის ვექტორიზებს logoColors-ში მითითებულ ფერებს ან მის მიერ ნაპოვნ ფერებს.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	არაფერი ვექტორიზდა: ვექტორიზაციის მიერ ნაპოვნი არცერთი ფერი არ შეესაბამება keepColors-ს ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	არაფერი ვექტორიზდა: ფერის იგნორირება გამოტოვებს keepColors-ში ჩამოთვლილი ფერების ყველა არეს.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	არაფერი ვექტორიზდა: keepColors-ის შესაბამისი ფერებიდან არცერთი კონტური არ მიიღება.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: ვექტორიზაციის მიერ ნაპოვნი არცერთი ფერი არ შეესაბამება {c}-ს, ამიტომ მისგან არაფერი ვექტორიზდება.
 @msg	`colorGroup` needs `library: "document"`	`colorGroup`-ს სჭირდება `library: "document"`
 @msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup`-ს სჭირდება `palette: "documentLibrary"`
 @msg	`colorGroup` needs `mode: "color"`	`colorGroup`-ს სჭირდება `mode: "color"`
@@ -5785,6 +5844,9 @@ axis	Y Axis	Y ღერძი
 	Install “{name}”, which asks for these permissions?	დავაყენოთ „{name}“, რომელიც ამ ნებართვებს ითხოვს?
 	ID: {id}	ID: {id}
 	Version: {version}	ვერსია: {version}
+	Install “{name}” in place of the plug-in with the same ID?	დავაყენოთ „{name}“ იმავე ID-ის მქონე პლაგინის ნაცვლად?
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	ეს ფაილი არ არის ამ ID-ით ადრე დაყენებული პლაგინი. ის მიიღებს ამ ID-სთვის შენახულ პარამეტრებს და ქეშს.
+@msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	„{name}“ სხვა მოდულია, ვიდრე პლაგინი ID-ით {_1}, და მიიღებდა მისთვის შენახულ პარამეტრებს და ქეშს: მომხმარებლის თანხმობის შემდეგ დააყენეთ ის `replace: true` პარამეტრით
 	File SHA-256: {hash}	ფაილის SHA-256: {hash}
 	Read the objects it is given	მიღებული ობიექტების წაკითხვა
 	Change, add and delete objects in the document	დოკუმენტში ობიექტების შეცვლა, დამატება და წაშლა
@@ -5792,11 +5854,16 @@ axis	Y Axis	Y ღერძი
 	Change how the objects its effect is applied to are drawn	იმის შეცვლა, თუ როგორ იხატება ობიექტები, რომლებზეც მისი ეფექტია გამოყენებული
 	Write the document as a file in its own format	დოკუმენტის ჩაწერა ფაილად საკუთარ ფორმატში
 	Show its progress, see Cancel and write log lines	პროგრესის ჩვენება, გაუქმების შემჩნევა და ჟურნალის სტრიქონების ჩაწერა
-@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	ნებართვას `progress` სჭირდება პლაგინის API-ის დონე {PROGRESS_API}: მიუთითეთ `api` {PROGRESS_API}
+	Keep settings of its own	საკუთარი პარამეტრების შენახვა
+	Keep a cache of its own, which you can clear	საკუთარი ქეშის შენახვა, რომლის გასუფთავებაც შეგიძლიათ
+	Clear Plug-in Cache	პლაგინის ქეშის გასუფთავება
+@msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	ნებართვას `{permission}` სჭირდება პლაგინის API-ის დონე {PROGRESS_API}: მიუთითეთ `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	მოდულს შემოაქვს `env.{name}` ჰოსტისგან განსხვავებული ტიპით: ჰოსტის ტიპია {signature}
-@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	მოდულს შემოაქვს `env.{name}`, რომლის გამოყენებაც პლაგინს მხოლოდ პლაგინის API-ის დონეზე {PROGRESS_API} (`api` {PROGRESS_API}) და ნებართვით `progress` შეუძლია
-@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	მოდულს შემოაქვს `{from}.{name}`, რომელსაც ჰოსტი არ გვთავაზობს: პლაგინს შეუძლია შემოიტანოს მხოლოდ `env.vc_progress`, `env.vc_cancelled` და `env.vc_log` (პლაგინის API-ის დონე 2) და არა WASI, ფაილები ან ქსელი
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	მოდულს შემოაქვს `env.{name}`, რომლის გამოყენებაც პლაგინს მხოლოდ პლაგინის API-ის დონეზე {PROGRESS_API} (`api` {PROGRESS_API}) და ნებართვით `{permission}` შეუძლია
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	მოდულს შემოაქვს `{from}.{name}`, რომელსაც ჰოსტი არ გვთავაზობს: პლაგინს შეუძლია შემოიტანოს მხოლოდ docs/plugins.md-ში ჩამოთვლილი `env.vc_*` ფუნქციები (პლაგინის API-ის დონე 2) და არა WASI, ფაილები ან ქსელი
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` არის {_1}; ეს ჰოსტი პლაგინის API-ის დონეებს 1-დან {API_LEVEL}-მდე უჭერს მხარს
+@msg	`paintOutput` may only be true	`paintOutput` შეიძლება იყოს მხოლოდ true
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` მხოლოდ ცოცხალი ეფექტისთვისაა (`kind` "effect") `api` 2-ზე
 @msg	`grant` must be a list of permission names	`grant` ნებართვების სახელების სია უნდა იყოს
 @msg	`grant` names an unknown permission `{shown}`	`grant` უცნობ ნებართვას ასახელებს: `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` სახის პლაგინს სჭირდება ნებართვა `{_2}`
@@ -5807,6 +5874,14 @@ axis	Y Axis	Y ღერძი
 @msg	unknown permission `{shown}`	უცნობი ნებართვა `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	„{name}“ ითხოვს ნებართვებს {asked}: მომხმარებლის თანხმობის შემდეგ დააყენეთ ის `grant` პარამეტრით, რომელშიც ისინი ჩამოთვლილია
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	„{name}“-ს არ მიეცა `{p}`, რომელიც მის შედეგს სჭირდება: არაფერი შეცვლილა
+@msg	a heavy filter runs in the background, so it can't declare `commands`	მძიმე ფილტრი ფონურ რეჟიმში მუშაობს, ამიტომ მას არ შეუძლია `commands`-ის გამოცხადება
+@msg	at most {MAX_COMMANDS} `commands`	მაქსიმუმ {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	ბრძანება {name} ორჯერაა გამოცხადებული
+@msg	command {name}: `label` must be 1-64 printable characters	ბრძანება {name}: `label` უნდა შედგებოდეს 1-64 დასაბეჭდი სიმბოლოსგან
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	ბრძანება {name}: გამოიყენეთ 1-{MAX_COMMAND_ID} სიმბოლოიანი id a-z 0-9 _ სიმბოლოებიდან, რომელიც ასოთი იწყება
+@msg	command {name}: {e}	ბრძანება {name}: {e}
+@msg	only a filter or a live effect declares `commands`	`commands`-ს მხოლოდ ფილტრი ან ცოცხალი ეფექტი აცხადებს
+@msg	“{name}” › {label}: {e}	„{name}“ › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	მოდულს არ აქვს `hash`-ში მითითებული SHA-256: არაფერი დაყენებულა
 # Actions panel: action sets (#3712).
 	New Set…	ახალი ნაკრები…
@@ -6110,7 +6185,7 @@ anchor	Points:	წერტილები:
 	Close Path:	ტრაექტორიის შეკვრა:
 	Keep Handles	სახელურების შენარჩუნება
 	Straight	სწორი
-	Stretch Curve	მრუდის გაჭიმვა
+	Stretch Curve	მრუდის გაწელვა
 @msg	direct-select the anchor points to remove	პირდაპირ მონიშნეთ მოსაცილებელი საყრდენი წერტილები
 @msg	select segments, or paths, to add points to	მონიშნეთ სეგმენტები ან ტრაექტორიები წერტილების დასამატებლად
 @msg	select open paths to close	მონიშნეთ შესაკრავი ღია ტრაექტორიები
@@ -6255,7 +6330,7 @@ anchor	Points:	წერტილები:
 	Join Point Text	წერტილის ტექსტის შეერთება
 	Remove Breaks	წყვეტების წაშლა
 	Split Text at Cursor	ტექსტის დაყოფა კურსორთან
-	Set Alignment, Keep Position	სწორების დაყენება მდებარეობის შენარჩუნებით
+	Set Alignment, Keep Position	სწორების დაყენება პოზიციის შენარჩუნებით
 	Reset Text Transform	ტექსტის გარდაქმნის ჩამოყრა
 	Replace Missing Fonts…	დაკარგული შრიფტების ჩანაცვლება…
 	Replace Missing Fonts	დაკარგული შრიფტების ჩანაცვლება
@@ -6266,7 +6341,7 @@ anchor	Points:	წერტილები:
 	Break Text into Words	ტექსტის დაყოფა სიტყვებად
 	Break Text into Glyphs	ტექსტის დაყოფა გლიფებად
 	Reset Text Transform and Scale	ტექსტის გარდაქმნისა და მასშტაბის ჩამოყრა
-	Set Alignment, Keep Position:	სწორების დაყენება მდებარეობის შენარჩუნებით:
+	Set Alignment, Keep Position:	სწორების დაყენება პოზიციის შენარჩუნებით:
 	Break Text into:	ტექსტის დაყოფა:
 	Split at Cursor	დაყოფა კურსორთან
 	Reset Transform	გარდაქმნის ჩამოყრა
@@ -6275,7 +6350,7 @@ anchor	Points:	წერტილები:
 breakText	Lines	სტრიქონები
 breakText	Words	სიტყვები
 breakText	Glyphs	გლიფები
-@msg	Click in type with a Type tool to split it	დასაყოფად დააწკაპუნეთ ტექსტში ტექსტის ხელსაწყოთი
+@msg	Click in type with a Type tool to split it	დასაყოფად დაწკაპეთ ტექსტში ტექსტის ხელსაწყოთი
 @msg	Too many type objects to change at once	ერთდროულად შესაცვლელად ძალიან ბევრი ტექსტური ობიექტია
 @msg	Too many pieces to make at once	ერთდროულად შესაქმნელად ძალიან ბევრი ნაწილია
 @msg	Select horizontal point or area type whose text fits	აირჩიეთ ჰორიზონტალური წერტილის ან არის ტექსტი, რომლის ტექსტიც ეტევა
@@ -6375,9 +6450,9 @@ breakText	Glyphs	გლიფები
 	Fit to Corners and Ends	კუთხეებსა და ბოლოებზე მორგება
 	Remove Gaps	ღრეჩოების მოცილება
 @msg	that makes too many pieces (at most 100000): make the dashes longer	ეს ძალიან ბევრ ნაწილს იძლევა (მაქსიმუმ 100000): გაზარდეთ ტირეების სიგრძე
-@msg	select paths, or segments, to divide	აირჩიეთ დასაყოფი კონტურები ან სეგმენტები
+@msg	select paths, or segments, to divide	აირჩიეთ დასაყოფი ტრაექტორიები ან სეგმენტები
 # Path Precision Tools add-on: Expand Dashes into Paths.
-	Expand Dashes into Paths	ტირეების კონტურებად გაშლა
+	Expand Dashes into Paths	ტირეების ტრაექტორიებად გაშლა
 @msg	select paths with dashed strokes to expand	აირჩიეთ გასაშლელი ტირეებიანი ხაზის კონტურები
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	დოკუმენტის ხელსაწყოები
@@ -6423,6 +6498,16 @@ breakText	Glyphs	გლიფები
 @msg	path must be a list of child indices	path უნდა იყოს შვილობილი ინდექსების სია
 @msg	no object at path {shown} in the symbol's art	სიმბოლოს გრაფიკაში გზაზე {shown} ობიექტი არ არის
 @msg	give fill, stroke, opacity and/or blend	მიუთითეთ fill, stroke, opacity და/ან blend
+@msg	{key} cannot be set on a guide	{key} ვერ დაყენდება დამხმარე ხაზზე
+@msg	{key} cannot be set on a blend	{key} ვერ დაყენდება გადასვლაზე
+@msg	{key} cannot be set on an envelope	{key} ვერ დაყენდება გარსზე
+@msg	{key} cannot be set on a gradient mesh	{key} ვერ დაყენდება გრადიენტულ ბადეზე
+@msg	{key} cannot be set on a Repeat	{key} ვერ დაყენდება გამეორებაზე
+@msg	{key} cannot be set on a placed document	{key} ვერ დაყენდება განთავსებულ დოკუმენტზე
+@msg	{key} cannot be set on an Intertwine group	{key} ვერ დაყენდება გადახლართვის ჯგუფზე
+@msg	stroke cannot be set on a symbol instance	stroke ვერ დაყენდება სიმბოლოს ეგზემპლარზე
+@msg	fill on a symbol instance must be a solid color or none	სიმბოლოს ეგზემპლარის fill უნდა იყოს ერთფეროვანი ფერი ან none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} ვერ დაყენდება გამოსახულებაზე „ფიგურად გარდაქმნის“ ან „ობიექტის კონტურებად გარდაქმნის“ ეფექტის გარეშე
 @msg	pass newName, registration, exportType, nineSlice and/or type	მიუთითეთ newName, registration, exportType, nineSlice და/ან type
 	Text Flow	ტექსტის დინება
 	By Rows	სტრიქონების მიხედვით
@@ -6452,6 +6537,7 @@ breakText	Glyphs	გლიფები
 	Create Swatch Legend	ფერის ნიმუშების ლეგენდის შექმნა
 	Create Swatch Legend…	ფერის ნიმუშების ლეგენდის შექმნა…
 	HEX	HEX
+	Help Bar	დახმარების ზოლი
 	Check for Updates…	განახლებების შემოწმება…
 	VectorCraft Updates	VectorCraft-ის განახლებები
 	Preparing the image…	გამოსახულების მომზადება…
@@ -6466,6 +6552,7 @@ font-script	Japanese	იაპონური
 	Japanese Double Postcard	იაპონური ორმაგი ღია ბარათი
 	Japanese Envelope #3	იაპონური კონვერტი #3
 	Japanese Envelope #4	იაპონური კონვერტი #4
+@msg	image '{key}' has no pixels and was left out	გამოსახულებას '{key}' პიქსელები არ აქვს და გამოტოვდა
 @msg	not an RTF file: it doesn't start with {\\rtf	RTF ფაილი არ არის: არ იწყება {\\rtf-ით
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	ტექსტის ხელსაწყოები
@@ -6477,6 +6564,54 @@ font-script	Japanese	იაპონური
 	Bow	რკალი
 	Spike	პიკი
 	Skip Spaces	ჰარების გამოტოვება
+
+# The strings the report listed as missing for ka.
+	1 Layer	შრე: 1
+	Art and Bright Colors	მხატვრული და კაშკაშა ფერები
+	Automate	ავტომატიზაცია
+	Color Table (4 colors)	ფერების ცხრილი (ფერი: 4)
+	Current Colors (0)	მიმდინარე ფერები (0)
+	Differences from VectorCraft Default:	განსხვავებები VectorCraft-ის ნაგულისხმევთან:
+	Differences from [Default]:	განსხვავებები [ნაგულისხმევი]-თან:
+	Dot Gain 15%	Dot Gain 15%
+	Expand 1 Selected	1 მონიშნული ობიექტის გაშლა
+	Graphic Styles (4)	გრაფიკული სტილები (4)
+	Gray Gamma 2.2	Gray Gamma 2.2
+	Part of ArtCraft. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono, Noto Sans SC (OFL). Icons: Lucide (ISC) + VectorCraft.	ArtCraft-ის ნაწილი. MIT OR Apache-2.0. შრიფტები: Source Sans 3, Inter, JetBrains Mono, Noto Sans SC (OFL). ხატულები: Lucide (ISC) + VectorCraft.
+	Phone 375×812	ტელეფონი 375×812
+	Photo Low Fidelity	დაბალი სიზუსტის ფოტო
+	Print & Proof	ბეჭდვა და კორექტურა
+	Printing & Proofing	ბეჭდვა და კორექტურა
+	RECENT (1)	ბოლოდროინდელი (1)
+	Reset Automation	Automation-ის ჩამოყრა
+	Reset Essentials Classic	Essentials Classic-ის ჩამოყრა
+	Reset Layout	Layout-ის ჩამოყრა
+	Reset Painting	Painting-ის ჩამოყრა
+	Reset Printing and Proofing	Printing and Proofing-ის ჩამოყრა
+	Reset Tracing	Tracing-ის ჩამოყრა
+	Reset Typography	Typography-ის ჩამოყრა
+	Reset Web	Web-ის ჩამოყრა
+	Restricted Colors	შეზღუდული ფერები
+	Right-click an item to move it into this group.	ამ ჯგუფში გადასატანად დაწკაპეთ ელემენტზე მარჯვენა ღილაკით.
+	Scale X	მასშტაბი X
+	Scale X:	მასშტაბი X:
+	Scale Y	მასშტაბი Y
+	Scale Y:	მასშტაბი Y:
+	Selected Styles Only (0)	მხოლოდ მონიშნული სტილები (0)
+	Selected Swatches Only (0)	მხოლოდ მონიშნული ფერის ნიმუშები (0)
+	Spot Colors (0)	სპოტ-ფერები (0)
+	Tablet 1024×768	პლანშეტი 1024×768
+	Video 1920×1080	ვიდეო 1920×1080
+	Video 3840×2160	ვიდეო 3840×2160
+	Web 1280×720	ვები 1280×720
+	[High Resolution]	[მაღალი გარჩევადობა]
+	[Low Resolution]	[დაბალი გარჩევადობა]
+	[Medium Resolution]	[საშუალო გარჩევადობა]
+	[PDF/X-1a:2001]	[PDF/X-1a:2001]
+	[PDF/X-3:2002]	[PDF/X-3:2002]
+	[PDF/X-4:2010]	[PDF/X-4:2010]
+	[VectorCraft Default]	[VectorCraft-ის ნაგულისხმევი]
+@msg	give corners of the path: anchors between two straight sides	მიუთითეთ ტრაექტორიის კუთხეები: საყრდენი წერტილები ორ სწორ გვერდს შორის
 	Release Type on a Path…	ტექსტის ტრაექტორიიდან მოხსნა…
 	Release Type on a Path	ტექსტის ტრაექტორიიდან მოხსნა
 	Text and Path	ტექსტი და ტრაექტორია
@@ -6532,6 +6667,24 @@ font-script	Japanese	იაპონური
 # 3D Box add-on
 	3D Box	3D ყუთი
 	3D Box Tool	3D ყუთის ხელსაწყო
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	გახსნა პროგრამით
+	No importer plug-ins installed	იმპორტის პლაგინები არ არის დაყენებული
+	Read files you open in its format and make documents from them	მის ფორმატში გახსნილი ფაილების წაკითხვა და მათგან დოკუმენტების შექმნა
+@msg	{_1} is an importer (File › Open With)	{_1} იმპორტის პლაგინია (ფაილი › გახსნა პროგრამით)
+@msg	missing `importer` (see document.formats)	`importer` აკლია (იხ. document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` უნდა იყოს პლაგინის ფორმატის ID (იხ. document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	„{shown}“ ხსნის {_1} ფაილებს და არა `{_2}`-ს
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` არის `{_2}` სახის პლაგინი და არა იმპორტის პლაგინი
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` არის `{_2}` სახის პლაგინი და არა ექსპორტის პლაგინი
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` იმპორტის პლაგინია: გახსენით ფაილი document.open {{"importer"}"}}-ით
+@msg	the importer returned no objects	იმპორტის პლაგინმა ობიექტები არ დააბრუნა
+@msg	an importer returns `objects` and `warnings`, not `{key}`	იმპორტის პლაგინი აბრუნებს `objects`-ს და `warnings`-ს და არა `{key}`-ს
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	ფაილი აღემატება {MAX_INPUT_BYTES} ბაიტს, რომელსაც იმპორტის პლაგინი კითხულობს
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	იმპორტის პლაგინი აცხადებს 1-დან {MAX_EXTENSIONS}-მდე `extensions`-ს
+@msg	only an exporter or an importer declares `extensions`	`extensions`-ს მხოლოდ ექსპორტის ან იმპორტის პლაგინი აცხადებს
+@msg	an importer always gets an import's budget: leave `budget` out	იმპორტის პლაგინი ყოველთვის იღებს იმპორტის ბიუჯეტს: გამოტოვეთ `budget`
 
 # Safe Mode
 	Safe Mode…	უსაფრთხო რეჟიმი…

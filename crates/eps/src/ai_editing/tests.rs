@@ -833,6 +833,178 @@ fn nested_symbol_instances_stop_at_the_symbol_art_limit() {
     assert_eq!(layers.matches("\r\nf\r\n").count(), 3198, "the squares of the leaves written");
 }
 
+/// The documents [`the_writer_counts_objects_as_the_reader_reads_them`] writes: groups, compound
+/// paths, guides, sublayers, clipping groups and layers, painted clipping paths, opacity masks,
+/// gradients, pattern definitions and tiles, images, type, symbol definitions and instances,
+/// objects with art styles and objects bound to variables.
+fn counted() -> Vec<(&'static str, Document)> {
+    vec![
+        ("sample", sample()),
+        ("unsupported", unsupported()),
+        ("transparent", transparent()),
+        ("gradients and patterns", gradients_and_patterns()),
+        ("images", images_doc()),
+        ("typed", typed()),
+        ("variables", variables_doc()),
+        ("symbols", symbols_document()),
+        ("styles", styles_document()),
+        ("painted clips", painted_clips()),
+        ("blend", blend_doc()),
+    ]
+}
+
+/// A blend of two squares 20 pt apart with a step every 10 pt, written as its steps.
+fn blend_doc() -> Document {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let keys = vec![
+        Arc::new(square(&mut doc, Rect::new(10.0, 10.0, 12.0, 12.0), Color::gray(0.5))),
+        Arc::new(square(&mut doc, Rect::new(30.0, 10.0, 32.0, 12.0), Color::gray(0.5))),
+    ];
+    let spec = vectorcraft_doc::BlendSpec { spacing: vectorcraft_doc::BlendSpacing::Distance(10.0), ..Default::default() };
+    let blend = Node::new(doc.alloc_id(), NodeKind::Blend { children: keys, spec: Box::new(spec) });
+    doc.insert(Some(layer), usize::MAX, blend).unwrap();
+    doc
+}
+
+/// Clipping groups whose clipping paths are filled: a square with a color, and a ring (a path of
+/// two subpaths) with a color, with a gradient, and with a color and a gradient stroke.
+fn painted_clips() -> Document {
+    let mut doc = Document::new(260.0, 100.0);
+    let layer = doc.layers[0].id;
+    let ring = |x: f64| {
+        let mut p = shapes::rectangle(Rect::new(x, 10.0, x + 20.0, 30.0));
+        p.subpaths.extend(shapes::rectangle(Rect::new(x + 5.0, 15.0, x + 15.0, 25.0)).subpaths);
+        p
+    };
+    let g = Gradient::new(
+        GradientKind::Linear,
+        vec![GradientStop::new(0.0, Color::rgb(1.0, 1.0, 1.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 0.0))],
+    );
+    let shade = || Paint::Gradient(Box::new(GradientPaint::new(g.clone())));
+    let clips = [
+        (10.0, shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0)), solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None),
+        (70.0, ring(70.0), solid(Color::rgb(0.0, 0.0, 1.0)), Paint::None),
+        (130.0, ring(130.0), shade(), Paint::None),
+        (190.0, ring(190.0), solid(Color::rgb(0.0, 1.0, 0.0)), shade()),
+    ];
+    for (x, path, fill, stroke) in clips {
+        let mut clip = clipping(&mut doc, path);
+        let width = if matches!(stroke, Paint::None) { 0.0 } else { 2.0 };
+        clip.appearance = Appearance::basic(fill, stroke, width).into();
+        let inside = square(&mut doc, Rect::new(x - 5.0, 5.0, x + 10.0, 20.0), Color::gray(0.5));
+        let g = group(&mut doc, vec![clip, inside], true);
+        doc.insert(Some(layer), usize::MAX, g).unwrap();
+    }
+    doc
+}
+
+/// The writer counts the objects it writes as the reader counts the objects it reads: with room
+/// for as many objects as the reader reads, nothing is left out; with one less, art is left out,
+/// with a warning. With room for fewer, the reader never reads more objects than there is room for.
+#[test]
+fn the_writer_counts_objects_as_the_reader_reads_them() {
+    let objects = |out: &AiEditingOutput| crate::import::objects_read(&out.program).unwrap();
+    let limited = |out: &AiEditingOutput| out.warnings.iter().any(|w| w == writer::OBJECT_LIMIT);
+    for (name, doc) in counted() {
+        let all = export_ai_editing(&doc, &opts()).unwrap();
+        let read = objects(&all);
+        assert!(read > 0 && !limited(&all), "{name}: {read} objects, {:?}", all.warnings);
+        let room = export_within(&doc, &opts(), read).unwrap();
+        assert!(!limited(&room), "{name}: nothing is left out with room for {read} objects");
+        assert_eq!(room.program, all.program, "{name}");
+        for max in 0..read {
+            let out = export_within(&doc, &opts(), max).unwrap();
+            assert!(limited(&out), "{name}: art is left out with room for {max} of {read} objects");
+            assert!(objects(&out) <= max, "{name}: {} objects read with room for {max}", objects(&out));
+        }
+    }
+}
+
+/// An opacity mask whose art doesn't all fit within the object limit is left out with its art,
+/// and the object it masks is written without it; the art left out leaves room for the objects
+/// after it.
+#[test]
+fn a_mask_whose_art_passes_the_object_limit_is_left_out() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let mut masked = square(&mut doc, Rect::new(10.0, 10.0, 50.0, 50.0), Color::gray(0.5));
+    let a = square(&mut doc, Rect::new(0.0, 0.0, 30.0, 30.0), Color::rgb(1.0, 1.0, 1.0));
+    let b = square(&mut doc, Rect::new(30.0, 30.0, 60.0, 60.0), Color::rgb(1.0, 1.0, 1.0));
+    let art = group(&mut doc, vec![a, b], false);
+    masked.extras_mut().mask = Some(Box::new(OpacityMask::new(art, false)));
+    doc.insert(Some(layer), usize::MAX, masked).unwrap();
+    let after = square(&mut doc, Rect::new(100.0, 10.0, 140.0, 50.0), Color::gray(0.5));
+    doc.insert(Some(layer), usize::MAX, after).unwrap();
+    let text = |max: usize| {
+        let out = export_within(&doc, &opts(), max).unwrap();
+        let limited = out.warnings.iter().any(|w| w == writer::OBJECT_LIMIT);
+        (String::from_utf8_lossy(&out.program).replace("\r\n", "\n"), limited)
+    };
+    let read = crate::import::objects_read(&export_ai_editing(&doc, &opts()).unwrap().program).unwrap();
+    let (all, limited) = text(read);
+    assert!(!limited && all.contains("(AI9_Mask)"), "{all}");
+    let has_mask = |max: usize| text(max).0.contains("(AI9_Mask)");
+    let Some(fit) = (0..=read).find(|&max| has_mask(max)) else { panic!("the mask fits with room for {read} objects") };
+    assert!(fit > 2, "the mask needs room beyond the two squares: {fit}");
+    for max in fit..=read {
+        assert!(has_mask(max), "room for {max} of {read}, the mask fits in {fit}");
+    }
+    let (short, limited) = text(fit - 1);
+    assert!(limited);
+    assert!(!short.contains("(AI9_Mask)") && !short.contains("%_/ArtDictionary :\n%_/Mask"), "{short}");
+    assert_eq!(short.matches("\nf\n").count(), 2, "both squares are written: {short}");
+}
+
+/// A symbol's definition is written only when there is room for its instance too.
+#[test]
+fn a_symbol_definition_is_written_only_with_room_for_its_instance() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let a = square(&mut doc, Rect::new(0.0, 0.0, 10.0, 10.0), Color::gray(0.5));
+    let b = square(&mut doc, Rect::new(10.0, 10.0, 20.0, 20.0), Color::gray(0.5));
+    let art = group(&mut doc, vec![a, b], false);
+    doc.symbols.push(Symbol { dynamic: false, name: "Pair".into(), art: Arc::new(art) });
+    let placed = instance(&mut doc, "Pair", Affine::translate((50.0, 10.0)));
+    doc.insert(Some(layer), usize::MAX, placed).unwrap();
+    add_rect(&mut doc, Rect::new(100.0, 10.0, 110.0, 20.0));
+    let program = export_ai_editing(&doc, &opts()).unwrap().program;
+    let all = String::from_utf8_lossy(&program).replace("\r\n", "\n");
+    assert!(all.contains("%AI14_BeginSymbol") && all.contains("/SymbolInstance :"), "{all}");
+    let read = crate::import::objects_read(&program).unwrap();
+    for max in 0..read {
+        let out = export_within(&doc, &opts(), max).unwrap();
+        let text = String::from_utf8_lossy(&out.program).replace("\r\n", "\n");
+        let defined = text.contains("%AI14_BeginSymbol");
+        assert_eq!(defined, text.contains("/SymbolInstance :"), "room for {max} of {read}: {text}");
+        assert!(out.warnings.iter().any(|w| w == writer::OBJECT_LIMIT), "art is left out with room for {max} of {read} objects");
+        let objects = crate::import::objects_read(&out.program).unwrap();
+        assert!(objects <= max, "{objects} objects read with room for {max}");
+    }
+}
+
+/// The writer's limit is the reader's, which its warning names.
+#[test]
+fn the_object_limit_is_the_readers() {
+    assert_eq!(crate::import::MAX_EDITING_OBJECTS, 4_000_000);
+    assert!(writer::OBJECT_LIMIT.contains("4,000,000"));
+}
+
+/// Paths past the object limit are left out of a layer of many paths, with a warning: the paths
+/// that fit are written.
+#[test]
+fn paths_past_the_object_limit_are_left_out() {
+    let mut doc = Document::new(200.0, 100.0);
+    for i in 0..10 {
+        add_rect(&mut doc, Rect::new(f64::from(i) * 10.0, 0.0, f64::from(i) * 10.0 + 5.0, 5.0));
+    }
+    let out = export_within(&doc, &opts(), 6).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::OBJECT_LIMIT), "{:?}", out.warnings);
+    assert_eq!(crate::import::objects_read(&out.program).unwrap(), 6);
+    let text = String::from_utf8_lossy(&out.program).replace("\r\n", "\n");
+    assert_eq!(text.matches("\nf\n").count(), 6, "the first six paths are written");
+}
+
 /// On a canvas of the usual size, nested symbols whose instances multiply, written as their art in
 /// art cut to a clipping object, stop at [`vectorcraft_doc::MAX_SYMBOL_NODES`] objects of symbol art
 /// in all, with a warning.
@@ -4715,6 +4887,48 @@ fn symbols_painting_patterns_through_brush_art_are_placed_as_art() {
     assert_eq!(instances(&back.layers[0]), 0, "the instance is its art");
 }
 
+/// A symbol first defined from the drawn look of a group with a style, through a member's scatter
+/// brush, still warns that its art's own effects are left out, and so does a later instance of it.
+#[test]
+fn a_symbol_defined_inside_a_drawn_look_warns_of_its_own_effects() {
+    let mut doc = Document::new(200.0, 100.0);
+    let mut shadowed = square(&mut doc, Rect::new(0.0, 0.0, 6.0, 6.0), Color::BLACK);
+    shadowed.appearance = Appearance { effects: vec![drop_shadow()], ..Appearance::basic(black_fill(), Paint::None, 0.0) }.into();
+    doc.symbols.push(Symbol { dynamic: false, name: "Shadowed".into(), art: Arc::new(shadowed) });
+    let dot = square(&mut doc, Rect::new(0.0, 0.0, 6.0, 6.0), Color::BLACK);
+    let placed = instance(&mut doc, "Shadowed", Affine::translate((8.0, 0.0)));
+    let art = group(&mut doc, vec![dot, placed], false);
+    let brush = vectorcraft_brush::Brush {
+        name: "Scattered".into(),
+        kind: vectorcraft_brush::BrushKind::Scatter(vectorcraft_brush::Scatter {
+            art,
+            size: (100.0, 100.0),
+            spacing: (100.0, 100.0),
+            scatter: (0.0, 0.0),
+            rotation: (0.0, 0.0),
+            colorization: vectorcraft_brush::Colorization::None,
+            ..Default::default()
+        }),
+    };
+    vectorcraft_brush::store(&mut doc, &[brush]);
+    let mut line =
+        Node::path(doc.alloc_id(), shapes::line((10.0, 50.0).into(), (90.0, 50.0).into()), Appearance::basic(Paint::None, solid(Color::BLACK), 1.0));
+    line.appearance.stroke_mut().unwrap().brush = Some("Scattered".into());
+    let edge = square(&mut doc, Rect::new(10.0, 60.0, 30.0, 80.0), LEAF);
+    let mut styled = group(&mut doc, vec![line, edge], false);
+    styled.appearance = Appearance { effects: vec![drop_shadow()], ..Appearance::default() }.into();
+    put(&mut doc, named(styled, "Styled"));
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    let p = shown(&out.program);
+    assert!(p.contains("%AI14_BeginSymbol") && p.contains("1 (Anon 1) XW"), "{p}");
+    assert!(out.warnings.iter().any(|w| w == writer::EFFECTS), "{:?}", out.warnings);
+
+    let later = instance(&mut doc, "Shadowed", Affine::translate((150.0, 20.0)));
+    put(&mut doc, later);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::EFFECTS), "{:?}", out.warnings);
+}
+
 /// A symbol whose stroke is written as its outline (an outside stroke): a scaled instance, a scaled
 /// instance of a symbol holding it and a turned and mirrored instance are written as their art,
 /// which keeps the stroke the canvas draws; a moved instance stays an instance.
@@ -5388,6 +5602,33 @@ fn styles_document() -> Document {
     let mut merged = group(&mut doc, vec![a, b], false);
     merged.appearance = Appearance { effects: vec![fx("pathfinder.add", serde_json::json!({}))], ..Appearance::default() }.into();
     add(&mut doc, named(merged, "Merged"));
+    // A graphic style of its own, and an object linked to one.
+    let mut fill_top = FillLayer::new(solid(Color::rgb(0.2, 0.2, 0.9)));
+    fill_top.opacity = 0.5;
+    fill_top.blend = BlendMode::Screen;
+    fill_top.effects = vec![fx("distort.twist", serde_json::json!({"angle": 30.0}))];
+    let style_ap = Appearance {
+        items: vec![
+            AppearanceItem::Fill(FillLayer::new(solid(Color::rgb(0.9, 0.9, 0.1)))),
+            AppearanceItem::Fill(fill_top),
+            AppearanceItem::Stroke(StrokeLayer::new(solid(Color::BLACK), 3.0)),
+        ],
+        effects: vec![fx("warp.arc", serde_json::json!({"bend": 30.0})), shadow],
+        // The contents over every fill and stroke.
+        contents_index: Some(3),
+    };
+    let mut layered = vectorcraft_doc::GraphicStyle::new("Layered", style_ap);
+    layered.id = 9;
+    layered.opacity = 0.8;
+    doc.graphic_styles.push(layered);
+    let sunshine = doc.graphic_style("Sunshine").unwrap().clone();
+    let mut linked_obj = Node::path(
+        doc.alloc_id(),
+        shapes::rectangle(Rect::new(170.0, 130.0, 220.0, 170.0)),
+        sunshine.appearance_on(&Node::group(vectorcraft_doc::NodeId(0), vec![])).into_owned(),
+    );
+    linked_obj.extras_mut().graphic_style = Some(sunshine.id);
+    add(&mut doc, named(linked_obj, "Sunny"));
     doc
 }
 
@@ -5511,12 +5752,24 @@ fn near_lines(got: &str, want: &str) {
 }
 
 #[test]
-fn objects_with_live_effects_are_read_back() {
+fn objects_with_live_effects_and_graphic_styles_are_read_back() {
     let doc = styles_document();
     let out = export_ai_editing(&doc, &opts()).unwrap();
-    assert!(!out.warnings.iter().any(|w| w == writer::EFFECTS), "{:?}", out.warnings);
+    assert!(!out.warnings.iter().any(|w| w == writer::EFFECTS || w == writer::PANEL_STYLES), "{:?}", out.warnings);
     let back = read_back(&doc);
     same_styles(&back, &doc);
+    // The panel's styles, in its order, with their appearance and transparency.
+    let names = |d: &Document| d.graphic_styles.iter().map(|g| g.name.clone()).collect::<Vec<_>>();
+    assert_eq!(names(&back), names(&doc));
+    for (g, w) in back.graphic_styles.iter().zip(doc.graphic_styles.iter()) {
+        assert!(writer::same_appearance(&g.appearance, &w.appearance), "{}:\n  got  {:?}\n  want {:?}", w.name, g.appearance, w.appearance);
+        assert_eq!(
+            (r3(f64::from(g.opacity)), g.blend, g.isolate, g.knockout),
+            (r3(f64::from(w.opacity)), w.blend, w.isolate, w.knockout),
+            "{}",
+            w.name
+        );
+    }
     // A group's members come back as they were.
     let members = |d: &Document, name: &str| {
         let mut out = vec![];
@@ -5528,13 +5781,39 @@ fn objects_with_live_effects_are_read_back() {
     same_lines(&members(&back, "Merged"), &members(&doc, "Merged"));
 }
 
+/// In a document with only a new document's graphic styles, an object linked to one of them keeps
+/// its link: the panel's styles are written.
+#[test]
+fn a_link_to_a_built_in_graphic_style_is_read_back() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let sunshine = doc.graphic_style("Sunshine").unwrap().clone();
+    let ap = sunshine.appearance_on(&Node::group(vectorcraft_doc::NodeId(0), vec![])).into_owned();
+    // Without a link, a new document's styles are not written.
+    let mut plain = doc.clone();
+    let unlinked = Node::path(plain.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 60.0, 50.0)), ap.clone());
+    plain.insert(Some(layer), usize::MAX, unlinked).unwrap();
+    assert!(!program(&plain).contains("%AI9_BeginArtStyleList"));
+    let mut sunny = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 60.0, 50.0)), ap);
+    sunny.extras_mut().graphic_style = Some(sunshine.id);
+    doc.insert(Some(layer), usize::MAX, named(sunny, "Sunny")).unwrap();
+    assert_eq!(doc.graphic_styles, Document::new(1.0, 1.0).graphic_styles);
+    let back = read_back(&doc);
+    same_styles(&back, &doc);
+    let n = &back.layers[0].children().unwrap()[0];
+    assert_eq!(n.extras().graphic_style.and_then(|id| back.graphic_style_by_id(id)).map(|g| g.name.as_str()), Some("Sunshine"));
+}
+
 #[test]
 fn art_styles_are_written_in_their_forms() {
     let p = program_shown(&styles_document());
-    // The styles in a non-printing block after the symbols' and before the palette.
-    let styles = p.find("%AI5_Begin_NonPrinting\nNp\n%AI9_BeginArtStyles\n/KnownStyle :\n(Anon 1) /Name ,\n/ActiveStyle :\n").unwrap();
+    // The styles in a non-printing block after the symbols' and before the palette; the panel's in
+    // its order first, then the objects' own.
+    let styles = p.find("%AI5_Begin_NonPrinting\nNp\n%AI9_BeginArtStyles\n/KnownStyle :\n(Default Graphic Style) /Name ,\n/ActiveStyle :\n").unwrap();
     assert!(styles < p.find("%AI5_BeginPalette").unwrap(), "{p}");
-    assert!(!p.contains("%AI9_BeginArtStyleList"), "{p}");
+    let list = "%AI5_Begin_NonPrinting\nNp\n%AI9_BeginArtStyleList\n(Default Graphic Style)\n(Black Outline)\n(Heavy Ink)\n(Sunshine)\n(Layered)\n%AI9_EndArtStyleList\n%AI5_End_NonPrinting--\n";
+    let at = p.find(list).unwrap();
+    assert!(p.find("%AI5_EndPalette").unwrap() < at && at < p.find("%AI9_BeginDocumentData").unwrap(), "{p}");
     // A drop shadow on the object, after its stack and before its transparency.
     assert!(
         p.contains(
@@ -5548,6 +5827,8 @@ fn art_styles_are_written_in_their_forms() {
     assert!(p.contains("U\n0 1 0 2 0 Xy\n0 0 Xd\n6 () XW\n%_0 XR\n%_0 1 0 0 0 Xy\n%_10 -10 m\n"), "{p}");
     assert!(p.contains("%_n\n%_/ArtDictionary :\n%_/XMLUID : (Shadowed) ; (AI10_ArtUID) ,\n%_;\n%_\n1 (Anon 1) XW\n"), "{p}");
     assert!(p.contains("%_n\n%_/ArtDictionary :\n%_/XMLUID : (Offset) ; (AI10_ArtUID) ,\n%_;\n%_\n1 (Anon "), "{p}");
+    // The object linked to a graphic style names it.
+    assert!(p.contains("%_/XMLUID : (Sunny) ; (AI10_ArtUID) ,\n%_;\n%_\n1 (Sunshine) XW\n"), "{p}");
     // A group's members on `%_` lines, then its name and style.
     assert!(p.contains("6 () XW\n%_u\n"), "{p}");
     assert!(p.contains("%_U\n%_/ArtDictionary :\n%_/XMLUID : (Merged) ; (AI10_ArtUID) ,\n%_;\n%_\n1 (Anon "), "{p}");
@@ -5567,8 +5848,9 @@ fn art_styles_are_written_in_their_forms() {
 }
 
 /// Objects whose appearance the reader wouldn't read with their style are written as their
-/// drawn look, with the warnings they were written with before; and a document without effects has
-/// no art styles.
+/// drawn look, with the warnings they were written with before; graphic styles it wouldn't read
+/// are left out with a warning; and a document without effects or styles of its own has no art
+/// styles.
 #[test]
 fn appearances_the_reader_wouldnt_read_are_their_drawn_look() {
     let mut doc = Document::new(200.0, 100.0);
@@ -5596,8 +5878,39 @@ fn appearances_the_reader_wouldnt_read_are_their_drawn_look() {
     assert!(!p.contains("%AI9_BeginArtStyles") && !p.lines().any(|l| l.starts_with("1 (")), "{p}");
     let back = read_back(&doc);
     assert!(back.layers[0].children().unwrap().iter().all(|n| n.appearance.effects.is_empty()));
+    // A graphic style with a gradient: left out, the others listed.
+    let ramp = Gradient { stops: vec![GradientStop::new(0.0, Color::WHITE), GradientStop::new(1.0, Color::BLACK)], ..Gradient::default() };
+    let graded = Appearance::basic(Paint::Gradient(Box::new(GradientPaint::new(ramp))), Paint::None, 0.0);
+    doc.graphic_styles.push(vectorcraft_doc::GraphicStyle::new("Graded", graded));
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::PANEL_STYLES), "{:?}", out.warnings);
+    let p = String::from_utf8(out.program).unwrap().replace("\r\n", "\n");
+    assert!(p.contains("(Sunshine)\n%AI9_EndArtStyleList") && !p.contains("(Graded)"), "{p}");
     // Nothing styled: no art styles.
     assert!(!program(&sample()).contains("ArtStyle"));
+}
+
+/// A graphic style's opacity is read back within the written number's precision: the style and an
+/// object's link to it stay.
+#[test]
+fn a_graphic_styles_opacity_is_compared_at_the_written_precision() {
+    let mut doc = Document::new(200.0, 100.0);
+    let ap = Appearance::basic(solid(Color::BLACK), Paint::None, 1.0);
+    let mut g = vectorcraft_doc::GraphicStyle::new("Fine", ap.clone());
+    g.id = 1;
+    g.opacity = 0.123456;
+    *doc.graphic_styles = vec![g];
+    let mut n = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 60.0, 50.0)), ap);
+    n.opacity = 0.123456;
+    n.extras_mut().graphic_style = Some(1);
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::PANEL_STYLES), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    assert_eq!(back.graphic_styles.len(), 1);
+    assert!((back.graphic_styles[0].opacity - 0.123456).abs() < 1e-3);
+    assert_eq!(back.layers[0].children().unwrap()[0].extras().graphic_style, Some(back.graphic_styles[0].id));
 }
 
 /// A compound shape draws as one area, which an art style's object wouldn't keep: it and a group
@@ -5628,6 +5941,45 @@ fn compound_shapes_are_not_written_with_an_art_style() {
         assert!(out.warnings.iter().any(|w| w == writer::EFFECTS), "{:?}", out.warnings);
         assert!(!shown(&out.program).contains("1 (Anon 1) XW"));
     }
+}
+
+/// Graphic styles the reader's style list wouldn't hold (a name over its limit, styles past its
+/// count) are left out with a warning, and an object linked to one has no link.
+#[test]
+fn graphic_styles_past_the_lists_limits_are_left_out() {
+    let plain = || Appearance::basic(solid(Color::BLACK), Paint::None, 1.0);
+    let styled = |name: String, id: u32| {
+        let mut g = vectorcraft_doc::GraphicStyle::new(name, plain());
+        g.id = id;
+        g
+    };
+    // A name one byte over the limit, among others.
+    let mut doc = Document::new(200.0, 100.0);
+    let long = "n".repeat(1025);
+    *doc.graphic_styles = vec![styled("Before".into(), 1), styled(long.clone(), 2), styled("After".into(), 3)];
+    let mut linked = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 60.0, 50.0)), plain());
+    linked.extras_mut().graphic_style = Some(2);
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, linked).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::PANEL_STYLES), "{:?}", out.warnings);
+    assert!(!shown(&out.program).contains(&long));
+    let back = read_back(&doc);
+    let names: Vec<&str> = back.graphic_styles.iter().map(|g| g.name.as_str()).collect();
+    assert_eq!(names, ["Before", "After"]);
+    assert_eq!(back.layers[0].children().unwrap()[0].extras().graphic_style, None);
+    // A name at the limit is kept.
+    let at_limit = "n".repeat(1024);
+    doc.graphic_styles[1].name = at_limit.clone();
+    assert!(read_back(&doc).graphic_styles.iter().any(|g| g.name == at_limit));
+    // Styles past the count.
+    let mut many = Document::new(200.0, 100.0);
+    *many.graphic_styles = (1..=4097).map(|i| styled(format!("Style {i}"), i)).collect();
+    let out = export_ai_editing(&many, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::PANEL_STYLES), "{:?}", out.warnings);
+    let back = read_back(&many);
+    assert_eq!(back.graphic_styles.len(), 4096);
+    assert_eq!(back.graphic_styles.last().map(|g| g.name.as_str()), Some("Style 4096"));
 }
 
 /// A member of a group whose Transform effect moves it is written where baking put it, not with
@@ -5781,7 +6133,8 @@ fn read_one(make: impl FnOnce(&mut Document) -> Node) -> (Arc<Node>, Vec<String>
 
 /// A filled path or compound path with live effects that fills by the even-odd rule is written as its
 /// drawn look with a warning, since a style's fill fills by the non-zero rule. A stroke-only object
-/// keeps its style and its own fill rule.
+/// keeps its style and its own fill rule. A filled even-odd object linked to a graphic style isn't
+/// written with that style, and its link is left out with a warning.
 #[test]
 fn a_filled_even_odd_object_is_written_as_its_drawn_look() {
     let mut doc = Document::new(300.0, 100.0);
@@ -5810,9 +6163,28 @@ fn a_filled_even_odd_object_is_written_as_its_drawn_look() {
     let back = read_back(&doc);
     same_styles(&back, &doc);
     assert!(matches!(back.layers[0].children().unwrap()[0].kind, NodeKind::Compound { rule: FillRule::EvenOdd, .. }));
+
+    let mut doc = Document::new(200.0, 100.0);
+    let ap = Appearance::basic(black_fill(), Paint::None, 0.0);
+    let mut g = vectorcraft_doc::GraphicStyle::new("Solid", ap.clone());
+    g.id = 7;
+    doc.graphic_styles.push(g);
+    let mut n = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 40.0)), ap);
+    n.extras_mut().graphic_style = Some(7);
+    if let NodeKind::Path { rule, .. } = &mut n.kind {
+        *rule = FillRule::EvenOdd;
+    }
+    put(&mut doc, n);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::STYLE_LINKS), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let n = &back.layers[0].children().unwrap()[0];
+    assert!(matches!(n.kind, NodeKind::Path { rule: FillRule::EvenOdd, .. }), "{n:?}");
+    assert_eq!(n.extras().graphic_style, None);
 }
 
-/// A compound path filled by the non-zero rule keeps its effects and its gradient fill.
+/// A compound path filled by the non-zero rule keeps its effects, its gradient fill and its link to
+/// a graphic style.
 #[test]
 fn a_compound_path_keeps_its_style() {
     let mut doc = Document::new(300.0, 100.0);
@@ -5830,8 +6202,16 @@ fn a_compound_path_keeps_its_style() {
     let ap = Appearance { effects: vec![drop_shadow()], ..Appearance::basic(graded, Paint::None, 0.0) };
     let n = named(non_zero(ring(&mut doc, ap)), "Graded");
     put(&mut doc, n);
+    let sunshine = doc.graphic_style("Sunshine").unwrap().clone();
+    let ap = sunshine.appearance_on(&Node::group(vectorcraft_doc::NodeId(0), vec![])).into_owned();
+    let mut linked_ring = named(ring(&mut doc, ap), "Linked");
+    if let NodeKind::Compound { rule, .. } = &mut linked_ring.kind {
+        *rule = FillRule::NonZero;
+    }
+    linked_ring.extras_mut().graphic_style = Some(sunshine.id);
+    put(&mut doc, linked_ring);
     let out = export_ai_editing(&doc, &opts()).unwrap();
-    assert!(!out.warnings.iter().any(|w| w == writer::EFFECTS), "{:?}", out.warnings);
+    assert!(!out.warnings.iter().any(|w| w == writer::EFFECTS || w == writer::STYLE_LINKS), "{:?}", out.warnings);
     let back = read_back(&doc);
     same_styles(&back, &doc);
     assert!(back.layers[0].children().unwrap().iter().all(|n| matches!(n.kind, NodeKind::Compound { .. })));
@@ -5857,36 +6237,136 @@ fn a_group_holding_an_image_is_written_as_its_drawn_look() {
     assert!(im.link.is_some());
 }
 
-/// Graphic styles and links to them are left out with a warning: an object linked to a style
-/// keeps its effects in a style of its own. A new document's styles without a link don't warn.
+/// A link to a graphic style that isn't written warns; one that is written doesn't.
 #[test]
-fn graphic_styles_and_links_are_left_out_with_a_warning() {
-    let warns = |doc: &Document| export_ai_editing(doc, &opts()).unwrap().warnings.iter().any(|w| w == writer::GRAPHIC_STYLES);
-    assert!(!warns(&Document::new(200.0, 100.0)));
-    // A style of the document's own.
-    let mut own = Document::new(200.0, 100.0);
-    own.graphic_styles.push(vectorcraft_doc::GraphicStyle::new("Mine", Appearance::basic(black_fill(), Paint::None, 0.0)));
-    assert!(warns(&own));
-    assert!(!shown(&export_ai_editing(&own, &opts()).unwrap().program).contains("ArtStyle"));
-    assert_eq!(read_back(&own).graphic_style("Mine"), None);
-    // A link to a new document's style, on an object with an effect.
-    let mut linked = Document::new(200.0, 100.0);
-    let id = linked.graphic_style("Sunshine").unwrap().id;
-    let mut n = plain_rect(&mut linked, "Linked", vec![drop_shadow()]);
-    n.extras_mut().graphic_style = Some(id);
-    put(&mut linked, n);
-    assert!(warns(&linked));
-    let back = read_back(&linked);
-    let n = &back.layers[0].children().unwrap()[0];
-    assert_eq!(n.extras().graphic_style, None);
-    assert_eq!(n.appearance.effects.len(), 1);
+fn a_link_left_out_warns() {
+    let warns = |make: &dyn Fn(&mut Document, u32) -> Node| {
+        let mut doc = Document::new(200.0, 100.0);
+        let ap = Appearance {
+            items: vec![AppearanceItem::Fill(FillLayer::new(black_fill())), AppearanceItem::Fill(FillLayer::new(solid(Color::WHITE)))],
+            ..Appearance::default()
+        };
+        let mut layered = vectorcraft_doc::GraphicStyle::new("Layered", ap);
+        layered.id = 7;
+        doc.graphic_styles.push(layered);
+        let mut plain = vectorcraft_doc::GraphicStyle::new("Plain", Appearance::basic(black_fill(), Paint::None, 0.0));
+        plain.id = 8;
+        doc.graphic_styles.push(plain);
+        let n = make(&mut doc, 7);
+        put(&mut doc, n);
+        let warned = export_ai_editing(&doc, &opts()).unwrap().warnings.iter().any(|w| w == writer::STYLE_LINKS);
+        (warned, read_back(&doc))
+    };
+    let linked = |mut n: Node, id: u32| {
+        n.extras_mut().graphic_style = Some(id);
+        n
+    };
+    // A style of two fills: a path isn't read with it.
+    let (warned, back) = warns(&|doc, id| {
+        let ap = doc.graphic_style_by_id(id).unwrap().appearance.clone();
+        linked(Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 40.0)), ap), id)
+    });
+    assert!(warned);
+    assert_eq!(back.layers[0].children().unwrap()[0].extras().graphic_style, None);
+    assert!(back.graphic_style("Layered").is_some());
+    // An image, a symbol instance and a knockout shape are never written with a style.
+    let (warned, _) = warns(&|doc, _| {
+        let art = square(doc, Rect::new(0.0, 0.0, 10.0, 10.0), Color::BLACK);
+        doc.symbols.push(Symbol { dynamic: false, name: "S".into(), art: Arc::new(art) });
+        linked(Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "S".into(), xf: Affine::translate((50.0, 20.0)) }), 8)
+    });
+    assert!(warned);
+    let (warned, _) = warns(&|doc, _| {
+        let mut n = plain_rect(doc, "Out", vec![]);
+        n.knockout_shape = true;
+        linked(n, 8)
+    });
+    assert!(warned);
+    // A group with a member the style can't hold.
+    let (warned, _) = warns(&|doc, _| {
+        let member = plain_rect(doc, "Member", vec![drop_shadow()]);
+        linked(group(doc, vec![member], false), 8)
+    });
+    assert!(warned);
+    // A group with an effect and a member linked to a style: the group keeps its effect, and the
+    // member's link is left out.
+    let (warned, back) = warns(&|doc, _| {
+        let member = linked(plain_rect(doc, "Member", vec![]), 8);
+        let mut g = group(doc, vec![member], false);
+        g.appearance = Appearance { effects: vec![drop_shadow()], ..Appearance::default() }.into();
+        g
+    });
+    assert!(warned);
+    let g = &back.layers[0].children().unwrap()[0];
+    assert_eq!(g.appearance.effects.len(), 1, "{g:?}");
+    assert_eq!(g.children().unwrap()[0].extras().graphic_style, None);
+    // A group whose link isn't written: its member keeps its own.
+    let (warned, back) = warns(&|doc, id| {
+        let plain = doc.graphic_style_by_id(id + 1).unwrap().appearance.clone();
+        let member = linked(Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 40.0)), plain), id + 1);
+        linked(group(doc, vec![member], false), id)
+    });
+    assert!(warned);
+    let g = &back.layers[0].children().unwrap()[0];
+    assert_eq!(g.extras().graphic_style, None);
+    let member = g.children().unwrap()[0].extras().graphic_style.unwrap();
+    assert_eq!(back.graphic_style_by_id(member).map(|s| s.name.as_str()), Some("Plain"));
     // A link in a symbol's art.
-    let mut in_symbol = Document::new(200.0, 100.0);
-    let id = in_symbol.graphic_style("Sunshine").unwrap().id;
-    let mut art = square(&mut in_symbol, Rect::new(0.0, 0.0, 10.0, 10.0), Color::BLACK);
-    art.extras_mut().graphic_style = Some(id);
-    in_symbol.symbols.push(Symbol { dynamic: false, name: "S".into(), art: Arc::new(art) });
-    assert!(warns(&in_symbol));
+    let (warned, _) = warns(&|doc, _| {
+        let art = linked(square(doc, Rect::new(0.0, 0.0, 10.0, 10.0), Color::BLACK), 8);
+        doc.symbols.push(Symbol { dynamic: false, name: "S".into(), art: Arc::new(art) });
+        Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "S".into(), xf: Affine::translate((50.0, 20.0)) })
+    });
+    assert!(warned);
+    // A link that is kept.
+    let (warned, back) = warns(&|doc, id| {
+        let plain = doc.graphic_style_by_id(id + 1).unwrap().appearance.clone();
+        linked(Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 40.0)), plain), id + 1)
+    });
+    assert!(!warned);
+    let id = back.layers[0].children().unwrap()[0].extras().graphic_style.unwrap();
+    assert_eq!(back.graphic_style_by_id(id).map(|g| g.name.as_str()), Some("Plain"));
+}
+
+/// A panel with no style written warns that a new document's styles come back.
+#[test]
+fn an_empty_graphic_styles_panel_warns() {
+    let mut doc = Document::new(200.0, 100.0);
+    doc.graphic_styles.clear();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::PANEL_EMPTY), "{:?}", out.warnings);
+    assert!(!shown(&out.program).contains("ArtStyle"));
+    assert_eq!(read_back(&doc).graphic_styles, Document::new(1.0, 1.0).graphic_styles);
+    // Every style left out.
+    let stops = vec![GradientStop::new(0.0, Color::WHITE), GradientStop::new(1.0, Color::BLACK)];
+    let graded = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+    doc.graphic_styles.push(vectorcraft_doc::GraphicStyle::new("Graded", Appearance::basic(graded, Paint::None, 0.0)));
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::PANEL_EMPTY) && out.warnings.iter().any(|w| w == writer::PANEL_STYLES), "{:?}", out.warnings);
+    // A new document's styles aren't written and don't warn.
+    let out = export_ai_editing(&Document::new(200.0, 100.0), &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::PANEL_EMPTY), "{:?}", out.warnings);
+}
+
+/// A second style of one name is left out with a warning, and an object linked to it has no link.
+#[test]
+fn a_graphic_style_of_a_name_another_has_is_left_out() {
+    let mut doc = Document::new(200.0, 100.0);
+    let style = |id: u32, c: Color| {
+        let mut g = vectorcraft_doc::GraphicStyle::new("Twin", Appearance::basic(solid(c), Paint::None, 0.0));
+        g.id = id;
+        g
+    };
+    *doc.graphic_styles = vec![style(1, Color::BLACK), style(2, Color::WHITE)];
+    let mut n = styled_rect(&mut doc, "Second", Rect::new(10.0, 10.0, 50.0, 40.0), solid(Color::WHITE), Paint::None, vec![]);
+    n.extras_mut().graphic_style = Some(2);
+    put(&mut doc, n);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::PANEL_STYLES) && out.warnings.iter().any(|w| w == writer::STYLE_LINKS), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    assert_eq!(back.graphic_styles.len(), 1);
+    assert_eq!(back.graphic_styles[0].appearance.fill().and_then(|f| f.paint.color()), Some(Color::BLACK));
+    assert_eq!(back.layers[0].children().unwrap()[0].extras().graphic_style, None);
 }
 
 /// A path or compound path with no points writes nothing, with or without a style; a group with no
@@ -6009,6 +6489,93 @@ fn every_effect_setting_written_on_an_object_is_read_back() {
     }
     let spot = &back.layers[0].children().unwrap()[1];
     assert!(matches!(&spot.appearance.fill().unwrap().paint, Paint::Solid { swatch: Some(s), .. } if s == "Ink"), "{spot:?}");
+}
+
+/// Each effect a graphic style can hold, in a style of its own, reads back with its settings, whatever
+/// the writer's conversions to the file's units.
+#[test]
+fn every_effect_a_graphic_style_holds_is_read_back() {
+    use serde_json::json;
+    let mut cases = vec![
+        (
+            "distort.transform",
+            json!({"scaleH": 50.0, "scaleV": 150.0, "moveH": 12.5, "moveV": -7.5, "rotate": 30.0, "copies": 2, "reference": 8, "reflectX": true, "objects": false, "strokes": true, "patterns": true}),
+        ),
+        ("distort.freeDistort", json!({"corners": [[0.1, 0.05], [0.9, 0.1], [1.0, 1.0], [0.0, 0.8]]})),
+        ("distort.puckerBloat", json!({"amount": -40.0})),
+        ("distort.puckerBloat", json!({"amount": 60.0})),
+        ("distort.twist", json!({"angle": -45.0})),
+        ("distort.zigZag", json!({"size": 7.5, "relative": false, "ridges": 6, "points": "corner"})),
+        ("distort.zigZag", json!({"size": 25.0, "relative": true, "ridges": 3, "points": "smooth"})),
+        ("blur.gaussian", json!({"radius": 2.5})),
+    ];
+    let warps = [
+        "arc",
+        "arcLower",
+        "arcUpper",
+        "arch",
+        "bulge",
+        "shellLower",
+        "shellUpper",
+        "flag",
+        "wave",
+        "fish",
+        "rise",
+        "fisheye",
+        "inflate",
+        "squeeze",
+        "twist",
+    ];
+    let ids: Vec<String> = warps.iter().map(|w| format!("warp.{w}")).collect();
+    for id in &ids {
+        cases.push((id, json!({"bend": 30.0, "horizontal": -10.0, "vertical": 20.0, "orientation": "vertical"})));
+        cases.push((id, json!({"bend": -30.0, "horizontal": 0.0, "vertical": 0.0, "orientation": "horizontal"})));
+    }
+    for (id, params) in cases {
+        let effect = fx(id, params.clone());
+        let mut doc = Document::new(200.0, 100.0);
+        let mut g = vectorcraft_doc::GraphicStyle::new(
+            "Held",
+            Appearance { effects: vec![effect.clone()], ..Appearance::basic(black_fill(), Paint::None, 0.0) },
+        );
+        g.id = 3;
+        *doc.graphic_styles = vec![g];
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert!(!out.warnings.iter().any(|w| w == writer::PANEL_STYLES), "{id} {params}: {:?}", out.warnings);
+        let back = read_back(&doc);
+        let got = &back.graphic_styles[0].appearance.effects;
+        assert_eq!(got.len(), 1, "{id} {params}");
+        assert_eq!(got[0].id, effect.id);
+        let (g, w) = (vectorcraft_effects::merged_params(&got[0].id, &got[0].params), vectorcraft_effects::merged_params(&effect.id, &effect.params));
+        for (key, value) in w.as_object().unwrap() {
+            // Random isn't written, and a style with it isn't read; its seed is the default.
+            let read = g.get(key).unwrap_or(&serde_json::Value::Null);
+            match value {
+                serde_json::Value::Array(rows) => {
+                    let got = read.as_array().unwrap();
+                    assert_eq!(got.len(), rows.len(), "{id}");
+                    for (r, w) in got.iter().zip(rows) {
+                        for (r, w) in r.as_array().unwrap().iter().zip(w.as_array().unwrap()) {
+                            assert!((r.as_f64().unwrap() - w.as_f64().unwrap()).abs() < 6e-3, "{id} {key}: {read} for {value}");
+                        }
+                    }
+                }
+                serde_json::Value::Number(v) => assert!((read.as_f64().unwrap() - v.as_f64().unwrap()).abs() < 6e-3, "{id} {key}: {read} for {v}"),
+                serde_json::Value::String(v) => assert_eq!(read.as_str().map(str::to_ascii_lowercase), Some(v.to_ascii_lowercase()), "{id} {key}"),
+                _ => assert_eq!(read, value, "{id} {key}"),
+            }
+        }
+    }
+    // A Zig Zag with its 0 to 1 settings written under the size's own key, and a turn in radians.
+    let mut doc = Document::new(200.0, 100.0);
+    let effects = vec![
+        fx("distort.zigZag", json!({"size": 7.5, "relative": false, "ridges": 6, "points": "corner"})),
+        fx("distort.transform", json!({"moveV": -7.5, "rotate": 30.0})),
+    ];
+    doc.graphic_styles.push(vectorcraft_doc::GraphicStyle::new("Forms", Appearance { effects, ..Appearance::default() }));
+    let p = program_shown(&doc);
+    assert!(p.contains("7.5 /Real (amount) ,") && p.contains("0 /Real (roundness) ,"), "{p}");
+    assert!(p.contains("7.5 /Real (moveV_Pts) ,") && p.contains("0.5236 /Real (rotate_Radians) ,"), "{p}");
 }
 
 /// Every kind of appearance a style isn't written for is written as its drawn look, with a warning.
@@ -6145,6 +6712,60 @@ fn appearances_written_as_their_drawn_look() {
         let out = export_ai_editing(&doc, &opts()).unwrap();
         assert!(out.warnings.iter().any(|w| w == writer::EFFECTS), "{what}: {:?}", out.warnings);
         let p = shown(&out.program);
+        assert!(!p.contains("%AI9_BeginArtStyles") && !p.contains("(Anon 1) XW"), "{what}:\n{p}");
+        let back = read_back(&doc);
+        let n = &back.layers[0].children().unwrap()[0];
+        assert!(n.appearance.effects.is_empty(), "{what}: {n:?}");
+    }
+}
+
+/// A link to a graphic style whose Transform moves the outline is kept on a path the reader reads
+/// that style on, and left out with a warning on a path with an opacity mask, which keeps its mask.
+#[test]
+fn a_link_to_a_style_that_moves_the_outline_is_kept_where_the_reader_reads_it() {
+    let make = |masked: bool| {
+        let mut doc = Document::new(200.0, 100.0);
+        let moved = fx("distort.transform", serde_json::json!({"copies": 0, "scaleH": 50.0}));
+        let ap = Appearance { effects: vec![moved], ..Appearance::basic(black_fill(), Paint::None, 0.0) };
+        let mut g = vectorcraft_doc::GraphicStyle::new("Moved", ap.clone());
+        g.id = 9;
+        doc.graphic_styles.push(g);
+        let mut n = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 40.0)), ap);
+        n.extras_mut().graphic_style = Some(9);
+        if masked {
+            let art = square(&mut doc, Rect::new(10.0, 10.0, 50.0, 25.0), Color::gray(0.5));
+            n.extras_mut().mask = Some(OpacityMask { art: Arc::new(art), clip: true, invert: false, disabled: false, linked: true }.into());
+        }
+        put(&mut doc, n);
+        doc
+    };
+    let doc = make(false);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::STYLE_LINKS), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let n = &back.layers[0].children().unwrap()[0];
+    assert_eq!(n.extras().graphic_style.and_then(|id| back.graphic_style_by_id(id)).map(|g| g.name.as_str()), Some("Moved"));
+
+    let doc = make(true);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::STYLE_LINKS), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let n = &back.layers[0].children().unwrap()[0];
+    assert_eq!(n.extras().graphic_style, None);
+    assert!(n.extras().mask.is_some(), "{n:?}");
+}
+
+/// Twist and Transform on an object that isn't linked to a graphic style are not written as a style
+/// of its own: the object reads back without live effects.
+#[test]
+fn distort_effects_on_an_unlinked_object_write_no_style() {
+    let cases = [fx("distort.twist", serde_json::json!({"angle": 30.0})), fx("distort.transform", serde_json::json!({"copies": 0, "moveH": 5.0}))];
+    for e in cases {
+        let what = e.id.clone();
+        let mut doc = Document::new(200.0, 100.0);
+        let n = plain_rect(&mut doc, "D", vec![e]);
+        put(&mut doc, n);
+        let p = shown(&export_ai_editing(&doc, &opts()).unwrap().program);
         assert!(!p.contains("%AI9_BeginArtStyles") && !p.contains("(Anon 1) XW"), "{what}:\n{p}");
         let back = read_back(&doc);
         let n = &back.layers[0].children().unwrap()[0];
@@ -6450,14 +7071,26 @@ fn a_styled_objects_gradient_is_placed_as_a_plain_objects_is() {
     }
 }
 
-/// On a large canvas an object with an effect warns and comes back as its drawn look at its place.
+/// On a large canvas a document with only graphic styles, an object linked to one and an object with
+/// an effect all warn, and the object comes back as its drawn look at its place.
 #[test]
 fn a_large_canvas_writes_every_object_as_its_look() {
     let warns = |doc: &Document| export_ai_editing(doc, &opts()).unwrap().warnings.iter().any(|w| w == writer::LARGE_CANVAS_STYLES);
+    let mut styles_only = Document::new(20000.0, 100.0);
+    styles_only.graphic_styles.push(vectorcraft_doc::GraphicStyle::new("Mine", Appearance::basic(black_fill(), Paint::None, 0.0)));
+    assert!(warns(&styles_only));
+    assert_eq!(read_back(&styles_only).graphic_style("Mine"), None);
     let mut plain = Document::new(20000.0, 100.0);
     let n = plain_rect(&mut plain, "None", vec![]);
     put(&mut plain, n);
     assert!(!warns(&plain));
+    let mut linked_doc = Document::new(20000.0, 100.0);
+    let id = linked_doc.graphic_style("Sunshine").unwrap().id;
+    let mut n = plain_rect(&mut linked_doc, "Linked", vec![]);
+    n.extras_mut().graphic_style = Some(id);
+    put(&mut linked_doc, n);
+    assert!(warns(&linked_doc));
+    assert_eq!(read_back(&linked_doc).layers[0].children().unwrap()[0].extras().graphic_style, None);
     let mut shaded = Document::new(20000.0, 100.0);
     let n = plain_rect(&mut shaded, "Shaded", vec![drop_shadow()]);
     put(&mut shaded, n);

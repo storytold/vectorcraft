@@ -97,7 +97,7 @@ use titlebar::opted_into_system_title_bar;
 #[cfg(windows)]
 use titlebar::set_taskbar_icon;
 #[cfg(all(test, feature = "wgpu"))]
-use titlebar::{app_draws_frame, opted_into_app_title_bar, start_frame};
+use titlebar::{app_draws_frame, opted_into_app_title_bar, start_frame, system_title_bar_applies};
 use titlebar::{custom_titlebar, native_options, titlebar_from_env};
 
 struct App {

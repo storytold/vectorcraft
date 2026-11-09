@@ -36,8 +36,8 @@ pub fn open(app: &mut VectorcraftApp, category: Option<&str>) {
     fields.insert("__smartGuides".into(), json!(app.ui.view.smart_guides));
     fields.insert("__snapToGrid".into(), json!(app.ui.view.snap_to_grid));
     fields.insert("__taskBar".into(), json!(app.ui.task_bar));
-    // Read-only: whether VECTORCRAFT_TITLEBAR chose this window's frame (VectorCraft Title Bar on
-    // Every Desktop's note).
+    // Read-only: whether VECTORCRAFT_TITLEBAR chose this window's frame (System Title Bar's dimmed
+    // row and VectorCraft Title Bar on Every Desktop's note).
     fields.insert("__titlebarFromEnv".into(), json!(app.titlebar_from_env));
     fields.insert("__search".into(), json!(""));
     fields.insert("__focusSearch".into(), json!(true));
@@ -57,10 +57,12 @@ pub(crate) struct Setting {
 /// preferences, each category's in the order the dialog lists them.
 fn settings() -> impl Iterator<Item = Setting> {
     let ui_fields = UI_FIELDS.iter().map(|&(key, category, label)| Setting { key, category, section: "", label });
+    const SYSTEM_TITLE_BAR: bool = cfg!(all(not(target_arch = "wasm32"), not(target_os = "macos")));
+    const DISPLAY_SERVER_CHOICE: bool = cfg!(target_os = "linux");
     let shown = |key: &str| match key {
-        "systemTitleBar" => cfg!(all(not(target_arch = "wasm32"), not(target_os = "macos"))),
+        "systemTitleBar" => SYSTEM_TITLE_BAR,
         "appTitleBar" => APP_TITLE_BAR_SHOWN,
-        "linuxDisplayServer" => cfg!(target_os = "linux"),
+        "linuxDisplayServer" => DISPLAY_SERVER_CHOICE,
         _ => true,
     };
     let prefs =
@@ -481,7 +483,8 @@ fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, 
             // Windows and Linux only: macOS always has the system's title bar, the web has none.
             PrefKind::Bool if sp.key == "systemTitleBar" => {
                 if cfg!(all(not(target_arch = "wasm32"), not(target_os = "macos"))) {
-                    bool_row(ui, d, sp.key, sp.label);
+                    // VECTORCRAFT_TITLEBAR chooses the frame while it is set: the checkbox is dimmed.
+                    ui.add_enabled_ui(!d.bool("__titlebarFromEnv"), |ui| bool_row(ui, d, sp.key, sp.label));
                     // The window's decorations are chosen once, when the app starts. On Linux and the
                     // BSDs the note goes under the next row, which also applies at the next start.
                     if !APP_TITLE_BAR_SHOWN {
@@ -497,7 +500,7 @@ fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, 
                     let from_env = d.bool("__titlebarFromEnv");
                     let system = d.bool("systemTitleBar");
                     ui.add_enabled_ui(!from_env && !system, |ui| bool_row(ui, d, sp.key, sp.label));
-                    if system {
+                    if system && !from_env {
                         let note = tl!("System Title Bar takes precedence over this option while it is on.");
                         ui.label(egui::RichText::new(note).color(t.text_dim).size(11.0));
                     }

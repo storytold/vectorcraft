@@ -186,6 +186,10 @@
 	Anti-Alias	Kantutjämning
 	Anti-alias Rasters	Kantutjämna rasterbilder
 	Anti-aliased Artwork	Kantutjämnad grafik
+	Anti-aliasing Method	Kantutjämningsmetod
+antiAlias	Sharp	Skarp
+	Crisp	Klar
+	Strong	Kraftig
 	Anti-aliasing:	Kantutjämning:
 	Any Kind	Alla typer
 	Font Technology	Typsnittsteknik
@@ -356,6 +360,13 @@ font-technology	Variable	Variabla
 	Apply Bullets	Använd punkter
 	Numbered List	Numrerad lista
 	Apply Numbers	Använd numrering
+	Bullets and Numbering…	Punkter och numrering…
+	Numbers	Nummer
+	Level:	Nivå:
+	Bullet Character:	Punkttecken:
+	Number Style:	Nummerformat:
+	Left Indent:	Vänsterindrag:
+	First Line Indent:	Indrag för första raden:
 	Convert to Text	Konvertera till text
 	Filled Dot	Fylld punkt
 	Dash	Tankstreck
@@ -542,6 +553,11 @@ font-technology	Variable	Variabla
 	Color Table ({n} colors)	Färgtabell ({n} färger)
 	Color Theme	Färgtema
 	Color Themes	Färgteman
+	Color Wheel	Färghjul
+	Hue ring	Nyansring
+	Saturation and brightness	Mättnad och ljusstyrka
+	Color field	Färgfält
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Färgtyp:
 	Color:	Färg:
 	Colorize	Färglägg
@@ -1104,6 +1120,17 @@ font-technology	Variable	Variabla
 	Exporting {}	Exporterar {}
 	Export…	Exportera…
 	Extrude & Bevel…	Extrudera och fasa…
+	3D (Classic)	3D (klassisk)
+	Extrude & Bevel (Classic)…	Extrudera och fasa (klassisk)…
+	Surface	Yta
+	Wireframe	Trådram
+	No Shading	Ingen skuggning
+	Plastic	Plast
+	Highlight Intensity	Högdagerintensitet
+	Highlight Size	Högdagerstorlek
+	Blend Steps	Övergångssteg
+	Shading Color	Skuggningsfärg
+	Draw Hidden Faces	Rita dolda ytor
 	Eyedropper	Pipett
 	Eyedropper Applies:	Pipetten tillämpar:
 	Eyedropper Options	Pipettalternativ
@@ -1915,6 +1942,10 @@ font-technology	Variable	Variabla
 	Stylistic	Stilistisk
 	Mojikumi Set	Mojikumi-uppsättning
 	Kinsoku Set	Kinsoku-uppsättning
+	Kinsoku Shori Type	Kinsoku Shori-typ
+	Push In First	Skjut in först
+	Push Out First	Skjut ut först
+	Push Out Only	Skjut endast ut
 	Hard	Hård
 	Soft	Mjuk
 	Monitor RGB	Bildskärms-RGB
@@ -3385,6 +3416,15 @@ digits	Malayalam	Malayalam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Inställningar för Tate-chu-yoko…
 	Tate-chu-yoko Settings	Inställningar för Tate-chu-yoko
+	Composite Fonts…	Sammansatta teckensnitt…
+	Composite Fonts	Sammansatta teckensnitt
+	Export Composite Fonts	Exportera sammansatta teckensnitt
+	Import Composite Fonts	Importera sammansatta teckensnitt
+	Delete Font	Ta bort teckensnitt
+	Kanji	Kanji
+	Kana	Kana
+	Numerals	Siffror
+	Scale at Center	Skala från mitten
 	Up/Down:	Upp/ned:
 	Left/Right:	Vänster/höger:
 	Temperature	Temperatur
@@ -3438,6 +3478,7 @@ digits	Malayalam	Malayalam
 	Tile Type:	Ruttyp:
 	tile {number}	ruta {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Rutorna numreras från vänster till höger och sedan nedåt. Lämna omfånget tomt för att få med alla rutor.
+	Copies per Sheet (as many as fit, in a grid)	Kopior per ark (så många som får plats, i ett rutnät)
 	Tint	Färgton
 	Tip extends past the end point	Spetsen sträcker sig förbi slutpunkten
 	Tip on the end point	Spetsen på slutpunkten
@@ -4004,6 +4045,7 @@ axis	Both	Båda
 @msg	Targa files are RGB: colorModel rgb	Targa-filer är RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Textombrytning: markera ett ombrytningsobjekt
 @msg	This shortcut file is in a form VectorCraft can't read.	Den här kortkommandofilen har ett format som VectorCraft inte kan läsa.
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` måste vara "none", "sharp", "crisp" eller "strong"
 @msg	`aspect` must be a number (%)	`aspect` måste vara ett tal (%)
 @msg	`at` must be [x, y]	`at` måste vara [x, y]
 @msg	`color` must be a colour	`color` måste vara en färg
@@ -4393,6 +4435,13 @@ axis	Both	Båda
 @msg	select an image	markera en bild
 @msg	select an object in perspective	markera ett objekt i perspektiv
 @msg	select artwork (or a colour group) to recolor	markera grafik (eller en färggrupp) att färga om
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	Omfärgning klar; utan ändring: {locked} och {hidden}
+@msg	Recolor completed; {objects} were left unchanged	Omfärgning klar; utan ändring: {objects}
+@msg	Recolor completed; {objects} was left unchanged	Omfärgning klar; utan ändring: {objects}
+@msg	1 locked object	1 låst objekt
+@msg	{n} locked objects	{n} låsta objekt
+@msg	1 hidden object	1 dolt objekt
+@msg	{n} hidden objects	{n} dolda objekt
 @msg	select at least two objects	markera minst två objekt
 @msg	exit isolation mode first	avsluta isoleringsläget först
 @msg	select objects, not layers	markera objekt, inte lager
@@ -4635,6 +4684,7 @@ axis	Both	Båda
 @msg	an image VectorCraft can't read was left out	en bild som VectorCraft inte kan läsa utelämnades
 @msg	graphs come in as plain art, without their data or settings	diagram läses in som vanlig grafik, utan sina data och inställningar
 @msg	an image whose data is cut short was left out	en bild med avkortade data utelämnades
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	en inbäddad bild på {_1} × {_2} pixlar förminskades till {_3} × {_4} pixlar för att behålla lagren
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	länkade bilder visar förhandsgranskningen med låg upplösning som sparats i filen tills deras filer hittas: länka om dem i panelen Länkar
 @msg	linked type areas past VectorCraft's limits were left out	länkade textområden utöver VectorCrafts gränser utelämnades
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	text som byter skrivriktning inuti ett textobjekt öppnas i riktningen för sitt första tecken
@@ -4714,6 +4764,7 @@ axis	Both	Båda
 @msg	object ids are non-negative integers, not {v}	objekt-id:n är icke-negativa heltal, inte {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} måste vara en array med objekt-id:n som är icke-negativa heltal
 @msg	invalid object id {value}: expected a non-negative integer	ogiltigt objekt-id {value}: ett icke-negativt heltal förväntades
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	post {index} i `{key}` är {value}, inte ett objekt-id (ett icke-negativt heltal)
 @msg	no such object id {value}	det finns inget objekt med id {value}
 @msg	id {value} is a layer, not an object	id {value} är ett lager, inte ett objekt
 @msg	id {value} is a layer, not an object; move layers with layer.move	id {value} är ett lager, inte ett objekt; flytta lager med layer.move
@@ -4749,6 +4800,10 @@ axis	Both	Båda
 @msg	the PSD file is cut short	PSD-filen är avkortad
 @msg	the PSD file's header is damaged	PSD-filens huvud är skadat
 @msg	the PSD file's image data can't be read: {e}	PSD-filens bilddata kan inte läsas: {e}
+@msg	the JPEG XL file is cut short	JPEG XL-filen är avkortad
+@msg	the JPEG XL container is too large to read	JPEG XL-behållaren är för stor för att läsas
+@msg	CMYK JPEG XL images can't be read	JPEG XL-bilder i CMYK kan inte läsas
+@msg	the JPEG XL file can't be read: {e}	JPEG XL-filen kan inte läsas: {e}
 	Video	Video
 	De-Interlace…	Avfläta…
 	De-Interlace	Avfläta
@@ -5767,6 +5822,11 @@ swatch	Yellow Green	Gulgrön
 	Snap to Perpendicular	Fäst mot vinkelrät
 @msg	unknown snap option `{key}` (use {options})	okänt fästalternativ `{key}` (använd {options})
 	Gap Length:	Lucklängd:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Läget Platt logotyp använder inte keepColors: det vektoriserar färgerna som anges i logoColors eller färgerna det hittar.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Ingenting vektoriserades: ingen av färgerna som vektoriseringen hittade motsvarar keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Ingenting vektoriserades: Ignorera färg utelämnar alla områden med färgerna som keepColors anger.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	Ingenting vektoriserades: färgerna som matchar keepColors ger inga banor.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: ingen av färgerna som vektoriseringen hittade motsvarar {c}, så ingenting av den vektoriseras.
 @msg	`colorGroup` needs `library: "document"`	`colorGroup` kräver `library: "document"`
 @msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` kräver `palette: "documentLibrary"`
 @msg	`colorGroup` needs `mode: "color"`	`colorGroup` kräver `mode: "color"`
@@ -5884,6 +5944,9 @@ axis	Y Axis	Y-axel
 	Install “{name}”, which asks for these permissions?	Installera ”{name}”, som begär dessa behörigheter?
 	ID: {id}	ID: {id}
 	Version: {version}	Version: {version}
+	Install “{name}” in place of the plug-in with the same ID?	Installera ”{name}” i stället för det plugin som har samma id?
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Den här filen är inte det plugin som tidigare installerades med detta id. Den får de inställningar och den cache som sparats för detta id.
+@msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	”{name}” är en annan modul än pluginet med id {_1} och skulle få de inställningar och den cache som sparats för det: installera det med `replace: true` när användaren har godkänt
 	File SHA-256: {hash}	Filens SHA-256: {hash}
 	Read the objects it is given	Läsa objekten den får
 	Change, add and delete objects in the document	Ändra, lägga till och ta bort objekt i dokumentet
@@ -5891,11 +5954,16 @@ axis	Y Axis	Y-axel
 	Change how the objects its effect is applied to are drawn	Ändra hur objekten som dess effekt används på ritas
 	Write the document as a file in its own format	Skriva dokumentet som en fil i sitt eget format
 	Show its progress, see Cancel and write log lines	Visa sitt förlopp, se när det avbryts och skriva loggrader
-@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	behörigheten `progress` kräver plugin-API-nivå {PROGRESS_API}: ange `api` {PROGRESS_API}
+	Keep settings of its own	Spara egna inställningar
+	Keep a cache of its own, which you can clear	Spara en egen cache, som du kan tömma
+	Clear Plug-in Cache	Töm pluginets cache
+@msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	behörigheten `{permission}` kräver plugin-API-nivå {PROGRESS_API}: ange `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	modulen importerar `env.{name}` med en annan typ än värdens: värdens typ är {signature}
-@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	modulen importerar `env.{name}`, som ett plugin bara får använda på plugin-API-nivå {PROGRESS_API} (`api` {PROGRESS_API}) och med behörigheten `progress`
-@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	modulen importerar `{from}.{name}`, som värden inte erbjuder: ett plugin får bara importera `env.vc_progress`, `env.vc_cancelled` och `env.vc_log` (plugin-API-nivå 2), och ingen WASI, inga filer eller nätverk
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	modulen importerar `env.{name}`, som ett plugin bara får använda på plugin-API-nivå {PROGRESS_API} (`api` {PROGRESS_API}) och med behörigheten `{permission}`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	modulen importerar `{from}.{name}`, som värden inte erbjuder: ett plugin får bara importera de `env.vc_*`-funktioner som docs/plugins.md listar (plugin-API-nivå 2), och ingen WASI, inga filer eller nätverk
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` är {_1}; den här värden stöder plugin-API-nivå 1 till {API_LEVEL}
+@msg	`paintOutput` may only be true	`paintOutput` får bara vara true
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` gäller bara en liveeffekt (`kind` "effect") med `api` 2
 @msg	`grant` must be a list of permission names	`grant` måste vara en lista med behörighetsnamn
 @msg	`grant` names an unknown permission `{shown}`	`grant` anger en okänd behörighet `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	ett plugin av typen `{_1}` behöver behörigheten `{_2}`
@@ -5906,6 +5974,14 @@ axis	Y Axis	Y-axel
 @msg	unknown permission `{shown}`	okänd behörighet `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	”{name}” begär behörigheterna {asked}: installera det med en `grant` som listar dem när användaren har godkänt
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	”{name}” beviljades inte `{p}`, som dess utdata behöver: ingenting ändrades
+@msg	a heavy filter runs in the background, so it can't declare `commands`	ett tungt filter körs i bakgrunden, så det kan inte deklarera `commands`
+@msg	at most {MAX_COMMANDS} `commands`	högst {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	kommandot {name} deklareras två gånger
+@msg	command {name}: `label` must be 1-64 printable characters	kommando {name}: `label` måste ha 1-64 utskrivbara tecken
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	kommando {name}: använd ett id med 1-{MAX_COMMAND_ID} tecken av a-z 0-9 _ som börjar med en bokstav
+@msg	command {name}: {e}	kommando {name}: {e}
+@msg	only a filter or a live effect declares `commands`	bara ett filter eller en live-effekt deklarerar `commands`
+@msg	“{name}” › {label}: {e}	”{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	modulen har inte den SHA-256 som `hash` anger: ingenting installerades
 # Actions panel: action sets (#3712).
 	New Set…	Ny uppsättning…
@@ -6477,6 +6553,16 @@ breakText	Glyphs	Glyfer
 @msg	path must be a list of child indices	path måste vara en lista med underordnade index
 @msg	no object at path {shown} in the symbol's art	inget objekt vid sökvägen {shown} i symbolens bild
 @msg	give fill, stroke, opacity and/or blend	ange fill, stroke, opacity och/eller blend
+@msg	{key} cannot be set on a guide	{key} kan inte anges för en stödlinje
+@msg	{key} cannot be set on a blend	{key} kan inte anges för en blandning
+@msg	{key} cannot be set on an envelope	{key} kan inte anges för ett kuvert
+@msg	{key} cannot be set on a gradient mesh	{key} kan inte anges för ett gradientnät
+@msg	{key} cannot be set on a Repeat	{key} kan inte anges för en upprepning
+@msg	{key} cannot be set on a placed document	{key} kan inte anges för ett placerat dokument
+@msg	{key} cannot be set on an Intertwine group	{key} kan inte anges för en sammanflätad grupp
+@msg	stroke cannot be set on a symbol instance	stroke kan inte anges för en symbolinstans
+@msg	fill on a symbol instance must be a solid color or none	fill för en symbolinstans måste vara en enfärgad färg eller none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} kan inte anges för en bild utan effekten Konvertera till form eller Konvertera objekt till konturer
 @msg	pass newName, registration, exportType, nineSlice and/or type	ange newName, registration, exportType, nineSlice och/eller type
 	Text Flow	Textflöde
 	By Rows	Radvis
@@ -6510,6 +6596,7 @@ breakText	Glyphs	Glyfer
 # The strings the report listed as missing for sv.
 	Font Size:	Teckenstorlek:
 digits	Hindi	Hindi
+	Help Bar	Hjälpfält
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	Textverktyg
 	Text Tweaker…	Textjustering…
@@ -6681,7 +6768,7 @@ digits	Hindi	Hindi
 @msg	{what} points outside memory	{what} pekar utanför minnet
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} skulle skrivas ut på fler än {MAX_TILES} rutor: skala ned det
 @msg	`{_1}` can't be edited or removed	`{_1}` kan inte redigeras eller tas bort
-@msg	`{_1}` is a {_2}, not an exporter	`{_1}` är av typen {_2}, inte en exportfunktion
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` är ett plugin av typen `{_2}`, inte en exportfunktion
 @msg	`{_1}` is a live effect: apply it with effect.apply {{"effect"}"}}	`{_1}` är en live-effekt: använd den med effect.apply {{"effect"}"}}
 @msg	`{_1}` is an exporter: export with document.export {{"format"}"}}	`{_1}` är en exportfunktion: exportera med document.export {{"format"}"}}
 @msg	`{_1}` is built in and always listed	`{_1}` är inbyggd och listas alltid
@@ -7556,7 +7643,7 @@ digits	Hindi	Hindi
 @msg	offset out of range	förskjutningen ligger utanför intervallet
 @msg	Offset Path: {e}	Förskjut bana: {e}
 @msg	Offset Path: the path is too complex to offset	Förskjut bana: banan är för komplex för att förskjutas
-@msg	only an exporter declares `extensions`	endast en exportfunktion deklarerar `extensions`
+@msg	only an exporter or an importer declares `extensions`	endast en exportfunktion eller importfunktion deklarerar `extensions`
 @msg	only groups, layers, type and images have a Contents (Characters) row	endast grupper, lager, text och bilder har en rad för Innehåll (Tecken)
 @msg	only interior mesh lines can be deleted	endast inre nätlinjer kan raderas
 @msg	only solid colours can be added (not gradients or patterns)	endast enhetliga färger kan läggas till (inte gradienter eller mönster)
@@ -8006,6 +8093,22 @@ digits	Hindi	Hindi
 @msg	x and y must be given together	x och y måste anges tillsammans
 @msg	zone needs an anchor: dock beside a panel with anchor, or in a new dock column with side (Start or End)	zone behöver ett ankare: docka bredvid en panel med anchor eller i en ny dockkolumn med side (Start eller End)
 @msg	zoom must be positive	zoom måste vara positiv
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Öppna med
+	No importer plug-ins installed	Inga importplugins är installerade
+	Read files you open in its format and make documents from them	Läsa filer som du öppnar i dess format och skapa dokument av dem
+@msg	{_1} is an importer (File › Open With)	{_1} är ett importinsticksprogram (Fil › Öppna med)
+@msg	missing `importer` (see document.formats)	`importer` saknas (se document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` måste vara ett formatid för ett plugin (se document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	”{shown}” öppnar {_1}-filer, inte `{_2}`
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` är ett plugin av typen `{_2}`, inte en importfunktion
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` är en importfunktion: öppna en fil med document.open {{"importer"}"}}
+@msg	the importer returned no objects	importfunktionen returnerade inga objekt
+@msg	an importer returns `objects` and `warnings`, not `{key}`	en importfunktion returnerar `objects` och `warnings`, inte `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	filen är större än de {MAX_INPUT_BYTES} byte som en importfunktion läser
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	en importfunktion anger 1 till {MAX_EXTENSIONS} `extensions`
+@msg	an importer always gets an import's budget: leave `budget` out	en importfunktion får alltid en imports budget: utelämna `budget`
 
 # Safe Mode
 	Safe Mode…	Felsäkert läge…

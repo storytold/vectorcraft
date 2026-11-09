@@ -1,5 +1,5 @@
 //! Untrusted files never crash the app: garbage, truncated, mutated and hostile SVG, PDF and DXF input,
-//! mutated raster images (Photoshop documents among them) placed with File → Place, and swatch (`.vcswatches`, `.gpl`, `.ase`), graphic style (`.vcstyles`), flattener preset
+//! mutated raster images (Photoshop documents and JPEG XL images among them) placed with File → Place, and swatch (`.vcswatches`, `.gpl`, `.ase`), graphic style (`.vcstyles`), flattener preset
 //! (`.vcflattener`) and export preset (`.vcexportpresets`) libraries, shortcut sets and action sets other apps save as text (`.kys`, `.aia`), and native files (compressed, damaged, saved for older versions),
 //! must load as an error or as a document that then renders and exports, without a panic; nor may
 //! bitmaps, PDF and text pasted from other apps, nor EMF and WMF pictures (damaged files, records
@@ -1743,6 +1743,22 @@ fn raster_samples() -> Vec<(&'static str, Vec<u8>)> {
     psb.extend((0..8).flat_map(|_| 2u32.to_be_bytes()));
     psb.extend((0..8u8).flat_map(|v| [0xfe, v * 30]));
     out.push(("a.psb", psb));
+    // JPEG XL: an 8-bit RGBA codestream, and a 16-bit gray one in the container.
+    use zune_core::{bit_depth::BitDepth, colorspace::ColorSpace, options::EncoderOptions};
+    let jxl = |space, depth, samples: &[u8]| {
+        let mut b = vec![];
+        zune_jpegxl::JxlSimpleEncoder::new(samples, EncoderOptions::new(5, 3, space, depth)).encode(&mut b).unwrap();
+        b
+    };
+    out.push(("a.jxl", jxl(ColorSpace::RGBA, BitDepth::Eight, &(0..60).map(|i| (i * 17) as u8).collect::<Vec<_>>())));
+    let gray = jxl(ColorSpace::Luma, BitDepth::Sixteen, &(0..30).map(|i| (i * 41) as u8).collect::<Vec<_>>());
+    let mut boxed = vec![0, 0, 0, 0x0c, b'J', b'X', b'L', b' ', 0x0d, 0x0a, 0x87, 0x0a];
+    boxed.extend(20u32.to_be_bytes());
+    boxed.extend(b"ftypjxl \0\0\0\0jxl ");
+    boxed.extend((8 + gray.len() as u32).to_be_bytes());
+    boxed.extend(b"jxlc");
+    boxed.extend(gray);
+    out.push(("b.jxl", boxed));
     out
 }
 
@@ -4034,6 +4050,12 @@ proptest! {
         let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&text)].concat();
         survive("mutated .ai symbols", || Some(vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;
         survive("mutated .ai symbols, trusted", || Some(vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, true, 1.0).0))?;
+        // A symbol library: the same symbols and list, no layers.
+        let library = mutate_text(&symbol_library_text(), cut, &edits);
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&library)].concat();
+        survive("mutated .ai symbol library", || Some(vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;
+        let eps = vectorcraft_testkit::ai::eps(library.as_bytes(), vectorcraft_testkit::ai::page_ps());
+        survive("mutated symbol library in an EPS", || vectorcraft_engine::cmd::fileio::load("x.eps", &eps).ok().map(|l| l.doc))?;
     }
 
     /// A `.ai` whose art styles, as the writer writes them, are damaged: the styles, the style
@@ -4052,13 +4074,13 @@ proptest! {
 const STYLES_FUZZ_CHARS: usize = 64_000;
 
 /// The editing data VectorCraft writes for a document with a drop shadow on a path, a gradient fill
-/// and a width profile on others, a stroked even-odd path with an opacity mask and Pathfinder › Add
-/// on a group.
+/// and a width profile on others, a stroked even-odd path with an opacity mask, Pathfinder › Add on
+/// a group and a graphic style of its own with effects on one of its fills.
 fn styles_text() -> &'static str {
     static TEXT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
     TEXT.get_or_init(|| {
         use vectorcraft_color::{Color, Gradient, GradientKind, GradientPaint, GradientStop, Paint};
-        use vectorcraft_doc::{Appearance, AppearanceItem, Node, NodeKind, OpacityMask, StrokeLayer, WidthProfile};
+        use vectorcraft_doc::{Appearance, AppearanceItem, FillLayer, GraphicStyle, Node, NodeKind, OpacityMask, StrokeLayer, WidthProfile};
         use vectorcraft_geom::{FillRule, Rect, shapes};
         let mut doc = Document::new(200.0, 100.0);
         let layer = doc.layers[0].id;
@@ -4101,6 +4123,10 @@ fn styles_text() -> &'static str {
         let mut merged = Node::group(doc.alloc_id(), vec![std::sync::Arc::new(a), std::sync::Arc::new(b)]);
         merged.appearance = Appearance { effects: vec![fx("pathfinder.add")], ..Appearance::default() }.into();
         doc.insert(Some(layer), usize::MAX, merged).unwrap();
+        doc.graphic_styles.push(GraphicStyle::new("Shaded", ap));
+        let chained = FillLayer { opacity: 0.5, effects: vec![fx("distort.twist")], ..FillLayer::new(Paint::solid(Color::WHITE)) };
+        let chained = Appearance { items: vec![AppearanceItem::Fill(chained)], ..Appearance::default() };
+        doc.graphic_styles.push(GraphicStyle::new("Chained", chained));
         let out = vectorcraft_eps::export_ai_editing(&doc, &vectorcraft_eps::AiEditingOptions::default()).unwrap();
         String::from_utf8(out.program).unwrap()
     })
@@ -4112,14 +4138,46 @@ fn styles_text() -> &'static str {
 fn the_written_styles_fuzz_data_opens_live() {
     let text = styles_text();
     assert!(text.chars().count() < STYLES_FUZZ_CHARS, "{}", text.chars().count());
-    for mark in ["%AI9_BeginArtStyles", "%AI5_BeginLayer", "\n6 () XW", "\n1 (Anon", "(BSLeftWidthsArray)", "0 /Bool (UseEvenOdd)", "Bb"] {
-        assert!(text.contains(mark), "{mark}");
+    for mark in [
+        "%AI9_BeginArtStyles",
+        "%AI9_BeginArtStyleList",
+        "%AI5_BeginLayer",
+        "\n6 () XW",
+        "\n1 (Anon",
+        "(BSLeftWidthsArray)",
+        "0 /Bool (UseEvenOdd)",
+        "(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/BasicFilter",
+        "Bb",
+    ] {
+        assert!(text.replace("\r\n", "\n").contains(mark), "{mark}");
     }
     let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(text)].concat();
     let (d, warnings, layered) = vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, true, 1.0);
     assert!(layered, "{warnings:?}");
     let art = d.layers[0].children().unwrap();
     assert_eq!(art.iter().map(|n| n.appearance.effects.len()).collect::<Vec<_>>(), [1, 1, 1, 1, 1]);
+    assert!(d.graphic_style("Shaded").is_some() && d.graphic_style("Chained").is_some());
+}
+
+/// [`symbols_text`] without its layer: a symbol library.
+fn symbol_library_text() -> String {
+    let full = symbols_text();
+    match (full.find("%AI5_BeginLayer"), full.find("%AI5_EndLayer--\n")) {
+        (Some(a), Some(b)) if a < b => format!("{}{}", &full[..a], &full[b + "%AI5_EndLayer--\n".len()..]),
+        _ => full,
+    }
+}
+
+/// The library [`ai_symbols_never_panic`] damages, as it is, opens with its symbols.
+#[test]
+fn the_symbol_library_fuzz_data_opens_with_its_symbols() {
+    let text = symbol_library_text();
+    assert!(!text.contains("%AI5_BeginLayer"));
+    let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&text)].concat();
+    let (doc, warnings, layered) = vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, false, 1.0);
+    assert!(!layered, "{warnings:?}");
+    let names: Vec<&str> = doc.symbols.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(names, ["S2", "S1"], "{warnings:?}");
 }
 
 /// Editing data with symbols (S2's art holds an instance of S1, F's holds non-native art), the
@@ -4212,6 +4270,9 @@ fn ai_symbol_limits_never_panic() {
             ai::layer("L", &inst("(S1)", "1 0 0 -1 20 50"))
         ),
         format!("{}{}", def("S1", &inst("(S2)", "1 0 0 -1 0 0")), def("S2", &inst("(S1)", "1 0 0 -1 0 0"))),
+        // Symbol libraries without layers: definitions nested too deep and a long chain.
+        nested,
+        chain,
     ];
     for body in cases {
         let data = ai::editing_data(200.0, 100.0, &body).replacen("%%EndComments", "%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n%%EndComments", 1);
@@ -4819,6 +4880,16 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "\n%AI5_BeginRaster\n",
             "\n%AI5_EndRaster\n",
             "\n%%BeginData: 12\rXI\n",
+            // Image operands past 2^25 pixels, of odd 1-bit rows, and past the hard limits: as
+            // many pixels as a u32 side allows, more samples than the bytes allowed, sizes that
+            // overflow when multiplied out, and a matrix that maps the box to nothing.
+            "[1 0 0 1 0 0] 0 0 6000 6000 6000 6000 1 1 0 0 1 0 4 4 0 0 ",
+            "[1 0 0 1 0 0] 0 0 17 13 17 13 1 1 0 0 1 0 4 4 0 0 ",
+            "[1 0 0 1 0 0] 0 0 9 9 65536 32769 1 1 0 0 1 0 4 4 0 0 ",
+            "[1 0 0 1 0 0] 0 0 9 9 23171 23171 8 4 1 0 1 0 4 4 0 0 ",
+            "[1 0 0 1 0 0] 0 0 9 9 4294967295 4294967295 8 4 1 0 1 0 4 4 0 0 ",
+            "[1 0 0 1 0 0] 0 0 9 9 1e308 1e308 8 3 1 0 0 0 4 4 0 0 ",
+            "[0 0 0 0 0 0] 0 0 9 9 46341 46341 1 1 0 0 1 0 4 4 0 0 ",
             "\n%%EndData\n",
             "\n%AI5_BeginGradient: (G)\n",
             "\n%AI14_BeginSymbol\n",

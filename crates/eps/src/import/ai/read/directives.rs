@@ -3,8 +3,9 @@ use std::collections::HashMap;
 use super::super::brush;
 use super::art::{four, sane, two};
 use super::ops::Dictionaries;
+use super::raster::{end_hex, push_hex};
 use super::types::{
-    FLIP, GState, Kind, MAX_DEPTH, MAX_HEX, MAX_LISTED, MAX_NODES, MAX_NOTE, MAX_PATTERNS, MAX_PLACED_FOLDER, MAX_STACK, MAX_SUBREADERS, MAX_SYMBOLS,
+    FLIP, GState, Kind, MAX_DEPTH, MAX_LISTED, MAX_NODES, MAX_NOTE, MAX_PATTERNS, MAX_PLACED_FOLDER, MAX_STACK, MAX_SUBREADERS, MAX_SYMBOLS,
     PatternHead, Place, Raster, SKIPPED, SymbolHead, VERSIONED_UNENDED,
 };
 use super::{Arc, BrushArtColors, Global, Lexer, Node, NodeKind, PatternDef, Reader, Rect, Tok, V, marker, obj};
@@ -52,9 +53,7 @@ impl<'a> Reader<'a> {
             && !line.is_empty()
             && line.bytes().all(|b| b.is_ascii_hexdigit())
         {
-            if r.hex.len() < MAX_HEX {
-                r.hex.extend_from_slice(line.as_bytes());
-            }
+            push_hex(&mut r.samples, &mut r.half, line.as_bytes(), r.max);
             return Ok(());
         }
         // The header's comments (AI7 specification §2.1.1; DSC 3.0).
@@ -182,8 +181,9 @@ impl<'a> Reader<'a> {
         } else if line.starts_with("AI5_EndRaster") {
             // A file `XG` named in this raster object is no later one's.
             self.image_link = None;
-            if let Some(Raster { operands: Some(vals), hex, .. }) = self.raster.take() {
-                return self.image_from(vals, &hex);
+            if let Some(Raster { operands: Some(vals), mut samples, half, max, .. }) = self.raster.take() {
+                end_hex(&mut samples, half, max);
+                return self.image_from(vals, &samples, true);
             }
         } else if line.starts_with("AI5_BeginPlace") {
             // One that is still open (no `~` ended it) isn't read.
@@ -503,7 +503,15 @@ impl<'a> Reader<'a> {
         let Some(tile) = head.tile.filter(|t| whole && sane(*t) && t.width() > 0.0 && t.height() > 0.0 && !frame.children.is_empty()) else {
             return;
         };
-        let art: Vec<Arc<Node>> = frame.children.iter().map(|n| Arc::new(self.doc.reid(n))).collect();
+        let art: Vec<Arc<Node>> = frame
+            .children
+            .iter()
+            .map(|n| {
+                let mut kept = self.doc.reid(n);
+                self.reid_masks(&mut kept, 0);
+                Arc::new(kept)
+            })
+            .collect();
         // The objects of the art linked to graphic styles, by their ids in the document.
         if !sub.style_links.is_empty() {
             let mut ids = HashMap::new();
@@ -671,7 +679,7 @@ impl<'a> Reader<'a> {
         named
     }
 
-    /// Give the art of the opacity masks in `n` (a copy of a symbol's art or of a clipping path with ids of this
+    /// Give the art of the opacity masks in `n` (a copy of a symbol's, a pattern's or a brush's art, or of a clipping path, with ids of this
     /// document, [`vectorcraft_doc::Document::reid`], which leaves masks as they are) ids of this
     /// document too.
     pub(super) fn reid_masks(&mut self, n: &mut Node, depth: usize) {
@@ -783,7 +791,15 @@ impl<'a> Reader<'a> {
             && sub.doc.images.is_empty();
         let Some(frame) = sub.frames.pop().filter(|f| whole && !f.children.is_empty()) else { return };
         self.brush_art_looks.insert(name.clone(), sub.drawn_looks);
-        let mut art: Vec<Arc<Node>> = frame.children.iter().map(|n| Arc::new(self.doc.reid(n))).collect();
+        let mut art: Vec<Arc<Node>> = frame
+            .children
+            .iter()
+            .map(|n| {
+                let mut kept = self.doc.reid(n);
+                self.reid_masks(&mut kept, 0);
+                Arc::new(kept)
+            })
+            .collect();
         let node = match art.len() {
             1 => art.pop().map(Arc::unwrap_or_clone),
             _ => Some(Node::group(self.doc.alloc_id(), art)),

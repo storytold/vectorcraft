@@ -184,6 +184,10 @@
 	Anti-Alias	Заглаждане
 	Anti-alias Rasters	Заглаждане на растери
 	Anti-aliased Artwork	Загладено произведение
+	Anti-aliasing Method	Метод на заглаждане
+antiAlias	Sharp	Остро
+	Crisp	Четко
+	Strong	Силно
 	Anti-aliasing:	Заглаждане:
 	Any Kind	Всякакъв вид
 	Font Technology	Технология на шрифта
@@ -354,6 +358,13 @@ font-technology	Variable	Променливи
 	Apply Bullets	Прилагане на булети
 	Numbered List	Номериран списък
 	Apply Numbers	Прилагане на номериране
+	Bullets and Numbering…	Булети и номериране…
+	Numbers	Номера
+	Level:	Ниво:
+	Bullet Character:	Знак за булет:
+	Number Style:	Стил на номерата:
+	Left Indent:	Ляв отстъп:
+	First Line Indent:	Отстъп на първия ред:
 	Convert to Text	Конвертиране в текст
 	Filled Dot	Плътна точка
 	Dash	Тире
@@ -540,6 +551,11 @@ font-technology	Variable	Променливи
 	Color Table ({n} colors)	Цветова таблица ({n} цвята)
 	Color Theme	Цветова тема
 	Color Themes	Цветови теми
+	Color Wheel	Цветно колело
+	Hue ring	Пръстен на оттенъка
+	Saturation and brightness	Насищане и яркост
+	Color field	Цветово поле
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Цветен тип:
 	Color:	Цвят:
 	Colorize	Оцветяване
@@ -1091,6 +1107,17 @@ font-technology	Variable	Променливи
 	Exporting {}	Експортиране на {}
 	Export…	Експортиране…
 	Extrude & Bevel…	Избутване и фасетка…
+	3D (Classic)	3D (класически)
+	Extrude & Bevel (Classic)…	Избутване и фасетка (класически)…
+	Surface	Повърхност
+	Wireframe	Телена рамка
+	No Shading	Без засенчване
+	Plastic	Пластмаса
+	Highlight Intensity	Интензивност на отблясъка
+	Highlight Size	Размер на отблясъка
+	Blend Steps	Стъпки на преливане
+	Shading Color	Цвят на засенчването
+	Draw Hidden Faces	Изчертаване на скритите страни
 	Eyedropper	Пипета
 	Eyedropper Applies:	Пипетата прилага:
 	Eyedropper Options	Опции за пипетата
@@ -1904,6 +1931,10 @@ font-technology	Variable	Променливи
 	Stylistic	Стилистично
 	Mojikumi Set	Набор Mojikumi
 	Kinsoku Set	Набор Kinsoku
+	Kinsoku Shori Type	Тип Kinsoku Shori
+	Push In First	Първо прибиране
+	Push Out First	Първо изтласкване
+	Push Out Only	Само изтласкване
 	Hard	Твърдо
 	Soft	Меко
 	Monitor RGB	RGB на монитора
@@ -3375,6 +3406,15 @@ digits	Malayalam	Малаялам
 	Tate-chu-yoko	Тате-чу-йоко
 	Tate-chu-yoko Settings…	Настройки на Тате-чу-йоко…
 	Tate-chu-yoko Settings	Настройки на Тате-чу-йоко
+	Composite Fonts…	Съставни шрифтове…
+	Composite Fonts	Съставни шрифтове
+	Export Composite Fonts	Експортиране на съставни шрифтове
+	Import Composite Fonts	Импортиране на съставни шрифтове
+	Delete Font	Изтриване на шрифт
+	Kanji	Канджи
+	Kana	Кана
+	Numerals	Цифри
+	Scale at Center	Мащабиране от центъра
 	Up/Down:	Нагоре/надолу:
 	Left/Right:	Наляво/надясно:
 	Temperature	Температура
@@ -3428,6 +3468,7 @@ digits	Malayalam	Малаялам
 	Tile Type:	Тип плочка:
 	tile {number}	плочка {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Плочките се номерират напречно, след това надолу; оставете диапазона празен за всяка плочка.
+	Copies per Sheet (as many as fit, in a grid)	Копия на лист (колкото се побират, в мрежа)
 	Tint	Оттенък
 	Tip extends past the end point	Връхът продължава след крайната точка
 	Tip on the end point	Връх върху крайната точка
@@ -3978,6 +4019,7 @@ axis	Both	И двете
 @msg	Targa files are RGB: colorModel rgb	Файловете Targa са RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Обгръщане на текст: изберете обгръщащ обект
 @msg	This shortcut file is in a form VectorCraft can't read.	 Този файл с преки пътища е във формат, който VectorCraft не може да прочете.
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` трябва да е "none", "sharp", "crisp" или "strong"
 @msg	`aspect` must be a number (%)	`aspect` трябва да бъде число (%)
 @msg	`at` must be [x, y]	`at` трябва да бъде [x, y]
 @msg	`color` must be a colour	`color` трябва да бъде цвят
@@ -4580,6 +4622,7 @@ axis	Both	И двете
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	градиентът „{name}“ не е дефиниран във файла: заменен е с обикновен цвят
 @msg	an image VectorCraft can't read was left out	изображение, което VectorCraft не може да разчете, беше пропуснато
 @msg	an image whose data is cut short was left out	изображение с непълни данни беше пропуснато
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	вградено изображение от {_1} × {_2} пиксела беше намалено до {_3} × {_4} пиксела, за да се запазят слоевете
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	свързаните картини показват записания във файла предварителен преглед с ниска резолюция, докато файловете им бъдат намерени: презакачете ги в панела „Връзки“
 @msg	linked type areas past VectorCraft's limits were left out	свързаните текстови области извън ограниченията на VectorCraft бяха пропуснати
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	текст, който сменя посоката на писане в рамките на текстов обект, се отваря в посоката на първия си знак
@@ -4656,6 +4699,7 @@ axis	Both	И двете
 @msg	object ids are non-negative integers, not {v}	идентификаторите на обектите са неотрицателни цели числа, а не {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} трябва да бъде масив от идентификатори на обекти, които са неотрицателни цели числа
 @msg	invalid object id {value}: expected a non-negative integer	невалиден идентификатор на обект {value}: очаква се неотрицателно цяло число
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	елемент {index} на `{key}` е {value}, а не идентификатор на обект (неотрицателно цяло число)
 @msg	no such object id {value}	няма обект с идентификатор {value}
 @msg	automation filesystem access is not granted: read authority is absent: {path}	достъпът на автоматизацията до файловата система не е разрешен: липсва право за четене: {path}
 @msg	automation filesystem access is not granted: write authority is absent: {path}	достъпът на автоматизацията до файловата система не е разрешен: липсва право за запис: {path}
@@ -5729,6 +5773,8 @@ axis	Y Axis	Y ос
 	Install “{name}”, which asks for these permissions?	Да се инсталира ли „{name}“, който иска тези права?
 	ID: {id}	ID: {id}
 	Version: {version}	Версия: {version}
+	Install “{name}” in place of the plug-in with the same ID?	Да се инсталира ли „{name}“ на мястото на приставката със същия ID?
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Този файл не е приставката, инсталирана преди с този ID. Той получава настройките и кеша, пазени за този ID.
 	File SHA-256: {hash}	SHA-256 на файла: {hash}
 	Read the objects it is given	Четене на обектите, които получава
 	Change, add and delete objects in the document	Промяна, добавяне и изтриване на обекти в документа
@@ -5736,6 +5782,9 @@ axis	Y Axis	Y ос
 	Change how the objects its effect is applied to are drawn	Промяна на начина, по който се рисуват обектите, към които е приложен ефектът му
 	Write the document as a file in its own format	Записване на документа като файл в собствен формат
 	Show its progress, see Cancel and write log lines	Показване на напредъка, разпознаване на отказ и записване на редове в дневника
+	Keep settings of its own	Съхраняване на собствени настройки
+	Keep a cache of its own, which you can clear	Съхраняване на собствен кеш, който можете да изчистите
+	Clear Plug-in Cache	Изчистване на кеша на добавката
 # Actions panel: action sets (#3712).
 	New Set…	Нов набор…
 	New Set	Нов набор
@@ -6243,6 +6292,16 @@ breakText	Glyphs	Глифи
 @msg	path must be a list of child indices	path трябва да е списък с индекси на дъщерни обекти
 @msg	no object at path {shown} in the symbol's art	в графиката на символа няма обект на пътя {shown}
 @msg	give fill, stroke, opacity and/or blend	задайте fill, stroke, opacity и/или blend
+@msg	{key} cannot be set on a guide	{key} не може да се задава за водач
+@msg	{key} cannot be set on a blend	{key} не може да се задава за преливане
+@msg	{key} cannot be set on an envelope	{key} не може да се задава за плик
+@msg	{key} cannot be set on a gradient mesh	{key} не може да се задава за мрежа с градиент
+@msg	{key} cannot be set on a Repeat	{key} не може да се задава за повтаряне
+@msg	{key} cannot be set on a placed document	{key} не може да се задава за вмъкнат документ
+@msg	{key} cannot be set on an Intertwine group	{key} не може да се задава за група с преплитане
+@msg	stroke cannot be set on a symbol instance	stroke не може да се задава за екземпляр на символ
+@msg	fill on a symbol instance must be a solid color or none	fill на екземпляр на символ трябва да е плътен цвят или none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} не може да се задава за изображение без ефект „Конвертиране в фигура“ или „Преобразуване на обекта в контур“
 @msg	pass newName, registration, exportType, nineSlice and/or type	задайте newName, registration, exportType, nineSlice и/или type
 	Text Flow	Поток на текста
 	By Rows	По редове
@@ -6272,6 +6331,7 @@ breakText	Glyphs	Глифи
 	Create Swatch Legend	Създаване на легенда на образците
 	Create Swatch Legend…	Създаване на легенда на образците…
 	HEX	HEX
+	Help Bar	Лента за помощ
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	Инструменти за текст
 	Text Tweaker…	Настройка на текста…
@@ -6337,6 +6397,11 @@ breakText	Glyphs	Глифи
 # 3D Box add-on
 	3D Box	3D кутия
 	3D Box Tool	Инструмент за 3D кутия
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Отваряне с
+	No importer plug-ins installed	Няма инсталирани плъгини за импортиране
+	Read files you open in its format and make documents from them	Четене на файлове, които отваряте в неговия формат, и създаване на документи от тях
 
 # Safe Mode
 	Safe Mode…	Безопасен режим…

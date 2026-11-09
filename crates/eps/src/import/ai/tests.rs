@@ -783,7 +783,7 @@ fn pattern_names_are_shown_up_to_their_newline() {
     // Nor the name of a custom color the program of an EPS gives, or None's.
     let ps = b"%!PS-Adobe-3.0\n%%CMYKCustomColor: 0 0 1 0 (Outer Ink)\n%%EndComments\n";
     let data = stream(&format!("{}{}{}", def("Outer Ink\\n1", 8), def("[None]\\n1", 8), layer(&filled("Outer Ink\\n1"))));
-    let doc = super::read_beside(data.as_bytes(), true, ps).unwrap().doc;
+    let doc = super::read_beside(data.as_bytes(), true, ps, false).unwrap().doc;
     assert_eq!(doc.patterns.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), ["Outer Ink 2", "[None] 2"]);
     assert!(matches!(doc.swatch("Outer Ink").unwrap().paint, Paint::Solid { .. }));
     assert!(matches!(fill(&art(&doc)[0]), Paint::Pattern { pattern, .. } if pattern == "Outer Ink 2"));
@@ -2613,6 +2613,29 @@ fn a_drawn_look_that_is_an_image_stands_for_its_object() {
     assert!(r.warnings.iter().any(|w| w.contains("drawn look (1)")), "{:?}", r.warnings);
 }
 
+/// Samples in hex comment lines after `XI` (the version 7 specification's form) are read up to the
+/// bytes the image needs; an image past the hard limits isn't read, whatever lines follow it.
+#[test]
+fn hex_comment_line_samples_are_read_up_to_the_image() {
+    let raster = |(w, h): (u32, u32), lines: &str| {
+        let s = format!(
+            "%AI5_BeginLayer\n1 1 1 1 0 0 1 0 79 128 255 0 50 0 Lb\n(L) Ln\n%AI5_File:\n%AI5_BeginRaster\n() 1 XG\n/DeviceRGB XN\n\
+             [ 1 0 0 1 0 100 ] {w} {h} 0 Xh\n[ 1 0 0 1 0 100 ] 0 0 {w} {h} {w} {h} 8 3 0 0 0 0 XI\n{lines}%AI5_EndRaster\nN\nLB\n%AI5_EndLayer--\n"
+        );
+        let mut out = stream("").into_bytes();
+        let at = out.windows(14).position(|w| w == b"%%PageTrailer\n").unwrap();
+        out.splice(at..at, s.into_bytes());
+        out
+    };
+    // 2 × 1: red, green, then digits past the image's six bytes.
+    let r = read(&raster((2, 1), "%FF00\n%0000FF\n%00FFFFFF\n")).unwrap();
+    let img = pixels(&r.doc).0;
+    assert_eq!((img.get_pixel(0, 0).0, img.get_pixel(1, 0).0), ([255, 0, 0, 255], [0, 255, 0, 255]));
+    let r = read(&raster((70_000, 70_000), "%FF0000\n%00FF00\n")).unwrap();
+    assert!(art(&r.doc).is_empty());
+    assert!(r.warnings.iter().any(|w| w == "an image too large to read from the editing data was left out"), "{:?}", r.warnings);
+}
+
 /// The name and opacity mask after an image follow the operators that end its raster: `XH`, the
 /// versioned `Xr` and the `N` after `%AI5_EndRaster`.
 #[test]
@@ -2911,7 +2934,7 @@ fn a_version_7_linked_image_without_its_file_name_is_left_out_with_a_warning() {
     let r = read(stream7(&layer7("L", &raster7("(a.tif) 0 XG\n", m, (100_000, 100_000), "XF", ""))).as_bytes()).unwrap();
     let a = art(&r.doc);
     assert!(matches!(&a[..], [n] if matches!(&n.kind, NodeKind::Image(im) if (im.width, im.height) == (100_000, 100_000))), "{a:?}");
-    assert!(!r.warnings.iter().any(|w| w == read::IMAGE_TOO_LARGE), "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|w| w == "an image too large to read from the editing data was left out"), "{:?}", r.warnings);
     let twice = raster7("(a.tif) 0 XG\n(b.tif) 0 XG\n", m, (2, 2), "XF", "");
     let r = read(stream7(&layer7("L", &twice)).as_bytes()).unwrap();
     let a = art(&r.doc);
@@ -5951,6 +5974,37 @@ fn an_object_in_a_brushs_art_with_a_style_this_reads_comes_in_as_itself() {
     assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
 }
 
+/// The art of an opacity mask in a brush's art takes ids of the document, as the rest of the art
+/// does: no object of the brush's art shares an id with an object of the layers.
+#[test]
+fn a_brushs_opacity_mask_art_takes_ids_of_the_document() {
+    fn ids(n: &Node, out: &mut Vec<vectorcraft_doc::NodeId>) {
+        out.push(n.id);
+        if let Some(m) = n.extras().mask.as_ref() {
+            ids(&m.art, out);
+        }
+        for c in n.children().into_iter().flatten() {
+            ids(c, out);
+        }
+    }
+    let square = rect_path(0.0, 0.0, 10.0, 10.0);
+    let mask_art: String = format!("1 g\n{square}f\n").lines().map(|l| format!("%_{l}\n")).collect();
+    let mask = format!("%_/ArtDictionary :\n%_/Mask :\n%_X=\n{mask_art}%_X+\n%_(Art) ,\n%_1 /Bool (Clipping) ,\n%_; (AI9_Mask) ,\n%_;\n");
+    let section = format!("%AI8_BeginBrushPattern\n(Dot art)\n0 A\n{RED}{square}f\n{mask}%AI8_EndBrushPattern\n");
+    let shapes: String = (0..12).map(|i| format!("{RED}{}f\n", rect_path(f64::from(i) * 20.0, 0.0, f64::from(i) * 20.0 + 10.0, 10.0))).collect();
+    let r = read_ok(&format!("{section}{}{}", plugin_object(SCATTER, "Spray", SPRAY), layer(&shapes)));
+    let lib = vectorcraft_brush::library(&r.doc);
+    let spray = lib.iter().find(|b| b.name == "Spray").unwrap_or_else(|| panic!("{:?}", r.warnings));
+    let art = spray.art();
+    assert!(art.iter().any(|n| n.extras().mask.is_some()), "the mask is read: {art:#?}");
+    let mut all = Vec::new();
+    for n in r.doc.layers.iter().map(|l| &**l).chain(art) {
+        ids(n, &mut all);
+    }
+    let unique: std::collections::HashSet<_> = all.iter().copied().collect();
+    assert_eq!(unique.len(), all.len(), "{all:?}");
+}
+
 /// An art styles section inside a symbol's, a pattern's or a brush's art is skipped: the file's own
 /// art styles still style the layers' objects read after the definition.
 #[test]
@@ -6161,6 +6215,50 @@ fn an_object_in_a_symbols_art_with_a_listed_style_is_linked() {
     assert_eq!(art.extras().graphic_style, Some(1), "{art:#?}");
 }
 
+/// Editing data with symbols and no layers (a symbol library) gives its symbols: in the symbol
+/// list's order with the unlisted one after them, with their registration points and the images
+/// their art shows, without the one holding an instance of a symbol the data doesn't define, and
+/// with the object linked to a listed graphic style linked to it by its id.
+#[test]
+fn a_symbol_library_without_layers_gives_its_symbols() {
+    let styles = styles_and_list(&[fill_style("Blue", "0 0 0 0 0 0 1 Xa\n")], &["Blue"]);
+    // The template box's center is (100.5, 50.5): art space's origin is at canvas (8091, 8242).
+    let nested = instance("Dot", [1.0, 0.0, 0.0, -1.0, -8081.0, 8237.0]);
+    let lost = instance("Ghost", [1.0, 0.0, 0.0, -1.0, -8081.0, 8237.0]);
+    let m = "[ 5 0 0 5 -8096 8244.5 ]";
+    let raster = format!(
+        "%AI5_File:\n%AI5_BeginRaster\n() 1 XG\n/DeviceRGB XN\n{m} 2 1 0 Xh\n{m} 0 0 2 1 2 1 8 3 0 0 1 0 4 4 0 0\n\
+         %%BeginData: 6\rXI\nABCDEF%%EndData\r\nXH\r\n%AI5_EndRaster\r\nN\n"
+    );
+    let defs = symbols(
+        &(symbol("Dot", &dot(), 1)
+            + &symbol("Pic", &raster, 5)
+            + &symbol("Pair", &nested, 5)
+            + &symbol("Tile", &styled_square("Blue"), 5)
+            + &symbol("Lost", &lost, 5)),
+    );
+    let list = "%AI24_BeginSymbolList\n(Tile)\n(Pair)\n(Lost)\n(Dot)\n%AI24_EndSymbolList\n";
+    let body = format!("%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n{styles}{defs}{list}");
+    let read = super::symbols(stream(&body).as_bytes()).expect("the library's symbols");
+    let names: Vec<&str> = read.symbols.iter().map(|(s, _)| s.name.as_str()).collect();
+    assert_eq!(names, ["Tile", "Pair", "Dot", "Pic"]);
+    let registrations: Vec<u8> = read.symbols.iter().map(|(_, r)| r.0).collect();
+    let center = vectorcraft_doc::SymbolRegistration::CENTER.0;
+    assert_eq!(registrations, [center, center, 0, center]);
+    let Some(((tile, _), (pair, _))) = read.symbols.first().zip(read.symbols.get(1)) else { panic!("two symbols") };
+    assert_eq!(tile.art.extras().graphic_style, Some(1), "{:#?}", tile.art);
+    // Dot sits at (10, 5) in Pair's art.
+    let mut doc = Document::new(1.0, 1.0);
+    doc.symbols = read.symbols.iter().map(|(s, _)| s.clone()).collect();
+    assert_eq!(pair.art.visual_bounds_with(&doc.symbol_boxes()), Some(Rect::new(8.0, 3.0, 12.0, 7.0)));
+    let keys: Vec<String> =
+        doc.symbols.iter().filter_map(|s| if let NodeKind::Image(im) = &s.art.kind { Some(im.key.clone()) } else { None }).collect();
+    assert_eq!(keys.len(), 1);
+    assert_eq!(read.images.keys().cloned().collect::<Vec<_>>(), keys);
+    // Without symbols there are none to give.
+    assert!(super::symbols(stream(&styles).as_bytes()).is_none());
+}
+
 #[test]
 fn an_object_in_a_patterns_art_with_a_listed_style_is_linked() {
     let defs = styles_and_list(&[fill_style("Blue", "0 0 0 0 0 0 1 Xa\n")], &["Blue"]);
@@ -6171,6 +6269,35 @@ fn an_object_in_a_patterns_art_with_a_listed_style_is_linked() {
     let [square] = def.art.as_slice() else { panic!("{:#?}", def.art) };
     assert_eq!(fill(square).color(), Some(Color::rgb(0.0, 0.0, 1.0)));
     assert_eq!(square.extras().graphic_style, Some(1), "{square:#?}");
+}
+
+/// The art of an opacity mask in a pattern's art takes ids of the document, as the rest of the art
+/// does: no object of the pattern's art shares an id with an object of the layers.
+#[test]
+fn a_patterns_opacity_mask_art_takes_ids_of_the_document() {
+    fn ids(n: &Node, out: &mut Vec<vectorcraft_doc::NodeId>) {
+        out.push(n.id);
+        if let Some(m) = n.extras().mask.as_ref() {
+            ids(&m.art, out);
+        }
+        for c in n.children().into_iter().flatten() {
+            ids(c, out);
+        }
+    }
+    let square = rect_path(0.0, 0.0, 10.0, 10.0);
+    let mask_art: String = format!("1 g\n{square}f\n").lines().map(|l| format!("%_{l}\n")).collect();
+    let mask = format!("%_/ArtDictionary :\n%_/Mask :\n%_X=\n{mask_art}%_X+\n%_(Art) ,\n%_1 /Bool (Clipping) ,\n%_; (AI9_Mask) ,\n%_;\n");
+    let pattern = format!("%AI3_BeginPattern: (P)\n(P) 0 0 10 10\n0 A\n0 Xw\n{RED}{square}f\n{mask}E\n%AI3_EndPattern\n");
+    let shapes: String = (0..12).map(|i| format!("{RED}{}f\n", rect_path(f64::from(i) * 20.0, 0.0, f64::from(i) * 20.0 + 10.0, 10.0))).collect();
+    let r = read_ok(&format!("{pattern}{}", layer(&shapes)));
+    let def = r.doc.pattern("P").unwrap_or_else(|| panic!("{:?}", r.warnings));
+    assert!(def.art.iter().any(|n| n.extras().mask.is_some()), "the mask is read: {:#?}", def.art);
+    let mut all = Vec::new();
+    for n in r.doc.layers.iter().chain(&def.art) {
+        ids(n, &mut all);
+    }
+    let unique: std::collections::HashSet<_> = all.iter().copied().collect();
+    assert_eq!(unique.len(), all.len(), "{all:?}");
 }
 
 #[test]
@@ -6299,7 +6426,7 @@ fn each_pathfinder_operation_on_a_group_draws_as_vectorcraft_draws_it() {
         // Each result's box and paints; Outline's lines start where each square's path starts, so
         // the results are compared in a sorted order.
         let faces = |g: &Node| -> Vec<String> {
-            let mut faces: Vec<String> = vectorcraft_effects::pathfinder_children(g, None)
+            let mut faces: Vec<String> = vectorcraft_effects::pathfinder_children(None, g, None)
                 .unwrap()
                 .iter()
                 .map(|n| {
@@ -8752,6 +8879,54 @@ fn a_pattern_brushs_five_slots_are_kept() {
     assert!(matches!(d.kind, brush::DraftKind::Scatter { ref art, .. } if art == "Dot art"), "{d:?}");
     let d = brush::parse_tool_object(brush::Tool::Art, "Ribbon", RIBBON).unwrap();
     assert!(matches!(d.kind, brush::DraftKind::Art { ref art, .. } if art == "Ribbon art"), "{d:?}");
+}
+
+/// An Art brush in the older form (first number 1: one field fewer before its 8 numbers) is read
+/// with the art of its section, but not as plain (its numbers aren't known); a Scatter brush in
+/// that form isn't read (its values aren't all there).
+#[test]
+fn an_older_art_brush_comes_in_with_its_art() {
+    const OLD_RIBBON: &str = "1 / Ribbon art/ / / / / 0 1 /  1 0 1 0 1 0 0 0";
+    let d = brush::parse_tool_object(brush::Tool::Art, "Ribbon", OLD_RIBBON).unwrap();
+    assert!(matches!(d.kind, brush::DraftKind::Art { ref art, plain: false, .. } if art == "Ribbon art"), "{d:?}");
+    let brush::DraftKind::Art { ref brush, .. } = d.kind else { panic!("art") };
+    assert_eq!(brush.colorization, vectorcraft_brush::ArtBrush::default().colorization, "the default colorization");
+    // A count of numbers neither form has isn't read.
+    for bad in ["1 / Ribbon art/ / / / / 0 1 /  1 0 1 0 1 0 0", "1 / Ribbon art/ / / / / 0 1 /  1 0 1 0 1 0 0 0 0 0 0 0 0 0 0 0"] {
+        assert_eq!(brush::parse_tool_object(brush::Tool::Art, "Ribbon", bad), Err(brush::BrushError::Values), "{bad}");
+    }
+    assert_eq!(brush::parse_tool_object(brush::Tool::Scatter, "Spray", "1 /Dot art/ 0 1 /  1 0 1 0 1 0 0 0"), Err(brush::BrushError::Values));
+    // 8 numbers are the older form whatever the first number says: read with the defaults.
+    let d = brush::parse_tool_object(brush::Tool::Art, "Ribbon", "0 / Ribbon art/ / / / / 0 1 /  1 0 1 0 1 0 0 0").unwrap();
+    let brush::DraftKind::Art { ref brush, ref art, plain } = d.kind else { panic!("art") };
+    assert_eq!((art.as_str(), plain, brush.colorization), ("Ribbon art", false, vectorcraft_brush::ArtBrush::default().colorization));
+    let objects = [plugin_object(ART_BRUSH, "Ribbon", OLD_RIBBON), plugin_object(ART_BRUSH, "Bare", "1 / / / / / / 0 1 /  1 0 1 0 1 0 0 0")].concat();
+    let r = read_ok(&format!("{}{objects}{}", brush_art("Ribbon art", 4.0), layer("")));
+    let lib = vectorcraft_brush::library(&r.doc);
+    let vectorcraft_brush::BrushKind::Art(a) = brush_named(&lib, "Ribbon") else { panic!("art") };
+    assert_eq!(a.art.geometric_bounds().map(|b| (b.width(), b.height())), Some((4.0, 4.0)), "the art of its section");
+    assert_eq!(lib.len(), 1, "a brush naming no art is left out");
+    assert!(r.warnings.iter().any(|w| w.ends_with("Brushes panel (1)")), "{:?}", r.warnings);
+}
+
+/// A Pattern brush needs only its first 3 numbers, its scale the third (as a percentage), so the
+/// older form's 8 numbers read too; fewer than 3 aren't read.
+#[test]
+fn a_pattern_brush_reads_its_scale_from_three_or_more_numbers() {
+    const SLOTS: &str = "1 / Tile one/ Tile two/ / / Tile five/ 0 1 / ";
+    for numbers in ["1 0 0.5", "1 0 0.5 0 1 0 0 0"] {
+        let d = brush::parse_tool_object(brush::Tool::Pattern, "Fence", &format!("{SLOTS}{numbers}")).unwrap();
+        let brush::DraftKind::Pattern { tiles, scale } = d.kind else { panic!("{d:?}") };
+        assert_eq!(tiles[1].as_deref(), Some("Tile two"), "{numbers}");
+        assert!((scale - 50.0).abs() < 1e-9, "{numbers}: {scale}");
+    }
+    for numbers in ["", "1", "1 0"] {
+        assert_eq!(
+            brush::parse_tool_object(brush::Tool::Pattern, "Fence", &format!("{SLOTS}{numbers}")),
+            Err(brush::BrushError::Values),
+            "{numbers:?}"
+        );
+    }
 }
 
 /// A brush's art filled with a pattern the file defines before it is read, with that pattern.

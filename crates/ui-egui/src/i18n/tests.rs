@@ -194,6 +194,19 @@ fn marquee_selection_labels_are_in_complete_catalogs() {
     }
 }
 
+/// The Character panel's Anti-aliasing Method label and its choices, with the Sharp method's
+/// own `antiAlias` row apart from the plain "Sharp" corner row.
+#[test]
+fn anti_aliasing_method_labels_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        let cat = lang.catalog();
+        for label in ["Anti-aliasing Method", "Crisp", "Strong"] {
+            assert!(cat.plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+        assert!(cat.contextual("antiAlias", "Sharp").is_some(), "{} is missing the antiAlias Sharp row", lang.code);
+    }
+}
+
 /// Each language counts with its own plural rule: the form a count picks (`one`, then `few`, then
 /// `other`/`many`).
 #[test]
@@ -1584,6 +1597,28 @@ fn messages_translate_by_template_and_their_parts() {
     assert_eq!(message(Lang::EN, nested), nested);
 }
 
+/// The note `recolor.apply` and the Edit Colors commands give when they leave out locked or hidden
+/// objects is translated whole, its counts included, in every complete-message language.
+#[test]
+fn recolor_notes_on_objects_left_unchanged_translate_with_their_counts() {
+    let notes = [
+        ("Recolor completed; 2 locked objects and 1 hidden object were left unchanged", ["2", "1"]),
+        ("Recolor completed; 1 locked object and 3 hidden objects were left unchanged", ["1", "3"]),
+        ("Recolor completed; 1 locked object was left unchanged", ["1", "1"]),
+        ("Recolor completed; 5 hidden objects were left unchanged", ["5", "5"]),
+    ];
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for (note, counts) in notes {
+            let shown = message(lang, note);
+            // Whole words, so that a translation such as Catalan's "objecte" is not read as English.
+            let english = ["completed", "locked", "hidden", "object", "objects", "unchanged"];
+            assert!(shown.split(|c: char| !c.is_alphabetic()).all(|w| !english.contains(&w)), "{code}: {shown}");
+            assert!(counts.iter().all(|n| shown.contains(n)), "{code}: {shown}");
+        }
+    }
+}
+
 #[test]
 fn package_status_message_templates_parse() {
     let c = Catalog::parse(concat!(
@@ -1852,6 +1887,42 @@ fn width(p: &Value, cmd: &str, key: &str) -> Result<f64> {
     assert_eq!(c.message("`width` must be a number").map(|m| m.1), Some(vec![("key", "width")]));
 }
 
+/// The warnings of an Image Trace with keepColors, which the status bar shows and the scan above
+/// doesn't read, are translated in each language of [`COMPLETE_MESSAGES`], with the colors kept.
+#[test]
+fn the_keep_colors_trace_warnings_are_translated() {
+    use serde_json::json;
+    let mut s = vectorcraft_engine::Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    // A white field with a black square in it.
+    let img = image::RgbaImage::from_fn(40, 40, |x, y| {
+        image::Rgba(if (10..30).contains(&x) && (10..30).contains(&y) { [0, 0, 0, 255] } else { [255, 255, 255, 255] })
+    });
+    let mut png = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let data = vectorcraft_format::base64_encode(&png);
+    let mut warnings = vec![];
+    for (params, shown) in [
+        (json!({"mode": "color", "palette": "limited", "colors": 2, "keepColors": ["#ff00ff", "#00ffff"]}), "#ff00ff, #00ffff"),
+        (json!({"mode": "color", "palette": "limited", "colors": 2, "keepColors": ["#000000", "#00ffff"]}), "#00ffff"),
+        (json!({"mode": "color", "palette": "limited", "colors": 2, "keepColors": ["#000000"], "ignoreWhite": true, "ignoreColor": "#000000"}), ""),
+        (json!({"mode": "logo", "keepColors": ["#000000"]}), ""),
+    ] {
+        s.execute("file.place", &json!({"name": "square.png", "dataBase64": data, "link": false})).unwrap();
+        let r = s.execute("imageTrace.makeAndExpand", &json!({ "params": params })).unwrap();
+        let w = r["warnings"].as_array().and_then(|w| w.first()).and_then(|w| w.as_str()).unwrap_or_else(|| panic!("{params}: {r}"));
+        warnings.push((w.to_string(), shown));
+    }
+    // Listed colors that were traced and produced no paths (no square image gives that).
+    warnings.push(("Nothing was traced: the colors that match keepColors produce no paths.".to_string(), ""));
+    for (warning, shown) in &warnings {
+        for code in COMPLETE_MESSAGES {
+            let tr = message(Lang::from_code(code).unwrap(), warning);
+            assert!(tr != *warning && tr.contains(shown) && tr.contains("keepColors"), "{code}: {tr}");
+        }
+    }
+}
+
 /// The parameter errors of the blend spine commands (Move Spine Point, Reshape Spine Segment, Add
 /// Spine Point and Delete Spine Point, which Direct Selection, the Pen and the Anchor Point tool
 /// send) say what is wrong.
@@ -2062,9 +2133,9 @@ fn dataset_import_cell_errors_are_translated() {
 
 /// The errors of the parameter checks that many commands share (a number given as text, a missing
 /// number or index, a fraction for a whole number, `ids` that aren't a list of object ids, an
-/// object id that is negative or names no object, a date that isn't Unix seconds) fill their
-/// templates, and each language shows the value in the message, such as a quoted `"60 mm"`, as
-/// given: in its row's translation, or in English where it has none.
+/// `ids` entry or an `id` that is negative, an object id that names no object, a date that isn't
+/// Unix seconds) fill their templates, and each language shows the value in the message, such as a
+/// quoted `"60 mm"`, as given: in its row's translation, or in English where it has none.
 #[test]
 fn shared_param_check_errors_show_their_values_as_given() {
     use serde_json::json;
@@ -2075,7 +2146,7 @@ fn shared_param_check_errors_show_their_values_as_given() {
     s.execute("select.all", &json!({})).unwrap();
     // A command, its params, the English template of its error and the template's values.
     type Case = (&'static str, serde_json::Value, &'static str, &'static [(&'static str, &'static str)]);
-    let cases: [Case; 10] = [
+    let cases: [Case; 11] = [
         ("object.move", json!({"dx": "60 mm"}), "`{key}` must be a number, not {v}", &[("key", "dx"), ("v", r#""60 mm""#)]),
         ("object.rotate", json!({"angle": true}), "`{key}` must be a number, not {v}", &[("key", "angle"), ("v", "true")]),
         ("object.setBounds", json!({"width": [1, 2]}), "`{key}` must be a number, not {v}", &[("key", "width"), ("v", "[1,2]")]),
@@ -2083,7 +2154,13 @@ fn shared_param_check_errors_show_their_values_as_given() {
         ("appearance.setItem", json!({}), "missing integer `{key}`", &[("key", "index")]),
         ("object.transformEach", json!({"reference": 2.5}), "`{key}` must be a whole number", &[("key", "reference")]),
         ("edit.clear", json!({"ids": "all"}), "{key} must be an array of non-negative integer object ids", &[("key", "ids")]),
-        ("edit.clear", json!({"ids": [-1]}), "invalid object id {value}: expected a non-negative integer", &[("value", "-1")]),
+        (
+            "edit.clear",
+            json!({"ids": [-1]}),
+            "`{key}` entry {index} is {value}, not a non-negative integer object id",
+            &[("key", "ids"), ("index", "0"), ("value", "-1")],
+        ),
+        ("paint.invert", json!({"id": -1}), "invalid object id {value}: expected a non-negative integer", &[("value", "-1")]),
         ("edit.clear", json!({"ids": [99999]}), "no such object id {value}", &[("value", "99999")]),
         ("file.new", json!({"created": "yesterday"}), "{key} must be Unix seconds (an integer) or null", &[("key", "created")]),
     ];

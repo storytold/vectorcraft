@@ -28,7 +28,13 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "file.open",
         "Open…",
         "Cmd+O",
-        "{path?} → with a path, document.open's result {index, title, format, warnings, …} (null when a dialog asks first or a library loads)",
+        "{path?, params?} → with a path, document.open's result {index, title, format, warnings, …} (null when a dialog asks first or a library loads); `params` are the parameters of the importer plug-in that opens the file",
+    ),
+    (
+        "file.openWith",
+        "Open With",
+        "",
+        "{importer: \"plugin.<id>\" (an importer plug-in's format id, see document.formats), path?} File › Open With: open the file with that importer (document.open's importer), also a file whose extension a built-in format reads; without a path pick one of the files with the extensions it lists (the web opens File › Open's picker, and the file opens as File › Open opens it) → with a path, document.open's result; a picked file is read off the UI thread on the desktop, {background: true, status}, and opens once the importer returns (file.cancelOpen stops it) | null while the picker is open",
     ),
     (
         "file.save",
@@ -233,6 +239,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Apply Numbers",
         "",
         "{number?: \"arabic\"|\"upperLetters\"|\"lowerLetters\"|\"upperRoman\"|\"lowerRoman\"|\"twoDigits\"|\"threeDigits\"|\"none\"} Type › Bullets and Numbering › Apply Numbers: the selected type's paragraphs (or those the Type tool's selection touches) become a numbered list in that number style (text.setFormat {number}); without it, a numbered list keeps its style and other paragraphs are numbered 1, 2, 3 (text.setFormat {list: \"number\"}); \"none\" turns the list off",
+    ),
+    (
+        "ui.bulletsAndNumbering",
+        "Bullets and Numbering…",
+        "",
+        "{tab?: \"bullets\"|\"numbers\"} open Bullets and Numbering (More Options in the Paragraph panel's Bullets and Numbered List presets) on the paragraphs the Paragraph panel acts on, filled in with the values it shows, on that tab (without it, Numbers when the paragraphs are a numbered list, else Bullets) (dialog `bulletsAndNumbering`: tab (bullets|numbers), list (none|bullet|number: the kind of the preset picked), bullet (dot|dash|circle|square), number (arabic|upperLetters|lowerLetters|upperRoman|lowerRoman|twoDigits|threeDigits), listAlign (left|right), listLevel (1..9; 1 for paragraphs in no list), leftIndent, firstLineIndent (pt)): the type shows the dialog's values while it is open, OK runs text.setFormat with the values that changed (and the indents it shows when a preset puts the paragraphs in a list), as one undo step, and Cancel puts the type back; a preset picked for paragraphs in no list whose indents are 0 fills in 18 and -18 pt; an error with no type selected or an unknown tab",
     ),
     (
         "type.convertListToText",
@@ -447,6 +459,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ),
     ("view.rotateReset", "Reset Rotate View", "Cmd+Shift+1", "{}"),
     ("window.control", "Control", "", "{}"),
+    ("window.helpBar", "Help Bar", "", "{} toggle the tool-help strip independently of the status bar; returns the new visibility"),
     (
         "window.control.dock",
         "Dock Control Bar",
@@ -1475,7 +1488,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.installPlugin",
         "Install Plug-in…",
         "",
-        "{path?: a .wasm file | dataBase64?: the module, name?: the file name shown as its source (with dataBase64), allowHeavy?: bool (the user agreed to its heavy budget), grant?: [permission] (the permissions the user granted it), replace?: bool, hash?: the module's SHA-256 (as plugin.install)} install a WebAssembly plug-in (plugin.install); without a path pick one (the web opens the browser's file picker; File › Open of a .wasm installs it too). A plug-in that lists permissions the user hasn't granted it asks the user first, showing its name, id, version, file SHA-256 and what each permission lets it do, and so does a filter that asks for a heavy budget: OK installs it if the file still has the SHA-256 shown, Cancel installs nothing → plugin.install's result | {pending: \"confirm\"} while it asks",
+        "{path?: a .wasm file | dataBase64?: the module, name?: the file name shown as its source (with dataBase64), allowHeavy?: bool (the user agreed to its heavy budget), grant?: [permission] (the permissions the user granted it), replace?: bool (true: the user agreed it takes the place of the plug-in with its id, as plugin.install), hash?: the module's SHA-256 (as plugin.install)} install a WebAssembly plug-in (plugin.install); without a path pick one (the web opens the browser's file picker; File › Open of a .wasm installs it too). A plug-in that lists permissions the user hasn't granted it asks the user first, showing its name, id, version, file SHA-256 and what each permission lets it do, so does a filter that asks for a heavy budget, and so does one without replace that would take the place of another module with its id and get its settings and cache (needsReplace in plugin.inspect), showing its id and file SHA-256: OK installs it if the file still has the SHA-256 shown, Cancel installs nothing → plugin.install's result | {pending: \"confirm\"} while it asks",
     ),
     (
         "plugin.cancelRuns",
