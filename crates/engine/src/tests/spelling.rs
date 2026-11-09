@@ -3,6 +3,7 @@
 
 use serde_json::{Value, json};
 
+use crate::cmd::spelling::MAX_DICTIONARY_FILE_BYTES;
 use crate::*;
 
 /// A session with a new 400 × 400 document.
@@ -102,4 +103,170 @@ fn each_paragraph_is_checked_on_its_own_at_the_bytes_of_the_whole_text() {
     let t = text(&mut s, 50.0, &format!("{vi}\ndrawing qzxvw tools"));
     let at = vi.len() + 1 + "drawing ".len();
     assert_eq!(unknown(&mut s, json!({})), [(t.0, at as u64, at as u64 + 5, "qzxvw".to_string())]);
+}
+
+// The custom dictionary is craft-proof's, shared by the whole process, so each test below uses
+// made-up words of its own: tests running at the same time never see each other's.
+
+/// The words a check of the whole active document lists.
+fn marked(s: &mut Session) -> Vec<String> {
+    unknown(s, json!({})).into_iter().map(|w| w.3).collect()
+}
+
+#[test]
+fn added_words_are_right_in_every_check_until_deleted() {
+    let mut s = session();
+    text(&mut s, 50.0, "drawing Zqvwkx tools");
+    assert_eq!(marked(&mut s), ["Zqvwkx"]);
+    // Kept in lower case, so the capitalized word is right too.
+    let r = run(&mut s, "text.spelling.addWord", json!({"word": " Zqvwkx "}));
+    assert_eq!((r["word"].as_str(), r["added"].as_bool()), (Some("zqvwkx"), Some(true)));
+    assert_eq!(marked(&mut s), Vec::<String>::new());
+    assert_eq!(run(&mut s, "text.spelling.addWord", json!({"word": "zqvwkx"}))["added"], false, "already there");
+    let words = run(&mut s, "text.spelling.dictionary", json!({}))["words"].clone();
+    assert!(words.as_array().unwrap().contains(&json!("zqvwkx")), "{words}");
+    // Another document's check takes it as right too.
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    text(&mut s, 50.0, "zqvwkx");
+    assert_eq!(marked(&mut s), Vec::<String>::new());
+    run(&mut s, "text.spelling.removeWord", json!({"word": "ZQVWKX"}));
+    assert_eq!(marked(&mut s), ["zqvwkx"]);
+    let e = s.execute("text.spelling.removeWord", &json!({"word": "zqvwkx"})).unwrap_err().to_string();
+    assert!(e.contains("isn't in the custom dictionary"), "{e}");
+}
+
+#[test]
+fn a_changed_word_replaces_the_old_one() {
+    let mut s = session();
+    text(&mut s, 50.0, "xkvzqa xkvzqb");
+    run(&mut s, "text.spelling.addWord", json!({"word": "xkvzqa"}));
+    assert_eq!(marked(&mut s), ["xkvzqb"]);
+    assert_eq!(run(&mut s, "text.spelling.changeWord", json!({"word": "xkvzqa", "to": "Xkvzqb"}))["word"], "xkvzqb");
+    assert_eq!(marked(&mut s), ["xkvzqa"]);
+    let e = s.execute("text.spelling.changeWord", &json!({"word": "xkvzqa", "to": "x"})).unwrap_err().to_string();
+    assert!(e.contains("isn't in the custom dictionary"), "{e}");
+    run(&mut s, "text.spelling.removeWord", json!({"word": "xkvzqb"}));
+}
+
+#[test]
+fn the_custom_dictionary_file_is_read_and_kept_up_to_date() {
+    let dir = vectorcraft_testkit::temp_dir("spelling-dictionary");
+    let file = dir.join("Custom Dictionary.txt");
+    std::fs::write(&file, "kqzvwx\nnot one word\n\n").unwrap();
+    let mut s = session();
+    s.attach_custom_dictionary(file.clone());
+    text(&mut s, 50.0, "kqzvwx vkqzwx");
+    assert_eq!(marked(&mut s), ["vkqzwx"], "the file's word is right; its line of three words is skipped");
+    run(&mut s, "text.spelling.addWord", json!({"word": "vkqzwx"}));
+    let saved = std::fs::read_to_string(&file).unwrap();
+    assert!(saved.lines().any(|l| l == "kqzvwx") && saved.lines().any(|l| l == "vkqzwx"), "{saved}");
+    run(&mut s, "text.spelling.changeWord", json!({"word": "kqzvwx", "to": "kqzvwy"}));
+    run(&mut s, "text.spelling.removeWord", json!({"word": "vkqzwx"}));
+    let saved = std::fs::read_to_string(&file).unwrap();
+    assert!(saved.lines().any(|l| l == "kqzvwy"), "{saved}");
+    assert!(!saved.lines().any(|l| l == "kqzvwx" || l == "vkqzwx"), "changed and deleted words are gone from the file: {saved}");
+    run(&mut s, "text.spelling.removeWord", json!({"word": "kqzvwy"}));
+}
+
+#[test]
+fn ignore_all_skips_a_word_in_the_active_document_only() {
+    let mut s = session();
+    text(&mut s, 50.0, "Wqzxkv drawing wqzxkv vqzxkw");
+    run(&mut s, "text.spelling.ignoreAll", json!({"word": "WQZXKV"}));
+    assert_eq!(marked(&mut s), ["vqzxkw"], "every occurrence, whatever its case");
+    let words = run(&mut s, "text.spelling.dictionary", json!({}))["words"].clone();
+    assert!(!words.as_array().unwrap().contains(&json!("wqzxkv")), "not added to the custom dictionary");
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    text(&mut s, 50.0, "wqzxkv");
+    assert_eq!(marked(&mut s), ["wqzxkv"], "another document still marks it");
+}
+
+#[test]
+fn custom_dictionary_commands_refuse_what_isnt_one_word() {
+    let mut s = session();
+    let long = "q".repeat(65);
+    for (id, p) in [
+        ("text.spelling.addWord", json!({})),
+        ("text.spelling.addWord", json!({"word": "  "})),
+        ("text.spelling.addWord", json!({"word": "two words"})),
+        ("text.spelling.addWord", json!({"word": long})),
+        ("text.spelling.addWord", json!({"word": 5})),
+        ("text.spelling.removeWord", json!({})),
+        ("text.spelling.changeWord", json!({"word": "qzx"})),
+        ("text.spelling.changeWord", json!({"word": "qzx", "to": "a b"})),
+        ("text.spelling.ignoreAll", json!({"word": "a\tb"})),
+    ] {
+        assert!(s.execute(id, &p).is_err(), "{id} {p} is refused");
+    }
+    let mut empty = Session::new();
+    assert!(empty.execute("text.spelling.ignoreAll", &json!({"word": "qzx"})).is_err(), "Ignore All needs a document");
+    assert!(empty.execute("text.spelling.dictionary", &json!({})).is_ok(), "the dictionary is the app's");
+}
+
+/// Whether the custom dictionary holds `word`.
+fn in_dictionary(s: &mut Session, word: &str) -> bool {
+    run(s, "text.spelling.dictionary", json!({}))["words"].as_array().unwrap().contains(&json!(word))
+}
+
+#[test]
+fn a_dictionary_file_that_cant_be_read_whole_is_never_written_over() {
+    let dir = vectorcraft_testkit::temp_dir("spelling-unreadable");
+    // A folder where the file should be can't be read as one; a file past what craft-proof reads
+    // would lose its other words if written back.
+    let folder = dir.join("Custom Dictionary.txt");
+    std::fs::create_dir_all(&folder).unwrap();
+    let big = dir.join("big.txt");
+    let words = "qkzvxw\n".repeat((MAX_DICTIONARY_FILE_BYTES / 7 + 2) as usize);
+    std::fs::write(&big, &words).unwrap();
+    for path in [folder.clone(), big.clone()] {
+        let mut s = session();
+        s.attach_custom_dictionary(path.clone());
+        let e = s.execute("text.spelling.addWord", &json!({"word": "zkqvxw"})).unwrap_err().to_string();
+        assert!(e.contains("can't be read"), "{}: {e}", path.display());
+        assert!(!in_dictionary(&mut s, "zkqvxw"), "the refused word isn't kept either");
+    }
+    assert!(folder.is_dir());
+    assert_eq!(std::fs::read_to_string(&big).unwrap(), words, "the large file is as it was");
+}
+
+#[test]
+fn a_change_that_cant_be_saved_is_taken_back() {
+    let mut s = session();
+    run(&mut s, "text.spelling.addWord", json!({"word": "wkqzvx"}));
+    let dir = vectorcraft_testkit::temp_dir("spelling-rollback");
+    let folder = dir.join("Custom Dictionary.txt");
+    std::fs::create_dir_all(&folder).unwrap();
+    let mut failing = session();
+    failing.attach_custom_dictionary(folder);
+    assert!(failing.execute("text.spelling.removeWord", &json!({"word": "wkqzvx"})).is_err());
+    assert!(in_dictionary(&mut s, "wkqzvx"), "a delete that wasn't saved leaves the word");
+    assert!(failing.execute("text.spelling.changeWord", &json!({"word": "wkqzvx", "to": "wkqzvy"})).is_err());
+    assert!(in_dictionary(&mut s, "wkqzvx") && !in_dictionary(&mut s, "wkqzvy"), "a change that wasn't saved leaves the old word");
+    run(&mut s, "text.spelling.removeWord", json!({"word": "wkqzvx"}));
+}
+
+#[cfg(unix)]
+#[test]
+fn a_word_another_window_saved_stays_when_this_save_fails() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = vectorcraft_testkit::temp_dir("spelling-readonly");
+    let file = dir.join("Custom Dictionary.txt");
+    std::fs::write(&file, "").unwrap();
+    let mut s = session();
+    s.attach_custom_dictionary(file.clone());
+    // Another window saves a word this session hasn't taken in, then the folder can't be written:
+    // the save reads the file, takes the word in, and fails writing.
+    std::fs::write(&file, "zvkqxw\n").unwrap();
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o500)).unwrap();
+    let probe = dir.join("probe");
+    let writable = std::fs::write(&probe, "").is_ok();
+    let r = (!writable).then(|| s.execute("text.spelling.addWord", &json!({"word": "zvkqxw"})));
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let Some(r) = r else {
+        // Run as root, the folder stays writable: there is no failing save to check.
+        return;
+    };
+    assert!(r.is_err(), "{r:?}");
+    assert!(in_dictionary(&mut s, "zvkqxw"), "the word in the file stays, though this Add was taken back");
+    run(&mut s, "text.spelling.removeWord", json!({"word": "zvkqxw"}));
 }

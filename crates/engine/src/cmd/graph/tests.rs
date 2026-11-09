@@ -14,6 +14,13 @@ fn fmt_value_does_not_saturate_beyond_i64() {
     assert_eq!(super::fmt_value(2.5), "2.5");
 }
 
+#[test]
+fn fmt_value_tiny_negative_is_zero() {
+    assert_eq!(super::fmt_value(-0.004), "0");
+    assert_eq!(super::fmt_value(-0.0049), "0");
+    assert_eq!(super::fmt_value(-0.006), "-0.01");
+}
+
 fn graph(s: &mut Session, ty: &str) -> NodeId {
     let csv = ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6";
     NodeId(

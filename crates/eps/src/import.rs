@@ -35,6 +35,7 @@
 
 mod ai;
 mod ate;
+mod cid;
 mod data;
 mod graphics;
 mod interp;
@@ -44,10 +45,13 @@ mod obj;
 mod preview;
 mod shading;
 mod text;
+mod type1;
 mod type42;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_cid;
 #[cfg(test)]
 mod tests_composite;
 #[cfg(test)]
@@ -60,6 +64,10 @@ mod tests_illustrator;
 mod tests_images;
 #[cfg(test)]
 mod tests_native;
+#[cfg(test)]
+mod tests_type1;
+#[cfg(test)]
+mod tests_type42;
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -89,6 +97,10 @@ pub use text::family_style;
 const LETTER: [f64; 4] = [0.0, 0.0, 612.0, 792.0];
 /// Largest page side read (points).
 const MAX_SIDE: f64 = 1e5;
+
+/// The start of the warning that type was set in fonts that aren't available, before ": " and
+/// their families: PDF import's words, as type in those fonts comes in the same way.
+pub(crate) const MISSING_FONTS_NOTE: &str = "fonts that aren't available show in the fallback font until they are";
 
 /// A read file.
 #[derive(Debug)]
@@ -356,6 +368,9 @@ fn finish_with(out: Out, layers: Vec<Arc<Node>>) -> Imported {
     }
     doc.layers = layers;
     let mut warnings = out.warnings;
+    if !out.missing_fonts.is_empty() {
+        warnings.push(format!("{MISSING_FONTS_NOTE}: {}", out.missing_fonts.join(", ")));
+    }
     doc.limit_depth_noting(&mut warnings);
     Imported { document: doc, warnings, preview: false }
 }

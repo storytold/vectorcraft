@@ -215,7 +215,7 @@ fn text_and_its_strokes_come_from_the_page_into_the_layer_of_its_text_object() {
     assert_eq!(kinds(&r.document.layers[0]), ["path"]);
     // The text and the path of its stroke, where the text object is (no group of their own).
     assert_eq!(kinds(&r.document.layers[1]), ["text", "path"], "{:?}", r.warnings);
-    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    assert!(super::tests::program_warnings(&r.warnings).is_empty(), "{:?}", r.warnings);
 }
 
 /// A point type object in the legacy format (`To` … `TO`), as an EPS saved for Illustrator 10
@@ -4659,6 +4659,22 @@ fn a_small_label_of_the_page_in_no_text_object_is_noted() {
     assert_eq!(names(&r.document), ["Art", "Spare"], "{:?}", r.warnings);
     let note = r.warnings.iter().find(|w| *w == "some of the page's type has no text object in the layers, so it is left out");
     assert!(note.is_some_and(|w| crate::is_loss(w)), "{:?}", r.warnings);
+}
+
+/// A ligature the page shows by a glyph its font's encoding names `uniE028` (a private-use
+/// character, without the letters it stands for) is the letters of its text object: the page's type
+/// has one, and nothing is noted as left out.
+#[test]
+fn a_ligature_glyph_without_letters_is_matched_to_its_text_object() {
+    let doc = text_document(&[("Quality here\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let art = native_with_text(&layer("Art", true, &text_object(0)), &doc);
+    let page = "0 0 0 1 setcmykcolor /Helvetica findfont dup length dict copy \
+        dup /Encoding StandardEncoding 256 array copy dup 127 /uniE028 put put /Lig exch definefont \
+        14 scalefont setfont 58.5 61.5 moveto (Qual\\177y here) show";
+    let r = import(&eps(page, &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|w| w.contains("so it is left out")), "{:?}", r.warnings);
+    assert_eq!(text_of(&r.document.layers[0]).iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["Quality here"], "{:?}", r.warnings);
 }
 
 /// A line break inside a paragraph (`\x03` in the text document) stays a line break in it.
