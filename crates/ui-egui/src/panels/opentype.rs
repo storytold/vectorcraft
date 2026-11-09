@@ -215,13 +215,15 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let sets = offered_sets(&st);
     ui.add_enabled_ui(!sets.is_empty(), |ui| {
         ui.menu_button(tl!("Stylistic Sets"), |ui| {
-            for set in &sets {
-                let flag = Flag::Extra(EXTRA_FEATURES[usize::from(set.number - 1)]);
-                let on = flag.get(&next);
-                if widgets::check_name(ui, &set_label(set), on) {
-                    change = Some(Change::Toggle(flag, !on));
+            widgets::menu_scroll(ui, |ui| {
+                for set in &sets {
+                    let flag = Flag::Extra(EXTRA_FEATURES[usize::from(set.number - 1)]);
+                    let on = flag.get(&next);
+                    if widgets::check_name(ui, &set_label(set), on) {
+                        change = Some(Change::Toggle(flag, !on));
+                    }
                 }
-            }
+            });
         });
     });
     if cur.ligatures && vectorcraft_text::ligatures_suppressed_by(st.tracking) && !vectorcraft_text::explicit_ligatures(&st.features) {

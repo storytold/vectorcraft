@@ -451,6 +451,18 @@ impl NineSliceMap {
         self.most_at(art, &boxes, 0)
     }
 
+    /// The affine map that [`Self::place`] and [`Self::place_unclipped`] move object `n` by as one
+    /// piece, with everything in it: the map of the cell its box lies in, or of the cell at the
+    /// origin when it has no box. `None` when its box crosses a guide.
+    pub fn one_cell(&self, n: &Node, doc: &Document) -> Option<Affine> {
+        let boxes = doc.symbol_boxes().quick();
+        let Some(b) = n.geometric(Some(&boxes)).map(|b| self.natural.transform_rect_bbox(b)).filter(|b| finite(*b)) else {
+            return Some(self.cell_at(Point::ZERO));
+        };
+        let (cols, rows) = (self.x.cells(b.x0, b.x1), self.y.cells(b.y0, b.y1));
+        (cols[0] == cols[1] && rows[0] == rows[1]).then(|| self.cell_xf(cols[0], rows[0]))
+    }
+
     /// [`Self::most_placed`] for [`Self::place_unclipped`]: the most objects it makes of `art`.
     pub fn most_placed_unclipped(&self, art: &Node, doc: &Document) -> u64 {
         Self { clips: false, ..*self }.most_placed(art, doc)

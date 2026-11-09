@@ -4,7 +4,8 @@
 //! as Break Link to Symbol places it. A linear or radial gradient fill becomes a
 //! gradient mesh, or solid strips / concentric ellipses, inside a clip group shaped like the object; a freeform
 //! gradient becomes a mesh shaped like the object. A pattern fill becomes the tiles it paints inside a clip
-//! group shaped like the object. Create Gradient Mesh shares the sampling.
+//! group shaped like the object. Create Gradient Mesh shares the sampling. A dimension whose art
+//! Expand changes becomes a plain group of that art.
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -19,6 +20,7 @@ use vectorcraft_doc::pattern::{PatternDef, place_art};
 use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, Scaling};
 use vectorcraft_geom::{Affine, PathData, Point, Rect, SubPath, Vec2, shapes};
 
+use super::dimension::EndedLink;
 use super::edit::selected_roots;
 use super::menucmds::{run_raw, squash};
 use super::object::as_clipping_path;
@@ -41,7 +43,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Expand…",
             ["Object"],
             None,
-            "{object?: true (symbol instances without effects (their fills' and strokes' included) and not in perspective → their art, as Break Link to Symbol places it (the instances that art holds stay instances), type → outlines, live shapes → paths, effects baked, blends → groups of their steps, repeats → groups of their instances, Intertwine groups → groups of their objects and of the parts drawn over the others (clip groups), envelopes → their distorted content, placed documents → editable copies of their art, as placing the file without link gives, its symbols, patterns, swatches and images joining the document), fill?: true (gradient fills → `gradient` art, pattern fills → their tiles in a clip group shaped like the object), stroke?: true (strokes → filled outlines, the stroked paths that baking effects leaves included), gradient?: \"objects\" (default: `steps` solid strips, concentric ellipses for radial gradients) | \"mesh\" (a gradient mesh); both in a clip group shaped like the object (freeform gradients always become a mesh shaped like it), steps?: 1..1000 (255)} one undo step → {ids}",
+            "{object?: true (symbol instances without effects (their fills' and strokes' included) and not in perspective → their art, as Break Link to Symbol places it (the instances that art holds stay instances), type → outlines, live shapes → paths, effects baked, blends → groups of their steps, repeats → groups of their instances, Intertwine groups → groups of their objects and of the parts drawn over the others (clip groups), envelopes → their distorted content, placed documents → editable copies of their art, as placing the file without link gives, its symbols, patterns, swatches and images joining the document), fill?: true (gradient fills → `gradient` art, pattern fills → their tiles in a clip group shaped like the object), stroke?: true (strokes → filled outlines, the stroked paths that baking effects leaves included), gradient?: \"objects\" (default: `steps` solid strips, concentric ellipses for radial gradients) | \"mesh\" (a gradient mesh); both in a clip group shaped like the object (freeform gradients always become a mesh shaped like it), steps?: 1..1000 (255)} one undo step; a dimension whose art an option changes, or one selected with the art it measures when that art is replaced, becomes a plain group of its art → {ids}",
             has_selection,
             expand
         ),
@@ -239,8 +241,12 @@ fn expand_steps(s: &mut Session, p: &Value) -> Result<Value> {
     let stroke = bool_or(p, "stroke", true);
     let to = GradientTo::parse(p)?;
     let from = s.doc()?.history.undo.len();
-    let rev0 = s.doc()?.revision;
     let mut e = Expandable::of(&s.doc()?.doc, &selected_roots(s)?);
+    // Before anything expands: outlining the art a dimension measures would remove the dimension.
+    let before = s.doc()?.doc.clone();
+    let mut ended = vec![];
+    end_dimension_links(s, &mut ended)?;
+    let rev0 = s.doc()?.revision;
     // Placed documents first: their art (type, strokes, gradients) expands below.
     if object && e.placed {
         let roots = selected_roots(s)?;
@@ -286,6 +292,8 @@ fn expand_steps(s: &mut Session, p: &Value) -> Result<Value> {
         let roots = selected_roots(s)?;
         s.edit("Expand", |d, _| super::patterncmds::expand_repeats(d, &roots).map(|_| ()))?;
     }
+    // The dimensions in the art those steps made.
+    end_dimension_links(s, &mut ended)?;
     if object && e.effects {
         // Effects that Expand Appearance can't expand are left as they are. When it refuses to
         // leave a process color on a grayscale image with transparency, Expand fails as a whole.
@@ -331,8 +339,26 @@ fn expand_steps(s: &mut Session, p: &Value) -> Result<Value> {
     if s.doc()?.revision == rev0 {
         return Err(EngineError::Other("Expand: nothing to expand".into()));
     }
+    if !ended.is_empty() {
+        // A dimension whose source Expand replaced stays plain: its link no longer fits that art.
+        let after = s.doc()?.doc.clone();
+        ended.retain(|e| e.source_kept(&before, &after));
+        s.edit("Expand", |d, _| {
+            super::dimension::restore_unchanged(d, std::mem::take(&mut ended));
+            Ok(())
+        })?;
+    }
     squash(s, from, "Expand");
     Ok(json!({ "ids": s.doc()?.selection.objects.iter().map(|i| i.0).collect::<Vec<_>>() }))
+}
+
+/// Ends the live link of each dimension under or holding the selection, adding it to `ended`.
+fn end_dimension_links(s: &mut Session, ended: &mut Vec<EndedLink>) -> Result<()> {
+    let roots = selected_roots(s)?;
+    if !super::dimension::reached(&s.doc()?.doc, &roots).is_empty() {
+        ended.extend(s.edit("Expand", |d, _| Ok(super::dimension::end_links(d, &roots)))?);
+    }
+    Ok(())
 }
 
 fn drop_live(n: &mut Node) {
@@ -367,12 +393,21 @@ fn expand_gradient_fills(s: &mut Session, to: GradientTo) -> Result<()> {
 /// Path `l` with each gradient fill turned into art, in appearance order: the other items stay
 /// on plain copies of the path. The path's geometry effects ([`reshaped`]) and each fill's own
 /// ([`fill_shape`]) shape the outline the art fills first, as on the canvas. `None` when no
-/// gradient fill can be expanded.
+/// gradient fill can be expanded. A path that live-effect plug-ins paint is expanded piece by piece
+/// ([`expand_pieces`]).
 fn expand_fills(d: &mut Document, l: &Node, to: GradientTo) -> Option<Node> {
+    if vectorcraft_render::effects::has_painted_effects(l) {
+        return expand_pieces(d, l, usize::MAX, |d, piece, _| expand_piece_fills(d, piece, to));
+    }
+    expand_piece_fills(d, l, to)
+}
+
+/// [`expand_fills`] of a path with no live-effect plug-in that paints what it returns.
+fn expand_piece_fills(d: &mut Document, l: &Node, to: GradientTo) -> Option<Node> {
     if !matches!(l.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) || !l.appearance.items.iter().any(|i| gradient_fill(i).is_some()) {
         return None;
     }
-    let reshaped = reshaped(l);
+    let reshaped = reshaped(d, l);
     let l = reshaped.as_ref().unwrap_or(l);
     let (path, _) = node_path(l)?;
     let bounds = path.bounds()?;
@@ -381,8 +416,9 @@ fn expand_fills(d: &mut Document, l: &Node, to: GradientTo) -> Option<Node> {
     let mut expanded = false;
     for item in &l.appearance.items {
         // Items that paint nothing go; a gradient that can't be expanded stays.
-        let art = gradient_fill(item).and_then(|(f, g)| {
-            let (fl, path, bounds) = fill_shape(l, item, &path, bounds)?;
+        let art = gradient_fill(item).and_then(|_| {
+            let (fl, path, bounds, moved) = fill_shape(d, l, item, &path, bounds)?;
+            let (f, g) = gradient_fill(&moved)?;
             gradient_art(d, &fl, &path, bounds, f, g, to)
         });
         let Some(art) = art else {
@@ -440,33 +476,90 @@ fn gradient_art(d: &mut Document, l: &Node, path: &PathData, bounds: Rect, f: &F
     Some(art)
 }
 
+/// Path `l`, which live-effect plug-ins paint, as the art the canvas draws
+/// ([`reshape`](vectorcraft_render::effects::reshape)) with ids of its own, each piece of the art
+/// replaced by what `expand` makes of it (`expand` gets the piece and how many objects it may become;
+/// `None` keeps the piece with its own paints). `None` when the art would hold more than `budget`
+/// objects or no piece expands.
+fn expand_pieces(d: &mut Document, l: &Node, budget: usize, mut expand: impl FnMut(&mut Document, &Node, usize) -> Option<Node>) -> Option<Node> {
+    let art = vectorcraft_render::effects::reshape(Some(d), l, None)?;
+    let mut art = d.reid(&art);
+    art.locked = l.locked;
+    let mut left = budget.checked_sub(art.count_with_masks())?;
+    let mut expanded = false;
+    expand_piece_leaves(d, &mut art, &mut left, &mut expanded, &mut expand);
+    expanded.then_some(art)
+}
+
+/// Replace each path and compound path under `n` (`n` included) by what `expand` makes of it, in
+/// paint order. `left` is how many more objects the art may hold, and `expanded` is set when a path
+/// is replaced.
+fn expand_piece_leaves(
+    d: &mut Document,
+    n: &mut Node,
+    left: &mut usize,
+    expanded: &mut bool,
+    expand: &mut impl FnMut(&mut Document, &Node, usize) -> Option<Node>,
+) {
+    if matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) {
+        let room = *left + n.count_with_masks();
+        if let Some(new) = expand(d, n, room) {
+            *left = room.saturating_sub(new.count_with_masks());
+            *n = new;
+            *expanded = true;
+        }
+        return;
+    }
+    for c in n.children_mut().into_iter().flatten() {
+        expand_piece_leaves(d, Arc::make_mut(c), left, expanded, expand);
+    }
+}
+
 /// Path `l` as the canvas paints its fills and strokes: its visible geometry effects applied to its
 /// path (a plain path then), and every geometry effect of its own removed. `None` when it has no
-/// visible geometry effect.
-fn reshaped(l: &Node) -> Option<Node> {
-    use vectorcraft_render::effects::{GeomContext, apply_geometry_with, has_geometry, is_geometry};
+/// visible geometry effect. The swatches and patterns that live-effect plug-ins painting their
+/// pieces name are looked up in `doc`. This merges the pieces of such a plug-in into one path, so a
+/// path that one paints goes through [`expand_pieces`] instead.
+pub(crate) fn reshaped(doc: &Document, l: &Node) -> Option<Node> {
+    use vectorcraft_render::effects::{GeomContext, apply_geometry_carrying, has_geometry, is_geometry};
     if !has_geometry(&l.appearance.effects) {
         return None;
     }
     let (path, _) = node_path(l)?;
-    let g = apply_geometry_with(&l.appearance.effects, &path, path.bounds()?, &GeomContext::of(l));
+    let (g, carry) = apply_geometry_carrying(&l.appearance.effects, &path, path.bounds()?, &GeomContext { doc: Some(doc), ..GeomContext::of(l) });
     let mut m = with_path(l, g);
+    // Its gradients move with the outline, as the canvas paints them.
+    if carry.moves(&m.appearance) {
+        carry.apply(&mut m.appearance);
+    }
     m.appearance.effects.retain(|e| !is_geometry(&e.id));
     Some(m)
 }
 
 /// Path `l` (outline `path`, box `bounds`) as its fill `item` paints it on the canvas, with its
-/// outline and box: when the fill has visible geometry effects, `l` with the outline they make of
-/// `path` as a plain path, and that outline's box.
-fn fill_shape(l: &Node, item: &AppearanceItem, path: &PathData, bounds: Rect) -> Option<(Node, PathData, Rect)> {
-    use vectorcraft_render::effects::{GeomContext, apply_geometry_with, has_geometry};
+/// outline, box and fill: when the fill has visible geometry effects, `l` with the outline they
+/// make of `path` as a plain path, that outline's box, and the fill with its gradient moved along
+/// with the outline.
+pub(crate) fn fill_shape(
+    doc: &Document,
+    l: &Node,
+    item: &AppearanceItem,
+    path: &PathData,
+    bounds: Rect,
+) -> Option<(Node, PathData, Rect, AppearanceItem)> {
+    use vectorcraft_render::effects::{GeomContext, apply_geometry_carrying, has_geometry};
     if !has_geometry(item.effects()) {
-        return Some((l.clone(), path.clone(), bounds));
+        return Some((l.clone(), path.clone(), bounds, item.clone()));
     }
     // In the fill's context, as drawing runs them: a plug-in effect is told which fill it is on.
-    let outline = apply_geometry_with(item.effects(), path, bounds, &GeomContext::of(l).item(item));
+    let (outline, carry) = apply_geometry_carrying(item.effects(), path, bounds, &GeomContext { doc: Some(doc), ..GeomContext::of(l) }.item(item));
     let b = outline.bounds()?;
-    Some((with_path(l, outline.clone()), outline, b))
+    let mut one = Appearance { items: vec![item.clone()], ..Default::default() };
+    if carry.moves(&one) {
+        carry.apply(&mut one);
+    }
+    let moved = one.items.pop().unwrap_or_else(|| item.clone());
+    Some((with_path(l, outline.clone()), outline, b, moved))
 }
 
 /// Path or compound path `l` with `path` as its path, a plain path.
@@ -661,7 +754,7 @@ fn expand_live_with_transparent_image_patterns(
         let Some(n) = d.node(*id) else { continue };
         // Random Transform effects take their seed from the ids: bake them first ([`bake_seeded`]),
         // and leave the object live when that can't be done.
-        let Some(mut g) = bake_seeded(&vectorcraft_render::effects::expand_live_deep(Some(d), n)) else { continue };
+        let Some(mut g) = bake_seeded(d, &vectorcraft_render::effects::expand_live_deep(Some(d), n)) else { continue };
         // An object whose art would take the expanded art past the budget stays live.
         let size = g.count_with_masks();
         if size > budget - made.get() {
@@ -744,14 +837,23 @@ fn expand_patterns(d: &mut Document, l: &Node) -> Option<Node> {
 }
 
 /// [`expand_patterns`] for only the pattern fills `which` picks: the others stay like the other
-/// items, as does a pattern fill whose tiles would take the tiles of `l` past `budget` objects.
+/// items, as does a pattern fill whose tiles would take the tiles of `l` past `budget` objects. A
+/// path that live-effect plug-ins paint is expanded piece by piece ([`expand_pieces`]).
 fn expand_patterns_where(d: &mut Document, l: &Node, which: impl Fn(&Document, &AppearanceItem) -> bool, budget: usize) -> Option<Node> {
+    if vectorcraft_render::effects::has_painted_effects(l) {
+        return expand_pieces(d, l, budget, |d, piece, room| expand_piece_patterns(d, piece, &which, room));
+    }
+    expand_piece_patterns(d, l, which, budget)
+}
+
+/// [`expand_patterns_where`] of a path with no live-effect plug-in that paints what it returns.
+fn expand_piece_patterns(d: &mut Document, l: &Node, which: impl Fn(&Document, &AppearanceItem) -> bool, budget: usize) -> Option<Node> {
     if !matches!(l.kind, NodeKind::Path { .. } | NodeKind::Compound { .. })
         || !l.appearance.items.iter().any(|i| pattern_fill(d, i).is_some() && which(d, i))
     {
         return None;
     }
-    let reshaped = reshaped(l);
+    let reshaped = reshaped(d, l);
     let l = reshaped.as_ref().unwrap_or(l);
     let (path, _) = node_path(l)?;
     let bounds = path.bounds()?;
@@ -783,7 +885,7 @@ fn expand_patterns_where(d: &mut Document, l: &Node, which: impl Fn(&Document, &
         later -= usize::from(fill.is_some());
         let room = if later > 0 { left.saturating_sub(l.count() + 1) } else { left };
         let tiles = fill.filter(|_| !full).and_then(|(f, def, xf)| {
-            let (fl, _, bounds) = fill_shape(l, item, &path, bounds)?;
+            let (fl, _, bounds, _) = fill_shape(d, l, item, &path, bounds)?;
             let Some(t) = pattern_tiles(d, &def, xf, bounds, room) else {
                 full = true;
                 return None;
@@ -830,7 +932,7 @@ fn pattern_tiles(d: &mut Document, def: &PatternDef, xf: Affine, bounds: Rect, b
     if !moves_only(xf) && def.art.iter().any(|a| has_instances(a)) {
         return Some(vec![]);
     }
-    let Some(def) = seeds_baked(def) else {
+    let Some(def) = seeds_baked(d, def) else {
         return Some(vec![]);
     };
     let brushes = vectorcraft_brush::library(d);
@@ -863,13 +965,14 @@ fn pattern_tiles(d: &mut Document, def: &PatternDef, xf: Affine, bounds: Rect, b
 /// effect baked into filled art ([`bake_appearance`](vectorcraft_render::effects::bake_appearance))
 /// while it keeps its own id: the effect takes its seed from the id, and the canvas draws the art
 /// with those ids for every tile, while the tiles get ids of their own. `None` when something
-/// other than a path has such an effect.
-fn seeds_baked(def: &PatternDef) -> Option<std::borrow::Cow<'_, PatternDef>> {
+/// other than a path has such an effect. The swatches and patterns that live-effect plug-ins
+/// painting their pieces name are looked up in `d`.
+fn seeds_baked<'a>(d: &Document, def: &'a PatternDef) -> Option<std::borrow::Cow<'a, PatternDef>> {
     if !def.art.iter().any(|a| has_seeded(a)) {
         return Some(std::borrow::Cow::Borrowed(def));
     }
     let mut def = def.clone();
-    def.art = def.art.iter().map(|a| bake_seeded(a).map(Arc::new)).collect::<Option<_>>()?;
+    def.art = def.art.iter().map(|a| bake_seeded(d, a).map(Arc::new)).collect::<Option<_>>()?;
     Some(std::borrow::Cow::Owned(def))
 }
 
@@ -959,10 +1062,13 @@ fn moves_only(a: Affine) -> bool {
     (m0 - 1.0).abs() <= eps && m1.abs() <= eps && m2.abs() <= eps && (m3 - 1.0).abs() <= eps
 }
 
+/// Is `e` a visible Transform effect with Random on (which takes its seed from the object's id)?
+pub(crate) fn seeded(e: &vectorcraft_doc::Effect) -> bool {
+    e.visible && e.id == "distort.transform" && e.params.get("random").and_then(Value::as_bool) == Some(true)
+}
+
 /// Does `n` have a visible Transform effect with Random on, its own or a fill's or stroke's?
 fn seeded_here(n: &Node) -> bool {
-    let seeded =
-        |e: &vectorcraft_doc::Effect| e.visible && e.id == "distort.transform" && e.params.get("random").and_then(Value::as_bool) == Some(true);
     n.appearance.effects.iter().any(seeded) || n.appearance.items.iter().any(|i| i.effects().iter().any(seeded))
 }
 
@@ -975,8 +1081,9 @@ pub(crate) fn has_seeded(n: &Node) -> bool {
 }
 
 /// `n` with the paths in it that have a random Transform effect baked ([`seeds_baked`]). `None`
-/// when something else has one.
-fn bake_seeded(n: &Node) -> Option<Node> {
+/// when something else has one. The swatches and patterns that live-effect plug-ins painting their
+/// pieces name are looked up in `d`.
+fn bake_seeded(d: &Document, n: &Node) -> Option<Node> {
     if !has_seeded(n) {
         return Some(n.clone());
     }
@@ -984,17 +1091,17 @@ fn bake_seeded(n: &Node) -> Option<Node> {
         if !matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) {
             return None;
         }
-        vectorcraft_render::effects::bake_appearance(n)?
+        vectorcraft_render::effects::bake_appearance(Some(d), n)?
     } else {
         n.clone()
     };
     if !matches!(n.kind, NodeKind::Compound { .. }) {
         for c in n.children_mut().into_iter().flatten() {
-            *c = Arc::new(bake_seeded(c)?);
+            *c = Arc::new(bake_seeded(d, c)?);
         }
     }
     if let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_mut()) {
-        m.art = Arc::new(bake_seeded(&m.art)?);
+        m.art = Arc::new(bake_seeded(d, &m.art)?);
     }
     Some(n)
 }
@@ -1015,7 +1122,7 @@ fn has_unbakeable_effects(n: &Node) -> bool {
 /// paths baked ([`baked`], [`outline_brushed`]) and its live shapes turned into plain paths (a
 /// stretch would rebuild their corners round), in its opacity masks too.
 fn prepared(d: &mut Document, brushes: &[vectorcraft_brush::Brush], n: &Node) -> Node {
-    let mut t = baked(n);
+    let mut t = baked(d, n);
     outline_brushed(d, brushes, &mut t);
     drop_live(&mut t);
     prepare_masks(d, brushes, &mut t);
@@ -1056,14 +1163,15 @@ fn scales_evenly(a: Affine) -> bool {
 }
 
 /// `n` with the strokes and geometry effects of each path in it baked into filled art
-/// ([`bake_appearance`](vectorcraft_render::effects::bake_appearance)).
-fn baked(n: &Node) -> Node {
-    if let Some(b) = vectorcraft_render::effects::bake_appearance(n) {
+/// ([`bake_appearance`](vectorcraft_render::effects::bake_appearance)), with the swatches and
+/// patterns that live-effect plug-ins painting their pieces name looked up in `d`.
+fn baked(d: &Document, n: &Node) -> Node {
+    if let Some(b) = vectorcraft_render::effects::bake_appearance(Some(d), n) {
         return b;
     }
     let mut n = n.clone();
     for c in n.children_mut().into_iter().flatten() {
-        *c = Arc::new(baked(c));
+        *c = Arc::new(baked(d, c));
     }
     n
 }

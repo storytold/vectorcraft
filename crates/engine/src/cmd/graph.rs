@@ -42,7 +42,10 @@ use data::{fmt_value, parse_csv, to_csv};
 use generate::generate;
 #[cfg(test)]
 use series::default_series_color;
-pub(crate) use series::{capture_label_styles, capture_series_opacity, capture_series_paints, paint_targets};
+pub(crate) use series::{
+    capture_label_styles, capture_series_object_opacity, capture_series_opacity, capture_series_paints, capture_series_top_paints, paint_targets,
+    series_object_opacity_differs, shown_paint,
+};
 
 #[cfg(test)]
 mod tests;

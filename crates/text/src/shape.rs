@@ -324,20 +324,33 @@ pub(crate) fn is_cjk(c: char) -> bool {
     matches!(c as u32, 0x2E80..=0x9FFF | 0xAC00..=0xD7AF | 0xF900..=0xFAFF | 0xFF00..=0xFFEF | 0x20000..=0x2FFFF)
 }
 
-/// Vertical metrics (points) of a style's resolved face: (ascent, descent, leading).
-pub(crate) fn style_metrics(db: &FontDb, st: &CharStyle) -> (f64, f64, f64) {
+/// The faces of a text's runs ([`FontDb::style_face`] of each run's style), each looked up the first
+/// time layout asks for it and kept for the rest of that layout.
+pub(crate) type RunFaces = [std::cell::OnceCell<Option<Arc<FontFace>>>];
+
+/// The face of run `ri`, whose style is `st`: kept in `faces` when it has a place for the run,
+/// otherwise looked up.
+pub(crate) fn run_face(db: &FontDb, faces: &RunFaces, ri: usize, st: &CharStyle) -> Option<Arc<FontFace>> {
+    match faces.get(ri) {
+        Some(face) => face.get_or_init(|| db.style_face(st)).clone(),
+        None => db.style_face(st),
+    }
+}
+
+/// Vertical metrics (points) of style `st` in its resolved face `face`: (ascent, descent, leading).
+pub(crate) fn style_metrics(face: Option<&FontFace>, st: &CharStyle) -> (f64, f64, f64) {
     let vs = st.v_scale / 100.0;
-    let Some(face) = db.style_face(st) else {
+    let Some(face) = face else {
         return (st.size * 0.8 * vs, st.size * 0.2 * vs, st.effective_leading());
     };
     let k = st.size / face.upem;
     (face.ascent * k * vs, face.descent * k * vs, st.effective_leading())
 }
 
-/// Cap height and x height (points) of a style's resolved face.
-pub(crate) fn cap_x_heights(db: &FontDb, st: &CharStyle) -> (f64, f64) {
+/// Cap height and x height (points) of style `st` in its resolved face `face`.
+pub(crate) fn cap_x_heights(face: Option<&FontFace>, st: &CharStyle) -> (f64, f64) {
     let vs = st.v_scale / 100.0;
-    let Some(face) = db.style_face(st) else {
+    let Some(face) = face else {
         return (st.size * 0.7 * vs, st.size * 0.5 * vs);
     };
     let k = st.size / face.upem * vs;
@@ -355,6 +368,23 @@ pub(crate) fn shape_range(
     range: Range<usize>,
     runs: &[(Range<usize>, &CharStyle)],
     inlines: &[Option<&InlineArt>],
+    feats: &OtFeatures,
+    levels: &[Level],
+    out: &mut Vec<SGlyph>,
+) {
+    shape_runs(db, text, range, runs, inlines, &[], feats, levels, out);
+}
+
+/// [`shape_range`] with `faces`, parallel to `runs`, holding the face of each run
+/// ([`run_face`]).
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn shape_runs(
+    db: &FontDb,
+    text: &str,
+    range: Range<usize>,
+    runs: &[(Range<usize>, &CharStyle)],
+    inlines: &[Option<&InlineArt>],
+    faces: &RunFaces,
     feats: &OtFeatures,
     levels: &[Level],
     out: &mut Vec<SGlyph>,
@@ -409,12 +439,13 @@ pub(crate) fn shape_range(
         let a = bytes.start;
         let b = bytes.end;
         if let Some(art) = art {
-            if let Some(face) = db.style_face(st).or_else(|| db.face_covering('a')) {
+            if let Some(face) = run_face(db, faces, source_runs.start, st).or_else(|| db.face_covering('a')) {
                 out.push(inline_glyph(&face, st, art, source_runs.start, a..b, text, level_at(a), feats.vertical));
             }
             continue;
         }
-        let Some(primary) = db.style_face(st) else { continue };
+        // A span's style is the style of its first source run.
+        let Some(primary) = run_face(db, faces, source_runs.start, st) else { continue };
         let pmap = primary.skrifa().map(|f| f.charmap());
         // Synthesized Small Caps shape lowercase letters separately (as smaller capitals).
         let small_caps = st.small_caps.is_some() && !st.all_caps;
