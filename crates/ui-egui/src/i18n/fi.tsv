@@ -5959,6 +5959,8 @@ axis	Y Axis	Y-akseli
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	moduuli tuo kohteen `env.{name}`, jota laajennus saa käyttää vain laajennus-API:n tasolla {PROGRESS_API} (`api` {PROGRESS_API}) ja käyttöoikeudella `{permission}`
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	moduuli tuo kohteen `{from}.{name}`, jota isäntä ei tarjoa: laajennus saa tuoda vain docs/plugins.md-tiedostossa luetellut `env.vc_*`-funktiot (laajennus-API:n taso 2) eikä mitään WASIa, tiedostoja tai verkkoa
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` on {_1}; tämä isäntä tukee laajennus-API:n tasoja 1 ja {API_LEVEL} välillä
+@msg	`paintOutput` may only be true	`paintOutput` voi olla vain true
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` on vain reaaliaikaiselle tehosteelle (`kind` "effect") tasolla `api` 2
 @msg	`grant` must be a list of permission names	`grant` on oltava luettelo käyttöoikeuksien nimistä
 @msg	`grant` names an unknown permission `{shown}`	`grant` nimeää tuntemattoman käyttöoikeuden `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	lajin `{_1}` laajennus tarvitsee käyttöoikeuden `{_2}`

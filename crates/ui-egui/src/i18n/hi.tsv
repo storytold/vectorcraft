@@ -5273,6 +5273,8 @@ antiAlias	Sharp	शार्प
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	मॉड्यूल `env.{name}` आयात करता है, जिसे प्लग-इन केवल प्लग-इन API स्तर {PROGRESS_API} (`api` {PROGRESS_API}) पर और अनुमति `{permission}` के साथ उपयोग कर सकता है
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	मॉड्यूल `{from}.{name}` आयात करता है, जिसे होस्ट उपलब्ध नहीं कराता: प्लग-इन केवल वे `env.vc_*` फ़ंक्शन आयात कर सकता है जो docs/plugins.md में सूचीबद्ध हैं (प्लग-इन API स्तर 2), और कोई WASI, फ़ाइल या नेटवर्क नहीं
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` {_1} है; यह होस्ट प्लग-इन API स्तर 1 से {API_LEVEL} तक का समर्थन करता है
+@msg	`paintOutput` may only be true	`paintOutput` केवल true हो सकता है
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` केवल `api` 2 पर लाइव इफ़ेक्ट (`kind` "effect") के लिए है
 @msg	`grant` must be a list of permission names	`grant` अनुमति नामों की सूची होनी चाहिए
 @msg	`grant` names an unknown permission `{shown}`	`grant` एक अज्ञात अनुमति `{shown}` बताता है
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` प्रकार के प्लग-इन को `{_2}` अनुमति चाहिए

@@ -5540,6 +5540,8 @@ axis	Y Axis	Ось Y
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	модуль импортирует `env.{name}`, который модуль может использовать только на уровне API модулей {PROGRESS_API} (`api` {PROGRESS_API}) и с разрешением `{permission}`
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	модуль импортирует `{from}.{name}`, который хост не предоставляет: модуль может импортировать только функции `env.vc_*`, перечисленные в docs/plugins.md (уровень API модулей 2), без WASI, файлов и сети
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` равно {_1}; этот хост поддерживает уровни API модулей от 1 до {API_LEVEL}
+@msg	`paintOutput` may only be true	`paintOutput` может быть только true
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` допустим только для динамического эффекта (`kind` "effect") с `api` 2
 @msg	`grant` must be a list of permission names	`grant` должен быть списком имён разрешений
 @msg	`grant` names an unknown permission `{shown}`	`grant` называет неизвестное разрешение `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	модулю вида `{_1}` нужно разрешение `{_2}`

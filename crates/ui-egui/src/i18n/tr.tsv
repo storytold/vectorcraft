@@ -5886,6 +5886,8 @@ axis	Y Axis	Y ekseni
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	modül `env.{name}` öğesini içe aktarıyor; bir eklenti bunu yalnızca eklenti API düzeyi {PROGRESS_API} (`api` {PROGRESS_API}) ile ve `{permission}` izniyle kullanabilir
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	modül, ana bilgisayarın sunmadığı `{from}.{name}` öğesini içe aktarıyor: bir eklenti yalnızca docs/plugins.md dosyasında listelenen `env.vc_*` işlevlerini (eklenti API düzeyi 2) içe aktarabilir; WASI, dosya veya ağ kullanamaz
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` değeri {_1}; bu ana bilgisayar 1 ile {API_LEVEL} arasındaki eklenti API düzeylerini destekler
+@msg	`paintOutput` may only be true	`paintOutput` yalnızca true olabilir
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` yalnızca `api` 2 düzeyindeki canlı efekt (`kind` "effect") içindir
 @msg	`grant` must be a list of permission names	`grant` izin adlarından oluşan bir liste olmalıdır
 @msg	`grant` names an unknown permission `{shown}`	`grant` bilinmeyen bir izin adlandırıyor: `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` türündeki bir eklentinin `{_2}` iznine ihtiyacı vardır

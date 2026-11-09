@@ -5610,6 +5610,8 @@ axis	Y Axis	Y 軸
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	モジュールが `env.{name}` をインポートしていますが、プラグインがこれを使用できるのはプラグイン API レベル {PROGRESS_API} (`api` {PROGRESS_API}) で権限 `{permission}` がある場合だけです
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	モジュールがホストの提供しない `{from}.{name}` をインポートしています。プラグインがインポートできるのは docs/plugins.md に記載された `env.vc_*` 関数 (プラグイン API レベル 2) だけで、WASI、ファイル、ネットワークは使用できません
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` は {_1} です。このホストが対応するプラグイン API レベルは 1 から {API_LEVEL} です
+@msg	`paintOutput` may only be true	`paintOutput` には true のみ指定できます
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` は `api` 2 のライブ効果 (`kind` "effect") 専用です
 @msg	`grant` must be a list of permission names	`grant` は権限名のリストにしてください
 @msg	`grant` names an unknown permission `{shown}`	`grant` に不明な権限 `{shown}` が含まれています
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	種類 `{_1}` のプラグインには権限 `{_2}` が必要です

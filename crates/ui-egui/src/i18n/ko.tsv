@@ -5506,6 +5506,8 @@ axis	Y Axis	Y축
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	모듈이 `env.{name}`을(를) 가져오지만, 플러그인은 이를 플러그인 API 수준 {PROGRESS_API}(`api` {PROGRESS_API})에서 `{permission}` 권한이 있을 때만 사용할 수 있습니다
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	모듈이 호스트가 제공하지 않는 `{from}.{name}`을(를) 가져옵니다. 플러그인은 docs/plugins.md에 나열된 `env.vc_*` 함수(플러그인 API 수준 2)만 가져올 수 있으며 WASI, 파일, 네트워크는 사용할 수 없습니다
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api`가 {_1}입니다. 이 호스트는 플러그인 API 수준 1부터 {API_LEVEL}까지 지원합니다
+@msg	`paintOutput` may only be true	`paintOutput`에는 true만 지정할 수 있습니다
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput`은 `api` 2의 라이브 효과(`kind` "effect")에만 쓸 수 있습니다
 @msg	`grant` must be a list of permission names	`grant`는 권한 이름 목록이어야 합니다
 @msg	`grant` names an unknown permission `{shown}`	`grant`에 알 수 없는 권한 `{shown}`이(가) 있습니다
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` 종류의 플러그인에는 `{_2}` 권한이 필요합니다

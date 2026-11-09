@@ -6426,7 +6426,7 @@ fn each_pathfinder_operation_on_a_group_draws_as_vectorcraft_draws_it() {
         // Each result's box and paints; Outline's lines start where each square's path starts, so
         // the results are compared in a sorted order.
         let faces = |g: &Node| -> Vec<String> {
-            let mut faces: Vec<String> = vectorcraft_effects::pathfinder_children(g, None)
+            let mut faces: Vec<String> = vectorcraft_effects::pathfinder_children(None, g, None)
                 .unwrap()
                 .iter()
                 .map(|n| {

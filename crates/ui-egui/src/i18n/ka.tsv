@@ -5853,6 +5853,8 @@ axis	Y Axis	Y ღერძი
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	მოდულს შემოაქვს `env.{name}`, რომლის გამოყენებაც პლაგინს მხოლოდ პლაგინის API-ის დონეზე {PROGRESS_API} (`api` {PROGRESS_API}) და ნებართვით `{permission}` შეუძლია
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	მოდულს შემოაქვს `{from}.{name}`, რომელსაც ჰოსტი არ გვთავაზობს: პლაგინს შეუძლია შემოიტანოს მხოლოდ docs/plugins.md-ში ჩამოთვლილი `env.vc_*` ფუნქციები (პლაგინის API-ის დონე 2) და არა WASI, ფაილები ან ქსელი
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` არის {_1}; ეს ჰოსტი პლაგინის API-ის დონეებს 1-დან {API_LEVEL}-მდე უჭერს მხარს
+@msg	`paintOutput` may only be true	`paintOutput` შეიძლება იყოს მხოლოდ true
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` მხოლოდ ცოცხალი ეფექტისთვისაა (`kind` "effect") `api` 2-ზე
 @msg	`grant` must be a list of permission names	`grant` ნებართვების სახელების სია უნდა იყოს
 @msg	`grant` names an unknown permission `{shown}`	`grant` უცნობ ნებართვას ასახელებს: `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` სახის პლაგინს სჭირდება ნებართვა `{_2}`

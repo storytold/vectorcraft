@@ -5942,6 +5942,8 @@ digits	Malayalam	Malaiàlam
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	el mòdul importa `env.{name}`, que un complement només pot fer servir al nivell d’API de complements {PROGRESS_API} (`api` {PROGRESS_API}) i amb el permís `{permission}`
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	el mòdul importa `{from}.{name}`, que l’amfitrió no ofereix: un complement només pot importar les funcions `env.vc_*` que enumera docs/plugins.md (nivell d’API de complements 2), i cap WASI, fitxer ni xarxa
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` és {_1}; aquest amfitrió admet els nivells d’API de complements de l’1 al {API_LEVEL}
+@msg	`paintOutput` may only be true	`paintOutput` només pot ser true
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` només és per a un efecte dinàmic (`kind` "effect") amb `api` 2
 @msg	`grant` must be a list of permission names	`grant` ha de ser una llista de noms de permisos
 @msg	`grant` names an unknown permission `{shown}`	`grant` esmenta un permís desconegut `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	un complement del tipus `{_1}` necessita el permís `{_2}`
