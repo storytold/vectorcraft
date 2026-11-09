@@ -604,8 +604,8 @@ fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut 
             // Import a library (.ase, .acb, .gpl, .vcswatches or a document's swatches) and limit to it.
             if app.services.pick_open.is_some() && widgets::icon_button(ui, "folder-open", tl!("Other Library…"), false, 24.0).clicked() {
                 let r = crate::picks::in_dialog(app, d, |app, d| {
-                    let pick =
-                        crate::FilePick { filters: crate::FilePick::filters(vectorcraft_engine::cmd::fileio::open_filters()), ..Default::default() };
+                    let filters = crate::FilePick::filters(vectorcraft_engine::cmd::fileio::builtin_open_filters());
+                    let pick = crate::FilePick { filters, ..Default::default() };
                     let Some(path) = crate::picks::open(app, &pick) else { return Ok(()) };
                     let r = app.run("swatch.library.load", json!({ "path": path }))?;
                     d.fields.insert("limitTo".into(), r["library"].clone());

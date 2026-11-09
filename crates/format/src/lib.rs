@@ -45,16 +45,18 @@ mod stream;
 mod unpack;
 
 use std::collections::{BTreeMap, HashSet};
+use std::fmt;
 use std::io::Write;
 use std::sync::Arc;
 
 use craft_vectorcraft_format::{Contents, Head, Image, ReadError, Tail};
-use serde::Serialize;
+use serde::de::{DeserializeSeed, IgnoredAny, MapAccess, SeqAccess, Visitor};
+use serde::{Deserializer, Serialize};
 use vectorcraft_doc::{Document, ImageBlob};
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use atomic::{sync_file, write_atomic, write_atomic_with, write_new_with};
-pub use craft_vectorcraft_format::base64::{decode as base64_decode, encode as base64_encode};
+pub use craft_vectorcraft_format::base64::{decode as base64_decode, decoded_len as base64_decoded_len, encode as base64_encode};
 pub use craft_vectorcraft_format::{
     BLOB_MAGIC, COMPRESSED_SINCE, EXTENSION, ICC_MIME, INLINE_MAX, LEGACY_EXTENSION, MIN_VERSION, PREVIEW_MAX, VERSION, is_compressed, json_part,
     sniff,
@@ -173,6 +175,9 @@ pub struct SaveOptions {
     pub profiles: BTreeMap<String, Vec<u8>>,
     /// Create PDF-Compatible File: a PDF of the document to carry.
     pub pdf: Option<Vec<u8>>,
+    /// The application's PDF save preference, retained even when there are no artboards to draw.
+    /// `None` omits this metadata, preserving the lower-level writer's existing output.
+    pub pdf_compatible: Option<bool>,
     /// Decimal places to round path anchors and handles to ([`Document::round_geometry`]), at
     /// most [`MAX_PRECISION`] (a larger value rounds to that many); `None` writes them exactly.
     pub precision: Option<u8>,
@@ -191,6 +196,7 @@ impl Default for SaveOptions {
             include_linked: false,
             profiles: BTreeMap::new(),
             pdf: None,
+            pdf_compatible: None,
             precision: None,
         }
     }
@@ -354,6 +360,9 @@ pub fn save_to(doc: &Document, o: &SaveOptions, w: impl Write) -> Result<(), For
     env.field(&mut out, "format", &if o.version < 3 { LEGACY_EXTENSION } else { EXTENSION })?;
     env.field(&mut out, "version", &o.version)?;
     env.field(&mut out, "generator", &format!("VectorCraft {}", env!("CARGO_PKG_VERSION")))?;
+    if let Some(compatible) = o.pdf_compatible {
+        env.field(&mut out, "pdfCompatible", &compatible)?;
+    }
     if let Some(png) = &o.preview {
         env.field(&mut out, "preview", &Image::inline("image/png", png))?;
     }
@@ -497,6 +506,9 @@ pub struct FileInfo {
     pub version: u32,
     /// Written under the project's former name (`"format": "drawcraft"`).
     pub legacy: bool,
+    /// The saved `pdfCompatible` preference, or the presence of a non-null `pdf` member in
+    /// files without a boolean preference. The PDF payload is not read or validated.
+    pub pdf_compatible: bool,
 }
 
 impl FileInfo {
@@ -548,7 +560,8 @@ fn load_file_budgeted(bytes: &[u8], caps: ReadCaps, max_nodes: usize, max_values
         ReadError::Envelope(e) => e.into(),
         e => FormatError::NotVectorcraft(e.to_string()),
     })?;
-    let info = FileInfo { version: f.version, legacy: f.format == LEGACY_EXTENSION };
+    let pdf_compatible = pdf_member(file.json()).map_err(|e| FormatError::NotVectorcraft(e.to_string()))?;
+    let info = FileInfo { version: f.version, legacy: f.format == LEGACY_EXTENSION, pdf_compatible };
     // A version 1 document saved before VectorCraft 0.21.0, or for an app before it (an older file
     // version): its Twist angles turned the other way. The app that wrote it is read from the JSON
     // before the data after it is taken; the walk's depth is bounded by the JSON reader's nesting
@@ -637,6 +650,92 @@ fn load_file_budgeted(bytes: &[u8], caps: ReadCaps, max_nodes: usize, max_values
         })
         .collect::<Result<_, FormatError>>()?;
     Ok(NativeFile { doc, depth_notes, info, profiles })
+}
+
+/// The saved PDF preference, falling back to the presence of its payload without retaining or
+/// decoding it. The array form has neither member. Repeated members use their last value.
+fn pdf_member(json: &[u8]) -> Result<bool, serde_json::Error> {
+    struct PdfMember;
+    impl<'de> Visitor<'de> for PdfMember {
+        type Value = bool;
+
+        fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            f.write_str("a native file envelope")
+        }
+
+        fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<bool, A::Error> {
+            let mut present = false;
+            let mut preference = None;
+            while let Some(key) = map.next_key::<String>()? {
+                match key.as_str() {
+                    "pdfCompatible" => preference = map.next_value_seed(Preference)?,
+                    "pdf" => present = map.next_value::<Option<IgnoredAny>>()?.is_some(),
+                    _ => {
+                        map.next_value::<IgnoredAny>()?;
+                    }
+                }
+            }
+            Ok(preference.unwrap_or(present))
+        }
+
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<bool, A::Error> {
+            while seq.next_element::<IgnoredAny>()?.is_some() {}
+            Ok(false)
+        }
+    }
+    serde_json::Deserializer::from_slice(json).deserialize_any(PdfMember)
+}
+
+/// A `pdfCompatible` value: `Some` for a boolean, `None` for null or any other value, which is
+/// skipped without being kept, as an unknown member is.
+struct Preference;
+
+impl<'de> DeserializeSeed<'de> for Preference {
+    type Value = Option<bool>;
+
+    fn deserialize<D: Deserializer<'de>>(self, d: D) -> Result<Option<bool>, D::Error> {
+        d.deserialize_any(self)
+    }
+}
+
+impl<'de> Visitor<'de> for Preference {
+    type Value = Option<bool>;
+
+    fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("any value")
+    }
+
+    fn visit_bool<E>(self, v: bool) -> Result<Option<bool>, E> {
+        Ok(Some(v))
+    }
+
+    fn visit_i64<E>(self, _: i64) -> Result<Option<bool>, E> {
+        Ok(None)
+    }
+
+    fn visit_u64<E>(self, _: u64) -> Result<Option<bool>, E> {
+        Ok(None)
+    }
+
+    fn visit_f64<E>(self, _: f64) -> Result<Option<bool>, E> {
+        Ok(None)
+    }
+
+    fn visit_str<E>(self, _: &str) -> Result<Option<bool>, E> {
+        Ok(None)
+    }
+
+    fn visit_unit<E>(self) -> Result<Option<bool>, E> {
+        Ok(None)
+    }
+
+    fn visit_seq<A: SeqAccess<'de>>(self, seq: A) -> Result<Option<bool>, A::Error> {
+        IgnoredAny.visit_seq(seq).map(|_| None)
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, map: A) -> Result<Option<bool>, A::Error> {
+        IgnoredAny.visit_map(map).map(|_| None)
+    }
 }
 
 /// The file's first `generator` member, the app that wrote it (`None`: it has none, it is not a
@@ -838,16 +937,58 @@ mod tests {
     }
 
     #[test]
+    fn file_info_keeps_pdf_presence_without_reading_its_payload() {
+        let d = Document::new(10.0, 10.0);
+        for version in [3, 4] {
+            for compress in [false, true] {
+                for present in [false, true] {
+                    let options = SaveOptions { version, compress, pdf: present.then(|| vec![7; 128 * 1024]), ..SaveOptions::default() };
+                    let bytes = save_with(&d, &options).unwrap();
+                    assert_eq!(load_info(&bytes).unwrap().1.pdf_compatible, present);
+                }
+            }
+        }
+        let mut value: serde_json::Value = serde_json::from_slice(&save(&d, false)).unwrap();
+        let array = serde_json::json!([EXTENSION, VERSION, value["document"], value["images"], {}]);
+        assert!(!load_info(&serde_json::to_vec(&array).unwrap()).unwrap().1.pdf_compatible);
+        value["pdf"] = serde_json::json!({"mime":"application/pdf", "data":"not base64"});
+        assert!(load_info(&serde_json::to_vec(&value).unwrap()).unwrap().1.pdf_compatible);
+        value["pdf"] = serde_json::Value::Null;
+        value["unrecognized"] = serde_json::json!({"pdf":{"data":"nested"}});
+        assert!(!load_info(&serde_json::to_vec(&value).unwrap()).unwrap().1.pdf_compatible);
+        // A preference that is not a boolean is skipped like an unknown member: the file opens,
+        // and the presence of the PDF decides.
+        for odd in [serde_json::json!(1), serde_json::json!("yes"), serde_json::json!([true]), serde_json::json!({"on": true})] {
+            for (pdf, present) in [(serde_json::Value::Null, false), (serde_json::json!({"mime":"application/pdf"}), true)] {
+                value["pdf"] = pdf;
+                value["pdfCompatible"] = odd.clone();
+                assert_eq!(load_info(&serde_json::to_vec(&value).unwrap()).unwrap().1.pdf_compatible, present, "{odd}");
+            }
+        }
+    }
+
+    #[test]
+    fn file_info_keeps_the_pdf_preference_without_artboards() {
+        let mut d = Document::new(10.0, 10.0);
+        d.artboards.clear();
+        for compatible in [false, true] {
+            let bytes = save_with(&d, &SaveOptions { pdf_compatible: Some(compatible), ..SaveOptions::default() }).unwrap();
+            assert_eq!(load_info(&bytes).unwrap().1.pdf_compatible, compatible);
+            assert!(pdf_content(&bytes).is_none());
+        }
+    }
+
+    #[test]
     fn file_info_tells_old_files() {
         let d = Document::new(10.0, 10.0);
         let current = save(&d, false);
-        assert_eq!(load_info(&current).unwrap().1, FileInfo { version: VERSION, legacy: false });
+        assert_eq!(load_info(&current).unwrap().1, FileInfo { version: VERSION, legacy: false, pdf_compatible: false });
         assert!(!load_info(&current).unwrap().1.is_old());
         let text = String::from_utf8(current).unwrap();
         let legacy = text.replacen("\"format\":\"vectorcraft\"", "\"format\":\"drawcraft\"", 1);
         assert!(load_info(legacy.as_bytes()).unwrap().1.is_old());
         let v1 = text.replacen(&format!("\"version\":{VERSION}"), "\"version\":1", 1);
-        assert_eq!(load_info(v1.as_bytes()).unwrap().1, FileInfo { version: 1, legacy: false });
+        assert_eq!(load_info(v1.as_bytes()).unwrap().1, FileInfo { version: 1, legacy: false, pdf_compatible: false });
         assert!(load_info(v1.as_bytes()).unwrap().1.is_old());
     }
 

@@ -1,4 +1,4 @@
-use super::build::{PAGE_MOVE, Page, build, build_from, build_on_page, build_without_page};
+use super::build::{PAGE_MOVE, Page, build, build_from, build_on_page, build_without_page, reid_page_art};
 use super::slots::LAYERS_UNREAD;
 use super::{Affine, Arc, Cow, Document, Imported, Node, NodeKind, PathData, Rect, Vec2, ai};
 
@@ -7,11 +7,11 @@ use super::{Affine, Arc, Cow, Document, Imported, Node, NodeKind, PathData, Rect
 /// hidden ones too), groups, compound paths, clipping groups and artboards, with the text and the
 /// strokes around it of the page. When the file has no editing copy, `visible` as it was; when it
 /// has one that can't be used, `visible` with a warning that says why, with the swatches of the
-/// editing copy's palette ([`use_palette`]), its graphic styles ([`use_styles`]) and its variable
-/// library ([`use_variables`]) when it could be read, and with its layer tree, empty,
-/// below the page's layer when that could be read (#2033). A program in the legacy format without
-/// layers (`illustrator`, see [`program_alone`]) is read with its art on one layer; when that
-/// can't be used, the file is `visible` as it was.
+/// editing copy's palette ([`use_palette`]), its graphic styles ([`use_styles`]), its symbols
+/// ([`use_symbols`]) and its variable library ([`use_variables`]) when it could be read, and with
+/// its layer tree, empty, below the page's layer when that could be read (#2033). A program in the
+/// legacy format without layers (`illustrator`, see [`program_alone`]) is read with its art on one
+/// layer; when that can't be used, the file is `visible` as it was.
 pub(in super::super) fn layered(ps: &[u8], visible: Imported, trust: bool, illustrator: bool) -> Imported {
     let Some(data) = editing_copy(ps) else {
         let read = illustrator.then(|| one_layer(ps)).flatten().and_then(|p| build(&p, Some(&visible.document), Page::Art, false, trust, 1.0).ok());
@@ -24,7 +24,7 @@ pub(in super::super) fn layered(ps: &[u8], visible: Imported, trust: bool, illus
     // can't be used.
     // Private data kept apart from the program: the program's own header gives the author and
     // custom colors the private data's header may lack.
-    let read = |d: &[u8]| if matches!(data, Ok(Cow::Owned(_))) { ai::read_beside(d, true, ps) } else { ai::read(d, true) };
+    let read = |d: &[u8]| if matches!(data, Ok(Cow::Owned(_))) { ai::read_beside(d, true, ps, true) } else { ai::read_over_page(d, true) };
     let (tree, result) = match data.as_deref() {
         Ok(d) => match read(d) {
             Ok(s) => (layer_tree(&s.doc.layers), build_from(s, d, Some(&visible.document), Page::Art, false, trust, 1.0)),
@@ -38,9 +38,10 @@ pub(in super::super) fn layered(ps: &[u8], visible: Imported, trust: bool, illus
             let mut v = visible;
             if let Ok(data) = &data {
                 let have = v.document.patterns.len();
-                use_palette(data, &mut v.document);
+                let own_palette = use_palette(data, &mut v.document);
                 use_brushes(data, &mut v.document, have, &mut v.warnings);
                 use_styles(data, &mut v.document, true, 1.0, None);
+                use_symbols(data, &mut v.document, own_palette, &mut v.warnings);
                 use_variables(data, &mut v.document, &mut v.warnings);
             }
             if tree.is_empty() {
@@ -100,10 +101,11 @@ fn layer_tree(nodes: &[Arc<Node>]) -> Vec<Arc<Node>> {
 /// notes, or a note saying why the layers weren't read when the editing data can't be decompressed
 /// or its layers can't be read. The flag returned is `true` when the document is the one read from
 /// the layers; else the document is `visible`, its pages moved by `place_pages` when the editing
-/// data was decompressed but its layers can't be read, and its swatches, brushes, graphic styles and
-/// variables those of the editing data's palette ([`use_palette`]), brushes ([`use_brushes`]), styles
-/// ([`use_styles`]) and variable library ([`use_variables`]) when it was decompressed: a graphic
-/// style library, which has no layers, opens with its styles, and editing data with no layers opens
+/// data was decompressed but its layers can't be read, and its swatches, brushes, graphic styles,
+/// symbols and variables those of the editing data's palette ([`use_palette`]), brushes
+/// ([`use_brushes`]), styles ([`use_styles`]), symbols ([`use_symbols`]) and variable library
+/// ([`use_variables`]) when it was decompressed: a graphic style library or a symbol library, which
+/// has no layers, opens with its styles or its symbols, and editing data with no layers opens
 /// on the page of its active artboard under the checks of `place_pages`. `outlined`: the PDF part's type was
 /// read as outlines (a file whose type shows then comes in as its PDF part).
 /// `trust`: layers that draw differently from the PDF part are used all the same, with a warning.
@@ -140,9 +142,10 @@ pub fn layered_ai_from(
             visible.opened_artboard = active_page(active, &visible);
         }
         let have = visible.patterns.len();
-        use_palette(&data, &mut visible);
+        let own_palette = use_palette(&data, &mut visible);
         use_brushes(&data, &mut visible, have, &mut warnings);
         use_styles(&data, &mut visible, false, unit, Some(&boards));
+        use_symbols(&data, &mut visible, own_palette, &mut warnings);
         use_variables(&data, &mut visible, &mut warnings);
         return (visible, warnings, false);
     }
@@ -152,22 +155,18 @@ pub fn layered_ai_from(
         let (boards, active) = ai::artboards(&data);
         place_pages(&boards, active, &mut visible, unit);
         let have = visible.patterns.len();
-        use_palette(&data, &mut visible);
+        let own_palette = use_palette(&data, &mut visible);
         use_brushes(&data, &mut visible, have, &mut warnings);
         use_styles(&data, &mut visible, false, unit, Some(&boards));
         let mut all = unread(warnings, why);
+        use_symbols(&data, &mut visible, own_palette, &mut all);
         use_variables(&data, &mut visible, &mut all);
         (visible, all, false)
     };
     let built = structure
-        .unwrap_or_else(|| ai::read(&data, false).map(Box::new))
+        .unwrap_or_else(|| ai::read_over_page(&data, false).map(Box::new))
         .and_then(|structure| build_from(*structure, &data, Some(&visible), Page::Artboard, outlined, trust, unit));
     match built {
-        // An image too large for the editing data's reader would be missing from the layers, while
-        // the PDF part has it: the file comes in as its PDF part instead (#1479).
-        Ok((_, notes)) if notes.iter().any(|n| n == ai::IMAGE_TOO_LARGE) => {
-            from_pdf_part(visible, warnings, "an image is too large to read from them")
-        }
         Ok((mut done, notes)) => {
             done.setup.bleed = visible.setup.bleed;
             let mut all = warnings;
@@ -193,14 +192,13 @@ pub fn ai_layers_alone(private: &[u8], pages: &[(f64, f64)], unit: f64) -> Resul
     if !has_layers(&data) {
         return Err(AiLayers { data: Ok(data), structure: None });
     }
-    let structure = match ai::read(&data, false) {
+    // An image past the hard limits is read as an unread box, which the PDF part's art replaces.
+    let structure = match ai::read_over_page(&data, false) {
         Ok(structure) => structure,
         Err(why) => return Err(AiLayers { data: Ok(data), structure: Some(Err(why)) }),
     };
     match build_without_page(structure, &data, pages, unit) {
-        // An image too large for the editing data's reader is missing from the layers: the PDF
-        // part has it (as in `layered_ai`).
-        Ok(Ok((doc, notes))) if !notes.iter().any(|n| n == ai::IMAGE_TOO_LARGE) => Ok((doc, notes)),
+        Ok(Ok((doc, notes))) => Ok((doc, notes)),
         Ok(_) => Err(AiLayers { data: Ok(data), structure: None }),
         Err(structure) => Err(AiLayers { data: Ok(data), structure: Some(Ok(structure)) }),
     }
@@ -223,6 +221,15 @@ impl AiLayers {
     }
 }
 
+/// The id of the artboard of `doc` that the editing copy `private` (as [`layered_ai`] takes it)
+/// names as its active one (`CropAreaActive`, an index into its `ArtboardArray`), for `doc`
+/// restored from the document a `.ai` file carries beside that copy: `None` when the copy names
+/// the first artboard, names none, can't be decoded, or names an artboard `doc` doesn't have.
+pub fn ai_opened_artboard(private: &[u8], doc: &Document) -> Option<u32> {
+    let data = ai::decode_private(private).ok()?;
+    active_page(ai::active_artboard(&data), doc)
+}
+
 /// `doc` (a file read as its page or PDF part, in place of its layers) with the variables, data
 /// sets, active data set and lock of the variable library of its editing data `data`, as [`build`]
 /// gives a document read from the layers, and the note about what of the library wasn't read
@@ -243,14 +250,14 @@ fn use_variables(data: &[u8], doc: &mut Document, warnings: &mut Vec<String>) {
 /// palette doesn't have follow the palette's swatches. The patterns that the editing data defines come
 /// in for the palette's pattern swatches, with the images they show; one whose name a pattern of
 /// the PDF part already has takes a free variant of it ([`ai::palette`]). Left as
-/// it is when the palette is empty.
-fn use_palette(data: &[u8], doc: &mut Document) {
-    let Some(ai::PaletteSwatches { swatches, groups, patterns, images }) = ai::palette(data, &doc.patterns) else { return };
+/// it is when the palette is empty. Whether the palette's swatches came in.
+fn use_palette(data: &[u8], doc: &mut Document) -> bool {
+    let Some(ai::PaletteSwatches { swatches, groups, patterns, images }) = ai::palette(data, &doc.patterns) else { return false };
     for (key, blob) in images {
         doc.images.entry(key).or_insert(blob);
     }
     for mut p in patterns {
-        p.art = p.art.iter().map(|n| Arc::new(doc.reid(n))).collect();
+        p.art = p.art.iter().map(|n| Arc::new(reid_page_art(doc, n))).collect();
         doc.patterns.push(p);
     }
     let named = |name: &str| swatches.iter().chain(groups.iter().flat_map(|g| &g.swatches)).any(|s| s.name == name);
@@ -259,6 +266,7 @@ fn use_palette(data: &[u8], doc: &mut Document) {
     let mut swatches = swatches;
     swatches.extend(art);
     (doc.swatches, doc.swatch_groups) = (swatches.into(), groups.into());
+    true
 }
 
 /// `doc` (a file read as its page or PDF part, in place of its layers) with the brushes of its
@@ -277,7 +285,7 @@ fn use_brushes(data: &[u8], doc: &mut Document, have: usize, warnings: &mut Vec<
         if doc.pattern(&p.name).is_some() {
             continue;
         }
-        p.art = p.art.iter().map(|n| Arc::new(doc.reid(n))).collect();
+        p.art = p.art.iter().map(|n| Arc::new(reid_page_art(doc, n))).collect();
         doc.patterns.push(p);
     }
     vectorcraft_brush::store(doc, &brushes);
@@ -315,6 +323,66 @@ fn use_styles(data: &[u8], doc: &mut Document, large_canvas: bool, unit: f64, bo
         }
     }
     doc.graphic_styles = styles.into();
+}
+
+/// `doc` (a file read as its page or PDF part, in place of its layers) with the symbols of its
+/// editing data `data` ([`ai::symbols`]), their registration points, the images their art shows and
+/// the global and spot colors it is linked to that `doc` has no such swatch for (a color whose name
+/// another swatch has takes that swatch's place when it is a default swatch and not `own_palette`,
+/// the swatches being those of the editing data's palette, and else comes in under a free variant
+/// of the name, which the art then names, as does one whose name a color group has), as [`build`] gives a document read from the layers, and
+/// the note about instances that can't be drawn added to `warnings`. An object of their art linked
+/// to a graphic style keeps the link when [`use_styles`] gave `doc` the editing data's styles. The
+/// symbols' art keeps the editing data's units, as in a document read from the layers: when
+/// [`use_styles`] draws the styles' strokes and effects larger (a file in larger units), linked art
+/// isn't scaled with them. Left as it is when `doc` has symbols already or the editing data has
+/// none this reads.
+fn use_symbols(data: &[u8], doc: &mut Document, own_palette: bool, warnings: &mut Vec<String>) {
+    if !doc.symbols.is_empty() {
+        return;
+    }
+    let Some(ai::Symbols { symbols, images, swatches }) = ai::symbols(data) else { return };
+    for (key, blob) in images {
+        doc.images.entry(key).or_insert(blob);
+    }
+    // A color whose name a swatch of another color has takes that swatch's place when it is a
+    // default swatch, and else a free variant of the name, as does one whose name a color group has.
+    let (defaults, groups) = vectorcraft_color::default_swatches(doc.color_mode.model());
+    let is_default =
+        |have: &vectorcraft_color::Swatch| !own_palette && defaults.iter().chain(groups.iter().flat_map(|g| &g.swatches)).any(|d| d == have);
+    let mut renamed = std::collections::HashMap::new();
+    for s in swatches {
+        match doc.swatch(&s.name) {
+            None if !doc.swatch_name_taken(&s.name) => doc.swatches.push(s),
+            Some(have) if have == &s || (s.name.starts_with('[') && s.name.ends_with(']')) => {}
+            Some(have) if is_default(have) => {
+                if let Some(default) = doc.swatch_mut(&s.name) {
+                    *default = s;
+                }
+            }
+            _ => {
+                let name = doc.free_swatch_name(&s.name);
+                renamed.insert(s.name.clone(), name.clone());
+                doc.swatches.push(vectorcraft_color::Swatch { name, ..s });
+            }
+        }
+    }
+    let mut follow = |_: &mut vectorcraft_color::Color, link: &mut Option<String>, _: &mut f32| {
+        let Some(new) = link.as_ref().and_then(|l| renamed.get(l)) else { return false };
+        *link = Some(new.clone());
+        true
+    };
+    for (mut symbol, registration) in symbols {
+        let mut art = reid_page_art(doc, &symbol.art);
+        if !renamed.is_empty() {
+            vectorcraft_doc::swatches::map_node_solid_paints(&mut art, &mut follow);
+        }
+        symbol.art = Arc::new(art);
+        doc.set_symbol_registration(&symbol.name, registration);
+        doc.symbols.push(symbol);
+    }
+    // Symbols that hold instances of themselves can't be drawn: those instances go.
+    doc.limit_depth_noting(warnings);
 }
 
 /// How many points a unit of `boards` (the artboards of a file's editing data, in art space) is in

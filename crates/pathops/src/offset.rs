@@ -85,6 +85,14 @@ pub fn outline_stroke(path: &PathData, width: f64, cap: Cap, join: Join, miter_l
 /// The area covered by stroke outlines (each filled with the non-zero rule, open subpaths
 /// closed) as one clean path: overlaps removed and the stroker's pieces refitted.
 pub fn stroke_region(outlines: &[BezPath]) -> PathData {
+    match crate::sweep_axis::turned_outlines(outlines) {
+        Some(turned) => crate::sweep_axis::unturn(stroke_region_upright(&turned)),
+        None => stroke_region_upright(outlines),
+    }
+}
+
+/// [`stroke_region`] with the sweep run on `outlines` as they are.
+pub(crate) fn stroke_region_upright(outlines: &[BezPath]) -> PathData {
     let tidy = Tidy::free(DEFAULT_PRECISION);
     let parts: Vec<BezPath> = outlines.iter().map(close_all).filter(|o| !o.elements().is_empty()).collect();
     if let [one] = &parts[..] {
@@ -151,7 +159,7 @@ fn offset_with_check(
         vec![(fill, FillRule::NonZero), (ring, FillRule::NonZero), (open_bp, FillRule::NonZero)],
         MAX_OFFSET_SEGMENT_PAIRS,
     )?;
-    let c = if delta >= 0.0 { arr.contours(|m| m[0] || m[1] || m[2]) } else { arr.contours(|m| m[0] && !m[1]) };
+    let c = if delta >= 0.0 { arr.contours_covering(|c| !c.is_empty()) } else { arr.contours_covering(|c| c.contains(&0) && !c.contains(&1)) };
     // When `d` exceeds a curvature radius the stroker's inner offset inverts and its loops cancel
     // winding, leaving faces uncovered that are really within `d` of the path. Every face of the
     // true offset is bounded by arrangement edges, so a contour is spurious iff a point deep inside

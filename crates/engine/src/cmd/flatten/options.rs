@@ -169,8 +169,15 @@ impl FlattenOptions {
     }
 
     /// Whether a group that splits into `regions` atomic regions is rasterized whole.
-    pub(super) fn rasterize_all(&self, regions: usize) -> bool {
+    pub(crate) fn rasterize_all(&self, regions: usize) -> bool {
         self.balance <= 0.0 || (self.balance < 100.0 && regions as f64 > 10f64.powf(self.balance / 20.0))
+    }
+
+    /// The most atomic regions a group can split into without being rasterized whole, when a group
+    /// with more needs none of its regions: `None` at a balance of 0 or 100, and with Clip Complex
+    /// Regions (a group rasterized whole is clipped to all of its regions).
+    pub(crate) fn region_limit(&self) -> Option<usize> {
+        (!self.clip_complex_regions && self.balance > 0.0 && self.balance < 100.0).then(|| 10f64.powf(self.balance / 20.0).floor() as usize)
     }
 }
 

@@ -17,6 +17,9 @@
 //! - `eps`: EPS export options (flattened transparency, previews, the embedded document), `document.exportEps`.
 //! - `dxfimport`: the DXF options `document.open` and Place read, `document.dxfInfo`.
 //! - `metafile`: EMF and WMF export, open and place.
+//! - `importer`: files that importer plug-ins open (`document.open {importer}`, and extensions no
+//!   built-in format reads).
+//! - `mesh3d`: 3D assets as OBJ, glTF, USDA and USDZ mesh files (`assets.export3D`).
 //!
 //! [`FORMATS`] is the single list of formats (append-only); open dialogs use [`open_filters`],
 //! agents query `document.formats`.
@@ -30,9 +33,12 @@ mod encode;
 pub mod eps;
 mod export;
 pub(crate) mod imagemap;
+mod importer;
 mod legacy_ai;
 mod load;
+mod mesh3d;
 pub(crate) use load::{MAX_RASTER_ALLOC, size_note};
+mod heifread;
 mod jp2read;
 mod metafile;
 mod naming;
@@ -54,6 +60,7 @@ pub mod zip;
 
 use serde_json::{Value, json};
 
+pub use action_batch::batch_overwrites_one_file;
 pub use dxf::{UNSUPPORTED, Unsupported, unsupported};
 pub use encode::{ARTBOARD_PARAMS, ArtboardPick, Encoded, encode, encode_all, encode_with_warnings};
 pub(crate) use encode::{anti_alias, background, with_single_artboard};
@@ -72,6 +79,8 @@ pub use load::{
     read_for_open, texture_image,
 };
 pub use load::{losses_summary, overwrite_losses};
+pub use mesh3d::{DEFAULT_FORMAT_3D, FORMATS_3D, format_3d_label};
+pub(crate) use mesh3d::{mesh_file_names, mesh_files};
 pub use naming::{NameParts as FileNameParts, parse_date as parse_file_date, render as render_file_name};
 pub use native::preview_png;
 pub use native::with_native_prefs;
@@ -123,13 +132,16 @@ pub(crate) use access::{drive_share_path, share_path, touched};
 pub(crate) use access::{may_read, may_write};
 pub use commands::specs;
 pub use export_names::artboard_file_names;
-pub(crate) use export_names::{default_name, merge, unique_file_names, with_black_output, write_or_return};
+pub(crate) use export_names::{
+    artboard_file_names_keeping_dots, default_name, merge, unique_file_names_keeping_dots, with_black_output, write_or_return,
+};
 use export_names::{distinct_names_by, write_encoded};
 use formats::{ARTBOARD, ARTBOARDS, RANGE, USE_ARTBOARDS, import_name, writable};
 pub use formats::{
-    DOC_EXTS, DOCX_EXTS, FORMATS, Format, FormatOption, OPEN_EXTS, PLACE_EXTS, RTF_EXTS, TEXT_EXTS, UNASSOCIATED_EXTS, export_extensions, extension,
-    file_stem, format, format_for_name, has_own_title, library_open_filters, open_filters, place_filters, plugin_formats, read_extensions,
-    readable_format, readable_format_for_name, titled_for_export, writable_format,
+    DOC_EXTS, DOCX_EXTS, FORMATS, Format, FormatOption, OPEN_EXTS, PLACE_EXTS, RTF_EXTS, TEXT_EXTS, UNASSOCIATED_EXTS, builtin_open_filters,
+    export_extensions, extension, file_stem, format, format_for_name, has_own_title, importer_formats, library_open_filters, open_extensions,
+    open_filters, opens_as_other, opens_with_importer, place_filters, plugin_formats, read_extensions, readable_format, readable_format_for_name,
+    titled_for_export, writable_format,
 };
 
 #[cfg(test)]
@@ -202,6 +214,8 @@ mod tests_psd;
 #[cfg(test)]
 mod tests_psdread;
 
+#[cfg(test)]
+mod tests_heifread;
 #[cfg(test)]
 mod tests_jp2read;
 #[cfg(test)]

@@ -1,7 +1,8 @@
-use super::predicates::{has_fx, has_object_fx};
+use super::predicates::{has_fx, has_object_fx, is_container};
 use super::raster::doc_raster_ppi;
 use super::{
-    Affine, AppearanceItem, Arc, BezPath, Document, Effect, FillRule, GeomContext, Node, NodeKind, Rect, Renderer, Shape, SymbolBoxes, effects,
+    Affine, AppearanceItem, Arc, BezPath, Document, Effect, FillRule, GeomContext, Node, NodeKind, PathEl, Rect, Renderer, Shape, SymbolBoxes,
+    effects,
 };
 
 fn node_bezpath(n: &Node) -> Option<BezPath> {
@@ -30,6 +31,19 @@ pub(super) fn apply(effects: &[Effect], bp: &BezPath, ctx: &GeomContext) -> BezP
 /// The object-level effected geometry of `n` (base path `bp`).
 pub(crate) fn effected_path(n: &Node, bp: &BezPath) -> BezPath {
     apply(&n.appearance.effects, bp, &GeomContext::of(n))
+}
+
+/// [`apply`], and how gradients follow the effects ([`effects::Carry`]).
+pub(super) fn apply_carrying(effects: &[Effect], bp: &BezPath, ctx: &GeomContext) -> (BezPath, effects::Carry) {
+    if !effects::has_geometry(effects) || bp.elements().is_empty() {
+        return (bp.clone(), effects::Carry::default());
+    }
+    effects::apply_geometry_bez_carrying(effects, bp, bp.bounding_box(), ctx)
+}
+
+/// [`effected_path`], and how `n`'s gradients follow its effects.
+pub(crate) fn effected_path_carrying(n: &Node, bp: &BezPath) -> (BezPath, effects::Carry) {
+    apply_carrying(&n.appearance.effects, bp, &GeomContext::of(n))
 }
 
 pub(super) fn item_effects(item: &AppearanceItem) -> &[Effect] {
@@ -230,6 +244,78 @@ pub(crate) fn drawn_outline(doc: &Document, n: &Node) -> Option<(BezPath, FillRu
         }
         _ => effects::clip_outline(n),
     }
+}
+
+/// Adds the outlines of `n` to `out`, one per object and without uniting them: the visible members of
+/// a group, layer or intertwine (a Shaper group's without its source art) and the evaluated art of a
+/// blend, envelope, repeat, Pathfinder result or object with object effects. A gradient mesh adds its
+/// mesh lines and a symbol instance its bounds, as the selection highlight shows them; any other
+/// object, a clip group included, adds [`drawn_outline`]. Each outline's points and each evaluated
+/// object are taken from `left`; `None` when they do not fit in it.
+pub(crate) fn drawn_outlines(doc: &Document, symbols: &SymbolBoxes, n: &Node, left: &mut usize, out: &mut Vec<BezPath>) -> Option<()> {
+    if let Some(art) = effects::crop_marks_art(n) {
+        return match art.children().and_then(|c| c.first()) {
+            Some(object) => drawn_outlines(doc, symbols, object, left, out),
+            None => Some(()),
+        };
+    }
+    if has_object_fx(n) {
+        let makes_art = effects::has_revolve(n) || effects::has_solid(n) || effects::addons::halftone::has_halftone(n);
+        // Effects that leave a mesh's shape alone evaluate it to its many colored pieces.
+        if let NodeKind::Mesh(m) = &n.kind
+            && !makes_art
+            && !effects::has_geometry(&n.appearance.effects)
+        {
+            return push_outline(Some(m.lines().to_bezpath()), left, out);
+        }
+        let mut object = n.clone();
+        // A group's own fills and strokes repeat its members' geometry as more art.
+        if is_container(n) && !makes_art && !effects::has_item_geometry(n) {
+            object.appearance.items.clear();
+        }
+        let art = Renderer::new().fx_art(doc, &Arc::new(object), false);
+        if art.children().is_some() && !has_object_fx(&art) {
+            return evaluated_outlines(doc, symbols, &art, left, out);
+        }
+        return push_outline(effects::clip_outline(&art).map(|(path, _)| path), left, out);
+    }
+    if effects::has_pathfinder(n)
+        && let Some(art) = effects::evaluate_container(Some(doc), n).filter(|art| !effects::has_pathfinder(art))
+    {
+        return evaluated_outlines(doc, symbols, &art, left, out);
+    }
+    match &n.kind {
+        NodeKind::Group { children, clip: false } | NodeKind::Layer { children, clip: false, .. } | NodeKind::Intertwine { children } => {
+            for c in children.iter().skip(usize::from(n.extras().shaper.is_some())).filter(|c| c.visible) {
+                drawn_outlines(doc, symbols, c, left, out)?;
+            }
+            Some(())
+        }
+        NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Repeat(_) => {
+            evaluated_outlines(doc, symbols, &effects::expanded_live_group(Some(doc), n), left, out)
+        }
+        NodeKind::Mesh(m) => push_outline(Some(m.lines().to_bezpath()), left, out),
+        NodeKind::SymbolInstance { .. } => {
+            push_outline(n.geometric_bounds_with(symbols).map(|b| vectorcraft_geom::shapes::rectangle(b).to_bezpath()), left, out)
+        }
+        _ => push_outline(drawn_outline(doc, n).map(|(path, _)| path), left, out),
+    }
+}
+
+/// [`drawn_outlines`] of `art`, the evaluated form of a live object or an object with effects, with
+/// each of its objects taken from `left`.
+fn evaluated_outlines(doc: &Document, symbols: &SymbolBoxes, art: &Node, left: &mut usize, out: &mut Vec<BezPath>) -> Option<()> {
+    *left = left.checked_sub(art.children().map_or(0, Vec::len))?;
+    drawn_outlines(doc, symbols, art, left, out)
+}
+
+/// Adds `path` to `out` with its points taken from `left`; `None` when they do not fit in it.
+fn push_outline(path: Option<BezPath>, left: &mut usize, out: &mut Vec<BezPath>) -> Option<()> {
+    if let Some(path) = path {
+        *left = left.checked_sub(path.elements().iter().filter(|el| !matches!(el, PathEl::ClosePath)).count())?;
+        out.push(path);
+    }
+    Some(())
 }
 
 /// How far raster effects `fx` paint beyond `b`, each spreading what the ones before it paint

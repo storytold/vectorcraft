@@ -149,15 +149,7 @@ pub fn artboards(data: &[u8]) -> (Vec<(String, Rect)>, Option<usize>) {
     }
     // Reading can stop before the artboards (art kept in the document's data comes first), or
     // between them and the active artboard's entry: read their array on its own.
-    let Some((array, active)) = artboard_array(data) else { return found };
-    let mut alone = b"%_/Document :\n%_/Dictionary :\n".to_vec();
-    alone.extend_from_slice(array);
-    if let Some(active) = active {
-        alone.push(b'\n');
-        alone.extend_from_slice(active);
-    }
-    alone.extend_from_slice(b"\n%_; /NotRecorded ,\n%_;\n");
-    let (boards, active) = artboards_read(&alone);
+    let Some((boards, active)) = artboard_array_read(data) else { return found };
     if found.0.is_empty() {
         (boards, active)
     } else if boards == found.0 {
@@ -166,6 +158,29 @@ pub fn artboards(data: &[u8]) -> (Vec<(String, Rect)>, Option<usize>) {
     } else {
         found
     }
+}
+
+/// The index of the active artboard (`CropAreaActive`) in the `ArtboardArray` of the editing data
+/// `data`, as [`artboards`] reads it, from that array and the entry beside it alone.
+pub fn active_artboard(data: &[u8]) -> Option<usize> {
+    artboard_array_read(data)?.1
+}
+
+/// Artboards as [`artboards`] gives them: names and rects in art space, and the active one's index.
+type ArtboardsRead = (Vec<(String, Rect)>, Option<usize>);
+
+/// The `ArtboardArray` entry of the editing data `data` ([`artboard_array`]), with the
+/// `CropAreaActive` entry beside it, read on their own as [`artboards_read`] reads them.
+fn artboard_array_read(data: &[u8]) -> Option<ArtboardsRead> {
+    let (array, active) = artboard_array(data)?;
+    let mut alone = b"%_/Document :\n%_/Dictionary :\n".to_vec();
+    alone.extend_from_slice(array);
+    if let Some(active) = active {
+        alone.push(b'\n');
+        alone.extend_from_slice(active);
+    }
+    alone.extend_from_slice(b"\n%_; /NotRecorded ,\n%_;\n");
+    Some(artboards_read(&alone))
 }
 
 /// The key that ends the `ArtboardArray` entry of the editing data.
@@ -390,6 +405,73 @@ pub fn graphic_styles(data: &[u8], large_canvas: bool) -> (Vec<GraphicStyle>, f6
     (r.graphic_styles().0, r.canvas_scale)
 }
 
+/// The symbols of a `.ai` file's editing data, as [`symbols`] reads them.
+pub struct Symbols {
+    /// The symbols in the Symbols panel's order, each with its Symbol Options › Registration.
+    pub symbols: Vec<(Symbol, vectorcraft_doc::SymbolRegistration)>,
+    /// The image blobs the symbols' art shows, by key.
+    pub images: std::collections::BTreeMap<String, ImageBlob>,
+    /// The global and spot colors the symbols' art is linked to, as swatches, as [`read`] adds
+    /// them to a document read from the layers.
+    pub swatches: Vec<Swatch>,
+}
+
+/// The symbols of the editing data `data`, for a file whose layers aren't read (a symbol library
+/// has none), as [`read`] makes them: in the symbol list's order, without those that hold an
+/// instance of a symbol the data doesn't define, and with each object of their art that is linked
+/// to a listed graphic style linked to it by the id [`graphic_styles`] gives that style. The
+/// symbols are those defined before reading stops and before the first layer; `None` when there
+/// are none.
+pub fn symbols(data: &[u8]) -> Option<Symbols> {
+    crate::import::ai::find(data, b"BeginSymbol")?;
+    let mut r = Reader::with_names(data);
+    // The symbols come before the art, so an error in the art leaves them read.
+    let _ = r.run();
+    r.check_symbols();
+    r.order_symbols();
+    if r.doc.symbols.is_empty() {
+        return None;
+    }
+    let (styles, ids) = r.graphic_styles();
+    let links: HashMap<NodeId, u32> = r.style_links.iter().filter_map(|(node, name)| Some((*node, *ids.get(name)?))).collect();
+    if !links.is_empty() {
+        for symbol in &mut r.doc.symbols {
+            link_styles(std::slice::from_mut(&mut symbol.art), &links, &styles, 0);
+        }
+    }
+    let mut shown = Document::new(1.0, 1.0);
+    shown.symbols = std::mem::take(&mut r.doc.symbols);
+    let mut images = std::collections::BTreeMap::new();
+    shown.visit_images(|_, im| {
+        if let Some(blob) = r.doc.images.get(&im.key) {
+            images.insert(im.key.clone(), blob.clone());
+        }
+    });
+    // The colors the art is linked to that the file defines, once each.
+    let mut linked = std::collections::HashSet::new();
+    for s in &mut shown.symbols {
+        vectorcraft_doc::swatches::map_node_solid_paints(Arc::make_mut(&mut s.art), &mut |_, link, _| {
+            linked.extend(link.clone());
+            false
+        });
+    }
+    let mut swatches: Vec<Swatch> = vec![];
+    let colors = r.spots.iter().chain(&r.stop_spots).map(|n| (n, n.spot)).chain(r.custom_colors.iter().map(|n| (n, true)));
+    for (n, spot) in colors {
+        if linked.remove(&n.name) {
+            swatches.push(Swatch { name: n.name.clone(), paint: Paint::solid(n.color), global: true, spot });
+        }
+    }
+    let symbols = std::mem::take(&mut shown.symbols)
+        .into_iter()
+        .map(|s| {
+            let reg = r.doc.symbol_registration(&s.name);
+            (s, reg)
+        })
+        .collect();
+    Some(Symbols { symbols, images, swatches })
+}
+
 /// [`artboards`] as far as reading `data` from its start gets: those read before an error, and
 /// those of a `/Document` still open when it stopped (its art can be what stopped it).
 fn artboards_read(data: &[u8]) -> (Vec<(String, Rect)>, Option<usize>) {
@@ -597,6 +679,7 @@ impl<'a> Reader<'a> {
             head.registration = Some(*r);
         }
         self.constraint_art(o);
+        self.placed_page(o);
         // A blend's key object or spine.
         if let Some(kind) = o.text("ShapeBlendPathType")
             && let Some(id) = self.last_object().map(|n| n.id)
@@ -804,12 +887,13 @@ impl<'a> Reader<'a> {
             let (paint, global, spot) = match e.cell {
                 Cell::Color { color, global, spot } => (Paint::solid(color), global, spot),
                 // A swatch named by its gradient or pattern takes the name that got in the document.
+                // A gradient swatch's own paint does not link to a swatch; art painted with the
+                // gradient links to it.
                 Cell::Gradient(g) => {
-                    let mut gp = vectorcraft_color::gradient::GradientPaint::new(self.gradients.get(&g)?.clone());
+                    let gp = vectorcraft_color::gradient::GradientPaint::new(self.gradients.get(&g)?.clone());
                     if e.name == g {
                         e.name = self.global_names.get(Global::Gradient, &g).to_string();
                     }
-                    gp.swatch = Some(e.name.clone());
                     (Paint::Gradient(Box::new(gp)), false, false)
                 }
                 Cell::Pattern(p) => {
@@ -931,6 +1015,41 @@ impl<'a> Reader<'a> {
         Some((lib, left_out + self.brushes_unread))
     }
 
+    /// Count the colors of the brush art that the brushes `lib` use after the colors read so far,
+    /// in the order the art was read: its spot colors make swatches, and its colors count toward
+    /// the color mode. Art that no brush of `lib` uses brings none of its colors. The art brings
+    /// at most [`brush::MAX_BRUSH_ART_COLORS`] different color names in all, each name's color
+    /// operators before its gradient stops, as [`Self::file_swatches`] takes them; its colors past
+    /// them still count toward the color mode.
+    fn count_brush_art_colors(&mut self, lib: &[vectorcraft_brush::Brush]) {
+        let used: std::collections::HashSet<NodeId> = lib.iter().flat_map(|b| b.art()).map(|a| a.id).collect();
+        let mut names: Vec<(NodeId, String)> = self.brush_art.iter().filter(|(_, a)| used.contains(&a.id)).map(|(n, a)| (a.id, n.clone())).collect();
+        names.sort();
+        // The names brought so far: every section's color operators', then every section's stops'.
+        let mut brought = std::collections::HashSet::new();
+        let mut stops = vec![];
+        for (_, name) in names {
+            let Some(colors) = self.brush_art_colors.remove(&name) else { continue };
+            for n in colors.spots {
+                if brought.contains(&n.name) || brought.len() >= brush::MAX_BRUSH_ART_COLORS {
+                    continue;
+                }
+                brought.insert(n.name.clone());
+                self.spots.push(n);
+            }
+            stops.push(colors.stop_spots);
+            self.cmyk_colors += colors.cmyk;
+            self.rgb_colors += colors.rgb;
+        }
+        for n in stops.into_iter().flatten() {
+            if brought.contains(&n.name) || brought.len() >= brush::MAX_BRUSH_ART_COLORS {
+                continue;
+            }
+            brought.insert(n.name.clone());
+            self.stop_spots.push(n);
+        }
+    }
+
     /// The graphic styles of the style list, in its order: each listed name the art styles define with
     /// an appearance [`appearance_from_art_style`] reads, once (a name listed again, empty or not
     /// defined is left out), with ids from 1. Also the id of each kept name.
@@ -982,6 +1101,8 @@ impl<'a> Reader<'a> {
         }
         let to_doc = self.ensure_space();
         let artboard = self.first_board();
+        // Before the artboards are taken below: the page is the first artboard's.
+        let page = self.page_in_doc();
         self.check_symbols();
         self.order_symbols();
         drop_commented_copies(&mut self.doc.layers, &self.hidden_ids);
@@ -1041,6 +1162,10 @@ impl<'a> Reader<'a> {
             };
             take_ruler_guides(&mut doc.layers, &pick, &mut doc.guides, 0);
         }
+        let mut brushes = self.brush_library();
+        if let Some((lib, _)) = &brushes {
+            self.count_brush_art_colors(lib);
+        }
         if self.color_model.unwrap_or(self.cmyk_colors > self.rgb_colors) {
             doc.color_mode = ColorMode::Cmyk;
             let (swatches, groups) = vectorcraft_color::default_swatches(ColorMode::Cmyk.model());
@@ -1061,7 +1186,6 @@ impl<'a> Reader<'a> {
         if let Some(author) = self.author.take() {
             doc.metadata.author = author;
         }
-        let mut brushes = self.brush_library();
         // The file's graphic styles in place of the defaults, and the objects linked to them.
         let (styles, ids) = self.graphic_styles();
         let styles_read = !styles.is_empty();
@@ -1071,6 +1195,9 @@ impl<'a> Reader<'a> {
                 link_styles(&mut doc.layers, &links, &styles, 0);
                 for symbol in &mut doc.symbols {
                     link_styles(std::slice::from_mut(&mut symbol.art), &links, &styles, 0);
+                }
+                for pattern in &mut doc.patterns {
+                    link_styles(&mut pattern.art, &links, &styles, 0);
                 }
             }
             doc.graphic_styles = styles.into();
@@ -1085,6 +1212,9 @@ impl<'a> Reader<'a> {
             doc.map_solid_paints(&mut follow);
             for a in brushes.iter_mut().flat_map(|(lib, _)| lib.iter_mut().flat_map(|b| b.art_mut())) {
                 vectorcraft_doc::swatches::map_node_solid_paints(a, &mut follow);
+            }
+            for w in &mut self.warped_type {
+                vectorcraft_doc::swatches::map_node_solid_paints(&mut w.look, &mut follow);
             }
         }
         let mut warnings = self.warnings;
@@ -1125,7 +1255,14 @@ impl<'a> Reader<'a> {
             restyled: self.restyled,
             placeholders: self.placeholders,
             placed_elsewhere: self.placed_elsewhere,
+            placed_pages: self.placed_pages,
             envelopes_drawn: self.envelopes_drawn,
+            warped_type: super::super::envelope::WarpedType {
+                looks: self.warped_type,
+                checks: self.envelope_checks,
+                spent: self.envelope_spent,
+                page,
+            },
             styles_read,
             canvas_scale: self.canvas_scale,
             xml_ids: self.xml_ids,

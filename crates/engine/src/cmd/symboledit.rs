@@ -20,7 +20,7 @@ use vectorcraft_doc::{Document, Node, NodeId, NodeKind, Selection, SymbolEdit, S
 use vectorcraft_geom::{Affine, Point};
 
 use super::brushsym::{natural_size, place_xf};
-use super::{EngineError, Result, Session, bad, id_param, number_or, ok, str_param};
+use super::{EngineError, Result, Session, bad, number_or, object_param, ok, str_param};
 
 /// The name of the undo step that enters symbol editing mode.
 const ENTER: &str = "Edit Symbol";
@@ -65,7 +65,8 @@ pub(crate) fn enter(s: &mut Session, p: &Value) -> Result<Value> {
     if st.doc.pattern_edit.is_some() {
         return Err(bad(C, "finish editing the pattern first"));
     }
-    let given = id_param(p, "id").map(|i| vec![i]).or_else(|| super::ids_param(p, "ids").filter(|v| !v.is_empty()));
+    let ids = super::ids_param(p, "ids", C)?;
+    let given = object_param(p, "id", C)?.map(|i| vec![i]).or_else(|| ids.filter(|v| !v.is_empty()));
     let (name, xf, instance) = match given {
         Some(ids) => {
             let symbols = ids.iter().map(|id| instance_of(&st.doc, *id)).collect::<Option<Vec<_>>>();
@@ -78,6 +79,10 @@ pub(crate) fn enter(s: &mut Session, p: &Value) -> Result<Value> {
             (name, xf, ids.first().copied())
         }
         None => {
+            // Refused while an object of a dynamic instance's art is selected, unless `name` is given.
+            if str_param(p, "name").is_none() && st.selection.symbol_part.is_some() {
+                return Err(super::brushsym::part_only());
+            }
             let picked = if str_param(p, "name").is_some() { vec![] } else { selected_instances(st) };
             let symbols: Vec<(String, Affine)> = picked.iter().filter_map(|id| instance_of(&st.doc, *id)).collect();
             match symbols.first() {

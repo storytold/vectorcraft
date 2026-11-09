@@ -68,6 +68,7 @@ fn menu_open_id() -> egui::Id {
 }
 
 /// Whether a menu of the in-window menu bar is open (`false` when no menu bar was drawn yet).
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn menu_open(ctx: &egui::Context) -> bool {
     ctx.data(|d| d.get_temp::<bool>(menu_open_id())).unwrap_or(false)
 }
