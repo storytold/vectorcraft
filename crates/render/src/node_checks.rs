@@ -115,8 +115,9 @@ pub(crate) fn left_out(opts: &crate::RenderOptions, doc: &vectorcraft_doc::Docum
     !a.visible || view_item || opts.hidden.contains(&a.id) || edited_instance(opts, doc, a.id)
 }
 
-/// Is `id` the symbol instance that `doc`'s symbol is edited from in isolation (drawn without it)?
-pub(crate) fn edited_instance(opts: &crate::RenderOptions, doc: &vectorcraft_doc::Document, id: vectorcraft_doc::NodeId) -> bool {
+/// Symbol editing mode on screen: is `id` the instance editing was entered from, which is not drawn
+/// (with its masks and effects), since the editing layer holds a copy of its art in its place?
+fn edited_instance(opts: &crate::RenderOptions, doc: &vectorcraft_doc::Document, id: vectorcraft_doc::NodeId) -> bool {
     opts.isolated.is_some() && doc.symbol_edit.as_ref().is_some_and(|e| e.instance == Some(id))
 }
 

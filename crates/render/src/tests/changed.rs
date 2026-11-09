@@ -63,24 +63,24 @@ fn redraw(old: &Document, new: &Document) -> Changed {
     let change = changed(old, new);
     let mut fresh = Renderer::new();
     let before = fresh.render(old, W, H, view(), &opts);
-    patched(&mut fresh, &before, new, change, &after);
+    patched(&mut fresh, &before, new, change, &after, &opts);
     let mut r = Renderer::new();
     let before = r.render(old, W, H, view(), &opts);
     let measured = r.changed(old, new, &opts);
-    patched(&mut r, &before, new, measured, &after);
+    patched(&mut r, &before, new, measured, &after, &opts);
     change
 }
 
-/// `before` with `new` drawn again by `r` only where `change` says, checked against `after`.
-fn patched(r: &mut Renderer, before: &Rendered, new: &Document, change: Changed, after: &Rendered) {
-    let opts = RenderOptions::default();
+/// `before` with `new` drawn again by `r` with `opts` only where `change` says, checked against
+/// `after`.
+fn patched(r: &mut Renderer, before: &Rendered, new: &Document, change: Changed, after: &Rendered, opts: &RenderOptions) {
     let mut patched = Rendered { width: W, height: H, pixels: before.pixels.clone() };
     match change {
         Changed::Everything => patched.pixels = after.pixels.clone(),
         Changed::Nothing => {}
         Changed::Area(area) => {
             if let Some([x0, y0, x1, y1]) = view_pixels(area, view(), W, H) {
-                let part = r.render(new, x1 - x0, y1 - y0, Affine::translate((-f64::from(x0), -f64::from(y0))) * view(), &opts);
+                let part = r.render(new, x1 - x0, y1 - y0, Affine::translate((-f64::from(x0), -f64::from(y0))) * view(), opts);
                 for y in 0..y1 - y0 {
                     let (from, to) = ((y * (x1 - x0) * 4) as usize, (((y0 + y) * W + x0) * 4) as usize);
                     let n = ((x1 - x0) * 4) as usize;
@@ -540,36 +540,84 @@ fn a_renderer_measures_an_edit_with_the_3d_art_it_draws() {
     assert_eq!(apart, 1, "changed keeps nothing for the renderer");
 }
 
-/// An Image Trace object shown with its source image (`view`): its hidden source, at the left, and
-/// two traced shapes, at the right. The ids of the source and of the second shape.
-fn traced(view: &str) -> (Document, NodeId, NodeId) {
+/// An Image Trace object shown with its source image (`view`): its hidden source, a red image at
+/// the left, and two traced shapes, at the right; the object's id, and the ids of the source and
+/// of the second shape.
+fn traced(view: &str) -> (Document, NodeId, NodeId, NodeId) {
     let mut d = Document::new(W as f64, H as f64);
-    let mut source = rect(&mut d, Rect::new(10.0, 10.0, 40.0, 40.0), Color::rgb(0.5, 0.5, 0.5));
-    source.visible = false;
+    let mut png = vec![];
+    let red = image::RgbaImage::from_pixel(1, 1, image::Rgba([255, 0, 0, 255]));
+    red.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    d.images.insert("red".into(), vectorcraft_doc::ImageBlob::new("image/png", png));
+    let source = red_image(&mut d, 10.0);
     let a = rect(&mut d, Rect::new(60.0, 10.0, 70.0, 20.0), Color::rgb(0.0, 0.5, 0.0));
     let b = rect(&mut d, Rect::new(80.0, 10.0, 90.0, 20.0), Color::rgb(1.0, 0.5, 0.0));
     let ids = (source.id, b.id);
     let mut g = Node::group(d.alloc_id(), vec![Arc::new(source), Arc::new(a), Arc::new(b)]);
     g.extras_mut().trace = Some(Box::new(serde_json::json!({ "view": view })));
     let l = d.layers[0].id;
-    d.insert(Some(l), 0, g).unwrap();
-    (d, ids.0, ids.1)
+    let g = d.insert(Some(l), 0, g).unwrap();
+    (d, g, ids.0, ids.1)
+}
+
+/// A hidden 30 pt square of the red image at (`x`, 10), as an Image Trace object's source.
+fn red_image(d: &mut Document, x: f64) -> Node {
+    let xf = Affine::translate((x, 10.0)) * Affine::scale(30.0);
+    let im = vectorcraft_doc::ImageObject { key: "red".into(), width: 1, height: 1, xf, link: None, placement: Default::default(), pixels: None };
+    let mut source = Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)));
+    source.visible = false;
+    source
+}
+
+/// Draws `new` again only where the renderer that drew `old` on screen, its Image Trace objects in
+/// their views, measures that it changed, and checks that this is `new` drawn whole.
+fn redraw_traced(old: &Document, new: &Document) -> Changed {
+    let opts = RenderOptions { trace_views: true, ..Default::default() };
+    let after = Renderer::new().render(new, W, H, view(), &opts);
+    let mut r = Renderer::new();
+    let before = r.render(old, W, H, view(), &opts);
+    let red = |r: &Rendered| r.pixels.chunks(4).any(|p| p[0] > 200 && p[1] < 60);
+    assert!(red(&before) || red(&after), "a source shows");
+    let measured = r.changed(old, new, &opts);
+    patched(&mut r, &before, new, measured, &after, &opts);
+    measured
 }
 
 #[test]
 fn moving_a_trace_objects_source_changes_where_it_shows() {
     for view in ["sourceImage", "outlinesWithSourceImage"] {
-        let (old, source, _) = traced(view);
+        let (old, _, source, _) = traced(view);
         let mut new = old.clone();
         new.node_mut(source).unwrap().transform(Affine::translate((5.0, 30.0)), false);
-        let a = area(redraw(&old, &new));
+        let a = area(redraw_traced(&old, &new));
         assert!(a.contains(Point::new(12.0, 12.0)) && a.contains(Point::new(44.0, 69.0)), "{view}: before and after: {a:?}");
     }
 }
 
+/// A trace object's source that is first again after an edit (undoing Send to Back on a traced
+/// shape), or a new source in its place, draws where it shows.
+#[test]
+fn a_trace_objects_new_first_member_is_its_source() {
+    let (back, g, source, shape) = traced("sourceImage");
+    // The shape sent to the back, before the source.
+    let mut sent = back.clone();
+    let children = sent.node_mut(g).unwrap().children_mut().unwrap();
+    let at = children.iter().position(|c| c.id == shape).unwrap();
+    let moved = children.remove(at);
+    children.insert(0, moved);
+    redraw_traced(&sent, &back);
+    // A new source image, with an id of its own.
+    let mut replaced = back.clone();
+    let new_source = red_image(&mut replaced, 55.0);
+    let children = replaced.node_mut(g).unwrap().children_mut().unwrap();
+    assert_eq!(children[0].id, source);
+    children[0] = Arc::new(new_source);
+    redraw_traced(&back, &replaced);
+}
+
 #[test]
 fn recolouring_a_traced_shape_changes_only_the_shape() {
-    let (old, _, shape) = traced("outlinesWithSourceImage");
+    let (old, _, _, shape) = traced("outlinesWithSourceImage");
     let mut new = old.clone();
     new.node_mut(shape).unwrap().appearance.fill_mut().unwrap().paint = Paint::solid(Color::rgb(0.0, 0.0, 1.0));
     let a = area(redraw(&old, &new));

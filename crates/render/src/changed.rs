@@ -86,12 +86,13 @@ pub fn changed(old: &Document, new: &Document) -> Changed {
 }
 
 impl crate::Renderer {
-    /// [`changed`], measured through this renderer (`Renderer::bounds_of`): what it drew
-    /// of `old` it measured to draw it, and what it measures of `new`, a 3D effect's art included,
-    /// it holds to draw that with `opts`; the objects `opts` leaves out (hidden, templates and
-    /// guides the view hides, the instance a symbol is edited from) draw nothing. The view that drew `old` with this renderer and `opts` asks this. With
-    /// Overprint Preview or Separations Preview the renderer draws copies of the objects
-    /// (`proof::prepare`), so they are measured afresh and nothing is held.
+    /// [`changed`], measured through this renderer (`Renderer::bounds_of`): what it drew of `old`
+    /// it measured to draw it, and what it measures of `new`, a 3D effect's art included, it holds
+    /// to draw that with `opts`; the objects `opts` leaves out (hidden, templates and guides the
+    /// view hides, the instance a symbol is edited from) draw nothing. The view that drew `old`
+    /// with this renderer and `opts` asks this. With Overprint Preview or Separations Preview the
+    /// renderer draws copies of the objects (`proof::prepare`), so they are measured afresh and
+    /// nothing is held.
     pub fn changed(&mut self, old: &Document, new: &Document, opts: &crate::RenderOptions) -> Changed {
         let renderer = (!crate::proof::overprints(opts)).then_some(self);
         changed_with(old, new, renderer, opts)
@@ -118,7 +119,7 @@ fn changed_with(old: &Document, new: &Document, renderer: Option<&mut crate::Ren
     if new.pattern_edit.is_some() || !old.same_outside_layers(new) {
         return Changed::Everything;
     }
-    let mut diff = Diff { old: old.symbol_boxes(), new: new.symbol_boxes(), area: None, renderer, opts, source: None };
+    let mut diff = Diff { old: old.symbol_boxes(), new: new.symbol_boxes(), area: None, renderer, opts, sources: (None, None) };
     diff.children(&old.layers, &new.layers);
     diff.area.map_or(Changed::Nothing, Changed::Area)
 }
@@ -137,14 +138,15 @@ pub fn view_pixels(area: Rect, view: Affine, w: u32, h: u32) -> Option<[u32; 4]>
 
 /// [`changed`] in progress: the symbols' boxes of both versions, the area so far, the renderer
 /// that measures, if any (else each object is measured afresh), the options of the frames it
-/// measures for, and the hidden source image of the Image Trace object whose members it compares.
+/// measures for, and the hidden source image, in each version, of the Image Trace object whose
+/// members it compares.
 struct Diff<'a, 'r> {
     old: SymbolBoxes<'a>,
     new: SymbolBoxes<'a>,
     area: Option<Rect>,
     renderer: Option<&'r mut crate::Renderer>,
     opts: &'r crate::RenderOptions,
-    source: Option<NodeId>,
+    sources: (Option<NodeId>, Option<NodeId>),
 }
 
 impl Diff<'_, '_> {
@@ -180,10 +182,11 @@ impl Diff<'_, '_> {
             && same_but_members(old, new)
         {
             // An Image Trace object draws its hidden source image, its first member, in some views.
-            let source = old.extras().trace.is_some().then(|| a.first().map(|s| s.id)).flatten();
-            let outer = std::mem::replace(&mut self.source, source);
+            // Each version's own: an edit can put another member first (undoing Send to Back).
+            let first = |m: &[Arc<Node>]| old.extras().trace.is_some().then(|| m.first().map(|s| s.id)).flatten();
+            let outer = std::mem::replace(&mut self.sources, (first(a), first(b)));
             self.children(a, b);
-            self.source = outer;
+            self.sources = outer;
         } else if let Some((area, moved, anchors)) = moved_anchors(old, new) {
             if moved <= FEW_MOVED && anchors >= MANY_ANCHORS {
                 self.add(area);
@@ -203,11 +206,11 @@ impl Diff<'_, '_> {
     /// (`node_checks::left_out`)? The source image of an Image Trace object draws in some views.
     /// The members of a group or layer left out are never compared ([`Self::node`]).
     fn unseen(&self, side: Side, n: &Node) -> bool {
-        let doc = match side {
-            Side::Old => self.old.document(),
-            Side::New => self.new.document(),
+        let (doc, source) = match side {
+            Side::Old => (self.old.document(), self.sources.0),
+            Side::New => (self.new.document(), self.sources.1),
         };
-        self.source != Some(n.id) && crate::node_checks::left_out(self.opts, doc, n)
+        source != Some(n.id) && crate::node_checks::left_out(self.opts, doc, n)
     }
 
     /// The cull bounds of `n` of the `side` version, through the renderer when there is one;

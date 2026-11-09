@@ -842,10 +842,10 @@ fn a_measuring_pass_sweeps_the_bounds_of_held_art_as_they_double() {
     assert!(r.three_d_sweeps <= 2, "{} sweeps", r.three_d_sweeps);
 }
 
-/// A renderer checks the brush library between frames only while it keeps bounds measured with
-/// brushed strokes in 3D art.
+/// A renderer checks the brush library between frames only once it has measured 3D art, and again
+/// only after measuring 3D art since the library last changed.
 #[test]
-fn the_brush_library_is_checked_only_with_3d_bounds_kept() {
+fn the_brush_library_is_checked_only_after_3d_art_is_measured() {
     let mut d = doc_with(Rect::new(30.0, 30.0, 60.0, 60.0), Color::BLACK, vec![]);
     let mut r = Renderer::new();
     r.render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default());
@@ -854,6 +854,12 @@ fn the_brush_library_is_checked_only_with_3d_bounds_kept() {
     d.node_mut(id).unwrap().appearance.effects = vec![Effect { id: "threeD.extrude".into(), params: json!({"depth": 20.0}), visible: true }];
     r.render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default());
     assert!(r.brush_library.is_some());
+    // A library changed: the bounds measured with the old one go, and so does its key.
+    let mut lib = vectorcraft_brush::library(&d);
+    lib.retain(|b| b.name != "3 pt. Round");
+    vectorcraft_brush::store(&mut d, &lib);
+    r.check_symbols(&d);
+    assert_eq!(r.brush_library, None);
 }
 
 /// An object whose 3D effect builds nothing (Revolve on a group) is measured by the renderer as the
@@ -1701,41 +1707,46 @@ fn an_image_inner_glow_follows_its_visible_pixels() {
     }
 }
 
-/// A 3D effect on a path's fill that builds nothing (Revolve after Roughen) draws the fill as
-/// without it, under the object's own effects too: the art made for the object is drawn without
-/// it, not as an object with effects again, and that art again, without end. With a raster effect
-/// the object draws from that art, where without the 3D effect it draws as a path: their edges
-/// differ a little. An Extrude may build.
+/// A 3D effect on a path's fill or stroke that builds nothing (Revolve after Roughen) draws the
+/// item as without it: the art made for the object is drawn without it, not as an object with
+/// effects again, and that art again, without end. Without effects of its own the object draws
+/// exactly as without the 3D effect. With a raster effect (Drop Shadow, Gaussian Blur) it draws from
+/// that art, where without the 3D effect it draws as a path, whose raster effects are clipped to
+/// the path's own geometry: there the item's Roughen spikes are cut off, so the two differ past
+/// the path, and match inside it.
 #[test]
-fn a_fills_3d_effect_that_builds_nothing_draws_the_fill_as_without_it() {
-    let rough = |detail: i64| Effect {
-        id: "distort.roughen".into(),
-        params: json!({"size": 10, "relative": false, "detail": detail, "points": "smooth"}),
-        visible: true,
-    };
-    let shadow = Effect { id: "stylize.dropShadow".into(), params: json!({}), visible: true };
+fn a_3d_effect_that_builds_nothing_draws_the_item_as_without_it() {
+    let rough =
+        Effect { id: "distort.roughen".into(), params: json!({"size": 10, "relative": false, "detail": 10, "points": "smooth"}), visible: true };
     let revolve = Effect { id: "threeD.revolve".into(), params: json!({}), visible: true };
-    let extrude = Effect { id: "threeD.extrude".into(), params: json!({"depth": 20.0}), visible: true };
-    for (object, fill, three) in [
-        (vec![shadow.clone()], rough(10), revolve.clone()),
-        (vec![], rough(10), revolve),
-        (vec![shadow], rough(60), extrude.clone()),
-        (vec![rough(60)], rough(60), extrude),
-    ] {
-        let draw = |three: Option<&Effect>| {
-            let mut d = doc_with(Rect::new(30.0, 30.0, 60.0, 60.0), Color::BLACK, vec![]);
-            let id = d.layers[0].children().unwrap()[0].id;
+    let shadow = Effect { id: "stylize.dropShadow".into(), params: json!({}), visible: true };
+    let blur = Effect { id: "blur.gaussian".into(), params: json!({"radius": 2}), visible: true };
+    for (object, on_fill) in [(vec![], true), (vec![], false), (vec![shadow], true), (vec![blur], false)] {
+        let draw = |three: bool| {
+            let mut d = Document::new(100.0, 100.0);
+            let ap = Appearance::basic(Paint::solid(Color::BLACK), Paint::solid(Color::rgb(0.0, 0.0, 1.0)), 2.0);
+            let n = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(30.0, 30.0, 60.0, 60.0)), ap);
+            let l = d.layers[0].id;
+            let id = d.insert(Some(l), 0, n).unwrap();
             let n = d.node_mut(id).unwrap();
             n.appearance.effects = object.clone();
-            n.appearance.fill_mut().unwrap().effects = [Some(&fill), three].into_iter().flatten().cloned().collect();
+            let item = if on_fill {
+                n.appearance.fill_mut().unwrap().effects = vec![];
+                &mut n.appearance.items[0]
+            } else {
+                &mut n.appearance.items[1]
+            };
+            *item.effects_mut() = [Some(rough.clone()), three.then(|| revolve.clone())].into_iter().flatten().collect();
+            assert!(crate::effects::revolve_art(d.node(id).unwrap()).is_none(), "builds nothing");
             Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default()).pixels
         };
-        let with = draw(Some(&three));
-        if three.id == "threeD.revolve" {
-            let without = draw(None);
-            let differ = with.iter().zip(&without).filter(|(a, b)| a != b).count();
-            let most = with.iter().zip(&without).map(|(a, b)| a.abs_diff(*b)).max().unwrap_or(0);
-            assert!(differ * 100 < with.len() && most <= 32, "{object:?}: {differ} channels differ, by up to {most}");
+        let (with, without) = (draw(true), draw(false));
+        if object.is_empty() {
+            assert!(with == without, "on the fill {on_fill}: as without it");
+        } else {
+            // Inside the path, well within its Roughen.
+            let at = |p: &[u8], x: usize, y: usize| p[(y * 100 + x) * 4..][..4].to_vec();
+            assert_eq!(at(&with, 45, 45), at(&without, 45, 45), "{object:?}");
         }
     }
 }
