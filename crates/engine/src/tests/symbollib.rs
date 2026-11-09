@@ -117,9 +117,8 @@ fn ui_frames_symbols_carry_default_nine_slice_when_added() {
     }
     let d = doc(&s);
     for name in &names {
-        assert!(d.symbol_nine_slice(name).is_some(), "{name} should have 9-slice guides");
+        assert_eq!(d.symbol_nine_slice(name), Some(vectorcraft_doc::SymbolNineSlice::default()), "{name} should have default 9-slice guides");
     }
-    assert_eq!(d.symbol_nine_slice("Panel"), Some(vectorcraft_doc::SymbolNineSlice::default()));
     assert!(matches!(
         d.node(NodeId(placed[0])).map(|n| &n.kind),
         Some(NodeKind::SymbolInstance { symbol, .. }) if symbol == "Panel"
