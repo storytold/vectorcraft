@@ -771,6 +771,14 @@ fn measured_art_is_held_within_its_budget() {
         r.bounds_of(&symbols, n);
     }
     assert!(r.measured_bytes <= one * 3 && r.measured.len() <= 3, "{} bytes in {} entries", r.measured_bytes, r.measured.len());
+    // Every object is measured right, those past the budget too, and draws as a new renderer
+    // draws it, its art made again.
+    for n in d.layers[0].children().unwrap() {
+        assert_eq!(r.bounds_of(&symbols, n), super::cull_bounds(&symbols, n), "{:?}", n.id);
+    }
+    let (view, opts) = (Affine::translate((-500.0, 0.0)), RenderOptions::default());
+    let drawn = r.render(&d, 800, 100, view, &opts).pixels;
+    assert!(drawn == Renderer::new().render(&d, 800, 100, view, &opts).pixels);
 }
 
 /// An edit to 3D objects the frame doesn't draw (hidden, in a hidden group, drawn hidden) builds
@@ -920,11 +928,18 @@ fn a_group_holding_3d_art_is_measured_once_a_pass() {
     d.insert(Some(l), 0, g).unwrap();
     let g = d.layers[0].children().unwrap()[0].clone();
     let mut r = Renderer::new();
-    for i in 0..3 {
+    let first = Rect::new(0.0, 0.0, 100.0, 100.0);
+    assert_eq!(r.art_bounds_on(&d, first), crate::encode::art_bounds_on(&d, first));
+    let key = Arc::as_ptr(&g) as usize;
+    assert!(r.geom.contains_key(&key), "kept for the next artboard");
+    // The group's bounds, planted over the next artboards: they read the kept bounds, measuring
+    // nothing again.
+    let planted = Rect::new(100.0, 0.0, 300.0, 100.0);
+    r.geom.get_mut(&key).unwrap().bounds = Some(planted);
+    for i in 1..3 {
         let rect = Rect::new(f64::from(i) * 100.0, 0.0, f64::from(i) * 100.0 + 100.0, 100.0);
-        assert_eq!(r.art_bounds_on(&d, rect), crate::encode::art_bounds_on(&d, rect));
+        assert_eq!(r.art_bounds_on(&d, rect), Some(planted), "artboard {i}");
     }
-    assert!(r.geom.contains_key(&(Arc::as_ptr(&g) as usize)), "kept for the next artboard");
 }
 
 /// A pass that only measures (Fit to Artwork Bounds, an export) holds no 3D art past its budget:
@@ -1070,6 +1085,8 @@ fn a_rasterized_3d_objects_brush_widened_is_drawn() {
 #[test]
 fn a_rasterized_objects_brush_widened_in_view_is_drawn_again() {
     let (drawn, fresh) = drawn_after_a_brush_widens(40.0, 12.0);
+    let (_, before) = drawn_after_a_brush_widens(40.0, 3.0);
+    assert!(fresh != before, "the wider brush draws otherwise");
     assert!(drawn == fresh, "as a new renderer draws it");
 }
 
@@ -1096,11 +1113,18 @@ fn a_group_with_a_hidden_member_is_measured_once_a_pass() {
     d.insert(Some(l), 0, g).unwrap();
     let g = d.layers[0].children().unwrap()[0].clone();
     let mut r = Renderer::new();
-    for i in 0..3 {
+    let first = Rect::new(0.0, 0.0, 100.0, 100.0);
+    assert_eq!(r.art_bounds_on(&d, first), crate::encode::art_bounds_on(&d, first));
+    let key = Arc::as_ptr(&g) as usize;
+    assert!(r.pass_bounds.contains_key(&key), "kept for the next artboard");
+    // The group's bounds, planted over the next artboards: they read the kept bounds, measuring
+    // nothing again.
+    let planted = Rect::new(100.0, 0.0, 300.0, 100.0);
+    r.pass_bounds.get_mut(&key).unwrap().1 = Some(planted);
+    for i in 1..3 {
         let rect = Rect::new(f64::from(i) * 100.0, 0.0, f64::from(i) * 100.0 + 100.0, 100.0);
-        assert_eq!(r.art_bounds_on(&d, rect), crate::encode::art_bounds_on(&d, rect));
+        assert_eq!(r.art_bounds_on(&d, rect), Some(planted), "artboard {i}");
     }
-    assert!(r.pass_bounds.contains_key(&(Arc::as_ptr(&g) as usize)), "kept for the next artboard");
 }
 
 /// Art made again for an object, after what it read from outside it changed, takes the place of
@@ -1724,11 +1748,9 @@ fn an_image_inner_glow_follows_its_visible_pixels() {
 
 /// A 3D effect on a path's fill or stroke that builds nothing (Revolve after Roughen) draws the
 /// item as without it: the art made for the object is drawn without it, not as an object with
-/// effects again, and that art again, without end. Without effects of its own the object draws
-/// exactly as without the 3D effect. With a raster effect (Drop Shadow, Gaussian Blur) it draws from
-/// that art, where without the 3D effect it draws as a path, whose raster effects are clipped to
-/// the path's own geometry: there the item's Roughen spikes are cut off, so the two differ past
-/// the path, and match inside it.
+/// effects again, and that art again, without end. The object draws exactly as without the 3D
+/// effect, with a raster effect of its own (Drop Shadow, Gaussian Blur) too, which reaches past
+/// the path.
 #[test]
 fn a_3d_effect_that_builds_nothing_draws_the_item_as_without_it() {
     let rough =
@@ -1756,12 +1778,10 @@ fn a_3d_effect_that_builds_nothing_draws_the_item_as_without_it() {
             Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default()).pixels
         };
         let (with, without) = (draw(true), draw(false));
-        if object.is_empty() {
-            assert!(with == without, "on the fill {on_fill}: as without it");
-        } else {
-            // Inside the path, well within its Roughen.
-            let at = |p: &[u8], x: usize, y: usize| p[(y * 100 + x) * 4..][..4].to_vec();
-            assert_eq!(at(&with, 45, 45), at(&without, 45, 45), "{object:?}");
+        assert!(with == without, "{object:?} on the fill {on_fill}: as without it");
+        if !object.is_empty() {
+            let past = (0..100usize).flat_map(|y| (0..100usize).map(move |x| (x, y))).filter(|(x, y)| *x > 62 || *y > 62);
+            assert!(past.into_iter().any(|(x, y)| with[(y * 100 + x) * 4 + 3] > 0), "{object:?}: drawn past the path");
         }
     }
 }

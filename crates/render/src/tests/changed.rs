@@ -621,7 +621,9 @@ fn recolouring_a_traced_shape_changes_only_the_shape() {
     let mut new = old.clone();
     new.node_mut(shape).unwrap().appearance.fill_mut().unwrap().paint = Paint::solid(Color::rgb(0.0, 0.0, 1.0));
     let a = area(redraw(&old, &new));
-    assert!(a.x0 > 72.0, "not the source or the other shape: {a:?}");
+    // The shape, its 2 pt stroke and a pixel's anti-aliasing, at most.
+    let shape = Rect::new(80.0, 10.0, 90.0, 20.0).inflate(3.0, 3.0);
+    assert!(a.union(shape) == shape, "only the shape: {a:?}");
 }
 
 /// Templates and guides that the view hides draw nothing: an edit to them changes nothing.
