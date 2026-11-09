@@ -6644,11 +6644,12 @@ them again at startup (`plugin.remove` deletes them there):
 schema, defaults). An object filter runs on the selected paths and compound paths with `plugin.run {id, params}` (one
 undo step; it may change, delete or add objects, and the result is selected). A filter whose manifest lists `inputs`
 (`type`, `image`, `symbolInstance`; `inputs` in its `plugin.list` entry) also lists `doc.read` in its `permissions`, so
-`plugin.install` needs `grant`. It is also given the selected objects of those kinds to read, with at most 16 MiB of
-pixels and 16 MiB of type runs over one run (later ones come with `pixelsOmitted` or `truncated`). Every object counts
-toward the input's half of the plug-in's memory cap, ids, bounds, transforms and names included: pixels and runs that
-don't fit come the same way, and an object whose other fields don't fit makes `plugin.run` return a memory-budget error
-naming the object and its size, with nothing changed. A path or compound path that doesn't fit makes it return the
+`plugin.install` needs `grant`. It is also given the selected objects of those kinds to read, in paint order from the
+bottom, with at most 16 MiB of pixels and 16 MiB of type runs over one run (an object that doesn't fit what the objects
+before it left comes with `pixelsOmitted` or `truncated`; an image that reaches the decoder counts toward the pixels
+even when decoding fails). Every object counts toward the input's half of the plug-in's memory cap, ids, bounds,
+transforms and names included: pixels and runs that don't fit come the same way, and an object whose other fields don't
+fit makes `plugin.run` return a memory-budget error naming the object and its size, with nothing changed. A path or compound path that doesn't fit makes it return the
 memory-budget error `the selection is too large to hand over`, and more than 100,000 of these objects make it return
 an object-budget error. Its output returns
 each of them as `{"id": …}` or exactly as given, otherwise `plugin.run` returns an error naming the object and the

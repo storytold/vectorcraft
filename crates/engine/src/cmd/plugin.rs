@@ -41,7 +41,6 @@
 //! images or symbol instances of those kinds, to read only: its output must return each of them
 //! unchanged ([`objects::decode_output_with`]).
 
-use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
 
 use serde_json::{Map, Value, json};
@@ -134,9 +133,9 @@ pub struct FilterRun {
     params: Vec<u8>,
     /// The objects the plug-in is given, and the container new objects go in.
     inputs: Vec<NodeId>,
-    /// The type, images and symbol instances among them (a filter that asks for them), as given:
-    /// its output must return each one unchanged.
-    read_only: HashMap<NodeId, Value>,
+    /// The type, images and symbol instances among them (a filter that asks for them): its output
+    /// must return each one as `input` gives it. These are their places in `input`.
+    read_only: objects::ReadOnlySpans,
     parent: Option<NodeId>,
     /// The document it was made from, and that document's revision then.
     document: (u64, u64),
@@ -270,7 +269,7 @@ impl FilterRun {
     fn finish(self, s: &mut Session, output: &[u8]) -> Result<Value> {
         let m = self.plugin.manifest();
         let may = m.permissions();
-        let out = objects::decode_output_with(output, &self.read_only).map_err(err)?;
+        let out = objects::decode_output_with(output, &self.input, &self.read_only).map_err(err)?;
         if out.document_data.is_some() && !may.contains(&Permission::State) {
             return Err(not_granted(&m.name, Permission::State));
         }
@@ -908,7 +907,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Run Plug-in",
             [],
             None,
-            "{id, params?: {…} (the plug-in's parameters; or give them as top-level keys; missing ones take their defaults, see plugin.info), ids?: [object id] (left out or null: the selection), …the plug-in's parameters as top-level keys} run an object filter on the selected paths and compound paths (inside selected groups and layers too; hidden, locked, guide and clipping paths, compound paths that clip a clip group and paths inside a group that clips one are left out): it may change, delete or add objects, as one undo step; the result is selected, except the objects it locked or made guides. A filter whose manifest lists inputs (type, image, symbolInstance; it lists doc.read in permissions, so plugin.install needs grant) is also given the selected objects of those kinds to read, with at most 16 MiB of pixels and 16 MiB of type runs per run (later ones come with pixelsOmitted or truncated); every object counts toward the input's half of the plug-in's memory cap, ids, bounds, transforms and names included, and an object whose fields besides its pixels and runs don't fit fails the run with a memory-budget error naming it and its size (a path or compound path fails it with the memory-budget error for a selection too large to hand over), and more than 100,000 of these objects fail it with an object-budget error: its output returns each as {id} or exactly as given, or the run is refused and nothing changes. With nothing selected it gets no objects (generators add theirs to the current layer) → {plugin, ids}",
+            "{id, params?: {…} (the plug-in's parameters; or give them as top-level keys; missing ones take their defaults, see plugin.info), ids?: [object id] (left out or null: the selection), …the plug-in's parameters as top-level keys} run an object filter on the selected paths and compound paths (inside selected groups and layers too; hidden, locked, guide and clipping paths, compound paths that clip a clip group and paths inside a group that clips one are left out): it may change, delete or add objects, as one undo step; the result is selected, except the objects it locked or made guides. A filter whose manifest lists inputs (type, image, symbolInstance; it lists doc.read in permissions, so plugin.install needs grant) is also given the selected objects of those kinds to read, in paint order from the bottom, with at most 16 MiB of pixels and 16 MiB of type runs per run (an object that doesn't fit what the objects before it left comes with pixelsOmitted or truncated; an image that reaches the decoder counts toward the pixels even when decoding fails); every object counts toward the input's half of the plug-in's memory cap, ids, bounds, transforms and names included, and an object whose fields besides its pixels and runs don't fit fails the run with a memory-budget error naming it and its size (a path or compound path fails it with the memory-budget error for a selection too large to hand over), and more than 100,000 of these objects fail it with an object-budget error: its output returns each as {id} or exactly as given, or the run is refused and nothing changes. With nothing selected it gets no objects (generators add theirs to the current layer) → {plugin, ids}",
             has_doc,
             run
         ),
