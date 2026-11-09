@@ -25,7 +25,8 @@ impl Tool for TypeTool {
     fn wants_text(&self) -> bool {
         self.editing.is_some()
     }
-    /// Escape while editing is the tool's: it goes on to the Selection tool (#1686).
+    /// Escape while editing is the tool's: it goes back to the tool whose double-click on type
+    /// chose this tool, or to the Selection tool when none did (#1686).
     fn claims_key(&self, _: &ToolContext, key: ToolKey) -> bool {
         key == ToolKey::Escape && self.editing.is_some()
     }
@@ -163,7 +164,7 @@ impl Tool for TypeTool {
         // commit this check still sees the pre-edit at the caret, while `text_input` replaces it
         // from its start; with a custom pair whose opening quote is straight, that can look
         // verbatim here and then be rewritten. Never claim verbatim for one.
-        if cx.doc.setup.typographers_quotes && matches!(s, "\"" | "'") {
+        if cx.doc.setup.typographers_quotes && (matches!(s, "\"" | "'") || (cx.typed_from_keyboard && is_one_typed_curly_quote(s))) {
             return false;
         }
         let Some(normalized) = self.input_text(cx, s) else { return false };
@@ -230,7 +231,8 @@ impl Tool for TypeTool {
             // tool shortcuts again (#1686).
             ToolKey::Escape => self.end_editing(cx),
             ToolKey::Enter => self.enter(cx, mods),
-            ToolKey::Tab => self.replace(cx, "\t", None),
+            ToolKey::Tab if story => self.replace(cx, "\t", None),
+            ToolKey::Tab => self.tab(cx, &t, &text, (a, b), mods.shift),
             ToolKey::Backspace | ToolKey::Delete if a != b || story => self.replace(cx, "", None),
             ToolKey::Backspace if self.caret > 0 => {
                 self.anchor = if word { edit::prev_word(&text, self.caret) } else { edit::prev_char(&text, self.caret) };
@@ -714,4 +716,11 @@ impl Tool for TypeTool {
             (None, true) => Cursor::TypeVertical,
         }
     }
+}
+
+/// Is `s` one curly quote that Typographer's Quotes may set like a straight one
+/// ([`vectorcraft_doc::Quotes::typed_as_straight`]: a lone `”`)?
+fn is_one_typed_curly_quote(s: &str) -> bool {
+    let mut chars = s.chars();
+    matches!((chars.next(), chars.next()), (Some(c), None) if vectorcraft_doc::Quotes::typed_as_straight(c).is_some())
 }

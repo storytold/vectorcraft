@@ -36,23 +36,31 @@
 //! Tool)` or `(Adobe ArtOnPath Brush Tool)`, with its stroke's style and the brush's settings for
 //! the object as entries (see [`super::brush`]).
 //!
+//! A stroke aligned inside or outside its path (Stroke panel › Align Stroke,
+//! https://helpx.adobe.com/illustrator/desktop/draw-and-paint/use-strokes/stroke-panel-options.html)
+//! is its own basic filter too, `(Adobe Stroke Offset)`, with its stroke's style and
+//! `StrokeOffsetInside` (1: inside, 0: outside, as its `DisplayString` names it) as entries.
+//! Without that entry, or with it as anything but a `/Bool` 0 or 1, which side it paints isn't
+//! known and the style isn't plain (its objects keep their drawn look).
+//!
 //! A style is *plain* when every filter in it is one read here: fills and strokes (in a colour; fills
-//! with a pattern or gradient too; strokes with a Calligraphic or Art brush too), each with its own
+//! with a pattern or gradient too; strokes with a Calligraphic or Art brush or aligned inside or outside too), each with its own
 //! transparency and effects, and the effects of
 //! [`effect`]. Such objects are read as themselves with an appearance of those fills, strokes and
-//! effects; others keep their drawn look. Effect › Pathfinder effects (`(Adobe Pathfinder)` in the
+//! effects (a path's stack of several fills and strokes when its drawn look places each of its
+//! gradients); others keep their drawn look. Effect › Pathfinder effects (`(Adobe Pathfinder)` in the
 //! object's chain) are read on a group with no fills or strokes of its own, which keeps its members.
 
 use std::collections::HashMap;
 
 use serde_json::json;
 use vectorcraft_color::{BlendMode, Paint};
-use vectorcraft_doc::{Dash, Effect, Knockout, LineCap, LineJoin, WidthProfile};
+use vectorcraft_doc::{Dash, Effect, Knockout, LineCap, LineJoin, StrokeAlign, WidthProfile};
 use vectorcraft_effects::is_pathfinder;
 
 use super::brush::PathBrush;
 use super::lex::{Lexer, Tok};
-use super::obj::V;
+use super::obj::{self, Names, V};
 use super::paint;
 
 const GLOW: &str = "Adobe Outer Glow"; // brand-ok: the filter's name in the files
@@ -78,6 +86,8 @@ const BAS_RELIEF: &str = "PSAdapter_plugin_BsRl";
 const SHAPE_EFFECTS: &str = "Adobe Shape Effects"; // brand-ok: the filter's name in the files
 const PATHFINDER: &str = "Adobe Pathfinder"; // brand-ok: the filter's name in the files
 
+/// A stroke aligned inside or outside its path (Stroke panel › Align Stroke).
+const STROKE_OFFSET: &str = "Adobe Stroke Offset"; // brand-ok: the filter's name in the files
 const CALLIGRAPHIC: &str = "Adobe Calligraphic Brush Tool"; // brand-ok: the filter's and plug-in's name in the files
 const ART_BRUSH: &str = "Adobe ArtOnPath Brush Tool"; // brand-ok: the filter's and plug-in's name in the files
 
@@ -111,6 +121,12 @@ const WARPS: [&str; 15] = [
 pub(super) fn warp_style(n: i64) -> Option<&'static str> {
     let id = WARPS.get(usize::try_from(n.checked_sub(1)?).ok()?)?;
     id.strip_prefix("warp.")
+}
+
+/// The number `DeformStyle` gives warp style `style` (`arc`, `arcLower`, …), from 1.
+pub(crate) fn warp_number(style: &str) -> Option<i64> {
+    let at = WARPS.iter().position(|id| id.strip_prefix("warp.") == Some(style))?;
+    i64::try_from(at + 1).ok()
 }
 
 /// The Effect › Pathfinder effects by the `Command` number of their filter. `Command` 0 is Add
@@ -158,13 +174,21 @@ const PATHFINDER_OPTIONS: [(&str, Kind, f64); 12] = [
 pub(super) struct ArtStyle {
     /// The style reads as [`Self::items`] and [`Self::effects`].
     pub plain: bool,
-    /// It is one fill and one stroke at most, in solid colours or the object's own gradient, with
+    /// It is one fill and one stroke at most, none of them [`Self::uneven`], in solid colours or the object's own gradient, with
     /// no transparency or effects of their own, and only Drop Shadow, Inner Glow, Outer Glow,
-    /// Feather, Round Corners, Scribble, Convert to Shape, the Path effects (Offset Path, Outline Object, Outline Stroke)
-    /// and some Distort & Transform effects ([`any_object_takes`]) on the object
+    /// Feather, Round Corners, Scribble, Convert to Shape, the Path effects (Offset Path, Outline Object, Outline Stroke),
+    /// Bas Relief read from its settings block and some Distort & Transform effects ([`any_object_takes`]) on the object
     /// (and Pathfinder effects when it has no fills or strokes): what any object is read with. Type takes the other plain styles too (its drawn look
-    /// can't be retyped); other objects keep their drawn look, which is the app's own rendering.
+    /// can't be retyped), paths and compound paths [`Self::stacked`] ones; other objects keep their drawn look, which is the app's own rendering.
     pub simple: bool,
+    /// It would be [`Self::simple`] but for a Stroke Style filter's variable width written as one
+    /// centered array ([`centered_widths`]): an object whose drawn look is empty takes it with its profile.
+    pub uneven: bool,
+    /// It is several fills and strokes in solid colours or gradients (strokes without a brush),
+    /// each with its own visibility, opacity and blend mode but no effects of its own, under only
+    /// the effects any object takes that don't move the outline: what a path or compound path is
+    /// read with when each gradient is placed as its drawn look has it (`read::ops`' `styled`).
+    pub stacked: bool,
     /// Its fills and strokes, bottom first.
     pub items: Vec<StyleItem>,
     /// Each item's own visibility, transparency and effects, in the order of [`Self::items`].
@@ -211,6 +235,8 @@ pub(super) enum StyleItem {
         miter: f64,
         dash: Option<Dash>,
         profile: Option<WidthProfile>,
+        /// Which side of the path it paints (centred, or inside or outside a closed path).
+        align: StrokeAlign,
         /// A brush: its name, and its settings for this object.
         brush: Option<(String, PathBrush)>,
     },
@@ -277,6 +303,8 @@ struct Filter {
     xy: Option<(usize, f32)>,
     /// `… isolate knockout … Xy`.
     xy_group: Option<(bool, Knockout)>,
+    /// Its settings block's bytes (`/Binary : /ASCII85Decode ,`), `Err` when it isn't read.
+    data: Option<Result<Vec<u8>, ()>>,
 }
 
 impl Default for Filter {
@@ -304,6 +332,7 @@ impl Default for Filter {
             plugin_object: None,
             xy: None,
             xy_group: None,
+            data: None,
         }
     }
 }
@@ -312,9 +341,9 @@ impl Default for Filter {
 const MAX_FILTERS: usize = 4096;
 
 /// Most entries read from a style list.
-const MAX_LISTED: usize = 4096;
+pub(crate) const MAX_LISTED: usize = 4096;
 /// The longest style name read from a style list, in bytes.
-const MAX_LISTED_NAME: usize = 1024;
+pub(crate) const MAX_LISTED_NAME: usize = 1024;
 
 /// The style list (`%AI9_BeginArtStyleList`, between its markers): one literal string per style,
 /// the Graphic Styles panel's order. Each name is its string's bytes, escapes undone; other tokens,
@@ -360,8 +389,14 @@ fn closes(data: &[u8]) -> bool {
     false
 }
 
-/// The styles of the section `data` (between its markers), by name.
+/// [`art_styles_in`], names read in the default encoding.
 pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
+    art_styles_in(data, &mut Names::default())
+}
+
+/// The styles of the section `data` (between its markers), by name: the names of the styles and of
+/// the colours, gradients and patterns they paint with read by `names`.
+pub(super) fn art_styles_in(data: &[u8], names: &mut Names) -> HashMap<String, ArtStyle> {
     let mut styles = HashMap::new();
     let mut name: Option<String> = None;
     let mut filters: Vec<Filter> = vec![];
@@ -383,11 +418,17 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
     let mut style_entry: Option<Kind> = None;
     // A name of a basic filter's that may be an entry's type, with the string that follows it.
     let mut other_entry: Option<Option<String>> = None;
+    // The last name was `/Binary`.
+    let mut binary = false;
     let mut lex = Lexer::new(data);
     while let Some(t) = lex.next_token() {
         if let (Some(a), Tok::Num(v)) = (array.as_mut(), &t.tok) {
             a.push(V::Num(*v));
             continue;
+        }
+        let after_binary = binary;
+        if let Tok::Name(n) = &t.tok {
+            binary = *n == b"Binary";
         }
         match t.tok {
             Tok::Num(v) => operands.push(V::Num(v)),
@@ -396,6 +437,11 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
                     *key = Some(String::from_utf8_lossy(&s).into_owned());
                 }
                 operands.push(V::Str(s));
+            }
+            // A basic filter's settings block: its bytes are on the comment lines the lexer skips.
+            Tok::Name(b"ASCII85Decode") if after_binary && in_basic => {
+                keep_block(&mut lex, data.len(), filters.last_mut());
+                operands.clear();
             }
             Tok::Name(n) => match n {
                 b"KnownStyle" => {
@@ -406,7 +452,8 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
                 }
                 b"FillStyle" => style_entry = Some(Kind::Fill),
                 b"StrokeStyle" | b"BlendStyle" => style_entry = Some(Kind::Other),
-                b"Name" if name.is_none() && filters.is_empty() => name = operands.iter().rev().find_map(V::text),
+                b"Name" if name.is_none() && filters.is_empty() => name = operands.iter().rev().find_map(|v| names.text(v)),
+                b"All" | b"[Registration]" | b"Registration" => operands.push(V::Name(obj::text(n))),
                 b"CompoundFilter" => pending = Some(true),
                 b"BasicFilter" => pending = Some(false),
                 b"Part" => in_basic = false,
@@ -432,7 +479,7 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
                 }
                 b"Array" => dict_array = Some(vec![]),
                 b"PluginObject" if in_basic => {
-                    let mut texts = operands.iter().rev().filter_map(V::text);
+                    let mut texts = operands.iter().rev().filter_map(|v| names.text(v));
                     if let (Some(plugin), Some(name), Some(f)) = (texts.next(), texts.next(), filters.last_mut()) {
                         f.plugin_object = Some((name, plugin));
                     }
@@ -503,7 +550,7 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
                     }
                 }
                 if let Some(f) = filters.last_mut() {
-                    paint_op(f, op, &operands);
+                    paint_op(f, op, &operands, names);
                 }
                 if op == "," || op == ";" || op.starts_with('X') || op.starts_with('B') || op.len() <= 2 {
                     operands.clear();
@@ -520,12 +567,69 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
     styles
 }
 
-/// A paint operator of a fill's or stroke's style.
-fn paint_op(f: &mut Filter, op: &str, vals: &[V]) {
+/// Reads the settings block that `lex` (over `data_len` bytes) has just reached into `filter`'s
+/// `data`; a second block on one filter, or a block that isn't read, leaves it `Err`.
+fn keep_block(lex: &mut Lexer, data_len: usize, filter: Option<&mut Filter>) {
+    let block = binary_block(lex, data_len).ok_or(());
+    if let Some(f) = filter {
+        f.data = Some(if f.data.is_some() { Err(()) } else { block });
+    }
+}
+
+/// The bytes of the settings block whose `/Binary : /ASCII85Decode` `lex` (over `data_len` bytes)
+/// has just read: the rest of that line is its `,`, each line after it holds ASCII85 after a `%`
+/// until `~>`, and `; (data) ,` follows. `lex` is moved past the `~>` when the lines up to it are
+/// the block's and fit in [`adapter::MAX_ENCODED`] bytes, and past `; (data)` when they follow.
+/// `None` when the block is malformed or decodes to more than [`adapter::MAX_DECODED`] bytes.
+fn binary_block(lex: &mut Lexer, data_len: usize) -> Option<Vec<u8>> {
+    let from = lex.offset();
+    let text = lex.slice(from, from.saturating_add(adapter::MAX_ENCODED).min(data_len));
+    let mut lines = text.split(|b| matches!(b, b'\r' | b'\n'));
+    let first = lines.next()?;
+    if first.trim_ascii() != b"," {
+        return None;
+    }
+    // Where the line being read starts in `text`.
+    let mut at = first.len() + 1;
+    let mut encoded = vec![];
+    for line in lines {
+        let start = at;
+        at += line.len() + 1;
+        if line.is_empty() {
+            continue;
+        }
+        // A line that isn't the block's ends it unread, the lexer left before it.
+        let digits = line.strip_prefix(b"%")?;
+        if let Some(i) = super::super::lex::find(digits, b"~>") {
+            encoded.extend_from_slice(digits.get(..i + 2)?);
+            lex.seek(from + start + 1 + i + 2);
+            return block_data(lex, &encoded);
+        }
+        encoded.extend_from_slice(digits);
+    }
+    None
+}
+
+/// The bytes of a settings block's ASCII85 `encoded`, when `; (data)` follows it in `lex`. When it
+/// doesn't, `lex` is left before those tokens, so the next style's `/KnownStyle` is still read.
+fn block_data(lex: &mut Lexer, encoded: &[u8]) -> Option<Vec<u8>> {
+    let at = lex.offset();
+    let data = crate::ps::ascii85_decode_within(std::str::from_utf8(encoded).ok()?, adapter::MAX_DECODED)?;
+    let (close, key) = (lex.next_token().map(|t| t.tok), lex.next_token().map(|t| t.tok));
+    if close == Some(Tok::Word(b";")) && key == Some(Tok::Str(b"data".to_vec())) {
+        return Some(data);
+    }
+    lex.seek(at);
+    None
+}
+
+/// A paint operator of a fill's or stroke's style, the names it gives read by `names`.
+fn paint_op(f: &mut Filter, op: &str, vals: &[V], names: &mut Names) {
     let last = vals.iter().rev().find_map(V::num);
     match op {
-        "Xa" | "k" | "g" | "x" | "Xk" | "XA" | "K" | "G" | "X" | "XK" => {
-            let Some((p, _)) = paint::color_op(op, vals) else { return };
+        "Xa" | "k" | "g" | "x" | "Xx" | "Xk" | "Xs" | "Xz" | "XA" | "K" | "G" | "X" | "XX" | "XK" | "XS" | "XZ" | "xa" | "xx" | "xk" | "xs"
+        | "xz" => {
+            let Some((p, _)) = paint::color_op_in(op, vals, names) else { return };
             if op.ends_with(|c: char| c.is_ascii_lowercase()) {
                 f.fill = Some(p);
             } else {
@@ -586,13 +690,13 @@ fn paint_op(f: &mut Filter, op: &str, vals: &[V]) {
         "Bg" => {
             f.gradient = true;
             let at = vals.iter().rposition(|v| matches!(v, V::Str(_)));
-            let name = at.and_then(|i| vals.get(i)).and_then(V::text);
+            let name = at.and_then(|i| vals.get(i)).and_then(|v| names.text(v));
             let n: Vec<f64> = at.map_or(&[][..], |i| vals.get(i + 1..).unwrap_or_default()).iter().filter_map(V::num).collect();
             let angle = n.get(2).copied().filter(|a| a.is_finite()).unwrap_or(0.0);
             f.gradient_of = Some((name, angle));
         }
         "p" => {
-            let name = vals.iter().find_map(|v| if let V::Str(_) = v { v.text() } else { None });
+            let name = vals.iter().find(|v| matches!(v, V::Str(_))).and_then(|v| names.text(v));
             let matrix = vals.iter().rev().find_map(|v| match v {
                 V::Arr(a) => {
                     let n: Vec<f64> = a.iter().filter_map(V::num).collect();
@@ -1068,13 +1172,31 @@ fn effect(f: &Filter, under: Under) -> Option<Effect> {
         TWIST => ("distort.twist", json!({"angle": real(f, "angle", 0.0, -3600.0..=3600.0)?})),
         ZIG_ZAG => ("distort.zigZag", zig_zag(f)?),
         GAUSSIAN => ("blur.gaussian", json!({"radius": param("blur").unwrap_or(5.0).clamp(0.0, 1000.0)})),
-        // Its settings are in a Photoshop plug-in's binary block: the effect's defaults stand in.
-        BAS_RELIEF => ("sketch.basRelief", json!({"detail": 13.0, "smoothness": 3.0, "lightDirection": "bottom"})),
+        BAS_RELIEF => (
+            "sketch.basRelief",
+            match &f.data {
+                // Without a settings block, the effect's defaults stand in.
+                None => json!({"detail": 13.0, "smoothness": 3.0, "lightDirection": "bottom"}),
+                Some(data) => adapter::bas_relief(&descriptor(f, data)?)?,
+            },
+        ),
         SHAPE_EFFECTS => return shape_effect(f),
         PATHFINDER => return pathfinder_effect(f),
         _ => return None,
     };
     Some(Effect { id: id.into(), params, visible: f.visible })
+}
+
+/// The fields of filter `f`'s settings block `data`, when it was read and its `dataSize`, written
+/// as `/Int`, is its length.
+fn descriptor(f: &Filter, data: &Result<Vec<u8>, ()>) -> Option<Vec<(adapter::Key, adapter::Value)>> {
+    let data = data.as_ref().ok()?;
+    (f.kinds.get("dataSize") == Some(&Kind::Int)).then_some(())?;
+    let size = f.params.get("dataSize").copied()?;
+    if size != data.len() as f64 {
+        return None;
+    }
+    adapter::decode(data)
 }
 
 /// The Effect › Pathfinder effect of [`PATHFINDER_COMMANDS`] that an integer `Command` names, when
@@ -1123,27 +1245,47 @@ fn paint_item(f: &Filter) -> Result<Option<StyleItem>, ()> {
             (None, None, Some(p)) => Ok(Some(StyleItem::Fill(p.clone()))),
             (None, None, None) => Err(()),
         },
-        STROKE if !f.paints.0 => Ok(None),
-        // Dashes aligned to corners and path ends draw as the look's pieces: a solid end at each end
-        // and the pattern, fitted, between them.
-        STROKE if f.params.get("BSDashAdj").is_some_and(|v| *v != 0.0) => Err(()),
-        STROKE => match &f.stroke {
-            Some(p) if !f.gradient && f.pattern.is_none() => Ok(Some(StyleItem::Stroke {
-                paint: p.clone(),
-                width: f.width,
-                cap: f.cap,
-                join: f.join,
-                miter: f.miter,
-                dash: f.dash.clone(),
-                profile: width_profile(&f.arrays),
-                brush: None,
-            })),
-            _ => Err(()),
-        },
+        STROKE => stroke_item(f, StrokeAlign::Center),
         CALLIGRAPHIC => calligraphic_stroke(f).map(Some).ok_or(()),
+        STROKE_OFFSET => offset_stroke(f),
         ART_BRUSH => art_stroke(f).map(Some).ok_or(()),
         _ => Err(()),
     }
+}
+
+/// A stroke filter `f`'s stroke, painting on side `align` of its path: `Ok(None)` when it paints
+/// nothing, `Err` when it paints in a way this doesn't read.
+fn stroke_item(f: &Filter, align: StrokeAlign) -> Result<Option<StyleItem>, ()> {
+    if !f.paints.0 {
+        return Ok(None);
+    }
+    // Dashes aligned to corners and path ends draw as the look's pieces: a solid end at each end
+    // and the pattern, fitted, between them.
+    if f.params.get("BSDashAdj").is_some_and(|v| *v != 0.0) {
+        return Err(());
+    }
+    match &f.stroke {
+        Some(p) if !f.gradient && f.pattern.is_none() => Ok(Some(StyleItem::Stroke {
+            paint: p.clone(),
+            width: f.width,
+            cap: f.cap,
+            join: f.join,
+            miter: f.miter,
+            dash: f.dash.clone(),
+            profile: width_profile(&f.arrays),
+            align,
+            brush: None,
+        })),
+        _ => Err(()),
+    }
+}
+
+/// A Stroke Offset filter `f`: a stroke whose own style is in its dictionary, aligned inside its
+/// path when `StrokeOffsetInside` is 1 and outside when it is 0 (its `DisplayString` says which).
+/// `Err` when that switch is missing or not a switch, or for a stroke [`paint_item`] doesn't read.
+fn offset_stroke(f: &Filter) -> Result<Option<StyleItem>, ()> {
+    let inside = switch(f, "StrokeOffsetInside", Kind::Bool)?.ok_or(())?;
+    stroke_item(f, if inside { StrokeAlign::Inside } else { StrokeAlign::Outside })
 }
 
 /// A Calligraphic brush's filter `f` as the stroke it paints: `None` when it isn't a stroke in a
@@ -1173,6 +1315,7 @@ fn calligraphic_stroke(f: &Filter) -> Option<StyleItem> {
         miter: f.miter,
         dash: None,
         profile: None,
+        align: StrokeAlign::Center,
         brush: Some((name.clone(), PathBrush::Calligraphic(super::brush::calligraphic(values, variation, codes)))),
     })
 }
@@ -1251,6 +1394,7 @@ fn art_stroke(f: &Filter) -> Option<StyleItem> {
         miter: f.miter,
         dash: None,
         profile: None,
+        align: StrokeAlign::Center,
         brush: Some((name.clone(), PathBrush::Art)),
     })
 }
@@ -1295,7 +1439,7 @@ impl Builder<'_> {
             let c = &filters[k];
             match c.name.as_str() {
                 _ if c.compound => {}
-                FILL | STROKE | CALLIGRAPHIC | ART_BRUSH => match paint_item(c) {
+                FILL | STROKE | STROKE_OFFSET | CALLIGRAPHIC | ART_BRUSH => match paint_item(c) {
                     Ok(Some(StyleItem::Stroke { .. })) => under.strokes = true,
                     Ok(Some(StyleItem::Pattern { .. })) => under.patterns = true,
                     _ => {}
@@ -1309,7 +1453,7 @@ impl Builder<'_> {
             let c = &filters[k];
             match c.name.as_str() {
                 _ if c.compound => self.plain = false,
-                FILL | STROKE | CALLIGRAPHIC | ART_BRUSH => {
+                FILL | STROKE | STROKE_OFFSET | CALLIGRAPHIC | ART_BRUSH => {
                     paints += 1;
                     look.visible &= c.visible;
                     match paint_item(c) {
@@ -1389,6 +1533,21 @@ fn any_object_takes(e: &Effect) -> bool {
     }
 }
 
+/// Does every Bas Relief filter in `filters` have a settings block, so that it reads from its
+/// settings and not from its defaults standing in?
+fn bas_relief_read(filters: &[Filter]) -> bool {
+    filters.iter().all(|f| f.name != BAS_RELIEF || f.data.is_some())
+}
+
+/// Is `e` read on the whole object: Bas Relief when `bas_relief` says its settings were read, and
+/// otherwise what [`any_object_takes`] says?
+fn object_takes(e: &Effect, bas_relief: bool) -> bool {
+    if e.id == "sketch.basRelief" {
+        return bas_relief;
+    }
+    any_object_takes(e)
+}
+
 /// Do Free Distort params `p`'s corners (top left, top right, bottom right, bottom left) make a
 /// parallelogram, so that the bilinear map is affine?
 fn affine(p: &serde_json::Value) -> bool {
@@ -1415,7 +1574,7 @@ fn style(filters: &[Filter]) -> ArtStyle {
         let f = &filters[id];
         match f.name.as_str() {
             STACK if f.compound => b.stack(id, &mut st),
-            FILL | STROKE | CALLIGRAPHIC | ART_BRUSH | CHAIN => {
+            FILL | STROKE | STROKE_OFFSET | CALLIGRAPHIC | ART_BRUSH | CHAIN => {
                 if let Some((item, look)) = b.item(id) {
                     st.items.push(item);
                     st.looks.push(look);
@@ -1443,20 +1602,43 @@ fn style(filters: &[Filter]) -> ArtStyle {
         b.plain = false;
     }
     st.plain = b.plain;
+    let bas_relief = bas_relief_read(filters);
     let count = |stroke: bool| st.items.iter().filter(|i| matches!(i, StyleItem::Stroke { .. }) == stroke).count();
-    st.simple = st.plain
+    let simple = st.plain
         && count(true) <= 1
         && count(false) <= 1
         && st.items.iter().all(|i| matches!(i, StyleItem::Fill(_) | StyleItem::Stroke { .. } | StyleItem::Gradient { .. }))
         && st.looks.iter().all(|l| l.visible && l.opacity >= 1.0 && l.blend == BlendMode::Normal && l.effects.is_empty())
-        && st.effects.iter().all(any_object_takes)
+        && st.effects.iter().all(|e| object_takes(e, bas_relief))
         // An effect that moves the outline is drawn on its own: with others, their order and what
         // scales with it aren't kept.
         && (!st.moves_outline() || st.effects.len() == 1)
         // Pathfinder effects on a group with no fills or strokes of its own (`styled` checks the group).
         && (!st.pathfinder || st.items.is_empty());
+    // A stroke with one centered width array comes in as the drawn look, which holds the outline as the file draws it.
+    let centered = filters.iter().any(centered_widths);
+    (st.simple, st.uneven) = (simple && !centered, simple && centered);
+    st.stacked = !centered
+        && st.plain
+        && !st.pathfinder
+        && !st.moves_outline()
+        && st.items.iter().all(|i| matches!(i, StyleItem::Fill(_) | StyleItem::Gradient { .. } | StyleItem::Stroke { brush: None, .. }))
+        && st.looks.iter().all(|l| l.effects.is_empty())
+        && st.effects.iter().all(any_object_takes);
     st
 }
 
+/// Whether `f` is a painted Stroke Style filter with a variable width written as one centered array,
+/// `BSCenteredWidthsArray`. A Stroke Offset filter's profile and one written as each side's widths
+/// (`BSLeftWidthsArray` and `BSRightWidthsArray`, as VectorCraft saves it) are not.
+fn centered_widths(f: &Filter) -> bool {
+    let each_side = f
+        .arrays
+        .get("BSVariableWidthTValuesArray")
+        .is_some_and(|at| ["BSLeftWidthsArray", "BSRightWidthsArray"].iter().all(|key| f.arrays.get(*key).is_some_and(|w| w.len() == at.len())));
+    f.name == STROKE && f.paints.0 && !each_side && width_profile(&f.arrays).is_some()
+}
+
+mod adapter;
 #[cfg(test)]
 mod tests;

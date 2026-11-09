@@ -159,6 +159,84 @@ fn shortcut_sets_are_read_only_inside_the_read_root() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// `app.export` refuses a key no format takes before anything is written, with a path or without.
+#[test]
+fn control_export_refuses_an_option_no_format_takes() {
+    let (mut app, tx, base) = confined("export-options");
+    let r = request(&mut app, &tx, "app.open", json!({"path": s(base.join("in/a.svg"))}));
+    assert_eq!(r["ok"], true, "{r}");
+    let path = base.join("out/a.pdf");
+    let refused = |r: &Value| r["error"].as_str().is_some_and(|e| e.contains("unknown parameter"));
+    for mut params in [json!({"format": "pdf", "noSuchOption": true}), json!({"format": "pdf", "marks": {"useDocumentBleed": true}})] {
+        let r = request(&mut app, &tx, "app.export", params.clone());
+        assert!(refused(&r), "{r}");
+        params["path"] = json!(s(path.clone()));
+        params["wait"] = json!(true);
+        let r = request(&mut app, &tx, "app.export", params);
+        assert!(refused(&r), "{r}");
+        assert!(!path.exists());
+    }
+    let r = request(&mut app, &tx, "app.export", json!({"format": "pdf", "path": s(path.clone()), "wait": true}));
+    assert_eq!(r["ok"], true, "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `app.save`, and `file.save` and `file.exportForScreens` run as commands, refuse a key no save
+/// format or no format takes before anything is written.
+#[test]
+fn control_save_refuses_an_option_no_format_takes() {
+    let (mut app, tx, base) = confined("save-options");
+    let r = request(&mut app, &tx, "app.open", json!({"path": s(base.join("in/a.svg"))}));
+    assert_eq!(r["ok"], true, "{r}");
+    let path = base.join("out/a.pdf");
+    let refused = |r: &Value| r["error"].as_str().is_some_and(|e| e.contains("unknown parameter"));
+    for params in [json!({"noSuchOption": true}), json!({"options": {"marks": {"useDocumentBleed": true}}})] {
+        let mut params = params;
+        params["path"] = json!(s(path.clone()));
+        let r = request(&mut app, &tx, "engine.execute", json!({"command": "file.save", "params": params.clone()}));
+        assert!(refused(&r), "{r}");
+        assert!(!path.exists());
+        params["wait"] = json!(true);
+        let r = request(&mut app, &tx, "app.save", params);
+        assert!(refused(&r), "{r}");
+        assert!(!path.exists());
+    }
+    let folder = base.join("out/screens");
+    for params in [json!({"noSuchOption": true}), json!({"formats": [{"format": "png", "noSuchOption": 1}]})] {
+        let mut params = params;
+        params["folder"] = json!(s(folder.clone()));
+        let r = request(&mut app, &tx, "engine.execute", json!({"command": "file.exportForScreens", "params": params}));
+        assert!(refused(&r), "{r}");
+        assert!(!folder.exists());
+    }
+    let r = request(&mut app, &tx, "app.save", json!({"path": s(path.clone()), "wait": true}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(path.exists());
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// An action set another app saved (`.aia`) is read only from inside the read root, whichever way a
+/// control request names it: `actionSet.read` and Load Actions….
+#[test]
+fn action_sets_are_read_only_inside_the_read_root() {
+    let (mut app, tx, base) = confined("aia");
+    let set = "/version 3\n/name [ 4 4d696e65 ]\n/action-1 { /name [ 1 41 ] }\n";
+    std::fs::write(base.join("in/a.aia"), set).unwrap();
+    std::fs::write(base.join("outside/b.aia"), set).unwrap();
+    let execute = |command: &str, path: PathBuf| json!({"command": command, "params": {"path": s(path)}});
+    let r = request(&mut app, &tx, "engine.execute", execute("actionSet.read", base.join("in/a.aia")));
+    assert_eq!(r["result"]["set"], "Mine", "{r}");
+    let r = request(&mut app, &tx, "engine.execute", execute(crate::panels::actions::LOAD_SET, base.join("in/a.aia")));
+    assert_eq!(r["result"]["name"], "Mine", "{r}");
+    let sets = app.ui.action_sets.len();
+    for command in ["actionSet.read", crate::panels::actions::LOAD_SET] {
+        let r = request(&mut app, &tx, "engine.execute", execute(command, base.join("outside/b.aia")));
+        assert!(r["error"].as_str().is_some_and(|e| e.contains("outside the read root")), "{command}: {r}");
+    }
+    assert_eq!(app.ui.action_sets.len(), sets, "no set added");
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// `ui.render` (MCP's `render_preview` and `screenshot` in the app) draws the artboard pixel for
 /// pixel as `app.export` writes a PNG on white: two rectangles that meet at x 40.3 and a diagonal
 /// edge.

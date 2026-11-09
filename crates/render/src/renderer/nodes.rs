@@ -98,15 +98,28 @@ impl Renderer {
     /// objects with a plug-in effect. Rasters of raster effects and evaluations of live objects hold
     /// the revision in their keys when what they draw has a plug-in effect (`fx::Inputs`,
     /// `live::resources_key`).
-    pub(crate) fn check_plugins(&mut self) {
+    ///
+    /// The same caches are dropped when a live-effect plug-in that paints its pieces is installed
+    /// and the names of `doc`'s swatches or patterns have changed since the last check: whether its
+    /// pieces are used depends on those names.
+    pub(crate) fn check_plugins(&mut self, doc: &Document) {
         let revision = effects::plugin_revision();
-        if revision == self.plugin_revision {
-            return;
+        let mut stale = false;
+        if revision != self.plugin_revision {
+            self.plugin_revision = revision;
+            self.painting_plugins = effects::any_plugin_paints_output();
+            stale = true;
         }
-        self.plugin_revision = revision;
-        self.fx_geom.retain(|_, e| !effects::has_plugin_effect(&e.node));
-        self.geom.retain(|_, e| !holds_plugin_effect(&e.node) && !holds_instance(&e.node));
-        self.fx_arts.retain(|(node, ..)| !effects::has_plugin_effect(node));
+        if self.painting_plugins {
+            let names = fx::paint_names(doc);
+            stale |= names != self.paint_names;
+            self.paint_names = names;
+        }
+        if stale {
+            self.fx_geom.retain(|_, e| !effects::has_plugin_effect(&e.node));
+            self.geom.retain(|_, e| !holds_plugin_effect(&e.node) && !holds_instance(&e.node));
+            self.fx_arts.retain(|(node, ..)| !effects::has_plugin_effect(node));
+        }
     }
 
     /// Cached region a clip group's clipping path `a` clips to ([`effects::clip_outline`]):

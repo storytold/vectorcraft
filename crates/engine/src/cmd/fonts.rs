@@ -10,8 +10,9 @@ use vectorcraft_color::Paint;
 use vectorcraft_doc::{AppearanceItem, Document, Node, NodeId, NodeKind, TextKind, TextObject, TextRun};
 use vectorcraft_geom::Rect;
 
+use super::select::on_artboard;
 use super::typecmd::refresh_bounds;
-use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, str_param};
+use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, index, str_param};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -20,7 +21,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fonts in Document",
             [],
             None,
-            "{selectionOnly?} (the type in the art of the symbols in scope included: all of the document's, or those the selected instances show) → [{family, style, runs, objects, missing, status: exact|substitute|missing, resolved: {family, style}, missingGlyphs, version?: the installed version the type names (when it names one)}] sorted by name. A font is found by any of its names (ヒラギノ角ゴシック = Hiragino Sans) among the loaded and installed fonts; substitute: the family is there but not the style (resolved names the stand-in); missing: the family is unknown (the fallback family stands in); missingGlyphs: characters of its text the resolved font lacks (drawn by a fallback font)",
+            "{selectionOnly?} (the type in the art of the symbols in scope included: all of the document's, or those the selected instances show) → [{family, style, runs, objects, missing, status: exact|substitute|missing, resolved: {family, style}, missingGlyphs, version?: the installed version the type names (when it names one)}] sorted by name. A font is found by any of its names (ヒラギノ角ゴシック = Hiragino Sans) among the loaded and installed fonts; substitute: the family is there but not the style (resolved names the stand-in); missing: the family is unknown (the fallback family stands in); missingGlyphs: characters of its text the resolved font lacks (drawn by a fallback font). For a composite font, status is the worst among the parts its characters are drawn in, and missingGlyphs counts the characters their part's font lacks",
             has_doc,
             fonts
         ),
@@ -29,7 +30,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Replace Font",
             [],
             None,
-            "{from: {family, style?}, to: {family (any of its names; stored as the font's own family name), style?}, selectionOnly?} (style omitted: every style of the family / keep the closest style); the type in the art of the symbols in scope changes too (all of the document's, or those the selected instances show, so every instance of them follows); text that is hidden or locked, in a hidden or locked group or layer (or group of a symbol's art), or on a locked artboard keeps its font; when no run changes (text already set in the new font, or none to change), the document and its undo history stay as they are → {runs: the runs changed, skipped?: the text objects left in the font, warning?: text (some text was left in its font, or the style set isn't available: its type is drawn in the family's closest style)}",
+            "{from: {family, style?}, to: {family (any of its names; stored as the font's own family name, a composite font's as its own name), style?}, selectionOnly?} (style omitted: every style of the family / keep the closest style); the type in the art of the symbols in scope changes too (all of the document's, or those the selected instances show, so every instance of them follows); text that is hidden or locked, in a hidden or locked group or layer (or group of a symbol's art), or on a locked artboard keeps its font; when no run changes (text already set in the new font, or none to change), the document and its undo history stay as they are → {runs: the runs changed, skipped?: the text objects left in the font, warning?: text (some text was left in its font, or the style set isn't available: its type is drawn in the family's closest style)}",
             has_doc,
             replace
         ),
@@ -38,7 +39,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Select Text by Font",
             [],
             None,
-            "{family, style?} select the text objects using the font, and the instances of the symbols whose art uses it, that are not hidden or locked, in a hidden or locked group or layer, or on a locked artboard → {count}",
+            "{family, style?, scope?: \"document\" (default) | {artboards: [index, …] (0-based)} | {layers: [id, …] (layers or sublayers)}} select the text objects using the font, and the instances of the symbols whose art uses it, that are not hidden or locked, in a hidden or locked group or layer, or on a locked artboard; with scope, only those on one of the artboards (as All on Active Artboard takes them: their bounds overlap it or their center is on it) or in one of the layers → {count}",
             has_doc,
             select_font
         ),
@@ -207,7 +208,18 @@ pub(super) fn font_label((family, style, version): &UsedFont) -> String {
     }
 }
 
-/// The fonts (family, style, version) of the type in the layers and symbols of `d`.
+/// The fonts (family, style, version) run `r` is drawn in: its own, or, set in a composite font,
+/// the fonts of the parts its characters fall in ([`vectorcraft_text::FontDb::composite_fonts_for`]).
+pub(super) fn run_fonts(r: &TextRun) -> Vec<UsedFont> {
+    let parts = if r.inline.is_some() { None } else { vectorcraft_text::FontDb::global().composite_fonts_for(&r.style.font_family, &r.text) };
+    match parts {
+        Some(parts) => parts.into_iter().map(|(family, style)| (family, style, None)).collect(),
+        None => vec![font_of(&r.style)],
+    }
+}
+
+/// The fonts (family, style, version) the type in the layers and symbols of `d` is drawn in, a
+/// composite font's parts in place of its name ([`run_fonts`]).
 pub(super) fn used_fonts(d: &Document) -> BTreeSet<UsedFont> {
     art_fonts(d, &[])
 }
@@ -225,12 +237,7 @@ fn fonts_of(d: &Document, art: &[Node], drawn: bool) -> BTreeSet<UsedFont> {
     let mut add = |n: &Node| {
         if let NodeKind::Text(t) = &n.kind {
             let file = if drawn { in_file_fonts(t) } else { vec![] };
-            fonts.extend(
-                t.runs
-                    .iter()
-                    .filter(|r| !file.contains(&(r.style.font_family.as_str(), r.style.font_style.as_str())))
-                    .map(|r| (r.style.font_family.clone(), r.style.font_style.clone(), r.style.font_version.clone())),
-            );
+            fonts.extend(t.runs.iter().filter(|r| !file.contains(&(r.style.font_family.as_str(), r.style.font_style.as_str()))).flat_map(run_fonts));
         }
     };
     d.walk(&mut add);
@@ -358,7 +365,7 @@ impl Printed<'_> {
                 for r in runs {
                     // Drawn in a font its file carried: printed as the file drew it.
                     if !file.contains(&(r.style.font_family.as_str(), r.style.font_style.as_str())) {
-                        self.fonts.insert((r.style.font_family.clone(), r.style.font_style.clone(), r.style.font_version.clone()));
+                        self.fonts.extend(run_fonts(r));
                     }
                     // Inline graphics draw their symbols' art.
                     if let Some(art) = &r.inline {
@@ -570,14 +577,15 @@ fn font_inventory(s: &Session, selected: Option<&[NodeId]>) -> Result<Value> {
     let symbols = if selected.is_some() { Some(selected_symbols(s, selected)?.0) } else { None };
     let mut texts: Vec<&TextObject> = ids.iter().filter_map(|id| text(d, *id)).collect();
     texts.extend(symbol_texts(d, symbols.as_ref()).into_iter().map(|(t, _)| t));
-    let mut found: BTreeMap<UsedFont, (usize, usize, String)> = BTreeMap::new();
+    // Each font's runs, objects and the text of its runs.
+    let mut found: BTreeMap<UsedFont, (usize, usize, Vec<&str>)> = BTreeMap::new();
     for t in texts {
         let mut seen = BTreeSet::new();
         for r in &t.runs {
             let font = (r.style.font_family.clone(), r.style.font_style.clone(), r.style.font_version.clone());
             let e = found.entry(font.clone()).or_default();
             e.0 += 1;
-            e.2.push_str(&r.text);
+            e.2.push(&r.text);
             if seen.insert(font) {
                 e.1 += 1;
             }
@@ -585,14 +593,27 @@ fn font_inventory(s: &Session, selected: Option<&[NodeId]>) -> Result<Value> {
     }
     let list: Vec<Value> = found
         .into_iter()
-        .map(|((family, style, version), (runs, objects, chars))| {
+        .map(|((family, style, version), (runs, objects, texts))| {
             // The face the type is set in: the version it names when that one is installed.
-            let resolved = db.resolve(&family, &style).map(|(f, m)| (db.face_version(&family, &style, version.as_deref()).unwrap_or(f), m));
-            let status = resolved.as_ref().map(|(_, m)| *m).unwrap_or(vectorcraft_text::FontMatch::Missing);
-            let mut lacking: Vec<char> = chars.chars().filter(|c| !c.is_whitespace() && !c.is_control()).collect();
-            lacking.sort_unstable();
-            lacking.dedup();
-            lacking.retain(|c| !resolved.as_ref().is_some_and(|(f, _)| f.covers(*c)));
+            let mut resolved = db.resolve(&family, &style).map(|(f, m)| (db.face_version(&family, &style, version.as_deref()).unwrap_or(f), m));
+            let (status, lacking) = match db.composite_coverage(&family, &texts) {
+                // A composite font: each character is drawn by the font of the part it falls in, and
+                // the row names the face of the first part that isn't there as named.
+                Some(c) => {
+                    if c.status != vectorcraft_text::FontMatch::Exact {
+                        resolved = c.face.map(|f| (f, c.status));
+                    }
+                    (c.status, c.lacking)
+                }
+                None => {
+                    let status = resolved.as_ref().map(|(_, m)| *m).unwrap_or(vectorcraft_text::FontMatch::Missing);
+                    let mut lacking: Vec<char> = texts.concat().chars().filter(|c| !c.is_whitespace() && !c.is_control()).collect();
+                    lacking.sort_unstable();
+                    lacking.dedup();
+                    lacking.retain(|c| !resolved.as_ref().is_some_and(|(f, _)| f.covers(*c)));
+                    (status, lacking)
+                }
+            };
             let mut row = json!({
                 "family": family, "style": style, "runs": runs, "objects": objects,
                 "missing": status == vectorcraft_text::FontMatch::Missing,
@@ -636,10 +657,11 @@ fn replace(s: &mut Session, p: &Value) -> Result<Value> {
     let (ff, fs) = font_param(p, "from", C)?;
     let (tf, ts) = font_param(p, "to", C)?;
     let db = vectorcraft_text::FontDb::global();
-    // Any name of the family (ヒラギノ角ゴシック) is stored as its own name (Hiragino Sans).
-    let tf = match db.resolve(&tf, ts.as_deref().unwrap_or("Regular")) {
-        Some((f, m)) if m != vectorcraft_text::FontMatch::Missing => f.family.clone(),
-        _ => return Err(bad(C, format!("font family `{tf}` is not available"))),
+    // Any name of the family (ヒラギノ角ゴシック) is stored as its own name (Hiragino Sans), and a
+    // composite font as its own name.
+    let composite = db.composite_font(&tf).is_some();
+    let Some(tf) = db.stored_family(&tf, ts.as_deref().unwrap_or("Regular")) else {
+        return Err(bad(C, format!("font family `{tf}` is not available")));
     };
     let matches = |st: &vectorcraft_doc::CharStyle| {
         st.font_family.eq_ignore_ascii_case(&ff) && fs.as_ref().is_none_or(|x| st.font_style.eq_ignore_ascii_case(x))
@@ -650,8 +672,10 @@ fn replace(s: &mut Session, p: &Value) -> Result<Value> {
         if !matches(st) {
             return None;
         }
-        // An explicit style, else the closest the new family has to the old one.
-        let style = ts.clone().or_else(|| db.face(&tf, &st.font_style).map(|f| f.style.clone())).unwrap_or_else(|| st.font_style.clone());
+        // An explicit style, else the closest the new family has to the old one (a composite font's
+        // parts name their own styles: the run keeps its style).
+        let closest = || if composite { None } else { db.face(&tf, &st.font_style).map(|f| f.style.clone()) };
+        let style = ts.clone().or_else(closest).unwrap_or_else(|| st.font_style.clone());
         (st.font_family != tf || st.font_style != style || st.font_version.is_some() || !st.font_axes.is_empty()).then_some(style)
     };
     // Only text the Selection tool can reach changes: not hidden or locked, in a hidden or locked
@@ -698,7 +722,7 @@ fn replace(s: &mut Session, p: &Value) -> Result<Value> {
                         // Another font: none of the old one's versions or Variable Font settings.
                         r.style.font_version = None;
                         r.style.font_axes.clear();
-                        set.insert(font_of(&r.style));
+                        set.extend(run_fonts(r));
                         changed = true;
                         n += 1;
                     }
@@ -714,7 +738,6 @@ fn replace(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             }
             edit_symbol_texts(d, symbols.as_ref(), &|t, open| open && changes(t), &mut replace_in);
-            drop(replace_in);
             Ok(n)
         })?
     };
@@ -739,6 +762,7 @@ fn select_font(s: &mut Session, p: &Value) -> Result<Value> {
     let style = str_param(p, "style").map(str::to_string);
     let ids = scope(s, false, None)?;
     let d = &s.doc()?.doc;
+    let within = FontScope::read(d, p)?;
     // Only text the Selection tool can reach: not hidden or locked, in a hidden or locked group
     // or layer, or on a locked artboard.
     let editable = d.editable();
@@ -784,9 +808,63 @@ fn select_font(s: &mut Session, p: &Value) -> Result<Value> {
         });
     }
     drop(editable);
+    let symbols = d.symbol_boxes();
+    hits.retain(|id| within.holds(d, &symbols, *id));
+    drop(symbols);
     let n = hits.len();
     s.select(|_, sel| sel.set(hits))?;
     Ok(json!({ "count": n }))
+}
+
+/// Where Select Text by Font looks: its `scope`.
+enum FontScope {
+    Document,
+    /// The artboards' rectangles.
+    Artboards(Vec<Rect>),
+    /// The layers and sublayers, with what they hold.
+    Layers(BTreeSet<NodeId>),
+}
+
+impl FontScope {
+    fn read(d: &Document, p: &Value) -> Result<Self> {
+        const C: &str = "select.font";
+        let expected = || bad(C, "`scope` must be \"document\", {artboards: [index, …]} or {layers: [id, …]}");
+        let scope = match p.get("scope") {
+            None | Some(Value::Null) => return Ok(Self::Document),
+            Some(Value::String(v)) if v == "document" => return Ok(Self::Document),
+            Some(Value::Object(m)) if m.len() == 1 => m,
+            Some(_) => return Err(expected()),
+        };
+        let list = |key: &str| -> Result<Option<&Vec<Value>>> {
+            match scope.get(key) {
+                None => Ok(None),
+                Some(Value::Array(a)) if !a.is_empty() => Ok(Some(a)),
+                Some(_) => Err(bad(C, format!("`scope.{key}` must be a non-empty array"))),
+            }
+        };
+        if let Some(a) = list("artboards")? {
+            let rect = |v: &Value| v.as_u64().and_then(|i| d.artboards.get(index(i))).map(|b| b.rect);
+            return a.iter().map(|v| rect(v).ok_or_else(|| bad(C, format!("no such artboard {v}")))).collect::<Result<_>>().map(Self::Artboards);
+        }
+        if let Some(a) = list("layers")? {
+            let layer = |v: &Value| v.as_u64().map(NodeId).filter(|id| d.node(*id).is_some_and(Node::is_layer));
+            return a
+                .iter()
+                .map(|v| layer(v).ok_or_else(|| bad(C, format!("{v} names no layer or sublayer"))))
+                .collect::<Result<_>>()
+                .map(Self::Layers);
+        }
+        Err(expected())
+    }
+
+    /// Is object `id` in the scope.
+    fn holds(&self, d: &Document, symbols: &vectorcraft_doc::SymbolBoxes, id: NodeId) -> bool {
+        match self {
+            Self::Document => true,
+            Self::Artboards(rects) => d.node(id).is_some_and(|n| rects.iter().any(|r| on_artboard(n, symbols, *r))),
+            Self::Layers(layers) => d.ancestry(id).is_some_and(|a| a.iter().any(|i| layers.contains(i))),
+        }
+    }
 }
 
 fn font_list(_: &mut Session, p: &Value) -> Result<Value> {
@@ -935,6 +1013,95 @@ mod tests {
         assert_eq!(s.doc().unwrap().selection.objects, [NodeId(ids[0]), NodeId(template)]);
         assert_eq!(s.execute("select.font", &json!({"family": "Inter"})).unwrap()["count"], 0);
         assert!(s.doc().unwrap().selection.objects.is_empty());
+    }
+
+    /// Select Text by Font with an artboard scope takes the text on the artboards, as All on
+    /// Active Artboard does: overlapping one, or centered on it, a straddling one included.
+    #[test]
+    fn select_font_in_artboards() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        s.execute("artboard.new", &json!({"x": 300, "y": 0, "width": 200, "height": 200})).unwrap();
+        s.execute("artboard.new", &json!({"x": 600, "y": 0, "width": 200, "height": 200})).unwrap();
+        let text = |s: &mut Session, x: i32| {
+            NodeId(s.execute("text.create", &json!({"x": x, "y": 50, "text": "Serif", "font": "Source Serif 4"})).unwrap()["id"].as_u64().unwrap())
+        };
+        let first = text(&mut s, 10);
+        let straddling = text(&mut s, 180);
+        let second = text(&mut s, 350);
+        let third = text(&mut s, 650);
+        let _off = text(&mut s, 1000);
+        let select = |s: &mut Session, scope: Value| {
+            s.execute("select.font", &json!({"family": "Source Serif 4", "scope": scope})).unwrap();
+            s.doc().unwrap().selection.objects.clone()
+        };
+        assert_eq!(select(&mut s, json!({"artboards": [0]})), [first, straddling]);
+        assert_eq!(select(&mut s, json!({"artboards": [1, 2]})), [second, third]);
+        assert_eq!(select(&mut s, json!("document")).len(), 5);
+        // The same objects All on Active Artboard takes.
+        s.execute("select.allOnArtboard", &json!({"artboard": 0})).unwrap();
+        assert_eq!(s.doc().unwrap().selection.objects, [first, straddling]);
+        // Hidden text stays out.
+        s.execute("select.set", &json!({"ids": [third.0]})).unwrap();
+        s.execute("object.hide", &json!({})).unwrap();
+        assert_eq!(select(&mut s, json!({"artboards": [1, 2]})), [second]);
+        for bad in [json!({"artboards": [3]}), json!({"artboards": []}), json!({"artboards": ["x"]}), json!({"pages": [0]}), json!("all"), json!(7)] {
+            assert!(s.execute("select.font", &json!({"family": "Source Serif 4", "scope": bad})).is_err(), "{bad}");
+        }
+    }
+
+    /// Select Text by Font with a layer scope takes the text in the layers, their sublayers
+    /// included, and still leaves out hidden and locked text.
+    #[test]
+    fn select_font_in_layers() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let text = |s: &mut Session, y: i32| {
+            NodeId(s.execute("text.create", &json!({"x": 10, "y": y, "text": "Serif", "font": "Source Serif 4"})).unwrap()["id"].as_u64().unwrap())
+        };
+        let first_layer = s.doc().unwrap().doc.layers[0].id;
+        let a = text(&mut s, 20);
+        let second_layer = s.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap();
+        let b = text(&mut s, 40);
+        let sub = s.execute("layer.newSublayer", &json!({"parent": second_layer})).unwrap()["id"].as_u64().unwrap();
+        s.execute("layer.setCurrent", &json!({"id": sub})).unwrap();
+        let in_sub = text(&mut s, 60);
+        let locked = text(&mut s, 80);
+        s.execute("select.set", &json!({"ids": [locked.0]})).unwrap();
+        s.execute("object.lock", &json!({})).unwrap();
+        let select = |s: &mut Session, layers: Value| {
+            s.execute("select.font", &json!({"family": "Source Serif 4", "scope": {"layers": layers}})).unwrap();
+            let mut v = s.doc().unwrap().selection.objects.clone();
+            v.sort();
+            v
+        };
+        let d = &s.doc().unwrap().doc;
+        assert_eq!(d.ancestry(in_sub).unwrap()[1], NodeId(sub), "the text is in the sublayer");
+        assert_eq!(select(&mut s, json!([first_layer.0])), [a]);
+        assert_eq!(select(&mut s, json!([second_layer])), [b, in_sub]);
+        assert_eq!(select(&mut s, json!([sub])), [in_sub]);
+        assert_eq!(select(&mut s, json!([first_layer.0, sub])), [a, in_sub]);
+        // Not a layer: an error, the selection as it was.
+        assert!(s.execute("select.font", &json!({"family": "Source Serif 4", "scope": {"layers": [a.0]}})).is_err());
+        assert!(s.execute("select.font", &json!({"family": "Source Serif 4", "scope": {"layers": [u64::MAX]}})).is_err());
+        assert_eq!(s.doc().unwrap().selection.objects.len(), 2);
+    }
+
+    /// A symbol instance whose art uses the font is selected when the instance is in scope.
+    #[test]
+    fn select_font_scope_takes_symbol_instances_in_it() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        s.execute("artboard.new", &json!({"x": 300, "y": 0, "width": 200, "height": 200})).unwrap();
+        let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "Serif", "font": "Source Serif 4"})).unwrap()["id"].clone();
+        s.execute("symbol.new", &json!({"name": "Mark", "ids": [id]})).unwrap();
+        let instance = s.doc().unwrap().selection.objects[0];
+        let select = |s: &mut Session, i: u64| {
+            s.execute("select.font", &json!({"family": "Source Serif 4", "scope": {"artboards": [i]}})).unwrap()["count"].clone()
+        };
+        assert_eq!(select(&mut s, 0), 1);
+        assert_eq!(s.doc().unwrap().selection.objects, [instance]);
+        assert_eq!(select(&mut s, 1), 0);
     }
 
     /// Replace Font leaves hidden and locked text in its font, and text inside a hidden or locked

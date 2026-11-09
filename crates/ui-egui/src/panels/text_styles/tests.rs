@@ -261,6 +261,66 @@ fn click_label(ctx: &egui::Context, app: &mut VectorcraftApp, label: &str, mut d
     app.run_count.wrapping_sub(before)
 }
 
+/// Double-clicking a user character style's row opens its Character Style Options once: the first
+/// click applies the style to the selected text, the second opens the dialog without applying it
+/// again. A paragraph style's row opens none, and the built-in Normal style opens none either.
+#[test]
+fn double_clicking_a_character_style_row_opens_its_options() {
+    for kind in [Kind::Char, Kind::Para] {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 150})).unwrap();
+        let id = app.run("text.create", json!({"x": 20, "y": 40, "text": "Hi"})).unwrap()["id"].clone();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        app.run(&format!("{}.new", kind.prefix()), json!({"name": "Body"})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut draw = |app: &mut VectorcraftApp, ui: &mut egui::Ui| show(app, ui, kind);
+        frame_events(&ctx, &mut app, vec![], &mut draw);
+        let texts = frame_events(&ctx, &mut app, vec![], &mut draw);
+        let pos = text_rect(&texts, "Body").center();
+        let before = app.run_count;
+        click(&ctx, &mut app, pos, &mut draw);
+        click(&ctx, &mut app, pos, &mut draw);
+        let dialog = app.ui.dialog.as_ref();
+        if kind == Kind::Char {
+            let d = dialog.expect("double-clicking a Character Style's row opens its options");
+            assert_eq!(d.kind, "charStyleOptions");
+            assert_eq!(d.str("__style"), "Body");
+            // One apply from the first click and the dialog from the second: no second apply.
+            assert_eq!(app.run_count.wrapping_sub(before), 2, "one apply and the dialog");
+        } else {
+            let d = dialog.expect("double-clicking a Paragraph Style's row opens its options");
+            assert_eq!(d.kind, "command");
+            assert_eq!(d.str("__command"), "paraStyle.rename");
+            assert_eq!(d.str("__label"), "Paragraph Style Options");
+            // One apply from the first click and the rename dialog from the second.
+            assert_eq!(app.run_count.wrapping_sub(before), 2, "one apply and the dialog");
+        }
+    }
+}
+
+/// A double-click on the built-in Normal style opens no options, and its second click applies it
+/// only once, as a user style's does.
+#[test]
+fn double_clicking_the_normal_style_opens_no_options() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 150})).unwrap();
+    let id = app.run("text.create", json!({"x": 20, "y": 40, "text": "Hi"})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut draw = |app: &mut VectorcraftApp, ui: &mut egui::Ui| show(app, ui, Kind::Char);
+    frame_events(&ctx, &mut app, vec![], &mut draw);
+    let texts = frame_events(&ctx, &mut app, vec![], &mut draw);
+    let normal = texts.iter().find(|(text, _)| text.contains("Normal")).map(|(_, r)| r.center());
+    let pos = normal.expect("the Normal style's row is drawn");
+    let before = app.run_count;
+    click(&ctx, &mut app, pos, &mut draw);
+    click(&ctx, &mut app, pos, &mut draw);
+    assert!(app.ui.dialog.is_none(), "the Normal style has no Character Style Options");
+    assert_eq!(app.run_count.wrapping_sub(before), 1, "the second click applies nothing");
+}
+
 /// The panel menu's Duplicate highlights the copy and its Delete clears the highlight, as the
 /// panel's New and Delete buttons do; after a menu delete, Duplicate runs nothing.
 #[test]

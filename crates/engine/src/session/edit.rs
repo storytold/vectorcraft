@@ -26,7 +26,11 @@ impl Session {
             if let Some(ge) = &st.global_edit {
                 spread = cmd::globaledit::propagate(&before, doc, ge, [&before_sel.objects, &st.selection.objects]);
             }
-            cmd::objects_on_path::refresh(&before, doc);
+            // Pixel-aligned objects the edit changed go back on the pixel grid.
+            cmd::refresh_pixel_aligned(&before, doc);
+            let placed = cmd::objects_on_path::refresh(&before, doc);
+            // Pixel-aligned members that placing moved go back on the pixel grid.
+            cmd::keep_aligned_in(doc, &placed);
             dim_changed = cmd::dimension::refresh(&before, doc)?;
             Ok(v)
         }) {
@@ -35,7 +39,9 @@ impl Session {
                 Ok(shaper_changed) => {
                     // Attached Shaper groups whose art was rebuilt go back on their path.
                     if shaper_changed || dim_changed {
-                        cmd::objects_on_path::refresh(&before, Arc::make_mut(&mut st.doc));
+                        let doc = Arc::make_mut(&mut st.doc);
+                        let placed = cmd::objects_on_path::refresh(&before, doc);
+                        cmd::keep_aligned_in(doc, &placed);
                     }
                     // Symbol editing: the symbol follows its art on the editing layer, before
                     // inline graphics follow their symbols.
@@ -224,6 +230,11 @@ impl Session {
         if label != "Typing" && cmd::typing_in_progress(self) {
             cmd::settle_interaction(self)?;
         }
+        // An edit the tool computes on another thread (a Shape Builder merge) is applied first too,
+        // so the snapshot the interaction previews from and goes back to holds it.
+        if !self.in_interaction() {
+            self.finish_tool_edit_later()?;
+        }
         self.clear_deferred_overlay_cache();
         let paint = self.paint.clone();
         let st = self.doc_mut()?;
@@ -340,7 +351,7 @@ impl Session {
             preview.1.get("dy").and_then(Value::as_f64).unwrap_or(0.0),
         );
         st.keep_interaction(it);
-        if preview.0 == "object.transform" {
+        if preview.0 == "object.transform" && changed {
             let m = cmd::matrix_param(&preview.1, "matrix");
             if let Some(m) = m {
                 // The options are the last preview's params with the values it noted, without the

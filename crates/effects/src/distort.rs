@@ -13,6 +13,21 @@ fn diag(b: Rect) -> f64 {
 /// Free Distort: bilinear map of the bounding box onto four new corners (unit box coordinates),
 /// making at most `max` anchors ([`map_nonlinear_within`]).
 pub fn free_distort(path: &PathData, b: Rect, p: &Value, max: usize) -> PathData {
+    let c = free_distort_corners(b, p);
+    let (w, h) = (b.width().max(1e-9), b.height().max(1e-9));
+    let f = |q: Point| {
+        let u = (q.x - b.x0) / w;
+        let v = (q.y - b.y0) / h;
+        let top = c[0].lerp(c[1], u);
+        let bot = c[3].lerp(c[2], u);
+        top.lerp(bot, v)
+    };
+    map_nonlinear_within(path, diag(b) / 16.0, max, f)
+}
+
+/// The four corners (top left, top right, bottom right, bottom left) Free Distort with params `p`
+/// moves bounding box `b`'s corners to, in the document.
+pub(crate) fn free_distort_corners(b: Rect, p: &Value) -> [Point; 4] {
     let mut c = [Point::new(0.0, 0.0), Point::new(1.0, 0.0), Point::new(1.0, 1.0), Point::new(0.0, 1.0)];
     if let Some(arr) = p.get("corners").and_then(Value::as_array) {
         for (i, v) in arr.iter().take(4).enumerate() {
@@ -26,16 +41,7 @@ pub fn free_distort(path: &PathData, b: Rect, p: &Value, max: usize) -> PathData
         }
     }
     let (w, h) = (b.width().max(1e-9), b.height().max(1e-9));
-    let to_doc = |q: Point| Point::new(b.x0 + q.x * w, b.y0 + q.y * h);
-    let c = c.map(to_doc);
-    let f = |q: Point| {
-        let u = (q.x - b.x0) / w;
-        let v = (q.y - b.y0) / h;
-        let top = c[0].lerp(c[1], u);
-        let bot = c[3].lerp(c[2], u);
-        top.lerp(bot, v)
-    };
-    map_nonlinear_within(path, diag(b) / 16.0, max, f)
+    c.map(|q| Point::new(b.x0 + q.x * w, b.y0 + q.y * h))
 }
 
 /// Pucker & Bloat: anchors move toward (bloat) or away from (pucker) the centre, handles the

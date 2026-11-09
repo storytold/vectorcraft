@@ -70,6 +70,8 @@ impl FontDb {
             #[cfg(not(target_arch = "wasm32"))]
             stamp: Mutex::new(None),
             instances: Mutex::new(Instances::default()),
+            composites: RwLock::new(HashMap::new()),
+            composite_loans: Mutex::new(HashMap::new()),
         }
     }
 
@@ -151,7 +153,8 @@ impl FontDb {
     /// The families font menus and lists show: [`FontDb::family_list`] without the system's hidden
     /// families, whose names start with "." (macOS keeps ".SF NS", ".LastResort" and others for its
     /// own interface, and Mac apps don't list them). Those still resolve by name, for documents and
-    /// fallbacks that name them. Cheap to call every frame.
+    /// fallbacks that name them. The composite fonts ([`FontDb::composite_font_names`]) come first.
+    /// Cheap to call every frame.
     pub fn menu_family_list(&self) -> Arc<[String]> {
         let all = self.family_list();
         let mut cache = self.menu_cache.lock().unwrap_or_else(|e| e.into_inner());
@@ -160,7 +163,8 @@ impl FontDb {
         {
             return list.clone();
         }
-        let list: Arc<[String]> = all.iter().filter(|f| !f.starts_with('.')).cloned().collect();
+        let composites = self.composite_font_names();
+        let list: Arc<[String]> = composites.into_iter().chain(all.iter().filter(|f| !f.starts_with('.')).cloned()).collect();
         *cache = Some((all, list.clone()));
         list
     }
@@ -188,7 +192,7 @@ impl FontDb {
         let mut v: Vec<String> = self.read_faces().iter().map(|f| f.family.clone()).filter(|f| !f.starts_with('.')).collect();
         v.sort_by_key(|a| a.to_lowercase());
         v.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
-        v.into()
+        self.composite_font_names().into_iter().chain(v).collect()
     }
 
     /// How a font menu labels `family`: the English name when `english` is on (Preferences › Type ›

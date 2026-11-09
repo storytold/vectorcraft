@@ -11,6 +11,7 @@ use std::sync::Arc;
 use std::sync::mpsc::{Receiver, TryRecvError, channel};
 
 use serde_json::{Value, json};
+use vectorcraft_engine::cancel::{self, CancelToken};
 use vectorcraft_engine::cmd::fileio::{self, ReadFile};
 use vectorcraft_engine::file_access::ScopeHandle;
 
@@ -30,6 +31,8 @@ pub struct Pending {
     /// The automation roots in force where the open started: the document is installed under
     /// them too (its links are read as it opens).
     scope: ScopeHandle,
+    /// Raised by Cancel, on the thread reading the file: an importer plug-in stops.
+    token: CancelToken,
     /// Continue in Background: the progress window no longer shows it.
     pub hidden: bool,
 }
@@ -65,21 +68,31 @@ pub fn available() -> bool {
 /// own ([`fileio::read_for_open`]) → `{background: true, status}`, or the bytes back when no thread
 /// could start (the caller opens the file at once).
 pub fn start(app: &mut VectorcraftApp, path: &str, bytes: Vec<u8>) -> Result<Value, Vec<u8>> {
+    start_with(app, path, bytes, Value::Null)
+}
+
+/// [`start`] with the `document.open` options in `params` (`importer` and its `params`).
+pub fn start_with(app: &mut VectorcraftApp, path: &str, bytes: Vec<u8>, params: Value) -> Result<Value, Vec<u8>> {
     let (tx, done) = channel();
     let bytes = Arc::new(bytes);
     let (name, file) = (path.to_string(), bytes.clone());
     // Update Links (Preferences › File Handling) applies there as it is set now.
     let update_links = app.session.prefs.update_links == "automatically";
     let low_res_proxy_eps = app.session.prefs.low_res_proxy_eps;
-    let open_params = app.session.prefs.with_pdf_font_choice(&Value::Null);
+    let open_params = app.session.prefs.with_pdf_font_choice(&params);
     // The automation roots in force here are in force there.
     let scope = ScopeHandle::capture();
     let opener = scope.clone();
+    let token = CancelToken::new();
+    let raised = token.clone();
     let spawned = std::thread::Builder::new().name("vectorcraft-open".into()).spawn(move || {
         let r = scope
             .run(|| {
                 vectorcraft_engine::guard::catch_panic(|| {
-                    fileio::read_for_open(&name, &file, Some(name.clone()), &open_params, update_links, low_res_proxy_eps).map_err(|e| e.to_string())
+                    cancel::scope(&raised, None, || {
+                        fileio::read_for_open(&name, &file, Some(name.clone()), &open_params, update_links, low_res_proxy_eps)
+                            .map_err(|e| e.to_string())
+                    })
                 })
             })
             .unwrap_or_else(|msg| Err(format!("internal error: {msg} (please report this bug)")));
@@ -94,7 +107,7 @@ pub fn start(app: &mut VectorcraftApp, path: &str, bytes: Vec<u8>) -> Result<Val
     let label = format!("Opening {}", fileio::file_name(path));
     app.opening.next_id += 1;
     let id = app.opening.next_id;
-    app.opening.pending.push(Pending { id, path: path.to_string(), label: label.clone(), done, scope: opener, hidden: false });
+    app.opening.pending.push(Pending { id, path: path.to_string(), label: label.clone(), done, scope: opener, token, hidden: false });
     let status = format!("{label}…");
     app.status(status.clone());
     Ok(json!({ "background": true, "status": status }))
@@ -152,11 +165,13 @@ pub fn poll(app: &mut VectorcraftApp) {
     }
 }
 
-/// The progress window's Cancel: the files being read don't open (their threads finish reading
-/// and the result is dropped) → `{cancelled: n}`.
+/// The progress window's Cancel: the files being read don't open. An importer plug-in stops
+/// between two slices of its budget; a built-in reader finishes reading and the result is dropped
+/// → `{cancelled: n}`.
 pub fn cancel_all(app: &mut VectorcraftApp) -> Value {
     let cancelled = std::mem::take(&mut app.opening.pending);
     for p in &cancelled {
+        p.token.cancel();
         // The status bar no longer says it is opening.
         if app.ui.status == format!("{}…", p.label) {
             app.ui.status.clear();

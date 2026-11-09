@@ -8,6 +8,7 @@ use crate::appearance::{Appearance, AppearanceItem, Dash, FillLayer, LineCap, Li
 
 mod area;
 mod char_style;
+mod composite;
 mod file_fonts;
 mod object;
 mod para_style;
@@ -18,13 +19,20 @@ mod wrap;
 pub use area::{AreaFit, AreaOptions, PathAlign, PathEffect, TextFlow, TextWrap, VerticalAlign, WrapShape};
 use char_style::yes;
 pub use char_style::{CharAlign, CharPosition, CharStyle, Digits, FontHeightReference, GlyphChoice, ScriptMetrics};
+pub use composite::{
+    COMPOSITE_BASELINE, COMPOSITE_FONTS_MAX, COMPOSITE_NAME_MAX, COMPOSITE_SCALE, COMPOSITE_SIZE, CharClass, CompositeFont, CompositePart,
+    CompositeParts,
+};
 pub use file_fonts::{FILE_FONT_MIME, FileFont, FileFonts, MAX_FILE_FONTS, text_hash};
 pub use para_style::{
-    Burasagari, Composer, FirstBaseline, HyphenationOptions, JustificationOptions, Justify, Kashida, Kinsoku, LeadingModel, Mojikumi, ParaDirection,
-    ParaStyle, SingleWordJustify,
+    Burasagari, Composer, FirstBaseline, HyphenationOptions, JustificationOptions, Justify, Kashida, Kinsoku, KinsokuShoriType, LeadingModel,
+    Mojikumi, ParaDirection, ParaStyle, SingleWordJustify,
 };
-pub use runs::{INLINE_CHAR, INLINE_MAX_SCALE, InlineArt, RubyAlign, RubyPosition, RubySpan, TextKind, TextRun, TextStyleDef};
-pub use tabs_lists::{Bullet, DEFAULT_TAB_INTERVAL, LIST_HANGING_INDENT, NumberStyle, ParaList, TabAlign, TabStop};
+pub use runs::{INLINE_CHAR, INLINE_MAX_SCALE, InlineArt, RubyAlign, RubyPosition, RubySpan, TextKind, TextRun, TextStyleDef, TypeAntiAlias};
+pub use tabs_lists::{
+    Bullet, DEFAULT_TAB_INTERVAL, LIST_HANGING_INDENT, LIST_LEVEL_INDENT, LIST_LEVELS, ListAlign, ListCounts, NumberStyle, ParaList, TabAlign,
+    TabStop,
+};
 pub use wrap::{resolve_wrap, wrap_work};
 
 /// A text object. `runs` split into paragraphs at `\n`.
@@ -80,6 +88,11 @@ pub struct TextObject {
     /// Off for new type and for documents from before it, and saved only when on.
     #[serde(default, rename = "opticalMarginAlignment", skip_serializing_if = "crate::skip::is_default")]
     pub optical_margin: bool,
+    /// Character panel › Anti-aliasing Method: how the type's edges are drawn as pixels. Each
+    /// frame of a thread keeps its own method. Sharp for new type and for documents from before it,
+    /// and saved only when it is another method.
+    #[serde(default, rename = "antiAlias", skip_serializing_if = "crate::skip::is_default")]
+    pub anti_alias: TypeAntiAlias,
     /// Character panel menu › System Layout, copied from the document: when on, each character
     /// that takes space advances by a whole number of points. Off by default, and saved only when
     /// on. The document setting is [`crate::DocSetup::system_layout`].
@@ -102,6 +115,11 @@ pub struct TextObject {
     /// which draw it until its text is edited ([`FileFonts`]); `None` for other type.
     #[serde(default, rename = "fileFonts", skip_serializing_if = "Option::is_none")]
     pub file_fonts: Option<Box<FileFonts>>,
+    /// Threaded text: as [`Self::list_count`], the counts the earlier frames carry into this frame
+    /// at list levels 2 on, level 2 first ([`ListCounts::from_parts`]). Empty when they are all 0,
+    /// and the file saves them only when not empty. A file's longer list opens with the first 8.
+    #[serde(default, rename = "listLevelCounts", skip_serializing_if = "Vec::is_empty", deserialize_with = "tabs_lists::read_level_counts")]
+    pub list_level_counts: Vec<u32>,
     /// Cached layout bounds in text space, filled in by the layout engine (not serialized).
     #[serde(skip)]
     pub cached_bounds: Option<Rect>,

@@ -206,7 +206,7 @@ pub(crate) fn whole_or(p: &Value, key: &str, default: u64, cmd: &str) -> Result<
 /// Run a command's implementation without the enablement check or journaling.
 pub(crate) fn run_raw(s: &mut Session, id: &str, p: &Value) -> Result<Value> {
     let c = find_command(id).ok_or_else(|| EngineError::UnknownCommand(id.into()))?;
-    (c.run)(s, p)
+    super::run_spec(s, c, p)
 }
 
 /// Merge the undo entries pushed since the history had `from` entries into one labelled step.
@@ -619,6 +619,9 @@ fn transform_each_as(s: &mut Session, p: &Value, label: &str) -> Result<Value> {
             let m = Affine::translate((k_mh, k_mv)) * about(o, frame.conjugate(scale));
             if let Some(n) = d.node_mut(*id) {
                 super::object::transform_node(n, m, sc, objects);
+            }
+            if objects {
+                super::object::keep_compound_aligned(d, *id, sc);
             }
         }
         Ok(targets)
@@ -1363,6 +1366,7 @@ fn rearrange_artboards(s: &mut Session, p: &Value) -> Result<Value> {
         for (id, dl) in &art {
             if let Some(n) = d.node_mut(*id) {
                 n.transform(Affine::translate(*dl), sc);
+                super::object::keep_pixel_aligned(n, sc);
             }
         }
         let mut moved = vec![];

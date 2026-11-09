@@ -82,8 +82,11 @@ impl FontDb {
     /// The kind of `family` (whether it sets Japanese, its class), for font menu filters: from a
     /// loaded face, else from the system font scan. Variable when any of its faces, loaded or
     /// scanned, is: a family may install static files beside a variable one. Cheap: no font file
-    /// is read, and a loaded family doesn't start the scan.
+    /// is read, and a loaded family doesn't start the scan. A composite font takes its base font's.
     pub fn family_traits(&self, family: &str) -> FontTraits {
+        if let Some((base, _)) = self.composite_base(family) {
+            return self.family_traits(&base);
+        }
         let loaded = {
             let faces = self.read_faces();
             let mut of_family = faces.iter().filter(|f| f.family.eq_ignore_ascii_case(family));
@@ -101,8 +104,11 @@ impl FontDb {
     }
 
     /// [`face`](Self::face) by any of the family's names ([`canonical`](Self::canonical)), and how
-    /// it matched.
+    /// it matched. A composite font matches as its base font does ([`Self::composite_base`]).
     pub fn resolve(&self, family: &str, style: &str) -> Option<(Arc<FontFace>, FontMatch)> {
+        if let Some((base, base_style)) = self.composite_base(family) {
+            return self.resolve(&base, &base_style);
+        }
         let (family, style) = self.canonical(family, style);
         let f = self.face(&family, &style)?;
         let m = if !f.family.eq_ignore_ascii_case(&family) {
@@ -159,8 +165,12 @@ impl FontDb {
     /// Resolve a family + style to a face, falling back to the closest style of the family, then to
     /// Source Sans 3 Regular. Installed system fonts are found by name whatever ran before. `None`
     /// only if no font at all is loaded (the bundled fonts failed to parse, or were left out with
-    /// the `bundled-fonts` feature and none was added), in which case text has no glyphs.
+    /// the `bundled-fonts` feature and none was added), in which case text has no glyphs. A
+    /// composite font gives its base font's face ([`Self::composite_base`]).
     pub fn face(&self, family: &str, style: &str) -> Option<Arc<FontFace>> {
+        if let Some((base, base_style)) = self.composite_base(family) {
+            return self.face(&base, &base_style);
+        }
         let (family, style) = self.canonical(family, style);
         let (family, style) = (family.as_str(), style.as_str());
         let found = self.find(family, style);
@@ -357,8 +367,16 @@ impl FontDb {
         self.family_list().iter().find(|f| norm_chars(f).eq(norm_chars(name))).cloned()
     }
 
-    /// Is `family` available (loaded, or installed on the system)?
+    /// Is `family` available (loaded, installed on the system, or a composite font)?
     pub fn has_family(&self, family: &str) -> bool {
+        if self.composite_font(family).is_some() {
+            return true;
+        }
+        self.has_installed_family(family)
+    }
+
+    /// Is `family` available as a loaded or installed font, excluding composite fonts?
+    pub fn has_installed_family(&self, family: &str) -> bool {
         let (family, _) = self.canonical(family, "");
         self.is_loaded(&family) || self.read_catalog().contains_key(&family.to_ascii_lowercase())
     }

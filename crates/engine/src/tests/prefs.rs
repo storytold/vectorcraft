@@ -7,6 +7,32 @@ use vectorcraft_tools::{PointerEvent, PointerKind};
 use crate::cmd::prefscmds::{PREF_CATEGORIES, PREF_GROUPS, PREF_SPECS, validate};
 use crate::*;
 
+/// The saved preference reaches the real tool; older preferences keep Touching and invalid
+/// values fail without changing the current setting.
+#[test]
+fn marquee_selection_preference_drives_the_selection_tool() {
+    assert_eq!(serde_json::from_value::<Prefs>(json!({})).unwrap().marquee_selection, "touching");
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("selection", v).unwrap();
+    for (mode, selected) in [("touching", true), ("enclosed", false), ("directional", false)] {
+        set_pref(&mut s, "marqueeSelection", json!(mode));
+        s.execute("select.none", &json!({})).unwrap();
+        for (k, x, y) in [(PointerKind::Down, 50.0, 50.0), (PointerKind::Drag, 150.0, 150.0), (PointerKind::Up, 150.0, 150.0)] {
+            s.pointer(&PointerEvent::new(k, x, y), v).unwrap();
+        }
+        assert_eq!(!s.doc().unwrap().selection.objects.is_empty(), selected, "{mode}");
+        let persisted = s.prefs.to_json();
+        assert_eq!(serde_json::from_value::<Prefs>(persisted).unwrap().marquee_selection, mode);
+    }
+    assert!(s.execute("prefs.set", &json!({"key": "marqueeSelection", "value": "unknown"})).is_err());
+    assert_eq!(s.prefs.marquee_selection, "directional");
+    s.execute("prefs.reset", &json!({})).unwrap();
+    assert_eq!(s.prefs.marquee_selection, "touching");
+}
+
 #[test]
 fn every_spec_matches_a_prefs_field_and_back() {
     let all = Prefs::default().to_json();
@@ -2509,6 +2535,20 @@ fn a_straight_segment_dragged_by_direct_selection_lands_on_a_ruler_guide() {
         );
         s.execute("edit.undo", &json!({})).unwrap();
     }
+}
+
+/// General › Scroll Sideways with Cmd/Ctrl + Wheel starts on: in a new session, in a preferences
+/// file saved before the option existed and after a reset.
+#[test]
+fn scroll_sideways_with_cmd_wheel_is_on_by_default() {
+    assert!(Prefs::default().ctrl_wheel_scrolls_sideways);
+    let old: Prefs = serde_json::from_value(json!({"zoomWithMouseWheel": false})).unwrap();
+    assert!(old.ctrl_wheel_scrolls_sideways);
+    let mut s = Session::new();
+    s.execute("prefs.set", &json!({"key": "ctrlWheelScrollsSideways", "value": false})).unwrap();
+    assert!(!s.prefs.ctrl_wheel_scrolls_sideways);
+    s.execute("prefs.reset", &json!({})).unwrap();
+    assert!(s.prefs.ctrl_wheel_scrolls_sideways);
 }
 
 /// The Transform panel menu's choice starts as `default` (the panels follow General › Transform
