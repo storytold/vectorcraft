@@ -28,9 +28,23 @@ pub(super) fn apply(effects: &[Effect], bp: &BezPath, ctx: &GeomContext) -> BezP
     effects::apply_geometry_bez(effects, bp, bp.bounding_box(), ctx)
 }
 
-/// The object-level effected geometry of `n` (base path `bp`).
-pub(crate) fn effected_path(n: &Node, bp: &BezPath) -> BezPath {
-    apply(&n.appearance.effects, bp, &GeomContext::of(n))
+/// The object-level effected geometry of `n` (base path `bp`), with the swatches and patterns that
+/// live-effect plug-ins painting their pieces name looked up in `doc`.
+pub(crate) fn effected_path(doc: &Document, n: &Node, bp: &BezPath) -> BezPath {
+    apply(&n.appearance.effects, bp, &GeomContext { doc: Some(doc), ..GeomContext::of(n) })
+}
+
+/// [`apply`], and how gradients follow the effects ([`effects::Carry`]).
+pub(super) fn apply_carrying(effects: &[Effect], bp: &BezPath, ctx: &GeomContext) -> (BezPath, effects::Carry) {
+    if !effects::has_geometry(effects) || bp.elements().is_empty() {
+        return (bp.clone(), effects::Carry::default());
+    }
+    effects::apply_geometry_bez_carrying(effects, bp, bp.bounding_box(), ctx)
+}
+
+/// [`effected_path`], and how `n`'s gradients follow its effects.
+pub(crate) fn effected_path_carrying(doc: &Document, n: &Node, bp: &BezPath) -> (BezPath, effects::Carry) {
+    apply_carrying(&n.appearance.effects, bp, &GeomContext { doc: Some(doc), ..GeomContext::of(n) })
 }
 
 pub(super) fn item_effects(item: &AppearanceItem) -> &[Effect] {
@@ -49,9 +63,12 @@ pub(crate) fn visual_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
             b.inflate(o, o)
         });
     }
+    if let Some(art) = painted_art(symbols, n) {
+        return art.visual_bounds_with(symbols).map(|r| with_raster_reach(symbols, n, r));
+    }
     let bp = node_bezpath(n)?;
-    let ctx = GeomContext::of(n);
-    let g = effected_path(n, &bp);
+    let ctx = GeomContext { doc: Some(symbols.document()), ..GeomContext::of(n) };
+    let g = effected_path(symbols.document(), n, &bp);
     let mut r: Option<Rect> = (!g.elements().is_empty()).then(|| g.bounding_box());
     for item in &n.appearance.items {
         let fx = item_effects(item);
@@ -64,13 +81,21 @@ pub(crate) fn visual_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
         }
     }
     let s = n.appearance.outset();
-    r.map(|r| {
-        let r = r.inflate(s, s);
-        // The fills' and strokes' own raster effects, then the object's.
-        let r = n.appearance.items.iter().filter(|i| paints(i)).map(|i| spread(symbols, item_effects(i), r)).fold(r, |acc, b| acc.union(b));
-        let o = outset(symbols, &n.appearance.effects, r);
-        r.inflate(o, o)
-    })
+    r.map(|r| with_raster_reach(symbols, n, r.inflate(s, s)))
+}
+
+/// `r`, the art of `n` with its strokes, grown by how far the raster effects of `n`'s fills and
+/// strokes and then `n`'s own paint past it.
+fn with_raster_reach(symbols: &SymbolBoxes, n: &Node, r: Rect) -> Rect {
+    let r = n.appearance.items.iter().filter(|i| paints(i)).map(|i| spread(symbols, item_effects(i), r)).fold(r, |acc, b| acc.union(b));
+    let o = outset(symbols, &n.appearance.effects, r);
+    r.inflate(o, o)
+}
+
+/// The art of `n` with each piece a live-effect plug-in returns and the paints of that piece
+/// ([`effects::has_painted_effects`]); `None` for any other object.
+fn painted_art(symbols: &SymbolBoxes, n: &Node) -> Option<Node> {
+    effects::has_painted_effects(n).then(|| effects::reshape(Some(symbols.document()), n, None)).flatten()
 }
 
 /// Does `item` paint (as [`Renderer::paint_items`] draws it)?
@@ -86,21 +111,27 @@ fn paints(item: &AppearanceItem) -> bool {
 pub(crate) fn drawn_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
     let b = art_bounds(symbols, n)?;
     let items = n.appearance.items.iter().filter(|i| paints(i) && !effects::raster_effects(item_effects(i)).is_empty());
-    Some(items.map(|i| spread(symbols, item_effects(i), item_bounds(n, i).unwrap_or(b))).fold(b, |acc, r| acc.union(r)))
+    Some(items.map(|i| spread(symbols, item_effects(i), item_bounds(symbols.document(), n, i).unwrap_or(b))).fold(b, |acc, r| acc.union(r)))
 }
 
 /// The bounds of what `item`, a fill or stroke of the path or compound path `n`, paints: the path
 /// with `n`'s and `item`'s geometry effects, and for a stroke its width. `None` for other objects,
-/// 3D art, a brushed stroke and an item that draws no path.
-fn item_bounds(n: &Node, item: &AppearanceItem) -> Option<Rect> {
+/// 3D art, a path whose live-effect plug-ins paint their pieces, a brushed stroke and an item that
+/// draws no path.
+fn item_bounds(doc: &Document, n: &Node, item: &AppearanceItem) -> Option<Rect> {
     let stroke = matches!(item, AppearanceItem::Stroke(_));
-    if !has_fx(n) || effects::has_revolve(n) || effects::has_solid(n) || (stroke && vectorcraft_brush::has_brush(n)) {
+    if !has_fx(n)
+        || effects::has_revolve(n)
+        || effects::has_solid(n)
+        || effects::has_painted_effects(n)
+        || (stroke && vectorcraft_brush::has_brush(n))
+    {
         return None;
     }
-    let g = effected_path(n, &node_bezpath(n)?);
+    let g = effected_path(doc, n, &node_bezpath(n)?);
     let fx = item_effects(item);
     if effects::has_geometry(fx) {
-        let ig = apply(fx, &g, &GeomContext::of(n).item(item));
+        let ig = apply(fx, &g, &GeomContext { doc: Some(doc), ..GeomContext::of(n) }.item(item));
         let o = if let AppearanceItem::Stroke(s) = item { s.reach() } else { 0.0 };
         return (!ig.elements().is_empty()).then(|| ig.bounding_box().inflate(o, o));
     }
@@ -155,14 +186,17 @@ fn shape_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
             if let Some(art) = effects::revolve_art(n).or_else(|| effects::solid_art(n)) {
                 return drawn_bounds(symbols, &art);
             }
-            let g = effected_path(n, &node_bezpath(n)?);
+            if let Some(art) = painted_art(symbols, n) {
+                return art.visual_bounds_with(symbols);
+            }
+            let g = effected_path(symbols.document(), n, &node_bezpath(n)?);
             // The path as the fills and strokes without geometry effects of their own paint it
             // (as every fill and stroke would when none paints).
             let mut plain = n.appearance.clone();
             plain.items.retain(|i| !(paints(i) && effects::has_geometry(item_effects(i))));
             let on_path = !n.appearance.items.iter().any(paints) || plain.items.iter().any(paints);
             let mut r = (on_path && !g.elements().is_empty()).then(|| plain.stroked_bounds(g.bounding_box(), || g.clone()));
-            let ctx = GeomContext::of(n);
+            let ctx = GeomContext { doc: Some(symbols.document()), ..GeomContext::of(n) };
             for item in n.appearance.items.iter().filter(|i| paints(i) && effects::has_geometry(item_effects(i))) {
                 let ig = apply(item_effects(item), &g, &ctx.item(item));
                 let o = if let AppearanceItem::Stroke(s) = item { s.reach() } else { 0.0 };
@@ -227,7 +261,7 @@ pub(crate) fn drawn_outline(doc: &Document, n: &Node) -> Option<(BezPath, FillRu
     }
     match &n.kind {
         NodeKind::Path { rule, .. } | NodeKind::Compound { rule, .. } if effects::has_geometry(&n.appearance.effects) => {
-            Some((effected_path(n, &node_bezpath(n)?), *rule))
+            Some((effected_path(doc, n, &node_bezpath(n)?), *rule))
         }
         _ => effects::clip_outline(n),
     }

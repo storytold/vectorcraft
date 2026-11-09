@@ -966,7 +966,7 @@ enum Item {
 /// The selected objects (or `ids`) as a library graphic (its id and name set by the caller).
 fn graphic_of(s: &Session, p: &Value, cmd: &str) -> Result<LibraryGraphic> {
     let st = s.doc()?;
-    let ids = match ids_param(p, "ids") {
+    let ids = match ids_param(p, "ids", cmd)? {
         Some(ids) => ids,
         None => st.selection.in_paint_order(&st.doc),
     };
@@ -1006,7 +1006,7 @@ fn color_of(s: &Session, p: &Value, stroke: bool, cmd: &str) -> Result<NewColor>
         let given = NewColor { name: color.to_hex(), color, spot: None, tint: 1.0 };
         return Ok(spot_color(s, given, swatch, tint));
     }
-    match selected_paint(s, p, stroke)? {
+    match selected_paint(s, p, stroke, cmd)? {
         Paint::Solid { color, swatch, tint } => {
             let swatch = swatch.filter(|n| !n.is_empty());
             let name = swatch.clone().unwrap_or_else(|| color.to_hex());
@@ -1029,9 +1029,9 @@ fn spot_color(s: &Session, c: NewColor, swatch: Option<String>, tint: f32) -> Ne
 
 /// The first selected object's (or `ids`') fill (`stroke`: stroke) paint (type's: its first
 /// character's, as the proxy shows it), else the default one.
-fn selected_paint(s: &Session, p: &Value, stroke: bool) -> Result<Paint> {
+fn selected_paint(s: &Session, p: &Value, stroke: bool, cmd: &str) -> Result<Paint> {
     let st = s.doc()?;
-    let ids = match ids_param(p, "ids") {
+    let ids = match ids_param(p, "ids", cmd)? {
         Some(ids) => ids,
         None => st.selection.objects.clone(),
     };
@@ -1071,7 +1071,7 @@ fn gradient_of(s: &Session, p: &Value, stroke: bool, cmd: &str) -> Result<Librar
             let sw = s.doc()?.doc.swatch(name).filter(|w| matches!(w.paint, Paint::Gradient(_)));
             (Some(name.to_string()), sw.ok_or_else(|| bad(cmd, format!("no gradient swatch `{name}`")))?.paint.clone())
         }
-        None => (None, selected_paint(s, p, stroke)?),
+        None => (None, selected_paint(s, p, stroke, cmd)?),
     };
     let Paint::Gradient(mut g) = paint else {
         return Err(bad(cmd, if stroke { "the selection has no gradient stroke" } else { "the selection has no gradient fill" }));
@@ -1094,7 +1094,7 @@ fn pattern_of(s: &Session, p: &Value, stroke: bool, cmd: &str) -> Result<Library
             _ if d.pattern(name).is_some() => name.to_string(),
             _ => return Err(bad(cmd, format!("no pattern swatch `{name}`"))),
         },
-        None => match selected_paint(s, p, stroke)? {
+        None => match selected_paint(s, p, stroke, cmd)? {
             Paint::Pattern { pattern, .. } => pattern,
             _ => return Err(bad(cmd, if stroke { "the selection has no pattern stroke" } else { "the selection has no pattern fill" })),
         },

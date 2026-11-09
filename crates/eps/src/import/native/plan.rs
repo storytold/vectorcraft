@@ -59,7 +59,7 @@ pub(super) fn make_slots(
     to_doc: Affine,
     warn: &mut Vec<String>,
 ) -> Vec<Option<Made>> {
-    let mut taller = 0;
+    let (mut taller, mut deeper, mut tabs_left_out) = (0, 0, false);
     let made = infos
         .iter()
         .enumerate()
@@ -67,6 +67,7 @@ pub(super) fn make_slots(
             let t = template?;
             let story = stories.get(k)?.as_ref()?;
             let mut node = story.node(NodeId(0), info.frame, t, to_doc)?;
+            tabs_left_out |= story.tabs_left_out();
             let mut region = story.region(t, to_doc);
             // The first line where the file has it, in the text document's frame (that of a
             // copied object is its original's, as its lines are).
@@ -80,6 +81,11 @@ pub(super) fn make_slots(
             {
                 taller += 1;
             }
+            if let NodeKind::Text(text) = &mut node.kind
+                && story.fit_last_lines(text)
+            {
+                deeper += 1;
+            }
             Some((Box::new(node), region))
         })
         .collect();
@@ -87,6 +93,14 @@ pub(super) fn make_slots(
         warn.push(format!(
             "area type in frames too short for a line of the font it shows in got taller frames ({taller}): their type wouldn't show otherwise"
         ));
+    }
+    if deeper > 0 {
+        warn.push(format!(
+            "area type whose last lines the file sets in frames too short for them here got taller frames ({deeper}): those lines wouldn't show otherwise"
+        ));
+    }
+    if tabs_left_out {
+        warn.push(crate::import::ate::TABS_LEFT_OUT.into());
     }
     made
 }

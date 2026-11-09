@@ -53,9 +53,10 @@ pub(super) fn evaluates_live(n: &Node) -> bool {
 /// Can the art [`Renderer::fx_art`] makes for `n` change while `n` stays the same, other than
 /// through live objects it evaluates? It can when `n` holds type (laid out in the fonts installed),
 /// a symbol instance (made from its symbol's art), an object with a 3D effect or a color
-/// adjustment (shaded or recolored through the color settings), or one with Vector Halftone (its
-/// dots sampled from everything it draws), in it or in the opacity masks of
-/// the objects in it.
+/// adjustment (shaded or recolored through the color settings), one with Vector Halftone (its
+/// dots sampled from everything it draws), or one with a live-effect plug-in that paints its pieces
+/// (drawn only while the swatches and patterns they name are in the document), in it or in the
+/// opacity masks of the objects in it.
 pub(super) fn reads_outside(n: &Node) -> bool {
     let mut reads = false;
     n.walk(&mut |c| {
@@ -64,6 +65,7 @@ pub(super) fn reads_outside(n: &Node) -> bool {
             || effects::has_solid(c)
             || effects::has_adjustment(c)
             || effects::addons::halftone::has_halftone(c)
+            || effects::has_painted_plugin_effect(c)
             || c.extras().mask.as_ref().is_some_and(|m| reads_outside(&m.art))
     });
     reads
@@ -77,5 +79,6 @@ pub(super) fn rasterize_bounds(symbols: &SymbolBoxes, n: &Node, rfx: &[RasterFx]
 
 /// `f` with the content moved by (`dx`, `dy`) document units (a shadow's offset).
 pub(super) fn shifted<'a>(f: &Frame<'a>, dx: f64, dy: f64) -> Frame<'a> {
-    Frame { view: f.view * Affine::translate((dx, dy)), visible: f.visible - Vec2::new(dx, dy), ..*f }
+    let moved = Affine::translate((dx, dy));
+    Frame { view: f.view * moved, visible: f.visible - Vec2::new(dx, dy), output: f.output * moved, ..*f }
 }
