@@ -29,7 +29,7 @@ use crate::{EngineError, Result};
 pub const API_VERSION: u32 = 1;
 
 /// [`schema_hash`] at each API level, oldest first; the last row is [`API_VERSION`]'s.
-pub const SCHEMA_HASHES: &[(u32, u64)] = &[(1, 0xda5b_4c1e_fe4e_c697)];
+pub const SCHEMA_HASHES: &[(u32, u64)] = &[(1, 0x9cdb_1087_7074_855c)];
 
 /// The hash of every built-in command's schema ([`vectorcraft_apischema::hash`]).
 pub fn schema_hash() -> u64 {
@@ -151,6 +151,8 @@ mod tests {
         assert!(e.contains("view.saved.new") && e.contains("`zoom` must be a number > 0, not -1"), "{e}");
         let e = s.execute("view.saved.new", &json!({"center": [0, 0], "zoom": 1, "rotaton": 5})).unwrap_err().to_string();
         assert!(e.contains("unknown parameter `rotaton`; did you mean `rotation`?"), "{e}");
+        let e = s.execute("view.saved.new", &Value::Null).unwrap_err().to_string();
+        assert!(e.contains("view.saved.new") && e.contains("missing `center`"), "{e}");
         assert!(s.doc().unwrap().doc.views.is_empty());
         assert!(s.doc().unwrap().history.undo.is_empty());
     }
@@ -285,6 +287,15 @@ mod tests {
             ("view.transparencyGrid", json!({"on": 1})),
             ("view.snapToGlyph.options", json!({"bounds": false, "angular": true})),
             ("view.snapToGlyph.options", json!({"bounds": null})),
+            ("view.capsLock", json!(null)),
+            ("view.saved.new", json!(null)),
+            ("view.saved.edit", json!(null)),
+            ("view.saved.list", json!(null)),
+            ("view.transparencyGrid", json!(null)),
+            ("view.snapToGlyph.options", json!(null)),
+            ("view.capsLock", json!([])),
+            ("view.saved.new", json!(5)),
+            ("view.transparencyGrid", json!("on")),
         ];
         assert_eq!(schemas().len(), 6);
         for (id, schema) in schemas() {

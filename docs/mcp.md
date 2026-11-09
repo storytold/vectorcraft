@@ -1392,7 +1392,9 @@ Some commands have a machine-readable parameter schema: at present `view.capsLoc
 fields are `x-since` (the API level that added the command or the parameter), `x-deprecatedSince`, `x-lenient`,
 `x-unit`, `x-kind` (`id`, `color` or `point`), `x-default` (a default the command works out, such as `toggle`),
 `x-cost`, `x-writes` (`nothing`, `session`, `preferences` or `document`) and `x-returns`. A parameter that reads null
-as left out is an `anyOf` with `{"type": "null"}`. A number with no fractional part, such as `2.0`, is an integer, as
+as left out is an `anyOf` with `{"type": "null"}`. Null params read as `{}`, so a schema with no required parameter has
+the root `type` `["object", "null"]`. A schema with a required parameter has the root `type` `"object"`, and the engine
+refuses null params for it as a missing parameter. A number with no fractional part, such as `2.0`, is an integer, as
 JSON Schema defines one, and the command receives `2`. An `x-lenient` parameter's schema states the documented type,
 and the engine also passes a value of another type to the command. The command's `params` text is written from the same
 schema.

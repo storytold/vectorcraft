@@ -273,11 +273,15 @@ impl ParamSchema {
     /// The schema as a JSON Schema 2020-12 object schema. Defaults written as JSON go in
     /// `default`, a parameter that accepts null as omitted is an `anyOf` with `{"type": "null"}`,
     /// and VectorCraft's own fields are `x-since`, `x-deprecatedSince`, `x-lenient`, `x-unit`,
-    /// `x-kind`, `x-cost`, `x-writes` and `x-returns`. A JSON Schema validator accepts the values
-    /// [`ParamSchema::validate`] accepts, except that an `x-lenient` parameter's schema states only
-    /// the documented type.
+    /// `x-kind`, `x-cost`, `x-writes` and `x-returns`. The root `type` is `["object", "null"]` when
+    /// no parameter is required, because null params read as `{}`, and `"object"` otherwise. A JSON
+    /// Schema validator accepts the values [`ParamSchema::validate`] accepts, except that an
+    /// `x-lenient` parameter's schema states only the documented type.
     pub fn to_json(&self) -> Value {
         let mut o = object_schema(self.params, 0);
+        if !self.params.iter().any(|p| p.required) {
+            o.insert("type".into(), json!(["object", "null"]));
+        }
         o.insert("$schema".into(), DIALECT.into());
         if !self.summary.is_empty() {
             o.insert("description".into(), self.summary.into());

@@ -501,6 +501,28 @@ fn the_json_form_is_an_object_schema() {
     assert_eq!(range["properties"]["x"], json!({"type": "number", "exclusiveMinimum": 0.0, "maximum": 1.0, "x-since": 1}));
 }
 
+/// Null params read as `{}`, so the root of the JSON form allows null exactly when `{}` passes.
+/// A nested object does not read null as `{}`.
+#[test]
+fn the_json_form_allows_null_params_when_no_parameter_is_required() {
+    const OPTIONAL: &[Param] = &[Param::new("inner", Type::Object(&[Param::new("y", Type::Boolean).optional()])).optional()];
+    let optional = ParamSchema::new(OPTIONAL, "");
+    let written = optional.to_json();
+    conformance::check_schema(&written, "#").unwrap();
+    assert_eq!(written["type"], json!(["object", "null"]));
+    assert_eq!(written["properties"]["inner"]["type"], "object");
+    let required = one(Type::Boolean);
+    assert_eq!(required.to_json()["type"], "object");
+    for schema in [optional, required] {
+        let written = schema.to_json();
+        for params in [json!(null), json!({}), json!(5), json!([]), json!("x"), json!({"inner": null}), json!({"inner": {}})] {
+            assert_eq!(schema.validate(&params).is_ok(), conformance::instance_valid(&written, &params), "{params} against {written}");
+        }
+    }
+    assert!(optional.validate(&json!(null)).is_ok());
+    assert!(required.validate(&json!(null)).is_err());
+}
+
 #[test]
 fn the_hash_follows_every_schema_but_not_their_order() {
     let a = ParamSchema::new(VIEW, "save a view");
