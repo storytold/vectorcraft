@@ -439,6 +439,42 @@ fn a_painted_effect_on_a_fill_and_refused_results() {
     }
 }
 
+/// A result refused for a swatch the document doesn't have stays cached: once the document has the
+/// swatch, the next check of that result clears the error.
+#[test]
+fn a_refused_swatch_s_error_clears_once_the_document_has_the_swatch() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    let mut later = solid("#00ff00");
+    later["swatch"] = json!("Later");
+    let output = json!({"objects": [{"path": square_at(40.0), "fills": [later]}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.laterswatch", true), &output));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.laterswatch"}));
+    drawn(&s);
+    assert!(run(&mut s, "plugin.info", json!({"id": "test.engine.laterswatch"}))["lastError"].is_string());
+    run(&mut s, "swatch.new", json!({"name": "Later", "color": "#00ff00", "global": true}));
+    drawn(&s);
+    assert_eq!(run(&mut s, "plugin.info", json!({"id": "test.engine.laterswatch"}))["lastError"], Value::Null);
+}
+
+/// An effect that paints nothing has no references to check, so replacing a refused painted effect
+/// with one clears the refusal's error once it runs.
+#[test]
+fn a_replacement_that_paints_nothing_clears_a_refused_swatch_s_error() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    let mut gone = solid("#00ff00");
+    gone["swatch"] = json!("Absent");
+    let output = json!({"objects": [{"path": square_at(40.0), "fills": [gone]}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.replaced", true), &output));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.replaced"}));
+    drawn(&s);
+    assert!(run(&mut s, "plugin.info", json!({"id": "test.engine.replaced"}))["lastError"].is_string());
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.replaced", false), &output));
+    drawn(&s);
+    assert_eq!(run(&mut s, "plugin.info", json!({"id": "test.engine.replaced"}))["lastError"], Value::Null);
+}
+
 /// A painted effect on a group may link its pieces to the document's swatches.
 #[test]
 fn a_painted_group_effect_links_to_the_document_s_swatches() {
@@ -1972,6 +2008,67 @@ fn a_filter_does_only_what_its_permissions_allow() {
     assert!(e.contains("wasn't granted `state`"), "{e}");
     assert_eq!(s.doc().unwrap().doc, before);
     assert_eq!(s.doc().unwrap().doc.plugin_data(stateless), Some(&json!({"pen": 1})));
+}
+
+/// A filter whose manifest lists `inputs` is also given the selected type, read-only: an echo
+/// changes nothing, and an output that leaves the type out or changes it is refused with the
+/// document and undo history as they were, handed in from a run made elsewhere too. A filter
+/// without `inputs` is not given the type and so never deletes it. Installing one that lists
+/// `inputs` needs the user's grant.
+#[test]
+fn read_only_kind_field_and_omission_refuse_without_undo() {
+    use cmd::plugin::FilterRun;
+    let mut s = session();
+    let r = rect(&mut s, 10.0, "#ff0000");
+    let t = NodeId(run(&mut s, "text.create", json!({"x": 10, "y": 80, "text": "Hi"}))["id"].as_u64().unwrap());
+    let reads =
+        |id: &str| format!(r#"{{"id":"{id}","name":"Test {id}","kind":"filter","api":2,"permissions":["doc.read","doc.write"],"inputs":["type"]}}"#);
+    // Each case installs another module under the same id, in place of the last (`replace: true`).
+    let install_wat = |s: &mut Session, src: &str| {
+        let data = vectorcraft_format::base64_encode(&wat::parse_str(src).unwrap());
+        run(s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read", "doc.write"], "replace": true}))
+    };
+    let echo = "test.engine.inputs.echo";
+    let module = tpl::module(&reads(echo), tpl::ECHO, "", 1);
+    let data = vectorcraft_format::base64_encode(&wat::parse_str(&module).unwrap());
+    let e = s.execute("plugin.install", &json!({"dataBase64": data})).unwrap_err().to_string();
+    assert!(e.contains("asks for the permissions doc.read, doc.write"), "{e}");
+    let listed = install_wat(&mut s, &module);
+    assert_eq!(listed["inputs"], json!(["type"]));
+    let p = |id: &str| json!({"id": id, "ids": [r.0, t.0]});
+    let before = s.doc().unwrap().doc.clone();
+    assert_eq!(run(&mut s, "plugin.run", p(echo))["ids"], json!([r.0, t.0]));
+    assert_eq!(s.doc().unwrap().doc.layers, before.layers, "an echo changes nothing");
+    for (output, says) in [
+        (json!({"objects": [{"id": r.0}]}), format!("objects (id {}): a read-only object was left out", t.0)),
+        (json!({"objects": [{"id": r.0}, {"id": t.0, "name": "Renamed"}]}), format!("objects[1] (id {}): read-only field 'name' changed", t.0)),
+        (json!({"objects": [{"id": r.0}, {"id": t.0}, {"type": "type", "path": triangle()}]}), "`type` must be \"path\" or \"compound\"".into()),
+    ] {
+        let id = "test.engine.inputs.bad";
+        install_wat(&mut s, &tpl::returning(&reads(id), &output.to_string()));
+        let (doc, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+        let e = s.execute("plugin.run", &p(id)).unwrap_err().to_string();
+        assert!(e.contains(&says), "{says}: {e}");
+        assert_eq!((&s.doc().unwrap().doc, s.doc().unwrap().history.undo.len()), (&doc, undo), "{output}");
+        // Handed in from a run made away from plugin.run, it is refused the same way.
+        let made = FilterRun::prepare(&s, &p(id)).unwrap();
+        let out = made.run().unwrap();
+        made.hand_in(&mut s, out);
+        let e = s.execute("plugin.run", &p(id)).unwrap_err().to_string();
+        assert!(e.contains(&says), "handed in: {e}");
+        assert_eq!((&s.doc().unwrap().doc, s.doc().unwrap().history.undo.len()), (&doc, undo), "handed in: {output}");
+    }
+    // Without `inputs` the type isn't given, so leaving it out keeps it.
+    let legacy = "test.engine.inputs.legacy";
+    install_wat(&mut s, &tpl::returning(&tpl::manifest(legacy, "filter", "{}"), &json!({"objects": [{"id": r.0, "name": "Kept"}]}).to_string()));
+    assert_eq!(run(&mut s, "plugin.run", p(legacy))["ids"], json!([r.0]));
+    assert_eq!(node(&s, r).name.as_deref(), Some("Kept"));
+    assert!(matches!(node(&s, t).kind, vectorcraft_doc::NodeKind::Text(_)), "the type stays");
+    // A manifest that lists `inputs` below `api` 2 doesn't install.
+    let old = format!(r#"{{"id":"{echo}","name":"Old","kind":"filter","inputs":["type"]}}"#);
+    let data = vectorcraft_format::base64_encode(&wat::parse_str(tpl::module(&old, tpl::ECHO, "", 1)).unwrap());
+    let e = s.execute("plugin.install", &json!({"dataBase64": data})).unwrap_err().to_string();
+    assert!(e.contains("`inputs` needs `api` 2"), "{e}");
 }
 
 /// What the user granted is kept in the plug-in store with the module: the next session installs
