@@ -737,7 +737,7 @@ fn embedded_font_programs_are_skipped() {
         let r = read(&program);
         let NodeKind::Text(t) = &objects(&r.document)[0].kind else { panic!("{program}: {:?}", r.warnings) };
         assert_eq!(t.runs[0].style.font_family, "My Font");
-        assert!(r.warnings.is_empty(), "{program}: {:?}", r.warnings);
+        assert!(program_warnings(&r.warnings).is_empty(), "{program}: {:?}", r.warnings);
     }
 }
 
@@ -833,12 +833,18 @@ fn device_settings_are_accepted_and_change_nothing() {
 }
 
 /// Check that `body` draws one square, blue: it sets blue when what it checks holds, else red.
+/// `warnings` without the note naming fonts that aren't available: which those are depends on the
+/// fonts installed where the tests run, not on the program.
+pub(super) fn program_warnings(warnings: &[String]) -> Vec<&String> {
+    warnings.iter().filter(|w| !w.starts_with(super::MISSING_FONTS_NOTE)).collect()
+}
+
 fn blue(body: &str) {
     let r = read(&format!("{body} 10 10 80 80 rectfill"));
     let o = objects(&r.document);
     assert_eq!(o.len(), 1, "{body}: {:?}", r.warnings);
     assert_eq!(fill(&o[0]), Some(&Paint::solid(Color::rgb(0.0, 0.0, 1.0))), "{body}");
-    assert!(r.warnings.is_empty(), "{body}: {:?}", r.warnings);
+    assert!(program_warnings(&r.warnings).is_empty(), "{body}: {:?}", r.warnings);
 }
 
 /// Check that PostScript `cond` leaves `true`.
