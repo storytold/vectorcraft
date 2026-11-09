@@ -87,6 +87,9 @@ pub(super) struct Builder<'p> {
     pub(super) image_keys: HashMap<u128, (String, u32, u32)>,
     /// The images kept with their CMYK samples ([`crate::import_image`]).
     pub(super) cmyk_keys: HashSet<u128>,
+    /// Images in a Separation space, by key: the paint of their ink, or `None` when they open in
+    /// RGB (an ink that can't be told, tints that can't be read).
+    pub(super) separation_paints: HashMap<u128, Option<Paint>>,
     /// Mask keys of CMYK images whose mask turned out to hide nothing.
     pub(super) opaque: HashSet<u128>,
     pub(super) warnings: Vec<String>,
