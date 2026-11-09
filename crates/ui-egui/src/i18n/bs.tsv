@@ -6341,7 +6341,7 @@ shape	Open	Otvoren
 	Reset Symbol Instance	Vrati instancu simbola na početno
 @msg	type must be static or dynamic, not {v}	type mora biti static ili dynamic, a ne {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` je statički simbol: prvo postavite vrstu simbola na Dinamički
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	Putanji, složenoj putanji ili tekstu odabranom u instanci simbola mogu se mijenjati samo pune boje ispune i poteza
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	Putanji, složenoj putanji ili tekstu odabranom u instanci simbola mogu se mijenjati samo ispuna, potez, neprozirnost i mješanje
 @msg	path must be a list of child indices	path mora biti lista indeksa podređenih objekata
 @msg	no object at path {shown} in the symbol's art	nema objekta na putanji {shown} u grafici simbola
 @msg	give fill, stroke, opacity and/or blend	navedite fill, stroke, opacity i/ili blend

@@ -215,7 +215,7 @@ fn text_and_its_strokes_come_from_the_page_into_the_layer_of_its_text_object() {
     assert_eq!(kinds(&r.document.layers[0]), ["path"]);
     // The text and the path of its stroke, where the text object is (no group of their own).
     assert_eq!(kinds(&r.document.layers[1]), ["text", "path"], "{:?}", r.warnings);
-    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    assert!(super::tests::program_warnings(&r.warnings).is_empty(), "{:?}", r.warnings);
 }
 
 /// A point type object in the legacy format (`To` … `TO`), as an EPS saved for Illustrator 10

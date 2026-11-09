@@ -43,6 +43,7 @@ fn cell(c: &str) -> Cell {
 }
 
 pub(super) fn parse_csv(csv: &str) -> (Vec<String>, Vec<String>, Vec<Vec<Option<f64>>>) {
+    let csv = csv.strip_prefix('\u{feff}').unwrap_or(csv);
     // Records end at line breaks outside quotes; a record is tab-separated if it has a tab outside quotes.
     let rows: Vec<Vec<Cell>> = split_unquoted(csv, '\n')
         .into_iter()
