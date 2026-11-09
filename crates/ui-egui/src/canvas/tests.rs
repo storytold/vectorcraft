@@ -10693,14 +10693,23 @@ fn art_measured_for_an_edit_not_drawn_here_is_let_go() {
         app.run("effect.apply", json!({"effect": "threeD.extrude", "ids": [id], "params": {"depth": 60.0}})).unwrap();
         let ctx = egui::Context::default();
         shapes(&mut app, &ctx);
+        // A worker whose jobs the test receives: none finishes unless the test says so.
+        let mut jobs = None;
         if worker {
-            app.canvas.worker = crate::render_worker::Worker::spawn(ctx.clone());
+            let (w, rx, done) = crate::render_worker::Worker::test_channel();
+            app.canvas.worker = Some(w);
+            jobs = Some((rx, done));
             app.canvas.last_ms = 100.0;
         }
         app.run("effect.setParams", json!({"ids": [id], "index": 0, "item": null, "params": {"depth": 5.0}})).unwrap();
+        // Measured through the canvas's renderer, the edit holds the art made for it.
+        let (shown, opts) = app.canvas.shown.clone().unwrap();
+        let now = app.session.active().unwrap().doc.clone();
+        app.canvas.renderer.changed(&shown, &now, &opts);
+        assert!(app.canvas.renderer.measured_bytes() > 0, "worker {worker}: art held");
         shapes(&mut app, &ctx);
-        if worker {
-            assert!(app.canvas.worker.as_ref().is_some_and(|w| w.pending.is_some()), "the worker draws it");
+        if let Some((rx, _)) = &jobs {
+            assert!(rx.try_recv().is_ok(), "the worker draws it");
         }
         assert_eq!(app.canvas.renderer.measured_bytes(), 0, "worker {worker}");
         app.canvas.worker = None;

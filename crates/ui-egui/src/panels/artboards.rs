@@ -314,7 +314,10 @@ pub struct MenuFacts {
 
 /// Whether an unlocked artboard of `indices` has art that Fit to Artwork Bounds fits it to. The
 /// answer is kept for the document's revision: the canvas menu asks on every frame it is open
-/// without its [`MenuFacts`], and measuring builds the solids of 3D effects.
+/// without its [`MenuFacts`], and measuring builds the solids of 3D effects. One answer is kept,
+/// the last asked: a document's uid is never given to another in the process, and its revision
+/// only moves forward (a document read again, or a batch rolled back, moves past it), so a kept
+/// answer is never another document's or another state's.
 pub(crate) fn fit_has_art(app: &VectorcraftApp, indices: &[usize]) -> bool {
     /// The document's uid and revision, the artboards asked about, and the answer.
     type Kept = Option<(u64, u64, Vec<usize>, bool)>;
