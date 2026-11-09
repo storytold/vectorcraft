@@ -82,6 +82,7 @@ mod select;
 pub(crate) mod shaper;
 pub mod shortcutset;
 pub(crate) mod slices;
+pub mod spelling;
 mod stroke;
 mod style;
 pub mod stylelib;
@@ -321,6 +322,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(expand::specs());
         v.extend(attributes::specs());
         v.extend(interactivity::specs());
+        v.extend(spelling::specs());
         v.extend(svgfilter::specs());
         v.extend(newart::specs());
         v.extend(colortheme::specs());
