@@ -911,8 +911,8 @@ fn a_3d_effect_that_builds_nothing_is_measured_alike() {
     assert_eq!(Renderer::new().bounds_of(&symbols, &n), crate::brush_fx::cull_bounds(&symbols, &n));
 }
 
-/// A group with effects of its own that holds an extruded path is measured once for every artboard of a
-/// pass: its bounds are kept after the first.
+/// A group with effects of its own that holds an extruded path is measured once for every artboard
+/// of a pass: its bounds are kept after the first.
 #[test]
 fn a_group_holding_3d_art_is_measured_once_a_pass() {
     let mut d = Document::new(100.0, 100.0);
@@ -1752,8 +1752,9 @@ fn an_image_inner_glow_follows_its_visible_pixels() {
 /// 3D effect, with a raster effect of its own (Drop Shadow, Gaussian Blur) too. An object with
 /// only a fill and a raster effect draws from that art, where without the 3D effect it draws as a
 /// path, whose raster effects are clipped to the path's own geometry: there Roughen's spikes are
-/// cut off, so the two differ in a few pixels at the edge and match inside the path. Either way
-/// the raster effect reaches past what the object draws without it.
+/// cut off, so the two differ in a few pixels at the edge and match inside the path. That clipping
+/// is a known bug of drawing without the 3D effect, older than this test, not the design. Either
+/// way the raster effect reaches past what the object draws without it.
 #[test]
 fn a_3d_effect_that_builds_nothing_draws_the_item_as_without_it() {
     let rough =
