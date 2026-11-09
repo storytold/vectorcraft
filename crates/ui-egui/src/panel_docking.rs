@@ -1204,8 +1204,8 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     }
 }
 
-/// Whether a modal is open: a dialog, About, the command palette, a native file dialog, or a
-/// window behind the modal backdrop last frame (export progress, plug-in runs). Floating panels
+/// Whether a modal is open: a dialog, About, the command palette, a native file dialog, an update
+/// dialog, or a window behind the modal backdrop last frame (export progress, plug-in runs). Floating panels
 /// in OS windows of their own take no input meanwhile, as the main window behind it takes none.
 /// The window level and visibility a palette window takes: hidden under a modal dialog (a click
 /// must not bring it back over the dialog), at the normal level under a menu or another popup drawn
@@ -1260,6 +1260,7 @@ pub(crate) fn modal_open(app: &VectorcraftApp, ctx: &egui::Context) -> bool {
         || app.ui.about
         || app.ui.palette_open
         || app.file_dialog_open()
+        || crate::updates_ui::blocks_input(app)
         || ctx.memory(|m| m.areas().is_visible(&crate::dialogs::modal::backdrop()))
 }
 

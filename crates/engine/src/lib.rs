@@ -148,15 +148,28 @@ pub struct Session {
     /// Where the saved PDF presets are kept, one file each; `None`: only for the session
     /// ([`Session::attach_pdf_preset_store`]).
     pdf_preset_dir: Option<std::path::PathBuf>,
+    /// The custom dictionary file Edit › Spelling › Add and Edit Custom Dictionary save to; `None`:
+    /// the words are kept only for the process ([`Session::attach_custom_dictionary`]).
+    dictionary_file: Option<std::path::PathBuf>,
     /// Where the ICC profiles `color.loadProfile` loads are kept; `None`: only for the process
     /// ([`Session::attach_profile_store`]).
     profile_dir: Option<std::path::PathBuf>,
     /// Where the plug-ins `plugin.install` installs are kept; `None`: only for the process
     /// ([`Session::attach_plugin_store`]).
     plugin_dir: Option<std::path::PathBuf>,
+    /// The plug-in ids whose grant in the plug-in store should be gone but could not be removed:
+    /// [`Session::plugin_approver`] and a load of the store do not count those grants, and a successful
+    /// [`Session::store_grant`] for the id takes it out.
+    ignored_plugin_grants: std::sync::Mutex<std::collections::BTreeSet<String>>,
     /// A filter's output that a run made in the background handed in for `plugin.run` to apply
     /// ([`cmd::plugin::FilterRun::hand_in`]); the next `plugin.run` takes it.
     plugin_output: Option<cmd::plugin::HandedIn>,
+    /// What a person approved for the next `plugin.install` ([`Session::approve_plugin_install`]);
+    /// that install spends it, whatever it does.
+    plugin_install_approval: Option<cmd::plugin::InstallApproval>,
+    /// `plugin.install` takes `grant` and `allowHeavy` from any request
+    /// ([`Session::allow_plugin_grants_from_requests`]).
+    plugin_grants_from_requests: bool,
     /// URLs recently given in the Attributes panel (`attributes.set {url}`), newest first; not saved.
     pub recent_urls: Vec<String>,
     /// The saved tracing presets' revision and latest changes ([`Session::trace_presets_revision`]).
