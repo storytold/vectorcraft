@@ -12,7 +12,7 @@ use vectorcraft_doc::Document;
 use vectorcraft_eps::{EpsOptions, Level, Overprint, Preview, Raster};
 use vectorcraft_geom::{Point, Rect};
 
-use super::super::flatten::{FlattenOptions, flatten_document};
+use super::super::flatten::{FlattenOptions, expand_transparent_tile_images, flatten_expanded};
 use super::super::{CommandSpec, EngineError, Result, Session, bad, bool_or, cmd, has_doc, str_param};
 use super::{ArtboardPick, Encoded, FormatOption};
 
@@ -32,14 +32,14 @@ pub fn specs() -> Vec<CommandSpec> {
         "Export EPS",
         [],
         None,
-        "{path?, level?: 2|3 (default; PostScript language level: 3 writes smooth gradients and masks transparent image pixels out, 2 steps gradients and writes those pixels white), previewFormat?: none|tiffBw|tiffColor (default: a TIFF preview other apps show), transparentPreview?: true (else on white), overprints?: preserve (default)|discard, flattenerPreset?: \"medium\" (default; high, low or a saved preset: flattener.presets.list), flattener?: {the options of object.flattenTransparency over the preset}, embedFonts?: true (type is always written as outlines, so no fonts are needed), includeLinkedFiles?: false (the embedded document keeps linked images whole, not just their previews), thumbnails?: true (a PNG thumbnail in the file), cmykPostScript?: true (RGB documents written in CMYK), compatibleGradients?: false (stepped gradients at level 3 too), selectedOnly?: false, useArtboards?: true (one file per chosen artboard, artboards?/range?, {stem}_{artboard}.eps, the bounding box the artboard; with two or more, also the central file {stem}.eps first: the whole document, the bounding box the visible art; none when no art shows) | false (one file, the bounding box the visible art, y up from the first artboard's bottom-left corner, even when artboards are named; the default when none are named), format?: \"eps\", artboard?: i | artboards?: [i…] | range?: \"1-3, 5\" (the artboards written; naming them without useArtboards works as useArtboards: true)} → {path, bytes, warnings, files?}; no path → {dataBase64, …}. Transparency is flattened with the preset (EPS has none); the native document rides along in comments, for reopening the file as it was. Same as document.export {format: eps}",
+        "{path?, level?: 2|3 (default; PostScript language level: 3 writes smooth gradients and masks transparent image pixels out, 2 steps gradients and writes those pixels white), previewFormat?: none|tiffBw|tiffColor (default: a TIFF preview other apps show), transparentPreview?: true (else on white), overprints?: preserve (default)|discard, flattenerPreset?: \"medium\" (default; high, low or a saved preset: flattener.presets.list), flattener?: {the options of object.flattenTransparency over the preset}, embedFonts?: true (type is always written as outlines, so no fonts are needed), includeLinkedFiles?: false (the embedded document keeps linked images whole, not just their previews), thumbnails?: true (a PNG thumbnail in the file), cmykPostScript?: true (RGB documents written in CMYK), compatibleGradients?: false (stepped gradients at level 3 too), selectedOnly?: false, useArtboards?: true (one file per chosen artboard, artboards?/range?, {stem}_{artboard}.eps, the bounding box the artboard; with two or more, also the central file {stem}.eps first: the whole document, the bounding box the visible art; none when no art shows) | false (one file, the bounding box the visible art, y up from the first artboard's bottom-left corner, even when artboards are named; the default when none are named), format?: \"eps\", artboard?: i | artboards?: [i…] | range?: \"1-3, 5\" (the artboards written; naming them without useArtboards works as useArtboards: true)} → {path, bytes, warnings, files?}; no path → {dataBase64, …}. Transparency is flattened with the preset (EPS has none); the native document rides along in comments, for reopening the file as it was. Same as document.export {format: eps}. A key EPS doesn't take, and an unknown key inside flattener, are refused",
         has_doc,
         export_eps
     )]
 }
 
 /// The EPS options `document.formats` lists.
-pub(super) const OPTIONS: &[FormatOption] = &[
+pub(crate) const OPTIONS: &[FormatOption] = &[
     super::ARTBOARD,
     super::ARTBOARDS,
     super::RANGE,
@@ -152,6 +152,8 @@ fn parse(p: &Value) -> Result<Settings> {
     let overprint = choice("overprints", q.overprints.clone(), Overprint::from_id, d.overprint, "preserve or discard")?;
     let mut flatten = flattener(&q, &[])?;
     flatten.preserve_overprints &= overprint == Overprint::Preserve;
+    // The writer draws colorized images in their ink.
+    flatten.keeps_colorize = true;
     let level = q.level.as_ref().map(super::dxf::text);
     let eps = EpsOptions {
         level: choice("level", level, Level::from_id, d.level, "2 or 3")?,
@@ -298,12 +300,17 @@ fn encode_document(doc: &Document, p: &Value, saving: bool) -> Result<Encoded> {
     if pages.is_empty() {
         return Err(bad(C, "the document has no artboard"));
     }
+    // The artboards' background colors, behind the art (the editing data keeps them as colors).
+    let filled = super::export::with_artboard_fills(doc, p, pages.iter().filter_map(|(b, ..)| *b)).map_err(|e| bad(C, e))?;
+    let doc = &*filled;
     let regions: Vec<Rect> = pages.iter().map(|(_, region, _)| *region).collect();
-    let transparent = doc.layers.iter().any(|l| l.shows_transparency());
-    let flat = flatten_document(doc, &set.flatten)?;
-    let drawn = flat.as_ref().unwrap_or(doc);
+    let expanded = expand_transparent_tile_images(doc, &set.flatten)?;
+    let source = expanded.as_ref().unwrap_or(doc);
+    let transparent = source.layers.iter().any(|l| set.flatten.shows_transparency(source, l));
+    let flat = flatten_expanded(source, &set.flatten)?;
+    let drawn = flat.as_ref().unwrap_or(source);
     let mut enc = Encoded { warnings, joiner: Some("_"), ..Encoded::default() };
-    if transparent && flat.is_some() {
+    if transparent && (flat.is_some() || expanded.is_some()) {
         enc.warnings.push("transparency is flattened into opaque art and images (EPS has none): see the flattener preset".into());
     }
     let preview_limit = if saving { SAVE_PREVIEW } else { MAX_PREVIEW };

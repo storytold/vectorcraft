@@ -1,5 +1,5 @@
-use super::bounds::{cull_bounds, effected_path};
-use super::entries::{Content, Drawn, FX_RASTER_BUDGET, FxGeom, Inputs, Kept, Made, Reads, Shadow, ShadowEntry};
+use super::bounds::{cull_bounds, effected_path_carrying};
+use super::entries::{Content, Drawn, FX_RASTER_BUDGET, FxGeom, Inputs, ItemGeom, Kept, Made, Reads, Shadow, ShadowEntry};
 use super::predicates::{evaluates_live, is_container, rasterize_bounds, reads_outside, shifted};
 use super::raster::{
     DRAG_PIXEL_BUDGET, MAX_RASTERIZE, PIXEL_BUDGET, ViewCrop, content_changing, doc_raster_ppi, image_size, linear_key, pan_margin, pcolor,
@@ -9,6 +9,26 @@ use super::{
     Affine, Arc, BezPath, FillRule, Frame, GeomContext, Ink, Node, NodeKind, RasterFx, Rect, RenderContext, Renderer, Shape, Vec2, blend_mode,
     effects, fill_rule, peniko,
 };
+
+#[cfg(test)]
+thread_local! {
+    /// How many silhouettes of drop shadows and outer glows renderers on this thread have drawn:
+    /// one per shadow or glow raster made ([`Renderer::shadow_raster`]) and per one drawn through a
+    /// filter layer ([`Renderer::draw_shadow_filter`]).
+    static SILHOUETTES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// [`SILHOUETTES`] of this thread.
+#[cfg(test)]
+pub(super) fn silhouettes() -> u64 {
+    SILHOUETTES.get()
+}
+
+/// Adds one to [`SILHOUETTES`].
+#[cfg(test)]
+fn note_silhouette() {
+    SILHOUETTES.set(SILHOUETTES.get().saturating_add(1));
+}
 
 impl Renderer {
     /// Drop shadow / outer glow `fx` (shadow-cache slot `i` of `n`) as a cached raster: the
@@ -62,6 +82,10 @@ impl Renderer {
             Some(e) => {
                 e.stamp = stamp;
                 self.stats.moved += usize::from(e.moved);
+                crate::paint::add_decode_failures(e.failed);
+                if e.image_left_out {
+                    self.image_left_out = self.image_left_out.map(|_| true);
+                }
                 let p = f.view * e.anchor;
                 (e.image.clone(), (p.x + e.rel.0).round(), (p.y + e.rel.1).round(), e.scale, e.moved, e.view.map(|v| v.served(f.view)))
             }
@@ -118,7 +142,15 @@ impl Renderer {
                 let ink = darkness.map_or(f.ink, |d| f.ink.darkened(d));
                 let crop = Frame { mt: false, view, visible, ink, ..*f };
                 let before = self.stats.moved;
+                let decoded = crate::paint::decode_failures();
+                let outer_image_left_out = self.image_left_out.replace(false);
+                let pattern_images_left_out = crate::pattern::images_left_out();
+                #[cfg(test)]
+                note_silhouette();
                 self.inside_layer(|r| paint(r, &mut off, &shifted(&crop, dx, dy)));
+                let failed = crate::paint::decode_failures() - decoded;
+                let image_left_out = self.image_left_out.unwrap_or(false) || crate::pattern::images_left_out() > pattern_images_left_out;
+                self.image_left_out = outer_image_left_out.map(|outer| outer || image_left_out);
                 // A silhouette drawn over moved rasters makes a moved shadow.
                 let moved = self.stats.moved > before;
                 off.flush();
@@ -165,11 +197,15 @@ impl Renderer {
                 let node = Drawn::of(n, owner);
                 let rel = (x0 - p.x, y0 - p.y);
                 let view = cropped.map(|room| ViewCrop::of(f.view, room));
-                self.shadows.insert(key, ShadowEntry { node, linear, anchor, rel, image: image.clone(), scale, view, made, inputs, moved, stamp });
+                self.shadows.insert(
+                    key,
+                    ShadowEntry { node, linear, anchor, rel, image: image.clone(), scale, view, made, inputs, moved, failed, image_left_out, stamp },
+                );
                 self.trim_fx_rasters(FX_RASTER_BUDGET);
                 (image, x0, y0, scale, moved, cropped)
             }
         };
+        self.stats.view_sized += usize::from(cropped.is_some() || scale != 1.0);
         Some(Shadow { image, at: Affine::translate((x, y)) * Affine::scale(scale), mode, moved, cropped })
     }
 
@@ -216,6 +252,8 @@ impl Renderer {
         // The offset moves the content rather than the filter: vello_cpu drops layer content
         // that lies entirely outside the viewport before filtering.
         let reach = reach + Vec2::new(dx, dy);
+        #[cfg(test)]
+        note_silhouette();
         self.with_filters(ctx, f, reach, blur, Some((mode, opacity)), |r, c, fr, comp| {
             c.set_transform(fr.view);
             c.push_layer(None, comp.map(|m| blend_mode(m.0)), comp.map(|m| m.1), None, Some(filter));
@@ -301,29 +339,39 @@ impl Renderer {
             let stamp = self.stamp;
             let e = match self.fx_geom.remove(&key) {
                 Some(e) if Arc::ptr_eq(&e.node, &o) => e,
-                _ => FxGeom { g: Arc::new(effected_path(n, bp)), items: vec![None; n.appearance.items.len()], node: o, stamp },
+                _ => {
+                    let (g, carry) = effected_path_carrying(n, bp);
+                    FxGeom { g: Arc::new(g), carried: carried(n, &carry), items: vec![None; n.appearance.items.len()], node: o, stamp }
+                }
             };
             (key, FxGeom { stamp, ..e })
         });
-        let g = match &cached {
-            Some((_, e)) => e.g.clone(),
-            None => Arc::new(effected_path(n, bp)),
+        let (g, carried) = match &cached {
+            Some((_, e)) => (e.g.clone(), e.carried.clone()),
+            None => {
+                let (g, carry) = effected_path_carrying(n, bp);
+                (Arc::new(g), carried(n, &carry))
+            }
         };
-        self.draw_shape_fx_geom(ctx, f, n, &g, rule, cached.as_mut().map(|(_, e)| &mut e.items));
+        let paints = carried.as_deref().unwrap_or(n);
+        self.draw_shape_fx_geom(ctx, f, n, paints, &g, rule, cached.as_mut().map(|(_, e)| &mut e.items));
         if let Some((key, e)) = cached {
             self.fx_geom.insert(key, e);
         }
     }
 
-    /// [`Self::draw_shape_fx`] on the effected geometry `g`, with the items' cached geometry.
+    /// [`Self::draw_shape_fx`] on the effected geometry `g`, with the items' cached geometry:
+    /// `paints` is `n` with the fills and strokes it paints.
+    #[allow(clippy::too_many_arguments)]
     fn draw_shape_fx_geom(
         &mut self,
         ctx: &mut RenderContext,
         f: &Frame,
         n: &Node,
+        paints: &Node,
         g: &BezPath,
         rule: FillRule,
-        items: Option<&mut Vec<Option<Arc<BezPath>>>>,
+        items: Option<&mut Vec<Option<ItemGeom>>>,
     ) {
         if g.elements().is_empty() {
             return;
@@ -332,7 +380,7 @@ impl Renderer {
             self.hairline(ctx, f, g, [0, 0, 0, 255]);
             return;
         }
-        let gctx = GeomContext::of(n);
+        let gctx = GeomContext::of(paints);
         let rfx = effects::raster_effects(&n.appearance.effects);
         // Document-space reach of the painted geometry (strokes, arrowheads…).
         let outset = n.appearance.outset();
@@ -342,7 +390,7 @@ impl Renderer {
         let reach = bounds.map_or(reach, |b| reach.union(b));
         let content = Content { node: n, owner: None, cache: Some(0), reach, outline: Some((g, rule)), bounds, kept: None };
         let mut items = items;
-        self.raster_fx(ctx, f, &content, &rfx, &mut |r, c, fr| r.paint_items(c, fr, n, g, rule, &gctx, items.as_deref_mut()));
+        self.raster_fx(ctx, f, &content, &rfx, &mut |r, c, fr| r.paint_items(c, fr, paints, g, rule, &gctx, items.as_deref_mut()));
         ctx.set_transform(Affine::IDENTITY);
     }
 
@@ -365,13 +413,21 @@ impl Renderer {
 
     /// What [`Self::draw_object_fx`] draws inside the object's transparency group.
     fn draw_object_fx_art(&mut self, ctx: &mut RenderContext, f: &Frame, a: &Arc<Node>, cache: bool) {
+        if !self.charge_fx_instance(f.doc, a) {
+            return;
+        }
         let art = self.fx_art(f.doc, a, cache);
         // Art the cache did not keep is made again in the next frame.
         let kept = cache && self.fx_arts.get(&(Arc::as_ptr(a) as usize), self.stamp).is_some_and(|e| Arc::ptr_eq(&e.1, &art));
         let outer = self.made_again;
         self.made_again = outer || !kept;
-        // With Crop Marks, the object inside the art paints its own raster effects.
-        let rfx = if effects::has_crop_marks(a) { vec![] } else { effects::raster_effects(&a.appearance.effects) };
+        // With Crop Marks, the object inside the art paints its own raster effects; Vector
+        // Halftone samples them with the object.
+        let rfx = if effects::has_crop_marks(a) || effects::addons::halftone::has_halftone(a) {
+            vec![]
+        } else {
+            effects::raster_effects(&a.appearance.effects)
+        };
         match cull_bounds(f.symbols, &art) {
             Some(reach) if !f.opts.outline && !rfx.is_empty() => {
                 // Feather, Inner Glow and Rasterize with Create Clipping Mask clip to the art's outline.
@@ -390,6 +446,19 @@ impl Renderer {
             _ => self.draw_fx_art(ctx, f, a, &art),
         }
         self.made_again = outer;
+    }
+
+    /// Whether the frame has room for the art of `a` when it is a symbol instance, charged to the
+    /// frame's symbol budget as an instance without effects is (`draw_node`): an instance whose
+    /// effects reshape its art draws through here, and nested instances would otherwise expand
+    /// without a limit. True for any other object.
+    pub(crate) fn charge_fx_instance(&mut self, doc: &vectorcraft_doc::Document, a: &Node) -> bool {
+        let NodeKind::SymbolInstance { symbol, .. } = &a.kind else { return true };
+        let count = doc.symbols.iter().find(|s| &s.name == symbol).map_or(0, |s| s.art.count() as u64);
+        let mut used = self.symbol_nodes;
+        let room = vectorcraft_doc::charge_symbol_art(&mut used, count, || ((), count)).is_some();
+        self.symbol_nodes = used;
+        room
     }
 
     /// The art [`Self::draw_object_fx`] draws for `a` (cached by `Arc` identity when `cache`):
@@ -426,6 +495,7 @@ impl Renderer {
         };
         let container = is_container(a);
         let art = match effects::crop_marks_art(a)
+            .or_else(|| crate::addons::halftone::art(doc, a))
             .or_else(|| effects::revolve_art(a))
             .or_else(|| effects::solid_art(a))
             .or_else(|| effects::reshape(Some(doc), a, symbol.as_ref()))
@@ -436,7 +506,9 @@ impl Renderer {
             None => effects::outline_art(Some(doc), a, symbol.as_ref()).unwrap_or_else(|| Node::group(a.id, vec![])),
         };
         let art = if effects::has_revolve(a) || effects::has_solid(a) { effects::evaluate_container(Some(doc), &art).unwrap_or(art) } else { art };
-        let mut art = self.adjusted_art(art, effects::color_map(&a.appearance.effects).as_ref());
+        // Vector Halftone samples the object with its colour adjustments: its dots keep their inks.
+        let outer = if effects::addons::halftone::has_halftone(a) { None } else { effects::color_map(&a.appearance.effects) };
+        let mut art = self.adjusted_art(doc, art, outer.as_ref());
         // A path's geometry effects still apply when it is drawn.
         let path = matches!(art.kind, NodeKind::Path { .. } | NodeKind::Compound { .. });
         art.appearance.effects.retain(|e| path && effects::is_geometry(&e.id));
@@ -469,12 +541,15 @@ impl Renderer {
     }
 
     /// `art` with the colour adjustments inside it applied, then `outer` (its object's own) on
-    /// everything ([`effects::adjust`]). Embedded images become recoloured copies, cached with the
-    /// decoded images under a key naming the adjustment.
-    fn adjusted_art(&mut self, mut art: Node, outer: Option<&effects::ColorMap>) -> Node {
+    /// everything ([`effects::adjust`]), with `doc`'s swatches. Embedded images become recoloured
+    /// copies, cached with the decoded images under a key naming the adjustment.
+    fn adjusted_art(&mut self, doc: &vectorcraft_doc::Document, mut art: Node, outer: Option<&effects::ColorMap>) -> Node {
         art.appearance.effects.retain(|e| !effects::is_adjustment(&e.id));
         let mut wanted: Vec<(String, String, u64, effects::ColorMap)> = vec![];
-        let adjusted = effects::adjust(&art, outer, &mut |key, map| {
+        // shortcut: art kept by `fx_arts` isn't made again when only a swatch's kind (spot or
+        // process) changes, which Duotone reads; editing the object makes it again.
+        let swatches = |name: &str| effects::addons::duotone::swatch_kind(doc, name);
+        let adjusted = effects::adjust(&art, outer, &swatches, &mut |key, map| {
             let mut h = std::hash::DefaultHasher::new();
             std::hash::Hash::hash(&format!("{map:?}"), &mut h);
             let hash = std::hash::Hasher::finish(&h);
@@ -651,17 +726,54 @@ impl Renderer {
         // The content itself (blurred / feathered / filtered), on its pixels: a filter layer's blur
         // works on a coarser grid tied to the canvas, so the blurred art shifted by up to a pixel
         // and looked blocky as the view moved by parts of a pixel (#755).
-        let blurs = rfx.iter().any(|fx| matches!(fx, RasterFx::Feather { radius } | RasterFx::GaussianBlur { radius } if *radius > 0.0));
+        let blurs = rfx.iter().any(|fx| matches!(fx, RasterFx::Feather { radius } | RasterFx::GaussianBlur { radius, .. } if *radius > 0.0));
         if blurs || rfx.iter().any(|fx| matches!(fx, RasterFx::Pixel(_) | RasterFx::Rasterize(_))) {
             self.pixel_content(ctx, f, content, rfx, paint);
         } else {
             paint(self, ctx, f);
         }
-        // Above the content: inner glows, clipped to its outline.
+        // Above the content: inner glows, clipped to its outline. An image's glow follows its
+        // visible pixels, not its frame (#5308).
         let Some((g, rule)) = content.outline else { return };
+        let pixels = matches!(content.node.kind, NodeKind::Image(_));
         for fx in rfx {
             let RasterFx::InnerGlow { mode, opacity, blur, color, center } = fx else { continue };
             let filter = shadow_filter(0.0, 0.0, *blur, pcolor(f.ink, color));
+            if pixels {
+                self.with_filters(ctx, f, g.bounding_box(), *blur, Some((*mode, *opacity)), |r, c, fr, comp| {
+                    if let Some((m, o)) = comp {
+                        c.set_transform(Affine::IDENTITY);
+                        c.push_layer(None, Some(blend_mode(m)), Some(o), None, None);
+                    }
+                    c.set_transform(fr.view);
+                    c.set_fill_rule(fill_rule(rule));
+                    c.push_clip_layer(g);
+                    c.push_layer(None, None, None, None, Some(filter));
+                    if !*center {
+                        // Everything around the visible pixels, so the glow bleeds in from their edges.
+                        let pad = blur * 2.0 + 4.0 * fr.px;
+                        c.set_transform(fr.view);
+                        c.set_paint(peniko::Color::BLACK);
+                        c.fill_rect(&g.bounding_box().inflate(pad, pad));
+                        c.push_layer(None, Some(peniko::BlendMode::new(peniko::Mix::Normal, peniko::Compose::DestOut)), None, None, None);
+                    }
+                    // The glow is cast by the pixels' alpha alone (the filter takes no color from them).
+                    paint(r, c, fr);
+                    if !*center {
+                        c.pop_layer();
+                    }
+                    c.pop_layer();
+                    // Only where the image shows, as much as it shows.
+                    c.push_layer(None, Some(peniko::BlendMode::new(peniko::Mix::Normal, peniko::Compose::DestIn)), None, None, None);
+                    paint(r, c, fr);
+                    c.pop_layer();
+                    c.pop_layer();
+                    if comp.is_some() {
+                        c.pop_layer();
+                    }
+                });
+                continue;
+            }
             self.with_filters(ctx, f, g.bounding_box(), *blur, Some((*mode, *opacity)), |_, c, fr, comp| {
                 // The blend layer goes outside the clip: a clip layer is isolated, so a blend
                 // inside it would mix with nothing instead of the content below.
@@ -695,6 +807,16 @@ impl Renderer {
     }
 }
 
+/// `n` with the gradients of its fills and strokes moved along with its effects by `carry`, or
+/// `None` when they stay where they are.
+fn carried(n: &Node, carry: &effects::Carry) -> Option<Arc<Node>> {
+    carry.moves(&n.appearance).then(|| {
+        let mut m = n.clone();
+        carry.apply(&mut m.appearance);
+        Arc::new(m)
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -716,6 +838,8 @@ mod tests {
             px: 1.0,
             opts: &opts,
             ink: Ink::Display,
+            output: Affine::IDENTITY,
+            plates: None,
         };
         let mut ctx = frame.offscreen_context(100, 100);
         let mut r = Renderer::new();

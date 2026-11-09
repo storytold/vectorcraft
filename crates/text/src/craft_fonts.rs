@@ -2,8 +2,7 @@
 //!
 //! Built with `CRAFT_FONTS_DIR=<craft-fonts checkout>`, [`CRAFT_FONTS`] holds every font in its
 //! manifest (Japanese UI and document fonts, Arabic fonts and Noto Sans Thai); built without it,
-//! it is empty and that text falls back to the installed system fonts. Release builds always set it. See `build.rs`
-//! and craftrules `standards/fonts.md`.
+//! it is empty and that text falls back to the installed system fonts. Release builds always set it. See `build.rs`.
 
 /// A font from the optional craft-fonts build input (empty unless built with `CRAFT_FONTS_DIR`).
 pub struct CraftFont {

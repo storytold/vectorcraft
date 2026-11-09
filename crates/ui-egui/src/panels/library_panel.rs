@@ -381,6 +381,13 @@ fn rename(ui: &mut UiState, from: &str, to: &str) -> Result<(), String> {
     }
     ui.docking = docking;
     ui.docking_hidden = hidden;
+    for group in &mut ui.docking_hidden_groups {
+        for panel in group {
+            if panel == from {
+                *panel = to.to_string();
+            }
+        }
+    }
     if ui.open_panel.as_deref() == Some(from) {
         ui.open_panel = Some(to.into());
     }
@@ -401,6 +408,7 @@ fn key(panel: &str, key: &str) -> String {
 pub(crate) fn submenu(category: &str) -> Option<&'static str> {
     match category {
         "gradients" => Some("Gradients"),
+        "patterns" => Some("Patterns"),
         "user" => Some("User Defined"),
         "loaded" => Some("Other Libraries"),
         _ => None,
@@ -787,12 +795,14 @@ fn panel_menu<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
 /// The libraries menu (a library panel's library button, the Swatches panel's): every library by
 /// submenu, the open ones checked, between `K`'s head and tail items.
 pub(crate) fn library_menu<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui) {
-    K::menu_head(app, ui);
-    let shown = open_panels(&app.ui);
-    if let Some(id) = library_items(ui, &K::list(app), &|id| shown.contains(&panel_id(K::KIND, id))) {
-        open::<K>(app, &id);
-    }
-    K::menu_tail(app, ui);
+    widgets::menu_scroll(ui, |ui| {
+        K::menu_head(app, ui);
+        let shown = open_panels(&app.ui);
+        if let Some(id) = library_items(ui, &K::list(app), &|id| shown.contains(&panel_id(K::KIND, id))) {
+            open::<K>(app, &id);
+        }
+        K::menu_tail(app, ui);
+    });
 }
 
 /// Menu rows for `libs`: the top-level ones, then a submenu per [`LibraryRef::submenu`], those

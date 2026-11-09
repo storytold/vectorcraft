@@ -299,12 +299,19 @@ fn sweep_graph(inputs: &[(BezPath, usize)], eps: f64, precision: f64) -> Option<
         if ends[0] == ends[1] {
             continue;
         }
+        // Source attribution belongs to the sweep piece: pinning its endpoints can move the
+        // middle off the original outlines even though it still separates the same faces.
+        let mut sources = mid(&segs).map(|m| outlines.sources_at(m)).unwrap_or_default();
         // Every edge at a vertex starts or ends exactly on it, so faces meeting there share its
         // coordinates: merging them (a union) then cancels their common edge, which it can't when
         // each face carries its own rounding of the corner (#893).
         pin_ends(&mut segs, p0, p1);
-        let Some(source) = mid(&segs).and_then(|m| outlines.source_at(m)) else { continue };
-        // Coincident pieces the sweep left apart are one edge (the front-most input's).
+        if sources.is_empty() {
+            sources = mid(&segs).map(|m| outlines.sources_at(m)).unwrap_or_default();
+        }
+        let Some(&source) = sources.last() else { continue };
+        // Coincident pieces the sweep left apart are one edge (the front-most input's), lying on
+        // the inputs of both.
         let key = (ends[0].min(ends[1]), ends[0].max(ends[1]));
         let here = mid(&segs);
         let twin_of = between.get(&key).and_then(|v| {
@@ -314,15 +321,16 @@ fn sweep_graph(inputs: &[(BezPath, usize)], eps: f64, precision: f64) -> Option<
             })
         });
         if let Some(e) = twin_of {
-            if let Some(e) = edges.get_mut(e)
-                && source > e.source
-            {
-                e.source = source;
+            if let Some(e) = edges.get_mut(e) {
+                e.source = e.source.max(source);
+                e.sources.extend(sources);
+                e.sources.sort_unstable();
+                e.sources.dedup();
             }
             continue;
         }
         between.entry(key).or_default().push(edges.len());
-        edges.push(Edge { segs, ends, source });
+        edges.push(Edge { segs, ends, source, sources });
     }
     Some((points, edges))
 }
@@ -414,7 +422,10 @@ impl Map {
     }
 }
 
-pub(super) fn build(shapes: &[Shape], precision: f64) -> Option<(Vec<Region>, Vec<Shape>)> {
+/// Faces and edges of `shapes`, and the pieces of the open paths (those with no closed subpath)
+/// that lie under another path in front of them, whose edges are that path's: under a closed
+/// path's outline, or along an open path in front.
+pub(super) fn build(shapes: &[Shape], precision: f64) -> Option<(Vec<Region>, Vec<Shape>, Vec<Shape>)> {
     let m = map_with(shapes, false, precision)?;
     let Map { edges, around, faces, holes, face_holes, tidy, anchors, snap, .. } = &m;
     let snap = *snap;
@@ -441,60 +452,77 @@ pub(super) fn build(shapes: &[Shape], precision: f64) -> Option<(Vec<Region>, Ve
         .collect();
 
     // Edges: chains of segments through vertices where nothing else meets.
-    let degree: Vec<usize> = around.iter().map(Vec::len).collect();
-    let passes = |v: usize| -> Option<(usize, usize)> {
+    let to_shapes = |chains: Vec<(Vec<Seg>, bool, usize)>| -> Vec<Shape> {
+        chains
+            .into_iter()
+            .filter_map(|(segs, closed, source)| {
+                let sp = segs_to_subpath(&tidy_segments(segs, closed, tidy), closed)?;
+                Some(Shape::new(unshear(PathData::new(vec![sp]), anchors, snap), FillRule::NonZero, shapes.get(source)?.key))
+            })
+            .collect()
+    };
+    let is_line = |i: usize| shapes.get(i).is_some_and(|s| !s.path.subpaths.iter().any(|sp| sp.closed));
+    // An edge is the front-most input's. Every other open path along it has a piece there too.
+    let edge_shapes = to_shapes(chains_by(edges, around, |e| vec![e.source]));
+    let under = to_shapes(chains_by(edges, around, |e| e.sources.iter().rev().copied().filter(|&i| i != e.source && is_line(i)).collect()));
+    Some((regions, edge_shapes, under))
+}
+
+/// The edges that `keys` gives each input, joined into chains through the vertices where only two
+/// edges of the same input meet, each with that input. An edge that several inputs share is in a
+/// chain for each of them. A chain is closed when it comes back round to where it started.
+fn chains_by(edges: &[Edge], around: &[Vec<usize>], keys: impl Fn(&Edge) -> Vec<usize>) -> Vec<(Vec<Seg>, bool, usize)> {
+    let keys: Vec<Vec<usize>> = edges.iter().map(&keys).collect();
+    // Where input `k` is among the inputs half-edge `h` gives.
+    let slot = |h: usize, k: usize| keys.get(h / 2).and_then(|ks| ks.iter().position(|&x| x == k));
+    let passes = |v: usize, k: usize| -> Option<(usize, usize)> {
         let list = around.get(v)?;
         let (&a, &b) = (list.first()?, list.get(1)?);
-        (degree.get(v) == Some(&2) && edges.get(a / 2)?.source == edges.get(b / 2)?.source).then_some((a, b))
+        (list.len() == 2 && slot(a, k).is_some() && slot(b, k).is_some()).then_some((a, b))
     };
-    let mut used = vec![false; edges.len()];
+    // Each edge's inputs, and whether its chain for each has been walked.
+    let mut used: Vec<Vec<bool>> = keys.iter().map(|ks| vec![false; ks.len()]).collect();
     let mut chains: Vec<(Vec<Seg>, bool, usize)> = Vec::new();
-    // A chain from half-edge `h0` up to the next vertex where it doesn't pass straight through;
-    // closed when it comes back round to where it started.
-    let walk = |h0: usize, used: &mut Vec<bool>| -> Option<(Vec<Seg>, bool, usize)> {
-        let source = edges.get(h0 / 2)?.source;
+    // A chain of input `k` from half-edge `h0` up to the next vertex where it doesn't pass straight through.
+    let walk = |h0: usize, k: usize, used: &mut Vec<Vec<bool>>| -> Option<(Vec<Seg>, bool, usize)> {
         let mut segs = Vec::new();
         let mut h = h0;
         loop {
-            let u = used.get_mut(h / 2)?;
+            let u = used.get_mut(h / 2)?.get_mut(slot(h, k)?)?;
             if *u {
-                return Some((segs, true, source));
+                return Some((segs, true, k));
             }
             *u = true;
             segs.extend(half_segs(edges, h));
             let v = origin(edges, twin(h))?;
-            let Some((a, b)) = passes(v) else { return Some((segs, origin(edges, h0) == Some(v), source)) };
+            let Some((a, b)) = passes(v, k) else { return Some((segs, origin(edges, h0) == Some(v), k)) };
             h = if a == twin(h) { b } else { a };
         }
     };
+    let unwalked = |used: &[Vec<bool>], h: usize, k: usize| slot(h, k).is_some_and(|s| used.get(h / 2).and_then(|u| u.get(s)) == Some(&false));
     for v in 0..around.len() {
-        if passes(v).is_some() {
-            continue;
-        }
         for &h in around.get(v).map(Vec::as_slice).unwrap_or_default() {
-            if !used.get(h / 2).copied().unwrap_or(true)
-                && let Some(c) = walk(h, &mut used)
-            {
-                chains.push(c);
+            for &k in keys.get(h / 2).map(Vec::as_slice).unwrap_or_default() {
+                if passes(v, k).is_none()
+                    && unwalked(&used, h, k)
+                    && let Some(c) = walk(h, k, &mut used)
+                {
+                    chains.push(c);
+                }
             }
         }
     }
     // What's left are closed loops with no junction on them.
     for e in 0..edges.len() {
-        if !used.get(e).copied().unwrap_or(true)
-            && let Some(c) = walk(2 * e, &mut used)
-        {
-            chains.push(c);
+        for &k in keys.get(e).map(Vec::as_slice).unwrap_or_default() {
+            if unwalked(&used, 2 * e, k)
+                && let Some(c) = walk(2 * e, k, &mut used)
+            {
+                chains.push(c);
+            }
         }
     }
-    let edge_shapes = chains
-        .into_iter()
-        .filter_map(|(segs, closed, source)| {
-            let sp = segs_to_subpath(&tidy_segments(segs, closed, tidy), closed)?;
-            Some(Shape::new(unshear(PathData::new(vec![sp]), anchors, snap), FillRule::NonZero, shapes.get(source)?.key))
-        })
-        .collect();
-    Some((regions, edge_shapes))
+    chains
 }
 
 /// A point strictly inside a filled path, well away from its edges where it can be (for re-finding

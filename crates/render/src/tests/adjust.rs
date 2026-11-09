@@ -112,7 +112,7 @@ fn an_embedded_image_is_recoloured_and_the_original_pixels_stay() {
 fn a_symbol_instance_recolours_its_art() {
     let mut d = Document::new(100.0, 100.0);
     let art = red_square(-15.0, -15.0);
-    d.symbols.push(Symbol { name: "Red".into(), art: Arc::new(art) });
+    d.symbols.push(Symbol { dynamic: false, name: "Red".into(), art: Arc::new(art) });
     let mut n = Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Red".into(), xf: Affine::translate((50.0, 50.0)) });
     n.appearance.effects.push(hue());
     let l = d.layers[0].id;

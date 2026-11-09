@@ -92,6 +92,21 @@ fn range_stroke_options_split_runs() {
 }
 
 #[test]
+fn range_stroke_gains_a_default_weight_and_scales_explicit_weight() {
+    let mut s = session();
+    let id = NodeId(run(&mut s, "text.create", json!({"x": 10, "y": 50, "text": "ABCD"}))["id"].as_u64().unwrap());
+    let weights = |s: &Session| text(s, id).runs.iter().map(|r| r.style.stroke_width).collect::<Vec<_>>();
+    run(&mut s, "text.setRangeStyle", json!({"id": id.0, "start": 0, "end": 2, "stroke": "#ff0000"}));
+    assert_eq!(weights(&s), [1.0, 0.0], "a newly painted range has a visible default stroke");
+
+    run(&mut s, "object.scale", json!({"ids": [id.0], "sx": 200, "sy": 200}));
+    run(&mut s, "text.setRangeStyle", json!({"id": id.0, "start": 0, "end": 2, "strokeWidth": 2.0}));
+    assert_eq!(weights(&s), [1.0, 0.0], "two document points become one text-space point at 200% scale");
+    run(&mut s, "text.setRangeStyle", json!({"id": id.0, "start": 2, "end": 4, "stroke": "#0000ff", "strokeWidth": 4.0}));
+    assert_eq!(weights(&s), [1.0, 2.0], "a different range receives its scaled weight");
+}
+
+#[test]
 fn eyedropper_and_outlines_carry_the_character_stroke() {
     let mut s = session();
     let id = stroked_text(&mut s);

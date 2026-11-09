@@ -1,9 +1,11 @@
 //! Object → Expand: live shapes, type and effects (Object), strokes (Stroke) and gradient and pattern
 //! fills (Fill) into plain art in one undo step; blends, repeats and Intertwine groups become groups of their steps, of their instances and of what they draw. Placed documents (Object) become editable copies of the
-//! art they show, their resources joining the document. A linear or radial gradient fill becomes a
+//! art they show, their resources joining the document. Symbol instances (Object) become their art,
+//! as Break Link to Symbol places it. A linear or radial gradient fill becomes a
 //! gradient mesh, or solid strips / concentric ellipses, inside a clip group shaped like the object; a freeform
 //! gradient becomes a mesh shaped like the object. A pattern fill becomes the tiles it paints inside a clip
-//! group shaped like the object. Create Gradient Mesh shares the sampling.
+//! group shaped like the object. Create Gradient Mesh shares the sampling. A dimension whose art
+//! Expand changes becomes a plain group of that art.
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -18,6 +20,7 @@ use vectorcraft_doc::pattern::{PatternDef, place_art};
 use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, Scaling};
 use vectorcraft_geom::{Affine, PathData, Point, Rect, SubPath, Vec2, shapes};
 
+use super::dimension::EndedLink;
 use super::edit::selected_roots;
 use super::menucmds::{run_raw, squash};
 use super::object::as_clipping_path;
@@ -40,7 +43,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Expand…",
             ["Object"],
             None,
-            "{object?: true (type → outlines, live shapes → paths, effects baked, blends → groups of their steps, repeats → groups of their instances, Intertwine groups → groups of their objects and of the parts drawn over the others (clip groups), envelopes → their distorted content, placed documents → editable copies of their art, as placing the file without link gives, its symbols, patterns, swatches and images joining the document), fill?: true (gradient fills → `gradient` art, pattern fills → their tiles in a clip group shaped like the object), stroke?: true (strokes → filled outlines, the stroked paths that baking effects leaves included), gradient?: \"objects\" (default: `steps` solid strips, concentric ellipses for radial gradients) | \"mesh\" (a gradient mesh); both in a clip group shaped like the object (freeform gradients always become a mesh shaped like it), steps?: 1..1000 (255)} one undo step → {ids}",
+            "{object?: true (symbol instances without effects (their fills' and strokes' included) and not in perspective → their art, as Break Link to Symbol places it (the instances that art holds stay instances), type → outlines, live shapes → paths, effects baked, blends → groups of their steps, repeats → groups of their instances, Intertwine groups → groups of their objects and of the parts drawn over the others (clip groups), envelopes → their distorted content, placed documents → editable copies of their art, as placing the file without link gives, its symbols, patterns, swatches and images joining the document), fill?: true (gradient fills → `gradient` art, pattern fills → their tiles in a clip group shaped like the object), stroke?: true (strokes → filled outlines, the stroked paths that baking effects leaves included), gradient?: \"objects\" (default: `steps` solid strips, concentric ellipses for radial gradients) | \"mesh\" (a gradient mesh); both in a clip group shaped like the object (freeform gradients always become a mesh shaped like it), steps?: 1..1000 (255)} one undo step; a dimension whose art an option changes, or one selected with the art it measures when that art is replaced, becomes a plain group of its art → {ids}",
             has_selection,
             expand
         ),
@@ -49,11 +52,17 @@ pub fn specs() -> Vec<CommandSpec> {
             "Expand Options",
             [],
             None,
-            "{} what each Expand option would change in the selection → {object, fill, stroke, gradient, appearance} (true: something to expand; gradient: a gradient fill that Fill expands, which Expand Gradient To applies to; appearance: appearance attributes Expand Appearance expands first, for which Object › Expand… is dimmed in the menus)",
+            "{} what each Expand option would change in the selection → {object, fill, stroke, gradient, appearance, symbolArt?: {fill, stroke, gradient}} (true: something to expand; gradient: a gradient fill that Fill expands, which Expand Gradient To applies to; appearance: appearance attributes Expand Appearance expands first, for which Object › Expand… is dimmed in the menus; symbolArt, when the selection holds symbol instances that Object expands: true when only their art holds it, which Fill and Stroke reach only with Object on)",
             has_selection,
             |s, _| {
                 let e = Expandable::of(&s.doc()?.doc, &selected_roots(s)?);
-                Ok(json!({"object": e.object(), "fill": e.fill, "stroke": e.stroke, "gradient": e.gradient, "appearance": has_appearance(s)}))
+                let mut info =
+                    json!({"object": e.object(), "fill": e.fill, "stroke": e.stroke, "gradient": e.gradient, "appearance": has_appearance(s)});
+                if e.symbols {
+                    let [fill, stroke, gradient] = e.symbol_art;
+                    info["symbolArt"] = json!({"fill": fill, "stroke": stroke, "gradient": gradient});
+                }
+                Ok(info)
             }
         ),
     ]
@@ -124,45 +133,74 @@ struct Expandable {
     repeats: bool,
     /// Intertwine groups (Object expands them into groups of what they draw).
     intertwines: bool,
+    /// Symbol instances (Object expands them into their art, as Break Link to Symbol does).
+    symbols: bool,
+    /// Fill, stroke and gradient that only the art of those symbol instances holds: Fill and Stroke
+    /// reach them only when Object expands the instances.
+    symbol_art: [bool; 3],
 }
 
 impl Expandable {
     fn of(d: &Document, roots: &[NodeId]) -> Self {
         let mut e = Self::default();
         for n in roots.iter().filter_map(|r| d.node(*r)) {
-            n.walk(&mut |c| {
-                let shape = matches!(c.kind, NodeKind::Path { .. } | NodeKind::Compound { .. });
-                e.text |= matches!(c.kind, NodeKind::Text(_));
-                e.live |= matches!(c.kind, NodeKind::Path { live: Some(_), .. });
-                e.effects |= !c.appearance.effects.is_empty();
-                e.envelope |= matches!(c.kind, NodeKind::Envelope { .. });
-                e.blends |= matches!(c.kind, NodeKind::Blend { .. });
-                e.placed |= matches!(c.kind, NodeKind::PlacedDocument(_));
-                e.repeats |= matches!(c.kind, NodeKind::Repeat(_));
-                e.intertwines |= matches!(c.kind, NodeKind::Intertwine { .. });
-                e.stroke |= match &c.kind {
-                    // Type's outlines take its characters' stroke (see `type.createOutlines`).
-                    NodeKind::Text(t) => t.runs.iter().any(|r| r.style.has_stroke()),
-                    _ => shape && !c.appearance.stroke_paint().is_none(),
-                };
-                e.gradient |= match &c.kind {
-                    NodeKind::Text(t) => t.runs.iter().any(|r| matches!(r.style.fill, Paint::Gradient(_))),
-                    _ => shape && c.appearance.items.iter().any(|i| gradient_fill(i).is_some()),
-                };
-                e.fill |= e.gradient;
-                e.fill |= match &c.kind {
-                    NodeKind::Text(t) => {
-                        t.runs.iter().any(|r| matches!(&r.style.fill, Paint::Pattern { pattern, .. } if d.pattern(pattern).is_some()))
-                    }
-                    _ => shape && c.appearance.items.iter().any(|i| pattern_fill(d, i).is_some()),
-                };
-            });
+            e.add(d, n);
         }
+        let own = [e.fill, e.stroke, e.gradient];
+        // The Fill and Stroke options also reach the art of the symbol instances that Object
+        // expands: a dynamic instance's art with its own changes, and each other symbol's art once.
+        let instances = super::brushsym::expandable_instances(d, roots);
+        e.symbols = !instances.is_empty();
+        let mut seen = std::collections::HashSet::new();
+        for inst in instances.iter().filter_map(|id| d.node(*id)) {
+            let NodeKind::SymbolInstance { symbol, .. } = &inst.kind else { continue };
+            let Some(sym) = d.symbols.iter().find(|s| &s.name == symbol) else { continue };
+            let mut a = Self::default();
+            if !inst.extras().symbol_overrides.is_empty() {
+                a.add(d, &vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, inst));
+            } else if seen.insert(symbol.clone()) {
+                a.add(d, &sym.art);
+            }
+            e.fill |= a.fill;
+            e.gradient |= a.gradient;
+            e.stroke |= a.stroke;
+        }
+        e.symbol_art = [e.fill && !own[0], e.stroke && !own[1], e.gradient && !own[2]];
         e
     }
 
+    /// Adds what `n` and the nodes under it hold.
+    fn add(&mut self, d: &Document, n: &Node) {
+        let e = self;
+        n.walk(&mut |c| {
+            let shape = matches!(c.kind, NodeKind::Path { .. } | NodeKind::Compound { .. });
+            e.text |= matches!(c.kind, NodeKind::Text(_));
+            e.live |= matches!(c.kind, NodeKind::Path { live: Some(_), .. });
+            e.effects |= !c.appearance.effects.is_empty();
+            e.envelope |= matches!(c.kind, NodeKind::Envelope { .. });
+            e.blends |= matches!(c.kind, NodeKind::Blend { .. });
+            e.placed |= matches!(c.kind, NodeKind::PlacedDocument(_));
+            e.repeats |= matches!(c.kind, NodeKind::Repeat(_));
+            e.intertwines |= matches!(c.kind, NodeKind::Intertwine { .. });
+            e.stroke |= match &c.kind {
+                // Type's outlines take its characters' stroke (see `type.createOutlines`).
+                NodeKind::Text(t) => t.runs.iter().any(|r| r.style.has_stroke()),
+                _ => shape && !c.appearance.stroke_paint().is_none(),
+            };
+            e.gradient |= match &c.kind {
+                NodeKind::Text(t) => t.runs.iter().any(|r| matches!(r.style.fill, Paint::Gradient(_))),
+                _ => shape && c.appearance.items.iter().any(|i| gradient_fill(i).is_some()),
+            };
+            e.fill |= e.gradient;
+            e.fill |= match &c.kind {
+                NodeKind::Text(t) => t.runs.iter().any(|r| matches!(&r.style.fill, Paint::Pattern { pattern, .. } if d.pattern(pattern).is_some())),
+                _ => shape && c.appearance.items.iter().any(|i| pattern_fill(d, i).is_some()),
+            };
+        });
+    }
+
     fn object(&self) -> bool {
-        self.text || self.live || self.effects || self.envelope || self.blends || self.placed || self.repeats || self.intertwines
+        self.text || self.live || self.effects || self.envelope || self.blends || self.placed || self.repeats || self.intertwines || self.symbols
     }
 }
 
@@ -189,17 +227,54 @@ fn pattern_fill<'a, 'd>(d: &'d Document, i: &'a AppearanceItem) -> Option<(&'a F
 }
 
 fn expand(s: &mut Session, p: &Value) -> Result<Value> {
+    let scope = s.begin_undo_scope();
+    let result = expand_steps(s, p);
+    if let Some(scope) = scope {
+        s.end_undo_scope(scope, result.is_err());
+    }
+    result
+}
+
+fn expand_steps(s: &mut Session, p: &Value) -> Result<Value> {
     let object = bool_or(p, "object", true);
     let fill = bool_or(p, "fill", true);
     let stroke = bool_or(p, "stroke", true);
     let to = GradientTo::parse(p)?;
     let from = s.doc()?.history.undo.len();
-    let rev0 = s.doc()?.revision;
     let mut e = Expandable::of(&s.doc()?.doc, &selected_roots(s)?);
+    // Before anything expands: outlining the art a dimension measures would remove the dimension.
+    let before = s.doc()?.doc.clone();
+    let mut ended = vec![];
+    end_dimension_links(s, &mut ended)?;
+    let rev0 = s.doc()?.revision;
     // Placed documents first: their art (type, strokes, gradients) expands below.
     if object && e.placed {
         let roots = selected_roots(s)?;
         s.edit("Expand", |d, _| expand_placed_under(d, &roots))?;
+        e = Expandable::of(&s.doc()?.doc, &selected_roots(s)?);
+    }
+    // Then the symbol instances, those in the placed documents' art included: their art expands
+    // below, and the instances it holds stay instances.
+    if object && e.symbols {
+        let roots = selected_roots(s)?;
+        // An edit that expands no instance (too many objects to make) is undone, and the
+        // instances stay as they are.
+        let mut expanded = None;
+        let r = s.edit("Expand", |d, _| {
+            let any = super::brushsym::expand_instances_under(d, &roots)?;
+            expanded = Some(any);
+            if any { Ok(()) } else { Err(EngineError::Other("Expand: nothing to expand".into())) }
+        });
+        if !matches!((&r, expanded), (Err(_), Some(false))) {
+            r?;
+        }
+        e = Expandable::of(&s.doc()?.doc, &selected_roots(s)?);
+        // The placed documents in the instances' art too.
+        if e.placed {
+            let roots = selected_roots(s)?;
+            s.edit("Expand", |d, _| expand_placed_under(d, &roots))?;
+            e = Expandable::of(&s.doc()?.doc, &selected_roots(s)?);
+        }
     }
     // Intertwine groups before what they hold: their objects, and the copies of the parts drawn
     // over the others, expand below.
@@ -217,8 +292,16 @@ fn expand(s: &mut Session, p: &Value) -> Result<Value> {
         let roots = selected_roots(s)?;
         s.edit("Expand", |d, _| super::patterncmds::expand_repeats(d, &roots).map(|_| ()))?;
     }
+    // The dimensions in the art those steps made.
+    end_dimension_links(s, &mut ended)?;
     if object && e.effects {
-        let _ = run_raw(s, "effect.expandAppearance", &json!({}));
+        // Effects that Expand Appearance can't expand are left as they are. When it refuses to
+        // leave a process color on a grayscale image with transparency, Expand fails as a whole.
+        if let Err(e) = run_raw(s, "effect.expandAppearance", &json!({}))
+            && super::paint::is_colorize_refusal(&e)
+        {
+            return Err(e);
+        }
         // What is left to expand is in the baked art: Expand Appearance leaves strokes strokes
         // (#3089), a group's own as stroked paths among its members, which Stroke outlines below.
         e = Expandable::of(&s.doc()?.doc, &selected_roots(s)?);
@@ -256,8 +339,26 @@ fn expand(s: &mut Session, p: &Value) -> Result<Value> {
     if s.doc()?.revision == rev0 {
         return Err(EngineError::Other("Expand: nothing to expand".into()));
     }
+    if !ended.is_empty() {
+        // A dimension whose source Expand replaced stays plain: its link no longer fits that art.
+        let after = s.doc()?.doc.clone();
+        ended.retain(|e| e.source_kept(&before, &after));
+        s.edit("Expand", |d, _| {
+            super::dimension::restore_unchanged(d, std::mem::take(&mut ended));
+            Ok(())
+        })?;
+    }
     squash(s, from, "Expand");
     Ok(json!({ "ids": s.doc()?.selection.objects.iter().map(|i| i.0).collect::<Vec<_>>() }))
+}
+
+/// Ends the live link of each dimension under or holding the selection, adding it to `ended`.
+fn end_dimension_links(s: &mut Session, ended: &mut Vec<EndedLink>) -> Result<()> {
+    let roots = selected_roots(s)?;
+    if !super::dimension::reached(&s.doc()?.doc, &roots).is_empty() {
+        ended.extend(s.edit("Expand", |d, _| Ok(super::dimension::end_links(d, &roots)))?);
+    }
+    Ok(())
 }
 
 fn drop_live(n: &mut Node) {
@@ -306,8 +407,9 @@ fn expand_fills(d: &mut Document, l: &Node, to: GradientTo) -> Option<Node> {
     let mut expanded = false;
     for item in &l.appearance.items {
         // Items that paint nothing go; a gradient that can't be expanded stays.
-        let art = gradient_fill(item).and_then(|(f, g)| {
-            let (fl, path, bounds) = fill_shape(l, item, &path, bounds)?;
+        let art = gradient_fill(item).and_then(|_| {
+            let (fl, path, bounds, moved) = fill_shape(l, item, &path, bounds)?;
+            let (f, g) = gradient_fill(&moved)?;
             gradient_art(d, &fl, &path, bounds, f, g, to)
         });
         let Some(art) = art else {
@@ -368,30 +470,40 @@ fn gradient_art(d: &mut Document, l: &Node, path: &PathData, bounds: Rect, f: &F
 /// Path `l` as the canvas paints its fills and strokes: its visible geometry effects applied to its
 /// path (a plain path then), and every geometry effect of its own removed. `None` when it has no
 /// visible geometry effect.
-fn reshaped(l: &Node) -> Option<Node> {
-    use vectorcraft_render::effects::{GeomContext, apply_geometry_with, has_geometry, is_geometry};
+pub(crate) fn reshaped(l: &Node) -> Option<Node> {
+    use vectorcraft_render::effects::{GeomContext, apply_geometry_carrying, has_geometry, is_geometry};
     if !has_geometry(&l.appearance.effects) {
         return None;
     }
     let (path, _) = node_path(l)?;
-    let g = apply_geometry_with(&l.appearance.effects, &path, path.bounds()?, &GeomContext::of(l));
+    let (g, carry) = apply_geometry_carrying(&l.appearance.effects, &path, path.bounds()?, &GeomContext::of(l));
     let mut m = with_path(l, g);
+    // Its gradients move with the outline, as the canvas paints them.
+    if carry.moves(&m.appearance) {
+        carry.apply(&mut m.appearance);
+    }
     m.appearance.effects.retain(|e| !is_geometry(&e.id));
     Some(m)
 }
 
 /// Path `l` (outline `path`, box `bounds`) as its fill `item` paints it on the canvas, with its
-/// outline and box: when the fill has visible geometry effects, `l` with the outline they make of
-/// `path` as a plain path, and that outline's box.
-fn fill_shape(l: &Node, item: &AppearanceItem, path: &PathData, bounds: Rect) -> Option<(Node, PathData, Rect)> {
-    use vectorcraft_render::effects::{GeomContext, apply_geometry_with, has_geometry};
+/// outline, box and fill: when the fill has visible geometry effects, `l` with the outline they
+/// make of `path` as a plain path, that outline's box, and the fill with its gradient moved along
+/// with the outline.
+pub(crate) fn fill_shape(l: &Node, item: &AppearanceItem, path: &PathData, bounds: Rect) -> Option<(Node, PathData, Rect, AppearanceItem)> {
+    use vectorcraft_render::effects::{GeomContext, apply_geometry_carrying, has_geometry};
     if !has_geometry(item.effects()) {
-        return Some((l.clone(), path.clone(), bounds));
+        return Some((l.clone(), path.clone(), bounds, item.clone()));
     }
     // In the fill's context, as drawing runs them: a plug-in effect is told which fill it is on.
-    let outline = apply_geometry_with(item.effects(), path, bounds, &GeomContext::of(l).item(item));
+    let (outline, carry) = apply_geometry_carrying(item.effects(), path, bounds, &GeomContext::of(l).item(item));
     let b = outline.bounds()?;
-    Some((with_path(l, outline.clone()), outline, b))
+    let mut one = Appearance { items: vec![item.clone()], ..Default::default() };
+    if carry.moves(&one) {
+        carry.apply(&mut one);
+    }
+    let moved = one.items.pop().unwrap_or_else(|| item.clone());
+    Some((with_path(l, outline.clone()), outline, b, moved))
 }
 
 /// Path or compound path `l` with `path` as its path, a plain path.
@@ -429,28 +541,209 @@ fn expand_pattern_fills(s: &mut Session) -> Result<()> {
     })
 }
 
-/// Expand the pattern fills under `root` that paint a transparent image into the tiles they paint
+/// Expand the pattern fills under `root` that paint a transparent or colorized image into the tiles they paint
 /// ([`expand_patterns_where`]), so each tile image becomes an object of its own; the other
-/// pattern fills stay. A tile image counts as
-/// transparent when its key is in `see_through` (it has see-through pixels), or when it, a group
+/// pattern fills stay. A tile image counts when its key is in `see_through` (it has see-through
+/// pixels), when it has a colorize paint that `colorize` counts, or when it, a group
 /// in the tile art, the fill, the shape or a group the shape is in has opacity or a blending
-/// mode. Returns how many shapes changed.
-pub(crate) fn expand_transparent_image_patterns(d: &mut Document, root: NodeId, see_through: &BTreeSet<String>) -> Result<usize> {
-    let (_, n) = replace_leaves(d, root, |d, l| {
-        // Most leaves have no pattern fill: skip the ancestry walk for them.
-        if !l.appearance.items.iter().any(|i| pattern_fill(d, i).is_some()) {
-            return None;
+/// mode. Blends, envelopes, repeats and Intertwine groups that hold such a fill are expanded
+/// first ([`expand_live_with_transparent_image_patterns`]). Hidden shapes and shapes in hidden
+/// groups or layers and in template layers stay as they are. A pattern fill in tile art counts
+/// too, down to the [`PATTERN_LEVELS`] the canvas draws, and the tile art the expansion makes is
+/// expanded again for it. A pattern fill stays, and a live object stays live, when its art would
+/// take the expanded art past [`MAX_GENERATED`](vectorcraft_doc::live::MAX_GENERATED) objects.
+/// Returns how many objects changed.
+pub(crate) fn expand_transparent_image_patterns(
+    d: &mut Document,
+    root: NodeId,
+    see_through: &BTreeSet<String>,
+    colorize: &dyn Fn(&Document, &Node) -> bool,
+) -> Result<usize> {
+    expand_transparent_image_patterns_within(d, root, see_through, colorize, vectorcraft_doc::live::MAX_GENERATED)
+}
+
+/// [`expand_transparent_image_patterns`] with the expanded art held to `budget` objects.
+pub(crate) fn expand_transparent_image_patterns_within(
+    d: &mut Document,
+    root: NodeId,
+    see_through: &BTreeSet<String>,
+    colorize: &dyn Fn(&Document, &Node) -> bool,
+    budget: usize,
+) -> Result<usize> {
+    let mut changed = 0;
+    let made = std::cell::Cell::new(0usize);
+    // Each pass brings the patterns in the expanded tiles' art up one level.
+    for levels in (1..=PATTERN_LEVELS).rev() {
+        let live = expand_live_with_transparent_image_patterns(d, root, see_through, colorize, levels, &made, budget)?;
+        let (_, n) = replace_leaves(d, root, |d, l| {
+            // Past the budget, and for most leaves, which have no pattern fill, skip the ancestry walk.
+            if made.get() >= budget || !l.appearance.items.iter().any(|i| pattern_fill(d, i).is_some()) {
+                return None;
+            }
+            // The expanded art would be shown.
+            if !d.ancestry(l.id).unwrap_or_default().iter().filter_map(|a| d.node(*a)).all(drawn) {
+                return None;
+            }
+            let which = |d: &Document, i: &AppearanceItem| transparent_pattern_fill(d, l, i, see_through, colorize, levels);
+            let art = expand_patterns_where(d, l, which, budget - made.get())?;
+            // The copies of the shape's other items count too.
+            let count = art.count_with_masks();
+            if count > budget - made.get() {
+                return None;
+            }
+            made.set(made.get() + count);
+            Some(art)
+        })?;
+        if live + n == 0 {
+            break;
         }
-        let shape = d.ancestry(l.id).unwrap_or_default().iter().filter_map(|a| d.node(*a)).any(blended);
-        let transparent = |d: &Document, i: &AppearanceItem| {
-            pattern_fill(d, i).is_some_and(|(f, def, _)| {
-                let on = shape || f.opacity < 1.0 || f.blend != BlendMode::Normal;
-                def.art.iter().any(|a| transparent_image(a, see_through, on))
-            })
-        };
-        expand_patterns_where(d, l, transparent)
-    })?;
-    Ok(n)
+        changed += live + n;
+    }
+    Ok(changed)
+}
+
+/// How many levels of patterns the canvas draws: a pattern fill in the art of a pattern, and so
+/// on, as [`vectorcraft_render`] draws them.
+const PATTERN_LEVELS: u32 = 3;
+
+/// Whether a layer of `d` holds a pattern fill that [`expand_transparent_image_patterns`] would
+/// expand with `see_through` and `colorize` ([`holds_transparent_image_patterns`]).
+pub(crate) fn has_transparent_image_patterns(d: &Document, see_through: &BTreeSet<String>, colorize: &dyn Fn(&Document, &Node) -> bool) -> bool {
+    d.layers.iter().any(|l| holds_transparent_image_patterns(d, l, see_through, colorize, PATTERN_LEVELS))
+}
+
+/// Whether `n`, art of `d`, is or holds a shown path or compound path (in groups, blends,
+/// envelopes, repeats and Intertwine groups) with a pattern fill that
+/// [`transparent_pattern_fill`] counts with `levels`. Guides, clipping paths and template layers
+/// don't count.
+fn holds_transparent_image_patterns(
+    d: &Document,
+    n: &Node,
+    see_through: &BTreeSet<String>,
+    colorize: &dyn Fn(&Document, &Node) -> bool,
+    levels: u32,
+) -> bool {
+    if !drawn(n) {
+        return false;
+    }
+    match &n.kind {
+        NodeKind::Path { guide: true, .. } | NodeKind::Path { clipping: true, .. } => false,
+        NodeKind::Path { .. } | NodeKind::Compound { .. } => {
+            n.appearance.items.iter().any(|i| transparent_pattern_fill(d, n, i, see_through, colorize, levels))
+        }
+        _ => n.children().is_some_and(|ch| ch.iter().any(|c| holds_transparent_image_patterns(d, c, see_through, colorize, levels))),
+    }
+}
+
+/// Whether `n` is shown and isn't a template layer.
+fn drawn(n: &Node) -> bool {
+    n.visible && !matches!(n.kind, NodeKind::Layer { template: true, .. })
+}
+
+/// Expand the shown blends, envelopes, repeats and Intertwine groups under `root` that hold a
+/// pattern fill [`holds_transparent_image_patterns`] counts with `levels` into the art the exporters write for
+/// them ([`expand_live_deep`](vectorcraft_render::effects::expand_live_deep), under one budget for
+/// everything nested in each), so the shapes they draw are leaves. The objects that art holds count
+/// in `made`, and an object whose art would take `made` past `budget` stays live. Returns how many
+/// were expanded.
+fn expand_live_with_transparent_image_patterns(
+    d: &mut Document,
+    root: NodeId,
+    see_through: &BTreeSet<String>,
+    colorize: &dyn Fn(&Document, &Node) -> bool,
+    levels: u32,
+    made: &std::cell::Cell<usize>,
+    budget: usize,
+) -> Result<usize> {
+    fn outermost(
+        d: &Document,
+        n: &Node,
+        see_through: &BTreeSet<String>,
+        colorize: &dyn Fn(&Document, &Node) -> bool,
+        levels: u32,
+        out: &mut Vec<NodeId>,
+    ) {
+        if !drawn(n) {
+            return;
+        }
+        match &n.kind {
+            NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Repeat(_) | NodeKind::Intertwine { .. } => {
+                if holds_transparent_image_patterns(d, n, see_through, colorize, levels) {
+                    out.push(n.id);
+                }
+            }
+            NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => {
+                children.iter().for_each(|c| outermost(d, c, see_through, colorize, levels, out));
+            }
+            _ => {}
+        }
+    }
+    /// Fresh ids for everything under `n`: copies of the same art share theirs.
+    fn fresh_ids(d: &mut Document, n: &mut Node) {
+        for c in n.children_mut().into_iter().flatten() {
+            let c = Arc::make_mut(c);
+            c.id = d.alloc_id();
+            fresh_ids(d, c);
+        }
+    }
+    let mut live = vec![];
+    if let Some(n) = d.node(root) {
+        outermost(d, n, see_through, colorize, levels, &mut live);
+    }
+    let mut count = 0;
+    for id in &live {
+        if made.get() >= budget {
+            break;
+        }
+        let Some(n) = d.node(*id) else { continue };
+        // Random Transform effects take their seed from the ids: bake them first ([`bake_seeded`]),
+        // and leave the object live when that can't be done.
+        let Some(mut g) = bake_seeded(&vectorcraft_render::effects::expand_live_deep(Some(d), n)) else { continue };
+        // An object whose art would take the expanded art past the budget stays live.
+        let size = g.count_with_masks();
+        if size > budget - made.get() {
+            continue;
+        }
+        made.set(made.get() + size);
+        g.id = *id;
+        fresh_ids(d, &mut g);
+        *d.node_mut(*id).ok_or(EngineError::NoNode(*id))? = g;
+        count += 1;
+    }
+    Ok(count)
+}
+
+/// Whether `i`, an item of leaf `l`, is a pattern fill whose tile art holds a transparent image
+/// ([`transparent_image`], through pattern fills in that art down to `levels` patterns),
+/// counting the fill's and the shape's opacity and blending mode.
+fn transparent_pattern_fill(
+    d: &Document,
+    l: &Node,
+    i: &AppearanceItem,
+    see_through: &BTreeSet<String>,
+    colorize: &dyn Fn(&Document, &Node) -> bool,
+    levels: u32,
+) -> bool {
+    let shape = d.ancestry(l.id).unwrap_or_default().iter().filter_map(|a| d.node(*a)).any(blended);
+    pattern_fill_holds_transparent_image(d, i, see_through, colorize, shape, levels)
+}
+
+/// Whether `i` is a pattern fill whose tile art holds a transparent image ([`transparent_image`]),
+/// down to `levels` patterns, counting the fill's opacity and blending mode, or anything when `on`.
+fn pattern_fill_holds_transparent_image(
+    d: &Document,
+    i: &AppearanceItem,
+    keys: &BTreeSet<String>,
+    colorize: &dyn Fn(&Document, &Node) -> bool,
+    on: bool,
+    levels: u32,
+) -> bool {
+    if levels == 0 {
+        return false;
+    }
+    let Some((f, def, _)) = pattern_fill(d, i) else { return false };
+    let on = on || f.opacity < 1.0 || f.blend != BlendMode::Normal;
+    def.art.iter().any(|a| transparent_image(d, a, keys, colorize, on, levels - 1))
 }
 
 /// Whether `n` has opacity or a blending mode of its own.
@@ -458,13 +751,21 @@ fn blended(n: &Node) -> bool {
     n.opacity < 1.0 || n.blend != BlendMode::Normal
 }
 
-/// Whether `n` is or holds a transparent image: one with see-through pixels (key in `keys`), or
-/// with opacity or a blending mode of its own or of a group in `n`, or anywhere when `on`.
-fn transparent_image(n: &Node, keys: &BTreeSet<String>, on: bool) -> bool {
+/// Whether `n` (art of `d`) is or holds an image with see-through pixels (key in `keys`), a
+/// colorize paint that `colorize` counts, opacity or a blending mode of its own or of a group in
+/// `n`, or anywhere when `on`, also in the tile art of the pattern fills of the paths in `n`, down
+/// to `levels` patterns. Hidden art doesn't count.
+fn transparent_image(d: &Document, n: &Node, keys: &BTreeSet<String>, colorize: &dyn Fn(&Document, &Node) -> bool, on: bool, levels: u32) -> bool {
+    if !n.visible {
+        return false;
+    }
     let on = on || blended(n);
     match &n.kind {
-        NodeKind::Image(im) => on || keys.contains(&im.key),
-        _ => n.children().is_some_and(|ch| ch.iter().any(|c| transparent_image(c, keys, on))),
+        NodeKind::Image(im) => on || keys.contains(&im.key) || (n.extras().colorize.is_some() && colorize(d, n)),
+        NodeKind::Path { .. } | NodeKind::Compound { .. } => {
+            n.appearance.items.iter().any(|i| pattern_fill_holds_transparent_image(d, i, keys, colorize, on, levels))
+        }
+        _ => n.children().is_some_and(|ch| ch.iter().any(|c| transparent_image(d, c, keys, colorize, on, levels))),
     }
 }
 
@@ -476,12 +777,12 @@ fn transparent_image(n: &Node, keys: &BTreeSet<String>, on: bool) -> bool {
 /// ([`pattern_tiles`]). A pattern fill that lays no tile there stays. `None` when no pattern fill
 /// lays a tile.
 fn expand_patterns(d: &mut Document, l: &Node) -> Option<Node> {
-    expand_patterns_where(d, l, |_, _| true)
+    expand_patterns_where(d, l, |_, _| true, usize::MAX)
 }
 
 /// [`expand_patterns`] for only the pattern fills `which` picks: the others stay like the other
-/// items.
-fn expand_patterns_where(d: &mut Document, l: &Node, which: impl Fn(&Document, &AppearanceItem) -> bool) -> Option<Node> {
+/// items, as does a pattern fill whose tiles would take the tiles of `l` past `budget` objects.
+fn expand_patterns_where(d: &mut Document, l: &Node, which: impl Fn(&Document, &AppearanceItem) -> bool, budget: usize) -> Option<Node> {
     if !matches!(l.kind, NodeKind::Path { .. } | NodeKind::Compound { .. })
         || !l.appearance.items.iter().any(|i| pattern_fill(d, i).is_some() && which(d, i))
     {
@@ -494,19 +795,47 @@ fn expand_patterns_where(d: &mut Document, l: &Node, which: impl Fn(&Document, &
     let mut parts = vec![];
     let mut rest = vec![];
     let mut expanded = false;
+    // What `assemble` adds around the tiles when every picked fill expands: a copy of the path for
+    // each run of other items, a group around the parts and one for the path's transparency, and
+    // the path's opacity mask.
+    let (mut copies, mut run, mut picked) = (0usize, false, vec![]);
+    for i in &l.appearance.items {
+        if let Some((f, _, _)) = pattern_fill(d, i).filter(|_| which(d, i)) {
+            run = false;
+            picked.push(f.opacity < 1.0 || f.blend != BlendMode::Normal);
+        } else if i.visible() && !i.paint().is_none() && !run {
+            (copies, run) = (copies + 1, true);
+        }
+    }
+    let group = copies + picked.len() > 1 || !l.appearance.effects.is_empty();
+    // A lone tile group with transparency of its own goes in a group for the path's.
+    let transparency = blended(l) && !group && picked.first().is_some_and(|b| *b);
+    let around = copies.saturating_mul(l.count()) + usize::from(group) + usize::from(transparency) + l.count_with_masks().saturating_sub(l.count());
+    let mut left = budget.saturating_sub(around);
+    // A fill that expands while others follow leaves room for the copy and group that those take
+    // if they don't fit, and once one doesn't fit, the ones after it stay too.
+    let (mut later, mut full) = (picked.len(), false);
     for item in &l.appearance.items {
         let fill = pattern_fill(d, item).filter(|_| which(d, item)).map(|(f, def, xf)| (f, def.clone(), xf));
-        let tiles = fill.and_then(|(f, def, xf)| {
-            let (fl, _, bounds) = fill_shape(l, item, &path, bounds)?;
-            let t = pattern_tiles(d, &def, xf, bounds);
+        later -= usize::from(fill.is_some());
+        let room = if later > 0 { left.saturating_sub(l.count() + 1) } else { left };
+        let tiles = fill.filter(|_| !full).and_then(|(f, def, xf)| {
+            let (fl, _, bounds, _) = fill_shape(l, item, &path, bounds)?;
+            let Some(t) = pattern_tiles(d, &def, xf, bounds, room) else {
+                full = true;
+                return None;
+            };
             (!t.is_empty()).then_some((f, fl, t))
         });
-        let Some(art) = tiles.and_then(|(f, fl, t)| tile_art(d, &fl, f, &t)) else {
+        let art = tiles.and_then(|(f, fl, t)| tile_art(d, &fl, f, &t));
+        full |= art.as_ref().is_some_and(|a| a.count_with_masks() > room);
+        let Some(art) = art.filter(|a| a.count_with_masks() <= room) else {
             if item.visible() && !item.paint().is_none() {
                 rest.push(item.clone());
             }
             continue;
         };
+        left -= art.count_with_masks();
         if !rest.is_empty() {
             parts.push(styled_copy(d, l, std::mem::take(&mut rest)));
         }
@@ -533,30 +862,38 @@ fn expand_patterns_where(d: &mut Document, l: &Node, which: impl Fn(&Document, &
 /// not, and when it does more than move art that holds a symbol instance, whose strokes the canvas
 /// draws scaled with the tile and an instance does not scale. Random Transform effects and brushes
 /// that vary at random in the art are baked first ([`seeds_baked`], [`random_brushes_baked`]).
-fn pattern_tiles(d: &mut Document, def: &PatternDef, xf: Affine, bounds: Rect) -> Vec<Node> {
+/// `None` when the tiles would hold more than `budget` objects.
+fn pattern_tiles(d: &mut Document, def: &PatternDef, xf: Affine, bounds: Rect, budget: usize) -> Option<Vec<Node>> {
     if !moves_only(xf) && def.art.iter().any(|a| has_instances(a)) {
-        return vec![];
+        return Some(vec![]);
     }
     let Some(def) = seeds_baked(def) else {
-        return vec![];
+        return Some(vec![]);
     };
     let brushes = vectorcraft_brush::library(d);
     let def = random_brushes_baked(d, &brushes, def);
     let def = &*def;
+    let per_tile = def.art.iter().map(|a| a.count_with_masks()).sum::<usize>();
+    if def.offsets_covering(xf.inverse().transform_rect_bbox(bounds)).len().saturating_mul(per_tile) > budget {
+        return None;
+    }
     let scaling = Scaling { strokes: true, effects: Some(vectorcraft_render::effects::scale_effect), patterns: true, ..Scaling::default() };
     if scales_evenly(xf) && (moves_only(xf) || !def.art.iter().any(|a| has_geometry_effects(a))) {
-        return def.instances_in_with(xf, bounds, scaling);
+        return Some(def.instances_in_with(xf, bounds, scaling));
     }
     if def.art.iter().any(|a| has_unbakeable_effects(a)) {
-        return vec![];
+        return Some(vec![]);
     }
     let placed = Scaling { patterns: true, ..Scaling::default() };
     let mut tiles = def.instances_in_with(Affine::IDENTITY, xf.inverse().transform_rect_bbox(bounds), placed);
+    // Outlined strokes and effects can make more objects than the art had.
+    let mut left = budget;
     for t in &mut tiles {
         *t = prepared(d, &brushes, t);
+        left = left.checked_sub(t.count_with_masks())?;
         place_art(t, xf, scaling);
     }
-    tiles
+    Some(tiles)
 }
 
 /// Pattern `def` with each path in its art (opacity masks included) that has a random Transform
@@ -659,10 +996,13 @@ fn moves_only(a: Affine) -> bool {
     (m0 - 1.0).abs() <= eps && m1.abs() <= eps && m2.abs() <= eps && (m3 - 1.0).abs() <= eps
 }
 
+/// Is `e` a visible Transform effect with Random on (which takes its seed from the object's id)?
+pub(crate) fn seeded(e: &vectorcraft_doc::Effect) -> bool {
+    e.visible && e.id == "distort.transform" && e.params.get("random").and_then(Value::as_bool) == Some(true)
+}
+
 /// Does `n` have a visible Transform effect with Random on, its own or a fill's or stroke's?
 fn seeded_here(n: &Node) -> bool {
-    let seeded =
-        |e: &vectorcraft_doc::Effect| e.visible && e.id == "distort.transform" && e.params.get("random").and_then(Value::as_bool) == Some(true);
     n.appearance.effects.iter().any(seeded) || n.appearance.items.iter().any(|i| i.effects().iter().any(seeded))
 }
 

@@ -61,7 +61,7 @@ fn a_chosen_artboard_s_svg_holds_only_its_own_art() {
     s.execute("shape.rectangle", &json!({"x": first + 10.0, "y": 10, "width": 30, "height": 30})).unwrap();
     s.execute("shape.ellipse", &json!({"x": third + 10.0, "y": 10, "width": 30, "height": 30})).unwrap();
     // A rectangle has straight sides only; the ellipse is curves.
-    let shapes = |svg: &str| (svg.matches("<path").count() + svg.matches("<rect").count(), svg.contains(" C") || svg.contains("<ellipse"));
+    let shapes = |svg: &str| (vectorcraft_testkit::svg_shapes(svg), svg.contains(" C") || svg.contains("<ellipse") || svg.contains("<circle"));
     let text = |v: &serde_json::Value| v["text"].as_str().unwrap().to_string();
     let third_only = text(&s.execute("document.serialize", &json!({"format": "svg", "useArtboards": true, "range": "3"})).unwrap());
     assert_eq!(shapes(&third_only), (1, true), "{third_only}");
@@ -88,8 +88,8 @@ fn a_chosen_artboard_s_svg_leaves_out_its_neighbours_art_in_a_shared_group() {
     s.execute("object.group", &json!({})).unwrap();
     let text = |v: &serde_json::Value| v["text"].as_str().unwrap().to_string();
     let third_only = text(&s.execute("document.serialize", &json!({"format": "svg", "useArtboards": true, "range": "3"})).unwrap());
-    assert_eq!(third_only.matches("<path").count() + third_only.matches("<rect").count(), 1, "{third_only}");
-    assert!(third_only.contains(" C") || third_only.contains("<ellipse"), "{third_only}");
+    assert_eq!(vectorcraft_testkit::svg_shapes(&third_only), 1, "{third_only}");
+    assert!(third_only.contains(" C") || third_only.contains("<ellipse") || third_only.contains("<circle"), "{third_only}");
 }
 
 /// An object off a chosen artboard whose drop shadow reaches onto it is in that artboard's SVG.
@@ -102,7 +102,7 @@ fn a_chosen_artboard_s_svg_keeps_an_object_whose_shadow_reaches_it() {
     let paths = |s: &mut Session| {
         let svg = s.execute("document.serialize", &json!({"format": "svg", "artboard": 0})).unwrap();
         let text = svg["text"].as_str().unwrap().to_string();
-        text.matches("<path").count() + text.matches("<rect").count()
+        vectorcraft_testkit::svg_shapes(&text)
     };
     assert_eq!(paths(&mut s), 0, "the plain rectangle is off the artboard");
     s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [id], "params": {"x": 20, "y": 0, "blur": 0}})).unwrap();

@@ -253,6 +253,103 @@ fn a_missing_link_is_reported_not_copied() {
     assert!(report.contains("blue.png: not found"), "{report}");
 }
 
+/// A file missing from a document that moved keeps the place its relative path names from the
+/// document's folder: the packaged document writes its relative path from there.
+#[test]
+fn a_missing_link_of_a_moved_document_keeps_its_relative_place() {
+    let a = Folder::new("package-moved-a");
+    let b = Folder::new("package-moved-b");
+    let mut s = poster(&a);
+    std::fs::remove_dir_all(&b.0).unwrap();
+    std::fs::rename(&a.0, &b.0).unwrap();
+    std::fs::remove_file(b.file("art/blue.png")).unwrap();
+    open(&mut s, &b.file("poster.vectorcraft"));
+    // Saved in another folder first: the relative path still names the folder the file was read from.
+    std::fs::create_dir_all(b.0.join("saved")).unwrap();
+    save(&mut s, &b.file("saved/poster.vectorcraft"));
+    let out = b.file("out");
+    let r = run(&mut s, "file.package", json!({"folder": out}));
+    assert_eq!(r["missingLinks"], json!(["blue.png"]), "{r}");
+    let packaged = std::path::Path::new(&out).join("poster Folder/poster.vectorcraft");
+    let doc = vectorcraft_format::load(&std::fs::read(packaged).unwrap()).unwrap();
+    let mut rel = vec![];
+    doc.visit_images(|_, im| rel.push(im.link.clone().unwrap().relative));
+    rel.sort();
+    assert_eq!(rel, [Some("../../art/blue.png".to_string()), Some("Links/red.png".to_string())]);
+}
+
+/// A missing link stays missing when another file sits where its relative path, written for the
+/// package folder, would name from the folder the document was last saved in.
+#[test]
+fn a_missing_link_is_not_collected_from_another_place() {
+    let a = Folder::new("package-other-a");
+    let b = Folder::new("package-other-b");
+    let mut s = poster(&a);
+    std::fs::remove_dir_all(&b.0).unwrap();
+    std::fs::rename(&a.0, &b.0).unwrap();
+    std::fs::remove_file(b.file("art/blue.png")).unwrap();
+    open(&mut s, &b.file("poster.vectorcraft"));
+    std::fs::create_dir_all(b.0.join("s1/s2/s3")).unwrap();
+    save(&mut s, &b.file("s1/s2/s3/poster.vectorcraft"));
+    // `../../art/blue.png` from the package folder, read from `s1/s2/s3`.
+    write(&b.file("s1/art/blue.png"), &png(10, 10, RED));
+    let r = run(&mut s, "file.package", json!({"folder": b.file("out")}));
+    assert_eq!((r["links"].as_u64(), r["missingLinks"].clone()), (Some(1), json!(["blue.png"])), "{r}");
+}
+
+/// Without copying, a packaged document links a file found by name beside the document it was read
+/// from, after a save in another folder, where it was found.
+#[test]
+fn a_link_found_by_name_is_kept_where_it_was_found_without_copying() {
+    let a = Folder::new("package-name-a");
+    let b = Folder::new("package-name-b");
+    let mut s = poster(&a);
+    std::fs::remove_dir_all(&b.0).unwrap();
+    std::fs::rename(&a.0, &b.0).unwrap();
+    let away = b.file("away.png");
+    std::fs::rename(b.file("art/blue.png"), &away).unwrap();
+    open(&mut s, &b.file("poster.vectorcraft"));
+    std::fs::create_dir_all(b.0.join("saved")).unwrap();
+    save(&mut s, &b.file("saved/poster.vectorcraft"));
+    std::fs::rename(&away, b.file("blue.png")).unwrap();
+    let out = b.file("out");
+    run(&mut s, "file.package", json!({"folder": out, "copyLinks": false}));
+    let packaged = std::path::Path::new(&out).join("poster Folder/poster.vectorcraft");
+    let r = open(&mut s, &packaged.to_string_lossy());
+    assert_eq!(&r["missingLinks"], &json!([]), "{r}");
+}
+
+/// A file that comes back beside the document it was read from, after the document was saved in
+/// another folder, is collected from there.
+#[test]
+fn a_link_that_comes_back_after_a_save_elsewhere_is_collected() {
+    let a = Folder::new("package-back-a");
+    let b = Folder::new("package-back-b");
+    let away = Folder::new("package-back-away");
+    let mut s = poster(&a);
+    std::fs::remove_dir_all(&b.0).unwrap();
+    std::fs::rename(&a.0, &b.0).unwrap();
+    std::fs::rename(b.file("art/blue.png"), away.file("blue.png")).unwrap();
+    open(&mut s, &b.file("poster.vectorcraft"));
+    std::fs::create_dir_all(b.0.join("saved")).unwrap();
+    save(&mut s, &b.file("saved/poster.vectorcraft"));
+    std::fs::rename(away.file("blue.png"), b.file("art/blue.png")).unwrap();
+    let out = b.file("out");
+    let r = run(&mut s, "file.package", json!({"folder": out}));
+    assert_eq!((r["links"].as_u64(), r["missingLinks"].clone()), (Some(2), json!([])), "{r}");
+    let packaged = std::path::Path::new(&out).join("poster Folder/poster.vectorcraft");
+    let doc = vectorcraft_format::load(&std::fs::read(packaged).unwrap()).unwrap();
+    let mut rel = vec![];
+    doc.visit_images(|_, im| rel.push(im.link.clone().unwrap().relative));
+    rel.sort();
+    assert_eq!(rel, [Some("Links/blue.png".to_string()), Some("Links/red.png".to_string())]);
+    // A file beside the folder the document was last saved in is collected too.
+    std::fs::create_dir_all(b.0.join("saved/art")).unwrap();
+    std::fs::rename(b.file("art/blue.png"), b.file("saved/art/blue.png")).unwrap();
+    let r = run(&mut s, "file.package", json!({"folder": b.file("out2")}));
+    assert_eq!((r["links"].as_u64(), r["missingLinks"].clone()), (Some(2), json!([])), "{r}");
+}
+
 #[test]
 fn a_font_named_by_another_of_its_names_is_copied() {
     let dir = Folder::new("package-alias");

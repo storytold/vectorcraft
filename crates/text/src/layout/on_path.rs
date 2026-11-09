@@ -6,6 +6,7 @@ use super::{
     Affine, ArcPath, BezPath, Ctx, GlyphBend, Justify, LineInfo, ListMarker, ParamCurve, PathAlign, PathData, PathEffect, PathEl, Point, Range,
     SGlyph, Shape, TextObject, Vec2, style_metrics,
 };
+use crate::fontdb::PathAlignHeights;
 
 /// The distance along type on a path each glyph takes: its advance measured `spacing` points above
 /// the path (Type on a Path Options › Spacing), so glyphs close up round the outside of a curve and
@@ -170,7 +171,7 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
     // A path out of range holds no text, as a path with no length holds none.
     let ap = if in_range(&path.to_bezpath()) { ArcPath::new(path) } else { ArcPath::default() };
     let m = Metrics::max(&sg).map(|m| (m.asc, m.desc)).unwrap_or_else(|| {
-        let s = style_metrics(cx.db, cx.style_at(0));
+        let s = style_metrics(cx.face_at(0).as_deref(), cx.style_at(0));
         (s.0, s.1)
     });
     if ap.is_empty() {
@@ -315,16 +316,25 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
         cx.out.overflow = true;
         fits = sg.get(fit..).and_then(|rest| rest.iter().map(|g| g.byte).min()).unwrap_or(text_len);
     }
-    // Align to Path: how far down (glyph space) the type moves to run its ascender, centre or
-    // descender along the path instead of its baseline.
-    let rise = match t.path_align {
-        PathAlign::Baseline => 0.0,
-        PathAlign::Ascender => m.0,
-        PathAlign::Descender => -m.1,
-        PathAlign::Center => (m.0 - m.1) * 0.5,
+    // Align to Path: how far down (glyph space) a glyph moves to run the top of its em box, half the
+    // height of the top of its H or the bottom of its font's bounding box along the path instead of its
+    // baseline, each glyph by its own face, size and vertical scale. In vertical type the glyph
+    // moves half its em (with its horizontal scale) for Ascender and Descender, and stays for Center.
+    // An inline graphic moves as a character of its run would, by its run's vertical scale in both.
+    let vertical = cx.vertical;
+    let rise_of = |g: &SGlyph| {
+        let em = g.face.units_per_em() * if vertical { g.sx } else { g.sy };
+        let h = if vertical { PathAlignHeights { top: 0.5, bottom: -0.5, center: 0.0 } } else { g.face.path_align_heights() };
+        match t.path_align {
+            PathAlign::Baseline => 0.0,
+            PathAlign::Ascender => h.top * em,
+            PathAlign::Descender => h.bottom * em,
+            PathAlign::Center => h.center * em,
+        }
     };
     let mut x = 0.0;
     for (g, &step) in sg.iter().zip(&steps).take(fit) {
+        let rise = rise_of(g);
         let s = s0 + x;
         let (p, dir) = ap.at(s + step * 0.5);
         let angle = dir.y.atan2(dir.x);

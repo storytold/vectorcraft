@@ -49,6 +49,8 @@ fn save_doc(app: &mut VectorcraftApp, path: &Path, font: &str, link: bool) {
     if link {
         std::fs::remove_file(&pic).unwrap();
     }
+    // Opened afresh by `open`: an open file would only come to the front (#3455).
+    app.run("file.close", json!({})).unwrap();
 }
 
 fn open(app: &mut VectorcraftApp, path: &Path) {
@@ -135,6 +137,8 @@ fn find_fonts_opens_find_font_on_the_missing_font() {
     app.run("text.create", json!({"x": 10, "y": 80, "text": "Gone", "font": "Zz Missing Family"})).unwrap();
     let doc = root.join("doc.vectorcraft");
     app.run("document.save", json!({"path": doc.to_string_lossy()})).unwrap();
+    // Opened afresh: an open file would only come to the front (#5369).
+    app.run("file.close", json!({})).unwrap();
     open(&mut app, &doc);
     assert_eq!(kind(&app), Some(KIND));
     app.ui.dialog.as_mut().unwrap().fields.insert("discard".into(), json!(true));
@@ -223,6 +227,7 @@ fn one_dialog_at_a_time_document_by_document() {
     super::super::cancel(&mut app);
     assert!(app.ui.dialog.is_none());
     // A document closed before its turn is passed over.
+    app.run("file.closeAll", json!({})).unwrap();
     open(&mut app, &a);
     open(&mut app, &b);
     let index = app.session.documents().iter().rposition(|d| d.path.as_deref() == Some(&*a.to_string_lossy())).unwrap();
@@ -295,6 +300,24 @@ fn a_search_folder_that_fails_is_not_tried_again() {
     assert_eq!(super::super::confirm(&mut app).err().as_deref(), Some("choose the font files to add"));
 }
 
+/// Opening a file that is already open only brings its tab to the front: Missing Fonts, closed
+/// once, is not asked again (#5369).
+#[test]
+fn reopening_an_open_document_does_not_ask_about_its_fonts_again() {
+    let root = folder("reopen");
+    let mut app = app_for(&root);
+    let doc = root.join("doc.vectorcraft");
+    save_doc(&mut app, &doc, "No Such Font Family", false);
+    open(&mut app, &doc);
+    assert_eq!(kind(&app), Some(KIND));
+    super::super::cancel(&mut app);
+    app.run("file.new", json!({})).unwrap();
+    open(&mut app, &doc);
+    frame(&mut app);
+    assert_eq!((app.session.documents().len(), app.session.active_index()), (2, Some(0)));
+    assert_eq!(kind(&app), None);
+}
+
 /// A placed document that Links › Edit Original opens asks about its fonts, as File › Open does.
 #[test]
 fn edit_original_asks_about_the_placed_documents_fonts() {
@@ -302,7 +325,6 @@ fn edit_original_asks_about_the_placed_documents_fonts() {
     let mut app = app_for(&root);
     let badge = root.join("badge.vectorcraft");
     save_doc(&mut app, &badge, "Badge Missing Family", false);
-    app.session.execute("file.close", &json!({})).unwrap();
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     app.run("file.place", json!({"path": badge.to_string_lossy(), "link": true})).unwrap();
     let tabs = app.session.documents().len();
@@ -328,16 +350,39 @@ fn files_go_with_their_fonts_by_name() {
     assert_eq!((d.str("state"), &d.fields["chosen"]), ("done".to_string(), &json!([])));
 }
 
+/// A folder search's counts use the forms the language's plural rule picks for each count.
+#[test]
+fn search_counts_use_each_count_form() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut progress_text = |code: &str, n: u64| {
+        crate::i18n::set_current(crate::i18n::Lang::from_code(code).unwrap());
+        let d = Dialog::new(KIND, json!({"state": "done", "searched": {"folders": n, "files": n}, "unreadable": n}));
+        let text = crate::tests_labels::painted_text(&mut app, |_, ui| progress(ui, &d));
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        text
+    };
+    let text = progress_text("en", 1);
+    assert!(text.contains("1 folder and 1 file searched") && text.contains("1 folder or file couldn't be read"), "{text}");
+    for (n, searched, unreadable) in [
+        (1, "Prohledáno: 1 složka, 1 soubor", "Nepodařilo se přečíst 1 složku nebo soubor"),
+        (2, "Prohledáno: 2 složky, 2 soubory", "Nepodařilo se přečíst 2 složky nebo soubory"),
+        (5, "Prohledáno: 5 složek, 5 souborů", "Nepodařilo se přečíst 5 složek nebo souborů"),
+    ] {
+        let text = progress_text("cs", n);
+        assert!(text.contains(searched) && text.contains(unreadable), "{n}: {text}");
+    }
+}
+
 #[test]
 fn the_web_says_how_many_fonts_are_missing() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     app.run("text.create", json!({"x": 10, "y": 40, "text": "Gone", "font": "No Such Font Family"})).unwrap();
     after_open_for(&mut app, &json!({}), true);
-    assert_eq!(app.ui.status, "1 font(s) aren't available here: their text shows in another font");
+    assert_eq!(app.ui.status, "1 font isn't available here: its text shows in another font");
     assert!(app.ui.pending_fonts.is_empty());
     // The open's notes stay on show.
-    app.ui.status = "Opened with 1 note(s): fonts".into();
+    app.ui.status = "Opened with 1 note: fonts".into();
     after_open_for(&mut app, &json!({"warnings": ["fonts"]}), true);
-    assert_eq!(app.ui.status, "Opened with 1 note(s): fonts");
+    assert_eq!(app.ui.status, "Opened with 1 note: fonts");
 }

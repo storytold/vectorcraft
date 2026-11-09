@@ -17,7 +17,7 @@ use vectorcraft_doc::{Node, NodeId, NodeKind, TraceView};
 use vectorcraft_engine::cmd::TracePresetChange;
 use vectorcraft_engine::cmd::swatchlib::DOCUMENT_SWATCHES;
 
-use super::{first_selected, library_panel, pstate, set_pstate, swatches};
+use super::{first_selected, pstate, set_pstate, swatches};
 use crate::VectorcraftApp;
 use crate::widgets::{self, menu_item};
 
@@ -44,24 +44,6 @@ fn palette_label(id: &str) -> &'static str {
         "documentLibrary" => tl!("Document Library"),
         _ => tl!("Limited"),
     }
-}
-
-/// The name of Document Library's library `key` (the document's swatches or a swatch library); a
-/// library that is gone shows its key.
-fn library_label(app: &VectorcraftApp, key: &str) -> String {
-    match swatches::limit_name(app, key) {
-        Some(_) if key == DOCUMENT_SWATCHES => tl!(swatches::DOCUMENT_SWATCHES).to_string(),
-        Some(name) => library_panel::library_name(key, &name).to_string(),
-        None => key.to_string(),
-    }
-}
-
-/// Document Library's choices: the document's swatches, then the colour libraries (`current`
-/// checked) → the key chosen.
-fn library_list(app: &VectorcraftApp, ui: &mut Ui, current: &str) -> Option<String> {
-    let document = menu_item(ui, swatches::DOCUMENT_SWATCHES, true, current == DOCUMENT_SWATCHES).then(|| DOCUMENT_SWATCHES.to_string());
-    ui.separator();
-    library_panel::library_items(ui, &swatches::colour_libraries(app), &|id| id == current).or(document)
 }
 
 /// Document Library's Colors choices with the document's swatches: All, then the document's color
@@ -263,7 +245,9 @@ pub(crate) fn view_row(app: &mut VectorcraftApp, ui: &mut Ui, current: TraceView
 fn trace_with(app: &mut VectorcraftApp, preset: &str) {
     // A failure is reported in the status bar. The panel stays as it was: the Image Trace
     // button (Properties, Control bar) opens it.
-    let _ = app.run("imageTrace.make", json!({ "preset": preset }));
+    if let Err(e) = crate::trace_runs::start(app, "imageTrace.make", json!({ "preset": preset }), false) {
+        app.status(e);
+    }
 }
 
 /// Reveal the editable tracing controls, including fidelity, in the panel's current location.
@@ -284,6 +268,21 @@ pub(crate) fn open_settings(app: &mut VectorcraftApp) {
 /// Outline preset is not the Outline view), as any other string else.
 fn preset_label(name: &str) -> &str {
     crate::i18n::tr_ctx(crate::i18n::current(), "imageTrace", name)
+}
+
+/// The buttons above the Image Trace panel's Preset dropdown, in panel order: each one's name and the
+/// built-in preset a click chooses. The help page lists these options before Preset
+/// (<https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/image-trace-panel-options.html>);
+/// which preset each one chooses is VectorCraft's own.
+fn preset_buttons() -> [(&'static str, &'static str); 6] {
+    [
+        (preset_label("Auto Color"), "Auto Color"),
+        (tl!("High Color"), "High Fidelity Photo"),
+        (tl!("Low Color"), "Low Fidelity Photo"),
+        (tl!("Grayscale"), "Shades of Gray"),
+        (tl!("Black and White"), "Black and White Logo"),
+        (preset_label("Outline"), "Outline"),
+    ]
 }
 
 fn preset_list(app: &mut VectorcraftApp, ui: &mut Ui, current: &str) -> Option<String> {
@@ -330,7 +329,7 @@ pub(crate) fn trace_button(app: &mut VectorcraftApp, ui: &mut Ui, width: f32) {
     if main.on_hover_text(tl!("Trace the image with the Default preset")).clicked() {
         trace_with(app, "Default");
     }
-    if let Some(p) = egui::Popup::menu(&arrow).show(|ui| preset_list(app, ui, "")).and_then(|r| r.inner) {
+    if let Some(p) = egui::Popup::menu(&arrow).show(|ui| widgets::menu_scroll(ui, |ui| preset_list(app, ui, ""))).and_then(|r| r.inner) {
         trace_with(app, &p);
     }
 }
@@ -376,18 +375,32 @@ fn trace(app: &mut VectorcraftApp, ctx: &egui::Context, st: &mut TraceUi) {
     let all = presets(app, ctx);
     let known = find_preset(&all, &st.preset).map(|p| p.0.as_str());
     let preset = known.filter(|_| st.preset != "Custom").unwrap_or("Default");
-    match app.run("imageTrace.make", json!({ "preset": preset, "params": st.params, "view": st.view.id() })) {
-        Ok(r) => {
-            st.info = Some((r["paths"].as_u64().unwrap_or(0), r["anchors"].as_u64().unwrap_or(0), r["colors"].as_u64().unwrap_or(0)));
-            // Adopt the committed state immediately: Undo before the next panel frame must
-            // still be recognized as a change, even when it returns to the previous settings.
-            if let Some(stored) = target(app).2 {
-                st.synced = stored;
-                st.object = target_key(app);
-            }
-        }
+    let p = json!({ "preset": preset, "params": st.params, "view": st.view.id() });
+    match crate::trace_runs::start(app, "imageTrace.make", p, true) {
+        // Traced off the UI thread: the result comes to [`traced`].
+        Ok(r) if r["background"] == true => {}
+        Ok(r) => adopt(app, st, &r),
         Err(e) => app.ui.status = e,
     }
+}
+
+/// The panel takes trace `r`'s counts and the traced object's stored settings at once: Undo before
+/// the next panel frame must still be recognized as a change, even when it returns to the previous
+/// settings.
+fn adopt(app: &VectorcraftApp, st: &mut TraceUi, r: &Value) {
+    st.info = Some((r["paths"].as_u64().unwrap_or(0), r["anchors"].as_u64().unwrap_or(0), r["colors"].as_u64().unwrap_or(0)));
+    if let Some(stored) = target(app).2 {
+        st.synced = stored;
+        st.object = target_key(app);
+    }
+}
+
+/// A trace the panel started off the UI thread was applied with result `r` ([`crate::trace_runs`]).
+pub(crate) fn traced(app: &VectorcraftApp, r: &Value) {
+    let Some(ctx) = app.ui_ctx.clone() else { return };
+    let mut st: TraceUi = pstate(&ctx, "image-trace");
+    adopt(app, &mut st, r);
+    set_pstate(&ctx, "image-trace", st);
 }
 
 fn slider(ui: &mut Ui, label: &str, v: &mut f64, range: std::ops::RangeInclusive<f64>, suffix: &str) -> (bool, bool) {
@@ -561,6 +574,23 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let restored = sync_with_object(&mut st, stored, object, &all, &changes);
     let mut retrace = false;
 
+    // A preset button chooses its preset as the Preset dropdown does; the button of the panel's
+    // preset shows as selected.
+    ui.horizontal_wrapped(|ui| {
+        for (label, name) in preset_buttons() {
+            let selected = st.preset == name;
+            if cfg!(test) {
+                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::unique(("trace-preset-button", name)), selected));
+            }
+            if ui.add(egui::Button::selectable(selected, label)).on_hover_text(preset_label(name)).clicked()
+                && let Some(p) = all.iter().find(|p| p.0 == name)
+            {
+                st.preset = name.to_string();
+                st.params = p.1.clone();
+                retrace = true;
+            }
+        }
+    });
     ui.horizontal(|ui| {
         widgets::dim_label(ui, tl!("Preset:"));
         let manage = 24.0;
@@ -640,7 +670,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             ui.horizontal(|ui| {
                 widgets::dim_label(ui, tl!("Library:"));
                 let key = st.params["library"].as_str().unwrap_or(DOCUMENT_SWATCHES).to_string();
-                if let Some(k) = widgets::combo(ui, "it-library", &library_label(app, &key), 170.0, |ui| library_list(app, ui, &key)) {
+                if let Some(k) =
+                    widgets::combo(ui, "it-library", &swatches::library_label(app, &key), 170.0, |ui| swatches::library_list(app, ui, &key))
+                {
                     if k != DOCUMENT_SWATCHES {
                         st.params["colorGroup"] = Value::Null;
                     }

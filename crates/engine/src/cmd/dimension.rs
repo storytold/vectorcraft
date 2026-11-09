@@ -195,6 +195,64 @@ fn replace(doc: &mut Document, id: NodeId, dim: Dimension) -> Result<()> {
     Ok(())
 }
 
+/// A dimension whose live link [`end_links`] ended, as it was before.
+pub(crate) struct EndedLink {
+    id: NodeId,
+    recipe: Dimension,
+    art: Vec<Arc<Node>>,
+}
+
+/// The dimensions under `roots` or holding one of them. A dimension can be listed more than once.
+pub(crate) fn reached(doc: &Document, roots: &[NodeId]) -> Vec<NodeId> {
+    let mut ids = Vec::new();
+    for n in roots.iter().filter_map(|r| doc.node(*r)) {
+        n.walk(&mut |c| {
+            if c.extras().dimension.is_some() {
+                ids.push(c.id);
+            }
+        });
+        if doc.dimensions {
+            let holders = doc.ancestry(n.id).unwrap_or_default();
+            ids.extend(holders.into_iter().filter(|id| doc.node(*id).is_some_and(|h| h.extras().dimension.is_some())));
+        }
+    }
+    ids
+}
+
+impl EndedLink {
+    /// Is the art this dimension measures, changed from `before` to `after`, still art it can link to?
+    pub(crate) fn source_kept(&self, before: &Document, after: &Document) -> bool {
+        !self.recipe.source.as_ref().is_some_and(|s| s.topology_changed(before, after)) && self.recipe.clone().resolve(after).is_ok()
+    }
+}
+
+/// The [`reached`] dimensions become plain groups, whose art does not redraw or follow what it
+/// measured. A command that replaces art calls this before it changes anything, since replacing
+/// the art a dimension measures would remove the dimension, and then [`restore_unchanged`].
+pub(crate) fn end_links(doc: &mut Document, roots: &[NodeId]) -> Vec<EndedLink> {
+    let mut ended = Vec::new();
+    for id in reached(doc, roots) {
+        let Some(n) = doc.node_mut(id) else { continue };
+        let art = n.children().cloned().unwrap_or_default();
+        if let Some(recipe) = n.extras_mut().dimension.take() {
+            ended.push(EndedLink { id, recipe: *recipe, art });
+        }
+    }
+    ended
+}
+
+/// The dimensions in `ended` whose art is as it was are live again.
+pub(crate) fn restore_unchanged(doc: &mut Document, ended: Vec<EndedLink>) {
+    for e in ended {
+        if doc.node(e.id).and_then(Node::children).is_some_and(|art| *art == e.art)
+            && let Some(n) = doc.node_mut(e.id)
+        {
+            n.extras_mut().dimension = Some(Box::new(e.recipe));
+            doc.dimensions = true;
+        }
+    }
+}
+
 /// Called inside every edit, so dimensions and their undo history stay in step with the art they
 /// measure. Returns at once in documents without dimensions.
 pub(crate) fn refresh(before: &Document, doc: &mut Document) -> Result<bool> {

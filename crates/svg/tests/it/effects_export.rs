@@ -30,7 +30,11 @@ fn revolve_caps_export_as_additional_vector_faces_and_leave_source_editable() {
     d.node_mut(id).unwrap().appearance.effects[0].params["cap"] = json!(true);
     let before = d.clone();
     let capped = export(&d, &ExportOptions::default());
-    assert_eq!(capped.matches("<path").count(), open.matches("<path").count() + 2, "two continuous caps, each with a fill and rim stroke");
+    assert_eq!(
+        vectorcraft_testkit::svg_shapes(&capped),
+        vectorcraft_testkit::svg_shapes(&open) + 2,
+        "two continuous caps, each with a fill and rim stroke"
+    );
     assert!(!capped.contains("<image"));
     assert_eq!(d, before);
 }
@@ -47,7 +51,7 @@ fn revolve_exports_shaded_vector_faces_and_keeps_the_source_live() {
     let d = doc_with(n);
     let before = d.clone();
     let svg = export(&d, &ExportOptions::default());
-    assert!(svg.matches("<path").count() > 50, "Revolve should export vector surfaces");
+    assert!(vectorcraft_testkit::svg_shapes(&svg) > 50, "Revolve should export vector surfaces");
     assert!(!svg.contains("<image"), "no raster fallback");
     assert_eq!(d, before, "export leaves source editable");
 }
@@ -66,7 +70,7 @@ fn smooth_revolve_exports_vector_gradients_without_rasterizing_or_editing_the_so
     let svg = export(&d, &ExportOptions::default());
     assert!(svg.matches("<linearGradient").count() > 50);
     assert!(svg.contains("gradientUnits=\"userSpaceOnUse\""));
-    assert!(svg.matches("<path").count() > 100);
+    assert!(vectorcraft_testkit::svg_shapes(&svg) > 100);
     assert!(svg.matches("stroke-linejoin=\"round\"").count() > 100, "seam strokes keep bounded joins in SVG");
     assert!(!svg.contains("stroke-miterlimit"));
     assert!(!svg.contains("<image") && !svg.contains("<filter"));

@@ -100,7 +100,31 @@ pub enum ItemKind {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct LibraryColor {
     pub name: String,
+    /// The colour; a spot colour's full-strength ink (its swatch's colour), without the tint.
     pub color: Color,
+    /// A spot colour's ink (its swatch's name): using it adds the document's spot swatch of that
+    /// name and links the paint to it (#5812). Files written before spot colours have none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spot: Option<String>,
+    /// A spot colour's tint (0..1; 1 for a process colour).
+    #[serde(default = "full_tint", skip_serializing_if = "is_full_tint")]
+    pub tint: f32,
+}
+
+fn full_tint() -> f32 {
+    1.0
+}
+
+fn is_full_tint(t: &f32) -> bool {
+    *t >= 1.0
+}
+
+/// A library colour as `library.add` reads it from the selection or params.
+struct NewColor {
+    name: String,
+    color: Color,
+    spot: Option<String>,
+    tint: f32,
 }
 
 /// A graphic: the art as a native document (its own resources included) and its thumbnail.
@@ -248,22 +272,24 @@ impl Libraries {
         })
     }
 
-    /// Change library `id` with `f` and save it; on a failed save the change is undone.
+    /// Change library `id` with `f` and save it; when `f` fails, or the save does, the change is
+    /// undone.
     fn change<T>(&mut self, id: &str, f: impl FnOnce(&mut Library) -> Result<T>) -> Result<T> {
         let i = self.libs.iter().position(|(i, _)| i == id).ok_or_else(|| EngineError::Other(format!("no library `{id}`")))?;
         let before = self.libs.get(i).map(|(_, l)| l.clone()).unwrap_or_default();
         let r = match self.libs.get_mut(i) {
-            Some((_, lib)) => f(lib)?,
+            Some((_, lib)) => f(lib),
             None => return Err(EngineError::Other(format!("no library `{id}`"))),
         };
-        if let Err(e) = self.save(id) {
+        let r = r.and_then(|r| self.save(id).map(|()| r));
+        if let Err(e) = r {
             if let Some((_, lib)) = self.libs.get_mut(i) {
                 *lib = before;
             }
             return Err(e);
         }
         self.sort();
-        Ok(r)
+        r
     }
 
     fn delete(&mut self, id: &str) -> Result<()> {
@@ -341,6 +367,23 @@ impl Library {
         }
     }
 
+    /// Put item `r` in group `at` (an index; None: in none), out of the one it was in, and with
+    /// `next_to` just before or after that item of its kind in its kind's list: in the group too,
+    /// next to that item when it is there, else last. → the group's name.
+    fn put(&mut self, r: ItemRef, at: Option<usize>, next_to: Option<&(ItemRef, bool)>) -> Option<String> {
+        if let Some((other, after)) = next_to
+            && *other != r
+        {
+            self.place_next_to(&r, other, *after);
+        }
+        self.ungroup(&r);
+        at.and_then(|i| self.groups.get_mut(i)).map(|g| {
+            let near = next_to.and_then(|(other, after)| g.items.iter().position(|x| x == other).map(|j| j + usize::from(*after)));
+            g.items.insert(near.unwrap_or(g.items.len()).min(g.items.len()), r);
+            g.name.clone()
+        })
+    }
+
     /// Make a library read from a file (hand-edited, imported) safe and consistent: at most
     /// [`MAX_ITEMS`] items of each kind and [`MAX_GROUPS`] groups, names clipped to [`MAX_NAME`]
     /// characters and unique within their kind (a repeated one gets a number), sizes finite, a
@@ -350,6 +393,13 @@ impl Library {
     fn sanitize(&mut self) {
         clip(&mut self.name);
         self.colors.truncate(MAX_ITEMS);
+        for c in &mut self.colors {
+            if let Some(ink) = &mut c.spot {
+                clip(ink);
+            }
+            c.spot = c.spot.take().filter(|ink| !ink.trim().is_empty());
+            c.tint = if c.spot.is_some() && c.tint.is_finite() { c.tint.clamp(0.0, 1.0) } else { 1.0 };
+        }
         self.gradients.retain_mut(|g| clean_gradient(&mut g.gradient));
         self.gradients.truncate(MAX_ITEMS);
         self.patterns.truncate(MAX_ITEMS);
@@ -429,6 +479,8 @@ fn clip(name: &mut String) {
 fn uniquify<'a>(names: impl Iterator<Item = &'a mut String>, fallback: &str, sep: &str, fold: bool) {
     let key = |n: &str| if fold { n.to_lowercase() } else { n.to_string() };
     let mut seen = HashSet::new();
+    // Per repeated name, the number to try next: a run of one name counts on instead of from 2.
+    let mut next: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
     for name in names {
         clip(name);
         if name.trim().is_empty() {
@@ -436,7 +488,12 @@ fn uniquify<'a>(names: impl Iterator<Item = &'a mut String>, fallback: &str, sep
         }
         if seen.contains(&key(name)) {
             let base = name.clone();
-            *name = (2..).map(|n| format!("{base}{sep}{n}")).find(|n| !seen.contains(&key(n))).unwrap_or_default();
+            let n = next.entry(key(&base)).or_insert(2);
+            while seen.contains(&key(&format!("{base}{sep}{n}"))) {
+                *n += 1;
+            }
+            *name = format!("{base}{sep}{n}");
+            *n += 1;
         }
         seen.insert(key(name));
     }
@@ -572,7 +629,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Library",
             [],
             None,
-            "{library?: id or name (default: the current library)} → {id, name, graphics: [{id, name, width, height, thumbnail: PNG base64}], colors: [{name, hex, color}], gradients: [{name, gradient: {gradient: {kind, stops}, angle}}], patterns: [{name, pattern: its name in the item, thumbnail: PNG base64}], charStyles: [{name, attrs}], paraStyles: [{name, attrs}], groups: [{name, items: [{kind: color|gradient|pattern|charStyle|paraStyle|graphic, item: name (graphic: id)}]}] (an item is in one group at most; the others are ungrouped)}",
+            "{library?: id or name (default: the current library)} → {id, name, graphics: [{id, name, width, height, thumbnail: PNG base64}], colors: [{name, hex, color, spot: ink name or null, tint: 0..1}], gradients: [{name, gradient: {gradient: {kind, stops}, angle}}], patterns: [{name, pattern: its name in the item, thumbnail: PNG base64}], charStyles: [{name, attrs}], paraStyles: [{name, attrs}], groups: [{name, items: [{kind: color|gradient|pattern|charStyle|paraStyle|graphic, item: name (graphic: id)}]}] (an item is in one group at most; the others are ungrouped)}",
             always,
             get
         ),
@@ -617,7 +674,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add to Library",
             [],
             None,
-            "{library?: id or name (default: the current library, made when there is none), kind: graphic|fillColor|strokeColor|fillGradient|strokeGradient|fillPattern|strokePattern|charStyle|paraStyle, ids?: objects (default: the selection), name?, color?: colour (a colour to add, instead of the selection's), swatch?: a gradient or pattern swatch of the document (fillGradient…strokePattern: added instead of the selection's paint)} add an item from the selection: graphic: a copy of the objects with every resource they use; fillColor/strokeColor: the first selected object's solid fill/stroke colour (else the default fill/stroke); fillGradient/strokeGradient: the first selected object's fill/stroke gradient (else the default's), without its placement or swatch links, named after its swatch, else \"Gradient\"; fillPattern/strokePattern: the first selected object's fill/stroke pattern (else the default's) with the resources its art uses, named after it; charStyle/paraStyle: the selected text's character/paragraph attributes (the Type tool's range, else the first selected text object). An item the library already has (same kind and contents) isn't added again → {library, kind, name, id?: graphic id, existing: bool}",
+            "{library?: id or name (default: the current library, made when there is none), kind: graphic|fillColor|strokeColor|fillGradient|strokeGradient|fillPattern|strokePattern|charStyle|paraStyle, ids?: objects (default: the selection), name?, color?: colour (a colour to add, instead of the selection's; #rrggbbaa and #rgba are refused), swatch?: a gradient or pattern swatch of the document (fillGradient…strokePattern: added instead of the selection's paint; with `color`, the spot swatch it is, kept as a spot colour), tint?: 0..100 (with `color` and a spot `swatch`: its %), group?: name, before?: item | after?: item (an item of the same kind)} add an item from the selection: graphic: a copy of the objects with every resource they use; fillColor/strokeColor: the first selected object's solid fill/stroke colour (else the default fill/stroke), a colour linked to a spot swatch kept as a spot colour (the swatch's name, its colour and the tint); fillGradient/strokeGradient: the first selected object's fill/stroke gradient (else the default's), without its placement or swatch links, named after its swatch, else \"Gradient\"; fillPattern/strokePattern: the first selected object's fill/stroke pattern (else the default's) with the resources its art uses, named after it; charStyle/paraStyle: the selected text's character/paragraph attributes (the Type tool's range, else the first selected text object). A new item goes into `group` (default: none) and, with `before` or `after`, just before or after that item in the order its kind is shown in, as dropping it among the Libraries panel's items does; an item the library already has (same kind and contents) isn't added again, nor moved → {library, kind, name, id?: graphic id, existing: bool, group?: name or null (a new item's)}",
             has_doc,
             add
         ),
@@ -626,7 +683,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Use Library Item",
             [],
             None,
-            "{library?, kind, item: name (graphic: id or name), center?: [x, y] (graphic; default: the first artboard's centre), to?: fill|stroke (colors, gradients, patterns; default: the kind's), recorded?: the item as it was when used (recorded in the journal so a replay matches)} graphic: place a copy centred on `center`, its resources pasted along, selected, one undo step; colors and gradients: paint the selection (and the defaults) as paint.setFill/paint.setStroke, a gradient fitting each object; patterns: add the pattern and its swatch to the document (a name the document gives another pattern gets a number; the same pattern is reused) and paint the selection (and the defaults) with it, one undo step; charStyle/paraStyle: add the style to the document (a name taken by different attributes gets a number) and apply it to the selected text, one undo step → {kind, ids?, style?}",
+            "{library?, kind, item: name (graphic: id or name), center?: [x, y] (graphic; default: the first artboard's centre), to?: fill|stroke (colors, gradients, patterns; default: the kind's), recorded?: the item as it was when used (recorded in the journal so a replay matches)} graphic: place a copy centred on `center`, its resources pasted along, selected, one undo step; colors and gradients: paint the selection (and the defaults) as paint.setFill/paint.setStroke, a gradient fitting each object; a spot color links to the document's spot swatch of its ink's name, added when the document has none of that colour (a name taken by another colour gets a number), one undo step; patterns: add the pattern and its swatch to the document (a name the document gives another pattern gets a number; the same pattern is reused) and paint the selection (and the defaults) with it, one undo step; charStyle/paraStyle: add the style to the document (a name taken by different attributes gets a number) and apply it to the selected text, one undo step → {kind, ids?, style?}",
             has_doc,
             use_item
         ),
@@ -756,7 +813,7 @@ fn get(s: &mut Session, p: &Value) -> Result<Value> {
         "id": id,
         "name": lib.name,
         "graphics": lib.graphics.iter().map(|g| json!({"id": g.id, "name": g.name, "width": g.width, "height": g.height, "thumbnail": g.thumbnail})).collect::<Vec<_>>(),
-        "colors": lib.colors.iter().map(|c| json!({"name": c.name, "hex": c.color.to_hex(), "color": c.color})).collect::<Vec<_>>(),
+        "colors": lib.colors.iter().map(|c| json!({"name": c.name, "hex": c.color.to_hex(), "color": c.color, "spot": c.spot, "tint": c.tint})).collect::<Vec<_>>(),
         "gradients": lib.gradients.iter().map(|g| json!({"name": g.name, "gradient": g.gradient})).collect::<Vec<_>>(),
         "patterns": lib.patterns.iter().map(|p| json!({"name": p.name, "pattern": p.pattern, "thumbnail": p.thumbnail})).collect::<Vec<_>>(),
         "charStyles": lib.char_styles.iter().map(|t| json!({"name": t.name, "attrs": t.attrs})).collect::<Vec<_>>(),
@@ -789,14 +846,6 @@ fn delete(s: &mut Session, p: &Value) -> Result<Value> {
     ok()
 }
 
-/// The library `p` names, else the current one, else a new "My Library".
-fn target_library(s: &mut Session, p: &Value, cmd: &str) -> Result<String> {
-    if p.get("library").is_some_and(|v| !v.is_null()) || s.libraries.current().is_some() {
-        return library_id(s, p, cmd);
-    }
-    s.libraries.create("My Library")
-}
-
 /// `base`, or `base 2`, `base 3`… the first that `taken` doesn't hold.
 fn unique(base: &str, taken: impl Fn(&str) -> bool) -> String {
     std::iter::once(base.to_string()).chain((2..).map(|n| format!("{base} {n}"))).find(|n| !taken(n)).unwrap_or_else(|| base.to_string())
@@ -818,9 +867,10 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
             Item::Style(para, attrs)
         }
     };
-    let id = target_library(s, p, C)?;
+    let place = Placement::of(p, C)?;
     let kind_name = str_param(p, "kind").unwrap_or_default().to_string();
-    let r = s.libraries.change(&id, |lib| {
+    let item_kind = kind.item_kind();
+    let put = |lib: &mut Library| {
         let full = |n: usize| if n >= MAX_ITEMS { Err(bad(C, format!("the library holds {MAX_ITEMS} items of this kind already"))) } else { Ok(()) };
         Ok(match item {
             Item::Graphic(mut g) => {
@@ -833,17 +883,19 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
                 // Ids are `graphic`, `graphic-2`…: taken ones are looked for as they are kept.
                 g.id = unique("graphic", |n| lib.graphics.iter().any(|o| o.id == n.replace(' ', "-"))).replace(' ', "-");
                 let v = json!({ "name": g.name, "id": g.id, "existing": false });
+                let key = g.id.clone();
                 lib.graphics.push(g);
-                v
+                placed(lib, &place, ItemRef { kind: item_kind, item: key }, v)?
             }
-            Item::Color((name, color)) => {
+            Item::Color(NewColor { name, color, spot, tint }) => {
                 full(lib.colors.len())?;
-                if let Some(old) = lib.colors.iter().find(|o| o.color == color) {
+                // A spot colour is its ink: one of another ink (or a process colour) is another item.
+                if let Some(old) = lib.colors.iter().find(|o| o.color == color && o.spot == spot && o.tint == tint) {
                     return Ok(json!({ "name": old.name, "existing": true }));
                 }
                 let name = unique(&given.clone().unwrap_or(name), |n| lib.colors.iter().any(|o| o.name == n));
-                lib.colors.push(LibraryColor { name: name.clone(), color });
-                json!({ "name": name, "existing": false })
+                lib.colors.push(LibraryColor { name: name.clone(), color, spot, tint });
+                placed(lib, &place, ItemRef { kind: item_kind, item: name.clone() }, json!({ "name": name, "existing": false }))?
             }
             Item::Gradient(mut g) => {
                 full(lib.gradients.len())?;
@@ -852,8 +904,9 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
                 }
                 g.name = unique(&given.clone().unwrap_or(g.name), |n| lib.gradients.iter().any(|o| o.name == n));
                 let v = json!({ "name": g.name, "existing": false });
+                let key = g.name.clone();
                 lib.gradients.push(g);
-                v
+                placed(lib, &place, ItemRef { kind: item_kind, item: key }, v)?
             }
             Item::Pattern(mut pat) => {
                 full(lib.patterns.len())?;
@@ -862,8 +915,9 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
                 }
                 pat.name = unique(&given.clone().unwrap_or(pat.name), |n| lib.patterns.iter().any(|o| o.name == n));
                 let v = json!({ "name": pat.name, "existing": false });
+                let key = pat.name.clone();
                 lib.patterns.push(pat);
-                v
+                placed(lib, &place, ItemRef { kind: item_kind, item: key }, v)?
             }
             Item::Style(para, attrs) => {
                 let list = if para { &mut lib.para_styles } else { &mut lib.char_styles };
@@ -874,19 +928,36 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
                 let base = given.clone().unwrap_or_else(|| style_name(&attrs, para));
                 let name = unique(&base, |n| list.iter().any(|o| o.name == n));
                 list.push(TextStyleDef { name: name.clone(), attrs });
-                json!({ "name": name, "existing": false })
+                placed(lib, &place, ItemRef { kind: item_kind, item: name.clone() }, json!({ "name": name, "existing": false }))?
             }
         })
-    })?;
-    let mut r = r;
+    };
+    // Into the library `p` names, else the current one, else a new "My Library", which is kept
+    // only once the item is in it (a `group` or item to place it by that it lacks makes none).
+    let (id, mut r) = if p.get("library").is_some_and(|v| !v.is_null()) || s.libraries.current().is_some() {
+        let id = library_id(s, p, C)?;
+        let r = s.libraries.change(&id, put)?;
+        (id, r)
+    } else {
+        let mut lib = Library { name: "My Library".to_string(), ..Default::default() };
+        let r = put(&mut lib)?;
+        (s.libraries.insert(lib)?, r)
+    };
     r["library"] = json!(id);
     r["kind"] = json!(kind_name);
     Ok(r)
 }
 
+/// New item `r` of `lib` put where `place` says, its group added to `v` (what `library.add`
+/// reports).
+fn placed(lib: &mut Library, place: &Placement, r: ItemRef, mut v: Value) -> Result<Value> {
+    v["group"] = json!(place.apply(lib, r, "library.add")?);
+    Ok(v)
+}
+
 enum Item {
     Graphic(LibraryGraphic),
-    Color((String, Color)),
+    Color(NewColor),
     Gradient(LibraryGradient),
     Pattern(LibraryPattern),
     Style(bool, Map<String, Value>),
@@ -895,7 +966,7 @@ enum Item {
 /// The selected objects (or `ids`) as a library graphic (its id and name set by the caller).
 fn graphic_of(s: &Session, p: &Value, cmd: &str) -> Result<LibraryGraphic> {
     let st = s.doc()?;
-    let ids = match ids_param(p, "ids") {
+    let ids = match ids_param(p, "ids", cmd)? {
         Some(ids) => ids,
         None => st.selection.in_paint_order(&st.doc),
     };
@@ -903,7 +974,7 @@ fn graphic_of(s: &Session, p: &Value, cmd: &str) -> Result<LibraryGraphic> {
     if roots.is_empty() {
         return Err(bad(cmd, "select the art to add first"));
     }
-    let clip = Clipboard::copy(st, &roots);
+    let clip = Clipboard::copy(st, &roots, false);
     let bounds = clip.bounds().ok_or_else(|| bad(cmd, "the selection draws nothing"))?;
     let mut doc = clip.to_document();
     let board = bounds.inflate(1.0, 1.0);
@@ -924,37 +995,59 @@ fn graphic_of(s: &Session, p: &Value, cmd: &str) -> Result<LibraryGraphic> {
 }
 
 /// The first selected object's solid fill (`stroke`: stroke) colour, else the default one, with a
-/// name: its swatch's, else its hex.
-fn color_of(s: &Session, p: &Value, stroke: bool, cmd: &str) -> Result<(String, Color)> {
-    // A colour given (a swatch dropped on the panel).
+/// name: its swatch's, else its hex. A colour linked to a spot swatch keeps the ink (the swatch's
+/// name and full-strength colour) and its tint.
+fn color_of(s: &Session, p: &Value, stroke: bool, cmd: &str) -> Result<NewColor> {
+    // A colour given (a swatch dropped on the panel), with its spot swatch's name when it has one.
     if let Some(c) = p.get("color").filter(|v| !v.is_null()) {
         let color = color_value(c).ok_or_else(|| bad(cmd, "bad colour"))?;
-        return Ok((color.to_hex(), color));
+        let swatch = str_param(p, "swatch").map(str::to_string);
+        let tint = super::paint::tint_param(p, cmd)?.unwrap_or(1.0);
+        let given = NewColor { name: color.to_hex(), color, spot: None, tint: 1.0 };
+        return Ok(spot_color(s, given, swatch, tint));
     }
-    match selected_paint(s, p, stroke)? {
-        Paint::Solid { color, swatch, .. } => {
-            let name = swatch.filter(|n| !n.is_empty()).unwrap_or_else(|| color.to_hex());
-            Ok((name, color))
+    match selected_paint(s, p, stroke, cmd)? {
+        Paint::Solid { color, swatch, tint } => {
+            let swatch = swatch.filter(|n| !n.is_empty());
+            let name = swatch.clone().unwrap_or_else(|| color.to_hex());
+            Ok(spot_color(s, NewColor { name, color, spot: None, tint: 1.0 }, swatch, tint))
         }
         Paint::None => Err(bad(cmd, if stroke { "the selection has no stroke colour" } else { "the selection has no fill colour" })),
         _ => Err(bad(cmd, "only solid colours can be added (not gradients or patterns)")),
     }
 }
 
+/// `c` as the spot colour of the active document's spot swatch `swatch` at `tint` (0..1), when
+/// there is one: named after it, with its full-strength colour; else `c` as it is.
+fn spot_color(s: &Session, c: NewColor, swatch: Option<String>, tint: f32) -> NewColor {
+    let Some(doc) = s.active().map(|st| &st.doc) else { return c };
+    let Some(name) = swatch else { return c };
+    let Some(ink) = doc.swatch(&name).filter(|w| w.spot).and_then(|w| w.paint.color()) else { return c };
+    let tint = if tint.is_finite() { tint.clamp(0.0, 1.0) } else { 1.0 };
+    NewColor { name: name.clone(), color: ink, spot: Some(name), tint }
+}
+
 /// The first selected object's (or `ids`') fill (`stroke`: stroke) paint (type's: its first
 /// character's, as the proxy shows it), else the default one.
-fn selected_paint(s: &Session, p: &Value, stroke: bool) -> Result<Paint> {
+fn selected_paint(s: &Session, p: &Value, stroke: bool, cmd: &str) -> Result<Paint> {
     let st = s.doc()?;
-    let ids = match ids_param(p, "ids") {
+    let ids = match ids_param(p, "ids", cmd)? {
         Some(ids) => ids,
         None => st.selection.objects.clone(),
     };
     let from_art = ids.iter().filter_map(|id| st.doc.node(*id)).find_map(|n| {
-        let (paint, to_doc, _) = n.proxy_paint(stroke, None)?;
+        // Only a gradient needs the object measured for its placement.
+        let paint = n.proxy_paint_only(stroke, None)?;
+        if !matches!(paint, Paint::Gradient(_)) {
+            return Some(paint.clone());
+        }
+        let (paint, to_doc, bounds) = n.proxy_paint(stroke, None)?;
         // Type's characters paint in its own space: a gradient there takes its placement in the
         // document, so that it keeps the direction it shows.
-        match (paint, n.proxy_gradient(stroke, None)) {
-            (Paint::Gradient(g), Some((_, geom))) if to_doc != vectorcraft_geom::Affine::IDENTITY => {
+        match paint {
+            Paint::Gradient(g) if to_doc != vectorcraft_geom::Affine::IDENTITY => {
+                let mut geom = g.resolve(bounds);
+                geom.transform(to_doc, g.gradient.kind);
                 Some(Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..(**g).clone() })))
             }
             _ => Some(paint.clone()),
@@ -978,7 +1071,7 @@ fn gradient_of(s: &Session, p: &Value, stroke: bool, cmd: &str) -> Result<Librar
             let sw = s.doc()?.doc.swatch(name).filter(|w| matches!(w.paint, Paint::Gradient(_)));
             (Some(name.to_string()), sw.ok_or_else(|| bad(cmd, format!("no gradient swatch `{name}`")))?.paint.clone())
         }
-        None => (None, selected_paint(s, p, stroke)?),
+        None => (None, selected_paint(s, p, stroke, cmd)?),
     };
     let Paint::Gradient(mut g) = paint else {
         return Err(bad(cmd, if stroke { "the selection has no gradient stroke" } else { "the selection has no gradient fill" }));
@@ -1001,7 +1094,7 @@ fn pattern_of(s: &Session, p: &Value, stroke: bool, cmd: &str) -> Result<Library
             _ if d.pattern(name).is_some() => name.to_string(),
             _ => return Err(bad(cmd, format!("no pattern swatch `{name}`"))),
         },
-        None => match selected_paint(s, p, stroke)? {
+        None => match selected_paint(s, p, stroke, cmd)? {
             Paint::Pattern { pattern, .. } => pattern,
             _ => return Err(bad(cmd, if stroke { "the selection has no pattern stroke" } else { "the selection has no pattern fill" })),
         },
@@ -1061,7 +1154,10 @@ fn use_item(s: &mut Session, p: &Value) -> Result<Value> {
                 }
                 Kind::FillColor | Kind::StrokeColor => {
                     let c = lib.colors.iter().find(|c| c.name == item).ok_or_else(missing)?;
-                    json!({ "color": c.color })
+                    match &c.spot {
+                        Some(ink) => json!({ "color": c.color, "spot": ink, "tint": c.tint }),
+                        None => json!({ "color": c.color }),
+                    }
                 }
                 Kind::FillGradient | Kind::StrokeGradient => {
                     let g = lib.gradients.iter().find(|g| g.name == item).ok_or_else(missing)?;
@@ -1104,7 +1200,13 @@ fn use_item(s: &mut Session, p: &Value) -> Result<Value> {
         Kind::FillColor | Kind::StrokeColor => {
             let stroke = to_stroke(p, kind)?;
             let color = data.get("color").cloned().ok_or_else(|| bad(C, "no colour"))?;
-            s.execute(if stroke { "paint.setStroke" } else { "paint.setFill" }, &json!({ "color": color }))?;
+            let set = if stroke { "paint.setStroke" } else { "paint.setFill" };
+            match str_param(&data, "spot").map(str::trim).filter(|n| !n.is_empty()) {
+                Some(ink) => use_spot(s, set, ink, &color, &data)?,
+                None => {
+                    s.execute(set, &json!({ "color": color }))?;
+                }
+            }
             Ok(json!({ "kind": if stroke { "strokeColor" } else { "fillColor" } }))
         }
         Kind::FillGradient | Kind::StrokeGradient => {
@@ -1144,6 +1246,32 @@ fn use_item(s: &mut Session, p: &Value) -> Result<Value> {
             Ok(json!({ "kind": if para { "paraStyle" } else { "charStyle" }, "style": style }))
         }
     }
+}
+
+/// Paint with library spot colour `ink` (`color` its full-strength colour, `data`'s `tint` its
+/// tint) through `set` (paint.setFill or paint.setStroke), linked to the document's spot swatch of
+/// that name: the one it has when it is the same colour, else a new one (a name taken by another
+/// colour gets a number), one undo step (#5812).
+fn use_spot(s: &mut Session, set: &str, ink: &str, color: &Value, data: &Value) -> Result<()> {
+    const C: &str = "library.use";
+    let c = color_value(color).ok_or_else(|| bad(C, "the library item is damaged"))?;
+    let tint = data.get("tint").and_then(Value::as_f64).filter(|t| t.is_finite()).map_or(1.0, |t| t.clamp(0.0, 1.0));
+    let doc = &s.doc()?.doc;
+    let have = doc.swatch(ink).is_some_and(|w| w.spot && w.paint.color() == Some(c));
+    in_one_step(s, |s| {
+        let swatch = if have {
+            ink.to_string()
+        } else {
+            let r = s.execute("swatch.new", &json!({ "name": ink, "color": color, "spot": true, "keepModel": true }))?;
+            r.get("name").and_then(Value::as_str).ok_or_else(|| bad(C, "the spot colour couldn't be added"))?.to_string()
+        };
+        let mut p = json!({ "swatch": swatch });
+        if tint < 1.0 {
+            p["tint"] = json!(tint * 100.0);
+        }
+        s.execute(set, &p)?;
+        Ok(())
+    })
 }
 
 /// The `to` param of `library.use`: whether the item paints the stroke (default: the kind's).
@@ -1320,36 +1448,45 @@ fn delete_group(s: &mut Session, p: &Value) -> Result<Value> {
 fn move_item(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "library.moveItem";
     let (id, kind, item) = item_param(s, p, C)?;
-    let group = str_param(p, "group");
-    let next_to = match (str_param(p, "before"), str_param(p, "after")) {
-        (Some(_), Some(_)) => return Err(bad(C, "give `before` or `after`, not both")),
-        (Some(b), None) => Some((b, false)),
-        (None, Some(a)) => Some((a, true)),
-        (None, None) => None,
-    };
+    let place = Placement::of(p, C)?;
     let (key, to) = s.libraries.change(&id, |lib| {
-        let missing = |item: &str| bad(C, format!("the library has no item `{item}`"));
-        let r = lib.item_ref(kind.item_kind(), item).ok_or_else(|| missing(item))?;
-        let at = group.map(|g| group_at(lib, g, C)).transpose()?;
-        let next_to = next_to
-            .map(|(other, after)| Ok::<_, EngineError>((lib.item_ref(kind.item_kind(), other).ok_or_else(|| missing(other))?, after)))
-            .transpose()?;
-        if let Some((other, after)) = &next_to
-            && *other != r
-        {
-            lib.place_next_to(&r, other, *after);
-        }
-        lib.ungroup(&r);
+        let r = lib.item_ref(kind.item_kind(), item).ok_or_else(|| bad(C, format!("the library has no item `{item}`")))?;
         let key = r.item.clone();
-        let to = at.and_then(|i| lib.groups.get_mut(i)).map(|g| {
-            // Next to the other item when that is in the group too, else last.
-            let near = next_to.as_ref().and_then(|(other, after)| g.items.iter().position(|x| x == other).map(|j| j + usize::from(*after)));
-            g.items.insert(near.unwrap_or(g.items.len()).min(g.items.len()), r);
-            g.name.clone()
-        });
+        let to = place.apply(lib, r, C)?;
         Ok((key, to))
     })?;
     Ok(json!({ "library": id, "kind": str_param(p, "kind"), "item": key, "group": to }))
+}
+
+/// Where `library.add` and `library.moveItem` put an item: its `group` (none: out of any), and
+/// the item of its kind it goes `before` or `after`.
+struct Placement<'a> {
+    group: Option<&'a str>,
+    next_to: Option<(&'a str, bool)>,
+}
+
+impl<'a> Placement<'a> {
+    fn of(p: &'a Value, cmd: &str) -> Result<Self> {
+        let next_to = match (str_param(p, "before"), str_param(p, "after")) {
+            (Some(_), Some(_)) => return Err(bad(cmd, "give `before` or `after`, not both")),
+            (Some(b), None) => Some((b, false)),
+            (None, Some(a)) => Some((a, true)),
+            (None, None) => None,
+        };
+        Ok(Self { group: str_param(p, "group"), next_to })
+    }
+
+    /// Put item `r` of `lib` where this says ([`Library::put`]) → its group's name.
+    fn apply(&self, lib: &mut Library, r: ItemRef, cmd: &str) -> Result<Option<String>> {
+        let at = self.group.map(|g| group_at(lib, g, cmd)).transpose()?;
+        let next_to = self
+            .next_to
+            .map(|(other, after)| {
+                lib.item_ref(r.kind, other).map(|o| (o, after)).ok_or_else(|| bad(cmd, format!("the library has no item `{other}`")))
+            })
+            .transpose()?;
+        Ok(lib.put(r, at, next_to.as_ref()))
+    }
 }
 
 fn move_group(s: &mut Session, p: &Value) -> Result<Value> {

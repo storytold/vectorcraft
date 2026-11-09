@@ -110,7 +110,7 @@ pub(crate) const MAX_TATWEELS: f64 = 64.0;
 /// Stylistic kashida is a whole number of tatweels, at most [`MAX_TATWEELS`], and a word whose
 /// share is shorter than one tatweel gets none. A line of words without joined letters, or whose
 /// font has no tatweel, gets none.
-pub(crate) fn plan(text: &str, sg: &[SGlyph], line: Range<usize>, kind: Kashida, room: f64) -> Vec<(usize, f64)> {
+pub(crate) fn plan(text: &str, sg: &[SGlyph], line: Range<usize>, kind: Kashida, room: f64, allows: impl Fn(usize) -> bool) -> Vec<(usize, f64)> {
     if kind == Kashida::None || !room.is_finite() || room <= 0.0 {
         return vec![];
     }
@@ -128,7 +128,7 @@ pub(crate) fn plan(text: &str, sg: &[SGlyph], line: Range<usize>, kind: Kashida,
             picks.extend(word.take());
             prev = None;
         } else {
-            if prev.and_then(|p| sg.get(p)).is_some_and(|a| joined(text, a, g)) && tatweel(g).is_some() {
+            if prev.and_then(|p| sg.get(p)).is_some_and(|a| joined(text, a, g) && allows(a.byte) && allows(g.byte)) && tatweel(g).is_some() {
                 word = Some(j);
             }
             prev = Some(j);

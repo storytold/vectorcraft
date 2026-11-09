@@ -229,7 +229,17 @@ fn arc_form(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
         if d.f64("lengthY", 100.0) != ly0 {
             arc_pin_to_anchor(d);
         }
-        form::choice(ui, d, "arcType", tl!("Type:"), (form::FIELD_W, form::FIELD_W - 12.0), &[("open", tl!("Open")), ("closed", tl!("Closed"))]);
+        form::choice(
+            ui,
+            d,
+            "arcType",
+            tl!("Type:"),
+            (form::FIELD_W, form::FIELD_W - 12.0),
+            &[
+                ("open", crate::i18n::tr_ctx(crate::i18n::current(), "shape", "Open")),
+                ("closed", crate::i18n::tr_ctx(crate::i18n::current(), "shape", "Closed")),
+            ],
+        );
         form::choice(
             ui,
             d,

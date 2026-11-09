@@ -218,6 +218,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                     vec![
                         c("Join", "path.join"),
                         c("Average…", "path.average"),
+                        c("Average & Join…", "path.averageJoin"),
                         Sep,
                         c("Outline Stroke", "object.path.outlineStroke"),
                         c("Offset Path…", "object.path.offsetPath"),
@@ -366,7 +367,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                     ],
                 ),
                 Sep,
-                sub("Plug-ins", crate::dialogs::plugin::object_menu()),
+                sub("Plug-ins", [crate::addons::plugin_menu(), crate::dialogs::plugin::object_menu()].concat()),
             ],
         ),
         (
@@ -405,6 +406,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("Fit Headline", "text.fitHeadline"),
                 Sep,
                 c("Find Font…", "type.findFont"),
+                c("Composite Fonts…", crate::dialogs::composite_fonts::COMMAND),
                 sub(
                     "Change Case",
                     vec![
@@ -461,6 +463,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         c("Graphic Style", "select.same.graphicStyle"),
                         c("Shape", "select.same.shapeType"),
                         c("Symbol Instance", "select.same.symbolInstance"),
+                        c("Link Block Series", "select.same.linkBlockSeries"),
                         Sep,
                         c("Font Family", "select.same.fontFamily"),
                         c("Font Family & Style", "select.same.fontFamilyStyle"),
@@ -468,6 +471,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         c("Font Size", "select.same.fontSize"),
                         c("Text Fill Color", "select.same.textFillColor"),
                         c("Text Stroke Color", "select.same.textStrokeColor"),
+                        c("Text Fill & Stroke Color", "select.same.textFillAndStrokeColor"),
                     ],
                 ),
                 sub(
@@ -606,17 +610,28 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
         ("Window", {
             let mut window_items = vec![
                 c("New Window", "window.newWindow"),
-                sub("Arrange", vec![todo("Cascade"), todo("Tile"), todo("Float in Window"), todo("Consolidate All Windows")]),
+                sub(
+                    "Arrange",
+                    vec![
+                        c("Cascade", "window.arrange.cascade"),
+                        c("Tile", "window.arrange.tile"),
+                        c("Float in Window", "window.arrange.floatInWindow"),
+                        c("Float All in Windows", "window.arrange.floatAllInWindows"),
+                        c("Consolidate All Windows", "window.arrange.consolidateAllWindows"),
+                    ],
+                ),
                 sub("Workspace", crate::workspaces::menu_items()),
                 Sep,
                 c("Control", "window.control"),
+                c("Help Bar", "window.helpBar"),
                 c("Contextual Task Bar", "window.taskBar"),
                 c("Tools", "window.toolbar"),
-                sub("Toolbars", vec![c("Advanced", "window.toolbarAdvanced"), c("Double Column", "window.toolbarColumns")]),
+                sub("Toolbars", crate::custom_toolbars::menu_items()),
                 Sep,
             ];
             let lang = crate::i18n::current();
             let mut panels = vec![
+                panel("3D and Materials", crate::panels::three_d::ID),
                 panel("Actions", "actions"),
                 panel("Align", "align"),
                 panel("Appearance", "appearance"),
@@ -689,6 +704,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 Sep,
                 c("Search Commands…", "help.commandPalette"),
                 todos("VectorCraft Help…", "F1"),
+                c("Safe Mode…", "help.safeMode"),
                 Sep,
                 c("Check for Updates…", "help.checkForUpdates"),
                 c("About VectorCraft", "help.about"),
