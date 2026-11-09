@@ -503,11 +503,22 @@ impl Ctx<'_> {
         });
     }
 
+    /// Source-run index covering byte `b` (the cluster start for a letter with its marks).
+    fn run_index_at(&self, b: usize) -> Option<usize> {
+        let find = |b: usize| {
+            let i = self.runs.partition_point(|(r, _)| r.end <= b);
+            self.runs.get(i).filter(|(r, _)| r.start <= b).map(|_| i)
+        };
+        find(b).or_else(|| b.checked_sub(1).and_then(find))
+    }
+
     /// Draw a kashida `len` points long from `at` (the pen on the baseline) on line `line`, as
     /// tatweels in the face, size and style of glyph `g`. Short, Medium and Long kashidas are one
     /// tatweel stretched along the baseline; a Stylistic one is tatweels side by side. Each tatweel
     /// is a glyph at `g`'s byte offset that stands for no character (length 0) and does not
-    /// advance: `g`'s advance takes the kashida in.
+    /// advance: `g`'s advance takes the kashida in. Paint comes from the base letter's run at the
+    /// cluster start (`g.byte`), not from a trailing mark that may be the last glyph of the
+    /// cluster when harakat are coloured or hidden apart from their letters.
     fn emit_kashida(&mut self, g: &SGlyph, kind: Kashida, len: f64, at: Point, line: usize) {
         let Some((gid, t)) = kashida::tatweel(g) else { return };
         let mut k = g.clone();
@@ -521,6 +532,10 @@ impl Ctx<'_> {
         k.ch = kashida::TATWEEL;
         k.inline = None;
         k.tcy = None;
+        // Base letter's run: `g` may be a mark (last in the shaping cluster) with mark paint.
+        if let Some(run) = self.run_index_at(g.byte) {
+            k.run = run;
+        }
         if kind == Kashida::Stylistic {
             let n = (len / t).round().clamp(1.0, kashida::MAX_TATWEELS) as usize;
             for m in 0..n {
@@ -535,3 +550,167 @@ impl Ctx<'_> {
 
 #[cfg(test)]
 mod wrapping_tests;
+
+/// Forced mark-last kashida emitter: the absorbing glyph carries a mark run while the cluster
+/// start is a letter run; the tatweel must take the letter run. Reverting the base-run assignment
+/// in [`Ctx::emit_kashida`] fails these.
+#[cfg(test)]
+mod emit_kashida_mark_last {
+    use super::*;
+    use std::sync::Arc;
+    use vectorcraft_doc::color::{Color, Paint};
+
+    fn arabic_face() -> Option<Arc<crate::FontFace>> {
+        let db = FontDb::global();
+        ["Noto Sans Arabic", "Arial", "Tahoma", "Times New Roman"]
+            .into_iter()
+            .filter_map(|name| db.face(name, "Regular"))
+            .find(|face| face.covers('ب') && face.covers('\u{064E}') && face.covers('\u{0640}'))
+    }
+
+    fn force_mark_last(mark_fill: Paint) {
+        let Some(face) = arabic_face() else {
+            eprintln!("SKIPPED: emit_kashida_mark_last; no Arabic face with tatweel");
+            return;
+        };
+        let Some((tat_gid, _)) = kashida::tatweel(&SGlyph {
+            face: Arc::clone(&face),
+            gid: 0,
+            byte: 0,
+            len: 2,
+            run: 0,
+            adv: 10.0,
+            dx: 0.0,
+            dy: 0.0,
+            kern_shift: 0.0,
+            sx: face.upem.recip() * 48.0,
+            sy: face.upem.recip() * 48.0,
+            bshift: 0.0,
+            rotation: 0.0,
+            ascent: 40.0,
+            descent: 10.0,
+            leading: 0.0,
+            cap: 30.0,
+            xh: 20.0,
+            ch: 'ب',
+            tcy: None,
+            inline: None,
+            word_end: false,
+            lead: 0.0,
+            proportional: false,
+            vpal: None,
+            level: Level::rtl(),
+            no_break: false,
+            vertical_roman: false,
+            cursive: true,
+            hyphen_language: crate::hyphen::Language::English,
+        }) else {
+            eprintln!("SKIPPED: emit_kashida_mark_last; face has no tatweel");
+            return;
+        };
+        let letter = CharStyle { font_family: face.family.clone(), size: 48.0, fill: Paint::solid(Color::BLACK), ..CharStyle::default() };
+        let mut mark = letter.clone();
+        mark.fill = mark_fill.clone();
+        // "بَ": letter run 0 covers 0..2, mark run 1 covers 2..4. Cluster starts at byte 0.
+        let text = "بَ";
+        let opts = LayoutOptions::default();
+        let db = FontDb::global();
+        let mut cx = Ctx {
+            on_path: false,
+            db,
+            text,
+            runs: vec![(0..2, &letter), (2..4, &mark)],
+            set_runs: Vec::new(),
+            inlines: vec![None, None],
+            faces: vec![std::cell::OnceCell::new(), std::cell::OnceCell::new()],
+            default: letter.clone(),
+            opts: &opts,
+            vertical: false,
+            system_layout: false,
+            fractional_widths: true,
+            upright_cluster: None,
+            out: TextLayout::default(),
+        };
+        // Last visual glyph of the cluster: a mark that wrongly keeps the mark run (run 1).
+        let mut g = SGlyph {
+            face: Arc::clone(&face),
+            gid: face.glyph_for('\u{064E}'),
+            byte: 0,
+            len: 4,
+            run: 1,
+            adv: 0.0,
+            dx: 0.0,
+            dy: 0.0,
+            kern_shift: 0.0,
+            sx: face.upem.recip() * 48.0,
+            sy: face.upem.recip() * 48.0,
+            bshift: 0.0,
+            rotation: 0.0,
+            ascent: 40.0,
+            descent: 10.0,
+            leading: 0.0,
+            cap: 30.0,
+            xh: 20.0,
+            ch: '\u{064E}',
+            tcy: None,
+            inline: None,
+            word_end: false,
+            lead: 0.0,
+            proportional: false,
+            vpal: None,
+            level: Level::rtl(),
+            no_break: false,
+            vertical_roman: false,
+            cursive: true,
+            hyphen_language: crate::hyphen::Language::English,
+        };
+        assert_ne!(g.run, 0, "precondition: absorbing glyph has mark run ≠ cluster-start run");
+        assert_eq!(cx.style_at(g.byte).fill, letter.fill, "precondition: cluster start is letter paint");
+        assert_eq!(mark.fill, mark_fill, "precondition: mark paint differs");
+        cx.emit_kashida(&g, Kashida::Long, 20.0, Point::ZERO, 0);
+        let tatweels: Vec<_> = cx.out.glyphs.iter().filter(|pg| pg.gid == tat_gid && pg.len == 0).collect();
+        assert!(!tatweels.is_empty(), "tatweel emitted");
+        for t in tatweels {
+            assert_eq!(t.run, 0, "tatweel must use base letter run, not mark run {}", g.run);
+            let fill = cx.runs.get(t.run).map(|(_, s)| &s.fill).expect("run");
+            assert_eq!(fill, &letter.fill, "tatweel paint is the letter's");
+            assert_ne!(fill, &mark_fill, "tatweel must not inherit mark paint");
+        }
+        // Without the base-run assignment, emit_kashida would keep g.run == 1.
+        g.run = 1;
+        let mut broken = Ctx {
+            on_path: false,
+            db,
+            text,
+            runs: vec![(0..2, &letter), (2..4, &mark)],
+            set_runs: Vec::new(),
+            inlines: vec![None, None],
+            faces: vec![std::cell::OnceCell::new(), std::cell::OnceCell::new()],
+            default: letter.clone(),
+            opts: &opts,
+            vertical: false,
+            system_layout: false,
+            fractional_widths: true,
+            upright_cluster: None,
+            out: TextLayout::default(),
+        };
+        // Simulate the pre-fix path: clone run from the mark glyph only.
+        let mut k = g.clone();
+        k.gid = tat_gid;
+        k.len = 0;
+        k.ch = kashida::TATWEEL;
+        // k.run stays 1 — what emit_kashida did before the fix.
+        broken.emit(&k, Affine::IDENTITY, Point::ZERO, 0.0, 0.0, 0);
+        assert_eq!(broken.out.glyphs[0].run, 1, "sanity: unrepaired path keeps mark run");
+    }
+
+    #[test]
+    fn coloured_mark_last_tatweel_uses_letter_run() {
+        force_mark_last(Paint::solid(Color::rgb8(200, 30, 30)));
+    }
+
+    #[test]
+    fn hidden_mark_last_tatweel_uses_letter_run() {
+        force_mark_last(Paint::None);
+    }
+}
