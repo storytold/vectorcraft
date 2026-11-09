@@ -6208,6 +6208,24 @@ breakText	Glyphs	Glifi
 	3D Box	Scatola 3D
 	3D Box Tool	Strumento Scatola 3D
 
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Apri con
+	No importer plug-ins installed	Nessun plug-in di importazione installato
+	Read files you open in its format and make documents from them	Leggere i file che apri nel suo formato e crearne documenti
+@msg	{_1} is an importer (File › Open With)	{_1} è un plug-in di importazione (File › Apri con)
+@msg	missing `importer` (see document.formats)	manca `importer` (vedi document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` deve essere l’id di formato di un plug-in (vedi document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	«{shown}» apre file {_1}, non `{_2}`
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` è un plug-in di tipo `{_2}`, non un plug-in di importazione
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` è un plug-in di tipo `{_2}`, non un plug-in di esportazione
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` è un plug-in di importazione: apri un file con document.open {{"importer"}"}}
+@msg	the importer returned no objects	il plug-in di importazione non ha restituito alcun oggetto
+@msg	an importer returns `objects` and `warnings`, not `{key}`	un plug-in di importazione restituisce `objects` e `warnings`, non `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	il file supera i {MAX_INPUT_BYTES} byte che un plug-in di importazione legge
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	un plug-in di importazione dichiara da 1 a {MAX_EXTENSIONS} `extensions`
+@msg	only an exporter or an importer declares `extensions`	solo un plug-in di esportazione o di importazione dichiara `extensions`
+@msg	an importer always gets an import's budget: leave `budget` out	un plug-in di importazione riceve sempre il budget di un’importazione: ometti `budget`
+
 # Safe Mode
 	Safe Mode…	Modalità provvisoria…
 	Safe Mode	Modalità provvisoria

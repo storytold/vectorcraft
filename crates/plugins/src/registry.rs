@@ -220,3 +220,27 @@ pub fn load_folder_where(
     }
     Ok(report)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A cache keyed by the revision can't store the old list under the new revision: an install
+    /// waiting for the set leaves the revision alone until it holds the set.
+    #[test]
+    fn an_install_changes_the_revision_only_while_it_holds_the_set() {
+        let plugin = Plugin::load(include_bytes!("../tests/fixtures/desaturate.wasm"), Limits::default()).unwrap();
+        let id = plugin.id().to_string();
+        let held = PLUGINS.read().unwrap_or_else(|e| e.into_inner());
+        let before = revision();
+        let installing = std::thread::spawn(move || install(plugin));
+        let moved = (0..1_000_000).any(|_| {
+            std::thread::yield_now();
+            revision() != before
+        });
+        drop(held);
+        installing.join().unwrap();
+        assert!(!moved, "the revision changed while the install waited for the set");
+        assert!(revision() > before && remove(&id));
+    }
+}

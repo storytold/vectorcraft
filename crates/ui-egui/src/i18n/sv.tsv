@@ -6749,7 +6749,7 @@ digits	Hindi	Hindi
 @msg	{what} points outside memory	{what} pekar utanför minnet
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} skulle skrivas ut på fler än {MAX_TILES} rutor: skala ned det
 @msg	`{_1}` can't be edited or removed	`{_1}` kan inte redigeras eller tas bort
-@msg	`{_1}` is a {_2}, not an exporter	`{_1}` är av typen {_2}, inte en exportfunktion
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` är ett plugin av typen `{_2}`, inte en exportfunktion
 @msg	`{_1}` is a live effect: apply it with effect.apply {{"effect"}"}}	`{_1}` är en live-effekt: använd den med effect.apply {{"effect"}"}}
 @msg	`{_1}` is an exporter: export with document.export {{"format"}"}}	`{_1}` är en exportfunktion: exportera med document.export {{"format"}"}}
 @msg	`{_1}` is built in and always listed	`{_1}` är inbyggd och listas alltid
@@ -7624,7 +7624,7 @@ digits	Hindi	Hindi
 @msg	offset out of range	förskjutningen ligger utanför intervallet
 @msg	Offset Path: {e}	Förskjut bana: {e}
 @msg	Offset Path: the path is too complex to offset	Förskjut bana: banan är för komplex för att förskjutas
-@msg	only an exporter declares `extensions`	endast en exportfunktion deklarerar `extensions`
+@msg	only an exporter or an importer declares `extensions`	endast en exportfunktion eller importfunktion deklarerar `extensions`
 @msg	only groups, layers, type and images have a Contents (Characters) row	endast grupper, lager, text och bilder har en rad för Innehåll (Tecken)
 @msg	only interior mesh lines can be deleted	endast inre nätlinjer kan raderas
 @msg	only solid colours can be added (not gradients or patterns)	endast enhetliga färger kan läggas till (inte gradienter eller mönster)
@@ -8074,6 +8074,22 @@ digits	Hindi	Hindi
 @msg	x and y must be given together	x och y måste anges tillsammans
 @msg	zone needs an anchor: dock beside a panel with anchor, or in a new dock column with side (Start or End)	zone behöver ett ankare: docka bredvid en panel med anchor eller i en ny dockkolumn med side (Start eller End)
 @msg	zoom must be positive	zoom måste vara positiv
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Öppna med
+	No importer plug-ins installed	Inga importplugins är installerade
+	Read files you open in its format and make documents from them	Läsa filer som du öppnar i dess format och skapa dokument av dem
+@msg	{_1} is an importer (File › Open With)	{_1} är ett importinsticksprogram (Fil › Öppna med)
+@msg	missing `importer` (see document.formats)	`importer` saknas (se document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` måste vara ett formatid för ett plugin (se document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	”{shown}” öppnar {_1}-filer, inte `{_2}`
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` är ett plugin av typen `{_2}`, inte en importfunktion
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` är en importfunktion: öppna en fil med document.open {{"importer"}"}}
+@msg	the importer returned no objects	importfunktionen returnerade inga objekt
+@msg	an importer returns `objects` and `warnings`, not `{key}`	en importfunktion returnerar `objects` och `warnings`, inte `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	filen är större än de {MAX_INPUT_BYTES} byte som en importfunktion läser
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	en importfunktion anger 1 till {MAX_EXTENSIONS} `extensions`
+@msg	an importer always gets an import's budget: leave `budget` out	en importfunktion får alltid en imports budget: utelämna `budget`
 
 # Safe Mode
 	Safe Mode…	Felsäkert läge…

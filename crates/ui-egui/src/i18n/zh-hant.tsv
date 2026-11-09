@@ -6226,6 +6226,24 @@ breakText	Glyphs	字符
 	3D Box	3D 盒子
 	3D Box Tool	3D 盒子工具
 
+# Importer plug-ins (File › Open With, document.open)
+	Open With	開啟方式
+	No importer plug-ins installed	未安裝匯入增效模組
+	Read files you open in its format and make documents from them	讀取以其格式開啟的檔案並據此建立文件
+@msg	{_1} is an importer (File › Open With)	{_1} 是匯入增效模組 (檔案 › 開啟方式)
+@msg	missing `importer` (see document.formats)	未提供 `importer` (請參閱 document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` 必須是增效模組的格式 ID (請參閱 document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	「{shown}」開啟的是 {_1} 檔案，不是 `{_2}`
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` 是 `{_2}` 類型的增效模組，不是匯入增效模組
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` 是 `{_2}` 類型的增效模組，不是匯出增效模組
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` 是匯入增效模組：請用 document.open {{"importer"}"}} 開啟檔案
+@msg	the importer returned no objects	匯入增效模組未傳回任何物件
+@msg	an importer returns `objects` and `warnings`, not `{key}`	匯入增效模組傳回 `objects` 和 `warnings`，不是 `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	檔案超過匯入增效模組讀取的 {MAX_INPUT_BYTES} 位元組
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	匯入增效模組宣告 1 到 {MAX_EXTENSIONS} 個 `extensions`
+@msg	only an exporter or an importer declares `extensions`	只有匯出或匯入增效模組才宣告 `extensions`
+@msg	an importer always gets an import's budget: leave `budget` out	匯入增效模組一律取得匯入的預算：請勿指定 `budget`
+
 # Safe Mode
 	Safe Mode…	安全模式…
 	Safe Mode	安全模式

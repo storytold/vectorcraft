@@ -6406,6 +6406,11 @@ breakText	Glyphs	Glif
 	3D Box	Kotak 3D
 	3D Box Tool	Alat Kotak 3D
 
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Buka Dengan
+	No importer plug-ins installed	Tidak ada plug-in impor yang terinstal
+	Read files you open in its format and make documents from them	Membaca file yang Anda buka dalam formatnya dan membuat dokumen darinya
+
 # Safe Mode
 	Safe Mode…	Mode aman…
 	Safe Mode	Mode aman

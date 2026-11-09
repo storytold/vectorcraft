@@ -381,7 +381,8 @@ impl Writer<'_> {
     /// Write pattern `name`'s definition, once: `%AI3_BeginPattern: (name)`, `(name) llx lly urx
     /// ury` (the tile, y up), the tile's box (an unpainted path whose dictionary marks it,
     /// `AIPattern_Editor_Backing_Tile_Rect`) and the art on `%_` lines, `E`, `%AI3_EndPattern`.
-    /// False when it can't be ([`Self::pattern_writable`]).
+    /// False when it can't be ([`Self::pattern_writable`]), or when its box and art don't all fit
+    /// within the object limit ([`Self::take_objects`]).
     fn define_pattern(&mut self, name: &str) -> bool {
         if !self.pattern_writable(name) {
             return false;
@@ -392,7 +393,9 @@ impl Writer<'_> {
             return true;
         }
         let doc = self.doc;
-        let Some(def) = doc.pattern(name) else { return false };
+        // The tile's box is an object of the definition ([`Self::take_objects`]).
+        let (before, bound) = (self.charges(), self.bound.len());
+        let Some(def) = doc.pattern(name).filter(|_| self.take_objects(1)) else { return false };
         self.defining.push(name.to_string());
         // The art is written in the pattern's space, y up, from the state a definition starts in.
         let saved = (
@@ -427,6 +430,12 @@ impl Writer<'_> {
         (art, (self.to_art, self.grad_space, self.canvas), self.state, self.gs, self.clip, self.block_end) = saved;
         let art = std::mem::replace(&mut self.body, art);
         self.defining.pop();
+        if self.left_out_since(before) {
+            self.give_back(before, &art);
+            self.bound.truncate(bound);
+            return false;
+        }
+        self.keep_since(before);
         let tile = Affine::FLIP_Y.transform_rect_bbox(def.tile);
         let quoted = ps::bytes(name.as_bytes());
         let mut text = format!("%AI3_BeginPattern: {quoted}\n{quoted} ");

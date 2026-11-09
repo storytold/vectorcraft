@@ -6442,6 +6442,11 @@ shape	Open	Otvoren
 	3D Box	3D kutija
 	3D Box Tool	Alat za 3D kutiju
 
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Otvori pomoću
+	No importer plug-ins installed	Nisu instalirani dodaci za uvoz
+	Read files you open in its format and make documents from them	Čitati datoteke koje otvarate u njegovom formatu i od njih praviti dokumente
+
 # Safe Mode
 	Safe Mode…	Sigurni način rada…
 	Safe Mode	Sigurni način rada
