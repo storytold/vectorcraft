@@ -47,7 +47,8 @@
 //! with a pattern or gradient too; strokes with a Calligraphic or Art brush or aligned inside or outside too), each with its own
 //! transparency and effects, and the effects of
 //! [`effect`]. Such objects are read as themselves with an appearance of those fills, strokes and
-//! effects; others keep their drawn look. Effect › Pathfinder effects (`(Adobe Pathfinder)` in the
+//! effects (a path's stack of several fills and strokes when its drawn look places each of its
+//! gradients); others keep their drawn look. Effect › Pathfinder effects (`(Adobe Pathfinder)` in the
 //! object's chain) are read on a group with no fills or strokes of its own, which keeps its members.
 
 use std::collections::HashMap;
@@ -178,11 +179,16 @@ pub(super) struct ArtStyle {
     /// Feather, Round Corners, Scribble, Convert to Shape, the Path effects (Offset Path, Outline Object, Outline Stroke),
     /// Bas Relief read from its settings block and some Distort & Transform effects ([`any_object_takes`]) on the object
     /// (and Pathfinder effects when it has no fills or strokes): what any object is read with. Type takes the other plain styles too (its drawn look
-    /// can't be retyped); other objects keep their drawn look, which is the app's own rendering.
+    /// can't be retyped), paths and compound paths [`Self::stacked`] ones; other objects keep their drawn look, which is the app's own rendering.
     pub simple: bool,
     /// It would be [`Self::simple`] but for a Stroke Style filter's variable width written as one
     /// centered array ([`centered_widths`]): an object whose drawn look is empty takes it with its profile.
     pub uneven: bool,
+    /// It is several fills and strokes in solid colours or gradients (strokes without a brush),
+    /// each with its own visibility, opacity and blend mode but no effects of its own, under only
+    /// the effects any object takes that don't move the outline: what a path or compound path is
+    /// read with when each gradient is placed as its drawn look has it (`read::ops`' `styled`).
+    pub stacked: bool,
     /// Its fills and strokes, bottom first.
     pub items: Vec<StyleItem>,
     /// Each item's own visibility, transparency and effects, in the order of [`Self::items`].
@@ -1606,6 +1612,13 @@ fn style(filters: &[Filter]) -> ArtStyle {
     // A stroke with one centered width array comes in as the drawn look, which holds the outline as the file draws it.
     let centered = filters.iter().any(centered_widths);
     (st.simple, st.uneven) = (simple && !centered, simple && centered);
+    st.stacked = !centered
+        && st.plain
+        && !st.pathfinder
+        && !st.moves_outline()
+        && st.items.iter().all(|i| matches!(i, StyleItem::Fill(_) | StyleItem::Gradient { .. } | StyleItem::Stroke { brush: None, .. }))
+        && st.looks.iter().all(|l| l.effects.is_empty())
+        && st.effects.iter().all(any_object_takes);
     st
 }
 

@@ -5925,6 +5925,115 @@ fn a_symbol_defined_before_the_art_styles_reads_its_styled_objects() {
     assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
 }
 
+/// An art style named `Glow`: a path filled with gradient swatch `under`, then gradient swatch
+/// `over` at 50 % Screen above it.
+fn two_gradient_style(under: &str, over: &str) -> String {
+    let fill = |name: &str| {
+        format!(
+            "/BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n\
+             /FillStyle : 0 O\n1 ({name}) 0 0 0 1 1 0 0 1 0 0 Bg\n0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n"
+        )
+    };
+    format!(
+        "/KnownStyle :\n(Glow) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n{}\
+         /BasicFilter :\n(Blend Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n\
+         /BlendStyle : 2 0.5 0 0 0 Xy\n0 J 0 j 1 w 10 M []0 d0 XR\n/Def ;\n (BlendStyle) ,\n; /Dict ;\n /Part ,\n;\n /Part ,\n\
+         {}/BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n /Part ,\n;\n",
+        fill(over),
+        fill(under)
+    )
+}
+
+#[test]
+fn a_path_with_several_gradient_fills_comes_in_as_itself_where_its_look_places_them() {
+    // GUARDS: a path whose style stacks fills with their own opacity and blend mode came in as its drawn look.
+    let defs = "%AI5_BeginGradient: (A)\n(A) 0 2 Bd\n[\n<00FF>\n0\n%_0 0 0 0 1 0 0 2 1 6 50 0 Bs\n%_0 0 0 0 0 0 1 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n\
+                %AI5_BeginGradient: (B)\n(B) 0 2 Bd\n[\n<00FF>\n0\n%_0 0 0 0 0 1 0 2 1 6 50 0 Bs\n%_0 0 0 0 1 1 1 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
+    let rect = rect_path(0.0, 0.0, 100.0, 50.0);
+    let hidden_rect = rect.replace('\n', "\n%_");
+    // The drawn look: the path filled with each gradient where the app placed it (its transparency
+    // left out: only where the gradients lie is read from it).
+    let look = |name: &str, x0: f64| format!("{rect}Bb\n1 ({name}) {x0} 25 0 50 1 0 0 1 0 0 Bg\nf\n0 BB\n");
+    let square = |under: &str, over: &str| format!("0 Ae\nu\n{}{}U\n%_{hidden_rect}f\n1 (Glow) XW\n", look(under, 0.0), look(over, 50.0));
+    let r = read_ok(&format!("%AI9_BeginArtStyles\n{}%AI9_EndArtStyles\n{defs}{}", two_gradient_style("A", "B"), layer(&square("A", "B"))));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the object, not its look: {a:#?}");
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    let fills: Vec<_> = a[0]
+        .appearance
+        .items
+        .iter()
+        .map(|i| match (i, i.paint()) {
+            (AppearanceItem::Fill(f), Paint::Gradient(g)) => (g.swatch.clone(), g.geom.map(|g| g.start.x), f.opacity, f.blend),
+            _ => panic!("{i:?}"),
+        })
+        .collect();
+    assert_eq!(fills, [(Some("A".into()), Some(0.0), 1.0, BlendMode::Normal), (Some("B".into()), Some(50.0), 0.5, BlendMode::Screen)]);
+    // Two fills of one swatch: which placement is whose isn't known, so the drawn look stays.
+    let same = read_ok(&format!("%AI9_BeginArtStyles\n{}%AI9_EndArtStyles\n{defs}{}", two_gradient_style("A", "A"), layer(&square("A", "A"))));
+    assert!(same.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", same.warnings);
+    // One gradient over a solid fill, on a path filled with that gradient placed elsewhere: the
+    // gradient lies where the drawn look has it, not where the path's own fill does.
+    let one = two_gradient_style("A", "B").replace("1 (A) 0 0 0 1 1 0 0 1 0 0 Bg\n", "0 0 0 1 0 0 0 Xa\n");
+    let own = format!(
+        "0 Ae\nu\n0 0 0 1 0 0 0 Xa\n{rect}f\n{}U\n%_{hidden_rect}Bb\n%_1 (B) 0 25 0 100 1 0 0 1 0 0 Bg\n%_f\n%_0 BB\n1 (Glow) XW\n",
+        look("B", 50.0)
+    );
+    let one = read_ok(&format!("%AI9_BeginArtStyles\n{one}%AI9_EndArtStyles\n{defs}{}", layer(&own)));
+    let a = art(&one.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    let placed: Vec<_> = a[0]
+        .appearance
+        .items
+        .iter()
+        .map(|i| match i.paint() {
+            Paint::Gradient(g) => g.geom.map(|g| g.start.x),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(placed, [None, Some(50.0)], "{:?}", one.warnings);
+    // A look that doesn't paint the gradient (a raster, say): the drawn look stays.
+    let flat = format!("0 Ae\nu\n{RED}{rect}f\nU\n%_{hidden_rect}f\n1 (Glow) XW\n");
+    let flat = read_ok(&format!("%AI9_BeginArtStyles\n{}%AI9_EndArtStyles\n{defs}{}", two_gradient_style("A", "B"), layer(&flat)));
+    assert!(flat.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", flat.warnings);
+}
+
+/// A stack of solid colours comes in live too: a path whose style is a solid fill under a stroke
+/// without a brush at 50 % Screen comes in as itself with both, each with its own transparency.
+#[test]
+fn a_path_with_a_solid_fill_under_a_screened_stroke_comes_in_as_itself() {
+    let stroke = "/BasicFilter :\n(Stroke Style Filter) 0 0 /Filter ,\n1 /Visible ,\n2 /FillOrStroke ,\n/Dictionary : /NotRecorded ,\n\
+                  /StrokeStyle : 0 R\n0 1 1 0 1 0 0 XA\n0 J 0 j 2 w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n";
+    let over = "/BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n\
+                /FillStyle : 0 O\n1 (B) 0 0 0 1 1 0 0 1 0 0 Bg\n0 1 Xd\n/Def ;\n (FillStyle) ,\n";
+    let style = two_gradient_style("A", "B");
+    assert!(style.contains(over));
+    let style = style.replace(over, stroke).replace("1 (A) 0 0 0 1 1 0 0 1 0 0 Bg\n", "0 0 0 1 0 0 0 Xa\n");
+    let rect = rect_path(0.0, 0.0, 100.0, 50.0);
+    let hidden_rect = rect.replace('\n', "\n%_");
+    let square = format!("0 Ae\nu\n0 0 0 1 0 0 0 Xa\n{rect}f\n0 1 1 0 1 0 0 XA\n2 w\n{rect}S\nU\n%_{hidden_rect}f\n1 (Glow) XW\n");
+    let r = read_ok(&format!("%AI9_BeginArtStyles\n{style}%AI9_EndArtStyles\n{}", layer(&square)));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the object, not its look: {a:#?}");
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    let items: Vec<_> = a[0]
+        .appearance
+        .items
+        .iter()
+        .map(|i| match i {
+            AppearanceItem::Fill(f) => ("fill", matches!(f.paint, Paint::Solid { .. }), f.opacity, f.blend),
+            AppearanceItem::Stroke(s) => {
+                ("stroke", matches!(s.paint, Paint::Solid { .. }) && s.brush.is_none() && s.width == 2.0, s.opacity, s.blend)
+            }
+        })
+        .collect();
+    assert_eq!(items, [("fill", true, 1.0, BlendMode::Normal), ("stroke", true, 0.5, BlendMode::Screen)]);
+}
+
 /// `node` is the red square of [`styled_square`] read as itself with [`ART_STYLES`]' `Blue`: a blue
 /// fill and a drop shadow, not the look it draws.
 fn assert_blue_square(node: &Node) {
