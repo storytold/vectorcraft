@@ -1025,6 +1025,19 @@ fn lasso_picks_gradient_mesh_points() {
 /// Shift-drag a marquee with the Selection tool (#483): the selected objects it reaches are
 /// deselected and the others selected, the rest of the selection staying as it was.
 #[test]
+fn a_selection_tool_click_gives_new_art_the_objects_fill() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 50.0, 50.0);
+    s.execute("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
+    rect(&mut s, 200.0, 100.0, 50.0, 50.0);
+    s.execute("paint.setFill", &json!({"color": "#0000ff"})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    gesture(&mut s, "selection", &[(125.0, 125.0), (125.0, 125.0)], Mods::default());
+    assert_eq!(s.doc().unwrap().selection.objects, vec![a]);
+    assert_eq!(s.paint.fill, s.doc().unwrap().doc.node(a).unwrap().appearance.fill_paint());
+}
+
+#[test]
 fn selection_shift_marquee_toggles_objects() {
     let mut s = session();
     let a = rect(&mut s, 100.0, 100.0, 50.0, 50.0);

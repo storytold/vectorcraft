@@ -8,6 +8,7 @@ use vectorcraft_geom::{Affine, FillRule, PathData, Point, Rect, shapes};
 
 use crate::*;
 
+mod actual_text;
 mod blend;
 mod charstroke;
 mod cmykblend;

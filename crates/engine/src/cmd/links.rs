@@ -23,7 +23,7 @@
 
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Component, Path};
+use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
 use serde_json::{Value, json};
@@ -219,6 +219,30 @@ struct Found {
     modified: Option<u64>,
     /// Read when telling whether it changed needed them.
     bytes: Option<Vec<u8>>,
+    /// `path` relative to the folder of [`LinkBase::relative`], when [`locate`] had that file.
+    relative: Option<Option<String>>,
+}
+
+/// The files a document's links are looked for from: `doc`, whose folder a link's path is followed
+/// from and its file is looked for by name in, and `relative`, the file its links' stored relative
+/// paths name places from (the file the document was read from).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct LinkBase<'a> {
+    pub doc: Option<&'a str>,
+    pub relative: Option<&'a str>,
+}
+
+impl<'a> LinkBase<'a> {
+    /// Both the file at `path`.
+    pub fn file(path: Option<&'a str>) -> Self {
+        Self { doc: path, relative: path }
+    }
+
+    /// The open document `st`'s. One with no file of its own looks beside the file it was read from.
+    pub(crate) fn of(st: &'a crate::DocState) -> Self {
+        let (path, from) = (st.path.as_deref(), st.links_from.as_deref());
+        Self { doc: path.or(from), relative: from.or(path) }
+    }
 }
 
 impl Found {
@@ -237,7 +261,17 @@ impl Found {
 
     /// [`Self::link`] with the bytes' hash already taken.
     fn link_hashed(&self, hash: String, base: &LinkInfo) -> LinkInfo {
-        LinkInfo { path: self.path.clone(), size: Some(self.size), modified: self.modified, hash: Some(hash), ..base.clone() }
+        LinkInfo { size: Some(self.size), modified: self.modified, hash: Some(hash), ..self.moved(base) }
+    }
+
+    /// `base` pointing at this file. A file found away from `base`'s path takes its relative path
+    /// from where it was found.
+    fn moved(&self, base: &LinkInfo) -> LinkInfo {
+        let relative = match &self.relative {
+            Some(found) if self.path != base.path => found.clone(),
+            _ => base.relative.clone(),
+        };
+        LinkInfo { path: self.path.clone(), relative, ..base.clone() }
     }
 }
 
@@ -255,15 +289,41 @@ pub(crate) fn link_info(path: &str, bytes: &[u8]) -> LinkInfo {
 /// The file at `path` when there is one.
 fn found_at(path: String) -> Option<Found> {
     let (size, modified) = file_stamp(&path)?;
-    Some(Found { path, size, modified, bytes: None })
+    Some(Found { path, size, modified, bytes: None, relative: None })
 }
 
-/// Where the file of `link` (stored in the document saved at `doc_path`) is: at its path, else at
-/// its relative path or by name in the document's folder. Only paths
-/// [`fileio::document_path`] follows are looked at.
-fn locate(link: &LinkInfo, doc_path: Option<&str>) -> Option<Found> {
-    let stored = [Some(link.path.as_str()), link.relative.as_deref(), Some(link.name())];
-    stored.into_iter().flatten().filter_map(|p| fileio::document_path(p, doc_path).ok()).find_map(found_at)
+/// Where the file of `link` (of a document looking from `base`) is: at its path, else at its
+/// relative path from the folder of [`LinkBase::relative`], then from the document's folder, else
+/// by name in the document's folder, then in that of [`LinkBase::relative`]. Only paths
+/// [`fileio::document_path`] follows from the document's own file are looked at.
+fn locate(link: &LinkInfo, base: LinkBase) -> Option<Found> {
+    let (relative, other) = (link.relative.as_deref(), base.doc != base.relative);
+    let stored = [
+        (Some(link.path.as_str()), base.doc),
+        (relative, base.relative),
+        (relative.filter(|_| other), base.doc),
+        (Some(link.name()), base.doc),
+        (other.then_some(link.name()), base.relative),
+    ];
+    let mut f = stored.into_iter().filter_map(|(p, from)| follow_from(p?, from, base.doc, fileio::document_path)).find_map(found_at)?;
+    f.relative = base.relative.map(|from| {
+        let from = absolute_path(from);
+        Path::new(&from).parent().and_then(|dir| relative_path(Path::new(&f.path), dir))
+    });
+    Some(f)
+}
+
+/// The place `stored` names from the file `from`, as `resolve` ([`fileio::document_path`]) follows
+/// it, when it also follows that place from the document's own file `doc`: a network share the
+/// document is no longer on is refused.
+pub(crate) fn follow_from(
+    stored: &str,
+    from: Option<&str>,
+    doc: Option<&str>,
+    resolve: impl Fn(&str, Option<&str>) -> std::result::Result<String, craft_docpath::Refused>,
+) -> Option<String> {
+    let path = resolve(stored, from).ok()?;
+    if from == doc { Some(path) } else { resolve(&path, doc).ok() }
 }
 
 /// Why the path of `link` (stored in the document saved at `doc_path`) isn't followed, when it
@@ -272,10 +332,10 @@ fn refused(link: &LinkInfo, doc_path: Option<&str>) -> Option<craft_docpath::Ref
     fileio::document_path(&link.path, doc_path).err().filter(|r| *r != craft_docpath::Refused::Invalid)
 }
 
-/// Where the file of group `g` (of the document saved at `doc_path`) is and whether it still has
+/// Where the file of group `g` (of a document looking from `base`) is and whether it still has
 /// the content shown. Its bytes are read only when its size or modification time changed.
-fn probe(g: &Group, doc_path: Option<&str>) -> (Status, Option<Found>) {
-    let Some(mut f) = locate(&g.link, doc_path) else { return (Status::Missing, None) };
+fn probe(g: &Group, base: LinkBase) -> (Status, Option<Found>) {
+    let Some(mut f) = locate(&g.link, base) else { return (Status::Missing, None) };
     let l = &g.link;
     if l.size == Some(f.size) && l.modified.is_some() && l.modified == f.modified {
         return (Status::Ok, Some(f));
@@ -328,9 +388,9 @@ pub(crate) struct LinkedFile {
     pub bytes: Option<Vec<u8>>,
 }
 
-/// Every file the linked images of `d` (saved at `doc_path`) show, in the layers, symbols and
+/// Every file the linked images of `d` (looking from `base`) show, in the layers, symbols and
 /// patterns, once each.
-pub(crate) fn linked_files(d: &Document, doc_path: Option<&str>) -> Vec<LinkedFile> {
+pub(crate) fn linked_files(d: &Document, base: LinkBase) -> Vec<LinkedFile> {
     let mut seen = std::collections::BTreeSet::new();
     groups(d, None)
         .into_iter()
@@ -338,7 +398,7 @@ pub(crate) fn linked_files(d: &Document, doc_path: Option<&str>) -> Vec<LinkedFi
         .map(|g| {
             let named = fileio::format_for_name(g.link.name()).or_else(|| fileio::readable_format_for_name(g.link.name()));
             let own = |b: &&ImageBlob| !b.is_proxy() && named.is_some_and(|f| f.mime == b.mime);
-            let found = locate(&g.link, doc_path);
+            let found = locate(&g.link, base);
             let found_path = found.as_ref().map(|f| f.path.clone());
             let bytes = found.and_then(|mut f| f.read().ok()).or_else(|| d.images.get(&g.key).filter(own).map(|b| b.bytes.to_vec()));
             LinkedFile { path: g.link.path.clone(), name: g.link.name().to_string(), found_path, bytes }
@@ -348,7 +408,7 @@ pub(crate) fn linked_files(d: &Document, doc_path: Option<&str>) -> Vec<LinkedFi
 
 /// `d` for output: linked raster images that still show only their saved preview read their files
 /// again (Preferences › Use Low Resolution Proxy for Linked EPS keeps the preview on screen only).
-pub(crate) fn full_linked_images<'a>(d: &'a Document, doc_path: Option<&str>) -> (Cow<'a, Document>, Vec<String>) {
+pub(crate) fn full_linked_images<'a>(d: &'a Document, base: LinkBase) -> (Cow<'a, Document>, Vec<String>) {
     let mut keys = BTreeSet::new();
     d.visit_images(|_, im| {
         if im.link.is_some() && d.images.get(&im.key).is_some_and(ImageBlob::is_proxy) {
@@ -363,7 +423,7 @@ pub(crate) fn full_linked_images<'a>(d: &'a Document, doc_path: Option<&str>) ->
     let all = groups(d, None);
     for key in keys {
         let Some(g) = all.iter().find(|g| g.document.is_none() && g.key == key) else { continue };
-        let Some(mut f) = locate(&g.link, doc_path) else {
+        let Some(mut f) = locate(&g.link, base) else {
             previews.insert(key);
             continue;
         };
@@ -398,7 +458,7 @@ pub(crate) fn full_linked_images<'a>(d: &'a Document, doc_path: Option<&str>) ->
 pub(crate) fn files_to_find(st: &crate::DocState, ids: Option<&[NodeId]>) -> Vec<(LinkInfo, Vec<NodeId>)> {
     groups(&st.doc, ids)
         .into_iter()
-        .filter(|g| !g.ids.is_empty() && (ids.is_some() || probe(g, st.path.as_deref()).0 == Status::Missing))
+        .filter(|g| !g.ids.is_empty() && (ids.is_some() || probe(g, LinkBase::of(st)).0 == Status::Missing))
         .map(|g| (g.link, g.ids))
         .collect()
 }
@@ -847,13 +907,13 @@ impl Resolved {
     }
 }
 
-/// The linked files of document `d`, just read from `doc_path`: those found unchanged are read
-/// again (their images had the preview), modified ones are read again when `update`, links found
-/// away from their path take the new path. A link nothing is known of whose image, or placed
+/// The linked files of document `d`, just read and looking from `base`: those found unchanged are
+/// read again (their images had the preview), modified ones are read again when `update`, links
+/// found away from their path take the new path. A link nothing is known of whose image, or placed
 /// document, shows a preview (a file another app wrote kept only that) was never read: its file is
 /// read now, into the object's bounds, which isn't a change to report. A placed document whose
 /// file's bytes are gone isn't showing a preview. Nothing here is an undo step.
-pub fn resolve(d: &mut Document, doc_path: Option<&str>, update: bool, low_res_proxy_eps: bool) -> Resolved {
+pub fn resolve(d: &mut Document, base: LinkBase, update: bool, low_res_proxy_eps: bool) -> Resolved {
     let mut out = Resolved::default();
     // The image (with its preview) and hash of each file read for a preview here, by path: images
     // of other keys linking to the same file share them, rather than each reading, decoding and
@@ -863,14 +923,14 @@ pub fn resolve(d: &mut Document, doc_path: Option<&str>, update: bool, low_res_p
     // away from its path or read again.
     let mut moved: Vec<(String, String, bool, LinkInfo)> = vec![];
     for g in groups(d, None) {
-        let row = rows(std::iter::once(&g), doc_path);
+        let row = rows(std::iter::once(&g), base.doc);
         let shows_preview = match g.document {
             None => previewing(d, &g.key),
             Some(_) => d.images.get(&g.key).is_some_and(ImageBlob::is_proxy),
         };
         let unread = g.link.hash.is_none() && g.link.size.is_none() && shows_preview;
         let eps_preview = keep_eps_preview(low_res_proxy_eps, &g, d);
-        match probe(&g, doc_path) {
+        match probe(&g, base) {
             (Status::Missing, _) => out.missing.extend(row),
             (Status::Modified, Some(mut f)) if update || unread => {
                 let force = unread.then_some(Preserve::Bounds);
@@ -894,7 +954,7 @@ pub fn resolve(d: &mut Document, doc_path: Option<&str>, update: bool, low_res_p
                     None => {
                         let link = match f.bytes.take() {
                             Some(b) => f.link(&b, &g.link),
-                            None => LinkInfo { path: f.path.clone(), ..g.link.clone() },
+                            None => f.moved(&g.link),
                         };
                         if link != g.link {
                             set_links(d, &g.ids, &link);
@@ -932,7 +992,7 @@ pub fn resolve(d: &mut Document, doc_path: Option<&str>, update: bool, low_res_p
                 // Found away from its path, or read again: the link follows.
                 let link = match &bytes {
                     Some(b) => f.link(b, &g.link),
-                    None => LinkInfo { path: f.path.clone(), ..g.link.clone() },
+                    None => f.moved(&g.link),
                 };
                 if link != g.link {
                     set_links(d, &g.ids, &link);
@@ -1035,42 +1095,68 @@ fn relative_path(target: &Path, base: &Path) -> Option<String> {
     Some(ups.chain(rest).collect::<Vec<std::borrow::Cow<str>>>().join("/"))
 }
 
-/// `d` as saved to `dest`: the links' paths relative to its folder written in; `None` when they
-/// are already. Links in the layers, symbols, graph designs, patterns and opacity masks are all set.
-pub fn with_relative_paths(d: &Document, dest: &str) -> Option<Document> {
-    let dest = absolute_path(dest);
-    let dir = Path::new(&dest).parent()?;
-    let relative = |l: &LinkInfo| relative_path(Path::new(&l.path), dir);
-    let outdated = |l: &LinkInfo| relative(l) != l.relative;
-    let mut changed = false;
-    d.visit_images(|_, im| changed |= im.link.as_ref().is_some_and(outdated));
-    d.visit_placed(|_, p| changed |= outdated(&p.link));
-    if !changed {
-        return None;
+/// The file `link` (of a document looking from `base`) is written relative to: where [`locate`]
+/// finds it, else the place its relative path names from the folder of [`LinkBase::relative`],
+/// else its path.
+fn link_target(link: &LinkInfo, base: LinkBase) -> PathBuf {
+    if let Some(f) = locate(link, base) {
+        return PathBuf::from(f.path);
     }
-    let mut d = d.clone();
-    d.update_links_where(outdated, |l| l.relative = relative(l));
-    Some(d)
+    match (base.relative, link.relative.as_deref()) {
+        (Some(_), Some(rel)) => fileio::document_path(rel, base.relative).map_or_else(|_| PathBuf::from(&link.path), PathBuf::from),
+        _ => PathBuf::from(&link.path),
+    }
 }
 
-/// Sets each link of `d`, a copy of the document saved at `doc_path` that has no file of its own,
-/// to the path where that document finds its file, so the copy finds the same files.
-/// Links in the layers, symbols, graph designs, patterns and opacity masks are all set.
-pub(crate) fn with_found_paths(d: &mut Document, doc_path: &str) {
-    // The new path of each link by what `locate` reads of it: its path, relative path and name.
-    let mut found: BTreeMap<(String, Option<String>), Option<String>> = BTreeMap::new();
+/// `d` (looking from `base`) as saved to `dest`: the links' paths relative to its folder written
+/// in; `None` when they are already. A link whose file is not at its path is written relative to
+/// where its file is found, else to the place its relative path names. Links in the layers,
+/// symbols, graph designs, patterns and opacity masks are all set.
+pub fn with_relative_paths(d: &Document, base: LinkBase, dest: &str) -> Option<Document> {
+    let dest = absolute_path(dest);
+    let dir = Path::new(&dest).parent()?;
+    // The relative path of each link by its path and stored relative path, each file looked at once.
+    let mut wanted: BTreeMap<(String, Option<String>), Option<String>> = BTreeMap::new();
     let mut look = |l: &LinkInfo| {
-        found.entry((l.path.clone(), l.relative.clone())).or_insert_with(|| locate(l, Some(doc_path)).map(|f| f.path));
+        wanted.entry((l.path.clone(), l.relative.clone())).or_insert_with(|| relative_path(&link_target(l, base), dir));
     };
     d.visit_images(|_, im| im.link.iter().for_each(&mut look));
     d.visit_placed(|_, p| look(&p.link));
-    found.retain(|(path, _), f| f.as_ref().is_some_and(|f| f != path));
+    wanted.retain(|(_, stored), rel| rel != stored);
+    if wanted.is_empty() {
+        return None;
+    }
+    let key = |l: &LinkInfo| (l.path.clone(), l.relative.clone());
+    let mut d = d.clone();
+    d.update_links_where(|l| wanted.contains_key(&key(l)), |l| l.relative = wanted.get(&key(l)).cloned().flatten());
+    Some(d)
+}
+
+/// Sets each link of `d`, a copy of a document looking from `base`, to the path where that
+/// document finds its file, and its relative path to it as that document's links have them, so
+/// the copy finds the same files. Links in the layers, symbols, graph designs, patterns and opacity
+/// masks are all set.
+pub(crate) fn with_found_paths(d: &mut Document, base: LinkBase) {
+    // The new path and relative path of each link by what `locate` reads of it: its path, relative
+    // path and name.
+    type PathAndRelative = (String, Option<String>);
+    let mut found: BTreeMap<PathAndRelative, Option<PathAndRelative>> = BTreeMap::new();
+    let mut look = |l: &LinkInfo| {
+        found.entry((l.path.clone(), l.relative.clone())).or_insert_with(|| {
+            let moved = locate(l, base)?.moved(l);
+            Some((moved.path, moved.relative))
+        });
+    };
+    d.visit_images(|_, im| im.link.iter().for_each(&mut look));
+    d.visit_placed(|_, p| look(&p.link));
+    found.retain(|(path, _), f| f.as_ref().is_some_and(|(f, _)| f != path));
     if found.is_empty() {
         return;
     }
     d.update_links(|l| {
-        if let Some(Some(f)) = found.get(&(l.path.clone(), l.relative.clone())) {
-            l.path = f.clone();
+        if let Some(Some((path, relative))) = found.get(&(l.path.clone(), l.relative.clone())) {
+            l.path = path.clone();
+            l.relative = relative.clone();
         }
     });
 }
@@ -1079,15 +1165,15 @@ pub(crate) fn with_found_paths(d: &mut Document, doc_path: &str) {
 
 fn check(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
-    let ids = ids_param(p, "ids");
+    let ids = ids_param(p, "ids", "links.check")?;
     let (mut missing, mut modified) = (0, 0);
     let mut links = vec![];
     for g in groups(&st.doc, ids.as_deref()).iter().filter(|g| !g.ids.is_empty()) {
-        let (status, found) = probe(g, st.path.as_deref());
+        let (status, found) = probe(g, LinkBase::of(st));
         missing += usize::from(status == Status::Missing);
         modified += usize::from(status == Status::Modified);
         let mut row = json!({ "name": g.link.name(), "path": g.link.path, "status": status.as_str(), "ids": ids_json(&g.ids) });
-        note_refused(&mut row, &g.link, st.path.as_deref());
+        note_refused(&mut row, &g.link, LinkBase::of(st).doc);
         if let Some(f) = found.filter(|f| f.path != g.link.path) {
             row["found"] = json!(f.path);
         }
@@ -1100,7 +1186,7 @@ fn check(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn update(s: &mut Session, p: &Value) -> Result<Value> {
-    update_where(s, ids_param(p, "ids"), None)
+    update_where(s, ids_param(p, "ids", "links.update")?, None)
 }
 
 /// Update Links in the active document of `s` for objects `ids` (default: the linked files that
@@ -1112,7 +1198,7 @@ fn update_where(s: &mut Session, ids: Option<Vec<NodeId>>, path: Option<&str>) -
     let (mut reads, mut missing) = (vec![], vec![]);
     let asked = ids.is_some() || path.is_some();
     for g in groups(&st.doc, ids.as_deref()).into_iter().filter(|g| path.is_none_or(|p| g.document.is_some() && g.link.path == p)) {
-        match probe(&g, st.path.as_deref()) {
+        match probe(&g, LinkBase::of(st)) {
             (Status::Missing, _) | (_, None) => missing.extend(ids_json(&g.ids)),
             // Unchanged and showing the file: nothing to read unless asked for.
             (Status::Ok, Some(_)) if !asked && !stale(&st.doc, &g) => {}
@@ -1225,14 +1311,14 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
             _ => None,
         })
     };
-    let mut ids: Vec<NodeId> = match (&each, ids_param(p, "ids")) {
+    let mut ids: Vec<NodeId> = match (&each, ids_param(p, "ids", C)?) {
         (Some(each), _) => each.iter().flat_map(|(ids, _)| ids.iter().copied()).collect(),
         (None, Some(ids)) => ids,
         (None, None) => {
             let selected: Vec<NodeId> = st.selection.objects.iter().copied().filter(|id| image(id).is_some()).collect();
             match folder_param {
                 Some(_) if selected.is_empty() => {
-                    groups(&st.doc, None).into_iter().filter(|g| probe(g, st.path.as_deref()).0 == Status::Missing).flat_map(|g| g.ids).collect()
+                    groups(&st.doc, None).into_iter().filter(|g| probe(g, LinkBase::of(st)).0 == Status::Missing).flat_map(|g| g.ids).collect()
                 }
                 _ => selected,
             }
@@ -1368,7 +1454,7 @@ fn missing_in_folder(
     let Some(dir) = files.first().and_then(|(_, p)| Path::new(p).parent()).map(Path::to_path_buf) else { return };
     for g in groups(&st.doc, None).into_iter().filter(|g| !(images_only && g.document.is_some())) {
         let rest: Vec<NodeId> = g.ids.iter().copied().filter(|id| !given.contains(id)).collect();
-        if rest.is_empty() || probe(&g, st.path.as_deref()).0 != Status::Missing {
+        if rest.is_empty() || probe(&g, LinkBase::of(st)).0 != Status::Missing {
             continue;
         }
         let found = absolute_path(&dir.join(g.link.name()).to_string_lossy());
@@ -1482,7 +1568,7 @@ fn linked_param(st: &crate::DocState, p: &Value, cmd: &str) -> Result<NodeId> {
 pub(crate) fn statuses(st: &crate::DocState) -> BTreeMap<NodeId, (Status, Option<String>, bool)> {
     let mut out = BTreeMap::new();
     for g in groups(&st.doc, None).iter().filter(|g| !g.ids.is_empty()) {
-        let (status, found) = probe(g, st.path.as_deref());
+        let (status, found) = probe(g, LinkBase::of(st));
         let found = found.map(|f| f.path).filter(|p| *p != g.link.path);
         let preview = stale(&st.doc, g);
         out.extend(g.ids.iter().map(|id| (*id, (status, found.clone(), preview))));
@@ -1603,7 +1689,7 @@ fn embed(s: &mut Session, p: &Value) -> Result<Value> {
         Some(NodeKind::PlacedDocument(_)) => true,
         _ => false,
     };
-    let ids = ids_param(p, "ids").unwrap_or_else(|| st.selection.objects.iter().copied().filter(linked).collect());
+    let ids = ids_param(p, "ids", C)?.unwrap_or_else(|| st.selection.objects.iter().copied().filter(linked).collect());
     if let Some(id) = ids.iter().find(|id| !matches!(kind(id), Some(NodeKind::Image(_) | NodeKind::PlacedDocument(_)))) {
         return Err(bad(C, format!("object {} is not an image or a placed document", id.0)));
     }
@@ -1625,7 +1711,7 @@ fn embed(s: &mut Session, p: &Value) -> Result<Value> {
             done.extend(g.ids);
             continue;
         }
-        match probe(&g, st.path.as_deref()) {
+        match probe(&g, LinkBase::of(st)) {
             (Status::Ok | Status::Modified, Some(mut f)) => match read_image(&mut f, &g.link) {
                 Ok(read) => {
                     done.extend(&g.ids);
@@ -1714,8 +1800,9 @@ fn file_fields(st: &crate::DocState, id: NodeId, l: &LinkInfo, out: &mut Value) 
 }
 
 fn file_fields_here(st: &crate::DocState, id: NodeId, l: &LinkInfo, out: &mut Value) {
-    let status = groups(&st.doc, Some(&[id])).first().map_or(Status::Missing, |g| probe(g, st.path.as_deref()).0);
-    let doc_path = st.path.as_deref();
+    let base = LinkBase::of(st);
+    let status = groups(&st.doc, Some(&[id])).first().map_or(Status::Missing, |g| probe(g, base).0);
+    let doc_path = base.doc;
     let path = fileio::document_path(&l.path, doc_path).ok();
     let stamp = path.as_deref().and_then(file_stamp);
     out["status"] = json!(status.as_str());
@@ -1792,7 +1879,8 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
 fn placement_options(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "links.placementOptions";
     let st = s.doc()?;
-    let ids = ids_param(p, "ids").unwrap_or_else(|| st.selection.objects.iter().copied().filter(|id| placement_of(&st.doc, *id).is_some()).collect());
+    let ids =
+        ids_param(p, "ids", C)?.unwrap_or_else(|| st.selection.objects.iter().copied().filter(|id| placement_of(&st.doc, *id).is_some()).collect());
     if let Some(id) = ids.iter().find(|id| placement_of(&st.doc, **id).is_none()) {
         return Err(bad(C, format!("object {} is not an image or a linked file", id.0)));
     }

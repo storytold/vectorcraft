@@ -30,6 +30,7 @@ use crate::import_shading::{
 use crate::import_text::{Families, LineFacts, Look, Placement, TextLine, Upright};
 use crate::{CropTo, ImportOptions, ImportReport, PdfError, TextAs};
 
+mod actual_text;
 mod builder;
 mod cid;
 mod device;

@@ -71,10 +71,10 @@ pub(super) fn gradient_chip_colors(gp: &vectorcraft_color::GradientPaint, width:
     let n = (cols + 1) * (rows + 1);
     if gp.gradient.kind == GradientKind::Freeform {
         let Some(painted) = vectorcraft_color::freeform::painted_box(b) else { return vec![Color32::TRANSPARENT; n] };
-        let field = gp.freeform_on(painted).field(vectorcraft_color::freeform::spread_scale(painted));
+        let field = gp.freeform_on(painted).model_field(vectorcraft_color::freeform::spread_scale(painted));
         return (0..n)
             .map(|k| {
-                let ([r, g, b], _) = field.sample(at(k));
+                let ([r, g, b], _) = field.display_sample(at(k));
                 let q = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
                 Color32::from_rgb(q(r), q(g), q(b))
             })

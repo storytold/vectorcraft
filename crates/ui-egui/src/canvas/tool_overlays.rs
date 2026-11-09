@@ -105,6 +105,134 @@ impl HiddenMarks {
     }
 }
 
+/// Edit › Spelling › Auto Spell Check: a red wavy line under each word of the visible type its
+/// dictionaries don't know ([`vectorcraft_engine::cmd::spelling::misspellings`], what
+/// `text.spelling.check` lists), in the run's language, without the active document's Ignore All
+/// words. Type with effects isn't underlined
+/// ([Check and correct spelling](https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/check-and-correct-spelling.html)).
+/// Each text object's lines are kept from one frame to the next ([`SpellingMarks`]).
+pub(super) fn spelling_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
+    let kept = &mut app.canvas.spelling;
+    let Some(st) = app.session.active() else {
+        *kept = SpellingMarks::default();
+        return;
+    };
+    let clip = p.clip_rect();
+    // `last` holds the lines of the last frame; the objects this frame doesn't draw are dropped.
+    let mut last = std::mem::take(&mut kept.lines);
+    let inputs = SpellingInputs {
+        fonts: vectorcraft_text::FontDb::global().generation(),
+        hyphenation: vectorcraft_text::hyphenation_exceptions(),
+        dictionary: vectorcraft_engine::cmd::spelling::dictionary_generation(),
+        doc: st.uid,
+        // Ignore All only adds words while the document is open.
+        ignored: st.spelling_ignored.len(),
+    };
+    if kept.inputs.as_ref() != Some(&inputs) {
+        last.clear();
+        kept.inputs = Some(inputs);
+    }
+    let stroke = Stroke::new(1.0, Color32::from_rgb(0xe0, 0x20, 0x20));
+    // Depth first in paint order, leaving out hidden objects and what is inside them.
+    fn walk(nodes: &[std::sync::Arc<Node>], f: &mut impl FnMut(&std::sync::Arc<Node>)) {
+        for n in nodes.iter().filter(|n| n.visible) {
+            f(n);
+            if let Some(children) = n.children() {
+                walk(children, f);
+            }
+        }
+    }
+    walk(&st.doc.layers, &mut |n| {
+        let NodeKind::Text(tx) = &n.kind else { return };
+        // An effect on the type or on one of its fills or strokes, shown (the Appearance panel's
+        // eye): the helpx page's "Auto spell check isn't available for text with effects applied".
+        let shown = |fx: &[vectorcraft_doc::Effect]| fx.iter().any(|e| e.visible);
+        if shown(&n.appearance.effects)
+            || n.appearance.items.iter().any(|i| shown(i.effects()))
+            || n.geometric_bounds().is_none_or(|b| !egui::Rect::from_points(&xf.quad(b)).intersects(clip))
+        {
+            return;
+        }
+        let lines = match last.remove(&n.id) {
+            Some((was, lines)) if std::sync::Arc::ptr_eq(&was, n) => lines,
+            _ => std::sync::Arc::new(underlines(tx, &st.spelling_ignored)),
+        };
+        for &(a, b) in lines.iter() {
+            wavy_line(p, xf.to_screen(a), xf.to_screen(b), stroke);
+        }
+        kept.lines.insert(n.id, (n.clone(), lines));
+    });
+}
+
+/// The most words underlined in one text object: past it the rest of the object isn't checked,
+/// so a long story of unknown words costs one check's worth.
+const MAX_UNDERLINED: usize = 1_000;
+
+/// The document-space segments under the unknown words of `tx`: for each word, the bottom edge of
+/// each piece of it on a line, from the start of the line to its end.
+fn underlines(tx: &vectorcraft_doc::TextObject, ignored: &std::collections::BTreeSet<String>) -> Vec<(Point, Point)> {
+    let (words, _) = vectorcraft_engine::cmd::spelling::misspellings(tx, ignored, MAX_UNDERLINED);
+    if words.is_empty() {
+        return vec![];
+    }
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), tx);
+    words
+        .iter()
+        .flat_map(|w| vectorcraft_text::selection_quads(&lay, w.range.start, w.range.end))
+        // Clockwise from the top left: q[3] and q[2] are the bottom left and right.
+        .map(|q| (tx.xf * q[3], tx.xf * q[2]))
+        .collect()
+}
+
+/// A wavy line from `a` to `b` on screen, waves 4 pixels long and 1.5 high.
+fn wavy_line(p: &egui::Painter, a: Pos2, b: Pos2, stroke: Stroke) {
+    const STEP: f32 = 2.0;
+    const HIGH: f32 = 1.5;
+    let d = b - a;
+    let len = d.length();
+    if !len.is_finite() || len < 1.0 {
+        return;
+    }
+    let along = d / len;
+    // Down the page from the line, whichever way the type runs.
+    let across = vec2(-along.y, along.x);
+    // At most 2000 waves on one line, however far the view is zoomed in.
+    let n = ((len / STEP) as usize).clamp(1, 4_000);
+    let step = len / n as f32;
+    let points: Vec<Pos2> = (0..=n).map(|i| a + along * (step * i as f32) + across * if i % 2 == 0 { 0.0 } else { HIGH }).collect();
+    p.add(Shape::line(points, stroke));
+}
+
+/// What Auto Spell Check's kept lines depend on beyond the text object itself: when any of it
+/// changes, all type is checked again.
+#[derive(Clone, Debug, PartialEq)]
+pub(super) struct SpellingInputs {
+    /// The fonts' generation ([`vectorcraft_text::FontDb::generation`]).
+    fonts: u64,
+    /// The hyphenation exceptions, which move line breaks.
+    hyphenation: String,
+    /// The custom dictionary's generation
+    /// ([`vectorcraft_engine::cmd::spelling::dictionary_generation`]).
+    dictionary: u64,
+    /// The document the lines are of.
+    doc: u64,
+    /// How many Ignore All words the document has.
+    ignored: usize,
+}
+
+/// The lines Auto Spell Check drew under each text object in the last frame
+/// ([`crate::CanvasCache::spelling`]). Each is kept with the object it was found in: an edited
+/// object is a new `Arc` and is checked again.
+#[derive(Default)]
+pub struct SpellingMarks {
+    pub(super) inputs: Option<SpellingInputs>,
+    /// Each text object drawn, by id: the node it was checked in and its lines in document space.
+    pub(super) lines: std::collections::HashMap<vectorcraft_doc::NodeId, (std::sync::Arc<Node>, Underlines)>,
+}
+
+/// One text object's Auto Spell Check lines: the document-space ends of each.
+pub(super) type Underlines = std::sync::Arc<Vec<(Point, Point)>>;
+
 /// View › Show Text Threads: for each thread with a selected frame, a line in its first frame's
 /// layer colour from each frame's out port to the next frame's in port, both showing the arrow of a
 /// threaded port, where the tools draw the ports of selected type ([`vectorcraft_tools::text`]).

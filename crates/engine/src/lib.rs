@@ -62,6 +62,23 @@ pub struct Session {
     /// While Cmd lends `tool` (a selection tool) for a drag: the tool it was lent to, which comes
     /// back as it was at the release ([`Session::pointer`]).
     pub(crate) lender: Option<Box<dyn Tool>>,
+    /// Pointer and key input that came while the tool computed an edit on another thread, each with
+    /// its number and view, made in order once the edit is applied.
+    held_input: std::collections::VecDeque<(u64, tooling::HeldInput, ViewInfo)>,
+    /// The number the next pointer or key event handed to the session gets.
+    input_count: u64,
+    /// The number of the event whose handling started the edit the tool is computing.
+    edit_started_by: Option<u64>,
+    /// Set while the tool's edit and the input held for it are applied: the commands that run then
+    /// do not start applying them again.
+    settling_tool_edit: bool,
+    /// Requests for the UI from making held input where nothing could take them (a command, a tool
+    /// switch), which the next [`Session::tool_poll`] returns.
+    held_ui: Vec<UiRequest>,
+    /// The active document (its uid) and its [`History::step`] when the tool last handled a pointer
+    /// event or drew its overlays: when they differ at the next one, the tool is told first
+    /// ([`vectorcraft_tools::Tool::history_moved`]). None until the first.
+    pub(crate) tool_step: Option<(u64, (u64, u64))>,
     /// The selection of the active document (its uid) as Cmd lent `tool`: what the lent tool's
     /// gesture found, so that one that leaves it as it was picks nothing.
     pub(crate) selection_at_lend: Option<(u64, vectorcraft_doc::Selection)>,
@@ -131,15 +148,28 @@ pub struct Session {
     /// Where the saved PDF presets are kept, one file each; `None`: only for the session
     /// ([`Session::attach_pdf_preset_store`]).
     pdf_preset_dir: Option<std::path::PathBuf>,
+    /// The custom dictionary file Edit › Spelling › Add and Edit Custom Dictionary save to; `None`:
+    /// the words are kept only for the process ([`Session::attach_custom_dictionary`]).
+    dictionary_file: Option<std::path::PathBuf>,
     /// Where the ICC profiles `color.loadProfile` loads are kept; `None`: only for the process
     /// ([`Session::attach_profile_store`]).
     profile_dir: Option<std::path::PathBuf>,
     /// Where the plug-ins `plugin.install` installs are kept; `None`: only for the process
     /// ([`Session::attach_plugin_store`]).
     plugin_dir: Option<std::path::PathBuf>,
+    /// The plug-in ids whose grant in the plug-in store should be gone but could not be removed:
+    /// [`Session::plugin_approver`] and a load of the store do not count those grants, and a successful
+    /// [`Session::store_grant`] for the id takes it out.
+    ignored_plugin_grants: std::sync::Mutex<std::collections::BTreeSet<String>>,
     /// A filter's output that a run made in the background handed in for `plugin.run` to apply
     /// ([`cmd::plugin::FilterRun::hand_in`]); the next `plugin.run` takes it.
     plugin_output: Option<cmd::plugin::HandedIn>,
+    /// What a person approved for the next `plugin.install` ([`Session::approve_plugin_install`]);
+    /// that install spends it, whatever it does.
+    plugin_install_approval: Option<cmd::plugin::InstallApproval>,
+    /// `plugin.install` takes `grant` and `allowHeavy` from any request
+    /// ([`Session::allow_plugin_grants_from_requests`]).
+    plugin_grants_from_requests: bool,
     /// URLs recently given in the Attributes panel (`attributes.set {url}`), newest first; not saved.
     pub recent_urls: Vec<String>,
     /// The saved tracing presets' revision and latest changes ([`Session::trace_presets_revision`]).
@@ -172,6 +202,12 @@ pub struct Session {
     /// has inherited the selection's appearance: the documents ([`DocState::uid`]) whose newest
     /// history step takes the colors the batch finally left.
     pub(crate) batch_paint_docs: Vec<u64>,
+    /// The composite fonts (lowercase names) that the open documents defined when the font
+    /// database was last brought in step with them ([`cmd::compositefonts::sync`]).
+    pub(crate) composite_names: Vec<String>,
+    /// Every composite font (lowercase name) this session has registered in the font database:
+    /// type read for opening may have been laid out in one that is gone by the time it opens.
+    pub(crate) composite_names_registered: std::collections::HashSet<String>,
     /// While a command that changes nothing in the document runs (a query, or one of
     /// [`command_sets::JOURNALED_READS`]): it reads the instance of an object selected in a symbol
     /// instance's art.
@@ -243,9 +279,10 @@ pub struct Session {
     /// Where folder searches may go; `None`: this computer's rules ([`cmd::findfiles::Rules`]).
     /// Tests set it.
     pub search_rules: Option<cmd::findfiles::Rules>,
-    /// Canvas feedback cached for the pending deferred preview ([`Session::overlays`]); cleared
-    /// when the preview params change or the interaction ends.
-    pub(crate) deferred_overlay_cache: Option<(String, Value, Vec<vectorcraft_tools::Overlay>)>,
+    /// Canvas feedback cached for the pending deferred preview ([`Session::overlays`],
+    /// [`Session::deferred_transform_box`]); cleared when the preview params change or the
+    /// interaction ends.
+    pub(crate) deferred_overlay_cache: Option<tooling::DeferredFeedback>,
     /// The walker threads a folder search starts; `None`: [`cmd::findfiles::threads`]. Tests set
     /// it.
     pub search_threads: Option<usize>,
@@ -297,7 +334,7 @@ mod session;
 pub(crate) use command_sets::SELECTS_GIVEN_IDS;
 #[cfg(test)]
 use command_sets::given_ids;
-pub use command_sets::{FIT_ACTIVE_ARTBOARD, ON_ACTIVE_ARTBOARD};
+pub use command_sets::{FIT_ACTIVE_ARTBOARD, ON_ACTIVE_ARTBOARD, waits_for_tool_edit};
 pub use doc_state::{DocState, OpenRows, RecalledSelection};
 pub use error::{EngineError, Result};
 pub use history::{History, HistoryEntry, NamedStep, default_history_budget};

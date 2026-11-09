@@ -146,6 +146,27 @@ fn common_gap(gaps: &[Gap]) -> f64 {
     if *common > 0.5 { 0.0 } else { common.max(0.0) }
 }
 
+/// A mapped glyph, authored logical text, or a glyph whose replacement was already placed.
+#[derive(Clone, Copy)]
+pub(crate) enum TextContent<'a> {
+    Mapped(&'a str),
+    Actual(&'a str),
+    Pen,
+}
+
+impl<'a> TextContent<'a> {
+    fn text(self) -> &'a str {
+        match self {
+            Self::Mapped(text) | Self::Actual(text) => text,
+            Self::Pen => "",
+        }
+    }
+
+    fn authored(self) -> bool {
+        !matches!(self, Self::Mapped(_))
+    }
+}
+
 /// A line of type being gathered: runs of glyphs on one baseline.
 pub(crate) struct TextLine {
     /// The first glyph's placement.
@@ -173,6 +194,10 @@ pub(crate) struct TextLine {
     /// glyph has its glyph's [`Slot`]; a space read from a gap and the other characters of a
     /// glyph of several have none.
     slots: Vec<Option<Slot>>,
+    /// Per character: authored logical order must survive visual-to-logical reconstruction.
+    authored: Vec<bool>,
+    /// Fill callbacks in an authored span, for the reader's later stroke pass.
+    actual_fills: HashMap<(u128, u64, u64), Option<usize>>,
     /// The first glyph was set vertically ([`Upright`]).
     upright: Option<Upright>,
     /// The glyphs make a column (vertical type), each below the last.
@@ -232,6 +257,8 @@ impl TextLine {
             runs: vec![],
             text_bytes: 0,
             slots: vec![],
+            authored: vec![],
+            actual_fills: HashMap::new(),
             upright: None,
             column: false,
             ink: vec![],
@@ -251,10 +278,24 @@ impl TextLine {
     /// line's single glyph a column): below the last one, in the same column. `false`: it starts
     /// another line.
     pub fn push_upright(&mut self, look: &Look, at: Placement, opacity: f32, upright: Upright, text: &str) -> bool {
+        self.push_upright_content(look, at, opacity, upright, TextContent::Mapped(text))
+    }
+
+    pub fn push_upright_content(&mut self, look: &Look, at: Placement, opacity: f32, upright: Upright, content: TextContent<'_>) -> bool {
+        let text = content.text();
+        if !text.is_empty() && self.authored.is_empty() && self.upright.is_some() {
+            // Suppressed vertical glyphs likewise provide no text anchor.
+            self.at = at;
+            self.opacity = opacity;
+            self.runs.clear();
+            self.column = false;
+        }
         let down = -self.at.up();
         let size = self.at.size.max(at.size);
         let Some((last, _, run)) = self.runs.last_mut() else {
             self.runs.push((look.clone(), 0.0, text.to_string()));
+            self.record_actual_fill(look, at, content);
+            self.authored.extend(text.chars().map(|_| content.authored()));
             (self.upright, self.next, self.last) = (Some(upright), at.origin + down * at.size, at.origin);
             return true;
         };
@@ -276,14 +317,20 @@ impl TextLine {
         self.column = true;
         // Letter-spaced Japanese is common: a gap reads as a space only when a whole em is left
         // out (the tracking set in `finish` keeps narrower gaps).
-        if step > size * 0.9 && !run.ends_with(is_space) && !text.starts_with(is_space) {
+        if !matches!(content, TextContent::Pen) && step > size * 0.9 && !run.is_empty() && !run.ends_with(is_space) && !text.starts_with(is_space) {
             run.push(' ');
+            self.authored.push(false);
         }
-        if last.takes(look) {
+        if last.takes(look)
+            && (matches!(content, TextContent::Pen)
+                || (!matches!(content, TextContent::Actual(_)) && !self.authored.last().copied().unwrap_or(false)))
+        {
             run.push_str(text);
         } else {
             self.runs.push((look.clone(), 0.0, text.to_string()));
         }
+        self.record_actual_fill(look, at, content);
+        self.authored.extend(text.chars().map(|_| content.authored()));
         self.next = at.origin + down * at.size;
         self.last = at.origin;
         true
@@ -292,9 +339,27 @@ impl TextLine {
     /// Add glyph `text` drawn with `look` at `at` (advancing `advance` points) at `opacity` if
     /// it continues this line; `false`: it starts another.
     pub fn push(&mut self, look: &Look, at: Placement, opacity: f32, advance: f64, text: &str) -> bool {
+        self.push_content(look, at, opacity, advance, TextContent::Mapped(text))
+    }
+
+    pub fn push_content(&mut self, look: &Look, at: Placement, opacity: f32, advance: f64, content: TextContent<'_>) -> bool {
+        let text = content.text();
+        let pen = matches!(content, TextContent::Pen);
         // A vertical line (even a single upright glyph) takes no horizontal glyphs.
         if self.column || self.upright.is_some() {
             return false;
+        }
+        if !pen && self.text_bytes == 0 && !self.baseline.is_empty() {
+            // A line containing only suppressed glyphs has no text anchor yet. Its first
+            // real character starts at its own origin, including after a line flush.
+            self.at = at;
+            self.opacity = opacity;
+            self.next = at.origin;
+            self.last = at.origin;
+            self.last_dir = at.dir;
+            self.last_size = at.size;
+            self.baseline.clear();
+            self.runs.clear();
         }
         let bytes = self.text_bytes;
         let glyph = self.baseline.len();
@@ -334,12 +399,12 @@ impl TextLine {
             if !on_line && !on_curve {
                 return false;
             }
-            if !run.ends_with(is_space) && !text.starts_with(is_space) {
+            if !pen && !run.is_empty() && !run.ends_with(is_space) && !text.starts_with(is_space) {
                 self.gaps.push(Gap { at: bytes, width: gap, em: self.last_size.min(at.size), on_line });
             }
             // A space the file draws between two glyphs spans the gaps on both sides of it.
-            let drawn = self.drawn_space.take();
-            if on_line {
+            let drawn = if pen { None } else { self.drawn_space.take() };
+            if on_line && !pen {
                 let mut chars = text.chars();
                 if chars.next().is_some_and(is_space) && chars.next().is_none() && !run.ends_with(is_space) {
                     self.drawn_space = Some((bytes, gap + advance));
@@ -347,7 +412,10 @@ impl TextLine {
                     self.drawn_spaces.push((b, before + gap));
                 }
             }
-            if last.takes(look) && (*last_shift - shift).abs() < 1e-3 {
+            if last.takes(look)
+                && (*last_shift - shift).abs() < 1e-3
+                && (pen || (!matches!(content, TextContent::Actual(_)) && !self.authored.last().copied().unwrap_or(false)))
+            {
                 run.push_str(text);
             } else {
                 self.runs.push((look.clone(), shift, text.to_string()));
@@ -355,18 +423,43 @@ impl TextLine {
         } else {
             self.runs.push((look.clone(), 0.0, text.to_string()));
         }
+        self.record_actual_fill(look, at, content);
         self.text_bytes = self.text_bytes.saturating_add(text.len());
-        let one = text.chars().count() == 1;
-        self.slots.push(Some(Slot { glyph, advance: one.then_some(advance) }));
-        self.slots.extend(text.chars().skip(1).map(|_| None));
+        if !pen {
+            let one = text.chars().count() == 1 && !content.authored();
+            self.slots.push(Some(Slot { glyph, advance: one.then_some(advance) }));
+            self.slots.extend(text.chars().skip(1).map(|_| None));
+            self.authored.extend(text.chars().map(|_| content.authored()));
+        }
+        // Pen-only glyphs retain a baseline but no character slot: later text still points
+        // to its own glyph, even after several suppressed glyphs or a style change.
         self.next = at.origin + at.dir * advance;
-        if !text.trim().is_empty() {
+        if pen || !text.trim().is_empty() {
             self.visible = self.next;
         }
         self.last = at.origin;
         self.last_dir = at.dir;
         self.last_size = at.size;
         self.baseline.push(at.origin);
+        true
+    }
+
+    fn record_actual_fill(&mut self, look: &Look, at: Placement, content: TextContent<'_>) {
+        if content.authored() && look.fill.is_some() {
+            let run = matches!(content, TextContent::Actual(_)).then(|| self.runs.len().saturating_sub(1));
+            self.actual_fills.insert((look.font, at.origin.x.to_bits(), at.origin.y.to_bits()), run);
+        }
+    }
+
+    /// The reader fills a whole Tj/TJ before replaying its glyphs as strokes. A replay
+    /// must neither consume the replacement nor rewind the pen. Only the first glyph's
+    /// style belongs to the replacement; suppressed glyphs have no text to restyle.
+    pub fn stroke_actual(&mut self, font: u128, at: Placement, stroke: (Paint, f64), overprint: bool) -> bool {
+        let key = (font, at.origin.x.to_bits(), at.origin.y.to_bits());
+        let Some(run) = self.actual_fills.remove(&key) else { return false };
+        if let Some((look, ..)) = run.and_then(|i| self.runs.get_mut(i)) {
+            (look.stroke, look.overprint_stroke) = (Some(stroke), overprint);
+        }
         true
     }
 
@@ -416,16 +509,27 @@ impl TextLine {
         // Turned along a curve: type on a path through the glyphs.
         let path = if self.curved() { self.baseline_path() } else { None };
         facts.wraps = path.is_none() && self.upright.is_none() && self.runs.last().is_some_and(|(.., t)| t.ends_with(' '));
-        if let Some((.., last)) = self.runs.last_mut() {
-            last.truncate(last.trim_end().len());
+        if !self.authored.last().copied().unwrap_or(false)
+            && let Some((.., last)) = self.runs.last_mut()
+        {
+            // Trim only ordinary trailing spaces, never authored replacement characters.
+            let trim = last
+                .chars()
+                .rev()
+                .zip(self.authored.iter().rev())
+                .take_while(|(c, authored)| c.is_whitespace() && !**authored)
+                .map(|(c, _)| c.len_utf8())
+                .sum::<usize>();
+            last.truncate(last.len().saturating_sub(trim));
         }
         self.runs.retain(|(.., t)| !t.is_empty());
-        if self.runs.iter().all(|(.., t)| t.trim().is_empty()) {
+        if self.runs.iter().all(|(.., t)| t.is_empty()) || (!self.authored.contains(&true) && self.runs.iter().all(|(.., t)| t.trim().is_empty())) {
             return None;
         }
         // The spaces trimmed off the end have no place either.
         let chars: usize = self.runs.iter().map(|(.., t)| t.chars().count()).sum();
         self.slots.truncate(chars);
+        self.authored.truncate(chars);
         // The baseline most of the characters sit on is the line's: the others are shifted off it
         // (a line starting with a raised footnote mark keeps the baseline of its text).
         let mut on: Vec<(f64, usize)> = vec![];
@@ -493,6 +597,7 @@ impl TextLine {
             let char_at = earlier + head.chars().count();
             if char_at <= self.slots.len() {
                 self.slots.insert(char_at, None);
+                self.authored.insert(char_at, false);
             }
             run.text.insert(at, ' ');
             spaces.push((gap.at, gap.width, gap.on_line));
@@ -502,7 +607,7 @@ impl TextLine {
         gaps.extend(self.drawn_spaces.iter().map(|&(b, width)| (b + spaces.iter().filter(|s| s.0 < b).count(), width)));
         gaps.sort_by_key(|&(b, _)| b);
         if self.upright.is_none() {
-            to_logical(&mut t);
+            to_logical(&mut t, &self.authored);
         }
         let angle = self.at.dir.atan2();
         // The glyphs' tops lean along the baseline (+x), up being -y in the type's own space.
@@ -1055,9 +1160,26 @@ fn is_style(s: &str) -> bool {
 
 /// Hebrew or Arabic comes from a PDF in visual order (each glyph where it is drawn): put `t`'s text
 /// back in logical order, with the paragraph direction that shows it as drawn.
-fn to_logical(t: &mut TextObject) {
-    let Some((order, rtl)) = vectorcraft_text::logical_order(&t.plain_text()) else { return };
+fn to_logical(t: &mut TextObject, authored: &[bool]) {
+    let Some((mut order, rtl)) = vectorcraft_text::logical_order(&t.plain_text()) else { return };
     let chars: Vec<(char, usize)> = t.runs.iter().enumerate().flat_map(|(i, r)| r.text.chars().map(move |c| (c, i))).collect();
+    if authored.contains(&true) {
+        // Explicit spans are logical-order islands. Reconstruct each ordinary stretch on
+        // either side independently; never reverse authored Arabic or its joiners again.
+        order.clear();
+        let mut start = 0;
+        while start < chars.len() {
+            let actual = authored.get(start).copied().unwrap_or(false);
+            let end = (start + 1..chars.len()).find(|&i| authored.get(i).copied().unwrap_or(false) != actual).unwrap_or(chars.len());
+            let text: String = chars.get(start..end).unwrap_or_default().iter().map(|(c, _)| c).collect();
+            if !actual && let Some((local, _)) = vectorcraft_text::logical_order(&text) {
+                order.extend(local.into_iter().map(|i| start + i));
+            } else {
+                order.extend(start..end);
+            }
+            start = end;
+        }
+    }
     let mut runs: Vec<(usize, String)> = Vec::with_capacity(t.runs.len());
     for &(c, i) in order.iter().filter_map(|&k| chars.get(k)) {
         match runs.last_mut() {

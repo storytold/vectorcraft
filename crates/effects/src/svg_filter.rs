@@ -57,16 +57,27 @@ fn numbers(v: &str) -> Option<Vec<f64>> {
 /// Filter `xml` as it is drawn and written ([`rebuilt`]) when it passes [`check`], `None` when it
 /// doesn't. Remembered for the filters seen last, so drawing does not check a filter again each time.
 fn checked(xml: &str) -> Option<Arc<str>> {
-    use std::hash::BuildHasher;
-    type Seen = (std::collections::hash_map::RandomState, std::collections::HashMap<(u64, usize), Option<Arc<str>>>, usize);
     static SEEN: std::sync::OnceLock<std::sync::Mutex<Seen>> = std::sync::OnceLock::new();
-    let seen = SEEN.get_or_init(Default::default);
+    remembered(&SEEN, xml, |xml| checked_form(xml).ok().map(|(_, form)| Arc::from(form)))
+}
+
+/// The results [`remembered`] keeps: the hash's seed, the results by key, and their size in bytes.
+type Seen = (std::collections::hash_map::RandomState, std::collections::HashMap<(u64, usize), Option<Arc<str>>>, usize);
+
+/// `make(xml)`, remembered in `seen` for the filters seen last.
+fn remembered(
+    seen: &'static std::sync::OnceLock<std::sync::Mutex<Seen>>,
+    xml: &str,
+    make: impl FnOnce(&str) -> Option<Arc<str>>,
+) -> Option<Arc<str>> {
+    use std::hash::BuildHasher;
+    let seen = seen.get_or_init(Default::default);
     // Keyed by a hash that a file can't aim at (randomly seeded) and the length.
     let key = seen.lock().ok().map(|s| (s.0.hash_one(xml), xml.len()));
     if let Some(hit) = key.and_then(|k| seen.lock().ok().and_then(|s| s.1.get(&k).cloned())) {
         return hit;
     }
-    let form: Option<Arc<str>> = checked_form(xml).ok().map(|(_, form)| Arc::from(form));
+    let form = make(xml);
     if let (Some(k), Ok(mut s)) = (key, seen.lock())
         && !s.1.contains_key(&k)
     {
@@ -83,7 +94,7 @@ fn checked(xml: &str) -> Option<Arc<str>> {
     form
 }
 
-/// The most check results [`checked`] keeps, and the most bytes of filters it keeps.
+/// The most results [`remembered`] keeps in one place, and the most bytes of filters it keeps there.
 const MAX_CHECKED: usize = 65_536;
 const MAX_CHECKED_BYTES: usize = 32 << 20;
 
@@ -279,9 +290,30 @@ const LATER_BLEND_MODES: [&str; 11] =
 /// The `feComposite` operators of SVG 1.1.
 const SVG11_OPERATORS: [&str; 6] = ["over", "in", "out", "atop", "xor", "arithmetic"];
 
-/// The longest form SVG output writes ([`svg11`]), leaving room within [`MAX_DRAWN_XML`] for the
-/// region and id written into it.
-const MAX_WRITTEN_XML: usize = MAX_DRAWN_XML - 1024;
+/// The longest id SVG output gives a filter it writes: a unique-id prefix of up to 13 characters,
+/// `filter-` and a counter of up to 20 digits, with room to spare.
+const WRITTEN_ID_ROOM: usize = 64;
+
+/// The longest text `{}` writes for a finite `f64`: a sign, `0.`, 307 zeros and 17 digits, as for
+/// `-f64::MIN_POSITIVE`.
+const MAX_NUMBER_TEXT: usize = 327;
+
+/// The most the four region attributes written into a filter ([`SvgFilterFx::written_xml`]) add to
+/// it: each of `x`, `y`, `width` and `height` as ` height="…"` with the longest number.
+const REGION_ROOM: usize = 4 * (" height=\"\"".len() + MAX_NUMBER_TEXT);
+
+/// The longest form SVG output writes ([`svg11`]): room is left within [`SvgFilter::MAX_XML`], the
+/// longest filter SVG import reads, for the id written into it. Measured with [`written_len`].
+const MAX_WRITTEN_XML: usize = SvgFilter::MAX_XML - WRITTEN_ID_ROOM;
+
+/// How long `s` is as SVG output can write it and import reads it back: SVG output with the Latin-1
+/// encoding writes each character past U+00FF as `&#x…;`, which import keeps as text, so the
+/// longer of the two lengths is counted for each such character.
+fn written_len(s: &str) -> usize {
+    // `&#x`, one hex digit per four significant bits, and `;`.
+    let reference = |c: u32| 4 + ((u32::BITS - c.leading_zeros()) as usize).div_ceil(4);
+    s.chars().map(|c| if u32::from(c) < 0x100 { c.len_utf8() } else { reference(u32::from(c)) }).sum()
+}
 
 /// Filter `xml` (a rebuilt one, [`rebuilt`]) as SVG 1.1 output writes it, in the form an SVG 1.1
 /// viewer draws as resvg draws `xml`:
@@ -413,7 +445,7 @@ fn svg11(xml: &str) -> Option<String> {
         }
         out.push_str("</filter>");
     }
-    (out.len() <= MAX_WRITTEN_XML).then_some(out)
+    (written_len(&out) <= MAX_WRITTEN_XML).then_some(out)
 }
 
 /// The result names of a filter's SVG 1.1 form ([`svg11`]): the names its elements use, and the
@@ -1278,13 +1310,28 @@ impl SvgFilterFx {
     /// whose box in the document is `bounds`: in its SVG 1.1 form ([`svg11`]), `None` when SVG 1.1
     /// can't hold it ([`Self::writes_as_svg11`]).
     pub fn written_xml(&self, bounds: Rect) -> Option<String> {
-        self.with_region(&svg11(&self.xml)?, (bounds - self.origin).scale_from_origin(1.0 / self.scale))
+        let out = self.with_region(&self.svg11_form()?, (bounds - self.origin).scale_from_origin(1.0 / self.scale))?;
+        (written_len(&out) <= MAX_WRITTEN_XML).then_some(out)
     }
 
-    /// Can SVG 1.1 output write the filter as a `<filter>` element ([`svg11`])? When it can't, SVG
-    /// output treats it as it treats the other pixel effects.
+    /// Can SVG 1.1 output write the filter as a `<filter>` element ([`svg11`]) that SVG import
+    /// reads back? When it can't, SVG output treats it as it treats the other pixel effects.
     pub fn writes_as_svg11(&self) -> bool {
-        svg11(&self.xml).is_some()
+        self.svg11_form().is_some()
+    }
+
+    /// The filter's SVG 1.1 form ([`svg11`]) when, with any region and id that SVG output writes
+    /// into it, it is a filter SVG import reads ([`check`]): at most [`SvgFilter::MAX_XML`] bytes,
+    /// [`MAX_PRIMITIVES`] primitives and [`MAX_DEPTH`] levels deep, and drawn. Remembered for the
+    /// filters seen last, so export does not check a filter again for each object.
+    fn svg11_form(&self) -> Option<Arc<str>> {
+        static FORMS: std::sync::OnceLock<std::sync::Mutex<Seen>> = std::sync::OnceLock::new();
+        // `measured` follows from the XML, so the XML is the whole key.
+        let region = if self.measured { REGION_ROOM } else { 0 };
+        remembered(&FORMS, &self.xml, |xml| {
+            let form = svg11(xml)?;
+            (written_len(&form) + region <= MAX_WRITTEN_XML && check(&form).is_ok()).then(|| Arc::from(form))
+        })
     }
 
     /// How finely the filter runs on a raster whose pixels are `space.px` points wide, for an

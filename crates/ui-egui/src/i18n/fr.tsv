@@ -199,6 +199,10 @@
 	Anti-Alias	Lissage
 	Anti-alias Rasters	Lisser les images pixellisées
 	Anti-aliased Artwork	Illustration lissée
+	Anti-aliasing Method	Méthode de lissage
+antiAlias	Sharp	Net
+	Crisp	Précis
+	Strong	Fort
 	Anti-aliasing:	Lissage :
 	Any Kind	Tout type
 	Font Technology	Technologie de police
@@ -368,6 +372,13 @@ font-technology	Variable	Variables
 	Apply Bullets	Appliquer les puces
 	Numbered List	Liste numérotée
 	Apply Numbers	Appliquer la numérotation
+	Bullets and Numbering…	Puces et numérotation…
+	Numbers	Numéros
+	Level:	Niveau :
+	Bullet Character:	Caractère de puce :
+	Number Style:	Style de numéro :
+	Left Indent:	Retrait gauche :
+	First Line Indent:	Retrait de première ligne :
 	Convert to Text	Convertir en texte
 	Filled Dot	Point plein
 	Dash	Tiret
@@ -556,6 +567,11 @@ font-technology	Variable	Variables
 	Color Table ({n} colors)	Table des couleurs ({n} couleurs)
 	Color Theme	Thème de couleurs
 	Color Themes	Thèmes de couleurs
+	Color Wheel	Roue chromatique
+	Hue ring	Anneau de teinte
+	Saturation and brightness	Saturation et luminosité
+	Color field	Champ de couleur
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Type de couleur :
 	Color:	Couleur :
 	Colorize	Coloriser
@@ -1120,6 +1136,17 @@ font-technology	Variable	Variables
 	Exporting {}	Exportation de {}
 	Export…	Exporter…
 	Extrude & Bevel…	Extrusion et biseautage…
+	3D (Classic)	3D (classique)
+	Extrude & Bevel (Classic)…	Extrusion et biseautage (classique)…
+	Surface	Surface
+	Wireframe	Fil de fer
+	No Shading	Sans ombrage
+	Plastic	Plastique
+	Highlight Intensity	Intensité de la brillance
+	Highlight Size	Taille de la brillance
+	Blend Steps	Étapes de transition
+	Shading Color	Couleur d’ombrage
+	Draw Hidden Faces	Dessiner les faces cachées
 	Eyedropper	Pipette
 	Sample Color from Screen	Prélever une couleur à l’écran
 	This system has no screen color sampler	Ce système n’a pas d’outil de prélèvement de couleur à l’écran
@@ -1968,6 +1995,10 @@ font-technology	Variable	Variables
 	Stylistic	Stylistique
 	Mojikumi Set	Jeu de mojikumi
 	Kinsoku Set	Jeu de kinsoku
+	Kinsoku Shori Type	Type de kinsoku shori
+	Push In First	D’abord vers l’intérieur
+	Push Out First	D’abord vers l’extérieur
+	Push Out Only	Vers l’extérieur uniquement
 	Hard	Fort
 	Soft	Souple
 	Monitor RGB	RVB du moniteur
@@ -3455,6 +3486,15 @@ digits	Malayalam	Malayalam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Paramètres Tate-chu-yoko…
 	Tate-chu-yoko Settings	Paramètres Tate-chu-yoko
+	Composite Fonts…	Polices composites…
+	Composite Fonts	Polices composites
+	Export Composite Fonts	Exporter des polices composites
+	Import Composite Fonts	Importer des polices composites
+	Delete Font	Supprimer la police
+	Kanji	Kanji
+	Kana	Kana
+	Numerals	Chiffres
+	Scale at Center	Mettre à l’échelle depuis le centre
 	Up/Down:	Haut/bas :
 	Left/Right:	Gauche/droite :
 	Temperature	Température
@@ -3507,6 +3547,7 @@ digits	Malayalam	Malayalam
 	Tile Range:	Plage de carreaux :
 	Tile Type:	Type de carreau :
 	tile {number}	carreau {number}
+	Copies per Sheet (as many as fit, in a grid)	Copies par feuille (autant qu’il en tient, en grille)
 	Tiles are numbered across, then down; leave the range empty for every tile.	Les carreaux sont numérotés de gauche à droite, puis de haut en bas ; laissez la plage vide pour tous les carreaux.
 	Tint	Teinte
 	Tip extends past the end point	La pointe dépasse le point d’extrémité
@@ -3970,7 +4011,7 @@ axis	Both	Les deux
 	Dock to Bottom	Ancrer en bas
 	Dock Control Bar	Ancrer la barre de contrôle
 	Drag to float the toolbar	Faire glisser pour rendre la barre d’outils flottante
-	Drag to the window's left edge to dock	Faire glisser vers le bord gauche de la fenêtre pour ancrer
+	Drag to the window's left or right edge to dock	Faire glisser vers le bord gauche ou droit de la fenêtre pour ancrer
 	Float Tool Group	Rendre le groupe d’outils flottant
 
 # Status and error messages (`@msg`), translated where the status bar shows them; the message itself
@@ -4083,6 +4124,7 @@ axis	Both	Les deux
 @msg	Targa files are RGB: colorModel rgb	Les fichiers Targa sont en RVB : colorModel rgb
 @msg	Text Wrap: select a wrap object	Habillage de texte : sélectionnez un objet d’habillage
 @msg	This shortcut file is in a form VectorCraft can't read.	Ce fichier de raccourcis est dans un format que VectorCraft ne sait pas lire.
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` doit être "none", "sharp", "crisp" ou "strong"
 @msg	`aspect` must be a number (%)	`aspect` doit être un nombre (%)
 @msg	`at` must be [x, y]	`at` doit être [x, y]
 @msg	`color` must be a colour	`color` doit être une couleur
@@ -4484,6 +4526,13 @@ axis	Both	Les deux
 @msg	select an image	sélectionnez une image
 @msg	select an object in perspective	sélectionnez un objet en perspective
 @msg	select artwork (or a colour group) to recolor	sélectionnez l’illustration (ou un groupe de couleurs) dont redéfinir les couleurs
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	Recoloration terminée ; sans changement : {locked} et {hidden}
+@msg	Recolor completed; {objects} were left unchanged	Recoloration terminée ; sans changement : {objects}
+@msg	Recolor completed; {objects} was left unchanged	Recoloration terminée ; sans changement : {objects}
+@msg	1 locked object	1 objet verrouillé
+@msg	{n} locked objects	{n} objets verrouillés
+@msg	1 hidden object	1 objet masqué
+@msg	{n} hidden objects	{n} objets masqués
 @msg	select at least two objects	sélectionnez au moins deux objets
 @msg	exit isolation mode first	quittez d’abord le mode Isolation
 @msg	select objects, not layers	sélectionnez des objets, pas des calques
@@ -4719,11 +4768,15 @@ axis	Both	Les deux
 @msg	its objects are nested too deeply	leurs objets sont imbriqués trop profondément
 @msg	its section ending with `%{end}` doesn't end	leur section qui se termine par `%{end}` ne se termine pas
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	les formes que VectorCraft ne sait pas encore lire ont été omises du panneau Formes ({_1})
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	les objets à plusieurs fonds ou contours, effets ou formes ont été importés tels qu’ils sont dessinés ({_1}) : leur aspect n’est pas encore modifiable
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	les objets à plusieurs fonds ou contours, contours de largeur variable, effets ou formes ont été importés tels qu’ils sont dessinés ({_1}) : leur aspect n’est pas encore modifiable
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	le nom `{name}` n’est pas en UTF-8 et a été lu en {label} : s’il semble incorrect, ouvrez le fichier avec un autre legacyNameEncoding
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	le nom `{name}` n’est pas en UTF-8, et certaines parties ne sont pas non plus du {label} valide : ouvrez le fichier avec un autre legacyNameEncoding
+@msg	more names that aren't UTF-8 were read as {label} ({count})	d’autres noms qui ne sont pas en UTF-8 ont été lus en {label} ({count})
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	le dégradé « {name} » n’est pas défini dans le fichier : une couleur unie le remplace
 @msg	an image VectorCraft can't read was left out	une image que VectorCraft ne peut pas lire a été ignorée
 @msg	graphs come in as plain art, without their data or settings	les graphes sont importés comme illustration ordinaire, sans leurs données ni leurs réglages
 @msg	an image whose data is cut short was left out	une image aux données tronquées a été ignorée
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	une image incorporée de {_1} × {_2} pixels a été réduite à {_3} × {_4} pixels pour conserver les calques
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	les images liées affichent l’aperçu basse résolution enregistré dans le fichier tant que leurs fichiers ne sont pas trouvés : liez-les à nouveau dans le panneau Liens
 @msg	linked type areas past VectorCraft's limits were left out	les zones de texte liées au-delà des limites de VectorCraft ont été omises
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	le texte qui change de sens d’écriture dans un objet texte s’ouvre dans le sens de son premier caractère
@@ -4805,6 +4858,7 @@ axis	Both	Les deux
 @msg	object ids are non-negative integers, not {v}	les identifiants d’objet sont des entiers positifs ou nuls, pas {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} doit être un tableau d’identifiants d’objet, entiers positifs ou nuls
 @msg	invalid object id {value}: expected a non-negative integer	identifiant d’objet {value} non valide (un entier positif ou nul est attendu)
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	l’entrée {index} de `{key}` vaut {value}, pas un identifiant d’objet (entier positif ou nul)
 @msg	no such object id {value}	aucun objet ne porte l’identifiant {value}
 @msg	id {value} is a layer, not an object	l’identifiant {value} désigne un calque, pas un objet
 @msg	id {value} is a layer, not an object; move layers with layer.move	l’identifiant {value} désigne un calque, pas un objet ; déplacez les calques avec layer.move
@@ -4840,6 +4894,10 @@ axis	Both	Les deux
 @msg	the PSD file is cut short	le fichier PSD est tronqué
 @msg	the PSD file's header is damaged	l'en-tête du fichier PSD est endommagé
 @msg	the PSD file's image data can't be read: {e}	les données d'image du fichier PSD ne peuvent pas être lues : {e}
+@msg	the JPEG XL file is cut short	le fichier JPEG XL est tronqué
+@msg	the JPEG XL container is too large to read	le conteneur JPEG XL est trop volumineux pour être lu
+@msg	CMYK JPEG XL images can't be read	les images JPEG XL en CMJN ne peuvent pas être lues
+@msg	the JPEG XL file can't be read: {e}	le fichier JPEG XL ne peut pas être lu : {e}
 	Video	Vidéo
 	De-Interlace…	Désentrelacement…
 	De-Interlace	Désentrelacement
@@ -5740,6 +5798,11 @@ theme	Appearance	Apparence
 	Snap to Perpendicular	Magnétisme de la perpendiculaire
 @msg	unknown snap option `{key}` (use {options})	option de magnétisme inconnue `{key}` (utilisez {options})
 	Gap Length:	Longueur de lacune :
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Le mode Logo en aplats n’utilise pas keepColors : il vectorise les couleurs indiquées dans logoColors ou celles qu’il trouve.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Rien n’a été vectorisé : aucune des couleurs trouvées par la vectorisation ne correspond à keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Rien n’a été vectorisé : Ignorer la couleur omet toutes les zones des couleurs indiquées dans keepColors.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	Rien n’a été vectorisé : les couleurs correspondant à keepColors ne produisent aucun tracé.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors : aucune des couleurs trouvées par la vectorisation ne correspond à {c}, donc rien n’en est vectorisé.
 @msg	`colorGroup` needs `library: "document"`	`colorGroup` nécessite `library: "document"`
 @msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` nécessite `palette: "documentLibrary"`
 @msg	`colorGroup` needs `mode: "color"`	`colorGroup` nécessite `mode: "color"`
@@ -5851,11 +5914,14 @@ axis	Y Axis	Axe Y
 @msg	Running “{name}”…	Exécution de « {name} »…
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	un effet dynamique s’exécute pendant le tracé du document, il ne peut donc pas être `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	un module externe d’exportation reçoit toujours le budget d’une exportation : omettez `budget`
-@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	« {_1} » demande un budget de calcul important (chaque exécution jusqu’à {minutes} minutes et {times} fois les instructions habituelles) : installez-le avec `allowHeavy: true` une fois que l’utilisateur l’accepte
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	« {_1} » demande un budget de calcul important (chaque exécution jusqu’à {minutes} minutes et {times} fois les instructions habituelles) : une personne doit l’approuver dans l’application de bureau, ou passez `allowHeavy: true` dans une session démarrée avec --allow-plugin-grants
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Installer « {name} », qui demande ces autorisations ?
 	ID: {id}	ID : {id}
 	Version: {version}	Version : {version}
+	Install “{name}” in place of the plug-in with the same ID?	Installer « {name} » à la place du module externe qui a le même ID ?
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Ce fichier n’est pas le module externe installé auparavant avec cet ID. Il reçoit les réglages et le cache conservés pour cet ID.
+@msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	« {name} » est un autre module que le module externe d’ID {_1} et recevrait les réglages et le cache conservés pour celui-ci : installez-le avec `replace: true` une fois que l’utilisateur l’accepte
 	File SHA-256: {hash}	SHA-256 du fichier : {hash}
 	Read the objects it is given	Lire les objets qui lui sont transmis
 	Change, add and delete objects in the document	Modifier, ajouter et supprimer des objets du document
@@ -5863,11 +5929,16 @@ axis	Y Axis	Axe Y
 	Change how the objects its effect is applied to are drawn	Modifier le rendu des objets auxquels son effet est appliqué
 	Write the document as a file in its own format	Écrire le document dans un fichier à son propre format
 	Show its progress, see Cancel and write log lines	Afficher sa progression, détecter l’annulation et écrire des lignes de journal
-@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	l’autorisation `progress` nécessite le niveau d’API de module externe {PROGRESS_API} : indiquez `api` {PROGRESS_API}
+	Keep settings of its own	Conserver ses propres réglages
+	Keep a cache of its own, which you can clear	Conserver son propre cache, que vous pouvez vider
+	Clear Plug-in Cache	Vider le cache du module externe
+@msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	l’autorisation `{permission}` nécessite le niveau d’API de module externe {PROGRESS_API} : indiquez `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	le module importe `env.{name}` avec un autre type que celui de l’hôte : celui de l’hôte est {signature}
-@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	le module importe `env.{name}`, qu’un module externe ne peut utiliser qu’au niveau d’API de module externe {PROGRESS_API} (`api` {PROGRESS_API}) et avec l’autorisation `progress`
-@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	le module importe `{from}.{name}`, que l’hôte ne propose pas : un module externe ne peut importer que `env.vc_progress`, `env.vc_cancelled` et `env.vc_log` (niveau d’API de module externe 2), et aucun WASI, fichier ni réseau
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	le module importe `env.{name}`, qu’un module externe ne peut utiliser qu’au niveau d’API de module externe {PROGRESS_API} (`api` {PROGRESS_API}) et avec l’autorisation `{permission}`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	le module importe `{from}.{name}`, que l’hôte ne propose pas : un module externe ne peut importer que les fonctions `env.vc_*` que liste docs/plugins.md (niveau d’API de module externe 2), et aucun WASI, fichier ni réseau
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` vaut {_1} ; cet hôte prend en charge les niveaux d’API de module externe 1 à {API_LEVEL}
+@msg	`paintOutput` may only be true	`paintOutput` ne peut valoir que true
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` est réservé à un effet dynamique (`kind` "effect") avec `api` 2
 @msg	`grant` must be a list of permission names	`grant` doit être une liste de noms d’autorisations
 @msg	`grant` names an unknown permission `{shown}`	`grant` nomme une autorisation inconnue `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	un module externe de type `{_1}` a besoin de l’autorisation `{_2}`
@@ -5875,9 +5946,26 @@ axis	Y Axis	Axe Y
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	l’autorisation `{shown}` ne s’applique pas à un module externe de type `{_1}`
 @msg	permission `{shown}` is listed twice	l’autorisation `{shown}` figure deux fois
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	l’autorisation `{shown}` est réservée à une future API de module externe ; cet hôte ne l’accorde pas
+@msg	only a filter declares `inputs`	seul un filtre déclare `inputs`
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` désigne un type d’objet inconnu `{shown}` : utilisez type, image ou symbolInstance
+@msg	`inputs` lists `{shown}` twice	`inputs` mentionne `{shown}` deux fois
+@msg	`inputs` needs `api` 2 or later	`inputs` nécessite `api` 2 ou plus
+@msg	`inputs` needs the permission `doc.read`	`inputs` nécessite l’autorisation `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	budget mémoire (l’objet {_1} nécessite {size} octets d’entrée, il en reste {left})
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	budget d’objets (plus de {MAX_OBJECTS} objets en lecture seule)
 @msg	unknown permission `{shown}`	autorisation inconnue `{shown}`
-@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	« {name} » demande les autorisations {asked} : installez-le avec `grant` qui les liste une fois que l’utilisateur l’accepte
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	« {name} » demande les autorisations {asked} : une personne doit les approuver dans l’application de bureau, ou passez `grant` dans une session démarrée avec --allow-plugin-grants
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` et `allowHeavy` ne prennent effet que dans une session démarrée avec --allow-plugin-grants : approuvez le module externe dans l’application de bureau
+@msg	Only the person at the keyboard can approve installing a plug-in	Seule la personne au clavier peut approuver l’installation d’un module externe
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	« {name} » n’a pas reçu `{p}`, dont sa sortie a besoin : rien n’a été modifié
+@msg	a heavy filter runs in the background, so it can't declare `commands`	un filtre lourd s’exécute en arrière-plan, il ne peut donc pas déclarer `commands`
+@msg	at most {MAX_COMMANDS} `commands`	au plus {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	la commande {name} est déclarée deux fois
+@msg	command {name}: `label` must be 1-64 printable characters	commande {name} : `label` doit compter 1-64 caractères imprimables
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	commande {name} : utilisez un id de 1-{MAX_COMMAND_ID} caractères parmi a-z 0-9 _ commençant par une lettre
+@msg	command {name}: {e}	commande {name} : {e}
+@msg	only a filter or a live effect declares `commands`	seul un filtre ou un effet dynamique déclare `commands`
+@msg	“{name}” › {label}: {e}	« {name} » › {label} : {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	le module n’a pas le SHA-256 indiqué par `hash` : rien n’a été installé
 # Actions panel: action sets (#3712).
 	New Set…	Nouveau jeu…
@@ -5929,6 +6017,9 @@ axis	Y Axis	Axe Y
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards` : all ou une plage telle que 1, 3-5, et non {v}
 	Add to Symbols	Ajouter aux symboles
 	Basic Shapes	Formes de base
+	Button	Bouton
+	Panel	Panneau
+	UI Frames	Cadres d’IU
 	Open Symbol Library	Ouvrir une bibliothèque de symboles
 	Save Symbol Library	Enregistrer la bibliothèque de symboles
 	Save Symbol Library…	Enregistrer la bibliothèque de symboles…
@@ -6416,10 +6507,20 @@ breakText	Glyphs	Glyphes
 	Reset Symbol Instance	Réinitialiser l'instance de symbole
 @msg	type must be static or dynamic, not {v}	type doit être static ou dynamic, et non {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` est un symbole statique : définissez d'abord son type de symbole sur Dynamique
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	Seules les couleurs unies du fond et du contour d'un tracé, d'un tracé transparent ou d'un texte sélectionné dans une instance de symbole peuvent changer
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	Seul le fond, le contour, l’opacité et le mode de fusion d’un tracé, tracé composé ou texte sélectionné dans une occurrence de symbole peuvent être modifiés
 @msg	path must be a list of child indices	path doit être une liste d'indices d'enfants
 @msg	no object at path {shown} in the symbol's art	aucun objet au chemin {shown} dans l'illustration du symbole
 @msg	give fill, stroke, opacity and/or blend	indiquez fill, stroke, opacity et/ou blend
+@msg	{key} cannot be set on a guide	{key} ne peut pas être défini sur un repère
+@msg	{key} cannot be set on a blend	{key} ne peut pas être défini sur un dégradé de formes
+@msg	{key} cannot be set on an envelope	{key} ne peut pas être défini sur une enveloppe
+@msg	{key} cannot be set on a gradient mesh	{key} ne peut pas être défini sur un filet de dégradé
+@msg	{key} cannot be set on a Repeat	{key} ne peut pas être défini sur une répétition
+@msg	{key} cannot be set on a placed document	{key} ne peut pas être défini sur un document importé
+@msg	{key} cannot be set on an Intertwine group	{key} ne peut pas être défini sur un groupe entrelacé
+@msg	stroke cannot be set on a symbol instance	stroke ne peut pas être défini sur une instance de symbole
+@msg	fill on a symbol instance must be a solid color or none	le fill d’une instance de symbole doit être une couleur unie ou none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} ne peut pas être défini sur une image sans l’effet Convertir en forme ou Vectoriser l’objet
 @msg	pass newName, registration, exportType, nineSlice and/or type	indiquez newName, registration, exportType, nineSlice et/ou type
 	Text Flow	Flux du texte
 	By Rows	Par lignes
@@ -6449,6 +6550,7 @@ breakText	Glyphs	Glyphes
 	Create Swatch Legend	Créer une légende des nuances
 	Create Swatch Legend…	Créer une légende des nuances…
 	HEX	HEX
+	Help Bar	Barre d’aide
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	Outils de texte
 	Text Tweaker…	Ajusteur de texte…
@@ -6515,6 +6617,24 @@ breakText	Glyphs	Glyphes
 	3D Box	Boîte 3D
 	3D Box Tool	Outil Boîte 3D
 
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Ouvrir avec
+	No importer plug-ins installed	Aucun module externe d’importation installé
+	Read files you open in its format and make documents from them	Lire les fichiers que vous ouvrez dans son format et en faire des documents
+@msg	{_1} is an importer (File › Open With)	{_1} est un module externe d’importation (Fichier › Ouvrir avec)
+@msg	missing `importer` (see document.formats)	`importer` manquant (voir document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` doit être l’identifiant de format d’un module externe (voir document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	« {shown} » ouvre les fichiers {_1}, pas `{_2}`
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` est un module externe de type `{_2}`, pas un module externe d’importation
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` est un module externe de type `{_2}`, pas un module externe d’exportation
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` est un module externe d’importation : ouvrez un fichier avec document.open {{"importer"}"}}
+@msg	the importer returned no objects	le module externe d’importation n’a renvoyé aucun objet
+@msg	an importer returns `objects` and `warnings`, not `{key}`	un module externe d’importation renvoie `objects` et `warnings`, pas `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	le fichier dépasse les {MAX_INPUT_BYTES} octets qu’un module externe d’importation lit
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	un module externe d’importation déclare de 1 à {MAX_EXTENSIONS} `extensions`
+@msg	only an exporter or an importer declares `extensions`	seul un module externe d’exportation ou d’importation déclare `extensions`
+@msg	an importer always gets an import's budget: leave `budget` out	un module externe d’importation reçoit toujours le budget d’une importation : omettez `budget`
+
 # Safe Mode
 	Safe Mode…	Mode sans échec…
 	Safe Mode	Mode sans échec
@@ -6536,3 +6656,4 @@ breakText	Glyphs	Glyphes
 # Align to Pixel Grid
 	Align to Pixel Grid	Aligner sur la grille de pixels
 @msg	only paths and compound paths can be aligned to the pixel grid	seuls les tracés et les tracés transparents peuvent être alignés sur la grille de pixels
+@msg	side is left or right, not `{s}`	side vaut left ou right, pas `{s}`

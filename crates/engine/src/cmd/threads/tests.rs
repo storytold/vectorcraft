@@ -981,6 +981,74 @@ fn outlining_a_numbered_last_frame_keeps_only_the_text_it_has_no_room_for() {
     assert_eq!(text(&s, a), format!("{}{hidden}", shown[0]));
 }
 
+/// As above for a list at level 2: the last frame's numbered paragraphs are counted on from the
+/// count the frames before it reached at that level.
+#[test]
+fn outlining_a_last_frame_numbered_at_a_deeper_level_keeps_only_the_text_it_has_no_room_for() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 300})).unwrap();
+    let items: String = (1..=7).map(|i| format!("Item {i}\n")).collect();
+    let story = format!("{items}{}", TEXT.repeat(4));
+    let a = new_id(s.execute("text.create", &json!({"x": 10, "y": 10, "text": story, "area": {"width": 150, "height": 106}})).unwrap());
+    let c = new_id(s.execute("text.create", &json!({"x": 200, "y": 10, "text": "", "area": {"width": 150, "height": 20}})).unwrap());
+    s.execute("text.thread.add", &json!({"from": a, "to": c})).unwrap();
+    s.execute("text.setFormat", &json!({"ids": [a, c], "number": "upperRoman", "listLevel": 2, "leftIndent": 14, "firstLineIndent": -14})).unwrap();
+    let shown = [a, c].map(|id| text(&s, id));
+    assert!(shown[0].ends_with("Item 7\n") && shown[1].starts_with("The quick"), "{shown:?}");
+    let Some(t) = text_of(&s.doc().unwrap().doc, NodeId(c)).cloned() else { panic!("not area type") };
+    assert_eq!((t.list_count, t.list_level_counts.as_slice()), (0, &[7][..]));
+    let laid = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    assert_eq!(laid.markers.first().map(|m| m.text.as_str()), Some("VIII."));
+    assert!(laid.overflow, "the last frame has more text than it shows");
+    let end = laid.lines.last().map_or(0, |l| l.end);
+    let from_one = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &TextObject { list_level_counts: vec![], ..t });
+    assert_ne!(from_one.lines.last().map_or(0, |l| l.end), end, "counted from 1, the frame would show other text");
+    let hidden = shown[1][end..].trim_start_matches(' ');
+    s.execute("select.set", &json!({"ids": [c]})).unwrap();
+    s.execute("type.createOutlines", &json!({})).unwrap();
+    assert_eq!(text(&s, a), format!("{}{hidden}", shown[0]));
+}
+
+/// New Symbol and Redefine Symbol on a thread's last frame numbered at level 2: the symbol's
+/// art holds the text the frame shows, measured with the count the frames before it reached at
+/// that level, and the frame before it takes the rest.
+#[test]
+fn a_symbol_of_a_last_frame_numbered_at_a_deeper_level_holds_the_text_it_shows() {
+    for command in ["symbol.new", "symbol.update"] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 600, "height": 300})).unwrap();
+        let items: String = (1..=7).map(|i| format!("Item {i}\n")).collect();
+        let story = format!("{items}{}", TEXT.repeat(4));
+        let a = new_id(s.execute("text.create", &json!({"x": 10, "y": 10, "text": story, "area": {"width": 150, "height": 106}})).unwrap());
+        let c = new_id(s.execute("text.create", &json!({"x": 200, "y": 10, "text": "", "area": {"width": 150, "height": 20}})).unwrap());
+        s.execute("text.thread.add", &json!({"from": a, "to": c})).unwrap();
+        s.execute("text.setFormat", &json!({"ids": [a, c], "number": "upperRoman", "listLevel": 2, "leftIndent": 14, "firstLineIndent": -14}))
+            .unwrap();
+        let shown = [a, c].map(|id| text(&s, id));
+        assert!(shown[0].ends_with("Item 7\n") && shown[1].starts_with("The quick"), "{command}: {shown:?}");
+        let Some(t) = text_of(&s.doc().unwrap().doc, NodeId(c)).cloned() else { panic!("not area type") };
+        let laid = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+        assert!(laid.overflow, "{command}: the last frame has more text than it shows");
+        let end = laid.lines.last().map_or(0, |l| l.end);
+        let from_one = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &TextObject { list_level_counts: vec![], ..t });
+        assert_ne!(from_one.lines.last().map_or(0, |l| l.end), end, "{command}: counted from 1, the frame would show other text");
+        let hidden = shown[1][end..].trim_start_matches(' ');
+        let name = if command == "symbol.update" {
+            let mark = new_id(s.execute("shape.rectangle", &json!({"x": 400, "y": 200, "width": 20, "height": 20})).unwrap());
+            s.execute("select.set", &json!({"ids": [mark]})).unwrap();
+            s.execute("symbol.new", &json!({"name": "Mark"})).unwrap();
+            "Mark"
+        } else {
+            "Story"
+        };
+        s.execute("select.set", &json!({"ids": [c]})).unwrap();
+        s.execute(command, &json!({"name": name})).unwrap();
+        let held = symbol_texts(&s, name);
+        assert_eq!(held.iter().map(|t| t.trim_end()).collect::<Vec<_>>(), [shown[1][..end].trim_end()], "{command}: the symbol's art");
+        assert_eq!(text(&s, a), format!("{}{hidden}", shown[0]), "{command}: the frame before it takes the rest");
+    }
+}
+
 /// A story of one-line paragraphs that each start with a quotation mark, threaded from area
 /// type `a` into the rectangle `b`, which shows the paragraphs that `a` has no room for.
 fn quoted_thread() -> (Session, u64, u64) {
@@ -1064,6 +1132,65 @@ fn a_thread_takes_its_first_frames_optical_margin_alignment() {
     s.execute("type.opticalMarginAlignment", &json!({"ids": [a], "on": true})).unwrap();
     let c = new_id(s.execute("text.thread.add", &json!({"from": a, "at": [400, 10]})).unwrap());
     assert_eq!([a, b, c].map(|id| optical(&s, id).0), [true; 3]);
+}
+
+/// The anti-aliasing method (`text.setFormat {antiAlias}`) belongs to each frame and is saved
+/// only when not Sharp. A range sets its frame in one undo step. Threading and opening preserve
+/// different methods on the frames of a thread.
+#[test]
+fn the_anti_aliasing_method_is_set_for_each_frame_of_a_thread() {
+    use vectorcraft_doc::text::TypeAntiAlias::{self, Crisp, None as Hard, Sharp, Strong};
+    let method = |s: &Session, id: u64| text_of(&s.doc().unwrap().doc, NodeId(id)).map(|t| t.anti_alias);
+    let saved = |s: &Session, id: u64| serde_json::to_value(text_of(&s.doc().unwrap().doc, NodeId(id)).unwrap()).unwrap().get("antiAlias").cloned();
+    let (mut s, a, b) = quoted_thread();
+    assert_eq!((method(&s, a), method(&s, b)), (Some(Sharp), Some(Sharp)));
+    assert_eq!(saved(&s, a), None, "Sharp is not saved");
+    s.execute("select.set", &json!({"ids": [b]})).unwrap();
+    let err = s.execute("text.setFormat", &json!({"antiAlias": "smooth"})).unwrap_err().to_string();
+    assert!(err.contains("`antiAlias` must be"), "{err}");
+    s.execute("text.setFormat", &json!({"antiAlias": "crisp"})).unwrap();
+    assert_eq!((method(&s, a), method(&s, b)), (Some(Sharp), Some(Crisp)), "only the selected frame takes it");
+    assert_eq!(saved(&s, b), Some(json!("crisp")));
+    // A range of characters sets its whole frame.
+    s.execute("text.setFormat", &json!({"ids": [a], "start": 0, "end": 1, "antiAlias": "none"})).unwrap();
+    assert_eq!((method(&s, a), method(&s, b)), (Some(Hard), Some(Crisp)));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!((method(&s, a), method(&s, b)), (Some(Sharp), Some(Crisp)), "one undo step");
+    // A new frame does not change the methods of the existing frames.
+    s.execute("text.setFormat", &json!({"ids": [b], "antiAlias": "strong"})).unwrap();
+    let c = new_id(s.execute("text.thread.add", &json!({"from": b, "at": [400, 10]})).unwrap());
+    assert_eq!([a, b, c].map(|id| method(&s, id)), [Some(Sharp), Some(Strong), Some(Strong)]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    // Threading existing frames with different methods preserves both.
+    let (mut joined, first_id, second_id) = quoted_thread();
+    joined.execute("text.thread.remove", &json!({})).unwrap();
+    joined.execute("text.setFormat", &json!({"ids": [first_id], "antiAlias": "crisp"})).unwrap();
+    joined.execute("text.setFormat", &json!({"ids": [second_id], "antiAlias": "strong"})).unwrap();
+    joined.execute("select.set", &json!({"ids": [first_id, second_id]})).unwrap();
+    joined.execute("text.thread.create", &json!({})).unwrap();
+    assert_eq!((method(&joined, first_id), method(&joined, second_id)), (Some(Crisp), Some(Strong)));
+    joined.execute("text.editRange", &json!({"id": first_id, "start": 0, "end": 0, "insert": "New "})).unwrap();
+    assert_eq!((method(&joined, first_id), method(&joined, second_id)), (Some(Crisp), Some(Strong)), "reflow keeps both methods");
+    joined.execute("text.thread.remove", &json!({})).unwrap();
+    assert_eq!((method(&joined, first_id), method(&joined, second_id)), (Some(Crisp), Some(Strong)), "unthreading keeps both methods");
+    let first: [TypeAntiAlias; 2] = [Crisp, Hard];
+    for (one, name) in [(first, "old.vectorcraft"), ([Hard, Crisp], "old.vectorcraft"), (first, "old.eps"), ([Hard, Crisp], "old.eps")] {
+        for (id, m) in [(a, one[0]), (b, one[1])] {
+            let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+            let Some(NodeKind::Text(t)) = doc.node_mut(NodeId(id)).map(|n| &mut n.kind) else { panic!("not text") };
+            t.anti_alias = m;
+        }
+        let bytes = if name.ends_with(".eps") {
+            let r = s.execute("document.exportEps", &json!({})).unwrap();
+            vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap()
+        } else {
+            vectorcraft_format::save(&s.doc().unwrap().doc, false)
+        };
+        let r = s.execute("document.open", &json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(&bytes)})).unwrap();
+        assert_eq!(r["restored"], name.ends_with(".eps"), "{r}");
+        assert_eq!(threads(&s), [[a, b]], "{name}");
+        assert_eq!((method(&s, a), method(&s, b)), (Some(one[0]), Some(one[1])), "{name}, frame methods");
+    }
 }
 
 /// A file saved with the frames of one thread set differently opens with the first frame's
@@ -1323,6 +1450,41 @@ fn numbered_list_paragraphs_count_on_through_a_thread() {
     s.execute("text.thread.releaseSelection", &json!({})).unwrap();
     assert!(threads(&s).is_empty());
     assert_eq!(numbers(&s, b), all(1), "the frame left holds the story");
+}
+
+/// List levels in a thread: a deeper level's count runs on into the next frame, which saves
+/// it (`listLevelCounts`), and a pasted copy of that frame counts every level from 1.
+#[test]
+fn list_levels_count_on_through_a_thread() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 300})).unwrap();
+    let items = (1..=10).map(|i| format!("Item {i}")).collect::<Vec<_>>().join("\n");
+    let a = new_id(s.execute("text.create", &json!({"x": 10, "y": 10, "text": items, "area": {"width": 150, "height": 60}})).unwrap());
+    let b = new_id(s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 200})).unwrap());
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    s.execute("text.setFormat", &json!({"ids": [a, b], "list": "number", "listLevel": 2})).unwrap();
+    s.execute("text.setFormat", &json!({"ids": [a], "listLevel": 1, "start": 0, "end": 0})).unwrap();
+    let frame = |s: &Session, id: u64| text_of(&s.doc().unwrap().doc, NodeId(id)).cloned().unwrap();
+    let numbers =
+        |t: &TextObject| vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).markers.iter().map(|m| m.text.clone()).collect::<Vec<_>>();
+    let first = numbers(&frame(&s, a));
+    assert!((2..10).contains(&first.len()), "both frames hold items: {first:?}");
+    let expected: Vec<String> = std::iter::once("1.".to_string()).chain((1..=9).map(|n| format!("{n}."))).collect();
+    assert_eq!([first.clone(), numbers(&frame(&s, b))].concat(), expected);
+    let b_counts = frame(&s, b).list_counts();
+    assert_eq!(b_counts.parts(), (1, vec![first.len() as u32 - 1]));
+    let reopened = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let Some(NodeKind::Text(back)) = reopened.node(NodeId(b)).map(|n| &n.kind) else { panic!("text") };
+    assert_eq!((back.list_counts(), numbers(back)), (b_counts, numbers(&frame(&s, b))), "reopened");
+    s.execute("select.set", &json!({"ids": [b]})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    s.execute("edit.paste", &json!({})).unwrap();
+    let copy = s.doc().unwrap().selection.objects.first().copied().unwrap();
+    assert_ne!(copy, NodeId(b));
+    let pasted = frame(&s, copy.0);
+    assert_eq!((pasted.list_count, pasted.list_level_counts.as_slice()), (0, &[][..]));
+    assert_eq!(numbers(&pasted).first().map(String::as_str), Some("1."), "a pasted copy counts from 1");
 }
 
 /// New Symbol from a numbered thread keeps each frame's count in the symbol's art, so the art

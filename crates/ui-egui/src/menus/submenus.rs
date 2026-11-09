@@ -108,6 +108,9 @@ pub(super) fn font_items(english_names: bool) -> Vec<Item> {
     items.3.clone()
 }
 
+/// The catalogue's menu path of the effects in 3D and Materials › 3D (Classic).
+const CLASSIC_3D: &[&str] = &["Effect", "3D and Materials", "3D (Classic)"];
+
 /// The raster effects' submenus of the Effect menu (the Photoshop-style effects, below the
 /// vector effects): (submenu, the catalogue's menu path of its effects).
 /// The raster Stylize submenu shares its path with the vector one and lists only the effects at
@@ -194,6 +197,10 @@ pub(super) fn effect_menu() -> Vec<Item> {
                     _ => 9,
                 });
                 items.push(todo("Materials…"));
+                let classic: Vec<Item> = cat.iter().filter(|e| e.menu == CLASSIC_3D).map(item).collect();
+                if !classic.is_empty() {
+                    items.push(sub("3D (Classic)", classic));
+                }
             }
             out.push(sub(sub_name, items));
         }
@@ -214,7 +221,9 @@ pub(super) fn effect_menu() -> Vec<Item> {
         out.extend(raster);
     }
     // Anything not placed above (future effects) still shows up.
-    let placed = |e: &vectorcraft_effects::EffectInfo| top_level(e) || in_vector_menu(e) || RASTER_MENUS.iter().any(|(_, path)| e.menu == *path);
+    let placed = |e: &vectorcraft_effects::EffectInfo| {
+        top_level(e) || in_vector_menu(e) || e.menu == CLASSIC_3D || RASTER_MENUS.iter().any(|(_, path)| e.menu == *path)
+    };
     for e in cat.iter().filter(|e| !placed(e)) {
         out.push(Item::Cmd(e.label, "effect.dialog", json!({ "effect": e.id })));
     }

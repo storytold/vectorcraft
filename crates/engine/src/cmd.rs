@@ -12,6 +12,7 @@ pub mod clipboard;
 mod colorcmds;
 pub mod colormgmt;
 pub mod colortheme;
+pub mod compositefonts;
 mod compoundshape;
 pub(crate) mod create;
 mod css;
@@ -81,6 +82,7 @@ mod select;
 pub(crate) mod shaper;
 pub mod shortcutset;
 pub(crate) mod slices;
+pub mod spelling;
 mod stroke;
 mod style;
 pub mod stylelib;
@@ -286,6 +288,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(inline::specs());
         v.extend(textstyles::specs());
         v.extend(fonts::specs());
+        v.extend(compositefonts::specs());
         v.extend(fontfiles::specs());
         v.extend(help::specs());
         v.extend(threads::specs());
@@ -319,6 +322,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(expand::specs());
         v.extend(attributes::specs());
         v.extend(interactivity::specs());
+        v.extend(spelling::specs());
         v.extend(svgfilter::specs());
         v.extend(newart::specs());
         v.extend(colortheme::specs());
@@ -354,8 +358,16 @@ pub fn command_specs() -> &'static [CommandSpec] {
     })
 }
 
+/// The command `id`: a built-in one, or a command an installed plug-in adds
+/// ([`plugin::command_specs`]).
 pub fn find_command(id: &str) -> Option<&'static CommandSpec> {
-    command_specs().iter().find(|c| c.id == id)
+    command_specs().iter().find(|c| c.id == id).or_else(|| plugin::find_spec(id))
+}
+
+/// Runs command `spec`'s implementation with `p`. A plug-in command's runs the plug-in
+/// ([`plugin::run_command`]), which needs the command's id.
+pub(crate) fn run_spec(s: &mut Session, spec: &CommandSpec, p: &Value) -> Result<Value> {
+    if plugin::is_command_id(spec.id) { plugin::run_command(s, spec.id, p) } else { (spec.run)(s, p) }
 }
 
 // ---------- param helpers ----------
@@ -420,8 +432,22 @@ pub(crate) fn text_param<'a>(p: &'a Value, key: &str, cmd: &str) -> Result<Optio
 pub(crate) fn id_param(p: &Value, key: &str) -> Option<NodeId> {
     p.get(key).and_then(Value::as_u64).map(NodeId)
 }
-pub(crate) fn ids_param(p: &Value, key: &str) -> Option<Vec<NodeId>> {
-    p.get(key).and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_u64).map(NodeId).collect())
+/// The object ids `p` gives for `key`, or `None` when `p` leaves it out or gives null. A value that
+/// is not an array, or an entry that is not a non-negative integer, is an error with the message
+/// [`checked_ids_param`] gives, so no entry is dropped. Whether each id names an object is left to
+/// the caller.
+pub(crate) fn ids_param(p: &Value, key: &str, cmd: &str) -> Result<Option<Vec<NodeId>>> {
+    let values = match p.get(key) {
+        None | Some(Value::Null) => return Ok(None),
+        Some(Value::Array(a)) => a,
+        Some(_) => return Err(bad(cmd, format!("{key} must be an array of non-negative integer object ids"))),
+    };
+    values.iter().enumerate().map(|(index, value)| id_entry(value, key, index, cmd)).collect::<Result<Vec<_>>>().map(Some)
+}
+/// Entry `index` (from 0) of the `key` list as an object id: anything but a non-negative integer is
+/// an error naming the key, the entry and its value.
+fn id_entry(value: &Value, key: &str, index: usize, cmd: &str) -> Result<NodeId> {
+    value.as_u64().map(NodeId).ok_or_else(|| bad(cmd, format!("`{key}` entry {index} is {value}, not a non-negative integer object id")))
 }
 /// The objects `p` gives `command`: its `ids`, else its `id` as `ids` of one (as [`targets`] reads
 /// them), each checked ([`checked_id`]): a malformed one, or one naming no object, is an error,
@@ -447,7 +473,7 @@ pub(crate) fn index(v: u64) -> usize {
 pub(crate) fn checked_ids_param(s: &Session, p: &Value, key: &str, command: &str) -> Result<Vec<NodeId>> {
     let values =
         p.get(key).and_then(Value::as_array).ok_or_else(|| bad(command, format!("{key} must be an array of non-negative integer object ids")))?;
-    values.iter().map(|value| checked_id(s, value, command)).collect()
+    values.iter().enumerate().map(|(index, value)| id_entry(value, key, index, command).and_then(|_| checked_id(s, value, command))).collect()
 }
 
 /// The objects a command acts on: `ids` when given (every one checked, and those inside another

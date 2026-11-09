@@ -1,3 +1,5 @@
+use vectorcraft_geom::Point;
+
 use super::entry::RgbInCmyk;
 use super::{
     Affine, Arc, BezPath, BlendMode, Color, Compatibility, Document, Exporter, Fill, FillRule, HashMap, HashSet, Node, NormalizedF32, Path,
@@ -47,6 +49,7 @@ impl<'a> Exporter<'a> {
             in_layer: 0,
             paper: Rect::ZERO,
             symbol_nodes: 0,
+            symbol_limit: vectorcraft_doc::MAX_SYMBOL_NODES,
             overprint: false,
             overprinted: false,
             invisible: false,
@@ -63,16 +66,18 @@ impl<'a> Exporter<'a> {
     }
 }
 
-/// Glyphs written together as real text: the same font at the same size along one baseline.
+/// Glyphs written together as real text: the same font, size and orientation on one layout line.
 pub(super) struct GlyphLine {
     pub(super) face: u32,
     pub(super) font: krilla::text::Font,
     pub(super) size: f64,
     /// The glyph space (krilla's, y down, at `size`) → text space, at the line's start.
     pub(super) frame: Affine,
-    /// Glyph id, pen position and advance along the line (in glyph space), and the characters it
+    /// The layout line (or vertical column); offsets alone do not identify a line.
+    pub(super) layout_line: usize,
+    /// Glyph id, position and horizontal advance (in glyph space), and the characters it
     /// stands for (bytes of the plain text, or of the list marker's text).
-    pub(super) glyphs: Vec<(u32, f64, f64, std::ops::Range<usize>)>,
+    pub(super) glyphs: Vec<(u32, Point, f64, std::ops::Range<usize>)>,
     /// The list marker the glyphs belong to, by its first glyph's index in the layout
     /// ([`TextLayout::marker_of`]); `None` for glyphs of the plain text.
     pub(super) marker: Option<usize>,

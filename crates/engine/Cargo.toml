@@ -21,6 +21,7 @@ heif = ["dep:heic-rs", "dep:rayon"]
 [dependencies]
 # Which paths stored in documents may be opened.
 craft-docpath = { workspace = true }
+craft-proof = { workspace = true }
 vectorcraft-geom = { workspace = true }
 vectorcraft-color = { workspace = true }
 vectorcraft-doc = { workspace = true }
@@ -40,6 +41,9 @@ vectorcraft-plugins = { workspace = true }
 vectorcraft-affinity = { workspace = true }
 vectorcraft-scriptcheck = { workspace = true }
 image = { workspace = true }
+jxl-oxide = { workspace = true }
+jxl-color = { workspace = true }
+jxl-grid = { workspace = true }
 hayro-jpeg2000 = { version = "=0.3.5", default-features = false, features = ["std", "simd"] }
 # Pure Rust, no unsafe; pinned at the version photocraft-heif uses.
 heic-rs = { version = "=0.1.4", default-features = false, features = ["std"], optional = true }
@@ -77,5 +81,8 @@ vectorcraft-pdf = { workspace = true, features = ["read-count"] }
 wat = { workspace = true }
 # Zstandard streams for the Illustrator editing data fuzz tests.
 ruzstd = { workspace = true }
+# JPEG XL files for the `.jxl` open and place tests.
+zune-jpegxl = { workspace = true }
+zune-core = { workspace = true }
 # The JavaScript parser's lexer, compared with the script checker's on the same scripts.
 vectorcraft-js = { workspace = true }

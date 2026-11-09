@@ -17,11 +17,13 @@ pub mod blend_options;
 mod brush_art_options;
 pub mod brush_delete;
 pub mod brush_options;
+pub mod bullets_numbering;
 pub mod char_style_options;
 pub mod color_balance;
 pub mod color_guide_options;
 mod color_picker;
 mod command;
+pub mod composite_fonts;
 pub mod confirm;
 pub mod corners;
 pub mod dimension;
@@ -124,6 +126,7 @@ pub mod symbolism_options;
 pub mod tate_chu_yoko;
 mod text_export;
 pub mod text_import;
+mod three_d_classic;
 mod tiff_bmp_tga;
 pub mod tile_edge_color;
 mod tools;
@@ -141,6 +144,7 @@ pub use document_setup::open as open_document_setup;
 pub use effect::open as open_effect_dialog;
 pub(crate) use effect::{FILM_GRAIN_FIELDS, PAINT_DAUB_BRUSH_TYPE_LABELS, SHADES, shown_choices};
 pub use export_as::open as open_export_as;
+pub(crate) use export_for_screens::drop_unread_screen_settings;
 pub use export_for_screens::open as open_export_for_screens;
 pub(crate) use export_for_screens::{
     KIND as EXPORT_FOR_SCREENS, PresetPick as ScreenPresetPick, export_preset as screen_export_preset, formats as screen_formats,
@@ -347,7 +351,9 @@ registry! {
     Corners: [corners::KIND] => corners::SPEC,
     Hyphenation: [hyphenation::KIND] => hyphenation::SPEC,
     Justification: [justification::KIND] => justification::SPEC,
+    BulletsAndNumbering: [bullets_numbering::KIND] => bullets_numbering::SPEC,
     TateChuYokoSettings: [tate_chu_yoko::KIND] => tate_chu_yoko::SPEC,
+    CompositeFonts: [composite_fonts::KIND] => composite_fonts::SPEC,
     SavePdf: [save_pdf::KIND] => save_pdf::SPEC,
     SvgOptions: [svg_options::KIND] => svg_options::SPEC,
     JavaScriptFiles: [javascript_files::KIND] => javascript_files::SPEC,
@@ -395,6 +401,8 @@ registry! {
     PrintPresets: [print_presets::KIND] => print_presets::SPEC,
     Plugin: [plugin::KIND] => plugin::SPEC,
     PluginExport: [plugin::EXPORT_KIND] => plugin::EXPORT_SPEC,
+    PluginImport: [plugin::IMPORT_KIND] => plugin::IMPORT_SPEC,
+    PluginInstall: [plugin::INSTALL_KIND] => plugin::INSTALL_SPEC,
     ScriptCheck: [script_check::KIND] => script_check::SPEC,
     VectorHalftone: [halftone::KIND] => halftone::SPEC,
     SimplifySlider: [simplify_slider::KIND] => simplify_slider::SPEC,
@@ -555,6 +563,9 @@ pub fn cancel(app: &mut VectorcraftApp) {
     if let Some(d) = app.ui.dialog.take() {
         if d.kind == swatch_conflict::KIND {
             crate::placing::cancel_swatch_paste(app);
+        }
+        if d.kind == plugin::INSTALL_KIND {
+            app.pending_plugin_install = None;
         }
         if d.kind == safe_mode::STOPPED {
             safe_mode::cancel_stopped(app);
@@ -819,6 +830,8 @@ mod tests_package;
 mod tests_plugin_export;
 #[cfg(test)]
 mod tests_plugin_fields;
+#[cfg(test)]
+mod tests_plugin_import;
 #[cfg(test)]
 mod tests_raster_formats;
 #[cfg(test)]

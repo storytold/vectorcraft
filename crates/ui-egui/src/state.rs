@@ -74,8 +74,9 @@ pub const ROTATE_VIEW_ANGLES: [(&str, f64); 12] = [
     ("-90°", -90.0),
 ];
 
-use super::{ControlResponse, Sender};
+use super::ControlResponse;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::Sender;
 
 /// Zoom stop stepping reads this (set each UI frame and before commands) so canvas wheel zoom
 /// matches the status bar when Display Print Size at 100% Zoom is on.
@@ -201,6 +202,7 @@ pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     ("attributes", "Attributes", "settings"),
     (crate::panels::svg_interactivity::ID, "SVG Interactivity", "spline-pointer"),
     ("colorThemes", "Color Themes", "sun"),
+    (crate::panels::color_wheel::ID, "Color Wheel", "circle"),
     (crate::panels::links::ID, "Links", "link"),
     (crate::panels::asset_export::ID, "Asset Export", "share-2"),
     (crate::panels::css_properties::ID, "CSS Properties", "globe"),
@@ -265,6 +267,10 @@ pub struct ViewFlags {
     pub live_paint_gaps: bool,
     /// Type → Show Hidden Characters.
     pub hidden_chars: bool,
+    /// Edit › Spelling › Auto Spell Check: a red underline under the words of the type its
+    /// dictionaries don't know.
+    #[serde(default)]
+    pub auto_spell_check: bool,
     /// View → Hide/Show Template: template layers drawn (dimmed) or left out of the canvas.
     #[serde(default = "yes")]
     pub templates: bool,
@@ -292,6 +298,7 @@ impl Default for ViewFlags {
             gradient_annotator: true,
             live_paint_gaps: false,
             hidden_chars: false,
+            auto_spell_check: false,
             templates: true,
         }
     }
@@ -471,7 +478,13 @@ pub struct UiState {
     /// `window.toolsBesideCanvas`). Off by default, and off in state saved without it.
     #[serde(default)]
     pub tools_beside_canvas: bool,
+    /// The docked Tools panel stands on the right, between the canvas and the panels, instead of on
+    /// the left (dropped there, or `window.panel.dock {panel: "tools", side: "right"}`). Off by
+    /// default, and off in state saved without it.
+    #[serde(default)]
+    pub toolbar_right: bool,
     pub status_bar: bool,
+    pub help_bar: bool,
     pub dock: bool,
     /// The bars that Tab (`window.dock`) hid, which the next Tab shows again; none when Tab has not
     /// hidden them since it last showed them, or a workspace was applied since.
@@ -1007,7 +1020,9 @@ impl Default for UiState {
             dock_width: None,
             toolbar_pos: None,
             tools_beside_canvas: false,
+            toolbar_right: false,
             status_bar: true,
+            help_bar: true,
             dock: true,
             tab_hid: None,
             view: ViewFlags::default(),

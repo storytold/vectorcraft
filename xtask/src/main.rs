@@ -44,7 +44,9 @@ commands:
   stats [--exact] count tests and lines per crate (--exact: ask the test harness via `-- --list`)
   test262         fetch the pinned ECMAScript conformance suite into corpus/test262 (sha256
                   verified), parse its ES5 subset with vectorcraft-js and run the ES5 language
-                  tests its interpreter supports, printing the counts
+                  and built-in tests its interpreter supports and the String, Number, RegExp
+                  and Date built-ins tests, printing the counts; then fetch json2.js into
+                  corpus/json2 (sha256 verified) and run it
   web-fonts       copy the craft-fonts faces in crates/text/web-fonts.txt into the web site (the Trunk
                   post_build hook; a no-op without CRAFT_FONTS_DIR)
 ";
@@ -341,6 +343,8 @@ Tests that use a corpus skip cleanly when it is absent.
   corpus/test262/    the ECMAScript conformance suite (BSD-3-Clause) at a pinned commit, sha256
                      verified: the JavaScript parser's and interpreter's ES5 subsets. Fetch and run:
                      cargo xtask test262
+  corpus/json2/      json2.js, the public-domain JSON polyfill, at a pinned commit, sha256 verified:
+                     compared with vectorcraft-js's JSON. Fetch and run: cargo xtask test262
 ",
         corpus.display()
     );
