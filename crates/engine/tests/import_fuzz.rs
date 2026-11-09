@@ -3239,6 +3239,50 @@ fn text_editing_of(document: &str, objects: &str) -> String {
 
 /// Area Type Options as an area frame's data may keep them: rows, columns, gutters and the first
 /// baseline, and keys besides, each with a value of any kind, in or out of range.
+/// A paragraph's attributes as a text document might keep them: an alignment (key 0), auto leading
+/// (7), hyphenation options (10 to 15) and tab stops (30) of any value or type, the stops a list of
+/// any length whose entries may be anything.
+fn arb_paragraph_attributes() -> impl Strategy<Value = String> {
+    let values = prop::sample::select(vec![
+        "0",
+        "1",
+        "2",
+        "3",
+        "6",
+        "7",
+        "-1",
+        "2.5",
+        "1e400",
+        "-1e400",
+        "NaN",
+        "inf",
+        "1e9",
+        "(x)",
+        "true",
+        "false",
+        "/nil",
+        "[ 1 ]",
+        "<< /0 1 >>",
+    ]);
+    let keys = prop::sample::select(vec!["0", "7", "10", "11", "12", "13", "14", "15"]);
+    let stop = (values.clone(), values.clone(), 0usize..3).prop_map(|(at, align, shape)| match shape {
+        0 => format!("<< /0 {at} /1 {align} >>"),
+        1 => format!("<< /1 {align} >>"),
+        _ => at.to_string(),
+    });
+    let tabs = (prop::collection::vec(stop, 0..40), 0usize..4).prop_map(|(stops, shape)| match shape {
+        0 => format!("/30 << /0 [ {} ] >>", stops.join(" ")),
+        1 => "/30 << /0 7 >>".to_string(),
+        2 => "/30 [ 1 2 ]".to_string(),
+        _ => String::new(),
+    });
+    (prop::collection::vec((keys, values), 0..8), tabs).prop_map(|(kv, tabs)| {
+        let mut attrs: Vec<String> = kv.iter().map(|(k, v)| format!("/{k} {v}")).collect();
+        attrs.push(tabs);
+        attrs.join(" ")
+    })
+}
+
 fn arb_area_options() -> impl Strategy<Value = String> {
     let keys = prop::sample::select(vec!["3", "4", "5", "7", "8", "10", "13", "14"]);
     let values = prop::sample::select(vec![
@@ -3399,6 +3443,23 @@ fn the_shown_stories_fixture_opens_with_its_layers() {
     assert!(texts.iter().all(|t| t.contains('\u{2028}') && t.contains('\n')), "{texts:?}");
 }
 
+/// The fuzzed editing data with its layer, pattern and global colour named in code page 949 opens
+/// with those names, read in that encoding, from its layers.
+#[test]
+fn the_editing_fixture_reads_names_in_a_legacy_encoding() {
+    // 레이어 1, then 빨강.
+    let text = editing_text()
+        .replace("(One) Ln", r"(\267\271\300\314\276\356 1) Ln")
+        .replace("(Dots)", r"(\273\241\260\255)")
+        .replace("(Black global)", r"(\273\241\260\255 global)");
+    let bytes = editing_eps(&text);
+    let r = vectorcraft_eps::import_names(&bytes, true, true, vectorcraft_eps::NameEncoding::Korean).unwrap();
+    let names: Vec<_> = r.document.layers.iter().map(|l| l.name.clone().unwrap_or_default()).collect();
+    assert_eq!(names, ["레이어 1", "Two"], "{:?}", r.warnings);
+    assert!(r.document.pattern("빨강").is_some(), "{:?}", r.warnings);
+    assert!(r.document.swatch("빨강 global").is_some_and(|s| s.global), "{:?}", r.warnings);
+}
+
 proptest! {
     #![proptest_config(config())]
 
@@ -3446,6 +3507,18 @@ proptest! {
         survive(".ai text frames with hostile area options", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
     }
 
+    /// The same text document with hostile paragraph attributes: an alignment, auto leading,
+    /// hyphenation options and tab stops of any value, type or size.
+    #[test]
+    fn text_frames_with_hostile_paragraph_attributes_never_panic(attrs in arb_paragraph_attributes()) {
+        let text = frames_document_text().replace("/5 << /0 2 /1 4 /2 6 >>", &format!("/5 << /1 4 /2 6 {attrs} >>"));
+        let editing = text_editing_of(&text, FRAME_OBJECTS);
+        let bytes = editing_eps(&editing);
+        survive("EPS text frames with hostile paragraph attributes", || vectorcraft_engine::cmd::fileio::load("x.eps", &bytes).ok().map(|l| l.doc))?;
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&editing)].concat();
+        survive(".ai text frames with hostile paragraph attributes", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
+    }
+
     /// The type on a path of the same text document with hostile Type on a Path Options, opened as
     /// an EPS document and as a `.ai`'s editing data.
     #[test]
@@ -3473,6 +3546,26 @@ proptest! {
         let text = mutate_text(&editing_text(), cut, &edits);
         let bytes = editing_eps(&text);
         survive("mutated EPS editing data", || vectorcraft_eps::import(&bytes).ok().map(|r| r.document))?;
+    }
+
+    /// Names of any bytes (a layer's, a pattern's, a global colour's) read in any legacy name
+    /// encoding: each byte written as an octal escape, so every code page sees bytes it doesn't
+    /// define, cut sequences and UTF-8 alike.
+    #[test]
+    fn eps_editing_data_names_in_any_encoding_never_panic(
+        name in prop::collection::vec(any::<u8>(), 0..24),
+        encoding in prop::sample::select(vectorcraft_eps::NameEncoding::LABELS.to_vec()),
+    ) {
+        let escaped: String = name.iter().map(|b| format!("\\{b:03o}")).collect();
+        let text = editing_text()
+            .replace("(One) Ln", &format!("({escaped}) Ln"))
+            .replace("(Dots)", &format!("({escaped})"))
+            .replace("(Black global)", &format!("({escaped} global)"));
+        let bytes = editing_eps(&text);
+        let encoding = vectorcraft_eps::NameEncoding::from_label(encoding).unwrap();
+        survive("EPS editing data names in a legacy encoding", || {
+            vectorcraft_eps::import_names(&bytes, true, false, encoding).ok().map(|r| r.document)
+        })?;
     }
 
     /// A `.ai` whose envelopes are damaged or hostile: any kind, warp style, options word,
@@ -5082,6 +5175,9 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "-9 /Real (CornerRadius) ,",
             "1 /Bool (Absolute) ,",
             "-0.5 /Real ,",
+            "0.5 /Real ,",
+            "1 /Real ,",
+            "1e308 /Real ,",
             "1.5 /Real ,",
             "-2 /Real ,",
             "; (BSLeftWidthsArray) ,",

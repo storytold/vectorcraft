@@ -493,7 +493,8 @@ fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, 
                 }
             }
             // Linux and the BSDs only, where the desktop may draw the frame: dimmed while System
-            // Title Bar is on or VECTORCRAFT_TITLEBAR is set, which take precedence over it. A note
+            // Title Bar is on or VECTORCRAFT_TITLEBAR is set to `app`, `system` or `desktop`, which
+            // take precedence over it. A note
             // names each one that is in effect.
             PrefKind::Bool if sp.key == "appTitleBar" => {
                 if APP_TITLE_BAR_SHOWN {

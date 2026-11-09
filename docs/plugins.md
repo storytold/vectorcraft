@@ -236,7 +236,9 @@ Every run gets a **fresh instance**, so no state survives between calls except w
 [settings and cache](#settings-and-cache). Traps, exhausted budgets, malformed
 modules, bad manifests, out-of-range pointers, negative return codes and invalid output all become errors, and the
 document is left untouched: a filter's output is checked completely before one edit applies it. A live effect that
-fails draws the object's geometry unchanged; `plugin.info` reports why (`lastError`).
+fails draws the object's geometry unchanged; `plugin.info` reports why (`lastError`). A run that succeeds clears the
+error of a failed run. A check that finds every swatch and pattern a painted result names clears only the error of a
+refused swatch or pattern.
 
 wasmi is built with its *portable* (loop) dispatcher: the default tail-call dispatcher relies on LLVM
 sibling-call optimisation, and when that doesn't happen a long-running module overflows the host stack, which aborts
@@ -524,10 +526,14 @@ In this example the character and paragraph styles are cut short; a filter gets 
   pixels fit) has them in `pixelsBase64`: straight RGBA, 8 bits a channel, row by row from the top, and
   `pixelsOmitted: false`. A CMYK image's pixels are its inks through the working CMYK profile, as sRGB. The pixels of
   all the images in one input take at most 16 MiB in base64, and an image the host starts to decode takes its size
-  from those 16 MiB even when decoding fails. A larger image, one whose pixels don't fit what the images before it in
-  paint order left, and a linked image (`linked: true`) have `pixelsOmitted: true` and no pixels; the host checks an
-  image's size before it decodes the image. The host never reads a linked image's file for a filter and never gives
-  its path.
+  from those 16 MiB even when decoding fails. A larger image, one whose pixels don't fit what the images before
+  it in paint order left, and a linked image (`linked: true`) have
+  `pixelsOmitted: true` and no pixels; the host checks an image's size before it decodes the image. An image of any
+  size also has `pixelsOmitted: true` when its data is missing from the document, when its width or height is 0, when
+  its data cannot be decoded (or needs more than 64 MiB of decoder memory, or is a TIFF the host rejects as too
+  large), or when the dimensions in its data differ from `pixelSize`. A plug-in checks `pixelsOmitted` before it
+  reads `pixelsBase64`, which is present only when `pixelsOmitted` is `false`. The host never
+  reads a linked image's file for a filter and never gives its path.
 - A symbol instance (`"symbolInstance"`): `symbolId` is the name of the symbol it shows, with `missing: true` when the
   document has no symbol of that name. `overrides` is `{}`.
 
