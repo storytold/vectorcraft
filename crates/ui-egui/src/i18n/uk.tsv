@@ -4053,7 +4053,7 @@ axis	Both	Обидві
 	Dock to Bottom	Прикріпити внизу
 	Dock Control Bar	Прикріпити панель керування
 	Drag to float the toolbar	Перетягніть, щоб від’єднати панель інструментів
-	Drag to the window's left edge to dock	Перетягніть до лівого краю вікна для прикріплення
+	Drag to the window's left or right edge to dock	Перетягніть до лівого або правого краю вікна для прикріплення
 	Float Tool Group	Від’єднати групу інструментів
 @msg	no library `{id}`	немає бібліотеки `{id}`
 @msg	select some type first	спочатку виділіть текст
@@ -6257,3 +6257,4 @@ breakText	Glyphs	Гліфи
 # Align to Pixel Grid
 	Align to Pixel Grid	Вирівняти за піксельною сіткою
 @msg	only paths and compound paths can be aligned to the pixel grid	за піксельною сіткою можна вирівняти лише контури і складені контури
+@msg	side is left or right, not `{s}`	side — це left або right, а не `{s}`

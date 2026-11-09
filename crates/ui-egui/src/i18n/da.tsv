@@ -1204,7 +1204,7 @@ lighting	Light	Lys
 	X:	X:
 	Y:	Y:
 	Drag to float the toolbar	Træk for at frigøre værktøjslinjen
-	Drag to the window's left edge to dock	Træk til vinduets venstre kant for at fastgøre
+	Drag to the window's left or right edge to dock	Træk til vinduets venstre eller højre kant for at fastgøre
 	Crystallize	Krystallisér
 	Add Anchor Point Tool	Tilføj ankerpunkt-værktøj
 	Anchor Point Tool	Ankerpunktværktøj
@@ -6440,3 +6440,4 @@ breakText	Glyphs	Glyffer
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Juster efter pixelgitter
+@msg	side is left or right, not `{s}`	side er left eller right, ikke `{s}`

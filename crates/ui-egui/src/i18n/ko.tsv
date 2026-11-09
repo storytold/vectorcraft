@@ -3990,7 +3990,7 @@ axis	Both	양쪽
 	Dock to Bottom	아래쪽에 고정
 	Dock Control Bar	컨트롤 막대 고정
 	Drag to float the toolbar	드래그하여 도구 모음 분리
-	Drag to the window's left edge to dock	창 왼쪽 가장자리로 드래그하여 고정
+	Drag to the window's left or right edge to dock	창 왼쪽 또는 오른쪽 가장자리로 드래그하여 고정
 	Float Tool Group	도구 그룹 분리
 	Services	서비스
 	Hide VectorCraft	VectorCraft 숨기기
@@ -6238,3 +6238,4 @@ breakText	Glyphs	글리프
 # Align to Pixel Grid
 	Align to Pixel Grid	픽셀 격자에 정렬
 @msg	only paths and compound paths can be aligned to the pixel grid	패스와 컴파운드 패스만 픽셀 격자에 정렬할 수 있습니다
+@msg	side is left or right, not `{s}`	side는 left 또는 right입니다(`{s}` 아님)

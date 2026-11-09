@@ -1289,7 +1289,7 @@ lighting	Light	Světlo
 	X:	X:
 	Y:	Y:
 	Drag to float the toolbar	Přetažením vytvoříte plovoucí panel nástrojů
-	Drag to the window's left edge to dock	Přetažením k levému okraji okna panel ukotvíte
+	Drag to the window's left or right edge to dock	Přetažením k levému nebo pravému okraji okna panel ukotvíte
 
 # Tools
 	Crystallize	Krystalizace
@@ -6656,3 +6656,4 @@ breakText	Glyphs	Glyfy
 # Align to Pixel Grid
 	Align to Pixel Grid	Zarovnat na mřížku obrazových bodů
 @msg	only paths and compound paths can be aligned to the pixel grid	na mřížku obrazových bodů lze zarovnat jen cesty a složené cesty
+@msg	side is left or right, not `{s}`	side je left nebo right, ne `{s}`

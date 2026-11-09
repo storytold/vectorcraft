@@ -558,7 +558,8 @@ impl VectorcraftApp {
             tools_float::clear_canvas_dock_zone(&ctx);
         }
         // Beside the canvas, docked Tools draws inside the canvas panel (`toolbar::show_beside_canvas`).
-        if self.ui.toolbar && self.ui.screen_mode < 3 && (!self.ui.tools_beside_canvas || self.ui.toolbar_pos.is_some()) {
+        // So does Tools docked on the right, left of the panels.
+        if self.ui.toolbar && self.ui.screen_mode < 3 && ((!self.ui.tools_beside_canvas && !self.ui.toolbar_right) || self.ui.toolbar_pos.is_some()) {
             toolbar::show(self, ui);
         } else if !self.ui.toolbar && self.ui.screen_mode < 3 && self.ui.tab_hid.is_none() {
             // Window › Tools hides the Tools panel alone; Tab hides the toolbars made with New

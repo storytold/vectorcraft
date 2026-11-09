@@ -3928,7 +3928,7 @@ axis	Both	И двете
 	Dock to Bottom	Закотвяне долу
 	Dock Control Bar	Закотвяне на контролната лента
 	Drag to float the toolbar	Плъзнете, за да направите лентата с инструменти плаваща
-	Drag to the window's left edge to dock	Плъзнете до левия ръб на прозореца за закотвяне
+	Drag to the window's left or right edge to dock	Плъзнете до левия или десния ръб на прозореца за закотвяне
 	Float Tool Group	Плаваща група инструменти
 @msg	no library `{id}`	няма библиотека `{id}`
 @msg	select some type first	първо изберете текст
@@ -6426,3 +6426,4 @@ breakText	Glyphs	Глифи
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Подравняване към пикселната мрежа
+@msg	side is left or right, not `{s}`	side е left или right, а не `{s}`

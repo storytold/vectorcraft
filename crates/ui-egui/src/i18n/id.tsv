@@ -1204,7 +1204,7 @@ lighting	Light	Cahaya
 	X:	X:
 	Y:	Y:
 	Drag to float the toolbar	Seret untuk mengambangkan bilah alat
-	Drag to the window's left edge to dock	Seret ke tepi kiri jendela untuk memasang
+	Drag to the window's left or right edge to dock	Seret ke tepi kiri atau kanan jendela untuk memasang
 	Crystallize	Kristalisasi
 	Add Anchor Point Tool	Alat tambah titik jangkar
 	Anchor Point Tool	Alat titik jangkar
@@ -6440,3 +6440,4 @@ breakText	Glyphs	Glif
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Sejajarkan ke grid piksel
+@msg	side is left or right, not `{s}`	side adalah left atau right, bukan `{s}`
