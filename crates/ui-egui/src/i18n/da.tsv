@@ -5848,6 +5848,9 @@ axis	Y Axis	Y-akse
 @plural	Result: {n}|Results: {n}	Resultat: {n}|Resultater: {n}
 	Add to Symbols	Føj til symboler
 	Basic Shapes	Grundlæggende former
+	Button	Knap
+	Panel	Panel
+	UI Frames	UI-rammer
 	Open Symbol Library	Åbn symbolbibliotek
 	Save Symbol Library	Gem symbolbibliotek
 	Save Symbol Library…	Gem symbolbibliotek…

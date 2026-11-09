@@ -5899,6 +5899,9 @@ axis	Y Axis	Y-as
 @plural	Result: {n}|Results: {n}	Resultaat: {n}|Resultaten: {n}
 	Add to Symbols	Aan symbolen toevoegen
 	Basic Shapes	Basisvormen
+	Button	Knop
+	Panel	Paneel
+	UI Frames	UI-kaders
 	Open Symbol Library	Symboolbibliotheek openen
 	Save Symbol Library	Symboolbibliotheek opslaan
 	Save Symbol Library…	Symboolbibliotheek opslaan…

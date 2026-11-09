@@ -5876,6 +5876,9 @@ axis	Y Axis	Oś Y
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all lub zakres, np. 1, 3-5, a nie {v}
 	Add to Symbols	Dodaj do symboli
 	Basic Shapes	Kształty podstawowe
+	Button	Przycisk
+	Panel	Panel
+	UI Frames	Ramki UI
 	Open Symbol Library	Otwórz bibliotekę symboli
 	Save Symbol Library	Zapisz bibliotekę symboli
 	Save Symbol Library…	Zapisz bibliotekę symboli…

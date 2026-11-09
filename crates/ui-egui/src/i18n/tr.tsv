@@ -5978,6 +5978,9 @@ axis	Y Axis	Y ekseni
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all ya da 1, 3-5 gibi bir aralık olmalı, {v} değil
 	Add to Symbols	Sembollere Ekle
 	Basic Shapes	Temel Şekiller
+	Button	Düğme
+	Panel	Panel
+	UI Frames	UI çerçeveleri
 	Open Symbol Library	Sembol Kitaplığını Aç
 	Save Symbol Library	Sembol Kitaplığını Kaydet
 	Save Symbol Library…	Sembol Kitaplığını Kaydet…

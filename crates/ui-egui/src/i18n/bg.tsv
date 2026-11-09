@@ -5833,6 +5833,9 @@ axis	Y Axis	Y ос
 @plural	Result: {n}|Results: {n}	Резултат: {n}|Резултати: {n}
 	Add to Symbols	Добавяне към символи
 	Basic Shapes	Основни фигури
+	Button	Бутон
+	Panel	Панел
+	UI Frames	UI рамки
 	Open Symbol Library	Отваряне на библиотека със символи
 	Save Symbol Library	Запазване на библиотека със символи
 	Save Symbol Library…	Запази библиотека със символи…

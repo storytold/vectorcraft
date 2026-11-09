@@ -6017,6 +6017,9 @@ axis	Y Axis	Axe Y
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards` : all ou une plage telle que 1, 3-5, et non {v}
 	Add to Symbols	Ajouter aux symboles
 	Basic Shapes	Formes de base
+	Button	Bouton
+	Panel	Panneau
+	UI Frames	Cadres d’IU
 	Open Symbol Library	Ouvrir une bibliothèque de symboles
 	Save Symbol Library	Enregistrer la bibliothèque de symboles
 	Save Symbol Library…	Enregistrer la bibliothèque de symboles…
