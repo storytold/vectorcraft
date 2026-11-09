@@ -15,6 +15,7 @@ mod embed;
 mod fit;
 mod glyph_alternates;
 mod hang;
+mod harakat;
 mod inline;
 mod joiners;
 mod justify;

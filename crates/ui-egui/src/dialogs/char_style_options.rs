@@ -505,9 +505,11 @@ fn opentype_attrs(d: &Dialog, original: &Map<String, Value>, original_fields: &M
         tags.retain(|t| !sets.contains(&bare(t)));
         let listed = d.fields.get("ot_sets").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str);
         tags.extend(listed.filter(|t| sets.contains(&bare(t))).map(|t| {
-            let kept = before.iter().rev().find(|b| bare(b) == bare(t)).filter(|b| {
-                !t.starts_with('-') && vectorcraft_text::OtFeatures::known_tag(b) && tag_on(b)
-            });
+            let kept = before
+                .iter()
+                .rev()
+                .find(|b| bare(b) == bare(t))
+                .filter(|b| !t.starts_with('-') && vectorcraft_text::OtFeatures::known_tag(b) && tag_on(b));
             kept.map_or_else(|| t.to_string(), Clone::clone)
         }));
     }

@@ -272,36 +272,37 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let row_h = cell + ui.spacing().item_spacing.y;
         area = area.vertical_scroll_offset((((i / cols) as f32 + 0.5) * row_h - list_h * 0.5).max(0.0));
     }
-    let shown = area.show_rows(ui, cell, rows, |ui, range| {
-        for r in range.clone() {
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
-                for k in r * cols..((r + 1) * cols).min(total) {
-                    let (c, gid) = match chars.get(k) {
-                        Some(&(c, gid)) => (Some(c), gid),
-                        None => (None, unencoded.get(k - chars.len()).copied().unwrap_or_default()),
-                    };
-                    let (rect, resp) = ui.allocate_exact_size(vec2(cell, cell), Sense::click());
-                    let chosen = c.is_some() && selected == c;
-                    if resp.hovered() {
-                        ui.painter().rect_filled(rect, 2, t.hover);
-                        ui.ctx().data_mut(|d| d.insert_temp(hover_id, (c, gid)));
-                    } else if chosen {
-                        ui.painter().rect_filled(rect, 2, t.row_selected);
-                    }
-                    let edge = if chosen { Stroke::new(1.5, t.accent) } else { Stroke::new(0.5, t.border) };
-                    ui.painter().rect_stroke(rect.shrink(0.5), 0, edge, StrokeKind::Inside);
-                    // A glyph no character maps is dimmed when it cannot go on the selection.
-                    let pick = match (c, &fit) {
-                        (None, Some(fit)) => Some(fit.pick(&face, gid)),
-                        _ => None,
-                    };
-                    let ink = if matches!(pick, Some(None)) { t.text_disabled } else { t.text_strong };
-                    let tex = glyph_texture(ui.ctx(), &face, gid, px);
-                    ui.painter().image(tex.id(), rect, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), ink);
-                    // The tooltip is made when it is shown: working out why a glyph cannot be
-                    // applied reads the font, which hundreds of cells cannot do each frame.
-                    let resp = resp.on_hover_ui(|ui| {
+    let shown =
+        area.show_rows(ui, cell, rows, |ui, range| {
+            for r in range.clone() {
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
+                    for k in r * cols..((r + 1) * cols).min(total) {
+                        let (c, gid) = match chars.get(k) {
+                            Some(&(c, gid)) => (Some(c), gid),
+                            None => (None, unencoded.get(k - chars.len()).copied().unwrap_or_default()),
+                        };
+                        let (rect, resp) = ui.allocate_exact_size(vec2(cell, cell), Sense::click());
+                        let chosen = c.is_some() && selected == c;
+                        if resp.hovered() {
+                            ui.painter().rect_filled(rect, 2, t.hover);
+                            ui.ctx().data_mut(|d| d.insert_temp(hover_id, (c, gid)));
+                        } else if chosen {
+                            ui.painter().rect_filled(rect, 2, t.row_selected);
+                        }
+                        let edge = if chosen { Stroke::new(1.5, t.accent) } else { Stroke::new(0.5, t.border) };
+                        ui.painter().rect_stroke(rect.shrink(0.5), 0, edge, StrokeKind::Inside);
+                        // A glyph no character maps is dimmed when it cannot go on the selection.
+                        let pick = match (c, &fit) {
+                            (None, Some(fit)) => Some(fit.pick(&face, gid)),
+                            _ => None,
+                        };
+                        let ink = if matches!(pick, Some(None)) { t.text_disabled } else { t.text_strong };
+                        let tex = glyph_texture(ui.ctx(), &face, gid, px);
+                        ui.painter().image(tex.id(), rect, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), ink);
+                        // The tooltip is made when it is shown: working out why a glyph cannot be
+                        // applied reads the font, which hundreds of cells cannot do each frame.
+                        let resp = resp.on_hover_ui(|ui| {
                         let tip = match (c, &pick) {
                             (Some(c), _) => encoded_tip(&face, c, gid),
                             (None, Some(Some(Pick::Glyph(_)))) => format!(
@@ -319,27 +320,27 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                         };
                         ui.label(tip);
                     });
-                    if resp.double_clicked() {
-                        match (c, pick) {
-                            (Some(c), _) => insert_character(app, ui.ctx(), &face, c, gid),
-                            (None, Some(Some(pick))) => {
-                                if let Some(fit) = &fit {
-                                    fit.apply(app, pick);
+                        if resp.double_clicked() {
+                            match (c, pick) {
+                                (Some(c), _) => insert_character(app, ui.ctx(), &face, c, gid),
+                                (None, Some(Some(pick))) => {
+                                    if let Some(fit) = &fit {
+                                        fit.apply(app, pick);
+                                    }
                                 }
-                            }
-                            (None, Some(None)) => {
-                                if let Some(fit) = &fit {
-                                    app.status(fit.why(&face, gid));
+                                (None, Some(None)) => {
+                                    if let Some(fit) = &fit {
+                                        app.status(fit.why(&face, gid));
+                                    }
                                 }
+                                (None, None) => {}
                             }
-                            (None, None) => {}
                         }
                     }
-                }
-            });
-        }
-        range
-    });
+                });
+            }
+            range
+        });
     ui.ctx().data_mut(|d| d.insert_temp(follow_id, (selected, shown.inner)));
     ui.add_space(4.0);
     let info = ui.ctx().data(|d| d.get_temp::<(Option<char>, u32)>(hover_id));
