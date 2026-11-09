@@ -583,7 +583,7 @@ impl<'p> Builder<'p> {
     }
 
     pub(super) fn add_image(&mut self, key: u128, make: impl FnOnce() -> Option<(ImageBlob, u32, u32)>, xf: Affine) {
-        self.add_image_masked(key, make, xf, None);
+        self.add_image_masked(key, make, xf, None, None);
     }
 
     /// An image's alpha (its soft mask, stencil mask or colour key, at its own resolution) as a
@@ -626,12 +626,15 @@ impl<'p> Builder<'p> {
         Some(OpacityMask::new(art, true))
     }
 
+    /// An image of key `key` (its blob made by `make` the first time), placed by `xf`, with opacity
+    /// mask `mask` and the solid paint that colorizes it (`colorize`, for a grayscale image).
     pub(super) fn add_image_masked(
         &mut self,
         key: u128,
         make: impl FnOnce() -> Option<(ImageBlob, u32, u32)>,
         xf: Affine,
         mask: Option<OpacityMask>,
+        colorize: Option<Paint>,
     ) {
         let (k, w, h) = if let Some(v) = self.image_keys.get(&key).cloned() {
             v
@@ -652,6 +655,7 @@ impl<'p> Builder<'p> {
             NodeKind::Image(Box::new(ImageObject { key: k, width: w, height: h, xf, link: None, placement: Default::default(), pixels: None })),
         );
         n.extras_mut().mask = mask.map(Box::new);
+        n.extras_mut().colorize = colorize.map(Box::new);
         self.push_node(n);
     }
 
