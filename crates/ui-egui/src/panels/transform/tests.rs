@@ -54,12 +54,41 @@ fn rotation_field_shows_the_angle_the_box_keeps() {
     app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 100, "height": 50})).unwrap();
     app.run("object.rotate", json!({"angle": 45, "absolute": true})).unwrap();
     let shown = texts(&mut app, show);
-    // The angle stays, and W/H are the rectangle's own sides.
+    // The angle stays, and W/H show the footprint square to the page: (100 + 50) × cos 45°.
     assert!(shown.iter().any(|t| t == "45°"), "{shown:?}");
-    assert!(shown.iter().any(|t| t == "100 pt") && shown.iter().any(|t| t == "50 pt"), "{shown:?}");
+    assert!(!shown.iter().any(|t| t == "100 pt") && shown.iter().filter(|t| t.starts_with("106.0")).count() == 2, "{shown:?}");
     app.run("object.resetBoundingBox", json!({})).unwrap();
     let shown = texts(&mut app, show);
-    assert!(shown.iter().any(|t| t == "0°") && !shown.iter().any(|t| t == "100 pt"), "{shown:?}");
+    assert!(shown.iter().any(|t| t == "0°") && shown.iter().filter(|t| t.starts_with("106.0")).count() == 2, "{shown:?}");
+}
+
+/// W/H follow every rotation, and a new W or H scales the footprint to it along the page's axes.
+#[test]
+fn width_and_height_follow_a_rotation_and_set_the_footprint() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 100, "height": 50})).unwrap();
+    let footprint = |app: &mut VectorcraftApp| {
+        let b = app.selection_box().unwrap();
+        shown_size(app, &b)
+    };
+    let (w, h) = footprint(&mut app);
+    assert!((w - 100.0).abs() < 1e-6 && (h - 50.0).abs() < 1e-6, "{w} {h}");
+    app.run("object.rotate", json!({"angle": 30, "absolute": true})).unwrap();
+    let (w, h) = footprint(&mut app);
+    assert!((w - 111.603).abs() < 0.01 && (h - 93.301).abs() < 0.01, "{w} {h}");
+    app.run("object.rotate", json!({"angle": 90, "absolute": true})).unwrap();
+    let (w, h) = footprint(&mut app);
+    assert!((w - 50.0).abs() < 0.01 && (h - 100.0).abs() < 0.01, "{w} {h}");
+    app.run("object.rotate", json!({"angle": 30, "absolute": true})).unwrap();
+    let b = app.selection_box().unwrap();
+    set_size(&mut app, &b, "width", 200.0, 4, true, false);
+    let (w, h) = footprint(&mut app);
+    assert!((w - 200.0).abs() < 0.01 && (h - 93.301 * 200.0 / 111.603).abs() < 0.05, "{w} {h}");
+    let b = app.selection_box().unwrap();
+    set_size(&mut app, &b, "height", 100.0, 4, false, false);
+    let (w, h) = footprint(&mut app);
+    assert!((w - 200.0).abs() < 0.01 && (h - 100.0).abs() < 0.01, "{w} {h}");
 }
 
 /// #812: a selected live polygon shows its Polygon Properties in the Transform panel and the

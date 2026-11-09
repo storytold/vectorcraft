@@ -50,6 +50,8 @@ pub struct CanvasCache {
     pub selection_marks: canvas::SelectionMarks,
     /// [`VectorcraftApp::selection_box`] for (document uid, revision, Use Preview Bounds).
     pub selection_box: Option<((u64, u64, bool), Option<vectorcraft_doc::OrientedBox>)>,
+    /// [`VectorcraftApp::selection_footprint`] for (document uid, revision, Use Preview Bounds).
+    pub selection_footprint: Option<((u64, u64, bool), Option<vectorcraft_geom::Rect>)>,
     /// [`VectorcraftApp::selection_bounds`] for (document uid, revision).
     pub selection_bounds: Option<((u64, u64), Option<vectorcraft_geom::Rect>)>,
     /// [`VectorcraftApp::content_bounds`] for (document uid, revision).

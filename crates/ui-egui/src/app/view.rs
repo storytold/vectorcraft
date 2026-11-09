@@ -151,6 +151,23 @@ impl VectorcraftApp {
         b
     }
 
+    /// The space the selected objects take on the page, square to it, measured as the bounding box
+    /// is (Use Preview Bounds): what the Transform panel's W and H show while the box is rotated.
+    /// Measured once per revision.
+    pub fn selection_footprint(&mut self) -> Option<vectorcraft_geom::Rect> {
+        let st = self.session.active()?;
+        let preview = self.session.prefs.use_preview_bounds;
+        let key = (st.uid, st.revision, preview);
+        if let Some((k, b)) = self.canvas.selection_footprint
+            && k == key
+        {
+            return b;
+        }
+        let b = vectorcraft_effects::preview::bounds_of(&st.doc, &st.selection.objects, preview);
+        self.canvas.selection_footprint = Some((key, b));
+        b
+    }
+
     /// The selection's visual bounds (strokes included, effects left out), square to the page:
     /// measured once per revision, as the canvas reads it every frame (a traced photo selects a
     /// group of hundreds of thousands of paths).

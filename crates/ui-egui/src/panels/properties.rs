@@ -799,7 +799,8 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
         dim_label(ui, tl!("No Selection"));
         return;
     };
-    let b = bx.rect;
+    // W/H: its own sides, or while it is rotated the footprint square to the page.
+    let (sw, sh) = super::transform::shown_size(app, &bx);
     // The reference point, or a symbol instance's registration point: X/Y are read and set there
     // and the rotation and flips turn and mirror the selection about it, as in the Transform panel.
     let reference = super::transform::panel_reference(app, ui, &bx);
@@ -823,8 +824,8 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
                 );
             }
             dim_label(ui, "W:");
-            if let Some(v) = widgets::size_field_named(ui, "tw", Some(tl!("W:")), Some(b.width()), units, fw) {
-                super::transform::run_transform(app, "object.setBounds", json!({"width": v, "reference": refi, "proportional": link, "copy": copy}));
+            if let Some(v) = widgets::size_field_named(ui, "tw", Some(tl!("W:")), Some(sw), units, fw) {
+                super::transform::set_size(app, &bx, "width", v, refi, link, copy);
             }
             ui.end_row();
             dim_label(ui, "Y:");
@@ -836,8 +837,8 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
                 );
             }
             dim_label(ui, "H:");
-            if let Some(v) = widgets::size_field_named(ui, "th", Some(tl!("H:")), Some(b.height()), units, fw) {
-                super::transform::run_transform(app, "object.setBounds", json!({"height": v, "reference": refi, "proportional": link, "copy": copy}));
+            if let Some(v) = widgets::size_field_named(ui, "th", Some(tl!("H:")), Some(sh), units, fw) {
+                super::transform::set_size(app, &bx, "height", v, refi, link, copy);
             }
             ui.end_row();
         });

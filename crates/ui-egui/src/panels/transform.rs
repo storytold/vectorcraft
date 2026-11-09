@@ -125,6 +125,45 @@ const PATTERN_MODES: [(&str, &str); 3] = [("object", "Transform Object Only"), (
 /// Only (the pattern tiles alone) or Transform Both. Until one is chosen (`default`, or any other
 /// value) neither is passed: patterns follow General › Transform Pattern Tiles. Errors are
 /// dropped, as the panels' fields have always done.
+/// The selection's footprint square to the page while its bounding box `bx` is rotated, else
+/// `None`: W and H then show the space it takes on the page, changing live as it turns.
+fn rotated_footprint(app: &mut VectorcraftApp, bx: &OrientedBox) -> Option<Rect> {
+    if bx.angle.abs() < 1e-6 {
+        return None;
+    }
+    app.selection_footprint().filter(|r| r.width().is_finite() && r.height().is_finite())
+}
+
+/// W and H as the Transform panel, Properties panel and Control bar show them: the bounding box's
+/// own sides, or while it is rotated the selection's footprint square to the page.
+pub(crate) fn shown_size(app: &mut VectorcraftApp, bx: &OrientedBox) -> (f64, f64) {
+    match rotated_footprint(app, bx) {
+        Some(r) => (r.width(), r.height()),
+        None => (bx.rect.width(), bx.rect.height()),
+    }
+}
+
+/// Set W (`key` "width") or H ("height") to `v`, about reference point `refi`, as [`shown_size`]
+/// shows them: `object.setBounds` on the bounding box, or while it is rotated a scale along the
+/// page's axes that gives the footprint that size (both sides with `proportional`).
+pub(crate) fn set_size(app: &mut VectorcraftApp, bx: &OrientedBox, key: &str, v: f64, refi: usize, proportional: bool, copy: bool) {
+    let Some(f) = rotated_footprint(app, bx) else {
+        run_transform(app, "object.setBounds", json!({key: v, "reference": refi, "proportional": proportional, "copy": copy}));
+        return;
+    };
+    let (now, other) = if key == "width" { (f.width(), f.height()) } else { (f.height(), f.width()) };
+    // A footprint with no width or height can't be scaled to one; zero or less isn't a size.
+    if !(v.is_finite() && v > 0.0 && now > 1e-9) {
+        return;
+    }
+    let k = v / now;
+    let k2 = if proportional && other > 1e-9 { k } else { 1.0 };
+    let (sx, sy) = if key == "width" { (k, k2) } else { (k2, k) };
+    let rp = vectorcraft_geom::reference_point(f, refi.min(8));
+    let matrix = [sx, 0.0, 0.0, sy, rp.x * (1.0 - sx), rp.y * (1.0 - sy)];
+    run_transform(app, "object.transform", json!({"matrix": matrix, "copy": copy}));
+}
+
 pub fn run_transform(app: &mut VectorcraftApp, cmd: &str, mut params: serde_json::Value) {
     let switches = match app.session.prefs.transform_panel_patterns.as_str() {
         "object" => Some((true, false)),
@@ -265,10 +304,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     let units = app.session.general_unit();
     let origin = app.ruler_origin();
-    // The bounding box, rotated with rotated objects: W/H are its own sides, X/Y its reference
-    // point on the page.
+    // The bounding box, rotated with rotated objects: X/Y are its reference point on the page, W/H
+    // its own sides, or while it is rotated the footprint square to the page ([`shown_size`]).
     let bx = app.selection_box();
     let bounds = bx.map(|b| b.rect);
+    let size = bx.map(|b| shown_size(app, &b));
     let reference = bx.map(|b| panel_reference(app, ui, &b));
     let refi = reference.map_or_else(|| reference_index(ui), |r| r.index);
     // `object.setBounds`'s x and y that put the reference (the registration point) at x, y.
@@ -289,8 +329,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     run_transform(app, "object.setBounds", json!({"x": to_box(v + origin.x, 0.0).0, "reference": refi, "copy": copy}));
                 }
                 widgets::dim_label(ui, "W:");
-                if let Some(v) = widgets::size_field_named(ui, "xfp-w", Some(tl!("W:")), bounds.map(|b| b.width()), units, 80.0) {
-                    run_transform(app, "object.setBounds", json!({"width": v, "reference": refi, "proportional": link, "copy": copy}));
+                if let Some(v) = widgets::size_field_named(ui, "xfp-w", Some(tl!("W:")), size.map(|s| s.0), units, 80.0)
+                    && let Some(b) = bx
+                {
+                    set_size(app, &b, "width", v, refi, link, copy);
                 }
                 ui.end_row();
                 widgets::dim_label(ui, "Y:");
@@ -298,8 +340,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     run_transform(app, "object.setBounds", json!({"y": to_box(0.0, v + origin.y).1, "reference": refi, "copy": copy}));
                 }
                 widgets::dim_label(ui, "H:");
-                if let Some(v) = widgets::size_field_named(ui, "xfp-h", Some(tl!("H:")), bounds.map(|b| b.height()), units, 80.0) {
-                    run_transform(app, "object.setBounds", json!({"height": v, "reference": refi, "proportional": link, "copy": copy}));
+                if let Some(v) = widgets::size_field_named(ui, "xfp-h", Some(tl!("H:")), size.map(|s| s.1), units, 80.0)
+                    && let Some(b) = bx
+                {
+                    set_size(app, &b, "height", v, refi, link, copy);
                 }
                 ui.end_row();
             });
