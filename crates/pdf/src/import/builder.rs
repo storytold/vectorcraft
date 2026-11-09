@@ -26,6 +26,7 @@ impl<'p> Builder<'p> {
             images: HashMap::new(),
             image_keys: HashMap::new(),
             cmyk_keys: HashSet::new(),
+            separation_paints: HashMap::new(),
             opaque: HashSet::new(),
             warnings: vec![],
             fonts: HashMap::new(),
@@ -582,8 +583,19 @@ impl<'p> Builder<'p> {
         Some(Paint::Pattern { pattern: name, xf })
     }
 
+    /// Separation image `st` (`w` × `h` pixels) as the paint of its ink at 100 % (a spot swatch, a
+    /// process plate or Registration, found by its colour space) and its tints as gray pixels
+    /// ([`crate::import_image::tint_gray`]). `None` for another image, an ink whose colour can't
+    /// be told, or tints that can't be read (with a warning): the image opens in RGB. The ink is
+    /// only marked used once the tints are read.
+    pub(super) fn separation_image(&mut self, st: &craft_pdf::syntax::object::Stream<'_>, w: u32, h: u32) -> Option<(Paint, Vec<u8>)> {
+        let space = self.colors.array_space(&crate::import_image::separation_space(st)?)?;
+        let gray = crate::import_image::tint_gray(st, w, h).map_err(|why| self.warn(why)).ok()?;
+        Some((self.colors.native(space, &[1.0])?.paint(), gray))
+    }
+
     pub(super) fn add_image(&mut self, key: u128, make: impl FnOnce() -> Option<(ImageBlob, u32, u32)>, xf: Affine) {
-        self.add_image_masked(key, make, xf, None);
+        self.add_image_masked(key, make, xf, None, None);
     }
 
     /// An image's alpha (its soft mask, stencil mask or colour key, at its own resolution) as a
@@ -626,12 +638,15 @@ impl<'p> Builder<'p> {
         Some(OpacityMask::new(art, true))
     }
 
+    /// An image of key `key` (its blob made by `make` the first time), placed by `xf`, with opacity
+    /// mask `mask` and the solid paint that colorizes it (`colorize`, for a grayscale image).
     pub(super) fn add_image_masked(
         &mut self,
         key: u128,
         make: impl FnOnce() -> Option<(ImageBlob, u32, u32)>,
         xf: Affine,
         mask: Option<OpacityMask>,
+        colorize: Option<Paint>,
     ) {
         let (k, w, h) = if let Some(v) = self.image_keys.get(&key).cloned() {
             v
@@ -652,6 +667,7 @@ impl<'p> Builder<'p> {
             NodeKind::Image(Box::new(ImageObject { key: k, width: w, height: h, xf, link: None, placement: Default::default(), pixels: None })),
         );
         n.extras_mut().mask = mask.map(Box::new);
+        n.extras_mut().colorize = colorize.map(Box::new);
         self.push_node(n);
     }
 

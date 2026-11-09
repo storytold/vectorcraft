@@ -812,6 +812,175 @@ fn a_path_with_its_own_transform_paints_each_copy_with_its_own_gradient() {
 }
 
 #[test]
+fn a_paths_gradient_moves_with_its_transform_and_free_distort() {
+    use vectorcraft_color::GradientGeom;
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let ramp = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
+    // Placed across the square from its left edge (red) to its right edge (blue).
+    let geom = GradientGeom { start: Point::new(10.0, 50.0), end: Point::new(40.0, 50.0), aspect: 1.0, focal: None };
+    let draw = |paint: &GradientPaint, e: Option<Effect>| {
+        let square = shapes::rectangle(vectorcraft_geom::Rect::new(10.0, 35.0, 40.0, 65.0));
+        let mut n = Node::path(NodeId(0), square, Appearance::basic(Paint::Gradient(Box::new(paint.clone())), Paint::None, 0.0));
+        n.appearance.effects = e.into_iter().collect();
+        render(&doc_with(Document::new(100.0, 100.0), n))
+    };
+    let placed = GradientPaint { geom: Some(geom), ..ramp.clone() };
+    let rb = |img: &Rendered, x: u32, y: u32| {
+        let p = img.pixel(x, y);
+        (p[0], p[2])
+    };
+    let red = |(r, b): (u8, u8)| r > 200 && b < 60;
+    let blue = |(r, b): (u8, u8)| b > 200 && r < 60;
+    // Moved 40 pt right by Transform, and 30 pt (one width) right by a Free Distort that moves
+    // every corner.
+    let corners = json!({"corners": [[1.0, 0.0], [2.0, 0.0], [2.0, 1.0], [1.0, 1.0]]});
+    for e in [fx("distort.transform", json!({"moveH": 40})), fx("distort.freeDistort", corners)] {
+        let img = draw(&placed, Some(e.clone()));
+        let moved = if e.id == "distort.transform" { 40 } else { 30 };
+        let (left, right) = (11 + moved, 38 + moved);
+        assert!(red(rb(&img, left, 50)) && blue(rb(&img, right, 50)), "{}: {:?} {:?}", e.id, rb(&img, left, 50), rb(&img, right, 50));
+    }
+    // Turned a quarter: the gradient runs from top to bottom (or bottom to top).
+    let turn = fx("distort.transform", json!({"rotate": 90}));
+    let img = draw(&placed, Some(turn));
+    let (top, bottom) = (rb(&img, 25, 36), rb(&img, 25, 63));
+    assert!((red(top) && blue(bottom)) || (blue(top) && red(bottom)), "{top:?} {bottom:?}");
+    assert_eq!(rb(&img, 12, 50), rb(&img, 38, 50), "the same color across");
+    // Scaled to half its width about its center: the gradient spans the narrower square.
+    let img = draw(&placed, Some(fx("distort.transform", json!({"scaleH": 50}))));
+    assert!(red(rb(&img, 18, 50)) && blue(rb(&img, 31, 50)), "{:?} {:?}", rb(&img, 18, 50), rb(&img, 31, 50));
+    // The fill's own Transform moves its gradient too.
+    let square = shapes::rectangle(vectorcraft_geom::Rect::new(10.0, 35.0, 40.0, 65.0));
+    let mut n = Node::path(NodeId(0), square, Appearance::basic(Paint::Gradient(Box::new(placed.clone())), Paint::None, 0.0));
+    n.appearance.items[0].effects_mut().push(fx("distort.transform", json!({"moveH": 40})));
+    let img = render(&doc_with(Document::new(100.0, 100.0), n));
+    assert!(red(rb(&img, 51, 50)) && blue(rb(&img, 78, 50)), "{:?} {:?}", rb(&img, 51, 50), rb(&img, 78, 50));
+}
+
+/// The canvas turns and reflects a gradient fitted to the square with its Transform effect, on the
+/// object and as the fill's own effect.
+#[test]
+fn a_fitted_gradient_turns_and_reflects_with_its_transform_on_the_canvas() {
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let fitted = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+    let draw = |e: Effect, own: bool| {
+        let square = shapes::rectangle(vectorcraft_geom::Rect::new(10.0, 35.0, 40.0, 65.0));
+        let mut n = Node::path(NodeId(0), square, Appearance::basic(fitted.clone(), Paint::None, 0.0));
+        if own {
+            n.appearance.items[0].effects_mut().push(e);
+        } else {
+            n.appearance.effects.push(e);
+        }
+        render(&doc_with(Document::new(100.0, 100.0), n))
+    };
+    let rb = |img: &Rendered, x: u32, y: u32| {
+        let p = img.pixel(x, y);
+        (p[0], p[2])
+    };
+    let red = |(r, b): (u8, u8)| r > 200 && b < 60;
+    let blue = |(r, b): (u8, u8)| b > 200 && r < 60;
+    for own in [false, true] {
+        // A quarter turn: the left (red) to right (blue) ramp runs from the bottom up.
+        let img = draw(fx("distort.transform", json!({"rotate": 90})), own);
+        let (top, bottom) = (rb(&img, 25, 36), rb(&img, 25, 63));
+        assert!(blue(top) && red(bottom), "own {own}: {top:?} {bottom:?}");
+        assert_eq!(rb(&img, 12, 50), rb(&img, 38, 50), "own {own}: the same color across");
+        // Reflected left to right: blue on the left, red on the right.
+        let img = draw(fx("distort.transform", json!({"reflectX": true})), own);
+        let (left, right) = (rb(&img, 11, 50), rb(&img, 38, 50));
+        assert!(blue(left) && red(right), "own {own}: {left:?} {right:?}");
+    }
+}
+
+#[test]
+fn a_paths_gradient_moves_and_scales_with_its_warped_bounds() {
+    use vectorcraft_color::GradientGeom;
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let ramp = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
+    let draw = |paint: &GradientPaint, e: Effect| {
+        let square = shapes::rectangle(vectorcraft_geom::Rect::new(30.0, 35.0, 60.0, 65.0));
+        let mut n = Node::path(NodeId(0), square, Appearance::basic(Paint::Gradient(Box::new(paint.clone())), Paint::None, 0.0));
+        n.appearance.effects = vec![e];
+        render(&doc_with(Document::new(100.0, 100.0), n))
+    };
+    // Placed from the square's left edge to its right edge, the gradient is drawn as one fitted to
+    // the square is: after a warp both run from the warped outline's left edge to its right edge.
+    let placed = GradientPaint {
+        geom: Some(GradientGeom { start: Point::new(30.0, 50.0), end: Point::new(60.0, 50.0), aspect: 1.0, focal: None }),
+        ..ramp.clone()
+    };
+    let styles = [
+        ("arc", json!({"bend": 50})),
+        ("bulge", json!({"bend": 60, "orientation": "vertical"})),
+        ("rise", json!({"bend": 40, "vertical": 50, "orientation": "vertical"})),
+    ];
+    for (style, params) in styles.clone() {
+        let e = fx(&format!("warp.{style}"), params.clone());
+        let (got, want) = (draw(&placed, e.clone()), draw(&ramp, e));
+        // The warp moves the outline's left or right edge, so a gradient left in place would not
+        // run from edge to edge.
+        let square = vectorcraft_geom::Rect::new(30.0, 35.0, 60.0, 65.0);
+        let path = shapes::rectangle(square);
+        let b = vectorcraft_effects::apply_geometry(&[fx(&format!("warp.{style}"), params.clone())], &path, square).bounds().unwrap();
+        assert!((b.x0 - 30.0).abs() > 0.5 || (b.x1 - 60.0).abs() > 0.5, "warp.{style}: the outline spans {b:?}");
+        let mut worst = 0;
+        for y in 0..100 {
+            for x in 0..100 {
+                let (a, b) = (got.pixel(x, y), want.pixel(x, y));
+                worst = worst.max((0..3).map(|i| a[i].abs_diff(b[i])).max().unwrap_or(0));
+            }
+        }
+        assert!(worst <= 3, "warp.{style}: worst channel difference {worst}");
+    }
+    // A stroke's own Warp: the canvas draws its gradient moved and scaled from the stroke-inflated
+    // bounds before the warp to those after it, as on the warped path with that gradient.
+    let geom = GradientGeom { start: Point::new(35.0, 50.0), end: Point::new(55.0, 50.0), aspect: 1.0, focal: None };
+    let stroked = Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..ramp.clone() }));
+    let square = vectorcraft_geom::Rect::new(30.0, 35.0, 60.0, 65.0);
+    let follow = |p: Point, from: vectorcraft_geom::Rect, to: vectorcraft_geom::Rect| {
+        Point::new(to.x0 + (p.x - from.x0) / from.width() * to.width(), to.y0 + (p.y - from.y0) / from.height() * to.height())
+    };
+    for (style, params) in styles {
+        let mut n = Node::path(NodeId(0), shapes::rectangle(square), Appearance::basic(Paint::None, stroked.clone(), 6.0));
+        let Some(AppearanceItem::Stroke(layer)) = n.appearance.items.iter().find(|i| matches!(i, AppearanceItem::Stroke(_))).cloned() else {
+            panic!("a stroke")
+        };
+        let Some(item) = n.appearance.items.iter_mut().find(|i| matches!(i, AppearanceItem::Stroke(_))) else { panic!("a stroke") };
+        item.effects_mut().push(fx(&format!("warp.{style}"), params));
+        let d = doc_with(Document::new(100.0, 100.0), n);
+        let live = render(&d);
+        let baked = vectorcraft_effects::bake_document(&d).unwrap();
+        let mut warped = None;
+        for l in &baked.layers {
+            l.walk(&mut |c: &Node| {
+                if let (Some(path), true) = (c.path_data(), c.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(_)))) {
+                    warped.get_or_insert_with(|| path.clone());
+                }
+            });
+        }
+        let path = warped.unwrap();
+        let b = vectorcraft_geom::Shape::bounding_box(&path.to_bezpath());
+        assert_ne!(b, square, "warp.{style}: the warp changes the bounds");
+        let (from, to) = (layer.paint_bounds(square), layer.paint_bounds(b));
+        let moved = GradientGeom { start: follow(geom.start, from, to), end: follow(geom.end, from, to), ..geom };
+        let want_node = Node::path(
+            NodeId(0),
+            path,
+            Appearance::basic(Paint::None, Paint::Gradient(Box::new(GradientPaint { geom: Some(moved), ..ramp.clone() })), 6.0),
+        );
+        let want = render(&doc_with(Document::new(100.0, 100.0), want_node));
+        let mut worst = 0;
+        for y in 0..100 {
+            for x in 0..100 {
+                let (a, b) = (live.pixel(x, y), want.pixel(x, y));
+                worst = worst.max((0..3).map(|i| a[i].abs_diff(b[i])).max().unwrap_or(0));
+            }
+        }
+        assert!(worst <= 3, "warp.{style} on the stroke: worst channel difference {worst}");
+    }
+}
+
+#[test]
 fn darkness_subtracts_from_rgb_before_shadow_opacity() {
     for opacity in [50.0, 100.0] {
         let mut n = Node::path(

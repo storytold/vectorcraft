@@ -43,12 +43,26 @@ impl<'a> Reader<'a> {
         }
     }
 
+    /// `X=` in a `/Mask` dictionary: the opacity mask's art starts, read until its `X+`
+    /// ([`Self::end_mask`]).
     fn open_mask_object(&mut self, hidden: bool) -> Result<(), String> {
         if !matches!(self.frames.last(), Some(Frame { kind: Kind::Obj(o), .. }) if o.ty == "Mask") {
             // `X=` also introduces legacy text frame art, read by `text_frames`.
             return Ok(());
         }
         self.end_path_quietly();
+        // The art goes on from the paint before the dictionaries it is in, which `begin_obj` set
+        // aside: the writer leaves out paint that doesn't change, so a mask rectangle with no color
+        // of its own takes the white of the art before it, not a fresh state's black, which hides
+        // what it masks. Lock, visibility and transparency start afresh, as a dictionary's art does.
+        if let Some(f) = self.frames.iter().rev().take_while(|f| matches!(f.kind, Kind::Obj(_))).last() {
+            let before = &f.gs;
+            let gs = &mut self.gs;
+            (gs.fill, gs.stroke, gs.dash) = (before.fill.clone(), before.stroke.clone(), before.dash.clone());
+            (gs.width, gs.cap, gs.join, gs.miter, gs.rule) = (before.width, before.cap, before.join, before.miter, before.rule);
+            (gs.overprint_fill, gs.overprint_stroke) = (before.overprint_fill, before.overprint_stroke);
+            (self.pending_unread_fill, self.pending_unread_stroke) = (f.pending_unread_fill, f.pending_unread_stroke);
+        }
         self.open(Kind::Mask, hidden)
     }
 
@@ -155,7 +169,7 @@ impl<'a> Reader<'a> {
         }
         if let Some(d) = self.gradient_def.as_mut() {
             match w {
-                "Bs" => d.stop(&vals, &mut self.stop_spots),
+                "Bs" => d.stop(&vals, &mut self.stop_spots, &mut self.names),
                 "BD" => {
                     if let Some((name, g)) = self.gradient_def.take().and_then(GradientDef::finish) {
                         self.global_names.define(Global::Gradient, &name);
@@ -213,7 +227,7 @@ impl<'a> Reader<'a> {
             "Lb" => self.layer_attrs(&vals),
             "Ln" => {
                 if let Some(Frame { kind: Kind::Layer(a), .. }) = self.frames.last_mut() {
-                    a.name = vals.iter().rev().find_map(V::text).unwrap_or_default();
+                    a.name = vals.iter().rev().find_map(|v| self.names.text(v)).unwrap_or_default();
                 }
             }
             "LB" => self.layer_end()?,
@@ -305,12 +319,12 @@ impl<'a> Reader<'a> {
             "A" => self.gs.locked = Self::nums(&vals).last() == Some(&1.0),
             "XW" => self.state_marker(&vals, hidden),
             // Gradients.
-            "Bd" => self.gradient_def = GradientDef::begin(&vals),
+            "Bd" => self.gradient_def = GradientDef::begin(&vals, &mut self.names),
             "Bs" | "BD" => {}
             "Bb" => self.instance = Some(Instance::begin(&vals)),
             "Bg" => {
                 if let Some(i) = self.instance.as_mut() {
-                    i.bg(&vals);
+                    i.bg(&vals, &mut self.names);
                 }
             }
             "Bm" => {
@@ -376,8 +390,10 @@ impl<'a> Reader<'a> {
             "TZ" => self.tz(&vals),
             // An image whose samples follow in comment lines (read at `%AI5_EndRaster`).
             "XI" if self.raster.is_some() => {
+                let max = self.sample_bytes(&vals);
                 if let Some(r) = self.raster.as_mut() {
                     r.operands = Some(vals);
+                    r.max = max;
                 }
             }
             // A linked image (§8.2, §8.3): `(path) modified XG` names the file of the `XF` image after
@@ -463,7 +479,7 @@ impl<'a> Reader<'a> {
         if self.frames.is_empty() {
             return;
         }
-        let name = vals.iter().find_map(|v| if let V::Str(_) = v { v.text() } else { None });
+        let name = vals.iter().find(|v| matches!(v, V::Str(_))).and_then(|v| self.names.text(v));
         let Some(tile) = name.as_deref().and_then(|n| self.pattern_tiles.get(n)).copied() else {
             self.unread_pattern(w);
             return;
@@ -507,9 +523,9 @@ impl<'a> Reader<'a> {
     }
 
     fn color(&mut self, w: &str, vals: &[V]) {
-        let Some((p, named)) = paint::color_op(w, vals) else { return };
+        let Some((p, named)) = paint::color_op_in(w, vals, &mut self.names) else { return };
         // Registration (`Xs`, `Xz`) says nothing of the document's colour model.
-        let registration = matches!(w, "Xs" | "XS" | "Xz" | "XZ");
+        let registration = matches!(w, "Xs" | "XS" | "Xz" | "XZ") || p.is_registration();
         match p.color().filter(|_| !registration) {
             Some(vectorcraft_color::Color::Rgb { .. }) => self.rgb_colors += 1,
             Some(vectorcraft_color::Color::Cmyk { .. }) => self.cmyk_colors += 1,
@@ -690,7 +706,7 @@ impl<'a> Reader<'a> {
     /// follows an object.
     fn style_marker(&mut self, vals: &[V], hidden: bool) {
         let code = Self::nums(vals).last().copied().unwrap_or(0.0);
-        let style = vals.iter().rev().find_map(V::text).unwrap_or_default();
+        let style = vals.iter().rev().find_map(|v| self.names.text(v)).unwrap_or_default();
         let after = std::mem::take(&mut self.after_object);
         // An object's own state block ends `6 () XW` (a layer's `7 () XW`): an `Xy` before it isn't the layer's.
         if code == 6.0 {
@@ -736,6 +752,24 @@ impl<'a> Reader<'a> {
         {
             return;
         }
+        // A variable-width stroke's look that draws nothing but copies read from `%_` lines: an
+        // empty group, which [`styled`] takes the stroke for.
+        let drawn;
+        let look = if !hidden
+            && slot_of(object.name.as_deref()).is_none()
+            && matches!(look.kind, NodeKind::Group { .. })
+            && self.styles.get(&style).is_some_and(|st| st.uneven)
+            && !draws(look, &self.hidden_ids)
+        {
+            let mut copy = look.clone();
+            if let Some(children) = copy.children_mut() {
+                children.clear();
+            }
+            drawn = copy;
+            &drawn
+        } else {
+            look
+        };
         // A style read here: the object, painted as it says.
         if let Some(mut appearance) = self.styles.get(&style).and_then(|st| {
             styled(
@@ -1046,10 +1080,13 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
     use crate::import::ai::style::StyleItem;
     // A text object's slot (an empty group standing for it) takes the style as the type will.
     let slot = slot_of(object.name.as_deref()).is_some();
+    // Several fills and strokes, on a path or a compound path.
+    let stacked = !slot && !st.simple && st.stacked && matches!(object.kind, NodeKind::Path { .. } | NodeKind::Compound { .. });
     // A symbol instance draws its symbol's art: it keeps its drawn look.
     if !st.plain
         || matches!(object.kind, NodeKind::SymbolInstance { .. })
-        || (!slot && !st.simple)
+        // A look with no outline in it to keep takes a variable-width stroke as the object's own.
+        || (!slot && !st.simple && !stacked && (!st.uneven || draws(look, &HashSet::new())))
         || (object.is_container() && !slot && !matches!(object.kind, NodeKind::Compound { .. }) && !st.items.is_empty())
         || (st.pathfinder
             && (slot || !st.items.is_empty() || object.is_compound_shape() || !matches!(object.kind, NodeKind::Group { clip: false, .. })))
@@ -1064,6 +1101,19 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
     // drawn look has each where the app placed it.
     let mut placed = HashMap::new();
     placed_paints(look, &mut placed, 0);
+    // A stack's gradients are each its own swatch, placed where the drawn look has it: one fitted
+    // to the object's bounds instead could lie elsewhere, so such a stack keeps its drawn look.
+    if stacked {
+        let mut seen = HashSet::new();
+        let placed_apart = st.items.iter().all(|i| match i {
+            StyleItem::Gradient { name: Some(n), .. } => seen.insert(n) && placed.contains_key(paints.names.get(Global::Gradient, n)),
+            StyleItem::Gradient { name: None, .. } => false,
+            _ => true,
+        });
+        if !placed_apart {
+            return None;
+        }
+    }
     let mut items = vec![];
     for (n, item) in st.items.iter().enumerate() {
         let mut layer = match item {
@@ -1071,8 +1121,9 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
             StyleItem::Gradient { name, angle } => {
                 // The drawn look's gradients are keyed by the names they got in the document.
                 let paint = match (name.as_ref().and_then(|n| placed.get(paints.names.get(Global::Gradient, n))), gradients, own_gradient) {
-                    // Other objects than type: the object's own, as they always were.
-                    (_, 1, Some(own)) if !slot => own.paint.clone(),
+                    // Other objects than type: the object's own, as they always were (a stack's
+                    // where its drawn look places it).
+                    (_, 1, Some(own)) if !slot && !stacked => own.paint.clone(),
                     (Some(p), ..) => p.clone(),
                     (None, 1, Some(own)) => own.paint.clone(),
                     _ => {
@@ -1166,6 +1217,13 @@ pub(crate) struct StyleRead {
     pub simple: bool,
     /// It has Effect › Pathfinder effects, which only a group with no fills or strokes is read with.
     pub pathfinder: bool,
+    /// The opacity, blending mode, isolation and knockout its blend filter gives.
+    pub transparency: Option<(f32, BlendMode, bool, Knockout)>,
+}
+
+/// The names a style list section gives graphic styles, as the reader reads them.
+pub(crate) fn read_style_list(section: &[u8]) -> Vec<String> {
+    crate::import::ai::style::art_style_list(section).iter().map(|raw| obj::text(raw)).filter(|name| !name.is_empty()).collect()
 }
 
 /// Art style `name` of `section` as the reader reads it ([`StyleRead`]): [`appearance_from_art_style`],
@@ -1184,14 +1242,21 @@ pub(crate) fn read_art_style(section: &[u8], name: &str, own_gradient: Option<&P
         }
     }
     let appearance = appearance_from_art_style(&st)?;
-    Some(StyleRead { appearance, simple: st.simple, pathfinder: st.pathfinder })
+    Some(StyleRead { appearance, simple: st.simple, pathfinder: st.pathfinder, transparency: st.transparency })
+}
+
+/// Is art style `name` of `section` read on `object` as far as an effect that moves the outline
+/// goes: the style has none, or `object` is one [`moves_with`] reads it on, as [`styled`] checks?
+/// `false` when the section doesn't define it.
+pub(crate) fn style_moves_with(section: &[u8], name: &str, object: &Node) -> bool {
+    crate::import::ai::style::art_styles(section).remove(name).is_some_and(|st| !st.moves_outline() || moves_with(object, &st))
 }
 
 /// A style's stroke as an appearance item (`None` for a fill).
 fn stroke_layer(item: &crate::import::ai::style::StyleItem) -> Option<AppearanceItem> {
-    let crate::import::ai::style::StyleItem::Stroke { paint, width, cap, join, miter, dash, profile, brush } = item else { return None };
+    let crate::import::ai::style::StyleItem::Stroke { paint, width, cap, join, miter, dash, profile, align, brush } = item else { return None };
     let mut layer = StrokeLayer::new(paint.clone(), line_width(*width));
-    (layer.cap, layer.join, layer.miter_limit, layer.dash, layer.profile) = (*cap, *join, *miter, dash.clone(), profile.clone());
+    (layer.cap, layer.join, layer.miter_limit, layer.dash, layer.profile, layer.align) = (*cap, *join, *miter, dash.clone(), profile.clone(), *align);
     layer.brush = brush.as_ref().map(|(name, _)| name.clone());
     Some(AppearanceItem::Stroke(layer))
 }
@@ -1226,6 +1291,21 @@ fn strip(n: &mut Node, hidden: &HashSet<NodeId>) {
         for c in children.iter_mut() {
             strip(Arc::make_mut(c), hidden);
         }
+    }
+}
+
+/// Whether `n` holds anything that draws, apart from the children read from `%_` lines (`hidden`):
+/// a path or a compound path with a paint of its own, or a node other than a group or those.
+fn draws(n: &Node, hidden: &HashSet<NodeId>) -> bool {
+    if hidden.contains(&n.id) {
+        return false;
+    }
+    let paints = n.appearance.items.iter().any(|i| i.visible() && !i.paint().is_none());
+    match (&n.kind, n.children()) {
+        (NodeKind::Compound { .. }, Some(children)) => paints && children.iter().any(|c| c.visible && !hidden.contains(&c.id)),
+        (NodeKind::Group { .. }, Some(children)) => children.iter().any(|c| c.visible && draws(c, hidden)),
+        (NodeKind::Path { .. }, _) => paints,
+        _ => true,
     }
 }
 

@@ -32,6 +32,7 @@ mod setup;
 mod strokegradient;
 mod thincoverage;
 mod tileedge;
+mod typeedges;
 mod viewraster;
 mod widthzoom;
 

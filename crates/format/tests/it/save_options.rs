@@ -291,7 +291,7 @@ fn precision_rounds_the_paths_objects_keep_besides_their_own() {
     d.insert(Some(layer), 1, Node::new(id, NodeKind::Blend { children: keys, spec: Box::new(blend) })).unwrap();
     let envelope = NodeKind::Envelope {
         content: vec![Arc::new(precise_path(&mut d, 1.0, 1.0))],
-        kind: Box::new(EnvelopeKind::TopObject { path: path() }),
+        kind: Box::new(EnvelopeKind::TopObject { path: path(), corners: None }),
         fidelity: 50.0,
         editing: false,
         options: Default::default(),

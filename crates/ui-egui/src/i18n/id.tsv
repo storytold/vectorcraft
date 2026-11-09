@@ -135,6 +135,7 @@
 	Report copied	Laporan disalin
 	Line {line}	Baris {line}
 	Line {line}: {name}: {status}	Baris {line}: {name}: {status}
+	Read Action Set File	Baca berkas set tindakan
 	Read Shortcut Set File	Baca berkas set pintasan
 	Import Matches	Impor kecocokan
 	Remember Import Matches	Ingat kecocokan impor
@@ -172,6 +173,11 @@
 	Ungroup	Buka grup
 	Lock	Kunci
 	Selection	Seleksi
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Seleksi persegi panjang
+	Touching	Objek tersentuh
+	Fully Enclosed	Sepenuhnya di dalam
+	Drag Direction	Arah seret
 	All Artwork Above	Semua karya seni di atas
 	Other Layers	Lapisan lain
 	Unlock All	Buka kunci semua
@@ -293,6 +299,13 @@
 	Apply Bullets	Terapkan poin
 	Numbered List	Daftar bernomor
 	Apply Numbers	Terapkan penomoran
+	Bullets and Numbering…	Poin dan penomoran…
+	Numbers	Nomor
+	Level:	Tingkat:
+	Bullet Character:	Karakter poin:
+	Number Style:	Gaya nomor:
+	Left Indent:	Indentasi kiri:
+	First Line Indent:	Indentasi baris pertama:
 	Convert to Text	Konversi ke teks
 	Filled Dot	Titik penuh
 	Dash	Tanda pisah
@@ -420,6 +433,17 @@
 	Inflate	Gelembungkan
 	Select objects, then pick an object type to give them a 3D effect.	Pilih objek, lalu pilih jenis objek untuk memberinya efek 3D.
 	Extrude & Bevel…	Ekstrusi & bevel…
+	3D (Classic)	3D (klasik)
+	Extrude & Bevel (Classic)…	Ekstrusi & bevel (klasik)…
+	Surface	Permukaan
+	Wireframe	Kerangka kawat
+	No Shading	Tanpa pengarsiran
+	Plastic	Plastik
+	Highlight Intensity	Intensitas kilau
+	Highlight Size	Ukuran kilau
+	Blend Steps	Langkah campuran
+	Shading Color	Warna pengarsiran
+	Draw Hidden Faces	Gambar sisi tersembunyi
 	Revolve…	Revolusi…
 	Inflate…	Gelembungkan…
 	Materials…	Material…
@@ -622,6 +646,7 @@
 	Toolbars	Bilah alat
 	Advanced	Lanjutan
 	Double Column	Kolom ganda
+	Keep Tools Beside the Canvas	Alat di samping kanvas
 	Actions	Tindakan
 	Asset Export	Ekspor aset
 	Attributes	Atribut
@@ -629,6 +654,11 @@
 	Color	Warna
 	Color Guide	Panduan warna
 	Color Themes	Tema warna
+	Color Wheel	Roda warna
+	Hue ring	Cincin rona
+	Saturation and brightness	Saturasi dan kecerahan
+	Color field	Kolom warna
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	CSS Properties	Properti CSS
 	Document Info	Info dokumen
 	Flattener Preview	Pratinjau perata
@@ -815,6 +845,9 @@
 	Stained Glass…	Kaca patri…
 	Texturizer…	Texturizer…
 	System Title Bar	Bilah judul sistem
+	VectorCraft Title Bar on Every Desktop	Bilah judul VectorCraft di setiap desktop
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Selama ditetapkan, variabel lingkungan VECTORCRAFT_TITLEBAR memilih bilah judul.
+	System Title Bar takes precedence over this option while it is on.	Selama aktif, Bilah judul sistem lebih diutamakan daripada opsi ini.
 	Exit	Keluar
 	Distort	Distorsi
 	Diffuse Glow…	Pendar difusi…
@@ -1171,7 +1204,7 @@ lighting	Light	Cahaya
 	X:	X:
 	Y:	Y:
 	Drag to float the toolbar	Seret untuk mengambangkan bilah alat
-	Drag to the window's left edge to dock	Seret ke tepi kiri jendela untuk memasang
+	Drag to the window's left or right edge to dock	Seret ke tepi kiri atau kanan jendela untuk memasang
 	Crystallize	Kristalisasi
 	Add Anchor Point Tool	Alat tambah titik jangkar
 	Anchor Point Tool	Alat titik jangkar
@@ -1425,6 +1458,15 @@ digits	Malayalam	Malayalam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Pengaturan Tate-chu-yoko…
 	Tate-chu-yoko Settings	Pengaturan Tate-chu-yoko
+	Composite Fonts…	Font komposit…
+	Composite Fonts	Font komposit
+	Export Composite Fonts	Ekspor font komposit
+	Import Composite Fonts	Impor font komposit
+	Delete Font	Hapus font
+	Kanji	Kanji
+	Kana	Kana
+	Numerals	Angka
+	Scale at Center	Skalakan dari tengah
 	Up/Down:	Atas/bawah:
 	Left/Right:	Kiri/kanan:
 	Underline	Garis bawah
@@ -1701,6 +1743,10 @@ digits	Malayalam	Malayalam
 	Stylistic	Stilistik
 	Mojikumi Set	Set Mojikumi
 	Kinsoku Set	Set Kinsoku
+	Kinsoku Shori Type	Jenis Kinsoku Shori
+	Push In First	Dorong masuk dahulu
+	Push Out First	Dorong keluar dahulu
+	Push Out Only	Hanya dorong keluar
 	Hard	Keras
 	Right Indent	Indentasi kanan
 	Right-to-Left Paragraph Direction	Arah paragraf kanan ke kiri
@@ -2461,6 +2507,7 @@ digits	Malayalam	Malayalam
 	Tile Range:	Rentang ubin:
 	tile {number}	ubin {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Ubin dinomori menyamping lalu ke bawah; biarkan rentang kosong untuk semua ubin.
+	Copies per Sheet (as many as fit, in a grid)	Salinan per lembar (sebanyak yang muat, dalam kisi)
 	Transverse (the page a quarter turn on the paper)	Melintang (halaman diputar seperempat putaran pada kertas)
 	Unprintable margin:	Margin yang tidak dapat dicetak:
 	{pages} in all, {count} per copy	{pages} total, {count} per salinan
@@ -2531,6 +2578,10 @@ digits	Malayalam	Malayalam
 	< 1 sec	< 1 detik
 	[Unnamed]	[Tanpa nama]
 	Amount:	Jumlah:
+	Anti-aliasing Method	Metode anti-aliasing
+antiAlias	Sharp	Tajam
+	Crisp	Jelas
+	Strong	Kuat
 	Anti-aliasing:	Anti-aliasing:
 	Artboard:	Artboard:
 	Color Table	Tabel warna
@@ -2925,6 +2976,9 @@ theme	Appearance	Tampilan
 	Asset Export Settings	Pengaturan ekspor aset
 	Assets	Aset
 	Export Assets	Ekspor aset
+	Export 3D Object	Ekspor objek 3D
+	3D Export Format	Format ekspor 3D
+	Export 3D Assets	Ekspor aset 3D
 	Remove Asset	Hapus aset
 	Rename Asset	Ganti nama aset
 	Fill Rule	Aturan isian
@@ -3058,6 +3112,7 @@ theme	Appearance	Tampilan
 	Document JSON	JSON dokumen
 	Duplicate	Duplikatkan
 	Find Objects	Cari objek
+	Compare with Image	Bandingkan dengan gambar
 	Inspect Document	Periksa dokumen
 	Inspect Object	Periksa objek
 	Begin Undo Group	Mulai grup urungkan
@@ -3361,6 +3416,7 @@ theme	Appearance	Tampilan
 	Feet	Kaki
 	Files	File
 	Fill New Type Objects With Placeholder Text	Isi objek teks baru dengan teks placeholder
+	Start Lists From Typed Markers	Mulai daftar dari penanda yang diketik
 	Folder	Folder
 	Font Preview Size	Ukuran pratinjau font
 	Get Preferences	Dapatkan preferensi
@@ -3471,6 +3527,7 @@ theme	Appearance	Tampilan
 	Yards	Yard
 	Zoom to Selection	Zum ke seleksi
 	Zoom with Mouse Wheel	Zum dengan roda mouse
+	Scroll Sideways with Cmd/Ctrl + Wheel	Gulir horizontal dengan Cmd/Ctrl + roda mouse
 	Scrub Numeric Fields by Dragging	Atur nilai kolom numerik dengan menyeret
 	Linux Display Server	Server tampilan Linux
 	Print Preview	Pratinjau cetak
@@ -3750,6 +3807,7 @@ effect	Regular	Reguler
 	Find in Folder…	Temukan di folder…
 	Replace With Font	Ganti dengan font
 	Replace With Font From	Ganti dengan font dari
+	Find In	Cari di
 	System	Sistem
 	  — substituted by {style}	  — digantikan oleh {style}
 	  — {n} characters from another font	  — {n} karakter dari font lain
@@ -3993,7 +4051,7 @@ imageTrace	Outline	Kontur
 @plural	{n} stroke|{n} strokes	{n} goresan
 @msg	no library `{id}`	tidak ada pustaka `{id}`
 @msg	select some type first	pilih beberapa teks terlebih dahulu
-@msg	kerning must be a number, "auto", or "optical"	Kerning harus berupa angka, “auto”, atau “optical”
+@msg	kerning must be a number, "auto", or "optical"	kerning harus berupa angka, “auto”, atau “optical”
 @msg	{_1} has no {_2} style	{_1} tidak memiliki gaya {_2}
 @msg	a layer couldn't be read	satu lapisan tidak dapat dibaca
 @msg	it has more than one artboard	memiliki lebih dari satu artboard
@@ -4078,6 +4136,7 @@ imageTrace	Outline	Kontur
 @msg	Split Into Grid: select paths large enough for the grid	Bagi menjadi kisi: pilih jalur yang cukup besar untuk kisi
 @msg	Targa files are RGB: colorModel rgb	File Targa adalah RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Pembungkusan teks: pilih objek pembungkus
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` harus "none", "sharp", "crisp" atau "strong"
 @msg	`aspect` must be a number (%)	`aspect` harus berupa angka (%)
 @msg	`at` must be [x, y]	`at` harus [x, y]
 @msg	`color` must be a colour	`color` harus berupa warna
@@ -4168,7 +4227,7 @@ imageTrace	Outline	Kontur
 @msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: none, art, atau type
 @msg	artboard {0} does not exist	artboard {0} tidak ada
 @msg	at this scale the drawing is {w} × {h} pt, more than the canvas holds: choose a smaller scale or fit it to the artboard	pada skala ini gambar berukuran {w} × {h} pt, melebihi kapasitas kanvas: pilih skala yang lebih kecil atau paskan ke artboard
-@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	sumbu harus "vertical", "horizontal", atau sudut dalam derajat, bukan `{v}`
+@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis harus "vertical", "horizontal", atau sudut dalam derajat, bukan `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	background {other}: transparan, putih, hitam, atau warna seperti "#ff8800"
 @msg	bad color {v}	warna tidak valid {v}
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio harus berupa angka dari 0,1 sampai 10
@@ -4318,6 +4377,8 @@ imageTrace	Outline	Kontur
 @msg	no such action set	tidak ada set tindakan seperti itu
 @msg	the action sets changed; nothing was deleted	set tindakan telah berubah; tidak ada yang dihapus
 @msg	no action set to save	tidak ada set tindakan untuk disimpan
+@msg	the action set file can't be read in full	file set tindakan tidak dapat dibaca seluruhnya
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	“{name}” dimuat: {n} langkah dilewati
 @msg	not an action set file	bukan file set tindakan
 @msg	the action set file is larger than 8 MiB	file set tindakan lebih besar dari 8 MiB
 @msg	the action set file holds more than 1,000 actions	file set tindakan berisi lebih dari 1.000 tindakan
@@ -4383,9 +4444,9 @@ imageTrace	Outline	Kontur
 @msg	replace: the object to replace was changed or deleted	ganti: objek yang akan diganti telah diubah atau dihapus
 @msg	pattern missing	pola hilang
 @msg	patterns nested too deeply are filled with mid-grey	pola yang bersarang terlalu dalam diisi dengan abu-abu tengah
-@msg	percent must be above 0 and at most 6400, not {p}	persen harus di atas 0 dan paling banyak 6400, bukan {p}
+@msg	percent must be above 0 and at most 6400, not {p}	percent harus di atas 0 dan paling banyak 6400, bukan {p}
 @msg	pick a colour, gradient or pattern to save as a swatch	pilih warna, gradien, atau pola untuk disimpan sebagai swatch
-@msg	plane must be left, right or ground	bidang harus kiri, kanan, atau tanah
+@msg	plane must be left, right or ground	plane harus left, right, atau ground
 @msg	plug-in ABI: {0}	ABI plug-in: {0}
 @msg	plug-in exceeded its {0}	plug-in melampaui {0}-nya
 @msg	plug-in failed: {0}	plug-in gagal: {0}
@@ -4404,8 +4465,8 @@ imageTrace	Outline	Kontur
 @msg	result would exceed the canvas (coordinates out of range)	hasil akan melampaui kanvas (koordinat di luar rentang)
 @msg	objects can't be nested more than 32 deep	objek tidak dapat bersarang lebih dari 32 tingkat
 @msg	the SVG's elements are nested more than {0} deep	elemen SVG bersarang lebih dari {0} tingkat
-@msg	scale must be a number from {_1} to {_2}, not {_3}	skala harus berupa angka dari {_1} sampai {_2}, bukan {_3}
-@msg	scale must be a number from {_1} to {_2}, not {s}	skala harus berupa angka dari {_1} sampai {_2}, bukan {s}
+@msg	scale must be a number from {_1} to {_2}, not {_3}	scale harus berupa angka dari {_1} sampai {_2}, bukan {_3}
+@msg	scale must be a number from {_1} to {_2}, not {s}	scale harus berupa angka dari {_1} sampai {_2}, bukan {s}
 @msg	select (or target) objects whose appearance isn't basic	pilih (atau jadikan target) objek yang penampilannya bukan dasar
 @msg	select a Live Paint group	pilih grup Live Paint
 @msg	select a blend	pilih blend
@@ -4645,10 +4706,14 @@ imageTrace	Outline	Kontur
 @msg	its objects are nested too deeply	objeknya bersarang terlalu dalam
 @msg	its section ending with `%{end}` doesn't end	bagian yang berakhir dengan `%{end}` tidak berakhir
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	kuas yang belum dapat dibaca VectorCraft tidak dimasukkan ke panel Kuas ({_1})
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objek dengan beberapa isian atau goresan, efek, atau kuas masuk sebagai tampilan gambarnya ({_1}): penampilannya belum dapat diedit
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objek dengan beberapa isian atau goresan, goresan dengan lebar bervariasi, efek, atau kuas masuk sebagai tampilan gambarnya ({_1}): penampilannya belum dapat diedit
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	nama `{name}` bukan UTF-8 dan dibaca sebagai {label}: jika terlihat salah, buka file dengan legacyNameEncoding lain
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	nama `{name}` bukan UTF-8, dan sebagiannya juga bukan {label} yang valid: buka file dengan legacyNameEncoding lain
+@msg	more names that aren't UTF-8 were read as {label} ({count})	nama lain yang bukan UTF-8 dibaca sebagai {label} ({count})
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	gradien “{name}” tidak didefinisikan dalam berkas: warna polos dipakai sebagai pengganti
 @msg	an image VectorCraft can't read was left out	gambar yang tidak dapat dibaca VectorCraft tidak disertakan
 @msg	an image whose data is cut short was left out	gambar yang datanya terpotong tidak disertakan
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	gambar tersemat berukuran {_1} × {_2} piksel diperkecil menjadi {_3} × {_4} piksel agar lapisannya tetap terjaga
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	gambar tertaut menampilkan pratinjau resolusi rendah yang tersimpan dalam berkas sampai berkasnya ditemukan: tautkan ulang di panel Tautan
 @msg	linked type areas past VectorCraft's limits were left out	area teks tertaut di luar batas VectorCraft dihilangkan
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	teks yang mengubah arah penulisan di dalam objek teks dibuka dengan arah karakter pertamanya
@@ -4684,6 +4749,7 @@ imageTrace	Outline	Kontur
 @msg	object ids are non-negative integers, not {v}	id objek adalah bilangan bulat non-negatif, bukan {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} harus berupa larik id objek yang berupa bilangan bulat non-negatif
 @msg	invalid object id {value}: expected a non-negative integer	id objek {value} tidak valid: harus berupa bilangan bulat non-negatif
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	entri {index} dari `{key}` adalah {value}, bukan id objek (bilangan bulat non-negatif)
 @msg	no such object id {value}	tidak ada objek dengan id {value}
 @msg	automation filesystem access is not granted: read authority is absent: {path}	akses sistem berkas otomatisasi tidak diberikan: otoritas baca tidak ada: {path}
 @msg	automation filesystem access is not granted: write authority is absent: {path}	akses sistem berkas otomatisasi tidak diberikan: otoritas tulis tidak ada: {path}
@@ -5725,6 +5791,8 @@ axis	Y Axis	Sumbu Y
 	Install “{name}”, which asks for these permissions?	Instal “{name}”, yang meminta izin berikut?
 	ID: {id}	ID: {id}
 	Version: {version}	Versi: {version}
+	Install “{name}” in place of the plug-in with the same ID?	Instal “{name}” sebagai pengganti plug-in dengan ID yang sama?
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	File ini bukan plug-in yang sebelumnya diinstal dengan ID ini. File ini mendapatkan pengaturan dan cache yang disimpan untuk ID tersebut.
 	File SHA-256: {hash}	SHA-256 file: {hash}
 	Read the objects it is given	Membaca objek yang diberikan kepadanya
 	Change, add and delete objects in the document	Mengubah, menambah, dan menghapus objek dalam dokumen
@@ -5732,6 +5800,9 @@ axis	Y Axis	Sumbu Y
 	Change how the objects its effect is applied to are drawn	Mengubah cara objek yang diberi efeknya digambar
 	Write the document as a file in its own format	Menulis dokumen sebagai file dalam formatnya sendiri
 	Show its progress, see Cancel and write log lines	Menampilkan kemajuannya, mengenali pembatalan, dan menulis baris log
+	Keep settings of its own	Menyimpan pengaturannya sendiri
+	Keep a cache of its own, which you can clear	Menyimpan cache-nya sendiri, yang dapat Anda kosongkan
+	Clear Plug-in Cache	Kosongkan cache plug-in
 # Actions panel: action sets (#3712).
 	New Set…	Set baru…
 	New Set	Set baru
@@ -5777,6 +5848,9 @@ axis	Y Axis	Sumbu Y
 @plural	Result: {n}|Results: {n}	Hasil: {n}
 	Add to Symbols	Tambahkan ke simbol
 	Basic Shapes	Bentuk dasar
+	Button	Tombol
+	Panel	Panel
+	UI Frames	Bingkai UI
 	Open Symbol Library	Buka pustaka simbol
 	Save Symbol Library	Simpan pustaka simbol
 	Save Symbol Library…	Simpan pustaka simbol…
@@ -6113,6 +6187,8 @@ breakText	Glyphs	Glif
 	File + Data Set Name	File + nama set data
 	Data Set Name	Nama set data
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` harus `fileNumber`, `fileDataSetName`, atau `dataSetName`
+	Each data set saves over the same file, which keeps only the last data set.	Setiap set data disimpan menimpa file yang sama, sehingga hanya set data terakhir yang tersisa.
+@msg	save the document with Save As before Save and Close	simpan dokumen dengan Simpan sebagai sebelum Simpan dan tutup
 @msg	no free data set file name in destination folder	Tidak ada nama file set data yang tersedia di folder tujuan
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).
@@ -6232,9 +6308,20 @@ breakText	Glyphs	Glif
 	Reset Symbol Instance	Atur ulang instans simbol
 @msg	type must be static or dynamic, not {v}	type harus static atau dynamic, bukan {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` adalah simbol statis: setel dulu jenis simbolnya ke Dinamis
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	Hanya isian, goresan, opacity, dan blend jalur, jalur majemuk, atau teks yang dipilih dalam instans simbol yang dapat diubah
 @msg	path must be a list of child indices	path harus berupa daftar indeks anak
 @msg	no object at path {shown} in the symbol's art	tidak ada objek di jalur {shown} dalam karya seni simbol
 @msg	give fill, stroke, opacity and/or blend	berikan fill, stroke, opacity dan/atau blend
+@msg	{key} cannot be set on a guide	{key} tidak dapat diatur pada panduan
+@msg	{key} cannot be set on a blend	{key} tidak dapat diatur pada blend
+@msg	{key} cannot be set on an envelope	{key} tidak dapat diatur pada amplop
+@msg	{key} cannot be set on a gradient mesh	{key} tidak dapat diatur pada mesh gradien
+@msg	{key} cannot be set on a Repeat	{key} tidak dapat diatur pada perulangan
+@msg	{key} cannot be set on a placed document	{key} tidak dapat diatur pada dokumen yang ditempatkan
+@msg	{key} cannot be set on an Intertwine group	{key} tidak dapat diatur pada grup jalinan
+@msg	stroke cannot be set on a symbol instance	stroke tidak dapat diatur pada instans simbol
+@msg	fill on a symbol instance must be a solid color or none	fill pada instans simbol harus berupa warna solid atau none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} tidak dapat diatur pada gambar tanpa efek Konversi ke bentuk atau Kerangka objek
 @msg	pass newName, registration, exportType, nineSlice and/or type	berikan newName, registration, exportType, nineSlice dan/atau type
 	Text Flow	Alur teks
 	By Rows	Per baris
@@ -6264,6 +6351,7 @@ breakText	Glyphs	Glif
 	Create Swatch Legend	Buat Legenda Swatch
 	Create Swatch Legend…	Buat Legenda Swatch…
 	HEX	HEX
+	Help Bar	Bilah Bantuan
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	Alat Teks
 	Text Tweaker…	Penyetel Teks…
@@ -6329,3 +6417,30 @@ breakText	Glyphs	Glif
 # 3D Box add-on
 	3D Box	Kotak 3D
 	3D Box Tool	Alat Kotak 3D
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Buka Dengan
+	No importer plug-ins installed	Tidak ada plug-in impor yang terinstal
+	Read files you open in its format and make documents from them	Membaca file yang Anda buka dalam formatnya dan membuat dokumen darinya
+
+# Safe Mode
+	Safe Mode…	Mode aman…
+	Safe Mode	Mode aman
+	Help › Safe Mode…	Bantuan › Mode aman…
+	Enable on Re-launch	Aktifkan saat dijalankan berikutnya
+	The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it.	Peluncuran terakhir VectorCraft berhenti saat plug-in {name} sedang dimuat. Plug-in itu mungkin bukan penyebabnya.
+	Disable and Continue	Nonaktifkan dan lanjutkan
+	Start Normally	Mulai secara normal
+	Start in Safe Mode	Mulai dalam mode aman
+	VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.	VectorCraft dalam mode aman: tidak ada plug-in yang dimuat atau dijalankan sampai aplikasi dimulai secara normal.
+	Disabled plug-ins	Plug-in yang dinonaktifkan
+	No plug-ins are disabled.	Tidak ada plug-in yang dinonaktifkan.
+@msg	Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally	Mode aman aktif: plug-in tidak dimuat atau dijalankan sampai VectorCraft dimulai secara normal
+@msg	give `id` or `file` (see plugin.safeMode)	berikan `id` atau `file` (lihat plugin.safeMode)
+@msg	that plug-in isn't disabled (see plugin.safeMode)	plug-in itu tidak dinonaktifkan (lihat plugin.safeMode)
+@msg	Couldn't save the disabled plug-ins for the next launch	Plug-in yang dinonaktifkan tidak dapat disimpan untuk peluncuran berikutnya
+@msg	Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode	Perluas tampilan: efek plug-in dalam seleksi tidak dapat diperluas dalam mode aman
+
+# Align to Pixel Grid
+	Align to Pixel Grid	Sejajarkan ke grid piksel
+@msg	side is left or right, not `{s}`	side adalah left atau right, bukan `{s}`
