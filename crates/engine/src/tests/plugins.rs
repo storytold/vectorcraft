@@ -811,6 +811,133 @@ fn a_failed_store_write_of_a_module_without_permissions_keeps_the_stored_grant()
     run(&mut s, "plugin.remove", json!({"id": id}));
 }
 
+/// A module listing no permissions whose id's grant can't be removed from `grants.json` doesn't stay
+/// in the store, so the grant and the module it covers stay together. It does stay when the module
+/// before it can't be read back, and when the grants file can't be read and so approves nothing.
+#[test]
+fn a_grant_that_cannot_be_removed_keeps_the_stored_module() {
+    let folder = crate::tests_links::Folder::new("plugin-store-failed-forget");
+    let id = "test.engine.permissions.forgetfail";
+    let empty = json!({"objects": []});
+    let approved = asking(id, r#"["doc.read"]"#, &empty);
+    let plain = asking(id, "null", &empty);
+    let replace = json!({"dataBase64": vectorcraft_format::base64_encode(&plain), "replace": true});
+    let grants = folder.0.join("grants.json");
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&approved), "grant": ["doc.read"]}));
+    let file = s.stored_plugin_file(id).unwrap();
+    // An entry this version can't use is written back as it was read: `1e9` as `1000000000.0`, which
+    // makes the rewritten file larger than the 1 MiB that is read.
+    let entry = serde_json::from_slice::<Vec<Value>>(&std::fs::read(&grants).unwrap()).unwrap().remove(0);
+    let full = format!(r#"[{entry},{{"n":[{}]}}]"#, vec!["1e9"; 200_000].join(",")).into_bytes();
+    std::fs::write(&grants, &full).unwrap();
+
+    run(&mut s, "plugin.install", replace.clone());
+    assert_eq!(std::fs::read(&file).unwrap(), approved, "the store gets the module the grant covers back");
+    assert_eq!(std::fs::read(&grants).unwrap(), full);
+    assert!(vectorcraft_plugins::registry::granted(id).is_none(), "the process runs the module that lists nothing");
+
+    let oversized = vectorcraft_plugins::Limits::default().max_module_bytes as u64 + 1;
+    std::fs::File::options().write(true).open(&file).unwrap().set_len(oversized).unwrap();
+    run(&mut s, "plugin.install", replace.clone());
+    assert_eq!(std::fs::read(&file).unwrap(), plain, "a module that can't be read back can't be put back");
+
+    std::fs::write(&file, &approved).unwrap();
+    std::fs::write(&grants, b"not a list").unwrap();
+    run(&mut s, "plugin.install", replace);
+    assert_eq!(std::fs::read(&file).unwrap(), plain, "a grants file that can't be read approves nothing");
+
+    std::fs::remove_file(&grants).unwrap();
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// `plugin.remove` returns an error and keeps the plug-in when its grant can't be removed from
+/// `grants.json`; a second one tries again. A grants file that can't be read doesn't stop it.
+#[test]
+fn a_grant_that_cannot_be_removed_stops_plugin_remove() {
+    let folder = crate::tests_links::Folder::new("plugin-store-failed-remove");
+    let id = "test.engine.permissions.removefail";
+    let approved = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+    let approved_data = vectorcraft_format::base64_encode(&approved);
+    let grants = folder.0.join("grants.json");
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": approved_data, "grant": ["doc.read"]}));
+    let file = s.stored_plugin_file(id).unwrap();
+    let recorded = std::fs::read(&grants).unwrap();
+    // `1e9` is written back as `1000000000.0`, which makes the rewritten file larger than the 1 MiB that is read.
+    let entry = serde_json::from_slice::<Vec<Value>>(&recorded).unwrap().remove(0);
+    let full = format!(r#"[{entry},{{"n":[{}]}}]"#, vec!["1e9"; 200_000].join(",")).into_bytes();
+    std::fs::write(&grants, &full).unwrap();
+    let data = crate::store::plugin_data_dir(&folder.0, id);
+    std::fs::create_dir_all(&data).unwrap();
+    std::fs::write(data.join("settings.json"), b"{}").unwrap();
+
+    assert!(s.execute("plugin.remove", &json!({"id": id})).is_err());
+    assert!(vectorcraft_plugins::registry::get(id).is_some(), "the plug-in stays installed");
+    assert!(vectorcraft_plugins::registry::granted(id).is_some(), "it keeps its grant");
+    assert_eq!(std::fs::read(&file).unwrap(), approved, "the store keeps the module the grant covers");
+    assert_eq!(std::fs::read(&grants).unwrap(), full);
+    assert!(data.join("settings.json").is_file(), "it keeps its settings");
+
+    // Settings that can't be moved aside leave the grant recorded. A file at the aside path stops
+    // the move on Unix, and a file held open in the folder stops it on Windows.
+    std::fs::write(&grants, &recorded).unwrap();
+    let mut aside = data.clone().into_os_string();
+    aside.push(".removed");
+    let aside = std::path::PathBuf::from(aside);
+    std::fs::write(&aside, b"in the way").unwrap();
+    #[cfg(windows)]
+    let held = {
+        use std::os::windows::fs::OpenOptionsExt;
+        std::fs::File::options().read(true).share_mode(1).open(data.join("settings.json")).unwrap()
+    };
+    assert!(s.execute("plugin.remove", &json!({"id": id})).is_err());
+    #[cfg(windows)]
+    drop(held);
+    assert_eq!(std::fs::read(&grants).unwrap(), recorded, "the grant stays while the settings do");
+    assert!(vectorcraft_plugins::registry::get(id).is_some());
+    let _ = std::fs::remove_file(&aside);
+
+    run(&mut s, "plugin.remove", json!({"id": id}));
+    assert!(vectorcraft_plugins::registry::get(id).is_none());
+    assert!(!grants.exists(), "the second removal forgets the grant");
+
+    run(&mut s, "plugin.install", json!({"dataBase64": approved_data, "grant": ["doc.read"]}));
+    std::fs::write(&grants, b"not a list").unwrap();
+    run(&mut s, "plugin.remove", json!({"id": id}));
+    assert!(vectorcraft_plugins::registry::get(id).is_none(), "a grants file that can't be read approves nothing");
+    assert!(!std::path::Path::new(&file).exists());
+}
+
+/// Windows keeps a file another program holds open without delete sharing, so the last grant can't
+/// be removed by deleting `grants.json`.
+#[cfg(windows)]
+#[test]
+fn a_grants_file_that_cannot_be_deleted_keeps_the_stored_module() {
+    use std::os::windows::fs::OpenOptionsExt;
+    const FILE_SHARE_READ: u32 = 1;
+    let folder = crate::tests_links::Folder::new("plugin-store-held-grants");
+    let id = "test.engine.permissions.heldgrants";
+    let empty = json!({"objects": []});
+    let approved = asking(id, r#"["doc.read"]"#, &empty);
+    let plain = asking(id, "null", &empty);
+    let grants = folder.0.join("grants.json");
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&approved), "grant": ["doc.read"]}));
+    let file = s.stored_plugin_file(id).unwrap();
+
+    let held = std::fs::File::options().read(true).share_mode(FILE_SHARE_READ).open(&grants).unwrap();
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&plain), "replace": true}));
+    drop(held);
+    assert_eq!(std::fs::read(&file).unwrap(), approved, "the store gets the module the grant covers back");
+    assert!(grants.exists());
+
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
 /// A plug-in folder that leaves a module listing no permissions under an id forgets the process's
 /// grant for it, unless a later file in the folder leaves a granted module there. A grant kept in
 /// the plug-in store stays, with the stored module it covers.
@@ -1893,7 +2020,7 @@ fn plugin_storage_is_capped_and_survives_a_damaged_settings_file() {
     assert_eq!(st.set_cache_entry("tile", b"again", m), Err(StorageError::Unavailable));
     assert!(!dir.exists());
     assert_eq!(upper.setting("k0", m).unwrap(), Some(b"upper".to_vec()));
-    s.remove_plugin_storage(upper_id).unwrap();
+    s.remove_plugin_storage(upper_id, || true).unwrap();
 }
 
 /// Files larger than the storage reads are not read: a settings file larger than 1 MiB, although

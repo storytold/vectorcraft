@@ -608,9 +608,12 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
         // This module takes the id over, so nothing the user approved for the id applies any more.
         registry::revoke(&m.id);
         // When the write failed, the old stored module stays in the folder and needs its grant at
-        // the next launch.
-        if stored {
-            s.store_grant(&m.id, None);
+        // the next launch. A grant that can't be removed still approves the old bytes, so the store
+        // gets the module it held back, when that could be read. A grants file that can't be read
+        // approves nothing, and the new module stays.
+        if stored && !s.store_grant(&m.id, None) && previous.is_ok() && s.holds_plugin_grant(&m.id) {
+            s.put_back_plugin(plugin.id(), previous.ok().flatten().as_deref());
+            stored = false;
         }
     }
     // It gets the settings and cache kept for its id.
@@ -822,19 +825,24 @@ fn remove(s: &mut Session, p: &Value) -> Result<Value> {
     let installed = registry::get(id).is_some();
     // Settings and cache the store keeps for an id that isn't installed are deleted too.
     let stored = !installed && vectorcraft_plugins::manifest::valid_id(id) && s.has_plugin_storage(id);
-    // Its settings and cache go first: when they can't be moved aside, the plug-in stays installed,
-    // as it was, and a second `plugin.remove` tries again.
-    if (installed || stored)
-        && let Err(e) = s.remove_plugin_storage(id)
-    {
+    // Installed again, it asks again. A grant that can't be removed still approves the module; a
+    // grants file that can't be read approves nothing and doesn't stop the removal.
+    let forget = || s.store_grant(id, None) || !s.holds_plugin_grant(id);
+    // Its settings and cache are moved aside and its grant removed before anything is deleted: when
+    // either can't be done, the plug-in stays installed, as it was, and a second `plugin.remove`
+    // tries again.
+    let failed = if installed || stored {
+        s.remove_plugin_storage(id, forget).err().map(|e| e.to_string())
+    } else {
+        (!forget()).then(|| crate::store::GRANT_NOT_REMOVED.to_string())
+    };
+    if let Some(e) = failed {
         if installed {
             s.attach_plugin_storage(id);
         }
-        return Err(EngineError::Other(e.to_string()));
+        return Err(EngineError::Other(e));
     }
-    // Installed again, it asks again.
     registry::revoke(id);
-    s.store_grant(id, None);
     s.unstore_plugin(id);
     if !stored && (!installed || !registry::remove(id)) {
         return Err(err(vectorcraft_plugins::Error::NotFound(id.into())));
@@ -913,7 +921,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Remove Plug-in",
             [],
             None,
-            "{id} uninstall a plug-in (its live effects then leave the geometry as it is) and delete the settings and cache it kept (when their folder can't be moved aside, the command fails and the plug-in stays installed); for an id that isn't installed, deletes the settings and cache the plug-in store still keeps for it → {removed}",
+            "{id} uninstall a plug-in (its live effects then leave the geometry as it is) and delete the settings and cache it kept (when their folder can't be moved aside, or its grant can't be removed from the plug-in store, the command fails and the plug-in stays installed); for an id that isn't installed, deletes the settings and cache the plug-in store still keeps for it → {removed}",
             always,
             remove
         ),

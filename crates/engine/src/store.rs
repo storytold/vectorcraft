@@ -61,6 +61,8 @@ pub const DISABLED_FILE: &str = "disabled.json";
 pub const DISABLED_LOCK: &str = "disabled.lock";
 /// The file in the plug-in store that holds the permissions the user granted.
 const GRANTS_FILE: &str = "grants.json";
+/// The error of a `plugin.remove` that can't remove the plug-in's grant from [`GRANTS_FILE`].
+pub(crate) const GRANT_NOT_REMOVED: &str = "the plug-in's grant can't be removed from the plug-in store";
 /// The largest grants file read.
 const MAX_GRANTS_FILE: u64 = 1 << 20;
 /// The folder in the plug-in store that holds each plug-in's settings and cache.
@@ -167,13 +169,15 @@ fn lock_disabled(_: &Path) -> Option<std::fs::File> {
     None
 }
 
-/// Remove `dir/file`; a file that isn't there is what was wanted.
-fn take(dir: &Path, file: &str) {
+/// Remove `dir/file` → whether it is gone; a file that isn't there is what was wanted.
+fn take(dir: &Path, file: &str) -> bool {
     let path = dir.join(file);
-    if let Err(e) = std::fs::remove_file(&path)
-        && e.kind() != std::io::ErrorKind::NotFound
-    {
-        log::warn!("can't remove {}: {e}", path.display());
+    match std::fs::remove_file(&path) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+            log::warn!("can't remove {}: {e}", path.display());
+            false
+        }
+        _ => true,
     }
 }
 
@@ -470,8 +474,7 @@ impl Session {
         let mut entries: Vec<serde_json::Value> = file.grants.into_values().filter_map(|g| serde_json::to_value(g).ok()).collect();
         entries.extend(file.other);
         if entries.is_empty() {
-            take(dir, GRANTS_FILE);
-            return true;
+            return take(dir, GRANTS_FILE);
         }
         // The file is read back only up to its cap: written compactly when pretty-printed is larger,
         // and not at all when that is too.
@@ -483,6 +486,12 @@ impl Session {
                 false
             }
         }
+    }
+
+    /// Whether the store holds a grant this version can use for the plug-in `id` (`false` without a
+    /// folder, and when the grants file can't be read).
+    pub(crate) fn holds_plugin_grant(&self, id: &str) -> bool {
+        self.plugin_dir.as_deref().is_some_and(|dir| stored_grants(dir).contains_key(id))
     }
 
     /// Remove the plug-in `id` from the store.
@@ -510,10 +519,15 @@ impl Session {
     /// Delete the settings and cache of plug-in `id` from the store, and stop keeping any for it.
     /// The folder is first renamed out of the way (`<folder>.removed`), and that fails, leaving it
     /// as it was, when the rename does; what the deletion then leaves stays under that name, with a
-    /// log record, and is deleted at the plug-in's next removal.
-    pub(crate) fn remove_plugin_storage(&self, id: &str) -> Result<(), StorageError> {
+    /// log record, and is deleted at the plug-in's next removal. `forget` runs once the folder is out
+    /// of the way, before anything is deleted: when it returns `false`, the folder is renamed back
+    /// and this fails.
+    pub(crate) fn remove_plugin_storage(&self, id: &str, forget: impl FnOnce() -> bool) -> Result<(), StorageError> {
+        let not_forgotten = || StorageError::Io(GRANT_NOT_REMOVED.to_string());
         vectorcraft_plugins::registry::set_storage(id, None);
-        let Some(dir) = &self.plugin_dir else { return Ok(()) };
+        let Some(dir) = &self.plugin_dir else {
+            return if forget() { Ok(()) } else { Err(not_forgotten()) };
+        };
         let _held = PLUGIN_DATA_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let path = plugin_data_dir(dir, id);
         // Every storage handed out for the folder, including those runs still hold, is closed once
@@ -528,6 +542,9 @@ impl Session {
         let data = dir.join(PLUGIN_DATA_DIR);
         if is_link(&data) {
             log::warn!("{} is a link: the plug-in settings and cache it leads to are left", data.display());
+            if !forget() {
+                return Err(not_forgotten());
+            }
             close();
             return Ok(());
         }
@@ -539,6 +556,14 @@ impl Session {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(e) => return Err(StorageError::Io(format!("{}: {e}", path.display()))),
             Ok(()) => {}
+        }
+        if !forget() {
+            if std::fs::symlink_metadata(&aside).is_ok()
+                && let Err(e) = std::fs::rename(&aside, &path)
+            {
+                log::warn!("can't move {} back: {e}", aside.display());
+            }
+            return Err(not_forgotten());
         }
         close();
         if std::fs::symlink_metadata(&aside).is_ok()

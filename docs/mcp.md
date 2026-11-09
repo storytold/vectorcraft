@@ -6570,7 +6570,8 @@ an error naming the permissions needed. The grant is kept with the module's hash
 same bytes install again without `grant`, and a module with other bytes has `needsApproval: true` and needs a new
 `grant` even when it lists the same permissions. `plugin.install` does not check that a person approved `grant`: it
 trusts the client that sends it. `plugin.remove` forgets the grant, and so does installing a module that lists no
-permissions under that id: the earlier bytes then need a new `grant`. A
+permissions under that id: the earlier bytes then need a new `grant`. When `plugin.remove` can't remove the grant from
+the plug-in store, it returns an error and the plug-in stays installed. A
 filter without `doc.write` or `state` that returns output needing them gets an error and the document is unchanged.
 A plug-in of API level 2 (`api: 2` in its entry) that lists `progress` may report its progress, see Cancel and write
 log lines: `notifications/cancelled` makes its `vc_cancelled` return 1, and its log lines go to the server's log
