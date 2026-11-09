@@ -109,6 +109,22 @@ fn a_journal_with_a_key_no_longer_read_still_replays() {
     assert!(s.execute("object.move", &json!({"dx": 5, "dyy": 5})).is_err());
 }
 
+/// `Session::replay` still runs an export with an option that is no longer read, and a preset
+/// file that holds one still loads and exports. `Session::execute` refuses the same options.
+#[test]
+fn an_export_step_or_preset_with_a_key_no_longer_read_still_runs() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let old = json!({"format": "pdf", "noSuchOption": true, "marks": {"useDocumentBleed": true}});
+    assert!(check_params("document.export", &old).is_err());
+    assert!(s.execute("document.export", &old).is_err());
+    s.replay("document.export", &old).unwrap();
+    let file = json!({"format": "vcpdfpresets", "presets": [{"name": "Old", "settings": {"standard": "none", "noLongerRead": 1, "marks": {"retired": true}}}]});
+    s.execute("pdf.preset.import", &json!({"data": file.to_string()})).unwrap();
+    check_params("document.export", &json!({"format": "pdf", "preset": "Old"})).unwrap();
+    s.execute("document.export", &json!({"format": "pdf", "preset": "Old"})).unwrap();
+}
+
 /// So do an effect's own parameters (#1592): a journal or a file with a key the effect doesn't
 /// take, or a value of another type, replays and opens; the effect reads what it knows, clamped.
 #[test]

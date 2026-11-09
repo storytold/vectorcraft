@@ -173,6 +173,10 @@
 	Anti-Alias	Glätten
 	Anti-alias Rasters	Pixelbilder glätten
 	Anti-aliased Artwork	Geglättete Grafik
+	Anti-aliasing Method	Glättungsmethode
+antiAlias	Sharp	Scharf
+	Crisp	Klar
+	Strong	Stark
 	Anti-aliasing:	Glättung:
 	Any Kind	Beliebige Art
 	Font Technology	Schrifttechnologie
@@ -4024,6 +4028,7 @@ theme	Appearance	Erscheinungsbild
 @msg	Targa files are RGB: colorModel rgb	Targa-Dateien sind RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Textumfluss: Wählen Sie ein Umflussobjekt aus
 @msg	This shortcut file is in a form VectorCraft can't read.	Diese Tastaturbefehlsdatei liegt in einem Format vor, das VectorCraft nicht lesen kann.
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` muss "none", "sharp", "crisp" oder "strong" sein
 @msg	`aspect` must be a number (%)	`aspect` muss eine Zahl sein (%)
 @msg	`at` must be [x, y]	`at` muss [x, y] sein
 @msg	`color` must be a colour	`color` muss eine Farbe sein
@@ -5342,6 +5347,11 @@ effect	Soft	Weich
 	Snap to Perpendicular	An Senkrechter ausrichten
 @msg	unknown snap option `{key}` (use {options})	unbekannte Einrastoption `{key}` (möglich: {options})
 	Gap Length:	Lückenlänge:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Der Modus „Flaches Logo“ verwendet keepColors nicht: Er zeichnet die in logoColors genannten Farben nach oder die Farben, die er findet.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Nichts wurde nachgezeichnet: Keine der beim Nachzeichnen gefundenen Farben entspricht keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Nichts wurde nachgezeichnet: „Farbe ignorieren“ lässt jeden Bereich der in keepColors aufgeführten Farben aus.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	Nichts wurde nachgezeichnet: Die Farben, die keepColors entsprechen, ergeben keine Pfade.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: Keine der beim Nachzeichnen gefundenen Farben entspricht {c}, daher wird davon nichts nachgezeichnet.
 @msg	`colorGroup` needs `library: "document"`	`colorGroup` erfordert `library: "document"`
 @msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` erfordert `palette: "documentLibrary"`
 @msg	`colorGroup` needs `mode: "color"`	`colorGroup` erfordert `mode: "color"`
@@ -5491,6 +5501,14 @@ axis	Y Axis	Y-Achse
 @msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` und `allowHeavy` wirken nur in einer mit --allow-plugin-grants gestarteten Sitzung: Genehmigen Sie das Plug-in in der Desktop-App
 @msg	Only the person at the keyboard can approve installing a plug-in	Nur die Person an der Tastatur kann die Installation eines Plug-ins genehmigen
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	„{name}“ wurde `{p}` nicht gewährt, das seine Ausgabe braucht: Es wurde nichts geändert
+@msg	a heavy filter runs in the background, so it can't declare `commands`	ein schwerer Filter läuft im Hintergrund und kann daher keine `commands` deklarieren
+@msg	at most {MAX_COMMANDS} `commands`	höchstens {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	der Befehl {name} ist doppelt deklariert
+@msg	command {name}: `label` must be 1-64 printable characters	Befehl {name}: `label` muss 1-64 druckbare Zeichen haben
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	Befehl {name}: Verwenden Sie eine ID aus 1-{MAX_COMMAND_ID} Zeichen aus a-z 0-9 _, die mit einem Buchstaben beginnt
+@msg	command {name}: {e}	Befehl {name}: {e}
+@msg	only a filter or a live effect declares `commands`	nur ein Filter oder ein Live-Effekt deklariert `commands`
+@msg	“{name}” › {label}: {e}	„{name}“ › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	das Modul hat nicht den SHA-256-Wert aus `hash`: Es wurde nichts installiert
 # Actions panel: action sets (#3712).
 	New Set…	Neuer Satz…
@@ -6076,6 +6094,7 @@ breakText	Glyphs	Glyphen
 	Create Swatch Legend	Farbfeldlegende erstellen
 	Create Swatch Legend…	Farbfeldlegende erstellen…
 	HEX	HEX
+	Help Bar	Hilfeleiste
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	Textwerkzeuge
 	Text Tweaker…	Text-Tweaker…

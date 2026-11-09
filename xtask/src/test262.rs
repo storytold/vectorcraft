@@ -2,7 +2,8 @@
 //! BSD-3-Clause) at a pinned commit, fetched as GitHub's archive of that commit, checked against
 //! its SHA-256 and size, and unpacked into `corpus/test262/` (gitignored, never committed). It then
 //! runs `vectorcraft-js`'s `test262` tests, which parse the ES5 parse subset, run the ES5
-//! `test/language` tests that need only the interpreter's built-ins, and print each one's counts.
+//! `test/language` tests that need only the interpreter's built-ins, run the `test/built-ins` tests
+//! for `String`, `Number`, `RegExp` and `Date`, and print each one's counts.
 //!
 //! Moving the pin: change [`COMMIT`], run the command once with the new commit to see the
 //! archive's SHA-256 in the error, check the archive, and update [`SHA256`].

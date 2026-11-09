@@ -993,6 +993,10 @@ digits	Malayalam	マラヤーラム数字
 	Anti-alias	アンチエイリアス
 	Anti-alias Rasters	ラスターをアンチエイリアス
 	Anti-aliased Artwork	アートワークをアンチエイリアス
+	Anti-aliasing Method	アンチエイリアスの方式
+antiAlias	Sharp	シャープ
+	Crisp	くっきり
+	Strong	太め
 	Anti-aliasing:	アンチエイリアス:
 	Appearance Item	アピアランス項目
 	Appearance Panel	アピアランスパネル
@@ -4282,6 +4286,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	no point {i} (the gradient has {_1})	ポイント {i} はありません (このグラデーションのポイントは {_1} 個です)
 @msg	no segment {segment} on line {line}	ライン {line} にセグメント {segment} はありません
 @msg	unknown freeform mode `{m}` (points, lines)	`{m}` は不明なフリーフォームのモードです (points、lines)
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` には "none"、"sharp"、"crisp" または "strong" を指定してください
 @msg	`aspect` must be a number (%)	`aspect` には数値 (%) を指定してください
 @msg	`gradient` must be an object	`gradient` にはオブジェクトを指定してください
 @msg	`groupColors` must be an array	`groupColors` には配列を指定してください
@@ -5419,6 +5424,11 @@ lighting	Light	ライト
 	Snap to Perpendicular	垂線にスナップ
 @msg	unknown snap option `{key}` (use {options})	不明なスナップオプション `{key}` ({options} を使用してください)
 	Gap Length:	ギャップの長さ:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	フラットロゴモードは keepColors を使いません。logoColors で指定したカラー、または検出したカラーをトレースします。
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	何もトレースされませんでした。トレースで検出したカラーのどれも keepColors ({_1}) に一致しません。
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	何もトレースされませんでした。「カラーを無視」が keepColors に指定したカラーの領域をすべて除外します。
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	何もトレースされませんでした。keepColors に一致するカラーからパスができません。
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: トレースで検出したカラーのどれも {c} に一致しないため、このカラーは何もトレースされません。
 @msg	`colorGroup` needs `library: "document"`	`colorGroup` には `library: "document"` が必要です
 @msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` には `palette: "documentLibrary"` が必要です
 @msg	`colorGroup` needs `mode: "color"`	`colorGroup` には `mode: "color"` が必要です
@@ -5590,6 +5600,14 @@ axis	Y Axis	Y 軸
 @msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` と `allowHeavy` は --allow-plugin-grants を付けて開始したセッションでのみ有効です。デスクトップ アプリでプラグインを承認してください
 @msg	Only the person at the keyboard can approve installing a plug-in	プラグインのインストールを承認できるのはキーボードの前にいる人だけです
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	「{name}」には出力に必要な `{p}` が付与されていません。何も変更されませんでした
+@msg	a heavy filter runs in the background, so it can't declare `commands`	重いフィルターはバックグラウンドで実行されるため、`commands` を宣言できません
+@msg	at most {MAX_COMMANDS} `commands`	`commands` は最大 {MAX_COMMANDS} 個です
+@msg	command {name} is declared twice	コマンド {name} が 2 回宣言されています
+@msg	command {name}: `label` must be 1-64 printable characters	コマンド {name}: `label` は印刷可能な 1-64 文字にしてください
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	コマンド {name}: a-z 0-9 _ からなり英字で始まる 1-{MAX_COMMAND_ID} 文字の ID を使用してください
+@msg	command {name}: {e}	コマンド {name}: {e}
+@msg	only a filter or a live effect declares `commands`	`commands` を宣言できるのはフィルターかライブ効果だけです
+@msg	“{name}” › {label}: {e}	「{name}」 › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	モジュールの SHA-256 が `hash` の値と一致しません。何もインストールされませんでした
 # Actions panel: action sets (#3712).
 	New Set…	新規セット…
@@ -6175,6 +6193,7 @@ breakText	Glyphs	字形
 	Create Swatch Legend	スウォッチの凡例を作成
 	Create Swatch Legend…	スウォッチの凡例を作成…
 	HEX	HEX
+	Help Bar	ヘルプバー
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	テキストツール
 	Text Tweaker…	テキストの調整…

@@ -122,6 +122,12 @@ pub(super) fn warp_style(n: i64) -> Option<&'static str> {
     id.strip_prefix("warp.")
 }
 
+/// The number `DeformStyle` gives warp style `style` (`arc`, `arcLower`, …), from 1.
+pub(crate) fn warp_number(style: &str) -> Option<i64> {
+    let at = WARPS.iter().position(|id| id.strip_prefix("warp.") == Some(style))?;
+    i64::try_from(at + 1).ok()
+}
+
 /// The Effect › Pathfinder effects by the `Command` number of their filter. `Command` 0 is Add
 /// (https://community.adobe.com/questions-652/liveeffect-xml-effect-is-added-under-the-object-795137);
 /// the numbers 1 to 11 are VectorCraft's own reader rules, learned from saved files. Trap (12) isn't
@@ -326,9 +332,9 @@ impl Default for Filter {
 const MAX_FILTERS: usize = 4096;
 
 /// Most entries read from a style list.
-const MAX_LISTED: usize = 4096;
+pub(crate) const MAX_LISTED: usize = 4096;
 /// The longest style name read from a style list, in bytes.
-const MAX_LISTED_NAME: usize = 1024;
+pub(crate) const MAX_LISTED_NAME: usize = 1024;
 
 /// The style list (`%AI9_BeginArtStyleList`, between its markers): one literal string per style,
 /// the Graphic Styles panel's order. Each name is its string's bytes, escapes undone; other tokens,

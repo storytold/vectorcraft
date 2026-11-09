@@ -6,7 +6,9 @@
 //! declared parameter (fields named after them; `__plugin` is the plug-in id) with a live
 //! Preview, and OK keeps the run as one undo step (`plugin.run`). A filter without parameters runs
 //! at once. A heavy filter (its manifest's `budget`) has no Preview, since a run may take minutes:
-//! it runs in the background ([`crate::plugin_runs`]). Exporters are formats of File › Export ›
+//! it runs in the background ([`crate::plugin_runs`]). A filter or live effect with commands of
+//! its own is a submenu named after it, holding its item and then its commands; a command with
+//! parameters opens the same dialog for them ([`open_command`]). Exporters are formats of File › Export ›
 //! Export As; one with parameters opens dialog `pluginExport` once the file is picked, and its
 //! Export button writes the file.
 //!
@@ -18,7 +20,7 @@ use std::sync::Arc;
 
 use serde_json::{Map, Value, json};
 use vectorcraft_engine::cmd::plugin::InstallApproval;
-use vectorcraft_plugins::{Budget, Kind, Manifest, Plugin, registry};
+use vectorcraft_plugins::{Budget, Kind, Manifest, Plugin, permissions, registry};
 
 use super::{DialogAction, DialogSpec, form};
 use crate::VectorcraftApp;
@@ -44,12 +46,30 @@ fn label(name: &str, has_params: bool) -> &'static str {
     registry::intern(&format!("{name}{dots}"))
 }
 
-/// Object › Plug-ins: the installed object filters, then Install Plug-in… and Reload Plug-ins.
+/// A filter or live effect `plugin`'s item `own`, as the menu lists it: alone, or for a plug-in
+/// with commands of its own, a submenu named after it holding `own` and then its commands. Each
+/// command runs its command id (`plugin.<id>.<command>`), with an ellipsis when it has parameters,
+/// whose dialog [`open_command`] opens.
+fn with_commands(plugin: &Plugin, own: Item) -> Item {
+    let m = plugin.manifest();
+    if m.commands.is_empty() {
+        return own;
+    }
+    let mut items = vec![own, Item::Sep];
+    items.extend(m.commands.iter().map(|c| {
+        let id = registry::intern(&vectorcraft_engine::cmd::plugin::command_id(&m.id, &c.id));
+        Item::Cmd(label(&c.shown_label(), !c.params.is_empty()), id, Value::Null)
+    }));
+    Item::Sub(registry::intern(&permissions::display_text(m.name.trim(), permissions::MAX_SHOWN_NAME)), items)
+}
+
+/// Object › Plug-ins: the installed object filters (each with its commands, if it has any), then
+/// Install Plug-in… and Reload Plug-ins.
 pub fn object_menu() -> Vec<Item> {
     let mut items: Vec<Item> = registry::list()
         .iter()
         .filter(|p| p.manifest().kind == Kind::Filter)
-        .map(|p| Item::Cmd(label(&p.manifest().name, !p.manifest().params.is_empty()), "plugin.dialog", json!({ "id": p.id() })))
+        .map(|p| with_commands(p, Item::Cmd(label(&p.manifest().name, !p.manifest().params.is_empty()), "plugin.dialog", json!({ "id": p.id() }))))
         .collect();
     if items.is_empty() {
         items.push(Item::Header(NO_FILTERS));
@@ -62,14 +82,20 @@ pub fn object_menu() -> Vec<Item> {
     items
 }
 
-/// Effect › Plug-ins: the live-effect plug-ins (`None` while none is installed). Effects without
-/// options apply at once, as built-in ones do.
+/// Effect › Plug-ins: the live-effect plug-ins, each with its commands if it has any (`None`
+/// while none is installed). Effects without options apply at once, as built-in ones do.
 pub fn effect_menu() -> Option<Item> {
     let items: Vec<Item> = vectorcraft_effects::plugin_effects()
         .into_iter()
-        .map(|e| match e.defaults.as_object().is_some_and(|o| o.is_empty()) {
-            true => Item::Cmd(e.label, "effect.apply", json!({ "effect": e.id })),
-            false => Item::Cmd(e.label, "effect.dialog", json!({ "effect": e.id })),
+        .map(|e| {
+            let own = match e.defaults.as_object().is_some_and(|o| o.is_empty()) {
+                true => Item::Cmd(e.label, "effect.apply", json!({ "effect": e.id })),
+                false => Item::Cmd(e.label, "effect.dialog", json!({ "effect": e.id })),
+            };
+            match vectorcraft_plugins::effect::plugin_id(e.id).and_then(registry::get) {
+                Some(plugin) => with_commands(&plugin, own),
+                None => own,
+            }
         })
         .collect();
     (!items.is_empty()).then_some(Item::Sub("Plug-ins", items))
@@ -119,8 +145,44 @@ fn described(ui: &mut egui::Ui, d: &Dialog) -> Option<Arc<Plugin>> {
     Some(plugin)
 }
 
+/// Opens the dialog of plug-in command `id` (`plugin.<plug-in id>.<command id>`), given no params,
+/// when it has parameters and a document is open: its fields at their defaults (`__command` is the
+/// command id) with a live Preview, and OK keeps the run as one undo step. False for any other
+/// command, which then runs as it was given.
+pub fn open_command(app: &mut VectorcraftApp, id: &str) -> bool {
+    let Some((plugin, c)) = vectorcraft_engine::cmd::plugin::command_of(id) else { return false };
+    if c.params.is_empty() || app.session.active().is_none() {
+        return false;
+    }
+    let mut fields = fields_for(&plugin.manifest().for_command(&c));
+    fields.insert("__command".into(), json!(id));
+    fields.insert("__label".into(), json!(c.shown_label()));
+    fields.insert("preview".into(), json!(true));
+    app.ui.dialog = Some(Dialog { kind: KIND.into(), fields });
+    true
+}
+
+/// The plug-in command dialog `d` is for (`__command`), and the manifest it runs with; `None` for
+/// a filter's own dialog.
+fn command_of(d: &Dialog) -> Option<Manifest> {
+    let (plugin, c) = vectorcraft_engine::cmd::plugin::command_of(&d.str("__command"))?;
+    Some(plugin.manifest().for_command(&c))
+}
+
+/// The command dialog `d` runs: its plug-in command, or `plugin.run`.
+fn command(d: &Dialog) -> String {
+    match d.str("__command") {
+        c if c.is_empty() => CMD.to_string(),
+        c => c,
+    }
+}
+
+/// The params of the command dialog `d` runs ([`command`]).
 fn params(d: &Dialog) -> Value {
-    json!({"id": d.str("__plugin"), "params": form::params(d)})
+    match d.str("__command").is_empty() {
+        true => json!({"id": d.str("__plugin"), "params": form::params(d)}),
+        false => json!({"params": form::params(d)}),
+    }
 }
 
 /// Runs filter `plugin` with `plugin.run`'s params `p`: at once, or in the background when it is
@@ -132,15 +194,20 @@ fn run(app: &mut VectorcraftApp, plugin: &Plugin, p: Value) -> Result<Value, Str
     }
 }
 
-/// The plug-in's description and fields, then the live Preview; a heavy filter has a note instead
-/// that it runs in the background, since a run may take minutes.
+/// The plug-in's description and fields (a command's: its own parameters), then the live
+/// Preview; a heavy filter has a note instead that it runs in the background, since a run may take
+/// minutes. A command dialog closes once the plug-in no longer has the command.
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let Some(plugin) = described(ui, d) else { return true };
-    form::schema_fields(app, ui, d, plugin.manifest());
+    let run_with = command_of(d);
+    if run_with.is_none() && !d.str("__command").is_empty() {
+        return true;
+    }
+    form::schema_fields(app, ui, d, run_with.as_ref().unwrap_or(plugin.manifest()));
     match plugin.manifest().budget {
         Budget::Light => {
             let (label, p) = (d.str("__label"), params(d));
-            form::preview(app, ui, d, &label, CMD, p);
+            form::preview(app, ui, d, &label, &command(d), p);
         }
         // No Preview: each run may take minutes.
         Budget::Heavy => {
@@ -163,7 +230,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
             }
             r
         }
-        _ => form::commit_preview(app, CMD, params(d)),
+        _ => form::commit_preview(app, &command(d), params(d)),
     }
 }
 

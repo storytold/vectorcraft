@@ -2566,7 +2566,7 @@ fn each_filter_plugin_takes_a_shortcut_of_its_own() {
     let lines: Vec<&str> = text.lines().filter(|l| l.starts_with("Object › Plug-ins › Same Name")).collect();
     assert_eq!(lines.len(), 2, "{text}");
     assert_eq!(lines[0], "Object › Plug-ins › Same Name\t");
-    assert!(lines[1].starts_with("Object › Plug-ins › Same Name…\t") && lines[1].ends_with("+Alt+Shift+F7"), "{}", lines[1]);
+    assert_eq!(lines[1], format!("Object › Plug-ins › Same Name…\t{}", crate::menus::pretty_shortcut(chord)));
     // A chord an Effect menu item holds is a conflict.
     crate::keymap::set_override(&mut app.ui.shortcut_overrides, "effect:distort.transform", "Cmd+Alt+Shift+F8");
     let conflicts = crate::shortcut_editor::conflicts_with(&app.ui.shortcut_overrides, "Cmd+Alt+Shift+F8", &key_one);

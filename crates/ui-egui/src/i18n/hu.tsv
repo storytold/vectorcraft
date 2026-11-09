@@ -280,6 +280,10 @@
 	Anti-Alias	Élsimítás
 	Anti-alias Rasters	Raszterek élsimítása
 	Anti-aliased Artwork	Élsimított grafika
+	Anti-aliasing Method	Élsimítási módszer
+antiAlias	Sharp	Éles
+	Crisp	Tiszta
+	Strong	Erős
 	Anti-aliasing:	Élsimítás:
 	Any except extracting pages	Bármi, kivéve az oldalak kinyerését
 	Any Kind	Bármilyen típus
@@ -4639,6 +4643,7 @@ imageTrace	Outline	Körvonal
 
 # Status and error messages
 @msg	"{0}" is not a colour: write it as #rrggbb	nem szín: "{0}"; #rrggbb alakban add meg
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias`: "none", "sharp", "crisp" vagy "strong" kell
 @msg	`aspect` must be a number (%)	`aspect`: szám kell (%)
 @msg	`at` must be [x, y]	`at`: [x, y] kell
 @msg	`color` must be a colour	`color`: szín kell
@@ -5746,6 +5751,11 @@ imageTrace	Outline	Körvonal
 	Snap to Perpendicular	Illesztés merőlegesre
 @msg	unknown snap option `{key}` (use {options})	ismeretlen illesztési beállítás: `{key}` (használható: {options})
 	Gap Length:	Rés hossza:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Az Egyszínű logó mód nem használja a keepColors beállítást: a logoColors beállításban megadott színeket vagy az általa talált színeket vektorizálja.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Semmi sem lett vektorizálva: a vektorizálás által talált színek egyike sem felel meg a keepColors beállításnak ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Semmi sem lett vektorizálva: a Szín figyelmen kívül hagyása kihagyja a keepColors beállításban felsorolt színek minden területét.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	Semmi sem lett vektorizálva: a keepColors beállításnak megfelelő színekből nem jön létre útvonal.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: a vektorizálás által talált színek egyike sem felel meg ennek: {c}, így belőle semmi sem lesz vektorizálva.
 @msg	`colorGroup` needs `library: "document"`	a `colorGroup` használatához `library: "document"` szükséges
 @msg	`colorGroup` needs `palette: "documentLibrary"`	a `colorGroup` használatához `palette: "documentLibrary"` szükséges
 @msg	`colorGroup` needs `mode: "color"`	a `colorGroup` használatához `mode: "color"` szükséges
@@ -5892,6 +5902,14 @@ axis	Y Axis	Y tengely
 @msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	a `grant` és az `allowHeavy` csak --allow-plugin-grants kapcsolóval indított munkamenetben érvényes: hagyd jóvá a bővítményt az asztali alkalmazásban
 @msg	Only the person at the keyboard can approve installing a plug-in	Bővítmény telepítését csak a billentyűzetnél ülő személy hagyhatja jóvá
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	a(z) „{name}” nem kapta meg a(z) `{p}` engedélyt, amelyre a kimenetének szüksége van: semmi sem változott
+@msg	a heavy filter runs in the background, so it can't declare `commands`	a nehéz szűrő a háttérben fut, ezért nem deklarálhat `commands` értéket
+@msg	at most {MAX_COMMANDS} `commands`	legfeljebb {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	a(z) {name} parancs kétszer van deklarálva
+@msg	command {name}: `label` must be 1-64 printable characters	{name} parancs: a `label` 1-64 nyomtatható karakter legyen
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	{name} parancs: használj 1-{MAX_COMMAND_ID} karakteres, a-z 0-9 _ karakterekből álló, betűvel kezdődő azonosítót
+@msg	command {name}: {e}	{name} parancs: {e}
+@msg	only a filter or a live effect declares `commands`	`commands` értéket csak szűrő vagy élő effektus deklarálhat
+@msg	“{name}” › {label}: {e}	„{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	a modul SHA-256 értéke nem az, amit a `hash` megad: semmi sem lett telepítve
 # Actions panel: action sets (#3712).
 	New Set…	Új készlet…
@@ -6474,6 +6492,7 @@ breakText	Glyphs	Glifák
 	Create Swatch Legend	Színmintajelmagyarázat létrehozása
 	Create Swatch Legend…	Színmintajelmagyarázat létrehozása…
 	HEX	HEX
+	Help Bar	Súgósáv
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	Szövegeszközök
 	Text Tweaker…	Szöveghangoló…

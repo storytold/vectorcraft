@@ -6384,6 +6384,7 @@ dependencies = [
 name = "vectorcraft-js"
 version = "0.21.0"
 dependencies = [
+ "chrono",
  "proptest",
  "unicode-general-category",
 ]

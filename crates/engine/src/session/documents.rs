@@ -346,9 +346,10 @@ impl Session {
         true
     }
 
-    /// Commands with enablement (for menus, palette, MCP `list_commands`).
+    /// Commands with enablement (for menus, palette, MCP `list_commands`), the installed plug-ins'
+    /// commands last.
     pub fn commands(&self) -> Vec<CommandInfo> {
-        command_specs().iter().map(|c| c.info(self)).collect()
+        command_specs().iter().chain(crate::cmd::plugin::command_specs()).map(|c| c.info(self)).collect()
     }
 }
 

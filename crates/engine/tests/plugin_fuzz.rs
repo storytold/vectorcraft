@@ -599,7 +599,7 @@ proptest! {
         let parsed = catch_quiet(|| vectorcraft_plugins::Manifest::parse(text.as_bytes()));
         let parsed = parsed.map_err(|msg| TestCaseError::fail(format!("panicked on {text}: {msg}")))?;
         if let Ok(man) = &parsed {
-            prop_assert!(man.permissions().iter().all(|p| p.applies(man.kind)), "{}", text);
+            prop_assert!(man.permissions().iter().all(|p| p.applies(man.kind, !man.commands.is_empty())), "{}", text);
             let shown = vectorcraft_plugins::permissions::display_text(&man.name, vectorcraft_plugins::permissions::MAX_SHOWN_NAME);
             prop_assert!(!shown.chars().any(|c| c.is_control() || matches!(c, '\u{202E}' | '\u{2066}' | '\u{200F}')), "{}", shown);
             prop_assert!(shown.chars().count() <= vectorcraft_plugins::permissions::MAX_SHOWN_NAME);
@@ -616,6 +616,80 @@ proptest! {
         prop_assert!(!installed || parsed.is_ok(), "a manifest that doesn't parse installed: {}", text);
         vectorcraft_plugins::registry::remove("fuzz.permissions");
         vectorcraft_plugins::registry::revoke("fuzz.permissions");
+    }
+
+    /// Manifests with hostile `commands` (junk of every type, bad and repeated ids, labels with
+    /// control and bidirectional override characters, a `menu` naming another menu, junk
+    /// parameters) parse to an error or to commands whose menu labels show no hidden character and
+    /// that sit under Plug-ins alone; installing one and running each of its commands ends as an
+    /// error or an edit, never a panic, and the document then renders and exports.
+    #[test]
+    fn hostile_manifest_commands_never_crash(
+        kind in prop::sample::select(vec!["filter", "effect", "exporter"]),
+        entries in prop::collection::vec(
+            prop_oneof![
+                3 => (
+                    prop_oneof![Just(json!("grow")), Just(json!("a_1")), Just(json!("Grow")), Just(json!("")), Just(json!("a.b")), arb_junk()],
+                    prop_oneof![
+                        3 => "[a-zA-Z\u{202E}\u{2066}\u{200F} ]{0,70}".prop_map(Value::from),
+                        1 => "[a-z\u{0007}\n]{1,8}".prop_map(Value::from),
+                        1 => arb_junk(),
+                    ],
+                    prop_oneof![Just(Value::Null), Just(json!("File")), arb_junk()],
+                    prop_oneof![Just(Value::Null), Just(json!({"by": {"type": "number", "min": 0, "max": 10, "default": 2}})), arb_junk()],
+                )
+                    .prop_map(|(id, label, menu, params)| {
+                        let mut c = json!({"id": id, "label": label});
+                        if !menu.is_null() {
+                            c["menu"] = menu;
+                        }
+                        if !params.is_null() {
+                            c["params"] = params;
+                        }
+                        c
+                    }),
+                1 => arb_junk(),
+            ],
+            0..5,
+        ),
+        junk in prop::option::weighted(0.1, arb_junk()),
+        given in prop_oneof![Just(json!({})), Just(json!({"by": 3})), arb_junk()],
+    ) {
+        let mut m = json!({"id": "fuzz.commands", "name": "Fuzz \u{202E}Commands", "kind": kind});
+        if kind == "exporter" {
+            m["extensions"] = json!(["fz"]);
+        }
+        m["commands"] = junk.unwrap_or(json!(entries));
+        let text = m.to_string();
+        let parsed = catch_quiet(|| vectorcraft_plugins::Manifest::parse(text.as_bytes()));
+        let parsed = parsed.map_err(|msg| TestCaseError::fail(format!("panicked on {text}: {msg}")))?;
+        if let Ok(man) = &parsed {
+            for c in &man.commands {
+                let shown = c.shown_label();
+                prop_assert!(!shown.chars().any(|ch| ch.is_control() || matches!(ch, '\u{202E}' | '\u{2066}' | '\u{200F}')), "{}", shown);
+                prop_assert!(shown.chars().count() <= vectorcraft_plugins::permissions::MAX_SHOWN_NAME);
+            }
+        }
+        let mut s = rich_session();
+        s.execute("select.all", &json!({})).unwrap();
+        let module = wat::parse_str(tpl::returning(&text, r#"{"objects":[]}"#)).unwrap();
+        let r = catch_quiet(|| {
+            let mut ran = vec![];
+            if install(&mut s, &module).is_ok() {
+                for c in s.commands().into_iter().filter(|c| c.id.starts_with("plugin.fuzz.commands.")) {
+                    ran.push((c.id, c.menu.clone()));
+                    let _ = s.execute(c.id, &given);
+                }
+            }
+            ran
+        });
+        let ran = r.map_err(|msg| TestCaseError::fail(format!("panicked running {text}: {msg}")))?;
+        prop_assert!(ran.is_empty() || parsed.is_ok(), "a manifest that doesn't parse installed: {}", text);
+        for (id, menu) in &ran {
+            prop_assert!(menu.len() == 3 && menu[1] == "Plug-ins" && matches!(menu[0], "Object" | "Effect"), "{id}: {menu:?}");
+        }
+        renders(&s, "after hostile commands")?;
+        vectorcraft_plugins::registry::remove("fuzz.commands");
     }
 
     /// A plug-in of API level 2 that calls the host imports with hostile arguments (any progress
@@ -682,7 +756,17 @@ proptest! {
         use vectorcraft_plugins::host::STORAGE_BUDGET;
         use vectorcraft_plugins::storage::Meter;
         const FUNCS: [&str; 6] = ["vc_settings_get", "vc_settings_set", "vc_cache_read", "vc_cache_write", "vc_settings_delete", "vc_cache_clear"];
-        let folder = std::env::temp_dir().join(format!("vectorcraft-plugin-fuzz-storage-{}", std::process::id()));
+        // Each case starts with an empty store, and the store is deleted when the case ends, also
+        // when it fails.
+        struct Store(std::path::PathBuf);
+        impl Drop for Store {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+        let store = Store(std::env::temp_dir().join(format!("vectorcraft-plugin-fuzz-storage-{}", std::process::id())));
+        let _ = std::fs::remove_dir_all(&store.0);
+        let folder = store.0.clone();
         let mut s = Session::new();
         s.allow_plugin_grants_from_requests();
         s.attach_plugin_store(folder.clone());
@@ -706,8 +790,11 @@ proptest! {
         let text: String = key.iter().map(|b| format!("\\{b:02x}")).collect();
         let imports = format!(r#"{} (data (i32.const 0x2000) "{text}")"#, tpl::STORAGE_IMPORTS);
         let wasm = wat::parse_str(tpl::with_imports(&storing("fuzz.storage"), &imports, &format!("(local $r i32) {body}"), r#"{"objects":[]}"#)).unwrap();
+        // A failed case leaves its module installed, and the cases that shrink it install others
+        // under the same id.
         let r = catch_quiet(|| {
-            s.execute("plugin.install", &json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "grant": grant})).map_err(|e| e.to_string())?;
+            s.execute("plugin.install", &json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "grant": grant, "replace": true}))
+                .map_err(|e| e.to_string())?;
             let p = vectorcraft_plugins::registry::get("fuzz.storage").ok_or("not installed")?;
             p.run(b"{\"objects\":[]}", b"{}").map_err(|e| e.to_string())
         });
