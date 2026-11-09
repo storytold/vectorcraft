@@ -82,6 +82,7 @@ pub(super) struct Builder<'p> {
     pub(super) glyphs: Option<GlyphRun>,
     pub(super) text: Option<TextLine>,
     pub(super) text_as: TextAs,
+    pub(super) actual: super::actual_text::ActualText,
     pub(super) images: HashMap<String, ImageBlob>,
     pub(super) image_keys: HashMap<u128, (String, u32, u32)>,
     /// The images kept with their CMYK samples ([`crate::import_image`]).
