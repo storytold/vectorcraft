@@ -3239,6 +3239,50 @@ fn text_editing_of(document: &str, objects: &str) -> String {
 
 /// Area Type Options as an area frame's data may keep them: rows, columns, gutters and the first
 /// baseline, and keys besides, each with a value of any kind, in or out of range.
+/// A paragraph's attributes as a text document might keep them: an alignment (key 0), auto leading
+/// (7), hyphenation options (10 to 15) and tab stops (30) of any value or type, the stops a list of
+/// any length whose entries may be anything.
+fn arb_paragraph_attributes() -> impl Strategy<Value = String> {
+    let values = prop::sample::select(vec![
+        "0",
+        "1",
+        "2",
+        "3",
+        "6",
+        "7",
+        "-1",
+        "2.5",
+        "1e400",
+        "-1e400",
+        "NaN",
+        "inf",
+        "1e9",
+        "(x)",
+        "true",
+        "false",
+        "/nil",
+        "[ 1 ]",
+        "<< /0 1 >>",
+    ]);
+    let keys = prop::sample::select(vec!["0", "7", "10", "11", "12", "13", "14", "15"]);
+    let stop = (values.clone(), values.clone(), 0usize..3).prop_map(|(at, align, shape)| match shape {
+        0 => format!("<< /0 {at} /1 {align} >>"),
+        1 => format!("<< /1 {align} >>"),
+        _ => at.to_string(),
+    });
+    let tabs = (prop::collection::vec(stop, 0..40), 0usize..4).prop_map(|(stops, shape)| match shape {
+        0 => format!("/30 << /0 [ {} ] >>", stops.join(" ")),
+        1 => "/30 << /0 7 >>".to_string(),
+        2 => "/30 [ 1 2 ]".to_string(),
+        _ => String::new(),
+    });
+    (prop::collection::vec((keys, values), 0..8), tabs).prop_map(|(kv, tabs)| {
+        let mut attrs: Vec<String> = kv.iter().map(|(k, v)| format!("/{k} {v}")).collect();
+        attrs.push(tabs);
+        attrs.join(" ")
+    })
+}
+
 fn arb_area_options() -> impl Strategy<Value = String> {
     let keys = prop::sample::select(vec!["3", "4", "5", "7", "8", "10", "13", "14"]);
     let values = prop::sample::select(vec![
@@ -3461,6 +3505,18 @@ proptest! {
         survive("EPS text frames with hostile area options", || vectorcraft_engine::cmd::fileio::load("x.eps", &bytes).ok().map(|l| l.doc))?;
         let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&editing)].concat();
         survive(".ai text frames with hostile area options", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
+    }
+
+    /// The same text document with hostile paragraph attributes: an alignment, auto leading,
+    /// hyphenation options and tab stops of any value, type or size.
+    #[test]
+    fn text_frames_with_hostile_paragraph_attributes_never_panic(attrs in arb_paragraph_attributes()) {
+        let text = frames_document_text().replace("/5 << /0 2 /1 4 /2 6 >>", &format!("/5 << /1 4 /2 6 {attrs} >>"));
+        let editing = text_editing_of(&text, FRAME_OBJECTS);
+        let bytes = editing_eps(&editing);
+        survive("EPS text frames with hostile paragraph attributes", || vectorcraft_engine::cmd::fileio::load("x.eps", &bytes).ok().map(|l| l.doc))?;
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&editing)].concat();
+        survive(".ai text frames with hostile paragraph attributes", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
     }
 
     /// The type on a path of the same text document with hostile Type on a Path Options, opened as

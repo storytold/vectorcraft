@@ -39,7 +39,7 @@ use breaking::tab_advance;
 use breaking::{break_line, candidates};
 #[cfg(test)]
 pub(crate) use driver::layout_faces_per_call;
-pub use driver::{decorations, fit_first_line, layout, layout_with, scaled};
+pub use driver::{decorations, fit_first_line, fit_source_lines, layout, layout_with, scaled};
 use vertical::{TcyStyle, stands_upright, tate_chu_yoko, upright_cell, upright_centre, upright_extent, whole_character_widths};
 
 #[cfg(test)]
