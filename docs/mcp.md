@@ -5933,6 +5933,10 @@ any case, while the document is open. It is not saved and not an undo step.
 {"name":"run_command","arguments":{"command":"text.spelling.ignoreAll","params":{"word":"Zqvwkx"}}}
 ```
 
+In the app, Edit › Spelling › Auto Spell Check (the UI command `edit.autoSpellCheck`, which returns whether it is now
+on) underlines on the canvas the words `text.spelling.check` lists, in the visible type without effects, and keeps the
+lines up to date as the type, the custom dictionary and the Ignore All words change.
+
 
 ## Justification options
 
