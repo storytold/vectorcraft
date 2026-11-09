@@ -5889,6 +5889,13 @@ axis	Y Axis	Eje Y
 @msg	at most {MAX_PERMISSIONS} `permissions`	como máximo {MAX_PERMISSIONS} `permissions`
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	el permiso `{shown}` no se aplica a un plugin de tipo `{_1}`
 @msg	permission `{shown}` is listed twice	el permiso `{shown}` aparece dos veces
+@msg	only a filter declares `inputs`	solo un filtro declara `inputs`
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` nombra un tipo de objeto desconocido `{shown}`: use type, image o symbolInstance
+@msg	`inputs` lists `{shown}` twice	`inputs` incluye `{shown}` dos veces
+@msg	`inputs` needs `api` 2 or later	`inputs` requiere `api` 2 o posterior
+@msg	`inputs` needs the permission `doc.read`	`inputs` requiere el permiso `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	presupuesto de memoria (el objeto {_1} necesita {size} bytes de entrada, quedan {left})
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	presupuesto de objetos (más de {MAX_OBJECTS} objetos de solo lectura)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	el permiso `{shown}` está reservado para una API de plugins posterior; este host no lo concede
 @msg	unknown permission `{shown}`	permiso desconocido `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	“{name}” pide los permisos {asked}: una persona debe aprobarlos en la aplicación de escritorio, o pasa `grant` en una sesión iniciada con --allow-plugin-grants

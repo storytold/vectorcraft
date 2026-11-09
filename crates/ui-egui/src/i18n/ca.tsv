@@ -5955,6 +5955,13 @@ digits	Malayalam	Malaiàlam
 @msg	at most {MAX_PERMISSIONS} `permissions`	com a màxim {MAX_PERMISSIONS} `permissions`
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	el permís `{shown}` no s’aplica a un complement del tipus `{_1}`
 @msg	permission `{shown}` is listed twice	el permís `{shown}` apareix dues vegades
+@msg	only a filter declares `inputs`	només un filtre declara `inputs`
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` anomena un tipus d’objecte desconegut `{shown}`: feu servir type, image o symbolInstance
+@msg	`inputs` lists `{shown}` twice	`inputs` inclou `{shown}` dues vegades
+@msg	`inputs` needs `api` 2 or later	`inputs` requereix `api` 2 o posterior
+@msg	`inputs` needs the permission `doc.read`	`inputs` requereix el permís `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	pressupost de memòria (l’objecte {_1} necessita {size} bytes d’entrada, en queden {left})
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	pressupost d’objectes (més de {MAX_OBJECTS} objectes de només lectura)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	el permís `{shown}` està reservat per a una API de complements posterior; aquest amfitrió no el concedeix
 @msg	unknown permission `{shown}`	permís desconegut `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	«{name}» demana els permisos {asked}: una persona els ha d’aprovar a l’aplicació d’escriptori, o passa `grant` en una sessió iniciada amb --allow-plugin-grants

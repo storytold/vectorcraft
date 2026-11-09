@@ -5943,6 +5943,13 @@ axis	Y Axis	Axe Y
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	l’autorisation `{shown}` ne s’applique pas à un module externe de type `{_1}`
 @msg	permission `{shown}` is listed twice	l’autorisation `{shown}` figure deux fois
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	l’autorisation `{shown}` est réservée à une future API de module externe ; cet hôte ne l’accorde pas
+@msg	only a filter declares `inputs`	seul un filtre déclare `inputs`
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` désigne un type d’objet inconnu `{shown}` : utilisez type, image ou symbolInstance
+@msg	`inputs` lists `{shown}` twice	`inputs` mentionne `{shown}` deux fois
+@msg	`inputs` needs `api` 2 or later	`inputs` nécessite `api` 2 ou plus
+@msg	`inputs` needs the permission `doc.read`	`inputs` nécessite l’autorisation `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	budget mémoire (l’objet {_1} nécessite {size} octets d’entrée, il en reste {left})
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	budget d’objets (plus de {MAX_OBJECTS} objets en lecture seule)
 @msg	unknown permission `{shown}`	autorisation inconnue `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	« {name} » demande les autorisations {asked} : une personne doit les approuver dans l’application de bureau, ou passez `grant` dans une session démarrée avec --allow-plugin-grants
 @msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` et `allowHeavy` ne prennent effet que dans une session démarrée avec --allow-plugin-grants : approuvez le module externe dans l’application de bureau

@@ -6642,7 +6642,17 @@ WebAssembly plug-ins ([plugins.md](plugins.md)) are reached through commands; th
 them again at startup (`plugin.remove` deletes them there):
 `plugin.install {path | dataBase64}` installs one, `plugin.list` / `plugin.info {id}` describe them (parameters,
 schema, defaults). An object filter runs on the selected paths and compound paths with `plugin.run {id, params}` (one
-undo step; it may change, delete or add objects, and the result is selected). A live-effect plug-in is an effect with
+undo step; it may change, delete or add objects, and the result is selected). A filter whose manifest lists `inputs`
+(`type`, `image`, `symbolInstance`; `inputs` in its `plugin.list` entry) also lists `doc.read` in its `permissions`, so
+`plugin.install` needs `grant`. It is also given the selected objects of those kinds to read, with at most 16 MiB of
+pixels and 16 MiB of type runs over one run (later ones come with `pixelsOmitted` or `truncated`). Every object counts
+toward the input's half of the plug-in's memory cap, ids, bounds, transforms and names included: pixels and runs that
+don't fit come the same way, and an object whose other fields don't fit makes `plugin.run` return a memory-budget error
+naming the object and its size, with nothing changed. A path or compound path that doesn't fit makes it return the
+memory-budget error `the selection is too large to hand over`, and more than 100,000 of these objects make it return
+an object-budget error. Its output returns
+each of them as `{"id": …}` or exactly as given, otherwise `plugin.run` returns an error naming the object and the
+field, and the document and undo history are unchanged. A live-effect plug-in is an effect with
 id `plugin.<id>`: `effect.apply`, `effect.setParams` and `effect.expandAppearance` work as for built-in effects, and
 `effect.list` lists it. One whose manifest declares `paintOutput` (at plug-in API level 2; `plugin.list` gives `api`
 and `paintOutput: true`) draws the pieces it returns with paints of their own, and `effect.expandAppearance` writes them

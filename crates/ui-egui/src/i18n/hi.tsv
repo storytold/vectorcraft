@@ -5286,6 +5286,13 @@ antiAlias	Sharp	शार्प
 @msg	at most {MAX_PERMISSIONS} `permissions`	अधिकतम {MAX_PERMISSIONS} `permissions`
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	अनुमति `{shown}` `{_1}` प्रकार के प्लग-इन पर लागू नहीं होती
 @msg	permission `{shown}` is listed twice	अनुमति `{shown}` दो बार सूचीबद्ध है
+@msg	only a filter declares `inputs`	केवल फ़िल्टर `inputs` घोषित करता है
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` में अज्ञात ऑब्जेक्ट प्रकार `{shown}` है: type, image या symbolInstance का उपयोग करें
+@msg	`inputs` lists `{shown}` twice	`inputs` में `{shown}` दो बार सूचीबद्ध है
+@msg	`inputs` needs `api` 2 or later	`inputs` के लिए `api` 2 या बाद का स्तर आवश्यक है
+@msg	`inputs` needs the permission `doc.read`	`inputs` के लिए अनुमति `doc.read` आवश्यक है
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	मेमोरी बजट (ऑब्जेक्ट {_1} को इनपुट के {size} बाइट चाहिए, {left} शेष हैं)
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	ऑब्जेक्ट बजट ({MAX_OBJECTS} से अधिक केवल-पठन ऑब्जेक्ट)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	अनुमति `{shown}` बाद के प्लग-इन API के लिए आरक्षित है; यह होस्ट इसे नहीं देता
 @msg	unknown permission `{shown}`	अज्ञात अनुमति `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	“{name}” अनुमतियां {asked} मांगता है: इन्हें डेस्कटॉप ऐप में किसी व्यक्ति को स्वीकृत करना होगा, या --allow-plugin-grants से शुरू किए गए सत्र में `grant` दें

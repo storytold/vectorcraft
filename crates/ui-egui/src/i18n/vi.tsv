@@ -5545,6 +5545,13 @@ axis	Y Axis	Trục Y
 @msg	at most {MAX_PERMISSIONS} `permissions`	tối đa {MAX_PERMISSIONS} `permissions`
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	quyền `{shown}` không áp dụng cho plug-in loại `{_1}`
 @msg	permission `{shown}` is listed twice	quyền `{shown}` được liệt kê hai lần
+@msg	only a filter declares `inputs`	chỉ bộ lọc mới khai báo `inputs`
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` nêu một loại đối tượng không xác định `{shown}`: dùng type, image hoặc symbolInstance
+@msg	`inputs` lists `{shown}` twice	`inputs` liệt kê `{shown}` hai lần
+@msg	`inputs` needs `api` 2 or later	`inputs` cần `api` 2 trở lên
+@msg	`inputs` needs the permission `doc.read`	`inputs` cần quyền `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	ngân sách bộ nhớ (đối tượng {_1} cần {size} byte đầu vào, còn lại {left})
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	ngân sách đối tượng (hơn {MAX_OBJECTS} đối tượng chỉ đọc)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	quyền `{shown}` được dành cho một API plug-in sau này; máy chủ này không cấp quyền đó
 @msg	unknown permission `{shown}`	quyền không xác định `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	“{name}” yêu cầu các quyền {asked}: cần một người phê duyệt trong ứng dụng máy tính, hoặc truyền `grant` trong phiên khởi động bằng --allow-plugin-grants
