@@ -299,6 +299,10 @@
 	Anti-alias Rasters	Antialiàsing de ràsters
 	Anti-aliased Artwork	Art amb antialiàsing
 	Anti-aliasing:	Antialiàsing:
+	Anti-aliasing Method	Mètode d'antialiàsing
+antiAlias	Sharp	Nítid
+	Crisp	Definit
+	Strong	Intens
 	Any except extracting pages	Qualsevol excepte extreure pàgines
 	Any Kind	Qualsevol tipus
 	Appearance	Aparença
@@ -1514,6 +1518,17 @@
 	Exporting {}	S’està exportant {}
 	Export…	Exporta…
 	Extrude & Bevel…	Extrudeix i bisella…
+	3D (Classic)	3D (clàssic)
+	Extrude & Bevel (Classic)…	Extrudeix i bisella (clàssic)…
+	Surface	Superfície
+	Wireframe	Filferro
+	No Shading	Sense ombra
+	Plastic	Plàstic
+	Highlight Intensity	Intensitat de la brillantor
+	Highlight Size	Mida de la brillantor
+	Blend Steps	Passos de fusió
+	Shading Color	Color de l’ombra
+	Draw Hidden Faces	Dibuixa les cares ocultes
 	Eyedropper	Comptagotes
 	Eyedropper Applies:	El comptagotes aplica:
 	Eyedropper Options	Opcions del comptagotes
@@ -2121,6 +2136,7 @@ digits	Malayalam	Malaiàlam
 	Keywords:	Paraules clau:
 	Kind	Tipus
 	Kinsoku Set	Conjunt Kinsoku
+	Kinsoku Shori Type	Tipus de Kinsoku Shori
 	Kite	Estel
 	Knife	Ganivet
 	Knockout Group	Grup knockout
@@ -3191,6 +3207,9 @@ digits	Malayalam	Malaiàlam
 	Puppet Warp Pins	Pins de deformació de titella
 	Puppet Warp Tool	Eina de deformació de titella
 	Purple	Porpra
+	Push In First	Primer cap a dins
+	Push Out First	Primer cap a fora
+	Push Out Only	Només cap a fora
 	Put back in the toolbar	Torna a posar a la barra d’eines
 	Quality	Qualitat
 	Quality {quality}	Qualitat {quality}
@@ -4901,6 +4920,7 @@ digits	Malayalam	Malaiàlam
 3d	Solid	Sòlid
 3d	Space	Espai
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" no és un color: escriviu-lo com a #rrggbb
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` ha de ser "none", "sharp", "crisp" o "strong"
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all o un interval com ara 1, 3-5, no {v}
 @msg	`aspect` must be a number (%)	`aspect` ha de ser un nombre (%)
 @msg	`at` must be [x, y]	`at` ha de ser [x, y]
@@ -5607,6 +5627,13 @@ digits	Malayalam	Malaiàlam
 @msg	select an object in perspective	selecciona un objecte en perspectiva
 @msg	select an Objects on Path group	selecciona un grup d’objectes sobre un traçat
 @msg	select artwork (or a colour group) to recolor	selecciona la il·lustració (o un grup de colors) per recolorejar
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	Recoloració completada; sense canvis: {locked} i {hidden}
+@msg	Recolor completed; {objects} were left unchanged	Recoloració completada; sense canvis: {objects}
+@msg	Recolor completed; {objects} was left unchanged	Recoloració completada; sense canvis: {objects}
+@msg	1 locked object	1 objecte bloquejat
+@msg	{n} locked objects	{n} objectes bloquejats
+@msg	1 hidden object	1 objecte ocult
+@msg	{n} hidden objects	{n} objectes ocults
 @msg	select at least two objects	selecciona almenys dos objectes
 @msg	select objects, not layers	selecciona objectes, no capes
 @msg	select one object	selecciona un objecte
@@ -5701,6 +5728,11 @@ digits	Malayalam	Malaiàlam
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	La imatge fa {_1} × {_2} píxels, més de {LARGE_TRACE_SIDE} per costat: es traça, però més lentament. Un preajust de menys fidelitat o una còpia més petita de la imatge es traça més de pressa.
 @msg	the image is {width} × {height} pixels, more than Image Trace takes ({max} megapixels)	la imatge fa {width} × {height} píxels, més del que admet Image Trace ({max} megapíxels)
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	La imatge s’ha traçat a {_1} × {_2} píxels, reduïda des de {_3} × {_4} ({_5} megapíxels com a màxim).
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	El mode Logotip pla no fa servir keepColors: traça els colors indicats a logoColors o els colors que troba.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	No s’ha traçat res: cap dels colors que ha trobat el traçat coincideix amb keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	No s’ha traçat res: Ignora el color omet totes les àrees dels colors que llista keepColors.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	No s’ha traçat res: els colors que coincideixen amb keepColors no produeixen cap traçat.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: cap dels colors que ha trobat el traçat coincideix amb {c}, per tant no se’n traça res.
 @msg	the image's pixels can't be read	no es poden llegir els píxels de la imatge
 @msg	the image's pixels don't match its size	els píxels de la imatge no coincideixen amb la seva mida
 @msg	The last start of VectorCraft ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	L’últim inici de VectorCraft va acabar a {name} abans que aparegués la seva finestra, així que s’ha iniciat amb {summary}. Per tornar a provar aquell processador gràfic, canvia Preferències › Rendiment › Processador gràfic o inicia amb WGPU_BACKEND definit
@@ -5910,6 +5942,8 @@ digits	Malayalam	Malaiàlam
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	el mòdul importa `env.{name}`, que un complement només pot fer servir al nivell d’API de complements {PROGRESS_API} (`api` {PROGRESS_API}) i amb el permís `{permission}`
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	el mòdul importa `{from}.{name}`, que l’amfitrió no ofereix: un complement només pot importar les funcions `env.vc_*` que enumera docs/plugins.md (nivell d’API de complements 2), i cap WASI, fitxer ni xarxa
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` és {_1}; aquest amfitrió admet els nivells d’API de complements de l’1 al {API_LEVEL}
+@msg	`paintOutput` may only be true	`paintOutput` només pot ser true
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` només és per a un efecte dinàmic (`kind` "effect") amb `api` 2
 @msg	`grant` must be a list of permission names	`grant` ha de ser una llista de noms de permisos
 @msg	`grant` names an unknown permission `{shown}`	`grant` esmenta un permís desconegut `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	un complement del tipus `{_1}` necessita el permís `{_2}`
@@ -5920,6 +5954,14 @@ digits	Malayalam	Malaiàlam
 @msg	unknown permission `{shown}`	permís desconegut `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	«{name}» demana els permisos {asked}: instal·la’l amb un `grant` que els enumeri quan l’usuari hi estigui d’acord
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	a «{name}» no se li ha concedit `{p}`, que la seva sortida necessita: no s’ha canviat res
+@msg	a heavy filter runs in the background, so it can't declare `commands`	un filtre pesat s’executa en segon pla, de manera que no pot declarar `commands`
+@msg	at most {MAX_COMMANDS} `commands`	com a màxim {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	l’ordre {name} està declarada dues vegades
+@msg	command {name}: `label` must be 1-64 printable characters	ordre {name}: `label` ha de tenir 1-64 caràcters imprimibles
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	ordre {name}: fes servir un id d’1-{MAX_COMMAND_ID} caràcters d’a-z 0-9 _ que comenci per una lletra
+@msg	command {name}: {e}	ordre {name}: {e}
+@msg	only a filter or a live effect declares `commands`	només un filtre o un efecte dinàmic declara `commands`
+@msg	“{name}” › {label}: {e}	«{name}» › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	el mòdul no té el SHA-256 que indica `hash`: no s’ha instal·lat res
 @msg	“{name}” is not a file	«{name}» no és un fitxer
 axis	Both	Tots dos
@@ -6297,6 +6339,10 @@ breakText	Glyphs	Glifs
 @msg	`by` must be lines, paragraphs, words or glyphs, not {other}	`by` ha de ser lines, paragraphs, words o glyphs, no {other}
 @msg	`kind` must be "line" or "paragraph", not {other}	`kind` ha de ser "line" o "paragraph", no {other}
 @msg	`align` must be "left", "center" or "right", not {other}	`align` ha de ser "left", "center" o "right", no {other}
+@msg	the JPEG XL file is cut short	el fitxer JPEG XL està truncat
+@msg	the JPEG XL container is too large to read	el contenidor JPEG XL és massa gran per llegir-lo
+@msg	CMYK JPEG XL images can't be read	les imatges JPEG XL en CMYK no es poden llegir
+@msg	the JPEG XL file can't be read: {e}	no es pot llegir el fitxer JPEG XL: {e}
 	File + Number	Fitxer + número
 	File + Data Set Name	Fitxer + nom del conjunt de dades
 	Data Set Name	Nom del conjunt de dades
@@ -6470,6 +6516,7 @@ breakText	Glyphs	Glifs
 	Create Swatch Legend	Crea una llegenda de mostres
 	Create Swatch Legend…	Crea una llegenda de mostres…
 	HEX	HEX
+	Help Bar	Barra d’ajuda
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	Eines de text
 	Text Tweaker…	Ajustador de text…
@@ -6535,6 +6582,24 @@ breakText	Glyphs	Glifs
 # 3D Box add-on
 	3D Box	Caixa 3D
 	3D Box Tool	Eina Caixa 3D
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Obre amb
+	No importer plug-ins installed	No hi ha complements d’importació instal·lats
+	Read files you open in its format and make documents from them	Llegir els fitxers que obriu en el seu format i fer-ne documents
+@msg	{_1} is an importer (File › Open With)	{_1} és un importador (Fitxer › Obre amb)
+@msg	missing `importer` (see document.formats)	falta `importer` (vegeu document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` ha de ser l’id de format d’un complement (vegeu document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	«{shown}» obre fitxers {_1}, no `{_2}`
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` és un complement del tipus `{_2}`, no un importador
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` és un complement del tipus `{_2}`, no un exportador
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` és un importador: obriu un fitxer amb document.open {{"importer"}"}}
+@msg	the importer returned no objects	l’importador no ha retornat cap objecte
+@msg	an importer returns `objects` and `warnings`, not `{key}`	un importador retorna `objects` i `warnings`, no `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	el fitxer supera els {MAX_INPUT_BYTES} bytes que llegeix un importador
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	un importador declara d’1 a {MAX_EXTENSIONS} `extensions`
+@msg	only an exporter or an importer declares `extensions`	només un exportador o un importador declara `extensions`
+@msg	an importer always gets an import's budget: leave `budget` out	un importador sempre rep el pressupost d’una importació: ometeu `budget`
 
 # Safe Mode
 	Safe Mode…	Mode segur…

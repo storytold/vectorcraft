@@ -76,6 +76,10 @@ digits	Malayalam	マラヤーラム数字
 	Stylistic	スタイリスティック
 	Mojikumi Set	文字組み
 	Kinsoku Set	禁則処理
+	Kinsoku Shori Type	禁則調整方式
+	Push In First	追い込み優先
+	Push Out First	追い出し優先
+	Push Out Only	追い出しのみ
 	Hard	強い禁則
 	Soft	弱い禁則
 	Latin	欧文
@@ -506,6 +510,17 @@ digits	Malayalam	マラヤーラム数字
 	Inflate	膨張
 	Select objects, then pick an object type to give them a 3D effect.	オブジェクトを選択してから、オブジェクトの種類を選んで 3D 効果を適用してください。
 	Extrude & Bevel…	押し出しとベベル…
+	3D (Classic)	3D（クラシック）
+	Extrude & Bevel (Classic)…	押し出しとベベル（クラシック）…
+	Surface	表面
+	Wireframe	ワイヤーフレーム
+	No Shading	陰影なし
+	Plastic	プラスチック
+	Highlight Intensity	ハイライトの強さ
+	Highlight Size	ハイライトのサイズ
+	Blend Steps	ブレンドの階調
+	Shading Color	陰影のカラー
+	Draw Hidden Faces	隠れた面を描画
 	Revolve…	回転体…
 	Inflate…	膨張…
 	Materials…	マテリアル…
@@ -993,6 +1008,10 @@ digits	Malayalam	マラヤーラム数字
 	Anti-alias	アンチエイリアス
 	Anti-alias Rasters	ラスターをアンチエイリアス
 	Anti-aliased Artwork	アートワークをアンチエイリアス
+	Anti-aliasing Method	アンチエイリアスの方式
+antiAlias	Sharp	シャープ
+	Crisp	くっきり
+	Strong	太め
 	Anti-aliasing:	アンチエイリアス:
 	Appearance Item	アピアランス項目
 	Appearance Panel	アピアランスパネル
@@ -3260,6 +3279,8 @@ mark-style	Japanese	日本式
 	Tile Range:	分割範囲:
 	Tile Type:	タイルの種類:
 	Tiles are numbered across, then down; leave the range empty for every tile.	タイルは左から右、上から下の順に番号が付きます。範囲を空にするとすべてのタイルが対象です。
+	Copies per Sheet (as many as fit, in a grid)	用紙ごとに複数コピー (収まるだけグリッド状に配置)
+	Gutter:	間隔:
 	Toggle Fill/Stroke Focus	塗り／線の切り替え
 	Toggle Selection	選択を切り替え
 	Toggle single/double column	1 列／2 列を切り替え
@@ -4282,6 +4303,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	no point {i} (the gradient has {_1})	ポイント {i} はありません (このグラデーションのポイントは {_1} 個です)
 @msg	no segment {segment} on line {line}	ライン {line} にセグメント {segment} はありません
 @msg	unknown freeform mode `{m}` (points, lines)	`{m}` は不明なフリーフォームのモードです (points、lines)
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` には "none"、"sharp"、"crisp" または "strong" を指定してください
 @msg	`aspect` must be a number (%)	`aspect` には数値 (%) を指定してください
 @msg	`gradient` must be an object	`gradient` にはオブジェクトを指定してください
 @msg	`groupColors` must be an array	`groupColors` には配列を指定してください
@@ -4676,6 +4698,13 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	print settings are not an object	プリント設定がオブジェクト形式ではありません
 @msg	no colour group `{g}`	カラーグループ `{g}` が見つかりません
 @msg	select artwork (or a colour group) to recolor	再配色するアートワーク (またはカラーグループ) を選択してください
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	再配色が完了しました。変更されなかったもの: {locked}、{hidden}
+@msg	Recolor completed; {objects} were left unchanged	再配色が完了しました。変更されなかったもの: {objects}
+@msg	Recolor completed; {objects} was left unchanged	再配色が完了しました。変更されなかったもの: {objects}
+@msg	1 locked object	ロックされたオブジェクト 1 個
+@msg	{n} locked objects	ロックされたオブジェクト {n} 個
+@msg	1 hidden object	非表示のオブジェクト 1 個
+@msg	{n} hidden objects	非表示のオブジェクト {n} 個
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	「ブラウザーでプレビュー」にはデスクトップアプリが必要です (Web 版では代わりにファイルをダウンロードします)
 @msg	no file system here	この環境にはファイルシステムがありません
 @msg	nothing to preview	プレビューするものがありません
@@ -4933,6 +4962,10 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the PSD file is cut short	PSD ファイルが途中で切れています
 @msg	the PSD file's header is damaged	PSD ファイルのヘッダーが破損しています
 @msg	the PSD file's image data can't be read: {e}	PSD ファイルの画像データを読み込めません：{e}
+@msg	the JPEG XL file is cut short	JPEG XL ファイルが途中で切れています
+@msg	the JPEG XL container is too large to read	JPEG XL コンテナが大きすぎて読み込めません
+@msg	CMYK JPEG XL images can't be read	CMYK の JPEG XL 画像は読み込めません
+@msg	the JPEG XL file can't be read: {e}	JPEG XL ファイルを読み込めません：{e}
 	Video	ビデオ
 	De-Interlace…	インターレース解除…
 	De-Interlace	インターレース解除
@@ -5419,6 +5452,11 @@ lighting	Light	ライト
 	Snap to Perpendicular	垂線にスナップ
 @msg	unknown snap option `{key}` (use {options})	不明なスナップオプション `{key}` ({options} を使用してください)
 	Gap Length:	ギャップの長さ:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	フラットロゴモードは keepColors を使いません。logoColors で指定したカラー、または検出したカラーをトレースします。
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	何もトレースされませんでした。トレースで検出したカラーのどれも keepColors ({_1}) に一致しません。
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	何もトレースされませんでした。「カラーを無視」が keepColors に指定したカラーの領域をすべて除外します。
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	何もトレースされませんでした。keepColors に一致するカラーからパスができません。
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: トレースで検出したカラーのどれも {c} に一致しないため、このカラーは何もトレースされません。
 @msg	`colorGroup` needs `library: "document"`	`colorGroup` には `library: "document"` が必要です
 @msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` には `palette: "documentLibrary"` が必要です
 @msg	`colorGroup` needs `mode: "color"`	`colorGroup` には `mode: "color"` が必要です
@@ -5578,6 +5616,8 @@ axis	Y Axis	Y 軸
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	モジュールが `env.{name}` をインポートしていますが、プラグインがこれを使用できるのはプラグイン API レベル {PROGRESS_API} (`api` {PROGRESS_API}) で権限 `{permission}` がある場合だけです
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	モジュールがホストの提供しない `{from}.{name}` をインポートしています。プラグインがインポートできるのは docs/plugins.md に記載された `env.vc_*` 関数 (プラグイン API レベル 2) だけで、WASI、ファイル、ネットワークは使用できません
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` は {_1} です。このホストが対応するプラグイン API レベルは 1 から {API_LEVEL} です
+@msg	`paintOutput` may only be true	`paintOutput` には true のみ指定できます
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` は `api` 2 のライブ効果 (`kind` "effect") 専用です
 @msg	`grant` must be a list of permission names	`grant` は権限名のリストにしてください
 @msg	`grant` names an unknown permission `{shown}`	`grant` に不明な権限 `{shown}` が含まれています
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	種類 `{_1}` のプラグインには権限 `{_2}` が必要です
@@ -5588,6 +5628,14 @@ axis	Y Axis	Y 軸
 @msg	unknown permission `{shown}`	不明な権限 `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	「{name}」は権限 {asked} を求めています。ユーザーが同意したら、それらを列挙した `grant` を指定してインストールしてください
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	「{name}」には出力に必要な `{p}` が付与されていません。何も変更されませんでした
+@msg	a heavy filter runs in the background, so it can't declare `commands`	重いフィルターはバックグラウンドで実行されるため、`commands` を宣言できません
+@msg	at most {MAX_COMMANDS} `commands`	`commands` は最大 {MAX_COMMANDS} 個です
+@msg	command {name} is declared twice	コマンド {name} が 2 回宣言されています
+@msg	command {name}: `label` must be 1-64 printable characters	コマンド {name}: `label` は印刷可能な 1-64 文字にしてください
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	コマンド {name}: a-z 0-9 _ からなり英字で始まる 1-{MAX_COMMAND_ID} 文字の ID を使用してください
+@msg	command {name}: {e}	コマンド {name}: {e}
+@msg	only a filter or a live effect declares `commands`	`commands` を宣言できるのはフィルターかライブ効果だけです
+@msg	“{name}” › {label}: {e}	「{name}」 › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	モジュールの SHA-256 が `hash` の値と一致しません。何もインストールされませんでした
 # Actions panel: action sets (#3712).
 	New Set…	新規セット…
@@ -6173,6 +6221,7 @@ breakText	Glyphs	字形
 	Create Swatch Legend	スウォッチの凡例を作成
 	Create Swatch Legend…	スウォッチの凡例を作成…
 	HEX	HEX
+	Help Bar	ヘルプバー
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	テキストツール
 	Text Tweaker…	テキストの調整…
@@ -6238,6 +6287,24 @@ breakText	Glyphs	字形
 # 3D Box add-on
 	3D Box	3Dボックス
 	3D Box Tool	3Dボックスツール
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	このアプリケーションで開く
+	No importer plug-ins installed	読み込みプラグインはインストールされていません
+	Read files you open in its format and make documents from them	独自形式で開いたファイルの読み取りとドキュメントの作成
+@msg	{_1} is an importer (File › Open With)	{_1} は読み込みプラグインです (「ファイル › このアプリケーションで開く」から使用してください)
+@msg	missing `importer` (see document.formats)	`importer` がありません (document.formats を参照)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` にはプラグインの形式 ID を指定してください (document.formats を参照)
+@msg	“{shown}” opens {_1} files, not `{_2}`	「{shown}」が開くのは {_1} ファイルで、`{_2}` ではありません
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` は種類 `{_2}` のプラグインで、読み込みプラグインではありません
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` は種類 `{_2}` のプラグインで、書き出しプラグインではありません
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` は読み込みプラグインです: document.open {{"importer"}"}} でファイルを開いてください
+@msg	the importer returned no objects	読み込みプラグインがオブジェクトを返しませんでした
+@msg	an importer returns `objects` and `warnings`, not `{key}`	読み込みプラグインが返すのは `objects` と `warnings` で、`{key}` ではありません
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	ファイルが読み込みプラグインの読み取る {MAX_INPUT_BYTES} バイトを超えています
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	読み込みプラグインは `extensions` を 1～{MAX_EXTENSIONS} 個宣言します
+@msg	only an exporter or an importer declares `extensions`	`extensions` を宣言できるのは書き出しプラグインと読み込みプラグインだけです
+@msg	an importer always gets an import's budget: leave `budget` out	読み込みプラグインには常に読み込みの予算が割り当てられます: `budget` は省略してください
 
 # Safe Mode
 	Safe Mode…	セーフモード…

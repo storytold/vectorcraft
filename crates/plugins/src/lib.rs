@@ -21,19 +21,25 @@
 //! their geometry, fills, strokes (gradients included) and opacity. An **object filter** returns
 //! the objects to keep, change or add, applied to the document as one edit
 //! ([`objects::apply_output`]); a **live effect** ([`effect`]) rewrites one object's geometry each
-//! time it is drawn, from an appearance stack; an **exporter** ([`export`]) writes the whole
-//! document in a file format of its own. The process-wide [`registry`] holds the installed
+//! time it is drawn, from an appearance stack, and at `api` 2 may paint what it returns
+//! ([`painted`]); an **exporter** ([`export`]) writes the whole
+//! document in a file format of its own; an **importer** ([`import`]) reads a file in a format of
+//! its own into a new document. The process-wide [`registry`] holds the installed
 //! plug-ins; in [`safe_mode`] none of them loads or runs. A plug-in's parameters ([`manifest`]) come with what the host's dialogs need to show
 //! them well: labels, units, groups, help and conditions ([`dialog`]). What a plug-in may do is
-//! the set of [`permissions`] its manifest lists, which the user approves when it is installed.
+//! the set of [`permissions`] its manifest lists, which the user approves when it is installed. A
+//! filter or a live effect may also add menu commands of its own ([`Command`]), which the host
+//! runs through `vc_run` with the command's id in `_context`.
 #![forbid(unsafe_code)]
 
 pub mod dialog;
 pub mod effect;
 pub mod export;
 pub mod host;
+pub mod import;
 pub mod manifest;
 pub mod objects;
+pub mod painted;
 pub mod permissions;
 pub mod registry;
 mod runtime;
@@ -43,11 +49,11 @@ pub mod wat;
 
 pub use dialog::ParamUi;
 pub use host::{LogLevel, LogLine, Report};
-pub use manifest::{Budget, Kind, Manifest, Param, ParamSpec};
+pub use manifest::{Budget, Command, Kind, Manifest, Param, ParamSpec};
 pub use runtime::{ABI_VERSION, HEAVY_FUEL, HEAVY_WALL_TIME_MS, Limits, Plugin, heavy_terms};
 
 /// What the host puts before a plug-in's id to name what it adds: its live effect
-/// (`plugin.<id>`, [`effect`]) or its file format ([`export`]).
+/// (`plugin.<id>`, [`effect`]) or its file format ([`export`], [`import`]).
 pub const PREFIX: &str = "plugin.";
 
 /// A plug-in error. Every way a module can misbehave ends here, never in a panic.

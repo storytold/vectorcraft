@@ -22,7 +22,8 @@ pub(super) enum Page {
 
 /// How art moved from a page to its place in the layers' document transforms: its pattern tiles
 /// move with it.
-pub(super) const PAGE_MOVE: Scaling = Scaling { strokes: false, effects: None, keep_type_strokes: false, keep_corners: false, patterns: true };
+pub(super) const PAGE_MOVE: Scaling =
+    Scaling { strokes: false, effects: None, keep_type_strokes: false, keep_corners: false, patterns: true, keep_fit_when_flat: false };
 
 /// The page (`visible`, the file read as its page) and the place of its area in the layers'
 /// document.
@@ -1192,7 +1193,7 @@ fn keep_differing(
 }
 
 /// Copy page drawing IDs, including mask art outside the ordinary child tree.
-fn reid_page_art(doc: &mut Document, source: &Node) -> Node {
+pub(super) fn reid_page_art(doc: &mut Document, source: &Node) -> Node {
     let mut copy = doc.reid(source);
     if let Some(mask) = &mut copy.extras_mut().mask {
         mask.art = Arc::new(reid_page_art(doc, &mask.art));

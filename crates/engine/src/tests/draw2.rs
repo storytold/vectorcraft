@@ -1440,17 +1440,17 @@ fn spiral_drags_with_alt_and_ctrl_change_its_segments_and_decay() {
     };
     s.select_tool("spiral", v).unwrap();
     let undo = undo_steps(&s);
-    // Alt from a radius of 100 to 200: 10 segments become 14, one full wind of four quarter turns.
+    // Alt from a radius of 100 to 200: preserving the inner end adds three full winds.
     let (anchors, outer) = spiral(&mut s, Mods { alt: true, ..Mods::default() }, (300.0, 100.0));
-    assert_eq!(anchors, 15);
+    assert_eq!(anchors, 23);
     assert!(near(outer, Point::new(300.0, 100.0)), "{outer:?}");
-    assert_eq!(s.tool_options()["segments"], json!(14));
-    // Ctrl/Cmd from 100 to 50: the decay rises from 80 % to 80 × 2^(1/14) %.
+    assert_eq!(s.tool_options()["segments"], json!(22));
+    // Ctrl/Cmd from 100 to 50: the decay rises from 80 % to 80 × 2^(4/22) %.
     let (anchors, outer) = spiral(&mut s, Mods { cmd: true, ..Mods::default() }, (150.0, 100.0));
-    assert_eq!(anchors, 15);
+    assert_eq!(anchors, 23);
     assert!(near(outer, Point::new(150.0, 100.0)), "{outer:?}");
     let decay = s.tool_options()["decay"].as_f64().unwrap();
-    assert!((decay - 80.0 * 2f64.powf(1.0 / 14.0)).abs() < 1e-9, "{decay}");
+    assert!((decay - 80.0 * 2f64.powf(4.0 / 22.0)).abs() < 1e-9, "{decay}");
     assert_eq!(undo_steps(&s) - undo, 2, "one undo step a spiral");
 }
 

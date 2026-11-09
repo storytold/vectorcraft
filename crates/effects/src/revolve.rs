@@ -66,19 +66,25 @@ pub fn revolve_options(p: &Value) -> Revolve {
 /// Validate before a command mutates the document. Loading external files is still bounded
 /// by the evaluator; unsupported source kinds remain unchanged when rendered.
 pub fn validate_revolve(n: &Node, p: &Value) -> Result<(), String> {
-    crate::lighting::validate(p)?;
+    validate_revolve_params(p)?;
     let path = profile(n).ok_or("Revolve currently requires a path or compound path. Select a profile drawn with the Pen tool.")?;
     let b = path.bounds().ok_or("Revolve requires a profile with at least two anchors")?;
     if !path.subpaths.iter().any(|sp| sp.anchors.len() >= 2) {
         return Err("Revolve requires at least two anchors".into());
     }
+    vectorcraft_three_d::revolve(&path, b, revolve_options(p)).map(|_| ())
+}
+
+/// Check Revolve's parameter values `p` alone: its lights, `edge` and `cap`.
+pub(crate) fn validate_revolve_params(p: &Value) -> Result<(), String> {
+    crate::lighting::validate(p)?;
     if p.get("edge").is_some_and(|v| v.as_str() != Some("left") && v.as_str() != Some("right")) {
         return Err("Revolve edge must be left or right".into());
     }
     if p.get("cap").is_some_and(|v| v.as_bool().is_none()) {
         return Err("Revolve cap must be a boolean".into());
     }
-    vectorcraft_three_d::revolve(&path, b, revolve_options(p)).map(|_| ())
+    Ok(())
 }
 
 fn profile(n: &Node) -> Option<PathData> {
@@ -476,7 +482,7 @@ mod tests {
         let expanded = expand_revolve_art(&n).unwrap();
         let count = |n: &Node| n.children().unwrap()[0].children().unwrap().len();
         assert!(count(&expanded) < count(&live) * 3 / 4, "hidden back surfaces are removed");
-        assert_eq!(crate::bake_appearance(&n), Some(live.clone()), "other baking retains the full surface");
+        assert_eq!(crate::bake_appearance(None, &n), Some(live.clone()), "other baking retains the full surface");
         n.appearance.effects[0].params["expandVisibleOnly"] = json!(false);
         assert_eq!(revolve_art(&n), Some(live.clone()), "the live view ignores the expansion setting");
         assert_eq!(expand_revolve_art(&n), Some(live));

@@ -142,12 +142,14 @@ mod types;
 pub(crate) use art::join_and;
 use art::preview_png;
 pub use document::{
-    BindingRef, Brushes, PaletteSwatches, VariableRead, active_artboard, artboards, bindings_note, brushes, graphic_styles, palette, variables,
+    BindingRef, Brushes, PaletteSwatches, Symbols, VariableRead, active_artboard, artboards, bindings_note, brushes, graphic_styles, palette,
+    symbols, variables,
 };
 pub(crate) use document::{slot_frame, slot_of};
-pub(crate) use ops::read_art_style;
+pub(crate) use ops::{read_art_style, read_style_list, style_moves_with};
 #[cfg(test)]
 pub(crate) use raster::with_image_limits;
+pub(crate) use types::MAX_NODES;
 pub use types::PlacedPage;
 use types::{BLEND_BUDGET, BrushArtColors, FLIP, Frame, GState, Graph, Kind, PatternHead, PendingEnvelope, Place, PlacedTail, Raster, SymbolHead};
 #[cfg(test)]
@@ -256,6 +258,14 @@ fn read_with(data: &[u8], large_canvas: bool, page_art: bool) -> Result<Structur
     r.page_art = page_art;
     r.run()?;
     r.finish()
+}
+
+/// How many objects [`read`] counts against [`MAX_NODES`] in the editing data `data`.
+#[cfg(test)]
+pub(crate) fn objects_read(data: &[u8]) -> Result<usize, String> {
+    let mut r = Reader::with_names(data);
+    r.run()?;
+    Ok(r.nodes)
 }
 
 /// [`read`] for editing data kept apart from the program `ps` it came with (an EPS's private

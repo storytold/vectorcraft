@@ -440,9 +440,9 @@ impl Writer<'_> {
         let freeform = g.gradient.kind == GradientKind::Freeform;
         let (rgba, cols, rows): (Vec<u8>, u16, u16) = if freeform {
             let (cols, rows) = grid_size(b, 2.0 * b.width().max(b.height()));
-            let field = g.freeform_on(b).field(spread_scale(b));
+            let field = g.freeform_on(b).model_field(spread_scale(b));
             let q = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
-            (field.grid(b, cols, rows).flat_map(|([r, g, bl], a)| [q(r), q(g), q(bl), q(a)]).collect(), cols, rows)
+            (field.display_grid(b, cols, rows).flat_map(|([r, g, bl], a)| [q(r), q(g), q(bl), q(a)]).collect(), cols, rows)
         } else {
             let k = self.doc.raster_effects_ppi / 72.0;
             let along = |len: f64| (len * k).ceil().clamp(1.0, MAX_GRADIENT_PX) as u16;

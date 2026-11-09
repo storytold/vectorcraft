@@ -466,6 +466,17 @@
 	Inflate	Napuhni
 	Select objects, then pick an object type to give them a 3D effect.	Odaberite objekte, zatim odaberite vrstu objekta da im date 3D efekat.
 	Extrude & Bevel…	Istiskivanje i zakošenje…
+	3D (Classic)	3D (klasično)
+	Extrude & Bevel (Classic)…	Istiskivanje i zakošenje (klasično)…
+	Surface	Površina
+	Wireframe	Žičani model
+	No Shading	Bez sjenčenja
+	Plastic	Plastika
+	Highlight Intensity	Intenzitet odsjaja
+	Highlight Size	Veličina odsjaja
+	Blend Steps	Koraci prelaza
+	Shading Color	Boja sjenčenja
+	Draw Hidden Faces	Crtaj skrivene strane
 	Revolve…	Rotaciono tijelo…
 	Inflate…	Napuhni…
 	Materials…	Materijali…
@@ -1894,6 +1905,10 @@ digits	Malayalam	Malajalam
 	Stylistic	Stilsko
 	Mojikumi Set	Mojikumi skup
 	Kinsoku Set	Kinsoku skup
+	Kinsoku Shori Type	Vrsta Kinsoku Shori
+	Push In First	Prvo uvlačenje
+	Push Out First	Prvo izbacivanje
+	Push Out Only	Samo izbacivanje
 	Hard	Tvrdo
 	Right Indent	Desna uvlaka
 	Right-to-Left Paragraph Direction	Smjer pasusa s desna nalijevo
@@ -2738,6 +2753,10 @@ digits	Malayalam	Malajalam
 	< 1 sec	< 1 sek.
 	[Unnamed]	[Bez naziva]
 	Amount:	Količina:
+	Anti-aliasing Method	Metoda zaglađivanja ivica
+antiAlias	Sharp	Oštro
+	Crisp	Jasno
+	Strong	Snažno
 	Anti-aliasing:	Zaglađivanje ivica:
 	Artboard:	Radna ploča:
 	Color Table	Tabela boja
@@ -4360,6 +4379,7 @@ imageTrace	Outline	Obris
 @msg	Split Into Grid: select paths large enough for the grid	Podijeli u mrežu: odaberite putanje dovoljno velike za mrežu
 @msg	Targa files are RGB: colorModel rgb	Targa datoteke su RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Omotavanje teksta: odaberite objekat omotavanja
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` mora biti "none", "sharp", "crisp" ili "strong"
 @msg	`aspect` must be a number (%)	`aspect` mora biti broj (%)
 @msg	`at` must be [x, y]	`at` mora biti [x, y]
 @msg	`color` must be a colour	`color` mora biti boja
@@ -6354,6 +6374,7 @@ shape	Open	Otvoren
 	Create Swatch Legend	Kreiraj legendu uzoraka boja
 	Create Swatch Legend…	Kreiraj legendu uzoraka boja…
 	HEX	HEX
+	Help Bar	Traka pomoći
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	Alati za tekst
 	Text Tweaker…	Podešavanje teksta…
@@ -6420,6 +6441,11 @@ shape	Open	Otvoren
 # 3D Box add-on
 	3D Box	3D kutija
 	3D Box Tool	Alat za 3D kutiju
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Otvori pomoću
+	No importer plug-ins installed	Nisu instalirani dodaci za uvoz
+	Read files you open in its format and make documents from them	Čitati datoteke koje otvarate u njegovom formatu i od njih praviti dokumente
 
 # Safe Mode
 	Safe Mode…	Sigurni način rada…

@@ -433,6 +433,17 @@
 	Inflate	Pust op
 	Select objects, then pick an object type to give them a 3D effect.	Markér objekter, og vælg derefter en objekttype for at give dem en 3D-effekt.
 	Extrude & Bevel…	Ekstrudér og facet…
+	3D (Classic)	3D (klassisk)
+	Extrude & Bevel (Classic)…	Ekstrudér og facet (klassisk)…
+	Surface	Overflade
+	Wireframe	Trådmodel
+	No Shading	Ingen skyggelægning
+	Plastic	Plastik
+	Highlight Intensity	Højlysintensitet
+	Highlight Size	Højlysstørrelse
+	Blend Steps	Overgangstrin
+	Shading Color	Skyggefarve
+	Draw Hidden Faces	Tegn skjulte flader
 	Revolve…	Omdrej…
 	Inflate…	Pust op…
 	Materials…	Materialer…
@@ -1727,6 +1738,10 @@ digits	Malayalam	Malayalam
 	Stylistic	Stilistisk
 	Mojikumi Set	Mojikumi-sæt
 	Kinsoku Set	Kinsoku-sæt
+	Kinsoku Shori Type	Kinsoku Shori-type
+	Push In First	Skub ind først
+	Push Out First	Skub ud først
+	Push Out Only	Kun skub ud
 	Hard	Hård
 	Right Indent	Højre indrykning
 	Right-to-Left Paragraph Direction	Afsnitsretning fra højre mod venstre
@@ -2487,6 +2502,7 @@ digits	Malayalam	Malayalam
 	Tile Range:	Fliseinterval:
 	tile {number}	flise {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Fliser nummereres på tværs og derefter nedad; lad intervallet stå tomt for alle fliser.
+	Copies per Sheet (as many as fit, in a grid)	Kopier pr. ark (så mange der er plads til, i et gitter)
 	Transverse (the page a quarter turn on the paper)	På tværs (siden drejes en kvart omgang på papiret)
 	Unprintable margin:	Ikke-udskrivbar margen:
 	{pages} in all, {count} per copy	{pages} i alt, {count} pr. kopi
@@ -2557,6 +2573,10 @@ digits	Malayalam	Malayalam
 	< 1 sec	< 1 sek
 	[Unnamed]	[Unavngiven]
 	Amount:	Mængde:
+	Anti-aliasing Method	Antialiaseringsmetode
+antiAlias	Sharp	Skarp
+	Crisp	Klar
+	Strong	Kraftig
 	Anti-aliasing:	Antialiasering:
 	Artboard:	Tegnebræt:
 	Color Table	Farvetabel
@@ -4111,6 +4131,7 @@ imageTrace	Outline	Kontur
 @msg	Split Into Grid: select paths large enough for the grid	Opdel i gitter: markér kurver, der er store nok til gitteret
 @msg	Targa files are RGB: colorModel rgb	Targa-filer er RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Tekstombrydning: markér et ombrydningsobjekt
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` skal være "none", "sharp", "crisp" eller "strong"
 @msg	`aspect` must be a number (%)	`aspect` skal være et tal (%)
 @msg	`at` must be [x, y]	`at` skal være [x, y]
 @msg	`color` must be a colour	`color` skal være en farve
@@ -6319,6 +6340,7 @@ breakText	Glyphs	Glyffer
 	Create Swatch Legend	Opret farveprøveforklaring
 	Create Swatch Legend…	Opret farveprøveforklaring…
 	HEX	HEX
+	Help Bar	Hjælpelinje
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	Tekstværktøjer
 	Text Tweaker…	Tekstjustering…
@@ -6384,6 +6406,11 @@ breakText	Glyphs	Glyffer
 # 3D Box add-on
 	3D Box	3D-boks
 	3D Box Tool	3D-boksværktøj
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Åbn med
+	No importer plug-ins installed	Ingen import-plug-ins installeret
+	Read files you open in its format and make documents from them	Læse filer, du åbner i dens format, og lave dokumenter ud fra dem
 
 # Safe Mode
 	Safe Mode…	Sikker tilstand…

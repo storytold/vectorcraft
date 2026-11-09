@@ -170,9 +170,13 @@ impl Realm {
     }
 
     /// Runs `source` as a script in the global environment and returns its completion value (the
-    /// value of the last expression statement that ran).
+    /// value of the last expression statement that ran). A realm whose built-ins could not be
+    /// installed runs nothing and gives an internal error.
     pub fn run(&mut self, source: &str) -> Result<JsValue, RunError> {
         let interp = &mut self.interp;
+        if let Some(message) = &interp.install_error {
+            return Err(RunError { kind: RunErrorKind::Internal, message: message.clone(), line: 0, column: 0 });
+        }
         interp.fuel = interp.limits.fuel;
         interp.source_units = 0;
         interp.throw_site = None;
@@ -188,6 +192,7 @@ impl Realm {
         interp.stack.clear();
         interp.frames.clear();
         interp.temp_roots.clear();
+        interp.join_stack.clear();
         match result {
             Ok(v) => Ok(interp.to_js_value(&v)),
             Err(Abrupt::Throw(v)) => {
@@ -207,6 +212,21 @@ impl Realm {
         let v = interp.last_thrown.clone();
         let global = interp.global;
         let _ = interp.define(global, key(name), Prop::Data { value: v, flags: HIDDEN });
+    }
+
+    /// Sets the clock `Date.now()` and `new Date()` read: the current time in milliseconds since
+    /// 1970-01-01 UTC. By default it is the system clock; a wasm build has none, and its default
+    /// gives NaN.
+    pub fn set_clock(&mut self, clock: impl Fn() -> f64 + 'static) {
+        self.interp.date_host.clock = std::rc::Rc::new(clock);
+    }
+
+    /// Sets the time zone `Date` uses for local time: `offset` gives local time's offset from UTC
+    /// in milliseconds at a time value (milliseconds since 1970-01-01 UTC), so it can follow
+    /// daylight saving time. An offset that is not finite or is a day or more counts as 0. By
+    /// default local time is UTC.
+    pub fn set_time_zone(&mut self, offset: impl Fn(f64) -> f64 + 'static) {
+        self.interp.date_host.offset = std::rc::Rc::new(offset);
     }
 
     /// Collects garbage now and returns the heap's estimated size in bytes afterwards.

@@ -447,6 +447,17 @@
 	Inflate	Opblazen
 	Select objects, then pick an object type to give them a 3D effect.	Selecteer objecten en kies dan een objecttype om ze een 3D-effect te geven.
 	Extrude & Bevel…	Extruderen en afschuinen…
+	3D (Classic)	3D (klassiek)
+	Extrude & Bevel (Classic)…	Extruderen en afschuinen (klassiek)…
+	Surface	Oppervlak
+	Wireframe	Draadmodel
+	No Shading	Geen arcering
+	Plastic	Plastic
+	Highlight Intensity	Glansintensiteit
+	Highlight Size	Glansgrootte
+	Blend Steps	Overvloeistappen
+	Shading Color	Arceringskleur
+	Draw Hidden Faces	Verborgen vlakken tekenen
 	Revolve…	Draaien…
 	Inflate…	Opblazen…
 	Materials…	Materialen…
@@ -1741,6 +1752,10 @@ digits	Malayalam	Malayalam
 	Stylistic	Stilistisch
 	Mojikumi Set	Mojikumi-set
 	Kinsoku Set	Kinsoku-set
+	Kinsoku Shori Type	Kinsoku Shori-type
+	Push In First	Eerst inschuiven
+	Push Out First	Eerst uitschuiven
+	Push Out Only	Alleen uitschuiven
 	Hard	Hard
 	Right Indent	Rechts inspringen
 	Right-to-Left Paragraph Direction	Alinearichting van rechts naar links
@@ -2501,6 +2516,7 @@ digits	Malayalam	Malayalam
 	Tile Range:	Tegelbereik:
 	tile {number}	tegel {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Tegels worden van links naar rechts en vervolgens van boven naar beneden genummerd; laat het bereik leeg voor alle tegels.
+	Copies per Sheet (as many as fit, in a grid)	Kopieën per vel (zoveel als er passen, in een raster)
 	Transverse (the page a quarter turn on the paper)	Dwars (de pagina een kwartslag op het papier)
 	Unprintable margin:	Niet afdrukbare marge:
 	{pages} in all, {count} per copy	{pages} in totaal, {count} per exemplaar
@@ -2571,6 +2587,10 @@ digits	Malayalam	Malayalam
 	< 1 sec	< 1 sec
 	[Unnamed]	[Naamloos]
 	Amount:	Hoeveelheid:
+	Anti-aliasing Method	Anti-aliasingmethode
+antiAlias	Sharp	Scherp
+	Crisp	Helder
+	Strong	Krachtig
 	Anti-aliasing:	Anti-aliasing:
 	Artboard:	Tekenbord:
 	Color Table	Kleurentabel
@@ -4125,6 +4145,7 @@ imageTrace	Outline	Contour
 @msg	Split Into Grid: select paths large enough for the grid	In raster verdelen: selecteer paden die groot genoeg zijn voor het raster
 @msg	Targa files are RGB: colorModel rgb	Targa-bestanden zijn RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Tekstomloop: selecteer een omloopobject
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` moet "none", "sharp", "crisp" of "strong" zijn
 @msg	`aspect` must be a number (%)	`aspect` moet een getal zijn (%)
 @msg	`at` must be [x, y]	`at` moet [x, y] zijn
 @msg	`color` must be a colour	`color` moet een kleur zijn
@@ -5684,6 +5705,11 @@ swatch	Bright Violet	Felviolet
 @msg	too many library panels were opened in this session	er zijn in deze sessie te veel bibliotheekpanelen geopend
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	De afbeelding is {_1} × {_2} pixels, meer dan {LARGE_TRACE_SIDE} aan één zijde: ze wordt getraceerd, maar langzamer. Een voorinstelling met minder detail of een kleinere kopie van de afbeelding traceert sneller.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	De afbeelding is getraceerd op {_1} × {_2} pixels, verkleind van {_3} × {_4} (maximaal {_5} megapixels).
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	De modus Plat logo gebruikt keepColors niet: hij traceert de kleuren die in logoColors staan, of de kleuren die hij vindt.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Er is niets getraceerd: geen van de kleuren die het traceren vond, komt overeen met keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Er is niets getraceerd: Kleur negeren laat elk gebied van de kleuren in keepColors weg.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	Er is niets getraceerd: de kleuren die overeenkomen met keepColors leveren geen paden op.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: geen van de kleuren die het traceren vond, komt overeen met {c}, dus daarvan wordt niets getraceerd.
 @msg	Flat Logo traced the image at {_1} × {_2} pixels, averaged down from {_3} × {_4}.	De modus Plat logo heeft de afbeelding getraceerd op {_1} × {_2} pixels, door middeling verkleind van {_3} × {_4}.
 	Artboard {n} of {total}	Tekengebied {n} van {total}
 	File {n} of {total}	Bestand {n} van {total}
@@ -6365,6 +6391,7 @@ breakText	Glyphs	Glyphs
 	Create Swatch Legend	Stalenlegenda maken
 	Create Swatch Legend…	Stalenlegenda maken…
 	HEX	HEX
+	Help Bar	Helpbalk
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	Teksthulpmiddelen
 	Text Tweaker…	Tekst bijstellen…
@@ -6430,6 +6457,11 @@ breakText	Glyphs	Glyphs
 # 3D Box add-on
 	3D Box	3D-doos
 	3D Box Tool	3D-doosgereedschap
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Openen met
+	No importer plug-ins installed	Geen importplug-ins geïnstalleerd
+	Read files you open in its format and make documents from them	Bestanden lezen die u in zijn indeling opent en er documenten van maken
 
 # Safe Mode
 	Safe Mode…	Veilige modus…
