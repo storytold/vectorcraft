@@ -9,7 +9,7 @@
 
 use std::rc::Rc;
 
-use skrifa::raw::ps::cs::{self, CharstringContext, CharstringKind, CommandSink};
+use skrifa::raw::ps::cs::{CharstringContext, CharstringKind, CommandSink};
 use skrifa::raw::ps::error::Error as CsError;
 use skrifa::raw::types::Fixed;
 use vectorcraft_geom::BezPath;
@@ -577,7 +577,10 @@ impl Interp<'_> {
         let subrs = self.cid_subrs(&private, data.as_ref(), len_iv)?;
         self.spend((charstring.len() as u64).saturating_add(64))?;
         let charstring = decrypt(&charstring, len_iv);
-        let Some((outline, width)) = type1_glyph(&charstring, &subrs) else { return Ok(None) };
+        let (glyph, work) = type1_glyph(&charstring, &subrs);
+        // The subroutines it ran, which the evaluator limits for each glyph, not for the file.
+        self.spend(work)?;
+        let Some((outline, width)) = glyph else { return Ok(None) };
         let mut outline = outline;
         outline.apply_affine(fdm);
         let w = fdm * vectorcraft_geom::Point::new(width, 0.0) - fdm * vectorcraft_geom::Point::ZERO;
@@ -679,12 +682,13 @@ pub(super) fn decrypt(data: &[u8], len_iv: f64) -> Vec<u8> {
 }
 
 /// The outline (glyph space) and width of decrypted Type 1 charstring `data`, with
-/// subroutines `subrs`, or `None` when it can't be run.
-pub(super) fn type1_glyph(data: &[u8], subrs: &[Vec<u8>]) -> Option<(BezPath, f64)> {
+/// subroutines `subrs`, or `None` when it can't be run; and the bytes of the charstrings it
+/// entered (see [`super::type1::evaluate`]).
+pub(super) fn type1_glyph(data: &[u8], subrs: &[Vec<u8>]) -> (Option<(BezPath, f64)>, u64) {
     let ctx = Type1 { subrs };
     let mut sink = Sink(BezPath::new());
-    let w = cs::evaluate(&ctx, None, data, &mut sink).ok()?;
-    Some((sink.0, w.map_or(0.0, |w| f64::from(w.to_f32()))))
+    let (w, work) = super::type1::evaluate(&ctx, data, &mut sink);
+    (w.ok().map(|w| (sink.0, w.map_or(0.0, |w| f64::from(w.to_f32())))), work)
 }
 
 /// What a Type 1 charstring runs with: its font's subroutines (no `seac` accents: a CIDFont's

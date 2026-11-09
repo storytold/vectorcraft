@@ -350,6 +350,25 @@ fn one_long_show_through_a_large_cmap_runs_out_of_the_budget() {
     );
 }
 
+/// The evaluator limits each glyph, not the file: measuring a glyph whose subroutines (1 to 8
+/// each calling the next four times) run a quarter of a million operations in a loop ends within
+/// the operation budget.
+#[test]
+fn cid_glyphs_measured_in_a_loop_run_out_of_the_budget() {
+    let font = String::from_utf8(cid_font(true)).unwrap();
+    let at = font.find("/Subrs [<").unwrap() + "/Subrs [".len();
+    let end = font[at..].find(']').unwrap() + at;
+    let mut subrs = vec![encrypt(&cs(&[(&[1], 10), (&[0, 0], 21), (&[500, 0], 5), (&[-250, 400], 5), (&[], 9), (&[], 11)]))];
+    for k in 1..=8 {
+        subrs.push(encrypt(&cs(&[(&[k + 1], 10), (&[k + 1], 10), (&[k + 1], 10), (&[k + 1], 10), (&[], 11)])));
+    }
+    subrs.push(encrypt(&cs(&[(&[], 11)])));
+    let list: String = subrs.iter().map(|s| format!("<{}> ", hex(s))).collect();
+    let font = format!("{}{list}{}", &font[..at], &font[end..]);
+    check(&format!("{font}{CMAP} /TestFont 50 selectfont (B) stringwidth pop 25 sub abs 0.01 lt"));
+    super::tests::runs_out_of_budget(&format!("{font}{CMAP} /TestFont 50 selectfont {{ (B) stringwidth pop pop }} loop"));
+}
+
 /// `usecmap` copies the parent's mappings into new arrays: the copies count against the memory
 /// budget, so keeping the CMaps made from a large one in a loop stops with an error instead of
 /// growing without bound.

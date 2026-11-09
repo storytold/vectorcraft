@@ -157,7 +157,7 @@ pub(super) fn advance(data: &[u8], gid: u32) -> f64 {
 }
 
 /// A pen drawing an outline scaled from font units to ems.
-struct Pen(BezPath, f64);
+pub(super) struct Pen(pub BezPath, pub f64);
 
 impl OutlinePen for Pen {
     fn move_to(&mut self, x: f32, y: f32) {
