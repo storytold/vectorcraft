@@ -41,7 +41,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Select Gradient Stop",
             [],
             None,
-            "{index: stop index (0 = the start) | null to clear} select a stop of the gradient behind the active proxy (the first selected object's, else the default paint): the stop the Gradient tool's annotator, the Gradient and Color panels and Delete/arrow keys act on → {index}",
+            "{index: stop index (0 = the start) | null to clear} select a stop of the gradient behind the active proxy (the first selected object's, else the default paint): the stop the Gradient tool's annotator, the Gradient and Color panels and Delete/arrow keys act on; refused while an object of a symbol instance's art is selected → {index}",
             always,
             select_stop
         ),
@@ -59,6 +59,10 @@ pub(crate) fn active_gradient(s: &Session) -> Option<GradientPaint> {
 
 fn select_stop(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "gradient.selectStop";
+    // No document is needed for the default paint's gradient, so this does not use `refuse_symbol_part`.
+    if s.active().is_some_and(|st| st.selection.symbol_part.is_some()) {
+        return Err(super::brushsym::part_only());
+    }
     let index = match p.get("index") {
         None => return Err(bad(C, "missing `index` (a stop index, or null to clear)")),
         Some(Value::Null) => None,

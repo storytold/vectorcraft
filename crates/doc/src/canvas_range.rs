@@ -313,8 +313,8 @@ mod tests {
         d.guides = vec![Guide { layer: Some(NodeId(40)), ..Guide::new(false, 5.0) }, Guide { layer: Some(d.layers[0].id), ..Guide::new(true, 5.0) }];
         d.saved_selections = vec![crate::records::SavedSelection { name: "s".into(), objects: vec![NodeId(10), NodeId(11)] }].into();
         d.assets = vec![
-            crate::assets::ExportAsset { id: 1, name: "far".into(), nodes: vec![NodeId(11)] },
-            crate::assets::ExportAsset { id: 2, name: "both".into(), nodes: vec![NodeId(10), NodeId(11)] },
+            crate::assets::ExportAsset { id: 1, name: "far".into(), nodes: vec![NodeId(11)], format_3d: None },
+            crate::assets::ExportAsset { id: 2, name: "both".into(), nodes: vec![NodeId(10), NodeId(11)], format_3d: None },
         ];
         d.variables.bindings.insert(NodeId(11), ["v".to_string()].into());
         d.variables.bindings.insert(NodeId(10), ["w".to_string()].into());

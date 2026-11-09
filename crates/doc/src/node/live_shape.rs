@@ -329,6 +329,10 @@ pub struct Scaling {
     /// Pattern fills and strokes move with the art (Transform Patterns; General › Transform
     /// Pattern Tiles is its default): their tiles transform too, instead of staying put.
     pub patterns: bool,
+    /// Gradients fitted to the object stay fitted under a transform that flattens it to a line or
+    /// a point (no area left), as a Transform effect leaves them, instead of being fixed to their
+    /// fit and flattened to one color with the object.
+    pub keep_fit_when_flat: bool,
 }
 
 impl Scaling {

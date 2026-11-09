@@ -5,7 +5,9 @@
 //! [`tidy_segments`] then re-joins pieces that came from the same smooth curve by refitting, so
 //! results have roughly as few anchors as the inputs.
 
-use std::collections::BTreeSet;
+use std::cell::RefCell;
+use std::cmp::Reverse;
+use std::collections::HashSet;
 
 use kurbo::{BezPath, CubicBez, PathSeg, Point, Shape as _};
 use linesweeper::topology::{ContourIdx, Contours, Topology, WindingNumber};
@@ -255,12 +257,60 @@ pub(crate) struct Arrangement {
 pub(crate) struct Tidy {
     pub(crate) precision: f64,
     keep: Vec<Point>,
+    /// `keep` by y, sorted on first use.
+    keep_by_y: std::sync::OnceLock<Vec<Point>>,
     /// Input curves (with inflated bounds) used to rebuild split pieces exactly.
     curves: Vec<(kurbo::Rect, CubicBez)>,
     /// `curves` indices by the left edge of their bounds, and the widest bounds: the curves whose
     /// bounds can hold a point, without testing them all.
     by_x: Vec<usize>,
     max_width: f64,
+    /// The top edge of their bounds and their index, in order of that edge, with the tallest
+    /// bounds, made on first use.
+    by_y: std::sync::OnceLock<(Vec<(f64, usize)>, f64)>,
+    /// The wide lookups in `curves` and in `keep` so far.
+    curve_lookups: WideLookups,
+    point_lookups: WideLookups,
+}
+
+/// The lookups in one list of [`Tidy`] with more than [`WIDE_WINDOW`] candidates along x: the
+/// candidates they counted, a score that rises by [`Y_WIN`] when the window along y was the one
+/// used and falls by one when it was not (within [`Y_SCORE_LIMIT`] either way), and the lookups
+/// made while the score was below zero.
+#[derive(Debug, Default)]
+struct WideLookups {
+    scanned: std::sync::atomic::AtomicUsize,
+    score: std::sync::atomic::AtomicIsize,
+    below: std::sync::atomic::AtomicUsize,
+}
+
+impl Clone for WideLookups {
+    fn clone(&self) -> Self {
+        let get = |n: &std::sync::atomic::AtomicUsize| n.load(std::sync::atomic::Ordering::Relaxed).into();
+        Self { scanned: get(&self.scanned), score: self.score().into(), below: get(&self.below) }
+    }
+}
+
+impl WideLookups {
+    fn score(&self) -> isize {
+        self.score.load(std::sync::atomic::Ordering::Relaxed)
+    }
+    /// Does a lookup with `window` candidates along x measure the window along y? It does past
+    /// [`WIDE_WINDOW`] candidates, once wide lookups have scanned [`SORT_COST`] candidates for each
+    /// of the `len` items that the sort along y orders, while the score is zero or more, and in
+    /// one of every [`Y_RETRY`] lookups while it is below.
+    fn search_y(&self, window: usize, len: usize) -> bool {
+        use std::sync::atomic::Ordering::Relaxed;
+        window > WIDE_WINDOW
+            && self.scanned.fetch_add(window, Relaxed) + window >= len.saturating_mul(SORT_COST)
+            && (self.score() >= 0 || self.below.fetch_add(1, Relaxed) % Y_RETRY == Y_RETRY - 1)
+    }
+    /// Counts a lookup that measured along y, and whether that window was the one used.
+    fn used_y(&self, used: bool) {
+        let step = if used { Y_WIN } else { -1 };
+        let next = (self.score() + step).clamp(-Y_SCORE_LIMIT, Y_SCORE_LIMIT);
+        self.score.store(next, std::sync::atomic::Ordering::Relaxed);
+    }
 }
 
 impl Tidy {
@@ -286,12 +336,46 @@ impl Tidy {
         let mut by_x: Vec<usize> = (0..curves.len()).collect();
         by_x.sort_by(|&i, &j| curves[i].0.x0.total_cmp(&curves[j].0.x0));
         let max_width = curves.iter().map(|(r, _)| r.width()).fold(0.0, f64::max);
-        Self { precision, keep, curves, by_x, max_width }
+        Self { precision, keep, curves, by_x, max_width, ..Default::default() }
     }
+    fn keep_by_y(&self) -> &[Point] {
+        self.keep_by_y.get_or_init(|| {
+            let mut keep = self.keep.clone();
+            keep.sort_unstable_by(|a, b| a.y.total_cmp(&b.y));
+            keep
+        })
+    }
+    fn by_y(&self) -> (&[(f64, usize)], f64) {
+        let (by_y, max_height) = self.by_y.get_or_init(|| {
+            let mut by_y: Vec<(f64, usize)> = self.curves.iter().enumerate().map(|(i, (r, _))| (r.y0, i)).collect();
+            by_y.sort_unstable_by(|a, b| a.0.total_cmp(&b.0));
+            (by_y, self.curves.iter().map(|(r, _)| r.height()).fold(0.0, f64::max))
+        });
+        (by_y, *max_height)
+    }
+    /// Is a kept point within the tolerance of `p`? The points within it along x are tested, or
+    /// those along y when [`WideLookups::search_y`] holds and there are fewer along y.
     fn is_kept(&self, p: Point) -> bool {
         let tol = 1e-6 * (1.0 + p.x.abs().max(p.y.abs()));
         let lo = self.keep.partition_point(|q| q.x < p.x - tol);
-        self.keep[lo..].iter().take_while(|q| q.x <= p.x + tol).any(|q| (q.y - p.y).abs() <= tol)
+        // Usually one or two points lie within the tolerance along x; count them one by one up to
+        // the wide window, and search past it.
+        let rest = &self.keep[lo..];
+        let mut within = rest.iter().take(WIDE_WINDOW + 1).take_while(|q| q.x <= p.x + tol).count();
+        if within > WIDE_WINDOW {
+            within = rest.partition_point(|q| q.x <= p.x + tol);
+        }
+        let hi = lo + within;
+        if self.point_lookups.search_y(hi - lo, self.keep.len()) {
+            let keep_by_y = self.keep_by_y();
+            let lo_y = keep_by_y.partition_point(|q| q.y < p.y - tol);
+            let hi_y = lo_y + keep_by_y[lo_y..].partition_point(|q| q.y <= p.y + tol);
+            self.point_lookups.used_y(hi_y - lo_y < hi - lo);
+            if hi_y - lo_y < hi - lo {
+                return keep_by_y[lo_y..hi_y].iter().any(|q| (q.x - p.x).abs() <= tol);
+            }
+        }
+        self.keep[lo..hi].iter().any(|q| (q.y - p.y).abs() <= tol)
     }
 }
 
@@ -317,6 +401,9 @@ impl Arrangement {
         Ok(Self { top, rules: paths.iter().map(|p| p.1).collect(), tidy })
     }
 
+    /// A flag per input telling whether it covers a face of winding `w`: the form the tests compare
+    /// [`Self::covered`] with.
+    #[cfg(test)]
     pub(crate) fn mask(&self, w: &Multi) -> Vec<bool> {
         // A zero winding is outside under both rules, so only the non-zero ones can set a flag.
         let mut m = vec![false; self.rules.len()];
@@ -333,37 +420,62 @@ impl Arrangement {
         w.iter().filter(|&(i, k)| self.rules.get(i).is_some_and(|&r| inside(r, k))).map(|(i, _)| i)
     }
 
-    /// [`Arrangement::contours`] with the test on the windings themselves (see [`Self::covered`]).
+    /// [`Arrangement::contours_covering`] with the test on the windings themselves (see [`Self::covered`]).
     pub(crate) fn contours_where(&self, pred: impl Fn(&Multi) -> bool) -> Contours {
         #[cfg(test)]
         CONTOUR_PASSES.with(|n| n.set(n.get() + 1));
         self.top.contours(pred)
     }
 
+    /// The contours of the faces where `pred` holds for the flags of [`Self::mask`]: the form the
+    /// tests compare [`Self::contours_covering`] with.
+    #[cfg(test)]
     pub(crate) fn contours(&self, pred: impl Fn(&[bool]) -> bool) -> Contours {
         self.contours_where(|w| pred(&self.mask(w)))
     }
 
-    /// [`Self::contours`] with a panic in the sweep's contour pass turned into an error, as `new` does for the
-    /// sweep itself (native builds only: on the web a panic aborts, whatever is caught here). Used by the calls that can return an error; the rest have none to return and let the engine's
-    /// guard report it.
-    pub(crate) fn try_contours(&self, pred: impl Fn(&[bool]) -> bool) -> Result<Contours, PathOpsError> {
-        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.contours(pred))).map_err(|_| PathOpsError::Degenerate)
+    /// The contours of the faces where `pred` holds for the inputs that cover them
+    /// ([`Self::covered`], ascending). One list is refilled for each winding the pass tests, so a
+    /// test costs the size of the face's cover, not the number of inputs.
+    pub(crate) fn contours_covering(&self, pred: impl Fn(&[usize]) -> bool) -> Contours {
+        let cover = RefCell::new(Vec::new());
+        self.contours_where(|w| {
+            let mut c = cover.borrow_mut();
+            c.clear();
+            c.extend(self.covered(w));
+            pred(&c)
+        })
     }
 
-    /// All distinct non-empty coverage masks that occur next to some edge, sorted.
-    pub(crate) fn distinct_masks(&self) -> Vec<Vec<bool>> {
-        let mut set = BTreeSet::new();
+    /// [`Self::contours_covering`] with a panic in the sweep's contour pass turned into an error, as `new` does for the
+    /// sweep itself (native builds only: on the web a panic aborts, whatever is caught here). Used by the calls that can return an error; the rest have none to return and let the engine's
+    /// guard report it.
+    pub(crate) fn try_contours(&self, pred: impl Fn(&[usize]) -> bool) -> Result<Contours, PathOpsError> {
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.contours_covering(pred))).map_err(|_| PathOpsError::Degenerate)
+    }
+
+    /// All distinct non-empty coverages that occur next to some edge, each as the inputs it covers
+    /// (ascending, as [`Self::covered`] gives them), in the order of their masks ([`Self::mask`])
+    /// sorted.
+    pub(crate) fn distinct_masks(&self) -> Vec<Vec<usize>> {
+        let mut set: HashSet<Vec<usize>> = HashSet::new();
+        let mut cover = Vec::new();
         for s in self.top.segment_indices() {
             let h = s.first_half();
             for w in [self.top.winding_clockwise(h), self.top.winding_counter_clockwise(h)] {
-                let m = self.mask(w);
-                if m.iter().any(|&b| b) {
-                    set.insert(m);
+                cover.clear();
+                cover.extend(self.covered(w));
+                if !cover.is_empty() && !set.contains(cover.as_slice()) {
+                    set.insert(cover.clone());
                 }
             }
         }
-        set.into_iter().collect()
+        let mut masks: Vec<Vec<usize>> = set.into_iter().collect();
+        // Masks sort by the first input only one of them covers: the one without it comes first.
+        // That input is the smaller of the first two entries that differ, or the next entry of the
+        // longer list where the shorter one ends.
+        masks.sort_unstable_by(|a, b| a.iter().map(Reverse).cmp(b.iter().map(Reverse)));
+        masks
     }
 
     /// Vertices where three or more edges meet (true intersections / touch points).
@@ -579,13 +691,52 @@ fn exact_merge(run: &[Seg], tidy: &Tidy) -> Option<CubicBez> {
     None
 }
 
+/// Past this many candidates along x, a lookup in [`Tidy`] adds them to the count of scanned ones.
+const WIDE_WINDOW: usize = 64;
+
+/// The candidates scanned per item of a list before [`Tidy`] sorts that list along y: about the
+/// comparisons per item of sorting 100,000 items.
+const SORT_COST: usize = 16;
+
+/// How much a lookup that used the window along y raises the score in [`WideLookups`].
+const Y_WIN: isize = 4;
+
+/// The highest and the lowest score in [`WideLookups`] (negated).
+const Y_SCORE_LIMIT: isize = 256;
+
+/// While the score in [`WideLookups`] is below zero, one lookup in this many measures along y.
+const Y_RETRY: usize = 32;
+
 impl Tidy {
-    /// The input curves whose bounds hold both `a` and `b`.
+    /// The input curves whose bounds hold both `a` and `b`, in the order of `by_x`. The candidates
+    /// are the curves whose bounds start within the widest bounds' reach of the points along x, or
+    /// the same along y when [`WideLookups::search_y`] holds and there are under a quarter as many
+    /// along y.
     fn curves_around(&self, a: Point, b: Point) -> impl Iterator<Item = &CubicBez> {
+        let holds = move |(r, _): &&(kurbo::Rect, CubicBez)| r.contains(a) && r.contains(b);
         let x = a.x.min(b.x);
         let hi = self.by_x.partition_point(|&i| self.curves[i].0.x0 <= x);
         let lo = self.by_x[..hi].partition_point(|&i| self.curves[i].0.x0 < x - self.max_width);
-        self.by_x[lo..hi].iter().map(|&i| &self.curves[i]).filter(move |(r, _)| r.contains(a) && r.contains(b)).map(|(_, c)| c)
+        let along_y = self.curve_lookups.search_y(hi - lo, self.curves.len()).then(|| {
+            let (by_y, max_height) = self.by_y();
+            let y = a.y.min(b.y);
+            let hi_y = by_y.partition_point(|&(y0, _)| y0 <= y);
+            let lo_y = by_y[..hi_y].partition_point(|&(y0, _)| y0 < y - max_height);
+            &by_y[lo_y..hi_y]
+        });
+        let along_y = along_y.filter(|ys| {
+            let used = ys.len().saturating_mul(4) < hi - lo;
+            self.curve_lookups.used_y(used);
+            used
+        });
+        let along_y = along_y.map(|ys| {
+            let mut found: Vec<(usize, &(kurbo::Rect, CubicBez))> = ys.iter().map(|&(_, i)| (i, &self.curves[i])).filter(|(_, c)| holds(c)).collect();
+            // `by_x` was sorted stably from index order, so this puts them in its order.
+            found.sort_by(|(i, p), (j, q)| p.0.x0.total_cmp(&q.0.x0).then(i.cmp(j)));
+            found.into_iter().map(|(_, c)| c)
+        });
+        let along_x = along_y.is_none().then(|| self.by_x[lo..hi].iter().map(|&i| &self.curves[i]).filter(holds));
+        along_x.into_iter().flatten().chain(along_y.into_iter().flatten()).map(|(_, c)| c)
     }
 
     /// `bp` with each curve piece that strays from the one input curve through both its ends
@@ -700,7 +851,7 @@ pub fn boolean(a: &PathData, a_rule: FillRule, b: &PathData, b_rule: FillRule, o
 pub fn try_boolean(a: &PathData, a_rule: FillRule, b: &PathData, b_rule: FillRule, op: BoolOp, precision: f64) -> Result<PathData, PathOpsError> {
     let (pa, pb) = (fill_bezpath(a), fill_bezpath(b));
     let arr = Arrangement::new(vec![(pa.clone(), a_rule), (pb.clone(), b_rule)])?;
-    let c = arr.try_contours(|m| op.apply(m[0], m[1]))?;
+    let c = arr.try_contours(|c| op.apply(c.contains(&0), c.contains(&1)))?;
     if !arrangement_adds_up(&arr, [&pa, &pb])
         && let Some(r) = resolved_boolean([(&pa, a_rule), (&pb, b_rule)], op, precision)
     {
@@ -788,7 +939,7 @@ fn resolved_boolean(inputs: [(&BezPath, FillRule); 2], op: BoolOp, precision: f6
     if !arrangement_adds_up(&arr, [&ra, &rb]) {
         return None;
     }
-    let c = arr.try_contours(|m| op.apply(m[0], m[1])).ok()?;
+    let c = arr.try_contours(|c| op.apply(c.contains(&0), c.contains(&1))).ok()?;
     // The refit keeps the operands' own anchors, not only those of their resolved contours.
     let tidy = Tidy::keeping(precision, [pa, pb]);
     Some(all_contours_to_path(&c, &tidy))
@@ -796,19 +947,19 @@ fn resolved_boolean(inputs: [(&BezPath, FillRule); 2], op: BoolOp, precision: f6
 
 /// [`boolean_n`] that reports a refused input ([`PathOpsError::TooComplex`], non-finite
 /// coordinates) instead of returning an empty path.
-pub fn try_boolean_n(paths: &[(&PathData, FillRule)], pred: impl Fn(&[bool]) -> bool) -> Result<PathData, PathOpsError> {
+pub fn try_boolean_n(paths: &[(&PathData, FillRule)], pred: impl Fn(&[usize]) -> bool) -> Result<PathData, PathOpsError> {
     let bps: Vec<(BezPath, FillRule)> = paths.iter().map(|(p, r)| (fill_bezpath(p), *r)).collect();
     let arr = Arrangement::new(bps)?;
     Ok(all_contours_to_path(&arr.try_contours(pred)?, &arr.tidy))
 }
 
-/// N-ary boolean: the area where `pred(inside_flags)` holds, `inside_flags[i]` telling whether a
-/// point is inside `paths[i]` under its fill rule. A refused input gives an empty path; callers that
-/// can report an error use [`try_boolean_n`].
-pub fn boolean_n(paths: &[(&PathData, FillRule)], pred: impl Fn(&[bool]) -> bool) -> PathData {
+/// N-ary boolean: the area where `pred(inside)` holds, `inside` listing the indices `i`, ascending,
+/// of the `paths[i]` a point is inside under their fill rules. A refused input gives an empty path;
+/// callers that can report an error use [`try_boolean_n`].
+pub fn boolean_n(paths: &[(&PathData, FillRule)], pred: impl Fn(&[usize]) -> bool) -> PathData {
     let bps: Vec<(BezPath, FillRule)> = paths.iter().map(|(p, r)| (fill_bezpath(p), *r)).collect();
     match Arrangement::new(bps) {
-        Ok(arr) => all_contours_to_path(&arr.contours(pred), &arr.tidy),
+        Ok(arr) => all_contours_to_path(&arr.contours_covering(pred), &arr.tidy),
         Err(_) => PathData::default(),
     }
 }
@@ -821,6 +972,17 @@ pub fn try_unite_all(paths: &[(&PathData, FillRule)]) -> Result<PathData, PathOp
 
 /// [`try_unite_all`] refit to `precision`, dropping slivers thinner than it.
 pub fn try_unite_all_with(paths: &[(&PathData, FillRule)], precision: f64) -> Result<PathData, PathOpsError> {
+    match crate::sweep_axis::turned_fills(paths) {
+        Some(turned) => {
+            let refs: Vec<(&PathData, FillRule)> = turned.iter().map(|(p, r)| (p, *r)).collect();
+            try_unite_all_upright(&refs, precision).map(crate::sweep_axis::unturn)
+        }
+        None => try_unite_all_upright(paths, precision),
+    }
+}
+
+/// [`try_unite_all_with`] with the sweeps run on `paths` as they are.
+pub(crate) fn try_unite_all_upright(paths: &[(&PathData, FillRule)], precision: f64) -> Result<PathData, PathOpsError> {
     let mut all = BezPath::new();
     for (p, r) in paths {
         let bp = fill_bezpath(p);
@@ -846,6 +1008,17 @@ pub fn unite_all(paths: &[(&PathData, FillRule)]) -> PathData {
 
 /// [`unite_all`] refit to `precision`, dropping slivers thinner than it.
 pub fn unite_all_with(paths: &[(&PathData, FillRule)], precision: f64) -> PathData {
+    match crate::sweep_axis::turned_fills(paths) {
+        Some(turned) => {
+            let refs: Vec<(&PathData, FillRule)> = turned.iter().map(|(p, r)| (p, *r)).collect();
+            crate::sweep_axis::unturn(unite_all_upright(&refs, precision))
+        }
+        None => unite_all_upright(paths, precision),
+    }
+}
+
+/// [`unite_all_with`] with the sweeps run on `paths` as they are.
+pub(crate) fn unite_all_upright(paths: &[(&PathData, FillRule)], precision: f64) -> PathData {
     let mut all = BezPath::new();
     for (p, r) in paths {
         let bp = fill_bezpath(p);
@@ -918,6 +1091,108 @@ mod tests {
         on.line_to(out.p0);
         on.close_path();
         assert_eq!(tidy.repair(&on), on);
+    }
+
+    #[test]
+    fn input_curves_and_kept_points_are_found_in_wide_and_tall_art() {
+        // Rows of short curves across the page, and the same stood on end: one lookup has a
+        // narrow window along x, the other along y.
+        let mut wide = BezPath::new();
+        for row in 0..4 {
+            let y = row as f64 * 3.0;
+            wide.move_to((0.0, y));
+            for k in 0..200 {
+                let x = k as f64;
+                wide.curve_to((x + 0.3, y + 1.0), (x + 0.7, y + 1.0), (x + 1.0, y));
+            }
+        }
+        let tall = kurbo::Affine::new([0.0, 1.0, 1.0, 0.0, 0.0, 0.0]) * &wide;
+        for art in [&wide, &tall] {
+            let tidy = Tidy::keeping(DEFAULT_PRECISION, [art]);
+            let mut sorted: Vec<usize> = (0..tidy.curves.len()).collect();
+            sorted.sort_by(|&i, &j| tidy.curves[i].0.x0.total_cmp(&tidy.curves[j].0.x0).then(i.cmp(&j)));
+            for (_, c) in tidy.curves.iter().step_by(7) {
+                use kurbo::ParamCurve;
+                // A curve's start point is also held by the curve before it, whose bounds start a
+                // whole curve further back.
+                for (a, b) in [(c.p0, c.p3), (c.p0, c.p0), (c.eval(0.25), c.eval(0.75)), (c.p0, c.p0 + kurbo::Vec2::new(2.5, 2.5))] {
+                    let by_hand: Vec<&CubicBez> =
+                        sorted.iter().map(|&i| &tidy.curves[i]).filter(|(r, _)| r.contains(a) && r.contains(b)).map(|(_, c)| c).collect();
+                    assert_eq!(tidy.curves_around(a, b).collect::<Vec<_>>(), by_hand, "{a:?} {b:?}");
+                }
+                for p in [c.p0, c.p0 + kurbo::Vec2::new(1e-7, -1e-7), c.p0 + kurbo::Vec2::new(0.0, 1e-3), c.p0 + kurbo::Vec2::new(1e-3, 0.0)] {
+                    let tol = 1e-6 * (1.0 + p.x.abs().max(p.y.abs()));
+                    let by_hand = tidy.keep.iter().any(|q| (q.x - p.x).abs() <= tol && (q.y - p.y).abs() <= tol);
+                    assert_eq!(tidy.is_kept(p), by_hand, "{p:?}");
+                }
+            }
+            // The tall art's lookups reach the sorted lists along y; the wide art's never do.
+            let tall_art = std::ptr::eq(art, &tall);
+            assert_eq!(tidy.by_y.get().is_some(), tall_art);
+            assert_eq!(tidy.keep_by_y.get().is_some(), tall_art);
+        }
+    }
+
+    #[test]
+    fn a_few_wide_lookups_do_not_sort_along_y() {
+        let mut tall = BezPath::new();
+        for x in 0..2 {
+            let x = f64::from(x) * 3.0;
+            tall.move_to((x, 0.0));
+            for k in 0..200 {
+                let y = f64::from(k);
+                tall.curve_to((x + 1.0, y + 0.3), (x + 1.0, y + 0.7), (x, y + 1.0));
+            }
+        }
+        let tidy = Tidy::keeping(DEFAULT_PRECISION, [&tall]);
+        let a = Point::new(0.0, 50.0);
+        let found = |tidy: &Tidy| tidy.curves_around(a, a).count();
+        // Bounds at x = 0: the column's 200 curves are candidates along x, and two of them hold `a`.
+        assert_eq!(found(&tidy), 2);
+        assert!(tidy.is_kept(a));
+        assert!(tidy.by_y.get().is_none());
+        assert!(tidy.keep_by_y.get().is_none());
+        // Enough of them to pay for the sort, and the answers stay the same.
+        let scanned = |l: &WideLookups| l.scanned.load(std::sync::atomic::Ordering::Relaxed);
+        while scanned(&tidy.curve_lookups) < SORT_COST * tidy.curves.len() || scanned(&tidy.point_lookups) < SORT_COST * tidy.keep.len() {
+            assert_eq!(found(&tidy), 2);
+            assert!(tidy.is_kept(a));
+        }
+        assert_eq!(found(&tidy), 2);
+        assert!(tidy.is_kept(a));
+        assert!(tidy.by_y.get().is_some());
+        assert!(tidy.keep_by_y.get().is_some());
+        // Along y the windows are narrow, so the lookups keep measuring there.
+        assert!(tidy.curve_lookups.score() > 0 && tidy.point_lookups.score() > 0);
+    }
+
+    #[test]
+    fn lookups_measure_along_y_rarely_where_it_narrows_nothing() {
+        // A square grid of short curves: about as many candidates lie along y as along x.
+        let mut grid = BezPath::new();
+        for row in 0..100 {
+            let y = f64::from(row) * 2.0;
+            grid.move_to((0.0, y));
+            for k in 0..100 {
+                let x = f64::from(k);
+                grid.curve_to((x + 0.3, y + 0.5), (x + 0.7, y + 0.5), (x + 1.0, y));
+            }
+        }
+        let tidy = Tidy::keeping(DEFAULT_PRECISION, [&grid]);
+        let lookups: u32 = 20_000;
+        for k in 0..lookups {
+            let a = Point::new(f64::from(k % 97) + 0.5, f64::from(k % 89) * 2.0 + 0.2);
+            let found: Vec<&CubicBez> = tidy.curves_around(a, a).collect();
+            if k % 500 == 0 {
+                let by_hand: Vec<&CubicBez> = tidy.by_x.iter().map(|&i| &tidy.curves[i]).filter(|(r, _)| r.contains(a)).map(|(_, c)| c).collect();
+                assert_eq!(found, by_hand, "{a:?}");
+            }
+        }
+        // The window along y was measured until the score fell below zero, then once in Y_RETRY lookups.
+        assert!(tidy.by_y.get().is_some());
+        assert_eq!(tidy.curve_lookups.score(), -Y_SCORE_LIMIT);
+        let below = tidy.curve_lookups.below.load(std::sync::atomic::Ordering::Relaxed);
+        assert!(below > lookups as usize / 2, "{below} of {lookups} lookups below zero");
     }
 
     #[test]
@@ -1045,7 +1320,110 @@ mod tests {
     #[cfg(panic = "unwind")]
     fn a_panic_in_the_contour_pass_becomes_an_error() {
         let arr = Arrangement::new(vec![(fill_bezpath(&square(0.0, 0.0, 10.0)), FillRule::NonZero)]).unwrap();
-        assert!(arr.try_contours(|m| m[0]).is_ok());
+        assert!(arr.try_contours(|c| c.contains(&0)).is_ok());
         assert_eq!(arr.try_contours(|_| panic!("simulated panic in the sweep")).err(), Some(PathOpsError::Degenerate));
+    }
+
+    /// Squares that overlap, nest, touch or lie apart, and 72 that overlap in rows, stacked in an
+    /// order other than across the page.
+    fn square_sets() -> Vec<(&'static str, Vec<PathData>)> {
+        let mut many: Vec<PathData> = (0..70)
+            .map(|i| {
+                let x = 10.0 * f64::from((i * 37) % 70);
+                square(x, 7.0 * f64::from(i % 5), 15.0)
+            })
+            .collect();
+        many.insert(20, square(100.0, -5.0, 60.0));
+        many.push(square(400.0, 10.0, 30.0));
+        vec![
+            ("overlapping", vec![square(0.0, 0.0, 100.0), square(50.0, 50.0, 100.0), square(25.0, 75.0, 100.0)]),
+            ("nested", vec![square(0.0, 0.0, 300.0), square(50.0, 50.0, 200.0), square(100.0, 100.0, 100.0), square(140.0, 140.0, 20.0)]),
+            ("touching", vec![square(0.0, 0.0, 100.0), square(100.0, 0.0, 100.0), square(0.0, 100.0, 100.0), square(100.0, 100.0, 100.0)]),
+            ("apart", vec![square(0.0, 0.0, 10.0), square(50.0, 0.0, 10.0), square(0.0, 50.0, 10.0)]),
+            ("many", many),
+        ]
+    }
+
+    /// The contours of a pass, in order, each with its path and whether it is an outer contour.
+    fn contour_list(c: &Contours) -> Vec<(BezPath, bool)> {
+        c.contours().map(|ct| (ct.path.clone(), ct.outer)).collect()
+    }
+
+    type FlagTest = Box<dyn Fn(&[bool]) -> bool>;
+    type CoverTest = Box<dyn Fn(&[usize]) -> bool>;
+
+    /// Each test of the boolean operations, Offset Path, the Pathfinder operations, compound shapes
+    /// and Intertwine finds the same contours in the same order from the inputs covering each face
+    /// as from a flag per input.
+    #[test]
+    fn contour_passes_on_the_covering_inputs_match_the_flag_tests() {
+        for (what, set) in square_sets() {
+            let n = set.len();
+            let arr = Arrangement::new(set.iter().map(|p| (fill_bezpath(p), FillRule::NonZero)).collect()).unwrap();
+            let mut tests: Vec<(String, FlagTest, CoverTest)> = vec![];
+            for op in [BoolOp::Union, BoolOp::Intersect, BoolOp::Difference, BoolOp::Xor] {
+                tests.push((
+                    format!("{op:?}"),
+                    Box::new(move |m: &[bool]| op.apply(m[0], m[1])),
+                    Box::new(move |c: &[usize]| op.apply(c.contains(&0), c.contains(&1))),
+                ));
+            }
+            // Offset Path sweeps three inputs, so there any cover is one of them.
+            tests.push((
+                "offset outward".into(),
+                Box::new(|m: &[bool]| m[0] || m[1] || m[2]),
+                Box::new(|c: &[usize]| c.first().is_some_and(|&i| i < 3)),
+            ));
+            tests.push(("offset inward".into(), Box::new(|m: &[bool]| m[0] && !m[1]), Box::new(|c: &[usize]| c.contains(&0) && !c.contains(&1))));
+            tests.push(("unite".into(), Box::new(|m: &[bool]| m.contains(&true)), Box::new(|c: &[usize]| !c.is_empty())));
+            tests.push(("intersect".into(), Box::new(|m: &[bool]| m.iter().all(|&b| b)), Box::new(move |c: &[usize]| c.len() == n)));
+            tests.push(("minus front".into(), Box::new(|m: &[bool]| m[0] && !m[1..].contains(&true)), Box::new(|c: &[usize]| c == [0])));
+            tests.push((
+                "minus back".into(),
+                Box::new(move |m: &[bool]| m[n - 1] && !m[..n - 1].contains(&true)),
+                Box::new(move |c: &[usize]| c == [n - 1]),
+            ));
+            tests.push((
+                "exclude".into(),
+                Box::new(|m: &[bool]| m.iter().filter(|&&b| b).count() % 2 == 1),
+                Box::new(|c: &[usize]| c.len() % 2 == 1),
+            ));
+            tests.push(("intertwine".into(), Box::new(|m: &[bool]| m[0] && m[1] && !m[2..].contains(&true)), Box::new(|c: &[usize]| c == [0, 1])));
+            // A compound shape whose members take two inputs each, with every shape mode in turn.
+            let modes = [BoolOp::Union, BoolOp::Difference, BoolOp::Intersect, BoolOp::Xor];
+            let compound = move |here: &dyn Fn(usize) -> bool| {
+                let mut area = false;
+                for (k, start) in (0..n).step_by(2).enumerate() {
+                    let h = here(start);
+                    area = if k == 0 { h } else { modes[k % modes.len()].apply(area, h) };
+                }
+                area
+            };
+            tests.push((
+                "compound shape".into(),
+                Box::new(move |m: &[bool]| compound(&|s| m[s..(s + 2).min(n)].contains(&true))),
+                Box::new(move |c: &[usize]| compound(&|s| c.get(c.partition_point(|&i| i < s)).is_some_and(|&i| i < s + 2))),
+            ));
+            for (op, flags, cover) in &tests {
+                let old = contour_list(&arr.contours(flags));
+                assert_eq!(contour_list(&arr.contours_covering(cover)), old, "{what}: {op}");
+                assert_eq!(contour_list(&arr.try_contours(cover).unwrap()), old, "{what}: {op}");
+            }
+        }
+    }
+
+    /// A contour pass hands its test the inputs covering each face, not a flag for every input:
+    /// with 100 squares apart, no test sees more than one.
+    #[test]
+    fn a_contour_pass_tests_only_the_inputs_covering_each_face() {
+        let set: Vec<(BezPath, FillRule)> = (0..100).map(|i| (fill_bezpath(&square(20.0 * f64::from(i), 0.0, 10.0)), FillRule::NonZero)).collect();
+        let arr = Arrangement::new(set).unwrap();
+        let widest = std::cell::Cell::new(0);
+        let c = arr.contours_covering(|c| {
+            widest.set(widest.get().max(c.len()));
+            !c.is_empty()
+        });
+        assert_eq!(widest.get(), 1);
+        assert_eq!(c.contours().count(), 100);
     }
 }
