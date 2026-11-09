@@ -276,8 +276,8 @@ doesn't fit and nothing is copied. A call that would pass the 1 GiB returns `-7`
 
 The app keeps the settings in memory after the first call and reads `settings.json` again only when the file's size
 or modified time differs from the last read or write. A get answered from memory reads no file and counts no bytes. A
-set to the value the key already has writes nothing. Every other set or delete writes the file before the call
-returns. A cache call reads or writes the whole entry in memory in one step, up to 64 MiB, and the run waits for it.
+set to the value the key already has writes nothing, and neither does a delete of a key that has no value. Every
+other successful set or delete writes the file before the call returns. A cache call reads or writes the whole entry in memory in one step, up to 64 MiB, and the run waits for it.
 A live effect runs while the art draws, so keep the entries it uses small.
 
 - A key is 1 to 64 characters from `A-Z`, `a-z`, `0-9`, `_` and `-`, and is not a Windows device name (`CON`, `PRN`,
