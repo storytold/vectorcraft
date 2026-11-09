@@ -159,7 +159,9 @@ pub(crate) fn set_size(app: &mut VectorcraftApp, bx: &OrientedBox, key: &str, v:
     let k = v / now;
     let k2 = if proportional && other > 1e-9 { k } else { 1.0 };
     let (sx, sy) = if key == "width" { (k, k2) } else { (k2, k) };
-    let rp = vectorcraft_geom::reference_point(f, refi.min(8));
+    // About the box's reference point, which X/Y show and the user picked to stay put (the
+    // footprint's corners aren't on the art).
+    let rp = bx.reference_point(refi.min(8));
     let matrix = [sx, 0.0, 0.0, sy, rp.x * (1.0 - sx), rp.y * (1.0 - sy)];
     run_transform(app, "object.transform", json!({"matrix": matrix, "copy": copy}));
 }

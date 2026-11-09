@@ -91,6 +91,23 @@ fn width_and_height_follow_a_rotation_and_set_the_footprint() {
     assert!((w - 200.0).abs() < 0.01 && (h - 100.0).abs() < 0.01, "{w} {h}");
 }
 
+/// A new W on a rotated selection keeps the reference point X/Y show where it is: a corner of the
+/// rotated box, not of the footprint.
+#[test]
+fn a_rotated_size_scales_about_the_boxs_reference_point() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap();
+    app.run("object.rotate", json!({"angle": 30, "absolute": true})).unwrap();
+    let b = app.selection_box().unwrap();
+    let corner = b.reference_point(0);
+    set_size(&mut app, &b, "width", 200.0, 0, true, false);
+    let after = app.selection_box().unwrap();
+    let moved = after.reference_point(0) - corner;
+    assert!(moved.hypot() < 0.01, "the top-left corner moved by {moved:?}");
+    assert!((shown_size(&mut app, &after).0 - 200.0).abs() < 0.01);
+}
+
 /// #812: a selected live polygon shows its Polygon Properties in the Transform panel and the
 /// Properties panel's Transform section, and Make Sides Equal evens it out after a stretch.
 #[test]

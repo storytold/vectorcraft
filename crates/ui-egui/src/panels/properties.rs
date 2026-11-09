@@ -788,6 +788,8 @@ fn document_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
 }
 
+/// The Properties panel's Transform section for the selection: its reference point and X/Y/W/H,
+/// W/H as the Transform panel shows them ([`super::transform::shown_size`]).
 pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.session.active().is_none() {
         return;
