@@ -861,12 +861,13 @@ impl<'a> FnCompiler<'a> {
                     let i = self.string(units);
                     self.emit(Op::String(i));
                 }
-                XmlPart::Content(e) | XmlPart::Attribute(e) | XmlPart::Raw(e) => {
+                XmlPart::Content(e) | XmlPart::Attribute(e) | XmlPart::Name(e) | XmlPart::Attributes(e) => {
                     self.expr(*e)?;
                     self.emit(Op::XmlEscape(match part {
                         XmlPart::Content(_) => 0,
                         XmlPart::Attribute(_) => 1,
-                        _ => 2,
+                        XmlPart::Name(_) => 2,
+                        _ => 3,
                     }));
                 }
             }

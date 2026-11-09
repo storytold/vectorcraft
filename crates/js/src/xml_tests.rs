@@ -120,6 +120,60 @@ fn embedded_expressions_are_escaped_by_position() {
     truth("(<a>{1 < 2}</a>) == 'true'");
 }
 
+#[test]
+fn a_computed_tag_name_cannot_add_markup() {
+    for src in [
+        r#"(<{'a x="1"'}/>)"#,
+        "(<{'a><c/'}></{'a'}>)",
+        "(<a><b>t</{'b><c/'}></a>)",
+        "(<{''}/>)",
+        "(<{'1a'}/>)",
+        "(<a></{'a '}>)",
+        r#"(<x {'a="1" b'}="2"/>)"#,
+    ] {
+        assert_eq!(thrown_name(src), "SyntaxError", "{src}");
+    }
+}
+
+#[test]
+fn a_computed_name_may_be_any_xml_name() {
+    assert_eq!(string("(<{'a.b-c'}/>).toXMLString()"), "<a.b-c/>");
+    assert_eq!(string("(<{'tag'}>t</{'tag'}>).toXMLString()"), "<tag>t</tag>");
+    assert_eq!(string("var n = 'n:b'; (<a xmlns:n=\"u\"><{n}/></a>).toXMLString()"), "<a xmlns:n=\"u\">\n  <n:b/>\n</a>");
+}
+
+#[test]
+fn a_computed_attribute_name_matches_the_standard_example() {
+    let vars = "var tagname = 'name', attributename = 'id', attributevalue = 5, content = 'Fred';";
+    let literal = "<{tagname} {attributename}={attributevalue}>{content}</{tagname}>";
+    assert_eq!(string(&format!("{vars} ({literal}).toXMLString()")), "<name id=\"5\">Fred</name>");
+    assert_eq!(string(r#"var a = 'id'; (<x {a} = "1" b="2"/>).toXMLString()"#), "<x id=\"1\" b=\"2\"/>");
+}
+
+#[test]
+fn a_computed_attribute_run_cannot_add_markup() {
+    for src in [
+        r#"(<x {'a="1"><y/'}></x>)"#,
+        r#"(<><x {'a="1"/><y b="2"'}/></>)"#,
+        "(<x {'b'}/>)",
+        "(<x {'a=1'}/>)",
+        r#"(<x {'a="1'}/>)"#,
+        r#"(<x {'a="1"b="2"'}/>)"#,
+        r#"(<x {'a="<"'}/>)"#,
+    ] {
+        assert_eq!(thrown_name(src), "SyntaxError", "{src}");
+    }
+}
+
+#[test]
+fn a_computed_attribute_run_may_hold_any_attributes() {
+    truth(
+        r#"var a = " a=\"1\"\n b = '>' "; var x = <x {a}/>; x.@a == '1' && x.@b == '>' && x.attributes().length() === 2 && x.children().length() === 0"#,
+    );
+    assert_eq!(string("(<x {''}/>).toXMLString()"), "<x/>");
+    assert_eq!(string("(<x {' '} c=\"3\"/>).toXMLString()"), "<x c=\"3\"/>");
+}
+
 // ---- selectors and updates ----
 
 #[test]
@@ -953,8 +1007,28 @@ fn tree_markup(shape: &[u8]) -> String {
     out
 }
 
+const TAG_PIECES: [&str; 11] = ["a", "b", " ", "=", "\"", "'", "<", "/", "&lt;", "a=\"1\"", "><y/"];
+
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(256))]
+
+    #[test]
+    fn computed_tag_parts_give_no_child_or_throw(parts in proptest::collection::vec(0..TAG_PIECES.len(), 0..5)) {
+        let text: String = parts.iter().map(|&i| TAG_PIECES[i]).collect();
+        let quoted = format!("{text:?}");
+        for src in [
+            format!("var v = <{{{quoted}}}/>; v.children().length() === 0 && v.attributes().length() === 0"),
+            format!("var v = <x {{{quoted}}}></x>; v.children().length() === 0 && v.name().localName === 'x'"),
+            format!("(<><x {{{quoted}}}/></>).length() === 1"),
+            format!("var v = <a><b></{{{quoted}}}></a>; v.children().length() === 1"),
+        ] {
+            let mut r = limited(Limits { fuel: 200_000, heap_bytes: 4 << 20, frames: 200, reentry: 8 });
+            match r.run(&src) {
+                Ok(v) => prop_assert_eq!(v, JsValue::Bool(true), "{}", src),
+                Err(e) => prop_assert!(e.kind != RunErrorKind::Internal, "{src:?}: {e:?}"),
+            }
+        }
+    }
 
     #[test]
     fn source_mixes_parse_or_give_a_located_error(parts in proptest::collection::vec(0..PIECES.len(), 0..40)) {

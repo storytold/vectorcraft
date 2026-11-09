@@ -8,7 +8,7 @@ use super::{Parser, Result, describe};
 use crate::ast::{Expr, ExprId, Stmt, StmtId, XmlNamePart, XmlPart, XmlQualifier};
 use crate::error::TOO_DEEP;
 use crate::token::{Keyword, Punct, Span, TokenKind};
-use crate::xml::{is_name_part, is_name_start, is_xml_space, scan_reference, valid_xml_units};
+use crate::xml::{is_name_start, is_xml_space, scan_name, scan_reference};
 
 const LT: u16 = b'<' as u16;
 const GT: u16 = b'>' as u16;
@@ -277,17 +277,7 @@ impl Parser<'_> {
 
     /// Reads a static name at `pos`, which must be one, and returns the offset after it.
     fn xml_static_name(&self, pos: usize) -> Result<usize> {
-        if !self.unit(pos).is_some_and(is_name_start) {
-            return Err(self.xml_error(pos, "invalid XML name"));
-        }
-        let mut at = pos + 1;
-        while self.unit(at).is_some_and(is_name_part) {
-            at += 1;
-        }
-        if !valid_xml_units(self.src.get(pos..at).unwrap_or_default()) {
-            return Err(self.xml_error(pos, "invalid XML name"));
-        }
-        Ok(at)
+        scan_name(self.src, pos).ok_or_else(|| self.xml_error(pos, "invalid XML name"))
     }
 
     fn xml_skip_space(&self, mut pos: usize, scan: &mut Scan) -> usize {
@@ -308,7 +298,7 @@ impl Parser<'_> {
         let name = if self.unit(at) == Some(LBRACE) {
             scan.flush();
             let (e, after) = self.xml_embedded(at)?;
-            scan.parts.push(XmlPart::Raw(e));
+            scan.parts.push(XmlPart::Name(e));
             at = after;
             None
         } else {
@@ -338,8 +328,17 @@ impl Parser<'_> {
                     }
                     scan.flush();
                     let (e, after) = self.xml_embedded(at)?;
-                    scan.parts.push(XmlPart::Raw(e));
-                    at = after;
+                    let mut next = after;
+                    while self.unit(next).is_some_and(is_xml_space) {
+                        next += 1;
+                    }
+                    if self.unit(next) == Some(EQ) {
+                        scan.parts.push(XmlPart::Name(e));
+                        at = self.xml_attribute_value(after, scan)?;
+                    } else {
+                        scan.parts.push(XmlPart::Attributes(e));
+                        at = after;
+                    }
                 }
                 Some(_) if at == before => return Err(self.xml_error(at, "expected white space before an attribute")),
                 Some(_) => at = self.xml_attribute(at, scan)?,
@@ -351,7 +350,12 @@ impl Parser<'_> {
     fn xml_attribute(&mut self, pos: usize, scan: &mut Scan) -> Result<usize> {
         let end = self.xml_static_name(pos)?;
         self.xml_copy(pos, end, scan);
-        let at = self.xml_skip_space(end, scan);
+        self.xml_attribute_value(end, scan)
+    }
+
+    /// Reads the `=` and value of an attribute whose name ends at `pos` and returns the offset after them.
+    fn xml_attribute_value(&mut self, pos: usize, scan: &mut Scan) -> Result<usize> {
+        let at = self.xml_skip_space(pos, scan);
         if self.unit(at) != Some(EQ) {
             return Err(self.xml_error(at, "expected '=' after an attribute name"));
         }
@@ -397,7 +401,7 @@ impl Parser<'_> {
         let name = if self.unit(at) == Some(LBRACE) {
             scan.flush();
             let (e, after) = self.xml_embedded(at)?;
-            scan.parts.push(XmlPart::Raw(e));
+            scan.parts.push(XmlPart::Name(e));
             at = after;
             None
         } else {

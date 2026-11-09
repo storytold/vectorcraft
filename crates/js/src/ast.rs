@@ -210,8 +210,10 @@ pub enum XmlPart {
     Content(ExprId),
     /// `{expression}` as an attribute's value.
     Attribute(ExprId),
-    /// `{expression}` as a name or a run of attributes, its string used as markup.
-    Raw(ExprId),
+    /// `{expression}` as an element or attribute name, its string checked as an XML name.
+    Name(ExprId),
+    /// `{expression}` as a run of attributes, its string checked as `name="value"` attributes.
+    Attributes(ExprId),
 }
 
 /// What stands before `::` in a qualified name.

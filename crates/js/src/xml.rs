@@ -18,7 +18,7 @@ use crate::heap::{
     XmlListData, XmlName, XmlNode, XmlNs, key, string_bytes,
 };
 use crate::interp::{Abrupt, ErrorType, HeldBytes, Interp, JsResult};
-use crate::string_builtins::UNITS_PER_FUEL;
+use crate::string_builtins::{UNITS_PER_FUEL, flat_charged};
 use crate::value::{Str, Value, index_key};
 
 fn parser_units(s: &str) -> Vec<u16> {
@@ -121,6 +121,53 @@ pub(crate) fn is_name_start(c: u16) -> bool {
 /// A unit a name may hold after its first.
 pub(crate) fn is_name_part(c: u16) -> bool {
     is_name_start(c) || matches!(c, 0x2D | 0x2E | 0xB7) || (c != 0x24 && is_id_part(u32::from(c)))
+}
+
+/// The offset after the XML name that starts at `src[pos]`, when one does.
+pub(crate) fn scan_name(src: &[u16], pos: usize) -> Option<usize> {
+    if !src.get(pos).copied().is_some_and(is_name_start) {
+        return None;
+    }
+    let mut end = pos + 1;
+    while src.get(end).copied().is_some_and(is_name_part) {
+        end += 1;
+    }
+    valid_xml_units(src.get(pos..end).unwrap_or_default()).then_some(end)
+}
+
+fn skip_xml_space(src: &[u16], mut pos: usize) -> usize {
+    while src.get(pos).copied().is_some_and(is_xml_space) {
+        pos += 1;
+    }
+    pos
+}
+
+/// Whether `units` holds only `name="value"` attributes separated by white space.
+fn is_attribute_run(units: &[u16]) -> bool {
+    let mut at = skip_xml_space(units, 0);
+    while at < units.len() {
+        let Some(name_end) = scan_name(units, at) else { return false };
+        let eq = skip_xml_space(units, name_end);
+        if units.get(eq) != Some(&EQ) {
+            return false;
+        }
+        let open = skip_xml_space(units, eq + 1);
+        let quote = match units.get(open).copied() {
+            Some(q @ (DQUOTE | SQUOTE)) => q,
+            _ => return false,
+        };
+        let value = units.get(open + 1..).unwrap_or_default();
+        let Some(len) = value.iter().position(|&c| c == quote || c == LT) else { return false };
+        if value.get(len) != Some(&quote) {
+            return false;
+        }
+        let end = open + len + 2;
+        at = skip_xml_space(units, end);
+        if at == end && at < units.len() {
+            return false;
+        }
+    }
+    true
 }
 
 /// An XML name without a prefix (ECMA-357 section 13.1.2.1).
@@ -2145,17 +2192,7 @@ impl Interp {
     }
 
     fn read_name(&mut self, src: &[u16], pos: usize) -> JsResult<usize> {
-        if !src.get(pos).copied().is_some_and(is_name_start) {
-            return Err(self.syntax("invalid XML name"));
-        }
-        let mut end = pos + 1;
-        while src.get(end).copied().is_some_and(is_name_part) {
-            end += 1;
-        }
-        if !valid_xml_units(src.get(pos..end).unwrap_or_default()) {
-            return Err(self.syntax("invalid XML name"));
-        }
-        Ok(end)
+        scan_name(src, pos).ok_or_else(|| self.syntax("invalid XML name"))
     }
 
     fn check_units(&mut self, src: &[u16], from: usize, to: usize) -> JsResult<()> {
@@ -2605,7 +2642,18 @@ impl Interp {
                 let Value::String(s) = out.finish(self) else { return Err(Abrupt::Internal("not a string".into())) };
                 s
             }
-            _ => self.to_str(&v)?,
+            _ => {
+                let text = self.to_str(&v)?;
+                let units = flat_charged(self, &text)?;
+                self.xml_take_fuel(units.len() / UNITS_PER_FUEL + 1)?;
+                if kind == 2 && scan_name(&units, 0) != Some(units.len()) {
+                    return Err(self.syntax("an embedded expression used as an XML name does not give a name"));
+                }
+                if kind != 2 && !is_attribute_run(&units) {
+                    return Err(self.syntax("an embedded expression used as XML attributes does not give only attributes"));
+                }
+                text
+            }
         };
         self.replace(1, Value::String(result))
     }

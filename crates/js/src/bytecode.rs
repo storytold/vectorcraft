@@ -153,7 +153,7 @@ pub(crate) enum Op {
     /// `object name` → the descendants that match.
     XmlDescendants,
     /// `value` → the string an embedded expression puts in a literal (0 content, 1 attribute
-    /// value, 2 name).
+    /// value, 2 name, 3 run of attributes).
     XmlEscape(u8),
     /// The `parts` strings → the XML or XMLList they spell.
     XmlLiteral {
