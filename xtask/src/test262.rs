@@ -2,16 +2,33 @@
 //! BSD-3-Clause) at a pinned commit, fetched as GitHub's archive of that commit, checked against
 //! its SHA-256 and size, and unpacked into `corpus/test262/` (gitignored, never committed). It then
 //! runs `vectorcraft-js`'s `test262` tests, which parse the ES5 parse subset, run the ES5
-//! `test/language` tests that need only the interpreter's built-ins, run the `test/built-ins` tests
-//! for `String`, `Number`, `RegExp` and `Date`, and print each one's counts.
+//! `test/language` tests and the tests of the ES5 built-ins under `test/built-ins` and
+//! `test/annexB/built-ins` that need only the interpreter's built-ins, run the `test/built-ins`
+//! tests for `String`, `Number`, `RegExp` and `Date`, and print each one's counts.
 //!
-//! Moving the pin: change [`COMMIT`], run the command once with the new commit to see the
-//! archive's SHA-256 in the error, check the archive, and update [`SHA256`].
+//! It also fetches `json2.js`, Douglas Crockford's public-domain JSON polyfill
+//! (https://github.com/douglascrockford/JSON-js), at a pinned commit, checks it against its SHA-256
+//! and size, saves it in `corpus/json2/` (gitignored, never committed), and runs `vectorcraft-js`'s
+//! `json2` test, which runs the polyfill and compares what it writes and reads with the built-in
+//! `JSON`.
+//!
+//! Moving the pin: change [`COMMIT`] (or [`JSON2_COMMIT`]), run the command once with the new
+//! commit to see the file's SHA-256 in the error, check the file, and update [`SHA256`] (or
+//! [`JSON2_SHA256`]).
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::{cargo, root, run, sha256};
+
+/// The douglascrockford/JSON-js commit `json2.js` is read at.
+const JSON2_COMMIT: &str = "7e83f38a2312429fd4933169c1f6a27fd65e889c";
+
+/// The SHA-256 of `json2.js` at [`JSON2_COMMIT`].
+const JSON2_SHA256: &str = "86df14b56572e68a7e10b18e71804cb78c6890a7d6e534324822c23d12e858a2";
+
+/// The largest `json2.js` accepted (the pinned one is 18,876 bytes).
+const JSON2_MAX_BYTES: u64 = 1 << 20;
 
 /// The tc39/test262 commit the suite is read at.
 const COMMIT: &str = "d53ebc8b1931d9f1541e43d59650776e4b766248";
@@ -26,11 +43,44 @@ pub fn run_suite() -> Result<(), String> {
     let dir = fetch()?;
     let mut c = cargo();
     c.env("VECTORCRAFT_TEST262_DIR", &dir).args(["test", "-p", "vectorcraft-js", "--release", "--test", "test262", "--", "--nocapture"]);
-    run(c, &format!("cargo test -p vectorcraft-js --release --test test262 -- --nocapture (VECTORCRAFT_TEST262_DIR={})", dir.display()))
+    run(c, &format!("cargo test -p vectorcraft-js --release --test test262 -- --nocapture (VECTORCRAFT_TEST262_DIR={})", dir.display()))?;
+    let json2 = fetch_json2()?;
+    let mut c = cargo();
+    c.env("VECTORCRAFT_JSON2", &json2).args(["test", "-p", "vectorcraft-js", "--release", "--test", "json2", "--", "--nocapture"]);
+    run(c, &format!("cargo test -p vectorcraft-js --release --test json2 -- --nocapture (VECTORCRAFT_JSON2={})", json2.display()))
+}
+
+/// Fetches `json2.js` unless a copy with the pinned SHA-256 is there already, and returns its path.
+fn fetch_json2() -> Result<PathBuf, String> {
+    let base = root().join("corpus").join("json2").join(JSON2_COMMIT);
+    let file = base.join("json2.js");
+    let matches = |p: &Path| -> Result<bool, String> {
+        let Ok(meta) = std::fs::metadata(p) else { return Ok(false) };
+        if meta.len() > JSON2_MAX_BYTES {
+            return Err(format!("{} is {} bytes, over the {JSON2_MAX_BYTES}-byte limit", p.display(), meta.len()));
+        }
+        Ok(std::fs::read(p).is_ok_and(|b| sha256::hex(&b) == JSON2_SHA256))
+    };
+    if matches(&file)? {
+        println!("json2.js {JSON2_COMMIT} is in {}", file.display());
+        return Ok(file);
+    }
+    std::fs::create_dir_all(&base).map_err(|e| format!("create {}: {e}", base.display()))?;
+    let url = format!("https://raw.githubusercontent.com/douglascrockford/JSON-js/{JSON2_COMMIT}/json2.js");
+    let mut curl = Command::new("curl");
+    curl.args(["-fsSL", "--retry", "3", "-A", "VectorCraft-dev", "--max-filesize", &JSON2_MAX_BYTES.to_string(), "-o"]).arg(&file).arg(&url);
+    run(curl, &format!("curl {url}"))?;
+    if !matches(&file)? {
+        let got = std::fs::read(&file).map(|b| sha256::hex(&b)).unwrap_or_default();
+        let _ = std::fs::remove_file(&file);
+        return Err(format!("json2.js: sha256 {got} does not match the pinned {JSON2_SHA256}"));
+    }
+    println!("json2.js {JSON2_COMMIT} saved in {}", file.display());
+    Ok(file)
 }
 
 /// Fetches and unpacks the suite unless it is there already, and returns its folder.
-fn fetch() -> Result<std::path::PathBuf, String> {
+fn fetch() -> Result<PathBuf, String> {
     let base = root().join("corpus").join("test262");
     let dir = base.join(format!("test262-{COMMIT}"));
     let marker = dir.join(".vectorcraft-sha256");

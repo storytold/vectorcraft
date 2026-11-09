@@ -1,16 +1,29 @@
-//! The built-in objects the interpreter itself needs (ECMA-262 5.1 section 15): `Object` and the
-//! basic methods of `Object.prototype`, `Function` with `Function.prototype.call`, `apply` and
-//! `toString`, `eval`, the error constructors and `Error.prototype.toString`, and the prototypes
-//! primitive values look properties up on. `String`, `Number`, `RegExp` and `Date` are in their
-//! own modules; the rest of the standard library is not here yet.
+//! The built-in objects (ECMA-262 5.1 section 15): `Object` with `Object.prototype` and the
+//! ES5 statics, `Function` with `Function.prototype.call`, `apply`, `bind` and `toString`,
+//! `Array`, the error constructors, `Math`, `JSON`, the global functions and constants, Annex
+//! B's `escape` and `unescape`, and the prototypes primitive values look properties up on, with
+//! `Boolean.prototype`'s `toString` and `valueOf`. `String`, `Number`, `RegExp` and `Date` are in
+//! their own modules.
+//!
+//! Every loop in a built-in takes a unit of fuel for each step, and every string, array, object
+//! or property it makes is checked against the heap limit before it is made, so no built-in can
+//! run past [`crate::Limits`].
+
+mod array;
+mod global;
+mod json;
+mod math;
+mod object;
 
 use std::rc::Rc;
 
 use crate::bytecode::{CodeKind, Source};
 use crate::compiler::{CompileFail, compile_constructed_function};
-use crate::heap::{Class, Func, HIDDEN, NativeFn, NativeKind, ObjId, Object, Prop, key, string_bytes};
-use crate::interp::{Abrupt, ErrorType, Interp, JsResult};
-use crate::value::{Str, Value};
+use crate::heap::{
+    BOUND_ARG_BYTES, Class, Func, HIDDEN, Key, NativeFn, NativeKind, OBJECT_BYTES, OPEN, ObjId, Object, PROP_BYTES, Prop, key, string_bytes,
+};
+use crate::interp::{Abrupt, Desc, ErrorType, Interp, JsResult};
+use crate::value::{Str, Value, index_key, number_to_str, to_uint32};
 
 fn alloc(interp: &mut Interp, class: Class, proto: Option<ObjId>) -> ObjId {
     interp.heap.alloc_object(Object::new(class, proto))
@@ -42,12 +55,16 @@ pub(crate) fn constructor(interp: &mut Interp, name: &'static str, ctor: ObjId, 
 }
 
 /// Creates the built-ins and the global object's properties. The caller installs them before it
-/// sets the realm's limits, so no limit stops the install.
+/// sets the realm's limits, so no limit stops the install. If it fails, the failure is kept in
+/// `interp.install_error` and every run of the realm ends with it.
 pub(crate) fn install(interp: &mut Interp) {
     if let Err(e) = try_install(interp) {
-        // Installing touches only objects it has just made, so this does not happen; a realm
-        // that somehow lacks a built-in reports it when a script uses it.
-        let _ = e;
+        let reason = match e {
+            Abrupt::Throw(v) => interp.describe(&v),
+            Abrupt::Limit(kind) => format!("limit reached: {kind:?}"),
+            Abrupt::Internal(message) => message,
+        };
+        interp.install_error = Some(format!("the built-ins could not be installed: {reason}"));
     }
 }
 
@@ -68,7 +85,8 @@ fn try_install(interp: &mut Interp) -> JsResult<()> {
     interp.intrinsics.array_proto = alloc(interp, Class::Array { length: 0, length_writable: true }, Some(object_proto));
     interp.intrinsics.string_proto = alloc(interp, Class::String(Str::from("")), Some(object_proto));
     interp.intrinsics.number_proto = alloc(interp, Class::Number(0.0), Some(object_proto));
-    interp.intrinsics.boolean_proto = alloc(interp, Class::Boolean, Some(object_proto));
+    let boolean_proto = alloc(interp, Class::Boolean(false), Some(object_proto));
+    interp.intrinsics.boolean_proto = boolean_proto;
     interp.intrinsics.regexp_proto = alloc(interp, Class::Ordinary, Some(object_proto));
     let thrower = native(interp, "", throw_type_error, 0, NativeKind::Plain, false)?;
     if let Some(t) = interp.heap.object_mut(thrower) {
@@ -98,13 +116,187 @@ fn try_install(interp: &mut Interp) -> JsResult<()> {
     data(interp, function_proto, "call", Value::Object(call), HIDDEN)?;
     let apply = native(interp, "apply", unreachable_native, 2, NativeKind::Apply, false)?;
     data(interp, function_proto, "apply", Value::Object(apply), HIDDEN)?;
+    method(interp, function_proto, "bind", function_bind, 1)?;
     method(interp, function_proto, "toString", function_to_string, 0)?;
 
+    method(interp, boolean_proto, "toString", boolean_to_string, 0)?;
+    method(interp, boolean_proto, "valueOf", boolean_value_of, 0)?;
+
     install_errors(interp, object_proto)?;
+    object::install(interp, object)?;
+    array::install(interp)?;
+    math::install(interp)?;
+    json::install(interp)?;
+    global::install(interp)?;
     crate::string_builtins::install(interp)?;
     crate::number_builtins::install(interp)?;
     crate::regexp_builtins::install(interp)?;
     crate::date_builtins::install(interp)
+}
+
+// ---- helpers for the built-ins ----
+
+/// ToInteger (section 9.4).
+fn to_integer(interp: &mut Interp, v: &Value) -> JsResult<f64> {
+    let n = interp.to_number(v)?;
+    Ok(if n.is_nan() { 0.0 } else { n.trunc() })
+}
+
+/// The property name of the index `n`, which may be past the largest array index.
+fn key_of(n: f64) -> Key {
+    if (0.0..4_294_967_295.0).contains(&n) && n.fract() == 0.0 {
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        return index_key(n as u32);
+    }
+    number_to_str(n).flat()
+}
+
+/// ToUint32 of an object's `length`.
+fn length_of(interp: &mut Interp, o: ObjId) -> JsResult<u32> {
+    let len = interp.get_from(o, &key("length"), &Value::Object(o))?;
+    Ok(to_uint32(interp.to_number(&len)?))
+}
+
+fn get_at(interp: &mut Interp, o: ObjId, k: f64) -> JsResult<Value> {
+    interp.get_from(o, &key_of(k), &Value::Object(o))
+}
+
+fn has_at(interp: &mut Interp, o: ObjId, k: f64) -> JsResult<bool> {
+    interp.has_property(o, &key_of(k))
+}
+
+/// The estimated bytes a new element adds.
+const ELEMENT_BYTES: usize = PROP_BYTES + 32 + 2 * 10;
+
+/// `o[k] = v` as the array methods assign: a failure throws. When `o` has no own property `k`, `v`
+/// stays rooted while heap is reserved for the new element, since the caller may hold it nowhere
+/// else; overwriting an own property reserves nothing.
+pub(crate) fn put_at(interp: &mut Interp, o: ObjId, k: f64, v: Value) -> JsResult<()> {
+    let k = key_of(k);
+    if interp.heap.object(o).is_some_and(|obj| obj.props.contains(&k)) {
+        return interp.put(o, k, v, true);
+    }
+    interp.rooted(std::slice::from_ref(&v), |i| {
+        i.reserve_heap(ELEMENT_BYTES)?;
+        i.put(o, k.clone(), v.clone(), true)
+    })
+}
+
+fn delete_at(interp: &mut Interp, o: ObjId, k: f64) -> JsResult<()> {
+    interp.delete(o, &key_of(k), true).map(drop)
+}
+
+/// Defines `a[k]` as a writable, enumerable and configurable data property, as the methods that
+/// build a new array do (DefineOwnProperty with `throw` false). `v` stays rooted while heap is
+/// reserved for it.
+fn create_at(interp: &mut Interp, a: ObjId, k: f64, v: Value) -> JsResult<()> {
+    interp.rooted(std::slice::from_ref(&v), |i| {
+        i.reserve_heap(ELEMENT_BYTES)?;
+        i.define_own_property(a, key_of(k), &Desc::data(v.clone(), OPEN), false).map(drop)
+    })
+}
+
+/// A new array with the given length and no elements.
+fn new_array(interp: &mut Interp, length: u32) -> JsResult<ObjId> {
+    interp.reserve_heap(OBJECT_BYTES)?;
+    let proto = interp.intrinsics.array_proto;
+    Ok(interp.heap.alloc_object(Object::new(Class::Array { length, length_writable: true }, Some(proto))))
+}
+
+/// A new string from code units, checked against the heap limit and charged to the heap.
+fn new_string(interp: &mut Interp, units: Vec<u16>) -> JsResult<Value> {
+    let bytes = string_bytes(units.len());
+    interp.reserve_heap(bytes)?;
+    interp.heap.bytes = interp.heap.bytes.saturating_add(bytes);
+    Ok(Value::String(Str::from_units(units)))
+}
+
+/// Code units a built-in may write into a string for one unit of fuel.
+const UNITS_PER_FUEL: usize = 16;
+
+/// A string the built-ins build piece by piece: each piece takes fuel for its length, is checked
+/// against the longest string the heap limit allows, and has its bytes reserved before it is
+/// added. The buffer's bytes count toward the heap until `finish` or until the native call that
+/// made the builder returns. Everything the caller still needs must be reachable from the roots.
+struct Builder {
+    units: Vec<u16>,
+    /// Code units already reserved and charged to the heap.
+    charged: usize,
+    /// Code units written since fuel was last taken, fewer than `UNITS_PER_FUEL`.
+    unpaid: usize,
+}
+
+impl Builder {
+    fn new() -> Self {
+        Builder { units: Vec::new(), charged: 0, unpaid: 0 }
+    }
+
+    /// Checks that `more` code units fit, reserving heap for them, and takes fuel for writing them.
+    fn make_room(&mut self, interp: &mut Interp, more: usize) -> JsResult<()> {
+        let want = self.units.len().saturating_add(more);
+        if want > interp.limits.heap_bytes / 4 {
+            return Err(Abrupt::Limit(crate::LimitKind::Heap));
+        }
+        self.unpaid += more;
+        let fuel = (self.unpaid / UNITS_PER_FUEL) as u64;
+        self.unpaid %= UNITS_PER_FUEL;
+        if fuel > 0 {
+            if interp.fuel < fuel {
+                interp.fuel = 0;
+                return Err(Abrupt::Limit(crate::LimitKind::Fuel));
+            }
+            // The last unit goes through `use_fuel`, which also checks for an interrupt.
+            interp.fuel -= fuel - 1;
+            interp.use_fuel()?;
+        }
+        if want > self.charged {
+            let grow = (want - self.charged).max(self.charged / 2).max(256).min((interp.limits.heap_bytes / 4).saturating_sub(self.charged));
+            interp.reserve_heap(2 * grow)?;
+            interp.heap.bytes = interp.heap.bytes.saturating_add(2 * grow);
+            interp.held_bytes = interp.held_bytes.saturating_add(2 * grow);
+            self.charged += grow;
+        }
+        Ok(())
+    }
+
+    fn push_units(&mut self, interp: &mut Interp, units: &[u16]) -> JsResult<()> {
+        self.make_room(interp, units.len())?;
+        self.units.extend_from_slice(units);
+        Ok(())
+    }
+
+    /// Appends `units` `count` times. Nothing is written for an empty `units`, however large
+    /// `count` is.
+    fn push_repeated(&mut self, interp: &mut Interp, units: &[u16], count: u64) -> JsResult<()> {
+        if units.is_empty() || count == 0 {
+            return Ok(());
+        }
+        let more = usize::try_from(count).unwrap_or(usize::MAX).saturating_mul(units.len());
+        self.make_room(interp, more)?;
+        for _ in 0..count {
+            self.units.extend_from_slice(units);
+        }
+        Ok(())
+    }
+
+    fn push_str(&mut self, interp: &mut Interp, s: &str) -> JsResult<()> {
+        let units: Vec<u16> = s.encode_utf16().collect();
+        self.push_units(interp, &units)
+    }
+
+    /// The string built, whose bytes were charged as it grew. From here on the heap counts them
+    /// as the string's.
+    fn finish(self, interp: &mut Interp) -> Value {
+        interp.held_bytes = interp.held_bytes.saturating_sub(2 * self.charged);
+        Value::String(Str::from_units(self.units))
+    }
+}
+
+fn require_callable(interp: &mut Interp, v: &Value, what: &str) -> JsResult<()> {
+    if interp.is_callable(v) {
+        return Ok(());
+    }
+    Err(interp.type_error(&format!("{what} is not a function")))
 }
 
 fn install_errors(interp: &mut Interp, object_proto: ObjId) -> JsResult<()> {
@@ -177,13 +369,40 @@ fn object_to_string(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> J
     Ok(Value::str(&format!("[object {class}]")))
 }
 
+/// The Boolean a `Boolean.prototype` method was called on (sections 15.6.4.2 and 15.6.4.3): a
+/// primitive, or the primitive value of a Boolean object.
+fn this_boolean(interp: &mut Interp, this: &Value, name: &str) -> JsResult<bool> {
+    let b = match this {
+        Value::Bool(b) => Some(*b),
+        Value::Object(o) => match interp.heap.object(*o).map(|x| &x.class) {
+            Some(Class::Boolean(b)) => Some(*b),
+            _ => None,
+        },
+        _ => None,
+    };
+    b.ok_or_else(|| interp.type_error(&format!("Boolean.prototype.{name} was called on a value that is not a Boolean")))
+}
+
+/// `Boolean.prototype.toString` (section 15.6.4.2).
+fn boolean_to_string(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
+    let b = this_boolean(interp, &this, "toString")?;
+    Ok(Value::str(if b { "true" } else { "false" }))
+}
+
+/// `Boolean.prototype.valueOf` (section 15.6.4.3).
+fn boolean_value_of(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
+    this_boolean(interp, &this, "valueOf").map(Value::Bool)
+}
+
+/// `Object.prototype.toLocaleString` (section 15.2.4.3).
 fn object_to_locale_string(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
     let o = interp.to_object(&this)?;
-    let f = interp.get_from(o, &key("toString"), &this)?;
+    let receiver = Value::Object(o);
+    let f = interp.get_from(o, &key("toString"), &receiver)?;
     if !interp.is_callable(&f) {
         return Err(interp.type_error("toString is not a function"));
     }
-    interp.call(&f, &this, &[])
+    interp.call(&f, &receiver, &[])
 }
 
 fn object_value_of(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
@@ -283,9 +502,38 @@ fn function_to_string(interp: &mut Interp, this: Value, _: &[Value], _: bool) ->
         }
         Some(Func::Native { name, .. }) => format!("function {name}() {{ [native code] }}"),
         Some(Func::Host { name, .. }) => format!("function {name}() {{ [native code] }}"),
+        Some(Func::Bound { .. }) => "function () { [native code] }".to_string(),
         None => return Err(interp.type_error("Function.prototype.toString was called on a value that is not a function")),
     };
     Ok(Value::str(&text))
+}
+
+/// `Function.prototype.bind` (section 15.3.4.5).
+fn function_bind(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    require_callable(interp, &this, "the value bind was called on")?;
+    let Some(target) = this.as_object() else { return Err(interp.type_error("the value bind was called on is not a function")) };
+    let bound_this = arg(args, 0);
+    let bound_args: Rc<[Value]> = args.get(1..).unwrap_or_default().into();
+    // A host function's `length` is an ordinary property a script can set, so it is converted
+    // to an integer first, as later editions specify.
+    let target_length = match interp.get_from(target, &key("length"), &this)? {
+        Value::Number(n) if n.is_nan() => 0.0,
+        Value::Number(n) => n.trunc(),
+        _ => 0.0,
+    };
+    // Adding 0 turns a negative zero into 0.
+    let length = (target_length - bound_args.len() as f64).max(0.0) + 0.0;
+    interp.reserve_heap(OBJECT_BYTES + 4 * PROP_BYTES + BOUND_ARG_BYTES * bound_args.len())?;
+    let proto = interp.intrinsics.function_proto;
+    let class = Class::Function(Func::Bound { target, this: bound_this, args: bound_args.clone() });
+    let f = interp.heap.alloc_object(Object::new(class, Some(proto)));
+    interp.heap.bytes = interp.heap.bytes.saturating_add(BOUND_ARG_BYTES * bound_args.len());
+    interp.define(f, key("length"), Prop::Data { value: Value::Number(length), flags: 0 })?;
+    let thrower = Some(interp.intrinsics.throw_type_error);
+    for name in ["caller", "arguments"] {
+        interp.define(f, key(name), Prop::Accessor { get: thrower, set: thrower, flags: 0 })?;
+    }
+    Ok(Value::Object(f))
 }
 
 /// The global `eval` called indirectly (section 15.1.2.1.1): global code in the global
