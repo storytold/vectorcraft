@@ -70,23 +70,28 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 
 /// `text.setFormat` parameters: the fields that differ from the values the dialog opened with,
 /// in points (a length typed with its unit, "1 mm", is converted) and kept within -1296..1296.
-fn params(d: &Dialog) -> Map<String, Value> {
+/// A blank field is left alone; a field that is not a length is an error.
+fn params(d: &Dialog) -> Result<Map<String, Value>, String> {
     let initial = d.fields.get(INITIAL).and_then(Value::as_object);
     let mut p = Map::new();
-    for key in KEYS {
-        if !d.fields.contains_key(key) {
-            continue;
-        }
-        let v = d.f64(key, 0.0).clamp(*RANGE.start(), *RANGE.end());
+    for (key, label) in KEYS.into_iter().zip(["Up/Down", "Left/Right"]) {
+        let v = match d.fields.get(key) {
+            None | Some(Value::Null) => continue,
+            Some(Value::String(s)) if s.trim().is_empty() => continue,
+            Some(Value::Number(n)) => n.as_f64(),
+            Some(Value::String(s)) => vectorcraft_doc::Unit::Points.parse(s),
+            Some(_) => None,
+        };
+        let v = v.filter(|v| v.is_finite()).ok_or_else(|| format!("{label} must be a number"))?.clamp(*RANGE.start(), *RANGE.end());
         if initial.and_then(|m| m.get(key)).and_then(Value::as_f64) != Some(v) {
             p.insert(key.into(), json!(v));
         }
     }
-    p
+    Ok(p)
 }
 
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let p = params(d);
+    let p = params(d)?;
     app.ui.dialog = None;
     if p.is_empty() {
         return Ok(Value::Null);
@@ -175,6 +180,30 @@ mod tests {
         assert!(super::super::confirm(&mut app).is_err());
         assert!(app.ui.dialog.is_none());
         assert_eq!(offsets(&app, id), [(0.0, 0.0)]);
+    }
+
+    /// OK with a value that is not a length returns an error, keeps the dialog open and leaves
+    /// the characters alone; a blank field leaves its value alone.
+    #[test]
+    fn tate_chu_yoko_settings_dialog_rejects_a_value_that_is_not_a_length() {
+        let (mut app, id) = app();
+        app.run("text.setRangeStyle", json!({"id": id, "start": 0, "end": 4, "tcyUpDown": 4, "tcyLeftRight": 2})).unwrap();
+        for (key, bad, message) in
+            [("tcyUpDown", json!("invalid"), "Up/Down must be a number"), ("tcyLeftRight", json!(true), "Left/Right must be a number")]
+        {
+            app.run("ui.tateChuYokoSettings", json!({})).unwrap();
+            app.ui.dialog.as_mut().unwrap().fields.insert(key.into(), bad);
+            assert_eq!(super::super::confirm(&mut app), Err(message.to_string()));
+            assert!(app.ui.dialog.is_some());
+            assert_eq!(offsets(&app, id), [(4.0, 2.0)]);
+            app.ui.dialog = None;
+        }
+        app.run("ui.tateChuYokoSettings", json!({})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("tcyUpDown".into(), json!(" "));
+        d.fields.insert("tcyLeftRight".into(), json!(7));
+        super::super::confirm(&mut app).unwrap();
+        assert_eq!(offsets(&app, id), [(4.0, 7.0)]);
     }
 
     /// While the Type tool edits text, OK sets the selected characters and returns the result.

@@ -10,7 +10,8 @@
 //! - `ui.contextMenu.list`: the canvas context menu for the current selection, flattened
 //! - `ui.tool.select {tool}`, `ui.tool.list`
 //! - `ui.pointer {events:[{kind: down|drag|up|move|doubleclick, x, y, backquote?, space?: "doc"|"screen"}], mods?, backquote?}`:
-//!   drive the active tool through the same path as the mouse
+//!   drive the active tool through the same path as the mouse, after the synthetic input sent
+//!   before it was applied
 //! - `ui.key {key, shift?, alt?, cmd?}` / `ui.text {text}`: synthetic keyboard input
 //! - `ui.move {x, y}` / `ui.click {x, y, button?, count?, shift?…}` / `ui.drag {x, y, toX, toY, steps?}`:
 //!   real egui pointer input in screen points (reaches every widget: panels, flyouts, dialogs)
@@ -33,7 +34,7 @@
 //!   Background Save or Background Export on. A `wait` other than true, false or null is refused
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 use std::sync::mpsc::Sender;
 
 use serde_json::{Value, json};
@@ -100,7 +101,12 @@ pub struct ControlRequest {
     pub params: Value,
     pub reply: Sender<ControlResponse>,
     state: Arc<AtomicU8>,
+    /// Its place in the order requests were made ([`ControlRequest::next_seq`]).
+    seq: u64,
 }
+
+/// The sequence number of the next request made.
+static NEXT_SEQ: AtomicU64 = AtomicU64::new(0);
 
 /// A request's state: waiting to run, taken by the app ([`ControlRequest::claim`]), or given up
 /// by its caller before that ([`Ticket::give_up`]). It leaves `QUEUED` once, one way or the other.
@@ -123,12 +129,28 @@ impl Ticket {
 impl ControlRequest {
     pub fn new(method: impl Into<String>, params: Value) -> (Self, std::sync::mpsc::Receiver<ControlResponse>) {
         let (tx, rx) = std::sync::mpsc::channel();
-        (Self { method: method.into(), params, reply: tx, state: Arc::new(AtomicU8::new(QUEUED)) }, rx)
+        let seq = NEXT_SEQ.fetch_add(1, Ordering::SeqCst);
+        (Self { method: method.into(), params, reply: tx, state: Arc::new(AtomicU8::new(QUEUED)), seq }, rx)
+    }
+
+    /// The sequence number the next request made gets: every request made so far is before it.
+    pub fn next_seq() -> u64 {
+        NEXT_SEQ.load(Ordering::SeqCst)
+    }
+
+    /// Whether this request was made before the one numbered `seq`.
+    pub fn made_before(&self, seq: u64) -> bool {
+        self.seq < seq
     }
 
     /// The caller's handle on this request, to give it up with.
     pub fn ticket(&self) -> Ticket {
         Ticket(self.state.clone())
+    }
+
+    /// Whether its caller gave it up (it never runs), without taking it.
+    pub fn given_up(&self) -> bool {
+        self.state.load(Ordering::SeqCst) == GIVEN_UP
     }
 
     /// Take the request to run it → `false` when its caller gave it up meanwhile (don't run it).
@@ -192,17 +214,23 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         "view": app.view().map(|v| serde_json::to_value(v).unwrap_or_default()),
         "canvasRect": app.canvas_rect.map(|c| json!([c.left(), c.top(), c.width(), c.height()])),
         // Window › Arrange › Tile (not saved, so not in `ui`) and the panes the last frame drew:
-        // each one's document index and rect. Canvas coordinates map to the current document's
-        // pane, inside its rulers and scroll bars (`canvasRect`).
+        // each one's document index, view number (Window › New Window) and rect. Canvas
+        // coordinates map to the current window's pane, inside its rulers and scroll bars
+        // (`canvasRect`).
         "tiled": app.ui.tiled,
-        "panes": app.canvas.panes.last.iter().map(|(i, c)| json!({
-            "document": i,
+        "panes": app.canvas.panes.last.iter().map(|(w, c)| json!({
+            "document": w.0,
+            "view": w.1,
             "rect": [c.left(), c.top(), c.width(), c.height()],
-            "active": app.session.active_index() == Some(*i),
+            "active": crate::doc_windows::current(app) == Some(*w),
         })).collect::<Vec<_>>(),
-        // Window › Arrange › Float in Window: the documents in floating windows, by index. While
-        // the current one floats, `canvasRect` is in its window's coordinates.
-        "floating": (0..app.session.documents().len()).filter(|i| crate::doc_windows::is_floating(app, *i)).collect::<Vec<_>>(),
+        // Window › Arrange › Float in Window: the floating windows' documents, by index. While the
+        // current one floats, `canvasRect` is in its window's coordinates.
+        "floating": crate::doc_windows::floating_windows(app).iter().map(|w| w.0).collect::<Vec<_>>(),
+        // Window › New Window: every window, as [document index, view number], in tab order, and
+        // the current one.
+        "windows": crate::doc_windows::windows(app),
+        "currentWindow": crate::doc_windows::current(app),
         "window": [r.width(), r.height()],
         "documents": app.session.documents().iter().map(|d| json!({"title": d.title(), "dirty": d.is_dirty()})).collect::<Vec<_>>(),
         "activeDocument": app.session.active_index(),
@@ -415,7 +443,21 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
                 None => ok(with_data(json!({"width": img.width, "height": img.height}), Some(&png))),
             }
         }
-        "app.open" => wrap(app.run("file.open", json!({"path": s("path")}))),
+        "app.open" => match p.get("importer").filter(|v| !v.is_null()) {
+            // The importer's parameters, else their defaults: automation gets no dialog asking for them.
+            Some(importer) => {
+                let params = p.get("params").filter(|v| !v.is_null()).cloned().unwrap_or_else(|| json!({}));
+                wrap(app.run("file.openWith", json!({"path": s("path"), "importer": importer, "params": params})))
+            }
+            // `params` go to the importer File › Open picks for the file, as in `document.open`.
+            None => {
+                let mut open = json!({"path": s("path")});
+                if let Some(params) = p.get("params").filter(|v| !v.is_null()) {
+                    open["params"] = params.clone();
+                }
+                wrap(app.run("file.open", open))
+            }
+        },
         "app.save" | "app.export" => {
             let mut p = if p.is_object() { p.clone() } else { json!({}) };
             // `wait: true`: the file is written before the reply, whatever Background Save and
@@ -428,6 +470,12 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
                 o.remove("wait");
             }
             let method = req.method.as_str();
+            // The key check of `document.export` runs before the file is written.
+            if method == "app.export"
+                && let Err(e) = crate::menus::check_params(&app.session, "document.export", &p)
+            {
+                return err(e);
+            }
             wrap(if wait { crate::background::in_foreground(app, |app| save_or_export(app, method, &p)) } else { save_or_export(app, method, &p) })
         }
         // As the menu's Quit: `{"pending": "saveChanges"}` while a modified document is asked
@@ -533,7 +581,13 @@ fn pointer_events(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRe
     let base_mods: Mods = p.get("mods").and_then(|m| serde_json::from_value(m.clone()).ok()).unwrap_or_default();
     let view = app.view_info();
     let xf = app.canvas_rect.zip(app.view().copied()).map(|(rect, v)| Xf::new(rect, &v));
-    for e in events {
+    let held =
+        PointerEvent::json_backquote(p, false).and_then(|d| events.iter().map(|e| PointerEvent::json_backquote(e, d)).collect::<Result<Vec<_>, _>>());
+    let held = match held {
+        Ok(held) => held,
+        Err(e) => return err(e),
+    };
+    for (e, backquote) in events.iter().zip(held) {
         let kind = match e.get("kind").and_then(Value::as_str).unwrap_or("") {
             "down" => PointerKind::Down,
             "drag" => PointerKind::Drag,
@@ -559,7 +613,6 @@ fn pointer_events(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRe
             Some(xf) if screen => crate::canvas::pose_on_page(q, &xf),
             _ => q,
         });
-        let backquote = e.get("backquote").and_then(Value::as_bool).unwrap_or_else(|| p.get("backquote").and_then(Value::as_bool).unwrap_or(false));
         crate::canvas::dispatch(app, &PointerEvent { kind, pos, mods, backquote, pressure: PointerEvent::json_pressure(e), pen }, view);
         let hold = PointerEvent::json_hold(e);
         if hold > 0.0 {

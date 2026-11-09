@@ -54,7 +54,7 @@ fn prints_usage(args: &[&str], env: &[(&str, &str)]) {
     assert!(out.status.success(), "{args:?}: {}", String::from_utf8_lossy(&out.stderr));
     assert!(out.stderr.is_empty(), "{args:?}: {}", String::from_utf8_lossy(&out.stderr));
     assert!(stdout.starts_with("Usage: vectorcraft "), "{args:?}: {stdout}");
-    for flag in ["--control", "--automation-read-root", "--automation-write-root", "--in-window-menus", "--version", "--help"] {
+    for flag in ["--control", "--automation-read-root", "--automation-write-root", "--in-window-menus", "--safe-mode", "--version", "--help"] {
         assert!(stdout.contains(flag), "{args:?}: usage doesn't mention {flag}: {stdout}");
     }
     // Headless work is the CLI's: the usage says where to go.
@@ -73,4 +73,28 @@ fn help_prints_usage_and_exits_before_startup() {
 #[test]
 fn help_wins_over_a_bad_control_port_variable() {
     prints_usage(&["--help"], &[("VECTORCRAFT_CONTROL_PORT", "abc")]);
+}
+
+/// An option the app doesn't know (a typo of `--safe-mode`) is an error, not a file to open with
+/// plug-ins; a later `--help` still wins.
+#[test]
+fn an_unknown_option_is_an_error_and_not_a_file() {
+    for args in [&["--safe-mod"][..], &["drawing.svg", "--safe-mod"], &["-x"]] {
+        let out = run(args, &[]);
+        assert!(!out.status.success(), "{args:?}");
+        assert!(out.stdout.is_empty(), "{args:?}");
+        let stderr = String::from_utf8(out.stderr).unwrap();
+        let unknown = args.iter().find(|a| a.starts_with('-')).unwrap();
+        assert_eq!(
+            stderr,
+            format!("vectorcraft: unknown option {unknown}; see vectorcraft --help, or put -- before a file whose name starts with '-'\n"),
+            "{args:?}"
+        );
+    }
+    prints_usage(&["--safe-mod", "--help"], &[]);
+    // After `--`, a name starting with '-' is a file: the run goes on to the control port, which
+    // `run` makes fail.
+    let out = run(&["--", "-x.svg"], &[]);
+    let stderr = String::from_utf8(out.stderr).unwrap();
+    assert!(stderr.contains("VECTORCRAFT_CONTROL_PORT") && !stderr.contains("unknown option"), "{stderr}");
 }

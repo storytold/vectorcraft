@@ -871,6 +871,164 @@ fn transform_effect_name_edits_the_displayed_appearance_target() {
 }
 
 #[test]
+fn transform_effect_dialog_reads_the_selected_compound_members_owner() {
+    for item in [None, Some(0)] {
+        let mut app = app_with_rect();
+        let member = app.session.doc().unwrap().selection.subjects()[0];
+        let other = app.run("shape.rectangle", json!({"x": 30, "y": 30, "width": 20, "height": 20})).unwrap()["id"].clone();
+        app.run("select.set", json!({"ids": [member.0, other]})).unwrap();
+        let compound = app.run("object.compoundPath.make", json!({})).unwrap()["id"].as_u64().unwrap();
+        app.run("effect.apply", json!({"effect": "distort.transform", "item": item, "params": {"moveH": 12, "copies": 2}})).unwrap();
+        app.run("select.set", json!({"ids": [member.0]})).unwrap();
+        app.run("effect.dialog", json!({"effect": "distort.transform", "item": item, "index": 0})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        assert_eq!(d.f64("moveH", 0.0), 12.0);
+        assert_eq!(d.f64("copies", 0.0), 2.0);
+        d.fields.insert("moveH".into(), json!(35));
+        crate::tests_labels::painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
+        crate::dialogs::confirm(&mut app).unwrap();
+        let effects = &app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(compound)).unwrap().appearance;
+        assert_eq!(effects.effects_at(item).unwrap()[0].params["moveH"].as_f64(), Some(35.0));
+        assert_eq!(effects.effects_at(item).unwrap()[0].params["copies"].as_f64(), Some(2.0));
+        app.run("edit.undo", json!({})).unwrap();
+        app.run("effect.dialog", json!({"effect": "distort.transform", "item": item})).unwrap();
+        assert_eq!(app.ui.dialog.as_ref().unwrap().kind, "effectExists");
+        crate::dialogs::confirm(&mut app).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        assert_eq!(d.f64("moveH", 0.0), 12.0);
+        d.fields.insert("moveH".into(), json!(60));
+        crate::tests_labels::painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
+        crate::dialogs::cancel(&mut app);
+        let effects = &app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(compound)).unwrap().appearance;
+        assert_eq!(effects.effects_at(item).unwrap()[0].params["moveH"].as_f64(), Some(12.0));
+    }
+}
+
+#[test]
+fn transform_effect_dialog_keeps_the_active_items_selection_anchor() {
+    for item in [None, Some(json!(0)), Some(Value::Null)] {
+        let mut app = app_with_rect();
+        let back = app.session.doc().unwrap().selection.subjects()[0];
+        for at in [json!(0), Value::Null] {
+            app.run("effect.apply", json!({"effect": "distort.transform", "item": at, "params": {"moveH": 99}})).unwrap();
+        }
+        let front = app.run("shape.rectangle", json!({"x": 30, "y": 30, "width": 20, "height": 20})).unwrap()["id"].clone();
+        for at in [json!(0), Value::Null] {
+            app.run("effect.apply", json!({"effect": "distort.transform", "item": at, "params": {"moveH": 12}})).unwrap();
+        }
+        app.run("select.set", json!({"ids": [front, back.0]})).unwrap();
+        app.run("appearance.setActiveItem", json!({"index": 0})).unwrap();
+        let mut p = json!({"effect": "distort.transform"});
+        if let Some(item) = &item {
+            p["item"] = item.clone();
+        }
+        app.run("effect.dialog", p).unwrap();
+        assert_eq!(app.ui.dialog.as_ref().unwrap().kind, "effectExists");
+        crate::dialogs::confirm(&mut app).unwrap();
+        let expected = if item.is_none() { 12.0 } else { 99.0 };
+        assert_eq!(app.ui.dialog.as_ref().unwrap().f64("moveH", 0.0), expected);
+    }
+}
+
+#[test]
+fn explicit_effect_items_use_paint_order_with_a_selected_compound_member() {
+    let mut app = app_with_rect();
+    let back = app.session.doc().unwrap().selection.subjects()[0];
+    for item in [json!(0), Value::Null] {
+        app.run("effect.apply", json!({"effect": "distort.transform", "item": item, "params": {"moveH": 99}})).unwrap();
+    }
+    let member = app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 80, "height": 80})).unwrap()["id"].clone();
+    let inner = app.run("shape.rectangle", json!({"x": 40, "y": 40, "width": 20, "height": 20})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [member, inner]})).unwrap();
+    app.run("object.compoundPath.make", json!({})).unwrap();
+    for item in [json!(0), Value::Null] {
+        app.run("effect.apply", json!({"effect": "distort.transform", "item": item, "params": {"moveH": 12}})).unwrap();
+    }
+    app.run("select.set", json!({"ids": [member, back.0]})).unwrap();
+    for item in [json!(0), Value::Null] {
+        app.run("effect.dialog", json!({"effect": "distort.transform", "item": item, "index": 0})).unwrap();
+        assert_eq!(app.ui.dialog.as_ref().unwrap().f64("moveH", 0.0), 99.0);
+        crate::dialogs::cancel(&mut app);
+    }
+}
+
+#[test]
+fn editing_an_active_effect_keeps_aligned_rows_in_mixed_stacks() {
+    let mut app = app_with_rect();
+    let back = app.session.doc().unwrap().selection.subjects()[0];
+    app.run("appearance.addStroke", json!({})).unwrap();
+    app.run("appearance.moveItem", json!({"from": 2, "to": 0})).unwrap();
+    app.run("effect.apply", json!({"effect": "distort.transform", "item": 0, "params": {"moveH": 99}})).unwrap();
+    app.run("effect.apply", json!({"effect": "distort.transform", "item": 1, "params": {"moveH": 12}})).unwrap();
+    let front = app.run("shape.rectangle", json!({"x": 30, "y": 30, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    app.run("effect.apply", json!({"effect": "distort.transform", "item": 0, "params": {"moveH": 12}})).unwrap();
+    app.run("select.set", json!({"ids": [front, back.0]})).unwrap();
+    app.run("appearance.setActiveItem", json!({"index": 0})).unwrap();
+    app.run("effect.dialog", json!({"effect": "distort.transform", "index": 0})).unwrap();
+    let d = app.ui.dialog.as_mut().unwrap();
+    assert_eq!(d.f64("moveH", 0.0), 12.0);
+    d.fields.insert("moveH".into(), json!(35));
+    app.run("appearance.setActiveItem", json!({"index": null})).unwrap();
+    crate::tests_labels::painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
+    crate::dialogs::confirm(&mut app).unwrap();
+    let doc = &app.session.doc().unwrap().doc;
+    let front = &doc.node(vectorcraft_doc::NodeId(front)).unwrap().appearance;
+    let back = &doc.node(back).unwrap().appearance;
+    assert_eq!(front.effects_at(Some(0)).unwrap()[0].params["moveH"], 35);
+    assert_eq!(back.effects_at(Some(1)).unwrap()[0].params["moveH"], 35);
+    assert_eq!(back.effects_at(Some(0)).unwrap()[0].params["moveH"], 99);
+}
+
+#[test]
+fn editing_an_effect_keeps_its_original_item_when_the_active_row_changes() {
+    for prompt in [false, true] {
+        let mut app = app_with_rect();
+        let id = app.session.doc().unwrap().selection.subjects()[0];
+        app.run("effect.apply", json!({"effect": "distort.transform", "item": null, "params": {"moveH": 99}})).unwrap();
+        app.run("effect.apply", json!({"effect": "distort.transform", "item": 0, "params": {"moveH": 12}})).unwrap();
+        app.run("appearance.setActiveItem", json!({"index": 0})).unwrap();
+        let mut p = json!({"effect": "distort.transform"});
+        if !prompt {
+            p["index"] = json!(0);
+        }
+        app.run("effect.dialog", p).unwrap();
+        app.run("appearance.setActiveItem", json!({"index": null})).unwrap();
+        if prompt {
+            crate::dialogs::confirm(&mut app).unwrap();
+        }
+        let d = app.ui.dialog.as_mut().unwrap();
+        assert_eq!(d.f64("moveH", 0.0), 12.0);
+        d.fields.insert("moveH".into(), json!(35));
+        crate::tests_labels::painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
+        crate::dialogs::confirm(&mut app).unwrap();
+        let appearance = &app.session.doc().unwrap().doc.node(id).unwrap().appearance;
+        assert_eq!(appearance.effects_at(Some(0)).unwrap()[0].params["moveH"].as_f64(), Some(35.0));
+        assert_eq!(appearance.effects[0].params["moveH"].as_f64(), Some(99.0));
+    }
+}
+
+#[test]
+fn new_effects_keep_implicit_item_targeting_until_confirmation() {
+    for prompt in [false, true] {
+        let mut app = app_with_rect();
+        let id = app.session.doc().unwrap().selection.subjects()[0];
+        app.run("effect.apply", json!({"effect": "distort.transform", "item": null, "params": {"moveH": 99}})).unwrap();
+        app.run("effect.apply", json!({"effect": "distort.transform", "item": 0, "params": {"moveH": 12}})).unwrap();
+        app.run("appearance.setActiveItem", json!({"index": 0})).unwrap();
+        app.run("effect.dialog", json!({"effect": if prompt { "distort.transform" } else { "distort.roughen" }})).unwrap();
+        app.run("appearance.setActiveItem", json!({"index": null})).unwrap();
+        if prompt {
+            app.ui.dialog.as_mut().unwrap().fields.insert("discard".into(), json!(true));
+            crate::dialogs::confirm(&mut app).unwrap();
+        }
+        crate::dialogs::confirm(&mut app).unwrap();
+        let appearance = &app.session.doc().unwrap().doc.node(id).unwrap().appearance;
+        assert_eq!(appearance.effects_at(Some(0)).unwrap().len(), 1);
+        assert_eq!(appearance.effects.len(), 2);
+    }
+}
+
+#[test]
 fn transform_effect_typed_scale_changes_the_painted_object() {
     for layer_target in [false, true] {
         let mut app = app_with_rect();
@@ -1190,10 +1348,15 @@ fn app_click(ctx: &egui::Context, app: &mut VectorcraftApp, pos: egui::Pos2, f: 
     }
 }
 
-/// `key` pressed and released in an app-like frame of `f`, then one more frame.
-fn app_key(ctx: &egui::Context, app: &mut VectorcraftApp, key: egui::Key, f: fn(&mut VectorcraftApp, &mut egui::Ui)) {
+/// `key` pressed and released in one app-like frame of `f`, with no idle frame after it.
+fn app_key_now(ctx: &egui::Context, app: &mut VectorcraftApp, key: egui::Key, f: fn(&mut VectorcraftApp, &mut egui::Ui)) {
     let ev = |pressed| egui::Event::Key { key, physical_key: None, pressed, repeat: false, modifiers: egui::Modifiers::NONE };
     app_frame(ctx, app, vec![ev(true), ev(false)], f);
+}
+
+/// `key` pressed and released in an app-like frame of `f`, then one more frame.
+fn app_key(ctx: &egui::Context, app: &mut VectorcraftApp, key: egui::Key, f: fn(&mut VectorcraftApp, &mut egui::Ui)) {
+    app_key_now(ctx, app, key, f);
     app_frame(ctx, app, vec![], f);
 }
 
@@ -1321,6 +1484,53 @@ fn after_a_row_click_delete_reaches_the_layers_panel_not_edit_clear() {
     let d = &app.session.active().unwrap().doc;
     assert_eq!(d.layers.len(), 1, "Layer 2 is deleted");
     assert!(d.node(rect).is_some(), "the rectangle on Layer 1 stays");
+}
+
+/// After Delete removed the last highlighted Layers row, the panel has nothing left to delete: the
+/// next Delete must go back to the app and clear the selected object, not be swallowed by the
+/// panel's row keys.
+#[test]
+fn delete_after_the_last_highlighted_layer_row_is_deleted_clears_the_selection() {
+    let ctx = drop_ctx();
+    let mut app = app_with_rect();
+    run(&mut app, "layer.new", json!({}));
+    let rect = first_selected(&app).unwrap().id;
+    let texts = frame_events(&ctx, &mut app, vec![], boxed_layers);
+    let row = text_rect(&texts, "Layer 2").center();
+    app_click(&ctx, &mut app, row, boxed_layers);
+    app_key_now(&ctx, &mut app, egui::Key::Delete, boxed_layers);
+    assert_eq!(app.session.active().unwrap().doc.layers.len(), 1, "Layer 2 is deleted");
+    assert!(app.session.active().unwrap().selection.contains(rect), "the rectangle stays selected");
+    app_key_now(&ctx, &mut app, egui::Key::Delete, boxed_layers);
+    assert!(app.session.active().unwrap().doc.node(rect).is_none(), "Delete clears the selected object once the panel has no rows");
+}
+
+/// Clicking a row right after the last highlighted row was deleted restores the row keys: Delete
+/// then deletes that row, not the selected art.
+#[test]
+fn clicking_a_row_after_the_last_one_was_deleted_keeps_delete_with_the_layers_panel() {
+    let ctx = drop_ctx();
+    let mut app = app_with_rect();
+    run(&mut app, "layer.new", json!({}));
+    run(&mut app, "layer.new", json!({}));
+    let rect = first_selected(&app).unwrap().id;
+    let texts = frame_events(&ctx, &mut app, vec![], boxed_layers);
+    let layer2 = text_rect(&texts, "Layer 2").center();
+    app_click(&ctx, &mut app, layer2, boxed_layers);
+    app_key_now(&ctx, &mut app, egui::Key::Delete, boxed_layers);
+    assert_eq!(app.session.active().unwrap().doc.layers.len(), 2, "Layer 2 is deleted");
+    // Click Layer 3 and press Delete in the very next frame: the click's highlight action runs at
+    // the end of its frame, so the panel must read the rows the click will leave.
+    let texts = frame_events(&ctx, &mut app, vec![], boxed_layers);
+    let layer3 = text_rect(&texts, "Layer 3").center();
+    let button =
+        |pressed| egui::Event::PointerButton { pos: layer3, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+    for e in [egui::Event::PointerMoved(layer3), button(true), button(false)] {
+        app_frame(&ctx, &mut app, vec![e], boxed_layers);
+    }
+    app_key_now(&ctx, &mut app, egui::Key::Delete, boxed_layers);
+    assert_eq!(app.session.active().unwrap().doc.layers.len(), 1, "Delete removes the clicked row");
+    assert!(app.session.active().unwrap().doc.node(rect).is_some(), "the rectangle on Layer 1 stays");
 }
 
 /// A tool that claims Delete and Backspace (the Artboard tool's active artboard) leaves them to a

@@ -32,6 +32,23 @@ pub(super) fn resolve(color: &str) -> Option<Color> {
     }
 }
 
+/// Whether `color` is an 8-digit hex color, `#rrggbbaa` (with or without `#`).
+pub(super) fn has_alpha(color: &str) -> bool {
+    let color = color.trim();
+    let digits = color.strip_prefix('#').unwrap_or(color);
+    digits.len() == 8 && digits.chars().all(|c| c.is_ascii_hexdigit())
+}
+
+/// `color` as [`resolve`] reads it, or an error naming the forms it takes. A hex color with an
+/// alpha part (`#rrggbbaa` or `#rgba`) is an error.
+pub(super) fn checked(color: &str) -> Result<Color, String> {
+    let refused = || format!("`{color}` is not a colour (#rrggbb or a preset name)");
+    if has_alpha(color) {
+        return Err(refused());
+    }
+    resolve(color).ok_or_else(refused)
+}
+
 fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let color = resolve(&d.str("color")).unwrap_or(Color::BLACK);
     let [r, g, b, _] = color.to_rgba8(1.0);
@@ -58,7 +75,7 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let color = d.str("color");
-    let hex = resolve(&color).ok_or_else(|| format!("`{color}` is not a colour (#rrggbb or a preset name)"))?.to_hex();
+    let hex = checked(&color)?.to_hex();
     run_and_close(app, "prefs.set", json!({ "key": "patternTileEdgeColor", "value": hex }))
 }
 
@@ -89,5 +106,37 @@ mod tests {
         assert_eq!(app.session.prefs.pattern_tile_edge_color, "#00ff00");
         app.run("ui.tileEdgeColor", json!({})).unwrap();
         assert!(set(&mut app, "nope").is_err());
+    }
+
+    /// A hex color with an alpha part is refused and leaves the preference as it was; `#rrggbb`
+    /// still sets it.
+    #[test]
+    fn a_color_with_an_alpha_part_is_refused() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("ui.tileEdgeColor", json!({})).unwrap();
+        let before = app.session.prefs.pattern_tile_edge_color.clone();
+        app.ui.dialog.as_mut().unwrap().fields.insert("color".into(), json!("#ff000080"));
+        let err = super::super::confirm(&mut app).unwrap_err();
+        assert_eq!(err, "`#ff000080` is not a colour (#rrggbb or a preset name)");
+        assert_eq!(app.session.prefs.pattern_tile_edge_color, before);
+        assert!(app.ui.dialog.is_some(), "the dialog stays open");
+        app.ui.dialog.as_mut().unwrap().fields.insert("color".into(), json!("#ff0000"));
+        super::super::confirm(&mut app).unwrap();
+        assert_eq!(app.session.prefs.pattern_tile_edge_color, "#ff0000");
+    }
+
+    /// The swatches the dialogs draw with `resolve` show an 8-digit color by its RGB, while
+    /// `checked` refuses it; preset names and `#rrggbb` pass both.
+    #[test]
+    fn only_checked_refuses_a_color_with_an_alpha_part() {
+        let red = Color::rgb8(0xff, 0, 0).to_rgba8(1.0);
+        assert_eq!(resolve("#ff000080").map(|c| c.to_rgba8(1.0)), Some(red));
+        assert_eq!(resolve("ff000080").map(|c| c.to_rgba8(1.0)), Some(red));
+        assert!(checked("#ff000080").is_err() && checked(" ff000080 ").is_err());
+        assert!(checked("#f008").is_err());
+        assert_eq!(checked("#ff0000").map(|c| c.to_rgba8(1.0)), Ok(red));
+        for (name, [r, g, b]) in LAYER_COLORS.iter() {
+            assert_eq!(checked(name).map(|c| c.to_rgba8(1.0)), Ok([*r, *g, *b, 255]), "{name}");
+        }
     }
 }

@@ -44,9 +44,12 @@ mod obj;
 mod preview;
 mod shading;
 mod text;
+mod type42;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_composite;
 #[cfg(test)]
 mod tests_fontnames;
 #[cfg(test)]
@@ -70,7 +73,15 @@ use graphics::{GState, Out};
 use interp::{Fault, Interp};
 use obj::PsError;
 
-pub use native::{ai_alone, ai_alone_on_page, is_loss, layered_ai};
+#[cfg(test)]
+pub(crate) use ai::objects_read;
+pub(crate) use ai::{
+    MAX_EDITING_OBJECTS, MAX_GRADIENT_STOPS, MAX_LISTED, MAX_LISTED_NAME, MAX_SYMBOLS, read_art_style, read_style_list, style_moves_with,
+    symbol_art_member, warp_number,
+};
+pub(crate) use ate::{MAX_BYTES as MAX_TEXT_DOCUMENT, MAX_FRAMES, MAX_SEGMENTS, MAX_STORY, MAX_VALUES as MAX_TEXT_VALUES};
+pub use native::{AiLayers, ai_alone, ai_alone_on_page, ai_layers_alone, ai_opened_artboard, is_loss, layered_ai, layered_ai_from};
+pub(crate) use native::{MAX_TEXT, scale_document};
 pub use text::family_style;
 
 /// The page of a PostScript file without a bounding box (US Letter).
@@ -300,7 +311,8 @@ pub fn import_trusting(bytes: &[u8], editing_data: bool, trust: bool) -> Result<
 /// The document of what `out` drew: one layer, clipped art in clipping groups (grouped art in
 /// groups), the spot inks as spot swatches, in CMYK when most process colours were.
 fn finish(mut out: Out) -> Imported {
-    let drawn = std::mem::take(&mut out.drawn);
+    let mut drawn = std::mem::take(&mut out.drawn);
+    graphics::merge_strips(&mut drawn, &mut out.shadings);
     let mut children = vectorcraft_doc::clipnest::nest(&mut out.doc, drawn);
     if !out.shadings.is_empty() {
         graphics::collapse(&mut children, &out.shadings);

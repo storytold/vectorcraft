@@ -25,6 +25,9 @@ pub fn stops_json(stops: &[GradientStop]) -> Value {
                 if let Some(n) = &s.swatch {
                     v["swatch"] = json!(n);
                     v["tint"] = json!(s.tint * 100.0);
+                    if let Some(p) = s.plates {
+                        v["plates"] = json!(p);
+                    }
                 }
                 v
             })

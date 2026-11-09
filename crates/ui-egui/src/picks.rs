@@ -47,6 +47,9 @@ pub type PickAnswer = Vec<String>;
 /// the dialog is then shown in line.
 pub type StartPick = Box<dyn FnMut(PickRequest) -> Option<Receiver<PickAnswer>>>;
 
+/// A button's action that runs again with the picked path.
+type Call = Rc<dyn Fn(&mut VectorcraftApp)>;
+
 /// What runs again with the picked path.
 #[derive(Clone)]
 pub(crate) enum Entry {
@@ -56,12 +59,16 @@ pub(crate) enum Entry {
     Confirm(Box<Dialog>),
     /// A panel's or a dialog's button.
     Call(Rc<dyn Fn(&mut VectorcraftApp)>),
+    /// A dialog's button that acts on no document (an app preference): its answer goes on even
+    /// when the document active at the time has closed meanwhile.
+    AppCall(Rc<dyn Fn(&mut VectorcraftApp)>),
 }
 
 /// Commands that ask for a file but act on no document: their answer goes on even when the
 /// document active at the time has closed meanwhile.
 const DOCUMENT_FREE: &[&str] = &[
     "file.open",
+    "file.openWith",
     "file.newFromTemplate",
     "ui.installPlugin",
     "ui.checkScript",
@@ -70,6 +77,7 @@ const DOCUMENT_FREE: &[&str] = &[
     "ui.libraryPanel.locate",
     "shortcuts.import",
     "shortcuts.export",
+    "shortcuts.exportText",
     "ui.shortcutImportDialog",
     crate::panels::actions::SAVE_SET,
     crate::panels::actions::LOAD_SET,
@@ -80,6 +88,7 @@ impl Entry {
     fn document(&self, app: &VectorcraftApp) -> Option<u64> {
         match self {
             Entry::Command(id, _) if DOCUMENT_FREE.contains(&id.as_str()) => None,
+            Entry::AppCall(_) => None,
             _ => app.session.active().map(|d| d.uid),
         }
     }
@@ -194,6 +203,26 @@ pub(crate) fn in_dialog(
     d: &mut Dialog,
     f: impl Fn(&mut VectorcraftApp, &mut Dialog) -> Result<(), String> + 'static,
 ) -> Result<(), String> {
+    dialog_entry(app, d, Entry::Call, f)
+}
+
+/// [`in_dialog`] for an action that acts on no document (an app preference): its answer runs `f`
+/// again on the open dialog even when the document active at the time has closed meanwhile.
+pub(crate) fn in_app_dialog(
+    app: &mut VectorcraftApp,
+    d: &mut Dialog,
+    f: impl Fn(&mut VectorcraftApp, &mut Dialog) -> Result<(), String> + 'static,
+) -> Result<(), String> {
+    dialog_entry(app, d, Entry::AppCall, f)
+}
+
+/// [`in_dialog`] with `wrap` making the entry (a [`Entry::Call`] or an [`Entry::AppCall`]).
+fn dialog_entry(
+    app: &mut VectorcraftApp,
+    d: &mut Dialog,
+    wrap: fn(Call) -> Entry,
+    f: impl Fn(&mut VectorcraftApp, &mut Dialog) -> Result<(), String> + 'static,
+) -> Result<(), String> {
     let f = Rc::new(move |app: &mut VectorcraftApp, d: &mut Dialog| {
         let r = f(app, d);
         if let Some(mut question) = app.ui.dialog.take_if(|q| q.kind == crate::dialogs::confirm::REPLACE) {
@@ -204,7 +233,7 @@ pub(crate) fn in_dialog(
     });
     let (again, kind) = (f.clone(), d.kind.clone());
     let entry = move || {
-        Entry::Call(Rc::new(move |app: &mut VectorcraftApp| {
+        wrap(Rc::new(move |app: &mut VectorcraftApp| {
             let Some(mut d) = app.ui.dialog.take_if(|d| d.kind == kind) else {
                 app.status(dialog_gone());
                 return;
@@ -426,6 +455,11 @@ fn rerun(app: &mut VectorcraftApp, entry: Entry) {
         Entry::Call(f) => {
             let again = f.clone();
             as_entry(app, move || Entry::Call(again), |app| f(app));
+            Ok(())
+        }
+        Entry::AppCall(f) => {
+            let again = f.clone();
+            as_entry(app, move || Entry::AppCall(again), |app| f(app));
             Ok(())
         }
     };

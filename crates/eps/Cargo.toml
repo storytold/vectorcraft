@@ -13,12 +13,18 @@ vectorcraft-geom = { workspace = true }
 vectorcraft-color = { workspace = true }
 vectorcraft-doc = { workspace = true }
 vectorcraft-effects = { workspace = true }
+# The editing data for other apps writes clipped art cut to its clipping path.
+vectorcraft-pathops = { workspace = true }
 vectorcraft-brush = { workspace = true }
 vectorcraft-text = { workspace = true }
+# The glyph outlines of Type 42 fonts a composite font shows.
+skrifa = { workspace = true }
 # Windows metafile previews, opened when a file's PostScript can't be read.
 vectorcraft-metafile = { workspace = true }
 # Non-native art in Illustrator editing data (a placed PDF's content, kept as a PDF).
 vectorcraft-pdf = { workspace = true }
+# The predefined CMaps that strings of legacy type in CJK fonts are decoded by.
+craft-pdf = { workspace = true }
 # The TIFF writer (previews) and PackBits, shared with raster export.
 vectorcraft-render = { workspace = true }
 kurbo = { workspace = true }

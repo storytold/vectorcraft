@@ -377,8 +377,8 @@ fn open_exts_cover_every_readable_format() {
     assert_eq!(filters[0], ("All readable files", OPEN_EXTS));
     assert_eq!(
         filters.len(),
-        10 + FORMATS.iter().filter(|f| f.read).count(),
-        "and swatch libraries, libraries, flattener, PDF, print and export presets, shortcut sets, scripts, plug-ins"
+        11 + FORMATS.iter().filter(|f| f.read).count(),
+        "and swatch libraries, libraries, flattener, PDF, print and export presets, composite fonts, shortcut sets, scripts, plug-ins"
     );
     assert!(filters.contains(&("Export presets", SCREEN_EXPORT_PRESET_EXTS)), "File › Open imports export presets");
     assert!(filters.contains(&("Scripts", crate::cmd::scripts::EXTS)), "File › Open checks scripts");
@@ -459,7 +459,7 @@ fn formats_query_lists_readers_writers_and_options() {
     );
     assert!(ids("readable").contains(&"tiff".to_string()) && ids("readable").contains(&"ait".to_string()));
     let png = r["formats"].as_array().unwrap().iter().find(|f| f["id"] == "png").unwrap();
-    assert_eq!(png["options"]["scale"]["default"], 1);
+    assert_eq!(png["options"]["scale"]["default"], Value::Null);
     assert_eq!(r["openExtensions"].as_array().unwrap().len(), OPEN_EXTS.len());
 }
 
@@ -680,7 +680,9 @@ fn a_native_save_streams_the_bytes_the_encoder_makes() {
     s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
     for (name, compress) in [("a.vectorcraft", false), ("b.vectorcraft", true), ("c.vctemplate", true)] {
         let path = d.join(name).to_string_lossy().to_string();
-        let p = json!({"path": path, "compress": compress});
+        // A PDF-compatible file's PDF is dated to the second it is written, so the byte comparison
+        // uses files without one.
+        let p = json!({"path": path, "compress": compress, "pdfCompatible": false});
         let r = s.execute("file.saveCopy", &p).unwrap();
         let written = std::fs::read(&path).unwrap();
         assert_eq!(r["bytes"], written.len(), "{r}");
@@ -690,6 +692,17 @@ fn a_native_save_streams_the_bytes_the_encoder_makes() {
         assert_eq!(written, job.encode().unwrap().files[0].1, "{name}");
         assert_eq!(vectorcraft_format::load(&written).unwrap().template, name.ends_with("vctemplate"));
     }
+    // A save with the default options streams a file that carries its PDF.
+    let path = d.join("d.vectorcraft").to_string_lossy().to_string();
+    let p = json!({"path": path});
+    let r = s.execute("file.saveCopy", &p).unwrap();
+    let written = std::fs::read(&path).unwrap();
+    assert_eq!(r["bytes"], written.len(), "{r}");
+    assert!(vectorcraft_format::pdf_content(&written).is_some());
+    let plan = save_plan(&s, SaveMode::Copy, &p).unwrap();
+    let job = save_job(&mut s, plan).unwrap();
+    assert!(job.streams());
+    assert!(vectorcraft_format::pdf_content(&job.encode().unwrap().files[0].1).is_some());
     // A writer that fails: the save fails with its error.
     let plan = save_plan(&s, SaveMode::Copy, &json!({"path": "/x/y.vectorcraft"})).unwrap();
     let job = save_job(&mut s, plan).unwrap();
@@ -877,4 +890,27 @@ fn a_photo_places_the_way_its_exif_orientation_says() {
     let px = image::load_from_memory(&img.blob.bytes).unwrap().to_rgb8();
     let red = |p: &image::Rgb<u8>| p[0] > 150 && p[1] < 80;
     assert!(red(px.get_pixel(4, 3)) && !red(px.get_pixel(4, 12)), "the left half is on top");
+}
+
+/// With `importer` named, a file up to the importer's limit is read whole and a larger one is an
+/// error, whatever its content.
+#[test]
+fn read_path_for_a_named_importer_stops_at_the_limit() {
+    let limit = vectorcraft_plugins::import::MAX_INPUT_BYTES as u64;
+    let dir = tmp_dir("read-path-limit");
+    let path = dir.join("drawing.tuv");
+    let name = path.to_string_lossy().into_owned();
+    let named = json!({"importer": "plugin.test.notinstalled"});
+    let sized = |len: u64| {
+        std::fs::write(&path, b"\x89PNG\r\n\x1a\n").unwrap();
+        std::fs::OpenOptions::new().write(true).open(&path).unwrap().set_len(len).unwrap();
+    };
+    for len in [8, 64 << 10, 70_000, limit] {
+        sized(len);
+        assert_eq!(importer::read_path(&name, &named).unwrap().len() as u64, len);
+    }
+    sized(limit + 1);
+    let e = importer::read_path(&name, &named).unwrap_err();
+    assert!(e.to_string().contains("larger than") && e.to_string().contains("drawing.tuv"), "{e}");
+    let _ = std::fs::remove_dir_all(&dir);
 }

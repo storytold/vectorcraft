@@ -90,9 +90,10 @@ impl Gen<'_> {
         };
         // A run the outline can't be made for (its points all in one place) stays a thin line.
         if !band.is_empty() {
-            // The band takes the series' colour, set as a fill or, on a thin line, as its stroke; a thin black outline.
+            // The band takes the series' color, set as a fill or, on a thin line, as a stroke with paint; a thin black outline.
             let slot = g.series_paints.get(s);
-            let fill = slot.and_then(|p| p.fill.clone().or_else(|| p.stroke.clone())).unwrap_or_else(|| default_series_paint(s));
+            let fill =
+                slot.and_then(|p| p.fill.clone().or_else(|| p.stroke.clone().filter(|st| !st.is_none()))).unwrap_or_else(|| default_series_paint(s));
             return self.path(band, fill, Paint::solid(Color::BLACK), 0.25);
         }
         let (fill, stroke, w) = series_marks(g, s, false, default_series_paint(s), 1.0);
@@ -140,7 +141,12 @@ pub(super) const SHADOW_OPACITY: f32 = 0.35;
 /// Draw Filled Lines: how wide a filled line is.
 const FILLED_LINE_WIDTH: f64 = 3.0;
 
-pub(super) const FILLED_LINE_BUDGET: usize = 20_000;
+const FILLED_LINE_BUDGET: usize = 20_000;
+
+/// Does graph `g`, with `series` series, draw Filled Lines (up to FILLED_LINE_BUDGET data points)?
+pub(super) fn filled_lines_on(g: &GraphSpec, series: usize) -> bool {
+    g.filled_lines && g.rows.len().saturating_mul(series) <= FILLED_LINE_BUDGET
+}
 
 /// Most marks a graph draws shadows for (each is a copy).
 pub(super) const SHADOW_BUDGET: usize = 200_000;

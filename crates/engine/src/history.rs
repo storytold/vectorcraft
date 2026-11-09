@@ -9,8 +9,8 @@ pub struct HistoryEntry {
     pub doc: Arc<Document>,
     /// The selection as it was, shared with the neighbouring steps that have the same one.
     pub selection: Arc<Selection>,
-    /// Roughly the memory this step keeps of its own: what of `doc` the step after it (or the
-    /// document now) doesn't share ([`Document::retained_bytes`]).
+    /// Roughly the memory this step keeps of its own: the unshared document data
+    /// ([`Document::retained_bytes`]) plus owned color-mode paint snapshots.
     pub bytes: usize,
     /// The same the other way round: what that next state keeps that `doc` doesn't share. Undoing
     /// (redoing) this step makes a step that keeps the next state: this is its `bytes`.
@@ -19,6 +19,18 @@ pub struct HistoryEntry {
     next: usize,
     /// The template and name `label` was made from ([`Session::edit_named`]).
     pub(crate) named: Option<NamedStep>,
+    /// A number no other step takes ([`History::step`]).
+    serial: u64,
+    /// Original and converted new-art colors, only for steps that change document color mode.
+    pub(crate) color_mode_paints: Option<(vectorcraft_tools::PaintDefaults, vectorcraft_tools::PaintDefaults)>,
+    /// Owned new-art snapshots included in both directional estimates.
+    color_mode_bytes: usize,
+}
+
+/// The next [`HistoryEntry::serial`]: 1 for the first step made, so 0 never names a step.
+fn next_serial() -> u64 {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
 /// A step name made by filling the `{name}` placeholder of a template with a name
@@ -45,7 +57,18 @@ impl HistoryEntry {
     pub(crate) fn kept(label: String, doc: Arc<Document>, selection: Arc<Selection>, next: &Document) -> Self {
         doc.drop_lookup_cache();
         let (bytes, next_bytes) = doc.retained_bytes_each(next);
-        HistoryEntry { label, doc, selection, bytes, next_bytes, next: std::ptr::from_ref(next) as usize, named: None }
+        HistoryEntry {
+            label,
+            doc,
+            selection,
+            bytes,
+            next_bytes,
+            next: std::ptr::from_ref(next) as usize,
+            named: None,
+            serial: next_serial(),
+            color_mode_paints: None,
+            color_mode_bytes: 0,
+        }
     }
 
     /// The template and name the step's label was made from, while the label is still the one
@@ -66,12 +89,43 @@ impl HistoryEntry {
             return Self::kept(label, doc, selection, now);
         }
         doc.drop_lookup_cache();
-        HistoryEntry { label, doc, selection, bytes: costs.next_bytes, next_bytes: costs.bytes, next: Arc::as_ptr(now) as usize, named: None }
+        HistoryEntry {
+            label,
+            doc,
+            selection,
+            bytes: costs.next_bytes,
+            next_bytes: costs.bytes,
+            next: Arc::as_ptr(now) as usize,
+            named: None,
+            serial: next_serial(),
+            color_mode_paints: None,
+            color_mode_bytes: 0,
+        }
     }
 
-    /// The figures [`HistoryEntry::turned`] reuses.
+    /// Recount the separately owned paints after a color-mode step or group changes them.
+    pub(crate) fn recost_paints(&mut self) {
+        let owned = |p: &vectorcraft_tools::PaintDefaults| {
+            std::mem::size_of::<vectorcraft_tools::PaintDefaults>()
+                + vectorcraft_doc::paint_heap_bytes(&p.fill)
+                + vectorcraft_doc::paint_heap_bytes(&p.stroke)
+                + p.appearance.as_ref().map_or(0, vectorcraft_doc::appearance_heap_bytes)
+                + p.style.as_ref().map_or(0, String::capacity)
+        };
+        let bytes = self.color_mode_paints.as_ref().map_or(0, |(before, after)| owned(before).saturating_add(owned(after)));
+        self.bytes = self.bytes.saturating_sub(self.color_mode_bytes).saturating_add(bytes);
+        self.next_bytes = self.next_bytes.saturating_sub(self.color_mode_bytes).saturating_add(bytes);
+        self.color_mode_bytes = bytes;
+    }
+
+    /// The document-only figures [`HistoryEntry::turned`] reuses. Its paint snapshots are
+    /// attached and counted separately, so swapping direction never doubles their cost.
     pub(crate) fn costs(&self) -> StepCosts {
-        StepCosts { bytes: self.bytes, next_bytes: self.next_bytes, next: self.next }
+        StepCosts {
+            bytes: self.bytes.saturating_sub(self.color_mode_bytes),
+            next_bytes: self.next_bytes.saturating_sub(self.color_mode_bytes),
+            next: self.next,
+        }
     }
 }
 
@@ -111,6 +165,24 @@ impl History {
         self.undo.iter().chain(&self.redo).map(|e| e.bytes).sum()
     }
 
+    /// Which step the document is at: the newest undo step and the next redo step, by numbers no
+    /// other step takes (0 for none). Every new step, Undo, Redo and edit merged into the newest
+    /// step (an undo group) changes it; a selection change does not.
+    pub fn step(&self) -> (u64, u64) {
+        (self.undo.last().map_or(0, |e| e.serial), self.redo.last().map_or(0, |e| e.serial))
+    }
+
+    /// The document at row `row` of the History panel, `now` being the document now: the rows before
+    /// it are the undo steps, oldest first, and the rows after it the redo steps, nearest first.
+    pub(crate) fn state<'a>(&'a self, now: &'a Arc<Document>, row: usize) -> Option<&'a Arc<Document>> {
+        let current = self.undo.len();
+        match row.cmp(&current) {
+            std::cmp::Ordering::Less => self.undo.get(row).map(|e| &e.doc),
+            std::cmp::Ordering::Equal => Some(now),
+            std::cmp::Ordering::Greater => self.redo.len().checked_sub(row - current).and_then(|i| self.redo.get(i)).map(|e| &e.doc),
+        }
+    }
+
     /// Let the oldest steps go while over the step limit or the memory budget: undo steps first
     /// (the oldest), then redo steps (the furthest ahead).
     pub fn trim(&mut self) {
@@ -137,11 +209,14 @@ impl History {
     }
 
     /// Estimate the newest undo step again, its next state now being `now` (the steps after it were
-    /// merged into it, or an undo group extended it).
+    /// merged into it, or an undo group extended it). It takes a new number ([`History::step`]).
     pub(crate) fn recost_last(&mut self, now: &Document) {
         if let Some(e) = self.undo.last_mut() {
-            (e.bytes, e.next_bytes) = e.doc.retained_bytes_each(now);
+            let (before, after) = e.doc.retained_bytes_each(now);
+            e.bytes = before.saturating_add(e.color_mode_bytes);
+            e.next_bytes = after.saturating_add(e.color_mode_bytes);
             e.next = std::ptr::from_ref(now) as usize;
+            e.serial = next_serial();
         }
     }
 }

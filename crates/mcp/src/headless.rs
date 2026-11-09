@@ -181,9 +181,11 @@ impl Headless {
     fn pointer(&mut self, p: &Value) -> Result<Value, String> {
         let events = p.get("events").and_then(Value::as_array).ok_or("missing `events`")?;
         let base: Mods = p.get("mods").and_then(|m| serde_json::from_value(m.clone()).ok()).unwrap_or_default();
+        let default = PointerEvent::json_backquote(p, false)?;
+        let held = events.iter().map(|e| PointerEvent::json_backquote(e, default)).collect::<Result<Vec<_>, _>>()?;
         self.ensure_document();
         let mut requests = vec![];
-        for e in events {
+        for (e, backquote) in events.iter().zip(held) {
             let kind = s(e, "kind").unwrap_or("");
             let kind = pointer_kind(kind).ok_or_else(|| format!("unknown pointer kind `{kind}` (down|drag|up|move|doubleclick)"))?;
             if s(e, "space") == Some("screen") {
@@ -192,8 +194,6 @@ impl Headless {
             let x = e.get("x").and_then(Value::as_f64).ok_or("pointer event needs numeric `x`")?;
             let y = e.get("y").and_then(Value::as_f64).ok_or("pointer event needs numeric `y`")?;
             let mods = e.get("mods").and_then(|m| serde_json::from_value(m.clone()).ok()).unwrap_or(base);
-            let backquote =
-                e.get("backquote").and_then(Value::as_bool).unwrap_or_else(|| p.get("backquote").and_then(Value::as_bool).unwrap_or(false));
             let ev = PointerEvent {
                 kind,
                 pos: Point::new(x, y),
@@ -295,11 +295,18 @@ impl Headless {
         Ok(out)
     }
 
-    /// `app.open {path}`: any readable file as a new active document (`document.open`).
+    /// `app.open {path, importer?, params?}`: any readable file as a new active document
+    /// (`document.open`, with the importer plug-in `importer` names and its parameters `params`).
     pub fn open(&mut self, p: &Value) -> Result<Value, String> {
         let path = s(p, "path").ok_or("missing `path`")?;
+        let mut params = json!({"path": path});
+        for k in ["importer", "params"] {
+            if let Some(v) = p.get(k).filter(|v| !v.is_null()) {
+                params[k] = v.clone();
+            }
+        }
         let roots = self.roots.clone();
-        file_access::confine(roots.as_ref(), || self.session.execute("document.open", &json!({"path": path}))).map_err(|e| e.to_string())
+        file_access::confine(roots.as_ref(), || self.session.execute("document.open", &params)).map_err(|e| e.to_string())
     }
 
     /// `app.save {path?, format?, options?}`: `document.save` (by default the document's own path and
@@ -315,6 +322,8 @@ impl Headless {
 
     /// `app.export {path?, format?, …}`: `document.export` (format defaults to the path's extension).
     pub fn export(&mut self, p: &Value) -> Result<Value, String> {
+        // The key check of `document.export` runs before the file is written.
+        self.session.check_params("document.export", p).map_err(|e| e.to_string())?;
         let roots = self.roots.clone();
         file_access::confine(roots.as_ref(), || self.session.execute("document.export", p)).map_err(|e| e.to_string())
     }

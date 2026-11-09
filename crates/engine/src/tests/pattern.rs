@@ -5,7 +5,7 @@ use vectorcraft_color::Paint;
 use vectorcraft_doc::pattern::{PATTERN_EDIT_LAYER, RepeatKind, TileType};
 use vectorcraft_doc::{Node, NodeKind};
 use vectorcraft_geom::{Point, Rect};
-use vectorcraft_tools::{PointerEvent, PointerKind};
+use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
 
 use crate::tests_menucmds::place_undecodable_png;
 use crate::*;
@@ -131,6 +131,72 @@ fn empty_point_type_is_not_saved_into_the_pattern() {
         let labels = s.doc().unwrap().history.undo.iter().map(|e| e.label.as_str()).collect::<Vec<_>>();
         assert_eq!(labels.last(), Some(&"Done Editing Pattern"), "{cmd}");
         assert!(!labels.contains(&"Type"), "{cmd}: {labels:?}");
+    }
+}
+
+/// The same while a Cmd/Ctrl press has lent the Selection tool to the Type tool: Done or Exit
+/// Isolation Mode before the release gives the Type tool back first, so the empty point type is
+/// still discarded, and the release that follows leaves the tile as it is.
+#[test]
+fn empty_point_type_is_not_saved_into_the_pattern_during_a_cmd_press() {
+    for cmd in ["object.pattern.done", "object.exitIsolation"] {
+        let mut s = session();
+        s.prefs.placeholder_text = false;
+        let r = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+        sel(&mut s, &[r]);
+        s.execute("object.pattern.make", &json!({"name": "P"})).unwrap();
+        let v = ViewInfo::default();
+        s.select_tool("type", v).unwrap();
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(kind, 200.0, 200.0), v).unwrap();
+        }
+        let press = Mods { cmd: true, ..Mods::default() };
+        s.pointer(&PointerEvent::new(PointerKind::Down, 300.0, 300.0).with_mods(press), v).unwrap();
+        assert_eq!(s.tool_id(), "selection", "{cmd}: the press lends the Selection tool");
+        s.execute(cmd, &json!({})).unwrap();
+        assert_eq!(s.tool_id(), "type", "{cmd}: the Type tool is back");
+        assert!(!s.tool_wants_text(), "{cmd}");
+        s.pointer(&PointerEvent::new(PointerKind::Up, 300.0, 300.0).with_mods(press), v).unwrap();
+        let art = &doc(&s).pattern("P").unwrap().art;
+        assert_eq!(art.len(), 1, "{cmd}: the tile keeps only the square");
+        assert!(!matches!(art[0].kind, NodeKind::Text(_)), "{cmd}");
+    }
+}
+
+/// Done during a drag of the lent Selection tool keeps the drag as its own step before the tile is
+/// saved, so no drag is left open for the release to end. With Real-time Drawing and Editing off,
+/// the drag's last position is applied first, as the release would apply it.
+#[test]
+fn done_during_a_lent_selection_drag_keeps_the_drag_as_its_own_step() {
+    for real_time in [true, false] {
+        let mut s = session();
+        s.prefs.placeholder_text = false;
+        s.execute("prefs.set", &json!({"key": "realTimeDrawing", "value": real_time})).unwrap();
+        let r = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+        sel(&mut s, &[r]);
+        s.execute("object.pattern.make", &json!({"name": "P"})).unwrap();
+        let st = s.doc().unwrap();
+        let b = st.doc.bounds_of(&st.selection.objects, false).expect("the tile art is selected");
+        let c = b.center();
+        let v = ViewInfo::default();
+        s.select_tool("type", v).unwrap();
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(kind, 200.0, 200.0), v).unwrap();
+        }
+        let press = Mods { cmd: true, ..Mods::default() };
+        s.pointer(&PointerEvent::new(PointerKind::Down, c.x, c.y).with_mods(press), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Drag, c.x + 20.0, c.y).with_mods(press), v).unwrap();
+        assert!(s.in_interaction(), "{real_time}: the lent Selection tool drags the square");
+        s.execute("object.pattern.done", &json!({})).unwrap();
+        assert!(!s.in_interaction(), "{real_time}: the drag is kept before the tile is saved");
+        assert_eq!(s.tool_id(), "type", "{real_time}");
+        s.pointer(&PointerEvent::new(PointerKind::Up, c.x + 20.0, c.y).with_mods(press), v).unwrap();
+        let labels = s.doc().unwrap().history.undo.iter().map(|e| e.label.as_str()).collect::<Vec<_>>();
+        assert_eq!(labels.last(), Some(&"Done Editing Pattern"), "{real_time}: {labels:?}");
+        assert!(labels.contains(&"Move"), "{real_time}: {labels:?}");
+        let art = &doc(&s).pattern("P").unwrap().art;
+        assert_eq!(art.len(), 1, "{real_time}: the tile keeps only the square");
+        assert!(!matches!(art[0].kind, NodeKind::Text(_)), "{real_time}");
     }
 }
 
@@ -911,6 +977,32 @@ fn picking_another_pattern_swatch_keeps_the_pattern_transform() {
     let Paint::Pattern { pattern, xf } = node(&s, big).appearance.fill_paint() else { panic!() };
     assert_eq!(pattern, "Dots");
     assert_eq!(xf.as_coeffs(), [2.0, 0.0, 0.0, 2.0, 15.0, 10.0]);
+}
+
+/// A pattern swatch made from the current fill holds the pattern untransformed: a fill picked up
+/// from art whose tiles were moved does not carry that placement to the art the swatch is applied
+/// to, which keeps its own (#1970).
+#[test]
+fn a_pattern_swatch_made_from_a_transformed_fill_holds_the_pattern_untransformed() {
+    let mut s = session();
+    make_dots(&mut s);
+    let src = rect(&mut s, 100.0, 100.0, 50.0, 50.0);
+    s.execute("paint.setFill", &json!({"ids": [src.0], "swatch": "Dots"})).unwrap();
+    s.execute("pattern.transform", &json!({"ids": [src.0], "matrix": [2, 0, 0, 2, 15, 10]})).unwrap();
+    sel(&mut s, &[]);
+    s.execute("appearance.copyFrom", &json!({"source": src.0})).unwrap();
+    let Paint::Pattern { xf, .. } = &s.paint.fill else { panic!("the picked-up pattern fill") };
+    assert_eq!(xf.as_coeffs(), [2.0, 0.0, 0.0, 2.0, 15.0, 10.0], "the current fill has the tiles' placement");
+    s.execute("swatch.new", &json!({"name": "Picked"})).unwrap();
+    let Paint::Pattern { pattern, xf } = doc(&s).swatch("Picked").unwrap().paint.clone() else { panic!("a pattern swatch") };
+    assert_eq!((pattern.as_str(), xf.as_coeffs()), ("Dots", [1.0, 0.0, 0.0, 1.0, 0.0, 0.0]));
+    let dst = rect(&mut s, 300.0, 100.0, 50.0, 50.0);
+    s.execute("paint.setFill", &json!({"ids": [dst.0], "color": "#00ff00"})).unwrap();
+    s.execute("paint.setFill", &json!({"ids": [dst.0], "swatch": "Dots"})).unwrap();
+    s.execute("pattern.transform", &json!({"ids": [dst.0], "matrix": [3, 0, 0, 3, 0, 0]})).unwrap();
+    s.execute("paint.setFill", &json!({"ids": [dst.0], "swatch": "Picked"})).unwrap();
+    let Paint::Pattern { xf, .. } = node(&s, dst).appearance.fill_paint() else { panic!("a pattern fill") };
+    assert_eq!(xf.as_coeffs(), [3.0, 0.0, 0.0, 3.0, 0.0, 0.0], "the art keeps its own placement");
 }
 
 #[test]

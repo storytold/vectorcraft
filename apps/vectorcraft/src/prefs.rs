@@ -168,6 +168,11 @@ fn same_lasting(a: &serde_json::Value, b: &serde_json::Value) -> bool {
     }
 }
 
+/// Fields that a read fills in from other fields when the file lacks them
+/// (`vectorcraft_ui_egui::layout_migration`): `help_bar` follows `status_bar`. A save writes them
+/// whenever the file lacks them, so the next read does not fill them in again from a changed field.
+const DERIVED: &[&str] = &["help_bar"];
+
 /// `on_disk` with what changed from `base` to `mine` put over it: each top-level field of the UI
 /// state, and each engine preference (`engine_prefs`) on its own, so two windows that change
 /// different settings keep both. A field both changed takes this window's value (it saves last).
@@ -217,6 +222,13 @@ fn merge_changes(base: &serde_json::Value, mine: &serde_json::Value, on_disk: se
             None => {
                 out.remove(key);
             }
+        }
+    }
+    for key in DERIVED {
+        if !out.contains_key(*key)
+            && let Some(v) = mine.get(*key)
+        {
+            out.insert((*key).to_string(), v.clone());
         }
     }
     if use_mine {
@@ -335,13 +347,11 @@ mod tests {
     #[test]
     fn a_kept_preferences_copy_is_owner_only() {
         use std::os::unix::fs::PermissionsExt as _;
-        let dir = std::env::temp_dir().join(format!("vc-prefs-copy-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let temp = tempfile::Builder::new().prefix("vc-prefs-copy-").tempdir().unwrap();
+        let dir = temp.path();
         super::keep_prefs_copy(&dir.join("ui.json"), b"{}", "ui.unreadable");
         let mode = std::fs::metadata(dir.join("ui.unreadable.json")).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode, 0o600);
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -383,6 +393,20 @@ mod tests {
         let merged = merge_changes(&base, &mine, on_disk);
         assert_eq!(merged, json!({"status": "Opened", "dialog": null, "workspace": "Painting", "toolbar": false}));
         assert!(!same_lasting(&base, &mine));
+    }
+
+    /// A file from before the Help Bar setting: the read shows the Help Bar with the status bar.
+    /// After the status bar is hidden and the Help Bar left showing, the save writes `help_bar`,
+    /// so the next read does not hide it with the status bar. A value on disk is kept.
+    #[test]
+    fn a_help_bar_setting_the_file_lacks_is_saved() {
+        let base = json!({"status_bar": true, "help_bar": true});
+        let mine = json!({"status_bar": false, "help_bar": true});
+        let on_disk = json!({"status_bar": true});
+        assert_eq!(merge_changes(&base, &mine, on_disk), json!({"status_bar": false, "help_bar": true}));
+        // Another window saved its own Help Bar setting: it stays.
+        let on_disk = json!({"status_bar": true, "help_bar": false});
+        assert_eq!(merge_changes(&base, &mine, on_disk), json!({"status_bar": false, "help_bar": false}));
     }
 
     /// One window deleted the first Actions set and saved; this one made the second set current.

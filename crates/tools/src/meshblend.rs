@@ -90,7 +90,7 @@ impl Tool for BlendTool {
     }
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         let options = |t: &mut Self| {
-            (t.first, t.chained) = (None, false);
+            (t.first, t.chained, t.before_press) = (None, false, None);
             vec![Action::Dialog(BLEND_OPTIONS.into(), json!({}))]
         };
         // A first pick whose object is no longer in the document (deleted, or undone away) is
@@ -157,7 +157,7 @@ impl Tool for BlendTool {
     /// click picks a new first object. The document and the selection stay as they are.
     fn key(&mut self, _cx: &ToolContext, key: crate::ToolKey, _mods: Mods) -> Vec<Action> {
         if key == crate::ToolKey::Escape {
-            (self.first, self.chained) = (None, false);
+            (self.first, self.chained, self.before_press) = (None, false, None);
         }
         vec![]
     }
@@ -171,7 +171,7 @@ impl Tool for BlendTool {
         vec![]
     }
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
-        (self.first, self.chained) = (None, false);
+        (self.first, self.chained, self.before_press) = (None, false, None);
         vec![]
     }
     /// Choosing the Blend tool again finishes the blend: it drops the object picked first and
@@ -179,6 +179,11 @@ impl Tool for BlendTool {
     /// document and the selection stay as they are.
     fn chosen_again(&mut self, cx: &ToolContext) -> Vec<Action> {
         self.deactivate(cx)
+    }
+    /// An edit, Undo or Redo made outside the tool drops the object picked first and stops adding to
+    /// the blend just made, so the next click picks a new first object.
+    fn history_moved(&mut self) {
+        (self.first, self.chained) = (None, false);
     }
 }
 
@@ -380,6 +385,28 @@ mod tests {
         assert_eq!(t.pointer(&c, &down(150.0, 150.0)), picks(a));
         // Other tools keep their state: the default does nothing.
         assert!(create("mesh").unwrap().chosen_again(&c).is_empty());
+    }
+
+    #[test]
+    fn resetting_blend_during_a_press_survives_its_drop() {
+        let (d, a) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        for reset in 0..3 {
+            let mut t = BlendTool { first: Some((a, None)), chained: true, ..Default::default() };
+            assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, 450.0, 450.0)).is_empty());
+            match reset {
+                0 => assert!(t.key(&c, ToolKey::Escape, Mods::default()).is_empty()),
+                1 => assert!(t.chosen_again(&c).is_empty()),
+                _ => assert_eq!(
+                    t.pointer(&c, &PointerEvent::new(PointerKind::DoubleClick, 450.0, 450.0)),
+                    vec![Action::Dialog(BLEND_OPTIONS.into(), json!({}))],
+                ),
+            }
+            assert!(t.drop_press(&c).is_empty());
+            assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 450.0, 450.0)).is_empty());
+            assert_eq!((t.first, t.chained), (None, false));
+        }
     }
 
     #[test]

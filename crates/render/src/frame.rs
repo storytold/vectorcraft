@@ -1,6 +1,9 @@
 use super::options::{AntiAlias, RenderOptions};
 use super::threads::single_threaded_context;
-use super::{Affine, Arc, BezPath, Document, FillRule, HashMap, Ink, Node, Rect, RenderContext, SymbolBoxes, TextObject, live};
+use super::{
+    Affine, Arc, BezPath, Document, FillRule, HashMap, Ink, Node, Pixmap, Rect, RenderContext, StrokeLayer, SymbolBoxes, TextObject, TypeAntiAlias,
+    fx, kurbo, live,
+};
 
 /// Hasher for pointer-keyed caches: a multiply-xorshift (SipHash showed up in frame profiles).
 #[derive(Default, Clone, Copy)]
@@ -30,20 +33,46 @@ pub(crate) type PtrMap<K, V> = HashMap<K, V, std::hash::BuildHasherDefault<PtrHa
 /// stroke's place in it, width bits, tolerance level).
 pub(crate) type StrokeKey = (usize, usize, u64, i32);
 
-/// A stroke expanded to a fill outline: (owning node, outline, last frame used).
+/// What the [`StrokeKey`] of the latest outline of an object's stroke is found under once the
+/// object has changed: (the object's id, the stroke's place in its appearance items, width bits,
+/// tolerance level).
+pub(crate) type MovedKey = (u64, usize, u64, i32);
+
+/// A stroke expanded to a fill outline: (owning node, outline, last frame used, the region a frame
+/// must lie in to draw the outline, when the outline leaves out the segments far from that region,
+/// `None` when it has every segment, and whether the outline was made along a line of the node's
+/// own path, the one [`Node::stroke_path`] makes, so that the line can be made again from the
+/// node and its stroke).
 pub(crate) struct StrokeEntry {
     pub(crate) node: Arc<Node>,
     pub(crate) outline: Arc<BezPath>,
     pub(crate) stamp: u64,
+    pub(crate) crop: Option<Rect>,
+    pub(crate) own: bool,
 }
 
 /// The slices of a stroke whose gradient runs along or across it, each with its paint and bounds.
 pub(crate) type Slices = Arc<Vec<(BezPath, vectorcraft_color::Paint, Rect)>>;
 
-/// [`Slices`] cached for a stroke: (owning node, slices, last frame used).
+/// The key of cached [`Slices`]: ([`Renderer::stroke_owner`] of the stroke's object, stroke layer
+/// address, tolerance level).
+pub(crate) type SliceKey = (usize, usize, i32);
+
+/// What the [`SliceKey`] of the latest slices of an object's stroke is found under once the object
+/// has changed: (the object's id, the stroke's place in its appearance items, tolerance level).
+pub(crate) type MovedSliceKey = (u64, usize, i32);
+
+/// [`Slices`] cached for a stroke: (owning node, the node whose path and stroke the slices were
+/// made from, either the owning node or an earlier copy of it that the owning node is moved from,
+/// the slices, the offset they are drawn moved by, the fill rule they were made with, whether they
+/// were made along the path [`Node::stroke_path`] makes from that node, last frame used).
 pub(crate) struct SliceEntry {
     pub(crate) node: Arc<Node>,
+    pub(crate) made: Arc<Node>,
     pub(crate) slices: Slices,
+    pub(crate) by: kurbo::Vec2,
+    pub(crate) rule: FillRule,
+    pub(crate) own: bool,
     pub(crate) stamp: u64,
 }
 
@@ -90,6 +119,26 @@ pub(crate) struct PlacedEntry {
     pub(crate) slice: Option<vectorcraft_doc::NineSliceMap>,
 }
 
+/// Type drawn with an anti-aliasing method other than Sharp, as [`Renderer::draw_type_edges`] drew
+/// it offscreen on the pixels of the output ([`Frame::output`]).
+pub(crate) struct TypeEdgeEntry {
+    /// A copy of the type's object: the kept pixels are used only for an object equal to it.
+    pub(crate) node: Node,
+    /// The output's zoom and rotation ([`fx::linear_key`]).
+    pub(crate) linear: [u64; 4],
+    /// The method, the edge threshold, the frame's edge smoothing, whether the frame composites
+    /// precisely, and the opacity folded into the paints.
+    pub(crate) settings: (TypeAntiAlias, Option<u8>, AntiAlias, bool, u32),
+    /// What the type read from the document and the color settings ([`Renderer::raster_inputs`]).
+    pub(crate) inputs: fx::Inputs,
+    /// The output's offset: in a frame whose offset differs from it by whole pixels, the pixels are
+    /// placed moved by them.
+    pub(crate) shift: kurbo::Vec2,
+    /// The output pixel at the image's top-left corner.
+    pub(crate) origin: (f64, f64),
+    pub(crate) image: Arc<Pixmap>,
+}
+
 /// How deep inline graphics nest (text in a symbol shown inline in text…) before they draw nothing.
 pub(crate) const MAX_INLINE_DEPTH: u32 = 4;
 
@@ -111,9 +160,20 @@ pub struct FrameStats {
     /// The filtered contents, shadows and glows the frame drew at a drag's lower resolution
     /// ([`RenderOptions::dragging`]). [`Self::moved`] counts them too.
     pub previewed: usize,
+    /// What the frame drew in a way that depends on the frame's size: effect rasters and filter
+    /// layers cropped to it or made at a lower resolution, blending groups drawn as layers past its
+    /// offscreen budget, gradient meshes drawn quad by quad past the mesh buffer, and every filter
+    /// layer drawn on a single-threaded context: on a single-threaded renderer, or offscreen in a
+    /// group or an effect's raster. A part of the frame rendered on its own can draw that art with
+    /// other pixels than the whole frame does.
+    pub view_sized: usize,
     /// How many threads composed the frame from its two ink planes, in a CMYK document that shows
     /// transparency; 0 for other frames.
     pub ink_threads: usize,
+    /// The type objects the frame drew offscreen with an anti-aliasing method other than Sharp
+    /// ([`Renderer::draw_type_edges`]). Type drawn from the pixels an earlier frame kept is not
+    /// counted.
+    pub type_edges: usize,
     pub micros: u64,
 }
 
@@ -127,11 +187,16 @@ pub(crate) struct Frame<'a> {
     pub(crate) view: Affine,
     /// Visible region in document coordinates (for culling).
     pub(crate) visible: Rect,
-    /// Size of one output pixel in document units.
+    /// Size of one of this frame's pixels in document units.
     pub(crate) px: f64,
     pub(crate) opts: &'a RenderOptions,
     /// What colours paint as: screen colours, or one ink plane of a CMYK document (see [`ink`]).
     pub(crate) ink: Ink,
+    /// Document → pixels of the output being drawn: `view` itself, except while an export draws
+    /// its art at several times its size (the export's own pixels) and in offscreen layers (the
+    /// pixels they are placed back on). Type with an anti-aliasing method other than Sharp is
+    /// drawn on these pixels ([`Renderer::draw_type_edges`]).
+    pub(crate) output: Affine,
     /// With Separations Preview, the tables placed images show the visible plates through.
     pub(crate) plates: Option<&'a crate::proof::PlateLut>,
 }
@@ -140,6 +205,16 @@ impl Frame<'_> {
     /// Text space → device pixels when type is snapped to the pixel grid (Type anti-aliasing).
     pub(crate) fn text_snap(&self, t: &TextObject) -> Option<Affine> {
         (self.opts.anti_alias == AntiAlias::Type).then(|| self.view * t.xf)
+    }
+
+    /// Stroke `st` as this frame draws it: a copy without its dashes when the frame draws dashed
+    /// lines as solid lines ([`RenderOptions::solid_dashes`]), else `st` itself.
+    pub(crate) fn stroke<'s>(&self, st: &'s StrokeLayer) -> std::borrow::Cow<'s, StrokeLayer> {
+        if self.opts.solid_dashes && st.dash.is_some() {
+            std::borrow::Cow::Owned(StrokeLayer { dash: None, ..st.clone() })
+        } else {
+            std::borrow::Cow::Borrowed(st)
+        }
     }
 
     /// A render context for drawing this frame's art offscreen (on the calling thread), with its

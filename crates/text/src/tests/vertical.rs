@@ -343,6 +343,41 @@ fn tracking_spaces_upright_marks_without_moving_them_off_the_centre_line() {
     assert!((step - 24.0).abs() < 1e-6, "one em plus 200/1000 em of tracking: {step}");
 }
 
+/// Baseline shift moves an upright glyph across the column, as it moves a letter lying on its
+/// side, at any Character Rotation, and leaves its neighbors where they are. The glyph turns about
+/// its shifted pen position (`xf * pivot`), and `xf * unturned` places the shifted glyph without
+/// its rotation.
+#[test]
+fn baseline_shift_moves_an_upright_glyph_across_the_column() {
+    let at = |byte: usize, rotation: f64, shift: f64| {
+        let mut t = vertical("§l§");
+        edit::style_range(&mut t.runs, byte, byte + "§l§"[byte..].chars().next().map_or(1, char::len_utf8), |s| {
+            s.rotation = rotation;
+            s.baseline_shift = shift;
+        });
+        layout(FontDb::global(), &t)
+    };
+    let centre = |l: &TextLayout, byte: usize| l.glyphs.iter().find(|g| g.byte == byte).map(|g| g.outline.bounding_box().center()).unwrap();
+    // The letter lying on its side moves across the column by the shift.
+    let across = centre(&at(2, 0.0, 10.0), 2) - centre(&at(2, 0.0, 0.0), 2);
+    assert!((across.x.abs() - 10.0).abs() < 1e-6 && across.y.abs() < 1e-6, "{across:?}");
+    for rotation in [0.0, 30.0, 90.0, -90.0] {
+        let (plain, shifted) = (at(3, rotation, 0.0), at(3, rotation, 10.0));
+        let moved = centre(&shifted, 3) - centre(&plain, 3);
+        assert!((moved - across).hypot() < 1e-6, "{rotation}°: {moved:?}, across {across:?}");
+        for byte in [0, 2] {
+            assert!((centre(&shifted, byte) - centre(&plain, byte)).hypot() < 1e-6, "{rotation}°: byte {byte} moved");
+        }
+        let (p, s) = (plain.glyphs.iter().find(|g| g.byte == 3).unwrap(), shifted.glyphs.iter().find(|g| g.byte == 3).unwrap());
+        let turn_at = s.xf * s.pivot - p.xf * p.pivot;
+        assert!((turn_at - across).hypot() < 1e-6, "{rotation}°: turns about a point moved by {turn_at:?}");
+        let unrotated = at(3, 0.0, 10.0);
+        let u = unrotated.glyphs.iter().find(|g| g.byte == 3).unwrap();
+        let (a, b) = ((s.xf * s.unturned).as_coeffs(), u.xf.as_coeffs());
+        assert!(a.iter().zip(b).all(|(a, b)| (a - b).abs() < 1e-6), "{rotation}°: {a:?} vs {b:?}");
+    }
+}
+
 /// Character panel menu › Tate-chu-yoko: a marked run stands across one em of the column, including
 /// a number longer than three digits and Latin letters. Unmarked text keeps the automatic rule
 /// (two or three digits only). Horizontal type stores the mark and does not move the letters.
@@ -653,6 +688,37 @@ fn mojikumi_spaces_japanese_from_latin_by_a_quarter_em() {
     assert!(on.glyphs.iter().zip(&off.glyphs).all(|(a, b)| (a.advance - b.advance).abs() < 0.01));
 }
 
+/// Mojikumi applies to type holding Japanese punctuation or a Japanese letter; type without either
+/// lays out the same with Line-end Punctuation Half Width as with Mojikumi None, across lines and
+/// list markers too.
+#[test]
+fn mojikumi_applies_only_to_japanese_punctuation_and_letters() {
+    use vectorcraft_doc::Mojikumi;
+    use vectorcraft_doc::text::{Bullet, ParaList};
+    let styled = |text: &str, m: Mojikumi| {
+        let mut t = TextObject::point(Point::ZERO, text, CharStyle { size: 20.0, ..CharStyle::default() });
+        t.xf = Affine::IDENTITY;
+        t.para.mojikumi = m;
+        t
+    };
+    let placed = |l: &TextLayout| l.glyphs.iter().map(|g| (g.byte, g.advance, g.origin, g.xf)).collect::<Vec<_>>();
+    for text in ["", "A", "Latin words, digits 2026 and (brackets).", "first\nsecond"] {
+        let on = styled(text, Mojikumi::LineEndHalf);
+        let lay = layout(FontDb::global(), &on);
+        assert!(!lay.mojikumi_applies(&on.plain_text()), "{text:?}");
+        let off = layout(FontDb::global(), &styled(text, Mojikumi::None));
+        assert_eq!(placed(&lay), placed(&off), "{text:?}");
+        assert_eq!(lay.bounds, off.bounds, "{text:?}");
+    }
+    let mut listed = styled("first\nsecond", Mojikumi::LineEndHalf);
+    listed.para.list = Some(ParaList::bulleted(Bullet::Dot));
+    assert!(!layout(FontDb::global(), &listed).mojikumi_applies(&listed.plain_text()));
+    for text in ["、", "「A」", "雅", "々", "Latin 漢字"] {
+        let t = styled(text, Mojikumi::LineEndHalf);
+        assert!(layout(FontDb::global(), &t).mojikumi_applies(&t.plain_text()), "{text:?}");
+    }
+}
+
 /// Mojikumi (JLREQ 3.1.5): with Line-end Punctuation Half Width, an opening bracket starting a
 /// wrapped line is set flush with the line's start (the space before it goes), giving the line half
 /// an em more room; at the start of a paragraph too, so its face starts at the first-line indent
@@ -787,6 +853,86 @@ fn kinsoku_set_decides_whether_a_small_kana_may_start_a_line() {
         let stop = |k| lay("あカ。", k, vertical_type).glyphs.iter().map(|g| g.line).collect::<Vec<_>>();
         assert_eq!(stop(Kinsoku::Soft), [0, 1, 1], "vertical {vertical_type}");
     }
+}
+
+/// Kinsoku Shori Type: in a measure of fifteen ems, the closing bracket after the fifteenth
+/// character ends the first line with Push In First, which closes the line's gaps to keep it inside
+/// the frame whatever its alignment; Push Out Only moves the fifteenth character to the next line
+/// with the bracket. Horizontal and vertical. Needs a font with full-width Japanese (skipped
+/// without one).
+#[test]
+fn kinsoku_shori_type_pushes_a_closing_bracket_in_or_out() {
+    use vectorcraft_doc::KinsokuShoriType;
+    let text = "一二三四五六七八九十一二三四五」六";
+    let lay = |ty: KinsokuShoriType, justify: Justify, vertical_type: bool| {
+        let mut t = TextObject::point(Point::ZERO, text, CharStyle { size: 20.0, ..CharStyle::default() });
+        t.xf = Affine::IDENTITY;
+        t.vertical = vertical_type;
+        t.para.kinsoku_type = ty;
+        t.para.justify = justify;
+        let frame = if vertical_type { Rect::new(0.0, 0.0, 200.0, 300.0) } else { Rect::new(0.0, 0.0, 300.0, 200.0) };
+        t.kind = TextKind::Area { frame: PathData::from_bezpath(&frame.to_path(0.1)) };
+        layout(FontDb::global(), &t)
+    };
+    if (lay(KinsokuShoriType::PushOutOnly, Justify::Left, false).glyphs[0].advance - 20.0).abs() > 2.0 {
+        return; // no font with full-width Japanese here
+    }
+    for vertical_type in [false, true] {
+        let lines = |ty| lay(ty, Justify::Left, vertical_type).glyphs.iter().map(|g| g.line).collect::<Vec<_>>();
+        let mut pushed_in = vec![0; 16];
+        pushed_in.push(1);
+        assert_eq!(lines(KinsokuShoriType::PushInFirst), pushed_in, "vertical {vertical_type}");
+        let mut pushed_out = vec![0; 14];
+        pushed_out.extend([1, 1, 1]);
+        assert_eq!(lines(KinsokuShoriType::PushOutOnly), pushed_out, "vertical {vertical_type}");
+        assert_eq!(lines(KinsokuShoriType::PushOutFirst), pushed_out, "vertical {vertical_type}: a push-out leaves one em");
+    }
+    for justify in [Justify::Left, Justify::Center, Justify::Right, Justify::JustifyLeft] {
+        let l = lay(KinsokuShoriType::PushInFirst, justify, false);
+        let (first, bracket) = (&l.glyphs[0], &l.glyphs[15]);
+        assert!(first.origin.x.abs() < 0.01, "{justify:?}: the line starts at the frame's left: {:?}", first.origin);
+        assert!(bracket.origin.x + bracket.advance <= 300.01, "{justify:?}: 」 ends inside the frame: {:?}", bracket.origin);
+        assert!(l.glyphs[1].origin.x < 20.0 - 0.5, "{justify:?}: the gaps close up");
+        for g in &l.glyphs[..15] {
+            assert!(g.advance >= 18.0 - 0.01, "{justify:?}: a gap closes by at most a tenth of an em: {}", g.advance);
+        }
+    }
+    // A No Break run wider than the frame did not push anything in, and keeps its gaps.
+    let mut t = TextObject::point(Point::ZERO, "一二三四五六七八九十", CharStyle { size: 20.0, no_break: true, ..CharStyle::default() });
+    t.xf = Affine::IDENTITY;
+    t.para.kinsoku_type = KinsokuShoriType::PushInFirst;
+    t.kind = TextKind::Area { frame: PathData::from_bezpath(&Rect::new(0.0, 0.0, 150.0, 200.0).to_path(0.1)) };
+    let l = layout(FontDb::global(), &t);
+    assert!((l.glyphs[1].origin.x - 20.0).abs() < 0.01, "{:?}", l.glyphs[1].origin);
+}
+
+/// Kinsoku Shori Type at 200% Vertical Scale in a column of 225 pt: the font's vertical metrics set
+/// each character 40 pt long, and its five gaps close by up to 4 pt each, room for the 15 pt 」
+/// overflows by, so 」 is pushed in; Push Out Only moves 五 to the next column with it. Needs
+/// craft-fonts' Shippori Mincho (skipped without it).
+#[test]
+fn kinsoku_shori_type_closes_a_column_by_the_em_down_the_column() {
+    use vectorcraft_doc::KinsokuShoriType;
+    if FontDb::global().face("Shippori Mincho", "Regular").is_none_or(|f| f.family != "Shippori Mincho") {
+        eprintln!("skipped: built without craft-fonts (set CRAFT_FONTS_DIR to a craft-fonts checkout to run it)");
+        return;
+    }
+    let lay = |ty: KinsokuShoriType| {
+        let mut t = vertical_styled(
+            "一二三四五」六",
+            CharStyle { size: 20.0, font_family: "Shippori Mincho".into(), v_scale: 200.0, ..CharStyle::default() },
+        );
+        t.para.kinsoku_type = ty;
+        t.kind = TextKind::Area { frame: PathData::from_bezpath(&Rect::new(0.0, 0.0, 200.0, 225.0).to_path(0.1)) };
+        layout(FontDb::global(), &t)
+    };
+    let lines = |ty| lay(ty).glyphs.iter().map(|g| g.line).collect::<Vec<_>>();
+    let out = lay(KinsokuShoriType::PushOutOnly);
+    assert!((out.glyphs[0].advance - 40.0).abs() < 0.01, "40 pt down the column: {}", out.glyphs[0].advance);
+    assert_eq!(lines(KinsokuShoriType::PushInFirst), [0, 0, 0, 0, 0, 0, 1]);
+    let bracket = &lay(KinsokuShoriType::PushInFirst).glyphs[5];
+    assert!(bracket.origin.y + bracket.advance <= 225.01, "」 ends inside the column: {:?} +{}", bracket.origin, bracket.advance);
+    assert_eq!(lines(KinsokuShoriType::PushOutOnly), [0, 0, 0, 0, 1, 1, 1]);
 }
 
 /// Proportional Metrics in vertical type (#966): upright glyphs take the font's proportional

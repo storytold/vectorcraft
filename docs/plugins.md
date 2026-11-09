@@ -5,7 +5,7 @@ arbitrary machine code and cannot work in the browser build. Instead, plug-ins a
 run in a sandbox. One `.wasm` file works on macOS, Windows, Linux and the web. The design follows PhotoCraft's
 plug-in API (same sandbox, same manifest and parameter schema), extended for vector documents.
 
-There are three kinds of plug-in:
+There are four kinds of plug-in:
 
 - **Object filters** read the selected paths and compound paths (geometry, fills, strokes, gradients, opacity)
   and return the objects to keep, change or add. A run is one undo step. Use them for recolouring, path
@@ -15,6 +15,9 @@ There are three kinds of plug-in:
 - **Exporters** write the whole document in a file format of their own, for pen plotters, cutting machines,
   laser cutters and the like. File › Export › Export As lists them after the built-in formats, and the host writes the
   bytes they return: a plug-in still never touches a file.
+- **Importers** read files in a format of their own, such as a plotter's or a cutting machine's, into a new document of
+  paths and compound paths. File › Open lists their files, File › Open With lists the importers by name, and the host
+  hands them the file's bytes.
 
 This page is the contract for plug-in authors and the reference for the host (`crates/plugins`, the
 `plugin.*` commands in `crates/engine/src/cmd/plugin.rs`).
@@ -23,13 +26,14 @@ This page is the contract for plug-in authors and the reference for the host (`c
 
 | Command | Params | What it does |
 |---|---|---|
-| `plugin.list` | `{}` | `{"plugins": [{id, name, version, kind, author, description, params, paramsSchema, effect?, format?, extensions?, budget?, size, source}], "folder": report}` (`budget: "heavy"` for a [heavy filter](#heavy-filters)) |
+| `plugin.list` | `{}` | `{"plugins": [{id, name, version, kind, author, description, params, paramsSchema, effect?, format?, extensions?, budget?, commands?, size, source, api, permissions, hash, cacheBytes}], "folder": report}` (`api` is the manifest's [plug-in API level](#permissions); `budget: "heavy"` for a [heavy filter](#heavy-filters); `commands` lists its [commands](#commands); `permissions` lists what it [may do](#permissions), `hash` is the module's SHA-256; `cacheBytes` is the size of its [cache](#settings-and-cache)) |
 | `plugin.info` | `{"id"}` | One plug-in: the `plugin.list` entry plus `manifest`, `defaults` and `lastError` (a live effect's last failure). |
-| `plugin.run` | `{"id", "params"?: {…}, "ids"?: [...]}` (plug-in params may also be top-level keys) | Runs an object filter on the selection (or `ids`). One undo step; the result is selected. |
-| `plugin.install` | `{"path": "/x/y.wasm"}` (desktop) or `{"dataBase64": "…", "name"?}`, `"replace": bool = true`, `"allowHeavy": bool = false` | Validates and installs a module; returns its `plugin.list` entry. The desktop app and `vectorcraft-cli` keep it in the `Plug-ins` folder next to the preferences, so it is installed again after a restart (#2541). A [heavy filter](#heavy-filters) installs only with `allowHeavy: true`, once the user agreed. |
-| `plugin.inspect` | as `plugin.install`: `{"path"}` or `{"dataBase64", "name"?}` | Validates a module without installing it; returns the `plugin.list` entry it would have. |
-| `plugin.remove` | `{"id"}` | Uninstalls, and deletes it from the `Plug-ins` folder. |
-| `plugin.reload` | `{"path"?: "folder"}` (default: the preference folder) | Installs every `*.wasm` in a folder; a bad module is reported and skipped, and so is a heavy filter (nobody was asked). |
+| `plugin.run` | `{"id", "params"?: {…}, "ids"?: [...]}` (plug-in params may also be top-level keys) | Runs an object filter on the selection (or `ids`; an `ids` that is not a list of object ids is an error). One undo step; the result is selected, except the objects it locked or made guides. |
+| `plugin.install` | `{"path": "/x/y.wasm"}` (desktop) or `{"dataBase64": "…", "name"?}`, `"replace"?: bool`, `"allowHeavy": bool = false`, `"grant"?: [permission]`, `"hash"?: "sha256 hex"` | Validates and installs a module; returns its `plugin.list` entry. The desktop app and `vectorcraft-cli` keep it in the `Plug-ins` folder next to the preferences, so it is installed again after a restart (#2541). A module with other bytes than the plug-in installed with its id, or, with none installed, one whose id has [settings and a cache](#settings-and-cache) in the `Plug-ins` folder, installs only with `replace: true`, once the user agreed; it takes that plug-in's place and gets its settings and cache. The same module installs again without `replace`, and `replace: false` refuses a module whose id is installed. A [heavy filter](#heavy-filters) installs only with `allowHeavy: true`, once the user agreed. A plug-in whose manifest lists [permissions](#permissions) installs only when `grant` lists every one of them, once the user agreed, unless the user already granted a module with the same SHA-256. With `hash`, a module whose SHA-256 differs is refused. |
+| `plugin.inspect` | as `plugin.install`: `{"path"}` or `{"dataBase64", "name"?}` | Validates a module without installing it; returns the `plugin.list` entry it would have, plus `needsApproval` (true when `plugin.install` needs `grant`) and `needsReplace` (true when `plugin.install` needs `replace: true`). |
+| `plugin.remove` | `{"id"}` | Uninstalls, and deletes it from the `Plug-ins` folder with its [settings and cache](#settings-and-cache). |
+| `plugin.clearCache` | `{"id"?}` | Deletes every entry in the [cache](#settings-and-cache) of plug-in `id`, or of every installed plug-in; settings stay. Returns `{"cleared": [id], "bytesFreed"}`. |
+| `plugin.reload` | `{"path"?: "folder"}` (default: the preference folder) | Installs every `*.wasm` in a folder; a bad module is reported and skipped, and so are a heavy filter and a plug-in whose permissions the user hasn't granted (nobody was asked). |
 
 Live effects are applied like any effect: `effect.apply {"effect": "plugin.<id>", "params": {…}}`, edited with
 `effect.setParams`, listed by `effect.list` (menu `Effect › Plug-ins`) and baked by Object › Expand Appearance.
@@ -38,20 +42,73 @@ An exporter adds a write-only format, `plugin.<id>`, which `document.formats` li
 `document.export {"format": "plugin.<id>", "params"?: {…}, "path"?}` writes it, and so does a `path` ending in one of
 its extensions that no built-in format has; `selectedOnly` hands it the selection, as for the built-in formats.
 
+An importer adds a read-only format, `plugin.<id>`, which `document.formats` lists with its `plugin` id. `openExtensions`
+holds the extensions File › Open opens with the importer (the lists below describe which are left out). `document.open {"path"}` (or `{"name", "dataBase64"}`) opens a file with it when no built-in format
+reads the file, by its content or by its extension, and the importer lists the file's extension; when several do, the
+one whose id sorts first opens it. `document.open {"importer": "plugin.<id>", "params"?: {…}}` names the importer,
+which must list the file's extension, also one a built-in format reads (an importer that lists `svg` opens an `.svg`
+only this way). A damaged file of a built-in format reports that format's error, and the file is not handed to an
+importer. The importer's objects become a new document whose artboard is their bounds (at least 1 pt wide and high,
+and within ±4,000,000 pt); the document keeps no path, so Save asks for a name. File › Place reads only the built-in formats, and a file only an importer reads opens as a new document when it is dropped on the canvas. These rules are
+VectorCraft's own.
+
 In the app, installed filters appear under **Object › Plug-ins**, next to **Install Plug-in…** and **Reload
 Plug-ins**; live effects under **Effect › Plug-ins** and in the Appearance panel's effect menu. A plug-in with
-parameters gets a dialog generated from its schema (numbers, whole numbers, checkboxes, dropdowns, text and lists
-of numbers, labelled, explained and sorted into sections as its manifest says) with a live preview; without
-parameters it runs at once. Parameters too many for the window's height scroll inside the dialog, which keeps its
+parameters gets a dialog generated from its schema (numbers, whole numbers, checkboxes, dropdowns, text, lists
+of numbers and colors, labelled, explained and sorted into sections as its manifest says) with a live preview; without
+parameters it runs at once. Edit › Keyboard Shortcuts lists each installed filter under Object › Plug-ins, where
+it can be given a shortcut (`plugin:<id>`); the shortcut stays saved while the plug-in is removed and applies again
+when it is reinstalled. Parameters too many for the window's height scroll inside the dialog, which keeps its
 heading and buttons in view. Exporters are formats of **File › Export › Export As**, where Use
 Artboards is greyed out (the plug-in writes the whole document); one with parameters asks for them in a dialog of the
-same kind once the file is picked, and its Export button writes the file. **File › Open** of a `.wasm` file installs
+same kind once the file is picked, and its Export button writes the file. Importers' files are listed under File ›
+Open's "All readable files" and under a filter of their own, named after the importer (other open dialogs, such as New
+from Template and Load Styles, list only the files the built-in formats read). These lists leave out an importer's
+extensions that a built-in format reads, and those File › Open installs, imports or loads as something else (`.wasm`,
+`.kys`, `.jsx`, presets, libraries and swatch or graphic style libraries such as `.ase`). File › Open does not give
+those files to the importer, and Open With does. **File › Open With** lists the
+installed importers by name (`file.openWith {"importer", "path"?, "params"?}`), and each opens a file picked among its
+extensions with that importer (on the web, File › Open's picker opens instead) and adds it to Open Recent. On the
+desktop the importer runs off the UI thread, and a run that takes a while shows a progress window with Cancel, which
+stops it. An importer
+with parameters, given no `params`, asks for them in a dialog of the same kind once the file is picked, and its Open
+button opens the file; File › Open runs an importer with its parameters' defaults. Open Recent opens a file the way
+File › Open does: it does not remember the importer or the parameters given to Open With. A built-in format reads the
+file if one can, and otherwise the first importer by id that lists its extension reads it with its parameters' defaults.
+**File › Open** of a `.wasm` file installs
 a plug-in too (on the web this is how plug-ins get in). A heavy filter asks before it is installed, and runs in the
-background ([below](#heavy-filters)).
+background ([below](#heavy-filters)). A plug-in that lists permissions asks for them before it is installed
+([below](#permissions)).
+
+### Commands
+
+A filter or a live effect may declare commands of its own in its manifest (`commands`, [below](#manifest)). Each
+becomes the command `plugin.<id>.<command>` while the plug-in is installed, and is gone once the plug-in is removed or
+replaced by a module without it.
+
+- **Menus.** A plug-in with commands is a submenu of **Object › Plug-ins** (a live effect: **Effect › Plug-ins**)
+  named after the plug-in. The submenu holds the plug-in's own item, then its commands. A command with parameters has
+  an ellipsis and opens a dialog for them, with a live preview, as a filter's own item does. A manifest cannot put a
+  command in another menu: a `menu` key in a command is ignored.
+- **Keyboard Shortcuts.** Edit › Keyboard Shortcuts lists each command under its submenu, and the user can give it a
+  shortcut. A manifest cannot give a command a shortcut.
+- **Actions and agents.** A command run is recorded in an action like any other command and plays back with its
+  parameters. `run`, MCP and `command.batch` call it as `plugin.<id>.<command>` with `{"ids"?: [...], "params"?: {…}}`
+  (its parameters may also be top-level keys). MCP's `command_list` and `list_commands` list it, and `plugin.list`
+  lists a plug-in's commands as `commands: [{id, command, label, params, paramsSchema}]`.
+- **Runs.** The parameters are checked against the command's declarations before the plug-in runs. The plug-in runs
+  through `vc_run` on the selection (or `ids`) as a filter run does, with `_context.mode` `"command"` and
+  `_context.command` set to the command's id ([Parameters](#parameters)), under the plug-in's
+  [permissions](#permissions): a live effect with commands may also hold `doc.write` and `state`, which only its
+  commands use. `ids` left out or null means the selection; an `ids` that is not a list of object ids is an error. One run
+  is one undo step named after the command. A run that traps, runs out of its instruction budget or fails leaves the
+  document and the undo history as they were, and the error starts with the plug-in's name and the command's label
+  (`“Cmd Test” › Grow: …`).
 
 **Preference folder.** Edit › Preferences › Plug-ins & Scratch Disks › *Additional Plug-ins Folder*: when set, every
 `*.wasm` in that folder (not recursive) is installed at startup and whenever the preference changes (desktop builds;
-the web build installs from bytes).
+the web build installs from bytes). On the desktop, Choose… beside the field picks the folder; the dialog refuses a
+picked or typed folder whose contents can't be listed, and `prefs.set` refuses such a folder too.
 
 Plug-ins are installed **per process**, not per document. Documents store a live effect as an ordinary effect record
 (`{"id": "plugin.<id>", "params": {…}}`): while the plug-in is installed it is drawn, exported and expanded; without it
@@ -65,24 +122,26 @@ The host is [`wasmi`](https://github.com/wasmi-labs/wasmi), a pure-Rust WebAssem
 
 | Limit | Default | On violation |
 |---|---|---|
-| Host imports | none: no WASI, file system, network, clock or randomness | module rejected at install |
+| Host imports | none at API level 1; at level 2 only the [host imports](#host-imports-api-level-2): no WASI, file system, network, clock or randomness | module rejected at install, naming the import |
 | Module size | 32 MiB | rejected |
 | Linear memory | 512 MiB per instance (input and parameters: at most half) | `memory.grow` returns -1; oversized input or initial memory fails |
 | Output | 64 MiB of JSON | `Limit("output size")` |
-| Instructions (fuel) | 50 M per call + 4,000 per input byte for `vc_run`; a [heavy filter](#heavy-filters) 1 G + 4,000 per byte; an export 10 G + 4,000 per byte | `Limit("instruction budget")` |
-| Wall clock | 60 s per filter run, 5 s per live-effect run, 300 s per heavy filter run or export (desktop; checked every 20 M instructions) | `Limit("time budget")` |
+| Instructions (fuel) | 50 M per call + 4,000 per input byte for `vc_run`; a [heavy filter](#heavy-filters) 1 G + 4,000 per byte; an export or import 10 G + 4,000 per byte | `Limit("instruction budget")` |
+| Wall clock | 60 s per filter run, 5 s per live-effect run, 300 s per heavy filter run, export or import (desktop; checked every 20 M instructions) | `Limit("time budget")` |
+| Import input | 128 MiB of the file (`vectorcraft_plugins::import::MAX_INPUT_BYTES`) | the file doesn't open; a larger file named by `path` is not read past that |
 | Call depth | 1,024 frames | trap |
 | Module shape | wasmi's strict limits (≤ 10,000 functions, 1 memory, …) | rejected |
 
 An export runs where the export runs: with Background Export on, on the export's worker, whose Cancel stops the
-plug-in between two of those 20 M-instruction slices; nothing is written then.
+plug-in between two of those 20 M-instruction slices; nothing is written then. An import stops the same way when the
+open it runs in is cancelled, and nothing opens then.
 
 ### Heavy filters
 
 Some filters do heavy but legitimate work, such as routing a plotter's pen, packing shapes onto a sheet or running a
 simulation, which a minute and 50 M instructions don't cover. Such a filter declares `"budget": "heavy"` in its
-manifest (only a filter may: a live effect runs whenever the document is drawn, and an exporter has an export's
-budget). Each of its runs gets 1 G instructions (20 times a light run's) plus the 4,000 per input byte, and 300 s
+manifest (only a filter may: a live effect runs whenever the document is drawn, an exporter has an export's budget and
+an importer an import's). Each of its runs gets 1 G instructions (20 times a light run's) plus the 4,000 per input byte, and 300 s
 (`vectorcraft_plugins::{HEAVY_FUEL, HEAVY_WALL_TIME_MS}`). Its output can't add to the budget: the host learns how
 much there is only once the run has ended.
 
@@ -100,7 +159,75 @@ much there is only once the run has ended.
 - `plugin.run` itself runs a heavy filter where it is called, as it runs any filter: an MCP client waits for it, and
   its `notifications/cancelled` stops it.
 
-Every run gets a **fresh instance**, so no state survives between calls. Traps, exhausted budgets, malformed
+### Permissions
+
+A manifest may list what the plug-in may do in `permissions`. `doc.read`, `doc.write` and `state` follow the
+capability model proposed for PhotoCraft plug-ins
+([storytold/photocraft#662](https://github.com/storytold/photocraft/issues/662)); the other names are VectorCraft's own:
+
+| Permission | Kinds | What it allows |
+|---|---|---|
+| `doc.read` | filter, effect, exporter | Read the objects it is given. |
+| `doc.write` | filter, effect with `commands` | Change, add and delete objects in the document. |
+| `state` | filter, effect with `commands` | Keep data of its own with the document (`documentData`). |
+| `effect.render` | effect | Change how the objects its effect is applied to are drawn. |
+| `export.write` | exporter | Write the document as a file in its own format. |
+| `import.read` | importer | Read files you open in its format and make documents from them. |
+| `progress` | all | Show its progress, see Cancel and write log lines through the [host imports](#host-imports-api-level-2). Needs `api` 2. |
+| `settings` | all | Keep settings of its own between runs and sessions ([settings and cache](#settings-and-cache)). Needs `api` 2. |
+| `cache` | all | Keep a cache of its own, which the user can clear ([settings and cache](#settings-and-cache)). Needs `api` 2. |
+
+- A manifest without `permissions` gets the ones its kind implies, as plug-ins did before the key existed: a filter
+  `doc.read`, `doc.write` and `state`; an effect `doc.read` and `effect.render`, and also `doc.write` and `state`
+  when it declares [commands](#commands); an exporter `doc.read` and `export.write`; an importer `import.read`. Such a
+  plug-in installs without a prompt. This rule is VectorCraft's own. A filter whose list is empty may do none of
+  these, and also installs without a prompt.
+- An effect, an exporter or an importer that lists permissions lists all of its implied ones (`doc.read` and
+  `effect.render`; `doc.read` and `export.write`; `import.read`). An effect with commands may add `doc.write` and
+  `state`, which only its commands use. A filter may list any of its three.
+  Any kind may add `progress`, `settings` and `cache`, which no kind implies. An unknown name, a name listed twice, a
+  name that doesn't apply to the kind, more than 16 names, `progress`, `settings` or `cache` with an `api` below 2, or
+  one of the names kept for a later plug-in API
+  (`ui.panel`, `ui.tool`) is refused when the module is installed, and the error names it.
+- **Installing asks first.** Install Plug-in… and File › Open show the plug-in's name, id, version, the SHA-256 of
+  the file and each permission in plain words, and install it once the user clicks OK, if the file still has the
+  SHA-256 shown; Cancel installs nothing. The
+  names shown have control and bidirectional characters escaped (`\u{202E}`) and are cut to 64 characters.
+  `plugin.install` refuses the module, naming the permissions it needs, unless `grant` lists them all, which an agent
+  passes once the user agreed (`plugin.inspect`'s `needsApproval` tells it beforehand), with `hash` set to the
+  `plugin.inspect` entry's `hash` so that the module installed is the one the user saw. `plugin.install` does not
+  check that a person approved `grant`: it trusts the client that sends it.
+- **Replacing asks first.** When the file is another module than the plug-in installed with its id, or, with none
+  installed, its id has settings and a cache in the `Plug-ins` folder, Install Plug-in… and File › Open show its id
+  and SHA-256 and ask whether to install it in place of that plug-in, which gives it the settings and cache kept for
+  the id. `plugin.install` refuses such a module, naming it, unless `replace` is `true`, which an agent passes once
+  the user agreed (`plugin.inspect`'s `needsReplace` tells it beforehand). The Additional Plug-ins Folder and
+  `plugin.reload` do not ask.
+- The grant is recorded with the plug-in's id, the module's hash and the permissions, in `grants.json` in the
+  `Plug-ins` folder, and covers only that module. Installing the same bytes again needs no new approval. A module with
+  other bytes asks again, even when it lists the same permissions, and does not get the id's settings and cache until
+  it is approved. Until then, the installed module and its grant stay as they are; once it is approved, the grant
+  records the new hash. When the new module or its grant can't be written to the `Plug-ins` folder, the folder keeps
+  the old module and its grant, and the old module loads at the next start. If the write that puts the old module back
+  fails as well, the folder holds the new module with the old grant, the grant does not cover that module, and the
+  plug-in is skipped at the next start until it is approved again. A grant whose hash is not 64 lower-case
+  hexadecimal digits covers nothing. `plugin.remove` forgets the grant. An entry of `grants.json` that this version can't use (a
+  permission it doesn't know, an invalid id) is skipped and stays in the file until its plug-in is granted again or
+  removed. A `grants.json` that is not a JSON list is never overwritten, and the file is never written larger than
+  1 MiB, the most that is read. When a `Plug-ins` folder is in use, only the grants kept
+  in it count for `plugin.install`, `plugin.inspect`, `plugin.reload` and the Additional Plug-ins Folder. At startup,
+  a stored plug-in is skipped when no grant covers its bytes and the permissions it lists. The Additional Plug-ins
+  Folder and `plugin.reload` install only plug-ins that such a grant covers, and report the others. A module without a
+  `permissions` list, or with an empty one, needs no grant.
+- The host enforces the grant on a filter run and a command run: without `doc.read` the filter is given no objects; without `state` its
+  `documentData` is `null` and an output that sets it is refused; without `doc.write` an output that changes the
+  document is refused. A refused output leaves the document as it was.
+- `api` is the plug-in API level the manifest is written for: `1` (the default) or `2`, which adds the [host
+  imports](#host-imports-api-level-2). A higher one is refused. `plugin.list` and `plugin.info` give it as `api`.
+- Parameter declarations are unchanged by permissions (`params`, below).
+
+Every run gets a **fresh instance**, so no state survives between calls except what a plug-in writes to its
+[settings and cache](#settings-and-cache). Traps, exhausted budgets, malformed
 modules, bad manifests, out-of-range pointers, negative return codes and invalid output all become errors, and the
 document is left untouched: a filter's output is checked completely before one edit applies it. A live effect that
 fails draws the object's geometry unchanged; `plugin.info` reports why (`lastError`).
@@ -120,8 +247,9 @@ geometry: a plug-in runs again only when one of them changes.
 ## ABI v1
 
 A plug-in is a core WebAssembly module (MVP + the usual post-MVP features: bulk memory, sign extension, multi-value,
-saturating conversions; no SIMD, no memory64) with **no imports** and these exports. Integers are `i32` unless noted;
-pointers are offsets into the module's memory.
+saturating conversions; no SIMD, no memory64) with these exports and no imports other than the [host
+imports](#host-imports-api-level-2) of API level 2. Integers are `i32` unless noted; pointers are offsets into the
+module's memory.
 
 | Export | Signature | Meaning |
 |---|---|---|
@@ -130,6 +258,82 @@ pointers are offsets into the module's memory.
 | `vc_manifest` | `() -> i64` | `(len << 32) \| ptr` of the UTF-8 manifest JSON (≤ 64 KiB). |
 | `vc_alloc` | `(size) -> ptr` | A block of `size` bytes the host may write, or `0` on failure. Never freed: each run gets a fresh instance. |
 | `vc_run` | `(input, input_len, params, params_len) -> i64` | Runs the plug-in on the input JSON with the parameters JSON; returns `(len << 32) \| ptr` of the output JSON, or a negative error code. |
+
+### Host imports (API level 2)
+
+A plug-in whose manifest gives `"api": 2` and lists the [permission](#permissions) an import needs may import these
+functions from module `env` (the module a Rust or C toolchain gives `extern` functions by default). `vc_abi_version`
+still returns `1`. `vc_progress`, `vc_cancelled` and `vc_log` need `progress`; the `vc_settings_*` imports need
+`settings` and the `vc_cache_*` imports need `cache` ([settings and cache](#settings-and-cache)).
+
+| Import | Signature | Meaning |
+|---|---|---|
+| `vc_progress` | `(done: i64, total: i64)` | `done` of `total` steps are finished; `total` 0 or less when not known. Negative values count as 0, and `done` is clamped to `total`. |
+| `vc_cancelled` | `() -> i32` | `1` once the user cancelled the run or its time budget ran out, else `0`. |
+| `vc_log` | `(level, ptr, len) -> i32` | Writes the UTF-8 text at `ptr` as a log line of `level` (0 error, 1 warning, 2 information, 3 debug). Returns `0` when written, `1` when the run's log budget is spent and the line was dropped, `-1` when the text doesn't lie inside the module's memory, `-2` when it is not UTF-8, `-3` for another level. |
+
+- The host checks the imports when the module is installed: an import it doesn't offer, one with another signature,
+  and one the manifest doesn't allow (an `api` below 2, or without the import's permission) refuse the module, and the
+  error names the import and the permission.
+- A filter's or an exporter's progress is shown as a share: a heavy filter's progress window and the export's progress
+  window draw a bar with a percentage, and Cancel there makes `vc_cancelled` return `1`. A plug-in that checks it can
+  stop early, and the host discards what it returns after the Cancel or after its time budget ran out; one that
+  ignores it is still stopped by the instruction and time budgets. With a known total, a report is passed on only when
+  it reaches another tenth of a percent; with an unknown total, each change of `done` is passed on. After 2,000 reports
+  in a run, one change in 1,000 is passed on, and so is the first report after the total becomes known or unknown. A
+  live effect's progress is not shown, since it is drawn as part of something else.
+- Log lines go to the app's log (target `vectorcraft_plugins`) as `<plug-in id>: <text>`, with control and
+  bidirectional characters escaped. The whole text must be UTF-8. A line shows its first 1,024 bytes, as at most 1,024
+  characters with the escapes, and ends with `…` when it is cut. A run writes at most 200 lines and 32 KiB of shown
+  text, and the host reads at most 1 MiB of log text in a run; past any of these, one "log truncated" line is written
+  and the rest are dropped.
+
+### Settings and cache
+
+A plug-in with the `settings` permission keeps named values between runs and sessions, and one with `cache` keeps
+named entries that the user can clear (#2191). It names each value by a key and never by a path. Each import takes
+the key as `(key, key_len)`, the UTF-8 bytes at `key` in its memory:
+
+| Import | Signature | Meaning |
+|---|---|---|
+| `vc_settings_get` | `(key, key_len, out, out_cap) -> i32` | The setting's length in bytes. When it fits in the `out_cap` bytes at `out`, its bytes are copied there; otherwise nothing is copied. |
+| `vc_settings_set` | `(key, key_len, value, value_len) -> i32` | Sets the setting to the `value_len` bytes at `value`. Returns `0`. |
+| `vc_settings_delete` | `(key, key_len) -> i32` | Removes the setting. Returns `0`. |
+| `vc_cache_read` | `(key, key_len, out, out_cap) -> i32` | As `vc_settings_get`, for the cache entry. |
+| `vc_cache_write` | `(key, key_len, value, value_len) -> i32` | As `vc_settings_set`, for the cache entry. |
+| `vc_cache_clear` | `(key, key_len) -> i32` | Removes the cache entry; with `key_len` 0, every entry. Returns `0`. |
+
+A call that fails returns `-1` when the key has no value, `-2` when a key, value or buffer doesn't lie inside the
+module's memory, `-3` when the key is not a valid key, `-4` when the write would pass a cap (nothing changes), `-5`
+when there is nowhere to keep anything, `-6` when reading or writing the file failed, and `-7` when the run has used
+its 10,000 storage calls or its 1 GiB of storage reads and writes. Each call counts the bytes it reads and writes: a
+settings call the whole settings file it reads, and a set or delete also the whole file it writes; a cache call the
+entry it reads or writes. A read counts them even when the value doesn't fit and nothing is copied. A call that would
+pass the 1 GiB returns `-7` before it reads or writes anything.
+
+- A key is 1 to 64 characters from `A-Z`, `a-z`, `0-9`, `_` and `-`, and is not a Windows device name (`CON`, `PRN`,
+  `AUX`, `NUL`, `COM0` to `COM9`, `LPT0` to `LPT9`, in any case). Keys differ in case: `tile` and `Tile` are two.
+- These caps are VectorCraft's own values: at most 256 settings of at most 64 KiB each, in a settings file of at most
+  1 MiB; cache entries of at most 64 MiB each, at most 4,096 entries and 512 MiB per plug-in. The cache has no
+  automatic eviction: a write past a cap fails with `-4`, and the plug-in or the user clears entries. A cache write
+  also fails with `-4` when the `cache` folder holds more than 8,192 items; clearing the cache removes every file in
+  it.
+- The desktop app and `vectorcraft-cli` keep them in a folder named from the id under `storage/` in the `Plug-ins`
+  folder (ids that differ only in case get two folders): `settings.json` and a
+  `cache` folder with one file per entry, named by the host. A settings file that is too large or doesn't parse is
+  moved to `settings.unreadable.json`, replacing an earlier one there, and the settings start empty. A link in that
+  folder is refused (`-5`). Writes go to a temporary file that then replaces the old one; a temporary file a failed
+  write leaves in the `cache` folder does not count toward the caps, and clearing the cache removes it.
+- A plug-in reaches only the storage of its own id. Replacing it with another module of the same id
+  (`plugin.install` with `replace: true`, after the user agreed) keeps the storage; `plugin.remove` deletes it, and a run of the plug-in still going gets `-5` from every storage call after that.
+  `plugin.remove` first renames the folder (adding `.removed` to its name). When that fails, `plugin.remove` fails
+  and the plug-in stays installed with its storage as it was. Files that can't be deleted after the rename stay in the
+  `.removed` folder, where no plug-in reaches them, and the next removal of a plug-in with that id deletes them.
+  `plugin.remove` with the id of a plug-in that isn't installed deletes the storage kept for that id, when there is
+  any.
+  `plugin.clearCache` empties the cache and leaves the settings, and `plugin.list` and
+  `plugin.info` give the cache's size as `cacheBytes`.
+- Without a `Plug-ins` folder (the web build, and embedders that attach none) the storage calls return `-5`.
 
 ### Manifest
 
@@ -153,14 +357,22 @@ pointers are offsets into the module's memory.
 
 - `id`: 1–64 characters from `A-Z a-z 0-9 . _ -` (reverse-DNS recommended). Installing a module with the same id
   replaces the old one. A live effect's effect id is `plugin.<id>`.
-- `name`: the menu label, or an exporter's format name in Export As (1–64 printable characters). `kind`: `"filter"`
-  (object filter), `"effect"` (live effect) or `"exporter"`. Exporters came after the first ABI v1 hosts, which refuse
-  the kind when the plug-in is installed.
+- `name`: the menu label, or an exporter's or importer's format name in Export As, Open and Open With (1–64 printable
+  characters). `kind`: `"filter"` (object filter), `"effect"` (live effect), `"exporter"` or `"importer"`. Exporters
+  and importers came after the first ABI v1 hosts, which refuse the kind when the plug-in is installed.
 - `budget` (filters only): `"light"` (the default) or `"heavy"`, for work that takes minutes ([heavy
   filters](#heavy-filters)). Hosts from before it ignore the key, so there the filter gets a light run's budget.
-- `extensions` (exporters only, and required): 1–8 file extensions, lower-case letters and digits without the dot
-  (`["plt"]`); the first is the one Export As gives the file. A built-in format keeps an extension both list (`svg`):
-  `document.export` then writes the exporter's format only when asked for by its format id.
+- `api`: the plug-in API level, `1` when left out. `permissions`: what the plug-in may do, a list of names
+  ([permissions](#permissions)); without it, what its kind implies.
+- `extensions` (exporters and importers only, and required): 1–8 file extensions, lower-case letters and digits
+  without the dot (`["plt"]`); the first is the one Export As gives the file. A built-in format keeps an extension both
+  list (`svg`): `document.export` then writes the exporter's format only when asked for by its format id, and
+  `document.open` reads a file with the importer only when `importer` names it.
+- `commands` (filters and live effects; not heavy filters): up to 32 commands of the plug-in's own
+  ([Commands](#commands)), each `{"id": "grow", "label": "Grow", "params"?: {…}}`. An `id` is 1–32 characters from
+  `a-z 0-9 _` that starts with a letter, and appears once. A `label` is 1–64 printable characters; menus show it with
+  control and bidirectional characters escaped. `params` are declared as the plug-in's own `params` are. A malformed
+  entry is refused when the module is installed, and the error names the command by its id (or its place, `[0]`).
 - `params`: in dialog order. Names are `[A-Za-z0-9_]`, not starting with `_`, and not `id`, `ids`, `params` or
   `preview`. The host validates the user's values before calling: missing values take the default, numbers are
   clamped to `min..max` (ints rounded), a wrong type or an unknown choice is an error. Numeric defaults
@@ -168,8 +380,14 @@ pointers are offsets into the module's memory.
   `int`, `bool` and `choice` there are `string` (`{"type": "string", "default": "", "maxLength": 256}`: a text field;
   longer text is cut to `maxLength`, at most 4,096 characters) and `numberList` (`{"type": "numberList", "min": 0,
   "max": 360, "default": [45, 135], "minItems": 1, "maxItems": 16}`: numbers typed separated by commas or spaces,
-  each clamped to `min..max`; a list of too few or too many is an error, and `maxItems` is at most 256). A plug-in
-  declares up to 256 parameters, at most 64 of them outside groups.
+  each clamped to `min..max`; a list of too few or too many is an error, and `maxItems` is at most 256) and `color`
+  (`{"type": "color", "default": "#3a7bd5"}`: a color button that opens a color picker; the default, black when left
+  out, and a value given to `plugin.run` may be a color object as paints hold one or a hex string, and the plug-in
+  always gets a color object, its components clamped, such as `{"model": "rgb", "r": 0.23, "g": 0.48, "b": 0.84}`; a
+  hex string and the picker's choice are display colors, given as the working RGB color that shows as them, so in a
+  working RGB space other than sRGB the numbers differ from the hex). Hosts from before `color` refuse a manifest that
+  uses it. A plug-in declares up to 256
+  parameters, at most 64 of them outside groups.
 
 Each parameter may also say how dialogs show it. Hosts from before these keys ignore them, so a plug-in that
 declares them still installs there:
@@ -190,18 +408,20 @@ parameters uses `label`, `unit`, `help` and `visibleWhen`, and lists the paramet
 ### Input
 
 `input` is UTF-8 JSON: `{"objects": [...]}`. An object filter gets the selected paths and compound paths in paint
-order (bottom first): the selected ones and those inside selected groups and layers; hidden, locked, guide and clipping
-paths are left out, and so are other kinds of object (type, images, symbols, live blends…), which a filter never
+order (bottom first): the selected ones and those inside selected groups and layers; hidden, locked, guide (compound
+guides too) and clipping paths are left out, and so are other kinds of object (type, images, symbols, live blends…), which a filter never
 touches. With nothing selected the list is empty (a generator then adds its own objects). A live effect gets one
 object: its geometry (`type`, `path`, `fillRule`, `bounds`) and its `fills` and `strokes`, as a filter gets them (hosts
 from before these give geometry only). The paints are read only: an effect may draw as wide as a stroke or use a
 fill's colour to decide its shape, but it changes only the geometry.
 
-An **exporter** gets something else: the document as a native `.vectorcraft` file's JSON, as `document.save` writes it
-but without indentation (the format is documented in [`crates/format/src/lib.rs`](../crates/format/src/lib.rs)). That is every layer, object,
+An **exporter** gets something else: the native `.vectorcraft` document JSON without indentation, optional preview/PDF
+renditions or save-preference metadata (the format is documented in [`crates/format/src/lib.rs`](../crates/format/src/lib.rs)). That is every layer, object,
 appearance and effect record, artboard, swatch and symbol, so an exporter reads whatever the document holds; it checks
 `version`, since a later host may write a newer one. Images of 8 KiB or more are listed in `images` with their MIME
 type and `blob` but without their data, which follows the JSON in a saved file; smaller ones keep their base64 `data`.
+
+An **importer** gets the bytes of the file being opened, as they are (not JSON), at most 128 MiB of them.
 
 ```json
 {"objects": [
@@ -247,14 +467,17 @@ type and `blob` but without their data, which follows the JSON in a saved file; 
  "_context": {"mode": "filter", "bounds": [10, 0, 75, 60], "artboard": [0, 0, 612, 792], "documentData": {"pens": 4}}}
 ```
 
-`mode` is `"filter"`, `"effect"` or `"export"`; `bounds` the selection's geometric bounds (a live effect: the reference
+`mode` is `"filter"`, `"effect"`, `"export"`, `"import"` or `"command"` (a [command](#commands) run, whose
+`command` is the command's id); `bounds` the selection's geometric bounds (a live effect: the reference
 box of the effect, the object's bounds or those of the previous effect's result); `artboard` (filters) the artboard
 under the selection's centre, else the first; `documentData` (filters) what the plug-in last kept with the document
 (`null` until it keeps something; see Output). A live effect's `item` says where it sits: `"object"` (one of the
 object's effects), or `{"fill": i}` / `{"stroke": i}` (in the own effects of the object's `i`th fill or stroke,
 counted from the bottom as in `fills` and `strokes`). An export's `_context` is `{"mode": "export", "extension": "plt",
 "name": "Poster"}` instead: the extension of the file being written (one the exporter lists) and its name without the
-extension (the document's name when the export is not given a path), which some formats keep in their header.
+extension (the document's name when the export is not given a path), which some formats keep in their header. An
+import's `_context` is `{"mode": "import", "extension": "plt", "name": "Poster"}`: the extension of the file being
+opened and its name without the extension.
 
 ### Output
 
@@ -278,6 +501,9 @@ For an **object filter**, the output is the new state of the input objects:
   strokes, full opacity.
 - Input objects missing from the output are deleted. The order of the input objects themselves doesn't change.
 - `type` turns a path into a compound path (one member per subpath) or back; `name: ""` clears the name.
+- `guide: true` makes the object a guide, as View › Guides › Make Guides does (a compound path's members become
+  guide paths), and `guide: false` a plain path again; `locked: true` locks it and `locked: false` unlocks it. Objects
+  the run locked or made guides are left out of the selection that follows. Hosts from before these keys ignore them.
 - A `path` returned as it was keeps a live shape live (a rectangle keeps its corner widgets); a changed one makes it a
   plain path.
 
@@ -302,6 +528,11 @@ An **exporter** returns `{"dataBase64": "…", "warnings"?: ["…"]}`: the file,
 is, and what the export left out or changed, for the user (at most 100 warnings of at most 500 characters each, shown
 with the export's own). A decline (`{"error": …}`), a missing `dataBase64` or data that isn't base64 writes nothing.
 
+An **importer** returns `{"objects": [...], "warnings"?: ["…"]}`: new paths and compound paths (no `id`) in the
+filters' object form, checked as a filter's new objects are, with warnings capped as an exporter's are and shown with
+the open's own. An output with no objects, with keys other than `objects`, `warnings` and `error`, or with an object
+that fails the checks opens nothing, and neither does a decline (`{"error": …}`).
+
 ## Writing a plug-in in Rust
 
 [`crates/plugins/example`](../crates/plugins/example) is a complete object filter, **Desaturate**: it moves every
@@ -315,12 +546,12 @@ crates/plugins/example/build.sh      # cargo build --release --target wasm32-unk
 
 The script also refreshes `crates/plugins/tests/fixtures/desaturate.wasm`, the test fixture built from that source.
 The crate is not a workspace member. Any language that targets core WebAssembly works (C, Zig, AssemblyScript,
-WAT…), as long as the module has no imports: in Rust, `std` on `wasm32-unknown-unknown` is fine as long as it never
+WAT…), as long as the module imports nothing but the host imports: in Rust, `std` on `wasm32-unknown-unknown` is fine as long as it never
 touches WASI. `vectorcraft_plugins::wat::module` is the skeleton of a plug-in in WebAssembly text, which the tests
 build their plug-ins from; `wat::echo_exporter` is an exporter whose file is its input or its parameters (with a
 base64 encoder written out in WebAssembly text), which the tests read back what the host hands a plug-in with, and
 `wat::when_given` a plug-in whose output depends on whether its input or parameters hold a given text, which shows in a
-live effect's geometry.
+live effect's geometry. `wat::reporting` and `wat::cooperating` build level 2 plug-ins that import the host functions.
 
 ## Performance
 
@@ -330,9 +561,9 @@ per change of their input, parameters or paints (results are cached), not per fr
 
 ## Not in v1
 
-- Tool plug-ins (pointer events on the canvas, a guide line or rectangle, geometry back), panel plug-ins, host
-  callbacks (a plug-in reporting progress or asking whether it was cancelled), importers (plug-in formats that open
-  files).
+- Tool plug-ins (pointer events on the canvas, a guide line or rectangle, geometry back), panel plug-ins, and
+  importers that place files (File › Place reads only the built-in formats) or make type, images, layers or
+  artboards.
 - Live effects that change paint (they reshape geometry; an object filter recolours), and filters on type, images or
   symbols.
 - Apply Last Effect and Last Effect work for plug-in effects; there is no "last filter" for object filters yet.

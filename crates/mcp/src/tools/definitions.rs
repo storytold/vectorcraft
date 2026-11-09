@@ -357,10 +357,17 @@ pub fn tool_definitions() -> Vec<Value> {
             "open_file",
             "Open file",
             &format!(
-                "Open a file as a new, active document: .{} (see run_command document.formats). Templates (.ait, native templates) open as a new untitled document. The reply's `warnings` say what didn't come in as it was (an EPS shown as its preview image says why its PostScript couldn't be read).",
+                "Open a file as a new, active document: .{} (see run_command document.formats). Templates (.ait, native templates) open as a new untitled document. The reply's `warnings` say what didn't come in as it was (an EPS shown as its preview image says why its PostScript couldn't be read). A file of an extension no built-in format reads opens with the installed importer plug-in that lists it; `importer` names the importer to use (File › Open With), also for an extension a built-in format reads, and `params` gives that importer's parameters.",
                 OPEN_EXTS.join(", .")
             ),
-            obj(json!({"path": string("File path")}), &["path"]),
+            obj(
+                json!({
+                    "path": string("File path"),
+                    "importer": string("An importer plug-in's format id, plugin.<id> (see run_command document.formats), which must list the file's extension (default: the built-in format that reads the file, else the first importer by id that lists its extension)"),
+                    "params": {"type": "object", "description": "The importer plug-in's parameters (see run_command plugin.list; default: the defaults its manifest declares)"},
+                }),
+                &["path"],
+            ),
             false,
         ),
         tool(
@@ -391,7 +398,7 @@ pub fn tool_definitions() -> Vec<Value> {
                 json!({
                     "format": {"type": "string", "enum": FORMATS.iter().filter(|f| f.write).map(|f| f.id).collect::<Vec<_>>(), "description": "Default: from the path's extension"},
                     "path": string("Destination file (omit to get dataBase64)"),
-                    "scale": num("Raster pixels per point (default 1)"),
+                    "scale": num("Raster pixels per point (without scale or options.ppi, uses the document's raster effects resolution; options.ppi wins)"),
                     "artboard": {"type": "integer", "minimum": 0, "description": "0-based artboard (default: the first; PDF and .ai default: all)"},
                     "range": string("1-based artboards such as \"1-3, 5\" (PDF and .ai: one page each; SVG and SVGZ: one file each; EPS: one file each, after a central file of the whole document when there are two or more and art shows; rasters, DXF, EMF and WMF: one, or one file each with options.useArtboards: true)"),
                     "selection": {"type": "boolean", "description": "Export only the selection, cropped to it"},

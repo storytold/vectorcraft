@@ -179,3 +179,83 @@ fn redo_during_an_interaction_keeps_the_history_and_the_document_in_step() {
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(first_x(&s), start);
 }
+
+/// `History::step` changes with every new step, Undo and Redo, also when an undo and a new edit
+/// leave as many steps as before, and with an edit merged into an undo group's step. It stays the
+/// same for a selection change.
+#[test]
+fn the_history_step_changes_with_each_step_undo_and_redo() {
+    let mut s = session_with_rects(2);
+    let step = |s: &Session| s.doc().unwrap().history.step();
+    let start = step(&s);
+    assert!(start.0 != 0 && start.1 == 0, "the Add step, and nothing to redo: {start:?}");
+    s.execute("object.move", &json!({"dx": 1, "dy": 0})).unwrap();
+    let moved = step(&s);
+    assert!(moved.0 != start.0 && moved.1 == 0, "{moved:?}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    let undone = step(&s);
+    assert!(undone.0 == start.0 && undone.1 != 0, "{undone:?}");
+    s.execute("edit.redo", &json!({})).unwrap();
+    let redone = step(&s);
+    assert!(![start, moved, undone].contains(&redone) && redone.1 == 0, "{redone:?}");
+    // An undo and a new edit: as many undo steps as after the move, at a different step.
+    s.execute("edit.undo", &json!({})).unwrap();
+    let depth = s.doc().unwrap().history.undo.len();
+    s.execute("object.move", &json!({"dx": 0, "dy": 1})).unwrap();
+    let other = step(&s);
+    assert_eq!(s.doc().unwrap().history.undo.len(), depth + 1);
+    assert!(![start, moved, undone, redone].contains(&other), "{other:?}");
+    s.execute("select.none", &json!({})).unwrap();
+    assert_eq!(step(&s), other, "a selection change is no step");
+    s.execute("select.all", &json!({})).unwrap();
+    s.begin_undo_group();
+    s.execute("object.move", &json!({"dx": 1, "dy": 0})).unwrap();
+    let (grouped, depth) = (step(&s), s.doc().unwrap().history.undo.len());
+    assert_ne!(grouped, other);
+    s.execute("object.move", &json!({"dx": 1, "dy": 0})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), depth, "the second move is merged into the first");
+    let merged = step(&s);
+    assert!(merged != grouped && merged.1 == 0, "a merged edit moves the step: {merged:?}");
+    s.execute("select.none", &json!({})).unwrap();
+    assert_eq!(step(&s), merged);
+    s.end_undo_group(false);
+}
+
+#[test]
+fn color_mode_paint_snapshots_count_toward_the_history_budget() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width":100,"height":100})).unwrap();
+    let mut appearance = s.new_art();
+    appearance.effects.push(vectorcraft_doc::Effect {
+        id: "stylize.dropShadow".into(),
+        visible: true,
+        params: json!({"color":"#ab6739", "retainedTemplateData":"x".repeat(128*1024)}),
+    });
+    s.paint.appearance = Some(appearance);
+    let original = s.paint.clone();
+    s.active_mut().unwrap().history.byte_budget = 64 * 1024;
+    for i in 0..12 {
+        s.execute("file.documentColorMode", &json!({"mode": if i%2 == 0 {"cmyk"} else {"rgb"}})).unwrap();
+    }
+    let st = s.doc().unwrap();
+    assert_eq!(st.history.undo.len(), History::MIN_STEPS);
+    assert!(st.history.undo.iter().all(|e| e.bytes > 256 * 1024), "both large templates count even without artwork");
+    assert!(st.doc.layers.iter().all(|l| l.children().is_none_or(|c| c.is_empty())));
+    let retained = st.history.bytes();
+    let after = s.paint.clone();
+    for _ in 0..History::MIN_STEPS {
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    assert_eq!(s.doc().unwrap().history.redo.len(), History::MIN_STEPS);
+    assert!(s.doc().unwrap().history.redo.iter().all(|e| e.bytes > 256 * 1024));
+    assert!(s.doc().unwrap().history.bytes().abs_diff(retained) < 64 * 1024, "turning entries must not double-count paint snapshots");
+    for _ in 0..History::MIN_STEPS {
+        s.execute("edit.redo", &json!({})).unwrap();
+    }
+    assert_eq!(s.paint, after);
+    assert!(s.doc().unwrap().history.bytes().abs_diff(retained) < 64 * 1024);
+    assert_eq!(
+        s.paint.appearance.as_ref().unwrap().effects[0].params["retainedTemplateData"],
+        original.appearance.unwrap().effects[0].params["retainedTemplateData"]
+    );
+}

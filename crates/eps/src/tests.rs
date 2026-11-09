@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use vectorcraft_color::{Color, Gradient, GradientKind, GradientMethod, GradientPaint, GradientStop, Paint, Swatch};
+use vectorcraft_color::{Color, Freeform, FreeformPoint, Gradient, GradientKind, GradientMethod, GradientPaint, GradientStop, Paint, Swatch};
 use vectorcraft_doc::{Appearance, AppearanceItem, Dash, Document, ImageBlob, ImageObject, LineCap, LineJoin, Node, NodeKind};
 use vectorcraft_geom::{Affine, PathData, Point, Rect, shapes};
 
@@ -352,6 +352,16 @@ fn gradients_mixing_spot_inks_with_other_inks_are_device_n_shadings() {
     assert!(page.contains("/C0 [0 0 1] /C1 [0.6 0 0]") && page.contains("/C0 [0.6 0 0] /C1 [0 0.4 0]"), "{page}");
     assert!(!out.warnings.iter().any(|w| w.contains("spot")), "{:?}", out.warnings);
 
+    // Gold Ink 0% to 100% over a constant 30% cyan plate (a DeviceN gradient read from a PDF,
+    // #3235): Cyan and Gold Ink.
+    let mut over = spot_stop(1.0, "Gold Ink", GOLD, 1.0);
+    over.plates = Some([0.3, 0.0, 0.0, 0.0]);
+    let plated = spot_gradient_doc(vec![GradientStop::new(0.0, Color::cmyk(0.3, 0.0, 0.0, 0.0)), over]);
+    let out = export(&plated, &opts(&plated), None, None).unwrap();
+    let ps = text(&out);
+    assert!(ps.contains("/VCdn0 [/DeviceN [/Cyan (Gold Ink) cvn ] /DeviceCMYK {2 array astore"), "{ps}");
+    assert!(checked_page(&ps).contains("/C0 [0.3 0] /C1 [0.3 1]"), "{ps}");
+
     // Read back as bands, the tint transforms give each ink's CMYK equivalent.
     for (d, end) in [(&two, [0.5, 0.0, 0.5, 0.0]), (&mixed, [0.0, 0.0, 0.0, 0.4])] {
         let out = export(d, &EpsOptions { compatible_gradients: true, ..opts(d) }, None, None).unwrap();
@@ -562,6 +572,60 @@ fn image_data(page: &str) -> Vec<u8> {
     let at = page.find("} exec\n").unwrap() + 7;
     let end = page[at..].find("~>").unwrap() + at + 2;
     ps::ascii85_decode(&page[at..end]).unwrap()
+}
+
+/// A square filled with a freeform gradient of `a` on the left and `b` on the right, with those
+/// points at `opacity`, exported: (the page, the middle pixel's samples, the warnings).
+fn freeform_mid(a: Color, b: Color, opacity: f32, n: usize) -> (String, Vec<u8>, Vec<String>) {
+    let p = |x, c| FreeformPoint { opacity, ..FreeformPoint::new(Point::new(x, 100.0), c) };
+    let mut g = GradientPaint::new(Gradient { kind: GradientKind::Freeform, ..Default::default() });
+    g.freeform = Some(Freeform { points: vec![p(40.0, a), p(160.0, b)], ..Default::default() });
+    let d = doc_with(|d| vec![path(d, shapes::rectangle(Rect::new(0.0, 0.0, 200.0, 200.0)), Paint::Gradient(Box::new(g)), Paint::None, 0.0)]);
+    let out = export(&d, &opts(&d), None, None).unwrap();
+    let page = text(&out);
+    let size = |key: &str| {
+        let at = page.find(key).unwrap() + key.len();
+        page[at..].split(' ').next().unwrap().parse::<usize>().unwrap()
+    };
+    let (w, h) = (size("/Width "), size("/Height "));
+    let pixels = ps::inflate(&image_data(&page), 1 << 28).unwrap();
+    let at = (h / 2 * w + w / 2) * n;
+    (page, pixels[at..at + n].to_vec(), out.warnings)
+}
+
+#[test]
+fn freeform_gradients_keep_the_inks_of_cmyk_points_and_mix_in_the_points_model() {
+    let (cyan, black) = (Color::cmyk(1.0, 0.0, 0.0, 0.0), Color::cmyk(0.0, 0.0, 0.0, 1.0));
+    let (page, mid, _) = freeform_mid(cyan, black, 1.0, 4);
+    assert!(page.contains("/DeviceCMYK setcolorspace"), "{page}");
+    assert!(mid.iter().zip([128, 0, 0, 128]).all(|(g, w): (&u8, i32)| (i32::from(*g) - w).abs() <= 6), "{mid:?}");
+    // A partly transparent point lays down that share of each ink.
+    let (_, mid, warnings) = freeform_mid(cyan, black, 0.5, 4);
+    assert!(mid.iter().zip([64, 0, 0, 64]).all(|(g, w): (&u8, i32)| (i32::from(*g) - w).abs() <= 6), "{mid:?}");
+    assert!(warnings.iter().any(|w| w.contains("partly transparent")), "{warnings:?}");
+    // Lab points go out as RGB, mixed first in Lab.
+    let (page, mid, _) = freeform_mid(Color::lab(90.0, -60.0, 40.0), Color::lab(30.0, 60.0, -40.0), 1.0, 3);
+    assert!(page.contains("/DeviceRGB setcolorspace"), "{page}");
+    let want = Color::lab(60.0, 0.0, 0.0).to_rgba8(1.0);
+    assert!(mid.iter().zip(want).all(|(g, w)| g.abs_diff(w) <= 6), "{mid:?} vs {want:?}");
+}
+
+#[test]
+fn gray_freeform_points_are_written_as_black_ink_in_a_cmyk_document() {
+    let p = |x, c| FreeformPoint::new(Point::new(x, 100.0), c);
+    let mut g = GradientPaint::new(Gradient { kind: GradientKind::Freeform, ..Default::default() });
+    g.freeform = Some(Freeform { points: vec![p(40.0, Color::gray(0.2)), p(160.0, Color::gray(0.8))], ..Default::default() });
+    let mut d = doc_with(|d| vec![path(d, shapes::rectangle(Rect::new(0.0, 0.0, 200.0, 200.0)), Paint::Gradient(Box::new(g)), Paint::None, 0.0)]);
+    d.color_mode = vectorcraft_doc::ColorMode::Cmyk;
+    let page = text(&export(&d, &opts(&d), None, None).unwrap());
+    let size = |key: &str| {
+        let at = page.find(key).unwrap() + key.len();
+        page[at..].split(' ').next().unwrap().parse::<usize>().unwrap()
+    };
+    let (w, h) = (size("/Width "), size("/Height "));
+    let pixels = ps::inflate(&image_data(&page), 1 << 28).unwrap();
+    let at = (h / 2 * w + w / 2) * 4;
+    assert!(pixels[at..at + 3] == [0, 0, 0] && pixels[at + 3].abs_diff(128) <= 6, "{:?}", &pixels[at..at + 4]);
 }
 
 #[test]

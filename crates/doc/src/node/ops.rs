@@ -212,7 +212,10 @@ impl Node {
     /// [`Node::reach_bounds`] with symbol instances measured by their symbol's art box from
     /// `symbols`. An instance that only moves its art is measured as the art's visual box moved,
     /// and any other instance is measured as its geometric box ([`Node::geometric_bounds_with`])
-    /// grown by the farthest a stroke in the art can reach.
+    /// grown by the farthest a stroke in the art can reach. For an instance placed through 9-slice
+    /// guides, that box also holds the art box placed by each cell's map
+    /// ([`crate::NineSliceMap::placement_bounds`]). An instance whose art holds an instance of a
+    /// symbol with 9-slice guides at any depth is measured as its art placed by its transform.
     pub fn reach_bounds_with(&self, symbols: &SymbolBoxes) -> Option<Rect> {
         symbols.quickly(|| self.reach(Some(symbols)))
     }
@@ -297,7 +300,7 @@ impl Node {
                 self.projected(Some(xf.transform_rect_bbox(art)))
             }
             NodeKind::Blend { children, spec } => vectorcraft_geom::union_opt(union(children), spec.spine.as_ref().and_then(|s| s.bounds())),
-            NodeKind::Envelope { content, kind, frame, .. } => crate::live::envelope_bounds(content, kind, **frame),
+            NodeKind::Envelope { content, kind, frame, options, .. } => crate::live::envelope_bounds(content, kind, **frame, *options),
             NodeKind::Mesh(m) => m.bounds(),
             // Each copy is measured where the repeat draws it: `RepeatSpec::transforms` lays the
             // copies out by the source's bounds measured without the document.
@@ -329,6 +332,14 @@ impl Node {
         self.visual(Some(symbols))
     }
 
+    /// The visual box of a group or layer without a clipping path, from the visual boxes of its
+    /// [`Node::editing_children`]: for a walk that measures the members as well.
+    pub fn visual_of_members(&self, members: impl Iterator<Item = Option<Rect>>) -> Option<Rect> {
+        // The container's own strokes paint around its members.
+        let o = self.appearance.outset();
+        members.fold(None, vectorcraft_geom::union_opt).map(|b| b.inflate(o, o))
+    }
+
     /// The box of [`Node::visual_bounds`], or of [`Node::visual_bounds_with`] when `symbols` is
     /// given.
     pub(crate) fn visual(&self, symbols: Option<&SymbolBoxes>) -> Option<Rect> {
@@ -343,11 +354,7 @@ impl Node {
                 }
             }
             NodeKind::Intertwine { children } => children.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.visual(symbols))),
-            NodeKind::Layer { .. } | NodeKind::Group { .. } => {
-                // The container's own strokes paint around its members.
-                let o = self.appearance.outset();
-                self.editing_children().iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.visual(symbols))).map(|b| b.inflate(o, o))
-            }
+            NodeKind::Layer { .. } | NodeKind::Group { .. } => self.visual_of_members(self.editing_children().iter().map(|c| c.visual(symbols))),
             NodeKind::Blend { children, spec } => {
                 let b = children.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.visual(symbols)));
                 let o = crate::live::max_outset(children, symbols);
@@ -367,9 +374,14 @@ impl Node {
                     Some((_, art)) if moves_only(*xf) => xf.transform_rect_bbox(art.visual),
                     Some((s, art)) => {
                         let placed = xf.transform_rect_bbox(art.geometric);
-                        match s.placed_visual(symbol, *xf) {
+                        match s.placed_visual(symbol, *xf).or_else(|| s.sliced_visual(symbol, *xf)) {
                             Some(v) => v.union(placed),
-                            None => placed.inflate(art.reach, art.reach),
+                            // Art placed through 9-slice guides can draw outside `placed`.
+                            None => s
+                                .document()
+                                .symbol_slice_map_of(symbol, art.geometric, *xf)
+                                .map_or(placed, |m| m.placement_bounds(art.geometric).union(placed))
+                                .inflate(art.reach, art.reach),
                         }
                     }
                     None => xf.transform_rect_bbox(SYMBOL_SQUARE),
@@ -419,7 +431,7 @@ impl Node {
         // Type and symbols in perspective keep looking the same, moved by `a`.
         self.transform_projection(a);
         // Refitting an unplaced gradient only reproduces moves and uniform scales.
-        if !keeps_gradient_fit(a) {
+        if !keeps_gradient_fit(a) && !(sc.keep_fit_when_flat && flattens(a)) {
             self.pin_gradients();
         }
         let k = Scaling::factor(a);
@@ -435,6 +447,9 @@ impl Node {
         // copy-on-write (`Shared`), and a move must not copy what it leaves as it is.
         if self.appearance.gradients().next().is_some() {
             self.appearance.transform_gradients(a);
+        }
+        if self.appearance.has_svg_filter() {
+            self.appearance.transform_svg_filters(a);
         }
         if sc.patterns {
             crate::pattern::transform_pattern_paints(self, a);
@@ -496,7 +511,7 @@ impl Node {
                             *h = (lin * h.to_point()).to_vec2();
                         }
                     }
-                    EnvelopeKind::TopObject { path } => path.transform(a),
+                    EnvelopeKind::TopObject { path, .. } => path.transform(a),
                     EnvelopeKind::Warp { .. } => {}
                 }
             }
@@ -596,6 +611,25 @@ impl Node {
         } else {
             self.appearance.fill_at(item).map(|f| (&f.paint, Affine::IDENTITY, b))
         }
+    }
+
+    /// The paint behind the Fill (or Stroke) proxy, the one [`Node::proxy_paint`] gives, without its
+    /// map and box: the object is not measured, so a long path costs no more than a short one.
+    pub fn proxy_paint_only(&self, stroke: bool, item: Option<usize>) -> Option<&vectorcraft_color::Paint> {
+        let item = self.appearance.item_of_kind(item, !stroke);
+        if item.is_none()
+            && !stroke
+            && let Some(c) = self.extras().colorize.as_deref()
+        {
+            return Some(c);
+        }
+        if item.is_none()
+            && let NodeKind::Text(t) = &self.kind
+        {
+            let st = &t.runs.first()?.style;
+            return Some(if stroke { &st.stroke } else { &st.fill });
+        }
+        if stroke { self.appearance.stroke_at(item).map(|s| &s.paint) } else { self.appearance.fill_at(item).map(|f| &f.paint) }
     }
 
     /// The gradient behind the Fill (or Stroke) proxy and its placement in document coordinates
@@ -736,11 +770,22 @@ impl Node {
     }
 }
 
-/// Is `a` a move plus a positive uniform scale (after which a refit gradient still matches)?
-fn keeps_gradient_fit(a: Affine) -> bool {
+/// Is `a` a move plus a positive uniform scale (after which a refit gradient still matches)? The
+/// terms are compared within 1e-12 of the scale (at least of 1). A scale of 0 or less, a turn, a
+/// reflection and an uneven scale give false, and so does a map that flattens the object
+/// ([`flattens`]), which callers that keep a fitted gradient there check apart.
+pub fn keeps_gradient_fit(a: Affine) -> bool {
     let [m0, m1, m2, m3, _, _] = a.as_coeffs();
     let eps = 1e-12 * m0.abs().max(1.0);
     m0 > 0.0 && m1.abs() <= eps && m2.abs() <= eps && (m0 - m3).abs() <= eps
+}
+
+/// Does `a` flatten what it maps to a line or a point (its determinant 0, within 1e-12 of the
+/// squares of its terms), or is it not finite?
+pub fn flattens(a: Affine) -> bool {
+    let [m0, m1, m2, m3, _, _] = a.as_coeffs();
+    let norm = m0 * m0 + m1 * m1 + m2 * m2 + m3 * m3;
+    !a.is_finite() || a.determinant().abs() <= 1e-12 * norm
 }
 
 impl Node {

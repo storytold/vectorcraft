@@ -21,6 +21,8 @@ fn extras_are_written_flat_in_order() {
         e.live_paint_gaps = Some(Box::default());
         e.compound_shape = true;
         e.shape_mode = crate::ShapeMode::Exclude;
+        e.envelope_edit_margin = Some([0.5, 0.5, 0.25, 0.25]);
+        e.pixel_aligned = true;
     }
     /// The top-level keys of a JSON object, in the order written.
     struct Keys(Vec<String>);
@@ -65,9 +67,12 @@ fn extras_are_written_flat_in_order() {
         "live_paint_gaps",
         "compound_shape",
         "shape_mode",
+        "envelope_edit_margin",
+        "pixel_aligned",
     ];
     assert_eq!(keys, order);
     assert_eq!(v["shape_mode"], "exclude");
+    assert_eq!(v["pixel_aligned"], true);
     assert_eq!(serde_json::from_value::<Node>(v).unwrap(), n);
     let plain = Node::path(NodeId(9), shapes::rectangle(Rect::new(0.0, 0.0, 4.0, 2.0)), Appearance::default_art());
     let back: Node = serde_json::from_value(serde_json::to_value(&plain).unwrap()).unwrap();
@@ -216,7 +221,8 @@ fn assert_round_corners(n: &Node, back: Affine, r: f64) {
     }
 }
 
-const KEEP_CORNERS: Scaling = Scaling { strokes: false, effects: None, keep_type_strokes: false, keep_corners: true, patterns: false };
+const KEEP_CORNERS: Scaling =
+    Scaling { strokes: false, effects: None, keep_type_strokes: false, keep_corners: true, patterns: false, keep_fit_when_flat: false };
 
 #[test]
 fn uneven_scales_keep_live_corners_circular() {
@@ -390,10 +396,19 @@ fn a_projection_follows_the_transform_or_is_removed() {
     let mut n = instance(far);
     n.transform(Affine::scale(1e150), false);
     assert_eq!(projection(&n), None);
-    // A transform that is not invertible leaves the projection as it is.
+    // A transform that is not invertible leaves the projection as it is, at any scale.
     let mut n = instance(far);
     n.transform(Affine::scale(0.0), false);
     assert_eq!(projection(&n), Some(far.to_array()));
+    let mut n = instance(far);
+    n.transform(Affine::new([1e-8, 2e-8, 2e-8, 4e-8, 0.0, 0.0]), false);
+    assert_eq!(projection(&n), Some(far.to_array()));
+    // A scale by 1e-8 is invertible: a move by 10 becomes a move by 1e-7.
+    let ten = Homography::from_affine(Affine::translate((10.0, 0.0)));
+    let mut n = instance(ten);
+    n.transform(Affine::scale(1e-8), false);
+    let q = n.projection().unwrap().apply(Point::new(3e-8, 7e-8)).unwrap();
+    assert!(q.distance(Point::new(1.3e-7, 7e-8)) < 1e-20, "{q:?}");
 }
 
 #[test]
@@ -432,6 +447,20 @@ fn visual_bounds_include_stroke() {
     let mut p = Node::path(NodeId(2), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
     p.appearance.stroke_mut().unwrap().join = crate::appearance::LineJoin::Round;
     assert_eq!(p.visual_bounds(), Some(Rect::new(-0.5, -0.5, 10.5, 10.5)));
+}
+
+/// A group's box from its members' boxes grows by the group's own strokes, leaves out members
+/// without a box, and is `None` when none has one.
+#[test]
+fn visual_of_members_unions_the_members_and_grows_by_the_group_stroke() {
+    let mut g = Node::group(NodeId(1), vec![]);
+    g.appearance = Appearance::default_art().into();
+    let (a, b) = (Rect::new(0.0, 0.0, 10.0, 10.0), Rect::new(20.0, 5.0, 30.0, 8.0));
+    let o = g.appearance.outset();
+    assert!(o > 0.0);
+    assert_eq!(g.visual_of_members([Some(a), None, Some(b)].into_iter()), Some(Rect::new(0.0, 0.0, 30.0, 10.0).inflate(o, o)));
+    assert_eq!(g.visual_of_members([None, None].into_iter()), None);
+    assert_eq!(g.visual_of_members([].into_iter()), None);
 }
 
 /// Type's visual bounds grow by how far its character strokes paint past the glyphs: half the
