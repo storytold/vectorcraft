@@ -4,7 +4,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use vectorcraft_doc::{Document, Node, NodeKind, SymbolBoxes};
+use vectorcraft_doc::{Document, Node, NodeId, NodeKind, SymbolBoxes};
 use vectorcraft_geom::{Affine, Rect};
 
 /// What may draw differently in a document than in its version before an edit ([`changed`]).
@@ -82,10 +82,43 @@ fn add_placed(symbols: &SymbolBoxes, n: &Node, files: &HashSet<String>, area: &m
 /// art also draws in the copies round it). Objects that an edit doesn't touch
 /// keep their identity, so this costs what changed, not the size of the document.
 pub fn changed(old: &Document, new: &Document) -> Changed {
+    changed_with(old, new, None, &[])
+}
+
+impl crate::Renderer {
+    /// [`changed`], measured through this renderer (`Renderer::bounds_of`): what it drew
+    /// of `old` it measured to draw it, and what it measures of `new`, a 3D effect's art included,
+    /// it holds to draw that with `opts`; the objects `opts` draws hidden count as hidden objects
+    /// do, drawing nothing. The view that drew `old` with this renderer and `opts` asks this. With
+    /// Overprint Preview or Separations Preview the renderer draws copies of the objects
+    /// (`proof::prepare`), so they are measured afresh and nothing is held.
+    pub fn changed(&mut self, old: &Document, new: &Document, opts: &crate::RenderOptions) -> Changed {
+        let renderer = (!crate::proof::overprints(opts)).then_some(self);
+        changed_with(old, new, renderer, &opts.hidden)
+    }
+
+    /// Let go of the art made to measure objects ([`crate::Renderer::changed`]) and held for this
+    /// renderer to draw them: another one draws the frame.
+    pub fn let_go_of_measured(&mut self) {
+        self.measured.clear();
+        self.measured_bytes = 0;
+        self.pass_bounds.clear();
+        self.three_d_bounds.retain(|_, e| e.0.strong_count() > 0);
+        self.three_d_kept = self.three_d_bounds.len();
+    }
+
+    /// The bytes of the art made to measure objects that this renderer holds to draw them
+    /// ([`crate::Renderer::changed`]).
+    pub fn measured_bytes(&self) -> usize {
+        self.measured_bytes
+    }
+}
+
+fn changed_with(old: &Document, new: &Document, renderer: Option<&mut crate::Renderer>, hidden: &[NodeId]) -> Changed {
     if new.pattern_edit.is_some() || !old.same_outside_layers(new) {
         return Changed::Everything;
     }
-    let mut diff = Diff { old: old.symbol_boxes(), new: new.symbol_boxes(), area: None };
+    let mut diff = Diff { old: old.symbol_boxes(), new: new.symbol_boxes(), area: None, renderer, hidden };
     diff.children(&old.layers, &new.layers);
     diff.area.map_or(Changed::Nothing, Changed::Area)
 }
@@ -102,14 +135,17 @@ pub fn view_pixels(area: Rect, view: Affine, w: u32, h: u32) -> Option<[u32; 4]>
     (x1 > x0 && y1 > y0).then_some([x0 as u32, y0 as u32, x1 as u32, y1 as u32])
 }
 
-/// [`changed`] in progress: the symbols' boxes of both versions, and the area so far.
-struct Diff<'a> {
+/// [`changed`] in progress: the symbols' boxes of both versions, the area so far, the renderer
+/// that measures, if any (else each object is measured afresh), and the objects it draws hidden.
+struct Diff<'a, 'r> {
     old: SymbolBoxes<'a>,
     new: SymbolBoxes<'a>,
     area: Option<Rect>,
+    renderer: Option<&'r mut crate::Renderer>,
+    hidden: &'r [NodeId],
 }
 
-impl Diff<'_> {
+impl Diff<'_, '_> {
     /// Members in the same order compare one by one. Members added, removed or restacked count
     /// before and after, except those that kept their place unchanged.
     fn children(&mut self, old: &[Arc<Node>], new: &[Arc<Node>]) {
@@ -123,8 +159,8 @@ impl Diff<'_> {
             match (old.get(i), new.get(i)) {
                 (Some(a), Some(b)) if Arc::ptr_eq(a, b) => {}
                 (a, b) => {
-                    self.add_old(a.map(|a| &**a));
-                    self.add_new(b.map(|b| &**b));
+                    self.add_old(a);
+                    self.add_new(b);
                 }
             }
         }
@@ -135,11 +171,13 @@ impl Diff<'_> {
     /// only had anchors moved changed around them ([`moved_anchors`]). Any other object that
     /// changed counts whole, before and after.
     fn node(&mut self, old: &Arc<Node>, new: &Arc<Node>) {
-        if Arc::ptr_eq(old, new) {
+        if Arc::ptr_eq(old, new) || self.unseen(old) && self.unseen(new) {
             return;
         }
+        // An Image Trace object draws its hidden source image in some views: it changed whole.
         if let (Some(a), Some(b)) = (members(old), members(new))
             && same_but_members(old, new)
+            && old.extras().trace.is_none()
         {
             self.children(a, b);
         } else if let Some((area, moved, anchors)) = moved_anchors(old, new) {
@@ -148,7 +186,7 @@ impl Diff<'_> {
             } else {
                 // The object's box before and after holds every pixel that changed too, and so
                 // does where the two overlap.
-                let whole = vectorcraft_geom::union_opt(crate::brush_fx::cull_bounds(&self.old, old), crate::brush_fx::cull_bounds(&self.new, new));
+                let whole = vectorcraft_geom::union_opt(self.bounds(Side::Old, old), self.bounds(Side::New, new));
                 self.add(area.zip(whole).map(|(a, w)| a.intersect(w)));
             }
         } else {
@@ -157,17 +195,49 @@ impl Diff<'_> {
         }
     }
 
-    fn add_old(&mut self, n: Option<&Node>) {
-        self.add(n.and_then(|n| crate::brush_fx::cull_bounds(&self.old, n)));
+    /// Does `n` draw nothing: hidden, or drawn hidden? The members of a hidden group or layer are
+    /// never compared ([`Self::node`]).
+    fn unseen(&self, n: &Node) -> bool {
+        !n.visible || self.hidden.contains(&n.id)
     }
 
-    fn add_new(&mut self, n: Option<&Node>) {
-        self.add(n.and_then(|n| crate::brush_fx::cull_bounds(&self.new, n)));
+    /// The cull bounds of `n` of the `side` version, through the renderer when there is one;
+    /// `None` when it draws nothing ([`Self::unseen`]), as nothing is measured to draw it.
+    fn bounds(&mut self, side: Side, n: &Arc<Node>) -> Option<Rect> {
+        if self.unseen(n) {
+            return None;
+        }
+        let Diff { old, new, renderer, .. } = self;
+        let symbols = match side {
+            Side::Old => old,
+            Side::New => new,
+        };
+        match renderer {
+            Some(r) => r.bounds_of(symbols, n),
+            None => crate::brush_fx::cull_bounds(symbols, n),
+        }
+    }
+
+    fn add_old(&mut self, n: Option<&Arc<Node>>) {
+        let b = n.and_then(|n| self.bounds(Side::Old, n));
+        self.add(b);
+    }
+
+    fn add_new(&mut self, n: Option<&Arc<Node>>) {
+        let b = n.and_then(|n| self.bounds(Side::New, n));
+        self.add(b);
     }
 
     fn add(&mut self, r: Option<Rect>) {
         self.area = vectorcraft_geom::union_opt(self.area, r);
     }
+}
+
+/// Which version of the document [`Diff`] measures an object of.
+#[derive(Clone, Copy)]
+enum Side {
+    Old,
+    New,
 }
 
 /// The members of a group or layer whose members draw each on their own: no clipping mask, and no

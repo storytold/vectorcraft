@@ -10656,3 +10656,53 @@ fn direct_selection_shows_the_bounding_box_while_cmd_is_held() {
     assert!(!handle_drawn(&mut app, egui::Modifiers::NONE), "gone once Cmd is released");
     assert!(app.ui.view.bounding_box, "View › Show Bounding Box is unchanged");
 }
+
+/// An edit to a 3D effect renders the part it changed on this thread, measured by the renderer
+/// that drew the frame shown ([`vectorcraft_render::Renderer::changed`]): it draws the part with
+/// the 3D art it made to measure it.
+#[test]
+fn an_edit_to_a_3d_effect_redraws_with_the_art_measured() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+    app.canvas.worker_started = true; // render on this thread
+    let id = app.run("shape.rectangle", json!({"x": 380, "y": 280, "width": 40, "height": 40})).unwrap()["id"].clone();
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "ids": [id], "params": {"depth": 60.0}})).unwrap();
+    let ctx = egui::Context::default();
+    shapes(&mut app, &ctx);
+    assert_eq!(app.canvas.renderer.stats.three_d_built, 1, "the whole frame made the art");
+    app.run("effect.setParams", json!({"ids": [id], "index": 0, "item": null, "params": {"depth": 5.0}})).unwrap();
+    // Drawing only a part keeps the whole frame's time; drawing it whole measures it again.
+    app.canvas.last_ms = 7.25;
+    shapes(&mut app, &ctx);
+    assert!(!app.canvas.from_worker);
+    assert_eq!(app.canvas.last_ms, 7.25, "only the part that changed was drawn");
+    assert_eq!(app.canvas.renderer.stats.three_d_built, 0, "the part was drawn with the art made to measure the edit");
+}
+
+/// An edit to a 3D effect off the view, and one the render worker draws, leave none of the art made
+/// to measure them held by this thread's renderer.
+#[test]
+fn art_measured_for_an_edit_not_drawn_here_is_let_go() {
+    for worker in [false, true] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+        app.canvas.worker_started = true; // render on this thread
+        // Off the view, or filling it, for the worker to draw.
+        let (x, size) = if worker { (0, 800) } else { (5000, 40) };
+        let id = app.run("shape.rectangle", json!({"x": x, "y": 0, "width": size, "height": size})).unwrap()["id"].clone();
+        app.run("effect.apply", json!({"effect": "threeD.extrude", "ids": [id], "params": {"depth": 60.0}})).unwrap();
+        let ctx = egui::Context::default();
+        shapes(&mut app, &ctx);
+        if worker {
+            app.canvas.worker = crate::render_worker::Worker::spawn(ctx.clone());
+            app.canvas.last_ms = 100.0;
+        }
+        app.run("effect.setParams", json!({"ids": [id], "index": 0, "item": null, "params": {"depth": 5.0}})).unwrap();
+        shapes(&mut app, &ctx);
+        if worker {
+            assert!(app.canvas.worker.as_ref().is_some_and(|w| w.pending.is_some()), "the worker draws it");
+        }
+        assert_eq!(app.canvas.renderer.measured_bytes(), 0, "worker {worker}");
+        app.canvas.worker = None;
+    }
+}

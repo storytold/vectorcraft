@@ -312,13 +312,22 @@ pub struct MenuFacts {
     pub(crate) any_art: bool,
 }
 
-/// Whether an unlocked artboard of `indices` has art that Fit to Artwork Bounds fits it to.
+/// Whether an unlocked artboard of `indices` has art that Fit to Artwork Bounds fits it to. The
+/// answer is kept for the document's revision: the canvas menu asks on every frame it is open
+/// without its [`MenuFacts`], and measuring builds the solids of 3D effects.
 pub(crate) fn fit_has_art(app: &VectorcraftApp, indices: &[usize]) -> bool {
+    /// The document's uid and revision, the artboards asked about, and the answer.
+    type Kept = Option<(u64, u64, Vec<usize>, bool)>;
+    thread_local!(static KEPT: std::cell::RefCell<Kept> = const { std::cell::RefCell::new(None) });
     app.session.active().is_some_and(|st| {
-        indices
-            .iter()
-            .filter_map(|i| st.doc.artboards.get(*i))
-            .any(|a| !a.locked && vectorcraft_render::encode::art_bounds_on(&st.doc, a.rect).is_some())
+        if let Some(any) = KEPT.with_borrow(|k| k.as_ref().filter(|k| k.0 == st.uid && k.1 == st.revision && k.2 == indices).map(|k| k.3)) {
+            return any;
+        }
+        // One renderer measures every artboard: each object once.
+        let mut r = vectorcraft_render::Renderer::new();
+        let any = indices.iter().filter_map(|i| st.doc.artboards.get(*i)).any(|a| !a.locked && r.art_bounds_on(&st.doc, a.rect).is_some());
+        KEPT.set(Some((st.uid, st.revision, indices.to_vec(), any)));
+        any
     })
 }
 

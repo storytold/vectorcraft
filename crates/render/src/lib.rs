@@ -49,6 +49,14 @@ pub use pattern::render_pattern_swatch;
 pub use vectorcraft_effects as effects;
 pub use vello_cpu;
 
+/// Art made to measure an object ([`Renderer::measured`]): the object, its art, and the key of
+/// what the art read from outside the object (`None`: nothing).
+type MeasuredArt = (Arc<Node>, Arc<Node>, Option<u64>);
+
+/// A 3D effect's art ([`Renderer::three_d_bounds`]), held weakly, and its bounds once measured at a
+/// raster effects resolution (its bits) with a brush library (its key).
+type ThreeDArt = (std::sync::Weak<Node>, Option<((u64, u64), Option<Rect>)>);
+
 /// Reusable renderer (keeps the render context, geometry and glyph caches between frames; decoded
 /// images are shared by all renderers, see [`set_image_cache_budget`]).
 pub struct Renderer {
@@ -76,6 +84,9 @@ pub struct Renderer {
     /// The plug-in revision ([`effects::plugin_revision`]) that `geom`, `fx_geom` and `fx_arts` were
     /// last checked against (see [`Self::check_plugins`]).
     plugin_revision: u64,
+    /// The key of the brush library ([`brush_fx::BrushCache::library_key`]) that `geom`'s bounds
+    /// of 3D art measured brushed strokes by (see [`Self::check_symbols`]).
+    brush_library: u64,
     /// Is a live-effect plug-in that paints its pieces installed (found when `plugin_revision`
     /// changes)?
     painting_plugins: bool,
@@ -148,6 +159,25 @@ pub struct Renderer {
     shape_of: usize,
     /// The art drawn for objects with effects that apply through it (see `fx::has_object_fx`).
     fx_arts: FrameCache<usize, FxArtEntry>,
+    /// The art of objects with object effects made to measure them ([`Renderer::bounds_of`]) and
+    /// not drawn yet, by the object's address, with the object and the key of what it read from
+    /// outside the object when it was made (`None`: nothing): drawing one keeps it in `fx_arts`
+    /// while that is unchanged; the frame's end lets go of the rest.
+    measured: PtrMap<usize, MeasuredArt>,
+    /// The bytes of the art in `measured` ([`lru::node_bytes`]), within `measured_budget`
+    /// ([`lru::MEASURED_BUDGET`]).
+    measured_bytes: usize,
+    measured_budget: usize,
+    /// The export bounds of the objects measured without their hidden members
+    /// (`encode::drawn_bounds`), by the object they were made from: kept for a pass over artboards,
+    /// let go when a frame ends.
+    pub(crate) pass_bounds: PtrMap<usize, (Arc<Node>, Option<Rect>)>,
+    /// The 3D effects' art among the art `fx_art` made, by its address, with the art (weakly: what
+    /// keeps the art is `fx_arts` and `measured`) and its bounds once measured.
+    three_d_bounds: PtrMap<usize, ThreeDArt>,
+    /// How many entries `three_d_bounds` kept when it last let go of the art no longer held: it
+    /// does so again when it holds twice as many.
+    three_d_kept: usize,
     /// Symbol art as instances and inline graphics draw it (see [`Self::placed_art`]).
     placed_arts: FrameCache<PlacedKey, PlacedEntry>,
     /// The bitmap clock of [`placed_document`] when this frame first drew a placed document from

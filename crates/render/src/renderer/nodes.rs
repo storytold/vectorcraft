@@ -6,6 +6,20 @@ use super::{
 };
 use crate::kept_paths::{self, KeptPath};
 
+/// Does [`Renderer::bounds_of`] measure `n` by the 3D art this renderer draws and keeps for it: a
+/// Revolve, Extrude & Bevel, Inflate or Rotate without Crop Marks or Vector Halftone, which draw
+/// other art?
+fn measures_three_d(n: &Node) -> bool {
+    (effects::has_revolve(n) || effects::has_solid(n)) && !effects::has_crop_marks(n) && !effects::addons::halftone::has_halftone(n)
+}
+
+/// Does `n` hold an object that [`Renderer::bounds_of`] measures by its 3D effect's art?
+fn holds_measured_three_d(n: &Node) -> bool {
+    let mut holds = false;
+    n.walk(&mut |c| holds |= measures_three_d(c));
+    holds
+}
+
 impl Renderer {
     /// Cached cull bounds of a node (containers union their cached children), symbol instances
     /// measured by their art box from `symbols`.
@@ -28,6 +42,21 @@ impl Renderer {
                     }
                 }
                 acc
+            }
+            // A 3D effect's art, measured as this renderer draws and keeps it ([`Self::fx_art`]): one
+            // build for the measure and the draw. Crop Marks and Vector Halftone draw other art, and
+            // an object whose 3D effect builds nothing (Revolve on a group, a solid too complex) is
+            // drawn otherwise, measured as below.
+            _ if measures_three_d(a)
+                && let Some(b) = {
+                    let art = self.measured_fx_art(symbols.document(), a);
+                    self.three_d_art_bounds(symbols, &art)
+                } =>
+            {
+                // Culling leaves room for brush art as for any object ([`brush_fx::cull_bounds`]);
+                // the measure is made again when the brush library changes ([`Self::check_symbols`]).
+                let pad = brush_fx::pad(symbols, a);
+                b.map(|b| fx::with_own_raster_reach(symbols, a, b).inflate(pad, pad))
             }
             _ => self.kept_bounds(symbols, a).unwrap_or_else(|| brush_fx::cull_bounds(symbols, a)),
         };
@@ -81,13 +110,20 @@ impl Renderer {
 
     /// Drop the cached bounds of symbol instances and of the objects that hold them when `doc`'s
     /// symbols are not those of the document last drawn (by name and art): those bounds measured
-    /// the instances by their symbol's art.
+    /// the instances by their symbol's art. Likewise drop those of objects measured by a 3D
+    /// effect's art, and of the objects that hold them, when the brush library has changed.
     pub(crate) fn check_symbols(&mut self, doc: &Document) {
         let same = self.symbols.len() == doc.symbols.len()
             && self.symbols.iter().zip(&doc.symbols).all(|((name, art), s)| *name == s.name && std::ptr::eq(art.as_ptr(), Arc::as_ptr(&s.art)));
         if !same {
             self.geom.retain(|_, e| !holds_instance(&e.node));
             self.symbols = doc.symbols.iter().map(|s| (s.name.clone(), Arc::downgrade(&s.art))).collect();
+        }
+        // That art is measured with the art its brushed strokes draw ([`Self::bounds_of`]).
+        let brushes = self.brushes.library_key_now(doc, self.stamp);
+        if brushes != self.brush_library {
+            self.brush_library = brushes;
+            self.geom.retain(|_, e| !holds_measured_three_d(&e.node));
         }
     }
 

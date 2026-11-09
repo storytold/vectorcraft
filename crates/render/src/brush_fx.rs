@@ -115,6 +115,13 @@ impl BrushCache {
         self.library(doc, stamp);
         self.key
     }
+
+    /// [`Self::library_key`] checked now, between frames: `doc` may be the document of the last
+    /// frame, edited in place.
+    pub(crate) fn library_key_now(&mut self, doc: &Document, stamp: u64) -> u64 {
+        self.checked = (u64::MAX, 0);
+        self.library_key(doc, stamp)
+    }
 }
 
 /// Cull bounds that allow for brush art reaching past the stroke (scatter, wide nibs), symbol

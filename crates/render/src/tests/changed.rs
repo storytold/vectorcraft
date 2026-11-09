@@ -55,13 +55,25 @@ fn document() -> (Document, [NodeId; 5]) {
 }
 
 /// Draws `new` again only where it changed from `old`, over `old` drawn whole, and checks that
-/// this is `new` drawn whole; returns what changed.
+/// this is `new` drawn whole; returns what changed. Measured afresh ([`changed`]) and by the
+/// renderer that drew `old`, which then draws the part ([`Renderer::changed`]): both must hold.
 fn redraw(old: &Document, new: &Document) -> Changed {
-    let mut r = Renderer::new();
     let opts = RenderOptions::default();
-    let before = r.render(old, W, H, view(), &opts);
-    let after = r.render(new, W, H, view(), &opts);
+    let after = Renderer::new().render(new, W, H, view(), &opts);
     let change = changed(old, new);
+    let mut fresh = Renderer::new();
+    let before = fresh.render(old, W, H, view(), &opts);
+    patched(&mut fresh, &before, new, change, &after);
+    let mut r = Renderer::new();
+    let before = r.render(old, W, H, view(), &opts);
+    let measured = r.changed(old, new, &opts);
+    patched(&mut r, &before, new, measured, &after);
+    change
+}
+
+/// `before` with `new` drawn again by `r` only where `change` says, checked against `after`.
+fn patched(r: &mut Renderer, before: &Rendered, new: &Document, change: Changed, after: &Rendered) {
+    let opts = RenderOptions::default();
     let mut patched = Rendered { width: W, height: H, pixels: before.pixels.clone() };
     match change {
         Changed::Everything => patched.pixels = after.pixels.clone(),
@@ -78,7 +90,6 @@ fn redraw(old: &Document, new: &Document) -> Changed {
         }
     }
     assert!(patched.pixels == after.pixels, "{change:?}: drawn again only there, it differs from drawing it all");
-    change
 }
 
 fn area(c: Changed) -> Rect {
@@ -420,4 +431,111 @@ fn a_path_painted_by_its_whole_shape_changes_whole_when_an_anchor_moves() {
     }
     let a = area(redraw(&plain, &added));
     assert!(a.width() > 80.0 && a.height() > 60.0, "{a:?}");
+}
+
+/// Changing a 3D effect's parameters on `make`'s object, from `before` to `after`.
+fn three_d_change(make: impl Fn(&mut Document) -> Node, id: &str, before: serde_json::Value, after: serde_json::Value) -> Changed {
+    let effect = |params: serde_json::Value| vectorcraft_doc::Effect { id: id.into(), params, visible: true };
+    let mut old = Document::new(110.0, 80.0);
+    let l = old.layers[0].id;
+    let mut n = make(&mut old);
+    n.appearance.effects.push(effect(before));
+    let n = old.insert(Some(l), 0, n).unwrap();
+    let mut new = old.clone();
+    new.node_mut(n).unwrap().appearance.effects[0] = effect(after);
+    redraw(&old, &new)
+}
+
+/// Type and a group draw a 3D effect as solids that reach past their letters and members: a
+/// shallower or turned solid changes where the deeper one drew too.
+#[test]
+fn a_3d_effect_changed_on_type_or_a_group_changes_where_its_solid_was() {
+    use vectorcraft_doc::{CharStyle, TextObject};
+    let blue = Color::rgb(0.1, 0.2, 0.6);
+    let type_k = move |d: &mut Document| {
+        let style = CharStyle { size: 30.0, fill: Paint::solid(blue), ..Default::default() };
+        Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(40.0, 50.0), "K", style))))
+    };
+    let group = move |d: &mut Document| {
+        let (a, b) = (rect(d, Rect::new(40.0, 30.0, 50.0, 50.0), blue), rect(d, Rect::new(52.0, 30.0, 60.0, 50.0), blue));
+        Node::group(d.alloc_id(), vec![Arc::new(a), Arc::new(b)])
+    };
+    let at = |depth: f64| serde_json::json!({"depth": depth, "position": "isometricTop"});
+    for make in [&type_k as &dyn Fn(&mut Document) -> Node, &group] {
+        for (id, before, after) in [
+            ("threeD.extrude", at(60.0), at(5.0)),
+            ("threeD.inflate", at(40.0), at(2.0)),
+            ("threeD.rotate", serde_json::json!({"rotationX": 0.0}), serde_json::json!({"rotationX": 80.0})),
+        ] {
+            // `redraw` holds the pixels drawn again only where it changed to drawing it all, and
+            // only an area of the document is drawn again.
+            area(three_d_change(make, id, before, after));
+        }
+    }
+    // Type on a path, a group with a hidden member, and a group in a group.
+    let on_path = move |d: &mut Document| {
+        let style = CharStyle { size: 14.0, fill: Paint::solid(blue), ..Default::default() };
+        let mut t = TextObject::point(Point::ZERO, "Along", style);
+        let line = kurbo::Line::new((30.0, 55.0), (80.0, 35.0)).to_path(0.1);
+        t.kind = vectorcraft_doc::TextKind::OnPath { path: vectorcraft_geom::PathData::from_bezpath(&line), start: 0.0, end: None };
+        t.xf = Affine::IDENTITY;
+        t.cached_bounds = Some(vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t).bounds);
+        Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)))
+    };
+    let hiding = move |d: &mut Document| {
+        let mut hidden = rect(d, Rect::new(10.0, 10.0, 20.0, 20.0), blue);
+        hidden.visible = false;
+        let shown = rect(d, Rect::new(40.0, 30.0, 60.0, 50.0), blue);
+        Node::group(d.alloc_id(), vec![Arc::new(hidden), Arc::new(shown)])
+    };
+    let nested = move |d: &mut Document| {
+        let inner = group(d);
+        Node::group(d.alloc_id(), vec![Arc::new(inner)])
+    };
+    for make in [&on_path as &dyn Fn(&mut Document) -> Node, &hiding, &nested] {
+        area(three_d_change(make, "threeD.extrude", at(60.0), at(5.0)));
+    }
+    // A revolved path, and revolved type, which Revolve leaves as it is.
+    let path = move |d: &mut Document| rect(d, Rect::new(40.0, 30.0, 60.0, 50.0), blue);
+    for make in [&path as &dyn Fn(&mut Document) -> Node, &type_k] {
+        area(three_d_change(make, "threeD.revolve", serde_json::json!({"offset": 30.0}), serde_json::json!({"offset": 0.0})));
+    }
+}
+
+/// A renderer that drew a document measures what an edit changed through what it keeps
+/// ([`Renderer::changed`]): the same area as [`changed`], and the 3D art it made to measure the
+/// edit it draws the edit with, making none again. [`changed`] makes its own, and the renderer
+/// makes the art again to draw it.
+#[test]
+fn a_renderer_measures_an_edit_with_the_3d_art_it_draws() {
+    use vectorcraft_doc::{CharStyle, TextObject};
+    let mut old = Document::new(110.0, 80.0);
+    let style = CharStyle { size: 30.0, fill: Paint::solid(Color::rgb(0.1, 0.2, 0.6)), ..Default::default() };
+    let mut n = Node::new(old.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(40.0, 50.0), "K", style))));
+    let extrude = |depth: f64| vectorcraft_doc::Effect {
+        id: "threeD.extrude".into(),
+        params: serde_json::json!({"depth": depth, "position": "isometricTop"}),
+        visible: true,
+    };
+    n.appearance.effects.push(extrude(60.0));
+    let l = old.layers[0].id;
+    let id = old.insert(Some(l), 0, n).unwrap();
+    let mut new = old.clone();
+    new.node_mut(id).unwrap().appearance.effects[0] = extrude(5.0);
+    let opts = RenderOptions::default();
+    let _fonts = crate::tests_fontchange::fonts_steady();
+    let (measured, built, apart) = crate::tests_fontchange::with_fonts_unchanged(|| {
+        let mut r = Renderer::new();
+        r.render(&old, W, H, view(), &opts);
+        let measured = area(r.changed(&old, &new, &opts));
+        r.render(&new, W, H, view(), &opts);
+        let mut fresh = Renderer::new();
+        fresh.render(&old, W, H, view(), &opts);
+        let _ = changed(&old, &new);
+        fresh.render(&new, W, H, view(), &opts);
+        (measured, r.stats.three_d_built, fresh.stats.three_d_built)
+    });
+    assert_eq!(measured, area(changed(&old, &new)), "as changed measures it");
+    assert_eq!(built, 0, "drawn with the art made to measure it");
+    assert_eq!(apart, 1, "changed keeps nothing for the renderer");
 }

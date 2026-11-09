@@ -45,6 +45,7 @@ impl Renderer {
             kept: PtrMap::default(),
             symbols: vec![],
             plugin_revision: 0,
+            brush_library: 0,
             painting_plugins: false,
             paint_names: 0,
             strokes: PtrMap::default(),
@@ -70,6 +71,12 @@ impl Renderer {
             knockout: false,
             shape_of: 0,
             fx_arts: FrameCache::new(lru::FX_ART_BUDGET, 256),
+            measured: PtrMap::default(),
+            measured_bytes: 0,
+            measured_budget: lru::MEASURED_BUDGET,
+            pass_bounds: PtrMap::default(),
+            three_d_bounds: PtrMap::default(),
+            three_d_kept: 0,
             placed_arts: FrameCache::new(lru::PLACED_ART_BUDGET, 256),
             placed_frame: None,
             nested: 0,
@@ -227,6 +234,8 @@ impl Renderer {
         self.clips.sweep(g);
         self.clip_paints.sweep(g);
         self.fx_arts.sweep(g);
+        // Only the 3D art still kept (in `fx_arts`) keeps its bounds.
+        self.let_go_of_measured();
         self.placed_arts.sweep(g);
         self.brushes.entries.sweep(g);
         self.live.sweep(g);
