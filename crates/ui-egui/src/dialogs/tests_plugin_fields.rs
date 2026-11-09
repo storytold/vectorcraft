@@ -13,7 +13,8 @@ use vectorcraft_plugins::wat as tpl;
 
 use super::*;
 
-/// The install approval has no OK in the shared footer: Enter, real or injected, doesn't press it.
+/// The install approval has no OK in the shared footer, so Enter presses OK only when OK has the
+/// keyboard focus.
 #[test]
 fn enter_does_not_answer_the_install_approval() {
     assert!(plugin::INSTALL_SPEC.ok.is_none() && plugin::INSTALL_SPEC.body_with_actions.is_some());

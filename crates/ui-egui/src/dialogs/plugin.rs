@@ -14,7 +14,7 @@
 //!
 //! Dialog `pluginInstall` asks a person to approve a plug-in's permissions or heavy budget. What it
 //! shows and installs is held by the app, not in its fields; a control request or synthetic input
-//! can't confirm it, and Enter doesn't.
+//! can't confirm it. Enter confirms it only when OK has the keyboard focus.
 
 use std::sync::Arc;
 
@@ -285,7 +285,8 @@ pub(crate) struct PendingInstall {
     pub approval: InstallApproval,
 }
 
-/// No OK in the shared footer, so Enter does nothing.
+/// No OK in the shared footer: the OK in its body is a button, which Enter clicks only when it has
+/// the keyboard focus.
 pub(super) const INSTALL_SPEC: DialogSpec = DialogSpec {
     heading: |_| tl!("Install Plug-in…").trim_end_matches('…').to_string(),
     body_with_actions: Some(install_body),

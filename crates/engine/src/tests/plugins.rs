@@ -1296,8 +1296,8 @@ fn a_request_cannot_grant_what_only_a_person_approves() {
     let e = s.execute("plugin.install", &json!({"dataBase64": data})).unwrap_err().to_string();
     assert!(e.contains("approve them in the desktop app") && e.contains("--allow-plugin-grants"), "{e}");
     let batch = json!({"commands": [{"command": "plugin.install", "params": {"dataBase64": data, "grant": ["doc.read"]}}]});
-    let r = s.execute("command.batch", &batch);
-    assert!(r.as_ref().map_or(true, |v| v.to_string().contains(refused)), "a batch can't grant: {r:?}");
+    let e = s.execute("command.batch", &batch).unwrap_err().to_string();
+    assert!(e.contains(refused), "a batch can't grant: {e}");
     assert!(vectorcraft_plugins::registry::get(id).is_none());
 
     // Approved for other bytes, for another id or for other permissions: refused, and spent.
@@ -1357,6 +1357,43 @@ fn a_request_cannot_grant_what_only_a_person_approves() {
     s.allow_plugin_grants_from_requests();
     run(&mut s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read"]}));
     run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// A module a person approved in the desktop app, recorded in the store's `grants.json`, installs
+/// from another session with that store and no flag and no `grant`. Other bytes under its id are
+/// refused there, with or without `grant`.
+#[test]
+fn a_module_approved_in_the_app_installs_from_a_strict_session_with_its_store() {
+    let folder = crate::tests_links::Folder::new("plugin-approval-store");
+    let id = "test.engine.approval.store";
+    let wasm = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+    let data = vectorcraft_format::base64_encode(&wasm);
+    let mut desktop = strict_session();
+    desktop.attach_plugin_store(folder.0.clone());
+    desktop.approve_plugin_install(approval(id, &wasm, &["doc.read"], false));
+    run(&mut desktop, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read"]}));
+    assert!(std::fs::read_to_string(folder.0.join("grants.json")).unwrap().contains(id), "recorded in the store");
+
+    // Another process starts with an empty registry and the store's grants.
+    let forget = || {
+        vectorcraft_plugins::registry::remove(id);
+        vectorcraft_plugins::registry::revoke(id);
+    };
+    forget();
+    let mut headless = strict_session();
+    headless.attach_plugin_store(folder.0.clone());
+    forget();
+    run(&mut headless, "plugin.install", json!({"dataBase64": data}));
+    assert_eq!(vectorcraft_plugins::registry::get(id).map(|p| p.hash().to_string()), Some(vectorcraft_plugins::permissions::sha256_hex(&wasm)));
+
+    let other = asking(id, r#"["doc.read"]"#, &json!({"objects": [{"name": "x"}]}));
+    let other_data = vectorcraft_format::base64_encode(&other);
+    let e = headless.execute("plugin.install", &json!({"dataBase64": other_data, "replace": true})).unwrap_err().to_string();
+    assert!(e.contains("approve them in the desktop app"), "{e}");
+    let e = headless.execute("plugin.install", &json!({"dataBase64": other_data, "replace": true, "grant": ["doc.read"]})).unwrap_err().to_string();
+    assert!(e.contains("take effect only in a session started with --allow-plugin-grants"), "{e}");
+    assert_eq!(vectorcraft_plugins::registry::get(id).map(|p| p.hash().to_string()), Some(vectorcraft_plugins::permissions::sha256_hex(&wasm)));
+    run(&mut headless, "plugin.remove", json!({"id": id}));
 }
 
 /// A filter run the caller cancels (MCP's `notifications/cancelled`, the app's Cancel) stops between

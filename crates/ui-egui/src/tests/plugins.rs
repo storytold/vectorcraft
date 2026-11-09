@@ -336,6 +336,63 @@ fn a_shortcut_runs_a_plugin_command() {
     app.run("plugin.remove", json!({"id": id})).unwrap();
 }
 
+/// The `grant` and `allowHeavy` that `ui.installPlugin` is given approve nothing: it asks all the
+/// same, and what OK would approve comes from the manifest. A module with nothing to approve
+/// installs without either.
+#[test]
+fn ui_install_plugin_takes_no_grant_or_heavy_budget_from_its_params() {
+    let mut app = app();
+    let id = "test.ui.approval.params";
+    let manifest = format!(r#"{{"id":"{id}","name":"Asks","kind":"filter","permissions":["doc.read"]}}"#);
+    let asks = wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap();
+    let given = |wasm: &[u8]| json!({"dataBase64": vectorcraft_format::base64_encode(wasm), "grant": ["doc.read", "doc.write"], "allowHeavy": true});
+    let r = app.run("ui.installPlugin", given(&asks)).unwrap();
+    assert_eq!(r["pending"], dialogs::plugin::INSTALL_KIND);
+    assert!(vectorcraft_plugins::registry::get(id).is_none() && vectorcraft_plugins::registry::granted(id).is_none());
+    let pending = app.pending_plugin_install.as_ref().unwrap();
+    assert_eq!(pending.approval.permissions, ["doc.read"], "the permissions the manifest lists");
+    assert_eq!(pending.params["grant"], json!(["doc.read"]));
+    assert!(!pending.approval.heavy && pending.params.get("allowHeavy").is_none(), "no heavy budget was asked about");
+    dialogs::cancel(&mut app);
+    assert!(vectorcraft_plugins::registry::get(id).is_none());
+
+    let heavy_id = "test.ui.approval.params.heavy";
+    let manifest = format!(r#"{{"id":"{heavy_id}","name":"Heavy","kind":"filter","budget":"heavy"}}"#);
+    let heavy = wat::parse_str(tpl::spinning(&manifest, 1, r#"{"objects":[]}"#)).unwrap();
+    let r = app.run("ui.installPlugin", given(&heavy)).unwrap();
+    assert_eq!(r["pending"], dialogs::plugin::INSTALL_KIND, "allowHeavy skips no question");
+    assert!(vectorcraft_plugins::registry::get(heavy_id).is_none());
+    dialogs::cancel(&mut app);
+
+    let plain_id = "test.ui.approval.params.plain";
+    let manifest = format!(r#"{{"id":"{plain_id}","name":"Plain","kind":"filter"}}"#);
+    let plain = wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap();
+    let r = app.run("ui.installPlugin", given(&plain)).unwrap();
+    assert!(r.get("pending").is_none() && app.ui.dialog.is_none(), "{r}");
+    assert!(vectorcraft_plugins::registry::get(plain_id).is_some());
+    assert!(vectorcraft_plugins::registry::granted(plain_id).is_none(), "the grant it was given isn't recorded");
+    app.run("plugin.remove", json!({"id": plain_id})).unwrap();
+}
+
+/// An action's step can't grant what only a person approves: a played `plugin.install` with `grant`
+/// is refused at Accelerated and at Step by Step, and nothing is installed.
+#[test]
+fn an_action_step_cannot_grant_a_plugin_its_permissions() {
+    use crate::panels::actions::{Action, ActionSet, PlaybackSpeed, play};
+    let mut app = app();
+    let id = "test.ui.approval.action";
+    let manifest = format!(r#"{{"id":"{id}","name":"Asks","kind":"filter","permissions":["doc.read"]}}"#);
+    let wasm = wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap();
+    let step = json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "grant": ["doc.read"]});
+    app.ui.action_sets = vec![ActionSet::new("Test", vec![Action::new("Install", vec![("plugin.install".into(), step)])])];
+    for speed in [PlaybackSpeed::Accelerated, PlaybackSpeed::Step] {
+        app.ui.action_playback.speed = speed;
+        let e = play(&mut app, 0, 0).unwrap_err();
+        assert!(e.contains("take effect only in a session started with --allow-plugin-grants"), "{e}");
+        assert!(vectorcraft_plugins::registry::get(id).is_none() && vectorcraft_plugins::registry::granted(id).is_none());
+    }
+}
+
 /// A plug-in of API level 2 that lists `progress` names it in plain words when it asks.
 #[test]
 fn installing_a_plugin_that_reports_progress_says_so() {

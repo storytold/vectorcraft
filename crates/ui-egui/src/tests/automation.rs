@@ -366,6 +366,12 @@ fn automation_cannot_approve_a_plugin_install() {
     // What the dialog installs isn't in its fields.
     let r = request(&mut app, &tx, "ui.dialog.set", json!({"field": "__params", "value": {"dataBase64": "AAAA"}}));
     assert!(r.get("error").is_none(), "{r}");
+    // What MCP's `answer_dialog` sends: `ui.dialog.set {fields}`, then `ui.dialog.confirm`.
+    let r = request(&mut app, &tx, "ui.dialog.set", json!({"fields": [{"field": "__params", "value": {"dataBase64": "AAAA"}}]}));
+    assert!(r.get("error").is_none(), "{r}");
+    let r = request(&mut app, &tx, "ui.dialog.confirm", json!({}));
+    refused(&r, "Only the person at the keyboard");
+    assert!(app.ui.dialog.is_some() && vectorcraft_plugins::registry::get(id).is_none());
     app.synthetic_frame = true;
     assert!(crate::dialogs::confirm(&mut app).unwrap_err().contains("Only the person at the keyboard"));
     assert!(vectorcraft_plugins::registry::get(id).is_none());
@@ -374,6 +380,103 @@ fn automation_cannot_approve_a_plugin_install() {
     crate::dialogs::confirm(&mut app).unwrap();
     assert_eq!(vectorcraft_plugins::registry::granted(id).map(|g| g.hash), Some(vectorcraft_plugins::permissions::sha256_hex(&bytes)));
     app.run("plugin.remove", json!({"id": id})).unwrap();
+}
+
+type DialogHarness = egui_kittest::Harness<'static, VectorcraftApp>;
+
+/// Runs one UI pass of `h` for each batch of synthetic input the control path queued, each taken
+/// through the host's raw-input hook, until none is left and the last batch is acknowledged.
+fn take_injected(h: &mut DialogHarness) {
+    let ctx = h.ctx.clone();
+    loop {
+        let mut raw = egui::RawInput::default();
+        h.state_mut().raw_input_hook(&ctx, &mut raw);
+        if raw.events.is_empty() && h.state().synthetic.is_empty() {
+            break;
+        }
+        h.input_mut().events.extend(raw.events);
+        h.step();
+    }
+}
+
+/// The open install approval, with nothing installed or granted for `id`.
+fn still_waiting(h: &DialogHarness, id: &str) -> bool {
+    h.state().ui.dialog.as_ref().is_some_and(|d| d.kind == crate::dialogs::plugin::INSTALL_KIND)
+        && vectorcraft_plugins::registry::get(id).is_none()
+        && vectorcraft_plugins::registry::granted(id).is_none()
+}
+
+/// Keys and pointer input sent through the control path approve nothing at the open install
+/// approval: Enter and Space press nothing with no button focused, and with OK focused they and a
+/// `ui.click` on it press it and are refused. `ui.pointer` drives the canvas. A person's click on
+/// the same button approves.
+#[test]
+fn injected_keys_and_pointer_input_cannot_approve_a_plugin_install() {
+    use egui_kittest::kittest::{NodeT, Queryable};
+    let refusal = "Only the person at the keyboard";
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default()).with_control(rx);
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    let id = "test.ui.approval.injected";
+    let manifest = format!(r#"{{"id":"{id}","name":"Approval","version":"1","kind":"filter","permissions":["doc.read"]}}"#);
+    let bytes = wat::parse_str(vectorcraft_plugins::wat::returning(&manifest, r#"{"objects":[]}"#)).unwrap();
+    let data = vectorcraft_format::base64_encode(&bytes);
+    let r = request(&mut app, &tx, "ui.menu.invoke", json!({"command": "ui.installPlugin", "params": {"dataBase64": data}}));
+    assert_eq!(r["result"]["pending"], crate::dialogs::plugin::INSTALL_KIND, "{r}");
+    let mut fonts = false;
+    let mut h: DialogHarness = egui_kittest::Harness::builder().with_size(egui::vec2(900.0, 800.0)).build_ui_state(
+        move |ui, app: &mut VectorcraftApp| {
+            if !std::mem::replace(&mut fonts, true) {
+                crate::theme::install_fonts(ui.ctx());
+                return;
+            }
+            crate::dialogs::show(app, ui.ctx());
+        },
+        app,
+    );
+    h.run_steps(4);
+
+    for key in ["Enter", "Space"] {
+        assert!(!h.get_by_label("OK").accesskit_node().is_focused(), "no button has the focus yet");
+        h.state_mut().ui.status.clear();
+        let r = request(h.state_mut(), &tx, "ui.key", json!({"key": key}));
+        assert_eq!(r["ok"], true, "{r}");
+        take_injected(&mut h);
+        assert!(still_waiting(&h, id), "{key}");
+        assert_eq!(h.state().ui.status, "", "{key} presses nothing");
+    }
+
+    for key in ["Enter", "Space"] {
+        h.get_by_label("OK").focus();
+        h.run_steps(2);
+        assert!(h.get_by_label("OK").accesskit_node().is_focused());
+        h.state_mut().ui.status.clear();
+        let r = request(h.state_mut(), &tx, "ui.key", json!({"key": key}));
+        assert_eq!(r["ok"], true, "{r}");
+        take_injected(&mut h);
+        assert!(still_waiting(&h, id), "{key} on a focused OK");
+        assert!(h.state().ui.status.contains(refusal), "{key} pressed OK and was refused: {:?}", h.state().ui.status);
+    }
+
+    let at = h.get_by_label("OK").rect().center();
+    h.state_mut().ui.status.clear();
+    let r = request(h.state_mut(), &tx, "ui.click", json!({"x": at.x, "y": at.y}));
+    assert_eq!(r["ok"], true, "{r}");
+    take_injected(&mut h);
+    assert!(still_waiting(&h, id), "ui.click");
+    assert!(h.state().ui.status.contains(refusal), "ui.click pressed OK and was refused: {:?}", h.state().ui.status);
+
+    let events = json!([{"kind": "down", "x": at.x, "y": at.y}, {"kind": "up", "x": at.x, "y": at.y}]);
+    let r = request(h.state_mut(), &tx, "ui.pointer", json!({"events": events}));
+    assert_eq!(r["ok"], true, "{r}");
+    take_injected(&mut h);
+    assert!(still_waiting(&h, id), "ui.pointer");
+
+    h.get_by_label("OK").click();
+    h.run_steps(2);
+    assert!(h.state().ui.dialog.is_none(), "{:?}", h.state().ui.status);
+    assert_eq!(vectorcraft_plugins::registry::granted(id).map(|g| g.hash), Some(vectorcraft_plugins::permissions::sha256_hex(&bytes)));
+    h.state_mut().run("plugin.remove", json!({"id": id})).unwrap();
 }
 
 /// Edit Original and the Attributes panel's Browser button hand a file or URL to another app: a

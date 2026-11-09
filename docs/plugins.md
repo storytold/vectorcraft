@@ -164,7 +164,8 @@ capability model proposed for PhotoCraft plug-ins
   SHA-256 shown; Cancel installs nothing. The
   names shown have control and bidirectional characters escaped (`\u{202E}`) and are cut to 64 characters.
   Only a person can press its OK: `ui.dialog.confirm`, MCP's `answer_dialog` and injected input (`ui.key`, `ui.click`)
-  are refused and the dialog stays open, and Enter does not confirm it. `ui.dialog.set` can't change what it installs.
+  are refused and the dialog stays open. Enter confirms it only when OK has the keyboard focus. `ui.dialog.set` can't
+  change what it installs.
 - `plugin.install` refuses the module, naming the permissions it needs, unless a person already granted this module
   (`plugin.inspect`'s `needsApproval` tells it beforehand). A request's `grant` is refused too: `plugin.install` takes
   it only with the approval the dialog gives. A `vectorcraft-cli mcp` or `run` started with `--allow-plugin-grants`
