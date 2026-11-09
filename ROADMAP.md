@@ -4,6 +4,7 @@
 - Compound Shapes add-on (beyond Illustrator): a menu for Make, Release and Expand Compound Shape and a setting, off by default, that makes the Pathfinder panel's Shape Mode buttons create compound shapes on a click. Scores and estimates unchanged.
 
 - Paint: new gradients use the document's color model for default stops, including Gradient tool creation. Scores and estimates unchanged.
+- UI: Window → Help Bar toggles the tool-help strip separately from the status bar and saves visibility with workspaces. Scores and estimates unchanged.
 
 - PDF.R1: editable PDF import uses the shared reader, scans page content in windows, and rejects known incomplete input before returning a document.
 - PDF.W1: PDF export and print composition use the shared optional writer for configuration, metadata, font preparation and guarded finalization; drawing and output policy remain app-owned.
@@ -14,7 +15,7 @@
 
 **Stage: alpha** · next: beta, ~13 points (ready for real work ~62% → ~75%, and reliable `.ai` exchange) and ~170–270 h away
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-06 · **Change:** minor (Hindi catalog draft complete under the translation tests; contributor loanword terminology reviewed; wider proofreading welcome; Compound Shapes add-on, beyond Illustrator; scores and estimates unchanged; Contour add-on, beyond Illustrator; scores and estimates unchanged; new gradients follow document color mode; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-06 · **Change:** minor (Tools stays beside the canvas with left-side panels; Hindi catalog draft complete under the translation tests; contributor loanword terminology reviewed; wider proofreading welcome; Compound Shapes add-on, beyond Illustrator; scores and estimates unchanged; Contour add-on, beyond Illustrator; scores and estimates unchanged; new gradients follow document color mode; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 VectorCraft is a clean-room, open-source, pure-Rust reimplementation of the Adobe Illustrator workflow. It runs
 on macOS, Windows, Linux, FreeBSD and the web (WASM), and agents can drive all of it over MCP, the CLI and a JSON
@@ -34,6 +35,7 @@ blocking it ([Alpha gate](docs/roadmap.md#alpha-gate)).
 
 | | Value | Kind |
 |---|---|---|
+| 2026-11-03 | minor | Docked Tools stays between left-side panels and the canvas; redocking accepts canvas and window edges. Requested layout choice; scores and estimates unchanged. |
 | **Feature breadth** (Illustrator's menu items, tools, effects, formats exist) | **~88%** | measured in part: menu items 348/375 wired (92.8%), tools 89/92, Illustrator effects 46/50, Photoshop effects 57/57, 3D 4/4 (initial types, no materials) |
 | **Feature depth** (weighted by use, scored by behaviour) | **~75%** | estimated |
 | **To beta** | **~170–270 h** one agent · ~50–80 h with 4–6 agents | estimated |
@@ -134,6 +136,7 @@ Ranked; detail in [docs/roadmap.md](docs/roadmap.md) and [docs/gaps.md](docs/gap
 
 ## Progress log
 
+- 2026-11-05: Window › Toolbars › Keep Tools Beside the Canvas, off by default, docks the Tools panel between left-side panels and the canvas instead of at the window's left edge, and the canvas's left edge then also docks a floating Tools panel (`window.toolsBesideCanvas`, #5395). Workspaces keep the setting; workspaces saved without it keep Tools at the window's edge. An optional VectorCraft layout choice; headline numbers unchanged.
 - 2026-11-05: Release Type on a Path joins the Type Tools add-on (Object › Plug-ins › Type Tools): each selected type on a path splits into point type with the same text and attributes, on one straight line starting where its first character sat, and the plain path it was set on, with its exact shape and place in the stacking order and no paint; or keeps only the path or only the text, optionally leaving the original. A dialog with Preview, one undo step (`addon.type.releasePath`, #5532). A VectorCraft addition: headline numbers unchanged.
 - 2026-11-04: New Document: the units chosen in Preset Details now belong to the chosen document, as the pane's options are listed for the selected preset; the chosen card shows them, every other Recent and Saved card keeps the units its document or preset was made in, and the built-in tabs still follow the chosen units, so switching between inches and millimetres no longer restyles every recent template. Scores and estimates unchanged.
 - 2026-11-02: Mouse wheel over a closed font-family field in Character, Properties or Control changes selected text through the family list using saved font filters (excluding search text), one undo step per notch, stopping at the ends (#5253). Scores and estimates unchanged.
@@ -223,6 +226,7 @@ The full earlier record of what landed is kept in [docs/roadmap.md](docs/roadmap
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-02 | minor | Selection QoL: saved marquee modes, screen drag direction with a 3 px dead zone, and translated mode/E feedback (#5313); VectorCraft addition, scores and estimates unchanged. |
 | 2026-11-06 | minor | Hindi (`hi`): 7,877-row machine-assisted catalog, zero/one singular plurals, desktop font fallback and optional Devanagari craft-fonts fallback; all 55 translation tests pass; native review and a web font remain; scores and estimates unchanged |
 | 2026-11-05 | minor | Progress log row for the Type Tools add-on's Release Type on a Path (#5532); headline numbers unchanged. |
 | 2026-11-03 | minor | Progress log row for the Type Tools add-on's Text Tweaker (#4924); headline numbers unchanged. |

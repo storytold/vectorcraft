@@ -41,6 +41,11 @@
 //! Dragging the brackets of selected type on a path moves or flips it ([`crate::pathtype`]).
 //! A press on a selected object's centre point (Attributes panel › Show Center) selects the object
 //! whole, and a drag from it moves the object.
+//! A click on an instance of a dynamic symbol selects the object of the symbol's art under the
+//! pointer (`symbol.instance.selectPart`), outlined: the solid color Fill, Stroke, Color, Swatches
+//! and Eyedropper changes then go to that object for this instance only, and a drag moves nothing.
+//! The engine refuses any object but a path, compound path or type. Alt and Shift pick the instance
+//! whole, as for other objects.
 //!
 //! A press on the stroke of a path that isn't selected as a whole selects that segment's two anchors
 //! (the fill, or Alt, selects the whole path); dragging the segment bends it if it's curved, else
@@ -50,8 +55,8 @@ use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::{Value, json};
-use vectorcraft_doc::hit::{Hit, HitKind, compound_part_at, hit_test, selected_hidden_at};
-use vectorcraft_doc::{AnchorRef, Node, NodeId, NodeKind, Selection};
+use vectorcraft_doc::hit::{Hit, HitKind, compound_part_at, hit_test, selected_hidden_at, symbol_part_at, symbol_part_outline};
+use vectorcraft_doc::{AnchorRef, Node, NodeId, NodeKind, Selection, symbol_overrides};
 use vectorcraft_geom::{Anchor, PathData, PathSeg, Point, Rect, Vec2};
 
 use crate::bbox::move_delta;
@@ -667,6 +672,12 @@ fn next_group(cx: &ToolContext, ancestry: &[NodeId]) -> Option<NodeId> {
         .find(|id| !cx.selection.contains(*id))
 }
 
+/// Is an object of instance `id`'s art selected ([`vectorcraft_doc::Selection::symbol_part`]),
+/// rather than the instance whole?
+fn part_picked(cx: &ToolContext, id: NodeId) -> bool {
+    cx.selection.symbol_part.as_ref().is_some_and(|sp| sp.instance == id)
+}
+
 /// The segment of path `id` nearest to `p`, where the hit test found its stroke.
 fn segment_at(cx: &ToolContext, id: NodeId, p: Point) -> Option<SegmentHit> {
     let pd = cx.doc.node(id)?.path_data()?;
@@ -984,6 +995,11 @@ impl Tool for DirectSelectionTool {
                 let mut out = self.spine_overlays(cx);
                 out.extend(self.mesh.overlays(cx, &|id| cx.selection.contains(id)));
                 if !self.group {
+                    if let Some(sp) = &cx.selection.symbol_part
+                        && let Some(path) = cx.doc.node(sp.instance).and_then(|n| symbol_part_outline(cx.doc, n, &sp.path))
+                    {
+                        out.push(Overlay::Path { path, color: cx.doc.layer_color(sp.instance), width: 1.0, dashed: false });
+                    }
                     out.extend(frame_overlays(cx, &self.frame_anchors(cx)));
                     let drag = if let State::Bracket(b) = &self.state { Some(b) } else { None };
                     out.extend(pathtype::overlays(cx, self.bracket_hover, drag));
@@ -1309,7 +1325,7 @@ impl DirectSelectionTool {
         if ev.mods.shift {
             return vec![Action::Exec("select.toggle".into(), json!({"id": id.0}))];
         }
-        if cx.selection.partial(id).is_some() || cx.selection.segments.contains_key(&id) {
+        if cx.selection.partial(id).is_some() || cx.selection.segments.contains_key(&id) || part_picked(cx, id) {
             return vec![Action::Exec("select.set".into(), json!({"ids": [id.0]}))];
         }
         vec![]
@@ -1318,6 +1334,26 @@ impl DirectSelectionTool {
         if let Some(part) = cx.doc.node(h.leaf).and_then(|n| compound_part_at(n, p, tol)) {
             h.ancestry.push(part);
             h.leaf = part;
+        }
+        // On an instance of a dynamic symbol a click picks the object of its art under the pointer;
+        // a drag from it moves nothing (`object.transform` refuses while it is selected).
+        if !ev.mods.alt
+            && !ev.mods.shift
+            && let Some(n) = cx.doc.node(h.leaf)
+            && let NodeKind::SymbolInstance { symbol, .. } = &n.kind
+            && let Some(sym) = cx.doc.symbols.iter().find(|s| s.name == *symbol && s.dynamic)
+            && let Some(path) = symbol_part_at(cx.doc, n, p, cx.selection_hit_options())
+        {
+            self.frame.clear();
+            // The engine refuses any other object with a status message, and the selection stays,
+            // so a drag from the press does not move it.
+            if symbol_overrides::part(&sym.art, &path).is_some_and(symbol_overrides::takes_part_paint) {
+                self.state = State::MoveObject { start: p, grab: None, hold: hold_point(cx, &h, p), began: false, deselect: None };
+            }
+            if cx.selection.symbol_part.as_ref().is_some_and(|sp| sp.instance == h.leaf && sp.path == path) {
+                return vec![];
+            }
+            return vec![Action::Exec("symbol.instance.selectPart".into(), json!({"id": h.leaf.0, "path": path}))];
         }
         // On a gradient mesh a click picks the point, the mesh line's two ends or the four points
         // around the patch under it (Shift toggles them), and selects the mesh; a drag moves the
@@ -1340,7 +1376,7 @@ impl DirectSelectionTool {
         // A segment pick keeps its endpoints available for movement without selecting
         // the anchors themselves. Dragging reshapes a curve, else moves it. Alt picks
         // the whole path (and Alt-drag copies it), as with Group Selection.
-        let whole = cx.selection.contains(h.leaf) && cx.selection.partial(h.leaf).is_none();
+        let whole = cx.selection.contains(h.leaf) && cx.selection.partial(h.leaf).is_none() && !part_picked(cx, h.leaf);
         if !ev.mods.alt
             && matches!(h.kind, HitKind::Stroke | HitKind::Outline)
             && let Some(s) = segment_at(cx, h.leaf, p)
@@ -1376,7 +1412,7 @@ impl DirectSelectionTool {
             return vec![Action::Exec("select.toggle".into(), json!({"id": h.leaf.0}))];
         }
         self.frame.clear();
-        if !cx.selection.contains(h.leaf) || cx.selection.partial(h.leaf).is_some() {
+        if !cx.selection.contains(h.leaf) || cx.selection.partial(h.leaf).is_some() || part_picked(cx, h.leaf) {
             return vec![Action::Exec("select.set".into(), json!({"ids": [h.leaf.0]}))];
         }
         vec![]

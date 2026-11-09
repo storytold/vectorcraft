@@ -1,3 +1,7 @@
+use std::collections::HashSet;
+
+use vectorcraft_doc::{Node, TextObject};
+
 use super::{
     Arc, Clipboard, Color, CommandInfo, DocState, Document, DrawMode, EngineError, GradientPaint, Journal, NodeKind, PaintDefaults, Prefs, Result,
     Session, ViewInfo, cmd, command_specs, file_access,
@@ -42,6 +46,14 @@ impl Session {
             journal: Journal::default(),
             tool: vectorcraft_tools::create("selection"),
             lender: None,
+            held_input: Default::default(),
+            input_count: 0,
+            edit_started_by: None,
+            settling_tool_edit: false,
+            held_ui: vec![],
+            tool_step: None,
+            selection_at_lend: None,
+            lent_selection: None,
             last_selection_tool: None,
             last_view: ViewInfo::default(),
             preview_memo: Default::default(),
@@ -81,6 +93,9 @@ impl Session {
             batch_stash: None,
             batch_steps: None,
             batch_paint_docs: Vec::new(),
+            composite_names: Vec::new(),
+            composite_names_registered: HashSet::new(),
+            reading: false,
             place_hand_off: None,
             queue_hand_off: None,
             place_queue_roots: None,
@@ -109,6 +124,7 @@ impl Session {
             link_stamps: Default::default(),
             link_scan: None,
             global_edit_options: Default::default(),
+            keyboard_text: false,
         }
     }
 
@@ -149,6 +165,9 @@ impl Session {
         }
         self.press_type_selection = None;
         let view = self.last_view;
+        // The edit the tool computes on another thread and the input held for it belong to the
+        // document being left. The switch goes on whatever they did, as for the deactivation.
+        let _ = self.finish_tool_edit_later();
         // The switch goes on whatever the lent tool's last actions did, as for the deactivation.
         let _ = self.give_back_tool(view);
         let acts = self.with_tool_cx(view, |t, cx| t.deactivate(cx));
@@ -172,14 +191,28 @@ impl Session {
 
     pub fn set_active(&mut self, index: usize) -> bool {
         if index < self.docs.len() {
-            if self.active != Some(index) {
+            let switched = self.active != Some(index);
+            if switched {
                 self.reset_tool_for_doc_switch();
             }
             self.active = Some(index);
+            if switched {
+                self.sync_front_composite_fonts();
+            }
             true
         } else {
             false
         }
+    }
+
+    /// Register the composite fonts of the document now in front ([`cmd::compositefonts::sync`]),
+    /// after a switch or a close brought it there. Its type set in a composite font that differs
+    /// from the one of that name before (added, changed or removed) is measured again, and type not
+    /// measured yet (in a document replaced while in the back) is measured now.
+    fn sync_front_composite_fonts(&mut self) {
+        let changed: HashSet<String> = cmd::compositefonts::sync(self).into_iter().collect();
+        let Some(index) = self.active else { return };
+        self.refresh_document_text_bounds(index, |t| t.cached_bounds.is_none() || sets_in_any(t, &changed));
     }
 
     /// The name [`Session::next_untitled`] gives next (New Document's Name field).
@@ -192,7 +225,7 @@ impl Session {
         format!("Untitled-{}", self.untitled_counter)
     }
 
-    /// Text layout bounds are a cache (not saved): compute them for a document just read, or
+    /// Text layout bounds are a cache (not saved): compute them after its fonts are registered, or
     /// selection boxes and hit testing would use the rough estimate until each text is edited, and
     /// what is fitted to type's bounds (an envelope warping it) would come out differently. That
     /// holds for the type in symbol definitions, pattern tiles, graph designs and opacity masks too,
@@ -200,11 +233,44 @@ impl Session {
     pub(crate) fn refresh_text_bounds(doc: &mut Document) {
         // Inline graphics in text take their size from their symbols' art (not saved either).
         doc.resolve_inline_art();
-        let trees = doc.layers.iter_mut().chain(doc.symbols.iter_mut().map(|s| &mut s.art));
-        let trees = trees.chain(doc.graph_designs.iter_mut().map(|g| &mut g.art));
-        for tree in trees.chain(doc.patterns.iter_mut().flat_map(|p| p.art.iter_mut())) {
-            refresh_tree_text_bounds(tree);
+        let mut uncached = |t: &TextObject| t.cached_bounds.is_none();
+        for tree in text_trees_mut(doc) {
+            each_text_where(tree, &mut uncached, &mut cmd::typecmd::refresh_bounds_for_first_frame);
         }
+    }
+
+    /// Measure the type in open document `index` that `stale` picks (in its trees as
+    /// [`Session::refresh_text_bounds`] walks them), as a change that is not an edit: a saved
+    /// document stays saved, and its undo history keeps its documents as they are. The document is
+    /// left as it is when `stale` picks nothing.
+    fn refresh_document_text_bounds(&mut self, index: usize, mut stale: impl FnMut(&TextObject) -> bool) {
+        let Some(st) = self.docs.get_mut(index) else { return };
+        if !text_trees(&st.doc).any(|n| has_text_where(n, &mut stale)) {
+            return;
+        }
+        st.change_unsaved(|doc| {
+            let doc = Arc::make_mut(doc);
+            for tree in text_trees_mut(doc) {
+                each_text_where(tree, &mut stale, &mut cmd::typecmd::refresh_bounds_for_first_frame);
+            }
+            // Inline graphics take their size from their symbols' art, whose type may just have
+            // been measured again: the text holding one whose size changed is measured again too.
+            if !doc.resolve_inline_art().is_empty() {
+                for tree in text_trees_mut(doc) {
+                    each_text_where(tree, &mut |t| t.cached_bounds.is_none(), &mut cmd::typecmd::refresh_bounds_for_first_frame);
+                }
+            }
+        });
+    }
+
+    /// Register the composite fonts of open document `index`, which is in front, and measure its
+    /// type not measured yet and its type set in a font of a name that a composite font of an open
+    /// document or of the font database has, or had before: that type may have been laid out in
+    /// another document's composite fonts (those registered while its file was read for opening).
+    fn sync_opened_composite_fonts(&mut self, index: usize) {
+        let mut names = cmd::compositefonts::names_in_use(self);
+        names.extend(cmd::compositefonts::sync(self));
+        self.refresh_document_text_bounds(index, |t| t.cached_bounds.is_none() || sets_in_any(t, &names));
     }
 
     /// Add a document and make it active. Between `edit.undoGroup.begin` and `edit.undoGroup.end`,
@@ -214,7 +280,9 @@ impl Session {
         // Every edit is checked against the document before it, so the first one is within the cap
         // (importers and the native reader have seen to theirs already, with a warning).
         doc.limit_depth();
-        Self::refresh_text_bounds(&mut doc);
+        cmd::compositefonts::filter_loaded(&mut doc);
+        // Inline graphics in text take their size from their symbols' art (not saved).
+        doc.resolve_inline_art();
         // Guides from files saved before guides had layers go on a layer.
         doc.adopt_guides();
         cmd::dimension::conform(&mut doc);
@@ -225,6 +293,7 @@ impl Session {
         self.docs.push(st);
         let i = self.docs.len() - 1;
         self.active = Some(i);
+        self.sync_opened_composite_fonts(i);
         if self.depth == 0
             && let Some(label) = self.explicit_undo_group.clone()
         {
@@ -240,12 +309,27 @@ impl Session {
             return false;
         }
         doc.limit_depth();
-        Self::refresh_text_bounds(&mut doc);
+        cmd::compositefonts::filter_loaded(&mut doc);
+        doc.resolve_inline_art();
         doc.adopt_guides();
         cmd::dimension::conform(&mut doc);
+        // In the back, type set in a font named like a composite font is measured when the document
+        // comes to the front and its own composite fonts are registered, not in the front
+        // document's.
+        let mut back_names = None;
         if self.active == Some(index) {
             // Pending tool work (typing, a drag) belongs to the content being thrown away.
             self.reset_tool_for_doc_switch();
+        } else {
+            let mut names = cmd::compositefonts::names_in_use(self);
+            names.extend(doc.composite_fonts.iter().map(|f| f.name.to_lowercase()));
+            for tree in text_trees_mut(&mut doc) {
+                each_text_where(tree, &mut |t| t.cached_bounds.is_some() && sets_in_any(t, &names), &mut |t| {
+                    t.cached_bounds = None;
+                    t.cached_baselines.clear();
+                });
+            }
+            back_names = Some(names);
         }
         let old = &self.docs[index];
         let mut st = DocState::new(doc, old.path.clone());
@@ -276,6 +360,10 @@ impl Session {
         if let Some(stash) = &mut self.batch_stash {
             stash.push(old);
         }
+        match back_names {
+            Some(names) => self.refresh_document_text_bounds(index, |t| t.cached_bounds.is_none() && !sets_in_any(t, &names)),
+            None => self.sync_opened_composite_fonts(index),
+        }
         true
     }
 
@@ -292,6 +380,7 @@ impl Session {
             stash.push(old);
         }
         self.active = if self.docs.is_empty() { None } else { Some(index.min(self.docs.len() - 1)) };
+        self.sync_front_composite_fonts();
         true
     }
 
@@ -316,33 +405,56 @@ impl Session {
         true
     }
 
-    /// Commands with enablement (for menus, palette, MCP `list_commands`).
+    /// Commands with enablement (for menus, palette, MCP `list_commands`), the installed plug-ins'
+    /// commands last.
     pub fn commands(&self) -> Vec<CommandInfo> {
-        command_specs().iter().map(|c| c.info(self)).collect()
+        command_specs().iter().chain(crate::cmd::plugin::command_specs()).map(|c| c.info(self)).collect()
     }
 }
 
-/// Lay out the type in tree `n` (opacity mask art included) whose bounds aren't cached. Only the
-/// nodes on the way to such type are copied.
-fn refresh_tree_text_bounds(n: &mut Arc<vectorcraft_doc::Node>) {
-    fn stale(n: &vectorcraft_doc::Node) -> bool {
-        matches!(&n.kind, NodeKind::Text(t) if t.cached_bounds.is_none())
-            || n.extras().mask.as_deref().is_some_and(|m| stale(&m.art))
-            || n.children().is_some_and(|ch| ch.iter().any(|c| stale(c)))
-    }
-    if !stale(n) {
+/// Whether some of type `t` is set in a font named (in any case) one of `names`, lowercased.
+fn sets_in_any(t: &TextObject, names: &HashSet<String>) -> bool {
+    !names.is_empty() && t.runs.iter().any(|r| names.contains(&r.style.font_family.to_lowercase()))
+}
+
+/// The trees of `doc` that hold type: its layers, symbol definitions, graph designs and pattern
+/// tiles.
+fn text_trees(doc: &Document) -> impl Iterator<Item = &Arc<Node>> {
+    let trees = doc.layers.iter().chain(doc.symbols.iter().map(|s| &s.art));
+    let trees = trees.chain(doc.graph_designs.iter().map(|g| &g.art));
+    trees.chain(doc.patterns.iter().flat_map(|p| p.art.iter()))
+}
+
+/// [`text_trees`], to change.
+fn text_trees_mut(doc: &mut Document) -> impl Iterator<Item = &mut Arc<Node>> {
+    let trees = doc.layers.iter_mut().chain(doc.symbols.iter_mut().map(|s| &mut s.art));
+    let trees = trees.chain(doc.graph_designs.iter_mut().map(|g| &mut g.art));
+    trees.chain(doc.patterns.iter_mut().flat_map(|p| p.art.iter_mut()))
+}
+
+/// Whether tree `n` (opacity mask art included) holds type that `pick` picks.
+fn has_text_where(n: &Node, pick: &mut dyn FnMut(&TextObject) -> bool) -> bool {
+    matches!(&n.kind, NodeKind::Text(t) if pick(t))
+        || n.extras().mask.as_deref().is_some_and(|m| has_text_where(&m.art, pick))
+        || n.children().is_some_and(|ch| ch.iter().any(|c| has_text_where(c, pick)))
+}
+
+/// Run `act` on the type in tree `n` (opacity mask art included) that `pick` picks. Only the nodes
+/// on the way to such type are copied.
+fn each_text_where(n: &mut Arc<Node>, pick: &mut dyn FnMut(&TextObject) -> bool, act: &mut dyn FnMut(&mut TextObject)) {
+    if !has_text_where(n, pick) {
         return;
     }
     let n = Arc::make_mut(n);
     if let NodeKind::Text(t) = &mut n.kind
-        && t.cached_bounds.is_none()
+        && pick(t)
     {
-        cmd::typecmd::refresh_bounds_for_first_frame(t);
+        act(t);
     }
     if let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_deref_mut()) {
-        refresh_tree_text_bounds(&mut m.art);
+        each_text_where(&mut m.art, pick, act);
     }
     for c in n.children_mut().into_iter().flatten() {
-        refresh_tree_text_bounds(c);
+        each_text_where(c, pick, act);
     }
 }

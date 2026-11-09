@@ -42,6 +42,29 @@ fn png_of(svg: &str) -> image::RgbaImage {
 }
 
 #[test]
+fn freeform_points_that_share_a_model_are_written_as_their_mix() {
+    let mid = |a: Color, b: Color| {
+        let p = |x, c| FreeformPoint::new(Point::new(x, 80.0), c);
+        let mut g = GradientPaint::new(Gradient { kind: GradientKind::Freeform, ..Default::default() });
+        g.freeform = Some(Freeform { points: vec![p(40.0, a), p(160.0, b)], ..Default::default() });
+        let shape = shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 140.0));
+        let d = doc_with(Node::path(NodeId(0), shape, Appearance::basic(Paint::Gradient(Box::new(g)), Paint::None, 0.0)));
+        let png = png_of(&export_full(&d, &ExportOptions::default(), None).svg);
+        png.get_pixel(png.width() / 2, png.height() / 2).0
+    };
+    let near = |got: [u8; 4], want: [u8; 4]| got.iter().zip(want).all(|(g, w)| g.abs_diff(w) <= 3);
+    let got = mid(Color::cmyk(1.0, 0.0, 0.0, 0.0), Color::cmyk(0.0, 0.0, 0.0, 1.0));
+    let want = Color::cmyk(0.5, 0.0, 0.0, 0.5).to_rgba8(1.0);
+    assert!(near(got, want), "CMYK: {got:?} vs {want:?}");
+    let got = mid(Color::lab(90.0, -60.0, 40.0), Color::lab(30.0, 60.0, -40.0));
+    let want = Color::lab(60.0, 0.0, 0.0).to_rgba8(1.0);
+    assert!(near(got, want), "Lab: {got:?} vs {want:?}");
+    let got = mid(Color::rgb(1.0, 0.0, 0.0), Color::rgb(0.0, 0.0, 1.0));
+    let want = Color::rgb(0.5, 0.0, 0.5).to_rgba8(1.0);
+    assert!(near(got, want), "RGB: {got:?} vs {want:?}");
+}
+
+#[test]
 fn a_freeform_fill_is_an_image_clipped_to_the_shape() {
     let shape = shapes::ellipse(Rect::new(20.0, 20.0, 180.0, 140.0));
     let d = doc_with(Node::path(NodeId(0), shape, Appearance::basic(freeform(), Paint::None, 0.0)));

@@ -59,6 +59,16 @@ pub const HOST_IMPORTS: &str = r#"(import "env" "vc_progress" (func $vc_progress
   (import "env" "vc_cancelled" (func $vc_cancelled (result i32)))
   (import "env" "vc_log" (func $vc_log (param i32 i32 i32) (result i32)))"#;
 
+/// The storage imports of plug-in API level 2 ([`crate::host::IMPORTS`]), as `$vc_settings_get`,
+/// `$vc_settings_set`, `$vc_settings_delete`, `$vc_cache_read`, `$vc_cache_write` and
+/// `$vc_cache_clear`; a manifest that uses them lists `settings` and `cache`.
+pub const STORAGE_IMPORTS: &str = r#"(import "env" "vc_settings_get" (func $vc_settings_get (param i32 i32 i32 i32) (result i32)))
+  (import "env" "vc_settings_set" (func $vc_settings_set (param i32 i32 i32 i32) (result i32)))
+  (import "env" "vc_settings_delete" (func $vc_settings_delete (param i32 i32) (result i32)))
+  (import "env" "vc_cache_read" (func $vc_cache_read (param i32 i32 i32 i32) (result i32)))
+  (import "env" "vc_cache_write" (func $vc_cache_write (param i32 i32 i32 i32) (result i32)))
+  (import "env" "vc_cache_clear" (func $vc_cache_clear (param i32 i32) (result i32)))"#;
+
 /// A plug-in of API level 2 (its manifest gives `api` 2 and lists `progress`) that imports the
 /// host functions ([`HOST_IMPORTS`]) and whose `vc_run` runs `first`, which may call them, then
 /// returns `output`.
@@ -155,6 +165,11 @@ pub fn manifest(id: &str, kind: &str, params: &str) -> String {
 /// The manifest of a test exporter `id` writing `extensions` (a JSON list) with `params`.
 pub fn exporter(id: &str, extensions: &str, params: &str) -> String {
     format!(r#"{{"id":"{id}","name":"Test {id}","version":"1","kind":"exporter","extensions":{extensions},"params":{params}}}"#)
+}
+
+/// The manifest of a test importer `id` reading `extensions` (a JSON list) with `params`.
+pub fn importer(id: &str, extensions: &str, params: &str) -> String {
+    format!(r#"{{"id":"{id}","name":"Test {id}","version":"1","kind":"importer","extensions":{extensions},"params":{params}}}"#)
 }
 
 /// What [`echo_exporter`] writes as its file.

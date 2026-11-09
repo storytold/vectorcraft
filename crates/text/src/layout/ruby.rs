@@ -127,7 +127,10 @@ fn ruby_piece_for_line(
 ) -> Option<RubyPiece> {
     let mut x0 = f64::INFINITY;
     let mut x1 = f64::NEG_INFINITY;
+    // The size the base is drawn at (where the reading goes), and the size the text sets it in (what
+    // the reading is scaled from: a composite font's part scales the reading itself).
     let mut base_size: f64 = 0.0;
+    let mut set_size: f64 = 0.0;
     let mut run = 0;
     let mut byte = start;
     for (index, &glyph_index) in glyph_indices.iter().enumerate() {
@@ -135,6 +138,7 @@ fn ruby_piece_for_line(
         x0 = x0.min(glyph.origin.x);
         x1 = x1.max(glyph.origin.x + glyph.advance);
         base_size = base_size.max(cx.style_at(glyph.byte).size);
+        set_size = set_size.max(cx.set_style_at(glyph.byte).size);
         if index == 0 {
             run = glyph.run;
             byte = glyph.byte;
@@ -143,8 +147,9 @@ fn ruby_piece_for_line(
     if !(x0.is_finite() && x1.is_finite()) || base_size <= 0.0 {
         return None;
     }
-    let mut style = cx.style_at(byte).clone();
-    style.size = base_size * ratio;
+    // The base's style as the text sets it: a reading in a composite font is set in its parts.
+    let mut style = cx.set_style_at(byte).clone();
+    style.size = set_size * ratio;
     style.leading = None;
     style.baseline_shift = 0.0;
     style.tracking = 0.0;

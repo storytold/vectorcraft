@@ -673,7 +673,7 @@ impl<'a> Writer<'a> {
         let resolved = vectorcraft_text::FontDb::global().font_heights_resolved(t);
         let t = &*resolved;
         if !self.outline_text {
-            if writable(t) {
+            if writable(self.doc, t) {
                 return self.text_object(t);
             }
             if !holds_as_text(t) {
