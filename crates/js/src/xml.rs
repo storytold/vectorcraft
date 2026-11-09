@@ -907,7 +907,9 @@ impl Interp {
             Content::List(l) => {
                 for at in 0..self.list_len(*l)? {
                     let Some(item) = self.list_at(*l, at)? else { break };
-                    self.check_attach_node(x, item)?;
+                    if self.xml_kind(item)? != XmlKind::Attribute {
+                        self.check_attach_node(x, item)?;
+                    }
                 }
                 Ok(())
             }
@@ -940,9 +942,6 @@ impl Interp {
     /// position in `x` to use after the removal. The caller has taken [`Self::place_fuel`].
     fn detach(&mut self, x: ObjId, v: ObjId, at: usize) -> JsResult<usize> {
         let Some(parent) = self.xml_node(v)?.parent else { return Ok(at) };
-        if self.xml_kind(v)? == XmlKind::Attribute {
-            return Ok(at);
-        }
         let Some(q) = self.xml_node(parent)?.children.iter().position(|&c| c == v) else { return Ok(at) };
         self.remove_child(parent, q)?;
         Ok(if parent == x && q < at { at - 1 } else { at })
@@ -952,10 +951,7 @@ impl Interp {
     /// the scan and removal that take it out.
     fn place_fuel(&mut self, len: usize, v: ObjId) -> JsResult<()> {
         self.xml_text_fuel(len + 1)?;
-        let node = self.xml_node(v)?;
-        if node.kind != XmlKind::Attribute
-            && let Some(parent) = node.parent
-        {
+        if let Some(parent) = self.xml_node(v)?.parent {
             let old = self.children_len(parent)?;
             self.xml_text_fuel(old)?;
             self.xml_text_fuel(old)?;
@@ -987,15 +983,30 @@ impl Interp {
         self.place_child(x, at, v)
     }
 
-    /// Takes the fuel and heap to put every item of `l` under `x` and returns the items. The tree
-    /// does not change here, so a limit leaves it as it was.
+    /// The node to place as a child for `item`: `item` itself, or a new text node holding the
+    /// value when it is an attribute. `roots` are held across any collection.
+    fn child_for_item(&mut self, item: ObjId, roots: &[Value]) -> JsResult<ObjId> {
+        if self.xml_kind(item)? != XmlKind::Attribute {
+            return Ok(item);
+        }
+        let value = self.xml_node(item)?.value.clone();
+        let t = self.rooted(roots, |i| i.new_text_node(value, None))?;
+        self.xml_keep(t);
+        Ok(t)
+    }
+
+    /// Takes the fuel and heap to put every item of `l` under `x` and returns the nodes to place,
+    /// from [`Self::child_for_item`]. The tree does not change here, so a limit leaves it as it
+    /// was.
     fn reserve_list_insert(&mut self, x: ObjId, l: ObjId) -> JsResult<Vec<ObjId>> {
-        let items = self.xml_list(l)?.items.clone();
+        let mut items = self.xml_list(l)?.items.clone();
         let bytes = XML_REF_BYTES.saturating_mul(items.len());
-        self.rooted(&[Value::Object(x), Value::Object(l)], |i| i.xml_charge(bytes))?;
+        let roots = [Value::Object(x), Value::Object(l)];
+        self.rooted(&roots, |i| i.xml_charge(bytes))?;
         let len = self.children_len(x)?;
-        for (j, &item) in items.iter().enumerate() {
-            self.place_fuel(len + j, item)?;
+        for (j, item) in items.iter_mut().enumerate() {
+            *item = self.child_for_item(*item, &roots)?;
+            self.place_fuel(len + j, *item)?;
         }
         Ok(items)
     }
@@ -1009,6 +1020,17 @@ impl Interp {
         Ok(())
     }
 
+    /// Puts a new text node holding `s` at position `at` of `x`.
+    fn insert_text(&mut self, x: ObjId, at: usize, s: &Str) -> JsResult<()> {
+        let t = self.new_text_node(s.clone(), Some(x))?;
+        self.xml_keep(t);
+        self.xml_charge(XML_REF_BYTES)?;
+        let node = self.xml_node_mut(x)?;
+        let at = at.min(node.children.len());
+        node.children.insert(at, t);
+        Ok(())
+    }
+
     /// [[Insert]] (ECMA-357 section 9.1.1.11).
     pub(crate) fn xml_insert(&mut self, x: ObjId, at: usize, c: &Content) -> JsResult<()> {
         if self.xml_kind(x)? != XmlKind::Element {
@@ -1016,13 +1038,10 @@ impl Interp {
         }
         self.check_attach(x, c)?;
         match c {
-            Content::Text(s) => {
-                let t = self.new_text_node(s.clone(), Some(x))?;
-                self.xml_keep(t);
-                self.xml_charge(XML_REF_BYTES)?;
-                let node = self.xml_node_mut(x)?;
-                let at = at.min(node.children.len());
-                node.children.insert(at, t);
+            Content::Text(s) => self.insert_text(x, at, s)?,
+            Content::Node(v) if self.xml_kind(*v)? == XmlKind::Attribute => {
+                let value = self.xml_node(*v)?.value.clone();
+                self.insert_text(x, at, &value)?;
             }
             Content::Node(v) => {
                 self.insert_node(x, at, *v)?;
@@ -1473,11 +1492,21 @@ impl Interp {
             Content::List(l) => {
                 let c = self.list_shallow_copy(l)?;
                 self.xml_keep(c);
-                let items = self.xml_list(c)?.items.clone();
+                let place = match parent {
+                    Some(parent) => self.index_in_parent(parent, item)?.map(|q| (parent, q)),
+                    None => None,
+                };
+                let mut items = self.xml_list(c)?.items.clone();
+                if place.is_some() {
+                    let roots = [Value::Object(x), Value::Object(c)];
+                    for item in &mut items {
+                        self.use_fuel()?;
+                        *item = self.child_for_item(*item, &roots)?;
+                    }
+                    self.xml_list_mut(c)?.items.clone_from(&items);
+                }
                 self.xml_charge(XML_REF_BYTES.saturating_mul(items.len()))?;
-                if let Some(parent) = parent
-                    && let Some(q) = self.index_in_parent(parent, item)?
-                {
+                if let Some((parent, q)) = place {
                     self.xml_replace(parent, q, &Content::List(c))?;
                 }
                 self.xml_list_mut(x)?.items.splice(i..=i, items);

@@ -912,6 +912,50 @@ fn matches_are_replaced_in_document_order() {
 }
 
 #[test]
+fn an_attribute_put_among_children_goes_in_as_text_and_stays_on_its_owner() {
+    let setup = "var y = <y p='v'/>; var x = <x><b/></x>;";
+    let check = "x.b.length() === 0 && x.children().length() === 1 && x.children()[0].nodeKind() === 'text' && x.toString() === 'v' \
+                 && y.@p.length() === 1 && y.@p.parent() === y && y.@p[0].parent() === y";
+    for edit in ["x.replace(0, y.@p)", "x.replace(0, y.@p[0])", "x.b = y.@p", "x.setChildren(y.@p)", "x.*[0] = y.@p"] {
+        truth(&format!("{setup} {edit}; {check}"));
+    }
+    let owner = "y.@p.length() === 1 && y.@p.parent() === y && y.@p[0].parent() === y";
+    for (edit, k) in [
+        ("x.prependChild(y.@p)", "0"),
+        ("x.prependChild(y.@p[0])", "0"),
+        ("x.appendChild(y.@p)", "1"),
+        ("x.appendChild(y.@p[0])", "1"),
+        ("x.insertChildAfter(x.b[0], y.@p)", "1"),
+        ("x.insertChildBefore(x.b[0], y.@p[0])", "0"),
+    ] {
+        truth(&format!(
+            "{setup} {edit}; x.children().length() === 2 && x.children()[{k}].nodeKind() === 'text' && x.children()[{k}] == 'v' && {owner}"
+        ));
+    }
+}
+
+#[test]
+fn a_list_assigned_attributes_holds_the_text_nodes_in_the_tree() {
+    truth(
+        "var y = <y p='v' q='w'/>; var x = <x><b/></x>; var l = x.*; l[0] = y.@*; \
+         l.length() === 2 && l[0].nodeKind() === 'text' && l[0].parent() === x && l[1].nodeKind() === 'text' && l[1].parent() === x \
+         && x.toString() === 'vw' && y.@*.length() === 2",
+    );
+}
+
+#[test]
+fn an_attribute_list_goes_in_as_text_at_the_depth_limit() {
+    let open = "<a>".repeat(7);
+    let close = "</a>".repeat(7);
+    let src = format!(
+        "var x = new XML('{open}<a/>{close}'); var c = x; while (c.a.length()) c = c.a[0]; \
+         var y = <y p='v'/>; c.prependChild(y.@p); c.toString() === 'v'"
+    );
+    let mut realm = Realm::with_options(Options { max_depth: 8, ..e4x() }, Limits::default());
+    assert_eq!(realm.run(&src), Ok(JsValue::Bool(true)));
+}
+
+#[test]
 fn a_limit_during_normalize_does_not_repeat_text() {
     let setup = "var x = <a/>; x.appendChild('p'); x.appendChild('q'); x.appendChild('r');";
     let check = "x.toString() === 'pqr'";
