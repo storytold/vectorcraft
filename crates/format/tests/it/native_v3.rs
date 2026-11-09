@@ -157,6 +157,24 @@ fn keys_from_newer_versions_round_trip() {
     check_native_roundtrip(&d).unwrap();
 }
 
+/// An opacity-mask editing state in a file drops the editing layer it names only when that is a
+/// top-level layer, as files saved mid-edit have it: a sublayer it names loads and stays.
+#[test]
+fn saved_mask_editing_drops_only_a_top_level_layer() {
+    let mut d = Document::new(612.0, 792.0);
+    let host = d.layers[0].id;
+    let sub = d.add_layer(Some("Sub"));
+    d.move_node(sub, Some(host), 0).unwrap();
+    let top = d.add_layer(Some("Mask"));
+    for (layer, kept) in [(sub, true), (top, false)] {
+        let mut v = json_of(&save(&d, false));
+        v["document"]["mask_edit"] = json!({"object": host, "layer": layer});
+        let back = load(&serde_json::to_vec(&v).unwrap()).unwrap();
+        assert_eq!(back.node(layer).is_some(), kept, "layer {layer:?}");
+        assert!(back.mask_edit.is_none() && back.node(host).is_some());
+    }
+}
+
 /// The paragraph composer is saved only when it isn't the default (Every-line) and reads back.
 #[test]
 fn text_composer_round_trips() {

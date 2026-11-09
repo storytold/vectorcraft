@@ -188,17 +188,30 @@ impl TextSlots {
 }
 
 /// Replace every `<text>` usvg would draw by a placeholder group (see the module docs).
-pub(super) fn prepare<'s>(svg: &'s str, xml: &roxmltree::Document, dpi: f64, warnings: &mut Vec<String>) -> (Cow<'s, str>, TextSlots) {
+/// `original_xml` supplies text styles; `xml` supplies placeholder positions and tracking IDs.
+pub(super) fn prepare<'s>(
+    svg: &'s str,
+    xml: &roxmltree::Document,
+    original_xml: Option<&roxmltree::Document>,
+    dpi: f64,
+    warnings: &mut Vec<String>,
+) -> (Cow<'s, str>, TextSlots) {
     let mut prefix = String::from("vectorcraft-text-");
     while xml.descendants().any(|n| n.attribute("id").is_some_and(|id| id.starts_with(&prefix))) {
         prefix.insert(0, '_');
     }
     let mut slots = TextSlots { prefix, texts: vec![] };
-    let cx = Ctx::new(xml, dpi);
+    let style_xml = original_xml.unwrap_or(xml);
+    let cx = Ctx::new(style_xml, dpi);
     let mut out = String::new();
     let mut copied = 0;
-    let is_text = |n: &XNode| n.is_element() && matches!(n.tag_name().name(), "text" | "flowRoot") && n.tag_name().namespace() == Some(SVG_NS);
-    for t in xml.descendants().filter(is_text) {
+    let is_text = |n: &XNode| {
+        n.is_element()
+            && matches!(n.tag_name().name(), "text" | "flowRoot")
+            && n.tag_name().namespace() == Some(SVG_NS)
+            && !n.ancestors().any(|a| a.has_tag_name("style"))
+    };
+    for (t, style_t) in xml.descendants().filter(is_text).zip(style_xml.descendants().filter(is_text)) {
         let label = t.attribute("id").map_or_else(|| "a text".to_string(), |id| format!("text '{id}'"));
         if t.ancestors().skip(1).any(|a| a.is_element() && a.tag_name().name() == "clipPath") {
             warnings.push(format!("{label} in a clip path ignored"));
@@ -216,13 +229,13 @@ pub(super) fn prepare<'s>(svg: &'s str, xml: &roxmltree::Document, dpi: f64, war
         };
         let flowed = t.tag_name().name() == "flowRoot";
         let Some(q) = qname.strip_suffix(t.tag_name().name()).filter(|q| q.is_empty() || q.ends_with(':')) else { continue };
-        if cx.css.own(t, "display").as_deref() == Some("none") || r.start < copied {
+        if cx.css.own(style_t, "display").as_deref() == Some("none") || r.start < copied {
             continue;
         }
-        let built = if flowed { cx.build_flow(t, &label, warnings) } else { cx.build(xml, t, &label, warnings) };
+        let built = if flowed { cx.build_flow(style_t, &label, warnings) } else { cx.build(style_xml, style_t, &label, warnings) };
         let Some((text, paints)) = built else { continue };
         out.push_str(&svg[copied..r.start]);
-        placeholder(&mut out, q, &cx.css, t, &slots.prefix, slots.texts.len(), text.marker, &paints);
+        placeholder(&mut out, q, &cx.css, t, style_t, &slots.prefix, slots.texts.len(), text.marker, &paints);
         copied = r.end;
         slots.texts.push(text);
     }
@@ -235,7 +248,7 @@ pub(super) fn prepare<'s>(svg: &'s str, xml: &roxmltree::Document, dpi: f64, war
 
 /// Write the placeholder group for text `t` (namespace prefix `q`), slot `index`.
 #[allow(clippy::too_many_arguments)]
-fn placeholder(out: &mut String, q: &str, css: &Styles, t: XNode, prefix: &str, index: usize, b: Rect, paints: &[String]) {
+fn placeholder(out: &mut String, q: &str, css: &Styles, t: XNode, style_t: XNode, prefix: &str, index: usize, b: Rect, paints: &[String]) {
     let _ = write!(out, "<{q}g");
     for a in ["id", "transform", "systemLanguage", "requiredFeatures", "requiredExtensions"] {
         if let Some(v) = t.attribute(a) {
@@ -247,9 +260,9 @@ fn placeholder(out: &mut String, q: &str, css: &Styles, t: XNode, prefix: &str, 
     for (p, initial) in
         [("opacity", "1"), ("clip-path", "none"), ("mask", "none"), ("filter", "none"), ("mix-blend-mode", "normal"), ("isolation", "auto")]
     {
-        let _ = write!(style, "{p}:{};", css.own(t, p).as_deref().unwrap_or(initial));
+        let _ = write!(style, "{p}:{};", css.own(style_t, p).as_deref().unwrap_or(initial));
     }
-    if let Some(v) = css.own(t, "visibility") {
+    if let Some(v) = css.own(style_t, "visibility") {
         let _ = write!(style, "visibility:{v};");
     }
     let _ = write!(out, " style=\"{}display:inline\">", xml_escape(&style));
@@ -490,6 +503,53 @@ impl Ctx {
         out.spans[slot].1 = start..out.chars.len();
     }
 
+    /// `textLength` and `lengthAdjust` (SVG 1.1 §10.9.1,
+    /// https://www.w3.org/TR/SVG11/text.html#TextElementTextLengthAttribute): the characters of
+    /// each element with a `textLength` are fitted to that advance, by adding the difference evenly
+    /// between them (`spacing`, the default; it becomes kerning) or by stretching them
+    /// (`spacingAndGlyphs`; it becomes horizontal scale, kept within 1–10000%). Innermost elements
+    /// first, so an element's length takes in its children's. Vertical type is spaced out only.
+    fn fit_lengths(&self, spans: &[(XNode, Range<usize>)], cells: &mut [Cell], vertical: bool, label: &str, warnings: &mut Vec<String>) {
+        let n = cells.len();
+        for (el, r) in spans.iter().rev() {
+            let Some(want) = el.attribute("textLength").and_then(|v| self.length(v, self.font_size(*el), self.viewport.0)).filter(|w| *w >= 0.0)
+            else {
+                continue;
+            };
+            // Past the largest coordinate, the characters would only be out of reach.
+            let want = want.min(vectorcraft_doc::MAX_COORD);
+            let Some(part) = cells.get_mut(r.start.min(n)..r.end.min(n)) else { continue };
+            let Some(gaps) = part.len().checked_sub(1) else { continue };
+            let stretch = el.attribute("lengthAdjust").map(str::trim) == Some("spacingAndGlyphs");
+            if stretch && vertical {
+                warnings.push(format!("{label}: lengthAdjust=\"spacingAndGlyphs\" on vertical text spaces the characters out instead"));
+            }
+            // Kerning and scale change shaping (manual kerning turns pair kerning off): measure again.
+            for _ in 0..4 {
+                let have = advance(&point_text(part));
+                if !have.is_finite() || (want - have).abs() < 0.01 {
+                    break;
+                }
+                if stretch && !vertical {
+                    let k = want / have;
+                    if !k.is_finite() || k <= 0.0 {
+                        break;
+                    }
+                    for c in part.iter_mut() {
+                        c.style.h_scale = (c.style.h_scale * k).clamp(1.0, 10_000.0);
+                    }
+                } else if gaps > 0 {
+                    let d = (want - have) / gaps as f64;
+                    for c in part.iter_mut().take(gaps) {
+                        c.kern += d;
+                    }
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+
     /// The path a `<textPath>` follows, in the text's user space.
     fn text_path(&self, xml: &roxmltree::Document, tp: XNode) -> Option<BezPath> {
         let mut bp = match tp.attribute("path") {
@@ -717,6 +777,7 @@ impl Ctx {
             }
         });
         let vertical = self.css.prop(t, "writing-mode").is_some_and(|m| m.starts_with("tb") || m.starts_with("vertical"));
+        self.fit_lengths(&cs.spans, &mut cells, vertical, label, warnings);
         let mut obj = TextObject::point(Point::ZERO, "", CharStyle::default());
         let mut breaks: Vec<Break> = vec![];
         let mut para_styles: Vec<ParaStyle> = vec![];

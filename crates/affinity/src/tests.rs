@@ -261,6 +261,34 @@ mod archive {
         assert!(matches!(a.read("doc.dat"), Err(Error::Limit(_))));
     }
 
+    #[test]
+    fn an_entry_that_fails_its_checksum_is_charged_once_and_not_decompressed_again() {
+        let d = doc();
+        let file = synth::container(&[("doc.dat", &d, Method::Zstd)], None);
+        let mut broken = file.clone();
+        broken[90] ^= 0x55;
+        let mut a = Archive::open(&broken, Limits::default()).unwrap();
+        let first = a.read("doc.dat").unwrap_err();
+        // The work was done, so it counts against the import even though it failed.
+        assert_eq!(a.extracted(), d.len());
+        assert_eq!(a.read("doc.dat").unwrap_err(), first);
+        assert_eq!(a.extracted(), d.len());
+        // A budget that only covers one attempt is not exceeded by asking again.
+        let mut a = Archive::open(&broken, Limits { max_entry: usize::MAX, max_total: d.len() }).unwrap();
+        assert!(a.read("doc.dat").is_err());
+        assert_eq!(a.read("doc.dat").unwrap_err(), first);
+    }
+
+    #[test]
+    fn the_table_index_has_a_budget_for_records_and_names() {
+        let d = doc();
+        let long = "n".repeat(300);
+        let file = synth::container(&[("doc.dat", &d, Method::Stored), (&long, b"tile", Method::Stored)], None);
+        Archive::open_within(&file, Limits::default(), 2, 307).unwrap();
+        assert_eq!(Archive::open_within(&file, Limits::default(), 1, 1 << 20).unwrap_err(), Error::Limit("too many archive entries"));
+        assert_eq!(Archive::open_within(&file, Limits::default(), 2, 306).unwrap_err(), Error::Limit("archive entry names too long"));
+    }
+
     // Regression test for #1710: ruzstd 0.9.0 let a block decompress to more than its frame's
     // window allows (RUSTSEC-2026-0344), so a crafted entry made the decoder produce far more than
     // the format permits for a block. 0.9.1 refuses it.

@@ -158,3 +158,32 @@ fn codecs_the_writer_lacks_are_zip_with_a_warning() {
     // The codecs of other kinds of images say nothing.
     assert!(pdf(&png, json!({"mono": {"compression": "ccittG4"}})).1.is_empty());
 }
+
+/// A PNG whose header declares `w` × `h` grey pixels and whose data holds a few: what a file can
+/// declare, not what it holds.
+fn declared_png(w: u32, h: u32) -> Vec<u8> {
+    let chunk = |kind: &[u8], data: &[u8]| {
+        let mut crc = flate2::Crc::new();
+        crc.update(kind);
+        crc.update(data);
+        [&(data.len() as u32).to_be_bytes()[..], kind, data, &crc.sum().to_be_bytes()].concat()
+    };
+    let ihdr = [&w.to_be_bytes()[..], &h.to_be_bytes(), &[8, 0, 0, 0, 0]].concat();
+    let mut z = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
+    std::io::Write::write_all(&mut z, &[0; 64]).unwrap();
+    let idat = z.finish().unwrap();
+    [&b"\x89PNG\r\n\x1a\n"[..], &chunk(b"IHDR", &ihdr), &chunk(b"IDAT", &idat), &chunk(b"IEND", &[])].concat()
+}
+
+/// Images a document holds are decoded within the decode allowance: a header declaring billions of
+/// pixels is refused before they are allocated, as an opacity mask and when recoded.
+#[test]
+fn images_declaring_more_than_the_allowance_are_not_decoded() {
+    let png = declared_png(60_000, 60_000);
+    let blob = ImageBlob::new("image/png", png.clone());
+    assert_eq!(crate::images::mask_alpha(&blob, 60_000, 60_000, false), None);
+    assert_eq!(crate::images::mask_alpha(&blob, 2, 2, false), None, "another size is not decoded at all");
+    let c: CompressionSettings = serde_json::from_value(json!({"gray": {"downsample": "bicubic", "ppi": 72, "abovePpi": 100}})).unwrap();
+    let r = crate::images::recode(&png, (10.0, 10.0), &c, false, None);
+    assert!(r.image.is_none(), "kept as it is");
+}

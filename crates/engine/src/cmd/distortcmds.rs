@@ -13,10 +13,10 @@ use vectorcraft_tools::distort::liquify::{Dabber, LiquifyParams, PathStroke, Sam
 use vectorcraft_tools::distort::perspective::{self as persp, PerspectiveGrid, Plane};
 use vectorcraft_tools::distort::{PinSet, arap, collect_points, mesh_for, project_node, stroke_owner, warp_from_rest, warp_node_with};
 
-use super::edit::{duplicate_in, outermost, selected_roots};
+use super::edit::{duplicate_in, outermost, refuse_symbol_part, selected_roots};
 use super::{
     CommandSpec, Result, Session, bad, check_numbers, check_switches, cmd, f64_or, f64_req, finite_numbers, has_doc, has_selection, id_param,
-    ids_param, matrix_param, number_or, ok, point_indices, point_param, str_param, switch_or, targets,
+    matrix_param, named_id, named_ids, number_or, ok, point_indices, point_param, str_param, switch_or, targets,
 };
 use crate::EngineError;
 
@@ -144,7 +144,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move in Perspective",
             [],
             None,
-            "{ids?|id?, from: [x,y], to: [x,y], plane?, copy?: bool (move copies, as Alt-dragging does), perpendicular?: bool (move along the plane's normal instead, as pressing 5 while dragging does), snap?: bool (default: View › Perspective Grid › Snap to Grid), constrain?: bool (default false; constrain each in-plane move to its plane's nearest axis or 45° diagonal)} slide objects within their own planes (unattached objects attach to `plane`/the active plane first); snapping pulls the nearer edge of the first plane's joint bounds toward a gridline within a quarter cell while preserving the constrained direction; Transform Again repeats it",
+            "{ids?|id?, from: [x,y], to: [x,y], plane?, copy?: bool (move copies, as Alt-dragging does), perpendicular?: bool (move along the plane's normal instead, as pressing 5 while dragging does), snap?: bool (default: View › Perspective Grid › Snap to Grid), constrain?: bool (default false; constrain each in-plane move to its plane's nearest axis or 45° diagonal)} slide objects within their own planes (unattached objects attach to `plane`/the active plane first); snapping pulls the nearer edge of the first plane's joint bounds toward a gridline within a quarter cell while preserving the constrained direction, and moves every object on that plane, at any depth, by the same plane offset; Transform Again repeats it",
             has_doc,
             persp_move
         ),
@@ -658,7 +658,7 @@ fn liquify(s: &mut Session, p: &Value) -> Result<Value> {
     if pts.iter().any(|(q, f)| !q.x.is_finite() || !q.y.is_finite() || !f.is_finite()) {
         return Err(bad(C, "points must be finite"));
     }
-    let roots = match ids_param(p, "ids").or_else(|| id_param(p, "id").map(|i| vec![i])) {
+    let roots = match named_ids(p)? {
         Some(v) => v,
         None => s.doc()?.selection.objects.clone(),
     };
@@ -708,7 +708,7 @@ fn liquify(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// The objects a Puppet Warp command works on: `id`/`ids`, else `default`.
 fn puppet_ids(p: &Value, default: impl FnOnce() -> Result<Vec<NodeId>>) -> Result<Vec<NodeId>> {
-    let ids = match ids_param(p, "ids").or_else(|| id_param(p, "id").map(|i| vec![i])) {
+    let ids = match named_ids(p)? {
         Some(v) => v,
         None => default()?,
     };
@@ -730,8 +730,13 @@ fn puppet_warp(s: &mut Session, p: &Value) -> Result<Value> {
     if pins.iter().chain(&moved).any(|q| !q.x.is_finite() || !q.y.is_finite()) {
         return Err(bad(C, "pins must be finite"));
     }
-    let ids =
-        if rest { puppet_ids(p, || Ok(s.doc()?.selection.objects.clone()))? } else { outermost(&s.doc()?.doc, puppet_ids(p, || selected_roots(s))?) };
+    // While an object of a dynamic symbol instance's art is selected, the selection is refused, as
+    // `selected_roots` refuses it.
+    let selected = || {
+        refuse_symbol_part(s)?;
+        Ok(s.doc()?.selection.objects.clone())
+    };
+    let ids = if rest { puppet_ids(p, selected)? } else { outermost(&s.doc()?.doc, puppet_ids(p, || selected_roots(s))?) };
     let expand = f64_or(p, "expand", 3.0).clamp(0.0, 1000.0);
     let angles: Vec<Option<f64>> = match p.get("angles") {
         None | Some(Value::Null) => vec![None; pins.len()],

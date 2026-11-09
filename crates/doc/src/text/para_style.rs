@@ -228,7 +228,8 @@ pub struct ParaStyle {
     pub leading_model: LeadingModel,
     /// Hanging punctuation (Paragraph panel menu › Burasagari): a comma or full stop ending a line
     /// may stand outside the frame. New type takes [`Burasagari::Standard`]; documents from before
-    /// it and imported text keep [`Burasagari::None`].
+    /// it and imported text keep [`Burasagari::None`], except legacy `.ai` type with binding
+    /// punctuation on, which opens with [`Burasagari::Forced`].
     pub burasagari: Burasagari,
     /// Kinsoku (Paragraph panel › Kinsoku Set): which Japanese characters may not start or end a
     /// line.
@@ -255,6 +256,12 @@ impl ParaStyle {
         for t in &mut self.tabs {
             t.position = within(t.position, 0.0, 100_000.0);
         }
+    }
+
+    /// The left indent the layout sets the paragraph at: its left indent, and for a paragraph in a
+    /// list at a level past the first, [`ParaList::level_indent`] more.
+    pub fn laid_out_left_indent(&self) -> f64 {
+        self.left_indent + self.list.map_or(0.0, |l| l.level_indent())
     }
 
     /// The leading of characters styled `st` in this paragraph, as the layout sets it: their own

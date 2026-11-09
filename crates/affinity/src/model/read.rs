@@ -26,6 +26,17 @@ const MAX_DOCUMENT_CHARS: usize = 16 << 20;
 /// Table cells of all tables together (each becomes a text object with its edge lines).
 const MAX_DOCUMENT_CELLS: usize = 1 << 18;
 
+/// Points of all strokes' pressure curves together (a stroke style may be shared by many layers).
+const MAX_DOCUMENT_PRESSURE_POINTS: usize = 1 << 20;
+
+/// Child references inspected, page rectangles produced, and outline segments retained, in all
+/// (shared objects are visited once per link, so each visit is charged). Real documents stay
+/// within a few times [`MAX_NODES`]; this leaves ~30x headroom over that.
+const MAX_DOCUMENT_WORK: usize = 1 << 24;
+
+/// Owned layer-name characters kept in all (each visit of a shared object keeps its own copy).
+const MAX_DOCUMENT_NAME_CHARS: usize = 16 << 20;
+
 /// What a whole read may still use. Shared objects can be linked from many layers, and embedded
 /// documents are read with what their embedding document left, so linking or embedding the
 /// same content many times can't multiply the work.
@@ -39,10 +50,30 @@ pub(crate) struct Budget {
     pub(crate) chars: usize,
     /// Table cells ([`MAX_DOCUMENT_CELLS`] in all).
     pub(crate) cells: usize,
+    /// Points of pressure curves ([`MAX_DOCUMENT_PRESSURE_POINTS`] in all).
+    pub(crate) pressure: usize,
+    /// Child references, page rectangles and outline segments ([`MAX_DOCUMENT_WORK`] in all).
+    pub(crate) work: usize,
+    /// Layer-name characters ([`MAX_DOCUMENT_NAME_CHARS`] in all).
+    pub(crate) name_chars: usize,
 }
 
 impl Budget {
-    pub(crate) const FULL: Budget = Budget { nodes: MAX_NODES, pixels: MAX_LAYER_PIXELS, chars: MAX_DOCUMENT_CHARS, cells: MAX_DOCUMENT_CELLS };
+    pub(crate) const FULL: Budget = Budget {
+        nodes: MAX_NODES,
+        pixels: MAX_LAYER_PIXELS,
+        chars: MAX_DOCUMENT_CHARS,
+        cells: MAX_DOCUMENT_CELLS,
+        pressure: MAX_DOCUMENT_PRESSURE_POINTS,
+        work: MAX_DOCUMENT_WORK,
+        name_chars: MAX_DOCUMENT_NAME_CHARS,
+    };
+
+    /// Take `n` units of work, or fail the read.
+    pub(crate) fn spend(&mut self, n: usize) -> Result<(), Error> {
+        self.work = self.work.checked_sub(n).ok_or(Error::Limit("too much shared geometry or page data"))?;
+        Ok(())
+    }
 }
 
 /// Read a document: archive, `doc.dat` and the model.
@@ -181,6 +212,7 @@ impl<'s, 'a, 'b> Reader<'s, 'a, 'b> {
             return Ok(None);
         }
         let pages = pages(s, spread);
+        self.budget.spend(pages.len() + 1)?;
         let default_size = s.floats::<2>(doc, b"DfSz").filter(|[w, h]| *w > 0.0 && *h > 0.0).map(|[w, h]| Rect { x0: 0.0, y0: 0.0, x1: w, y1: h });
         let bounds = s.floats::<4>(spread, b"SprB").map(rect).or_else(|| pages.iter().copied().reduce(union)).or(default_size).unwrap_or(Rect {
             x0: 0.0,
@@ -203,7 +235,10 @@ impl<'s, 'a, 'b> Reader<'s, 'a, 'b> {
         let s = self.s;
         let mut out = Vec::new();
         let mut mask = None;
-        for c in s.objs(parent, b"Chld") {
+        let kids = s.objs(parent, b"Chld");
+        // Invisible masks and skipped children cost no node, so the visit is charged here.
+        self.budget.spend(kids.len())?;
+        for c in kids {
             if s.is(c, b"MRst") {
                 // A mask layer inside a group or layer masks that container.
                 if s.bool(c, b"Visi") == Some(false) {
@@ -243,7 +278,8 @@ impl<'s, 'a, 'b> Reader<'s, 'a, 'b> {
         let world = local.then(parent);
         let class = s.class(id).unwrap_or(Tag(0));
         // A layer name is short; a long one is cut, as every visit of a shared object keeps a copy.
-        let name: String = s.str(id, b"Desc").unwrap_or_default().chars().take(MAX_NAME_CHARS).collect();
+        let name: String = s.str(id, b"Desc").unwrap_or_default().chars().take(MAX_NAME_CHARS.min(self.budget.name_chars)).collect();
+        self.budget.name_chars -= name.chars().count();
         let visible = s.bool(id, b"Visi").unwrap_or(true);
         let locked = s.bool(id, b"Edtb").is_some_and(|e| !e);
         let opacity = s.f64(id, b"Opac").map_or(1.0, |o| o.clamp(0.0, 1.0));
@@ -301,6 +337,7 @@ impl<'s, 'a, 'b> Reader<'s, 'a, 'b> {
                     self.warn(format!("a {} that could not be read", describe(class)));
                     return Ok(Kind::Unsupported);
                 };
+                self.budget.spend(local.subpaths.iter().map(|sp| sp.segments.len() + 1).sum())?;
                 let (fills, strokes) = paint::node_paint(self, id, world);
                 Kind::Shape { path: local.transformed(world), fills, strokes, even_odd }
             }
@@ -632,5 +669,17 @@ impl<'s, 'a, 'b> Reader<'s, 'a, 'b> {
         });
         let (background, strokes) = paint::node_paint(self, id, world);
         Kind::Artboard { rect, path: path.transformed(world), even_odd, background, strokes }
+    }
+}
+
+#[cfg(test)]
+mod budget_tests {
+    use super::*;
+
+    #[test]
+    fn shared_work_is_bounded() {
+        let mut b = Budget::FULL;
+        assert!(b.spend(MAX_DOCUMENT_WORK).is_ok());
+        assert_eq!(b.spend(1), Err(Error::Limit("too much shared geometry or page data")));
     }
 }

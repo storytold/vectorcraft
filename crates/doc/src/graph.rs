@@ -314,6 +314,27 @@ pub struct SeriesPaint {
     /// Stroke weight in points, kept with [`Self::stroke`].
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stroke_width: Option<f64>,
+    /// Opacity (0..1) of the topmost fill of each path directly in the series group (graph designs keep their own),
+    /// taken from the topmost fill row edited on one of them. Absent: fully opaque.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fill_opacity: Option<f32>,
+    /// Opacity (0..1) of the topmost stroke of each path directly in the series group, as [`Self::fill_opacity`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stroke_opacity: Option<f32>,
+    /// Blend mode of the topmost fill of each path directly in the series group, as [`Self::fill_opacity`]. Absent: Normal.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fill_blend: Option<vectorcraft_color::BlendMode>,
+    /// Blend mode of the topmost stroke of each path directly in the series group, as [`Self::fill_opacity`]. Absent:
+    /// Normal.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stroke_blend: Option<vectorcraft_color::BlendMode>,
+    /// Object opacity (0..1) of each path directly in the series group, taken from the object opacity set on one of them.
+    /// Absent: fully opaque.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opacity: Option<f32>,
+    /// Object blend mode of each path directly in the series group, as [`Self::opacity`]. Absent: Normal.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blend: Option<vectorcraft_color::BlendMode>,
 }
 
 /// Graph data and options. `rows` are categories (one per row of the Graph Data window), each

@@ -17,6 +17,20 @@ fn fx(id: &str, params: serde_json::Value) -> Effect {
     Effect { id: id.into(), params, visible: true }
 }
 
+/// Asserts that placed gradient `got` has `want`'s start, end, aspect and focal point, within 1e-6.
+fn assert_geom_near(got: vectorcraft_color::GradientGeom, want: vectorcraft_color::GradientGeom, what: &str) {
+    let near = |a: Point, b: Point| a.distance(b) < 1e-6;
+    let focal = match (got.focal, want.focal) {
+        (None, None) => true,
+        (Some(a), Some(b)) => near(a, b),
+        _ => false,
+    };
+    assert!(
+        near(got.start, want.start) && near(got.end, want.end) && (got.aspect - want.aspect).abs() < 1e-6 && focal,
+        "{what}: got {got:?}, want {want:?}"
+    );
+}
+
 fn doc_with(n: Node) -> Document {
     let mut d = Document::new(400.0, 400.0);
     let l = d.layers[0].id;
@@ -43,6 +57,328 @@ fn object_effects_become_geometry_and_raster_effects_stay() {
     assert!((b.width() - 120.0).abs() < 0.5, "{b:?}");
     assert_eq!(m.appearance.effects.len(), 1);
     assert_eq!(m.appearance.effects[0].id, "stylize.dropShadow");
+}
+
+#[test]
+fn a_baked_transform_moves_a_placed_gradient_with_the_path() {
+    use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let ramp = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
+    let geom = GradientGeom { start: Point::new(0.0, 50.0), end: Point::new(100.0, 50.0), aspect: 1.0, focal: None };
+    let placed = Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..ramp }));
+    let placed_geom = |n: &Node| match n.appearance.fill_paint() {
+        Paint::Gradient(g) => g.geom.unwrap(),
+        p => panic!("a gradient: {p:?}"),
+    };
+    // A move 30 pt right, and a turn of 90° with the width halved about the center (50, 50): the
+    // square becomes 100 pt wide and 50 pt tall, and the gradient runs from the bottom up.
+    let moves = [
+        (json!({"moveH": 30.0}), Point::new(30.0, 0.0), GradientGeom { start: Point::new(30.0, 50.0), end: Point::new(130.0, 50.0), ..geom }),
+        (
+            json!({"rotate": 90.0, "scaleH": 50.0}),
+            Point::new(0.0, 25.0),
+            GradientGeom { start: Point::new(50.0, 75.0), end: Point::new(50.0, 25.0), ..geom },
+        ),
+    ];
+    // Alone, with a stroke whose own effect makes one path for each fill and stroke, and as the
+    // fill's own effect.
+    for (params, corner, want) in moves {
+        for (split, own) in [(false, false), (true, false), (true, true)] {
+            let mut ap = Appearance::basic(placed.clone(), Paint::solid(Color::BLACK), if split { 1.0 } else { 0.0 });
+            if split && let AppearanceItem::Stroke(s) = &mut ap.items[1] {
+                s.effects.push(fx("path.offsetPath", json!({"offset": 5.0})));
+            }
+            let transform = fx("distort.transform", params.clone());
+            if own {
+                ap.items[0].effects_mut().push(transform.clone());
+            }
+            let mut n = Node::path(NodeId(50), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), ap);
+            if !own {
+                n.appearance.effects.push(transform);
+            }
+            let d = bake_document(&doc_with(n)).unwrap();
+            let m = d.node(NodeId(50)).unwrap();
+            let fill: &Node = if split { &m.children().unwrap()[0] } else { m };
+            let b = fill.geometric_bounds().unwrap();
+            assert!(b.origin().distance(corner) < 1e-6, "{params}, split {split}, own {own}: {b:?}");
+            assert_geom_near(placed_geom(fill), want, &format!("{params}, split {split}, own {own}"));
+        }
+    }
+}
+
+/// A stroke's own Transform effect or Free Distort moves the gradient placed on that stroke.
+#[test]
+fn a_strokes_own_transform_and_free_distort_move_its_placed_gradient() {
+    use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let ramp = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
+    let geom = GradientGeom { start: Point::new(0.0, 50.0), end: Point::new(100.0, 50.0), aspect: 1.0, focal: None };
+    let placed = Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..ramp }));
+    // Moved 30 pt right by Transform, and one width (100 pt) right by Free Distort.
+    let moves = [
+        (fx("distort.transform", json!({"moveH": 30.0})), 30.0),
+        (fx("distort.freeDistort", json!({"corners": [[1.0, 0.0], [2.0, 0.0], [2.0, 1.0], [1.0, 1.0]]})), 100.0),
+    ];
+    for (e, moved) in moves {
+        let mut ap = Appearance::basic(Paint::None, placed.clone(), 4.0);
+        let Some(stroke) = ap.items.iter_mut().find(|i| matches!(i, AppearanceItem::Stroke(_))) else { panic!("a stroke") };
+        stroke.effects_mut().push(e.clone());
+        let n = Node::path(NodeId(50), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), ap);
+        let d = bake_document(&doc_with(n)).unwrap();
+        let mut geoms = vec![];
+        d.node(NodeId(50)).unwrap().walk(&mut |c: &Node| {
+            for item in &c.appearance.items {
+                if let AppearanceItem::Stroke(s) = item
+                    && let Paint::Gradient(g) = &s.paint
+                {
+                    geoms.push(g.geom.unwrap());
+                }
+            }
+        });
+        assert!(!geoms.is_empty(), "{}: the stroke keeps its gradient", e.id);
+        let want = GradientGeom { start: Point::new(moved, 50.0), end: Point::new(100.0 + moved, 50.0), ..geom };
+        for g in geoms {
+            assert_geom_near(g, want, &e.id);
+        }
+    }
+}
+
+#[test]
+fn a_fills_gradient_follows_the_effects_around_its_transform_with_options() {
+    use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let ramp = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
+    let geom = GradientGeom { start: Point::new(0.0, 50.0), end: Point::new(100.0, 50.0), aspect: 1.0, focal: None };
+    let placed = Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..ramp }));
+    let moved = fx("distort.transform", json!({"moveH": 30.0}));
+    let scales_strokes = fx("distort.transform", json!({"strokes": true}));
+    // A move before and a move after the fill's Transform effect with Scale Strokes & Effects on.
+    for fill_fx in [vec![moved.clone(), scales_strokes.clone()], vec![scales_strokes, moved]] {
+        let mut ap = Appearance::basic(placed.clone(), Paint::None, 0.0);
+        *ap.items[0].effects_mut() = fill_fx.clone();
+        let n = Node::path(NodeId(50), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), ap);
+        let d = bake_document(&doc_with(n)).unwrap();
+        let mut found = vec![];
+        d.node(NodeId(50)).unwrap().walk(&mut |c: &Node| {
+            if let Paint::Gradient(g) = c.appearance.fill_paint() {
+                found.push((c.geometric_bounds().unwrap(), g.geom.unwrap()));
+            }
+        });
+        assert!(!found.is_empty(), "{fill_fx:?}: the fill keeps its gradient");
+        let want = GradientGeom { start: Point::new(30.0, 50.0), end: Point::new(130.0, 50.0), ..geom };
+        for (b, g) in found {
+            assert!(b.origin().distance(Point::new(30.0, 0.0)) < 1e-6, "{fill_fx:?}: {b:?}");
+            assert_geom_near(g, want, &format!("{fill_fx:?}"));
+        }
+    }
+}
+
+#[test]
+fn baked_free_distort_moves_placed_gradients_from_the_bounds_to_the_distorted_bounds() {
+    use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let ramp = |kind| GradientPaint::new(Gradient::new(kind, stops.clone()));
+    let linear = GradientGeom { start: Point::new(20.0, 50.0), end: Point::new(80.0, 50.0), aspect: 1.0, focal: None };
+    let radial = GradientGeom { start: Point::new(40.0, 30.0), end: Point::new(60.0, 30.0), aspect: 0.5, focal: Some(Point::new(45.0, 32.0)) };
+    let placed_linear = Paint::Gradient(Box::new(GradientPaint { geom: Some(linear), ..ramp(GradientKind::Linear) }));
+    let placed_radial = Paint::Gradient(Box::new(GradientPaint { geom: Some(radial), ..ramp(GradientKind::Radial) }));
+    let fitted = Paint::Gradient(Box::new(ramp(GradientKind::Linear)));
+    let baked = |fill: &Paint, e: Effect| {
+        let mut n = Node::path(NodeId(50), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::basic(fill.clone(), Paint::None, 0.0));
+        n.appearance.effects.push(e);
+        let d = bake_document(&doc_with(n)).unwrap();
+        let m = d.node(NodeId(50)).unwrap();
+        match m.appearance.fill_paint() {
+            Paint::Gradient(g) => (m.geometric_bounds().unwrap(), (*g).clone()),
+            p => panic!("a gradient: {p:?}"),
+        }
+    };
+    let near = |a: Point, b: Point| a.distance(b) < 1e-6;
+    // The bottom right corner moves 50 pt right, so the bounds grow from 0..100 to 0..150 across.
+    let corners = json!({"corners": [[0.0, 0.0], [1.0, 0.0], [1.5, 1.0], [0.0, 1.0]]});
+    let distort = || fx("distort.freeDistort", corners.clone());
+    let (b, g) = baked(&placed_linear, distort());
+    assert!((b.x1 - 150.0).abs() < 1e-6, "{b:?}");
+    let geom = g.geom.unwrap();
+    assert!(near(geom.start, Point::new(30.0, 50.0)) && near(geom.end, Point::new(120.0, 50.0)), "{geom:?}");
+    // A radial gradient's center, focal point and ellipse take the same stretch: the radius along
+    // the vector grows from 20 to 30 pt and the 10 pt radius across it stays.
+    let (_, g) = baked(&placed_radial, distort());
+    let want = GradientGeom { start: Point::new(60.0, 30.0), end: Point::new(90.0, 30.0), aspect: 1.0 / 3.0, focal: Some(Point::new(67.5, 32.0)) };
+    assert_geom_near(g.geom.unwrap(), want, "radial");
+    // A fitted gradient stays fitted, and fits the distorted outline.
+    assert_eq!(baked(&fitted, distort()).1.geom, None);
+}
+
+#[test]
+fn baked_warps_move_placed_gradients_from_the_bounds_to_the_warped_bounds() {
+    use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let ramp = |kind| GradientPaint::new(Gradient::new(kind, stops.clone()));
+    // A ramp across the square and one down it, so both axes of the box map show.
+    let across = GradientGeom { start: Point::new(20.0, 30.0), end: Point::new(80.0, 30.0), aspect: 1.0, focal: None };
+    let down = GradientGeom { start: Point::new(60.0, 10.0), end: Point::new(60.0, 75.0), aspect: 1.0, focal: None };
+    let placed = |geom| Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..ramp(GradientKind::Linear) }));
+    let fitted = Paint::Gradient(Box::new(ramp(GradientKind::Linear)));
+    let square = Rect::new(0.0, 0.0, 100.0, 100.0);
+    let baked = |fill: &Paint, e: Effect| {
+        let mut n = Node::path(NodeId(50), shapes::rectangle(square), Appearance::basic(fill.clone(), Paint::None, 0.0));
+        n.appearance.effects.push(e);
+        let d = bake_document(&doc_with(n)).unwrap();
+        let m = d.node(NodeId(50)).unwrap();
+        match m.appearance.fill_paint() {
+            Paint::Gradient(g) => (m.geometric_bounds().unwrap(), (*g).clone()),
+            p => panic!("a gradient: {p:?}"),
+        }
+    };
+    // Where the box map from the square to `to` takes `p`.
+    let follow = |p: Point, to: Rect| Point::new(to.x0 + p.x / 100.0 * to.width(), to.y0 + p.y / 100.0 * to.height());
+    let styles = [
+        "arc",
+        "arcLower",
+        "arcUpper",
+        "arch",
+        "bulge",
+        "shellLower",
+        "shellUpper",
+        "flag",
+        "wave",
+        "fish",
+        "rise",
+        "fisheye",
+        "inflate",
+        "squeeze",
+        "twist",
+    ];
+    // The square's warped bounds, from `warp_point` on 401 points along each side: the square's
+    // corners are (-1, -1) and (1, 1) in the warp's box coordinates, and a vertical warp swaps
+    // the axes.
+    let warped_bounds = |style: &str, p: &serde_json::Value| {
+        let Some(style) = crate::WarpStyle::from_id(style) else { panic!("warp.{style}: a style") };
+        let share = |key: &str, default: f64| p.get(key).and_then(serde_json::Value::as_f64).unwrap_or(default) / 100.0;
+        let vertical = p.get("orientation").and_then(serde_json::Value::as_str) == Some("vertical");
+        let (bend, dh, dv) = (share("bend", 50.0), share("horizontal", 0.0), share("vertical", 0.0));
+        let mut r: Option<Rect> = None;
+        for k in 0..=400 {
+            let s = f64::from(k) / 200.0 - 1.0;
+            for (x, y) in [(s, -1.0), (s, 1.0), (-1.0, s), (1.0, s)] {
+                let (x2, y2) = if vertical {
+                    let (a, b) = crate::warp_point(style, bend, dh, dv, 1.0, y, x);
+                    (b, a)
+                } else {
+                    crate::warp_point(style, bend, dh, dv, 1.0, x, y)
+                };
+                let q = Point::new(50.0 + x2 * 50.0, 50.0 + y2 * 50.0);
+                r = Some(r.map_or(Rect::from_points(q, q), |r| r.union_pt(q)));
+            }
+        }
+        r.unwrap_or(square)
+    };
+    let near =
+        |a: Rect, b: Rect, tol: f64| (a.x0 - b.x0).abs() < tol && (a.y0 - b.y0).abs() < tol && (a.x1 - b.x1).abs() < tol && (a.y1 - b.y1).abs() < tol;
+    let mut moved = 0;
+    for style in styles {
+        for params in
+            [json!({"bend": 30.0}), json!({"bend": -40.0, "orientation": "vertical"}), json!({"bend": 20.0, "horizontal": 30.0, "vertical": -20.0})]
+        {
+            // A warp that bends the square's sides inward keeps its bounds (within 0.5 pt), and the
+            // gradient stays with them.
+            let expected = warped_bounds(style, &params);
+            let moves = !near(expected, square, 0.5);
+            moved += usize::from(moves);
+            for linear in [across, down] {
+                let what = format!("warp.{style} {params} {linear:?}");
+                let (b, g) = baked(&placed(linear), fx(&format!("warp.{style}"), params.clone()));
+                assert!(near(b, expected, 0.1), "{what}: bounds {b:?}, want {expected:?}");
+                let geom = g.geom.unwrap();
+                let shifted = geom.start.distance(linear.start).max(geom.end.distance(linear.end));
+                assert_eq!(shifted > 0.1, moves, "{what}: the gradient moves {shifted} with bounds {b:?}");
+                let want = GradientGeom { start: follow(linear.start, b), end: follow(linear.end, b), ..linear };
+                assert_geom_near(geom, want, &what);
+            }
+            let what = format!("warp.{style} {params}");
+            // A fitted gradient stays fitted, and fits the warped outline.
+            assert_eq!(baked(&fitted, fx(&format!("warp.{style}"), params)).1.geom, None, "{what}");
+        }
+    }
+    assert_eq!(moved, 39, "the warps that move the bounds, of 45");
+    // With no bend and no distortion the gradient stays where it is.
+    let (_, g) = baked(&placed(across), fx("warp.arc", json!({"bend": 0.0})));
+    assert_geom_near(g.geom.unwrap(), across, "no bend");
+}
+
+/// A warp with no distortion and no bend (or a bend Arc takes as none) leaves a placed gradient
+/// exactly where it was, even where warping the outline moves its bounds by a rounding error.
+#[test]
+fn a_warp_with_no_bend_leaves_a_placed_gradient_exactly_in_place() {
+    use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let geom = GradientGeom { start: Point::new(13.7, 31.3), end: Point::new(91.1, 47.9), aspect: 1.0, focal: None };
+    let placed = Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..GradientPaint::new(Gradient::new(GradientKind::Linear, stops)) }));
+    let mut drift = 0;
+    let cases = crate::WARP_STYLES.map(|(s, _)| (s, 0.0));
+    for (k, (style, bend)) in cases.into_iter().chain([("arc", 1e-5), ("arc", -1e-5)]).enumerate() {
+        let k = k as f64;
+        let oval = Rect::new(10.1 + k * 0.37, 20.3 - k * 1.13, 97.7 + k * 3.31, 71.9 + k * 0.71);
+        let mut n = Node::path(NodeId(50), shapes::ellipse(oval), Appearance::basic(placed.clone(), Paint::None, 0.0));
+        n.appearance.effects.push(fx(&format!("warp.{style}"), json!({ "bend": bend })));
+        let d = bake_document(&doc_with(n)).unwrap();
+        let m = d.node(NodeId(50)).unwrap();
+        drift += usize::from(m.geometric_bounds() != shapes::ellipse(oval).bounds());
+        let Paint::Gradient(g) = m.appearance.fill_paint() else { panic!("warp.{style} {bend}: a gradient") };
+        assert_eq!(g.geom, Some(geom), "warp.{style} {bend}");
+    }
+    assert!(drift > 0, "the warped outlines' bounds move by a rounding error");
+    // Another style with as small a bend still moves the outline, and the gradient follows it.
+    let mut n = Node::path(NodeId(50), shapes::ellipse(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::basic(placed, Paint::None, 0.0));
+    n.appearance.effects.push(fx("warp.rise", json!({"bend": 1e-5})));
+    let d = bake_document(&doc_with(n)).unwrap();
+    let Paint::Gradient(g) = d.node(NodeId(50)).unwrap().appearance.fill_paint() else { panic!("warp.rise: a gradient") };
+    assert_ne!(g.geom, Some(geom), "warp.rise 1e-5");
+}
+
+/// A Warp effect on a fill or a stroke itself moves and scales its placed gradient from the
+/// path's bounds before the warp to its bounds after it (a stroke: its stroke-inflated bounds).
+#[test]
+fn a_fills_and_a_strokes_own_warp_move_its_placed_gradient_with_the_bounds() {
+    use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let ramp = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
+    let geom = GradientGeom { start: Point::new(20.0, 60.0), end: Point::new(80.0, 60.0), aspect: 1.0, focal: None };
+    let placed = Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..ramp }));
+    let square = Rect::new(0.0, 0.0, 100.0, 100.0);
+    let width = 4.0;
+    // Where the box map from `from` to `to` takes `p`.
+    let follow = |p: Point, from: Rect, to: Rect| {
+        Point::new(to.x0 + (p.x - from.x0) / from.width() * to.width(), to.y0 + (p.y - from.y0) / from.height() * to.height())
+    };
+    let pad = |r: Rect| r.inflate(width / 2.0, width / 2.0);
+    for style in ["arc", "rise", "inflate"] {
+        for stroke in [false, true] {
+            let what = format!("warp.{style} on the {}", if stroke { "stroke" } else { "fill" });
+            let mut ap =
+                if stroke { Appearance::basic(Paint::None, placed.clone(), width) } else { Appearance::basic(placed.clone(), Paint::None, 0.0) };
+            let Some(item) = ap.items.iter_mut().find(|i| matches!(i, AppearanceItem::Stroke(_)) == stroke) else { panic!("{what}: the item") };
+            item.effects_mut().push(fx(&format!("warp.{style}"), json!({"bend": 40.0})));
+            let n = Node::path(NodeId(50), shapes::rectangle(square), ap);
+            let d = bake_document(&doc_with(n)).unwrap();
+            let mut found = vec![];
+            d.node(NodeId(50)).unwrap().walk(&mut |c: &Node| {
+                for item in &c.appearance.items {
+                    if let Paint::Gradient(g) = item.paint() {
+                        found.push((c.geometric_bounds().unwrap(), g.geom.unwrap()));
+                    }
+                }
+            });
+            assert!(!found.is_empty(), "{what}: the gradient is kept");
+            for (b, g) in found {
+                assert_ne!(b, square, "{what}: the warp changes the bounds");
+                let (from, to) = if stroke { (pad(square), pad(b)) } else { (square, b) };
+                let want = GradientGeom { start: follow(geom.start, from, to), end: follow(geom.end, from, to), ..geom };
+                assert_geom_near(g, want, &what);
+            }
+        }
+    }
 }
 
 #[test]
@@ -104,6 +440,63 @@ fn a_baked_stroke_with_a_gradient_along_it_becomes_meshes_clipped_to_its_outline
     assert!(matches!(children[0].kind, NodeKind::Path { clipping: true, .. }));
     assert!(children.len() > 1 && children[1..].iter().all(|c| matches!(c.kind, NodeKind::Mesh(_))), "gradient meshes");
     assert_eq!(ch[1].opacity, 0.5);
+}
+
+/// A 100 pt square at the origin painted by `fill` and `stroke` (`width` pt), with the Transform
+/// effect `params`.
+fn transformed(fill: Paint, stroke: Paint, width: f64, params: serde_json::Value) -> Node {
+    let mut n = Node::path(NodeId(50), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::basic(fill, stroke, width));
+    n.appearance.effects.push(fx("distort.transform", params));
+    n
+}
+
+/// The paths under `n`, in document order.
+fn baked_paths(n: &Node) -> Vec<&Node> {
+    match n.children() {
+        Some(ch) if !matches!(n.kind, NodeKind::Compound { .. }) => ch.iter().flat_map(|c| baked_paths(c)).collect(),
+        _ => vec![n],
+    }
+}
+
+fn widths(n: &Node) -> Vec<f64> {
+    baked_paths(n).iter().map(|p| p.geometric_bounds().unwrap().width()).collect()
+}
+
+#[test]
+fn a_baked_transform_copy_keeps_its_scaled_stroke() {
+    // Distort Appearance: the 200% copy's stroke is 4 pt, as outside the envelope, so its outline
+    // is 204 pt wide.
+    let n = transformed(Paint::None, Paint::solid(Color::BLACK), 2.0, json!({"scaleH": 200, "scaleV": 200, "copies": 1, "strokes": true}));
+    let m = bake_appearance(&n).unwrap();
+    let w = widths(&m);
+    assert_eq!(w.len(), 2, "{w:?}");
+    assert!((w[0] - 102.0).abs() < 0.5 && (w[1] - 204.0).abs() < 0.5, "{w:?}");
+    assert!(baked_paths(&m).iter().all(|p| p.appearance.stroke().is_none()), "the strokes are outlined");
+}
+
+#[test]
+fn a_baked_transform_copy_keeps_its_moved_pattern() {
+    let paint = Paint::Pattern { pattern: "p".into(), xf: vectorcraft_geom::Affine::IDENTITY };
+    let n = transformed(paint, Paint::None, 0.0, json!({"moveH": 30, "copies": 1, "patterns": true}));
+    let m = bake_appearance(&n).unwrap();
+    let xs: Vec<f64> = baked_paths(&m)
+        .iter()
+        .map(|p| match p.appearance.fill_paint() {
+            Paint::Pattern { xf, .. } => xf.as_coeffs()[4],
+            p => panic!("not a pattern: {p:?}"),
+        })
+        .collect();
+    assert_eq!(xs, vec![0.0, 30.0]);
+}
+
+#[test]
+fn a_baked_transform_without_its_options_outlines_the_copies_together() {
+    // Without Scale Strokes & Effects the copy keeps the 2 pt stroke: one outline of both squares.
+    let n = transformed(Paint::None, Paint::solid(Color::BLACK), 2.0, json!({"scaleH": 200, "scaleV": 200, "copies": 1}));
+    let m = bake_appearance(&n).unwrap();
+    let w = widths(&m);
+    assert_eq!(w.len(), 1, "{w:?}");
+    assert!((w[0] - 202.0).abs() < 0.5, "{w:?}");
 }
 
 /// Black 24 pt "Type" with its baseline at (20, 60).

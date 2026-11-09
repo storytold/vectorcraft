@@ -11,7 +11,7 @@ use vectorcraft_doc::{Document, Node, NodeId, NodeKind, ShapeMode};
 use vectorcraft_render::effects;
 
 use super::edit::{roots_of, selected_roots};
-use super::pathops::{pf_leaves, shape_node, style_of};
+use super::pathops::{Style, pf_leaves, shape_node, style_of};
 use super::{CommandSpec, EngineError, Result, Session, bad, cmd, has_multi};
 
 const MODE_NAMES: [&str; 4] = ["add", "subtract", "intersect", "exclude"];
@@ -23,7 +23,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make Compound Shape",
             ["Window", "Pathfinder"],
             None,
-            "{ids?: [id…] (selected first; default: the selection), mode?: \"add\"|\"subtract\"|\"intersect\"|\"exclude\" (default add; Alt-clicking a Shape Mode button gives its mode)} the two or more selected objects (paths, compound paths, groups, compound shapes, type) become the members of one compound shape, each with the shape mode, in their stacking order where the frontmost was: it draws as the area they make from the backmost up (open paths closed), painted with the appearance and transparency of the topmost member in Add, Intersect or Exclude mode (with every member in Subtract, the backmost), and the members stay editable (Direct Selection, Layers panel, isolation mode) → {id}",
+            "{ids?: [id…] (selected first; default: the selection), mode?: \"add\"|\"subtract\"|\"intersect\"|\"exclude\" (default add; Alt-clicking a Shape Mode button gives its mode)} the two or more selected objects (paths, compound paths, groups, compound shapes, type, blends, envelopes) become the members of one compound shape, each with the shape mode, in their stacking order where the frontmost was: it draws as the area they make from the backmost up (open paths closed; a blend as its steps, an envelope as its distorted art, an object with a warp or other geometry effect as it draws), painted with the appearance and transparency of the topmost member in Add, Intersect or Exclude mode (with every member in Subtract, the backmost), and the members stay editable (Direct Selection, Layers panel, isolation mode) → {id}",
             has_multi,
             make
         ),
@@ -140,19 +140,24 @@ fn make(s: &mut Session, p: &Value) -> Result<Value> {
     let mut members = Vec::with_capacity(roots.len());
     for id in &roots {
         let n = d.node(*id).ok_or(EngineError::NoNode(*id))?;
-        if !matches!(n.kind, NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. } | NodeKind::Group { .. } | NodeKind::Text(_)) {
-            return Err(bad(C, "compound shapes take paths, compound paths, groups, compound shapes and type"));
+        if !matches!(
+            n.kind,
+            NodeKind::Path { guide: false, .. }
+                | NodeKind::Compound { .. }
+                | NodeKind::Group { .. }
+                | NodeKind::Text(_)
+                | NodeKind::Blend { .. }
+                | NodeKind::Envelope { .. }
+        ) {
+            return Err(bad(C, "compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes"));
         }
         members.push(n);
     }
     // The paint and transparency of the topmost member in Add, Intersect or Exclude mode: as they
     // all have `mode`, the topmost, or the backmost when they all subtract.
     let order: Vec<&Node> = if mode == ShapeMode::Subtract { members } else { members.into_iter().rev().collect() };
-    let style = order.into_iter().find_map(|n| {
-        let mut lv = vec![];
-        pf_leaves(n, &mut lv);
-        lv.last().map(style_of)
-    });
+    let hook = |c: &Node| effects::outline_object(Some(d), c);
+    let style = order.into_iter().find_map(|n| top_style(d, n, &hook));
     let id = s.edit("Make Compound Shape", |d, sel| {
         let gid = d.alloc_id();
         let id = d.wrap(&roots, |children| {
@@ -175,6 +180,32 @@ fn make(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(id)
     })?;
     Ok(json!({ "id": id.0 }))
+}
+
+/// The paint and transparency of the frontmost shape `n` adds to a compound shape's area, from the
+/// same objects the area takes: a blend, an envelope or an object with a warp gives those of the
+/// art it draws, without its geometry effects; a symbol instance those of its symbol's art (with
+/// `hook`); type its first style; a compound shape its own; a group those of its frontmost member
+/// that has a shape. A shape taken from inside a group, or from the art of a blend, an envelope or
+/// a warped group, also takes that object's opacity and blend mode.
+fn top_style(d: &Document, n: &Node, hook: effects::OutlineHook) -> Option<Style> {
+    if let Some(art) = effects::shape_art(n, Some(hook)) {
+        let mut lv = vec![];
+        pf_leaves(d, &art, &mut lv);
+        let inside = matches!(art.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }) && !art.is_compound_shape();
+        return lv.last().map(|l| if inside { style_of(l).within(n) } else { style_of(l) });
+    }
+    match &n.kind {
+        NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } if !n.is_compound_shape() => {
+            children.iter().rev().find_map(|c| top_style(d, c, hook)).map(|s| s.within(n))
+        }
+        NodeKind::SymbolInstance { .. } => effects::member_leaves(n, Some(hook)).last().map(style_of),
+        _ => {
+            let mut lv = vec![];
+            pf_leaves(d, n, &mut lv);
+            lv.last().map(style_of)
+        }
+    }
 }
 
 fn set_mode(s: &mut Session, p: &Value) -> Result<Value> {
@@ -235,7 +266,8 @@ fn expand(s: &mut Session, _: &Value) -> Result<Value> {
         let (mut items, mut made) = (vec![], vec![]);
         for id in &shapes {
             let shape = d.node(*id).cloned().ok_or(EngineError::NoNode(*id))?;
-            let area = effects::compound_shape_area(&shape, effects::text_outliner())
+            let hook = |c: &Node| effects::outline_object(Some(d), c);
+            let area = effects::compound_shape_area(&shape, Some(&hook))
                 .ok_or_else(|| EngineError::Other("the compound shape is too complex to expand".into()))?;
             if area.is_empty() {
                 return Err(EngineError::Other(format!("{LABEL} produced an empty result")));

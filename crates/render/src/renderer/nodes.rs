@@ -4,6 +4,7 @@ use super::{
     holds_instance, holds_plugin_effect, images, kurbo, lru, mask_value, painted_items, plain_image, polygon_length, rects_overlap,
     shape_masked_image, single_plain_fill, text_geom_snapped, white_shape_mask,
 };
+use crate::kept_paths::{self, KeptPath};
 
 impl Renderer {
     /// Cached cull bounds of a node (containers union their cached children), symbol instances
@@ -28,10 +29,54 @@ impl Renderer {
                 }
                 acc
             }
-            _ => brush_fx::cull_bounds(symbols, a),
+            _ => self.kept_bounds(symbols, a).unwrap_or_else(|| brush_fx::cull_bounds(symbols, a)),
         };
         self.geom.insert(key, GeomEntry { node: a.clone(), bounds: b, path: None, stamp: self.stamp });
         b
+    }
+
+    /// The kept path of long path or compound path `a` ([`KeptPath`]), made, or brought up to date
+    /// from the one kept for its id, when it is not `a`'s yet. `None` when `a` has none.
+    fn kept_path(&mut self, a: &Arc<Node>) -> Option<&mut KeptPath> {
+        if !kept_paths::kept(a) {
+            return None;
+        }
+        let stamp = self.stamp;
+        let made = match self.kept.get_mut(&a.id) {
+            Some(k) if Arc::ptr_eq(&k.node, a) => true,
+            Some(k) => {
+                // The object the path was made from, when no longer drawn, shares the path through
+                // its `geom` entry: dropping that entry lets the path change in place.
+                let old = Arc::as_ptr(&k.node) as usize;
+                if self.geom.get(&old).is_some_and(|e| Arc::ptr_eq(&e.node, &k.node) && e.stamp != stamp) {
+                    self.geom.remove(&old);
+                }
+                k.update(a)
+            }
+            None => false,
+        };
+        if !made {
+            let k = KeptPath::new(a, stamp)?;
+            self.kept.insert(a.id, k);
+        }
+        let k = self.kept.get_mut(&a.id)?;
+        k.stamp = stamp;
+        Some(k)
+    }
+
+    /// Cull bounds of long path or compound path `a` measured from its kept path
+    /// ([`Self::kept_path`]): the same as [`brush_fx::cull_bounds`]. `None` when it has no kept path
+    /// or is measured another way ([`brush_fx::path_cull_bounds`]).
+    fn kept_bounds(&mut self, symbols: &SymbolBoxes, a: &Arc<Node>) -> Option<Option<Rect>> {
+        let k = self.kept_path(a)?;
+        brush_fx::path_cull_bounds(symbols, a, || {
+            let b = k.geometric()?;
+            let bp = k.path.clone();
+            Some(a.appearance.stroked_bounds_by(b, |s| {
+                let tips = k.tips(s);
+                s.bounds_with_tips(&bp, b, tips)
+            }))
+        })
     }
 
     /// Drop the cached bounds of symbol instances and of the objects that hold them when `doc`'s
@@ -105,7 +150,10 @@ impl Renderer {
         {
             return Some(p.clone());
         }
-        let p = Arc::new(a.stroke_path()?);
+        let p = match self.kept_path(a) {
+            Some(k) => k.path.clone(),
+            None => Arc::new(a.stroke_path()?),
+        };
         let bounds = self.bounds_of(symbols, a);
         self.geom.insert(key, GeomEntry { node: a.clone(), bounds, path: Some(p.clone()), stamp: self.stamp });
         Some(p)
@@ -114,15 +162,32 @@ impl Renderer {
     /// The cached path of path or compound path `n` ([`Self::path_of`]) when the frame is in
     /// Outline view and `n` is `fx_owner`, else `None`.
     fn outline_path(&mut self, f: &Frame, n: &Node) -> Option<Arc<BezPath>> {
-        let owner = self.fx_owner.as_ref().filter(|o| f.opts.outline && std::ptr::eq(&***o, n)).cloned()?;
+        if !f.opts.outline {
+            return None;
+        }
+        self.owner_path(f, n)
+    }
+
+    /// The cached path of path or compound path `n` ([`Self::path_of`]) when `n` is `fx_owner`,
+    /// else `None`.
+    fn owner_path(&mut self, f: &Frame, n: &Node) -> Option<Arc<BezPath>> {
+        let owner = self.fx_owner.as_ref().filter(|o| std::ptr::eq(&***o, n)).cloned()?;
         self.path_of(f.symbols, &owner)
     }
 
-    /// Whether `a` is left out of this frame: hidden, a skipped template or guide, or culled.
+    /// Symbol editing mode on screen: `id` is the instance editing was entered from, which is not
+    /// drawn (with its masks and effects), since the editing layer holds a copy of its art in its
+    /// place.
+    fn edited_instance(f: &Frame, id: NodeId) -> bool {
+        f.opts.isolated.is_some() && f.doc.symbol_edit.as_ref().is_some_and(|e| e.instance == Some(id))
+    }
+
+    /// Whether `a` is left out of this frame: hidden, a skipped template or guide, the instance a
+    /// symbol is edited from, or culled.
     fn skipped(&mut self, f: &Frame, a: &Arc<Node>) -> bool {
         let skipped_view_item = (f.opts.skip_templates || f.opts.hide_templates) && matches!(a.kind, NodeKind::Layer { template: true, .. })
             || (f.opts.skip_templates || f.opts.hide_guides) && matches!(a.kind, NodeKind::Path { guide: true, .. });
-        if !a.visible || skipped_view_item || f.opts.hidden.contains(&a.id) {
+        if !a.visible || skipped_view_item || f.opts.hidden.contains(&a.id) || Self::edited_instance(f, a.id) {
             return true;
         }
         match self.bounds_of(f.symbols, a) {
@@ -153,7 +218,7 @@ impl Renderer {
             && let Some(region) = self.clip_of(&m.art)
             && shape_masked_image(a, im, &region.0)
         {
-            self.draw_image_in(ctx, f, im, Some(&region), images::image_tint(a, f.ink), a.extras().pixelated);
+            self.draw_image_in(ctx, f, im, Some(&region), images::image_tint(f.doc, a, f.ink), a.extras().pixelated);
             self.stats.drawn += 1;
             return;
         }
@@ -265,7 +330,14 @@ impl Renderer {
             return;
         }
         if vectorcraft_doc::live::is_live(a) || effects::has_pathfinder(a) {
-            return self.draw_live(ctx, f, a);
+            // The isolated object itself (a repeat isolated to edit its source, #5054) draws its
+            // art as usual, as an isolated group does in `draw_layer_node`.
+            let settle = f.opts.isolated == Some(a.id) && f.doc.mask_edit.is_none();
+            let outer = self.isolation_settled;
+            self.isolation_settled = outer || settle;
+            self.draw_live(ctx, f, a);
+            self.isolation_settled = outer;
+            return;
         }
         // Its live-effect geometry depends on the node alone, and for plug-in effects on the
         // plug-ins installed (`check_plugins`), so it can be kept across frames.
@@ -414,7 +486,7 @@ impl Renderer {
                         && let NodeKind::Image(im) = &image.kind
                         && plain_image(image, im, &region.0)
                     {
-                        self.draw_image_in(ctx, f, im, Some(&region), images::image_tint(image, f.ink), image.extras().pixelated);
+                        self.draw_image_in(ctx, f, im, Some(&region), images::image_tint(f.doc, image, f.ink), image.extras().pixelated);
                         self.stats.drawn += 1;
                         return;
                     }
@@ -455,26 +527,32 @@ impl Renderer {
                     self.draw_shape(ctx, f, n, &bp, *rule);
                 }
             }
-            NodeKind::Compound { children, rule } => {
-                if let Some(bp) = self.outline_path(f, n) {
-                    return self.draw_shape(ctx, f, n, &bp, *rule);
+            NodeKind::Compound { rule, .. } => {
+                // Its members assembled once and kept with the node in `geom`, as plain paths are
+                // (`path_of`): a compound path of thousands of members is not assembled again in
+                // every frame.
+                if let Some(bp) = self.owner_path(f, n).or_else(|| n.stroke_path().map(Arc::new)) {
+                    self.draw_shape(ctx, f, n, &bp, *rule);
                 }
-                let mut bp = BezPath::new();
-                for c in children {
-                    if let Some(p) = c.path_data() {
-                        bp.extend(p.to_bezpath());
-                    }
-                }
-                self.draw_shape(ctx, f, n, &bp, *rule);
             }
             NodeKind::Text(t) => self.draw_text(ctx, f, n, t),
-            NodeKind::Image(im) => self.draw_image_in(ctx, f, im, None, images::image_tint(n, f.ink), n.extras().pixelated),
+            NodeKind::Image(im) => self.draw_image_in(ctx, f, im, None, images::image_tint(f.doc, n, f.ink), n.extras().pixelated),
             NodeKind::SymbolInstance { symbol, xf } => {
-                if let Some(sym) = f.doc.symbols.iter().find(|s| &s.name == symbol)
-                    && self.charge_symbol(&sym.art)
-                {
-                    let (art, kept) = self.placed_art(&sym.art, *xf, false, Some(n));
-                    self.draw_placed_art(ctx, f, &art, kept);
+                if let Some(sym) = f.doc.symbols.iter().find(|s| &s.name == symbol) {
+                    // The instance draws when the frame has room for its art's objects; a symbol
+                    // with 9-slice guides is placed cell by cell (`Self::sliced_art`).
+                    let mut used = self.symbol_nodes;
+                    let placed = match f.doc.symbol_slice_map(symbol, *xf) {
+                        Some(m) => self.sliced_art(f.doc, &sym.art, &m, *xf, n, &mut used),
+                        None => {
+                            let count = sym.art.count() as u64;
+                            vectorcraft_doc::charge_symbol_art(&mut used, count, || (self.placed_art(&sym.art, *xf, false, Some(n)), count))
+                        }
+                    };
+                    self.symbol_nodes = used;
+                    if let Some((art, kept)) = placed {
+                        self.draw_placed_art(ctx, f, &art, kept);
+                    }
                 }
             }
             NodeKind::Blend { .. }
@@ -487,13 +565,6 @@ impl Renderer {
                 None => self.draw_live_node(ctx, f, n),
             },
         }
-    }
-
-    /// Count symbol art `art`'s objects against the frame's [`vectorcraft_doc::MAX_SYMBOL_NODES`]: `false` (the
-    /// instance isn't drawn) once they would pass it.
-    fn charge_symbol(&mut self, art: &Node) -> bool {
-        let total = self.symbol_nodes.saturating_add(art.count() as u64);
-        (total <= vectorcraft_doc::MAX_SYMBOL_NODES).then(|| self.symbol_nodes = total).is_some()
     }
 
     /// Draw symbol art `art` as [`Self::placed_art`] placed it for an instance or an inline graphic
@@ -551,7 +622,11 @@ impl Renderer {
     /// `fx_owner`, so its path, its live-effect geometry and, through [`Self::draw_kept_node`], a
     /// live object's evaluation come from the caches.
     fn draw_outline_member(&mut self, ctx: &mut RenderContext, f: &Frame, c: &Arc<Node>) {
-        if !c.visible || f.opts.hidden.contains(&c.id) || f.opts.hide_guides && matches!(c.kind, NodeKind::Path { guide: true, .. }) {
+        if !c.visible
+            || f.opts.hidden.contains(&c.id)
+            || f.opts.hide_guides && matches!(c.kind, NodeKind::Path { guide: true, .. })
+            || Self::edited_instance(f, c.id)
+        {
             return;
         }
         match self.bounds_of(f.symbols, c) {
