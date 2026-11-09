@@ -19,14 +19,13 @@ fn empty_dir(dir: std::path::PathBuf) -> std::path::PathBuf {
     dir
 }
 
-/// `run` and `mcp --headless` refuse `plugin.install`'s `grant` unless the process was started with
-/// `--allow-plugin-grants`, which `mcp` won't take with `--connect` or the automation roots.
-#[test]
-fn plugin_grants_need_the_start_up_flag() {
+/// `run` and `mcp --headless` refuse `plugin.install` with this param unless the process was started
+/// with `--allow-plugin-grants`.
+fn approval_param_needs_the_start_up_flag(key: &str, value: Value) {
     let module = vectorcraft_format::base64_encode(include_bytes!("../../../../crates/plugins/tests/fixtures/desaturate.wasm"));
-    let steps = tmp("grants.json");
-    std::fs::write(&steps, json!([{"command": "plugin.install", "params": {"dataBase64": module, "grant": ["doc.read"]}}]).to_string()).unwrap();
-    let config = empty_dir(std::env::temp_dir().join(format!("vectorcraft-cli-test-grants-{}", std::process::id())));
+    let steps = tmp(&format!("{key}.json"));
+    std::fs::write(&steps, json!([{"command": "plugin.install", "params": {"dataBase64": module, key: value}}]).to_string()).unwrap();
+    let config = empty_dir(std::env::temp_dir().join(format!("vectorcraft-cli-test-{key}-{}", std::process::id())));
     let run = |extra: &[&str]| {
         Command::new(BIN).env("VECTORCRAFT_CONFIG_DIR", &config).args(["run", "--commands", steps.to_str().unwrap()]).args(extra).output().unwrap()
     };
@@ -37,7 +36,7 @@ fn plugin_grants_need_the_start_up_flag() {
     let out = run(&["--allow-plugin-grants"]);
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
 
-    let mcp_config = empty_dir(std::env::temp_dir().join(format!("vectorcraft-cli-test-mcp-grants-{}", std::process::id())));
+    let mcp_config = empty_dir(std::env::temp_dir().join(format!("vectorcraft-cli-test-mcp-{key}-{}", std::process::id())));
     let mcp_install = |extra: &[&str]| -> Value {
         let mut child = Command::new(BIN)
             .env("VECTORCRAFT_CONFIG_DIR", &mcp_config)
@@ -50,7 +49,7 @@ fn plugin_grants_need_the_start_up_flag() {
             .unwrap();
         {
             let mut stdin = child.stdin.take().unwrap();
-            let params = json!({"dataBase64": module, "grant": ["doc.read"]});
+            let params = json!({"dataBase64": module, key: value});
             for m in [
                 json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}),
                 json!({"jsonrpc":"2.0","method":"notifications/initialized"}),
@@ -69,6 +68,14 @@ fn plugin_grants_need_the_start_up_flag() {
     assert!(refused["content"][0]["text"].as_str().unwrap().contains("--allow-plugin-grants"), "{refused}");
     let accepted = mcp_install(&["--allow-plugin-grants"]);
     assert_eq!(accepted["isError"], false, "with the flag: {accepted}");
+}
+
+/// `run` and `mcp --headless` refuse `plugin.install`'s `grant` and `allowHeavy` unless the process was
+/// started with `--allow-plugin-grants`, which `mcp` won't take with `--connect` or the automation roots.
+#[test]
+fn plugin_grants_need_the_start_up_flag() {
+    approval_param_needs_the_start_up_flag("grant", json!(["doc.read"]));
+    approval_param_needs_the_start_up_flag("allowHeavy", json!(true));
 
     let out = Command::new(BIN).args(["mcp", "--allow-plugin-grants", "--connect", "127.0.0.1:1"]).output().unwrap();
     assert!(!out.status.success());
