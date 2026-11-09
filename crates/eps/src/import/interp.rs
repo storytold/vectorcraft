@@ -101,7 +101,7 @@ pub(crate) struct Fault {
 }
 
 /// The TrueType data of Type 42 fonts by their `sfnts` array (see [`Interp::type42`]).
-pub(crate) type Type42Cache = Vec<(Shared<Obj>, Option<Rc<Vec<u8>>>)>;
+pub(crate) type Type42Cache = Vec<(Shared<Obj>, Option<Rc<super::type42::Font>>)>;
 
 /// Most procedure names a [`Fault`] keeps.
 const FAULT_PROCS: usize = 3;

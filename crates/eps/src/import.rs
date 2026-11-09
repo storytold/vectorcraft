@@ -60,6 +60,8 @@ mod tests_illustrator;
 mod tests_images;
 #[cfg(test)]
 mod tests_native;
+#[cfg(test)]
+mod tests_type42;
 
 use std::collections::HashSet;
 use std::sync::Arc;
