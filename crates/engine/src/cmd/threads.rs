@@ -168,7 +168,17 @@ pub(crate) fn reflow(before: &Document, doc: &mut Document) {
             }
         }
         let optical = if live.len() >= 2 { optical_margin(before, doc, &live) } else { None };
-        let frames: Vec<TextObject> = live.iter().filter_map(|id| text_of(doc, *id).cloned()).collect();
+        let vertical = if live.len() >= 2 { thread_setting(before, doc, &live, |t| t.vertical) } else { None };
+        // The story is measured in each frame with the settings the frame takes.
+        let frames: Vec<TextObject> = live
+            .iter()
+            .filter_map(|id| text_of(doc, *id).cloned())
+            .map(|mut t| {
+                t.optical_margin = optical.unwrap_or(t.optical_margin);
+                t.vertical = vertical.unwrap_or(t.vertical);
+                t
+            })
+            .collect();
         let refs: Vec<&TextObject> = frames.iter().collect();
         let parts = vectorcraft_text::thread::distribute(vectorcraft_text::FontDb::global(), &refs, &story, &paras);
         for (id, part) in live.iter().zip(parts) {
@@ -177,19 +187,24 @@ pub(crate) fn reflow(before: &Document, doc: &mut Document) {
                 next.runs = part.runs;
                 next.set_paragraph_styles(part.paras);
                 let optical = optical.unwrap_or(t.optical_margin);
+                let vertical = vertical.unwrap_or(t.vertical);
                 let continues = part.continues;
                 if next.runs != t.runs
                     || next.para != t.para
                     || next.paras != t.paras
                     || optical != t.optical_margin
+                    || vertical != t.vertical
                     || part.list_count != t.list_count
+                    || part.list_level_counts != t.list_level_counts
                     || continues != t.first_para_continues
                 {
                     t.runs = next.runs;
                     t.para = next.para;
                     t.paras = next.paras;
                     t.optical_margin = optical;
+                    t.vertical = vertical;
                     t.list_count = part.list_count;
+                    t.list_level_counts = part.list_level_counts;
                     t.first_para_continues = continues;
                     refresh_bounds(t);
                 }
@@ -203,14 +218,15 @@ pub(crate) fn reflow(before: &Document, doc: &mut Document) {
 }
 
 /// Type that is not a frame of a thread is a story of its own: its numbered list paragraphs count
-/// from 1. Each such type object with another [`TextObject::list_count`] (a copy of a frame, a
-/// frame taken out of its thread, a frame converted to point type, which [`reflow`] takes out of
-/// its thread) gets 0 and is laid out again.
+/// from 1. Each such type object with another [`TextObject::list_count`] or
+/// [`TextObject::list_level_counts`] (a copy of a frame, a frame taken out of its thread, a frame
+/// converted to point type, which [`reflow`] takes out of its thread) gets 0 at every level and is
+/// laid out again.
 pub(crate) fn restart_unthreaded_counts(doc: &mut std::sync::Arc<Document>) {
     let mut stale = vec![];
     doc.walk(|n| {
         if let NodeKind::Text(t) = &n.kind
-            && t.list_count != 0
+            && (t.list_count != 0 || !t.list_level_counts.is_empty())
         {
             stale.push(n.id);
         }
@@ -227,6 +243,7 @@ pub(crate) fn restart_unthreaded_counts(doc: &mut std::sync::Arc<Document>) {
     for id in stale {
         if let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) {
             t.list_count = 0;
+            t.list_level_counts.clear();
             refresh_bounds(t);
         }
     }
@@ -235,9 +252,35 @@ pub(crate) fn restart_unthreaded_counts(doc: &mut std::sync::Arc<Document>) {
 /// The Optical Margin Alignment setting that every frame of a thread with the frames `live` takes:
 /// that of the first frame whose setting changed between `before` and `doc`, else the first frame's.
 fn optical_margin(before: &Document, doc: &Document, live: &[NodeId]) -> Option<bool> {
-    let now = |id: &NodeId| text_of(doc, *id).map(|t| t.optical_margin);
-    let changed = live.iter().find(|id| text_of(before, **id).is_some_and(|t| Some(t.optical_margin) != now(id)));
+    thread_setting(before, doc, live, |t| t.optical_margin)
+}
+
+/// The value of the frame setting `get` that every frame of a thread with the frames `live` takes:
+/// that of the first frame whose value changed between `before` and `doc`, or the first frame's value
+/// when none changed.
+fn thread_setting<T: PartialEq>(before: &Document, doc: &Document, live: &[NodeId], get: impl Fn(&TextObject) -> T) -> Option<T> {
+    let now = |id: &NodeId| text_of(doc, *id).map(&get);
+    let changed = live.iter().find(|id| text_of(before, **id).is_some_and(|t| Some(get(t)) != now(id)));
     changed.or(live.first()).and_then(now)
+}
+
+/// Turn Auto Size off for the frames of each thread of two or more frames, as [`reflow`] does,
+/// without re-flowing the story: for a document restored from a file as it was saved, so a later
+/// change to a frame's settings keeps the frame's size.
+pub(crate) fn keep_frame_sizes(doc: &mut Document) {
+    for thread in doc.text_threads.clone() {
+        let live: Vec<NodeId> = thread.into_iter().filter(|id| text_of(doc, *id).is_some()).collect();
+        if live.len() < 2 {
+            continue;
+        }
+        for id in live {
+            if text_of(doc, id).is_some_and(|t| t.area.fit == vectorcraft_doc::AreaFit::AutoHeight)
+                && let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind)
+            {
+                t.area.fit = vectorcraft_doc::AreaFit::None;
+            }
+        }
+    }
 }
 
 /// Give every frame of each thread the first frame's Optical Margin Alignment setting, without
@@ -255,6 +298,25 @@ pub(crate) fn share_optical_margin(doc: &mut Document) {
             }
         }
     }
+}
+
+/// Give every frame of each thread the first frame's writing direction, and re-flow each thread in
+/// which that changes a frame: for a document restored from a file as it was saved.
+pub(crate) fn share_orientation(doc: &mut Document) {
+    let before = doc.clone();
+    for thread in doc.text_threads.clone() {
+        let live: Vec<NodeId> = thread.into_iter().filter(|id| text_of(doc, *id).is_some()).collect();
+        let Some(vertical) = thread_setting(doc, doc, &live, |t| t.vertical) else { continue };
+        // Only the frames whose direction changes are copied, so only their threads re-flow.
+        let turn: Vec<NodeId> = live.into_iter().filter(|id| text_of(doc, *id).is_some_and(|t| t.vertical != vertical)).collect();
+        for id in turn {
+            if let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) {
+                t.vertical = vertical;
+                refresh_bounds(t);
+            }
+        }
+    }
+    reflow(&before, doc);
 }
 
 /// Mark the frames of each thread whose first paragraph continues from the frame before
@@ -386,13 +448,13 @@ fn cut_to_shown(n: &mut Node, ids: &[NodeId]) {
     {
         // Split as `take_overflow` splits it: the first part is what the frame shows.
         let from: &TextObject = t;
-        let parts = vectorcraft_text::thread::distribute_continuing(
+        let parts = vectorcraft_text::thread::distribute_continuing_levels(
             vectorcraft_text::FontDb::global(),
             &[from, from],
             &from.runs,
             &from.paragraph_styles(),
             from.first_para_continues,
-            from.list_count,
+            from.list_counts(),
         );
         if let (Some(head), Some(_)) = (parts.first(), parts.get(1).filter(|p| p.runs.iter().any(|r| !r.text.is_empty()))) {
             t.runs = head.runs.clone();
@@ -427,13 +489,13 @@ fn take_overflow(d: &mut Document, to: NodeId, from: &TextObject) {
     // `from`'s text split as if it flowed on into a second frame: the second part is what `from`
     // has no room for. Its share is measured as it is laid out, continuing a paragraph or not and
     // with its numbered list paragraphs counted on from the frames before it.
-    let parts = vectorcraft_text::thread::distribute_continuing(
+    let parts = vectorcraft_text::thread::distribute_continuing_levels(
         db,
         &[from, from],
         &from.runs,
         &from.paragraph_styles(),
         from.first_para_continues,
-        from.list_count,
+        from.list_counts(),
     );
     let Some(rest) = parts.get(1).filter(|p| p.runs.iter().any(|r| !r.text.is_empty())) else { return };
     let mut tail = from.clone();

@@ -370,6 +370,9 @@ pub struct UiState {
     /// That popup's first text field is still to take the keyboard.
     #[serde(skip)]
     pub transient_focus: bool,
+    /// Type › Find Font…'s last Find In choice (`find_font::FIND_IN`), kept while the app runs.
+    #[serde(skip)]
+    pub find_font_in: String,
     pub control_bar: bool,
     /// The Control bar is docked to the bottom of the window instead of the top
     /// (`window.control.dock`).
@@ -460,10 +463,16 @@ pub struct UiState {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dock_width: Option<f32>,
     /// The Tools panel floats with its top-left corner here (dragged out by its title bar); `None`:
-    /// docked at the window's left edge.
+    /// docked at the window's left edge, or beside the canvas with [`Self::tools_beside_canvas`].
     #[serde(default)]
     pub toolbar_pos: Option<[f32; 2]>,
+    /// The docked Tools panel sits between the left-side panels and the canvas instead of at the
+    /// window's left edge (Window › Toolbars › Keep Tools Beside the Canvas,
+    /// `window.toolsBesideCanvas`). Off by default, and off in state saved without it.
+    #[serde(default)]
+    pub tools_beside_canvas: bool,
     pub status_bar: bool,
+    pub help_bar: bool,
     pub dock: bool,
     /// The bars that Tab (`window.dock`) hid, which the next Tab shows again; none when Tab has not
     /// hidden them since it last showed them, or a workspace was applied since.
@@ -628,6 +637,11 @@ pub struct UiState {
     /// place, [`crate::dialogs::settle`] puts the document back at the front of `pending_fonts`.
     #[serde(skip)]
     pub fonts_dialog: Option<u64>,
+    /// The plug-in (`{id, file, name, label}`) the last launch was loading when it stopped, while
+    /// the user has not chosen what to do about it. When another dialog takes the choice's place,
+    /// [`crate::dialogs::settle`] opens the choice again once no dialog is open.
+    #[serde(skip)]
+    pub stopped_plugin: Option<Value>,
     /// The search the Missing Fonts dialog started (`text.findFontFiles`'s `id`), stopped once the
     /// dialog is gone.
     #[serde(skip)]
@@ -964,6 +978,7 @@ impl Default for UiState {
             open_panel: None,
             transient_panel: None,
             transient_focus: false,
+            find_font_in: String::new(),
             control_bar: false,
             control_bar_bottom: false,
             toolbar: true,
@@ -992,7 +1007,9 @@ impl Default for UiState {
             docking_generation: 0,
             dock_width: None,
             toolbar_pos: None,
+            tools_beside_canvas: false,
             status_bar: true,
+            help_bar: true,
             dock: true,
             tab_hid: None,
             view: ViewFlags::default(),
@@ -1043,6 +1060,7 @@ impl Default for UiState {
             made_text_style: vec![],
             pending_fonts: vec![],
             fonts_dialog: None,
+            stopped_plugin: None,
             dialog_search: None,
             links_search: None,
             dxf_options: Value::Null,

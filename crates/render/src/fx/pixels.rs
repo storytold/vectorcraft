@@ -1,5 +1,5 @@
-use super::bounds::{apply, item_effects};
-use super::entries::{Content, DocInputs, Drawn, FX_RASTER_BUDGET, Inputs, KeptImage, Made, Reads, feather_outline};
+use super::bounds::{apply_carrying, item_effects};
+use super::entries::{Content, DocInputs, Drawn, FX_RASTER_BUDGET, Inputs, ItemGeom, KeptImage, Made, Reads, feather_outline};
 #[cfg(test)]
 use super::raster::RASTERIZED;
 use super::raster::{
@@ -534,7 +534,8 @@ impl Renderer {
             (true, false) => crate::AntiAlias::Art,
         };
         let opts = crate::RenderOptions { anti_alias, ..f.opts.clone() };
-        let frame = Frame { mt: false, view, visible: rect, px: cell, opts: &opts, ..*f };
+        // The image's pixels are the output's.
+        let frame = Frame { mt: false, view, visible: rect, px: cell, opts: &opts, output: view, ..*f };
         let mut off = frame.offscreen_context(w, h);
         self.inside_layer(|s| paint(s, &mut off, &frame));
         off.flush();
@@ -630,7 +631,7 @@ impl Renderer {
         g: &BezPath,
         rule: FillRule,
         gctx: &GeomContext,
-        mut cache: Option<&mut Vec<Option<Arc<BezPath>>>>,
+        mut cache: Option<&mut Vec<Option<ItemGeom>>>,
     ) {
         let bounds = g.bounding_box();
         for (j, item) in n.appearance.items.iter().enumerate() {
@@ -639,12 +640,23 @@ impl Renderer {
             }
             // The item's own geometry effects on `g`, from the cache when there is one.
             let slot = cache.as_deref_mut().and_then(|c| c.get_mut(j));
-            let ig: Arc<BezPath> = match slot {
-                Some(Some(ig)) => ig.clone(),
-                Some(s) => s.insert(Arc::new(apply(item_effects(item), g, &gctx.item(item)))).clone(),
-                None => Arc::new(apply(item_effects(item), g, &gctx.item(item))),
+            let made = || {
+                let (ig, carry) = apply_carrying(item_effects(item), g, &gctx.item(item));
+                (Arc::new(ig), Arc::new(carry))
+            };
+            let (ig, carry): ItemGeom = match slot {
+                Some(Some(e)) => e.clone(),
+                Some(s) => s.insert(made()).clone(),
+                None => made(),
             };
             let ig = &*ig;
+            // The item with its gradient moved along with its own effects.
+            let carried = (!carry.is_empty() && matches!(item.paint(), vectorcraft_color::Paint::Gradient(_))).then(|| {
+                let mut ap = vectorcraft_doc::Appearance { items: vec![item.clone()], ..Default::default() };
+                carry.apply(&mut ap);
+                ap.items.pop()
+            });
+            let item = carried.as_ref().and_then(Option::as_ref).unwrap_or(item);
             let ib = if effects::has_geometry(item_effects(item)) && !ig.elements().is_empty() { ig.bounding_box() } else { bounds };
             let rfx = effects::raster_effects(item_effects(item));
             if rfx.is_empty() {

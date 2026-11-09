@@ -41,6 +41,82 @@ fn guides_are_selected_on_their_own() {
     assert_eq!(s.guides, vec![0]);
 }
 
+/// A picked object of a dynamic symbol's instance stays picked while it and the groups and layers
+/// around it in the symbol's art are visible, unlocked and not a template. An art edit that hides
+/// or locks it, or one around it, or makes a layer around it a template, drops the pick.
+#[test]
+fn a_picked_symbol_part_is_dropped_once_it_cannot_be_edited() {
+    let rect = || vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(0.0, 0.0, 10.0, 10.0));
+    let mut d = Document::new(100.0, 100.0);
+    let l = d.layers[0].id;
+    let leaf = Node::path(d.alloc_id(), rect(), crate::Appearance::default_art());
+    let group = Node::group(d.alloc_id(), vec![Arc::new(leaf)]);
+    let layer = Node::layer(d.alloc_id(), "Inner", crate::LayerColor::Preset(2));
+    let root = Node::group(d.alloc_id(), vec![Arc::new(group), Arc::new(layer)]);
+    d.symbols.push(crate::Symbol { dynamic: true, name: "Parts".into(), art: Arc::new(root.clone()) });
+    let inst = d.alloc_id();
+    d.insert(Some(l), 0, Node::new(inst, NodeKind::SymbolInstance { symbol: "Parts".into(), xf: vectorcraft_geom::Affine::IDENTITY })).unwrap();
+    // The layer in the art holds a path too.
+    let in_layer = Node::path(d.alloc_id(), rect(), crate::Appearance::default_art());
+    let mut art = root;
+    if let Some(NodeKind::Layer { children, .. }) = art.children_mut().and_then(|c| c.get_mut(1)).map(|c| &mut Arc::make_mut(c).kind) {
+        children.push(Arc::new(in_layer));
+    }
+    d.symbols[0].art = Arc::new(art.clone());
+    let picked = |d: &Document, path: &[u32]| {
+        let mut s = Selection::default();
+        s.set_symbol_part(inst, path.to_vec());
+        s.prune(d);
+        s.symbol_part.is_some()
+    };
+    assert!(picked(&d, &[0, 0]) && picked(&d, &[1, 0]), "editable parts stay picked");
+    assert!(!picked(&d, &[0]) && !picked(&d, &[1]) && !picked(&d, &[]), "a group or layer does not stay picked");
+    let edited = |change: &dyn Fn(&mut Node)| {
+        let mut d = d.clone();
+        let mut art = art.clone();
+        change(&mut art);
+        d.symbols[0].art = Arc::new(art);
+        d
+    };
+    let child = |art: &mut Node, path: &[usize]| -> Node {
+        let mut n = &*art;
+        for &i in path {
+            n = &n.children().unwrap()[i];
+        }
+        n.clone()
+    };
+    let set = |art: &mut Node, path: &[usize], n: Node| {
+        let mut at = art;
+        for &i in path {
+            at = Arc::make_mut(&mut at.children_mut().unwrap()[i]);
+        }
+        *at = n;
+    };
+    let hidden = edited(&|art| {
+        let mut n = child(art, &[0, 0]);
+        n.visible = false;
+        set(art, &[0, 0], n);
+    });
+    assert!(!picked(&hidden, &[0, 0]), "the part is hidden");
+    let locked_group = edited(&|art| {
+        let mut n = child(art, &[0]);
+        n.locked = true;
+        set(art, &[0], n);
+    });
+    assert!(!picked(&locked_group, &[0, 0]), "the group around it is locked");
+    assert!(picked(&locked_group, &[1, 0]), "a part outside the locked group stays");
+    let template = edited(&|art| {
+        let mut n = child(art, &[1]);
+        if let NodeKind::Layer { template, .. } = &mut n.kind {
+            *template = true;
+        }
+        set(art, &[1], n);
+    });
+    assert!(!picked(&template, &[1, 0]), "the layer around it is a template");
+    let hidden_root = edited(&|art| art.visible = false);
+    assert!(!picked(&hidden_root, &[0, 0]), "the art is hidden");
+}
+
 #[test]
 fn guides_show_and_lock_with_their_layer() {
     let mut d = Document::new(100.0, 100.0);

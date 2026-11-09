@@ -855,6 +855,44 @@ pub fn vertical_ligature_caret_font(caret: i16) -> Option<Vec<u8>> {
     Some(builder.build())
 }
 
+/// [`vertical_ligature_caret_font`] with its one caret at y = `caret` font units, f + i joined by
+/// `ccmp` (which shaping applies top to bottom too, unlike `liga`), and its `GPOS` replaced by a
+/// `vpal` single adjustment that changes the ligature glyph's advance down the column by
+/// `y_advance` font units. `None` when it can't be built.
+pub fn proportional_vertical_ligature_caret_font(caret: i16, y_advance: i16) -> Option<Vec<u8>> {
+    use write_fonts::tables::gpos::{Gpos, PositionLookup, PositionLookupList, SinglePos, ValueRecord};
+    use write_fonts::tables::gsub::{Gsub, Ligature, LigatureSet, LigatureSubstFormat1, SubstitutionLookup, SubstitutionLookupList};
+    use write_fonts::tables::layout::{CoverageFormat1, Feature, FeatureList, FeatureRecord, LangSys, Lookup, Script, ScriptList, ScriptRecord};
+    use write_fonts::types::GlyphId16;
+
+    let base = vertical_ligature_caret_font(caret)?;
+    let font = skrifa::FontRef::new(&base).ok()?;
+    let gid = |c| Some(GlyphId16::new(source_sans_gid(c)?));
+    let ligature = gid(LIGATURE_CARET_GLYPH)?;
+    let langsys = || Script::new(Some(LangSys::new(vec![0])), vec![]);
+    let scripts = || ScriptList::new(vec![ScriptRecord::new(Tag::new(b"DFLT"), langsys()), ScriptRecord::new(Tag::new(b"latn"), langsys())]);
+    let subst = LigatureSubstFormat1::new(
+        CoverageFormat1::new(vec![gid('f')?]).into(),
+        vec![LigatureSet::new(vec![Ligature::new(ligature, vec![gid('i')?])])],
+    );
+    let features = FeatureList::new(vec![FeatureRecord::new(Tag::new(b"ccmp"), Feature::new(None, vec![0]))]);
+    let lookups = SubstitutionLookupList::new(vec![SubstitutionLookup::Ligature(Lookup::new(Default::default(), vec![subst]))]);
+    let gsub = Gsub::new(scripts(), features, lookups);
+    let pos = SinglePos::format_1(CoverageFormat1::new(vec![ligature]).into(), ValueRecord::new().with_y_advance(y_advance));
+    let features = FeatureList::new(vec![FeatureRecord::new(Tag::new(b"vpal"), Feature::new(None, vec![0]))]);
+    let lookups = PositionLookupList::new(vec![PositionLookup::Single(Lookup::new(Default::default(), vec![pos]))]);
+    let mut builder = FontBuilder::new();
+    builder.add_table(&gsub).ok()?;
+    builder.add_table(&Gpos::new(scripts(), features, lookups)).ok()?;
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
 /// The family of [`variable_ligature_caret_font`].
 pub const VARIABLE_LIGATURE_CARET_FAMILY: &str = "Varicaret Sans";
 
@@ -1033,6 +1071,160 @@ pub fn tall_ideograph_font() -> Option<Vec<u8>> {
         }
     }
     Some(data)
+}
+
+/// A family of [`path_align_font`]: OS/2 cap height 660, H and O.
+pub const PATH_ALIGN_ROMAN_FAMILY: &str = "Pathalign Roman Sans";
+/// A family of [`path_align_font`]: no cap height, no H or O, and a `head` box above the baseline.
+pub const PATH_ALIGN_BARE_FAMILY: &str = "Pathalign Bare Sans";
+/// A family of [`path_align_font`]: a `BASE` table with `ideo` at -150 and no `idtp`.
+pub const PATH_ALIGN_BASE_FAMILY: &str = "Pathalign Base Sans";
+/// A family of [`path_align_font`]: Japanese code page, 永 on the ⌠ outline (ink -51 to 949).
+pub const PATH_ALIGN_IDEOGRAPH_FAMILY: &str = "Pathalign Ideograph Sans";
+/// A family of [`path_align_font`]: as [`PATH_ALIGN_IDEOGRAPH_FAMILY`], with ┼ on the | outline
+/// (ink -250 to 750, one em).
+pub const PATH_ALIGN_CROSS_FAMILY: &str = "Pathalign Cross Sans";
+/// A family of [`path_align_font`]: Japanese code page, 永 on the H outline (ink 0 to 656), and a
+/// typographic box from -100 to 900.
+pub const PATH_ALIGN_TYPO_FAMILY: &str = "Pathalign Typo Sans";
+/// A family of [`path_align_font`]: as [`PATH_ALIGN_TYPO_FAMILY`], with a typographic box of 0
+/// to 0 and an `hhea` box from -100 to 900.
+pub const PATH_ALIGN_HHEA_FAMILY: &str = "Pathalign Hhea Sans";
+/// A family of [`path_align_font`]: as [`PATH_ALIGN_TYPO_FAMILY`], as a variable font with one
+/// weight axis (400–700, named instances Regular and Bold) whose `MVAR` table raises the
+/// typographic ascender and descender by 100 at 700: a box from 0 to 1,000 in Bold.
+pub const PATH_ALIGN_VARIABLE_FAMILY: &str = "Pathalign Variable Sans";
+/// A family of [`path_align_font`]: Japanese code page, with no reference ideograph and no ┼.
+pub const PATH_ALIGN_NONE_FAMILY: &str = "Pathalign None Sans";
+/// A family of [`path_align_font`]: no cap height, and H and O swapped (H top 668, O top 656).
+pub const PATH_ALIGN_LOWER_FAMILY: &str = "Pathalign Lower Sans";
+/// A family of [`path_align_font`]: OS/2 cap height 660, O and no H, and a `BASE` table as
+/// [`PATH_ALIGN_BASE_FAMILY`]'s.
+pub const PATH_ALIGN_CAPITAL_FAMILY: &str = "Pathalign Capital Sans";
+/// A family of [`path_align_font`]: as [`PATH_ALIGN_IDEOGRAPH_FAMILY`], with a typographic box
+/// from -101 to 1,002: margins of 53 and 50 round 永's ink.
+pub const PATH_ALIGN_MARGINS_FAMILY: &str = "Pathalign Margins Sans";
+/// A family of [`path_align_font`]: as [`PATH_ALIGN_IDEOGRAPH_FAMILY`], with a typographic box
+/// from -101 to 1,003: margins of 54 and 50 round 永's ink.
+pub const PATH_ALIGN_UNEVEN_FAMILY: &str = "Pathalign Uneven Sans";
+/// A family of [`path_align_font`]: a `BASE` table with `ideo` at -150 and `romn` below it at
+/// -200.
+pub const PATH_ALIGN_DAMAGED_FAMILY: &str = "Pathalign Damaged Sans";
+
+/// The bundled Source Sans 3 Regular (1,000 units to the em, typographic box -326 to 1,000, `head`
+/// box bottom -295, H top 656, O top 668) without its `BASE` table, as one of the
+/// `PATH_ALIGN_*_FAMILY` faces, which map x, and H and O except where the family says otherwise.
+/// `None` when it can't be built.
+pub fn path_align_font(family: &str) -> Option<Vec<u8>> {
+    use write_fonts::tables::base::{Axis, Base, BaseCoord, BaseScript, BaseScriptList, BaseScriptRecord, BaseTagList, BaseValues};
+    use write_fonts::tables::mvar::{Mvar, ValueRecord};
+    use write_fonts::tables::variations::{ItemVariationData, ItemVariationStore, RegionAxisCoordinates, VariationRegion, VariationRegionList};
+    use write_fonts::types::MajorMinor;
+
+    let typo = family == PATH_ALIGN_TYPO_FAMILY || family == PATH_ALIGN_VARIABLE_FAMILY;
+    let ideograph = [PATH_ALIGN_IDEOGRAPH_FAMILY, PATH_ALIGN_CROSS_FAMILY, PATH_ALIGN_MARGINS_FAMILY, PATH_ALIGN_UNEVEN_FAMILY].contains(&family);
+    let japanese = typo || ideograph || [PATH_ALIGN_HHEA_FAMILY, PATH_ALIGN_NONE_FAMILY].contains(&family);
+    let mut mapping = vec![('x', 'x')];
+    match family {
+        PATH_ALIGN_BARE_FAMILY => {}
+        PATH_ALIGN_LOWER_FAMILY => mapping.extend([('H', 'O'), ('O', 'H')]),
+        PATH_ALIGN_CAPITAL_FAMILY => mapping.push(('O', 'O')),
+        _ => mapping.extend([('H', 'H'), ('O', 'O')]),
+    }
+    if ideograph {
+        mapping.push(('永', '⌠'));
+    }
+    if family == PATH_ALIGN_CROSS_FAMILY {
+        mapping.push(('┼', '|'));
+    }
+    if typo || family == PATH_ALIGN_HHEA_FAMILY {
+        mapping.push(('永', 'H'));
+    }
+    let mut data = remapped_source_sans(family, &format!("{}-Regular", family.replace(' ', "")), &mapping)?;
+    let tables: Vec<(Tag, usize)> = {
+        let font = skrifa::FontRef::new(&data).ok()?;
+        font.table_directory.table_records().iter().map(|r| (Tag::new(&r.tag().to_be_bytes()), r.offset() as usize)).collect()
+    };
+    for (tag, at) in tables {
+        if tag == Tag::new(b"OS/2") {
+            if japanese {
+                // ulCodePageRange1 at bytes 78 to 82: bit 17, JIS/Japan.
+                data.get_mut(at + 78..at + 82)?.copy_from_slice(&(1_u32 << 17).to_be_bytes());
+            }
+            if typo {
+                // sTypoAscender and sTypoDescender at bytes 68 to 72.
+                data.get_mut(at + 68..at + 72)?.copy_from_slice(&[900_i16.to_be_bytes(), (-100_i16).to_be_bytes()].concat());
+            }
+            if family == PATH_ALIGN_HHEA_FAMILY {
+                data.get_mut(at + 68..at + 72)?.copy_from_slice(&[0, 0, 0, 0]);
+            }
+            if family == PATH_ALIGN_MARGINS_FAMILY || family == PATH_ALIGN_UNEVEN_FAMILY {
+                let top: i16 = if family == PATH_ALIGN_MARGINS_FAMILY { 1002 } else { 1003 };
+                data.get_mut(at + 68..at + 72)?.copy_from_slice(&[top.to_be_bytes(), (-101_i16).to_be_bytes()].concat());
+            }
+            if family == PATH_ALIGN_BARE_FAMILY || family == PATH_ALIGN_LOWER_FAMILY {
+                // sCapHeight at bytes 88 to 90.
+                data.get_mut(at + 88..at + 90)?.copy_from_slice(&0_i16.to_be_bytes());
+            }
+        } else if tag == Tag::new(b"hhea") && family == PATH_ALIGN_HHEA_FAMILY {
+            // ascender and descender at bytes 4 to 8.
+            data.get_mut(at + 4..at + 8)?.copy_from_slice(&[900_i16.to_be_bytes(), (-100_i16).to_be_bytes()].concat());
+        } else if tag == Tag::new(b"head") && family == PATH_ALIGN_BARE_FAMILY {
+            // yMin at bytes 38 to 40.
+            data.get_mut(at + 38..at + 40)?.copy_from_slice(&10_i16.to_be_bytes());
+        }
+    }
+    // Source Sans 3's own `BASE` table (`ideo` -170) is left out.
+    let font = skrifa::FontRef::new(&data).ok()?;
+    let mut builder = FontBuilder::new();
+    if [PATH_ALIGN_BASE_FAMILY, PATH_ALIGN_CAPITAL_FAMILY, PATH_ALIGN_DAMAGED_FAMILY].contains(&family) {
+        let romn = if family == PATH_ALIGN_DAMAGED_FAMILY { -200 } else { 0 };
+        let tags = BaseTagList::new([b"ideo", b"romn"].map(Tag::new).to_vec());
+        let values = BaseValues::new(1, [-150, romn].map(BaseCoord::format_1).to_vec());
+        let latn = BaseScriptRecord::new(Tag::new(b"latn"), BaseScript::new(Some(values), None, vec![]));
+        let axis = Axis::new(Some(tags), BaseScriptList::new(vec![latn]));
+        builder.add_table(&Base::new(Some(axis), None)).ok()?;
+    }
+    if family == PATH_ALIGN_VARIABLE_FAMILY {
+        let region = VariationRegion::new(vec![RegionAxisCoordinates::new(F2Dot14::from_f32(0.0), F2Dot14::from_f32(1.0), F2Dot14::from_f32(1.0))]);
+        // Two delta sets (hasc, hdsc) of one 16-bit delta each for the one region.
+        let data = ItemVariationData::new(2, 1, vec![0], [100_i16.to_be_bytes(), 100_i16.to_be_bytes()].concat());
+        let store = ItemVariationStore::new(VariationRegionList::new(1, vec![region]), vec![Some(data)]);
+        let records = vec![ValueRecord::new(Tag::new(b"hasc"), 0, 0), ValueRecord::new(Tag::new(b"hdsc"), 0, 1)];
+        let axis = VariationAxisRecord {
+            axis_tag: Tag::new(b"wght"),
+            min_value: Fixed::from_i32(400),
+            default_value: Fixed::from_i32(400),
+            max_value: Fixed::from_i32(700),
+            flags: 0,
+            axis_name_id: NameId::new(256),
+        };
+        let instance = |name: u16, wght: i32| InstanceRecord {
+            subfamily_name_id: NameId::new(name),
+            flags: 0,
+            coordinates: vec![Fixed::from_i32(wght)],
+            post_script_name_id: None,
+        };
+        let fvar = Fvar::new(AxisInstanceArrays::new(vec![axis], vec![instance(257, 400), instance(258, 700)]));
+        let name = name_table(&[
+            (1, family),
+            (2, "Regular"),
+            (4, "Pathalign Variable Sans Regular"),
+            (6, "PathalignVariableSans-Regular"),
+            (256, "Weight"),
+            (257, "Regular"),
+            (258, "Bold"),
+        ])?;
+        builder.add_raw(Tag::new(b"name"), name);
+        builder.add_table(&fvar).ok()?.add_table(&Mvar::new(MajorMinor::VERSION_1_0, Some(store), records)).ok()?;
+    }
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) && tag != Tag::new(b"BASE") {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
 }
 
 /// The family of [`soft_hyphen_outline_font`].

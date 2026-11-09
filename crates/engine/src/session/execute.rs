@@ -1,5 +1,6 @@
 use super::{
-    CommandSpec, EngineError, NodeId, Result, SELECTS_GIVEN_IDS, Selection, Session, Value, cmd, find_command, given_ids, guard, strip_replay_only,
+    CommandSpec, EngineError, JOURNALED_READS, NodeId, Result, SELECTS_GIVEN_IDS, Selection, Session, Value, cmd, find_command, given_ids, guard,
+    strip_replay_only,
 };
 
 impl Session {
@@ -14,11 +15,14 @@ impl Session {
         r
     }
 
-    /// Error, under the command's own id, at the first of `ids` that is malformed, names no node, or
-    /// names a layer or sublayer: a command in [`SELECTS_GIVEN_IDS`] acts on objects.
+    /// Error, under the command's own id, at the first of `ids` that is malformed, else at the first
+    /// that names no node or names a layer or sublayer: a command in [`SELECTS_GIVEN_IDS`] acts on
+    /// objects.
     fn check_given_ids(&self, id: &str, params: &Value) -> Result<()> {
         let (Some(st), Some(ids)) = (self.active(), params.get("ids")) else { return Ok(()) };
         let Some(given) = ids.as_array() else { return cmd::checked_ids_param(self, params, "ids", id).map(drop) };
+        // A malformed entry anywhere in the list is refused first, under the key and the entry.
+        cmd::ids_param(params, "ids", id)?;
         for value in given {
             let node = cmd::checked_id(self, value, id)?;
             if st.doc.node(node).is_some_and(|n| n.is_layer()) {
@@ -35,6 +39,13 @@ impl Session {
     /// Execute a command by id. This is THE entry point for every frontend.
     pub fn execute(&mut self, id: &str, params: &Value) -> Result<Value> {
         let spec = find_command(id).ok_or_else(|| cmd::params::unknown_command(id))?;
+        let outer = std::mem::replace(&mut self.reading, !spec.journal || JOURNALED_READS.contains(&id));
+        let r = self.execute_spec(spec, id, params);
+        self.reading = outer;
+        r
+    }
+
+    fn execute_spec(&mut self, spec: &'static CommandSpec, id: &str, params: &Value) -> Result<Value> {
         // A key the command's params description doesn't name is a parameter error (#1442), before
         // anything runs, for the commands other commands run too. A `command.batch` or an
         // `action.batch` checks its steps before the first one runs, and each step is checked again
@@ -57,10 +68,21 @@ impl Session {
         if SELECTS_GIVEN_IDS.contains(&id) {
             self.check_given_ids(id, params)?;
         }
+        // An `ids` list with an entry that is not an object id, or an `ids` that is not a list, is
+        // refused under the command's id before the menu check, which would otherwise run on the
+        // other entries or on the selection. This holds with no document open too, where commands
+        // such as `effect.list` still run.
+        if cmd::params::takes_key(spec.params, "ids") {
+            cmd::ids_param(params, "ids", id)?;
+        }
         // Clear's menu needs a selection; an agent supplying explicit targets only needs a
-        // document. The command validates those targets before making any edit.
+        // document. The command validates those targets before making any edit. Cut and Copy given
+        // the artboards the journal recorded need only a document too, whatever is selected and
+        // whichever tool is chosen.
         let given = given_ids(spec.params, params);
-        let enabled = if id == "edit.clear" && params.get("ids").is_some() {
+        let enabled = if (id == "edit.clear" && params.get("ids").is_some())
+            || (matches!(id, "edit.copy" | "edit.cut") && params.get("selectedArtboards").is_some())
+        {
             cmd::has_doc(self)
         } else if let Some(ids) = given.clone() {
             // Objects given as `ids` (or `id`) stand in for the selection: the command is enabled
@@ -95,7 +117,7 @@ impl Session {
             if let Some(ids) = &select_first {
                 s.execute("select.set", &serde_json::json!({ "ids": ids }))?;
             }
-            let r = (spec.run)(s, params);
+            let r = cmd::run_spec(s, spec, params);
             if r.is_err()
                 && let Some((uid, selection, layer)) = selected_before
                 && let Some(st) = s.docs.iter_mut().find(|d| d.uid == uid)
@@ -113,6 +135,9 @@ impl Session {
         let r = if self.depth == 0 { self.run_guarded(id, run) } else { self.run_nested(run) };
         if r.is_err() && self.depth == 0 {
             self.batch_paint_docs.clear();
+            // A failed or panicked command's documents are put back: type is drawn in their
+            // composite fonts again, not in those the command set.
+            cmd::compositefonts::sync(self);
         }
         let r = r?;
         if self.depth == 0 {
@@ -139,6 +164,9 @@ impl Session {
         }
         if let Some(open) = open {
             self.open_undo_groups_in_new_documents(&open);
+            // Type is drawn in the composite fonts of the documents open now, an undone or opened
+            // document's included.
+            cmd::compositefonts::sync(self);
         }
         let journaled = spec.journal || (self.depth == 0 && std::mem::take(&mut self.journal_query));
         if journaled && self.depth == 0 && self.active().is_none_or(|d| d.interaction.is_none()) {

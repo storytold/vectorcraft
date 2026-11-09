@@ -177,7 +177,7 @@ pub(super) fn encode(doc: &Document, p: &Value, compressed: bool) -> Result<Enco
         chosen.then(|| boards.iter().flatten().filter_map(|b| doc.artboards.get(*b)).map(|a| a.rect).collect());
     let overflow = crate::cmd::fonts::export_overflow_warning(doc, &doc.layers, regions.as_deref());
     // Render effects SVG cannot represent faithfully, including source-model Darkness shadows.
-    let flat = crate::cmd::rasterfx::flatten_pixel_effects(doc);
+    let flat = crate::cmd::rasterfx::flatten_pixel_effects_for(doc, opts.profile != vectorcraft_svg::Profile::Tiny12);
     let doc = flat.as_ref().unwrap_or(doc);
     let mut enc = Encoded { warnings, ..Encoded::default() };
     for artboard in boards {

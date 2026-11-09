@@ -412,7 +412,8 @@ fn drop_shadow_chains_become_drop_shadows() {
 }
 
 /// A proportional RGB filter is not additive Darkness. A fully black shadow remains
-/// recognizable, while other proportional transforms are reported rather than misrepresented.
+/// recognizable, while other proportional transforms are kept as SVG filters rather than
+/// misrepresented.
 #[test]
 fn proportional_filters_are_not_misread_as_additive_darkness() {
     let chain = |space: &str, transfer: &str, slope: f64| {
@@ -436,15 +437,108 @@ fn proportional_filters_are_not_misread_as_additive_darkness() {
     // Scaled on linear values, or blurred on them before an sRGB scale.
     for (space, transfer) in [(srgb, ""), ("", ""), ("", srgb)] {
         let (d, w) = open(&chain(space, transfer, 0.5));
-        assert!(w.iter().any(|w| w.contains("filter")), "{transfer}: {w:?}");
-        assert!(effects(&d).is_empty());
+        assert!(w.is_empty(), "{transfer}: {w:?}");
+        let ids: Vec<String> = effects(&d).iter().map(|e| e.id.clone()).collect();
+        assert_eq!(ids, ["svg.filter"], "{transfer}: kept as it is written, not as a shadow");
     }
 }
 
+/// Filters used by several objects keep their own XML on each, also when two filters have the same
+/// primitives with other values.
 #[test]
-fn other_filters_are_reported() {
+fn reused_filters_keep_their_own_xml() {
+    let body = r##"<defs><filter id="a"><feTurbulence baseFrequency="0.05"/></filter><filter id="b"><feTurbulence baseFrequency="0.2"/></filter></defs>
+        <rect width="20" height="20" filter="url(#a)"/><rect x="30" width="20" height="20" filter="url(#b)"/>
+        <rect y="30" width="20" height="20" filter="url(#a)"/><rect x="30" y="30" width="20" height="20" filter="url(#b)"/>"##;
+    let (d, w) = open(body);
+    assert!(w.is_empty(), "{w:?}");
+    let names: Vec<String> =
+        art(&d).into_iter().flat_map(|n| &n.appearance.effects).map(|e| e.params["name"].as_str().unwrap().to_string()).collect();
+    assert_eq!(names, ["a", "b", "a", "b"]);
+    // Two filters that differ only in their ids draw alike: a further use of either takes the first.
+    let same = r##"<defs><filter id="a"><feTurbulence baseFrequency="0.05"/></filter><filter id="b"><feTurbulence baseFrequency="0.05"/></filter></defs>
+        <rect width="20" height="20" filter="url(#a)"/><rect x="30" width="20" height="20" filter="url(#b)"/>
+        <rect y="30" width="20" height="20" filter="url(#a)"/><rect x="30" y="30" width="20" height="20" filter="url(#b)"/>"##;
+    let (d, w) = open(same);
+    assert!(w.is_empty(), "{w:?}");
+    let xml: Vec<String> = art(&d).into_iter().flat_map(|n| &n.appearance.effects).map(|e| e.params["xml"].as_str().unwrap().to_string()).collect();
+    assert_eq!(xml.len(), 4);
+    assert!(xml.iter().all(|x| x.contains("baseFrequency=\"0.05\"")), "{xml:?}");
+    // A `filter` element of another namespace with the same id isn't the source.
+    let foreign = r##"<defs><filter id="t"><feTurbulence baseFrequency="0.05"/></filter><o:filter xmlns:o="urn:other" id="t"><o:x/></o:filter></defs>
+        <rect width="20" height="20" filter="url(#t)"/>"##;
+    let (d, w) = open(foreign);
+    assert!(w.is_empty(), "{w:?}");
+    let fx = effects(&d);
+    assert!(fx[0].params["xml"].as_str().unwrap().contains("feTurbulence"), "{fx:?}");
+}
+
+/// An SVG image's filters are its own: one with the same id as a filter of the outer document is
+/// not imported with the outer document's XML. The image's own source isn't read, so its filter is
+/// left out with a warning.
+#[test]
+fn an_svg_images_filter_does_not_take_the_outer_filter_of_its_id() {
+    let inner = r##"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="10"><filter id="f"><feTurbulence baseFrequency="0.2"/></filter><rect width="10" height="10" filter="url(#f)"/></svg>"##;
+    let data = format!("data:image/svg+xml;base64,{}", vectorcraft_svg::base64_encode(inner.as_bytes()));
+    let (d, w) = open(&format!(
+        r#"<defs><filter id="f"><feTurbulence baseFrequency="0.05"/></filter></defs><rect width="20" height="20" filter="url(#f)"/><image href="{data}" x="100" width="40" height="20"/>"#
+    ));
+    let xml: Vec<String> = art(&d)
+        .into_iter()
+        .flat_map(|n| &n.appearance.effects)
+        .filter(|e| e.id == "svg.filter")
+        .map(|e| e.params["xml"].as_str().unwrap_or_default().to_string())
+        .collect();
+    assert_eq!(xml.len(), 1, "only the outer rect: {xml:?}");
+    assert!(xml[0].contains("baseFrequency=\"0.05\""), "{xml:?}");
+    assert!(w.iter().any(|w| w.contains("filter")), "{w:?}");
+}
+
+/// A filter the document's style sheet colors would draw differently on its own: it is reported
+/// and left out.
+#[test]
+fn filters_styled_by_the_document_are_reported() {
+    let (d, w) = open(
+        r##"<style>.red{flood-color:#f00}</style><defs><filter id="t"><feFlood class="red"/><feComposite in2="SourceGraphic" operator="in"/></filter></defs><rect width="60" height="40" filter="url(#t)"/>"##,
+    );
+    assert!(w.iter().any(|w| w.contains("filter")), "{w:?}");
+    assert!(effects(&d).is_empty());
+}
+
+/// Among many filters, art that uses one twice keeps it both times (the second use is a copy
+/// under another id).
+#[test]
+fn a_filter_used_twice_among_many_is_kept_twice() {
+    let used = r##"<filter id="g"><feOffset dx="1"/><feFlood flood-color="#f00"/><feComposite in2="SourceGraphic" operator="in"/></filter>"##;
+    let defs: String = (0..300)
+        .map(|i| format!(r##"<filter id="f{i}"><feFlood flood-color="#00f"/><feComposite in2="SourceGraphic" operator="in"/></filter>"##))
+        .collect();
+    let (d, w) = open(&format!(
+        r#"<defs>{defs}{used}</defs><rect width="60" height="40" filter="url(#g)"/><rect x="100" width="60" height="40" filter="url(#g)"/>"#
+    ));
+    assert!(w.is_empty(), "{w:?}");
+    let named = |n: &&Node| n.appearance.effects.iter().filter(|e| e.id == "svg.filter").map(|e| e.params["name"].clone()).collect::<Vec<_>>();
+    let filters: Vec<Vec<serde_json::Value>> = art(&d).iter().map(named).collect();
+    assert_eq!(filters, vec![vec![json!("g")], vec![json!("g")]], "{:?}", art(&d));
+}
+
+/// Other filters come in as SVG filters; one on a turned object is reported and left out.
+#[test]
+fn other_filters_are_kept_or_reported() {
     let (d, w) =
         open(r##"<defs><filter id="t"><feTurbulence baseFrequency="0.05"/></filter></defs><rect width="60" height="40" filter="url(#t)"/>"##);
+    assert!(w.is_empty(), "{w:?}");
+    let fx = effects(&d);
+    assert_eq!((fx.len(), fx[0].id.as_str(), &fx[0].params["name"]), (1, "svg.filter", &json!("t")));
+    let (d, w) = open(
+        r##"<defs><filter id="t"><feTurbulence baseFrequency="0.05"/></filter></defs><rect width="60" height="40" transform="rotate(30)" filter="url(#t)"/>"##,
+    );
+    assert!(w.iter().any(|w| w.contains("filter")), "{w:?}");
+    assert!(effects(&d).is_empty());
+    // Past the 0.001 to 1000 points a unit of the effect measures: reported and left out too.
+    let (d, w) = open(
+        r##"<defs><filter id="t"><feTurbulence baseFrequency="0.05"/></filter></defs><rect width="0.04" height="0.04" transform="scale(2000)" filter="url(#t)"/>"##,
+    );
     assert!(w.iter().any(|w| w.contains("filter")), "{w:?}");
     assert!(effects(&d).is_empty());
 }
@@ -528,6 +622,114 @@ fn an_exported_outer_glow_round_faint_art_draws_as_the_canvas_does() {
     d.insert(Some(l), 0, n).unwrap();
     let svg = export(&d, &ExportOptions::default());
     assert_similar(&render_artboard(&d), &resvg_render(&svg, 200, 120), 40.0, 0.02);
+}
+
+/// A document with one red rectangle whose only effect is the SVG filter `xml`.
+fn filtered_rect(xml: &str) -> Document {
+    let mut d = Document::new(200.0, 120.0);
+    let mut n = Node::path(
+        d.alloc_id(),
+        shapes::rectangle(Rect::new(40.0, 20.0, 100.0, 70.0)),
+        Appearance::basic(Paint::solid(Color::rgb(0.9, 0.1, 0.1)), Paint::None, 0.0),
+    );
+    n.appearance.effects = vec![Effect { id: "svg.filter".into(), params: json!({ "xml": xml }), visible: true }];
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, n).unwrap();
+    d
+}
+
+/// SVG 1.1 export writes an SVG filter's image reference as `xlink:href`, and it imports back.
+#[test]
+fn an_exported_filter_image_has_an_xlink_reference() {
+    let data = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
+    let xml = format!(r#"<filter id="i"><feImage href="{data}"/><feComposite in2="SourceGraphic" operator="in"/></filter>"#);
+    let d = filtered_rect(&xml);
+    let svg = export(&d, &ExportOptions::default());
+    assert!(svg.contains(&format!(r#"<feImage xlink:href="{data}"/>"#)), "{svg}");
+    assert!(!svg.contains(" href="), "{svg}");
+    let (back, w) = import_with_report(&svg).unwrap();
+    assert!(w.is_empty(), "{w:?}");
+    match vectorcraft_effects::raster_effects(&effects(&back)).as_slice() {
+        [RasterFx::Pixel(vectorcraft_effects::PixelFx::Svg(f))] => {
+            assert!(f.xml().contains(&format!(r#"<feImage href="{data}"/>"#)), "the filter as it is drawn: {}", f.xml())
+        }
+        other => panic!("{other:?}"),
+    }
+}
+
+/// SVG export writes a filter only in a form SVG import reads back. A filter at the size limit,
+/// whose id or region written out would make it longer, is left out of the SVG with the other pixel
+/// effects (exports that turn pixel effects into images draw it as an image), and the SVG opens
+/// without a filter that import can't read.
+#[test]
+fn an_exported_filter_is_one_import_reads_back() {
+    let max = vectorcraft_doc::SvgFilter::MAX_XML;
+    let close = r#""/><feComposite in2="SourceGraphic" operator="in"/></filter>"#;
+    let short_id = r##"<filter id="r"><feFlood flood-color="#ff0000" result=""##;
+    let measured =
+        r##"<filter id="r" filterUnits="userSpaceOnUse" x="-10%" y="-10%" width="120%" height="120%"><feFlood flood-color="#ff0000" result=""##;
+    for open in [short_id, measured] {
+        let xml = format!("{open}{}{close}", "a".repeat(max - open.len() - close.len()));
+        let d = filtered_rect(&xml);
+        assert_eq!(effects(&d).len(), 1);
+        let svg = export(&d, &ExportOptions::default());
+        assert!(!svg.contains("<filter"), "{open}");
+        let (_, w) = import_with_report(&svg).unwrap();
+        assert!(w.is_empty(), "{open}: {w:?}");
+    }
+    // A shorter one is written and read back.
+    let xml = format!("{short_id}{}{close}", "a".repeat(max - 64 - short_id.len() - close.len()));
+    let svg = export(&filtered_rect(&xml), &ExportOptions::default());
+    let (back, w) = import_with_report(&svg).unwrap();
+    assert!(w.is_empty(), "{w:?}");
+    assert_eq!(effects(&back).iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["svg.filter"]);
+}
+
+/// With the Latin-1 encoding, export writes each character past U+00FF as a character reference,
+/// which import counts as text. A filter is measured with those references in either encoding: one
+/// that passes the limit with them is left out of both, and one that fits with them is written live
+/// in Latin-1 and read back.
+#[test]
+fn an_exported_filter_counts_the_references_latin1_writes() {
+    let open = r##"<filter id="r"><feFlood flood-color="#ff0000" result=""##;
+    let close = r#""/><feComposite in2="SourceGraphic" operator="in"/></filter>"#;
+    let max = vectorcraft_doc::SvgFilter::MAX_XML;
+    let latin1 = ExportOptions { encoding: vectorcraft_svg::Encoding::Latin1, ..ExportOptions::default() };
+    // `国` takes three bytes as UTF-8 and eight as `&#x56FD;`.
+    let xml = format!("{open}{}{close}", "\u{56FD}".repeat((max / 2 - open.len() - close.len()) / 3));
+    let d = filtered_rect(&xml);
+    assert_eq!(effects(&d).len(), 1);
+    assert!(!export(&d, &ExportOptions::default()).contains("<filter"), "its references pass the limit");
+    let svg = export(&d, &latin1);
+    assert!(!svg.contains("<filter"), "its references pass the limit");
+    let (_, w) = import_with_report(&svg).unwrap();
+    assert!(w.is_empty(), "{w:?}");
+    // One that fits with its references.
+    let xml = format!("{open}{}{close}", "\u{56FD}".repeat((max - 64 - open.len() - close.len()) / 8));
+    let svg = export(&filtered_rect(&xml), &latin1);
+    assert!(svg.contains("&#x56FD;"), "the references are written");
+    let (back, w) = import_with_report(&svg).unwrap();
+    assert!(w.is_empty(), "{w:?}");
+    assert_eq!(effects(&back).iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["svg.filter"]);
+}
+
+/// SVG 1.1 has no `feDropShadow`: export writes the SVG 1.1 primitives it stands for, which draw
+/// as the canvas draws the shadow and import back as a filter that draws the same.
+#[test]
+fn an_exported_svg_drop_shadow_is_svg_1_1_and_draws_as_the_canvas_does() {
+    let xml = r##"<filter id="s" filterUnits="userSpaceOnUse" x="0" y="0" width="200" height="120"><feDropShadow dx="12" dy="9" stdDeviation="3" flood-color="#0040ff" flood-opacity="0.7"/></filter>"##;
+    let d = filtered_rect(xml);
+    let svg = export(&d, &ExportOptions::default());
+    assert!(!svg.contains("feDropShadow") && svg.contains("<feGaussianBlur") && svg.contains("<feMerge"), "{svg}");
+    let canvas = render_artboard(&d);
+    // The shadow, beside the art.
+    let [r, g, b] = canvas.over_white(105, 75);
+    assert!(b > 150 && r < 200 && g < 200, "{:?}", [r, g, b]);
+    assert_similar(&canvas, &resvg_render(&svg, 200, 120), 40.0, 0.02);
+    let (back, w) = import_with_report(&svg).unwrap();
+    assert!(w.is_empty(), "{w:?}");
+    assert_eq!(effects(&back).iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["svg.filter"]);
+    assert_similar(&canvas, &render_artboard(&back), 40.0, 0.02);
 }
 
 #[test]

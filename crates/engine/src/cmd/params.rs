@@ -6,7 +6,9 @@
 //! by `|`; a `?` marks an optional one, and a `:`, `=` or `(` starts what the entry says about it. An entry that starts
 //! with `…` stands for keys listed elsewhere: those of each command it names after `as` or `of`
 //! (`…settings as file.new`), or, naming none, any key (the options of the format an export picks). Objects inside a value aren't
-//! described key by key, so only the top level is checked.
+//! described key by key, so only the top level is checked, except in an export's options: those
+//! are checked against the options of the formats the command can write, in `marks`, `bleed` and
+//! the other objects too ([`check_export_options`]).
 //!
 //! [`Session::execute`] answers a key the description doesn't name with a parameter error
 //! ([`check_params`]), for every caller (the app, the control channel, MCP, the CLI) and for the
@@ -279,6 +281,29 @@ pub fn check_effect_params(id: &str, effect: &str, params: &Value) -> Result<()>
             _ => {}
         }
     }
+    // An SVG filter's XML is one drawable <filter> element.
+    if effect == vectorcraft_render::effects::SVG_FILTER
+        && let Some(xml) = given.get("xml")
+    {
+        let xml = xml.as_str().ok_or_else(|| bad(id, "`xml` must be a string"))?;
+        vectorcraft_render::effects::svg_filter::check(xml).map_err(|e| bad(id, e))?;
+    }
+    if effect == vectorcraft_render::effects::SVG_FILTER
+        && let Some(scale) = given.get("scale")
+        && !scale.as_f64().is_some_and(|k| (0.001..=1000.0).contains(&k))
+    {
+        return Err(bad(id, "`scale` must be a number from 0.001 to 1000"));
+    }
+    if effect == vectorcraft_render::effects::SVG_FILTER
+        && let Some(origin) = given.get("origin")
+        && !origin.as_array().is_some_and(|o| o.len() == 2 && o.iter().all(|v| v.as_f64().is_some_and(f64::is_finite)))
+    {
+        return Err(bad(id, "`origin` must be [x, y] in points"));
+    }
+    // Its name is the filter's id.
+    if effect == vectorcraft_render::effects::SVG_FILTER && given.contains_key("name") && !given.contains_key("xml") {
+        return Err(bad(id, "an SVG filter is named by its id: give `xml` with `name`"));
+    }
     check_effect_color(id, effect, params)?;
     check_effect_channel(id, effect, params)
 }
@@ -477,9 +502,100 @@ pub const UNCHECKED: &[&str] = &[
     "webExport.settings",
 ];
 
-/// [`check_keys`] for an engine command, the steps of a `command.batch` or an `action.batch` included, and
-/// [`check_effect_params`] for the effect `effect.apply` adds. A command the engine doesn't have
-/// passes: running it reports that.
+/// The object options of a PDF export, key by key: the Save PDF settings as a preset stores them,
+/// with the passwords it leaves out.
+fn pdf_option_tree() -> Value {
+    let mut tree = serde_json::to_value(vectorcraft_pdf::PdfSettings::default()).unwrap_or_default();
+    if let Some(security) = tree.get_mut("security").and_then(Value::as_object_mut) {
+        security.extend(["openPassword", "permissionsPassword"].map(|k| (k.to_string(), Value::Null)));
+    }
+    tree
+}
+
+/// `given`, the object at `within` (`marks.`), has only keys of `schema`, the objects inside it too.
+fn check_option_tree(id: &str, within: &str, given: &serde_json::Map<String, Value>, schema: &serde_json::Map<String, Value>) -> Result<()> {
+    for (key, value) in given {
+        match (schema.get(key), value) {
+            (None, _) => {
+                let keys: Vec<&str> = schema.keys().map(String::as_str).collect();
+                let why = match nearest(key, &keys) {
+                    Some(near) => format!("did you mean `{within}{near}`?"),
+                    None => format!("`{}` takes: {}", within.trim_end_matches('.'), keys.join(", ")),
+                };
+                return Err(bad(id, format!("unknown parameter `{within}{key}`; {why}")));
+            }
+            (Some(Value::Object(inner)), Value::Object(value)) => check_option_tree(id, &format!("{within}{key}."), value, inner)?,
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+/// The options of an export command `id`. `document.export`, `document.exportSelection` and
+/// `document.serialize` take a key that some format reads (one object can carry several formats'
+/// options; `document.formats` lists them). `document.exportPdf`, `document.pdfSettings` and
+/// `pdf.preset.save` take a key that PDF reads, `document.exportEps` one that EPS reads and
+/// `document.exportDxf` one that DXF reads. Where a command takes `marks`, `bleed`, `flattener` or
+/// another object option of PDF or EPS, only the object's own keys pass. An SVG export's `svg`
+/// object is checked when it is read. Saved presets are not checked: one with a key that is no
+/// longer read keeps loading.
+fn check_export_options(id: &str, params: &Value) -> Result<()> {
+    use super::fileio::{FORMATS, dxf, eps, pdf};
+    let Value::Object(given) = params else { return Ok(()) };
+    let mut keys: Vec<&str> = vec!["path", "format", "acknowledgeLoss"];
+    let why_not = match id {
+        "document.export" | "document.exportSelection" | "document.serialize" => {
+            // `richBlack` is Appearance of Black's setting for a raster export, and `params` an
+            // exporter plug-in's own.
+            keys.extend(["includeArtboardFill", "selectedOnly", "richBlack", "params"]);
+            keys.extend(FORMATS.iter().filter(|f| f.write).flat_map(|f| f.options).map(|o| o.name));
+            "no format takes it"
+        }
+        "document.exportPdf" | "document.pdfSettings" | "pdf.preset.save" => {
+            keys.push("includeArtboardFill");
+            keys.extend(pdf::OPTIONS.iter().map(|o| o.name));
+            match id {
+                "document.pdfSettings" => keys.push("includeDocument"),
+                "pdf.preset.save" => keys.extend(["name", "newName", "description"]),
+                _ => {}
+            }
+            "PDF doesn't take it"
+        }
+        "document.exportEps" => {
+            keys.push("includeArtboardFill");
+            keys.extend(eps::OPTIONS.iter().map(|o| o.name));
+            "EPS doesn't take it"
+        }
+        "document.exportDxf" => {
+            keys.extend(dxf::OPTIONS.iter().map(|o| o.name));
+            "DXF doesn't take it"
+        }
+        _ => return Ok(()),
+    };
+    let mut trees = pdf_option_tree();
+    if let Some(tree) = trees.as_object_mut() {
+        tree.insert("flattener".into(), serde_json::to_value(super::flatten::FlattenOptions::default()).unwrap_or_default());
+    }
+    for (key, value) in given {
+        if !keys.contains(&key.as_str()) {
+            return Err(bad(
+                id,
+                match nearest(key, &keys) {
+                    Some(near) => format!("unknown parameter `{key}`; did you mean `{near}`?"),
+                    None => format!("unknown parameter `{key}`; {why_not} (see document.formats)"),
+                },
+            ));
+        }
+        if let (Some(Value::Object(schema)), Value::Object(value)) = (trees.get(key), value) {
+            check_option_tree(id, &format!("{key}."), value, schema)?;
+        }
+    }
+    Ok(())
+}
+
+/// [`check_keys`] for an engine command, the steps of a `command.batch` or an `action.batch` included,
+/// [`check_effect_params`] for the effect `effect.apply` adds and [`check_export_options`] for an
+/// export. A command the engine doesn't have passes: running it reports that.
 pub fn check_params(id: &str, params: &Value) -> Result<()> {
     check_params_in(id, params, false)
 }
@@ -493,6 +609,7 @@ fn check_params_in(id: &str, params: &Value, in_batch: bool) -> Result<()> {
     {
         check_effect_params(id, effect, given)?;
     }
+    check_export_options(id, params)?;
     if UNCHECKED.contains(&id) {
         return Ok(());
     }

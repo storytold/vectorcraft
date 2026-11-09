@@ -43,12 +43,26 @@ impl<'a> Reader<'a> {
         }
     }
 
+    /// `X=` in a `/Mask` dictionary: the opacity mask's art starts, read until its `X+`
+    /// ([`Self::end_mask`]).
     fn open_mask_object(&mut self, hidden: bool) -> Result<(), String> {
         if !matches!(self.frames.last(), Some(Frame { kind: Kind::Obj(o), .. }) if o.ty == "Mask") {
             // `X=` also introduces legacy text frame art, read by `text_frames`.
             return Ok(());
         }
         self.end_path_quietly();
+        // The art goes on from the paint before the dictionaries it is in, which `begin_obj` set
+        // aside: the writer leaves out paint that doesn't change, so a mask rectangle with no color
+        // of its own takes the white of the art before it, not a fresh state's black, which hides
+        // what it masks. Lock, visibility and transparency start afresh, as a dictionary's art does.
+        if let Some(f) = self.frames.iter().rev().take_while(|f| matches!(f.kind, Kind::Obj(_))).last() {
+            let before = &f.gs;
+            let gs = &mut self.gs;
+            (gs.fill, gs.stroke, gs.dash) = (before.fill.clone(), before.stroke.clone(), before.dash.clone());
+            (gs.width, gs.cap, gs.join, gs.miter, gs.rule) = (before.width, before.cap, before.join, before.miter, before.rule);
+            (gs.overprint_fill, gs.overprint_stroke) = (before.overprint_fill, before.overprint_stroke);
+            (self.pending_unread_fill, self.pending_unread_stroke) = (f.pending_unread_fill, f.pending_unread_stroke);
+        }
         self.open(Kind::Mask, hidden)
     }
 
@@ -376,8 +390,10 @@ impl<'a> Reader<'a> {
             "TZ" => self.tz(&vals),
             // An image whose samples follow in comment lines (read at `%AI5_EndRaster`).
             "XI" if self.raster.is_some() => {
+                let max = self.sample_bytes(&vals);
                 if let Some(r) = self.raster.as_mut() {
                     r.operands = Some(vals);
+                    r.max = max;
                 }
             }
             // A linked image (§8.2, §8.3): `(path) modified XG` names the file of the `XF` image after
@@ -509,7 +525,7 @@ impl<'a> Reader<'a> {
     fn color(&mut self, w: &str, vals: &[V]) {
         let Some((p, named)) = paint::color_op(w, vals) else { return };
         // Registration (`Xs`, `Xz`) says nothing of the document's colour model.
-        let registration = matches!(w, "Xs" | "XS" | "Xz" | "XZ");
+        let registration = matches!(w, "Xs" | "XS" | "Xz" | "XZ") || p.is_registration();
         match p.color().filter(|_| !registration) {
             Some(vectorcraft_color::Color::Rgb { .. }) => self.rgb_colors += 1,
             Some(vectorcraft_color::Color::Cmyk { .. }) => self.cmyk_colors += 1,
@@ -1166,6 +1182,13 @@ pub(crate) struct StyleRead {
     pub simple: bool,
     /// It has Effect › Pathfinder effects, which only a group with no fills or strokes is read with.
     pub pathfinder: bool,
+    /// The opacity, blending mode, isolation and knockout its blend filter gives.
+    pub transparency: Option<(f32, BlendMode, bool, Knockout)>,
+}
+
+/// The names a style list section gives graphic styles, as the reader reads them.
+pub(crate) fn read_style_list(section: &[u8]) -> Vec<String> {
+    crate::import::ai::style::art_style_list(section).iter().map(|raw| obj::text(raw)).filter(|name| !name.is_empty()).collect()
 }
 
 /// Art style `name` of `section` as the reader reads it ([`StyleRead`]): [`appearance_from_art_style`],
@@ -1184,14 +1207,21 @@ pub(crate) fn read_art_style(section: &[u8], name: &str, own_gradient: Option<&P
         }
     }
     let appearance = appearance_from_art_style(&st)?;
-    Some(StyleRead { appearance, simple: st.simple, pathfinder: st.pathfinder })
+    Some(StyleRead { appearance, simple: st.simple, pathfinder: st.pathfinder, transparency: st.transparency })
+}
+
+/// Is art style `name` of `section` read on `object` as far as an effect that moves the outline
+/// goes: the style has none, or `object` is one [`moves_with`] reads it on, as [`styled`] checks?
+/// `false` when the section doesn't define it.
+pub(crate) fn style_moves_with(section: &[u8], name: &str, object: &Node) -> bool {
+    crate::import::ai::style::art_styles(section).remove(name).is_some_and(|st| !st.moves_outline() || moves_with(object, &st))
 }
 
 /// A style's stroke as an appearance item (`None` for a fill).
 fn stroke_layer(item: &crate::import::ai::style::StyleItem) -> Option<AppearanceItem> {
-    let crate::import::ai::style::StyleItem::Stroke { paint, width, cap, join, miter, dash, profile, brush } = item else { return None };
+    let crate::import::ai::style::StyleItem::Stroke { paint, width, cap, join, miter, dash, profile, align, brush } = item else { return None };
     let mut layer = StrokeLayer::new(paint.clone(), line_width(*width));
-    (layer.cap, layer.join, layer.miter_limit, layer.dash, layer.profile) = (*cap, *join, *miter, dash.clone(), profile.clone());
+    (layer.cap, layer.join, layer.miter_limit, layer.dash, layer.profile, layer.align) = (*cap, *join, *miter, dash.clone(), profile.clone(), *align);
     layer.brush = brush.as_ref().map(|(name, _)| name.clone());
     Some(AppearanceItem::Stroke(layer))
 }

@@ -5,8 +5,9 @@
 //! `doc.read`, `doc.write`, `state` and `progress` are the names of the plug-in capability model in
 //! storytold/photocraft#662; the other names are VectorCraft's own. A manifest without
 //! `permissions` gets the ones its kind implies ([`Permission::implied`]): what every plug-in of
-//! that kind could do before manifests listed them. `progress`, which lets a plug-in use the host
-//! imports of API level 2 ([`crate::host`]), is never implied: a manifest lists it.
+//! that kind could do before manifests listed them. `progress`, `settings` and `cache`, which let a
+//! plug-in use the host imports of API level 2 ([`crate::host`]), are never implied: a manifest
+//! lists them.
 
 use serde::{Deserialize, Serialize};
 
@@ -16,8 +17,8 @@ use crate::{Error, Kind, Result};
 /// this.
 pub const API_LEVEL: u32 = 2;
 
-/// The API level that adds the host imports ([`crate::host::IMPORTS`]) and the `progress`
-/// permission they need.
+/// The API level that adds the host imports ([`crate::host::IMPORTS`]) and the `progress`,
+/// `settings` and `cache` permissions they need.
 pub const PROGRESS_API: u32 = 2;
 
 /// Most permissions a manifest may list.
@@ -56,11 +57,29 @@ pub enum Permission {
     /// host imports of API level 2 ([`crate::host::IMPORTS`]).
     #[serde(rename = "progress")]
     Progress,
+    /// Keep settings of its own between runs and sessions ([`crate::storage`]).
+    #[serde(rename = "settings")]
+    Settings,
+    /// Keep a cache of its own, which the user can clear ([`crate::storage`]).
+    #[serde(rename = "cache")]
+    Cache,
 }
 
 /// Every permission this host grants, in the order prompts list them.
-pub const ALL: [Permission; 6] =
-    [Permission::DocRead, Permission::DocWrite, Permission::State, Permission::EffectRender, Permission::ExportWrite, Permission::Progress];
+pub const ALL: [Permission; 8] = [
+    Permission::DocRead,
+    Permission::DocWrite,
+    Permission::State,
+    Permission::EffectRender,
+    Permission::ExportWrite,
+    Permission::Progress,
+    Permission::Settings,
+    Permission::Cache,
+];
+
+/// The permissions of the host imports, which any kind may list and none implies; each needs plug-in
+/// API level [`PROGRESS_API`].
+pub const HOST: [Permission; 3] = [Permission::Progress, Permission::Settings, Permission::Cache];
 
 impl Permission {
     /// Its name in a manifest and in `plugin.install`'s `grant`.
@@ -72,6 +91,8 @@ impl Permission {
             Permission::EffectRender => "effect.render",
             Permission::ExportWrite => "export.write",
             Permission::Progress => "progress",
+            Permission::Settings => "settings",
+            Permission::Cache => "cache",
         }
     }
 
@@ -89,22 +110,35 @@ impl Permission {
             Permission::EffectRender => "Change how the objects its effect is applied to are drawn",
             Permission::ExportWrite => "Write the document as a file in its own format",
             Permission::Progress => "Show its progress, see Cancel and write log lines",
+            Permission::Settings => "Keep settings of its own",
+            Permission::Cache => "Keep a cache of its own, which you can clear",
         }
     }
 
-    /// May a plug-in of `kind` list it: one its kind implies, or `progress`, which any kind may
-    /// list.
-    pub fn applies(self, kind: Kind) -> bool {
-        self == Permission::Progress || Permission::implied(kind).contains(&self)
+    /// May a plug-in of `kind` that declares `commands` or not list it: one [`Permission::allowed`]
+    /// gives it, or one of the host imports' ([`HOST`]), which any kind may list.
+    pub fn applies(self, kind: Kind, commands: bool) -> bool {
+        HOST.contains(&self) || Permission::allowed(kind, commands).contains(&self)
     }
 
     /// The permissions a manifest of `kind` without `permissions` gets. A manifest may also list
-    /// `progress` ([`Permission::applies`]).
+    /// the host imports' ([`HOST`], [`Permission::applies`]).
     pub fn implied(kind: Kind) -> &'static [Permission] {
         match kind {
             Kind::Filter => &[Permission::DocRead, Permission::DocWrite, Permission::State],
             Kind::Effect => &[Permission::DocRead, Permission::EffectRender],
             Kind::Exporter => &[Permission::DocRead, Permission::ExportWrite],
+        }
+    }
+
+    /// The permissions a plug-in of `kind` that declares `commands` or not may list besides
+    /// `progress`, which are also the ones its manifest gets without `permissions`: those `kind`
+    /// implies, and for a live effect with commands also `doc.write` and `state`, which only its
+    /// commands use (drawing the effect changes no object and keeps no data).
+    pub fn allowed(kind: Kind, commands: bool) -> &'static [Permission] {
+        match kind {
+            Kind::Effect if commands => &[Permission::DocRead, Permission::DocWrite, Permission::State, Permission::EffectRender],
+            _ => Permission::implied(kind),
         }
     }
 
@@ -119,10 +153,11 @@ impl Permission {
     }
 }
 
-/// Checks the `permissions` a manifest of `kind` lists → them, in the order [`ALL`] has. A name
-/// that is not a permission, a reserved one, one that doesn't apply to the kind, one listed twice
-/// and a list without what the kind needs are errors that name it.
-pub(crate) fn validate(kind: Kind, names: &[String]) -> Result<Vec<Permission>> {
+/// Checks the `permissions` a manifest of `kind` lists → them, in the order [`ALL`] has; `commands`
+/// is whether it declares commands ([`Permission::allowed`]). A name that is not a permission, a
+/// reserved one, one that doesn't apply to the kind, one listed twice and a list without what the
+/// kind needs are errors that name it.
+pub(crate) fn validate(kind: Kind, commands: bool, names: &[String]) -> Result<Vec<Permission>> {
     if names.len() > MAX_PERMISSIONS {
         return Err(Error::Manifest(format!("at most {MAX_PERMISSIONS} `permissions`")));
     }
@@ -135,7 +170,7 @@ pub(crate) fn validate(kind: Kind, names: &[String]) -> Result<Vec<Permission>> 
             }
             return Err(Error::Manifest(format!("unknown permission `{shown}`")));
         };
-        if !p.applies(kind) {
+        if !p.applies(kind, commands) {
             return Err(Error::Manifest(format!("permission `{shown}` doesn't apply to a plug-in of kind `{}`", kind.name())));
         }
         if out.contains(&p) {
@@ -232,29 +267,55 @@ mod tests {
     #[test]
     fn lists_are_checked_against_the_kind() {
         let list = |names: &[&str]| names.iter().map(|s| s.to_string()).collect::<Vec<_>>();
-        assert_eq!(validate(Kind::Filter, &list(&["doc.write", "doc.read"])).unwrap(), [Permission::DocRead, Permission::DocWrite]);
-        assert_eq!(validate(Kind::Filter, &[]).unwrap(), []);
-        assert!(validate(Kind::Effect, &list(&["doc.read", "effect.render"])).is_ok());
-        assert!(validate(Kind::Exporter, &list(&["export.write", "doc.read"])).is_ok());
+        assert_eq!(validate(Kind::Filter, false, &list(&["doc.write", "doc.read"])).unwrap(), [Permission::DocRead, Permission::DocWrite]);
+        assert_eq!(validate(Kind::Filter, false, &[]).unwrap(), []);
+        assert!(validate(Kind::Effect, false, &list(&["doc.read", "effect.render"])).is_ok());
+        assert!(validate(Kind::Exporter, false, &list(&["export.write", "doc.read"])).is_ok());
         // Any kind may list `progress`, which no kind implies.
-        assert_eq!(validate(Kind::Filter, &list(&["progress", "doc.read"])).unwrap(), [Permission::DocRead, Permission::Progress]);
-        assert!(validate(Kind::Effect, &list(&["doc.read", "effect.render", "progress"])).is_ok());
-        assert!(validate(Kind::Exporter, &list(&["progress", "export.write", "doc.read"])).is_ok());
+        assert_eq!(validate(Kind::Filter, false, &list(&["progress", "doc.read"])).unwrap(), [Permission::DocRead, Permission::Progress]);
+        assert!(validate(Kind::Effect, false, &list(&["doc.read", "effect.render", "progress"])).is_ok());
+        assert!(validate(Kind::Effect, true, &list(&["doc.read", "effect.render", "progress"])).is_ok());
+        assert!(validate(Kind::Exporter, false, &list(&["progress", "export.write", "doc.read"])).is_ok());
         assert!([Kind::Filter, Kind::Effect, Kind::Exporter].iter().all(|k| !Permission::implied(*k).contains(&Permission::Progress)));
-        for (kind, names, says) in [
-            (Kind::Filter, &["doc.read", "clipboard"][..], "unknown permission `clipboard`"),
-            (Kind::Filter, &["ui.panel"], "`ui.panel` is reserved"),
-            (Kind::Filter, &["progress", "progress"], "`progress` is listed twice"),
-            (Kind::Filter, &["export.write"], "doesn't apply to a plug-in of kind `filter`"),
-            (Kind::Exporter, &["doc.read", "export.write", "doc.read"], "`doc.read` is listed twice"),
-            (Kind::Effect, &["doc.read"], "needs the permission `effect.render`"),
-            (Kind::Exporter, &["export.write"], "needs the permission `doc.read`"),
+        // So may `settings` and `cache`, which no kind implies either.
+        assert_eq!(
+            validate(Kind::Effect, false, &list(&["cache", "settings", "doc.read", "effect.render"])).unwrap(),
+            [Permission::DocRead, Permission::EffectRender, Permission::Settings, Permission::Cache]
+        );
+        assert!(validate(Kind::Exporter, false, &list(&["settings", "export.write", "doc.read"])).is_ok());
+        assert_eq!(validate(Kind::Filter, false, &list(&["cache"])).unwrap(), [Permission::Cache]);
+        for kind in [Kind::Filter, Kind::Effect, Kind::Exporter] {
+            for commands in [false, true] {
+                assert!(HOST.iter().all(|p| p.applies(kind, commands) && !Permission::implied(kind).contains(p)));
+            }
+        }
+        // A live effect with commands may also change the document and keep data with it.
+        assert_eq!(
+            validate(Kind::Effect, true, &list(&["state", "effect.render", "doc.write", "doc.read"])).unwrap(),
+            [Permission::DocRead, Permission::DocWrite, Permission::State, Permission::EffectRender]
+        );
+        assert_eq!(Permission::allowed(Kind::Effect, false), Permission::implied(Kind::Effect));
+        assert_eq!(Permission::allowed(Kind::Filter, true), Permission::implied(Kind::Filter));
+        for (kind, commands, names, says) in [
+            (Kind::Filter, false, &["doc.read", "clipboard"][..], "unknown permission `clipboard`"),
+            (Kind::Filter, false, &["ui.panel"], "`ui.panel` is reserved"),
+            (Kind::Filter, false, &["progress", "progress"], "`progress` is listed twice"),
+            (Kind::Filter, false, &["export.write"], "doesn't apply to a plug-in of kind `filter`"),
+            (Kind::Exporter, false, &["doc.read", "export.write", "doc.read"], "`doc.read` is listed twice"),
+            (Kind::Effect, false, &["doc.read"], "needs the permission `effect.render`"),
+            (Kind::Effect, false, &["doc.read", "effect.render", "doc.write"], "`doc.write` doesn't apply to a plug-in of kind `effect`"),
+            (Kind::Effect, true, &["doc.read", "doc.write"], "needs the permission `effect.render`"),
+            (Kind::Effect, true, &["doc.read", "effect.render", "export.write"], "`export.write` doesn't apply"),
+            (Kind::Exporter, true, &["doc.read", "export.write", "doc.write"], "`doc.write` doesn't apply"),
+            (Kind::Exporter, false, &["export.write"], "needs the permission `doc.read`"),
+            (Kind::Filter, false, &["cache", "cache"], "`cache` is listed twice"),
+            (Kind::Filter, false, &["storage"], "unknown permission `storage`"),
         ] {
-            let e = validate(kind, &list(names)).unwrap_err().to_string();
+            let e = validate(kind, commands, &list(names)).unwrap_err().to_string();
             assert!(e.contains(says), "{names:?}: {e}");
         }
         let many = list(&["doc.read"; MAX_PERMISSIONS + 1]);
-        assert!(validate(Kind::Filter, &many).unwrap_err().to_string().contains("at most"));
+        assert!(validate(Kind::Filter, false, &many).unwrap_err().to_string().contains("at most"));
     }
 
     /// Control, bidirectional override and separator characters show as escapes, so a name can't

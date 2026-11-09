@@ -743,7 +743,7 @@ fn text_create(s: &mut Session, p: &Value) -> Result<Value> {
     let mut made = super::typecmd::with_overflow(s, id.as_slice(), made);
     if p.get("font").is_some() || p.get("style").is_some() {
         let runs = match id.and_then(|i| s.doc().ok()?.doc.node(i)).map(|n| &n.kind) {
-            Some(NodeKind::Text(t)) => t.runs.iter().map(|r| super::fonts::font_of(&r.style)).collect(),
+            Some(NodeKind::Text(t)) => t.runs.iter().flat_map(super::fonts::run_fonts).collect(),
             _ => Default::default(),
         };
         if let Some(w) = super::fonts::set_font_warning(runs) {
