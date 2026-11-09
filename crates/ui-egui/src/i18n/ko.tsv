@@ -5600,6 +5600,9 @@ axis	Y Axis	Y축
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all 또는 1, 3-5 같은 범위여야 합니다({v}이(가) 아님)
 	Add to Symbols	심볼에 추가
 	Basic Shapes	기본 모양
+	Button	버튼
+	Panel	패널
+	UI Frames	UI 프레임
 	Open Symbol Library	심볼 라이브러리 열기
 	Save Symbol Library	심볼 라이브러리 저장
 	Save Symbol Library…	심볼 라이브러리 저장…

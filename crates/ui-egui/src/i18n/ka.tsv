@@ -5945,6 +5945,9 @@ axis	Y Axis	Y ღერძი
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all ან დიაპაზონი, მაგალითად 1, 3-5, და არა {v}
 	Add to Symbols	სიმბოლოებში დამატება
 	Basic Shapes	ძირითადი ფიგურები
+	Button	ღილაკი
+	Panel	პანელი
+	UI Frames	UI ჩარჩოები
 	Open Symbol Library	სიმბოლოების ბიბლიოთეკის გახსნა
 	Save Symbol Library	სიმბოლოების ბიბლიოთეკის შენახვა
 	Save Symbol Library…	სიმბოლოების ბიბლიოთეკის შენახვა…

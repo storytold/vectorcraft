@@ -5605,6 +5605,9 @@ axis	Y Axis	Y-Achse
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all oder ein Bereich wie 1, 3-5, nicht {v}
 	Add to Symbols	Zu Symbolen hinzufügen
 	Basic Shapes	Grundformen
+	Button	Schaltfläche
+	Panel	Bedienfeld
+	UI Frames	UI-Rahmen
 	Open Symbol Library	Symbol-Bibliothek öffnen
 	Save Symbol Library	Symbol-Bibliothek speichern
 	Save Symbol Library…	Symbol-Bibliothek speichern…
