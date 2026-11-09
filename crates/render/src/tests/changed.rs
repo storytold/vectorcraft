@@ -651,3 +651,73 @@ fn an_edit_to_what_the_view_hides_changes_nothing() {
     assert_eq!(r.changed(&old, &new, &opts), Changed::Nothing);
     assert!(matches!(changed(&old, &new), Changed::Area(_)), "shown, they change");
 }
+
+/// Overprint Preview and separations draw objects through the inks they print, not through the
+/// art a renderer keeps for them: a renderer measures an edit there as [`changed`] does and holds
+/// none of the 3D art it made to measure it.
+#[test]
+fn an_edit_measured_under_overprint_holds_no_art() {
+    use vectorcraft_doc::{CharStyle, TextObject};
+    let mut old = Document::new(110.0, 80.0);
+    let style = CharStyle { size: 30.0, fill: Paint::solid(Color::rgb(0.1, 0.2, 0.6)), ..Default::default() };
+    let mut n = Node::new(old.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(40.0, 50.0), "K", style))));
+    let extrude = |depth: f64| vectorcraft_doc::Effect {
+        id: "threeD.extrude".into(),
+        params: serde_json::json!({"depth": depth, "position": "isometricTop"}),
+        visible: true,
+    };
+    n.appearance.effects.push(extrude(60.0));
+    let l = old.layers[0].id;
+    let id = old.insert(Some(l), 0, n).unwrap();
+    let mut new = old.clone();
+    new.node_mut(id).unwrap().appearance.effects[0] = extrude(5.0);
+    let _fonts = crate::tests_fontchange::fonts_steady();
+    let held = |opts: &RenderOptions| {
+        crate::tests_fontchange::with_fonts_unchanged(|| {
+            let mut r = Renderer::new();
+            r.render(&old, W, H, view(), opts);
+            (area(r.changed(&old, &new, opts)), r.measured_bytes())
+        })
+    };
+    let (_, on_screen) = held(&RenderOptions::default());
+    assert!(on_screen > 0, "the screen view holds the art it measured with");
+    let (measured, overprinted) = held(&RenderOptions { overprint_preview: true, ..Default::default() });
+    assert_eq!(overprinted, 0);
+    assert_eq!(measured, area(changed(&old, &new)), "as changed measures it");
+}
+
+/// Symbol editing mode on screen doesn't draw the instance it was entered from: an edit to that
+/// instance changes nothing there, and changes where it draws in an export.
+#[test]
+fn an_edit_to_the_instance_symbol_editing_came_from_changes_nothing_on_screen() {
+    use vectorcraft_doc::{Symbol, SymbolEdit};
+    let mut old = Document::new(W as f64, H as f64);
+    let art = rect(&mut old, Rect::new(20.0, 20.0, 50.0, 50.0), Color::rgb(0.0, 0.5, 0.0));
+    old.symbols.push(Symbol { dynamic: false, name: "Square".into(), art: Arc::new(art.clone()) });
+    let inst = Node::new(old.alloc_id(), NodeKind::SymbolInstance { symbol: "Square".into(), xf: Affine::IDENTITY });
+    let l = old.layers[0].id;
+    let inst = old.insert(Some(l), 0, inst).unwrap();
+    let layer = old.add_layer(Some("Square"));
+    let copy = old.reid(&art);
+    old.insert(Some(layer), usize::MAX, copy).unwrap();
+    old.symbol_edit = Some(SymbolEdit {
+        symbol: "Square".into(),
+        layer,
+        instance: Some(inst),
+        xf: Affine::IDENTITY,
+        group: false,
+        changed: false,
+        back_isolation: None,
+        back_layer: None,
+    });
+    let mut new = old.clone();
+    new.node_mut(inst).unwrap().transform(Affine::translate((30.0, 30.0)), false);
+    let screen = RenderOptions { isolated: Some(layer), ..Default::default() };
+    let mut r = Renderer::new();
+    r.render(&old, W, H, view(), &screen);
+    assert_eq!(r.changed(&old, &new, &screen), Changed::Nothing);
+    let export = RenderOptions::default();
+    let mut r = Renderer::new();
+    r.render(&old, W, H, view(), &export);
+    assert!(matches!(r.changed(&old, &new, &export), Changed::Area(_)), "an export draws it");
+}

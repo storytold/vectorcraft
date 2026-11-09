@@ -674,6 +674,21 @@ fn the_renderer_measures_3d_art_with_crop_marks_as_drawn() {
     assert_eq!(Renderer::new().bounds_of(&symbols, &n), Some(free));
 }
 
+/// Vector Halftone draws dots in place of a 3D effect's solid: the renderer measures the object as
+/// the free measure does, building no solid and holding no art to draw it with.
+#[test]
+fn the_renderer_measures_3d_art_with_vector_halftone_as_drawn() {
+    let fx = vec![("threeD.extrude", json!({"depth": 30.0, "position": "isometricTop"})), (crate::effects::addons::halftone::HALFTONE, json!({}))];
+    let d = doc_with(Rect::new(40.0, 40.0, 60.0, 60.0), Color::BLACK, fx);
+    let n = d.layers[0].children().unwrap()[0].clone();
+    let symbols = d.symbol_boxes();
+    let free = super::cull_bounds(&symbols, &n).unwrap();
+    let mut r = Renderer::new();
+    assert_eq!(r.bounds_of(&symbols, &n), Some(free));
+    assert_eq!(r.stats.three_d_built, 0);
+    assert_eq!(r.measured_bytes(), 0);
+}
+
 /// A renderer measures the art over each artboard as [`crate::encode::art_bounds_on`] does, and
 /// builds each 3D solid once for every artboard it measures.
 #[test]
