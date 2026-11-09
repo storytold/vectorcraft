@@ -1898,6 +1898,118 @@ fn full_screen_modes_fill_the_screen_and_normal_mode_restores_the_window() {
     assert!(sent(&mut app, true).is_empty(), "still full screen, as the user had it");
 }
 
+/// Snapping quick access includes the existing glyph and alignment settings. Pointer clicks use
+/// their commands, and reopening reads the same state as View and Preferences (#6164).
+#[test]
+fn the_control_bar_snapping_menu_shares_glyph_and_alignment_settings() {
+    struct RestoreLanguage(crate::i18n::Lang);
+    impl Drop for RestoreLanguage {
+        fn drop(&mut self) {
+            crate::i18n::set_current(self.0);
+        }
+    }
+    let _language = RestoreLanguage(crate::i18n::current());
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.ui.view.snap_to_glyph = false;
+    app.run("prefs.set", json!({"key": "alignmentGuides", "value": true})).unwrap();
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 400.0));
+    let frame = |app: &mut crate::VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(app, ui));
+        out.textures_delta.clear();
+        out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default()
+    };
+    type Nodes = Vec<(egui::accesskit::NodeId, egui::accesskit::Node)>;
+    let find = |nodes: &Nodes, name: &str| {
+        nodes.iter().find(|(_, n)| n.label() == Some(name)).map(|(_, n)| n.clone()).unwrap_or_else(|| panic!("missing {name}"))
+    };
+    let center = |n: &egui::accesskit::Node| {
+        let b = n.bounds().expect("a visible menu control");
+        assert!(b.x0 >= 0.0 && b.y0 >= 0.0 && b.x1 <= 1200.0 && b.y1 <= 400.0, "menu control stays inside the window: {b:?}");
+        egui::pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32)
+    };
+    let click = |app: &mut crate::VectorcraftApp, at: egui::Pos2| {
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(app, vec![egui::Event::PointerMoved(at), press(true)]);
+        frame(app, vec![press(false)]);
+        frame(app, vec![]);
+        frame(app, vec![])
+    };
+    let check = |nodes: &Nodes, name: &str, on: bool| {
+        let node = find(nodes, name);
+        assert_eq!(node.role(), egui::accesskit::Role::CheckBox, "{name}");
+        assert_eq!(node.toggled(), Some(if on { egui::accesskit::Toggled::True } else { egui::accesskit::Toggled::False }), "{name}");
+        center(&node)
+    };
+    let dismiss = |app: &mut crate::VectorcraftApp| {
+        let before = (app.ui.view.snap_to_glyph, app.session.prefs.to_json(), app.run_count);
+        frame(
+            app,
+            vec![egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }],
+        );
+        frame(
+            app,
+            vec![egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: false, repeat: false, modifiers: Default::default() }],
+        );
+        let nodes = frame(app, vec![]);
+        assert!(!nodes.iter().any(|(_, n)| n.label() == Some("Snap to Glyph")), "Escape closes Snapping");
+        assert_eq!(
+            (app.ui.view.snap_to_glyph, app.session.prefs.to_json(), app.run_count),
+            before,
+            "dismissal changes no settings and runs no command"
+        );
+    };
+    frame(&mut app, vec![]);
+    let nodes = frame(&mut app, vec![]);
+    let menu = center(&find(&nodes, "Snapping"));
+    let nodes = click(&mut app, menu);
+    let glyph = check(&nodes, "Snap to Glyph", false);
+    check(&nodes, "Alignment Guides", true);
+    // The two extra rows still leave the original menu entries visible.
+    for name in ["Smart Guides", "Snap to Point", "Snap to Grid", "Snap to Pixel", "Snap to Tangent", "Snap to Perpendicular"] {
+        center(&find(&nodes, name));
+    }
+    click(&mut app, glyph);
+    assert!(app.ui.view.snap_to_glyph);
+    assert_eq!(crate::menus::checked(&app, "view.snapToGlyph", &json!({})), Some(true));
+    assert!(app.session.prefs.alignment_guides, "glyph snapping leaves Alignment Guides alone");
+    dismiss(&mut app);
+    let nodes = click(&mut app, menu);
+    check(&nodes, "Snap to Glyph", true);
+    let alignment = check(&nodes, "Alignment Guides", true);
+    let commands = app.run_count;
+    click(&mut app, alignment);
+    assert_eq!(app.run_count, commands + 1, "Alignment Guides uses the app command entry point");
+    assert_eq!(app.run("prefs.get", json!({"key": "alignmentGuides"})).unwrap(), json!(false));
+    assert!(!app.session.prefs.alignment_guides);
+    crate::prefs_dialog::snapshot(&mut app);
+    let saved = serde_json::to_string(&app.ui.engine_prefs).unwrap();
+    let mut restored = crate::VectorcraftApp::new(Session::new(), Default::default());
+    restored.ui.engine_prefs = serde_json::from_str(&saved).unwrap();
+    crate::prefs_dialog::restore(&mut restored);
+    assert_eq!(
+        restored.run("prefs.get", json!({"key": "alignmentGuides"})).unwrap(),
+        json!(false),
+        "Alignment Guides survives host preference persistence"
+    );
+    assert!(app.ui.view.snap_to_glyph, "Alignment Guides leaves glyph snapping alone");
+    dismiss(&mut app);
+    let nodes = click(&mut app, menu);
+    check(&nodes, "Snap to Glyph", true);
+    check(&nodes, "Alignment Guides", false);
+    // Changes made through the existing command surfaces are reflected on the next opening too.
+    crate::menus::invoke(&mut app, "view.snapToGlyph", json!({}));
+    app.run("prefs.set", json!({"key": "alignmentGuides", "value": true})).unwrap();
+    dismiss(&mut app);
+    let nodes = click(&mut app, menu);
+    check(&nodes, "Snap to Glyph", false);
+    check(&nodes, "Alignment Guides", true);
+}
+
 /// The window the Control bar docking tests draw the bar in.
 const DOCK_SCREEN: egui::Rect = egui::Rect { min: egui::Pos2::ZERO, max: egui::pos2(1200.0, 300.0) };
 
