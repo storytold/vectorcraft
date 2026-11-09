@@ -297,3 +297,138 @@ fn an_uncolored_pattern_drawing_an_image_mask_keeps_each_color() {
     }
     assert_eq!(colors, [["#ff0000"], ["#0000ff"]]);
 }
+
+const SPOT_RED: &str = "[/Separation /SpotRed /DeviceCMYK << /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [0 1 1 0] /N 1 >>]";
+
+/// A page drawing a `w` × 1 image in color space `space` (`bpc` bits a sample, more dictionary
+/// entries `more`, samples `hex`), then the `extra` objects after it.
+fn separation_page(space: &str, w: u32, bpc: u8, more: &str, hex: &str, extra: &[&str]) -> Document {
+    separation_report(space, w, bpc, more, hex, extra, "q 80 0 0 10 10 50 cm /Im1 Do Q").document
+}
+
+/// [`separation_page`] drawn with `content`, with the import's report. `more` may name filters
+/// after ASCIIHex (`/Filter [/ASCIIHexDecode …]`).
+fn separation_report(space: &str, w: u32, bpc: u8, more: &str, hex: &str, extra: &[&str], content: &str) -> ImportReport {
+    let filter = if more.contains("/Filter") { "" } else { "/Filter /ASCIIHexDecode" };
+    let image = format!(
+        "<< /Type /XObject /Subtype /Image /Width {w} /Height 1 /ColorSpace {space} /BitsPerComponent {bpc} {more} {filter} /Length {} >>\nstream\n{hex}>\nendstream",
+        hex.len() + 1
+    );
+    let resources = format!("/XObject << /Im1 {} 0 R >>", first_extra(1));
+    let mut objects = vec![image.as_str()];
+    objects.extend_from_slice(extra);
+    let pdf = pdf_with(&[PdfPage { resources, ..PdfPage::new(100.0, 100.0, content) }], &objects, None);
+    import_with_report(&pdf, &ImportOptions::default()).unwrap()
+}
+
+/// An image in a spot ink's Separation space opens as a grayscale image of its tints, colorized by
+/// the ink's spot swatch at 100 %.
+#[test]
+fn a_separation_image_opens_colorized_by_its_ink() {
+    let d = separation_page(SPOT_RED, 4, 8, "", "0055AAFF", &[]);
+    let images = imported_images(&d);
+    assert_eq!(images.len(), 1);
+    let (paint, gray) = &images[0];
+    assert_eq!(gray, &[255, 170, 85, 0], "the tints 0, 1/3, 2/3 and 1");
+    let Some(Paint::Solid { swatch, tint, .. }) = paint else { panic!("colorized: {paint:?}") };
+    assert_eq!((swatch.as_deref(), *tint), (Some("SpotRed"), 1.0));
+    assert!(d.swatch("SpotRed").is_some_and(|s| s.spot), "a spot swatch");
+}
+
+/// Samples of 1, 4 and 16 bits are unpacked, and the Decode array applied.
+#[test]
+fn a_separation_image_reads_its_samples_and_decode_array() {
+    for (bpc, w, more, hex, want) in [
+        (1, 8, "/Decode [1 0]", "C3", vec![255, 255, 0, 0, 0, 0, 255, 255]),
+        (4, 3, "", "0F80", vec![255, 0, 119]),
+        (16, 2, "", "0000FFFF", vec![255, 0]),
+    ] {
+        let d = separation_page(SPOT_RED, w, bpc, more, hex, &[]);
+        let images = imported_images(&d);
+        assert_eq!(images.len(), 1, "{bpc} bits");
+        assert_eq!(images[0].1, want, "{bpc} bits");
+        assert!(images[0].0.is_some(), "{bpc} bits: colorized");
+    }
+}
+
+/// A Separation of a process plate colorizes in that plate's CMYK color; the ink `None`, which
+/// paints nothing, is left to the interpreter.
+#[test]
+fn a_separation_image_of_a_process_plate_or_of_no_ink() {
+    let black = "[/Separation /Black /DeviceCMYK << /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [0 0 0 1] /N 1 >>]";
+    let d = separation_page(black, 2, 8, "", "00FF", &[]);
+    let images = imported_images(&d);
+    assert_eq!(images.len(), 1);
+    assert_eq!(images[0].0, Some(Paint::solid(Color::cmyk(0.0, 0.0, 0.0, 1.0))));
+    assert!(d.swatches.iter().all(|s| !s.spot), "no spot swatch for a process plate");
+    let none = "[/Separation /None /DeviceCMYK << /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [0 1 1 0] /N 1 >>]";
+    let d = separation_page(none, 2, 8, "", "00FF", &[]);
+    let mut colorized = vec![];
+    for l in &d.layers {
+        l.walk(&mut |n| {
+            if matches!(n.kind, NodeKind::Image(_)) {
+                colorized.push(n.extras().colorize.is_some());
+            }
+        });
+    }
+    assert!(colorized.iter().all(|c| !c), "{colorized:?}");
+}
+
+/// A Separation image's soft mask becomes its opacity mask.
+#[test]
+fn a_separation_image_keeps_its_soft_mask() {
+    let smask = "<< /Type /XObject /Subtype /Image /Width 4 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /ASCIIHexDecode /Length 9 >>\nstream\nFF00FF00>\nendstream";
+    let d = separation_page(SPOT_RED, 4, 8, &format!("/SMask {} 0 R", first_extra(1) + 1), "0055AAFF", &[smask]);
+    let mut found = vec![];
+    for l in &d.layers {
+        l.walk(&mut |n| {
+            if matches!(n.kind, NodeKind::Image(_)) && n.extras().colorize.is_some() {
+                found.push(n.extras().mask.is_some());
+            }
+        });
+    }
+    assert_eq!(found, [true]);
+}
+
+/// The same Separation image drawn twice is colorized twice, over the same pixels.
+#[test]
+fn a_separation_image_drawn_twice_is_colorized_twice() {
+    let d = separation_report(SPOT_RED, 4, 8, "", "0055AAFF", &[], "q 80 0 0 10 10 20 cm /Im1 Do Q q 80 0 0 10 10 60 cm /Im1 Do Q").document;
+    let images = imported_images(&d);
+    assert_eq!(images.len(), 2);
+    assert_eq!(images[0], images[1]);
+    assert!(images[0].0.is_some(), "colorized");
+}
+
+/// A one-component JPEG in a Separation space is read through its decoder.
+#[test]
+fn a_separation_jpeg_opens_colorized_by_its_ink() {
+    let mut jpeg = vec![];
+    jpeg_encoder::Encoder::new(&mut jpeg, 100).encode(&[0, 0, 255, 255, 0, 0, 255, 255], 8, 1, jpeg_encoder::ColorType::Luma).unwrap();
+    let hex: String = jpeg.iter().map(|b| format!("{b:02X}")).collect();
+    let d = separation_page(SPOT_RED, 8, 8, "/Filter [/ASCIIHexDecode /DCTDecode]", &hex, &[]);
+    let images = imported_images(&d);
+    assert_eq!(images.len(), 1);
+    assert!(images[0].0.is_some(), "colorized");
+    // Sample 0 lays no ink (white), 255 lays it all (black); JPEG blurs the edges a little.
+    let gray = &images[0].1;
+    assert!(gray[0] > 200 && gray[2] < 55 && gray[4] > 200 && gray[6] < 55, "{gray:?}");
+}
+
+/// A Separation image whose tints can't be read (its data cut short) opens in RGB each time it is
+/// drawn, with one warning and no swatch for its ink.
+#[test]
+fn a_separation_image_that_cant_be_read_stays_rgb() {
+    let r = separation_report(SPOT_RED, 4, 8, "", "0055", &[], "q 80 0 0 10 10 20 cm /Im1 Do Q q 80 0 0 10 10 60 cm /Im1 Do Q");
+    let mut colorized = vec![];
+    for l in &r.document.layers {
+        l.walk(&mut |n| {
+            if matches!(n.kind, NodeKind::Image(_)) {
+                colorized.push(n.extras().colorize.is_some());
+            }
+        });
+    }
+    assert_eq!(colorized, [false, false]);
+    assert!(r.document.swatches.iter().all(|s| !s.spot), "no swatch for an ink nothing uses");
+    assert_eq!(r.warnings.iter().filter(|w| w.contains("spot ink")).count(), 1, "{:?}", r.warnings);
+}
