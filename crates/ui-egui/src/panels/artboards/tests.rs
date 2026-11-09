@@ -1656,13 +1656,14 @@ fn the_open_menu_reads_what_the_right_click_measured() {
     assert!(labels.contains(&"Delete Empty Artboards") && !labels.contains(&"Fit to Artwork Bounds"), "{labels:?}");
 }
 
-/// Whether Fit to Artwork Bounds has art to fit is measured once for a revision of the document:
-/// the canvas menu asks on every frame it is open.
+/// Whether Fit to Artwork Bounds has art to fit is kept for a version of the document, not its
+/// revision: a document replaced with no revision moved (composite fonts synced as its tab comes
+/// to the front) is measured again.
 #[test]
-fn fit_to_art_is_measured_once_a_revision() {
+fn fit_to_art_is_measured_for_each_version_of_the_document() {
     let mut app = menu_app(2);
     assert!(!super::fit_has_art(&app, &[0, 1]));
-    // Art on the first artboard, the revision left as it was: the answer kept stands.
+    // Art on the first artboard, the revision left as it was.
     let st = app.session.active_mut().unwrap();
     let mut doc = (*st.doc).clone();
     let l = doc.layers[0].id;
@@ -1674,9 +1675,8 @@ fn fit_to_art_is_measured_once_a_revision() {
     );
     doc.insert(Some(l), 0, art).unwrap();
     st.doc = std::sync::Arc::new(doc);
-    assert!(!super::fit_has_art(&app, &[0, 1]), "kept for the revision");
-    app.session.active_mut().unwrap().revision += 1;
     assert!(super::fit_has_art(&app, &[0, 1]), "measured again");
+    assert!(!super::fit_has_art(&app, &[1]), "measured for the artboards asked about");
 }
 
 /// `artboard.selectAll` chooses the Artboard tool first when another tool is in use, and fails

@@ -313,23 +313,31 @@ pub struct MenuFacts {
 }
 
 /// Whether an unlocked artboard of `indices` has art that Fit to Artwork Bounds fits it to. The
-/// answer is kept for the document's revision: the canvas menu asks on every frame it is open
-/// without its [`MenuFacts`], and measuring builds the solids of 3D effects. One answer is kept,
-/// the last asked: a document's uid is never given to another in the process, and its revision
-/// only moves forward (a document read again, or a batch rolled back, moves past it), so a kept
-/// answer is never another document's or another state's.
+/// canvas menu asks on every frame it is open without its [`MenuFacts`], and measuring builds the
+/// solids of 3D effects, so one answer is kept, the last asked: for that version of the document
+/// (the same `Arc`, held weakly so its address isn't reused, as
+/// `DocState::any_empty_artboards` keeps its answer) and those artboards, until a plug-in is
+/// installed or removed, which can change what its effects draw. A change of the selection or the
+/// view keeps it.
 pub(crate) fn fit_has_art(app: &VectorcraftApp, indices: &[usize]) -> bool {
-    /// The document's uid and revision, the artboards asked about, and the answer.
-    type Kept = Option<(u64, u64, Vec<usize>, bool)>;
-    thread_local!(static KEPT: std::cell::RefCell<Kept> = const { std::cell::RefCell::new(None) });
+    /// The document measured, the artboards asked about, the plug-ins' revision, and the answer.
+    struct Kept {
+        doc: std::sync::Weak<vectorcraft_doc::Document>,
+        indices: Vec<usize>,
+        plugins: u64,
+        any: bool,
+    }
+    thread_local!(static KEPT: std::cell::RefCell<Option<Kept>> = const { std::cell::RefCell::new(None) });
     app.session.active().is_some_and(|st| {
-        if let Some(any) = KEPT.with_borrow(|k| k.as_ref().filter(|k| k.0 == st.uid && k.1 == st.revision && k.2 == indices).map(|k| k.3)) {
+        let plugins = crate::menus::plugin_revision();
+        let same = |k: &Kept| std::ptr::eq(k.doc.as_ptr(), std::sync::Arc::as_ptr(&st.doc)) && k.indices == indices && k.plugins == plugins;
+        if let Some(any) = KEPT.with_borrow(|k| k.as_ref().filter(|k| same(k)).map(|k| k.any)) {
             return any;
         }
         // One renderer measures every artboard: each object once.
         let mut r = vectorcraft_render::Renderer::new();
         let any = indices.iter().filter_map(|i| st.doc.artboards.get(*i)).any(|a| !a.locked && r.art_bounds_on(&st.doc, a.rect).is_some());
-        KEPT.set(Some((st.uid, st.revision, indices.to_vec(), any)));
+        KEPT.set(Some(Kept { doc: std::sync::Arc::downgrade(&st.doc), indices: indices.to_vec(), plugins, any }));
         any
     })
 }
