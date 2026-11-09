@@ -1136,6 +1136,17 @@ font-technology	Variable	Variables
 	Exporting {}	Exportando {}
 	Export…	Exportar…
 	Extrude & Bevel…	Extrusión y biselado…
+	3D (Classic)	3D (clásico)
+	Extrude & Bevel (Classic)…	Extrusión y biselado (clásico)…
+	Surface	Superficie
+	Wireframe	Malla
+	No Shading	Sin sombreado
+	Plastic	Plástico
+	Highlight Intensity	Intensidad del brillo
+	Highlight Size	Tamaño del brillo
+	Blend Steps	Pasos de fusión
+	Shading Color	Color de sombreado
+	Draw Hidden Faces	Dibujar caras ocultas
 	Eyedropper	Cuentagotas
 	Sample Color from Screen	Tomar color de la pantalla
 	This system has no screen color sampler	Este sistema no tiene muestreador de color de la pantalla
@@ -1985,6 +1996,10 @@ font-technology	Variable	Variables
 	Stylistic	Estilística
 	Mojikumi Set	Conjunto de mojikumi
 	Kinsoku Set	Conjunto de kinsoku
+	Kinsoku Shori Type	Tipo de kinsoku shori
+	Push In First	Primero hacia dentro
+	Push Out First	Primero hacia fuera
+	Push Out Only	Solo hacia fuera
 	Hard	Fuerte
 	Soft	Suave
 	Monitor RGB	RGB del monitor

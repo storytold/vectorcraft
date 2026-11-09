@@ -76,6 +76,10 @@ digits	Malayalam	マラヤーラム数字
 	Stylistic	スタイリスティック
 	Mojikumi Set	文字組み
 	Kinsoku Set	禁則処理
+	Kinsoku Shori Type	禁則調整方式
+	Push In First	追い込み優先
+	Push Out First	追い出し優先
+	Push Out Only	追い出しのみ
 	Hard	強い禁則
 	Soft	弱い禁則
 	Latin	欧文
@@ -506,6 +510,17 @@ digits	Malayalam	マラヤーラム数字
 	Inflate	膨張
 	Select objects, then pick an object type to give them a 3D effect.	オブジェクトを選択してから、オブジェクトの種類を選んで 3D 効果を適用してください。
 	Extrude & Bevel…	押し出しとベベル…
+	3D (Classic)	3D（クラシック）
+	Extrude & Bevel (Classic)…	押し出しとベベル（クラシック）…
+	Surface	表面
+	Wireframe	ワイヤーフレーム
+	No Shading	陰影なし
+	Plastic	プラスチック
+	Highlight Intensity	ハイライトの強さ
+	Highlight Size	ハイライトのサイズ
+	Blend Steps	ブレンドの階調
+	Shading Color	陰影のカラー
+	Draw Hidden Faces	隠れた面を描画
 	Revolve…	回転体…
 	Inflate…	膨張…
 	Materials…	マテリアル…

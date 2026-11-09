@@ -2348,8 +2348,9 @@ See [Revolve](revolve.md) for the scope and limitations.
 `effect.lightingPreset {index: int, preset: "standard" | "diffuse" | "topLeft" | "right", item?, ids?, target?}`
 replaces the lighting rig and ambient of an existing Revolve, Extrude & Bevel, Inflate or Rotate
 effect. `item: null` addresses object-level effects; an item index addresses a fill/stroke's
-effects. All targets must have a 3D effect at `index`, otherwise nothing changes. The operation
-is one undo step and preserves Shading, geometry, source paint and the view.
+effects. All targets must have a 3D effect at `index`, otherwise nothing changes. Extrude & Bevel
+(Classic) has no lighting presets: a target with it at `index` is an error, nothing changes, and
+`effect.setParams` sets its lights. The operation is one undo step and preserves Shading, geometry, source paint and the view.
 
 The four original rigs use one white front light at 80% intensity. Standard keeps the existing
 default; Diffuse uses 100% Softness and 35% Ambient Light, Top Left uses Rotation 135 and Height
@@ -2390,6 +2391,33 @@ solid, false open behind), `volume` (0..100%, default 50), `bothSides`.
 All three take `rotationX/Y/Z` (degrees, -180..180, default the Off-Axis Front position -21.88/-23.4/9.06),
 `perspectiveAngle` and the lighting parameters as Revolve. See [three-d.md](three-d.md) for the Position presets,
 the scope and what differs from the public documentation.
+
+## Extrude & Bevel (Classic)
+
+`effect.apply {effect: "threeD.classicExtrude", params: {...}, ids?, item?}` is Effect › 3D and Materials ›
+3D (Classic) › Extrude & Bevel (Classic)…. It builds the same solid as `threeD.extrude` and draws its faces with the
+classic surfaces. Parameters: `depth` (points, 0..2000, default 50), `cap` (true solid, false hollow), `bevel` (`none`,
+`classic`, `rounded`, `cove`, `step`, `ogee`), `bevelHeight` (points, 1..100, default 4; the bevel is as wide as it
+is tall), `bevelInside` (false adds the bevel around the shape, true carves it into the shape), `rotationX/Y/Z` and
+`perspectiveAngle` as above, and the surface:
+
+- `surface`: `wireframe` (the edges of every face, hidden faces included, with no fill), `none` (the art's own paint,
+  unlit), `diffuse` (soft light) or `plastic` (soft light plus a highlight; the default).
+- `lightRotation`, `lightHeight`, `lightBehind` and `lightIntensity` (0..100%, default 100) place one light, or
+  `lights` holds one to ten (`intensity`, `rotation`, `height`, `behind`; their light adds up, and `color` and
+  `softness` are not used). `ambient` (0..100%, default 50) lights every face.
+- `highlightIntensity` (0..100%, default 60) and `highlightSize` (0..100%, default 90; 100 is broad) shape the Plastic
+  highlight. `blendSteps` (whole number, 1..256, default 25) is how many levels the shading is rounded to.
+- `shadingColor`: `black` (the default), `custom` (darkens toward `shadingCustom`, a `#rrggbb` color) or `none` (the
+  paint is kept and only the highlight lightens it). `drawHiddenFaces` also draws the faces turned away from the
+  viewer, behind the others.
+
+The defaults are VectorCraft's own. An unknown parameter, a number out of range, a flag that is not true or false, or
+an unknown surface or shading color is refused with an error and the document is not changed.
+
+```json
+{"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"threeD.classicExtrude","item":null,"params":{"depth":40,"bevel":"rounded","bevelHeight":6,"surface":"diffuse","blendSteps":64}}}}
+```
 
 
 ## Edit Colors and Recolor Artwork
@@ -4126,8 +4154,10 @@ New objects take the fill and stroke proxies (`paint.setFill` / `paint.setStroke
 selected) on top of a template. With nothing selected, `stroke.set` / `stroke.setAdvanced` (cap, join, dashes,
 arrowheads, profile…) and `graphicStyle.apply` (every fill, stroke and effect, opacity, blend mode and the link to the
 style; `add: true` stacks it) set that template instead of editing art. With the Appearance panel's New Art Has Basic
-Appearance off (`appearance.setNewArtBasic {on: false}`, the preference `newArtBasic`) new art takes the whole
-appearance of the last selected object. `appearance.newArt` reports what the next object gets; `paint.default`
+Appearance on (the default), a `select.*` command or `layer.target` that changes the selection loads the proxies and
+the weight from it: only a paint or weight the selected objects share, and art without paint (a placed image) changes
+nothing. With the option off (`appearance.setNewArtBasic {on: false}`, the preference `newArtBasic`) new art takes the
+whole appearance of the last selected object. `appearance.newArt` reports what the next object gets; `paint.default`
 resets it.
 `appearance.setNewArtBasic` rejects an `on` value that is not a boolean. Omitting `on` toggles the current preference.
 
@@ -5860,6 +5890,30 @@ JLREQ's level 3 line-breaking rules do (https://www.w3.org/TR/jlreq/#addendum_a3
 
 ```json
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"kinsoku":"soft"}}}
+```
+
+## Kinsoku Shori Type
+
+`text.setFormat {kinsokuType: "pushInFirst"|"pushOutFirst"|"pushOutOnly"}` (Paragraph panel menu › Kinsoku Shori Type,
+shown with the East Asian options) sets how the area type lines of the paragraphs of the selected type (or `ids`, or the
+paragraphs a `start` / `end` range touches) keep the characters of their Kinsoku Set off their start and end. When the
+character that does not fit on a line may not start the next one, or the character before it may not end the line,
+**Push In First** sets it on the line, with the characters up to the next break the Kinsoku Set allows. The line then
+closes its gaps next to CJK characters to fit its measure, however it is aligned, each gap by the same share of the em
+of the character before it and by at most a tenth of that em; a line that cannot close up that much, or that holds a
+tab, pushes out instead. **Push Out First** pushes in
+the same way only when pushing out would leave the line more than an em, of the character before the break, short of
+its measure. **Push Out Only** (the default: new type and documents from before the setting) moves the
+character before a prohibited line start to the next line with it. With Burasagari on, an overflowing comma or full
+stop may hang outside the margin first, leaving the preceding character on the line. With Kinsoku Set None the setting
+does nothing. When Push In First or Push Out First is selected and a paragraph contains a prohibited line-start or
+line-end character, the whole paragraph is broken line by line, as the Single-line Composer breaks it, even if no line
+ends up pushing a character in. The setting is saved
+with the paragraph (`kinsoku_type` in `para`) only when it is not `pushOutOnly`, paragraph styles carry it, and Reset
+Panel sets it back to Push Out Only. One undo step.
+
+```json
+{"name":"run_command","arguments":{"command":"text.setFormat","params":{"kinsokuType":"pushInFirst"}}}
 ```
 
 ## Hanging punctuation (burasagari)

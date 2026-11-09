@@ -475,6 +475,17 @@
 	Inflate	Nafouknutí
 	Select objects, then pick an object type to give them a 3D effect.	Vyberte objekty a pak zvolte typ objektu, abyste jim dali 3D efekt.
 	Extrude & Bevel…	Vysunutí a zkosení…
+	3D (Classic)	3D (klasické)
+	Extrude & Bevel (Classic)…	Vysunutí a zkosení (klasické)…
+	Surface	Povrch
+	Wireframe	Drátový model
+	No Shading	Bez stínování
+	Plastic	Plast
+	Highlight Intensity	Intenzita odlesku
+	Highlight Size	Velikost odlesku
+	Blend Steps	Kroky prolnutí
+	Shading Color	Barva stínování
+	Draw Hidden Faces	Kreslit skryté stěny
 	Revolve…	Rotační těleso…
 	Inflate…	Nafouknutí…
 	Materials…	Materiály…
@@ -1921,6 +1932,10 @@ digits	Malayalam	Malajálamské
 	Stylistic	Stylistický
 	Mojikumi Set	Sada Mojikumi
 	Kinsoku Set	Sada Kinsoku
+	Kinsoku Shori Type	Typ Kinsoku Shori
+	Push In First	Nejprve vtáhnout
+	Push Out First	Nejprve vysunout
+	Push Out Only	Pouze vysunout
 	Hard	Pevné
 	Right Indent	Odsazení zprava
 	Right-to-Left Paragraph Direction	Směr odstavce zprava doleva

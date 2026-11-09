@@ -1107,6 +1107,17 @@ font-technology	Variable	Değişken
 	Exporting {}	{} dışa aktarılıyor
 	Export…	İhracat…
 	Extrude & Bevel…	Ekstrüzyon ve Eğim…
+	3D (Classic)	3D (Klasik)
+	Extrude & Bevel (Classic)…	Ekstrüzyon ve Eğim (Klasik)…
+	Surface	Yüzey
+	Wireframe	Tel Kafes
+	No Shading	Gölgeleme Yok
+	Plastic	Plastik
+	Highlight Intensity	Parlama Yoğunluğu
+	Highlight Size	Parlama Boyutu
+	Blend Steps	Karışım Adımları
+	Shading Color	Gölgeleme Rengi
+	Draw Hidden Faces	Gizli Yüzleri Çiz
 	Eyedropper	Damlalık
 	Sample Color from Screen	Ekrandan Örnek Renk
 	This system has no screen color sampler	Bu sistemin ekran rengi örnekleyicisi yok
@@ -1815,6 +1826,10 @@ font-technology	Variable	Değişken
 	Mojikumi	Mojikumi
 	Mojikumi Set	Mojikumi Seti
 	Kinsoku Set	Kinsoku Seti
+	Kinsoku Shori Type	Kinsoku Shori Türü
+	Push In First	Önce İçeri
+	Push Out First	Önce Dışarı
+	Push Out Only	Yalnızca Dışarı
 	Hard	Sert
 	Soft	Yumuşak
 	Monitor RGB	RGB'yi izleyin

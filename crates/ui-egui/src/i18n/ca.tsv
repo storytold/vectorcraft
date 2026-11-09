@@ -1518,6 +1518,17 @@ antiAlias	Sharp	Nítid
 	Exporting {}	S’està exportant {}
 	Export…	Exporta…
 	Extrude & Bevel…	Extrudeix i bisella…
+	3D (Classic)	3D (clàssic)
+	Extrude & Bevel (Classic)…	Extrudeix i bisella (clàssic)…
+	Surface	Superfície
+	Wireframe	Filferro
+	No Shading	Sense ombra
+	Plastic	Plàstic
+	Highlight Intensity	Intensitat de la brillantor
+	Highlight Size	Mida de la brillantor
+	Blend Steps	Passos de fusió
+	Shading Color	Color de l’ombra
+	Draw Hidden Faces	Dibuixa les cares ocultes
 	Eyedropper	Comptagotes
 	Eyedropper Applies:	El comptagotes aplica:
 	Eyedropper Options	Opcions del comptagotes
@@ -2125,6 +2136,7 @@ digits	Malayalam	Malaiàlam
 	Keywords:	Paraules clau:
 	Kind	Tipus
 	Kinsoku Set	Conjunt Kinsoku
+	Kinsoku Shori Type	Tipus de Kinsoku Shori
 	Kite	Estel
 	Knife	Ganivet
 	Knockout Group	Grup knockout
@@ -3195,6 +3207,9 @@ digits	Malayalam	Malaiàlam
 	Puppet Warp Pins	Pins de deformació de titella
 	Puppet Warp Tool	Eina de deformació de titella
 	Purple	Porpra
+	Push In First	Primer cap a dins
+	Push Out First	Primer cap a fora
+	Push Out Only	Només cap a fora
 	Put back in the toolbar	Torna a posar a la barra d’eines
 	Quality	Qualitat
 	Quality {quality}	Qualitat {quality}

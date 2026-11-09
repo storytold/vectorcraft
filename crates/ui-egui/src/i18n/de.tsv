@@ -1107,6 +1107,17 @@ font-technology	Variable	Variabel
 	Exporting {}	{} wird exportiert
 	Export…	Exportieren…
 	Extrude & Bevel…	Extrudieren und abgeflachte Kante…
+	3D (Classic)	3D (klassisch)
+	Extrude & Bevel (Classic)…	Extrudieren und abgeflachte Kante (klassisch)…
+	Surface	Oberfläche
+	Wireframe	Drahtmodell
+	No Shading	Keine Schattierung
+	Plastic	Kunststoff
+	Highlight Intensity	Glanzpunktintensität
+	Highlight Size	Glanzpunktgröße
+	Blend Steps	Angleichungsstufen
+	Shading Color	Schattierungsfarbe
+	Draw Hidden Faces	Verdeckte Flächen zeichnen
 	Eyedropper	Pipette
 	Sample Color from Screen	Farbe vom Bildschirm aufnehmen
 	This system has no screen color sampler	Dieses System hat keine Farbaufnahme vom Bildschirm
@@ -1982,6 +1993,10 @@ file-filter	Templates	Vorlagen
 	Stylistic	Stilistisch
 	Mojikumi Set	Mojikumi-Satz
 	Kinsoku Set	Kinsoku-Satz
+	Kinsoku Shori Type	Kinsoku-Shori-Typ
+	Push In First	Zuerst einziehen
+	Push Out First	Zuerst hinausschieben
+	Push Out Only	Nur hinausschieben
 	Hard	Hart
 	Soft	Weich
 	Monitor RGB	Monitor-RGB

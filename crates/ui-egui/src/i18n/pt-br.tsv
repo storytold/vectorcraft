@@ -1029,6 +1029,17 @@ antiAlias	Sharp	Nítido
 	Export:	Exportar:
 	Export…	Exportar…
 	Extrude & Bevel…	Extrusão e Bisel…
+	3D (Classic)	3D (Clássico)
+	Extrude & Bevel (Classic)…	Extrusão e Bisel (Clássico)…
+	Surface	Superfície
+	Wireframe	Aramado
+	No Shading	Sem Sombreamento
+	Plastic	Plástico
+	Highlight Intensity	Intensidade do Realce
+	Highlight Size	Tamanho do Realce
+	Blend Steps	Etapas de Mesclagem
+	Shading Color	Cor do Sombreamento
+	Draw Hidden Faces	Desenhar Faces Ocultas
 	Eyedropper	Conta-gotas
 	Eyedropper Applies:	O Conta-gotas Aplica:
 	Eyedropper Options	Opções do Conta-gotas
@@ -3424,6 +3435,10 @@ font-technology	Variable	Variáveis
 	Stylistic	Estilístico
 	Mojikumi Set	Conjunto Mojikumi
 	Kinsoku Set	Conjunto Kinsoku
+	Kinsoku Shori Type	Tipo de Kinsoku Shori
+	Push In First	Primeiro para dentro
+	Push Out First	Primeiro para fora
+	Push Out Only	Somente para fora
 	Hard	Duro
 	Soft	Macio
 	Monospaced	Monoespaçado

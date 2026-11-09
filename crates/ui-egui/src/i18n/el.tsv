@@ -1080,6 +1080,17 @@ font-technology	Variable	Μεταβλητές
 	Exporting {}	Εξαγωγή {}
 	Export…	Εξαγωγή…
 	Extrude & Bevel…	Εξώθηση και λοξότμηση…
+	3D (Classic)	3D (κλασικό)
+	Extrude & Bevel (Classic)…	Εξώθηση και λοξότμηση (κλασικό)…
+	Surface	Επιφάνεια
+	Wireframe	Συρματόπλεγμα
+	No Shading	Χωρίς σκίαση
+	Plastic	Πλαστικό
+	Highlight Intensity	Ένταση ανταύγειας
+	Highlight Size	Μέγεθος ανταύγειας
+	Blend Steps	Βήματα ανάμειξης
+	Shading Color	Χρώμα σκίασης
+	Draw Hidden Faces	Σχεδίαση κρυφών εδρών
 	Eyedropper	Σταγονόμετρο (Eyedropper Tool)
 	Eyedropper Applies:	Το σταγονόμετρο εφαρμόζει:
 	Eyedropper Options	Επιλογές σταγονόμετρου
@@ -2778,6 +2789,10 @@ theme	Appearance	Εμφάνιση
 	Stylistic	Στιλιστικό
 	Mojikumi Set	Σύνολο Mojikumi
 	Kinsoku Set	Σύνολο Kinsoku
+	Kinsoku Shori Type	Τύπος Kinsoku Shori
+	Push In First	Πρώτα προς τα μέσα
+	Push Out First	Πρώτα προς τα έξω
+	Push Out Only	Μόνο προς τα έξω
 	Mono	Μονοφωνικό
 	Monochrome images	Μονόχρωμες εικόνες
 	Monospaced	Σταθερού πλάτους

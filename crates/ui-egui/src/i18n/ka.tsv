@@ -398,6 +398,17 @@
 	Inflate	გაბერვა
 	Select objects, then pick an object type to give them a 3D effect.	აირჩიეთ ობიექტები, შემდეგ აირჩიეთ ობიექტის ტიპი, რომ მათ 3D ეფექტი მიეცეთ.
 	Extrude & Bevel…	ამოწევა და წაკვეთა…
+	3D (Classic)	3D (კლასიკური)
+	Extrude & Bevel (Classic)…	ამოწევა და წაკვეთა (კლასიკური)…
+	Surface	ზედაპირი
+	Wireframe	მავთულის ჩარჩო
+	No Shading	დაჩრდილვის გარეშე
+	Plastic	პლასტიკური
+	Highlight Intensity	ელვარების ინტენსივობა
+	Highlight Size	ელვარების ზომა
+	Blend Steps	შერევის საფეხურები
+	Shading Color	დაჩრდილვის ფერი
+	Draw Hidden Faces	დამალული წახნაგების დახატვა
 	Revolve…	ბრუნვა…
 	Inflate…	გაბერვა…
 	Materials…	მასალები…
@@ -1635,6 +1646,10 @@ digits	Malayalam	მალაიალამური
 	Stylistic	სტილისტური
 	Mojikumi Set	Mojikumi-ის ნაკრები
 	Kinsoku Set	Kinsoku-ის ნაკრები
+	Kinsoku Shori Type	Kinsoku Shori-ის ტიპი
+	Push In First	ჯერ შეტანა
+	Push Out First	ჯერ გატანა
+	Push Out Only	მხოლოდ გატანა
 	Hard	მკაცრი
 	Right Indent	მარჯვენა შეწევა
 	Right-to-Left Paragraph Direction	აბზაცის მიმართულება მარჯვნიდან მარცხნივ
