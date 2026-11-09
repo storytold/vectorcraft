@@ -36,6 +36,8 @@ mod logging;
 #[cfg(all(target_os = "macos", feature = "wgpu"))]
 mod mac_color_space;
 #[cfg(target_os = "macos")]
+mod mac_cursor;
+#[cfg(target_os = "macos")]
 mod mac_fonts;
 #[cfg(target_os = "macos")]
 mod mac_menu;
@@ -549,6 +551,7 @@ fn main() -> std::process::ExitCode {
                     if !in_window_menus {
                         app.services.native_menu = mac_menu::install(&cc.egui_ctx, &app);
                     }
+                    mac_cursor::install(&cc.egui_ctx, winit_window.as_ref());
                 }
                 #[cfg(not(target_os = "macos"))]
                 {
