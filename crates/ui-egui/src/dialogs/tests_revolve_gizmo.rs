@@ -347,6 +347,24 @@ fn a_refused_3d_effect_is_found_with_preview_off() {
     assert!(!h.app.session.in_interaction());
 }
 
+/// With Preview off, trying the values waits for another interaction to end: trying them during
+/// one would replace its preview and cancel it.
+#[test]
+fn a_3d_effect_with_preview_off_leaves_another_interaction_alone() {
+    let mut h = Harness::extrude_dialog(&clipping_group(), false);
+    h.app.session.begin_interaction("Drag").unwrap();
+    let d = h.app.ui.dialog.as_mut().unwrap();
+    d.fields.remove("__tried");
+    d.fields.remove(dialogs::form::REFUSED);
+    h.settle();
+    assert!(h.app.session.in_interaction(), "the other interaction goes on");
+    assert!(h.ok_is_on(), "nothing has tried the values yet");
+    h.app.session.cancel_interaction().unwrap();
+    assert!(h.shows("requires a path"));
+    assert!(!h.ok_is_on());
+    assert!(!h.app.session.in_interaction());
+}
+
 /// An object the effect can take keeps OK on, with Preview on or off, and shows no reason.
 #[test]
 fn an_accepted_3d_effect_keeps_ok_on() {

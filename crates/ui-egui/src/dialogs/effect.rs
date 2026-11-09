@@ -38,8 +38,9 @@ const TRIED: &str = "__tried";
 fn three_d_refusal(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, cmd: &str, params: Value) {
     if d.bool("preview") {
         d.fields.remove(TRIED);
-    } else if d.fields.get(TRIED) != Some(&params) {
-        // A failure to begin leaves no interaction: the preview below then reports it.
+    } else if !app.session.in_interaction() && d.fields.get(TRIED) != Some(&params) {
+        // Waits for another interaction to end: trying inside it would replace its preview and
+        // cancel it. A failure to begin leaves no interaction: the preview below then reports it.
         let _ = app.session.begin_interaction(&d.str("__label"));
         match app.session.preview(cmd, &params) {
             Ok(_) => {
