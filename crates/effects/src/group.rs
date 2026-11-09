@@ -67,25 +67,28 @@ pub type OutlineHook<'a> = &'a dyn Fn(&Node) -> Option<Node>;
 /// back to front: a compound shape as its area, a blend, an envelope or an object with a warp as
 /// the art it draws, and type and symbol instances as their art through `hook`. Past
 /// [`SYMBOL_ART_MAX_NODES`](crate::SYMBOL_ART_MAX_NODES) objects of symbol art, further
-/// instances add nothing.
-pub fn member_leaves(n: &Node, hook: Option<OutlineHook>) -> Vec<Node> {
+/// instances add nothing. The swatches and patterns that live-effect plug-ins painting their
+/// pieces name are looked up in `doc` ([`shape_art`]).
+pub fn member_leaves(doc: Option<&Document>, n: &Node, hook: Option<OutlineHook>) -> Vec<Node> {
     let mut out = vec![];
-    leaves(n, hook, &SymbolNodes::default(), &mut out);
+    leaves(doc, n, hook, &SymbolNodes::default(), &mut out);
     out
 }
 
 /// [`member_leaves`], with the symbol art given so far counted in `nodes`.
-fn leaves(n: &Node, hook: Option<OutlineHook>, nodes: &SymbolNodes, out: &mut Vec<Node>) {
+fn leaves(doc: Option<&Document>, n: &Node, hook: Option<OutlineHook>, nodes: &SymbolNodes, out: &mut Vec<Node>) {
     if !n.visible {
         return;
     }
     // A blend, an envelope or an object with a warp takes part as the art it draws.
-    if let Some(art) = shape_art_in(n, hook, nodes) {
+    if let Some(art) = shape_art_in(doc, n, hook, nodes) {
         let first = out.len();
-        leaves(&art, hook, nodes, out);
-        // Every path of a live object's, type's or symbol instance's art is drawn inside the
-        // object's opacity and blend mode.
-        if crate::needs_outline(n) {
+        leaves(doc, &art, hook, nodes, out);
+        // Every path of a live object's, type's or symbol instance's art, and every piece of a path
+        // whose live-effect plug-in paints its pieces, is drawn inside the object's opacity and
+        // blend mode.
+        let pieces = matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) && matches!(art.kind, NodeKind::Group { .. });
+        if crate::needs_outline(n) || pieces {
             for l in out.iter_mut().skip(first) {
                 within(l, n);
             }
@@ -95,11 +98,11 @@ fn leaves(n: &Node, hook: Option<OutlineHook>, nodes: &SymbolNodes, out: &mut Ve
     match &n.kind {
         NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. } => out.push(n.clone()),
         // A compound shape takes part as its area, styled like it.
-        NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => match compound_shape_art_in(n, hook, nodes) {
+        NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => match compound_shape_art_in(doc, n, hook, nodes) {
             Some(art) => out.push(art),
             None => {
                 for c in children {
-                    leaves(c, hook, nodes, out);
+                    leaves(doc, c, hook, nodes, out);
                 }
             }
         },
@@ -114,7 +117,7 @@ fn leaves(n: &Node, hook: Option<OutlineHook>, nodes: &SymbolNodes, out: &mut Ve
                 let art = match &n.kind {
                     NodeKind::SymbolInstance { symbol, .. } if nodes.charge(&art) => {
                         let mut art = crate::reshape::symbol_art_with(&art, h, nodes, symbol);
-                        crate::reshape::outline_nested_text(&mut art, false);
+                        crate::reshape::outline_nested_text(doc, &mut art, false);
                         transparency_into_members(&mut art);
                         art
                     }
@@ -122,7 +125,7 @@ fn leaves(n: &Node, hook: Option<OutlineHook>, nodes: &SymbolNodes, out: &mut Ve
                     _ => art,
                 };
                 let first = out.len();
-                leaves(&art, None, nodes, out);
+                leaves(doc, &art, None, nodes, out);
                 for l in out.iter_mut().skip(first) {
                     within(l, n);
                 }
@@ -176,29 +179,37 @@ fn transparency_into_members(n: &mut Node) {
 /// [`outline_object`](crate::outline_object) gives a symbol instance its symbol's art. The art
 /// keeps the effects of `n` other than its geometry effects, and the groups inside it pass their
 /// opacity and blend mode to the objects they hold. `None` when `n` is none of these, for images,
-/// for symbol instances without geometry effects, and for one without art from `hook`.
-pub fn shape_art(n: &Node, hook: Option<OutlineHook>) -> Option<Node> {
-    shape_art_in(n, hook, &SymbolNodes::default())
+/// for symbol instances without geometry effects, and for one without art from `hook`. A
+/// live-effect plug-in that paints its pieces makes a path, and each path of a group's or symbol's
+/// art, a group of its pieces, whose swatches and patterns must be in `doc` (without one, pieces
+/// that name one are refused and the path stays as it is).
+pub fn shape_art(doc: Option<&Document>, n: &Node, hook: Option<OutlineHook>) -> Option<Node> {
+    shape_art_in(doc, n, hook, &SymbolNodes::default())
 }
 
 /// [`shape_art`], with the symbol art given so far counted in `nodes`.
-fn shape_art_in(n: &Node, hook: Option<OutlineHook>, nodes: &SymbolNodes) -> Option<Node> {
-    let mut art = reshaped_art(n, hook, nodes)?;
+fn shape_art_in(doc: Option<&Document>, n: &Node, hook: Option<OutlineHook>, nodes: &SymbolNodes) -> Option<Node> {
+    let mut art = reshaped_art(doc, n, hook, nodes)?;
     transparency_into_members(&mut art);
     Some(art)
 }
 
 /// [`shape_art_in`] before the groups inside the art pass on their transparency.
-fn reshaped_art(n: &Node, hook: Option<OutlineHook>, nodes: &SymbolNodes) -> Option<Node> {
+fn reshaped_art(doc: Option<&Document>, n: &Node, hook: Option<OutlineHook>, nodes: &SymbolNodes) -> Option<Node> {
     let fx = crate::reshape::geometry_effects(n);
     let outline = hook.unwrap_or(&crate::outline_text);
     match &n.kind {
-        NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. } if !fx.is_empty() => Some(reshaped(n, n)),
-        NodeKind::Group { .. } | NodeKind::Layer { .. } if !fx.is_empty() => match compound_shape_art_in(n, hook, nodes) {
-            Some(area) => Some(reshaped(&area, n)),
+        // A path with a live-effect plug-in that paints its pieces: the group of its pieces, each
+        // with its own paints, as the renderer draws it.
+        NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. } if !fx.is_empty() => {
+            let painted = crate::reshape::has_painted_effects(n).then(|| crate::reshape::reshape(doc, n, None)).flatten();
+            Some(painted.unwrap_or_else(|| reshaped(n, n, doc)))
+        }
+        NodeKind::Group { .. } | NodeKind::Layer { .. } if !fx.is_empty() => match compound_shape_art_in(doc, n, hook, nodes) {
+            Some(area) => Some(reshaped(&area, n, doc)),
             None => {
-                let mut m = crate::reshape::outlined_members_with(None, n, outline, nodes);
-                let carry = crate::reshape::reshape_leaves_carrying(&mut m, &fx);
+                let mut m = crate::reshape::outlined_members_with(None, doc, n, outline, nodes);
+                let carry = crate::reshape::reshape_leaves_carrying(&mut m, &fx, doc);
                 // The group's own fills and strokes follow the effects as its members do.
                 if carry.moves(&m.appearance) {
                     carry.apply(&mut m.appearance);
@@ -213,8 +224,8 @@ fn reshaped_art(n: &Node, hook: Option<OutlineHook>, nodes: &SymbolNodes) -> Opt
             let h = hook?;
             let art = h(n).filter(|art| nodes.charge(art))?;
             let mut art = crate::reshape::symbol_art_with(&art, h, nodes, symbol);
-            crate::reshape::outline_nested_text(&mut art, false);
-            let carry = crate::reshape::reshape_leaves_carrying(&mut art, &fx);
+            crate::reshape::outline_nested_text(doc, &mut art, false);
+            let carry = crate::reshape::reshape_leaves_carrying(&mut art, &fx, doc);
             // The art's own fills and strokes follow the effects as its members do.
             if carry.moves(&art.appearance) {
                 carry.apply(&mut art.appearance);
@@ -226,19 +237,21 @@ fn reshaped_art(n: &Node, hook: Option<OutlineHook>, nodes: &SymbolNodes) -> Opt
         }
         NodeKind::Image(_) | NodeKind::SymbolInstance { .. } => None,
         _ if crate::needs_outline(n) && (vectorcraft_doc::live::is_live(n) || !fx.is_empty()) => {
-            crate::reshape::as_art_with(None, n, None, outline, nodes)
+            crate::reshape::as_art_with(None, doc, n, None, outline, nodes)
         }
         _ => None,
     }
 }
 
 /// `src`, a path, compound path or compound shape's area, as one path reshaped by the visible
-/// geometry effects of `n`, without those effects.
-fn reshaped(src: &Node, n: &Node) -> Node {
+/// geometry effects of `n`, without those effects. The swatches and patterns a live-effect plug-in
+/// that paints its pieces names are looked up in `doc`.
+fn reshaped(src: &Node, n: &Node, doc: Option<&Document>) -> Node {
     let mut m = src.clone();
     if let Some((path, rule)) = geometry(src) {
         let bounds = vectorcraft_geom::Shape::bounding_box(&path.to_bezpath());
-        let (g, carry) = crate::apply_geometry_carrying(&n.appearance.effects, &path, bounds, &crate::GeomContext::of(n));
+        let (g, carry) =
+            crate::apply_geometry_carrying(&n.appearance.effects, &path, bounds, &crate::GeomContext { doc, ..crate::GeomContext::of(n) });
         m.kind = NodeKind::Path { path: g, rule, live: None, clipping: false, guide: false };
         // Its gradients move with the outline, as the canvas paints them.
         if carry.moves(&m.appearance) {
@@ -282,12 +295,12 @@ fn shape_op(mode: ShapeMode) -> po::BoolOp {
 /// it by the member's shape mode; the backmost member starts the area. `None` when `n` is not a
 /// compound shape, or its members are past a live Pathfinder's budget ([`PATHFINDER_MAX_SEGMENTS`],
 /// [`PATHFINDER_MAX_OVERLAPS`], [`SYMBOL_ART_MAX_NODES`](crate::SYMBOL_ART_MAX_NODES)).
-pub fn compound_shape_area(n: &Node, hook: Option<OutlineHook>) -> Option<PathData> {
-    compound_shape_area_in(n, hook, &SymbolNodes::default())
+pub fn compound_shape_area(doc: Option<&Document>, n: &Node, hook: Option<OutlineHook>) -> Option<PathData> {
+    compound_shape_area_in(doc, n, hook, &SymbolNodes::default())
 }
 
 /// [`compound_shape_area`], with the symbol art given so far counted in `nodes`.
-fn compound_shape_area_in(n: &Node, hook: Option<OutlineHook>, nodes: &SymbolNodes) -> Option<PathData> {
+fn compound_shape_area_in(doc: Option<&Document>, n: &Node, hook: Option<OutlineHook>, nodes: &SymbolNodes) -> Option<PathData> {
     if !n.is_compound_shape() {
         return None;
     }
@@ -296,7 +309,7 @@ fn compound_shape_area_in(n: &Node, hook: Option<OutlineHook>, nodes: &SymbolNod
     let mut members: Vec<(po::BoolOp, usize)> = vec![];
     for c in n.children()? {
         let before = all.len();
-        leaves(c, hook, nodes, &mut all);
+        leaves(doc, c, hook, nodes, &mut all);
         if all.len() > before {
             members.push((shape_op(c.extras().shape_mode), all.len() - before));
         }
@@ -323,13 +336,13 @@ fn compound_shape_area_in(n: &Node, hook: Option<OutlineHook>, nodes: &SymbolNod
 
 /// Compound shape `n` as one path of its area ([`compound_shape_area`]) with its appearance,
 /// opacity and blend mode: how it takes part in a Pathfinder operation.
-pub fn compound_shape_art(n: &Node, hook: Option<OutlineHook>) -> Option<Node> {
-    compound_shape_art_in(n, hook, &SymbolNodes::default())
+pub fn compound_shape_art(doc: Option<&Document>, n: &Node, hook: Option<OutlineHook>) -> Option<Node> {
+    compound_shape_art_in(doc, n, hook, &SymbolNodes::default())
 }
 
 /// [`compound_shape_art`], with the symbol art given so far counted in `nodes`.
-fn compound_shape_art_in(n: &Node, hook: Option<OutlineHook>, nodes: &SymbolNodes) -> Option<Node> {
-    let area = compound_shape_area_in(n, hook, nodes)?;
+fn compound_shape_art_in(doc: Option<&Document>, n: &Node, hook: Option<OutlineHook>, nodes: &SymbolNodes) -> Option<Node> {
+    let area = compound_shape_area_in(doc, n, hook, nodes)?;
     let mut art = Node::path(n.id, area, Appearance { items: n.appearance.items.clone(), ..Default::default() });
     (art.opacity, art.blend) = (n.opacity, n.blend);
     Some(art)
@@ -435,15 +448,16 @@ fn within_budget<'a>(leaves: impl IntoIterator<Item = &'a Node>) -> bool {
 /// Evaluate the visible Pathfinder effects of `group` in order: the resulting child objects.
 /// `None` when the group has no Pathfinder effect. Past the budget ([`PATHFINDER_MAX_SEGMENTS`],
 /// [`PATHFINDER_MAX_OVERLAPS`], [`SYMBOL_ART_MAX_NODES`](crate::SYMBOL_ART_MAX_NODES) for
-/// each effect) it returns the children as they are.
-pub fn pathfinder_children(group: &Node, hook: Option<OutlineHook>) -> Option<Vec<Arc<Node>>> {
+/// each effect) it returns the children as they are. The swatches and patterns that live-effect
+/// plug-ins painting their pieces name are looked up in `doc` ([`shape_art`]).
+pub fn pathfinder_children(doc: Option<&Document>, group: &Node, hook: Option<OutlineHook>) -> Option<Vec<Arc<Node>>> {
     if !has_pathfinder(group) {
         return None;
     }
     let source: &[Arc<Node>] = group.children()?;
     let mut stack: Vec<Arc<Node>> = if group.is_compound_shape() {
         // The group's own appearance paints the area ([`evaluate_container`]), so the art has none.
-        match compound_shape_area(group, hook) {
+        match compound_shape_area(doc, group, hook) {
             Some(area) if area.is_empty() => vec![],
             Some(area) => vec![Arc::new(Node::path(group.id, area, Appearance::default()))],
             None => return Some(source.to_vec()),
@@ -455,7 +469,7 @@ pub fn pathfinder_children(group: &Node, hook: Option<OutlineHook>) -> Option<Ve
         if e.id == crate::trap::TRAP {
             let (mut lv, nodes) = (vec![], SymbolNodes::default());
             for c in &stack {
-                leaves(c, hook, &nodes, &mut lv);
+                leaves(doc, c, hook, &nodes, &mut lv);
             }
             if nodes.spent() || !within_budget(&lv) {
                 return Some(source.to_vec());
@@ -479,7 +493,7 @@ pub fn pathfinder_children(group: &Node, hook: Option<OutlineHook>) -> Option<Ve
             .iter()
             .map(|c| {
                 let mut lv = vec![];
-                leaves(c, hook, &nodes, &mut lv);
+                leaves(doc, c, hook, &nodes, &mut lv);
                 lv
             })
             .collect();
@@ -633,7 +647,7 @@ pub fn member_shapes(doc: Option<&Document>, n: &Node) -> Vec<(PathData, FillRul
             NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. } => out.extend(crate::reshape::leaf_geometry(n)),
             NodeKind::Group { .. } if n.is_compound_shape() => {
                 let hook = |c: &Node| crate::outline_object(doc, c);
-                match compound_shape_area(n, Some(&hook)) {
+                match compound_shape_area(doc, n, Some(&hook)) {
                     Some(area) => out.push((area, FillRule::NonZero)),
                     None => members(doc, n, out),
                 }
@@ -715,7 +729,7 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
     let mut m = n.clone();
     if pathfinder {
         let hook = |c: &Node| crate::outline_object(doc, c);
-        let result = pathfinder_children(n, Some(&hook)).unwrap_or_default();
+        let result = pathfinder_children(doc, n, Some(&hook)).unwrap_or_default();
         if let Some(ch) = m.children_mut() {
             *ch = result;
         }
@@ -724,7 +738,7 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
     }
     if !fx.is_empty() {
         m = crate::reshape::outlined_members(doc, &m);
-        let carry = crate::reshape::reshape_leaves_carrying(&mut m, &fx);
+        let carry = crate::reshape::reshape_leaves_carrying(&mut m, &fx, doc);
         // The group's own fills and strokes paint the members as a whole: their gradients follow
         // the effects as the members' do.
         if paint && carry.moves(&m.appearance) {

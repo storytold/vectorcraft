@@ -430,3 +430,47 @@ fn recolor_writes_a_new_pattern_swatch() {
     s.execute("edit.colors.invert", &json!({})).unwrap();
     assert_eq!((fill_pattern(&s, r), tile_fill(&s, "Dots 2")), ("Dots 2".to_string(), "#00ffff".to_string()));
 }
+
+#[test]
+fn edit_colors_of_everything_count_the_hidden_objects_left_out() {
+    let mut s = session();
+    let shown = rect(&mut s, json!("#ff0000"));
+    let hidden = rect(&mut s, json!("#ff0000"));
+    // A hidden object with no paint would not change.
+    let unpainted = rect(&mut s, json!("#ff0000"));
+    s.execute("paint.setFill", &json!({"ids": [unpainted.0], "none": true})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [unpainted.0], "none": true})).unwrap();
+    s.execute("layer.setProps", &json!({"ids": [hidden.0, unpainted.0], "visible": false})).unwrap();
+    // A locked member of a selected group is recolored with it.
+    let member = rect(&mut s, json!("#ff0000"));
+    let locked_member = rect(&mut s, json!("#ff0000"));
+    s.execute("select.set", &json!({"ids": [member.0, locked_member.0]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    s.execute("layer.setProps", &json!({"ids": [locked_member.0], "locked": true})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    let r = s.execute("edit.colors.invert", &json!({})).unwrap();
+    assert_eq!(r["notChanged"], json!({"locked": 0, "hidden": 1}), "{r}");
+    assert_eq!(r["warning"], "Recolor completed; 1 hidden object was left unchanged");
+    assert_eq!((fill_of(&s, shown).to_hex(), fill_of(&s, hidden).to_hex()), ("#00ffff".to_string(), "#ff0000".to_string()));
+    assert_eq!(fill_of(&s, locked_member).to_hex(), "#00ffff");
+    // Objects given by `ids` are the whole scope.
+    let r = s.execute("edit.colors.toGrayscale", &json!({"ids": [shown.0]})).unwrap();
+    assert_eq!(r["notChanged"], json!({"locked": 0, "hidden": 0}), "{r}");
+    assert!(r.get("warning").is_none(), "{r}");
+}
+
+#[test]
+fn edit_colors_in_isolation_mode_count_the_locked_members_left_out() {
+    let mut s = session();
+    let a = rect(&mut s, json!("#ff0000"));
+    let b = rect(&mut s, json!("#ff0000"));
+    let c = rect(&mut s, json!("#ff0000"));
+    s.execute("select.set", &json!({"ids": [a.0, b.0, c.0]})).unwrap();
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    s.execute("layer.setProps", &json!({"ids": [b.0, c.0], "locked": true})).unwrap();
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    let r = s.execute("edit.colors.saturate", &json!({"intensity": -50})).unwrap();
+    assert_eq!(r["notChanged"], json!({"locked": 2, "hidden": 0}), "{r}");
+    assert_eq!(r["warning"], "Recolor completed; 2 locked objects were left unchanged");
+}
