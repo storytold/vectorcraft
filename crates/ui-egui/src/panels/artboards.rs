@@ -312,34 +312,11 @@ pub struct MenuFacts {
     pub(crate) any_art: bool,
 }
 
-/// Whether an unlocked artboard of `indices` has art that Fit to Artwork Bounds fits it to. The
-/// canvas menu asks on every frame it is open without its [`MenuFacts`], and measuring builds the
-/// solids of 3D effects, so one answer is kept, the last asked: for that version of the document
-/// (the same `Arc`, held weakly so its address isn't reused, as
-/// `DocState::any_empty_artboards` keeps its answer) and those artboards, until a plug-in is
-/// installed or removed, which can change what its effects draw. A change of the selection or the
-/// view keeps it.
+/// Whether an unlocked artboard of `indices` has art that Fit to Artwork Bounds fits it to, kept by
+/// the document ([`vectorcraft_engine::DocState::any_art_to_fit`]): the canvas menu asks on every
+/// frame it is open without its [`MenuFacts`].
 pub(crate) fn fit_has_art(app: &VectorcraftApp, indices: &[usize]) -> bool {
-    /// The document measured, the artboards asked about, the plug-ins' revision, and the answer.
-    struct Kept {
-        doc: std::sync::Weak<vectorcraft_doc::Document>,
-        indices: Vec<usize>,
-        plugins: u64,
-        any: bool,
-    }
-    thread_local!(static KEPT: std::cell::RefCell<Option<Kept>> = const { std::cell::RefCell::new(None) });
-    app.session.active().is_some_and(|st| {
-        let plugins = crate::menus::plugin_revision();
-        let same = |k: &Kept| std::ptr::eq(k.doc.as_ptr(), std::sync::Arc::as_ptr(&st.doc)) && k.indices == indices && k.plugins == plugins;
-        if let Some(any) = KEPT.with_borrow(|k| k.as_ref().filter(|k| same(k)).map(|k| k.any)) {
-            return any;
-        }
-        // One renderer measures every artboard: each object once.
-        let mut r = vectorcraft_render::Renderer::new();
-        let any = indices.iter().filter_map(|i| st.doc.artboards.get(*i)).any(|a| !a.locked && r.art_bounds_on(&st.doc, a.rect).is_some());
-        KEPT.set(Some(Kept { doc: std::sync::Arc::downgrade(&st.doc), indices: indices.to_vec(), plugins, any }));
-        any
-    })
+    app.session.active().is_some_and(|st| st.any_art_to_fit(indices))
 }
 
 /// A right-click on the canvas at `p` with the Artboard tool: an artboard under the pointer that
