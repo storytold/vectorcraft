@@ -252,6 +252,7 @@ const HEX: f64 = 2.0 * 1.732_050_807_568_877_2;
 /// Flattening tolerance of the curved local heads, in units.
 const LOCAL_TOL: f64 = 1e-3;
 
+/// Where the stroke ends under a head drawn in local units ([`local`]), in those units.
 fn local_stop(kind: Arrowhead) -> Stop {
     match kind {
         Arrowhead::Target | Arrowhead::TagOpen | Arrowhead::DiamondOpen => Stop::Wall(4.0),
