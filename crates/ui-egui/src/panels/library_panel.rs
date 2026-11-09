@@ -573,7 +573,7 @@ pub(crate) fn library_pick_filters(kind: &str) -> Vec<(&'static str, &'static [&
     match kind {
         super::swatches::SwatchLibraries::KIND => fileio::library_open_filters("Swatch libraries", swatchlib::LIBRARY_EXTS).collect(),
         super::graphic_styles::GraphicStyleLibraries::KIND => fileio::library_open_filters("Graphic Style Libraries", &[STYLES_EXT]).collect(),
-        _ => fileio::open_filters().collect(),
+        _ => fileio::builtin_open_filters().collect(),
     }
 }
 

@@ -434,6 +434,17 @@
 	Inflate	Nadmuchanie
 	Select objects, then pick an object type to give them a 3D effect.	Zaznacz obiekty, a następnie wybierz typ obiektu, aby nadać im efekt 3D.
 	Extrude & Bevel…	Wyciągnięcie i fazowanie…
+	3D (Classic)	3D (klasyczne)
+	Extrude & Bevel (Classic)…	Wyciągnięcie i fazowanie (klasyczne)…
+	Surface	Powierzchnia
+	Wireframe	Szkielet
+	No Shading	Bez cieniowania
+	Plastic	Plastik
+	Highlight Intensity	Intensywność połysku
+	Highlight Size	Rozmiar połysku
+	Blend Steps	Kroki przejścia
+	Shading Color	Kolor cieniowania
+	Draw Hidden Faces	Rysuj ukryte ściany
 	Revolve…	Obrót…
 	Inflate…	Nadmuchanie…
 	Materials…	Materiały…
@@ -1839,6 +1850,10 @@ digits	Malayalam	Malajalam
 	Stylistic	Stylistyczny
 	Mojikumi Set	Zestaw mojikumi
 	Kinsoku Set	Zestaw kinsoku
+	Kinsoku Shori Type	Typ kinsoku shori
+	Push In First	Najpierw wciągaj
+	Push Out First	Najpierw wypychaj
+	Push Out Only	Tylko wypychaj
 	Hard	Ścisły
 	Right Indent	Wcięcie z prawej
 	Right-to-Left Paragraph Direction	Kierunek akapitu od prawej do lewej
@@ -6427,6 +6442,24 @@ breakText	Glyphs	Glify
 # 3D Box add-on
 	3D Box	Bryła 3D
 	3D Box Tool	Narzędzie Bryła 3D
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Otwórz za pomocą
+	No importer plug-ins installed	Brak zainstalowanych wtyczek importu
+	Read files you open in its format and make documents from them	Odczytywać pliki otwierane w jego formacie i tworzyć z nich dokumenty
+@msg	{_1} is an importer (File › Open With)	{_1} to wtyczka importu (Plik › Otwórz za pomocą)
+@msg	missing `importer` (see document.formats)	brak `importer` (zobacz document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` musi być identyfikatorem formatu wtyczki (zobacz document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	„{shown}” otwiera pliki {_1}, a nie `{_2}`
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` to wtyczka rodzaju `{_2}`, a nie wtyczka importu
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` to wtyczka rodzaju `{_2}`, a nie wtyczka eksportu
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` to wtyczka importu: otwórz plik za pomocą document.open {{"importer"}"}}
+@msg	the importer returned no objects	wtyczka importu nie zwróciła żadnych obiektów
+@msg	an importer returns `objects` and `warnings`, not `{key}`	wtyczka importu zwraca `objects` i `warnings`, a nie `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	plik jest większy niż {MAX_INPUT_BYTES} bajtów, które odczytuje wtyczka importu
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	wtyczka importu deklaruje od 1 do {MAX_EXTENSIONS} `extensions`
+@msg	only an exporter or an importer declares `extensions`	`extensions` deklaruje tylko wtyczka eksportu lub importu
+@msg	an importer always gets an import's budget: leave `budget` out	wtyczka importu zawsze dostaje budżet importu: pomiń `budget`
 
 # Safe Mode
 	Safe Mode…	Tryb awaryjny…

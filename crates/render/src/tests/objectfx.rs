@@ -857,6 +857,41 @@ fn a_paths_gradient_moves_with_its_transform_and_free_distort() {
     assert!(red(rb(&img, 51, 50)) && blue(rb(&img, 78, 50)), "{:?} {:?}", rb(&img, 51, 50), rb(&img, 78, 50));
 }
 
+/// The canvas turns and reflects a gradient fitted to the square with its Transform effect, on the
+/// object and as the fill's own effect.
+#[test]
+fn a_fitted_gradient_turns_and_reflects_with_its_transform_on_the_canvas() {
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let fitted = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+    let draw = |e: Effect, own: bool| {
+        let square = shapes::rectangle(vectorcraft_geom::Rect::new(10.0, 35.0, 40.0, 65.0));
+        let mut n = Node::path(NodeId(0), square, Appearance::basic(fitted.clone(), Paint::None, 0.0));
+        if own {
+            n.appearance.items[0].effects_mut().push(e);
+        } else {
+            n.appearance.effects.push(e);
+        }
+        render(&doc_with(Document::new(100.0, 100.0), n))
+    };
+    let rb = |img: &Rendered, x: u32, y: u32| {
+        let p = img.pixel(x, y);
+        (p[0], p[2])
+    };
+    let red = |(r, b): (u8, u8)| r > 200 && b < 60;
+    let blue = |(r, b): (u8, u8)| b > 200 && r < 60;
+    for own in [false, true] {
+        // A quarter turn: the left (red) to right (blue) ramp runs from the bottom up.
+        let img = draw(fx("distort.transform", json!({"rotate": 90})), own);
+        let (top, bottom) = (rb(&img, 25, 36), rb(&img, 25, 63));
+        assert!(blue(top) && red(bottom), "own {own}: {top:?} {bottom:?}");
+        assert_eq!(rb(&img, 12, 50), rb(&img, 38, 50), "own {own}: the same color across");
+        // Reflected left to right: blue on the left, red on the right.
+        let img = draw(fx("distort.transform", json!({"reflectX": true})), own);
+        let (left, right) = (rb(&img, 11, 50), rb(&img, 38, 50));
+        assert!(blue(left) && red(right), "own {own}: {left:?} {right:?}");
+    }
+}
+
 #[test]
 fn a_paths_gradient_moves_and_scales_with_its_warped_bounds() {
     use vectorcraft_color::GradientGeom;
