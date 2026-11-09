@@ -1,7 +1,7 @@
 use super::entry::{INVISIBLE_TEXT_NOTE, MAX_NESTED, OUTLINED_TEXT_NOTE, UNSORTED, WHITE_KEY};
 use super::state::{
-    Builder, Decoded, Frame, FrameKind, GlyphRun, blend, fill_rule, line_width, mean_scale, resize_alpha, rgba_png, same_outline, stroke_layer,
-    stroke_outline,
+    Builder, Decoded, Frame, FrameKind, GlyphRun, blend, fill_rule, gray_png, line_width, mean_scale, resize_alpha, rgba_png, same_outline,
+    stroke_layer, stroke_outline,
 };
 use super::{
     Affine, Appearance, AppearanceItem, Arc, BezPath, BlendMode, ClipPath, Device, FillLayer, FillRule, Glyph, GlyphDrawMode, Image, ImageBlob,
@@ -248,7 +248,26 @@ impl<'a> Device<'a> for Builder<'_> {
                     // Its mask (read by the interpreter, whatever its kind) becomes an opacity
                     // mask, so the inks stay as they are.
                     let mask = if crate::import_image::has_mask(st) { self.alpha_mask(key, &r, w, h, transform) } else { None };
-                    return self.add_image_masked(key, || cmyk.map(|blob| (blob, w, h)), transform, mask);
+                    return self.add_image_masked(key, || cmyk.map(|blob| (blob, w, h)), transform, mask, None);
+                }
+                // A Separation image keeps its ink: its tints as a grayscale image that the ink at
+                // 100 % colorizes, as a mask painted in the ink comes in. Its mask becomes an
+                // opacity mask, as a CMYK image's does. Read once per image: the decision is kept,
+                // so one that opens in RGB stays RGB, and the gray pixels have their own key.
+                if !white {
+                    let found = match self.separation_paints.get(&key) {
+                        Some(paint) => paint.clone().map(|p| (p, None)),
+                        None => {
+                            let read = self.separation_image(st, w, h);
+                            self.separation_paints.insert(key, read.as_ref().map(|(p, _)| p.clone()));
+                            read.map(|(p, gray)| (p, Some(gray)))
+                        }
+                    };
+                    if let Some((paint, gray)) = found {
+                        let mask = if crate::import_image::has_mask(st) { self.alpha_mask(key, &r, w, h, transform) } else { None };
+                        let make = || gray.and_then(|g| gray_png(g, w, h)).map(|png| (ImageBlob::new("image/png", png), w, h));
+                        return self.add_image_masked(key ^ 0x5e9_a7e5, make, transform, mask, Some(paint));
+                    }
                 }
                 // JPEG passthrough for plain DeviceRGB/DeviceGray DCT images.
                 let dict = st.dict();
@@ -290,22 +309,43 @@ impl<'a> Device<'a> for Builder<'_> {
             Image::Stencil(s) => {
                 let white = self.white_images;
                 let key = craft_pdf::interpret::CacheKey::cache_key(&s) ^ if white { WHITE_KEY } else { 0 };
+                // A mask painted in a solid color comes in as a grayscale image of what it paints
+                // (black, the rest white) colorized by that color, as the `.ai` reader opens an
+                // image mask: Fill and Recolor Artwork reach the color, a spot color keeps its ink,
+                // and the mask drawn again in another color keeps that color. Inside an alpha soft
+                // mask, or painted with a pattern (which isn't drawn), its pixels are white or black.
                 let mut decoded: Option<Decoded> = None;
+                let mut colorize = None;
                 s.with_stencil(
                     |luma, paint| {
-                        let rgb = match paint {
-                            _ if white => [255, 255, 255, 255],
-                            craft_pdf::interpret::Paint::Color(c) => c.to_rgba().to_rgba8(),
-                            _ => [0, 0, 0, 255],
+                        let px = match paint {
+                            craft_pdf::interpret::Paint::Color(_) if !white => {
+                                // The walk doesn't count images: the ink is found by its color space.
+                                colorize = Some(self.paint(paint, false, None).0);
+                                luma.data.iter().map(|a| u8::MAX - a).collect()
+                            }
+                            _ => {
+                                let v = if white { u8::MAX } else { 0 };
+                                luma.data.iter().flat_map(|a| [v, v, v, *a]).collect()
+                            }
                         };
-                        let rgba = luma.data.iter().flat_map(|a| [rgb[0], rgb[1], rgb[2], *a]).collect();
-                        decoded = Some((rgba, luma.width, luma.height, luma.scale_factors));
+                        decoded = Some((px, luma.width, luma.height, luma.scale_factors));
                     },
                     None,
                 );
-                let Some((rgba, w, h, sf)) = decoded else { return };
+                let Some((px, w, h, sf)) = decoded else { return };
                 let xf = transform * Affine::scale_non_uniform(sf.0 as f64, sf.1 as f64);
-                self.add_image(key ^ 0x5_7e9c, || rgba_png(rgba, w, h).map(|png| (ImageBlob::new("image/png", png), w, h)), xf);
+                match colorize {
+                    // Its own key: its pixels are the gray ones, whatever color paints it.
+                    Some(paint) => self.add_image_masked(
+                        key ^ 0x6a7_57e9c,
+                        || gray_png(px, w, h).map(|png| (ImageBlob::new("image/png", png), w, h)),
+                        xf,
+                        None,
+                        Some(paint),
+                    ),
+                    None => self.add_image(key ^ 0x5_7e9c, || rgba_png(px, w, h).map(|png| (ImageBlob::new("image/png", png), w, h)), xf),
+                }
             }
         }
     }

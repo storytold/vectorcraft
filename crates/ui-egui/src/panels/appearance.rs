@@ -251,6 +251,21 @@ pub(crate) fn shown_effect_label(id: &str) -> String {
     }
 }
 
+/// An effect row's name: [`shown_effect_label`], followed by "(Safe Mode)" for a plug-in effect
+/// Safe Mode skips (the object keeps it and draws without it).
+pub fn effect_row_label(id: &str) -> String {
+    let label = shown_effect_label(id);
+    if vectorcraft_plugins::effect::skipped(id) { format!("{label} ({})", tl!("Safe Mode")) } else { label }
+}
+
+/// The tooltip of an effect row Safe Mode skips: why it draws nothing, and its plug-in's id;
+/// `None` for an effect that draws.
+pub fn skipped_effect_tip(id: &str) -> Option<String> {
+    let plugin = vectorcraft_plugins::effect::plugin_id(id).filter(|_| vectorcraft_plugins::effect::skipped(id))?;
+    let why = crate::i18n::msg(&vectorcraft_plugins::Error::SafeMode.to_string());
+    Some(format!("{why}\n{}", vectorcraft_plugins::safe_mode::display_name(plugin)))
+}
+
 /// "Opacity: Default" or "Opacity: 50% Multiply".
 pub fn opacity_text(opacity: f32, blend: BlendMode) -> String {
     if (opacity - 1.0).abs() < 1e-4 && blend == BlendMode::Normal {
@@ -582,7 +597,7 @@ fn default_stack(app: &mut VectorcraftApp, ui: &mut Ui) {
     let fx = |ui: &mut Ui, e: &Effect, id: (Option<usize>, usize)| {
         let (r, _) = row(ui, false);
         eye(ui, r, ("ap-def-fx", id), e.visible, false);
-        text(ui, pos2(r.left() + EYE_W + 24.0 + if id.0.is_some() { 12.0 } else { 0.0 }, r.center().y), &shown_effect_label(&e.id), false);
+        text(ui, pos2(r.left() + EYE_W + 24.0 + if id.0.is_some() { 12.0 } else { 0.0 }, r.center().y), &effect_row_label(&e.id), false);
         icons::paint(ui, "dc-fx", Rect::from_center_size(r.right_center() - vec2(14.0, 0.0), vec2(16.0, 16.0)), t.icon);
     };
     for (i, it) in ap.items.iter().enumerate().rev() {
@@ -856,7 +871,7 @@ fn drag_ghost(app: &VectorcraftApp, ui: &Ui, n: &Node, what: Dragged, order: &[u
             Dragged::Effect(item, k) => {
                 let Some(e) = n.appearance.effects_at(item).and_then(|fx| fx.get(k)) else { return };
                 let indent = if item.is_some() { 12.0 } else { 0.0 };
-                text(ui, pos2(r.left() + indent + EYE_W + 24.0, y), &shown_effect_label(&e.id), false);
+                text(ui, pos2(r.left() + indent + EYE_W + 24.0, y), &effect_row_label(&e.id), false);
             }
             Dragged::Contents => {
                 if let Some(label) = n.contents_label() {
@@ -1128,7 +1143,11 @@ fn effect_row(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: usi
     // The name edits the effect on a click; the empty space takes the click rules (in `stack`)
     // and edits it on a double-click: its settings dialog, or the inline editor of an effect
     // without settings.
-    let name = name_link(ui, pos2(lx, r.center().y), ("ap-fx-link", item, k), &shown_effect_label(&e.id));
+    let name = name_link(ui, pos2(lx, r.center().y), ("ap-fx-link", item, k), &effect_row_label(&e.id));
+    let name = match skipped_effect_tip(&e.id) {
+        Some(tip) => name.on_hover_text(tip),
+        None => name,
+    };
     let resp = edit_tip(resp, &name);
     let edit = name.clicked() || resp.double_clicked();
     if edit {
@@ -1332,7 +1351,7 @@ fn swatch_button(app: &mut VectorcraftApp, ui: &mut Ui, r: Rect, paint: &Paint, 
         open_popup(app, ui.ctx(), "color");
     }
     egui::Popup::menu(&resp).open_memory((resp.clicked() && !mixer).then_some(egui::SetOpenCommand::Toggle)).show(|ui| {
-        swatch_picker(app, ui, target);
+        widgets::menu_scroll(ui, |ui| swatch_picker(app, ui, target));
     });
 }
 
@@ -1608,18 +1627,20 @@ pub(crate) fn fx_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
             None => groups.push((g, vec![(id.clone(), label.to_string())])),
         }
     }
-    for (g, items) in groups {
-        ui.menu_button(tl!(&g), |ui| {
-            crate::widgets::menu_scroll(ui, |ui| {
-                for (id, label) in items {
-                    if ui.button(format!("{label}…")).clicked() {
-                        app.run("effect.dialog", json!({"effect": id})).ok();
-                        ui.close();
+    crate::widgets::menu_scroll(ui, |ui| {
+        for (g, items) in groups {
+            ui.menu_button(tl!(&g), |ui| {
+                crate::widgets::menu_scroll(ui, |ui| {
+                    for (id, label) in items {
+                        if ui.button(format!("{label}…")).clicked() {
+                            app.run("effect.dialog", json!({"effect": id})).ok();
+                            ui.close();
+                        }
                     }
-                }
+                });
             });
-        });
-    }
+        }
+    });
 }
 
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {

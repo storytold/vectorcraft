@@ -1,5 +1,7 @@
 use super::labels::{PreviousLabel, label_field, name_field, take_previous_label};
-use super::panel_chrome::chevron_cell;
+use super::panel_chrome::{
+    alt_down_in_field, chevron_cell, entry_to_focus, keep_enter_in_presets, open_presets_from_keys, presets_open, return_focus_from_presets,
+};
 use super::text::{
     after_shift_enter, focus_field, recessed_text, select_all, select_all_on_focus, shift_enter_keeps_focus, take_armed_focus, take_dialog_focus,
 };
@@ -190,7 +192,7 @@ pub(crate) fn round_to(v: f64, decimals: i32) -> f64 {
 /// One step of a numeric field with each modifier, most specific first (a plain pattern would also
 /// match Shift): ten with Shift, a tenth with Ctrl/Cmd, else one. A Ctrl/Cmd or plain step goes to
 /// the next multiple of its size ([`step_to_multiple`]); a Shift step adds or takes ten.
-const STEPS: [(egui::Modifiers, f64); 3] = [(egui::Modifiers::SHIFT, 10.0), (egui::Modifiers::COMMAND, 0.1), (egui::Modifiers::NONE, 1.0)];
+pub(super) const STEPS: [(egui::Modifiers, f64); 3] = [(egui::Modifiers::SHIFT, 10.0), (egui::Modifiers::COMMAND, 0.1), (egui::Modifiers::NONE, 1.0)];
 
 /// `v` moved `n` steps of `size` (down when `n` is negative): the first step goes to the next
 /// multiple of `size` in its direction and each further step adds or takes one `size`. By 1, 5.1
@@ -245,9 +247,9 @@ pub(super) fn shown_alike(show: impl Fn(f64) -> String) -> impl Fn(f64, f64) -> 
 /// a weight stops at 0, a miter limit at 1), and a plain step also stops at each of `stops`
 /// ([`step_through`]). The new value is applied at once, as in
 /// Illustrator's panels and dialogs, and the new text replaces `buf`, all selected so typing
-/// replaces it. Returns the new number when a step was taken. While the pointer is over the focused
-/// field the wheel is the field's (the panel under it doesn't scroll); an unfocused field leaves the
-/// wheel to the panel and the canvas.
+/// replaces it when focused. Returns the new number when a step was taken. While the pointer is
+/// over an enabled field the wheel is the field's (the panel under it doesn't scroll), without
+/// taking keyboard focus. Arrow keys still require keyboard focus.
 fn step_value(
     ui: &Ui,
     resp: &Response,
@@ -259,11 +261,15 @@ fn step_value(
 ) -> Option<f64> {
     // Memory focus, as the field's highlight and its typing use: `Response::has_focus` also needs the
     // window to report keyboard focus.
-    if !ui.memory(|m| m.has_focus(resp.id)) {
+    if !resp.enabled() {
         return None;
     }
+    let focused = ui.memory(|m| m.has_focus(resp.id));
     use egui::{Event, Key, MouseWheelUnit};
     let wheel = resp.contains_pointer();
+    if !focused && !wheel {
+        return None;
+    }
     // Wheel turns in notches: a line each, or `line` points of a trackpad or a fine wheel; what is
     // left of a notch carries over to the next turn.
     let (line, notch_id) = (ui.ctx().options(|o| o.input_options.line_scroll_speed), resp.id.with("wheel"));
@@ -276,8 +282,8 @@ fn step_value(
             let (Event::Key { modifiers, .. } | Event::MouseWheel { modifiers, .. }) = e else { return true };
             let Some(&(mods, size)) = STEPS.iter().find(|(m, _)| modifiers.matches_logically(*m)) else { return true };
             let n = match e {
-                Event::Key { key: Key::ArrowUp, pressed: true, .. } => 1.0,
-                Event::Key { key: Key::ArrowDown, pressed: true, .. } => -1.0,
+                Event::Key { key: Key::ArrowUp, pressed: true, .. } if focused => 1.0,
+                Event::Key { key: Key::ArrowDown, pressed: true, .. } if focused => -1.0,
                 Event::MouseWheel { unit, delta, .. } if wheel => {
                     // Shift may turn the wheel sideways (the Mac does).
                     let d = if modifiers.shift { delta.x + delta.y } else { delta.y };
@@ -323,7 +329,9 @@ fn step_value(
     let v = within(if stops.contains(&v) { v } else { round_to(v, STEP_DECIMALS) }, bounds);
     *buf = show(v);
     ui.data_mut(|d| d.insert_temp(resp.id, buf.clone()));
-    select_all(ui, resp.id, buf);
+    if focused {
+        select_all(ui, resp.id, buf);
+    }
     Some(v)
 }
 
@@ -822,9 +830,10 @@ fn spin_generic(
     let h = 26.0;
     let enabled = ui.is_enabled();
     ui.scope(|ui| {
-        // The spinner, the field and the chevron share their borders: one box in three parts.
+        // The spinner, the field and the chevron share their borders: one box in three parts. The
+        // spinner is not a Tab stop (↑/↓ in the field step it), so Tab goes from field to field.
         ui.spacing_mut().item_spacing.x = -1.0;
-        let (sr, sresp) = ui.allocate_exact_size(vec2(16.0, h), Sense::click());
+        let (sr, sresp) = ui.allocate_exact_size(vec2(16.0, h), Sense::CLICK);
         ui.painter().rect_filled(sr, CornerRadius { nw: 2, sw: 2, ne: 0, se: 0 }, t.input);
         ui.painter().rect_stroke(sr, CornerRadius { nw: 2, sw: 2, ne: 0, se: 0 }, Stroke::new(1.0, t.input_border), StrokeKind::Inside);
         let up = Rect::from_min_max(sr.min, pos2(sr.right(), sr.center().y));
@@ -855,30 +864,41 @@ fn spin_generic(
             out = Some(SpinPick::Value(spinner_step(v, step, min, up.contains(p), modifiers, stops, fmt)));
         }
         let fw = if presets.is_empty() { width - 15.0 } else { width - 34.0 };
+        let keyed = if presets.is_empty() { None } else { alt_down_in_field(ui, Rect::from_x_y_ranges(sr.right()..=sr.right() + fw, sr.y_range())) };
         if let Some(v) = field(ui, fw, label) {
             out = Some(SpinPick::Value(v.max(min)));
         }
         if !presets.is_empty() {
             let dresp = chevron_cell(ui, h);
+            let keyed = open_presets_from_keys(ui, &dresp, keyed);
+            let was_open = presets_open(ui, &dresp);
             egui::Popup::menu(&dresp).show(|ui| {
                 ui.set_min_width(width - 10.0);
-                if let Some(on) = auto
-                    && ui.selectable_label(on, tl!("Auto")).clicked()
-                {
-                    out = Some(SpinPick::Auto);
-                }
-                if let Some(on) = optical
-                    && ui.selectable_label(on, optical_label.unwrap_or_default()).clicked()
-                {
-                    out = Some(SpinPick::Optical);
-                }
                 let current = value.filter(|_| auto != Some(true));
-                for p in presets {
-                    if ui.selectable_label(current.is_some_and(|v| (v - p).abs() < 1e-6), fmt(*p)).clicked() {
-                        out = Some(SpinPick::Value(*p));
+                let mut entries: Vec<(bool, String, SpinPick)> = Vec::new();
+                if let Some(on) = auto {
+                    entries.push((on, tl!("Auto").to_string(), SpinPick::Auto));
+                }
+                if let Some(on) = optical {
+                    entries.push((on, optical_label.unwrap_or_default().to_string(), SpinPick::Optical));
+                }
+                entries.extend(presets.iter().map(|p| (current.is_some_and(|v| (v - p).abs() < 1e-6), fmt(*p), SpinPick::Value(*p))));
+                let focus = entry_to_focus(keyed, entries.iter().map(|e| e.0));
+                for (i, (on, text, pick)) in entries.into_iter().enumerate() {
+                    let r = ui.selectable_label(on, text);
+                    if focus == Some(i) {
+                        r.request_focus();
+                    }
+                    if r.clicked() {
+                        out = Some(pick);
+                        // Enter or Space on the focused entry is a click too, which the menu
+                        // does not close on by itself.
+                        ui.close();
                     }
                 }
             });
+            keep_enter_in_presets(ui, was_open);
+            return_focus_from_presets(ui, &dresp);
         }
     });
     out

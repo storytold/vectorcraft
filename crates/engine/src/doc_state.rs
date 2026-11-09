@@ -58,6 +58,9 @@ pub struct DocState {
     /// View Opacity Mask (Alt-click the mask thumbnail): the masked object whose mask the canvas
     /// shows alone, in greyscale, while that mask is edited (see [`DocState::shown_mask`]).
     pub mask_view: Option<NodeId>,
+    /// Check Spelling's Ignore All: the words (as craft-proof keys them, lower case) a spelling
+    /// check of this document skips. Kept while the document is open: not saved, not undoable.
+    pub spelling_ignored: std::collections::BTreeSet<String>,
     /// View → Show Transparency Grid, per document (saved view state, not undoable).
     pub transparency_grid: bool,
     /// The format Save writes ([`cmd::fileio::SAVE_FORMATS`]): the one the document was opened
@@ -95,6 +98,11 @@ pub struct DocState {
     /// so an export or save to it asks first ([`cmd::fileio::check_not_lossy_overwrite`]). Not saved.
     pub imported_from: Option<String>,
     pub import_losses: Vec<String>,
+    /// The file its links' stored relative paths name places from: the file the document was read
+    /// from, also when that file is not its own (such as a `.ai` file another app wrote). A save
+    /// writes the saved file's relative paths and leaves the open document's links as they are.
+    /// `None`: the document's own file. Not saved ([`crate::cmd::links::LinkBase`]).
+    pub links_from: Option<String>,
     /// Transform Again after a perspective move or scale (Perspective Selection tool): the
     /// `perspective.transform` params it repeats. `None` once an ordinary transform follows.
     pub last_perspective: Option<Value>,
@@ -102,6 +110,24 @@ pub struct DocState {
     /// paths the document links to are looked at within them later too, when the Links panel
     /// asks about a link outside any caller's scope.
     pub opened_by: Option<Arc<file_access::AutomationRoots>>,
+    /// What [`DocState::any_empty_artboards`] last measured. Not saved.
+    empty_artboards: std::cell::RefCell<EmptyArtboards>,
+}
+
+/// Whether a document has an artboard for Delete Empty Artboards to delete, with the document that
+/// was measured.
+#[derive(Clone, Debug, Default)]
+struct EmptyArtboards {
+    /// The document measured. While this reference lasts, its allocation holds no other document,
+    /// and `Arc::make_mut` moves a document it changes to a new allocation.
+    doc: std::sync::Weak<Document>,
+    any: bool,
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Tests: how many times [`DocState::any_empty_artboards`] measured a document on this thread.
+    pub(crate) static EMPTY_ARTBOARD_MEASURES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 static NEXT_DOC_UID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
@@ -265,6 +291,7 @@ impl DocState {
             uid: NEXT_DOC_UID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             opened_as_tab: true,
             mask_view: None,
+            spelling_ignored: Default::default(),
             transparency_grid,
             format: "vectorcraft",
             save_options: Default::default(),
@@ -278,9 +305,23 @@ impl DocState {
             layers_open,
             imported_from: None,
             import_losses: vec![],
+            links_from: None,
             last_perspective: None,
             opened_by: file_access::current(),
+            empty_artboards: Default::default(),
         }
+    }
+    /// `measure`'s answer for the document now. `measure` runs once for each version of the document,
+    /// so a menu that asks on every frame measures it once, and a change of the selection or the view
+    /// keeps the answer.
+    pub(crate) fn any_empty_artboards(&self, measure: impl FnOnce(&Document) -> bool) -> bool {
+        let mut last = self.empty_artboards.borrow_mut();
+        if !std::ptr::eq(last.doc.as_ptr(), Arc::as_ptr(&self.doc)) {
+            #[cfg(test)]
+            EMPTY_ARTBOARD_MEASURES.with(|c| c.set(c.get() + 1));
+            *last = EmptyArtboards { doc: Arc::downgrade(&self.doc), any: measure(&self.doc) };
+        }
+        last.any
     }
     /// Unsaved changes: the document differs from the saved one (selection changes and changes that
     /// are not edits to save don't count, [`DocState::same_content`]).

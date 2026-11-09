@@ -1109,10 +1109,11 @@ pub(super) fn bleed(ui: &mut egui::Ui, d: &mut Dialog, unit: vectorcraft_doc::Un
     }
 }
 
-/// A small grey caption above a field (New Document's details column).
-pub(super) fn caption(ui: &mut egui::Ui, text: &str) {
+/// A small grey caption above a field (New Document's details column) → its response, so the field
+/// can be named by it.
+pub(super) fn caption(ui: &mut egui::Ui, text: &str) -> egui::Response {
     let t = Tokens::get(ui.ctx());
-    ui.label(egui::RichText::new(tl!(text)).size(11.0).color(t.text_dim));
+    ui.label(egui::RichText::new(tl!(text)).size(11.0).color(t.text_dim))
 }
 
 #[cfg(test)]

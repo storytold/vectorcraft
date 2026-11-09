@@ -1,25 +1,26 @@
 //! Line breaking and glyph placement for point, area and on-path type.
 
 use std::ops::Range;
+use std::sync::Arc;
 
 use kurbo::{Affine, BezPath, ParamCurve, PathEl, Point, Rect, Shape, Vec2};
 use unicode_bidi::{BidiInfo, Level};
-use vectorcraft_doc::text::Kashida;
+use vectorcraft_doc::text::{Kashida, ListAlign};
 use vectorcraft_doc::{
-    Burasagari, CharStyle, HyphenationOptions, InlineArt, Justify, Kinsoku, LeadingModel, Mojikumi, ParaDirection, ParaStyle, PathAlign, PathEffect,
-    RubyAlign, RubyPosition, SingleWordJustify, TextKind, TextObject,
+    Burasagari, CharStyle, HyphenationOptions, InlineArt, Justify, Kinsoku, KinsokuShoriType, LeadingModel, Mojikumi, ParaDirection, ParaStyle,
+    PathAlign, PathEffect, RubyAlign, RubyPosition, SingleWordJustify, TextKind, TextObject,
 };
 use vectorcraft_geom::{ArcPath, PathData};
 
 use crate::GlyphBend;
 use crate::composer::{Breakpoint, Params, compose};
-use crate::fontdb::FontDb;
+use crate::fontdb::{FontDb, FontFace};
 use crate::hyphen::points_for;
 use crate::justify::{Flex, LineFit, apply_desired, fit_line, is_word_space};
 use crate::kashida;
 use crate::shape::{
-    Punct, SGlyph, Tcy, cap_x_heights, hyphen_glyph, is_cjk, mark_word_ends, no_line_end, no_line_start, punct, shape_range, soft_line_start,
-    style_metrics,
+    Punct, SGlyph, Tcy, cap_x_heights, hyphen_glyph, is_cjk, mark_word_ends, no_line_end, no_line_start, punct, run_face, shape_range, shape_runs,
+    soft_line_start, style_metrics,
 };
 use crate::{Composer, FirstBaseline, InlineGlyph, LayoutOptions, LineInfo, ListMarker, OtFeatures, PositionedGlyph, TextLayout, VerticalAlign};
 
@@ -36,8 +37,14 @@ pub(crate) use bidi::{is_rtl, para_bidi};
 use breaking::tab_advance;
 #[cfg(test)]
 use breaking::{break_line, candidates};
-pub use driver::{decorations, fit_first_line, layout, layout_with, scaled};
+#[cfg(test)]
+pub(crate) use driver::layout_faces_per_call;
+pub use driver::{decorations, fit_first_line, fit_source_lines, layout, layout_with, scaled};
 use vertical::{TcyStyle, stands_upright, tate_chu_yoko, upright_cell, upright_centre, upright_extent, whole_character_widths};
+
+#[cfg(test)]
+pub(crate) use driver::envelope_ink_inputs;
+pub use driver::{envelope_ink, register_envelope_ink};
 
 const EPS: f64 = 1e-6;
 
@@ -50,8 +57,9 @@ fn continues_cluster(prev: Option<&SGlyph>, g: Option<&SGlyph>) -> bool {
 /// The caret stops inside glyph `g` when it alone stands for several characters (grapheme clusters)
 /// of `text`, a ligature ([`PositionedGlyph::carets`]); `rtl` when its logical leading edge is its
 /// right edge; `upright` when it stands upright in vertical type, its carets then down its cell
-/// ([`upright_extent`]). Empty for a glyph of one character.
-fn ligature_carets(text: &str, g: &SGlyph, rtl: bool, upright: bool) -> Vec<(usize, f64)> {
+/// ([`upright_extent`]) as a share of `upright`, the length in font units its own width runs down.
+/// Empty for a glyph of one character.
+fn ligature_carets(text: &str, g: &SGlyph, rtl: bool, upright: Option<f64>) -> Vec<(usize, f64)> {
     use unicode_segmentation::UnicodeSegmentation;
     let Some(s) = text.get(g.byte..g.byte + g.len).filter(|_| g.len > 1) else { return Vec::new() };
     let starts: Vec<usize> = s.grapheme_indices(true).skip(1).map(|(i, _)| g.byte + i).collect();
@@ -59,12 +67,13 @@ fn ligature_carets(text: &str, g: &SGlyph, rtl: bool, upright: bool) -> Vec<(usi
         return Vec::new();
     }
     let parts = starts.len() + 1;
-    let from_font = if upright {
+    let from_font = if let Some(length) = upright {
         let (cell, top) = upright_extent(g);
         g.face
             .vertical_ligature_carets(g.gid, starts.len(), top, cell)
-            .filter(|c| c.len() == starts.len() && cell > 0.0)
-            .map(|c| c.into_iter().map(|d| d / cell).collect::<Vec<f64>>())
+            .filter(|c| c.len() == starts.len() && length > 0.0)
+            .map(|c| c.into_iter().map(|d| d / length).collect::<Vec<f64>>())
+            .filter(|c| c.iter().all(|f| *f > 0.0 && *f < 1.0))
     } else {
         let advance = g.face.advance(g.gid);
         g.face
@@ -106,8 +115,14 @@ struct Ctx<'a> {
     db: &'a FontDb,
     text: &'a str,
     runs: Vec<(Range<usize>, &'a CharStyle)>,
+    /// The runs as the text sets them, when `runs` are the pieces a composite font splits them
+    /// into ([`FontDb::composite_split`]); empty otherwise. Ruby readings take their style from
+    /// these, so a reading in a composite font is set in its own parts.
+    set_runs: Vec<(Range<usize>, &'a CharStyle)>,
     /// The inline graphic of each run that is one (parallel to `runs`).
     inlines: Vec<Option<&'a InlineArt>>,
+    /// The face of each run (parallel to `runs`), looked up once ([`run_face`]).
+    faces: Vec<std::cell::OnceCell<Option<Arc<FontFace>>>>,
     default: CharStyle,
     opts: &'a LayoutOptions,
     /// Vertical type: lines are laid out as horizontal lines in line space, upright glyphs turned
@@ -126,13 +141,36 @@ struct Ctx<'a> {
 }
 
 impl Ctx<'_> {
-    fn style_at(&self, b: usize) -> &CharStyle {
+    /// The index of the run whose style [`Self::style_at`] gives for byte `b`; `None` without runs.
+    fn run_at(&self, b: usize) -> Option<usize> {
         // The runs follow one another: the first that ends after `b` is the only one that can hold it.
         let find = |b: usize| {
             let i = self.runs.partition_point(|(r, _)| r.end <= b);
-            self.runs.get(i).filter(|(r, _)| r.start <= b).map(|(_, s)| *s)
+            self.runs.get(i).filter(|(r, _)| r.start <= b).map(|_| i)
         };
-        find(b).or_else(|| b.checked_sub(1).and_then(find)).or_else(|| self.runs.first().map(|(_, s)| *s)).unwrap_or(&self.default)
+        find(b).or_else(|| b.checked_sub(1).and_then(find)).or_else(|| (!self.runs.is_empty()).then_some(0))
+    }
+
+    fn style_at(&self, b: usize) -> &CharStyle {
+        self.run_at(b).and_then(|i| self.runs.get(i)).map_or(&self.default, |(_, s)| *s)
+    }
+
+    /// The style the text sets byte `b` in: [`Self::style_at`], or for text in a composite font
+    /// the run's style before it was split by class ([`Self::set_runs`]).
+    fn set_style_at(&self, b: usize) -> &CharStyle {
+        let i = self.set_runs.partition_point(|(r, _)| r.end <= b);
+        match self.set_runs.get(i).or_else(|| self.set_runs.last()) {
+            Some((_, s)) => s,
+            None => self.style_at(b),
+        }
+    }
+
+    /// The face of [`Self::style_at`] `b` ([`FontDb::style_face`]).
+    fn face_at(&self, b: usize) -> Option<Arc<FontFace>> {
+        match self.run_at(b).and_then(|i| self.runs.get(i).map(|(_, s)| (i, *s))) {
+            Some((i, st)) => run_face(self.db, &self.faces, i, st),
+            None => self.db.style_face(&self.default),
+        }
     }
 
     /// The stretches of paragraph `r` whose characters have a Character Direction, as byte ranges
@@ -158,7 +196,7 @@ impl Ctx<'_> {
     fn shape_para(&self, r: Range<usize>, bidi: Option<&BidiInfo<'_>>) -> Vec<SGlyph> {
         let mut v = Vec::with_capacity(r.len());
         let levels = bidi.map_or(&[][..], |b| &b.levels);
-        shape_range(self.db, self.text, r, &self.runs, &self.inlines, &self.opts.features, levels, &mut v);
+        shape_runs(self.db, self.text, r, &self.runs, &self.inlines, &self.faces, &self.opts.features, levels, &mut v);
         self.finish_shaping(&mut v, |g| self.style_at(g.byte));
         v
     }
@@ -205,12 +243,16 @@ impl Ctx<'_> {
     /// before its glyphs `sg` and return how many glyphs went in (none for a paragraph without a
     /// marker). The marker's characters are set in
     /// [`vectorcraft_doc::text::ParaList::marker_style`], and a tab after them takes the text to
-    /// the next tab stop past them on the first line, the left indent counting as a stop when no
-    /// explicit stop comes before it. In a horizontal right-to-left paragraph, whose indents are
-    /// mirrored ([`line_indents`]), these are measured from the right, and a number reads left to
-    /// right with its period at its left. The tab keeps that width however the line is aligned or
-    /// justified. Each of these glyphs stands for no character of the text: length 0, at the
-    /// paragraph's first byte, in its first character's run, at the paragraph's embedding level.
+    /// the next tab stop past them on the first line, the left indent plus its list level's indent
+    /// ([`ParaStyle::laid_out_left_indent`]) counting as a stop when no explicit stop comes before
+    /// it. With the list's [`ListAlign::Right`] that tab goes before them instead, with the same
+    /// width: the marker ends where the text starts, and the text starts where it does with
+    /// [`ListAlign::Left`]. In a horizontal right-to-left paragraph,
+    /// whose indents are mirrored ([`line_indents`]), these are measured from the right, and a
+    /// number reads left to right with its period at its left. The tab keeps that width however
+    /// the line is aligned or justified. Each of these glyphs stands for no character of the
+    /// text: length 0, at the paragraph's first byte, in its first character's run, at the
+    /// paragraph's embedding level.
     fn prepend_marker(&self, pr: &Range<usize>, para: &ParaStyle, text: Option<&str>, rtl: bool, sg: &mut Vec<SGlyph>) -> usize {
         let Some(text) = text.filter(|_| para.list.is_some() && !pr.is_empty()) else { return 0 };
         let st = vectorcraft_doc::text::ParaList::marker_style(self.style_at(pr.start));
@@ -243,11 +285,16 @@ impl Ctx<'_> {
         tab.kern_shift = 0.0;
         tab.tcy = None;
         tab.vpal = None;
-        let pen = para.left_indent + para.first_line_indent + marker.iter().map(|g| g.adv).sum::<f64>();
-        let to_indent = para.left_indent - pen;
-        let stop_before_indent = para.tabs.iter().any(|t| t.position > pen + EPS && t.position < para.left_indent - EPS);
+        let left = para.laid_out_left_indent();
+        let pen = left + para.first_line_indent + marker.iter().map(|g| g.adv).sum::<f64>();
+        let to_indent = left - pen;
+        let stop_before_indent = para.tabs.iter().any(|t| t.position > pen + EPS && t.position < left - EPS);
         tab.adv = if to_indent > EPS && !stop_before_indent { to_indent } else { tab_advance(&para.tabs, 0.0, pen, sg).0 };
-        marker.push(tab);
+        if para.list.is_some_and(|l| l.align == ListAlign::Right) {
+            marker.insert(0, tab);
+        } else {
+            marker.push(tab);
+        }
         let n = marker.len();
         sg.splice(0..0, marker);
         n
@@ -310,9 +357,31 @@ impl Ctx<'_> {
             Affine::IDENTITY
         };
         let mut m = pre * local;
+        // Vertical type on a path: an upright glyph's cell in font units, as (its length with the
+        // Proportional Metrics change to it, the height of its top above the baseline).
+        let path_cell = (self.vertical && self.on_path && g.inline.is_none() && g.tcy.is_none() && takes_cell(g) && stands_upright(g) && g.sy != 0.0)
+            .then(|| {
+                let (cell, top) = upright_extent(g);
+                let proportional = g.vpal.filter(|_| g.face.vertical_glyph(g.gid).is_some()).map_or(0.0, |a| a.advance) / g.sy;
+                (cell + proportional, top)
+            });
         if self.vertical && self.on_path {
             // Vertical path type keeps the baseline path and turns each glyph across it.
             m = Affine::rotate_about(std::f64::consts::FRAC_PI_2, origin) * m;
+            if let Some((cell, top)) = path_cell {
+                // An upright glyph whose top then faces the path's end turns half a turn about the
+                // center of its cell (without its Character Rotation), so that its top faces the
+                // path's start and the characters of an upright ligature read along the path in
+                // order. The effects that keep the glyph's up direction fixed already turn it so on
+                // a path that runs to the left.
+                let turned = m * unturned;
+                let tangent = Vec2::new(angle.cos(), angle.sin());
+                let along = |y: f64| (turned * Point::new(0.0, y) - origin).dot(tangent);
+                if along(-top) > along(cell - top) {
+                    let centre = turned * Point::new(g.face.advance(g.gid) * 0.5, cell * 0.5 - top);
+                    m = Affine::translate(centre.to_vec2() * 2.0) * Affine::scale(-1.0) * m;
+                }
+            }
         } else if let (true, Some(t)) = (self.vertical, g.tcy) {
             // Tate-chu-yoko: the block set across the column, centred on its em of it, then moved up
             // by its Up/Down and right by its Left/Right (line x runs down the column and line y
@@ -386,20 +455,17 @@ impl Ctx<'_> {
         } else {
             0.0
         };
-        // On a path, an upright glyph turns about its pen: its cell runs along the path between
-        // where the glyph's transform sets the cell's foot and its top, moved by the shaper's
-        // placement and a baseline shift, and slanted by the path's effect.
-        let (width, width_start) = match (upright && self.on_path, g.sy) {
-            (true, sy) if sy != 0.0 => {
-                // In font units, with the Proportional Metrics change to its length.
-                let (cell, top) = upright_extent(g);
-                let proportional = g.vpal.filter(|_| g.face.vertical_glyph(g.gid).is_some()).map_or(0.0, |a| a.advance) / sy;
+        // On a path, an upright glyph's cell runs along the path from where the glyph's transform
+        // sets the cell's top to its foot, moved by the shaper's placement and a baseline shift, and
+        // slanted by the path's effect.
+        let (width, width_start) = match path_cell {
+            Some((cell, top)) => {
                 let tangent = Vec2::new(angle.cos(), angle.sin());
                 let along = |y: f64| (m * Point::new(0.0, y) - origin).dot(tangent);
-                let (start, end) = (along(cell + proportional - top), along(-top));
+                let (start, end) = (along(-top), along(cell - top));
                 if start.is_finite() && end > start { (end - start, start) } else { (width, width_start) }
             }
-            _ => (width, width_start),
+            None => (width, width_start),
         };
         if let Some(art) = g.inline.as_ref().and_then(|ib| ib.art) {
             self.out.inlines.push(InlineGlyph { run: g.run, byte: g.byte, glyph: self.out.glyphs.len(), xf: m, bounds: m.transform_rect_bbox(art) });
@@ -424,17 +490,35 @@ impl Ctx<'_> {
             bend: None,
             unturned,
             pivot,
-            carets: if g.inline.is_some() { Vec::new() } else { ligature_carets(self.text, g, g.level.is_rtl() && !self.vertical, upright) },
+            // On a path its carets divide the cell its width runs along, with the Proportional
+            // Metrics change to it.
+            carets: if g.inline.is_some() {
+                Vec::new()
+            } else {
+                let length = upright.then(|| path_cell.map_or_else(|| upright_extent(g).0, |(cell, _)| cell));
+                ligature_carets(self.text, g, g.level.is_rtl() && !self.vertical, length)
+            },
             width,
             width_start,
         });
+    }
+
+    /// Source-run index covering byte `b` (the cluster start for a letter with its marks).
+    fn run_index_at(&self, b: usize) -> Option<usize> {
+        let find = |b: usize| {
+            let i = self.runs.partition_point(|(r, _)| r.end <= b);
+            self.runs.get(i).filter(|(r, _)| r.start <= b).map(|_| i)
+        };
+        find(b).or_else(|| b.checked_sub(1).and_then(find))
     }
 
     /// Draw a kashida `len` points long from `at` (the pen on the baseline) on line `line`, as
     /// tatweels in the face, size and style of glyph `g`. Short, Medium and Long kashidas are one
     /// tatweel stretched along the baseline; a Stylistic one is tatweels side by side. Each tatweel
     /// is a glyph at `g`'s byte offset that stands for no character (length 0) and does not
-    /// advance: `g`'s advance takes the kashida in.
+    /// advance: `g`'s advance takes the kashida in. Paint comes from the base letter's run at the
+    /// cluster start (`g.byte`), not from a trailing mark that may be the last glyph of the
+    /// cluster when harakat are coloured or hidden apart from their letters.
     fn emit_kashida(&mut self, g: &SGlyph, kind: Kashida, len: f64, at: Point, line: usize) {
         let Some((gid, t)) = kashida::tatweel(g) else { return };
         let mut k = g.clone();
@@ -448,6 +532,10 @@ impl Ctx<'_> {
         k.ch = kashida::TATWEEL;
         k.inline = None;
         k.tcy = None;
+        // Base letter's run: `g` may be a mark (last in the shaping cluster) with mark paint.
+        if let Some(run) = self.run_index_at(g.byte) {
+            k.run = run;
+        }
         if kind == Kashida::Stylistic {
             let n = (len / t).round().clamp(1.0, kashida::MAX_TATWEELS) as usize;
             for m in 0..n {
@@ -462,3 +550,167 @@ impl Ctx<'_> {
 
 #[cfg(test)]
 mod wrapping_tests;
+
+/// Forced mark-last kashida emitter: the absorbing glyph carries a mark run while the cluster
+/// start is a letter run; the tatweel must take the letter run. Reverting the base-run assignment
+/// in [`Ctx::emit_kashida`] fails these.
+#[cfg(test)]
+mod emit_kashida_mark_last {
+    use super::*;
+    use std::sync::Arc;
+    use vectorcraft_doc::color::{Color, Paint};
+
+    fn arabic_face() -> Option<Arc<crate::FontFace>> {
+        let db = FontDb::global();
+        ["Noto Sans Arabic", "Arial", "Tahoma", "Times New Roman"]
+            .into_iter()
+            .filter_map(|name| db.face(name, "Regular"))
+            .find(|face| face.covers('ب') && face.covers('\u{064E}') && face.covers('\u{0640}'))
+    }
+
+    fn force_mark_last(mark_fill: Paint) {
+        let Some(face) = arabic_face() else {
+            eprintln!("SKIPPED: emit_kashida_mark_last; no Arabic face with tatweel");
+            return;
+        };
+        let Some((tat_gid, _)) = kashida::tatweel(&SGlyph {
+            face: Arc::clone(&face),
+            gid: 0,
+            byte: 0,
+            len: 2,
+            run: 0,
+            adv: 10.0,
+            dx: 0.0,
+            dy: 0.0,
+            kern_shift: 0.0,
+            sx: face.upem.recip() * 48.0,
+            sy: face.upem.recip() * 48.0,
+            bshift: 0.0,
+            rotation: 0.0,
+            ascent: 40.0,
+            descent: 10.0,
+            leading: 0.0,
+            cap: 30.0,
+            xh: 20.0,
+            ch: 'ب',
+            tcy: None,
+            inline: None,
+            word_end: false,
+            lead: 0.0,
+            proportional: false,
+            vpal: None,
+            level: Level::rtl(),
+            no_break: false,
+            vertical_roman: false,
+            cursive: true,
+            hyphen_language: crate::hyphen::Language::English,
+        }) else {
+            eprintln!("SKIPPED: emit_kashida_mark_last; face has no tatweel");
+            return;
+        };
+        let letter = CharStyle { font_family: face.family.clone(), size: 48.0, fill: Paint::solid(Color::BLACK), ..CharStyle::default() };
+        let mut mark = letter.clone();
+        mark.fill = mark_fill.clone();
+        // "بَ": letter run 0 covers 0..2, mark run 1 covers 2..4. Cluster starts at byte 0.
+        let text = "بَ";
+        let opts = LayoutOptions::default();
+        let db = FontDb::global();
+        let mut cx = Ctx {
+            on_path: false,
+            db,
+            text,
+            runs: vec![(0..2, &letter), (2..4, &mark)],
+            set_runs: Vec::new(),
+            inlines: vec![None, None],
+            faces: vec![std::cell::OnceCell::new(), std::cell::OnceCell::new()],
+            default: letter.clone(),
+            opts: &opts,
+            vertical: false,
+            system_layout: false,
+            fractional_widths: true,
+            upright_cluster: None,
+            out: TextLayout::default(),
+        };
+        // Last visual glyph of the cluster: a mark that wrongly keeps the mark run (run 1).
+        let mut g = SGlyph {
+            face: Arc::clone(&face),
+            gid: face.glyph_for('\u{064E}'),
+            byte: 0,
+            len: 4,
+            run: 1,
+            adv: 0.0,
+            dx: 0.0,
+            dy: 0.0,
+            kern_shift: 0.0,
+            sx: face.upem.recip() * 48.0,
+            sy: face.upem.recip() * 48.0,
+            bshift: 0.0,
+            rotation: 0.0,
+            ascent: 40.0,
+            descent: 10.0,
+            leading: 0.0,
+            cap: 30.0,
+            xh: 20.0,
+            ch: '\u{064E}',
+            tcy: None,
+            inline: None,
+            word_end: false,
+            lead: 0.0,
+            proportional: false,
+            vpal: None,
+            level: Level::rtl(),
+            no_break: false,
+            vertical_roman: false,
+            cursive: true,
+            hyphen_language: crate::hyphen::Language::English,
+        };
+        assert_ne!(g.run, 0, "precondition: absorbing glyph has mark run ≠ cluster-start run");
+        assert_eq!(cx.style_at(g.byte).fill, letter.fill, "precondition: cluster start is letter paint");
+        assert_eq!(mark.fill, mark_fill, "precondition: mark paint differs");
+        cx.emit_kashida(&g, Kashida::Long, 20.0, Point::ZERO, 0);
+        let tatweels: Vec<_> = cx.out.glyphs.iter().filter(|pg| pg.gid == tat_gid && pg.len == 0).collect();
+        assert!(!tatweels.is_empty(), "tatweel emitted");
+        for t in tatweels {
+            assert_eq!(t.run, 0, "tatweel must use base letter run, not mark run {}", g.run);
+            let fill = cx.runs.get(t.run).map(|(_, s)| &s.fill).expect("run");
+            assert_eq!(fill, &letter.fill, "tatweel paint is the letter's");
+            assert_ne!(fill, &mark_fill, "tatweel must not inherit mark paint");
+        }
+        // Without the base-run assignment, emit_kashida would keep g.run == 1.
+        g.run = 1;
+        let mut broken = Ctx {
+            on_path: false,
+            db,
+            text,
+            runs: vec![(0..2, &letter), (2..4, &mark)],
+            set_runs: Vec::new(),
+            inlines: vec![None, None],
+            faces: vec![std::cell::OnceCell::new(), std::cell::OnceCell::new()],
+            default: letter.clone(),
+            opts: &opts,
+            vertical: false,
+            system_layout: false,
+            fractional_widths: true,
+            upright_cluster: None,
+            out: TextLayout::default(),
+        };
+        // Simulate the pre-fix path: clone run from the mark glyph only.
+        let mut k = g.clone();
+        k.gid = tat_gid;
+        k.len = 0;
+        k.ch = kashida::TATWEEL;
+        // k.run stays 1 — what emit_kashida did before the fix.
+        broken.emit(&k, Affine::IDENTITY, Point::ZERO, 0.0, 0.0, 0);
+        assert_eq!(broken.out.glyphs[0].run, 1, "sanity: unrepaired path keeps mark run");
+    }
+
+    #[test]
+    fn coloured_mark_last_tatweel_uses_letter_run() {
+        force_mark_last(Paint::solid(Color::rgb8(200, 30, 30)));
+    }
+
+    #[test]
+    fn hidden_mark_last_tatweel_uses_letter_run() {
+        force_mark_last(Paint::None);
+    }
+}

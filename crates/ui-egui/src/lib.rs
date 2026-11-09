@@ -94,7 +94,7 @@ use tests::{
 mod tests;
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 
 use serde_json::{Value, json};
@@ -114,6 +114,7 @@ mod services;
 pub use app::MAX_RECENT_FONTS;
 pub use caches::{CacheKey, CanvasCache, LivePaintGapsCache, Perf, PrintTilingCache, SliceCache};
 pub use clock::{now_ms, now_secs};
+pub use craft_ui::docking::Monitor as DockMonitor;
 #[cfg(test)]
 pub(crate) use services::browsable_url;
 pub use services::{
@@ -160,6 +161,9 @@ pub struct VectorcraftApp {
     synthetic_dropped_before: u64,
     /// Window captures asked for and not answered yet.
     pending_screenshots: Vec<PendingScreenshot>,
+    /// `ui.pointer` replies waiting for their events and the edit the tool computes on another
+    /// thread ([`control::Outcome::AfterToolEdit`]), with the numbers of those events.
+    pointer_replies: Vec<control::PendingPointerReply>,
     /// Admitted captures whose settled frame has not come yet (issued one at a time).
     queued_screenshots: Vec<QueuedScreenshot>,
     screenshot_token: u64,
@@ -194,9 +198,17 @@ pub struct VectorcraftApp {
     clipboard_publishing: sysclip::Publishing,
     /// A URL to open through egui next frame (when the host has no `open_url` service).
     pending_url: Option<String>,
+    /// `VECTORCRAFT_TITLEBAR` chose this window's frame (Linux and the BSDs), so Preferences › User
+    /// Interface › System Title Bar and VectorCraft Title Bar on Every Desktop do not apply while
+    /// it is set. `false` unless the host sets it.
+    pub titlebar_from_env: bool,
     /// Windows and Linux: the window has no OS decorations, so the app bar is the title bar (drag,
     /// double-click to maximize, caption buttons) and invisible edge zones resize the window.
     pub custom_titlebar: bool,
+    /// The window has the desktop's own title bar: the OS or the window manager draws its frame,
+    /// icon and title. Set by the desktop app when it opens the window; `false` for embedders
+    /// without a window of their own.
+    pub desktop_frame: bool,
     /// Last window title sent to the OS (`ViewportCommand::Title`, see `chrome::sync_window_title`):
     /// sent again only when it changes, so idle frames don't spam the backend.
     pub(crate) last_window_title: String,
@@ -297,6 +309,9 @@ pub struct VectorcraftApp {
     /// This frame carries input the control channel injected ([`Self::raw_input_hook`]): it runs
     /// confined to [`Self::automation_roots`].
     synthetic_frame: bool,
+    /// The plug-in install the approval dialog asks about, kept out of the dialog's fields, which
+    /// `ui.dialog.set` writes.
+    pub(crate) pending_plugin_install: Option<dialogs::plugin::PendingInstall>,
     /// The pen end the canvas saw last and the tool its eraser end stands in for
     /// ([`stylus::sync_eraser_tool`]).
     pub(crate) pen_end: stylus::PenEnd,
@@ -314,6 +329,9 @@ pub struct VectorcraftApp {
     /// The context, viewport and frame `shortcuts::handle` already took in this host iteration.
     /// Interleaving root and auxiliary viewport passes cannot make an older frame look new again.
     pub(crate) shortcuts_frames: Vec<InputFrame>,
+    /// The single-key tool shortcuts held down, the last held last, and the tool each goes back to
+    /// when it is let go ([`shortcuts::HeldTool`]).
+    pub(crate) held_tool: Vec<shortcuts::HeldTool>,
     /// A synthetic batch is in the host's raw input and no settled UI pass has taken it yet.
     synthetic_injected: bool,
     /// The exact events of [`Self::synthetic_injected`], to remove them if the state they belong
