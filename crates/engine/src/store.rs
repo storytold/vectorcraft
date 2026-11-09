@@ -176,6 +176,12 @@ fn lock_disabled(_: &Path) -> Option<std::fs::File> {
     None
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Tests: [`Session::put_back_plugin`] fails on this thread, as on a full volume.
+    pub(crate) static PUT_BACK_FAILS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
 /// Remove `dir/file` → whether it is gone; a file that isn't there is what was wanted.
 fn take(dir: &Path, file: &str) -> bool {
     let path = dir.join(file);
@@ -363,9 +369,7 @@ impl Session {
         for id in &asks_nothing {
             vectorcraft_plugins::registry::revoke(id);
             let named = match &kept {
-                Ok(file) => {
-                    file.grants.contains_key(id) || file.other.iter().any(|e| e.get("id").and_then(serde_json::Value::as_str) == Some(id.as_str()))
-                }
+                Ok(file) => file.names(id),
                 Err(e) => e.unread,
             };
             if named && !self.store_grant(id, None) && self.holds_plugin_grant(id) {
@@ -458,12 +462,15 @@ impl Session {
     }
 
     /// Return the store's module for the plug-in `id` to `previous`, the bytes it held before a
-    /// write ([`Session::stored_plugin_bytes`]): with `None`, the file is removed.
-    pub(crate) fn put_back_plugin(&self, id: &str, previous: Option<&[u8]>) {
+    /// write ([`Session::stored_plugin_bytes`]): with `None`, the file is removed. → whether the
+    /// store now holds `previous`.
+    pub(crate) fn put_back_plugin(&self, id: &str, previous: Option<&[u8]>) -> bool {
+        #[cfg(test)]
+        if PUT_BACK_FAILS.get() {
+            return false;
+        }
         match previous {
-            Some(bytes) => {
-                self.store_plugin(id, bytes);
-            }
+            Some(bytes) => self.store_plugin(id, bytes),
             None => self.unstore_plugin(id),
         }
     }
@@ -531,21 +538,20 @@ impl Session {
         }
     }
 
-    /// Whether the store holds, or may hold, a grant this version can use for the plug-in `id`.
-    /// `true` when the grants file can't be opened or read, because it may name `id` once it reads
-    /// again; `false` without a folder, and when the file is too large or doesn't hold a list.
+    /// Whether the store holds, or may hold, an entry for the plug-in `id`, including one this
+    /// version can't use ([`GrantsFile::names`]). `true` when the grants file can't be opened or
+    /// read, because it may name `id` once it reads again; `false` without a folder, and when the
+    /// file is too large or doesn't hold a list.
     pub(crate) fn holds_plugin_grant(&self, id: &str) -> bool {
         self.plugin_dir.as_deref().is_some_and(|dir| match read_grants(dir) {
-            Ok(file) => file.grants.contains_key(id),
+            Ok(file) => file.names(id),
             Err(e) => e.unread,
         })
     }
 
-    /// Remove the plug-in `id` from the store.
-    pub(crate) fn unstore_plugin(&self, id: &str) {
-        if let Some(dir) = &self.plugin_dir {
-            take(dir, &format!("{}.{PLUGIN_EXT}", file_stem(id)));
-        }
+    /// Remove the plug-in `id` from the store → whether its file is gone (`false` without a folder).
+    pub(crate) fn unstore_plugin(&self, id: &str) -> bool {
+        self.plugin_dir.as_deref().is_some_and(|dir| take(dir, &format!("{}.{PLUGIN_EXT}", file_stem(id))))
     }
 
     /// Keep the settings and cache of plug-in `id` in the attached plug-in store from now on; without
@@ -1040,6 +1046,13 @@ struct GrantsFile {
     grants: BTreeMap<String, vectorcraft_plugins::permissions::Grant>,
     /// The entries it can't use (a permission it doesn't know, an invalid id), as they were.
     other: Vec<serde_json::Value>,
+}
+
+impl GrantsFile {
+    /// Whether the file has an entry for the plug-in `id`, usable by this version or not.
+    fn names(&self, id: &str) -> bool {
+        self.grants.contains_key(id) || self.other.iter().any(|e| e.get("id").and_then(serde_json::Value::as_str) == Some(id))
+    }
 }
 
 /// Why the grants file of a plug-in store gave no grants.
