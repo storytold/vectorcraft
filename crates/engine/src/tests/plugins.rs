@@ -1433,7 +1433,8 @@ fn a_failed_store_write_of_a_module_without_permissions_keeps_the_stored_grant()
 
 /// A module listing no permissions whose id's grant can't be removed from `grants.json` doesn't stay
 /// in the store, so the grant and the module it covers stay together. It does stay when the module
-/// before it can't be read back, and when the grants file doesn't hold a list and so approves nothing.
+/// before it can't be read back, and when the grants file is too large or doesn't hold a list and so
+/// approves nothing.
 #[test]
 fn a_grant_that_cannot_be_removed_keeps_the_stored_module() {
     let folder = crate::tests_links::Folder::new("plugin-store-failed-forget");
@@ -1465,8 +1466,13 @@ fn a_grant_that_cannot_be_removed_keeps_the_stored_module() {
 
     std::fs::write(&file, &approved).unwrap();
     std::fs::write(&grants, b"not a list").unwrap();
-    run(&mut s, "plugin.install", replace);
+    run(&mut s, "plugin.install", replace.clone());
     assert_eq!(std::fs::read(&file).unwrap(), plain, "a grants file that isn't a list approves nothing");
+
+    std::fs::write(&file, &approved).unwrap();
+    std::fs::write(&grants, vec![b' '; (1 << 20) + 1]).unwrap();
+    run(&mut s, "plugin.install", replace);
+    assert_eq!(std::fs::read(&file).unwrap(), plain, "a grants file over its size limit approves nothing");
 
     std::fs::remove_file(&grants).unwrap();
     run(&mut s, "plugin.remove", json!({"id": id}));
@@ -1494,7 +1500,7 @@ fn a_grants_file_that_cannot_be_read_keeps_the_grant_and_the_module_it_covers() 
     run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&plain), "replace": true}));
     assert_eq!(std::fs::read(&file).unwrap(), approved, "the store gets the module the grant covers back");
 
-    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&approved), "grant": ["doc.read"]}));
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&approved), "grant": ["doc.read"], "replace": true}));
     let refused = s.execute("plugin.remove", &json!({"id": id})).unwrap_err().to_string();
     assert!(refused.contains(crate::store::GRANT_NOT_REMOVED), "{refused}");
     assert!(vectorcraft_plugins::registry::get(id).is_some(), "the plug-in stays installed");
