@@ -2769,6 +2769,10 @@ digits	Malayalam	Malajálamské
 	< 1 sec	< 1 s
 	[Unnamed]	[Bez názvu]
 	Amount:	Míra:
+	Anti-aliasing Method	Metoda vyhlazování
+antiAlias	Sharp	Ostré
+	Crisp	Jasné
+	Strong	Silné
 	Anti-aliasing:	Vyhlazování:
 	Artboard:	Pracovní plocha:
 	Color Table	Tabulka barev
@@ -4419,6 +4423,7 @@ imageTrace	Outline	Obrys
 @msg	Split Into Grid: select paths large enough for the grid	Rozdělit do mřížky: vyberte cesty dost velké pro mřížku
 @msg	Targa files are RGB: colorModel rgb	soubory Targa jsou RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Obtékání textu: vyberte objekt obtékání
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` musí být "none", "sharp", "crisp" nebo "strong"
 @msg	`aspect` must be a number (%)	`aspect` musí být číslo (%)
 @msg	`at` must be [x, y]	`at` musí být [x, y]
 @msg	`color` must be a colour	`color` musí být barva
@@ -5763,6 +5768,11 @@ mark-style	Japanese	Japonské
 	Snap to Perpendicular	Přichytávat ke kolmici
 @msg	unknown snap option `{key}` (use {options})	neznámá možnost přichytávání `{key}` (použijte {options})
 	Gap Length:	Délka mezery:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Režim Ploché logo nepoužívá keepColors: vektorizuje barvy uvedené v logoColors nebo barvy, které najde.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Nic nebylo vektorizováno: žádná z barev, které vektorizace našla, neodpovídá keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Nic nebylo vektorizováno: Ignorovat barvu vynechává všechny oblasti barev uvedených v keepColors.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	Nic nebylo vektorizováno: z barev odpovídajících keepColors nevznikly žádné cesty.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: žádná z barev, které vektorizace našla, neodpovídá {c}, takže z ní není nic vektorizováno.
 @msg	`colorGroup` needs `library: "document"`	`colorGroup` vyžaduje `library: "document"`
 @msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` vyžaduje `palette: "documentLibrary"`
 @msg	`colorGroup` needs `mode: "color"`	`colorGroup` vyžaduje `mode: "color"`
@@ -5914,6 +5924,14 @@ axis	Y Axis	osa Y
 @msg	unknown permission `{shown}`	neznámé oprávnění `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	„{name}“ žádá o oprávnění {asked}: nainstalujte ho s `grant`, který je uvádí, jakmile uživatel souhlasí
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	„{name}“ nedostal `{p}`, které jeho výstup potřebuje: nic se nezměnilo
+@msg	a heavy filter runs in the background, so it can't declare `commands`	těžký filtr běží na pozadí, takže nemůže deklarovat `commands`
+@msg	at most {MAX_COMMANDS} `commands`	nejvýše {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	příkaz {name} je deklarován dvakrát
+@msg	command {name}: `label` must be 1-64 printable characters	příkaz {name}: `label` musí mít 1-64 tisknutelných znaků
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	příkaz {name}: použijte id o 1-{MAX_COMMAND_ID} znacích z a-z 0-9 _, které začíná písmenem
+@msg	command {name}: {e}	příkaz {name}: {e}
+@msg	only a filter or a live effect declares `commands`	`commands` deklaruje jen filtr nebo živý efekt
+@msg	“{name}” › {label}: {e}	„{name}“ › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	modul nemá SHA-256 uvedený v `hash`: nic nebylo nainstalováno
 # Actions panel: action sets (#3712).
 	New Set…	Nová sada…
@@ -6495,6 +6513,7 @@ breakText	Glyphs	Glyfy
 	Create Swatch Legend	Vytvořit legendu vzorníku
 	Create Swatch Legend…	Vytvořit legendu vzorníku…
 	HEX	HEX
+	Help Bar	Panel nápovědy
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	Nástroje textu
 	Text Tweaker…	Ladění textu…

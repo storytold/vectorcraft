@@ -658,6 +658,7 @@ impl PluginIntField {
             params: vec![("seed".into(), vectorcraft_plugins::ParamSpec::Int { min, max, default: 0 }.into())],
             extensions: Vec::new(),
             budget: Default::default(),
+            commands: Vec::new(),
         };
         let mut f = PluginIntField { ctx, d: Dialog::new(plugin::KIND, json!({ "seed": start })), m, pos: egui::Pos2::ZERO };
         fn number_rect(shape: &egui::Shape, text: &str) -> Option<egui::Rect> {

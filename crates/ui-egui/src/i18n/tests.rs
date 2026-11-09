@@ -194,6 +194,19 @@ fn marquee_selection_labels_are_in_complete_catalogs() {
     }
 }
 
+/// The Character panel's Anti-aliasing Method label and its choices, with the Sharp method's
+/// own `antiAlias` row apart from the plain "Sharp" corner row.
+#[test]
+fn anti_aliasing_method_labels_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        let cat = lang.catalog();
+        for label in ["Anti-aliasing Method", "Crisp", "Strong"] {
+            assert!(cat.plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+        assert!(cat.contextual("antiAlias", "Sharp").is_some(), "{} is missing the antiAlias Sharp row", lang.code);
+    }
+}
+
 /// Each language counts with its own plural rule: the form a count picks (`one`, then `few`, then
 /// `other`/`many`).
 #[test]
@@ -1850,6 +1863,42 @@ fn width(p: &Value, cmd: &str, key: &str) -> Result<f64> {
     // A message read this way matches its row: `{key}` keeps its name.
     let c = Catalog::parse("@msg\t`{key}` must be a number\t`{key}` ok\n");
     assert_eq!(c.message("`width` must be a number").map(|m| m.1), Some(vec![("key", "width")]));
+}
+
+/// The warnings of an Image Trace with keepColors, which the status bar shows and the scan above
+/// doesn't read, are translated in each language of [`COMPLETE_MESSAGES`], with the colors kept.
+#[test]
+fn the_keep_colors_trace_warnings_are_translated() {
+    use serde_json::json;
+    let mut s = vectorcraft_engine::Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    // A white field with a black square in it.
+    let img = image::RgbaImage::from_fn(40, 40, |x, y| {
+        image::Rgba(if (10..30).contains(&x) && (10..30).contains(&y) { [0, 0, 0, 255] } else { [255, 255, 255, 255] })
+    });
+    let mut png = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let data = vectorcraft_format::base64_encode(&png);
+    let mut warnings = vec![];
+    for (params, shown) in [
+        (json!({"mode": "color", "palette": "limited", "colors": 2, "keepColors": ["#ff00ff", "#00ffff"]}), "#ff00ff, #00ffff"),
+        (json!({"mode": "color", "palette": "limited", "colors": 2, "keepColors": ["#000000", "#00ffff"]}), "#00ffff"),
+        (json!({"mode": "color", "palette": "limited", "colors": 2, "keepColors": ["#000000"], "ignoreWhite": true, "ignoreColor": "#000000"}), ""),
+        (json!({"mode": "logo", "keepColors": ["#000000"]}), ""),
+    ] {
+        s.execute("file.place", &json!({"name": "square.png", "dataBase64": data, "link": false})).unwrap();
+        let r = s.execute("imageTrace.makeAndExpand", &json!({ "params": params })).unwrap();
+        let w = r["warnings"].as_array().and_then(|w| w.first()).and_then(|w| w.as_str()).unwrap_or_else(|| panic!("{params}: {r}"));
+        warnings.push((w.to_string(), shown));
+    }
+    // Listed colors that were traced and produced no paths (no square image gives that).
+    warnings.push(("Nothing was traced: the colors that match keepColors produce no paths.".to_string(), ""));
+    for (warning, shown) in &warnings {
+        for code in COMPLETE_MESSAGES {
+            let tr = message(Lang::from_code(code).unwrap(), warning);
+            assert!(tr != *warning && tr.contains(shown) && tr.contains("keepColors"), "{code}: {tr}");
+        }
+    }
 }
 
 /// The parameter errors of the blend spine commands (Move Spine Point, Reshape Spine Segment, Add

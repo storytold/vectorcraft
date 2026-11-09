@@ -1116,6 +1116,225 @@ fn a_cancelled_filter_run_changes_nothing() {
     assert_eq!(s.doc().unwrap().doc, before);
 }
 
+/// The manifest of a filter `id` named "Cmd Test" of `kind` with `commands` (a JSON list).
+fn with_commands(id: &str, kind: &str, commands: &str) -> String {
+    format!(r#"{{"id":"{id}","name":"Cmd Test","version":"1","kind":"{kind}","commands":{commands}}}"#)
+}
+
+/// Two commands: Grow, with a parameter, and Tidy, whose `menu` names another menu.
+const GROW_AND_TIDY: &str = r#"[{"id":"grow","label":"Grow","params":{"by":{"type":"number","min":0,"max":10,"default":2}}},
+    {"id":"tidy","label":"Tidy","menu":"File"}]"#;
+
+/// A plug-in that adds a triangle when it runs as its command `grow` (`_context.command`) and
+/// returns its input unchanged otherwise.
+fn grower(id: &str) -> String {
+    let triangle = r#"{"objects":[{"path":{"subpaths":[{"closed":true,"anchors":[{"p":[0,0]},{"p":[5,0]},{"p":[5,5]}]}]}}]}"#;
+    tpl::when_given(&with_commands(id, "filter", GROW_AND_TIDY), tpl::Given::Params, r#""command":"grow""#, triangle)
+}
+
+/// The command listing's entry for `id`.
+fn listed(s: &Session, id: &str) -> Option<crate::cmd::CommandInfo> {
+    s.commands().into_iter().find(|c| c.id == id)
+}
+
+fn objects(s: &Session) -> usize {
+    s.doc().unwrap().doc.layers.iter().map(|l| l.children().map_or(0, |c| c.len())).sum()
+}
+
+/// A plug-in's commands are commands of their own while it is installed: listed under Object ›
+/// Plug-ins › its name whatever menu the manifest names, run with their checked parameters and
+/// `_context.command` as one undo step named after them, and gone once it is removed or replaced
+/// by a module without them.
+#[test]
+fn plugin_commands_are_registered_run_and_removed() {
+    let mut s = session();
+    let id = "test.engine.cmds";
+    let (grow, tidy) = ("plugin.test.engine.cmds.grow", "plugin.test.engine.cmds.tidy");
+    let info = install_wat(&mut s, &grower(id));
+    assert_eq!(info["commands"][0]["command"], grow);
+    assert_eq!(info["commands"][1]["label"], "Tidy");
+    for (cmd, label) in [(grow, "Grow"), (tidy, "Tidy")] {
+        let c = listed(&s, cmd).unwrap_or_else(|| panic!("{cmd} is listed"));
+        assert_eq!((c.label, c.menu.as_slice()), (label, &["Object", "Plug-ins", "Cmd Test"][..]), "{cmd}");
+        assert!(c.enabled, "{cmd}");
+    }
+    assert!(crate::cmd::find_command(grow).is_some());
+
+    run(&mut s, "select.none", json!({}));
+    let (before, undo) = (objects(&s), s.doc().unwrap().history.undo.len());
+    let r = run(&mut s, grow, json!({"by": 3}));
+    assert_eq!((r["plugin"].as_str(), r["command"].as_str()), (Some(id), Some("grow")));
+    assert_eq!(objects(&s), before + 1, "the command added its triangle");
+    let st = s.doc().unwrap();
+    assert_eq!((st.history.undo.len(), st.history.undo.last().unwrap().label.as_str()), (undo + 1, "Grow"));
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(objects(&s), before);
+    // Its parameters are checked before it runs.
+    let e = s.execute(grow, &json!({"by": "lots"})).unwrap_err();
+    assert!(matches!(&e, EngineError::BadParams { cmd, .. } if cmd == grow), "{e}");
+    assert_eq!(objects(&s), before);
+    // Another command of the same plug-in is told apart by its id.
+    run(&mut s, tidy, json!({}));
+    assert_eq!(objects(&s), before, "tidy returns its input unchanged");
+
+    // Replaced by a module without commands, its commands are gone; installed again, back.
+    install_wat(&mut s, &tpl::module(&tpl::manifest(id, "filter", "{}"), tpl::ECHO, "", 1));
+    assert!(listed(&s, grow).is_none() && crate::cmd::find_command(grow).is_none());
+    install_wat(&mut s, &grower(id));
+    assert!(listed(&s, grow).is_some());
+    run(&mut s, "plugin.remove", json!({"id": id}));
+    assert!(listed(&s, grow).is_none() && listed(&s, tidy).is_none());
+    assert!(s.execute(grow, &json!({})).is_err(), "removed, it no longer runs");
+}
+
+/// A command run is journaled like any other, so an action records it with its parameters and
+/// plays it back.
+#[test]
+fn actions_record_and_play_plugin_commands() {
+    let mut s = session();
+    let id = "test.engine.cmds.actions";
+    let grow = crate::cmd::plugin::command_id(id, "grow");
+    install_wat(&mut s, &grower(id));
+    run(&mut s, "select.none", json!({}));
+    let before = objects(&s);
+    let start = s.journal.len();
+    run(&mut s, &grow, json!({"by": 4}));
+    let steps = s.journal_for_action(start);
+    assert_eq!(steps, [(grow.clone(), json!({"by": 4}))]);
+    run(&mut s, "edit.undo", json!({}));
+    let commands: Vec<Value> = steps.iter().map(|(c, p)| json!({"command": c, "params": p})).collect();
+    // The triangle a run adds is selected, and the next run would be given it: deselect between.
+    let none = json!({"command": "select.none", "params": {}});
+    run(&mut s, "command.batch", json!({"label": "Grow Twice", "commands": [commands[0].clone(), none, commands[0].clone()]}));
+    assert_eq!(objects(&s), before + 2, "both steps ran");
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// A command that traps leaves the document and its history as they were, and the error names
+/// the plug-in and the command.
+#[test]
+fn a_failing_plugin_command_changes_nothing_and_names_itself() {
+    let mut s = session();
+    rect(&mut s, 10.0, "#ff0000");
+    run(&mut s, "select.all", json!({}));
+    let id = "test.engine.cmds.trap";
+    install_wat(&mut s, &tpl::module(&with_commands(id, "filter", r#"[{"id":"boom","label":"Boom"}]"#), "unreachable", "", 1));
+    let (before, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+    let e = s.execute(&crate::cmd::plugin::command_id(id, "boom"), &json!({})).unwrap_err().to_string();
+    assert!(e.contains("“Cmd Test” › Boom: ") && e.contains("trapped"), "{e}");
+    assert_eq!(s.doc().unwrap().doc, before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// A command that runs out of its instruction budget leaves the document and its history as they
+/// were, and the error names the plug-in and the command.
+#[test]
+fn a_plugin_command_out_of_budget_changes_nothing_and_names_itself() {
+    let mut s = session();
+    rect(&mut s, 10.0, "#ff0000");
+    run(&mut s, "select.all", json!({}));
+    let id = "test.engine.cmds.spin";
+    let triangle = r#"{"objects":[{"path":{"subpaths":[{"closed":true,"anchors":[{"p":[0,0]},{"p":[5,0]},{"p":[5,5]}]}]}}]}"#;
+    // More steps than a light budget pays for (as the plug-in crate's budget test counts them).
+    install_wat(&mut s, &tpl::spinning(&with_commands(id, "filter", r#"[{"id":"spin","label":"Spin"}]"#), 100_000_000, triangle));
+    let (before, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+    let e = s.execute(&crate::cmd::plugin::command_id(id, "spin"), &json!({})).unwrap_err().to_string();
+    assert!(e.contains("“Cmd Test” › Spin: ") && e.contains("instruction budget"), "{e}");
+    assert_eq!(s.doc().unwrap().doc, before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// An `ids` that is not a list, or that holds an entry that is not an object id, is an error naming
+/// `ids` for a plug-in command and for `plugin.run`, and is never read as the selection; left out
+/// or null, `ids` is the selection.
+#[test]
+fn a_malformed_ids_is_refused_not_read_as_the_selection() {
+    let mut s = session();
+    let id = "test.engine.cmds.ids";
+    let grow = crate::cmd::plugin::command_id(id, "grow");
+    install_wat(&mut s, &grower(id));
+    rect(&mut s, 10.0, "#ff0000");
+    run(&mut s, "select.all", json!({}));
+    let (before, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+    let cases = [
+        (grow.as_str(), json!(5)),
+        (grow.as_str(), json!([1, "x"])),
+        (grow.as_str(), json!([-1])),
+        ("plugin.run", json!("all")),
+        ("plugin.run", json!([1.5])),
+    ];
+    for (cmd, ids) in cases {
+        let mut p = json!({"ids": ids});
+        if cmd == "plugin.run" {
+            p["id"] = json!(id);
+        }
+        let e = s.execute(cmd, &p).unwrap_err();
+        assert!(matches!(&e, EngineError::BadParams { cmd: c, .. } if c == cmd), "{cmd} {ids}: {e}");
+        let said = e.to_string();
+        assert!(
+            said.contains("ids must be an array of non-negative integer object ids") || said.contains("not a non-negative integer object id"),
+            "{cmd} {ids}: {e}"
+        );
+        assert_eq!(s.doc().unwrap().doc, before, "{cmd} {ids}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo, "{cmd} {ids}");
+    }
+    // Left out or null, the command runs on the selection.
+    for p in [json!({}), json!({"ids": null})] {
+        let r = run(&mut s, &grow, p.clone());
+        assert_eq!(r["command"], "grow", "{p}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "{p}");
+        run(&mut s, "edit.undo", json!({}));
+        assert_eq!(s.doc().unwrap().doc, before, "{p}");
+    }
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// A live effect's commands are listed under Effect › Plug-ins and run under its permissions (with
+/// commands it gets `doc.write` unless its list leaves it out), and labels show bidirectional
+/// characters escaped. A malformed
+/// `commands` entry is refused at install, and the error names it.
+#[test]
+fn effect_commands_labels_and_malformed_entries() {
+    let mut s = session();
+    let id = "test.engine.cmds.effect";
+    let triangle = r#"{"objects":[{"path":{"subpaths":[{"closed":true,"anchors":[{"p":[0,0]},{"p":[5,0]},{"p":[5,5]}]}]}}]}"#;
+    install_wat(&mut s, &tpl::returning(&with_commands(id, "effect", "[{\"id\":\"flip\",\"label\":\"Flip\u{202E}txt\"}]"), triangle));
+    let c = listed(&s, &crate::cmd::plugin::command_id(id, "flip")).expect("listed");
+    assert_eq!((c.label, c.menu.as_slice()), ("Flip\\u{202E}txt", &["Effect", "Plug-ins", "Cmd Test"][..]));
+    run(&mut s, "select.none", json!({}));
+    // Without `permissions`, a live effect with commands may change the document: its command adds
+    // the triangle, as one undo step.
+    let (before, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+    let out = run(&mut s, &crate::cmd::plugin::command_id(id, "flip"), json!({}));
+    assert_eq!(out["ids"].as_array().map(Vec::len), Some(1), "{out}");
+    assert_ne!(s.doc().unwrap().doc, before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    run(&mut s, "plugin.remove", json!({"id": id}));
+    // One that lists its permissions without `doc.write` is refused the change, and the document
+    // stays as it was.
+    let listed = format!(
+        r#"{{"id":"{id}","name":"Cmd Test","version":"1","kind":"effect","permissions":["doc.read","effect.render"],"commands":[{{"id":"flip","label":"Flip"}}]}}"#
+    );
+    let wasm = wat::parse_str(tpl::returning(&listed, triangle)).unwrap();
+    let hash = vectorcraft_plugins::permissions::sha256_hex(&wasm);
+    let grant = json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "grant": ["doc.read", "effect.render"], "hash": hash});
+    run(&mut s, "plugin.install", grant);
+    let (before, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+    let e = s.execute(&crate::cmd::plugin::command_id(id, "flip"), &json!({})).unwrap_err().to_string();
+    assert!(e.contains("wasn't granted `doc.write`"), "{e}");
+    assert_eq!(s.doc().unwrap().doc, before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    run(&mut s, "plugin.remove", json!({"id": id}));
+
+    let bad = id.replace("effect", "bad");
+    let wasm = wat::parse_str(tpl::module(&with_commands(&bad, "filter", r#"[{"id":"ok","label":"A"},{"id":"Bad","label":"B"}]"#), tpl::ECHO, "", 1));
+    let e = s.execute("plugin.install", &json!({"dataBase64": vectorcraft_format::base64_encode(&wasm.unwrap())})).unwrap_err().to_string();
+    assert!(e.contains("command `Bad`"), "{e}");
+    assert!(vectorcraft_plugins::registry::get(&bad).is_none());
+}
+
 /// A filter `id` of API level 2 that lists `settings` and `cache`, whose `vc_run` runs `first`
 /// (instructions that trap unless each storage call returns what it should), with the keys "zoom"
 /// at 0x2000 and "tile" at 0x2004 and the value "hello" at 0x2100.
@@ -1147,10 +1366,11 @@ fn replace_storing(s: &mut Session, id: &str, first: &str) -> Value {
 
 /// A plug-in's settings and cache are kept in the plug-in store under its id: the next session
 /// has them, replacing the plug-in keeps them, another plug-in can't read them, `plugin.clearCache`
-/// empties the cache alone and `plugin.remove` deletes both. The caps and the bytes each call is
-/// charged follow ([`plugin_storage_is_capped_and_survives_a_damaged_settings_file`],
-/// [`plugin_storage_calls_are_charged_the_files_they_read_and_write`]) in the same test, since
-/// clearing every plug-in's cache would empty theirs.
+/// with its id empties its cache alone and `plugin.remove` deletes both. The caps and the bytes
+/// each call is charged follow ([`plugin_storage_is_capped_and_survives_a_damaged_settings_file`],
+/// [`plugin_storage_calls_are_charged_the_files_they_read_and_write`]) in the same test.
+/// `plugin.clearCache` without an id empties the cache of every plug-in installed in the process,
+/// so it is tested in a binary of its own (`tests/plugin_clear_cache.rs`).
 #[test]
 fn plugins_keep_settings_and_a_cache_of_their_own_in_the_store() {
     let folder = crate::tests_links::Folder::new("plugin-storage");
@@ -1177,16 +1397,13 @@ fn plugins_keep_settings_and_a_cache_of_their_own_in_the_store() {
     install_storing(&mut next, other, READS);
     assert!(next.execute("plugin.run", &json!({"id": other, "ids": []})).is_err());
 
-    // Clearing the cache leaves the settings.
-    assert_eq!(run(&mut next, "plugin.clearCache", json!({"id": id})), json!({"cleared": [id], "bytesFreed": 3}));
-    assert_eq!(run(&mut next, "plugin.info", json!({"id": id}))["cacheBytes"], json!(0));
-    run(&mut next, "plugin.run", json!({"id": id, "ids": []}));
+    // Clearing the cache leaves the settings, and the other plug-in's cache.
     replace_storing(&mut next, other, WRITES);
     run(&mut next, "plugin.run", json!({"id": other, "ids": []}));
-    let all = run(&mut next, "plugin.clearCache", json!({}));
-    let cleared = all["cleared"].as_array().unwrap();
-    assert!(cleared.contains(&json!(id)) && cleared.contains(&json!(other)) && all["bytesFreed"] == json!(3), "{all}");
-    assert_eq!(run(&mut next, "plugin.info", json!({"id": other}))["cacheBytes"], json!(0));
+    assert_eq!(run(&mut next, "plugin.clearCache", json!({"id": id})), json!({"cleared": [id], "bytesFreed": 3}));
+    assert_eq!(run(&mut next, "plugin.info", json!({"id": id}))["cacheBytes"], json!(0));
+    assert_eq!(run(&mut next, "plugin.info", json!({"id": other}))["cacheBytes"], json!(3));
+    run(&mut next, "plugin.run", json!({"id": id, "ids": []}));
     assert!(next.execute("plugin.clearCache", &json!({"id": "test.engine.storing.missing"})).is_err());
 
     run(&mut next, "plugin.remove", json!({"id": id}));

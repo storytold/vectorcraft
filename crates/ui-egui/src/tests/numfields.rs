@@ -920,11 +920,10 @@ fn wheel(at: Pos2, unit: egui::MouseWheelUnit, dy: f32, modifiers: Modifiers) ->
     ]
 }
 
-/// The mouse wheel over a focused numeric field steps it as ↑/↓ do (#485): a notch a step, Shift
-/// ten, Ctrl/Cmd a tenth; a trackpad's points add up to notches. Unfocused, or with the pointer
-/// elsewhere, the wheel isn't the field's.
+/// Hover stepping (#5949) keeps the existing units, modifiers and trackpad accumulation,
+/// without taking keyboard focus. Outside the field, the wheel is left alone.
 #[test]
-fn the_wheel_steps_a_focused_field_under_the_pointer() {
+fn the_wheel_steps_a_hovered_field_without_taking_focus() {
     use egui::MouseWheelUnit::{Line, Point};
     let mut f = Field::new();
     let u = Unit::Millimeters;
@@ -932,16 +931,13 @@ fn the_wheel_steps_a_focused_field_under_the_pointer() {
     let draw = |ui: &mut egui::Ui| widgets::num_field(ui, "f", Some(u.to_pt(mm.get())), u, 80.0).inspect(|&v| mm.set(u.from_pt(v)));
     f.frame(vec![], &draw);
     let at = f.rect.get().center();
-    assert_eq!(f.frame(wheel(at, Line, 1.0, Modifiers::NONE), &draw), None, "unfocused");
-    f.frame(f.click(1), &draw);
-    f.frame(vec![], &draw);
     for (dy, mods, want) in
         [(1.0, Modifiers::NONE, 5.0), (2.0, Modifiers::SHIFT, 25.0), (-1.0, Modifiers::COMMAND, 24.9), (-1.0, Modifiers::NONE, 24.0)]
     {
         assert!(f.frame(wheel(at, Line, dy, mods), &draw).is_some(), "{dy} {mods:?}");
         assert!((mm.get() - want).abs() < 1e-6, "{dy} {mods:?}: {}", mm.get());
     }
-    assert_eq!(f.selection(), Some((0, "24 mm".len())), "the new value is selected");
+    assert!(!f.ctx.memory(|m| m.has_focus(f.id.get())), "hover never takes keyboard focus");
     // Points: a step for each line's worth, what is left carried to the next turn.
     let line = f.ctx.options(|o| o.input_options.line_scroll_speed);
     assert_eq!(f.frame(wheel(at, Point, line * 0.6, Modifiers::NONE), &draw), None);
@@ -957,16 +953,16 @@ fn the_wheel_steps_a_focused_field_under_the_pointer() {
     assert_eq!(f.frame(wheel(f.rect.get().center(), Line, -1.0, Modifiers::NONE), &count), Some(2.0));
 }
 
-/// The wheel over a focused field steps it and leaves the panel where it is; over an unfocused one
-/// it scrolls the panel as before.
+/// Both focused and unfocused hovered fields own the wheel, including its smoothing tail.
 #[test]
-fn the_wheel_scrolls_the_panel_unless_over_the_focused_field() {
+fn the_wheel_scrolls_the_panel_unless_over_a_numeric_field() {
     for focus in [false, true] {
         let mut f = Field::new();
         let offset = Cell::new(0.0);
+        let value = Cell::new(10.0);
         let draw = |ui: &mut egui::Ui| {
             let out = egui::ScrollArea::vertical().max_height(60.0).show(ui, |ui| {
-                let v = widgets::plain_field(ui, "f", 10.0, "", 0, 80.0);
+                let v = widgets::plain_field(ui, "f", value.get(), "", 0, 80.0).inspect(|&v| value.set(v));
                 ui.add_space(600.0);
                 v
             });
@@ -994,11 +990,59 @@ fn the_wheel_scrolls_the_panel_unless_over_the_focused_field() {
         for _ in 0..20 {
             f.frame(vec![], &draw);
         }
-        if focus {
-            assert_eq!((stepped, offset.get()), (Some(8.0), 0.0));
-        } else {
-            assert!(stepped.is_none() && offset.get() > 0.0, "{stepped:?} {}", offset.get());
+        assert_eq!((stepped, offset.get()), (Some(8.0), 0.0), "focus {focus}");
+        let line = f.ctx.options(|o| o.input_options.line_scroll_speed);
+        assert_eq!(f.frame(wheel(at, egui::MouseWheelUnit::Point, -line * 0.6, Modifiers::NONE), &draw), None);
+        assert_eq!(offset.get(), 0.0);
+        assert_eq!(f.frame(wheel(at, egui::MouseWheelUnit::Point, -line * 0.6, Modifiers::NONE), &draw), Some(7.0));
+        for _ in 0..20 {
+            f.frame(vec![], &draw);
         }
+        assert_eq!(offset.get(), 0.0);
+        assert_eq!(f.frame(wheel(Pos2::new(20.0, 45.0), egui::MouseWheelUnit::Line, -2.0, Modifiers::NONE), &draw), None);
+        for _ in 0..20 {
+            f.frame(vec![], &draw);
+        }
+        assert!(offset.get() > 0.0, "outside the field scrolls the panel");
+    }
+}
+
+/// A wheel turn over an unfocused field steps it without consuming an arrow key in the same frame.
+#[test]
+fn hover_wheel_keeps_arrow_keys_for_the_keyboard_focus() {
+    let mut f = Field::new();
+    let arrows = Cell::new(false);
+    let draw = |ui: &mut egui::Ui| {
+        let v = widgets::plain_field(ui, "f", 1.123, "", 3, 80.0);
+        arrows.set(ui.input(|i| i.events.iter().any(|e| matches!(e, Event::Key { key: Key::ArrowUp, .. }))));
+        v
+    };
+    f.frame(vec![], &draw);
+    let at = f.rect.get().center();
+    assert_eq!(f.frame(vec![Event::PointerMoved(at), key(Key::ArrowUp, Modifiers::NONE)], &draw), None);
+    assert!(arrows.get());
+    let mut events = wheel(at, egui::MouseWheelUnit::Line, 1.0, Modifiers::NONE);
+    events.push(key(Key::ArrowUp, Modifiers::NONE));
+    assert_eq!(f.frame(events, &draw), Some(2.0), "existing next-multiple rounding, wheel only");
+    assert!(arrows.get(), "hover does not consume arrows");
+    assert!(!f.ctx.memory(|m| m.has_focus(f.id.get())));
+}
+
+/// Hover steps stop at both bounds, leave mixed values blank, and never edit disabled fields.
+#[test]
+fn hover_wheel_preserves_limits_mixed_values_and_disabled_fields() {
+    for (value, enabled, dy, want) in [
+        (Some(0.5), true, -1.0, Some(0.0)),
+        (Some(0.0), true, -1.0, None),
+        (Some(9.5), true, 1.0, Some(10.0)),
+        (Some(10.0), true, -1.0, Some(9.0)),
+        (None, true, -1.0, None),
+        (Some(10.0), false, -1.0, None),
+    ] {
+        let mut f = Field::new();
+        let draw = |ui: &mut egui::Ui| ui.add_enabled_ui(enabled, |ui| widgets::range_field(ui, "f", value, 0.0..=10.0, "", 3, 80.0)).inner;
+        f.frame(vec![], &draw);
+        assert_eq!(f.frame(wheel(f.rect.get().center(), egui::MouseWheelUnit::Line, dy, Modifiers::NONE), &draw), want);
     }
 }
 

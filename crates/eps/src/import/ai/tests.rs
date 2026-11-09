@@ -5974,6 +5974,37 @@ fn an_object_in_a_brushs_art_with_a_style_this_reads_comes_in_as_itself() {
     assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
 }
 
+/// The art of an opacity mask in a brush's art takes ids of the document, as the rest of the art
+/// does: no object of the brush's art shares an id with an object of the layers.
+#[test]
+fn a_brushs_opacity_mask_art_takes_ids_of_the_document() {
+    fn ids(n: &Node, out: &mut Vec<vectorcraft_doc::NodeId>) {
+        out.push(n.id);
+        if let Some(m) = n.extras().mask.as_ref() {
+            ids(&m.art, out);
+        }
+        for c in n.children().into_iter().flatten() {
+            ids(c, out);
+        }
+    }
+    let square = rect_path(0.0, 0.0, 10.0, 10.0);
+    let mask_art: String = format!("1 g\n{square}f\n").lines().map(|l| format!("%_{l}\n")).collect();
+    let mask = format!("%_/ArtDictionary :\n%_/Mask :\n%_X=\n{mask_art}%_X+\n%_(Art) ,\n%_1 /Bool (Clipping) ,\n%_; (AI9_Mask) ,\n%_;\n");
+    let section = format!("%AI8_BeginBrushPattern\n(Dot art)\n0 A\n{RED}{square}f\n{mask}%AI8_EndBrushPattern\n");
+    let shapes: String = (0..12).map(|i| format!("{RED}{}f\n", rect_path(f64::from(i) * 20.0, 0.0, f64::from(i) * 20.0 + 10.0, 10.0))).collect();
+    let r = read_ok(&format!("{section}{}{}", plugin_object(SCATTER, "Spray", SPRAY), layer(&shapes)));
+    let lib = vectorcraft_brush::library(&r.doc);
+    let spray = lib.iter().find(|b| b.name == "Spray").unwrap_or_else(|| panic!("{:?}", r.warnings));
+    let art = spray.art();
+    assert!(art.iter().any(|n| n.extras().mask.is_some()), "the mask is read: {art:#?}");
+    let mut all = Vec::new();
+    for n in r.doc.layers.iter().map(|l| &**l).chain(art) {
+        ids(n, &mut all);
+    }
+    let unique: std::collections::HashSet<_> = all.iter().copied().collect();
+    assert_eq!(unique.len(), all.len(), "{all:?}");
+}
+
 /// An art styles section inside a symbol's, a pattern's or a brush's art is skipped: the file's own
 /// art styles still style the layers' objects read after the definition.
 #[test]
@@ -6184,6 +6215,50 @@ fn an_object_in_a_symbols_art_with_a_listed_style_is_linked() {
     assert_eq!(art.extras().graphic_style, Some(1), "{art:#?}");
 }
 
+/// Editing data with symbols and no layers (a symbol library) gives its symbols: in the symbol
+/// list's order with the unlisted one after them, with their registration points and the images
+/// their art shows, without the one holding an instance of a symbol the data doesn't define, and
+/// with the object linked to a listed graphic style linked to it by its id.
+#[test]
+fn a_symbol_library_without_layers_gives_its_symbols() {
+    let styles = styles_and_list(&[fill_style("Blue", "0 0 0 0 0 0 1 Xa\n")], &["Blue"]);
+    // The template box's center is (100.5, 50.5): art space's origin is at canvas (8091, 8242).
+    let nested = instance("Dot", [1.0, 0.0, 0.0, -1.0, -8081.0, 8237.0]);
+    let lost = instance("Ghost", [1.0, 0.0, 0.0, -1.0, -8081.0, 8237.0]);
+    let m = "[ 5 0 0 5 -8096 8244.5 ]";
+    let raster = format!(
+        "%AI5_File:\n%AI5_BeginRaster\n() 1 XG\n/DeviceRGB XN\n{m} 2 1 0 Xh\n{m} 0 0 2 1 2 1 8 3 0 0 1 0 4 4 0 0\n\
+         %%BeginData: 6\rXI\nABCDEF%%EndData\r\nXH\r\n%AI5_EndRaster\r\nN\n"
+    );
+    let defs = symbols(
+        &(symbol("Dot", &dot(), 1)
+            + &symbol("Pic", &raster, 5)
+            + &symbol("Pair", &nested, 5)
+            + &symbol("Tile", &styled_square("Blue"), 5)
+            + &symbol("Lost", &lost, 5)),
+    );
+    let list = "%AI24_BeginSymbolList\n(Tile)\n(Pair)\n(Lost)\n(Dot)\n%AI24_EndSymbolList\n";
+    let body = format!("%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n{styles}{defs}{list}");
+    let read = super::symbols(stream(&body).as_bytes()).expect("the library's symbols");
+    let names: Vec<&str> = read.symbols.iter().map(|(s, _)| s.name.as_str()).collect();
+    assert_eq!(names, ["Tile", "Pair", "Dot", "Pic"]);
+    let registrations: Vec<u8> = read.symbols.iter().map(|(_, r)| r.0).collect();
+    let center = vectorcraft_doc::SymbolRegistration::CENTER.0;
+    assert_eq!(registrations, [center, center, 0, center]);
+    let Some(((tile, _), (pair, _))) = read.symbols.first().zip(read.symbols.get(1)) else { panic!("two symbols") };
+    assert_eq!(tile.art.extras().graphic_style, Some(1), "{:#?}", tile.art);
+    // Dot sits at (10, 5) in Pair's art.
+    let mut doc = Document::new(1.0, 1.0);
+    doc.symbols = read.symbols.iter().map(|(s, _)| s.clone()).collect();
+    assert_eq!(pair.art.visual_bounds_with(&doc.symbol_boxes()), Some(Rect::new(8.0, 3.0, 12.0, 7.0)));
+    let keys: Vec<String> =
+        doc.symbols.iter().filter_map(|s| if let NodeKind::Image(im) = &s.art.kind { Some(im.key.clone()) } else { None }).collect();
+    assert_eq!(keys.len(), 1);
+    assert_eq!(read.images.keys().cloned().collect::<Vec<_>>(), keys);
+    // Without symbols there are none to give.
+    assert!(super::symbols(stream(&styles).as_bytes()).is_none());
+}
+
 #[test]
 fn an_object_in_a_patterns_art_with_a_listed_style_is_linked() {
     let defs = styles_and_list(&[fill_style("Blue", "0 0 0 0 0 0 1 Xa\n")], &["Blue"]);
@@ -6194,6 +6269,35 @@ fn an_object_in_a_patterns_art_with_a_listed_style_is_linked() {
     let [square] = def.art.as_slice() else { panic!("{:#?}", def.art) };
     assert_eq!(fill(square).color(), Some(Color::rgb(0.0, 0.0, 1.0)));
     assert_eq!(square.extras().graphic_style, Some(1), "{square:#?}");
+}
+
+/// The art of an opacity mask in a pattern's art takes ids of the document, as the rest of the art
+/// does: no object of the pattern's art shares an id with an object of the layers.
+#[test]
+fn a_patterns_opacity_mask_art_takes_ids_of_the_document() {
+    fn ids(n: &Node, out: &mut Vec<vectorcraft_doc::NodeId>) {
+        out.push(n.id);
+        if let Some(m) = n.extras().mask.as_ref() {
+            ids(&m.art, out);
+        }
+        for c in n.children().into_iter().flatten() {
+            ids(c, out);
+        }
+    }
+    let square = rect_path(0.0, 0.0, 10.0, 10.0);
+    let mask_art: String = format!("1 g\n{square}f\n").lines().map(|l| format!("%_{l}\n")).collect();
+    let mask = format!("%_/ArtDictionary :\n%_/Mask :\n%_X=\n{mask_art}%_X+\n%_(Art) ,\n%_1 /Bool (Clipping) ,\n%_; (AI9_Mask) ,\n%_;\n");
+    let pattern = format!("%AI3_BeginPattern: (P)\n(P) 0 0 10 10\n0 A\n0 Xw\n{RED}{square}f\n{mask}E\n%AI3_EndPattern\n");
+    let shapes: String = (0..12).map(|i| format!("{RED}{}f\n", rect_path(f64::from(i) * 20.0, 0.0, f64::from(i) * 20.0 + 10.0, 10.0))).collect();
+    let r = read_ok(&format!("{pattern}{}", layer(&shapes)));
+    let def = r.doc.pattern("P").unwrap_or_else(|| panic!("{:?}", r.warnings));
+    assert!(def.art.iter().any(|n| n.extras().mask.is_some()), "the mask is read: {:#?}", def.art);
+    let mut all = Vec::new();
+    for n in r.doc.layers.iter().chain(&def.art) {
+        ids(n, &mut all);
+    }
+    let unique: std::collections::HashSet<_> = all.iter().copied().collect();
+    assert_eq!(unique.len(), all.len(), "{all:?}");
 }
 
 #[test]
