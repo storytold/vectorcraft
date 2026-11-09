@@ -763,6 +763,100 @@ fn limits_during_deletes_and_puts_keep_the_other_nodes() {
     assert!(heap_stops(setup, "x.b = (SPARE, 'v')", &held) > 0);
 }
 
+/// True when the markup of `tree` is `before` or `after`, ignoring white space.
+fn tree_is(tree: &str, before: &str, after: &str) -> String {
+    format!("(function () {{ var s = {tree}.toXMLString().replace(/\\s/g, ''); return s === '{before}' || s === '{after}'; }})()")
+}
+
+#[test]
+fn a_limit_while_a_list_replaces_a_child_leaves_the_children() {
+    let setup = "var x = <a><b/><z/></a>; var v = <><p/><q/></>;";
+    let replaced = tree_is("x", "<a><b/><z/></a>", "<a><p/><q/><z/></a>");
+    for action in ["x.replace(0, v)", "x.b = v"] {
+        assert!(fuel_stops(setup, action, &replaced) > 0, "{action}");
+    }
+    let spare = "x.replace({ toString: function () { SPARE; return '0'; } }, v)";
+    assert!(heap_stops(setup, spare, &replaced) > 0);
+    let set = tree_is("x", "<a><b/><z/></a>", "<a><p/><q/></a>");
+    assert!(fuel_stops(setup, "x.setChildren(v)", &set) > 0);
+}
+
+#[test]
+fn a_limit_while_a_list_is_inserted_leaves_the_children() {
+    let setup = "var o = <o><p/><q/></o>; var x = <a><b/></a>; var v = o.*;";
+    let check = |after: &str| {
+        format!("{} && (o.*.length() === 0 ? x.*.length() === 3 : o.*.length() === 2 && x.*.length() === 1)", tree_is("x", "<a><b/></a>", after))
+    };
+    for (action, after) in [
+        ("x.appendChild(v)", "<a><b/><p/><q/></a>"),
+        ("x.prependChild(v)", "<a><p/><q/><b/></a>"),
+        ("x.insertChildAfter(null, v)", "<a><p/><q/><b/></a>"),
+        ("x.insertChildBefore(null, v)", "<a><b/><p/><q/></a>"),
+    ] {
+        assert!(fuel_stops(setup, action, &check(after)) > 0, "{action}");
+    }
+    assert!(heap_stops(setup, "x.appendChild((SPARE, v))", &check("<a><b/><p/><q/></a>")) > 0);
+}
+
+#[test]
+fn a_heap_limit_on_a_list_put_at_an_index_keeps_the_list_and_tree_in_step() {
+    let setup = "var x = <a><b/><z/></a>; var l = x.*; var v = <><p/><q/></>;";
+    let check = "var s = x.toXMLString().replace(/\\s/g, ''); \
+        (s === '<a><b/><z/></a>' && l.length() === 2 && l[0].name() == 'b') \
+        || (s === '<a><p/><q/><z/></a>' && l.length() === 3 && l[0].name() == 'p')";
+    assert!(heap_stops(setup, "l[(SPARE, 0)] = v", check) > 0);
+}
+
+#[test]
+fn an_index_put_of_an_earlier_sibling_keeps_that_node_in_the_list() {
+    let setup = "var x = <a><b/><c/><d/><e/></a>; var l = x.*;";
+    truth(&format!("{setup} l[2] = x.b; l[2] === x.b[0] && l[3] === x.e[0]"));
+    truth(&format!("{setup} l[2] = x.b[0]; l[2] === x.b[0] && l[3] === x.e[0]"));
+}
+
+/// A realm whose trees may be 32 levels deep, and a script line making `deep`, a tree of 32 levels
+/// that cannot go under any element.
+fn shallow_with_deep_value() -> (Realm, &'static str) {
+    let deep = "var s = ''; var e = ''; for (var i = 0; i < 32; i++) { s += '<d>'; e += '</d>'; } var deep = new XML(s + e);";
+    (Realm::with_options(Options { max_depth: 32, ..e4x() }, Limits::default()), deep)
+}
+
+#[test]
+fn a_too_deep_value_leaves_every_match_in_place() {
+    for action in ["x.replace('b', deep)", "x.b = deep"] {
+        let (mut r, deep) = shallow_with_deep_value();
+        r.run(deep).unwrap();
+        r.run("var x = <a><b/><c/><b/></a>;").unwrap();
+        assert_eq!(r.run(action).map_err(|e| e.kind), Err(RunErrorKind::Limit(LimitKind::Heap)), "{action}");
+        assert_eq!(r.run("x.b.length() === 2 && x.*.length() === 3"), Ok(JsValue::Bool(true)), "{action}");
+    }
+}
+
+#[test]
+fn a_limit_while_matches_are_replaced_keeps_every_match() {
+    let setup = "var x = <a><b/><c/><b/></a>; var n = <n/>; var l = <><p/><q/></>;";
+    let two = "<a><b/><c/><b/></a>";
+    for (action, after) in [
+        ("x.replace('b', n)", "<a><n/><c/></a>"),
+        ("x.replace('b', l)", "<a><p/><q/><c/></a>"),
+        ("x.b = n", "<a><n/><c/></a>"),
+        ("x.b = l", "<a><p/><q/><c/></a>"),
+        ("x.b = 'v'", "<a><b>v</b><c/></a>"),
+    ] {
+        assert!(fuel_stops(setup, action, &tree_is("x", two, after)) > 0, "{action}");
+    }
+    let by_name = "x.replace({ toString: function () { SPARE; return 'b'; } }, n)";
+    assert!(heap_stops(setup, by_name, &tree_is("x", two, "<a><n/><c/></a>")) > 0);
+    assert!(heap_stops(setup, "x.b = (SPARE, 'v')", &tree_is("x", two, "<a><b>v</b><c/></a>")) > 0);
+}
+
+#[test]
+fn matches_are_replaced_in_document_order() {
+    truth("var x = <a><b>1</b><c/><b>2</b><d/><b>3</b></a>; x.replace('b', <n/>); x.*.length() === 3 && x.*[0].name() == 'n' && x.d.length() === 1");
+    truth("var x = <a><b>1</b><c/><b>2</b></a>; var old = x.b[1]; x.b = 'v'; x.b.length() === 1 && x.b == 'v' && old.parent() === null");
+    truth("var x = <a><c/></a>; x.b = 'v'; x.b == 'v' && x.*.length() === 2 && x.b[0].parent() === x");
+}
+
 #[test]
 fn a_limit_during_normalize_does_not_repeat_text() {
     let setup = "var x = <a/>; x.appendChild('p'); x.appendChild('q'); x.appendChild('r');";

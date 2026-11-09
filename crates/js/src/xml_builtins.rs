@@ -967,23 +967,11 @@ fn replace(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResul
         };
         let matched = i.xml_select(x, &NameRef { attribute: false, ..n })?;
         i.xml_keep(matched);
-        let count = i.list_len(matched)?;
-        if count == 0 {
+        let items = i.xml_list(matched)?.items.clone();
+        if items.is_empty() {
             return Ok(());
         }
-        let Some(first) = i.list_at(matched, 0)? else { return Ok(()) };
-        for at in (1..count).rev() {
-            let Some(item) = i.list_at(matched, at)? else { continue };
-            i.use_fuel()?;
-            let position = i.xml_node(x)?.children.iter().position(|&c| c == item);
-            if let Some(q) = position {
-                let removed = i.xml_node_mut(x)?.children.remove(q);
-                i.xml_node_mut(removed)?.parent = None;
-            }
-        }
-        i.use_fuel()?;
-        let at = i.xml_node(x)?.children.iter().position(|&c| c == first).unwrap_or(0);
-        i.xml_replace(x, at, &c)
+        i.xml_replace_matches(x, &items, &c)
     })?;
     Ok(this)
 }
