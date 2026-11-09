@@ -96,6 +96,13 @@ fn reserve_synthetic(app: &mut VectorcraftApp, additional: usize) -> Result<(), 
 
 pub type ControlResponse = Value;
 
+pub(crate) struct PendingPointerReply {
+    pub from: u64,
+    pub to: u64,
+    pub document: Option<u64>,
+    pub reply: Sender<ControlResponse>,
+}
+
 pub struct ControlRequest {
     pub method: String,
     pub params: Value,
@@ -167,6 +174,34 @@ pub enum Outcome {
         path: Option<String>,
         data: bool,
     },
+    /// A `ui.pointer` reply ([`pointer_reply`]), sent once the events numbered `from..to`
+    /// ([`vectorcraft_engine::Session::input_applied`]) have been made and the edit they started
+    /// on another thread is applied, so it shows the selection after the edit.
+    AfterToolEdit {
+        from: u64,
+        to: u64,
+        document: Option<u64>,
+    },
+}
+
+/// The reply to `ui.pointer`: the selection, the key object and the active tool.
+pub(crate) fn pointer_reply(app: &mut VectorcraftApp) -> Value {
+    pointer_reply_for(app, app.session.active().map(|d| d.uid))
+}
+
+pub(crate) fn pointer_reply_for(app: &VectorcraftApp, document: Option<u64>) -> Value {
+    let state = document.and_then(|uid| app.session.documents().iter().find(|d| d.uid == uid));
+    match state {
+        Some(state) => json!({
+            "ok": true,
+            "result": {
+                "selection": state.selection.objects.iter().map(|id| id.0).collect::<Vec<_>>(),
+                "key": state.selection.key.map(|id| id.0),
+                "tool": app.session.tool_id(),
+            }
+        }),
+        None => json!({"ok": false, "error": "the gesture's document is no longer open"}),
+    }
 }
 
 fn ok(v: Value) -> Outcome {
@@ -470,10 +505,9 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
                 o.remove("wait");
             }
             let method = req.method.as_str();
-            // The key check of `document.export` runs before the file is written.
-            if method == "app.export"
-                && let Err(e) = crate::menus::check_params(&app.session, "document.export", &p)
-            {
+            // The key check of `document.export` or `document.save` runs before the file is written.
+            let checked = if method == "app.export" { "document.export" } else { "document.save" };
+            if let Err(e) = crate::menus::check_params(&app.session, checked, &p) {
                 return err(e);
             }
             wrap(if wait { crate::background::in_foreground(app, |app| save_or_export(app, method, &p)) } else { save_or_export(app, method, &p) })
@@ -581,6 +615,7 @@ fn pointer_events(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRe
     let base_mods: Mods = p.get("mods").and_then(|m| serde_json::from_value(m.clone()).ok()).unwrap_or_default();
     let view = app.view_info();
     let xf = app.canvas_rect.zip(app.view().copied()).map(|(rect, v)| Xf::new(rect, &v));
+    let from = app.session.input_count();
     let held =
         PointerEvent::json_backquote(p, false).and_then(|d| events.iter().map(|e| PointerEvent::json_backquote(e, d)).collect::<Result<Vec<_>, _>>());
     let held = match held {
@@ -621,7 +656,15 @@ fn pointer_events(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRe
         }
     }
     ctx.request_repaint();
-    wrap(app.run("document.inspect", json!({})).map(|d| json!({"selection": d["selection"], "key": d["key"], "tool": app.session.tool_id()})))
+    // A Shape Builder merge of a large selection is computed on another thread, and the
+    // reply to the events that started it waits for it without holding the frames up. A
+    // gesture sent while it is computed is made after it, and its reply waits until then;
+    // a hover is answered at once.
+    let to = app.session.input_count();
+    if !app.session.input_applied(from, to) {
+        return Outcome::AfterToolEdit { from, to, document: app.session.active().map(|d| d.uid) };
+    }
+    Outcome::Done(pointer_reply(app))
 }
 
 /// `ui.click` and `ui.drag`: pointer input through egui itself.

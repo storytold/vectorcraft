@@ -1,6 +1,6 @@
 # File format parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-07 · **Change:** minor (`.ai` and EPS import: Art brushes in the older form of their objects come into the Brushes panel; EPS import: gradients drawn as abutting strips come in as one gradient, without seams; EPS import: composite fonts draw their Type 42 glyphs; SVG import: filter and mask regions clip, #5876, #5875; SVG import: Gaussian blurs keep `color-interpolation-filters`, #5877; PDF and `.ai` export: objects' URLs as links, #5785; SVG import: `color-interpolation="linearRGB"` gradients, #5878; `.ai` import: paths with a Calligraphic brush open brushed, #372) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-07 · **Change:** minor (`.ai` and EPS type from the text document keeps its tab stops; it keeps auto leading and hyphenation options, and may show more of the file's last lines in an area frame; `.ai` and EPS import: Art brushes in the older form of their objects come into the Brushes panel; EPS import: gradients drawn as abutting strips come in as one gradient, without seams; EPS import: composite fonts draw their Type 42 glyphs; SVG import: filter and mask regions clip, #5876, #5875; SVG import: Gaussian blurs keep `color-interpolation-filters`, #5877; PDF and `.ai` export: objects' URLs as links, #5785; SVG import: `color-interpolation="linearRGB"` gradients, #5878; `.ai` import: paths with a Calligraphic brush open brushed, #372) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Every format Illustrator opens, places, saves or exports, against VectorCraft's format table (`FORMATS`,
 `OPEN_EXTS`, `PLACE_EXTS` in `crates/engine/src/cmd/fileio/formats.rs`). Illustrator's list comes from its public
@@ -52,6 +52,11 @@ private editing data. VectorCraft:
   An opacity mask's art of one shown object, other than a guide or a clipping path, opens as that object in the
   editing data of a `.ai`, EPS or PDF; other art opens in a group. Art in the mask that sets no paint of its
   own paints with the paint before the mask's dictionary, as the writer leaves out paint that doesn't change.
+  Type from the text document keeps auto leading as auto, each line taking the paragraph's share
+  (Auto Leading) of the largest type on it ([Line and character spacing](https://helpx.adobe.com/illustrator/using/line-character-spacing.html)),
+  and the paragraph's hyphenation options and tab stops. Area type of one
+  frame whose last lines the file sets but which don't fit here (the fallback font, or a descent
+  past the frame's bottom) may get a frame taller from its bottom, by its lines' deepest descent plus 0.05 pt and only when that shows more of those lines, with a warning when it does.
   RGB in the PDF page's `ICCBased` spaces keeps the file's numbers in a `.ai` (the `uncalibrated_rgb`
   import option, on for editor documents, off for PDFs), so `.ai` files tagged with a non-sRGB RGB profile
   open with different, unconverted RGB colours than before.
@@ -266,6 +271,8 @@ A Scatter brush in the editing data whose last 15 numbers start with 1 comes int
 
 An object in a pattern's art or in a brush's art takes the file's art styles in the same way as an object on a layer: with a style VectorCraft reads, it comes in as itself with its effects live, not as the look it draws. An object in a pattern's art with a style in the file's style list keeps that graphic style's id. An art styles section inside a symbol's, a pattern's or a brush's art is skipped.
 
+Names in the editing data that aren't UTF-8 (layers, objects, artboards, colors, gradients, patterns, graphic styles, swatches, brushes, symbols, variables and data sets) are read as Windows-1252 unless `legacyNameEncoding` (`convert --legacy-name-encoding`) picks `macintosh`, `windows-949`, `shift_jis`, `gbk` or `big5`; the open result's warnings list the first three such names as read and count the rest. The text values of data sets are read in the same encoding.
+
 ## Format by format
 
 | Format | Illustrator | Ours: open/place | Ours: save/export | Fidelity and tests |
@@ -313,6 +320,8 @@ An object in a pattern's art or in a brush's art takes the file's art styles in 
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-07 | minor | EPS and `.ai` type from the text document keeps its paragraphs' tab stops (positions and alignments; leaders aren't read), at most 1,024 a paragraph and 2^20 a story, past which the default stops apply with a warning. A user's `.ai` (used locally, not committed) whose price lists came in on the default stops now lays them out as its page has them (its type 0.8% from its page, from 1.5%; what differs is hyphenation in Hungarian and type in a font that isn't installed). Scores and estimates unchanged. |
+| 2026-11-07 | minor | EPS and `.ai` type from the text document: auto leading stays auto at the paragraph's share (it was the first two lines' distance for every line, so 10 pt lines under a 15 pt heading came in 18 pt apart), the paragraph's hyphenation options are read, and area type of one frame whose last lines the file sets in too short a frame for them here may get a frame taller by its lines' deepest descent plus 0.05 pt, when that shows more of them. A user's `.ai` (used locally, not committed) whose type differed from its page by 6.6%, so that it opened from its PDF part, now opens from its layers (4.9%; type with tab stops in right-aligned paragraphs still differs, a separate issue) (#6137). Scores and estimates unchanged. |
 | 2026-11-06 | minor | EPS and `.ai` editing data: a path or compound path whose art style stacks several fills and strokes (solid colours and gradients, each with its own visibility, opacity and blend mode, under effects any object takes) comes in as itself with that appearance instead of its drawn look. Each gradient must be its own swatch, placed as the drawn look places it; a stack that repeats a swatch, or whose look doesn't paint its gradients, keeps the drawn look, as do fills and strokes with effects of their own. |
 | 2026-11-06 | minor | `.ai` and EPS import: Art brushes whose objects are in the older form (first number 1, one field fewer and 8 numbers at the end) come into the Brushes panel with their art instead of being left out with a note. In a survey of 302 users' EPS files (used locally, not committed), 652 Art brushes in 188 of the 197 files with the note were left out this way; afterwards 55 files have the note, all for Pattern brushes. Test `an_older_art_brush_comes_in_with_its_art` (crate `vectorcraft-eps`); scores unchanged |
 | 2026-11-06 | minor | EPS import: composite (Type 0) fonts with the 8/8 mapping (`FMapType` 2: PLRM 3rd ed., §5.10) draw a Type 42 descendant's glyphs from the TrueType outlines its `sfnts` carry (Adobe Technical Note #5012), spaced by their own widths or the show operator's numbers, and `charpath` and `stringwidth` read them; descendants found by name set their characters as type at the composite font's size instead of a thousand times it. EPS from `pdftops` of a PDF with embedded TrueType fonts showed nothing, or one black shape, where its type was. |

@@ -25,8 +25,8 @@ use vectorcraft_engine::cmd::fileio::{FORMATS_3D, SCREEN_SETTINGS_KEYS, format_3
 
 use super::{pstate, set_pstate};
 use crate::dialogs::{
-    EXPORT_FOR_SCREENS, ScreenPresetPick, open_export_for_screens_assets, screen_export_preset, screen_formats, screen_import_presets,
-    screen_preset_list, screen_saved_options, screen_saved_rows,
+    EXPORT_FOR_SCREENS, ScreenPresetPick, drop_unread_screen_settings, open_export_for_screens_assets, screen_export_preset, screen_formats,
+    screen_import_presets, screen_preset_list, screen_saved_options, screen_saved_rows,
 };
 use crate::state::Dialog;
 use crate::theme::Tokens;
@@ -240,7 +240,10 @@ fn export_now(app: &mut VectorcraftApp, ids: Vec<u64>, files_each: usize) {
         let saved = &st.doc.export_settings;
         let mut settings = saved.get("settings").and_then(Value::as_object).cloned().unwrap_or_default();
         settings.insert("tiff".into(), Value::Object(screen_saved_options(app, saved, "tiff")));
-        p["settings"] = Value::Object(settings);
+        // Without the keys the export no longer reads, which it would refuse.
+        let mut given = serde_json::Map::from_iter([("settings".to_string(), Value::Object(settings))]);
+        drop_unread_screen_settings(&mut given);
+        p["settings"] = given.remove("settings").unwrap_or_default();
     }
     if io::is_web(app) {
         p["zip"] = json!(ids.len() * files_each > 1);
@@ -532,6 +535,7 @@ fn preset_settings(app: &VectorcraftApp, ctx: &egui::Context, doc: u64) -> Value
         settings.remove("preset");
     }
     settings.extend(shared);
+    drop_unread_screen_settings(&mut settings);
     Value::Object(settings)
 }
 
@@ -554,6 +558,7 @@ fn shared_settings(app: &VectorcraftApp) -> Value {
             settings.insert("formats".into(), json!(rows));
         }
     }
+    drop_unread_screen_settings(&mut settings);
     Value::Object(settings)
 }
 
