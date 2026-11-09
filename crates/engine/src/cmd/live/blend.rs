@@ -522,6 +522,11 @@ pub(super) fn blend_replace_spine(s: &mut Session, _: &Value) -> Result<Value> {
     s.edit("Replace Spine", |d, sel| {
         let spine =
             d.node(path).and_then(replace_spine_path).ok_or_else(|| EngineError::Other("Replace Spine: the selected object has no path".into()))?;
+        // A spine of no length (no subpath, or one that flattens to a single point) cannot carry
+        // the blend: refuse it before the path is consumed rather than lose it for nothing.
+        if Spine::new(&spine).is_none() {
+            return Err(EngineError::Other("Replace Spine: the selected path has no length".into()));
+        }
         d.remove(path)?;
         if let Some(NodeKind::Blend { children, spec }) = d.node_mut(b).map(|n| &mut n.kind) {
             spec.spine = Some(spine);

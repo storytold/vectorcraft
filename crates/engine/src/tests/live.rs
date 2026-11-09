@@ -447,6 +447,24 @@ fn blend_replace_spine_uses_a_compound_paths_first_member() {
     assert!(last.distance(end) < 1.0, "and end on it, not on the other member: {last:?} vs {end:?}");
 }
 
+/// Replace Spine refuses a path that would give no spine (no length) before consuming it, so the
+/// path is not lost for nothing.
+#[test]
+fn blend_replace_spine_refuses_a_path_with_no_spine() {
+    let mut s = session();
+    let (_, _, g) = blend(&mut s, json!({"steps": 5}));
+    let a = id_of(&s.execute("path.create", &json!({"anchors": [{"x": 100.0, "y": 300.0}]})).unwrap());
+    let b = id_of(&s.execute("path.create", &json!({"anchors": [{"x": 200.0, "y": 300.0}]})).unwrap());
+    sel(&mut s, &[a, b]);
+    let compound = id_of(&s.execute("object.compoundPath.make", &json!({})).unwrap());
+    sel(&mut s, &[g, compound]);
+    let r = s.execute("object.blend.replaceSpine", &json!({}));
+    assert!(r.is_err(), "a spine of no length is refused: {r:?}");
+    assert!(s.doc().unwrap().doc.node(compound).is_some(), "and the compound path is not consumed");
+    let first = steps_of(&s, g)[0].geometric_bounds().unwrap().center();
+    assert!(first.distance(Point::new(5.0, 5.0)) < 0.01, "the keys stay where they were: {first:?}");
+}
+
 #[test]
 fn blend_align_to_path_rotates_steps() {
     let mut s = session();
