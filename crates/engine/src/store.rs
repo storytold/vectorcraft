@@ -111,12 +111,18 @@ fn list_files(dir: &Path, ext: &str) -> Vec<PathBuf> {
 
 /// The content of `path` when it is at most `max` bytes; the file is never read past `max`.
 pub(crate) fn read_capped(path: &Path, max: u64) -> Result<Vec<u8>, String> {
-    let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
-    let mut bytes = vec![];
-    file.take(max + 1).read_to_end(&mut bytes).map_err(|e| e.to_string())?;
+    let bytes = read_past_cap(path, max).map_err(|e| e.to_string())?;
     if bytes.len() as u64 > max {
         return Err(too_large(max));
     }
+    Ok(bytes)
+}
+
+/// The first `max + 1` bytes of `path` at most, so that a result longer than `max` shows the file is
+/// over its cap.
+fn read_past_cap(path: &Path, max: u64) -> std::io::Result<Vec<u8>> {
+    let mut bytes = vec![];
+    std::fs::File::open(path)?.take(max + 1).read_to_end(&mut bytes)?;
     Ok(bytes)
 }
 
@@ -458,7 +464,7 @@ impl Session {
         let mut file = match read_grants(dir) {
             Ok(file) => file,
             Err(e) => {
-                log::warn!("not updating the stored plug-in grants {}: {e}", dir.join(GRANTS_FILE).display());
+                log::warn!("not updating the stored plug-in grants {}: {}", dir.join(GRANTS_FILE).display(), e.why);
                 return false;
             }
         };
@@ -488,10 +494,14 @@ impl Session {
         }
     }
 
-    /// Whether the store holds a grant this version can use for the plug-in `id` (`false` without a
-    /// folder, and when the grants file can't be read).
+    /// Whether the store holds, or may hold, a grant this version can use for the plug-in `id`.
+    /// `true` when the grants file can't be opened or read, because it may name `id` once it reads
+    /// again; `false` without a folder, and when the file is too large or doesn't hold a list.
     pub(crate) fn holds_plugin_grant(&self, id: &str) -> bool {
-        self.plugin_dir.as_deref().is_some_and(|dir| stored_grants(dir).contains_key(id))
+        self.plugin_dir.as_deref().is_some_and(|dir| match read_grants(dir) {
+            Ok(file) => file.grants.contains_key(id),
+            Err(e) => e.unread,
+        })
     }
 
     /// Remove the plug-in `id` from the store.
@@ -901,16 +911,29 @@ struct GrantsFile {
     other: Vec<serde_json::Value>,
 }
 
+/// Why the grants file of a plug-in store gave no grants.
+struct GrantsError {
+    /// Opening or reading the file failed, so what it holds is unknown. When `false`, the file is
+    /// too large or doesn't hold a list, and approves nothing.
+    unread: bool,
+    /// The detail for a log record.
+    why: String,
+}
+
 /// The grants file of the plug-in store `dir`: empty when there is none, an error when it is too
 /// large, can't be read or doesn't hold a list. An entry that doesn't parse as a grant, or names an
 /// invalid id, is kept in [`GrantsFile::other`] with a log record.
-fn read_grants(dir: &Path) -> Result<GrantsFile, String> {
+fn read_grants(dir: &Path) -> Result<GrantsFile, GrantsError> {
     let path = dir.join(GRANTS_FILE);
-    if !path.exists() {
-        return Ok(GrantsFile::default());
+    let bytes = match read_past_cap(&path, MAX_GRANTS_FILE) {
+        Ok(bytes) => bytes,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(GrantsFile::default()),
+        Err(e) => return Err(GrantsError { unread: true, why: e.to_string() }),
+    };
+    if bytes.len() as u64 > MAX_GRANTS_FILE {
+        return Err(GrantsError { unread: false, why: too_large(MAX_GRANTS_FILE) });
     }
-    let entries =
-        read_capped(&path, MAX_GRANTS_FILE).and_then(|bytes| serde_json::from_slice::<Vec<serde_json::Value>>(&bytes).map_err(|e| e.to_string()))?;
+    let entries = serde_json::from_slice::<Vec<serde_json::Value>>(&bytes).map_err(|e| GrantsError { unread: false, why: e.to_string() })?;
     let mut file = GrantsFile::default();
     let mut first_error = None;
     for entry in entries {
@@ -938,7 +961,7 @@ fn stored_grants(dir: &Path) -> BTreeMap<String, vectorcraft_plugins::permission
     match read_grants(dir) {
         Ok(file) => file.grants,
         Err(e) => {
-            log::warn!("skipping the stored plug-in grants {}: {e}", dir.join(GRANTS_FILE).display());
+            log::warn!("skipping the stored plug-in grants {}: {}", dir.join(GRANTS_FILE).display(), e.why);
             BTreeMap::new()
         }
     }

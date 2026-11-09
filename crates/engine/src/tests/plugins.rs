@@ -813,7 +813,7 @@ fn a_failed_store_write_of_a_module_without_permissions_keeps_the_stored_grant()
 
 /// A module listing no permissions whose id's grant can't be removed from `grants.json` doesn't stay
 /// in the store, so the grant and the module it covers stay together. It does stay when the module
-/// before it can't be read back, and when the grants file can't be read and so approves nothing.
+/// before it can't be read back, and when the grants file doesn't hold a list and so approves nothing.
 #[test]
 fn a_grant_that_cannot_be_removed_keeps_the_stored_module() {
     let folder = crate::tests_links::Folder::new("plugin-store-failed-forget");
@@ -846,14 +846,49 @@ fn a_grant_that_cannot_be_removed_keeps_the_stored_module() {
     std::fs::write(&file, &approved).unwrap();
     std::fs::write(&grants, b"not a list").unwrap();
     run(&mut s, "plugin.install", replace);
-    assert_eq!(std::fs::read(&file).unwrap(), plain, "a grants file that can't be read approves nothing");
+    assert_eq!(std::fs::read(&file).unwrap(), plain, "a grants file that isn't a list approves nothing");
 
     std::fs::remove_file(&grants).unwrap();
     run(&mut s, "plugin.remove", json!({"id": id}));
 }
 
+/// A grants file that can't be opened or read may name the old module once it reads again, so
+/// neither a module listing no permissions nor `plugin.remove` gets past it. A directory at the
+/// file's path gives a read error on every platform.
+#[test]
+fn a_grants_file_that_cannot_be_read_keeps_the_grant_and_the_module_it_covers() {
+    let folder = crate::tests_links::Folder::new("plugin-store-unread-grants");
+    let id = "test.engine.permissions.unreadgrants";
+    let empty = json!({"objects": []});
+    let approved = asking(id, r#"["doc.read"]"#, &empty);
+    let plain = asking(id, "null", &empty);
+    let grants = folder.0.join("grants.json");
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&approved), "grant": ["doc.read"]}));
+    let file = s.stored_plugin_file(id).unwrap();
+    let recorded = std::fs::read(&grants).unwrap();
+    std::fs::remove_file(&grants).unwrap();
+    std::fs::create_dir(&grants).unwrap();
+
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&plain), "replace": true}));
+    assert_eq!(std::fs::read(&file).unwrap(), approved, "the store gets the module the grant covers back");
+
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&approved), "grant": ["doc.read"]}));
+    let refused = s.execute("plugin.remove", &json!({"id": id})).unwrap_err().to_string();
+    assert!(refused.contains(crate::store::GRANT_NOT_REMOVED), "{refused}");
+    assert!(vectorcraft_plugins::registry::get(id).is_some(), "the plug-in stays installed");
+    assert_eq!(std::fs::read(&file).unwrap(), approved, "the store keeps the module");
+
+    std::fs::remove_dir(&grants).unwrap();
+    std::fs::write(&grants, &recorded).unwrap();
+    run(&mut s, "plugin.remove", json!({"id": id}));
+    assert!(vectorcraft_plugins::registry::get(id).is_none());
+    assert!(!grants.exists(), "the file reads again and the grant goes");
+}
+
 /// `plugin.remove` returns an error and keeps the plug-in when its grant can't be removed from
-/// `grants.json`; a second one tries again. A grants file that can't be read doesn't stop it.
+/// `grants.json`; a second one tries again. A grants file that doesn't hold a list doesn't stop it.
 #[test]
 fn a_grant_that_cannot_be_removed_stops_plugin_remove() {
     let folder = crate::tests_links::Folder::new("plugin-store-failed-remove");
@@ -907,7 +942,7 @@ fn a_grant_that_cannot_be_removed_stops_plugin_remove() {
     run(&mut s, "plugin.install", json!({"dataBase64": approved_data, "grant": ["doc.read"]}));
     std::fs::write(&grants, b"not a list").unwrap();
     run(&mut s, "plugin.remove", json!({"id": id}));
-    assert!(vectorcraft_plugins::registry::get(id).is_none(), "a grants file that can't be read approves nothing");
+    assert!(vectorcraft_plugins::registry::get(id).is_none(), "a grants file that isn't a list approves nothing");
     assert!(!std::path::Path::new(&file).exists());
 }
 

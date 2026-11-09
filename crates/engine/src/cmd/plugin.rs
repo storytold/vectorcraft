@@ -621,8 +621,9 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
         registry::revoke(&m.id);
         // When the write failed, the old stored module stays in the folder and needs its grant at
         // the next launch. A grant that can't be removed still approves the old bytes, so the store
-        // gets the module it held back, when that could be read. A grants file that can't be read
-        // approves nothing, and the new module stays.
+        // gets the module it held back, when that could be read. A grants file that is too large or
+        // doesn't hold a list approves nothing, and the new module stays; one that can't be opened or
+        // read may approve the old bytes once it reads again.
         if stored && !s.store_grant(&m.id, None) && previous.is_ok() && s.holds_plugin_grant(&m.id) {
             s.put_back_plugin(plugin.id(), previous.ok().flatten().as_deref());
             stored = false;
@@ -837,8 +838,9 @@ fn remove(s: &mut Session, p: &Value) -> Result<Value> {
     let installed = registry::get(id).is_some();
     // Settings and cache the store keeps for an id that isn't installed are deleted too.
     let stored = !installed && vectorcraft_plugins::manifest::valid_id(id) && s.has_plugin_storage(id);
-    // Installed again, it asks again. A grant that can't be removed still approves the module; a
-    // grants file that can't be read approves nothing and doesn't stop the removal.
+    // Installed again, it asks again. A grant that can't be removed still approves the module, and
+    // so may a grants file that can't be opened or read. One that is too large or doesn't hold a
+    // list approves nothing and doesn't stop the removal.
     let forget = || s.store_grant(id, None) || !s.holds_plugin_grant(id);
     // Its settings and cache are moved aside and its grant removed before anything is deleted: when
     // either can't be done, the plug-in stays installed, as it was, and a second `plugin.remove`
