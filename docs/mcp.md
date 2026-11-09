@@ -6709,8 +6709,11 @@ needs a person's approval too, and `plugin.install` refuses `grant: [permission]
 app connected, `ui.installPlugin` opens the approval dialog and returns `{pending: "pluginInstall"}`; `answer_dialog`,
 `ui.dialog.confirm` and injected input can't confirm it. A `vectorcraft-cli mcp` started with `--allow-plugin-grants`
 accepts `grant` and `allowHeavy` from any request, in that session only (headless; it can't be combined with
-`--connect`). Without `--allow-plugin-grants` and without a recorded grant for the module, `plugin.install` returns
-an error naming the permissions needed. The approval, or a `grant` accepted under the flag, is kept with the module's
+`--connect`, `--automation-read-root` or `--automation-write-root`). A server confined to folders has no plug-in
+store, so it reads no `grants.json`, and a module that lists permissions or asks for a heavy budget does not install
+there. Without `--allow-plugin-grants` and without a recorded grant for the module, `plugin.install` returns an error
+naming the permissions needed. With `VECTORCRAFT_NO_PREFS` set there is no store, and a `grant` accepted under the
+flag lasts for that session only. In other sessions the approval, or a `grant` accepted under the flag, is kept with the module's
 hash, counts as approved in later sessions and in the desktop app, and covers only that module: the
 same bytes install again without one, also from a headless session that reads the same `grants.json`, and a module
 with other bytes has `needsApproval: true` and needs a new one even when it lists the same permissions. `plugin.remove`

@@ -91,7 +91,11 @@ USAGE:
       with nobody approving them. Without it they are refused, and a plug-in that lists permissions
       installs only when its hash is already recorded in grants.json, by a person's approval in the
       desktop app or by a grant accepted under this flag. A grant accepted under this flag stays
-      recorded and counts as approved in later sessions. It implies --headless.
+      recorded and counts as approved in later sessions. It implies --headless. It can't be used
+      with --automation-read-root or --automation-write-root: a server confined to folders has no
+      plug-in store, so it reads no grants.json, and a plug-in that lists permissions or asks for a
+      heavy budget does not install there. With VECTORCRAFT_NO_PREFS set there is no store either,
+      and a grant accepted under this flag lasts for that session only.
 
   vectorcraft-cli run [--in FILE] [--cmd ID [--params JSON] | --commands FILE|-]... [--export FILE]... [--scale N] [--ppi N] [--allow-plugin-grants]
       Headless batch: open FILE (any readable format) or start a new document, run commands in
@@ -282,6 +286,9 @@ fn mcp(args: &[String], safe_mode: bool) -> Result<(), String> {
     }
     if allow_grants && connect.is_some() {
         return Err("--allow-plugin-grants applies to the headless server; in a running app a person approves each plug-in".into());
+    }
+    if allow_grants && !(read_roots.is_empty() && write_roots.is_empty()) {
+        return Err("--allow-plugin-grants can't be used with --automation-read-root or --automation-write-root: a server confined to folders has no plug-in store to record a grant in".into());
     }
     if safe_mode && connect.is_some() {
         return Err("--safe-mode runs a headless session without plug-ins; a running app loads its own: start it with `vectorcraft --safe-mode --control <port>`".into());

@@ -20,7 +20,7 @@ fn empty_dir(dir: std::path::PathBuf) -> std::path::PathBuf {
 }
 
 /// `run` and `mcp --headless` refuse `plugin.install`'s `grant` unless the process was started with
-/// `--allow-plugin-grants`, which `mcp` won't take with `--connect`.
+/// `--allow-plugin-grants`, which `mcp` won't take with `--connect` or the automation roots.
 #[test]
 fn plugin_grants_need_the_start_up_flag() {
     let module = vectorcraft_format::base64_encode(include_bytes!("../../../../crates/plugins/tests/fixtures/desaturate.wasm"));
@@ -73,6 +73,12 @@ fn plugin_grants_need_the_start_up_flag() {
     let out = Command::new(BIN).args(["mcp", "--allow-plugin-grants", "--connect", "127.0.0.1:1"]).output().unwrap();
     assert!(!out.status.success());
     assert!(String::from_utf8_lossy(&out.stderr).contains("--allow-plugin-grants applies to the headless server"));
+    let root = std::env::temp_dir();
+    for flag in ["--automation-read-root", "--automation-write-root"] {
+        let out = Command::new(BIN).args(["mcp", "--allow-plugin-grants", flag, root.to_str().unwrap()]).stdin(Stdio::null()).output().unwrap();
+        assert!(!out.status.success(), "{flag}");
+        assert!(String::from_utf8_lossy(&out.stderr).contains("--allow-plugin-grants can't be used with"), "{flag}");
+    }
     let usage = Command::new(BIN).arg("help").output().unwrap();
     assert!(String::from_utf8_lossy(&usage.stdout).contains("--allow-plugin-grants lets plugin.install's grant and allowHeavy take effect"));
 }

@@ -202,10 +202,13 @@ capability model proposed for PhotoCraft plug-ins
   (`plugin.inspect`'s `needsApproval` tells it beforehand). A request's `grant` is refused too: `plugin.install` takes
   it only with the approval the dialog gives. A `vectorcraft-cli mcp` or `run` started with `--allow-plugin-grants`
   takes `grant` and `allowHeavy` from any request; only the person starting the process can set that flag, and it
-  doesn't apply to a running app. Without it, MCP in headless mode and the CLI install a module that lists
-  permissions only when its hash is recorded in the shared `grants.json`. A person's approval in the desktop app
-  records it, and so does a `grant` accepted under `--allow-plugin-grants`. A recorded grant counts as approved in
-  later sessions without the flag and in the desktop app.
+  doesn't apply to a running app. `mcp` refuses the flag together with `--automation-read-root` or
+  `--automation-write-root`: a server confined to folders has no plug-in store, so it reads no `grants.json`, and a
+  module that lists permissions or asks for a heavy budget does not install there. Without the flag, MCP in headless
+  mode and the CLI install a module that lists permissions only when its hash is recorded in the shared `grants.json`.
+  A person's approval in the desktop app records it, and so does a `grant` accepted under `--allow-plugin-grants`. A
+  recorded grant counts as approved in later sessions without the flag and in the desktop app. With
+  `VECTORCRAFT_NO_PREFS` set there is no store, and a `grant` accepted under the flag lasts for that session only.
   With `--allow-plugin-grants`, pass `hash` set to the `plugin.inspect` entry's `hash` so that the module installed is
   the one the user saw.
 - **Replacing asks first.** When the file is another module than the plug-in installed with its id, or, with none
