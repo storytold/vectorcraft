@@ -32,7 +32,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
+use std::time::SystemTime;
 
 use vectorcraft_pdf::{PdfPreset, builtin_preset};
 use vectorcraft_plugins::safe_mode;
@@ -81,9 +82,9 @@ pub(crate) const MAX_CACHE_SCAN: usize = storage::MAX_CACHE_ENTRIES * 2;
 /// Held while a plug-in's settings or cache change, so two runs can't pass a cap together or lose
 /// each other's settings.
 static PLUGIN_DATA_LOCK: Mutex<()> = Mutex::new(());
-/// The closed flag of each plug-in folder's storage, shared by every storage made for the folder
-/// until the plug-in is removed, which sets it and drops it.
-static PLUGIN_DATA_OPEN: Mutex<BTreeMap<PathBuf, Arc<AtomicBool>>> = Mutex::new(BTreeMap::new());
+/// The state of each plug-in folder's storage, shared by every storage made for the folder until
+/// the plug-in is removed, which closes it and drops it.
+static PLUGIN_DATA_OPEN: Mutex<BTreeMap<PathBuf, Arc<PluginData>>> = Mutex::new(BTreeMap::new());
 
 /// The file name (without extension) a stored item called `name` gets: its name made safe for any
 /// file system, then a hash of the name, so that names that differ only in characters a file name
@@ -529,9 +530,9 @@ impl Session {
     /// Delete the settings and cache of plug-in `id` from the store, and stop keeping any for it.
     /// The folder is first renamed out of the way (`<folder>.removed`), and that fails, leaving it
     /// as it was, when the rename does; what the deletion then leaves stays under that name, with a
-    /// log record, and is deleted at the plug-in's next removal. `forget` runs once the folder is out
-    /// of the way, before anything is deleted: when it returns `false`, the folder is renamed back
-    /// and this fails.
+    /// log record. A later call for the id tries to delete it again. `forget` runs once the folder is
+    /// out of the way, before anything is deleted: when it returns `false`, the folder is renamed
+    /// back and this fails.
     pub(crate) fn remove_plugin_storage(&self, id: &str, forget: impl FnOnce() -> bool) -> Result<(), StorageError> {
         let not_forgotten = || StorageError::Io(GRANT_NOT_REMOVED.to_string());
         vectorcraft_plugins::registry::set_storage(id, None);
@@ -543,8 +544,8 @@ impl Session {
         // Every storage handed out for the folder, including those runs still hold, is closed once
         // the folder is out of the way; until then they keep working.
         let close = || {
-            if let Some(closed) = PLUGIN_DATA_OPEN.lock().unwrap_or_else(|e| e.into_inner()).remove(&path) {
-                closed.store(true, Ordering::Release);
+            if let Some(data) = PLUGIN_DATA_OPEN.lock().unwrap_or_else(|e| e.into_inner()).remove(&path) {
+                data.closed.store(true, Ordering::Release);
             }
         };
         // A `storage` folder that is a link leads out of the store: nothing there is deleted. A link
@@ -614,22 +615,67 @@ pub(crate) fn plugin_data_dir(dir: &Path, id: &str) -> PathBuf {
 fn plugin_storage(dir: Option<&Path>, id: &str) -> Option<Arc<dyn Storage>> {
     let dir = dir?;
     let data = plugin_data_dir(dir, id);
-    let closed = PLUGIN_DATA_OPEN.lock().unwrap_or_else(|e| e.into_inner()).entry(data.clone()).or_default().clone();
-    Some(Arc::new(PluginStorage { root: dir.to_path_buf(), dir: data, closed }))
+    let state = PLUGIN_DATA_OPEN.lock().unwrap_or_else(|e| e.into_inner()).entry(data.clone()).or_default().clone();
+    Some(Arc::new(PluginStorage { root: dir.to_path_buf(), dir: data, state }))
+}
+
+/// A file's size and modified time (`None`: there is no file).
+type FileStamp = Option<(u64, SystemTime)>;
+
+/// The stamp of the file at `path`.
+fn file_stamp(path: &Path) -> Result<FileStamp, StorageError> {
+    match std::fs::metadata(path) {
+        Ok(m) => Ok(Some((m.len(), m.modified().map_err(|e| io(&e))?))),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(io(&e)),
+    }
+}
+
+/// The modified time of the folder at `dir` (`None`: it can't be read, or there is no folder).
+fn folder_stamp(dir: &Path) -> Option<SystemTime> {
+    std::fs::symlink_metadata(dir).ok()?.modified().ok()
+}
+
+/// What every storage made for one plug-in folder shares ([`PLUGIN_DATA_OPEN`]).
+#[derive(Default)]
+struct PluginData {
+    /// Set, under [`PLUGIN_DATA_LOCK`], once the plug-in is removed.
+    closed: AtomicBool,
+    kept: Mutex<Kept>,
+}
+
+/// What the folder's files last held in this process.
+#[derive(Default)]
+struct Kept {
+    settings: Option<KeptSettings>,
+    cache: Option<KeptCache>,
+}
+
+/// The settings by key, and the settings file's stamp when they were read or written.
+struct KeptSettings {
+    stamp: FileStamp,
+    values: BTreeMap<String, Vec<u8>>,
+}
+
+/// The bytes of the cache entries, and the cache folder's stamp when they were added up.
+#[derive(Clone, Copy)]
+struct KeptCache {
+    stamp: Option<SystemTime>,
+    bytes: u64,
 }
 
 /// The settings and cache of one plug-in, in its folder of the plug-in store (see the module docs).
 /// Keys and entry names are [`storage::valid_name`]s; an entry's file name is its name as
 /// [`case_safe`] writes it, so that names differing only in case get different files. A link
 /// anywhere in the folder's path below the store is refused, and so is a cache file that is not a
-/// plain file.
+/// plain file. The settings stay in memory ([`Kept`]) while the settings file keeps its size and
+/// modified time, and every change is written to the file before the call returns. The total
+/// `cache_bytes` reports stays in memory while the cache folder keeps its modified time.
 pub(crate) struct PluginStorage {
     /// The plug-in store, and the plug-in's folder in it.
     root: PathBuf,
     dir: PathBuf,
-    /// Set, under [`PLUGIN_DATA_LOCK`], once the plug-in is removed; shared by every storage of the
-    /// folder ([`PLUGIN_DATA_OPEN`]).
-    closed: Arc<AtomicBool>,
+    state: Arc<PluginData>,
 }
 
 /// The sizes of `files` added up, at most `u64::MAX`: the sizes come from the file system.
@@ -703,17 +749,29 @@ impl PluginStorage {
         Ok(())
     }
 
-    /// The settings, by key. A file that is too large or doesn't parse is moved aside
-    /// ([`BAD_SETTINGS_FILE`]) with a log record, and the settings are empty. `meter` is charged the
-    /// file's size before it is read.
-    fn read_settings(&self, meter: &mut Meter) -> Result<BTreeMap<String, Vec<u8>>, StorageError> {
+    fn kept(&self) -> MutexGuard<'_, Kept> {
+        self.state.kept.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// The settings: those in `kept` when the settings file still has their stamp, else the file's,
+    /// which then replace them.
+    fn read_settings<'a>(&self, kept: &'a mut Option<KeptSettings>, meter: &mut Meter) -> Result<&'a mut KeptSettings, StorageError> {
         let path = self.settings_path();
         self.no_links(&path)?;
-        let size = match std::fs::metadata(&path) {
-            Ok(m) => m.len(),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(BTreeMap::new()),
-            Err(e) => return Err(io(&e)),
+        let stamp = file_stamp(&path)?;
+        let held = match kept.take() {
+            Some(held) if held.stamp == stamp => held,
+            _ => self.load_settings(stamp, meter)?,
         };
+        Ok(kept.insert(held))
+    }
+
+    /// Reads the settings file, whose stamp is `stamp`. A file that is too large or doesn't parse is
+    /// moved aside ([`BAD_SETTINGS_FILE`]) with a log record, and the settings are empty. `meter` is
+    /// charged the file's size before it is read.
+    fn load_settings(&self, stamp: FileStamp, meter: &mut Meter) -> Result<KeptSettings, StorageError> {
+        let path = self.settings_path();
+        let Some((size, _)) = stamp else { return Ok(KeptSettings { stamp, values: BTreeMap::new() }) };
         let readable = size <= storage::MAX_SETTINGS_BYTES as u64;
         if readable {
             meter.take(size)?;
@@ -729,12 +787,30 @@ impl PluginStorage {
                 settings.filter(|s| s.len() <= storage::MAX_SETTINGS && s.values().all(|v| v.len() <= storage::MAX_SETTING_BYTES))
             });
         match parsed {
-            Some(settings) => Ok(settings),
+            Some(values) => Ok(KeptSettings { stamp, values }),
             None => {
                 let aside = self.dir.join(BAD_SETTINGS_FILE);
                 log::warn!("the plug-in settings {} don't read: moved to {} and started empty", path.display(), aside.display());
                 std::fs::rename(&path, &aside).map_err(|e| io(&e))?;
-                Ok(BTreeMap::new())
+                Ok(KeptSettings { stamp: None, values: BTreeMap::new() })
+            }
+        }
+    }
+
+    /// Writes the settings in `kept` to the file and records the file's new stamp. When that fails,
+    /// or settings were written and the file is gone, `kept` is emptied, so the next call reads the
+    /// file again.
+    fn save_settings(&self, kept: &mut Option<KeptSettings>, meter: &mut Meter) -> Result<(), StorageError> {
+        let Some(held) = kept.as_mut() else { return Ok(()) };
+        let written = self.write_settings(&held.values, meter);
+        match (written, file_stamp(&self.settings_path())) {
+            (Ok(()), Ok(stamp)) if stamp.is_some() || held.values.is_empty() => {
+                held.stamp = stamp;
+                Ok(())
+            }
+            (written, _) => {
+                *kept = None;
+                written
             }
         }
     }
@@ -762,7 +838,7 @@ impl PluginStorage {
 
     /// Fails with [`StorageError::Unavailable`] once the storage is closed.
     fn open(&self) -> Result<(), StorageError> {
-        if self.closed.load(Ordering::Acquire) { Err(StorageError::Unavailable) } else { Ok(()) }
+        if self.state.closed.load(Ordering::Acquire) { Err(StorageError::Unavailable) } else { Ok(()) }
     }
 
     /// The entries of the cache folder (plain files named as [`Self::entry_path`] names them, which
@@ -799,28 +875,33 @@ impl Storage for PluginStorage {
     fn setting(&self, key: &str, meter: &mut Meter) -> Result<Option<Vec<u8>>, StorageError> {
         let _held = PLUGIN_DATA_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         self.open()?;
-        Ok(self.read_settings(meter)?.remove(key))
+        let mut kept = self.kept();
+        Ok(self.read_settings(&mut kept.settings, meter)?.values.get(key).cloned())
     }
 
     fn set_setting(&self, key: &str, value: &[u8], meter: &mut Meter) -> Result<(), StorageError> {
         let _held = PLUGIN_DATA_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         self.open()?;
-        let mut settings = self.read_settings(meter)?;
+        let mut kept = self.kept();
+        let settings = &mut self.read_settings(&mut kept.settings, meter)?.values;
         if value.len() > storage::MAX_SETTING_BYTES || (!settings.contains_key(key) && settings.len() >= storage::MAX_SETTINGS) {
             return Err(StorageError::Full);
         }
+        if settings.get(key).is_some_and(|old| old == value) {
+            return Ok(());
+        }
         settings.insert(key.to_string(), value.to_vec());
-        self.write_settings(&settings, meter)
+        self.save_settings(&mut kept.settings, meter)
     }
 
     fn delete_setting(&self, key: &str, meter: &mut Meter) -> Result<bool, StorageError> {
         let _held = PLUGIN_DATA_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         self.open()?;
-        let mut settings = self.read_settings(meter)?;
-        if settings.remove(key).is_none() {
+        let mut kept = self.kept();
+        if self.read_settings(&mut kept.settings, meter)?.values.remove(key).is_none() {
             return Ok(false);
         }
-        self.write_settings(&settings, meter).map(|()| true)
+        self.save_settings(&mut kept.settings, meter).map(|()| true)
     }
 
     fn cache_entry(&self, name: &str, meter: &mut Meter) -> Result<Option<Vec<u8>>, StorageError> {
@@ -854,7 +935,10 @@ impl Storage for PluginStorage {
         meter.take(value.len() as u64)?;
         std::fs::create_dir_all(self.cache_dir()).map_err(|e| io(&e))?;
         self.no_links(&path)?;
-        write_atomic(&path, value).map_err(|e| io(&e))
+        write_atomic(&path, value).map_err(|e| io(&e))?;
+        let stamp = folder_stamp(&self.cache_dir());
+        self.kept().cache = stamp.map(|_| KeptCache { stamp, bytes: total });
+        Ok(())
     }
 
     fn remove_cache_entry(&self, name: &str) -> Result<bool, StorageError> {
@@ -863,7 +947,10 @@ impl Storage for PluginStorage {
         let path = self.entry_path(name);
         self.no_links(&path)?;
         match std::fs::remove_file(&path) {
-            Ok(()) => Ok(true),
+            Ok(()) => {
+                self.kept().cache = None;
+                Ok(true)
+            }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
             Err(e) => Err(io(&e)),
         }
@@ -891,6 +978,7 @@ impl Storage for PluginStorage {
                 freed = freed.saturating_add(m.len());
             }
         }
+        self.kept().cache = Some(KeptCache { stamp: folder_stamp(&dir), bytes: 0 });
         Ok(freed)
     }
 
@@ -898,7 +986,14 @@ impl Storage for PluginStorage {
         if self.open().is_err() {
             return 0;
         }
-        self.cache_files().map(|(files, _)| sum_sizes(&files)).unwrap_or(0)
+        let stamp = folder_stamp(&self.cache_dir());
+        if let Some(kept) = self.kept().cache.filter(|k| k.stamp == stamp) {
+            return kept.bytes;
+        }
+        let Ok((files, _)) = self.cache_files() else { return 0 };
+        let bytes = sum_sizes(&files);
+        self.kept().cache = Some(KeptCache { stamp, bytes });
+        bytes
     }
 }
 
