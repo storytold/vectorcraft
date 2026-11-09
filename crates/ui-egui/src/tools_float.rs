@@ -219,12 +219,14 @@ pub(crate) fn command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         return None;
     }
     // Docking: on the left, or on the right left of the panels (default: the side it docked at last).
-    let right = match p.get("side").and_then(Value::as_str) {
-        None => Ok(app.ui.toolbar_right),
+    let right = match p.get("side") {
+        None | Some(Value::Null) => Ok(app.ui.toolbar_right),
         // `Start` and `End`, as panels take them, too.
-        Some(s) if s.eq_ignore_ascii_case("left") || s.eq_ignore_ascii_case("start") => Ok(false),
-        Some(s) if s.eq_ignore_ascii_case("right") || s.eq_ignore_ascii_case("end") => Ok(true),
-        Some(s) => Err(format!("side is left or right, not `{s}`")),
+        Some(Value::String(s)) if s.eq_ignore_ascii_case("left") || s.eq_ignore_ascii_case("start") => Ok(false),
+        Some(Value::String(s)) if s.eq_ignore_ascii_case("right") || s.eq_ignore_ascii_case("end") => Ok(true),
+        Some(Value::String(s)) => Err(format!("side is left or right, not `{s}`")),
+        // A number, a list…: an error, not the last side.
+        Some(v) => Err(format!("side is left or right, not `{v}`")),
     };
     Some(position(p).and_then(|at| {
         let right = right?;

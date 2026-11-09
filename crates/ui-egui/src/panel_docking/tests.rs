@@ -321,6 +321,13 @@ fn the_tools_panel_docks_on_the_right_left_of_the_panels() {
     h.app.run("window.panel.float", json!({"panel": "tools"})).unwrap();
     assert_eq!(h.app.run("window.panel.dock", json!({"panel": "tools"})).unwrap()["side"], "right", "back on the side it docked at last");
     assert!(h.app.run("window.panel.dock", json!({"panel": "tools", "side": "top"})).is_err());
+    // A side that isn't text is an error too, not the last side: it leaves Tools where it is.
+    h.app.run("window.panel.float", json!({"panel": "tools"})).unwrap();
+    for side in [json!(5), json!(true), json!(["left"])] {
+        assert!(h.app.run("window.panel.dock", json!({"panel": "tools", "side": side})).is_err(), "{side}");
+        assert!(h.app.ui.toolbar_pos.is_some(), "still floating after side {side}");
+    }
+    assert_eq!(h.app.run("window.panel.dock", json!({"panel": "tools", "side": null})).unwrap()["side"], "right", "null: the last side");
 }
 
 /// The docked Tools panel as last drawn.

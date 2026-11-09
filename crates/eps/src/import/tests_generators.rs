@@ -677,6 +677,10 @@ fn mesh_and_function_shadings_become_gradient_meshes() {
     let NodeKind::Mesh(g) = &m.kind else { panic!() };
     // Its first corner (the domain's origin) is the first sample.
     assert_eq!(g.points[0].color, Color::rgb(1.0, 0.0, 0.0));
+    // Between the samples it is interpolated (PLRM 3rd ed. §3.10.1, type 0 functions), not the
+    // nearest sample: the middle of the 17 × 17 grid is the average of red, green, blue and black.
+    let mid = g.points[8 * 17 + 8].color.to_rgb_uncalibrated();
+    assert!(mid.iter().all(|c| (c - 0.25).abs() < 1e-3), "{mid:?}");
 
     // Type 4 packed: 8-bit flags, coordinates and components; a triangle and one on its edge.
     let tri = [[0u8, 0, 0, 255, 0, 0], [0, 255, 0, 0, 255, 0], [0, 0, 255, 0, 0, 255], [1, 255, 255, 255, 255, 0]].concat();
@@ -1140,4 +1144,32 @@ fn filter_output_counts_against_the_memory_budget() {
     let many = import(&file("t", &format!("/z <{z}> def 100 {{ z /FlateDecode filter pop }} repeat 0 0 1 1 rectfill")));
     let Err(err) = many else { panic!("the budget ends the program") };
     assert!(err.contains("too much memory"), "{err}");
+}
+
+/// A sampled function of one input in an axial shading: interpolated linearly, its gradient has a
+/// stop at every sample (exact, not sampled evenly); with `Order 3` it is a cubic through the
+/// samples (PLRM 3rd ed. §3.10.1, Table 3.36), kept in its range.
+#[test]
+fn sampled_functions_interpolate_linearly_or_by_cubics() {
+    let shading = |order: &str| {
+        let r = read(&format!(
+            "<< /ShadingType 2 /ColorSpace /DeviceGray /Coords [0 0 100 0] /Function << /FunctionType 0 /Domain [0 1] \
+             /Range [0 1] /Size [4] /BitsPerSample 8 {order} /DataSource <00ffff00> >> >> shfill"
+        ));
+        let Some(Paint::Gradient(g)) = all(&r.document).into_iter().find_map(|n| fill(&n).cloned()) else { panic!("no gradient") };
+        g.gradient.stops.iter().map(|s| (s.offset, s.color.to_rgb_uncalibrated()[0])).collect::<Vec<_>>()
+    };
+    let linear = shading("");
+    assert_eq!(linear.len(), 4, "{linear:?}");
+    for ((t, v), (et, ev)) in linear.iter().zip([(0.0, 0.0), (1.0 / 3.0, 1.0), (2.0 / 3.0, 1.0), (1.0, 0.0)]) {
+        assert!((t - et).abs() < 1e-4 && (v - ev).abs() < 1e-3, "{linear:?}");
+    }
+    // Sampled evenly; at 3/32 (0.28 of the way from the first sample to the second) the cubic
+    // through 0, 0, 1 and 1 (the first sample repeated before it) is 0.237, where a straight line
+    // would be 0.281. Between the two white samples it would overshoot past 1, and is kept at 1.
+    let cubic = shading("/Order 3");
+    let at = |t: f32| cubic.iter().find(|s| (s.0 - t).abs() < 1e-4).map(|s| s.1);
+    assert!(at(3.0 / 32.0).is_some_and(|v| (v - 0.237).abs() < 0.01), "{cubic:?}");
+    assert!(cubic.iter().all(|s| (0.0..=1.0).contains(&s.1)), "{cubic:?}");
+    assert!(cubic.iter().any(|s| s.1 == 1.0), "{cubic:?}");
 }
