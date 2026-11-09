@@ -64,6 +64,36 @@ fn paintbrush_sends_pen_pressure() {
     assert_eq!(stroke("pencil", [0.25, 0.5, 1.0]), json!([[0.0, 0.0], [40.0, 0.0], [80.0, 0.0]]));
 }
 
+/// #764: the Paintbrush sends each point's pen tilt and barrel rotation where the pen reads
+/// them, `null` for what a point lacks; the Pencil sends plain points.
+#[test]
+fn paintbrush_sends_pen_tilt_and_rotation() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let stroke = |id: &str, pressure: f32, poses: [Option<PenPose>; 3]| {
+        let mut t = GestureTool::new(id);
+        let kinds = [PointerKind::Down, PointerKind::Drag, PointerKind::Up];
+        let mut last = vec![];
+        for ((k, x), pen) in kinds.into_iter().zip([0.0, 40.0, 80.0]).zip(poses) {
+            last = t.pointer(&cx, &PointerEvent { pressure, pen, ..PointerEvent::new(k, x, 0.0) });
+        }
+        let Some(Action::Preview(_, v)) = last.first() else { panic!("{last:?}") };
+        v["points"].clone()
+    };
+    let leaning = |x: f32, r: Option<f32>| Some(PenPose { tilt: Some([x, -10.0]), rotation: r });
+    assert_eq!(
+        stroke("paintbrush", 0.5, [leaning(30.0, Some(45.0)), leaning(40.0, Some(-90.0)), None]),
+        json!([[0.0, 0.0, 0.5, 30.0, -10.0, 45.0], [40.0, 0.0, 0.5, 40.0, -10.0, 270.0], [80.0, 0.0, 0.5, null, null, null]])
+    );
+    // A pen without a rotation axis, pressing fully: no pressure, the tilt alone.
+    assert_eq!(stroke("paintbrush", 1.0, [leaning(30.0, None); 3])[1], json!([40.0, 0.0, null, 30.0, -10.0, null]));
+    // A pose that reads nothing is a mouse's.
+    assert_eq!(stroke("paintbrush", 1.0, [Some(PenPose::default()); 3]), json!([[0.0, 0.0], [40.0, 0.0], [80.0, 0.0]]));
+    assert_eq!(stroke("pencil", 0.5, [leaning(30.0, Some(45.0)); 3]), json!([[0.0, 0.0], [40.0, 0.0], [80.0, 0.0]]));
+}
+
 #[test]
 fn pencil_previews_and_commits() {
     let (d, _) = doc_with_rect();
@@ -124,7 +154,8 @@ fn pencil_with_live_curve_fitting_off_previews_the_stroke_unfitted() {
 
 /// A stroke whose Fidelity is finer than half a screen pixel previews fitted at half a pixel, which
 /// looks the same at a fraction of the fit's cost (#4565); the release, and another tool chosen
-/// while it is drawn, fit it at its own Fidelity. A coarser Fidelity previews as it is kept.
+/// while it is drawn, fit it at its own Fidelity. A coarser Fidelity previews as it is kept. Fidelity
+/// is in screen pixels, so the stroke is fitted in points at Fidelity / zoom (#5729).
 #[test]
 fn fine_fidelity_previews_at_half_a_pixel() {
     let (d, _) = doc_with_rect();
@@ -136,23 +167,80 @@ fn fine_fidelity_previews_at_half_a_pixel() {
         acts.iter().filter_map(|a| if let Action::Preview(_, v) = a { v["fidelity"].as_f64() } else { None }).collect()
     };
     for id in ["pencil", "paintbrush"] {
-        for (zoom, fidelity, drawn) in [(1.0, 0.01, 0.5), (4.0, 0.01, 0.125), (1.0, 1.5, 1.5)] {
+        for (zoom, fidelity, drawn, kept) in [(1.0, 0.01, 0.5, 0.01), (4.0, 0.01, 0.125, 0.0025), (1.0, 1.5, 1.5, 1.5), (4.0, 1.5, 0.375, 0.375)] {
             cx.zoom = zoom;
             let mut t = GestureTool::new(id);
             t.set_option("fidelity", &json!(fidelity));
             let acts = drag(&mut t, &cx, &stroke, Mods::default());
             let (release, during) = acts.split_last().unwrap();
-            assert_eq!(fidelities(&during.concat()), [drawn; 3], "{id} at {zoom}x, {fidelity} pt");
-            assert_eq!(fidelities(release), [fidelity], "{id} at {zoom}x, {fidelity} pt: the release");
+            assert_eq!(fidelities(&during.concat()), [drawn; 3], "{id} at {zoom}x, {fidelity} px");
+            assert_eq!(fidelities(release), [kept], "{id} at {zoom}x, {fidelity} px: the release");
             t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 0.0, 0.0));
             for &(x, y) in &stroke[1..] {
                 t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, x, y));
             }
             let acts = t.deactivate(&cx);
-            let kept = if drawn > fidelity { [fidelity].to_vec() } else { vec![] };
-            assert_eq!(fidelities(&acts), kept, "{id} at {zoom}x, {fidelity} pt: another tool chosen");
+            let stale = if drawn > kept { [kept].to_vec() } else { vec![] };
+            assert_eq!(fidelities(&acts), stale, "{id} at {zoom}x, {fidelity} px: another tool chosen");
             assert_eq!(acts.last(), Some(&Action::Commit));
         }
+    }
+}
+
+/// #5729: the Pencil's and the Paintbrush's Fidelity is in screen pixels. The same stroke drawn on
+/// screen at 1x and at 4x is fitted at the same tolerance on screen, so it keeps as many points
+/// whatever the zoom (another tool chosen mid-stroke: `fine_fidelity_previews_at_half_a_pixel`).
+#[test]
+fn fidelity_is_in_screen_pixels_at_any_zoom() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let mut cx = cx(&d, &s, &p);
+    let screen = [(0.0, 0.0), (40.0, 20.0), (80.0, 0.0), (120.0, 20.0)];
+    for id in ["pencil", "paintbrush"] {
+        let on_screen = |cx: &ToolContext, zoom: f64| {
+            let pts: Vec<_> = screen.iter().map(|&(x, y)| (x / zoom, y / zoom)).collect();
+            let mut t = GestureTool::new(id);
+            t.set_option("fidelity", &json!(1.5));
+            let acts = drag(&mut t, cx, &pts, Mods::default());
+            let Some(Action::Preview(_, v)) = acts.last().and_then(|a| a.first()) else { panic!("{acts:?}") };
+            v["fidelity"].as_f64().unwrap() * zoom
+        };
+        cx.zoom = 1.0;
+        let at_1 = on_screen(&cx, 1.0);
+        cx.zoom = 4.0;
+        let at_4 = on_screen(&cx, 4.0);
+        assert_eq!(at_1, 1.5, "{id}");
+        assert_eq!(at_4, at_1, "{id}: fidelity in screen px at 1x vs 4x");
+    }
+}
+
+/// The Blob Brush's Fidelity stays in points (#5729 is the Pencil's and the Paintbrush's): its
+/// stroke, and another tool chosen while it is drawn, send it as set at any zoom.
+#[test]
+fn blob_brush_fidelity_stays_in_points_at_any_zoom() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let mut cx = cx(&d, &s, &p);
+    let stroke = [(0.0, 0.0), (40.0, 20.0), (80.0, 0.0), (120.0, 20.0)];
+    for zoom in [1.0, 4.0] {
+        cx.zoom = zoom;
+        let mut t = GestureTool::new("blobBrush");
+        t.set_option("fidelity", &json!(1.5));
+        let acts = drag(&mut t, &cx, &stroke, Mods::default());
+        let sent: Vec<_> = acts
+            .concat()
+            .into_iter()
+            .filter_map(|a| if let Action::Exec(_, v) | Action::Preview(_, v) = a { v["fidelity"].as_f64() } else { None })
+            .collect();
+        assert_eq!(sent, [1.5], "at {zoom}x");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 0.0, 0.0));
+        for &(x, y) in &stroke[1..] {
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, x, y));
+        }
+        let acts = t.deactivate(&cx);
+        assert!(!acts.iter().any(|a| matches!(a, Action::Preview(id, _) if id == "path.freehand")), "at {zoom}x: {acts:?}");
     }
 }
 

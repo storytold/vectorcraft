@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
-use super::{Document, NodeId, NodeKind, TextKind};
+use super::{Document, LockedArtboards, NodeId, NodeKind, TextKind};
 
 /// What a variable drives.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -21,11 +21,15 @@ pub enum VariableKind {
     Image,
     /// A graph object's data (CSV of categories and series, as Graph Data uses).
     Graph,
+    /// A variable a file declares without a kind (or with one VectorCraft doesn't know): it drives
+    /// nothing, no value fits it, and nothing can be bound to it.
+    Unknown,
 }
 
 impl VariableKind {
     /// Parse the `kind` of `variable.define`: `text`, `visibility` (`visible` is accepted
-    /// as the same thing, as the panel and the docs call it both), `image` or `graph`.
+    /// as the same thing, as the panel and the docs call it both), `image` or `graph`. A variable
+    /// of [`Self::Unknown`] kind is never defined this way.
     pub fn parse(s: &str) -> Option<Self> {
         match s.to_ascii_lowercase().as_str() {
             "text" => Some(Self::Text),
@@ -43,6 +47,7 @@ impl VariableKind {
             Self::Visibility => "visibility",
             Self::Image => "image",
             Self::Graph => "graph",
+            Self::Unknown => "unknown",
         }
     }
 }
@@ -101,12 +106,11 @@ impl DataSet {
 /// The variable state of a document: definitions, datasets, bindings
 /// (object id → the variables bound to it) and which dataset is active.
 ///
-/// An object may be driven by several variables — the reference app binds the selected object
-/// to the selected variable, one click at a time, and never says a second binding replaces the
-/// first — so a binding is a set. `dataset.select` applies the text values in the order the
-/// variables are defined, which is what makes two text variables on one object deterministic:
-/// the last one wins, and `applied` counts both. Of two visibility variables on one object, the
-/// last one defined wins too.
+/// An object may be driven by several variables, so a binding is a set. `variable.bind` and Make
+/// Text Dynamic refuse a second text variable on one type object, but a document saved before
+/// they did may hold two: `dataset.select` applies the text values in the order the variables
+/// are defined, so the last one wins, and `applied` counts both. Of two visibility variables on
+/// one object, the last one defined wins too.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Variables {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -191,20 +195,34 @@ impl Document {
     }
 
     /// Whether a variable of `kind` may be bound to the object `id`: it is in the document,
-    /// nothing above it is hidden, and, unless `kind` is visibility, neither it nor anything above
-    /// it is locked. Its own visibility doesn't count, as that is what a visibility variable
-    /// drives.
+    /// nothing above it is hidden, it is not on a locked artboard ([`Document::on_locked_artboard`]),
+    /// and, unless `kind` is visibility, neither it nor anything above it is locked. Its own
+    /// visibility doesn't count, as that is what a visibility variable drives.
     pub fn variable_target(&self, id: NodeId, kind: VariableKind) -> bool {
-        let locks = kind != VariableKind::Visibility;
-        self.ancestry(id).is_some_and(|a| a.iter().all(|i| self.node(*i).is_some_and(|n| !(locks && n.locked) && (n.visible || *i == id))))
+        self.variable_target_with(&self.locked_artboards(), id, kind)
+    }
+
+    /// [`Document::variable_target`] with the locked artboards `locks` of this document, measured
+    /// once for many ids.
+    pub fn variable_target_with(&self, locks: &LockedArtboards, id: NodeId, kind: VariableKind) -> bool {
+        let locking = kind != VariableKind::Visibility;
+        self.ancestry(id).is_some_and(|a| a.iter().all(|i| self.node(*i).is_some_and(|n| !(locking && n.locked) && (n.visible || *i == id))))
+            && !locks.holds_id(id)
     }
 
     /// Whether a data set reads and rewrites the bound object `id` for a variable of `kind`: it
-    /// is in the document and, unless `kind` is visibility, neither it nor anything above it is
-    /// locked. Hidden objects count, and so do objects in a hidden layer or group.
+    /// is in the document, it is not on a locked artboard ([`Document::on_locked_artboard`]) and,
+    /// unless `kind` is visibility, neither it nor anything above it is locked. Hidden objects
+    /// count, and so do objects in a hidden layer or group.
     pub fn dataset_target(&self, id: NodeId, kind: VariableKind) -> bool {
-        let locks = kind != VariableKind::Visibility;
-        self.ancestry(id).is_some_and(|a| a.iter().all(|i| self.node(*i).is_some_and(|n| !(locks && n.locked))))
+        self.dataset_target_with(&self.locked_artboards(), id, kind)
+    }
+
+    /// [`Document::dataset_target`] with the locked artboards `locks` of this document, measured
+    /// once for many ids.
+    pub fn dataset_target_with(&self, locks: &LockedArtboards, id: NodeId, kind: VariableKind) -> bool {
+        let locking = kind != VariableKind::Visibility;
+        self.ancestry(id).is_some_and(|a| a.iter().all(|i| self.node(*i).is_some_and(|n| !(locking && n.locked)))) && !locks.holds_id(id)
     }
 
     /// The type objects of the story that the type object `id` belongs to, in thread order: the
@@ -232,25 +250,36 @@ impl Document {
     /// Whether a data set reads and rewrites the text of the type object `id`: every frame of its
     /// story ([`Document::story_of`]) is a [`Document::dataset_target`].
     pub fn story_target(&self, id: NodeId) -> bool {
-        self.story_of(id).into_iter().all(|f| self.dataset_target(f, VariableKind::Text))
+        self.story_target_with(&self.locked_artboards(), id)
+    }
+
+    /// [`Document::story_target`] with the locked artboards `locks` of this document, measured
+    /// once for many ids.
+    pub fn story_target_with(&self, locks: &LockedArtboards, id: NodeId) -> bool {
+        self.story_of(id).into_iter().all(|f| self.dataset_target_with(locks, f, VariableKind::Text))
     }
 
     /// What the object `id` holds for the variable of `kind`: its characters (the whole story
     /// for a frame of threaded text), whether it shows, or a linked image's path. `None` when the
     /// object is gone, is not of that kind, has no link path yet (an embedded image), or, unless
-    /// `kind` is visibility, is locked or in a locked layer or group, or for text when a frame of
-    /// its story is (the document's value is whatever it was left at).
+    /// `kind` is visibility, is locked or in a locked layer or group, or is on a locked artboard,
+    /// or for text when a frame of its story is (the document's value is whatever it was left at).
     pub fn variable_value(&self, id: NodeId, kind: VariableKind) -> Option<DataValue> {
-        if !self.dataset_target(id, kind) {
+        self.variable_value_with(&self.locked_artboards(), id, kind)
+    }
+
+    /// [`Document::variable_value`] with the locked artboards `locks` of this document.
+    fn variable_value_with(&self, locks: &LockedArtboards, id: NodeId, kind: VariableKind) -> Option<DataValue> {
+        if !self.dataset_target_with(locks, id, kind) {
             return None;
         }
         let node = self.node(id)?;
         match (kind, &node.kind) {
-            (VariableKind::Text, NodeKind::Text(_)) if self.story_target(id) => Some(DataValue::Text(self.story_text(id))),
+            (VariableKind::Text, NodeKind::Text(_)) if self.story_target_with(locks, id) => Some(DataValue::Text(self.story_text(id))),
             (VariableKind::Visibility, _) => Some(DataValue::Visible(node.visible)),
             (VariableKind::Image, NodeKind::Image(im)) => im.link.as_ref().map(|l| DataValue::Image(l.path.clone())),
             (VariableKind::Graph, _) => node.extras().graph.as_ref().map(|g| DataValue::Graph(g.to_csv())),
-            (VariableKind::Text | VariableKind::Image, _) => None,
+            (VariableKind::Text | VariableKind::Image | VariableKind::Unknown, _) => None,
         }
     }
 
@@ -261,10 +290,11 @@ impl Document {
     /// still matches what it says.
     pub fn captured_values(&self) -> BTreeMap<String, DataValue> {
         let mut out = BTreeMap::new();
+        let locks = self.locked_artboards();
         for v in &self.variables.variables {
             // An object driven by several variables of the same kind reads from the first one
             // bound, so a capture is one value per variable and applies back the same way.
-            let value = self.variables.objects_of(&v.name).into_iter().find_map(|id| self.variable_value(id, v.kind));
+            let value = self.variables.objects_of(&v.name).into_iter().find_map(|id| self.variable_value_with(&locks, id, v.kind));
             if let Some(value) = value {
                 out.insert(v.name.clone(), value);
             }

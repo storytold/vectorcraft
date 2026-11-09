@@ -1,7 +1,7 @@
 //! Brush Options (double-click a brush in the Brushes panel, or the panel menu's Brush Options…).
-//! Calligraphic Brush Options: Name, then Angle, Roundness and Size, each Fixed, Random or
-//! Pressure with its Variation, over live previews of the nib and of a stroke (light, heavy, light
-//! pressure). Bristle Brush Options: Name (typing stops at [`Bristle::MAX_NAME_CHARS`]
+//! Calligraphic Brush Options: Name, then Angle, Roundness and Size, each Fixed, Random, Pressure,
+//! Tilt, Bearing or Rotation with its Variation, over live previews of the nib and of a stroke
+//! (light, heavy, light pressure). Bristle Brush Options: Name (typing stops at [`Bristle::MAX_NAME_CHARS`]
 //! characters), Shape and the bristle sliders. Scatter, Art and Pattern Brush Options: see
 //! [`super::brush_art_options`]. OK runs `brush.options` (strokes painted with the brush update);
 //! a name another brush has, or a new bristle brush name that is too long, keeps the dialog open.
@@ -9,7 +9,8 @@
 //! Fields: `__brush` (the brush's name), `__type` (`calligraphic` | `bristle` | `scatter` | `art` |
 //! `pattern`), `name`.
 //! Calligraphic: `angle` (−180..180°), `roundness` (0..100 %), `size` (0..1296 pt), and per value
-//! `angleMode`, `roundnessMode`, `sizeMode` (`fixed` | `random` | `pressure`) and
+//! `angleMode`, `roundnessMode`, `sizeMode` (`fixed` | `random` | `pressure` | `tilt` | `bearing` |
+//! `rotation`) and
 //! `angleVariation`, `roundnessVariation`, `sizeVariation`. Bristle: `shape` (`roundPoint`…),
 //! `size` (pt), `length` (25..300 %), `density`, `thickness`, `opacity`, `stiffness` (1..100 %).
 //!
@@ -367,9 +368,9 @@ fn nib_preview(ui: &mut egui::Ui, c: &Calligraphic, size: egui::Vec2) {
     let at = |sign: f64| -> [f64; 3] {
         let mut v = values;
         for (i, (x, mode)) in v.iter_mut().zip(c.modes()).enumerate() {
-            let (Some(&var), Some(&(lo, hi))) = (c.variation.get(i), Calligraphic::RANGES.get(i)) else { continue };
+            let Some(&var) = c.variation.get(i) else { continue };
             if mode != Variation::Fixed {
-                *x = (*x + sign * var).clamp(lo, hi);
+                *x = Calligraphic::moved(i, *x, sign * var);
             }
         }
         v

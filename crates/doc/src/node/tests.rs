@@ -21,6 +21,8 @@ fn extras_are_written_flat_in_order() {
         e.live_paint_gaps = Some(Box::default());
         e.compound_shape = true;
         e.shape_mode = crate::ShapeMode::Exclude;
+        e.envelope_edit_margin = Some([0.5, 0.5, 0.25, 0.25]);
+        e.pixel_aligned = true;
     }
     /// The top-level keys of a JSON object, in the order written.
     struct Keys(Vec<String>);
@@ -65,9 +67,12 @@ fn extras_are_written_flat_in_order() {
         "live_paint_gaps",
         "compound_shape",
         "shape_mode",
+        "envelope_edit_margin",
+        "pixel_aligned",
     ];
     assert_eq!(keys, order);
     assert_eq!(v["shape_mode"], "exclude");
+    assert_eq!(v["pixel_aligned"], true);
     assert_eq!(serde_json::from_value::<Node>(v).unwrap(), n);
     let plain = Node::path(NodeId(9), shapes::rectangle(Rect::new(0.0, 0.0, 4.0, 2.0)), Appearance::default_art());
     let back: Node = serde_json::from_value(serde_json::to_value(&plain).unwrap()).unwrap();
@@ -241,6 +246,34 @@ fn uneven_scales_keep_live_corners_circular() {
     assert_round_corners(&n, Affine::IDENTITY, 40.0);
 }
 
+/// Objects attached to a rounded rectangle that keeps its corners when scaled stay where the scale
+/// takes them on the regenerated path, which is not twice as long when twice the size.
+#[test]
+fn objects_on_a_live_rectangle_follow_its_regenerated_path() {
+    use crate::objects_on_path::{CENTER, ObjectsOnPath, stops};
+    let path = live_rect(100.0, 100.0, 20.0, Affine::IDENTITY);
+    let objects: Vec<Node> =
+        (2..5).map(|i| Node::path(NodeId(i), vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Default::default())).collect();
+    let members: Vec<&Node> = objects.iter().collect();
+    let rec = ObjectsOnPath { spacing: Some(20.0), start: 10.0, ..ObjectsOnPath::new(NodeId(1), &members, CENTER, 0.0) };
+    let mut children = vec![Arc::new(path)];
+    children.extend(objects.iter().cloned().map(Arc::new));
+    let mut g = Node::new(NodeId(9), NodeKind::Group { children, clip: false });
+    g.extras_mut().objects_on_path = Some(Box::new(rec));
+    let path_of = |g: &Node| g.children().and_then(|c| c.first()).and_then(|p| p.path_data().cloned()).unwrap();
+    let rec_of = |g: &Node| g.extras().objects_on_path.as_deref().cloned().unwrap();
+    let r = rec_of(&g);
+    let before = stops(&path_of(&g), 3, r.spacing, r.start).unwrap();
+    let a = Affine::scale(2.0);
+    g.transform(a, KEEP_CORNERS);
+    assert_round_corners(&g.children().unwrap()[0], Affine::IDENTITY, 20.0);
+    let r = rec_of(&g);
+    let after = stops(&path_of(&g), 3, r.spacing, r.start).unwrap();
+    for ((p, _), (q, _)) in before.iter().zip(&after) {
+        assert!((a * *p).distance(*q) < 1e-6, "{p:?} went to {q:?}: {r:?}");
+    }
+}
+
 #[test]
 fn rotated_and_reflected_live_rectangles_scale_along_their_own_sides() {
     let place = Affine::translate((200.0, 100.0)) * Affine::rotate(30f64.to_radians());
@@ -362,10 +395,19 @@ fn a_projection_follows_the_transform_or_is_removed() {
     let mut n = instance(far);
     n.transform(Affine::scale(1e150), false);
     assert_eq!(projection(&n), None);
-    // A transform that is not invertible leaves the projection as it is.
+    // A transform that is not invertible leaves the projection as it is, at any scale.
     let mut n = instance(far);
     n.transform(Affine::scale(0.0), false);
     assert_eq!(projection(&n), Some(far.to_array()));
+    let mut n = instance(far);
+    n.transform(Affine::new([1e-8, 2e-8, 2e-8, 4e-8, 0.0, 0.0]), false);
+    assert_eq!(projection(&n), Some(far.to_array()));
+    // A scale by 1e-8 is invertible: a move by 10 becomes a move by 1e-7.
+    let ten = Homography::from_affine(Affine::translate((10.0, 0.0)));
+    let mut n = instance(ten);
+    n.transform(Affine::scale(1e-8), false);
+    let q = n.projection().unwrap().apply(Point::new(3e-8, 7e-8)).unwrap();
+    assert!(q.distance(Point::new(1.3e-7, 7e-8)) < 1e-20, "{q:?}");
 }
 
 #[test]
@@ -404,6 +446,20 @@ fn visual_bounds_include_stroke() {
     let mut p = Node::path(NodeId(2), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
     p.appearance.stroke_mut().unwrap().join = crate::appearance::LineJoin::Round;
     assert_eq!(p.visual_bounds(), Some(Rect::new(-0.5, -0.5, 10.5, 10.5)));
+}
+
+/// A group's box from its members' boxes grows by the group's own strokes, leaves out members
+/// without a box, and is `None` when none has one.
+#[test]
+fn visual_of_members_unions_the_members_and_grows_by_the_group_stroke() {
+    let mut g = Node::group(NodeId(1), vec![]);
+    g.appearance = Appearance::default_art().into();
+    let (a, b) = (Rect::new(0.0, 0.0, 10.0, 10.0), Rect::new(20.0, 5.0, 30.0, 8.0));
+    let o = g.appearance.outset();
+    assert!(o > 0.0);
+    assert_eq!(g.visual_of_members([Some(a), None, Some(b)].into_iter()), Some(Rect::new(0.0, 0.0, 30.0, 10.0).inflate(o, o)));
+    assert_eq!(g.visual_of_members([None, None].into_iter()), None);
+    assert_eq!(g.visual_of_members([].into_iter()), None);
 }
 
 /// Type's visual bounds grow by how far its character strokes paint past the glyphs: half the
@@ -517,4 +573,24 @@ fn fields_before_the_type_are_buffered_within_the_value_budget() {
     let written = serde_json::to_string(&Node::group(NodeId(1), vec![Arc::new(Node::group(NodeId(2), vec![]))])).unwrap();
     assert!(with_buffered_value_budget(0, || read(&written)).is_ok(), "a saved object buffers nothing: {written}");
     assert!(read(reordered).is_ok(), "no budget outside a read");
+}
+
+/// A compound path's path is its members' paths one after another, open and closed, empty
+/// members and single anchors included.
+#[test]
+fn compound_stroke_path_is_its_members_in_order() {
+    use vectorcraft_geom::{Anchor, PathData, SubPath};
+    let open = PathData::single(SubPath::new([(0.0, 0.0), (5.0, 1.0), (9.0, 7.0)].map(|(x, y)| Anchor::corner(Point::new(x, y))).to_vec(), false));
+    let lone = PathData::single(SubPath::new(vec![Anchor::corner(Point::new(3.0, 3.0))], false));
+    let members =
+        [shapes::rectangle(Rect::new(0.0, 0.0, 4.0, 2.0)), open, PathData::default(), lone, shapes::ellipse(Rect::new(10.0, 10.0, 20.0, 16.0))];
+    let mut expected = vectorcraft_geom::BezPath::new();
+    for pd in &members {
+        expected.extend(pd.to_bezpath());
+    }
+    let children = members.iter().enumerate().map(|(i, pd)| Arc::new(Node::path(NodeId(i as u64 + 1), pd.clone(), Appearance::default()))).collect();
+    let n = Node::new(NodeId(99), NodeKind::Compound { children, rule: vectorcraft_geom::FillRule::EvenOdd });
+    let bp = n.stroke_path().unwrap();
+    assert_eq!(bp.elements(), expected.elements());
+    assert!(!bp.elements().is_empty());
 }

@@ -69,7 +69,8 @@ pub fn sri(hex: &str) -> Option<String> {
 /// name>`. Relative, so the site works under any path; content-addressed, so it can be cached
 /// forever.
 pub fn url(sha256: &str, file: &str) -> String {
-    let name = file.rsplit('/').next().unwrap_or(file);
+    // Either separator: on Windows a backslash in supplier data would otherwise pick a folder.
+    let name = file.rsplit(['/', '\\']).next().unwrap_or(file);
     format!("fonts/{}/{name}", sha256.get(..16).unwrap_or(sha256))
 }
 
@@ -98,6 +99,7 @@ mod tests {
     fn url_is_relative_and_content_addressed() {
         let sha = "63111b5b2e074dd48cc67692e0a2726d86ee94c1c37fe8598257b7b4e87e869e";
         assert_eq!(url(sha, "fonts/noto-sans-arabic/NotoSansArabic.ttf"), "fonts/63111b5b2e074dd4/NotoSansArabic.ttf");
+        assert_eq!(url(sha, "fonts\\..\\..\\NotoSansArabic.ttf"), "fonts/63111b5b2e074dd4/NotoSansArabic.ttf");
         assert!(!url(sha, "x.ttf").starts_with('/'));
     }
 

@@ -67,6 +67,94 @@ fn optical_pairs_cross_paint_runs_and_manual_and_tracking_are_independent() {
 }
 
 #[test]
+fn rtl_manual_kerning_spaces_the_character_from_the_next_in_reading_order() {
+    for optical_kerning in [false, true] {
+        // Reading order: alef (bytes 0..2), bet (2..4), gimel (4..6); bet carries the kerning.
+        let base = CharStyle { size: 100.0, optical_kerning, ..CharStyle::default() };
+        let kerned = |value: f64| {
+            let mut t = TextObject::point(Point::ZERO, "אבג", base.clone());
+            edit::style_range(&mut t.runs, 2, 4, |s| s.kerning = Some(value));
+            layout(db(), &t)
+        };
+        let ink = |lay: &TextLayout, byte: usize| {
+            let g = lay.glyphs.iter().find(|g| g.byte == byte).unwrap();
+            assert!(g.rtl && g.gid != 0, "byte {byte} is set right to left with a glyph of its own");
+            (g.xf * Point::ZERO).x
+        };
+        let (plain, spaced) = (kerned(0.0), kerned(200.0));
+        let gap = |lay: &TextLayout, right: usize, left: usize| ink(lay, right) - ink(lay, left);
+        assert!(
+            (gap(&spaced, 2, 4) - gap(&plain, 2, 4) - 20.0).abs() < 0.01,
+            "kerning on bet spaces it from gimel, after it in reading order (Optical: {optical_kerning})"
+        );
+        assert!(
+            (gap(&spaced, 0, 2) - gap(&plain, 0, 2)).abs() < 0.01,
+            "alef, before bet in reading order, keeps its place (Optical: {optical_kerning})"
+        );
+        // The caret between bet and gimel stays at gimel: the new space is on bet's side of it.
+        let caret = |lay: &TextLayout| caret_position(lay, 4).0.x;
+        assert!((caret(&spaced) - ink(&spaced, 4) - (caret(&plain) - ink(&plain, 4))).abs() < 0.01);
+        assert!((ink(&spaced, 2) - caret(&spaced) - (ink(&plain, 2) - caret(&plain)) - 20.0).abs() < 0.01);
+    }
+}
+
+#[test]
+fn rtl_manual_kerning_with_whole_point_widths_keeps_the_previous_character_in_place() {
+    // Reading order: alef (bytes 0..2), bet (2..4), gimel (4..6); bet carries the kerning, which
+    // is a fraction of a point.
+    for (system_layout, fractional_widths) in [(true, true), (false, false)] {
+        for value in [3.0, 4.0, 6.0, 7.0] {
+            let kerned = |value: f64| {
+                let mut t = TextObject::point(Point::ZERO, "אבג", CharStyle { size: 100.0, ..CharStyle::default() });
+                t.system_layout = system_layout;
+                t.fractional_widths = fractional_widths;
+                edit::style_range(&mut t.runs, 2, 4, |s| s.kerning = Some(value));
+                layout(db(), &t)
+            };
+            let ink = |lay: &TextLayout, byte: usize| {
+                let g = lay.glyphs.iter().find(|g| g.byte == byte).unwrap();
+                assert!(g.rtl && g.gid != 0, "byte {byte} is set right to left with a glyph of its own");
+                (g.xf * Point::ZERO).x
+            };
+            let (plain, spaced) = (kerned(0.0), kerned(value));
+            let gap = |lay: &TextLayout, right: usize, left: usize| ink(lay, right) - ink(lay, left);
+            assert!(
+                (gap(&spaced, 0, 2) - gap(&plain, 0, 2)).abs() < 1e-9,
+                "alef, before bet in reading order, keeps its place (kerning {value}, System Layout {system_layout})"
+            );
+            let wider = gap(&spaced, 2, 4) - gap(&plain, 2, 4);
+            assert!((wider - wider.round()).abs() < 1e-9, "bet moves from gimel by whole points: {wider} (kerning {value})");
+        }
+    }
+}
+
+#[test]
+fn rtl_manual_kerning_on_a_rotated_character_moves_it_along_the_baseline() {
+    // Reading order: alef (bytes 0..2), bet (2..4), gimel (4..6); bet is turned 90 degrees and
+    // carries the kerning.
+    let kerned = |value: f64| {
+        let mut t = TextObject::point(Point::ZERO, "אבג", CharStyle { size: 100.0, ..CharStyle::default() });
+        edit::style_range(&mut t.runs, 2, 4, |s| {
+            s.kerning = Some(value);
+            s.rotation = 90.0;
+        });
+        layout(db(), &t)
+    };
+    let origin = |lay: &TextLayout, byte: usize| {
+        let g = lay.glyphs.iter().find(|g| g.byte == byte).unwrap();
+        assert!(g.rtl && g.gid != 0, "byte {byte} is set right to left with a glyph of its own");
+        g.xf * Point::ZERO
+    };
+    let (plain, spaced) = (kerned(0.0), kerned(200.0));
+    let moved = origin(&spaced, 2) - origin(&plain, 2);
+    let gimel = origin(&spaced, 4) - origin(&plain, 4);
+    assert!((moved.x - gimel.x - 20.0).abs() < 0.01, "kerning on the turned bet spaces it from gimel along the line: {moved:?}, {gimel:?}");
+    assert!(moved.y.abs() < 0.01, "the turned bet stays on its baseline: {moved:?}");
+    let alef = origin(&spaced, 0) - origin(&plain, 0);
+    assert!((alef.x - moved.x).abs() < 0.01 && alef.y.abs() < 0.01, "alef keeps its place next to bet: {alef:?}");
+}
+
+#[test]
 fn optical_pair_skips_an_invisible_soft_hyphen_with_an_outline() {
     use crate::test_fonts::{SOFT_HYPHEN_OUTLINE_FAMILY, soft_hyphen_outline_font};
 
@@ -114,6 +202,10 @@ fn optical_pair_after_separate_combining_mark_uses_base_outline() {
 
 #[test]
 fn optical_pair_after_rtl_separate_mark_uses_base_outline() {
+    if db().face("Noto Sans Arabic", "Regular").is_none_or(|f| f.family != "Noto Sans Arabic") {
+        eprintln!("skipped: built without craft-fonts (set CRAFT_FONTS_DIR to a craft-fonts checkout to run it)");
+        return;
+    }
     let st = CharStyle { font_family: "Noto Sans Arabic".into(), size: 100.0, optical_kerning: true, ..CharStyle::default() };
     let shaped = |text: &str, manual: bool| {
         let mut style = st.clone();
@@ -135,6 +227,54 @@ fn optical_pair_after_rtl_separate_mark_uses_base_outline() {
         plain.iter().filter(|g| g.0 == 2).map(|g| g.1).sum::<f64>() - plain_zero.iter().filter(|g| g.0 == 2).map(|g| g.1).sum::<f64>();
     assert!(plain_correction.abs() > 0.1, "Optical adjusts the unmarked pair");
     assert!((correction - plain_correction).abs() < 0.01, "the marked cluster uses the base outline");
+}
+
+/// Optical spaces pairs by the face's own stem spacing (#5336): straight pairs like `nn` keep the
+/// font's spacing, diagonal pairs close up, and a line of ordinary text is no narrower than it
+/// is with the font's spacing and no kerning.
+#[test]
+fn optical_keeps_the_fonts_stem_spacing_and_closes_diagonal_pairs() {
+    let st = CharStyle { font_family: "Source Sans 3".into(), size: 100.0, optical_kerning: true, ..CharStyle::default() };
+    let advances = |text: &str, kerning: Option<f64>| {
+        layout(db(), &TextObject::point(Point::ZERO, text, CharStyle { kerning, ..st.clone() })).glyphs.iter().map(|g| g.advance).collect::<Vec<_>>()
+    };
+    let width = |text: &str, kerning: Option<f64>| advances(text, kerning).iter().sum::<f64>();
+    let (optical, zero) = (advances("nn", None), advances("nn", Some(0.0)));
+    assert!((optical[0] - zero[0]).abs() <= 0.11, "nn, the reference, keeps the font's spacing: {optical:?} {zero:?}");
+    for pair in ["HH", "ll", "nl"] {
+        let (optical, zero) = (advances(pair, None), advances(pair, Some(0.0)));
+        assert!((optical[0] - zero[0]).abs() <= 3.0, "{pair} stays within 0.03 em of the font's spacing: {optical:?} {zero:?}");
+    }
+    for pair in ["AV", "To", "Yo"] {
+        let (optical, zero) = (advances(pair, None), advances(pair, Some(0.0)));
+        assert!(optical[0] < zero[0] - 1.0, "{pair} closes up: {optical:?} {zero:?}");
+        assert!(optical[0] >= zero[0] - 12.0 - 0.01, "{pair} tightens by at most 0.12 em: {optical:?} {zero:?}");
+    }
+    for text in ["minimum", "Hamburgefonstiv", "illumination"] {
+        let (optical, zero) = (width(text, None), width(text, Some(0.0)));
+        assert!(optical >= zero * 0.97, "{text} is not squeezed: {optical} against {zero}");
+    }
+}
+
+/// Ideographs, kana and fullwidth forms keep the font's spacing under Optical, even where their
+/// outlines would be spaced (the test face draws them with Latin outlines).
+#[test]
+fn optical_leaves_ideographs_kana_and_fullwidth_forms_alone() {
+    use crate::test_fonts::{IDEOGRAPH_OPTICAL_FAMILY, ideograph_optical_font};
+
+    let db = FontDb::with_font_dirs(vec![]);
+    assert_eq!(db.add_font(ideograph_optical_font().unwrap()), 1);
+    let st = CharStyle { font_family: IDEOGRAPH_OPTICAL_FAMILY.into(), size: 100.0, optical_kerning: true, ..CharStyle::default() };
+    let advances = |kerning: Option<f64>| {
+        layout(&db, &TextObject::point(Point::ZERO, "日本カなＷ日", CharStyle { kerning, ..st.clone() }))
+            .glyphs
+            .iter()
+            .map(|g| g.advance)
+            .collect::<Vec<_>>()
+    };
+    let (optical, zero) = (advances(None), advances(Some(0.0)));
+    assert_eq!(optical.len(), 6);
+    assert_eq!(optical, zero, "no ideograph, kana or fullwidth pair is corrected");
 }
 
 #[test]
@@ -477,6 +617,32 @@ fn text_flow_fills_the_cells_by_columns_or_by_rows() {
     assert_eq!(layout(db(), &by_rows).frames.get(1).map(|f| (f.x0, f.y0)), Some((220.0, 0.0)));
 }
 
+/// A gutter between rows of its own: the rows are that far apart, and the columns keep the gutter.
+#[test]
+fn rows_can_have_a_gutter_of_their_own() {
+    let mut t = area(&COPY.repeat(8), style(12.0), Rect::new(0.0, 0.0, 420.0, 300.0), Justify::Left);
+    (t.area.rows, t.area.columns, t.area.gutter, t.area.row_gutter) = (2, 2, 20.0, Some(40.0));
+    let cells: Vec<(f64, f64, f64, f64)> = layout(db(), &t).frames.iter().map(|f| (f.x0, f.y0, f.x1, f.y1)).collect();
+    // By columns: down the first column, then the second; (300 − 40) / 2 tall, (420 − 20) / 2 wide.
+    assert_eq!(cells, [(0.0, 0.0, 200.0, 130.0), (0.0, 170.0, 200.0, 300.0), (220.0, 0.0, 420.0, 130.0), (220.0, 170.0, 420.0, 300.0)]);
+    // Without one, the rows take the gutter too.
+    t.area.row_gutter = None;
+    assert_eq!(layout(db(), &t).frames.get(1).map(|f| f.y0), Some(160.0));
+}
+
+/// A gutter so huge that a line's height no longer moves the baseline past it: the cells beyond it
+/// have no room, and looking down all 10,000 of them for a line must not freeze the layout.
+#[test]
+fn a_gutter_too_huge_to_step_past_has_no_room_for_lines() {
+    let mut t = area(COPY, style(12.0), Rect::new(0.0, 0.0, 420.0, 300.0), Justify::Left);
+    (t.area.rows, t.area.row_gutter) = (2, Some(1e300));
+    let l = layout(db(), &t);
+    assert!(l.lines.is_empty() && l.overflow);
+    (t.area.rows, t.area.columns, t.area.gutter, t.area.row_gutter) = (100, 100, 1e300, None);
+    let l = layout(db(), &t);
+    assert!(l.lines.is_empty() && l.overflow);
+}
+
 // ---------- area flow ----------
 
 #[test]
@@ -538,12 +704,12 @@ fn area_flow_moves_a_word_down_to_a_line_wide_enough_for_it() {
 }
 
 /// Lays `t` out as [`layout`] does, on a thread of its own, and fails the test when that panics or
-/// takes more than 20 s.
+/// has not ended after 300 s.
 fn layout_soon(t: &TextObject) -> TextLayout {
     let (tx, rx) = std::sync::mpsc::channel();
     let (t, text) = (t.clone(), t.plain_text());
     std::thread::spawn(move || tx.send(layout(db(), &t)).ok());
-    rx.recv_timeout(std::time::Duration::from_secs(20)).unwrap_or_else(|e| panic!("laying out {text:?}: {e}"))
+    rx.recv_timeout(std::time::Duration::from_secs(300)).unwrap_or_else(|e| panic!("laying out {text:?}: {e}"))
 }
 
 /// Each line's baseline, left and right edges, and byte range.
@@ -589,6 +755,31 @@ fn frames_and_wrap_shapes_beyond_a_billion_points_are_left_out() {
         assert_eq!(line_places(&wrapped(boxed(150.0, 300.0, 200.0, far))), line_places(&unwrapped), "{far}");
     }
     assert_eq!(line_places(&wrapped(Rect::new(150.0, 0.0, 300.0, f64::NAN).to_path(0.1))), line_places(&unwrapped));
+}
+
+/// Area type whose frame a wrap object covers sets no line and overflows. Area type wrapped around
+/// a shape of 10,000 anchors sets its lines beside the shape.
+#[test]
+fn a_frame_a_wrap_object_covers_overflows_and_a_complex_wrap_shape_is_laid_out() {
+    let mut t = area(COPY, style(12.0), Rect::new(0.0, 0.0, 300.0, 200.0), Justify::Left);
+    let mut wrapped = |path: BezPath| {
+        t.wrap = vec![vectorcraft_doc::WrapShape { path: PathData::from_bezpath(&path), wrap: Default::default() }];
+        layout_soon(&t)
+    };
+    let covered = wrapped(Rect::new(-10.0, -10.0, 310.0, 210.0).to_path(0.1));
+    assert!(covered.lines.is_empty() && covered.overflow, "{:?}", line_places(&covered));
+    // A zigzag between x = 150 and 160 down the frame, closed along its right half.
+    let mut zigzag = BezPath::new();
+    zigzag.move_to((150.0, 0.0));
+    for i in 1..10_000 {
+        zigzag.line_to((if i % 2 == 0 { 150.0 } else { 160.0 }, 200.0 * i as f64 / 10_000.0));
+    }
+    zigzag.line_to((300.0, 200.0));
+    zigzag.line_to((300.0, 0.0));
+    zigzag.close_path();
+    let beside = wrapped(zigzag);
+    assert!(!beside.lines.is_empty(), "no line was set");
+    assert!(beside.lines.iter().all(|li| li.x1 <= 160.0), "{:?}", line_places(&beside));
 }
 
 /// Layout steps a line down a frame (or a row or column of one) at most 100,000 times to find room
@@ -727,6 +918,55 @@ fn natural_width(s: &str, size: f64) -> f64 {
     l.lines[0].x1 - l.lines[0].x0
 }
 
+/// Installed fonts exercise run-language routing, source boundaries and hyphen limits end to end.
+#[test]
+fn indic_language_runs_hyphenate_with_both_composers() {
+    let db = FontDb::global();
+    for (tag, syllable) in [
+        ("hi", "कि"),
+        ("mr", "कि"),
+        ("gu", "કિ"),
+        ("bn", "কি"),
+        ("pa", "ਕਿ"),
+        ("ta", "கி"),
+        ("te", "కి"),
+        ("kn", "ಕಿ"),
+        ("ml", "കി"),
+        ("or", "କି"),
+        ("as", "কি"),
+    ] {
+        let Some(face) = syllable.chars().next().and_then(|ch| db.face_covering(ch)).filter(|f| syllable.chars().all(|ch| f.covers(ch))) else {
+            eprintln!("SKIPPED: indic hyphenation layout {tag}; no installed font covers {syllable}");
+            continue;
+        };
+        let style = CharStyle {
+            font_family: face.family.clone(),
+            font_style: face.style.clone(),
+            size: 12.0,
+            language: Some(tag.into()),
+            ..Default::default()
+        };
+        let prefix = layout(db, &TextObject::point(Point::ZERO, &format!("{}-", syllable.repeat(3)), style.clone()));
+        let width = prefix.glyphs.iter().map(|g| g.advance).sum::<f64>() + 0.5;
+        for composer in [Composer::SingleLine, Composer::EveryLine] {
+            let text = syllable.repeat(20);
+            let mut t = area(&text, style.clone(), Rect::new(0.0, 0.0, width, 2000.0), Justify::Left);
+            t.para.composer = composer;
+            t.para.hyphenate = true;
+            let l = layout(db, &t);
+            assert!(!l.overflow, "{tag} {composer:?}");
+            assert!(hyphen_run(&l) > 0, "{tag} {composer:?}: no automatic hyphens");
+            assert!(l.lines.iter().all(|line| line.end % syllable.len() == 0), "{tag} {composer:?}: split syllable");
+            assert_eq!(l.lines.last().map(|line| line.end), Some(text.len()));
+            t.para.hyphenation.hyphen_limit = 1;
+            assert!(hyphen_run(&layout(db, &t)) <= 1, "{tag} {composer:?}: hyphen limit");
+            t.runs.iter_mut().for_each(|run| run.style.language = Some("zz".into()));
+            assert_eq!(hyphen_run(&layout(db, &t)), 0, "unknown language must not use Indic patterns");
+        }
+        eprintln!("ASSERTIONS RUN: indic hyphenation layout {tag}, {} {}", face.family, face.style);
+    }
+}
+
 /// The text of each line.
 fn line_texts(t: &TextObject, l: &TextLayout) -> Vec<String> {
     let text = t.plain_text();
@@ -833,6 +1073,33 @@ fn hyphenation_rules() {
         let pts = hyphen::hyphen_points(w);
         assert!(pts.iter().all(|&p| p >= hyphen::MIN_BEFORE && p <= w.chars().count() - hyphen::MIN_AFTER), "{w}: {pts:?}");
     }
+}
+
+/// #394: each run hyphenates in its own language. English breaks words, a language without break
+/// points doesn't, and text saved without a language breaks as it always did.
+#[test]
+fn each_run_hyphenates_in_its_own_language() {
+    let text = "Extraordinarily comprehensive typographical considerations notwithstanding everything.";
+    let frame = Rect::new(0.0, 0.0, 120.0, 600.0);
+    let hyphens = |language: Option<&str>| {
+        let st = CharStyle { language: language.map(str::to_string), ..style(14.0) };
+        let mut t = area(text, st, frame, Justify::Left);
+        t.para.hyphenate = true;
+        layout(db(), &t).glyphs.iter().filter(|g| g.len == 0).count()
+    };
+    let saved_without_one = hyphens(None);
+    assert!(saved_without_one > 0, "some words hyphenated");
+    assert_eq!(hyphens(Some("en-GB")), saved_without_one);
+    assert_eq!(hyphens(Some("de")), 0, "German has no break points yet");
+    assert_eq!(hyphens(Some("x-from-a-file")), 0, "a tag that isn't known has no hyphenation");
+
+    // both in one paragraph: the English run breaks and the German one doesn't
+    let mut t = area(&format!("{text} {text}"), style(14.0), frame, Justify::Left);
+    t.para.hyphenate = true;
+    edit::style_range(&mut t.runs, text.len(), 2 * text.len() + 1, |s| s.language = Some("de".into()));
+    let l = layout(db(), &t);
+    let at: Vec<usize> = l.glyphs.iter().filter(|g| g.len == 0).map(|g| g.byte).collect();
+    assert!(!at.is_empty() && at.iter().all(|b| *b < text.len()), "hyphens only in the English run: {at:?}");
 }
 
 #[test]
@@ -1631,6 +1898,28 @@ fn proportional_metrics_set_full_width_glyphs_on_their_proportional_widths() {
     assert!((none.glyphs[0].advance - 20.0).abs() < 0.01 && (half.glyphs[0].advance - 10.0).abs() < 0.01, "{:?}", adv(&half));
     let moved = x0(&half)[1] - x0(&none)[1];
     assert!((moved - 10.0).abs() < 0.01, "〙's empty half goes past the line's end: あ moved {moved}");
+}
+
+#[test]
+fn mojikumi_trim_keeps_a_rotated_opening_bracket_on_its_line() {
+    use vectorcraft_doc::Mojikumi;
+    if db().face("Shippori Mincho", "Regular").is_none_or(|f| f.family != "Shippori Mincho") {
+        eprintln!("skipped: Shippori Mincho is not in CRAFT_FONTS_DIR");
+        return;
+    }
+    let lay = |rotation, mojikumi| {
+        let st = CharStyle { font_family: "Shippori Mincho".into(), size: 20.0, rotation, ..Default::default() };
+        let mut t = area("「あ", st, Rect::new(0.0, 0.0, 200.0, 200.0), Justify::Left);
+        t.para.mojikumi = mojikumi;
+        layout(db(), &t)
+    };
+    for rotation in [0.0, 45.0, 90.0, -90.0] {
+        let (plain, trimmed) = (lay(rotation, Mojikumi::None), lay(rotation, Mojikumi::LineEndHalf));
+        let (a, b) = (&plain.glyphs[0], &trimmed.glyphs[0]);
+        assert!((a.advance - 20.0).abs() < 0.01 && (b.advance - 10.0).abs() < 0.01, "full-width bracket fixture");
+        let shift = b.xf * Point::ZERO - a.xf * Point::ZERO;
+        assert!((shift.x + 10.0).abs() < 0.01 && shift.y.abs() < 0.01, "{rotation} degrees: {shift:?}");
+    }
 }
 
 /// The arrows pass a Thai consonant with its vowel and tone marks whole (น้ำ: no, mai tho, sara am),

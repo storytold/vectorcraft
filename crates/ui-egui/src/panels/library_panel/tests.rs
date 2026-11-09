@@ -70,6 +70,25 @@ fn clicking_a_library_swatch_adds_and_applies_it_in_one_step() {
     assert!(last_open(&app.ui).is_none());
 }
 
+#[test]
+fn clicking_a_library_pattern_adds_the_pattern_and_applies_it_to_the_active_proxy() {
+    let mut app = app();
+    let ctx = context();
+    let r = app.run("window.swatchLibrary", json!({"library": "Geometric Patterns"})).unwrap();
+    assert_eq!(r["panel"].as_str(), Some("library:swatches:geometric-patterns"));
+    let undo = undo_len(&app);
+    click(&mut app, &ctx, "Checkerboard", Modifiers::NONE, 0.0);
+    let d = &app.session.doc().unwrap().doc;
+    assert!(d.pattern("Checkerboard").is_some() && d.swatch("Checkerboard").is_some(), "added with its pattern");
+    assert!(matches!(&app.session.paint.fill, Paint::Pattern { pattern, .. } if pattern == "Checkerboard"), "applied to the fill");
+    assert_eq!(undo_len(&app), undo + 1);
+    // Alt-click paints the stroke; the pattern is added once.
+    let patterns = app.session.doc().unwrap().doc.patterns.len();
+    click(&mut app, &ctx, "Checkerboard", Modifiers::ALT, 2.0);
+    assert!(matches!(&app.session.paint.stroke, Paint::Pattern { pattern, .. } if pattern == "Checkerboard"));
+    assert_eq!(app.session.doc().unwrap().doc.patterns.len(), patterns);
+}
+
 /// A color clicked in a swatch library becomes the Color Guide's base color (#3137).
 #[test]
 fn a_clicked_library_color_becomes_the_color_guides_base() {
@@ -136,7 +155,8 @@ fn find_filters_list_view_and_arrows_step_through_the_libraries() {
     assert!(ctx.read_response(tile_id(panel, "#00FF00")).is_none());
     let first = SWATCH_IDS[0];
     let last = SwatchLibraries::list(&app).pop().unwrap().id;
-    assert_eq!(last, "radial-glows", "gradient libraries come after the swatch libraries");
+    assert_eq!(last, "geometric-patterns", "gradient and then pattern libraries come after the swatch libraries");
+    assert_eq!(neighbour::<SwatchLibraries>(&app, "radial-glows", 1).as_deref(), Some("geometric-patterns"));
     assert_eq!(neighbour::<SwatchLibraries>(&app, first, -1), Some(last), "wraps around");
     assert_eq!(neighbour::<SwatchLibraries>(&app, "web-safe-216", 1).as_deref(), Some(SWATCH_IDS[1]));
 }
@@ -172,6 +192,13 @@ fn the_window_submenu_lists_every_library() {
         .collect();
     assert!(gradients.len() >= 5);
     assert_eq!(gradients, listed("gradients"));
+    let patterns: Vec<Value> = crate::menus::menu_entries(&app)
+        .into_iter()
+        .filter(|e| e.path == ["Window", "Swatch Libraries", "Patterns"])
+        .map(|e| e.params["library"].clone())
+        .collect();
+    assert!(!patterns.is_empty());
+    assert_eq!(patterns, listed("patterns"));
     let defaults = crate::menus::menu_entries(&app).into_iter().any(|e| e.command.as_deref() == Some("swatch.resetDefaults"));
     assert!(defaults, "Default Swatches is listed");
 }

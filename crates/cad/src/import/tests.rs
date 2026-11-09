@@ -814,7 +814,7 @@ fn nested_array_inserts_of_nothing_stop_at_the_work_budget() {
     blocks.extend(block("*C", None));
     let top = [(0, "INSERT"), (2, "*A"), (10, "0"), (20, "0"), (70, "300"), (44, "1")];
     let r = open(&drawing(&[], &[], &blocks, &top), &points());
-    assert!(r.warnings.iter().any(|w| w.contains("more than")), "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.contains("too much work")), "{:?}", r.warnings);
 }
 
 #[test]
@@ -1176,4 +1176,174 @@ fn many_array_inserts_of_a_missing_block_stay_bounded() {
     let total: usize = items.iter().map(|i| if let entity::Geom::Insert(ins) = &i.geom { ins.cells.len() } else { 0 }).sum();
     assert!(total <= 2_000_000 + 3000, "total cells materialised: {total}");
     assert!(conv.warnings.iter().any(|w| w.contains("array inserts")), "{:?}", conv.warnings);
+}
+
+#[test]
+fn dashed_lines_past_the_dash_budget_are_drawn_solid() {
+    // 600 lines of a two-length linetype: 1,200 dash lengths, past the 1,000 tests import with.
+    let tables = [(0, "TABLE"), (2, "LTYPE"), (0, "LTYPE"), (2, "DASHED"), (73, "2"), (40, "15"), (49, "10"), (49, "-5"), (0, "ENDTAB")];
+    let line = [(0, "LINE"), (6, "DASHED"), (10, "0"), (20, "0"), (11, "100"), (21, "0")];
+    let e: Vec<(i32, &str)> = (0..600).flat_map(|_| line).collect();
+    let r = open(&drawing(&[], &tables, &[], &e), &points());
+    let (mut dashed, mut solid, mut kept) = (0, 0, 0);
+    r.document.walk(|n| {
+        if let NodeKind::Path { .. } = n.kind {
+            match n.appearance.stroke().and_then(|s| s.dash.as_ref()) {
+                Some(d) => {
+                    dashed += 1;
+                    kept += d.pattern.len();
+                }
+                None => solid += 1,
+            }
+        }
+    });
+    assert_eq!(dashed + solid, 600);
+    assert!(dashed > 0 && solid > 0, "{dashed} dashed, {solid} solid");
+    assert!(kept <= 1_000, "{kept} dash lengths kept");
+    assert!(r.warnings.iter().any(|w| w.contains("drawn solid")), "{:?}", r.warnings);
+}
+
+/// The bytes of text in the document's text objects.
+fn text_bytes(doc: &Document) -> usize {
+    let mut bytes = 0;
+    doc.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            bytes += t.runs.iter().map(|r| r.text.len()).sum::<usize>();
+        }
+    });
+    bytes
+}
+
+#[test]
+fn text_copied_into_array_cells_stops_at_the_text_budget() {
+    // 1,000 characters of text in an anonymous block placed 10 × 10: 100 KB of copies, past the
+    // 64 KB tests import with.
+    let long = "x".repeat(1000);
+    let blocks =
+        [(0, "BLOCK"), (2, "*U1"), (70, "1"), (10, "0"), (20, "0"), (0, "TEXT"), (10, "0"), (20, "0"), (40, "1"), (1, long.as_str()), (0, "ENDBLK")];
+    let insert = [(0, "INSERT"), (2, "*U1"), (10, "0"), (20, "0"), (70, "10"), (71, "10"), (44, "1"), (45, "1")];
+    let r = open(&drawing(&[], &[], &blocks, &insert), &points());
+    let bytes = text_bytes(&r.document);
+    assert!(bytes > 0, "some copies are kept");
+    assert!(bytes <= 64 << 10, "{bytes} bytes of text");
+    assert!(r.warnings.iter().any(|w| w.contains("64 MB of text")), "{:?}", r.warnings);
+}
+
+#[test]
+fn a_text_style_naming_an_overlong_font_family_takes_the_default() {
+    let family = "F".repeat(10_000);
+    let tables = [(0, "TABLE"), (2, "STYLE"), (0, "STYLE"), (2, "Big"), (3, "x.ttf"), (1001, "ACAD"), (1000, family.as_str()), (0, "ENDTAB")];
+    let e = [(0, "TEXT"), (10, "0"), (20, "0"), (40, "1"), (1, "Hi"), (7, "Big")];
+    let doc = open(&drawing(&[], &tables, &[], &e), &points()).document;
+    let mut families = vec![];
+    doc.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            families.extend(t.runs.iter().map(|r| r.style.font_family.clone()));
+        }
+    });
+    assert_eq!(families, [vectorcraft_doc::CharStyle::default().font_family]);
+}
+
+#[test]
+fn symbol_instances_of_a_long_block_name_stop_at_the_text_budget() {
+    // A 1,000-byte block name placed 10 × 10: each instance keeps its own copy of the name.
+    let name = "N".repeat(1000);
+    let blocks = [(0, "BLOCK"), (2, name.as_str()), (10, "0"), (20, "0"), (0, "LINE"), (10, "0"), (20, "0"), (11, "1"), (21, "0"), (0, "ENDBLK")];
+    let insert = [(0, "INSERT"), (2, name.as_str()), (10, "0"), (20, "0"), (70, "10"), (71, "10"), (44, "2"), (45, "2")];
+    let r = open(&drawing(&[], &[], &blocks, &insert), &points());
+    let mut instances = 0;
+    r.document.walk(|n| {
+        if let NodeKind::SymbolInstance { .. } = n.kind {
+            instances += 1;
+        }
+    });
+    assert!(instances > 0 && instances < 100, "{instances} instances");
+    assert!(r.warnings.iter().any(|w| w.contains("64 MB of text")), "{:?}", r.warnings);
+}
+
+#[test]
+fn arrays_of_blocks_of_hidden_art_stop_at_the_work_budget() {
+    // 500 lines on a hidden layer in an anonymous block placed 50 × 50: they make nothing, but
+    // each placement looks at all of them (1,250,000 items, past the 1,000,000 tests import with).
+    let tables = [(0, "TABLE"), (2, "LAYER"), (0, "LAYER"), (2, "Off"), (70, "0"), (62, "-1"), (0, "ENDTAB")];
+    let mut blocks = vec![(0, "BLOCK"), (2, "*U1"), (70, "1"), (10, "0"), (20, "0")];
+    for _ in 0..500 {
+        blocks.extend([(0, "LINE"), (8, "Off"), (10, "0"), (20, "0"), (11, "1"), (21, "0")]);
+    }
+    blocks.push((0, "ENDBLK"));
+    let insert = [(0, "INSERT"), (2, "*U1"), (10, "0"), (20, "0"), (70, "50"), (71, "50"), (44, "1"), (45, "1")];
+    let r = open(&drawing(&[], &tables, &blocks, &insert), &points());
+    assert!(r.warnings.iter().any(|w| w.contains("too much work")), "{:?}", r.warnings);
+}
+
+#[test]
+fn dashed_compound_paths_charge_every_copy_of_their_pattern() {
+    // 100 pattern hatches of 9 loops in a two-length linetype: each keeps its dashes on the
+    // compound path and on each loop, 2,000 dash lengths, past the 1,000 tests import with.
+    let tables = [(0, "TABLE"), (2, "LTYPE"), (0, "LTYPE"), (2, "DASHED"), (73, "2"), (40, "15"), (49, "10"), (49, "-5"), (0, "ENDTAB")];
+    let corners = ["0", "10", "20", "30", "40", "50", "60", "70", "80", "90"];
+    let mut hatch = vec![(0, "HATCH"), (6, "DASHED"), (10, "0"), (20, "0"), (30, "0"), (2, "ANSI31"), (70, "0"), (71, "0"), (91, "9")];
+    for i in 0..9 {
+        let (a, b) = (corners[i], corners[i + 1]);
+        hatch.extend([
+            (92, "2"),
+            (72, "0"),
+            (73, "1"),
+            (93, "4"),
+            (10, a),
+            (20, "0"),
+            (10, b),
+            (20, "0"),
+            (10, b),
+            (20, "5"),
+            (10, a),
+            (20, "5"),
+            (97, "0"),
+        ]);
+    }
+    hatch.extend([(75, "0"), (76, "1"), (98, "0")]);
+    let e: Vec<(i32, &str)> = (0..100).flat_map(|_| hatch.iter().copied()).collect();
+    let r = open(&drawing(&[], &tables, &[], &e), &points());
+    let (mut compounds, mut kept) = (0, 0);
+    r.document.walk(|n| {
+        compounds += usize::from(matches!(n.kind, NodeKind::Compound { .. }));
+        kept += n.appearance.stroke().and_then(|s| s.dash.as_ref()).map_or(0, |d| d.pattern.len());
+    });
+    assert_eq!(compounds, 100, "{:?}", r.warnings);
+    assert!(kept > 0 && kept <= 1_000, "{kept} dash lengths kept");
+    assert!(r.warnings.iter().any(|w| w.contains("drawn solid")), "{:?}", r.warnings);
+}
+
+#[test]
+fn symbols_of_a_long_block_name_stop_at_the_text_budget() {
+    // A 1,000-byte block name inserted in 100 colours its art takes: a symbol per colour, each
+    // keeping its own copy of the name, past the 64 KB tests import with.
+    let name = "N".repeat(1000);
+    let blocks = [
+        (0, "BLOCK"),
+        (2, name.as_str()),
+        (10, "0"),
+        (20, "0"),
+        (0, "LINE"),
+        (8, "0"),
+        (62, "0"),
+        (10, "0"),
+        (20, "0"),
+        (11, "1"),
+        (21, "0"),
+        (0, "ENDBLK"),
+    ];
+    let colours: Vec<String> = (1..=100).map(|c| c.to_string()).collect();
+    let inserts: Vec<(i32, &str)> =
+        colours.iter().flat_map(|c| [(0, "INSERT"), (2, name.as_str()), (62, c.as_str()), (10, "0"), (20, "0")]).collect();
+    let r = open(&drawing(&[], &[], &blocks, &inserts), &points());
+    let mut bytes: usize = r.document.symbols.iter().map(|s| s.name.len()).sum();
+    r.document.walk(|n| {
+        if let NodeKind::SymbolInstance { symbol, .. } = &n.kind {
+            bytes += symbol.len();
+        }
+    });
+    assert!(!r.document.symbols.is_empty());
+    assert!(bytes <= 64 << 10, "{bytes} bytes of symbol names");
+    assert!(r.warnings.iter().any(|w| w.contains("64 MB of text")), "{:?}", r.warnings);
 }

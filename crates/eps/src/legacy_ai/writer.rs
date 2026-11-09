@@ -1,12 +1,13 @@
 use super::encoding::{
-    Ink, average, direct_fill, direct_stroke, finite, font_of, invertible, latin_string, lost_attributes, segment_point, unit, writable,
+    Ink, average, direct_fill, direct_stroke, finite, font_of, holds_as_text, invertible, latin_string, lost_attributes, rotated, segment_point,
+    unit, writable,
 };
 use super::{
-    Affine, AnchorKind, AppearanceItem, Arc, BezPath, BlendMode, CharStyle, Cms, Color, Document, ELLIPTICAL, FREEFORM, FillLayer, FillRule,
-    Gradient, GradientKind, GradientPaint, HEX_LINE, HIDDEN, HIDDEN_LAYER, HIDDEN_SHOWN, HiddenObjects, IMAGE_ALPHA, ImageBlob, Justify, LARGE_IMAGE,
-    LAYER_COLORS, LAYER_NAME, LIVE, LayerColor, LegacyAiOptions, LineCap, LineJoin, MAX_IMAGE_PIXELS, MAX_NEST, NAMES, Node, NodeKind, PATTERNS,
-    Paint, ParaDirection, ParaStyle, PathData, Point, Rect, STROKES, SUBLAYERS, Shape, StrokeLayer, SubPath, TITLE_AND_COLOR_NAMES, TRANSPARENCY,
-    TYPE, TYPE_ATTRIBUTES, TextKind, TextObject, UNDECODED, Vec2, Write, latin, ps, stroke,
+    Affine, AppearanceItem, Arc, BezPath, BlendMode, CharStyle, Cms, Color, Document, ELLIPTICAL, FREEFORM, FillLayer, FillRule, Gradient,
+    GradientKind, GradientPaint, HEX_LINE, HIDDEN, HIDDEN_LAYER, HIDDEN_SHOWN, HiddenObjects, IMAGE_ALPHA, ImageBlob, Justify, LARGE_IMAGE,
+    LAYER_COLORS, LAYER_NAME, LIVE, LayerColor, LegacyAiOptions, MAX_IMAGE_PIXELS, MAX_NEST, NAMES, Node, NodeKind, PATTERNS, Paint, ParaDirection,
+    ParaStyle, PathData, ROTATED_TYPE, Rect, STROKES, SUBLAYERS, Shape, StrokeLayer, SubPath, TITLE_AND_COLOR_NAMES, TRANSPARENCY, TYPE,
+    TYPE_ATTRIBUTES, TextKind, TextObject, UNDECODED, Vec2, Write, ai_ops, latin, ps, stroke,
 };
 
 pub(super) struct Writer<'a> {
@@ -271,15 +272,18 @@ impl<'a> Writer<'a> {
             }
             NodeKind::Image(im) => {
                 self.lock(locked);
-                self.image(self.doc.image_blob(im), im.width, im.height, im.xf);
+                let blob = self.doc.image_blob(im);
+                // A colorize color the renderer draws the image in.
+                let colorize =
+                    n.extras().colorize.as_deref().filter(|p| matches!(p, Paint::Solid { .. }) && blob.is_some_and(ImageBlob::takes_colorize));
+                self.image(blob, im.width, im.height, im.xf, colorize);
             }
             NodeKind::SymbolInstance { symbol, xf } => {
                 self.warn(LIVE);
                 if let Some(sym) = self.doc.symbols.iter().find(|s| &s.name == symbol)
                     && self.nest < MAX_NEST
+                    && let Some(mut art) = self.doc.place_symbol_art(symbol, &vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n), *xf)
                 {
-                    let mut art = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n);
-                    art.transform(*xf, false);
                     art.visible = true;
                     self.nest += 1;
                     self.node(&art, locked);
@@ -363,13 +367,9 @@ impl<'a> Writer<'a> {
         self.line(if sp.closed { "h\nW\nn" } else { "H\nW\nN" });
     }
 
-    /// A guide (§6): `(N) *`, its path, `(N) *`.
+    /// A guide ([`ai_ops::guide`]).
     fn guide(&mut self, path: &PathData) {
-        for sp in path.subpaths.iter().filter(|sp| !sp.anchors.is_empty()) {
-            self.line("(N) *");
-            self.subpath(sp);
-            self.line("(N) *");
-        }
+        ai_ops::guide(&mut self.body, self.to_art, path, false);
     }
 
     /// A path's fills and strokes: one object with one fill and a plain stroke over it where it
@@ -528,71 +528,14 @@ impl<'a> Writer<'a> {
         self.line(if rule == FillRule::EvenOdd { "1 XR" } else { "0 XR" });
     }
 
-    /// One subpath's points, in art space: `m`, then a line or curve to each point (lower case: the
-    /// point is smooth, upper case: a corner, §5.3.2), and for a closed one the segment back to the
-    /// start, which says whether the start is smooth or a corner (as the specification's examples
-    /// close paths: the start point again, then the painting operator).
+    /// One subpath's points, in art space ([`ai_ops::subpath`]).
     fn subpath(&mut self, sp: &SubPath) {
-        let Some(first) = sp.anchors.first() else { return };
-        let xf = self.to_art;
-        let s = &mut self.body;
-        let pt = |s: &mut String, p: Point| {
-            let p = xf * p;
-            ps::push_nums(s, &[p.x, p.y]);
-        };
-        pt(s, first.p);
-        s.push_str("m\n");
-        let segment = |s: &mut String, a: &vectorcraft_geom::Anchor, b: &vectorcraft_geom::Anchor| {
-            let straight = a.h_out == a.p && b.h_in == b.p;
-            let smooth = b.kind == AnchorKind::Smooth;
-            if straight {
-                pt(s, b.p);
-                s.push_str(if smooth { "l\n" } else { "L\n" });
-            } else {
-                pt(s, a.h_out);
-                pt(s, b.h_in);
-                pt(s, b.p);
-                s.push_str(if smooth { "c\n" } else { "C\n" });
-            }
-        };
-        for pair in sp.anchors.windows(2) {
-            if let [a, b] = pair {
-                segment(s, a, b);
-            }
-        }
-        if sp.closed
-            && sp.anchors.len() > 1
-            && let Some(last) = sp.anchors.last()
-        {
-            segment(s, last, first);
-        }
+        ai_ops::subpath(&mut self.body, self.to_art, sp);
     }
 
-    /// The stroke's width, cap, join, miter limit and dashes: `w J j M d`.
+    /// The stroke's width, cap, join, miter limit and dashes ([`ai_ops::line_style`]).
     fn line_style(&mut self, st: &StrokeLayer) {
-        let cap = match st.cap {
-            LineCap::Butt => 0,
-            LineCap::Round => 1,
-            LineCap::Square => 2,
-        };
-        let join = match st.join {
-            LineJoin::Miter => 0,
-            LineJoin::Round => 1,
-            LineJoin::Bevel => 2,
-        };
-        let s = &mut self.body;
-        ps::push_num(s, st.width);
-        let _ = write!(s, " w {cap} J {join} j ");
-        ps::push_num(s, if st.miter_limit.is_finite() { st.miter_limit.max(1.0) } else { 10.0 });
-        s.push_str(" M [");
-        let dash = st.dash.as_ref().filter(|d| d.is_dashed());
-        if let Some(d) = dash {
-            ps::push_nums(s, &d.pattern);
-            s.pop();
-        }
-        s.push_str("] ");
-        ps::push_num(s, dash.map_or(0.0, |d| d.offset));
-        s.push_str(" d\n");
+        ai_ops::line_style(&mut self.body, st);
     }
 
     // ---------- colour ----------
@@ -719,7 +662,8 @@ impl<'a> Writer<'a> {
 
     // ---------- type ----------
 
-    /// Type: a text object when the format can hold it as text, else its outlines. A run whose
+    /// Type: a text object when the format can hold it as text, else its outlines (type with
+    /// rotated characters among them, which keeps their rotation). A run whose
     /// font size measures a height other than the em box is written at the em size it is drawn
     /// at ([`vectorcraft_text::FontDb::font_heights_resolved`]).
     fn text(&mut self, t: &TextObject) {
@@ -729,10 +673,15 @@ impl<'a> Writer<'a> {
         let resolved = vectorcraft_text::FontDb::global().font_heights_resolved(t);
         let t = &*resolved;
         if !self.outline_text {
-            if writable(t) {
+            if writable(self.doc, t) {
                 return self.text_object(t);
             }
-            self.warn(TYPE);
+            if !holds_as_text(t) {
+                self.warn(TYPE);
+            }
+            if rotated(t) {
+                self.warn(ROTATED_TYPE);
+            }
         }
         self.outlines(t);
     }
@@ -890,7 +839,7 @@ impl<'a> Writer<'a> {
         // Colour bitmap glyphs (emoji): their images, which the runs' paint doesn't paint.
         for g in &layout.glyphs {
             if let Some((image, to_text)) = g.placed_image() {
-                self.image(Some(&image.blob), image.width, image.height, t.xf * to_text);
+                self.image(Some(&image.blob), image.width, image.height, t.xf * to_text, None);
             }
             // COLR glyphs: their layers, as art.
             if let Some(art) = g.placed_colour(t.xf) {
@@ -908,8 +857,12 @@ impl<'a> Writer<'a> {
     /// `%AI5_EndRaster`, then `F`. §8.4's examples have no `F`; without it, an app reading the file
     /// can leave out an image in a clipping group and the art after it. No path is open there, so
     /// the `F` paints nothing. `blob` holds the pixels, placed as a grid of `width` × `height`
-    /// by `xf`.
-    fn image(&mut self, blob: Option<&ImageBlob>, width: u32, height: u32, xf: Affine) {
+    /// by `xf`, and `colorize` is the solid color the image is colorized with. A colorized image
+    /// whose pixels are all black or white is written as an image mask (ImageMask 1, §8.1): its
+    /// color as the fill, then 1-bit samples, a 0 bit for each black pixel, which takes the color,
+    /// and a 1 bit for each white pixel, which is clear. Another colorized image is written with
+    /// its color in its pixels.
+    fn image(&mut self, blob: Option<&ImageBlob>, width: u32, height: u32, xf: Affine, colorize: Option<&Paint>) {
         let flip = Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 0.0]);
         let m = self.to_art * xf * flip;
         if !invertible(m) {
@@ -931,25 +884,61 @@ impl<'a> Writer<'a> {
         // The object places the image's own pixel grid (its width × height) wherever the file's is.
         let fit = Affine::scale_non_uniform(f64::from(width.max(1)) / f64::from(w), f64::from(height.max(1)) / f64::from(h));
         let m = self.to_art * xf * fit * flip;
+        // Over white.
+        let over = |c: u8, a: u8| ((u32::from(c) * u32::from(a) + 255 * (255 - u32::from(a)) + 127) / 255) as u8;
+        if let Some(paint) = colorize {
+            let Some((_, _, coverage)) = blob.and_then(ImageBlob::coverage).filter(|(cw, ch, _)| (*cw, *ch) == (w, h)) else {
+                self.warn(UNDECODED);
+                return;
+            };
+            if coverage.iter().all(|&v| v == 0 || v == 255) {
+                let stride = (w as usize).div_ceil(8);
+                let mut bits = vec![0xFF; stride.saturating_mul(h as usize)];
+                for (i, _) in coverage.iter().enumerate().filter(|(_, v)| **v == 255) {
+                    let (x, y) = (i % w as usize, i / w as usize);
+                    if let Some(byte) = bits.get_mut(y * stride + x / 8) {
+                        *byte &= !(0x80 >> (x % 8));
+                    }
+                }
+                self.color(paint, false);
+                self.raster(m, &format!("0 0 {w} {h} {w} {h} 1 1 0 0 0 1"), &bits);
+                return;
+            }
+            let rgb = paint.color().map_or([0; 3], |c| c.to_rgb().map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8));
+            let samples: Vec<u8> = coverage.iter().flat_map(|&a| rgb.map(|c| over(c, a))).collect();
+            self.warn(IMAGE_ALPHA);
+            self.raster(m, &format!("0 0 {w} {h} {w} {h} 8 3 0 0 0 0"), &samples);
+            return;
+        }
         let rgba = img.to_rgba8();
-        let mut hex = String::with_capacity(rgba.len() / 4 * 7);
-        hex.push('%');
-        let mut on_line = 0;
+        let mut samples = Vec::with_capacity(rgba.len() / 4 * 3);
         let mut see_through = false;
         for px in rgba.pixels() {
             let [r, g, b, a] = px.0;
             if a < 255 {
                 see_through = true;
             }
-            // Over white.
-            let over = |c: u8| ((u32::from(c) * u32::from(a) + 255 * (255 - u32::from(a)) + 127) / 255) as u8;
-            for c in [over(r), over(g), over(b)] {
-                let _ = write!(hex, "{c:02X}");
-                on_line += 2;
-                if on_line >= HEX_LINE {
-                    hex.push_str("\n%");
-                    on_line = 0;
-                }
+            samples.extend([over(r, a), over(g, a), over(b, a)]);
+        }
+        if see_through {
+            self.warn(IMAGE_ALPHA);
+        }
+        self.raster(m, &format!("0 0 {w} {h} {w} {h} 8 3 0 0 0 0"), &samples);
+    }
+
+    /// An image's lines (§8.4): `%AI5_File:`, `%AI5_BeginRaster`, matrix `m` as `[ a b c d tx ty ]`
+    /// and the numbers `operands` with `XI`, `samples` in hex on comment lines of [`HEX_LINE`]
+    /// digits, `%AI5_EndRaster`, then `F`.
+    fn raster(&mut self, m: Affine, operands: &str, samples: &[u8]) {
+        let mut hex = String::with_capacity(samples.len() * 2 + samples.len() / HEX_LINE * 2 + 2);
+        hex.push('%');
+        let mut on_line = 0;
+        for c in samples {
+            let _ = write!(hex, "{c:02X}");
+            on_line += 2;
+            if on_line >= HEX_LINE {
+                hex.push_str("\n%");
+                on_line = 0;
             }
         }
         if hex.ends_with('%') {
@@ -957,14 +946,11 @@ impl<'a> Writer<'a> {
         } else {
             hex.push('\n');
         }
-        if see_through {
-            self.warn(IMAGE_ALPHA);
-        }
         let [a, b, c, d, e, f] = m.as_coeffs();
         let s = &mut self.body;
         s.push_str("%AI5_File:\n%AI5_BeginRaster\n[ ");
         ps::push_nums(s, &[a, b, c, d, e, f]);
-        let _ = writeln!(s, "] 0 0 {w} {h} {w} {h} 8 3 0 0 0 0 XI");
+        let _ = writeln!(s, "] {operands} XI");
         s.push_str(&hex);
         s.push_str("%AI5_EndRaster\nF\n");
     }

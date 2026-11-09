@@ -50,7 +50,8 @@
 //! their own above their layer, are left out or show, as [`HiddenObjects`] says (in a hidden
 //! layer they stay where they are). Type that 8-bit text can't hold (characters outside
 //! Windows-1252, vertical type, ruby, inline graphics, gradient or pattern fills) is written as its
-//! outlines, and all type with [`LegacyAiOptions::outline_text`]. Layer, spot color and gradient
+//! outlines, and so is type with rotated characters (a text object has no character rotation), and
+//! all type with [`LegacyAiOptions::outline_text`]. Layer, spot color and gradient
 //! names and the title are written in Windows-1252 too, and a character outside it is written as
 //! `?`. Two spot colors or two gradients whose names become the same that way are numbered (`? 2`).
 //!
@@ -64,21 +65,21 @@ use std::sync::Arc;
 use vectorcraft_color::cms::Cms;
 use vectorcraft_color::{BlendMode, Color, Gradient, GradientKind, GradientPaint, Paint};
 use vectorcraft_doc::{
-    AppearanceItem, AreaOptions, CharPosition, CharStyle, Document, FillLayer, ImageBlob, Justify, LAYER_COLORS, LayerColor, LineCap, LineJoin, Node,
-    NodeKind, ParaDirection, ParaStyle, PathEffect, StrokeLayer, TextKind, TextObject,
+    AppearanceItem, AreaOptions, CharPosition, CharStyle, CompositeFont, Document, FillLayer, ImageBlob, Justify, LAYER_COLORS, LayerColor, Node,
+    NodeKind, ParaDirection, ParaStyle, PathAlign, PathEffect, StrokeLayer, TextKind, TextObject,
 };
 use vectorcraft_effects::stroke;
-use vectorcraft_geom::{Affine, AnchorKind, BezPath, FillRule, PathData, Point, Rect, Shape, SubPath, Vec2};
+use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Rect, Shape, SubPath, Vec2};
 
-use crate::{latin, ps};
+use crate::{ai_ops, latin, ps};
 
 mod encoding;
 mod prolog;
 mod writer;
 
-#[cfg(test)]
-use encoding::writable;
 use encoding::{gradient_def, latin_string};
+#[cfg(test)]
+use encoding::{rotated, writable};
 pub(crate) use prolog::PROCSET;
 use prolog::{PROLOG, PS_HEADER, fonts};
 use writer::Writer;
@@ -94,7 +95,8 @@ const HEX_LINE: usize = 60;
 
 pub const SUBLAYERS: &str = "sublayers are written as groups in their top-level layer (legacy .ai files have no sublayers)";
 pub const TYPE: &str = "type a legacy .ai can't hold as text (characters outside Windows Latin-1, vertical type, ruby, inline graphics, gradient or pattern fills) is written as outlines";
-pub const TYPE_ATTRIBUTES: &str = "type attributes legacy .ai files don't have (underline, strikethrough, small caps, superscript and subscript, character rotation, OpenType features, Variable Font settings, area type options, type on a path effects, space after paragraphs, tabs, bulleted and numbered lists) are left out";
+pub const ROTATED_TYPE: &str = "type with rotated characters is written as outlines, which keep the rotation, and is no longer editable text (legacy .ai text can't rotate characters)";
+pub const TYPE_ATTRIBUTES: &str = "type attributes legacy .ai files don't have (underline, strikethrough, manual kerning, optical kerning, small caps, superscript and subscript, OpenType features, Variable Font settings, optical margin alignment, System Layout, fractional widths off, area type options, type on a path's effect, alignment and spacing, an end bracket short of the path's end, subpaths after the first in an area type frame or a type path, space after paragraphs, tabs, bulleted and numbered lists) are left out";
 pub const HIDDEN: &str = "hidden objects are left out (hidden layers are kept, hidden)";
 pub const HIDDEN_LAYER: &str = "hidden objects are moved to a hidden layer above their own (legacy .ai files can hide only layers)";
 pub const HIDDEN_SHOWN: &str = "hidden objects are written visible (legacy .ai files can hide only layers)";
@@ -148,6 +150,27 @@ pub struct LegacyAiOutput {
     pub warnings: Vec<String>,
 }
 
+/// Whether image node `n` of `doc` is written as a 1-bit image mask in its colorize color
+/// (ImageMask 1, §8.1) that draws as the document does: it is colorized with a solid color, its
+/// pixels take the color and are all black or white (or clear), it has no opacity mask turned on,
+/// and it has no more pixels than the writer writes. Such an image keeps its clear pixels in the file.
+pub fn writes_image_mask(doc: &Document, n: &Node) -> bool {
+    let NodeKind::Image(im) = &n.kind else { return false };
+    // The size from the file's header, before any pixels are decoded.
+    let fits = |bytes: &[u8]| {
+        image::ImageReader::new(std::io::Cursor::new(bytes))
+            .with_guessed_format()
+            .ok()
+            .and_then(|r| r.into_dimensions().ok())
+            .is_some_and(|(w, h)| w > 0 && h > 0 && u64::from(w) * u64::from(h) <= MAX_IMAGE_PIXELS)
+    };
+    matches!(n.extras().colorize.as_deref(), Some(Paint::Solid { .. }))
+        && !n.extras().mask.as_ref().is_some_and(|m| !m.disabled)
+        && doc
+            .image_blob(im)
+            .is_some_and(|b| b.takes_colorize() && fits(&b.bytes) && b.coverage().is_some_and(|(_, _, c)| c.iter().all(|&v| v == 0 || v == 255)))
+}
+
 /// Write `doc`'s first artboard and every layer (all its art, on the artboard or not) as a
 /// legacy `.ai` file of version 7. Art space is y up, its origin at the artboard's left edge and
 /// just under its bottom edge: the artboard's top is on a whole point, where readers that place
@@ -157,6 +180,8 @@ pub fn export_legacy_ai(doc: &Document, o: &LegacyAiOptions) -> Result<LegacyAiO
     if !(board.is_finite() && board.width() > 0.0 && board.height() > 0.0) {
         return Err("the document has no artboard".into());
     }
+    // Type in the document's composite fonts is drawn in them, whether or not an app has the document open.
+    let _lent = vectorcraft_text::FontDb::global().lend_composite_fonts(&doc.composite_fonts);
     // The document is y down; art space y up from the artboard's left edge, its top on a whole point.
     let (width, height) = (board.width(), board.height());
     let top = if (height - height.round()).abs() < 1e-6 { height.round() } else { height.ceil() };
