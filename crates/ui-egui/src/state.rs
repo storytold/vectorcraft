@@ -473,6 +473,11 @@ pub struct UiState {
     /// `window.toolsBesideCanvas`). Off by default, and off in state saved without it.
     #[serde(default)]
     pub tools_beside_canvas: bool,
+    /// The docked Tools panel stands on the right, between the canvas and the panels, instead of on
+    /// the left (dropped there, or `window.panel.dock {panel: "tools", side: "right"}`). Off by
+    /// default, and off in state saved without it.
+    #[serde(default)]
+    pub toolbar_right: bool,
     pub status_bar: bool,
     pub help_bar: bool,
     pub dock: bool,
@@ -1010,6 +1015,7 @@ impl Default for UiState {
             dock_width: None,
             toolbar_pos: None,
             tools_beside_canvas: false,
+            toolbar_right: false,
             status_bar: true,
             help_bar: true,
             dock: true,

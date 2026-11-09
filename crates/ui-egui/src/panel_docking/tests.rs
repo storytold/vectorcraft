@@ -284,6 +284,45 @@ fn the_tools_panel_floats_by_its_title_bar_and_docks_on_the_left_edge() {
     assert_eq!(h.app.ui.toolbar_pos, None, "dropped on the left edge, it docks");
 }
 
+/// The Tools panel also docks on the right, left of the panels: dropped on the window's right edge
+/// it stands between the canvas and the panels, its flyouts open toward the canvas, the side is
+/// kept with the preferences, and it drags back to the left edge.
+#[test]
+fn the_tools_panel_docks_on_the_right_left_of_the_panels() {
+    let mut h = Harness::new();
+    let zone = docked_tools(&h);
+    h.drag(zone.min + vec2(20.0, 12.0), pos2(600.0, 400.0));
+    let [x, y] = h.app.ui.toolbar_pos.expect("the Tools panel floats");
+    h.drag(pos2(x + 20.0, y + 7.0), pos2(SCREEN.right() - 10.0, 500.0));
+    assert_eq!((h.app.ui.toolbar_pos, h.app.ui.toolbar_right), (None, true), "dropped on the right edge, it docks on the right");
+    settle(&mut h);
+    let bar = docked_tools(&h);
+    let canvas = h.app.canvas_rect.expect("the canvas");
+    let layers = h.tab("layers").expect("the Layers panel, docked right");
+    assert!(canvas.right() <= bar.left() + 1.0 && bar.right() <= layers.left() + 1.0, "canvas {canvas:?}, Tools {bar:?}, Layers {layers:?}");
+    assert!(SCREEN.right() - bar.right() > 100.0, "the panels keep the window's right edge: {bar:?}");
+    // Its flyouts and drawer open toward the canvas, not over the panels.
+    let room = crate::toolbar::room(&h.app, &h.ctx);
+    assert!(room.right() <= bar.right() + 0.5, "{room:?}");
+    let left = crate::toolbar::beside(bar, 160.0, 8.0, room);
+    assert!(left + 160.0 <= bar.left() - 7.0, "left of the toolbar: {left}");
+    let prefs: crate::state::UiState = serde_json::from_slice(&serde_json::to_vec(&h.app.ui).unwrap()).unwrap();
+    assert!(prefs.toolbar_right, "kept with the preferences");
+    // Dragged back to the window's left edge, it docks there again.
+    h.drag(bar.min + vec2(20.0, 12.0), pos2(600.0, 400.0));
+    let [x, y] = h.app.ui.toolbar_pos.expect("floats again");
+    h.drag(pos2(x + 20.0, y + 7.0), pos2(12.0, 500.0));
+    assert_eq!((h.app.ui.toolbar_pos, h.app.ui.toolbar_right), (None, false));
+    settle(&mut h);
+    assert!(docked_tools(&h).left() < 10.0, "at the window's left edge again");
+    // Agents: window.panel.dock takes the side (left/right, or Start/End as panels do).
+    let r = h.app.run("window.panel.dock", json!({"panel": "tools", "side": "End"})).unwrap();
+    assert_eq!((r["side"].as_str(), h.app.ui.toolbar_right), (Some("right"), true));
+    h.app.run("window.panel.float", json!({"panel": "tools"})).unwrap();
+    assert_eq!(h.app.run("window.panel.dock", json!({"panel": "tools"})).unwrap()["side"], "right", "back on the side it docked at last");
+    assert!(h.app.run("window.panel.dock", json!({"panel": "tools", "side": "top"})).is_err());
+}
+
 /// The docked Tools panel as last drawn.
 fn docked_tools(h: &Harness) -> Rect {
     h.ctx.data(|d| d.get_temp::<Rect>(crate::toolbar::docked_rect_id())).expect("the docked Tools panel")
