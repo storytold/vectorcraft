@@ -1299,7 +1299,15 @@ fn set_glyph_alternate(s: &mut Session, p: &Value) -> Result<Value> {
     let substituted = unchosen.is_some_and(|g| g != default);
     let choice = match gid.filter(|g| *g != default || substituted) {
         None => None,
-        Some(g) if g == default || face.alternates(ch).iter().any(|a| a.gid == g) || face.is_unlisted_alternate(ch, g) => Some(face.choice(ch, g)),
+        Some(g)
+            if g == default
+                || face.alternates(ch).iter().any(|a| a.gid == g)
+                || face.is_unlisted_alternate(ch, g)
+                || vectorcraft_text::alternates_in_context(vectorcraft_text::FontDb::global(), &t, bytes.start)
+                    .is_some_and(|f| f.font_id == face.id() && f.alternates.iter().any(|a| a.gid == g)) =>
+        {
+            Some(face.choice(ch, g))
+        }
         Some(g) => return Err(bad(C, format!("glyph {g} is not an alternate of {ch} in {} {}", face.family, face.style))),
     };
     let drawn = choice.as_ref().map_or(unchosen.unwrap_or(default), |c| c.gid);

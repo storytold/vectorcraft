@@ -839,6 +839,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-09 | minor | G4 review (#6084): positional variants no supported feature draws can be applied as glyph choices in both Glyphs views; unlisted glyphs still respect name ownership. OpenType style options keep only a valid last on-value when enabling a set. Existing contextual/ligature lookup and unsupported-feature gaps remain; estimate unchanged. |
 | 2026-11-07 | minor | G4: the Glyphs panel's Alternates for Current Selection applies the OpenType feature that draws a variant to that letter alone (`salt=2`; the style commands take `tag=N`; runs that differ only in their features shape as one piece of text), so an Arabic word stays joined, and Show › Entire Font lists the unencoded glyphs (#5514). Estimate unchanged. |
 | 2026-11-08 | minor | Floating tab groups collapse into the side icon rail and opened rail panels fold back into it (#5925, in part); tab groups remain intact. Scores and estimates unchanged. |
 | 2026-11-06 | minor | Hindi (`hi`): 7,877-row machine-assisted catalog, zero/one singular plurals, desktop font fallback and optional Devanagari craft-fonts fallback; all 55 translation tests pass; native review and a web font remain; scores and estimates unchanged |

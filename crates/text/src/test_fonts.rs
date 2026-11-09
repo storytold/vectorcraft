@@ -810,8 +810,9 @@ pub const JOINING_LETTERS: [char; 4] = ['\u{0628}', '\u{062A}', '\u{0646}', '\u{
 /// alternate substitutions of the medial teh u (w, x, y: three alternates), of the final teh U
 /// (W, X), of the isolated teh t (E) and of the medial beh v (z), and `ss01` single substitutions
 /// u to w, U to W, t to E and v to z. A set differs by position, as in a font that draws each
-/// letter's alternates for the position they join in. Family [`JOINING_ALTERNATES_FAMILY`]. `None`
-/// when it can't be built.
+/// letter's alternates for the position they join in. `cv01` gives the medial noon m the glyph d,
+/// an alternate that has no style tag. Family [`JOINING_ALTERNATES_FAMILY`]. `None` when it can't
+/// be built.
 pub fn joining_alternates_font() -> Option<Vec<u8>> {
     use write_fonts::tables::cmap::Cmap;
     use write_fonts::tables::gsub::{
@@ -857,20 +858,21 @@ pub fn joining_alternates_font() -> Option<Vec<u8>> {
             vec![AlternateSubstFormat1::new(CoverageFormat1::new(from).into(), sets)],
         )))
     };
-    // Lookups: 0 init, 1 medi, 2 fina, 3 salt, 4 ss01.
+    // Lookups: 0 init, 1 medi, 2 fina, 3 salt, 4 ss01, 5 cv01.
     let lookups = SubstitutionLookupList::new(vec![
         single(&[('b', 'B'), ('t', 'T'), ('n', 'N')])?,
         single(&[('b', 'v'), ('t', 'u'), ('n', 'm')])?,
         single(&[('b', 'V'), ('t', 'U'), ('n', 'M'), ('I', 'A')])?,
         alternates(&[('u', &['w', 'x', 'y']), ('U', &['W', 'X']), ('t', &['E']), ('v', &['z'])])?,
         single(&[('u', 'w'), ('U', 'W'), ('t', 'E'), ('v', 'z')])?,
+        single(&[('m', 'd')])?,
     ]);
-    // Features sorted by tag, as OpenType requires: fina, init, medi, salt, ss01.
-    let records: Vec<FeatureRecord> = [(b"fina", 2), (b"init", 0), (b"medi", 1), (b"salt", 3), (b"ss01", 4)]
+    // Features sorted by tag, as OpenType requires: cv01, fina, init, medi, salt, ss01.
+    let records: Vec<FeatureRecord> = [(b"cv01", 5), (b"fina", 2), (b"init", 0), (b"medi", 1), (b"salt", 3), (b"ss01", 4)]
         .into_iter()
         .map(|(tag, lookup)| FeatureRecord::new(Tag::new(tag), Feature::new(None, vec![lookup])))
         .collect();
-    let scripts = ScriptList::new(vec![ScriptRecord::new(Tag::new(b"arab"), Script::new(Some(LangSys::new(vec![0, 1, 2, 3, 4])), vec![]))]);
+    let scripts = ScriptList::new(vec![ScriptRecord::new(Tag::new(b"arab"), Script::new(Some(LangSys::new(vec![0, 1, 2, 3, 4, 5])), vec![]))]);
     builder.add_table(&Gsub::new(scripts, FeatureList::new(records), lookups)).ok()?;
     for r in font.table_directory.table_records() {
         let tag = Tag::new(&r.tag().to_be_bytes());

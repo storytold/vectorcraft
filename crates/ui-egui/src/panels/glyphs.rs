@@ -6,8 +6,9 @@
 //! stands in its word), and a double-click applies the OpenType feature that draws one to that
 //! character alone, so the text stays real text that joins its neighbors. A double-click on a
 //! glyph no character maps in Entire Font does the same when the selected character's font gives
-//! that glyph as one of its alternates in its word; any other glyph is drawn dimmed, and its tooltip
-//! says why it cannot be applied to the selection.
+//! that glyph as one of its alternates in its word. A glyph no feature reaches whose name does
+//! not belong to another letter is applied as a glyph choice, which may not join. Other glyphs
+//! are drawn dimmed, and their tooltips say why they cannot be applied to the selection.
 
 use std::collections::HashMap;
 
@@ -1186,6 +1187,41 @@ mod tests {
         assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
         let NodeKind::Text(text) = &app.session.active().unwrap().doc.node(NodeId(id.as_u64().unwrap())).unwrap().kind else { panic!("text") };
         assert!(text.runs.iter().all(|r| r.style.glyph_alternate.is_none()), "the choice is gone");
+    }
+
+    /// A positional alternate without a supported feature still goes through the engine's glyph
+    /// choice validation, even though the isolated character has different alternates.
+    #[test]
+    fn a_positional_variant_no_feature_draws_replaces_the_glyph() {
+        use vectorcraft_text::test_fonts::{JOINING_ALTERNATES_FAMILY, joining_alternates_font, source_sans_gid};
+        FontDb::global().add_font(joining_alternates_font().expect("the test font builds"));
+        let face = FontDb::global().face(JOINING_ALTERNATES_FAMILY, "Regular").expect("the test face");
+        let gid = u32::from(source_sans_gid('d').expect("a glyph"));
+        assert!(face.alternates('\u{646}').is_empty(), "the isolated noon has no alternates");
+        assert!(!face.is_unlisted_alternate('\u{646}', gid), "cv01 reaches the glyph");
+        for view in ["Alternates for Current Selection", "Entire Font"] {
+            let (mut app, id) = editing("\u{628}\u{646}\u{62A}");
+            app.run("text.setRangeStyle", json!({"id": id, "font": JOINING_ALTERNATES_FAMILY})).unwrap();
+            let plain = glyph_ids(&app, &id);
+            select(&mut app, 2, 4);
+            let ctx = egui::Context::default();
+            choose(&ctx, &mut app, view);
+            let at = if view == "Entire Font" {
+                entire_font_cell(&ctx, &mut app, &face, gid).0
+            } else {
+                let cells = squares(&shapes(&ctx, &mut app, vec![]));
+                assert_eq!(cells.len(), 2, "the medial noon and its cv01 alternate");
+                cells[1].center()
+            };
+            let undo = app.session.active().unwrap().history.undo.len();
+            double_click_in(&ctx, &mut app, at, if view == "Entire Font" { TALL } else { vec2(280.0, 420.0) });
+            assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1, "{view}: {}", app.ui.status);
+            assert_eq!(glyph_ids(&app, &id)[1], gid, "{view}");
+            let NodeKind::Text(text) = &app.session.active().unwrap().doc.node(NodeId(id.as_u64().unwrap())).unwrap().kind else { panic!("text") };
+            assert_eq!(text.plain_text(), "\u{628}\u{646}\u{62A}", "the characters stay unchanged");
+            app.run("edit.undo", json!({})).unwrap();
+            assert_eq!(glyph_ids(&app, &id), plain, "{view}: undo restores the word");
+        }
     }
 
     /// Show › Entire Font also lists the glyphs no character maps.

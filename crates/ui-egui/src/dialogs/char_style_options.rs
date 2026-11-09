@@ -505,7 +505,9 @@ fn opentype_attrs(d: &Dialog, original: &Map<String, Value>, original_fields: &M
         tags.retain(|t| !sets.contains(&bare(t)));
         let listed = d.fields.get("ot_sets").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str);
         tags.extend(listed.filter(|t| sets.contains(&bare(t))).map(|t| {
-            let kept = before.iter().rev().find(|b| bare(b) == bare(t)).filter(|b| !t.starts_with('-') && tag_on(b));
+            let kept = before.iter().rev().find(|b| bare(b) == bare(t)).filter(|b| {
+                !t.starts_with('-') && vectorcraft_text::OtFeatures::known_tag(b) && tag_on(b)
+            });
             kept.map_or_else(|| t.to_string(), Clone::clone)
         }));
     }
@@ -1650,6 +1652,11 @@ mod tests {
         d.fields.insert("ot_sets".into(), json!(["ss01", "ss02"]));
         d.fields.insert("ot_salt".into(), json!(true));
         assert_eq!(edited_attrs(&d).unwrap()["features"], json!(["salt", "ss01", "ss02=2"]));
+        for last in ["ss01=0", "-ss01", "ss01=65536"] {
+            let mut d = dialog_for(json!({"features": ["ss01=2", last]}));
+            d.fields.insert("ot_sets".into(), json!(["ss01", "ss02"]));
+            assert_eq!(edited_attrs(&d).unwrap()["features"], json!(["ss01", "ss02"]), "{last}: only a valid last on-value is kept");
+        }
     }
 
     #[test]
