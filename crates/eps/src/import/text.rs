@@ -229,6 +229,7 @@ impl Interp<'_> {
                 };
                 self.push(Obj::Dict(font))?;
             }
+            op if op == ComposeFont || Op::PROCSET.contains(&op) => self.cid_op(op)?,
             _ => return ps_err("undefined", op.name()),
         }
         Ok(())
@@ -719,14 +720,17 @@ impl Spacing {
     }
 }
 
-/// A character of a composite font: the descendant font that draws it, its code there, and the
-/// composite font's matrix (over the descendant's own).
+/// A character of a composite font: the descendant font that draws it, its code there (its last
+/// byte for a CID), its CID and the notdef mapping's (`FMapType` 9), the composite font's matrix
+/// (over the descendant's own) and whether it is set vertically (`WMode` 1).
 struct Mapped {
     font: DictRef,
     /// The byte that picked the descendant (the font number).
     pick: u8,
     code: u8,
+    cid: Option<(u32, Option<u32>)>,
     outer: Affine,
+    vertical: bool,
 }
 
 /// What drawing a glyph does with it.
@@ -760,28 +764,36 @@ fn units(f: &Dict) -> f64 {
 impl Interp<'_> {
     /// The characters of `s` in the current font when it is a composite font with the 8/8 mapping
     /// (`FMapType` 2: a byte picking the descendant through `Encoding` and `FDepVector`, then the
-    /// code in it: PLRM 3rd ed., §5.10.1 "Type 0 Font Dictionaries"); `None` for other fonts and
-    /// mappings, which are set as type in the font of the composite font's name.
+    /// code in it: PLRM 3rd ed., §5.10.1 "Type 0 Font Dictionaries") or a CMap (`FMapType` 9:
+    /// codes mapped to a descendant and a CID, §5.11.5); `None` for other fonts and mappings,
+    /// which are set as type in the font of the composite font's name.
     fn composite_glyphs(&mut self, s: &[u8]) -> Res<Option<Vec<Mapped>>> {
         let Some(font) = self.g.font.clone() else { return Ok(None) };
-        {
+        let map = {
             let f = font.borrow();
-            if font_type(&f) != Some(0.0) || f.get(&Key::name("FMapType")).and_then(Obj::as_num) != Some(2.0) {
+            if font_type(&f) != Some(0.0) {
                 return Ok(None);
             }
+            f.get(&Key::name("FMapType")).and_then(Obj::as_num)
+        };
+        if map == Some(9.0) {
+            return self.cid_chars(&font, s).map(Some);
+        }
+        if map != Some(2.0) {
+            return Ok(None);
         }
         // The scan visits every byte pair, also those that map to no glyph and so cost nothing
         // further: charged by the string's length first, so a long string of unmapped characters
         // shown in a loop runs out of the budget.
         self.spend(s.len() as u64)?;
-        Ok(Self::map_composite(&font.borrow(), s))
-    }
-
-    /// The characters of `s` in composite font `f` (8/8 mapping), as [`Self::composite_glyphs`].
-    fn map_composite(f: &Dict, s: &[u8]) -> Option<Vec<Mapped>> {
-        let (encoding, fonts) = (f.get(&Key::name("Encoding"))?.items()?.clone(), f.get(&Key::name("FDepVector"))?.items()?.clone());
+        let f = font.borrow();
+        let (Some(encoding), Some(fonts)) =
+            (f.get(&Key::name("Encoding")).and_then(|e| e.items().cloned()), f.get(&Key::name("FDepVector")).and_then(|e| e.items().cloned()))
+        else {
+            return Ok(None);
+        };
         let (encoding, fonts) = (encoding.borrow(), fonts.borrow());
-        let outer = font_matrix(f, 1.0);
+        let outer = font_matrix(&f, 1.0);
         let mut out = Vec::with_capacity(s.len() / 2);
         for &[pick, code] in s.as_chunks::<2>().0 {
             let index = encoding.get(usize::from(pick)).and_then(Obj::as_num).filter(|i| *i >= 0.0 && i.fract() == 0.0);
@@ -789,10 +801,37 @@ impl Interp<'_> {
             if let Some(Obj::Dict(d)) = index.and_then(|i| fonts.get(i as usize))
                 && font_type(&d.borrow()) != Some(0.0)
             {
-                out.push(Mapped { font: d.clone(), pick, code, outer });
+                out.push(Mapped { font: d.clone(), pick, code, cid: None, outer, vertical: false });
             }
         }
-        Some(out)
+        Ok(Some(out))
+    }
+
+    /// The characters of `s` in `FMapType` 9 font `font`: its CMap's codes, each a CID in the
+    /// descendant `FDepVector` gives its font number (PLRM 3rd ed., §5.11.5).
+    fn cid_chars(&mut self, font: &DictRef, s: &[u8]) -> Res<Vec<Mapped>> {
+        let (cmap, fonts, outer, wmode) = {
+            let f = font.borrow();
+            let fonts = f.get(&Key::name("FDepVector")).and_then(|e| e.items().map(|i| i.to_vec())).unwrap_or_default();
+            let wmode = f.get(&Key::name("WMode")).and_then(Obj::as_num);
+            (f.get(&Key::name("CMap")).cloned(), fonts, font_matrix(&f, 1.0), wmode)
+        };
+        let Some(Obj::Dict(cmap)) = cmap else { return Ok(vec![]) };
+        let vertical = wmode.or_else(|| cmap.borrow().get(&Key::name("WMode")).and_then(Obj::as_num)) == Some(1.0);
+        let map = self.cmap(&cmap)?;
+        // Decoding stops when it would pass the budget left, which `spend` then reports.
+        let (chars, work) = map.decode(s, self.ops_left().saturating_mul(64));
+        // Each code is compared with the CMap's ranges and mappings until one matches.
+        self.spend((s.len() as u64).saturating_add(work / 64))?;
+        Ok(chars
+            .into_iter()
+            .filter_map(|c| match fonts.get(c.font) {
+                Some(Obj::Dict(d)) => {
+                    Some(Mapped { font: d.clone(), pick: 0, code: (c.cid & 0xff) as u8, cid: Some((c.cid, c.notdef)), outer, vertical })
+                }
+                _ => None,
+            })
+            .collect())
     }
 
     /// The characters of a composite font shown at the current point, spaced as `spacing` says.
@@ -806,7 +845,8 @@ impl Interp<'_> {
             // times 256 plus its code (PLRM 3rd ed., `widthshow` in chapter 8).
             let d = spacing.advance(i, i64::from(g.pick) * 256 + i64::from(g.code), w);
             self.g.cur = Some(self.xf() * (at + d));
-            let c = code_char(&g.font.borrow(), g.code);
+            // A CID stands for no character (its code is only the CID's low byte).
+            let c = if g.cid.is_some() { '\u{2022}' } else { code_char(&g.font.borrow(), g.code) };
             if c != '\u{2022}' {
                 text.push(c);
             }
@@ -828,6 +868,9 @@ impl Interp<'_> {
             let f = g.font.borrow();
             font_type(&f) == Some(3.0) && (f.contains_key(&Key::name("BuildGlyph")) || f.contains_key(&Key::name("BuildChar")))
         };
+        if let Some((cid, notdef)) = g.cid {
+            return self.cid_glyph_at(g, cid, notdef, at, paint);
+        }
         if builds {
             return self.type3_glyph_in(&g.font, Glyph::Code(g.code), at, paint == Draw::Fill, g.outer);
         }
@@ -857,6 +900,43 @@ impl Interp<'_> {
         };
         self.g.font = saved;
         r
+    }
+
+    /// Glyph `cid` of CIDFont `g.font` at user point `at` (else the notdef mapping's glyph, else
+    /// CID 0's) → its width (user space), or its vertical displacement in writing mode 1 (the
+    /// glyph's origin then half its width left of the point and 0.88 em above it, and the next
+    /// one an em below it, the defaults ISO 32000-1 §9.7.4.3 gives CIDFonts without vertical
+    /// metrics). A CIDFont the file doesn't carry draws nothing, an em wide.
+    fn cid_glyph_at(&mut self, g: &Mapped, cid: u32, notdef: Option<u32>, at: Point, paint: Draw) -> Res<Vec2> {
+        let (em, fm) = {
+            let f = g.font.borrow();
+            // Without a matrix, Type 2 CIDFonts, like Type 42 fonts, are in ems; Type 0 in
+            // 1000-unit space. With one, an em is the glyph units it makes one unit of text space.
+            let default = if f.get(&Key::name("CIDFontType")).and_then(Obj::as_num) == Some(2.0) { 1.0 } else { 0.001 };
+            let m = font_matrix(&f, default);
+            let scale = m.determinant().abs().sqrt();
+            let em = if scale.is_finite() && scale > 1e-9 { 1.0 / scale } else { 1.0 / default };
+            (em, g.outer * m)
+        };
+        let mut glyph = self.cid_glyph(&g.font, cid)?;
+        for other in [notdef, Some(0)].into_iter().flatten() {
+            if glyph.is_none() {
+                glyph = self.cid_glyph(&g.font, other)?;
+            }
+        }
+        let (outline, w) = match glyph {
+            Some(g) => g,
+            None => {
+                self.out.warn(MISSING_CID_FONT);
+                (vectorcraft_geom::BezPath::new(), em)
+            }
+        };
+        if g.vertical {
+            self.type42_paint(outline, at, fm * Affine::translate((-w / 2.0, -0.88 * em)), paint)?;
+            return Ok(fm * Point::new(0.0, -em) - fm * Point::ZERO);
+        }
+        self.type42_paint(outline, at, fm, paint)?;
+        Ok(fm * Point::new(w, 0.0) - fm * Point::ZERO)
     }
 
     /// Glyph `code` of Type 42 font `font` from the TrueType font it carries: its outline and
@@ -893,10 +973,12 @@ impl Interp<'_> {
 
     /// The TrueType font Type 42 font `font` carries (read once for each `sfnts` array), or
     /// `None` when it isn't a Type 42 font with one.
-    fn type42_data(&mut self, font: &DictRef) -> Res<Option<Rc<super::type42::Font>>> {
+    pub(super) fn type42_data(&mut self, font: &DictRef) -> Res<Option<Rc<super::type42::Font>>> {
         let sfnts = {
             let f = font.borrow();
-            if font_type(&f) != Some(42.0) {
+            // Type 42 fonts and Type 2 CIDFonts (FontType 11) carry TrueType fonts.
+            let cid2 = f.get(&Key::name("CIDFontType")).and_then(Obj::as_num) == Some(2.0);
+            if font_type(&f) != Some(42.0) && !cid2 {
                 return Ok(None);
             }
             let Some(Obj::Array { items: sfnts, .. }) = f.get(&Key::name("sfnts")).cloned() else { return Ok(None) };
@@ -958,6 +1040,9 @@ fn type42_code(f: &Dict, data: &super::type42::Font, code: u8) -> (Option<char>,
     let gid = char_string(f, &name).or_else(|| named.and_then(|c| data.gid_of(c))).or_else(|| char_string(f, ".notdef")).unwrap_or(0);
     (named.or_else(|| data.char_of(gid)), gid)
 }
+
+/// The warning for CID-keyed type in a CIDFont the file doesn't carry.
+const MISSING_CID_FONT: &str = "CID-keyed type in a font the file doesn't carry was left out";
 
 /// Most Type 42 fonts whose TrueType data is kept between glyphs.
 const MAX_TYPE42: usize = 16;

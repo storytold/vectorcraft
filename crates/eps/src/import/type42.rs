@@ -75,16 +75,15 @@ impl Font {
     /// The character glyph `gid` stands for: the one the font's character map maps to it
     /// (the lowest, when it maps several), else the one its `post` table's glyph name says
     /// (`uni20AC`, a single character). `None` for a glyph neither names, and for one a symbol
-    /// font maps only from its private-use codes (U+F000–U+F0FF), which aren't characters.
+    /// font maps only from, or names only as, its private-use codes (U+F000–U+F0FF), which
+    /// aren't characters.
     pub fn char_of(&self, gid: u32) -> Option<char> {
         let chars = self.chars.get_or_init(|| {
             let mut m = HashMap::new();
             if let Ok(font) = FontRef::new(&self.data) {
                 for (c, g) in font.charmap().mappings() {
                     self.work.set(self.work.get().saturating_add(1));
-                    // Not a symbol font's private-use codes, controls or the soft hyphen, which
-                    // doesn't show (a hyphen glyph mapped from it is the hyphen's).
-                    let Some(c) = char::from_u32(c).filter(|c| !('\u{F000}'..='\u{F0FF}').contains(c) && !c.is_control() && *c != '\u{AD}') else {
+                    let Some(c) = char::from_u32(c).filter(|c| is_char(*c)) else {
                         continue;
                     };
                     m.entry(g.to_u32()).and_modify(|e: &mut char| *e = (*e).min(c)).or_insert(c);
@@ -102,8 +101,7 @@ impl Font {
         self.work.set(self.work.get().saturating_add(u64::from(gid / 16) + 1));
         let c = FontRef::new(&self.data).ok().and_then(|font| {
             let name = font.glyph_names().get(GlyphId::new(gid))?;
-            let c = super::text::glyph_char(name.as_str());
-            (c != '\u{2022}' || name.as_str() == "bullet").then_some(c)
+            post_name_char(name.as_str())
         });
         self.names.borrow_mut().insert(gid, c);
         c
@@ -114,6 +112,20 @@ impl Font {
         let font = FontRef::new(&self.data).ok()?;
         font.charmap().map(c).map(|g| g.to_u32()).filter(|g| *g != 0)
     }
+}
+
+/// Whether character `c`, read from a font's character map or glyph names, is one the glyph
+/// stands for: not a symbol font's private-use codes, controls or the soft hyphen, which doesn't
+/// show (a hyphen glyph mapped from it is the hyphen's).
+fn is_char(c: char) -> bool {
+    !('\u{F000}'..='\u{F0FF}').contains(&c) && !c.is_control() && c != '\u{AD}'
+}
+
+/// The character `post` table glyph name `name` says (`uni20AC`, a single character), when it
+/// says one [`is_char`] accepts.
+pub(super) fn post_name_char(name: &str) -> Option<char> {
+    let c = super::text::glyph_char(name);
+    (c != '\u{2022}' || name == "bullet").then_some(c).filter(|c| is_char(*c))
 }
 
 /// Glyph `gid` of TrueType font `data`: its outline and advance width, in ems (y up), or `None`

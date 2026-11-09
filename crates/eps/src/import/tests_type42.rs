@@ -197,6 +197,22 @@ fn reading_the_character_map_counts_its_mappings() {
     assert_eq!(f.take_char_map_work(), 0);
 }
 
+/// A glyph named for a symbol font's private-use code (`uniF041`) stands for no character, as
+/// when the character map maps only that code to it, so it's drawn from the font's outline;
+/// other names still say their character.
+#[test]
+fn private_use_glyph_names_stand_for_no_character() {
+    use super::type42::post_name_char;
+    assert_eq!(post_name_char("uniF041"), None);
+    assert_eq!(post_name_char("uF0FF"), None);
+    assert_eq!(post_name_char("uni00AD"), None);
+    assert_eq!(post_name_char("uniF100"), Some('\u{F100}'));
+    assert_eq!(post_name_char("uni20AC"), Some('€'));
+    assert_eq!(post_name_char("A"), Some('A'));
+    assert_eq!(post_name_char("bullet"), Some('\u{2022}'));
+    assert_eq!(post_name_char("g12"), None);
+}
+
 /// A glyph the character map doesn't reach is looked up by its glyph name once: the first lookup
 /// counts for the operation budget, a second one is remembered (a miss too).
 #[test]
