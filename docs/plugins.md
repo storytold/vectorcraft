@@ -224,9 +224,12 @@ capability model proposed for PhotoCraft plug-ins
   `documentData` is `null` and an output that sets it is refused; without `doc.write` an output that changes the
   document is refused. A refused output leaves the document as it was.
 - `api` is the plug-in API level the manifest is written for: `1` (the default) or `2`, which adds the [host
-  imports](#host-imports-api-level-2) and a live effect's [`paintOutput`](#painted-live-effects). A higher one is
-  refused. `plugin.list` and `plugin.info` give it as `api`. A level 2 effect that declares `paintOutput` needs no
-  other permission than `doc.read` and `effect.render`.
+  imports](#host-imports-api-level-2), a filter's `inputs` ([reading type, images and
+  symbols](#reading-type-images-and-symbols)) and a live effect's [`paintOutput`](#painted-live-effects). A higher one
+  is refused. `plugin.list` and `plugin.info` give it as `api`. `inputs` is not a permission: the objects it asks for
+  are read under `doc.read`, which a filter that lists `inputs` must list in `permissions`, so installing it asks the
+  user to grant them. A level 2 effect that declares `paintOutput` needs no other permission than `doc.read` and
+  `effect.render`.
 - Parameter declarations are unchanged by permissions (`params`, below).
 
 Every run gets a **fresh instance**, so no state survives between calls except what a plug-in writes to its
@@ -379,6 +382,11 @@ A live effect runs while the art draws, so keep the entries it uses small.
   filters](#heavy-filters)). Hosts from before it ignore the key, so there the filter gets a light run's budget.
 - `api`: the plug-in API level, `1` when left out. `permissions`: what the plug-in may do, a list of names
   ([permissions](#permissions)); without it, what its kind implies.
+- `inputs` (filters at `api` 2 only): the kinds of object besides paths and compound paths the filter reads, any of
+  `"type"`, `"image"` and `"symbolInstance"`, each at most once (`"inputs": ["type", "image"]`). Left out or `[]`, the
+  filter gets paths and compound paths alone, as before. An unknown, repeated or wrongly typed entry, `inputs` on
+  another kind, below `api` 2, or without a `permissions` list that holds `doc.read`, is refused when the plug-in is
+  installed, and so is `api` 2 on hosts from before it.
 - `paintOutput` (live effects at `api` 2 only): `true` makes the effect return [painted pieces](#painted-live-effects)
   instead of geometry alone. `true` is the only value the key takes; `false`, `null`, another type, another kind or
   `api` 1 is refused when the module is installed, and the error names `paintOutput`. Without the key the effect returns
@@ -429,8 +437,9 @@ parameters uses `label`, `unit`, `help` and `visibleWhen`, and lists the paramet
 
 `input` is UTF-8 JSON: `{"objects": [...]}`. An object filter gets the selected paths and compound paths in paint
 order (bottom first): the selected ones and those inside selected groups and layers; hidden, locked, guide (compound
-guides too) and clipping paths are left out, and so are other kinds of object (type, images, symbols, live blends…), which a filter never
-touches. With nothing selected the list is empty (a generator then adds its own objects). A live effect gets one
+guides too) and clipping paths are left out, and so are other kinds of object (type, images, symbols, live blends…),
+which a filter never touches unless its manifest lists them in `inputs` ([reading type, images and
+symbols](#reading-type-images-and-symbols)). With nothing selected the list is empty (a generator then adds its own objects). A live effect gets one
 object: its geometry (`type`, `path`, `fillRule`, `bounds`) and its `fills` and `strokes`, as a filter gets them (hosts
 from before these give geometry only). The paints are read only: an effect may draw as wide as a stroke or use a
 fill's colour to decide its shape, but it changes only the geometry, unless it declares `paintOutput` ([painted live
@@ -478,6 +487,65 @@ An **importer** gets the bytes of the file being opened, as they are (not JSON),
 - `effects` (filters): the object's own effects in order, as its effect records: `id` (as `effect.list` lists it, or
   `plugin.<id>` for a live-effect plug-in), `params` and `visible`. Its fills' and strokes' own effects aren't listed.
 - `bounds`: `[x0, y0, x1, y1]`, the geometric bounds (read only).
+
+### Reading type, images and symbols
+
+A filter whose manifest lists `inputs` also gets the selected objects of those kinds, in paint order among the paths
+and under the same rules (hidden and locked ones, objects that clip a clip group, alone or inside a group that clips
+it, and anything inside a symbol, a placed document or a live object are left out). They are never turned into
+outlines, rectangles or the symbol's art. Each has `id`, `type`, `name` (when it has one), `bounds` (`null` until the
+object has been laid out or drawn) and
+`transform`, `[a, b, c, d, e, f]` mapping its own space (text space, pixel space, the symbol's art) into the document.
+In this example the character and paragraph styles are cut short; a filter gets every attribute:
+
+```json
+{"objects": [
+  {"id": 17, "type": "type", "bounds": [10, 38, 52, 52], "transform": [1, 0, 0, 1, 10, 50],
+   "text": {"kind": "point", "vertical": false,
+            "runs": [{"text": "Hello\nthere", "style": {"font_family": "Source Sans 3", "size": 12}}],
+            "paragraphs": [{"justify": "Left"}, {"justify": "Center"}]},
+   "truncated": false},
+  {"id": 18, "type": "image", "bounds": [0, 0, 4, 2], "transform": [2, 0, 0, 2, 0, 0], "pixelSize": [2, 1],
+   "colorMode": "rgb", "linked": false, "pixelsOmitted": false, "pixelsBase64": "AAAegGQAHoA="},
+  {"id": 19, "type": "symbolInstance", "bounds": [100, 0, 110, 10], "transform": [1, 0, 0, 1, 100, 0],
+   "symbolId": "Star", "overrides": {}}
+]}
+```
+
+- Type (`"type"`): `text.kind` is `"point"`, `"area"` or `"path"`; `runs` are its text runs with their character
+  attributes as the native file stores them (`inline` when a run is an inline graphic), and `paragraphs` holds one
+  paragraph style per paragraph (the paragraphs are split at `\n`). No font data or glyph outlines are given. Type
+  whose runs hold more than 256 KiB of UTF-8 text, or more than 4,096 runs or paragraphs, comes with `truncated:
+  true` and empty `runs` and `paragraphs`. The runs and paragraphs of all the type in one input take at most 16 MiB
+  of JSON: type whose runs and paragraphs don't fit what the type before it in paint order left comes with
+  `truncated: true` too.
+- An image (`"image"`): `pixelSize` is its width and height in pixels; `colorMode` is `"rgb"`, `"cmyk"`, `"gray"` or
+  `"unknown"`, read from the image itself. An embedded image whose pixels take at most 1 MiB in base64 (443 × 443
+  pixels fit) has them in `pixelsBase64`: straight RGBA, 8 bits a channel, row by row from the top, and
+  `pixelsOmitted: false`. A CMYK image's pixels are its inks through the working CMYK profile. The pixels of all the
+  images in one input take at most 16 MiB in base64. A larger image, one whose pixels don't fit what the images before
+  it in paint order left, and a linked image (`linked: true`) have
+  `pixelsOmitted: true` and no pixels; the host checks an image's size before it decodes the image. The host never
+  reads a linked image's file for a filter and never gives its path.
+- A symbol instance (`"symbolInstance"`): `symbolId` is the name of the symbol it shows, with `missing: true` when the
+  document has no symbol of that name. `overrides` is `{}`.
+
+These objects are read only. The output must list each of them exactly once, as `{"id": 17}` alone or exactly as it
+was given (numbers compare by value, so `1` and `1.0` are the same). A changed or added field, one left out, an object
+listed twice or left out, and a new object with one of these types are refused, and the document and undo history
+stay as they were: `objects[1] (id 17): read-only field 'text.runs[0].text' changed`, `objects (id 17): a read-only
+object was left out`. The field is named with control and bidirectional characters escaped (`\u{202E}`), cut to 64
+characters. New objects listed after one of them go just above it.
+
+Every object in the input counts toward the half of the memory cap that the input and the parameters share, in paint
+order, with its id, bounds, transform and name. Type whose runs and paragraphs don't fit what is left comes with
+`truncated: true`, and an image whose pixels don't fit comes with `pixelsOmitted: true`. When the other fields of one
+of these objects don't fit what is left, the run fails before the plug-in starts, naming the object and the bytes it
+needs: `plug-in exceeded its memory budget (object 17 needs 4200 bytes of input, 1000 left)`. A path or compound path
+that doesn't fit fails it with `plug-in exceeded its memory budget (the selection is too large to hand over)` before
+the objects after it are written. An output lists at most 100,000 objects, so a run given more than 100,000 of these
+objects fails with `plug-in exceeded its object budget (more than 100000 read-only objects)`. An echo of them counts
+toward the 64 MiB output cap.
 
 ### Parameters
 
@@ -632,5 +700,6 @@ per change of their input, parameters or paints (results are cached), not per fr
   importers that place files (File › Place reads only the built-in formats) or make type, images, layers or
   artboards.
 - Live effects that change opacity, blending or effects (at `api` 2 one may [paint](#painted-live-effects) the pieces
-  it returns), and filters on type, images or symbols.
+  it returns), and filters that change type, images or symbol instances (a filter at `api` 2 reads them, see
+  [`inputs`](#reading-type-images-and-symbols)).
 - Apply Last Effect and Last Effect work for plug-in effects; there is no "last filter" for object filters yet.
