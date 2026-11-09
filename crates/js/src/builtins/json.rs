@@ -158,9 +158,12 @@ fn syntax(interp: &mut Interp, why: &str, at: usize) -> crate::interp::Abrupt {
 
 /// `JSON.parse` (section 15.12.2).
 fn parse(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Value> {
-    let text = super::global::units_of(interp, args)?;
+    let source = Value::String(interp.to_str(&arg(args, 0))?);
     let mark = interp.temp_roots.len();
-    let r = parse_text(interp, &text).and_then(|v| {
+    // The text stays rooted for the whole parse, so a collection still counts it.
+    interp.temp_roots.push(source.clone());
+    let r = super::global::units_of(interp, std::slice::from_ref(&source)).and_then(|text| {
+        let v = parse_text(interp, &text)?;
         let reviver = arg(args, 1);
         if !interp.is_callable(&reviver) {
             return Ok(v);
@@ -214,7 +217,12 @@ fn member_name(interp: &mut Interp, p: &mut Parser<'_>, first: bool) -> JsResult
         return Err(syntax(interp, "a property name must be a string", at));
     }
     let units = p.string().map_err(|why| syntax(interp, why, at))?;
-    interp.reserve_heap(string_bytes(units.len()))?;
+    let bytes = string_bytes(units.len());
+    interp.reserve_heap(bytes)?;
+    // The name is counted while it waits for its value; `parse_text` releases it before `define`
+    // accounts for it, and the native call's return releases it on every other path.
+    interp.heap.bytes = interp.heap.bytes.saturating_add(bytes);
+    interp.held_bytes = interp.held_bytes.saturating_add(bytes);
     p.skip_space();
     if !p.eat(b':') {
         return Err(syntax(interp, "a property name must be followed by ':'", p.pos));
@@ -286,6 +294,9 @@ fn parse_text(interp: &mut Interp, text: &[u16]) -> JsResult<Value> {
                     let obj = *obj;
                     let Some(k) = name.take() else { return Err(syntax(interp, "a member has no name", p.pos)) };
                     interp.rooted(std::slice::from_ref(&v), |i| i.reserve_heap(ELEMENT_BYTES))?;
+                    let held = string_bytes(k.len());
+                    interp.heap.bytes = interp.heap.bytes.saturating_sub(held);
+                    interp.held_bytes = interp.held_bytes.saturating_sub(held);
                     interp.define(obj, k, Prop::Data { value: v, flags: OPEN })?;
                     p.skip_space();
                     if p.eat(b',') {
@@ -571,7 +582,7 @@ fn unwrap_primitive(interp: &mut Interp, v: &Value, as_string: bool) -> JsResult
 
 /// Whether looking up `name` from `o` reaches the object `proto` on the prototype chain before
 /// any object on the way, `proto` included, has its own property `name`.
-pub(super) fn reaches_prototype(interp: &mut Interp, o: ObjId, proto: ObjId, name: &str) -> JsResult<bool> {
+fn reaches_prototype(interp: &mut Interp, o: ObjId, proto: ObjId, name: &str) -> JsResult<bool> {
     let k = key(name);
     let mut cur = Some(o);
     while let Some(id) = cur {

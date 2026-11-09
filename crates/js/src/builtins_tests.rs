@@ -388,11 +388,23 @@ fn to_locale_string_writes_the_primitive_of_a_boxed_value() {
     // Object.prototype.toString comes after the standard prototypes on the chain.
     assert_eq!(string("Object.prototype.toString = function () { return 'z'; }; [1, 'x', true].toLocaleString()"), "1,x,true");
     // A toString on the object or on its standard prototype is called.
-    assert_eq!(string("var n = Object(1); n.toString = function () { return 'own'; }; [n].toLocaleString()"), "own");
+    assert_eq!(string("var b = Object(true); b.toString = function () { return 'own'; }; [b].toLocaleString()"), "own");
     assert_eq!(string("Object.getPrototypeOf(true).toString = function () { return 'p'; }; [true].toLocaleString()"), "p");
-    assert_eq!(string("Object.getPrototypeOf(1).toString = Object.prototype.toString; [1].toLocaleString()"), "[object Number]");
+    assert_eq!(string("Object.getPrototypeOf(true).toString = Object.prototype.toString; [true].toLocaleString()"), "[object Boolean]");
     // Other objects still reach Object.prototype.toString.
     assert_eq!(string("Object.prototype.toLocaleString.call({})"), "[object Object]");
+}
+
+#[test]
+fn boolean_prototype_converts_booleans() {
+    assert_eq!(string("true.toString() + false.toString()"), "truefalse");
+    assert_eq!(string("Object(false).toString()"), "false");
+    truth("true.valueOf() === true && Object(false).valueOf() === false");
+    assert_eq!(num("Object(true) + 1"), 2.0);
+    assert_eq!(string("'' + Object(false)"), "false");
+    truth("Object.getPrototypeOf(true).valueOf() === false && Object.getPrototypeOf(true).toString() === 'false'");
+    throws("Object.getPrototypeOf(true).toString.call(1)", "TypeError");
+    throws("Object.getPrototypeOf(true).valueOf.call({})", "TypeError");
 }
 
 #[test]
@@ -598,7 +610,7 @@ fn math_functions_follow_the_special_cases() {
 #[test]
 fn json_parse_reads_the_grammar_of_section_15_12_1() {
     assert_eq!(num("var v = JSON.parse(' {\"a\": [1, -2.5e1, true, null, \"x\\\\u0041\\\\n\"], \"b\": {}} '); v.a[1] + v.a.length"), -20.0);
-    assert_eq!(string("JSON.parse('\"\\\\ud800\"').charCodeAt === undefined ? 'no string methods' : ''"), "no string methods");
+    assert_eq!(num("JSON.parse('\"\\\\ud800\"').charCodeAt(0)"), 55296.0);
     truth("JSON.parse('[]').length === 0 && JSON.parse('0') === 0 && 1 / JSON.parse('-0') === -Infinity && JSON.parse('{\"a\":1,\"a\":2}').a === 2");
     for bad in ["'{a: 1}'", "'[1,]'", "'01'", "'1.'", "'.5'", "'\"\\t\"'", "\"'x'\"", "'[1] 2'", "''", "'+1'", "'\"\\\\x\"'", "'{\"a\" 1}'"] {
         throws(&format!("JSON.parse({bad})"), "SyntaxError");
@@ -691,6 +703,42 @@ fn json_parse_counts_a_string_while_it_reserves_the_property_for_it() {
         }
         assert!(fits > 0 && over > 0, "{text}: {fits} limits fit and {over} did not");
     }
+}
+
+#[test]
+fn json_parse_keeps_its_text_counted_for_the_whole_parse() {
+    // The text exists only as the ToString result of the argument, and the parsed value needs a
+    // collection. Without the text the value fits under the limit; with it the value does not.
+    let setup = "var ws = new Array(8193).join(' '); var items = new Array(257).join('{},'); \
+                 var o = {toString: function () { return ws + '[' + items + '{}]'; }}; 0";
+    let parse = "var a = JSON.parse(o); 0";
+    let mut measure = small(Limits::default());
+    assert_eq!(measure.run(setup), Ok(JsValue::Number(0.0)));
+    measure.interp().collect_garbage();
+    assert_eq!(measure.run(parse), Ok(JsValue::Number(0.0)));
+    let full = measure.interp().heap.bytes;
+    let text = 2 * (8192 + 2 + 3 * 256 + 2);
+    let mut realm = small(Limits { heap_bytes: full - text / 2, ..Limits::default() });
+    assert_eq!(realm.run(setup), Ok(JsValue::Number(0.0)));
+    realm.interp().collect_garbage();
+    assert_eq!(limit(&mut realm, parse), LimitKind::Heap);
+}
+
+#[test]
+fn json_parse_counts_names_that_wait_for_their_values() {
+    // An unterminated text: every name read waits for a value that never comes, so nothing but
+    // the parser holds them, and the names together pass the limit before the text ends.
+    let setup = "var k = new Array(2049).join('k'); var text = new Array(33).join('{\"' + k + '\":'); 0";
+    let mut measure = small(Limits::default());
+    assert_eq!(measure.run(setup), Ok(JsValue::Number(0.0)));
+    let heap_bytes = measure.collect_garbage() + (96 << 10);
+    let mut realm = small(Limits { heap_bytes, ..Limits::default() });
+    assert_eq!(realm.run(setup), Ok(JsValue::Number(0.0)));
+    assert_eq!(limit(&mut realm, "JSON.parse(text)"), LimitKind::Heap);
+    // A complete text gives its names back as it stores them, so one that fits parses.
+    let mut realm = small(Limits { heap_bytes: heap_bytes + (64 << 10), ..Limits::default() });
+    assert_eq!(realm.run(setup), Ok(JsValue::Number(0.0)));
+    assert_eq!(realm.run("var a = JSON.parse('{\"' + k + '\":{\"' + k + 'x\":1}}'); 0"), Ok(JsValue::Number(0.0)));
 }
 
 #[test]

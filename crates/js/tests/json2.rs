@@ -6,6 +6,8 @@
 //! written by the polyfill and by the built-in `JSON.stringify` (ECMA-262 5.1 section 15.12.3),
 //! which must give the same text, and the text is read back by the polyfill's `parse` and by the
 //! built-in `JSON.parse` (section 15.12.2), which must give values that write the same text again.
+//! The samples leave out U+2028 and U+2029: the polyfill escapes them, and section 15.12.3 does not
+//! escape them.
 //!
 //! The polyfill uses `Date`, `String.prototype.replace` and regular expression `test`. While the
 //! interpreter lacks any of them, the test prints that it skipped and passes.
@@ -36,7 +38,7 @@ const BEFORE: &str = "var NATIVE = JSON; delete this.JSON; this.JSON = undefined
 const ROUND_TRIP: &str = r#"
 var POLY = JSON;
 var samples = [
-    0, -1.5, 1e21, "", "plain", "quote \" backslash \\ newline \n tab \t \u0001   é",
+    0, -1.5, 1e21, "", "plain", "quote \" backslash \\ newline \n tab \t \u0001 é",
     true, false, null, [], {}, [1, [2, [3, []]]], {a: 1, b: [true, null, "x"], c: {d: {}}},
     [undefined, function () {}], {skip: undefined, f: function () {}, keep: 2}, [NaN, Infinity, -Infinity]
 ];
