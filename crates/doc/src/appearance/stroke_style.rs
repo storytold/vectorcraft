@@ -49,6 +49,10 @@ impl Dash {
     }
 }
 
+/// How far the arrowheads drawn in the 4 × 4 box reach from their tip, in units of their weight
+/// (the open arrow's arms are cut square a little behind the box).
+const HEAD_REACH: f64 = 4.6;
+
 /// An arrowhead shape. Saved by variant name: new shapes are appended, never renamed or reordered.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Arrowhead {
@@ -94,13 +98,17 @@ pub enum Arrowhead {
     Kite,
     TriangleBar,
     Oval,
+    /// Two arms of the line's own weight meeting at right angles in a sharp tip, cut square at
+    /// their ends. Twice as wide as the other heads.
+    LineArrow,
 }
 
 impl Arrowhead {
     /// Every arrowhead, in menu order (arrows, then outlined shapes, then bars and marks).
-    pub const ALL: [Arrowhead; 40] = [
+    pub const ALL: [Arrowhead; 41] = [
         Arrowhead::Arrow,
         Arrowhead::ArrowOpen,
+        Arrowhead::LineArrow,
         Arrowhead::Barbed,
         Arrowhead::Concave,
         Arrowhead::DoubleArrow,
@@ -140,6 +148,22 @@ impl Arrowhead {
         Arrowhead::Bracket,
         Arrowhead::Fork,
     ];
+
+    /// How far any part of the head can be from its tip, in units of its weight.
+    pub fn reach(self) -> f64 {
+        match self {
+            // Its farthest corners are 4 + ½√2 back and 4 − ½√2 out.
+            Arrowhead::LineArrow => 5.75,
+            _ => HEAD_REACH,
+        }
+    }
+    /// How far the head spreads either side of its line, in units of its weight.
+    pub fn half_width(self) -> f64 {
+        match self {
+            Arrowhead::LineArrow => 4.0,
+            _ => 2.0,
+        }
+    }
 
     /// The name the arrowhead menus show.
     pub fn label(self) -> &'static str {
@@ -184,6 +208,7 @@ impl Arrowhead {
             Arrowhead::Kite => "Kite",
             Arrowhead::TriangleBar => "Triangle to Bar",
             Arrowhead::Oval => "Oval",
+            Arrowhead::LineArrow => "Line Arrow",
         }
     }
 }
