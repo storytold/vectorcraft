@@ -270,3 +270,43 @@ fn a_word_another_window_saved_stays_when_this_save_fails() {
     assert!(in_dictionary(&mut s, "zvkqxw"), "the word in the file stays, though this Add was taken back");
     run(&mut s, "text.spelling.removeWord", json!({"word": "zvkqxw"}));
 }
+
+/// `misspellings` finds in one type object what the check lists for it, stops at the most it is
+/// asked for and says so, and leaves out the Ignore All words it is given.
+#[test]
+fn misspellings_of_one_object_are_what_the_check_lists() {
+    use crate::cmd::spelling::misspellings;
+    let mut s = session();
+    let id = text(&mut s, 50.0, "the Vqzrtwx cat\nsat Wzqrvtx Xqrzvtw");
+    let listed: Vec<_> = unknown(&mut s, json!({"ids": [id.0]})).into_iter().map(|(_, a, b, _)| a as usize..b as usize).collect();
+    let st = s.doc().unwrap();
+    let Some(vectorcraft_doc::NodeKind::Text(t)) = st.doc.node(id).map(|n| n.kind.clone()) else { panic!("type") };
+    let none = Default::default();
+    let (found, cut) = misspellings(&t, &none, 10);
+    assert_eq!((found.iter().map(|m| m.range.clone()).collect::<Vec<_>>(), cut), (listed.clone(), false));
+    assert!(found.iter().all(|m| m.lang.tag() == "en"), "{found:?}");
+    let (first, cut) = misspellings(&t, &none, 2);
+    assert_eq!((first.iter().map(|m| m.range.clone()).collect::<Vec<_>>(), cut), (listed[..2].to_vec(), true));
+    let ignored = std::collections::BTreeSet::from(["wzqrvtx".to_string()]);
+    let (found, _) = misspellings(&t, &ignored, 10);
+    assert_eq!(found.iter().map(|m| m.range.clone()).collect::<Vec<_>>(), [listed[0].clone(), listed[2].clone()]);
+}
+
+/// Each change to the custom dictionary moves its generation on, whether it is saved or not, so
+/// what Auto Spell Check found before is checked again.
+#[test]
+fn custom_dictionary_changes_move_its_generation_on() {
+    use crate::cmd::spelling::dictionary_generation;
+    let mut s = session();
+    let mut last = dictionary_generation();
+    let mut moved = |s: &mut Session, id: &str, p: Value| {
+        let _ = s.execute(id, &p);
+        let now = dictionary_generation();
+        let on = now > last;
+        last = now;
+        on
+    };
+    assert!(moved(&mut s, "text.spelling.addWord", json!({"word": "Gqzvrtx"})), "add");
+    assert!(moved(&mut s, "text.spelling.changeWord", json!({"word": "gqzvrtx", "to": "hqzvrtx"})), "change");
+    assert!(moved(&mut s, "text.spelling.removeWord", json!({"word": "hqzvrtx"})), "delete");
+}

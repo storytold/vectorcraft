@@ -267,6 +267,7 @@ fn run_ui_part3(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         }
         "view.textThreads" => flag(&mut app.ui.view.text_threads),
         "type.hiddenCharacters" => flag(&mut app.ui.view.hidden_chars),
+        "edit.autoSpellCheck" => flag(&mut app.ui.view.auto_spell_check),
         "type.bold" => crate::panels::character::toggle_face(app, Face::Bold),
         "type.italic" => crate::panels::character::toggle_face(app, Face::Italic),
         "type.highlightFontName" => crate::panels::character::highlight(app, crate::panels::character::Field::FontName),

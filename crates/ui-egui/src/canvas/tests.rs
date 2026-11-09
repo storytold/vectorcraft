@@ -10727,3 +10727,100 @@ fn mac_cursor_headless(ctx: &egui::Context, input: egui::RawInput, draw: impl Fn
     output.textures_delta.clear();
     output
 }
+
+/// The shapes Edit › Spelling › Auto Spell Check draws in one frame, seen through `xf`.
+fn spelling_lines(app: &mut VectorcraftApp, ctx: &egui::Context, xf: &Xf) -> Vec<Shape> {
+    let raw = egui::RawInput { screen_rect: Some(xf.rect), ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| spelling_overlay(app, ui.painter(), xf));
+    out.textures_delta.clear();
+    out.shapes.into_iter().map(|c| c.shape).collect()
+}
+
+/// A document with one point type object of `text` at the top left, and a view of it.
+fn spelling_doc(text: &str) -> (VectorcraftApp, u64, Xf) {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let id = app.session.execute("text.create", &json!({"x": 20, "y": 60, "text": text})).unwrap()["id"].as_u64().unwrap();
+    let xf = Xf { rect: egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0)), zoom: 1.0, center: Point::new(200.0, 150.0), rot: 0.0 };
+    (app, id, xf)
+}
+
+/// Auto Spell Check draws one wavy line under each unknown word, under its glyphs, and none under
+/// the words the dictionaries know.
+#[test]
+fn auto_spell_check_underlines_the_unknown_words() {
+    let ctx = egui::Context::default();
+    let (mut app, _, xf) = spelling_doc("the cat sat");
+    assert!(spelling_lines(&mut app, &ctx, &xf).is_empty(), "every word is known");
+    let (mut app, id, xf) = spelling_doc("the Qzvbtrw sat\nZvqtrbx");
+    let lines = spelling_lines(&mut app, &ctx, &xf);
+    assert_eq!(lines.len(), 2, "one line under each unknown word: {lines:?}");
+    // The first line runs under the second word: below the type's top and within its width.
+    let bounds = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap();
+    let on_screen = xf.rect_to_screen(bounds);
+    let Shape::Path(first) = &lines[0] else { panic!("{:?}", lines[0]) };
+    let xs = || first.points.iter().map(|p| p.x);
+    let (left, right) = (xs().fold(f32::MAX, f32::min), xs().fold(f32::MIN, f32::max));
+    assert!(left > on_screen.left() + 5.0 && right < on_screen.right() - 5.0, "under the middle word: {left}..{right} in {on_screen:?}");
+    assert!(first.points.iter().all(|p| p.y > on_screen.top() && p.y < on_screen.center().y + on_screen.height()), "{first:?}");
+    assert!(first.points.windows(2).any(|w| w[0].y != w[1].y), "wavy");
+}
+
+/// The lines follow the type and the dictionaries: an edit, Ignore All and Add to Dictionary each
+/// change what is underlined in the next frame, and a frame with no change checks no type again.
+#[test]
+fn auto_spell_check_follows_edits_ignore_all_and_the_dictionary() {
+    let ctx = egui::Context::default();
+    let (mut app, id, xf) = spelling_doc("Wqzxvtr and Pzxqvrt");
+    let kept = |app: &VectorcraftApp| app.canvas.spelling.lines[&vectorcraft_doc::NodeId(id)].1.clone();
+    assert_eq!(spelling_lines(&mut app, &ctx, &xf).len(), 2);
+    // Tests running alongside add fonts and words, which checks all type again: frames are drawn
+    // until neither changed between two of them.
+    let again = (0..100).any(|_| {
+        let (inputs, before) = (app.canvas.spelling.inputs.clone(), kept(&app));
+        spelling_lines(&mut app, &ctx, &xf);
+        app.canvas.spelling.inputs == inputs && std::sync::Arc::ptr_eq(&kept(&app), &before)
+    });
+    assert!(again, "a frame keeps the lines of the frame before");
+    app.session.execute("text.setText", &json!({"id": id, "text": "Wqzxvtr and Pzxqvrt or Qxzvwtr"})).unwrap();
+    assert_eq!(spelling_lines(&mut app, &ctx, &xf).len(), 3, "the edit is checked");
+    app.session.execute("text.spelling.ignoreAll", &json!({"word": "wqzxvtr"})).unwrap();
+    assert_eq!(spelling_lines(&mut app, &ctx, &xf).len(), 2, "Ignore All");
+    app.session.execute("text.spelling.addWord", &json!({"word": "Pzxqvrt"})).unwrap();
+    let after_add = spelling_lines(&mut app, &ctx, &xf).len();
+    app.session.execute("text.spelling.removeWord", &json!({"word": "pzxqvrt"})).unwrap();
+    assert_eq!(after_add, 1, "Add to Dictionary");
+    assert_eq!(spelling_lines(&mut app, &ctx, &xf).len(), 2, "deleted from the dictionary again");
+}
+
+/// Type with an effect shown, and hidden type, has no lines: the helpx page leaves type with
+/// effects out of Auto Spell Check.
+#[test]
+fn auto_spell_check_leaves_out_type_with_effects_and_hidden_type() {
+    let ctx = egui::Context::default();
+    let (mut app, id, xf) = spelling_doc("Xqzvtrw");
+    assert_eq!(spelling_lines(&mut app, &ctx, &xf).len(), 1);
+    app.session.execute("effect.apply", &json!({"ids": [id], "effect": "distort.roughen", "params": {"size": 1}})).unwrap();
+    assert!(spelling_lines(&mut app, &ctx, &xf).is_empty(), "an effect");
+    app.session.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(spelling_lines(&mut app, &ctx, &xf).len(), 1, "undone");
+    app.session.execute("object.hide", &json!({"ids": [id]})).unwrap();
+    assert!(spelling_lines(&mut app, &ctx, &xf).is_empty(), "hidden");
+}
+
+/// Edit › Spelling › Auto Spell Check is a toggle, off at first: on, the canvas draws the lines;
+/// off again, it draws none and keeps no text node.
+#[test]
+fn auto_spell_check_is_a_toggle_of_the_canvas_lines() {
+    let ctx = egui::Context::default();
+    let (mut app, _, _) = spelling_doc("Yqzvtrx");
+    let red = |s: &Shape| matches!(s, Shape::Path(p) if p.stroke.color == egui::epaint::ColorMode::Solid(Color32::from_rgb(0xe0, 0x20, 0x20)));
+    let count = |app: &mut VectorcraftApp| shapes(app, &ctx).iter().filter(|s| red(s)).count();
+    assert!(!app.ui.view.auto_spell_check, "off at first");
+    assert_eq!(count(&mut app), 0);
+    assert_eq!(app.run("edit.autoSpellCheck", json!({})).unwrap(), json!(true));
+    assert_eq!(count(&mut app), 1, "on");
+    assert_eq!(app.run("edit.autoSpellCheck", json!({})).unwrap(), json!(false));
+    assert_eq!(count(&mut app), 0, "off");
+    assert!(app.canvas.spelling.lines.is_empty(), "no node is kept");
+}
