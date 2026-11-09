@@ -250,6 +250,25 @@ impl<'a> Device<'a> for Builder<'_> {
                     let mask = if crate::import_image::has_mask(st) { self.alpha_mask(key, &r, w, h, transform) } else { None };
                     return self.add_image_masked(key, || cmyk.map(|blob| (blob, w, h)), transform, mask, None);
                 }
+                // A Separation image keeps its ink: its tints as a grayscale image that the ink at
+                // 100 % colorizes, as a mask painted in the ink comes in. Its mask becomes an
+                // opacity mask, as a CMYK image's does. Read once per image: the decision is kept,
+                // so one that opens in RGB stays RGB, and the gray pixels have their own key.
+                if !white {
+                    let found = match self.separation_paints.get(&key) {
+                        Some(paint) => paint.clone().map(|p| (p, None)),
+                        None => {
+                            let read = self.separation_image(st, w, h);
+                            self.separation_paints.insert(key, read.as_ref().map(|(p, _)| p.clone()));
+                            read.map(|(p, gray)| (p, Some(gray)))
+                        }
+                    };
+                    if let Some((paint, gray)) = found {
+                        let mask = if crate::import_image::has_mask(st) { self.alpha_mask(key, &r, w, h, transform) } else { None };
+                        let make = || gray.and_then(|g| gray_png(g, w, h)).map(|png| (ImageBlob::new("image/png", png), w, h));
+                        return self.add_image_masked(key ^ 0x5e9_a7e5, make, transform, mask, Some(paint));
+                    }
+                }
                 // JPEG passthrough for plain DeviceRGB/DeviceGray DCT images.
                 let dict = st.dict();
                 let filters = st.filters();
@@ -359,6 +378,7 @@ impl<'a> Device<'a> for Builder<'_> {
         if self.nested > 0 {
             return;
         }
+        self.actual.begin();
         let at = self.tag_at;
         self.tag_at += 1;
         let group = match self.scan.tags.get(at) {
@@ -397,5 +417,12 @@ impl<'a> Device<'a> for Builder<'_> {
             self.flush();
         }
         self.marked.pop();
+        self.actual.end();
+    }
+
+    fn actual_text(&mut self, text: &[u8]) {
+        if self.nested == 0 && self.text_as == crate::TextAs::Text && !self.actual.set(text) {
+            self.warn("ActualText beyond the import size or nesting limit was left to glyph mappings");
+        }
     }
 }
