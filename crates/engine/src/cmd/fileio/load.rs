@@ -9,7 +9,7 @@ use vectorcraft_render::effects::pixel::LoadedTexture;
 
 use super::super::{Result, Session, bad, bool_or, clipboard, parse_range, str_param};
 use super::pdfimport::LoadOptions;
-use super::{Format, SAVE_FORMATS, absolute_path, file_stamp, format, psdread, read_file, readable_format_for_name};
+use super::{Format, SAVE_FORMATS, absolute_path, file_stamp, format, jxlread, psdread, read_file, readable_format_for_name};
 use crate::cmd::links::Resolved;
 use crate::{EngineError, Prefs};
 
@@ -101,6 +101,9 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     }
     if super::pxrread::is_pxr(bytes) {
         return format("pxr");
+    }
+    if jxlread::is_jxl(bytes) {
+        return format("jxl");
     }
     if super::jp2read::is_jpeg2000(bytes) {
         return format("jpeg2000");
@@ -567,10 +570,15 @@ impl ReadFile {
 /// [`open_read`] opens. Type in the file's composite fonts is measured again once the document
 /// opens and its composite fonts are registered. The linked files are looked for from `path`, where the file was read from,
 /// and modified ones are read again when `update_links` (Preferences › File Handling › Update
-/// Links set to Automatically; see [`crate::cmd::links::resolve`]).
+/// Links set to Automatically; see [`crate::cmd::links::resolve`]). A file an importer plug-in
+/// reads (`importer` in `p`, or an extension only an importer lists) is read by it
+/// ([`super::importer`]).
 pub fn read_for_open(name: &str, bytes: &[u8], path: Option<String>, p: &Value, update_links: bool, low_res_proxy_eps: bool) -> Result<ReadFile> {
     let opts = LoadOptions::from_params("document.open", p)?;
-    let mut loaded = load_with(name, bytes, &opts)?;
+    let mut loaded = match super::importer::pick(name, bytes, p)? {
+        Some(plugin) => super::importer::load(name, bytes, &plugin, p)?,
+        None => load_with(name, bytes, &opts)?,
+    };
     let links = crate::cmd::links::resolve(&mut loaded.doc, crate::cmd::links::LinkBase::file(path.as_deref()), update_links, low_res_proxy_eps);
     Session::refresh_text_bounds(&mut loaded.doc);
     Ok(ReadFile { loaded, opts, path, links })
@@ -681,7 +689,14 @@ pub(crate) fn source<'a>(p: &'a Value, cmd: &str) -> Result<Source<'a>> {
 }
 
 pub(super) fn open(s: &mut Session, p: &Value) -> Result<Value> {
-    let src = source(p, "document.open")?;
+    // A file only an importer plug-in reads is read up to the importer's input limit.
+    let src = match str_param(p, "path") {
+        Some(path) => Source { name: path, bytes: super::importer::read_path(path, p)?, path: Some(path) },
+        None => {
+            super::importer::check_data(p)?;
+            source(p, "document.open")?
+        }
+    };
     // A relative path is the file in the working directory: its folder is where relative links
     // are found (a bare file name has no folder of its own).
     let path = src.path.map(super::absolute_path);
@@ -747,7 +762,8 @@ pub(crate) fn size_note(bytes: &[u8]) -> Option<String> {
 /// ([`super::tgaread::fix_alpha`]). An image stored as PNG whose decoded samples, or whose pixels
 /// as RGBA, need more than [`MAX_RASTER_ALLOC`] is refused as too large to draw.
 /// A TIFF with more strips or tiles than the decoder can count
-/// ([`vectorcraft_doc::cmyk::oversized_tiff`]) is refused as too large to draw.
+/// ([`vectorcraft_doc::cmyk::oversized_tiff`]) is refused as too large to draw. JPEG XL images are
+/// read with [`jxlread`] and stored as PNG, with the ICC profile their colors are left in.
 pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     let ppi = super::ppi::resolution(bytes);
     if let Some((w, h)) = vectorcraft_doc::cmyk::oversized_tiff(bytes) {
@@ -755,25 +771,29 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     }
     if psdread::is_psd(bytes) {
         let cms = vectorcraft_color::cms::active();
-        return as_png(psdread::decode(bytes, MAX_RASTER_ALLOC, |c| cms.cmyk_to_srgb(c, false)).map_err(err)?, ppi);
+        return as_png(psdread::decode(bytes, MAX_RASTER_ALLOC, |c| cms.cmyk_to_srgb(c, false)).map_err(err)?, None, ppi);
+    }
+    if jxlread::is_jxl(bytes) {
+        let (img, icc, orientation) = jxlread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?;
+        return as_png(img, icc, jxlread::oriented_resolution(ppi, orientation));
     }
     if super::jp2read::is_jpeg2000(bytes) {
-        return as_png(super::jp2read::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, ppi);
+        return as_png(super::jp2read::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, None, ppi);
     }
     if super::heifread::is_heif(bytes) {
         // The EXIF resolution describes the stored pixels; a quarter turn swaps its axes.
         let ppi = ppi.map(|(x, y)| if super::heifread::quarter_turned(bytes) { (y, x) } else { (x, y) });
-        return as_png(super::heifread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, ppi);
+        return as_png(super::heifread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, None, ppi);
     }
     if super::pxrread::is_pxr(bytes) {
-        return as_png(super::pxrread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, ppi);
+        return as_png(super::pxrread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, None, ppi);
     }
     let mut reader = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().map_err(err)?;
     if reader.format().is_none() && super::tgaread::is_targa(bytes) {
         reader.set_format(image::ImageFormat::Tga);
     }
     if reader.format().is_none() && super::pcxread::is_pcx(bytes) {
-        return as_png(super::pcxread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, ppi);
+        return as_png(super::pcxread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, None, ppi);
     }
     let mut limits = image::Limits::default();
     limits.max_alloc = Some(MAX_RASTER_ALLOC);
@@ -819,7 +839,7 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     if f.id == "tga" {
         super::tgaread::fix_alpha(bytes, &mut img);
     }
-    as_png(img, ppi)
+    as_png(img, None, ppi)
 }
 
 /// The EXIF orientation of encoded image `bytes` when it turns or flips the pixels; `None` when
@@ -830,11 +850,17 @@ pub(crate) fn exif_orientation(bytes: &[u8]) -> Option<image::metadata::Orientat
     decoder.orientation().ok().filter(|o| *o != image::metadata::Orientation::NoTransforms)
 }
 
-/// `img` stored as a PNG that keeps the file's resolution.
-fn as_png(img: image::RgbaImage, ppi: Option<(f64, f64)>) -> Result<RasterImage> {
+/// `img` stored as a PNG that keeps the file's resolution and carries `icc`, the ICC profile its
+/// colors are in.
+pub(super) fn as_png(img: image::RgbaImage, icc: Option<Vec<u8>>, ppi: Option<(f64, f64)>) -> Result<RasterImage> {
+    use image::ImageEncoder as _;
     let size = img.dimensions();
     let mut png = Vec::new();
-    img.write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png).map_err(err)?;
+    let mut encoder = image::codecs::png::PngEncoder::new(&mut png);
+    if let Some(icc) = icc {
+        encoder.set_icc_profile(icc).map_err(err)?;
+    }
+    img.write_with_encoder(encoder).map_err(err)?;
     let png = match ppi {
         Some(r) => super::ppi::with_png_resolution(&png, r),
         None => png,

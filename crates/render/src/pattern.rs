@@ -185,7 +185,7 @@ fn rasterize(
     let opts = RenderOptions { mark_undecoded_images, ..Default::default() };
     r.image_left_out = Some(false);
     let pattern_images_left_out = images_left_out();
-    r.check_plugins();
+    r.check_plugins(doc);
     r.check_symbols(doc);
     let symbols = doc.symbol_boxes().quick();
     r.stamp += 1;

@@ -5,16 +5,20 @@ arbitrary machine code and cannot work in the browser build. Instead, plug-ins a
 run in a sandbox. One `.wasm` file works on macOS, Windows, Linux and the web. The design follows PhotoCraft's
 plug-in API (same sandbox, same manifest and parameter schema), extended for vector documents.
 
-There are three kinds of plug-in:
+There are four kinds of plug-in:
 
 - **Object filters** read the selected paths and compound paths (geometry, fills, strokes, gradients, opacity)
   and return the objects to keep, change or add. A run is one undo step. Use them for recolouring, path
   clean-up, halftones, generative patterns and the like.
 - **Live effects** rewrite one object's geometry each time it is drawn, from its appearance stack, like the
-  built-in Distort & Transform effects. The art stays editable: move or reshape it and the effect follows.
+  built-in Distort & Transform effects. The art stays editable: move or reshape it and the effect follows. A live
+  effect may also paint what it returns ([painted live effects](#painted-live-effects)).
 - **Exporters** write the whole document in a file format of their own, for pen plotters, cutting machines,
   laser cutters and the like. File › Export › Export As lists them after the built-in formats, and the host writes the
   bytes they return: a plug-in still never touches a file.
+- **Importers** read files in a format of their own, such as a plotter's or a cutting machine's, into a new document of
+  paths and compound paths. File › Open lists their files, File › Open With lists the importers by name, and the host
+  hands them the file's bytes.
 
 This page is the contract for plug-in authors and the reference for the host (`crates/plugins`, the
 `plugin.*` commands in `crates/engine/src/cmd/plugin.rs`).
@@ -23,7 +27,7 @@ This page is the contract for plug-in authors and the reference for the host (`c
 
 | Command | Params | What it does |
 |---|---|---|
-| `plugin.list` | `{}` | `{"plugins": [{id, name, version, kind, author, description, params, paramsSchema, effect?, format?, extensions?, budget?, commands?, size, source, api, permissions, hash, cacheBytes}], "folder": report}` (`api` is the manifest's [plug-in API level](#permissions); `budget: "heavy"` for a [heavy filter](#heavy-filters); `commands` lists its [commands](#commands); `permissions` lists what it [may do](#permissions), `hash` is the module's SHA-256; `cacheBytes` is the size of its [cache](#settings-and-cache)) |
+| `plugin.list` | `{}` | `{"plugins": [{id, name, version, kind, author, description, params, paramsSchema, effect?, format?, extensions?, budget?, commands?, size, source, api, paintOutput?, permissions, hash, cacheBytes}], "folder": report}` (`api` is the manifest's [plug-in API level](#permissions); `budget: "heavy"` for a [heavy filter](#heavy-filters); `commands` lists its [commands](#commands); `paintOutput: true` marks a [painted live effect](#painted-live-effects); `permissions` lists what it [may do](#permissions), `hash` is the module's SHA-256; `cacheBytes` is the size of its [cache](#settings-and-cache)) |
 | `plugin.info` | `{"id"}` | One plug-in: the `plugin.list` entry plus `manifest`, `defaults` and `lastError` (a live effect's last failure). |
 | `plugin.run` | `{"id", "params"?: {…}, "ids"?: [...]}` (plug-in params may also be top-level keys) | Runs an object filter on the selection (or `ids`; an `ids` that is not a list of object ids is an error). One undo step; the result is selected, except the objects it locked or made guides. |
 | `plugin.install` | `{"path": "/x/y.wasm"}` (desktop) or `{"dataBase64": "…", "name"?}`, `"replace"?: bool`, `"allowHeavy": bool = false`, `"grant"?: [permission]`, `"hash"?: "sha256 hex"` | Validates and installs a module; returns its `plugin.list` entry. The desktop app and `vectorcraft-cli` keep it in the `Plug-ins` folder next to the preferences, so it is installed again after a restart (#2541). A module with other bytes than the plug-in installed with its id, or, with none installed, one whose id has [settings and a cache](#settings-and-cache) in the `Plug-ins` folder, installs only with `replace: true`, once the user agreed; it takes that plug-in's place and gets its settings and cache. The same module installs again without `replace`, and `replace: false` refuses a module whose id is installed. A [heavy filter](#heavy-filters) installs only with `allowHeavy: true`. A plug-in whose manifest lists [permissions](#permissions) installs only when `grant` lists every one of them, unless a person already granted a module with the same SHA-256. A request's `grant` and `allowHeavy` are refused except in a session started with `vectorcraft-cli --allow-plugin-grants`. With `hash`, a module whose SHA-256 differs is refused. |
@@ -39,6 +43,16 @@ An exporter adds a write-only format, `plugin.<id>`, which `document.formats` li
 `document.export {"format": "plugin.<id>", "params"?: {…}, "path"?}` writes it, and so does a `path` ending in one of
 its extensions that no built-in format has; `selectedOnly` hands it the selection, as for the built-in formats.
 
+An importer adds a read-only format, `plugin.<id>`, which `document.formats` lists with its `plugin` id. `openExtensions`
+holds the extensions File › Open opens with the importer (the lists below describe which are left out). `document.open {"path"}` (or `{"name", "dataBase64"}`) opens a file with it when no built-in format
+reads the file, by its content or by its extension, and the importer lists the file's extension; when several do, the
+one whose id sorts first opens it. `document.open {"importer": "plugin.<id>", "params"?: {…}}` names the importer,
+which must list the file's extension, also one a built-in format reads (an importer that lists `svg` opens an `.svg`
+only this way). A damaged file of a built-in format reports that format's error, and the file is not handed to an
+importer. The importer's objects become a new document whose artboard is their bounds (at least 1 pt wide and high,
+and within ±4,000,000 pt); the document keeps no path, so Save asks for a name. File › Place reads only the built-in formats, and a file only an importer reads opens as a new document when it is dropped on the canvas. These rules are
+VectorCraft's own.
+
 In the app, installed filters appear under **Object › Plug-ins**, next to **Install Plug-in…** and **Reload
 Plug-ins**; live effects under **Effect › Plug-ins** and in the Appearance panel's effect menu. A plug-in with
 parameters gets a dialog generated from its schema (numbers, whole numbers, checkboxes, dropdowns, text, lists
@@ -48,7 +62,21 @@ it can be given a shortcut (`plugin:<id>`); the shortcut stays saved while the p
 when it is reinstalled. Parameters too many for the window's height scroll inside the dialog, which keeps its
 heading and buttons in view. Exporters are formats of **File › Export › Export As**, where Use
 Artboards is greyed out (the plug-in writes the whole document); one with parameters asks for them in a dialog of the
-same kind once the file is picked, and its Export button writes the file. **File › Open** of a `.wasm` file installs
+same kind once the file is picked, and its Export button writes the file. Importers' files are listed under File ›
+Open's "All readable files" and under a filter of their own, named after the importer (other open dialogs, such as New
+from Template and Load Styles, list only the files the built-in formats read). These lists leave out an importer's
+extensions that a built-in format reads, and those File › Open installs, imports or loads as something else (`.wasm`,
+`.kys`, `.jsx`, presets, libraries and swatch or graphic style libraries such as `.ase`). File › Open does not give
+those files to the importer, and Open With does. **File › Open With** lists the
+installed importers by name (`file.openWith {"importer", "path"?, "params"?}`), and each opens a file picked among its
+extensions with that importer (on the web, File › Open's picker opens instead) and adds it to Open Recent. On the
+desktop the importer runs off the UI thread, and a run that takes a while shows a progress window with Cancel, which
+stops it. An importer
+with parameters, given no `params`, asks for them in a dialog of the same kind once the file is picked, and its Open
+button opens the file; File › Open runs an importer with its parameters' defaults. Open Recent opens a file the way
+File › Open does: it does not remember the importer or the parameters given to Open With. A built-in format reads the
+file if one can, and otherwise the first importer by id that lists its extension reads it with its parameters' defaults.
+**File › Open** of a `.wasm` file installs
 a plug-in too (on the web this is how plug-ins get in). A heavy filter asks before it is installed, and runs in the
 background ([below](#heavy-filters)). A plug-in that lists permissions asks for them before it is installed
 ([below](#permissions)).
@@ -99,20 +127,22 @@ The host is [`wasmi`](https://github.com/wasmi-labs/wasmi), a pure-Rust WebAssem
 | Module size | 32 MiB | rejected |
 | Linear memory | 512 MiB per instance (input and parameters: at most half) | `memory.grow` returns -1; oversized input or initial memory fails |
 | Output | 64 MiB of JSON | `Limit("output size")` |
-| Instructions (fuel) | 50 M per call + 4,000 per input byte for `vc_run`; a [heavy filter](#heavy-filters) 1 G + 4,000 per byte; an export 10 G + 4,000 per byte | `Limit("instruction budget")` |
-| Wall clock | 60 s per filter run, 5 s per live-effect run, 300 s per heavy filter run or export (desktop; checked every 20 M instructions) | `Limit("time budget")` |
+| Instructions (fuel) | 50 M per call + 4,000 per input byte for `vc_run`; a [heavy filter](#heavy-filters) 1 G + 4,000 per byte; an export or import 10 G + 4,000 per byte | `Limit("instruction budget")` |
+| Wall clock | 60 s per filter run, 5 s per live-effect run, 300 s per heavy filter run, export or import (desktop; checked every 20 M instructions) | `Limit("time budget")` |
+| Import input | 128 MiB of the file (`vectorcraft_plugins::import::MAX_INPUT_BYTES`) | the file doesn't open; a larger file named by `path` is not read past that |
 | Call depth | 1,024 frames | trap |
 | Module shape | wasmi's strict limits (≤ 10,000 functions, 1 memory, …) | rejected |
 
 An export runs where the export runs: with Background Export on, on the export's worker, whose Cancel stops the
-plug-in between two of those 20 M-instruction slices; nothing is written then.
+plug-in between two of those 20 M-instruction slices; nothing is written then. An import stops the same way when the
+open it runs in is cancelled, and nothing opens then.
 
 ### Heavy filters
 
 Some filters do heavy but legitimate work, such as routing a plotter's pen, packing shapes onto a sheet or running a
 simulation, which a minute and 50 M instructions don't cover. Such a filter declares `"budget": "heavy"` in its
-manifest (only a filter may: a live effect runs whenever the document is drawn, and an exporter has an export's
-budget). Each of its runs gets 1 G instructions (20 times a light run's) plus the 4,000 per input byte, and 300 s
+manifest (only a filter may: a live effect runs whenever the document is drawn, an exporter has an export's budget and
+an importer an import's). Each of its runs gets 1 G instructions (20 times a light run's) plus the 4,000 per input byte, and 300 s
 (`vectorcraft_plugins::{HEAVY_FUEL, HEAVY_WALL_TIME_MS}`). Its output can't add to the budget: the host learns how
 much there is only once the run has ended.
 
@@ -139,22 +169,24 @@ capability model proposed for PhotoCraft plug-ins
 
 | Permission | Kinds | What it allows |
 |---|---|---|
-| `doc.read` | all | Read the objects it is given. |
+| `doc.read` | filter, effect, exporter | Read the objects it is given. |
 | `doc.write` | filter, effect with `commands` | Change, add and delete objects in the document. |
 | `state` | filter, effect with `commands` | Keep data of its own with the document (`documentData`). |
 | `effect.render` | effect | Change how the objects its effect is applied to are drawn. |
 | `export.write` | exporter | Write the document as a file in its own format. |
+| `import.read` | importer | Read files you open in its format and make documents from them. |
 | `progress` | all | Show its progress, see Cancel and write log lines through the [host imports](#host-imports-api-level-2). Needs `api` 2. |
 | `settings` | all | Keep settings of its own between runs and sessions ([settings and cache](#settings-and-cache)). Needs `api` 2. |
 | `cache` | all | Keep a cache of its own, which the user can clear ([settings and cache](#settings-and-cache)). Needs `api` 2. |
 
 - A manifest without `permissions` gets the ones its kind implies, as plug-ins did before the key existed: a filter
   `doc.read`, `doc.write` and `state`; an effect `doc.read` and `effect.render`, and also `doc.write` and `state`
-  when it declares [commands](#commands); an exporter `doc.read` and `export.write`. Such a plug-in installs without
-  a prompt. This rule is VectorCraft's own. A filter whose list is empty may do none of these, and also installs
-  without a prompt.
-- An effect or an exporter that lists permissions lists `doc.read` and its own (`effect.render`, `export.write`). An
-  effect with commands may add `doc.write` and `state`, which only its commands use. A filter may list any of its three.
+  when it declares [commands](#commands); an exporter `doc.read` and `export.write`; an importer `import.read`. Such a
+  plug-in installs without a prompt. This rule is VectorCraft's own. A filter whose list is empty may do none of
+  these, and also installs without a prompt.
+- An effect, an exporter or an importer that lists permissions lists all of its implied ones (`doc.read` and
+  `effect.render`; `doc.read` and `export.write`; `import.read`). An effect with commands may add `doc.write` and
+  `state`, which only its commands use. A filter may list any of its three.
   Any kind may add `progress`, `settings` and `cache`, which no kind implies. An unknown name, a name listed twice, a
   name that doesn't apply to the kind, more than 16 names, `progress`, `settings` or `cache` with an `api` below 2, or
   one of the names kept for a later plug-in API
@@ -201,7 +233,9 @@ capability model proposed for PhotoCraft plug-ins
   `documentData` is `null` and an output that sets it is refused; without `doc.write` an output that changes the
   document is refused. A refused output leaves the document as it was.
 - `api` is the plug-in API level the manifest is written for: `1` (the default) or `2`, which adds the [host
-  imports](#host-imports-api-level-2). A higher one is refused. `plugin.list` and `plugin.info` give it as `api`.
+  imports](#host-imports-api-level-2) and a live effect's [`paintOutput`](#painted-live-effects). A higher one is
+  refused. `plugin.list` and `plugin.info` give it as `api`. A level 2 effect that declares `paintOutput` needs no
+  other permission than `doc.read` and `effect.render`.
 - Parameter declarations are unchanged by permissions (`params`, below).
 
 Every run gets a **fresh instance**, so no state survives between calls except what a plug-in writes to its
@@ -219,8 +253,10 @@ takes as many instructions the first time as the next. Charged to the run, as wa
 could fail it: when the 20 M-instruction slice the run was in ran out while a function compiled, wasmi ended the run
 with an error rather than a pause the host resumes, and the run stopped with most of its budget left.
 
-Drawing evaluates effects often, so live-effect results are cached by plug-in installation, parameters and input
-geometry: a plug-in runs again only when one of them changes.
+Drawing evaluates effects often, so live-effect results are cached by plug-in installation, parameters, input
+geometry, fill rule, reference box and the paints the effect is given: a plug-in runs again only when one of them
+changes. Failures are cached too. The swatches and patterns a painted result names are checked against the document
+each time it is drawn, and a paint linked to a global swatch is drawn in that swatch's current color at its own tint.
 
 ## ABI v1
 
@@ -335,16 +371,22 @@ pass the 1 GiB returns `-7` before it reads or writes anything.
 
 - `id`: 1–64 characters from `A-Z a-z 0-9 . _ -` (reverse-DNS recommended). Installing a module with the same id
   replaces the old one. A live effect's effect id is `plugin.<id>`.
-- `name`: the menu label, or an exporter's format name in Export As (1–64 printable characters). `kind`: `"filter"`
-  (object filter), `"effect"` (live effect) or `"exporter"`. Exporters came after the first ABI v1 hosts, which refuse
-  the kind when the plug-in is installed.
+- `name`: the menu label, or an exporter's or importer's format name in Export As, Open and Open With (1–64 printable
+  characters). `kind`: `"filter"` (object filter), `"effect"` (live effect), `"exporter"` or `"importer"`. Exporters
+  and importers came after the first ABI v1 hosts, which refuse the kind when the plug-in is installed.
 - `budget` (filters only): `"light"` (the default) or `"heavy"`, for work that takes minutes ([heavy
   filters](#heavy-filters)). Hosts from before it ignore the key, so there the filter gets a light run's budget.
 - `api`: the plug-in API level, `1` when left out. `permissions`: what the plug-in may do, a list of names
   ([permissions](#permissions)); without it, what its kind implies.
-- `extensions` (exporters only, and required): 1–8 file extensions, lower-case letters and digits without the dot
-  (`["plt"]`); the first is the one Export As gives the file. A built-in format keeps an extension both list (`svg`):
-  `document.export` then writes the exporter's format only when asked for by its format id.
+- `paintOutput` (live effects at `api` 2 only): `true` makes the effect return [painted pieces](#painted-live-effects)
+  instead of geometry alone. `true` is the only value the key takes; `false`, `null`, another type, another kind or
+  `api` 1 is refused when the module is installed, and the error names `paintOutput`. Without the key the effect returns
+  geometry, at any level. Hosts at `api` 1 refuse the manifest for its `api`, so such an effect never draws unpainted
+  there.
+- `extensions` (exporters and importers only, and required): 1–8 file extensions, lower-case letters and digits
+  without the dot (`["plt"]`); the first is the one Export As gives the file. A built-in format keeps an extension both
+  list (`svg`): `document.export` then writes the exporter's format only when asked for by its format id, and
+  `document.open` reads a file with the importer only when `importer` names it.
 - `commands` (filters and live effects; not heavy filters): up to 32 commands of the plug-in's own
   ([Commands](#commands)), each `{"id": "grow", "label": "Grow", "params"?: {…}}`. An `id` is 1–32 characters from
   `a-z 0-9 _` that starts with a letter, and appears once. A `label` is 1–64 printable characters; menus show it with
@@ -390,13 +432,16 @@ guides too) and clipping paths are left out, and so are other kinds of object (t
 touches. With nothing selected the list is empty (a generator then adds its own objects). A live effect gets one
 object: its geometry (`type`, `path`, `fillRule`, `bounds`) and its `fills` and `strokes`, as a filter gets them (hosts
 from before these give geometry only). The paints are read only: an effect may draw as wide as a stroke or use a
-fill's colour to decide its shape, but it changes only the geometry.
+fill's colour to decide its shape, but it changes only the geometry, unless it declares `paintOutput` ([painted live
+effects](#painted-live-effects)).
 
 An **exporter** gets something else: the native `.vectorcraft` document JSON without indentation, optional preview/PDF
 renditions or save-preference metadata (the format is documented in [`crates/format/src/lib.rs`](../crates/format/src/lib.rs)). That is every layer, object,
 appearance and effect record, artboard, swatch and symbol, so an exporter reads whatever the document holds; it checks
 `version`, since a later host may write a newer one. Images of 8 KiB or more are listed in `images` with their MIME
 type and `blob` but without their data, which follows the JSON in a saved file; smaller ones keep their base64 `data`.
+
+An **importer** gets the bytes of the file being opened, as they are (not JSON), at most 128 MiB of them.
 
 ```json
 {"objects": [
@@ -442,15 +487,17 @@ type and `blob` but without their data, which follows the JSON in a saved file; 
  "_context": {"mode": "filter", "bounds": [10, 0, 75, 60], "artboard": [0, 0, 612, 792], "documentData": {"pens": 4}}}
 ```
 
-`mode` is `"filter"`, `"effect"`, `"export"` or `"command"` (a [command](#commands) run, whose `command` is the
-command's id); `bounds` the selection's geometric bounds (a live effect: the reference
+`mode` is `"filter"`, `"effect"`, `"export"`, `"import"` or `"command"` (a [command](#commands) run, whose
+`command` is the command's id); `bounds` the selection's geometric bounds (a live effect: the reference
 box of the effect, the object's bounds or those of the previous effect's result); `artboard` (filters) the artboard
 under the selection's centre, else the first; `documentData` (filters) what the plug-in last kept with the document
 (`null` until it keeps something; see Output). A live effect's `item` says where it sits: `"object"` (one of the
 object's effects), or `{"fill": i}` / `{"stroke": i}` (in the own effects of the object's `i`th fill or stroke,
 counted from the bottom as in `fills` and `strokes`). An export's `_context` is `{"mode": "export", "extension": "plt",
 "name": "Poster"}` instead: the extension of the file being written (one the exporter lists) and its name without the
-extension (the document's name when the export is not given a path), which some formats keep in their header.
+extension (the document's name when the export is not given a path), which some formats keep in their header. An
+import's `_context` is `{"mode": "import", "extension": "plt", "name": "Poster"}`: the extension of the file being
+opened and its name without the extension.
 
 ### Output
 
@@ -495,11 +542,62 @@ document, so it can read what every plug-in keeps there, not only its own. A liv
 is worked out from the object alone.
 
 For a **live effect**, the geometry of every returned object's `path` (their subpaths, in order) replaces the
-object's; the rest is ignored (the object keeps its own appearance). An empty list removes the geometry.
+object's; the rest is ignored (the object keeps its own appearance). An empty list removes the geometry. A live effect
+that declares `paintOutput` returns painted pieces instead ([below](#painted-live-effects)).
+
+#### Painted live effects
+
+A live effect whose manifest has `"api": 2` and `"paintOutput": true` returns `{"objects": [...]}` too, but each entry
+is a piece drawn by itself, in the order returned, with paints of its own:
+
+```json
+{"objects": [
+  {"path": {…}, "fills": [{"type": "solid", "color": {"model": "rgb", "r": 0, "g": 0.6, "b": 0.3}}]},
+  {"path": {…}, "fillRule": "evenodd", "strokes": [{"paint": null}, {"paint": {…}, "width": 4, "join": "round"}]},
+  {"path": {…}}
+]}
+```
+
+- `path` is required; `fillRule` defaults to the object's. `type` and `bounds` may be handed back as given and are
+  ignored. Any other key (`opacity`, `effects`, `guide`, `locked`, `name`, a top-level `documentData`…) refuses the
+  result, as does a key that a paint, its color, a gradient stop, a gradient's placement or a freeform point does not
+  have, such as `opacity` on a solid paint.
+- `fills` and `strokes` take the forms a filter returns ([Input](#input)). A piece without `fills` (or `strokes`) is
+  painted with the ones the effect was given; an empty list paints none. Given ones replace the object's in order, as
+  a filter's output sets them: an existing fill or stroke keeps its own effects, opacity and blending, and a new stroke
+  starts at 1 pt, miter join, butt cap, miter limit 10.
+- An effect on a fill (`_context.item` `{"fill": i}`) returns only `fills`, which replace that fill on each piece; an
+  effect on a stroke returns only `strokes`. The object's other fills and strokes stay where they are.
+- The effects after it in the stack apply to the pieces together, the reference box being the bounds of all of them.
+  Bounds, raster effects, Pathfinder effects, compound shapes and Envelope Options › Distort Appearance use the pieces
+  as they are drawn. Outside outline mode, an image is also hit where the pieces of its own fills and strokes paint; a
+  path or compound path is hit-tested on its source path and appearance. On an object with no geometry effect of its
+  own, Pathfinder effects and compound shapes use the object's path for an effect on a fill or stroke, as they do for
+  every other effect on a fill or stroke; on an object that has one, they also use the pieces of a painted effect on a
+  fill or stroke. A 3D effect later in the stack uses the
+  object's input path when the pieces name a swatch or pattern. Each piece counts against the budget of the
+  object's geometry effects as well as its anchors, so all the painted effects in a stack make at most 100,000 pieces
+  together; a run whose pieces would pass the budget draws its input as it was.
+- The result is checked whole before any of it is drawn: the limits of a filter's output (100,000 objects, 4,000,000
+  anchors, 256 fills and 256 strokes per piece, 256 stops per gradient), finite numbers in range with nothing clamped
+  (color components, tints, offsets, opacities, midpoints 0.13 to 0.87, stops in order of `offset`, stroke
+  widths 0 to 1,000 pt, miter limits 1 to 500), and every swatch a solid paint, gradient or stop links to and every pattern named in
+  the document. One fault refuses the whole result: that step of the stack draws its input as it was, the effect
+  record stays, and `plugin.info`'s `lastError` names the plug-in and the field, for example
+  `Test Tone: plug-in output: objects[1].strokes[0].width: …`.
+- The pieces are never written into the document while it is drawn, measured, previewed, saved or exported. PDF and SVG
+  export draw them as the canvas does, from a copy of the document. Object › Expand Appearance writes each piece as an
+  ordinary path or compound path with its fills and strokes, as one undo step. Object › Expand of gradient and pattern
+  fills expands the fills of each piece, and leaves a piece with other paints as it is drawn.
 
 An **exporter** returns `{"dataBase64": "…", "warnings"?: ["…"]}`: the file, in base64, which the host writes as it
 is, and what the export left out or changed, for the user (at most 100 warnings of at most 500 characters each, shown
 with the export's own). A decline (`{"error": …}`), a missing `dataBase64` or data that isn't base64 writes nothing.
+
+An **importer** returns `{"objects": [...], "warnings"?: ["…"]}`: new paths and compound paths (no `id`) in the
+filters' object form, checked as a filter's new objects are, with warnings capped as an exporter's are and shown with
+the open's own. An output with no objects, with keys other than `objects`, `warnings` and `error`, or with an object
+that fails the checks opens nothing, and neither does a decline (`{"error": …}`).
 
 ## Writing a plug-in in Rust
 
@@ -529,8 +627,9 @@ per change of their input, parameters or paints (results are cached), not per fr
 
 ## Not in v1
 
-- Tool plug-ins (pointer events on the canvas, a guide line or rectangle, geometry back), panel plug-ins, importers
-  (plug-in formats that open files).
-- Live effects that change paint (they reshape geometry; an object filter recolours), and filters on type, images or
-  symbols.
+- Tool plug-ins (pointer events on the canvas, a guide line or rectangle, geometry back), panel plug-ins, and
+  importers that place files (File › Place reads only the built-in formats) or make type, images, layers or
+  artboards.
+- Live effects that change opacity, blending or effects (at `api` 2 one may [paint](#painted-live-effects) the pieces
+  it returns), and filters on type, images or symbols.
 - Apply Last Effect and Last Effect work for plug-in effects; there is no "last filter" for object filters yet.

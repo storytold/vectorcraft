@@ -766,6 +766,11 @@ impl Session {
         self.tool.transforming()
     }
 
+    /// Is the active tool resizing the selection by a bounding-box handle?
+    pub fn tool_resizing(&self) -> bool {
+        self.tool.resizing()
+    }
+
     /// With Real-time Drawing off, how far a Selection-tool move drag has carried the selection
     /// so far: the document moves on release, and the bounding box shows at this offset meanwhile.
     pub fn deferred_move(&self) -> Option<vectorcraft_geom::Vec2> {
@@ -1087,25 +1092,48 @@ impl Session {
         Ok(ui)
     }
 
-    /// Canvas feedback while Real-time Drawing is off: run the pending preview command once, take
-    /// outlines from the objects it touched, then put the document back at the interaction snapshot.
-    fn deferred_preview_overlays_from_command(&mut self, cmd: &str, p: &Value) -> Vec<Overlay> {
-        if self.deferred_overlay_cache.as_ref().is_some_and(|(c, params, _)| c == cmd && params == p) {
-            return self.deferred_overlay_cache.as_ref().map(|(_, _, o)| o.clone()).unwrap_or_default();
+    /// With Real-time Drawing off, the selection's transform box ([`Session::transform_box`]) as the
+    /// pending preview of a handle resize leaves it, measured once per preview step; `None` when no
+    /// such preview is pending, or when the preview fails.
+    pub fn deferred_transform_box(&mut self) -> Option<vectorcraft_doc::OrientedBox> {
+        if !self.tool.resizing() {
+            return None;
         }
+        let (cmd, p) = self.unapplied_interaction_preview()?;
+        self.deferred_feedback(&cmd, &p)?.transform_box
+    }
+
+    fn deferred_preview_overlays_from_command(&mut self, cmd: &str, p: &Value) -> Vec<Overlay> {
+        self.deferred_feedback(cmd, p).map(|f| f.overlays.clone()).unwrap_or_default()
+    }
+
+    /// Canvas feedback while Real-time Drawing is off: run the pending preview command once, take
+    /// outlines from the objects it touched (and, during a handle resize, their transform box), then
+    /// put the document back at the interaction snapshot.
+    fn deferred_feedback(&mut self, cmd: &str, p: &Value) -> Option<&DeferredFeedback> {
+        if !self.deferred_overlay_cache.as_ref().is_some_and(|f| f.cmd == cmd && f.params == *p) {
+            let feedback = self.measure_deferred_preview(cmd, p)?;
+            self.deferred_overlay_cache = Some(feedback);
+        }
+        self.deferred_overlay_cache.as_ref()
+    }
+
+    fn measure_deferred_preview(&mut self, cmd: &str, p: &Value) -> Option<DeferredFeedback> {
         let (snapshot, selection, revision, paint, interaction_fields) = {
-            let Some(st) = self.active() else { return vec![] };
-            let Some(it) = st.interaction.as_ref() else { return vec![] };
+            let st = self.active()?;
+            let it = st.interaction.as_ref()?;
             if !std::sync::Arc::ptr_eq(&it.doc, &st.doc) {
-                return vec![];
+                return None;
             }
             let interaction_fields = (it.preview.clone(), it.copies.clone(), it.perspective_again.clone());
             (st.doc.clone(), st.selection.clone(), st.revision, self.pending_paint.clone(), interaction_fields)
         };
-        let overlays = if self.preview(cmd, p).is_ok() {
-            self.active().map(|st| outlines_for_selection(&st.doc, &st.selection)).unwrap_or_default()
+        let (overlays, transform_box) = if self.preview(cmd, p).is_ok() {
+            let overlays = self.active().map(|st| outlines_for_selection(&st.doc, &st.selection)).unwrap_or_default();
+            let objects = self.active().map(|st| st.selection.objects.clone()).unwrap_or_default();
+            (overlays, if self.tool.resizing() { self.transform_box(&objects) } else { None })
         } else {
-            vec![]
+            (vec![], None)
         };
         if let Ok(st) = self.doc_mut() {
             st.doc = snapshot;
@@ -1118,9 +1146,16 @@ impl Session {
             }
         }
         self.pending_paint = paint;
-        self.deferred_overlay_cache = Some((cmd.to_string(), p.clone(), overlays.clone()));
-        overlays
+        Some(DeferredFeedback { cmd: cmd.to_string(), params: p.clone(), overlays, transform_box })
     }
+}
+
+/// What the canvas shows for a deferred preview: see [`Session::deferred_transform_box`].
+pub(crate) struct DeferredFeedback {
+    cmd: String,
+    params: Value,
+    overlays: Vec<Overlay>,
+    transform_box: Option<vectorcraft_doc::OrientedBox>,
 }
 
 /// The most points the outlines of [`outlines_for_selection`] are drawn for, the same number as the

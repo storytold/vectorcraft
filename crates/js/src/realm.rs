@@ -170,9 +170,13 @@ impl Realm {
     }
 
     /// Runs `source` as a script in the global environment and returns its completion value (the
-    /// value of the last expression statement that ran).
+    /// value of the last expression statement that ran). A realm whose built-ins could not be
+    /// installed runs nothing and gives an internal error.
     pub fn run(&mut self, source: &str) -> Result<JsValue, RunError> {
         let interp = &mut self.interp;
+        if let Some(message) = &interp.install_error {
+            return Err(RunError { kind: RunErrorKind::Internal, message: message.clone(), line: 0, column: 0 });
+        }
         interp.fuel = interp.limits.fuel;
         interp.source_units = 0;
         interp.throw_site = None;
@@ -188,6 +192,7 @@ impl Realm {
         interp.stack.clear();
         interp.frames.clear();
         interp.temp_roots.clear();
+        interp.join_stack.clear();
         match result {
             Ok(v) => Ok(interp.to_js_value(&v)),
             Err(Abrupt::Throw(v)) => {

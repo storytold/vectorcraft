@@ -1993,6 +1993,10 @@ file-filter	Templates	Vorlagen
 	Stylistic	Stilistisch
 	Mojikumi Set	Mojikumi-Satz
 	Kinsoku Set	Kinsoku-Satz
+	Kinsoku Shori Type	Kinsoku-Shori-Typ
+	Push In First	Zuerst einziehen
+	Push Out First	Zuerst hinausschieben
+	Push Out Only	Nur hinausschieben
 	Hard	Hart
 	Soft	Weich
 	Monitor RGB	Monitor-RGB
@@ -4442,6 +4446,13 @@ theme	Appearance	Erscheinungsbild
 @msg	select an image	wählen Sie ein Bild aus
 @msg	select an object in perspective	wählen Sie ein Objekt in der Perspektive aus
 @msg	select artwork (or a colour group) to recolor	wählen Sie eine Grafik (oder eine Farbgruppe) zum Neufärben aus
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	Neufärben abgeschlossen; unverändert: {locked} und {hidden}
+@msg	Recolor completed; {objects} were left unchanged	Neufärben abgeschlossen; unverändert: {objects}
+@msg	Recolor completed; {objects} was left unchanged	Neufärben abgeschlossen; unverändert: {objects}
+@msg	1 locked object	1 gesperrtes Objekt
+@msg	{n} locked objects	{n} gesperrte Objekte
+@msg	1 hidden object	1 ausgeblendetes Objekt
+@msg	{n} hidden objects	{n} ausgeblendete Objekte
 @msg	select at least two objects	wählen Sie mindestens zwei Objekte aus
 @msg	exit isolation mode first	beenden Sie zuerst den Isolationsmodus
 @msg	select objects, not layers	wählen Sie Objekte aus, keine Ebenen
@@ -4887,6 +4898,10 @@ theme	Appearance	Erscheinungsbild
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	das PSD-Bild ist zu groß zum Lesen ({_1} × {_2} Pixel)
 @msg	zipped 32-bit PSD image data with prediction can't be read	ZIP-komprimierte 32-Bit-PSD-Bilddaten mit Vorhersage können nicht gelesen werden
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-Bit-PSD-Dateien in diesem Farbmodus können nicht gelesen werden
+@msg	the JPEG XL file is cut short	die JPEG-XL-Datei ist unvollständig
+@msg	the JPEG XL container is too large to read	der JPEG-XL-Container ist zu groß zum Lesen
+@msg	CMYK JPEG XL images can't be read	JPEG-XL-Bilder im CMYK-Modus können nicht gelesen werden
+@msg	the JPEG XL file can't be read: {e}	die JPEG-XL-Datei kann nicht gelesen werden: {e}
 	Value Axis	Werteachse
 	On Left Side	Links
 	On Right Side	Rechts
@@ -5500,6 +5515,8 @@ axis	Y Axis	Y-Achse
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	das Modul importiert `env.{name}`, das ein Plug-in nur auf der Plug-in-API-Stufe {PROGRESS_API} (`api` {PROGRESS_API}) und mit der Berechtigung `{permission}` verwenden darf
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	das Modul importiert `{from}.{name}`, das der Host nicht anbietet: Ein Plug-in darf nur die `env.vc_*`-Funktionen importieren, die docs/plugins.md aufführt (Plug-in-API-Stufe 2), aber kein WASI, keine Dateien und kein Netzwerk
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` ist {_1}; dieser Host unterstützt die Plug-in-API-Stufen 1 bis {API_LEVEL}
+@msg	`paintOutput` may only be true	`paintOutput` darf nur true sein
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` gilt nur für einen Live-Effekt (`kind` "effect") mit `api` 2
 @msg	`grant` must be a list of permission names	`grant` muss eine Liste von Berechtigungsnamen sein
 @msg	`grant` names an unknown permission `{shown}`	`grant` nennt eine unbekannte Berechtigung `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	ein Plug-in der Art `{_1}` braucht die Berechtigung `{_2}`
@@ -6171,6 +6188,24 @@ breakText	Glyphs	Glyphen
 # 3D Box add-on
 	3D Box	3D-Quader
 	3D Box Tool	3D-Quader-Werkzeug
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Öffnen mit
+	No importer plug-ins installed	Keine Import-Plug-ins installiert
+	Read files you open in its format and make documents from them	Dateien lesen, die Sie in seinem Format öffnen, und daraus Dokumente erstellen
+@msg	{_1} is an importer (File › Open With)	{_1} ist ein Import-Plug-in (Datei › Öffnen mit)
+@msg	missing `importer` (see document.formats)	`importer` fehlt (siehe document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` muss die Format-ID eines Plug-ins sein (siehe document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	„{shown}“ öffnet {_1}-Dateien, nicht `{_2}`
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` ist ein Plug-in der Art `{_2}`, kein Import-Plug-in
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` ist ein Plug-in der Art `{_2}`, kein Export-Plug-in
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` ist ein Import-Plug-in: Öffnen Sie eine Datei mit document.open {{"importer"}"}}
+@msg	the importer returned no objects	das Import-Plug-in hat keine Objekte zurückgegeben
+@msg	an importer returns `objects` and `warnings`, not `{key}`	ein Import-Plug-in gibt `objects` und `warnings` zurück, nicht `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	die Datei ist größer als die {MAX_INPUT_BYTES} Byte, die ein Import-Plug-in liest
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	ein Import-Plug-in gibt 1 bis {MAX_EXTENSIONS} `extensions` an
+@msg	only an exporter or an importer declares `extensions`	nur ein Export- oder Import-Plug-in gibt `extensions` an
+@msg	an importer always gets an import's budget: leave `budget` out	ein Import-Plug-in erhält immer das Budget eines Imports: Lassen Sie `budget` weg
 
 # Safe Mode
 	Safe Mode…	Abgesicherter Modus…

@@ -412,7 +412,7 @@ fn stacked_effects_on_art_stay_within_the_anchor_budget() {
     let leaf = |x: f64| Arc::new(Node::path(id, shapes::rectangle(Rect::new(x, 0.0, x + 100.0, 100.0)), Appearance::default()));
     let mut art = Node::group(id, (0..10).map(|k| leaf(k as f64 * 120.0)).collect());
     let rough = fx("distort.roughen", json!({"size": 50, "detail": 100}));
-    crate::reshape::reshape_leaves_within(&mut art, &[&rough, &rough, &rough], Budget { anchors: 5_000, lines: usize::MAX });
+    crate::reshape::reshape_leaves_within(&mut art, &[&rough, &rough, &rough], Budget { anchors: 5_000, lines: usize::MAX }, None);
     let mut total = 0;
     let mut reshaped = 0;
     for c in art.children().into_iter().flatten() {
@@ -451,12 +451,12 @@ fn art_past_the_budget_keeps_its_own_gradients_in_place() {
     for params in [json!({"scaleH": 1000, "scaleV": 1000}), json!({"scaleH": 1000, "scaleV": 1000, "strokes": true})] {
         let grow = fx("distort.transform", params.clone());
         let mut art = Node::group(id, vec![circle()]);
-        let carry = crate::reshape::reshape_leaves_within(&mut art, &[&grow], Budget::EFFECTS);
+        let carry = crate::reshape::reshape_leaves_within(&mut art, &[&grow], Budget::EFFECTS, None);
         let end = own_end(&carry).unwrap();
         assert!((end - 550.0).abs() < 1e-6, "{params}: within the budget the group's gradient grows with the circle: {end}");
         // No room beyond what the circle costs: scaled up, it would be drawn with more lines.
         let mut art = Node::group(id, vec![circle()]);
-        let carry = crate::reshape::reshape_leaves_within(&mut art, &[&grow], Budget { anchors: usize::MAX, lines: 0 });
+        let carry = crate::reshape::reshape_leaves_within(&mut art, &[&grow], Budget { anchors: usize::MAX, lines: 0 }, None);
         let b = art.geometric_bounds().unwrap();
         assert!(b.width() < 101.0 && b.height() < 101.0, "{params}: the circle keeps its shape: {b:?}");
         assert_eq!(own_end(&carry), Some(100.0), "{params}: the group's gradient stays where it was placed");
@@ -465,7 +465,7 @@ fn art_past_the_budget_keeps_its_own_gradients_in_place() {
         let mut inner = Node::group(NodeId(2), vec![square]);
         inner.appearance.items.push(AppearanceItem::Fill(FillLayer::new(placed.clone())));
         let mut art = Node::group(id, vec![circle(), Arc::new(inner)]);
-        let carry = crate::reshape::reshape_leaves_within(&mut art, &[&grow], Budget { anchors: usize::MAX, lines: 0 });
+        let carry = crate::reshape::reshape_leaves_within(&mut art, &[&grow], Budget { anchors: usize::MAX, lines: 0 }, None);
         assert_eq!(own_end(&carry), Some(100.0), "{params}: the art's own gradient stays");
         let inner = &art.children().unwrap()[1];
         let Paint::Gradient(g) = inner.appearance.fill_paint() else { panic!("a gradient") };
@@ -509,7 +509,7 @@ fn a_hidden_path_past_the_budget_leaves_a_layers_gradients_free_to_move() {
     let corners = json!({"corners": [[-4.5, -4.5], [5.5, -4.5], [5.5, 5.5], [-4.5, 5.5]]});
     for grow in [fx("distort.transform", json!({"scaleH": 1000, "scaleV": 1000})), fx("distort.freeDistort", corners)] {
         let mut art = layer();
-        let carry = crate::reshape::reshape_leaves_within(&mut art, &[&grow], budget);
+        let carry = crate::reshape::reshape_leaves_within(&mut art, &[&grow], budget, None);
         let circle = art.children().unwrap()[1].geometric_bounds().unwrap();
         assert!(circle.width() < 101.0, "{}: the hidden circle keeps its shape: {circle:?}", grow.id);
         let square = art.children().unwrap()[0].geometric_bounds().unwrap();
@@ -518,7 +518,7 @@ fn a_hidden_path_past_the_budget_leaves_a_layers_gradients_free_to_move() {
         carry.apply(&mut own);
         assert_eq!(end(&own), Some(550.0), "{}: the layer's gradient, as the art", grow.id);
         let mut art = Node::group(NodeId(9), vec![Arc::new(layer())]);
-        crate::reshape::reshape_leaves_within(&mut art, &[&grow], budget);
+        crate::reshape::reshape_leaves_within(&mut art, &[&grow], budget, None);
         assert_eq!(end(&art.children().unwrap()[0].appearance), Some(550.0), "{}: the layer's gradient, inside the art", grow.id);
     }
 }
@@ -549,7 +549,7 @@ fn edited_freeform_points_follow_a_transform_effect_and_free_distort() {
         inner.appearance.items.push(AppearanceItem::Fill(FillLayer::new(freeform.clone())));
         let mut art = Node::group(NodeId(9), vec![square(Appearance::basic(freeform.clone(), Paint::None, 0.0)), Arc::new(inner)]);
         art.appearance.items.push(AppearanceItem::Fill(FillLayer::new(freeform.clone())));
-        let carry = crate::reshape::reshape_leaves_within(&mut art, &[&e], Budget::EFFECTS);
+        let carry = crate::reshape::reshape_leaves_within(&mut art, &[&e], Budget::EFFECTS, None);
         let members = art.children().unwrap();
         assert_eq!(xs(&members[0].appearance), Some(vec![30.0, 130.0]), "{}: the path's points", e.id);
         assert_eq!(xs(&members[1].appearance), Some(vec![30.0, 130.0]), "{}: the inner group's points", e.id);
@@ -625,7 +625,7 @@ fn reshape_leaves_within_optimizes_transform_before_terminal_offset_path() {
     let offset = fx("path.offsetPath", json!({"offset": 4.0, "joins": "round"}));
 
     let start = std::time::Instant::now();
-    crate::reshape::reshape_leaves_within(&mut art, &[&transform, &offset], Budget::EFFECTS);
+    crate::reshape::reshape_leaves_within(&mut art, &[&transform, &offset], Budget::EFFECTS, None);
     let elapsed = start.elapsed();
     assert!(elapsed < std::time::Duration::from_secs(2));
 
@@ -652,7 +652,7 @@ fn reshape_leaves_within_preserves_order_when_not_terminal_or_not_style_safe() {
     let mut art_evenodd = Node::group(id, vec![Arc::new(leaf)]);
     let transform = fx("distort.transform", json!({"moveH": 2.0, "moveV": 2.0, "copies": 2}));
     let offset = fx("path.offsetPath", json!({"offset": 4.0}));
-    crate::reshape::reshape_leaves_within(&mut art_evenodd, &[&transform, &offset], Budget::EFFECTS);
+    crate::reshape::reshape_leaves_within(&mut art_evenodd, &[&transform, &offset], Budget::EFFECTS, None);
     let p = art_evenodd.children().unwrap()[0].path_data().unwrap();
     assert_eq!(p.subpaths.len(), 1, "EvenOdd does not swap; copies union into 1 outer subpath");
 
@@ -660,7 +660,7 @@ fn reshape_leaves_within_preserves_order_when_not_terminal_or_not_style_safe() {
     let leaf_round = Arc::new(Node::path(id, shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0)), Appearance::default()));
     let mut art_round = Node::group(id, vec![leaf_round]);
     let round_corners = fx("stylize.roundCorners", json!({"radius": 2.0}));
-    crate::reshape::reshape_leaves_within(&mut art_round, &[&transform, &offset, &round_corners], Budget::EFFECTS);
+    crate::reshape::reshape_leaves_within(&mut art_round, &[&transform, &offset, &round_corners], Budget::EFFECTS, None);
     let p = art_round.children().unwrap()[0].path_data().unwrap();
     assert_eq!(p.subpaths.len(), 1, "Non-terminal Offset Path does not swap; copies union into 1 outer subpath");
 
@@ -668,7 +668,7 @@ fn reshape_leaves_within_preserves_order_when_not_terminal_or_not_style_safe() {
     let leaf_miter = Arc::new(Node::path(id, shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0)), Appearance::default()));
     let mut art_miter = Node::group(id, vec![leaf_miter]);
     let offset_miter = fx("path.offsetPath", json!({"offset": 4.0, "joins": "miter"}));
-    crate::reshape::reshape_leaves_within(&mut art_miter, &[&transform, &offset_miter], Budget::EFFECTS);
+    crate::reshape::reshape_leaves_within(&mut art_miter, &[&transform, &offset_miter], Budget::EFFECTS, None);
     let p = art_miter.children().unwrap()[0].path_data().unwrap();
     assert_eq!(p.subpaths.len(), 1, "Miter join does not swap; copies union into 1 outer subpath");
 }
