@@ -607,6 +607,10 @@ impl Interp<'_> {
                     continue;
                 }
                 let want = step.min(n - o.len());
+                // The bytes of this read's own copy of a procedure's string: counted while it
+                // lives, released once it is appended (the string itself is the program's, and
+                // stays counted as long as the program can hold it).
+                let mut copied = 0;
                 let chunk = match src {
                     Source::File(f) => self.read(f, want)?,
                     // A string gives its bytes over and over.
@@ -618,11 +622,14 @@ impl Interp<'_> {
                         self.call(p.clone())?;
                         let s = self.pop_str()?.to_vec();
                         self.alloc(s.len())?;
+                        copied = s.len();
                         s
                     }
                 };
                 *e = chunk.is_empty();
                 o.extend_from_slice(chunk.get(..chunk.len().min(n - o.len())).unwrap_or_default());
+                drop(chunk);
+                self.unalloc(copied);
             }
         }
         Ok(out)
@@ -698,32 +705,44 @@ impl Interp<'_> {
         let mut stencil = self.image_dict(&mask, false)?;
         stencil.space = Space::Gray;
         let n = image.space.n();
+        // Interleaved data is read into this decoder's own buffers, split into the two images'
+        // samples: those stop counting once both are decoded (their pixels still count).
+        let mut charged = 0;
         if interleave != 3.0 {
             let src = image.sources.first().cloned().ok_or(PsError::Ps("undefined", "DataSource".into()))?;
             let (pixels, samples) = if interleave == 2.0 {
                 let (mrow, drow) = (stencil.row_bytes(1), image.row_bytes(n));
                 let total = mrow.saturating_mul(stencil.h).saturating_add(drow.saturating_mul(image.h));
-                self.alloc(total)?;
-                let raw = self.source_bytes(&src, total.min(MAX_DATA))?;
+                // What is read: an image past the pixel cap is reduced from the samples read.
+                charged = total.min(MAX_DATA);
+                self.alloc(charged)?;
+                let raw = self.source_bytes(&src, charged)?;
                 by_rows(&raw, (mrow, stencil.h), (drow, image.h))
             } else {
                 // Each sample: the mask's value, then the colour's, as many bits each.
                 stencil.bpc = image.bpc;
                 (stencil.w, stencil.h) = (image.w, image.h);
                 let row = (image.w * (n + 1) * usize::from(image.bpc)).div_ceil(8);
-                self.alloc(row.saturating_mul(image.h))?;
-                let raw = self.source_bytes(&src, row.saturating_mul(image.h).min(MAX_DATA))?;
+                charged = row.saturating_mul(image.h).min(MAX_DATA);
+                self.alloc(charged)?;
+                let raw = self.source_bytes(&src, charged)?;
                 by_samples(&raw, image.w, image.h, n, image.bpc)
             };
             stencil.sources = vec![Source::Str(pixels)];
             image.sources = vec![Source::Str(samples)];
         }
-        let Some(mut img) = self.decode_image(image)? else {
-            // The mask's own data (`InterleaveType` 3) is skipped with the image's.
-            let _ = self.leave_out(&stencil);
-            return Ok(None);
+        let decoded = match self.decode_image(image) {
+            Ok(Some(img)) => self.decode_image(stencil).map(|m| Some((img, m))),
+            Ok(None) => {
+                // The mask's own data (`InterleaveType` 3) is skipped with the image's.
+                let _ = self.leave_out(&stencil);
+                Ok(None)
+            }
+            Err(e) => Err(e),
         };
-        let Some(m) = self.decode_image(stencil)? else { return Ok(Some(img)) };
+        self.unalloc(charged);
+        let Some((mut img, m)) = decoded? else { return Ok(None) };
+        let Some(m) = m else { return Ok(Some(img)) };
         let (w, h, mw, mh) = (img.w as usize, img.h as usize, m.w as usize, m.h as usize);
         for (i, px) in img.rgba.as_chunks_mut::<4>().0.iter_mut().enumerate() {
             let (x, y) = (i % w, i / w);
@@ -852,8 +871,14 @@ impl Interp<'_> {
         }
         // With only the rows read kept, row `i` of the plane is the `i`th row read.
         let rows_kept = streamed.is_some();
-        let planes = match streamed {
-            Some(rows) => vec![rows],
+        // The sample planes (or the rows kept) are this decoder's own and live only while the
+        // image is decoded: they stop counting once it is (the pixels made from them still
+        // count). What the data source procedures allocate is the program's and stays counted.
+        let (planes, plane_bytes) = match streamed {
+            Some(rows) => {
+                let kept = rows.len();
+                (vec![rows], kept)
+            }
             None => {
                 // More samples than the reader holds: a reduced image is left out (its data
                 // skipped), while one within the pixel cap whose samples are still too much data
@@ -865,12 +890,13 @@ impl Interp<'_> {
                     }
                     return Err(PsError::Limit("decoded data is too large"));
                 };
-                self.alloc(plane.saturating_mul(sources.len()))?;
+                let plane_bytes = plane.saturating_mul(sources.len());
+                self.alloc(plane_bytes)?;
                 let mut planes = self.read_sources(sources, row * s.h, if multi { row } else { row * s.h })?;
                 for p in &mut planes {
                     p.resize(row * s.h, 0);
                 }
-                planes
+                (planes, plane_bytes)
             }
         };
         self.alloc(ow * oh * 4)?;
@@ -949,6 +975,8 @@ impl Interp<'_> {
                 rgba.extend([rgb[0], rgb[1], rgb[2], if masked { 0 } else { 255 }]);
             }
         }
+        drop(planes);
+        self.unalloc(plane_bytes);
         // The reduced samples cover the image's area: image space scaled to them.
         let matrix = Affine::scale_non_uniform(ow as f64 / s.w as f64, oh as f64 / s.h as f64) * s.matrix;
         Ok(Some(Pixels { w: ow as u32, h: oh as u32, rgba, inks, matrix }))
