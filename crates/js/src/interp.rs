@@ -164,6 +164,17 @@ pub(crate) struct Interp {
     pub(crate) throw_site: Option<ThrowSite>,
     /// The last exception a run did not catch.
     pub(crate) last_thrown: Value,
+    /// The state of `Math.random`'s generator.
+    pub(crate) random: u64,
+    /// The objects `Array.prototype.join` and `toLocaleString` are joining, innermost last: a
+    /// cycle back to one of them joins as an empty string.
+    pub(crate) join_stack: Vec<ObjId>,
+    /// Bytes of the string buffers native functions are building outside the heap. They are
+    /// charged to `heap.bytes` and added back after each collection, and a native call's
+    /// buffers are released when it returns.
+    pub(crate) held_bytes: usize,
+    /// Why installing the built-ins failed; a realm with this set runs no script.
+    pub(crate) install_error: Option<String>,
     /// The clock and time zone `Date` reads.
     pub(crate) date_host: crate::date_builtins::DateHost,
     /// The bytes native code holds outside the heap's cells through [`HeldBytes`].
@@ -237,6 +248,15 @@ fn index_keys_bytes(len: usize) -> usize {
         digits += 1;
     }
     total
+}
+
+/// A seed for `Math.random` that differs from realm to realm, from the standard library's
+/// randomly keyed hasher; never zero.
+fn random_seed() -> u64 {
+    use std::hash::{BuildHasher, Hasher};
+    let mut h = std::collections::hash_map::RandomState::new().build_hasher();
+    h.write_u64(0x9e37_79b9_7f4a_7c15);
+    h.finish() | 1
 }
 
 /// The estimated bytes of a binding or property named by `len` code units.
@@ -341,6 +361,10 @@ impl Interp {
             source_units: 0,
             throw_site: None,
             last_thrown: Value::Undefined,
+            random: random_seed(),
+            join_stack: Vec::new(),
+            held_bytes: 0,
+            install_error: None,
             date_host: crate::date_builtins::DateHost::default(),
             held: Rc::default(),
         };
@@ -515,7 +539,7 @@ impl Interp {
         self.heap.collect(&roots);
         // The collection counts the live total again, so bytes already released are not in it.
         self.held.released.set(0);
-        self.heap.bytes = self.heap.bytes.saturating_add(self.held.now.get());
+        self.heap.bytes = self.heap.bytes.saturating_add(self.held_bytes).saturating_add(self.held.now.get());
     }
 
     /// Runs frames until the boundary frame on top returns, and returns its value.
@@ -1058,11 +1082,217 @@ impl Interp {
             *length = i + 1;
         }
         let name_len = k.len();
+        let index = new && k.first().is_some_and(|&u| (u16::from(b'0')..=u16::from(b'9')).contains(&u));
         o.props.insert(k, prop);
         if new {
             self.heap.bytes += PROP_BYTES + string_bytes(name_len);
         }
+        if index {
+            self.heap.index_epoch = self.heap.index_epoch.wrapping_add(1);
+        }
         Ok(())
+    }
+
+    /// [[DefineOwnProperty]] (section 8.12.9, with the array rules of section 15.4.5.1 and the
+    /// arguments object rules of section 10.6). Returns whether the property was defined; with
+    /// `throw` a rejection throws a `TypeError` instead.
+    pub(crate) fn define_own_property(&mut self, id: ObjId, k: Key, desc: &Desc, throw: bool) -> JsResult<bool> {
+        match &self.object(id)?.class {
+            Class::Array { length, length_writable } => {
+                let (length, length_writable) = (*length, *length_writable);
+                if is(&k, "length") {
+                    return self.define_array_length(id, desc, throw);
+                }
+                if let Some(i) = array_index(&k)
+                    && i >= length
+                    && !length_writable
+                {
+                    return self.reject_bool(throw, &k, "the array's length is read-only");
+                }
+                self.define_ordinary(id, k, desc, throw)
+            }
+            Class::Arguments(map) => {
+                let mapped = array_index(&k).and_then(|i| map.names.get(i as usize)).and_then(Option::as_ref).cloned();
+                if !self.define_ordinary(id, k.clone(), desc, false)? {
+                    return self.reject_bool(throw, &k, "the property cannot be redefined");
+                }
+                if let Some(name) = mapped {
+                    let env = match &self.object(id)?.class {
+                        Class::Arguments(map) => Some(map.env),
+                        _ => None,
+                    };
+                    if let Some(v) = desc.value.clone().filter(|_| !desc.is_accessor())
+                        && let Some(env) = env
+                        && let Some(Env::Decl { bindings, .. }) = self.heap.env_mut(env)
+                        && let Some(b) = bindings.get_mut(&name)
+                    {
+                        b.value = v;
+                    }
+                    if (desc.is_accessor() || desc.writable == Some(false))
+                        && let Class::Arguments(map) = &mut self.object_mut(id)?.class
+                        && let Some(slot) = array_index(&k).and_then(|i| map.names.get_mut(i as usize))
+                    {
+                        *slot = None;
+                    }
+                }
+                Ok(true)
+            }
+            _ => self.define_ordinary(id, k, desc, throw),
+        }
+    }
+
+    fn reject_bool(&mut self, throw: bool, k: &[u16], why: &str) -> JsResult<bool> {
+        if throw {
+            let message = format!("cannot define property '{}': {why}", String::from_utf16_lossy(k));
+            return Err(self.type_error(&message));
+        }
+        Ok(false)
+    }
+
+    /// The default [[DefineOwnProperty]] (section 8.12.9).
+    fn define_ordinary(&mut self, id: ObjId, k: Key, desc: &Desc, throw: bool) -> JsResult<bool> {
+        let current = self.get_own_property(id, &k)?;
+        let o = self.object(id)?;
+        let virtual_string = matches!(&o.class, Class::String(s) if is(&k, "length") || array_index(&k).is_some_and(|i| (i as usize) < s.len()));
+        let Some(current) = current else {
+            if !o.extensible {
+                return self.reject_bool(throw, &k, "the object is not extensible");
+            }
+            // The object and the descriptor's values stay rooted while the heap is checked.
+            let mut roots = vec![Value::Object(id)];
+            roots.extend(desc.value.iter().cloned());
+            roots.extend(desc.get.flatten().into_iter().chain(desc.set.flatten()).map(Value::Object));
+            self.rooted(&roots, |i| i.reserve_heap(binding_bytes(k.len())))?;
+            let flags = desc.flags_or(0);
+            let prop = if desc.is_accessor() {
+                Prop::Accessor { get: desc.get.flatten(), set: desc.set.flatten(), flags: flags & !WRITABLE }
+            } else {
+                Prop::Data { value: desc.value.clone().unwrap_or(Value::Undefined), flags }
+            };
+            self.define(id, k, prop)?;
+            return Ok(true);
+        };
+        let Some(merged) = merge_desc(&current, desc) else { return self.reject_bool(throw, &k, "the property cannot be redefined") };
+        // An index or the length of a String object cannot change, so a definition that passes
+        // the checks leaves it as it is.
+        if virtual_string {
+            return Ok(true);
+        }
+        self.define(id, k, merged)?;
+        Ok(true)
+    }
+
+    /// Defining an array's `length` (section 15.4.5.1, step 3).
+    fn define_array_length(&mut self, id: ObjId, desc: &Desc, throw: bool) -> JsResult<bool> {
+        let length_key = key("length");
+        let Some(v) = desc.value.clone() else {
+            let Some(current) = self.get_own_property(id, &length_key)? else { return internal("an array without a length") };
+            let Some(merged) = merge_desc(&current, desc) else { return self.reject_bool(throw, &length_key, "the length cannot be redefined") };
+            if let Class::Array { length_writable, .. } = &mut self.object_mut(id)?.class {
+                *length_writable = merged.flags() & WRITABLE != 0;
+            }
+            return Ok(true);
+        };
+        let new = to_uint32(self.to_number(&v)?);
+        if f64::from(new) != self.to_number(&v)? {
+            return Err(self.throw(ErrorType::Range, "invalid array length"));
+        }
+        let Some(current) = self.get_own_property(id, &length_key)? else { return internal("an array without a length") };
+        let Class::Array { length: old, length_writable } = self.object(id)?.class else { return internal("not an array") };
+        let new_desc = Desc { value: Some(Value::Number(f64::from(new))), ..desc.clone() };
+        if new >= old {
+            let Some(merged) = merge_desc(&current, &new_desc) else { return self.reject_bool(throw, &length_key, "the length cannot be redefined") };
+            if let Class::Array { length, length_writable } = &mut self.object_mut(id)?.class {
+                *length = new;
+                *length_writable = merged.flags() & WRITABLE != 0;
+            }
+            return Ok(true);
+        }
+        if !length_writable {
+            return self.reject_bool(throw, &length_key, "it is read-only");
+        }
+        let checked = Desc { writable: None, ..new_desc };
+        if merge_desc(&current, &checked).is_none() {
+            return self.reject_bool(throw, &length_key, "the length cannot be redefined");
+        }
+        let read_only = desc.writable == Some(false);
+        if !self.shrink_array(id, new, read_only)? {
+            return self.reject_bool(throw, &length_key, "an element cannot be deleted");
+        }
+        Ok(true)
+    }
+
+    /// Sets an array's length to `new`, deleting the elements at and past it from the last one
+    /// down (section 15.4.5.1, step 3.l). An element that cannot be deleted stops it, leaving
+    /// the length one past that element, and gives `false`. Each property takes a unit of fuel
+    /// before anything is removed. With `read_only` the length is made read-only afterwards
+    /// either way.
+    fn shrink_array(&mut self, id: ObjId, new: u32, read_only: bool) -> JsResult<bool> {
+        let Class::Array { length: old, .. } = self.object(id)?.class else { return internal("not an array") };
+        let mut ok = true;
+        let mut length = new;
+        if new < old {
+            for _ in 0..self.object(id)?.props.len() {
+                self.use_fuel()?;
+            }
+            let o = self.object_mut(id)?;
+            let mut doomed: Vec<(u32, Key)> =
+                o.props.iter().filter_map(|(k, _)| array_index(k).filter(|&i| i >= new).map(|i| (i, k.clone()))).collect();
+            doomed.sort_unstable_by_key(|d| std::cmp::Reverse(d.0));
+            for (i, k) in doomed {
+                if o.props.get(&k).is_some_and(|p| !p.configurable()) {
+                    length = i + 1;
+                    ok = false;
+                    break;
+                }
+                o.props.remove(&k);
+            }
+        }
+        if let Class::Array { length: l, length_writable } = &mut self.object_mut(id)?.class {
+            *l = length;
+            if read_only {
+                *length_writable = false;
+            }
+        }
+        Ok(ok)
+    }
+
+    /// The names of an object's own properties (section 15.2.3.4): a String object's indices and
+    /// `length` first, then the rest in the order they were added, which is the order `for-in`
+    /// visits them, then an array's `length`. Each name takes a unit of fuel, and the heap for the
+    /// list is checked first.
+    pub(crate) fn own_keys(&mut self, id: ObjId) -> JsResult<Vec<Key>> {
+        let o = self.object(id)?;
+        let string_len = if let Class::String(s) = &o.class { s.len() } else { 0 };
+        let is_string = matches!(o.class, Class::String(_));
+        let is_array = matches!(o.class, Class::Array { .. });
+        let count = o.props.len().saturating_add(string_len).saturating_add(usize::from(is_string || is_array));
+        self.reserve_heap(index_keys_bytes(string_len).saturating_add(count.saturating_mul(KEY_ENTRY_BYTES)))?;
+        let mut out = Vec::with_capacity(count);
+        for i in 0..string_len {
+            self.use_fuel()?;
+            out.push(index_key(u32::try_from(i).unwrap_or(u32::MAX)));
+        }
+        if is_string {
+            out.push(key("length"));
+        }
+        for _ in 0..self.object(id)?.props.len() {
+            self.use_fuel()?;
+        }
+        out.extend(self.object(id)?.props.keys());
+        if is_array {
+            out.push(key("length"));
+        }
+        Ok(out)
+    }
+
+    /// Runs `f` with `values` kept reachable for any collection it starts.
+    pub(crate) fn rooted<T>(&mut self, values: &[Value], f: impl FnOnce(&mut Self) -> JsResult<T>) -> JsResult<T> {
+        let mark = self.temp_roots.len();
+        self.temp_roots.extend(values.iter().cloned());
+        let r = f(self);
+        self.temp_roots.truncate(mark);
+        r
     }
 
     fn reject(&mut self, throw: bool, k: &[u16], why: &str) -> JsResult<()> {
@@ -1131,32 +1361,19 @@ impl Interp {
         }
     }
 
-    /// Assigning to an array's `length` (section 15.4.5.1).
+    /// Assigning to an array's `length` (section 15.4.5.1). [[Put]] defines the value, so the
+    /// value is converted once with ToUint32 and once with ToNumber, as in steps 3.c and 3.d.
     fn set_array_length(&mut self, id: ObjId, v: &Value, throw: bool) -> JsResult<()> {
-        let n = self.to_number(v)?;
-        let new = to_uint32(n);
-        if f64::from(new) != n {
+        let new = to_uint32(self.to_number(v)?);
+        if f64::from(new) != self.to_number(v)? {
             return Err(self.throw(ErrorType::Range, "invalid array length"));
         }
-        let o = self.object(id)?;
-        let Class::Array { length: old, length_writable } = o.class else { return internal("not an array") };
+        let Class::Array { length_writable, .. } = self.object(id)?.class else { return internal("not an array") };
         if !length_writable {
             return self.reject(throw, &key("length"), "it is read-only");
         }
-        if new < old {
-            // Shrinking visits every property: each takes fuel before anything is removed.
-            for _ in 0..o.props.len() {
-                self.use_fuel()?;
-            }
-        }
-        let o = self.object_mut(id)?;
-        let Class::Array { length, .. } = &mut o.class else { return internal("not an array") };
-        *length = new;
-        if new < old {
-            let doomed: Vec<Key> = o.props.keys().into_iter().filter(|k| array_index(k).is_some_and(|i| i >= new)).collect();
-            for k in doomed {
-                o.props.remove(&k);
-            }
+        if !self.shrink_array(id, new, false)? {
+            return self.reject(throw, &key("length"), "an element cannot be deleted");
         }
         Ok(())
     }
@@ -1576,13 +1793,25 @@ impl Interp {
                     this = args.first().cloned().unwrap_or(Value::Undefined);
                     args = self.list_from_array_like(&list)?;
                 }
+                Func::Bound { target, this: bound_this, args: bound_args } => {
+                    self.use_fuel()?;
+                    let mut all = Vec::with_capacity(bound_args.len().saturating_add(args.len()));
+                    all.extend(bound_args.iter().cloned());
+                    all.append(&mut args);
+                    args = all;
+                    this = bound_this;
+                    f = Value::Object(target);
+                }
                 Func::Native { f: native, .. } => {
-                    // A list from `apply` is not on the operand stack, and a native function can run
-                    // JavaScript that collects, so the arguments stay rooted for the call.
+                    // A list from `apply` and the arguments a bound function adds are not on the
+                    // operand stack, and a native function can run JavaScript that collects, so the
+                    // arguments stay rooted for the call.
                     let mark = self.temp_roots.len();
                     self.temp_roots.push(this.clone());
                     self.temp_roots.extend(args.iter().cloned());
+                    let held = self.held_bytes;
                     let r = native(self, this, &args, false);
+                    self.held_bytes = held;
                     self.temp_roots.truncate(mark);
                     return Ok(Prepared::Done(r?));
                 }
@@ -1660,8 +1889,17 @@ impl Interp {
         let n = argc as usize;
         let start =
             self.stack.len().checked_sub(n + 1).filter(|&s| s >= self.base()).ok_or_else(|| Abrupt::Internal("new below the stack".into()))?;
-        let f = self.stack.get(start).cloned().unwrap_or(Value::Undefined);
-        let args: Vec<Value> = self.stack.get(start + 1..).map(<[Value]>::to_vec).unwrap_or_default();
+        let mut f = self.stack.get(start).cloned().unwrap_or(Value::Undefined);
+        let mut args: Vec<Value> = self.stack.get(start + 1..).map(<[Value]>::to_vec).unwrap_or_default();
+        // A bound function constructs its target with its arguments first (section 15.3.4.5.2);
+        // the bound function on the stack keeps them reachable.
+        while let Some(Func::Bound { target, args: bound_args, .. }) = self.func_of(&f) {
+            self.use_fuel()?;
+            let mut all = bound_args.to_vec();
+            all.append(&mut args);
+            args = all;
+            f = Value::Object(target);
+        }
         match self.func_of(&f) {
             Some(Func::Closure { code, env }) => {
                 let Some(callee) = f.as_object() else { return internal("callee is not an object") };
@@ -1674,7 +1912,10 @@ impl Interp {
                 self.enter_function(Entry { callee, code, env, this: Value::Object(obj), args }, Some(obj), false)
             }
             Some(Func::Native { f: native, constructor: true, .. }) => {
-                let v = native(self, Value::Undefined, &args, true)?;
+                let held = self.held_bytes;
+                let r = native(self, Value::Undefined, &args, true);
+                self.held_bytes = held;
+                let v = r?;
                 self.stack.truncate(start);
                 self.push(v)
             }
@@ -2081,7 +2322,7 @@ impl Interp {
         let (class, proto) = match v {
             Value::Object(o) => return Ok(*o),
             Value::Undefined | Value::Null => return Err(self.type_error("cannot convert undefined or null to an object")),
-            Value::Bool(_) => (Class::Boolean, self.intrinsics.boolean_proto),
+            Value::Bool(b) => (Class::Boolean(*b), self.intrinsics.boolean_proto),
             Value::Number(n) => (Class::Number(*n), self.intrinsics.number_proto),
             Value::String(s) => (Class::String(s.clone()), self.intrinsics.string_proto),
         };
@@ -2226,7 +2467,13 @@ impl Interp {
         if !self.is_callable(f) {
             return Err(self.type_error("the right side of 'instanceof' is not a function"));
         }
-        let Some(fid) = f.as_object() else { return Ok(false) };
+        let Some(mut fid) = f.as_object() else { return Ok(false) };
+        // A bound function answers for its target (section 15.3.4.5.3).
+        while let Some(Func::Bound { target, .. }) = self.func_of(&Value::Object(fid)) {
+            self.use_fuel()?;
+            fid = target;
+        }
+        let f = &Value::Object(fid);
         let Value::Object(mut o) = v.clone() else { return Ok(false) };
         let Value::Object(proto) = self.get_from(fid, &key("prototype"), f)? else {
             return Err(self.type_error("the function's prototype is not an object"));
@@ -2299,6 +2546,107 @@ impl Interp {
 pub(crate) enum CompileError {
     Syntax(crate::SyntaxError),
     Internal(String),
+}
+
+/// A property descriptor (section 8.10): each field is `None` when it is absent. `get` and `set`
+/// are `Some(None)` when present as `undefined`.
+#[derive(Clone, Default, Debug)]
+pub(crate) struct Desc {
+    pub(crate) value: Option<Value>,
+    pub(crate) get: Option<Option<ObjId>>,
+    pub(crate) set: Option<Option<ObjId>>,
+    pub(crate) writable: Option<bool>,
+    pub(crate) enumerable: Option<bool>,
+    pub(crate) configurable: Option<bool>,
+}
+
+impl Desc {
+    /// A data descriptor with every attribute given.
+    pub(crate) fn data(value: Value, flags: u8) -> Self {
+        Desc {
+            value: Some(value),
+            writable: Some(flags & WRITABLE != 0),
+            enumerable: Some(flags & ENUMERABLE != 0),
+            configurable: Some(flags & CONFIGURABLE != 0),
+            ..Desc::default()
+        }
+    }
+
+    pub(crate) fn is_accessor(&self) -> bool {
+        self.get.is_some() || self.set.is_some()
+    }
+
+    pub(crate) fn is_data(&self) -> bool {
+        self.value.is_some() || self.writable.is_some()
+    }
+
+    /// The attribute flags the descriptor gives, each absent one taken from `default`.
+    fn flags_or(&self, default: u8) -> u8 {
+        let pick = |field: Option<bool>, bit: u8| match field {
+            Some(true) => bit,
+            Some(false) => 0,
+            None => default & bit,
+        };
+        pick(self.writable, WRITABLE) | pick(self.enumerable, ENUMERABLE) | pick(self.configurable, CONFIGURABLE)
+    }
+}
+
+/// SameValue (section 9.12).
+pub(crate) fn same_value(a: &Value, b: &Value) -> bool {
+    match (a, b) {
+        (Value::Number(x), Value::Number(y)) => (x.is_nan() && y.is_nan()) || (x == y && x.is_sign_negative() == y.is_sign_negative()),
+        _ => strict_eq(a, b),
+    }
+}
+
+/// Steps 5 to 12 of [[DefineOwnProperty]] (section 8.12.9) for an existing property: the
+/// property after `desc` is applied, or `None` when the change is not allowed.
+fn merge_desc(current: &Prop, desc: &Desc) -> Option<Prop> {
+    let flags = current.flags();
+    let configurable = flags & CONFIGURABLE != 0;
+    if !configurable {
+        if desc.configurable == Some(true) {
+            return None;
+        }
+        if desc.enumerable.is_some_and(|e| e != (flags & ENUMERABLE != 0)) {
+            return None;
+        }
+    }
+    let attrs = |base: u8, writable_bit: bool| {
+        let f = desc.flags_or(base);
+        if writable_bit { f } else { f & !WRITABLE }
+    };
+    match current {
+        Prop::Data { .. } if desc.is_accessor() => {
+            if !configurable {
+                return None;
+            }
+            Some(Prop::Accessor { get: desc.get.flatten(), set: desc.set.flatten(), flags: attrs(flags & !WRITABLE, false) })
+        }
+        Prop::Accessor { .. } if desc.is_data() => {
+            if !configurable {
+                return None;
+            }
+            Some(Prop::Data { value: desc.value.clone().unwrap_or(Value::Undefined), flags: attrs(flags & !WRITABLE, true) })
+        }
+        Prop::Data { value, .. } => {
+            if !configurable && flags & WRITABLE == 0 {
+                if desc.writable == Some(true) {
+                    return None;
+                }
+                if desc.value.as_ref().is_some_and(|v| !same_value(v, value)) {
+                    return None;
+                }
+            }
+            Some(Prop::Data { value: desc.value.clone().unwrap_or_else(|| value.clone()), flags: attrs(flags, true) })
+        }
+        Prop::Accessor { get, set, .. } => {
+            if !configurable && (desc.get.is_some_and(|g| g != *get) || desc.set.is_some_and(|s| s != *set)) {
+                return None;
+            }
+            Some(Prop::Accessor { get: desc.get.unwrap_or(*get), set: desc.set.unwrap_or(*set), flags: attrs(flags, false) })
+        }
+    }
 }
 
 /// The strict equality comparison (section 11.9.6).
