@@ -33,10 +33,13 @@ const MAX_CODE: usize = 4;
 const CODESPACE: &str = "CodeSpaceRange";
 const CIDS: &str = "CIDRange";
 const NOTDEFS: &str = "NotDefRange";
+/// Mappings to a base font's character codes or glyph names (`[lo hi dst font …]`: `dst` a
+/// string, a name, or an array of them, one a code).
+const BASES: &str = "BFRange";
 
-/// The mappings of the CMaps shown with so far, by their character mapping, codespace and
-/// notdef mapping arrays, the most recent last.
-pub(super) type CMaps = Vec<([Option<Shared<Obj>>; 3], Rc<CMap>)>;
+/// The mappings of the CMaps shown with so far, by their character mapping, codespace, notdef
+/// mapping and base-font mapping arrays, the most recent last.
+pub(super) type CMaps = Vec<([Option<Shared<Obj>>; 4], Rc<CMap>)>;
 
 /// A CMap's mappings, read from its dictionary.
 pub(super) struct CMap {
@@ -46,6 +49,16 @@ pub(super) struct CMap {
     cids: Vec<(usize, u32, u32, u32, usize)>,
     /// Notdef mappings, latest first.
     notdefs: Vec<(usize, u32, u32, u32, usize)>,
+    /// Mappings to base-font codes or glyph names (code length, first code, last code, what
+    /// the first code maps to, font), latest first.
+    bases: Vec<(usize, u32, u32, Obj, usize)>,
+}
+
+/// What a code maps to in a base font (`beginbfchar`, `beginbfrange`).
+#[derive(Clone)]
+pub(super) enum Base {
+    Code(u8),
+    Name(Rc<str>),
 }
 
 /// A character of an `FMapType` 9 font: its code's descendant font and CID, and the notdef
@@ -54,6 +67,9 @@ pub(super) struct CidChar {
     pub font: usize,
     pub cid: u32,
     pub notdef: Option<u32>,
+    /// The base-font code or glyph name a `bfchar` or `bfrange` mapping gives it, instead of a
+    /// CID.
+    pub base: Option<Base>,
 }
 
 impl CMap {
@@ -87,7 +103,18 @@ impl CMap {
                 })
                 .collect()
         };
-        Self { space, cids: maps(CIDS), notdefs: maps(NOTDEFS) }
+        let bases = items(BASES)
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .rev()
+            .filter_map(|[lo, hi, dst, font]| {
+                let (lo, hi) = (bytes(lo)?, bytes(hi)?);
+                let font = font.as_num().filter(|f| (0.0..=255.0).contains(f))? as usize;
+                (!lo.is_empty() && lo.len() == hi.len() && lo.len() <= MAX_CODE).then(|| (lo.len(), code(&lo), code(&hi), dst.clone(), font))
+            })
+            .collect();
+        Self { space, cids: maps(CIDS), notdefs: maps(NOTDEFS), bases }
     }
 
     /// The characters of show string `s` (PLRM 3rd ed., §5.11.5 "CMap Mapping" and "Handling
@@ -115,12 +142,16 @@ impl CMap {
                 at.and_then(|k| maps.get(k)).map(|m| (m.4, m.3.saturating_add(c - m.1), m.3))
             };
             let notdef = find(&self.notdefs, &mut work).map(|(_, _, base)| base);
-            out.push(match (matched.is_some(), find(&self.cids, &mut work)) {
-                (true, Some((font, cid, _))) => CidChar { font, cid, notdef },
+            let at = self.bases.iter().position(|m| m.0 == n && (m.1..=m.2).contains(&c));
+            work += at.map_or(self.bases.len(), |k| k + 1) as u64;
+            let base = at.and_then(|k| self.bases.get(k)).and_then(|m| Some((m.4, base_of(&m.3, c - m.1)?)));
+            out.push(match (matched.is_some(), find(&self.cids, &mut work), base) {
+                (true, Some((font, cid, _)), _) => CidChar { font, cid, notdef, base: None },
+                (true, None, Some((font, base))) => CidChar { font, cid: 0, notdef: None, base: Some(base) },
                 // No character mapping: the notdef mapping's CID, else font 0's CID 0.
                 _ => match find(&self.notdefs, &mut work) {
-                    Some((font, _, base)) if matched.is_some() => CidChar { font, cid: base, notdef: None },
-                    _ => CidChar { font: 0, cid: 0, notdef: None },
+                    Some((font, _, base)) if matched.is_some() => CidChar { font, cid: base, notdef: None, base: None },
+                    _ => CidChar { font: 0, cid: 0, notdef: None, base: None },
                 },
             });
             i += n;
@@ -136,6 +167,30 @@ impl CMap {
         let best = self.space.iter().map(|r| prefix(r)).max().unwrap_or(0);
         let pick = self.space.iter().filter(|r| best == 0 || prefix(r) == best).map(Vec::len).min();
         pick.unwrap_or(1)
+    }
+}
+
+/// What the code `k` codes after the first of a base-font mapping to `dst` maps to: a string's
+/// code with its last byte that much higher, the `k`th of an array of codes and names, or a
+/// name (TN #5099, `beginbfrange`).
+fn base_of(dst: &Obj, k: u32) -> Option<Base> {
+    match dst {
+        // An array's elements are read as codes and names only: an array may hold itself, so
+        // reading its arrays in turn could recurse without end.
+        Obj::Array { items, .. } => base_of_leaf(items.borrow().get(usize::try_from(k).ok()?)?, 0),
+        _ => base_of_leaf(dst, k),
+    }
+}
+
+/// [`base_of`] for a string or a name.
+fn base_of_leaf(dst: &Obj, k: u32) -> Option<Base> {
+    match dst {
+        Obj::Str(s) => {
+            let last = u32::from(s.len().checked_sub(1).and_then(|i| s.get(i))?).checked_add(k)?;
+            Some(Base::Code(u8::try_from(last).ok()?))
+        }
+        Obj::Name(n) if k == 0 => Some(Base::Name(n.clone())),
+        _ => None,
     }
 }
 
@@ -208,10 +263,26 @@ impl Interp<'_> {
                 }
                 self.cmap_append(if matches!(op, EndCidChar | EndCidRange) { CIDS } else { NOTDEFS }, out)?;
             }
-            // Mappings to character codes or names in base fonts aren't read: their codes take
-            // font 0's CID 0, as an unmapped code does.
+            // Mappings to character codes or names in base fonts (TN #5099, §§3.3 and 4).
             EndBfChar | EndBfRange => {
-                self.pop_mark_items()?;
+                let items = self.pop_mark_items()?;
+                let per = if op == EndBfChar { 2 } else { 3 };
+                if items.len() % per != 0 {
+                    return ps_err("rangecheck", op.name());
+                }
+                let mut out = Vec::with_capacity(items.len() / per * 4);
+                for m in items.chunks_exact(per) {
+                    let (lo, hi, dst) = match m {
+                        [lo, dst] => (lo, lo, dst),
+                        [lo, hi, dst] => (lo, hi, dst),
+                        _ => return ps_err("rangecheck", op.name()),
+                    };
+                    if !(matches!(lo, Obj::Str(_)) && matches!(hi, Obj::Str(_)) && matches!(dst, Obj::Str(_) | Obj::Name(_) | Obj::Array { .. })) {
+                        return ps_err("typecheck", op.name());
+                    }
+                    out.extend([lo.clone(), hi.clone(), dst.clone(), Obj::Int(self.cmap_font)]);
+                }
+                self.cmap_append(BASES, out)?;
             }
             UseFont => {
                 let n = self.pop_int()?;
@@ -221,7 +292,7 @@ impl Interp<'_> {
                 let name = self.pop()?;
                 let parent = self.find_cmap(&name)?;
                 let d = self.dicts.last().cloned().ok_or(PsError::Ps("dictstackunderflow", "usecmap".into()))?;
-                for k in [CODESPACE, CIDS, NOTDEFS] {
+                for k in [CODESPACE, CIDS, NOTDEFS, BASES] {
                     // Both arrays are copied into a new one: charged by its size first, as
                     // `cmap_append` charges its copy, so `usecmap` of a large CMap in a loop runs
                     // out of the budgets instead of the memory.
@@ -449,7 +520,7 @@ impl Interp<'_> {
     /// The mappings of CMap dictionary `d` (read once while it stays the same).
     pub(super) fn cmap(&mut self, d: &DictRef) -> Res<Rc<CMap>> {
         let array = |k: &str| d.borrow().get(&Key::name(k)).and_then(|a| a.items().cloned());
-        let key = [array(CIDS), array(CODESPACE), array(NOTDEFS)];
+        let key = [array(CIDS), array(CODESPACE), array(NOTDEFS), array(BASES)];
         let same = |a: &Option<Shared<Obj>>, b: &Option<Shared<Obj>>| match (a, b) {
             (Some(a), Some(b)) => a.same(b),
             (None, None) => true,
@@ -459,7 +530,7 @@ impl Interp<'_> {
             return Ok(m.clone());
         }
         let m = Rc::new(CMap::read(&d.borrow()));
-        self.spend((m.cids.len() + m.space.len() + m.notdefs.len()) as u64)?;
+        self.spend((m.cids.len() + m.space.len() + m.notdefs.len() + m.bases.len()) as u64)?;
         if self.cmaps.len() >= MAX_CMAPS {
             self.cmaps.remove(0);
         }
