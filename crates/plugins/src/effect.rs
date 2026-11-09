@@ -254,14 +254,22 @@ pub fn last_error(id: &str) -> Option<String> {
 
 /// Records how a run of plug-in `id`, or a check of what its result names, went: a failure as that
 /// origin's error (a painted effect's named after the plug-in, [`painted::named`]), a success
-/// clearing that origin's error only.
+/// clearing that origin's error. A run of an effect that paints nothing clears a refused
+/// reference's error too.
 fn note(id: &str, plugin: &crate::Plugin, origin: Origin, r: std::result::Result<(), &Error>) {
     let message = r.err().map(|e| if plugin.manifest().paint_output { painted::named(&plugin.manifest().name, e) } else { e.to_string() });
     let mut errors = ERRORS.lock().unwrap_or_else(|e| e.into_inner());
     let errors = errors.get_or_insert_with(HashMap::new);
     let failures = errors.entry(id.to_string()).or_default();
     match origin {
-        Origin::Run => failures.run = message,
+        Origin::Run => {
+            failures.run = message;
+            // Nothing checks the references of an effect that paints nothing, such as one that
+            // replaced a painted effect under this id.
+            if !plugin.manifest().paint_output {
+                failures.references = None;
+            }
+        }
         Origin::References => failures.references = message,
     }
     if failures.run.is_none() && failures.references.is_none() {
