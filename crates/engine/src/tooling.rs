@@ -277,7 +277,15 @@ impl Session {
 
     /// Give `t` the persistent options stored for it in `prefs`.
     fn restore_tool_settings(prefs: &Prefs, t: &mut dyn Tool) {
+        Self::restore_stores(prefs, t, |_| true);
+    }
+
+    /// Give `t` the persistent options stored for it in `prefs`, from the stores `wanted` accepts.
+    fn restore_stores(prefs: &Prefs, t: &mut dyn Tool, wanted: impl Fn(&str) -> bool) {
         for (store, keys) in settings::stores(t.id()) {
+            if !wanted(store) {
+                continue;
+            }
             let Some(saved) = prefs.tool_settings.get(store) else { continue };
             for k in keys {
                 if let Some(v) = saved.get(*k) {
@@ -287,6 +295,7 @@ impl Session {
         }
         // Alt switches the Pencil, Paintbrush or Blob Brush to Smooth, using Smooth Tool Options' Fidelity.
         if matches!(t.id(), "pencil" | "paintbrush" | "blobBrush")
+            && wanted("smooth")
             && let Some(v) = prefs.tool_settings.get("smooth").and_then(|s| s.get("fidelity"))
         {
             t.set_option("smoothFidelity", v);
@@ -420,6 +429,25 @@ impl Session {
     /// The error of a tool that panicked in the last [`Self::with_tool_cx`] call, if any.
     fn take_tool_panic(&mut self) -> Result<()> {
         self.tool_panic.take().map_or(Ok(()), Err)
+    }
+
+    /// The active document (its uid) and its [`crate::History::step`].
+    fn history_step(&self) -> Option<(u64, (u64, u64))> {
+        self.active().map(|d| (d.uid, d.history.step()))
+    }
+
+    /// Tell the active tool when the history moved, or another document became active, since it
+    /// last handled a pointer event or was last told ([`vectorcraft_tools::Tool::history_moved`]).
+    /// A lent selection tool is not told.
+    fn tell_tool_history_moved(&mut self) {
+        if self.lender.is_some() {
+            return;
+        }
+        let now = self.history_step();
+        if self.tool_step.is_some_and(|seen| Some(seen) != now) {
+            self.tool.history_moved();
+        }
+        self.tool_step = now;
     }
 
     /// Feed a pointer event to the active tool. Returns requests for the UI. While the tool computes
@@ -622,7 +650,9 @@ impl Session {
             return r;
         }
         self.leave_draw_inside(ev, view)?;
+        self.tell_tool_history_moved();
         let ev = &self.lend_selection_tool(ev);
+        let lent = self.lender.is_some();
         let mut acts = self.with_tool_cx(view, |t, cx| t.pointer(cx, ev));
         if !keep {
             acts.retain(|a| matches!(a, Action::Cancel | Action::Notify(_)));
@@ -634,6 +664,11 @@ impl Session {
             }
             self.apply_actions(acts)
         });
+        // The tool's own edits do not move the history for it. A selection tool that Cmd lends
+        // edits for the lender, which hears of the edit at its next event.
+        if !lent {
+            self.tool_step = self.history_step();
+        }
         match ev.kind {
             PointerKind::Down => self.press_point = Some(self.freeform_point),
             PointerKind::Up => self.press_point = None,
@@ -996,6 +1031,11 @@ impl Session {
         self.tool.transforming()
     }
 
+    /// Is the active tool resizing the selection by a bounding-box handle?
+    pub fn tool_resizing(&self) -> bool {
+        self.tool.resizing()
+    }
+
     /// With Real-time Drawing off, how far a Selection-tool move drag has carried the selection
     /// so far: the document moves on release, and the bounding box shows at this offset meanwhile.
     pub fn deferred_move(&self) -> Option<vectorcraft_geom::Vec2> {
@@ -1020,6 +1060,8 @@ impl Session {
     }
 
     pub fn overlays(&mut self, view: ViewInfo) -> Vec<Overlay> {
+        // The Blend tool's first pick is not marked after an edit that dropped it.
+        self.tell_tool_history_moved();
         let mut v = self.with_tool_cx(view, |t, cx| t.overlays(cx));
         // The Type tools draw the ports of selected type themselves.
         if !matches!(self.tool.id(), "type" | "areaType" | "typeOnPath" | "verticalType" | "verticalAreaType" | "verticalTypeOnPath") {
@@ -1134,7 +1176,10 @@ impl Session {
                 }
                 Self::restore_tool_settings(&self.prefs, lender);
             }
-            Self::restore_tool_settings(&self.prefs, self.tool.as_mut());
+            // Only the stores it shares with the tool set: the active tool's own options stay as they
+            // are, also in the middle of a drag that Escape can cancel.
+            let set = other.id();
+            Self::restore_stores(&self.prefs, self.tool.as_mut(), |store| settings::stores(set).any(|(s, _)| s == store));
         }
         out
     }
@@ -1323,25 +1368,48 @@ impl Session {
         Ok(ui)
     }
 
-    /// Canvas feedback while Real-time Drawing is off: run the pending preview command once, take
-    /// outlines from the objects it touched, then put the document back at the interaction snapshot.
-    fn deferred_preview_overlays_from_command(&mut self, cmd: &str, p: &Value) -> Vec<Overlay> {
-        if self.deferred_overlay_cache.as_ref().is_some_and(|(c, params, _)| c == cmd && params == p) {
-            return self.deferred_overlay_cache.as_ref().map(|(_, _, o)| o.clone()).unwrap_or_default();
+    /// With Real-time Drawing off, the selection's transform box ([`Session::transform_box`]) as the
+    /// pending preview of a handle resize leaves it, measured once per preview step; `None` when no
+    /// such preview is pending, or when the preview fails.
+    pub fn deferred_transform_box(&mut self) -> Option<vectorcraft_doc::OrientedBox> {
+        if !self.tool.resizing() {
+            return None;
         }
+        let (cmd, p) = self.unapplied_interaction_preview()?;
+        self.deferred_feedback(&cmd, &p)?.transform_box
+    }
+
+    fn deferred_preview_overlays_from_command(&mut self, cmd: &str, p: &Value) -> Vec<Overlay> {
+        self.deferred_feedback(cmd, p).map(|f| f.overlays.clone()).unwrap_or_default()
+    }
+
+    /// Canvas feedback while Real-time Drawing is off: run the pending preview command once, take
+    /// outlines from the objects it touched (and, during a handle resize, their transform box), then
+    /// put the document back at the interaction snapshot.
+    fn deferred_feedback(&mut self, cmd: &str, p: &Value) -> Option<&DeferredFeedback> {
+        if !self.deferred_overlay_cache.as_ref().is_some_and(|f| f.cmd == cmd && f.params == *p) {
+            let feedback = self.measure_deferred_preview(cmd, p)?;
+            self.deferred_overlay_cache = Some(feedback);
+        }
+        self.deferred_overlay_cache.as_ref()
+    }
+
+    fn measure_deferred_preview(&mut self, cmd: &str, p: &Value) -> Option<DeferredFeedback> {
         let (snapshot, selection, revision, paint, interaction_fields) = {
-            let Some(st) = self.active() else { return vec![] };
-            let Some(it) = st.interaction.as_ref() else { return vec![] };
+            let st = self.active()?;
+            let it = st.interaction.as_ref()?;
             if !std::sync::Arc::ptr_eq(&it.doc, &st.doc) {
-                return vec![];
+                return None;
             }
             let interaction_fields = (it.preview.clone(), it.copies.clone(), it.perspective_again.clone());
             (st.doc.clone(), st.selection.clone(), st.revision, self.pending_paint.clone(), interaction_fields)
         };
-        let overlays = if self.preview(cmd, p).is_ok() {
-            self.active().map(|st| outlines_for_selection(&st.doc, &st.selection)).unwrap_or_default()
+        let (overlays, transform_box) = if self.preview(cmd, p).is_ok() {
+            let overlays = self.active().map(|st| outlines_for_selection(&st.doc, &st.selection)).unwrap_or_default();
+            let objects = self.active().map(|st| st.selection.objects.clone()).unwrap_or_default();
+            (overlays, if self.tool.resizing() { self.transform_box(&objects) } else { None })
         } else {
-            vec![]
+            (vec![], None)
         };
         if let Ok(st) = self.doc_mut() {
             st.doc = snapshot;
@@ -1354,9 +1422,16 @@ impl Session {
             }
         }
         self.pending_paint = paint;
-        self.deferred_overlay_cache = Some((cmd.to_string(), p.clone(), overlays.clone()));
-        overlays
+        Some(DeferredFeedback { cmd: cmd.to_string(), params: p.clone(), overlays, transform_box })
     }
+}
+
+/// What the canvas shows for a deferred preview: see [`Session::deferred_transform_box`].
+pub(crate) struct DeferredFeedback {
+    cmd: String,
+    params: Value,
+    overlays: Vec<Overlay>,
+    transform_box: Option<vectorcraft_doc::OrientedBox>,
 }
 
 /// The most points the outlines of [`outlines_for_selection`] are drawn for, the same number as the

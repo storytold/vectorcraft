@@ -202,7 +202,9 @@ fn wheel_view(
 ) -> (egui::PointerState, egui::Modifiers, bool, Option<Pos2>) {
     let line = ui.ctx().options(|o| o.input_options.line_scroll_speed);
     let wheel_zooms = app.session.prefs.zoom_with_mouse_wheel;
-    let animate = animated_zoom(&app.session.prefs);
+    // A docked field may be drawn later and has not consumed its wheel event yet. Only canvas
+    // hover may start a zoom glide; existing glides still decay outside the canvas in `wheel`.
+    let animate = animated_zoom(&app.session.prefs) && resp.hovered();
     let turn_id = egui::Id::unique("canvas-wheel-turn");
     let turn_before: WheelTurn = ui.data(|d| d.get_temp(turn_id)).unwrap_or_default();
     let mut turn = turn_before;

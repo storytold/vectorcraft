@@ -5925,6 +5925,115 @@ fn a_symbol_defined_before_the_art_styles_reads_its_styled_objects() {
     assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
 }
 
+/// An art style named `Glow`: a path filled with gradient swatch `under`, then gradient swatch
+/// `over` at 50 % Screen above it.
+fn two_gradient_style(under: &str, over: &str) -> String {
+    let fill = |name: &str| {
+        format!(
+            "/BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n\
+             /FillStyle : 0 O\n1 ({name}) 0 0 0 1 1 0 0 1 0 0 Bg\n0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n"
+        )
+    };
+    format!(
+        "/KnownStyle :\n(Glow) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n{}\
+         /BasicFilter :\n(Blend Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n\
+         /BlendStyle : 2 0.5 0 0 0 Xy\n0 J 0 j 1 w 10 M []0 d0 XR\n/Def ;\n (BlendStyle) ,\n; /Dict ;\n /Part ,\n;\n /Part ,\n\
+         {}/BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n /Part ,\n;\n",
+        fill(over),
+        fill(under)
+    )
+}
+
+#[test]
+fn a_path_with_several_gradient_fills_comes_in_as_itself_where_its_look_places_them() {
+    // GUARDS: a path whose style stacks fills with their own opacity and blend mode came in as its drawn look.
+    let defs = "%AI5_BeginGradient: (A)\n(A) 0 2 Bd\n[\n<00FF>\n0\n%_0 0 0 0 1 0 0 2 1 6 50 0 Bs\n%_0 0 0 0 0 0 1 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n\
+                %AI5_BeginGradient: (B)\n(B) 0 2 Bd\n[\n<00FF>\n0\n%_0 0 0 0 0 1 0 2 1 6 50 0 Bs\n%_0 0 0 0 1 1 1 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
+    let rect = rect_path(0.0, 0.0, 100.0, 50.0);
+    let hidden_rect = rect.replace('\n', "\n%_");
+    // The drawn look: the path filled with each gradient where the app placed it (its transparency
+    // left out: only where the gradients lie is read from it).
+    let look = |name: &str, x0: f64| format!("{rect}Bb\n1 ({name}) {x0} 25 0 50 1 0 0 1 0 0 Bg\nf\n0 BB\n");
+    let square = |under: &str, over: &str| format!("0 Ae\nu\n{}{}U\n%_{hidden_rect}f\n1 (Glow) XW\n", look(under, 0.0), look(over, 50.0));
+    let r = read_ok(&format!("%AI9_BeginArtStyles\n{}%AI9_EndArtStyles\n{defs}{}", two_gradient_style("A", "B"), layer(&square("A", "B"))));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the object, not its look: {a:#?}");
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    let fills: Vec<_> = a[0]
+        .appearance
+        .items
+        .iter()
+        .map(|i| match (i, i.paint()) {
+            (AppearanceItem::Fill(f), Paint::Gradient(g)) => (g.swatch.clone(), g.geom.map(|g| g.start.x), f.opacity, f.blend),
+            _ => panic!("{i:?}"),
+        })
+        .collect();
+    assert_eq!(fills, [(Some("A".into()), Some(0.0), 1.0, BlendMode::Normal), (Some("B".into()), Some(50.0), 0.5, BlendMode::Screen)]);
+    // Two fills of one swatch: which placement is whose isn't known, so the drawn look stays.
+    let same = read_ok(&format!("%AI9_BeginArtStyles\n{}%AI9_EndArtStyles\n{defs}{}", two_gradient_style("A", "A"), layer(&square("A", "A"))));
+    assert!(same.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", same.warnings);
+    // One gradient over a solid fill, on a path filled with that gradient placed elsewhere: the
+    // gradient lies where the drawn look has it, not where the path's own fill does.
+    let one = two_gradient_style("A", "B").replace("1 (A) 0 0 0 1 1 0 0 1 0 0 Bg\n", "0 0 0 1 0 0 0 Xa\n");
+    let own = format!(
+        "0 Ae\nu\n0 0 0 1 0 0 0 Xa\n{rect}f\n{}U\n%_{hidden_rect}Bb\n%_1 (B) 0 25 0 100 1 0 0 1 0 0 Bg\n%_f\n%_0 BB\n1 (Glow) XW\n",
+        look("B", 50.0)
+    );
+    let one = read_ok(&format!("%AI9_BeginArtStyles\n{one}%AI9_EndArtStyles\n{defs}{}", layer(&own)));
+    let a = art(&one.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    let placed: Vec<_> = a[0]
+        .appearance
+        .items
+        .iter()
+        .map(|i| match i.paint() {
+            Paint::Gradient(g) => g.geom.map(|g| g.start.x),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(placed, [None, Some(50.0)], "{:?}", one.warnings);
+    // A look that doesn't paint the gradient (a raster, say): the drawn look stays.
+    let flat = format!("0 Ae\nu\n{RED}{rect}f\nU\n%_{hidden_rect}f\n1 (Glow) XW\n");
+    let flat = read_ok(&format!("%AI9_BeginArtStyles\n{}%AI9_EndArtStyles\n{defs}{}", two_gradient_style("A", "B"), layer(&flat)));
+    assert!(flat.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", flat.warnings);
+}
+
+/// A stack of solid colours comes in live too: a path whose style is a solid fill under a stroke
+/// without a brush at 50 % Screen comes in as itself with both, each with its own transparency.
+#[test]
+fn a_path_with_a_solid_fill_under_a_screened_stroke_comes_in_as_itself() {
+    let stroke = "/BasicFilter :\n(Stroke Style Filter) 0 0 /Filter ,\n1 /Visible ,\n2 /FillOrStroke ,\n/Dictionary : /NotRecorded ,\n\
+                  /StrokeStyle : 0 R\n0 1 1 0 1 0 0 XA\n0 J 0 j 2 w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n";
+    let over = "/BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n\
+                /FillStyle : 0 O\n1 (B) 0 0 0 1 1 0 0 1 0 0 Bg\n0 1 Xd\n/Def ;\n (FillStyle) ,\n";
+    let style = two_gradient_style("A", "B");
+    assert!(style.contains(over));
+    let style = style.replace(over, stroke).replace("1 (A) 0 0 0 1 1 0 0 1 0 0 Bg\n", "0 0 0 1 0 0 0 Xa\n");
+    let rect = rect_path(0.0, 0.0, 100.0, 50.0);
+    let hidden_rect = rect.replace('\n', "\n%_");
+    let square = format!("0 Ae\nu\n0 0 0 1 0 0 0 Xa\n{rect}f\n0 1 1 0 1 0 0 XA\n2 w\n{rect}S\nU\n%_{hidden_rect}f\n1 (Glow) XW\n");
+    let r = read_ok(&format!("%AI9_BeginArtStyles\n{style}%AI9_EndArtStyles\n{}", layer(&square)));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the object, not its look: {a:#?}");
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    let items: Vec<_> = a[0]
+        .appearance
+        .items
+        .iter()
+        .map(|i| match i {
+            AppearanceItem::Fill(f) => ("fill", matches!(f.paint, Paint::Solid { .. }), f.opacity, f.blend),
+            AppearanceItem::Stroke(s) => {
+                ("stroke", matches!(s.paint, Paint::Solid { .. }) && s.brush.is_none() && s.width == 2.0, s.opacity, s.blend)
+            }
+        })
+        .collect();
+    assert_eq!(items, [("fill", true, 1.0, BlendMode::Normal), ("stroke", true, 0.5, BlendMode::Screen)]);
+}
+
 /// `node` is the red square of [`styled_square`] read as itself with [`ART_STYLES`]' `Blue`: a blue
 /// fill and a drop shadow, not the look it draws.
 fn assert_blue_square(node: &Node) {
@@ -5972,6 +6081,37 @@ fn an_object_in_a_brushs_art_with_a_style_this_reads_comes_in_as_itself() {
     let [square] = art.as_slice() else { panic!("{art:#?}") };
     assert_blue_square(square);
     assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+}
+
+/// The art of an opacity mask in a brush's art takes ids of the document, as the rest of the art
+/// does: no object of the brush's art shares an id with an object of the layers.
+#[test]
+fn a_brushs_opacity_mask_art_takes_ids_of_the_document() {
+    fn ids(n: &Node, out: &mut Vec<vectorcraft_doc::NodeId>) {
+        out.push(n.id);
+        if let Some(m) = n.extras().mask.as_ref() {
+            ids(&m.art, out);
+        }
+        for c in n.children().into_iter().flatten() {
+            ids(c, out);
+        }
+    }
+    let square = rect_path(0.0, 0.0, 10.0, 10.0);
+    let mask_art: String = format!("1 g\n{square}f\n").lines().map(|l| format!("%_{l}\n")).collect();
+    let mask = format!("%_/ArtDictionary :\n%_/Mask :\n%_X=\n{mask_art}%_X+\n%_(Art) ,\n%_1 /Bool (Clipping) ,\n%_; (AI9_Mask) ,\n%_;\n");
+    let section = format!("%AI8_BeginBrushPattern\n(Dot art)\n0 A\n{RED}{square}f\n{mask}%AI8_EndBrushPattern\n");
+    let shapes: String = (0..12).map(|i| format!("{RED}{}f\n", rect_path(f64::from(i) * 20.0, 0.0, f64::from(i) * 20.0 + 10.0, 10.0))).collect();
+    let r = read_ok(&format!("{section}{}{}", plugin_object(SCATTER, "Spray", SPRAY), layer(&shapes)));
+    let lib = vectorcraft_brush::library(&r.doc);
+    let spray = lib.iter().find(|b| b.name == "Spray").unwrap_or_else(|| panic!("{:?}", r.warnings));
+    let art = spray.art();
+    assert!(art.iter().any(|n| n.extras().mask.is_some()), "the mask is read: {art:#?}");
+    let mut all = Vec::new();
+    for n in r.doc.layers.iter().map(|l| &**l).chain(art) {
+        ids(n, &mut all);
+    }
+    let unique: std::collections::HashSet<_> = all.iter().copied().collect();
+    assert_eq!(unique.len(), all.len(), "{all:?}");
 }
 
 /// An art styles section inside a symbol's, a pattern's or a brush's art is skipped: the file's own
@@ -6184,6 +6324,50 @@ fn an_object_in_a_symbols_art_with_a_listed_style_is_linked() {
     assert_eq!(art.extras().graphic_style, Some(1), "{art:#?}");
 }
 
+/// Editing data with symbols and no layers (a symbol library) gives its symbols: in the symbol
+/// list's order with the unlisted one after them, with their registration points and the images
+/// their art shows, without the one holding an instance of a symbol the data doesn't define, and
+/// with the object linked to a listed graphic style linked to it by its id.
+#[test]
+fn a_symbol_library_without_layers_gives_its_symbols() {
+    let styles = styles_and_list(&[fill_style("Blue", "0 0 0 0 0 0 1 Xa\n")], &["Blue"]);
+    // The template box's center is (100.5, 50.5): art space's origin is at canvas (8091, 8242).
+    let nested = instance("Dot", [1.0, 0.0, 0.0, -1.0, -8081.0, 8237.0]);
+    let lost = instance("Ghost", [1.0, 0.0, 0.0, -1.0, -8081.0, 8237.0]);
+    let m = "[ 5 0 0 5 -8096 8244.5 ]";
+    let raster = format!(
+        "%AI5_File:\n%AI5_BeginRaster\n() 1 XG\n/DeviceRGB XN\n{m} 2 1 0 Xh\n{m} 0 0 2 1 2 1 8 3 0 0 1 0 4 4 0 0\n\
+         %%BeginData: 6\rXI\nABCDEF%%EndData\r\nXH\r\n%AI5_EndRaster\r\nN\n"
+    );
+    let defs = symbols(
+        &(symbol("Dot", &dot(), 1)
+            + &symbol("Pic", &raster, 5)
+            + &symbol("Pair", &nested, 5)
+            + &symbol("Tile", &styled_square("Blue"), 5)
+            + &symbol("Lost", &lost, 5)),
+    );
+    let list = "%AI24_BeginSymbolList\n(Tile)\n(Pair)\n(Lost)\n(Dot)\n%AI24_EndSymbolList\n";
+    let body = format!("%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n{styles}{defs}{list}");
+    let read = super::symbols(stream(&body).as_bytes()).expect("the library's symbols");
+    let names: Vec<&str> = read.symbols.iter().map(|(s, _)| s.name.as_str()).collect();
+    assert_eq!(names, ["Tile", "Pair", "Dot", "Pic"]);
+    let registrations: Vec<u8> = read.symbols.iter().map(|(_, r)| r.0).collect();
+    let center = vectorcraft_doc::SymbolRegistration::CENTER.0;
+    assert_eq!(registrations, [center, center, 0, center]);
+    let Some(((tile, _), (pair, _))) = read.symbols.first().zip(read.symbols.get(1)) else { panic!("two symbols") };
+    assert_eq!(tile.art.extras().graphic_style, Some(1), "{:#?}", tile.art);
+    // Dot sits at (10, 5) in Pair's art.
+    let mut doc = Document::new(1.0, 1.0);
+    doc.symbols = read.symbols.iter().map(|(s, _)| s.clone()).collect();
+    assert_eq!(pair.art.visual_bounds_with(&doc.symbol_boxes()), Some(Rect::new(8.0, 3.0, 12.0, 7.0)));
+    let keys: Vec<String> =
+        doc.symbols.iter().filter_map(|s| if let NodeKind::Image(im) = &s.art.kind { Some(im.key.clone()) } else { None }).collect();
+    assert_eq!(keys.len(), 1);
+    assert_eq!(read.images.keys().cloned().collect::<Vec<_>>(), keys);
+    // Without symbols there are none to give.
+    assert!(super::symbols(stream(&styles).as_bytes()).is_none());
+}
+
 #[test]
 fn an_object_in_a_patterns_art_with_a_listed_style_is_linked() {
     let defs = styles_and_list(&[fill_style("Blue", "0 0 0 0 0 0 1 Xa\n")], &["Blue"]);
@@ -6194,6 +6378,35 @@ fn an_object_in_a_patterns_art_with_a_listed_style_is_linked() {
     let [square] = def.art.as_slice() else { panic!("{:#?}", def.art) };
     assert_eq!(fill(square).color(), Some(Color::rgb(0.0, 0.0, 1.0)));
     assert_eq!(square.extras().graphic_style, Some(1), "{square:#?}");
+}
+
+/// The art of an opacity mask in a pattern's art takes ids of the document, as the rest of the art
+/// does: no object of the pattern's art shares an id with an object of the layers.
+#[test]
+fn a_patterns_opacity_mask_art_takes_ids_of_the_document() {
+    fn ids(n: &Node, out: &mut Vec<vectorcraft_doc::NodeId>) {
+        out.push(n.id);
+        if let Some(m) = n.extras().mask.as_ref() {
+            ids(&m.art, out);
+        }
+        for c in n.children().into_iter().flatten() {
+            ids(c, out);
+        }
+    }
+    let square = rect_path(0.0, 0.0, 10.0, 10.0);
+    let mask_art: String = format!("1 g\n{square}f\n").lines().map(|l| format!("%_{l}\n")).collect();
+    let mask = format!("%_/ArtDictionary :\n%_/Mask :\n%_X=\n{mask_art}%_X+\n%_(Art) ,\n%_1 /Bool (Clipping) ,\n%_; (AI9_Mask) ,\n%_;\n");
+    let pattern = format!("%AI3_BeginPattern: (P)\n(P) 0 0 10 10\n0 A\n0 Xw\n{RED}{square}f\n{mask}E\n%AI3_EndPattern\n");
+    let shapes: String = (0..12).map(|i| format!("{RED}{}f\n", rect_path(f64::from(i) * 20.0, 0.0, f64::from(i) * 20.0 + 10.0, 10.0))).collect();
+    let r = read_ok(&format!("{pattern}{}", layer(&shapes)));
+    let def = r.doc.pattern("P").unwrap_or_else(|| panic!("{:?}", r.warnings));
+    assert!(def.art.iter().any(|n| n.extras().mask.is_some()), "the mask is read: {:#?}", def.art);
+    let mut all = Vec::new();
+    for n in r.doc.layers.iter().chain(&def.art) {
+        ids(n, &mut all);
+    }
+    let unique: std::collections::HashSet<_> = all.iter().copied().collect();
+    assert_eq!(unique.len(), all.len(), "{all:?}");
 }
 
 #[test]
@@ -6322,7 +6535,7 @@ fn each_pathfinder_operation_on_a_group_draws_as_vectorcraft_draws_it() {
         // Each result's box and paints; Outline's lines start where each square's path starts, so
         // the results are compared in a sorted order.
         let faces = |g: &Node| -> Vec<String> {
-            let mut faces: Vec<String> = vectorcraft_effects::pathfinder_children(g, None)
+            let mut faces: Vec<String> = vectorcraft_effects::pathfinder_children(None, g, None)
                 .unwrap()
                 .iter()
                 .map(|n| {
@@ -8775,6 +8988,54 @@ fn a_pattern_brushs_five_slots_are_kept() {
     assert!(matches!(d.kind, brush::DraftKind::Scatter { ref art, .. } if art == "Dot art"), "{d:?}");
     let d = brush::parse_tool_object(brush::Tool::Art, "Ribbon", RIBBON).unwrap();
     assert!(matches!(d.kind, brush::DraftKind::Art { ref art, .. } if art == "Ribbon art"), "{d:?}");
+}
+
+/// An Art brush in the older form (first number 1: one field fewer before its 8 numbers) is read
+/// with the art of its section, but not as plain (its numbers aren't known); a Scatter brush in
+/// that form isn't read (its values aren't all there).
+#[test]
+fn an_older_art_brush_comes_in_with_its_art() {
+    const OLD_RIBBON: &str = "1 / Ribbon art/ / / / / 0 1 /  1 0 1 0 1 0 0 0";
+    let d = brush::parse_tool_object(brush::Tool::Art, "Ribbon", OLD_RIBBON).unwrap();
+    assert!(matches!(d.kind, brush::DraftKind::Art { ref art, plain: false, .. } if art == "Ribbon art"), "{d:?}");
+    let brush::DraftKind::Art { ref brush, .. } = d.kind else { panic!("art") };
+    assert_eq!(brush.colorization, vectorcraft_brush::ArtBrush::default().colorization, "the default colorization");
+    // A count of numbers neither form has isn't read.
+    for bad in ["1 / Ribbon art/ / / / / 0 1 /  1 0 1 0 1 0 0", "1 / Ribbon art/ / / / / 0 1 /  1 0 1 0 1 0 0 0 0 0 0 0 0 0 0 0"] {
+        assert_eq!(brush::parse_tool_object(brush::Tool::Art, "Ribbon", bad), Err(brush::BrushError::Values), "{bad}");
+    }
+    assert_eq!(brush::parse_tool_object(brush::Tool::Scatter, "Spray", "1 /Dot art/ 0 1 /  1 0 1 0 1 0 0 0"), Err(brush::BrushError::Values));
+    // 8 numbers are the older form whatever the first number says: read with the defaults.
+    let d = brush::parse_tool_object(brush::Tool::Art, "Ribbon", "0 / Ribbon art/ / / / / 0 1 /  1 0 1 0 1 0 0 0").unwrap();
+    let brush::DraftKind::Art { ref brush, ref art, plain } = d.kind else { panic!("art") };
+    assert_eq!((art.as_str(), plain, brush.colorization), ("Ribbon art", false, vectorcraft_brush::ArtBrush::default().colorization));
+    let objects = [plugin_object(ART_BRUSH, "Ribbon", OLD_RIBBON), plugin_object(ART_BRUSH, "Bare", "1 / / / / / / 0 1 /  1 0 1 0 1 0 0 0")].concat();
+    let r = read_ok(&format!("{}{objects}{}", brush_art("Ribbon art", 4.0), layer("")));
+    let lib = vectorcraft_brush::library(&r.doc);
+    let vectorcraft_brush::BrushKind::Art(a) = brush_named(&lib, "Ribbon") else { panic!("art") };
+    assert_eq!(a.art.geometric_bounds().map(|b| (b.width(), b.height())), Some((4.0, 4.0)), "the art of its section");
+    assert_eq!(lib.len(), 1, "a brush naming no art is left out");
+    assert!(r.warnings.iter().any(|w| w.ends_with("Brushes panel (1)")), "{:?}", r.warnings);
+}
+
+/// A Pattern brush needs only its first 3 numbers, its scale the third (as a percentage), so the
+/// older form's 8 numbers read too; fewer than 3 aren't read.
+#[test]
+fn a_pattern_brush_reads_its_scale_from_three_or_more_numbers() {
+    const SLOTS: &str = "1 / Tile one/ Tile two/ / / Tile five/ 0 1 / ";
+    for numbers in ["1 0 0.5", "1 0 0.5 0 1 0 0 0"] {
+        let d = brush::parse_tool_object(brush::Tool::Pattern, "Fence", &format!("{SLOTS}{numbers}")).unwrap();
+        let brush::DraftKind::Pattern { tiles, scale } = d.kind else { panic!("{d:?}") };
+        assert_eq!(tiles[1].as_deref(), Some("Tile two"), "{numbers}");
+        assert!((scale - 50.0).abs() < 1e-9, "{numbers}: {scale}");
+    }
+    for numbers in ["", "1", "1 0"] {
+        assert_eq!(
+            brush::parse_tool_object(brush::Tool::Pattern, "Fence", &format!("{SLOTS}{numbers}")),
+            Err(brush::BrushError::Values),
+            "{numbers:?}"
+        );
+    }
 }
 
 /// A brush's art filled with a pattern the file defines before it is read, with that pattern.

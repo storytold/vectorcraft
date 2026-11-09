@@ -107,7 +107,7 @@ the two can still win that race.
 | `ui.render` | `{path?, scale?, artboard?, data?, traceViews?}` | render an artboard headlessly (PNG with the pixels of `app.export {format: "png", background: "white"}` at the same scale; `artboard`: its 0-based index, default the first; `traceViews: true`: Image Trace objects draw in their View, as on the canvas, instead of their tracing result): written to `path`, else (or with `data: true` as well) sent back as `pngBase64` |
 | `ui.render` | `{path?, scale?, artboard?, data?}` | render an artboard headlessly (PNG with the pixels of `app.export {format: "png", background: "white"}` at the same scale; `artboard`: its 0-based index, default the first): written to `path`, else (or with `data: true` as well) sent back as `pngBase64` |
 | `ui.resize` / `ui.focus` | | |
-| `app.open` / `app.save` / `app.export` / `app.quit` | `{path}` / `{path?}` / `{path?, format?, artboard?, range?, scale?, …}` | `app.open` reads every format `document.open` reads (see `document.formats`) and returns its result (`{index, title, format, warnings, …}`; `warnings` say what didn't come in as it was, such as an EPS shown as its preview image and why its PostScript couldn't be read), or null when a dialog asks first or a library loads. `app.export` encodes through the engine's `document.export` (same options; the document keeps its path) and writes `path` through the host; without `path` it returns `{dataBase64, format, bytes}`, as headless mode does. `app.quit`, `file.close` and `file.closeAll` first open a `saveChanges` dialog for each modified document (they return `{"pending": "saveChanges"}`): `ui.dialog.confirm` saves, `ui.dialog.set {field: "discard", value: true}` then confirm discards, `ui.dialog.cancel` cancels the whole close or quit |
+| `app.open` / `app.save` / `app.export` / `app.quit` | `{path, importer?, params?}` / `{path?}` / `{path?, format?, artboard?, range?, scale?, …}` | `app.open` reads every format `document.open` reads (see `document.formats`) and returns its result (`{index, title, format, warnings, …}`; `warnings` say what didn't come in as it was, such as an EPS shown as its preview image and why its PostScript couldn't be read), or null when a dialog asks first or a library loads. With `importer` (an importer plug-in's format id, `plugin.<id>`) it runs `file.openWith`: the file opens with that importer, also when a built-in format reads its extension, with the importer's parameters `params` (their defaults when omitted; no dialog asks for them). Without `importer`, `params` go to the importer that opens the file, and a built-in format does not read them. `app.export` encodes through the engine's `document.export` (same options; the document keeps its path) and writes `path` through the host; without `path` it returns `{dataBase64, format, bytes}`, as headless mode does. It refuses a key that no format takes, and an unknown key inside a PDF or EPS option object, before it writes anything (`docs/mcp.md`, Parameter keys). `app.quit`, `file.close` and `file.closeAll` first open a `saveChanges` dialog for each modified document (they return `{"pending": "saveChanges"}`): `ui.dialog.confirm` saves, `ui.dialog.set {field: "discard", value: true}` then confirm discards, `ui.dialog.cancel` cancels the whole close or quit |
 | `app.export` with `useArtboards` | `{path, useArtboards: true, range? \| artboards?, …}` | Export As: PNG, JPEG and WebP write one file per chosen artboard (default all; SVG does so for a `range`), `<path stem>-<artboard>.<ext>`, and return `{path, files: [path…]}`; a PDF keeps them as pages of `path`. `useArtboards: false` covers the bounds of the visible art. The menu's Export As… is `file.exportAs`: the `exportAs` dialog (`format`, `useArtboards`, `all`, `range`), then a save dialog and the format's options: `pngOptions` / `jpgOptions` / `webpOptions`, `svgOptions`, or `savePdf` for a PDF with Use Artboards |
 | `ui.dialog.*` on `gradientStop` | `{field: "color" \| "opacity" \| "location", value}` | double-clicking a stop on the Gradient tool's annotator opens its popover (fields `index`, `x`, `y`, `tab`); set `color` (hex), `opacity` or `location` (percentages) and `ui.dialog.confirm` to apply them to the selected stop. `gradient.selectStop {index}` picks the stop the annotator, the panels and Delete/←/→ (`ui.key`) act on |
 | `engine.execute` `ui.savePdfDialog` | `{path?, preset?, range?, …document.exportPdf options}` | opens the Save PDF dialog (`file.export.pdf` with no params opens it too). Its fields are the `document.exportPdf` options: set `compatibility` with `ui.dialog.set {field: "compatibility", value: "1.5"}`, a whole section with `{field: "compression", value: {…}}`, the artboards with `__allArtboards: false` and `range`, the visible section with `__section` (General, Compression, Marks and Bleeds, Output, Advanced, Security, Summary). `ui.dialog.confirm` writes `path` (else asks for one), returns `{path, bytes, warnings}` and opens the file when `viewAfterSaving` is set |
@@ -213,7 +213,9 @@ after it), `__plugin` (the plug-in id) and `preview`. It previews `plugin.run` o
 `ui.dialog.confirm` keeps the result as one undo step and `ui.dialog.cancel` rolls it back. Live-effect plug-ins open
 the `effect` dialog (`effect.dialog {effect: "plugin.<id>"}`). An exporter plug-in with parameters opens the
 `pluginExport` dialog once Export As has picked the file: one field per parameter, `__plugin`, and `__export` (the
-export's own parameters); `ui.dialog.confirm` writes the file. `ui.installPlugin {path?}` installs a `.wasm` (without
+export's own parameters); `ui.dialog.confirm` writes the file. An importer plug-in with parameters opens the
+`pluginImport` dialog when `file.openWith` is given no `params`: one field per parameter, `__plugin`, and `__open`
+(`path` and `importer`); `ui.dialog.confirm` opens the file. `ui.installPlugin {path?}` installs a `.wasm` (without
 a path it asks for one); see [plugins.md](plugins.md).
 
 Overprint Black: the Edit → Edit Colors → Overprint Black… menu item opens a `command` parameter dialog for
@@ -243,6 +245,11 @@ Another mode, `lab` included, answers an error. The desktop app keeps both setti
 Color Themes panel (`window.panel {panel: "colorThemes"}`): its Create tab makes a theme on a harmony wheel and its
 My Themes tab lists the saved themes; every action runs a command (`colorTheme.save`, `colorTheme.delete`,
 `colorTheme.addToSwatches`, `swatch.newGroup` for the theme being made), and `colorTheme.list` reads the library.
+
+Color Wheel panel (`window.panel {panel: "colorWheel"}`): a hue ring around a saturation and brightness square. A
+pick runs the commands the Color panel's sliders run: `paint.setFill` or `paint.setStroke` with `keepModel`,
+`paint.editGradient` for a gradient's selected stop, and `paint.freeform.setPoint` for a freeform gradient's selected
+point (the first stop or point when none is selected).
 
 Edit Colors dialogs: `ui.colorBalanceDialog` opens Adjust Colors (`colorBalance`: fields `mode` `gray`/`rgb`/`cmyk`/
 `global`, the channels `r` `g` `b` / `c` `m` `y` `k` / `gray` / `tint` (global mode) from −100 to 100, `convert`, `fill`, `stroke`,
@@ -336,7 +343,9 @@ when the app starts, off by default) turns off the desktop's frame and uses the 
 sessions where the desktop would draw the frame: X11 sessions, Wayland compositors that draw server-side decorations
 such as KDE Plasma, and a window opened through XWayland. System Title Bar and `VECTORCRAFT_TITLEBAR` (`app`, or
 `system` or `desktop`) take precedence over it. The checkbox is dimmed while either applies, and a note under it names
-each one that applies.
+each one that applies. `VECTORCRAFT_TITLEBAR` also takes precedence over System Title Bar for the run it is set in:
+`app` keeps the app bar as the title bar with System Title Bar on. While the variable is set, the Preferences dialog dims
+System Title Bar and its `__titlebarFromEnv` field is `true`.
 
 Fill/Stroke chips and panel shortcuts: the Control bar's and Properties' Fill and Stroke chips bring their proxy
 forward (`paint.toggleActive {fill}`) and open a popover with the Swatches panel (Shift-click: the Color panel's mixer);

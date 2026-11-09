@@ -183,6 +183,10 @@
 	Anti-Alias	Kenar Yumuşatma
 	Anti-alias Rasters	Kenar Yumuşatma Rasterleri
 	Anti-aliased Artwork	Kenar Yumuşatılmış Sanat Çalışması
+	Anti-aliasing Method	Kenar Yumuşatma Yöntemi
+antiAlias	Sharp	Keskin
+	Crisp	Net
+	Strong	Güçlü
 	Anti-aliasing:	Kenar yumuşatma:
 	Any Kind	Her Türlü
 	Font Technology	Yazı Tipi Teknolojisi
@@ -543,6 +547,11 @@ font-technology	Variable	Değişken
 	Color Table ({n} colors)	Renk Tablosu ({n} renkleri)
 	Color Theme	Renk Teması
 	Color Themes	Renk Temaları
+	Color Wheel	Renk Tekerleği
+	Hue ring	Renk tonu halkası
+	Saturation and brightness	Doygunluk ve parlaklık
+	Color field	Renk seçim alanı
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Renk Türü:
 	Color:	Renk:
 	Colorize	Renklendir
@@ -1103,6 +1112,17 @@ font-technology	Variable	Değişken
 	Exporting {}	{} dışa aktarılıyor
 	Export…	İhracat…
 	Extrude & Bevel…	Ekstrüzyon ve Eğim…
+	3D (Classic)	3D (Klasik)
+	Extrude & Bevel (Classic)…	Ekstrüzyon ve Eğim (Klasik)…
+	Surface	Yüzey
+	Wireframe	Tel Kafes
+	No Shading	Gölgeleme Yok
+	Plastic	Plastik
+	Highlight Intensity	Parlama Yoğunluğu
+	Highlight Size	Parlama Boyutu
+	Blend Steps	Karışım Adımları
+	Shading Color	Gölgeleme Rengi
+	Draw Hidden Faces	Gizli Yüzleri Çiz
 	Eyedropper	Damlalık
 	Sample Color from Screen	Ekrandan Örnek Renk
 	This system has no screen color sampler	Bu sistemin ekran rengi örnekleyicisi yok
@@ -1811,6 +1831,10 @@ font-technology	Variable	Değişken
 	Mojikumi	Mojikumi
 	Mojikumi Set	Mojikumi Seti
 	Kinsoku Set	Kinsoku Seti
+	Kinsoku Shori Type	Kinsoku Shori Türü
+	Push In First	Önce İçeri
+	Push Out First	Önce Dışarı
+	Push Out Only	Yalnızca Dışarı
 	Hard	Sert
 	Soft	Yumuşak
 	Monitor RGB	RGB'yi izleyin
@@ -3901,6 +3925,7 @@ axis	Both	Her İkisi
 @msg	Targa files are RGB: colorModel rgb	Targa dosyaları RGB'dir: colorModel rgb
 @msg	Text Wrap: select a wrap object	Metin Sarma: bir sarma nesnesi seçin
 @msg	This shortcut file is in a form VectorCraft can't read.	Bu kısayol dosyası VectorCraft'ın okuyamayacağı bir biçimdedir.
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` "none", "sharp", "crisp" veya "strong" olmalıdır
 @msg	`aspect` must be a number (%)	`aspect` bir sayı olmalıdır (%)
 @msg	`at` must be [x, y]	`at` [x, y] olmalıdır
 @msg	`color` must be a colour	`color` bir renk olmalıdır
@@ -4262,6 +4287,13 @@ axis	Both	Her İkisi
 @msg	select an image	bir resim seç
 @msg	select an object in perspective	perspektifte bir nesne seç
 @msg	select artwork (or a colour group) to recolor	yeniden renklendirilecek resmi (veya bir renk grubunu) seçin
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	Yeniden renklendirme tamamlandı; değiştirilmeden kalan: {locked} ve {hidden}
+@msg	Recolor completed; {objects} were left unchanged	Yeniden renklendirme tamamlandı; değiştirilmeden kalan: {objects}
+@msg	Recolor completed; {objects} was left unchanged	Yeniden renklendirme tamamlandı; değiştirilmeden kalan: {objects}
+@msg	1 locked object	1 kilitli nesne
+@msg	{n} locked objects	{n} kilitli nesne
+@msg	1 hidden object	1 gizli nesne
+@msg	{n} hidden objects	{n} gizli nesne
 @msg	select at least two objects	en az iki nesne seç
 @msg	exit isolation mode first	önce izolasyon modundan çık
 @msg	select objects, not layers	katmanları değil nesneleri seçin
@@ -4599,6 +4631,10 @@ axis	Both	Her İkisi
 @msg	the PSD file is cut short	PSD dosyası kısa kesildi
 @msg	the PSD file's header is damaged	PSD dosyasının başlığı hasarlı
 @msg	the PSD file's image data can't be read: {e}	PSD dosyasının görüntü verileri okunamıyor: {e}
+@msg	the JPEG XL file is cut short	JPEG XL dosyası kısa kesildi
+@msg	the JPEG XL container is too large to read	JPEG XL kapsayıcısı okunamayacak kadar büyük
+@msg	CMYK JPEG XL images can't be read	CMYK JPEG XL görüntüleri okunamıyor
+@msg	the JPEG XL file can't be read: {e}	JPEG XL dosyası okunamıyor: {e}
 	Video	video
 	De-Interlace…	Taramasızlaştırma…
 	De-Interlace	Taramasızlaştırma
@@ -5760,6 +5796,11 @@ theme	Appearance	Görünüm
 @msg	byColor can't split Auto Grouping groups: trace without Auto Grouping	byColor, Otomatik Gruplama gruplarını bölemez: Otomatik Gruplama olmadan izleyin
 @msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	byColor, canlı Pathfinder efekti olan bir izlemeyi yeniden gruplayamaz: byColor olmadan genişletin
 	Gap Length:	Boşluk Uzunluğu:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Düz Logo modu keepColors kullanmaz: logoColors içinde adı verilen renkleri veya bulduğu renkleri izler.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Hiçbir şey izlenmedi: izlemenin bulduğu renklerin hiçbiri keepColors ({_1}) ile eşleşmiyor.
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Hiçbir şey izlenmedi: Rengi Yoksay, keepColors içinde listelenen renklerin tüm alanlarını dışarıda bırakıyor.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	Hiçbir şey izlenmedi: keepColors ile eşleşen renkler hiçbir yol oluşturmuyor.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: izlemenin bulduğu renklerin hiçbiri {c} ile eşleşmiyor, bu yüzden bu renkten hiçbir şey izlenmiyor.
 @msg	`colorGroup` needs `library: "document"`	`colorGroup` için `library: "document"` gerekir
 @msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` için `palette: "documentLibrary"` gerekir
 @msg	`colorGroup` needs `mode: "color"`	`colorGroup` için `mode: "color"` gerekir
@@ -5854,16 +5895,33 @@ axis	Y Axis	Y ekseni
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	modül `env.{name}` öğesini içe aktarıyor; bir eklenti bunu yalnızca eklenti API düzeyi {PROGRESS_API} (`api` {PROGRESS_API}) ile ve `{permission}` izniyle kullanabilir
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	modül, ana bilgisayarın sunmadığı `{from}.{name}` öğesini içe aktarıyor: bir eklenti yalnızca docs/plugins.md dosyasında listelenen `env.vc_*` işlevlerini (eklenti API düzeyi 2) içe aktarabilir; WASI, dosya veya ağ kullanamaz
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` değeri {_1}; bu ana bilgisayar 1 ile {API_LEVEL} arasındaki eklenti API düzeylerini destekler
+@msg	`paintOutput` may only be true	`paintOutput` yalnızca true olabilir
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` yalnızca `api` 2 düzeyindeki canlı efekt (`kind` "effect") içindir
 @msg	`grant` must be a list of permission names	`grant` izin adlarından oluşan bir liste olmalıdır
 @msg	`grant` names an unknown permission `{shown}`	`grant` bilinmeyen bir izin adlandırıyor: `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` türündeki bir eklentinin `{_2}` iznine ihtiyacı vardır
 @msg	at most {MAX_PERMISSIONS} `permissions`	en fazla {MAX_PERMISSIONS} `permissions`
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	`{shown}` izni `{_1}` türündeki bir eklentiye uygulanmaz
 @msg	permission `{shown}` is listed twice	`{shown}` izni iki kez listelenmiş
+@msg	only a filter declares `inputs`	`inputs` yalnızca bir filtrede bildirilebilir
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` bilinmeyen bir nesne türü belirtiyor: `{shown}`; type, image veya symbolInstance kullanın
+@msg	`inputs` lists `{shown}` twice	`inputs` `{shown}` değerini iki kez listeliyor
+@msg	`inputs` needs `api` 2 or later	`inputs` için `api` 2 veya üstü gerekir
+@msg	`inputs` needs the permission `doc.read`	`inputs` için `doc.read` izni gerekir
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	bellek bütçesi (nesne {_1} için {size} bayt girdi gerekiyor, {left} kaldı)
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	nesne bütçesi ({MAX_OBJECTS} adetten fazla salt okunur nesne)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	`{shown}` izni sonraki bir eklenti API’si için ayrılmıştır; bu ana bilgisayar bu izni vermez
 @msg	unknown permission `{shown}`	bilinmeyen izin `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}” {asked} izinlerini istiyor: kullanıcı onayladıktan sonra bunları listeleyen bir `grant` ile yükleyin
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	“{name}” öğesine çıktısının ihtiyaç duyduğu `{p}` izni verilmedi: hiçbir şey değiştirilmedi
+@msg	a heavy filter runs in the background, so it can't declare `commands`	ağır bir filtre arka planda çalışır, bu yüzden `commands` bildiremez
+@msg	at most {MAX_COMMANDS} `commands`	en fazla {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	{name} komutu iki kez bildirilmiş
+@msg	command {name}: `label` must be 1-64 printable characters	{name} komutu: `label` 1-64 yazdırılabilir karakter olmalıdır
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	{name} komutu: a-z 0-9 _ karakterlerinden oluşan ve harfle başlayan 1-{MAX_COMMAND_ID} karakterlik bir kimlik kullanın
+@msg	command {name}: {e}	{name} komutu: {e}
+@msg	only a filter or a live effect declares `commands`	`commands` yalnızca bir filtre veya canlı efekt tarafından bildirilir
+@msg	“{name}” › {label}: {e}	“{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	modül `hash` içinde verilen SHA-256 değerine sahip değil: hiçbir şey yüklenmedi
 # Actions panel: action sets (#3712).
 	New Set…	Yeni Set…
@@ -6445,6 +6503,7 @@ breakText	Glyphs	Glifler
 	Create Swatch Legend	Renk Örneği Açıklaması Oluştur
 	Create Swatch Legend…	Renk Örneği Açıklaması Oluştur…
 	HEX	HEX
+	Help Bar	Yardım Çubuğu
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	Metin Araçları
 	Text Tweaker…	Metin Ayarlayıcı…
@@ -6510,6 +6569,24 @@ breakText	Glyphs	Glifler
 # 3D Box add-on
 	3D Box	3B Kutu
 	3D Box Tool	3B Kutu Aracı
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Birlikte Aç
+	No importer plug-ins installed	İçe aktarma eklentisi yüklü değil
+	Read files you open in its format and make documents from them	Kendi biçiminde açtığınız dosyaları okuma ve bunlardan belge oluşturma
+@msg	{_1} is an importer (File › Open With)	{_1} bir içe aktarma eklentisidir (Dosya › Birlikte Aç)
+@msg	missing `importer` (see document.formats)	`importer` eksik (bkz. document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` bir eklentinin biçim kimliği olmalıdır (bkz. document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	“{shown}” {_1} dosyalarını açar, `{_2}` dosyasını değil
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}`, `{_2}` türünde bir eklentidir, içe aktarma eklentisi değildir
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}`, `{_2}` türünde bir eklentidir, dışa aktarma eklentisi değildir
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` bir içe aktarma eklentisidir: dosyayı document.open {{"importer"}"}} ile açın
+@msg	the importer returned no objects	içe aktarma eklentisi hiç nesne döndürmedi
+@msg	an importer returns `objects` and `warnings`, not `{key}`	içe aktarma eklentisi `{key}` değil, `objects` ve `warnings` döndürür
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	dosya, içe aktarma eklentisinin okuduğu {MAX_INPUT_BYTES} bayttan büyük
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	içe aktarma eklentisi 1 ile {MAX_EXTENSIONS} arasında `extensions` bildirir
+@msg	only an exporter or an importer declares `extensions`	`extensions` yalnızca dışa veya içe aktarma eklentisi bildirir
+@msg	an importer always gets an import's budget: leave `budget` out	içe aktarma eklentisi her zaman bir içe aktarmanın bütçesini alır: `budget` değerini çıkarın
 
 # Safe Mode
 	Safe Mode…	Güvenli Mod…

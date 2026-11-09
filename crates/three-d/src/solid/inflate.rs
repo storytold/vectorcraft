@@ -125,7 +125,7 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64, mesh: boo
     let smooth = view.shade && view.has_colored_lights();
     let camera = Camera::new(view, bounds, o.depth + 2.0 * height.max(reach));
     // Without its back cap the object is a shell open behind, its inside showing.
-    let mut b = Builder { camera: &camera, closed: o.cap, facets: vec![], mesh: mesh.then(Vec::new) };
+    let mut b = Builder { camera: &camera, closed: o.cap, hidden: false, facets: vec![], mesh: mesh.then(Vec::new) };
     let half = o.depth / 2.0;
     // The back: turned and scaled by the twist and taper, its puff too.
     let back_turn = Turn::new(bounds, o.twist, o.taper, 1.0);

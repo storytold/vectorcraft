@@ -1437,6 +1437,37 @@ fn an_ai_file_without_layers_keeps_the_patterns_of_its_palette() {
     assert!(keys.iter().all(|k| d.images.contains_key(k)), "{keys:?}");
 }
 
+/// The art of a pattern with an opacity mask that a palette swatch or a brush's art paints with,
+/// in a file without layers, takes ids of the document, its mask's art included.
+#[test]
+fn a_pattern_of_a_file_without_layers_takes_ids_for_its_mask_art() {
+    let mask_art: String = symbol_square(0.0, 0.0, 4.0, 4.0).replace("0 1 1 0 1 0 0 Xa", "1 g").lines().map(|l| format!("%_{l}\n")).collect();
+    let mask = format!("%_/ArtDictionary :\n%_/Mask :\n%_X=\n{mask_art}%_X+\n%_(Art) ,\n%_1 /Bool (Clipping) ,\n%_; (AI9_Mask) ,\n%_;\n");
+    let hidden = |art: String| -> String { art.lines().map(|l| format!("%_{l}\n")).collect() };
+    let tile = format!("{}{mask}{}", hidden(symbol_square(0.0, 0.0, 4.0, 4.0)), hidden(symbol_square(1.0, 1.0, 3.0, 3.0)));
+    let dots = format!("%AI3_BeginPattern: (Dots)\n(Dots) 0 0 4 4\n{tile}E\n%AI3_EndPattern\n");
+    let palette = "%AI5_BeginPalette\n0 0 Pb\n(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n(Dots)\nPc\nPB\n%AI5_EndPalette\n";
+    let order = "%AI8_BeginPluginObject\n(Adobe Brush Manager Order)\n(Adobe Brush Manager Order)\n( Adobe Scatter Brush Tool/ Spray/) .\n%AI8_EndPluginObject\n";
+    let spray = "%AI8_BeginPluginObject\n(Adobe Scatter Brush Tool)\n(Spray)\n(2 /Dot art/ 5 1 0 0 / 0 0.5 1.5 1 ) -\n\
+                 (1.2 2 0 -0.25 0.25 2 -45 30 1 1 0) .\n%AI8_EndPluginObject\n";
+    let dot = "%AI8_BeginBrushPattern\n(Dot art)\n(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n0 0 m\n4 0 L\n4 4 L\nf\n%AI8_EndBrushPattern\n";
+    for setup in [format!("{dots}{palette}"), format!("{dots}{dot}{order}{spray}")] {
+        let library = format!("%!PS-Adobe-3.0 \n%%BoundingBox: 0 0 100 100\n%%BeginSetup\n{setup}%%EndSetup\n%%PageTrailer\n%%Trailer\n");
+        let (d, warnings, read) = crate::layered_ai(&private(&library), pdf_part(10.0, 86.0), vec![], false, true, 1.0);
+        assert!(!read, "{warnings:?}");
+        let art = d.pattern("Dots").map(|p| p.art.clone()).unwrap_or_default();
+        let mut masked = art.iter().flat_map(|n| std::iter::once(n).chain(n.children().into_iter().flatten()));
+        assert!(masked.any(|n| n.extras().mask.is_some()), "the mask is read: {art:#?} {warnings:?}");
+        let mut ids = vec![];
+        for n in d.layers.iter().chain(d.patterns.iter().flat_map(|p| &p.art)) {
+            all_ids(n, &mut ids);
+        }
+        let unique: std::collections::HashSet<_> = ids.iter().copied().collect();
+        assert_eq!(unique.len(), ids.len(), "{ids:?}");
+        assert!(ids.iter().all(|id| id.0 < d.peek_next_id()), "{ids:?}");
+    }
+}
+
 /// A brush library (brush objects and their art, no layers) comes in as its PDF part with the
 /// library's brushes in place of the default ones: Other Library lists them.
 #[test]
@@ -1565,6 +1596,230 @@ fn a_file_whose_layers_cant_be_used_keeps_its_graphic_styles() {
     let r = import(&eps(&page_square(10, 10), &art)).unwrap();
     assert!(r.warnings.iter().any(|w| w.contains("600 × 400")), "{:?}", r.warnings);
     assert_eq!(names(&r.document), ["Thin", "Medium", "Thick"], "{:?}", r.warnings);
+}
+
+/// A symbol named `name` whose art is `art` (in the symbol's space, y down), with the registration
+/// point `registration` (1 to 9 from the top left, row by row), as the editing data defines it.
+fn symbol_def(name: &str, art: &str, registration: u32) -> String {
+    format!(
+        "%AI14_BeginSymbol\n({name})\n0 A\n0 Xw\n0 Ae\nu\n{art}U\n%_/ArtDictionary :\n%_{registration} /Int (AI13PatternRegistrationType) ,\n%_;\n%_\n9 () XW\n%AI10_EndSymbol\n"
+    )
+}
+
+/// A red square from (`x0`, `y0`) to (`x1`, `y1`), as a symbol's art.
+fn symbol_square(x0: f64, y0: f64, x1: f64, y1: f64) -> String {
+    format!("0 1 1 0 1 0 0 Xa\n{x0} {y0} m\n{x0} {y1} L\n{x1} {y1} L\n{x1} {y0} L\n{x0} {y0} L\nf\n")
+}
+
+/// The symbols Dot (a square of 4 about the origin, registered at its top left), Bar (12 × 2 about
+/// the origin) and Masked (a square with an opacity mask), listed as Bar, Masked, Dot.
+fn symbol_defs() -> String {
+    let mask_art: String = symbol_square(-2.0, -2.0, 2.0, 2.0).replace("0 1 1 0 1 0 0 Xa", "1 g").lines().map(|l| format!("%_{l}\n")).collect();
+    let mask = format!("%_/ArtDictionary :\n%_/Mask :\n%_X=\n{mask_art}%_X+\n%_(Art) ,\n%_1 /Bool (Clipping) ,\n%_; (AI9_Mask) ,\n%_;\n");
+    let masked = format!("{}{mask}{}", symbol_square(-2.0, -2.0, 2.0, 2.0), symbol_square(-1.0, -1.0, 1.0, 1.0));
+    let defs = symbol_def("Dot", &symbol_square(-2.0, -2.0, 2.0, 2.0), 1)
+        + &symbol_def("Bar", &symbol_square(-6.0, -1.0, 6.0, 1.0), 5)
+        + &symbol_def("Masked", &masked, 5);
+    format!("%AI5_Begin_NonPrinting\n{defs}%AI5_End_NonPrinting--\n%AI24_BeginSymbolList\n(Bar)\n(Masked)\n(Dot)\n%AI24_EndSymbolList\n")
+}
+
+/// A symbol library (the symbols of [`symbol_defs`], and no layers).
+fn symbol_library() -> String {
+    format!("%!PS-Adobe-3.0 \n%%BoundingBox: 0 0 100 100\n%%BeginSetup\n{}%%EndSetup\n%%PageTrailer\n%%Trailer\n", symbol_defs())
+}
+
+/// The ids of `n`, what it holds and the art of its opacity masks.
+fn all_ids(n: &Node, out: &mut Vec<vectorcraft_doc::NodeId>) {
+    out.push(n.id);
+    if let Some(m) = n.extras().mask.as_ref() {
+        all_ids(&m.art, out);
+    }
+    for c in n.children().into_iter().flatten() {
+        all_ids(c, out);
+    }
+}
+
+/// The names of the symbols of `d`, in the Symbols panel's order.
+fn symbol_names(d: &Document) -> Vec<&str> {
+    d.symbols.iter().map(|s| s.name.as_str()).collect()
+}
+
+/// A symbol library comes in as its PDF part with the library's symbols, in the list's order, with
+/// their registration points: Other Library lists them. Their art takes ids of the document, the
+/// art of an opacity mask in it included.
+#[test]
+fn an_ai_symbol_library_without_layers_keeps_its_symbols() {
+    let (d, warnings, read) = crate::layered_ai(&private(&symbol_library()), pdf_part(10.0, 86.0), vec![], false, true, 1.0);
+    assert!(!read, "{warnings:?}");
+    assert_eq!(symbol_names(&d), ["Bar", "Masked", "Dot"], "{warnings:?}");
+    assert_eq!(d.symbol_registration("Dot"), vectorcraft_doc::SymbolRegistration(0));
+    assert!(d.symbol_registration("Bar").is_center());
+    let boxes = d.symbol_boxes();
+    let bar = d.symbols.first().and_then(|s| s.art.visual_bounds_with(&boxes));
+    assert_eq!(bar, Some(vectorcraft_geom::Rect::new(-6.0, -1.0, 6.0, 1.0)));
+    drop(boxes);
+    let mut ids = vec![];
+    for n in d.layers.iter().chain(d.symbols.iter().map(|s| &s.art)) {
+        all_ids(n, &mut ids);
+    }
+    let masked = d.symbols.get(1).map(|s| &s.art);
+    assert!(masked.is_some_and(|a| a.children().into_iter().flatten().any(|c| c.extras().mask.is_some())), "the mask is read");
+    let unique: std::collections::HashSet<_> = ids.iter().copied().collect();
+    assert_eq!(unique.len(), ids.len(), "{ids:?}");
+    assert!(warnings.is_empty(), "{warnings:?}");
+    // Without symbols, the PDF part's (none) stay.
+    let (d, warnings, _) = crate::layered_ai(&private(&native("")), pdf_part(10.0, 86.0), vec![], false, true, 1.0);
+    assert!(d.symbols.is_empty(), "{warnings:?}");
+}
+
+/// An EPS whose editing copy has symbols and no layers comes in as its page with those symbols.
+#[test]
+fn an_eps_without_layers_keeps_its_symbols() {
+    let r = import(&eps(&page_square(50, 50), &symbol_library())).unwrap();
+    assert_eq!(symbol_names(&r.document), ["Bar", "Masked", "Dot"], "{:?}", r.warnings);
+}
+
+/// A `.ai` that comes in as its PDF part, and an EPS that comes in as its page, because their
+/// layers can't be used (their editing data is for another page) get the symbols defined before
+/// their layers.
+#[test]
+fn a_file_whose_layers_cant_be_used_keeps_its_symbols() {
+    let art = native(&format!("{}{}", symbol_defs(), layer("Art", true, &square(10, 10)))).replace(" 0 0 100 100", " 0 0 600 400");
+    let (d, warnings, read) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false, false, 1.0);
+    assert!(!read && warnings.iter().any(|w| w.contains("600 × 400")), "{warnings:?}");
+    assert_eq!(symbol_names(&d), ["Bar", "Masked", "Dot"], "{warnings:?}");
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    assert!(r.warnings.iter().any(|w| w.contains("600 × 400")), "{:?}", r.warnings);
+    assert_eq!(symbol_names(&r.document), ["Bar", "Masked", "Dot"], "{:?}", r.warnings);
+}
+
+/// A symbol library's symbols bring the spot colors their art is linked to. A color whose name a
+/// swatch of the library's palette has for another color comes in under a free variant of the
+/// name, which the art then names, as it does for an ink of the PDF part; without a palette, it
+/// takes the place of the default swatch of that name.
+#[test]
+fn an_ai_symbol_librarys_symbols_keep_their_spot_colors() {
+    let library = |setup: &str, ink: &str| {
+        let art = format!("0 0 1 0 ({ink}) 1 x\n-2 -2 m\n-2 2 L\n2 2 L\n2 -2 L\n-2 -2 L\nf\n");
+        let defs = format!("{setup}%AI5_Begin_NonPrinting\n{}%AI5_End_NonPrinting--\n", symbol_def("Inked", &art, 5));
+        format!("%!PS-Adobe-3.0 \n%%BoundingBox: 0 0 100 100\n%%BeginSetup\n{defs}%%EndSetup\n%%PageTrailer\n%%Trailer\n")
+    };
+    let open = |text: &str| crate::layered_ai(&private(text), pdf_part(10.0, 86.0), vec![], false, true, 1.0);
+    let link = |d: &Document| match d.symbols.first().and_then(|s| s.art.appearance.fill()).map(|f| &f.paint) {
+        Some(vectorcraft_color::Paint::Solid { swatch, .. }) => swatch.clone(),
+        _ => None,
+    };
+    let ink = |d: &Document, name: &str| d.swatch(name).map(|s| (s.paint.color(), s.spot));
+    let yellow = Some(vectorcraft_color::Color::cmyk(0.0, 0.0, 1.0, 0.0));
+    let (d, warnings, _) = open(&library("", "Brand Ink"));
+    assert_eq!(link(&d).as_deref(), Some("Brand Ink"), "{warnings:?}");
+    assert_eq!(ink(&d, "Brand Ink"), Some((yellow, true)));
+    let palette = "%AI5_BeginPalette\n0 0 Pb\n0 0 0 0 0 1 0 Xa\n(Clash)\nPc\nPB\n%AI5_EndPalette\n";
+    let (d, warnings, _) = open(&library(palette, "Clash"));
+    assert_eq!(link(&d).as_deref(), Some("Clash 2"), "{warnings:?}");
+    assert_eq!(ink(&d, "Clash 2"), Some((yellow, true)));
+    assert_eq!(ink(&d, "Clash"), Some((Some(vectorcraft_color::Color::rgb(0.0, 1.0, 0.0)), false)));
+    let (d, warnings, _) = open(&library("", "Red"));
+    assert_eq!(link(&d).as_deref(), Some("Red"), "{warnings:?}");
+    assert_eq!(ink(&d, "Red"), Some((yellow, true)));
+    assert_eq!(d.swatches.iter().filter(|s| s.name == "Red").count(), 1);
+    // An ink of the PDF part keeps its swatch: the library's color of that name is renamed.
+    let mut part = pdf_part(10.0, 86.0);
+    let green = vectorcraft_color::Paint::solid(vectorcraft_color::Color::cmyk(1.0, 0.0, 1.0, 0.0));
+    part.swatches.push(vectorcraft_color::Swatch { name: "Ink".into(), paint: green.clone(), global: true, spot: true });
+    let (d, warnings, _) = crate::layered_ai(&private(&library("", "Ink")), part, vec![], false, true, 1.0);
+    assert_eq!(link(&d).as_deref(), Some("Ink 2"), "{warnings:?}");
+    assert_eq!(ink(&d, "Ink 2"), Some((yellow, true)));
+    assert_eq!(d.swatch("Ink").map(|s| &s.paint), Some(&green));
+    // A color group of the PDF part keeps its name: the library's color of that name is renamed.
+    let mut part = pdf_part(10.0, 86.0);
+    part.swatch_groups.push(vectorcraft_color::SwatchGroup { name: "Kit".into(), swatches: vec![] });
+    let (d, warnings, _) = crate::layered_ai(&private(&library("", "Kit")), part, vec![], false, true, 1.0);
+    assert_eq!(link(&d).as_deref(), Some("Kit 2"), "{warnings:?}");
+    assert_eq!(ink(&d, "Kit 2"), Some((yellow, true)));
+    assert!(d.swatch("Kit").is_none());
+}
+
+/// A symbol library's symbols bring a global process color their art is filled with as a global
+/// swatch that isn't an ink, and a spot color a stop of their gradient names as an ink.
+#[test]
+fn an_ai_symbol_librarys_symbols_keep_their_global_and_gradient_stop_colors() {
+    let gradient = "%AI5_BeginGradient: (Fade)\n(Fade) 0 2 Bd\n[\n\
+                    %_0 1 1 0 (Brand) 0 0 5 1 6 50 0 Bs\n%_0 0 0 0 1 0 0 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
+    let global = "0 0 1 0 (Process Yellow) 0 0 Xk\n-2 -2 m\n-2 2 L\n2 2 L\n2 -2 L\n-2 -2 L\nf\n";
+    let graded = "Bb\n1 (Fade) 0 0 0 4 1 0 0 1 0 0 Bg\n-2 -2 m\n-2 2 L\n2 2 L\n2 -2 L\n-2 -2 L\nf\n0 BB\n";
+    let defs = symbol_def("Global", global, 5) + &symbol_def("Graded", graded, 5);
+    let text = format!(
+        "%!PS-Adobe-3.0 \n%%BoundingBox: 0 0 100 100\n%%BeginSetup\n{gradient}%AI5_Begin_NonPrinting\n{defs}%AI5_End_NonPrinting--\n\
+         %%EndSetup\n%%PageTrailer\n%%Trailer\n"
+    );
+    let (d, warnings, _) = crate::layered_ai(&private(&text), pdf_part(10.0, 86.0), vec![], false, true, 1.0);
+    assert_eq!(symbol_names(&d), ["Global", "Graded"], "{warnings:?}");
+    let swatch = |name: &str| d.swatch(name).map(|s| (s.paint.color(), s.global, s.spot));
+    assert_eq!(swatch("Process Yellow"), Some((Some(vectorcraft_color::Color::cmyk(0.0, 0.0, 1.0, 0.0)), true, false)), "{warnings:?}");
+    assert_eq!(swatch("Brand"), Some((Some(vectorcraft_color::Color::cmyk(0.0, 1.0, 1.0, 0.0)), true, true)), "{warnings:?}");
+}
+
+/// A symbol library's symbol shows its image from the document's images, and an object of a
+/// symbol's art linked to a style of the library's style list links to that style as the document
+/// has it.
+#[test]
+fn an_ai_symbol_librarys_symbols_bring_their_images_and_style_links() {
+    // The template box's center is (100.5, 50.5): art space's origin is at canvas (8091, 8242).
+    let m = "[ 5 0 0 5 -8096 8244.5 ]";
+    let raster = format!(
+        "%AI5_File:\n%AI5_BeginRaster\n() 1 XG\n/DeviceRGB XN\n{m} 2 1 0 Xh\n{m} 0 0 2 1 2 1 8 3 0 0 1 0 4 4 0 0\n\
+         %%BeginData: 6\rXI\nABCDEF%%EndData\r\nXH\r\n%AI5_EndRaster\r\nN\n"
+    );
+    let path = "-2 -2 m\n-2 2 L\n2 2 L\n2 -2 L\n-2 -2 L\n";
+    let hidden: String = path.lines().map(|l| format!("%_{l}\n")).collect();
+    let styled = format!("0 Ae\nu\n0 0 0 0 0 0 1 XA\n0 J 0 j 3 w 10 M []0 d\n{path}S\nU\n{hidden}%_S\n1 (Thick) XW\n");
+    let defs = format!("%AI5_Begin_NonPrinting\n{}{}%AI5_End_NonPrinting--\n", symbol_def("Pic", &raster, 5), symbol_def("Line", &styled, 5));
+    let text = style_library(&defs).replacen("%%BeginSetup", "%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n%%BeginSetup", 1);
+    let (d, warnings, read) = crate::layered_ai(&private(&text), pdf_part(10.0, 86.0), vec![], false, true, 1.0);
+    assert!(!read, "{warnings:?}");
+    assert_eq!(symbol_names(&d), ["Pic", "Line"], "{warnings:?}");
+    let key = d.symbols.first().and_then(|s| if let NodeKind::Image(im) = &s.art.kind { Some(im.key.clone()) } else { None });
+    let key = key.unwrap_or_else(|| panic!("an image: {:#?}", d.symbols.first()));
+    assert!(d.images.contains_key(&key), "{key}");
+    let mut linked = vec![];
+    let mut stack: Vec<&Node> = d.symbols.get(1).map(|s| &*s.art).into_iter().collect();
+    while let Some(n) = stack.pop() {
+        linked.extend(n.extras().graphic_style);
+        stack.extend(n.children().into_iter().flatten().map(|c| &**c));
+    }
+    let named: Vec<&str> = linked.iter().filter_map(|id| d.graphic_styles.iter().find(|g| g.id == *id)).map(|g| g.name.as_str()).collect();
+    assert_eq!(named, ["Thick"], "{linked:?}");
+}
+
+/// The instances of a symbol library's symbols that would draw more than
+/// [`vectorcraft_doc::depth::MAX_DRAWN_DEPTH`] objects deep go, with the note saying so, and a
+/// document that has symbols already keeps them.
+#[test]
+fn an_ai_symbol_librarys_instances_drawn_too_deep_go() {
+    // C0 is a square, and each later symbol holds an instance of the one before it. The template
+    // box's center is (100.5, 50.5): art space's origin is at canvas (8091, 8242).
+    let instance = |name: &str| format!("/SymbolInstance :\n({name}) /SymbolRef ,\n1 0 0 -1 -8091 8242 /RTransformMatrix\n;\n9 () XW\n");
+    let count = vectorcraft_doc::depth::MAX_DRAWN_DEPTH + 10;
+    let mut defs = symbol_def("C0", &symbol_square(-2.0, -2.0, 2.0, 2.0), 5);
+    for i in 1..count {
+        defs.push_str(&symbol_def(&format!("C{i}"), &instance(&format!("C{}", i - 1)), 5));
+    }
+    let text = format!(
+        "%!PS-Adobe-3.0 \n%%BoundingBox: 0 0 100 100\n%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n%%BeginSetup\n\
+         %AI5_Begin_NonPrinting\n{defs}%AI5_End_NonPrinting--\n%%EndSetup\n%%PageTrailer\n%%Trailer\n"
+    );
+    let (d, warnings, _) = crate::layered_ai(&private(&text), pdf_part(10.0, 86.0), vec![], false, true, 1.0);
+    assert_eq!(d.symbols.len(), count, "{warnings:?}");
+    let instances = d.symbols.iter().filter(|s| matches!(s.art.kind, NodeKind::SymbolInstance { .. })).count();
+    assert!(instances < count - 1, "{instances}");
+    assert!(warnings.contains(&vectorcraft_doc::depth::symbols_note()), "{warnings:?}");
+    // A document with symbols keeps its own.
+    let mut part = pdf_part(10.0, 86.0);
+    let mine = Node::group(part.alloc_id(), vec![]);
+    part.symbols.push(vectorcraft_doc::Symbol { name: "Mine".into(), art: std::sync::Arc::new(mine), dynamic: false });
+    let (d, warnings, _) = crate::layered_ai(&private(&text), part, vec![], false, true, 1.0);
+    assert_eq!(symbol_names(&d), ["Mine"], "{warnings:?}");
 }
 
 /// A PDF part whose tiling has the name of a pattern its editing data defines (the PDF part names

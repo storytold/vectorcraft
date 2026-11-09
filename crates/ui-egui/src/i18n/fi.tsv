@@ -472,6 +472,17 @@
 	Inflate	Täytä ilmalla
 	Select objects, then pick an object type to give them a 3D effect.	Valitse objektit ja valitse sitten objektityyppi, niin niille tulee 3D-tehoste.
 	Extrude & Bevel…	Pursota ja viistä…
+	3D (Classic)	3D (perinteinen)
+	Extrude & Bevel (Classic)…	Pursota ja viistä (perinteinen)…
+	Surface	Pinta
+	Wireframe	Rautalanka
+	No Shading	Ei varjostusta
+	Plastic	Muovi
+	Highlight Intensity	Kiillon voimakkuus
+	Highlight Size	Kiillon koko
+	Blend Steps	Sulautusvaiheet
+	Shading Color	Varjostusväri
+	Draw Hidden Faces	Piirrä piilotetut pinnat
 	Revolve…	Pyöräytä…
 	Inflate…	Täytä ilmalla…
 	Materials…	Materiaalit…
@@ -685,6 +696,11 @@
 	Color	Väri
 	Color Guide	Väriopas
 	Color Themes	Väriteemat
+	Color Wheel	Väriympyrä
+	Hue ring	Sävyrengas
+	Saturation and brightness	Kylläisyys ja kirkkaus
+	Color field	Värikenttä
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	CSS Properties	CSS-ominaisuudet
 	Document Info	Asiakirjan tiedot
 	Flattener Preview	Litistyksen esikatselu
@@ -1882,6 +1898,10 @@ digits	Malayalam	Malajalam
 	Stylistic	Tyylitelty
 	Mojikumi Set	Mojikumi-joukko
 	Kinsoku Set	Kinsoku-joukko
+	Kinsoku Shori Type	Kinsoku Shori -tyyppi
+	Push In First	Ensin sisään
+	Push Out First	Ensin ulos
+	Push Out Only	Vain ulos
 	Hard	Tiukka
 	Right Indent	Oikea sisennys
 	Right-to-Left Paragraph Direction	Kappaleen suunta oikealta vasemmalle
@@ -2643,6 +2663,7 @@ digits	Malayalam	Malajalam
 	Tile Range:	Ruutualue:
 	tile {number}	ruutu {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Ruudut numeroidaan vaakasuunnassa ja sitten alaspäin; jätä alue tyhjäksi, niin kaikki ruudut tulostetaan.
+	Copies per Sheet (as many as fit, in a grid)	Kopioita arkille (niin monta kuin mahtuu, ruudukkoon)
 	Transverse (the page a quarter turn on the paper)	Poikittainen (sivu neljänneskierroksen käännettynä paperilla)
 	Unprintable margin:	Tulostumaton reunus:
 	{pages} in all, {count} per copy	{pages} yhteensä, {count} kopiota kohden
@@ -2713,6 +2734,10 @@ digits	Malayalam	Malajalam
 	< 1 sec	< 1 s
 	[Unnamed]	[Nimetön]
 	Amount:	Määrä:
+	Anti-aliasing Method	Reunanpehmennystapa
+antiAlias	Sharp	Terävä
+	Crisp	Selkeä
+	Strong	Vahva
 	Anti-aliasing:	Reunanpehmennys:
 	Artboard:	Piirtoalusta:
 	Color Table	Väritaulukko
@@ -4333,6 +4358,7 @@ imageTrace	Outline	Ääriviiva
 @msg	Split Into Grid: select paths large enough for the grid	Jaa ruudukoksi: valitse ruudukolle riittävän suuret polut
 @msg	Targa files are RGB: colorModel rgb	Targa-tiedostot ovat RGB-muotoisia: colorModel rgb
 @msg	Text Wrap: select a wrap object	Tekstin rivitys: valitse rivitysobjekti
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` on oltava "none", "sharp", "crisp" tai "strong"
 @msg	`aspect` must be a number (%)	`aspect` on oltava luku (%)
 @msg	`at` must be [x, y]	`at` on oltava [x, y]
 @msg	`color` must be a colour	`color` on oltava väri
@@ -4721,6 +4747,13 @@ imageTrace	Outline	Ääriviiva
 @msg	select an image	valitse kuva
 @msg	select an object in perspective	valitse perspektiivissä oleva objekti
 @msg	select artwork (or a colour group) to recolor	valitse uudelleenväritettävä kuvitus (tai väriryhmä)
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	Uudelleenväritys valmis; muuttamatta jäi: {locked} ja {hidden}
+@msg	Recolor completed; {objects} were left unchanged	Uudelleenväritys valmis; muuttamatta jäi: {objects}
+@msg	Recolor completed; {objects} was left unchanged	Uudelleenväritys valmis; muuttamatta jäi: {objects}
+@msg	1 locked object	1 lukittu objekti
+@msg	{n} locked objects	{n} lukittua objektia
+@msg	1 hidden object	1 piilotettu objekti
+@msg	{n} hidden objects	{n} piilotettua objektia
 @msg	select at least two objects	valitse vähintään kaksi objektia
 @msg	exit isolation mode first	poistu ensin eristystilasta
 @msg	select objects, not layers	valitse objekteja, ei tasoja
@@ -5035,6 +5068,10 @@ imageTrace	Outline	Ääriviiva
 @msg	the PSD file is cut short	tämä PSD-tiedosto on katkennut
 @msg	the PSD file's header is damaged	tämän PSD-tiedoston otsake on vaurioitunut
 @msg	the PSD file's image data can't be read: {e}	tämän PSD-tiedoston kuvadataa ei voi lukea: {e}
+@msg	the JPEG XL file is cut short	tämä JPEG XL -tiedosto on katkennut
+@msg	the JPEG XL container is too large to read	JPEG XL -säiliö on liian suuri luettavaksi
+@msg	CMYK JPEG XL images can't be read	CMYK-tilassa olevia JPEG XL -kuvia ei voi lukea
+@msg	the JPEG XL file can't be read: {e}	tätä JPEG XL -tiedostoa ei voi lukea: {e}
 @msg	Imported library {name}	Tuotiin kirjasto {name}
 @msg	Invalid panel layout; restored the default dock	Virheellinen paneeliasettelu; oletustelakka palautettiin
 @msg	action is required	action vaaditaan
@@ -5726,6 +5763,11 @@ mark-style	Japanese	Japanilainen
 	Snap to Perpendicular	Kohdista kohtisuoraan
 @msg	unknown snap option `{key}` (use {options})	tuntematon tartuntavalinta `{key}` (käytä: {options})
 	Gap Length:	Aukon pituus:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Tasainen logo -tila ei käytä keepColors-asetusta: se jäljittää logoColors-asetuksessa nimetyt värit tai löytämänsä värit.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Mitään ei jäljitetty: mikään jäljityksen löytämistä väreistä ei vastaa keepColors-asetusta ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Mitään ei jäljitetty: Ohita väri jättää pois kaikki keepColors-asetuksen värien alueet.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	Mitään ei jäljitetty: keepColors-asetusta vastaavista väreistä ei synny polkuja.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: mikään jäljityksen löytämistä väreistä ei vastaa väriä {c}, joten siitä ei jäljitetä mitään.
 @msg	`colorGroup` needs `library: "document"`	`colorGroup` edellyttää arvoa `library: "document"`
 @msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` edellyttää arvoa `palette: "documentLibrary"`
 @msg	`colorGroup` needs `mode: "color"`	`colorGroup` edellyttää arvoa `mode: "color"`
@@ -5927,16 +5969,33 @@ axis	Y Axis	Y-akseli
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	moduuli tuo kohteen `env.{name}`, jota laajennus saa käyttää vain laajennus-API:n tasolla {PROGRESS_API} (`api` {PROGRESS_API}) ja käyttöoikeudella `{permission}`
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	moduuli tuo kohteen `{from}.{name}`, jota isäntä ei tarjoa: laajennus saa tuoda vain docs/plugins.md-tiedostossa luetellut `env.vc_*`-funktiot (laajennus-API:n taso 2) eikä mitään WASIa, tiedostoja tai verkkoa
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` on {_1}; tämä isäntä tukee laajennus-API:n tasoja 1 ja {API_LEVEL} välillä
+@msg	`paintOutput` may only be true	`paintOutput` voi olla vain true
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` on vain reaaliaikaiselle tehosteelle (`kind` "effect") tasolla `api` 2
 @msg	`grant` must be a list of permission names	`grant` on oltava luettelo käyttöoikeuksien nimistä
 @msg	`grant` names an unknown permission `{shown}`	`grant` nimeää tuntemattoman käyttöoikeuden `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	lajin `{_1}` laajennus tarvitsee käyttöoikeuden `{_2}`
 @msg	at most {MAX_PERMISSIONS} `permissions`	enintään {MAX_PERMISSIONS} `permissions`
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	käyttöoikeus `{shown}` ei koske lajin `{_1}` laajennusta
 @msg	permission `{shown}` is listed twice	käyttöoikeus `{shown}` on lueteltu kahdesti
+@msg	only a filter declares `inputs`	vain suodatin voi määrittää `inputs`-avaimen
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` nimeää tuntemattoman objektilajin `{shown}`: käytä arvoa type, image tai symbolInstance
+@msg	`inputs` lists `{shown}` twice	`inputs` luettelee kohteen `{shown}` kahdesti
+@msg	`inputs` needs `api` 2 or later	`inputs` edellyttää `api`-tasoa 2 tai uudempaa
+@msg	`inputs` needs the permission `doc.read`	`inputs` edellyttää käyttöoikeutta `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	muistibudjetti (objekti {_1} tarvitsee {size} tavua syötettä, jäljellä {left})
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	objektibudjetti (yli {MAX_OBJECTS} vain luku -objektia)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	käyttöoikeus `{shown}` on varattu myöhemmälle laajennus-API:lle; tämä isäntä ei myönnä sitä
 @msg	unknown permission `{shown}`	tuntematon käyttöoikeus `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	”{name}” pyytää käyttöoikeuksia {asked}: asenna se `grant`-luettelolla, jossa ne ovat, kun käyttäjä suostuu
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	”{name}” ei saanut käyttöoikeutta `{p}`, jota sen tulos tarvitsee: mitään ei muutettu
+@msg	a heavy filter runs in the background, so it can't declare `commands`	raskas suodin suoritetaan taustalla, joten se ei voi määritellä `commands`-kohtaa
+@msg	at most {MAX_COMMANDS} `commands`	enintään {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	komento {name} on määritelty kahdesti
+@msg	command {name}: `label` must be 1-64 printable characters	komento {name}: `label`-kentässä on oltava 1-64 tulostettavaa merkkiä
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	komento {name}: käytä 1-{MAX_COMMAND_ID} merkin tunnusta merkeistä a-z 0-9 _, joka alkaa kirjaimella
+@msg	command {name}: {e}	komento {name}: {e}
+@msg	only a filter or a live effect declares `commands`	vain suodin tai live-tehoste määrittelee `commands`-kohdan
+@msg	“{name}” › {label}: {e}	”{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	moduulilla ei ole `hash`-kentän SHA-256-arvoa: mitään ei asennettu
 # Actions panel: action sets (#3712).
 	New Set…	Uusi sarja…
@@ -6518,6 +6577,7 @@ breakText	Glyphs	Merkit
 	Create Swatch Legend	Luo värimallien selite
 	Create Swatch Legend…	Luo värimallien selite…
 	HEX	HEX
+	Help Bar	Ohjepalkki
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	Tekstityökalut
 	Text Tweaker…	Tekstin säätö…
@@ -6588,6 +6648,24 @@ breakText	Glyphs	Merkit
 # 3D Box add-on
 	3D Box	3D-laatikko
 	3D Box Tool	3D-laatikkotyökalu
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Avaa ohjelmalla
+	No importer plug-ins installed	Tuontilaajennuksia ei ole asennettu
+	Read files you open in its format and make documents from them	Lukea sen muodossa avaamasi tiedostot ja tehdä niistä asiakirjoja
+@msg	{_1} is an importer (File › Open With)	{_1} on tuontilaajennus (Tiedosto › Avaa ohjelmalla)
+@msg	missing `importer` (see document.formats)	`importer` puuttuu (katso document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` on oltava laajennuksen muototunnus (katso document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	”{shown}” avaa {_1}-tiedostoja, ei `{_2}`
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` on lajin `{_2}` laajennus, ei tuontilaajennus
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` on lajin `{_2}` laajennus, ei vientilaajennus
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` on tuontilaajennus: avaa tiedosto komennolla document.open {{"importer"}"}}
+@msg	the importer returned no objects	tuontilaajennus ei palauttanut objekteja
+@msg	an importer returns `objects` and `warnings`, not `{key}`	tuontilaajennus palauttaa `objects` ja `warnings`, ei `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	tiedosto on suurempi kuin tuontilaajennuksen lukemat {MAX_INPUT_BYTES} tavua
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	tuontilaajennus ilmoittaa 1–{MAX_EXTENSIONS} `extensions`
+@msg	only an exporter or an importer declares `extensions`	vain vienti- tai tuontilaajennus ilmoittaa `extensions`
+@msg	an importer always gets an import's budget: leave `budget` out	tuontilaajennus saa aina tuonnin budjetin: jätä `budget` pois
 
 # Safe Mode
 	Safe Mode…	Vikasietotila…

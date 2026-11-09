@@ -316,6 +316,626 @@ fn expanding_a_fill_gives_its_plug_in_effect_the_fill_it_sits_on() {
     assert_eq!(clip.path_data().unwrap().bounds(), triangle().bounds(), "the triangle the canvas fills");
 }
 
+/// The manifest of a test live effect `id` that declares `paintOutput` (at `api` 2), or that
+/// doesn't (`paints` off).
+fn painting(id: &str, paints: bool) -> String {
+    let declared = if paints { r#","api":2,"paintOutput":true"# } else { "" };
+    format!(r#"{{"id":"{id}","name":"Test {id}","version":"1","kind":"effect"{declared},"params":{{}}}}"#)
+}
+
+/// A 20 × 20 square at `x`, 40.
+fn square_at(x: f64) -> PathData {
+    PathData::single(SubPath::polyline(&[Point::new(x, 40.0), Point::new(x + 20.0, 40.0), Point::new(x + 20.0, 60.0), Point::new(x, 60.0)], true))
+}
+
+fn solid(hex: &str) -> Value {
+    serde_json::to_value(Paint::solid(Color::from_hex(hex).unwrap())).unwrap()
+}
+
+/// The 200 × 200 top left of the document, drawn on white.
+fn drawn(s: &Session) -> vectorcraft_render::Rendered {
+    let opts = vectorcraft_render::RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    vectorcraft_render::Renderer::new().render(&s.doc().unwrap().doc, 200, 200, vectorcraft_geom::Affine::IDENTITY, &opts)
+}
+
+const WHITE: [u8; 4] = [255, 255, 255, 255];
+const RED: [u8; 4] = [255, 0, 0, 255];
+const GREEN: [u8; 4] = [0, 255, 0, 255];
+const BLUE: [u8; 4] = [0, 0, 255, 255];
+
+/// A live effect that declares `paintOutput` draws each piece it returns by itself, with the paints
+/// it gives (a piece without `fills` keeps the object's), in place of the object; the same output
+/// from an effect that doesn't declare it is one path painted by the object's fill. Drawing and
+/// export leave the document alone, and Expand Appearance writes the pieces as ordinary paths in
+/// one undo step.
+#[test]
+fn a_painted_live_effect_draws_its_pieces_with_their_own_paints() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    let out = json!({"objects": [{"path": square_at(40.0), "fills": [solid("#00ff00")]}, {"path": square_at(80.0)}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.paints", true), &out));
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.geometry", false), &out));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.geometry"}));
+    let img = drawn(&s);
+    assert_eq!((img.pixel(50, 50), img.pixel(90, 50), img.pixel(15, 15)), (RED, RED, WHITE), "without paintOutput the paint is ignored");
+    run(&mut s, "effect.remove", json!({"ids": [id.0], "index": 0}));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.paints"}));
+    let before = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    let img = drawn(&s);
+    assert_eq!((img.pixel(50, 50), img.pixel(90, 50), img.pixel(15, 15)), (GREEN, RED, WHITE), "each piece with its own paint");
+    // An upstream paint edit reaches the piece that keeps the object's fill; Undo brings it back.
+    run(&mut s, "paint.setFill", json!({"ids": [id.0], "color": "#0000ff"}));
+    assert_eq!((drawn(&s).pixel(50, 50), drawn(&s).pixel(90, 50)), (GREEN, BLUE));
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(drawn(&s).pixel(90, 50), RED);
+    run(&mut s, "edit.redo", json!({}));
+    assert_eq!(drawn(&s).pixel(90, 50), BLUE);
+    run(&mut s, "edit.undo", json!({}));
+    let svg = s.execute("document.export", &json!({"format": "svg"})).unwrap();
+    let svg = String::from_utf8(vectorcraft_format::base64_decode(svg["dataBase64"].as_str().unwrap()).unwrap()).unwrap();
+    assert!(svg.contains("#00ff00") && svg.contains("#ff0000"), "{svg}");
+    assert_eq!(s.doc().unwrap().doc, before, "drawing and export don't change the document");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    // Expanded: two ordinary paths, green and red, and no live effect, as one undo step.
+    run(&mut s, "select.set", json!({"ids": [id.0]}));
+    run(&mut s, "effect.expandAppearance", json!({}));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    let mut paths = vec![];
+    s.doc().unwrap().doc.walk(|n| {
+        if let Some(p) = n.path_data() {
+            assert!(n.appearance.effects.is_empty(), "no live effect left");
+            paths.push((p.bounds(), n.appearance.fill().map(|f| f.paint.clone())));
+        }
+    });
+    let fill = |hex: &str| Some(Paint::solid(Color::from_hex(hex).unwrap()));
+    assert_eq!(paths, [(square_at(40.0).bounds(), fill("#00ff00")), (square_at(80.0).bounds(), fill("#ff0000"))]);
+    assert_eq!(drawn(&s).pixel(50, 50), GREEN);
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(node(&s, id).appearance.effects[0].id, "plugin.test.engine.paints");
+}
+
+/// On a fill, a painted effect returns only fills: they replace that fill on each piece. A result
+/// that breaks a rule (strokes from an effect on a fill, a swatch the document doesn't have) is
+/// refused whole: the object is drawn as if the effect weren't there, and `plugin.info` names the
+/// plug-in and the field.
+#[test]
+fn a_painted_effect_on_a_fill_and_refused_results() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    let fills = json!({"objects": [{"path": square_at(40.0), "fills": [solid("#00ff00")]}]}).to_string();
+    let strokes = json!({"objects": [{"path": square_at(40.0), "strokes": [{"paint": solid("#00ff00"), "width": 2}]}]}).to_string();
+    let mut gone = solid("#00ff00");
+    gone["swatch"] = json!("Not a swatch");
+    let unknown = json!({"objects": [{"path": square_at(40.0), "fills": [gone]}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.fillpaint", true), &fills));
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.strokepaint", true), &strokes));
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.swatchpaint", true), &unknown));
+    let fill = node(&s, id).appearance.items.iter().position(|i| i.is_fill()).unwrap();
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.fillpaint", "item": fill}));
+    let img = drawn(&s);
+    assert_eq!((img.pixel(50, 50), img.pixel(15, 15)), (GREEN, WHITE), "the fill's piece, green");
+    assert_eq!(run(&mut s, "plugin.info", json!({"id": "test.engine.fillpaint"}))["lastError"], Value::Null);
+    // A second painted effect on the same fill paints what it returns too.
+    let blue = json!({"objects": [{"path": square_at(80.0), "fills": [solid("#0000ff")]}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.bluepaint", true), &blue));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.bluepaint", "item": fill}));
+    let img = drawn(&s);
+    assert_eq!((img.pixel(90, 50), img.pixel(50, 50), img.pixel(15, 15)), (BLUE, WHITE, WHITE), "the second effect's piece, blue");
+    run(&mut s, "effect.remove", json!({"ids": [id.0], "index": 1, "item": fill}));
+    run(&mut s, "effect.remove", json!({"ids": [id.0], "index": 0, "item": fill}));
+    for (effect, item, field) in
+        [("test.engine.strokepaint", json!(fill), "objects[0].strokes"), ("test.engine.swatchpaint", Value::Null, "objects[0].fills[0].swatch")]
+    {
+        run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": format!("plugin.{effect}"), "item": item}));
+        let img = drawn(&s);
+        assert_eq!((img.pixel(50, 50), img.pixel(15, 15)), (WHITE, RED), "{effect}: drawn as it is");
+        let e = run(&mut s, "plugin.info", json!({"id": effect}))["lastError"].as_str().unwrap_or_default().to_string();
+        assert!(e.starts_with(&format!("Test {effect}: ")) && e.contains(field), "{effect}: {e}");
+        let n = node(&s, id);
+        let kept = if item.is_null() { n.appearance.effects.clone() } else { n.appearance.items[fill].effects().to_vec() };
+        assert_eq!(kept.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), [format!("plugin.{effect}")], "the effect record stays");
+        run(&mut s, "effect.remove", json!({"ids": [id.0], "index": 0, "item": item}));
+    }
+}
+
+/// A painted effect on a group may link its pieces to the document's swatches.
+#[test]
+fn a_painted_group_effect_links_to_the_document_s_swatches() {
+    let mut s = session();
+    rect(&mut s, 10.0, "#ff0000");
+    run(&mut s, "swatch.new", json!({"name": "Leaf", "color": "#00ff00", "global": true}));
+    run(&mut s, "select.all", json!({}));
+    let g = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    let mut leaf = solid("#00ff00");
+    leaf["swatch"] = json!("Leaf");
+    let out = json!({"objects": [{"path": square_at(40.0), "fills": [leaf]}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.grouppaint", true), &out));
+    run(&mut s, "effect.apply", json!({"ids": [g.0], "effect": "plugin.test.engine.grouppaint"}));
+    let img = drawn(&s);
+    assert_eq!((img.pixel(50, 50), img.pixel(15, 15)), (GREEN, WHITE), "the group's piece, green");
+}
+
+/// The output of a painted effect that returns one green square linked to swatch `Leaf`.
+fn leaf_square() -> String {
+    let mut leaf = solid("#00ff00");
+    leaf["swatch"] = json!("Leaf");
+    json!({"objects": [{"path": square_at(40.0), "fills": [leaf]}]}).to_string()
+}
+
+/// A Pathfinder operation and baked appearance take a painted effect's pieces, swatch links
+/// included, as the canvas draws them: a group with a painted effect inside a group with a live
+/// Pathfinder effect draws the green piece, and baking a path's appearance gives the piece linked
+/// to the swatch.
+#[test]
+fn pathfinder_and_baked_appearance_take_painted_pieces_with_swatch_links() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    run(&mut s, "swatch.new", json!({"name": "Leaf", "color": "#00ff00"}));
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.leafpaint", true), &leaf_square()));
+    run(&mut s, "select.set", json!({"ids": [id.0]}));
+    let inner = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    run(&mut s, "effect.apply", json!({"ids": [inner.0], "effect": "plugin.test.engine.leafpaint"}));
+    let outer = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    run(&mut s, "effect.apply", json!({"ids": [outer.0], "effect": "pathfinder.add"}));
+    let img = drawn(&s);
+    assert_eq!((img.pixel(50, 50), img.pixel(15, 15)), (GREEN, WHITE), "the Pathfinder operation takes the green piece");
+
+    let id = rect(&mut s, 120.0, "#ff0000");
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.leafpaint"}));
+    let st = s.doc().unwrap();
+    let baked = vectorcraft_render::effects::bake_appearance(Some(&st.doc), st.doc.node(id).unwrap()).unwrap();
+    let mut fills = vec![];
+    baked.walk(&mut |n| {
+        if let Some(p) = n.path_data() {
+            fills.push((p.bounds(), n.appearance.fill().map(|f| f.paint.clone())));
+        }
+    });
+    let mut leaf = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    if let Paint::Solid { swatch, .. } = &mut leaf {
+        *swatch = Some("Leaf".into());
+    }
+    assert_eq!(fills, [(square_at(40.0).bounds(), Some(leaf))]);
+}
+
+/// A swatch-linked piece on screen is drawn when the path it comes from is off screen: the
+/// renderer's bounds of the path take in the piece.
+#[test]
+fn a_swatch_linked_piece_is_not_culled_with_its_off_screen_path() {
+    let mut s = session();
+    let id = rect(&mut s, 500.0, "#ff0000");
+    run(&mut s, "swatch.new", json!({"name": "Leaf", "color": "#00ff00"}));
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.culled", true), &leaf_square()));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.culled"}));
+    assert_eq!(drawn(&s).pixel(50, 50), GREEN);
+}
+
+/// The renderer measures a painted piece with its own strokes: a piece off screen whose wide stroke
+/// reaches the view is drawn, and the bounds raster effects work over take in that stroke, on a
+/// path with no stroke of its own and with a blur on the stroke the effect is on.
+#[test]
+fn a_piece_s_own_stroke_counts_in_the_bounds_of_what_is_drawn() {
+    let mut s = session();
+    let wide = json!({"objects": [{"path": square_at(-120.0), "strokes": [{"paint": solid("#00ff00"), "width": 300}]}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.widestroke", true), &wide));
+    let id = rect(&mut s, -300.0, "#ff0000");
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.widestroke"}));
+    assert_eq!(drawn(&s).pixel(30, 50), GREEN, "only the piece's stroke is on screen");
+    let bounds = |s: &Session, id: NodeId| vectorcraft_render::drawn_bounds(&s.doc().unwrap().doc, &node(s, id)).unwrap();
+    assert!(bounds(&s, id).x1 >= 50.0, "{:?}", bounds(&s, id));
+
+    let blurred = rect(&mut s, -300.0, "#ff0000");
+    run(&mut s, "paint.setStroke", json!({"ids": [blurred.0], "color": "#0000ff", "width": 1}));
+    let stroke = node(&s, blurred).appearance.items.iter().position(|i| !i.is_fill()).unwrap();
+    run(&mut s, "effect.apply", json!({"ids": [blurred.0], "effect": "plugin.test.engine.widestroke", "item": stroke}));
+    run(&mut s, "effect.apply", json!({"ids": [blurred.0], "effect": "blur.gaussian", "params": {"radius": 10}, "item": stroke}));
+    assert!(bounds(&s, blurred).x1 > 55.0, "the blur spreads the piece's stroke: {:?}", bounds(&s, blurred));
+}
+
+/// A retained renderer's kept bounds follow the document's swatches: a swatch-linked piece on
+/// screen appears when its swatch is added, though the path it comes from is off screen.
+#[test]
+fn a_retained_renderer_shows_a_piece_once_its_swatch_exists() {
+    let mut s = session();
+    let id = rect(&mut s, 500.0, "#ff0000");
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.lateleaf", true), &leaf_square()));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.lateleaf"}));
+    let opts = vectorcraft_render::RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut r = vectorcraft_render::Renderer::new();
+    let at_piece = |r: &mut vectorcraft_render::Renderer, s: &Session| {
+        r.render(&s.doc().unwrap().doc, 200, 200, vectorcraft_geom::Affine::IDENTITY, &opts).pixel(50, 50)
+    };
+    assert_eq!(at_piece(&mut r, &s), WHITE, "the piece is refused");
+    run(&mut s, "select.none", json!({}));
+    run(&mut s, "swatch.new", json!({"name": "Leaf", "color": "#00ff00"}));
+    assert_eq!(at_piece(&mut r, &s), GREEN, "the piece is drawn with its swatch");
+}
+
+/// Object › Expand of a gradient fill works piece by piece, for a painted effect on the object and
+/// on the fill: a piece that keeps the gradient has it expanded, and a piece with a paint of its own,
+/// here linked to the document's swatch, keeps that paint on its own path.
+#[test]
+fn expanding_a_gradient_fill_keeps_each_piece_s_own_paint() {
+    for on_fill in [false, true] {
+        let mut s = session();
+        let id = rect(&mut s, 10.0, "#ff0000");
+        run(&mut s, "paint.setFill", json!({"ids": [id.0], "gradient": {"kind": "linear"}}));
+        run(&mut s, "swatch.new", json!({"name": "Leaf", "color": "#00ff00"}));
+        let mut leaf = solid("#00ff00");
+        leaf["swatch"] = json!("Leaf");
+        let out = json!({"objects": [{"path": square_at(40.0), "fills": [leaf]}, {"path": square_at(100.0)}]}).to_string();
+        install_wat(&mut s, &tpl::returning(&painting("test.engine.expandref", true), &out));
+        let item = if on_fill { json!(node(&s, id).appearance.items.iter().position(|i| i.is_fill()).unwrap()) } else { Value::Null };
+        run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.expandref", "item": item}));
+        run(&mut s, "select.set", json!({"ids": [id.0]}));
+        run(&mut s, "object.expand", json!({"object": false, "fill": true, "stroke": false}));
+        let img = drawn(&s);
+        assert_eq!((img.pixel(15, 15), img.pixel(50, 50)), (WHITE, GREEN), "on_fill {on_fill}: the input is gone and the piece keeps its paint");
+        assert!(![WHITE, GREEN].contains(&img.pixel(110, 50)), "on_fill {on_fill}: the other piece shows the gradient");
+        let mut own = Paint::solid(Color::from_hex("#00ff00").unwrap());
+        if let Paint::Solid { swatch, .. } = &mut own {
+            *swatch = Some("Leaf".into());
+        }
+        let mut kept = vec![];
+        let mut plugins = 0;
+        s.doc().unwrap().doc.walk(|n| {
+            plugins += n
+                .appearance
+                .effects
+                .iter()
+                .chain(n.appearance.items.iter().flat_map(|i| i.effects()))
+                .filter(|e| e.id.starts_with("plugin."))
+                .count();
+            if n.path_data().is_some_and(|p| p.bounds() == square_at(40.0).bounds()) {
+                kept.push(n.appearance.fill().map(|f| f.paint.clone()));
+            }
+        });
+        assert_eq!(kept, [Some(own)], "on_fill {on_fill}");
+        assert_eq!(plugins, 0, "on_fill {on_fill}: no live effect is left");
+    }
+}
+
+/// Object › Expand of a pattern fill works piece by piece: a piece that keeps the pattern has its
+/// tiles expanded, and a piece with a paint of its own keeps that paint.
+#[test]
+fn expanding_a_pattern_fill_keeps_each_piece_s_own_paint() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    let tile = rect(&mut s, 300.0, "#00ff00");
+    run(&mut s, "object.pattern.make", json!({"ids": [tile.0], "name": "Tiles", "edit": false}));
+    run(&mut s, "paint.setFill", json!({"ids": [id.0], "swatch": "Tiles"}));
+    let out = json!({"objects": [{"path": square_at(40.0), "fills": [solid("#0000ff")]}, {"path": square_at(100.0)}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.expandtiles", true), &out));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.expandtiles"}));
+    run(&mut s, "select.set", json!({"ids": [id.0]}));
+    run(&mut s, "object.expand", json!({"object": false, "fill": true, "stroke": false}));
+    let img = drawn(&s);
+    assert_eq!((img.pixel(15, 15), img.pixel(50, 50)), (WHITE, BLUE), "the input is gone and the piece keeps its paint");
+    assert!(near(img.pixel(110, 50), GREEN), "the other piece shows the tiles");
+    let mut patterns = 0;
+    s.doc().unwrap().doc.walk(|n| patterns += n.appearance.items.iter().filter(|i| matches!(i.paint(), Paint::Pattern { .. })).count());
+    assert_eq!(patterns, 0, "the tiles are objects");
+}
+
+/// Two painted effects on one fill, the first returning a piece with two fills: the second replaces
+/// the first of them and the other fill stays over it.
+#[test]
+fn a_second_painted_effect_on_a_fill_keeps_the_piece_s_other_fills() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    let two = json!({"objects": [{"path": square_at(40.0), "fills": [solid("#ff0000"), solid("#00ff00")]}]}).to_string();
+    let one = json!({"objects": [{"path": square_at(40.0), "fills": [solid("#0000ff")]}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.twofills", true), &two));
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.onefill", true), &one));
+    let fill = node(&s, id).appearance.items.iter().position(|i| i.is_fill()).unwrap();
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.twofills", "item": fill}));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.onefill", "item": fill}));
+    assert_eq!(drawn(&s).pixel(50, 50), GREEN, "the other fill paints over the replaced one");
+    let st = s.doc().unwrap();
+    let art = vectorcraft_render::effects::reshape(Some(&st.doc), st.doc.node(id).unwrap(), None).unwrap();
+    let mut paints = vec![];
+    art.walk(&mut |n| {
+        if n.path_data().is_some() {
+            paints.push(n.appearance.items.iter().filter(|i| i.is_fill()).map(|i| i.paint().clone()).collect::<Vec<_>>());
+        }
+    });
+    let fill = |hex: &str| Paint::solid(Color::from_hex(hex).unwrap());
+    assert!(paints.contains(&vec![fill("#0000ff"), fill("#00ff00")]), "{paints:?}");
+}
+
+/// A Transform effect before a painted effect on a fill moves the fill's placed gradient: a piece
+/// that keeps the fill, and the fill drawn on the moved shape after a refused result, both have the
+/// gradient at its moved position.
+#[test]
+fn a_painted_effect_on_a_fill_keeps_a_placed_gradient_with_its_moved_shape() {
+    let mut gone = solid("#00ff00");
+    gone["swatch"] = json!("Not a swatch");
+    for (name, out, want) in [
+        ("keeps", json!({"objects": [{"path": square_at(40.0)}]}).to_string(), square_at(40.0).bounds()),
+        ("refused", json!({"objects": [{"path": square_at(40.0), "fills": [gone]}]}).to_string(), square_at(110.0).bounds()),
+    ] {
+        let mut s = session();
+        let id = NodeId(run(&mut s, "shape.rectangle", json!({"x": 10, "y": 40, "width": 20, "height": 20}))["id"].as_u64().unwrap());
+        run(&mut s, "paint.setStroke", json!({"ids": [id.0], "none": true}));
+        let stops = json!([{"offset": 0, "color": "#ffffff"}, {"offset": 1, "color": "#000000"}]);
+        run(&mut s, "paint.setFill", json!({"ids": [id.0], "gradient": {"kind": "linear", "stops": stops}}));
+        run(&mut s, "select.set", json!({"ids": [id.0]}));
+        run(&mut s, "paint.setGradientGeom", json!({"start": [14, 50], "end": [26, 50], "stroke": false}));
+        let plugin = format!("test.engine.carry{name}");
+        install_wat(&mut s, &tpl::returning(&painting(&plugin, true), &out));
+        let fill = node(&s, id).appearance.items.iter().position(|i| i.is_fill()).unwrap();
+        run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "distort.transform", "params": {"moveH": 100}, "item": fill}));
+        run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": format!("plugin.{plugin}"), "item": fill}));
+        let st = s.doc().unwrap();
+        let art = vectorcraft_render::effects::reshape(Some(&st.doc), st.doc.node(id).unwrap(), None).unwrap();
+        let mut seen = vec![];
+        art.walk(&mut |n| {
+            if let (Some(p), Some(Paint::Gradient(g))) = (n.path_data(), n.appearance.items.iter().find(|i| i.is_fill()).map(|i| i.paint())) {
+                seen.push((p.bounds(), g.geom.map(|g| (g.start.x, g.end.x))));
+            }
+        });
+        assert_eq!(seen, [(want, Some((114.0, 126.0)))], "{name}");
+    }
+}
+
+/// The geometry of a painted result that names a swatch counts only when the document has that
+/// swatch: without a document, and with one that lacks it, the effect keeps its input.
+#[test]
+fn painted_geometry_is_used_only_when_its_references_are_in_the_document() {
+    use vectorcraft_render::effects::{GeomContext, apply_geometry_with};
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.geomref", true), &leaf_square()));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.geomref"}));
+    let n = node(&s, id);
+    let path = n.path_data().unwrap().clone();
+    let input = path.bounds().unwrap();
+    let geometry = |doc: Option<&vectorcraft_doc::Document>| {
+        apply_geometry_with(&n.appearance.effects, &path, input, &GeomContext { doc, ..GeomContext::of(&n) }).bounds()
+    };
+    assert_eq!(geometry(None), Some(input), "no document");
+    assert_eq!(geometry(Some(&s.doc().unwrap().doc)), Some(input), "no such swatch");
+    run(&mut s, "swatch.new", json!({"name": "Leaf", "color": "#00ff00"}));
+    assert_eq!(geometry(Some(&s.doc().unwrap().doc)), square_at(40.0).bounds(), "the piece's geometry");
+}
+
+/// Type with a painted effect, in a group with a live Pathfinder effect: the operation takes the
+/// piece linked to the document's swatch.
+#[test]
+fn pathfinder_takes_the_swatch_linked_pieces_of_type() {
+    let mut s = session();
+    let t = NodeId(run(&mut s, "text.create", json!({"x": 10, "y": 150, "text": "Hi", "size": 20}))["id"].as_u64().unwrap());
+    run(&mut s, "swatch.new", json!({"name": "Leaf", "color": "#00ff00"}));
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.typepaint", true), &leaf_square()));
+    run(&mut s, "effect.apply", json!({"ids": [t.0], "effect": "plugin.test.engine.typepaint"}));
+    run(&mut s, "select.set", json!({"ids": [t.0]}));
+    let g = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    run(&mut s, "effect.apply", json!({"ids": [g.0], "effect": "pathfinder.divide"}));
+    assert_eq!(drawn(&s).pixel(50, 50), GREEN);
+}
+
+/// Type whose fill has a painted effect, in a group with a geometry effect inside a live Pathfinder
+/// effect: the operation takes the piece linked to the document's swatch.
+#[test]
+fn pathfinder_takes_swatch_linked_pieces_of_type_in_a_reshaped_group() {
+    let mut s = session();
+    let t = NodeId(run(&mut s, "text.create", json!({"x": 10, "y": 150, "text": "Hi", "size": 20}))["id"].as_u64().unwrap());
+    run(&mut s, "swatch.new", json!({"name": "Leaf", "color": "#00ff00"}));
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.memberpaint", true), &leaf_square()));
+    run(&mut s, "select.set", json!({"ids": [t.0]}));
+    run(&mut s, "appearance.addFill", json!({}));
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000", "item": 0}));
+    run(&mut s, "effect.apply", json!({"effect": "plugin.test.engine.memberpaint", "item": 0}));
+    let inner = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    run(&mut s, "effect.apply", json!({"ids": [inner.0], "effect": "path.offsetPath", "params": {"offset": 0}}));
+    let outer = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    run(&mut s, "effect.apply", json!({"ids": [outer.0], "effect": "pathfinder.divide"}));
+    assert_eq!(drawn(&s).pixel(50, 50), GREEN);
+}
+
+/// A painted effect on an image's own fill that links its piece to a swatch: hit tests and bounds
+/// use the piece the canvas draws.
+#[test]
+fn an_image_s_painted_fill_is_hit_and_measured_as_drawn() {
+    let mut s = session();
+    let mut png = vec![];
+    image::RgbaImage::from_pixel(30, 30, image::Rgba([255, 0, 0, 255]))
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    let r = run(&mut s, "file.place", json!({"name": "red.png", "dataBase64": vectorcraft_format::base64_encode(&png), "at": [65, 65]}));
+    let im = NodeId(r["ids"][0].as_u64().unwrap());
+    run(&mut s, "swatch.new", json!({"name": "Leaf", "color": "#00ff00"}));
+    let mut leaf = solid("#00ff00");
+    leaf["swatch"] = json!("Leaf");
+    let out = json!({"objects": [{"path": square_at(120.0), "fills": [leaf]}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.imagepaint", true), &out));
+    run(&mut s, "select.set", json!({"ids": [im.0]}));
+    run(&mut s, "appearance.addFill", json!({}));
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000", "item": 0}));
+    run(&mut s, "effect.apply", json!({"effect": "convertToShape.rectangle", "item": 0}));
+    run(&mut s, "effect.apply", json!({"effect": "plugin.test.engine.imagepaint", "item": 0}));
+    assert_eq!(drawn(&s).pixel(130, 50), GREEN, "the canvas draws the piece");
+    let doc = &s.doc().unwrap().doc;
+    assert!(vectorcraft_doc::hit::hit_test(doc, Point::new(130.0, 50.0), Default::default()).is_some(), "a click on the piece hits the image");
+    let boxes = doc.symbol_boxes();
+    assert!(doc.node(im).unwrap().reach_bounds_with(&boxes).unwrap().x1 >= 140.0, "the bounds take in the piece");
+}
+
+/// A path with a painted effect takes part in a Pathfinder operation as its pieces, each with its
+/// own paint and the path's opacity: Divide on a group holding it makes one face per piece,
+/// painted as the piece is.
+#[test]
+fn a_path_with_a_painted_effect_takes_part_in_pathfinder_as_its_pieces() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    let out = json!({"objects": [{"path": square_at(40.0), "fills": [solid("#00ff00")]}, {"path": square_at(80.0), "fills": [solid("#0000ff")]}]})
+        .to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.twopaint", true), &out));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.twopaint"}));
+    run(&mut s, "select.set", json!({"ids": [id.0]}));
+    let g = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    run(&mut s, "effect.apply", json!({"ids": [g.0], "effect": "pathfinder.divide"}));
+    let img = drawn(&s);
+    assert_eq!((img.pixel(50, 50), img.pixel(90, 50), img.pixel(15, 15)), (GREEN, BLUE, WHITE), "one face per piece");
+    run(&mut s, "select.set", json!({"ids": [id.0]}));
+    run(&mut s, "transparency.set", json!({"item": null, "opacity": 50}));
+    let st = s.doc().unwrap();
+    let hook = |c: &vectorcraft_doc::Node| vectorcraft_render::effects::outline_object(Some(&st.doc), c);
+    let faces = vectorcraft_render::effects::pathfinder_children(Some(&st.doc), st.doc.node(g).unwrap(), Some(&hook)).unwrap();
+    let faces: Vec<_> = faces.iter().map(|f| (f.appearance.fill().map(|f| f.paint.clone()), f.opacity)).collect();
+    let fill = |hex: &str| Some(Paint::solid(Color::from_hex(hex).unwrap()));
+    assert_eq!(faces, [(fill("#0000ff"), 0.5), (fill("#00ff00"), 0.5)]);
+}
+
+/// Art a renderer keeps for an object with a painted effect is made again when a swatch its pieces
+/// name leaves the document (the object is then drawn as if the effect weren't there) and when
+/// Undo brings the swatch back.
+#[test]
+fn kept_art_follows_the_swatches_painted_pieces_name() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    run(&mut s, "swatch.new", json!({"name": "Leaf", "color": "#00ff00"}));
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.keptpaint", true), &leaf_square()));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.keptpaint"}));
+    let mut r = vectorcraft_render::Renderer::new();
+    let opts = vectorcraft_render::RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut draw = |s: &Session| {
+        let img = r.render(&s.doc().unwrap().doc, 200, 200, vectorcraft_geom::Affine::IDENTITY, &opts);
+        (img.pixel(50, 50), img.pixel(15, 15))
+    };
+    assert_eq!(draw(&s), (GREEN, WHITE), "the piece, green");
+    run(&mut s, "swatch.delete", json!({"name": "Leaf"}));
+    assert_eq!(draw(&s), (WHITE, RED), "without the swatch, the object as it is");
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(draw(&s), (GREEN, WHITE), "the swatch back, the piece again");
+}
+
+/// A piece linked to a global swatch shows the swatch's edited color, in art a renderer keeps and
+/// in a kept raster of a blur over it, and its earlier color after Undo.
+#[test]
+fn a_piece_linked_to_a_global_swatch_takes_its_edited_color() {
+    for blur in [false, true] {
+        let mut s = session();
+        let id = rect(&mut s, 10.0, "#ff0000");
+        install_wat(&mut s, &tpl::returning(&painting("test.engine.globalleaf", true), &leaf_square()));
+        run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.globalleaf"}));
+        if blur {
+            run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "blur.gaussian", "params": {"radius": 1}}));
+        }
+        run(&mut s, "select.none", json!({}));
+        run(&mut s, "swatch.new", json!({"name": "Leaf", "color": "#00ff00", "global": true}));
+        let mut r = vectorcraft_render::Renderer::new();
+        let opts = vectorcraft_render::RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+        let mut at_piece = |s: &Session| r.render(&s.doc().unwrap().doc, 200, 200, vectorcraft_geom::Affine::IDENTITY, &opts).pixel(50, 50);
+        assert!(near(at_piece(&s), GREEN), "the piece, in the swatch's color (blur {blur})");
+        run(&mut s, "swatch.edit", json!({"name": "Leaf", "color": "#0000ff"}));
+        let px = at_piece(&s);
+        assert!(near(px, BLUE), "the swatch's new color (blur {blur}): {px:?}");
+        run(&mut s, "edit.undo", json!({}));
+        assert!(near(at_piece(&s), GREEN), "the swatch's color after Undo (blur {blur})");
+    }
+}
+
+/// Art a renderer keeps for an object whose plug-in starts to paint its pieces when it is replaced
+/// follows the swatches those pieces name from then on.
+#[test]
+fn kept_art_follows_the_swatches_once_a_replaced_plugin_paints() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    run(&mut s, "swatch.new", json!({"name": "Leaf", "color": "#00ff00"}));
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.laterpaint", false), &leaf_square()));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.laterpaint"}));
+    let mut r = vectorcraft_render::Renderer::new();
+    let opts = vectorcraft_render::RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut draw = |s: &Session| {
+        let img = r.render(&s.doc().unwrap().doc, 200, 200, vectorcraft_geom::Affine::IDENTITY, &opts);
+        (img.pixel(50, 50), img.pixel(15, 15))
+    };
+    assert_eq!(draw(&s), (RED, WHITE), "the square in the object's paint");
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.laterpaint", true), &leaf_square()));
+    assert_eq!(draw(&s), (GREEN, WHITE), "the piece, green");
+    run(&mut s, "swatch.delete", json!({"name": "Leaf"}));
+    assert_eq!(draw(&s), (WHITE, RED), "without the swatch, the object as it is");
+}
+
+/// Whether `px` is within 40 levels of `want` on every channel. A blur leaves the middle of a
+/// shape close to its color.
+fn near(px: [u8; 4], want: [u8; 4]) -> bool {
+    px.iter().zip(want).all(|(a, b)| a.abs_diff(b) <= 40)
+}
+
+/// A kept raster of a blur over a painted effect is made again when a swatch its piece names
+/// leaves the document (the object is then drawn as if the effect weren't there) and when Undo
+/// brings the swatch back.
+#[test]
+fn a_kept_raster_follows_the_swatches_painted_pieces_name() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    run(&mut s, "swatch.new", json!({"name": "Leaf", "color": "#00ff00"}));
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.blurpaint", true), &leaf_square()));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.blurpaint"}));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "blur.gaussian", "params": {"radius": 1}}));
+    let mut r = vectorcraft_render::Renderer::new();
+    let opts = vectorcraft_render::RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut draw = |s: &Session| r.render(&s.doc().unwrap().doc, 200, 200, vectorcraft_geom::Affine::IDENTITY, &opts);
+    let img = draw(&s);
+    assert!(near(img.pixel(50, 50), GREEN) && near(img.pixel(15, 15), WHITE), "the piece, green and blurred");
+    run(&mut s, "swatch.delete", json!({"name": "Leaf"}));
+    let img = draw(&s);
+    assert!(near(img.pixel(50, 50), WHITE) && near(img.pixel(15, 15), RED), "without the swatch, the object as it is: {:?}", img.pixel(50, 50));
+    run(&mut s, "edit.undo", json!({}));
+    let img = draw(&s);
+    assert!(near(img.pixel(50, 50), GREEN) && near(img.pixel(15, 15), WHITE), "the swatch back, the piece again");
+}
+
+/// A kept raster of a blur over a painted effect is made again when the tile of a pattern its
+/// piece names changes and the pattern keeps its name.
+#[test]
+fn a_kept_raster_follows_the_tiles_of_patterns_painted_pieces_name() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    let green = rect(&mut s, 300.0, "#00ff00");
+    let blue = rect(&mut s, 320.0, "#0000ff");
+    let tile = |r: f64, art: vectorcraft_doc::Node| vectorcraft_doc::pattern::PatternDef {
+        tile: vectorcraft_geom::Rect::new(r, 10.0, r + 10.0, 20.0),
+        ..vectorcraft_doc::pattern::PatternDef::new("Tiles", vec![std::sync::Arc::new(art)])
+    };
+    let (first, second) = (tile(300.0, node(&s, green)), tile(320.0, node(&s, blue)));
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).patterns.push(first);
+    let paint = serde_json::to_value(Paint::Pattern { pattern: "Tiles".into(), xf: vectorcraft_geom::Affine::IDENTITY }).unwrap();
+    let out = json!({"objects": [{"path": square_at(40.0), "fills": [paint]}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.tilepaint", true), &out));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.tilepaint"}));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "blur.gaussian", "params": {"radius": 1}}));
+    let mut r = vectorcraft_render::Renderer::new();
+    let opts = vectorcraft_render::RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut draw = |s: &Session| r.render(&s.doc().unwrap().doc, 200, 200, vectorcraft_geom::Affine::IDENTITY, &opts).pixel(50, 50);
+    assert!(near(draw(&s), GREEN), "the piece in the green tile");
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).patterns[0] = second;
+    let px = draw(&s);
+    assert!(near(px, BLUE), "the piece in the new tile: {px:?}");
+}
+
+/// Every painted piece counts against the effects' budget, however small its path: two painted
+/// effects in a stack that each return 350 tiny triangles make no more than 100,000 objects, not
+/// 350 × 350 of them.
+#[test]
+fn painted_pieces_keep_to_the_effects_budget() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    let tiny = PathData::single(SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(0.1, 0.0), Point::new(0.0, 0.1)], true));
+    let out = json!({"objects": vec![json!({"path": tiny}); 350]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.many", true), &out));
+    for _ in 0..2 {
+        run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.many"}));
+    }
+    let st = s.doc().unwrap();
+    let art = vectorcraft_render::effects::reshape(Some(&st.doc), st.doc.node(id).unwrap(), None).unwrap();
+    let mut paths = 0;
+    art.walk(&mut |n| paths += usize::from(matches!(n.kind, vectorcraft_doc::NodeKind::Path { .. })));
+    assert!((350..=100_000).contains(&paths), "{paths} paths");
+}
+
 /// `CRAFT_PLUGIN_PAINTS_WASM=<folder>` saves a test live effect to try in the app
 /// (`stroke-width-test-effect.wasm`): it draws a triangle over the area 100,80–300,230 while its
 /// object's stroke is 5 pt wide, and hands the geometry back otherwise.
@@ -579,9 +1199,9 @@ fn asking(id: &str, permissions: &str, output: &Value) -> Vec<u8> {
 
 /// A plug-in whose manifest lists permissions installs only once they are all granted (`grant`),
 /// which `plugin.inspect` tells beforehand (`needsApproval`) with the permissions and the module's
-/// hash. The grant is recorded with that hash: replacing the plug-in (`replace: true`) with one
-/// that lists the same permissions needs no new grant, and one that lists another needs one. Removing it forgets the
-/// grant. A plug-in without `permissions` installs as before, with the ones its kind implies.
+/// hash. The grant is recorded with that hash and covers only that module: replacing the plug-in
+/// (`replace: true`) with one with other bytes needs a new grant. Removing it forgets the grant. A
+/// plug-in without `permissions` installs as before, with the ones its kind implies.
 #[test]
 fn a_plugin_that_lists_permissions_installs_once_they_are_granted() {
     let mut s = session();
@@ -617,11 +1237,11 @@ fn a_plugin_that_lists_permissions_installs_once_they_are_granted() {
     assert_eq!(installed["permissions"], json!(["doc.read"]));
     let g = vectorcraft_plugins::registry::granted(id).unwrap();
     assert_eq!((g.hash.as_str(), g.permissions.as_slice()), (hash.as_str(), &[vectorcraft_plugins::permissions::Permission::DocRead][..]));
-    // Replaced with another module that lists the same permissions: no new grant needed, and the
-    // grant now records the new module's hash.
+    // Replaced with another module that lists the same permissions: granted again, the grant now
+    // records the new module's hash.
     let other = asking(id, r#"["doc.read"]"#, &json!({"objects": [], "error": null}));
-    assert_eq!(run(&mut s, "plugin.inspect", json!({"dataBase64": vectorcraft_format::base64_encode(&other)}))["needsApproval"], false);
-    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&other), "replace": true}));
+    assert_eq!(run(&mut s, "plugin.inspect", json!({"dataBase64": vectorcraft_format::base64_encode(&other)}))["needsApproval"], true);
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&other), "grant": ["doc.read"], "replace": true}));
     assert_eq!(vectorcraft_plugins::registry::granted(id).unwrap().hash, vectorcraft_plugins::permissions::sha256_hex(&other));
     // One that asks for more is refused until it is granted all of them.
     let more = data(r#"["doc.read","doc.write"]"#);
@@ -639,6 +1259,221 @@ fn a_plugin_that_lists_permissions_installs_once_they_are_granted() {
     let plain = install(&mut s, DESATURATE);
     assert_eq!(plain["permissions"], json!(["doc.read", "doc.write", "state"]));
     assert_eq!(run(&mut s, "plugin.inspect", json!({"dataBase64": vectorcraft_format::base64_encode(DESATURATE)}))["needsApproval"], false);
+}
+
+/// A module with other bytes under an id that was granted is not covered, even when it lists the
+/// same permissions: `plugin.inspect` says so, `plugin.install` refuses it and leaves the installed
+/// module and its grant alone, and a new `grant` installs it and records its hash. The same bytes
+/// install again without asking, and a module that lists no permissions never asks.
+#[test]
+fn a_grant_covers_only_the_module_that_was_approved() {
+    use vectorcraft_plugins::permissions::sha256_hex;
+    let mut s = session();
+    let id = "test.engine.permissions.bytes";
+    let first = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+    let changed = asking(id, r#"["doc.read"]"#, &json!({"objects": [], "error": null}));
+    let (first_data, changed_data) = (vectorcraft_format::base64_encode(&first), vectorcraft_format::base64_encode(&changed));
+    let (first_hash, changed_hash) = (sha256_hex(&first), sha256_hex(&changed));
+    run(&mut s, "plugin.install", json!({"dataBase64": first_data, "grant": ["doc.read"]}));
+    assert_eq!(run(&mut s, "plugin.inspect", json!({"dataBase64": changed_data}))["needsApproval"], true);
+    let e = s.execute("plugin.install", &json!({"dataBase64": changed_data, "replace": true})).unwrap_err().to_string();
+    assert!(e.contains("doc.read") && e.contains("`grant`"), "{e}");
+    let e = s.execute("plugin.install", &json!({"dataBase64": changed_data, "replace": true, "hash": changed_hash})).unwrap_err().to_string();
+    assert!(e.contains("`grant`"), "`hash` is not an approval: {e}");
+    assert_eq!(vectorcraft_plugins::registry::get(id).unwrap().hash(), first_hash, "the installed module stays");
+    assert_eq!(vectorcraft_plugins::registry::granted(id).unwrap().hash, first_hash, "its grant stays");
+    // The same bytes need no new grant.
+    assert_eq!(run(&mut s, "plugin.inspect", json!({"dataBase64": first_data}))["needsApproval"], false);
+    run(&mut s, "plugin.install", json!({"dataBase64": first_data}));
+    // A new grant installs the changed module, and the old bytes are no longer covered.
+    run(&mut s, "plugin.install", json!({"dataBase64": changed_data, "grant": ["doc.read"], "hash": changed_hash, "replace": true}));
+    assert_eq!(vectorcraft_plugins::registry::get(id).unwrap().hash(), changed_hash);
+    assert_eq!(vectorcraft_plugins::registry::granted(id).unwrap().hash, changed_hash);
+    assert_eq!(run(&mut s, "plugin.inspect", json!({"dataBase64": first_data}))["needsApproval"], true);
+    run(&mut s, "plugin.remove", json!({"id": id}));
+
+    // A manifest without a list, or with an empty one, asks for nothing, whatever its bytes.
+    let exempt = "test.engine.permissions.exempt";
+    for (permissions, out) in [("null", json!({"objects": []})), ("null", json!({"objects": [], "error": null})), ("[]", json!({"objects": []}))] {
+        let data = vectorcraft_format::base64_encode(&asking(exempt, permissions, &out));
+        assert_eq!(run(&mut s, "plugin.inspect", json!({"dataBase64": data}))["needsApproval"], false, "{permissions}");
+        run(&mut s, "plugin.install", json!({"dataBase64": data, "replace": true}));
+    }
+    run(&mut s, "plugin.remove", json!({"id": exempt}));
+}
+
+/// A stored module whose bytes changed is skipped at the next start and stays in the store with its
+/// grant, and the original bytes load again. A stored grant whose hash is malformed covers nothing.
+/// With a store attached, a matching grant held only by the process doesn't count.
+#[test]
+fn a_stored_grant_covers_only_the_stored_module_it_recorded() {
+    use vectorcraft_plugins::permissions::{Grant, Permission, sha256_hex};
+    let folder = crate::tests_links::Folder::new("plugin-store-recorded-module");
+    let id = "test.engine.permissions.storedbytes";
+    let first = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+    let changed = asking(id, r#"["doc.read"]"#, &json!({"objects": [], "error": null}));
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&first), "grant": ["doc.read"]}));
+    let grants = folder.0.join("grants.json");
+    let recorded = std::fs::read(&grants).unwrap();
+    let module = std::fs::read_dir(&folder.0)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .find(|p| p.extension().is_some_and(|x| x == "wasm"))
+        .expect("the stored module");
+    let forget = || {
+        vectorcraft_plugins::registry::remove(id);
+        vectorcraft_plugins::registry::revoke(id);
+    };
+    let starts = || {
+        forget();
+        let mut next = session();
+        next.attach_plugin_store(folder.0.clone());
+        vectorcraft_plugins::registry::get(id).is_some()
+    };
+    assert!(starts(), "the module that was approved loads");
+    std::fs::write(&module, &changed).unwrap();
+    assert!(!starts(), "other bytes under the old grant are skipped");
+    assert_eq!(std::fs::read(&module).unwrap(), changed, "the module stays in the store");
+    assert_eq!(std::fs::read(&grants).unwrap(), recorded, "its grant stays");
+    std::fs::write(&module, &first).unwrap();
+    assert!(starts(), "the approved bytes load again");
+
+    // A malformed hash is no wildcard, even for the module on disk.
+    let upper = sha256_hex(&first).to_uppercase();
+    for hash in ["", "00", upper.as_str()] {
+        std::fs::write(&grants, serde_json::to_vec(&json!([{"id": id, "hash": hash, "permissions": ["doc.read"]}])).unwrap()).unwrap();
+        assert!(!starts(), "hash {hash:?}");
+    }
+
+    // The store's grants are the ones that count, even when the process holds one for these bytes.
+    std::fs::write(&grants, &recorded).unwrap();
+    assert!(starts());
+    let mut attached = session();
+    attached.attach_plugin_store(folder.0.clone());
+    vectorcraft_plugins::registry::grant(Grant { id: id.into(), hash: sha256_hex(&changed), permissions: vec![Permission::DocRead] });
+    let inspected = run(&mut attached, "plugin.inspect", json!({"dataBase64": vectorcraft_format::base64_encode(&changed)}));
+    assert_eq!(inspected["needsApproval"], true, "a grant held only by the process doesn't count with a store attached");
+    run(&mut attached, "plugin.remove", json!({"id": id}));
+}
+
+/// A write to the plug-in store that fails leaves the store's module beside the grant that approved
+/// it, so the old module loads at the next start: a module that can't be written doesn't update the
+/// grant, and a grant that can't be written puts the old module back. On a first install, it takes
+/// the new module out again.
+#[test]
+fn a_failed_store_write_keeps_the_stored_module_with_its_grant() {
+    use vectorcraft_plugins::permissions::sha256_hex;
+    let folder = crate::tests_links::Folder::new("plugin-store-failed-write");
+    let id = "test.engine.permissions.failedwrite";
+    let first = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+    let changed = asking(id, r#"["doc.read","doc.write"]"#, &json!({"objects": []}));
+    let first_data = vectorcraft_format::base64_encode(&first);
+    let update = json!({"dataBase64": vectorcraft_format::base64_encode(&changed), "grant": ["doc.read", "doc.write"], "replace": true});
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": first_data, "grant": ["doc.read"]}));
+    let grants = folder.0.join("grants.json");
+    let recorded = std::fs::read(&grants).unwrap();
+    let module = std::path::PathBuf::from(s.stored_plugin_file(id).unwrap());
+    let starts = || {
+        vectorcraft_plugins::registry::remove(id);
+        vectorcraft_plugins::registry::revoke(id);
+        let mut next = session();
+        next.attach_plugin_store(folder.0.clone());
+        vectorcraft_plugins::registry::get(id).map(|p| p.hash().to_string())
+    };
+    let block = |path: &std::path::Path| {
+        std::fs::remove_file(path).unwrap();
+        std::fs::create_dir_all(path.join("block")).unwrap();
+    };
+
+    // The module can't be written: the grant stays the old module's.
+    block(&module);
+    run(&mut s, "plugin.install", update.clone());
+    assert_eq!(std::fs::read(&grants).unwrap(), recorded, "the grant isn't updated for a module that wasn't stored");
+    std::fs::remove_dir_all(&module).unwrap();
+    std::fs::write(&module, &first).unwrap();
+    assert_eq!(starts(), Some(sha256_hex(&first)), "the old module loads after a failed module write");
+
+    // The grants file is full: the new grant, which is longer, doesn't fit.
+    let cap = 1 << 20;
+    let mut entries: Vec<Value> = serde_json::from_slice(&recorded).unwrap();
+    entries.push(json!({"id": "", "pad": ""}));
+    let room = cap - serde_json::to_vec(&entries).unwrap().len();
+    *entries.last_mut().unwrap() = json!({"id": "", "pad": "x".repeat(room)});
+    let full = serde_json::to_vec(&entries).unwrap();
+    assert_eq!(full.len(), cap);
+    std::fs::write(&grants, &full).unwrap();
+    run(&mut s, "plugin.install", update.clone());
+    assert_eq!(std::fs::read(&grants).unwrap(), full, "not written past the cap");
+    assert_eq!(std::fs::read(&module).unwrap(), first, "the old module is put back");
+    assert_eq!(starts(), Some(sha256_hex(&first)), "the old module loads after a failed grant write");
+
+    // The grants file can't be read, so nothing can be recorded in it.
+    block(&grants);
+    run(&mut s, "plugin.install", update.clone());
+    assert_eq!(std::fs::read(&module).unwrap(), first, "the old module is put back");
+    std::fs::remove_dir_all(&grants).unwrap();
+    std::fs::write(&grants, &recorded).unwrap();
+    assert_eq!(starts(), Some(sha256_hex(&first)), "the old module loads once the grants are readable");
+
+    // A stored module that can't be read back isn't replaced, so a failed grant write can't lose it.
+    let oversized = vectorcraft_plugins::Limits::default().max_module_bytes as u64 + 1;
+    std::fs::File::options().write(true).open(&module).unwrap().set_len(oversized).unwrap();
+    block(&grants);
+    run(&mut s, "plugin.install", update);
+    assert_eq!(std::fs::metadata(&module).unwrap().len(), oversized, "the stored module stays");
+    std::fs::remove_dir_all(&grants).unwrap();
+    std::fs::write(&grants, &recorded).unwrap();
+    std::fs::write(&module, &first).unwrap();
+
+    // A first install whose grant can't be written leaves no module without a grant in the store.
+    run(&mut s, "plugin.remove", json!({"id": id}));
+    assert!(!module.exists() && !grants.exists());
+    std::fs::create_dir_all(grants.join("block")).unwrap();
+    run(&mut s, "plugin.install", json!({"dataBase64": first_data, "grant": ["doc.read"]}));
+    assert!(!module.exists(), "the store holds no module its grants don't cover");
+    vectorcraft_plugins::registry::remove(id);
+    vectorcraft_plugins::registry::revoke(id);
+}
+
+/// A plug-in folder reports a changed module as needing approval and still loads the other files;
+/// granted on its own, the changed module loads from the folder. A session without a store uses the
+/// grants held by the process.
+#[test]
+fn a_plugin_folder_skips_a_changed_module_until_it_is_approved() {
+    let mut s = session();
+    let id = "test.engine.permissions.folderbytes";
+    let plain = "test.engine.permissions.folderplain";
+    let first = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+    let changed = asking(id, r#"["doc.read"]"#, &json!({"objects": [], "error": null}));
+    let dir = crate::tests_links::Folder::new("plugin-folder-changed-module");
+    let file = dir.0.join("asks.wasm");
+    std::fs::write(&file, &first).unwrap();
+    std::fs::write(dir.0.join("plain.wasm"), asking(plain, "null", &json!({"objects": []}))).unwrap();
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&first), "grant": ["doc.read"]}));
+    let path = json!({"path": dir.0.display().to_string()});
+    let r = run(&mut s, "plugin.reload", path.clone());
+    assert_eq!((r["loaded"].as_array().unwrap().len(), r["failed"].as_array().unwrap().len()), (2, 0), "{r}");
+
+    std::fs::write(&file, &changed).unwrap();
+    let r = run(&mut s, "plugin.reload", path.clone());
+    assert_eq!(r["loaded"], json!([plain]), "the other file still loads");
+    let failed = r["failed"].as_array().unwrap();
+    assert_eq!(failed.len(), 1, "{r}");
+    assert!(failed[0]["file"].as_str().unwrap().ends_with("asks.wasm"), "{r}");
+    let why = failed[0]["error"].as_str().unwrap();
+    assert!(why.contains("needs approval") && why.contains("doc.read"), "{why}");
+    let hash = vectorcraft_plugins::permissions::sha256_hex(&first);
+    assert_eq!(vectorcraft_plugins::registry::get(id).unwrap().hash(), hash, "the module installed earlier stays");
+
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&changed), "grant": ["doc.read"], "replace": true}));
+    let r = run(&mut s, "plugin.reload", path);
+    assert_eq!(r["failed"], json!([]), "approved on its own, it loads: {r}");
+    run(&mut s, "plugin.remove", json!({"id": id}));
+    run(&mut s, "plugin.remove", json!({"id": plain}));
 }
 
 /// The host enforces what a filter was granted: without `doc.write` an output that changes the
@@ -705,6 +1540,67 @@ fn a_filter_does_only_what_its_permissions_allow() {
     assert!(e.contains("wasn't granted `state`"), "{e}");
     assert_eq!(s.doc().unwrap().doc, before);
     assert_eq!(s.doc().unwrap().doc.plugin_data(stateless), Some(&json!({"pen": 1})));
+}
+
+/// A filter whose manifest lists `inputs` is also given the selected type, read-only: an echo
+/// changes nothing, and an output that leaves the type out or changes it is refused with the
+/// document and undo history as they were, handed in from a run made elsewhere too. A filter
+/// without `inputs` is not given the type and so never deletes it. Installing one that lists
+/// `inputs` needs the user's grant.
+#[test]
+fn read_only_kind_field_and_omission_refuse_without_undo() {
+    use cmd::plugin::FilterRun;
+    let mut s = session();
+    let r = rect(&mut s, 10.0, "#ff0000");
+    let t = NodeId(run(&mut s, "text.create", json!({"x": 10, "y": 80, "text": "Hi"}))["id"].as_u64().unwrap());
+    let reads =
+        |id: &str| format!(r#"{{"id":"{id}","name":"Test {id}","kind":"filter","api":2,"permissions":["doc.read","doc.write"],"inputs":["type"]}}"#);
+    // Each case installs another module under the same id, in place of the last (`replace: true`).
+    let install_wat = |s: &mut Session, src: &str| {
+        let data = vectorcraft_format::base64_encode(&wat::parse_str(src).unwrap());
+        run(s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read", "doc.write"], "replace": true}))
+    };
+    let echo = "test.engine.inputs.echo";
+    let module = tpl::module(&reads(echo), tpl::ECHO, "", 1);
+    let data = vectorcraft_format::base64_encode(&wat::parse_str(&module).unwrap());
+    let e = s.execute("plugin.install", &json!({"dataBase64": data})).unwrap_err().to_string();
+    assert!(e.contains("asks for the permissions doc.read, doc.write"), "{e}");
+    let listed = install_wat(&mut s, &module);
+    assert_eq!(listed["inputs"], json!(["type"]));
+    let p = |id: &str| json!({"id": id, "ids": [r.0, t.0]});
+    let before = s.doc().unwrap().doc.clone();
+    assert_eq!(run(&mut s, "plugin.run", p(echo))["ids"], json!([r.0, t.0]));
+    assert_eq!(s.doc().unwrap().doc.layers, before.layers, "an echo changes nothing");
+    for (output, says) in [
+        (json!({"objects": [{"id": r.0}]}), format!("objects (id {}): a read-only object was left out", t.0)),
+        (json!({"objects": [{"id": r.0}, {"id": t.0, "name": "Renamed"}]}), format!("objects[1] (id {}): read-only field 'name' changed", t.0)),
+        (json!({"objects": [{"id": r.0}, {"id": t.0}, {"type": "type", "path": triangle()}]}), "`type` must be \"path\" or \"compound\"".into()),
+    ] {
+        let id = "test.engine.inputs.bad";
+        install_wat(&mut s, &tpl::returning(&reads(id), &output.to_string()));
+        let (doc, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+        let e = s.execute("plugin.run", &p(id)).unwrap_err().to_string();
+        assert!(e.contains(&says), "{says}: {e}");
+        assert_eq!((&s.doc().unwrap().doc, s.doc().unwrap().history.undo.len()), (&doc, undo), "{output}");
+        // Handed in from a run made away from plugin.run, it is refused the same way.
+        let made = FilterRun::prepare(&s, &p(id)).unwrap();
+        let out = made.run().unwrap();
+        made.hand_in(&mut s, out);
+        let e = s.execute("plugin.run", &p(id)).unwrap_err().to_string();
+        assert!(e.contains(&says), "handed in: {e}");
+        assert_eq!((&s.doc().unwrap().doc, s.doc().unwrap().history.undo.len()), (&doc, undo), "handed in: {output}");
+    }
+    // Without `inputs` the type isn't given, so leaving it out keeps it.
+    let legacy = "test.engine.inputs.legacy";
+    install_wat(&mut s, &tpl::returning(&tpl::manifest(legacy, "filter", "{}"), &json!({"objects": [{"id": r.0, "name": "Kept"}]}).to_string()));
+    assert_eq!(run(&mut s, "plugin.run", p(legacy))["ids"], json!([r.0]));
+    assert_eq!(node(&s, r).name.as_deref(), Some("Kept"));
+    assert!(matches!(node(&s, t).kind, vectorcraft_doc::NodeKind::Text(_)), "the type stays");
+    // A manifest that lists `inputs` below `api` 2 doesn't install.
+    let old = format!(r#"{{"id":"{echo}","name":"Old","kind":"filter","inputs":["type"]}}"#);
+    let data = vectorcraft_format::base64_encode(&wat::parse_str(tpl::module(&old, tpl::ECHO, "", 1)).unwrap());
+    let e = s.execute("plugin.install", &json!({"dataBase64": data})).unwrap_err().to_string();
+    assert!(e.contains("`inputs` needs `api` 2"), "{e}");
 }
 
 /// What the user granted is kept in the plug-in store with the module: the next session installs
@@ -815,18 +1711,25 @@ fn a_grant_covers_only_the_module_it_was_given_to() {
     std::fs::write(&stored[0], &other).unwrap();
     vectorcraft_plugins::registry::remove(id);
     vectorcraft_plugins::registry::revoke(id);
+    vectorcraft_plugins::registry::set_storage(id, None);
+    let no_storage = |how: &str| {
+        assert!(vectorcraft_plugins::registry::storage(id).is_none(), "{how} gives another module the id's settings and cache");
+    };
     let mut next = session();
     next.attach_plugin_store(folder.0.clone());
     assert!(vectorcraft_plugins::registry::get(id).is_none(), "another module isn't loaded under the grant");
+    no_storage("the next start");
     let dir = crate::tests_links::Folder::new("plugin-folder-grant-hash");
     std::fs::write(dir.0.join("other.wasm"), &other).unwrap();
     let r = run(&mut next, "plugin.reload", json!({"path": dir.0.display().to_string()}));
     assert_eq!(r["loaded"], json!([]));
     let why = r["failed"][0]["error"].as_str().unwrap();
     assert!(why.contains("needs approval"), "{why}");
+    no_storage("a folder load");
     let data = vectorcraft_format::base64_encode(&other);
     let e = next.execute("plugin.install", &json!({"dataBase64": data, "replace": true})).unwrap_err().to_string();
     assert!(e.contains("`grant`"), "{e}");
+    no_storage("a refused install");
     // Granted, it reads the settings the first module set.
     run(&mut next, "plugin.install", json!({"dataBase64": data, "grant": ["settings", "cache"], "replace": true}));
     run(&mut next, "plugin.run", json!({"id": id, "ids": []}));
@@ -1055,6 +1958,225 @@ fn a_cancelled_filter_run_changes_nothing() {
     assert_eq!(s.doc().unwrap().doc, before);
 }
 
+/// The manifest of a filter `id` named "Cmd Test" of `kind` with `commands` (a JSON list).
+fn with_commands(id: &str, kind: &str, commands: &str) -> String {
+    format!(r#"{{"id":"{id}","name":"Cmd Test","version":"1","kind":"{kind}","commands":{commands}}}"#)
+}
+
+/// Two commands: Grow, with a parameter, and Tidy, whose `menu` names another menu.
+const GROW_AND_TIDY: &str = r#"[{"id":"grow","label":"Grow","params":{"by":{"type":"number","min":0,"max":10,"default":2}}},
+    {"id":"tidy","label":"Tidy","menu":"File"}]"#;
+
+/// A plug-in that adds a triangle when it runs as its command `grow` (`_context.command`) and
+/// returns its input unchanged otherwise.
+fn grower(id: &str) -> String {
+    let triangle = r#"{"objects":[{"path":{"subpaths":[{"closed":true,"anchors":[{"p":[0,0]},{"p":[5,0]},{"p":[5,5]}]}]}}]}"#;
+    tpl::when_given(&with_commands(id, "filter", GROW_AND_TIDY), tpl::Given::Params, r#""command":"grow""#, triangle)
+}
+
+/// The command listing's entry for `id`.
+fn listed(s: &Session, id: &str) -> Option<crate::cmd::CommandInfo> {
+    s.commands().into_iter().find(|c| c.id == id)
+}
+
+fn objects(s: &Session) -> usize {
+    s.doc().unwrap().doc.layers.iter().map(|l| l.children().map_or(0, |c| c.len())).sum()
+}
+
+/// A plug-in's commands are commands of their own while it is installed: listed under Object ›
+/// Plug-ins › its name whatever menu the manifest names, run with their checked parameters and
+/// `_context.command` as one undo step named after them, and gone once it is removed or replaced
+/// by a module without them.
+#[test]
+fn plugin_commands_are_registered_run_and_removed() {
+    let mut s = session();
+    let id = "test.engine.cmds";
+    let (grow, tidy) = ("plugin.test.engine.cmds.grow", "plugin.test.engine.cmds.tidy");
+    let info = install_wat(&mut s, &grower(id));
+    assert_eq!(info["commands"][0]["command"], grow);
+    assert_eq!(info["commands"][1]["label"], "Tidy");
+    for (cmd, label) in [(grow, "Grow"), (tidy, "Tidy")] {
+        let c = listed(&s, cmd).unwrap_or_else(|| panic!("{cmd} is listed"));
+        assert_eq!((c.label, c.menu.as_slice()), (label, &["Object", "Plug-ins", "Cmd Test"][..]), "{cmd}");
+        assert!(c.enabled, "{cmd}");
+    }
+    assert!(crate::cmd::find_command(grow).is_some());
+
+    run(&mut s, "select.none", json!({}));
+    let (before, undo) = (objects(&s), s.doc().unwrap().history.undo.len());
+    let r = run(&mut s, grow, json!({"by": 3}));
+    assert_eq!((r["plugin"].as_str(), r["command"].as_str()), (Some(id), Some("grow")));
+    assert_eq!(objects(&s), before + 1, "the command added its triangle");
+    let st = s.doc().unwrap();
+    assert_eq!((st.history.undo.len(), st.history.undo.last().unwrap().label.as_str()), (undo + 1, "Grow"));
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(objects(&s), before);
+    // Its parameters are checked before it runs.
+    let e = s.execute(grow, &json!({"by": "lots"})).unwrap_err();
+    assert!(matches!(&e, EngineError::BadParams { cmd, .. } if cmd == grow), "{e}");
+    assert_eq!(objects(&s), before);
+    // Another command of the same plug-in is told apart by its id.
+    run(&mut s, tidy, json!({}));
+    assert_eq!(objects(&s), before, "tidy returns its input unchanged");
+
+    // Replaced by a module without commands, its commands are gone; installed again, back.
+    install_wat(&mut s, &tpl::module(&tpl::manifest(id, "filter", "{}"), tpl::ECHO, "", 1));
+    assert!(listed(&s, grow).is_none() && crate::cmd::find_command(grow).is_none());
+    install_wat(&mut s, &grower(id));
+    assert!(listed(&s, grow).is_some());
+    run(&mut s, "plugin.remove", json!({"id": id}));
+    assert!(listed(&s, grow).is_none() && listed(&s, tidy).is_none());
+    assert!(s.execute(grow, &json!({})).is_err(), "removed, it no longer runs");
+}
+
+/// A command run is journaled like any other, so an action records it with its parameters and
+/// plays it back.
+#[test]
+fn actions_record_and_play_plugin_commands() {
+    let mut s = session();
+    let id = "test.engine.cmds.actions";
+    let grow = crate::cmd::plugin::command_id(id, "grow");
+    install_wat(&mut s, &grower(id));
+    run(&mut s, "select.none", json!({}));
+    let before = objects(&s);
+    let start = s.journal.len();
+    run(&mut s, &grow, json!({"by": 4}));
+    let steps = s.journal_for_action(start);
+    assert_eq!(steps, [(grow.clone(), json!({"by": 4}))]);
+    run(&mut s, "edit.undo", json!({}));
+    let commands: Vec<Value> = steps.iter().map(|(c, p)| json!({"command": c, "params": p})).collect();
+    // The triangle a run adds is selected, and the next run would be given it: deselect between.
+    let none = json!({"command": "select.none", "params": {}});
+    run(&mut s, "command.batch", json!({"label": "Grow Twice", "commands": [commands[0].clone(), none, commands[0].clone()]}));
+    assert_eq!(objects(&s), before + 2, "both steps ran");
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// A command that traps leaves the document and its history as they were, and the error names
+/// the plug-in and the command.
+#[test]
+fn a_failing_plugin_command_changes_nothing_and_names_itself() {
+    let mut s = session();
+    rect(&mut s, 10.0, "#ff0000");
+    run(&mut s, "select.all", json!({}));
+    let id = "test.engine.cmds.trap";
+    install_wat(&mut s, &tpl::module(&with_commands(id, "filter", r#"[{"id":"boom","label":"Boom"}]"#), "unreachable", "", 1));
+    let (before, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+    let e = s.execute(&crate::cmd::plugin::command_id(id, "boom"), &json!({})).unwrap_err().to_string();
+    assert!(e.contains("“Cmd Test” › Boom: ") && e.contains("trapped"), "{e}");
+    assert_eq!(s.doc().unwrap().doc, before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// A command that runs out of its instruction budget leaves the document and its history as they
+/// were, and the error names the plug-in and the command.
+#[test]
+fn a_plugin_command_out_of_budget_changes_nothing_and_names_itself() {
+    let mut s = session();
+    rect(&mut s, 10.0, "#ff0000");
+    run(&mut s, "select.all", json!({}));
+    let id = "test.engine.cmds.spin";
+    let triangle = r#"{"objects":[{"path":{"subpaths":[{"closed":true,"anchors":[{"p":[0,0]},{"p":[5,0]},{"p":[5,5]}]}]}}]}"#;
+    // More steps than a light budget pays for (as the plug-in crate's budget test counts them).
+    install_wat(&mut s, &tpl::spinning(&with_commands(id, "filter", r#"[{"id":"spin","label":"Spin"}]"#), 100_000_000, triangle));
+    let (before, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+    let e = s.execute(&crate::cmd::plugin::command_id(id, "spin"), &json!({})).unwrap_err().to_string();
+    assert!(e.contains("“Cmd Test” › Spin: ") && e.contains("instruction budget"), "{e}");
+    assert_eq!(s.doc().unwrap().doc, before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// An `ids` that is not a list, or that holds an entry that is not an object id, is an error naming
+/// `ids` for a plug-in command and for `plugin.run`, and is never read as the selection; left out
+/// or null, `ids` is the selection.
+#[test]
+fn a_malformed_ids_is_refused_not_read_as_the_selection() {
+    let mut s = session();
+    let id = "test.engine.cmds.ids";
+    let grow = crate::cmd::plugin::command_id(id, "grow");
+    install_wat(&mut s, &grower(id));
+    rect(&mut s, 10.0, "#ff0000");
+    run(&mut s, "select.all", json!({}));
+    let (before, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+    let cases = [
+        (grow.as_str(), json!(5)),
+        (grow.as_str(), json!([1, "x"])),
+        (grow.as_str(), json!([-1])),
+        ("plugin.run", json!("all")),
+        ("plugin.run", json!([1.5])),
+    ];
+    for (cmd, ids) in cases {
+        let mut p = json!({"ids": ids});
+        if cmd == "plugin.run" {
+            p["id"] = json!(id);
+        }
+        let e = s.execute(cmd, &p).unwrap_err();
+        assert!(matches!(&e, EngineError::BadParams { cmd: c, .. } if c == cmd), "{cmd} {ids}: {e}");
+        let said = e.to_string();
+        assert!(
+            said.contains("ids must be an array of non-negative integer object ids") || said.contains("not a non-negative integer object id"),
+            "{cmd} {ids}: {e}"
+        );
+        assert_eq!(s.doc().unwrap().doc, before, "{cmd} {ids}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo, "{cmd} {ids}");
+    }
+    // Left out or null, the command runs on the selection.
+    for p in [json!({}), json!({"ids": null})] {
+        let r = run(&mut s, &grow, p.clone());
+        assert_eq!(r["command"], "grow", "{p}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "{p}");
+        run(&mut s, "edit.undo", json!({}));
+        assert_eq!(s.doc().unwrap().doc, before, "{p}");
+    }
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// A live effect's commands are listed under Effect › Plug-ins and run under its permissions (with
+/// commands it gets `doc.write` unless its list leaves it out), and labels show bidirectional
+/// characters escaped. A malformed
+/// `commands` entry is refused at install, and the error names it.
+#[test]
+fn effect_commands_labels_and_malformed_entries() {
+    let mut s = session();
+    let id = "test.engine.cmds.effect";
+    let triangle = r#"{"objects":[{"path":{"subpaths":[{"closed":true,"anchors":[{"p":[0,0]},{"p":[5,0]},{"p":[5,5]}]}]}}]}"#;
+    install_wat(&mut s, &tpl::returning(&with_commands(id, "effect", "[{\"id\":\"flip\",\"label\":\"Flip\u{202E}txt\"}]"), triangle));
+    let c = listed(&s, &crate::cmd::plugin::command_id(id, "flip")).expect("listed");
+    assert_eq!((c.label, c.menu.as_slice()), ("Flip\\u{202E}txt", &["Effect", "Plug-ins", "Cmd Test"][..]));
+    run(&mut s, "select.none", json!({}));
+    // Without `permissions`, a live effect with commands may change the document: its command adds
+    // the triangle, as one undo step.
+    let (before, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+    let out = run(&mut s, &crate::cmd::plugin::command_id(id, "flip"), json!({}));
+    assert_eq!(out["ids"].as_array().map(Vec::len), Some(1), "{out}");
+    assert_ne!(s.doc().unwrap().doc, before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    run(&mut s, "plugin.remove", json!({"id": id}));
+    // One that lists its permissions without `doc.write` is refused the change, and the document
+    // stays as it was.
+    let listed = format!(
+        r#"{{"id":"{id}","name":"Cmd Test","version":"1","kind":"effect","permissions":["doc.read","effect.render"],"commands":[{{"id":"flip","label":"Flip"}}]}}"#
+    );
+    let wasm = wat::parse_str(tpl::returning(&listed, triangle)).unwrap();
+    let hash = vectorcraft_plugins::permissions::sha256_hex(&wasm);
+    let grant = json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "grant": ["doc.read", "effect.render"], "hash": hash});
+    run(&mut s, "plugin.install", grant);
+    let (before, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+    let e = s.execute(&crate::cmd::plugin::command_id(id, "flip"), &json!({})).unwrap_err().to_string();
+    assert!(e.contains("wasn't granted `doc.write`"), "{e}");
+    assert_eq!(s.doc().unwrap().doc, before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    run(&mut s, "plugin.remove", json!({"id": id}));
+
+    let bad = id.replace("effect", "bad");
+    let wasm = wat::parse_str(tpl::module(&with_commands(&bad, "filter", r#"[{"id":"ok","label":"A"},{"id":"Bad","label":"B"}]"#), tpl::ECHO, "", 1));
+    let e = s.execute("plugin.install", &json!({"dataBase64": vectorcraft_format::base64_encode(&wasm.unwrap())})).unwrap_err().to_string();
+    assert!(e.contains("command `Bad`"), "{e}");
+    assert!(vectorcraft_plugins::registry::get(&bad).is_none());
+}
+
 /// A filter `id` of API level 2 that lists `settings` and `cache`, whose `vc_run` runs `first`
 /// (instructions that trap unless each storage call returns what it should), with the keys "zoom"
 /// at 0x2000 and "tile" at 0x2004 and the value "hello" at 0x2100.
@@ -1086,10 +2208,11 @@ fn replace_storing(s: &mut Session, id: &str, first: &str) -> Value {
 
 /// A plug-in's settings and cache are kept in the plug-in store under its id: the next session
 /// has them, replacing the plug-in keeps them, another plug-in can't read them, `plugin.clearCache`
-/// empties the cache alone and `plugin.remove` deletes both. The caps and the bytes each call is
-/// charged follow ([`plugin_storage_is_capped_and_survives_a_damaged_settings_file`],
-/// [`plugin_storage_calls_are_charged_the_files_they_read_and_write`]) in the same test, since
-/// clearing every plug-in's cache would empty theirs.
+/// with its id empties its cache alone and `plugin.remove` deletes both. The caps and the bytes
+/// each call is charged follow ([`plugin_storage_is_capped_and_survives_a_damaged_settings_file`],
+/// [`plugin_storage_calls_are_charged_the_files_they_read_and_write`]) in the same test.
+/// `plugin.clearCache` without an id empties the cache of every plug-in installed in the process,
+/// so it is tested in a binary of its own (`tests/plugin_clear_cache.rs`).
 #[test]
 fn plugins_keep_settings_and_a_cache_of_their_own_in_the_store() {
     let folder = crate::tests_links::Folder::new("plugin-storage");
@@ -1116,16 +2239,13 @@ fn plugins_keep_settings_and_a_cache_of_their_own_in_the_store() {
     install_storing(&mut next, other, READS);
     assert!(next.execute("plugin.run", &json!({"id": other, "ids": []})).is_err());
 
-    // Clearing the cache leaves the settings.
-    assert_eq!(run(&mut next, "plugin.clearCache", json!({"id": id})), json!({"cleared": [id], "bytesFreed": 3}));
-    assert_eq!(run(&mut next, "plugin.info", json!({"id": id}))["cacheBytes"], json!(0));
-    run(&mut next, "plugin.run", json!({"id": id, "ids": []}));
+    // Clearing the cache leaves the settings, and the other plug-in's cache.
     replace_storing(&mut next, other, WRITES);
     run(&mut next, "plugin.run", json!({"id": other, "ids": []}));
-    let all = run(&mut next, "plugin.clearCache", json!({}));
-    let cleared = all["cleared"].as_array().unwrap();
-    assert!(cleared.contains(&json!(id)) && cleared.contains(&json!(other)) && all["bytesFreed"] == json!(3), "{all}");
-    assert_eq!(run(&mut next, "plugin.info", json!({"id": other}))["cacheBytes"], json!(0));
+    assert_eq!(run(&mut next, "plugin.clearCache", json!({"id": id})), json!({"cleared": [id], "bytesFreed": 3}));
+    assert_eq!(run(&mut next, "plugin.info", json!({"id": id}))["cacheBytes"], json!(0));
+    assert_eq!(run(&mut next, "plugin.info", json!({"id": other}))["cacheBytes"], json!(3));
+    run(&mut next, "plugin.run", json!({"id": id, "ids": []}));
     assert!(next.execute("plugin.clearCache", &json!({"id": "test.engine.storing.missing"})).is_err());
 
     run(&mut next, "plugin.remove", json!({"id": id}));
@@ -1331,9 +2451,14 @@ fn plugin_storage_writes_are_atomic(st: &dyn vectorcraft_plugins::storage::Stora
     std::fs::remove_file(&entry_copy).unwrap();
 }
 
+/// Gives the file at `path` the modified time `when`, whatever the file system's clock says.
+fn set_modified(path: &std::path::Path, when: std::time::SystemTime) {
+    std::fs::File::options().write(true).open(path).unwrap().set_modified(when).unwrap();
+}
+
 /// Each storage call is charged the bytes it reads and writes, before it does: a settings call the
-/// whole settings file it reads and the whole file it writes, a cache call the entry it reads or
-/// writes. A call that would pass what its meter has left fails and changes nothing.
+/// whole settings file when it reads the file and the whole file when it writes it, a cache call the
+/// entry it reads or writes. A call that would pass what its meter has left fails and changes nothing.
 fn plugin_storage_calls_are_charged_the_files_they_read_and_write() {
     use vectorcraft_plugins::storage::{Meter, StorageError};
     let folder = crate::tests_links::Folder::new("plugin-storage-meter");
@@ -1347,22 +2472,25 @@ fn plugin_storage_calls_are_charged_the_files_they_read_and_write() {
     st.set_setting("big", &[7; 60_000], &mut Meter::unlimited()).unwrap();
     st.set_setting("small", b"x", &mut Meter::unlimited()).unwrap();
 
-    // Reading a one-byte setting reads the whole file.
+    // A file another window changed is read whole, even for a one-byte setting.
+    let touch = || set_modified(&file, std::fs::metadata(&file).unwrap().modified().unwrap() + std::time::Duration::from_secs(1));
+    touch();
     let before = size();
     let mut m = Meter::unlimited();
     assert_eq!(st.setting("small", &mut m).unwrap(), Some(b"x".to_vec()));
     assert_eq!(m.used(), before);
-    // Setting it reads the file and writes it again, and so does deleting one.
+    // Setting it writes the file again, and so does deleting one.
     let mut m = Meter::unlimited();
     st.set_setting("small", b"yz", &mut m).unwrap();
-    assert_eq!(m.used(), before + size());
-    let (before, mut m) = (size(), Meter::unlimited());
+    assert_eq!(m.used(), size());
+    let mut m = Meter::unlimited();
     assert!(st.delete_setting("small", &mut m).unwrap());
-    assert_eq!(m.used(), before + size());
+    assert_eq!(m.used(), size());
     st.set_setting("small", b"y", &mut Meter::unlimited()).unwrap();
 
     // Less left than the file: nothing is read. Enough to read it but not to write it again:
     // nothing changes.
+    touch();
     let mut m = Meter::new(size() - 1);
     assert_eq!(st.setting("small", &mut m), Err(StorageError::Budget));
     assert_eq!(m.used(), 0);
@@ -1379,6 +2507,122 @@ fn plugin_storage_calls_are_charged_the_files_they_read_and_write() {
     assert_eq!(st.cache_entry("tile", &mut Meter::new(999)), Err(StorageError::Budget));
     assert_eq!(st.set_cache_entry("tile", &[2; 10], &mut Meter::new(9)), Err(StorageError::Budget));
     assert_eq!(st.cache_entry("tile", &mut Meter::unlimited()).unwrap().map(|v| v.len()), Some(1000));
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// A session with the plug-in `id` installed in a new store → its storage and the path of its
+/// settings file.
+fn storage_in(
+    s: &mut Session,
+    folder: &crate::tests_links::Folder,
+    id: &str,
+) -> (std::sync::Arc<dyn vectorcraft_plugins::storage::Storage>, std::path::PathBuf) {
+    s.attach_plugin_store(folder.0.clone());
+    install_storing(s, id, "");
+    (vectorcraft_plugins::registry::storage(id).unwrap(), crate::store::plugin_data_dir(&folder.0, id).join("settings.json"))
+}
+
+/// The settings stay in memory while the file keeps its size and modified time: a read doesn't open
+/// the file, a set to the value already there doesn't write it, a real change is in the file when
+/// the call returns, and a file with another time is read again.
+#[test]
+fn plugin_settings_are_read_from_memory_until_the_file_changes() {
+    use vectorcraft_plugins::storage::{Meter, StorageError};
+    let folder = crate::tests_links::Folder::new("plugin-storage-kept");
+    let id = "test.engine.storagekept";
+    let mut s = session();
+    let (st, file) = storage_in(&mut s, &folder, id);
+    st.set_setting("zoom", b"hello", &mut Meter::unlimited()).unwrap();
+    let written = std::fs::metadata(&file).unwrap().modified().unwrap();
+
+    // Other bytes of the same size and the same time: the storage can't tell, so what it answers
+    // shows that it did not read the file.
+    let other =
+        std::fs::read_to_string(&file).unwrap().replace(&vectorcraft_format::base64_encode(b"hello"), &vectorcraft_format::base64_encode(b"world"));
+    std::fs::write(&file, &other).unwrap();
+    set_modified(&file, written);
+    let mut m = Meter::unlimited();
+    assert_eq!(st.setting("zoom", &mut m).unwrap(), Some(b"hello".to_vec()));
+    assert_eq!(m.used(), 0, "answered from memory");
+
+    // Setting the value it has writes nothing: the file still holds the other bytes.
+    let mut m = Meter::unlimited();
+    st.set_setting("zoom", b"hello", &mut m).unwrap();
+    assert_eq!(m.used(), 0, "nothing to write");
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), other);
+
+    // Another time: read again.
+    set_modified(&file, written + std::time::Duration::from_secs(1));
+    let mut m = Meter::unlimited();
+    assert_eq!(st.setting("zoom", &mut m).unwrap(), Some(b"world".to_vec()));
+    assert_eq!(m.used(), other.len() as u64);
+
+    // A change reaches the file before the call returns, and a failed one is not kept.
+    st.set_setting("tile", b"x", &mut Meter::unlimited()).unwrap();
+    assert!(std::fs::read_to_string(&file).unwrap().contains("\"tile\""));
+    assert_eq!(st.set_setting("tile", b"y", &mut Meter::new(0)), Err(StorageError::Budget));
+    assert_eq!(st.setting("tile", &mut Meter::unlimited()).unwrap(), Some(b"x".to_vec()));
+    assert!(st.delete_setting("tile", &mut Meter::unlimited()).unwrap());
+    assert!(!std::fs::read_to_string(&file).unwrap().contains("\"tile\""));
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// `plugin.remove` drops what was kept: a file put back with the removed settings' size and time is
+/// read from disk by the storage of the id installed again.
+#[test]
+fn removing_a_plugin_drops_its_settings_from_memory() {
+    use vectorcraft_plugins::storage::Meter;
+    let folder = crate::tests_links::Folder::new("plugin-storage-kept-removed");
+    let id = "test.engine.storagekeptremoved";
+    let mut s = session();
+    let (st, file) = storage_in(&mut s, &folder, id);
+    st.set_setting("zoom", b"hello", &mut Meter::unlimited()).unwrap();
+    let (bytes, written) = (std::fs::read(&file).unwrap(), std::fs::metadata(&file).unwrap().modified().unwrap());
+    run(&mut s, "plugin.remove", json!({"id": id}));
+
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(&file, &bytes).unwrap();
+    set_modified(&file, written);
+    s.attach_plugin_storage(id);
+    let st = vectorcraft_plugins::registry::storage(id).unwrap();
+    let mut m = Meter::unlimited();
+    assert_eq!(st.setting("zoom", &mut m).unwrap(), Some(b"hello".to_vec()));
+    assert_eq!(m.used(), bytes.len() as u64, "read from the file");
+    s.remove_plugin_storage(id).unwrap();
+}
+
+/// The cache's total stays in memory while the cache folder keeps its time; a write and a clear
+/// update it, and removing an entry drops it. A file whose length changes behind the storage leaves
+/// the folder's time alone, so the total it reports shows that it did not list the folder.
+#[test]
+fn plugin_cache_total_is_kept_and_follows_writes_removals_and_clears() {
+    use vectorcraft_plugins::storage::Meter;
+    let folder = crate::tests_links::Folder::new("plugin-storage-kept-cache");
+    let id = "test.engine.storagekeptcache";
+    let mut s = session();
+    let (st, file) = storage_in(&mut s, &folder, id);
+    let cache = file.parent().unwrap().join("cache");
+    let m = &mut Meter::unlimited();
+    let grow = |name: &str, len: u64| std::fs::File::options().write(true).open(cache.join(name)).unwrap().set_len(len).unwrap();
+
+    st.set_cache_entry("tile", b"abc", m).unwrap();
+    grow("tile.bin", 10);
+    assert_eq!(st.cache_bytes(), 3, "the write set the total");
+    // A write lists the folder for its caps, and starts from what it finds.
+    st.set_cache_entry("more", b"12345", m).unwrap();
+    grow("more.bin", 5);
+    assert_eq!(st.cache_bytes(), 15);
+    assert!(st.remove_cache_entry("more").unwrap());
+    assert_eq!(st.cache_bytes(), 10, "after a removal the total comes from the folder");
+    grow("tile.bin", 20);
+    assert_eq!(st.cache_bytes(), 10, "and is kept again");
+    assert_eq!(st.clear_cache().unwrap(), 20);
+    assert_eq!(st.cache_bytes(), 0);
+
+    // A folder deleted behind the storage is noticed.
+    st.set_cache_entry("tile", b"abc", m).unwrap();
+    std::fs::remove_dir_all(&cache).unwrap();
+    assert_eq!(st.cache_bytes(), 0);
     run(&mut s, "plugin.remove", json!({"id": id}));
 }
 

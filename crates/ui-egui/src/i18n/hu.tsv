@@ -280,6 +280,10 @@
 	Anti-Alias	Élsimítás
 	Anti-alias Rasters	Raszterek élsimítása
 	Anti-aliased Artwork	Élsimított grafika
+	Anti-aliasing Method	Élsimítási módszer
+antiAlias	Sharp	Éles
+	Crisp	Tiszta
+	Strong	Erős
 	Anti-aliasing:	Élsimítás:
 	Any except extracting pages	Bármi, kivéve az oldalak kinyerését
 	Any Kind	Bármilyen típus
@@ -738,6 +742,11 @@ font-technology	Variable	Változó
 	Color Table ({n} colors)	Színtábla ({n} szín)
 	Color Theme	Színtéma
 	Color Themes	Színtémák
+	Color Wheel	Színkör
+	Hue ring	Színárnyalat-gyűrű
+	Saturation and brightness	Telítettség és fényesség
+	Color field	Színmező
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Színtípus:
 	Color:	Szín:
 	Colorization	Színezés
@@ -1416,6 +1425,17 @@ font-technology	Variable	Változó
 	Exporting {}	Exportálás: {}
 	Export…	Exportálás…
 	Extrude & Bevel…	Kihúzás és élletörés…
+	3D (Classic)	3D (klasszikus)
+	Extrude & Bevel (Classic)…	Kihúzás és élletörés (klasszikus)…
+	Surface	Felület
+	Wireframe	Drótváz
+	No Shading	Nincs árnyékolás
+	Plastic	Műanyag
+	Highlight Intensity	Csillanás erőssége
+	Highlight Size	Csillanás mérete
+	Blend Steps	Átmenetlépések
+	Shading Color	Árnyékolás színe
+	Draw Hidden Faces	Rejtett lapok rajzolása
 	Eyedropper	Pipetta
 	Sample Color from Screen	Szín mintavétele a képernyőről
 	This system has no screen color sampler	Ezen a rendszeren nincs képernyős színmintavevő
@@ -2183,6 +2203,7 @@ file-filter	Templates	Sablonok
 	Keywords:	Kulcsszavak:
 	Kind	Típus
 	Kinsoku Set	Kinsoku-készlet
+	Kinsoku Shori Type	Kinsoku Shori típusa
 	Kite	Deltoid
 	Knife	Kés
 	Knockout Group	Kiütő csoport
@@ -3111,6 +3132,9 @@ mark-style	Japanese	Japán
 	Puppet Warp Pins	Bábtorzítás tűi
 	Puppet Warp Tool	Bábtorzítás
 	Purple	Lila
+	Push In First	Először behúzás
+	Push Out First	Először kitolás
+	Push Out Only	Csak kitolás
 	Put back in the toolbar	Visszahelyezés az eszköztárba
 	Quality	Minőség
 	Quality {quality}	Minőség: {quality}
@@ -4206,6 +4230,7 @@ mark-style	Japanese	Japán
 	tile {number}	csempe {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	A csempék számozása vízszintesen, majd lefelé halad; az összes csempéhez hagyd üresen a tartományt.
 	Tilt	Dőlés
+	Copies per Sheet (as many as fit, in a grid)	Példány laponként (ahány elfér, rácsban)
 	Tint	Tónus
 	Tints	Tónusok
 	Tints and Shades	Tónusok és árnyalatok
@@ -4639,6 +4664,7 @@ imageTrace	Outline	Körvonal
 
 # Status and error messages
 @msg	"{0}" is not a colour: write it as #rrggbb	nem szín: "{0}"; #rrggbb alakban add meg
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias`: "none", "sharp", "crisp" vagy "strong" kell
 @msg	`aspect` must be a number (%)	`aspect`: szám kell (%)
 @msg	`at` must be [x, y]	`at`: [x, y] kell
 @msg	`color` must be a colour	`color`: szín kell
@@ -5257,6 +5283,13 @@ imageTrace	Outline	Körvonal
 @msg	select an Image Trace object	jelölj ki egy képvektorizálási objektumot
 @msg	select an object in perspective	jelölj ki egy perspektivikus objektumot
 @msg	select artwork (or a colour group) to recolor	jelölj ki átszínezendő grafikát (vagy színcsoportot)
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	Átszínezés kész; változatlan maradt: {locked} és {hidden}
+@msg	Recolor completed; {objects} were left unchanged	Átszínezés kész; változatlan maradt: {objects}
+@msg	Recolor completed; {objects} was left unchanged	Átszínezés kész; változatlan maradt: {objects}
+@msg	1 locked object	1 zárolt objektum
+@msg	{n} locked objects	{n} zárolt objektum
+@msg	1 hidden object	1 rejtett objektum
+@msg	{n} hidden objects	{n} rejtett objektum
 @msg	select at least two objects	jelölj ki legalább két objektumot
 @msg	exit isolation mode first	előbb lépj ki az elkülönítési módból
 @msg	select objects, not layers	objektumokat jelölj ki, rétegeket ne
@@ -5359,6 +5392,10 @@ imageTrace	Outline	Körvonal
 @msg	the PSD file is cut short	a PSD-fájl csonka
 @msg	the PSD file's header is damaged	a PSD-fájl fejléce sérült
 @msg	the PSD file's image data can't be read: {e}	a PSD-fájl képadatai nem olvashatók: {e}
+@msg	the JPEG XL file is cut short	a JPEG XL-fájl csonka
+@msg	the JPEG XL container is too large to read	a JPEG XL-konténer túl nagy az olvasáshoz
+@msg	CMYK JPEG XL images can't be read	CMYK módú JPEG XL-képek nem olvashatók
+@msg	the JPEG XL file can't be read: {e}	a JPEG XL-fájl nem olvasható: {e}
 @msg	the PSD file's image data uses an unknown compression ({m})	a PSD-fájl képadatai ismeretlen tömörítést használnak ({m})
 @msg	the PCX file is cut short	a PCX-fájl csonka
 @msg	the PCX file's header is damaged	a PCX-fájl fejléce sérült
@@ -5746,6 +5783,11 @@ imageTrace	Outline	Körvonal
 	Snap to Perpendicular	Illesztés merőlegesre
 @msg	unknown snap option `{key}` (use {options})	ismeretlen illesztési beállítás: `{key}` (használható: {options})
 	Gap Length:	Rés hossza:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Az Egyszínű logó mód nem használja a keepColors beállítást: a logoColors beállításban megadott színeket vagy az általa talált színeket vektorizálja.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Semmi sem lett vektorizálva: a vektorizálás által talált színek egyike sem felel meg a keepColors beállításnak ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Semmi sem lett vektorizálva: a Szín figyelmen kívül hagyása kihagyja a keepColors beállításban felsorolt színek minden területét.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	Semmi sem lett vektorizálva: a keepColors beállításnak megfelelő színekből nem jön létre útvonal.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: a vektorizálás által talált színek egyike sem felel meg ennek: {c}, így belőle semmi sem lesz vektorizálva.
 @msg	`colorGroup` needs `library: "document"`	a `colorGroup` használatához `library: "document"` szükséges
 @msg	`colorGroup` needs `palette: "documentLibrary"`	a `colorGroup` használatához `palette: "documentLibrary"` szükséges
 @msg	`colorGroup` needs `mode: "color"`	a `colorGroup` használatához `mode: "color"` szükséges
@@ -5880,16 +5922,33 @@ axis	Y Axis	Y tengely
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	a modul importálja az `env.{name}` elemet, amelyet bővítmény csak {PROGRESS_API}. szintű bővítmény-API-val (`api` {PROGRESS_API}) és a(z) `{permission}` engedéllyel használhat
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	a modul importálja a(z) `{from}.{name}` elemet, amelyet a gazdaprogram nem kínál: bővítmény csak a docs/plugins.md által felsorolt `env.vc_*` függvényeket importálhatja (2. szintű bővítmény-API), WASI-t, fájlokat és hálózatot nem
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	az `api` értéke {_1}; ez a gazdaprogram az 1 és {API_LEVEL} közötti bővítmény-API-szinteket támogatja
+@msg	`paintOutput` may only be true	A `paintOutput` értéke csak true lehet
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	a `paintOutput` csak élő effektushoz (`kind` "effect") használható, `api` 2 mellett
 @msg	`grant` must be a list of permission names	a `grant` értékének engedélynevek listájának kell lennie
 @msg	`grant` names an unknown permission `{shown}`	a `grant` ismeretlen engedélyt nevez meg: `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	egy `{_1}` fajtájú bővítménynek szüksége van a(z) `{_2}` engedélyre
 @msg	at most {MAX_PERMISSIONS} `permissions`	legfeljebb {MAX_PERMISSIONS} `permissions`
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	a(z) `{shown}` engedély nem vonatkozik `{_1}` fajtájú bővítményre
 @msg	permission `{shown}` is listed twice	a(z) `{shown}` engedély kétszer szerepel
+@msg	only a filter declares `inputs`	`inputs` kulcsot csak szűrő adhat meg
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	az `inputs` ismeretlen objektumfajtát nevez meg: `{shown}`; használja a type, image vagy symbolInstance értéket
+@msg	`inputs` lists `{shown}` twice	az `inputs` kétszer sorolja fel ezt: `{shown}`
+@msg	`inputs` needs `api` 2 or later	az `inputs` használatához `api` 2 vagy újabb szükséges
+@msg	`inputs` needs the permission `doc.read`	az `inputs` használatához a(z) `doc.read` engedély szükséges
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	memóriakeret (a(z) {_1} objektumnak {size} bájt bemenet kell, {left} maradt)
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	objektumkeret (több mint {MAX_OBJECTS} csak olvasható objektum)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	a(z) `{shown}` engedély egy későbbi bővítmény-API számára van fenntartva; ez a gazdaprogram nem adja meg
 @msg	unknown permission `{shown}`	ismeretlen engedély: `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	a(z) „{name}” a következő engedélyeket kéri: {asked}; telepítsd egy őket felsoroló `grant` értékkel, ha a felhasználó beleegyezik
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	a(z) „{name}” nem kapta meg a(z) `{p}` engedélyt, amelyre a kimenetének szüksége van: semmi sem változott
+@msg	a heavy filter runs in the background, so it can't declare `commands`	a nehéz szűrő a háttérben fut, ezért nem deklarálhat `commands` értéket
+@msg	at most {MAX_COMMANDS} `commands`	legfeljebb {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	a(z) {name} parancs kétszer van deklarálva
+@msg	command {name}: `label` must be 1-64 printable characters	{name} parancs: a `label` 1-64 nyomtatható karakter legyen
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	{name} parancs: használj 1-{MAX_COMMAND_ID} karakteres, a-z 0-9 _ karakterekből álló, betűvel kezdődő azonosítót
+@msg	command {name}: {e}	{name} parancs: {e}
+@msg	only a filter or a live effect declares `commands`	`commands` értéket csak szűrő vagy élő effektus deklarálhat
+@msg	“{name}” › {label}: {e}	„{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	a modul SHA-256 értéke nem az, amit a `hash` megad: semmi sem lett telepítve
 # Actions panel: action sets (#3712).
 	New Set…	Új készlet…
@@ -6472,6 +6531,7 @@ breakText	Glyphs	Glifák
 	Create Swatch Legend	Színmintajelmagyarázat létrehozása
 	Create Swatch Legend…	Színmintajelmagyarázat létrehozása…
 	HEX	HEX
+	Help Bar	Súgósáv
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	Szövegeszközök
 	Text Tweaker…	Szöveghangoló…
@@ -6537,6 +6597,24 @@ breakText	Glyphs	Glifák
 # 3D Box add-on
 	3D Box	3D doboz
 	3D Box Tool	3D doboz eszköz
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Megnyitás ezzel
+	No importer plug-ins installed	Nincs telepített importáló bővítmény
+	Read files you open in its format and make documents from them	Beolvashatja a formátumában megnyitott fájlokat, és dokumentumokat készíthet belőlük
+@msg	{_1} is an importer (File › Open With)	importáló bővítmény: {_1} (Fájl › Megnyitás ezzel)
+@msg	missing `importer` (see document.formats)	hiányzik az `importer` (lásd document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	az `importer` egy bővítmény formátumazonosítója kell legyen (lásd document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	„{shown}” {_1} fájlokat nyit meg, nem `{_2}`
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}`: `{_2}` fajtájú bővítmény, nem importáló bővítmény
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}`: `{_2}` fajtájú bővítmény, nem exportáló bővítmény
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` importáló bővítmény: nyisson meg egy fájlt a document.open {{"importer"}"}} paranccsal
+@msg	the importer returned no objects	az importáló bővítmény nem adott vissza objektumot
+@msg	an importer returns `objects` and `warnings`, not `{key}`	az importáló bővítmény `objects` és `warnings` értéket ad vissza, nem `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	a fájl nagyobb annál a {MAX_INPUT_BYTES} bájtnál, amit egy importáló bővítmény beolvas
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	az importáló bővítmény 1–{MAX_EXTENSIONS} `extensions` értéket ad meg
+@msg	only an exporter or an importer declares `extensions`	csak exportáló vagy importáló bővítmény adhat meg `extensions` értéket
+@msg	an importer always gets an import's budget: leave `budget` out	az importáló bővítmény mindig egy importálás keretét kapja: hagyja el a `budget` kulcsot
 
 # Safe Mode
 	Safe Mode…	Csökkentett mód…

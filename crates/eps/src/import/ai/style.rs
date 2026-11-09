@@ -47,7 +47,8 @@
 //! with a pattern or gradient too; strokes with a Calligraphic or Art brush or aligned inside or outside too), each with its own
 //! transparency and effects, and the effects of
 //! [`effect`]. Such objects are read as themselves with an appearance of those fills, strokes and
-//! effects; others keep their drawn look. Effect › Pathfinder effects (`(Adobe Pathfinder)` in the
+//! effects (a path's stack of several fills and strokes when its drawn look places each of its
+//! gradients); others keep their drawn look. Effect › Pathfinder effects (`(Adobe Pathfinder)` in the
 //! object's chain) are read on a group with no fills or strokes of its own, which keeps its members.
 
 use std::collections::HashMap;
@@ -122,6 +123,12 @@ pub(super) fn warp_style(n: i64) -> Option<&'static str> {
     id.strip_prefix("warp.")
 }
 
+/// The number `DeformStyle` gives warp style `style` (`arc`, `arcLower`, …), from 1.
+pub(crate) fn warp_number(style: &str) -> Option<i64> {
+    let at = WARPS.iter().position(|id| id.strip_prefix("warp.") == Some(style))?;
+    i64::try_from(at + 1).ok()
+}
+
 /// The Effect › Pathfinder effects by the `Command` number of their filter. `Command` 0 is Add
 /// (https://community.adobe.com/questions-652/liveeffect-xml-effect-is-added-under-the-object-795137);
 /// the numbers 1 to 11 are VectorCraft's own reader rules, learned from saved files. Trap (12) isn't
@@ -172,8 +179,13 @@ pub(super) struct ArtStyle {
     /// Feather, Round Corners, Scribble, Convert to Shape, the Path effects (Offset Path, Outline Object, Outline Stroke),
     /// Bas Relief read from its settings block and some Distort & Transform effects ([`any_object_takes`]) on the object
     /// (and Pathfinder effects when it has no fills or strokes): what any object is read with. Type takes the other plain styles too (its drawn look
-    /// can't be retyped); other objects keep their drawn look, which is the app's own rendering.
+    /// can't be retyped), paths and compound paths [`Self::stacked`] ones; other objects keep their drawn look, which is the app's own rendering.
     pub simple: bool,
+    /// It is several fills and strokes in solid colours or gradients (strokes without a brush),
+    /// each with its own visibility, opacity and blend mode but no effects of its own, under only
+    /// the effects any object takes that don't move the outline: what a path or compound path is
+    /// read with when each gradient is placed as its drawn look has it (`read::ops`' `styled`).
+    pub stacked: bool,
     /// Its fills and strokes, bottom first.
     pub items: Vec<StyleItem>,
     /// Each item's own visibility, transparency and effects, in the order of [`Self::items`].
@@ -326,9 +338,9 @@ impl Default for Filter {
 const MAX_FILTERS: usize = 4096;
 
 /// Most entries read from a style list.
-const MAX_LISTED: usize = 4096;
+pub(crate) const MAX_LISTED: usize = 4096;
 /// The longest style name read from a style list, in bytes.
-const MAX_LISTED_NAME: usize = 1024;
+pub(crate) const MAX_LISTED_NAME: usize = 1024;
 
 /// The style list (`%AI9_BeginArtStyleList`, between its markers): one literal string per style,
 /// the Graphic Styles panel's order. Each name is its string's bytes, escapes undone; other tokens,
@@ -1594,6 +1606,12 @@ fn style(filters: &[Filter]) -> ArtStyle {
         && (!st.moves_outline() || st.effects.len() == 1)
         // Pathfinder effects on a group with no fills or strokes of its own (`styled` checks the group).
         && (!st.pathfinder || st.items.is_empty());
+    st.stacked = st.plain
+        && !st.pathfinder
+        && !st.moves_outline()
+        && st.items.iter().all(|i| matches!(i, StyleItem::Fill(_) | StyleItem::Gradient { .. } | StyleItem::Stroke { brush: None, .. }))
+        && st.looks.iter().all(|l| l.effects.is_empty())
+        && st.effects.iter().all(any_object_takes);
     st
 }
 

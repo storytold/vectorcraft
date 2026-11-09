@@ -28,7 +28,13 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "file.open",
         "Open…",
         "Cmd+O",
-        "{path?} → with a path, document.open's result {index, title, format, warnings, …} (null when a dialog asks first or a library loads)",
+        "{path?, params?} → with a path, document.open's result {index, title, format, warnings, …} (null when a dialog asks first or a library loads); `params` are the parameters of the importer plug-in that opens the file",
+    ),
+    (
+        "file.openWith",
+        "Open With",
+        "",
+        "{importer: \"plugin.<id>\" (an importer plug-in's format id, see document.formats), path?} File › Open With: open the file with that importer (document.open's importer), also a file whose extension a built-in format reads; without a path pick one of the files with the extensions it lists (the web opens File › Open's picker, and the file opens as File › Open opens it) → with a path, document.open's result; a picked file is read off the UI thread on the desktop, {background: true, status}, and opens once the importer returns (file.cancelOpen stops it) | null while the picker is open",
     ),
     (
         "file.save",
@@ -453,6 +459,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ),
     ("view.rotateReset", "Reset Rotate View", "Cmd+Shift+1", "{}"),
     ("window.control", "Control", "", "{}"),
+    ("window.helpBar", "Help Bar", "", "{} toggle the tool-help strip independently of the status bar; returns the new visibility"),
     (
         "window.control.dock",
         "Dock Control Bar",
