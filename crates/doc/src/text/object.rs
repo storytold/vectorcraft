@@ -1,8 +1,8 @@
 use super::area::{AreaOptions, PathAlign, PathEffect};
 use super::char_style::CharStyle;
 use super::para_style::ParaStyle;
-use super::runs::{RubySpan, TextKind, TextRun, move_anchors, reverse_from_end};
-use super::tabs_lists::ParaList;
+use super::runs::{RubySpan, TextKind, TextRun, TypeAntiAlias, move_anchors, reverse_from_end};
+use super::tabs_lists::{ListCounts, ParaList};
 use super::{Affine, PathData, Point, Rect, TextObject, TextStyleScale, Vec2};
 
 impl TextObject {
@@ -90,12 +90,23 @@ impl TextObject {
             path_spacing: 0.0,
             wrap: Vec::new(),
             optical_margin: false,
+            anti_alias: TypeAntiAlias::Sharp,
             system_layout: false,
             fractional_widths: true,
             list_count: 0,
+            list_level_counts: Vec::new(),
             cached_bounds: None,
             cached_baselines: Vec::new(),
         }
+    }
+    /// The list counts the story's earlier frames carry into this frame at each level
+    /// ([`Self::list_count`] and [`Self::list_level_counts`]).
+    pub fn list_counts(&self) -> ListCounts {
+        ListCounts::from_parts(self.list_count, &self.list_level_counts)
+    }
+    /// Set the list counts the story's earlier frames carry into this frame ([`Self::list_counts`]).
+    pub fn set_list_counts(&mut self, counts: ListCounts) {
+        (self.list_count, self.list_level_counts) = counts.parts();
     }
     pub fn plain_text(&self) -> String {
         self.runs.iter().map(|r| r.text.as_str()).collect()
@@ -200,14 +211,16 @@ impl TextObject {
     }
     /// The list that the characters before byte `at` start ([`ParaList::typed`]) with the byte
     /// where their paragraph starts: when the plain text from the start of the paragraph up to
-    /// `at` is a list's start followed by a space, and the paragraph is in no list. None otherwise.
+    /// `at` is a list's start followed by a space, and the paragraph is in no list. None otherwise,
+    /// and for a first paragraph that continues from the frame before
+    /// ([`TextObject::first_para_continues`]).
     pub fn typed_list_at(&self, at: usize) -> Option<(usize, ParaList)> {
         let text = self.plain_text();
         let before = text.get(..at)?;
         let start = before.rfind('\n').map_or(0, |i| i + 1);
         let list = ParaList::typed(before[start..].strip_suffix(' ')?)?;
         let index = before.bytes().filter(|&b| b == b'\n').count();
-        self.para_at(index).list.is_none().then_some((start, list))
+        (!(index == 0 && self.first_para_continues) && self.para_at(index).list.is_none()).then_some((start, list))
     }
     /// Apply `f` to the attributes of paragraphs `range` (indices; None = every paragraph).
     pub fn edit_paras(&mut self, range: Option<std::ops::Range<usize>>, mut f: impl FnMut(&mut ParaStyle)) {
@@ -435,12 +448,16 @@ impl crate::Document {
             st.h_scale = num("h_scale").unwrap_or(st.h_scale);
             st.v_scale = num("v_scale").unwrap_or(st.v_scale);
             st.baseline_shift = num("baseline_shift").unwrap_or(st.baseline_shift);
+            st.tcy_up_down = num("tcyUpDown").unwrap_or(st.tcy_up_down);
+            st.tcy_left_right = num("tcyLeftRight").unwrap_or(st.tcy_left_right);
             st.keep_dimensions_in_range();
             let kept = [
                 ("size", Some(st.size)),
                 ("h_scale", Some(st.h_scale)),
                 ("v_scale", Some(st.v_scale)),
                 ("baseline_shift", Some(st.baseline_shift)),
+                ("tcyUpDown", Some(st.tcy_up_down)),
+                ("tcyLeftRight", Some(st.tcy_left_right)),
                 ("leading", st.leading),
             ];
             for (k, v) in kept {

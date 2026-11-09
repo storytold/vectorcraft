@@ -17,6 +17,7 @@
 //! - `eps`: EPS export options (flattened transparency, previews, the embedded document), `document.exportEps`.
 //! - `dxfimport`: the DXF options `document.open` and Place read, `document.dxfInfo`.
 //! - `metafile`: EMF and WMF export, open and place.
+//! - `mesh3d`: 3D assets as OBJ, glTF, USDA and USDZ mesh files (`assets.export3D`).
 //!
 //! [`FORMATS`] is the single list of formats (append-only); open dialogs use [`open_filters`],
 //! agents query `document.formats`.
@@ -32,7 +33,9 @@ mod export;
 pub(crate) mod imagemap;
 mod legacy_ai;
 mod load;
+mod mesh3d;
 pub(crate) use load::{MAX_RASTER_ALLOC, size_note};
+mod heifread;
 mod jp2read;
 mod metafile;
 mod naming;
@@ -54,12 +57,13 @@ pub mod zip;
 
 use serde_json::{Value, json};
 
+pub use action_batch::batch_overwrites_one_file;
 pub use dxf::{UNSUPPORTED, Unsupported, unsupported};
 pub use encode::{ARTBOARD_PARAMS, ArtboardPick, Encoded, encode, encode_all, encode_with_warnings};
 pub(crate) use encode::{anti_alias, background, with_single_artboard};
-pub use export::export_source;
 pub(crate) use export::with_artboard_fills;
 pub(crate) use export::{export_crop, isolated};
+pub use export::{export_doc, export_source};
 pub(crate) use load::check_not_lossy_overwrite;
 use load::err;
 pub(crate) use load::import_svg;
@@ -72,6 +76,8 @@ pub use load::{
     read_for_open, texture_image,
 };
 pub use load::{losses_summary, overwrite_losses};
+pub use mesh3d::{DEFAULT_FORMAT_3D, FORMATS_3D, format_3d_label};
+pub(crate) use mesh3d::{mesh_file_names, mesh_files};
 pub use naming::{NameParts as FileNameParts, parse_date as parse_file_date, render as render_file_name};
 pub(crate) use native::preview_png;
 pub use native::with_compression_pref;
@@ -108,7 +114,7 @@ mod export_names;
 mod formats;
 
 #[cfg(not(target_arch = "wasm32"))]
-use access::list_dir;
+pub(crate) use access::list_dir;
 pub use access::write_file_with;
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) use access::{Placed, copy_new, file_metadata};
@@ -120,10 +126,12 @@ pub(crate) use access::{drive_share_of, share_of};
 #[cfg(test)]
 pub(crate) use access::{drive_share_path, share_path, touched};
 #[cfg(not(target_arch = "wasm32"))]
-use access::{may_read, may_write};
+pub(crate) use access::{may_read, may_write};
 pub use commands::specs;
 pub use export_names::artboard_file_names;
-pub(crate) use export_names::{default_name, merge, unique_file_names, with_black_output, write_or_return};
+pub(crate) use export_names::{
+    artboard_file_names_keeping_dots, default_name, merge, unique_file_names_keeping_dots, with_black_output, write_or_return,
+};
 use export_names::{distinct_names_by, write_encoded};
 use formats::{ARTBOARD, ARTBOARDS, RANGE, USE_ARTBOARDS, import_name, writable};
 pub use formats::{
@@ -202,6 +210,8 @@ mod tests_psd;
 #[cfg(test)]
 mod tests_psdread;
 
+#[cfg(test)]
+mod tests_heifread;
 #[cfg(test)]
 mod tests_jp2read;
 #[cfg(test)]

@@ -24,8 +24,8 @@ const TRUNCATED: &str = "the Pixar file is cut short";
 /// define.
 const DAMAGED: &str = "the Pixar file's header is damaged";
 
-/// The message for encoded tile data with a packet the format doesn't define, or one that runs
-/// past the end of its scan line.
+/// The message for a tile pointer into the header or the tile pointer table, and for encoded tile
+/// data with a packet the format doesn't define, or one that runs past the end of its scan line.
 const BAD_DATA: &str = "the Pixar file's image data is damaged";
 
 /// The channel bits of the picture format field (header byte 424): R, G, B and A, stored in this
@@ -115,7 +115,9 @@ pub(super) fn decode(bytes: &[u8], max_alloc: u64) -> Result<image::RgbaImage, S
     let layout =
         Layout { gray: format & 0b1110 == 0b1000, matted: alpha_mode == 0, alpha: format & 1 != 0, sample: if wide { 2 } else { 1 }, wide, stored };
     let (across, down) = (w.div_ceil(tile_w), h.div_ceil(tile_h));
-    let table = bytes.get(HEADER..HEADER + across * down * 8).ok_or(TRUNCATED)?;
+    // A table end past the largest address is past the end of the file too.
+    let table_end = across.checked_mul(down).and_then(|n| n.checked_mul(8)).and_then(|n| n.checked_add(HEADER)).ok_or(TRUNCATED)?;
+    let table = bytes.get(HEADER..table_end).ok_or(TRUNCATED)?;
     let empty = if layout.alpha { [0; 4] } else { [0, 0, 0, 255] };
     let mut img = image::RgbaImage::from_pixel(w as u32, h as u32, image::Rgba(empty));
     // The encoded data read in all, which a file whose tiles each hold their own data stays within.
@@ -130,6 +132,11 @@ pub(super) fn decode(bytes: &[u8], max_alloc: u64) -> Result<image::RgbaImage, S
         // file's length, so it fits a 32-bit address.
         if length == -1 || pointer >= bytes.len() {
             return Err(TRUNCATED.into());
+        }
+        // Tile data follows the tile pointer table; a pointer into the header or the table would
+        // read them as pixels.
+        if pointer < table_end {
+            return Err(BAD_DATA.into());
         }
         let (x0, y0) = (n % across * tile_w, n / across * tile_h);
         // The part of the tile inside the picture; the pixels of border tiles past its edges are

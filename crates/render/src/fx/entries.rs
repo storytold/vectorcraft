@@ -360,6 +360,11 @@ pub(super) fn raster_bytes(pm: &vello_cpu::Pixmap) -> usize {
 pub(crate) struct FxGeom {
     pub(crate) node: Arc<Node>,
     pub(super) g: Arc<BezPath>,
-    pub(super) items: Vec<Option<Arc<BezPath>>>,
+    /// The node with its gradients moved along with its effects, when they move.
+    pub(super) carried: Option<Arc<Node>>,
+    pub(super) items: Vec<Option<ItemGeom>>,
     pub(crate) stamp: u64,
 }
+
+/// One appearance item's own effected geometry, and how its gradient follows those effects.
+pub(super) type ItemGeom = (Arc<BezPath>, Arc<effects::Carry>);

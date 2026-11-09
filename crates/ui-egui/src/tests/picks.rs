@@ -238,8 +238,8 @@ fn load_profile_asks_off_the_ui_thread() {
 }
 
 /// The Variables panel menu's Import Data Sets… and Export Data Sets… ask off the UI thread: the
-/// data sets in the file picked are loaded, and the header and data set `B` are written to the
-/// path the dialog answers.
+/// data sets in the file picked are loaded, and the header and the data set's row are written to
+/// the path the dialog answers.
 #[test]
 fn variables_panel_data_sets_ask_off_the_ui_thread() {
     let (mut app, shown, _) = app();
@@ -250,20 +250,20 @@ fn variables_panel_data_sets_ask_off_the_ui_thread() {
     }
     std::fs::create_dir_all(&dir).unwrap();
     let (csv, out) = (dir.join("sets.csv"), dir.join("out.csv"));
-    std::fs::write(&csv, "name,Name\nB,y\n").unwrap();
+    std::fs::write(&csv, "Name\ny\n").unwrap();
     let sets = |app: &VectorcraftApp| app.session.doc().unwrap().doc.variables.datasets.iter().map(|d| d.name.clone()).collect::<Vec<_>>();
 
     click(&mut app, "Import Data Sets…", crate::panels::variables::menu);
     assert!(matches!(shown.requests().as_slice(), [PickRequest::Open(_)]));
     shown.answer(&[&csv.to_string_lossy()]);
     poll(&mut app);
-    assert_eq!(sets(&app), ["B"], "{}", app.ui.status);
+    assert_eq!(sets(&app), ["Data Set 1"], "{}", app.ui.status);
 
     click(&mut app, "Export Data Sets…", crate::panels::variables::menu);
     assert!(matches!(shown.requests().as_slice(), [PickRequest::Save(_)]));
     shown.answer(&[&out.to_string_lossy()]);
     poll(&mut app);
-    assert_eq!(std::fs::read_to_string(&out).ok().as_deref(), Some("name,Name\nB,y\n"), "{}", app.ui.status);
+    assert_eq!(std::fs::read_to_string(&out).ok().as_deref(), Some("Name\ny\n"), "{}", app.ui.status);
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -405,6 +405,43 @@ fn keyboard_shortcuts_import_and_export_ask_off_the_ui_thread() {
     assert_eq!(*written.borrow(), ["/keys/out.json", "/keys/command.json"]);
 }
 
+/// The Keyboard Shortcuts dialog's Export Text… asks off the UI thread for a `.txt` file and writes
+/// the dialog's working set, as edited so far, as text where the dialog answers.
+#[test]
+fn keyboard_shortcuts_export_text_writes_the_working_set_as_text() {
+    let (mut app, shown, _) = app();
+    let texts: Rc<RefCell<Vec<(String, String)>>> = Default::default();
+    let t = texts.clone();
+    app.services.write = Some(Box::new(move |path: &str, b: &[u8]| {
+        t.borrow_mut().push((path.to_string(), String::from_utf8_lossy(b).into_owned()));
+        Ok(())
+    }));
+    let ov = crate::keymap::overrides_from(&[("view.grid", "Ctrl+Alt+G")]);
+    let revision = crate::menus::plugin_revision();
+    app.run("edit.keyboardShortcuts", json!({})).unwrap();
+    let d = app.ui.dialog.as_mut().expect("Keyboard Shortcuts");
+    d.fields.insert("overrides".into(), crate::keymap::stored::to_value(&ov));
+    d.fields.insert("set".into(), json!("Custom"));
+    click(&mut app, "Export Text…", dialogs);
+    match shown.requests().as_slice() {
+        [PickRequest::Save(pick)] => assert_eq!(pick.filters, FilePick::filters([("Text", &["txt"][..])])),
+        other => panic!("{other:?}"),
+    }
+    shown.answer(&["/keys/list.txt"]);
+    poll(&mut app);
+    let texts = texts.borrow();
+    let [(path, text)] = texts.as_slice() else { panic!("{texts:?}") };
+    assert_eq!(path, "/keys/list.txt");
+    // Another test installing or removing a plug-in meanwhile changes the Effect menu's rows.
+    if crate::menus::plugin_revision() == revision {
+        assert_eq!(*text, crate::shortcut_editor::export_text("Custom", &ov));
+    }
+    assert!(text.starts_with("Keyboard Shortcuts\nSet: Custom\n"), "{text}");
+    assert!(text.contains(&format!("\t{}\n", crate::menus::pretty_shortcut("Ctrl+Alt+G"))), "{text}");
+    assert!(app.ui.shortcut_overrides.is_empty(), "the working set is kept only on OK");
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("shortcuts"), "the dialog stays open");
+}
+
 /// Keyboard Shortcuts' Import… opens a shortcut set another app saved as text (`.kys`) in Import
 /// Shortcut Set over the dialog when its file dialog answers, and the dialog's working set stays in
 /// Keyboard Shortcuts, which Cancel shows again.
@@ -429,6 +466,29 @@ fn keyboard_shortcuts_import_opens_a_text_set_over_the_dialog() {
     crate::dialogs::cancel(&mut app);
     assert_eq!(dialog_kind(&app), Some("shortcuts"));
     let _ = std::fs::remove_dir_all(dir);
+}
+
+/// `shortcuts.export` and `shortcuts.import` given a `path` that is not a string open no file
+/// dialog, read and write nothing, and give an error naming `path`; a null `path` still asks.
+#[test]
+fn keyboard_shortcuts_commands_reject_a_path_that_is_not_a_string() {
+    let (mut app, shown, written) = app();
+    let read: Written = Default::default();
+    let r = read.clone();
+    app.services.read = Some(Box::new(move |path: &str| {
+        r.borrow_mut().push(path.to_string());
+        Ok(SVG.to_vec())
+    }));
+    for path in [json!(5), json!(true), json!({"file": "/keys/a.json"}), json!(["/keys/a.json"])] {
+        for id in ["shortcuts.export", "shortcuts.import"] {
+            assert_eq!(app.run(id, json!({ "path": path })), Err("`path` must be a string".to_string()), "{id} {path}");
+            assert!(shown.requests().is_empty(), "{id} {path}: {:?}", shown.requests());
+        }
+    }
+    assert!(written.borrow().is_empty() && read.borrow().is_empty());
+    assert!(app.ui.shortcut_overrides.is_empty());
+    assert_eq!(app.run("shortcuts.export", json!({"path": null})), Err("cancelled".to_string()));
+    assert!(matches!(shown.requests().as_slice(), [PickRequest::Save(_)]));
 }
 
 /// A dialog's folder button answered after the dialog closed fills nothing, and the status says
@@ -638,6 +698,21 @@ fn nothing_closes_or_quits_while_a_sheet_is_open() {
     poll(&mut app);
     app.run("app.quit", json!({})).unwrap();
     assert_eq!(app.ui.status, "quit");
+}
+
+/// A view Window › New Window opened does not close while a dialog's sheet is on the window either.
+#[test]
+fn no_view_closes_while_a_sheet_is_open() {
+    let (mut app, shown, _) = app();
+    app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
+    app.run("window.newWindow", json!({})).unwrap();
+    assert!(app.run("file.open", json!({})).is_err());
+    assert_eq!(app.run("file.close", json!({})), Err(picks::busy().to_string()));
+    assert_eq!(crate::doc_windows::windows(&app), [(0, 1), (0, 2)]);
+    shown.answer(&[]);
+    poll(&mut app);
+    app.run("file.close", json!({})).unwrap();
+    assert_eq!(crate::doc_windows::windows(&app), [(0, 1)]);
 }
 
 /// On Linux the dialog is a window of its own, not a sheet: Close and Quit go on while it is open,

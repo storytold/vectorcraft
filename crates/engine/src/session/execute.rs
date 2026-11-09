@@ -1,5 +1,6 @@
 use super::{
-    CommandSpec, EngineError, NodeId, Result, SELECTS_GIVEN_IDS, Selection, Session, Value, cmd, find_command, given_ids, guard, strip_replay_only,
+    CommandSpec, EngineError, JOURNALED_READS, NodeId, Result, SELECTS_GIVEN_IDS, Selection, Session, Value, cmd, find_command, given_ids, guard,
+    strip_replay_only,
 };
 
 impl Session {
@@ -14,11 +15,14 @@ impl Session {
         r
     }
 
-    /// Error, under the command's own id, at the first of `ids` that is malformed, names no node, or
-    /// names a layer or sublayer: a command in [`SELECTS_GIVEN_IDS`] acts on objects.
+    /// Error, under the command's own id, at the first of `ids` that is malformed, else at the first
+    /// that names no node or names a layer or sublayer: a command in [`SELECTS_GIVEN_IDS`] acts on
+    /// objects.
     fn check_given_ids(&self, id: &str, params: &Value) -> Result<()> {
         let (Some(st), Some(ids)) = (self.active(), params.get("ids")) else { return Ok(()) };
         let Some(given) = ids.as_array() else { return cmd::checked_ids_param(self, params, "ids", id).map(drop) };
+        // A malformed entry anywhere in the list is refused first, under the key and the entry.
+        cmd::ids_param(params, "ids", id)?;
         for value in given {
             let node = cmd::checked_id(self, value, id)?;
             if st.doc.node(node).is_some_and(|n| n.is_layer()) {
@@ -35,10 +39,21 @@ impl Session {
     /// Execute a command by id. This is THE entry point for every frontend.
     pub fn execute(&mut self, id: &str, params: &Value) -> Result<Value> {
         let spec = find_command(id).ok_or_else(|| cmd::params::unknown_command(id))?;
-        // The crate's own tests are the audit of the params descriptions (#1442): a key a test
-        // passes that its command's description doesn't name fails the test.
-        #[cfg(test)]
-        self.check_params(id, params)?;
+        let outer = std::mem::replace(&mut self.reading, !spec.journal || JOURNALED_READS.contains(&id));
+        let r = self.execute_spec(spec, id, params);
+        self.reading = outer;
+        r
+    }
+
+    fn execute_spec(&mut self, spec: &'static CommandSpec, id: &str, params: &Value) -> Result<Value> {
+        // A key the command's params description doesn't name is a parameter error (#1442), before
+        // anything runs, for the commands other commands run too. A `command.batch` or an
+        // `action.batch` checks its steps before the first one runs, and each step is checked again
+        // as it runs, against the document the steps before it left (the effects `effect.setParams`
+        // edits). Saved steps played with `replay` aren't checked.
+        if !self.replaying {
+            self.check_params(id, params)?;
+        }
         // Objects given as `id` (where it stands for `ids` of one) or as `ids` beside it are checked
         // before anything else: a malformed one, or one naming no object, is an error under this
         // command's id, never the selection in its place. `effect.apply {id: "stylize.dropShadow"}`
@@ -53,10 +68,21 @@ impl Session {
         if SELECTS_GIVEN_IDS.contains(&id) {
             self.check_given_ids(id, params)?;
         }
+        // An `ids` list with an entry that is not an object id, or an `ids` that is not a list, is
+        // refused under the command's id before the menu check, which would otherwise run on the
+        // other entries or on the selection. This holds with no document open too, where commands
+        // such as `effect.list` still run.
+        if cmd::params::takes_key(spec.params, "ids") {
+            cmd::ids_param(params, "ids", id)?;
+        }
         // Clear's menu needs a selection; an agent supplying explicit targets only needs a
-        // document. The command validates those targets before making any edit.
+        // document. The command validates those targets before making any edit. Cut and Copy given
+        // the artboards the journal recorded need only a document too, whatever is selected and
+        // whichever tool is chosen.
         let given = given_ids(spec.params, params);
-        let enabled = if id == "edit.clear" && params.get("ids").is_some() {
+        let enabled = if (id == "edit.clear" && params.get("ids").is_some())
+            || (matches!(id, "edit.copy" | "edit.cut") && params.get("selectedArtboards").is_some())
+        {
             cmd::has_doc(self)
         } else if let Some(ids) = given.clone() {
             // Objects given as `ids` (or `id`) stand in for the selection: the command is enabled
@@ -91,7 +117,7 @@ impl Session {
             if let Some(ids) = &select_first {
                 s.execute("select.set", &serde_json::json!({ "ids": ids }))?;
             }
-            let r = (spec.run)(s, params);
+            let r = cmd::run_spec(s, spec, params);
             if r.is_err()
                 && let Some((uid, selection, layer)) = selected_before
                 && let Some(st) = s.docs.iter_mut().find(|d| d.uid == uid)
@@ -107,12 +133,40 @@ impl Session {
         let (doc, journal, grouped) = (self.active().map(|d| d.uid), self.journal.len(), self.undo_group_docs());
         let open = (self.depth == 0).then(|| self.docs.iter().map(|d| d.uid).collect::<Vec<_>>());
         let r = if self.depth == 0 { self.run_guarded(id, run) } else { self.run_nested(run) };
+        if r.is_err() && self.depth == 0 {
+            self.batch_paint_docs.clear();
+            // A failed or panicked command's documents are put back: type is drawn in their
+            // composite fonts again, not in those the command set.
+            cmd::compositefonts::sync(self);
+        }
         let r = r?;
         if self.depth == 0 {
-            self.inherit_new_art();
+            // A color-mode history step restores exact new-art colors; selection inheritance
+            // must not immediately replace that restoration.
+            let restored = self.active().is_some_and(|d| match id {
+                "edit.undo" => d.history.redo.last().is_some_and(|e| e.color_mode_paints.is_some()),
+                "edit.redo" => d.history.undo.last().is_some_and(|e| e.color_mode_paints.is_some()),
+                _ => false,
+            });
+            if !restored {
+                self.inherit_new_art();
+            }
+            for uid in std::mem::take(&mut self.batch_paint_docs) {
+                if let Some(st) = self.docs.iter_mut().find(|d| d.uid == uid)
+                    && let Some(e) = st.history.undo.last_mut()
+                    && let Some((_, after)) = &mut e.color_mode_paints
+                {
+                    after.clone_from(&self.paint);
+                    e.recost_paints();
+                    st.history.trim();
+                }
+            }
         }
         if let Some(open) = open {
             self.open_undo_groups_in_new_documents(&open);
+            // Type is drawn in the composite fonts of the documents open now, an undone or opened
+            // document's included.
+            cmd::compositefonts::sync(self);
         }
         let journaled = spec.journal || (self.depth == 0 && std::mem::take(&mut self.journal_query));
         if journaled && self.depth == 0 && self.active().is_none_or(|d| d.interaction.is_none()) {
@@ -136,8 +190,8 @@ impl Session {
     }
 
     /// Record `key: value` in the running top-level command's journal entry (or its interaction's
-    /// preview, or its step in a batch) unless its params give `key`: a value it resolved from the
-    /// preferences or the clock.
+    /// preview, or its step in a batch) unless its params give `key` (a null gives nothing): a value
+    /// it resolved from the preferences or the clock.
     pub fn note_journal(&mut self, key: &str, value: Value) {
         if self.depth == self.note_depth {
             self.journal_note.insert(key.to_string(), value);
@@ -164,6 +218,29 @@ impl Session {
         Ok((r?, noted))
     }
 
+    /// [`Session::execute`] for saved steps: a journal entry or an action's steps, recorded by this
+    /// version or an older one. Keys a command's params description doesn't name (a key it no longer
+    /// reads, an effect parameter it no longer takes) are taken, by the commands it runs too, so what
+    /// was recorded still plays (#1442). Everything else is checked as `execute` checks it.
+    pub fn replay(&mut self, id: &str, params: &Value) -> Result<Value> {
+        let outer = self.set_replaying(true);
+        let r = self.execute(id, params);
+        self.set_replaying(outer);
+        r
+    }
+
+    /// Whether [`Session::execute`] plays saved steps as [`Session::replay`] does. A frontend that
+    /// runs saved steps through its own path to `execute` sets it around that call, and puts back the
+    /// value this returns, which it had before.
+    pub fn set_replaying(&mut self, on: bool) -> bool {
+        std::mem::replace(&mut self.replaying, on)
+    }
+
+    /// Whether saved steps are playing ([`Session::set_replaying`]).
+    pub fn replaying(&self) -> bool {
+        self.replaying
+    }
+
     /// The journal from entry `start` on, as an action records it: without the params that only
     /// pin a replay to the original run ([`REPLAY_ONLY`]), so playing the action later acts now.
     pub fn journal_for_action(&self, start: usize) -> Vec<(String, Value)> {
@@ -182,9 +259,14 @@ impl Session {
     pub(super) fn noted(&mut self, params: &Value) -> Value {
         let mut note = std::mem::take(&mut self.journal_note);
         match params {
-            // The params' own values win.
+            // The params' own values win, except a null: it reads as a key left out, so the
+            // noted value is the one the command resolved.
             Value::Object(m) if !note.is_empty() => {
-                note.extend(m.clone());
+                for (k, v) in m {
+                    if !v.is_null() || !note.contains_key(k) {
+                        note.insert(k.clone(), v.clone());
+                    }
+                }
                 Value::Object(note)
             }
             Value::Null if !note.is_empty() => Value::Object(note),

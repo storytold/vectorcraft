@@ -95,12 +95,7 @@ impl Tool for MeasureInspectTool {
             }
             PointerKind::Drag | PointerKind::Up if self.dragging => {
                 if let Some((a, _)) = self.line {
-                    let b = if ev.mods.shift {
-                        a + vectorcraft_geom::constrain_angle_from(ev.pos - a, 45.0, cx.constrain_angle)
-                    } else {
-                        crate::guides::snap_draw(cx, ev.pos, &[]).0
-                    };
-                    self.line = Some((a, b));
+                    self.line = Some((a, crate::xform::measure_end_point(cx, a, ev.pos, ev.mods.shift)));
                 }
                 self.dragging = ev.kind == PointerKind::Drag;
             }
@@ -212,5 +207,24 @@ mod tests {
         assert!(!t.busy());
         assert_eq!(t.options(), Value::Null);
         assert_eq!(area_label(Unit::Points, 2.0), "2.00 pt²");
+    }
+
+    /// A Shift-drag snaps its end point to the grid, then projects it onto its 45° step.
+    #[test]
+    fn shift_drag_snaps_its_end_point() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let mut cx = cx(&d, &s, &p);
+        cx.smart_guides = false;
+        cx.snap_to_grid = true;
+        let shift = Mods { shift: true, ..Mods::default() };
+        let mut t = MeasureInspectTool::default();
+        // (37.3, 12.1) snaps to (36, 9) on the 9 pt grid, and Shift keeps it at 0°: (36, 0).
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 0.0, 0.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 37.3, 12.1).with_mods(shift));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 37.3, 12.1).with_mods(shift));
+        let o = t.options();
+        assert!((o["distance"].as_f64().unwrap() - 36.0).abs() < 1e-9, "on the 9 pt grid: {o}");
+        assert!(o["dy"].as_f64().unwrap().abs() < 1e-9, "kept horizontal: {o}");
     }
 }

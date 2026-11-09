@@ -13,7 +13,7 @@ fn string(desc: &str) -> Value {
 }
 
 /// The arguments `save_file` passes on to `document.save` beside `path`.
-pub(super) const SAVE_FILE_OPTIONS: [&str; 4] = ["compress", "version", "preview", "options"];
+pub(super) const SAVE_FILE_OPTIONS: [&str; 5] = ["compress", "version", "preview", "precision", "options"];
 
 /// The arguments `doc_inspect` / `inspect_document` pass on to `document.inspect`.
 pub(super) const INSPECT_KEYS: [&str; 6] = ["depth", "childLimit", "ids", "kind", "limit", "offset"];
@@ -367,7 +367,7 @@ pub fn tool_definitions() -> Vec<Value> {
             "save_file",
             "Save file",
             &format!(
-                "Save the active document with the engine's document.save: by default to its own file in its own format (native .vectorcraft unless it was opened from or saved as SVG, PDF or a restorable .ai). With `path`, the extension picks the format: .{}. Other formats are exports (see export). A native file is gzipped when `compress` is true (default: the useCompression preference, Preferences > File Handling > Use Compression); `version` writes it for an older VectorCraft and `preview` embeds a PNG of the first artboard. `options` carries the format's save options (see run_command document.formats); giving `compress`, `version` or `preview` both at the top level and in `options` with different values is an error. The reply's `format` says what was written and `warnings` what that format loses and each option given that the format doesn't read (such as `compress` for .svg). In the running app the call returns once the file is written, or with the error, even with Background Save on. When the save asks first (before replacing a file that opened with losses, or with a file dialog for an untitled document without `path`), the reply is `pending` or \"cancelled\" as before.",
+                "Save the active document with the engine's document.save: by default to its own file in its own format (native .vectorcraft unless it was opened from or saved as SVG, PDF or a restorable .ai). With `path`, the extension picks the format: .{}. Other formats are exports (see export). A native file is gzipped when `compress` is true (default: the useCompression preference, Preferences > File Handling > Use Compression); `version` writes it for an older VectorCraft, `preview` embeds a PNG of the first artboard, and `precision` rounds path anchors and handles to that many decimal places for that save only. `options` carries the format's save options (see run_command document.formats); giving `compress`, `version`, `preview` or `precision` both at the top level and in `options` with different values is an error. The reply's `format` says what was written and `warnings` what that format loses and each option given that the format doesn't read (such as `compress` for .svg). In the running app the call returns once the file is written, or with the error, even with Background Save on. When the save asks first (before replacing a file that opened with losses, or with a file dialog for an untitled document without `path`), the reply is `pending` or \"cancelled\" as before.",
                 save_extensions().join(", .")
             ),
             obj(
@@ -376,6 +376,7 @@ pub fn tool_definitions() -> Vec<Value> {
                     "compress": {"type": "boolean", "description": "Native files: gzip the file (default: the useCompression preference)"},
                     "version": {"type": "integer", "minimum": 1, "maximum": vectorcraft_format::VERSION, "description": "Native files: the format version to write (default: the current one; 1 and 2 are never compressed)"},
                     "preview": {"type": "boolean", "description": "Native files: embed a PNG of the first artboard, at most 256 px (default false)"},
+                    "precision": {"type": "integer", "minimum": 0, "maximum": vectorcraft_format::MAX_PRECISION, "description": "Native files: round path anchors and handles to this many decimal places, a smaller file; colors, transforms and type stay exact (default: exact)"},
                     "options": {"type": "object", "description": "The format's save options, passed through (see run_command document.formats); default: as last saved"},
                 }),
                 &[],
@@ -390,7 +391,7 @@ pub fn tool_definitions() -> Vec<Value> {
                 json!({
                     "format": {"type": "string", "enum": FORMATS.iter().filter(|f| f.write).map(|f| f.id).collect::<Vec<_>>(), "description": "Default: from the path's extension"},
                     "path": string("Destination file (omit to get dataBase64)"),
-                    "scale": num("Raster pixels per point (default 1)"),
+                    "scale": num("Raster pixels per point (without scale or options.ppi, uses the document's raster effects resolution; options.ppi wins)"),
                     "artboard": {"type": "integer", "minimum": 0, "description": "0-based artboard (default: the first; PDF and .ai default: all)"},
                     "range": string("1-based artboards such as \"1-3, 5\" (PDF and .ai: one page each; SVG and SVGZ: one file each; EPS: one file each, after a central file of the whole document when there are two or more and art shows; rasters, DXF, EMF and WMF: one, or one file each with options.useArtboards: true)"),
                     "selection": {"type": "boolean", "description": "Export only the selection, cropped to it"},

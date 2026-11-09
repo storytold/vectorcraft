@@ -459,7 +459,7 @@ fn formats_query_lists_readers_writers_and_options() {
     );
     assert!(ids("readable").contains(&"tiff".to_string()) && ids("readable").contains(&"ait".to_string()));
     let png = r["formats"].as_array().unwrap().iter().find(|f| f["id"] == "png").unwrap();
-    assert_eq!(png["options"]["scale"]["default"], 1);
+    assert_eq!(png["options"]["scale"]["default"], Value::Null);
     assert_eq!(r["openExtensions"].as_array().unwrap().len(), OPEN_EXTS.len());
 }
 
@@ -680,7 +680,9 @@ fn a_native_save_streams_the_bytes_the_encoder_makes() {
     s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
     for (name, compress) in [("a.vectorcraft", false), ("b.vectorcraft", true), ("c.vctemplate", true)] {
         let path = d.join(name).to_string_lossy().to_string();
-        let p = json!({"path": path, "compress": compress});
+        // A PDF-compatible file's PDF is dated to the second it is written, so the byte comparison
+        // uses files without one.
+        let p = json!({"path": path, "compress": compress, "pdfCompatible": false});
         let r = s.execute("file.saveCopy", &p).unwrap();
         let written = std::fs::read(&path).unwrap();
         assert_eq!(r["bytes"], written.len(), "{r}");
@@ -690,6 +692,17 @@ fn a_native_save_streams_the_bytes_the_encoder_makes() {
         assert_eq!(written, job.encode().unwrap().files[0].1, "{name}");
         assert_eq!(vectorcraft_format::load(&written).unwrap().template, name.ends_with("vctemplate"));
     }
+    // A save with the default options streams a file that carries its PDF.
+    let path = d.join("d.vectorcraft").to_string_lossy().to_string();
+    let p = json!({"path": path});
+    let r = s.execute("file.saveCopy", &p).unwrap();
+    let written = std::fs::read(&path).unwrap();
+    assert_eq!(r["bytes"], written.len(), "{r}");
+    assert!(vectorcraft_format::pdf_content(&written).is_some());
+    let plan = save_plan(&s, SaveMode::Copy, &p).unwrap();
+    let job = save_job(&mut s, plan).unwrap();
+    assert!(job.streams());
+    assert!(vectorcraft_format::pdf_content(&job.encode().unwrap().files[0].1).is_some());
     // A writer that fails: the save fails with its error.
     let plan = save_plan(&s, SaveMode::Copy, &json!({"path": "/x/y.vectorcraft"})).unwrap();
     let job = save_job(&mut s, plan).unwrap();
@@ -704,8 +717,8 @@ fn a_native_save_streams_the_bytes_the_encoder_makes() {
 }
 
 /// An option given beside the path (an SVG option flat or in `svg`) and in `options` with different
-/// values is refused before anything is written; `compress`, `version` or `preview` beside the path of a format that doesn't
-/// read it is named in the warnings.
+/// values is refused before anything is written; `compress`, `version`, `preview` or `precision` beside the path of a format
+/// that doesn't read it is named in the warnings.
 #[test]
 fn a_save_refuses_disagreeing_options_and_names_unread_native_ones() {
     let d = tmp_dir("save-options");
@@ -752,6 +765,16 @@ fn a_save_refuses_disagreeing_options_and_names_unread_native_ones() {
     let r = s.execute("file.saveCopy", &json!({"path": d.join("a.ai").to_string_lossy(), "compress": false, "version": 3})).unwrap();
     let w: Vec<&str> = r["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
     assert!(w.iter().any(|w| w.starts_with("`version` was not used")) && !w.iter().any(|w| w.starts_with("`compress`")), "{w:?}");
+    // `precision` is read by native files and templates only.
+    for name in ["p.svg", "p.pdf", "p.ai", "p.eps"] {
+        let r = s.execute("file.saveCopy", &json!({"path": d.join(name).to_string_lossy(), "precision": 2})).unwrap();
+        let w: Vec<&str> = r["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+        assert!(w.iter().any(|w| w.starts_with("`precision` was not used:")), "{name}: {w:?}");
+    }
+    for name in ["p.vectorcraft", "p.vctemplate"] {
+        let r = s.execute("file.saveCopy", &json!({"path": d.join(name).to_string_lossy(), "precision": 2})).unwrap();
+        assert_eq!(r["warnings"], json!([]), "{name}: {r}");
+    }
     let _ = std::fs::remove_dir_all(&d);
 }
 

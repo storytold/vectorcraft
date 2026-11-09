@@ -104,6 +104,11 @@ impl PointerEvent {
     pub fn json_hold(e: &Value) -> f64 {
         e.get("holdMs").and_then(Value::as_f64).filter(|f| f.is_finite()).map_or(0.0, |ms| ms.clamp(0.0, 60_000.0) / 1000.0)
     }
+    /// Whether backquote is held, from the `backquote` of a JSON pointer event or request (control
+    /// channel, MCP): `default` when the key is absent, an error when it is not a boolean.
+    pub fn json_backquote(v: &Value, default: bool) -> Result<bool, String> {
+        v.get("backquote").map_or(Ok(default), |b| b.as_bool().ok_or_else(|| "`backquote` must be a boolean".to_owned()))
+    }
 }
 
 #[cfg(test)]
@@ -118,6 +123,17 @@ mod tests {
         assert!(!serde_json::from_value::<PointerEvent>(value.clone()).unwrap().backquote);
         value["backquote"] = serde_json::json!(true);
         assert!(serde_json::from_value::<PointerEvent>(value).unwrap().backquote);
+    }
+
+    #[test]
+    fn json_backquote_takes_the_default_only_when_absent() {
+        use serde_json::json;
+        assert_eq!(PointerEvent::json_backquote(&json!({}), true), Ok(true));
+        assert_eq!(PointerEvent::json_backquote(&json!({"backquote": false}), true), Ok(false));
+        assert_eq!(PointerEvent::json_backquote(&json!({"backquote": true}), false), Ok(true));
+        for bad in [json!("true"), json!(1), json!(null)] {
+            assert!(PointerEvent::json_backquote(&json!({"backquote": bad}), false).is_err(), "{bad}");
+        }
     }
 }
 

@@ -17,6 +17,10 @@ pub struct CanvasCache {
     /// The frame shown was rendered on the worker: an interaction's frames stay there
     /// ([`canvas::show`]).
     pub from_worker: bool,
+    /// The frame shown holds pixels the worker copied from its last frame, and when it was shown
+    /// (seconds, egui's input time): it renders whole once it has been shown for
+    /// [`canvas::STILL_SECS`] with the view unmoved.
+    pub reused: Option<f64>,
     /// Set in the web build, which has no render worker: while the view changes on a document whose
     /// last render took more than 8 ms, the canvas draws the frame shown reprojected and renders
     /// once the view has been still for [`canvas::STILL_SECS`].
@@ -41,6 +45,9 @@ pub struct CanvasCache {
     /// The marks Type → Show Hidden Characters drew on each text object in the last frame. A frame
     /// that does not draw them drops them ([`canvas::show`]).
     pub hidden_chars: canvas::HiddenChars,
+    /// The selected objects' outlines, anchors and handles as drawn in the last frame. A frame that
+    /// does not draw them drops them ([`canvas::show`]).
+    pub selection_marks: canvas::SelectionMarks,
     /// [`VectorcraftApp::selection_box`] for (document uid, revision, Use Preview Bounds).
     pub selection_box: Option<((u64, u64, bool), Option<vectorcraft_doc::OrientedBox>)>,
     /// [`VectorcraftApp::selection_bounds`] for (document uid, revision).
@@ -58,8 +65,14 @@ pub struct CanvasCache {
     /// In Presentation Mode, the canvas rect the active artboard was last fitted to: it is fitted
     /// again when the rect changes (the window going full screen).
     pub presented: Option<egui::Rect>,
+    /// The canvas a document's opening view was fitted to, with the view the fit gave. The window's
+    /// layout can still move the canvas's edges over the next frames, so until the view is moved or
+    /// the user acts, the opening view is fitted again when the canvas changes ([`canvas::show`]).
+    pub opening_fit: Option<canvas::ViewKey>,
     /// Window › Arrange › Tile: the renders the panes of the other documents draw.
     pub panes: canvas::Panes,
+    /// Window › Arrange › Float in Window: what the floating document windows keep between frames.
+    pub windows: crate::doc_windows::Windows,
 }
 
 /// [`CanvasCache::slices`]: the layout of the slices of (document uid, revision).

@@ -292,6 +292,12 @@ fn methods_and_bad_params() {
     select_all(&mut s);
     assert!(s.execute("recolor.apply", &json!({"map": {"#ff0000": "#00ff00"}, "method": "nope"})).is_err());
     assert!(s.execute("recolor.apply", &json!({"map": {"#ff0000": "nonsense"}})).is_err());
+    // A current or new color with an alpha part (`#rrggbbaa` or `#rgba`) is refused.
+    let undo = s.doc().unwrap().history.undo.len();
+    for (from, to) in [("#ff000080", "#00ff00"), ("ff000080", "#00ff00"), ("#ff0000", "#00ff0080"), ("#ff0000", "#0f08")] {
+        assert!(s.execute("recolor.apply", &json!({"map": {from: to}})).is_err(), "{from} {to}");
+    }
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
     assert!(s.execute("recolor.apply", &json!({})).is_err());
     run(&mut s, "select.none", json!({}));
     assert!(s.execute("recolor.apply", &json!({"map": {}})).is_err(), "needs art or a group");

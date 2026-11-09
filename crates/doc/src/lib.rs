@@ -16,8 +16,10 @@ pub mod corners;
 pub mod depth;
 pub mod dimension;
 pub mod graph;
+mod halftone_radii;
 pub mod hit;
 mod id_index;
+pub use id_index::tree_walks;
 pub mod inks;
 mod inline;
 pub mod intertwine;
@@ -29,7 +31,10 @@ mod symbol_registration;
 pub use inline::{SYMBOL_HALF, SYMBOL_SIZES};
 pub use shared::Shared;
 pub use symbol_export_type::{SYMBOL_EXPORT_TYPE, SymbolExportType};
-pub use symbol_nine_slice::{MAX_SLICE_GROWTH, NineSliceMap, PAINTED_EFFECTS, SYMBOL_NINE_SLICE, SymbolNineSlice, charge_symbol_art};
+pub use symbol_nine_slice::{
+    EditedNineSlice, MAX_SLICE_GROWTH, MIN_CENTER_BAND, NineSliceGuide, NineSliceMap, PAINTED_EFFECTS, SYMBOL_NINE_SLICE, SymbolNineSlice,
+    charge_symbol_art,
+};
 pub use symbol_overrides::SymbolOverride;
 pub use symbol_registration::{SYMBOL_REGISTRATION, SymbolRegistration};
 pub mod links;
@@ -37,6 +42,7 @@ pub mod live;
 pub mod live_paint;
 pub mod marks;
 mod mem;
+pub use mem::{appearance_heap_bytes, paint_heap_bytes};
 pub mod metadata;
 pub mod node;
 pub mod objects_on_path;
@@ -64,6 +70,7 @@ mod symbols;
 pub use symbols::SymbolBoxes;
 pub mod text;
 pub mod trace;
+pub mod twist;
 pub mod variables;
 pub mod xml_id;
 
@@ -102,17 +109,19 @@ pub use placed_document::{PageBox, PlacedDocument};
 pub use profiles::ColorProfiles;
 pub use puppet::{PuppetPin, PuppetPins};
 pub use rastersettings::{RasterColorModel, RasterEffectsSettings};
-pub use selection::{AnchorRef, SegmentRef, Selection};
+pub use selection::{AnchorRef, SegmentRef, Selection, SymbolPart};
 pub use setup::{Background, DocSetup, ExportText, GridSize, Quotes};
 pub use slices::{CellAlign, CellVAlign, Slice, SliceArea, SliceKind, SliceOptions, SliceSource};
 pub use style_libs::StyleLibrary;
 pub use text::FontHeightReference;
+pub use text::GlyphChoice;
 pub use text::{
     AreaFit, AreaOptions, Burasagari, CharAlign, CharPosition, CharStyle, Composer, Digits, FirstBaseline, HyphenationOptions, InlineArt,
     JustificationOptions, Justify, Kinsoku, LeadingModel, Mojikumi, ParaDirection, ParaStyle, PathAlign, PathEffect, RubyAlign, RubyPosition,
     RubySpan, ScriptMetrics, SingleWordJustify, TabAlign, TabStop, TextFlow, TextKind, TextObject, TextRun, TextStyleDef, TextWrap, VerticalAlign,
     WrapShape,
 };
+pub use text::{CharClass, CompositeFont, CompositePart, CompositeParts};
 pub use trace::TraceView;
 pub use variables::{DataSet, DataValue, Variable, VariableKind, Variables};
 pub use vectorcraft_color as color;
@@ -133,7 +142,7 @@ mod limits;
 mod records;
 mod units;
 
-pub use artboard::{Artboard, LockedArtboards, RetiredArtboardId, VIDEO_PIXEL_ASPECT_RANGE, VIDEO_SAFE_INSETS};
+pub use artboard::{ARTBOARD_GAP, Artboard, ArtboardSide, LockedArtboards, RetiredArtboardId, VIDEO_PIXEL_ASPECT_RANGE, VIDEO_SAFE_INSETS};
 pub use canvas_range::BeyondCanvas;
 #[cfg(test)]
 use document_ext::free_id;
@@ -142,7 +151,7 @@ pub use guides::{GridPrefs, Guide, RulerMode};
 #[cfg(test)]
 use limits::MAX_NEXT_ID;
 pub use limits::{DocError, FORMAT_VERSION, MAX_COORD};
-pub use records::{ImageBlob, MaskEdit, NewArtIds, SavedSelection, SavedView, Symbol, SymbolEdit};
+pub use records::{ImageBlob, MaskEdit, NewArtIds, SavedSelection, SavedView, SvgFilter, Symbol, SymbolEdit};
 pub use units::{ColorMode, Unit, parse_number};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -187,6 +196,9 @@ pub struct Document {
     /// Paragraph styles (besides the built-in [Normal Paragraph Style]).
     #[serde(default, skip_serializing_if = "skip::is_empty_vec")]
     pub para_styles: Shared<Vec<TextStyleDef>>,
+    /// Type › Composite Fonts…: the composite fonts defined in the document, by name.
+    #[serde(default, skip_serializing_if = "skip::is_empty_vec")]
+    pub composite_fonts: Shared<Vec<CompositeFont>>,
     /// Threaded text: area-type frames one story flows through, in order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub text_threads: Vec<Vec<NodeId>>,
@@ -223,8 +235,9 @@ pub struct Document {
     #[serde(default, skip_serializing)]
     pub mask_edit: Option<MaskEdit>,
     /// Symbol editing mode, while active. Never saved (see [`Document::without_edit_modes`]): the
-    /// symbol already holds the art of its editing layer.
-    #[serde(default, skip_serializing)]
+    /// symbol already holds the art of its editing layer. Never read either: a value in file data
+    /// is dropped, so the layer it names is kept and saving does not write the value again.
+    #[serde(default, skip_serializing, deserialize_with = "skip::read_as_none")]
     pub symbol_edit: Option<SymbolEdit>,
     next_id: u64,
     /// Foreign data preserved on round-trip.
@@ -301,6 +314,10 @@ pub struct Document {
     /// given) SVG export links with `<script>` elements, in order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub svg_scripts: Vec<String>,
+    /// Effect › SVG Filters: the SVG filters the document holds (at most [`SvgFilter::MAX`]), in
+    /// the order the submenu lists them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub svg_filters: Vec<SvgFilter>,
     /// Puppet Warp pins on the selected artwork while the tool edits it ([`PuppetPins`]): editing
     /// state, never saved.
     #[serde(skip)]
@@ -317,6 +334,11 @@ pub struct Document {
     /// Never saved.
     #[serde(skip)]
     pub retired_artboard_id: RetiredArtboardId,
+    /// The id of the artboard an imported file names as its active one (a `.ai` file's
+    /// `CropAreaActive`): the document opens with that artboard active. A `.ai` save or export
+    /// names it as the file's active artboard. `None`: the first. Native files do not keep it.
+    #[serde(skip)]
+    pub opened_artboard: Option<u32>,
     /// Some object is a dimension (the Dimension tool): edits refresh dimensions only while this
     /// is set, so documents without any pay nothing for them.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]

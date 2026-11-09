@@ -221,6 +221,7 @@ fn save_a_copy_and_template_suggest_their_names() {
     assert_eq!(picks.borrow()[0].name, "Untitled-1 copy.vectorcraft");
     assert!(app.ui.dialog.is_none(), "the native format has no options");
     assert!(vectorcraft_format::sniff(&written.borrow()[0].1));
+    assert!(vectorcraft_format::pdf_content(&written.borrow()[0].1).is_some());
     assert!(app.session.active().unwrap().path.is_none() && app.session.active().unwrap().is_dirty());
     app.run("file.saveAsTemplate", json!({})).unwrap();
     let pick = &picks.borrow()[1];
@@ -266,6 +267,18 @@ fn the_ait_template_options_have_no_version_row() {
     let names = |id: &str| shown(fileio::format(id).unwrap()).map(|o| o.name).collect::<Vec<_>>();
     assert!(names("ai").contains(&"aiVersion"), "{:?}", names("ai"));
     assert!(!names("ait").contains(&"aiVersion"), "{:?}", names("ait"));
+}
+
+/// The native options dialog has no row for `precision`, which agents give with the save
+/// command; the rows it has stay.
+#[test]
+fn the_native_options_have_no_precision_row() {
+    for id in ["vectorcraft", "template"] {
+        let f = fileio::format(id).unwrap();
+        assert!(f.options.iter().any(|o| o.name == "precision"), "{id}");
+        let names: Vec<&str> = shown(f).map(|o| o.name).collect();
+        assert!(!names.contains(&"precision") && names.contains(&"version") && names.contains(&"compress"), "{id}: {names:?}");
+    }
 }
 
 /// A name typed in the Save as Template panel with a Save As format's extension has it

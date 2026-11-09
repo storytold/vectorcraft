@@ -202,13 +202,14 @@ impl RasterOptions {
         }
     }
 
-    /// The render and encoder settings: `ppi`, else 72 × `scale`, within 0.01–64 pixels per point;
+    /// The render and encoder settings: `ppi`, else 72 × `scale`, else the document's resolution,
+    /// within 0.01–64 pixels per point;
     /// `background`, else `page` (the document's background).
-    fn settings(&self, page: Option<[u8; 3]>) -> Result<RasterExportOptions> {
+    fn settings(&self, page: Option<[u8; 3]>, document_ppi: f64) -> Result<RasterExportOptions> {
         if let Some(ppi) = self.ppi.filter(|p| !(p.is_finite() && *p > 0.0)) {
             return Err(bad(C, format!("ppi must be a positive number, not {ppi}")));
         }
-        let ppi = self.ppi.unwrap_or(72.0 * self.scale.unwrap_or(1.0));
+        let ppi = self.ppi.unwrap_or_else(|| self.scale.map_or(document_ppi, |scale| 72.0 * scale));
         let color_model = parse(self.color_model.as_deref(), jpeg::ColorModel::from_id, "colorModel", "rgb, cmyk or gray")?;
         let embed_icc = self.embed_icc.unwrap_or(true);
         Ok(RasterExportOptions {
@@ -420,7 +421,10 @@ pub fn encode(doc: &Document, format: &str, p: &Value) -> Result<Vec<u8>> {
 /// font; PDF, EPS, SVG, EMF, WMF and the raster formats: type that doesn't fit its frame).
 pub fn encode_with_warnings(doc: &Document, format: &str, p: &Value) -> Result<(Vec<u8>, Vec<String>)> {
     let f = super::writable(C, Some(format), None)?;
-    encode_all(doc, f.id, p)?.single(f)
+    let enc = encode_all(doc, f.id, p)?;
+    // The error for a version 7 .ai of several artboards names the legacy .ai.
+    let legacy = f.id == "ai" && super::legacy_ai::wanted(C, f, p)?;
+    enc.single(&if legacy { super::legacy_ai::named(f) } else { *f })
 }
 
 /// [`encode`], with every file the export writes.
@@ -541,7 +545,7 @@ fn encode_files(doc: &Document, f: &Format, p: &Value) -> Result<Encoded> {
             // New Document → Background Contents: White makes the export opaque, unless `background`
             // says otherwise (JPEG has no alpha: white either way).
             let page = (doc.setup.background == vectorcraft_doc::Background::White).then_some([255; 3]);
-            let mut settings = o.settings(page)?;
+            let mut settings = o.settings(page, doc.raster_ppi())?;
             let size = o.pixel_size()?;
             let format = match f.id {
                 "png" => RasterFormat::Png,

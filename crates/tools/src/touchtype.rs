@@ -58,13 +58,14 @@ struct CharBox {
     pivot: Point,
     /// A unit vector along its line in reading order.
     along: Vec2,
-    /// A unit vector up from its line, without its rotation: the way baseline shift moves it.
+    /// A unit vector up from its line, without its rotation: the way baseline shift moves it. For
+    /// a glyph standing upright in vertical type, the line's cross axis (right of its column).
     up: Vec2,
     /// The glyph's own x axis and its up axis (with its rotation), unit vectors.
     ex: Vec2,
     ey: Vec2,
     /// Whether the tool moves it along its line by kerning: a character comes before it on its
-    /// line and it is not right-to-left.
+    /// line in logical order.
     kerned: bool,
     /// Its style as the Character panel shows it (horizontal scale with the object transform).
     style: CharStyle,
@@ -174,6 +175,11 @@ fn char_box(t: &TextObject, lay: &TextLayout, gi: usize) -> Option<CharBox> {
     }
     let quad = [m * Point::new(x0, y0), m * Point::new(x1, y0), m * Point::new(x1, y1), m * Point::new(x0, y1)];
     let d = Vec2::new(g.angle.cos(), g.angle.sin());
+    // Up from the glyph's frame without its rotation. For a glyph standing upright in vertical
+    // type, that up runs along the column, so the glyph takes the line's cross axis instead: the
+    // way baseline shift moves the column's sideways glyphs.
+    let up = unit(linear(m * g.unturned, Vec2::new(0.0, -1.0)));
+    let up = if d.cross(up).abs() > 1e-6 { up } else { Vec2::new(d.y, -d.x) };
     let style = edit::slice_runs(&t.runs, g.byte, g.byte + g.len).first().map(|r| r.style.clone())?;
     Some(CharBox {
         start: g.byte,
@@ -181,10 +187,10 @@ fn char_box(t: &TextObject, lay: &TextLayout, gi: usize) -> Option<CharBox> {
         pen,
         pivot: m * g.pivot,
         along: if g.rtl { -d } else { d },
-        up: unit(linear(m * g.unturned, Vec2::new(0.0, -1.0))),
+        up,
         ex,
         ey,
-        kerned: !g.rtl && lay.glyphs.iter().any(|h| h.line == g.line && h.len > 0 && h.byte + h.len == g.byte),
+        kerned: lay.glyphs.iter().any(|h| h.line == g.line && h.len > 0 && h.byte + h.len == g.byte && h.rtl == g.rtl),
         style: t.effective_char_style(&style)?,
     })
 }

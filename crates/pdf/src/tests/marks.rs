@@ -82,6 +82,22 @@ fn bleed_grows_the_media_box_around_the_trim_box() {
     assert_eq!(page_box(&bytes, CropTo::Trim), Rect::new(3.0, 2.0, 203.0, 102.0));
 }
 
+#[test]
+fn a_pdfx_file_leaves_out_the_document_bleed_side_by_side() {
+    let x4 = |bleed: serde_json::Value| settings(json!({"standard": "pdfX4", "bleed": bleed}));
+    let mut d = doc();
+    d.setup.bleed = [6.0, 0.0, 0.0, 0.0];
+    assert!(x4(json!({})).leaves_out_bleed(&d));
+    assert!(x4(json!({"bottom": 1})).leaves_out_bleed(&d), "the top is left out");
+    assert!(!x4(json!({"top": 1})).leaves_out_bleed(&d), "the sides without a document bleed don't count");
+    assert!(!x4(json!({"useDocument": true})).leaves_out_bleed(&d));
+    assert!(!settings(json!({})).leaves_out_bleed(&d), "not a PDF/X file");
+    // A document bleed read from a file counts as it is kept in range.
+    d.setup.bleed = [f64::INFINITY, f64::NAN, -3.0, 0.0];
+    assert!(!x4(json!({})).leaves_out_bleed(&d));
+    assert!(!x4(json!({"useDocument": true})).leaves_out_bleed(&d));
+}
+
 /// Each page's `UserUnit` and media box as the file holds them (in its units).
 fn units_and_media(bytes: &[u8]) -> Vec<(f32, Rect)> {
     let file = crate::pages::open(bytes, None).unwrap();
