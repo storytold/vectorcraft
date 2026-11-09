@@ -46,6 +46,7 @@ impl Session {
             journal: Journal::default(),
             tool: vectorcraft_tools::create("selection"),
             lender: None,
+            tool_step: None,
             selection_at_lend: None,
             lent_selection: None,
             last_selection_tool: None,

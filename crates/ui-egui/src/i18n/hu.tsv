@@ -2198,6 +2198,7 @@ file-filter	Templates	Sablonok
 	Keywords:	Kulcsszavak:
 	Kind	Típus
 	Kinsoku Set	Kinsoku-készlet
+	Kinsoku Shori Type	Kinsoku Shori típusa
 	Kite	Deltoid
 	Knife	Kés
 	Knockout Group	Kiütő csoport
@@ -3126,6 +3127,9 @@ mark-style	Japanese	Japán
 	Puppet Warp Pins	Bábtorzítás tűi
 	Puppet Warp Tool	Bábtorzítás
 	Purple	Lila
+	Push In First	Először behúzás
+	Push Out First	Először kitolás
+	Push Out Only	Csak kitolás
 	Put back in the toolbar	Visszahelyezés az eszköztárba
 	Quality	Minőség
 	Quality {quality}	Minőség: {quality}
@@ -6567,6 +6571,24 @@ breakText	Glyphs	Glifák
 # 3D Box add-on
 	3D Box	3D doboz
 	3D Box Tool	3D doboz eszköz
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Megnyitás ezzel
+	No importer plug-ins installed	Nincs telepített importáló bővítmény
+	Read files you open in its format and make documents from them	Beolvashatja a formátumában megnyitott fájlokat, és dokumentumokat készíthet belőlük
+@msg	{_1} is an importer (File › Open With)	importáló bővítmény: {_1} (Fájl › Megnyitás ezzel)
+@msg	missing `importer` (see document.formats)	hiányzik az `importer` (lásd document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	az `importer` egy bővítmény formátumazonosítója kell legyen (lásd document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	„{shown}” {_1} fájlokat nyit meg, nem `{_2}`
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}`: `{_2}` fajtájú bővítmény, nem importáló bővítmény
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}`: `{_2}` fajtájú bővítmény, nem exportáló bővítmény
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` importáló bővítmény: nyisson meg egy fájlt a document.open {{"importer"}"}} paranccsal
+@msg	the importer returned no objects	az importáló bővítmény nem adott vissza objektumot
+@msg	an importer returns `objects` and `warnings`, not `{key}`	az importáló bővítmény `objects` és `warnings` értéket ad vissza, nem `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	a fájl nagyobb annál a {MAX_INPUT_BYTES} bájtnál, amit egy importáló bővítmény beolvas
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	az importáló bővítmény 1–{MAX_EXTENSIONS} `extensions` értéket ad meg
+@msg	only an exporter or an importer declares `extensions`	csak exportáló vagy importáló bővítmény adhat meg `extensions` értéket
+@msg	an importer always gets an import's budget: leave `budget` out	az importáló bővítmény mindig egy importálás keretét kapja: hagyja el a `budget` kulcsot
 
 # Safe Mode
 	Safe Mode…	Csökkentett mód…

@@ -2789,6 +2789,10 @@ theme	Appearance	Εμφάνιση
 	Stylistic	Στιλιστικό
 	Mojikumi Set	Σύνολο Mojikumi
 	Kinsoku Set	Σύνολο Kinsoku
+	Kinsoku Shori Type	Τύπος Kinsoku Shori
+	Push In First	Πρώτα προς τα μέσα
+	Push Out First	Πρώτα προς τα έξω
+	Push Out Only	Μόνο προς τα έξω
 	Mono	Μονοφωνικό
 	Monochrome images	Μονόχρωμες εικόνες
 	Monospaced	Σταθερού πλάτους
@@ -6535,6 +6539,24 @@ breakText	Glyphs	Γλύφοι
 # 3D Box add-on
 	3D Box	Κουτί 3D
 	3D Box Tool	Εργαλείο κουτιού 3D
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Άνοιγμα με
+	No importer plug-ins installed	Δεν έχουν εγκατασταθεί πρόσθετα εισαγωγής
+	Read files you open in its format and make documents from them	Ανάγνωση των αρχείων που ανοίγετε στη μορφή του και δημιουργία εγγράφων από αυτά
+@msg	{_1} is an importer (File › Open With)	το {_1} είναι πρόσθετο εισαγωγής (Αρχείο › Άνοιγμα με)
+@msg	missing `importer` (see document.formats)	λείπει το `importer` (δείτε document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	το `importer` πρέπει να είναι αναγνωριστικό μορφής πρόσθετου (δείτε document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	το «{shown}» ανοίγει αρχεία {_1}, όχι `{_2}`
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	το `{_1}` είναι πρόσθετο τύπου `{_2}`, όχι πρόσθετο εισαγωγής
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	το `{_1}` είναι πρόσθετο τύπου `{_2}`, όχι πρόσθετο εξαγωγής
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	το `{_1}` είναι πρόσθετο εισαγωγής: ανοίξτε ένα αρχείο με document.open {{"importer"}"}}
+@msg	the importer returned no objects	το πρόσθετο εισαγωγής δεν επέστρεψε κανένα αντικείμενο
+@msg	an importer returns `objects` and `warnings`, not `{key}`	ένα πρόσθετο εισαγωγής επιστρέφει `objects` και `warnings`, όχι `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	το αρχείο είναι μεγαλύτερο από τα {MAX_INPUT_BYTES} byte που διαβάζει ένα πρόσθετο εισαγωγής
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	ένα πρόσθετο εισαγωγής δηλώνει 1 έως {MAX_EXTENSIONS} `extensions`
+@msg	only an exporter or an importer declares `extensions`	μόνο ένα πρόσθετο εξαγωγής ή εισαγωγής δηλώνει `extensions`
+@msg	an importer always gets an import's budget: leave `budget` out	ένα πρόσθετο εισαγωγής παίρνει πάντα τον προϋπολογισμό μιας εισαγωγής: παραλείψτε το `budget`
 
 # Safe Mode
 	Safe Mode…	Ασφαλής λειτουργία…

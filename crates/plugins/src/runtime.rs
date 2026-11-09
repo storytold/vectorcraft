@@ -61,6 +61,10 @@ pub struct Limits {
     /// raise. Set them to `fuel_base` and `wall_time_ms` to give heavy filters nothing more.
     pub heavy_fuel: u64,
     pub heavy_wall_time_ms: u64,
+    /// What one export or import is given instead of `fuel_base` and `wall_time_ms`
+    /// ([`crate::export::limits`]).
+    pub export_fuel: u64,
+    pub export_wall_time_ms: u64,
 }
 
 impl Default for Limits {
@@ -75,6 +79,8 @@ impl Default for Limits {
             wall_time_ms: 60_000,
             heavy_fuel: HEAVY_FUEL,
             heavy_wall_time_ms: HEAVY_WALL_TIME_MS,
+            export_fuel: crate::export::FUEL,
+            export_wall_time_ms: crate::export::WALL_TIME_MS,
         }
     }
 }
