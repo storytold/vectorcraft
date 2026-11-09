@@ -6441,3 +6441,7 @@ breakText	Glyphs	Glif
 # Align to Pixel Grid
 	Align to Pixel Grid	Sejajarkan ke grid piksel
 @msg	side is left or right, not `{s}`	side adalah left atau right, bukan `{s}`
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Edit asli dengan:
+file-filter	Applications	Aplikasi

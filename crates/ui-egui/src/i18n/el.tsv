@@ -6611,3 +6611,7 @@ breakText	Glyphs	Γλύφοι
 	Align to Pixel Grid	Στοίχιση στο πλέγμα εικονοστοιχείων
 @msg	only paths and compound paths can be aligned to the pixel grid	μόνο διαδρομές και σύνθετες διαδρομές μπορούν να στοιχιστούν στο πλέγμα εικονοστοιχείων
 @msg	side is left or right, not `{s}`	το side είναι left ή right, όχι `{s}`
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Επεξεργασία πρωτοτύπου με:
+file-filter	Applications	Εφαρμογές

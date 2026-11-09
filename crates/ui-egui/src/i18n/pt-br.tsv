@@ -6732,3 +6732,7 @@ swatch	Yellow Green	Verde-amarelado
 	Align to Pixel Grid	Alinhar à Grade de Pixels
 @msg	only paths and compound paths can be aligned to the pixel grid	somente caminhos e caminhos compostos podem ser alinhados à grade de pixels
 @msg	side is left or right, not `{s}`	side é left ou right, não `{s}`
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Editar original com:
+file-filter	Applications	Aplicativos

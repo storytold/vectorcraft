@@ -6298,3 +6298,7 @@ breakText	Glyphs	字符
 	Align to Pixel Grid	對齊像素格點
 @msg	only paths and compound paths can be aligned to the pixel grid	只有路徑和複合路徑可以對齊像素格點
 @msg	side is left or right, not `{s}`	side 應為 left 或 right，而不是 `{s}`
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	編輯原稿所用應用程式：
+file-filter	Applications	應用程式

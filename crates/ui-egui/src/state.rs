@@ -585,6 +585,9 @@ pub struct UiState {
     /// Engine preferences (Edit → Preferences), persisted alongside the UI state.
     #[serde(default)]
     pub engine_prefs: Value,
+    /// Native-picker-only raster editor; never exposed as an engine preference or dialog field.
+    #[serde(default)]
+    pub original_editor: crate::OriginalEditorChoice,
     /// Color Guide panel: variation kind, steps and amount (Color Guide Options).
     #[serde(default)]
     pub color_guide: vectorcraft_color::harmony::GuideOptions,
@@ -1053,6 +1056,7 @@ impl Default for UiState {
             recent_fonts: vec![],
             favorite_fonts: vec![],
             engine_prefs: Value::Null,
+            original_editor: Default::default(),
             color_guide: Default::default(),
             library_panels: vec![],
             flattener_preview: Default::default(),

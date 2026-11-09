@@ -6261,3 +6261,7 @@ breakText	Glyphs	Glyph
 	Align to Pixel Grid	Căn theo lưới pixel
 @msg	only paths and compound paths can be aligned to the pixel grid	chỉ đường dẫn và đường dẫn phức mới căn theo lưới pixel được
 @msg	side is left or right, not `{s}`	side là left hoặc right, không phải `{s}`
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Chỉnh sửa bản gốc bằng:
+file-filter	Applications	Ứng dụng

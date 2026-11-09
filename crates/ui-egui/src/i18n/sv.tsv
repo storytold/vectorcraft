@@ -8144,3 +8144,7 @@ digits	Hindi	Hindi
 	Align to Pixel Grid	Justera mot pixelrutnät
 @msg	only paths and compound paths can be aligned to the pixel grid	bara banor och sammansatta banor kan justeras mot pixelrutnätet
 @msg	side is left or right, not `{s}`	side är left eller right, inte `{s}`
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Redigera original med:
+file-filter	Applications	Program
