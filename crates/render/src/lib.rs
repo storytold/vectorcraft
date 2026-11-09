@@ -175,7 +175,11 @@ pub struct Renderer {
     /// let go when a frame ends.
     pub(crate) pass_bounds: PtrMap<usize, (Arc<Node>, Option<Rect>)>,
     /// The 3D effects' art among the art `fx_art` made, by its address, with the art (weakly: what
-    /// keeps the art is `fx_arts` and `measured`) and its bounds once measured.
+    /// keeps the art is `fx_arts` and `measured`) and its bounds once measured. An entry is added
+    /// for every 3D art made, measured or not, and entries whose art is gone are swept when the map
+    /// reaches twice the size it kept at the last sweep (at least 1024), so it holds at most about
+    /// twice the live 3D art plus 1024 entries. Until swept, an entry's weak pointer keeps the art's
+    /// allocation (not its contents) alive.
     three_d_bounds: PtrMap<usize, ThreeDArt>,
     /// How many entries `three_d_bounds` kept when it last let go of the art no longer held: it
     /// does so again when it holds twice as many.

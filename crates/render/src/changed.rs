@@ -183,8 +183,8 @@ impl Diff<'_, '_> {
         {
             // An Image Trace object draws its hidden source image, its first member, in some views.
             // Each version's own: an edit can put another member first (undoing Send to Back).
-            let first = |m: &[Arc<Node>]| old.extras().trace.is_some().then(|| m.first().map(|s| s.id)).flatten();
-            let outer = std::mem::replace(&mut self.sources, (first(a), first(b)));
+            let first = |n: &Node, m: &[Arc<Node>]| n.extras().trace.is_some().then(|| m.first().map(|s| s.id)).flatten();
+            let outer = std::mem::replace(&mut self.sources, (first(old, a), first(new, b)));
             self.children(a, b);
             self.sources = outer;
         } else if let Some((area, moved, anchors)) = moved_anchors(old, new) {
