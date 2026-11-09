@@ -387,6 +387,59 @@ mod tests {
         }
     }
 
+    /// A command run by another command's implementation has its params checked against its schema
+    /// too, with nothing changed when they are refused.
+    #[test]
+    fn a_raw_run_is_checked_against_the_schema() {
+        let mut s = session_with_views(&[]);
+        let e = super::super::menucmds::run_raw(&mut s, "view.saved.new", &json!({"center": [0, 0], "zoom": -1})).unwrap_err().to_string();
+        assert!(e.contains("view.saved.new") && e.contains("`zoom` must be a number > 0, not -1"), "{e}");
+        assert!(s.doc().unwrap().doc.views.is_empty());
+        assert!(s.doc().unwrap().history.undo.is_empty());
+        super::super::menucmds::run_raw(&mut s, "view.saved.new", &json!({"center": [0, 0], "zoom": 1})).unwrap();
+        assert_eq!(s.doc().unwrap().doc.views.len(), 1);
+    }
+
+    /// An edit list with nothing in it and an edit that leaves a view as it is add no undo step;
+    /// names with path characters are only names; a key with one is refused and named.
+    #[test]
+    fn edit_views_edges() {
+        let mut s = session_with_views(&["a.b[0]", "plain"]);
+        let steps = s.doc().unwrap().history.undo.len();
+        assert_eq!(s.execute("view.saved.edit", &json!({"edits": []})).unwrap()["views"].as_array().map(Vec::len), Some(2));
+        s.execute("view.saved.edit", &json!({"name": "plain", "newName": "plain"})).unwrap();
+        s.execute("view.saved.edit", &json!({"edits": [{"name": "plain", "newName": "plain"}]})).unwrap();
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+        s.execute("view.saved.edit", &json!({"name": "a.b[0]", "newName": "c[1].d"})).unwrap();
+        assert_eq!(names(&mut s), ["c[1].d", "plain"]);
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+        let e = s.execute("view.saved.edit", &json!({"a.b": 1})).unwrap_err().to_string();
+        assert!(e.contains("`a.b`"), "{e}");
+        let e = s.execute("view.saved.edit", &json!({"edits": [{"name": "plain", "a.b": 1}]})).unwrap_err().to_string();
+        assert!(e.contains("`edits[0].a.b`; it takes: name, newName, delete"), "{e}");
+        // Repeated and unknown names keep the command's own errors.
+        let e = s.execute("view.saved.edit", &json!({"edits": [{"name": "plain", "newName": "c[1].d"}]})).unwrap_err().to_string();
+        assert!(e.contains("exists"), "{e}");
+        let e = s.execute("view.saved.edit", &json!({"name": "", "delete": true})).unwrap_err().to_string();
+        assert!(e.contains("no view named"), "{e}");
+    }
+
+    /// A refused call during a drag leaves the drag running and adds no undo step; canceling the
+    /// drag then leaves the history as it was.
+    #[test]
+    fn a_refused_call_leaves_an_interaction_alone() {
+        let mut s = session_with_views(&["A"]);
+        let steps = s.doc().unwrap().history.undo.len();
+        s.begin_interaction("Move").unwrap();
+        assert!(s.execute("view.saved.new", &json!({"name": 5, "center": [0, 0], "zoom": 1})).is_err());
+        assert!(s.doc().unwrap().interaction.is_some());
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+        s.cancel_interaction().unwrap();
+        assert!(s.doc().unwrap().interaction.is_none());
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+        assert_eq!(names(&mut s), ["A"]);
+    }
+
     /// Edit Views… is off until the document has a view.
     #[test]
     fn edit_views_needs_a_saved_view() {

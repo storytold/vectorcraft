@@ -5,11 +5,16 @@
 //!
 //! - [`ParamSchema::validate`], which checks a params object and names the parameter of the first
 //!   problem it finds ([`ParamError`]), and fills in the defaults of omitted values;
+//! - [`ParamSchema::definition_problem`], which checks the schema itself;
 //! - [`ParamSchema::params_text`], the params text a command lists;
 //! - [`ParamSchema::to_json`], the schema as a JSON object in the shape of a JSON Schema 2020-12
 //!   object schema (<https://json-schema.org/draft/2020-12>), with VectorCraft's own fields as
 //!   `x-` keywords;
 //! - [`hash`], a hash of a set of command schemas, which changes whenever any of them changes.
+//!
+//! Checking a value walks the schema, so its depth is the schema's, at most [`MAX_DEPTH`]. An error
+//! shows a bounded part of a refused value and of a refused key, and the value is not written out
+//! first, so a huge or deeply nested value costs no more to refuse than a small one.
 //!
 //! The crate knows no command and depends on no other VectorCraft crate.
 #![forbid(unsafe_code)]
@@ -20,6 +25,19 @@ use serde_json::{Map, Value, json};
 
 /// The JSON Schema dialect [`ParamSchema::to_json`] names in `$schema`.
 pub const DIALECT: &str = "https://json-schema.org/draft/2020-12/schema";
+
+/// How many objects and lists may nest inside a schema's params object.
+pub const MAX_DEPTH: usize = 16;
+
+/// The largest object id [`Type::Id`] takes: 2^53 - 1, the largest integer every JSON reader holds
+/// exactly.
+pub const MAX_ID: u64 = (1 << 53) - 1;
+
+/// How many characters of a refused value an error shows.
+const SHOWN_CHARS: usize = 40;
+
+/// How many characters of a key an error shows.
+const KEY_CHARS: usize = 64;
 
 /// One end of a number's range.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -35,7 +53,8 @@ pub enum Bound {
 pub enum Type {
     /// A JSON number in the range the bounds give, measured in `unit` (`"pt"`, `"deg"`) when set.
     Number { min: Option<Bound>, max: Option<Bound>, unit: Option<&'static str> },
-    /// A JSON number without a fraction (written without a decimal point), in the range given.
+    /// A JSON number with no fractional part, in the range given. [`ParamSchema::validate`] gives
+    /// the command `2.0` as `2`.
     Integer { min: Option<i64>, max: Option<i64> },
     /// `true` or `false`.
     Boolean,
@@ -43,7 +62,7 @@ pub enum Type {
     String,
     /// One of the strings listed.
     Enum(&'static [&'static str]),
-    /// An object id: a non-negative integer.
+    /// An object id: an integer from 0 to [`MAX_ID`], read as [`Type::Integer`] reads one.
     Id,
     /// A list of object ids.
     Ids,
@@ -116,7 +135,8 @@ pub struct Param {
     /// The API level the parameter was deprecated at.
     pub deprecated: Option<u32>,
     /// A value of the wrong type or out of range is not refused here: the command reads it as it
-    /// did before it had a schema.
+    /// did before it had a schema. [`ParamSchema::to_json`] still writes the documented type, so a
+    /// JSON Schema validator refuses a value this passes.
     pub lenient: bool,
 }
 
@@ -207,19 +227,38 @@ impl ParamSchema {
     /// or, when it has none, `params` with the defaults of its omitted values filled in (`None`
     /// when no default was filled in, so `params` is used as it is). Null params read as `{}`.
     pub fn validate(&self, params: &Value) -> Result<Option<Value>, ParamError> {
+        self.validate_as(params, false)
+    }
+
+    /// [`ParamSchema::validate`] for saved steps recorded by this version or an older one: a key
+    /// the schema doesn't name passes, at any depth, and the command does not read it. Values of
+    /// the parameters the schema names are checked as `validate` checks them.
+    pub fn validate_saved(&self, params: &Value) -> Result<Option<Value>, ParamError> {
+        self.validate_as(params, true)
+    }
+
+    fn validate_as(&self, params: &Value, saved: bool) -> Result<Option<Value>, ParamError> {
         static EMPTY: std::sync::OnceLock<Map<String, Value>> = std::sync::OnceLock::new();
         let given = match params {
             Value::Object(o) => o,
             Value::Null => EMPTY.get_or_init(Map::new),
             v => return Err(ParamError { path: String::new(), problem: Problem::NotAnObject { got: shown(v) } }),
         };
-        Ok(check_object("", self.params, given)?.map(Value::Object))
+        Ok(check_object(&At::Root, 0, self.params, given, saved)?.map(Value::Object))
+    }
+
+    /// What is wrong with the schema itself, or `None`: a parameter name that is empty, repeated
+    /// or holds `.`, `[` or `]`; a required parameter with a default; a default that isn't JSON or
+    /// doesn't pass its parameter's type; an enum with no names or a repeated name; a range with
+    /// an end that isn't finite or that no value can be in; nesting past [`MAX_DEPTH`].
+    pub fn definition_problem(&self) -> Option<String> {
+        object_problem("", self.params, 0)
     }
 
     /// The params text: the params object (`{name?: string, zoom: number > 0}`), then the summary,
     /// then `→` and what the command returns.
     pub fn params_text(&self) -> String {
-        let mut s = object_text(self.params);
+        let mut s = object_text(self.params, 0);
         if !self.summary.is_empty() {
             s.push(' ');
             s.push_str(self.summary);
@@ -234,9 +273,11 @@ impl ParamSchema {
     /// The schema as a JSON Schema 2020-12 object schema. Defaults written as JSON go in
     /// `default`, a parameter that accepts null as omitted is an `anyOf` with `{"type": "null"}`,
     /// and VectorCraft's own fields are `x-since`, `x-deprecatedSince`, `x-lenient`, `x-unit`,
-    /// `x-kind`, `x-cost`, `x-writes` and `x-returns`.
+    /// `x-kind`, `x-cost`, `x-writes` and `x-returns`. A JSON Schema validator accepts the values
+    /// [`ParamSchema::validate`] accepts, except that an `x-lenient` parameter's schema states only
+    /// the documented type.
     pub fn to_json(&self) -> Value {
-        let mut o = object_schema(self.params);
+        let mut o = object_schema(self.params, 0);
         o.insert("$schema".into(), DIALECT.into());
         if !self.summary.is_empty() {
             o.insert("description".into(), self.summary.into());
@@ -274,6 +315,8 @@ pub enum Problem {
     Missing,
     /// The value is not of the parameter's type: `expected` says what it must be.
     WrongType { expected: String, got: String },
+    /// The schema nests deeper than [`MAX_DEPTH`] here ([`ParamSchema::definition_problem`]).
+    TooDeep,
 }
 
 impl fmt::Display for ParamError {
@@ -285,6 +328,7 @@ impl fmt::Display for ParamError {
             Problem::Unknown { keys } => write!(f, "unknown parameter `{path}`; it takes: {}", keys.join(", ")),
             Problem::Missing => write!(f, "missing `{path}`"),
             Problem::WrongType { expected, got } => write!(f, "`{path}` must be {expected}, not {got}"),
+            Problem::TooDeep => write!(f, "`{path}` is nested too deeply"),
         }
     }
 }
@@ -350,44 +394,161 @@ pub fn hash<'a>(schemas: impl IntoIterator<Item = (&'a str, &'a ParamSchema)>) -
     })
 }
 
-/// A value as an error message shows it: its JSON, cut to 40 characters.
+/// `key` as an error message shows it: cut to [`KEY_CHARS`] characters.
+pub fn shown_key(key: &str) -> String {
+    let mut chars = key.chars();
+    let head: String = chars.by_ref().take(KEY_CHARS).collect();
+    if chars.next().is_some() { format!("{head}…") } else { head }
+}
+
+/// The JSON text of a value, stopping when its characters run out.
+struct Shown {
+    text: String,
+    left: usize,
+}
+
+impl Shown {
+    /// Adds `s`; false when it didn't fit.
+    fn push(&mut self, s: &str) -> bool {
+        for c in s.chars() {
+            if self.left == 0 {
+                return false;
+            }
+            self.left -= 1;
+            self.text.push(c);
+        }
+        true
+    }
+
+    /// Adds the JSON text of string `s`, reading no more of it than can be shown.
+    fn push_string(&mut self, s: &str) -> bool {
+        let head: String = s.chars().take(self.left + 1).collect();
+        self.push(&Value::from(head).to_string())
+    }
+
+    /// Adds the JSON text of `v`; false when it didn't fit. Each object or list writes a bracket,
+    /// so the characters left bound the recursion.
+    fn push_value(&mut self, v: &Value) -> bool {
+        match v {
+            Value::String(s) => self.push_string(s),
+            Value::Array(items) => {
+                self.push("[") && items.iter().enumerate().all(|(i, x)| (i == 0 || self.push(",")) && self.push_value(x)) && self.push("]")
+            }
+            Value::Object(o) => {
+                self.push("{")
+                    && o.iter()
+                        .enumerate()
+                        .all(|(i, (k, x))| (i == 0 || self.push(",")) && self.push_string(k) && self.push(":") && self.push_value(x))
+                    && self.push("}")
+            }
+            other => self.push(&other.to_string()),
+        }
+    }
+}
+
+/// A value as an error message shows it: its JSON, cut to [`SHOWN_CHARS`] characters. Only what is
+/// shown is read, however large the value is.
 fn shown(v: &Value) -> String {
-    let s = v.to_string();
-    if s.chars().count() > 40 { format!("{}…", s.chars().take(40).collect::<String>()) } else { s }
+    let mut out = Shown { text: String::new(), left: SHOWN_CHARS };
+    if !out.push_value(v) {
+        out.text.push('…');
+    }
+    out.text
 }
 
 fn join(path: &str, key: &str) -> String {
     if path.is_empty() { key.to_string() } else { format!("{path}.{key}") }
 }
 
-/// The object `given` checked against `params` (unknown keys first, then each parameter in
-/// order): with the defaults of omitted values filled in when there are any.
-fn check_object(path: &str, params: &'static [Param], given: &Map<String, Value>) -> Result<Option<Map<String, Value>>, ParamError> {
-    if let Some(key) = given.keys().find(|k| !params.iter().any(|p| p.name == k.as_str())) {
-        return Err(ParamError { path: join(path, key), problem: Problem::Unknown { keys: params.iter().map(|p| p.name).collect() } });
+/// Where a value is, from the value up to the params object. The path's text is written only for
+/// an error.
+#[derive(Clone, Copy)]
+enum At<'a> {
+    Root,
+    Key(&'a At<'a>, &'a str),
+    Index(&'a At<'a>, usize),
+}
+
+impl At<'_> {
+    /// The path, `edits[1].name`, with each key as [`shown_key`] shows it.
+    fn text(&self) -> String {
+        let mut steps = Vec::new();
+        let mut at = self;
+        while let At::Key(up, _) | At::Index(up, _) = at {
+            steps.push(at);
+            at = up;
+        }
+        let mut out = String::new();
+        for step in steps.into_iter().rev() {
+            match step {
+                At::Key(_, key) => {
+                    if !out.is_empty() {
+                        out.push('.');
+                    }
+                    out.push_str(&shown_key(key));
+                }
+                At::Index(_, i) => out.push_str(&format!("[{i}]")),
+                At::Root => {}
+            }
+        }
+        out
     }
-    let mut filled: Option<Map<String, Value>> = None;
+}
+
+/// Whether `v` nests no deeper than [`MAX_DEPTH`] counted from `depth`. The walk stops at the
+/// limit, so it recurses at most [`MAX_DEPTH`] levels and allocates nothing.
+fn nests_within(v: &Value, depth: usize) -> bool {
+    match v {
+        Value::Array(a) => depth < MAX_DEPTH && a.iter().all(|x| nests_within(x, depth + 1)),
+        Value::Object(o) => depth < MAX_DEPTH && o.values().all(|x| nests_within(x, depth + 1)),
+        _ => true,
+    }
+}
+
+/// The object `given` checked against `params` (unknown keys first, then each parameter in
+/// order): with the defaults of omitted values filled in when there are any. `saved` keeps a key
+/// the schema doesn't name, unless its value nests past [`MAX_DEPTH`].
+fn check_object(
+    at: &At<'_>,
+    depth: usize,
+    params: &'static [Param],
+    given: &Map<String, Value>,
+    saved: bool,
+) -> Result<Option<Map<String, Value>>, ParamError> {
+    let refused = |key: &String, v: &Value| !params.iter().any(|p| p.name == key.as_str()) && (!saved || !nests_within(v, depth));
+    if let Some((key, _)) = given.iter().find(|(k, v)| refused(k, v)) {
+        return Err(ParamError { path: At::Key(at, key).text(), problem: Problem::Unknown { keys: params.iter().map(|p| p.name).collect() } });
+    }
+    // The changes are applied once every value has passed, so no refused value is ever copied.
+    let mut changes: Vec<(&'static str, Value)> = Vec::new();
     for p in params {
-        let at = || join(path, p.name);
+        let here = At::Key(at, p.name);
         match given.get(p.name) {
             Some(Value::Null) if p.null_omitted => {}
             Some(v) => {
-                if let Some(changed) = check_value(&at(), &p.ty, v, p.lenient)? {
-                    filled.get_or_insert_with(|| given.clone()).insert(p.name.to_string(), changed);
+                if let Some(changed) = check_value(&here, depth, &p.ty, v, p.lenient, saved)? {
+                    changes.push((p.name, changed));
                 }
                 continue;
             }
-            None if p.required => return Err(ParamError { path: at(), problem: Problem::Missing }),
+            None if p.required => return Err(ParamError { path: here.text(), problem: Problem::Missing }),
             None => {}
         }
         // Omitted, or null read as omitted.
         if let Omitted::Value(json) = p.omitted
             && let Ok(v) = serde_json::from_str::<Value>(json)
         {
-            filled.get_or_insert_with(|| given.clone()).insert(p.name.to_string(), v);
+            changes.push((p.name, v));
         }
     }
-    Ok(filled)
+    if changes.is_empty() {
+        return Ok(None);
+    }
+    let mut filled = given.clone();
+    for (name, v) in changes {
+        filled.insert(name.to_string(), v);
+    }
+    Ok(Some(filled))
 }
 
 /// What a value of type `ty` must be, as an error message says it.
@@ -450,68 +611,181 @@ fn in_range(x: f64, min: Option<&Bound>, max: Option<&Bound>) -> bool {
     low && high
 }
 
-fn is_id(v: &Value) -> bool {
-    v.as_u64().is_some()
+/// The integer a JSON number with no fractional part stands for, as an integer value when it fits
+/// in one (`2.0` is `2`); `None` for anything else.
+fn whole(v: &Value) -> Option<Value> {
+    if v.is_i64() || v.is_u64() {
+        return Some(v.clone());
+    }
+    const TWO_63: f64 = 9_223_372_036_854_775_808.0;
+    const TWO_64: f64 = 18_446_744_073_709_551_616.0;
+    let x = v.as_f64().filter(|x| x.fract() == 0.0)?;
+    Some(if (-TWO_63..TWO_63).contains(&x) {
+        json!(x as i64)
+    } else if (0.0..TWO_64).contains(&x) {
+        json!(x as u64)
+    } else {
+        v.clone()
+    })
+}
+
+/// Whether the [`whole`] value `w` is in the range.
+fn whole_in_range(w: &Value, min: Option<i64>, max: Option<i64>) -> bool {
+    match (w.as_i64(), w.as_u64(), w.as_f64()) {
+        (Some(x), _, _) => min.is_none_or(|m| x >= m) && max.is_none_or(|m| x <= m),
+        // Past i64::MAX: above any i64 bound.
+        (None, Some(_), _) => max.is_none(),
+        // Past what u64 holds: above any i64 bound.
+        (None, None, Some(x)) if x > 0.0 => max.is_none(),
+        // Below what i64 holds: under any i64 bound, so it meets every maximum and no minimum.
+        (None, None, Some(_)) => min.is_none(),
+        _ => false,
+    }
 }
 
 fn is_number(v: &Value) -> bool {
     v.as_f64().is_some_and(f64::is_finite)
 }
 
-/// `v` checked against `ty` at `path`: with the defaults of omitted values inside it filled in
-/// when there are any. A lenient value of the wrong type passes as it is.
-fn check_value(path: &str, ty: &Type, v: &Value, lenient: bool) -> Result<Option<Value>, ParamError> {
-    let wrong = || ParamError { path: path.to_string(), problem: Problem::WrongType { expected: expected(ty), got: shown(v) } };
-    let ok = match ty {
-        Type::Number { min, max, .. } => v.as_f64().is_some_and(|x| x.is_finite() && in_range(x, min.as_ref(), max.as_ref())),
-        Type::Integer { min, max } => match (v.as_i64(), v.as_u64()) {
-            (Some(x), _) => min.is_none_or(|m| x >= m) && max.is_none_or(|m| x <= m),
-            // Past i64::MAX: above any i64 bound.
-            (None, Some(_)) => max.is_none(),
-            (None, None) => false,
-        },
-        Type::Boolean => v.is_boolean(),
-        Type::String => v.is_string(),
-        Type::Enum(names) => v.as_str().is_some_and(|s| names.contains(&s)),
-        Type::Id => is_id(v),
-        Type::Ids => v.as_array().is_some_and(|a| a.iter().all(is_id)),
-        Type::Color => match v {
-            Value::String(_) | Value::Object(_) => true,
-            Value::Array(a) => a.len() >= 3 && a.iter().all(is_number),
-            _ => false,
-        },
-        Type::Point => v.as_array().is_some_and(|a| a.len() == 2 && a.iter().all(is_number)),
-        Type::Object(params) => {
-            return match v {
-                Value::Object(o) => Ok(check_object(path, params, o)?.map(Value::Object)),
-                _ if lenient => Ok(None),
-                _ => Err(wrong()),
-            };
-        }
-        Type::Array(item) => {
-            let Some(items) = v.as_array() else { return if lenient { Ok(None) } else { Err(wrong()) } };
-            let mut filled: Option<Vec<Value>> = None;
-            for (i, x) in items.iter().enumerate() {
-                if let Some(changed) = check_value(&format!("{path}[{i}]"), item, x, lenient)? {
-                    let all = filled.get_or_insert_with(|| items.clone());
-                    if let Some(slot) = all.get_mut(i) {
-                        *slot = changed;
-                    }
-                }
-            }
-            return Ok(filled.map(Value::Array));
+/// `v` checked against `ty` at `at`: with the defaults of omitted values inside it filled in, and
+/// whole numbers written with a fraction made integers, when there are any. A lenient value of
+/// the wrong type passes as it is, unless it nests past [`MAX_DEPTH`].
+fn check_value(at: &At<'_>, depth: usize, ty: &Type, v: &Value, lenient: bool, saved: bool) -> Result<Option<Value>, ParamError> {
+    let done = |ok: bool| {
+        if ok || (lenient && nests_within(v, depth)) {
+            Ok(None)
+        } else {
+            Err(ParamError { path: at.text(), problem: Problem::WrongType { expected: expected(ty), got: shown(v) } })
         }
     };
-    if ok || lenient { Ok(None) } else { Err(wrong()) }
+    let too_deep = || ParamError { path: at.text(), problem: Problem::TooDeep };
+    if matches!(ty, Type::Ids | Type::Color | Type::Point) && v.is_array() && depth >= MAX_DEPTH {
+        return Err(too_deep());
+    }
+    match ty {
+        Type::Number { min, max, .. } => done(v.as_f64().is_some_and(|x| x.is_finite() && in_range(x, min.as_ref(), max.as_ref()))),
+        Type::Integer { min, max } => match whole(v).filter(|w| whole_in_range(w, *min, *max)) {
+            Some(w) => Ok((w != *v).then_some(w)),
+            None => done(false),
+        },
+        Type::Boolean => done(v.is_boolean()),
+        Type::String => done(v.is_string()),
+        Type::Enum(names) => done(v.as_str().is_some_and(|s| names.contains(&s))),
+        Type::Id => match whole(v).filter(|w| w.as_u64().is_some_and(|x| x <= MAX_ID)) {
+            Some(w) => Ok((w != *v).then_some(w)),
+            None => done(false),
+        },
+        Type::Ids => match v.as_array() {
+            Some(items) => check_items(at, depth, &Type::Id, items, lenient, saved),
+            None => done(false),
+        },
+        Type::Color => done(match v {
+            Value::String(_) => true,
+            Value::Object(_) => nests_within(v, depth),
+            Value::Array(a) => a.len() >= 3 && a.iter().all(is_number),
+            _ => false,
+        }),
+        Type::Point => done(v.as_array().is_some_and(|a| a.len() == 2 && a.iter().all(is_number))),
+        Type::Object(params) => match v {
+            Value::Object(_) if depth >= MAX_DEPTH => Err(too_deep()),
+            Value::Object(o) => Ok(check_object(at, depth + 1, params, o, saved)?.map(Value::Object)),
+            _ => done(false),
+        },
+        Type::Array(item) => match v.as_array() {
+            Some(_) if depth >= MAX_DEPTH => Err(too_deep()),
+            Some(items) => check_items(at, depth + 1, item, items, lenient, saved),
+            None => done(false),
+        },
+    }
 }
 
-/// `{a: number, b?: bool}`: the params object of a params text.
-fn object_text(params: &[Param]) -> String {
-    format!("{{{}}}", params.iter().map(param_text).collect::<Vec<_>>().join(", "))
+/// Each of `items` checked against `item`: the list with what [`check_value`] changed, when it
+/// changed anything.
+fn check_items(at: &At<'_>, depth: usize, item: &Type, items: &[Value], lenient: bool, saved: bool) -> Result<Option<Value>, ParamError> {
+    let mut changes: Vec<(usize, Value)> = Vec::new();
+    for (i, x) in items.iter().enumerate() {
+        if let Some(changed) = check_value(&At::Index(at, i), depth, item, x, lenient, saved)? {
+            changes.push((i, changed));
+        }
+    }
+    if changes.is_empty() {
+        return Ok(None);
+    }
+    let mut filled = items.to_vec();
+    for (i, v) in changes {
+        if let Some(slot) = filled.get_mut(i) {
+            *slot = v;
+        }
+    }
+    Ok(Some(Value::Array(filled)))
 }
 
-fn param_text(p: &Param) -> String {
-    let mut s = format!("{}{}: {}", p.name, if p.required { "" } else { "?" }, type_text(&p.ty));
+/// What is wrong with `params`, the object at `path` nested `depth` objects and lists deep.
+fn object_problem(path: &str, params: &[Param], depth: usize) -> Option<String> {
+    if depth > MAX_DEPTH {
+        return Some(format!("`{path}` nests deeper than {MAX_DEPTH} levels"));
+    }
+    for (i, p) in params.iter().enumerate() {
+        let at = join(path, p.name);
+        if p.name.is_empty() || p.name.contains(['.', '[', ']']) {
+            return Some(format!("the parameter name `{at}` is empty or holds a path character"));
+        }
+        if params.iter().take(i).any(|q| q.name == p.name) {
+            return Some(format!("`{at}` is listed twice"));
+        }
+        if p.required && p.omitted != Omitted::Nothing {
+            return Some(format!("`{at}` is required and has a default"));
+        }
+        if let Some(problem) = type_problem(&at, &p.ty, depth) {
+            return Some(problem);
+        }
+        if let Omitted::Value(text) = p.omitted {
+            let Ok(v) = serde_json::from_str::<Value>(text) else { return Some(format!("the default of `{at}` isn't JSON: {text}")) };
+            if let Err(e) = check_value(&At::Root, 0, &p.ty, &v, false, false) {
+                return Some(format!("the default of `{at}` doesn't pass its type: {e}"));
+            }
+        }
+    }
+    None
+}
+
+fn type_problem(at: &str, ty: &Type, depth: usize) -> Option<String> {
+    let bound = |b: &Bound| match *b {
+        Bound::Inclusive(x) => (x, false),
+        Bound::Exclusive(x) => (x, true),
+    };
+    match ty {
+        Type::Number { min, max, .. } => {
+            let (low, high) = (min.as_ref().map(bound), max.as_ref().map(bound));
+            if low.iter().chain(high.iter()).any(|(x, _)| !x.is_finite()) {
+                return Some(format!("the range of `{at}` has an end that isn't finite"));
+            }
+            match (low, high) {
+                (Some((a, open_a)), Some((b, open_b))) if a > b || (a == b && (open_a || open_b)) => {
+                    Some(format!("no value can be in the range of `{at}`"))
+                }
+                _ => None,
+            }
+        }
+        Type::Integer { min: Some(a), max: Some(b) } if a > b => Some(format!("no value can be in the range of `{at}`")),
+        Type::Enum([]) => Some(format!("the enum of `{at}` has no names")),
+        Type::Enum(names) if names.iter().enumerate().any(|(i, n)| names.iter().take(i).any(|m| m == n)) => {
+            Some(format!("the enum of `{at}` repeats a name"))
+        }
+        Type::Object(params) => object_problem(at, params, depth + 1),
+        Type::Array(_) if depth >= MAX_DEPTH => Some(format!("`{at}` nests deeper than {MAX_DEPTH} levels")),
+        Type::Array(item) => type_problem(&format!("{at}[]"), item, depth + 1),
+        _ => None,
+    }
+}
+
+/// `{a: number, b?: bool}`: the params object of a params text, `depth` objects and lists deep.
+fn object_text(params: &[Param], depth: usize) -> String {
+    format!("{{{}}}", params.iter().map(|p| param_text(p, depth)).collect::<Vec<_>>().join(", "))
+}
+
+fn param_text(p: &Param, depth: usize) -> String {
+    let mut s = format!("{}{}: {}", p.name, if p.required { "" } else { "?" }, type_text(&p.ty, depth));
     match p.omitted {
         Omitted::Value(v) | Omitted::Note(v) => s.push_str(&format!(" (default: {v})")),
         Omitted::Nothing => {}
@@ -525,8 +799,9 @@ fn param_text(p: &Param) -> String {
     s
 }
 
-fn type_text(ty: &Type) -> String {
+fn type_text(ty: &Type, depth: usize) -> String {
     match ty {
+        Type::Object(_) | Type::Array(_) if depth >= MAX_DEPTH => "…".into(),
         Type::Number { min, max, unit } => {
             format!("number{}{}", range_text(min.as_ref(), max.as_ref()), unit.map(|u| format!(" {u}")).unwrap_or_default())
         }
@@ -540,16 +815,16 @@ fn type_text(ty: &Type) -> String {
         Type::Ids => "[id…]".into(),
         Type::Color => "color".into(),
         Type::Point => "[x, y]".into(),
-        Type::Object(params) => object_text(params),
-        Type::Array(item) => format!("[{}…]", type_text(item)),
+        Type::Object(params) => object_text(params, depth + 1),
+        Type::Array(item) => format!("[{}…]", type_text(item, depth + 1)),
     }
 }
 
 /// `{"type": "object", "properties": …, "required": […], "additionalProperties": false}`.
-fn object_schema(params: &[Param]) -> Map<String, Value> {
+fn object_schema(params: &[Param], depth: usize) -> Map<String, Value> {
     let mut o = Map::new();
     o.insert("type".into(), "object".into());
-    o.insert("properties".into(), Value::Object(params.iter().map(|p| (p.name.to_string(), param_schema(p))).collect()));
+    o.insert("properties".into(), Value::Object(params.iter().map(|p| (p.name.to_string(), param_schema(p, depth))).collect()));
     let required: Vec<Value> = params.iter().filter(|p| p.required).map(|p| p.name.into()).collect();
     if !required.is_empty() {
         o.insert("required".into(), required.into());
@@ -558,8 +833,8 @@ fn object_schema(params: &[Param]) -> Map<String, Value> {
     o
 }
 
-fn param_schema(p: &Param) -> Value {
-    let inner = type_schema(&p.ty);
+fn param_schema(p: &Param, depth: usize) -> Value {
+    let inner = type_schema(&p.ty, depth);
     let mut o = if p.null_omitted {
         let mut o = Map::new();
         o.insert("anyOf".into(), json!([inner, {"type": "null"}]));
@@ -611,8 +886,9 @@ fn bound_keywords(o: &mut Map<String, Value>, min: Option<&Bound>, max: Option<&
     }
 }
 
-fn type_schema(ty: &Type) -> Value {
+fn type_schema(ty: &Type, depth: usize) -> Value {
     match ty {
+        Type::Object(_) | Type::Array(_) if depth >= MAX_DEPTH => Value::Bool(true),
         Type::Number { min, max, unit } => {
             let mut o = Map::new();
             o.insert("type".into(), "number".into());
@@ -636,8 +912,8 @@ fn type_schema(ty: &Type) -> Value {
         Type::Boolean => json!({"type": "boolean"}),
         Type::String => json!({"type": "string"}),
         Type::Enum(names) => json!({"enum": names}),
-        Type::Id => json!({"type": "integer", "minimum": 0, "x-kind": "id"}),
-        Type::Ids => json!({"type": "array", "items": {"type": "integer", "minimum": 0, "x-kind": "id"}}),
+        Type::Id => json!({"type": "integer", "minimum": 0, "maximum": MAX_ID, "x-kind": "id"}),
+        Type::Ids => json!({"type": "array", "items": {"type": "integer", "minimum": 0, "maximum": MAX_ID, "x-kind": "id"}}),
         Type::Color => json!({
             "anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "number"}, "minItems": 3}, {"type": "object"}],
             "x-kind": "color",
@@ -649,10 +925,12 @@ fn type_schema(ty: &Type) -> Value {
             "minItems": 2,
             "x-kind": "point",
         }),
-        Type::Object(params) => Value::Object(object_schema(params)),
-        Type::Array(item) => json!({"type": "array", "items": type_schema(item)}),
+        Type::Object(params) => Value::Object(object_schema(params, depth + 1)),
+        Type::Array(item) => json!({"type": "array", "items": type_schema(item, depth + 1)}),
     }
 }
 
+#[cfg(test)]
+mod conformance;
 #[cfg(test)]
 mod tests;

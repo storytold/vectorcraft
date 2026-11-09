@@ -384,6 +384,14 @@ pub(crate) fn run_spec(s: &mut Session, spec: &CommandSpec, p: &Value) -> Result
     if plugin::is_command_id(spec.id) { plugin::run_command(s, spec.id, p) } else { (spec.run)(s, p) }
 }
 
+/// [`run_spec`] for a command run outside [`Session::execute`]: with params checked against the
+/// command's schema, and the defaults of omitted values filled in, as `execute` does
+/// ([`crate::schemas::check`]).
+pub(crate) fn run_checked(s: &mut Session, spec: &CommandSpec, p: &Value) -> Result<Value> {
+    let checked = crate::schemas::check(spec, p, s.replaying())?;
+    run_spec(s, spec, checked.as_ref().unwrap_or(p))
+}
+
 // ---------- param helpers ----------
 
 pub(crate) fn bad(cmd: &str, msg: impl Into<String>) -> EngineError {

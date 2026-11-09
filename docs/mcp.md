@@ -1388,16 +1388,20 @@ Some commands have a machine-readable parameter schema: at present `view.capsLoc
 `view.saved.edit`, `view.saved.list`, `view.transparencyGrid` and `view.snapToGlyph.options`. The engine's
 `engine.commands` list gives such a command a `schema` field: an object schema in the shape of JSON Schema 2020-12
 (https://json-schema.org/draft/2020-12), with `type`, `properties`, `required`, `additionalProperties: false`,
-`minimum` and `exclusiveMinimum` for ranges, `enum`, and `default` for a default the engine fills in. VectorCraft's own
+`minimum`, `maximum`, `exclusiveMinimum` and `exclusiveMaximum` for ranges, `enum`, and `default` for a default the engine fills in. VectorCraft's own
 fields are `x-since` (the API level that added the command or the parameter), `x-deprecatedSince`, `x-lenient`,
 `x-unit`, `x-kind` (`id`, `color` or `point`), `x-default` (a default the command works out, such as `toggle`),
 `x-cost`, `x-writes` (`nothing`, `session`, `preferences` or `document`) and `x-returns`. A parameter that reads null
-as left out is an `anyOf` with `{"type": "null"}`. The command's `params` text is written from the same schema.
+as left out is an `anyOf` with `{"type": "null"}`. A number with no fractional part, such as `2.0`, is an integer, as
+JSON Schema defines one, and the command receives `2`. An `x-lenient` parameter's schema states the documented type,
+and the engine also passes a value of another type to the command. The command's `params` text is written from the same
+schema.
 
-Every caller, the desktop app and a step of `command.batch` included, has the params of such a command checked against
-its schema before the command runs. A value of the wrong type, out of range or not in its list, a missing required
-parameter or an unknown key is refused with a parameter error that names the parameter, with the path to a value
-inside a list or an object, and the document and its undo history stay as they were:
+The engine checks the params of such a command against its schema before the command runs, for every new call: from
+the desktop app, the control channel, MCP or the CLI, and when one command runs another. The steps of `command.batch`
+and `action.batch` are checked before the first step runs. A value of the wrong type, out of range or not in its list,
+a missing required parameter or an unknown key is refused with a parameter error that names the parameter, with the
+path to a value inside a list or an object, and the document and its undo history stay as they were:
 
 ```json
 {"id": "view.saved.new", "params": {"center": [0, 0], "zoom": 0}}
@@ -1407,8 +1411,10 @@ inside a list or an object, and the document and its undo history stay as they w
 ```
 
 An omitted value with a `default` takes it (`rotation` 0 in `view.saved.new`); the journal keeps the params as they
-were given. The schemas belong to API level 1 (`vectorcraft_engine::schemas::API_VERSION`); a change to any schema
-raises the level.
+were given. Saved steps played from a journal or an action keep a key the schema does not name, unless its value nests
+more than 16 levels deep, and the values of the parameters it names are checked as in a new call. The schemas of built-in commands belong to API level 1
+(`vectorcraft_engine::schemas::API_VERSION`); a change to any of them raises the level. Commands that plug-ins add have
+no schema here.
 
 ## Checking scripts written for the reference app
 

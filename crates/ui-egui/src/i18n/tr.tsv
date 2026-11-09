@@ -4866,6 +4866,11 @@ lighting	Light	Işık
 @msg	unknown parameter `{key}`; did you mean `{near}`?	bilinmeyen parametre `{key}`; `{near}` mi demek istediniz?
 @msg	unknown parameter `{key}`; the command takes no parameters	bilinmeyen parametre `{key}`; komut hiçbir parametre almaz
 @msg	unknown parameter `{key}`; the command takes: {keys}	bilinmeyen parametre `{key}`; komut şunları alır: {keys}
+@msg	the params must be an object, not {got}	parametreler bir nesne olmalıdır, {got} değil
+@msg	unknown parameter `{path}`; the object takes no keys	bilinmeyen parametre `{path}`; nesne anahtar almaz
+@msg	unknown parameter `{path}`; it takes: {keys}	bilinmeyen parametre `{path}`; şunları alır: {keys}
+@msg	missing `{path}`	`{path}` eksik
+@msg	`{path}` must be {expected}, not {got}	`{path}` {expected} olmalıdır, {got} değil
 	1 Layer	1 Katman
 	1 bit	1 bit
 	16 Colors	16 Renk

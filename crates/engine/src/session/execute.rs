@@ -61,8 +61,9 @@ impl Session {
             self.check_params(id, params)?;
         }
         // A command with a parameter schema runs only with params that pass it, and with the
-        // defaults of omitted values filled in; the journal keeps the params as given.
-        let checked = crate::schemas::check(spec, params)?;
+        // defaults of omitted values filled in; the journal keeps the params as given. Saved steps
+        // keep their keys the schema doesn't name, as above.
+        let checked = crate::schemas::check(spec, params, self.replaying)?;
         let run_params = checked.as_ref().unwrap_or(params);
         // Objects given as `id` (where it stands for `ids` of one) or as `ids` beside it are checked
         // before anything else: a malformed one, or one naming no object, is an error under this
