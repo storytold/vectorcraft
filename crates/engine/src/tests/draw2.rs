@@ -2698,11 +2698,26 @@ fn pen_cmd_selected_anchors_are_what_copy_and_cut_take() {
     assert_eq!(s.doc().unwrap().selection.anchors[&id], [(0, 1), (0, 2)].into());
     s.execute("edit.copy", &json!({})).unwrap();
     assert_eq!(pasted(&mut s), [2]);
-    // Cut takes the segment between them out of the path, as with Direct Selection chosen.
+    // Cut takes the segment between them. The two surviving runs of an ordinary path
+    // become independent objects, and this path keeps the first run (#3380).
     s.execute("edit.undo", &json!({})).unwrap();
+    let original = path(&s, id);
+    let picked = s.doc().unwrap().selection.clone();
     s.execute("edit.cut", &json!({})).unwrap();
-    let left = path(&s, id).subpaths.iter().map(|sp| sp.anchors.len()).collect::<Vec<_>>();
-    assert_eq!((s.clipboard.nodes.len(), left), (1, vec![2, 2]));
+    let left = paths(&s);
+    assert_eq!(left.len(), 2);
+    assert_eq!(left[0].0, id);
+    assert!(left.iter().all(|(_, p)| p.subpaths.len() == 1 && !p.subpaths[0].closed));
+    assert_eq!(left[0].1.subpaths[0].anchors, original.subpaths[0].anchors[..2]);
+    assert_eq!(left[1].1.subpaths[0].anchors, original.subpaths[0].anchors[2..]);
+    assert_eq!(s.doc().unwrap().selection.objects, left.iter().map(|(id, _)| *id).collect::<Vec<_>>());
+    assert_eq!(s.clipboard.nodes.len(), 1);
+    assert_eq!(s.clipboard.nodes[0].path_data().unwrap().subpaths[0].anchors, original.subpaths[0].anchors[1..3]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(paths(&s), vec![(id, original.clone())]);
+    assert_eq!(s.doc().unwrap().selection, picked);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(paths(&s), left);
     // Drawing on: the last anchor the Pen leaves selected doesn't make Copy take that anchor.
     s.execute("edit.undo", &json!({})).unwrap();
     s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
@@ -3412,6 +3427,7 @@ fn a_filled_pencil_path_keeps_no_stroke() {
     assert!(!s.doc().unwrap().doc.node(id).unwrap().appearance.stroke_paint().is_none());
 }
 
+/// Interior and endpoint deletions preserve each surviving run without adding connecting segments.
 #[test]
 fn open_anchor_delete_splits_runs_without_new_connections() {
     let cases = [
@@ -3439,16 +3455,19 @@ fn open_anchor_delete_splits_runs_without_new_connections() {
             assert!(s.doc().unwrap().doc.node(id).is_none(), "only isolated points remain: {removed:?}");
             assert!(s.doc().unwrap().selection.objects.is_empty());
         } else {
-            let result = path(&s, id);
-            assert_eq!(result.subpaths.len(), expected.len(), "deleted anchors: {removed:?}");
-            for (sp, indices) in result.subpaths.iter().zip(&expected) {
+            let pieces = &s.doc().unwrap().selection.objects;
+            assert_eq!(pieces.len(), expected.len(), "deleted anchors: {removed:?}");
+            assert_eq!(pieces[0], id);
+            for (piece, indices) in pieces.iter().zip(&expected) {
+                let result = path(&s, *piece);
+                assert_eq!(result.subpaths.len(), 1);
+                let sp = &result.subpaths[0];
                 assert!(!sp.closed);
                 assert_eq!(sp.anchors.iter().map(|a| a.p).collect::<Vec<_>>(), indices.iter().map(|&i| original.anchors[i].p).collect::<Vec<_>>());
                 for (segment, pair) in indices.windows(2).enumerate() {
                     assert_eq!(sp.segment(segment), original.segment(pair[0]));
                 }
             }
-            assert_eq!(s.doc().unwrap().selection.objects, vec![id]);
         }
         assert_eq!(undo_steps(&s), undo + 1);
         assert!(s.doc().unwrap().selection.anchors.is_empty() && s.doc().unwrap().selection.segments.is_empty());
@@ -3547,6 +3566,7 @@ fn open_anchor_delete_does_not_change_explicit_remove_anchors() {
     }
 }
 
+/// Baked transforms and mixed whole/partial selection survive splitting and atomic Undo/Redo.
 #[test]
 fn open_anchor_delete_after_transform_keeps_mixed_selection_atomic() {
     use vectorcraft_geom::Affine;
@@ -3584,13 +3604,17 @@ fn open_anchor_delete_after_transform_keeps_mixed_selection_atomic() {
         let st = s.doc().unwrap();
         assert!(st.doc.node(whole).is_none());
         assert_eq!(st.doc.node(untouched), before.node(untouched));
-        let result = path(&s, id);
-        assert_eq!(result.subpaths.len(), 2);
-        for (sp, segment) in result.subpaths.iter().zip([0, 3]) {
+        let pieces = st.selection.objects.clone();
+        assert_eq!(pieces.len(), 2);
+        assert_eq!(pieces[0], id);
+        for (piece, segment) in pieces.iter().zip([0, 3]) {
+            let result = path(&s, *piece);
+            assert_eq!(result.subpaths.len(), 1);
+            let sp = &result.subpaths[0];
             assert_eq!(sp.segment_count(), 1);
             assert_eq!(sp.segment(0), original.subpaths[0].segment(segment));
         }
-        assert_eq!(st.selection.objects, vec![id]);
+        assert_eq!(st.selection.objects, pieces);
         assert!(st.selection.anchors.is_empty() && st.selection.segments.is_empty());
         assert_eq!(undo_steps(&s), undo + 1);
         let after = st.doc.clone();
@@ -3599,7 +3623,7 @@ fn open_anchor_delete_after_transform_keeps_mixed_selection_atomic() {
         assert_eq!(s.doc().unwrap().selection, selection);
         s.execute("edit.redo", &json!({})).unwrap();
         assert_eq!(s.doc().unwrap().doc, after);
-        assert_eq!(s.doc().unwrap().selection.objects, vec![id]);
+        assert_eq!(s.doc().unwrap().selection.objects, pieces);
     }
 }
 
