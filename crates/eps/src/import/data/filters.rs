@@ -78,14 +78,28 @@ fn flate(raw: &[u8]) -> Res<(Vec<u8>, usize)> {
 
 /// LZW data (`EarlyChange` 1) decoded, and how many bytes of `raw` it took.
 fn lzw(raw: &[u8]) -> Res<(Vec<u8>, usize)> {
+    let mut out = vec![];
+    let used = lzw_into(raw, &mut |bytes| {
+        out.extend_from_slice(bytes);
+        if out.len() > MAX_DATA {
+            return Err(PsError::Limit("decoded data is too large"));
+        }
+        Ok(())
+    })?;
+    Ok((out, used))
+}
+
+/// LZW data (`EarlyChange` 1) decoded into `sink` as it goes, and how many bytes of `raw` it
+/// took.
+fn lzw_into(raw: &[u8], sink: &mut dyn FnMut(&[u8]) -> Res) -> Res<usize> {
     let mut table: Vec<Vec<u8>> = (0..=255u8).map(|b| vec![b]).collect();
     table.push(vec![]);
     table.push(vec![]);
-    let (mut out, mut prev): (Vec<u8>, Option<Vec<u8>>) = (vec![], None);
+    let mut prev: Option<Vec<u8>> = None;
     let (mut acc, mut bits, mut width, mut i) = (0u32, 0u32, 9u32, 0usize);
     loop {
         while bits < width {
-            let Some(&b) = raw.get(i) else { return Ok((out, i)) };
+            let Some(&b) = raw.get(i) else { return Ok(i) };
             i += 1;
             acc = (acc << 8) | u32::from(b);
             bits += 8;
@@ -98,7 +112,7 @@ fn lzw(raw: &[u8]) -> Res<(Vec<u8>, usize)> {
                 width = 9;
                 prev = None;
             }
-            257 => return Ok((out, i)),
+            257 => return Ok(i),
             _ => {
                 let entry = match (table.get(code), &prev) {
                     (Some(e), _) if !e.is_empty() => e.clone(),
@@ -109,7 +123,7 @@ fn lzw(raw: &[u8]) -> Res<(Vec<u8>, usize)> {
                     }
                     _ => return io("LZWDecode"),
                 };
-                out.extend_from_slice(&entry);
+                sink(&entry)?;
                 if let Some(mut p) = prev.take()
                     && table.len() < 4096
                 {
@@ -123,11 +137,63 @@ fn lzw(raw: &[u8]) -> Res<(Vec<u8>, usize)> {
                     _ => 9,
                 };
                 prev = Some(entry);
-                if out.len() > MAX_DATA {
-                    return Err(PsError::Limit("decoded data is too large"));
-                }
             }
         }
+    }
+}
+
+/// zlib data inflated into `sink` as it goes (64 KiB at a time), and how many bytes of `raw` it
+/// took.
+fn flate_into(raw: &[u8], sink: &mut dyn FnMut(&[u8]) -> Res) -> Res<usize> {
+    let mut z = flate2::Decompress::new(true);
+    let mut scratch = vec![0u8; 64 * 1024];
+    loop {
+        let before = (z.total_in(), z.total_out());
+        let input = raw.get(usize::try_from(z.total_in()).unwrap_or(usize::MAX)..).unwrap_or_default();
+        let status = z.decompress(input, &mut scratch, flate2::FlushDecompress::None).map_err(|_| PsError::Ps("ioerror", "FlateDecode".into()))?;
+        let made = usize::try_from(z.total_out() - before.1).unwrap_or(0);
+        sink(scratch.get(..made).unwrap_or_default())?;
+        match status {
+            flate2::Status::StreamEnd => break,
+            _ if (z.total_in(), z.total_out()) == before => break,
+            _ => {}
+        }
+    }
+    Ok(usize::try_from(z.total_in()).unwrap_or(raw.len()))
+}
+
+/// Data compressed with filter `f` (`FlateDecode` or `LZWDecode` without a predictor) decoded
+/// into `sink` as it goes, and how many bytes of `raw` it took; `None` for other filters.
+pub(super) fn decode_into(f: &Filter, raw: &[u8], sink: &mut dyn FnMut(&[u8]) -> Res) -> Option<Res<usize>> {
+    match &*f.name {
+        _ if f.predictor.is_some() => None,
+        "FlateDecode" => Some(flate_into(raw, sink)),
+        "LZWDecode" => Some(lzw_into(raw, sink)),
+        _ => None,
+    }
+}
+
+/// How many bytes of `raw` filter `f` would read, found without keeping what it decodes, for
+/// data whose decoded form is too large to hold: compressed data (`FlateDecode`, `LZWDecode`,
+/// `RunLengthDecode`) is decoded and dropped as it goes, a JPEG ends at its end-of-image
+/// marker, as [`dct`] reads it. `None` for other filters, or data that can't be decoded.
+pub(super) fn encoded_len(f: &Filter, raw: &[u8]) -> Option<usize> {
+    match &*f.name {
+        "FlateDecode" => flate_into(raw, &mut |_| Ok(())).ok(),
+        "LZWDecode" => lzw_into(raw, &mut |_| Ok(())).ok(),
+        "RunLengthDecode" => {
+            let mut i = 0usize;
+            while let Some(&n) = raw.get(i) {
+                i += match n {
+                    128 => return Some(i + 1),
+                    0..=127 => 2 + usize::from(n),
+                    _ => 2,
+                };
+            }
+            Some(raw.len())
+        }
+        "DCTDecode" => Some(find(raw, &[0xFF, 0xD9]).map_or(raw.len(), |e| e + 2)),
+        _ => None,
     }
 }
 
