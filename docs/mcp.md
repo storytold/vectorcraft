@@ -811,7 +811,8 @@ A `security` password encrypts the file (RC4 40-bit at PDF 1.3, RC4 128-bit at 1
 1.7 and 2.0) with its permissions; either password opens it (`document.open {password}`), and a password with PDF/A or PDF/X is refused.
 Pattern fills and strokes are written as their tiles clipped to the area they paint (a stroke's outline, with its
 dashes, caps, profile, arrowheads and alignment), and freeform gradients as an image of their colour field at the
-document's raster effects resolution, clipped the same way.
+document's raster effects resolution, clipped the same way (a CMYK image when every point is CMYK or, in a CMYK
+document, every point is Gray; the Output settings convert it as they convert any CMYK image).
 `createLayers` writes each layer and sublayer (template layers are left out) as a PDF layer, an optional content group
 named as the layer and listed under its parent layer's: hidden layers are off (their art is written, for the reader to
 show), non-printing ones have `/PrintState /OFF` and locked ones are locked. It needs PDF 1.5 or later (at 1.4 it
@@ -1025,7 +1026,10 @@ line?}`, `setPoint {index?, …}`, `deletePoint {index?}`, `addLine {points}`, `
 `selectPoint {index|null}` edit them (`index` defaults to the selected point; each edit is one undo step). The color
 of a point colored along the stops, of a point `splitLine` adds and of a point `addPoint` adds without `color` is a mix
 of the colors around it (the two stops, the line's two points, or all the points) in the color model those colors
-share, so CMYK stops and points give CMYK points. With the
+share, so CMYK stops and points give CMYK points. Points that are all CMYK, Gray, Lab or RGB mix in that model on the
+canvas, in the swatch and Fill and Stroke chips, and in the SVG, PDF, EPS and EMF writers; points in different models
+mix in display RGB (on the canvas in a CMYK document that shows transparency, as the inks of each point). With
+Appearance of Black set to Rich, the canvas mixes points that include pure CMYK black in display RGB. With the
 Gradient tool on a freeform gradient a click on a point selects it (drag to move it), a click on a line adds a point
 on it, a click elsewhere on the art adds a point (in Lines mode joined to the selected one), and Delete removes the
 selected point:
@@ -5119,7 +5123,8 @@ without `useArtboards` (no central file when no art shows). `level: 3` (default)
 shadings and masks transparent image pixels out; `level: 2` writes gradients as bands of colour (as does
 `compatibleGradients`) and transparent pixels white. Type is always glyph outlines, so no fonts are needed (`embedFonts`
 is accepted); spot colours are Separation colour spaces, and overprinting fills and strokes overprint unless
-`overprints: "discard"`. RGB documents are written in CMYK unless `cmykPostScript: false`. When the file would hold an
+`overprints: "discard"`. RGB documents are written in CMYK unless `cmykPostScript: false`. A freeform gradient is
+written as an image, in CMYK when every point is CMYK or when every point is Gray in a file written in CMYK. When the file would hold an
 image that can't be decoded, the image is left out, and `warnings` carries "an image couldn't be decoded and is missing
 from the picture" once for all such images.
 Colorized grayscale and 1-bit images use their process or spot ink; the flattener leaves them alone unless they have opacity, a blending mode, an opacity mask or effects, or overlap other transparent art. Binary coverage leaves underlying art untouched. For a grayscale image, Level 3 leaves white (zero-coverage) pixels out, Level 2 writes them white, and gray midtones are written over white at both levels.

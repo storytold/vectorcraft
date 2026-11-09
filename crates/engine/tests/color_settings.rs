@@ -347,6 +347,42 @@ fn a_freeform_gradient_expands_with_its_rgb_values_in_the_working_rgb_space() {
     }
 }
 
+/// With a working RGB space other than sRGB, RGB freeform points mix in that space on the canvas
+/// and in a writer, as Object > Expand mixes them.
+#[test]
+fn freeform_rgb_points_mix_in_the_working_rgb_space() {
+    use vectorcraft_color::freeform::spread_scale;
+    use vectorcraft_color::{Color, Freeform, FreeformPoint, Gradient, GradientKind, GradientPaint, Paint};
+    use vectorcraft_doc::{Appearance, Document, Node};
+    use vectorcraft_geom::{Point, Rect, shapes};
+    let _g = settings();
+    let old = cms::active_settings();
+    cms::set_active(&cms::ColorSettings { rgb: cms::WIDE_GAMUT_RGB.into(), ..old.clone() }).unwrap();
+    let box_ = Rect::new(0.0, 0.0, 100.0, 100.0);
+    let (a, b) = (Color::rgb(0.9, 0.1, 0.1), Color::rgb(0.1, 0.2, 0.9));
+    let p = |x, c| FreeformPoint::new(Point::new(x, 50.5), c);
+    let f = Freeform { points: vec![p(20.5, a), p(80.5, b)], ..Default::default() };
+    let mut g = GradientPaint::new(Gradient { kind: GradientKind::Freeform, ..Default::default() });
+    g.freeform = Some(f.clone());
+    let mut d = Document::new(100.0, 100.0);
+    let id = d.alloc_id();
+    d.insert(Some(d.layers[0].id), 0, Node::path(id, shapes::rectangle(box_), Appearance::basic(Paint::Gradient(Box::new(g)), Paint::None, 0.0)))
+        .unwrap();
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let canvas = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts).pixel(50, 50);
+    let svg = vectorcraft_svg::export_full(&d, &vectorcraft_svg::ExportOptions::default(), None).svg;
+    let data = svg.split("data:image/png;base64,").nth(1).unwrap().split('"').next().unwrap();
+    let png = image::load_from_memory(&vectorcraft_testkit::format::base64_decode(data).unwrap()).unwrap().to_rgba8();
+    let written = png.get_pixel(png.width() / 2, png.height() / 2).0;
+    let want = Color::rgb(0.5, 0.15, 0.5).to_rgba8(1.0);
+    let display = f.field(spread_scale(box_)).sample(Point::new(50.5, 50.5)).0.map(|v| (v * 255.0).round() as u8);
+    cms::set_active(&old).unwrap();
+    let near = |got: [u8; 4]| got.iter().zip(want).take(3).all(|(g, w)| g.abs_diff(w) <= 3);
+    assert!(near(canvas), "canvas: {canvas:?} vs {want:?}");
+    assert!(near(written), "SVG: {written:?} vs {want:?}");
+    assert!(display.iter().zip(want).any(|(g, w)| g.abs_diff(w) > 8), "the display mix differs: {display:?} vs {want:?}");
+}
+
 /// Loading a new file of the working RGB profile (named after its description, as before) takes
 /// effect at once: CMYK colors convert into the new file and the canvas redraws, without choosing
 /// the working spaces again.
