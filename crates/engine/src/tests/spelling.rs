@@ -244,3 +244,29 @@ fn a_change_that_cant_be_saved_is_taken_back() {
     assert!(in_dictionary(&mut s, "wkqzvx") && !in_dictionary(&mut s, "wkqzvy"), "a change that wasn't saved leaves the old word");
     run(&mut s, "text.spelling.removeWord", json!({"word": "wkqzvx"}));
 }
+
+#[cfg(unix)]
+#[test]
+fn a_word_another_window_saved_stays_when_this_save_fails() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = vectorcraft_testkit::temp_dir("spelling-readonly");
+    let file = dir.join("Custom Dictionary.txt");
+    std::fs::write(&file, "").unwrap();
+    let mut s = session();
+    s.attach_custom_dictionary(file.clone());
+    // Another window saves a word this session hasn't taken in, then the folder can't be written:
+    // the save reads the file, takes the word in, and fails writing.
+    std::fs::write(&file, "zvkqxw\n").unwrap();
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o500)).unwrap();
+    let probe = dir.join("probe");
+    let writable = std::fs::write(&probe, "").is_ok();
+    let r = (!writable).then(|| s.execute("text.spelling.addWord", &json!({"word": "zvkqxw"})));
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let Some(r) = r else {
+        // Run as root, the folder stays writable: there is no failing save to check.
+        return;
+    };
+    assert!(r.is_err(), "{r:?}");
+    assert!(in_dictionary(&mut s, "zvkqxw"), "the word in the file stays, though this Add was taken back");
+    run(&mut s, "text.spelling.removeWord", json!({"word": "zvkqxw"}));
+}
