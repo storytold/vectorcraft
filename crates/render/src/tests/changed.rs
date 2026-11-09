@@ -616,10 +616,11 @@ fn a_trace_objects_new_first_member_is_its_source() {
 }
 
 /// Recoloring a traced shape changes only the shape, as the free measure and the renderer that drew
-/// the trace object in its view measure it. The area is bounded, not drawn again and compared: in
-/// this view (outlines with the source image) a partial render of the outlines differs from the
-/// whole by one in alpha on 37 pixels (230 against 229), which is older than this test and has
-/// nothing to do with what changed (the recolor changes no pixel in this view).
+/// the trace object in its view measure it. Through the renderer the area is bounded, not drawn
+/// again and compared: in this view (outlines with the source image) a partial render of the
+/// outlines differs from the whole by one in alpha on a few dozen hairline pixels, either way,
+/// which is older than this test and has nothing to do with what changed (the recolor changes no
+/// pixel in this view).
 #[test]
 fn recolouring_a_traced_shape_changes_only_the_shape() {
     let (old, _, _, shape) = traced("outlinesWithSourceImage");

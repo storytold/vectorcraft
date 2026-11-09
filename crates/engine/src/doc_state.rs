@@ -128,7 +128,9 @@ struct EmptyArtboards {
 
 /// Whether an unlocked artboard of those asked about has art that Fit to Artwork Bounds fits it
 /// to, with what was measured: the document (held as [`EmptyArtboards::doc`] holds it), the
-/// artboards, and the generations of what the measure reads outside the document.
+/// artboards, and the generations of what the measure reads outside the document. One is kept for
+/// each open document, and its weak reference keeps the measured document's allocation (not its
+/// contents) until the next measure or until the document closes.
 #[derive(Clone, Debug)]
 struct ArtToFit {
     doc: std::sync::Weak<Document>,
@@ -344,13 +346,18 @@ impl DocState {
     /// answer is kept for this version of the document and those artboards, and a change of the
     /// selection or the view keeps it. It is measured again when what the measure reads outside the
     /// document changes: the installed plug-ins, whose effects draw art, and the installed fonts,
-    /// which set type drawn by its effects' art (an envelope, a 3D effect).
+    /// which set the bounds of all type.
     pub fn any_art_to_fit(&self, indices: &[usize]) -> bool {
         self.any_art_to_fit_with(indices, (vectorcraft_plugins::registry::revision(), vectorcraft_text::FontDb::global().generation()))
     }
     /// [`Self::any_art_to_fit`], with `outside` the generations of the plug-ins and the fonts.
     pub(crate) fn any_art_to_fit_with(&self, indices: &[usize], outside: (u64, u64)) -> bool {
-        let mut last = self.art_to_fit.borrow_mut();
+        // Measuring runs renderer and plug-in code; should it ever ask again while measuring, it
+        // is measured without being kept rather than borrowed twice.
+        let Ok(mut last) = self.art_to_fit.try_borrow_mut() else {
+            let mut r = vectorcraft_render::Renderer::new();
+            return indices.iter().filter_map(|i| self.doc.artboards.get(*i)).any(|a| !a.locked && r.art_bounds_on(&self.doc, a.rect).is_some());
+        };
         if let Some(k) = last.as_ref()
             && std::ptr::eq(k.doc.as_ptr(), Arc::as_ptr(&self.doc))
             && k.indices == indices

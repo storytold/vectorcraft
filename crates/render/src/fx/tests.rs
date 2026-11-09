@@ -1755,7 +1755,7 @@ fn an_image_inner_glow_follows_its_visible_pixels() {
 /// only a fill and a raster effect draws from that art, where without the 3D effect it draws as a
 /// path, whose raster effects are clipped to the path's own geometry: there Roughen's spikes are
 /// cut off, so the two differ in a few pixels at the edge and match inside the path. That clipping
-/// is a known bug of drawing without the 3D effect, older than this test, not the design. Either
+/// is an older bug on main of drawing without the 3D effect, not the design. Either
 /// way the raster effect reaches past what the object draws without it.
 #[test]
 fn a_3d_effect_that_builds_nothing_draws_the_item_as_without_it() {

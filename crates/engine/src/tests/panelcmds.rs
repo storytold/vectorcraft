@@ -1818,6 +1818,22 @@ fn art_to_fit_is_measured_once_for_a_version_of_the_document() {
     assert_eq!(art_to_fit_counted(&s, &[1], (1, 1)), (false, 0));
 }
 
+/// A change made to the document in place (`Arc::make_mut`, with no other holder and no change
+/// of revision) is measured again: the kept answer holds the document it measured weakly, so a
+/// changed document is a new allocation, not the old address.
+#[test]
+fn art_to_fit_follows_a_change_in_place() {
+    let mut s = row_of_artboards(2);
+    box_at(&mut s, 10.0, 20.0);
+    assert_eq!(art_to_fit_counted(&s, &[0], (0, 0)), (true, 1), "art on artboard 1");
+    let st = s.doc_mut().unwrap();
+    assert_eq!(Arc::strong_count(&st.doc), 1, "the undo history holds the document before the edit");
+    let (revision, empty_spot) = (st.revision, st.doc.artboards[1].rect);
+    Arc::make_mut(&mut st.doc).artboards[0].rect = empty_spot;
+    assert_eq!(st.revision, revision);
+    assert_eq!(art_to_fit_counted(&s, &[0], (0, 0)), (false, 1), "artboard 1 moved off the art");
+}
+
 /// The enabled state follows an edit, an undo, a redo, an added and a removed artboard, a locked
 /// artboard, and each change measures the document once.
 #[test]
