@@ -22,7 +22,7 @@ craft-window = { git = "https://github.com/storytold/craft-libs", rev = "9be9a63
 # The `.vectorcraft` envelope: its members, version, embedded images and the data after the JSON.
 craft-vectorcraft-format = { git = "https://github.com/storytold/craft-libs", rev = "9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb" }
 # craft-update: app-specific pretend versions apply to startup and manual checks.
-craft-update = { git = "https://github.com/storytold/craft-libs", version = "=0.1.0", rev = "c5a1cbfb5f9049f9270955caffb5bee5997aebf7", features = ["egui"] }
+craft-update = { git = "https://github.com/storytold/craft-libs", version = "=0.1.0", rev = "1b34eba41e62138fc2438d2734523b302840b45d", features = ["egui"] }
 # internal
 vectorcraft-geom = { path = "crates/geom" }
 vectorcraft-color = { path = "crates/color" }
@@ -99,12 +99,25 @@ ruzstd = { version = "0.9.1", default-features = false, features = ["std"] }
 hayro-ccitt = "0.3"
 # Substring search for the EPS reader's PostScript `search`.
 memchr = "2"
+# The WHATWG Encoding Standard's legacy encodings: names in legacy .ai files read in the code page
+# the user picks (Mac OS Roman, Korean, Japanese, Chinese).
+encoding_rs = "0.8.42"
 jpeg-encoder = { version = "0.6", default-features = false, features = ["std"] }
 gif = { version = "0.14", default-features = false, features = ["std", "raii_no_panic"] }
 # CMYK image samples (vectorcraft-doc's cmyk module): the image crate's own TIFF and JPEG
 # decoders, read directly (the image crate converts CMYK to RGB).
 tiff = "0.11"
 zune-jpeg = "0.5"
+# JPEG XL decoder (pure Rust, MIT OR Apache-2.0): File › Open and Place read `.jxl` images. It is
+# built without its default `rayon` feature and decodes on one thread.
+jxl-oxide = { version = "0.12.6", default-features = false }
+# jxl-oxide's color conversions, run on colors after their alpha is divided out.
+jxl-color = "0.11.0"
+# jxl-oxide's buffer allocation error, told apart from other decoding errors.
+jxl-grid = "0.6.2"
+# Tests: a lossless JPEG XL encoder (pure Rust, MIT OR Apache-2.0 OR Zlib) for the `.jxl` test files.
+zune-jpegxl = { version = "0.5.2", default-features = false, features = ["std"] }
+zune-core = "0.5"
 
 # ui
 egui = "0.37"

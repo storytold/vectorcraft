@@ -5,20 +5,25 @@
 //! sees them ([`Paints`]): an effect can draw as wide as the stroke it sits on, or tell its fills
 //! apart, without asking for them again as parameters.
 //!
+//! An effect whose manifest declares `"paintOutput": true` returns painted pieces instead
+//! ([`apply_painted`], [`crate::painted`]): each is drawn by itself with paints of its own.
+//!
 //! Drawing evaluates effects often (every frame, hit tests, bounds), so results are cached by
 //! plug-in installation, parameters, input geometry and paints: the plug-in runs again only when
 //! one of them changes. Failures are cached too (the geometry is then drawn unchanged) and
-//! reported by [`last_error`].
+//! reported by [`last_error`]. The swatches and patterns a painted result names are checked
+//! against the document each time it is used.
 
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{Appearance, AppearanceItem};
+use vectorcraft_doc::{Appearance, AppearanceItem, Document};
 use vectorcraft_geom::{FillRule, PathData, Rect};
 
 use crate::objects::{decode, output_geometry, paint_lists};
+use crate::painted::{self, Piece, Scope};
 use crate::{Error, Kind, Limits, Result, registry};
 
 /// The effect id prefix of live-effect plug-ins: `plugin.<plug-in id>`.
@@ -88,6 +93,15 @@ impl Paints<'_> {
         };
         Given { fills, strokes, item }
     }
+
+    /// Where the effect sits: what the pieces of an effect that declares `paintOutput` may paint.
+    fn scope(&self) -> Scope {
+        match self.appearance.zip(self.item).and_then(|(ap, i)| ap.items.get(i)) {
+            Some(AppearanceItem::Fill(_)) => Scope::Fill,
+            Some(AppearanceItem::Stroke(_)) => Scope::Stroke,
+            None => Scope::Object,
+        }
+    }
 }
 
 #[derive(PartialEq)]
@@ -117,9 +131,27 @@ impl Key {
     }
 }
 
+/// What one run of a live effect gave: geometry, or the painted pieces of an effect that declares
+/// `paintOutput` ([`crate::painted`]).
+#[derive(Clone, Debug, PartialEq)]
+enum Out {
+    Path(PathData),
+    Pieces(Arc<Vec<Piece>>),
+}
+
+impl Out {
+    /// The geometry: the path, or every piece's path in order.
+    fn geometry(&self) -> PathData {
+        match self {
+            Out::Path(p) => p.clone(),
+            Out::Pieces(pieces) => PathData::new(pieces.iter().flat_map(|p| p.path.subpaths.iter().cloned()).collect()),
+        }
+    }
+}
+
 #[derive(Default)]
 struct Cache {
-    entries: HashMap<u64, (Key, Option<PathData>)>,
+    entries: HashMap<u64, (Key, Option<Out>)>,
     /// The anchors of the entries' inputs and results ([`CACHE_ANCHORS`]).
     anchors: usize,
 }
@@ -131,12 +163,36 @@ fn anchors(p: &PathData) -> usize {
     p.subpaths.iter().map(|sp| sp.anchors.len() + 1).sum()
 }
 
-/// Cache units an entry takes: its input and result paths, and the serialized parameters and
-/// paints its key owns (one unit per [`CACHE_ANCHORS`]'s 50 bytes an anchor stands for).
-fn weight(key: &Key, out: Option<&PathData>) -> usize {
-    anchors(&key.path) + out.map_or(0, anchors) + (key.params.len() + key.paints.len()) / 50 + 1
+/// Cache units an entry takes: its input and result paths, the serialized parameters and paints its
+/// key owns (one unit per [`CACHE_ANCHORS`]'s 50 bytes an anchor stands for), and one for each
+/// paint, gradient stop and freeform point a painted result holds.
+fn weight(key: &Key, out: Option<&Out>) -> usize {
+    let out = match out {
+        None => 0,
+        Some(Out::Path(p)) => anchors(p),
+        Some(Out::Pieces(pieces)) => pieces.iter().map(|p| anchors(&p.path) + 1).sum::<usize>() + painted::paint_count(pieces),
+    };
+    anchors(&key.path) + out + (key.params.len() + key.paints.len()) / 50 + 1
 }
-static ERRORS: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
+static ERRORS: Mutex<Option<HashMap<String, Failures>>> = Mutex::new(None);
+
+/// The errors recorded for a live-effect plug-in, one for each kind of outcome that can clear it.
+#[derive(Default)]
+struct Failures {
+    /// From a run of the plug-in.
+    run: Option<String>,
+    /// From checking the swatches and patterns a painted result names against the document.
+    references: Option<String>,
+    /// Was the latest failure a refused reference?
+    references_latest: bool,
+}
+
+/// Which of a plug-in's [`Failures`] an outcome replaces.
+#[derive(Clone, Copy)]
+enum Origin {
+    Run,
+    References,
+}
 
 /// Where an installation ([`crate::Plugin::serial`]) stands as a live effect in this process.
 enum Runs {
@@ -189,26 +245,103 @@ fn end_run(serial: u64, cancelled: bool) {
     }
 }
 
-/// The last error of live-effect plug-in `id` (cleared when it next succeeds).
+/// The last error of live-effect plug-in `id`: the latest failure that still stands. A run that
+/// succeeds clears a failed run's error, and a reference check that passes clears a refused
+/// reference's.
 pub fn last_error(id: &str) -> Option<String> {
-    ERRORS.lock().unwrap_or_else(|e| e.into_inner()).as_ref()?.get(id).cloned()
+    let errors = ERRORS.lock().unwrap_or_else(|e| e.into_inner());
+    let failures = errors.as_ref()?.get(id)?;
+    let (latest, other) = if failures.references_latest { (&failures.references, &failures.run) } else { (&failures.run, &failures.references) };
+    latest.clone().or_else(|| other.clone())
 }
 
-fn note(id: &str, r: &Result<PathData>) {
+/// Records how a run of plug-in `id`, or a check of what its result names, went: a failure as that
+/// origin's error (a painted effect's named after the plug-in, [`painted::named`]), a success
+/// clearing that origin's error. A run of an effect that paints nothing clears a refused
+/// reference's error too.
+fn note(id: &str, plugin: &crate::Plugin, origin: Origin, r: std::result::Result<(), &Error>) {
+    let message = r.err().map(|e| if plugin.manifest().paint_output { painted::named(&plugin.manifest().name, e) } else { e.to_string() });
     let mut errors = ERRORS.lock().unwrap_or_else(|e| e.into_inner());
     let errors = errors.get_or_insert_with(HashMap::new);
-    match r {
-        Ok(_) => errors.remove(id),
-        Err(e) => errors.insert(id.to_string(), e.to_string()),
-    };
+    let failures = errors.entry(id.to_string()).or_default();
+    if message.is_some() {
+        failures.references_latest = matches!(origin, Origin::References);
+    }
+    match origin {
+        Origin::Run => {
+            failures.run = message;
+            // Nothing checks the references of an effect that paints nothing, such as one that
+            // replaced a painted effect under this id.
+            if !plugin.manifest().paint_output {
+                failures.references = None;
+            }
+        }
+        Origin::References => failures.references = message,
+    }
+    if failures.run.is_none() && failures.references.is_none() {
+        errors.remove(id);
+    }
+}
+
+/// Does live-effect plug-in `id` return painted pieces (its manifest declares `paintOutput`)?
+pub fn paints_output(id: &str) -> bool {
+    registry::get(id).is_some_and(|p| p.manifest().kind == Kind::Effect && p.manifest().paint_output)
 }
 
 /// Runs live-effect plug-in `id` on `path` (whose reference box is `bounds`), of an object painted
 /// with `paints`: the new geometry, or `None` when the plug-in isn't installed, isn't an effect,
 /// fails, or Safe Mode is on (the caller then keeps the geometry, and the object keeps its effect).
-/// The launch marker names the plug-in during its first run in this process, and until every run
-/// that started while it ran has ended too ([`crate::safe_mode::loading`]).
-pub fn apply(id: &str, params: &Value, path: &PathData, bounds: Rect, rule: FillRule, paints: Paints) -> Option<PathData> {
+/// For an effect that returns painted pieces, the geometry is every piece's path in order, and
+/// `None` when the swatches and patterns they name are refused as [`apply_painted`] refuses them.
+pub fn apply(id: &str, params: &Value, path: &PathData, bounds: Rect, rule: FillRule, paints: Paints, doc: Option<&Document>) -> Option<PathData> {
+    let (plugin, out) = evaluate(id, params, path, bounds, rule, paints)?;
+    if let Out::Pieces(pieces) = &out {
+        references_found(id, &plugin, pieces, doc)?;
+    }
+    Some(out.geometry())
+}
+
+/// Runs live-effect plug-in `id`, which declares `paintOutput`, as [`apply`] does: its painted
+/// pieces, each to draw by itself in order with the paints it gives ([`painted::appearance`],
+/// [`painted::items`]). Every swatch and pattern the pieces name must be in `doc`; without a
+/// document, pieces that name one are refused ([`painted::check_references`]). A paint linked to a
+/// global swatch has that swatch's current color. `None` when the
+/// plug-in isn't installed, doesn't declare `paintOutput`, fails, or Safe Mode is on; the caller then
+/// draws its input unchanged, and [`last_error`] says why a run failed (a refusal for want of a
+/// document is not recorded).
+pub fn apply_painted(
+    id: &str,
+    params: &Value,
+    path: &PathData,
+    bounds: Rect,
+    rule: FillRule,
+    paints: Paints,
+    doc: Option<&Document>,
+) -> Option<Arc<Vec<Piece>>> {
+    let (plugin, out) = evaluate(id, params, path, bounds, rule, paints)?;
+    let Out::Pieces(pieces) = out else { return None };
+    references_found(id, &plugin, &pieces, doc)?;
+    Some(match doc {
+        Some(d) => painted::with_swatch_colors(pieces, d),
+        None => pieces,
+    })
+}
+
+/// `Some` when every swatch and pattern `pieces` name is in `doc` ([`painted::check_references`]),
+/// recording the outcome for [`last_error`] when there is a document. The document's swatches and
+/// patterns can change while a result stays cached, so each use checks them.
+fn references_found(id: &str, plugin: &crate::Plugin, pieces: &[Piece], doc: Option<&Document>) -> Option<()> {
+    let checked = painted::check_references(pieces, doc);
+    if doc.is_some() {
+        note(id, plugin, Origin::References, checked.as_ref().map(|_| ()));
+    }
+    checked.ok()
+}
+
+/// Runs plug-in `id` as [`apply`] says, or takes its result from the cache: the plug-in and what
+/// it gave. The launch marker names the plug-in during its first run in this process, and until
+/// every run that started while it ran has ended too ([`crate::safe_mode::loading`]).
+fn evaluate(id: &str, params: &Value, path: &PathData, bounds: Rect, rule: FillRule, paints: Paints) -> Option<(Arc<crate::Plugin>, Out)> {
     if crate::safe_mode::active() {
         return None;
     }
@@ -227,10 +360,11 @@ pub fn apply(id: &str, params: &Value, path: &PathData, bounds: Rect, rule: Fill
     if let Some((k, out)) = CACHE.lock().unwrap_or_else(std::sync::PoisonError::into_inner).as_ref().and_then(|c| c.entries.get(&h))
         && *k == key
     {
-        return out.clone();
+        return out.clone().map(|o| (plugin, o));
     }
+    let scope = paints.scope();
     let guarded = begin_run(&plugin);
-    let r = run(&plugin, resolved, path, bounds, rule, given);
+    let r = run(&plugin, resolved, path, bounds, rule, given, scope);
     let cancelled = matches!(r, Err(Error::Cancelled));
     if guarded {
         end_run(plugin.serial(), cancelled);
@@ -239,11 +373,11 @@ pub fn apply(id: &str, params: &Value, path: &PathData, bounds: Rect, rule: Fill
     if cancelled {
         return None;
     }
-    note(id, &r);
+    note(id, &plugin, Origin::Run, r.as_ref().map(|_| ()));
     let out = r.ok();
     let size = weight(&key, out.as_ref());
     if size > CACHE_ANCHORS / 4 {
-        return out;
+        return out.map(|o| (plugin, o));
     }
     let mut cache = CACHE.lock().unwrap_or_else(|e| e.into_inner());
     let cache = cache.get_or_insert_with(Cache::default);
@@ -254,28 +388,35 @@ pub fn apply(id: &str, params: &Value, path: &PathData, bounds: Rect, rule: Fill
         cache.anchors = cache.anchors.saturating_sub(weight(&old, old_out.as_ref()));
     }
     cache.anchors += size;
-    out
+    out.map(|o| (plugin, o))
 }
 
-/// One run of `plugin` on `path`, with the object's paints as `given`.
-fn run(plugin: &crate::Plugin, mut params: Value, path: &PathData, bounds: Rect, rule: FillRule, given: Given) -> Result<PathData> {
+/// One run of `plugin` on `path`, with the object's paints as `given`: geometry, or for an effect
+/// that declares `paintOutput` its pieces, checked for an effect in `scope`.
+fn run(plugin: &crate::Plugin, mut params: Value, path: &PathData, bounds: Rect, rule: FillRule, given: Given, scope: Scope) -> Result<Out> {
     let b = json!([bounds.x0, bounds.y0, bounds.x1, bounds.y1]);
     params["_context"] = json!({"mode": "effect", "bounds": b, "item": given.item});
-    let rule = match rule {
+    let rule_name = match rule {
         FillRule::NonZero => "nonzero",
         FillRule::EvenOdd => "evenodd",
     };
-    let input = json!({"objects": [{"type": "path", "path": path, "fillRule": rule, "bounds": b, "fills": given.fills, "strokes": given.strokes}]});
+    let input =
+        json!({"objects": [{"type": "path", "path": path, "fillRule": rule_name, "bounds": b, "fills": given.fills, "strokes": given.strokes}]});
     let (input, params) = (serde_json::to_vec(&input), serde_json::to_vec(&params));
     let (Ok(input), Ok(params)) = (input, params) else { return Err(Error::Params("can't encode the input".into())) };
     let limits = Limits { wall_time_ms: WALL_TIME_MS, ..plugin.limits().clone() };
-    Ok(output_geometry(decode(&plugin.run_limited(&input, &params, &limits)?)?))
+    let output = plugin.run_limited(&input, &params, &limits)?;
+    if plugin.manifest().paint_output {
+        return Ok(Out::Pieces(Arc::new(painted::decode(&output, scope, rule)?)));
+    }
+    Ok(Out::Path(output_geometry(decode(&output)?)))
 }
 
 #[cfg(test)]
 mod tests {
     use vectorcraft_color::{Color, Paint};
     use vectorcraft_doc::{FillLayer, StrokeLayer};
+    use vectorcraft_geom::{Point, SubPath};
 
     use super::*;
 
@@ -299,6 +440,63 @@ mod tests {
         assert_eq!((none.fills, none.strokes, none.item), (vec![], vec![], json!("object")));
     }
 
+    /// A result taken from the cache passes its reference check without clearing the error of a
+    /// failed run, and the next run that succeeds clears that error.
+    #[test]
+    fn a_passed_reference_check_keeps_a_failed_run_s_error() {
+        let _lock = crate::safe_mode::TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        crate::safe_mode::set_active(None);
+        const ID: &str = "test.effect.lasterror";
+        let manifest = format!(r#"{{"id":"{ID}","name":"Test","version":"1","kind":"effect","api":2,"paintOutput":true,"params":{{}}}}"#);
+        // Traps on a long input.
+        let first = "(if (i32.gt_u (local.get $il) (i32.const 4096)) (then unreachable))";
+        let src = crate::wat::with_imports(&manifest, "", first, r#"{"objects":[]}"#);
+        registry::install(crate::Plugin::load(&wat::parse_str(&src).unwrap(), Limits::default()).unwrap());
+        let doc = Document::new(100.0, 100.0);
+        let line = |n: usize| PathData::single(SubPath::polyline(&(0..n).map(|i| Point::new(i as f64, 0.0)).collect::<Vec<_>>(), false));
+        let draw =
+            |path: &PathData| apply_painted(ID, &json!({}), path, Rect::new(0.0, 0.0, 1.0, 1.0), FillRule::NonZero, Paints::default(), Some(&doc));
+        let short = line(2);
+        assert!(draw(&short).is_some());
+        assert_eq!(last_error(ID), None);
+        assert!(draw(&line(1000)).is_none());
+        let failed = last_error(ID).unwrap();
+        assert!(draw(&short).is_some(), "from the cache");
+        assert_eq!(last_error(ID), Some(failed));
+        assert!(draw(&line(3)).is_some(), "a new run");
+        assert_eq!(last_error(ID), None);
+        registry::remove(ID);
+    }
+
+    /// With a refused reference and a failed run both standing, the latest of the two is reported.
+    #[test]
+    fn the_latest_of_a_refused_reference_and_a_failed_run_is_reported() {
+        let _lock = crate::safe_mode::TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        crate::safe_mode::set_active(None);
+        const ID: &str = "test.effect.latesterror";
+        let manifest = format!(r#"{{"id":"{ID}","name":"Test","version":"1","kind":"effect","api":2,"paintOutput":true,"params":{{}}}}"#);
+        let mut fill = serde_json::to_value(Paint::solid(Color::WHITE)).unwrap();
+        fill["swatch"] = json!("Missing");
+        let square = PathData::single(SubPath::polyline(&[(0.0, 0.0), (9.0, 0.0), (9.0, 9.0)].map(|(x, y)| Point::new(x, y)), true));
+        let output = json!({"objects": [{"path": square, "fills": [fill]}]}).to_string();
+        // Traps on a long input.
+        let first = "(if (i32.gt_u (local.get $il) (i32.const 4096)) (then unreachable))";
+        let src = crate::wat::with_imports(&manifest, "", first, &output);
+        registry::install(crate::Plugin::load(&wat::parse_str(&src).unwrap(), Limits::default()).unwrap());
+        let doc = Document::new(100.0, 100.0);
+        let line = |n: usize| PathData::single(SubPath::polyline(&(0..n).map(|i| Point::new(i as f64, 0.0)).collect::<Vec<_>>(), false));
+        let draw =
+            |path: &PathData| apply_painted(ID, &json!({}), path, Rect::new(0.0, 0.0, 1.0, 1.0), FillRule::NonZero, Paints::default(), Some(&doc));
+        let short = line(2);
+        assert!(draw(&short).is_none());
+        assert!(last_error(ID).unwrap().contains("swatch"));
+        assert!(draw(&line(1000)).is_none());
+        assert!(last_error(ID).unwrap().contains("trapped"));
+        assert!(draw(&short).is_none(), "from the cache, refused again");
+        assert!(last_error(ID).unwrap().contains("swatch"));
+        registry::remove(ID);
+    }
+
     /// A first run that is cancelled leaves the next run to be the first: the launch marker names
     /// the plug-in during that one.
     #[test]
@@ -309,8 +507,17 @@ mod tests {
         let plugin = registry::install(crate::Plugin::load(&wat::parse_str(&src).unwrap(), Limits::default()).unwrap());
         let ran_first =
             || RUNS.lock().unwrap_or_else(|e| e.into_inner()).as_ref().is_some_and(|r| matches!(r.get(&plugin.serial()), Some(Runs::Done)));
-        let draw =
-            || apply("test.effect.cancelled", &json!({}), &PathData::default(), Rect::new(0.0, 0.0, 1.0, 1.0), FillRule::NonZero, Paints::default());
+        let draw = || {
+            apply(
+                "test.effect.cancelled",
+                &json!({}),
+                &PathData::default(),
+                Rect::new(0.0, 0.0, 1.0, 1.0),
+                FillRule::NonZero,
+                Paints::default(),
+                None,
+            )
+        };
         let token = vectorcraft_doc::cancel::CancelToken::new();
         token.cancel();
         assert_eq!(vectorcraft_doc::cancel::scope(&token, None, draw), None);

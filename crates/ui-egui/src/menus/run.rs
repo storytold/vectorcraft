@@ -29,7 +29,13 @@ pub(crate) fn opt_bool(p: &Value, key: &str) -> Result<Option<bool>, String> {
 /// `params` has only keys the params description of engine command `id` names, or the parameter
 /// error naming the one it doesn't (#1442). The UI's own commands aren't checked yet: their
 /// descriptions haven't been audited against what they read.
+/// `file.save` and `file.exportForScreens` take the params of the engine command they run.
 pub fn check_params(session: &vectorcraft_engine::Session, id: &str, params: &Value) -> Result<(), String> {
+    let id = match id {
+        "file.save" => "document.save",
+        "file.exportForScreens" => "document.exportForScreens",
+        id => id,
+    };
     if UI_COMMANDS.iter().any(|c| c.0 == id) {
         return Ok(());
     }
@@ -107,9 +113,13 @@ fn run_ui_part1(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             Ok(Value::Null)
         }
         "file.open" => match s("path") {
-            Some(path) => io::open_path(app, &path),
+            Some(path) => match p.get("params").filter(|v| !v.is_null()) {
+                Some(params) => io::open_path_with(app, &path, params),
+                None => io::open_path(app, &path),
+            },
             None => io::open_dialog(app).map(|_| Value::Null),
         },
+        "file.openWith" => io::open_with(app, p),
         // Saves write through the app (save panel, download); with no path known the panel and the
         // format's options dialog ask first.
         "file.save" => io::save(app, SaveMode::Save, p, true),
@@ -270,6 +280,7 @@ fn run_ui_part3(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         }
         "type.applyBullets" => crate::panels::paragraph::apply_bullets(app, p),
         "type.applyNumbers" => crate::panels::paragraph::apply_numbers(app, p),
+        "ui.bulletsAndNumbering" => crate::dialogs::bullets_numbering::open(app, p),
         _ => return None,
     };
     Some(r)
@@ -448,6 +459,7 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             Ok(Value::Null)
         }
         "window.control" => flag(&mut app.ui.control_bar),
+        "window.helpBar" => flag(&mut app.ui.help_bar),
         // The Control bar's panel menu and gripper: the edge of the window the bar docks to.
         "window.control.dock" => {
             let key = "edge";
@@ -808,16 +820,21 @@ fn run_ui_part10(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         "ui.svgFilterDialog" => crate::dialogs::svg_filter::open(app, p),
         "ui.importSvgFilter" => crate::dialogs::svg_filter::import_file(app),
         "ui.spotColors" => crate::dialogs::spot_colors::open(app),
-        "ui.menuDialog" => match s("command").as_deref() {
-            Some(c) if crate::dialogs::envelope::opens(c) => crate::dialogs::envelope::open(app, c),
-            c => match c.and_then(|c| menu_dialog(app, c)) {
-                Some((kind, fields)) => {
-                    app.ui.dialog = Some(crate::state::Dialog::new(kind, fields));
-                    Ok(Value::Null)
-                }
-                None => Err("`command` must be a command whose menu item opens a dialog (see ui.menuDialog)".into()),
-            },
-        },
+        "ui.menuDialog" => {
+            // As from the menu ([`invoke`]), the edit the tool computes on another thread first.
+            let r = app.session.finish_tool_edit();
+            crate::canvas::apply_requests(app, r);
+            match s("command").as_deref() {
+                Some(c) if crate::dialogs::envelope::opens(c) => crate::dialogs::envelope::open(app, c),
+                c => match c.and_then(|c| menu_dialog(app, c)) {
+                    Some((kind, fields)) => {
+                        app.ui.dialog = Some(crate::state::Dialog::new(kind, fields));
+                        Ok(Value::Null)
+                    }
+                    None => Err("`command` must be a command whose menu item opens a dialog (see ui.menuDialog)".into()),
+                },
+            }
+        }
         "ui.widthPointEdit" => crate::dialogs::width_point::open(app, p),
         "ui.corners" => crate::dialogs::corners::open(app, p),
         "ui.hyphenation" => crate::dialogs::hyphenation::open(app),

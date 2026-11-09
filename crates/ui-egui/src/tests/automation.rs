@@ -159,6 +159,62 @@ fn shortcut_sets_are_read_only_inside_the_read_root() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// `app.export` refuses a key no format takes before anything is written, with a path or without.
+#[test]
+fn control_export_refuses_an_option_no_format_takes() {
+    let (mut app, tx, base) = confined("export-options");
+    let r = request(&mut app, &tx, "app.open", json!({"path": s(base.join("in/a.svg"))}));
+    assert_eq!(r["ok"], true, "{r}");
+    let path = base.join("out/a.pdf");
+    let refused = |r: &Value| r["error"].as_str().is_some_and(|e| e.contains("unknown parameter"));
+    for mut params in [json!({"format": "pdf", "noSuchOption": true}), json!({"format": "pdf", "marks": {"useDocumentBleed": true}})] {
+        let r = request(&mut app, &tx, "app.export", params.clone());
+        assert!(refused(&r), "{r}");
+        params["path"] = json!(s(path.clone()));
+        params["wait"] = json!(true);
+        let r = request(&mut app, &tx, "app.export", params);
+        assert!(refused(&r), "{r}");
+        assert!(!path.exists());
+    }
+    let r = request(&mut app, &tx, "app.export", json!({"format": "pdf", "path": s(path.clone()), "wait": true}));
+    assert_eq!(r["ok"], true, "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `app.save`, and `file.save` and `file.exportForScreens` run as commands, refuse a key no save
+/// format or no format takes before anything is written.
+#[test]
+fn control_save_refuses_an_option_no_format_takes() {
+    let (mut app, tx, base) = confined("save-options");
+    let r = request(&mut app, &tx, "app.open", json!({"path": s(base.join("in/a.svg"))}));
+    assert_eq!(r["ok"], true, "{r}");
+    let path = base.join("out/a.pdf");
+    let refused = |r: &Value| r["error"].as_str().is_some_and(|e| e.contains("unknown parameter"));
+    for params in [json!({"noSuchOption": true}), json!({"options": {"marks": {"useDocumentBleed": true}}})] {
+        let mut params = params;
+        params["path"] = json!(s(path.clone()));
+        let r = request(&mut app, &tx, "engine.execute", json!({"command": "file.save", "params": params.clone()}));
+        assert!(refused(&r), "{r}");
+        assert!(!path.exists());
+        params["wait"] = json!(true);
+        let r = request(&mut app, &tx, "app.save", params);
+        assert!(refused(&r), "{r}");
+        assert!(!path.exists());
+    }
+    let folder = base.join("out/screens");
+    for params in [json!({"noSuchOption": true}), json!({"formats": [{"format": "png", "noSuchOption": 1}]})] {
+        let mut params = params;
+        params["folder"] = json!(s(folder.clone()));
+        let r = request(&mut app, &tx, "engine.execute", json!({"command": "file.exportForScreens", "params": params}));
+        assert!(refused(&r), "{r}");
+        assert!(!folder.exists());
+    }
+    let r = request(&mut app, &tx, "app.save", json!({"path": s(path.clone()), "wait": true}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(path.exists());
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// An action set another app saved (`.aia`) is read only from inside the read root, whichever way a
 /// control request names it: `actionSet.read` and Load Actions….
 #[test]

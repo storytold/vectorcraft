@@ -114,7 +114,7 @@ fn apply_transform_moving_guides(
     let c = xf.as_coeffs();
     let is_translation = (c[0] - 1.0).abs() < 1e-9 && c[1].abs() < 1e-9 && c[2].abs() < 1e-9 && (c[3] - 1.0).abs() < 1e-9;
     let delta = guides.unwrap_or(Vec2::new(c[4], c[5]));
-    let with_guides = objects && ids_param(p, "ids").is_none() && is_translation;
+    let with_guides = objects && p.get("ids").is_none_or(Value::is_null) && is_translation;
     let has_guides = with_guides && !s.doc()?.selection.guides.is_empty();
     // A transform of ids that name no object, or an identity transform without a copy, moves
     // nothing: the document and its undo history stay as they are, and Transform Again repeats it.
@@ -254,7 +254,7 @@ pub(super) fn transform(s: &mut Session, p: &Value) -> Result<Value> {
     if p.get("ids").is_none() && crate::cmd::brushsym::selected_part(s)?.is_some() {
         return Ok(json!({ "warning": crate::cmd::brushsym::part_only().to_string() }));
     }
-    let (ids, anchors) = match ids_param(p, "ids") {
+    let (ids, anchors) = match ids_param(p, "ids", "object.transform")? {
         Some(v) => (outermost(&s.doc()?.doc, v), false),
         None => (selected_roots_to_transform(s)?, bool_or(p, "anchors", false)),
     };

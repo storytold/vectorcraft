@@ -174,7 +174,13 @@ pub(super) fn file_part(s: &str) -> String {
 /// every platform. Spaces between the device name and the period are dropped (`CON .png` becomes
 /// `CON-.png`).
 pub(crate) fn safe_file_name(s: &str) -> String {
-    let name = file_part(s);
+    name_without_device(&file_part(s))
+}
+
+/// [`safe_file_name`] without [`file_part`]: drops trailing periods and spaces and puts `-` after a
+/// Windows device name, and keeps every other character, so a source file name with `\` or `:` keeps
+/// it where the file system allows it.
+pub(super) fn name_without_device(name: &str) -> String {
     let name = name.trim_end_matches(['.', ' ']);
     let (base, rest) = name.split_at(name.find('.').unwrap_or(name.len()));
     // Windows ignores spaces before the extension, so `CON .png` is the CON device too.
@@ -187,7 +193,10 @@ pub(crate) fn safe_file_name(s: &str) -> String {
 }
 
 /// Keys of a format row that aren't encoder options.
-const ROW_KEYS: [&str; 7] = ["format", "scale", "ppi", "width", "height", "suffix", "folder"];
+pub(crate) const ROW_KEYS: [&str; 7] = ["format", "scale", "ppi", "width", "height", "suffix", "folder"];
+
+/// The writable formats a format row can't name.
+pub(crate) const UNWRITTEN_FORMATS: [&str; 5] = ["template", "txt", "dxf", "emf", "wmf"];
 
 /// One format row: what to write, at which size, with which suffix, into which sub-folder.
 struct Row {
@@ -208,7 +217,7 @@ impl Row {
             return Err(bad(C, "each format is an object {format, scale?, suffix?}"));
         }
         let format = writable(C, Some(str_param(row, "format").unwrap_or("png")), None)?;
-        if matches!(format.id, "template" | "txt" | "dxf" | "emf" | "wmf") {
+        if UNWRITTEN_FORMATS.contains(&format.id) {
             return Err(bad(C, "Export for Screens writes png, png8, jpg, webp, gif, tiff, bmp, tga, psd, svg, svgz, pdf, eps, ai or vectorcraft"));
         }
         // Vector formats have no pixel size: it doesn't apply and adds no @2x suffix (not even one
@@ -278,6 +287,36 @@ impl Row {
 /// The settings the Asset Export panel shares with the dialog: what is exported, not which art
 /// or where to.
 pub const SHARED_KEYS: [&str; 6] = ["formats", "preset", "settings", "prefix", "subfolders", "antiAlias"];
+
+/// The keys `document.exportForScreens` reads: those of [`ScreenParams`], the formats and their
+/// settings, `antiAlias`, `exportPreset` and `openLocation`, which the app reads.
+pub(crate) const PARAM_KEYS: [&str; 25] = [
+    "artboard",
+    "artboards",
+    "range",
+    "folder",
+    "zip",
+    "fullDocument",
+    "includeBleed",
+    "includeArtboardFill",
+    "subfolders",
+    "preset",
+    "prefix",
+    "assets",
+    "layers",
+    "selection",
+    "name",
+    "counterStart",
+    "counterPer",
+    "date",
+    "folders",
+    "pdfs",
+    "formats",
+    "settings",
+    "antiAlias",
+    "exportPreset",
+    "openLocation",
+];
 
 /// What `document.exportForScreens` reads besides the formats.
 #[derive(Default, Deserialize)]

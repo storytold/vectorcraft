@@ -1,6 +1,6 @@
 # Gaps
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-07 · **Change:** minor (Tools stays beside the canvas with left-side panels; new gradients follow document color mode; Selection QoL: marquee modes and visible feedback, #5313; Indian-language hyphenation review and license allowlist, #4947; opening a slow file shows a progress window, part of #5930; Hindi catalog and contributor loanword preferences; agent wording pass complete; wider native proofreading welcome; an image zoomed in on is separated, colorized or proofed only where it shows (#4155); scores and estimates unchanged; a document's first frame renders on the render worker, so opening a heavy file no longer freezes the window; scores and estimates unchanged; large images in CMYK documents are shrunk before they are separated into ink planes (#4155); scores and estimates unchanged; `.ai` paths with a Calligraphic brush open brushed, with the 6D Art Pen's channels, and Windows reads the pen's tilt and barrel rotation, #372; scores and estimates unchanged; Compound Shapes add-on, beyond Illustrator; scores and estimates unchanged; Contour add-on, beyond Illustrator; scores and estimates unchanged; a slow first frame is waited for instead of restarting without the graphics adapter, and the menu bar no longer waits for the installed fonts' scan; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-08 · **Change:** minor (floating tab groups collapse into the side icon rail and opened rail panels fold back into it, #5925 in part; G9: EPS gradients drawn as abutting strips import as one gradient, without seams; Tools stays beside the canvas with left-side panels; new gradients follow document color mode; Selection QoL: marquee modes and visible feedback, #5313; Indian-language hyphenation review and license allowlist, #4947; opening a slow file shows a progress window, part of #5930; Hindi catalog and contributor loanword preferences; agent wording pass complete; wider native proofreading welcome; an image zoomed in on is separated, colorized or proofed only where it shows (#4155); scores and estimates unchanged; a document's first frame renders on the render worker, so opening a heavy file no longer freezes the window; scores and estimates unchanged; large images in CMYK documents are shrunk before they are separated into ink planes (#4155); scores and estimates unchanged; `.ai` paths with a Calligraphic brush open brushed, with the 6D Art Pen's channels, and Windows reads the pen's tilt and barrel rotation, #372; scores and estimates unchanged; Compound Shapes add-on, beyond Illustrator; scores and estimates unchanged; Contour add-on, beyond Illustrator; scores and estimates unchanged; a slow first frame is waited for instead of restarting without the graphics adapter, and the menu bar no longer waits for the installed fonts' scan; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -15,6 +15,8 @@ Group Selection keeps an already selected component selected during a drag; a co
 **PR #3272 revision — 2026-11-04:** Group Selection component drags defer ancestor selection until a completed click, using current Direct Selection release handling; original Outline Stroke fills and newer selection behavior retained. Scores and estimates unchanged.
 
 Creating a gradient from solid or empty paint uses the document's color model for its default stops, including drawing its vector with the Gradient tool. Explicit `keepModel: true` retains RGB defaults, and existing gradients keep their own colors. Scores and estimates are unchanged.
+
+Window → Help Bar toggles the bottom tool-help strip independently of the status bar. Its visibility is saved with workspaces and UI preferences; Presentation Mode hides both bars. Scores and estimates are unchanged.
 
 The closed font-family fields in Character, Properties and Control now accept the
 mouse wheel for selected text (#5253). Each effective notch applies one family and
@@ -38,6 +40,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-06 | minor | G9: EPS import reads gradients a page paints as abutting strips as one linear gradient each (no seams); an Illustrator EPS whose page drew them that way keeps its layers. Estimate unchanged. |
 | 2026-11-03 | minor | Docked Tools stays between left-side panels and the canvas; redocking accepts canvas and window edges. Requested layout choice; scores and estimates unchanged. |
 | 2026-11-02 | minor | Selection QoL: saved marquee modes, screen drag direction with a 3 px dead zone, and translated mode/E feedback (#5313); VectorCraft addition, scores and estimates unchanged. |
 | 2026-11-07 | minor | Indian-language hyphenation (#4947): eleven MIT-licensed pattern sets, with grapheme and shaping-cluster protection in both composers and existing paragraph limits. Assamese and Sanskrit are selectable; Sanskrit automatic patterns remain pending an allowlisted source. Scores and estimates unchanged. |
@@ -52,6 +55,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 | 2026-11-05 | minor | G12: Hyphenation › Default Language sets the language of new type unless Document Setup chose one, stored as a tag; each run hyphenates in its own language, English only so far, so 2 Preferences options stay unused (#394) |
 | 2026-11-05 | minor | Compound Shapes add-on (beyond Illustrator): Object › Plug-ins › Compound Shapes lists Make, Release and Expand Compound Shape, and holds a setting, off by default, that makes the Pathfinder panel's Shape Mode buttons make a compound shape on a click and give the permanent result on Alt-click (the default is the reverse). Selected members of a compound shape always take the clicked mode. The setting is `window.pathfinder.compoundShapes`; no existing behavior changes while it is off. Scores and estimates unchanged. |
 | 2026-11-03 | minor | New gradients use CMYK default stops in CMYK documents, including Gradient tool creation. Scores and estimates unchanged. |
+| 2026-11-03 | minor | Help Bar has its own Window menu toggle and workspace visibility setting. Scores and estimates unchanged. |
 | 2026-11-02 | minor | Font-family fields step selected text with the mouse wheel (#5253); no scored gap or estimate reassessed. |
 | 2026-10-24 | minor | G12: General › Corner Radius is the Rounded Rectangle tool's radius, a change while the tool is active reaches it, and the radius ↑/↓ set while drawing (or a Tool Options value) becomes the preference, within 0–1296 pt (#394, `crates/engine/src/tests/constrain_tools.rs`); no entry closed, estimate unchanged. |
 | 2026-10-22 | minor | Reconcile upstream documentation after review F-3; preserve every dated revision and the original scaleArt runtime evidence without repeating completed jobs. |
@@ -108,6 +112,8 @@ partial one, and it blocks beta, not alpha.
 from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall clock with 4–6 agents.
 
 ## G1 Interaction fidelity
+
+- **Panel collapse controls (#5925, in part):** The small » in a floating tab-group header moves that group into the side icon rail, reusing the existing rail or creating one. An opened rail panel has the same control to fold its flyout back into the rail, including after a tab switch. Both controls preserve the tab group and its menu; other floating groups and full-width docked headers stay as they were. Pointer regressions in `crates/ui-egui/src/panel_docking/tests.rs` cover grouped tabs, reopening, separate groups, a missing rail, the menu and flyout closure after switching tabs; `native_tests.rs` covers the native-window click and removal of the empty palette. Scores and estimates unchanged.
 
 - **Done:** Distance Guides ([public page](https://helpx.adobe.com/illustrator/desktop/measure-and-align/grids-and-guides/use-distance-guides-for-accurate-placement.html)): with Smart Guides on and something selected, the Selection tool with Alt/Option held over another object shows the horizontal and vertical distances between them, and over an empty part of an artboard the selection's distances from its four edges, labelled in the General unit; Preferences › Smart Guides › Invoke Distance Guides turns them off. Hover only, as documented: not while moving or nudging. No entry closed; estimates unchanged.
 
@@ -187,7 +193,8 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 ## G9 Illustrator `.ai` and EPS files from real users
 
-- **Done (2026-10-30):** from an audit of a user's `.ai`/EPS files: All Caps and Small Caps; placed files at their box's corner; pages cropped to the art; gradient mesh corners with handle weights of 0 and the transparency written after a mesh, a masked mesh and a blend; a layer's state block with the stroke style; type on a path spaced as the file lays it out (the distance from the path under Align to Path comes from VectorCraft's font metrics, and the fit under Gravity does not reproduce the file's layout); EPS10 legacy-format type; a PDF of some artboards compared on the artboard its page shows. Comparison limits remain unchanged. This narrows G9; scores and estimates unchanged.
+- **Done (2026-11-06):** an EPS page that paints its gradients as rows of abutting one-colour strips imports them as linear gradients, so the seams between strips no longer show and an Illustrator EPS drawn that way keeps its layers instead of opening as its page. This narrows G9; scores and estimates unchanged.
+- **Done (2026-10-30):** from an audit of a user's `.ai`/EPS files: All Caps and Small Caps; placed files at their box's corner; pages cropped to the art; gradient mesh corners with handle weights of 0 and the transparency written after a mesh, a masked mesh and a blend; a layer's state block with the stroke style; type on a path spaced as the file lays it out (the distance from the path under Align to Path is measured from the top of each character's em box, half the height of the top of its H or the bottom of its font's bounding box, and the fit under Gravity does not reproduce the file's layout); EPS10 legacy-format type; a PDF of some artboards compared on the artboard its page shows. Comparison limits remain unchanged. This narrows G9; scores and estimates unchanged.
 
 - **Save-back update (2026-10-26):** ordinary EPS Save retains page margins and the whole editable document; source-loss confirmation remains. Import fidelity gaps and estimates below are unchanged.
 
@@ -636,8 +643,8 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 - **Done:** an initial live Revolve in the `three-d` crate (#846, from the contributor who offered in #605), with automatic smooth vector shading, default-on circular caps and spike-free continuous rims;
   Extrude & Bevel, Inflate and Rotate with Position presets ([three-d.md](three-d.md), #1407). Colored Inflate has automatic smooth vector lighting from shared membrane normals. White-light Inflate keeps its existing appearance. All four take one to ten colored directional lights, with neutral ambient applied once, a light list and independent previewing controls. Standard, Diffuse, Top Left and Right select original rigs, shared with commands; manual settings show Custom.
 - **Missing:** materials (base, Substance, graphics), shadows,
-  ray-traced rendering, angular cut caps, exact visibility for intersecting and concave surfaces, 3D Classic,
-  Turntable, textures, map art and shading in 3D export.
+  ray-traced rendering, angular cut caps, exact visibility for intersecting and concave surfaces, the rest of 3D
+  Classic (Revolve, Rotate, Map Art), Turntable, textures, map art and shading in 3D export.
 - **Impact:** specialist; Materials is the one menu stub left.
 - **Estimate:** 25–45 h; plan in `plan/` before coding.
 
@@ -743,9 +750,14 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 ## G17 Ecosystem: third-party plug-ins
 
 - **Missing:** Illustrator's ecosystem is a C++ plug-in SDK and a large commercial plug-in market. VectorCraft
-  has sandboxed WebAssembly plug-ins for object filters, live effects and file formats it writes
-  ([plugins.md](plugins.md)) and MCP; missing are tool plug-ins, panel plug-ins, importers, a plug-in directory and
+  has sandboxed WebAssembly plug-ins for object filters, live effects and file formats it writes or reads
+  ([plugins.md](plugins.md)) and MCP; missing are tool plug-ins, panel plug-ins, a plug-in directory and
   any third-party plug-ins (#710).
+- **Done:** importer plug-ins (`"kind": "importer"`). A plug-in adds a read-only file format that File › Open lists
+  and File › Open With names; `document.open` uses it for a file no built-in format reads, or when `importer` names it.
+  It is given at most 128 MiB of the file and returns paths and compound paths, checked as a filter's output is, which
+  become a new document; nothing opens when it fails, declines or is cancelled. Engine, unit and headless Open With
+  regressions.
 - **Done:** exporter plug-ins (`"kind": "exporter"`). A plug-in adds a write-only file format that File › Export ›
   Export As lists after the built-in ones and `document.export` writes (`plugin.<id>`, or a path ending in one of its
   extensions). It is given the document as the native file's JSON and its parameters, with a larger budget than a
@@ -821,6 +833,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-08 | minor | Floating tab groups collapse into the side icon rail and opened rail panels fold back into it (#5925, in part); tab groups remain intact. Scores and estimates unchanged. |
 | 2026-11-06 | minor | Hindi (`hi`): 7,877-row machine-assisted catalog, zero/one singular plurals, desktop font fallback and optional Devanagari craft-fonts fallback; all 55 translation tests pass; native review and a web font remain; scores and estimates unchanged |
 | 2026-11-05 | minor | G15: nearby hits on plain long strokes and outlines check their candidate segments directly; a 200,000-anchor middle hit took about 11–13 ms before and 1.0–1.4 ms after in paired runs. An inside-bounds miss fell from 18.7 ms to 1.6 ms. Estimate unchanged; idle budget run still open. |
 | 2026-11-05 | minor | G15: an image zoomed in on is separated, colorized or proofed only for the tiles in view (#4155); 100% zoom on that file 8.6 s → 0.05 s. Estimate unchanged. |

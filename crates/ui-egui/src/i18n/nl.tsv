@@ -313,6 +313,13 @@
 	Apply Bullets	Opsommingstekens toepassen
 	Numbered List	Genummerde lijst
 	Apply Numbers	Nummering toepassen
+	Bullets and Numbering…	Opsommingstekens en nummering…
+	Numbers	Nummers
+	Level:	Niveau:
+	Bullet Character:	Opsommingsteken:
+	Number Style:	Nummerstijl:
+	Left Indent:	Links inspringen:
+	First Line Indent:	Eerste regel inspringen:
 	Convert to Text	Converteren naar tekst
 	Filled Dot	Gevulde stip
 	Dash	Streepje
@@ -440,6 +447,17 @@
 	Inflate	Opblazen
 	Select objects, then pick an object type to give them a 3D effect.	Selecteer objecten en kies dan een objecttype om ze een 3D-effect te geven.
 	Extrude & Bevel…	Extruderen en afschuinen…
+	3D (Classic)	3D (klassiek)
+	Extrude & Bevel (Classic)…	Extruderen en afschuinen (klassiek)…
+	Surface	Oppervlak
+	Wireframe	Draadmodel
+	No Shading	Geen arcering
+	Plastic	Plastic
+	Highlight Intensity	Glansintensiteit
+	Highlight Size	Glansgrootte
+	Blend Steps	Overvloeistappen
+	Shading Color	Arceringskleur
+	Draw Hidden Faces	Verborgen vlakken tekenen
 	Revolve…	Draaien…
 	Inflate…	Opblazen…
 	Materials…	Materialen…
@@ -650,6 +668,11 @@
 	Color	Kleur
 	Color Guide	Kleurhulp
 	Color Themes	Kleurthema's
+	Color Wheel	Kleurenwiel
+	Hue ring	Tintring
+	Saturation and brightness	Verzadiging en helderheid
+	Color field	Kleurveld
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	CSS Properties	CSS-eigenschappen
 	Document Info	Documentinfo
 	Flattener Preview	Afvlakvoorbeeld
@@ -1195,7 +1218,7 @@ lighting	Light	Licht
 	X:	X:
 	Y:	Y:
 	Drag to float the toolbar	Sleep om de werkbalk zwevend te maken
-	Drag to the window's left edge to dock	Sleep naar de linkerrand van het venster om te dokken
+	Drag to the window's left or right edge to dock	Sleep naar de linker- of rechterrand van het venster om te dokken
 	Crystallize	Kristalliseren
 	Add Anchor Point Tool	Ankerpunt toevoegen
 	Anchor Point Tool	Ankerpunt-gereedschap
@@ -1449,6 +1472,15 @@ digits	Malayalam	Malayalam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Tate-chu-yoko-instellingen…
 	Tate-chu-yoko Settings	Tate-chu-yoko-instellingen
+	Composite Fonts…	Samengestelde lettertypen…
+	Composite Fonts	Samengestelde lettertypen
+	Export Composite Fonts	Samengestelde lettertypen exporteren
+	Import Composite Fonts	Samengestelde lettertypen importeren
+	Delete Font	Lettertype verwijderen
+	Kanji	Kanji
+	Kana	Kana
+	Numerals	Cijfers
+	Scale at Center	Schalen vanuit het midden
 	Up/Down:	Omhoog/omlaag:
 	Left/Right:	Links/rechts:
 	Underline	Onderstrepen
@@ -1725,6 +1757,10 @@ digits	Malayalam	Malayalam
 	Stylistic	Stilistisch
 	Mojikumi Set	Mojikumi-set
 	Kinsoku Set	Kinsoku-set
+	Kinsoku Shori Type	Kinsoku Shori-type
+	Push In First	Eerst inschuiven
+	Push Out First	Eerst uitschuiven
+	Push Out Only	Alleen uitschuiven
 	Hard	Hard
 	Right Indent	Rechts inspringen
 	Right-to-Left Paragraph Direction	Alinearichting van rechts naar links
@@ -2485,6 +2521,7 @@ digits	Malayalam	Malayalam
 	Tile Range:	Tegelbereik:
 	tile {number}	tegel {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Tegels worden van links naar rechts en vervolgens van boven naar beneden genummerd; laat het bereik leeg voor alle tegels.
+	Copies per Sheet (as many as fit, in a grid)	Kopieën per vel (zoveel als er passen, in een raster)
 	Transverse (the page a quarter turn on the paper)	Dwars (de pagina een kwartslag op het papier)
 	Unprintable margin:	Niet afdrukbare marge:
 	{pages} in all, {count} per copy	{pages} in totaal, {count} per exemplaar
@@ -2555,6 +2592,10 @@ digits	Malayalam	Malayalam
 	< 1 sec	< 1 sec
 	[Unnamed]	[Naamloos]
 	Amount:	Hoeveelheid:
+	Anti-aliasing Method	Anti-aliasingmethode
+antiAlias	Sharp	Scherp
+	Crisp	Helder
+	Strong	Krachtig
 	Anti-aliasing:	Anti-aliasing:
 	Artboard:	Tekenbord:
 	Color Table	Kleurentabel
@@ -4109,6 +4150,7 @@ imageTrace	Outline	Contour
 @msg	Split Into Grid: select paths large enough for the grid	In raster verdelen: selecteer paden die groot genoeg zijn voor het raster
 @msg	Targa files are RGB: colorModel rgb	Targa-bestanden zijn RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Tekstomloop: selecteer een omloopobject
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` moet "none", "sharp", "crisp" of "strong" zijn
 @msg	`aspect` must be a number (%)	`aspect` moet een getal zijn (%)
 @msg	`at` must be [x, y]	`at` moet [x, y] zijn
 @msg	`color` must be a colour	`color` moet een kleur zijn
@@ -4676,10 +4718,14 @@ imageTrace	Outline	Contour
 @msg	its objects are nested too deeply	de objecten ervan zijn te diep genest
 @msg	its section ending with `%{end}` doesn't end	zijn sectie die op `%{end}` eindigt, eindigt niet
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	penselen die VectorCraft nog niet kan lezen, zijn weggelaten uit het deelvenster Penselen ({_1})
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objecten met meerdere vullingen of lijnen, effecten of penselen zijn als hun getekende uiterlijk binnengekomen ({_1}): hun vormgeving is nog niet bewerkbaar
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objecten met meerdere vullingen of lijnen, lijnen met variabele breedte, effecten of penselen zijn als hun getekende uiterlijk binnengekomen ({_1}): hun vormgeving is nog niet bewerkbaar
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	de naam `{name}` is geen UTF-8 en is gelezen als {label}: als die er verkeerd uitziet, open het bestand dan met een andere legacyNameEncoding
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	de naam `{name}` is geen UTF-8, en delen ervan zijn ook geen geldige {label}: open het bestand met een andere legacyNameEncoding
+@msg	more names that aren't UTF-8 were read as {label} ({count})	meer namen die geen UTF-8 zijn, zijn gelezen als {label} ({count})
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	verloop „{name}” is niet gedefinieerd in het bestand: er is een effen kleur voor gebruikt
 @msg	an image VectorCraft can't read was left out	een afbeelding die VectorCraft niet kan lezen, is weggelaten
 @msg	an image whose data is cut short was left out	een afbeelding waarvan de gegevens zijn afgekapt, is weggelaten
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	een ingesloten afbeelding van {_1} × {_2} pixels is verkleind tot {_3} × {_4} pixels om de lagen te behouden
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	gekoppelde afbeeldingen tonen het in het bestand opgeslagen voorbeeld met lage resolutie totdat hun bestanden zijn gevonden: koppel ze opnieuw in het paneel Koppelingen
 @msg	linked type areas past VectorCraft's limits were left out	gekoppelde tekstvlakken buiten de limieten van VectorCraft zijn weggelaten
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	tekst die binnen een tekstobject van schrijfrichting verandert, wordt geopend in de richting van het eerste teken
@@ -4715,6 +4761,7 @@ imageTrace	Outline	Contour
 @msg	object ids are non-negative integers, not {v}	object-id's zijn niet-negatieve gehele getallen, niet {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} moet een array van object-id's zijn die niet-negatieve gehele getallen zijn
 @msg	invalid object id {value}: expected a non-negative integer	ongeldige object-id {value}: een niet-negatief geheel getal verwacht
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	item {index} van `{key}` is {value}, geen object-id (een niet-negatief geheel getal)
 @msg	no such object id {value}	er is geen object met id {value}
 @msg	automation filesystem access is not granted: read authority is absent: {path}	toegang tot het bestandssysteem voor automatisering is niet verleend: de leesbevoegdheid ontbreekt: {path}
 @msg	automation filesystem access is not granted: write authority is absent: {path}	toegang tot het bestandssysteem voor automatisering is niet verleend: de schrijfbevoegdheid ontbreekt: {path}
@@ -5666,6 +5713,11 @@ swatch	Bright Violet	Felviolet
 @msg	too many library panels were opened in this session	er zijn in deze sessie te veel bibliotheekpanelen geopend
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	De afbeelding is {_1} × {_2} pixels, meer dan {LARGE_TRACE_SIDE} aan één zijde: ze wordt getraceerd, maar langzamer. Een voorinstelling met minder detail of een kleinere kopie van de afbeelding traceert sneller.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	De afbeelding is getraceerd op {_1} × {_2} pixels, verkleind van {_3} × {_4} (maximaal {_5} megapixels).
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	De modus Plat logo gebruikt keepColors niet: hij traceert de kleuren die in logoColors staan, of de kleuren die hij vindt.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Er is niets getraceerd: geen van de kleuren die het traceren vond, komt overeen met keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Er is niets getraceerd: Kleur negeren laat elk gebied van de kleuren in keepColors weg.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	Er is niets getraceerd: de kleuren die overeenkomen met keepColors leveren geen paden op.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: geen van de kleuren die het traceren vond, komt overeen met {c}, dus daarvan wordt niets getraceerd.
 @msg	Flat Logo traced the image at {_1} × {_2} pixels, averaged down from {_3} × {_4}.	De modus Plat logo heeft de afbeelding getraceerd op {_1} × {_2} pixels, door middeling verkleind van {_3} × {_4}.
 	Artboard {n} of {total}	Tekengebied {n} van {total}
 	File {n} of {total}	Bestand {n} van {total}
@@ -5790,6 +5842,8 @@ axis	Y Axis	Y-as
 	Install “{name}”, which asks for these permissions?	„{name}” installeren, dat om deze machtigingen vraagt?
 	ID: {id}	ID: {id}
 	Version: {version}	Versie: {version}
+	Install “{name}” in place of the plug-in with the same ID?	„{name}” installeren in plaats van de plug-in met dezelfde ID?
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Dit bestand is niet de plug-in die eerder met deze ID was geïnstalleerd. Het krijgt de instellingen en cache die voor die ID bewaard zijn.
 	File SHA-256: {hash}	SHA-256 van het bestand: {hash}
 	Read the objects it is given	De objecten lezen die het krijgt
 	Change, add and delete objects in the document	Objecten in het document wijzigen, toevoegen en verwijderen
@@ -5797,6 +5851,9 @@ axis	Y Axis	Y-as
 	Change how the objects its effect is applied to are drawn	Wijzigen hoe de objecten waarop het effect is toegepast worden getekend
 	Write the document as a file in its own format	Het document als bestand in een eigen indeling schrijven
 	Show its progress, see Cancel and write log lines	De voortgang tonen, een annulering zien en logregels schrijven
+	Keep settings of its own	Eigen instellingen bewaren
+	Keep a cache of its own, which you can clear	Een eigen cache bewaren, die u kunt legen
+	Clear Plug-in Cache	Plug-incache legen
 # Actions panel: action sets (#3712).
 	New Set…	Nieuwe set…
 	New Set	Nieuwe set
@@ -6308,6 +6365,16 @@ breakText	Glyphs	Glyphs
 @msg	path must be a list of child indices	path moet een lijst met onderliggende indexen zijn
 @msg	no object at path {shown} in the symbol's art	geen object op pad {shown} in de illustratie van het symbool
 @msg	give fill, stroke, opacity and/or blend	geef fill, stroke, opacity en/of blend op
+@msg	{key} cannot be set on a guide	{key} kan niet worden ingesteld op een hulplijn
+@msg	{key} cannot be set on a blend	{key} kan niet worden ingesteld op een vermenging
+@msg	{key} cannot be set on an envelope	{key} kan niet worden ingesteld op een envelop
+@msg	{key} cannot be set on a gradient mesh	{key} kan niet worden ingesteld op een verloopraster
+@msg	{key} cannot be set on a Repeat	{key} kan niet worden ingesteld op een herhaling
+@msg	{key} cannot be set on a placed document	{key} kan niet worden ingesteld op een geplaatst document
+@msg	{key} cannot be set on an Intertwine group	{key} kan niet worden ingesteld op een verstrengelde groep
+@msg	stroke cannot be set on a symbol instance	stroke kan niet worden ingesteld op een symboolinstantie
+@msg	fill on a symbol instance must be a solid color or none	fill van een symboolinstantie moet een egale kleur of none zijn
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} kan niet worden ingesteld op een afbeelding zonder het effect Converteren naar vorm of Object omtrekken
 @msg	pass newName, registration, exportType, nineSlice and/or type	geef newName, registration, exportType, nineSlice en/of type op
 	Text Flow	Tekstdoorloop
 	By Rows	Per rij
@@ -6337,6 +6404,7 @@ breakText	Glyphs	Glyphs
 	Create Swatch Legend	Stalenlegenda maken
 	Create Swatch Legend…	Stalenlegenda maken…
 	HEX	HEX
+	Help Bar	Helpbalk
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	Teksthulpmiddelen
 	Text Tweaker…	Tekst bijstellen…
@@ -6403,6 +6471,11 @@ breakText	Glyphs	Glyphs
 	3D Box	3D-doos
 	3D Box Tool	3D-doosgereedschap
 
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Openen met
+	No importer plug-ins installed	Geen importplug-ins geïnstalleerd
+	Read files you open in its format and make documents from them	Bestanden lezen die u in zijn indeling opent en er documenten van maken
+
 # Safe Mode
 	Safe Mode…	Veilige modus…
 	Safe Mode	Veilige modus
@@ -6423,3 +6496,4 @@ breakText	Glyphs	Glyphs
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Uitlijnen op pixelraster
+@msg	side is left or right, not `{s}`	side is left of right, niet `{s}`

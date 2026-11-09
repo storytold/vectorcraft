@@ -367,6 +367,8 @@ pub fn export_with_report(doc: &Document, opts: &ExportOptions) -> (String, Vec<
 /// Export a document as SVG plus the image files it links to. `native`: the document in the
 /// native format, embedded when [`ExportOptions::preserve_editing`] is on.
 pub fn export_full(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>) -> Output {
+    // Type in the document's composite fonts is drawn in them, whether or not an app has the document open.
+    let _lent = vectorcraft_text::FontDb::global().lend_composite_fonts(&doc.composite_fonts);
     export::export(doc, opts, native)
 }
 

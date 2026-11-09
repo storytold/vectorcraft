@@ -33,6 +33,8 @@ pub fn entry<'a>(app: &VectorcraftApp, it: &'a Item) -> Option<Entry<'a>> {
     Some(match it {
         Item::Sep => Entry::Sep,
         Item::Header(h) => Entry::Header(t(h)),
+        // A plug-in's submenu shows its name as it is, as its items do.
+        Item::Sub(label, children) if super::labels::holds_plugin_commands(children) => Entry::Sub(label, children),
         Item::Sub(label, children) => Entry::Sub(t(label), children),
         Item::Todo(label, sc) => Entry::Item(Row {
             command: None,

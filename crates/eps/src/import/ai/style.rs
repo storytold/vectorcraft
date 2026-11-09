@@ -47,7 +47,8 @@
 //! with a pattern or gradient too; strokes with a Calligraphic or Art brush or aligned inside or outside too), each with its own
 //! transparency and effects, and the effects of
 //! [`effect`]. Such objects are read as themselves with an appearance of those fills, strokes and
-//! effects; others keep their drawn look. Effect › Pathfinder effects (`(Adobe Pathfinder)` in the
+//! effects (a path's stack of several fills and strokes when its drawn look places each of its
+//! gradients); others keep their drawn look. Effect › Pathfinder effects (`(Adobe Pathfinder)` in the
 //! object's chain) are read on a group with no fills or strokes of its own, which keeps its members.
 
 use std::collections::HashMap;
@@ -59,7 +60,7 @@ use vectorcraft_effects::is_pathfinder;
 
 use super::brush::PathBrush;
 use super::lex::{Lexer, Tok};
-use super::obj::{self, V};
+use super::obj::{self, Names, V};
 use super::paint;
 
 const GLOW: &str = "Adobe Outer Glow"; // brand-ok: the filter's name in the files
@@ -122,6 +123,12 @@ pub(super) fn warp_style(n: i64) -> Option<&'static str> {
     id.strip_prefix("warp.")
 }
 
+/// The number `DeformStyle` gives warp style `style` (`arc`, `arcLower`, …), from 1.
+pub(crate) fn warp_number(style: &str) -> Option<i64> {
+    let at = WARPS.iter().position(|id| id.strip_prefix("warp.") == Some(style))?;
+    i64::try_from(at + 1).ok()
+}
+
 /// The Effect › Pathfinder effects by the `Command` number of their filter. `Command` 0 is Add
 /// (https://community.adobe.com/questions-652/liveeffect-xml-effect-is-added-under-the-object-795137);
 /// the numbers 1 to 11 are VectorCraft's own reader rules, learned from saved files. Trap (12) isn't
@@ -167,13 +174,21 @@ const PATHFINDER_OPTIONS: [(&str, Kind, f64); 12] = [
 pub(super) struct ArtStyle {
     /// The style reads as [`Self::items`] and [`Self::effects`].
     pub plain: bool,
-    /// It is one fill and one stroke at most, in solid colours or the object's own gradient, with
+    /// It is one fill and one stroke at most, none of them [`Self::uneven`], in solid colours or the object's own gradient, with
     /// no transparency or effects of their own, and only Drop Shadow, Inner Glow, Outer Glow,
     /// Feather, Round Corners, Scribble, Convert to Shape, the Path effects (Offset Path, Outline Object, Outline Stroke),
     /// Bas Relief read from its settings block and some Distort & Transform effects ([`any_object_takes`]) on the object
     /// (and Pathfinder effects when it has no fills or strokes): what any object is read with. Type takes the other plain styles too (its drawn look
-    /// can't be retyped); other objects keep their drawn look, which is the app's own rendering.
+    /// can't be retyped), paths and compound paths [`Self::stacked`] ones; other objects keep their drawn look, which is the app's own rendering.
     pub simple: bool,
+    /// It would be [`Self::simple`] but for a Stroke Style filter's variable width written as one
+    /// centered array ([`centered_widths`]): an object whose drawn look is empty takes it with its profile.
+    pub uneven: bool,
+    /// It is several fills and strokes in solid colours or gradients (strokes without a brush),
+    /// each with its own visibility, opacity and blend mode but no effects of its own, under only
+    /// the effects any object takes that don't move the outline: what a path or compound path is
+    /// read with when each gradient is placed as its drawn look has it (`read::ops`' `styled`).
+    pub stacked: bool,
     /// Its fills and strokes, bottom first.
     pub items: Vec<StyleItem>,
     /// Each item's own visibility, transparency and effects, in the order of [`Self::items`].
@@ -326,9 +341,9 @@ impl Default for Filter {
 const MAX_FILTERS: usize = 4096;
 
 /// Most entries read from a style list.
-const MAX_LISTED: usize = 4096;
+pub(crate) const MAX_LISTED: usize = 4096;
 /// The longest style name read from a style list, in bytes.
-const MAX_LISTED_NAME: usize = 1024;
+pub(crate) const MAX_LISTED_NAME: usize = 1024;
 
 /// The style list (`%AI9_BeginArtStyleList`, between its markers): one literal string per style,
 /// the Graphic Styles panel's order. Each name is its string's bytes, escapes undone; other tokens,
@@ -374,8 +389,14 @@ fn closes(data: &[u8]) -> bool {
     false
 }
 
-/// The styles of the section `data` (between its markers), by name.
+/// [`art_styles_in`], names read in the default encoding.
 pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
+    art_styles_in(data, &mut Names::default())
+}
+
+/// The styles of the section `data` (between its markers), by name: the names of the styles and of
+/// the colours, gradients and patterns they paint with read by `names`.
+pub(super) fn art_styles_in(data: &[u8], names: &mut Names) -> HashMap<String, ArtStyle> {
     let mut styles = HashMap::new();
     let mut name: Option<String> = None;
     let mut filters: Vec<Filter> = vec![];
@@ -431,7 +452,7 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
                 }
                 b"FillStyle" => style_entry = Some(Kind::Fill),
                 b"StrokeStyle" | b"BlendStyle" => style_entry = Some(Kind::Other),
-                b"Name" if name.is_none() && filters.is_empty() => name = operands.iter().rev().find_map(V::text),
+                b"Name" if name.is_none() && filters.is_empty() => name = operands.iter().rev().find_map(|v| names.text(v)),
                 b"All" | b"[Registration]" | b"Registration" => operands.push(V::Name(obj::text(n))),
                 b"CompoundFilter" => pending = Some(true),
                 b"BasicFilter" => pending = Some(false),
@@ -458,7 +479,7 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
                 }
                 b"Array" => dict_array = Some(vec![]),
                 b"PluginObject" if in_basic => {
-                    let mut texts = operands.iter().rev().filter_map(V::text);
+                    let mut texts = operands.iter().rev().filter_map(|v| names.text(v));
                     if let (Some(plugin), Some(name), Some(f)) = (texts.next(), texts.next(), filters.last_mut()) {
                         f.plugin_object = Some((name, plugin));
                     }
@@ -529,7 +550,7 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
                     }
                 }
                 if let Some(f) = filters.last_mut() {
-                    paint_op(f, op, &operands);
+                    paint_op(f, op, &operands, names);
                 }
                 if op == "," || op == ";" || op.starts_with('X') || op.starts_with('B') || op.len() <= 2 {
                     operands.clear();
@@ -602,13 +623,13 @@ fn block_data(lex: &mut Lexer, encoded: &[u8]) -> Option<Vec<u8>> {
     None
 }
 
-/// A paint operator of a fill's or stroke's style.
-fn paint_op(f: &mut Filter, op: &str, vals: &[V]) {
+/// A paint operator of a fill's or stroke's style, the names it gives read by `names`.
+fn paint_op(f: &mut Filter, op: &str, vals: &[V], names: &mut Names) {
     let last = vals.iter().rev().find_map(V::num);
     match op {
         "Xa" | "k" | "g" | "x" | "Xx" | "Xk" | "Xs" | "Xz" | "XA" | "K" | "G" | "X" | "XX" | "XK" | "XS" | "XZ" | "xa" | "xx" | "xk" | "xs"
         | "xz" => {
-            let Some((p, _)) = paint::color_op(op, vals) else { return };
+            let Some((p, _)) = paint::color_op_in(op, vals, names) else { return };
             if op.ends_with(|c: char| c.is_ascii_lowercase()) {
                 f.fill = Some(p);
             } else {
@@ -669,13 +690,13 @@ fn paint_op(f: &mut Filter, op: &str, vals: &[V]) {
         "Bg" => {
             f.gradient = true;
             let at = vals.iter().rposition(|v| matches!(v, V::Str(_)));
-            let name = at.and_then(|i| vals.get(i)).and_then(V::text);
+            let name = at.and_then(|i| vals.get(i)).and_then(|v| names.text(v));
             let n: Vec<f64> = at.map_or(&[][..], |i| vals.get(i + 1..).unwrap_or_default()).iter().filter_map(V::num).collect();
             let angle = n.get(2).copied().filter(|a| a.is_finite()).unwrap_or(0.0);
             f.gradient_of = Some((name, angle));
         }
         "p" => {
-            let name = vals.iter().find_map(|v| if let V::Str(_) = v { v.text() } else { None });
+            let name = vals.iter().find(|v| matches!(v, V::Str(_))).and_then(|v| names.text(v));
             let matrix = vals.iter().rev().find_map(|v| match v {
                 V::Arr(a) => {
                     let n: Vec<f64> = a.iter().filter_map(V::num).collect();
@@ -1583,7 +1604,7 @@ fn style(filters: &[Filter]) -> ArtStyle {
     st.plain = b.plain;
     let bas_relief = bas_relief_read(filters);
     let count = |stroke: bool| st.items.iter().filter(|i| matches!(i, StyleItem::Stroke { .. }) == stroke).count();
-    st.simple = st.plain
+    let simple = st.plain
         && count(true) <= 1
         && count(false) <= 1
         && st.items.iter().all(|i| matches!(i, StyleItem::Fill(_) | StyleItem::Stroke { .. } | StyleItem::Gradient { .. }))
@@ -1594,7 +1615,28 @@ fn style(filters: &[Filter]) -> ArtStyle {
         && (!st.moves_outline() || st.effects.len() == 1)
         // Pathfinder effects on a group with no fills or strokes of its own (`styled` checks the group).
         && (!st.pathfinder || st.items.is_empty());
+    // A stroke with one centered width array comes in as the drawn look, which holds the outline as the file draws it.
+    let centered = filters.iter().any(centered_widths);
+    (st.simple, st.uneven) = (simple && !centered, simple && centered);
+    st.stacked = !centered
+        && st.plain
+        && !st.pathfinder
+        && !st.moves_outline()
+        && st.items.iter().all(|i| matches!(i, StyleItem::Fill(_) | StyleItem::Gradient { .. } | StyleItem::Stroke { brush: None, .. }))
+        && st.looks.iter().all(|l| l.effects.is_empty())
+        && st.effects.iter().all(any_object_takes);
     st
+}
+
+/// Whether `f` is a painted Stroke Style filter with a variable width written as one centered array,
+/// `BSCenteredWidthsArray`. A Stroke Offset filter's profile and one written as each side's widths
+/// (`BSLeftWidthsArray` and `BSRightWidthsArray`, as VectorCraft saves it) are not.
+fn centered_widths(f: &Filter) -> bool {
+    let each_side = f
+        .arrays
+        .get("BSVariableWidthTValuesArray")
+        .is_some_and(|at| ["BSLeftWidthsArray", "BSRightWidthsArray"].iter().all(|key| f.arrays.get(*key).is_some_and(|w| w.len() == at.len())));
+    f.name == STROKE && f.paints.0 && !each_side && width_profile(&f.arrays).is_some()
 }
 
 mod adapter;

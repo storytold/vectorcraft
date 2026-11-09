@@ -119,6 +119,25 @@ fn variable_font_settings_are_not_highlighted_as_substituted_glyphs() {
     assert!(g.alternate_glyphs(&t).elements().is_empty());
 }
 
+/// Type in a composite font draws each class of character in its part's face, which is not a
+/// substitute: Document Setup's highlight of substituted glyphs leaves it alone.
+#[test]
+fn composite_font_parts_are_not_highlighted_as_substituted_glyphs() {
+    use vectorcraft_doc::{CompositeFont, CompositePart, CompositeParts};
+    let _adding = adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    let mut parts = CompositeParts::all(CompositePart::new("Source Sans 3", "Regular"));
+    parts.roman = CompositePart::new("JetBrains Mono", "Regular");
+    parts.numerals = CompositePart::new("Inter", "Regular");
+    db.set_composite_font(&CompositeFont { name: "CF Highlight".into(), parts });
+    let style = CharStyle { size: 40.0, font_family: "CF Highlight".into(), ..Default::default() };
+    let t = TextObject::point(Point::new(10.0, 60.0), "Ab12", style);
+    let g = text_geom(&t);
+    db.remove_composite_font("CF Highlight");
+    assert!(!g.all.elements().is_empty());
+    assert!(g.substituted_glyphs.elements().is_empty() && g.substituted_fonts.elements().is_empty());
+}
+
 /// Type at 80% opacity, in Multiply and with a drop shadow redraws in a font that becomes
 /// available: the glyph geometry kept for it is laid out again.
 #[test]

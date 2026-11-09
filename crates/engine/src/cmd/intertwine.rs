@@ -330,7 +330,7 @@ fn raised_area(face: &PathData, i: usize, areas: &[Option<PathData>]) -> PathDat
             .filter(|a| a.bounds().is_some_and(|b| b.overlaps(near)))
             .map(|a| (a, FillRule::NonZero)),
     );
-    let only = po::boolean_n(&paths, |inside| inside.first() == Some(&true) && inside.get(1) == Some(&true) && !inside.iter().skip(2).any(|b| *b));
+    let only = po::boolean_n(&paths, |inside| inside == [0, 1]);
     if only.is_empty() {
         return face.clone();
     }

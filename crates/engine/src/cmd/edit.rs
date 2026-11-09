@@ -157,7 +157,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Cut",
             ["Edit"],
             Some("Cmd+X"),
-            "{lockedAndHidden?: bool (the Artboard tool chosen, as artboard.cut)} (selected ruler guides go too; the Artboard tool chosen: artboard.cut); refused while an object of a symbol instance's art is selected",
+            "{selectedArtboards?: [n…], art?: bool, lockedAndHidden?: bool (the Artboard tool chosen, as artboard.cut)} (as edit.copy) (selected ruler guides go too; the Artboard tool chosen, or selectedArtboards given: artboard.cut); refused while an object of a symbol instance's art is selected",
             has_selection_guides_or_artboard_tool,
             cut
         ),
@@ -166,7 +166,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Copy",
             ["Edit"],
             Some("Cmd+C"),
-            "{lockedAndHidden?: bool (the Artboard tool chosen, as artboard.copy)} the selection with what it uses, and the selected ruler guides (pasted on the layer new art goes to, moved as the objects are; alone, where they were); the Artboard tool chosen: artboard.copy; with an object of a symbol instance's art selected, the instance is copied whole → {copied, guides}",
+            "{selectedArtboards?: [n…] (the artboards the Artboard tool had selected, which the journal records for a replay; it runs artboard.copy with any tool chosen), art?: bool (default: the Artboard tool's moveArt option; the journal records it beside selectedArtboards), lockedAndHidden?: bool (the Artboard tool chosen, as artboard.copy)} the selection with what it uses, and the selected ruler guides (pasted on the layer new art goes to, moved as the objects are; alone, where they were); the Artboard tool chosen: artboard.copy; with an object of a symbol instance's art selected, the instance is copied whole → {copied, guides}",
             has_selection_guides_or_artboard_tool,
             copy
         ),
@@ -794,11 +794,14 @@ fn new_document_from_state(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
     let mut doc = Document::clone(chosen.as_ref().unwrap_or(&st.doc));
     let (imported_from, import_losses, opened_by) = (st.imported_from.clone(), st.import_losses.clone(), st.opened_by.clone());
-    if let Some(path) = st.path.as_deref() {
+    let base = super::links::LinkBase::of(st);
+    if base.doc.is_some() {
         // Files are looked for within the asking caller's roots, else within those of the caller that opened the source.
         let roots = crate::file_access::current().or_else(|| opened_by.clone());
-        crate::file_access::confine(roots.as_ref(), || super::links::with_found_paths(&mut doc, path));
+        crate::file_access::confine(roots.as_ref(), || super::links::with_found_paths(&mut doc, base));
     }
+    // The copy's links keep their relative paths, which name places from the same file.
+    let links_from = base.relative.map(str::to_string);
     doc.drop_edit_modes();
     if doc.pattern_edit.is_some() {
         super::patterncmds::finish_edit(&mut doc, &mut vectorcraft_doc::Selection::default())?;
@@ -815,6 +818,7 @@ fn new_document_from_state(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc_mut()?;
     st.imported_from = imported_from;
     st.import_losses = import_losses;
+    st.links_from = links_from;
     st.opened_by = st.opened_by.take().or(opened_by);
     st.mark_unsaved();
     Ok(json!({ "index": i, "title": st.title() }))
@@ -942,15 +946,27 @@ fn copy_cut_targets(s: &Session) -> Result<(bool, Vec<NodeId>)> {
     Ok((direct, roots))
 }
 
-/// The params edit.copy and edit.cut pass on to `artboard.copy` and `artboard.cut`.
-fn artboard_clipboard_params(p: &Value) -> Value {
-    p.get("lockedAndHidden").map_or_else(|| json!({}), |v| json!({ "lockedAndHidden": v }))
+/// Copy or Cut takes artboards: the Artboard tool is chosen, or the journal recorded the artboards
+/// it took then.
+fn takes_artboards(s: &Session, p: &Value) -> bool {
+    s.tool_id() == "artboard" || p.get("selectedArtboards").is_some()
+}
+
+/// Copy or Cut of artboards: `selectedArtboards`, `art` and `lockedAndHidden` of `p`, or their
+/// defaults from the Artboard tool, which the journal entry records.
+fn copy_artboards(s: &mut Session, p: &Value, cut: bool) -> Result<Value> {
+    let given: serde_json::Map<String, Value> =
+        ["selectedArtboards", "art", "lockedAndHidden"].into_iter().filter_map(|key| p.get(key).map(|v| (key.to_string(), v.clone()))).collect();
+    let given = Value::Object(given);
+    super::panelcmds::boards_and_art_noted(s, &given, if cut { "edit.cut" } else { "edit.copy" })?;
+    super::panelcmds::artboard_copy(s, &given, cut)
 }
 
 fn copy(s: &mut Session, p: &Value) -> Result<Value> {
+    switch_or(p, "art", false, "edit.copy")?;
     // The Artboard tool copies its artboard (and the art on it).
-    if s.tool_id() == "artboard" {
-        return super::panelcmds::artboard_copy(s, &artboard_clipboard_params(p), false);
+    if takes_artboards(s, p) {
+        return copy_artboards(s, p, false);
     }
     // With an object of a dynamic symbol instance's art selected, the instance is copied.
     let (direct, targets) = copy_cut_targets(s)?;
@@ -990,8 +1006,9 @@ fn copy(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn cut(s: &mut Session, p: &Value) -> Result<Value> {
-    if s.tool_id() == "artboard" {
-        return super::panelcmds::artboard_copy(s, &artboard_clipboard_params(p), true);
+    switch_or(p, "art", false, "edit.cut")?;
+    if takes_artboards(s, p) {
+        return copy_artboards(s, p, true);
     }
     refuse_symbol_part(s)?;
     // Ruler guides selected on their own: Copy takes them, Clear removes them.

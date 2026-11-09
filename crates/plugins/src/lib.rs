@@ -3,48 +3,58 @@
 //! A plug-in is a WebAssembly module that implements the VectorCraft plug-in ABI (v1, documented
 //! in `docs/plugins.md`). It runs in [`wasmi`], a pure-Rust interpreter, with:
 //!
-//! - **no host imports but the three of API level 2** ([`host`]: progress, Cancel and log lines,
-//!   with the `progress` permission): no WASI, file system, network, clock or randomness. A module
-//!   that imports anything else is rejected;
+//! - **no host imports but those of API level 2** ([`host`]: progress, Cancel and log lines with
+//!   the `progress` permission, and settings and a cache of its own with the `settings` and `cache`
+//!   permissions, [`storage`]): no WASI, file system, network, clock or randomness. A module that
+//!   imports anything else is rejected;
 //! - an **instruction budget** (fuel) per call, metered in slices so a wall-clock deadline is
 //!   also enforced (native builds), so infinite loops end with an error. A filter may ask for a
 //!   larger one ([`Budget::Heavy`]), which the host lets the user allow before installing it;
 //! - a **linear-memory cap**, a **recursion-depth cap** and wasmi's strict module limits;
-//! - a **fresh instance per run**, so no state leaks between calls.
+//! - a **fresh instance per run**, so no state leaks between calls; what a plug-in keeps is only
+//!   what it writes to its settings and cache.
 //!
 //! Every failure (malformed module, trap, exhausted budget, bad output) is an [`Error`]; nothing
 //! a module does can panic or hang the host.
 //!
 //! Plug-ins see the document as JSON ([`objects`]): the selected paths and compound paths with
-//! their geometry, fills, strokes (gradients included) and opacity. An **object filter** returns
+//! their geometry, fills, strokes (gradients included) and opacity, and, for a filter that asks
+//! for them ([`InputKind`]), type, images and symbol instances to read. An **object filter** returns
 //! the objects to keep, change or add, applied to the document as one edit
 //! ([`objects::apply_output`]); a **live effect** ([`effect`]) rewrites one object's geometry each
-//! time it is drawn, from an appearance stack; an **exporter** ([`export`]) writes the whole
-//! document in a file format of its own. The process-wide [`registry`] holds the installed
+//! time it is drawn, from an appearance stack, and at `api` 2 may paint what it returns
+//! ([`painted`]); an **exporter** ([`export`]) writes the whole
+//! document in a file format of its own; an **importer** ([`import`]) reads a file in a format of
+//! its own into a new document. The process-wide [`registry`] holds the installed
 //! plug-ins; in [`safe_mode`] none of them loads or runs. A plug-in's parameters ([`manifest`]) come with what the host's dialogs need to show
 //! them well: labels, units, groups, help and conditions ([`dialog`]). What a plug-in may do is
-//! the set of [`permissions`] its manifest lists, which the user approves when it is installed.
+//! the set of [`permissions`] its manifest lists, which the user approves when it is installed. A
+//! filter or a live effect may also add menu commands of its own ([`Command`]), which the host
+//! runs through `vc_run` with the command's id in `_context`.
 #![forbid(unsafe_code)]
 
 pub mod dialog;
 pub mod effect;
 pub mod export;
 pub mod host;
+pub mod import;
 pub mod manifest;
 pub mod objects;
+pub mod painted;
 pub mod permissions;
 pub mod registry;
 mod runtime;
 pub mod safe_mode;
+pub mod storage;
 pub mod wat;
 
 pub use dialog::ParamUi;
 pub use host::{LogLevel, LogLine, Report};
-pub use manifest::{Budget, Kind, Manifest, Param, ParamSpec};
+pub use manifest::{Budget, Command, InputKind, Kind, Manifest, Param, ParamSpec};
 pub use runtime::{ABI_VERSION, HEAVY_FUEL, HEAVY_WALL_TIME_MS, Limits, Plugin, heavy_terms};
 
 /// What the host puts before a plug-in's id to name what it adds: its live effect
-/// (`plugin.<id>`, [`effect`]) or its file format ([`export`]).
+/// (`plugin.<id>`, [`effect`]) or its file format ([`export`], [`import`]).
 pub const PREFIX: &str = "plugin.";
 
 /// A plug-in error. Every way a module can misbehave ends here, never in a panic.

@@ -598,6 +598,29 @@ fn tiff_photometric(bytes: &[u8]) -> u16 {
     short(entry + 8)
 }
 
+/// Remembered format settings that hold keys the export no longer reads, and settings for a format
+/// it doesn't write, are left out of the panel's export, so it is not refused.
+#[test]
+fn export_leaves_out_remembered_keys_no_longer_read() {
+    let (mut app, log, [a, _]) = app(true);
+    app.run("assets.add", json!({"ids": [a], "name": "Badge"})).unwrap();
+    let serde_json::Value::Object(saved) = json!({
+        "formats": [{"format": "tiff", "scale": "1x", "noSuchOption": 1}],
+        "settings": {"png": {"noSuchSetting": true}, "dxf": {}, "tiff": {"lzw": false, "noSuchSetting": 1}}
+    }) else {
+        panic!("an object")
+    };
+    std::sync::Arc::make_mut(&mut app.session.active_mut().unwrap().doc).export_settings = saved;
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    frame(&ctx, &mut app, vec![], false);
+    let texts = frame(&ctx, &mut app, vec![], false);
+    frame(&ctx, &mut app, click(at(&texts, "Export")), false);
+    let log = log.borrow();
+    let [(name, _)] = log.as_slice() else { panic!("expected one TIFF: {}", app.ui.status) };
+    assert_eq!(name, "Badge.tif");
+}
+
 #[test]
 fn tiff_cmyk_defaults_match_screens_and_preserve_explicit_rgb() {
     for rgb_override in [false, true] {

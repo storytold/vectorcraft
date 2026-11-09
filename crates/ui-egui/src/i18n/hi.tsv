@@ -343,6 +343,10 @@
 	Anti-Alias	एंटी-एलियास
 	Anti-alias Rasters	रास्टर एंटी-एलियास करें
 	Anti-aliased Artwork	एंटी-एलियास किया आर्टवर्क
+	Anti-aliasing Method	एंटी-एलियासिंग विधि
+antiAlias	Sharp	शार्प
+	Crisp	क्रिस्प
+	Strong	स्ट्रॉन्ग
 	Anti-aliasing:	एंटी-एलियासिंग:
 	Any except extracting pages	पेज निकालने के अलावा सभी
 	Any Kind	किसी भी प्रकार का
@@ -863,6 +867,11 @@
 	Color Table (4 colors)	रंग तालिका (4 रंग)
 	Color Theme	रंग थीम
 	Color Themes	रंग थीम्स
+	Color Wheel	कलर व्हील
+	Hue ring	ह्यू रिंग
+	Saturation and brightness	सैचुरेशन और ब्राइटनेस
+	Color field	कलर फ़ील्ड
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	रंग का प्रकार:
 	Color wheel	कलर व्हील
 	Color:	रंग:
@@ -1375,7 +1384,7 @@
 	Drag to float as a toolbar	एक टूलबार के रूप में तैरने के लिए खींचें
 	Drag to float the toolbar	टूलबार को तैरने के लिए खींचें
 	Drag to move	आगे बढ़ने के लिए
-	Drag to the window's left edge to dock	खिड़की के बाएं किनारे पर डॉक करने के लिए खींचें
+	Drag to the window's left or right edge to dock	खिड़की के बाएं या दाएं किनारे पर डॉक करने के लिए खींचें
 	Drag values or labels. Double-click a value to type.	मूल्यों या लेबल खींचें। टाइप करने के लिए एक मान को डबल क्लिक करें।
 	Draw	ड्रा
 	Draw Behind	पीछे खींचना
@@ -1684,6 +1693,17 @@
 	Extension Lines	एक्सटेंशन लाइन
 	Extension:	विस्तार:
 	Extrude & Bevel…	एक्सट्रूडेड और बेवेल…
+	3D (Classic)	3D (क्लासिक)
+	Extrude & Bevel (Classic)…	एक्सट्रूडेड और बेवेल (क्लासिक)…
+	Surface	सतह
+	Wireframe	वायरफ़्रेम
+	No Shading	कोई शेडिंग नहीं
+	Plastic	प्लास्टिक
+	Highlight Intensity	हाइलाइट तीव्रता
+	Highlight Size	हाइलाइट आकार
+	Blend Steps	ब्लेंड चरण
+	Shading Color	शेडिंग रंग
+	Draw Hidden Faces	छिपे हुए फलक बनाएँ
 	Eyedropper	आईड्रॉपर
 	Eyedropper Applies:	आईड्रॉपपर लागू होता है:
 	Eyedropper Options	आईड्रॉपर ऑप्शन्स
@@ -2049,6 +2069,7 @@
 	Help	सहायता
 	Help › Search Commands…	मदद › खोज कमांड…
 	HEX	HEX
+	Help Bar	मदद बार
 	Hex by Column	कॉलम द्वारा हेक्स
 	Hex by Row	पंक्ति द्वारा हेक्स
 	Hexagon	षट्भुज
@@ -4694,6 +4715,15 @@
 	Tate-chu-yoko	ताते-चू-योको
 	Tate-chu-yoko Settings	ताते-चू-योको सेटिंग्स
 	Tate-chu-yoko Settings…	ताते-चू-योको सेटिंग्स…
+	Composite Fonts…	कंपोज़िट फ़ॉन्ट…
+	Composite Fonts	कंपोज़िट फ़ॉन्ट
+	Export Composite Fonts	कंपोज़िट फ़ॉन्ट एक्सपोर्ट करें
+	Import Composite Fonts	कंपोज़िट फ़ॉन्ट इम्पोर्ट करें
+	Delete Font	फ़ॉन्ट हटाएँ
+	Kanji	कांजी
+	Kana	काना
+	Numerals	अंक
+	Scale at Center	केंद्र से आकार बदलें
 	Technical Drawing	तकनीकी ड्राइंग
 	Telugu	तेलुगु
 	Temperature	तापमान
@@ -5235,6 +5265,9 @@
 	Install “{name}”, which asks for these permissions?	"{name}" स्थापित करें, जो ये अनुमतियां मांगता है?
 	ID: {id}	ID: {id}
 	Version: {version}	संस्करण: {version}
+	Install “{name}” in place of the plug-in with the same ID?	समान ID वाले प्लग-इन की जगह “{name}” इंस्टॉल करें?
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	यह फ़ाइल इस ID के साथ पहले इंस्टॉल किया गया प्लग-इन नहीं है। इसे उस ID के लिए रखी गई सेटिंग्स और कैश मिलते हैं।
+@msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	“{name}” आईडी {_1} वाले प्लग-इन से अलग मॉड्यूल है और उसके लिए रखी गई सेटिंग्स और कैश पा लेगा: उपयोगकर्ता की सहमति मिलने पर इसे `replace: true` से इंस्टॉल करें
 	File SHA-256: {hash}	फ़ाइल SHA-256: {hash}
 	Read the objects it is given	उसे दिए गए ऑब्जेक्ट्स पढ़ना
 	Change, add and delete objects in the document	डॉक्यूमेंट में ऑब्जेक्ट्स बदलना, जोड़ना और हटाना
@@ -5242,21 +5275,41 @@
 	Change how the objects its effect is applied to are drawn	जिन ऑब्जेक्ट्स पर उसका इफ़ेक्ट लगा है, उनके बनाए जाने का तरीका बदलना
 	Write the document as a file in its own format	डॉक्यूमेंट को अपने फ़ॉर्मेट की फ़ाइल के रूप में लिखना
 	Show its progress, see Cancel and write log lines	अपनी प्रगति दिखाना, रद्द करने का अनुरोध देखना और लॉग पंक्तियाँ लिखना
-@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	अनुमति `progress` के लिए प्लग-इन API स्तर {PROGRESS_API} चाहिए: `api` {PROGRESS_API} दें
+	Keep settings of its own	अपनी सेटिंग्स रखना
+	Keep a cache of its own, which you can clear	अपना कैश रखना, जिसे आप साफ़ कर सकते हैं
+	Clear Plug-in Cache	प्लग-इन कैश साफ़ करें
+@msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	अनुमति `{permission}` के लिए प्लग-इन API स्तर {PROGRESS_API} चाहिए: `api` {PROGRESS_API} दें
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	मॉड्यूल `env.{name}` को होस्ट से अलग प्रकार के साथ आयात करता है: होस्ट का प्रकार {signature} है
-@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	मॉड्यूल `env.{name}` आयात करता है, जिसे प्लग-इन केवल प्लग-इन API स्तर {PROGRESS_API} (`api` {PROGRESS_API}) पर और अनुमति `progress` के साथ उपयोग कर सकता है
-@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	मॉड्यूल `{from}.{name}` आयात करता है, जिसे होस्ट उपलब्ध नहीं कराता: प्लग-इन केवल `env.vc_progress`, `env.vc_cancelled` और `env.vc_log` (प्लग-इन API स्तर 2) आयात कर सकता है, और कोई WASI, फ़ाइल या नेटवर्क नहीं
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	मॉड्यूल `env.{name}` आयात करता है, जिसे प्लग-इन केवल प्लग-इन API स्तर {PROGRESS_API} (`api` {PROGRESS_API}) पर और अनुमति `{permission}` के साथ उपयोग कर सकता है
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	मॉड्यूल `{from}.{name}` आयात करता है, जिसे होस्ट उपलब्ध नहीं कराता: प्लग-इन केवल वे `env.vc_*` फ़ंक्शन आयात कर सकता है जो docs/plugins.md में सूचीबद्ध हैं (प्लग-इन API स्तर 2), और कोई WASI, फ़ाइल या नेटवर्क नहीं
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` {_1} है; यह होस्ट प्लग-इन API स्तर 1 से {API_LEVEL} तक का समर्थन करता है
+@msg	`paintOutput` may only be true	`paintOutput` केवल true हो सकता है
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` केवल `api` 2 पर लाइव इफ़ेक्ट (`kind` "effect") के लिए है
 @msg	`grant` must be a list of permission names	`grant` अनुमति नामों की सूची होनी चाहिए
 @msg	`grant` names an unknown permission `{shown}`	`grant` एक अज्ञात अनुमति `{shown}` बताता है
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` प्रकार के प्लग-इन को `{_2}` अनुमति चाहिए
 @msg	at most {MAX_PERMISSIONS} `permissions`	अधिकतम {MAX_PERMISSIONS} `permissions`
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	अनुमति `{shown}` `{_1}` प्रकार के प्लग-इन पर लागू नहीं होती
 @msg	permission `{shown}` is listed twice	अनुमति `{shown}` दो बार सूचीबद्ध है
+@msg	only a filter declares `inputs`	केवल फ़िल्टर `inputs` घोषित करता है
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` में अज्ञात ऑब्जेक्ट प्रकार `{shown}` है: type, image या symbolInstance का उपयोग करें
+@msg	`inputs` lists `{shown}` twice	`inputs` में `{shown}` दो बार सूचीबद्ध है
+@msg	`inputs` needs `api` 2 or later	`inputs` के लिए `api` 2 या बाद का स्तर आवश्यक है
+@msg	`inputs` needs the permission `doc.read`	`inputs` के लिए अनुमति `doc.read` आवश्यक है
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	मेमोरी बजट (ऑब्जेक्ट {_1} को इनपुट के {size} बाइट चाहिए, {left} शेष हैं)
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	ऑब्जेक्ट बजट ({MAX_OBJECTS} से अधिक केवल-पठन ऑब्जेक्ट)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	अनुमति `{shown}` बाद के प्लग-इन API के लिए आरक्षित है; यह होस्ट इसे नहीं देता
 @msg	unknown permission `{shown}`	अज्ञात अनुमति `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}” अनुमतियां {asked} मांगता है: उपयोगकर्ता की सहमति मिलने पर इसे उन्हें सूचीबद्ध करने वाले `grant` के साथ इंस्टॉल करें
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	“{name}” को `{p}` नहीं दी गई, जो उसके आउटपुट को चाहिए: कुछ नहीं बदला
+@msg	a heavy filter runs in the background, so it can't declare `commands`	भारी फ़िल्टर पृष्ठभूमि में चलता है, इसलिए वह `commands` घोषित नहीं कर सकता
+@msg	at most {MAX_COMMANDS} `commands`	अधिकतम {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	कमांड {name} दो बार घोषित है
+@msg	command {name}: `label` must be 1-64 printable characters	कमांड {name}: `label` में 1-64 प्रिंट करने योग्य वर्ण होने चाहिए
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	कमांड {name}: a-z 0-9 _ के 1-{MAX_COMMAND_ID} वर्णों वाली ऐसी id इस्तेमाल करें जो अक्षर से शुरू हो
+@msg	command {name}: {e}	कमांड {name}: {e}
+@msg	only a filter or a live effect declares `commands`	केवल फ़िल्टर या लाइव इफ़ेक्ट ही `commands` घोषित करता है
+@msg	“{name}” › {label}: {e}	“{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	मॉड्यूल का SHA-256 वह नहीं है जो `hash` बताता है: कुछ भी इंस्टॉल नहीं हुआ
 @msg	“{name}” is not a file	"{name}" एक फ़ाइल नहीं है
 @msg	({note}) ({more})	({note}) ({more})
@@ -5393,7 +5446,7 @@
 @msg	`{_1}` can't be edited or removed	`{_1}` को संपादित या हटाया नहीं जा सकता है
 @msg	`{_1}` has no brushes to apply	`{_1}` को लागू करने के लिए कोई ब्रश नहीं है
 @msg	`{_1}` has no symbols to place	`{_1}` के पास कोई सिंबल नहीं है
-@msg	`{_1}` is a {_2}, not an exporter	`{_1}` एक {_2} है, एक निर्यातक नहीं है
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` `{_2}` प्रकार का प्लग-इन है, निर्यातक नहीं
 @msg	`{_1}` is a live effect: apply it with effect.apply {{"effect"}"}}	`{_1}` एक लाइव इफ़ेक्ट है: इसे effect.apply {{"effect"}"}} के साथ लागू करें
 @msg	`{_1}` is an exporter: export with document.export {{"format"}"}}	`{_1}` एक एक्सपोर्टर है: document.export {{"format"}"}} से एक्सपोर्ट करें
 @msg	`{_1}` is built in and always listed	`{_1}` बनाया गया है और हमेशा सूचीबद्ध है
@@ -5520,6 +5573,7 @@
 @msg	`anchors` must be an array of [subpath, anchor] pairs	`anchors` को [subpath, एंकर] जोड़े की एक सारणी होना चाहिए
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {k}	`anchors` में एंकर इंडेक्स (0, 1, 2…) की सूची होनी चाहिए, {k} नहीं
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {v}	`anchors` में एंकर इंडेक्स (0, 1, 2…) की सूची होनी चाहिए, {v} नहीं
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` होना चाहिए "none", "sharp", "crisp" या "strong"
 @msg	`artboards` must be a list of artboard indices	`artboards` को आर्टबोर्ड इंडेक्स की सूची होना चाहिए
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all या 1, 3-5 जैसी सीमा दें, {v} नहीं
 @msg	`aspect` must be a number (%)	`aspect` को संख्या (%) होना चाहिए
@@ -6284,6 +6338,16 @@
 @msg	give dataBase64	dataBase64 दें
 @msg	give either at (a click) or area (a path drawn around the overlaps)	या तो (एक क्लिक) या क्षेत्र (ओवरलैप के चारों ओर खींचा गया एक पाथ) देना
 @msg	give fill, stroke, opacity and/or blend	भरने, स्ट्रोक, अपारदर्शिता और/या मिश्रण देते हैं
+@msg	{key} cannot be set on a guide	गाइड पर {key} सेट नहीं किया जा सकता
+@msg	{key} cannot be set on a blend	ब्लेंड पर {key} सेट नहीं किया जा सकता
+@msg	{key} cannot be set on an envelope	एन्वेलप पर {key} सेट नहीं किया जा सकता
+@msg	{key} cannot be set on a gradient mesh	ग्रेडिएंट मेश पर {key} सेट नहीं किया जा सकता
+@msg	{key} cannot be set on a Repeat	रिपीट पर {key} सेट नहीं किया जा सकता
+@msg	{key} cannot be set on a placed document	प्लेस्ड डॉक्यूमेंट पर {key} सेट नहीं किया जा सकता
+@msg	{key} cannot be set on an Intertwine group	इंटरट्वाइन समूह पर {key} सेट नहीं किया जा सकता
+@msg	stroke cannot be set on a symbol instance	सिंबल इंस्टेंस पर stroke सेट नहीं किया जा सकता
+@msg	fill on a symbol instance must be a solid color or none	सिंबल इंस्टेंस का fill ठोस रंग या none होना चाहिए
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	शेप में बदलें या रूपरेखा ऑब्जेक्ट इफ़ेक्ट के बिना इमेज पर {key} सेट नहीं किया जा सकता
 @msg	give formats or a preset, not both	फ़ॉर्मैट या एक पूर्व निर्धारित देना, दोनों ही नहीं
 @msg	give horizontal or vertical	क्षैतिज या ऊर्ध्वाधर देना
 @msg	give newName or delete	newName या delete दें
@@ -6384,6 +6448,7 @@
 @msg	invalid image data for `{0}`	`{0}` के लिए अमान्य इमेज डेटा
 @msg	invalid native panel set	अमान्य मूल पैनल सेट
 @msg	invalid object id {value}: expected a non-negative integer	अमान्य ऑब्जेक्ट id {value}: एक गैर-नकारात्मक पूर्णांक की उम्मीद
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	`{key}` की प्रविष्टि {index} {value} है, गैर-नकारात्मक पूर्णांक ऑब्जेक्ट id नहीं
 @msg	Invalid panel layout; restored the default dock	अमान्य पैनल लेआउट; डिफ़ॉल्ट डॉक पुनर्स्थापित किया गया
 @msg	invalid parameter name {k}	अमान्य पैरामीटर नाम {k}
 @msg	invalid parameters for `{cmd}`: {msg}	`{cmd}` के लिए अमान्य पैरामीटर: {msg}
@@ -6938,7 +7003,7 @@
 @msg	warped text objects that came in as drawn art, not as editable type: {_1}	मोड़े गए टेक्स्ट ऑब्जेक्ट जो संपादन योग्य टेक्स्ट के बजाय कला के रूप में आए: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	उन ऑब्जेक्ट्स को जो फ़ाइल के स्वयं के पृष्ठ से अलग-अलग तरीके से आकर्षित होते हैं, उनकी कला के रूप में आया: {_1}
 @msg	objects were left out	ऑब्जेक्ट्स को छोड़ दिया गया था
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	कई भराव या स्ट्रोक, इफ़ेक्ट या ब्रश के साथ ऑब्जेक्टएं उनके ड्रॉइंग लुक ({_1}) के रूप में आईं: उनकी उपस्थिति अभी तक संपादन योग्य नहीं है
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	कई भराव या स्ट्रोक, परिवर्तनीय चौड़ाई वाले स्ट्रोक, इफ़ेक्ट या ब्रश के साथ ऑब्जेक्टएं उनके ड्रॉइंग लुक ({_1}) के रूप में आईं: उनकी उपस्थिति अभी तक संपादन योग्य नहीं है
 @msg	offset out of range	सीमा से बाहर ऑफसेट
 @msg	Offset Path: {e}	ऑफसेट पाथ: {e}
 @msg	Offset Path: select paths	ऑफसेट पाथ: सिलेक्शन पाथ
@@ -6946,7 +7011,7 @@
 @msg	Offset Path: the path is too complex to offset	ऑफसेट पाथ: पाथ ऑफसेट करने के लिए बहुत जटिल है
 @msg	on must be true or false	on को true या false होना चाहिए
 @msg	only a dock group above or below others collapses, not one beside another	केवल दूसरों के ऊपर या नीचे एक डॉक समूह गिर जाता है, एक दूसरे के बगल में नहीं
-@msg	only an exporter declares `extensions`	केवल निर्यातक `extensions` घोषित करता है
+@msg	only an exporter or an importer declares `extensions`	केवल एक्सपोर्टर या इंपोर्टर `extensions` घोषित करता है
 @msg	only an object of the Global Edit other than the one it started from can be left out	केवल ग्लोबल एडिट का एक ऑब्जेक्ट, इसके अलावा इसे शुरू किया जा सकता है, छोड़ दिया जा सकता है
 @msg	only groups, layers, type and images have a Contents (Characters) row	केवल समूहों, लेयर्स, प्रकार और इमेज में एक सामग्री (Character) पंक्ति है
 @msg	only http, https and mailto URLs open in the browser, not “{url}”	केवल http, https और Mailto URL ब्राउज़र में खुलते हैं, न कि "{url}"
@@ -7180,6 +7245,13 @@
 @msg	select area type and closed paths (at least one area type object)	क्षेत्र प्रकार और बंद पाथ (कम से कम एक क्षेत्र प्रकार ऑब्जेक्ट) सिलेक्ट करें
 @msg	select area type whose first line can fit its frame	क्षेत्र के प्रकार सिलेक्ट करें जिनकी पहली पंक्ति अपने फ्रेम को फिट कर सकती है
 @msg	select artwork (or a colour group) to recolor	फिर से रंग करने के लिए आर्टवर्क (या एक रंग समूह) सिलेक्ट करें
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	रीकलर पूरा हुआ; ये अपरिवर्तित रहे: {locked} और {hidden}
+@msg	Recolor completed; {objects} were left unchanged	रीकलर पूरा हुआ; ये अपरिवर्तित रहे: {objects}
+@msg	Recolor completed; {objects} was left unchanged	रीकलर पूरा हुआ; यह अपरिवर्तित रहा: {objects}
+@msg	1 locked object	1 लॉक किया गया ऑब्जेक्ट
+@msg	{n} locked objects	{n} लॉक किए गए ऑब्जेक्ट
+@msg	1 hidden object	1 छिपा हुआ ऑब्जेक्ट
+@msg	{n} hidden objects	{n} छिपे हुए ऑब्जेक्ट
 @msg	select artwork to add its colours	अपने रंगों को जोड़ने के लिए आर्टवर्क सिलेक्ट करें
 @msg	select artwork to make a group of its colours	अपने रंगों का एक समूह बनाने के लिए आर्टवर्क सिलेक्ट करें
 @msg	select artwork to recolour, or give a colour `group`	रंग बदलने के लिए आर्टवर्क चुनें या रंग `group` दें
@@ -7408,6 +7480,11 @@
 @msg	the image is fully transparent	इमेज पूरी तरह से पारदर्शी है
 @msg	the image is not on an artboard; pass rect	इमेज एक आर्टबोर्ड पर नहीं है; सही होकर गुजरना
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	इमेज को {_1} × {_2} पिक्सेल पर पता लगाया गया था, जिसे {_3} × {_4} ({_5} मेगापिक्सेल) से नीचे बढ़ाया गया था।
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Flat लोगो मोड keepColors का उपयोग नहीं करता: यह logoColors में बताए गए रंगों को या अपने पाए गए रंगों को ट्रेस करता है।
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	कुछ भी ट्रेस नहीं हुआ: ट्रेस में मिला कोई भी रंग keepColors ({_1}) से मेल नहीं खाता।
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	कुछ भी ट्रेस नहीं हुआ: Ignore रंग keepColors में सूचीबद्ध रंगों के सभी क्षेत्र छोड़ देता है।
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	कुछ भी ट्रेस नहीं हुआ: keepColors से मेल खाने वाले रंग कोई पाथ नहीं बनाते।
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: ट्रेस में मिला कोई भी रंग {c} से मेल नहीं खाता, इसलिए इसका कुछ भी ट्रेस नहीं होता।
 @msg	the image's pixels are missing	इमेज के पिक्सेल लापता हैं
 @msg	the image's pixels aren't in the document	इमेज के पिक्सेल डॉक्यूमेंट में नहीं हैं
 @msg	the image's pixels can't be read	इमेज के पिक्सेल को पढ़ा नहीं जा सकता है
@@ -8002,8 +8079,28 @@ theme	Appearance	अपीयरेंस
 # Align to Pixel Grid
 	Align to Pixel Grid	पिक्सेल ग्रिड से संरेखित करें
 @msg	only paths and compound paths can be aligned to the pixel grid	केवल पाथ और कंपाउंड पाथ को पिक्सेल ग्रिड से संरेखित किया जा सकता है
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	नाम `{name}` UTF-8 नहीं है और इसे {label} के रूप में पढ़ा गया: यदि यह गलत दिखे, तो फ़ाइल को किसी अन्य legacyNameEncoding से खोलें
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	नाम `{name}` UTF-8 नहीं है, और इसके कुछ हिस्से {label} में भी मान्य नहीं हैं: फ़ाइल को किसी अन्य legacyNameEncoding से खोलें
+@msg	more names that aren't UTF-8 were read as {label} ({count})	UTF-8 में न होने वाले और नाम {label} के रूप में पढ़े गए ({count})
 	Start Lists From Typed Markers	टाइप किए गए चिह्नों से सूचियाँ शुरू करें
 	Marquee Selection	मार्की चयन
 	Touching	स्पर्श करते हुए
 	Fully Enclosed	पूरी तरह घिरे हुए
 	Drag Direction	खींचने की दिशा
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	इसके साथ खोलें
+	No importer plug-ins installed	कोई इंपोर्टर प्लग-इन स्थापित नहीं है
+	Read files you open in its format and make documents from them	उसके फ़ॉर्मेट में खोली गई फ़ाइलें पढ़ना और उनसे डॉक्यूमेंट बनाना
+@msg	{_1} is an importer (File › Open With)	{_1} एक इंपोर्टर है (फ़ाइल › इसके साथ खोलें)
+@msg	missing `importer` (see document.formats)	`importer` नहीं दिया गया (document.formats देखें)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` किसी प्लग-इन का फ़ॉर्मेट id होना चाहिए (document.formats देखें)
+@msg	“{shown}” opens {_1} files, not `{_2}`	“{shown}” {_1} फ़ाइलें खोलता है, `{_2}` नहीं
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` `{_2}` प्रकार का प्लग-इन है, इंपोर्टर नहीं
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` एक इंपोर्टर है: document.open {{"importer"}"}} से फ़ाइल खोलें
+@msg	the importer returned no objects	इंपोर्टर ने कोई ऑब्जेक्ट नहीं लौटाया
+@msg	an importer returns `objects` and `warnings`, not `{key}`	इंपोर्टर `objects` और `warnings` लौटाता है, `{key}` नहीं
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	फ़ाइल उन {MAX_INPUT_BYTES} बाइट्स से बड़ी है जो इंपोर्टर पढ़ता है
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	इंपोर्टर 1 से {MAX_EXTENSIONS} `extensions` घोषित करता है
+@msg	an importer always gets an import's budget: leave `budget` out	इंपोर्टर को हमेशा इंपोर्ट का बजट मिलता है: `budget` छोड़ दें
+@msg	side is left or right, not `{s}`	side left या right होना चाहिए, `{s}` नहीं
