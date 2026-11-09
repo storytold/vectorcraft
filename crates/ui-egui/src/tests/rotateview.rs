@@ -30,6 +30,13 @@ fn with_document() -> VectorcraftApp {
     app
 }
 
+/// Send a control request and keep its success/error value for protocol assertions.
+fn control_response(app: &mut VectorcraftApp, ctx: &egui::Context, method: &str, params: Value) -> Value {
+    let (request, _) = crate::control::ControlRequest::new(method, params);
+    let crate::control::Outcome::Done(reply) = crate::control::handle(app, ctx, &request) else { panic!("not done") };
+    reply
+}
+
 /// Returns the labels of the View › Rotate View items that are checked.
 fn checked(app: &VectorcraftApp) -> Vec<&'static str> {
     ANGLES.iter().filter(|(_, a)| menus::checked(app, "view.rotate", &json!({ "angle": a })) == Some(true)).map(|(l, _)| *l).collect()
@@ -69,6 +76,8 @@ fn control_rotate_view_gesture_turns_the_canvas_and_reset_restores_it() {
     let send = super::synthetic::control;
     send(&mut app, &ctx, "ui.tool.select", json!({"tool": "rotateView"}));
     send(&mut app, &ctx, "ui.pointer", json!({"events": [{"kind": "down", "x": 300, "y": 150}]}));
+    let mut frame = ctx.run_ui(Default::default(), |_| {});
+    frame.textures_delta.clear();
     send(
         &mut app,
         &ctx,
@@ -83,10 +92,13 @@ fn control_rotate_view_gesture_turns_the_canvas_and_reset_restores_it() {
     assert_eq!(view.center, vectorcraft_geom::Point::new(200.0, 150.0));
     assert_eq!(view.zoom, 1.0);
     assert_eq!(app.session.active().unwrap().revision, revision, "navigation does not edit the document");
-    send(&mut app, &ctx, "engine.execute", json!({"command": "view.rotateReset", "params": {}}));
+    let reset = control_response(&mut app, &ctx, "engine.execute", json!({"command": "view.rotateReset", "params": {}}));
+    assert_eq!(reset["ok"], true);
+    assert!(reset["result"].is_null());
     assert_eq!(app.view().unwrap().rotation, 0.0);
 }
 
+/// Repeated document points stay fixed across requests, including Shift snapping from a turned view.
 #[test]
 fn control_rotate_view_keeps_press_coordinates_and_shift_snapping_across_requests() {
     let mut app = with_document();
@@ -109,6 +121,7 @@ fn control_rotate_view_keeps_press_coordinates_and_shift_snapping_across_request
     assert_eq!(app.view().unwrap().rotation, 45.0);
 }
 
+/// Invalid coordinates and document changes cannot turn a different view.
 #[test]
 fn control_rotate_view_rejects_nonfinite_positions_and_a_changed_document() {
     let mut app = with_document();
@@ -126,6 +139,78 @@ fn control_rotate_view_rejects_nonfinite_positions_and_a_changed_document() {
     let crate::control::Outcome::Done(reply) = crate::control::handle(&mut app, &ctx, &req) else { panic!("not done") };
     assert_eq!(reply["ok"], false);
     assert_eq!(app.view().unwrap().rotation, 0.0);
+}
+
+/// An invalid packet leaves the angle unchanged and requires a fresh press, including errors
+/// after an otherwise valid drag and malformed releases or hovers.
+#[test]
+fn control_rotate_view_rejects_malformed_packets_without_leaving_a_press() {
+    let drag = json!({"kind": "drag", "x": 200, "y": 250});
+    for packet in [
+        json!({"events": [drag.clone(), {"kind": "drag", "y": 250}]}),
+        json!({"events": [drag.clone(), {"kind": "drag", "x": "200", "y": 250}]}),
+        json!({"events": [drag.clone(), {"kind": "drag", "x": 200, "y": 250, "mods": {"shift": "yes"}}]}),
+        json!({"mods": "shift", "events": [drag.clone()]}),
+        json!({"events": [drag.clone(), {"kind": "drag", "x": 200, "y": 250, "mods": {"unknown": true}}]}),
+        json!({"events": [drag.clone(), {"kind": "drag", "x": 1e300, "y": 250}]}),
+        json!({"events": [drag.clone(), {"kind": "up", "x": 1e300, "y": 250}]}),
+        json!({"events": [drag.clone(), {"kind": "move", "x": 1e300, "y": 250}]}),
+        json!({"events": [drag.clone(), {"kind": "doubleclick", "x": 1e300, "y": 250}]}),
+        json!({"events": [drag.clone(), {"kind": "wiggle", "x": 200, "y": 250}]}),
+        json!({"events": [drag.clone(), {"kind": "drag", "x": 200, "y": 250, "space": "window"}]}),
+        json!({"events": null}),
+    ] {
+        let mut app = with_document();
+        let ctx = egui::Context::default();
+        app.canvas_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0)));
+        let view = app.view_mut().unwrap();
+        view.center = vectorcraft_geom::Point::new(200.0, 150.0);
+        view.zoom = 1.0;
+        super::synthetic::control(&mut app, &ctx, "ui.tool.select", json!({"tool": "rotateView"}));
+        super::synthetic::control(&mut app, &ctx, "ui.pointer", json!({"events": [{"kind": "down", "x": 300, "y": 150}]}));
+        let reply = control_response(&mut app, &ctx, "ui.pointer", packet.clone());
+        assert_eq!(reply["ok"], false, "{packet}: {reply}");
+        assert_eq!(app.view().unwrap().rotation, 0.0, "{packet}");
+        let resume = control_response(&mut app, &ctx, "ui.pointer", json!({"events": [drag.clone()]}));
+        assert_eq!(resume["ok"], false, "a failed packet cancels its press: {packet}");
+        assert_eq!(app.view().unwrap().rotation, 0.0);
+    }
+}
+
+/// Screen-space gestures survive frames, stop on release or a tool change, and start afresh
+/// from the current angle. A press at the pivot uses the same finite convention as the mouse.
+#[test]
+fn control_rotate_view_screen_events_require_a_live_press() {
+    let mut app = with_document();
+    let ctx = egui::Context::default();
+    app.canvas_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0)));
+    let view = app.view_mut().unwrap();
+    view.center = vectorcraft_geom::Point::new(1200.0, 900.0);
+    view.zoom = 2.0;
+    let send = super::synthetic::control;
+    send(&mut app, &ctx, "ui.tool.select", json!({"tool": "rotateView"}));
+    let down = json!({"events": [{"kind": "down", "x": 500, "y": 300, "space": "screen"}]});
+    let drag = json!({"events": [{"kind": "drag", "x": 400, "y": 400, "space": "screen"}]});
+    assert_eq!(control_response(&mut app, &ctx, "ui.pointer", drag.clone())["ok"], false);
+    send(&mut app, &ctx, "ui.pointer", down.clone());
+    let mut frame = ctx.run_ui(Default::default(), |_| {});
+    frame.textures_delta.clear();
+    send(&mut app, &ctx, "ui.pointer", drag.clone());
+    assert!((app.view().unwrap().rotation - 90.0).abs() < 1e-3);
+    send(&mut app, &ctx, "ui.pointer", json!({"events": [{"kind": "up", "x": 400, "y": 400, "space": "screen"}]}));
+    assert_eq!(control_response(&mut app, &ctx, "ui.pointer", drag.clone())["ok"], false, "release ends the press");
+    send(&mut app, &ctx, "ui.pointer", down.clone());
+    send(&mut app, &ctx, "ui.tool.select", json!({"tool": "selection"}));
+    send(&mut app, &ctx, "ui.tool.select", json!({"tool": "rotateView"}));
+    assert_eq!(control_response(&mut app, &ctx, "ui.pointer", drag.clone())["ok"], false, "a tool change ends the press");
+    send(&mut app, &ctx, "ui.pointer", down);
+    send(&mut app, &ctx, "ui.pointer", drag);
+    assert!((app.view().unwrap().rotation.abs() - 180.0).abs() < 1e-3, "a new press starts at the current angle");
+    let before = app.view().unwrap().rotation;
+    send(&mut app, &ctx, "ui.pointer", json!({"events": [{"kind": "down", "x": 400, "y": 300, "space": "screen"}]}));
+    send(&mut app, &ctx, "ui.pointer", json!({"events": [{"kind": "drag", "x": 500, "y": 300, "space": "screen"}]}));
+    assert!(app.view().unwrap().rotation.is_finite());
+    assert!((app.view().unwrap().rotation - before).abs() < 1e-3);
 }
 
 #[test]

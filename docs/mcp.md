@@ -4014,6 +4014,8 @@ angle it set, normalized to (-180, 180], and `view.rotateReset` turns the view b
 Select the Rotate View Tool with `select_tool` and the tool id `rotateView`. Its `pointer_gesture`
 drags turn the canvas about its center; Shift snaps to 15°. Document coordinates for a rotation
 gesture use the view at the initial down event, including when the gesture spans several calls.
+The control channel rejects malformed rotation packets without changing the angle and cancels
+the current press. Start a new down event after an error.
 Reset Rotate View is the command `view.rotateReset`:
 
 ```json

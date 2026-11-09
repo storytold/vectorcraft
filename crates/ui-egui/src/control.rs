@@ -610,9 +610,9 @@ mod tests;
 
 /// The window and coordinate mapping where a control-channel Rotate View drag began.
 #[derive(Clone, Copy)]
-struct RotateViewPress {
+pub(crate) struct RotateViewPress {
     window: (u64, u32),
-    tool_resets: u64,
+    document_resets: u64,
     xf: Xf,
     start_angle: f64,
     start_rotation: f64,
@@ -622,53 +622,102 @@ struct RotateViewPress {
 /// across requests so document-coordinate drags do not move again as the view turns underneath.
 fn rotate_view_pointer(
     app: &mut VectorcraftApp,
-    ctx: &egui::Context,
     kind: PointerKind,
     position: vectorcraft_geom::Point,
     screen: bool,
     shift: bool,
 ) -> Result<(), String> {
-    let id = egui::Id::unique("control.rotateView");
-    match kind {
-        PointerKind::Up => {
-            ctx.data_mut(|d| d.remove::<RotateViewPress>(id));
-            return Ok(());
-        }
-        PointerKind::Move | PointerKind::DoubleClick => return Ok(()),
-        _ => {}
-    }
     let window = app.session.active().zip(crate::doc_windows::current(app)).map(|(d, w)| (d.uid, w.1)).ok_or("no document")?;
-    let tool_resets = app.session.tool_resets();
-    let mut press = if kind == PointerKind::Down {
-        let rect = app.canvas_rect.ok_or("no canvas yet")?;
-        let view = app.view().ok_or("no document")?;
-        RotateViewPress { window, tool_resets, xf: Xf::new(rect, view), start_angle: 0.0, start_rotation: view.rotation }
-    } else {
-        ctx.data(|d| d.get_temp::<RotateViewPress>(id)).ok_or("Rotate View needs a down event before a drag")?
+    let document_resets = app.session.tool_resets();
+    let stored = if kind == PointerKind::Down { None } else { app.control_rotate_press };
+    if kind == PointerKind::Drag && stored.is_none() {
+        return Err("Rotate View needs a down event before a drag".into());
+    }
+    let mut press = match stored {
+        Some(press) => press,
+        None => {
+            let rect = app.canvas_rect.ok_or("no canvas yet")?;
+            let view = app.view().ok_or("no document")?;
+            RotateViewPress { window, document_resets, xf: Xf::new(rect, view), start_angle: 0.0, start_rotation: view.rotation }
+        }
     };
-    // A gesture cannot turn a different document/view or resume after another tool was chosen.
-    if (press.window, press.tool_resets) != (window, tool_resets) {
-        ctx.data_mut(|d| d.remove::<RotateViewPress>(id));
-        return Err("the Rotate View gesture's window or tool changed".into());
+    // A gesture cannot turn a different document/view or resume after its document was reset.
+    if (press.window, press.document_resets) != (window, document_resets) {
+        return Err("the Rotate View gesture's window or document changed".into());
     }
     let point = if screen { egui::pos2(position.x as f32, position.y as f32) } else { press.xf.to_screen(position) };
     let center = press.xf.rect.center();
     if !point.is_finite() || !center.is_finite() {
         return Err("Rotate View needs finite canvas coordinates".into());
     }
-    if kind == PointerKind::Down {
-        press.start_angle = (point.y - center.y).atan2(point.x - center.x) as f64;
-        ctx.data_mut(|d| d.insert_temp(id, press));
-    } else {
-        app.view_mut().ok_or("no document")?.rotation = crate::canvas::drag_rotation(center, point, press.start_angle, press.start_rotation, shift);
+    match kind {
+        PointerKind::Down => {
+            press.start_angle = (point.y - center.y).atan2(point.x - center.x) as f64;
+            app.control_rotate_press = Some(press);
+        }
+        PointerKind::Drag => {
+            app.view_mut().ok_or("no document")?.rotation =
+                crate::canvas::drag_rotation(center, point, press.start_angle, press.start_rotation, shift);
+        }
+        PointerKind::Up => {
+            app.control_rotate_press = None;
+        }
+        PointerKind::Move | PointerKind::DoubleClick => {}
+    }
+    Ok(())
+}
+
+/// A Rotate View packet accepts only the documented boolean modifier fields.
+fn validate_rotate_view_mods(value: Option<&Value>) -> Result<(), String> {
+    let Some(value) = value else { return Ok(()) };
+    let Some(fields) = value.as_object() else { return Err("Rotate View `mods` must be an object of booleans".into()) };
+    if fields.iter().any(|(key, value)| !matches!(key.as_str(), "shift" | "alt" | "cmd" | "ctrl" | "space") || !value.is_boolean()) {
+        return Err("Rotate View `mods` accepts only boolean shift, alt, cmd, ctrl and space".into());
+    }
+    Ok(())
+}
+
+/// Reject malformed coordinates and modifiers before any event can change the angle or press.
+fn validate_rotate_view_events(params: &Value, events: &[Value]) -> Result<(), String> {
+    validate_rotate_view_mods(params.get("mods"))?;
+    for event in events {
+        for axis in ["x", "y"] {
+            if event.get(axis).and_then(Value::as_f64).filter(|value| value.is_finite()).is_none() {
+                return Err(format!("Rotate View `{axis}` must be a finite number"));
+            }
+        }
+        validate_rotate_view_mods(event.get("mods"))?;
+        if event.get("space").is_some_and(|space| !matches!(space.as_str(), Some("doc" | "screen"))) {
+            return Err("Rotate View `space` must be doc or screen".into());
+        }
     }
     Ok(())
 }
 
 /// `ui.pointer`: pointer events through the tools.
 fn pointer_events(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest) -> Outcome {
+    let rotating = app.session.tool_id() == "rotateView";
+    let before = if rotating { app.view().map(|view| view.rotation) } else { None };
+    let outcome = pointer_events_inner(app, ctx, req);
+    if rotating && matches!(&outcome, Outcome::Done(reply) if reply.get("ok").and_then(Value::as_bool) == Some(false)) {
+        // A failed packet must neither leave a partial turn nor allow a later drag to resume it.
+        app.control_rotate_press = None;
+        if let (Some(before), Some(view)) = (before, app.view_mut()) {
+            view.rotation = before;
+        }
+        ctx.request_repaint();
+    }
+    outcome
+}
+
+/// Apply a pointer packet after Rotate View validation; other tools retain their existing routing.
+fn pointer_events_inner(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest) -> Outcome {
     let p = &req.params;
     let Some(events) = p.get("events").and_then(Value::as_array) else { return err("missing `events`") };
+    let rotating = app.session.tool_id() == "rotateView";
+    if rotating && let Err(error) = validate_rotate_view_events(p, events) {
+        return err(error);
+    }
     let base_mods: Mods = p.get("mods").and_then(|m| serde_json::from_value(m.clone()).ok()).unwrap_or_default();
     let view = app.view_info();
     let xf = app.canvas_rect.zip(app.view().copied()).map(|(rect, v)| Xf::new(rect, &v));
@@ -692,8 +741,8 @@ fn pointer_events(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRe
         let y = e.get("y").and_then(Value::as_f64).unwrap_or(0.0);
         let screen = e.get("space").and_then(Value::as_str) == Some("screen");
         let mods = e.get("mods").and_then(|m| serde_json::from_value(m.clone()).ok()).unwrap_or(base_mods);
-        if app.session.tool_id() == "rotateView" {
-            if let Err(e) = rotate_view_pointer(app, ctx, kind, vectorcraft_geom::Point::new(x, y), screen, mods.shift) {
+        if rotating {
+            if let Err(e) = rotate_view_pointer(app, kind, vectorcraft_geom::Point::new(x, y), screen, mods.shift) {
                 return err(e);
             }
             continue;
