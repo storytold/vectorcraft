@@ -771,10 +771,10 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     if super::heifread::is_heif(bytes) {
         // The EXIF resolution describes the stored pixels; a quarter turn swaps its axes.
         let ppi = ppi.map(|(x, y)| if super::heifread::quarter_turned(bytes) { (y, x) } else { (x, y) });
-        return as_png(super::heifread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, ppi);
+        return as_png(super::heifread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, None, ppi);
     }
     if super::pxrread::is_pxr(bytes) {
-        return as_png(super::pxrread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, ppi);
+        return as_png(super::pxrread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, None, ppi);
     }
     let mut reader = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().map_err(err)?;
     if reader.format().is_none() && super::tgaread::is_targa(bytes) {
