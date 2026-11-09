@@ -22,9 +22,9 @@ mod symbols;
 mod texts;
 mod variables;
 
+pub(super) use styles::{LARGE_CANVAS_STYLES, style_links, styled_objects};
 #[cfg(test)]
-pub(super) use styles::same_appearance;
-pub(super) use styles::{GRAPHIC_STYLES, LARGE_CANVAS_STYLES, has_graphic_styles, styled_objects};
+pub(super) use styles::{PANEL_EMPTY, PANEL_STYLES, STYLE_LINKS, same_appearance};
 
 pub(super) use images::PAYLOAD;
 #[cfg(test)]

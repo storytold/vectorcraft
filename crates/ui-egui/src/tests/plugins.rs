@@ -199,6 +199,91 @@ fn installing_a_plugin_that_lists_permissions_asks_first() {
     app.run("plugin.remove", json!({"id": id})).unwrap();
 }
 
+/// A plug-in with two commands: Grow, which adds a triangle (`_context.command` is `grow`), and
+/// Size, with a parameter, whose `menu` names another menu.
+fn commands_plugin(id: &str) -> Vec<u8> {
+    let manifest = format!(
+        r#"{{"id":"{id}","name":"Cmd Test","version":"1","kind":"filter","commands":[{{"id":"grow","label":"Grow"}},
+        {{"id":"size","label":"Size","menu":"File","params":{{"by":{{"type":"number","min":0,"max":10,"default":2}}}}}}]}}"#
+    );
+    let triangle = r#"{"objects":[{"path":{"subpaths":[{"closed":true,"anchors":[{"p":[0,0]},{"p":[5,0]},{"p":[5,5]}]}]}}]}"#;
+    wat::parse_str(tpl::when_given(&manifest, tpl::Given::Params, r#""command":"grow""#, triangle)).unwrap()
+}
+
+fn objects(app: &VectorcraftApp) -> usize {
+    app.session.doc().unwrap().doc.layers.iter().map(|l| l.children().map_or(0, |c| c.len())).sum()
+}
+
+/// A plug-in's commands are items of Object › Plug-ins › its name (never the menu a manifest
+/// names), entries of Edit › Keyboard Shortcuts with no shortcut of their own, and gone from both
+/// once it is removed. A command with parameters opens its dialog.
+#[test]
+fn plugin_commands_are_menu_items_and_shortcut_entries() {
+    let mut app = app();
+    let id = "test.ui.cmds";
+    let (grow, size) = ("plugin.test.ui.cmds.grow", "plugin.test.ui.cmds.size");
+    app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&commands_plugin(id))})).unwrap();
+    let entries = menus::menu_entries(&app);
+    let under = ["Object", "Plug-ins", "Cmd Test"];
+    let item = entry(&entries, &under, "Grow").expect("Grow is listed");
+    assert_eq!((item.command.as_deref(), item.enabled), (Some(grow), true));
+    assert!(
+        entry(&entries, &under, "Size…").is_some(),
+        "Size is listed: {:?}",
+        entries.iter().filter(|e| e.path == under).map(|e| &e.label).collect::<Vec<_>>()
+    );
+    assert!(!entries.iter().any(|e| e.command.as_deref() == Some(size) && e.path.first().map(String::as_str) != Some("Object")), "not in File");
+    assert!(!menus::menu_strings().contains("Cmd Test"), "the plug-in's name is not text to translate");
+
+    let listed = crate::shortcut_editor::entry(grow).expect("in Keyboard Shortcuts");
+    assert_eq!((listed.label.as_str(), listed.group.as_str()), ("Grow", "Object › Plug-ins › Cmd Test"));
+    assert_eq!(crate::shortcut_editor::default_of(grow), None, "a manifest gives no shortcut");
+    assert!(crate::keymap::template().bindable(&crate::keymap::command_of(grow)).is_some(), "a shortcut can be given to it");
+
+    // Size asks for its parameter; OK runs it as one undo step named after it.
+    let undo = app.session.doc().unwrap().history.undo.len();
+    menus::invoke(&mut app, size, json!({}));
+    let d = app.ui.dialog.as_ref().expect("Size opens its dialog");
+    assert_eq!((d.str("__command"), d.str("__label"), d.fields.get("by")), (size.to_string(), "Size".to_string(), Some(&json!(2.0))));
+    frame(&mut app);
+    dialogs::confirm(&mut app).unwrap();
+    let st = app.session.doc().unwrap();
+    assert_eq!((st.history.undo.len(), st.history.undo.last().unwrap().label.as_str()), (undo + 1, "Size"));
+
+    app.run("plugin.remove", json!({"id": id})).unwrap();
+    assert!(menus::menu_entries(&app).iter().all(|e| e.command.as_deref() != Some(grow)));
+    assert!(crate::shortcut_editor::entries().iter().all(|e| e.key != grow));
+    assert!(crate::keymap::template().bindable(&crate::keymap::command_of(grow)).is_none());
+}
+
+/// A shortcut the user gives a plug-in command runs it.
+#[test]
+fn a_shortcut_runs_a_plugin_command() {
+    let mut app = app();
+    let id = "test.ui.cmds.keys";
+    let grow = vectorcraft_engine::cmd::plugin::command_id(id, "grow");
+    app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&commands_plugin(id))})).unwrap();
+    crate::keymap::set_override(&mut app.ui.shortcut_overrides, &grow, "Cmd+Alt+Shift+F9");
+    crate::shortcut_editor::sync(&app.ui);
+    assert_eq!(crate::shortcut_editor::command_for_key("Cmd+Alt+Shift+F9"), Some(grow.as_str()));
+    let before = objects(&app);
+    let m = if crate::keymap::platform().is_mac() { egui::Modifiers::MAC_CMD } else { egui::Modifiers::CTRL } | egui::Modifiers::COMMAND;
+    let m = m | egui::Modifiers::ALT | egui::Modifiers::SHIFT;
+    let events = vec![
+        egui::Event::ModifiersChanged(m),
+        egui::Event::Key { key: egui::Key::F9, physical_key: Some(egui::Key::F9), pressed: true, repeat: false, modifiers: m },
+    ];
+    let ctx = egui::Context::default();
+    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| {
+        app.logic(ui.ctx());
+        crate::shortcuts::handle(&mut app, ui.ctx());
+    });
+    out.textures_delta.clear();
+    crate::shortcut_editor::sync(&crate::state::UiState::default());
+    assert_eq!(objects(&app), before + 1, "the command added its triangle: {}", app.ui.status);
+    app.run("plugin.remove", json!({"id": id})).unwrap();
+}
+
 /// A plug-in of API level 2 that lists `progress` names it in plain words when it asks.
 #[test]
 fn installing_a_plugin_that_reports_progress_says_so() {

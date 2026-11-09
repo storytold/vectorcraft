@@ -186,6 +186,10 @@
 	Anti-Alias	Kantutjämning
 	Anti-alias Rasters	Kantutjämna rasterbilder
 	Anti-aliased Artwork	Kantutjämnad grafik
+	Anti-aliasing Method	Kantutjämningsmetod
+antiAlias	Sharp	Skarp
+	Crisp	Klar
+	Strong	Kraftig
 	Anti-aliasing:	Kantutjämning:
 	Any Kind	Alla typer
 	Font Technology	Typsnittsteknik
@@ -4020,6 +4024,7 @@ axis	Both	Båda
 @msg	Targa files are RGB: colorModel rgb	Targa-filer är RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Textombrytning: markera ett ombrytningsobjekt
 @msg	This shortcut file is in a form VectorCraft can't read.	Den här kortkommandofilen har ett format som VectorCraft inte kan läsa.
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` måste vara "none", "sharp", "crisp" eller "strong"
 @msg	`aspect` must be a number (%)	`aspect` måste vara ett tal (%)
 @msg	`at` must be [x, y]	`at` måste vara [x, y]
 @msg	`color` must be a colour	`color` måste vara en färg
@@ -5785,6 +5790,11 @@ swatch	Yellow Green	Gulgrön
 	Snap to Perpendicular	Fäst mot vinkelrät
 @msg	unknown snap option `{key}` (use {options})	okänt fästalternativ `{key}` (använd {options})
 	Gap Length:	Lucklängd:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Läget Platt logotyp använder inte keepColors: det vektoriserar färgerna som anges i logoColors eller färgerna det hittar.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Ingenting vektoriserades: ingen av färgerna som vektoriseringen hittade motsvarar keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Ingenting vektoriserades: Ignorera färg utelämnar alla områden med färgerna som keepColors anger.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	Ingenting vektoriserades: färgerna som matchar keepColors ger inga banor.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: ingen av färgerna som vektoriseringen hittade motsvarar {c}, så ingenting av den vektoriseras.
 @msg	`colorGroup` needs `library: "document"`	`colorGroup` kräver `library: "document"`
 @msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` kräver `palette: "documentLibrary"`
 @msg	`colorGroup` needs `mode: "color"`	`colorGroup` kräver `mode: "color"`
@@ -5930,6 +5940,14 @@ axis	Y Axis	Y-axel
 @msg	unknown permission `{shown}`	okänd behörighet `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	”{name}” begär behörigheterna {asked}: installera det med en `grant` som listar dem när användaren har godkänt
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	”{name}” beviljades inte `{p}`, som dess utdata behöver: ingenting ändrades
+@msg	a heavy filter runs in the background, so it can't declare `commands`	ett tungt filter körs i bakgrunden, så det kan inte deklarera `commands`
+@msg	at most {MAX_COMMANDS} `commands`	högst {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	kommandot {name} deklareras två gånger
+@msg	command {name}: `label` must be 1-64 printable characters	kommando {name}: `label` måste ha 1-64 utskrivbara tecken
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	kommando {name}: använd ett id med 1-{MAX_COMMAND_ID} tecken av a-z 0-9 _ som börjar med en bokstav
+@msg	command {name}: {e}	kommando {name}: {e}
+@msg	only a filter or a live effect declares `commands`	bara ett filter eller en live-effekt deklarerar `commands`
+@msg	“{name}” › {label}: {e}	”{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	modulen har inte den SHA-256 som `hash` anger: ingenting installerades
 # Actions panel: action sets (#3712).
 	New Set…	Ny uppsättning…

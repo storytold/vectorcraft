@@ -405,6 +405,73 @@ pub fn graphic_styles(data: &[u8], large_canvas: bool) -> (Vec<GraphicStyle>, f6
     (r.graphic_styles().0, r.canvas_scale)
 }
 
+/// The symbols of a `.ai` file's editing data, as [`symbols`] reads them.
+pub struct Symbols {
+    /// The symbols in the Symbols panel's order, each with its Symbol Options › Registration.
+    pub symbols: Vec<(Symbol, vectorcraft_doc::SymbolRegistration)>,
+    /// The image blobs the symbols' art shows, by key.
+    pub images: std::collections::BTreeMap<String, ImageBlob>,
+    /// The global and spot colors the symbols' art is linked to, as swatches, as [`read`] adds
+    /// them to a document read from the layers.
+    pub swatches: Vec<Swatch>,
+}
+
+/// The symbols of the editing data `data`, for a file whose layers aren't read (a symbol library
+/// has none), as [`read`] makes them: in the symbol list's order, without those that hold an
+/// instance of a symbol the data doesn't define, and with each object of their art that is linked
+/// to a listed graphic style linked to it by the id [`graphic_styles`] gives that style. The
+/// symbols are those defined before reading stops and before the first layer; `None` when there
+/// are none.
+pub fn symbols(data: &[u8]) -> Option<Symbols> {
+    crate::import::ai::find(data, b"BeginSymbol")?;
+    let mut r = Reader::with_names(data);
+    // The symbols come before the art, so an error in the art leaves them read.
+    let _ = r.run();
+    r.check_symbols();
+    r.order_symbols();
+    if r.doc.symbols.is_empty() {
+        return None;
+    }
+    let (styles, ids) = r.graphic_styles();
+    let links: HashMap<NodeId, u32> = r.style_links.iter().filter_map(|(node, name)| Some((*node, *ids.get(name)?))).collect();
+    if !links.is_empty() {
+        for symbol in &mut r.doc.symbols {
+            link_styles(std::slice::from_mut(&mut symbol.art), &links, &styles, 0);
+        }
+    }
+    let mut shown = Document::new(1.0, 1.0);
+    shown.symbols = std::mem::take(&mut r.doc.symbols);
+    let mut images = std::collections::BTreeMap::new();
+    shown.visit_images(|_, im| {
+        if let Some(blob) = r.doc.images.get(&im.key) {
+            images.insert(im.key.clone(), blob.clone());
+        }
+    });
+    // The colors the art is linked to that the file defines, once each.
+    let mut linked = std::collections::HashSet::new();
+    for s in &mut shown.symbols {
+        vectorcraft_doc::swatches::map_node_solid_paints(Arc::make_mut(&mut s.art), &mut |_, link, _| {
+            linked.extend(link.clone());
+            false
+        });
+    }
+    let mut swatches: Vec<Swatch> = vec![];
+    let colors = r.spots.iter().chain(&r.stop_spots).map(|n| (n, n.spot)).chain(r.custom_colors.iter().map(|n| (n, true)));
+    for (n, spot) in colors {
+        if linked.remove(&n.name) {
+            swatches.push(Swatch { name: n.name.clone(), paint: Paint::solid(n.color), global: true, spot });
+        }
+    }
+    let symbols = std::mem::take(&mut shown.symbols)
+        .into_iter()
+        .map(|s| {
+            let reg = r.doc.symbol_registration(&s.name);
+            (s, reg)
+        })
+        .collect();
+    Some(Symbols { symbols, images, swatches })
+}
+
 /// [`artboards`] as far as reading `data` from its start gets: those read before an error, and
 /// those of a `/Document` still open when it stopped (its art can be what stopped it).
 fn artboards_read(data: &[u8]) -> (Vec<(String, Rect)>, Option<usize>) {

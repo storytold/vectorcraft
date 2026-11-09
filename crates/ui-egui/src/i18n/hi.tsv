@@ -343,6 +343,10 @@
 	Anti-Alias	एंटी-एलियास
 	Anti-alias Rasters	रास्टर एंटी-एलियास करें
 	Anti-aliased Artwork	एंटी-एलियास किया आर्टवर्क
+	Anti-aliasing Method	एंटी-एलियासिंग विधि
+antiAlias	Sharp	शार्प
+	Crisp	क्रिस्प
+	Strong	स्ट्रॉन्ग
 	Anti-aliasing:	एंटी-एलियासिंग:
 	Any except extracting pages	पेज निकालने के अलावा सभी
 	Any Kind	किसी भी प्रकार का
@@ -5267,6 +5271,14 @@
 @msg	unknown permission `{shown}`	अज्ञात अनुमति `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}” अनुमतियां {asked} मांगता है: उपयोगकर्ता की सहमति मिलने पर इसे उन्हें सूचीबद्ध करने वाले `grant` के साथ इंस्टॉल करें
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	“{name}” को `{p}` नहीं दी गई, जो उसके आउटपुट को चाहिए: कुछ नहीं बदला
+@msg	a heavy filter runs in the background, so it can't declare `commands`	भारी फ़िल्टर पृष्ठभूमि में चलता है, इसलिए वह `commands` घोषित नहीं कर सकता
+@msg	at most {MAX_COMMANDS} `commands`	अधिकतम {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	कमांड {name} दो बार घोषित है
+@msg	command {name}: `label` must be 1-64 printable characters	कमांड {name}: `label` में 1-64 प्रिंट करने योग्य वर्ण होने चाहिए
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	कमांड {name}: a-z 0-9 _ के 1-{MAX_COMMAND_ID} वर्णों वाली ऐसी id इस्तेमाल करें जो अक्षर से शुरू हो
+@msg	command {name}: {e}	कमांड {name}: {e}
+@msg	only a filter or a live effect declares `commands`	केवल फ़िल्टर या लाइव इफ़ेक्ट ही `commands` घोषित करता है
+@msg	“{name}” › {label}: {e}	“{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	मॉड्यूल का SHA-256 वह नहीं है जो `hash` बताता है: कुछ भी इंस्टॉल नहीं हुआ
 @msg	“{name}” is not a file	"{name}" एक फ़ाइल नहीं है
 @msg	({note}) ({more})	({note}) ({more})
@@ -5530,6 +5542,7 @@
 @msg	`anchors` must be an array of [subpath, anchor] pairs	`anchors` को [subpath, एंकर] जोड़े की एक सारणी होना चाहिए
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {k}	`anchors` में एंकर इंडेक्स (0, 1, 2…) की सूची होनी चाहिए, {k} नहीं
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {v}	`anchors` में एंकर इंडेक्स (0, 1, 2…) की सूची होनी चाहिए, {v} नहीं
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` होना चाहिए "none", "sharp", "crisp" या "strong"
 @msg	`artboards` must be a list of artboard indices	`artboards` को आर्टबोर्ड इंडेक्स की सूची होना चाहिए
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all या 1, 3-5 जैसी सीमा दें, {v} नहीं
 @msg	`aspect` must be a number (%)	`aspect` को संख्या (%) होना चाहिए
@@ -7429,6 +7442,11 @@
 @msg	the image is fully transparent	इमेज पूरी तरह से पारदर्शी है
 @msg	the image is not on an artboard; pass rect	इमेज एक आर्टबोर्ड पर नहीं है; सही होकर गुजरना
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	इमेज को {_1} × {_2} पिक्सेल पर पता लगाया गया था, जिसे {_3} × {_4} ({_5} मेगापिक्सेल) से नीचे बढ़ाया गया था।
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Flat लोगो मोड keepColors का उपयोग नहीं करता: यह logoColors में बताए गए रंगों को या अपने पाए गए रंगों को ट्रेस करता है।
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	कुछ भी ट्रेस नहीं हुआ: ट्रेस में मिला कोई भी रंग keepColors ({_1}) से मेल नहीं खाता।
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	कुछ भी ट्रेस नहीं हुआ: Ignore रंग keepColors में सूचीबद्ध रंगों के सभी क्षेत्र छोड़ देता है।
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	कुछ भी ट्रेस नहीं हुआ: keepColors से मेल खाने वाले रंग कोई पाथ नहीं बनाते।
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: ट्रेस में मिला कोई भी रंग {c} से मेल नहीं खाता, इसलिए इसका कुछ भी ट्रेस नहीं होता।
 @msg	the image's pixels are missing	इमेज के पिक्सेल लापता हैं
 @msg	the image's pixels aren't in the document	इमेज के पिक्सेल डॉक्यूमेंट में नहीं हैं
 @msg	the image's pixels can't be read	इमेज के पिक्सेल को पढ़ा नहीं जा सकता है
