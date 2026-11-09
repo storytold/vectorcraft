@@ -2698,11 +2698,17 @@ fn pen_cmd_selected_anchors_are_what_copy_and_cut_take() {
     assert_eq!(s.doc().unwrap().selection.anchors[&id], [(0, 1), (0, 2)].into());
     s.execute("edit.copy", &json!({})).unwrap();
     assert_eq!(pasted(&mut s), [2]);
-    // Cut takes the segment between them out of the path, as with Direct Selection chosen.
+    // Cut takes the segment between them. The two surviving runs of an ordinary path
+    // become independent objects, and this path keeps the first run (#3380).
     s.execute("edit.undo", &json!({})).unwrap();
     s.execute("edit.cut", &json!({})).unwrap();
+    let pieces = paths(&s);
     let left = path(&s, id).subpaths.iter().map(|sp| sp.anchors.len()).collect::<Vec<_>>();
-    assert_eq!((s.clipboard.nodes.len(), left), (1, vec![2, 2]));
+    assert_eq!(s.clipboard.nodes.len(), 1);
+    assert_eq!(left, vec![2]);
+    assert_eq!(pieces.len(), 2);
+    assert!(pieces.iter().all(|(_, path)| path.subpaths.len() == 1 && path.subpaths[0].anchors.len() == 2));
+    assert_eq!(s.doc().unwrap().selection.objects.len(), 2);
     // Drawing on: the last anchor the Pen leaves selected doesn't make Copy take that anchor.
     s.execute("edit.undo", &json!({})).unwrap();
     s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
