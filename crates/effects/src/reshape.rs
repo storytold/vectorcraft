@@ -708,7 +708,8 @@ fn reshape_leaves_apart(art: &mut Node, fx: &[&Effect], budget: Budget, apart: b
                     return;
                 }
                 if separate {
-                    let made = copy_leaf(leaf, &path, m, copies, vectorcraft_doc::Scaling::default(), room);
+                    let scaling = vectorcraft_doc::Scaling { keep_fit_when_flat: true, ..Default::default() };
+                    let made = copy_leaf(leaf, &path, m, copies, scaling, room);
                     used = used.minus(before).plus(made);
                     return;
                 }
@@ -718,8 +719,12 @@ fn reshape_leaves_apart(art: &mut Node, fx: &[&Effect], budget: Budget, apart: b
                 return;
             };
             used = used.minus(before).plus(Budget::of(&out));
-            if follows && !boxes && leaf.appearance.has_positioned_gradient() {
-                crate::Carry::of(&e.id, &params, bounds, None, None, seed).apply(&mut leaf.appearance);
+            if follows && !boxes {
+                // A gradient fitted to the path fits the path's own bounds.
+                let carry = crate::Carry::of(&e.id, &params, bounds, path.bounds(), None, seed);
+                if carry.moves(&leaf.appearance) {
+                    carry.apply(&mut leaf.appearance);
+                }
             }
             set_geometry(leaf, out, rule);
         });
@@ -774,6 +779,8 @@ fn transform_leaf(
         strokes: options.strokes,
         effects: options.strokes.then_some(crate::scale_effect as fn(&mut Effect, f64)),
         patterns: options.patterns,
+        // A map that flattens the path leaves its fitted gradients fitted, as `fixes_fit` does.
+        keep_fit_when_flat: true,
         ..Default::default()
     };
     if !options.objects {
@@ -1052,7 +1059,7 @@ fn is_member_group(n: &Node) -> bool {
 }
 
 /// A group below the art that [`is_member_group`] takes and whose own fills or strokes hold a
-/// placed gradient: the child indices that lead to it from the art, its geometric bounds, and
+/// gradient: the child indices that lead to it from the art, its geometric bounds, and
 /// whether a path below it that its bounds measure kept its shape.
 type GroupMark = (Vec<usize>, Option<Rect>, bool);
 
@@ -1069,7 +1076,7 @@ fn group_marks(n: &Node, at: &mut Vec<usize>, kept: &HashSet<NodeId>, out: &mut 
             for (i, c) in children.iter().enumerate() {
                 at.push(i);
                 let (b, h) = group_marks(c, at, kept, out);
-                if is_member_group(c) && c.appearance.has_positioned_gradient() {
+                if is_member_group(c) && (c.appearance.has_positioned_gradient() || c.appearance.has_unplaced_gradient()) {
                     out.push((at.clone(), b, h));
                 }
                 at.pop();
@@ -1223,6 +1230,10 @@ fn copy_placed(n: &mut Node, m: Affine, copies: usize, room: &mut usize) {
         let src = (**c).clone();
         let placed = |xf: Affine| {
             let mut one = src.clone();
+            // Gradients fitted to it are fixed to their fit first when a refit would not match.
+            if crate::geometry::fixes_fit(xf) {
+                one.pin_gradients();
+            }
             match &mut one.kind {
                 NodeKind::Image(im) => im.xf = xf * im.xf,
                 NodeKind::SymbolInstance { xf: at, .. } => *at = xf * *at,

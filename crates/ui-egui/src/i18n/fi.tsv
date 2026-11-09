@@ -472,6 +472,17 @@
 	Inflate	Täytä ilmalla
 	Select objects, then pick an object type to give them a 3D effect.	Valitse objektit ja valitse sitten objektityyppi, niin niille tulee 3D-tehoste.
 	Extrude & Bevel…	Pursota ja viistä…
+	3D (Classic)	3D (perinteinen)
+	Extrude & Bevel (Classic)…	Pursota ja viistä (perinteinen)…
+	Surface	Pinta
+	Wireframe	Rautalanka
+	No Shading	Ei varjostusta
+	Plastic	Muovi
+	Highlight Intensity	Kiillon voimakkuus
+	Highlight Size	Kiillon koko
+	Blend Steps	Sulautusvaiheet
+	Shading Color	Varjostusväri
+	Draw Hidden Faces	Piirrä piilotetut pinnat
 	Revolve…	Pyöräytä…
 	Inflate…	Täytä ilmalla…
 	Materials…	Materiaalit…
@@ -1882,6 +1893,10 @@ digits	Malayalam	Malajalam
 	Stylistic	Tyylitelty
 	Mojikumi Set	Mojikumi-joukko
 	Kinsoku Set	Kinsoku-joukko
+	Kinsoku Shori Type	Kinsoku Shori -tyyppi
+	Push In First	Ensin sisään
+	Push Out First	Ensin ulos
+	Push Out Only	Vain ulos
 	Hard	Tiukka
 	Right Indent	Oikea sisennys
 	Right-to-Left Paragraph Direction	Kappaleen suunta oikealta vasemmalle
@@ -6607,6 +6622,24 @@ breakText	Glyphs	Merkit
 # 3D Box add-on
 	3D Box	3D-laatikko
 	3D Box Tool	3D-laatikkotyökalu
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Avaa ohjelmalla
+	No importer plug-ins installed	Tuontilaajennuksia ei ole asennettu
+	Read files you open in its format and make documents from them	Lukea sen muodossa avaamasi tiedostot ja tehdä niistä asiakirjoja
+@msg	{_1} is an importer (File › Open With)	{_1} on tuontilaajennus (Tiedosto › Avaa ohjelmalla)
+@msg	missing `importer` (see document.formats)	`importer` puuttuu (katso document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` on oltava laajennuksen muototunnus (katso document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	”{shown}” avaa {_1}-tiedostoja, ei `{_2}`
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` on lajin `{_2}` laajennus, ei tuontilaajennus
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` on lajin `{_2}` laajennus, ei vientilaajennus
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` on tuontilaajennus: avaa tiedosto komennolla document.open {{"importer"}"}}
+@msg	the importer returned no objects	tuontilaajennus ei palauttanut objekteja
+@msg	an importer returns `objects` and `warnings`, not `{key}`	tuontilaajennus palauttaa `objects` ja `warnings`, ei `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	tiedosto on suurempi kuin tuontilaajennuksen lukemat {MAX_INPUT_BYTES} tavua
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	tuontilaajennus ilmoittaa 1–{MAX_EXTENSIONS} `extensions`
+@msg	only an exporter or an importer declares `extensions`	vain vienti- tai tuontilaajennus ilmoittaa `extensions`
+@msg	an importer always gets an import's budget: leave `budget` out	tuontilaajennus saa aina tuonnin budjetin: jätä `budget` pois
 
 # Safe Mode
 	Safe Mode…	Vikasietotila…

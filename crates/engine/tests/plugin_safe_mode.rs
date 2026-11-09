@@ -198,6 +198,25 @@ fn installing_a_disabled_plug_in_again_turns_it_on() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// When the grant of an update can't be stored, the store keeps the old module, and it stays disabled.
+#[test]
+fn a_disabled_plug_in_whose_new_grant_cant_be_stored_stays_disabled() {
+    let _f = fresh();
+    let dir = tmp_dir("reinstall-no-grant");
+    let mut s = launch(&dir);
+    let manifest = r#"{"id":"test.sm.g","name":"Test","version":"1","kind":"filter","permissions":["doc.read"]}"#;
+    let module = |out: &str| vectorcraft_format::base64_encode(&wat::parse_str(tpl::returning(manifest, out)).unwrap());
+    s.execute("plugin.install", &json!({"dataBase64": module(r#"{"objects":[]}"#), "grant": ["doc.read"]})).unwrap();
+    s.execute("plugin.setEnabled", &json!({"id": "test.sm.g", "enabled": false})).unwrap();
+    let grants = dir.join("grants.json");
+    std::fs::remove_file(&grants).unwrap();
+    std::fs::create_dir_all(grants.join("block")).unwrap();
+    s.execute("plugin.install", &json!({"dataBase64": module(r#"{"objects":[],"error":null}"#), "grant": ["doc.read"], "replace": true})).unwrap();
+    assert_eq!(safe_mode::disabled().len(), 1, "the module the update could not replace stays disabled");
+    safe_mode::set_disabled(vec![]);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// A launch where the stored plug-in `id` stopped while loading: it is installed, then disabled by
 /// its stored file alone (as Disable and Continue saves it), and the next launch skips it.
 fn stored_plug_in_disabled_by_file(dir: &std::path::Path, id: &str) -> Session {

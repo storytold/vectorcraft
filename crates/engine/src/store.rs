@@ -289,8 +289,8 @@ impl Session {
     /// Install the plug-ins kept in the plug-in folder: none in Safe Mode, and none the user
     /// disabled (matched by file name, which is made from the id). The launch marker names each
     /// file while it loads. A module that doesn't load, and one that lists permissions the grants
-    /// there don't grant it, is skipped with a log record. A grant covers only the module it was
-    /// given to ([`grant_covers`]).
+    /// there don't grant that very module ([`grant_covers`]), is skipped with a log record, and
+    /// stays in the folder with its grant.
     pub fn load_stored_plugins(&mut self) {
         let Some(dir) = self.plugin_dir.clone() else { return };
         if safe_mode::active() {
@@ -376,9 +376,9 @@ impl Session {
         written && merged.complete()
     }
 
-    /// Whether `plugin` installs without asking the user: it lists no permissions, or its id was
-    /// granted every one it lists, in the grants of the attached plug-in store when there is one
-    /// (for this module alone, [`grant_covers`]), else in this process's
+    /// Whether `plugin` installs without asking the user: it lists no permissions, or this very
+    /// module (its id and SHA-256) was granted every one it lists, in the grants of the attached
+    /// plug-in store when there is one ([`grant_covers`]), else in this process's
     /// ([`vectorcraft_plugins::registry::approved`]).
     pub(crate) fn plugin_approved(&self, plugin: &vectorcraft_plugins::Plugin) -> bool {
         self.plugin_approver()(plugin)
@@ -403,6 +403,29 @@ impl Session {
         self.plugin_dir.as_deref().is_some_and(|dir| put(dir, &format!("{}.{PLUGIN_EXT}", file_stem(id)), bytes))
     }
 
+    /// The module the store holds for the plug-in `id`: `None` without a folder or such a file, and
+    /// an error, with a log record, when the file can't be read or is larger than the module limit.
+    pub(crate) fn stored_plugin_bytes(&self, id: &str) -> Result<Option<Vec<u8>>, String> {
+        let Some(dir) = self.plugin_dir.as_deref() else { return Ok(None) };
+        let path = dir.join(format!("{}.{PLUGIN_EXT}", file_stem(id)));
+        if !path.exists() {
+            return Ok(None);
+        }
+        let max = vectorcraft_plugins::Limits::default().max_module_bytes as u64;
+        read_capped(&path, max).map(Some).inspect_err(|e| log::warn!("can't read the stored plug-in {}: {e}", path.display()))
+    }
+
+    /// Return the store's module for the plug-in `id` to `previous`, the bytes it held before a
+    /// write ([`Session::stored_plugin_bytes`]): with `None`, the file is removed.
+    pub(crate) fn put_back_plugin(&self, id: &str, previous: Option<&[u8]>) {
+        match previous {
+            Some(bytes) => {
+                self.store_plugin(id, bytes);
+            }
+            None => self.unstore_plugin(id),
+        }
+    }
+
     /// The file the plug-in `id` is stored in, spelled as [`Session::load_stored_plugins`] names it
     /// (`None` without a plug-in folder).
     pub(crate) fn stored_plugin_file(&self, id: &str) -> Option<String> {
@@ -413,14 +436,15 @@ impl Session {
     /// other grants as they are; with none left, remove the file. Entries this version can't use
     /// are written back as they were, except one for `id`. A grants file that is too large, can't
     /// be read or doesn't hold a list is left as it is, with a log record, and nothing is recorded;
-    /// so is one whose new content would be larger than `MAX_GRANTS_FILE`.
-    pub(crate) fn store_grant(&self, id: &str, grant: Option<vectorcraft_plugins::permissions::Grant>) {
-        let Some(dir) = &self.plugin_dir else { return };
+    /// so is one whose new content would be larger than `MAX_GRANTS_FILE`. → whether the store now
+    /// holds what was asked (`false` without a folder).
+    pub(crate) fn store_grant(&self, id: &str, grant: Option<vectorcraft_plugins::permissions::Grant>) -> bool {
+        let Some(dir) = &self.plugin_dir else { return false };
         let mut file = match read_grants(dir) {
             Ok(file) => file,
             Err(e) => {
                 log::warn!("not updating the stored plug-in grants {}: {e}", dir.join(GRANTS_FILE).display());
-                return;
+                return false;
             }
         };
         let others = file.other.len();
@@ -430,22 +454,23 @@ impl Session {
             None => file.grants.remove(id).is_some(),
         } || file.other.len() != others;
         if !changed {
-            return;
+            return true;
         }
         let mut entries: Vec<serde_json::Value> = file.grants.into_values().filter_map(|g| serde_json::to_value(g).ok()).collect();
         entries.extend(file.other);
         if entries.is_empty() {
             take(dir, GRANTS_FILE);
-            return;
+            return true;
         }
         // The file is read back only up to its cap: written compactly when pretty-printed is larger,
         // and not at all when that is too.
         let fits = |bytes: &Vec<u8>| bytes.len() as u64 <= MAX_GRANTS_FILE;
         match serde_json::to_vec_pretty(&entries).ok().filter(fits).or_else(|| serde_json::to_vec(&entries).ok().filter(fits)) {
-            Some(bytes) => {
-                put(dir, GRANTS_FILE, &bytes);
+            Some(bytes) => put(dir, GRANTS_FILE, &bytes),
+            None => {
+                log::warn!("not updating the stored plug-in grants {}: {}", dir.join(GRANTS_FILE).display(), too_large(MAX_GRANTS_FILE));
+                false
             }
-            None => log::warn!("not updating the stored plug-in grants {}: {}", dir.join(GRANTS_FILE).display(), too_large(MAX_GRANTS_FILE)),
         }
     }
 
@@ -577,12 +602,13 @@ fn io(e: &std::io::Error) -> StorageError {
     StorageError::Io(e.to_string())
 }
 
-/// Does grant `g` cover `plugin`: was it given to this module (the same SHA-256) for every
+/// Does grant `g` cover `plugin`: was it given to this module (the same id and SHA-256) for every
 /// permission the module lists? A module with other bytes under the id needs the user's approval
-/// again, and so doesn't get the settings and cache kept for the id without it, and so does every
-/// module when the grant records no hash.
+/// again, and so doesn't get the settings and cache kept for the id without it. A grant whose hash
+/// is missing or not a valid SHA-256 covers no module.
 fn grant_covers(g: &vectorcraft_plugins::permissions::Grant, plugin: &vectorcraft_plugins::Plugin) -> bool {
-    !g.hash.is_empty() && g.hash == plugin.hash() && g.covers(&plugin.manifest().permissions())
+    let m = plugin.manifest();
+    g.covers(&m.id, plugin.hash(), &m.permissions())
 }
 
 /// Is `path` a link (a symbolic link or, on Windows, a junction)?
