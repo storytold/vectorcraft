@@ -1204,11 +1204,10 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let attrs = s.prefs.eyedropper.attrs(p).map_err(|e| bad(C, e))?;
     // An object of a dynamic symbol instance's art selected with Direct Selection takes the clicked
-    // object's solid fill and stroke, as the Eyedropper Options allow, for this instance only. A
-    // gradient or pattern sampled for it, a source that is not a path, compound path or type (a
-    // symbol instance's own appearance is empty), and options that pick up neither color are
-    // refused, and the paint defaults stay as they are. A path of a compound path stands for the
-    // compound path, which holds the paint.
+    // object's fill and stroke, as the Eyedropper Options allow, for this instance only. A source
+    // that is not a path, compound path or type (a symbol instance's own appearance is empty) and
+    // options that pick up neither color are refused, and the paint defaults stay as they are. A
+    // path of a compound path stands for the compound path, which holds the paint.
     if !reverse
         && !append
         && !defaults_only
@@ -1219,11 +1218,7 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
         let src = Arc::new(d.node(super::path::compound_or_self(d, clicked)).ok_or(EngineError::NoNode(clicked))?.clone());
         let (fill, stroke) = (super::paint::proxy_paint(&src, false, None), super::paint::proxy_paint(&src, true, None));
         let a = attrs.appearance;
-        if !vectorcraft_doc::symbol_overrides::takes_part_paint(&src)
-            || !(a.fill.color || a.stroke.color)
-            || (a.fill.color && !super::paint::part_takes(&fill))
-            || (a.stroke.color && !super::paint::part_takes(&stroke))
-        {
+        if !vectorcraft_doc::symbol_overrides::takes_part_paint(&src) || !(a.fill.color || a.stroke.color) {
             return Err(super::brushsym::part_only());
         }
         super::brushsym::edit_part(s, id, &path, "Eyedropper", |o| {
