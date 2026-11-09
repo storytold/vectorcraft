@@ -105,7 +105,7 @@ fn each_copy_scales_its_stroke_once_more() {
     let n = stroked(json!({"scaleH": 200, "scaleV": 200, "copies": 2, "strokes": true}));
     let art = reshape(None, &n, None).unwrap();
     let widths: Vec<f64> = leaves(&art).iter().map(|p| stroke_of(p).0).collect();
-    assert_eq!(widths, vec![2.0, 4.0, 8.0]);
+    assert_eq!(widths, vec![8.0, 4.0, 2.0], "the original on top");
     // Without the option the copies keep the original's weight.
     let plain = stroked(json!({"scaleH": 200, "scaleV": 200, "copies": 2}));
     assert!(!has_transform_art(&plain));
@@ -127,7 +127,7 @@ fn transform_patterns_moves_each_copys_pattern() {
     assert!(has_transform_options(&n));
     let art = reshape(None, &n, None).unwrap();
     let xs: Vec<f64> = leaves(&art).iter().map(|p| pattern_xf(p).as_coeffs()[4]).collect();
-    assert_eq!(xs, vec![0.0, 30.0, 60.0]);
+    assert_eq!(xs, vec![60.0, 30.0, 0.0], "the original on top");
     // Without it, every copy's pattern stays put (the tiles don't follow the copies).
     let n = patterned(json!({"moveH": 30, "patterns": false, "strokes": false, "objects": true}));
     assert!(!has_transform_art(&n));
@@ -218,7 +218,7 @@ fn each_copy_of_a_strokes_own_transform_scales_its_weight_once_more() {
     let n = stroke_with_effect(json!({"scaleH": 200, "scaleV": 200, "copies": 2, "strokes": true}));
     let art = reshape(None, &n, None).unwrap();
     let widths: Vec<f64> = stroked_leaves(&art).iter().map(|p| stroke_of(p).0).collect();
-    assert_eq!(widths, vec![2.0, 4.0, 8.0]);
+    assert_eq!(widths, vec![8.0, 4.0, 2.0], "the original on top");
 }
 
 #[test]
@@ -268,7 +268,7 @@ fn a_fills_own_transform_moves_each_copys_pattern_with_transform_patterns() {
     assert!(has_transform_options(&n));
     let art = reshape(None, &n, None).unwrap();
     let xs: Vec<f64> = pattern_leaves(&art).iter().map(|p| pattern_xf(p).as_coeffs()[4]).collect();
-    assert_eq!(xs, vec![0.0, 30.0, 60.0]);
+    assert_eq!(xs, vec![60.0, 30.0, 0.0], "the original on top");
     // Off, the pattern stays put.
     assert!(!has_transform_art(&fill_with_effect(json!({"moveH": 30, "copies": 2}))));
 }
@@ -294,7 +294,7 @@ fn a_strokes_own_transform_draws_bakes_expands_and_measures_alike() {
     let n = stroke_with_effect(json!({"scaleH": 200, "scaleV": 200, "copies": 1, "strokes": true}));
     let drawn = reshape(None, &n, None).unwrap();
     let widths = |art: &Node| stroked_leaves(art).iter().map(|p| stroke_of(p).0).collect::<Vec<f64>>();
-    assert_eq!(widths(&drawn), vec![2.0, 4.0]);
+    assert_eq!(widths(&drawn), vec![4.0, 2.0], "the original on top");
     // Expand Appearance.
     assert_eq!(widths(&expand_outlined(None, &n, None).unwrap()), widths(&drawn));
     // Export.
@@ -394,9 +394,9 @@ fn filled_and_stroked(fill: Paint, params: Value) -> Node {
 }
 
 #[test]
-fn copies_with_a_fill_and_a_stroke_are_drawn_one_above_another() {
-    // Black fill, white stroke, each copy scaled and turned (#5920): each copy is an object of its
-    // own above the one before, so its fill covers the strokes of the copies below.
+fn copies_with_a_fill_and_a_stroke_are_drawn_one_below_another() {
+    // Black fill, white stroke, each copy scaled and turned (#5920, #6316): each copy is an object
+    // of its own below the one before, so the fills above cover the strokes of the copies below.
     let params = json!({"scaleH": 97, "scaleV": 97, "rotate": 10, "copies": 25});
     let n = filled_and_stroked(Paint::solid(Color::BLACK), params.clone());
     assert!(has_transform_art(&n));
@@ -407,10 +407,10 @@ fn copies_with_a_fill_and_a_stroke_are_drawn_one_above_another() {
         assert!(matches!(p.kind, NodeKind::Path { .. }), "one shape each, not one path of every copy");
         assert!(!p.appearance.fill_paint().is_none() && p.appearance.stroke().is_some());
     }
-    // The original is at the bottom, the smallest copy on top.
-    assert_eq!(paths[0].geometric_bounds().unwrap(), Rect::new(0.0, 0.0, 100.0, 100.0));
-    let top = paths[25].geometric_bounds().unwrap();
-    assert!(top.width() < 100.0 && top.height() < 100.0, "{top:?}");
+    // The smallest copy is at the bottom, the original on top.
+    assert_eq!(paths[25].geometric_bounds().unwrap(), Rect::new(0.0, 0.0, 100.0, 100.0));
+    let bottom = paths[0].geometric_bounds().unwrap();
+    assert!(bottom.width() < 100.0 && bottom.height() < 100.0, "{bottom:?}");
     // Drawn as Expand Appearance makes it.
     assert_eq!(leaves(&expand_outlined(None, &n, None).unwrap()).len(), 26);
 
@@ -426,4 +426,86 @@ fn copies_with_a_fill_and_a_stroke_are_drawn_one_above_another() {
     assert!(has_transform_art(&fill_only));
     // No copies: nothing to stack.
     assert!(!has_transform_art(&filled_and_stroked(Paint::solid(Color::BLACK), json!({"rotate": 10}))));
+}
+
+/// A group of two squares side by side, each with a black fill and a white stroke, with the
+/// Transform effect `params`.
+fn two_squares(params: Value) -> Node {
+    let square = |id, x| {
+        let a = Appearance::basic(Paint::solid(Color::BLACK), Paint::solid(Color::WHITE), 4.0);
+        std::sync::Arc::new(Node::path(NodeId(id), shapes::rectangle(Rect::new(x, 0.0, x + 100.0, 100.0)), a))
+    };
+    let mut g = Node::group(NodeId(20), vec![square(21, 0.0), square(22, 120.0)]);
+    g.appearance.effects.push(transform(params));
+    g
+}
+
+#[test]
+fn a_groups_copies_are_whole_groups_below_the_original() {
+    let art = crate::evaluate_container(None, &two_squares(json!({"scaleH": 95, "scaleV": 95, "copies": 10}))).unwrap();
+    let copies = art.children().unwrap();
+    assert_eq!(copies.len(), 11, "the original and 10 copies");
+    for c in copies {
+        assert_eq!(c.children().map(Vec::len), Some(2), "each copy holds both squares");
+    }
+    // The smallest copy is at the bottom, the original on top with its members in their order.
+    let width = |i: usize| copies[i].geometric_bounds().unwrap().width();
+    assert!((0..10).all(|i| width(i) < width(i + 1)), "{:?}", (0..11).map(width).collect::<Vec<_>>());
+    assert_eq!(copies[10].geometric_bounds().unwrap(), Rect::new(0.0, 0.0, 220.0, 100.0));
+    let members = copies[10].children().unwrap();
+    assert_eq!(members[0].geometric_bounds().unwrap(), Rect::new(0.0, 0.0, 100.0, 100.0));
+    assert_eq!(members[1].geometric_bounds().unwrap(), Rect::new(120.0, 0.0, 220.0, 100.0));
+
+    // Without copies the members stay members of the art.
+    let art = crate::evaluate_container(None, &two_squares(json!({"scaleH": 50, "scaleV": 50}))).unwrap();
+    assert_eq!(art.children().unwrap().iter().map(|c| c.id).collect::<Vec<_>>(), [NodeId(21), NodeId(22)]);
+
+    // A group's own fill paints the shape of all its copies, so each member keeps its place.
+    let mut own_fill = two_squares(json!({}));
+    own_fill.appearance = Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0).into();
+    let copies = transform(json!({"moveH": 300, "copies": 2}));
+    crate::reshape::reshape_leaves_within(&mut own_fill, &[&copies], crate::geometry::Budget::EFFECTS, None);
+    assert_eq!(own_fill.children().map(Vec::len), Some(2), "a stack of copies per member");
+
+    // A guide in the group stays one guide.
+    let mut guided = two_squares(json!({}));
+    let mut guide = Node::path(NodeId(23), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default());
+    if let NodeKind::Path { guide: on, .. } = &mut guide.kind {
+        *on = true;
+    }
+    if let Some(members) = guided.children_mut() {
+        members.push(std::sync::Arc::new(guide));
+    }
+    guided.appearance.effects.clear();
+    crate::reshape::reshape_leaves_within(&mut guided, &[&copies], crate::geometry::Budget::EFFECTS, None);
+    assert_eq!(guided.children().map(Vec::len), Some(3), "the original and 2 copies");
+    let mut guides = 0;
+    guided.walk(&mut |n| guides += usize::from(matches!(n.kind, NodeKind::Path { guide: true, .. })));
+    assert_eq!(guides, 1);
+
+    // A clipping group's first member stays its clip.
+    let mut clipping = two_squares(json!({}));
+    if let NodeKind::Group { clip, .. } = &mut clipping.kind {
+        *clip = true;
+    }
+    clipping.appearance.effects.clear();
+    crate::reshape::reshape_leaves_within(&mut clipping, &[&copies], crate::geometry::Budget::EFFECTS, None);
+    assert_eq!(clipping.children().map(Vec::len), Some(2), "the clip and the clipped member");
+}
+
+#[test]
+fn a_groups_copies_stop_at_the_node_limit() {
+    // Empty groups cost no anchors, so only the count of nodes stops their copies.
+    let empties = (0..5_000).map(|i| std::sync::Arc::new(Node::group(NodeId(100 + i), vec![])));
+    let mut g = two_squares(json!({}));
+    if let Some(members) = g.children_mut() {
+        members.extend(empties);
+    }
+    g.appearance.effects.clear();
+    let copies = transform(json!({"moveH": 1, "copies": 1000}));
+    crate::reshape::reshape_leaves_within(&mut g, &[&copies], crate::geometry::Budget::EFFECTS, None);
+    let mut nodes = 0usize;
+    g.walk(&mut |_| nodes += 1);
+    assert!(nodes <= crate::distort::MAX_COPY_OBJECTS + 1, "{nodes}");
+    assert!(g.children().unwrap().len() < 1001, "the limit stopped the copies");
 }
