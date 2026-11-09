@@ -65,8 +65,8 @@ use std::sync::Arc;
 use vectorcraft_color::cms::Cms;
 use vectorcraft_color::{BlendMode, Color, Gradient, GradientKind, GradientPaint, Paint};
 use vectorcraft_doc::{
-    AppearanceItem, AreaOptions, CharPosition, CharStyle, Document, FillLayer, ImageBlob, Justify, LAYER_COLORS, LayerColor, Node, NodeKind,
-    ParaDirection, ParaStyle, PathEffect, StrokeLayer, TextKind, TextObject,
+    AppearanceItem, AreaOptions, CharPosition, CharStyle, CompositeFont, Document, FillLayer, ImageBlob, Justify, LAYER_COLORS, LayerColor, Node,
+    NodeKind, ParaDirection, ParaStyle, PathAlign, PathEffect, StrokeLayer, TextKind, TextObject,
 };
 use vectorcraft_effects::stroke;
 use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Rect, Shape, SubPath, Vec2};
@@ -96,7 +96,7 @@ const HEX_LINE: usize = 60;
 pub const SUBLAYERS: &str = "sublayers are written as groups in their top-level layer (legacy .ai files have no sublayers)";
 pub const TYPE: &str = "type a legacy .ai can't hold as text (characters outside Windows Latin-1, vertical type, ruby, inline graphics, gradient or pattern fills) is written as outlines";
 pub const ROTATED_TYPE: &str = "type with rotated characters is written as outlines, which keep the rotation, and is no longer editable text (legacy .ai text can't rotate characters)";
-pub const TYPE_ATTRIBUTES: &str = "type attributes legacy .ai files don't have (underline, strikethrough, small caps, superscript and subscript, OpenType features, Variable Font settings, area type options, type on a path effects, space after paragraphs, tabs, bulleted and numbered lists) are left out";
+pub const TYPE_ATTRIBUTES: &str = "type attributes legacy .ai files don't have (underline, strikethrough, manual kerning, optical kerning, small caps, superscript and subscript, OpenType features, Variable Font settings, optical margin alignment, System Layout, fractional widths off, area type options, type on a path's effect, alignment and spacing, an end bracket short of the path's end, subpaths after the first in an area type frame or a type path, space after paragraphs, tabs, bulleted and numbered lists) are left out";
 pub const HIDDEN: &str = "hidden objects are left out (hidden layers are kept, hidden)";
 pub const HIDDEN_LAYER: &str = "hidden objects are moved to a hidden layer above their own (legacy .ai files can hide only layers)";
 pub const HIDDEN_SHOWN: &str = "hidden objects are written visible (legacy .ai files can hide only layers)";
@@ -180,6 +180,8 @@ pub fn export_legacy_ai(doc: &Document, o: &LegacyAiOptions) -> Result<LegacyAiO
     if !(board.is_finite() && board.width() > 0.0 && board.height() > 0.0) {
         return Err("the document has no artboard".into());
     }
+    // Type in the document's composite fonts is drawn in them, whether or not an app has the document open.
+    let _lent = vectorcraft_text::FontDb::global().lend_composite_fonts(&doc.composite_fonts);
     // The document is y down; art space y up from the artboard's left edge, its top on a whole point.
     let (width, height) = (board.width(), board.height());
     let top = if (height - height.round()).abs() < 1e-6 { height.round() } else { height.ceil() };

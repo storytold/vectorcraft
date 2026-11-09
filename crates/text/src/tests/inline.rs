@@ -347,6 +347,25 @@ fn top_to_top_leading_spaces_inline_art_by_its_run() {
     assert!((small0 - tall0).abs() < 1e-6 && (small1 - tall1).abs() < 1e-6, "{small0} {small1} / {tall0} {tall1}");
 }
 
+/// A pushed-in line closes the gaps next to its CJK characters and leaves the gap after inline art
+/// open. Needs a font with full-width Japanese (skipped without one).
+#[test]
+fn a_pushed_in_line_leaves_the_gap_after_inline_art() {
+    let mut t = TextObject::point(Point::ZERO, "一二", style(20.0));
+    t.xf = Affine::IDENTITY;
+    t.runs.push(TextRun::inline(art(0.5), style(20.0)));
+    t.runs.push(TextRun::new("四五六七八九十一二三四五」六", style(20.0)));
+    t.para.kinsoku_type = vectorcraft_doc::KinsokuShoriType::PushInFirst;
+    t.kind = TextKind::Area { frame: PathData::from_bezpath(&Rect::new(0.0, 0.0, 300.0, 200.0).to_path(0.1)) };
+    let l = layout(FontDb::global(), &t);
+    if (l.glyphs[0].advance - 20.0).abs() > 2.0 {
+        return; // no font with full-width Japanese here
+    }
+    assert!(l.glyphs[1].advance < 20.0 - 0.5, "the other gaps close up: {}", l.glyphs[1].advance);
+    let art = inline_glyph(&l);
+    assert!((art.advance - 20.0).abs() < 1e-6, "the art keeps its advance: {}", art.advance);
+}
+
 #[test]
 fn inline_art_moves_with_vertically_aligned_lines() {
     use vectorcraft_doc::text::{AreaOptions, VerticalAlign};

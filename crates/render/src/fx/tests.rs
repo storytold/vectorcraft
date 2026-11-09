@@ -7,6 +7,30 @@ use super::{DRAG_PIXEL_BUDGET, Drawn, PIXEL_BUDGET, drag_scale, filter_region, f
 use crate::tests_fontchange::{fonts_steady, with_fonts_unchanged};
 use crate::{RenderOptions, Rendered, Renderer};
 
+/// The hash renderers compare to redraw art linked to swatches changes with a global swatch's
+/// color and spot flag and with the Spot Colors option.
+#[test]
+fn paint_names_follow_global_swatch_colors_and_spot_flags() {
+    let mut d = Document::new(100.0, 100.0);
+    d.swatches.push(vectorcraft_doc::color::Swatch {
+        name: "Brand".into(),
+        paint: Paint::solid(Color::rgb(1.0, 0.0, 0.0)),
+        global: true,
+        spot: false,
+    });
+    let last = d.swatches.len() - 1;
+    let first = super::paint_names(&d);
+    d.swatches[last].spot = true;
+    assert_ne!(super::paint_names(&d), first, "spot flag");
+    d.swatches[last].spot = false;
+    assert_eq!(super::paint_names(&d), first, "nothing changed");
+    d.swatches[last].paint = Paint::solid(Color::rgb(0.0, 0.0, 1.0));
+    assert_ne!(super::paint_names(&d), first, "color");
+    d.swatches[last].paint = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    d.spot_use_lab = !d.spot_use_lab;
+    assert_ne!(super::paint_names(&d), first, "Spot Colors option");
+}
+
 /// #1706: the raster a shadow or glow is filtered in stays within the pixel budget however
 /// far the blur spreads at the zoom (it was up to 65535 pixels a side: 16 GB).
 #[test]
@@ -467,9 +491,10 @@ fn a_glow_too_large_for_a_full_size_raster_keeps_its_solid_silhouette() {
 }
 
 #[test]
-fn thirty_stacked_glows_draw_quickly_cached_or_not() {
+fn thirty_stacked_glows_draw_thirty_silhouettes_cached_or_not() {
     // GUARDS: each glow is of the content with the glows before it; drawing those again for every glow costs 2^n.
     // A shape draws through the shadow cache, a symbol instance without it (the filter layers).
+    // Each glow's silhouette is drawn once.
     let glows: Vec<(&str, serde_json::Value)> =
         (0..30).map(|k| ("stylize.outerGlow", json!({"color": "#ff0000", "mode": "normal", "opacity": 20, "blur": 1 + k % 4}))).collect();
     let shape = doc_with(Rect::new(30.0, 30.0, 70.0, 70.0), Color::BLACK, glows.clone());
@@ -486,9 +511,10 @@ fn thirty_stacked_glows_draw_quickly_cached_or_not() {
     let l = instanced.layers[0].id;
     instanced.insert(Some(l), 0, instance).unwrap();
     for d in [&shape, &instanced] {
-        let start = std::time::Instant::now();
+        let before = super::renderer::silhouettes();
         let p = render(d).pixel(25, 50);
-        assert!(start.elapsed() < std::time::Duration::from_secs(20), "{:?}", start.elapsed());
+        let drawn = super::renderer::silhouettes() - before;
+        assert_eq!(drawn, 30, "silhouettes drawn for 30 glows");
         assert!(p[1] < 250, "the glows show: {p:?}");
     }
 }

@@ -47,6 +47,7 @@ impl<'a> Exporter<'a> {
             in_layer: 0,
             paper: Rect::ZERO,
             symbol_nodes: 0,
+            symbol_limit: vectorcraft_doc::MAX_SYMBOL_NODES,
             overprint: false,
             overprinted: false,
             invisible: false,

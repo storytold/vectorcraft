@@ -261,6 +261,66 @@ fn click_label(ctx: &egui::Context, app: &mut VectorcraftApp, label: &str, mut d
     app.run_count.wrapping_sub(before)
 }
 
+/// Double-clicking a user character style's row opens its Character Style Options once: the first
+/// click applies the style to the selected text, the second opens the dialog without applying it
+/// again. A paragraph style's row opens none, and the built-in Normal style opens none either.
+#[test]
+fn double_clicking_a_character_style_row_opens_its_options() {
+    for kind in [Kind::Char, Kind::Para] {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 150})).unwrap();
+        let id = app.run("text.create", json!({"x": 20, "y": 40, "text": "Hi"})).unwrap()["id"].clone();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        app.run(&format!("{}.new", kind.prefix()), json!({"name": "Body"})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut draw = |app: &mut VectorcraftApp, ui: &mut egui::Ui| show(app, ui, kind);
+        frame_events(&ctx, &mut app, vec![], &mut draw);
+        let texts = frame_events(&ctx, &mut app, vec![], &mut draw);
+        let pos = text_rect(&texts, "Body").center();
+        let before = app.run_count;
+        click(&ctx, &mut app, pos, &mut draw);
+        click(&ctx, &mut app, pos, &mut draw);
+        let dialog = app.ui.dialog.as_ref();
+        if kind == Kind::Char {
+            let d = dialog.expect("double-clicking a Character Style's row opens its options");
+            assert_eq!(d.kind, "charStyleOptions");
+            assert_eq!(d.str("__style"), "Body");
+            // One apply from the first click and the dialog from the second: no second apply.
+            assert_eq!(app.run_count.wrapping_sub(before), 2, "one apply and the dialog");
+        } else {
+            let d = dialog.expect("double-clicking a Paragraph Style's row opens its options");
+            assert_eq!(d.kind, "command");
+            assert_eq!(d.str("__command"), "paraStyle.rename");
+            assert_eq!(d.str("__label"), "Paragraph Style Options");
+            // One apply from the first click and the rename dialog from the second.
+            assert_eq!(app.run_count.wrapping_sub(before), 2, "one apply and the dialog");
+        }
+    }
+}
+
+/// A double-click on the built-in Normal style opens no options, and its second click applies it
+/// only once, as a user style's does.
+#[test]
+fn double_clicking_the_normal_style_opens_no_options() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 150})).unwrap();
+    let id = app.run("text.create", json!({"x": 20, "y": 40, "text": "Hi"})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut draw = |app: &mut VectorcraftApp, ui: &mut egui::Ui| show(app, ui, Kind::Char);
+    frame_events(&ctx, &mut app, vec![], &mut draw);
+    let texts = frame_events(&ctx, &mut app, vec![], &mut draw);
+    let normal = texts.iter().find(|(text, _)| text.contains("Normal")).map(|(_, r)| r.center());
+    let pos = normal.expect("the Normal style's row is drawn");
+    let before = app.run_count;
+    click(&ctx, &mut app, pos, &mut draw);
+    click(&ctx, &mut app, pos, &mut draw);
+    assert!(app.ui.dialog.is_none(), "the Normal style has no Character Style Options");
+    assert_eq!(app.run_count.wrapping_sub(before), 1, "the second click applies nothing");
+}
+
 /// The panel menu's Duplicate highlights the copy and its Delete clears the highlight, as the
 /// panel's New and Delete buttons do; after a menu delete, Duplicate runs nothing.
 #[test]
@@ -764,6 +824,44 @@ fn dragging_a_highlighted_style_carries_every_highlighted_style() {
         assert_eq!(undo_len(&app), undo + 1, "{what} Styles: one undo step for the deletes");
         assert_eq!(highlighted_now(&mut app, &ctx, kind), Vec::<String>::new(), "{what} Styles: the highlight is cleared");
     }
+}
+
+/// The panel menu's Load Character Styles… (Load Paragraph Styles…) adds that kind of style from
+/// the document picked in the open dialog, and Load All Styles… adds both kinds, each in one undo
+/// step. Without an open dialog the items are off.
+#[test]
+fn panel_menus_load_the_styles_of_a_picked_document() {
+    let mut src = vectorcraft_engine::Session::new();
+    src.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    src.execute("charStyle.new", &json!({"name": "Lead", "attrs": {"size": 30.0}})).unwrap();
+    src.execute("paraStyle.new", &json!({"name": "Centered", "attrs": {"justify": "Center"}})).unwrap();
+    let dir = std::env::temp_dir().join(format!("vc-panel-load-styles-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("Styles.vectorcraft");
+    std::fs::write(&path, vectorcraft_format::save(&src.doc().unwrap().doc, false)).unwrap();
+    let names = |app: &mut VectorcraftApp, kind| styles(app, kind).into_iter().skip(1).map(|s| s.0).collect::<Vec<_>>();
+    for kind in [Kind::Char, Kind::Para] {
+        let (mut app, _) = several_app();
+        let ctx = egui::Context::default();
+        let items = |app: &mut VectorcraftApp, ui: &mut egui::Ui| menu(app, ui, kind);
+        let one = format!("   Load {} Styles…", kind.what());
+        let doc = app.session.doc().unwrap().doc.clone();
+        click_text_held(&ctx, &mut app, &one, egui::Modifiers::NONE, items);
+        assert_eq!(app.session.doc().unwrap().doc, doc, "{} Styles: off without an open dialog", kind.what());
+        let picked = path.to_string_lossy().to_string();
+        app.services.pick_open = Some(Box::new(move |_: &crate::FilePick| Some(picked.clone())));
+        let undo = app.session.doc().unwrap().history.undo.len();
+        click_text_held(&ctx, &mut app, &one, egui::Modifiers::NONE, items);
+        let (added, other) = if kind == Kind::Char { ("Lead", Kind::Para) } else { ("Centered", Kind::Char) };
+        assert_eq!(names(&mut app, kind), ["A", "B", "C", "D", added], "{} Styles", kind.what());
+        assert_eq!(names(&mut app, other), ["A", "B", "C", "D"], "{} Styles: the other kind", kind.what());
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1);
+        click_text_held(&ctx, &mut app, "   Load All Styles…", egui::Modifiers::NONE, items);
+        assert_eq!(names(&mut app, Kind::Char), ["A", "B", "C", "D", "Lead"], "{} Styles: Load All Styles", kind.what());
+        assert_eq!(names(&mut app, Kind::Para), ["A", "B", "C", "D", "Centered"], "{} Styles: Load All Styles", kind.what());
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 2);
+    }
+    std::fs::remove_dir_all(&dir).ok();
 }
 
 /// Feed real text/shortcut events through the canvas Type routing. No focus reset or typing

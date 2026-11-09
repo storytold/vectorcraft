@@ -1,4 +1,4 @@
-use super::Value;
+use super::{GraphSpec, Value};
 
 pub(super) const LABEL_SIZE: f64 = 9.0;
 
@@ -30,6 +30,11 @@ pub(super) fn nice_axis(lo: f64, hi: f64, ticks: usize) -> (f64, f64, f64) {
     let mag = 10f64.powf(raw.log10().floor());
     let step = [1.0, 2.0, 2.5, 5.0, 10.0].iter().map(|m| m * mag).find(|s| *s >= raw - 1e-12).unwrap_or(10.0 * mag);
     ((lo / step).floor() * step, (hi / step).ceil() * step, step)
+}
+
+/// The value axis of a radar graph: from 0 to the largest value of any series.
+pub(super) fn radar_axis(g: &GraphSpec) -> (f64, f64, f64) {
+    value_axis(g.ticks, g.axis_min, g.axis_max, 0.0, g.rows.iter().flatten().copied().fold(0.0, f64::max))
 }
 
 /// A value axis: with both `min` and `max` set (Graph Type › Tick Values › Override Calculated Values), exactly that

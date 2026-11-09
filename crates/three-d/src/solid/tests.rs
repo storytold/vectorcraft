@@ -77,6 +77,28 @@ fn no_depth_is_the_flat_shape_and_no_cap_shows_the_inside() {
 }
 
 #[test]
+fn hidden_faces_draw_every_face_of_the_solid_behind_the_visible_ones() {
+    let (p, b) = shape(&square(0.0, 0.0, 100.0));
+    let v = View { rotation_x: 20.0, rotation_y: 30.0, ..front() };
+    let shown = extrude(&p, FillRule::EvenOdd, b, Extrude::default(), v).unwrap();
+    let all = extrude(&p, FillRule::EvenOdd, b, Extrude { hidden: true, ..Extrude::default() }, v).unwrap();
+    // A box: the three faces turned to the viewer, then the three turned away, drawn first.
+    assert_eq!(shown.len(), 3);
+    assert_eq!(all.len(), 6);
+    assert!(all.windows(2).all(|w| w[0].depth <= w[1].depth));
+    // The faces turned away keep their outward normals, so a light behind the solid lights them.
+    assert!(all[..3].iter().all(|f| f.normal[2] < 0.0), "{:?}", all.iter().map(|f| f.normal).collect::<Vec<_>>());
+    for f in shown.iter().chain(&all) {
+        let [x, y, z] = f.normal;
+        assert!(close(x.hypot(y).hypot(z), 1.0, 1e-9), "{:?}", f.normal);
+    }
+    // The visible faces keep their normals and their place at the front.
+    for (front, kept) in shown.iter().rev().zip(all.iter().rev()) {
+        assert_eq!(front.normal, kept.normal);
+    }
+}
+
+#[test]
 fn taper_shrinks_the_back_and_twist_turns_it() {
     let (p, b) = shape(&square(0.0, 0.0, 100.0));
     let side = View { rotation_y: 90.0, ..front() };
@@ -232,6 +254,7 @@ fn malformed_and_degenerate_input_is_bounded() {
         taper: -3.0,
         cap: true,
         bevel: Some(Bevel { width: f64::NAN, height: 1e12, repeat: usize::MAX, space: 7.0, ..Bevel::default() }),
+        hidden: false,
     };
     let f = extrude(&p, FillRule::EvenOdd, b, wild, View { rotation_x: f64::NAN, perspective: 900.0, ..front() }).unwrap();
     assert!(f.iter().flat_map(|f| f.contours.iter().flatten()).all(|q| q.x.is_finite() && q.y.is_finite()));
@@ -753,4 +776,408 @@ fn many_small_rings_far_apart_are_too_complex() {
     let (p, r) = shape(&b);
     let e = rings(&p, FillRule::NonZero, r.width().max(r.height()), usize::MAX).unwrap_err();
     assert!(e.contains("too complex"), "{e}");
+}
+
+/// Type often draws a glyph as contours that cross (a "k"'s arm across its stem, its leg across
+/// the arm). Each contour's side was told from its first point, so one starting inside another
+/// was dropped or cut as a hole, and the parts left were walled where they overlapped. The
+/// outline is the union the art fills, under either rule.
+#[test]
+fn crossing_contours_make_one_outline() {
+    let rect = |r: Rect| {
+        vectorcraft_geom::SubPath::polyline(&[Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x1, r.y1), Point::new(r.x0, r.y1)], true)
+    };
+    // The stem, an arm starting inside it, and a leg starting inside the arm.
+    let k = PathData::new(vec![
+        rect(Rect::new(0.0, 0.0, 20.0, 100.0)),
+        rect(Rect::new(10.0, 40.0, 60.0, 60.0)),
+        rect(Rect::new(50.0, 50.0, 70.0, 100.0)),
+    ]);
+    let b = k.bounds().unwrap();
+    for rule in [FillRule::NonZero, FillRule::EvenOdd] {
+        let filled = vectorcraft_pathops::area(&k, rule);
+        assert!(close(area(&plane(&k, rule, b, front()).unwrap()), filled, 1e-6), "{rule:?}: Rotate");
+        let f = extrude(&k, rule, b, Extrude::default(), front()).unwrap();
+        assert_eq!(f.len(), 1, "{rule:?}: straight on, only the front cap shows");
+        assert!(close(area(&f), filled, 1e-6), "{rule:?}: Extrude's cap");
+        let puffed = inflate(&k, rule, b, Inflate::default(), front()).unwrap();
+        assert_eq!(extent(&puffed), b, "{rule:?}: Inflate covers the whole k");
+        assert!(close(area(&puffed), filled, filled * 1e-3), "{rule:?}: Inflate's front, {} against {filled}", area(&puffed));
+    }
+    // The filled area is the union's: the stem, the arm past it and the leg past the arm.
+    assert!(close(vectorcraft_pathops::area(&k, FillRule::NonZero), 20.0 * 100.0 + 40.0 * 20.0 + 20.0 * 50.0 - 10.0 * 10.0, 1e-6));
+}
+
+/// Resolving overlaps keeps every contour that fills area, however narrow: a hairline beside a
+/// large shape is art. What a boolean leaves where two curves coincide is still dropped.
+#[test]
+fn resolving_overlaps_keeps_narrow_contours() {
+    let rect = |r: Rect| {
+        vectorcraft_geom::SubPath::polyline(&[Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x1, r.y1), Point::new(r.x0, r.y1)], true)
+    };
+    // A hairline beside a square, and two bars crossing elsewhere so the profile is resolved.
+    let hairline = Rect::new(120.0, 0.0, 120.005, 50.0);
+    let p = PathData::new(vec![
+        rect(Rect::new(0.0, 0.0, 100.0, 100.0)),
+        rect(hairline),
+        rect(Rect::new(140.0, 40.0, 200.0, 60.0)),
+        rect(Rect::new(160.0, 20.0, 180.0, 80.0)),
+    ]);
+    let b = p.bounds().unwrap();
+    let filled = |rule: FillRule| {
+        let bars = if rule == FillRule::NonZero { 60.0 * 20.0 + 20.0 * 40.0 } else { 60.0 * 20.0 + 20.0 * 40.0 - 20.0 * 20.0 };
+        100.0 * 100.0 + hairline.width() * hairline.height() + bars
+    };
+    for rule in [FillRule::NonZero, FillRule::EvenOdd] {
+        assert!(close(area(&plane(&p, rule, b, front()).unwrap()), filled(rule), 1e-6), "{rule:?}: Rotate");
+        assert!(close(area(&extrude(&p, rule, b, Extrude::default(), front()).unwrap()), filled(rule), 1e-6), "{rule:?}: Extrude's cap");
+    }
+    // A circle drawn twice, exactly and a hair off, is one outline: no sliver between the copies.
+    let circle = |cx: f64, cy: f64, r: f64| {
+        let (mut b, k) = (BezPath::new(), 0.5523 * r);
+        b.move_to((cx + r, cy));
+        b.curve_to((cx + r, cy + k), (cx + k, cy + r), (cx, cy + r));
+        b.curve_to((cx - k, cy + r), (cx - r, cy + k), (cx - r, cy));
+        b.curve_to((cx - r, cy - k), (cx - k, cy - r), (cx, cy - r));
+        b.curve_to((cx + k, cy - r), (cx + r, cy - k), (cx + r, cy));
+        b.close_path();
+        b
+    };
+    for dx in [0.0, 1e-7] {
+        let mut twice = circle(50.0, 50.0, 40.0);
+        twice.extend(circle(50.0 + dx, 50.0, 40.0).iter());
+        let p = PathData::from_bezpath(&twice);
+        let f = plane(&p, FillRule::NonZero, p.bounds().unwrap(), front()).unwrap();
+        assert_eq!(f.len(), 1, "{dx}");
+        assert_eq!(f[0].contours.len(), 1, "{dx}");
+        let once = PathData::from_bezpath(&circle(50.0, 50.0, 40.0));
+        let one = area(&plane(&once, FillRule::NonZero, once.bounds().unwrap(), front()).unwrap());
+        assert!(close(area(&f), one, one * 1e-6), "{dx}: the area of one circle, {} against {one}", area(&f));
+    }
+}
+
+/// Only a profile whose contours meet goes through the boolean: crossing, touching, running along
+/// another or folding back on itself. Separate and nested contours are taken as they are.
+#[test]
+fn contours_meet_when_they_cross_touch_or_fold_back() {
+    let ring = |pts: &[(f64, f64)]| pts.iter().map(|&(x, y)| Point::new(x, y)).collect::<Vec<_>>();
+    let square = |x: f64, y: f64, s: f64| ring(&[(x, y), (x + s, y), (x + s, y + s), (x, y + s)]);
+    assert!(!rings::edges_meet(&[square(0.0, 0.0, 10.0), square(20.0, 0.0, 10.0)], 1e-6), "apart");
+    assert!(!rings::edges_meet(&[square(0.0, 0.0, 10.0), square(3.0, 3.0, 4.0)], 1e-6), "nested, as an o's hole");
+    assert!(rings::edges_meet(&[square(0.0, 0.0, 10.0), square(5.0, 5.0, 10.0)], 1e-6), "crossing");
+    assert!(rings::edges_meet(&[square(0.0, 0.0, 10.0), square(10.0, 0.0, 10.0)], 1e-6), "sharing an edge");
+    assert!(rings::edges_meet(&[square(0.0, 0.0, 10.0), square(10.0, 3.0, 4.0)], 1e-6), "along part of an edge");
+    assert!(rings::edges_meet(&[square(0.0, 0.0, 10.0), square(10.0, 10.0, 4.0)], 1e-6), "at a corner");
+    assert!(rings::edges_meet(&[square(0.0, 0.0, 10.0), square(10.0 + 1e-7, 0.0, 10.0)], 1e-6), "within the boolean's snapping");
+    assert!(rings::edges_meet(&[ring(&[(0.0, 0.0), (10.0, 10.0), (10.0, 0.0), (0.0, 10.0)])], 1e-6), "a bowtie crossing itself");
+    assert!(rings::edges_meet(&[ring(&[(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (10.0, 5.0), (0.0, 10.0)])], 1e-6), "folding back on itself");
+    // Squares sharing an edge inflate as one puff, not two with a seam between them.
+    let shared = PathData::new(
+        [Rect::new(0.0, 0.0, 50.0, 50.0), Rect::new(50.0, 0.0, 100.0, 50.0)]
+            .iter()
+            .map(|r| {
+                vectorcraft_geom::SubPath::polyline(
+                    &[Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x1, r.y1), Point::new(r.x0, r.y1)],
+                    true,
+                )
+            })
+            .collect(),
+    );
+    let whole = PathData::from_bezpath(&{
+        let mut b = BezPath::new();
+        b.move_to((0.0, 0.0));
+        b.line_to((100.0, 0.0));
+        b.line_to((100.0, 50.0));
+        b.line_to((0.0, 50.0));
+        b.close_path();
+        b
+    });
+    let b = whole.bounds().unwrap();
+    let puff = |p: &PathData| inflate(p, FillRule::NonZero, b, Inflate::default(), front()).unwrap().len();
+    assert_eq!(puff(&shared), puff(&whole));
+}
+
+/// Flat contours fill nothing and build nothing, crossing or not; an invalid coordinate is refused,
+/// as it was; and a profile the boolean refuses is built from its contours as drawn.
+#[test]
+fn flat_invalid_and_refused_profiles() {
+    let flat =
+        PathData::new(vec![vectorcraft_geom::SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(10.0, 10.0), Point::new(20.0, 20.0)], true)]);
+    let crossing_flat = PathData::new(vec![
+        vectorcraft_geom::SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(10.0, 10.0), Point::new(20.0, 20.0)], true),
+        vectorcraft_geom::SubPath::polyline(&[Point::new(0.0, 20.0), Point::new(10.0, 10.0), Point::new(20.0, 0.0)], true),
+    ]);
+    let b = Rect::new(0.0, 0.0, 20.0, 20.0);
+    for p in [&flat, &crossing_flat] {
+        assert_eq!(area(&plane(p, FillRule::NonZero, b, front()).unwrap()), 0.0);
+        assert_eq!(area(&extrude(p, FillRule::NonZero, b, Extrude::default(), front()).unwrap()), 0.0);
+    }
+    let mut bad = crossing_flat.clone();
+    bad.subpaths[0].anchors[1].p = Point::new(f64::NAN, 10.0);
+    assert_eq!(plane(&bad, FillRule::NonZero, b, front()).unwrap_err(), "The shape contains invalid coordinates");
+    // A star of 3,001 points, each joined to the one 1,500 on: every edge spans the middle, so
+    // past pathops' budget of segment pairs the boolean refuses it (`TooComplex`) without sweeping,
+    // and the profile is turned as drawn.
+    let n = 3001;
+    let star: Vec<Point> = (0..n)
+        .map(|i| {
+            let a = std::f64::consts::TAU * ((i * 1500) % n) as f64 / n as f64;
+            Point::new(100.0 + 100.0 * a.cos(), 100.0 + 100.0 * a.sin())
+        })
+        .collect();
+    let star = PathData::new(vec![vectorcraft_geom::SubPath::polyline(&star, true)]);
+    assert_eq!(
+        vectorcraft_pathops::try_unite_all_with(&[(&star, FillRule::NonZero)], rings::DEBRIS),
+        Err(vectorcraft_pathops::PathOpsError::TooComplex)
+    );
+    let b = star.bounds().unwrap();
+    let drawn: f64 =
+        rings::rings(&star, FillRule::NonZero, b.width().max(b.height()), usize::MAX).unwrap().iter().map(|r| rings::signed_area(r)).sum();
+    assert!(drawn > 0.0);
+    assert!(close(area(&plane(&star, FillRule::NonZero, b, front()).unwrap()), drawn, 1e-6), "built from its contours as drawn");
+}
+
+/// A contour that crosses itself into lobes that cancel has no area of its own, yet fills both
+/// lobes; contours that cancel each other fill nothing. Both go through the boolean.
+#[test]
+fn self_crossing_and_cancelling_profiles_are_resolved() {
+    let poly = |pts: &[(f64, f64)]| vectorcraft_geom::SubPath::polyline(&pts.iter().map(|&(x, y)| Point::new(x, y)).collect::<Vec<_>>(), true);
+    let bowtie = PathData::new(vec![poly(&[(0.0, 0.0), (10.0, 10.0), (10.0, 0.0), (0.0, 10.0)])]);
+    let b = bowtie.bounds().unwrap();
+    for rule in [FillRule::NonZero, FillRule::EvenOdd] {
+        assert!(close(area(&plane(&bowtie, rule, b, front()).unwrap()), 50.0, 1e-6), "{rule:?}: Rotate");
+        assert!(close(area(&extrude(&bowtie, rule, b, Extrude::default(), front()).unwrap()), 50.0, 1e-6), "{rule:?}: Extrude's cap");
+        assert!(inflate(&bowtie, rule, b, Inflate::default(), front()).is_ok_and(|f| close(area(&f), 50.0, 1e-6)), "{rule:?}: Inflate");
+    }
+    let square = poly(&[(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]);
+    let twice = PathData::new(vec![square.clone(), square]);
+    let b = twice.bounds().unwrap();
+    assert_eq!(area(&plane(&twice, FillRule::EvenOdd, b, front()).unwrap()), 0.0);
+    assert_eq!(area(&extrude(&twice, FillRule::EvenOdd, b, Extrude::default(), front()).unwrap()), 0.0);
+    assert!(inflate(&twice, FillRule::EvenOdd, b, Inflate::default(), front()).is_ok_and(|f| area(&f) == 0.0));
+}
+
+/// The boolean's answer often starts a contour where it touches another. Its rings are turned as
+/// a whole, never judged from one point each, so touching parts are kept and holes stay open.
+#[test]
+fn touching_contours_keep_their_parts_and_holes() {
+    let poly = |pts: &[(f64, f64)]| vectorcraft_geom::SubPath::polyline(&pts.iter().map(|&(x, y)| Point::new(x, y)).collect::<Vec<_>>(), true);
+    // A triangle whose tip rests on a square's edge.
+    let tip = PathData::new(vec![poly(&[(0.0, 10.0), (10.0, 10.0), (10.0, 20.0), (0.0, 20.0)]), poly(&[(0.0, 0.0), (10.0, 0.0), (5.0, 10.0)])]);
+    let b = tip.bounds().unwrap();
+    for rule in [FillRule::NonZero, FillRule::EvenOdd] {
+        assert!(close(area(&plane(&tip, rule, b, front()).unwrap()), 150.0, 1e-6), "{rule:?}: Rotate");
+        assert!(close(area(&extrude(&tip, rule, b, Extrude::default(), front()).unwrap()), 150.0, 1e-6), "{rule:?}: Extrude's cap");
+    }
+    // An even-odd triangular hole touching its square's edge.
+    let hole =
+        PathData::new(vec![poly(&[(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)]), poly(&[(0.0, 50.0), (60.0, 0.0 + 20.0), (60.0, 80.0)])]);
+    let b = hole.bounds().unwrap();
+    assert!(close(area(&plane(&hole, FillRule::EvenOdd, b, front()).unwrap()), 10000.0 - 1800.0, 1e-6));
+}
+
+/// An open subpath is closed by a straight line, whichever way the profile goes: the same as the
+/// renderer's fill, whether or not other contours meet.
+#[test]
+fn an_open_subpath_closes_straight_whether_or_not_contours_meet() {
+    let open = vectorcraft_geom::SubPath {
+        anchors: vec![
+            vectorcraft_geom::Anchor {
+                p: Point::new(0.0, 0.0),
+                h_in: Point::new(0.0, -50.0),
+                h_out: Point::new(0.0, 0.0),
+                kind: vectorcraft_geom::AnchorKind::Corner,
+            },
+            vectorcraft_geom::Anchor::corner(Point::new(50.0, 100.0)),
+            vectorcraft_geom::Anchor {
+                p: Point::new(100.0, 0.0),
+                h_in: Point::new(100.0, 0.0),
+                h_out: Point::new(100.0, -50.0),
+                kind: vectorcraft_geom::AnchorKind::Corner,
+            },
+        ],
+        closed: false,
+    };
+    let rect = |x0: f64, y0: f64, x1: f64, y1: f64| {
+        vectorcraft_geom::SubPath::polyline(&[Point::new(x0, y0), Point::new(x1, y0), Point::new(x1, y1), Point::new(x0, y1)], true)
+    };
+    let alone = PathData::new(vec![open.clone()]);
+    let with_bars = PathData::new(vec![open, rect(200.0, 40.0, 260.0, 60.0), rect(220.0, 20.0, 240.0, 80.0)]);
+    let bars = 60.0 * 20.0 + 20.0 * 40.0;
+    assert!(close(area(&plane(&alone, FillRule::NonZero, alone.bounds().unwrap(), front()).unwrap()), 5000.0, 1e-6));
+    assert!(close(area(&plane(&with_bars, FillRule::NonZero, with_bars.bounds().unwrap(), front()).unwrap()), 5000.0 + bars, 1e-6));
+}
+
+/// A flat contour beside separate ones fills nothing and doesn't send the profile through the
+/// boolean; contours far from the origin meet within the boolean's wider snapping; and a merged
+/// outline past the point limit is too complex.
+#[test]
+fn flat_far_and_too_large_merges() {
+    let rect = |x0: f64, y0: f64, x1: f64, y1: f64| {
+        vectorcraft_geom::SubPath::polyline(&[Point::new(x0, y0), Point::new(x1, y0), Point::new(x1, y1), Point::new(x0, y1)], true)
+    };
+    let squares: Vec<_> = (0..12).map(|i| rect(i as f64 * 20.0, 0.0, i as f64 * 20.0 + 10.0, 10.0)).collect();
+    let line = vectorcraft_geom::SubPath::polyline(&[Point::new(0.0, 300.0), Point::new(50.0, 300.0), Point::new(100.0, 300.0)], false);
+    let with_line = PathData::new(squares.iter().cloned().chain([line]).collect());
+    assert!(!rings::meets(&rings::sample(&with_line, 300.0, usize::MAX).unwrap(), &rings::closed_straight(&with_line)));
+    assert!(close(area(&plane(&with_line, FillRule::NonZero, with_line.bounds().unwrap(), front()).unwrap()), 1200.0, 1e-6));
+    // Far from the origin the boolean snaps wider than 1e-6 (1.4e-6 at 9.9e7), and so does the
+    // test for meeting: squares 1.35e-6 apart there are one outline, one cap of both areas.
+    let far = PathData::new(vec![rect(9.9e7, 0.0, 9.9e7 + 10.0, 10.0), rect(9.9e7 + 10.0 + 1.35e-6, 0.0, 9.9e7 + 20.0, 10.0)]);
+    let cap = plane(&far, FillRule::NonZero, far.bounds().unwrap(), front()).unwrap();
+    assert_eq!(cap.iter().map(|f| f.contours.len()).sum::<usize>(), 1, "joined into one outline");
+    assert!(close(area(&cap), 200.0, 1e-3), "joined, not lost");
+    // Handles count too: a lobe whose handles reach 1.3e8 widens the boolean's snapping to 1.85e-6.
+    let lobe = vectorcraft_geom::SubPath {
+        anchors: vec![
+            vectorcraft_geom::Anchor {
+                p: Point::new(0.0, 1000.0),
+                h_in: Point::new(0.0, 1000.0),
+                h_out: Point::new(1.3e8, 1000.0),
+                kind: vectorcraft_geom::AnchorKind::Corner,
+            },
+            vectorcraft_geom::Anchor {
+                p: Point::new(0.0, 1100.0),
+                h_in: Point::new(1.3e8, 1100.0),
+                h_out: Point::new(0.0, 1100.0),
+                kind: vectorcraft_geom::AnchorKind::Corner,
+            },
+        ],
+        closed: true,
+    };
+    let wide = PathData::new(vec![rect(9.9e7, 0.0, 9.9e7 + 10.0, 10.0), rect(9.9e7 + 10.0 + 1.6e-6, 0.0, 9.9e7 + 20.0, 10.0), lobe]);
+    let b = wide.bounds().unwrap();
+    let joined = plane(&wide, FillRule::NonZero, b, front()).unwrap();
+    assert_eq!(joined.iter().map(|f| f.contours.len()).sum::<usize>(), 2, "the squares joined, the lobe apart");
+    // 24 bars each way: 192 points as drawn, some 2,400 once every hole between them is traced:
+    // past Extrude's and Inflate's 2,048 the shape is too complex (its contours as drawn cross, so
+    // they can't be built as they are), and Rotate's 65,536 takes it.
+    let mut bars = vec![];
+    for i in 0..24 {
+        let x = i as f64 * 10.0;
+        bars.push(rect(x, 0.0, x + 4.0, 240.0));
+        bars.push(rect(0.0, x, 240.0, x + 4.0));
+    }
+    let grid = PathData::new(bars);
+    let b = grid.bounds().unwrap();
+    for rule in [FillRule::NonZero, FillRule::EvenOdd] {
+        assert_eq!(extrude(&grid, rule, b, Extrude::default(), front()).unwrap_err(), "The shape is too complex for a 3D effect", "{rule:?}");
+        assert_eq!(inflate(&grid, rule, b, Inflate::default(), front()).unwrap_err(), "The shape is too complex for a 3D effect", "{rule:?}");
+        assert!(close(area(&plane(&grid, rule, b, front()).unwrap()), vectorcraft_pathops::area(&grid, rule), 1e-6), "{rule:?}: Rotate");
+    }
+}
+
+/// A profile goes through the boolean when its contours come within twice the boolean's tolerance
+/// of the path it is given: pathops snaps anchors onto nearby heights before sweeping, then the
+/// sweep joins edges within its tolerance, so contours a little more than it apart can come out
+/// as one.
+#[test]
+fn meets_within_twice_the_boolean_tolerance() {
+    let rect = |x0: f64, y0: f64, x1: f64, y1: f64| {
+        vectorcraft_geom::SubPath::polyline(&[Point::new(x0, y0), Point::new(x1, y0), Point::new(x1, y1), Point::new(x0, y1)], true)
+    };
+    let meets = |p: &PathData| rings::meets(&rings::sample(p, 300.0, usize::MAX).unwrap(), &rings::closed_straight(p));
+    // Two triangles whose facing 45° edges are 1.4e-6 apart, the second's corners 0.99e-6 lower on
+    // the page (greater y) than the first's: snapped onto the first's heights, they are joined.
+    let d = 0.99e-6;
+    let snapped = PathData::new(vec![
+        vectorcraft_geom::SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(10.0, 0.0), Point::new(0.0, 10.0)], true),
+        vectorcraft_geom::SubPath::polyline(&[Point::new(10.0 + d, d), Point::new(10.0 + d, 10.0 + d), Point::new(d, 10.0 + d)], true),
+    ]);
+    assert!(meets(&snapped));
+    let cap = plane(&snapped, FillRule::NonZero, snapped.bounds().unwrap(), front()).unwrap();
+    assert_eq!(cap.iter().map(|f| f.contours.len()).sum::<usize>(), 1, "joined into one outline");
+    assert!(close(area(&cap), 100.0, 1e-3), "joined, not lost");
+    // At the same heights the boolean leaves the triangles apart, and the shape it builds is the
+    // one drawn: both triangles, two outlines.
+    let tri = |g: f64| {
+        PathData::new(vec![
+            vectorcraft_geom::SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(10.0, 0.0), Point::new(0.0, 10.0)], true),
+            vectorcraft_geom::SubPath::polyline(&[Point::new(10.0 + g, 0.0), Point::new(10.0 + g, 10.0), Point::new(g, 10.0)], true),
+        ])
+    };
+    let apart = tri(1.4e-6 * std::f64::consts::SQRT_2);
+    assert!(meets(&apart));
+    assert_eq!(vectorcraft_pathops::try_unite_all_with(&[(&apart, FillRule::NonZero)], rings::DEBRIS).map(|p| p.subpaths.len()), Ok(2));
+    let cap = plane(&apart, FillRule::NonZero, apart.bounds().unwrap(), front()).unwrap();
+    assert_eq!(cap.iter().map(|f| f.contours.len()).sum::<usize>(), 2);
+    assert!(close(area(&cap), 100.0, 1e-3), "both kept");
+    // Twice the tolerance, not less: 45° edges 1.9e-6 apart still meet.
+    assert!(meets(&tri(1.9e-6 * std::f64::consts::SQRT_2)));
+    // And pathops joins nothing past it: the worst case, 2.05e-6 apart as `meets` measures them,
+    // with the second triangle's corners just under the tolerance lower so that the snap brings it
+    // closest, stays two outlines.
+    let lift = 0.999e-6;
+    let g = 2.05e-6 * std::f64::consts::SQRT_2 - lift;
+    let past = PathData::new(vec![
+        vectorcraft_geom::SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(10.0, 0.0), Point::new(0.0, 10.0)], true),
+        vectorcraft_geom::SubPath::polyline(&[Point::new(10.0 + g, lift), Point::new(10.0 + g, 10.0 + lift), Point::new(g, 10.0 + lift)], true),
+    ]);
+    assert!(!meets(&past));
+    assert_eq!(vectorcraft_pathops::try_unite_all_with(&[(&past, FillRule::NonZero)], rings::DEBRIS).map(|p| p.subpaths.len()), Ok(2));
+    // Near the origin, contours a few millionths apart stay apart and skip the boolean.
+    assert!(!meets(&PathData::new(vec![rect(0.0, 0.0, 10.0, 10.0), rect(10.0 + 2.2e-6, 0.0, 20.0, 10.0)])));
+    // What the boolean is given decides the tolerance: an open subpath's end handles (closed
+    // straight) and a one-anchor subpath (skipped) don't widen it.
+    let ends = vectorcraft_geom::SubPath {
+        anchors: vec![
+            vectorcraft_geom::Anchor {
+                p: Point::new(0.0, 0.0),
+                h_in: Point::new(1e9, 0.0),
+                h_out: Point::new(0.0, 0.0),
+                kind: vectorcraft_geom::AnchorKind::Corner,
+            },
+            vectorcraft_geom::Anchor {
+                p: Point::new(10.0, 0.0),
+                h_in: Point::new(10.0, 0.0),
+                h_out: Point::new(1e9, 0.0),
+                kind: vectorcraft_geom::AnchorKind::Corner,
+            },
+        ],
+        closed: false,
+    };
+    let speck = vectorcraft_geom::SubPath { anchors: vec![vectorcraft_geom::Anchor::corner(Point::new(1e9, 1e9))], closed: true };
+    let quiet = PathData::new(vec![ends, speck]);
+    assert_eq!(rings::touch(&rings::closed_straight(&quiet)), 1e-6);
+    // A closing-side handle at either end alone is enough to close the subpath straight.
+    for kept in [0, 1] {
+        let mut one = quiet.subpaths[0].clone();
+        one.anchors[0].h_in = if kept == 0 { Point::new(1e9, 0.0) } else { one.anchors[0].p };
+        one.anchors[1].h_out = if kept == 1 { Point::new(1e9, 0.0) } else { one.anchors[1].p };
+        assert_eq!(rings::touch(&rings::closed_straight(&PathData::new(vec![one]))), 1e-6, "handle kept at anchor {kept}");
+    }
+    // Beside two squares 3e-6 apart near the origin (farther apart than twice 1e-6), they don't
+    // send the profile through the boolean; read unclosed, the end handles would.
+    let mut quiet_squares = quiet.clone();
+    quiet_squares.subpaths.extend([rect(0.0, 100.0, 10.0, 110.0), rect(10.0 + 3e-6, 100.0, 20.0, 110.0)]);
+    assert!(!meets(&quiet_squares));
+}
+
+/// The boolean's rings are turned as a whole so the filled side is on their left: holes stay
+/// against their outlines, and a profile wound the other way round is turned over.
+#[test]
+fn the_merged_rings_are_turned_as_a_whole() {
+    let outline = vec![Point::new(0.0, 0.0), Point::new(10.0, 0.0), Point::new(10.0, 10.0), Point::new(0.0, 10.0)];
+    let hole = vec![Point::new(2.0, 2.0), Point::new(2.0, 8.0), Point::new(8.0, 8.0), Point::new(8.0, 2.0)];
+    let turned = rings::wound(vec![outline.iter().rev().copied().collect(), hole.iter().rev().copied().collect()]);
+    assert!(rings::signed_area(&turned[0]) > 0.0 && rings::signed_area(&turned[1]) < 0.0);
+    let kept = rings::wound(vec![outline.clone(), hole.clone()]);
+    assert_eq!(kept, vec![outline, hole]);
+}
+
+/// A subpath of one anchor draws nothing, so it builds nothing, beside other art or not.
+#[test]
+fn a_one_anchor_subpath_builds_nothing() {
+    let loop_ = vectorcraft_geom::SubPath {
+        anchors: vec![vectorcraft_geom::Anchor {
+            p: Point::new(0.0, 0.0),
+            h_in: Point::new(-20.0, 30.0),
+            h_out: Point::new(20.0, 30.0),
+            kind: vectorcraft_geom::AnchorKind::Corner,
+        }],
+        closed: true,
+    };
+    let p = PathData::new(vec![loop_]);
+    let b = Rect::new(-20.0, 0.0, 20.0, 30.0);
+    assert_eq!(area(&plane(&p, FillRule::NonZero, b, front()).unwrap()), 0.0);
 }

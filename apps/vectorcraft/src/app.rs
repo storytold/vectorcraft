@@ -8,6 +8,7 @@ use super::windows_stylus;
 use super::{App, VectorcraftApp, file_access, window};
 #[cfg(target_os = "macos")]
 use super::{mac_menu, mac_window, open_documents};
+use vectorcraft_ui_egui::dialogs::safe_mode;
 
 /// The parts of [`App::raw_input_hook`] that every window needs, for the OS windows of floating
 /// panels: a click or Escape that closes the macOS menu bar's open menu, and the pen barrel
@@ -91,6 +92,9 @@ impl eframe::App for App {
     }
     fn on_exit(&mut self) {
         file_access::unconfined(|| save_prefs(&self.app));
+        // A ready update installs once the process has exited. The macOS exit below skips
+        // dropping the app, so the helper is started here.
+        self.app.start_pending_update();
         end_before_teardown(self.frames);
     }
 }
@@ -113,17 +117,34 @@ impl App {
             vectorcraft_ui_egui::background::wait_all(&mut self.app);
             return;
         }
+        // An app that stays in Safe Mode leaves later launches to start their own app with plug-ins.
+        #[cfg(not(target_os = "macos"))]
+        if safe_mode::staying_on(&self.app) {
+            single_instance::resign();
+        }
         // Files from the Finder and the Dock (macOS) or from later launches (#4892) wait while a file
-        // dialog is open: what asked for it runs again on its document when it answers.
-        if !self.app.file_dialog_open() {
+        // dialog is open: what asked for it runs again on its document when it answers. They also
+        // wait for the choice about a stopped plug-in, so they open after the plug-ins it loads, as
+        // do the command line's files held back for it. Files later launches handed over before the
+        // choice ended in Safe Mode open in a new app with plug-ins.
+        if !self.app.file_dialog_open() && !safe_mode::choosing(&self.app) {
+            let held = std::mem::take(&mut self.held_files);
             #[cfg(target_os = "macos")]
             let files = open_documents::take();
             #[cfg(not(target_os = "macos"))]
-            let files = single_instance::take();
+            let files = single_instance::take_for_frame(safe_mode::staying_on(&self.app), single_instance::launch_with_plug_ins);
             if !files.is_empty() {
                 bring_window_forward(ctx);
             }
+            open_files(&mut self.app, held);
             open_files(&mut self.app, files);
+        }
+        let (now, zoom) = (ctx.input(|i| i.time), ctx.zoom_factor());
+        if let Some(w) = &self.winit_window
+            && window::monitors_due(self.monitors_listed, now, zoom)
+        {
+            self.app.services.dock_monitors = window::dock_monitors(w, zoom);
+            self.monitors_listed = Some((now, zoom));
         }
         self.app.tick(ctx);
         if self.pending_maximize {
@@ -144,13 +165,15 @@ impl App {
 /// On macOS with accessibility, end the process once the app has saved what it keeps on quitting,
 /// before eframe tears the window down (#661). AccessKit then gives the window's content view back
 /// its own class, which AppKit's Touch Bar support was observing it under, and AppKit aborts the
-/// app as it quits on Macs with a Touch Bar. Nothing after the window is needed on a normal quit.
+/// app as it quits on Macs with a Touch Bar. On a normal quit, only the launch marker is needed
+/// after the window, so it is ended here as `main` ends it after the window on other platforms.
 /// Not while the window is still starting up (`frames` below [`gpu::STARTUP_FRAMES`]): a graphics
 /// failure then starts the app again on another adapter (#651).
 #[allow(unused_variables)]
 fn end_before_teardown(frames: u64) {
     #[cfg(all(target_os = "macos", feature = "accessibility", feature = "wgpu"))]
     if frames >= gpu::STARTUP_FRAMES {
+        safe_mode::end_launch();
         log::info!("quitting");
         log::logger().flush();
         std::process::exit(0);
@@ -163,6 +186,16 @@ fn end_before_teardown(frames: u64) {
 pub(crate) fn bring_window_forward(ctx: &egui::Context) {
     ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
     ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+}
+
+/// Open the command line's `files` now, or, while the choice about a stopped plug-in is up
+/// ([`safe_mode::choosing`]), return them to open once it is made, with the plug-ins it loads.
+pub(crate) fn open_or_hold(app: &mut VectorcraftApp, files: Vec<String>) -> Vec<String> {
+    if safe_mode::choosing(app) {
+        return files;
+    }
+    open_files(app, files);
+    Vec::new()
 }
 
 /// Open files handed to the app (command line, macOS Finder and Dock, later launches) as documents. A file that

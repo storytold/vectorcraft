@@ -188,6 +188,10 @@ fn decode(s: &str) -> String {
 /// caller turns it into `-32602`); other failures (no document, an unreachable app) stay
 /// backend errors.
 fn read_object(b: &mut dyn Backend, id: &str) -> Result<Option<Value>, String> {
+    // `parse` alone would accept a leading `+`.
+    if id.is_empty() || !id.bytes().all(|c| c.is_ascii_digit()) {
+        return Ok(None);
+    }
     let Ok(id) = id.parse::<u64>() else { return Ok(None) };
     match b.call("engine.execute", json!({"command": "document.node", "params": {"id": id, "summary": true}})) {
         Ok(v) => Ok(Some(v)),
@@ -266,6 +270,17 @@ mod tests {
         }
         let mut empty = Box::new(crate::Headless::new());
         assert!(matches!(read(empty.as_mut(), "vectorcraft://object/1"), Err(ReadError::Backend(_))));
+    }
+
+    #[test]
+    fn object_id_must_be_plain_digits() {
+        let mut b = Box::new(crate::Headless::with_document());
+        let made = b.call("engine.execute", json!({"command": "shape.rectangle", "params": {"x": 10, "y": 10, "width": 50, "height": 40}})).unwrap();
+        let id = made["id"].as_i64().expect("shape.rectangle returns an integer id");
+        for uri in [format!("vectorcraft://object/+{id}"), format!("vectorcraft://object/-{id}")] {
+            assert!(matches!(read(b.as_mut(), &uri), Err(ReadError::Invalid(_))), "{uri}");
+        }
+        assert!(read(b.as_mut(), &format!("vectorcraft://object/{id}")).is_ok());
     }
 
     #[test]

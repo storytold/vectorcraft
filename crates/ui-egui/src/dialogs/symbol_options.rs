@@ -123,7 +123,7 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         ui.end_row();
         label(ui, tl!("Registration:"));
         let cur = d.fields.get("registration").and_then(Value::as_u64).unwrap_or(4) as usize;
-        if let Some(i) = widgets::reference_point(ui, cur) {
+        if let Some(i) = widgets::reference_point_named(ui, cur, tl!("Registration:")) {
             d.fields.insert("registration".into(), json!(i));
         }
         ui.end_row();

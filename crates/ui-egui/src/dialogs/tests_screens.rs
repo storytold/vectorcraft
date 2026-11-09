@@ -957,6 +957,34 @@ fn saving_an_applied_preset_keeps_its_bleed_and_fill() {
     assert_eq!((s.get("includeBleed"), s.get("includeArtboardFill")), (Some(&json!(true)), Some(&json!(false))));
 }
 
+/// Remembered settings and a preset that hold keys the export no longer reads, in a row, in a
+/// format's settings and inside an object option, and settings for a format it doesn't write, open
+/// without them, so the dialog's export is not refused.
+#[test]
+fn saved_keys_no_longer_read_are_left_out_of_the_dialog_s_export() {
+    let (mut app, _) = app(1, false);
+    let stale = json!({
+        "formats": [{"format": "png", "scale": "2x", "noSuchOption": 1}, {"format": "pdf", "marks": {"trim": true, "noSuchMark": 1}}],
+        "settings": {"png": {"noSuchSetting": true}, "dxf": {}, "pdf": {"bleed": {"top": 1, "inner": 2}}}
+    });
+    let Value::Object(saved) = stale.clone() else { panic!("an object") };
+    std::sync::Arc::make_mut(&mut app.session.active_mut().unwrap().doc).export_settings = saved;
+    let folder = temp_folder("stale");
+    let check = |app: &VectorcraftApp| {
+        let p = export_for_screens::params(app, app.ui.dialog.as_ref().unwrap()).unwrap();
+        app.session.check_params("document.exportForScreens", &p).unwrap_or_else(|e| panic!("{e}: {p}"));
+        p
+    };
+    open(&mut app);
+    set(&mut app, "folder", json!(folder.to_string_lossy()));
+    let p = check(&app);
+    assert_eq!(p["formats"][0]["scale"], json!("2x"));
+    assert_eq!(p["formats"][1]["marks"]["trim"], json!(true));
+    export_for_screens::apply_preset(app.ui.dialog.as_mut().unwrap(), &json!({"name": "Old", "settings": stale}));
+    check(&app);
+    let _ = std::fs::remove_dir_all(&folder);
+}
+
 /// A preset that puts each item in its own folder (`item` or `itemFormat`, which the dialog has no
 /// control for) keeps that folder mode when it is exported or saved again from the dialog, until
 /// the sub-folder controls change (in the dialog or by `ui.dialog.set`).

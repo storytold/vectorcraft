@@ -91,6 +91,15 @@ pub struct TraceParams {
     /// The colour Ignore Color leaves out (`#rrggbb`): the palette colours within about 30 levels
     /// of it. `None` is white. (Flat Logo mode leaves out white only.)
     pub ignore_color: Option<String>,
+    /// With Ignore Color: leave out only the areas of that color that reach the image's edge (a
+    /// background), through neighbors above, below and to either side, and trace the areas of it
+    /// that other colors enclose. (Flat Logo mode leaves out every white area.)
+    pub ignore_background: bool,
+    /// Keep Colors: the colors to trace (`#rrggbb`). Only the palette colors within about 30
+    /// levels of one of them (as Ignore Color matches a color) are traced, a gradient by its middle
+    /// color, and their paths are the ones the trace of every color has. Empty traces every color.
+    /// (Flat Logo mode does not use it: it traces the colors named in `logo_colors`.)
+    pub keep_colors: Vec<String>,
     /// Replace nearly-straight curves with straight lines. In Logo mode this also snaps tight arcs
     /// to true circles.
     pub snap_curves_to_lines: bool,
@@ -110,9 +119,16 @@ pub struct TraceParams {
     /// Stroke: the widest feature (px) traced as a stroke.
     pub stroke_width: f64,
     /// Flat Logo mode: the flat colours (`#rrggbb`) to use; empty finds them automatically. White is
-    /// always traced on its own and cannot be named, colours closer than about 12 (RGB distance)
-    /// count as one, and at most ten are used. (Not `palette`: that is Color mode's colour source.)
+    /// traced on its own and cannot be named unless [`logo_white`](Self::logo_white) is off, colours
+    /// closer than about 12 (RGB distance) count as one, and at most ten are used. (Not `palette`:
+    /// that is Color mode's colour source.)
     pub logo_colors: Vec<String>,
+    /// Flat Logo mode with named `logo_colors`: `true` traces white (every channel 245 or more) as a
+    /// color of its own beside the named ones. `false` traces the named colors only: white areas
+    /// take the nearest of them, a named white or near-white is used as named, and enclosed
+    /// transparent areas stay holes. With the colors found automatically, white is always its own,
+    /// and with [`ignore_white`](Self::ignore_white) white areas are left out whatever this says.
+    pub logo_white: bool,
 }
 
 impl Default for TraceParams {
@@ -133,6 +149,8 @@ impl Default for TraceParams {
             method: Method::Abutting,
             ignore_white: false,
             ignore_color: None,
+            ignore_background: false,
+            keep_colors: Vec::new(),
             snap_curves_to_lines: false,
             shapes: false,
             auto_grouping: false,
@@ -141,6 +159,7 @@ impl Default for TraceParams {
             strokes: false,
             stroke_width: 10.0,
             logo_colors: Vec::new(),
+            logo_white: true,
         }
     }
 }
