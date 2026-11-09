@@ -6452,6 +6452,31 @@ fn an_object_with_a_feather_style_comes_in_with_a_live_effect() {
     assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
 }
 
+/// The art style `Tapered`: a 4 pt stroke with width points `widths` (position, width) along it,
+/// their widths written as one centered array.
+fn width_profile_style(widths: &[(f64, f64)]) -> String {
+    width_arrays_style(widths, &["BSCenteredWidthsArray"])
+}
+
+/// The art style `Tapered`: a 4 pt stroke with width points `widths` (position, width) along it,
+/// their widths written under each of `keys`.
+fn width_arrays_style(widths: &[(f64, f64)], keys: &[&str]) -> String {
+    let array = |values: Vec<f64>| values.iter().map(|v| format!("{v} /Real ,\n")).collect::<String>();
+    let width_arrays: String = keys.iter().map(|key| format!("/Array :\n{}; ({key}) ,\n", array(widths.iter().map(|w| w.1).collect()))).collect();
+    format!(
+        "%AI9_BeginArtStyles\n\
+        /KnownStyle :\n(Tapered) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+        /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+        /BasicFilter :\n(Stroke Style Filter) 0 0 /Filter ,\n1 /Visible ,\n2 /FillOrStroke ,\n/Dictionary : /NotRecorded ,\n\
+        /StrokeStyle : 0 R\n0 0 0 0 0 0 1 XA\n0 J 0 j 4 w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n\
+        /Dictionary : /NotRecorded ,\n2 /Int (BSWidthSource) ,\n/Array :\n{}; (BSVariableWidthTValuesArray) ,\n{width_arrays}\
+        ; (kAIBeautifulStrokesParamsDictKey) ,\n; /Dict ;\n /Part ,\n\
+        /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n /Part ,\n;\n\
+        %AI9_EndArtStyles\n",
+        array(widths.iter().map(|w| w.0).collect()),
+    )
+}
+
 /// An art style section with style `PF`: an Effect › Pathfinder filter with `Command` `command`
 /// and `Mix` `mix` in the object's chain, over a fill and stroke that paint nothing.
 fn pathfinder_styles(command: u32, mix: f64) -> String {
@@ -6483,6 +6508,73 @@ fn pathfinder_group() -> String {
 }
 
 #[test]
+fn a_variable_width_stroke_comes_in_as_its_drawn_outline() {
+    // GUARDS: the object came in as a live stroke drawn from its profile, and the outline in the file was dropped.
+    let hidden_line = "0 5 m\n10 5 L\n".replace('\n', "\n%_");
+    let fills = format!("{RED}{}f\n", rect_path(30.0, 0.0, 40.0, 10.0));
+    let art_ = format!("{fills}0 Ae\nu\n{RED}{}f\nU\n%_{hidden_line}S\n1 (Tapered) XW\n{fills}", rect_path(0.0, 3.0, 10.0, 7.0));
+    let lens = width_profile_style(&[(0.0, 0.0), (0.5, 1.0), (1.0, 0.0)]);
+    let r = read_ok(&format!("{lens}{}", layer(&art_)));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 3, "{a:#?}");
+    let look = &a[1];
+    assert!(matches!(look.kind, NodeKind::Group { .. }), "{look:#?}");
+    let [outline] = look.children().unwrap().as_slice() else { panic!("{look:#?}") };
+    assert!(matches!(outline.kind, NodeKind::Path { .. }) && outline.appearance.fill().is_some(), "{outline:#?}");
+    assert!(outline.appearance.stroke().is_none_or(|s| s.profile.is_none()), "{outline:#?}");
+    assert!([&a[0], &a[2]].iter().all(|n| matches!(n.kind, NodeKind::Path { .. })), "the objects beside it stay in place");
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look (1)")), "{:?}", r.warnings);
+
+    // A uniform profile is a plain stroke: the object comes in as itself.
+    let uniform = width_profile_style(&[(0.0, 1.0), (1.0, 1.0)]);
+    let r = read_ok(&format!("{uniform}{}", layer(&art_)));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 3, "{a:#?}");
+    assert!(matches!(a[1].kind, NodeKind::Path { .. }), "{:#?}", a[1]);
+    assert_eq!(a[1].appearance.stroke().map(|s| (s.width, s.profile.is_none())), Some((4.0, true)), "{:#?}", a[1]);
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+}
+
+/// Only a Stroke Style filter's widths written as one centered array come in as the drawn look.
+/// A Stroke Offset stroke and widths written for each side, as VectorCraft saves them, stay live.
+#[test]
+fn only_centered_widths_on_a_plain_stroke_come_in_as_the_drawn_outline() {
+    // GUARDS: every stroke with a profile went to its drawn look, so a Stroke Offset stroke and the
+    // app's own files lost their live profile.
+    let hidden_line = "0 5 m\n10 5 L\n".replace('\n', "\n%_");
+    let art_ = format!("0 Ae\nu\n{RED}{}f\nU\n%_{hidden_line}S\n1 (Tapered) XW\n", rect_path(0.0, 3.0, 10.0, 7.0));
+    let lens = [(0.0, 0.0), (0.5, 1.0), (1.0, 0.0)];
+
+    let r = read_ok(&format!("{}{}", width_profile_style(&lens), layer(&art_)));
+    let a = art(&r.doc);
+    let [look] = a.as_slice() else { panic!("{a:#?}") };
+    assert!(matches!(look.kind, NodeKind::Group { .. }), "{look:#?}");
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look (1)")), "{:?}", r.warnings);
+
+    // One side's array alone doesn't replace the centered one, so the widths are still centered.
+    let r = read_ok(&format!("{}{}", width_arrays_style(&lens, &["BSCenteredWidthsArray", "BSLeftWidthsArray"]), layer(&art_)));
+    let a = art(&r.doc);
+    let [look] = a.as_slice() else { panic!("{a:#?}") };
+    assert!(matches!(look.kind, NodeKind::Group { .. }), "{look:#?}");
+
+    let sides = width_arrays_style(&lens, &["BSLeftWidthsArray", "BSRightWidthsArray"]);
+    let profile = "/Dictionary : /NotRecorded ,\n/Array :\n0 /Real ,\n0.5 /Real ,\n1 /Real ,\n; (BSVariableWidthTValuesArray) ,\n\
+                   /Array :\n0 /Real ,\n1 /Real ,\n0 /Real ,\n; (BSCenteredWidthsArray) ,\n; (kAIBeautifulStrokesParamsDictKey) ,\n";
+    let offset = format!(
+        "%AI9_BeginArtStyles\n{}%AI9_EndArtStyles\n",
+        offset_stroke_style_with("Tapered", &format!("0 /Bool (StrokeOffsetInside) ,\n{profile}"), OFFSET_STROKE)
+    );
+    for (why, style) in [("each side's widths", sides), ("a Stroke Offset stroke", offset)] {
+        let r = read_ok(&format!("{style}{}", layer(&art_)));
+        let a = art(&r.doc);
+        let [object] = a.as_slice() else { panic!("{why}: {a:#?}") };
+        assert!(matches!(object.kind, NodeKind::Path { .. }), "{why}: {object:#?}");
+        assert!(object.appearance.stroke().is_some_and(|s| s.profile.is_some()), "{why}: {object:#?}");
+        assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{why}: {:?}", r.warnings);
+    }
+}
+
+#[test]
 fn a_group_with_a_pathfinder_effect_keeps_its_members_and_the_effect() {
     // GUARDS: the style was not read, and the group came in as its drawn look: one path, with no effect.
     let r = read_ok(&format!("{}{}", pathfinder_styles(0, 0.5), layer(&pathfinder_group())));
@@ -6496,6 +6588,27 @@ fn a_group_with_a_pathfinder_effect_keeps_its_members_and_the_effect() {
     assert_eq!(effects, [("pathfinder.add", true)]);
     assert!(a[0].appearance.items.is_empty(), "{:?}", a[0].appearance);
     assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+}
+
+#[test]
+fn a_variable_width_stroke_with_an_empty_look_comes_in_as_itself() {
+    // GUARDS: with no outline in its look to keep, the object was dropped.
+    let hidden_line = "0 5 m\n10 5 L\n".replace('\n', "\n%_");
+    let hidden_fill = format!("{}f\n", rect_path(0.0, 3.0, 10.0, 7.0)).replace('\n', "\n%_");
+    let lens = width_profile_style(&[(0.0, 0.0), (0.5, 1.0), (1.0, 0.0)]);
+    // An empty look, ones whose group or compound path holds only a copy read from `%_` lines, and
+    // ones that hold only a path painted with nothing or a hidden painted path.
+    let unpainted = format!("u\n{}n\nU\n", rect_path(0.0, 3.0, 10.0, 7.0));
+    let invisible = format!("u\n1 Xw\n{RED}{}f\n0 Xw\nU\n", rect_path(0.0, 3.0, 10.0, 7.0));
+    for look in ["u\nU\n".to_string(), format!("u\nu\n%_{hidden_fill}\nU\nU\n"), format!("u\n*u\n%_{hidden_fill}\n*U\nU\n"), unpainted, invisible] {
+        let art_ = format!("{look}%_{hidden_line}S\n1 (Tapered) XW\n");
+        let r = read_ok(&format!("{lens}{}", layer(&art_)));
+        let a = art(&r.doc);
+        let [object] = a.as_slice() else { panic!("{look:?}: {a:#?}") };
+        assert!(matches!(object.kind, NodeKind::Path { .. }), "{look:?}: {object:#?}");
+        assert_eq!(object.appearance.stroke().map(|s| (s.width, s.profile.is_some())), Some((4.0, true)), "{look:?}: {object:#?}");
+        assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{look:?}: {:?}", r.warnings);
+    }
 }
 
 #[test]

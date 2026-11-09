@@ -1253,7 +1253,7 @@ antiAlias	Sharp	Nítid
 	Drag to float as a toolbar	Arrossega per surar com a barra d’eines
 	Drag to float the toolbar	Arrossega per fer surar la barra d’eines
 	Drag to move	Arrossega per moure
-	Drag to the window's left edge to dock	Arrossega fins a la vora esquerra de la finestra per acoblar
+	Drag to the window's left or right edge to dock	Arrossega fins a la vora esquerra o dreta de la finestra per acoblar
 	Drag values or labels. Double-click a value to type.	Arrossega els valors o les etiquetes. Fes doble clic en un valor per escriure’l.
 	Draw	Dibuixa
 	Draw Behind	Dibuixa al darrere
@@ -5507,7 +5507,7 @@ digits	Malayalam	Malaiàlam
 @msg	objects can't be nested more than 32 deep	els objectes no es poden niar més de 32 nivells
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	els objectes dins d’una fusió, un embolcall, una repetició o un grup Intertwine no es poden adjuntar a un traçat
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	els pinzells que VectorCraft encara no pot llegir s'han deixat fora del tauler Pinzells ({_1})
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	els objectes amb diversos farciments o traços, efectes o pinzells han arribat amb el seu aspecte dibuixat ({_1}): la seva aparença encara no és editable
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	els objectes amb diversos farciments o traços, traços d’amplada variable, efectes o pinzells han arribat amb el seu aspecte dibuixat ({_1}): la seva aparença encara no és editable
 @msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	el nom `{name}` no és UTF-8 i s’ha llegit com a {label}: si sembla incorrecte, obriu el fitxer amb un altre legacyNameEncoding
 @msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	el nom `{name}` no és UTF-8, i algunes parts tampoc no són {label} vàlid: obriu el fitxer amb un altre legacyNameEncoding
 @msg	more names that aren't UTF-8 were read as {label} ({count})	s’han llegit com a {label} més noms que no són UTF-8 ({count})
@@ -6637,3 +6637,4 @@ breakText	Glyphs	Glifs
 # Align to Pixel Grid
 	Align to Pixel Grid	Alinea a la quadrícula de píxels
 @msg	only paths and compound paths can be aligned to the pixel grid	només els traçats i els traçats compostos es poden alinear a la quadrícula de píxels
+@msg	side is left or right, not `{s}`	side ha de ser left o right, no `{s}`

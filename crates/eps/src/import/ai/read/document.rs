@@ -1308,7 +1308,7 @@ impl<'a> Reader<'a> {
         self.drawn_looks += self.pattern_looks.values().sum::<usize>();
         if self.drawn_looks > 0 {
             warnings.push(format!(
-                "objects with several fills or strokes, effects or brushes came in as their drawn look ({}): their appearance isn't editable yet",
+                "objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({}): their appearance isn't editable yet",
                 self.drawn_looks
             ));
         }
