@@ -392,6 +392,14 @@ fn work_on_the_longest_dash_pattern_ends_soon() {
 }
 
 #[test]
+fn a_chain_of_filters_over_the_program_is_bounded() {
+    let r = read_soon("0 0 10 10 rectfill currentfile 100 { 0 (x) /SubFileDecode filter } repeat pop 20 20 10 10 rectfill");
+    assert!(r.warnings.iter().any(|w| w.contains("too many filters")), "{:?}", r.warnings);
+    let r = read_soon("0 0 10 10 rectfill currentfile 3 { 0 (x) /SubFileDecode filter } repeat pop 20 20 10 10 rectfill");
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+}
+
+#[test]
 fn procedures_bind_def_loops_and_dictionaries() {
     let r = read(
         "/bd {bind def} bind def /sq {newpath moveto 10 0 rlineto 0 10 rlineto -10 0 rlineto closepath fill} bd \
@@ -717,14 +725,20 @@ fn type_42_fonts_set_type_at_their_size() {
     }
 }
 
+/// The encrypted part of a font program is skipped up to its `cleartomark` in the file it is in:
+/// the program's own file, or a file being run (`cvx exec`), as Ghostscript's `eps2write` runs
+/// each Type 1 font it embeds.
 #[test]
 fn embedded_font_programs_are_skipped() {
     let body = "/MyFont 10 dict begin /FontName /MyFont def /FontMatrix [0.001 0 0 0.001 0 0] def currentdict end currentfile eexec\n\
                 0123456789abcdef garbage that is encrypted\n0000000000000000000000000000000000000000000000000000000000000000\ncleartomark\n\
                 /MyFont findfont 10 scalefont setfont 10 10 moveto (x) show";
-    let r = read(body);
-    let NodeKind::Text(t) = &objects(&r.document)[0].kind else { panic!("{:?}", r.warnings) };
-    assert_eq!(t.runs[0].style.font_family, "My Font");
+    for program in [body.to_string(), format!("currentfile 0 (endstream) /SubFileDecode filter cvx exec\n{body}\nendstream\n")] {
+        let r = read(&program);
+        let NodeKind::Text(t) = &objects(&r.document)[0].kind else { panic!("{program}: {:?}", r.warnings) };
+        assert_eq!(t.runs[0].style.font_family, "My Font");
+        assert!(r.warnings.is_empty(), "{program}: {:?}", r.warnings);
+    }
 }
 
 /// A document with what the writer writes in its own ways: gradients, type, an image with
@@ -892,6 +906,17 @@ fn the_generic_category_defines_new_categories() {
     check("{ /X 5 /Category defineresource } stopped");
 }
 
+/// The standard encodings are instances of the Encoding category, the same arrays as the names in
+/// `systemdict` (PLRM 3rd ed., §3.9.2 and `findencoding`, <https://www.adobe.com/jp/print/postscript/pdfs/PLRM.pdf>).
+/// Ghostscript's `eps2write` finds `StandardEncoding` that way for the fonts it embeds.
+#[test]
+fn the_standard_encodings_are_encoding_resources() {
+    check("/StandardEncoding /Encoding findresource StandardEncoding eq");
+    check("/ISOLatin1Encoding /Encoding findresource ISOLatin1Encoding eq");
+    check("/StandardEncoding /Encoding resourcestatus { pop pop true } { false } ifelse");
+    check("{ /Nope /Encoding findresource } stopped");
+}
+
 #[test]
 fn clipsave_and_cliprestore_bring_the_clip_back() {
     // #234.
@@ -985,6 +1010,30 @@ fn the_standard_dictionaries_are_dictionaries_in_systemdict() {
     check("SharedFontDirectory type /dicttype eq");
 }
 
+/// A key may be any object but null (PLRM 3rd ed., §3.3.9, <https://www.adobe.com/jp/print/postscript/pdfs/PLRM.pdf>),
+/// so `known` answers for every other key.
+/// Ghostscript's `eps2write` looks an inline image's filter up in a dictionary of abbreviations,
+/// and the filter may be an array of them.
+#[test]
+fn known_answers_false_for_keys_no_dictionary_holds() {
+    check("<< /A85 /ASCII85Decode >> [ /A85 /LZW ] known not");
+    check("1 dict 1 dict known not 1 dict 1.5 known not and 1 dict mark known not and");
+    check("<< /A85 /ASCII85Decode >> /A85 known << 1 2 >> 1.0 known and");
+    check("{ 1 dict null known } stopped");
+}
+
+/// `cvi` and `cvr` read a string as the PostScript syntax reads a number (PLRM 3rd ed., chapter
+/// 8), radix numbers included: prologs turn a name's `#20` escape back into its character with
+/// `(16#20) cvi`.
+#[test]
+fn cvi_and_cvr_read_radix_numbers() {
+    check("(16#20) cvi 32 eq (8#17) cvi 15 eq and ( 2#101 ) cvi 5 eq and (36#Z) cvi 35 eq and");
+    check("(16#ff) cvr 255 eq (3.7) cvi 3 eq and (-2.5e1) cvr -25 eq and (12) cvr 12 eq and");
+    check("{ (16#zz) cvi } stopped { (inf) cvr } stopped and { (16#-1) cvi } stopped and { () cvi } stopped and");
+    // A name's escapes, as a prolog undoes them for a spot colour named `PANTONE 300 C`.
+    check("(PANTONE#20300) dup 7 3 getinterval (16#--) dup 3 4 -1 roll 1 2 getinterval putinterval cvi 32 eq exch pop");
+}
+
 #[test]
 fn dictstack_and_internaldict_answer() {
     check("10 array dictstack length countdictstack eq");
@@ -993,6 +1042,21 @@ fn dictstack_and_internaldict_answer() {
     check("1183615869 internaldict /k 1 put 1183615869 internaldict /k get 1 eq");
     check("currentsystemparams /MaxPatternCache get type /integertype eq");
     check("<< /MaxPatternItem currentsystemparams /MaxPatternCache get >> setuserparams currentuserparams /MaxFontItem known");
+}
+
+/// `bind` makes the procedures it goes into read-only and leaves read-only procedures alone (PLRM
+/// 3rd ed., `bind` in chapter 8), so a later `bind` of a procedure holding one doesn't turn a name
+/// it kept into an operator defined since: here `M` stays the procedure's own variable, as in the
+/// prologs that keep `M` for `setmiterlimit` and also as the name of a variable.
+#[test]
+fn bind_leaves_procedures_it_already_bound_alone() {
+    let get = "/Get { 4 dict begin /M 7 def { M } exec end } bind def /M /setmiterlimit load def";
+    check(&format!("{get} /Outer {{ //Get exec }} bind def Outer 7 eq"));
+    // Nor does it go into one made read-only.
+    check("/I { M } readonly def /P { //I exec } def /M /setmiterlimit load def /P load bind pop /M 3 def P 3 eq");
+    check("/P { M } readonly def /M /setmiterlimit load def /P load bind pop /M 3 def P 3 eq");
+    // A procedure bound on its own is still bound again (only those inside are read-only).
+    check("/P { M } bind def /M /setmiterlimit load def /P load bind 0 get type /operatortype eq");
 }
 
 #[test]
@@ -1006,6 +1070,17 @@ fn an_executable_filter_runs_its_data_as_a_program() {
     check("currentfile /ASCIIHexDecode filter cvx exec 74727565>");
     // A literal file is only pushed.
     check("(1 2 add) 0 () /SubFileDecode filter exec type /filetype eq");
+}
+
+/// `SubFileDecode`'s count is how many bytes (or end strings) to pass, not an allocation: a count
+/// past the 4 MiB cap on allocations (a long content stream's `/Length`) is read, and only the data
+/// there passes through.
+#[test]
+fn subfile_counts_past_the_allocation_cap_are_read() {
+    check("(1 2 add) 6000000 () /SubFileDecode filter cvx exec 3 eq");
+    check("(1 2 add) 5000000 (x) /SubFileDecode filter cvx exec 3 eq");
+    check("(abcd) 7000000 () /SubFileDecode filter 8 string readstring pop (abcd) eq");
+    check("{ (1) -1 () /SubFileDecode filter } stopped");
 }
 
 #[test]
@@ -1050,10 +1125,27 @@ fn read_within(body: &str, secs: u64) -> crate::Imported {
 /// budget. Running to the end of the budget can take over 20 s on a slow CI runner
 /// (`search_in_a_loop_runs_out_of_the_budget` searches about 3 GB, 14 s on a fast desktop), so the
 /// limit here only catches a program that never stops.
-fn runs_out_of_budget(body: &str) {
+pub(super) fn runs_out_of_budget(body: &str) {
     let r = read_within(&format!("0 0 10 10 rectfill {body}"), 120);
     assert_eq!(objects(&r.document).len(), 1, "{body}: {:?}", r.warnings);
     assert!(r.warnings.iter().any(|w| w.contains("the program runs too long")), "{body}: {:?}", r.warnings);
+}
+
+/// A large file that runs far more operations than a small one may, but only a few hundred for
+/// each object it draws, reads to its end: the operation budget grows with the program's length.
+#[test]
+fn a_large_file_with_many_objects_reads_to_its_end() {
+    let n = 200_000;
+    let mut body = String::from(
+        "/sq { 4 dict begin /y exch def /x exch def 0 1 200 { pop } for \
+                                 x y moveto x 1 add y lineto x y 1 add lineto closepath fill end } def\n",
+    );
+    for i in 0..n {
+        body.push_str(&format!("{} {} sq\n", i % 100, i / 2000));
+    }
+    let r = read_within(&body, 300);
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    assert_eq!(objects(&r.document).len(), n);
 }
 
 /// A loop of operators whose work grows with the path they make runs out of the operation budget
@@ -1362,4 +1454,97 @@ fn stored_graphics_states_use_up_the_memory_budget() {
         let r = read_soon(&format!("0 0 10 10 rectfill {path} {body}"));
         assert!(r.warnings.iter().any(|w| w.contains("uses too much memory")), "{body}: {:?}", r.warnings);
     }
+}
+
+/// `bitshift` by the most negative integer shifts right by everything, not a negation overflow.
+#[test]
+fn bitshift_by_the_most_negative_integer_does_not_panic() {
+    let r = read("0 0 10 10 rectfill 1 -9223372036854775808 bitshift pop -1 -9223372036854775808 bitshift pop");
+    assert_eq!(objects(&r.document).len(), 1, "{:?}", r.warnings);
+}
+
+/// The stops (offset, grey's black ink or red) and the start and end of the linear gradient `n` is
+/// filled with.
+fn linear_stops(n: &Node) -> (Vec<(f32, f32)>, Point, Point) {
+    let Some(Paint::Gradient(g)) = fill(n) else { panic!("not a gradient: {:?}", fill(n)) };
+    assert_eq!(g.gradient.kind, GradientKind::Linear);
+    let level = |c: &Color| match *c {
+        Color::Gray { k } => k,
+        Color::Rgb { r, .. } => r,
+        other => panic!("{other:?}"),
+    };
+    let geom = g.geom.unwrap();
+    (g.gradient.stops.iter().map(|s| (s.offset, level(&s.color))).collect(), geom.start, geom.end)
+}
+
+#[test]
+fn abutting_strips_of_a_gradient_become_one_gradient() {
+    // A grey ramp drawn right to left as 40 strips 2 pt wide under a clip, after a strip of no
+    // width on its right edge: the clip path filled with one linear gradient, without seams.
+    let r = read(
+        "gsave 10 10 80 80 rectclip 90 10 0 80 rectfill
+         0 1 39 { /i exch def i 39 div setgray 88 i 2 mul sub 10 2 80 rectfill } for grestore",
+    );
+    let o = objects(&r.document);
+    assert_eq!(o.len(), 1, "{o:#?}");
+    let n = &o[0];
+    assert!(matches!(n.kind, NodeKind::Path { .. }));
+    assert!(near(bounds(n), Rect::new(10.0, 10.0, 90.0, 90.0)), "{:?}", bounds(n));
+    let (stops, start, end) = linear_stops(n);
+    // A straight ramp needs only its two ends, at the middles of the end strips: black on the
+    // right, white on the left.
+    assert_eq!(stops.len(), 2, "{stops:?}");
+    let x = |t: f32| start.x + (end.x - start.x) * f64::from(t);
+    assert!((start.y - end.y).abs() < 1e-6);
+    let ((t0, k0), (t1, k1)) = (stops[0], stops[1]);
+    // A grey's level is its black ink: 1 for black.
+    let (dark, light) = if k0 > k1 { ((x(t0), k0), (x(t1), k1)) } else { ((x(t1), k1), (x(t0), k0)) };
+    assert!((dark.0 - 89.0).abs() < 0.01 && (dark.1 - 1.0).abs() < 1e-6, "{dark:?}");
+    assert!((light.0 - 11.0).abs() < 0.01 && light.1.abs() < 1e-6, "{light:?}");
+}
+
+#[test]
+fn strips_under_a_larger_clip_keep_the_clip() {
+    // The same ramp under a clip larger than the strips: the gradient fills only where the
+    // strips were, still clipped, not the whole clip.
+    let r = read(
+        "gsave 5 5 90 90 rectclip
+         0 1 39 { /i exch def i 39 div setgray 88 i 2 mul sub 10 2 80 rectfill } for grestore",
+    );
+    let o = objects(&r.document);
+    assert_eq!(o.len(), 1, "{o:#?}");
+    let NodeKind::Group { children, clip: true } = &o[0].kind else { panic!("not a clipping group: {:#?}", o[0]) };
+    let [_, fill] = children.as_slice() else { panic!("{children:#?}") };
+    assert!(near(bounds(fill), Rect::new(10.0, 10.0, 90.0, 90.0)), "{:?}", bounds(fill));
+    let (stops, _, _) = linear_stops(fill);
+    assert_eq!(stops.len(), 2, "{stops:?}");
+}
+
+#[test]
+fn turned_strips_become_a_gradient_across_them() {
+    // Strips drawn in a turned space: the gradient runs square to them.
+    let r = read("50 50 translate 30 rotate 0 1 19 { /i exch def i 19 div 0 0 setrgbcolor i 2 mul 20 sub -20 2 40 rectfill } for");
+    let o = objects(&r.document);
+    assert_eq!(o.len(), 1, "{o:#?}");
+    let (stops, start, end) = linear_stops(&o[0]);
+    assert_eq!(stops.len(), 2, "{stops:?}");
+    let d = end - start;
+    // 30° in PostScript's y-up space is −30° in the document's y-down one.
+    let angle = d.y.atan2(d.x).to_degrees();
+    assert!((angle + 30.0).abs() < 0.01 || (angle - 150.0).abs() < 0.01, "{angle}");
+    assert!((d.hypot() - 40.0).abs() < 0.01, "{}", d.hypot());
+}
+
+#[test]
+fn abutting_blocks_of_distinct_colours_stay_apart() {
+    // Side by side but each a different colour (a row of swatches): not a gradient.
+    let blocks: String =
+        (0..8).map(|i| format!("{} {} {} setrgbcolor {} 10 10 80 rectfill ", i % 2, (i / 2) % 2, (i / 4) % 2, 10 + i * 10)).collect();
+    assert_eq!(objects(&read(&blocks).document).len(), 8);
+    // Too few strips to be sure of.
+    let few: String = (0..5).map(|i| format!("{} setgray {} 10 2 80 rectfill ", f64::from(i) / 40.0, 10 + i * 2)).collect();
+    assert_eq!(objects(&read(&few).document).len(), 5);
+    // Strips with gaps between them.
+    let gaps: String = (0..10).map(|i| format!("{} setgray {} 10 2 80 rectfill ", f64::from(i) / 40.0, 10 + i * 3)).collect();
+    assert_eq!(objects(&read(&gaps).document).len(), 10);
 }

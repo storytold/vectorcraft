@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::SavedView;
 use vectorcraft_geom::Point;
 
-use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, f64_req, finite_numbers, has_doc, str_param};
+use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, f64_req, finite_numbers, has_doc, str_param, switch_or};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -64,7 +64,7 @@ fn caps_lock(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn transparency_grid(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc_mut()?;
-    st.transparency_grid = p.get("on").and_then(Value::as_bool).unwrap_or(!st.transparency_grid);
+    st.transparency_grid = switch_or(p, "on", !st.transparency_grid, "view.transparencyGrid")?;
     Ok(json!({ "on": st.transparency_grid }))
 }
 

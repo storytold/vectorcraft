@@ -30,6 +30,20 @@ fn undo_len(s: &Session) -> usize {
 }
 
 #[test]
+fn invalid_new_art_basic_parameters_keep_the_preference_unchanged() {
+    let mut s = session();
+    let undo = undo_len(&s);
+    for params in [json!({"on": "false"}), json!({"on": 1})] {
+        assert!(s.execute("appearance.setNewArtBasic", &params).is_err(), "accepted {params}");
+        assert!(s.prefs.new_art_basic, "changed the preference for {params}");
+        assert_eq!(undo_len(&s), undo, "recorded undo for {params}");
+    }
+    // Left out, or null as for every command, it toggles.
+    assert_eq!(s.execute("appearance.setNewArtBasic", &json!(null)).unwrap(), json!({"on": false}));
+    assert_eq!(s.execute("appearance.setNewArtBasic", &json!({"on": null})).unwrap(), json!({"on": true}));
+}
+
+#[test]
 fn stroke_options_set_with_nothing_selected_carry_to_the_next_object() {
     let mut s = session();
     let before = rect(&mut s, 20.0);

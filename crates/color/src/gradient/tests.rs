@@ -23,6 +23,64 @@ fn increasing_samples_match_single_samples() {
     assert_eq!(g.sample_increasing_with(ts, Color::lerp_keep_model), one_by_one);
 }
 
+/// The prepared sampler gives what sampling each position alone does, out-of-order stops included.
+#[test]
+fn the_sampler_matches_single_samples() {
+    let stop = |offset: f32, hex: &str| GradientStop::new(offset, Color::from_hex(hex).unwrap());
+    let g = Gradient::new(
+        GradientKind::Linear,
+        vec![stop(0.1, "#ff0000"), stop(0.4, "#00ff00"), stop(0.4, "#0000ff"), stop(0.2, "#ffff00"), stop(0.9, "#000000")],
+    );
+    let sample = g.sampler();
+    for k in (0..=40).rev() {
+        let t = k as f32 / 40.0;
+        assert_eq!(sample(t), g.sample(t), "{t}");
+    }
+}
+
+/// Looking stops up by their reach finds what scanning them does, for any order of offsets,
+/// repeated, out-of-order and NaN ones included, and for positions outside and between them.
+#[test]
+fn stop_reach_matches_scanning_the_stops() {
+    let colors = ["#ff0000", "#00ff00", "#0000ff", "#ffff00", "#00ffff", "#000000"];
+    let offsets: [&[f32]; 5] = [
+        &[0.1, 0.4, 0.4, 0.2, 0.9, 0.5],
+        &[0.5, 0.5, 0.5, 0.5],
+        &[0.9, 0.1, 0.8, 0.2, 0.7, 0.3],
+        &[0.2, f32::NAN, 0.6, 0.1, f32::NAN, 1.0],
+        &[f32::NAN, 0.3, 0.3, 0.8],
+    ];
+    for offsets in offsets {
+        let stops: Vec<GradientStop> = offsets
+            .iter()
+            .zip(colors.iter().cycle())
+            .map(|(&o, hex)| GradientStop { midpoint: 0.3, ..GradientStop::new(o, Color::from_hex(hex).unwrap()) })
+            .collect();
+        let g = Gradient::new(GradientKind::Linear, stops);
+        let reach = StopReach::new(&g.stops);
+        for t in (-4..=44).map(|k| k as f32 / 40.0).chain([f32::NAN, f32::INFINITY, f32::NEG_INFINITY]) {
+            // Compared as printed: a NaN offset mixes NaN colours, which are equal only so.
+            let (got, want) = (reach.sample_with(&g.stops, t, &Color::lerp_keep_model), g.sample_with(t, Color::lerp_keep_model));
+            assert_eq!(format!("{got:?}"), format!("{want:?}"), "{offsets:?} at {t}");
+        }
+    }
+}
+
+/// Repeated offsets turn off the direct midpoint mix, and the midpoints still come out as
+/// `sample` gives them, with work that stays near linear in the stops (thousands of stops at one
+/// offset used to scan them all for each midpoint).
+#[test]
+fn expanded_with_repeated_offsets_samples_midpoints() {
+    let stop = |offset: f32, hex: &str| GradientStop { midpoint: 0.25, ..GradientStop::new(offset, Color::from_hex(hex).unwrap()) };
+    let g = Gradient::new(GradientKind::Linear, vec![stop(0.0, "#ff0000"), stop(0.5, "#00ff00"), stop(0.5, "#0000ff"), stop(1.0, "#000000")]);
+    for (t, c, o, mid) in g.expanded().filter(|e| e.3.is_some()) {
+        assert_eq!(mid, Some(0.25));
+        assert_eq!((c, o), g.sample(t), "midpoint at {t}");
+    }
+    let many = Gradient::new(GradientKind::Linear, (0..200_000).map(|i| stop(if i == 0 { 0.0 } else { 0.5 }, "#808080")).collect());
+    assert_eq!(many.expanded().count(), 2 * 200_000 - 1);
+}
+
 #[test]
 fn midpoint_shifts() {
     let mut g = Gradient::default();
@@ -466,10 +524,14 @@ fn ink_tints_follow_the_perceptual_curve() {
     let mut g = Gradient::new(GradientKind::Linear, vec![GradientStop::new(0.0, ink.tinted(0.8)), GradientStop::new(1.0, Color::WHITE)]);
     g.method = GradientMethod::Perceptual;
     assert!(g.fits_ink_tints());
-    let tints = g.ink_tints(&ink).expect("a magenta ink's tints differ in lightness");
+    let tints = g.ink_tints(&ink, &[]).expect("a magenta ink's tints differ in lightness");
     assert!(tints.len() > 2, "the curve's stops: {tints:?}");
     let (first, last) = (tints[0], tints[tints.len() - 1]);
     assert!((first.0, last.0) == (0.0, 1.0) && (first.1 - 0.8).abs() < 1e-4 && last.1 < 1e-4, "{tints:?}");
+    // The stops' own tints, when given, are kept exactly; the tints in between are the same.
+    let own = g.ink_tints(&ink, &[0.8, 0.0]).expect("tints");
+    assert!(own.len() == tints.len() && own[0].1 == 0.8 && own[own.len() - 1].1 == 0.0, "{own:?}");
+    assert!(own[1..own.len() - 1] == tints[1..tints.len() - 1], "{own:?}");
     assert!(tints.windows(2).all(|w| w[0].0 <= w[1].0 && w[0].1 >= w[1].1), "in order, lighter along the way: {tints:?}");
     let lightness = |c: &Color| srgb_to_oklab(c.to_rgb())[0];
     for (t, tint, _) in &tints {
@@ -479,11 +541,11 @@ fn ink_tints_follow_the_perceptual_curve() {
     let mid = tints.iter().find(|s| (s.0 - 0.5).abs() < 1e-6).expect("the midpoint");
     assert!((mid.1 - 0.4).abs() > 0.01, "not halfway in tint: {mid:?}");
     // A white ink's tints all have paper white's lightness: no tints by lightness.
-    assert_eq!(g.ink_tints(&Color::WHITE), None);
+    assert_eq!(g.ink_tints(&Color::WHITE, &[]), None);
     // More stops on the curve than MAX_INK_TINTS: no tints.
     let n = MAX_INK_TINTS + 1;
     g.stops = (0..n).map(|i| GradientStop::new(i as f32 / (n - 1) as f32, if i % 2 == 0 { ink } else { Color::WHITE })).collect();
-    assert_eq!(g.ink_tints(&ink), None);
+    assert_eq!(g.ink_tints(&ink, &[]), None);
     assert!(!g.fits_ink_tints());
 }
 
@@ -522,4 +584,23 @@ fn ink_mixes_follow_the_perceptual_curve() {
     let n = MAX_INK_TINTS + 1;
     g.stops = (0..n).map(|i| GradientStop::new(i as f32 / (n - 1) as f32, if i % 2 == 0 { magenta } else { Color::WHITE })).collect();
     assert_eq!(g.ink_mixes(), None);
+}
+
+/// From red to blue the display RGB mix darkens past blue's lightness and comes back, so a
+/// weight found by lightness near the blue stop would be a red-side one and the inks would jump
+/// there. The weights are the mix positions instead, and reach the blue stop's inks steadily.
+#[test]
+fn ink_mixes_use_the_mix_position_when_the_lightness_turns_back() {
+    let (red, blue) = (Color::rgb(1.0, 0.0, 0.0), Color::rgb(0.0, 0.0, 1.0));
+    let mut g = Gradient::new(GradientKind::Linear, vec![GradientStop::new(0.0, red), GradientStop::new(1.0, blue)]);
+    g.method = GradientMethod::Perceptual;
+    let mixes = g.ink_mixes().expect("a Perceptual gradient's curve");
+    assert_eq!(mixes[mixes.len() - 1], (1.0, 1, 0.0, 1.0), "the blue stop");
+    let between: Vec<_> = mixes.iter().filter(|m| m.1 == 0 && m.0 > 0.0).collect();
+    assert!(!between.is_empty(), "stops on the curve between red and blue: {mixes:?}");
+    // With the midpoint at ½, a stop's offset on the curve is its mix position.
+    for (t, _, w, _) in &between {
+        assert!((w - t).abs() < 1e-6, "at {t}: weight {w}");
+    }
+    assert!(mixes.windows(2).filter(|p| p[1].1 == 0).all(|p| p[0].2 <= p[1].2), "the weights rise: {mixes:?}");
 }

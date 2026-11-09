@@ -103,9 +103,10 @@ impl Strip {
         let b = bounds(app, &mut d);
         let pos = place(app, ctx, id, b);
         // A click anywhere else keeps the result, and the rest of the app doesn't take it.
+        // Not focusable (`Sense::click()` is): Tab goes through the strip's controls, not the backdrop.
         let dim = modal::backdrop();
         let outside =
-            egui::Area::new(dim.id).order(dim.order).fixed_pos(Pos2::ZERO).show(ctx, |ui| ui.allocate_rect(ctx.content_rect(), Sense::click())).inner;
+            egui::Area::new(dim.id).order(dim.order).fixed_pos(Pos2::ZERO).show(ctx, |ui| ui.allocate_rect(ctx.content_rect(), Sense::CLICK)).inner;
         let mut action: Option<Button> = None;
         egui::Area::new(id).order(Order::Foreground).fixed_pos(pos).show(ctx, |ui| {
             egui::Frame::NONE

@@ -33,6 +33,104 @@ pub(super) fn blends(xml: &roxmltree::Document, markers: &str) -> HashMap<String
         .collect()
 }
 
+/// A `<filter>` element as written ([`sources`]): its XML, its primitives' element names and its
+/// place among the filters in document order, and whether it looks different outside the document
+/// ([`vectorcraft_effects::svg_filter::depends_on_styles`]). Its check and its primitives as usvg
+/// reads them are worked out once, when first asked for.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct Source {
+    xml: String,
+    primitives: Vec<String>,
+    order: usize,
+    styled: bool,
+    name: std::cell::OnceCell<Option<String>>,
+    forms: std::cell::OnceCell<Option<Vec<String>>>,
+}
+
+impl Source {
+    /// The filter's name when [`vectorcraft_effects::svg_filter::check`] takes it.
+    fn name(&self) -> Option<&String> {
+        self.name.get_or_init(|| vectorcraft_effects::svg_filter::check(&self.xml).ok()).as_ref()
+    }
+
+    /// Its primitives as usvg reads them ([`vectorcraft_effects::svg_filter::primitive_forms`]).
+    fn forms(&self) -> Option<&Vec<String>> {
+        self.forms.get_or_init(|| vectorcraft_effects::svg_filter::primitive_forms(&self.xml)).as_ref()
+    }
+}
+
+/// Each `<filter>` element with an id, as written, by id, with the document's style sheets read
+/// once for all of them. A source is checked and read by usvg only when art uses it, once.
+/// `markers` is the text with its data URLs left out ([`super::depth::prescan`]).
+pub(super) fn sources(xml: &roxmltree::Document, markers: &str) -> HashMap<String, Source> {
+    if !markers.contains("<filter") && !markers.contains(":filter") {
+        return HashMap::new();
+    }
+    let text = xml.input_text();
+    let styles = vectorcraft_effects::svg_filter::Styles::of(xml);
+    xml.descendants()
+        .filter(|n| n.has_tag_name((super::SVG_NS, "filter")))
+        .enumerate()
+        .filter_map(|(order, n)| {
+            let id = n.attribute("id")?.to_string();
+            let primitives = n.children().filter(roxmltree::Node::is_element).map(|p| p.tag_name().name().to_string()).collect();
+            let xml = vectorcraft_effects::svg_filter::element_xml(n, text)?;
+            let styled = vectorcraft_effects::svg_filter::depends_on_styles(n, &styles);
+            Some((id, Source { xml, primitives, order, styled, ..Default::default() }))
+        })
+        .collect()
+}
+
+/// The element name of primitive `k` (`feGaussianBlur`).
+fn element_name(k: &Kind) -> String {
+    let debug = format!("{k:?}");
+    format!("fe{}", debug.split(|c: char| !c.is_ascii_alphanumeric()).next().unwrap_or_default())
+}
+
+/// The source of `filter` in `sources`: by its id, else (usvg gives each further element that uses
+/// a filter a copy with an id of its own) the only source with the same primitives, compared by
+/// element name and then as usvg reads them. Sources that differ only in their ids draw alike: the
+/// first of them in document order is taken. usvg's tree doesn't say which `<filter>` an element
+/// named, so other sources with the same primitives leave the filter without a source.
+fn source_of<'a>(filter: &Filter, sources: &'a HashMap<String, Source>) -> Option<&'a Source> {
+    use vectorcraft_effects::svg_filter::with_id;
+    if let Some(s) = sources.get(filter.id()) {
+        return Some(s);
+    }
+    let names: Vec<String> = filter.primitives().iter().map(|p| element_name(p.kind())).collect();
+    let same: Vec<&Source> = sources.values().filter(|s| s.primitives == names).collect();
+    if let [one] = same.as_slice() {
+        return Some(one);
+    }
+    let forms: Vec<String> = filter.primitives().iter().map(|p| format!("{:?}", p.kind())).collect();
+    let read_alike: Vec<&Source> = same.into_iter().filter(|s| s.forms() == Some(&forms)).collect();
+    let first = read_alike.iter().copied().min_by_key(|s| s.order)?;
+    let unnamed = |s: &Source| with_id(&s.xml, "");
+    read_alike.iter().all(|s| unnamed(s) == unnamed(first)).then_some(first)
+}
+
+/// `filters` (in the order they apply) as Effect › SVG Filters effects, each holding its filter's
+/// XML from `sources` ([`sources`]), in user space mapped to the document by `ts`. `None` when one
+/// isn't there, looks different outside the document, or isn't a filter the effect draws
+/// ([`vectorcraft_effects::svg_filter::check`]), or
+/// when `ts` turns or skews the user space or scales it past what the effect measures (0.001 to
+/// 1000 points to a unit). Where `ts` moves the user space is the effect's `origin`.
+pub(super) fn kept(filters: &[Arc<Filter>], ts: Affine, sources: &HashMap<String, Source>) -> Option<Vec<Effect>> {
+    let [a, b, c, d, e, f] = ts.as_coeffs();
+    if b != 0.0 || c != 0.0 || !(0.001..=1000.0).contains(&a) || (a - d).abs() > 1e-9 * a.abs().max(1.0) || !e.is_finite() || !f.is_finite() {
+        return None;
+    }
+    filters
+        .iter()
+        .map(|filter| {
+            // A filter styled by the document is left out rather than drawn differently.
+            let source = source_of(filter, sources).filter(|s| !s.styled)?;
+            let params = json!({ "name": source.name()?, "xml": source.xml, "scale": a, "origin": [e, f] });
+            Some(Effect { id: vectorcraft_effects::SVG_FILTER.into(), params, visible: true })
+        })
+        .collect()
+}
+
 /// The object's alpha, blurred (σ), moved and maybe inverted.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 struct Shape {
@@ -347,7 +445,9 @@ pub(super) fn effects(filters: &[Arc<Filter>], ts: Affine, blends: &HashMap<Stri
         let paint = |c: Color, o: f32| (c.to_hex(), num(o as f64 * 100.0));
         let (id, params) = match eval(f, k)? {
             V::Graphic => continue,
-            V::Blurred(sd, _) => ("blur.gaussian", json!({ "radius": blur(sd) })),
+            // SVG blurs in linear light unless the filter asks for sRGB (`color-interpolation-filters`).
+            V::Blurred(sd, true) => ("blur.gaussian", json!({ "radius": blur(sd), "linear": true })),
+            V::Blurred(sd, false) => ("blur.gaussian", json!({ "radius": blur(sd) })),
             V::Feathered(sd) => ("stylize.feather", json!({ "radius": blur(sd) })),
             V::Stack(layers) => match layers.as_slice() {
                 [V::Paint { shape, color, opacity, clipped: false }, V::Graphic] if !shape.inverted => {

@@ -1,22 +1,26 @@
 //! Swatch libraries (Window → Swatch Libraries, the Swatches panel's library button): read-only
 //! sets of swatches the library panel shows. The built-in libraries are computed in
-//! [`vectorcraft_color::libraries`]; User Defined ones are the library files in the user library
-//! folder ([`Libraries`]), and Other Library… loads more from files. `swatch.library.add` copies
-//! swatches into the document; `swatch.library.save` writes the document's ([`palette_io`]).
+//! [`vectorcraft_color::libraries`] and the pattern libraries in [`super::patternlib`]; User
+//! Defined ones are the library files in the user library folder ([`Libraries`]), and Other
+//! Library… loads more from files. `swatch.library.add` copies swatches (and a pattern swatch's
+//! pattern) into the document; `swatch.library.save` writes the document's ([`palette_io`]).
 //! `swatch.library.copyToUser` copies a loaded library into the user library folder.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_color::libraries::{BuiltinLibrary, GRADIENT_LIBRARIES, SWATCH_LIBRARIES, builtin_library};
 use vectorcraft_color::palette_io::{self, PaletteFormat};
 use vectorcraft_color::recolor::Palette;
+use vectorcraft_color::swatch::REGISTRATION;
 use vectorcraft_color::{Paint, Swatch, SwatchGroup, SwatchLibrary, default_swatches};
+use vectorcraft_doc::pattern::pattern_paint;
 
 use super::fileio::{create_dir, extension, read_file, write_file, write_new_file};
 use super::menucmds::squash;
 use super::package::free_name;
+use super::patternlib;
 use super::swatch::{map_default_paints, map_swatch_links, str_list, swatch_json};
 use super::{Color, CommandSpec, Result, Session, always, bad, cmd, has_doc, switch_or, text_param};
 
@@ -27,7 +31,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Swatch Libraries",
             [],
             None,
-            "{} → {libraries: [{id, name, category: \"builtIn\"|\"gradients\"|\"user\" (User Defined: the library files in the user library folder, rescanned now)|\"loaded\" (swatch.library.load), count, path?}], userFolder} every library the library panel opens, in menu order",
+            "{} → {libraries: [{id, name, category: \"builtIn\"|\"gradients\"|\"patterns\"|\"user\" (User Defined: the library files in the user library folder, rescanned now)|\"loaded\" (swatch.library.load), count, path?}], userFolder} every library the library panel opens, in menu order",
             always,
             list
         ),
@@ -36,7 +40,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Swatch Library",
             [],
             None,
-            "{library: id or name} → {id, name, category, swatches: [{name, kind, group, global, spot, color?, hex?, gradient?}] (as swatch.list), groups: [{name, swatches: [names]}]}",
+            "{library: id or name} → {id, name, category, swatches: [{name, kind, group, global, spot, color?, hex?, gradient?, pattern?}] (as swatch.list), groups: [{name, swatches: [names]}]}",
             always,
             get
         ),
@@ -45,7 +49,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add to Swatches",
             ["Window", "Swatch Libraries"],
             None,
-            "{library: id or name, names?: [swatch or colour group names in the library] (default: all of it; a group comes as a colour group, a single swatch ungrouped), apply?: \"fill\"|\"stroke\" (also apply the first one to the selection and the defaults, as paint.setFill / paint.setStroke), focus?: true (with apply: false keeps the active proxy)} copy library swatches into the document as one undo step. A swatch the document already has (same name and paint) isn't added again; a name taken by another swatch gets a number (\"Clay 1 2\") → {library, added: [names in the document], existing: [names already there], applied?: name}",
+            "{library: id or name, names?: [swatch or colour group names in the library] (default: all of it; a group comes as a colour group, a single swatch ungrouped), apply?: \"fill\"|\"stroke\" (also apply the first one to the selection and the defaults, as paint.setFill / paint.setStroke), focus?: true (with apply: false keeps the active proxy)} copy library swatches into the document as one undo step. A swatch the document already has (same name and paint) isn't added again; a name taken by another swatch gets a number (\"Clay 1 2\"). A pattern swatch brings its pattern, as pasting art painted with it does: the same pattern the document has is used, and a name another pattern or swatch has gets a number → {library, added: [names in the document], existing: [names already there], applied?: name}",
             has_doc,
             add
         ),
@@ -100,6 +104,19 @@ pub struct Libraries<L = SwatchLibrary> {
     /// Loaded libraries copied into the user library folder ([`Libraries::copy_to_user`]): the
     /// loaded id and the User Defined id [`Libraries::get`] finds for it.
     copied: Vec<(String, String)>,
+    /// The name each User Defined file was saved under ([`Libraries::write`]), lower case id first,
+    /// with a hash of the bytes written. A format that keeps no title (`.ase`) reads its name from
+    /// the file name instead. [`Libraries::rescan`] drops an entry whose file no longer holds those
+    /// bytes, and keeps one whose file is missing so a file put back can be checked.
+    saved_as: HashMap<String, SavedAs>,
+}
+
+/// A User Defined file this session wrote: the library's name, and [`vectorcraft_doc::links::hash_bytes`]
+/// of what was written, so a file replaced since then is no longer that library's.
+#[derive(Clone, Debug)]
+struct SavedAs {
+    name: String,
+    hash: String,
 }
 
 #[derive(Clone, Debug)]
@@ -148,20 +165,30 @@ impl<L: LibraryFile> Libraries<L> {
     /// Set the user library folder and list its libraries.
     pub fn set_user_dir(&mut self, dir: Option<String>) {
         self.user_dir = dir;
+        self.saved_as.clear();
         self.rescan();
     }
 
     /// Re-read the library files of the user library folder (unreadable ones are skipped). The
     /// folder is the app's own: automation roots don't apply to it ([`crate::file_access`]). Each
     /// file is read inside [`crate::guard::catch_panic`], and a file whose reading panics is
-    /// skipped too.
+    /// skipped too. A file this session saved, whose bytes are no longer the ones written, is
+    /// forgotten ([`Libraries::write`]); a missing file is left remembered until it is back.
     pub fn rescan(&mut self) {
         self.extra.retain(|e| e.info.category != "user");
         let Some(dir) = self.user_dir.clone() else { return };
         for path in library_files(&dir, L::EXTS) {
             let file = file_name(&path);
-            let read = || crate::file_access::unconfined(|| read_file(&path)).ok().and_then(|b| L::read(&b, stem(&file)).ok());
-            let Some(lib) = crate::guard::catch_panic(read).ok().flatten() else { continue };
+            let read = || crate::file_access::unconfined(|| read_file(&path)).ok();
+            let Some(bytes) = crate::guard::catch_panic(read).ok().flatten() else { continue };
+            let id = format!("user/{file}").to_lowercase();
+            // Compared before parsing, so a file that no longer reads as a library is forgotten too.
+            let hash = vectorcraft_doc::links::hash_bytes(&bytes);
+            if self.saved_as.get(&id).is_some_and(|saved| saved.hash != hash) {
+                self.saved_as.remove(&id);
+            }
+            let parsed = || L::read(&bytes, stem(&file)).ok();
+            let Some(lib) = crate::guard::catch_panic(parsed).ok().flatten() else { continue };
             let info = LibraryInfo { id: format!("user/{file}"), name: library_tab_name(&file, lib.name()), category: "user" };
             self.extra.push(Extra { info, path: Some(path), lib: Arc::new(lib) });
         }
@@ -207,10 +234,52 @@ impl<L: LibraryFile> Libraries<L> {
                 .user_dir()
                 .ok_or_else(|| bad(cmd, "no user library folder here (save with a path, or without one to get the data)"))?
                 .to_string();
-            let file = library_file_name(name, ext);
+            let mut file = library_file_name(name, ext);
+            // `COM¹` is saved as `COM¹-`, which can be another library's own name, and a library put
+            // under a numbered name holds a file another name can ask for: such a file is kept.
+            // `saved_as` is that memory for this run, and only while the file still holds what was
+            // written. A file that could not be read has no name to trust: one a device name could
+            // make is kept too. Any other unreadable file is replaced, as it was before.
+            self.rescan();
+            let device = crate::file_access::is_device_name;
+            let id = format!("user/{file}").to_lowercase();
+            let fallback = |other: &str| library_file_name(other, ext).to_lowercase() != file.to_lowercase();
+            // A format with no title reads its name from the file name, so a file a device name could
+            // have made has no known owner until it is saved here.
+            let untitled = L::read(bytes, "\0").is_ok_and(|lib| lib.name() == "\0");
+            let owner = |e: &Extra<L>| match self.saved_as.get(&e.info.id.to_lowercase()) {
+                Some(saved) => Some(saved.name.clone()),
+                None if untitled && device_file_name(e.lib.name()) => None,
+                None => Some(e.lib.name().to_string()),
+            };
+            let file_key = file.to_lowercase();
+            let on_disk = library_files(&dir, L::EXTS).iter().any(|p| file_name(p).to_lowercase() == file_key);
+            let listed = self.extra.iter().any(|e| e.info.category == "user" && e.info.id.to_lowercase() == id);
+            let unread = on_disk && !listed && (device(name) || device_file_name(stem(&file)));
+            let held = unread
+                || self.extra.iter().any(|e| {
+                    e.info.id.to_lowercase() == id
+                        && owner(e).is_none_or(|other| other != name && (device(name) || device(&other) || fallback(&other)))
+                });
+            if held {
+                // Saved again, it goes back to the file it was given the first time.
+                let own = self
+                    .extra
+                    .iter()
+                    .find(|e| e.info.category == "user" && owner(e).as_deref() == Some(name) && extension(&e.info.id) == extension(&file));
+                file = match own.and_then(|e| e.info.id.strip_prefix("user/")) {
+                    Some(own) => own.to_string(),
+                    None => {
+                        let mut taken: HashSet<String> = library_files(&dir, L::EXTS).iter().map(|p| file_name(p).to_lowercase()).collect();
+                        free_name(&file, &mut taken)
+                    }
+                };
+            }
             let path = std::path::Path::new(&dir).join(&file).to_string_lossy().to_string();
             // The app's own folder, under a name made safe: no root applies.
             crate::file_access::unconfined(|| create_dir(&dir).and_then(|()| write_file(&path, bytes)))?;
+            self.saved_as
+                .insert(format!("user/{file}").to_lowercase(), SavedAs { name: name.to_string(), hash: vectorcraft_doc::links::hash_bytes(bytes) });
             self.rescan();
             out["path"] = json!(path);
             out["library"] = json!(format!("user/{file}"));
@@ -348,6 +417,13 @@ pub fn library_file_name(name: &str, ext: &str) -> String {
     }
 }
 
+/// Is `stem` a file name [`library_file_name`] gives a device name (`COM¹-`, `COM¹-.x`), or one of
+/// those with the number [`free_name`] adds (`COM¹- 2`)?
+fn device_file_name(stem: &str) -> bool {
+    let base = stem.rsplit_once(' ').filter(|(_, n)| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit())).map_or(stem, |(base, _)| base);
+    base.split('.').next().and_then(|first| first.strip_suffix('-')).is_some_and(crate::file_access::is_device_name)
+}
+
 /// The library files with extensions `exts` in folder `dir`, sorted by name.
 #[cfg(not(target_arch = "wasm32"))]
 fn library_files(dir: &str, exts: &[&str]) -> Vec<String> {
@@ -380,7 +456,7 @@ pub(crate) fn stem(name: &str) -> &str {
 pub struct LibraryInfo {
     pub id: String,
     pub name: String,
-    /// "builtIn", "gradients", "user" or "loaded".
+    /// "builtIn", "gradients", "patterns", "user" or "loaded".
     pub category: &'static str,
 }
 
@@ -393,9 +469,9 @@ fn builtin_info((category, b): (&'static str, &BuiltinLibrary)) -> LibraryInfo {
     LibraryInfo { id: b.id.into(), name: b.name.into(), category }
 }
 
-/// Every library, in menu order: built-in, gradients, User Defined, loaded.
+/// Every library, in menu order: built-in, gradients, patterns, User Defined, loaded.
 pub fn libraries(s: &Session) -> Vec<LibraryInfo> {
-    builtins().map(builtin_info).chain(s.swatch_libraries.infos().cloned()).collect()
+    builtins().map(builtin_info).chain(patternlib::infos()).chain(s.swatch_libraries.infos().cloned()).collect()
 }
 
 /// Library `key` (an id, or a name in any case) with its info.
@@ -405,6 +481,9 @@ pub fn library(s: &Session, key: &str) -> Option<(LibraryInfo, Arc<SwatchLibrary
     }
     if let Some(b) = builtins().find(|(_, b)| b.id == key) {
         return Some((builtin_info(b), builtin_library(key)?));
+    }
+    if let Some(found) = patternlib::library(key) {
+        return Some(found);
     }
     let id = libraries(s).into_iter().find(|l| l.name.eq_ignore_ascii_case(key))?.id;
     library(s, &id)
@@ -581,8 +660,9 @@ fn copy_to_user(s: &mut Session, p: &Value) -> Result<Value> {
 /// ungrouped): a group's name brings the group, a swatch's name the swatch alone; no names, all.
 fn picked<'a>(lib: &'a SwatchLibrary, names: &[String], cmd: &str) -> Result<Vec<(Option<&'a str>, &'a Swatch)>> {
     let mut out: Vec<(Option<&str>, &Swatch)> = vec![];
+    let mut seen: HashSet<&str> = HashSet::new();
     let mut push = |g: Option<&'a str>, w: &'a Swatch| {
-        if !out.iter().any(|(_, x)| x.name == w.name) {
+        if seen.insert(w.name.as_str()) {
             out.push((g, w));
         }
     };
@@ -600,6 +680,23 @@ fn picked<'a>(lib: &'a SwatchLibrary, names: &[String], cmd: &str) -> Result<Vec
     Ok(out)
 }
 
+/// Every name a swatch or colour group of `d` uses (they share one namespace, with the registration swatch).
+fn taken_names(d: &vectorcraft_doc::Document) -> HashSet<String> {
+    let names = d.swatches_iter().map(|w| &w.name).chain(d.swatch_groups.iter().map(|g| &g.name));
+    names.cloned().chain([REGISTRATION.to_string()]).collect()
+}
+
+/// [`vectorcraft_doc::Document::free_swatch_name`] against `taken`, which takes the name returned.
+fn free_in(taken: &mut HashSet<String>, base: &str) -> String {
+    let name = if taken.contains(base) {
+        (2..).map(|i| format!("{base} {i}")).find(|n| !taken.contains(n)).unwrap_or_else(|| base.to_string())
+    } else {
+        base.to_string()
+    };
+    taken.insert(name.clone());
+    name
+}
+
 fn add(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "swatch.library.add";
     let (info, lib) = library_param(s, p, C)?;
@@ -611,10 +708,35 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let focus = switch_or(p, "focus", true, C)?;
     let picked = picked(&lib, &names_param(p, C)?, C)?;
-    // Swatches the document already has (same name and paint) are reused, not added again.
+    // Swatches the document already has (same name and paint; for a pattern swatch, a swatch of the
+    // same pattern) are reused, not added again.
+    let patterns = patternlib::library_doc(&info.id);
     let d = &s.doc()?.doc;
-    let (existing, fresh): (Vec<_>, Vec<_>) = picked.iter().partition(|(_, w)| d.swatch(&w.name).is_some_and(|x| x.paint == w.paint));
-    let existing: Vec<String> = existing.iter().map(|(_, w)| w.name.clone()).collect();
+    // The document's swatches by name (the first of a name wins, as in `Document::swatch`), looked
+    // up once so that a large palette takes linear time.
+    let mut by_name: std::collections::HashMap<&str, &Swatch> = std::collections::HashMap::new();
+    for w in d.swatches_iter() {
+        by_name.entry(w.name.as_str()).or_insert(w);
+    }
+    let there = |w: &Swatch| match (&w.paint, &patterns) {
+        (Paint::Pattern { pattern, .. }, Some(src)) => {
+            patternlib::existing_pattern(d, src, pattern).and_then(|target| patternlib::pattern_swatch(d, &target))
+        }
+        _ => match by_name.get(w.name.as_str()) {
+            Some(x) => x.paint == w.paint,
+            None => w.name == REGISTRATION && d.swatch(&w.name).is_some_and(|x| x.paint == w.paint),
+        }
+        .then(|| w.name.clone()),
+    };
+    // Library name → the name of the document's swatch.
+    let mut existing: Vec<(String, String)> = vec![];
+    let mut fresh = vec![];
+    for &(group, w) in &picked {
+        match there(w) {
+            Some(name) => existing.push((w.name.clone(), name)),
+            None => fresh.push((group, w)),
+        }
+    }
     let undo_before = s.doc()?.history.undo.len();
     // Library name → the name it got in the document.
     let added: Vec<(String, String)> = if fresh.is_empty() {
@@ -626,8 +748,25 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
             // already had, or one made here.
             let before = d.swatch_groups.len();
             let mut placed: Vec<(&str, usize)> = vec![];
+            let mut taken = taken_names(d);
             for (group, w) in fresh {
-                let name = d.free_swatch_name(&w.name);
+                if let (Paint::Pattern { pattern, .. }, Some(src)) = (&w.paint, &patterns) {
+                    // The pattern comes with its swatch; a pattern the document has without one
+                    // gets one.
+                    let target = patternlib::import(d, src, pattern);
+                    let name = match patternlib::pattern_swatch(d, &target) {
+                        Some(name) => name,
+                        None => {
+                            let name = d.free_swatch_name(&target);
+                            d.swatches.push(Swatch { name: name.clone(), paint: pattern_paint(&target), global: false, spot: false });
+                            name
+                        }
+                    };
+                    out.push((w.name.clone(), name));
+                    taken = taken_names(d);
+                    continue;
+                }
+                let name = free_in(&mut taken, &w.name);
                 let sw = Swatch { name: name.clone(), ..(*w).clone() };
                 match group {
                     Some(g) => {
@@ -635,7 +774,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
                         let i = match found.or_else(|| d.swatch_groups.iter().take(before).position(|x| x.name == *g)) {
                             Some(i) => i,
                             None => {
-                                let name = d.free_swatch_name(g);
+                                let name = free_in(&mut taken, g);
                                 d.swatch_groups.push(SwatchGroup { name, swatches: vec![] });
                                 d.swatch_groups.len() - 1
                             }
@@ -652,9 +791,10 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
             Ok(out)
         })?
     };
-    let mut out = json!({"library": info.id, "added": added.iter().map(|(_, n)| n).collect::<Vec<_>>(), "existing": existing});
+    let names = |list: &[(String, String)]| list.iter().map(|(_, n)| n.clone()).collect::<Vec<_>>();
+    let mut out = json!({"library": info.id, "added": names(&added), "existing": names(&existing)});
     if let (Some(cmd), Some((_, first))) = (apply, picked.first()) {
-        let name = added.iter().find(|(l, _)| *l == first.name).map_or(first.name.clone(), |(_, n)| n.clone());
+        let name = added.iter().chain(&existing).find(|(l, _)| *l == first.name).map_or(first.name.clone(), |(_, n)| n.clone());
         s.execute(cmd, &json!({"swatch": name, "focus": focus}))?;
         // Adding and applying undo together.
         squash(s, undo_before, "Add to Swatches");

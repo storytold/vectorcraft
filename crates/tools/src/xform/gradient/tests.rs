@@ -268,6 +268,31 @@ fn a_click_inside_the_art_applies_the_gradient_from_there() {
     assert!(t.pointer(&cx, &ev(PointerKind::Up, Point::new(400.0, 400.0))).is_empty());
 }
 
+/// With an object of a dynamic symbol instance selected with Direct Selection, a click on the
+/// instance sends the gradient without `ids`, which the engine refuses.
+#[test]
+fn a_click_on_a_dynamic_instance_with_a_picked_object_names_no_object() {
+    use std::sync::Arc;
+    use vectorcraft_doc::{Appearance, Node, NodeId, NodeKind, Symbol};
+    let square =
+        Node::path(NodeId(0), vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
+    let art = Node::group(NodeId(0), vec![Arc::new(square)]);
+    let (mut d, _) = doc_with_rect();
+    d.symbols.push(Symbol { dynamic: true, name: "One".into(), art: Arc::new(art) });
+    let (l, id) = (d.layers[0].id, d.alloc_id());
+    d.insert(Some(l), usize::MAX, Node::new(id, NodeKind::SymbolInstance { symbol: "One".into(), xf: Affine::translate((300.0, 300.0)) })).unwrap();
+    let mut s = Selection::default();
+    s.set_symbol_part(id, vec![0]);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = GradientTool::default();
+    t.pointer(&cx, &ev(PointerKind::Down, Point::new(305.0, 305.0)));
+    let a = t.pointer(&cx, &ev(PointerKind::Up, Point::new(305.0, 305.0)));
+    let (c, v) = exec(&a[0]);
+    assert_eq!(c, "paint.setGradientGeom");
+    assert!(v.get("ids").is_none() && v.get("item").is_none(), "{v}");
+}
+
 #[test]
 fn double_click_on_a_stop_opens_its_popover() {
     let (d, s) = graded(two());

@@ -277,3 +277,17 @@ fn invalid_symbol_name_alias_does_not_break_xml() {
         }
     }
 }
+
+#[test]
+fn link_url_with_invalid_xml_characters_does_not_break_export() {
+    let mut doc = import(&svg(r#"<rect id="shape" width="20" height="20"/>"#)).unwrap();
+    let id = named(&doc, "shape").id;
+    doc.node_mut(id).unwrap().edit_attrs(|a| a.url = "http://a/\u{1}b\u{ffff}".into());
+    for styling in styles() {
+        let out = export_full(&doc, &ExportOptions { styling, ..Default::default() }, None);
+        let parsed = xml(&out.svg);
+        let a = parsed.descendants().find(|n| n.has_tag_name("a")).unwrap();
+        assert_eq!(a.attribute(("http://www.w3.org/1999/xlink", "href")), Some("http://a/b"));
+        assert!(out.warnings.iter().any(|w| w.contains("invalid XML characters")));
+    }
+}
