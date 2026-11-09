@@ -110,6 +110,7 @@ impl VectorcraftApp {
             deferred_control: None,
             synthetic_dropped_before: 0,
             pending_screenshots: vec![],
+            pointer_replies: vec![],
             queued_screenshots: vec![],
             screenshot_token: 0,
             screenshot_reserved: 0,
@@ -167,6 +168,7 @@ impl VectorcraftApp {
             scrub_scope: None,
             automation_roots: None,
             synthetic_frame: false,
+            pending_plugin_install: None,
             pen_end: Default::default(),
             host_iteration: 0,
             #[cfg(test)]
@@ -337,8 +339,9 @@ impl VectorcraftApp {
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
         }
         // The window's close button (or the system quitting the app) asks about unsaved documents,
-        // once the saves running in the background are done. Not while a file dialog's sheet is on
-        // the window: what asked for it runs again when it answers.
+        // once the saves running in the background are done and a Shape Builder merge being
+        // computed is applied. Not while a file dialog's sheet is on the window: what asked for it
+        // runs again when it answers.
         if ctx.input(|i| i.viewport().close_requested()) {
             // This native viewport is going away: release its IME context. No request is
             // allocated here: the close prompt or file sheet publishes no custom descriptor, so a
@@ -346,7 +349,7 @@ impl VectorcraftApp {
             // fresh generation on the next pass (never inherits a composition across the prompt).
             crate::ime::close_viewport(self, ctx);
             self.ime_context.end_viewport(ctx.viewport_id());
-            background::wait_all(self);
+            unsaved::finish_pending(self);
             if self.file_sheet_open() {
                 ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
                 self.status(picks::busy());
@@ -374,6 +377,7 @@ impl VectorcraftApp {
         crate::chrome::sync_window_title(self, ctx);
         crate::chrome::sync_fullscreen(self, ctx);
         self.drain_control(ctx);
+        self.answer_pointer_replies(ctx);
         // An egui `PasteImage` with a rich system clipboard: run the paste command now, once. It
         // goes through `run`, whose `edit.paste` branch calls `adopt_system_clipboard` (which clears
         // the request) to read the formats and then pastes them. A text paste in the same UI pass
@@ -558,7 +562,8 @@ impl VectorcraftApp {
             tools_float::clear_canvas_dock_zone(&ctx);
         }
         // Beside the canvas, docked Tools draws inside the canvas panel (`toolbar::show_beside_canvas`).
-        if self.ui.toolbar && self.ui.screen_mode < 3 && (!self.ui.tools_beside_canvas || self.ui.toolbar_pos.is_some()) {
+        // So does Tools docked on the right, left of the panels.
+        if self.ui.toolbar && self.ui.screen_mode < 3 && ((!self.ui.tools_beside_canvas && !self.ui.toolbar_right) || self.ui.toolbar_pos.is_some()) {
             toolbar::show(self, ui);
         } else if !self.ui.toolbar && self.ui.screen_mode < 3 && self.ui.tab_hid.is_none() {
             // Window › Tools hides the Tools panel alone; Tab hides the toolbars made with New

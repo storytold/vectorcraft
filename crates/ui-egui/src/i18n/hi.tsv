@@ -867,6 +867,11 @@ antiAlias	Sharp	शार्प
 	Color Table (4 colors)	रंग तालिका (4 रंग)
 	Color Theme	रंग थीम
 	Color Themes	रंग थीम्स
+	Color Wheel	कलर व्हील
+	Hue ring	ह्यू रिंग
+	Saturation and brightness	सैचुरेशन और ब्राइटनेस
+	Color field	कलर फ़ील्ड
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	रंग का प्रकार:
 	Color wheel	कलर व्हील
 	Color:	रंग:
@@ -1379,7 +1384,7 @@ antiAlias	Sharp	शार्प
 	Drag to float as a toolbar	एक टूलबार के रूप में तैरने के लिए खींचें
 	Drag to float the toolbar	टूलबार को तैरने के लिए खींचें
 	Drag to move	आगे बढ़ने के लिए
-	Drag to the window's left edge to dock	खिड़की के बाएं किनारे पर डॉक करने के लिए खींचें
+	Drag to the window's left or right edge to dock	खिड़की के बाएं या दाएं किनारे पर डॉक करने के लिए खींचें
 	Drag values or labels. Double-click a value to type.	मूल्यों या लेबल खींचें। टाइप करने के लिए एक मान को डबल क्लिक करें।
 	Draw	ड्रा
 	Draw Behind	पीछे खींचना
@@ -5249,7 +5254,7 @@ antiAlias	Sharp	शार्प
 	Zoom with Mouse Wheel	माउस व्हील के साथ ज़ूम
 @id	file.close	बंद करें
 @id	pathfinder.add	मिलाएँ
-@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	“{_1}” अधिक संसाधन माँगता है (हर रन में {minutes} मिनट और सामान्य से {times} गुना निर्देश): उपयोगकर्ता की सहमति मिलने पर इसे `allowHeavy: true` से इंस्टॉल करें
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}” अधिक संसाधन माँगता है (हर रन में {minutes} मिनट और सामान्य से {times} गुना निर्देश): इसे डेस्कटॉप ऐप में किसी व्यक्ति को स्वीकृत करना होगा, या --allow-plugin-grants से शुरू किए गए सत्र में `allowHeavy: true` दें
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" एक रंग नहीं है: इसे #rrggbb के रूप में लिखें
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	"{name}" स्थापित करें, जो ये अनुमतियां मांगता है?
@@ -5281,9 +5286,18 @@ antiAlias	Sharp	शार्प
 @msg	at most {MAX_PERMISSIONS} `permissions`	अधिकतम {MAX_PERMISSIONS} `permissions`
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	अनुमति `{shown}` `{_1}` प्रकार के प्लग-इन पर लागू नहीं होती
 @msg	permission `{shown}` is listed twice	अनुमति `{shown}` दो बार सूचीबद्ध है
+@msg	only a filter declares `inputs`	केवल फ़िल्टर `inputs` घोषित करता है
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` में अज्ञात ऑब्जेक्ट प्रकार `{shown}` है: type, image या symbolInstance का उपयोग करें
+@msg	`inputs` lists `{shown}` twice	`inputs` में `{shown}` दो बार सूचीबद्ध है
+@msg	`inputs` needs `api` 2 or later	`inputs` के लिए `api` 2 या बाद का स्तर आवश्यक है
+@msg	`inputs` needs the permission `doc.read`	`inputs` के लिए अनुमति `doc.read` आवश्यक है
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	मेमोरी बजट (ऑब्जेक्ट {_1} को इनपुट के {size} बाइट चाहिए, {left} शेष हैं)
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	ऑब्जेक्ट बजट ({MAX_OBJECTS} से अधिक केवल-पठन ऑब्जेक्ट)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	अनुमति `{shown}` बाद के प्लग-इन API के लिए आरक्षित है; यह होस्ट इसे नहीं देता
 @msg	unknown permission `{shown}`	अज्ञात अनुमति `{shown}`
-@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}” अनुमतियां {asked} मांगता है: उपयोगकर्ता की सहमति मिलने पर इसे उन्हें सूचीबद्ध करने वाले `grant` के साथ इंस्टॉल करें
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	“{name}” अनुमतियां {asked} मांगता है: इन्हें डेस्कटॉप ऐप में किसी व्यक्ति को स्वीकृत करना होगा, या --allow-plugin-grants से शुरू किए गए सत्र में `grant` दें
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` और `allowHeavy` केवल --allow-plugin-grants से शुरू किए गए सत्र में प्रभावी होते हैं: डेस्कटॉप ऐप में प्लग-इन स्वीकृत करें
+@msg	Only the person at the keyboard can approve installing a plug-in	प्लग-इन इंस्टॉल करने की स्वीकृति केवल कीबोर्ड पर मौजूद व्यक्ति दे सकता है
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	“{name}” को `{p}` नहीं दी गई, जो उसके आउटपुट को चाहिए: कुछ नहीं बदला
 @msg	a heavy filter runs in the background, so it can't declare `commands`	भारी फ़िल्टर पृष्ठभूमि में चलता है, इसलिए वह `commands` घोषित नहीं कर सकता
 @msg	at most {MAX_COMMANDS} `commands`	अधिकतम {MAX_COMMANDS} `commands`
@@ -5526,7 +5540,7 @@ antiAlias	Sharp	शार्प
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` एक अंतर्निहित वर्कस्पेस है; एक और नाम चुनें
 @msg	`{name}` is a process colour: tints apply to global and spot colours	`{name}` एक प्रक्रिया रंग है: टिंट वैश्विक और स्पॉट रंगों पर लागू होते हैं
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` एक स्थिर सिंबल है: अपने सिंबल प्रकार को पहले गतिशील करने के लिए सेट करें
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	सिंबल इंस्टेंस में चुने गए पाथ, कंपाउंड पाथ या टाइप का केवल ठोस रंग वाला फ़िल और स्ट्रोक बदला जा सकता है
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	प्रतीक इंस्टेंस में चयनित पथ, संयोजित पथ या पाठ का केवल भराव, स्ट्रोक, अपारदर्शिता और ब्लेंड बदला जा सकता है
 @msg	`{name}` is a tint of `{base}`: edit `{base}` (a tint swatch only takes a new name)	`{name}` `{base}` का एक टिंट है: `{base}` संपादित करें (केवल एक टिंट swatch केवल एक नया नाम लेता है)
 @msg	`{name}` is a working space: choose another with edit.colorSettings first	`{name}` वर्किंग स्पेस है: पहले edit.colorSettings से दूसरा चुनें
 @msg	`{name}` is built in and stays	`{name}` बनाया गया है और रहता है
@@ -6986,7 +7000,7 @@ antiAlias	Sharp	शार्प
 @msg	warped text objects that came in as drawn art, not as editable type: {_1}	मोड़े गए टेक्स्ट ऑब्जेक्ट जो संपादन योग्य टेक्स्ट के बजाय कला के रूप में आए: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	उन ऑब्जेक्ट्स को जो फ़ाइल के स्वयं के पृष्ठ से अलग-अलग तरीके से आकर्षित होते हैं, उनकी कला के रूप में आया: {_1}
 @msg	objects were left out	ऑब्जेक्ट्स को छोड़ दिया गया था
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	कई भराव या स्ट्रोक, इफ़ेक्ट या ब्रश के साथ ऑब्जेक्टएं उनके ड्रॉइंग लुक ({_1}) के रूप में आईं: उनकी उपस्थिति अभी तक संपादन योग्य नहीं है
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	कई भराव या स्ट्रोक, परिवर्तनीय चौड़ाई वाले स्ट्रोक, इफ़ेक्ट या ब्रश के साथ ऑब्जेक्टएं उनके ड्रॉइंग लुक ({_1}) के रूप में आईं: उनकी उपस्थिति अभी तक संपादन योग्य नहीं है
 @msg	offset out of range	सीमा से बाहर ऑफसेट
 @msg	Offset Path: {e}	ऑफसेट पाथ: {e}
 @msg	Offset Path: select paths	ऑफसेट पाथ: सिलेक्शन पाथ
@@ -8062,6 +8076,9 @@ theme	Appearance	अपीयरेंस
 # Align to Pixel Grid
 	Align to Pixel Grid	पिक्सेल ग्रिड से संरेखित करें
 @msg	only paths and compound paths can be aligned to the pixel grid	केवल पाथ और कंपाउंड पाथ को पिक्सेल ग्रिड से संरेखित किया जा सकता है
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	नाम `{name}` UTF-8 नहीं है और इसे {label} के रूप में पढ़ा गया: यदि यह गलत दिखे, तो फ़ाइल को किसी अन्य legacyNameEncoding से खोलें
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	नाम `{name}` UTF-8 नहीं है, और इसके कुछ हिस्से {label} में भी मान्य नहीं हैं: फ़ाइल को किसी अन्य legacyNameEncoding से खोलें
+@msg	more names that aren't UTF-8 were read as {label} ({count})	UTF-8 में न होने वाले और नाम {label} के रूप में पढ़े गए ({count})
 	Start Lists From Typed Markers	टाइप किए गए चिह्नों से सूचियाँ शुरू करें
 	Marquee Selection	मार्की चयन
 	Touching	स्पर्श करते हुए
@@ -8083,3 +8100,4 @@ theme	Appearance	अपीयरेंस
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	फ़ाइल उन {MAX_INPUT_BYTES} बाइट्स से बड़ी है जो इंपोर्टर पढ़ता है
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	इंपोर्टर 1 से {MAX_EXTENSIONS} `extensions` घोषित करता है
 @msg	an importer always gets an import's budget: leave `budget` out	इंपोर्टर को हमेशा इंपोर्ट का बजट मिलता है: `budget` छोड़ दें
+@msg	side is left or right, not `{s}`	side left या right होना चाहिए, `{s}` नहीं

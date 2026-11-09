@@ -72,7 +72,7 @@ fn save_as_takes_on_path_format_and_options() {
     let d = dir("saveas");
     let mut s = session();
     let pdf = path(&d, "doc.pdf");
-    s.execute("file.saveAs", &json!({"path": pdf, "options": {"range": "1", "bogus": 1}})).unwrap();
+    s.execute("file.saveAs", &json!({"path": pdf, "options": {"range": "1", "preview": true}})).unwrap();
     let st = s.doc().unwrap();
     assert_eq!((st.format, st.title()), ("pdf", "doc.pdf".to_string()));
     assert_eq!(Value::Object(st.save_options.clone()), json!({"range": "1"}), "only the format's own options are kept");

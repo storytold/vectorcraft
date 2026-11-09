@@ -737,7 +737,7 @@ fn embedded_font_programs_are_skipped() {
         let r = read(&program);
         let NodeKind::Text(t) = &objects(&r.document)[0].kind else { panic!("{program}: {:?}", r.warnings) };
         assert_eq!(t.runs[0].style.font_family, "My Font");
-        assert!(r.warnings.is_empty(), "{program}: {:?}", r.warnings);
+        assert!(program_warnings(&r.warnings).is_empty(), "{program}: {:?}", r.warnings);
     }
 }
 
@@ -833,12 +833,18 @@ fn device_settings_are_accepted_and_change_nothing() {
 }
 
 /// Check that `body` draws one square, blue: it sets blue when what it checks holds, else red.
+/// `warnings` without the note naming fonts that aren't available: which those are depends on the
+/// fonts installed where the tests run, not on the program.
+pub(super) fn program_warnings(warnings: &[String]) -> Vec<&String> {
+    warnings.iter().filter(|w| !w.starts_with(super::MISSING_FONTS_NOTE)).collect()
+}
+
 fn blue(body: &str) {
     let r = read(&format!("{body} 10 10 80 80 rectfill"));
     let o = objects(&r.document);
     assert_eq!(o.len(), 1, "{body}: {:?}", r.warnings);
     assert_eq!(fill(&o[0]), Some(&Paint::solid(Color::rgb(0.0, 0.0, 1.0))), "{body}");
-    assert!(r.warnings.is_empty(), "{body}: {:?}", r.warnings);
+    assert!(program_warnings(&r.warnings).is_empty(), "{body}: {:?}", r.warnings);
 }
 
 /// Check that PostScript `cond` leaves `true`.
@@ -983,8 +989,8 @@ fn intervals_share_their_arrays_and_strings() {
 fn resourceforall_enumerates_matching_names() {
     // #234.
     blue("(*) { pop } 128 string /Category resourceforall 0 0 1 setrgbcolor");
-    let count = |template: &str| format!("/n 0 def ({template}) {{ pop /n n 1 add def }} 128 string /ProcSet resourceforall n");
-    let define = "[/Foo /Fop /Bar /F*x] { 1 dict /ProcSet defineresource pop } forall";
+    let count = |template: &str| format!("/n 0 def ({template}) {{ pop /n n 1 add def }} 128 string /Form resourceforall n");
+    let define = "[/Foo /Fop /Bar /F*x] { 1 dict /Form defineresource pop } forall";
     check(&format!("{define} {} 4 eq", count("*")));
     check(&format!("{define} {} 2 eq", count("Fo?")));
     check(&format!("{define} {} 3 eq", count("F*")));
@@ -992,10 +998,10 @@ fn resourceforall_enumerates_matching_names() {
     check(&format!("{define} {} 0 eq", count("Q*")));
     check(&format!("{define} {} 1 eq", count("*a*")));
     // Each name is copied into the scratch string; exit stops.
-    check(&format!("{define} /last () def (B*) {{ dup length string copy /last exch def }} 8 string /ProcSet resourceforall last (Bar) eq"));
-    check(&format!("{define} /n 0 def (*) {{ pop /n n 1 add def exit }} 8 string /ProcSet resourceforall n 1 eq"));
+    check(&format!("{define} /last () def (B*) {{ dup length string copy /last exch def }} 8 string /Form resourceforall last (Bar) eq"));
+    check(&format!("{define} /n 0 def (*) {{ pop /n n 1 add def exit }} 8 string /Form resourceforall n 1 eq"));
     // A scratch string too small for the names, as the prolog probes it.
-    check(&format!("{define} {{ (*) {{ pop }} 2 string /ProcSet resourceforall }} stopped"));
+    check(&format!("{define} {{ (*) {{ pop }} 2 string /Form resourceforall }} stopped"));
     check("/n 0 def (Gen*) { pop /n n 1 add def } 16 string /Category resourceforall n 1 eq");
 }
 
@@ -1433,6 +1439,31 @@ fn the_planes_of_multi_source_images_are_charged() {
     let image = "/DeviceCMYK setcolorspace << /ImageType 1 /Width 8192 /Height 8192 /BitsPerComponent 8 \
                  /MultipleDataSources true /ImageMatrix [8192 0 0 8192 0 0] /DataSource [<80> <80> <80> <80>] >> image\n";
     let r = import(&eps(&image.repeat(2))).unwrap();
+    assert!(r.warnings.iter().any(|w| w.contains("too much memory")), "{:?}", r.warnings);
+}
+
+/// The planes an image is decoded from, and the decoder's copies of the strings a procedure gives
+/// to fill them, stop counting against the memory budget once the image is decoded: they are freed
+/// then. A procedure that hands back one large buffer for every image (1 MiB here, for a one-pixel
+/// image) charged the whole buffer each time, and a file of many images came in as its preview.
+#[test]
+fn an_images_transient_data_is_not_charged_after_it() {
+    let body = "/buf 1048576 string def\n1100 { 1 1 8 [1 0 0 1 0 0] { buf } image } repeat\n";
+    let r = import(&eps(body)).unwrap();
+    assert!(!r.warnings.iter().any(|w| w.contains("too much memory")), "{:?}", r.warnings);
+    let mut images = 0;
+    r.document.walk(|n| images += usize::from(matches!(n.kind, NodeKind::Image(_))));
+    assert_eq!(images, 1100);
+}
+
+/// What a data source procedure allocates stays counted, whatever image it fills: a procedure
+/// that keeps each new string (in an array here) still runs into the memory budget, however small
+/// the images it fills are.
+#[test]
+fn strings_a_data_source_keeps_stay_charged() {
+    let body = "/keep 1100 array def /i 0 def\n\
+        1100 { 1 1 8 [1 0 0 1 0 0] { keep i 1048576 string put keep i get /i i 1 add def } image } repeat\n";
+    let r = import(&eps(body)).unwrap();
     assert!(r.warnings.iter().any(|w| w.contains("too much memory")), "{:?}", r.warnings);
 }
 

@@ -566,6 +566,11 @@ font-technology	Variable	Variables
 	Color Table ({n} colors)	Tabla de colores ({n} colores)
 	Color Theme	Tema de color
 	Color Themes	Temas de color
+	Color Wheel	Rueda de color
+	Hue ring	Anillo de tono
+	Saturation and brightness	Saturación y brillo
+	Color field	Campo de color
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Tipo de color:
 	Color:	Color:
 	Colorize	Colorear
@@ -3551,6 +3556,8 @@ digits	Malayalam	Malayálam
 	Tile Type:	Tipo de mosaico:
 	tile {number}	mosaico {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Los mosaicos se numeran de izquierda a derecha y luego hacia abajo; deja el rango vacío para todos.
+	Copies per Sheet (as many as fit, in a grid)	Copias por hoja (tantas como quepan, en cuadrícula)
+	Gutter:	Medianil:
 	Tint	Matiz
 	Tip extends past the end point	La punta se extiende más allá del punto final
 	Tip on the end point	Punta en el punto final
@@ -4015,7 +4022,7 @@ axis	Both	Ambos
 	Dock to Bottom	Anclar abajo
 	Dock Control Bar	Anclar barra de control
 	Drag to float the toolbar	Arrastrar para hacer flotar la barra de herramientas
-	Drag to the window's left edge to dock	Arrastrar al borde izquierdo de la ventana para anclar
+	Drag to the window's left or right edge to dock	Arrastrar al borde izquierdo o derecho de la ventana para anclar
 	Float Tool Group	Hacer flotar el grupo de herramientas
 
 # Status and error messages (`@msg`), translated where the status bar shows them; the message itself
@@ -4774,7 +4781,10 @@ axis	Both	Ambos
 @msg	its objects are nested too deeply	sus objetos están anidados a demasiada profundidad
 @msg	its section ending with `%{end}` doesn't end	su sección que termina con `%{end}` no termina
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	los pinceles que VectorCraft aún no puede leer se omitieron del panel Pinceles ({_1})
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	los objetos con varios rellenos o trazos, efectos o pinceles se importaron con su aspecto dibujado ({_1}): su aspecto aún no se puede editar
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	los objetos con varios rellenos o trazos, trazos de ancho variable, efectos o pinceles se importaron con su aspecto dibujado ({_1}): su aspecto aún no se puede editar
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	el nombre `{name}` no está en UTF-8 y se leyó como {label}: si no se ve bien, abre el archivo con otro legacyNameEncoding
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	el nombre `{name}` no está en UTF-8 y partes de él tampoco son {label} válido: abre el archivo con otro legacyNameEncoding
+@msg	more names that aren't UTF-8 were read as {label} ({count})	se leyeron como {label} más nombres que no están en UTF-8 ({count})
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	el degradado “{name}” no está definido en el archivo: lo sustituye un color sólido
 @msg	an image VectorCraft can't read was left out	se omitió una imagen que VectorCraft no puede leer
 @msg	graphs come in as plain art, without their data or settings	los gráficos se importan como ilustración normal, sin sus datos ni sus ajustes
@@ -5851,7 +5861,7 @@ axis	Y Axis	Eje Y
 @msg	Running “{name}”…	Ejecutando “{name}”…
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	un efecto interactivo se ejecuta mientras se dibuja el documento, así que no puede ser `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	un plugin de exportación siempre recibe el presupuesto de una exportación: omite `budget`
-@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	“{_1}” pide un presupuesto de cálculo grande (cada ejecución hasta {minutes} minutos y {times} veces las instrucciones habituales): instálalo con `allowHeavy: true` cuando el usuario lo acepte
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}” pide un presupuesto de cálculo grande (cada ejecución hasta {minutes} minutos y {times} veces las instrucciones habituales): una persona debe aprobarlo en la aplicación de escritorio, o pasa `allowHeavy: true` en una sesión iniciada con --allow-plugin-grants
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	¿Instalar “{name}”, que pide estos permisos?
 	ID: {id}	ID: {id}
@@ -5882,9 +5892,18 @@ axis	Y Axis	Eje Y
 @msg	at most {MAX_PERMISSIONS} `permissions`	como máximo {MAX_PERMISSIONS} `permissions`
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	el permiso `{shown}` no se aplica a un plugin de tipo `{_1}`
 @msg	permission `{shown}` is listed twice	el permiso `{shown}` aparece dos veces
+@msg	only a filter declares `inputs`	solo un filtro declara `inputs`
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` nombra un tipo de objeto desconocido `{shown}`: use type, image o symbolInstance
+@msg	`inputs` lists `{shown}` twice	`inputs` incluye `{shown}` dos veces
+@msg	`inputs` needs `api` 2 or later	`inputs` requiere `api` 2 o posterior
+@msg	`inputs` needs the permission `doc.read`	`inputs` requiere el permiso `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	presupuesto de memoria (el objeto {_1} necesita {size} bytes de entrada, quedan {left})
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	presupuesto de objetos (más de {MAX_OBJECTS} objetos de solo lectura)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	el permiso `{shown}` está reservado para una API de plugins posterior; este host no lo concede
 @msg	unknown permission `{shown}`	permiso desconocido `{shown}`
-@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}” pide los permisos {asked}: instálalo con un `grant` que los incluya cuando el usuario lo acepte
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	“{name}” pide los permisos {asked}: una persona debe aprobarlos en la aplicación de escritorio, o pasa `grant` en una sesión iniciada con --allow-plugin-grants
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` y `allowHeavy` solo tienen efecto en una sesión iniciada con --allow-plugin-grants: aprueba el complemento en la aplicación de escritorio
+@msg	Only the person at the keyboard can approve installing a plug-in	Solo la persona que está en el teclado puede aprobar la instalación de un complemento
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	a “{name}” no se le concedió `{p}`, que su resultado necesita: no se cambió nada
 @msg	a heavy filter runs in the background, so it can't declare `commands`	un filtro pesado se ejecuta en segundo plano, así que no puede declarar `commands`
 @msg	at most {MAX_COMMANDS} `commands`	como máximo {MAX_COMMANDS} `commands`
@@ -6433,7 +6452,7 @@ breakText	Glyphs	Glifos
 	Reset Symbol Instance	Restablecer instancia de símbolo
 @msg	type must be static or dynamic, not {v}	type debe ser static o dynamic, no {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` es un símbolo estático: primero establezca su tipo de símbolo en Dinámico
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	De un trazado, trazado compuesto o texto seleccionado en una instancia de símbolo solo se puede cambiar el color sólido del relleno y del trazo
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	En un trazado, trazado compuesto o texto seleccionado en una instancia de símbolo solo se pueden cambiar el relleno, el trazo, la opacidad y la fusión
 @msg	path must be a list of child indices	path debe ser una lista de índices de hijos
 @msg	no object at path {shown} in the symbol's art	no hay ningún objeto en la ruta {shown} del arte del símbolo
 @msg	give fill, stroke, opacity and/or blend	indique fill, stroke, opacity y/o blend
@@ -6582,3 +6601,4 @@ breakText	Glyphs	Glifos
 # Align to Pixel Grid
 	Align to Pixel Grid	Alinear con cuadrícula de píxeles
 @msg	only paths and compound paths can be aligned to the pixel grid	solo los trazados y los trazados compuestos se pueden alinear con la cuadrícula de píxeles
+@msg	side is left or right, not `{s}`	side es left o right, no `{s}`

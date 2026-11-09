@@ -230,6 +230,11 @@ impl Session {
         if label != "Typing" && cmd::typing_in_progress(self) {
             cmd::settle_interaction(self)?;
         }
+        // An edit the tool computes on another thread (a Shape Builder merge) is applied first too,
+        // so the snapshot the interaction previews from and goes back to holds it.
+        if !self.in_interaction() {
+            self.finish_tool_edit_later()?;
+        }
         self.clear_deferred_overlay_cache();
         let paint = self.paint.clone();
         let st = self.doc_mut()?;

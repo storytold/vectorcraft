@@ -115,6 +115,9 @@ impl Default for GState {
     }
 }
 
+/// Most families listed in the warning about fonts that aren't available.
+const MAX_MISSING_FONTS: usize = 64;
+
 /// What the program draws.
 pub(crate) struct Out {
     /// The document being made: ids, images and swatches.
@@ -152,6 +155,9 @@ pub(crate) struct Out {
     pub(super) tilings: HashMap<u64, Vec<Tiling>>,
     /// How deep art drawn apart (a pattern's cell, a Type 3 glyph) is nested.
     pub apart: u32,
+    /// The families type was set in that aren't available (it shows in the fallback font), each
+    /// once in the order first set, for the import's warning.
+    pub missing_fonts: Vec<String>,
 }
 
 fn sane(r: Rect) -> bool {
@@ -201,6 +207,14 @@ impl Out {
             shadings: HashSet::new(),
             tilings: HashMap::new(),
             apart: 0,
+            missing_fonts: vec![],
+        }
+    }
+
+    /// Note that type was set in `family`, which isn't available (at most [`MAX_MISSING_FONTS`]).
+    pub fn missing_font(&mut self, family: &str) {
+        if !family.is_empty() && self.missing_fonts.len() < MAX_MISSING_FONTS && !self.missing_fonts.iter().any(|f| f == family) {
+            self.missing_fonts.push(family.to_string());
         }
     }
 

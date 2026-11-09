@@ -605,9 +605,39 @@ fn evaluated_art_is_not_kept_while_a_placed_document_may_show_in_it() {
 fn a_kept_evaluation_is_stale_after_the_live_inputs_change() {
     let d = Document::new(100.0, 100.0);
     let n = Node::path(NodeId(3), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
-    let e = EvaluatedLive { node: n.clone(), symbols: vec![], patterns: vec![], inputs: 7, art: std::rc::Rc::new(vec![]), size: 0 };
+    let e = kept_evaluation(&d, &n);
     assert!(e.is_of(&d, &n, 7));
     assert!(!e.is_of(&d, &n, 8));
+}
+
+/// An evaluation of `n` in `d`, with inputs 7, holding no symbols, patterns or art.
+fn kept_evaluation(d: &Document, n: &Node) -> EvaluatedLive {
+    EvaluatedLive {
+        node: n.clone(),
+        symbols: vec![],
+        patterns: vec![],
+        swatches: d.swatches.clone(),
+        swatch_groups: d.swatch_groups.clone(),
+        inputs: 7,
+        art: std::rc::Rc::new(vec![]),
+        size: 0,
+    }
+}
+
+/// A kept evaluation is stale once a swatch changes, in a color group too: a painted live effect's
+/// pieces name swatches.
+#[test]
+fn a_kept_evaluation_is_stale_after_a_swatch_changes() {
+    let mut d = Document::new(100.0, 100.0);
+    let n = Node::path(NodeId(3), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
+    let e = kept_evaluation(&d, &n);
+    assert!(e.is_of(&d, &n, 7));
+    d.swatches.first_mut().unwrap().name = "Renamed".into();
+    assert!(!e.is_of(&d, &n, 7));
+    let mut d = Document::new(100.0, 100.0);
+    let e = kept_evaluation(&d, &n);
+    d.swatch_groups.push(vectorcraft_color::SwatchGroup { name: "Added".into(), swatches: vec![] });
+    assert!(!e.is_of(&d, &n, 7));
 }
 
 /// A rectangle (40, 40)–(140, 140) clipping a filled 200 × 200 square drawn over its edges, in a

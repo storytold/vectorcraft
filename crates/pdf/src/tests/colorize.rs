@@ -1,5 +1,6 @@
 //! Grayscale and 1-bit images colorized by a fill color are written in that color, a spot color
 //! as its ink, with the image's coverage as the soft mask.
+//! An image mask in a PDF opens as a grayscale image colorized by the color it is painted with.
 
 use std::sync::Arc;
 
@@ -8,6 +9,7 @@ use craft_pdf::syntax::object::{Array, Name, Object, Stream};
 use vectorcraft_color::{Color, Paint, Swatch};
 use vectorcraft_doc::{ColorMode, Document, ImageBlob, ImageObject, Node, NodeKind};
 use vectorcraft_geom::Affine;
+use vectorcraft_testkit::pdf::{PdfPage, first_extra, pdf_with};
 
 use crate::*;
 
@@ -218,4 +220,80 @@ fn ink_options_naming_no_ink_give_one_short_warning() {
     assert!(list.iter().any(|i| i.name == "Cyan"));
     assert_eq!(warnings.len(), 1);
     assert!(warnings[0].contains("`Missing 0`") && warnings[0].contains("and 9990 more") && warnings[0].len() < 500, "{}", warnings[0]);
+}
+
+/// An 8 × 1 image mask whose 0 bits (columns 2 to 5) are painted.
+const MASK: &str = "<< /Type /XObject /Subtype /Image /Width 8 /Height 1 /ImageMask true /BitsPerComponent 1 /Filter /ASCIIHexDecode /Length 3 >>\nstream\nC3>\nendstream";
+
+/// A page drawing [`MASK`] (`/Im1`) with `content`, with a spot ink `SpotRed` as `/CS0`.
+fn mask_page(content: &str) -> Vec<u8> {
+    let spot = "[/Separation /SpotRed /DeviceCMYK << /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [0 1 1 0] /N 1 >>]";
+    let resources = format!("/ColorSpace << /CS0 {spot} >> /XObject << /Im1 {} 0 R >>", first_extra(1));
+    pdf_with(&[PdfPage { resources, ..PdfPage::new(200.0, 100.0, content) }], &[MASK], None)
+}
+
+/// The imported images, in paint order: their colorize paint and gray pixels.
+fn imported_images(d: &Document) -> Vec<(Option<Paint>, Vec<u8>)> {
+    let mut out = vec![];
+    for l in &d.layers {
+        l.walk(&mut |n| {
+            if let NodeKind::Image(im) = &n.kind {
+                let blob = d.images.get(&im.key).unwrap();
+                let gray = image::load_from_memory(&blob.bytes).unwrap();
+                assert_eq!(gray.color(), image::ColorType::L8, "a grayscale image");
+                out.push((n.extras().colorize.as_deref().cloned(), gray.into_luma8().into_raw()));
+            }
+        });
+    }
+    out
+}
+
+/// What the mask paints is black, the rest white; a spot color keeps its swatch and tint.
+#[test]
+fn an_image_mask_opens_colorized_by_its_spot_color() {
+    let d = crate::import(&mask_page("/CS0 cs 0.5 scn q 80 0 0 10 10 50 cm /Im1 Do Q")).unwrap();
+    let images = imported_images(&d);
+    assert_eq!(images.len(), 1);
+    let (paint, gray) = &images[0];
+    assert_eq!(gray, &[255, 255, 0, 0, 0, 0, 255, 255]);
+    let Some(Paint::Solid { swatch, tint, .. }) = paint else { panic!("colorized: {paint:?}") };
+    assert_eq!((swatch.as_deref(), *tint), (Some("SpotRed"), 0.5));
+    assert!(d.swatch("SpotRed").is_some_and(|s| s.spot), "a spot swatch");
+}
+
+/// A mask drawn twice keeps each color it is painted with, over the same pixels.
+#[test]
+fn an_image_mask_drawn_in_two_colors_keeps_both() {
+    let d = crate::import(&mask_page("1 0 0 rg q 80 0 0 10 10 20 cm /Im1 Do Q 0 0 1 rg q 80 0 0 10 10 60 cm /Im1 Do Q")).unwrap();
+    let images = imported_images(&d);
+    let hex: Vec<_> = images.iter().map(|(p, _)| p.as_ref().and_then(Paint::color).map(|c| c.to_hex())).collect();
+    assert_eq!(hex, [Some("#ff0000".to_string()), Some("#0000ff".to_string())]);
+    assert_eq!(images[0].1, images[1].1);
+}
+
+/// An uncolored tiling pattern whose cell draws a mask, filled in red and then in blue, gives a
+/// pattern for each color: the readings of its cell differ by the mask's color.
+#[test]
+fn an_uncolored_pattern_drawing_an_image_mask_keeps_each_color() {
+    let (mask, pattern) = (first_extra(1), first_extra(1) + 1);
+    let resources = format!("/ColorSpace << /CS1 [/Pattern /DeviceRGB] >> /Pattern << /P0 {pattern} 0 R >>");
+    let cell = format!(
+        "<< /PatternType 1 /PaintType 2 /TilingType 1 /BBox [0 0 10 10] /XStep 10 /YStep 10 /Resources << /XObject << /Im1 {mask} 0 R >> >> /Length 28 >>\nstream\nq 10 0 0 10 0 0 cm /Im1 Do Q\nendstream"
+    );
+    let content = "/CS1 cs 1 0 0 /P0 scn 0 0 100 40 re f 0 0 1 /P0 scn 0 50 100 40 re f";
+    let d = crate::import(&pdf_with(&[PdfPage { resources, ..PdfPage::new(100.0, 100.0, content) }], &[MASK, &cell], None)).unwrap();
+    let mut colors = vec![];
+    for l in &d.layers {
+        l.walk(&mut |n| {
+            for item in &n.appearance.items {
+                let Paint::Pattern { pattern, .. } = item.paint() else { continue };
+                let mut hex = vec![];
+                for a in &d.pattern(pattern).unwrap().art {
+                    a.walk(&mut |c| hex.extend(c.extras().colorize.as_deref().and_then(Paint::color).map(|c| c.to_hex())));
+                }
+                colors.push(hex);
+            }
+        });
+    }
+    assert_eq!(colors, [["#ff0000"], ["#0000ff"]]);
 }

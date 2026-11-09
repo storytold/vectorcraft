@@ -210,6 +210,11 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         crate::ime::controls_without_editor(app, ctx);
         return;
     }
+    // The update prompt and the modal result window draw over everything and read Escape themselves.
+    if crate::updates_ui::blocks_input(app) {
+        crate::ime::controls_without_editor(app, ctx);
+        return;
+    }
     if app.ui.dialog.is_some() || app.ui.palette_open {
         crate::ime::controls_without_editor(app, ctx);
         if app.ui.dialog.as_ref().is_some_and(crate::dialogs::revolve_gizmo::active) && crate::dialogs::revolve_gizmo::dragging(ctx) {

@@ -714,6 +714,11 @@ digits	Malayalam	マラヤーラム数字
 	Color	カラー
 	Color Guide	カラーガイド
 	Color Themes	カラーテーマ
+	Color Wheel	カラーホイール
+	Hue ring	色相リング
+	Saturation and brightness	彩度と明るさ
+	Color field	カラーフィールド
+	{name1} {value1}, {name2} {value2}	{name1} {value1}、{name2} {value2}
 	CSS Properties	CSS プロパティ
 	Document Info	ドキュメント情報
 	Flattener Preview	分割・統合プレビュー
@@ -3279,6 +3284,8 @@ mark-style	Japanese	日本式
 	Tile Range:	分割範囲:
 	Tile Type:	タイルの種類:
 	Tiles are numbered across, then down; leave the range empty for every tile.	タイルは左から右、上から下の順に番号が付きます。範囲を空にするとすべてのタイルが対象です。
+	Copies per Sheet (as many as fit, in a grid)	用紙ごとに複数コピー (収まるだけグリッド状に配置)
+	Gutter:	間隔:
 	Toggle Fill/Stroke Focus	塗り／線の切り替え
 	Toggle Selection	選択を切り替え
 	Toggle single/double column	1 列／2 列を切り替え
@@ -3999,7 +4006,7 @@ axis	Both	両方
 	Dock to Bottom	下部にドッキング
 	Dock Control Bar	コントロールバーをドッキング
 	Drag to float the toolbar	ドラッグしてツールバーをフローティング
-	Drag to the window's left edge to dock	ウィンドウの左端までドラッグしてドッキング
+	Drag to the window's left or right edge to dock	ウィンドウの左端または右端までドラッグしてドッキング
 	Float Tool Group	ツールグループをフローティング
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
@@ -4507,7 +4514,10 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	表示に使われるフォントの 1 行に対して低すぎるフレーム内のエリア内文字は、フレームを高くしました ({_1}): そうしないと文字が表示されません
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	グラデーション「{name}」はファイル内で定義されていません: 代わりに単色を使用しています
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	VectorCraft がまだ読み込めないブラシ {_1} 個はブラシパネルに追加されませんでした
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	塗りや線が複数ある、または効果やブラシを適用したオブジェクト {_1} 個は見た目のまま読み込まれました: アピアランスはまだ編集できません
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	塗りや線が複数ある、可変幅の線がある、または効果やブラシを適用したオブジェクト {_1} 個は見た目のまま読み込まれました: アピアランスはまだ編集できません
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	名前 `{name}` は UTF-8 ではないため {label} として読み込みました: 正しくない場合は別の legacyNameEncoding でファイルを開いてください
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	名前 `{name}` は UTF-8 ではなく、一部は {label} としても無効です: 別の legacyNameEncoding でファイルを開いてください
+@msg	more names that aren't UTF-8 were read as {label} ({count})	UTF-8 ではないほかの名前を {label} として読み込みました ({count})
 @msg	patterns nested too deeply are filled with mid-grey	入れ子が深すぎるパターンは中間のグレーで塗りつぶされています
 @msg	shadings of an unknown type were left out	種類が不明なシェーディングは除外されました
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	関数の種類が不明なシェーディングは中間の色で塗りつぶされています
@@ -5591,7 +5601,7 @@ axis	Y Axis	Y 軸
 @msg	Running “{name}”…	「{name}」を実行中…
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	ライブ効果はドキュメントの描画中に実行されるため、`heavy` にはできません
 @msg	an exporter always gets an export's budget: leave `budget` out	書き出しプラグインには常に書き出しの予算が割り当てられます。`budget` は省略してください
-@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	「{_1}」は大きな計算予算を求めています (1 回の実行につき最大 {minutes} 分、通常の {times} 倍の命令)。ユーザーが同意したら `allowHeavy: true` を指定してインストールしてください
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	「{_1}」は大きな計算予算を求めています (1 回の実行につき最大 {minutes} 分、通常の {times} 倍の命令)。デスクトップ アプリで人が承認するか、--allow-plugin-grants を付けて開始したセッションで `allowHeavy: true` を指定してください
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	これらの権限を求める「{name}」をインストールしますか？
 	ID: {id}	ID: {id}
@@ -5622,9 +5632,18 @@ axis	Y Axis	Y 軸
 @msg	at most {MAX_PERMISSIONS} `permissions`	`permissions` は最大 {MAX_PERMISSIONS} 個です
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	権限 `{shown}` は種類 `{_1}` のプラグインには適用されません
 @msg	permission `{shown}` is listed twice	権限 `{shown}` が 2 回指定されています
+@msg	only a filter declares `inputs`	`inputs` を宣言できるのはフィルターだけです
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` に不明なオブジェクトの種類 `{shown}` があります。type、image、symbolInstance のいずれかを使ってください
+@msg	`inputs` lists `{shown}` twice	`inputs` に `{shown}` が 2 回指定されています
+@msg	`inputs` needs `api` 2 or later	`inputs` には `api` 2 以上が必要です
+@msg	`inputs` needs the permission `doc.read`	`inputs` には権限 `doc.read` が必要です
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	メモリ予算 (オブジェクト {_1} には {size} バイトの入力が必要ですが、残りは {left} です)
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	オブジェクト予算 ({MAX_OBJECTS} 個を超える読み取り専用オブジェクト)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	権限 `{shown}` は今後のプラグイン API 用に予約されています。このホストはこの権限を付与しません
 @msg	unknown permission `{shown}`	不明な権限 `{shown}`
-@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	「{name}」は権限 {asked} を求めています。ユーザーが同意したら、それらを列挙した `grant` を指定してインストールしてください
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	「{name}」は権限 {asked} を求めています。デスクトップ アプリで人が承認するか、--allow-plugin-grants を付けて開始したセッションで `grant` を指定してください
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` と `allowHeavy` は --allow-plugin-grants を付けて開始したセッションでのみ有効です。デスクトップ アプリでプラグインを承認してください
+@msg	Only the person at the keyboard can approve installing a plug-in	プラグインのインストールを承認できるのはキーボードの前にいる人だけです
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	「{name}」には出力に必要な `{p}` が付与されていません。何も変更されませんでした
 @msg	a heavy filter runs in the background, so it can't declare `commands`	重いフィルターはバックグラウンドで実行されるため、`commands` を宣言できません
 @msg	at most {MAX_COMMANDS} `commands`	`commands` は最大 {MAX_COMMANDS} 個です
@@ -6176,7 +6195,7 @@ breakText	Glyphs	字形
 	Reset Symbol Instance	シンボルインスタンスをリセット
 @msg	type must be static or dynamic, not {v}	type は static または dynamic にしてください({v} は無効です)
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` はスタティックシンボルです。先にシンボルの種類をダイナミックに設定してください
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	シンボルインスタンス内で選択したパス、複合パス、テキストは、塗りと線の単色のみ変更できます
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	シンボルインスタンス内で選択したパス、複合パス、または文字について変更できるのは塗り、線、不透明度、描画モードだけです
 @msg	path must be a list of child indices	path は子のインデックスのリストにしてください
 @msg	no object at path {shown} in the symbol's art	シンボルのアートのパス {shown} にオブジェクトがありません
 @msg	give fill, stroke, opacity and/or blend	fill、stroke、opacity、blend のいずれかを指定してください
@@ -6325,3 +6344,4 @@ breakText	Glyphs	字形
 # Align to Pixel Grid
 	Align to Pixel Grid	ピクセルグリッドに整合
 @msg	only paths and compound paths can be aligned to the pixel grid	ピクセルグリッドに整合できるのはパスと複合パスのみです
+@msg	side is left or right, not `{s}`	side は left または right です（`{s}` ではありません）

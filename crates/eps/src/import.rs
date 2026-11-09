@@ -35,6 +35,7 @@
 
 mod ai;
 mod ate;
+mod cid;
 mod data;
 mod graphics;
 mod interp;
@@ -44,10 +45,13 @@ mod obj;
 mod preview;
 mod shading;
 mod text;
+mod type1;
 mod type42;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_cid;
 #[cfg(test)]
 mod tests_composite;
 #[cfg(test)]
@@ -60,6 +64,10 @@ mod tests_illustrator;
 mod tests_images;
 #[cfg(test)]
 mod tests_native;
+#[cfg(test)]
+mod tests_type1;
+#[cfg(test)]
+mod tests_type42;
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -73,6 +81,7 @@ use graphics::{GState, Out};
 use interp::{Fault, Interp};
 use obj::PsError;
 
+pub use ai::NameEncoding;
 #[cfg(test)]
 pub(crate) use ai::objects_read;
 pub(crate) use ai::{
@@ -80,7 +89,7 @@ pub(crate) use ai::{
     symbol_art_member, warp_number,
 };
 pub(crate) use ate::{MAX_BYTES as MAX_TEXT_DOCUMENT, MAX_FRAMES, MAX_SEGMENTS, MAX_STORY, MAX_VALUES as MAX_TEXT_VALUES};
-pub use native::{AiLayers, ai_alone, ai_alone_on_page, ai_layers_alone, ai_opened_artboard, is_loss, layered_ai, layered_ai_from};
+pub use native::{AiLayers, ai_alone, ai_alone_on_page, ai_alone_with, ai_layers_alone, ai_opened_artboard, is_loss, layered_ai, layered_ai_from};
 pub(crate) use native::{MAX_TEXT, scale_document};
 pub use text::family_style;
 
@@ -88,6 +97,10 @@ pub use text::family_style;
 const LETTER: [f64; 4] = [0.0, 0.0, 612.0, 792.0];
 /// Largest page side read (points).
 const MAX_SIDE: f64 = 1e5;
+
+/// The start of the warning that type was set in fonts that aren't available, before ": " and
+/// their families: PDF import's words, as type in those fonts comes in the same way.
+pub(crate) const MISSING_FONTS_NOTE: &str = "fonts that aren't available show in the fallback font until they are";
 
 /// A read file.
 #[derive(Debug)]
@@ -251,6 +264,13 @@ pub fn import_with(bytes: &[u8], editing_data: bool) -> Result<Imported, String>
 /// [`import_with`]; `trust`: an Illustrator EPS's layers are used even where they draw differently
 /// from its page, with a note (`editingData: "always"`, as for a `.ai`).
 pub fn import_trusting(bytes: &[u8], editing_data: bool, trust: bool) -> Result<Imported, String> {
+    import_names(bytes, editing_data, trust, NameEncoding::default())
+}
+
+/// [`import_trusting`], with the names in the editing copy that aren't UTF-8 (layers, objects,
+/// artboards, colors, gradients, patterns, graphic styles, swatches, brushes, symbols, variables
+/// and data sets) read in `names`.
+pub fn import_names(bytes: &[u8], editing_data: bool, trust: bool, names: NameEncoding) -> Result<Imported, String> {
     let ps = program(bytes)?;
     let dsc = Dsc::read(ps);
     // A legacy `.ai` VectorCraft wrote: its prolog prints the art plainly (gradients flat, no
@@ -258,7 +278,7 @@ pub fn import_trusting(bytes: &[u8], editing_data: bool, trust: bool) -> Result<
     // printed).
     if editing_data
         && dsc.own_legacy
-        && let Some(Ok((document, warnings))) = native::program_alone(ps, dsc.illustrator)
+        && let Some(Ok((document, warnings))) = native::program_alone(ps, dsc.illustrator, names)
     {
         return Ok(Imported { document, warnings, preview: false });
     }
@@ -278,7 +298,7 @@ pub fn import_trusting(bytes: &[u8], editing_data: bool, trust: bool) -> Result<
     }
     let drew = !out.drawn.is_empty();
     let why = match (&result, drew) {
-        (Ok(()), true) if editing_data => return Ok(native::layered(ps, finish(out), trust, dsc.illustrator)),
+        (Ok(()), true) if editing_data => return Ok(native::layered(ps, finish(out), trust, dsc.illustrator, names)),
         (Ok(()), true) => return Ok(finish(out)),
         (Ok(()), false) => "it draws nothing VectorCraft's PostScript reader can show".to_string(),
         (Err(e), _) => reason(e, fault.as_ref()),
@@ -286,7 +306,7 @@ pub fn import_trusting(bytes: &[u8], editing_data: bool, trust: bool) -> Result<
     // A file in the legacy Illustrator format whose program can't be run (a `.ai` that names the
     // prolog defining its operators without including it): its layers, which the program has, or
     // its art on one layer when it has none (Illustrator 3).
-    let why = match editing_data.then(|| native::program_alone(ps, dsc.illustrator)).flatten() {
+    let why = match editing_data.then(|| native::program_alone(ps, dsc.illustrator, names)).flatten() {
         Some(Ok((document, warnings))) => return Ok(Imported { document, warnings, preview: false }),
         Some(Err(e)) => format!("{why}; its layers couldn't be read either ({e})"),
         None => why,
@@ -348,6 +368,9 @@ fn finish_with(out: Out, layers: Vec<Arc<Node>>) -> Imported {
     }
     doc.layers = layers;
     let mut warnings = out.warnings;
+    if !out.missing_fonts.is_empty() {
+        warnings.push(format!("{MISSING_FONTS_NOTE}: {}", out.missing_fonts.join(", ")));
+    }
     doc.limit_depth_noting(&mut warnings);
     Imported { document: doc, warnings, preview: false }
 }

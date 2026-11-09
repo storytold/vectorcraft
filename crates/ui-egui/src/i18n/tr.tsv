@@ -547,6 +547,11 @@ font-technology	Variable	Değişken
 	Color Table ({n} colors)	Renk Tablosu ({n} renkleri)
 	Color Theme	Renk Teması
 	Color Themes	Renk Temaları
+	Color Wheel	Renk Tekerleği
+	Hue ring	Renk tonu halkası
+	Saturation and brightness	Doygunluk ve parlaklık
+	Color field	Renk seçim alanı
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Renk Türü:
 	Color:	Renk:
 	Colorize	Renklendir
@@ -3819,7 +3824,7 @@ axis	Both	Her İkisi
 	Dock to Bottom	Alta yerleştir
 	Dock Control Bar	Kontrol çubuğunu yerleştir
 	Drag to float the toolbar	Araç çubuğunu ayırmak için sürükleyin
-	Drag to the window's left edge to dock	Sabitlemek için pencerenin sol kenarına sürükleyin
+	Drag to the window's left or right edge to dock	Sabitlemek için pencerenin sol veya sağ kenarına sürükleyin
 	Float Tool Group	Araç Grubunu Yüzer Yap
 @msg	no library `{id}`	`{id}` kütüphanesi yok
 @msg	select some type first	önce bir tür seçin
@@ -4511,7 +4516,10 @@ axis	Both	Her İkisi
 @msg	its objects are nested too deeply	nesneleri çok derin bir şekilde iç içe geçmiş
 @msg	its section ending with `%{end}` doesn't end	`%{end}` ile biten bölümü bitmiyor
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	VectorCraft'ın henüz okuyamadığı fırçalar Fırçalar panelinin dışında bırakıldı ({_1})
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	çeşitli dolgulara veya konturlara, efektlere veya fırçalara sahip nesneler çizilmiş görünümleri olarak geldi ({_1}): görünümleri henüz düzenlenemez
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	çeşitli dolgulara veya konturlara, değişken genişlikli konturlara, efektlere veya fırçalara sahip nesneler çizilmiş görünümleri olarak geldi ({_1}): görünümleri henüz düzenlenemez
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	`{name}` adı UTF-8 değil ve {label} olarak okundu: yanlış görünüyorsa dosyayı başka bir legacyNameEncoding ile açın
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	`{name}` adı UTF-8 değil ve bazı bölümleri {label} olarak da geçerli değil: dosyayı başka bir legacyNameEncoding ile açın
+@msg	more names that aren't UTF-8 were read as {label} ({count})	UTF-8 olmayan diğer adlar {label} olarak okundu ({count})
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	“{name}” degradesi dosyada tanımlı değil: onun yerine düz bir renk geliyor
 @msg	an image VectorCraft can't read was left out	VectorCraft'ın okuyamadığı bir resim dışarıda bırakıldı
 @msg	graphs come in as plain art, without their data or settings	grafikler, verileri ve ayarları olmadan düz çizim olarak içe aktarılır
@@ -5867,7 +5875,7 @@ axis	Y Axis	Y ekseni
 @msg	Running “{name}”…	“{name}” çalıştırılıyor…
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	canlı efekt belge çizilirken çalışır, bu yüzden `heavy` olamaz
 @msg	an exporter always gets an export's budget: leave `budget` out	dışa aktarma eklentisi her zaman bir dışa aktarmanın bütçesini alır: `budget` anahtarını çıkarın
-@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	“{_1}” büyük bir hesaplama bütçesi istiyor (her çalıştırma en fazla {minutes} dakika ve olağan komutların {times} katı): kullanıcı onayladıktan sonra `allowHeavy: true` ile yükleyin
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}” büyük bir hesaplama bütçesi istiyor (her çalıştırma en fazla {minutes} dakika ve olağan komutların {times} katı): masaüstü uygulamasında bir kişinin onaylaması gerekir veya --allow-plugin-grants ile başlatılan bir oturumda `allowHeavy: true` geçirin
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Bu izinleri isteyen “{name}” yüklensin mi?
 	ID: {id}	Kimlik: {id}
@@ -5898,9 +5906,18 @@ axis	Y Axis	Y ekseni
 @msg	at most {MAX_PERMISSIONS} `permissions`	en fazla {MAX_PERMISSIONS} `permissions`
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	`{shown}` izni `{_1}` türündeki bir eklentiye uygulanmaz
 @msg	permission `{shown}` is listed twice	`{shown}` izni iki kez listelenmiş
+@msg	only a filter declares `inputs`	`inputs` yalnızca bir filtrede bildirilebilir
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` bilinmeyen bir nesne türü belirtiyor: `{shown}`; type, image veya symbolInstance kullanın
+@msg	`inputs` lists `{shown}` twice	`inputs` `{shown}` değerini iki kez listeliyor
+@msg	`inputs` needs `api` 2 or later	`inputs` için `api` 2 veya üstü gerekir
+@msg	`inputs` needs the permission `doc.read`	`inputs` için `doc.read` izni gerekir
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	bellek bütçesi (nesne {_1} için {size} bayt girdi gerekiyor, {left} kaldı)
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	nesne bütçesi ({MAX_OBJECTS} adetten fazla salt okunur nesne)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	`{shown}` izni sonraki bir eklenti API’si için ayrılmıştır; bu ana bilgisayar bu izni vermez
 @msg	unknown permission `{shown}`	bilinmeyen izin `{shown}`
-@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}” {asked} izinlerini istiyor: kullanıcı onayladıktan sonra bunları listeleyen bir `grant` ile yükleyin
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	“{name}” {asked} izinlerini istiyor: masaüstü uygulamasında bir kişinin onaylaması gerekir veya --allow-plugin-grants ile başlatılan bir oturumda `grant` geçirin
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` ve `allowHeavy` yalnızca --allow-plugin-grants ile başlatılan bir oturumda etkili olur: eklentiyi masaüstü uygulamasında onaylayın
+@msg	Only the person at the keyboard can approve installing a plug-in	Bir eklentinin yüklenmesini yalnızca klavye başındaki kişi onaylayabilir
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	“{name}” öğesine çıktısının ihtiyaç duyduğu `{p}` izni verilmedi: hiçbir şey değiştirilmedi
 @msg	a heavy filter runs in the background, so it can't declare `commands`	ağır bir filtre arka planda çalışır, bu yüzden `commands` bildiremez
 @msg	at most {MAX_COMMANDS} `commands`	en fazla {MAX_COMMANDS} `commands`
@@ -6448,7 +6465,7 @@ breakText	Glyphs	Glifler
 	Reset Symbol Instance	Sembol Örneğini Sıfırla
 @msg	type must be static or dynamic, not {v}	type static veya dynamic olmalıdır, {v} değil
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` statik bir semboldür: önce Sembol Türünü Dinamik olarak ayarlayın
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	Bir sembol örneğinde seçilen yolun, bileşik yolun veya yazının yalnızca dolgu ve konturunun düz rengi değiştirilebilir
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	Bir sembol örneğinde seçili yol, bileşik yol veya metnin yalnızca dolgu, kontur, opaklık ve karışımı değiştirilebilir
 @msg	path must be a list of child indices	path alt öğe dizinlerinden oluşan bir liste olmalıdır
 @msg	no object at path {shown} in the symbol's art	sembolün çiziminde {shown} yolunda nesne yok
 @msg	give fill, stroke, opacity and/or blend	fill, stroke, opacity ve/veya blend verin
@@ -6597,3 +6614,4 @@ breakText	Glyphs	Glifler
 # Align to Pixel Grid
 	Align to Pixel Grid	Piksel Izgarasına Hizala
 @msg	only paths and compound paths can be aligned to the pixel grid	piksel ızgarasına yalnızca yollar ve bileşik yollar hizalanabilir
+@msg	side is left or right, not `{s}`	side left veya right olmalıdır, `{s}` değil
