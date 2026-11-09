@@ -306,6 +306,39 @@ fn area_alignment_and_justify() {
     assert!((l.lines[0].x1 - frame.x1).abs() < 1e-6);
 }
 
+/// A source that sets a last line whose descent passes its frame's bottom: the frame grows from its
+/// bottom by its lines' deepest descent plus 0.05 pt, so that line shows, and only as many lines as
+/// the source has.
+#[test]
+fn fit_source_lines_keeps_the_last_lines_the_source_sets() {
+    let text = "one\ntwo\nthree";
+    let tall = layout(db(), &area(text, style(12.0), Rect::new(0.0, 0.0, 200.0, 400.0), Justify::Left));
+    let third = &tall.lines[2];
+    // The third baseline is in the frame, its descent isn't.
+    let frame = Rect::new(0.0, 0.0, 200.0, third.baseline + third.descent / 2.0);
+    let mut t = area(text, style(12.0), frame, Justify::Left);
+    let short = layout(db(), &t);
+    assert!(short.overflow && short.lines.len() == 2);
+    // A source with no more lines than fit leaves the frame as it is.
+    assert!(!fit_source_lines(db(), &mut t, 2));
+    assert_eq!(layout(db(), &t).lines.len(), 2);
+    assert!(fit_source_lines(db(), &mut t, 3));
+    let fitted = layout(db(), &t);
+    assert!(!fitted.overflow && fitted.lines.len() == 3);
+    let TextKind::Area { frame: grown } = &t.kind else { panic!("area type") };
+    let grown = grown.bounds().unwrap();
+    assert!(grown.y0 == frame.y0 && grown.y1 > frame.y1 && grown.y1 <= frame.y1 + third.descent + 0.1, "{grown:?}");
+    // Fitted, nothing more to do.
+    assert!(!fit_source_lines(db(), &mut t, 3));
+    // More than a descent short: a line the source can't have set in its frame stays out.
+    let frame = Rect::new(0.0, 0.0, 200.0, tall.lines[1].baseline + tall.lines[1].descent + 1.0);
+    let mut t = area(text, style(12.0), frame, Justify::Left);
+    assert!(!fit_source_lines(db(), &mut t, 3));
+    // Point type and vertical type aren't fitted.
+    let mut p = point(text, style(12.0));
+    assert!(!fit_source_lines(db(), &mut p, 9));
+}
+
 #[test]
 fn indents_and_paragraph_spacing() {
     let frame = Rect::new(0.0, 0.0, 200.0, 400.0);
@@ -880,12 +913,67 @@ fn a_leading_tab_takes_its_width_in_the_line_and_the_justification() {
     }
 }
 
+/// Right-aligned area type with tabs: the text before the last tab sits at its stops, measured from
+/// the frame's left edge, and the text after the last tab against the right edge, as Illustrator's
+/// own layout in a user's `.ai` (used locally, not committed) sets a list of an item and two
+/// prices: with a right stop at 269.29 and a left one at 272.13, the item starts at 0, the first
+/// price ends at 269.29 and the second ends on the edge.
+#[test]
+fn right_aligned_area_type_sets_the_text_after_its_last_tab_against_the_edge() {
+    use vectorcraft_doc::{TabAlign, TabStop};
+    let stop = |position: f64, align: TabAlign| TabStop { position, align, leader: String::new(), align_on: '.' };
+    let frame = Rect::new(0.0, 0.0, 336.0, 100.0);
+    let mut t = area("Item\t12.50\t24.00", style(13.0), frame, Justify::Right);
+    t.para.tabs = vec![stop(269.29, TabAlign::Right), stop(272.13, TabAlign::Left)];
+    let lay = layout(db(), &t);
+    let glyph = |byte: usize| lay.glyphs.iter().find(|g| g.byte == byte).unwrap();
+    let end = |byte: usize| glyph(byte).origin.x + glyph(byte).advance;
+    assert!(glyph(0).origin.x.abs() < 1e-6, "the item starts at the left edge: {}", glyph(0).origin.x);
+    let first_price_end = "Item\t12.50".len() - 1;
+    assert!((end(first_price_end) - 269.29).abs() < 1e-6, "the first price ends on its right stop: {}", end(first_price_end));
+    let last = t.plain_text().len() - 1;
+    assert!((end(last) - 336.0).abs() < 1e-6, "the last price ends on the edge: {}", end(last));
+    // One tab: the text after it is against the edge, whatever its stop.
+    let mut one = area("Another item\t8.00", style(13.0), frame, Justify::Right);
+    one.para.tabs = t.para.tabs.clone();
+    let lay = layout(db(), &one);
+    let first = lay.glyphs.first().unwrap();
+    let last = lay.glyphs.last().unwrap();
+    assert!(
+        first.origin.x.abs() < 1e-6 && (last.origin.x + last.advance - 336.0).abs() < 1e-6,
+        "{} {}",
+        first.origin.x,
+        last.origin.x + last.advance
+    );
+    // A tab ending the line (a heading in the user's file): the text before it at the left edge,
+    // the tab to the right edge.
+    let lay = layout(db(), &area("Heading\t\nNext", style(13.0), frame, Justify::Right));
+    assert!(lay.glyphs.first().unwrap().origin.x.abs() < 1e-6, "{}", lay.glyphs.first().unwrap().origin.x);
+    let tab = lay.glyphs.iter().find(|g| g.byte == 7).unwrap();
+    assert!((tab.origin.x + tab.advance - 336.0).abs() < 1e-6, "the tab ends at {}", tab.origin.x + tab.advance);
+    // Text after the last tab that breaks with a hyphen: the hyphen ends on the edge too.
+    let text = "A\tinternationalization";
+    let mut hyphenated = area(text, style(13.0), Rect::new(0.0, 0.0, 100.0, 200.0), Justify::Right);
+    hyphenated.para.hyphenate = true;
+    hyphenated.para.composer = vectorcraft_doc::Composer::SingleLine;
+    let lay = layout(db(), &hyphenated);
+    let line = &lay.lines[0];
+    assert!(line.end > 2 && line.end < text.len(), "the first line breaks inside the word: {line:?}");
+    let last = lay.glyphs.get(line.glyph_end - 1).unwrap();
+    assert!((last.origin.x + last.advance - 100.0).abs() < 1e-6, "the hyphen ends at {}", last.origin.x + last.advance);
+    // Without a tab, the line is right aligned as a whole.
+    let lay = layout(db(), &area("Name", style(13.0), frame, Justify::Right));
+    assert!(lay.glyphs.first().unwrap().origin.x > 200.0);
+}
+
 #[test]
 fn a_centred_or_right_aligned_line_sets_its_tabs_as_if_it_started_at_the_left() {
     use vectorcraft_doc::{TabAlign, TabStop};
     // "A<tab>B" with a stop at 100 pt is 100 pt plus B wide whatever the alignment: the whole line
     // moves, the gap between A and B stays 100 pt, and a right aligned line ends on the edge (#2457).
-    for justify in [Justify::Center, Justify::Right, Justify::JustifyCenter, Justify::JustifyRight] {
+    // (Right aligned area type sets the text after its last tab against the edge instead: see
+    // `right_aligned_area_type_sets_the_text_after_its_last_tab_against_the_edge`.)
+    for justify in [Justify::Center, Justify::JustifyCenter, Justify::JustifyRight] {
         let mut t = area("A\tB", style(12.0), Rect::new(0.0, 0.0, 200.0, 100.0), justify);
         t.para.tabs = vec![TabStop { position: 100.0, align: TabAlign::Left, leader: String::new(), align_on: '.' }];
         let lay = layout(db(), &t);
