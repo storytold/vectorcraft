@@ -74,6 +74,7 @@ pub(crate) use bounds::{cull_bounds, drawn_outline, drawn_outlines, painted_reac
 #[cfg(test)]
 pub(crate) use entries::Drawn;
 pub(crate) use entries::{DocInputs, FxGeom, Inputs, Reads, ShadowEntry};
+pub(crate) use pixels::paint_names;
 pub(crate) use predicates::{has_fx, has_object_fx};
 #[cfg(test)]
 pub(crate) use raster::RASTERIZED;

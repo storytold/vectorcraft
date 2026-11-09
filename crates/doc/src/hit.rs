@@ -84,8 +84,9 @@ impl Default for HitOptions {
 
 /// The shapes that an image's own fills and strokes paint, each with its fill rule and the fill or
 /// stroke that paints it (none for fills and strokes that paint nothing). Effects are evaluated
-/// above this crate, so the engine registers one with [`set_image_paint`].
-pub type ImagePaint = fn(&Node) -> Vec<(BezPath, FillRule, AppearanceItem)>;
+/// above this crate, so the engine registers one with [`set_image_paint`]. It looks up swatches and
+/// patterns in the document it is given.
+pub type ImagePaint = fn(Option<&Document>, &Node) -> Vec<(BezPath, FillRule, AppearanceItem)>;
 
 static IMAGE_PAINT: OnceLock<ImagePaint> = OnceLock::new();
 
@@ -98,8 +99,8 @@ pub fn set_image_paint(f: ImagePaint) {
 
 /// The shapes that the image `n`'s own fills and strokes paint ([`set_image_paint`]), none while
 /// nothing is registered.
-pub(crate) fn image_paint(n: &Node) -> Vec<(BezPath, FillRule, AppearanceItem)> {
-    IMAGE_PAINT.get().map_or_else(Vec::new, |f| f(n))
+pub(crate) fn image_paint(doc: Option<&Document>, n: &Node) -> Vec<(BezPath, FillRule, AppearanceItem)> {
+    IMAGE_PAINT.get().map_or_else(Vec::new, |f| f(doc, n))
 }
 
 /// One level of evaluation of a live object in a document, as the canvas draws it: type in an
@@ -871,7 +872,7 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
             if opt.outline {
                 return None;
             }
-            image_paint(n).iter().rev().find_map(|(bp, rule, item)| match item {
+            image_paint(Some(symbols.document()), n).iter().rev().find_map(|(bp, rule, item)| match item {
                 AppearanceItem::Stroke(s) => s.hits(bp, *rule, p, opt.tol).then_some(HitKind::Stroke),
                 AppearanceItem::Fill(_) => (!opt.path_only && fill_contains(bp, *rule, p)).then_some(HitKind::Fill),
             })

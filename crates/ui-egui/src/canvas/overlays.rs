@@ -110,9 +110,10 @@ pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf:
     // The Selection tool's bounding box (rotated with the objects after a rotation), also shown by
     // the shape tools that keep a shape just drawn ready to adjust while they draw none (#5477). It
     // hides while a drag moves or resizes the selection, so only the art is seen going with the
-    // pointer (#712).
+    // pointer (#712). A handle resize keeps it at the changing bounds (#3526).
     // With Real-time Drawing off the art waits for the release of a move drag, and the box moves
     // with the pointer instead.
+    let resizing = app.session.tool_resizing();
     let moved = app.session.deferred_move();
     let shape_tool = vectorcraft_tools::shape::shows_shape_widgets(app.session.tool_id());
     // A shape tool drawing a shape shows none of this; adjusting a widget, it shows the widgets.
@@ -122,10 +123,18 @@ pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf:
     let held = super::drag::mods(p.ctx().input(|i| i.modifiers), false);
     let lends_selection = !app.session.tool_busy() && app.session.lent_tool_id(&held) == Some("selection");
     let show_box = (app.session.tool_id() == "selection" || lends_selection || (shape_tool && !app.session.tool_busy()))
-        && (!app.session.tool_transforming() || moved.is_some())
+        && (resizing || !app.session.tool_transforming() || moved.is_some())
         && app.ui.view.bounding_box
         && app.session.active().is_some_and(|st| !st.selection.is_empty() && st.selection.anchors.is_empty());
-    let bbox = if show_box { app.selection_box() } else { None };
+    // With Real-time Drawing off the document stays at the drag's snapshot, so a resize measures the
+    // box from the pending preview; otherwise each step's revision measures it once (`selection_box`).
+    let bbox = if !show_box {
+        None
+    } else if let Some(b) = resizing.then(|| app.session.deferred_transform_box()).flatten() {
+        Some(b)
+    } else {
+        app.selection_box()
+    };
     let bbox = bbox.map(|b| match moved {
         Some(d) => vectorcraft_doc::OrientedBox { rect: b.rect + b.to_local(d.to_point()).to_vec2(), ..b },
         None => b,
