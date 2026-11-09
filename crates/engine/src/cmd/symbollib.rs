@@ -199,10 +199,12 @@ fn basic_shapes() -> SymbolLibrary {
 
 /// UI Frames: panel, button and bar HUD chrome with default 9-slice guides (original art).
 fn ui_frames() -> SymbolLibrary {
+    // Heights keep default 9-slice (0.25) past each corner radius so a vertical resize
+    // stretches only the flat middle, not the curves.
     let frames = [
         ("Panel", Rect::new(-48.0, -36.0, 48.0, 36.0), 10.0, "#2b3340", "#8aa0b8"),
-        ("Button", Rect::new(-36.0, -14.0, 36.0, 14.0), 8.0, "#3a6ea5", "#d7e6f5"),
-        ("Bar", Rect::new(-56.0, -10.0, 56.0, 10.0), 10.0, "#1f6b4a", "#b7e0c9"),
+        ("Button", Rect::new(-36.0, -18.0, 36.0, 18.0), 8.0, "#3a6ea5", "#d7e6f5"),
+        ("Bar", Rect::new(-56.0, -24.0, 56.0, 24.0), 10.0, "#1f6b4a", "#b7e0c9"),
     ];
     let mut doc = Document::new(100.0, 100.0);
     for (name, rect, radius, fill_hex, edge_hex) in frames {

@@ -105,13 +105,23 @@ fn ui_frames_symbols_carry_default_nine_slice_when_added() {
     let lib = run(&mut s, "symbol.library", json!({"library": "ui-frames"}));
     let names: Vec<&str> = lib["symbols"].as_array().unwrap().iter().map(|x| x["name"].as_str().unwrap()).collect();
     assert_eq!(names, ["Panel", "Button", "Bar"]);
-    let r = run(&mut s, "symbol.addFromLibrary", json!({"library": "ui-frames", "name": "Panel", "place": true, "x": 100.0, "y": 100.0}));
-    assert_eq!(r["added"], json!(["Panel"]));
-    assert!(r["placed"].as_u64().is_some());
+    let mut placed = Vec::new();
+    for (i, name) in names.iter().enumerate() {
+        let r = run(
+            &mut s,
+            "symbol.addFromLibrary",
+            json!({"library": "ui-frames", "name": name, "place": true, "x": 100.0 + 80.0 * i as f64, "y": 100.0}),
+        );
+        assert_eq!(r["added"], json!([name]));
+        placed.push(r["placed"].as_u64().unwrap());
+    }
     let d = doc(&s);
+    for name in &names {
+        assert!(d.symbol_nine_slice(name).is_some(), "{name} should have 9-slice guides");
+    }
     assert_eq!(d.symbol_nine_slice("Panel"), Some(vectorcraft_doc::SymbolNineSlice::default()));
     assert!(matches!(
-        d.node(NodeId(r["placed"].as_u64().unwrap())).map(|n| &n.kind),
+        d.node(NodeId(placed[0])).map(|n| &n.kind),
         Some(NodeKind::SymbolInstance { symbol, .. }) if symbol == "Panel"
     ));
 }
