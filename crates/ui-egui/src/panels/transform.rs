@@ -161,9 +161,25 @@ pub(crate) fn set_size(app: &mut VectorcraftApp, bx: &OrientedBox, key: &str, v:
     let (sx, sy) = if key == "width" { (k, k2) } else { (k2, k) };
     // About the box's reference point, which X/Y show and the user picked to stay put (the
     // footprint's corners aren't on the art).
-    let rp = bx.reference_point(refi.min(8));
+    let refi = refi.min(8);
+    let rp = bx.reference_point(refi);
     let matrix = [sx, 0.0, 0.0, sy, rp.x * (1.0 - sx), rp.y * (1.0 - sy)];
+    // A scale out of proportion skews rotated art, and its box is measured again around it (its
+    // angle can change): the selection then moves so that box's reference point is where X/Y
+    // showed it. Both are one undo step.
+    if app.run("edit.undoGroup.begin", json!({"label": "Transform"})).is_err() {
+        return;
+    }
     run_transform(app, "object.transform", json!({"matrix": matrix, "copy": copy}));
+    if let Some(after) = app.selection_box() {
+        let d = rp - after.reference_point(refi);
+        if d.x.is_finite() && d.y.is_finite() && d.hypot() > 1e-9 {
+            // The copy, if one was made, is what is selected and moves.
+            run_transform(app, "object.transform", json!({"matrix": [1.0, 0.0, 0.0, 1.0, d.x, d.y]}));
+        }
+    }
+    // It only fails with no group open, which the begin above opened.
+    let _ = app.run("edit.undoGroup.end", json!({}));
 }
 
 pub fn run_transform(app: &mut VectorcraftApp, cmd: &str, mut params: serde_json::Value) {

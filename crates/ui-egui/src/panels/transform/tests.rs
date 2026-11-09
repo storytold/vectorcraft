@@ -92,20 +92,26 @@ fn width_and_height_follow_a_rotation_and_set_the_footprint() {
 }
 
 /// A new W on a rotated selection keeps the reference point X/Y show where it is: a corner of the
-/// rotated box, not of the footprint.
+/// rotated box, not of the footprint, also when a scale out of proportion skews the art and its
+/// box is measured again. It is one undo step.
 #[test]
 fn a_rotated_size_scales_about_the_boxs_reference_point() {
-    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-    app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap();
-    app.run("object.rotate", json!({"angle": 30, "absolute": true})).unwrap();
-    let b = app.selection_box().unwrap();
-    let corner = b.reference_point(0);
-    set_size(&mut app, &b, "width", 200.0, 0, true, false);
-    let after = app.selection_box().unwrap();
-    let moved = after.reference_point(0) - corner;
-    assert!(moved.hypot() < 0.01, "the top-left corner moved by {moved:?}");
-    assert!((shown_size(&mut app, &after).0 - 200.0).abs() < 0.01);
+    for (proportional, width) in [(true, 200.0), (false, 200.0), (false, 60.0)] {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap();
+        app.run("object.rotate", json!({"angle": 30, "absolute": true})).unwrap();
+        let b = app.selection_box().unwrap();
+        let corner = b.reference_point(0);
+        set_size(&mut app, &b, "width", width, 0, proportional, false);
+        let after = app.selection_box().unwrap();
+        let moved = after.reference_point(0) - corner;
+        assert!(moved.hypot() < 0.01, "proportional {proportional}, W {width}: the top-left corner moved by {moved:?}");
+        assert!((shown_size(&mut app, &after).0 - width).abs() < 0.01, "proportional {proportional}, W {width}");
+        app.run("edit.undo", json!({})).unwrap();
+        let back = app.selection_box().unwrap();
+        assert!((back.reference_point(0) - corner).hypot() < 0.01 && (back.angle - b.angle).abs() < 1e-6, "one undo step");
+    }
 }
 
 /// #812: a selected live polygon shows its Polygon Properties in the Transform panel and the
