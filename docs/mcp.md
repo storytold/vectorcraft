@@ -5916,8 +5916,9 @@ The custom dictionary holds words every check takes as right, in every language.
 adds one (Check Spelling's Add; one word of at most 64 characters, kept in lower case) and says whether it was new;
 `text.spelling.removeWord {word}` deletes one and `text.spelling.changeWord {word, to}` replaces one (Edit Custom
 Dictionary's Delete and Change; an error when `word` isn't there); `text.spelling.dictionary` lists them, sorted. The
-desktop app keeps them in `Custom Dictionary.txt` next to its preferences, one word per line; elsewhere they last
-until the app closes. `text.spelling.ignoreAll {word}` is Ignore All: the active document's checks skip the word, in
+desktop app and `vectorcraft-cli` (its `mcp` and `run` sessions) keep them in `Custom Dictionary.txt` next to the
+preferences, one word per line; without preferences (`VECTORCRAFT_NO_PREFS`, the web app) they last until the app
+closes. `text.spelling.ignoreAll {word}` is Ignore All: the active document's checks skip the word, in
 any case, while the document is open. It is not saved and not an undo step.
 
 ```json
