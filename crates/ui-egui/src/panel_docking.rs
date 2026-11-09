@@ -1418,13 +1418,53 @@ impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
         crate::panels::panel_menu_items(self.app, ui, id);
     }
 
-    fn group_header_width(&self, _panels: &[String], _active: &String, _floating: bool, _strip_width: f32) -> f32 {
-        28.0
+    fn group_header_width(&self, panels: &[String], _active: &String, floating: bool, _strip_width: f32) -> f32 {
+        let flyout = self.app.ui.open_panel.as_ref().is_some_and(|panel| panels.contains(panel));
+        if floating || flyout { 52.0 } else { 28.0 }
     }
 
-    fn group_header(&mut self, ui: &mut egui::Ui, _panels: &[String], active: &String, _floating: bool) {
-        let rect = egui::Rect::from_center_size(ui.max_rect().center(), egui::vec2(16.0, 16.0));
-        crate::panels::panel_menu(self.app, ui, active, rect);
+    fn group_header(&mut self, ui: &mut egui::Ui, panels: &[String], active: &String, floating: bool) {
+        let header = ui.max_rect();
+        let flyout = self.app.ui.open_panel.clone().filter(|panel| panels.contains(panel));
+        let menu_cell = if floating || flyout.is_some() {
+            let split = (header.right() - 28.0).max(header.left());
+            let cell = egui::Rect::from_min_max(header.min, egui::pos2(split, header.bottom()));
+            if cell.is_positive() {
+                let rect = egui::Rect::from_center_size(cell.center(), egui::vec2(24.0_f32.min(cell.width()), 24.0_f32.min(cell.height())));
+                let tokens = crate::theme::Tokens::get(ui.ctx());
+                let response = ui.interact(rect, ui.scope_id().with(("collapse-to-icons", active)), egui::Sense::click());
+                response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!("Collapse to Icons")));
+                let color = if response.hovered() || response.has_focus() { tokens.text_strong } else { tokens.text_dim };
+                ui.painter().with_clip_rect(rect.intersect(ui.clip_rect())).text(
+                    rect.center(),
+                    egui::Align2::CENTER_CENTER,
+                    "»",
+                    egui::TextStyle::Button.resolve(ui.style()),
+                    color,
+                );
+                if response.on_hover_text(tl!("Collapse to Icons")).clicked() {
+                    let result = if let Some(panel) = flyout {
+                        // The opening icon can differ from the currently active tab.
+                        self.app.run("window.panel", json!({"panel": panel}))
+                    } else {
+                        self.app.run("window.panel.dock", json!({"panel": active, "icon": true, "group": true}))
+                    };
+                    match result {
+                        // Dock commands reveal their destination. This control leaves the group collapsed.
+                        Ok(_) => self.app.ui.open_panel = None,
+                        Err(error) => self.app.ui.status = error,
+                    }
+                }
+            }
+            egui::Rect::from_min_max(egui::pos2(split, header.top()), header.max)
+        } else {
+            header
+        };
+        if menu_cell.is_positive() {
+            let rect =
+                egui::Rect::from_center_size(menu_cell.center(), egui::vec2(16.0_f32.min(menu_cell.width()), 16.0_f32.min(menu_cell.height())));
+            crate::panels::panel_menu(self.app, ui, active, rect);
+        }
     }
 }
 
