@@ -30,8 +30,8 @@ This page is the contract for plug-in authors and the reference for the host (`c
 | `plugin.list` | `{}` | `{"plugins": [{id, name, version, kind, author, description, params, paramsSchema, effect?, format?, extensions?, budget?, commands?, size, source, api, paintOutput?, permissions, hash, cacheBytes}], "folder": report}` (`api` is the manifest's [plug-in API level](#permissions); `budget: "heavy"` for a [heavy filter](#heavy-filters); `commands` lists its [commands](#commands); `paintOutput: true` marks a [painted live effect](#painted-live-effects); `permissions` lists what it [may do](#permissions), `hash` is the module's SHA-256; `cacheBytes` is the size of its [cache](#settings-and-cache)) |
 | `plugin.info` | `{"id"}` | One plug-in: the `plugin.list` entry plus `manifest`, `defaults` and `lastError` (a live effect's last failure). |
 | `plugin.run` | `{"id", "params"?: {…}, "ids"?: [...]}` (plug-in params may also be top-level keys) | Runs an object filter on the selection (or `ids`; an `ids` that is not a list of object ids is an error). One undo step; the result is selected, except the objects it locked or made guides. |
-| `plugin.install` | `{"path": "/x/y.wasm"}` (desktop) or `{"dataBase64": "…", "name"?}`, `"replace"?: bool`, `"allowHeavy": bool = false`, `"grant"?: [permission]`, `"hash"?: "sha256 hex"` | Validates and installs a module; returns its `plugin.list` entry. The desktop app and `vectorcraft-cli` keep it in the `Plug-ins` folder next to the preferences, so it is installed again after a restart (#2541). A module with other bytes than the plug-in installed with its id, or, with none installed, one whose id has [settings and a cache](#settings-and-cache) in the `Plug-ins` folder, installs only with `replace: true`, once the user agreed; it takes that plug-in's place and gets its settings and cache. The same module installs again without `replace`, and `replace: false` refuses a module whose id is installed. A [heavy filter](#heavy-filters) installs only with `allowHeavy: true`, once the user agreed. A plug-in whose manifest lists [permissions](#permissions) installs only when `grant` lists every one of them, once the user agreed, unless the user already granted a module with the same SHA-256. With `hash`, a module whose SHA-256 differs is refused. |
-| `plugin.inspect` | as `plugin.install`: `{"path"}` or `{"dataBase64", "name"?}` | Validates a module without installing it; returns the `plugin.list` entry it would have, plus `needsApproval` (true when `plugin.install` needs `grant`) and `needsReplace` (true when `plugin.install` needs `replace: true`). |
+| `plugin.install` | `{"path": "/x/y.wasm"}` (desktop) or `{"dataBase64": "…", "name"?}`, `"replace"?: bool`, `"allowHeavy": bool = false`, `"grant"?: [permission]`, `"hash"?: "sha256 hex"` | Validates and installs a module; returns its `plugin.list` entry. The desktop app and `vectorcraft-cli` keep it in the `Plug-ins` folder next to the preferences, so it is installed again after a restart (#2541). A module with other bytes than the plug-in installed with its id, or, with none installed, one whose id has [settings and a cache](#settings-and-cache) in the `Plug-ins` folder, installs only with `replace: true`, once the user agreed; it takes that plug-in's place and gets its settings and cache. The same module installs again without `replace`, and `replace: false` refuses a module whose id is installed. A [heavy filter](#heavy-filters) installs only with `allowHeavy: true`. A plug-in whose manifest lists [permissions](#permissions) installs only when `grant` lists every one of them, unless a grant is already recorded for a module with the same SHA-256. A request's `grant` and `allowHeavy` are refused except in a session started with `vectorcraft-cli --allow-plugin-grants`. With `hash`, a module whose SHA-256 differs is refused. |
+| `plugin.inspect` | as `plugin.install`: `{"path"}` or `{"dataBase64", "name"?}` | Validates a module without installing it; returns the `plugin.list` entry it would have, plus `needsApproval` (true when installing it needs a person's approval) and `needsReplace` (true when `plugin.install` needs `replace: true`). |
 | `plugin.remove` | `{"id"}` | Uninstalls, and deletes it from the `Plug-ins` folder with its [settings and cache](#settings-and-cache). |
 | `plugin.clearCache` | `{"id"?}` | Deletes every entry in the [cache](#settings-and-cache) of plug-in `id`, or of every installed plug-in; settings stay. Returns `{"cleared": [id], "bytesFreed"}`. |
 | `plugin.reload` | `{"path"?: "folder"}` (default: the preference folder) | Installs every `*.wasm` in a folder; a bad module is reported and skipped, and so are a heavy filter and a plug-in whose permissions the user hasn't granted (nobody was asked). |
@@ -147,8 +147,9 @@ an importer an import's). Each of its runs gets 1 G instructions (20 times a lig
 much there is only once the run has ended.
 
 - **Installing asks first.** Install Plug-in… and File › Open show what the filter asks for, and install it once the
-  user clicks OK; `plugin.install` refuses it without `allowHeavy: true`, which an agent passes once the user agreed
-  (`plugin.inspect` tells it beforehand). A filter kept in the `Plug-ins` folder was agreed to and is installed again
+  user clicks OK (see [Permissions](#permissions) for who can). `plugin.install` refuses it without `allowHeavy: true`,
+  and refuses `allowHeavy` from a request except in a session started with `vectorcraft-cli --allow-plugin-grants`
+  (`plugin.inspect` shows the budget beforehand). A filter kept in the `Plug-ins` folder was agreed to and is installed again
   at startup. The Additional Plug-ins Folder skips heavy filters with a note in its report, since loading a folder
   asks nobody.
 - **It runs in the background.** Its dialog has no Preview. OK (or the menu item, without parameters) runs it on a
@@ -194,16 +195,29 @@ capability model proposed for PhotoCraft plug-ins
   the file and each permission in plain words, and install it once the user clicks OK, if the file still has the
   SHA-256 shown; Cancel installs nothing. The
   names shown have control and bidirectional characters escaped (`\u{202E}`) and are cut to 64 characters.
-  `plugin.install` refuses the module, naming the permissions it needs, unless `grant` lists them all, which an agent
-  passes once the user agreed (`plugin.inspect`'s `needsApproval` tells it beforehand), with `hash` set to the
-  `plugin.inspect` entry's `hash` so that the module installed is the one the user saw. `plugin.install` does not
-  check that a person approved `grant`: it trusts the client that sends it.
+  Only a person can press its OK: `ui.dialog.confirm`, MCP's `answer_dialog` and injected input (`ui.key`, `ui.click`)
+  are refused and the dialog stays open. Enter confirms it only when OK has the keyboard focus. `ui.dialog.set` can't
+  change what it installs.
+- `plugin.install` refuses the module, naming the permissions it needs, unless this module already has a recorded grant
+  (`plugin.inspect`'s `needsApproval` tells it beforehand). A request's `grant` is refused too: `plugin.install` takes
+  it only with the approval the dialog gives. A `vectorcraft-cli mcp` or `run` started with `--allow-plugin-grants`
+  takes `grant` and `allowHeavy` from any request; only the person starting the process can set that flag, and it
+  doesn't apply to a running app. `mcp` refuses the flag together with `--automation-read-root` or
+  `--automation-write-root`: a server confined to folders has no plug-in store, so it reads no `grants.json`, and a
+  module that lists permissions or asks for a heavy budget does not install there. Without the flag, MCP in headless
+  mode and the CLI install a module that lists permissions only when its hash is recorded in the shared `grants.json`.
+  A person's approval in the desktop app records it, and so does a `grant` accepted under `--allow-plugin-grants`. A
+  recorded grant counts as approved in later sessions without the flag and in the desktop app. With
+  `VECTORCRAFT_NO_PREFS` set there is no store, and a `grant` accepted under the flag lasts for that session only.
+  With `--allow-plugin-grants`, pass `hash` set to the `plugin.inspect` entry's `hash` so that the module installed is
+  the one the user saw.
 - **Replacing asks first.** When the file is another module than the plug-in installed with its id, or, with none
   installed, its id has settings and a cache in the `Plug-ins` folder, Install Plug-in… and File › Open show its id
   and SHA-256 and ask whether to install it in place of that plug-in, which gives it the settings and cache kept for
-  the id. `plugin.install` refuses such a module, naming it, unless `replace` is `true`, which an agent passes once
-  the user agreed (`plugin.inspect`'s `needsReplace` tells it beforehand). The Additional Plug-ins Folder and
-  `plugin.reload` do not ask.
+  the id. When the same module also needs its permissions or a heavy budget approved, the one approval dialog asks
+  about all of them, and only a person can press its OK. `plugin.install` refuses such a module, naming it, unless
+  `replace` is `true`, which an agent passes once the user agreed (`plugin.inspect`'s `needsReplace` tells it
+  beforehand). The Additional Plug-ins Folder and `plugin.reload` do not ask.
 - The grant is recorded with the plug-in's id, the module's hash and the permissions, in `grants.json` in the
   `Plug-ins` folder, and covers only that module. Installing the same bytes again needs no new approval. A module with
   other bytes asks again, even when it lists the same permissions, and does not get the id's settings and cache until
@@ -212,9 +226,29 @@ capability model proposed for PhotoCraft plug-ins
   the old module and its grant, and the old module loads at the next start. If the write that puts the old module back
   fails as well, the folder holds the new module with the old grant, the grant does not cover that module, and the
   plug-in is skipped at the next start until it is approved again. A grant whose hash is not 64 lower-case
-  hexadecimal digits covers nothing. `plugin.remove` forgets the grant. An entry of `grants.json` that this version can't use (a
-  permission it doesn't know, an invalid id) is skipped and stays in the file until its plug-in is granted again or
-  removed. A `grants.json` that is not a JSON list is never overwritten, and the file is never written larger than
+  hexadecimal digits covers nothing. `plugin.remove` forgets the grant, and so does a successful `plugin.install` of a
+  module that lists no permissions under that id, so the earlier bytes need a new approval. When `plugin.remove` can't
+  remove the grant from `grants.json`, it returns an error, the plug-in stays installed, and a second `plugin.remove`
+  tries again. A refused install leaves the grant as it is. When an install of a module that lists no permissions can't
+  write the module to the `Plug-ins` folder, or can't remove the grant from `grants.json`, the folder keeps the module
+  it held and `grants.json` keeps the grant. The new module runs until the session ends. When the grant can't be
+  removed and the module already stored can't be read back or written back, the new module stays in the folder, and
+  the grant does not count for the rest of the session. The grant also does not count when the folder held no module
+  for that id. A
+  `grants.json` larger than 1 MiB, or one that is not a JSON list, grants nothing: the new module stays in the folder,
+  and `plugin.remove` removes the plug-in. A `grants.json` that can't be opened or read counts as a grant that can't be
+  removed. When VectorCraft loads the `Plug-ins` folder, it forgets any grant for an id whose stored module lists no
+  permissions. When it can't remove that grant from `grants.json`, or can't read the file, the grant does not count for
+  the rest of the session, or until the plug-in is granted again, including for the next load, which tries the removal
+  again. In Safe Mode, and for
+  a stored module that the user disabled,
+  VectorCraft does not read the module, and `grants.json` keeps the grant for its id. The Additional Plug-ins Folder
+  and `plugin.reload` do not change the `Plug-ins` folder: when they leave a module that lists no permissions under an
+  id, the process forgets its own grant for that id, and a grant kept in `grants.json` stays with the stored module it
+  covers. An entry of `grants.json` that this version can't use (a permission it doesn't know, an invalid id) is
+  skipped and stays in the file until its plug-in is granted again, replaced by a module that lists no permissions, or
+  removed. When such an entry can't be removed from the file, `plugin.install` and `plugin.remove` treat it as a grant
+  that can't be removed. A `grants.json` that is not a JSON list is never overwritten, and the file is never written larger than
   1 MiB, the most that is read. When a `Plug-ins` folder is in use, only the grants kept
   in it count for `plugin.install`, `plugin.inspect`, `plugin.reload` and the Additional Plug-ins Folder. At startup,
   a stored plug-in is skipped when no grant covers its bytes and the permissions it lists. The Additional Plug-ins
@@ -530,9 +564,9 @@ In this example the character and paragraph styles are cut short; a filter gets 
   it in paint order left, and a linked image (`linked: true`) have
   `pixelsOmitted: true` and no pixels; the host checks an image's size before it decodes the image. An image of any
   size also has `pixelsOmitted: true` when its data is missing from the document, when its width or height is 0, when
-  its data cannot be decoded (or needs more than 64 MiB of decoder memory, or is a TIFF the host rejects as too
-  large), or when the dimensions in its data differ from `pixelSize`. A plug-in checks `pixelsOmitted` before it
-  reads `pixelsBase64`, which is present only when `pixelsOmitted` is `false`. The host never
+  its data cannot be decoded (including a non-CMYK image whose decoder enforces the host's 64 MiB memory limit and
+  needs more, and a TIFF the host rejects as too large), or when the dimensions in its data differ from `pixelSize`.
+  A plug-in checks `pixelsOmitted` before it reads `pixelsBase64`, which is present only when `pixelsOmitted` is `false`. The host never
   reads a linked image's file for a filter and never gives its path.
 - A symbol instance (`"symbolInstance"`): `symbolId` is the name of the symbol it shows, with `missing: true` when the
   document has no symbol of that name. `overrides` is `{}`.

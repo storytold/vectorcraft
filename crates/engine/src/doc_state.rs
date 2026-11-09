@@ -58,6 +58,9 @@ pub struct DocState {
     /// View Opacity Mask (Alt-click the mask thumbnail): the masked object whose mask the canvas
     /// shows alone, in greyscale, while that mask is edited (see [`DocState::shown_mask`]).
     pub mask_view: Option<NodeId>,
+    /// Check Spelling's Ignore All: the words (as craft-proof keys them, lower case) a spelling
+    /// check of this document skips. Kept while the document is open: not saved, not undoable.
+    pub spelling_ignored: std::collections::BTreeSet<String>,
     /// View → Show Transparency Grid, per document (saved view state, not undoable).
     pub transparency_grid: bool,
     /// The format Save writes ([`cmd::fileio::SAVE_FORMATS`]): the one the document was opened
@@ -288,6 +291,7 @@ impl DocState {
             uid: NEXT_DOC_UID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             opened_as_tab: true,
             mask_view: None,
+            spelling_ignored: Default::default(),
             transparency_grid,
             format: "vectorcraft",
             save_options: Default::default(),
