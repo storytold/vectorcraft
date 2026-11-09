@@ -2453,6 +2453,10 @@ digits	Malayalam	მალაიალამური
 	< 1 sec	< 1 წმ
 	[Unnamed]	[უსახელო]
 	Amount:	რაოდენობა:
+	Anti-aliasing Method	ანტიალიასინგის მეთოდი
+antiAlias	Sharp	მკვეთრი
+	Crisp	მკაფიო
+	Strong	ძლიერი
 	Anti-aliasing:	ანტიალიასინგი:
 	Artboard:	სამუშაო დაფა:
 	Color Table	ფერების ცხრილი
@@ -3894,6 +3898,7 @@ font-technology	Variable	ცვლადი
 @msg	Split Into Grid: select paths large enough for the grid	ბადედ გაყოფა: მონიშნეთ ბადისთვის საკმარისად დიდი ტრაექტორიები
 @msg	Targa files are RGB: colorModel rgb	Targa ფაილები RGB-ა: colorModel rgb
 @msg	Text Wrap: select a wrap object	ტექსტის შემოვლება: მონიშნეთ შემოსავლელი ობიექტი
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` უნდა იყოს "none", "sharp", "crisp" ან "strong"
 @msg	`aspect` must be a number (%)	`aspect` უნდა იყოს რიცხვი (%)
 @msg	`at` must be [x, y]	`at` უნდა იყოს [x, y]
 @msg	`color` must be a colour	`color` უნდა იყოს ფერი
@@ -5597,6 +5602,11 @@ imageTrace	Outline	კონტური
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	„შენახვა“ წერს ფორმატს {_1} და არა {_2}: ამისთვის გამოიყენეთ file.saveAsTemplate
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	გამოსახულება არის {_1} × {_2} პიქსელი, ანუ ერთ მხარეზე {LARGE_TRACE_SIDE}-ზე მეტი: ის ვექტორიზდება, მაგრამ უფრო ნელა. ნაკლები სიზუსტის პრესეტი ან გამოსახულების უფრო პატარა ასლი უფრო სწრაფად ვექტორიზდება.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	გამოსახულება ვექტორიზდა {_1} × {_2} პიქსელზე, შემცირდა {_3} × {_4}-დან (მაქსიმუმ {_5} მეგაპიქსელი).
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	ბრტყელი ლოგოს რეჟიმი keepColors-ს არ იყენებს: ის ვექტორიზებს logoColors-ში მითითებულ ფერებს ან მის მიერ ნაპოვნ ფერებს.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	არაფერი ვექტორიზდა: ვექტორიზაციის მიერ ნაპოვნი არცერთი ფერი არ შეესაბამება keepColors-ს ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	არაფერი ვექტორიზდა: ფერის იგნორირება გამოტოვებს keepColors-ში ჩამოთვლილი ფერების ყველა არეს.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	არაფერი ვექტორიზდა: keepColors-ის შესაბამისი ფერებიდან არცერთი კონტური არ მიიღება.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: ვექტორიზაციის მიერ ნაპოვნი არცერთი ფერი არ შეესაბამება {c}-ს, ამიტომ მისგან არაფერი ვექტორიზდება.
 @msg	`colorGroup` needs `library: "document"`	`colorGroup`-ს სჭირდება `library: "document"`
 @msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup`-ს სჭირდება `palette: "documentLibrary"`
 @msg	`colorGroup` needs `mode: "color"`	`colorGroup`-ს სჭირდება `mode: "color"`
@@ -5831,6 +5841,14 @@ axis	Y Axis	Y ღერძი
 @msg	unknown permission `{shown}`	უცნობი ნებართვა `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	„{name}“ ითხოვს ნებართვებს {asked}: მომხმარებლის თანხმობის შემდეგ დააყენეთ ის `grant` პარამეტრით, რომელშიც ისინი ჩამოთვლილია
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	„{name}“-ს არ მიეცა `{p}`, რომელიც მის შედეგს სჭირდება: არაფერი შეცვლილა
+@msg	a heavy filter runs in the background, so it can't declare `commands`	მძიმე ფილტრი ფონურ რეჟიმში მუშაობს, ამიტომ მას არ შეუძლია `commands`-ის გამოცხადება
+@msg	at most {MAX_COMMANDS} `commands`	მაქსიმუმ {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	ბრძანება {name} ორჯერაა გამოცხადებული
+@msg	command {name}: `label` must be 1-64 printable characters	ბრძანება {name}: `label` უნდა შედგებოდეს 1-64 დასაბეჭდი სიმბოლოსგან
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	ბრძანება {name}: გამოიყენეთ 1-{MAX_COMMAND_ID} სიმბოლოიანი id a-z 0-9 _ სიმბოლოებიდან, რომელიც ასოთი იწყება
+@msg	command {name}: {e}	ბრძანება {name}: {e}
+@msg	only a filter or a live effect declares `commands`	`commands`-ს მხოლოდ ფილტრი ან ცოცხალი ეფექტი აცხადებს
+@msg	“{name}” › {label}: {e}	„{name}“ › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	მოდულს არ აქვს `hash`-ში მითითებული SHA-256: არაფერი დაყენებულა
 # Actions panel: action sets (#3712).
 	New Set…	ახალი ნაკრები…
@@ -6486,6 +6504,7 @@ breakText	Glyphs	გლიფები
 	Create Swatch Legend	ფერის ნიმუშების ლეგენდის შექმნა
 	Create Swatch Legend…	ფერის ნიმუშების ლეგენდის შექმნა…
 	HEX	HEX
+	Help Bar	დახმარების ზოლი
 	Check for Updates…	განახლებების შემოწმება…
 	VectorCraft Updates	VectorCraft-ის განახლებები
 	Preparing the image…	გამოსახულების მომზადება…

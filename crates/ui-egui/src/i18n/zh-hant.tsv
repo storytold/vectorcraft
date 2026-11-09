@@ -156,6 +156,10 @@
 	Anti-Alias	消除鋸齒
 	Anti-alias Rasters	點陣影像消除鋸齒
 	Anti-aliased Artwork	消除鋸齒的圖稿
+	Anti-aliasing Method	消除鋸齒方法
+antiAlias	Sharp	銳利
+	Crisp	清晰
+	Strong	強
 	Anti-aliasing:	消除鋸齒：
 	Any Kind	所有類型
 	Font Technology	字體技術
@@ -1852,6 +1856,7 @@ file-filter	Templates	範本
 @msg	no point {i} (the gradient has {_1})	沒有點 {i} (此漸層有 {_1} 個)
 @msg	no segment {segment} on line {line}	線條 {line} 上沒有線段 {segment}
 @msg	unknown freeform mode `{m}` (points, lines)	未知的任意形狀模式 `{m}` (points、lines)
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` 必須是 "none"、"sharp"、"crisp" 或 "strong"
 @msg	`aspect` must be a number (%)	`aspect` 必須是數字 (%)
 @msg	`gradient` must be an object	`gradient` 必須是物件
 @msg	`groupColors` must be an array	`groupColors` 必須是陣列
@@ -2570,6 +2575,11 @@ file-filter	Templates	範本
 @msg	too many library panels were opened in this session	本次工作階段開啟的資料庫面板過多
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	影像為 {_1} × {_2} 像素，有一邊超過 {LARGE_TRACE_SIDE}：仍會描圖，但速度較慢。使用精確度較低的預設集或較小的影像拷貝，描圖會較快。
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	影像已以 {_1} × {_2} 像素描圖，由 {_3} × {_4} 縮小而來 (最多 {_5} 百萬像素)。
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	「扁平標誌」模式不使用 keepColors：它會描圖 logoColors 中指定的顏色，或它找到的顏色。
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	未描圖任何內容：描圖找到的顏色中沒有一種與 keepColors ({_1}) 相符。
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	未描圖任何內容：「忽略顏色」排除了 keepColors 所列顏色的所有區域。
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	未描圖任何內容：與 keepColors 相符的顏色未產生任何路徑。
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors：描圖找到的顏色中沒有一種與 {c} 相符，因此該顏色未被描圖。
 @msg	`colorGroup` needs `library: "document"`	`colorGroup` 需要 `library: "document"`
 @msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` 需要 `palette: "documentLibrary"`
 @msg	`colorGroup` needs `mode: "color"`	`colorGroup` 需要 `mode: "color"`
@@ -5541,6 +5551,14 @@ axis	Y Axis	Y 軸
 @msg	unknown permission `{shown}`	未知權限 `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	「{name}」需要權限 {asked}：請在使用者同意後以列出這些權限的 `grant` 安裝
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	「{name}」未獲授予其輸出所需的 `{p}`：未做任何變更
+@msg	a heavy filter runs in the background, so it can't declare `commands`	重型濾鏡在背景執行，因此不能宣告 `commands`
+@msg	at most {MAX_COMMANDS} `commands`	最多 {MAX_COMMANDS} 個 `commands`
+@msg	command {name} is declared twice	指令 {name} 宣告了兩次
+@msg	command {name}: `label` must be 1-64 printable characters	指令 {name}：`label` 必須是 1-64 個可列印字元
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	指令 {name}：請使用由 a-z 0-9 _ 組成、以字母開頭的 1-{MAX_COMMAND_ID} 個字元的 ID
+@msg	command {name}: {e}	指令 {name}：{e}
+@msg	only a filter or a live effect declares `commands`	只有濾鏡或即時效果才能宣告 `commands`
+@msg	“{name}” › {label}: {e}	「{name}」 › {label}：{e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	模組的 SHA-256 與 `hash` 提供的不符：未安裝任何內容
 # Actions panel: action sets (#3712).
 	New Set…	新增組…
@@ -6126,6 +6144,7 @@ breakText	Glyphs	字符
 	Create Swatch Legend	建立色票圖例
 	Create Swatch Legend…	建立色票圖例…
 	HEX	HEX
+	Help Bar	說明列
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	文字工具
 	Text Tweaker…	文字微調…

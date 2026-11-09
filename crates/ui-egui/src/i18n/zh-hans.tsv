@@ -147,6 +147,10 @@
 	Anti-Alias	消除锯齿
 	Anti-alias Rasters	栅格消除锯齿
 	Anti-aliased Artwork	图稿抗锯齿
+	Anti-aliasing Method	消除锯齿方法
+antiAlias	Sharp	锐利
+	Crisp	清晰
+	Strong	强
 	Anti-aliasing:	消除锯齿：
 	Appearance	外观
 	Appearance Attribute	外观属性
@@ -4010,6 +4014,7 @@ imageTrace	Outline	轮廓
 @msg	no point {i} (the gradient has {_1})	没有点 {i} (该渐变有 {_1} 个)
 @msg	no segment {segment} on line {line}	线 {line} 上没有线段 {segment}
 @msg	unknown freeform mode `{m}` (points, lines)	未知的任意形状模式 `{m}` (points、lines)
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` 必须是 "none"、"sharp"、"crisp" 或 "strong"
 @msg	`aspect` must be a number (%)	`aspect` 必须是数字 (%)
 @msg	`gradient` must be an object	`gradient` 必须是对象
 @msg	`groupColors` must be an array	`groupColors` 必须是数组
@@ -5594,6 +5599,11 @@ lighting	Light	光源
 	Snap to Perpendicular	对齐垂线
 @msg	unknown snap option `{key}` (use {options})	未知的对齐选项 `{key}`（可用：{options}）
 	Gap Length:	间隙长度：
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	“扁平徽标”模式不使用 keepColors：它描摹 logoColors 中指定的颜色，或它找到的颜色。
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	未描摹任何内容：描摹找到的颜色中没有一种与 keepColors ({_1}) 匹配。
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	未描摹任何内容：“忽略颜色”排除了 keepColors 所列颜色的所有区域。
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	未描摹任何内容：与 keepColors 匹配的颜色未生成任何路径。
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors：描摹找到的颜色中没有一种与 {c} 匹配，因此该颜色未被描摹。
 @msg	`colorGroup` needs `library: "document"`	`colorGroup` 需要 `library: "document"`
 @msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` 需要 `palette: "documentLibrary"`
 @msg	`colorGroup` needs `mode: "color"`	`colorGroup` 需要 `mode: "color"`
@@ -5745,6 +5755,14 @@ axis	Y Axis	Y 轴
 @msg	unknown permission `{shown}`	未知权限 `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}”需要权限 {asked}：请在用户同意后使用列出这些权限的 `grant` 安装
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	“{name}”未获授予其输出所需的 `{p}`：未作任何更改
+@msg	a heavy filter runs in the background, so it can't declare `commands`	重型滤镜在后台运行，因此不能声明 `commands`
+@msg	at most {MAX_COMMANDS} `commands`	最多 {MAX_COMMANDS} 个 `commands`
+@msg	command {name} is declared twice	命令 {name} 声明了两次
+@msg	command {name}: `label` must be 1-64 printable characters	命令 {name}：`label` 必须是 1-64 个可打印字符
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	命令 {name}：请使用由 a-z 0-9 _ 组成、以字母开头的 1-{MAX_COMMAND_ID} 个字符的 ID
+@msg	command {name}: {e}	命令 {name}：{e}
+@msg	only a filter or a live effect declares `commands`	只有滤镜或实时效果才能声明 `commands`
+@msg	“{name}” › {label}: {e}	“{name}” › {label}：{e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	模块的 SHA-256 与 `hash` 给出的不符：未安装任何内容
 # Actions panel: action sets (#3712).
 	New Set…	新建组…
@@ -6329,6 +6347,7 @@ breakText	Glyphs	字形
 	Create Swatch Legend	创建色板图例
 	Create Swatch Legend…	创建色板图例…
 	HEX	HEX
+	Help Bar	帮助栏
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	文字工具
 	Text Tweaker…	文字微调…

@@ -4,6 +4,7 @@
 - Compound Shapes add-on (beyond Illustrator): a menu for Make, Release and Expand Compound Shape and a setting, off by default, that makes the Pathfinder panel's Shape Mode buttons create compound shapes on a click. Scores and estimates unchanged.
 
 - Paint: new gradients use the document's color model for default stops, including Gradient tool creation. Scores and estimates unchanged.
+- UI: Window → Help Bar toggles the tool-help strip separately from the status bar and saves visibility with workspaces. Scores and estimates unchanged.
 
 - PDF.R1: editable PDF import uses the shared reader, scans page content in windows, and rejects known incomplete input before returning a document.
 - PDF.W1: PDF export and print composition use the shared optional writer for configuration, metadata, font preparation and guarded finalization; drawing and output policy remain app-owned.

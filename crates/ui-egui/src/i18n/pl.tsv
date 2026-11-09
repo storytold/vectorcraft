@@ -2677,6 +2677,10 @@ digits	Malayalam	Malajalam
 	< 1 sec	< 1 s
 	[Unnamed]	[Bez nazwy]
 	Amount:	Wartość:
+	Anti-aliasing Method	Metoda wygładzania
+antiAlias	Sharp	Ostre
+	Crisp	Wyraźne
+	Strong	Mocne
 	Anti-aliasing:	Wygładzanie:
 	Artboard:	Obszar kompozycji:
 	Color Table	Tablica kolorów
@@ -4241,6 +4245,7 @@ imageTrace	Outline	Kontur
 @msg	Split Into Grid: select paths large enough for the grid	Podziel na siatkę: zaznacz ścieżki wystarczająco duże dla siatki
 @msg	Targa files are RGB: colorModel rgb	Pliki Targa są w RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Oblewanie tekstem: zaznacz obiekt oblewany
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` musi mieć wartość "none", "sharp", "crisp" lub "strong"
 @msg	`aspect` must be a number (%)	`aspect` musi być liczbą (%)
 @msg	`at` must be [x, y]	`at` musi mieć postać [x, y]
 @msg	`color` must be a colour	`color` musi być kolorem
@@ -5616,6 +5621,11 @@ mark-style	Japanese	Japońskie
 	Snap to Perpendicular	Przyciągaj do prostopadłych
 @msg	unknown snap option `{key}` (use {options})	nieznana opcja przyciągania `{key}` (użyj: {options})
 	Gap Length:	Długość przerwy:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Tryb Płaskie logo nie używa keepColors: obrysowuje kolory podane w logoColors lub kolory, które znajdzie.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Nic nie zostało obrysowane: żaden z kolorów znalezionych podczas obrysowania nie pasuje do keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Nic nie zostało obrysowane: Ignoruj kolor pomija każdy obszar kolorów wymienionych w keepColors.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	Nic nie zostało obrysowane: kolory pasujące do keepColors nie dają żadnych ścieżek.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: żaden z kolorów znalezionych podczas obrysowania nie pasuje do {c}, więc nic z niego nie jest obrysowywane.
 @msg	`colorGroup` needs `library: "document"`	`colorGroup` wymaga `library: "document"`
 @msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` wymaga `palette: "documentLibrary"`
 @msg	`colorGroup` needs `mode: "color"`	`colorGroup` wymaga `mode: "color"`
@@ -5760,6 +5770,14 @@ axis	Y Axis	Oś Y
 @msg	unknown permission `{shown}`	nieznane uprawnienie `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	„{name}” prosi o uprawnienia {asked}: zainstaluj ją z `grant`, który je wymienia, gdy użytkownik się zgodzi
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	„{name}” nie otrzymała `{p}`, którego potrzebuje jej wynik: nic nie zmieniono
+@msg	a heavy filter runs in the background, so it can't declare `commands`	ciężki filtr działa w tle, więc nie może deklarować `commands`
+@msg	at most {MAX_COMMANDS} `commands`	najwyżej {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	polecenie {name} jest zadeklarowane dwa razy
+@msg	command {name}: `label` must be 1-64 printable characters	polecenie {name}: `label` musi mieć 1-64 drukowalnych znaków
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	polecenie {name}: użyj id z 1-{MAX_COMMAND_ID} znaków spośród a-z 0-9 _, zaczynającego się od litery
+@msg	command {name}: {e}	polecenie {name}: {e}
+@msg	only a filter or a live effect declares `commands`	`commands` deklaruje tylko filtr lub efekt na żywo
+@msg	“{name}” › {label}: {e}	„{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	moduł nie ma skrótu SHA-256 podanego w `hash`: nic nie zainstalowano
 # Actions panel: action sets (#3712).
 	New Set…	Nowy zestaw…
@@ -6343,6 +6361,7 @@ breakText	Glyphs	Glify
 	Create Swatch Legend	Utwórz legendę próbek
 	Create Swatch Legend…	Utwórz legendę próbek…
 	HEX	HEX
+	Help Bar	Pasek pomocy
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	Narzędzia tekstu
 	Text Tweaker…	Strojenie tekstu…
