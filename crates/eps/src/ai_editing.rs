@@ -122,16 +122,17 @@
 //!   definitions are at most the reader's 4,096. In a symbol's art, an instance's matrix and
 //!   a gradient's take the art to the canvas's space turned y up about art space's origin there.
 //! - Art styles, as the reader reads them (`style.rs`, `read/ops.rs`): a path, compound path or
-//!   group with live effects is written as its drawn look (`u`, its vector art as its geometry
-//!   effects leave it, without shadows, glows or feathers, `U`, its transparency, `0 0 Xd`,
-//!   `6 () XW`), then the object itself on `%_` lines (its points painted
+//!   group with live effects or linked to a graphic style is written as its drawn look (`u`, its
+//!   vector art as its geometry effects leave it, without shadows, glows or feathers, `U`, its
+//!   transparency, `0 0 Xd`, `6 () XW`), then the object itself on `%_` lines (its points painted
 //!   with nothing, or with its gradient fill; a group with its members) with its name and opacity
 //!   mask, then `1 (style) XW`. The styles are written in a non-printing block after the symbols
 //!   (`%AI9_BeginArtStyles`, each `/KnownStyle :` with its name and a filter tree: a chain of the
-//!   stack of fills and strokes with the contents among them, the effects and the blend filter). A
-//!   fill filter fills by the non-zero rule (`0 /Bool (UseEvenOdd)`), so a filled object that fills by
-//!   the even-odd rule is written as its drawn look. A style is written only when the reader reads it
-//!   back as the object's appearance.
+//!   stack of fills and strokes with the contents among them, the effects and the blend filter), the
+//!   Graphic Styles panel's first; the panel's order follows the palette (`%AI9_BeginArtStyleList`).
+//!   A fill filter fills by the non-zero rule (`0 /Bool (UseEvenOdd)`), so a filled object that
+//!   fills by the even-odd rule is written as its drawn look. A style is written only when the
+//!   reader reads it back as the object's appearance (or the graphic style's).
 //!
 //! Lines end in CR LF. Strings are written in UTF-8. Art space is ruler space: y up, its origin at
 //! the first artboard's top-left corner. On the canvas ([`CANVAS_SIZE`] points square, y down) the
@@ -166,8 +167,10 @@
 //! gradient swatches, gradient swatches of more than 256 stops, swatches of patterns written as
 //! tiles and the placement of pattern swatches that move, turn or scale their pattern, the opacity and blending modes of single fills and strokes, opacity masks on
 //! layers and opacity masks nested too deep, and, on objects written without an art style, live
-//! effects other than geometry effects left out; graphic styles, links to them and every art style
-//! on a large canvas are left out.
+//! effects other than geometry effects left out; graphic styles the reader wouldn't read, links to
+//! graphic styles on objects not written with them, and every art style on a large canvas, are left
+//! out; art past [`crate::import::MAX_EDITING_OBJECTS`] objects in all (the most the reader reads),
+//! counted as the reader counts them, is left out.
 //!
 //! The data streams hold the program compressed with Zstandard after `%AI24_ZStandard_Data`, with
 //! the version numbers of the newest files users sent ([`private_data`]).
@@ -240,6 +243,11 @@ pub struct AiEditingOutput {
 
 /// Write `doc` as the editing data of a `.ai` file: every artboard and layer.
 pub fn export_ai_editing(doc: &Document, o: &AiEditingOptions) -> Result<AiEditingOutput, String> {
+    export_within(doc, o, crate::import::MAX_EDITING_OBJECTS)
+}
+
+/// [`export_ai_editing`] writing at most `max_objects` objects, counted as the reader counts them.
+fn export_within(doc: &Document, o: &AiEditingOptions, max_objects: usize) -> Result<AiEditingOutput, String> {
     let board = doc.artboards.first().ok_or("the document has no artboard")?.rect;
     if !(board.is_finite() && board.width() > 0.0 && board.height() > 0.0) {
         return Err("the document has no artboard".into());
@@ -249,7 +257,8 @@ pub fn export_ai_editing(doc: &Document, o: &AiEditingOptions) -> Result<AiEditi
     // The objects that may keep their effects in an art style, as they are before baking (not on
     // a large canvas, whose scale the styles' strokes and effects would need).
     let styled = writer::styled_objects(doc);
-    let graphic_styles = writer::has_graphic_styles(doc);
+    let own_styles = doc.graphic_styles != Document::new(1.0, 1.0).graphic_styles;
+    let links = writer::style_links(doc);
     // Live geometry effects as their result, as the PDF part draws them.
     let baked = baked(doc);
     let doc = baked.as_ref().unwrap_or(doc);
@@ -280,17 +289,19 @@ pub fn export_ai_editing(doc: &Document, o: &AiEditingOptions) -> Result<AiEditi
     // On a large canvas the layers' symbol instances are written as their art.
     w.symbols_live = scale == 1.0;
     w.symbol_doc = symbol_doc;
+    w.max_objects = max_objects;
     w.reserve_swatch_gradients();
     if scale == 1.0 {
         w.styled = styled;
-    } else if !styled.is_empty() {
+        w.panel_styles();
+    } else if !styled.is_empty() || own_styles || links > 0 {
         w.warnings.push(writer::LARGE_CANVAS_STYLES.to_string());
-    }
-    if graphic_styles {
-        w.warnings.push(writer::GRAPHIC_STYLES.to_string());
     }
     for layer in &doc.layers {
         w.layer(layer);
+    }
+    if scale == 1.0 {
+        w.lost_links(links);
     }
     // The symbols no instance uses too; their art adds definitions.
     w.symbols();
@@ -315,6 +326,7 @@ pub fn export_ai_editing(doc: &Document, o: &AiEditingOptions) -> Result<AiEditi
     w.symbol_definitions(&mut s);
     w.art_styles(&mut s);
     s.push_str(&palette);
+    w.art_style_list(&mut s);
     w.symbol_list(&mut s);
     artboards(&mut s, doc, to_art, origin, &library);
     if !w.texts.is_empty() {

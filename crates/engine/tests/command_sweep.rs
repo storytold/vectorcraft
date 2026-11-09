@@ -219,6 +219,56 @@ fn every_command_with_junk_params() {
     );
 }
 
+/// Each document's uid, revision and selected ids, the active document and the current paint.
+type ToolEditState = (Vec<(u64, u64, Vec<u64>)>, Option<usize>, vectorcraft_tools::PaintDefaults);
+
+/// What a command that runs while the active tool computes an edit on another thread must leave
+/// as it was: every document's revision and selection, which document is active, and the current
+/// paint.
+fn tool_edit_state(s: &Session) -> ToolEditState {
+    let docs = s.documents().iter().map(|d| (d.uid, d.revision, d.selection.objects.iter().map(|i| i.0).collect())).collect();
+    (docs, s.active_index(), s.paint.clone())
+}
+
+/// Every command that runs at once while the active tool computes an edit on another thread (a
+/// Shape Builder merge), rather than applying the edit first (`waits_for_tool_edit`), leaves the
+/// documents' revisions and selections, the active document and the current paint as they were,
+/// with `{}`, junk params and params that turn its options on and off: the edit, computed for the
+/// document as it was, still applies after it.
+#[test]
+fn commands_that_do_not_wait_for_a_tool_edit_change_no_document() {
+    let path = safe_path();
+    let mut failures = vec![];
+    for fx in [Fixture::Single, Fixture::Multi] {
+        for c in command_specs().iter().filter(|c| !vectorcraft_engine::waits_for_tool_edit(c.id)) {
+            let mut cases = junk_params(c.params, &path);
+            if heavy(c.id) {
+                cases.truncate(12);
+            }
+            for k in param_keys(c.params) {
+                for v in [json!(true), json!(false), json!(1), json!("on")] {
+                    cases.push(json!({ k.as_str(): v }));
+                }
+            }
+            // Find Objects selects only with a filter, which one key at a time does not give it.
+            if c.id == "document.find" {
+                cases.extend([json!({"kind": "Path", "select": true}), json!({"name": "no such name", "select": true})]);
+            }
+            for p in &cases {
+                let mut s = fx.session();
+                let before = tool_edit_state(&s);
+                let _ = catch_quiet(|| no_panic(s.execute(c.id, p)));
+                if tool_edit_state(&s) != before {
+                    failures.push(format!("{} {p} [{fx:?}]", c.id));
+                }
+            }
+        }
+    }
+    failures.sort();
+    failures.dedup_by(|a, b| a.split(' ').next() == b.split(' ').next());
+    assert!(failures.is_empty(), "{} commands change a document without waiting for a tool edit:\n{}", failures.len(), failures.join("\n"));
+}
+
 /// Junk inside the obvious structured params: ids arrays, anchors, matrices, colours, stops.
 #[test]
 fn structured_junk() {
@@ -230,6 +280,10 @@ fn structured_junk() {
         ("document.export", json!({"format": "bmp", "rect": {"x": 1}, "artboard": 3})),
         ("document.export", json!({"format": "svg", "rect": [0, 0, 10, 10]})),
         ("select.add", json!({"ids": [[1], {"a": 1}]})),
+        ("select.font", json!({"family": "Source Sans 3", "scope": {"artboards": [0, u64::MAX, -1, "x", null, 1.5]}})),
+        ("select.font", json!({"family": "Source Sans 3", "scope": {"layers": [0, u64::MAX, -1, [1], {"a": 1}]}})),
+        ("select.font", json!({"family": "Source Sans 3", "scope": {"artboards": [], "layers": [1]}})),
+        ("select.font", json!({"family": "Source Sans 3", "scope": 7})),
         ("select.anchors", json!({"id": 2, "anchors": [[99, 99], [-1, 0], ["a", "b"]], "mode": "set"})),
         ("select.anchorsMany", json!({"items": [{"id": 2, "anchors": [[0, 1000]]}, null, 5]})),
         ("select.anchorsMany", json!({"items": [{"id": 2, "anchors": [[0, 1000], [0, 0]]}, {"id": u64::MAX}], "mode": "toggle"})),
@@ -432,6 +486,37 @@ fn structured_junk() {
         ("effect.apply", json!({"effect": "addon.color.halftone", "params": {"frequency": 300, "invert": true, "clip": false, "fromArt": true}})),
         ("effect.apply", json!({"effect": "addon.color.halftone", "params": {"frequency": -1e308, "mode": "cmyk", "color": "#123456", "target": 3}})),
         ("effect.apply", json!({"effect": "addon.color.duotone", "params": {"tones": "x", "skipSpot": "yes"}})),
+        // Effect › SVG Filters: hostile filters are refused or drawn within their bounds.
+        ("effect.apply", json!({"effect": "svg.filter", "params": {"xml": "<filter id=\"a\"><feTurbulence numOctaves=\"1e308\"/></filter>"}})),
+        (
+            "effect.apply",
+            json!({"effect": "svg.filter", "params": {"xml": "<filter id=\"a\"><feGaussianBlur stdDeviation=\"1e308\"/></filter>", "scale": 1e308}}),
+        ),
+        (
+            "effect.apply",
+            json!({"effect": "svg.filter", "params": {"xml": "<filter id=\"a\" filterUnits=\"userSpaceOnUse\" x=\"-1e308\" width=\"1e308\"><feFlood/></filter>"}}),
+        ),
+        (
+            "effect.apply",
+            json!({"effect": "svg.filter", "params": {"xml": "<filter id=\"a\"><feImage xlink:href=\"/etc/passwd\"/></filter>", "scale": -1}}),
+        ),
+        (
+            "effect.apply",
+            json!({"effect": "svg.filter", "params": {"xml": "<!DOCTYPE x [<!ENTITY a \"aaaa\">]><filter id=\"&a;\"><feOffset/></filter>"}}),
+        ),
+        ("effect.apply", json!({"effect": "svg.filter", "params": {"xml": ["x"], "name": 3}})),
+        ("svgFilter.define", json!({"xml": "<filter id=\"a\"><feConvolveMatrix order=\"4294967295\" kernelMatrix=\"1\"/></filter>"})),
+        ("svgFilter.define", json!({"xml": format!("<filter id=\"a\">{}</filter>", "<feOffset/>".repeat(100_000)), "replace": "a"})),
+        (
+            "svgFilter.import",
+            json!({"svg": format!(
+                "<!DOCTYPE svg [<!ENTITY a \"aaaaaaaaaa\"><!ENTITY b \"{}\"><!ENTITY c \"{}\">]><svg xmlns=\"http://www.w3.org/2000/svg\"><filter id=\"&c;\"><feOffset/></filter></svg>",
+                "&a;".repeat(10),
+                "&b;".repeat(10)
+            )}),
+        ),
+        ("svgFilter.apply", json!({"name": "\u{0}", "ids": [u64::MAX]})),
+        ("svgFilter.delete", json!({"name": ["a"]})),
         (
             "effect.apply",
             json!({"effect": "addon.color.duotone", "params": {"tones": [1, null, {"color": [1e308, -1e308, "x"], "curve": [[1e308, -1e308], ["a"]]}]}}),

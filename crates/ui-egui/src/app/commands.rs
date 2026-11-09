@@ -1,5 +1,5 @@
 use super::fonts::MAX_RECENT_FONTS;
-use super::{Value, VectorcraftApp, dialogs, fileio, io, menus, panels, picks, toolbar};
+use super::{Value, VectorcraftApp, canvas, dialogs, fileio, io, menus, panels, picks, toolbar};
 use crate::placing;
 use crate::state::ReplaceFontWarning;
 
@@ -94,6 +94,17 @@ impl VectorcraftApp {
         result
     }
 
+    /// A command that waits for the edit the tool computes on another thread and the input held
+    /// for it waits before the app adds the view's active artboard to its params: a held press
+    /// may change it. The app's own commands (its dialogs, panels and view) wait too.
+    fn wait_for_tool_edit(&mut self, id: &str) {
+        let ui_command = vectorcraft_engine::find_command(id).is_none();
+        if (ui_command || vectorcraft_engine::waits_for_tool_edit(id)) && self.session.tool_waiting() {
+            let r = self.session.finish_tool_edit();
+            canvas::apply_requests(self, r);
+        }
+    }
+
     /// [`Self::run`] it, inside what asks for file dialogs.
     fn run_now(&mut self, id: &str, params: Value) -> Result<Value, String> {
         crate::state::sync_zoom_stops_display_print_size(self.session.prefs.display_print_size);
@@ -104,6 +115,7 @@ impl VectorcraftApp {
         if cfg!(debug_assertions) && !self.session.replaying() {
             menus::check_params(&self.session, id, &params)?;
         }
+        self.wait_for_tool_edit(id);
         // A `.ai` file a command writes (a save, an export, a timestamped copy, a batch's save) names
         // the view's active artboard.
         io::remember_active_artboard(self);
@@ -250,7 +262,7 @@ impl VectorcraftApp {
                         let to = &params["to"];
                         to["family"].as_str().and_then(|family| {
                             let style = to["style"].as_str().unwrap_or("Regular");
-                            vectorcraft_text::FontDb::global().resolve(family, style).map(|(face, _)| face.family.clone())
+                            vectorcraft_text::FontDb::global().stored_family(family, style)
                         })
                     }
                     _ => None,

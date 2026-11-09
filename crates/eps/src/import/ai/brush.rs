@@ -28,7 +28,11 @@
 //!   [`vectorcraft_brush::ArtBrush`]'s `overlap: false`).
 //! - A Scatter, Art or Pattern brush's parameters are fields split by `/`: a number, the art's
 //!   section names (one for Scatter, five for Art and Pattern, empty where there is none, each
-//!   after a space for Art and Pattern), more fields, and last 15 numbers.
+//!   after a space for Art and Pattern), more fields, and last 15 numbers. Older files write
+//!   brushes with first number 1, one field fewer before the numbers and 8 numbers; an Art brush
+//!   with 8 numbers, whatever its first number, is read from its art's name alone (its numbers
+//!   aren't known, so it keeps the defaults and its paths their drawn look). A Pattern brush needs
+//!   only its first 3 numbers (its scale is the third).
 //!   - Scatter: the size (2, 3), spacing (5, 6) and scatter (8, 9) as (low, high) factors of the
 //!     art, the rotation in degrees (11, 12), how each varies (4, 7, 10, 13) and whether the
 //!     rotation follows the path (14), and 1 Tints (1).
@@ -53,7 +57,7 @@ use vectorcraft_color::Paint;
 use vectorcraft_doc::{AppearanceItem, Node, NodeKind};
 
 use super::lex::{Lexer, Tok};
-use super::obj;
+use super::obj::Names;
 
 /// The brush manager's order: the plug-in name of its object.
 pub(super) const MANAGER: &str = "Adobe Brush Manager Order"; // brand-ok: the plug-in name the files use
@@ -153,16 +157,17 @@ pub(super) enum BrushError {
 }
 
 /// The strings of a plug-in object's section (`section`: what follows `%AI8_BeginPluginObject`):
-/// its plug-in name, its name and its parameters, joined. The name is `None` with one string, and
-/// the whole is `None` with none.
-pub(super) fn plugin_strings(section: &[u8]) -> Option<(String, Option<String>, String)> {
+/// its plug-in name, the bytes of its name and its parameters, joined, read by `names` without
+/// notes. The name is `None` with one string, and the whole is `None` with none. A brush's name has
+/// its note when the brush is read, and the names of its art when their art is read.
+pub(super) fn plugin_strings(section: &[u8], names: &Names) -> Option<(String, Option<Vec<u8>>, String)> {
     let mut lex = Lexer::new(section);
     let mut strings = vec![];
     let mut params = vec![];
     while let Some(t) = lex.next_token() {
         if let Tok::Str(s) | Tok::Hex(s) = t.tok {
             if strings.len() < 2 {
-                strings.push(obj::text(&s));
+                strings.push(s);
             } else {
                 // Joined before they are text: a string may end inside a character.
                 let room = MAX_PARAMS.saturating_sub(params.len());
@@ -171,8 +176,8 @@ pub(super) fn plugin_strings(section: &[u8]) -> Option<(String, Option<String>, 
         }
     }
     let mut strings = strings.into_iter();
-    let kind = strings.next()?;
-    Some((kind, strings.next(), obj::text(&params)))
+    let kind = names.quiet(&strings.next()?);
+    Some((kind, strings.next(), names.quiet(&params)))
 }
 
 /// The brush manager's order (`params`: its parameters): the kind and name of each brush. Pairs
@@ -312,11 +317,10 @@ pub(super) fn parse_tool_object(kind: Tool, name: &str, params: &str) -> Result<
                 })
                 .collect();
             let n = fields.last().and_then(|f| numbers(f)).ok_or(BrushError::Values)?;
-            let n: &[f64; 15] = n.as_slice().try_into().map_err(|_| BrushError::Values)?;
-            let [_, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, _] = n;
             let art = || tiles.first().cloned().flatten().ok_or(BrushError::NoArt);
             match kind {
                 Tool::Scatter => {
+                    let [_, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, _] = n.as_slice() else { return Err(BrushError::Values) };
                     let pct = |a: f64, b: f64| (a * 100.0, b * 100.0);
                     let values = [pct(*p2, *p3), pct(*p5, *p6), pct(*p8, *p9), (*p11, *p12)];
                     let codes = [*p4, *p7, *p10, *p13];
@@ -336,10 +340,20 @@ pub(super) fn parse_tool_object(kind: Tool, name: &str, params: &str) -> Result<
                     DraftKind::Scatter { brush, art: art()? }
                 }
                 Tool::Art => {
-                    let colorization = if *p2 == 1.0 { Colorization::Tints } else { Colorization::None };
-                    DraftKind::Art { brush: ArtBrush { colorization, ..ArtBrush::default() }, art: art()?, plain: art_is_plain(n) }
+                    // The older form's 8 numbers aren't known: its brush keeps the defaults and its
+                    // paths their drawn look. The count tells the form, not the first number.
+                    // Any other count isn't a form this reads.
+                    let (colorization, plain) = if let Ok(n15) = <&[f64; 15]>::try_from(n.as_slice()) {
+                        (if n15[1] == 1.0 { Colorization::Tints } else { Colorization::None }, art_is_plain(n15))
+                    } else if n.len() == 8 {
+                        (ArtBrush::default().colorization, false)
+                    } else {
+                        return Err(BrushError::Values);
+                    };
+                    DraftKind::Art { brush: ArtBrush { colorization, ..ArtBrush::default() }, art: art()?, plain }
                 }
                 _ => {
+                    let [_, _, p3, ..] = n.as_slice() else { return Err(BrushError::Values) };
                     let tiles: [Option<String>; 5] = tiles.try_into().map_err(|_| BrushError::Values)?;
                     DraftKind::Pattern { tiles, scale: p3 * 100.0 }
                 }

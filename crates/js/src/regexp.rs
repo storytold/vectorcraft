@@ -176,15 +176,8 @@ fn class_atom(pattern: &[u16], i: usize) -> Result<(Option<u32>, usize), String>
             _ => (Some(u32::from(b'\\')), i + 1),
         },
         '0'..='7' => {
-            let mut value = 0;
-            let mut j = i + 1;
-            while j < i + 4
-                && let Some(d) = pattern.get(j).and_then(|&u| char::from_u32(u32::from(u))).and_then(|ch| ch.to_digit(8))
-            {
-                value = value * 8 + d;
-                j += 1;
-            }
-            (Some(value), j)
+            let (value, end) = crate::regexp_vm::octal(pattern, i + 1);
+            (Some(u32::from(value)), end)
         }
         _ => (Some(next), i + 2),
     })

@@ -85,6 +85,21 @@ fn linked_files_on_other_computers_are_never_read() {
     assert!(s.link_stamps.keys().all(|(_, p)| !far.contains(p)), "{:?}", s.link_stamps.keys());
 }
 
+/// A place a link names from the file the document was read from is followed only when the
+/// document's own file follows it too: after a document read from a network share is saved on
+/// this computer, its links are not looked for on that share.
+#[test]
+fn places_named_from_a_share_are_not_followed_after_a_save_elsewhere() {
+    use crate::cmd::links::follow_from;
+    let resolve =
+        |stored: &str, doc: Option<&str>| craft_docpath::resolve(stored, doc.map(std::path::Path::new)).map(|p| p.to_string_lossy().into_owned());
+    let (link, on_share) = (r"\\server\share\a\art\photo.png", Some(r"\\server\share\a\poster.vectorcraft"));
+    assert_eq!(follow_from(link, on_share, on_share, resolve).as_deref(), Some(link));
+    assert_eq!(follow_from(link, on_share, Some(r"\\server\share\b\poster.vectorcraft"), resolve).as_deref(), Some(link));
+    assert_eq!(follow_from(link, on_share, Some("/local/b/poster.vectorcraft"), resolve), None);
+    assert_eq!(follow_from(link, on_share, Some(r"C:\b\poster.vectorcraft"), resolve), None);
+}
+
 /// The final path Windows gives a folder of the drive `Z:` mapped to `\\server\share`. The
 /// share's root folder has no trailing separator (`\\?\UNC\server\share`).
 fn on_share(folder: &str) -> Option<std::path::PathBuf> {

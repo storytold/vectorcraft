@@ -445,6 +445,39 @@ fn a_graphic_style_library_in_a_ai_file_without_layers_loads_its_styles() {
     assert_eq!(styles, [("Red", 1), ("Green", 2), ("Blue", 3)], "{r}");
 }
 
+/// A `.ai` symbol library (symbols and their list, no layers) opens with its symbols, and Other
+/// Library… in the Symbols panel lists them in the list's order.
+#[test]
+fn a_symbol_library_in_a_ai_file_without_layers_loads_its_symbols() {
+    let symbol = |name: &str, x: f64| {
+        format!(
+            "%AI14_BeginSymbol\n({name})\n0 A\n0 Xw\n0 Ae\nu\n0 1 1 0 1 0 0 Xa\n{x} 0 m\n{x} 4 L\n{} 4 L\n{} 0 L\nf\nU\n\
+             %_/ArtDictionary :\n%_5 /Int (AI13PatternRegistrationType) ,\n%_;\n%_\n9 () XW\n%AI10_EndSymbol\n",
+            x + 4.0,
+            x + 4.0
+        )
+    };
+    let symbols = format!(
+        "%AI5_Begin_NonPrinting\n{}{}{}%AI5_End_NonPrinting--\n%AI24_BeginSymbolList\n(Star)\n(Leaf)\n(Arrow)\n%AI24_EndSymbolList\n",
+        symbol("Arrow", 0.0),
+        symbol("Leaf", 10.0),
+        symbol("Star", 20.0)
+    );
+    let data = ai::editing_data(200.0, 100.0, &symbols);
+    let file = ai::ai(&compressed(data.as_bytes()), "1 0 0 rg 10 50 30 40 re f");
+    let mut s = Session::new();
+    let p = json!({"dataBase64": vectorcraft_format::base64_encode(&file), "name": "shapes.ai"});
+    let r = s.execute("symbol.loadLibrary", &p).unwrap();
+    assert_eq!((&r["name"], &r["count"]), (&json!("shapes"), &json!(3)), "{r}");
+    let lib = s.execute("symbol.library", &json!({"library": r["library"]})).unwrap();
+    let names: Vec<&str> = lib["symbols"].as_array().unwrap().iter().map(|g| g["name"].as_str().unwrap()).collect();
+    assert_eq!(names, ["Star", "Leaf", "Arrow"], "{lib}");
+    let r = open(&mut s, "shapes.ai", &file, json!({})).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    let names: Vec<&str> = doc.symbols.iter().map(|g| g.name.as_str()).collect();
+    assert_eq!(names, ["Star", "Leaf", "Arrow"], "{r}");
+}
+
 /// A 1-bit RGB image opens from the editing data in the colors its PDF part shows.
 #[test]
 fn a_one_bit_rgb_image_opens_from_the_editing_data_in_its_colors() {
@@ -720,7 +753,7 @@ fn a_file_whose_pdf_part_cant_be_read_outlines_its_type_when_asked() {
     assert!(paths > 0, "the outlines are there: {r}");
 }
 
-/// An image too large to read from the editing data of a file whose PDF part can't be read is
+/// An image whose data is cut short in the editing data of a file whose PDF part can't be read is
 /// left out, and both notes say so.
 #[test]
 fn a_file_whose_pdf_part_cant_be_read_notes_an_image_left_out() {
@@ -729,7 +762,7 @@ fn a_file_whose_pdf_part_cant_be_read_notes_an_image_left_out() {
     let mut s = Session::new();
     let e = open(&mut s, name, &file, json!({"editingData": false})).unwrap_err().to_string();
     let r = open(&mut s, name, &file, json!({})).unwrap();
-    assert_eq!(r["warnings"], json!([unread_pdf_part(&e), "an image too large to read from the editing data was left out"]), "{r}");
+    assert_eq!(r["warnings"], json!([unread_pdf_part(&e), "an image whose data is cut short was left out"]), "{r}");
 }
 
 /// A copied file whose PDF part can't be read pastes the objects of its editing data when asked
@@ -987,6 +1020,21 @@ fn an_ai_file_saved_without_its_pdf_part_pastes_from_its_editing_data() {
     assert!(e.contains("without PDF compatibility") && e.contains("zlib"), "{e}");
     let e = s.execute("clipboard.importPdf", &json!({"dataBase64": plain})).unwrap_err().to_string();
     assert!(e.contains("placeholder"), "{e}");
+}
+
+/// `file.place` reads a `.ai` saved without its PDF part in the `legacyNameEncoding` it is given.
+#[test]
+fn an_ai_file_saved_without_its_pdf_part_places_in_the_encoding_picked() {
+    let mut data = ai::sample_data();
+    let at = data.windows(4).position(|w| w == b"Pair").unwrap();
+    // 빨강 in code page 949.
+    data.splice(at..at + 4, br"\273\241\260\255".iter().copied());
+    let file = vectorcraft_format::base64_encode(&ai::ai(&compressed(&data), PLACEHOLDER));
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let r = s.execute("file.place", &json!({"name": "art.ai", "dataBase64": file, "link": false, "legacyNameEncoding": "windows-949"})).unwrap();
+    let placed = s.doc().unwrap().doc.layers[0].children().unwrap()[0].clone();
+    assert_eq!(names(&placed.children().unwrap()[1..]), ["빨강", "Ring", "Window"], "{r}");
 }
 
 #[test]

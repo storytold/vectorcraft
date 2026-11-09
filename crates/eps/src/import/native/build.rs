@@ -9,6 +9,7 @@ use super::slots::{
 use super::{
     Affine, Arc, BTreeSet, Document, Node, NodeId, NodeKind, PathData, Rect, Scaling, Story, Structure, Texts, Unit, VariableKind, Vec2, ai,
 };
+use vectorcraft_doc::PlacedDocument;
 
 /// Which box of the editing copy is the page.
 #[derive(Clone, Copy)]
@@ -21,7 +22,8 @@ pub(super) enum Page {
 
 /// How art moved from a page to its place in the layers' document transforms: its pattern tiles
 /// move with it.
-pub(super) const PAGE_MOVE: Scaling = Scaling { strokes: false, effects: None, keep_type_strokes: false, keep_corners: false, patterns: true };
+pub(super) const PAGE_MOVE: Scaling =
+    Scaling { strokes: false, effects: None, keep_type_strokes: false, keep_corners: false, patterns: true, keep_fit_when_flat: false };
 
 /// The page (`visible`, the file read as its page) and the place of its area in the layers'
 /// document.
@@ -47,7 +49,7 @@ pub(super) struct Frame<'a> {
 /// (a `.ai` saved without its PDF part), its type is made from the file's text document alone and
 /// nothing is compared. `outlined`: the page's type was read as outlines, so it has none to put in
 /// the text objects. `unit`: the size in points of a unit of the page's user space (see
-/// [`layered_ai`]).
+/// [`layered_ai`]). `names`: the encoding of names that aren't UTF-8.
 pub(super) fn build(
     data: &[u8],
     visible: Option<&Document>,
@@ -55,19 +57,23 @@ pub(super) fn build(
     outlined: bool,
     trust: bool,
     unit: f64,
+    names: ai::NameEncoding,
 ) -> Result<(Document, Vec<String>), String> {
     // An EPS (its page is its art) draws a Large Canvas page at full size; a `.ai` keeps its art
     // space, as its PDF part may (#2031).
-    build_from(ai::read(data, matches!(page, Page::Art))?, data, visible, page, outlined, trust, unit)
+    let large_canvas = matches!(page, Page::Art);
+    let structure = if visible.is_some() { ai::read_over_page(data, large_canvas, names)? } else { ai::read_in(data, large_canvas, names)? };
+    build_from(structure, data, visible, page, outlined, trust, unit)
 }
 
 /// [`build`] without a page, for a `.ai` whose PDF part can't be read, its first page `page`
 /// (width and height, either way round) points large in units of `unit` points: the document is
 /// drawn `unit` times as large when its first artboard, or its art's box, has the page's size in
 /// those units and not in points, as [`build_from`] decides with a page; else as many times as
-/// large as its declared large canvas scale when it has the page's size at that scale.
-pub(super) fn build_on_page(data: &[u8], page: (f64, f64), unit: f64) -> Result<(Document, Vec<String>), String> {
-    let structure = ai::read(data, false)?;
+/// large as its declared large canvas scale when it has the page's size at that scale. `names`: the
+/// encoding of names that aren't UTF-8.
+pub(super) fn build_on_page(data: &[u8], page: (f64, f64), unit: f64, names: ai::NameEncoding) -> Result<(Document, Vec<String>), String> {
+    let structure = ai::read_in(data, false, names)?;
     let board = structure.artboard.map(|a| structure.to_doc.transform_rect_bbox(a));
     let art = structure.bbox.map(|[a, b, c, d]| structure.to_doc.transform_rect_bbox(Rect::new(a, b, c, d)));
     let (w, h) = page;
@@ -203,6 +209,7 @@ pub(super) fn build_from(
         restyled,
         placeholders,
         placed_elsewhere,
+        placed_pages,
         envelopes_drawn,
         styles_read,
         canvas_scale,
@@ -491,11 +498,62 @@ pub(super) fn build_from(
     }
     doc.limit_depth_noting(&mut notes);
     bind_variables(&mut doc, &bindings, bindings_skipped, &xml_ids, &filled, &mut notes);
+    placed_documents(&mut doc, &placed_pages);
     if small.is_some() {
         scale_document(&mut doc, unit, styles_read);
         relayout_wrapped(&mut doc);
     }
     Ok((doc, notes))
+}
+
+/// The linked images of `pages` that are still in `doc`, opacity-mask art included, as placed
+/// documents of their page and box, over the same place, each showing the same preview until its
+/// file is read. An image bound to an image variable stays a linked image, the object an image
+/// variable binds.
+fn placed_documents(doc: &mut Document, pages: &[ai::PlacedPage]) {
+    if pages.is_empty() {
+        return;
+    }
+    let vars = &doc.variables;
+    let image_bound = |id: &NodeId| {
+        vars.bindings.get(id).is_some_and(|names| names.iter().any(|v| vars.variable(v).is_some_and(|v| v.kind == VariableKind::Image)))
+    };
+    let pages: std::collections::HashMap<NodeId, ai::PlacedPage> = pages.iter().filter(|p| !image_bound(&p.id)).map(|p| (p.id, *p)).collect();
+    for layer in &mut doc.layers {
+        to_placed_documents(Arc::make_mut(layer), &pages);
+    }
+}
+
+/// [`placed_documents`] in `n` and everything in it.
+fn to_placed_documents(n: &mut Node, pages: &std::collections::HashMap<NodeId, ai::PlacedPage>) {
+    // A box too small to take the image's pixels to (its transform not finite) keeps the linked image.
+    if let Some(page) = pages.get(&n.id)
+        && let NodeKind::Image(im) = &n.kind
+        && let Some(link) = &im.link
+        && let (width, height) = page.size
+        && let xf = im.xf * Affine::scale_non_uniform(f64::from(im.width) / width, f64::from(im.height) / height)
+        && xf.as_coeffs().iter().all(|v| v.is_finite())
+        && xf.determinant().abs() > 1e-12
+    {
+        let link = vectorcraft_doc::LinkInfo { page: Some(page.page), ..link.clone() };
+        let placed = PlacedDocument {
+            link,
+            key: im.key.clone(),
+            bounding: page.bounding,
+            page_box: page.page_box,
+            width,
+            height,
+            xf,
+            placement: im.placement,
+        };
+        n.kind = NodeKind::PlacedDocument(Box::new(placed));
+    }
+    if let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_mut()) {
+        to_placed_documents(Arc::make_mut(&mut m.art), pages);
+    }
+    for c in n.children_mut().into_iter().flatten() {
+        to_placed_documents(Arc::make_mut(c), pages);
+    }
 }
 
 /// Bind the objects of `doc` to the variables of its library that `bindings` binds them to, each
@@ -1137,7 +1195,7 @@ fn keep_differing(
 }
 
 /// Copy page drawing IDs, including mask art outside the ordinary child tree.
-fn reid_page_art(doc: &mut Document, source: &Node) -> Node {
+pub(super) fn reid_page_art(doc: &mut Document, source: &Node) -> Node {
     let mut copy = doc.reid(source);
     if let Some(mask) = &mut copy.extras_mut().mask {
         mask.art = Arc::new(reid_page_art(doc, &mask.art));
