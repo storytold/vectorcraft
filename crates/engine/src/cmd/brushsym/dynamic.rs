@@ -129,6 +129,64 @@ fn path_param(p: &Value, art: &Node, cmd: &str) -> Result<Vec<u32>> {
     Ok(path)
 }
 
+/// The refusal of `key` (`fill` or `stroke`) for `n`, an object of a dynamic symbol's art, when `n`
+/// does not draw that paint of its own; `None` when it does. Paths (not guides),
+/// compound paths, type, groups and layers draw them; a symbol instance draws its fill as a stain
+/// on its art ([`solid_fill_check`]) and no stroke; an image draws one only when that fill or
+/// stroke has a Convert to Shape or Outline Object effect.
+fn paint_refusal(n: &Node, key: &str, cmd: &str) -> Option<EngineError> {
+    Some(match &n.kind {
+        NodeKind::Path { guide: true, .. } => bad(cmd, format!("{key} cannot be set on a guide")),
+        NodeKind::Path { .. } | NodeKind::Compound { .. } | NodeKind::Text(_) | NodeKind::Group { .. } | NodeKind::Layer { .. } => return None,
+        NodeKind::Image(_) => {
+            let effects = if key == "fill" { n.appearance.fill().map(|f| &f.effects) } else { n.appearance.stroke().map(|s| &s.effects) };
+            if effects.is_some_and(|e| vectorcraft_render::effects::gives_image_shape(e)) {
+                return None;
+            }
+            bad(cmd, format!("{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it"))
+        }
+        NodeKind::SymbolInstance { .. } if key == "fill" => return None,
+        NodeKind::SymbolInstance { .. } => bad(cmd, "stroke cannot be set on a symbol instance"),
+        NodeKind::Blend { .. } => bad(cmd, format!("{key} cannot be set on a blend")),
+        NodeKind::Envelope { .. } => bad(cmd, format!("{key} cannot be set on an envelope")),
+        NodeKind::Mesh(_) => bad(cmd, format!("{key} cannot be set on a gradient mesh")),
+        NodeKind::Repeat(_) => bad(cmd, format!("{key} cannot be set on a Repeat")),
+        NodeKind::PlacedDocument(_) => bad(cmd, format!("{key} cannot be set on a placed document")),
+        NodeKind::Intertwine { .. } => bad(cmd, format!("{key} cannot be set on an Intertwine group")),
+    })
+}
+
+/// Refuse a `fill` or `stroke` other than null that the object at `path` of `art` does not draw
+/// ([`paint_refusal`]); null, which takes a change back, is taken for every object.
+fn check_paint_kinds(p: &Value, art: &Node, path: &[u32], cmd: &str) -> Result<()> {
+    let Some(n) = symbol_overrides::part(art, path) else { return Ok(()) };
+    for key in ["fill", "stroke"] {
+        if p.get(key).is_some_and(|v| !v.is_null())
+            && let Some(e) = paint_refusal(n, key, cmd)
+        {
+            return Err(e);
+        }
+    }
+    Ok(())
+}
+
+/// Refuse `fill`, the paint `p` asks for the object at `path` of `art`, when that object is a
+/// symbol instance and `fill` is a gradient or a pattern: an instance stains its art with a solid
+/// fill only, so such a fill draws nothing.
+fn solid_fill_check(p: &Value, art: &Node, path: &[u32], fill: Option<&vectorcraft_color::Paint>, cmd: &str) -> Result<()> {
+    let asked = p.get("fill").is_some_and(|v| !v.is_null());
+    let is_instance = symbol_overrides::part(art, path).is_some_and(|n| matches!(n.kind, NodeKind::SymbolInstance { .. }));
+    let draws_nothing = |f: &vectorcraft_color::Paint| match f {
+        vectorcraft_color::Paint::Gradient(_) => true,
+        vectorcraft_color::Paint::Pattern { .. } => true,
+        vectorcraft_color::Paint::None | vectorcraft_color::Paint::Solid { .. } => false,
+    };
+    if asked && is_instance && fill.is_some_and(draws_nothing) {
+        return Err(bad(cmd, "fill on a symbol instance must be a solid color or none"));
+    }
+    Ok(())
+}
+
 /// `fill` or `stroke` of `p` for override `o`: absent leaves it, null clears it, a colour string or
 /// an object of `paint.setFill`'s paint params sets it.
 fn paint_change(s: &Session, p: &Value, key: &str, cmd: &str) -> Result<Option<Option<vectorcraft_color::Paint>>> {
@@ -170,9 +228,11 @@ pub(super) fn symbol_instance_set_appearance(s: &mut Session, p: &Value) -> Resu
     }
     let (id, art) = dynamic_instance(s, p, C)?;
     let path = path_param(p, &art, C)?;
+    check_paint_kinds(p, &art, &path, C)?;
     let d = &s.doc()?.doc;
     let old = d.node(id).and_then(|n| n.extras().symbol_overrides.iter().find(|o| o.path == path).cloned());
     let new = changed(s, p, old.unwrap_or_else(|| SymbolOverride { path: path.clone(), ..Default::default() }), C)?;
+    solid_fill_check(p, &art, &path, new.fill.as_ref(), C)?;
     let count = edit_part(s, id, &path, "Symbol Instance Appearance", |o| *o = new)?;
     Ok(json!({ "id": id.0, "overrides": count }))
 }

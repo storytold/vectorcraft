@@ -192,6 +192,10 @@
 	Anti-Alias	Згладжування
 	Anti-alias Rasters	Згладжувати растрові зображення
 	Anti-aliased Artwork	Згладжений малюнок
+	Anti-aliasing Method	Метод згладжування
+antiAlias	Sharp	Різке
+	Crisp	Чітке
+	Strong	Сильне
 	Anti-aliasing:	Згладжування:
 	Any Kind	Будь-який тип
 	Font Technology	Технологія шрифту
@@ -556,6 +560,11 @@ font-technology	Variable	Варіативні
 	Color Table ({n} colors)	Таблиця кольорів ({n} кольорів)
 	Color Theme	Колірна тема
 	Color Themes	Колірні теми
+	Color Wheel	Колірне коло
+	Hue ring	Кільце відтінків
+	Saturation and brightness	Насиченість і яскравість
+	Color field	Колірне поле
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Тип кольору:
 	Color:	Колір:
 	Colorize	Тонувати
@@ -1127,6 +1136,17 @@ font-technology	Variable	Варіативні
 	Exporting {}	Експорт {}
 	Export…	Експорт…
 	Extrude & Bevel…	Видавлювання та фаска…
+	3D (Classic)	3D (класичні)
+	Extrude & Bevel (Classic)…	Видавлювання та фаска (класичне)…
+	Surface	Поверхня
+	Wireframe	Каркас
+	No Shading	Без затінення
+	Plastic	Пластик
+	Highlight Intensity	Інтенсивність відблиску
+	Highlight Size	Розмір відблиску
+	Blend Steps	Кроки переходу
+	Shading Color	Колір затінення
+	Draw Hidden Faces	Малювати приховані грані
 	Eyedropper	Піпетка
 	Sample Color from Screen	Взяти колір з екрана
 	This system has no screen color sampler	У цій системі немає засобу вибору кольору з екрана
@@ -2004,6 +2024,10 @@ file-filter	Templates	Шаблони
 	Stylistic	Стилістичні
 	Mojikumi Set	Набір mojikumi
 	Kinsoku Set	Набір kinsoku
+	Kinsoku Shori Type	Тип kinsoku shori
+	Push In First	Спершу втягувати
+	Push Out First	Спершу виштовхувати
+	Push Out Only	Лише виштовхувати
 	Hard	Суворий
 	Soft	М’який
 	Monitor RGB	RGB монітора
@@ -3561,6 +3585,8 @@ effect	Points	Точки
 	Tile Type:	Тип плитки:
 	tile {number}	плитка {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Плитки нумеруються зліва направо, потім униз; Залишіть діапазон порожнім для всіх плиток.
+	Copies per Sheet (as many as fit, in a grid)	Копій на аркуш (скільки поміститься, сіткою)
+	Gutter:	Проміжок:
 	Tint	Відтінок
 	Tip extends past the end point	Кінчик виходить за кінцеву точку
 	Tip on the end point	Кінчик на кінцевій точці
@@ -4135,6 +4161,7 @@ axis	Both	Обидві
 @msg	Targa files are RGB: colorModel rgb	Файли Targa є RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Обтікання текстом: виділіть об’єкт обтікання
 @msg	This shortcut file is in a form VectorCraft can't read.	Цей файл сполучень клавіш записано у форматі, який VectorCraft не може прочитати.
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` має бути "none", "sharp", "crisp" або "strong"
 @msg	`aspect` must be a number (%)	`aspect` має бути числом (%)
 @msg	`at` must be [x, y]	`at` має бути [x, y]
 @msg	`color` must be a colour	`color` має бути кольором
@@ -4536,6 +4563,13 @@ axis	Both	Обидві
 @msg	select an image	виділіть зображення
 @msg	select an object in perspective	виділіть об’єкт у перспективі
 @msg	select artwork (or a colour group) to recolor	виділіть малюнок (або колірну групу) для перефарбовування
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	Перефарбовування завершено; без змін: {locked} і {hidden}
+@msg	Recolor completed; {objects} were left unchanged	Перефарбовування завершено; без змін: {objects}
+@msg	Recolor completed; {objects} was left unchanged	Перефарбовування завершено; без змін: {objects}
+@msg	1 locked object	заблокований об’єкт (1)
+@msg	{n} locked objects	заблоковані об’єкти ({n})
+@msg	1 hidden object	прихований об’єкт (1)
+@msg	{n} hidden objects	приховані об’єкти ({n})
 @msg	select at least two objects	виділіть як мінімум два об’єкти
 @msg	exit isolation mode first	спочатку вийдіть з режиму ізоляції
 @msg	select objects, not layers	виділіть об’єкти, а не шари
@@ -4876,6 +4910,10 @@ axis	Both	Обидві
 @msg	the PSD file is cut short	файл PSD обрізаний
 @msg	the PSD file's header is damaged	заголовок файлу PSD пошкоджено
 @msg	the PSD file's image data can't be read: {e}	не вдається прочитати дані зображення файлу PSD: {e}
+@msg	the JPEG XL file is cut short	файл JPEG XL обрізаний
+@msg	the JPEG XL container is too large to read	контейнер JPEG XL завеликий для читання
+@msg	CMYK JPEG XL images can't be read	зображення JPEG XL у режимі CMYK не читаються
+@msg	the JPEG XL file can't be read: {e}	не вдається прочитати файл JPEG XL: {e}
 	Video	Відео
 	De-Interlace…	Усунення черезрядковості…
 	De-Interlace	Усунення черезрядковості
@@ -5356,6 +5394,11 @@ lighting	Light	Світло
 	Snap to Perpendicular	Прив’язати до перпендикуляра
 @msg	unknown snap option `{key}` (use {options})	невідомий параметр прив’язки `{key}` (використовуйте {options})
 	Gap Length:	Довжина проміжку:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Режим «Плоский логотип» не використовує keepColors: він трасує кольори, вказані в logoColors, або знайдені ним кольори.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Нічого не трасовано: жоден із кольорів, знайдених під час трасування, не відповідає keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Нічого не трасовано: «Ігнорувати колір» пропускає всі області кольорів, перелічених у keepColors.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	Нічого не трасовано: кольори, що відповідають keepColors, не дають жодного контуру.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: жоден із кольорів, знайдених під час трасування, не відповідає {c}, тому з нього нічого не трасується.
 @msg	`colorGroup` needs `library: "document"`	для `colorGroup` потрібен `library: "document"`
 @msg	`colorGroup` needs `palette: "documentLibrary"`	для `colorGroup` потрібен `palette: "documentLibrary"`
 @msg	`colorGroup` needs `mode: "color"`	для `colorGroup` потрібен `mode: "color"`
@@ -5493,6 +5536,8 @@ axis	Y Axis	Вісь Y
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	модуль імпортує `env.{name}`, який модуль може використовувати лише на рівні API модулів {PROGRESS_API} (`api` {PROGRESS_API}) і з дозволом `{permission}`
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	модуль імпортує `{from}.{name}`, який хост не надає: модуль може імпортувати лише функції `env.vc_*`, перелічені в docs/plugins.md (рівень API модулів 2), без WASI, файлів і мережі
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` дорівнює {_1}; цей хост підтримує рівні API модулів від 1 до {API_LEVEL}
+@msg	`paintOutput` may only be true	`paintOutput` може бути лише true
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` дозволено лише для динамічного ефекту (`kind` "effect") з `api` 2
 @msg	`grant` must be a list of permission names	`grant` має бути списком назв дозволів
 @msg	`grant` names an unknown permission `{shown}`	`grant` називає невідомий дозвіл `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	модулю виду `{_1}` потрібен дозвіл `{_2}`
@@ -5503,6 +5548,14 @@ axis	Y Axis	Вісь Y
 @msg	unknown permission `{shown}`	невідомий дозвіл `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	«{name}» запитує дозволи {asked}: установіть його з `grant`, де їх перелічено, коли користувач погодиться
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	«{name}» не отримав дозволу `{p}`, потрібного для його результату: нічого не змінено
+@msg	a heavy filter runs in the background, so it can't declare `commands`	важкий фільтр виконується у фоні, тому не може оголошувати `commands`
+@msg	at most {MAX_COMMANDS} `commands`	щонайбільше {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	команду {name} оголошено двічі
+@msg	command {name}: `label` must be 1-64 printable characters	команда {name}: `label` має містити 1-64 друковані символи
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	команда {name}: використайте id з 1-{MAX_COMMAND_ID} символів a-z 0-9 _, що починається з літери
+@msg	command {name}: {e}	команда {name}: {e}
+@msg	only a filter or a live effect declares `commands`	`commands` оголошує лише фільтр або динамічний ефект
+@msg	“{name}” › {label}: {e}	«{name}» › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	модуль має не той SHA-256, що вказаний у `hash`: нічого не встановлено
 # Actions panel: action sets (#3712).
 	New Set…	Новий набір…
@@ -6049,6 +6102,16 @@ breakText	Glyphs	Гліфи
 @msg	path must be a list of child indices	path має бути списком індексів дочірніх об’єктів
 @msg	no object at path {shown} in the symbol's art	у графіці символу немає об’єкта за шляхом {shown}
 @msg	give fill, stroke, opacity and/or blend	вкажіть fill, stroke, opacity та/або blend
+@msg	{key} cannot be set on a guide	{key} не можна задати для напрямної
+@msg	{key} cannot be set on a blend	{key} не можна задати для переходу
+@msg	{key} cannot be set on an envelope	{key} не можна задати для оболонки
+@msg	{key} cannot be set on a gradient mesh	{key} не можна задати для градієнтної сітки
+@msg	{key} cannot be set on a Repeat	{key} не можна задати для повторення
+@msg	{key} cannot be set on a placed document	{key} не можна задати для розміщеного документа
+@msg	{key} cannot be set on an Intertwine group	{key} не можна задати для групи переплетення
+@msg	stroke cannot be set on a symbol instance	stroke не можна задати для екземпляра символу
+@msg	fill on a symbol instance must be a solid color or none	fill екземпляра символу має бути суцільним кольором або none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} не можна задати для зображення без ефекту «Перетворити на фігуру» або «Обвести об’єкт»
 @msg	pass newName, registration, exportType, nineSlice and/or type	вкажіть newName, registration, exportType, nineSlice та/або type
 	Text Flow	Потік тексту
 	By Rows	За рядками
@@ -6078,6 +6141,7 @@ breakText	Glyphs	Гліфи
 	Create Swatch Legend	Створити легенду зразків
 	Create Swatch Legend…	Створити легенду зразків…
 	HEX	HEX
+	Help Bar	Панель підказок
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	Інструменти тексту
 	Text Tweaker…	Налаштування тексту…
@@ -6143,6 +6207,24 @@ breakText	Glyphs	Гліфи
 # 3D Box add-on
 	3D Box	3D-паралелепіпед
 	3D Box Tool	Інструмент «3D-паралелепіпед»
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Відкрити за допомогою
+	No importer plug-ins installed	Модулі імпорту не встановлено
+	Read files you open in its format and make documents from them	Читати файли, які ви відкриваєте в його форматі, і створювати з них документи
+@msg	{_1} is an importer (File › Open With)	{_1} - модуль імпорту (Файл › Відкрити за допомогою)
+@msg	missing `importer` (see document.formats)	не вказано `importer` (див. document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` має бути ідентифікатором формату модуля (див. document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	«{shown}» відкриває файли {_1}, а не `{_2}`
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` є модулем виду `{_2}`, а не модулем імпорту
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` є модулем виду `{_2}`, а не модулем експорту
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` - модуль імпорту: відкрийте файл за допомогою document.open {{"importer"}"}}
+@msg	the importer returned no objects	модуль імпорту не повернув жодного об’єкта
+@msg	an importer returns `objects` and `warnings`, not `{key}`	модуль імпорту повертає `objects` і `warnings`, а не `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	файл більший за {MAX_INPUT_BYTES} байтів, які читає модуль імпорту
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	модуль імпорту оголошує від 1 до {MAX_EXTENSIONS} `extensions`
+@msg	only an exporter or an importer declares `extensions`	`extensions` оголошує лише модуль експорту або імпорту
+@msg	an importer always gets an import's budget: leave `budget` out	модуль імпорту завжди отримує бюджет імпорту: не вказуйте `budget`
 
 # Safe Mode
 	Safe Mode…	Безпечний режим…

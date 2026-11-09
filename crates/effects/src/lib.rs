@@ -80,13 +80,14 @@ pub use marks::{CROP_MARKS, crop_marks_art, has_crop_marks};
 pub use pixel::{PIXEL_EFFECTS, PixelFx, PixelSpace};
 pub use raster::{RASTERIZE, RasterFx, Rasterize, color_param, outset, raster_effects};
 pub use reshape::{
-    SYMBOL_ART_MAX_NODES, expand_outlined, has_gradient_copies, has_item_geometry, has_transform_art, has_transform_copies, has_transform_options,
-    image_paint, needs_outline, outline_art, outline_text, reshape,
+    SYMBOL_ART_MAX_NODES, expand_outlined, gives_image_shape, has_gradient_copies, has_item_geometry, has_painted_effects, has_transform_art,
+    has_transform_copies, has_transform_options, image_paint, needs_outline, outline_art, outline_text, reshape,
 };
 pub use revolve::{REVOLVE, has_revolve, revolve_art, revolve_options, validate_revolve};
 pub use solids::{
-    EXTRUDE, INFLATE, ROTATE, ROTATION_PRESETS, SOLIDS, SolidMesh, THREE_D_TYPES, extrude_options, has_solid, inflate_options, is_three_d, solid_art,
-    three_d_meshes, three_d_meshes_of, three_d_params_as, validate_solid, validate_three_d, view_options,
+    CLASSIC_EXTRUDE, EXTRUDE, INFLATE, ROTATE, ROTATION_PRESETS, SHADING_COLORS, SOLIDS, SolidMesh, THREE_D_TYPES, classic_extrude_options,
+    classic_shading, extrude_options, has_solid, inflate_options, is_three_d, solid_art, three_d_meshes, three_d_meshes_of, three_d_params_as,
+    validate_solid, validate_three_d, validate_three_d_params, view_options,
 };
 pub use stylize::{ScribbleSetting, scribble_setting_id, scribble_settings};
 pub use svg_filter::SVG_FILTER;
@@ -106,5 +107,6 @@ pub use geometry::{
 #[cfg(test)]
 pub(crate) use geometry::{MAX_EFFECT_LINES, apply_geometry_within};
 pub use params::{
-    default_params, has_geometry, has_plugin_effect, is_geometry, is_raster, merged_params, new_effect, plugin_revision, scale_effect, upgrade_params,
+    any_plugin_paints_output, default_params, has_geometry, has_painted_plugin_effect, has_plugin_effect, is_geometry, is_raster, merged_params,
+    new_effect, plugin_revision, scale_effect, upgrade_params,
 };

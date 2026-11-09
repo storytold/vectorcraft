@@ -107,6 +107,11 @@ impl Writer<'_> {
         if self.clip.as_ref().is_some_and(|c| c.subpaths.iter().all(|sp| sp.anchors.is_empty())) {
             return;
         }
+        // The image, and where it is cut, the clipping group and its clipping path.
+        let clipping = self.clip.as_ref().map_or(0, |c| 1 + super::object_count(c.subpaths.iter().filter(|sp| !sp.anchors.is_empty()).count()));
+        if !self.take_objects(1 + clipping) {
+            return;
+        }
         if deep {
             self.warn(IMAGE_DEPTH);
         }

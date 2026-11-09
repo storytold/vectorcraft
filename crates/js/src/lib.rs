@@ -23,9 +23,17 @@
 //! verifier, and runs it on an interpreter that keeps JavaScript calls on its own frame stack, so
 //! deep recursion in a script does not use the native stack. Objects and environments live in an
 //! arena with a mark-and-sweep collector; strings built by repeated `+` are flattened and dropped
-//! with loops. The realm provides the language (sections 10 to 14 of ECMA-262 5.1) and a minimal
-//! set of built-ins: `Object` and `Object.prototype`'s basic methods, `Function` with
-//! `Function.prototype.call` and `apply`, `eval`, and the error constructors. Every run is bounded
+//! with loops. The realm provides the language (sections 10 to 14 of ECMA-262 5.1) and these
+//! built-ins: the global functions and constants (15.1, with Annex B's `escape` and `unescape`),
+//! `Object` (15.2), `Function` with `call`, `apply` and `bind` (15.3), `Array` (15.4), `String`
+//! (15.5), `Boolean.prototype`'s `toString` and `valueOf` (15.6.4), `Number` (15.7), `Math` (15.8),
+//! `Date` (15.9), `RegExp` (15.10), the error types (15.11) and `JSON` (15.12). The array methods
+//! visit only the indices an array or array-like object has, so a sparse array of length 2^32-1
+//! costs as much as its elements, and `JSON.parse`, `JSON.stringify` and the reviver walk use no
+//! native recursion. Regular expressions run on a backtracking matcher that keeps its choice points
+//! on its own stack and takes fuel for every step; `Date` reads the clock and time zone the host
+//! sets with [`Realm::set_clock`] and [`Realm::set_time_zone`]. The prototype methods are writable
+//! and configurable, so scripts can replace them. Every run is bounded
 //! by [`Limits`]: instructions run (fuel), heap bytes, frames, nested host calls, and an
 //! [`Interrupt`] flag another thread can set. A run that reaches a limit ends with
 //! [`RunErrorKind::Limit`], which a script's `try` cannot catch.
@@ -36,14 +44,19 @@ mod builtins;
 mod bytecode;
 mod chars;
 mod compiler;
+mod date_builtins;
 mod error;
 mod heap;
 mod interp;
 mod lexer;
 mod number;
+mod number_builtins;
 mod parser;
 mod realm;
 mod regexp;
+mod regexp_builtins;
+mod regexp_vm;
+mod string_builtins;
 mod token;
 mod value;
 
@@ -170,6 +183,10 @@ impl LineTable {
 }
 
 #[cfg(test)]
+mod builtins_tests;
+#[cfg(test)]
 mod interp_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod text_tests;

@@ -107,9 +107,13 @@ fn run_ui_part1(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             Ok(Value::Null)
         }
         "file.open" => match s("path") {
-            Some(path) => io::open_path(app, &path),
+            Some(path) => match p.get("params").filter(|v| !v.is_null()) {
+                Some(params) => io::open_path_with(app, &path, params),
+                None => io::open_path(app, &path),
+            },
             None => io::open_dialog(app).map(|_| Value::Null),
         },
+        "file.openWith" => io::open_with(app, p),
         // Saves write through the app (save panel, download); with no path known the panel and the
         // format's options dialog ask first.
         "file.save" => io::save(app, SaveMode::Save, p, true),
@@ -449,6 +453,7 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             Ok(Value::Null)
         }
         "window.control" => flag(&mut app.ui.control_bar),
+        "window.helpBar" => flag(&mut app.ui.help_bar),
         // The Control bar's panel menu and gripper: the edge of the window the bar docks to.
         "window.control.dock" => {
             let key = "edge";

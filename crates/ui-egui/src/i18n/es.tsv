@@ -198,6 +198,10 @@
 	Anti-Alias	Suavizado
 	Anti-alias Rasters	Suavizar imágenes ráster
 	Anti-aliased Artwork	Ilustración suavizada
+	Anti-aliasing Method	Método de suavizado
+antiAlias	Sharp	Nítido
+	Crisp	Definido
+	Strong	Fuerte
 	Anti-aliasing:	Suavizado:
 	Any Kind	Cualquier tipo
 	Font Technology	Tecnología de fuente
@@ -562,6 +566,11 @@ font-technology	Variable	Variables
 	Color Table ({n} colors)	Tabla de colores ({n} colores)
 	Color Theme	Tema de color
 	Color Themes	Temas de color
+	Color Wheel	Rueda de color
+	Hue ring	Anillo de tono
+	Saturation and brightness	Saturación y brillo
+	Color field	Campo de color
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Tipo de color:
 	Color:	Color:
 	Colorize	Colorear
@@ -1132,6 +1141,17 @@ font-technology	Variable	Variables
 	Exporting {}	Exportando {}
 	Export…	Exportar…
 	Extrude & Bevel…	Extrusión y biselado…
+	3D (Classic)	3D (clásico)
+	Extrude & Bevel (Classic)…	Extrusión y biselado (clásico)…
+	Surface	Superficie
+	Wireframe	Malla
+	No Shading	Sin sombreado
+	Plastic	Plástico
+	Highlight Intensity	Intensidad del brillo
+	Highlight Size	Tamaño del brillo
+	Blend Steps	Pasos de fusión
+	Shading Color	Color de sombreado
+	Draw Hidden Faces	Dibujar caras ocultas
 	Eyedropper	Cuentagotas
 	Sample Color from Screen	Tomar color de la pantalla
 	This system has no screen color sampler	Este sistema no tiene muestreador de color de la pantalla
@@ -1981,6 +2001,10 @@ font-technology	Variable	Variables
 	Stylistic	Estilística
 	Mojikumi Set	Conjunto de mojikumi
 	Kinsoku Set	Conjunto de kinsoku
+	Kinsoku Shori Type	Tipo de kinsoku shori
+	Push In First	Primero hacia dentro
+	Push Out First	Primero hacia fuera
+	Push Out Only	Solo hacia fuera
 	Hard	Fuerte
 	Soft	Suave
 	Monitor RGB	RGB del monitor
@@ -3532,6 +3556,8 @@ digits	Malayalam	Malayálam
 	Tile Type:	Tipo de mosaico:
 	tile {number}	mosaico {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Los mosaicos se numeran de izquierda a derecha y luego hacia abajo; deja el rango vacío para todos.
+	Copies per Sheet (as many as fit, in a grid)	Copias por hoja (tantas como quepan, en cuadrícula)
+	Gutter:	Medianil:
 	Tint	Matiz
 	Tip extends past the end point	La punta se extiende más allá del punto final
 	Tip on the end point	Punta en el punto final
@@ -4109,6 +4135,7 @@ axis	Both	Ambos
 @msg	Targa files are RGB: colorModel rgb	los archivos Targa son RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Ceñir texto: selecciona un objeto para ceñir
 @msg	This shortcut file is in a form VectorCraft can't read.	Este archivo de métodos abreviados tiene un formato que VectorCraft no puede leer.
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` debe ser "none", "sharp", "crisp" o "strong"
 @msg	`aspect` must be a number (%)	`aspect` debe ser un número (%)
 @msg	`at` must be [x, y]	`at` debe ser [x, y]
 @msg	`color` must be a colour	`color` debe ser un color
@@ -4510,6 +4537,13 @@ axis	Both	Ambos
 @msg	select an image	selecciona una imagen
 @msg	select an object in perspective	selecciona un objeto en perspectiva
 @msg	select artwork (or a colour group) to recolor	selecciona la ilustración (o un grupo de colores) que quieres volver a colorear
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	Recoloreado completado; sin cambios: {locked} y {hidden}
+@msg	Recolor completed; {objects} were left unchanged	Recoloreado completado; sin cambios: {objects}
+@msg	Recolor completed; {objects} was left unchanged	Recoloreado completado; sin cambios: {objects}
+@msg	1 locked object	1 objeto bloqueado
+@msg	{n} locked objects	{n} objetos bloqueados
+@msg	1 hidden object	1 objeto oculto
+@msg	{n} hidden objects	{n} objetos ocultos
 @msg	select at least two objects	selecciona al menos dos objetos
 @msg	exit isolation mode first	sal primero del modo de aislamiento
 @msg	select objects, not layers	selecciona objetos, no capas
@@ -4850,6 +4884,10 @@ axis	Both	Ambos
 @msg	the PSD file is cut short	el archivo PSD está incompleto
 @msg	the PSD file's header is damaged	el encabezado del archivo PSD está dañado
 @msg	the PSD file's image data can't be read: {e}	no se pueden leer los datos de imagen del archivo PSD: {e}
+@msg	the JPEG XL file is cut short	el archivo JPEG XL está incompleto
+@msg	the JPEG XL container is too large to read	el contenedor JPEG XL es demasiado grande para leerlo
+@msg	CMYK JPEG XL images can't be read	las imágenes JPEG XL en CMYK no se pueden leer
+@msg	the JPEG XL file can't be read: {e}	no se puede leer el archivo JPEG XL: {e}
 	Video	Video
 	De-Interlace…	Desentrelazar…
 	De-Interlace	Desentrelazar
@@ -5704,6 +5742,11 @@ mark-style	Japanese	Japonesas
 	Snap to Perpendicular	Ajustar a perpendicular
 @msg	unknown snap option `{key}` (use {options})	opción de ajuste desconocida `{key}` (use {options})
 	Gap Length:	Longitud del hueco:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	El modo Logotipo plano no usa keepColors: calca los colores indicados en logoColors o los colores que encuentra.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	No se calcó nada: ninguno de los colores que encontró el calco coincide con keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	No se calcó nada: Ignorar color omite todas las áreas de los colores que indica keepColors.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	No se calcó nada: los colores que coinciden con keepColors no producen ningún trazado.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: ninguno de los colores que encontró el calco coincide con {c}, así que no se calca nada de él.
 @msg	`colorGroup` needs `library: "document"`	`colorGroup` requiere `library: "document"`
 @msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` requiere `palette: "documentLibrary"`
 @msg	`colorGroup` needs `mode: "color"`	`colorGroup` requiere `mode: "color"`
@@ -5838,6 +5881,8 @@ axis	Y Axis	Eje Y
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	el módulo importa `env.{name}`, que un plugin solo puede usar en el nivel de API de plugins {PROGRESS_API} (`api` {PROGRESS_API}) y con el permiso `{permission}`
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	el módulo importa `{from}.{name}`, que el host no ofrece: un plugin solo puede importar las funciones `env.vc_*` que enumera docs/plugins.md (nivel de API de plugins 2), y ningún WASI, archivo ni red
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` es {_1}; este host admite los niveles de API de plugins de 1 a {API_LEVEL}
+@msg	`paintOutput` may only be true	`paintOutput` solo puede ser true
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` solo es para un efecto dinámico (`kind` "effect") con `api` 2
 @msg	`grant` must be a list of permission names	`grant` debe ser una lista de nombres de permisos
 @msg	`grant` names an unknown permission `{shown}`	`grant` nombra un permiso desconocido `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	un plugin de tipo `{_1}` necesita el permiso `{_2}`
@@ -5848,6 +5893,14 @@ axis	Y Axis	Eje Y
 @msg	unknown permission `{shown}`	permiso desconocido `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}” pide los permisos {asked}: instálalo con un `grant` que los incluya cuando el usuario lo acepte
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	a “{name}” no se le concedió `{p}`, que su resultado necesita: no se cambió nada
+@msg	a heavy filter runs in the background, so it can't declare `commands`	un filtro pesado se ejecuta en segundo plano, así que no puede declarar `commands`
+@msg	at most {MAX_COMMANDS} `commands`	como máximo {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	el comando {name} está declarado dos veces
+@msg	command {name}: `label` must be 1-64 printable characters	comando {name}: `label` debe tener 1-64 caracteres imprimibles
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	comando {name}: usa un id de 1-{MAX_COMMAND_ID} caracteres de a-z 0-9 _ que empiece por una letra
+@msg	command {name}: {e}	comando {name}: {e}
+@msg	only a filter or a live effect declares `commands`	solo un filtro o un efecto interactivo declara `commands`
+@msg	“{name}” › {label}: {e}	“{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	el módulo no tiene el SHA-256 que indica `hash`: no se instaló nada
 # Actions panel: action sets (#3712).
 	New Set…	Nuevo conjunto…
@@ -6391,6 +6444,16 @@ breakText	Glyphs	Glifos
 @msg	path must be a list of child indices	path debe ser una lista de índices de hijos
 @msg	no object at path {shown} in the symbol's art	no hay ningún objeto en la ruta {shown} del arte del símbolo
 @msg	give fill, stroke, opacity and/or blend	indique fill, stroke, opacity y/o blend
+@msg	{key} cannot be set on a guide	{key} no se puede definir en una guía
+@msg	{key} cannot be set on a blend	{key} no se puede definir en una fusión
+@msg	{key} cannot be set on an envelope	{key} no se puede definir en una envolvente
+@msg	{key} cannot be set on a gradient mesh	{key} no se puede definir en una malla de degradado
+@msg	{key} cannot be set on a Repeat	{key} no se puede definir en una repetición
+@msg	{key} cannot be set on a placed document	{key} no se puede definir en un documento colocado
+@msg	{key} cannot be set on an Intertwine group	{key} no se puede definir en un grupo entrelazado
+@msg	stroke cannot be set on a symbol instance	stroke no se puede definir en una instancia de símbolo
+@msg	fill on a symbol instance must be a solid color or none	el fill de una instancia de símbolo debe ser un color sólido o none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} no se puede definir en una imagen sin el efecto Convertir en forma o Contornear objeto
 @msg	pass newName, registration, exportType, nineSlice and/or type	indique newName, registration, exportType, nineSlice y/o type
 	Text Flow	Flujo de texto
 	By Rows	Por filas
@@ -6420,6 +6483,7 @@ breakText	Glyphs	Glifos
 	Create Swatch Legend	Crear leyenda de muestras
 	Create Swatch Legend…	Crear leyenda de muestras…
 	HEX	HEX
+	Help Bar	Barra de ayuda
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	Herramientas de texto
 	Text Tweaker…	Ajustador de texto…
@@ -6485,6 +6549,24 @@ breakText	Glyphs	Glifos
 # 3D Box add-on
 	3D Box	Caja 3D
 	3D Box Tool	Herramienta Caja 3D
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Abrir con
+	No importer plug-ins installed	No hay plugins de importación instalados
+	Read files you open in its format and make documents from them	Leer los archivos que abre en su formato y crear documentos a partir de ellos
+@msg	{_1} is an importer (File › Open With)	{_1} es un plugin de importación (Archivo › Abrir con)
+@msg	missing `importer` (see document.formats)	falta `importer` (consulte document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` debe ser el id de formato de un plugin (consulte document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	«{shown}» abre archivos {_1}, no `{_2}`
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` es un plugin de tipo `{_2}`, no un plugin de importación
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` es un plugin de tipo `{_2}`, no un plugin de exportación
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` es un plugin de importación: abra un archivo con document.open {{"importer"}"}}
+@msg	the importer returned no objects	el plugin de importación no devolvió ningún objeto
+@msg	an importer returns `objects` and `warnings`, not `{key}`	un plugin de importación devuelve `objects` y `warnings`, no `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	el archivo supera los {MAX_INPUT_BYTES} bytes que lee un plugin de importación
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	un plugin de importación declara de 1 a {MAX_EXTENSIONS} `extensions`
+@msg	only an exporter or an importer declares `extensions`	solo un plugin de exportación o de importación declara `extensions`
+@msg	an importer always gets an import's budget: leave `budget` out	un plugin de importación siempre recibe el presupuesto de una importación: omita `budget`
 
 # Safe Mode
 	Safe Mode…	Modo seguro…

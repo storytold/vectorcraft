@@ -245,6 +245,79 @@ fn the_start_frame_applies_the_app_title_bar_preference() {
     assert!(!super::custom_titlebar_from(&both, true), "System Title Bar takes precedence over the app title bar preference");
 }
 
+/// `VECTORCRAFT_TITLEBAR` chooses the frame for the run it is set in, with System Title Bar off and
+/// on. The saved preference still decides while the variable is unset.
+#[test]
+fn the_titlebar_variable_takes_precedence_over_system_title_bar() {
+    use craft_window::Frame;
+    assert!(super::system_title_bar_applies(true, false));
+    assert!(!super::system_title_bar_applies(true, true));
+    assert!(!super::system_title_bar_applies(false, false));
+    assert!(!super::system_title_bar_applies(false, true));
+    // VECTORCRAFT_TITLEBAR=app with System Title Bar on: VectorCraft draws its own title bar.
+    let frame = super::start_frame(Frame::Desktop, Some(true), false, false);
+    assert_eq!(super::custom_titlebar_from(&frame, super::system_title_bar_applies(true, true)), !cfg!(target_os = "macos"));
+    // VECTORCRAFT_TITLEBAR=desktop with System Title Bar off keeps the desktop's frame.
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        let frame = super::start_frame(Frame::App(craft_window::Layout::default()), Some(false), false, false);
+        assert!(!super::custom_titlebar_from(&frame, super::system_title_bar_applies(false, true)));
+    }
+}
+
+/// `VECTORCRAFT_TITLEBAR` read from the environment at startup, with System Title Bar off and on.
+/// The variable is process-wide and read once, so each value runs in a separate test process.
+#[test]
+fn the_titlebar_variable_decides_the_frame_before_the_window_opens() {
+    const CHILD: &str = "VECTORCRAFT_TEST_TITLEBAR_CHILD";
+    if std::env::var_os(CHILD).is_none() {
+        for value in ["app", "system", "desktop", "unknown"] {
+            // Linux and the BSDs: hold `spawning` while the child starts, so it does not keep a
+            // copy of a GPU start test's locked start file (see `CHILD_SPAWN`).
+            #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
+            let spawning = super::spawning();
+            let child = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "tests::the_titlebar_variable_decides_the_frame_before_the_window_opens", "--nocapture"])
+                .env(CHILD, "1")
+                .env("VECTORCRAFT_TITLEBAR", value)
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::piped())
+                .spawn();
+            #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
+            drop(spawning);
+            let output = child.unwrap().wait_with_output().unwrap();
+            assert!(
+                output.status.success(),
+                "VECTORCRAFT_TITLEBAR={value}\n{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+        return;
+    }
+    let value = std::env::var("VECTORCRAFT_TITLEBAR").unwrap();
+    let not_read = cfg!(any(target_os = "macos", target_os = "windows"));
+    assert_eq!(super::titlebar_from_env(), !not_read && value != "unknown", "VECTORCRAFT_TITLEBAR={value}");
+    let off = ui_state_with_prefs(serde_json::json!({"systemTitleBar": false}));
+    let on = ui_state_with_prefs(serde_json::json!({"systemTitleBar": true}));
+    for (saved, opted_into_system) in [(None, false), (Some(&off), false), (Some(&on), true)] {
+        let custom = super::custom_titlebar(saved);
+        let expected = match value.as_str() {
+            _ if not_read => !cfg!(target_os = "macos") && !opted_into_system,
+            "app" => true,
+            "system" | "desktop" => false,
+            // Not a value the variable takes: System Title Bar decides when it is on. Otherwise the
+            // `craft-window` probe decides, the same with System Title Bar off as with no saved
+            // preferences.
+            _ if opted_into_system => false,
+            _ => super::custom_titlebar(None),
+        };
+        assert_eq!(custom, expected, "{value}, preference {opted_into_system}");
+        assert_eq!(super::native_options(custom).viewport.decorations, Some(!custom), "{value}, preference {opted_into_system}");
+    }
+}
+
 /// The file extensions the macOS bundle declares: its document types and its own exported type.
 fn plist_extensions(plist: &str) -> Vec<&str> {
     ["<key>CFBundleTypeExtensions</key>", "<key>public.filename-extension</key>"]
