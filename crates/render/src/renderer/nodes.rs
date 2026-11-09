@@ -5,20 +5,7 @@ use super::{
     shape_masked_image, single_plain_fill, text_geom_snapped, white_shape_mask,
 };
 use crate::kept_paths::{self, KeptPath};
-
-/// Does [`Renderer::bounds_of`] measure `n` by the 3D art this renderer draws and keeps for it: a
-/// Revolve, Extrude & Bevel, Inflate or Rotate without Crop Marks or Vector Halftone, which draw
-/// other art?
-fn measures_three_d(n: &Node) -> bool {
-    (effects::has_revolve(n) || effects::has_solid(n)) && !effects::has_crop_marks(n) && !effects::addons::halftone::has_halftone(n)
-}
-
-/// Does `n` hold an object that [`Renderer::bounds_of`] measures by its 3D effect's art?
-fn holds_measured_three_d(n: &Node) -> bool {
-    let mut holds = false;
-    n.walk(&mut |c| holds |= measures_three_d(c));
-    holds
-}
+use crate::node_checks::{holds_measured_three_d, measures_three_d};
 
 impl Renderer {
     /// Cached cull bounds of a node (containers union their cached children), symbol instances
@@ -55,6 +42,9 @@ impl Renderer {
             {
                 // Culling leaves room for brush art as for any object ([`brush_fx::cull_bounds`]);
                 // the measure is made again when the brush library changes ([`Self::check_symbols`]).
+                if self.brush_library.is_none() {
+                    self.brush_library = Some(self.brushes.library_key_now(symbols.document(), self.stamp));
+                }
                 let pad = brush_fx::pad(symbols, a);
                 b.map(|b| fx::with_own_raster_reach(symbols, a, b).inflate(pad, pad))
             }
@@ -119,11 +109,13 @@ impl Renderer {
             self.geom.retain(|_, e| !holds_instance(&e.node));
             self.symbols = doc.symbols.iter().map(|s| (s.name.clone(), Arc::downgrade(&s.art))).collect();
         }
-        // That art is measured with the art its brushed strokes draw ([`Self::bounds_of`]).
-        let brushes = self.brushes.library_key_now(doc, self.stamp);
-        if brushes != self.brush_library {
-            self.brush_library = brushes;
+        // That art is measured with the art its brushed strokes draw ([`Self::bounds_of`]). Without
+        // such bounds, nothing is checked.
+        if let Some(was) = self.brush_library
+            && self.brushes.library_key_now(doc, self.stamp) != was
+        {
             self.geom.retain(|_, e| !holds_measured_three_d(&e.node));
+            self.brush_library = None;
         }
     }
 
@@ -228,15 +220,13 @@ impl Renderer {
     /// drawn (with its masks and effects), since the editing layer holds a copy of its art in its
     /// place.
     fn edited_instance(f: &Frame, id: NodeId) -> bool {
-        f.opts.isolated.is_some() && f.doc.symbol_edit.as_ref().is_some_and(|e| e.instance == Some(id))
+        crate::node_checks::edited_instance(f.opts, f.doc, id)
     }
 
     /// Whether `a` is left out of this frame: hidden, a skipped template or guide, the instance a
     /// symbol is edited from, or culled.
     fn skipped(&mut self, f: &Frame, a: &Arc<Node>) -> bool {
-        let skipped_view_item = (f.opts.skip_templates || f.opts.hide_templates) && matches!(a.kind, NodeKind::Layer { template: true, .. })
-            || (f.opts.skip_templates || f.opts.hide_guides) && matches!(a.kind, NodeKind::Path { guide: true, .. });
-        if !a.visible || skipped_view_item || f.opts.hidden.contains(&a.id) || Self::edited_instance(f, a.id) {
+        if crate::node_checks::left_out(f.opts, f.doc, a) {
             return true;
         }
         match self.bounds_of(f.symbols, a) {

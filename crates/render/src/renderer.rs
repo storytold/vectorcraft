@@ -45,7 +45,7 @@ impl Renderer {
             kept: PtrMap::default(),
             symbols: vec![],
             plugin_revision: 0,
-            brush_library: 0,
+            brush_library: None,
             painting_plugins: false,
             paint_names: 0,
             strokes: PtrMap::default(),
@@ -77,6 +77,8 @@ impl Renderer {
             pass_bounds: PtrMap::default(),
             three_d_bounds: PtrMap::default(),
             three_d_kept: 0,
+            #[cfg(test)]
+            three_d_sweeps: 0,
             placed_arts: FrameCache::new(lru::PLACED_ART_BUDGET, 256),
             placed_frame: None,
             nested: 0,

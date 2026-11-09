@@ -107,6 +107,32 @@ pub(crate) fn holds_instance(n: &Node) -> bool {
     holds
 }
 
+/// Is `a` left out of a frame `doc` draws with `opts`, before any culling: hidden, a template or
+/// guide the view hides, drawn hidden, or the instance its symbol is being edited from?
+pub(crate) fn left_out(opts: &crate::RenderOptions, doc: &vectorcraft_doc::Document, a: &Node) -> bool {
+    let view_item = (opts.skip_templates || opts.hide_templates) && matches!(a.kind, NodeKind::Layer { template: true, .. })
+        || (opts.skip_templates || opts.hide_guides) && matches!(a.kind, NodeKind::Path { guide: true, .. });
+    !a.visible || view_item || opts.hidden.contains(&a.id) || edited_instance(opts, doc, a.id)
+}
+
+/// Is `id` the symbol instance that `doc`'s symbol is edited from in isolation (drawn without it)?
+pub(crate) fn edited_instance(opts: &crate::RenderOptions, doc: &vectorcraft_doc::Document, id: vectorcraft_doc::NodeId) -> bool {
+    opts.isolated.is_some() && doc.symbol_edit.as_ref().is_some_and(|e| e.instance == Some(id))
+}
+
+/// Does [`crate::Renderer::bounds_of`] measure `n` by the 3D art the renderer draws and keeps for
+/// it: a Revolve, Extrude & Bevel, Inflate or Rotate without Crop Marks or Vector Halftone, which
+/// draw other art?
+pub(crate) fn measures_three_d(n: &Node) -> bool {
+    (effects::has_revolve(n) || effects::has_solid(n)) && !effects::has_crop_marks(n) && !effects::addons::halftone::has_halftone(n)
+}
+
+/// Does `n` hold an object that [`crate::Renderer::bounds_of`] measures by its 3D effect's art
+/// ([`measures_three_d`])?
+pub(crate) fn holds_measured_three_d(n: &Node) -> bool {
+    measures_three_d(n) || n.children().is_some_and(|c| c.iter().any(|c| holds_measured_three_d(c)))
+}
+
 /// Does `n` hold an object with a visible plug-in effect ([`effects::has_plugin_effect`]), in it or
 /// in the opacity masks of the objects in it?
 pub(crate) fn holds_plugin_effect(n: &Node) -> bool {

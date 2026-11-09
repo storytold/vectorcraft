@@ -819,6 +819,43 @@ fn a_measuring_pass_keeps_the_bounds_of_held_art_only() {
     assert!(r.three_d_bounds.len() <= 1024, "{} kept", r.three_d_bounds.len());
 }
 
+/// While its 3D art is held, a pass that only measures sweeps the bounds kept for 3D art each time
+/// they double, not on every new art past a size.
+#[test]
+fn a_measuring_pass_sweeps_the_bounds_of_held_art_as_they_double() {
+    let mut d = Document::new(100.0, 100.0);
+    let l = d.layers[0].id;
+    for i in 0..3000 {
+        let x = f64::from(i) * 30.0;
+        let mut n = Node::path(
+            d.alloc_id(),
+            shapes::rectangle(Rect::new(x, 30.0, x + 20.0, 50.0)),
+            Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+        );
+        n.appearance.effects = vec![Effect { id: "threeD.extrude".into(), params: json!({"depth": 2.0}), visible: true }];
+        d.insert(Some(l), 0, n).unwrap();
+    }
+    let mut r = Renderer::new();
+    // Held here, as the art kept to draw is.
+    let held: Vec<_> = d.layers[0].children().unwrap().iter().map(|n| r.measured_fx_art(&d, n)).collect();
+    assert_eq!((held.len(), r.three_d_bounds.len()), (3000, 3000));
+    assert!(r.three_d_sweeps <= 2, "{} sweeps", r.three_d_sweeps);
+}
+
+/// A renderer checks the brush library between frames only while it keeps bounds measured with
+/// brushed strokes in 3D art.
+#[test]
+fn the_brush_library_is_checked_only_with_3d_bounds_kept() {
+    let mut d = doc_with(Rect::new(30.0, 30.0, 60.0, 60.0), Color::BLACK, vec![]);
+    let mut r = Renderer::new();
+    r.render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default());
+    assert_eq!(r.brush_library, None);
+    let id = d.layers[0].children().unwrap()[0].id;
+    d.node_mut(id).unwrap().appearance.effects = vec![Effect { id: "threeD.extrude".into(), params: json!({"depth": 20.0}), visible: true }];
+    r.render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default());
+    assert!(r.brush_library.is_some());
+}
+
 /// An object whose 3D effect builds nothing (Revolve on a group) is measured by the renderer as the
 /// free measure does it: as the renderer draws it, by its members.
 #[test]

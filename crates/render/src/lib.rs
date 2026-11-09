@@ -85,8 +85,9 @@ pub struct Renderer {
     /// last checked against (see [`Self::check_plugins`]).
     plugin_revision: u64,
     /// The key of the brush library ([`brush_fx::BrushCache::library_key`]) that `geom`'s bounds
-    /// of 3D art measured brushed strokes by (see [`Self::check_symbols`]).
-    brush_library: u64,
+    /// of 3D art measured brushed strokes by (see [`Self::check_symbols`]), while `geom` may hold
+    /// such bounds (`Some`).
+    brush_library: Option<u64>,
     /// Is a live-effect plug-in that paints its pieces installed (found when `plugin_revision`
     /// changes)?
     painting_plugins: bool,
@@ -178,6 +179,9 @@ pub struct Renderer {
     /// How many entries `three_d_bounds` kept when it last let go of the art no longer held: it
     /// does so again when it holds twice as many.
     three_d_kept: usize,
+    /// How many times `three_d_bounds` was swept for art no longer held between frames.
+    #[cfg(test)]
+    three_d_sweeps: usize,
     /// Symbol art as instances and inline graphics draw it (see [`Self::placed_art`]).
     placed_arts: FrameCache<PlacedKey, PlacedEntry>,
     /// The bitmap clock of [`placed_document`] when this frame first drew a placed document from

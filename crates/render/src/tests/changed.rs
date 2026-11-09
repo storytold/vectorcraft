@@ -539,3 +539,67 @@ fn a_renderer_measures_an_edit_with_the_3d_art_it_draws() {
     assert_eq!(built, 0, "drawn with the art made to measure it");
     assert_eq!(apart, 1, "changed keeps nothing for the renderer");
 }
+
+/// An Image Trace object shown with its source image (`view`): its hidden source, at the left, and
+/// two traced shapes, at the right. The ids of the source and of the second shape.
+fn traced(view: &str) -> (Document, NodeId, NodeId) {
+    let mut d = Document::new(W as f64, H as f64);
+    let mut source = rect(&mut d, Rect::new(10.0, 10.0, 40.0, 40.0), Color::rgb(0.5, 0.5, 0.5));
+    source.visible = false;
+    let a = rect(&mut d, Rect::new(60.0, 10.0, 70.0, 20.0), Color::rgb(0.0, 0.5, 0.0));
+    let b = rect(&mut d, Rect::new(80.0, 10.0, 90.0, 20.0), Color::rgb(1.0, 0.5, 0.0));
+    let ids = (source.id, b.id);
+    let mut g = Node::group(d.alloc_id(), vec![Arc::new(source), Arc::new(a), Arc::new(b)]);
+    g.extras_mut().trace = Some(Box::new(serde_json::json!({ "view": view })));
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, g).unwrap();
+    (d, ids.0, ids.1)
+}
+
+#[test]
+fn moving_a_trace_objects_source_changes_where_it_shows() {
+    for view in ["sourceImage", "outlinesWithSourceImage"] {
+        let (old, source, _) = traced(view);
+        let mut new = old.clone();
+        new.node_mut(source).unwrap().transform(Affine::translate((5.0, 30.0)), false);
+        let a = area(redraw(&old, &new));
+        assert!(a.contains(Point::new(12.0, 12.0)) && a.contains(Point::new(44.0, 69.0)), "{view}: before and after: {a:?}");
+    }
+}
+
+#[test]
+fn recolouring_a_traced_shape_changes_only_the_shape() {
+    let (old, _, shape) = traced("outlinesWithSourceImage");
+    let mut new = old.clone();
+    new.node_mut(shape).unwrap().appearance.fill_mut().unwrap().paint = Paint::solid(Color::rgb(0.0, 0.0, 1.0));
+    let a = area(redraw(&old, &new));
+    assert!(a.x0 > 72.0, "not the source or the other shape: {a:?}");
+}
+
+/// Templates and guides that the view hides draw nothing: an edit to them changes nothing.
+#[test]
+fn an_edit_to_what_the_view_hides_changes_nothing() {
+    let mut old = Document::new(W as f64, H as f64);
+    let template = Node::layer(old.alloc_id(), "Template", vectorcraft_doc::LayerColor::Preset(1));
+    let template = old.insert(None, usize::MAX, template).unwrap();
+    if let Some(NodeKind::Layer { template: t, .. }) = old.node_mut(template).map(|n| &mut n.kind) {
+        *t = true;
+    }
+    let traced = rect(&mut old, Rect::new(10.0, 10.0, 40.0, 40.0), Color::rgb(0.5, 0.5, 0.5));
+    let traced = old.insert(Some(template), 0, traced).unwrap();
+    let mut guide = rect(&mut old, Rect::new(60.0, 10.0, 90.0, 40.0), Color::BLACK);
+    if let NodeKind::Path { guide: g, .. } = &mut guide.kind {
+        *g = true;
+    }
+    let l = old.layers[0].id;
+    let guide = old.insert(Some(l), 0, guide).unwrap();
+    let mut new = old.clone();
+    for id in [traced, guide] {
+        new.node_mut(id).unwrap().transform(Affine::translate((5.0, 5.0)), false);
+    }
+    let opts = RenderOptions { hide_templates: true, hide_guides: true, ..Default::default() };
+    let mut r = Renderer::new();
+    r.render(&old, W, H, view(), &opts);
+    assert_eq!(r.changed(&old, &new, &opts), Changed::Nothing);
+    assert!(matches!(changed(&old, &new), Changed::Area(_)), "shown, they change");
+}

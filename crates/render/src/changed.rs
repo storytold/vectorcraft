@@ -82,19 +82,19 @@ fn add_placed(symbols: &SymbolBoxes, n: &Node, files: &HashSet<String>, area: &m
 /// art also draws in the copies round it). Objects that an edit doesn't touch
 /// keep their identity, so this costs what changed, not the size of the document.
 pub fn changed(old: &Document, new: &Document) -> Changed {
-    changed_with(old, new, None, &[])
+    changed_with(old, new, None, &crate::RenderOptions::default())
 }
 
 impl crate::Renderer {
     /// [`changed`], measured through this renderer (`Renderer::bounds_of`): what it drew
     /// of `old` it measured to draw it, and what it measures of `new`, a 3D effect's art included,
-    /// it holds to draw that with `opts`; the objects `opts` draws hidden count as hidden objects
-    /// do, drawing nothing. The view that drew `old` with this renderer and `opts` asks this. With
+    /// it holds to draw that with `opts`; the objects `opts` leaves out (hidden, templates and
+    /// guides the view hides, the instance a symbol is edited from) draw nothing. The view that drew `old` with this renderer and `opts` asks this. With
     /// Overprint Preview or Separations Preview the renderer draws copies of the objects
     /// (`proof::prepare`), so they are measured afresh and nothing is held.
     pub fn changed(&mut self, old: &Document, new: &Document, opts: &crate::RenderOptions) -> Changed {
         let renderer = (!crate::proof::overprints(opts)).then_some(self);
-        changed_with(old, new, renderer, &opts.hidden)
+        changed_with(old, new, renderer, opts)
     }
 
     /// Let go of the art made to measure objects ([`crate::Renderer::changed`]) and held for this
@@ -114,11 +114,11 @@ impl crate::Renderer {
     }
 }
 
-fn changed_with(old: &Document, new: &Document, renderer: Option<&mut crate::Renderer>, hidden: &[NodeId]) -> Changed {
+fn changed_with(old: &Document, new: &Document, renderer: Option<&mut crate::Renderer>, opts: &crate::RenderOptions) -> Changed {
     if new.pattern_edit.is_some() || !old.same_outside_layers(new) {
         return Changed::Everything;
     }
-    let mut diff = Diff { old: old.symbol_boxes(), new: new.symbol_boxes(), area: None, renderer, hidden };
+    let mut diff = Diff { old: old.symbol_boxes(), new: new.symbol_boxes(), area: None, renderer, opts, source: None };
     diff.children(&old.layers, &new.layers);
     diff.area.map_or(Changed::Nothing, Changed::Area)
 }
@@ -136,13 +136,15 @@ pub fn view_pixels(area: Rect, view: Affine, w: u32, h: u32) -> Option<[u32; 4]>
 }
 
 /// [`changed`] in progress: the symbols' boxes of both versions, the area so far, the renderer
-/// that measures, if any (else each object is measured afresh), and the objects it draws hidden.
+/// that measures, if any (else each object is measured afresh), the options of the frames it
+/// measures for, and the hidden source image of the Image Trace object whose members it compares.
 struct Diff<'a, 'r> {
     old: SymbolBoxes<'a>,
     new: SymbolBoxes<'a>,
     area: Option<Rect>,
     renderer: Option<&'r mut crate::Renderer>,
-    hidden: &'r [NodeId],
+    opts: &'r crate::RenderOptions,
+    source: Option<NodeId>,
 }
 
 impl Diff<'_, '_> {
@@ -171,15 +173,17 @@ impl Diff<'_, '_> {
     /// only had anchors moved changed around them ([`moved_anchors`]). Any other object that
     /// changed counts whole, before and after.
     fn node(&mut self, old: &Arc<Node>, new: &Arc<Node>) {
-        if Arc::ptr_eq(old, new) || self.unseen(old) && self.unseen(new) {
+        if Arc::ptr_eq(old, new) || self.unseen(Side::Old, old) && self.unseen(Side::New, new) {
             return;
         }
-        // An Image Trace object draws its hidden source image in some views: it changed whole.
         if let (Some(a), Some(b)) = (members(old), members(new))
             && same_but_members(old, new)
-            && old.extras().trace.is_none()
         {
+            // An Image Trace object draws its hidden source image, its first member, in some views.
+            let source = old.extras().trace.is_some().then(|| a.first().map(|s| s.id)).flatten();
+            let outer = std::mem::replace(&mut self.source, source);
             self.children(a, b);
+            self.source = outer;
         } else if let Some((area, moved, anchors)) = moved_anchors(old, new) {
             if moved <= FEW_MOVED && anchors >= MANY_ANCHORS {
                 self.add(area);
@@ -195,16 +199,21 @@ impl Diff<'_, '_> {
         }
     }
 
-    /// Does `n` draw nothing: hidden, or drawn hidden? The members of a hidden group or layer are
-    /// never compared ([`Self::node`]).
-    fn unseen(&self, n: &Node) -> bool {
-        !n.visible || self.hidden.contains(&n.id)
+    /// Does `n` of the `side` version draw nothing, as the renderer leaves it out
+    /// (`node_checks::left_out`)? The source image of an Image Trace object draws in some views.
+    /// The members of a group or layer left out are never compared ([`Self::node`]).
+    fn unseen(&self, side: Side, n: &Node) -> bool {
+        let doc = match side {
+            Side::Old => self.old.document(),
+            Side::New => self.new.document(),
+        };
+        self.source != Some(n.id) && crate::node_checks::left_out(self.opts, doc, n)
     }
 
     /// The cull bounds of `n` of the `side` version, through the renderer when there is one;
     /// `None` when it draws nothing ([`Self::unseen`]), as nothing is measured to draw it.
     fn bounds(&mut self, side: Side, n: &Arc<Node>) -> Option<Rect> {
-        if self.unseen(n) {
+        if self.unseen(side, n) {
             return None;
         }
         let Diff { old, new, renderer, .. } = self;

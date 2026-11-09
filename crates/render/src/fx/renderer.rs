@@ -621,6 +621,10 @@ impl Renderer {
             if self.three_d_bounds.len() >= (2 * self.three_d_kept).max(1024) {
                 self.three_d_bounds.retain(|_, e| e.0.strong_count() > 0);
                 self.three_d_kept = self.three_d_bounds.len();
+                #[cfg(test)]
+                {
+                    self.three_d_sweeps += 1;
+                }
             }
             self.three_d_bounds.insert(Arc::as_ptr(&art) as usize, (Arc::downgrade(&art), None));
         }
