@@ -1859,10 +1859,12 @@ already walks Image Trace. Short agent entry points:
   one back to the symbol. It is refused for a static symbol and for a path that names no object. On the canvas (VectorCraft's own rule), a Direct Selection click on an instance of a
   dynamic symbol selects the path, compound path or type object of its art under the pointer and outlines it
   (`symbol.instance.selectPart {id, path}`; Alt or Shift selects the instance whole). While it is selected,
-  `paint.setFill` and `paint.setStroke` (solid, none, gradient or pattern), `paint.invert` and `paint.complement` on a
-  solid color, all without `ids`, `id` or `item`, `transparency.set` with opacity and/or blend, and the Eyedropper's
-  `appearance.copyFrom` (fill and stroke, including a gradient or pattern) change that object for this instance only,
-  each as one undo step. A painted stroke on type without a weight gets 1 pt. `paint.invert` and `paint.complement`
+  `paint.setFill` and `paint.setStroke` (solid, none, gradient or pattern) and `paint.invert` and `paint.complement`
+  on a solid color change that object's fill or stroke for this instance only when `ids`, `id` and `item` are omitted.
+  `transparency.set` with opacity and/or blend does the same when `ids`, `id` and `item` are omitted; with `ids` or
+  `id` it edits those objects, so the instance's id changes the instance. `appearance.copyFrom` takes the source's
+  fill and stroke (including a gradient or pattern) for this instance only when `ids`, `reverse`, `append` and
+  `defaultsOnly` are omitted; with `ids` it copies onto those objects. Each of these is one undo step. A painted stroke on type without a weight gets 1 pt. `paint.invert` and `paint.complement`
   on a gradient or pattern, or on type whose characters differ in color, are refused with a status message, and so are
   Eyedropper options that pick up neither color, an Eyedropper source that is not a path, compound path or type (a
   symbol instance or a group, for which the paint defaults stay as they are too), isolate, knockout, knockoutShape,
