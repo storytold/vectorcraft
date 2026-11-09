@@ -928,6 +928,7 @@ mod tests {
         thumbs.receive(ctx, done);
     }
 
+    /// Prioritize the shown document’s thumbnails, requeue them when revisited, and retain cached rows.
     #[test]
     fn the_shown_documents_thumbnails_are_made_before_the_queued_ones_of_another() {
         let ctx = egui::Context::default();
