@@ -5973,6 +5973,9 @@ axis	Y Axis	Άξονας Y
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all ή ένα εύρος όπως 1, 3-5, όχι {v}
 	Add to Symbols	Προσθήκη στα σύμβολα
 	Basic Shapes	Βασικά σχήματα
+	Button	Κουμπί
+	Panel	Πίνακας
+	UI Frames	Πλαίσια UI
 	Open Symbol Library	Άνοιγμα βιβλιοθήκης συμβόλων
 	Save Symbol Library	Αποθήκευση βιβλιοθήκης συμβόλων
 	Save Symbol Library…	Αποθήκευση βιβλιοθήκης συμβόλων…

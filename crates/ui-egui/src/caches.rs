@@ -45,6 +45,9 @@ pub struct CanvasCache {
     /// The marks Type → Show Hidden Characters drew on each text object in the last frame. A frame
     /// that does not draw them drops them ([`canvas::show`]).
     pub hidden_chars: canvas::HiddenChars,
+    /// The words Edit › Spelling › Auto Spell Check underlined on each text object in the last
+    /// frame; dropped while it is off.
+    pub spelling: canvas::SpellingMarks,
     /// The selected objects' outlines, anchors and handles as drawn in the last frame. A frame that
     /// does not draw them drops them ([`canvas::show`]).
     pub selection_marks: canvas::SelectionMarks,

@@ -489,14 +489,7 @@ impl Interp<'_> {
         }
         let (family, font_style) = family_style(&name);
         // The available family's own spelling: `MicrosoftYaHei` is Microsoft YaHei, not "Microsoft Ya Hei".
-        // A family that isn't available keeps its name and shows in the fallback font.
-        let font_family = match vectorcraft_text::FontDb::global().find_family(&family) {
-            Some(f) => f,
-            None => {
-                self.out.missing_font(&family);
-                family
-            }
-        };
+        let font_family = vectorcraft_text::FontDb::global().find_family(&family).unwrap_or(family);
         let fill = if self.g.paint.is_none() { Paint::solid(vectorcraft_color::Color::BLACK) } else { self.g.paint.clone() };
         let style = CharStyle { font_family, font_style, size, fill, stroke: Paint::None, ..CharStyle::default() };
         let mut t = TextObject::point(Point::ZERO, text, style);
