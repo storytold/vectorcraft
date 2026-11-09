@@ -116,15 +116,21 @@ fn page_knockout_and_isolated_blending() {
     Arc::make_mut(&mut d.layers[0]).knockout = Knockout::Off;
     assert!(close(render(&d).pixel(50, 50), BLUE_OVER_RED));
 
-    // Page Isolated Blending: a Difference object no longer blends with the white under the page.
+    // A Difference object on the bare page keeps its color: the background goes under the
+    // finished art (#6125), with Page Isolated Blending or without it.
     let mut d = Document::new(100.0, 100.0);
     let mut red = half(&mut d, 10.0, (1.0, 0.0, 0.0));
     red.opacity = 1.0;
     red.blend = Blend::Difference;
     d.insert(Some(d.layers[0].id), 0, red).unwrap();
-    assert!(close(render(&d).pixel(30, 50), [0, 255, 255, 255]), "inverts the white: {:?}", render(&d).pixel(30, 50));
+    assert!(close(render(&d).pixel(30, 50), [255, 0, 0, 255]), "the bare page: {:?}", render(&d).pixel(30, 50));
     d.page_isolate = true;
     assert!(close(render(&d).pixel(30, 50), [255, 0, 0, 255]), "isolated: {:?}", render(&d).pixel(30, 50));
+    // A white object under it is art: the Difference object inverts it.
+    let id = d.alloc_id();
+    let white = Node::path(id, shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::basic(Paint::solid(Color::WHITE), Paint::None, 0.0));
+    d.insert(Some(d.layers[0].id), 0, white).unwrap();
+    assert!(close(render(&d).pixel(30, 50), [0, 255, 255, 255]), "inverts the white object: {:?}", render(&d).pixel(30, 50));
 }
 
 #[test]
