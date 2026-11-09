@@ -85,6 +85,9 @@ pub(crate) struct Interp<'a> {
     /// The Type 1 fonts read from the encrypted part of their programs, by the `CharStrings`
     /// dictionary given to their font dictionaries (see `type1`).
     pub type1: Vec<(DictRef, Rc<super::type1::Font>)>,
+    /// The CIDFonts a FontSet's Compact Font Format data defined, by their dictionaries: the
+    /// data and the font's index in it (see `cid`).
+    pub cff: Vec<(DictRef, Rc<super::cid::Cff>)>,
     /// The decrypted subroutines of Type 0 CIDFonts (see `cid`).
     pub cid_subrs: super::cid::CidSubrs,
     /// The font number `usefont` gave the CMap mappings that follow.
@@ -226,6 +229,7 @@ impl<'a> Interp<'a> {
             type42: vec![],
             cmaps: vec![],
             type1: vec![],
+            cff: vec![],
             cid_subrs: vec![],
             cmap_font: 0,
             type42_counted: HashSet::new(),
