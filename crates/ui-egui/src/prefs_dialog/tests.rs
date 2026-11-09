@@ -336,7 +336,8 @@ fn app_title_bar_preference_shows_and_persists() {
 
 /// VectorCraft Title Bar on Every Desktop does not take clicks while System Title Bar is on or
 /// VECTORCRAFT_TITLEBAR is set. With the variable set its note names the variable in place of the
-/// next-launch note, and with System Title Bar on a note says that System Title Bar takes precedence.
+/// next-launch note, and with System Title Bar on and the variable unset a note says that System
+/// Title Bar takes precedence.
 #[test]
 fn app_title_bar_is_dimmed_while_something_takes_precedence() {
     fn texts(s: &egui::Shape, out: &mut Vec<String>) {
@@ -364,7 +365,7 @@ fn app_title_bar_is_dimmed_while_something_takes_precedence() {
         let mut shown = vec![];
         out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
         assert_eq!(shown.iter().any(|t| t == note), supported && from_env, "{shown:?}");
-        assert_eq!(shown.iter().any(|t| t == system_note), supported && system, "{shown:?}");
+        assert_eq!(shown.iter().any(|t| t == system_note), supported && system && !from_env, "{shown:?}");
         // The next-launch note stays under this row on Linux and the BSDs, where it also covers
         // System Title Bar, and under System Title Bar on Windows.
         let restart_shown = if supported { !from_env } else { cfg!(all(not(target_arch = "wasm32"), not(target_os = "macos"))) };
@@ -388,6 +389,42 @@ fn app_title_bar_is_dimmed_while_something_takes_precedence() {
                 out.textures_delta.clear();
             }
             assert_eq!(a.ui.dialog.as_ref().unwrap().bool("appTitleBar"), !from_env && !system, "variable {from_env}, System Title Bar {system}");
+        }
+    }
+}
+
+/// While VECTORCRAFT_TITLEBAR chooses the frame, System Title Bar does not take clicks.
+#[test]
+fn system_title_bar_is_dimmed_while_the_environment_variable_chooses_the_frame() {
+    let supported = cfg!(all(not(target_arch = "wasm32"), not(target_os = "macos")));
+    for from_env in [false, true] {
+        let mut a = app();
+        a.titlebar_from_env = from_env;
+        open(&mut a, Some("User Interface"));
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut a, ui.ctx()));
+        out.textures_delta.clear();
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut a, ui.ctx()));
+        out.textures_delta.clear();
+        let label = out.shapes.iter().find_map(|c| match &c.shape {
+            egui::Shape::Text(t) if t.galley.text() == "System Title Bar" => Some(t.visual_bounding_rect()),
+            _ => None,
+        });
+        assert_eq!(label.is_some(), supported);
+        if let Some(r) = label {
+            for pressed in [true, false] {
+                let input = egui::RawInput {
+                    events: vec![
+                        egui::Event::PointerMoved(r.center()),
+                        egui::Event::PointerButton { pos: r.center(), button: egui::PointerButton::Primary, pressed, modifiers: Default::default() },
+                    ],
+                    ..Default::default()
+                };
+                let mut out = ctx.run_ui(input, |ui| show(&mut a, ui.ctx()));
+                out.textures_delta.clear();
+            }
+            assert_eq!(a.ui.dialog.as_ref().unwrap().bool("systemTitleBar"), !from_env, "clicked with the variable {from_env}");
         }
     }
 }

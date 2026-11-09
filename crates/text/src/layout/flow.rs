@@ -607,6 +607,17 @@ fn is_cjk_gap(glyph: usize, held: &[usize], after: &[Option<usize>], index: usiz
         })
 }
 
+// May a pushed-in line close a CJK gap after `g`? Not after a list marker or an inline graphic,
+// which the push-in's room does not count either.
+fn may_squeeze(g: &SGlyph) -> bool {
+    g.len > 0 && g.inline.is_none()
+}
+
+// How much a pushed-in line's `squeeze` adds to the CJK gap after `g`.
+fn squeeze_after(g: &SGlyph, squeeze: f64, vertical: bool) -> f64 {
+    if may_squeeze(g) { squeeze * squeeze_em(g, vertical) } else { 0.0 }
+}
+
 // What justification may change of glyph `j`: nothing of a `held` glyph, and no glyph
 // scaling of a `hung` one.
 fn flow_line_flex(glyph: usize, flex: &[Flex], held: &[usize], hung: &[usize]) -> Flex {
@@ -672,8 +683,10 @@ fn justify_flow_line(cx: &Ctx<'_>, paragraph: &ParagraphData<'_, '_>, line: &Lin
     // the same share of the em of the glyph before it, at most [`PUSH_IN_SQUEEZE`].
     let pushed_in = line.position.pushed_in && paragraph.regions.is_some() && cjk_gaps > 0 && width > room + EPS;
     if pushed_in {
-        let ems: f64 =
-            (line.index..line.body).filter(|&j| is_cjk_gap(j, held, &after, line.index, sg)).map(|j| squeeze_em(&sg[j], cx.vertical)).sum();
+        let ems: f64 = (line.index..line.body)
+            .filter(|&j| is_cjk_gap(j, held, &after, line.index, sg) && may_squeeze(&sg[j]))
+            .map(|j| squeeze_em(&sg[j], cx.vertical))
+            .sum();
         if ems > EPS {
             squeeze = ((room - width) / ems).max(-PUSH_IN_SQUEEZE);
         }
@@ -778,7 +791,7 @@ fn emit_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, paragraph: &ParagraphData
                 advance += justification.per_space;
             } else if justification.per_cjk != 0.0 || justification.squeeze != 0.0 {
                 if is_cjk_gap(glyph_index, &line.held, &justification.after, index, sg) {
-                    advance += justification.per_cjk + justification.squeeze * squeeze_em(glyph, cx.vertical);
+                    advance += justification.per_cjk + squeeze_after(glyph, justification.squeeze, cx.vertical);
                 }
             } else if !line.held.contains(&glyph_index)
                 && drawn_after(index, glyph_index, &justification.after).and_then(|next| sg.get(next)).is_some_and(|next| !next.continues_tcy())
