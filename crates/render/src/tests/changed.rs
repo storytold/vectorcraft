@@ -620,10 +620,16 @@ fn recolouring_a_traced_shape_changes_only_the_shape() {
     let (old, _, _, shape) = traced("outlinesWithSourceImage");
     let mut new = old.clone();
     new.node_mut(shape).unwrap().appearance.fill_mut().unwrap().paint = Paint::solid(Color::rgb(0.0, 0.0, 1.0));
-    let a = area(redraw(&old, &new));
-    // The shape, its 2 pt stroke and a pixel's anti-aliasing, at most.
-    let shape = Rect::new(80.0, 10.0, 90.0, 20.0).inflate(3.0, 3.0);
-    assert!(a.union(shape) == shape, "only the shape: {a:?}");
+    // The shape, half its 2 pt stroke and a pixel's anti-aliasing, at most: measured by the
+    // renderer that drew the trace object in its view, and by the free measure.
+    let opts = RenderOptions { trace_views: true, ..Default::default() };
+    let mut r = Renderer::new();
+    r.render(&old, W, H, view(), &opts);
+    let measured = area(r.changed(&old, &new, &opts));
+    let shape = Rect::new(80.0, 10.0, 90.0, 20.0).inflate(2.0, 2.0);
+    for (what, a) in [("measured", measured), ("free", area(redraw(&old, &new)))] {
+        assert!(a.union(shape) == shape, "{what}: only the shape: {a:?}");
+    }
 }
 
 /// Templates and guides that the view hides draw nothing: an edit to them changes nothing.
@@ -655,8 +661,8 @@ fn an_edit_to_what_the_view_hides_changes_nothing() {
 }
 
 /// Overprint Preview and separations draw objects through the inks they print, not through the
-/// art a renderer keeps for them: a renderer measures an edit there as [`changed`] does and holds
-/// none of the 3D art it made to measure it.
+/// art a renderer keeps for them: a renderer measures an edit there holding none of the 3D art it
+/// made to measure it, and as [`changed`] does.
 #[test]
 fn an_edit_measured_under_overprint_holds_no_art() {
     use vectorcraft_doc::{CharStyle, TextObject};
@@ -685,6 +691,7 @@ fn an_edit_measured_under_overprint_holds_no_art() {
     assert!(on_screen > 0, "the screen view holds the art it measured with");
     let (measured, overprinted) = held(&RenderOptions { overprint_preview: true, ..Default::default() });
     assert_eq!(overprinted, 0);
+    // A consistency check: the area itself doesn't tell the branch taken.
     assert_eq!(measured, area(changed(&old, &new)), "as changed measures it");
 }
 

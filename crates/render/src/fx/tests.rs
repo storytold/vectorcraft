@@ -674,8 +674,8 @@ fn the_renderer_measures_3d_art_with_crop_marks_as_drawn() {
     assert_eq!(Renderer::new().bounds_of(&symbols, &n), Some(free));
 }
 
-/// Vector Halftone draws dots in place of a 3D effect's solid: the renderer measures the object as
-/// the free measure does, building no solid and holding no art to draw it with.
+/// Vector Halftone draws dots in place of a 3D effect's solid: the renderer doesn't measure the
+/// object by art it holds to draw it with, and measures it as the free measure does.
 #[test]
 fn the_renderer_measures_3d_art_with_vector_halftone_as_drawn() {
     let fx = vec![("threeD.extrude", json!({"depth": 30.0, "position": "isometricTop"})), (crate::effects::addons::halftone::HALFTONE, json!({}))];
@@ -684,9 +684,9 @@ fn the_renderer_measures_3d_art_with_vector_halftone_as_drawn() {
     let symbols = d.symbol_boxes();
     let free = super::cull_bounds(&symbols, &n).unwrap();
     let mut r = Renderer::new();
+    // A consistency check: measured from the dots' art, the bounds come out the same.
     assert_eq!(r.bounds_of(&symbols, &n), Some(free));
-    assert_eq!(r.stats.three_d_built, 0);
-    assert_eq!(r.measured_bytes(), 0);
+    assert_eq!(r.measured_bytes(), 0, "no art held");
 }
 
 /// A renderer measures the art over each artboard as [`crate::encode::art_bounds_on`] does, and
@@ -911,7 +911,7 @@ fn a_3d_effect_that_builds_nothing_is_measured_alike() {
     assert_eq!(Renderer::new().bounds_of(&symbols, &n), crate::brush_fx::cull_bounds(&symbols, &n));
 }
 
-/// A group with effects of its own that holds 3D type is measured once for every artboard of a
+/// A group with effects of its own that holds an extruded path is measured once for every artboard of a
 /// pass: its bounds are kept after the first.
 #[test]
 fn a_group_holding_3d_art_is_measured_once_a_pass() {
@@ -1748,9 +1748,12 @@ fn an_image_inner_glow_follows_its_visible_pixels() {
 
 /// A 3D effect on a path's fill or stroke that builds nothing (Revolve after Roughen) draws the
 /// item as without it: the art made for the object is drawn without it, not as an object with
-/// effects again, and that art again, without end. The object draws exactly as without the 3D
-/// effect, with a raster effect of its own (Drop Shadow, Gaussian Blur) too, which reaches past
-/// the path.
+/// effects again, and that art again, without end. A stroked object draws exactly as without the
+/// 3D effect, with a raster effect of its own (Drop Shadow, Gaussian Blur) too. An object with
+/// only a fill and a raster effect draws from that art, where without the 3D effect it draws as a
+/// path, whose raster effects are clipped to the path's own geometry: there Roughen's spikes are
+/// cut off, so the two differ in a few pixels at the edge and match inside the path. Either way
+/// the raster effect reaches past what the object draws without it.
 #[test]
 fn a_3d_effect_that_builds_nothing_draws_the_item_as_without_it() {
     let rough =
@@ -1758,15 +1761,25 @@ fn a_3d_effect_that_builds_nothing_draws_the_item_as_without_it() {
     let revolve = Effect { id: "threeD.revolve".into(), params: json!({}), visible: true };
     let shadow = Effect { id: "stylize.dropShadow".into(), params: json!({}), visible: true };
     let blur = Effect { id: "blur.gaussian".into(), params: json!({"radius": 2}), visible: true };
-    for (object, on_fill) in [(vec![], true), (vec![], false), (vec![shadow], true), (vec![blur], false)] {
-        let draw = |three: bool| {
+    let cases = [
+        (vec![], true, true),
+        (vec![], false, true),
+        (vec![shadow.clone()], true, true),
+        (vec![blur.clone()], false, true),
+        (vec![], true, false),
+        (vec![shadow], true, false),
+        (vec![blur], true, false),
+    ];
+    for (object, on_fill, stroked) in cases {
+        let draw = |object: &[Effect], three: bool| {
             let mut d = Document::new(100.0, 100.0);
-            let ap = Appearance::basic(Paint::solid(Color::BLACK), Paint::solid(Color::rgb(0.0, 0.0, 1.0)), 2.0);
+            let stroke = if stroked { Paint::solid(Color::rgb(0.0, 0.0, 1.0)) } else { Paint::None };
+            let ap = Appearance::basic(Paint::solid(Color::BLACK), stroke, 2.0);
             let n = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(30.0, 30.0, 60.0, 60.0)), ap);
             let l = d.layers[0].id;
             let id = d.insert(Some(l), 0, n).unwrap();
             let n = d.node_mut(id).unwrap();
-            n.appearance.effects = object.clone();
+            n.appearance.effects = object.to_vec();
             let item = if on_fill {
                 n.appearance.fill_mut().unwrap().effects = vec![];
                 &mut n.appearance.items[0]
@@ -1777,11 +1790,24 @@ fn a_3d_effect_that_builds_nothing_draws_the_item_as_without_it() {
             assert!(crate::effects::revolve_art(d.node(id).unwrap()).is_none(), "builds nothing");
             Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default()).pixels
         };
-        let (with, without) = (draw(true), draw(false));
-        assert!(with == without, "{object:?} on the fill {on_fill}: as without it");
+        let what = format!("{object:?} on the fill {on_fill}, stroked {stroked}");
+        let (with, without) = (draw(&object, true), draw(&object, false));
+        if stroked || object.is_empty() {
+            assert!(with == without, "{what}: as without it");
+        } else {
+            // Under 4% of the pixels, all at the edge, where Roughen's spikes are: inside the path
+            // they match.
+            let differ: Vec<(usize, usize)> =
+                (0..100 * 100).filter(|i| with[i * 4..i * 4 + 4] != without[i * 4..i * 4 + 4]).map(|i| (i % 100, i / 100)).collect();
+            assert!(differ.len() * 25 < 100 * 100, "{what}: {} pixels differ", differ.len());
+            let inside = differ.iter().find(|(x, y)| (33..57).contains(x) && (33..57).contains(y));
+            assert!(inside.is_none(), "{what}: differs inside the path at {inside:?}");
+        }
         if !object.is_empty() {
-            let past = (0..100usize).flat_map(|y| (0..100usize).map(move |x| (x, y))).filter(|(x, y)| *x > 62 || *y > 62);
-            assert!(past.into_iter().any(|(x, y)| with[(y * 100 + x) * 4 + 3] > 0), "{object:?}: drawn past the path");
+            // Ink where the object without its raster effect draws none.
+            let plain = draw(&[], true);
+            let past = (0..100 * 100).filter(|i| plain[i * 4 + 3] == 0 && with[i * 4 + 3] > 0).count();
+            assert!(past > 0, "{what}: drawn past the object");
         }
     }
 }

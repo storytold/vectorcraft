@@ -10707,7 +10707,15 @@ fn art_measured_for_an_edit_not_drawn_here_is_let_go() {
         let now = app.session.active().unwrap().doc.clone();
         app.canvas.renderer.changed(&shown, &now, &opts);
         assert!(app.canvas.renderer.measured_bytes() > 0, "worker {worker}: art held");
+        if !worker {
+            app.canvas.last_ms = 7.25;
+        }
         shapes(&mut app, &ctx);
+        if !worker {
+            // Nothing in view to draw: no frame, whole or part, began since the measure.
+            assert_eq!(app.canvas.last_ms, 7.25, "not drawn whole");
+            assert!(app.canvas.renderer.stats.three_d_built > 0, "no part drawn");
+        }
         if let Some((rx, _)) = &jobs {
             assert!(rx.try_recv().is_ok(), "the worker draws it");
         }
