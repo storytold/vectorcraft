@@ -392,6 +392,14 @@ fn work_on_the_longest_dash_pattern_ends_soon() {
 }
 
 #[test]
+fn a_chain_of_filters_over_the_program_is_bounded() {
+    let r = read_soon("0 0 10 10 rectfill currentfile 100 { 0 (x) /SubFileDecode filter } repeat pop 20 20 10 10 rectfill");
+    assert!(r.warnings.iter().any(|w| w.contains("too many filters")), "{:?}", r.warnings);
+    let r = read_soon("0 0 10 10 rectfill currentfile 3 { 0 (x) /SubFileDecode filter } repeat pop 20 20 10 10 rectfill");
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+}
+
+#[test]
 fn procedures_bind_def_loops_and_dictionaries() {
     let r = read(
         "/bd {bind def} bind def /sq {newpath moveto 10 0 rlineto 0 10 rlineto -10 0 rlineto closepath fill} bd \
@@ -1014,6 +1022,18 @@ fn known_answers_false_for_keys_no_dictionary_holds() {
     check("{ 1 dict null known } stopped");
 }
 
+/// `cvi` and `cvr` read a string as the PostScript syntax reads a number (PLRM 3rd ed., chapter
+/// 8), radix numbers included: prologs turn a name's `#20` escape back into its character with
+/// `(16#20) cvi`.
+#[test]
+fn cvi_and_cvr_read_radix_numbers() {
+    check("(16#20) cvi 32 eq (8#17) cvi 15 eq and ( 2#101 ) cvi 5 eq and (36#Z) cvi 35 eq and");
+    check("(16#ff) cvr 255 eq (3.7) cvi 3 eq and (-2.5e1) cvr -25 eq and (12) cvr 12 eq and");
+    check("{ (16#zz) cvi } stopped { (inf) cvr } stopped and { (16#-1) cvi } stopped and { () cvi } stopped and");
+    // A name's escapes, as a prolog undoes them for a spot colour named `PANTONE 300 C`.
+    check("(PANTONE#20300) dup 7 3 getinterval (16#--) dup 3 4 -1 roll 1 2 getinterval putinterval cvi 32 eq exch pop");
+}
+
 #[test]
 fn dictstack_and_internaldict_answer() {
     check("10 array dictstack length countdictstack eq");
@@ -1022,6 +1042,21 @@ fn dictstack_and_internaldict_answer() {
     check("1183615869 internaldict /k 1 put 1183615869 internaldict /k get 1 eq");
     check("currentsystemparams /MaxPatternCache get type /integertype eq");
     check("<< /MaxPatternItem currentsystemparams /MaxPatternCache get >> setuserparams currentuserparams /MaxFontItem known");
+}
+
+/// `bind` makes the procedures it goes into read-only and leaves read-only procedures alone (PLRM
+/// 3rd ed., `bind` in chapter 8), so a later `bind` of a procedure holding one doesn't turn a name
+/// it kept into an operator defined since: here `M` stays the procedure's own variable, as in the
+/// prologs that keep `M` for `setmiterlimit` and also as the name of a variable.
+#[test]
+fn bind_leaves_procedures_it_already_bound_alone() {
+    let get = "/Get { 4 dict begin /M 7 def { M } exec end } bind def /M /setmiterlimit load def";
+    check(&format!("{get} /Outer {{ //Get exec }} bind def Outer 7 eq"));
+    // Nor does it go into one made read-only.
+    check("/I { M } readonly def /P { //I exec } def /M /setmiterlimit load def /P load bind pop /M 3 def P 3 eq");
+    check("/P { M } readonly def /M /setmiterlimit load def /P load bind pop /M 3 def P 3 eq");
+    // A procedure bound on its own is still bound again (only those inside are read-only).
+    check("/P { M } bind def /M /setmiterlimit load def /P load bind 0 get type /operatortype eq");
 }
 
 #[test]
@@ -1035,6 +1070,17 @@ fn an_executable_filter_runs_its_data_as_a_program() {
     check("currentfile /ASCIIHexDecode filter cvx exec 74727565>");
     // A literal file is only pushed.
     check("(1 2 add) 0 () /SubFileDecode filter exec type /filetype eq");
+}
+
+/// `SubFileDecode`'s count is how many bytes (or end strings) to pass, not an allocation: a count
+/// past the 4 MiB cap on allocations (a long content stream's `/Length`) is read, and only the data
+/// there passes through.
+#[test]
+fn subfile_counts_past_the_allocation_cap_are_read() {
+    check("(1 2 add) 6000000 () /SubFileDecode filter cvx exec 3 eq");
+    check("(1 2 add) 5000000 (x) /SubFileDecode filter cvx exec 3 eq");
+    check("(abcd) 7000000 () /SubFileDecode filter 8 string readstring pop (abcd) eq");
+    check("{ (1) -1 () /SubFileDecode filter } stopped");
 }
 
 #[test]
@@ -1079,10 +1125,27 @@ fn read_within(body: &str, secs: u64) -> crate::Imported {
 /// budget. Running to the end of the budget can take over 20 s on a slow CI runner
 /// (`search_in_a_loop_runs_out_of_the_budget` searches about 3 GB, 14 s on a fast desktop), so the
 /// limit here only catches a program that never stops.
-fn runs_out_of_budget(body: &str) {
+pub(super) fn runs_out_of_budget(body: &str) {
     let r = read_within(&format!("0 0 10 10 rectfill {body}"), 120);
     assert_eq!(objects(&r.document).len(), 1, "{body}: {:?}", r.warnings);
     assert!(r.warnings.iter().any(|w| w.contains("the program runs too long")), "{body}: {:?}", r.warnings);
+}
+
+/// A large file that runs far more operations than a small one may, but only a few hundred for
+/// each object it draws, reads to its end: the operation budget grows with the program's length.
+#[test]
+fn a_large_file_with_many_objects_reads_to_its_end() {
+    let n = 200_000;
+    let mut body = String::from(
+        "/sq { 4 dict begin /y exch def /x exch def 0 1 200 { pop } for \
+                                 x y moveto x 1 add y lineto x y 1 add lineto closepath fill end } def\n",
+    );
+    for i in 0..n {
+        body.push_str(&format!("{} {} sq\n", i % 100, i / 2000));
+    }
+    let r = read_within(&body, 300);
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    assert_eq!(objects(&r.document).len(), n);
 }
 
 /// A loop of operators whose work grows with the path they make runs out of the operation budget
@@ -1391,4 +1454,11 @@ fn stored_graphics_states_use_up_the_memory_budget() {
         let r = read_soon(&format!("0 0 10 10 rectfill {path} {body}"));
         assert!(r.warnings.iter().any(|w| w.contains("uses too much memory")), "{body}: {:?}", r.warnings);
     }
+}
+
+/// `bitshift` by the most negative integer shifts right by everything, not a negation overflow.
+#[test]
+fn bitshift_by_the_most_negative_integer_does_not_panic() {
+    let r = read("0 0 10 10 rectfill 1 -9223372036854775808 bitshift pop -1 -9223372036854775808 bitshift pop");
+    assert_eq!(objects(&r.document).len(), 1, "{:?}", r.warnings);
 }

@@ -10,7 +10,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
 
 use super::layer::{NewLayers, row_roots, rows_param};
-use super::{CommandSpec, Result, Session, bad, checked_id, cmd, has_doc, id_param, ok, switch_or};
+use super::{CommandSpec, Result, Session, bad, checked_id, cmd, has_doc, object_param, ok, switch_or};
 use crate::EngineError;
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -336,7 +336,7 @@ fn release(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.releaseToLayers";
     let build = switch_or(p, "build", false, C)?;
     let st = s.doc()?;
-    let id = match id_param(p, "id") {
+    let id = match object_param(p, "id", C)? {
         Some(id) => id,
         None => match st.highlighted_rows().as_slice() {
             [id] => *id,
@@ -434,8 +434,9 @@ fn reverse(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn locate(s: &mut Session, p: &Value) -> Result<Value> {
+    let id = object_param(p, "id", "layer.locate")?;
     let st = s.doc_mut()?;
-    let id = id_param(p, "id").or_else(|| st.selection.objects.last().copied()).ok_or_else(|| bad("layer.locate", "nothing selected"))?;
+    let id = id.or_else(|| st.selection.objects.last().copied()).ok_or_else(|| bad("layer.locate", "nothing selected"))?;
     let ancestry = st.doc.ancestry(id).ok_or(EngineError::NoNode(id))?;
     st.layer_rows = vec![id];
     st.revision += 1;

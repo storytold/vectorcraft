@@ -18,19 +18,24 @@
 //!   `Bm` for each pair in the order of the ramp (`Bc`, around them, are the caps past the first and
 //!   last stops). Without `Xm`, a radial gradient's one `Bm` takes the unit circle onto it.
 //!
+//! - The name shown for a gradient's or a pattern's name in the file is the part before its first
+//!   newline (`\n`) ([`ShownNames`]).
+//!
 //! "AI7 spec": Adobe Illustrator File Format Specification, version 7.0 (1998), listed by PRONOM at
-//! https://www.nationalarchives.gov.uk/PRONOM/fmt/423; §3.5 documents the gradient operators.
+//! https://www.nationalarchives.gov.uk/PRONOM/fmt/423; §3.5 documents the gradient operators and §4
+//! the names of global objects.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use kurbo::{Affine, Point, Vec2};
 use vectorcraft_color::gradient::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
 use vectorcraft_color::{Color, Paint};
 
+use super::lex::{Lexer, Tok};
 use super::obj::V;
 
 /// Largest number of stops read in one gradient.
-const MAX_STOPS: usize = 256;
+pub(crate) const MAX_STOPS: usize = 256;
 
 /// A colour read with the swatch it names (spot and global colours).
 #[derive(Clone, Debug, PartialEq)]
@@ -62,20 +67,29 @@ pub(super) fn color_op(op: &str, vals: &[V]) -> Option<(Paint, Option<Named>)> {
         "x" => named(vals, Some(false)),
         "xx" => named(vals, None),
         "xk" => named(vals, None).map(|(p, n)| (p, n.map(|n| Named { spot: false, ..n }))),
-        "xs" | "xz" => registration(vals),
+        "xs" | "xz" => registration(op, vals),
         _ => None,
     }
+}
+
+fn is_registration(name: &str) -> bool {
+    matches!(name, vectorcraft_color::swatch::REGISTRATION | "Registration" | "/All" | "All" | "/[Registration]")
 }
 
 /// `c m y k (name) tint x` or `c m y k [r g b | L a b] (name) tint type Xx` (type 1: RGB, 2: Lab);
 /// `rgb` forces RGB or CMYK.
 fn named(vals: &[V], rgb: Option<bool>) -> Option<(Paint, Option<Named>)> {
-    let at = vals.iter().rposition(|v| matches!(v, V::Str(_)))?;
+    let at = vals.iter().rposition(|v| matches!(v, V::Str(_) | V::Name(_)))?;
     let name = vals.get(at)?.text()?;
     let before: Vec<f32> = vals.get(..at)?.iter().filter_map(V::num).map(|v| v as f32).collect();
     let after: Vec<f32> = vals.get(at + 1..)?.iter().filter_map(V::num).map(|v| v as f32).collect();
     let unit = |v: f32| v.clamp(0.0, 1.0);
     let tint = 1.0 - unit(*after.first()?);
+    if is_registration(&name) {
+        let full = Color::cmyk(1.0, 1.0, 1.0, 1.0);
+        let paint = Paint::Solid { color: full.tinted(tint), swatch: Some(vectorcraft_color::swatch::REGISTRATION.into()), tint };
+        return Some((paint, None));
+    }
     let n = before.len();
     let kind = after.get(1).copied();
     let color = if rgb.unwrap_or(kind == Some(1.0)) {
@@ -97,9 +111,20 @@ fn named(vals: &[V], rgb: Option<bool>) -> Option<(Paint, Option<Named>)> {
 
 /// `… (name) tint Xs` / `… (name) tint type Xz`: the built-in Registration swatch at the tint (its
 /// own colour, whatever values the operands give).
-fn registration(vals: &[V]) -> Option<(Paint, Option<Named>)> {
-    let at = vals.iter().rposition(|v| matches!(v, V::Str(_)))?;
-    let tint = 1.0 - vals.get(at + 1).and_then(V::num).unwrap_or(0.0).clamp(0.0, 1.0) as f32;
+fn registration(op: &str, vals: &[V]) -> Option<(Paint, Option<Named>)> {
+    let at = vals.iter().rposition(|v| matches!(v, V::Str(_) | V::Name(_)));
+    let tint = if let Some(i) = at {
+        1.0 - vals.get(i + 1).and_then(V::num).unwrap_or(0.0).clamp(0.0, 1.0) as f32
+    } else {
+        let mut nums = vals.iter().rev().filter_map(V::num);
+        let t = if op.eq_ignore_ascii_case("xz") {
+            let _type = nums.next();
+            nums.next().unwrap_or(0.0)
+        } else {
+            nums.next().unwrap_or(0.0)
+        };
+        1.0 - t.clamp(0.0, 1.0) as f32
+    };
     let full = Color::cmyk(1.0, 1.0, 1.0, 1.0);
     Some((Paint::Solid { color: full.tinted(tint), swatch: Some(vectorcraft_color::swatch::REGISTRATION.into()), tint }, None))
 }
@@ -172,11 +197,171 @@ impl GradientDef {
         }
         // Stops are listed along the ramp from either end: listed downwards they're reversed, so
         // stops sharing a ramp point keep their order (and each its midpoint, to the next stop).
-        if self.gradient.stops.first().zip(self.gradient.stops.last()).is_some_and(|(first, last)| first.offset > last.offset) {
+        // When every stop shares one ramp point, a linear gradient's are taken as listed from the
+        // last, as newer files list a linear gradient's stops.
+        let linear = self.gradient.kind == GradientKind::Linear;
+        if self
+            .gradient
+            .stops
+            .first()
+            .zip(self.gradient.stops.last())
+            .is_some_and(|(first, last)| first.offset > last.offset || (linear && self.gradient.stops.len() > 1 && first.offset == last.offset))
+        {
             self.gradient.stops.reverse();
         }
         self.gradient.stops.sort_by(|a, b| a.offset.total_cmp(&b.offset));
         Some((self.name, self.gradient))
+    }
+}
+
+/// The names of the named colors in the tokens [`Self::token`] is given: those the color operators
+/// (`x`, `Xx`, `Xk` and their stroke forms) and gradient stops (`Bs` between `Bd` and `BD`) use,
+/// also in the color and tile strings of patterns in the version 7 form (`(…) @`, `(…) &`). It
+/// also keeps the names of the gradients `BD` finishes ([`GradientDef::finish`]).
+#[derive(Default)]
+pub(super) struct ColorNames {
+    pub names: HashSet<String>,
+    pub gradients: Vec<String>,
+    vals: Vec<V>,
+    def: Option<GradientDef>,
+    spots: Vec<Named>,
+}
+
+impl ColorNames {
+    pub fn token(&mut self, tok: Tok<'_>) {
+        self.take(tok, true);
+    }
+
+    /// [`Self::token`], with the names in the strings of a version 7 pattern's layer when `outer`.
+    fn take(&mut self, tok: Tok<'_>, outer: bool) {
+        let w = match tok {
+            Tok::Num(n) => {
+                if self.vals.len() < MAX_STOPS {
+                    self.vals.push(V::Num(n));
+                }
+                return;
+            }
+            Tok::Str(s) | Tok::Hex(s) => {
+                if self.vals.len() < MAX_STOPS {
+                    self.vals.push(V::Str(s));
+                }
+                return;
+            }
+            Tok::Word(w) => w,
+            _ => return,
+        };
+        let vals = std::mem::take(&mut self.vals);
+        match w {
+            b"Bd" => self.def = GradientDef::begin(&vals),
+            b"BD" => {
+                if let Some((name, _)) = self.def.take().and_then(GradientDef::finish) {
+                    self.gradients.push(name);
+                }
+            }
+            b"Bs" => {
+                if let Some(d) = self.def.as_mut() {
+                    d.stop(&vals, &mut self.spots);
+                }
+            }
+            b"x" | b"X" | b"Xx" | b"XX" | b"Xk" | b"XK" => {
+                if let Some((_, Some(n))) = std::str::from_utf8(w).ok().and_then(|op| color_op(op, &vals)) {
+                    self.spots.push(n);
+                }
+            }
+            b"@" | b"&" if outer => {
+                for v in &vals {
+                    if let V::Str(s) = v {
+                        let mut inner = ColorNames::default();
+                        let mut lex = Lexer::new(s);
+                        while let Some(t) = lex.next_token() {
+                            inner.take(t.tok, false);
+                        }
+                        self.names.extend(inner.names);
+                    }
+                }
+            }
+            _ => {}
+        }
+        self.names.extend(self.spots.drain(..).map(|n| n.name));
+    }
+}
+
+/// A kind of global object.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Global {
+    Gradient,
+    Pattern,
+}
+
+/// The names the gradients and patterns get in the document, by their kind and names in the file.
+/// The name shown for a name in the file is the part before its first newline (AI7 spec §4):
+/// `(Sky\n1)` is shown as "Sky". Gradients and patterns share their swatches' names. A name with a
+/// newline is shown as the part before it unless that name is reserved (a custom color's, or a
+/// gradient's or pattern's name without a newline) or an object defined earlier (of either kind)
+/// got it; then it is the first free "Sky 2", "Sky 3"… A name shown as nothing (`(\n3)`) is shown
+/// as "Gradient" or "Pattern", numbered the same way. A name without a newline is kept. An object
+/// defined again under the same name in the file keeps the name it got.
+#[derive(Debug, Default)]
+pub(super) struct ShownNames {
+    gradients: HashMap<String, String>,
+    patterns: HashMap<String, String>,
+    taken: HashSet<String>,
+    /// The number to try first for each shown name already taken.
+    next: HashMap<String, usize>,
+}
+
+impl ShownNames {
+    fn by_file(&self, kind: Global) -> &HashMap<String, String> {
+        match kind {
+            Global::Gradient => &self.gradients,
+            Global::Pattern => &self.patterns,
+        }
+    }
+
+    /// The name the object of `kind` defined as `name` in the file got ([`Self::define`]), or
+    /// `name` for one not defined.
+    pub fn get<'n>(&'n self, kind: Global, name: &'n str) -> &'n str {
+        self.by_file(kind).get(name).map_or(name, String::as_str)
+    }
+
+    /// Keep `name` from the objects defined after.
+    pub fn reserve(&mut self, name: &str) {
+        self.taken.insert(name.to_string());
+    }
+
+    /// The name the object of `kind` defined as `name` in the file gets.
+    pub fn define(&mut self, kind: Global, name: &str) -> String {
+        if let Some(shown) = self.by_file(kind).get(name) {
+            return shown.clone();
+        }
+        let shown = match name.split_once('\n') {
+            None => name.to_string(),
+            Some((base, _)) => {
+                let base = match (base.is_empty(), kind) {
+                    (false, _) => base,
+                    (true, Global::Gradient) => "Gradient",
+                    (true, Global::Pattern) => "Pattern",
+                };
+                if self.taken.contains(base) {
+                    // The first free number from the one after the last number this base got. Of
+                    // the numbers `from..=tries`, at least one is free.
+                    let from = self.next.get(base).copied().unwrap_or(2);
+                    let tries = from.saturating_add(self.taken.len());
+                    let i = (from..tries).find(|i| !self.taken.contains(&format!("{base} {i}"))).unwrap_or(tries);
+                    self.next.insert(base.to_string(), i.saturating_add(1));
+                    format!("{base} {i}")
+                } else {
+                    base.to_string()
+                }
+            }
+        };
+        self.taken.insert(shown.clone());
+        let by_file = match kind {
+            Global::Gradient => &mut self.gradients,
+            Global::Pattern => &mut self.patterns,
+        };
+        by_file.insert(name.to_string(), shown.clone());
+        shown
     }
 }
 
@@ -258,8 +443,9 @@ impl Instance {
         self.xm.is_some() || self.bm.is_some()
     }
 
-    /// The paint, through `to_doc` (art space → the document), when the gradient is defined.
-    pub fn paint(&self, defs: &HashMap<String, Gradient>, to_doc: Affine) -> Option<Paint> {
+    /// The paint, through `to_doc` (art space → the document), when the gradient is defined, linked
+    /// to the gradient's swatch by the name `shown` gave it.
+    pub fn paint(&self, defs: &HashMap<String, Gradient>, shown: &ShownNames, to_doc: Affine) -> Option<Paint> {
         let name = self.name.as_ref()?;
         let gradient = defs.get(name)?.clone();
         let radial = gradient.kind == GradientKind::Radial;
@@ -310,7 +496,8 @@ impl Instance {
         let focal = (self.hilight.hypot() > 1e-9).then_some(focal).filter(|p| p.is_finite());
         let geom = GradientGeom { start, end, aspect, focal: if radial { focal } else { None } };
         let angle = -(end - start).atan2().to_degrees();
-        Some(Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), angle, swatch: Some(name.clone()), ..GradientPaint::new(gradient) })))
+        let swatch = Some(shown.get(Global::Gradient, name).to_string());
+        Some(Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), angle, swatch, ..GradientPaint::new(gradient) })))
     }
 }
 
@@ -345,6 +532,29 @@ mod tests {
         let mut v = nums(&[1.0, 1.0, 1.0, 1.0]);
         v.extend([V::Str(b"[Registration]".to_vec()), V::Num(0.0)]);
         assert!(matches!(color_op("Xs", &v), Some((Paint::Solid { tint, .. }, None)) if tint == 1.0));
+        let mut v = nums(&[1.0, 1.0, 1.0, 1.0]);
+        v.extend([V::Str(b"[Registration]".to_vec()), V::Num(1.0)]);
+        assert!(
+            matches!(color_op("Xs", &v), Some((Paint::Solid { tint, color, .. }, None)) if tint == 0.0 && color == Color::cmyk(1.0, 1.0, 1.0, 1.0).tinted(0.0))
+        );
+        let mut v = nums(&[1.0, 1.0, 1.0, 1.0]);
+        v.extend([V::Name("All".into()), V::Num(1.0)]);
+        assert!(matches!(color_op("Xs", &v), Some((Paint::Solid { tint, .. }, None)) if tint == 0.0));
+        let mut v = nums(&[1.0, 1.0, 1.0, 1.0]);
+        v.extend([V::Str(b"[Registration]".to_vec()), V::Num(0.2), V::Num(0.0)]);
+        let (p, named) = color_op("Xx", &v).unwrap();
+        assert!(named.is_none());
+        assert!(matches!(p, Paint::Solid { swatch: Some(s), tint, .. } if s == "[Registration]" && (tint - 0.8).abs() < 1e-6));
+        let mut v = nums(&[1.0, 1.0, 1.0, 1.0]);
+        v.extend([V::Name("All".into()), V::Num(0.5), V::Num(0.0)]);
+        let (p, named) = color_op("Xx", &v).unwrap();
+        assert!(named.is_none());
+        assert!(matches!(p, Paint::Solid { swatch: Some(s), tint, .. } if s == "[Registration]" && (tint - 0.5).abs() < 1e-6));
+        // Name-free Xs and Xz operands
+        let v = nums(&[1.0, 1.0, 1.0, 1.0, 0.3]);
+        assert!(matches!(color_op("Xs", &v), Some((Paint::Solid { tint, .. }, None)) if (tint - 0.7).abs() < 1e-6));
+        let v = nums(&[1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.2, 1.0]);
+        assert!(matches!(color_op("Xz", &v), Some((Paint::Solid { tint, .. }, None)) if (tint - 0.8).abs() < 1e-6));
     }
 
     #[test]
@@ -357,6 +567,14 @@ mod tests {
         v.push(V::Str(b"MySpot".to_vec()));
         v.push(V::Num(0.4));
         let (p, named) = color_op("x", &v).unwrap();
+        let named = named.unwrap();
+        assert_eq!(named.name, "MySpot");
+        assert!((named.tint - 0.6).abs() < 1e-6);
+        assert!(matches!(p, Paint::Solid { swatch: Some(_), .. }));
+        let mut v_name = nums(&[0.0, 0.5, 1.0, 0.0]);
+        v_name.push(V::Name("MySpot".into()));
+        v_name.push(V::Num(0.4));
+        let (p, named) = color_op("x", &v_name).unwrap();
         let named = named.unwrap();
         assert_eq!(named.name, "MySpot");
         assert!((named.tint - 0.6).abs() < 1e-6);
@@ -406,20 +624,57 @@ mod tests {
         bg.extend(nums(&[100.0, 100.0, 0.0, 50.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0]));
         i.bg(&bg);
         i.bm(&nums(&[50.0, 0.0, 0.0, -50.0, 100.0, 100.0]));
-        let Some(Paint::Gradient(gp)) = i.paint(&defs, Affine::IDENTITY) else { panic!() };
+        let shown = ShownNames::default();
+        let Some(Paint::Gradient(gp)) = i.paint(&defs, &shown, Affine::IDENTITY) else { panic!() };
+        assert_eq!(gp.swatch.as_deref(), Some("G"));
         let geom = gp.geom.unwrap();
         assert_eq!(geom.start, Point::new(100.0, 100.0));
         assert_eq!(geom.end, Point::new(150.0, 100.0));
         assert!((geom.aspect - 1.0).abs() < 1e-9);
-        assert!(i.paint(&HashMap::new(), Affine::IDENTITY).is_none());
+        assert!(i.paint(&HashMap::new(), &shown, Affine::IDENTITY).is_none());
         // Newer files give the matrix with `Xm`; the `Bm`s after it are bands of a cached ramp.
         let mut i = Instance::begin(&[]);
         i.bg(&bg);
         i.xm(&nums(&[40.0, 0.0, 0.0, -40.0, 10.0, 10.0]));
         i.bm(&nums(&[5.0, 0.0, 0.0, -40.0, 30.0, 10.0]));
-        let Some(Paint::Gradient(gp)) = i.paint(&defs, Affine::IDENTITY) else { panic!() };
+        let Some(Paint::Gradient(gp)) = i.paint(&defs, &shown, Affine::IDENTITY) else { panic!() };
         let geom = gp.geom.unwrap();
         assert_eq!((geom.start, geom.end), (Point::new(10.0, 10.0), Point::new(50.0, 10.0)));
+    }
+
+    /// A name is shown up to its first newline, numbered when a reserved name or an earlier object
+    /// of either kind has it; a name defined again keeps the name it got, and a blank one gets its
+    /// kind's stand-in. A name without a newline is kept.
+    #[test]
+    fn global_names_are_shown_up_to_their_newline() {
+        let mut shown = ShownNames::default();
+        // A color's name, and the names without a newline the file defines.
+        for name in ["Ink", "Sky", "Sky 2", "Sea"] {
+            shown.reserve(name);
+        }
+        let got: Vec<String> = [
+            (Global::Gradient, "Sky\n1"),
+            (Global::Gradient, "Sky\n2"),
+            (Global::Gradient, "Sky"),
+            (Global::Gradient, "Sky\n1"),
+            (Global::Pattern, "Sky\n1"),
+            (Global::Gradient, "Sea\nA\nB"),
+            (Global::Gradient, "\n3"),
+            (Global::Pattern, "\n4"),
+            (Global::Gradient, "Sky 2"),
+            (Global::Pattern, "Ink\n1"),
+            (Global::Gradient, "Ink"),
+            (Global::Pattern, "Sea"),
+            (Global::Pattern, "Tide\n1"),
+            (Global::Pattern, ""),
+        ]
+        .iter()
+        .map(|(kind, n)| shown.define(*kind, n))
+        .collect();
+        assert_eq!(got, ["Sky 3", "Sky 4", "Sky", "Sky 3", "Sky 5", "Sea 2", "Gradient", "Pattern", "Sky 2", "Ink 2", "Ink", "Sea", "Tide", ""]);
+        assert_eq!(shown.get(Global::Gradient, "Sky\n2"), "Sky 4");
+        assert_eq!(shown.get(Global::Pattern, "Sky\n1"), "Sky 5");
+        assert_eq!(shown.get(Global::Pattern, "Sky\n2"), "Sky\n2", "not a pattern's name");
     }
 
     #[test]
@@ -432,6 +687,24 @@ mod tests {
         }
         let (_, g) = d.finish().unwrap();
         assert_eq!(g.stops.len(), MAX_STOPS);
+    }
+
+    /// A hard edge: every stop at one ramp point. A linear gradient's are listed from the last, a
+    /// radial one's from the first.
+    #[test]
+    fn stops_at_one_ramp_point_keep_their_sides() {
+        for (kind, listed) in [(0.0, [0.75, 0.25]), (1.0, [0.25, 0.75])] {
+            let mut d = GradientDef::begin(&[V::Str(b"E".to_vec()), V::Num(kind), V::Num(2.0)]).unwrap();
+            for (gray, mid) in listed.into_iter().zip([40.0, 70.0]) {
+                d.stop(&nums(&[gray, 0.0, 1.0, 6.0, mid, 30.0]), &mut vec![]);
+            }
+            let (_, g) = d.finish().unwrap();
+            let lightness: Vec<f32> = g.stops.iter().map(|s| (s.color.to_rgb()[0] * 100.0).round() / 100.0).collect();
+            let first_mid = if kind == 0.0 { 0.7 } else { 0.4 };
+            assert_eq!(lightness, vec![0.25, 0.75], "kind {kind}");
+            assert!((g.stops[0].midpoint - first_mid).abs() < 1e-6, "kind {kind}: {:?}", g.stops);
+            assert!(g.stops.iter().all(|s| (s.offset - 0.3).abs() < 1e-6));
+        }
     }
 
     /// A linear gradient of three stops as newer files place it: `Bg` with numbers that aren't in
@@ -454,7 +727,7 @@ mod tests {
             // From the stop at 20 to the one at 60, then on to the one at 100.
             i.bm(&nums(&[0.0, -80.0, -30.0, 0.0, 10.0, 260.0]));
             i.bm(&nums(&[0.0, -80.0, -30.0, 0.0, 10.0, 180.0]));
-            let Some(Paint::Gradient(gp)) = i.paint(&defs, Affine::IDENTITY) else { panic!() };
+            let Some(Paint::Gradient(gp)) = i.paint(&defs, &ShownNames::default(), Affine::IDENTITY) else { panic!() };
             gp.geom.unwrap()
         };
         for xm in [true, false] {

@@ -39,6 +39,7 @@ fn synthetic_glyphs(specs: &[(usize, usize, f64, char)]) -> Vec<SGlyph> {
             no_break: false,
             vertical_roman: false,
             cursive: false,
+            hyphen_language: crate::hyphen::Language::English,
         })
         .collect()
 }
@@ -47,6 +48,47 @@ fn source_range(glyphs: &[SGlyph], start: usize, end: usize) -> Range<usize> {
     let first = glyphs.get(start).expect("nonempty source range");
     let last = glyphs.get(end - 1).expect("nonempty source range");
     first.byte..last.byte + last.len
+}
+
+/// Both composers consume language-specific points even when a font subdivides vowel signs.
+#[test]
+fn indic_hyphenation_reaches_both_composers_without_splitting_marks() {
+    let opts = HyphenationOptions { words_longer_than: 0, after_first: 1, before_last: 1, ..Default::default() };
+    for (tag, syllable) in [
+        ("hi", "कि"),
+        ("mr", "कि"),
+        ("gu", "કિ"),
+        ("bn", "কি"),
+        ("pa", "ਕਿ"),
+        ("ta", "கி"),
+        ("te", "కి"),
+        ("kn", "ಕಿ"),
+        ("ml", "കി"),
+        ("or", "କି"),
+        ("as", "কি"),
+    ] {
+        let text = syllable.repeat(8);
+        // Deliberately subdivide each grapheme, as a fallback font may do. Marks are word
+        // characters but must never become a break, even at a shaping cluster boundary.
+        let specs: Vec<_> = text.char_indices().map(|(byte, ch)| (byte, ch.len_utf8(), 1.0, ch)).collect();
+        let mut glyphs = synthetic_glyphs(&specs);
+        for glyph in &mut glyphs {
+            glyph.hyphen_language = crate::hyphen::Language::from_tag(Some(tag));
+            glyph.sx = 0.001;
+        }
+        let cands = candidates(&text, &glyphs, Some(&opts), Kinsoku::None);
+        assert_eq!(cands.iter().filter(|b| b.hyphen > 0.0).map(|b| b.end).collect::<Vec<_>>(), (2..16).step_by(2).collect::<Vec<_>>(), "{tag}");
+        let (end, hyphen) = break_line(&text, &glyphs, 0, 4.5, &[], 0.0, Some((&opts, 0.0)), Burasagari::None, Kinsoku::None);
+        assert_eq!((end, hyphen), (4, true), "{tag}");
+        let params = Params { justify_last: false, ragged: true, tolerance: 1.0, uniform_from: 0, hyphen_limit: 0 };
+        let lines = compose(&glyphs, &|_| 4.5, &|_| 0.0, &cands, &[], &params).expect("every-line composition");
+        assert!(lines.iter().any(|(_, hyphen)| *hyphen), "{tag}");
+        assert!(lines.iter().all(|(end, _)| end % 2 == 0), "{tag}: {lines:?}");
+        let limited = Params { hyphen_limit: 1, ..params };
+        if let Some(lines) = compose(&glyphs, &|_| 4.5, &|_| 0.0, &cands, &[], &limited) {
+            assert!(lines.windows(2).all(|pair| !pair[0].1 || !pair[1].1), "{tag}: {lines:?}");
+        }
+    }
 }
 
 #[test]
@@ -72,7 +114,9 @@ fn composition_trim_stays_along_the_line_when_a_character_rotates() {
                 db: &db,
                 text: "A",
                 runs: vec![(0..1, &style)],
+                set_runs: Vec::new(),
                 inlines: vec![None],
+                faces: vec![std::cell::OnceCell::new()],
                 default: style.clone(),
                 opts: &opts,
                 vertical: false,

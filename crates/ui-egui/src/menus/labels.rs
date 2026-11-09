@@ -123,7 +123,7 @@ fn command_label(app: &VectorcraftApp, id: &str, label: &str) -> Option<String> 
 
 /// Does the menu item `id` show a name that is user, file or system data rather than an interface
 /// label: a recent file, a saved view, a font, a user library or preset, a custom workspace, a
-/// plug-in? Such names are shown as they are, never translated (a workspace the user calls
+/// plug-in, an SVG filter? Such names are shown as they are, never translated (a workspace the user calls
 /// "Layers" stays "Layers").
 pub(super) fn shows_a_name(id: &str, label: &str) -> bool {
     const SLOTS: [&str; 8] = [
@@ -138,7 +138,7 @@ pub(super) fn shows_a_name(id: &str, label: &str) -> bool {
     ];
     SLOTS.iter().any(|s| id.starts_with(s))
         || saved_selection_slot(id).is_some()
-        || matches!(id, "text.setStyle" | "plugin.dialog" | "window.toolbar.custom")
+        || matches!(id, "text.setStyle" | "plugin.dialog" | "window.toolbar.custom" | "svgFilter.apply")
         || (id == "window.workspace" && !crate::workspaces::is_builtin(label))
         || (matches!(id, "effect.apply" | "effect.dialog") && vectorcraft_effects::plugin_effects().iter().any(|e| e.label == label))
 }
@@ -212,11 +212,18 @@ pub(super) fn unlock_item_label(app: &VectorcraftApp, id: &str, p: &Value, lang:
 }
 
 /// The shortcut a menu item shows: its command's (items without params), a panel's for the
-/// Window menu's `window.panel {panel}` items, or an effect's for the Effect menu's items.
+/// Window menu's `window.panel {panel}` items, an effect's for the Effect menu's items, or a filter
+/// plug-in's for Object › Plug-ins' `plugin.dialog {id}` items.
 pub fn item_shortcut(id: &str, p: &Value) -> Option<&'static str> {
     match (id, p.get("panel").and_then(Value::as_str)) {
         ("window.panel", Some(panel)) => crate::shortcut_editor::panel_shortcut(panel),
         ("effect.dialog" | "effect.apply", _) => p.get("effect").and_then(Value::as_str).and_then(crate::shortcut_editor::effect_shortcut),
+        ("plugin.dialog", _) => p.get("id").and_then(Value::as_str).and_then(crate::shortcut_editor::filter_shortcut),
+        // The Artboard tool's canvas menu passes the point its Paste goes to.
+        ("edit.paste", _) => shortcut_of(id),
+        // That menu's Cut and Copy: with the tool chosen, the keys run `edit.cut` and `edit.copy`, which do the same.
+        ("artboard.cut", _) => shortcut_of("edit.cut"),
+        ("artboard.copy", _) => shortcut_of("edit.copy"),
         _ if p.is_null() => shortcut_of(id),
         _ => None,
     }
@@ -234,6 +241,16 @@ pub const CONTEXT_LABELS: &[&str] = &[
     "Unlock Artboards",
     "Unlock Selected",
     "Unlock",
+    "New Artboard",
+    "Duplicate Artboards",
+    "Rename",
+    "Delete Artboards",
+    "Delete Empty Artboards",
+    "Select All Artboards",
+    "Rearrange",
+    "Switch Orientation",
+    "Artboard Options",
+    "Export",
     "Make Clipping Mask",
     "Release Clipping Mask",
     "Make Compound Path",

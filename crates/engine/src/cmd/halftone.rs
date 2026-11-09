@@ -19,7 +19,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Vector Halftone…",
         ["Object"],
         None,
-        "{shape?: \"circle\"|\"ellipse\"|\"square\"|\"diamond\"|\"line\" (circle), frequency?: lines per inch 1–300 (20), angle?: deg (45; CMYK: the black screen's, cyan −30°, magenta +30°, yellow −45° from it), mode?: \"mono\"|\"cmyk\" (mono), color?: mono dot colour (\"#000000\"), invert?: bool (dots for light tones), clip?: true (clip the dots to the art's outline), keepOriginal?: false} the selection as vector halftone dots sized by its tone, a group of one path per screen (CMYK screens multiply), as one undo step → {id, dots, warning? (an image in the art couldn't be decoded, as object.rasterize says)}",
+        "{shape?: \"circle\"|\"ellipse\"|\"square\"|\"diamond\"|\"line\" (circle), frequency?: lines per inch 1–300 (20), angle?: deg (45; CMYK: the black screen's, cyan −30°, magenta +30°, yellow −45° from it), mode?: \"mono\"|\"cmyk\" (mono), color?: mono dot colour (\"#000000\"; #rrggbbaa and #rgba are refused), invert?: bool (dots for light tones), clip?: true (clip the dots to the art's outline), keepOriginal?: false} the selection as vector halftone dots sized by its tone, a group of one path per screen (CMYK screens multiply), as one undo step → {id, dots, warning? (an image in the art couldn't be decoded, as object.rasterize says)}",
         has_selection,
         halftone
     )]

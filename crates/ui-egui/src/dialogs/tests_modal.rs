@@ -118,6 +118,31 @@ fn dialogs_move_by_their_heading_stay_on_screen_and_where_they_were_moved() {
     }
 }
 
+/// #5246: the band that moves a dialog keeps the arrow when hovered, as a title bar does (the grab
+/// cursor is the four-way move arrows on Windows); it shows the window held only while dragged.
+#[test]
+fn the_band_that_moves_a_dialog_keeps_the_arrow_until_dragged() {
+    let opens: [(&str, Open, egui::Id); 2] = [
+        ("Offset Path", |app| crate::menus::invoke(app, "object.path.offsetPath", json!({})), egui::Id::unique(("dialog", "offsetPath"))),
+        ("New Document", open_new_document, egui::Id::unique(("dialog", "newDocument"))),
+    ];
+    for (name, open, id) in opens {
+        let (ctx, mut app) = (ctx(), app_with_selection());
+        open(&mut app);
+        settle(&ctx, &mut app);
+        let at = rect_of(&ctx, id).left_top() + vec2(40.0, 6.0);
+        let cursor = |ctx: &egui::Context, app: &mut VectorcraftApp, events: Vec<Event>| {
+            let input = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, SCREEN)), events, ..Default::default() };
+            ctx.run_ui(input, |ui| show(app, ui.ctx())).platform_output.cursor_icon
+        };
+        cursor(&ctx, &mut app, vec![Event::PointerMoved(at)]);
+        assert_eq!(cursor(&ctx, &mut app, vec![]), egui::CursorIcon::Default, "{name}: hovering the band");
+        cursor(&ctx, &mut app, vec![button(at, true)]);
+        assert_eq!(cursor(&ctx, &mut app, vec![Event::PointerMoved(at + vec2(20.0, 10.0))]), egui::CursorIcon::Grabbing, "{name}: dragging it");
+        cursor(&ctx, &mut app, vec![button(at + vec2(20.0, 10.0), false)]);
+    }
+}
+
 /// Tab goes through a dialog's controls and does not stop on the band that moves the window.
 #[test]
 fn tab_skips_the_band_that_moves_a_dialog() {
@@ -428,9 +453,10 @@ fn simplify_slider_escape_puts_the_paths_back() {
     let undo_len = app.session.doc().unwrap().history.undo.len();
     crate::menus::invoke(&mut app, "object.path.simplify", json!({}));
     settle(&ctx, &mut app);
+    // Level 0's tolerance of 32 pt takes out the path's 0.1 pt zigzag; level 100's 1/32 pt keeps it.
     let (_, _, rail, _) = slider_strip(&ctx);
-    drag(&ctx, &mut app, rail, vec2(100.0, 0.0));
-    assert_eq!(simplify_preview(&app), json!({"level": 100.0}));
+    drag(&ctx, &mut app, rail + vec2(90.0, 0.0), vec2(-190.0, 0.0));
+    assert_eq!(simplify_preview(&app), json!({"level": 0.0}));
     assert_ne!(app.session.doc().unwrap().doc, before, "the preview changes the path");
     let escape = Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
     let input = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, SCREEN)), events: vec![escape], ..Default::default() };

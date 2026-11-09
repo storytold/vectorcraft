@@ -474,7 +474,7 @@ fn bulleted_lists_are_set_per_paragraph_saved_and_continued() {
     assert_eq!(serde_json::to_value(text(&s).para_at(0)).unwrap()["list"], json!({"bullet": "square"}));
     // A saved list reads the fields it leaves out as their defaults and ignores those it doesn't know.
     let read = |v: serde_json::Value| serde_json::from_value::<vectorcraft_doc::ParaStyle>(json!({ "list": v })).unwrap().list;
-    assert_eq!((read(json!({})), read(json!({"bullet": "dash", "level": 2}))), (dot, Some(ParaList::bulleted(Bullet::Dash))));
+    assert_eq!((read(json!({})), read(json!({"bullet": "dash", "restart": 2}))), (dot, Some(ParaList::bulleted(Bullet::Dash))));
     let reopened = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
     let Some(NodeKind::Text(back)) = reopened.node(NodeId(id)).map(|n| &n.kind) else { panic!("text") };
     assert_eq!((back.para_at(0).list, back.para_at(1).list, back.para_at(2).list), (square, dot, None));
@@ -537,7 +537,7 @@ fn numbered_lists_are_set_per_paragraph_saved_and_styled() {
     s.execute("text.setFormat", &json!({"bullet": "square", "start": 0, "end": 0})).unwrap();
     assert_eq!(list(&s, 0), Some(ParaList::bulleted(Bullet::Square)));
     s.execute("text.setFormat", &json!({"number": "lowerLetters", "start": 0, "end": 0})).unwrap();
-    let letters = Some(ParaList { bullet: Bullet::Square, number: Some(NumberStyle::LowerLetters) });
+    let letters = Some(ParaList { bullet: Bullet::Square, number: Some(NumberStyle::LowerLetters), ..ParaList::default() });
     assert_eq!(list(&s, 0), letters);
     assert_eq!(numbers(&s), ["a.", "2.", "3."]);
     assert_eq!((text(&s).para_at(0).left_indent, text(&s).para_at(0).first_line_indent), (18.0, -18.0));
@@ -571,6 +571,70 @@ fn numbered_lists_are_set_per_paragraph_saved_and_styled() {
     assert_eq!(t.para_at(0).list, roman);
     s.execute("paraStyle.apply", &json!({"name": "Plain", "id": id})).unwrap();
     assert_eq!((list(&s, 0), list(&s, 1), list(&s, 2)), (None, None, None));
+}
+
+/// Bullets and Numbering… › Alignment: `text.setFormat {listAlign}` sets where the marker
+/// stands in the list paragraphs it touches, in one undo step, and refuses unknown values;
+/// a paragraph in no list gets no list from it. A list keeps its alignment when it changes
+/// between bullets and numbers, and a call that puts a paragraph in a list gives it the
+/// alignment too. The alignment is saved only when it is right, opens with the file, and
+/// paragraph styles carry it both ways.
+#[test]
+fn list_markers_are_aligned_per_paragraph_saved_and_styled() {
+    use vectorcraft_doc::text::{Bullet, ListAlign, NumberStyle, ParaList};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 10, "text": "One\nTwo\nThree", "area": {"width": 300, "height": 200}})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    let text = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("text"),
+    };
+    let list = |s: &Session, i: usize| text(s).para_at(i).list;
+    let align = |s: &Session| (0..3).map(|i| list(s, i).map(|l| l.align)).collect::<Vec<_>>();
+    let (left, right) = (Some(ListAlign::Left), Some(ListAlign::Right));
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"list": "number", "start": 0, "end": 4})).unwrap();
+    assert_eq!(align(&s), [left, left, None]);
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("text.setFormat", &json!({"listAlign": "right", "start": 0, "end": 0})).unwrap();
+    assert_eq!(align(&s), [right, left, None]);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(align(&s), [left, left, None]);
+    s.execute("text.setFormat", &json!({"listAlign": "right"})).unwrap();
+    assert_eq!(align(&s), [right, right, None], "the paragraph in no list stays out of one");
+    for bad in [json!({"listAlign": "center"}), json!({"listAlign": "Right"}), json!({"listAlign": 1}), json!({"listAlign": true})] {
+        assert!(s.execute("text.setFormat", &bad).is_err(), "{bad}");
+    }
+    assert_eq!(align(&s), [right, right, None], "an unknown value changes nothing");
+    // Bullets and numbers keep it; a call that makes a list sets it there too.
+    s.execute("text.setFormat", &json!({"bullet": "square", "start": 0, "end": 0})).unwrap();
+    assert_eq!(list(&s, 0), Some(ParaList::bulleted(Bullet::Square).aligned(ListAlign::Right)));
+    s.execute("text.setFormat", &json!({"list": "bullet", "listAlign": "right", "start": 8, "end": 8})).unwrap();
+    assert_eq!(list(&s, 2), Some(ParaList::bulleted(Bullet::Dot).aligned(ListAlign::Right)));
+    s.execute("text.setFormat", &json!({"listAlign": "left", "start": 8, "end": 8})).unwrap();
+    assert_eq!(serde_json::to_value(text(&s).para_at(0)).unwrap()["list"], json!({"bullet": "square", "align": "right"}));
+    assert_eq!(serde_json::to_value(text(&s).para_at(2)).unwrap()["list"], json!({"bullet": "dot"}));
+    let reopened = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let Some(NodeKind::Text(back)) = reopened.node(NodeId(id)).map(|n| &n.kind) else { panic!("text") };
+    assert_eq!((back.para_at(0).list, back.para_at(1).list), (list(&s, 0), Some(ParaList::numbered(NumberStyle::Arabic).aligned(ListAlign::Right))));
+    // A list turned off and on again starts aligned left.
+    s.execute("text.setFormat", &json!({"list": "none", "start": 4, "end": 4})).unwrap();
+    s.execute("text.setFormat", &json!({"list": "number", "start": 4, "end": 4})).unwrap();
+    assert_eq!(align(&s)[1], left);
+    // A style captured from a list aligned right gives other lists that alignment, and one
+    // captured from a list aligned left takes it back.
+    let other = s.execute("text.create", &json!({"x": 10, "y": 300, "text": "Other"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("text.setFormat", &json!({"ids": [other], "list": "number"})).unwrap();
+    s.execute("paraStyle.new", &json!({"name": "Aligned left", "id": other})).unwrap();
+    s.execute("paraStyle.new", &json!({"name": "Aligned right", "id": id})).unwrap();
+    s.execute("paraStyle.apply", &json!({"name": "Aligned right", "id": other})).unwrap();
+    let Some(NodeKind::Text(t)) = s.doc().unwrap().doc.node(NodeId(other)).map(|n| &n.kind) else { panic!("text") };
+    assert_eq!(t.para_at(0).list.map(|l| l.align), right);
+    s.execute("paraStyle.apply", &json!({"name": "Aligned left", "id": id})).unwrap();
+    assert_eq!(align(&s), [left, left, left]);
 }
 
 /// The text object `id`.
@@ -761,6 +825,56 @@ fn point_and_vertical_type_convert(s: &mut Session) {
     assert_eq!(s.doc().unwrap().history.undo.len(), steps);
 }
 
+/// Convert to Text of a list whose markers are aligned right writes the same characters as for
+/// a list aligned left, the marker and then a tab, and gives the paragraphs the same tab stops:
+/// the text after the tab stays where it was, and the marker moves to the first line's start,
+/// where a list aligned left draws it. Numbers narrower than the hanging indent (their tab went
+/// to the left indent) and wider (their tab went to the next default stop), and bullets.
+#[test]
+fn convert_to_text_of_markers_aligned_right_keeps_the_text_in_place() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let text_glyphs = |s: &Session, id: u64| {
+        let Some(NodeKind::Text(t)) = s.doc().unwrap().doc.node(NodeId(id)).map(|n| &n.kind) else { panic!("text") };
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+        let milli = |v: f64| (v * 1000.0).round() as i64;
+        lay.glyphs
+            .iter()
+            .filter(|g| g.len > 0 && !g.outline.elements().is_empty())
+            .map(|g| (g.gid, milli(g.origin.x), milli(g.origin.y)))
+            .collect::<Vec<_>>()
+    };
+    let plain = |s: &Session, id: u64| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.plain_text(),
+        _ => panic!("text"),
+    };
+    let items = (1..=10).map(|i| format!("Item {i}")).collect::<Vec<_>>().join("\n");
+    for (list, converted) in [
+        ("number", (1..=10).map(|i| format!("{i}.\tItem {i}")).collect::<Vec<_>>().join("\n")),
+        ("bullet", (1..=10).map(|i| format!("\u{2022}\tItem {i}")).collect::<Vec<_>>().join("\n")),
+    ] {
+        let make = |s: &mut Session, align: &str| {
+            let id = s.execute("text.create", &json!({"x": 300, "y": 10, "size": 20, "text": items, "area": {"width": 300, "height": 600}})).unwrap()
+                ["id"]
+                .as_u64()
+                .unwrap();
+            s.execute("text.setFormat", &json!({"ids": [id], "list": list, "listAlign": align})).unwrap();
+            id
+        };
+        let (left, right) = (make(&mut s, "left"), make(&mut s, "right"));
+        let drawn_left = drawn_glyphs(&s, left);
+        let text_before = text_glyphs(&s, right);
+        assert_eq!(text_before, text_glyphs(&s, left), "{list}: the text starts at the same place with either alignment");
+        assert_ne!(drawn_glyphs(&s, right), drawn_left, "{list}: the markers aligned right are drawn elsewhere");
+        s.execute("text.convertListToText", &json!({"ids": [left, right]})).unwrap();
+        assert_eq!((plain(&s, left), plain(&s, right)), (converted.clone(), converted), "{list}: the marker, then a tab");
+        let after = text_glyphs(&s, right);
+        assert!(text_before.iter().all(|g| after.contains(g)), "{list}: the text stays where it was");
+        assert_eq!(drawn_glyphs(&s, right), drawn_left, "{list}: the markers start where a list aligned left draws them");
+        assert_eq!(drawn_glyphs(&s, left), drawn_left, "{list}: aligned left, every glyph stays");
+    }
+}
+
 /// A right-to-left list paragraph converted to text starts with the number, its period and a
 /// tab, which are read first: the line draws its glyphs in the order it drew them with the
 /// marker, the number at the right with its period at its left. Letters and roman numerals
@@ -942,6 +1056,130 @@ fn convert_to_text_moves_the_type_tools_selection() {
     let after_d = (first.len() - "og. ".len()) as u64;
     assert_eq!(selection(&s), (Some(a), Some(after_d), Some(after_d)), "the caret is after the d of dog in the first frame");
     assert_eq!(s.active().unwrap().selection.objects, vec![NodeId(a)], "the first frame is selected");
+}
+
+/// Convert to Text of list paragraphs at deeper levels writes each level's own numbers, those
+/// a thread's earlier frames counted at each level included, and every glyph is drawn where it
+/// was: each converted paragraph's left indent takes its level's indent, with the plain left
+/// stop there.
+#[test]
+fn convert_to_text_keeps_deeper_list_levels_in_place() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let text = |s: &Session, id: u64| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("text"),
+    };
+    let numbers = |s: &Session, id: u64| {
+        vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &text(s, id)).markers.iter().map(|m| m.text.clone()).collect::<Vec<_>>()
+    };
+    let text_in = "One\nTwo\nThree\nFour\nFive";
+    let id = s.execute("text.create", &json!({"x": 10, "y": 10, "size": 20, "text": text_in, "area": {"width": 400, "height": 400}})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    s.execute("text.setFormat", &json!({"ids": [id], "list": "number"})).unwrap();
+    s.execute("text.setFormat", &json!({"ids": [id], "listLevel": 2, "start": 4, "end": 9})).unwrap();
+    s.execute("text.setFormat", &json!({"ids": [id], "listLevel": 3, "start": 14, "end": 14})).unwrap();
+    let before = drawn_glyphs(&s, id);
+    s.execute("text.convertListToText", &json!({"ids": [id]})).unwrap();
+    assert_eq!(drawn_glyphs(&s, id), before, "every glyph is drawn where it was");
+    let t = text(&s, id);
+    assert_eq!(t.plain_text(), "1.\tOne\n1.\tTwo\n2.\tThree\n1.\tFour\n2.\tFive");
+    let paras = (0..5)
+        .map(|k| {
+            let p = t.para_at(k);
+            (p.list.is_none(), p.left_indent, p.tabs.iter().map(|tab| tab.position).collect::<Vec<_>>())
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(paras, [18.0, 36.0, 36.0, 54.0, 18.0].map(|x| (true, x, vec![x])), "out of the list, at the level's indent");
+    // A thread whose second frame goes on with the numbers of level 2.
+    let items = std::iter::once("Head".to_string()).chain((1..=9).map(|i| format!("Item {i}"))).collect::<Vec<_>>().join("\n");
+    let a =
+        s.execute("text.create", &json!({"x": 10, "y": 500, "text": items, "area": {"width": 150, "height": 60}})).unwrap()["id"].as_u64().unwrap();
+    let b = s.execute("shape.rectangle", &json!({"x": 200, "y": 500, "width": 150, "height": 200})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    s.execute("text.setFormat", &json!({"ids": [a, b], "list": "number", "listLevel": 2})).unwrap();
+    s.execute("text.setFormat", &json!({"ids": [a], "listLevel": 1, "start": 0, "end": 0})).unwrap();
+    let first = numbers(&s, a).len();
+    assert!((3..10).contains(&first) && text(&s, a).plain_text().ends_with('\n'), "both frames hold items: {first}");
+    assert_eq!(numbers(&s, b).first(), Some(&format!("{first}.")), "the second frame counts level 2 on");
+    let before = (drawn_glyphs(&s, a), drawn_glyphs(&s, b));
+    s.execute("text.convertListToText", &json!({"ids": [a, b]})).unwrap();
+    assert_eq!((drawn_glyphs(&s, a), drawn_glyphs(&s, b)), before, "both frames");
+    let story = std::iter::once("1.\tHead".to_string()).chain((1..=9).map(|i| format!("{i}.\tItem {i}"))).collect::<Vec<_>>().join("\n");
+    assert_eq!(text(&s, a).plain_text() + &text(&s, b).plain_text(), story);
+}
+
+/// List levels: `text.setFormat {listLevel}` sets the level of the list paragraphs it touches
+/// as one undo step, from 1 to 9, and refuses other values; bullets and numbers keep it, a
+/// list turned off and on starts at level 1 again, each level counts its own numbers, and the
+/// level is saved past level 1, reopened and carried by paragraph styles.
+#[test]
+fn list_levels_are_set_per_paragraph_saved_and_styled() {
+    use vectorcraft_doc::text::{Bullet, NumberStyle, ParaList};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id =
+        s.execute("text.create", &json!({"x": 10, "y": 10, "text": "One\nTwo\nThree\nFour", "area": {"width": 300, "height": 200}})).unwrap()["id"]
+            .as_u64()
+            .unwrap();
+    let text = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("text"),
+    };
+    let levels = |s: &Session| (0..4).map(|i| text(s).para_at(i).list.map(|l| l.level)).collect::<Vec<_>>();
+    let numbers = |s: &Session| {
+        vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &text(s)).markers.iter().map(|m| m.text.clone()).collect::<Vec<_>>()
+    };
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"list": "number", "start": 0, "end": 9})).unwrap();
+    assert_eq!(levels(&s), [Some(1), Some(1), Some(1), None]);
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("text.setFormat", &json!({"listLevel": 2, "start": 4, "end": 9})).unwrap();
+    assert_eq!(levels(&s), [Some(1), Some(2), Some(2), None]);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    assert_eq!(numbers(&s), ["1.", "1.", "2."]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(levels(&s), [Some(1), Some(1), Some(1), None]);
+    s.execute("text.setFormat", &json!({"listLevel": 2.0, "start": 4, "end": 4})).unwrap();
+    assert_eq!(levels(&s)[1], Some(2));
+    s.execute("text.setFormat", &json!({"listLevel": 9})).unwrap();
+    assert_eq!(levels(&s), [Some(9), Some(9), Some(9), None], "the paragraph in no list stays out of one");
+    let bad = [json!({"listLevel": 0}), json!({"listLevel": 10}), json!({"listLevel": 1.5}), json!({"listLevel": "2"}), json!({"listLevel": true})];
+    for p in bad {
+        assert!(s.execute("text.setFormat", &p).is_err(), "{p}");
+    }
+    let err = s.execute("text.setFormat", &json!({"listLevel": 10})).unwrap_err().to_string();
+    assert!(err.contains("`listLevel` must be a whole number between 1 and 9 (got 10)"), "{err}");
+    assert_eq!(levels(&s)[0], Some(9), "an unknown value changes nothing");
+    // A deeper paragraph counts from 1, and one back at a shallower level goes on.
+    s.execute("text.setFormat", &json!({"listLevel": 1, "start": 0, "end": 0})).unwrap();
+    s.execute("text.setFormat", &json!({"listLevel": 3, "start": 4, "end": 4})).unwrap();
+    s.execute("text.setFormat", &json!({"listLevel": 1, "start": 8, "end": 8})).unwrap();
+    assert_eq!(numbers(&s), ["1.", "1.", "2."]);
+    // Bullets and numbers keep the level; a call that makes a list sets it there too.
+    s.execute("text.setFormat", &json!({"bullet": "square", "start": 4, "end": 4})).unwrap();
+    assert_eq!(text(&s).para_at(1).list, Some(ParaList::bulleted(Bullet::Square).at_level(3)));
+    s.execute("text.setFormat", &json!({"list": "bullet", "listLevel": 4, "start": 14, "end": 14})).unwrap();
+    assert_eq!(text(&s).para_at(3).list, Some(ParaList::bulleted(Bullet::Dot).at_level(4)));
+    assert_eq!(serde_json::to_value(text(&s).para_at(1)).unwrap()["list"], json!({"bullet": "square", "level": 3}));
+    assert_eq!(serde_json::to_value(text(&s).para_at(0)).unwrap()["list"], json!({"bullet": "dot", "number": "arabic"}));
+    let reopened = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let Some(NodeKind::Text(back)) = reopened.node(NodeId(id)).map(|n| &n.kind) else { panic!("text") };
+    assert_eq!((0..4).map(|i| back.para_at(i).list).collect::<Vec<_>>(), (0..4).map(|i| text(&s).para_at(i).list).collect::<Vec<_>>());
+    // A list turned off and on again starts at level 1.
+    s.execute("text.setFormat", &json!({"list": "none", "start": 4, "end": 4})).unwrap();
+    s.execute("text.setFormat", &json!({"list": "number", "start": 4, "end": 4})).unwrap();
+    assert_eq!(text(&s).para_at(1).list, Some(ParaList::numbered(NumberStyle::Arabic)));
+    // A style captured from a paragraph at level 4 sets that level, and one captured at level 1
+    // takes it back.
+    s.execute("paraStyle.new", &json!({"name": "Level 4", "id": id, "start": 14, "end": 14})).unwrap();
+    s.execute("paraStyle.new", &json!({"name": "Level 1", "id": id, "start": 0, "end": 0})).unwrap();
+    s.execute("paraStyle.apply", &json!({"name": "Level 4", "id": id, "start": 0, "end": 0})).unwrap();
+    assert_eq!(levels(&s)[0], Some(4));
+    s.execute("paraStyle.apply", &json!({"name": "Level 1", "id": id})).unwrap();
+    assert_eq!(levels(&s), [Some(1); 4]);
 }
 
 /// Type › Create Outlines makes a path of a list item's bullet as well as of its characters.
@@ -1664,9 +1902,10 @@ fn variable_font_settings_are_a_character_attribute_saved_only_when_set() {
     s.execute("text.setStyle", &json!({"style": "Bold"})).unwrap();
     assert!(runs(&s).iter().all(|r| r.style.font_axes.is_empty()));
     s.execute("text.setFormat", &json!({"fontAxes": {"wdth": 75}})).unwrap();
-    s.execute("text.replaceFont", &json!({"from": {"family": FAMILY}, "to": {"family": "Inter"}})).unwrap();
+    s.execute("text.replaceFont", &json!({"from": {"family": FAMILY}, "to": {"family": "Source Sans 3"}})).unwrap();
     assert!(runs(&s).iter().all(|r| r.style.font_axes.is_empty()));
-    // A static font has no axes to set.
+    // A static font has no axes to set (Source Sans 3, not Inter: an installed Inter
+    // Variable would shadow the bundled static and give it axes).
     s.execute("text.setFormat", &json!({"fontAxes": {"wght": 650}})).unwrap();
     assert_eq!(saved(&s), None);
     // A missing font keeps them as given, for when it is installed.
@@ -1688,7 +1927,7 @@ fn variable_font_settings_are_a_character_attribute_saved_only_when_set() {
             {"tag": "wdth", "name": "Width", "min": 75.0, "default": 100.0, "max": 100.0, "value": 100.0, "hidden": false},
         ])
     );
-    assert_eq!(s.execute("text.fontList", &json!({"family": "Inter"})).unwrap()["axes"], json!([]));
+    assert_eq!(s.execute("text.fontList", &json!({"family": "Source Sans 3"})).unwrap()["axes"], json!([]));
 }
 
 #[test]
@@ -1798,4 +2037,47 @@ fn area_options_set_a_gutter_between_rows_of_its_own() {
     s.execute("text.areaOptions", &json!({"rowGutter": 30})).unwrap();
     s.execute("text.areaOptions", &json!({"rowGutter": null})).unwrap();
     assert_eq!(area(&s).row_gutter, None);
+}
+
+/// #3759: an option given for several area types goes onto each one's own options: the others
+/// stay as each had them, not copied from the first.
+#[test]
+fn area_options_for_several_frames_change_only_what_is_given() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let make = |s: &mut Session, x: f64| {
+        s.execute("text.create", &json!({"x": x, "y": 10, "text": "A", "area": {"width": 100, "height": 100}})).unwrap()["id"].as_u64().unwrap()
+    };
+    let (a, b) = (make(&mut s, 10.0), make(&mut s, 200.0));
+    s.execute("text.areaOptions", &json!({"ids": [a], "columns": 3, "gutter": 6})).unwrap();
+    s.execute("text.areaOptions", &json!({"ids": [b], "inset": 4})).unwrap();
+    s.execute("text.areaOptions", &json!({"ids": [a, b], "verticalAlign": "bottom"})).unwrap();
+    let area = |s: &Session, id: u64| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.area.clone(),
+        k => panic!("{k:?}"),
+    };
+    let (oa, ob) = (area(&s, a), area(&s, b));
+    assert_eq!((oa.vertical_align, ob.vertical_align), (vectorcraft_doc::VerticalAlign::Bottom, vectorcraft_doc::VerticalAlign::Bottom));
+    assert_eq!((oa.columns, oa.gutter, oa.inset), (3, 6.0, 0.0));
+    assert_eq!((ob.columns, ob.inset), (1, 4.0), "b keeps its own options");
+}
+
+/// `fitMinPercent` alone changes only the frames that shrink text to fit, each from its own
+/// setting (#3759).
+#[test]
+fn fit_min_percent_for_several_frames_keeps_each_frames_fit() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let make = |s: &mut Session, x: f64| {
+        s.execute("text.create", &json!({"x": x, "y": 10, "text": "A", "area": {"width": 100, "height": 100}})).unwrap()["id"].as_u64().unwrap()
+    };
+    let (plain, shrink) = (make(&mut s, 10.0), make(&mut s, 200.0));
+    s.execute("text.areaOptions", &json!({"ids": [shrink], "fit": "shrinkText"})).unwrap();
+    s.execute("text.areaOptions", &json!({"ids": [plain, shrink], "fitMinPercent": 30})).unwrap();
+    let fit = |s: &Session, id: u64| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.area.fit,
+        k => panic!("{k:?}"),
+    };
+    assert_eq!(fit(&s, plain), vectorcraft_doc::AreaFit::None, "the plain frame doesn't start shrinking");
+    assert_eq!(fit(&s, shrink), vectorcraft_doc::AreaFit::ShrinkText { min_percent: 30.0 });
 }

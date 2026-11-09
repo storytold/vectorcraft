@@ -16,7 +16,8 @@ pub fn items() -> Vec<(String, String, String)> {
         let label = if path.is_empty() { c.label.to_string() } else { format!("{path} › {}", c.label) };
         items.push((label, c.id.to_string(), menus::shortcut_of(c.id).unwrap_or("").to_string()));
     }
-    for c in menus::UI_COMMANDS {
+    // `plugin.dialog` runs nothing without an id: [`build`] lists each filter instead.
+    for c in menus::UI_COMMANDS.iter().filter(|c| c.0 != "plugin.dialog") {
         items.push((c.1.to_string(), c.0.to_string(), menus::shortcut_of(c.0).unwrap_or("").to_string()));
     }
     for tool in vectorcraft_tools::catalog::all_tools() {
@@ -32,7 +33,7 @@ fn shown_label(lang: crate::i18n::Lang, label: &str) -> String {
 }
 
 /// One palette entry, with what it shows and what a query matches worked out once.
-struct Entry {
+pub(crate) struct Entry {
     id: String,
     shortcut: String,
     /// The label in the UI language.
@@ -59,24 +60,52 @@ fn entries(ctx: &egui::Context, lang: crate::i18n::Lang) -> Arc<Vec<Entry>> {
     {
         return v;
     }
-    let built: Arc<Vec<Entry>> = Arc::new(
-        items()
-            .into_iter()
-            .map(|(label, id, shortcut)| {
-                let shown = shown_label(lang, &label);
-                let haystack = format!("{}\n{}\n{}", label.to_lowercase(), shown.to_lowercase(), id.to_lowercase());
-                Entry { id, shortcut, shown, haystack }
-            })
-            .collect(),
-    );
+    let built: Arc<Vec<Entry>> = Arc::new(build(lang));
     ctx.data_mut(|d| d.insert_temp::<Cached>(id, (key, built.clone())));
     built
+}
+
+/// The palette's entries in `lang`: [`items`], then one per filter plug-in's Object › Plug-ins
+/// item (`plugin:<id>`), whose name is not translated.
+fn build(lang: crate::i18n::Lang) -> Vec<Entry> {
+    let entry = |label: String, shown: String, id: String, shortcut: String| {
+        let haystack = format!("{}\n{}\n{}", label.to_lowercase(), shown.to_lowercase(), id.to_lowercase());
+        Entry { id, shortcut, shown, haystack }
+    };
+    let mut out: Vec<Entry> = items()
+        .into_iter()
+        .map(|(label, id, shortcut)| {
+            let shown = shown_label(lang, &label);
+            entry(label, shown, id, shortcut)
+        })
+        .collect();
+    out.extend(crate::shortcut_editor::filter_items().iter().map(|f| {
+        let shortcut = crate::shortcut_editor::filter_shortcut(&f.id).unwrap_or("").to_string();
+        let label = format!("{} › {}", f.group, f.label);
+        let shown = format!("{} › {}", shown_label(lang, &f.group), f.label);
+        entry(label, shown, format!("plugin:{}", f.id), shortcut)
+    }));
+    out
+}
+
+/// Runs the palette result `id`: selects a tool, or invokes a command with the params its entry
+/// stands for.
+pub(crate) fn run_pick(app: &mut VectorcraftApp, id: &str) {
+    if let Some(tool) = id.strip_prefix("tool:") {
+        app.select_tool(tool);
+    } else if id.starts_with("plugin:") {
+        let command = crate::keymap::command_of(id);
+        menus::invoke(app, &command.id, command.params);
+    } else {
+        menus::invoke(app, id, json!({}));
+    }
 }
 
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if !app.ui.palette_open {
         return;
     }
+    crate::shortcuts::hold_back_keys(app, ctx);
     let t = Tokens::get(ctx);
     let q = app.ui.palette_query.to_lowercase();
     let entries = entries(ctx, crate::i18n::current());
@@ -136,11 +165,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     ctx.data_mut(|d| d.insert_temp(sel_id, (sel, q)));
     if let Some(id) = run {
         app.ui.palette_open = false;
-        if let Some(tool) = id.strip_prefix("tool:") {
-            app.select_tool(tool);
-        } else {
-            menus::invoke(app, &id, json!({}));
-        }
+        run_pick(app, &id);
     }
 }
 
@@ -221,7 +246,7 @@ mod tests {
     /// Asset Export panel instead of failing on the missing params or exporting nowhere.
     #[test]
     fn a_pick_of_an_asset_export_command_opens_its_panel() {
-        let ids = ["assets.export", "assets.remove", "assets.rename", "assets.settings.set"];
+        let ids = ["assets.export", "assets.remove", "assets.rename", "assets.settings.set", "assets.export3D", "assets.set3DFormat"];
         for id in ids {
             assert!(items().iter().any(|(_, item, _)| item == id), "{id} is in the palette");
             let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
@@ -262,5 +287,40 @@ mod tests {
         assert!(last > 1, "Up on the first result wraps to the last: {last}");
         app.ui.palette_query = "zoom in".into();
         assert_eq!(frame(&mut app, vec![]), 0);
+    }
+
+    /// Each filter plug-in has one result, also when two share a name: its menu path translates,
+    /// the plug-in's name does not, and a pick runs that filter (a dialog for one with parameters,
+    /// nothing with no document open).
+    #[test]
+    fn each_filter_plugin_is_a_result_of_its_own() {
+        use vectorcraft_plugins::wat as tpl;
+        let (one, two) = ("test.UI.palette_filter-one", "test.UI.palette_filter-two");
+        let (key_one, key_two) = (format!("plugin:{one}"), format!("plugin:{two}"));
+        let install = |id: &str, params: &str| {
+            let manifest = format!(r#"{{"id":"{id}","name":"Group","version":"1","kind":"filter","params":{params}}}"#);
+            vectorcraft_plugins::registry::install_bytes(&wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap()).unwrap();
+        };
+        install(one, "{}");
+        install(two, r#"{"wiggle":{"type":"bool"}}"#);
+        let zh = Lang::from_code("zh-hant").unwrap();
+        let built = build(zh);
+        let of = |key: &str| built.iter().filter(|e| e.id == key).collect::<Vec<_>>();
+        assert_eq!((of(&key_one).len(), of(&key_two).len()), (1, 1));
+        assert!(built.iter().all(|e| e.id != "plugin.dialog"), "no result without a filter's id");
+        let path = format!("{} › {}", crate::i18n::tr(zh, "Object"), crate::i18n::tr(zh, "Plug-ins"));
+        assert_eq!(of(&key_two)[0].shown, format!("{path} › Group…"));
+        assert_eq!(of(&key_one)[0].shown, format!("{path} › Group"));
+        assert!(of(&key_two)[0].haystack.contains("object › plug-ins › group…"));
+
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        run_pick(&mut app, &key_two);
+        assert!(app.ui.dialog.is_none(), "no document: the dimmed item's pick does nothing");
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        run_pick(&mut app, &key_two);
+        let d = app.ui.dialog.take().expect("the filter's dialog opens");
+        assert_eq!((d.kind.as_str(), d.str("__plugin")), ("plugin", two.to_string()));
+        vectorcraft_plugins::registry::remove(one);
+        vectorcraft_plugins::registry::remove(two);
     }
 }

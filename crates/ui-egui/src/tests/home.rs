@@ -349,3 +349,143 @@ fn reopening_an_open_file_focuses_its_tab() {
     assert_eq!(focused(&app, "drop"), uid);
     let _ = std::fs::remove_dir_all(d);
 }
+
+/// An app with `doc.vectorcraft` saved in a fresh folder `name`, open in the first tab, and an
+/// untitled document active in the second → (app, folder, document path).
+fn saved_and_another(name: &str) -> (VectorcraftApp, std::path::PathBuf, String) {
+    let services = crate::Services {
+        read: Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string()))),
+        write: Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string()))),
+        ..Default::default()
+    };
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), services);
+    let d = std::env::temp_dir().join(format!("vc-reopen-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    std::fs::create_dir_all(&d).unwrap();
+    let path = d.join("doc.vectorcraft").to_string_lossy().to_string();
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    app.run("file.saveAs", json!({"path": path})).unwrap();
+    app.run("file.new", json!({})).unwrap();
+    assert_eq!((app.session.documents().len(), app.session.active_index()), (2, Some(1)));
+    (app, d, path)
+}
+
+/// Home shown over the document asked for gives way to it, as it does to any other tab (#5369).
+#[test]
+fn reopening_the_active_document_closes_home() {
+    let (mut app, d, path) = saved_and_another("home");
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    app.run("app.home", json!({})).unwrap();
+    assert!(crate::menus::home_showing(&app));
+    assert_eq!(crate::io::open_reporting(&mut app, &path).unwrap()["activated"], true);
+    assert!(!crate::menus::home_showing(&app));
+    let _ = std::fs::remove_dir_all(d);
+}
+
+/// Automation confined to a folder can't reach an open document saved outside it (#5369).
+#[test]
+fn a_confined_open_does_not_reach_an_open_document_outside_its_roots() {
+    use vectorcraft_engine::file_access;
+    let (mut app, d, path) = saved_and_another("roots");
+    let inside = d.join("inside");
+    std::fs::create_dir_all(&inside).unwrap();
+    let roots = file_access::AutomationRoots::new(&[inside.as_path()], &[]).unwrap();
+    assert!(file_access::confine(roots.as_ref(), || app.run("file.open", json!({"path": path}))).is_err());
+    assert_eq!((app.session.documents().len(), app.session.active_index()), (2, Some(1)));
+    let _ = std::fs::remove_dir_all(d);
+}
+
+/// While a dialog acts on the active document, an open document asked for again comes to the
+/// front only once the dialog closes, so the dialog's OK acts on its own document (#5369).
+#[test]
+fn reopening_while_a_dialog_is_open_waits_for_it_to_close() {
+    let (mut app, d, path) = saved_and_another("dialog");
+    app.ui.dialog = Some(crate::state::Dialog::new(crate::dialogs::save_options::KIND, json!({})));
+    assert_eq!(crate::io::open_reporting(&mut app, &path).unwrap(), serde_json::Value::Null);
+    crate::opening::poll(&mut app);
+    assert_eq!((app.session.documents().len(), app.session.active_index()), (2, Some(1)), "still the dialog's document");
+    app.ui.dialog = None;
+    crate::opening::poll(&mut app);
+    assert_eq!((app.session.documents().len(), app.session.active_index()), (2, Some(0)));
+    let _ = std::fs::remove_dir_all(d);
+}
+
+/// A document asked for under automation roots while a dialog is open comes to the front, or
+/// opens again, in those roots once the dialog closes, not in the scope of the frame that runs it
+/// (#5369): closed meanwhile and now a link to a file outside the roots, it is not read.
+#[cfg(unix)]
+#[test]
+fn a_queued_reopen_keeps_the_roots_it_was_asked_in() {
+    use vectorcraft_engine::file_access;
+    let (mut app, d, _) = saved_and_another("queued-roots");
+    let (inside, outside) = (d.join("inside"), d.join("outside"));
+    std::fs::create_dir_all(&inside).unwrap();
+    std::fs::create_dir_all(&outside).unwrap();
+    let path = inside.join("doc.vectorcraft").to_string_lossy().to_string();
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    app.run("file.saveAs", json!({"path": path})).unwrap();
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    app.ui.dialog = Some(crate::state::Dialog::new(crate::dialogs::save_options::KIND, json!({})));
+    let roots = file_access::AutomationRoots::new(&[inside.as_path()], &[]).unwrap();
+    assert_eq!(file_access::confine(roots.as_ref(), || crate::io::open_reporting(&mut app, &path)).unwrap(), serde_json::Value::Null);
+    // Closed, and its file swapped for a link to one outside the roots.
+    app.session.execute("file.close", &json!({"index": 0})).unwrap();
+    let away = outside.join("doc.vectorcraft");
+    std::fs::rename(&path, &away).unwrap();
+    std::os::unix::fs::symlink(&away, &path).unwrap();
+    app.ui.dialog = None;
+    crate::opening::poll(&mut app);
+    assert_eq!(app.session.documents().len(), 1, "the file outside the roots is not opened");
+    let _ = std::fs::remove_dir_all(d);
+}
+
+/// The x-centre of the first text shape whose text is `text` on a drawn Home screen, and the
+/// window's centre (#4684). A centred galley's `pos` is its anchor, so its rect says where it lies.
+fn text_centre_x(app: &mut VectorcraftApp, text: &str) -> Option<(f32, f32)> {
+    fn find(s: &egui::Shape, text: &str) -> Option<f32> {
+        match s {
+            egui::Shape::Text(t) if t.galley.text() == text => Some(t.pos.x + t.galley.rect.center().x),
+            egui::Shape::Vec(v) => v.iter().find_map(|s| find(s, text)),
+            _ => None,
+        }
+    }
+    app.canvas_rect = None;
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1000.0, 900.0));
+    let raw = egui::RawInput { screen_rect: Some(screen), ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| canvas::show(app, ui));
+    out.textures_delta.clear();
+    let x = out.shapes.iter().find_map(|c| find(&c.shape, text))?;
+    Some((x, screen.center().x))
+}
+
+/// The Home screen centres its welcome, its New / Open buttons and its community block, as
+/// PhotoCraft's does (#4684).
+#[test]
+fn home_welcome_and_community_are_centred() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    for text in ["Welcome to VectorCraft", "Community", "ArtCraft website", "VectorCraft on getartcraft.com", "Source code on GitHub"] {
+        let (x, centre) = text_centre_x(&mut app, text).unwrap_or_else(|| panic!("{text} is drawn"));
+        assert!((x - centre).abs() < 6.0, "{text} is centred: {x} vs {centre}");
+    }
+    // The Discord button is centred; its label lies right of its icon, 0.375 of the button's 36 pt
+    // height right of the middle.
+    let (x, centre) = text_centre_x(&mut app, "Join our Discord").unwrap();
+    assert!((x - centre - 0.375 * 36.0).abs() < 2.0, "the Discord button is centred: label at {x} about {centre}");
+    // The two buttons (a label's width plus 32, at least 72, each) lie symmetrically about the
+    // centre: the first one's left edge and the second one's right edge are equally far from it.
+    let width = |label: &str| {
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut w = 0.0;
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| w = crate::widgets::button_width(ui, label));
+        out.textures_delta.clear();
+        w
+    };
+    let (new_x, centre) = text_centre_x(&mut app, "New file").unwrap();
+    let (open_x, _) = text_centre_x(&mut app, "Open").unwrap();
+    let left = new_x - width("New file") / 2.0;
+    let right = open_x + width("Open") / 2.0;
+    assert!((centre - left - (right - centre)).abs() < 6.0, "New / Open row is centred: {left}..{right} about {centre}");
+}
