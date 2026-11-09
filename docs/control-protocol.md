@@ -345,7 +345,9 @@ sessions where the desktop would draw the frame: X11 sessions, Wayland composito
 such as KDE Plasma, and a window opened through XWayland. System Title Bar and `VECTORCRAFT_TITLEBAR` (`app`, or
 `system` or `desktop`) take precedence over it. The checkbox is dimmed while either applies, and a note under it names
 each one that applies. `VECTORCRAFT_TITLEBAR` also takes precedence over System Title Bar for the run it is set in:
-`app` keeps the app bar as the title bar with System Title Bar on. While the variable is set, the Preferences dialog dims
+`app` keeps the app bar as the title bar with System Title Bar on. Only the values `app`, `system` and `desktop` take
+precedence (case-sensitive, surrounding spaces ignored); any other value, such as `unknown`, is ignored and does not
+override System Title Bar. While the variable is set to one of those values, the Preferences dialog dims
 System Title Bar and its `__titlebarFromEnv` field is `true`.
 
 Fill/Stroke chips and panel shortcuts: the Control bar's and Properties' Fill and Stroke chips bring their proxy

@@ -193,7 +193,8 @@ fn the_system_title_bar_preference_keeps_the_window_decorations() {
 
 /// Preferences › User Interface › VectorCraft Title Bar on Every Desktop gives the app frame where
 /// the probe chose the desktop's (KDE, X11, a window opened through XWayland); without it the probe
-/// decides, and `VECTORCRAFT_TITLEBAR` takes precedence over both.
+/// decides, and `VECTORCRAFT_TITLEBAR` set to `app`, `system` or `desktop` takes precedence over
+/// both.
 #[test]
 fn the_app_title_bar_preference_gives_the_app_frame_on_desktop_frames() {
     assert!(!super::opted_into_app_title_bar(None), "no preferences: the default");
