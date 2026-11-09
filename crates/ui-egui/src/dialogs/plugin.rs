@@ -331,8 +331,8 @@ pub(crate) struct PendingInstall {
     pub approval: InstallApproval,
 }
 
-/// No OK in the shared footer: the OK in its body is a button, which Enter clicks only when it has
-/// the keyboard focus.
+/// No OK in the shared footer: the OK in its body is a `Sense::click` button, which Enter clicks
+/// only when it has the keyboard focus.
 pub(super) const INSTALL_SPEC: DialogSpec = DialogSpec {
     heading: |_| tl!("Install Plug-in…").trim_end_matches('…').to_string(),
     body_with_actions: Some(install_body),
