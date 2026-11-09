@@ -1518,6 +1518,17 @@ antiAlias	Sharp	Nítid
 	Exporting {}	S’està exportant {}
 	Export…	Exporta…
 	Extrude & Bevel…	Extrudeix i bisella…
+	3D (Classic)	3D (clàssic)
+	Extrude & Bevel (Classic)…	Extrudeix i bisella (clàssic)…
+	Surface	Superfície
+	Wireframe	Filferro
+	No Shading	Sense ombra
+	Plastic	Plàstic
+	Highlight Intensity	Intensitat de la brillantor
+	Highlight Size	Mida de la brillantor
+	Blend Steps	Passos de fusió
+	Shading Color	Color de l’ombra
+	Draw Hidden Faces	Dibuixa les cares ocultes
 	Eyedropper	Comptagotes
 	Eyedropper Applies:	El comptagotes aplica:
 	Eyedropper Options	Opcions del comptagotes
@@ -2125,6 +2136,7 @@ digits	Malayalam	Malaiàlam
 	Keywords:	Paraules clau:
 	Kind	Tipus
 	Kinsoku Set	Conjunt Kinsoku
+	Kinsoku Shori Type	Tipus de Kinsoku Shori
 	Kite	Estel
 	Knife	Ganivet
 	Knockout Group	Grup knockout
@@ -3195,6 +3207,9 @@ digits	Malayalam	Malaiàlam
 	Puppet Warp Pins	Pins de deformació de titella
 	Puppet Warp Tool	Eina de deformació de titella
 	Purple	Porpra
+	Push In First	Primer cap a dins
+	Push Out First	Primer cap a fora
+	Push Out Only	Només cap a fora
 	Put back in the toolbar	Torna a posar a la barra d’eines
 	Quality	Qualitat
 	Quality {quality}	Qualitat {quality}
@@ -6556,6 +6571,24 @@ breakText	Glyphs	Glifs
 # 3D Box add-on
 	3D Box	Caixa 3D
 	3D Box Tool	Eina Caixa 3D
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Obre amb
+	No importer plug-ins installed	No hi ha complements d’importació instal·lats
+	Read files you open in its format and make documents from them	Llegir els fitxers que obriu en el seu format i fer-ne documents
+@msg	{_1} is an importer (File › Open With)	{_1} és un importador (Fitxer › Obre amb)
+@msg	missing `importer` (see document.formats)	falta `importer` (vegeu document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` ha de ser l’id de format d’un complement (vegeu document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	«{shown}» obre fitxers {_1}, no `{_2}`
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` és un complement del tipus `{_2}`, no un importador
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` és un complement del tipus `{_2}`, no un exportador
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` és un importador: obriu un fitxer amb document.open {{"importer"}"}}
+@msg	the importer returned no objects	l’importador no ha retornat cap objecte
+@msg	an importer returns `objects` and `warnings`, not `{key}`	un importador retorna `objects` i `warnings`, no `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	el fitxer supera els {MAX_INPUT_BYTES} bytes que llegeix un importador
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	un importador declara d’1 a {MAX_EXTENSIONS} `extensions`
+@msg	only an exporter or an importer declares `extensions`	només un exportador o un importador declara `extensions`
+@msg	an importer always gets an import's budget: leave `budget` out	un importador sempre rep el pressupost d’una importació: ometeu `budget`
 
 # Safe Mode
 	Safe Mode…	Mode segur…

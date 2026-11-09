@@ -447,6 +447,17 @@
 	Inflate	Opblazen
 	Select objects, then pick an object type to give them a 3D effect.	Selecteer objecten en kies dan een objecttype om ze een 3D-effect te geven.
 	Extrude & Bevel…	Extruderen en afschuinen…
+	3D (Classic)	3D (klassiek)
+	Extrude & Bevel (Classic)…	Extruderen en afschuinen (klassiek)…
+	Surface	Oppervlak
+	Wireframe	Draadmodel
+	No Shading	Geen arcering
+	Plastic	Plastic
+	Highlight Intensity	Glansintensiteit
+	Highlight Size	Glansgrootte
+	Blend Steps	Overvloeistappen
+	Shading Color	Arceringskleur
+	Draw Hidden Faces	Verborgen vlakken tekenen
 	Revolve…	Draaien…
 	Inflate…	Opblazen…
 	Materials…	Materialen…
@@ -1741,6 +1752,10 @@ digits	Malayalam	Malayalam
 	Stylistic	Stilistisch
 	Mojikumi Set	Mojikumi-set
 	Kinsoku Set	Kinsoku-set
+	Kinsoku Shori Type	Kinsoku Shori-type
+	Push In First	Eerst inschuiven
+	Push Out First	Eerst uitschuiven
+	Push Out Only	Alleen uitschuiven
 	Hard	Hard
 	Right Indent	Rechts inspringen
 	Right-to-Left Paragraph Direction	Alinearichting van rechts naar links
@@ -6441,6 +6456,11 @@ breakText	Glyphs	Glyphs
 # 3D Box add-on
 	3D Box	3D-doos
 	3D Box Tool	3D-doosgereedschap
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Openen met
+	No importer plug-ins installed	Geen importplug-ins geïnstalleerd
+	Read files you open in its format and make documents from them	Bestanden lezen die u in zijn indeling opent en er documenten van maken
 
 # Safe Mode
 	Safe Mode…	Veilige modus…

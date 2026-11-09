@@ -1107,6 +1107,17 @@ font-technology	Variable	Değişken
 	Exporting {}	{} dışa aktarılıyor
 	Export…	İhracat…
 	Extrude & Bevel…	Ekstrüzyon ve Eğim…
+	3D (Classic)	3D (Klasik)
+	Extrude & Bevel (Classic)…	Ekstrüzyon ve Eğim (Klasik)…
+	Surface	Yüzey
+	Wireframe	Tel Kafes
+	No Shading	Gölgeleme Yok
+	Plastic	Plastik
+	Highlight Intensity	Parlama Yoğunluğu
+	Highlight Size	Parlama Boyutu
+	Blend Steps	Karışım Adımları
+	Shading Color	Gölgeleme Rengi
+	Draw Hidden Faces	Gizli Yüzleri Çiz
 	Eyedropper	Damlalık
 	Sample Color from Screen	Ekrandan Örnek Renk
 	This system has no screen color sampler	Bu sistemin ekran rengi örnekleyicisi yok
@@ -1815,6 +1826,10 @@ font-technology	Variable	Değişken
 	Mojikumi	Mojikumi
 	Mojikumi Set	Mojikumi Seti
 	Kinsoku Set	Kinsoku Seti
+	Kinsoku Shori Type	Kinsoku Shori Türü
+	Push In First	Önce İçeri
+	Push Out First	Önce Dışarı
+	Push Out Only	Yalnızca Dışarı
 	Hard	Sert
 	Soft	Yumuşak
 	Monitor RGB	RGB'yi izleyin
@@ -6531,6 +6546,24 @@ breakText	Glyphs	Glifler
 # 3D Box add-on
 	3D Box	3B Kutu
 	3D Box Tool	3B Kutu Aracı
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Birlikte Aç
+	No importer plug-ins installed	İçe aktarma eklentisi yüklü değil
+	Read files you open in its format and make documents from them	Kendi biçiminde açtığınız dosyaları okuma ve bunlardan belge oluşturma
+@msg	{_1} is an importer (File › Open With)	{_1} bir içe aktarma eklentisidir (Dosya › Birlikte Aç)
+@msg	missing `importer` (see document.formats)	`importer` eksik (bkz. document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` bir eklentinin biçim kimliği olmalıdır (bkz. document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	“{shown}” {_1} dosyalarını açar, `{_2}` dosyasını değil
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}`, `{_2}` türünde bir eklentidir, içe aktarma eklentisi değildir
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}`, `{_2}` türünde bir eklentidir, dışa aktarma eklentisi değildir
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` bir içe aktarma eklentisidir: dosyayı document.open {{"importer"}"}} ile açın
+@msg	the importer returned no objects	içe aktarma eklentisi hiç nesne döndürmedi
+@msg	an importer returns `objects` and `warnings`, not `{key}`	içe aktarma eklentisi `{key}` değil, `objects` ve `warnings` döndürür
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	dosya, içe aktarma eklentisinin okuduğu {MAX_INPUT_BYTES} bayttan büyük
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	içe aktarma eklentisi 1 ile {MAX_EXTENSIONS} arasında `extensions` bildirir
+@msg	only an exporter or an importer declares `extensions`	`extensions` yalnızca dışa veya içe aktarma eklentisi bildirir
+@msg	an importer always gets an import's budget: leave `budget` out	içe aktarma eklentisi her zaman bir içe aktarmanın bütçesini alır: `budget` değerini çıkarın
 
 # Safe Mode
 	Safe Mode…	Güvenli Mod…

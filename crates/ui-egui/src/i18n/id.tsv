@@ -433,6 +433,17 @@
 	Inflate	Gelembungkan
 	Select objects, then pick an object type to give them a 3D effect.	Pilih objek, lalu pilih jenis objek untuk memberinya efek 3D.
 	Extrude & Bevel…	Ekstrusi & bevel…
+	3D (Classic)	3D (klasik)
+	Extrude & Bevel (Classic)…	Ekstrusi & bevel (klasik)…
+	Surface	Permukaan
+	Wireframe	Kerangka kawat
+	No Shading	Tanpa pengarsiran
+	Plastic	Plastik
+	Highlight Intensity	Intensitas kilau
+	Highlight Size	Ukuran kilau
+	Blend Steps	Langkah campuran
+	Shading Color	Warna pengarsiran
+	Draw Hidden Faces	Gambar sisi tersembunyi
 	Revolve…	Revolusi…
 	Inflate…	Gelembungkan…
 	Materials…	Material…
@@ -1727,6 +1738,10 @@ digits	Malayalam	Malayalam
 	Stylistic	Stilistik
 	Mojikumi Set	Set Mojikumi
 	Kinsoku Set	Set Kinsoku
+	Kinsoku Shori Type	Jenis Kinsoku Shori
+	Push In First	Dorong masuk dahulu
+	Push Out First	Dorong keluar dahulu
+	Push Out Only	Hanya dorong keluar
 	Hard	Keras
 	Right Indent	Indentasi kanan
 	Right-to-Left Paragraph Direction	Arah paragraf kanan ke kiri
@@ -6390,6 +6405,11 @@ breakText	Glyphs	Glif
 # 3D Box add-on
 	3D Box	Kotak 3D
 	3D Box Tool	Alat Kotak 3D
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Buka Dengan
+	No importer plug-ins installed	Tidak ada plug-in impor yang terinstal
+	Read files you open in its format and make documents from them	Membaca file yang Anda buka dalam formatnya dan membuat dokumen darinya
 
 # Safe Mode
 	Safe Mode…	Mode aman…

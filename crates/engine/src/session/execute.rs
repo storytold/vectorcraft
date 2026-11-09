@@ -113,6 +113,9 @@ impl Session {
             })
             .flatten();
         let selected_before = select_first.as_ref().and(self.active()).map(|d| (d.uid, d.selection.clone(), d.active_layer));
+        // Only a selection command that changes the selection loads its paints for new art: other
+        // commands, and clicking what is already selected, keep a sampled paint in the proxies.
+        let selection_was = (id.starts_with("select.") || id == "layer.target").then(|| self.active().map(|d| d.selection.clone())).flatten();
         let run = |s: &mut Session| {
             if let Some(ids) = &select_first {
                 s.execute("select.set", &serde_json::json!({ "ids": ids }))?;
@@ -135,6 +138,9 @@ impl Session {
         let r = if self.depth == 0 { self.run_guarded(id, run) } else { self.run_nested(run) };
         if r.is_err() && self.depth == 0 {
             self.batch_paint_docs.clear();
+            // A failed or panicked command's documents are put back: type is drawn in their
+            // composite fonts again, not in those the command set.
+            cmd::compositefonts::sync(self);
         }
         let r = r?;
         if self.depth == 0 {
@@ -147,6 +153,9 @@ impl Session {
             });
             if !restored {
                 self.inherit_new_art();
+                if selection_was.is_some_and(|was| self.active().is_some_and(|d| d.selection != was)) {
+                    self.load_selection_paints();
+                }
             }
             for uid in std::mem::take(&mut self.batch_paint_docs) {
                 if let Some(st) = self.docs.iter_mut().find(|d| d.uid == uid)

@@ -130,8 +130,9 @@ fn asking(id: &str, name: &str, permissions: &str) -> Vec<u8> {
 
 /// Installing a plug-in that lists permissions asks first, showing its name, id, version, file hash
 /// and each permission in plain words, with hidden characters from the manifest escaped. Cancel
-/// installs nothing, OK installs it; another module with its id and the same permissions asks only
-/// whether to take the installed one's place, and one that asks for another permission asks again.
+/// installs nothing, OK installs it; installing the same module again doesn't ask, one with other
+/// bytes asks again, even when it lists the same permissions, and then whether to take the
+/// installed one's place, as does one that asks for another permission.
 #[test]
 fn installing_a_plugin_that_lists_permissions_asks_first() {
     let mut app = app();
@@ -165,11 +166,22 @@ fn installing_a_plugin_that_lists_permissions_asks_first() {
     assert!(app.ui.dialog.is_none());
     assert!(vectorcraft_plugins::registry::get(id).is_some());
     assert_eq!(vectorcraft_plugins::registry::granted(id).map(|g| g.hash), Some(hash));
-    // Another module with the same permissions asks for none of them again, but asks before it
-    // takes the installed one's place, showing its id and file hash.
+    // The same module again: installed without asking.
+    app.run("ui.installPlugin", json!({"dataBase64": data})).unwrap();
+    assert!(app.ui.dialog.is_none(), "the same bytes don't ask again");
+    // Other bytes with the same permissions ask for them, from both ways in; Cancel keeps the one
+    // installed.
     let again = asking(id, "Tidy 2", r#"["doc.write","doc.read"]"#);
     let r = app.run("ui.installPlugin", json!({"dataBase64": vectorcraft_format::base64_encode(&again)})).unwrap();
-    assert_eq!(r["pending"], dialogs::confirm::KIND);
+    assert_eq!(r["pending"], dialogs::confirm::KIND, "other bytes ask again");
+    assert_eq!(app.ui.dialog.as_ref().unwrap().str("message"), "Install “Tidy 2”, which asks for these permissions?");
+    dialogs::cancel(&mut app);
+    assert_eq!(vectorcraft_plugins::registry::get(id).map(|p| p.manifest().name.clone()), Some(name.into()), "Cancel keeps the one installed");
+    io::open_bytes(&mut app, "tidy2.wasm", &again, None).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(dialogs::confirm::KIND), "File › Open asks too");
+    dialogs::confirm(&mut app).unwrap();
+    // OK on the permissions goes on to ask before it takes the installed one's place, showing its
+    // id and file hash; Cancel there keeps the one installed and records no grant.
     let d = app.ui.dialog.as_ref().unwrap();
     assert_eq!(d.str("message"), "Install “Tidy 2” in place of the plug-in with the same ID?");
     let again_hash = vectorcraft_plugins::permissions::sha256_hex(&again);
@@ -181,10 +193,14 @@ fn installing_a_plugin_that_lists_permissions_asks_first() {
     );
     dialogs::cancel(&mut app);
     assert_eq!(vectorcraft_plugins::registry::get(id).map(|p| p.manifest().name.clone()), Some(name.into()), "Cancel keeps the one installed");
+    assert_ne!(vectorcraft_plugins::registry::granted(id).map(|g| g.hash), Some(again_hash), "Cancel records no grant");
     app.run("ui.installPlugin", json!({"dataBase64": vectorcraft_format::base64_encode(&again)})).unwrap();
     dialogs::confirm(&mut app).unwrap();
-    assert!(app.ui.dialog.is_none(), "the same permissions don't ask again");
+    dialogs::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none(), "both questions are answered");
     assert_eq!(vectorcraft_plugins::registry::get(id).map(|p| p.manifest().name.clone()), Some("Tidy 2".into()));
+    let new_hash = vectorcraft_plugins::permissions::sha256_hex(&again);
+    assert_eq!(vectorcraft_plugins::registry::granted(id).map(|g| g.hash), Some(new_hash), "OK records the new module's hash");
     // One that asks for another permission asks again.
     let more = asking(id, "Tidy 3", r#"["doc.read","doc.write","state"]"#);
     let r = app.run("ui.installPlugin", json!({"dataBase64": vectorcraft_format::base64_encode(&more)})).unwrap();

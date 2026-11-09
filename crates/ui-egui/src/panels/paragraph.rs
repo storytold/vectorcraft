@@ -2,13 +2,14 @@
 //! Bullets and Numbered List buttons and their presets (More Options opens Bullets and
 //! Numbering…), indents, space before/after, Hyphenate, Insert Kashidas (with the Indic options),
 //! Mojikumi Set and Kinsoku Set (with the East Asian options); the panel menu turns Roman Hanging
-//! Punctuation on and off, opens Justification… and Hyphenation… and picks the Single-line or
-//! Every-line Composer.
+//! Punctuation on and off, opens Justification… and Hyphenation…, picks the Kinsoku Shori Type
+//! (with the East Asian options) and picks the Single-line or Every-line Composer.
 
 use egui::{Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_doc::{
-    Composer, HyphenationOptions, JustificationOptions, Justify, Kinsoku, Mojikumi, NodeKind, ParaDirection, ParaStyle, SingleWordJustify,
+    Composer, HyphenationOptions, JustificationOptions, Justify, Kinsoku, KinsokuShoriType, Mojikumi, NodeKind, ParaDirection, ParaStyle,
+    SingleWordJustify,
 };
 
 use super::character::{Metric, Shared, text_style};
@@ -860,6 +861,22 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
             });
         });
+        // How a line keeps the kinsoku characters off its ends: the selected paragraphs' type is
+        // checked, and none is when they differ.
+        let kinsoku_type = shared_para(app, |p| p.kinsoku_type);
+        ui.add_enabled_ui(has, |ui| {
+            ui.menu_button(format!("   {}", tl!("Kinsoku Shori Type")), |ui| {
+                for (label, t, key) in [
+                    (tl!("Push In First"), KinsokuShoriType::PushInFirst, "pushInFirst"),
+                    (tl!("Push Out First"), KinsokuShoriType::PushOutFirst, "pushOutFirst"),
+                    (tl!("Push Out Only"), KinsokuShoriType::PushOutOnly, "pushOutOnly"),
+                ] {
+                    if menu_item(ui, label, true, kinsoku_type == Some(t)) {
+                        set_kinsoku_type(app, key);
+                    }
+                }
+            });
+        });
     }
     ui.separator();
     let composer = shared_composer(app);
@@ -876,12 +893,18 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
+/// Kinsoku Shori Type (`key`: `"pushInFirst"`, `"pushOutFirst"` or `"pushOutOnly"`) for the
+/// paragraphs the panel acts on ([`format`]), in one undo step.
+fn set_kinsoku_type(app: &mut VectorcraftApp, key: &str) {
+    format(app, json!({"kinsokuType": key}));
+}
+
 /// Reset Panel: the paragraphs the panel acts on ([`format`]) take Auto alignment, no list, no
 /// indents or paragraph spacing, Hyphenate off with the default Hyphenation and Justification
 /// options, Auto direction, Bottom-to-Bottom Leading, the Line-end Punctuation Half Width Mojikumi
-/// Set, Regular burasagari, the Hard kinsoku set, the Every-line Composer, Roman Hanging
-/// Punctuation off, no kashidas and no tab stops, as one undo step named Reset Panel (inside an
-/// undo group that is already open, as part of its step).
+/// Set, Regular burasagari, the Hard kinsoku set, Push Out Only, the Every-line Composer, Roman
+/// Hanging Punctuation off, no kashidas and no tab stops, as one undo step named Reset Panel (inside
+/// an undo group that is already open, as part of its step).
 fn reset_panel(app: &mut VectorcraftApp) {
     let h = HyphenationOptions::default();
     let j = vectorcraft_doc::JustificationOptions::default();
@@ -901,7 +924,7 @@ fn reset_panel(app: &mut VectorcraftApp) {
             "wordSpacing": j.word_spacing, "letterSpacing": j.letter_spacing, "glyphScaling": j.glyph_scaling,
             "autoLeading": j.auto_leading, "singleWordJustification": "fullJustify",
             "direction": "auto", "leadingModel": "romanBaseline", "mojikumi": "lineEndHalf", "burasagari": "standard", "kinsoku": "hard",
-            "composer": "everyLine", "romanHangingPunctuation": false
+            "kinsokuType": "pushOutOnly", "composer": "everyLine", "romanHangingPunctuation": false
         }),
     );
     para_cmd(app, "text.tabs.clear", json!({}));

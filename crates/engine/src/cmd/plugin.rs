@@ -7,7 +7,8 @@
 //! plug-in that fails leaves the document untouched), and read and write the data they keep with
 //! the document ([`vectorcraft_doc::plugin_data`], theirs alone); live-effect plug-ins are applied
 //! like any effect (`effect.apply {effect: "plugin.<id>"}`) and drawn by `vectorcraft-effects`;
-//! exporters add a file format that `document.export` writes (`fileio::plugin_formats`).
+//! exporters add a file format that `document.export` writes, and importers one that
+//! `document.open` reads (`fileio::plugin_formats`).
 //!
 //! A filter may ask for a heavy budget (`Budget::Heavy`: minutes rather than a minute, for routing,
 //! packing or simulation). It installs only once the user agrees (`plugin.install {allowHeavy}`),
@@ -65,7 +66,7 @@ pub fn describe(p: &Plugin) -> Value {
     });
     match m.kind {
         Kind::Effect => v["effect"] = json!(effect::effect_id(&m.id)),
-        Kind::Exporter => {
+        Kind::Exporter | Kind::Importer => {
             v["format"] = json!(export::format_id(&m.id));
             v["extensions"] = json!(m.extensions);
         }
@@ -159,6 +160,12 @@ impl FilterRun {
                 return Err(bad(
                     C,
                     format!("`{}` is an exporter: export with document.export {{\"format\": \"{}\"}}", m.id, export::format_id(&m.id)),
+                ));
+            }
+            Kind::Importer => {
+                return Err(bad(
+                    C,
+                    format!("`{}` is an importer: open a file with document.open {{\"importer\": \"{}\"}}", m.id, export::format_id(&m.id)),
                 ));
             }
         }
@@ -449,8 +456,13 @@ pub(crate) fn run_command(s: &mut Session, id: &str, p: &Value) -> Result<Value>
 /// Texturizer) comes as the effect stores it, never as a file to read: a plug-in can't have the
 /// host read one.
 fn admit_effects(fx: &[Effect], n: &Node) -> std::result::Result<Vec<Effect>, String> {
+    admit_effects_for("plugin.run", fx, n)
+}
+
+/// [`admit_effects`] for command `cmd`, which bad parameters name: `plugin.run`, or `document.open`
+/// for the objects an importer plug-in returns.
+pub(crate) fn admit_effects_for(cmd: &str, fx: &[Effect], n: &Node) -> std::result::Result<Vec<Effect>, String> {
     use vectorcraft_render::effects;
-    const C: &str = "plugin.run";
     let mut out = Vec::with_capacity(fx.len());
     for (j, e) in fx.iter().enumerate() {
         if n.appearance.effects.contains(e) {
@@ -463,7 +475,7 @@ fn admit_effects(fx: &[Effect], n: &Node) -> std::result::Result<Vec<Effect>, St
             Some(plugin) => {
                 plugin.manifest().resolve_params(&params).map_err(|why| refuse(why.to_string()))?;
             }
-            None => super::params::check_effect_params(C, &e.id, &params).map_err(|why| refuse(why.to_string()))?,
+            None => super::params::check_effect_params(cmd, &e.id, &params).map_err(|why| refuse(why.to_string()))?,
         }
         if super::effectcmd::texture_load_effect(&e.id)
             && let Some(t) = params.get(effects::pixel::TEXTURE_IMAGE)
@@ -538,8 +550,8 @@ fn takes_over(s: &Session, plugin: &Plugin) -> bool {
 }
 
 /// `plugin.install`: loads and checks the module, refuses one that asks for a heavy budget unless
-/// `allowHeavy` says the user agreed, one that lists permissions the user hasn't granted its id
-/// unless `grant` lists them all, one that would take another module's place ([`takes_over`])
+/// `allowHeavy` says the user agreed, one that lists permissions the user hasn't granted this very
+/// module unless `grant` lists them all, one that would take another module's place ([`takes_over`])
 /// unless `replace` is true, and one whose SHA-256 isn't the `hash` given; records the grant with
 /// the module's hash, keeps it for the next start and installs it → its `plugin.list` entry.
 fn install(s: &mut Session, p: &Value) -> Result<Value> {
@@ -584,8 +596,7 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
         ));
     }
     // A plug-in that lists permissions installs once the user grants them: whoever installs it
-    // asks them first, unless they already granted all of them (with a plug-in store, to this
-    // module).
+    // asks them first, unless they already granted this very module all of them.
     let m = plugin.manifest();
     let wanted = m.permissions();
     if !s.plugin_approved(&plugin) && !grant.as_ref().is_some_and(|g| wanted.iter().all(|w| g.contains(w))) {
@@ -593,13 +604,22 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
         let asked = permissions::names(&wanted).join(", ");
         return Err(bad(C, format!("“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees")));
     }
+    // Installed plug-ins stay installed after a restart (#2541). The module is written first and its
+    // grant only once it is there; when the grant can't be written, the store gets the module it
+    // held back. A failed write of that module is only logged, and the grant then doesn't cover
+    // the new module. A stored module that can't be read back isn't replaced by one that needs a
+    // grant.
+    let previous = s.stored_plugin_bytes(plugin.id());
+    let mut stored = (previous.is_ok() || !m.asks_permissions()) && s.store_plugin(plugin.id(), &bytes);
     if m.asks_permissions() {
         let g = Grant { id: m.id.clone(), hash: plugin.hash().to_string(), permissions: wanted };
         registry::grant(g.clone());
-        s.store_grant(&m.id, Some(g));
+        if stored && !s.store_grant(&m.id, Some(g)) {
+            s.put_back_plugin(plugin.id(), previous.ok().flatten().as_deref());
+            stored = false;
+        }
     }
-    // Installed plug-ins stay installed after a restart (#2541), with their settings and cache.
-    let stored = s.store_plugin(plugin.id(), &bytes);
+    // It gets the settings and cache kept for its id.
     s.attach_plugin_storage(plugin.id());
     // Installing a disabled plug-in again (an updated version) turns it on for the next launch too,
     // also when it is disabled by its stored file alone (it stopped a launch while loading). When
@@ -854,7 +874,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "List Plug-ins",
             [],
             None,
-            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's format id, plugin.<id>, for document.export, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines; settings: it may keep settings of its own; cache: it may keep a cache of its own), hash (the module's SHA-256), api (the plug-in API level it was built for, 1 or 2), paintOutput?: true (a live effect whose pieces have paints of their own, see docs/plugins.md), cacheBytes (the bytes its cache holds; see plugin.clearCache), commands?: [{id, command (its command id, plugin.<id>.<command id>, which runs it), label, params (doc), paramsSchema}] (the menu commands a filter or live effect adds)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}]} | null, safeMode: bool (no plug-in loads or runs, see plugin.safeMode), disabled: [{id, file, name, label}] (turned off for the next launch, see plugin.setEnabled)}",
+            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\"|\"importer\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's or importer's format id, plugin.<id>, for document.export or document.open's importer, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines; settings: it may keep settings of its own; cache: it may keep a cache of its own), hash (the module's SHA-256), api (the plug-in API level it was built for, 1 or 2), paintOutput?: true (a live effect whose pieces have paints of their own, see docs/plugins.md), cacheBytes (the bytes its cache holds; see plugin.clearCache), commands?: [{id, command (its command id, plugin.<id>.<command id>, which runs it), label, params (doc), paramsSchema}] (the menu commands a filter or live effect adds)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}]} | null, safeMode: bool (no plug-in loads or runs, see plugin.safeMode), disabled: [{id, file, name, label}] (turned off for the next launch, see plugin.setEnabled)}",
             always,
             list
         ),
@@ -881,7 +901,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Install Plug-in",
             [],
             None,
-            "{path: a .wasm file (desktop) | dataBase64: the module (+ name?: shown as its source), replace?: bool (true once the user agreed: a module with other bytes than the plug-in installed with its id, or with none installed, one whose id has settings or a cache in the plug-in store, installs only with it, takes that plug-in's place and gets its settings and cache; false: one whose id is installed is refused; left out, the same module installs again), name?: file name (with dataBase64), allowHeavy?: bool (true once the user agreed to a heavy budget: a filter whose manifest asks for one, budget \"heavy\" in plugin.inspect, installs only with it), grant?: [permission] (the permissions the user granted: a plug-in whose manifest lists permissions, needsApproval in plugin.inspect, installs only when grant holds every one of them; the grant is recorded with the module's hash, and replacing the plug-in with one that lists no new permission needs none; with a plug-in store attached, only the grants kept there count, each for the module with its hash alone), hash?: string (the module's SHA-256 as plugin.inspect gave it: a module with other bytes is refused)} validate and install a WebAssembly plug-in for this session → its plugin.list entry",
+            "{path: a .wasm file (desktop) | dataBase64: the module (+ name?: shown as its source), replace?: bool (true once the user agreed: a module with other bytes than the plug-in installed with its id, or with none installed, one whose id has settings or a cache in the plug-in store, installs only with it, takes that plug-in's place and gets its settings and cache; false: one whose id is installed is refused; left out, the same module installs again), name?: file name (with dataBase64), allowHeavy?: bool (true once the user agreed to a heavy budget: a filter whose manifest asks for one, budget \"heavy\" in plugin.inspect, installs only with it), grant?: [permission] (the permissions the user granted: a plug-in whose manifest lists permissions, needsApproval in plugin.inspect, installs only when grant holds every one of them; the grant is recorded with the module's hash and covers only that module, so a module with other bytes needs a new grant even when it lists the same permissions; with a plug-in store attached, only the grants kept there count), hash?: string (the module's SHA-256 as plugin.inspect gave it: a module with other bytes is refused)} validate and install a WebAssembly plug-in for this session → its plugin.list entry",
             always,
             install
         ),
@@ -890,7 +910,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Inspect Plug-in",
             [],
             None,
-            "{path: a .wasm file (desktop) | dataBase64: the module, name?: the file name shown as its source (with dataBase64)} validate a WebAssembly plug-in without installing it → the plugin.list entry it would have, plus needsApproval: bool (true when it lists permissions the user hasn't granted its id: plugin.install then needs grant) and needsReplace: bool (true when it would take the place of another module with its id: plugin.install then needs replace: true)",
+            "{path: a .wasm file (desktop) | dataBase64: the module, name?: the file name shown as its source (with dataBase64)} validate a WebAssembly plug-in without installing it → the plugin.list entry it would have, plus needsApproval: bool (true when it lists permissions the user hasn't granted this very module, its bytes included: plugin.install then needs grant) and needsReplace: bool (true when it would take the place of another module with its id: plugin.install then needs replace: true)",
             always,
             inspect
         ),
@@ -917,7 +937,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reload Plug-ins",
             ["Object", "Plug-ins"],
             None,
-            "{path?: a folder (default: the Additional Plug-ins Folder preference)} install every *.wasm in it (desktop; a bad module, and one disabled with plugin.setEnabled, is reported and skipped, and so are a heavy filter and a plug-in that lists permissions the user hasn't granted its id; an error in Safe Mode) → {folder, loaded: [id], failed: [{file, error}]}",
+            "{path?: a folder (default: the Additional Plug-ins Folder preference)} install every *.wasm in it (desktop; a bad module, and one disabled with plugin.setEnabled, is reported and skipped, and so are a heavy filter and a plug-in that lists permissions the user hasn't granted this very module, its bytes included; an error in Safe Mode) → {folder, loaded: [id], failed: [{file, error}]}",
             always,
             reload
         ),

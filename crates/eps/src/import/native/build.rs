@@ -22,7 +22,8 @@ pub(super) enum Page {
 
 /// How art moved from a page to its place in the layers' document transforms: its pattern tiles
 /// move with it.
-pub(super) const PAGE_MOVE: Scaling = Scaling { strokes: false, effects: None, keep_type_strokes: false, keep_corners: false, patterns: true };
+pub(super) const PAGE_MOVE: Scaling =
+    Scaling { strokes: false, effects: None, keep_type_strokes: false, keep_corners: false, patterns: true, keep_fit_when_flat: false };
 
 /// The page (`visible`, the file read as its page) and the place of its area in the layers'
 /// document.
