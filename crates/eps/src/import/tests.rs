@@ -1270,6 +1270,15 @@ fn shading_functions_in_shared_arrays_stop_at_the_limits() {
     assert!(r.warnings.iter().any(|w| w.contains("the program runs too long")), "{:?}", r.warnings);
 }
 
+/// Type only measured (`stringwidth`) or drawn as outlines (`charpath`) adds no type to the
+/// document, so its font isn't named as one that shows in the fallback font.
+#[test]
+fn fonts_only_measured_or_outlined_are_not_named_as_missing() {
+    let r = read("/Nowhere-Bold 12 selectfont (Hi) stringwidth pop pop newpath 10 10 moveto (Hi) true charpath fill 10 10 80 80 rectfill");
+    assert!(!objects(&r.document).iter().any(|n| matches!(n.kind, NodeKind::Text(_))));
+    assert!(!r.warnings.iter().any(|w| w.starts_with(super::MISSING_FONTS_NOTE)), "{:?}", r.warnings);
+}
+
 #[test]
 fn cshow_runs_its_procedure_for_each_character() {
     check("/n 0 def { pop pop pop /n n 1 add def } (abc) cshow n 3 eq");

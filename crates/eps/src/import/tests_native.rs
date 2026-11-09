@@ -245,6 +245,25 @@ fn type_in_the_legacy_format_is_the_layers_own_and_the_page_has_text() {
     assert!(r.warnings.iter().any(|w| w.starts_with("1 text objects of the page are outlines on the layers")), "{:?}", r.warnings);
 }
 
+/// The warning about fonts that aren't available names the fonts of the type the document keeps,
+/// wherever it came from: type the editing copy sets in a font that isn't available is named
+/// though the page sets it in one that is, and type only the page sets in such a font is not.
+#[test]
+fn the_missing_fonts_warning_names_the_fonts_of_the_documents_type() {
+    let page = |font: &str| format!("{}\n0 0 0 1 setcmykcolor /{font} findfont 12 scalefont setfont 10 50 moveto (Hi) show", page_square(10, 10));
+    // `legacy_text` in `font`.
+    let words = |font: &str| format!("0 To\n1 0 0 1 10 50 0 Tp\nTP\n0 Tr\n0 0 0 1 k\n/_{font} 12 Tf\n(Hi) Tx\nTO");
+    for (on_page, in_copy, named) in [("Inter-Regular", "Nowhere-Bold", Some("Nowhere")), ("Nowhere-Bold", "Inter-Regular", None)] {
+        let art = native(&(layer("Art", true, &square(10, 10)) + &layer("Words", true, &words(in_copy))));
+        let r = import(&eps(&page(on_page), &art)).unwrap();
+        assert_eq!(names(&r.document), ["Art", "Words"], "{:?}", r.warnings);
+        assert_eq!(text_of(&r.document.layers[1]).len(), 1, "{:?}", r.warnings);
+        let notes: Vec<&String> = r.warnings.iter().filter(|w| w.starts_with(super::MISSING_FONTS_NOTE)).collect();
+        let want: Vec<String> = named.iter().map(|f| format!("{}: {f}", super::MISSING_FONTS_NOTE)).collect();
+        assert_eq!(notes, want.iter().collect::<Vec<_>>(), "page {on_page}, editing copy {in_copy}: {:?}", r.warnings);
+    }
+}
+
 #[test]
 fn a_damaged_editing_copy_leaves_the_page() {
     // Not ASCII85, ASCII85 of something that isn't Zstandard, Zstandard of something that isn't art.
@@ -5203,7 +5222,7 @@ fn envelope_options_keep_the_source_text_hidden_under_its_outlined_appearance() 
         }
     });
     assert_eq!(texts, [("CHONKYCATS".to_string(), false)], "{:?}", r.warnings);
-    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    assert!(super::tests::program_warnings(&r.warnings).is_empty(), "{:?}", r.warnings);
 }
 
 /// A live envelope that draws a little apart from its drawn art, in layers that already differ
