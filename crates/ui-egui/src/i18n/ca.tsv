@@ -5938,7 +5938,7 @@ digits	Malayalam	Malaiàlam
 @msg	{path}: {e}	{path}: {e}
 @msg	{status} ({e})	{status} ({e})
 @msg	{tool} isn't in a toolbar group of several tools	{tool} no forma part d’un grup de diverses eines a la barra d’eines
-@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	«{_1}» demana un pressupost elevat (cada execució fins a {minutes} minuts i {times} vegades les instruccions habituals): instal·la’l amb `allowHeavy: true` quan l’usuari hi estigui d’acord
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	«{_1}» demana un pressupost elevat (cada execució fins a {minutes} minuts i {times} vegades les instruccions habituals): una persona l’ha d’aprovar a l’aplicació d’escriptori, o passa `allowHeavy: true` en una sessió iniciada amb --allow-plugin-grants
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Instal·la «{name}», que demana aquests permisos?
 	ID: {id}	ID: {id}
@@ -5978,7 +5978,9 @@ digits	Malayalam	Malaiàlam
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	pressupost d’objectes (més de {MAX_OBJECTS} objectes de només lectura)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	el permís `{shown}` està reservat per a una API de complements posterior; aquest amfitrió no el concedeix
 @msg	unknown permission `{shown}`	permís desconegut `{shown}`
-@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	«{name}» demana els permisos {asked}: instal·la’l amb un `grant` que els enumeri quan l’usuari hi estigui d’acord
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	«{name}» demana els permisos {asked}: una persona els ha d’aprovar a l’aplicació d’escriptori, o passa `grant` en una sessió iniciada amb --allow-plugin-grants
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` i `allowHeavy` només tenen efecte en una sessió iniciada amb --allow-plugin-grants: aprova el complement a l’aplicació d’escriptori
+@msg	Only the person at the keyboard can approve installing a plug-in	Només la persona al teclat pot aprovar la instal·lació d’un complement
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	a «{name}» no se li ha concedit `{p}`, que la seva sortida necessita: no s’ha canviat res
 @msg	a heavy filter runs in the background, so it can't declare `commands`	un filtre pesat s’executa en segon pla, de manera que no pot declarar `commands`
 @msg	at most {MAX_COMMANDS} `commands`	com a màxim {MAX_COMMANDS} `commands`

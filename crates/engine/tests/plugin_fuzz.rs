@@ -695,6 +695,7 @@ proptest! {
             prop_assert!(shown.chars().count() <= vectorcraft_plugins::permissions::MAX_SHOWN_NAME);
         }
         let mut s = rich_session();
+        s.allow_plugin_grants_from_requests();
         let module = wat::parse_str(tpl::returning(&text, r#"{"objects":[]}"#)).unwrap();
         let data = vectorcraft_format::base64_encode(&module);
         let r = catch_quiet(|| {
@@ -862,6 +863,7 @@ proptest! {
             prop_assert!(kinds.is_empty() || (man.asks_permissions() && reads), "{}", text);
         }
         let mut s = rich_session();
+        s.allow_plugin_grants_from_requests();
         let module = wat::parse_str(tpl::module(&text, tpl::ECHO, "", 1)).unwrap();
         let data = vectorcraft_format::base64_encode(&module);
         let grant = json!(["doc.read", "doc.write", "state", "effect.render", "export.write"]);
@@ -915,6 +917,7 @@ proptest! {
         let _ = std::fs::remove_dir_all(&store.0);
         let folder = store.0.clone();
         let mut s = Session::new();
+        s.allow_plugin_grants_from_requests();
         s.attach_plugin_store(folder.clone());
         let storing = |id: &str| format!(r#"{{"id":"{id}","name":"F","kind":"filter","api":2,"permissions":["settings","cache"]}}"#);
         let grant = json!(["settings", "cache"]);

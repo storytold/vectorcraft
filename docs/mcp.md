@@ -4199,8 +4199,8 @@ selected) on top of a template. With nothing selected, `stroke.set` / `stroke.se
 arrowheads, profile…) and `graphicStyle.apply` (every fill, stroke and effect, opacity, blend mode and the link to the
 style; `add: true` stacks it) set that template instead of editing art. With the Appearance panel's New Art Has Basic
 Appearance on (the default), a `select.*` command or `layer.target` that changes the selection loads the proxies and
-the weight from it: only a paint or weight the selected objects share, and art without paint (a placed image) changes
-nothing. With the option off (`appearance.setNewArtBasic {on: false}`, the preference `newArtBasic`) new art takes the
+the weight from it: only a paint or weight the selected objects share, and art without paint (a placed image that isn't
+colorized) changes nothing. With the option off (`appearance.setNewArtBasic {on: false}`, the preference `newArtBasic`) new art takes the
 whole appearance of the last selected object. `appearance.newArt` reports what the next object gets; `paint.default`
 resets it.
 `appearance.setNewArtBasic` rejects an `on` value that is not a boolean. Omitting `on` toggles the current preference.
@@ -5554,7 +5554,7 @@ dictionaries (the standard ones are values in `systemdict`; `dictstack`, `intern
 intervals share storage, resources (categories made from `Generic`, `resourceforall`), executable filters (`cvx exec`
 runs their data; `flushfile` skips it), axial and radial shadings and shading patterns (gradients), images and image
 masks (data in the file through ASCII85, hex, run-length, Flate, LZW or DCT filters, or from procedures), and type as
-point type in the font the file names (embedded font programs are skipped). In a file in Illustrator's own format
+point type in the font the file names (embedded Type 1 and Type 42 fonts' characters and widths come from the font program they carry, and the show operators' spacing along the baseline is kept as tracking, while spacing that moves characters off it (`yshow`, `xyshow`) makes a text object per character; CID-keyed fonts draw the glyphs of the Type 0 and Type 2 CIDFonts the file carries, CIDFonts in a FontSet's Compact Font Format data included). In a file in Illustrator's own format
 (Illustrator 3–8 `.ai` and their EPS, written with the prolog that defines its operators) the groups it writes (`u` …
 `U`) come in as groups, nested as they were; clips and groups nest at most 128 deep. The artboard is the `%%HiResBoundingBox`
 (else `%%BoundingBox`; a letter page without one). A program the interpreter can't run (an operator it doesn't know,
@@ -5890,6 +5890,40 @@ returns the new value.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"hyphenate":true,"wordsLongerThan":8,"hyphenLimit":2}}}
+```
+
+
+## Spelling
+
+`text.spelling.check {ids?}` lists the words of the document's type that its dictionaries don't know: every
+visible, unlocked type object in paint order, or those in `ids` (and in the groups `ids` names). Each run is checked
+in its Character panel Language (English when it has none) by craft-proof, one paragraph at a time; a language without
+a spelling dictionary marks nothing. English words come from the first dictionary craft-proof finds: a Hunspell
+dictionary in the user's dictionaries folder, the SCOWL dictionary for that English built in from craft-i18n, a
+system Hunspell dictionary, and last the public-domain Moby word list built into craft-proof. Words in capitals, words with digits and web addresses are taken as correct. The result is
+`{words: [{id, start, end, word, lang}], more}`: `start` and `end` are byte offsets in the type object's text, the
+ones `text.editRange` takes, so `text.editRange {id, start, end, insert}` changes a word as one undo step. At most
+10,000 words are listed; `more` is `true` when there were more. `text.spelling.suggest {word, max?, lang?}` gives
+the words the dictionary of `lang` (default English) suggests instead of `word`, best first, at most `max` (1 to 20,
+default 5). Both only read the document.
+
+```json
+{"name":"run_command","arguments":{"command":"text.spelling.check","params":{}}}
+{"name":"run_command","arguments":{"command":"text.spelling.suggest","params":{"word":"drawng","lang":"en"}}}
+```
+
+The custom dictionary holds words every check takes as right, in every language. `text.spelling.addWord {word}`
+adds one (Check Spelling's Add; one word of at most 64 characters, kept in lower case) and says whether it was new;
+`text.spelling.removeWord {word}` deletes one and `text.spelling.changeWord {word, to}` replaces one (Edit Custom
+Dictionary's Delete and Change; an error when `word` isn't there); `text.spelling.dictionary` lists them, sorted. The
+desktop app and `vectorcraft-cli` (its `mcp` and `run` sessions) keep them in `Custom Dictionary.txt` next to the
+preferences, one word per line; without preferences (`VECTORCRAFT_NO_PREFS`, the web app) they last until the app
+closes. `text.spelling.ignoreAll {word}` is Ignore All: the active document's checks skip the word, in
+any case, while the document is open. It is not saved and not an undo step.
+
+```json
+{"name":"run_command","arguments":{"command":"text.spelling.addWord","params":{"word":"VectorCraft"}}}
+{"name":"run_command","arguments":{"command":"text.spelling.ignoreAll","params":{"word":"Zqvwkx"}}}
 ```
 
 
@@ -6703,7 +6737,7 @@ them again at startup (`plugin.remove` deletes them there):
 schema, defaults). An object filter runs on the selected paths and compound paths with `plugin.run {id, params}` (one
 undo step; it may change, delete or add objects, and the result is selected). A filter whose manifest lists `inputs`
 (`type`, `image`, `symbolInstance`; `inputs` in its `plugin.list` entry) also lists `doc.read` in its `permissions`, so
-`plugin.install` needs `grant`. It is also given the selected objects of those kinds to read, in paint order from the
+installing it needs a person's approval. It is also given the selected objects of those kinds to read, in paint order from the
 bottom, with at most 16 MiB of pixels and 16 MiB of type runs over one run (an object that doesn't fit what the objects
 before it left comes with `pixelsOmitted` or `truncated`; an image that reaches the decoder counts toward the pixels
 even when decoding fails). Every object counts toward the input's half of the plug-in's memory cap, ids, bounds,
@@ -6734,15 +6768,26 @@ on the desktop a picked file is read off the UI thread and the reply is `{backgr
 `pluginImport` dialog. `params` holds the importer's parameters (their defaults when
 omitted). A failing plug-in returns an error and leaves the document as it was (an export writes
 no file, and an import opens no document). A filter whose manifest asks for a heavy budget (minutes rather than a minute, `budget: "heavy"` in its
-`plugin.inspect {path | dataBase64}` entry) installs only with `allowHeavy: true`: ask the user first. `plugin.run`
+`plugin.inspect {path | dataBase64}` entry) needs a person's approval, and `plugin.install` refuses `allowHeavy: true`
+from a request. `plugin.run`
 runs it where it is called, so the call may take minutes; `notifications/cancelled` stops it.
 A plug-in whose manifest lists permissions (`permissions` in its `plugin.inspect` entry, with `needsApproval: true`)
-installs only with `grant: [permission]` listing every one of them: show the user the list and ask first, and pass
-the entry's `hash` as `hash` so that a module that changed since is refused. Without `grant`, `plugin.install` returns
-an error naming the permissions needed. The grant is kept with the module's hash and covers only that module: the
-same bytes install again without `grant`, and a module with other bytes has `needsApproval: true` and needs a new
-`grant` even when it lists the same permissions. `plugin.install` does not check that a person approved `grant`: it
-trusts the client that sends it. `plugin.remove` forgets the grant. A
+needs a person's approval too, and `plugin.install` refuses `grant: [permission]` from a request. With a desktop
+app connected, `ui.installPlugin` opens the approval dialog and returns `{pending: "pluginInstall"}`; `answer_dialog`,
+`ui.dialog.confirm` and injected input can't confirm it. A `vectorcraft-cli mcp` started with `--allow-plugin-grants`
+accepts `grant` and `allowHeavy` from any request, in that session only (headless; it can't be combined with
+`--connect`, `--automation-read-root` or `--automation-write-root`). A server confined to folders has no plug-in
+store, so it reads no `grants.json`, and a module that lists permissions or asks for a heavy budget does not install
+there. Without `--allow-plugin-grants` and without a recorded grant for the module, `plugin.install` returns an error
+naming the permissions needed. With `VECTORCRAFT_NO_PREFS` set there is no store, and a `grant` accepted under the
+flag lasts for that session only. In other sessions the approval, or a `grant` accepted under the flag, is kept with the module's
+hash, counts as approved in later sessions and in the desktop app, and covers only that module: the
+same bytes install again without one, also from a headless session that reads the same `grants.json`, and a module
+with other bytes has `needsApproval: true` and needs a new one even when it lists the same permissions. `plugin.remove`
+forgets the approval, and so does installing a module that lists no permissions under that id: the earlier bytes then
+need a new approval. A refused install keeps the grant. A failed write of the module to the plug-in store leaves the
+grant in the store. A stored module that is disabled, or not read in Safe Mode, keeps the grant for its id. When
+`plugin.remove` can't remove the grant from the plug-in store, it returns an error and the plug-in stays installed. A
 filter without `doc.write` or `state` that returns output needing them gets an error and the document is unchanged.
 A plug-in of API level 2 (`api: 2` in its entry) that lists `progress` may report its progress, see Cancel and write
 log lines: `notifications/cancelled` makes its `vc_cancelled` return 1, and its log lines go to the server's log

@@ -5913,7 +5913,7 @@ axis	Y Axis	Y tengely
 @msg	Running “{name}”…	Futtatás: „{name}”…
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	az élő effektus a dokumentum rajzolása közben fut, ezért nem lehet `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	az exportáló bővítmény mindig az exportálás keretét kapja: hagyd ki a `budget` kulcsot
-@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	a(z) „{_1}” nagy számítási keretet kér (futásonként legfeljebb {minutes} perc és a szokásos utasításszám {times}-szorosa): telepítsd az `allowHeavy: true` megadásával, miután a felhasználó beleegyezett
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	a(z) „{_1}” nagy számítási keretet kér (futásonként legfeljebb {minutes} perc és a szokásos utasításszám {times}-szorosa): egy személynek jóvá kell hagynia az asztali alkalmazásban, vagy add meg az `allowHeavy: true` értéket egy --allow-plugin-grants kapcsolóval indított munkamenetben
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Telepíted a(z) „{name}” bővítményt, amely ezeket az engedélyeket kéri?
 	ID: {id}	Azonosító: {id}
@@ -5953,7 +5953,9 @@ axis	Y Axis	Y tengely
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	objektumkeret (több mint {MAX_OBJECTS} csak olvasható objektum)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	a(z) `{shown}` engedély egy későbbi bővítmény-API számára van fenntartva; ez a gazdaprogram nem adja meg
 @msg	unknown permission `{shown}`	ismeretlen engedély: `{shown}`
-@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	a(z) „{name}” a következő engedélyeket kéri: {asked}; telepítsd egy őket felsoroló `grant` értékkel, ha a felhasználó beleegyezik
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	a(z) „{name}” a következő engedélyeket kéri: {asked}; egy személynek jóvá kell hagynia őket az asztali alkalmazásban, vagy add meg a `grant` értéket egy --allow-plugin-grants kapcsolóval indított munkamenetben
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	a `grant` és az `allowHeavy` csak --allow-plugin-grants kapcsolóval indított munkamenetben érvényes: hagyd jóvá a bővítményt az asztali alkalmazásban
+@msg	Only the person at the keyboard can approve installing a plug-in	Bővítmény telepítését csak a billentyűzetnél ülő személy hagyhatja jóvá
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	a(z) „{name}” nem kapta meg a(z) `{p}` engedélyt, amelyre a kimenetének szüksége van: semmi sem változott
 @msg	a heavy filter runs in the background, so it can't declare `commands`	a nehéz szűrő a háttérben fut, ezért nem deklarálhat `commands` értéket
 @msg	at most {MAX_COMMANDS} `commands`	legfeljebb {MAX_COMMANDS} `commands`

@@ -5925,7 +5925,7 @@ axis	Y Axis	Axe Y
 @msg	Running “{name}”…	Exécution de « {name} »…
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	un effet dynamique s’exécute pendant le tracé du document, il ne peut donc pas être `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	un module externe d’exportation reçoit toujours le budget d’une exportation : omettez `budget`
-@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	« {_1} » demande un budget de calcul important (chaque exécution jusqu’à {minutes} minutes et {times} fois les instructions habituelles) : installez-le avec `allowHeavy: true` une fois que l’utilisateur l’accepte
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	« {_1} » demande un budget de calcul important (chaque exécution jusqu’à {minutes} minutes et {times} fois les instructions habituelles) : une personne doit l’approuver dans l’application de bureau, ou passez `allowHeavy: true` dans une session démarrée avec --allow-plugin-grants
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Installer « {name} », qui demande ces autorisations ?
 	ID: {id}	ID : {id}
@@ -5965,7 +5965,9 @@ axis	Y Axis	Axe Y
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	budget mémoire (l’objet {_1} nécessite {size} octets d’entrée, il en reste {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	budget d’objets (plus de {MAX_OBJECTS} objets en lecture seule)
 @msg	unknown permission `{shown}`	autorisation inconnue `{shown}`
-@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	« {name} » demande les autorisations {asked} : installez-le avec `grant` qui les liste une fois que l’utilisateur l’accepte
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	« {name} » demande les autorisations {asked} : une personne doit les approuver dans l’application de bureau, ou passez `grant` dans une session démarrée avec --allow-plugin-grants
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` et `allowHeavy` ne prennent effet que dans une session démarrée avec --allow-plugin-grants : approuvez le module externe dans l’application de bureau
+@msg	Only the person at the keyboard can approve installing a plug-in	Seule la personne au clavier peut approuver l’installation d’un module externe
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	« {name} » n’a pas reçu `{p}`, dont sa sortie a besoin : rien n’a été modifié
 @msg	a heavy filter runs in the background, so it can't declare `commands`	un filtre lourd s’exécute en arrière-plan, il ne peut donc pas déclarer `commands`
 @msg	at most {MAX_COMMANDS} `commands`	au plus {MAX_COMMANDS} `commands`

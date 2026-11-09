@@ -5527,7 +5527,7 @@ axis	Y Axis	Вісь Y
 @msg	Running “{name}”…	Виконується «{name}»…
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	динамічний ефект виконується під час відмальовування документа, тому він не може бути `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	модуль експорту завжди отримує бюджет експорту: не вказуйте `budget`
-@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	«{_1}» запитує великий обчислювальний бюджет (кожен запуск до {minutes} хвилин і в {times} разів більше інструкцій, ніж зазвичай): встановіть його з `allowHeavy: true`, коли користувач погодиться
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	«{_1}» запитує великий обчислювальний бюджет (кожен запуск до {minutes} хвилин і в {times} разів більше інструкцій, ніж зазвичай): його має схвалити людина в настільному застосунку, або передайте `allowHeavy: true` у сеансі, запущеному з --allow-plugin-grants
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Встановити «{name}», якому потрібні ці дозволи?
 	ID: {id}	ID: {id}
@@ -5567,7 +5567,9 @@ axis	Y Axis	Вісь Y
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	бюджет об’єктів (понад {MAX_OBJECTS} об’єктів лише для читання)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	дозвіл `{shown}` зарезервовано для пізнішого API модулів; цей хост його не надає
 @msg	unknown permission `{shown}`	невідомий дозвіл `{shown}`
-@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	«{name}» запитує дозволи {asked}: установіть його з `grant`, де їх перелічено, коли користувач погодиться
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	«{name}» запитує дозволи {asked}: їх має схвалити людина в настільному застосунку, або передайте `grant` у сеансі, запущеному з --allow-plugin-grants
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` і `allowHeavy` діють лише в сеансі, запущеному з --allow-plugin-grants: схваліть плагін у настільному застосунку
+@msg	Only the person at the keyboard can approve installing a plug-in	Схвалити встановлення плагіна може лише людина за клавіатурою
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	«{name}» не отримав дозволу `{p}`, потрібного для його результату: нічого не змінено
 @msg	a heavy filter runs in the background, so it can't declare `commands`	важкий фільтр виконується у фоні, тому не може оголошувати `commands`
 @msg	at most {MAX_COMMANDS} `commands`	щонайбільше {MAX_COMMANDS} `commands`
