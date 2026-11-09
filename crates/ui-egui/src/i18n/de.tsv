@@ -1107,6 +1107,17 @@ font-technology	Variable	Variabel
 	Exporting {}	{} wird exportiert
 	Export…	Exportieren…
 	Extrude & Bevel…	Extrudieren und abgeflachte Kante…
+	3D (Classic)	3D (klassisch)
+	Extrude & Bevel (Classic)…	Extrudieren und abgeflachte Kante (klassisch)…
+	Surface	Oberfläche
+	Wireframe	Drahtmodell
+	No Shading	Keine Schattierung
+	Plastic	Kunststoff
+	Highlight Intensity	Glanzpunktintensität
+	Highlight Size	Glanzpunktgröße
+	Blend Steps	Angleichungsstufen
+	Shading Color	Schattierungsfarbe
+	Draw Hidden Faces	Verdeckte Flächen zeichnen
 	Eyedropper	Pipette
 	Sample Color from Screen	Farbe vom Bildschirm aufnehmen
 	This system has no screen color sampler	Dieses System hat keine Farbaufnahme vom Bildschirm

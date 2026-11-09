@@ -1131,6 +1131,17 @@ font-technology	Variable	Variables
 	Exporting {}	Exportation de {}
 	Export…	Exporter…
 	Extrude & Bevel…	Extrusion et biseautage…
+	3D (Classic)	3D (classique)
+	Extrude & Bevel (Classic)…	Extrusion et biseautage (classique)…
+	Surface	Surface
+	Wireframe	Fil de fer
+	No Shading	Sans ombrage
+	Plastic	Plastique
+	Highlight Intensity	Intensité de la brillance
+	Highlight Size	Taille de la brillance
+	Blend Steps	Étapes de transition
+	Shading Color	Couleur d’ombrage
+	Draw Hidden Faces	Dessiner les faces cachées
 	Eyedropper	Pipette
 	Sample Color from Screen	Prélever une couleur à l’écran
 	This system has no screen color sampler	Ce système n’a pas d’outil de prélèvement de couleur à l’écran

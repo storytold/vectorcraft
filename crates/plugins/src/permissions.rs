@@ -234,6 +234,11 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
     Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect()
 }
 
+/// Is `s` a SHA-256 as [`sha256_hex`] writes it: 64 lower-case hexadecimal digits?
+fn is_sha256_hex(s: &str) -> bool {
+    s.len() == 64 && s.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+}
+
 /// What the user approved for a plug-in: its id, the SHA-256 of the module they approved
 /// ([`sha256_hex`]) and the permissions it was granted.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -244,9 +249,10 @@ pub struct Grant {
 }
 
 impl Grant {
-    /// Does it grant every one of `wanted`?
-    pub fn covers(&self, wanted: &[Permission]) -> bool {
-        wanted.iter().all(|w| self.permissions.contains(w))
+    /// Does it grant every one of `wanted` to the module with this `id` and SHA-256 `hash`? A grant
+    /// whose own hash is not a valid SHA-256 ([`sha256_hex`]) covers nothing.
+    pub fn covers(&self, id: &str, hash: &str, wanted: &[Permission]) -> bool {
+        self.id == id && is_sha256_hex(&self.hash) && self.hash == hash && wanted.iter().all(|w| self.permissions.contains(w))
     }
 }
 
@@ -342,10 +348,37 @@ mod tests {
 
     #[test]
     fn a_grant_covers_its_permissions_and_no_more() {
-        let g = Grant { id: "a".into(), hash: String::new(), permissions: vec![Permission::DocRead, Permission::DocWrite] };
-        assert!(g.covers(&[Permission::DocRead]));
-        assert!(g.covers(&[]));
-        assert!(!g.covers(&[Permission::State]));
-        assert!(!g.covers(&[Permission::DocRead, Permission::State]));
+        let hash = sha256_hex(b"module");
+        let g = Grant { id: "a".into(), hash: hash.clone(), permissions: vec![Permission::DocRead, Permission::DocWrite] };
+        assert!(g.covers("a", &hash, &[Permission::DocRead]));
+        assert!(g.covers("a", &hash, &[]));
+        assert!(!g.covers("a", &hash, &[Permission::State]));
+        assert!(!g.covers("a", &hash, &[Permission::DocRead, Permission::State]));
+    }
+
+    #[test]
+    fn a_grant_covers_only_the_module_that_was_approved() {
+        let hash = sha256_hex(b"module");
+        let wanted = [Permission::DocRead];
+        let g = Grant { id: "a".into(), hash: hash.clone(), permissions: vec![Permission::DocRead] };
+        assert!(g.covers("a", &hash, &wanted));
+        assert!(!g.covers("b", &hash, &wanted), "another id");
+        assert!(!g.covers("a", &sha256_hex(b"other"), &wanted), "other bytes");
+        assert!(!g.covers("a", &sha256_hex(b"other"), &[]), "other bytes, even when nothing is wanted");
+    }
+
+    /// Damaged data can't stand for every module, even when the hash asked about is just as damaged.
+    #[test]
+    fn a_grant_with_an_invalid_hash_covers_nothing() {
+        let upper = sha256_hex(b"module").to_uppercase();
+        let short = "ab".repeat(31);
+        let long = "ab".repeat(33);
+        let not_hex = "g".repeat(64);
+        let wide = "é".repeat(32);
+        for hash in ["", "00", upper.as_str(), short.as_str(), long.as_str(), not_hex.as_str(), wide.as_str()] {
+            let g = Grant { id: "a".into(), hash: hash.into(), permissions: vec![Permission::DocRead] };
+            assert!(!g.covers("a", hash, &[Permission::DocRead]), "{hash:?}");
+            assert!(!g.covers("a", hash, &[]), "{hash:?}");
+        }
     }
 }

@@ -297,6 +297,68 @@ fn the_other_3d_effects_show_their_options_and_position_presets() {
     }
 }
 
+/// Extrude & Bevel (Classic): its extrude and bevel options on the Object tab, Position on the
+/// Rotation tab, and the surface with its lights, highlight, blend steps and shading color on the
+/// Lighting tab; OK keeps the edit as one undo step.
+#[test]
+fn classic_extrude_bevel_shows_its_options_and_applies_as_one_step() {
+    use vectorcraft_effects::CLASSIC_EXTRUDE;
+    let mut h = Harness::with("M100 100 L200 100 L200 200 L100 200 Z", CLASSIC_EXTRUDE, vec2(1400.0, 1000.0));
+    let before = h.app.session.doc().unwrap().doc.clone();
+    h.settle();
+    for text in ["Depth", "Cap", "Bevel Shape", "Height", "Bevel Inside"] {
+        h.rect(text);
+    }
+    assert!(!h.texts.iter().any(|(t, _)| t == "Twist" || t == "Taper" || t == "Width"), "the newer effect's options stay out");
+    assert!(!h.ctx.read_response(Id::unique(("revolve-reset", "bevelHeight"))).unwrap().enabled(), "no bevel: its height is off");
+    h.app.ui.dialog.as_mut().unwrap().fields.insert("__tab".into(), json!("rotation"));
+    h.settle();
+    for text in ["Presets", "Rotation X", "Perspective", "Off-Axis Front"] {
+        h.rect(text);
+    }
+    h.click(h.rect("Lighting").center());
+    h.settle();
+    for text in [
+        "Surface",
+        "Plastic",
+        "Light Intensity",
+        "Ambient Light",
+        "Highlight Intensity",
+        "Highlight Size",
+        "Blend Steps",
+        "Shading Color",
+        "Draw Hidden Faces",
+    ] {
+        h.rect(text);
+    }
+    assert!(h.ctx.read_response(Id::unique(("revolve-reset", "highlightSize"))).unwrap().enabled());
+    // The light gizmo is on for a lit surface.
+    assert_eq!(dialogs::revolve_gizmo::hint(h.app.ui.dialog.as_ref().unwrap()), "Drag the light, or its rings. Shift snaps to 15°.");
+    // Diffuse has no highlight; Wireframe and No Shading take no light.
+    h.app.ui.dialog.as_mut().unwrap().fields.insert("surface".into(), json!("diffuse"));
+    h.settle();
+    assert!(!h.ctx.read_response(Id::unique(("revolve-reset", "highlightSize"))).unwrap().enabled());
+    assert!(h.ctx.read_response(Id::unique(("revolve-reset", "ambient"))).unwrap().enabled());
+    h.app.ui.dialog.as_mut().unwrap().fields.insert("surface".into(), json!("wireframe"));
+    h.settle();
+    assert!(!h.ctx.read_response(Id::unique(("revolve-reset", "ambient"))).unwrap().enabled());
+    assert!(h.ctx.read_response(Id::unique(("revolve-reset", "drawHiddenFaces"))).unwrap().enabled());
+    assert_eq!(dialogs::revolve_gizmo::hint(h.app.ui.dialog.as_ref().unwrap()), "Drag values or labels. Double-click a value to type.");
+    // A custom shading color shows its color row.
+    let d = h.app.ui.dialog.as_mut().unwrap();
+    d.fields.insert("surface".into(), json!("diffuse"));
+    d.fields.insert("shadingColor".into(), json!("custom"));
+    h.settle();
+    h.rect("#000000");
+    dialogs::confirm(&mut h.app).unwrap();
+    let state = h.app.session.doc().unwrap();
+    let fx = &state.doc.node(state.selection.objects[0]).unwrap().appearance.effects[0];
+    assert_eq!(fx.id, CLASSIC_EXTRUDE);
+    assert_eq!((fx.params["surface"].clone(), fx.params["shadingColor"].clone()), (json!("diffuse"), json!("custom")));
+    h.app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(h.app.session.doc().unwrap().doc, before);
+}
+
 #[test]
 fn extrude_bevel_options_enable_with_a_bevel_shape() {
     let mut h = Harness::with("M100 100 L200 100 L200 200 L100 200 Z", vectorcraft_effects::EXTRUDE, vec2(1400.0, 1000.0));

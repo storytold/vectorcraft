@@ -2348,8 +2348,9 @@ See [Revolve](revolve.md) for the scope and limitations.
 `effect.lightingPreset {index: int, preset: "standard" | "diffuse" | "topLeft" | "right", item?, ids?, target?}`
 replaces the lighting rig and ambient of an existing Revolve, Extrude & Bevel, Inflate or Rotate
 effect. `item: null` addresses object-level effects; an item index addresses a fill/stroke's
-effects. All targets must have a 3D effect at `index`, otherwise nothing changes. The operation
-is one undo step and preserves Shading, geometry, source paint and the view.
+effects. All targets must have a 3D effect at `index`, otherwise nothing changes. Extrude & Bevel
+(Classic) has no lighting presets: a target with it at `index` is an error, nothing changes, and
+`effect.setParams` sets its lights. The operation is one undo step and preserves Shading, geometry, source paint and the view.
 
 The four original rigs use one white front light at 80% intensity. Standard keeps the existing
 default; Diffuse uses 100% Softness and 35% Ambient Light, Top Left uses Rotation 135 and Height
@@ -2390,6 +2391,33 @@ solid, false open behind), `volume` (0..100%, default 50), `bothSides`.
 All three take `rotationX/Y/Z` (degrees, -180..180, default the Off-Axis Front position -21.88/-23.4/9.06),
 `perspectiveAngle` and the lighting parameters as Revolve. See [three-d.md](three-d.md) for the Position presets,
 the scope and what differs from the public documentation.
+
+## Extrude & Bevel (Classic)
+
+`effect.apply {effect: "threeD.classicExtrude", params: {...}, ids?, item?}` is Effect › 3D and Materials ›
+3D (Classic) › Extrude & Bevel (Classic)…. It builds the same solid as `threeD.extrude` and draws its faces with the
+classic surfaces. Parameters: `depth` (points, 0..2000, default 50), `cap` (true solid, false hollow), `bevel` (`none`,
+`classic`, `rounded`, `cove`, `step`, `ogee`), `bevelHeight` (points, 1..100, default 4; the bevel is as wide as it
+is tall), `bevelInside` (false adds the bevel around the shape, true carves it into the shape), `rotationX/Y/Z` and
+`perspectiveAngle` as above, and the surface:
+
+- `surface`: `wireframe` (the edges of every face, hidden faces included, with no fill), `none` (the art's own paint,
+  unlit), `diffuse` (soft light) or `plastic` (soft light plus a highlight; the default).
+- `lightRotation`, `lightHeight`, `lightBehind` and `lightIntensity` (0..100%, default 100) place one light, or
+  `lights` holds one to ten (`intensity`, `rotation`, `height`, `behind`; their light adds up, and `color` and
+  `softness` are not used). `ambient` (0..100%, default 50) lights every face.
+- `highlightIntensity` (0..100%, default 60) and `highlightSize` (0..100%, default 90; 100 is broad) shape the Plastic
+  highlight. `blendSteps` (whole number, 1..256, default 25) is how many levels the shading is rounded to.
+- `shadingColor`: `black` (the default), `custom` (darkens toward `shadingCustom`, a `#rrggbb` color) or `none` (the
+  paint is kept and only the highlight lightens it). `drawHiddenFaces` also draws the faces turned away from the
+  viewer, behind the others.
+
+The defaults are VectorCraft's own. An unknown parameter, a number out of range, a flag that is not true or false, or
+an unknown surface or shading color is refused with an error and the document is not changed.
+
+```json
+{"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"threeD.classicExtrude","item":null,"params":{"depth":40,"bevel":"rounded","bevelHeight":6,"surface":"diffuse","blendSteps":64}}}}
+```
 
 
 ## Edit Colors and Recolor Artwork
@@ -6566,10 +6594,10 @@ runs it where it is called, so the call may take minutes; `notifications/cancell
 A plug-in whose manifest lists permissions (`permissions` in its `plugin.inspect` entry, with `needsApproval: true`)
 installs only with `grant: [permission]` listing every one of them: show the user the list and ask first, and pass
 the entry's `hash` as `hash` so that a module that changed since is refused. Without `grant`, `plugin.install` returns
-an error naming the permissions needed. The grant is kept with the module's hash; without a `Plug-ins` folder, a
-module with the same id that lists no new permission installs without `grant`. A grant kept in a `Plug-ins` folder
-covers only the module with that hash, so another module under the id needs `grant` again. `plugin.remove` forgets the
-grant. A
+an error naming the permissions needed. The grant is kept with the module's hash and covers only that module: the
+same bytes install again without `grant`, and a module with other bytes has `needsApproval: true` and needs a new
+`grant` even when it lists the same permissions. `plugin.install` does not check that a person approved `grant`: it
+trusts the client that sends it. `plugin.remove` forgets the grant. A
 filter without `doc.write` or `state` that returns output needing them gets an error and the document is unchanged.
 A plug-in of API level 2 (`api: 2` in its entry) that lists `progress` may report its progress, see Cancel and write
 log lines: `notifications/cancelled` makes its `vc_cancelled` return 1, and its log lines go to the server's log

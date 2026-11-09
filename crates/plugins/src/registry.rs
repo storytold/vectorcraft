@@ -56,11 +56,11 @@ pub fn revoke(id: &str) -> bool {
 }
 
 /// May `plugin` be installed without asking the user: does it list no permissions, or did the user
-/// already grant its id every permission it lists? A module with other bytes but no new permission
-/// needs no new approval.
+/// already grant this very module (its id and SHA-256) every permission it lists? A module with
+/// other bytes needs a new approval, even when it lists the same permissions.
 pub fn approved(plugin: &Plugin) -> bool {
     let m = plugin.manifest();
-    !m.asks_permissions() || granted(&m.id).is_some_and(|g| g.covers(&m.permissions()))
+    !m.asks_permissions() || granted(&m.id).is_some_and(|g| g.covers(&m.id, plugin.hash(), &m.permissions()))
 }
 
 /// Installs `plugin`, replacing one with the same id.
@@ -153,7 +153,7 @@ pub struct FolderReport {
 /// Installs every `*.wasm` directly in `dir` (not recursive), in file-name order. A bad module is
 /// reported and skipped, the others still load; so is a heavy one ([`crate::Budget::Heavy`]),
 /// which installs only once the user agrees, and one that lists permissions the user has not
-/// granted its id ([`approved`]).
+/// granted this very module ([`approved`]).
 #[cfg(not(target_arch = "wasm32"))]
 pub fn load_folder(dir: &std::path::Path) -> Result<FolderReport> {
     load_folder_where(dir, |_| Ok(()), approved)

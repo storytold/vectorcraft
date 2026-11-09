@@ -1102,6 +1102,17 @@ font-technology	Variable	Променливи
 	Exporting {}	Експортиране на {}
 	Export…	Експортиране…
 	Extrude & Bevel…	Избутване и фасетка…
+	3D (Classic)	3D (класически)
+	Extrude & Bevel (Classic)…	Избутване и фасетка (класически)…
+	Surface	Повърхност
+	Wireframe	Телена рамка
+	No Shading	Без засенчване
+	Plastic	Пластмаса
+	Highlight Intensity	Интензивност на отблясъка
+	Highlight Size	Размер на отблясъка
+	Blend Steps	Стъпки на преливане
+	Shading Color	Цвят на засенчването
+	Draw Hidden Faces	Изчертаване на скритите страни
 	Eyedropper	Пипета
 	Eyedropper Applies:	Пипетата прилага:
 	Eyedropper Options	Опции за пипетата
