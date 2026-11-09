@@ -178,6 +178,9 @@ pub struct Session {
     /// has inherited the selection's appearance: the documents ([`DocState::uid`]) whose newest
     /// history step takes the colors the batch finally left.
     pub(crate) batch_paint_docs: Vec<u64>,
+    /// The composite fonts (lowercase names) that the open documents defined when the font
+    /// database was last brought in step with them ([`cmd::compositefonts::sync`]).
+    pub(crate) composite_names: Vec<String>,
     /// While a command that changes nothing in the document runs (a query, or one of
     /// [`command_sets::JOURNALED_READS`]): it reads the instance of an object selected in a symbol
     /// instance's art.

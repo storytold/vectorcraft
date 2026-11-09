@@ -102,6 +102,7 @@ pub fn opens_as(name: &str) -> Option<OpensAs> {
         (vectorcraft_engine::cmd::printpresets::PRESET_EXTS, "print.presets.import", "print presets"),
         (vectorcraft_engine::cmd::perspgrid::PRESET_EXTS, "perspective.presets.import", "perspective grid presets"),
         (fileio::SCREEN_EXPORT_PRESET_EXTS, "document.exportPresets.import", EXPORT_PRESETS),
+        (vectorcraft_engine::cmd::compositefonts::EXTS, "type.compositeFonts.import", "composite fonts"),
     ];
     if vectorcraft_engine::cmd::plugin::EXTS.contains(&ext.as_str()) {
         Some(OpensAs::Plugin)
@@ -176,6 +177,8 @@ fn permission_words(name: &str) -> String {
         Some(permissions::Permission::EffectRender) => tl!("Change how the objects its effect is applied to are drawn"),
         Some(permissions::Permission::ExportWrite) => tl!("Write the document as a file in its own format"),
         Some(permissions::Permission::Progress) => tl!("Show its progress, see Cancel and write log lines"),
+        Some(permissions::Permission::Settings) => tl!("Keep settings of its own"),
+        Some(permissions::Permission::Cache) => tl!("Keep a cache of its own, which you can clear"),
         None => return permissions::display_text(name, permissions::MAX_SHOWN_FIELD),
     };
     words.to_string()
@@ -184,10 +187,11 @@ fn permission_words(name: &str) -> String {
 /// Installs the plug-in module that `module` names (`plugin.install`'s `path`, or `dataBase64`
 /// with `name`) → `plugin.install`'s result. A plug-in that lists permissions no person has granted
 /// it yet asks first, showing its name, id, version, file hash and what each permission lets it
-/// do, and so does a filter that asks for a heavy budget; OK installs it if the module still has
-/// the hash the prompt showed, Cancel installs nothing → `{pending}` while it asks. The `grant`
-/// and `allowHeavy` of a request are ignored: only the dialog's OK approves. Every text from the
-/// manifest is shown with its hidden characters escaped and its length capped
+/// do, so does a filter that asks for a heavy budget, and so does a module that would take the
+/// place of another one with its id and get its settings and cache (`replace`); OK installs it if
+/// the module still has the hash the prompt showed, Cancel installs nothing → `{pending}` while it
+/// asks. The `grant` and `allowHeavy` of a request are ignored: only the dialog's OK approves.
+/// Every text from the manifest is shown with its hidden characters escaped and its length capped
 /// ([`permissions::display_text`]).
 pub fn install_module(app: &mut VectorcraftApp, module: Value) -> Result<Value, String> {
     let given = |k: &str| module.get(k).map(|v| (k.to_string(), v.clone()));
@@ -195,7 +199,9 @@ pub fn install_module(app: &mut VectorcraftApp, module: Value) -> Result<Value, 
     let mut install = Value::Object(["path", "dataBase64", "name", "replace", "hash"].into_iter().filter_map(given).collect());
     let info = app.run("plugin.inspect", source)?;
     let (needs_grant, heavy) = (info["needsApproval"] == true, info["budget"] == "heavy");
-    if !needs_grant && !heavy {
+    // `replace: false` asks for no replacing, so only a module without `replace` asks.
+    let asks_replace = module.get("replace").is_none_or(Value::is_null) && info["needsReplace"] == true;
+    if !needs_grant && !heavy && !asks_replace {
         let r = app.run("plugin.install", install)?;
         report_installed(app, &r);
         return Ok(r);
@@ -206,6 +212,22 @@ pub fn install_module(app: &mut VectorcraftApp, module: Value) -> Result<Value, 
     }
     let shown = |k: &str, max: usize| permissions::display_text(info[k].as_str().unwrap_or_default(), max);
     let name = shown("name", permissions::MAX_SHOWN_NAME);
+    let identity = [
+        crate::i18n::fmt(tl!("ID: {id}"), &[("id", &shown("id", permissions::MAX_SHOWN_FIELD))]),
+        crate::i18n::fmt(tl!("File SHA-256: {hash}"), &[("hash", &shown("hash", 64))]),
+    ]
+    .join("\n");
+    let takes_place = tl!("This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.");
+    if asks_replace {
+        install["replace"] = json!(true);
+    }
+    // A client may pass `replace` itself, so taking another module's place alone needs no approval
+    // that only a person can give.
+    if !needs_grant && !heavy {
+        let message = crate::i18n::fmt(tl!("Install “{name}” in place of the plug-in with the same ID?"), &[("name", &name)]);
+        dialogs::confirm::ask(app, &message, &format!("{identity}\n\n{takes_place}"), "ui.installPlugin", install);
+        return Ok(json!({ "pending": dialogs::confirm::KIND }));
+    }
     let asked = info["permissions"].as_array().cloned().unwrap_or_default();
     let mut paragraphs = vec![];
     if needs_grant {
@@ -229,6 +251,9 @@ pub fn install_module(app: &mut VectorcraftApp, module: Value) -> Result<Value, 
             &[("minutes", &minutes.to_string()), ("times", &times.to_string())],
         ));
         install["allowHeavy"] = json!(true);
+    }
+    if asks_replace {
+        paragraphs.push(if needs_grant { takes_place.to_string() } else { format!("{identity}\n\n{takes_place}") });
     }
     let message = if needs_grant {
         crate::i18n::fmt(tl!("Install “{name}”, which asks for these permissions?"), &[("name", &name)])

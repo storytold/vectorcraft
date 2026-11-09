@@ -596,6 +596,30 @@ fn long_names_match_and_apply() {
     assert_eq!((out["applied"].clone(), ov), (json!(1), json!({"edit.copy": "Cmd+Alt+Shift+F11"})));
 }
 
+/// A filter plug-in's row takes an imported shortcut when the user picks it, stored under its
+/// `plugin.dialog {id}` key. A file's row with the plug-in's name does not match it by itself, and
+/// a removed plug-in is not a target.
+#[test]
+fn an_imported_shortcut_reaches_a_filter_plugin_picked_as_its_target() {
+    use vectorcraft_plugins::wat as tpl;
+    let id = "test.UI.import_filter-one";
+    let key = format!("plugin:{id}");
+    let manifest = format!(r#"{{"id":"{id}","name":"Acme Import Filter","version":"1","kind":"filter","params":{{}}}}"#);
+    vectorcraft_plugins::registry::install_bytes(&wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap()).unwrap();
+    assert!(shortcut_editor::entry(&key).is_some(), "a target the picker lists");
+    assert!(super::shortcut_import::candidates().iter().all(|c| c.id != key), "a name alone does not match it");
+
+    let mut app = app();
+    let (out, ov) = apply_rows(&mut app, "defaults", &[("Anything", "Menus", &key, "Cmd+Alt+Shift+F11")]);
+    assert_eq!(out["applied"], 1);
+    assert_eq!(ov, json!({ key.as_str(): "Cmd+Alt+Shift+F11" }), "not a binding of plugin.dialog without its id");
+    let reloaded = crate::keymap::stored::from_value(ov);
+    assert_eq!(reloaded.get(&crate::keymap::stored_key(&key)).map(<[String]>::len), Some(1), "read back under the filter's id");
+
+    vectorcraft_plugins::registry::remove(id);
+    assert!(shortcut_editor::entries().iter().all(|e| e.key != key), "a removed filter is no target");
+}
+
 /// A search in a row's target picker that matches nothing shrinks its menu to the search field
 /// and "No equivalent"; clearing the search lists every entry again, and the menu grows back to
 /// its height before the search (egui#5225). The search field stays where it was throughout.

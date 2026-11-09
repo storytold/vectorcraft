@@ -65,8 +65,8 @@ use std::sync::Arc;
 use vectorcraft_color::cms::Cms;
 use vectorcraft_color::{BlendMode, Color, Gradient, GradientKind, GradientPaint, Paint};
 use vectorcraft_doc::{
-    AppearanceItem, AreaOptions, CharPosition, CharStyle, Document, FillLayer, ImageBlob, Justify, LAYER_COLORS, LayerColor, Node, NodeKind,
-    ParaDirection, ParaStyle, PathAlign, PathEffect, StrokeLayer, TextKind, TextObject,
+    AppearanceItem, AreaOptions, CharPosition, CharStyle, CompositeFont, Document, FillLayer, ImageBlob, Justify, LAYER_COLORS, LayerColor, Node,
+    NodeKind, ParaDirection, ParaStyle, PathAlign, PathEffect, StrokeLayer, TextKind, TextObject,
 };
 use vectorcraft_effects::stroke;
 use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Rect, Shape, SubPath, Vec2};
@@ -180,6 +180,8 @@ pub fn export_legacy_ai(doc: &Document, o: &LegacyAiOptions) -> Result<LegacyAiO
     if !(board.is_finite() && board.width() > 0.0 && board.height() > 0.0) {
         return Err("the document has no artboard".into());
     }
+    // Type in the document's composite fonts is drawn in them, whether or not an app has the document open.
+    let _lent = vectorcraft_text::FontDb::global().lend_composite_fonts(&doc.composite_fonts);
     // The document is y down; art space y up from the artboard's left edge, its top on a whole point.
     let (width, height) = (board.width(), board.height());
     let top = if (height - height.round()).abs() < 1e-6 { height.round() } else { height.ceil() };

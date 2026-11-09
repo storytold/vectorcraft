@@ -67,7 +67,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Missing Fonts",
             [],
             None,
-            "{} → {fonts: [{family, style, status: missing|substitute, resolved: {family, style}}] (sorted by name; at most 1000), count, fontsNextToDocument?} the fonts the active document's type uses, in its layers and its symbols, that aren't available as named: missing (the family is unknown and the fallback family stands in) or substitute (the family is there but not the style; resolved names the stand-in), as text.fonts says. CSS generic families such as sans-serif and names longer than 256 bytes are left out. fontsNextToDocument: the Fonts folder next to the saved document (File › Package writes it), when there is one and a search may start there (not in another app's folders, such as a mail app's attachments)",
+            "{} → {fonts: [{family, style, status: missing|substitute, resolved: {family, style}}] (sorted by name; at most 1000), count, fontsNextToDocument?} the fonts the active document's type uses, in its layers and its symbols (for type in a composite font, the fonts of the parts its characters are drawn in), that aren't available as named: missing (the family is unknown and the fallback family stands in) or substitute (the family is there but not the style; resolved names the stand-in), as text.fonts says. CSS generic families such as sans-serif and names longer than 256 bytes are left out. fontsNextToDocument: the Fonts folder next to the saved document (File › Package writes it), when there is one and a search may start there (not in another app's folders, such as a mail app's attachments)",
             has_doc,
             missing
         ),
@@ -103,8 +103,8 @@ pub struct MissingFont {
     pub resolved: Option<(String, String)>,
 }
 
-/// The fonts the type of `d` uses, in its layers and its symbols, that aren't available as named
-/// (sorted by family and style, each once whatever version its type names; at most 1000). CSS generic families such as `sans-serif`
+/// The fonts the type of `d` uses, in its layers and its symbols (a composite font's parts, those
+/// its characters are drawn in, in place of its name), that aren't available as named (sorted by family and style, each once whatever version its type names; at most 1000). CSS generic families such as `sans-serif`
 /// ([`GENERIC_FAMILIES`]) and names longer than 256 bytes are left out.
 pub fn missing_fonts(d: &Document) -> Vec<MissingFont> {
     let db = FontDb::global();

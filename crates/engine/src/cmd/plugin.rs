@@ -27,7 +27,10 @@
 //! `vc_cancelled` and `vc_log` ([`vectorcraft_plugins::host`]): run inside a
 //! [`vectorcraft_doc::cancel::scope`] (the app's heavy filters and background exports), its
 //! progress goes to the scope's sink and it sees the scope's Cancel; its log lines go to the log
-//! under its id.
+//! under its id. One that lists `settings` or `cache` may keep settings and a cache of its own
+//! (`vc_settings_*`, `vc_cache_*`), in the plug-in store under its id ([`crate::store`]):
+//! `plugin.clearCache` empties the cache, `plugin.list` and `plugin.info` give its size
+//! (`cacheBytes`), replacing the plug-in keeps both and `plugin.remove` deletes them.
 
 use std::sync::{Arc, Mutex};
 
@@ -144,7 +147,7 @@ impl FilterRun {
         let st = s.doc()?;
         // While an object of a dynamic symbol instance's art is selected, the selection is refused,
         // as `selected_roots` refuses it.
-        let selected = match ids_param(p, "ids") {
+        let selected = match ids_param(p, "ids", C)? {
             Some(ids) => ids,
             None => {
                 super::edit::refuse_symbol_part(s)?;
@@ -382,17 +385,31 @@ impl Session {
     }
 }
 
+/// Would installing `plugin` take another module's place: one installed with its id and other
+/// bytes, or, with none installed, the settings and cache the plug-in store keeps for its id?
+fn takes_over(s: &Session, plugin: &Plugin) -> bool {
+    match registry::get(plugin.id()) {
+        Some(installed) => installed.hash() != plugin.hash(),
+        None => s.has_plugin_storage(plugin.id()),
+    }
+}
+
 /// `plugin.install`: loads and checks the module, refuses `grant` and `allowHeavy` that neither an
 /// [`InstallApproval`] for this module nor the session allows, one that asks for a heavy budget
 /// unless `allowHeavy` says a person agreed, one that lists permissions no person has granted this
-/// very module unless `grant` lists them all, and one whose SHA-256 isn't the `hash` given; records
+/// very module unless `grant` lists them all, one that would take another module's place
+/// ([`takes_over`]) unless `replace` is true, and one whose SHA-256 isn't the `hash` given; records
 /// the grant with the module's hash, keeps it for the next start and installs it → its
 /// `plugin.list` entry.
 fn install(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "plugin.install";
     // One use: spent whatever this install does.
     let approval = s.plugin_install_approval.take();
-    let (replace, allow_heavy) = (switch_or(p, "replace", true, C)?, switch_or(p, "allowHeavy", false, C)?);
+    let replace = match p.get("replace") {
+        None | Some(Value::Null) => None,
+        Some(_) => Some(switch_or(p, "replace", false, C)?),
+    };
+    let allow_heavy = switch_or(p, "allowHeavy", false, C)?;
     let grant = grant_param(C, p)?;
     let (plugin, bytes) = load_given(C, p)?;
     // `hash` pins the module the user was shown: one with other bytes is refused.
@@ -401,8 +418,20 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
     {
         return Err(bad(C, "the module doesn't have the SHA-256 `hash` gives: nothing was installed"));
     }
-    if !replace && registry::get(plugin.id()).is_some() {
+    if replace == Some(false) && registry::get(plugin.id()).is_some() {
         return Err(bad(C, format!("a plug-in with id {:?} is already installed", plugin.id())));
+    }
+    // Another module under the id gets the settings and cache kept for it: whoever installs it asks
+    // the user first.
+    if replace != Some(true) && takes_over(s, &plugin) {
+        let name = permissions::display_text(&plugin.manifest().name, permissions::MAX_SHOWN_NAME);
+        return Err(bad(
+            C,
+            format!(
+                "“{name}” is another module than the plug-in with id {:?} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees",
+                plugin.id()
+            ),
+        ));
     }
     // `grant` and `allowHeavy` say that a person agreed, and a request alone can't say that.
     let approval = approval.filter(|a| a.covers(&plugin));
@@ -437,17 +466,23 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
             ),
         ));
     }
-    let new_grant = m.asks_permissions().then(|| Grant { id: m.id.clone(), hash: plugin.hash().to_string(), permissions: wanted });
-    if let Some(g) = &new_grant {
+    // Installed plug-ins stay installed after a restart (#2541). The module is written first and its
+    // grant only once it is there; when the grant can't be written, the store gets the module it
+    // held back. A failed write of that module is only logged, and the grant then doesn't cover
+    // the new module. A stored module that can't be read back isn't replaced by one that needs a
+    // grant.
+    let previous = s.stored_plugin_bytes(plugin.id());
+    let mut stored = (previous.is_ok() || !m.asks_permissions()) && s.store_plugin(plugin.id(), &bytes);
+    if m.asks_permissions() {
+        let g = Grant { id: m.id.clone(), hash: plugin.hash().to_string(), permissions: wanted };
         registry::grant(g.clone());
+        if stored && !s.store_grant(&m.id, Some(g)) {
+            s.put_back_plugin(plugin.id(), previous.ok().flatten().as_deref());
+            stored = false;
+        }
     }
-    // Installed plug-ins stay installed after a restart (#2541).
-    let stored = s.store_plugin(plugin.id(), &bytes);
-    // A stored grant names one module: when this one could not replace the stored file, the file
-    // keeps the grant it has.
-    if stored && let Some(g) = new_grant {
-        s.store_grant(&m.id, Some(g));
-    }
+    // It gets the settings and cache kept for its id.
+    s.attach_plugin_storage(plugin.id());
     // Installing a disabled plug-in again (an updated version) turns it on for the next launch too,
     // also when it is disabled by its stored file alone (it stopped a launch while loading). When
     // the new version could not replace the stored file, the old one stays disabled.
@@ -462,15 +497,17 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
     if changed {
         s.store_disabled_plugins();
     }
-    Ok(describe(&registry::install(plugin)))
+    Ok(describe_installed(&registry::install(plugin)))
 }
 
-/// `plugin.inspect`: what installing the module would install, without installing it, and whether
-/// that needs the user to grant its permissions first (`needsApproval`).
+/// `plugin.inspect`: what installing the module would install, without installing it, whether that
+/// needs the user to grant its permissions first (`needsApproval`) and whether it would take
+/// another module's place (`needsReplace`).
 fn inspect(s: &mut Session, p: &Value) -> Result<Value> {
     load_given("plugin.inspect", p).map(|(plugin, _)| {
         let mut v = describe(&plugin);
         v["needsApproval"] = json!(!s.plugin_approved(&plugin));
+        v["needsReplace"] = json!(takes_over(s, &plugin));
         v
     })
 }
@@ -541,6 +578,9 @@ fn load_folder(s: &Session, folder: &str) -> Value {
     };
     match registry::load_folder_where(std::path::Path::new(folder), allow, s.plugin_approver()) {
         Ok(r) => {
+            for id in &r.loaded {
+                s.attach_plugin_storage(id);
+            }
             if r.disabled_changed {
                 s.store_disabled_plugins();
             }
@@ -572,11 +612,18 @@ fn reload(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(report)
 }
 
+/// [`describe`] for an installed plug-in, with the bytes its cache holds (`cacheBytes`).
+fn describe_installed(p: &Plugin) -> Value {
+    let mut v = describe(p);
+    v["cacheBytes"] = json!(registry::storage(p.id()).map_or(0, |st| st.cache_bytes()));
+    v
+}
+
 fn list(_: &mut Session, _: &Value) -> Result<Value> {
     let folder = FOLDER.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|(_, _, r)| r.clone());
     let disabled: Vec<Value> = safe_mode::disabled().iter().map(safe_mode::Item::to_json).collect();
     Ok(
-        json!({"plugins": registry::list().iter().map(|p| describe(p)).collect::<Vec<_>>(), "folder": folder, "safeMode": safe_mode::active(), "disabled": disabled}),
+        json!({"plugins": registry::list().iter().map(|p| describe_installed(p)).collect::<Vec<_>>(), "folder": folder, "safeMode": safe_mode::active(), "disabled": disabled}),
     )
 }
 
@@ -631,7 +678,7 @@ fn set_enabled(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn info(_: &mut Session, p: &Value) -> Result<Value> {
     let plugin = plugin_by_id("plugin.info", p)?;
-    let mut v = describe(&plugin);
+    let mut v = describe_installed(&plugin);
     v["manifest"] = serde_json::to_value(plugin.manifest()).unwrap_or(Value::Null);
     v["defaults"] = Value::Object(plugin.manifest().defaults());
     v["lastError"] = json!(effect::last_error(plugin.id()));
@@ -640,15 +687,48 @@ fn info(_: &mut Session, p: &Value) -> Result<Value> {
 
 fn remove(s: &mut Session, p: &Value) -> Result<Value> {
     let id = str_param(p, "id").ok_or_else(|| bad("plugin.remove", "missing `id`"))?;
+    let installed = registry::get(id).is_some();
+    // Settings and cache the store keeps for an id that isn't installed are deleted too.
+    let stored = !installed && vectorcraft_plugins::manifest::valid_id(id) && s.has_plugin_storage(id);
+    // Its settings and cache go first: when they can't be moved aside, the plug-in stays installed,
+    // as it was, and a second `plugin.remove` tries again.
+    if (installed || stored)
+        && let Err(e) = s.remove_plugin_storage(id)
+    {
+        if installed {
+            s.attach_plugin_storage(id);
+        }
+        return Err(EngineError::Other(e.to_string()));
+    }
     // Installed again, it asks again.
     registry::revoke(id);
     s.store_grant(id, None);
     s.unstore_plugin(id);
-    if registry::remove(id) { Ok(json!({"removed": id})) } else { Err(err(vectorcraft_plugins::Error::NotFound(id.into()))) }
+    if !stored && (!installed || !registry::remove(id)) {
+        return Err(err(vectorcraft_plugins::Error::NotFound(id.into())));
+    }
+    Ok(json!({"removed": id}))
+}
+
+/// `plugin.clearCache`: empties the cache of plug-in `id`, else of every installed plug-in →
+/// `{cleared: [id], bytesFreed}`. Settings stay.
+fn clear_cache(_: &mut Session, p: &Value) -> Result<Value> {
+    let plugins = match p.get("id").filter(|v| !v.is_null()) {
+        Some(_) => vec![plugin_by_id("plugin.clearCache", p)?],
+        None => registry::list(),
+    };
+    let (mut cleared, mut freed) = (Vec::new(), 0_u64);
+    for plugin in plugins {
+        if let Some(st) = registry::storage(plugin.id()) {
+            freed += st.clear_cache().map_err(|e| EngineError::Other(e.to_string()))?;
+        }
+        cleared.push(plugin.id().to_string());
+    }
+    Ok(json!({"cleared": cleared, "bytesFreed": freed}))
 }
 
 /// This module's commands: `plugin.list`, `.info`, `.run`, `.install`, `.inspect`, `.remove`,
-/// `.reload`, `.safeMode` and `.setEnabled`.
+/// `.reload`, `.clearCache`, `.safeMode` and `.setEnabled`.
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         cmd!(
@@ -656,7 +736,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "List Plug-ins",
             [],
             None,
-            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's format id, plugin.<id>, for document.export, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines), hash (the module's SHA-256), api (the plug-in API level it was built for, 1 or 2)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}]} | null, safeMode: bool (no plug-in loads or runs, see plugin.safeMode), disabled: [{id, file, name, label}] (turned off for the next launch, see plugin.setEnabled)}",
+            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's format id, plugin.<id>, for document.export, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines; settings: it may keep settings of its own; cache: it may keep a cache of its own), hash (the module's SHA-256), api (the plug-in API level it was built for, 1 or 2), cacheBytes (the bytes its cache holds; see plugin.clearCache)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}]} | null, safeMode: bool (no plug-in loads or runs, see plugin.safeMode), disabled: [{id, file, name, label}] (turned off for the next launch, see plugin.setEnabled)}",
             always,
             list
         ),
@@ -683,7 +763,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Install Plug-in",
             [],
             None,
-            "{path: a .wasm file (desktop) | dataBase64: the module (+ name?: shown as its source), replace?: bool (true: a plug-in with the same id is replaced), name?: file name (with dataBase64), allowHeavy?: bool (a filter whose manifest asks for a heavy budget, budget \"heavy\" in plugin.inspect, installs only with it), grant?: [permission] (a plug-in whose manifest lists permissions, needsApproval in plugin.inspect, installs only when grant holds every one of them; the grant is recorded with the module's hash and covers only that module, so a module with other bytes needs a new grant even when it lists the same permissions; with a plug-in store attached, only the grants kept there count; a request's allowHeavy and grant are refused unless the session was started with vectorcraft-cli --allow-plugin-grants: in the desktop app a person approves the install, see ui.installPlugin, and a module whose hash a person already approved needs no grant), hash?: string (the module's SHA-256 as plugin.inspect gave it: a module with other bytes is refused)} validate and install a WebAssembly plug-in for this session → its plugin.list entry",
+            "{path: a .wasm file (desktop) | dataBase64: the module (+ name?: shown as its source), replace?: bool (true once the user agreed: a module with other bytes than the plug-in installed with its id, or with none installed, one whose id has settings or a cache in the plug-in store, installs only with it, takes that plug-in's place and gets its settings and cache; false: one whose id is installed is refused; left out, the same module installs again), name?: file name (with dataBase64), allowHeavy?: bool (a filter whose manifest asks for a heavy budget, budget \"heavy\" in plugin.inspect, installs only with it), grant?: [permission] (a plug-in whose manifest lists permissions, needsApproval in plugin.inspect, installs only when grant holds every one of them; the grant is recorded with the module's hash and covers only that module, so a module with other bytes needs a new grant even when it lists the same permissions; with a plug-in store attached, only the grants kept there count; a request's allowHeavy and grant are refused unless the session was started with vectorcraft-cli --allow-plugin-grants: in the desktop app a person approves the install, see ui.installPlugin, and a module whose hash a person already approved needs no grant), hash?: string (the module's SHA-256 as plugin.inspect gave it: a module with other bytes is refused)} validate and install a WebAssembly plug-in for this session → its plugin.list entry",
             always,
             install
         ),
@@ -692,11 +772,28 @@ pub fn specs() -> Vec<CommandSpec> {
             "Inspect Plug-in",
             [],
             None,
-            "{path: a .wasm file (desktop) | dataBase64: the module, name?: the file name shown as its source (with dataBase64)} validate a WebAssembly plug-in without installing it → the plugin.list entry it would have, plus needsApproval: bool (true when it lists permissions no person has granted this very module, its bytes included: it then needs a person's approval, see plugin.install)",
+            "{path: a .wasm file (desktop) | dataBase64: the module, name?: the file name shown as its source (with dataBase64)} validate a WebAssembly plug-in without installing it → the plugin.list entry it would have, plus needsApproval: bool (true when it lists permissions no person has granted this very module, its bytes included: it then needs a person's approval, see plugin.install) and needsReplace: bool (true when it would take the place of another module with its id: plugin.install then needs replace: true)",
             always,
             inspect
         ),
-        cmd!(query "plugin.remove", "Remove Plug-in", [], None, "{id} uninstall a plug-in (its live effects then leave the geometry as it is) → {removed}", always, remove),
+        cmd!(
+            query "plugin.remove",
+            "Remove Plug-in",
+            [],
+            None,
+            "{id} uninstall a plug-in (its live effects then leave the geometry as it is) and delete the settings and cache it kept (when their folder can't be moved aside, the command fails and the plug-in stays installed); for an id that isn't installed, deletes the settings and cache the plug-in store still keeps for it → {removed}",
+            always,
+            remove
+        ),
+        cmd!(
+            query "plugin.clearCache",
+            "Clear Plug-in Cache",
+            [],
+            None,
+            "{id?} delete every entry in the cache of plug-in id (default: of every installed plug-in); its settings stay → {cleared: [id], bytesFreed}",
+            always,
+            clear_cache
+        ),
         cmd!(
             query "plugin.reload",
             "Reload Plug-ins",

@@ -135,12 +135,19 @@ fn swapped_out(app: &VectorcraftApp, id: &str) -> bool {
     enabled(app, "object.envelope.release") != reset
 }
 
+/// Menu items shown only with Preferences › Type › Show East Asian Options on: Type › Composite
+/// Fonts….
+fn east_asian_hidden(app: &VectorcraftApp, id: &str) -> bool {
+    id == crate::dialogs::composite_fonts::COMMAND && !app.session.prefs.show_east_asian_options
+}
+
 /// How the menus show item `id` (params `p`) now: (enabled, checked: `Some` for an item that is on
-/// or off), or `None` while they leave it out: an empty slot ([`hidden_when_disabled`]) or an item
-/// another stands in for ([`swapped_out`]).
+/// or off), or `None` while they leave it out: an empty slot ([`hidden_when_disabled`]), an item
+/// another stands in for ([`swapped_out`]) or an East Asian item with those options hidden
+/// ([`east_asian_hidden`]).
 pub fn shown_state(app: &VectorcraftApp, id: &str, p: &Value) -> Option<(bool, Option<bool>)> {
     let en = enabled(app, id) && (id != crate::addons::select::link_status::COMMAND || crate::addons::select::link_status::enabled(app, p));
-    if (!en && hidden_when_disabled(id)) || swapped_out(app, id) {
+    if (!en && hidden_when_disabled(id)) || swapped_out(app, id) || east_asian_hidden(app, id) {
         return None;
     }
     Some((en, checked(app, id, p)))
