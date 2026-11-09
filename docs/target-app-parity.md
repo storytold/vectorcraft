@@ -1903,6 +1903,7 @@ Edit › Copy and Cut put the selected ruler guides on the clipboard, with the s
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-09 | minor | Canvas: a 3D effect changed on type or a group redraws where its solid was, measured by the effect's art through the renderer that drew the frame; exports and Object › Rasterize take the solid of 3D type; Fit to Artwork Bounds and per-artboard SVG export measure all artboards through one renderer; a 3D effect on a fill or stroke that builds nothing no longer overflows the stack (evidence in Feature revisions). Scores and estimates unchanged. |
 | 2026-11-09 | minor | Symbols: on-canvas dynamic part appearance takes gradient/pattern fill and stroke and opacity/blend; evidence updated; area ~87% → ~88%; strokes remaining no longer lists Overlap/auto corners. |
 | 2026-11-09 | minor | Strokes/brushes: Art brush Overlap and Pattern brush auto corners removed from remaining (evidence already covered them); symbols remaining clarified for dynamic on-canvas beyond solid fill/stroke; scores and hours unchanged. |
 | 2026-11-09 | minor | Interim macOS canvas cursor delivery (#2292): existing artwork in aligned 1×/2× AppKit representations, visible system fallback and host-owned restoration. Headless routing, bitmap and ownership coverage; native timing, menus, focus/handback, mixed displays, Spotlight and full-screen Spaces remain unverified. Scores and estimates unchanged. |
