@@ -257,7 +257,15 @@ impl Session {
 
     /// Give `t` the persistent options stored for it in `prefs`.
     fn restore_tool_settings(prefs: &Prefs, t: &mut dyn Tool) {
+        Self::restore_stores(prefs, t, |_| true);
+    }
+
+    /// Give `t` the persistent options stored for it in `prefs`, from the stores `wanted` accepts.
+    fn restore_stores(prefs: &Prefs, t: &mut dyn Tool, wanted: impl Fn(&str) -> bool) {
         for (store, keys) in settings::stores(t.id()) {
+            if !wanted(store) {
+                continue;
+            }
             let Some(saved) = prefs.tool_settings.get(store) else { continue };
             for k in keys {
                 if let Some(v) = saved.get(*k) {
@@ -267,6 +275,7 @@ impl Session {
         }
         // Alt switches the Pencil, Paintbrush or Blob Brush to Smooth, using Smooth Tool Options' Fidelity.
         if matches!(t.id(), "pencil" | "paintbrush" | "blobBrush")
+            && wanted("smooth")
             && let Some(v) = prefs.tool_settings.get("smooth").and_then(|s| s.get("fidelity"))
         {
             t.set_option("smoothFidelity", v);
@@ -907,7 +916,10 @@ impl Session {
                 }
                 Self::restore_tool_settings(&self.prefs, lender);
             }
-            Self::restore_tool_settings(&self.prefs, self.tool.as_mut());
+            // Only the stores it shares with the tool set: the active tool's own options stay as they
+            // are, also in the middle of a drag that Escape can cancel.
+            let set = other.id();
+            Self::restore_stores(&self.prefs, self.tool.as_mut(), |store| settings::stores(set).any(|(s, _)| s == store));
         }
         out
     }
