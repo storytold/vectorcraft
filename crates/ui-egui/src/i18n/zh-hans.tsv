@@ -5458,6 +5458,10 @@ lighting	Light	光源
 @msg	unknown parameter `{key}`; the command takes: {keys}	未知参数 `{key}`；该命令接受：{keys}
 	Load EPS into Clipboard	将 EPS 载入剪贴板
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} 像素的图像过大，无法绘制
+@msg	the JPEG XL file is cut short	JPEG XL 文件不完整
+@msg	the JPEG XL container is too large to read	JPEG XL 容器过大，无法读取
+@msg	CMYK JPEG XL images can't be read	无法读取 CMYK 模式的 JPEG XL 图像
+@msg	the JPEG XL file can't be read: {e}	无法读取 JPEG XL 文件：{e}
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}：不是 PNG、JPEG、WebP、TIFF 或 BMP 图像
 @msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	图像为 {iw} × {ih} 像素，而画板在该宽度下为 {rw} × {rh} 像素：两者的比例不同
 @msg	`threshold` must be a number from 0 to 1	`threshold` 必须是 0 到 1 之间的数字
