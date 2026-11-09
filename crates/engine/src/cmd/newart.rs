@@ -217,13 +217,15 @@ impl Session {
     /// After a command changed the selection, with New Art Has Basic Appearance on: the fill and
     /// stroke proxies and the weight take what the selection shows in them, so new art looks like
     /// it. A paint the selected objects don't share (a "?" proxy) stays as it was, and art without
-    /// paint (a placed image, whose None would make new art invisible) changes nothing. The
-    /// template is left alone, and without a stroke to show the weight stays too.
+    /// paint (a placed image that isn't colorized, whose None would make new art invisible) changes
+    /// nothing. The template is left alone, and without a stroke to show the weight stays too.
     pub(crate) fn load_selection_paints(&mut self) {
         if !self.prefs.new_art_basic {
             return;
         }
-        let has_paint = self.proxy_source(false).is_some_and(|(n, _)| matches!(n.kind, NodeKind::Text(_)) || !n.appearance.items.is_empty());
+        let has_paint = self
+            .proxy_source(false)
+            .is_some_and(|(n, _)| matches!(n.kind, NodeKind::Text(_)) || !n.appearance.items.is_empty() || n.extras().colorize.is_some());
         if !has_paint {
             return;
         }

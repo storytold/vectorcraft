@@ -173,6 +173,22 @@ fn blend_recolors_a_colorized_gray_image_without_alpha() {
     assert_eq!(colorize(&s, middle), Some(Paint::solid(Color::rgb(0.5, 0.5, 0.5))));
 }
 
+/// A colorized image shows a fill and no stroke, so selecting it loads them for new art as any
+/// object without a stroke does (the weight stays).
+#[test]
+fn selecting_a_colorized_image_gives_new_art_its_fill_and_no_stroke() {
+    let mut s = session();
+    let id = image(&mut s, "gray", gray(false));
+    s.execute("paint.setFill", &json!({"color": "#336699"})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("paint.setStroke", &json!({"color": "#00ff00"})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 5.0})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    assert_eq!(s.paint.fill.color().map(|c| c.to_hex()), Some("#336699".into()));
+    assert_eq!((s.paint.stroke.clone(), s.paint.stroke_width), (Paint::None, 5.0));
+}
+
 #[test]
 fn fill_proxy_invert_recolors_a_colorized_gray_image_and_undo_restores_it() {
     let mut s = session();

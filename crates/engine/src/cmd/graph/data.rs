@@ -169,7 +169,9 @@ pub(super) fn fmt_value(v: f64) -> String {
         // `{:.0}` prints its exact digits.
         if v.abs() < 9e18 { format!("{}", v.round() as i64) } else { format!("{v:.0}") }
     } else {
-        format!("{:.2}", v).trim_end_matches('0').trim_end_matches('.').to_string()
+        let s = format!("{:.2}", v).trim_end_matches('0').trim_end_matches('.').to_string();
+        // A tiny negative rounds to "-0.00"; show it as plain zero like -0.0.
+        if s == "-0" { "0".to_string() } else { s }
     }
 }
 

@@ -5757,7 +5757,7 @@ axis	Y Axis	Y 轴
 @msg	Running “{name}”…	正在运行“{name}”…
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	实时效果在绘制文档时运行，因此不能为 `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	导出增效工具始终使用导出的预算：请省略 `budget`
-@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	“{_1}”需要大量计算预算（每次运行最多 {minutes} 分钟，指令数为通常的 {times} 倍）：请在用户同意后使用 `allowHeavy: true` 安装
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}”需要大量计算预算（每次运行最多 {minutes} 分钟，指令数为通常的 {times} 倍）：需要有人在桌面应用中批准，或在以 --allow-plugin-grants 启动的会话中传入 `allowHeavy: true`
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	要安装需要这些权限的“{name}”吗？
 	ID: {id}	ID：{id}
@@ -5797,7 +5797,9 @@ axis	Y Axis	Y 轴
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	对象预算（超过 {MAX_OBJECTS} 个只读对象）
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	权限 `{shown}` 保留给以后的增效工具 API；此主机不授予该权限
 @msg	unknown permission `{shown}`	未知权限 `{shown}`
-@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}”需要权限 {asked}：请在用户同意后使用列出这些权限的 `grant` 安装
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	“{name}”需要权限 {asked}：需要有人在桌面应用中批准，或在以 --allow-plugin-grants 启动的会话中传入 `grant`
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` 和 `allowHeavy` 仅在以 --allow-plugin-grants 启动的会话中生效：请在桌面应用中批准此插件
+@msg	Only the person at the keyboard can approve installing a plug-in	只有键盘前的人才能批准安装插件
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	“{name}”未获授予其输出所需的 `{p}`：未作任何更改
 @msg	a heavy filter runs in the background, so it can't declare `commands`	重型滤镜在后台运行，因此不能声明 `commands`
 @msg	at most {MAX_COMMANDS} `commands`	最多 {MAX_COMMANDS} 个 `commands`
