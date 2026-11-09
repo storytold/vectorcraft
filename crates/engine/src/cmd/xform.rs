@@ -414,6 +414,7 @@ fn artboard_move(s: &mut Session, p: &Value) -> Result<Value> {
             for id in art {
                 if let Some(n) = d.node_mut(*id) {
                     n.transform(Affine::translate(dv), sc);
+                    super::object::keep_pixel_aligned(n, sc);
                 }
             }
             index.push(*i);

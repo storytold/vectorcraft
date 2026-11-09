@@ -56,7 +56,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Type on a Path Options…",
             ["Type", "Type on a Path"],
             None,
-            "{ids?|id?, start?: 0..1, end?: 0..1|null, flip?: bool, effect?: rainbow|skew|3dRibbon|stairStep|gravity, alignToPath?: ascender|descender|center|baseline, spacing?: pt} set the selected type on a path's options: start and end place its start and end brackets as fractions of the path's length (end null: the end of the path, or once round a closed path), and flip then turns the type to the other side of its path (the path runs the other way, the brackets swap ends); none given: query → the first object's {start, end, flip: false, effect, alignToPath, spacing}",
+            "{ids?|id?, start?: 0..1, end?: 0..1|null, flip?: bool, effect?: rainbow|skew|3dRibbon|stairStep|gravity, alignToPath?: ascender|descender|center|baseline, spacing?: pt} set the selected type on a path's options: start and end place its start and end brackets as fractions of the path's length (end null: the end of the path, or once round a closed path), and flip then turns the type to the other side of its path (the path runs the other way, the brackets swap ends); alignToPath runs each character's em box top (ascender), font bounding box bottom (descender), half the height of its H's top above the baseline (center) or baseline along the path, by the character's own font, size and vertical scale (vertical type: half an em either way, or none for center); none given: query → the first object's {start, end, flip: false, effect, alignToPath, spacing}",
             has_selection,
             path_options
         ),
@@ -373,8 +373,10 @@ fn to_point(s: &mut Session, p: &Value) -> Result<Value> {
             }
             // The point origin sits where the alignment anchors the first line.
             let p0 = t.para_at(0);
-            let (x0, x1) =
-                lay.lines.first().map_or((fb.x0, fb.x1), |l| (l.avail.0 - p0.left_indent - p0.first_line_indent, l.avail.1 + p0.right_indent));
+            let (x0, x1) = lay
+                .lines
+                .first()
+                .map_or((fb.x0, fb.x1), |l| (l.avail.0 - p0.laid_out_left_indent() - p0.first_line_indent, l.avail.1 + p0.right_indent));
             let ox = match p0.justify {
                 Justify::Center | Justify::JustifyCenter => (x0 + x1) * 0.5,
                 Justify::Right | Justify::JustifyRight => x1,
@@ -611,6 +613,9 @@ pub(crate) fn alt_code_char(code: u64) -> Option<char> {
 fn unicode_char(u: &str) -> Option<char> {
     let u = u.trim();
     let hex = u.strip_prefix("U+").or_else(|| u.strip_prefix("u+")).or_else(|| u.strip_prefix("0x")).unwrap_or(u);
+    if hex.is_empty() || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
     char::from_u32(u32::from_str_radix(hex, 16).ok()?).filter(|c| !c.is_control() || *c == '\t')
 }
 
@@ -844,4 +849,19 @@ fn paste_plain(s: &mut Session, p: &Value) -> Result<Value> {
         e.label = "Paste without Formatting".into();
     }
     r
+}
+
+#[cfg(test)]
+mod tests {
+    use super::unicode_char;
+
+    #[test]
+    fn unicode_char_rejects_sign_in_hex_digits() {
+        assert_eq!(unicode_char("+B0"), None);
+        assert_eq!(unicode_char("U++B0"), None);
+        assert_eq!(unicode_char("U+"), None);
+        assert_eq!(unicode_char("00B0"), Some('°'));
+        assert_eq!(unicode_char("U+00B0"), Some('°'));
+        assert_eq!(unicode_char("0x00B0"), Some('°'));
+    }
 }

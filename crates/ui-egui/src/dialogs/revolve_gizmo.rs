@@ -20,8 +20,18 @@ pub(crate) fn lighting(d: &Dialog) -> bool {
     d.str("__gizmo") == "light"
 }
 
+/// Does the effect take light: Shading on, or for Extrude & Bevel (Classic) a Diffuse or Plastic
+/// surface?
+fn lit(d: &Dialog) -> bool {
+    if d.str("__effect") == vectorcraft_effects::CLASSIC_EXTRUDE {
+        matches!(d.str("surface").as_str(), "diffuse" | "plastic")
+    } else {
+        d.bool("shade")
+    }
+}
+
 pub(crate) fn hint(d: &Dialog) -> &'static str {
-    if !d.bool("preview") || (lighting(d) && !d.bool("shade")) {
+    if !d.bool("preview") || (lighting(d) && !lit(d)) {
         tl!("Drag values or labels. Double-click a value to type.")
     } else if lighting(d) {
         tl!("Drag the light, or its rings. Shift snaps to 15°.")
@@ -190,7 +200,7 @@ fn snap_height(height: f64, snap: bool) -> f64 {
 
 pub(super) fn show(app: &VectorcraftApp, ctx: &egui::Context, d: &mut Dialog) {
     let light_mode = lighting(d);
-    if !d.bool("preview") || (light_mode && !d.bool("shade")) {
+    if !d.bool("preview") || (light_mode && !lit(d)) {
         clear(ctx);
         return;
     }

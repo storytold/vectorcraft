@@ -86,6 +86,35 @@ fn wmf_output_round_trips() {
 }
 
 #[test]
+fn freeform_points_that_share_a_model_are_written_as_their_mix() {
+    use vectorcraft_color::{Color, Freeform, FreeformPoint, GradientKind};
+    let mid = |a: Color, b: Color| {
+        let p = |x, c| FreeformPoint::new(Point::new(x, 50.0), c);
+        let mut g = GradientPaint::new(Gradient { kind: GradientKind::Freeform, ..Default::default() });
+        g.freeform = Some(Freeform { points: vec![p(20.0, a), p(80.0, b)], ..Default::default() });
+        let d =
+            doc_with(100.0, 100.0, vec![path(shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Paint::Gradient(Box::new(g)), Paint::None, 0.0)]);
+        let back = import(&emf(&d).bytes).unwrap();
+        let im = all(&back.document)
+            .iter()
+            .find_map(|n| match &n.kind {
+                NodeKind::Image(im) => Some(im.clone()),
+                _ => None,
+            })
+            .unwrap();
+        let px = image::load_from_memory(&back.document.images[&im.key].bytes).unwrap().to_rgba8();
+        px.get_pixel(px.width() / 2, px.height() / 2).0
+    };
+    let near = |got: [u8; 4], want: [u8; 4]| got.iter().zip(want).all(|(g, w)| g.abs_diff(w) <= 6);
+    let got = mid(Color::cmyk(1.0, 0.0, 0.0, 0.0), Color::cmyk(0.0, 0.0, 0.0, 1.0));
+    let want = Color::cmyk(0.5, 0.0, 0.0, 0.5).to_rgba8(1.0);
+    assert!(near(got, want), "CMYK: {got:?} vs {want:?}");
+    let got = mid(Color::lab(90.0, -60.0, 40.0), Color::lab(30.0, 60.0, -40.0));
+    let want = Color::lab(60.0, 0.0, 0.0).to_rgba8(1.0);
+    assert!(near(got, want), "Lab: {got:?} vs {want:?}");
+}
+
+#[test]
 fn dashes_gradients_and_images_round_trip_through_emf() {
     let mut line = path(shapes::line((10.0, 90.0).into(), (190.0, 90.0).into()), Paint::None, red(), 2.0);
     line.appearance.stroke_mut().unwrap().dash = Some(Dash { pattern: vec![6.0, 3.0], offset: 0.0, align_corners: false });

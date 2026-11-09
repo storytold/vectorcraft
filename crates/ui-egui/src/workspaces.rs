@@ -35,6 +35,7 @@ pub struct Workspace {
     pub dock_collapsed: bool,
     pub open_panel: Option<String>,
     pub status_bar: bool,
+    pub help_bar: bool,
     /// Tool groups torn off the toolbar into floating strips (built-in workspaces: none).
     pub floating_flyouts: Vec<FloatingFlyout>,
     /// Floating panel groups in workspaces saved before the canvas joined `docking`; read only
@@ -57,6 +58,9 @@ pub struct Workspace {
     pub docking_collapsed: std::collections::BTreeSet<String>,
     /// Where the Tools panel floats (built-in workspaces: docked).
     pub toolbar_pos: Option<[f32; 2]>,
+    /// The docked Tools panel sits beside the canvas, inside any left-side panels (built-in
+    /// workspaces and workspaces saved without it: at the window's left edge).
+    pub tools_beside_canvas: bool,
     /// Main dock column width in screen points while `docking` is none (#1753).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dock_width: Option<f32>,
@@ -189,6 +193,7 @@ pub fn capture(ui: &UiState, name: &str) -> Workspace {
         dock_collapsed: ui.dock_collapsed,
         open_panel: ui.open_panel.clone(),
         status_bar: ui.status_bar,
+        help_bar: ui.help_bar,
         floating_flyouts: ui.floating_flyouts.clone(),
         floating_panels: Vec::new(),
         docking: ui.docking.clone(),
@@ -197,6 +202,7 @@ pub fn capture(ui: &UiState, name: &str) -> Workspace {
         docking_icons: Default::default(),
         docking_collapsed: Default::default(),
         toolbar_pos: ui.toolbar_pos,
+        tools_beside_canvas: ui.tools_beside_canvas,
         dock_width: ui.dock_width,
         toolbars: ui.custom_toolbars.clone(),
     }
@@ -217,12 +223,14 @@ pub fn apply(ui: &mut UiState, w: &Workspace) {
     ui.dock_collapsed = w.dock_collapsed;
     ui.open_panel = w.open_panel.clone();
     ui.status_bar = w.status_bar;
+    ui.help_bar = w.help_bar;
     ui.floating_flyouts = w.floating_flyouts.clone();
     ui.docking_generation = ui.docking_generation.wrapping_add(1);
     ui.docking = w.docking.clone().filter(crate::panel_docking::valid);
     ui.docking_hidden = w.docking_hidden.clone();
     ui.docking_hidden_groups = w.docking_hidden_groups.clone();
     ui.toolbar_pos = w.toolbar_pos;
+    ui.tools_beside_canvas = w.tools_beside_canvas;
     ui.dock_width = w.dock_width;
     crate::state::sanitize_toolbar_pos(&mut ui.toolbar_pos);
     ui.custom_toolbars = w.toolbars.clone();

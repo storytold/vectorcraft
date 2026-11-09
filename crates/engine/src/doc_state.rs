@@ -95,6 +95,11 @@ pub struct DocState {
     /// so an export or save to it asks first ([`cmd::fileio::check_not_lossy_overwrite`]). Not saved.
     pub imported_from: Option<String>,
     pub import_losses: Vec<String>,
+    /// The file its links' stored relative paths name places from: the file the document was read
+    /// from, also when that file is not its own (such as a `.ai` file another app wrote). A save
+    /// writes the saved file's relative paths and leaves the open document's links as they are.
+    /// `None`: the document's own file. Not saved ([`crate::cmd::links::LinkBase`]).
+    pub links_from: Option<String>,
     /// Transform Again after a perspective move or scale (Perspective Selection tool): the
     /// `perspective.transform` params it repeats. `None` once an ordinary transform follows.
     pub last_perspective: Option<Value>,
@@ -296,6 +301,7 @@ impl DocState {
             layers_open,
             imported_from: None,
             import_losses: vec![],
+            links_from: None,
             last_perspective: None,
             opened_by: file_access::current(),
             empty_artboards: Default::default(),

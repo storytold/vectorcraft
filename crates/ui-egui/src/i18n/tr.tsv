@@ -183,6 +183,10 @@
 	Anti-Alias	Kenar Yumuşatma
 	Anti-alias Rasters	Kenar Yumuşatma Rasterleri
 	Anti-aliased Artwork	Kenar Yumuşatılmış Sanat Çalışması
+	Anti-aliasing Method	Kenar Yumuşatma Yöntemi
+antiAlias	Sharp	Keskin
+	Crisp	Net
+	Strong	Güçlü
 	Anti-aliasing:	Kenar yumuşatma:
 	Any Kind	Her Türlü
 	Font Technology	Yazı Tipi Teknolojisi
@@ -351,6 +355,13 @@ font-technology	Variable	Değişken
 	Apply Bullets	Madde İşaretlerini Uygula
 	Numbered List	Numaralı Liste
 	Apply Numbers	Numaralandırmayı Uygula
+	Bullets and Numbering…	Madde İşaretleri ve Numaralandırma…
+	Numbers	Numaralar
+	Level:	Düzey:
+	Bullet Character:	Madde İşareti Karakteri:
+	Number Style:	Numara Stili:
+	Left Indent:	Sol Girinti:
+	First Line Indent:	İlk Satır Girintisi:
 	Convert to Text	Metne Dönüştür
 	Filled Dot	Dolu Nokta
 	Dash	Tire
@@ -536,6 +547,11 @@ font-technology	Variable	Değişken
 	Color Table ({n} colors)	Renk Tablosu ({n} renkleri)
 	Color Theme	Renk Teması
 	Color Themes	Renk Temaları
+	Color Wheel	Renk Tekerleği
+	Hue ring	Renk tonu halkası
+	Saturation and brightness	Doygunluk ve parlaklık
+	Color field	Renk seçim alanı
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Renk Türü:
 	Color:	Renk:
 	Colorize	Renklendir
@@ -1057,6 +1073,14 @@ font-technology	Variable	Değişken
 	Export As SVG…	SVG Olarak Dışa Aktar…
 	Export Asset	Varlığı Dışa Aktar
 	Export Assets	Varlıkları Dışa Aktar
+	Export 3D Object	3D Nesneyi Dışa Aktar
+	3D Export Format	3D Dışa Aktarma Biçimi
+	Export 3D Assets	3D Varlıkları Dışa Aktar
+@msg	{what} can't be exported in 3D: {e}	{what} 3D olarak dışa aktarılamıyor: {e}
+@msg	asset {id} isn't a 3D asset	{id} varlığı bir 3D varlık değil
+@msg	asset {id} is a 3D asset: assets.export3D writes it	{id} varlığı bir 3D varlık: onu assets.export3D yazar
+@msg	no 3D assets yet: collect an object with a 3D effect first (assets.add3D)	henüz 3D varlık yok: önce 3D efekti olan bir nesne toplayın (assets.add3D)
+@msg	select an object with a 3D effect (or give its ids)	3D efekti olan bir nesne seçin (veya kimliklerini verin)
 	Export As…	Farklı Dışa Aktar…
 	Export CSS	CSS'yi dışa aktar
 	Export CSS…	CSS'yi dışa aktar…
@@ -1088,6 +1112,17 @@ font-technology	Variable	Değişken
 	Exporting {}	{} dışa aktarılıyor
 	Export…	İhracat…
 	Extrude & Bevel…	Ekstrüzyon ve Eğim…
+	3D (Classic)	3D (Klasik)
+	Extrude & Bevel (Classic)…	Ekstrüzyon ve Eğim (Klasik)…
+	Surface	Yüzey
+	Wireframe	Tel Kafes
+	No Shading	Gölgeleme Yok
+	Plastic	Plastik
+	Highlight Intensity	Parlama Yoğunluğu
+	Highlight Size	Parlama Boyutu
+	Blend Steps	Karışım Adımları
+	Shading Color	Gölgeleme Rengi
+	Draw Hidden Faces	Gizli Yüzleri Çiz
 	Eyedropper	Damlalık
 	Sample Color from Screen	Ekrandan Örnek Renk
 	This system has no screen color sampler	Bu sistemin ekran rengi örnekleyicisi yok
@@ -1127,6 +1162,7 @@ font-technology	Variable	Değişken
 	Merge only with selection	Yalnızca seçimle birleştir
 	Fill Color	Dolgu Rengi
 	Fill New Type Objects With Placeholder Text	Yeni Yazım Nesnelerini Yer Tutucu Metinle Doldurun
+	Start Lists From Typed Markers	Yazılan İşaretlerden Liste Başlat
 	Fill Rule	Doldurma Kuralı
 	Fill with Placeholder Text	Yer Tutucu Metinle Doldur
 	Fill:	Doldurun:
@@ -1137,6 +1173,7 @@ font-technology	Variable	Değişken
 	Find Font…	Yazı Tipi Bul…
 	Find Next	Sonrakini Bul
 	Find Objects	Nesneleri Bul
+	Compare with Image	Görüntüyle Karşılaştır
 	First Page	İlk Sayfa
 	First-line Left Indent	Birinci Satırda Sol Girinti
 	Fisheye…	Balıkgözü…
@@ -1551,6 +1588,7 @@ font-technology	Variable	Değişken
 	Report copied	Rapor kopyalandı
 	Line {line}	{line} Hattı
 	Line {line}: {name}: {status}	Hat {line}: {name}: {status}
+	Read Action Set File	Eylem Seti Dosyasını Oku
 	Read Shortcut Set File	Kısayol Seti Dosyasını Oku
 	Import Matches	Eşleşmeleri İçe Aktar
 	Remember Import Matches	İçe Aktarılan Eşleşmeleri Hatırla
@@ -1793,6 +1831,10 @@ font-technology	Variable	Değişken
 	Mojikumi	Mojikumi
 	Mojikumi Set	Mojikumi Seti
 	Kinsoku Set	Kinsoku Seti
+	Kinsoku Shori Type	Kinsoku Shori Türü
+	Push In First	Önce İçeri
+	Push Out First	Önce Dışarı
+	Push Out Only	Yalnızca Dışarı
 	Hard	Sert
 	Soft	Yumuşak
 	Monitor RGB	RGB'yi izleyin
@@ -2568,6 +2610,7 @@ digits	Malayalam	Malayalam
 	Reset Transformation	Dönüşümü Sıfırla
 	Replace With Font	Yazı Tipiyle Değiştir
 	Replace With Font From	Değiştirilecek Yazı Tipi Kaynağı
+	Find In	Arama yeri
 	System	Sistem
 	Replaces the saved preset of that name.	Bu adın kayıtlı ön ayarını değiştirir.
 	Replace…	Değiştir…
@@ -2888,6 +2931,11 @@ digits	Malayalam	Malayalam
 	Selected Swatches	Seçilen Renk Örnekleri
 	Selected Swatches Only	Yalnızca Seçilen Renk Örnekleri
 	Selection	Seçim
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Dikdörtgen seçim
+	Touching	Dokunulanlar
+	Fully Enclosed	Tamamen içeride
+	Drag Direction	Sürükleme yönü
 	Selection & Anchor Display	Seçim ve Bağlantı Ekranı
 	Selection Only	Yalnızca Seçim
 	Selection Tool	Seçim Aracı
@@ -3022,6 +3070,7 @@ digits	Malayalam	Malayalam
 	Simulate Colored Paper	Renkli Kağıdı Simüle Et
 	Simulate Paper	Kağıdı Simüle Et
 	Double Column	Çift Sütun
+	Keep Tools Beside the Canvas	Araçları Tuvalin Yanında Tut
 	Single Left Quotation Mark	Tek Sol Tırnak İşareti
 	Single Quotes:	Tek Alıntılar:
 	Single Right Quotation Mark	Tek Sağ Tırnak İşareti
@@ -3258,6 +3307,15 @@ digits	Malayalam	Malayalam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Tate-chu-yoko Ayarları…
 	Tate-chu-yoko Settings	Tate-chu-yoko Ayarları
+	Composite Fonts…	Bileşik Fontlar…
+	Composite Fonts	Bileşik Fontlar
+	Export Composite Fonts	Bileşik Fontları Dışa Aktar
+	Import Composite Fonts	Bileşik Fontları İçe Aktar
+	Delete Font	Fontu Sil
+	Kanji	Kanji
+	Kana	Kana
+	Numerals	Rakamlar
+	Scale at Center	Merkezden Ölçekle
 	Up/Down:	Yukarı/Aşağı:
 	Left/Right:	Sol/Sağ:
 	Temperature	Sıcaklık
@@ -3601,6 +3659,7 @@ digits	Malayalam	Malayalam
 	Zoom to Selection	Seçimi Yakınlaştır
 	Zoom Tool	Yakınlaştırma Aracı
 	Zoom with Mouse Wheel	Fare Tekerleği ile Yakınlaştırma
+	Scroll Sideways with Cmd/Ctrl + Wheel	Cmd/Ctrl + Tekerlek ile Yatay Kaydırma
 	Scrub Numeric Fields by Dragging	Sayısal Alanları Sürükleyerek Fırçalayın
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{folder} içinde {n} dosya {note}. Paket klasörü gösterilsin mi?
 @plural	{n} linked file not found|{n} linked files not found	{n} bağlantılı dosya bulunamadı
@@ -3866,6 +3925,7 @@ axis	Both	Her İkisi
 @msg	Targa files are RGB: colorModel rgb	Targa dosyaları RGB'dir: colorModel rgb
 @msg	Text Wrap: select a wrap object	Metin Sarma: bir sarma nesnesi seçin
 @msg	This shortcut file is in a form VectorCraft can't read.	Bu kısayol dosyası VectorCraft'ın okuyamayacağı bir biçimdedir.
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` "none", "sharp", "crisp" veya "strong" olmalıdır
 @msg	`aspect` must be a number (%)	`aspect` bir sayı olmalıdır (%)
 @msg	`at` must be [x, y]	`at` [x, y] olmalıdır
 @msg	`color` must be a colour	`color` bir renk olmalıdır
@@ -3947,7 +4007,7 @@ axis	Both	Her İkisi
 @msg	already editing a pattern	zaten bir desen düzenliyor
 @msg	an object can't be read	bir nesne okunamıyor
 @msg	an object in perspective would leave the edited grid	perspektifteki bir nesne düzenlenen ızgaradan ayrılır
-@msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: yok, resim veya tür
+@msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: none, art veya type
 @msg	artboard {0} does not exist	{0} çalışma yüzeyi mevcut değil
 @msg	at this scale the drawing is {w} × {h} pt, more than the canvas holds: choose a smaller scale or fit it to the artboard	bu ölçekte çizim {w} × {h} nk, kanvasın sığabileceğinden daha fazladır: daha küçük bir ölçek seçin veya çalışma yüzeyine sığdırın
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis "vertical", "horizontal" veya derece cinsinden bir açı olmalıdır, `{v}` değil
@@ -4017,6 +4077,11 @@ axis	Both	Her İkisi
 @msg	invalid image data for `{0}`	`{0}` için geçersiz resim verileri
 @msg	invalid parameters for `{cmd}`: {msg}	`{cmd}` için geçersiz parametreler: {msg}
 @msg	is not an image VectorCraft reads	VectorCraft'ın okuduğu bir resim değil
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: PNG, JPEG, WebP, TIFF veya BMP resmi değil
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	resim {iw} × {ih} piksel, çalışma yüzeyi bu genişlikte {rw} × {rh} piksel: oranları farklı
+@msg	`threshold` must be a number from 0 to 1	`threshold` 0 ile 1 arasında bir sayı olmalıdır
+@msg	background {v}: a color such as "#808080"	background {v}: "#808080" gibi bir renk
+@msg	comparing with an image file isn't available in the browser	bir resim dosyasıyla karşılaştırma tarayıcıda kullanılamaz
 @msg	it uses `{at}`, which VectorCraft's PostScript reader doesn't know	VectorCraft'ın PostScript okuyucusunun bilmediği `{at}`yi kullanıyor
 @msg	it uses `{at}`, which VectorCraft's PostScript reader doesn't know, in {procs}	{procs}'de VectorCraft'ın PostScript okuyucusunun bilmediği `{at}`yi kullanıyor
 @msg	its Windows metafile preview was opened instead, which may simplify the art	bunun yerine Windows meta dosyası önizlemesi açıldı, bu da işi basitleştirebilir
@@ -4110,6 +4175,8 @@ axis	Both	Her İkisi
 @msg	no such action set	öyle bir eylem seti yok
 @msg	the action sets changed; nothing was deleted	eylem setleri değişti; hiçbir şey silinmedi
 @msg	no action set to save	kaydedilecek eylem seti yok
+@msg	the action set file can't be read in full	eylem seti dosyası tamamen okunamıyor
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	“{name}” yüklendi: {n} adım atlandı
 @msg	not an action set file	bir eylem seti dosyası değil
 @msg	the action set file is larger than 8 MiB	eylem seti dosyası 8 MiB'den büyük
 @msg	the action set file holds more than 1,000 actions	eylem seti dosyası 1.000'den fazla eylem içeriyor
@@ -4220,6 +4287,13 @@ axis	Both	Her İkisi
 @msg	select an image	bir resim seç
 @msg	select an object in perspective	perspektifte bir nesne seç
 @msg	select artwork (or a colour group) to recolor	yeniden renklendirilecek resmi (veya bir renk grubunu) seçin
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	Yeniden renklendirme tamamlandı; değiştirilmeden kalan: {locked} ve {hidden}
+@msg	Recolor completed; {objects} were left unchanged	Yeniden renklendirme tamamlandı; değiştirilmeden kalan: {objects}
+@msg	Recolor completed; {objects} was left unchanged	Yeniden renklendirme tamamlandı; değiştirilmeden kalan: {objects}
+@msg	1 locked object	1 kilitli nesne
+@msg	{n} locked objects	{n} kilitli nesne
+@msg	1 hidden object	1 gizli nesne
+@msg	{n} hidden objects	{n} gizli nesne
 @msg	select at least two objects	en az iki nesne seç
 @msg	exit isolation mode first	önce izolasyon modundan çık
 @msg	select objects, not layers	katmanları değil nesneleri seçin
@@ -4443,10 +4517,14 @@ axis	Both	Her İkisi
 @msg	its section ending with `%{end}` doesn't end	`%{end}` ile biten bölümü bitmiyor
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	VectorCraft'ın henüz okuyamadığı fırçalar Fırçalar panelinin dışında bırakıldı ({_1})
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	çeşitli dolgulara veya konturlara, efektlere veya fırçalara sahip nesneler çizilmiş görünümleri olarak geldi ({_1}): görünümleri henüz düzenlenemez
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	`{name}` adı UTF-8 değil ve {label} olarak okundu: yanlış görünüyorsa dosyayı başka bir legacyNameEncoding ile açın
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	`{name}` adı UTF-8 değil ve bazı bölümleri {label} olarak da geçerli değil: dosyayı başka bir legacyNameEncoding ile açın
+@msg	more names that aren't UTF-8 were read as {label} ({count})	UTF-8 olmayan diğer adlar {label} olarak okundu ({count})
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	“{name}” degradesi dosyada tanımlı değil: onun yerine düz bir renk geliyor
 @msg	an image VectorCraft can't read was left out	VectorCraft'ın okuyamadığı bir resim dışarıda bırakıldı
 @msg	graphs come in as plain art, without their data or settings	grafikler, verileri ve ayarları olmadan düz çizim olarak içe aktarılır
 @msg	an image whose data is cut short was left out	verileri kısa kesilen bir resim dışarıda bırakıldı
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	katmanları korumak için {_1} × {_2} piksellik gömülü bir resim {_3} × {_4} piksele küçültüldü
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	bağlantılı resimler, dosyaları bulunana kadar dosyaya kaydedilen düşük çözünürlüklü önizlemeyi gösterir: bunları Bağlantılar panelinde yeniden bağlayın
 @msg	linked type areas past VectorCraft's limits were left out	VectorCraft sınırlarını aşan bağlantılı metin alanları dışarıda bırakıldı
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	bir metin nesnesi içinde yazı yönünü değiştiren metin, ilk karakterinin yönünde açılır
@@ -4547,12 +4625,19 @@ axis	Both	Her İkisi
 @msg	the Pixar file's image data is damaged	Pixar dosyasının görüntü verileri bozuk
 @msg	the JPEG 2000 file can't be read	JPEG 2000 dosyası okunamıyor
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000 dosyasında desteklenmeyen bir renk alanı veya JPX içeriği var
+@msg	the HEIC or HEIF file can't be read	HEIC veya HEIF dosyası okunamıyor
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC veya HEIF dosyası okunamayan türde bir görüntü içeriyor
+@msg	HEIC and HEIF images can't be opened in this build	HEIC ve HEIF görüntüleri bu derlemede açılamıyor
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD görüntüsü okunamayacak kadar büyük ({_1} × {_2} piksel)
 @msg	zipped 32-bit PSD image data with prediction can't be read	Tahmin içeren sıkıştırılmış 32 bit PSD görüntü verileri okunamıyor
 @msg	{depth}-bit PSD files in this colour mode can't be read	Bu renk modunda {depth}-bit PSD dosyaları okunamaz
 @msg	the PSD file is cut short	PSD dosyası kısa kesildi
 @msg	the PSD file's header is damaged	PSD dosyasının başlığı hasarlı
 @msg	the PSD file's image data can't be read: {e}	PSD dosyasının görüntü verileri okunamıyor: {e}
+@msg	the JPEG XL file is cut short	JPEG XL dosyası kısa kesildi
+@msg	the JPEG XL container is too large to read	JPEG XL kapsayıcısı okunamayacak kadar büyük
+@msg	CMYK JPEG XL images can't be read	CMYK JPEG XL görüntüleri okunamıyor
+@msg	the JPEG XL file can't be read: {e}	JPEG XL dosyası okunamıyor: {e}
 	Video	video
 	De-Interlace…	Taramasızlaştırma…
 	De-Interlace	Taramasızlaştırma
@@ -4609,6 +4694,9 @@ axis	Both	Her İkisi
 effect	Soft	Yumuşak
 	Edge	Kenar
 	System Title Bar	Sistem Başlık Çubuğu
+	VectorCraft Title Bar on Every Desktop	Her Masaüstünde VectorCraft Başlık Çubuğu
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	VECTORCRAFT_TITLEBAR ortam değişkeni ayarlı olduğu sürece başlık çubuğunu o seçer.
+	System Title Bar takes precedence over this option while it is on.	Sistem Başlık Çubuğu açık olduğu sürece bu seçeneğe göre önceliklidir.
 	Value Axis	Değer Ekseni
 	On Left Side	Sol Tarafta
 	On Right Side	Sağ Tarafta
@@ -5499,6 +5587,7 @@ theme	Appearance	Görünüm
 @msg	missing integer `{key}`	`{key}` tam sayısı eksik
 @msg	{key} must be an array of non-negative integer object ids	{key}, negatif olmayan tam sayı nesne kimlikleri dizisi olmalıdır
 @msg	invalid object id {value}: expected a non-negative integer	geçersiz nesne kimliği {value}: negatif olmayan bir tam sayı bekleniyordu
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	`{key}` içindeki {index} dizinli öğe {value}, negatif olmayan tam sayı bir nesne kimliği değil
 @msg	no such object id {value}	böyle bir nesne kimliği yok: {value}
 @msg	id {value} is a layer, not an object	{value} kimliği bir katmana ait, bir nesneye değil
 @msg	id {value} is a layer, not an object; move layers with layer.move	{value} kimliği bir katmana ait, bir nesneye değil; katmanları layer.move ile taşıyın
@@ -5706,7 +5795,15 @@ theme	Appearance	Görünüm
 @msg	library panel `{given}` isn't missing its library	`{given}` kitaplık panelinin kitaplığı eksik değil
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	Görüntü {_1} × {_2} piksel, bir kenarı {LARGE_TRACE_SIDE} değerinden büyük: izlenir, ancak daha yavaş. Daha düşük doğruluklu bir ön ayar veya görüntünün daha küçük bir kopyası daha hızlı izlenir.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	Görüntü {_3} × {_4} boyutundan küçültülerek {_1} × {_2} pikselde izlendi (en fazla {_5} megapiksel).
+@msg	byColor must be true or false	byColor true veya false olmalıdır
+@msg	byColor can't split Auto Grouping groups: trace without Auto Grouping	byColor, Otomatik Gruplama gruplarını bölemez: Otomatik Gruplama olmadan izleyin
+@msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	byColor, canlı Pathfinder efekti olan bir izlemeyi yeniden gruplayamaz: byColor olmadan genişletin
 	Gap Length:	Boşluk Uzunluğu:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Düz Logo modu keepColors kullanmaz: logoColors içinde adı verilen renkleri veya bulduğu renkleri izler.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Hiçbir şey izlenmedi: izlemenin bulduğu renklerin hiçbiri keepColors ({_1}) ile eşleşmiyor.
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Hiçbir şey izlenmedi: Rengi Yoksay, keepColors içinde listelenen renklerin tüm alanlarını dışarıda bırakıyor.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	Hiçbir şey izlenmedi: keepColors ile eşleşen renkler hiçbir yol oluşturmuyor.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: izlemenin bulduğu renklerin hiçbiri {c} ile eşleşmiyor, bu yüzden bu renkten hiçbir şey izlenmiyor.
 @msg	`colorGroup` needs `library: "document"`	`colorGroup` için `library: "document"` gerekir
 @msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` için `palette: "documentLibrary"` gerekir
 @msg	`colorGroup` needs `mode: "color"`	`colorGroup` için `mode: "color"` gerekir
@@ -5783,6 +5880,9 @@ axis	Y Axis	Y ekseni
 	Install “{name}”, which asks for these permissions?	Bu izinleri isteyen “{name}” yüklensin mi?
 	ID: {id}	Kimlik: {id}
 	Version: {version}	Sürüm: {version}
+	Install “{name}” in place of the plug-in with the same ID?	Aynı kimliğe sahip eklentinin yerine “{name}” yüklensin mi?
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Bu dosya, daha önce bu kimlikle yüklenen eklenti değil. O kimlik için saklanan ayarları ve önbelleği alır.
+@msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	“{name}”, {_1} kimlikli eklentiden farklı bir modül ve onun için saklanan ayarları ve önbelleği alacak: kullanıcı onayladıktan sonra `replace: true` ile yükleyin
 	File SHA-256: {hash}	Dosya SHA-256: {hash}
 	Read the objects it is given	Kendisine verilen nesneleri okuma
 	Change, add and delete objects in the document	Belgedeki nesneleri değiştirme, ekleme ve silme
@@ -5790,21 +5890,41 @@ axis	Y Axis	Y ekseni
 	Change how the objects its effect is applied to are drawn	Efektinin uygulandığı nesnelerin nasıl çizildiğini değiştirme
 	Write the document as a file in its own format	Belgeyi kendi biçiminde bir dosya olarak yazma
 	Show its progress, see Cancel and write log lines	İlerlemesini gösterme, iptali algılama ve günlük satırları yazma
-@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	`progress` izni için eklenti API düzeyi {PROGRESS_API} gerekir: `api` {PROGRESS_API} verin
+	Keep settings of its own	Kendi ayarlarını saklama
+	Keep a cache of its own, which you can clear	Temizleyebileceğiniz kendi önbelleğini saklama
+	Clear Plug-in Cache	Eklenti Önbelleğini Temizle
+@msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	`{permission}` izni için eklenti API düzeyi {PROGRESS_API} gerekir: `api` {PROGRESS_API} verin
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	modül `env.{name}` öğesini ana bilgisayarınkinden farklı bir türle içe aktarıyor: ana bilgisayarın türü {signature}
-@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	modül `env.{name}` öğesini içe aktarıyor; bir eklenti bunu yalnızca eklenti API düzeyi {PROGRESS_API} (`api` {PROGRESS_API}) ile ve `progress` izniyle kullanabilir
-@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	modül, ana bilgisayarın sunmadığı `{from}.{name}` öğesini içe aktarıyor: bir eklenti yalnızca `env.vc_progress`, `env.vc_cancelled` ve `env.vc_log` öğelerini (eklenti API düzeyi 2) içe aktarabilir; WASI, dosya veya ağ kullanamaz
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	modül `env.{name}` öğesini içe aktarıyor; bir eklenti bunu yalnızca eklenti API düzeyi {PROGRESS_API} (`api` {PROGRESS_API}) ile ve `{permission}` izniyle kullanabilir
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	modül, ana bilgisayarın sunmadığı `{from}.{name}` öğesini içe aktarıyor: bir eklenti yalnızca docs/plugins.md dosyasında listelenen `env.vc_*` işlevlerini (eklenti API düzeyi 2) içe aktarabilir; WASI, dosya veya ağ kullanamaz
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` değeri {_1}; bu ana bilgisayar 1 ile {API_LEVEL} arasındaki eklenti API düzeylerini destekler
+@msg	`paintOutput` may only be true	`paintOutput` yalnızca true olabilir
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` yalnızca `api` 2 düzeyindeki canlı efekt (`kind` "effect") içindir
 @msg	`grant` must be a list of permission names	`grant` izin adlarından oluşan bir liste olmalıdır
 @msg	`grant` names an unknown permission `{shown}`	`grant` bilinmeyen bir izin adlandırıyor: `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` türündeki bir eklentinin `{_2}` iznine ihtiyacı vardır
 @msg	at most {MAX_PERMISSIONS} `permissions`	en fazla {MAX_PERMISSIONS} `permissions`
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	`{shown}` izni `{_1}` türündeki bir eklentiye uygulanmaz
 @msg	permission `{shown}` is listed twice	`{shown}` izni iki kez listelenmiş
+@msg	only a filter declares `inputs`	`inputs` yalnızca bir filtrede bildirilebilir
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` bilinmeyen bir nesne türü belirtiyor: `{shown}`; type, image veya symbolInstance kullanın
+@msg	`inputs` lists `{shown}` twice	`inputs` `{shown}` değerini iki kez listeliyor
+@msg	`inputs` needs `api` 2 or later	`inputs` için `api` 2 veya üstü gerekir
+@msg	`inputs` needs the permission `doc.read`	`inputs` için `doc.read` izni gerekir
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	bellek bütçesi (nesne {_1} için {size} bayt girdi gerekiyor, {left} kaldı)
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	nesne bütçesi ({MAX_OBJECTS} adetten fazla salt okunur nesne)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	`{shown}` izni sonraki bir eklenti API’si için ayrılmıştır; bu ana bilgisayar bu izni vermez
 @msg	unknown permission `{shown}`	bilinmeyen izin `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}” {asked} izinlerini istiyor: kullanıcı onayladıktan sonra bunları listeleyen bir `grant` ile yükleyin
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	“{name}” öğesine çıktısının ihtiyaç duyduğu `{p}` izni verilmedi: hiçbir şey değiştirilmedi
+@msg	a heavy filter runs in the background, so it can't declare `commands`	ağır bir filtre arka planda çalışır, bu yüzden `commands` bildiremez
+@msg	at most {MAX_COMMANDS} `commands`	en fazla {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	{name} komutu iki kez bildirilmiş
+@msg	command {name}: `label` must be 1-64 printable characters	{name} komutu: `label` 1-64 yazdırılabilir karakter olmalıdır
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	{name} komutu: a-z 0-9 _ karakterlerinden oluşan ve harfle başlayan 1-{MAX_COMMAND_ID} karakterlik bir kimlik kullanın
+@msg	command {name}: {e}	{name} komutu: {e}
+@msg	only a filter or a live effect declares `commands`	`commands` yalnızca bir filtre veya canlı efekt tarafından bildirilir
+@msg	“{name}” › {label}: {e}	“{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	modül `hash` içinde verilen SHA-256 değerine sahip değil: hiçbir şey yüklenmedi
 # Actions panel: action sets (#3712).
 	New Set…	Yeni Set…
@@ -6222,6 +6342,8 @@ breakText	Glyphs	Glifler
 	File + Data Set Name	Dosya + veri kümesi adı
 	Data Set Name	Veri kümesi adı
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` değeri `fileNumber`, `fileDataSetName` veya `dataSetName` olmalıdır
+	Each data set saves over the same file, which keeps only the last data set.	Her veri kümesi aynı dosyanın üzerine kaydedilir ve dosyada yalnızca son veri kümesi kalır.
+@msg	save the document with Save As before Save and Close	Kaydet ve Kapat'tan önce belgeyi Farklı Kaydet ile kaydedin
 @msg	no free data set file name in destination folder	Hedef klasörde veri kümesi için boş bir dosya adı yok
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).
@@ -6341,9 +6463,20 @@ breakText	Glyphs	Glifler
 	Reset Symbol Instance	Sembol Örneğini Sıfırla
 @msg	type must be static or dynamic, not {v}	type static veya dynamic olmalıdır, {v} değil
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` statik bir semboldür: önce Sembol Türünü Dinamik olarak ayarlayın
+@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	Bir sembol örneğinde seçilen yolun, bileşik yolun veya yazının yalnızca dolgu ve konturunun düz rengi değiştirilebilir
 @msg	path must be a list of child indices	path alt öğe dizinlerinden oluşan bir liste olmalıdır
 @msg	no object at path {shown} in the symbol's art	sembolün çiziminde {shown} yolunda nesne yok
 @msg	give fill, stroke, opacity and/or blend	fill, stroke, opacity ve/veya blend verin
+@msg	{key} cannot be set on a guide	{key} bir kılavuzda ayarlanamaz
+@msg	{key} cannot be set on a blend	{key} bir karışımda ayarlanamaz
+@msg	{key} cannot be set on an envelope	{key} bir zarfta ayarlanamaz
+@msg	{key} cannot be set on a gradient mesh	{key} bir degrade örgüde ayarlanamaz
+@msg	{key} cannot be set on a Repeat	{key} bir tekrarda ayarlanamaz
+@msg	{key} cannot be set on a placed document	{key} yerleştirilmiş bir belgede ayarlanamaz
+@msg	{key} cannot be set on an Intertwine group	{key} bir iç içe geçirme grubunda ayarlanamaz
+@msg	stroke cannot be set on a symbol instance	stroke bir sembol örneğinde ayarlanamaz
+@msg	fill on a symbol instance must be a solid color or none	bir sembol örneğinin fill değeri düz renk veya none olmalıdır
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key}, Şekle Dönüştür veya Anahat Nesnesi efekti olmayan bir görüntüde ayarlanamaz
 @msg	pass newName, registration, exportType, nineSlice and/or type	newName, registration, exportType, nineSlice ve/veya type verin
 	Text Flow	Metin Akışı
 	By Rows	Satırlara Göre
@@ -6373,6 +6506,7 @@ breakText	Glyphs	Glifler
 	Create Swatch Legend	Renk Örneği Açıklaması Oluştur
 	Create Swatch Legend…	Renk Örneği Açıklaması Oluştur…
 	HEX	HEX
+	Help Bar	Yardım Çubuğu
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	Metin Araçları
 	Text Tweaker…	Metin Ayarlayıcı…
@@ -6438,3 +6572,43 @@ breakText	Glyphs	Glifler
 # 3D Box add-on
 	3D Box	3B Kutu
 	3D Box Tool	3B Kutu Aracı
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Birlikte Aç
+	No importer plug-ins installed	İçe aktarma eklentisi yüklü değil
+	Read files you open in its format and make documents from them	Kendi biçiminde açtığınız dosyaları okuma ve bunlardan belge oluşturma
+@msg	{_1} is an importer (File › Open With)	{_1} bir içe aktarma eklentisidir (Dosya › Birlikte Aç)
+@msg	missing `importer` (see document.formats)	`importer` eksik (bkz. document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` bir eklentinin biçim kimliği olmalıdır (bkz. document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	“{shown}” {_1} dosyalarını açar, `{_2}` dosyasını değil
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}`, `{_2}` türünde bir eklentidir, içe aktarma eklentisi değildir
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}`, `{_2}` türünde bir eklentidir, dışa aktarma eklentisi değildir
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` bir içe aktarma eklentisidir: dosyayı document.open {{"importer"}"}} ile açın
+@msg	the importer returned no objects	içe aktarma eklentisi hiç nesne döndürmedi
+@msg	an importer returns `objects` and `warnings`, not `{key}`	içe aktarma eklentisi `{key}` değil, `objects` ve `warnings` döndürür
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	dosya, içe aktarma eklentisinin okuduğu {MAX_INPUT_BYTES} bayttan büyük
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	içe aktarma eklentisi 1 ile {MAX_EXTENSIONS} arasında `extensions` bildirir
+@msg	only an exporter or an importer declares `extensions`	`extensions` yalnızca dışa veya içe aktarma eklentisi bildirir
+@msg	an importer always gets an import's budget: leave `budget` out	içe aktarma eklentisi her zaman bir içe aktarmanın bütçesini alır: `budget` değerini çıkarın
+
+# Safe Mode
+	Safe Mode…	Güvenli Mod…
+	Safe Mode	Güvenli Mod
+	Help › Safe Mode…	Yardım › Güvenli Mod…
+	Enable on Re-launch	Sonraki Başlatmada Etkinleştir
+	The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it.	VectorCraft'ın son başlatılması, {name} eklentisi yüklenirken durdu. Nedeni bu eklenti olmayabilir.
+	Disable and Continue	Devre Dışı Bırak ve Devam Et
+	Start Normally	Normal Başlat
+	Start in Safe Mode	Güvenli Modda Başlat
+	VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.	VectorCraft Güvenli Mod'da: normal başlatılana kadar hiçbir eklenti yüklenmez veya çalıştırılmaz.
+	Disabled plug-ins	Devre dışı eklentiler
+	No plug-ins are disabled.	Devre dışı bırakılmış eklenti yok.
+@msg	Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally	Güvenli Mod açık: VectorCraft normal başlatılana kadar eklentiler yüklenmez veya çalıştırılmaz
+@msg	give `id` or `file` (see plugin.safeMode)	`id` veya `file` belirtin (bkz. plugin.safeMode)
+@msg	that plug-in isn't disabled (see plugin.safeMode)	bu eklenti devre dışı değil (bkz. plugin.safeMode)
+@msg	Couldn't save the disabled plug-ins for the next launch	Devre dışı eklentiler bir sonraki başlatma için kaydedilemedi
+@msg	Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode	Görünümü Genişlet: seçimdeki bir eklenti efekti Güvenli Mod'da genişletilemez
+
+# Align to Pixel Grid
+	Align to Pixel Grid	Piksel Izgarasına Hizala
+@msg	only paths and compound paths can be aligned to the pixel grid	piksel ızgarasına yalnızca yollar ve bileşik yollar hizalanabilir

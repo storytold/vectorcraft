@@ -572,7 +572,8 @@ mod tests {
         place(&mut g, &symbols);
         g.transform(Affine::new([2.0, 0.0, 0.0, 1.0, 0.0, 0.0]), false);
         let rec = g.extras().objects_on_path.as_deref().cloned().unwrap();
-        assert_eq!((rec.spacing, rec.start), (Some(40.0), 20.0));
+        // The spine measures arc length along the curve, so within rounding of the exact values.
+        assert!(rec.spacing.is_some_and(|d| (d - 40.0).abs() < 1e-9) && (rec.start - 20.0).abs() < 1e-9, "{rec:?}");
         place(&mut g, &symbols);
         let x = |id| g.children().and_then(|c| c.iter().find(|c| c.id == id).cloned()).unwrap().geometric_bounds().unwrap().center().x;
         assert!((x(NodeId(2)) - 20.0).abs() < 1e-9 && (x(NodeId(3)) - 60.0).abs() < 1e-9, "{} {}", x(NodeId(2)), x(NodeId(3)));

@@ -287,7 +287,8 @@ fn assign_profile(s: &mut Session, p: &Value) -> Result<Value> {
 /// How Document Color Mode converts neutral RGB greys (R = G = B) to CMYK (the `grays` param).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Grays {
-    /// Through the CMYK profile like any colour: four-colour greys and a rich black.
+    /// Through the CMYK profile like any colour: light grays in cyan, magenta and yellow only, darker
+    /// grays in four inks, and a rich black.
     #[default]
     Profile,
     /// On the black plate only: K is the grey's ink percentage (as Convert to Grayscale and then
