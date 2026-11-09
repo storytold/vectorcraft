@@ -4824,7 +4824,7 @@ theme	Appearance	Giao diện
 @msg	object {id} is not a path	đối tượng {id} không phải là đường dẫn
 @msg	object {id} is not a selected top-level object	đối tượng {id} không phải là đối tượng cấp cao nhất đã chọn
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	các cọ mà VectorCraft chưa đọc được đã bị bỏ khỏi bảng Cọ ({_1})
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	đối tượng có nhiều tô hoặc nét, hiệu ứng hoặc cọ đã vào dưới dạng bề ngoài ({_1}): diện mạo chưa thể chỉnh sửa
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	đối tượng có nhiều tô hoặc nét, nét có độ rộng thay đổi, hiệu ứng hoặc cọ đã vào dưới dạng bề ngoài ({_1}): diện mạo chưa thể chỉnh sửa
 @msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	tên `{name}` không phải UTF-8 và đã được đọc theo {label}: nếu trông sai, hãy mở tệp với legacyNameEncoding khác
 @msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	tên `{name}` không phải UTF-8, và một số phần cũng không hợp lệ trong {label}: hãy mở tệp với legacyNameEncoding khác
 @msg	more names that aren't UTF-8 were read as {label} ({count})	thêm các tên không phải UTF-8 đã được đọc theo {label} ({count})

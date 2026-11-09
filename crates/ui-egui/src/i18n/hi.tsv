@@ -6998,7 +6998,7 @@ antiAlias	Sharp	शार्प
 @msg	warped text objects that came in as drawn art, not as editable type: {_1}	मोड़े गए टेक्स्ट ऑब्जेक्ट जो संपादन योग्य टेक्स्ट के बजाय कला के रूप में आए: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	उन ऑब्जेक्ट्स को जो फ़ाइल के स्वयं के पृष्ठ से अलग-अलग तरीके से आकर्षित होते हैं, उनकी कला के रूप में आया: {_1}
 @msg	objects were left out	ऑब्जेक्ट्स को छोड़ दिया गया था
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	कई भराव या स्ट्रोक, इफ़ेक्ट या ब्रश के साथ ऑब्जेक्टएं उनके ड्रॉइंग लुक ({_1}) के रूप में आईं: उनकी उपस्थिति अभी तक संपादन योग्य नहीं है
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	कई भराव या स्ट्रोक, परिवर्तनीय चौड़ाई वाले स्ट्रोक, इफ़ेक्ट या ब्रश के साथ ऑब्जेक्टएं उनके ड्रॉइंग लुक ({_1}) के रूप में आईं: उनकी उपस्थिति अभी तक संपादन योग्य नहीं है
 @msg	offset out of range	सीमा से बाहर ऑफसेट
 @msg	Offset Path: {e}	ऑफसेट पाथ: {e}
 @msg	Offset Path: select paths	ऑफसेट पाथ: सिलेक्शन पाथ

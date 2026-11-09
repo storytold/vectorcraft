@@ -4817,7 +4817,7 @@ axis	Both	Оба
 @msg	its objects are nested too deeply	объекты в них вложены слишком глубоко
 @msg	its section ending with `%{end}` doesn't end	раздел, заканчивающийся на `%{end}`, не заканчивается
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	кисти, которые VectorCraft пока не умеет читать, не добавлены в панель «Кисти» ({_1})
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	объекты с несколькими заливками или обводками, эффектами или кистями импортированы в нарисованном виде ({_1}): их оформление пока нельзя редактировать
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	объекты с несколькими заливками или обводками, обводками переменной ширины, эффектами или кистями импортированы в нарисованном виде ({_1}): их оформление пока нельзя редактировать
 @msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	имя `{name}` не в UTF-8 и прочитано как {label}: если оно выглядит неверно, откройте файл с другим legacyNameEncoding
 @msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	имя `{name}` не в UTF-8, и его части недопустимы и в {label}: откройте файл с другим legacyNameEncoding
 @msg	more names that aren't UTF-8 were read as {label} ({count})	другие имена не в UTF-8 прочитаны как {label} ({count})

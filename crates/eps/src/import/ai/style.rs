@@ -174,13 +174,16 @@ const PATHFINDER_OPTIONS: [(&str, Kind, f64); 12] = [
 pub(super) struct ArtStyle {
     /// The style reads as [`Self::items`] and [`Self::effects`].
     pub plain: bool,
-    /// It is one fill and one stroke at most, in solid colours or the object's own gradient, with
+    /// It is one fill and one stroke at most, none of them [`Self::uneven`], in solid colours or the object's own gradient, with
     /// no transparency or effects of their own, and only Drop Shadow, Inner Glow, Outer Glow,
     /// Feather, Round Corners, Scribble, Convert to Shape, the Path effects (Offset Path, Outline Object, Outline Stroke),
     /// Bas Relief read from its settings block and some Distort & Transform effects ([`any_object_takes`]) on the object
     /// (and Pathfinder effects when it has no fills or strokes): what any object is read with. Type takes the other plain styles too (its drawn look
     /// can't be retyped), paths and compound paths [`Self::stacked`] ones; other objects keep their drawn look, which is the app's own rendering.
     pub simple: bool,
+    /// It would be [`Self::simple`] but for a Stroke Style filter's variable width written as one
+    /// centered array ([`centered_widths`]): an object whose drawn look is empty takes it with its profile.
+    pub uneven: bool,
     /// It is several fills and strokes in solid colours or gradients (strokes without a brush),
     /// each with its own visibility, opacity and blend mode but no effects of its own, under only
     /// the effects any object takes that don't move the outline: what a path or compound path is
@@ -1601,7 +1604,7 @@ fn style(filters: &[Filter]) -> ArtStyle {
     st.plain = b.plain;
     let bas_relief = bas_relief_read(filters);
     let count = |stroke: bool| st.items.iter().filter(|i| matches!(i, StyleItem::Stroke { .. }) == stroke).count();
-    st.simple = st.plain
+    let simple = st.plain
         && count(true) <= 1
         && count(false) <= 1
         && st.items.iter().all(|i| matches!(i, StyleItem::Fill(_) | StyleItem::Stroke { .. } | StyleItem::Gradient { .. }))
@@ -1612,13 +1615,28 @@ fn style(filters: &[Filter]) -> ArtStyle {
         && (!st.moves_outline() || st.effects.len() == 1)
         // Pathfinder effects on a group with no fills or strokes of its own (`styled` checks the group).
         && (!st.pathfinder || st.items.is_empty());
-    st.stacked = st.plain
+    // A stroke with one centered width array comes in as the drawn look, which holds the outline as the file draws it.
+    let centered = filters.iter().any(centered_widths);
+    (st.simple, st.uneven) = (simple && !centered, simple && centered);
+    st.stacked = !centered
+        && st.plain
         && !st.pathfinder
         && !st.moves_outline()
         && st.items.iter().all(|i| matches!(i, StyleItem::Fill(_) | StyleItem::Gradient { .. } | StyleItem::Stroke { brush: None, .. }))
         && st.looks.iter().all(|l| l.effects.is_empty())
         && st.effects.iter().all(any_object_takes);
     st
+}
+
+/// Whether `f` is a painted Stroke Style filter with a variable width written as one centered array,
+/// `BSCenteredWidthsArray`. A Stroke Offset filter's profile and one written as each side's widths
+/// (`BSLeftWidthsArray` and `BSRightWidthsArray`, as VectorCraft saves it) are not.
+fn centered_widths(f: &Filter) -> bool {
+    let each_side = f
+        .arrays
+        .get("BSVariableWidthTValuesArray")
+        .is_some_and(|at| ["BSLeftWidthsArray", "BSRightWidthsArray"].iter().all(|key| f.arrays.get(*key).is_some_and(|w| w.len() == at.len())));
+    f.name == STROKE && f.paints.0 && !each_side && width_profile(&f.arrays).is_some()
 }
 
 mod adapter;

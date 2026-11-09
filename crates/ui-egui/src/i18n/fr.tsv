@@ -4768,7 +4768,7 @@ axis	Both	Les deux
 @msg	its objects are nested too deeply	leurs objets sont imbriqués trop profondément
 @msg	its section ending with `%{end}` doesn't end	leur section qui se termine par `%{end}` ne se termine pas
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	les formes que VectorCraft ne sait pas encore lire ont été omises du panneau Formes ({_1})
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	les objets à plusieurs fonds ou contours, effets ou formes ont été importés tels qu’ils sont dessinés ({_1}) : leur aspect n’est pas encore modifiable
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	les objets à plusieurs fonds ou contours, contours de largeur variable, effets ou formes ont été importés tels qu’ils sont dessinés ({_1}) : leur aspect n’est pas encore modifiable
 @msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	le nom `{name}` n’est pas en UTF-8 et a été lu en {label} : s’il semble incorrect, ouvrez le fichier avec un autre legacyNameEncoding
 @msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	le nom `{name}` n’est pas en UTF-8, et certaines parties ne sont pas non plus du {label} valide : ouvrez le fichier avec un autre legacyNameEncoding
 @msg	more names that aren't UTF-8 were read as {label} ({count})	d’autres noms qui ne sont pas en UTF-8 ont été lus en {label} ({count})
