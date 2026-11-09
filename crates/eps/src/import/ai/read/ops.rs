@@ -752,6 +752,24 @@ impl<'a> Reader<'a> {
         {
             return;
         }
+        // A variable-width stroke's look that draws nothing but copies read from `%_` lines: an
+        // empty group, which [`styled`] takes the stroke for.
+        let drawn;
+        let look = if !hidden
+            && slot_of(object.name.as_deref()).is_none()
+            && matches!(look.kind, NodeKind::Group { .. })
+            && self.styles.get(&style).is_some_and(|st| st.uneven)
+            && !draws(look, &self.hidden_ids)
+        {
+            let mut copy = look.clone();
+            if let Some(children) = copy.children_mut() {
+                children.clear();
+            }
+            drawn = copy;
+            &drawn
+        } else {
+            look
+        };
         // A style read here: the object, painted as it says.
         if let Some(mut appearance) = self.styles.get(&style).and_then(|st| {
             styled(
@@ -1067,7 +1085,8 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
     // A symbol instance draws its symbol's art: it keeps its drawn look.
     if !st.plain
         || matches!(object.kind, NodeKind::SymbolInstance { .. })
-        || (!slot && !st.simple && !stacked)
+        // A look with no outline in it to keep takes a variable-width stroke as the object's own.
+        || (!slot && !st.simple && !stacked && (!st.uneven || draws(look, &HashSet::new())))
         || (object.is_container() && !slot && !matches!(object.kind, NodeKind::Compound { .. }) && !st.items.is_empty())
         || (st.pathfinder
             && (slot || !st.items.is_empty() || object.is_compound_shape() || !matches!(object.kind, NodeKind::Group { clip: false, .. })))
@@ -1272,6 +1291,21 @@ fn strip(n: &mut Node, hidden: &HashSet<NodeId>) {
         for c in children.iter_mut() {
             strip(Arc::make_mut(c), hidden);
         }
+    }
+}
+
+/// Whether `n` holds anything that draws, apart from the children read from `%_` lines (`hidden`):
+/// a path or a compound path with a paint of its own, or a node other than a group or those.
+fn draws(n: &Node, hidden: &HashSet<NodeId>) -> bool {
+    if hidden.contains(&n.id) {
+        return false;
+    }
+    let paints = n.appearance.items.iter().any(|i| i.visible() && !i.paint().is_none());
+    match (&n.kind, n.children()) {
+        (NodeKind::Compound { .. }, Some(children)) => paints && children.iter().any(|c| c.visible && !hidden.contains(&c.id)),
+        (NodeKind::Group { .. }, Some(children)) => children.iter().any(|c| c.visible && draws(c, hidden)),
+        (NodeKind::Path { .. }, _) => paints,
+        _ => true,
     }
 }
 

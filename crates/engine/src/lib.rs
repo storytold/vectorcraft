@@ -62,6 +62,19 @@ pub struct Session {
     /// While Cmd lends `tool` (a selection tool) for a drag: the tool it was lent to, which comes
     /// back as it was at the release ([`Session::pointer`]).
     pub(crate) lender: Option<Box<dyn Tool>>,
+    /// Pointer and key input that came while the tool computed an edit on another thread, each with
+    /// its number and view, made in order once the edit is applied.
+    held_input: std::collections::VecDeque<(u64, tooling::HeldInput, ViewInfo)>,
+    /// The number the next pointer or key event handed to the session gets.
+    input_count: u64,
+    /// The number of the event whose handling started the edit the tool is computing.
+    edit_started_by: Option<u64>,
+    /// Set while the tool's edit and the input held for it are applied: the commands that run then
+    /// do not start applying them again.
+    settling_tool_edit: bool,
+    /// Requests for the UI from making held input where nothing could take them (a command, a tool
+    /// switch), which the next [`Session::tool_poll`] returns.
+    held_ui: Vec<UiRequest>,
     /// The active document (its uid) and its [`History::step`] when the tool last handled a pointer
     /// event or drew its overlays: when they differ at the next one, the tool is told first
     /// ([`vectorcraft_tools::Tool::history_moved`]). None until the first.
@@ -314,7 +327,7 @@ mod session;
 pub(crate) use command_sets::SELECTS_GIVEN_IDS;
 #[cfg(test)]
 use command_sets::given_ids;
-pub use command_sets::{FIT_ACTIVE_ARTBOARD, ON_ACTIVE_ARTBOARD};
+pub use command_sets::{FIT_ACTIVE_ARTBOARD, ON_ACTIVE_ARTBOARD, waits_for_tool_edit};
 pub use doc_state::{DocState, OpenRows, RecalledSelection};
 pub use error::{EngineError, Result};
 pub use history::{History, HistoryEntry, NamedStep, default_history_budget};

@@ -358,6 +358,7 @@ fn details(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, b: &mut 
     let top = ui.cursor().top();
     ui.label(egui::RichText::new(tl!("PRESET DETAILS")).font(theme::semibold(11.0)).color(t.text_dim));
     ui.add_space(8.0);
+    form::caption(ui, tl!("Document Name"));
     ui.horizontal(|ui| {
         form::text(ui, d, "name", DETAILS - 50.0);
         save_button(app, ui, d);
@@ -874,6 +875,44 @@ mod tests {
         let t = thumbs(&out);
         assert!(!t.is_empty() && t.iter().all(|s| s.y >= s.x), "the cards turned: {t:?}");
         assert!(selected(&out), "the turned preset stays chosen: {:?}", field(&app, "preset"));
+    }
+
+    /// The document's name field has a caption of its own under the Preset Details heading, and
+    /// the column stays inside the dialog's height with Save Preset and Advanced Options open.
+    #[test]
+    fn the_name_field_is_captioned_and_the_column_fits() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.newDialog", json!({})).unwrap();
+        set(&mut app, "advanced", json!(true));
+        set(&mut app, super::SAVING, json!(true));
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut time = 0.0;
+        let mut run = |app: &mut VectorcraftApp| {
+            time += 0.5;
+            let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 1000.0)));
+            let raw = egui::RawInput { screen_rect, time: Some(time), ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| crate::dialogs::show(app, ui.ctx()));
+            out.textures_delta.clear();
+            out
+        };
+        run(&mut app);
+        let out = run(&mut app);
+        fn walk(s: &egui::Shape, out: &mut Vec<(String, egui::Rect)>) {
+            match s {
+                egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.visual_bounding_rect())),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+                _ => {}
+            }
+        }
+        let mut texts = vec![];
+        out.shapes.iter().for_each(|c| walk(&c.shape, &mut texts));
+        let at = |name: &str| texts.iter().find(|(t, _)| t == name).map(|(_, r)| *r).unwrap_or_else(|| panic!("{name} is missing: {texts:?}"));
+        let (heading, caption, value) = (at("PRESET DETAILS"), at("Document Name"), at("Untitled-1"));
+        assert!(heading.bottom() <= caption.top() && caption.bottom() <= value.top(), "{heading:?} {caption:?} {value:?}");
+        assert!(value.bottom() <= at("Preset Name").top(), "the preset's own name field follows");
+        let used = at("Create").bottom() - heading.top();
+        assert!(used <= super::HEIGHT, "the column used {used}");
     }
 
     #[test]

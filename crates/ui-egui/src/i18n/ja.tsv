@@ -4006,7 +4006,7 @@ axis	Both	両方
 	Dock to Bottom	下部にドッキング
 	Dock Control Bar	コントロールバーをドッキング
 	Drag to float the toolbar	ドラッグしてツールバーをフローティング
-	Drag to the window's left edge to dock	ウィンドウの左端までドラッグしてドッキング
+	Drag to the window's left or right edge to dock	ウィンドウの左端または右端までドラッグしてドッキング
 	Float Tool Group	ツールグループをフローティング
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
@@ -4514,7 +4514,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	表示に使われるフォントの 1 行に対して低すぎるフレーム内のエリア内文字は、フレームを高くしました ({_1}): そうしないと文字が表示されません
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	グラデーション「{name}」はファイル内で定義されていません: 代わりに単色を使用しています
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	VectorCraft がまだ読み込めないブラシ {_1} 個はブラシパネルに追加されませんでした
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	塗りや線が複数ある、または効果やブラシを適用したオブジェクト {_1} 個は見た目のまま読み込まれました: アピアランスはまだ編集できません
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	塗りや線が複数ある、可変幅の線がある、または効果やブラシを適用したオブジェクト {_1} 個は見た目のまま読み込まれました: アピアランスはまだ編集できません
 @msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	名前 `{name}` は UTF-8 ではないため {label} として読み込みました: 正しくない場合は別の legacyNameEncoding でファイルを開いてください
 @msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	名前 `{name}` は UTF-8 ではなく、一部は {label} としても無効です: 別の legacyNameEncoding でファイルを開いてください
 @msg	more names that aren't UTF-8 were read as {label} ({count})	UTF-8 ではないほかの名前を {label} として読み込みました ({count})
@@ -6344,3 +6344,4 @@ breakText	Glyphs	字形
 # Align to Pixel Grid
 	Align to Pixel Grid	ピクセルグリッドに整合
 @msg	only paths and compound paths can be aligned to the pixel grid	ピクセルグリッドに整合できるのはパスと複合パスのみです
+@msg	side is left or right, not `{s}`	side は left または right です（`{s}` ではありません）

@@ -1384,7 +1384,7 @@ antiAlias	Sharp	शार्प
 	Drag to float as a toolbar	एक टूलबार के रूप में तैरने के लिए खींचें
 	Drag to float the toolbar	टूलबार को तैरने के लिए खींचें
 	Drag to move	आगे बढ़ने के लिए
-	Drag to the window's left edge to dock	खिड़की के बाएं किनारे पर डॉक करने के लिए खींचें
+	Drag to the window's left or right edge to dock	खिड़की के बाएं या दाएं किनारे पर डॉक करने के लिए खींचें
 	Drag values or labels. Double-click a value to type.	मूल्यों या लेबल खींचें। टाइप करने के लिए एक मान को डबल क्लिक करें।
 	Draw	ड्रा
 	Draw Behind	पीछे खींचना
@@ -7000,7 +7000,7 @@ antiAlias	Sharp	शार्प
 @msg	warped text objects that came in as drawn art, not as editable type: {_1}	मोड़े गए टेक्स्ट ऑब्जेक्ट जो संपादन योग्य टेक्स्ट के बजाय कला के रूप में आए: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	उन ऑब्जेक्ट्स को जो फ़ाइल के स्वयं के पृष्ठ से अलग-अलग तरीके से आकर्षित होते हैं, उनकी कला के रूप में आया: {_1}
 @msg	objects were left out	ऑब्जेक्ट्स को छोड़ दिया गया था
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	कई भराव या स्ट्रोक, इफ़ेक्ट या ब्रश के साथ ऑब्जेक्टएं उनके ड्रॉइंग लुक ({_1}) के रूप में आईं: उनकी उपस्थिति अभी तक संपादन योग्य नहीं है
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	कई भराव या स्ट्रोक, परिवर्तनीय चौड़ाई वाले स्ट्रोक, इफ़ेक्ट या ब्रश के साथ ऑब्जेक्टएं उनके ड्रॉइंग लुक ({_1}) के रूप में आईं: उनकी उपस्थिति अभी तक संपादन योग्य नहीं है
 @msg	offset out of range	सीमा से बाहर ऑफसेट
 @msg	Offset Path: {e}	ऑफसेट पाथ: {e}
 @msg	Offset Path: select paths	ऑफसेट पाथ: सिलेक्शन पाथ
@@ -8100,3 +8100,4 @@ theme	Appearance	अपीयरेंस
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	फ़ाइल उन {MAX_INPUT_BYTES} बाइट्स से बड़ी है जो इंपोर्टर पढ़ता है
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	इंपोर्टर 1 से {MAX_EXTENSIONS} `extensions` घोषित करता है
 @msg	an importer always gets an import's budget: leave `budget` out	इंपोर्टर को हमेशा इंपोर्ट का बजट मिलता है: `budget` छोड़ दें
+@msg	side is left or right, not `{s}`	side left या right होना चाहिए, `{s}` नहीं

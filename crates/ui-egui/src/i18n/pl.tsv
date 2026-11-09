@@ -1217,7 +1217,7 @@ lighting	Light	Światło
 	Toggle single/double column	Przełącz jedną/dwie kolumny
 	W:	S:
 	Drag to float the toolbar	Przeciągnij, aby odpiąć pasek narzędzi
-	Drag to the window's left edge to dock	Przeciągnij do lewej krawędzi okna, aby zadokować
+	Drag to the window's left or right edge to dock	Przeciągnij do lewej lub prawej krawędzi okna, aby zadokować
 	Crystallize	Krystalizacja
 	Add Anchor Point Tool	Narzędzie Dodaj punkt kontrolny
 	Anchor Point Tool	Narzędzie Punkt kontrolny
@@ -4915,7 +4915,7 @@ imageTrace	Outline	Kontur
 @msg	its objects are nested too deeply	jego obiekty są zagnieżdżone zbyt głęboko
 @msg	its section ending with `%{end}` doesn't end	jego sekcja kończąca się na `%{end}` nie ma końca
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	pędzle, których VectorCraft jeszcze nie odczytuje, pominięto w panelu Pędzle ({_1})
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	obiekty z kilkoma wypełnieniami lub obrysami, efektami albo pędzlami wczytano jako ich narysowany wygląd ({_1}): ich wyglądu nie można jeszcze edytować
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	obiekty z kilkoma wypełnieniami lub obrysami, obrysami o zmiennej szerokości, efektami albo pędzlami wczytano jako ich narysowany wygląd ({_1}): ich wyglądu nie można jeszcze edytować
 @msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	nazwa `{name}` nie jest w UTF-8 i została odczytana jako {label}: jeśli wygląda źle, otwórz plik z innym legacyNameEncoding
 @msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	nazwa `{name}` nie jest w UTF-8, a jej części nie są poprawne również w {label}: otwórz plik z innym legacyNameEncoding
 @msg	more names that aren't UTF-8 were read as {label} ({count})	kolejne nazwy spoza UTF-8 odczytano jako {label} ({count})
@@ -6514,3 +6514,4 @@ breakText	Glyphs	Glify
 # Align to Pixel Grid
 	Align to Pixel Grid	Wyrównaj do siatki pikseli
 @msg	only paths and compound paths can be aligned to the pixel grid	do siatki pikseli można wyrównać tylko ścieżki i ścieżki złożone
+@msg	side is left or right, not `{s}`	side to left lub right, a nie `{s}`
