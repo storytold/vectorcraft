@@ -168,12 +168,12 @@ impl Interp<'_> {
             ResourceForAll => self.resource_for_all()?,
             Show | AShow | WidthShow | AWidthShow | XShow | YShow | XYShow | KShow => {
                 let (s, spacing) = self.show_operands(op)?;
-                if let Some(glyphs) = self.composite_glyphs(&s) {
+                if let Some(glyphs) = self.composite_glyphs(&s)? {
                     self.show_composite(&glyphs, &spacing)?;
                 } else {
                     match self.type3_font() {
                         Some(font) => self.show_type3(&font, &s, &spacing)?,
-                        None => self.show(&s)?,
+                        None => self.show_plain(&s, &spacing)?,
                     }
                 }
             }
@@ -229,6 +229,7 @@ impl Interp<'_> {
                 };
                 self.push(Obj::Dict(font))?;
             }
+            op if op == ComposeFont || Op::PROCSET.contains(&op) => self.cid_op(op)?,
             _ => return ps_err("undefined", op.name()),
         }
         Ok(())
@@ -277,14 +278,20 @@ impl Interp<'_> {
 
     /// How far `s` moves the current point (user space).
     fn width_of(&mut self, s: &[u8]) -> Res<Vec2> {
-        if let Some(glyphs) = self.composite_glyphs(s) {
+        if let Some(glyphs) = self.composite_glyphs(s)? {
             let mut w = Vec2::ZERO;
             for g in &glyphs {
                 w += self.composite_glyph(g, Point::new(w.x, w.y), Draw::No)?;
             }
             return Ok(w);
         }
-        let Some(font) = self.type3_font() else { return Ok(self.set_type(s, Point::ZERO)?.2) };
+        let Some(font) = self.type3_font() else {
+            if let Some((_, glyphs)) = self.type42_plain(s)? {
+                let (_, f1) = self.font()?;
+                return Ok(glyphs.iter().map(|g| f1 * Point::new(g.width, 0.0) - f1 * Point::ZERO).sum());
+            }
+            return Ok(self.set_type(s, Point::ZERO)?.2);
+        };
         let mut w = Vec2::ZERO;
         for &code in s {
             w += self.type3_glyph(&font, Glyph::Code(code), Point::new(w.x, w.y), false)?;
@@ -421,10 +428,18 @@ impl Interp<'_> {
     /// `s` (read as Latin-1) set in the current font at user point `at`: point type placed there,
     /// its layout in text space, and how far it moves the current point (user space).
     fn set_type(&mut self, s: &[u8], at: Point) -> Res<(TextObject, TextLayout, Vec2)> {
+        // Every byte is read, also the control codes left out of the type (a new string's zeros).
+        self.spend(s.len() as u64)?;
+        let text: String = s.iter().map(|b| char::from(*b)).filter(|c| !c.is_control()).collect();
+        self.set_text(&text, at)
+    }
+
+    /// [`Self::set_type`] for the characters `text`.
+    fn set_text(&mut self, text: &str, at: Point) -> Res<(TextObject, TextLayout, Vec2)> {
         // Laying out type costs about as much as 300 operations, and 64 more a character
         // (measured), so `{ (a) stringwidth pop pop } loop` or `cshow` on a long string ends
         // within the budget like any other loop instead of running for minutes.
-        self.spend((s.len() as u64).saturating_mul(64).saturating_add(300))?;
+        self.spend((text.len() as u64).saturating_mul(64).saturating_add(300))?;
         let (name, f1) = self.font()?;
         // Text space (y down, `size` points an em) onto the document.
         let m = self.xf() * Affine::translate(at.to_vec2()) * f1;
@@ -435,10 +450,9 @@ impl Interp<'_> {
         let (family, font_style) = family_style(&name);
         // The available family's own spelling: `MicrosoftYaHei` is Microsoft YaHei, not "Microsoft Ya Hei".
         let font_family = vectorcraft_text::FontDb::global().find_family(&family).unwrap_or(family);
-        let text: String = s.iter().map(|b| char::from(*b)).filter(|c| !c.is_control()).collect();
         let fill = if self.g.paint.is_none() { Paint::solid(vectorcraft_color::Color::BLACK) } else { self.g.paint.clone() };
         let style = CharStyle { font_family, font_style, size, fill, stroke: Paint::None, ..CharStyle::default() };
-        let mut t = TextObject::point(Point::ZERO, &text, style);
+        let mut t = TextObject::point(Point::ZERO, text, style);
         let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
         t.xf = m * Affine::scale_non_uniform(1.0 / size, -1.0 / size);
         t.cached_bounds = Some(layout.bounds);
@@ -448,24 +462,210 @@ impl Interp<'_> {
 
     /// `show`: point type at the current point, which moves past it.
     fn show(&mut self, s: &[u8]) -> Res {
+        self.show_plain(s, &Spacing::Plain)
+    }
+
+    /// `s` shown in a font that isn't a Type 3 or composite font, spaced as `spacing` says: point
+    /// type at the current point, which moves past it as far as the file says, each character
+    /// where the file puts it. A Type 42 font that carries its TrueType font gives each code its
+    /// character (by its glyph name, else the character its glyph stands for in the font's own
+    /// character map) and its glyph's width; type in a font found by name is spaced by the
+    /// installed font's advances. Where the file's spacing differs from the advances of the
+    /// installed (or fallback) font, each character's tracking makes up the difference, so type
+    /// in a font that isn't installed keeps the file's line lengths and justified lines don't
+    /// drift, as PDF import does. Glyphs that stand for no character are drawn from the font's
+    /// outlines (the whole string, as one group).
+    fn show_plain(&mut self, s: &[u8], spacing: &Spacing) -> Res {
+        // Every code gets a move, also the control codes left out of the type.
+        self.spend(s.len() as u64)?;
         let at = self.user_point()?;
-        let (t, _, adv) = self.set_type(s, at)?;
-        if !self.g.paint.is_none() && !t.plain_text().trim().is_empty() {
+        let (_, f1) = self.font()?;
+        let plain = self.type42_plain(s)?;
+        if let Some((data, glyphs)) = &plain
+            && glyphs.iter().any(|g| g.ch.is_none() && g.gid != 0)
+        {
+            return self.show_type42_outlines(data, glyphs, s, spacing, at, f1);
+        }
+        // Each code's character, if it has one that shows (control codes don't).
+        let chars: Vec<Option<char>> = match &plain {
+            Some((_, glyphs)) => glyphs.iter().map(|g| g.ch).collect::<Vec<_>>(),
+            None => s.iter().map(|b| Some(char::from(*b))).collect(),
+        }
+        .into_iter()
+        .map(|c| c.filter(|c| !c.is_control()))
+        .collect();
+        let text: String = chars.iter().flatten().collect();
+        let (mut t, mut layout, _) = self.set_text(&text, at)?;
+        let size = t.runs.first().map_or(1.0, |r| r.style.size);
+        let starts: Vec<usize> = text.char_indices().map(|(b, _)| b).collect();
+        // The file places each character's glyph: where the layout joins characters in a
+        // ligature, the type is set without ligatures, so each character has its own advance.
+        let glyph_starts: std::collections::HashSet<usize> = layout.glyphs.iter().map(|g| g.byte).collect();
+        if starts.iter().any(|b| !glyph_starts.contains(b)) {
+            for run in &mut t.runs {
+                run.style.features.push("-liga".into());
+            }
+            layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+            t.cached_bounds = Some(layout.bounds);
+        }
+        // Each character's advance in the layout (text space).
+        let mut natural = vec![0.0; starts.len()];
+        for g in &layout.glyphs {
+            if let Some(n) = starts.binary_search(&g.byte).ok().and_then(|k| natural.get_mut(k)) {
+                *n += g.advance;
+            }
+        }
+        // Each code's move (user space) and that move in text space, along the baseline and across.
+        let em = |x: f64| f1 * Point::new(x, 0.0) - f1 * Point::ZERO;
+        let inv = f1.inverse();
+        let mut moves = Vec::with_capacity(s.len());
+        let mut k = 0;
+        for (i, (&code, c)) in s.iter().zip(&chars).enumerate() {
+            let own = match &plain {
+                Some((_, glyphs)) => glyphs.get(i).map_or(0.0, |g| g.width),
+                None if c.is_some() => natural.get(k).copied().unwrap_or(0.0) / size,
+                None => 0.0,
+            };
+            k += usize::from(c.is_some());
+            let d = spacing.advance(i, i64::from(code), em(own));
+            let e = inv * Point::new(d.x, d.y) - inv * Point::ZERO;
+            if ![d.x, d.y, e.x * size, e.y * size].iter().all(|v| v.is_finite()) {
+                return ps_err("undefinedresult", "a show");
+            }
+            moves.push((d, e.x * size, e.y * size));
+        }
+        let total: Vec2 = moves.iter().map(|m| m.0).sum();
+        if !(total.x.is_finite() && total.y.is_finite()) {
+            return ps_err("undefinedresult", "a show");
+        }
+        let across = moves.iter().any(|m| m.2.abs() > size * 1e-3);
+        // Nothing shows on the null device (`nulldevice`, a Type 3 glyph only measured).
+        let painted = !self.g.paint.is_none() && !self.g.null;
+        if across {
+            // Moves across the baseline (`yshow`, `xyshow`): each character where the file puts it.
+            let mut pen = at;
+            for ((d, ..), c) in moves.iter().zip(&chars) {
+                if let Some(c) = c
+                    && painted
+                    && !c.is_whitespace()
+                {
+                    let (t, ..) = self.set_text(c.encode_utf8(&mut [0; 4]), pen)?;
+                    let clips = self.g.clips.clone();
+                    self.out.push(Node::new(NodeId(0), NodeKind::Text(Box::new(t))), &clips);
+                }
+                pen += *d;
+            }
+        } else if painted && !text.trim().is_empty() {
+            // The moves of codes before the first character move the type; those of codes after
+            // a character, before the next, are that character's.
+            let mut lead = Vec2::ZERO;
+            let mut target: Vec<f64> = Vec::with_capacity(natural.len());
+            for ((d, along, _), c) in moves.iter().zip(&chars) {
+                match (c, target.last_mut()) {
+                    (Some(_), _) => target.push(*along),
+                    (None, Some(last)) => *last += along,
+                    (None, None) => lead += *d,
+                }
+            }
+            let tracking: Vec<f64> = target
+                .iter()
+                .zip(&natural)
+                // Hundredths of a thousandth of an em: no drift along a line, no noise in the panels.
+                .map(|(want, has)| (((want - has) / size * 1000.0).clamp(-1000.0, 10000.0) * 100.0).round() / 100.0)
+                .collect();
+            if tracking.iter().any(|t| *t != 0.0)
+                && let Some(run) = t.runs.first().cloned()
+            {
+                let mut runs: Vec<vectorcraft_doc::TextRun> = Vec::new();
+                for (c, tr) in text.chars().zip(&tracking) {
+                    match runs.last_mut() {
+                        Some(last) if last.style.tracking == *tr => last.text.push(c),
+                        _ => runs.push(vectorcraft_doc::TextRun {
+                            text: c.to_string(),
+                            style: CharStyle { tracking: *tr, ..run.style.clone() },
+                            inline: run.inline.clone(),
+                        }),
+                    }
+                }
+                t.runs = runs;
+                t.cached_bounds = Some(vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t).bounds);
+            }
+            if lead != Vec2::ZERO {
+                t.xf = Affine::translate(self.xf() * Point::new(lead.x, lead.y) - self.xf() * Point::ZERO) * t.xf;
+            }
             let clips = self.g.clips.clone();
             self.out.push(Node::new(NodeId(0), NodeKind::Text(Box::new(t))), &clips);
         }
-        self.g.cur = Some(self.xf() * (at + adv));
+        self.g.cur = Some(self.xf() * (at + total));
+        Ok(())
+    }
+
+    /// `s` in a Type 42 font, some of whose glyphs stand for no character, drawn from the font's
+    /// outlines at the current point (one group), spaced as `spacing` says.
+    fn show_type42_outlines(&mut self, data: &super::type42::Font, glyphs: &[Plain], s: &[u8], spacing: &Spacing, at: Point, f1: Affine) -> Res {
+        // Each glyph's place, checked before anything is painted: moves that overflow (two
+        // `1e308` numbers in `xshow`) are an error, as in `show_plain`, not glyphs at infinity.
+        let mut places = Vec::with_capacity(glyphs.len());
+        let mut pen = at;
+        for (i, (g, &code)) in glyphs.iter().zip(s).enumerate() {
+            places.push(pen);
+            pen += spacing.advance(i, i64::from(code), f1 * Point::new(g.width, 0.0) - f1 * Point::ZERO);
+            if !(pen.x.is_finite() && pen.y.is_finite()) {
+                return ps_err("undefinedresult", "a show");
+            }
+        }
+        let start = self.out.drawn.len();
+        let mut text = String::new();
+        for (g, place) in glyphs.iter().zip(places) {
+            if let Some(outline) = super::type42::glyph(&data.data, g.gid).map(|o| o.0) {
+                self.type42_paint(outline, place, f1, Draw::Fill)?;
+            }
+            text.push(g.ch.unwrap_or('\u{2022}'));
+        }
+        self.g.cur = Some(self.xf() * pen);
+        self.group_glyphs(start, &text);
+        Ok(())
+    }
+
+    /// Glyph outline `outline` (glyph space) under font matrix `fm` at user point `at`: filled, or
+    /// added to the current path (`charpath`).
+    fn type42_paint(&mut self, mut outline: vectorcraft_geom::BezPath, at: Point, fm: Affine, paint: Draw) -> Res {
+        // Measuring a glyph reads its outline too, so `stringwidth` in a loop pays for it.
+        self.spend((outline.elements().len() as u64).saturating_add(16))?;
+        if paint == Draw::No {
+            return Ok(());
+        }
+        outline.apply_affine(self.xf() * Affine::translate(at.to_vec2()) * fm);
+        if paint == Draw::Fill {
+            return self.fill_path(outline, vectorcraft_geom::FillRule::NonZero);
+        }
+        if self.g.path.elements().len().saturating_add(outline.elements().len()) > super::graphics::MAX_PATH {
+            return Err(PsError::Limit("a path has too many points"));
+        }
+        self.g.path.extend(outline);
         Ok(())
     }
 
     /// `charpath`: the glyph outlines of `s` added to the path.
     fn char_path(&mut self, s: &[u8]) -> Res {
-        if let Some(glyphs) = self.composite_glyphs(s) {
+        if let Some(glyphs) = self.composite_glyphs(s)? {
             for g in &glyphs {
                 let at = self.user_point()?;
                 let w = self.composite_glyph(g, at, Draw::Path)?;
                 self.g.cur = Some(self.xf() * (at + w));
             }
+            return Ok(());
+        }
+        if let Some((data, glyphs)) = self.type42_plain(s)? {
+            let (_, f1) = self.font()?;
+            let mut pen = self.user_point()?;
+            for g in &glyphs {
+                if let Some((outline, _)) = super::type42::glyph(&data.data, g.gid) {
+                    self.type42_paint(outline, pen, f1, Draw::Path)?;
+                }
+                pen += f1 * Point::new(g.width, 0.0) - f1 * Point::ZERO;
+            }
+            self.g.cur = Some(self.xf() * pen);
             return Ok(());
         }
         let at = self.user_point()?;
@@ -520,14 +720,17 @@ impl Spacing {
     }
 }
 
-/// A character of a composite font: the descendant font that draws it, its code there, and the
-/// composite font's matrix (over the descendant's own).
+/// A character of a composite font: the descendant font that draws it, its code there (its last
+/// byte for a CID), its CID and the notdef mapping's (`FMapType` 9), the composite font's matrix
+/// (over the descendant's own) and whether it is set vertically (`WMode` 1).
 struct Mapped {
     font: DictRef,
     /// The byte that picked the descendant (the font number).
     pick: u8,
     code: u8,
+    cid: Option<(u32, Option<u32>)>,
     outer: Affine,
+    vertical: bool,
 }
 
 /// What drawing a glyph does with it.
@@ -561,15 +764,34 @@ fn units(f: &Dict) -> f64 {
 impl Interp<'_> {
     /// The characters of `s` in the current font when it is a composite font with the 8/8 mapping
     /// (`FMapType` 2: a byte picking the descendant through `Encoding` and `FDepVector`, then the
-    /// code in it: PLRM 3rd ed., §5.10.1 "Type 0 Font Dictionaries"); `None` for other fonts and
-    /// mappings, which are set as type in the font of the composite font's name.
-    fn composite_glyphs(&self, s: &[u8]) -> Option<Vec<Mapped>> {
-        let font = self.g.font.clone()?;
-        let f = font.borrow();
-        if font_type(&f) != Some(0.0) || f.get(&Key::name("FMapType")).and_then(Obj::as_num) != Some(2.0) {
-            return None;
+    /// code in it: PLRM 3rd ed., §5.10.1 "Type 0 Font Dictionaries") or a CMap (`FMapType` 9:
+    /// codes mapped to a descendant and a CID, §5.11.5); `None` for other fonts and mappings,
+    /// which are set as type in the font of the composite font's name.
+    fn composite_glyphs(&mut self, s: &[u8]) -> Res<Option<Vec<Mapped>>> {
+        let Some(font) = self.g.font.clone() else { return Ok(None) };
+        let map = {
+            let f = font.borrow();
+            if font_type(&f) != Some(0.0) {
+                return Ok(None);
+            }
+            f.get(&Key::name("FMapType")).and_then(Obj::as_num)
+        };
+        if map == Some(9.0) {
+            return self.cid_chars(&font, s).map(Some);
         }
-        let (encoding, fonts) = (f.get(&Key::name("Encoding"))?.items()?.clone(), f.get(&Key::name("FDepVector"))?.items()?.clone());
+        if map != Some(2.0) {
+            return Ok(None);
+        }
+        // The scan visits every byte pair, also those that map to no glyph and so cost nothing
+        // further: charged by the string's length first, so a long string of unmapped characters
+        // shown in a loop runs out of the budget.
+        self.spend(s.len() as u64)?;
+        let f = font.borrow();
+        let (Some(encoding), Some(fonts)) =
+            (f.get(&Key::name("Encoding")).and_then(|e| e.items().cloned()), f.get(&Key::name("FDepVector")).and_then(|e| e.items().cloned()))
+        else {
+            return Ok(None);
+        };
         let (encoding, fonts) = (encoding.borrow(), fonts.borrow());
         let outer = font_matrix(&f, 1.0);
         let mut out = Vec::with_capacity(s.len() / 2);
@@ -579,10 +801,37 @@ impl Interp<'_> {
             if let Some(Obj::Dict(d)) = index.and_then(|i| fonts.get(i as usize))
                 && font_type(&d.borrow()) != Some(0.0)
             {
-                out.push(Mapped { font: d.clone(), pick, code, outer });
+                out.push(Mapped { font: d.clone(), pick, code, cid: None, outer, vertical: false });
             }
         }
-        Some(out)
+        Ok(Some(out))
+    }
+
+    /// The characters of `s` in `FMapType` 9 font `font`: its CMap's codes, each a CID in the
+    /// descendant `FDepVector` gives its font number (PLRM 3rd ed., §5.11.5).
+    fn cid_chars(&mut self, font: &DictRef, s: &[u8]) -> Res<Vec<Mapped>> {
+        let (cmap, fonts, outer, wmode) = {
+            let f = font.borrow();
+            let fonts = f.get(&Key::name("FDepVector")).and_then(|e| e.items().map(|i| i.to_vec())).unwrap_or_default();
+            let wmode = f.get(&Key::name("WMode")).and_then(Obj::as_num);
+            (f.get(&Key::name("CMap")).cloned(), fonts, font_matrix(&f, 1.0), wmode)
+        };
+        let Some(Obj::Dict(cmap)) = cmap else { return Ok(vec![]) };
+        let vertical = wmode.or_else(|| cmap.borrow().get(&Key::name("WMode")).and_then(Obj::as_num)) == Some(1.0);
+        let map = self.cmap(&cmap)?;
+        // Decoding stops when it would pass the budget left, which `spend` then reports.
+        let (chars, work) = map.decode(s, self.ops_left().saturating_mul(64));
+        // Each code is compared with the CMap's ranges and mappings until one matches.
+        self.spend((s.len() as u64).saturating_add(work / 64))?;
+        Ok(chars
+            .into_iter()
+            .filter_map(|c| match fonts.get(c.font) {
+                Some(Obj::Dict(d)) => {
+                    Some(Mapped { font: d.clone(), pick: 0, code: (c.cid & 0xff) as u8, cid: Some((c.cid, c.notdef)), outer, vertical })
+                }
+                _ => None,
+            })
+            .collect())
     }
 
     /// The characters of a composite font shown at the current point, spaced as `spacing` says.
@@ -596,7 +845,8 @@ impl Interp<'_> {
             // times 256 plus its code (PLRM 3rd ed., `widthshow` in chapter 8).
             let d = spacing.advance(i, i64::from(g.pick) * 256 + i64::from(g.code), w);
             self.g.cur = Some(self.xf() * (at + d));
-            let c = code_char(&g.font.borrow(), g.code);
+            // A CID stands for no character (its code is only the CID's low byte).
+            let c = if g.cid.is_some() { '\u{2022}' } else { code_char(&g.font.borrow(), g.code) };
             if c != '\u{2022}' {
                 text.push(c);
             }
@@ -618,25 +868,15 @@ impl Interp<'_> {
             let f = g.font.borrow();
             font_type(&f) == Some(3.0) && (f.contains_key(&Key::name("BuildGlyph")) || f.contains_key(&Key::name("BuildChar")))
         };
+        if let Some((cid, notdef)) = g.cid {
+            return self.cid_glyph_at(g, cid, notdef, at, paint);
+        }
         if builds {
             return self.type3_glyph_in(&g.font, Glyph::Code(g.code), at, paint == Draw::Fill, g.outer);
         }
         let fm = g.outer * font_matrix(&g.font.borrow(), 1.0);
         if let Some((outline, advance)) = self.type42_glyph(&g.font, g.code)? {
-            // Measuring a glyph reads its outline too, so `stringwidth` in a loop pays for it.
-            self.spend((outline.elements().len() as u64).saturating_add(16))?;
-            if paint != Draw::No {
-                let mut p = outline;
-                p.apply_affine(self.xf() * Affine::translate(at.to_vec2()) * fm);
-                if paint == Draw::Fill {
-                    self.fill_path(p, vectorcraft_geom::FillRule::NonZero)?;
-                } else {
-                    if self.g.path.elements().len().saturating_add(p.elements().len()) > super::graphics::MAX_PATH {
-                        return Err(PsError::Limit("a path has too many points"));
-                    }
-                    self.g.path.extend(p);
-                }
-            }
+            self.type42_paint(outline, at, fm, paint)?;
             return Ok(fm * Point::new(advance, 0.0) - fm * Point::ZERO);
         }
         // Set as type in the descendant's font, under the composite font's matrix.
@@ -662,61 +902,147 @@ impl Interp<'_> {
         r
     }
 
+    /// Glyph `cid` of CIDFont `g.font` at user point `at` (else the notdef mapping's glyph, else
+    /// CID 0's) → its width (user space), or its vertical displacement in writing mode 1 (the
+    /// glyph's origin then half its width left of the point and 0.88 em above it, and the next
+    /// one an em below it, the defaults ISO 32000-1 §9.7.4.3 gives CIDFonts without vertical
+    /// metrics). A CIDFont the file doesn't carry draws nothing, an em wide.
+    fn cid_glyph_at(&mut self, g: &Mapped, cid: u32, notdef: Option<u32>, at: Point, paint: Draw) -> Res<Vec2> {
+        let (em, fm) = {
+            let f = g.font.borrow();
+            // Without a matrix, Type 2 CIDFonts, like Type 42 fonts, are in ems; Type 0 in
+            // 1000-unit space. With one, an em is the glyph units it makes one unit of text space.
+            let default = if f.get(&Key::name("CIDFontType")).and_then(Obj::as_num) == Some(2.0) { 1.0 } else { 0.001 };
+            let m = font_matrix(&f, default);
+            let scale = m.determinant().abs().sqrt();
+            let em = if scale.is_finite() && scale > 1e-9 { 1.0 / scale } else { 1.0 / default };
+            (em, g.outer * m)
+        };
+        let mut glyph = self.cid_glyph(&g.font, cid)?;
+        for other in [notdef, Some(0)].into_iter().flatten() {
+            if glyph.is_none() {
+                glyph = self.cid_glyph(&g.font, other)?;
+            }
+        }
+        let (outline, w) = match glyph {
+            Some(g) => g,
+            None => {
+                self.out.warn(MISSING_CID_FONT);
+                (vectorcraft_geom::BezPath::new(), em)
+            }
+        };
+        if g.vertical {
+            self.type42_paint(outline, at, fm * Affine::translate((-w / 2.0, -0.88 * em)), paint)?;
+            return Ok(fm * Point::new(0.0, -em) - fm * Point::ZERO);
+        }
+        self.type42_paint(outline, at, fm, paint)?;
+        Ok(fm * Point::new(w, 0.0) - fm * Point::ZERO)
+    }
+
     /// Glyph `code` of Type 42 font `font` from the TrueType font it carries: its outline and
     /// width in its glyph space (ems), or `None` when it isn't a Type 42 font with one.
     fn type42_glyph(&mut self, font: &DictRef, code: u8) -> Res<Option<(vectorcraft_geom::BezPath, f64)>> {
-        let (sfnts, gid) = {
+        let Some(data) = self.type42_data(font)? else { return Ok(None) };
+        let gid = {
             let f = font.borrow();
-            if font_type(&f) != Some(42.0) {
+            let name = glyph_name(&f, code);
+            char_string(&f, &name).or_else(|| char_string(&f, ".notdef")).unwrap_or(0)
+        };
+        Ok(super::type42::glyph(&data.data, gid))
+    }
+
+    /// The codes of `s` in the current font when it is a Type 42 font that carries its TrueType
+    /// font (not a descendant of a composite font): the font, and each code's glyph.
+    fn type42_plain(&mut self, s: &[u8]) -> Res<Option<(Rc<super::type42::Font>, Vec<Plain>)>> {
+        let Some(font) = self.g.font.clone() else { return Ok(None) };
+        let Some(data) = self.type42_data(&font)? else { return Ok(None) };
+        self.spend((s.len() as u64).saturating_mul(4))?;
+        let f = font.borrow();
+        let glyphs = s
+            .iter()
+            .map(|&code| {
+                let (ch, gid) = type42_code(&f, &data, code);
+                Plain { ch, gid, width: super::type42::advance(&data.data, gid) }
+            })
+            .collect();
+        drop(f);
+        // Reading the font's character map (once) visits each of its mappings.
+        self.spend(data.take_char_map_work())?;
+        Ok(Some((data, glyphs)))
+    }
+
+    /// The TrueType font Type 42 font `font` carries (read once for each `sfnts` array), or
+    /// `None` when it isn't a Type 42 font with one.
+    pub(super) fn type42_data(&mut self, font: &DictRef) -> Res<Option<Rc<super::type42::Font>>> {
+        let sfnts = {
+            let f = font.borrow();
+            // Type 42 fonts and Type 2 CIDFonts (FontType 11) carry TrueType fonts.
+            let cid2 = f.get(&Key::name("CIDFontType")).and_then(Obj::as_num) == Some(2.0);
+            if font_type(&f) != Some(42.0) && !cid2 {
                 return Ok(None);
             }
             let Some(Obj::Array { items: sfnts, .. }) = f.get(&Key::name("sfnts")).cloned() else { return Ok(None) };
-            let name = glyph_name(&f, code);
-            let strings = f.get(&Key::name("CharStrings")).and_then(|c| match c {
-                Obj::Dict(d) => Some(d.clone()),
-                _ => None,
-            });
-            let gid = strings
-                .and_then(|d| {
-                    let d = d.borrow();
-                    d.get(&Key::name(&name)).or_else(|| d.get(&Key::name(".notdef"))).and_then(Obj::as_num)
-                })
-                .filter(|g| (0.0..=f64::from(u16::MAX)).contains(g))
-                .map_or(0, |g| g as u32);
-            (sfnts, gid)
+            sfnts
         };
         // The least recently used font goes first: a hit moves to the end.
-        let data = match self.type42.iter().position(|(k, _)| k.same(&sfnts)) {
-            Some(i) => {
-                let hit = self.type42.remove(i);
-                let data = hit.1.clone();
-                self.type42.push(hit);
-                data
-            }
-            None => {
-                // Joining the strings visits each element and copies its bytes, whether or not
-                // the font can then be read: charged first, as other bulk copies are.
-                let (elements, bytes) = super::type42::font_size(&sfnts.borrow());
-                self.spend_bytes(bytes)?;
-                self.spend((elements / 16) as u64)?;
-                // Fonts whose data can't be read are kept too, so they are copied only once.
-                let data = super::type42::font_data(&sfnts.borrow()).map(Rc::new);
-                if let Some(d) = &data
-                    && self.type42_counted.insert(sfnts.clone())
-                {
-                    self.alloc(d.len())?;
-                }
-                if self.type42.len() >= MAX_TYPE42 {
-                    self.type42.remove(0);
-                }
-                self.type42.push((sfnts, data.clone()));
-                data
-            }
-        };
-        let Some(data) = data else { return Ok(None) };
-        Ok(super::type42::glyph(&data, gid))
+        if let Some(i) = self.type42.iter().position(|(k, _)| k.same(&sfnts)) {
+            let hit = self.type42.remove(i);
+            let data = hit.1.clone();
+            self.type42.push(hit);
+            return Ok(data);
+        }
+        // Joining the strings visits each element and copies its bytes, whether or not the font
+        // can then be read: charged first, as other bulk copies are.
+        let (elements, bytes) = super::type42::font_size(&sfnts.borrow());
+        self.spend_bytes(bytes)?;
+        self.spend((elements / 16) as u64)?;
+        // Fonts whose data can't be read are kept too, so they are copied only once.
+        let data = super::type42::font_data(&sfnts.borrow()).map(|d| Rc::new(super::type42::Font::new(d)));
+        if let Some(d) = &data
+            && self.type42_counted.insert(sfnts.clone())
+        {
+            self.alloc(d.data.len())?;
+        }
+        if self.type42.len() >= MAX_TYPE42 {
+            self.type42.remove(0);
+        }
+        self.type42.push((sfnts, data.clone()));
+        Ok(data)
     }
 }
+
+/// A character code of a Type 42 font: the character it stands for (`None` when neither its
+/// glyph name nor the font says), its glyph and the glyph's width (ems).
+struct Plain {
+    ch: Option<char>,
+    gid: u32,
+    width: f64,
+}
+
+/// The glyph index `CharStrings` gives glyph name `name` in Type 42 font `f`.
+fn char_string(f: &Dict, name: &str) -> Option<u32> {
+    let Some(Obj::Dict(d)) = f.get(&Key::name("CharStrings")) else { return None };
+    d.borrow().get(&Key::name(name)).and_then(Obj::as_num).filter(|g| (0.0..=f64::from(u16::MAX)).contains(g)).map(|g| g as u32)
+}
+
+/// The character and glyph of code `code` in Type 42 font `f`, carrying TrueType font `data`:
+/// by the glyph name its `Encoding` gives it (a name such as `A`, `uni20AC` or `Euro` says the
+/// character; else the glyph `CharStrings` gives it stands for one in the font's character map
+/// or `post` names). A code the encoding leaves `.notdef` (the standard encodings here have no
+/// names) is read as Latin-1, drawn by that character's glyph.
+fn type42_code(f: &Dict, data: &super::type42::Font, code: u8) -> (Option<char>, u32) {
+    let name = glyph_name(f, code);
+    if &*name == ".notdef" {
+        let c = char::from(code);
+        return (Some(c), data.gid_of(c).or_else(|| char_string(f, ".notdef")).unwrap_or(0));
+    }
+    let named = named_char(code, &name);
+    let gid = char_string(f, &name).or_else(|| named.and_then(|c| data.gid_of(c))).or_else(|| char_string(f, ".notdef")).unwrap_or(0);
+    (named.or_else(|| data.char_of(gid)), gid)
+}
+
+/// The warning for CID-keyed type in a CIDFont the file doesn't carry.
+const MISSING_CID_FONT: &str = "CID-keyed type in a font the file doesn't carry was left out";
 
 /// Most Type 42 fonts whose TrueType data is kept between glyphs.
 const MAX_TYPE42: usize = 16;
@@ -735,6 +1061,26 @@ fn glyph_name(f: &Dict, code: u8) -> Rc<str> {
     f.get(&Key::name("Encoding")).and_then(|e| e.items()?.get(usize::from(code))).and_then(|o| o.text()).unwrap_or_else(|| Rc::from(".notdef"))
 }
 
+/// The character glyph name `name` (at code `code`) says: a single character or `uniXXXX`; a
+/// name of the standard encoding's printable ASCII range (`hyphen`, `quotedbl`: PLRM 3rd ed.,
+/// Appendix E.6); one of the Windows-1252 names; else `None`.
+fn named_char(code: u8, name: &str) -> Option<char> {
+    match glyph_char(name) {
+        '\u{2022}' if name != "bullet" => {}
+        c => return Some(c),
+    }
+    use skrifa::raw::ps::encoding::PredefinedEncoding;
+    if let Some(c) = (0x20u8..0x7F).find(|c| PredefinedEncoding::Standard.name(*c) == name) {
+        // The standard encoding has curly quotes where ASCII has the straight quote and the grave.
+        return Some(match c {
+            0x27 => '\u{2019}',
+            0x60 => '\u{2018}',
+            c => char::from(c),
+        });
+    }
+    crate::latin::glyph(code, name)
+}
+
 /// A font scaled or transformed by `m` (`scalefont`, `makefont`).
 fn transformed(font: &DictRef, m: Affine) -> DictRef {
     let mut d = font.borrow().clone();
@@ -744,7 +1090,7 @@ fn transformed(font: &DictRef, m: Affine) -> DictRef {
 }
 
 /// The character a glyph name stands for (`A`, `space`, `uni20AC`), else a bullet.
-fn glyph_char(name: &str) -> char {
+pub(super) fn glyph_char(name: &str) -> char {
     let mut chars = name.chars();
     if let (Some(c), None) = (chars.next(), chars.next()) {
         return c;

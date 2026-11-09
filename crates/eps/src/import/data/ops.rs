@@ -196,7 +196,7 @@ impl Interp<'_> {
     }
 
     /// Up to `n` bytes of file `f`.
-    fn read(&mut self, f: &Rc<RefCell<Stream>>, n: usize) -> Res<Vec<u8>> {
+    pub(in super::super) fn read(&mut self, f: &Rc<RefCell<Stream>>, n: usize) -> Res<Vec<u8>> {
         self.materialize(f)?;
         Ok(match &mut *f.borrow_mut() {
             Stream::Current => {
@@ -236,7 +236,7 @@ impl Interp<'_> {
     }
 
     /// Up to `n` bytes read as hexadecimal digits from `f` (other characters skipped).
-    fn read_hex(&mut self, f: &Rc<RefCell<Stream>>, n: usize) -> Res<Vec<u8>> {
+    pub(in super::super) fn read_hex(&mut self, f: &Rc<RefCell<Stream>>, n: usize) -> Res<Vec<u8>> {
         let mut out = Vec::with_capacity(n);
         let mut high: Option<u8> = None;
         while out.len() < n {
@@ -248,6 +248,31 @@ impl Interp<'_> {
             }
         }
         Ok(out)
+    }
+
+    /// Skip the whitespace and the `>` that end hexadecimal data in `f`, if a `>` is next: the
+    /// rest is left unread.
+    pub(in super::super) fn skip_hex_end(&mut self, f: &Rc<RefCell<Stream>>) -> Res {
+        self.materialize(f)?;
+        let blank = |b: &u8| b.is_ascii_whitespace() || *b == 0;
+        match &mut *f.borrow_mut() {
+            Stream::Current => {
+                let rest = self.lex.data();
+                let n = rest.iter().take_while(|b| blank(b)).count();
+                if rest.get(n) == Some(&b'>') {
+                    self.lex.advance(n + 1);
+                }
+            }
+            Stream::Buf { data, pos, .. } => {
+                let rest = data.get(*pos..).unwrap_or_default();
+                let n = rest.iter().take_while(|b| blank(b)).count();
+                if rest.get(n) == Some(&b'>') {
+                    *pos += n + 1;
+                }
+            }
+            Stream::Pending { .. } => {}
+        }
+        Ok(())
     }
 
     /// Read bytes `got` into string `s` and push the part of `s` they fill.
