@@ -91,7 +91,7 @@ impl Exporter<'_> {
             swatch.as_deref().and_then(|name| self.spot_ink(name)).into_iter().collect()
         };
         let spot_colorants =
-            inks.into_iter().map(|(name, full)| Colorant::Spot { name, alternate: cmyk::Color::new(q(full[0]), q(full[1]), q(full[2]), q(full[3])) });
+            inks.into_iter().map(|(name, full)| Colorant::Spot { name, alternate: cmyk::Color::new_f32(full[0], full[1], full[2], full[3]) });
         let device_n = if registration {
             DeviceNSpace::new(Process::ALL.into_iter().map(Colorant::Process).chain(spot_colorants))
         } else {

@@ -572,9 +572,95 @@ fn switching_tabs_or_slider_modes_keeps_the_dialog_height() {
         h.ctx.memory(|m| m.area_rect(egui::Id::unique(("dialog", "recolor")))).unwrap().height()
     };
     let assign = height(&mut h, "sliderMode", json!("cmyk"));
-    for (k, v) in [("sliderMode", json!("hsb")), ("sliderMode", json!("lab")), ("tab", json!("edit")), ("tab", json!("assign"))] {
+    for (k, v) in [
+        ("sliderMode", json!("hsb")),
+        ("sliderMode", json!("lab")),
+        ("tab", json!("edit")),
+        ("display", json!("segmented")),
+        ("display", json!("bars")),
+        ("sliderMode", json!("global")),
+        ("display", json!("smooth")),
+        ("sliderMode", json!("rgb")),
+        ("tab", json!("assign")),
+    ] {
         assert_eq!(height(&mut h, k, v.clone()), assign, "{k} {v}");
     }
+}
+
+/// The fills of the document's objects, in order.
+fn fills(app: &VectorcraftApp) -> Vec<Option<Color>> {
+    let d = &app.session.doc().unwrap().doc;
+    d.layers[0].children().unwrap().iter().map(|n| d.node(n.id).unwrap().appearance.fill_paint().color()).collect()
+}
+
+/// The Edit tab's color mode menu offers Global Adjust: Saturation, Brightness, Temperature and
+/// Luminosity open at 0%, which changes nothing; one slider changes every recolored color at once
+/// (the rows keep their new colors) and the art previews it; back at 0% the art has its own colors
+/// again; the amounts stay while the tab or the mode changes; OK keeps the change as one undo step
+/// and Cancel leaves the art as it was.
+#[test]
+fn global_adjust_changes_every_color_at_once() {
+    for confirm in [true, false] {
+        let mut h = edit_harness(&["#ff0000", "#0000ff", "#00ff00"]);
+        let before = fills(h.state());
+        let undo = h.state().session.doc().unwrap().history.undo.len();
+        h.get_by_role_and_label(egui::accesskit::Role::ComboBox, "Color Mode:").click();
+        h.run_steps(2);
+        h.get_by_label("Global Adjust").click();
+        h.run_steps(3);
+        assert_eq!(field(h.state(), "sliderMode"), json!("global"));
+        for name in ["Saturation", "Temperature", "Luminosity"] {
+            assert!(h.query_by_role_and_label(egui::accesskit::Role::Slider, name).is_some(), "{name}");
+        }
+        // Global Adjust's Brightness and the wheel's.
+        assert_eq!(h.get_all_by_role_and_label(egui::accesskit::Role::Slider, "Brightness").count(), 2);
+        assert_eq!(fills(h.state()), before, "at 0% the art keeps its colors");
+        let rows = field(h.state(), "rows");
+        click_slider(&mut h, "Saturation", 0.0);
+        assert_eq!(field(h.state(), "globalAdjust")["saturation"], json!(-100.0));
+        assert_eq!(field(h.state(), "rows"), rows, "the rows keep their new colors");
+        let gray = |app: &VectorcraftApp| fills(app).iter().all(|c| c.is_some_and(|c| c.to_hsb()[1] < 1e-3));
+        assert!(gray(h.state()), "every color previews gray: {:?}", fills(h.state()));
+        click_slider(&mut h, "Saturation", 0.5);
+        assert_eq!(field(h.state(), "globalAdjust")["saturation"], json!(0.0));
+        assert_eq!(fills(h.state()), before, "back at 0% the art has its own colors");
+        click_slider(&mut h, "Saturation", 0.0);
+        for (k, v) in [("tab", json!("assign")), ("tab", json!("edit")), ("sliderMode", json!("hsb")), ("sliderMode", json!("global"))] {
+            set(h.state_mut(), k, v);
+            h.run_steps(3);
+        }
+        assert_eq!(field(h.state(), "globalAdjust")["saturation"], json!(-100.0), "the amount stays");
+        assert!(gray(h.state()), "and still applies");
+        h.get_by_label(if confirm { "OK" } else { "Cancel" }).click();
+        h.run_steps(2);
+        assert!(h.state().ui.dialog.is_none());
+        let app = h.state();
+        if confirm {
+            assert!(gray(app), "OK keeps the change: {:?}", fills(app));
+            assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+        } else {
+            assert_eq!(fills(app), before, "Cancel leaves the art unchanged");
+            assert_eq!(app.session.doc().unwrap().history.undo.len(), undo, "and records no undo step");
+        }
+    }
+}
+
+/// Colors opened alone with Limit to Library: OK saves the new colors with the Global Adjust as a
+/// new color group, each snapped to the library again, as `recolor.apply` gives them to a group.
+#[test]
+fn global_adjust_on_a_new_group_keeps_its_colors_in_the_library() {
+    let mut app = app();
+    app.run("ui.recolorDialog", json!({"colors": ["#123456", "#abcdef"], "library": ""})).unwrap();
+    assert_eq!(field(&app, "limitTo"), "web-safe-216");
+    let web = |k: &Value| vectorcraft_engine::cmd::color_value(k).unwrap().to_rgb().iter().all(|v| ((v * 5.0).round() - v * 5.0).abs() < 1e-3);
+    let rows: Vec<Value> = field(&app, "rows").as_array().unwrap().iter().map(|r| r["to"].clone()).collect();
+    assert!(rows.iter().all(web), "the rows open snapped: {rows:?}");
+    set(&mut app, "globalAdjust", json!({"brightness": -60}));
+    dialogs::confirm(&mut app).unwrap();
+    let keys = group_keys(&app, "Color Group");
+    assert_eq!(keys.len(), 2);
+    assert_ne!(keys, rows, "the Global Adjust changed the colors");
+    assert!(keys.iter().all(web), "every group color is a library color: {keys:?}");
 }
 
 /// The Assign tab's per-row hex fields are named by their row, not all "Color": a screen reader can
@@ -855,4 +941,234 @@ fn the_last_edit_color_can_be_selected_edited_and_undone() {
         }
         assert_eq!(h.state().session.doc().unwrap().doc, before);
     }
+}
+
+/// The height of the open Recolor Artwork dialog.
+fn dialog_height(h: &egui_kittest::Harness<'_, VectorcraftApp>) -> f32 {
+    h.ctx.memory(|m| m.area_rect(egui::Id::unique(("dialog", "recolor")))).unwrap().height()
+}
+
+/// Clicks the Edit tab's display button named `name` and lets the dialog settle.
+fn show_display(h: &mut egui_kittest::Harness<'_, VectorcraftApp>, name: &str) {
+    h.get_by_role_and_label(egui::accesskit::Role::Button, name).click();
+    h.run_steps(6);
+}
+
+/// The Edit tab opens on the smooth color wheel and its buttons switch to the segmented wheel and to
+/// the color bars and back: the dialog keeps its size, and the rows and the selected row stay. The
+/// choice stays while the dialog is open; the next opening starts on the smooth wheel again.
+#[test]
+fn the_edit_tab_shows_a_smooth_or_segmented_wheel_or_color_bars() {
+    let mut h = edit_harness(&["#ff0000", "#0000ff", "#00ff00"]);
+    set(h.state_mut(), "__sel", json!([1]));
+    h.run_steps(4);
+    let (rows, height) = (field(h.state(), "rows"), dialog_height(&h));
+    let slider = |h: &egui_kittest::Harness<'_, VectorcraftApp>, name: &str| h.query_by_role_and_label(egui::accesskit::Role::Slider, name).is_some();
+    let bar = |h: &egui_kittest::Harness<'_, VectorcraftApp>, name: &str| h.query_by_role_and_label(egui::accesskit::Role::Button, name).is_some();
+    assert!(slider(&h, "Color wheel") && !slider(&h, "Segmented color wheel"), "the smooth wheel first");
+    assert!(!bar(&h, "Color 1"));
+    show_display(&mut h, "Show segmented color wheel");
+    assert_eq!(field(h.state(), "display"), json!("segmented"));
+    assert!(slider(&h, "Segmented color wheel") && !slider(&h, "Color wheel"));
+    assert_eq!(widget_of_size(&h, vec2(220.0, 220.0)).size(), vec2(220.0, 220.0), "the same size of wheel");
+    assert!(slider(&h, "Brightness"));
+    show_display(&mut h, "Show color bars");
+    assert_eq!(field(h.state(), "display"), json!("bars"));
+    assert!(!slider(&h, "Color wheel") && !slider(&h, "Segmented color wheel"));
+    assert!(["Color 1", "Color 2", "Color 3"].iter().all(|n| bar(&h, n)), "a bar per color");
+    assert_eq!(dialog_height(&h), height, "the bars keep the dialog's height");
+    show_display(&mut h, "Show smooth color wheel");
+    assert!(slider(&h, "Color wheel"));
+    assert_eq!(dialog_height(&h), height);
+    assert_eq!(field(h.state(), "rows"), rows, "switching changes no color");
+    assert_eq!(field(h.state(), "__sel"), json!([1]), "and keeps the selected row");
+    show_display(&mut h, "Show color bars");
+    set(h.state_mut(), "tab", json!("assign"));
+    h.run_steps(3);
+    set(h.state_mut(), "tab", json!("edit"));
+    h.run_steps(3);
+    assert!(bar(&h, "Color 1"), "the choice stays while the dialog is open");
+    let app = h.state_mut();
+    dialogs::cancel(app);
+    app.run("select.all", json!({})).unwrap();
+    app.run("ui.recolorDialog", json!({})).unwrap();
+    assert_eq!(field(app, "display"), Value::Null, "a new opening starts on the smooth wheel");
+}
+
+/// The segmented wheel's patches: 24 hues, centered on red, by 5 saturations, at the brightness asked.
+#[test]
+fn the_segmented_wheel_has_24_hues_by_5_saturations() {
+    let seg = |h, s, v| crate::widgets::segment_color(h, s, v).to_hsb();
+    let near = |a: [f32; 3], b: [f32; 3]| a.iter().zip(b).all(|(x, y)| (x - y).abs() < 1e-3);
+    assert!(near(seg(7.0, 0.95, 1.0), [0.0, 0.9, 1.0]), "{:?}", seg(7.0, 0.95, 1.0));
+    assert!(near(seg(8.0, 0.0, 0.5), [15.0, 0.1, 0.5]), "{:?}", seg(8.0, 0.0, 0.5));
+    assert!(near(seg(355.0, 1.0, 1.0), [0.0, 0.9, 1.0]), "{:?}", seg(355.0, 1.0, 1.0));
+    assert!(near(seg(120.0, 0.5, 1.0), [120.0, 0.5, 1.0]), "{:?}", seg(120.0, 0.5, 1.0));
+    let mut patches = std::collections::BTreeSet::new();
+    for h in 0..360 {
+        for s in 0..=100 {
+            patches.insert(ColorKey::of(&crate::widgets::segment_color(h as f32, s as f32 / 100.0, 1.0)).to_string());
+        }
+    }
+    assert_eq!(patches.len(), 24 * 5);
+}
+
+/// On the segmented wheel a marker moves as freely as on the smooth one, past patch edges and
+/// without snapping to a patch; linked colors turn with it from where the drag started, an excluded
+/// row keeps its color, and the smooth wheel shows the result. Its Brightness slider works too.
+#[test]
+fn a_segmented_wheel_marker_moves_freely() {
+    let mut h = edit_harness(&["rgb 200 100 100", "rgb 100 200 200", "rgb 20 160 20"]);
+    let mut rows = field(h.state(), "rows");
+    let green = (0..3).find(|i| rows[*i]["from"] == json!(["rgb 20 160 20"])).unwrap();
+    let red = (0..3).find(|i| rows[*i]["from"] == json!(["rgb 200 100 100"])).unwrap();
+    rows[green]["exclude"] = json!(true);
+    set(h.state_mut(), "rows", rows);
+    set(h.state_mut(), "__sel", json!([red]));
+    h.run_steps(4);
+    show_display(&mut h, "Show segmented color wheel");
+    let start = new_hsb(h.state());
+    let wheel = widget_of_size(&h, vec2(220.0, 220.0));
+    let (c, r) = (wheel.center(), 100.0);
+    let at = |hue: f32, s: f32| c + vec2(hue.to_radians().cos(), -hue.to_radians().sin()) * r * s;
+    let [hue, s, _] = start[red];
+    h.hover_at(at(hue, s));
+    h.run_steps(1);
+    h.drag_at(at(hue, s));
+    h.run_steps(1);
+    // 37° on in small steps, across two patch edges, ending inside a patch away from its center.
+    for k in 1..=10 {
+        h.hover_at(at(hue + 3.7 * k as f32, s));
+        h.run_steps(1);
+    }
+    h.drop_at(at(hue + 37.0, s));
+    h.run_steps(2);
+    let moved = new_hsb(h.state());
+    let gap = |a: f32, b: f32| (a - b).rem_euclid(360.0).min((b - a).rem_euclid(360.0));
+    let want = (hue + 37.0).rem_euclid(360.0);
+    assert!(gap(moved[red][0], want) < 1.0, "the marker follows the pointer: {} -> {}", hue, moved[red][0]);
+    assert!(gap(moved[red][0], (want / 15.0).round() * 15.0) > 2.0, "not snapped to a patch center: {}", moved[red][0]);
+    let other = 3 - red - green;
+    assert!((gap(moved[other][0], start[other][0]) - 37.0).abs() < 1.5, "linked: {:?} -> {:?}", start[other], moved[other]);
+    assert_eq!(field(h.state(), "rows")[green]["to"], json!("rgb 20 160 20"), "the excluded row stays");
+    let rows = field(h.state(), "rows");
+    show_display(&mut h, "Show smooth color wheel");
+    assert_eq!(field(h.state(), "rows"), rows, "the smooth wheel shows the same colors");
+    show_display(&mut h, "Show segmented color wheel");
+    click_slider(&mut h, "Brightness", 0.25);
+    assert!((new_hsb(h.state())[red][2] - 0.25).abs() < 0.02, "the Brightness slider: {:?}", new_hsb(h.state()));
+}
+
+/// The rows as `(current colors, new color)` pairs, sorted.
+fn row_pairs(app: &VectorcraftApp) -> Vec<String> {
+    let mut v: Vec<String> = field(app, "rows").as_array().unwrap().iter().map(|r| format!("{} {}", r["from"], r["to"])).collect();
+    v.sort();
+    v
+}
+
+/// The color bars: one per recolored row (none for an excluded row), the last one selected with a
+/// click and edited with the H slider, then dragged to the top, which moves its row and changes no
+/// color. Preview shows the edit, Cancel restores the art and OK keeps it as one undo step.
+#[test]
+fn color_bars_select_edit_and_reorder_the_rows() {
+    for confirm in [false, true] {
+        let mut h = edit_harness(&["#ff0000", "#0000ff", "#00ff00", "#ffff00"]);
+        let before = h.state().session.doc().unwrap().doc.clone();
+        let undo = h.state().session.doc().unwrap().history.undo.len();
+        let mut rows = field(h.state(), "rows");
+        rows[1]["exclude"] = json!(true);
+        set(h.state_mut(), "rows", rows);
+        set(h.state_mut(), "linked", json!(false));
+        set(h.state_mut(), "sliderMode", json!("hsb"));
+        show_display(&mut h, "Show color bars");
+        let bar = |h: &egui_kittest::Harness<'_, VectorcraftApp>, name: &str| {
+            h.query_by_role_and_label(egui::accesskit::Role::Button, name).map(|n| n.rect())
+        };
+        assert!(bar(&h, "Color 2").is_none(), "no bar for the excluded row");
+        let first = bar(&h, "Color 1").expect("a bar per recolored row");
+        let last = bar(&h, "Color 4").expect("a bar per recolored row");
+        assert!(bar(&h, "Color 3").is_some_and(|r| r.top() > first.bottom() && r.bottom() < last.top()), "in row order");
+        h.input_mut().events.extend(press(last.center(), 1));
+        h.run_steps(3);
+        assert_eq!(field(h.state(), "__sel"), json!([3]), "a click selects the bar's row");
+        let unedited = field(h.state(), "rows");
+        click_slider(&mut h, "H", 0.5);
+        let edited = field(h.state(), "rows");
+        assert_ne!(edited[3]["to"], unedited[3]["to"], "the H slider edits the selected bar's color");
+        assert_eq!(&edited.as_array().unwrap()[..3], &unedited.as_array().unwrap()[..3], "and only that one");
+        let previewed = h.state().session.doc().unwrap().doc.clone();
+        assert_ne!(previewed, before, "the art previews the edit");
+        let pairs = row_pairs(h.state());
+        let last = bar(&h, "Color 4").unwrap();
+        h.hover_at(last.center());
+        h.run_steps(1);
+        h.drag_at(last.center());
+        h.run_steps(1);
+        let top = egui::pos2(last.center().x, first.top() + 2.0);
+        for k in 1..=8 {
+            h.hover_at(last.center().lerp(top, k as f32 / 8.0));
+            h.run_steps(1);
+        }
+        h.drop_at(top);
+        h.run_steps(3);
+        let rows = field(h.state(), "rows");
+        assert_eq!(rows[0], edited[3], "the dragged row moved to the top: {rows}");
+        assert_eq!(rows.as_array().unwrap()[1..], [edited[0].clone(), edited[1].clone(), edited[2].clone()], "the others shift down");
+        assert_eq!(row_pairs(h.state()), pairs, "moving a bar changes no color");
+        assert_eq!(field(h.state(), "__sel"), json!([0]), "the moved row stays selected");
+        assert_eq!(h.state().session.doc().unwrap().doc, previewed, "and the art keeps the same colors");
+        h.get_by_label(if confirm { "OK" } else { "Cancel" }).click();
+        h.run_steps(2);
+        assert!(h.state().ui.dialog.is_none());
+        let app = h.state();
+        if confirm {
+            assert_eq!(app.session.doc().unwrap().doc, previewed, "OK keeps the edit");
+            assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "as one undo step");
+        } else {
+            assert_eq!(app.session.doc().unwrap().doc, before, "Cancel restores the art");
+            assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
+        }
+    }
+}
+
+/// Many color bars scroll within the wheel's height, the dialog keeps its height, and the last bar
+/// can be reached and selected; with every row excluded the bars area says there is nothing to
+/// recolor.
+#[test]
+fn color_bars_scroll_and_show_when_nothing_is_recolored() {
+    let colors: Vec<String> = (1..=40).map(|i| format!("#{:06x}", i * 9973)).collect();
+    let refs: Vec<&str> = colors.iter().map(String::as_str).collect();
+    let mut h = edit_harness(&refs);
+    let height = dialog_height(&h);
+    show_display(&mut h, "Show color bars");
+    assert_eq!(dialog_height(&h), height, "40 bars keep the dialog's height");
+    let first = h.get_by_role_and_label(egui::accesskit::Role::Button, "Color 1").rect();
+    let wheel_bottom = first.top() + 251.0;
+    let last = |h: &egui_kittest::Harness<'_, VectorcraftApp>| h.get_by_role_and_label(egui::accesskit::Role::Button, "Color 40").rect();
+    assert!(last(&h).top() > wheel_bottom, "the last bar starts out of view: {:?}", last(&h));
+    h.input_mut().events.extend([
+        Event::PointerMoved(first.center()),
+        Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: vec2(0.0, -10000.0),
+            phase: egui::TouchPhase::Move,
+            modifiers: Modifiers::NONE,
+            source: egui::MouseWheelSource::Unknown,
+        },
+    ]);
+    h.run_steps(12);
+    let shown = last(&h);
+    assert!(shown.bottom() <= wheel_bottom + 1.0, "the last bar scrolls into view: {shown:?}");
+    assert_eq!(dialog_height(&h), height);
+    h.input_mut().events.extend(press(shown.center(), 1));
+    h.run_steps(3);
+    assert_eq!(field(h.state(), "__sel"), json!([39]));
+    let mut rows = field(h.state(), "rows");
+    for r in rows.as_array_mut().unwrap() {
+        r["exclude"] = json!(true);
+    }
+    set(h.state_mut(), "rows", rows);
+    h.run_steps(4);
+    assert!(h.query_by_role_and_label(egui::accesskit::Role::Button, "Color 1").is_none());
+    let _ = h.get_by_label("No colors to recolor (preserved colors are left out).");
 }

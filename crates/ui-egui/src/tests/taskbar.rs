@@ -1,7 +1,7 @@
 //! The Contextual Task Bar's actions for each kind of selection: open paths offer Join and Edit
 //! Path, compound paths and clipping masks their Release, images selected with vector art Make
-//! Clipping Mask, type converts between point and area type, and a basic shape shows its
-//! properties in place of Lock.
+//! Clipping Mask, type converts between point and area type, type on a path opens its options, and
+//! a basic shape shows its properties in place of Lock.
 
 use egui::{Event, PointerButton, Pos2, Rect, vec2};
 use serde_json::json;
@@ -163,6 +163,25 @@ fn type_converts_between_point_and_area_type() {
     assert!(has(&texts, "Convert To Point Type") && !has(&texts, "Convert To Area Type"), "{texts:?}");
     click(&mut app, "Convert To Point Type");
     assert!(matches!(text_kind(&app), TextKind::Point));
+}
+
+#[test]
+fn type_on_a_path_offers_its_options() {
+    let mut app = app();
+    let path = id(app.run("path.create", json!({"d": "M60 150 L340 150"})).unwrap());
+    let t = id(app.run("text.createInPath", json!({"path": path, "mode": "onPath", "text": "Along", "at": [200, 160]})).unwrap());
+    assert!(matches!(kind(&app, t), NodeKind::Text(ref t) if matches!(t.kind, TextKind::OnPath { .. })));
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    select(&mut app, &[t]);
+    // A non-default effect, so the dialog shows the selected type's options rather than defaults.
+    app.run("type.pathOptions", json!({"effect": "skew"})).unwrap();
+    let (_, texts) = bar(&mut app);
+    assert!(has(&texts, "Create Outlines") && has(&texts, "Type on a Path Options"), "{texts:?}");
+    assert!(!has(&texts, "Convert To Area Type") && !has(&texts, "Convert To Point Type"), "{texts:?}");
+    click(&mut app, "Type on a Path Options");
+    let d = app.ui.dialog.as_ref().expect("the options dialog opens");
+    assert_eq!(d.str("__command"), "type.pathOptions");
+    assert_eq!(d.fields.get("effect"), Some(&json!("skew")));
 }
 
 /// The path's anchors (its first subpath).
@@ -398,4 +417,60 @@ fn a_compound_path_under_direct_selection_drops_edit_path() {
     select(&mut app, &[c]);
     let (_, texts) = bar(&mut app);
     assert!(has(&texts, "Release Compound Path") && !has(&texts, "Edit Path"), "{texts:?}");
+}
+
+/// After a switch to another document and back, the task bar shows the actions for the active
+/// document's selection: an open path's Join in the first, a rectangle's Shape Properties in the
+/// second.
+#[test]
+fn the_task_bar_follows_the_active_document() {
+    let mut app = app();
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    let line = id(app.run("shape.line", json!({"x1": 50, "y1": 50, "x2": 200, "y2": 120})).unwrap());
+    select(&mut app, &[line]);
+    assert!(has(&bar(&mut app).1, "Join"));
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let rect = id(app.run("shape.rectangle", json!({"x": 40, "y": 40, "width": 80, "height": 60})).unwrap());
+    select(&mut app, &[rect]);
+    let (_, texts) = bar(&mut app);
+    assert!(!has(&texts, "Join") && has(&texts, "Duplicate"), "{texts:?}");
+    app.session.set_active(0);
+    let (_, texts) = bar(&mut app);
+    assert!(has(&texts, "Join"), "{texts:?}");
+    app.session.set_active(1);
+    let (_, texts) = bar(&mut app);
+    assert!(!has(&texts, "Join"), "{texts:?}");
+    let (_, texts) = click_lock_slot(&mut app);
+    assert!(has(&texts, "Rectangle Properties:"), "{texts:?}");
+    assert!(!locked(&app, rect), "the button doesn't lock the shape");
+}
+
+/// The task bar shows the selection as it is after an edit and after Undo: Join leaves once the
+/// open path is closed and comes back with Undo, and Shape Properties shows a rectangle's new
+/// corner radius and then its old one.
+#[test]
+fn the_task_bar_follows_edits_and_undo() {
+    let mut app = app();
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    let line = id(app.run("shape.line", json!({"x1": 50, "y1": 50, "x2": 200, "y2": 120})).unwrap());
+    select(&mut app, &[line]);
+    assert!(has(&bar(&mut app).1, "Join"));
+    app.run("path.join", json!({})).unwrap();
+    let (_, texts) = bar(&mut app);
+    assert!(!has(&texts, "Join"), "{texts:?}");
+    app.run("edit.undo", json!({})).unwrap();
+    let (_, texts) = bar(&mut app);
+    assert!(has(&texts, "Join"), "{texts:?}");
+
+    let rect = id(app.run("shape.rectangle", json!({"x": 40, "y": 40, "width": 80, "height": 60, "radius": 10})).unwrap());
+    select(&mut app, &[rect]);
+    let (_, texts) = click_lock_slot(&mut app);
+    assert!(has(&texts, "10 pt") && !has(&texts, "20 pt"), "{texts:?}");
+    app.run("object.setLiveShape", json!({"radius": 20})).unwrap();
+    let (_, texts) = click_lock_slot(&mut app);
+    assert!(has(&texts, "20 pt") && !has(&texts, "10 pt"), "{texts:?}");
+    app.run("edit.undo", json!({})).unwrap();
+    let (_, texts) = click_lock_slot(&mut app);
+    assert!(has(&texts, "10 pt") && !has(&texts, "20 pt"), "{texts:?}");
+    assert!(!locked(&app, rect), "the button doesn't lock the shape");
 }

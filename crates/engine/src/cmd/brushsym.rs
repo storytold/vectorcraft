@@ -19,10 +19,13 @@ use super::edit::{outermost, selected_roots};
 use super::pathops::{remove_each, separate};
 use super::swatch::{anchor, names_param};
 use super::{
-    CommandSpec, Result, Session, bad, check_numbers, cmd, color_value, find_command, has_doc, has_selection, id_param, ids_param, number_or, ok,
+    CommandSpec, Result, Session, bad, check_numbers, cmd, color_param, find_command, has_doc, has_selection, id_param, named_ids, number_or, ok,
     str_param, switch_or,
 };
 use crate::EngineError;
+
+/// Whether Reset Transformation changes a symbol instance.
+pub use symbols::reset_transformation_changes;
 
 mod brushes;
 mod dynamic;
@@ -33,12 +36,16 @@ use brushes::{
     brush_apply, brush_delete, brush_duplicate, brush_freehand, brush_get, brush_list, brush_move, brush_new, brush_options, brush_remove,
     brush_selection_art, brush_set_current, brush_unused, expand_brush,
 };
-use dynamic::{symbol_instance_reset, symbol_instance_set_appearance};
+pub(crate) use dynamic::{edit_part, part_only, selected_part};
+use dynamic::{symbol_instance_reset, symbol_instance_select_part, symbol_instance_set_appearance};
 use symbols::selected_instances;
-pub(crate) use symbols::{fit_instances_of, instance_in_place, instances_of, natural_size, normalize, place_xf, set_natural_size, store_symbol};
+pub(crate) use symbols::{
+    expand_instances_under, expandable_instances, instance_in_place, natural_size, normalize, place_xf, set_natural_size, store_symbol,
+    stored_natural_size,
+};
 use symbols::{
-    symbol_adjust, symbol_break_link, symbol_delete, symbol_duplicate, symbol_list, symbol_new, symbol_options, symbol_place, symbol_replace,
-    symbol_select_instances, symbol_set_current, symbol_spray, symbol_unused, symbol_update,
+    symbol_adjust, symbol_break_link, symbol_delete, symbol_duplicate, symbol_instance_reset_transform, symbol_list, symbol_new, symbol_options,
+    symbol_place, symbol_replace, symbol_select_instances, symbol_set_current, symbol_spray, symbol_unused, symbol_update,
 };
 
 const SIZES_KEY: &str = vectorcraft_doc::SYMBOL_SIZES;
@@ -137,7 +144,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Brush Options…",
             [],
             None,
-            "{name, params?: {…fields to change (brush.get shows them; values outside their ranges are clamped). calligraphic: angle −180..180°, roundness 0..100%, size 0..1296 pt, variation: [angle°, roundness%, size pt], modes: [fixed|random|pressure for angle, roundness, size] (pressure goes from value − variation at the lightest pen pressure to value + variation at the heaviest). scatter: size [a, b] 1..10000%, spacing [a, b] 1..10000%, scatter [a, b] −1000..1000%, rotation [a, b] −180..180°, modes: [fixed|random|pressure for size, spacing, scatter, rotation] (fixed: a; random: between a and b; pressure: a at the lightest pen pressure to b at the heaviest), rotation_relative_to_path. art: width 1..1000%, width_mode: null (fixed)|pressure, width_max 1..1000% (pressure: width at the lightest pen pressure to width_max at the heaviest, half way on a stroke drawn without pressure), scale: {mode: proportional|stretch|betweenGuides, start, end: 0..1 of the art length}, direction: leftToRight|rightToLeft|topToBottom|bottomToTop, flip_along, flip_across, overlap. pattern: scale 1..10000%, spacing 0..10000%, fit: stretch|addSpace|approximate, flip_along, flip_across, outer_corner and inner_corner: corner tile art or null, outer_source and inner_source: what that kind of corner draws without its art: none|autoCentered|autoBetween|autoSliced|autoOverlap (a tile made from the side tile), or null (the other kind of corner's art); side_tile, outer_corner_tile, inner_corner_tile, start_tile, end_tile: a document pattern name, original, or none (side refuses none); corner tiles also take autoCentered|autoBetween|autoSliced|autoOverlap. Each tile also accepts {pattern: name} to select a swatch whose name is a reserved choice. scatter, art and pattern: colorization: {method: none|tints|tintsAndShades|hueShift, key: colour (hueShift: the art colour that becomes the stroke colour; without a key: the solid color the art's fills and strokes use most, black when they use none)}; colorization and the art brush's scale change only the fields given}, newName? (trimmed; blank: the name is kept; a new bristle brush name has at most 31 characters, and a longer name the brush has is kept)} edit a brush definition (strokes using it update) → {name}",
+            "{name, params?: {…fields to change (brush.get shows them; values outside their ranges are clamped). calligraphic: angle −180..180°, roundness 0..100%, size 0..1296 pt, variation: [angle°, roundness%, size pt], modes: [fixed|random|pressure|tilt|bearing|rotation for angle, roundness, size] (pressure goes from value − variation at the lightest pen pressure to value + variation at the heaviest; tilt from value − variation with the pen lying flat to value + variation with it upright; bearing and rotation add variation × the pen's bearing (which way it leans, counter-clockwise from leaning right) or its barrel's counter-clockwise rotation over 180°; the angle turns on past ±180°). scatter: size [a, b] 1..10000%, spacing [a, b] 1..10000%, scatter [a, b] −1000..1000%, rotation [a, b] −180..180°, modes: [fixed|random|pressure|tilt|bearing|rotation for size, spacing, scatter, rotation] (fixed: a; random: between a and b; pressure: a at the lightest pen pressure to b at the heaviest; tilt: a with the pen lying flat to b upright; bearing and rotation: a at −180° to b at 180°), rotation_relative_to_path. art: width 1..1000%, width_mode: null (fixed)|pressure, width_max 1..1000% (pressure: width at the lightest pen pressure to width_max at the heaviest, half way on a stroke drawn without pressure), scale: {mode: proportional|stretch|betweenGuides, start, end: 0..1 of the art length}, direction: leftToRight|rightToLeft|topToBottom|bottomToTop, flip_along, flip_across, overlap. pattern: scale 1..10000%, spacing 0..10000%, fit: stretch|addSpace|approximate, flip_along, flip_across, outer_corner and inner_corner: corner tile art (drawn as the corner that joins a side tile on its right to one below it) or null, outer_source and inner_source: what that kind of corner draws without its art: none|autoCentered|autoBetween|autoSliced|autoOverlap (a tile made from the side tile), or null (the other kind of corner's art); side_tile, outer_corner_tile, inner_corner_tile, start_tile, end_tile: a document pattern name, original, or none (side refuses none); corner tiles also take autoCentered|autoBetween|autoSliced|autoOverlap. Each tile also accepts {pattern: name} to select a swatch whose name is a reserved choice. scatter, art and pattern: colorization: {method: none|tints|tintsAndShades|hueShift, key: colour (hueShift: the art colour that becomes the stroke colour; without a key: the solid color the art's fills and strokes use most, black when they use none)}; colorization and the art brush's scale change only the fields given}, newName? (trimmed; blank: the name is kept; a new bristle brush name has at most 31 characters, and a longer name the brush has is kept)} edit a brush definition (strokes using it update) → {name}",
             has_doc,
             brush_options
         ),
@@ -174,7 +181,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Symbol…",
             [],
             None,
-            "{name?, ids?|id?, registration?: 0..8 (9-point grid, 4 = centre; Symbol Options › Registration), exportType?: movieClip (default)|graphic, nineSlice?: bool, nineSliceGuides?: array, type?: static (default)|dynamic (Symbol Options › Symbol Type)} make a symbol from the selection and replace it with an instance; a frame of threaded text in the selection leaves its thread with the text it shows, which the symbol's art holds; nineSlice is Symbol Options › Enable Guides for 9-Slice Scaling, nineSliceGuides [left, top, right, bottom] as fractions 0..1 of the natural size (default a third each) → {name, id, registration, exportType, nineSlice, type}",
+            "{name?, ids?|id?, registration?: 0..8 (9-point grid, 4 = centre; Symbol Options › Registration), exportType?: movieClip (default)|graphic, nineSlice?: bool, nineSliceGuides?: array, type?: static (default)|dynamic (Symbol Options › Symbol Type)} make a symbol from the selection and replace it with an instance; a frame of threaded text in the selection leaves its thread with the text it shows, which the symbol's art holds; nineSlice is Symbol Options › Enable Guides for 9-Slice Scaling, nineSliceGuides [left, top, right, bottom] as fractions 0..1 of the natural size (default a quarter each); an instance of a symbol with guides keeps its corners' size when scaled, its edges stretch along their length and its center in both directions → {name, id, registration, exportType, nineSlice, type}",
             has_selection,
             symbol_new
         ),
@@ -201,7 +208,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Break Link to Symbol",
             [],
             None,
-            "{ids?|id?} expand selected instances into plain art (with their appearance changes to a dynamic symbol) → {ids}",
+            "{ids?|id?} expand selected instances into plain art (with their appearance changes to a dynamic symbol), placed through the symbol's 9-slice guides when it has them, with the instance's opacity mask → {ids}",
             has_selection,
             symbol_break_link
         ),
@@ -256,9 +263,18 @@ pub fn specs() -> Vec<CommandSpec> {
             "Symbol Instance Appearance",
             [],
             None,
-            "{id?|ids?: [one id] (default: the one selected object), path: [i…] (the object in the symbol's art: child indices in paint order from the art's root down through its groups; [] the root), fill?: \"#rrggbb\"|{…paint params of paint.setFill: color, none, swatch, tint, gradient, keepModel}|null (null: the symbol's own again), stroke?: as fill, opacity?: 0..100|null, blend?: name|null} change the appearance of one object of a dynamic symbol instance's art, for that instance only: it stays linked, so editing the symbol reshapes it and keeps the change; refused for a static symbol or a path naming no object → {id, overrides: how many objects the instance changes}",
+            "{id?|ids?: [one id] (default: the one selected object), path: [i…] (the object in the symbol's art: child indices in paint order from the art's root down through its groups; [] the root), fill?: \"#rrggbb\"|{…paint params of paint.setFill: color, none, swatch, tint, gradient, keepModel}|null (null: the symbol's own again), stroke?: as fill, opacity?: 0..100|null, blend?: name|null} change the appearance of one object of a dynamic symbol instance's art, for that instance only: it stays linked, so editing the symbol reshapes it and keeps the change; refused for a static symbol, a path naming no object, or a fill or stroke other than null for an object that does not draw it (a guide, blend, envelope, Repeat, Intertwine group, gradient mesh or placed document; a symbol instance's stroke, and its fill unless a solid color or none, which stains its art; an image's fill or stroke without a Convert to Shape or Outline Object effect), with nothing of the call applied; opacity, blend and null are taken for every object → {id, overrides: how many objects the instance changes}",
             has_selection,
             symbol_instance_set_appearance
+        ),
+        cmd!(
+            "symbol.instance.selectPart",
+            "Select Symbol Instance Part",
+            [],
+            None,
+            "{id, path: [i…] (as symbol.instance.setAppearance)} select one path, compound path or type object of a dynamic symbol instance's art, as a Direct Selection click on it does: the instance is selected alone, and until the selection changes paint.setFill and paint.setStroke with a solid color or none, paint.invert and paint.complement on a solid color (without ids, id or item; type whose characters differ in color is refused) and appearance.copyFrom with a solid fill and stroke (the Eyedropper, without ids, reverse or append; options that pick up neither color are refused) change that object's fill or stroke for this instance only; gradients and patterns are refused, and so are the commands that change the selected objects without ids (transparency.set, the gradient commands, object.group, edit.cut and edit.clear among them); edit.copy copies the instance whole, and selection exports, artboard.fitToSelection, object.liquify, object.isolate, library.add and select.save use the instance (docs/mcp.md); selectPart itself is refused for a static symbol, a path naming no object, a group, image or other kind of object, a hidden, locked or template object or one inside such a group, and a hidden or locked instance → {id, path}",
+            has_doc,
+            symbol_instance_select_part
         ),
         cmd!(
             "symbol.instance.reset",
@@ -268,6 +284,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{ids?|id?} drop the selected dynamic symbol instances' own appearance changes, so they show the symbol's appearance again → {ids: the instances that had changes}",
             has_selection,
             symbol_instance_reset
+        ),
+        cmd!(
+            "symbol.instance.resetTransform",
+            "Reset Transformation",
+            [],
+            None,
+            "{ids?|id?} give the selected symbol instances (in groups too) their symbol's own scale, without rotation, shear or reflection, keeping the center of each one's bounding box in place, as one undo step; other objects, instances in perspective and instances already at their symbol's scale are left as they are, and no undo step is added when nothing changes; an id naming no object, or no symbol instance among the objects, is an error → {ids: the instances changed}",
+            has_selection,
+            symbol_instance_reset_transform
         ),
         cmd!(
             "symbol.setCurrent",
@@ -302,7 +327,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Symbolism Tool",
             [],
             None,
-            "{tool: shift|scrunch|size|spin|stain|screen|style, points: [[x,y]…], radius?: 40, intensity?: 1..10 (5), alt?: bool, color?, keepModel?: bool (as paint.setFill), style?: name} adjust instances near the points (selection, else all) → {count}",
+            "{tool: shift|scrunch|size|spin|stain|screen|style, points: [[x,y]…], radius?: 40, intensity?: 1..10 (5), alt?: bool, color? (#rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), style?: name} adjust instances near the points (selection, else all) → {count}",
             has_doc,
             symbol_adjust
         ),
@@ -314,7 +339,7 @@ fn ids_json(ids: &[NodeId]) -> Value {
 }
 
 pub(crate) fn roots(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
-    match ids_param(p, "ids").or_else(|| id_param(p, "id").map(|i| vec![i])) {
+    match named_ids(p)? {
         Some(mut v) => {
             // Explicit ids: only existing, non-layer objects, none inside another of them.
             let d = &s.doc()?.doc;

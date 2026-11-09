@@ -370,9 +370,8 @@ impl<'a> Scene<'a> {
             NodeKind::SymbolInstance { symbol, xf } => {
                 if let Some(sym) = self.doc.symbols.iter().find(|s| &s.name == symbol)
                     && self.nest < MAX_NEST
+                    && let Some(art) = self.doc.place_symbol_art(symbol, &vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n), *xf)
                 {
-                    let mut art = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n);
-                    art.transform(*xf, false);
                     self.nest += 1;
                     self.node(&art, true);
                     self.nest -= 1;
@@ -752,7 +751,8 @@ impl<'a> Scene<'a> {
     /// The stops of a gradient with a spot ink as tints of its inks: a Separation space when every
     /// stop is a tint of one spot ink or paper white, else (at Level 3) a DeviceN space of the
     /// process inks the stops use, in CMYK order, and the spot inks, in the order the stops name
-    /// them. Paper white adds no ink and a gray stop is black ink. An off-center midpoint is a stop
+    /// them. Paper white adds no ink, a gray stop is black ink, and a spot stop's process plates
+    /// print with its ink. An off-center midpoint is a stop
     /// with the inks halfway between its two stops. `None` for a gradient without a spot ink, and,
     /// with a warning, for one whose inks can't be kept or that is mixed by the Perceptual method;
     /// it is then written in process colors.
@@ -799,6 +799,10 @@ impl<'a> Scene<'a> {
                 Some(n) => {
                     if let Some(i) = names.iter().position(|m| *m == n) {
                         v[4 + i] = unit(s.tint);
+                    }
+                    // Process plates printed with the spot ink (a DeviceN mix from a file).
+                    if let Some(p) = s.plates {
+                        v[..4].copy_from_slice(&p.map(unit));
                     }
                 }
                 None if paper(&s.color) => {}

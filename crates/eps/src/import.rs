@@ -18,7 +18,8 @@
 //! `%%Creator`) and these operators: Adobe Illustrator File Format Specification, version 7.0
 //! (1998), listed by PRONOM at https://www.nationalarchives.gov.uk/PRONOM/fmt/423. A file in that
 //! format whose program has its layers (`%AI5_BeginLayer`) comes in through them, as `native` reads
-//! an Illustrator EPS's editing copy (#1027). One VectorCraft wrote (its prolog the procedure set
+//! an Illustrator EPS's editing copy (#1027), and one without layers (Illustrator 3) comes in
+//! through its art put on one layer, as its page when that can't be read. One VectorCraft wrote (its prolog the procedure set
 //! [`crate::legacy_ai::PROCSET`], which prints its gradients flat and leaves its type out) comes in
 //! from those layers alone, without its page.
 //!
@@ -43,9 +44,12 @@ mod obj;
 mod preview;
 mod shading;
 mod text;
+mod type42;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_composite;
 #[cfg(test)]
 mod tests_fontnames;
 #[cfg(test)]
@@ -70,7 +74,12 @@ use interp::{Fault, Interp};
 use obj::PsError;
 
 pub use ai::NameEncoding;
-pub use native::{ai_alone, ai_alone_with, is_loss, layered_ai, layered_ai_with};
+pub(crate) use ai::{
+    MAX_GRADIENT_STOPS, MAX_LISTED, MAX_LISTED_NAME, MAX_SYMBOLS, read_art_style, read_style_list, style_moves_with, symbol_art_member, warp_number,
+};
+pub(crate) use ate::{MAX_BYTES as MAX_TEXT_DOCUMENT, MAX_FRAMES, MAX_SEGMENTS, MAX_STORY, MAX_VALUES as MAX_TEXT_VALUES};
+pub use native::{AiLayers, ai_alone, ai_alone_on_page, ai_alone_with, ai_layers_alone, ai_opened_artboard, is_loss, layered_ai, layered_ai_from};
+pub(crate) use native::{MAX_TEXT, scale_document};
 pub use text::family_style;
 
 /// The page of a PostScript file without a bounding box (US Letter).
@@ -244,7 +253,8 @@ pub fn import_trusting(bytes: &[u8], editing_data: bool, trust: bool) -> Result<
 }
 
 /// [`import_trusting`], with the names in the editing copy that aren't UTF-8 (layers, objects,
-/// colors, gradients, patterns, graphic styles, swatches) read in `names`.
+/// colors, gradients, patterns, graphic styles, swatches, brushes, symbols, variables and data
+/// sets) read in `names`.
 pub fn import_names(bytes: &[u8], editing_data: bool, trust: bool, names: NameEncoding) -> Result<Imported, String> {
     let ps = program(bytes)?;
     let dsc = Dsc::read(ps);
@@ -273,7 +283,7 @@ pub fn import_names(bytes: &[u8], editing_data: bool, trust: bool, names: NameEn
     }
     let drew = !out.drawn.is_empty();
     let why = match (&result, drew) {
-        (Ok(()), true) if editing_data => return Ok(native::layered(ps, finish(out), trust, names)),
+        (Ok(()), true) if editing_data => return Ok(native::layered(ps, finish(out), trust, dsc.illustrator, names)),
         (Ok(()), true) => return Ok(finish(out)),
         (Ok(()), false) => "it draws nothing VectorCraft's PostScript reader can show".to_string(),
         (Err(e), _) => reason(e, fault.as_ref()),
@@ -306,7 +316,8 @@ pub fn import_names(bytes: &[u8], editing_data: bool, trust: bool, names: NameEn
 /// The document of what `out` drew: one layer, clipped art in clipping groups (grouped art in
 /// groups), the spot inks as spot swatches, in CMYK when most process colours were.
 fn finish(mut out: Out) -> Imported {
-    let drawn = std::mem::take(&mut out.drawn);
+    let mut drawn = std::mem::take(&mut out.drawn);
+    graphics::merge_strips(&mut drawn, &mut out.shadings);
     let mut children = vectorcraft_doc::clipnest::nest(&mut out.doc, drawn);
     if !out.shadings.is_empty() {
         graphics::collapse(&mut children, &out.shadings);

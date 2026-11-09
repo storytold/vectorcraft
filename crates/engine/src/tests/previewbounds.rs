@@ -879,6 +879,31 @@ fn a_handle_drag_keeps_the_opposite_edge_of_the_offset_shape() {
 }
 
 #[test]
+fn a_hover_checks_the_memo_as_often_however_many_objects_are_selected() {
+    let checks = |objects: u32| {
+        let mut s = session();
+        for i in 0..objects {
+            rect(&mut s, f64::from(i), 1.0, 0.0);
+        }
+        run(&mut s, "select.all", json!({}));
+        let v = ViewInfo::default();
+        s.select_tool("selection", v).unwrap();
+        // Off the art, so the hover walks every selected object and finds no anchor or center.
+        let hover = |s: &mut Session| {
+            s.pointer(&PointerEvent::new(PointerKind::Move, 350.0, 350.0), v).unwrap();
+            s.cursor(Point::new(350.0, 350.0), Mods::default(), v)
+        };
+        hover(&mut s);
+        let before = s.preview_memo.checks();
+        hover(&mut s);
+        s.preview_memo.checks() - before
+    };
+    let few = checks(3);
+    assert!(few > 0, "a hover asks the memo");
+    assert_eq!(checks(60), few, "a check compares the whole selection: one per object is quadratic");
+}
+
+#[test]
 fn hovering_over_an_unchanged_document_measures_nothing_again() {
     // A selected square with Offset Path 10, drawn from 90 to 210, with Use Preview Bounds and Smart
     // Guides on: the bounding box and the center Smart Guides label are measured once.

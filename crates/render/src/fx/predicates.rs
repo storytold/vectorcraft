@@ -77,5 +77,6 @@ pub(super) fn rasterize_bounds(symbols: &SymbolBoxes, n: &Node, rfx: &[RasterFx]
 
 /// `f` with the content moved by (`dx`, `dy`) document units (a shadow's offset).
 pub(super) fn shifted<'a>(f: &Frame<'a>, dx: f64, dy: f64) -> Frame<'a> {
-    Frame { view: f.view * Affine::translate((dx, dy)), visible: f.visible - Vec2::new(dx, dy), ..*f }
+    let moved = Affine::translate((dx, dy));
+    Frame { view: f.view * moved, visible: f.visible - Vec2::new(dx, dy), output: f.output * moved, ..*f }
 }

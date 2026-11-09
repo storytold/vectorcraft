@@ -63,6 +63,14 @@ impl Palette {
     pub fn is_empty(&self) -> bool {
         self.swatches.is_empty() && self.groups.iter().all(|(_, s)| s.is_empty())
     }
+
+    /// The names the palette gives its color groups and swatches, except the name a swatch takes
+    /// from its gradient or pattern.
+    pub fn own_names(&self) -> impl Iterator<Item = &str> {
+        let named = |e: &Entry| !matches!(&e.cell, Cell::Gradient(n) | Cell::Pattern(n) if *n == e.name);
+        let swatches = self.swatches.iter().chain(self.groups.iter().flat_map(|(_, s)| s)).filter(move |e| named(e));
+        self.groups.iter().map(|(name, _)| name.as_str()).chain(swatches.map(|e| e.name.as_str()))
+    }
 }
 
 /// The palette of `data`: what follows `%AI5_BeginPalette`, up to its end, its names read by

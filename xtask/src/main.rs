@@ -14,6 +14,7 @@ mod pdf_deps;
 mod pngsuite;
 mod sha256;
 mod stats;
+mod test262;
 mod version;
 mod web_fonts;
 
@@ -41,6 +42,10 @@ commands:
   ico <out.ico> <png>...
                   pack PNGs into a Windows .ico (used by packaging/icons.sh)
   stats [--exact] count tests and lines per crate (--exact: ask the test harness via `-- --list`)
+  test262         fetch the pinned ECMAScript conformance suite into corpus/test262 (sha256
+                  verified), parse its ES5 subset with vectorcraft-js and run the ES5 language
+                  tests its interpreter supports and the String, Number, RegExp and Date
+                  built-ins tests, printing the counts
   web-fonts       copy the craft-fonts faces in crates/text/web-fonts.txt into the web site (the Trunk
                   post_build hook; a no-op without CRAFT_FONTS_DIR)
 ";
@@ -64,6 +69,7 @@ fn main() -> ExitCode {
         Some("ico") => ico::run(&rest),
         Some("version") => version::run(&root(), &rest),
         Some("stats") => stats::run(&root(), rest.contains(&"--exact")),
+        Some("test262") => test262::run_suite(),
         Some("web-fonts") => web_fonts::run(&root()),
         Some("-h" | "--help" | "help") | None => {
             print!("{USAGE}");
@@ -333,6 +339,9 @@ Tests that use a corpus skip cleanly when it is absent.
   corpus/raw/        raw.pixls.us samples, CC0 (optional)
   corpus/affinity/   public Affinity documents (CC0/MIT/Apache-2.0) at pinned commits, sha256
                      verified: oracles for the Affinity reader. Fetch: cargo xtask corpus --affinity
+  corpus/test262/    the ECMAScript conformance suite (BSD-3-Clause) at a pinned commit, sha256
+                     verified: the JavaScript parser's and interpreter's ES5 subsets. Fetch and run:
+                     cargo xtask test262
 ",
         corpus.display()
     );

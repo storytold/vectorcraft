@@ -308,6 +308,14 @@ impl RecoveryStore for FolderStore {
     }
     fn read(&self, name: &str) -> std::result::Result<Vec<u8>, String> {
         let f = self.file(name)?;
+        // Entry names come from the copy's metadata: refuse a link (or a folder another account
+        // owns) that would read a file from outside the store.
+        if let Some(dir) = f.parent() {
+            Self::own_area(dir)?;
+        }
+        if !std::fs::symlink_metadata(&f).map_err(|e| format!("{}: {e}", f.display()))?.file_type().is_file() {
+            return Err(format!("{}: not a plain file", f.display()));
+        }
         std::fs::read(&f).map_err(|e| format!("{}: {e}", f.display()))
     }
     fn write(&self, name: &str, bytes: &[u8]) -> std::result::Result<(), String> {
@@ -557,12 +565,20 @@ struct Meta {
     path: Option<String>,
     /// The format Save writes for it ([`SAVE_FORMATS`]).
     format: String,
+    /// A document's own native PDF choice before the recovery copy omits its PDF. None keeps
+    /// inheritance from the current application preference. Older copies did not record a choice.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    native_pdf_compatible: Option<bool>,
     /// When the copy was written (Unix seconds; none without a clock).
     saved: Option<i64>,
     /// The file it was read from when that import left things out of the document, and what
     /// (see [`crate::DocState::import_losses`]): a restored copy still refuses to replace it.
     imported_from: Option<String>,
     import_losses: Vec<String>,
+    /// The file the links' relative paths name places from, for a copy without `path` (see
+    /// [`crate::DocState::links_from`]).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    links_from: Option<String>,
     /// The document's images by key, in entries of the area (none in copies written before
     /// images were kept apart: the document entry holds them).
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
@@ -693,11 +709,12 @@ impl RecoveryJob {
         let meta_bytes = serde_json::to_vec_pretty(&meta).map_err(|e| e.to_string())?;
         let area = self.file.split_once('/').map_or("", |(a, _)| a);
         let _turn = WRITES.lock().unwrap_or_else(|e| e.into_inner());
-        let have: BTreeSet<String> = if images.is_empty() { BTreeSet::new() } else { store.list()?.into_iter().collect() };
+        let mut have: BTreeSet<String> = if images.is_empty() { BTreeSet::new() } else { store.list()?.into_iter().collect() };
         let mut image_bytes = 0;
         for (blob, data) in images {
             let name = format!("{area}/{blob}");
-            if !have.contains(&name) {
+            // Images of several keys can share one entry: it is written once.
+            if have.insert(name.clone()) {
                 store.write(&name, data)?;
                 image_bytes += data.len();
             }
@@ -812,7 +829,7 @@ pub fn jobs(s: &mut Session, store: &Arc<dyn RecoveryStore>) -> Result<(Vec<Reco
             mode: SaveMode::Copy,
             path: st.path.clone(),
             format: native,
-            options: Default::default(),
+            options: serde_json::Map::from_iter([("pdfCompatible".into(), json!(false))]),
             name: format!("{file}{DOC_EXT}"),
             folder: None,
             modified: None,
@@ -823,9 +840,15 @@ pub fn jobs(s: &mut Session, store: &Arc<dyn RecoveryStore>) -> Result<(Vec<Reco
             title: title.clone(),
             path: st.path.clone(),
             format: st.format.to_string(),
+            native_pdf_compatible: if matches!(st.format, "vectorcraft" | "template") {
+                st.save_options.get("pdfCompatible").and_then(Value::as_bool)
+            } else {
+                None
+            },
             saved,
             imported_from: st.imported_from.clone(),
             import_losses: st.import_losses.clone(),
+            links_from: st.links_from.clone().filter(|_| st.path.is_none()),
             // Filled in as the copy is written.
             images: BTreeMap::new(),
         };
@@ -1001,16 +1024,21 @@ fn restore_one(s: &mut Session, store: &Arc<dyn RecoveryStore>, file: &str) -> R
     super::threads::mark_continued(&mut doc);
     // The images, from the entries of the copy's area.
     let from = file.split_once('/').map_or("", |(a, _)| a);
-    let mut blobs = vec![];
+    let mut blobs: BTreeMap<String, Arc<Vec<u8>>> = BTreeMap::new();
     for (key, r) in &meta.images {
-        match store.read(&format!("{from}/{}", r.blob)) {
+        // Keys sharing an entry share its bytes: each entry is read (and written again) once.
+        let read = match blobs.get(&r.blob) {
+            Some(data) => Ok(data.clone()),
+            None => store.read(&format!("{from}/{}", r.blob)).map(Arc::new),
+        };
+        match read {
             Ok(data) => {
-                let mut blob = ImageBlob::new(r.mime.clone(), data);
+                let mut blob = ImageBlob { mime: r.mime.clone(), bytes: data, proxy: None };
                 // Until the linked file is read, the preview stands in for it.
                 if r.proxy {
                     blob.proxy = Some(blob.bytes.clone());
                 }
-                blobs.push((r.blob.clone(), blob.bytes.clone()));
+                blobs.insert(r.blob.clone(), blob.bytes.clone());
                 doc.images.insert(key.clone(), blob);
             }
             Err(e) => warnings.push(format!("the image “{key}” of the recovered document couldn't be read: {e}")),
@@ -1038,14 +1066,20 @@ fn restore_one(s: &mut Session, store: &Arc<dyn RecoveryStore>, file: &str) -> R
     if doc.title.is_empty() {
         doc.title = if meta.title.is_empty() { stem.to_string() } else { meta.title.clone() };
     }
-    // Linked files are looked for from the document's own folder.
-    let links = super::links::resolve(&mut doc, meta.path.as_deref(), s.prefs.update_links == "automatically", s.prefs.low_res_proxy_eps);
+    // Linked files are looked for from the document's own folder, else from the file it was read from.
+    let links_from = meta.path.clone().or_else(|| meta.links_from.clone());
+    let base = super::links::LinkBase::file(links_from.as_deref());
+    let links = super::links::resolve(&mut doc, base, s.prefs.update_links == "automatically", s.prefs.low_res_proxy_eps);
     let index = s.add_document(doc, meta.path.clone());
     let st = s.doc_mut()?;
     st.recovered = true;
+    st.links_from = links_from;
     st.imported_from = meta.imported_from.clone();
     st.import_losses = meta.import_losses.clone();
     st.format = SAVE_FORMATS.iter().copied().find(|f| *f == meta.format).unwrap_or("vectorcraft");
+    if let Some(pdf) = meta.native_pdf_compatible {
+        st.save_options.insert("pdfCompatible".into(), json!(pdf));
+    }
     st.mark_unsaved();
     // The copy stays until the document is saved or closed.
     st.recovery = Some(RecoveryCopy { file: mine.clone(), doc: st.doc.clone() });

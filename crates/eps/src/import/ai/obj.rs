@@ -115,6 +115,13 @@ impl NameEncoding {
         let (text, replaced) = other.decode_without_bom_handling(bytes);
         Decoded { text: text.into_owned(), fallback: true, replaced }
     }
+
+    /// [`NameEncoding::decode`] as the text, whether the bytes weren't UTF-8, and whether some
+    /// weren't valid in the encoding either.
+    pub(super) fn decoded(self, bytes: &[u8]) -> (String, bool, bool) {
+        let d = self.decode(bytes);
+        (d.text, d.fallback, d.replaced)
+    }
 }
 
 /// A name's hash, for counting the names past the notes.
@@ -143,7 +150,7 @@ const MAX_NAMES_COUNTED: usize = 10_000;
 /// name (the first [`MAX_NAME_NOTES`]), then one counting the others (up to
 /// [`MAX_NAMES_COUNTED`]).
 #[derive(Debug, Default)]
-pub(super) struct Names {
+pub struct Names {
     pub encoding: NameEncoding,
     noted: Vec<(String, bool)>,
     /// Hashes of the other names.
@@ -155,9 +162,15 @@ impl Names {
         Self { encoding, ..Self::default() }
     }
 
+    /// `bytes` read in the encoding, without a note (a list or a parameter string that repeats
+    /// names noted where they are defined).
+    pub fn quiet(&self, bytes: &[u8]) -> String {
+        self.encoding.decode(bytes).text
+    }
+
     /// A string's or name's text as a name: a string that isn't UTF-8 read in the encoding,
     /// with a note.
-    pub fn text(&mut self, v: &V) -> Option<String> {
+    pub(super) fn text(&mut self, v: &V) -> Option<String> {
         match v {
             V::Str(s) => Some(self.bytes(s)),
             V::Name(n) => Some(n.clone()),
@@ -175,12 +188,14 @@ impl Names {
     }
 
     /// The first text value of `o`'s entry `key`, as a name.
-    pub fn entry(&mut self, o: &Obj, key: &str) -> Option<String> {
+    pub(super) fn entry(&mut self, o: &Obj, key: &str) -> Option<String> {
         let v = o.get(key)?.iter().find(|v| matches!(v, V::Str(_)))?;
         self.text(v)
     }
 
-    fn note(&mut self, name: &str, replaced: bool) {
+    /// A note on `name`, which wasn't UTF-8 (`replaced`: parts of it weren't valid in the encoding
+    /// either).
+    pub(super) fn note(&mut self, name: &str, replaced: bool) {
         if self.noted.iter().any(|(n, _)| n == name) {
             return;
         }
@@ -207,24 +222,28 @@ impl Names {
         }
     }
 
+    /// Take the notes of `other` on the names in `used` (names read but then not used, such as the
+    /// layers of data whose layers aren't used, left out).
+    pub fn absorb_among(&mut self, other: Names, used: &[&str]) {
+        for (name, replaced) in other.noted {
+            if used.contains(&name.as_str()) {
+                self.note(&name, replaced);
+            }
+        }
+        for n in used {
+            let h = hash(n);
+            if other.more.contains(&h) {
+                self.count(h);
+            }
+        }
+    }
+
     /// The notes on the names that weren't UTF-8.
     pub fn notes(&self) -> Vec<String> {
-        self.notes_of(self.noted.iter().collect(), self.more.len())
-    }
-
-    /// The notes on the names in `used` that weren't UTF-8 (names read but then not used, such as
-    /// the layers of data whose layers aren't used, left out).
-    pub fn notes_among(&self, used: &[&str]) -> Vec<String> {
-        let noted: Vec<&(String, bool)> = self.noted.iter().filter(|(n, _)| used.contains(&n.as_str())).collect();
-        let others: std::collections::HashSet<u64> =
-            used.iter().filter(|n| !noted.iter().any(|(m, _)| m == *n)).map(|n| hash(n)).filter(|h| self.more.contains(h)).collect();
-        self.notes_of(noted, others.len())
-    }
-
-    fn notes_of(&self, noted: Vec<&(String, bool)>, more: usize) -> Vec<String> {
         let label = self.encoding.label();
-        let mut out: Vec<String> = noted
-            .into_iter()
+        let mut out: Vec<String> = self
+            .noted
+            .iter()
             .map(|(name, replaced)| {
                 if *replaced {
                     format!(
@@ -235,8 +254,8 @@ impl Names {
                 }
             })
             .collect();
-        if more > 0 {
-            out.push(format!("more names that aren't UTF-8 were read as {label} ({count})", count = more));
+        if !self.more.is_empty() {
+            out.push(format!("more names that aren't UTF-8 were read as {label} ({count})", count = self.more.len()));
         }
         out
     }
