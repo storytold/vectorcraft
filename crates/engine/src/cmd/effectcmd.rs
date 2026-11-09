@@ -18,6 +18,22 @@ use super::expand::has_seeded;
 use super::rasterfx;
 use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, cmd, fileio, has_doc, str_param, switch_or};
 
+/// The name of the `svg.filter` effect drawing `xml`: its `<filter>` id. An effect names the
+/// document's filter of that name, so `xml` that differs from the document's filter of the same
+/// name is refused.
+fn svg_filter_name(s: &Session, xml: &str, cmd: &str) -> Result<String> {
+    let name = effects::svg_filter::check(xml).map_err(|e| bad(cmd, e))?;
+    if let Some(held) = s.doc()?.doc.svg_filters.iter().find(|f| f.name == name)
+        && held.xml != xml.trim()
+    {
+        return Err(bad(
+            cmd,
+            format!("the document has another SVG filter named {name:?}: use svgFilter.apply, or svgFilter.define with `replace` to edit it"),
+        ));
+    }
+    Ok(name)
+}
+
 /// The effect commands of the Effect menu and the Appearance panel.
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -35,7 +51,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Effects",
             [],
             None,
-            "{ids?|id?: object ids (default: the selection), target?: \"object\"|\"contents\"} → {catalog: [{id, label, menu, params, defaults, raster, lengths: {always, absolute (while relative is false)} (distance params Scale Strokes & Effects scales)}] (installed effect plug-ins last: id plugin.<plug-in id>, menu Effect › Plug-ins), applied: [{id, effects, items: [{index, kind: fill|stroke, effects}]}], activeItem} for the selection",
+            "{ids?|id?: object ids (default: the selection), target?: \"object\"|\"contents\"} → {catalog: [{id, label, menu, params, defaults, raster, lengths: {always, absolute (while relative is false)} (distance params Scale Strokes & Effects scales)}] (installed effect plug-ins last: id plugin.<plug-in id>, menu Effect › Plug-ins), applied: [{id, effects, items: [{index, kind: fill|stroke, effects}]}] (an effect has skipped: true while Safe Mode skips it: a plug-in effect, which the object keeps and draws without), activeItem} for the selection",
             always,
             list
         ),
@@ -62,7 +78,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "3D Lighting Preset",
             [],
             None,
-            "{index: int, preset: standard|diffuse|topLeft|right, item?: appearance item index|null (omitted: the active item, else the object's), ids?|id?: [..], target?: object|contents, aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection)} replace an applied 3D effect's light rig and ambient with an original lighting preset; preserve shading, geometry and view; all targets must have a 3D effect at index; one undo step → {ids}",
+            "{index: int, preset: standard|diffuse|topLeft|right, item?: appearance item index|null (omitted: the active item, else the object's), ids?|id?: [..], target?: object|contents, aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection)} replace an applied 3D effect's light rig and ambient with an original lighting preset; preserve shading, geometry and view; all targets must have a 3D effect at index other than Extrude & Bevel (Classic), which has no lighting presets; one undo step → {ids}",
             has_doc,
             lighting_preset
         ),
@@ -71,7 +87,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Expand Appearance",
             ["Object"],
             None,
-            "{ids?|id?: [..], target?} turn each object's appearance into objects: every fill and stroke becomes an object of its own (a stroke stays a stroke, with its weight, dashes, arrowheads and width profile, on its own copy of the path, which object.expand or object.path.outlineStroke outline; brushed strokes become their brush art) grouped in paint order under the object's id and transparency, geometry effects are baked, raster effects become an embedded image (shadows and outer glows below the art; blur, feather and inner glow replace it; an object whose only raster effect is its own Rasterize becomes the image object.rasterize makes with the effect's options), type with effects or fills of its own is outlined; Crop Marks become a group of the object and its marks; Vector Halftone (addon.color.halftone) becomes a group of its dot paths, one per ink; a group's or layer's own fills and strokes become objects among its members, which are expanded too. An outlined frame of threaded text leaves its thread with the text it shows, and a frame kept as type in a group stays in its thread. A dimension whose art it changes, or one selected with the art it measures when that art is replaced, becomes a plain group of its art. Hidden fills, strokes and effects are dropped. Enabled when a selected or targeted object's appearance isn't basic (`ids` then pick which objects) → {ids, warning? (an image in the art couldn't be decoded, as object.rasterize says)}",
+            "{ids?|id?: [..], target?} turn each object's appearance into objects: every fill and stroke becomes an object of its own (a stroke stays a stroke, with its weight, dashes, arrowheads and width profile, on its own copy of the path, which object.expand or object.path.outlineStroke outline; brushed strokes become their brush art) grouped in paint order under the object's id and transparency, geometry effects are baked, raster effects become an embedded image (shadows and outer glows below the art; blur, feather and inner glow replace it; an object whose only raster effect is its own Rasterize becomes the image object.rasterize makes with the effect's options), type with effects or fills of its own is outlined; Crop Marks become a group of the object and its marks; Vector Halftone (addon.color.halftone) becomes a group of its dot paths, one per ink; a group's or layer's own fills and strokes become objects among its members, which are expanded too. An outlined frame of threaded text leaves its thread with the text it shows, and a frame kept as type in a group stays in its thread. A dimension whose art it changes, or one selected with the art it measures when that art is replaced, becomes a plain group of its art. Hidden fills, strokes and effects are dropped. In Safe Mode, an object with a visible plug-in effect (in it, or in a symbol it places) is an error and nothing changes. Enabled when a selected or targeted object's appearance isn't basic (`ids` then pick which objects) → {ids, warning? (an image in the art couldn't be decoded, as object.rasterize says)}",
             can_expand,
             expand_appearance
         ),
@@ -245,6 +261,11 @@ pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     if texture_load_effect(id) {
         load_texture(&mut params, C)?;
     }
+    // An SVG filter needs its <filter> element, and is named by its id.
+    if id == effects::SVG_FILTER {
+        let xml = params.get("xml").and_then(Value::as_str).ok_or_else(|| bad(C, "give `xml`, one SVG <filter> element"))?;
+        params["name"] = json!(svg_filter_name(s, xml, C)?);
+    }
     let effect = effects::new_effect(id, &params).ok_or_else(|| bad(C, format!("unknown effect `{id}`")))?;
     let label = effects::effect_info(id).map(|e| e.label.trim_end_matches('…').to_string()).unwrap_or_default();
     aligned(p, C)?;
@@ -307,7 +328,22 @@ fn list(s: &mut Session, p: &Value) -> Result<Value> {
         .collect();
     let mut applied = vec![];
     if s.active().is_some() {
-        let fx = |e: &[Effect]| serde_json::to_value(e).unwrap_or(Value::Null);
+        // A plug-in effect Safe Mode skips says so (`skipped`): the object keeps it.
+        let fx = |e: &[Effect]| {
+            Value::Array(
+                e.iter()
+                    .map(|e| {
+                        let mut v = serde_json::to_value(e).unwrap_or(Value::Null);
+                        if vectorcraft_plugins::effect::skipped(&e.id)
+                            && let Some(o) = v.as_object_mut()
+                        {
+                            o.insert("skipped".into(), json!(true));
+                        }
+                        v
+                    })
+                    .collect(),
+            )
+        };
         for id in appearance_targets(s, p)? {
             if let Some(n) = s.doc()?.doc.node(id) {
                 let items: Vec<Value> = n
@@ -469,6 +505,13 @@ fn lighting_preset(s: &mut Session, p: &Value) -> Result<Value> {
         if !effect.is_some_and(|e| effects::is_three_d(&e.id)) {
             return Err(bad(C, format!("object {} needs a 3D effect at index {index}", id.0)));
         }
+        // Extrude & Bevel (Classic) has no lighting presets; its lights are set in its own options.
+        if effect.is_some_and(|e| e.id == effects::CLASSIC_EXTRUDE) {
+            return Err(bad(
+                C,
+                format!("object {}: Extrude & Bevel (Classic) at index {index} has no lighting presets; set its lights with effect.setParams", id.0),
+            ));
+        }
     }
     let mut options = p.clone();
     let map = options.as_object_mut().ok_or_else(|| bad(C, "parameters must be an object"))?;
@@ -480,7 +523,7 @@ fn lighting_preset(s: &mut Session, p: &Value) -> Result<Value> {
 /// `effect.setParams`: merges `params` into the effect at `index` of the targets' active item, and
 /// sets its Warp style (`warpStyle`), its 3D type (`threeDType`) or visibility (`visible`), as one
 /// undo step. They are checked as `effect.apply` checks them, and a visible 3D effect must still
-/// fit. → `{ids}`.
+/// fit; a hidden one has its given values checked. → `{ids}`.
 fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "effect.setParams";
     let index = index_param(p, "index", C)?;
@@ -521,6 +564,12 @@ fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
             return Ok(json!({ "ids": [] }));
         }
     }
+    // An SVG filter is named by its id: another filter renames the effect.
+    if edited.iter().any(|e| e == effects::SVG_FILTER)
+        && let Some(xml) = params.get("xml").and_then(Value::as_str)
+    {
+        params["name"] = json!(svg_filter_name(s, xml, C)?);
+    }
     for &(id, target, index) in &targets {
         let n = s.doc()?.doc.node(id).ok_or(EngineError::NoNode(id))?;
         let effect = n.appearance.effects_at(target).and_then(|fx| fx.get(index));
@@ -532,7 +581,6 @@ fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
         }
         if let Some(e) = effect
             && effects::is_three_d(&e.id)
-            && visible != Some(false)
         {
             let to = kind.unwrap_or(&e.id);
             let mut prospective =
@@ -540,7 +588,14 @@ fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
             if let (Some(cur), Value::Object(new)) = (prospective.as_object_mut(), effects::upgrade_params(to, &params)) {
                 cur.extend(new);
             }
-            effects::validate_three_d(n, to, &prospective).map_err(|e| bad(C, e))?;
+            if visible != Some(false) {
+                effects::validate_three_d(n, to, &prospective).map_err(|e| bad(C, e))?;
+            } else {
+                // Hidden, the effect draws nothing, so its object need not fit. The values given are
+                // checked, and after a change of 3D type so is every value it keeps.
+                let checked = if to == e.id { effects::upgrade_params(to, &params) } else { prospective };
+                effects::validate_three_d_params(to, &checked).map_err(|e| bad(C, e))?;
+            }
         }
     }
     let ids = edit_effects(s, p, item, C, "Effect Options", &format!("{C}: no effect at index {index}"), index, |fx, index| {
@@ -879,8 +934,40 @@ fn expanded_node(d: &mut Document, mut n: Node, brushes: &[vectorcraft_brush::Br
     changed.then_some(n)
 }
 
+/// Does `n`, an object in it, or the art of a symbol placed in it hold a plug-in effect that
+/// expanding it draws: a visible one, the object's own or a visible fill's or stroke's, on an
+/// object that expands ([`expandable`]; in a symbol's art, `in_art`, every object does). A symbol's
+/// art counts where an instance of it expands. `seen` holds the symbols already looked into.
+fn holds_plugin_effect(d: &Document, n: &Node, in_art: bool, seen: &mut std::collections::HashSet<String>) -> bool {
+    let plugin = |e: &Effect| e.visible && vectorcraft_plugins::effect::plugin_id(&e.id).is_some();
+    let mut symbols = vec![];
+    let mut holds = false;
+    n.walk(&mut |c| {
+        if !in_art && !expandable(c) {
+            return;
+        }
+        holds |= c.appearance.effects.iter().any(plugin) || c.appearance.items.iter().any(|i| i.visible() && i.effects().iter().any(plugin));
+        if let NodeKind::SymbolInstance { symbol, .. } = &c.kind {
+            symbols.push(symbol.clone());
+        }
+    });
+    holds
+        || symbols.into_iter().any(|name| {
+            seen.insert(name.clone()) && d.symbols.iter().find(|s| s.name == name).is_some_and(|s| holds_plugin_effect(d, &s.art, true, seen))
+        })
+}
+
 fn expand_appearance(s: &mut Session, p: &Value) -> Result<Value> {
     let roots = appearance_targets(s, p)?;
+    // In Safe Mode a plug-in effect draws nothing: expanding it would drop the effect and keep the
+    // geometry it hasn't changed.
+    if vectorcraft_plugins::safe_mode::active() {
+        let d = &s.doc()?.doc;
+        let mut seen = std::collections::HashSet::new();
+        if roots.iter().filter_map(|id| d.node(*id)).any(|n| holds_plugin_effect(d, n, false, &mut seen)) {
+            return Err(EngineError::Other("Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode".into()));
+        }
+    }
     let failed = vectorcraft_render::decode_failures();
     let colorized_ok = super::paint::check_colorized(&s.doc()?.doc).is_ok();
     let ids = s.edit("Expand Appearance", |d, _| {

@@ -110,9 +110,10 @@ pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf:
     // The Selection tool's bounding box (rotated with the objects after a rotation), also shown by
     // the shape tools that keep a shape just drawn ready to adjust while they draw none (#5477). It
     // hides while a drag moves or resizes the selection, so only the art is seen going with the
-    // pointer (#712).
+    // pointer (#712). A handle resize keeps it at the changing bounds (#3526).
     // With Real-time Drawing off the art waits for the release of a move drag, and the box moves
     // with the pointer instead.
+    let resizing = app.session.tool_resizing();
     let moved = app.session.deferred_move();
     let shape_tool = vectorcraft_tools::shape::shows_shape_widgets(app.session.tool_id());
     // A shape tool drawing a shape shows none of this; adjusting a widget, it shows the widgets.
@@ -122,10 +123,18 @@ pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf:
     let held = super::drag::mods(p.ctx().input(|i| i.modifiers), false);
     let lends_selection = !app.session.tool_busy() && app.session.lent_tool_id(&held) == Some("selection");
     let show_box = (app.session.tool_id() == "selection" || lends_selection || (shape_tool && !app.session.tool_busy()))
-        && (!app.session.tool_transforming() || moved.is_some())
+        && (resizing || !app.session.tool_transforming() || moved.is_some())
         && app.ui.view.bounding_box
         && app.session.active().is_some_and(|st| !st.selection.is_empty() && st.selection.anchors.is_empty());
-    let bbox = if show_box { app.selection_box() } else { None };
+    // With Real-time Drawing off the document stays at the drag's snapshot, so a resize measures the
+    // box from the pending preview; otherwise each step's revision measures it once (`selection_box`).
+    let bbox = if !show_box {
+        None
+    } else if let Some(b) = resizing.then(|| app.session.deferred_transform_box()).flatten() {
+        Some(b)
+    } else {
+        app.selection_box()
+    };
     let bbox = bbox.map(|b| match moved {
         Some(d) => vectorcraft_doc::OrientedBox { rect: b.rect + b.to_local(d.to_point()).to_vec2(), ..b },
         None => b,
@@ -275,6 +284,29 @@ pub(super) fn draw_overlays(p: &egui::Painter, xf: &Xf, overlays: &[Overlay], t:
         match o {
             // Where the tools select: the document rectangle, turned with the view.
             Overlay::Marquee(r) => marquee_through(p, &xf.quad(*r)),
+            Overlay::SelectionMarquee { rect, enclosed, pointer } => {
+                let quad = xf.quad(*rect);
+                if *enclosed {
+                    let points: Vec<Pos2> = quad.iter().chain(quad.first()).copied().collect();
+                    p.add(Shape::line(points.clone(), Stroke::new(3.0, Color32::from_white_alpha(230))));
+                    p.add(Shape::line(points, Stroke::new(1.0, Color32::from_gray(40))));
+                } else {
+                    marquee_through(p, &quad);
+                }
+                let (current, other) = if *enclosed { (tl!("Fully Enclosed"), tl!("Touching")) } else { (tl!("Touching"), tl!("Fully Enclosed")) };
+                let label = format!("{current} · E: {other}");
+                let galley = p.layout(label, egui::FontId::proportional(11.0), t.text, (p.clip_rect().width() - 12.0).max(1.0));
+                let size = galley.size() + vec2(12.0, 8.0);
+                let wanted = xf.to_screen(*pointer) + vec2(14.0, 14.0);
+                let clip = p.clip_rect();
+                let min = egui::pos2(
+                    wanted.x.clamp(clip.min.x, (clip.max.x - size.x).max(clip.min.x)),
+                    wanted.y.clamp(clip.min.y, (clip.max.y - size.y).max(clip.min.y)),
+                );
+                let badge = egui::Rect::from_min_size(min, size);
+                p.rect_filled(badge, CornerRadius::same(3), t.panel);
+                p.galley(badge.min + vec2(6.0, 4.0), galley, t.text);
+            }
             Overlay::Path { path, color, width, dashed } => {
                 let s = Stroke::new(*width, c32(*color));
                 if *dashed {

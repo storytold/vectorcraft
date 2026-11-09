@@ -333,8 +333,8 @@ fn an_rgb_image_sampled_in_a_cmyk_document_separates_through_the_color_settings(
     let got = node(&s, dst).appearance.fill_paint().color().unwrap();
     assert_eq!(got, managed_cmyk(Color::rgb8(83, 170, 223)));
     let Color::Cmyk { c, m, y, k } = got else { panic!("{got:?}") };
-    // Generic CMYK: about C59 M12 Y3 K0, with no black, where the formula gave K13.
-    assert!((0.5..0.75).contains(&c) && (0.05..0.2).contains(&m) && y < 0.05 && k < 0.02, "{c} {m} {y} {k}");
+    // Generic CMYK: about C62 M19 Y0 K0, with no black, where the formula gave K13.
+    assert!((0.5..0.75).contains(&c) && (0.1..0.25).contains(&m) && y < 0.05 && k < 0.02, "{c} {m} {y} {k}");
     // A light blue shows close to the color it was picked from; the formula's C12 M7 showed duller.
     click(&mut s, 450.0, 50.0, Mods::default());
     let got = node(&s, dst).appearance.fill_paint().color().unwrap();

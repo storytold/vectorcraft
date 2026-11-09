@@ -239,10 +239,12 @@ impl Node {
             NodeKind::Intertwine { children } => children.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.reach(symbols))),
             // The frame and each shape the image's own fills and strokes paint, a stroke's grown by
             // the farthest it can reach from its shape.
-            NodeKind::Image(_) => crate::hit::image_paint(self).iter().fold(self.geometric(symbols), |acc, (bp, _, item)| {
-                let o = if let crate::AppearanceItem::Stroke(s) = item { s.reach() } else { 0.0 };
-                vectorcraft_geom::union_opt(acc, (!bp.elements().is_empty()).then(|| bp.bounding_box().inflate(o, o)))
-            }),
+            NodeKind::Image(_) => {
+                crate::hit::image_paint(symbols.map(SymbolBoxes::document), self).iter().fold(self.geometric(symbols), |acc, (bp, _, item)| {
+                    let o = if let crate::AppearanceItem::Stroke(s) = item { s.reach() } else { 0.0 };
+                    vectorcraft_geom::union_opt(acc, (!bp.elements().is_empty()).then(|| bp.bounding_box().inflate(o, o)))
+                })
+            }
             // Keys and steps placed on a spine, turned to it with Align to Path, can reach past the
             // keys and the spine.
             NodeKind::Blend { children, spec } => {
@@ -431,7 +433,7 @@ impl Node {
         // Type and symbols in perspective keep looking the same, moved by `a`.
         self.transform_projection(a);
         // Refitting an unplaced gradient only reproduces moves and uniform scales.
-        if !keeps_gradient_fit(a) {
+        if !keeps_gradient_fit(a) && !(sc.keep_fit_when_flat && flattens(a)) {
             self.pin_gradients();
         }
         let k = Scaling::factor(a);
@@ -447,6 +449,9 @@ impl Node {
         // copy-on-write (`Shared`), and a move must not copy what it leaves as it is.
         if self.appearance.gradients().next().is_some() {
             self.appearance.transform_gradients(a);
+        }
+        if self.appearance.has_svg_filter() {
+            self.appearance.transform_svg_filters(a);
         }
         if sc.patterns {
             crate::pattern::transform_pattern_paints(self, a);
@@ -508,7 +513,7 @@ impl Node {
                             *h = (lin * h.to_point()).to_vec2();
                         }
                     }
-                    EnvelopeKind::TopObject { path } => path.transform(a),
+                    EnvelopeKind::TopObject { path, .. } => path.transform(a),
                     EnvelopeKind::Warp { .. } => {}
                 }
             }
@@ -767,11 +772,22 @@ impl Node {
     }
 }
 
-/// Is `a` a move plus a positive uniform scale (after which a refit gradient still matches)?
-fn keeps_gradient_fit(a: Affine) -> bool {
+/// Is `a` a move plus a positive uniform scale (after which a refit gradient still matches)? The
+/// terms are compared within 1e-12 of the scale (at least of 1). A scale of 0 or less, a turn, a
+/// reflection and an uneven scale give false, and so does a map that flattens the object
+/// ([`flattens`]), which callers that keep a fitted gradient there check apart.
+pub fn keeps_gradient_fit(a: Affine) -> bool {
     let [m0, m1, m2, m3, _, _] = a.as_coeffs();
     let eps = 1e-12 * m0.abs().max(1.0);
     m0 > 0.0 && m1.abs() <= eps && m2.abs() <= eps && (m0 - m3).abs() <= eps
+}
+
+/// Does `a` flatten what it maps to a line or a point (its determinant 0, within 1e-12 of the
+/// squares of its terms), or is it not finite?
+pub fn flattens(a: Affine) -> bool {
+    let [m0, m1, m2, m3, _, _] = a.as_coeffs();
+    let norm = m0 * m0 + m1 * m1 + m2 * m2 + m3 * m3;
+    !a.is_finite() || a.determinant().abs() <= 1e-12 * norm
 }
 
 impl Node {

@@ -408,8 +408,8 @@ impl<'a> Scene<'a> {
         let (cols, rows) = (along(area.width()), along(area.height()));
         let pixels: Vec<u8> = if g.gradient.kind == GradientKind::Freeform {
             let Some(b) = painted_box(bounds) else { return };
-            let field = g.freeform_on(b).field_with(spread_scale(b), &|c| c.to_rgb());
-            field.grid(area, cols, rows).flat_map(|(c, a)| [q(c[0]), q(c[1]), q(c[2]), q(a)]).collect()
+            let field = g.freeform_on(b).model_field(spread_scale(b));
+            field.display_grid(area, cols, rows).flat_map(|(c, a)| [q(c[0]), q(c[1]), q(c[2]), q(a)]).collect()
         } else {
             let geom = g.resolve(bounds);
             let sample = g.gradient.sampler();

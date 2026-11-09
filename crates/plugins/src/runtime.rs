@@ -32,6 +32,9 @@ pub const HEAVY_FUEL: u64 = 1_000_000_000;
 /// Wall-clock budget of a heavy filter's run, in milliseconds (native builds).
 pub const HEAVY_WALL_TIME_MS: u64 = 300_000;
 
+/// The limit a run reports when its input and parameters together are past half its memory.
+pub(crate) const SELECTION_TOO_LARGE: &str = "memory budget (the selection is too large to hand over)";
+
 /// A heavy run's budget as people read it: (minutes it may take, times the instructions a light
 /// run gets).
 pub fn heavy_terms() -> (u64, u64) {
@@ -61,6 +64,10 @@ pub struct Limits {
     /// raise. Set them to `fuel_base` and `wall_time_ms` to give heavy filters nothing more.
     pub heavy_fuel: u64,
     pub heavy_wall_time_ms: u64,
+    /// What one export or import is given instead of `fuel_base` and `wall_time_ms`
+    /// ([`crate::export::limits`]).
+    pub export_fuel: u64,
+    pub export_wall_time_ms: u64,
 }
 
 impl Default for Limits {
@@ -75,6 +82,8 @@ impl Default for Limits {
             wall_time_ms: 60_000,
             heavy_fuel: HEAVY_FUEL,
             heavy_wall_time_ms: HEAVY_WALL_TIME_MS,
+            export_fuel: crate::export::FUEL,
+            export_wall_time_ms: crate::export::WALL_TIME_MS,
         }
     }
 }
@@ -133,8 +142,9 @@ type RunArgs = (i32, i32, i32, i32);
 impl Plugin {
     /// Validates and loads a module: checks the ABI version, the exports and reads the manifest, and
     /// checks that each host import it asks for is one the host offers ([`crate::host::IMPORTS`])
-    /// and its manifest allows.
+    /// and its manifest allows. In Safe Mode nothing is loaded ([`Error::SafeMode`]).
     pub fn load(bytes: &[u8], limits: Limits) -> Result<Plugin> {
+        crate::safe_mode::check()?;
         if bytes.len() > limits.max_module_bytes {
             return Err(Error::Module(format!("module is {} bytes (limit {})", bytes.len(), limits.max_module_bytes)));
         }
@@ -153,8 +163,9 @@ impl Plugin {
         let hash = crate::permissions::sha256_hex(bytes);
         let mut p = Plugin { manifest: Manifest::placeholder(), engine, module, limits, size: bytes.len(), hash, source: None, serial: 0 };
         let deadline = Deadline::new(p.limits.wall_time_ms);
-        // The manifest isn't read yet: every host import is linked, and what it reports is dropped.
-        let mut live = p.instantiate(Run::new("", false, false, deadline), true, &mut Report::default())?;
+        // The manifest isn't read yet: every host import is linked, what it reports is dropped and
+        // there is no storage to reach.
+        let mut live = p.instantiate(Run::new("", false, false, deadline), &crate::permissions::ALL, &mut Report::default())?;
         let version: TypedFunc<(), i32> = live.func("vc_abi_version")?;
         let v = p.call(&mut live, &version, (), p.limits.fuel_base, &deadline)?;
         if v != ABI_VERSION {
@@ -214,9 +225,9 @@ impl Plugin {
         self.serial = serial;
     }
 
-    /// A new instance for `run`, with the host imports linked when `granted`. When the module's
-    /// start function fails, what it reported through the host imports goes to `report`.
-    fn instantiate(&self, run: Run, granted: bool, report: &mut Report) -> Result<Live> {
+    /// A new instance for `run`, with the host imports of the permissions `granted` linked. When the
+    /// module's start function fails, what it reported through the host imports goes to `report`.
+    fn instantiate(&self, run: Run, granted: &[Permission], report: &mut Report) -> Result<Live> {
         let limits =
             StoreLimitsBuilder::new().memory_size(self.limits.max_memory_bytes).memories(1).tables(4).table_elements(100_000).instances(1).build();
         let mut store = Store::new(&self.engine, Host { limits, run });
@@ -279,17 +290,22 @@ impl Plugin {
         self.run_limited(input, params, &self.limits)
     }
 
-    /// [`Plugin::run`] with other time and instruction budgets (live effects get a shorter one).
+    /// [`Plugin::run`] with other time and instruction budgets (live effects get a shorter one). In
+    /// Safe Mode nothing runs ([`Error::SafeMode`]), even a plug-in installed before it was on.
     pub fn run_limited(&self, input: &[u8], params: &[u8], limits: &Limits) -> Result<Vec<u8>> {
         self.run_reporting(input, params, limits).0
     }
 
     /// [`Plugin::run_limited`], and what the run reported through the host imports: its last
-    /// progress report and its log lines, which also go to the app's log under its id. Inside a
+    /// progress report and its log lines, which also go to the app's log under its id. Its storage
+    /// imports reach the storage of its id ([`crate::registry::storage`]). Inside a
     /// [`vectorcraft_doc::cancel::scope`] its progress goes to the scope's sink (a live effect's
     /// doesn't) and `vc_cancelled` sees the scope's Cancel.
     pub fn run_reporting(&self, input: &[u8], params: &[u8], limits: &Limits) -> (Result<Vec<u8>>, Report) {
         let mut report = Report::default();
+        if let Err(e) = crate::safe_mode::check() {
+            return (Err(e), report);
+        }
         // wasmi reports misbehaving modules as errors; a panic would be a bug in it, and must
         // still not take the document down (native builds; wasm aborts on panic anyway).
         let run = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.run_inner(input, params, limits, &mut report)));
@@ -298,11 +314,11 @@ impl Plugin {
 
     fn run_inner(&self, input: &[u8], params: &[u8], limits: &Limits, report: &mut Report) -> Result<Vec<u8>> {
         let total = input.len().checked_add(params.len()).filter(|b| *b <= i32::MAX as usize && *b <= self.limits.max_memory_bytes / 2);
-        total.ok_or_else(|| Error::Limit("memory budget (the selection is too large to hand over)".into()))?;
+        total.ok_or_else(|| Error::Limit(SELECTION_TOO_LARGE.into()))?;
         let deadline = Deadline::new(limits.wall_time_ms);
         let m = &self.manifest;
-        let run = Run::new(&m.id, m.kind != Kind::Effect, true, deadline);
-        let mut live = self.instantiate(run, m.permissions().contains(&Permission::Progress), report)?;
+        let run = Run::new(&m.id, m.kind != Kind::Effect, true, deadline).with_storage(crate::registry::storage(&m.id));
+        let mut live = self.instantiate(run, &m.permissions(), report)?;
         let out = self.run_live(&mut live, input, params, limits, &deadline);
         *report = std::mem::take(&mut live.store.data_mut().run.report);
         out

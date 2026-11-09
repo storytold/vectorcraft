@@ -114,17 +114,19 @@ pub(super) fn show_preview(ui: &mut egui::Ui, tex: Option<&egui::TextureHandle>,
 
 /// Open `bytes` (or place them with the `file.place` params `place`) through the dialog when the
 /// file is a PDF (or `.ai`/`.ait`) with several pages or a password; false when there's nothing to
-/// ask (the caller goes on), including a file that carries its VectorCraft document when opening.
+/// ask (the caller goes on), including, when opening, a file that carries its VectorCraft document
+/// and a `.ai`/`.ait` with its editing data.
 pub fn offer(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<String>, place: Option<&Value>) -> bool {
-    if !fileio::detect(name, bytes).is_some_and(|f| matches!(f.id, "pdf" | "ai" | "ait")) {
+    let Some(format) = fileio::detect(name, bytes).map(|f| f.id).filter(|id| matches!(*id, "pdf" | "ai" | "ait")) else {
         return false;
-    }
+    };
     // A file carrying its VectorCraft document (a saved .ai, or a PDF saved with Preserve Editing)
-    // opens as that document, every artboard and layer: there are no pages to pick. Placing still
-    // asks, since a place takes one page.
+    // opens as that document, every artboard and layer: there are no pages to pick. So does a .ai
+    // or .ait with its editing data, which holds them all (#6135); a PDF with editing data still
+    // asks, as its pages are what it is. Placing still asks, since a place takes one page.
     // The file is read once for both checks.
     let opened = vectorcraft_pdf::open_pdf(bytes, None);
-    if place.is_none() && opened.as_ref().is_ok_and(|o| o.editing().is_some()) {
+    if place.is_none() && opened.as_ref().is_ok_and(|o| o.editing().is_some() || (format != "pdf" && o.has_illustrator_data())) {
         return false;
     }
     let (pages, locked) = match opened.map(|o| o.page_count()) {

@@ -245,8 +245,8 @@ fn loads_system_cmyk_icc() {
     assert_eq!(c.cmyk_to_srgb([0.0; 4], false).map(|v| (v * 255.0).round() as u8), [255, 255, 255]);
 }
 
-/// With black-point compensation, sRGB black separates to the press's darkest black and that black
-/// displays as black again (hex 000000 -> C67 M67 Y67 K100 -> 000000, not a dark grey).
+/// With black-point compensation, sRGB black separates to the press's black point and that black
+/// displays as black again (hex 000000 -> C75 M68 Y67 K90 -> 000000, not a dark gray).
 #[test]
 fn generic_cmyk_black_round_trips_with_bpc() {
     let c = cms();
@@ -259,25 +259,104 @@ fn generic_cmyk_black_round_trips_with_bpc() {
     assert!(raw.iter().all(|v| *v > 0.05), "{raw:?}");
 }
 
-/// A color whose solve holds cyan at 0 separates to the same inks when its values change by a few
-/// float steps: hex ed1e79 with its red stepped one `f32` at a time over 4,001 values (about 0.00024
-/// in all) stays within 0.001 on every ink.
+/// Each ink's 40% and 50% tints gain like CGATS TR 001 (SWOP): the colorimetric tone value increase
+/// (Murray–Davies on X for cyan, Y for magenta and black, Z for yellow) is C 20.0, M 17.6, Y 16.8 and
+/// K 21.6 points at 50%, and C 20.0, M 17.3, Y 16.7 and K 21.9 points at 40%.
+#[test]
+fn generic_cmyk_tints_gain_like_tr001() {
+    let g = generic();
+    let tvi = |ink: usize, a: f32| {
+        let ch = [0, 1, 2, 1][ink];
+        let mut cmyk = [0.0f32; 4];
+        cmyk[ink] = a;
+        let tint = g.to_xyz_rel(cmyk)[ch];
+        cmyk[ink] = 1.0;
+        let solid = g.to_xyz_rel(cmyk)[ch];
+        let paper = g.to_xyz_rel([0.0; 4])[ch];
+        (paper - tint) / (paper - solid) - a
+    };
+    for (ink, (at50, at40)) in [(0.200, 0.200), (0.176, 0.173), (0.168, 0.167), (0.216, 0.219)].into_iter().enumerate() {
+        assert!((tvi(ink, 0.5) - at50).abs() < 0.002, "ink {ink} at 50%: {}", tvi(ink, 0.5));
+        assert!((tvi(ink, 0.4) - at40).abs() < 0.002, "ink {ink} at 40%: {}", tvi(ink, 0.4));
+    }
+}
+
+/// More of any ink never makes a Generic CMYK color lighter, in any XYZ channel: on a 10% grid of
+/// builds within the 300% ink limit, adding 10% of one ink keeps X, Y and Z or lowers them.
+#[test]
+fn generic_cmyk_more_ink_is_never_lighter() {
+    let g = generic();
+    let steps = (0..=10).map(|i| i as f32 / 10.0);
+    for c in steps.clone() {
+        for m in steps.clone() {
+            for y in steps.clone() {
+                for k in steps.clone() {
+                    let base = [c, m, y, k];
+                    if base.iter().sum::<f32>() > 3.0 - 0.1 + 1e-4 {
+                        continue;
+                    }
+                    let x0 = g.to_xyz_rel(base);
+                    for ink in 0..4 {
+                        if base[ink] >= 1.0 {
+                            continue;
+                        }
+                        let mut more = base;
+                        more[ink] += 0.1;
+                        let x1 = g.to_xyz_rel(more);
+                        assert!((0..3).all(|ch| x1[ch] <= x0[ch] + 1e-5), "{base:?} plus ink {ink}: {x0:?} to {x1:?}");
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// sRGB black separates to 90% black under neutral CMY that fills the 300% ink limit, light grays
+/// carry no black, and black rises steadily from the light end of the gray ramp to the dark end.
+#[test]
+fn generic_cmyk_black_generation_follows_the_black_curve() {
+    let c = cms();
+    let black = c.srgb_to_cmyk([0.0; 3], Intent::RelativeColorimetric);
+    assert!((black[3] - 0.9).abs() < 0.005, "{black:?}");
+    assert!((black.iter().sum::<f32>() - 3.0).abs() < 0.01, "{black:?}");
+    let lab = c.cmyk_to_lab(black);
+    assert!(lab.a.abs() < 0.05 && lab.b.abs() < 0.05, "neutral: {lab:?}");
+    let light = c.srgb_to_cmyk([0.7; 3], Intent::RelativeColorimetric);
+    assert_eq!(light[3], 0.0, "{light:?}");
+    let mut prev = 0.0;
+    for v in (0..=50).rev().map(|i| i as f32 / 50.0) {
+        let k = c.srgb_to_cmyk([v; 3], Intent::RelativeColorimetric)[3];
+        assert!(k >= prev - 1e-4, "gray {v}: K {k} after {prev}");
+        prev = k;
+    }
+}
+
+/// A color whose solve holds an ink at a bound separates to the same inks when its values change by
+/// a few float steps: hex f01482 (cyan held at 0) and hex ed1e79 (magenta held at 100%), each with
+/// its red stepped one `f32` at a time over 4,001 values (about 0.00024 in all), stay within 0.001
+/// on every ink.
 #[test]
 fn generic_cmyk_separates_nearby_colors_at_the_gamut_edge_alike() {
     let c = cms();
-    let pink = [237.0f32 / 255.0, 30.0 / 255.0, 121.0 / 255.0];
-    let (mut lo, mut hi) = ([f32::MAX; 4], [f32::MIN; 4]);
-    for step in -2000i32..=2000 {
-        let mut rgb = pink;
-        rgb[0] = f32::from_bits(pink[0].to_bits().wrapping_add_signed(step));
-        let ink = c.srgb_to_cmyk(rgb, Intent::RelativeColorimetric);
-        for i in 0..4 {
-            lo[i] = lo[i].min(ink[i]);
-            hi[i] = hi[i].max(ink[i]);
+    let spread = |pink: [f32; 3]| {
+        let (mut lo, mut hi) = ([f32::MAX; 4], [f32::MIN; 4]);
+        for step in -2000i32..=2000 {
+            let mut rgb = pink;
+            rgb[0] = f32::from_bits(pink[0].to_bits().wrapping_add_signed(step));
+            let ink = c.srgb_to_cmyk(rgb, Intent::RelativeColorimetric);
+            for i in 0..4 {
+                lo[i] = lo[i].min(ink[i]);
+                hi[i] = hi[i].max(ink[i]);
+            }
         }
-    }
+        (lo, hi)
+    };
+    let (lo, hi) = spread([240.0f32 / 255.0, 20.0 / 255.0, 130.0 / 255.0]);
     assert!((0..4).all(|i| hi[i] - lo[i] < 1e-3), "{lo:?} to {hi:?}");
     assert_eq!(lo[0], 0.0, "{lo:?}");
+    let (lo, hi) = spread([237.0f32 / 255.0, 30.0 / 255.0, 121.0 / 255.0]);
+    assert!((0..4).all(|i| hi[i] - lo[i] < 1e-3), "{lo:?} to {hi:?}");
+    assert_eq!(hi[1], 1.0, "{hi:?}");
 }
 
 /// A color whose solve holds cyan and magenta at 1 separates to the same inks when its values change

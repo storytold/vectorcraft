@@ -11,17 +11,37 @@
 //! `INTERPRETING.md` says), unless its `onlyStrict`, `noStrict` or `raw` flag says otherwise. The
 //! test prints the counts and writes each failure to `failures.txt` beside the suite; it fails only
 //! when the suite cannot be read.
+//!
+//! A second test runs the same ES5 tests through the interpreter, each in a new realm after the
+//! suite's `assert.js`, `sta.js` and the files its `includes:` names: every test that must parse
+//! and uses only the built-ins the interpreter has (those that name a missing global or method,
+//! in their own source or an included file, are counted as skipped, as are `async` tests). A test
+//! passes when it completes, or, for `negative: phase: runtime`, when it throws an object whose
+//! `constructor` is the global its `type:` names. Its counts are printed apart from the parse
+//! counts, and its failures go to `run-failures.txt`.
+//!
+//! A third test runs the tests of the ES5 built-ins the same way: those under the folders
+//! [`ES5_BUILT_INS`] names that have an `es5id:` (or, under `annexB/`, any edition's id) and no
+//! `features:` tag. Its failures go to `built-ins-failures.txt`. A fourth test runs the tests under
+//! `test/built-ins/String`, `Number`, `RegExp` and `Date` the same way, counting the tests that name
+//! an ES5 section apart from the other tests without a feature tag; its failures go to
+//! `builtins-failures.txt`. The interpreter tests fail when the interpreter panics, when a harness
+//! or test file cannot be read, or when no ES5 test runs.
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use vectorcraft_js::{Options, parse};
+use vectorcraft_js::{JsValue, Limits, Options, Realm, RunErrorKind, TokenKind, parse, tokenize};
 
 /// A test file's metadata, from its `/*--- … ---*/` block.
 #[derive(Default)]
 struct Meta {
     features: Vec<String>,
     flags: Vec<String>,
+    includes: Vec<String>,
     negative_phase: Option<String>,
+    /// The error constructor a negative test expects (`negative: type:`).
+    negative_type: Option<String>,
     /// The test names the ES5 section it was written for (`es5id:`).
     es5: bool,
 }
@@ -86,6 +106,10 @@ fn meta(source: &str) -> Meta {
             meta.features = list(v, &mut lines);
         } else if let Some(v) = trimmed.strip_prefix("flags:").filter(|_| !indented) {
             meta.flags = list(v, &mut lines);
+        } else if let Some(v) = trimmed.strip_prefix("includes:").filter(|_| !indented) {
+            meta.includes = list(v, &mut lines);
+        } else if let Some(v) = trimmed.strip_prefix("type:").filter(|_| in_negative) {
+            meta.negative_type = Some(v.trim().to_string());
         } else if trimmed.starts_with("es5id:") && !indented {
             meta.es5 = true;
         } else if trimmed == "negative:" && !indented {
@@ -175,4 +199,271 @@ fn es5_parse_subset() {
         positive + negative,
         report.display()
     );
+}
+
+/// Globals and method names the interpreter does not provide yet: a test that names one, in its
+/// own source or in a harness file it includes, is skipped.
+const MISSING_BUILTINS: &str = "String Number Boolean Date RegExp print $262 $DONE Symbol Proxy Reflect Promise Map Set WeakMap \
+    WeakSet ArrayBuffer DataView Int8Array Uint8Array Float64Array charAt charCodeAt fromCharCode substring substr split replace \
+    match search exec test toUpperCase toLowerCase trim toFixed toPrecision toExponential now";
+
+/// The directories under `test/built-ins/` and `test/annexB/built-ins/` that hold tests of the
+/// ES5 built-ins (ECMA-262 5.1 sections 15.1 to 15.12 and Annex B.2).
+const ES5_BUILT_INS: &[&str] = &[
+    "built-ins/Object",
+    "built-ins/Function",
+    "built-ins/Array",
+    "built-ins/Error",
+    "built-ins/NativeErrors",
+    "built-ins/Math",
+    "built-ins/JSON",
+    "built-ins/global",
+    "built-ins/Infinity",
+    "built-ins/NaN",
+    "built-ins/undefined",
+    "built-ins/parseInt",
+    "built-ins/parseFloat",
+    "built-ins/isNaN",
+    "built-ins/isFinite",
+    "built-ins/encodeURI",
+    "built-ins/encodeURIComponent",
+    "built-ins/decodeURI",
+    "built-ins/decodeURIComponent",
+    "annexB/built-ins/escape",
+    "annexB/built-ins/unescape",
+];
+
+/// The names in [`MISSING_BUILTINS`] that `String`, `Number`, `RegExp` and `Date` provide.
+const TEXT_BUILTINS: &str = "String Number Date RegExp charAt charCodeAt fromCharCode substring substr split replace match search exec test \
+    toUpperCase toLowerCase trim toFixed toPrecision toExponential now";
+
+/// String methods whose names `Array.prototype` also uses: provided for the tests under
+/// `built-ins/String/`, and still missing elsewhere, where the name usually means the array method.
+const STRING_METHODS_SHARED_WITH_ARRAY: &str = "indexOf lastIndexOf concat slice";
+
+/// The names in [`MISSING_BUILTINS`] the interpreter still lacks, without those in each of
+/// `provided`.
+fn missing_builtins<'a>(provided: &[&str]) -> HashSet<&'a str> {
+    let provided: HashSet<&str> = provided.iter().flat_map(|p| p.split_whitespace()).collect();
+    MISSING_BUILTINS.split_whitespace().filter(|name| !provided.contains(name)).collect()
+}
+
+/// The source names a missing built-in, as an identifier, a property name or a word inside a
+/// string literal (code passed to `eval` or `Function`), or does not parse as ES5 (the tests that
+/// use `let` and `const`).
+fn needs_missing_builtin(source: &str, missing: &HashSet<&str>) -> bool {
+    let Ok(tokens) = tokenize(source, &Options::default()) else { return true };
+    tokens.iter().any(|t| match &t.kind {
+        TokenKind::Ident(name) => missing.contains(name.as_str()),
+        TokenKind::String(units) => {
+            String::from_utf16_lossy(units).split(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '$')).any(|word| missing.contains(word))
+        }
+        _ => false,
+    })
+}
+
+/// Runs one test in a new realm; `Err` describes a failure.
+fn run_one(script: &str, negative_type: Option<&str>) -> Result<(), String> {
+    let mut realm = Realm::with_options(Options::default(), Limits { fuel: 20_000_000, heap_bytes: 256 << 20, ..Limits::default() });
+    match (realm.run(script), negative_type) {
+        (Ok(_), None) => Ok(()),
+        (Ok(_), Some(t)) => Err(format!("completed; a {t} was expected")),
+        (Err(e), Some(t)) if e.kind == RunErrorKind::Thrown => {
+            realm.bind_last_thrown("__thrown");
+            match realm.run(&format!("typeof __thrown === 'object' && __thrown !== null && __thrown.constructor === {t}")) {
+                Ok(JsValue::Bool(true)) => Ok(()),
+                _ => Err(format!("threw {} (line {}); a {t} was expected", e.message, e.line)),
+            }
+        }
+        (Err(e), _) => Err(format!("{:?}: {} (line {}, column {})", e.kind, e.message, e.line, e.column)),
+    }
+}
+
+#[test]
+fn es5_language_subset_runs() {
+    let Some(dir) = suite_dir() else {
+        println!("test262 interpreter: SKIPPED (no suite; run cargo xtask test262)");
+        return;
+    };
+    // Each test runs on a thread with a stack large enough for the nested runs the re-entry limit
+    // allows in an unoptimized build.
+    let handle = std::thread::Builder::new().stack_size(64 << 20).spawn(move || run_language_subset(&dir)).unwrap();
+    handle.join().unwrap();
+}
+
+/// The counts of one run of a set of tests through the interpreter.
+#[derive(Default)]
+struct RunCounts {
+    tests: usize,
+    skipped: usize,
+    passed: usize,
+    failed: usize,
+    panicked: usize,
+    failures: String,
+}
+
+impl RunCounts {
+    fn summary(&self) -> String {
+        format!(
+            "{} tests that need only the built-ins present, {} runs passed, {} failed ({} panicked), {} skipped",
+            self.tests, self.passed, self.failed, self.panicked, self.skipped
+        )
+    }
+}
+
+fn run_language_subset(dir: &Path) {
+    let language = dir.join("test").join("language");
+    assert!(language.is_dir(), "{} is not a test262 checkout", dir.display());
+    let missing = missing_builtins(&[TEXT_BUILTINS]);
+    let (es5, _) = run_tests(dir, &language, &missing, false);
+    assert!(es5.tests > 0, "no ES5 tests ran under {}", language.display());
+    let report = dir.join("run-failures.txt");
+    if let Err(e) = std::fs::write(&report, &es5.failures) {
+        println!("could not write {}: {e}", report.display());
+    }
+    println!(
+        "test262 ES5 language subset through the interpreter: {} tests that need only the built-ins present, {} runs passed, \
+         {} failed ({} panicked). Skipped {} tests that need other built-ins, use syntax after ES5 or are asynchronous. Failures: {}",
+        es5.tests,
+        es5.passed,
+        es5.failed,
+        es5.panicked,
+        es5.skipped,
+        report.display()
+    );
+    assert_eq!(es5.panicked, 0, "the interpreter panicked; see {}", report.display());
+}
+
+#[test]
+fn es5_built_ins_subset_runs() {
+    let Some(dir) = suite_dir() else {
+        println!("test262 built-ins: SKIPPED (no suite; run cargo xtask test262)");
+        return;
+    };
+    let handle = std::thread::Builder::new().stack_size(64 << 20).spawn(move || run_built_ins(&dir)).unwrap();
+    handle.join().unwrap();
+}
+
+/// Runs the tests under the folders [`ES5_BUILT_INS`] names, prints the counts and writes the
+/// failures to `built-ins-failures.txt` beside the suite. The Annex B tests name the edition they
+/// were written for with `esid:`, so they run without an `es5id:`.
+fn run_built_ins(dir: &Path) {
+    let missing = missing_builtins(&[TEXT_BUILTINS]);
+    let mut all = RunCounts::default();
+    for folder in ES5_BUILT_INS {
+        let root = dir.join("test").join(folder);
+        assert!(root.is_dir(), "{} is not a test262 checkout", dir.display());
+        let (es5, later) = run_tests(dir, &root, &missing, folder.starts_with("annexB"));
+        for counts in [es5, later] {
+            all.tests += counts.tests;
+            all.skipped += counts.skipped;
+            all.passed += counts.passed;
+            all.failed += counts.failed;
+            all.panicked += counts.panicked;
+            all.failures.push_str(&counts.failures);
+        }
+    }
+    assert!(all.tests > 0, "no ES5 built-ins tests ran under {}", dir.display());
+    let report = dir.join("built-ins-failures.txt");
+    if let Err(e) = std::fs::write(&report, &all.failures) {
+        println!("could not write {}: {e}", report.display());
+    }
+    println!("test262 ES5 built-ins subset through the interpreter: {}. Failures: {}", all.summary(), report.display());
+    assert_eq!(all.panicked, 0, "the interpreter panicked; see {}", report.display());
+}
+
+#[test]
+fn es5_text_builtins_run() {
+    let Some(dir) = suite_dir() else {
+        println!("test262 text built-ins: SKIPPED (no suite; run cargo xtask test262)");
+        return;
+    };
+    let handle = std::thread::Builder::new().stack_size(64 << 20).spawn(move || run_text_builtins(&dir)).unwrap();
+    handle.join().unwrap();
+}
+
+/// Runs the tests under `test/built-ins/` for `String`, `Number`, `RegExp` and `Date`: those that
+/// name an ES5 section and the other tests without a feature tag, counted apart.
+fn run_text_builtins(dir: &Path) {
+    let mut report = String::new();
+    let mut panicked = 0;
+    for name in ["String", "Number", "RegExp", "Date"] {
+        let root = dir.join("test").join("built-ins").join(name);
+        assert!(root.is_dir(), "{} is not a test262 checkout", dir.display());
+        let missing =
+            if name == "String" { missing_builtins(&[TEXT_BUILTINS, STRING_METHODS_SHARED_WITH_ARRAY]) } else { missing_builtins(&[TEXT_BUILTINS]) };
+        let (es5, later) = run_tests(dir, &root, &missing, true);
+        assert!(es5.tests > 0, "no ES5 tests ran under {}", root.display());
+        println!("test262 built-ins/{name}, ES5 tests: {}. Other tests without a feature tag: {}.", es5.summary(), later.summary());
+        report.push_str(&format!("# built-ins/{name}, ES5 tests\n{}\n# built-ins/{name}, other tests\n{}\n", es5.failures, later.failures));
+        panicked += es5.panicked + later.panicked;
+    }
+    let path = dir.join("builtins-failures.txt");
+    if let Err(e) = std::fs::write(&path, &report) {
+        println!("could not write {}: {e}", path.display());
+    }
+    println!("test262 built-ins failures: {}", path.display());
+    assert_eq!(panicked, 0, "the interpreter panicked; see {}", path.display());
+}
+
+/// Runs the tests under `root` that have no feature tag and are not module, asynchronous or
+/// negative parse tests, each in a new realm after the harness. Returns the counts for the tests
+/// that name an ES5 section and, when `later` is set, for the others (otherwise those are left out).
+fn run_tests(dir: &Path, root: &Path, missing: &HashSet<&str>, later: bool) -> (RunCounts, RunCounts) {
+    let harness_dir = dir.join("harness");
+    let read = |p: &Path| {
+        let bytes = std::fs::read(p).map_err(|e| format!("cannot read {}: {e}", p.display()));
+        assert!(bytes.is_ok(), "{}", bytes.as_ref().err().map_or("", String::as_str));
+        String::from_utf8_lossy(&bytes.unwrap_or_default()).into_owned()
+    };
+    let prelude = format!("{}\n{}\n", read(&harness_dir.join("assert.js")), read(&harness_dir.join("sta.js")));
+    let verbose = std::env::var_os("VECTORCRAFT_TEST262_VERBOSE").is_some();
+    let (mut es5_counts, mut later_counts) = (RunCounts::default(), RunCounts::default());
+    for path in test_files(root) {
+        let source = read(&path);
+        let meta = meta(&source);
+        let negative_parse = matches!(meta.negative_phase.as_deref(), Some("parse" | "resolution"));
+        if (!meta.es5 && !later) || !meta.features.is_empty() || negative_parse || meta.flags.iter().any(|f| f == "module") {
+            continue;
+        }
+        let counts = if meta.es5 { &mut es5_counts } else { &mut later_counts };
+        let includes: String = meta.includes.iter().map(|i| read(&harness_dir.join(i)) + "\n").collect();
+        if meta.flags.iter().any(|f| f == "async") || needs_missing_builtin(&source, missing) || needs_missing_builtin(&includes, missing) {
+            counts.skipped += 1;
+            continue;
+        }
+        counts.tests += 1;
+        let has = |flag: &str| meta.flags.iter().any(|f| f == flag);
+        let modes: &[bool] = if has("raw") || has("noStrict") {
+            &[false]
+        } else if has("onlyStrict") {
+            &[true]
+        } else {
+            &[false, true]
+        };
+        let rel = path.strip_prefix(dir).unwrap_or(&path).display().to_string().replace('\\', "/");
+        for &strict in modes {
+            let mode = if strict { "strict" } else { "sloppy" };
+            if verbose {
+                eprintln!("{rel} ({mode})");
+            }
+            let body = if has("raw") { source.clone() } else { format!("{prelude}{includes}{source}") };
+            let script = if strict { format!("\"use strict\";\n{body}") } else { body };
+            let negative_type = meta.negative_type.clone().filter(|_| meta.negative_phase.as_deref() == Some("runtime"));
+            let outcome = std::panic::catch_unwind(|| run_one(&script, negative_type.as_deref()));
+            match outcome {
+                Ok(Ok(())) => counts.passed += 1,
+                Ok(Err(why)) => {
+                    counts.failed += 1;
+                    counts.failures.push_str(&format!("{rel} ({mode}): {why}\n"));
+                }
+                Err(_) => {
+                    counts.failed += 1;
+                    counts.panicked += 1;
+                    counts.failures.push_str(&format!("{rel} ({mode}): PANIC\n"));
+                }
+            }
+        }
+    }
+    (es5_counts, later_counts)
 }
