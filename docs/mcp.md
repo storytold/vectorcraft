@@ -6717,7 +6717,10 @@ flag lasts for that session only. In other sessions the approval, or a `grant` a
 hash, counts as approved in later sessions and in the desktop app, and covers only that module: the
 same bytes install again without one, also from a headless session that reads the same `grants.json`, and a module
 with other bytes has `needsApproval: true` and needs a new one even when it lists the same permissions. `plugin.remove`
-forgets the approval. A
+forgets the approval, and so does installing a module that lists no permissions under that id: the earlier bytes then
+need a new approval. A refused install keeps the grant. A failed write of the module to the plug-in store leaves the
+grant in the store. A stored module that is disabled, or not read in Safe Mode, keeps the grant for its id. When
+`plugin.remove` can't remove the grant from the plug-in store, it returns an error and the plug-in stays installed. A
 filter without `doc.write` or `state` that returns output needing them gets an error and the document is unchanged.
 A plug-in of API level 2 (`api: 2` in its entry) that lists `progress` may report its progress, see Cancel and write
 log lines: `notifications/cancelled` makes its `vc_cancelled` return 1, and its log lines go to the server's log

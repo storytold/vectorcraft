@@ -226,9 +226,29 @@ capability model proposed for PhotoCraft plug-ins
   the old module and its grant, and the old module loads at the next start. If the write that puts the old module back
   fails as well, the folder holds the new module with the old grant, the grant does not cover that module, and the
   plug-in is skipped at the next start until it is approved again. A grant whose hash is not 64 lower-case
-  hexadecimal digits covers nothing. `plugin.remove` forgets the grant. An entry of `grants.json` that this version can't use (a
-  permission it doesn't know, an invalid id) is skipped and stays in the file until its plug-in is granted again or
-  removed. A `grants.json` that is not a JSON list is never overwritten, and the file is never written larger than
+  hexadecimal digits covers nothing. `plugin.remove` forgets the grant, and so does a successful `plugin.install` of a
+  module that lists no permissions under that id, so the earlier bytes need a new approval. When `plugin.remove` can't
+  remove the grant from `grants.json`, it returns an error, the plug-in stays installed, and a second `plugin.remove`
+  tries again. A refused install leaves the grant as it is. When an install of a module that lists no permissions can't
+  write the module to the `Plug-ins` folder, or can't remove the grant from `grants.json`, the folder keeps the module
+  it held and `grants.json` keeps the grant. The new module runs until the session ends. When the grant can't be
+  removed and the module already stored can't be read back or written back, the new module stays in the folder, and
+  the grant does not count for the rest of the session. The grant also does not count when the folder held no module
+  for that id. A
+  `grants.json` larger than 1 MiB, or one that is not a JSON list, grants nothing: the new module stays in the folder,
+  and `plugin.remove` removes the plug-in. A `grants.json` that can't be opened or read counts as a grant that can't be
+  removed. When VectorCraft loads the `Plug-ins` folder, it forgets any grant for an id whose stored module lists no
+  permissions. When it can't remove that grant from `grants.json`, or can't read the file, the grant does not count for
+  the rest of the session, or until the plug-in is granted again, including for the next load, which tries the removal
+  again. In Safe Mode, and for
+  a stored module that the user disabled,
+  VectorCraft does not read the module, and `grants.json` keeps the grant for its id. The Additional Plug-ins Folder
+  and `plugin.reload` do not change the `Plug-ins` folder: when they leave a module that lists no permissions under an
+  id, the process forgets its own grant for that id, and a grant kept in `grants.json` stays with the stored module it
+  covers. An entry of `grants.json` that this version can't use (a permission it doesn't know, an invalid id) is
+  skipped and stays in the file until its plug-in is granted again, replaced by a module that lists no permissions, or
+  removed. When such an entry can't be removed from the file, `plugin.install` and `plugin.remove` treat it as a grant
+  that can't be removed. A `grants.json` that is not a JSON list is never overwritten, and the file is never written larger than
   1 MiB, the most that is read. When a `Plug-ins` folder is in use, only the grants kept
   in it count for `plugin.install`, `plugin.inspect`, `plugin.reload` and the Additional Plug-ins Folder. At startup,
   a stored plug-in is skipped when no grant covers its bytes and the permissions it lists. The Additional Plug-ins

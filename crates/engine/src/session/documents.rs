@@ -82,6 +82,7 @@ impl Session {
             pdf_preset_dir: None,
             profile_dir: None,
             plugin_dir: None,
+            ignored_plugin_grants: Default::default(),
             plugin_output: None,
             plugin_install_approval: None,
             plugin_grants_from_requests: false,
