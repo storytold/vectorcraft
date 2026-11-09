@@ -74,6 +74,14 @@ impl Plane {
     pub const ALL: [Plane; 3] = [Plane::Left, Plane::Right, Plane::Ground];
 }
 
+/// Return the nearest 45-degree direction of `delta` in plane space, counted from the plane's x axis,
+/// and `delta` projected onto that direction.
+pub fn constrain_move_delta(delta: Vec2) -> (Vec2, Vec2) {
+    let angle = (delta.y.atan2(delta.x) / std::f64::consts::FRAC_PI_4).round() * std::f64::consts::FRAC_PI_4;
+    let direction = Vec2::new(angle.cos(), angle.sin());
+    (direction, direction * (delta.x * direction.x + delta.y * direction.y))
+}
+
 /// Plane Switching widget: (plane, face quad) list and the "no plane" circle (centre, radius).
 pub type WidgetGeom = (Vec<(Plane, [Point; 4])>, (Point, f64));
 
@@ -441,7 +449,7 @@ impl PerspectiveGrid {
     pub fn transform_map(&self, plane: Plane, depth: f64, m: Affine, dz: f64) -> Option<Homography> {
         let h = self.homography_at(plane, depth)?;
         let to = self.homography_at(plane, depth + dz)?;
-        Some(to.then_after(&Homography::from_affine(m)).then_after(&h.inverse()?))
+        to.checked_then_after(&Homography::from_affine(m))?.checked_then_after(&h.inverse()?)
     }
 
     /// Where object `id` is attached (plane, depth): its own record, else the one a grid stored
@@ -521,7 +529,7 @@ impl PerspectiveGrid {
         let sy = if b.height().abs() > 1e-9 { (c.y - a.y) / b.height() } else { sx.abs() * if c.y < a.y { -1.0 } else { 1.0 } };
         let sx = if b.width().abs() > 1e-9 { sx } else { sy.abs() };
         let m = Affine::new([sx, 0.0, 0.0, sy, a.x - b.x0 * sx, a.y - b.y0 * sy]);
-        Some(h.then_after(&Homography::from_affine(m)))
+        h.checked_then_after(&Homography::from_affine(m))
     }
 
     /// The map that puts flat art drawn at `at` onto `plane` keeping its sizes in plane units (a
@@ -536,7 +544,7 @@ impl PerspectiveGrid {
         let sx = if h.apply(q + Vec2::new(1.0, 0.0))?.x < at.x { -1.0 } else { 1.0 };
         let sy = if h.apply(q + Vec2::new(0.0, 1.0))?.y < at.y { -1.0 } else { 1.0 };
         let m = Affine::new([sx, 0.0, 0.0, sy, q.x - sx * at.x, q.y - sy * at.y]);
-        Some(h.then_after(&Homography::from_affine(m)))
+        h.checked_then_after(&Homography::from_affine(m))
     }
 
     /// The map that slides art lying on `plane` by the plane-space offset between `from` and `to`.
@@ -1204,9 +1212,140 @@ mod tests {
         let Action::Preview(cmd, v) = &acts[0] else { panic!("{acts:?}") };
         assert_eq!((cmd.as_str(), &v["perpendicular"], &v["to"]), ("perspective.move", &json!(true), &json!([mid.x + 20.0, mid.y])));
         assert!(t.overlays(&c).iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text.starts_with("dZ"))));
-        assert!(t.key(&c, ToolKey::Digit(3), Mods::default()).is_empty());
+        assert!(matches!(t.key(&c, ToolKey::Digit(3), Mods::default()).as_slice(), [Action::Preview(cmd, _)] if cmd == "perspective.move"));
         assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, mid.x + 20.0, mid.y)), vec![Action::Commit]);
         assert!(!t.busy());
+    }
+
+    #[test]
+    fn selection_move_shift_snaps_in_each_plane() {
+        for plane in Plane::ALL {
+            let g = grid(2);
+            let h = g.homography(plane).unwrap();
+            let from = h.apply(Point::new(50.0, 50.0)).unwrap();
+            let mut d = Document::new(800.0, 600.0);
+            let layer = d.layers[0].id;
+            let id = d.alloc_id();
+            d.insert(
+                Some(layer),
+                0,
+                vectorcraft_doc::Node::path(
+                    id,
+                    vectorcraft_geom::shapes::rectangle(Rect::new(from.x - 20.0, from.y - 20.0, from.x + 20.0, from.y + 20.0)),
+                    vectorcraft_doc::Appearance::default_art(),
+                ),
+            )
+            .unwrap();
+            g.store(&mut d);
+            set_attachment(d.node_mut(id).unwrap(), plane, 0.0);
+            let mut s = Selection::default();
+            s.add(id);
+            let p = paint();
+            let c = cx(&d, &s, &p);
+            let hi = h.inverse().unwrap();
+            let start = hi.apply(from).unwrap();
+            for (raw, expected) in [
+                (Vec2::new(60.0, 12.0), Vec2::new(60.0, 0.0)),
+                (Vec2::new(12.0, 60.0), Vec2::new(0.0, 60.0)),
+                (Vec2::new(40.0, 50.0), Vec2::new(45.0, 45.0)),
+            ] {
+                let to = h.apply(start + raw).unwrap();
+                let mut t = PerspectiveSelectionTool::default();
+                t.pointer(&c, &PointerEvent::new(PointerKind::Down, from.x, from.y));
+                let acts = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, to.x, to.y).with_mods(Mods { shift: true, ..Default::default() }));
+                let Some(Action::Preview(cmd, v)) = acts.last() else { panic!("{acts:?}") };
+                assert_eq!(cmd, "perspective.move");
+                assert_eq!(v["to"], json!([to.x, to.y]));
+                let raw_delta = hi.apply(to).unwrap() - start;
+                let delta = constrain_move_delta(raw_delta).1;
+                assert!((delta - expected).hypot() < 1e-6, "{plane:?}: {delta:?} != {expected:?}");
+                assert_eq!(v["constrain"], json!(true));
+            }
+        }
+    }
+
+    #[test]
+    fn selection_shift_preview_sends_raw_pointer_and_boolean_constraint() {
+        let (mut d, id) = doc_with_rect();
+        grid(2).store(&mut d);
+        set_attachment(d.node_mut(id).unwrap(), Plane::Right, 0.0);
+        let mut selection = Selection::default();
+        selection.add(id);
+        let p = paint();
+        let c = cx(&d, &selection, &p);
+        let h = PerspectiveGrid::current(&d).homography(Plane::Right).unwrap();
+        let from = d.node(id).unwrap().geometric_bounds().unwrap().center();
+        let start = h.inverse().unwrap().apply(from).unwrap();
+        let to = h.apply(start + Vec2::new(60.0, 12.0)).unwrap();
+        let mut tool = PerspectiveSelectionTool::default();
+        tool.pointer(&c, &PointerEvent::new(PointerKind::Down, from.x, from.y));
+        let actions = tool.pointer(&c, &PointerEvent::new(PointerKind::Drag, to.x, to.y).with_mods(Mods { shift: true, ..Default::default() }));
+        let Some(Action::Preview(command, params)) = actions.last() else { panic!("{actions:?}") };
+        assert_eq!(command, "perspective.move");
+        assert_eq!(params["to"], json!([to.x, to.y]));
+        assert_eq!(params["constrain"], json!(true));
+    }
+
+    #[test]
+    fn loose_move_preview_keeps_its_plane_when_the_active_plane_is_cleared() {
+        let (mut d, id) = doc_with_rect();
+        let mut g = grid(2);
+        g.plane = Plane::Right;
+        g.store(&mut d);
+        let mut selection = Selection::default();
+        selection.add(id);
+        let p = paint();
+        let from = d.node(id).unwrap().geometric_bounds().unwrap().center();
+        let to = from + Vec2::new(30.0, 15.0);
+        let mut tool = PerspectiveSelectionTool::default();
+        let c = cx(&d, &selection, &p);
+        tool.pointer(&c, &PointerEvent::new(PointerKind::Down, from.x, from.y));
+        let actions = tool.pointer(&c, &PointerEvent::new(PointerKind::Drag, to.x, to.y));
+        assert!(matches!(actions.last(), Some(Action::Preview(_, params)) if params["plane"] == "right"));
+        g.plane = Plane::None;
+        g.store(&mut d);
+        let c = cx(&d, &selection, &p);
+        let actions = tool.key(&c, ToolKey::Digit(4), Mods::default());
+        assert!(matches!(actions.last(), Some(Action::Preview(_, params)) if params["plane"] == "right"), "{actions:?}");
+        let actions = tool.pointer(&c, &PointerEvent::new(PointerKind::Drag, to.x + 10.0, to.y));
+        assert!(matches!(actions.last(), Some(Action::Preview(_, params)) if params["plane"] == "right"), "{actions:?}");
+    }
+
+    #[test]
+    fn selection_move_recomputes_shift_copy_and_perpendicular() {
+        let (mut d, id) = doc_with_rect();
+        grid(2).store(&mut d);
+        set_attachment(d.node_mut(id).unwrap(), Plane::Right, 0.0);
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let c = cx(&d, &s, &p);
+        let h = PerspectiveGrid::current(&d).homography(Plane::Right).unwrap();
+        let from = d.node(id).unwrap().geometric_bounds().unwrap().center();
+        let start = h.inverse().unwrap().apply(from).unwrap();
+        let to = h.apply(start + Vec2::new(60.0, 12.0)).unwrap();
+        let mut t = PerspectiveSelectionTool::default();
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, from.x, from.y));
+        let plain = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, to.x, to.y));
+        let Some(Action::Preview(_, raw)) = plain.last() else { panic!("{plain:?}") };
+        assert_eq!(raw["to"], json!([to.x, to.y]));
+        let shifted =
+            t.pointer(&c, &PointerEvent::new(PointerKind::Drag, to.x, to.y).with_mods(Mods { shift: true, alt: true, ..Default::default() }));
+        let Some(Action::Preview(_, snapped)) = shifted.last() else { panic!("{shifted:?}") };
+        assert_eq!(snapped["copy"], json!(true));
+        assert_eq!(snapped["constrain"], json!(true));
+        assert_eq!(snapped["to"], raw["to"]);
+        let perpendicular = t.key(&c, ToolKey::Digit(5), Mods { shift: true, alt: true, ..Default::default() });
+        let Some(Action::Preview(_, depth)) = perpendicular.last() else { panic!("{perpendicular:?}") };
+        assert_eq!(depth["to"], raw["to"]);
+        assert!(depth.get("constrain").is_none());
+        let in_plane = t.key(&c, ToolKey::Digit(5), Mods { shift: true, alt: true, ..Default::default() });
+        let Some(Action::Preview(_, snapped_again)) = in_plane.last() else { panic!("{in_plane:?}") };
+        assert_eq!(snapped_again["to"], snapped["to"]);
+        let released = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, to.x, to.y));
+        let Some(Action::Preview(_, raw_again)) = released.last() else { panic!("{released:?}") };
+        assert_eq!(raw_again["to"], raw["to"]);
+        assert!(raw_again.get("constrain").is_none());
     }
 
     #[test]

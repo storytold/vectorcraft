@@ -25,6 +25,23 @@ pub(crate) fn single_plain_fill(n: &Node) -> bool {
     matches!((painted.next(), painted.next()), (Some(AppearanceItem::Fill(f)), None) if f.blend == vectorcraft_color::BlendMode::Normal && f.opacity >= 1.0 && !matches!(f.paint, vectorcraft_color::Paint::Pattern { .. }))
 }
 
+/// A knockout element whose opaque paint covers exactly its knockout shape. The caller limits
+/// source-over substitution to binary coverage, retaining analytical AA's intermediate rounding.
+pub(crate) fn opaque_knockout_fill(n: &Node) -> bool {
+    matches!(n.kind, NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. })
+        && n.opacity >= 1.0
+        && n.blend == vectorcraft_color::BlendMode::Normal
+        && !n.isolate
+        && n.extras().mask.is_none()
+        && !crate::fx::has_fx(n)
+        && !crate::fx::has_object_fx(n)
+        && single_plain_fill(n)
+        && n.appearance
+            .items
+            .iter()
+            .any(|i| matches!(i, AppearanceItem::Fill(f) if f.visible && matches!(f.paint, vectorcraft_color::Paint::Solid { .. })))
+}
+
 /// Number of visible painted fill/stroke items (opacity folding is exact only for one). A dashed
 /// stroke is one paint: its dashes are outlined into one path and filled once, so overlapping
 /// dashes don't darken where they overlap. A dashed brush stroke draws its pieces one by one, so

@@ -192,6 +192,16 @@ pub fn align_buttons(app: &mut VectorcraftApp, ui: &mut Ui, size: f32) {
     }
 }
 
+/// The six Distribute Objects buttons of the Control bar, `size` points square. They distribute
+/// what the Align panel's buttons do, to what its Align To says.
+pub(crate) fn distribute_buttons(app: &mut VectorcraftApp, ui: &mut Ui, size: f32) {
+    for (icon, tip, axis, v) in DISTRIBUTE {
+        if widgets::icon_button(ui, icon, tl!(tip), false, size).clicked() {
+            run_button(app, Button::Distribute(axis, v)).ok();
+        }
+    }
+}
+
 /// Whether the selection has a key object or a key guide.
 fn has_key(app: &VectorcraftApp) -> bool {
     app.session.active().is_some_and(|st| st.selection.has_key())
@@ -337,7 +347,21 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if menu_item(ui, tl!("Cancel Key Object"), align_to(app) == AlignTo::Key, false) {
         app.run("select.key", json!({})).ok();
     }
-    menu_item(ui, tl!("Align to Glyph Bounds"), false, false);
+    // Indented like the items beside it (their check column).
+    ui.menu_button(format!("   {}", tl!("Align to Glyph Bounds")), |ui| glyph_bounds_items(app, ui));
+}
+
+/// The Align to Glyph Bounds submenu: Point Text and Area Text, each checked while Align and
+/// Distribute measure that kind of type by the ink of its glyphs.
+fn glyph_bounds_items(app: &mut VectorcraftApp, ui: &mut Ui) {
+    for (label, key, on) in [
+        (tl!("Point Text"), "alignGlyphBoundsPoint", app.session.prefs.align_glyph_bounds_point),
+        (tl!("Area Text"), "alignGlyphBoundsArea", app.session.prefs.align_glyph_bounds_area),
+    ] {
+        if menu_item(ui, label, true, on) {
+            super::transform::set_pref(app, key, !on);
+        }
+    }
 }
 
 #[cfg(test)]

@@ -380,13 +380,13 @@ fn an_object_has_the_art_of_at_most_4096_symbol_instances_drawn() {
     let mut filled = Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0);
     filled.effects.push(Effect { id: "path.offsetPath".into(), params: json!({"offset": 1}), visible: true });
     let square = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), filled);
-    d.symbols.push(Symbol { name: "S0".into(), art: Arc::new(square) });
+    d.symbols.push(Symbol { dynamic: false, name: "S0".into(), art: Arc::new(square) });
     for k in 1..=12 {
         let mut instance =
             |dx: f64| Arc::new(Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: format!("S{}", k - 1), xf: Affine::translate((dx, 0.0)) }));
         let pair = vec![instance(0.0), instance(20.0 * f64::from(1 << (k - 1)))];
         let art = Node::group(d.alloc_id(), pair);
-        d.symbols.push(Symbol { name: format!("S{k}"), art: Arc::new(art) });
+        d.symbols.push(Symbol { dynamic: false, name: format!("S{k}"), art: Arc::new(art) });
     }
     let instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "S12".into(), xf: Affine::IDENTITY });
     let (layer, id) = (d.layers[0].id, instance.id);
@@ -876,6 +876,31 @@ fn a_handle_drag_keeps_the_opposite_edge_of_the_offset_shape() {
         let (_, g) = drag_box(&mut s, id, (300.0, 200.0), (350.0, 250.0), Mods::default());
         assert_eq!(g, Rect::new(100.0, 100.0, 350.0, 250.0), "strokes {strokes}");
     }
+}
+
+#[test]
+fn a_hover_checks_the_memo_as_often_however_many_objects_are_selected() {
+    let checks = |objects: u32| {
+        let mut s = session();
+        for i in 0..objects {
+            rect(&mut s, f64::from(i), 1.0, 0.0);
+        }
+        run(&mut s, "select.all", json!({}));
+        let v = ViewInfo::default();
+        s.select_tool("selection", v).unwrap();
+        // Off the art, so the hover walks every selected object and finds no anchor or center.
+        let hover = |s: &mut Session| {
+            s.pointer(&PointerEvent::new(PointerKind::Move, 350.0, 350.0), v).unwrap();
+            s.cursor(Point::new(350.0, 350.0), Mods::default(), v)
+        };
+        hover(&mut s);
+        let before = s.preview_memo.checks();
+        hover(&mut s);
+        s.preview_memo.checks() - before
+    };
+    let few = checks(3);
+    assert!(few > 0, "a hover asks the memo");
+    assert_eq!(checks(60), few, "a check compares the whole selection: one per object is quadratic");
 }
 
 #[test]

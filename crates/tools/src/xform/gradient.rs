@@ -444,6 +444,11 @@ impl GradientTool {
                 let id = paint_owner(cx.doc, h.leaf);
                 let Some(v) = cx.selection.objects.contains(&id).then(|| click_vector(cx, id)).flatten() else { return vec![] };
                 let mut params = Self::geom_params(cx, p, p + v);
+                // Without `ids`, the engine refuses the gradient while an object of a dynamic symbol
+                // instance's art is selected.
+                if cx.selection.symbol_part.is_some() {
+                    return vec![Action::Exec("paint.setGradientGeom".into(), params)];
+                }
                 params["ids"] = json!([id.0]);
                 // With `ids` the engine edits the topmost fill or stroke unless an item is named.
                 if let Some(i) = cx.doc.node(id).and_then(|n| n.appearance.item_of_kind(cx.appearance_item, cx.fill_active)) {
@@ -509,6 +514,17 @@ impl Tool for GradientTool {
         }
         matches!(key, ToolKey::Delete | ToolKey::Backspace | ToolKey::Left | ToolKey::Right)
             && cx.gradient_stop.is_some_and(|i| Annotator::of(cx).is_some_and(|a| i < a.gradient.stops.len()))
+    }
+
+    /// A dropped drag is canceled as by Escape. A dropped click does nothing, and the line Lines
+    /// mode is drawing stays open.
+    fn drop_press(&mut self, cx: &ToolContext) -> Vec<Action> {
+        if self.busy() {
+            return self.key(cx, ToolKey::Escape, Mods::default());
+        }
+        (self.gesture, self.free) = (None, None);
+        self.guides.clear();
+        vec![]
     }
 
     fn key(&mut self, cx: &ToolContext, key: ToolKey, mods: Mods) -> Vec<Action> {

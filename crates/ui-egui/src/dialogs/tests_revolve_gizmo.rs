@@ -137,6 +137,10 @@ fn free_orbit_and_light_drag_update_the_canvas_and_escape_restores_only_the_gest
     assert_ne!(h.value("rotationX"), before["rotationX"].as_f64().unwrap());
     assert_ne!(h.value("rotationY"), before["rotationY"].as_f64().unwrap());
     h.frame(vec![escape()], Modifiers::NONE);
+    h.frame(
+        vec![Event::Key { key: egui::Key::Escape, physical_key: None, pressed: false, repeat: false, modifiers: Modifiers::NONE }],
+        Modifiers::NONE,
+    );
     h.release(p, Modifiers::NONE);
     assert!(h.app.ui.dialog.is_some());
     assert_eq!(super::super::form::params(h.app.ui.dialog.as_ref().unwrap()), before);

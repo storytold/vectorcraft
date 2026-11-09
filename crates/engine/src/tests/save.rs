@@ -99,6 +99,25 @@ fn save_as_takes_on_path_format_and_options() {
     let _ = std::fs::remove_dir_all(d);
 }
 
+/// #4523: a new document's VectorCraft Options start as the last native save used them (not its
+/// artboard range, nor Use Compression, which its preference decides).
+#[test]
+fn a_new_document_offers_the_native_options_used_last() {
+    let d = dir("lastnative");
+    let mut s = session();
+    let opts = json!({"preview": true, "embedProfiles": false, "pdfCompatible": true, "separateArtboards": true, "range": "1"});
+    s.execute("file.saveAs", &json!({"path": path(&d, "a.vectorcraft"), "options": opts})).unwrap();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let o = s.execute("file.formatOptions", &json!({"format": "vectorcraft"})).unwrap();
+    let value = |k: &str| o["options"][k]["value"].clone();
+    assert_eq!((value("preview"), value("embedProfiles"), value("pdfCompatible")), (json!(true), json!(false), json!(true)));
+    assert_eq!(
+        (value("separateArtboards"), value("range")),
+        (o["options"]["separateArtboards"]["default"].clone(), o["options"]["range"]["default"].clone())
+    );
+    let _ = std::fs::remove_dir_all(d);
+}
+
 #[test]
 fn another_format_without_a_path_hands_the_bytes_back() {
     let d = dir("otherfmt");
@@ -542,4 +561,26 @@ fn eps_save_bounds_large_page_preview_without_cropping_vector_or_editing_data() 
     let native = vectorcraft_format::load(&vectorcraft_eps::native(&bytes).unwrap()).unwrap();
     assert_eq!(native.artboards, s.doc().unwrap().doc.artboards);
     assert_eq!(native.layers, s.doc().unwrap().doc.layers);
+}
+
+/// #4646: a new document's units and ruler guides survive Save, Close and Open in every format
+/// that carries the whole document (an SVG keeps them only with Preserve Editing).
+#[test]
+fn units_and_ruler_guides_survive_save_and_reopen() {
+    let d = dir("units-guides");
+    for ext in ["vectorcraft", "pdf", "ai", "eps"] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 100, "units": "Millimeters"})).unwrap();
+        s.execute("guide.add", &json!({"vertical": true, "pos": 50})).unwrap();
+        s.execute("guide.add", &json!({"vertical": false, "pos": 30})).unwrap();
+        rect(&mut s);
+        let p = path(&d, &format!("a.{ext}"));
+        s.execute("document.save", &json!({"path": p})).unwrap();
+        s.execute("file.close", &json!({})).unwrap();
+        s.execute("document.open", &json!({"path": p})).unwrap();
+        let doc = &s.doc().unwrap().doc;
+        let guides: Vec<_> = doc.guides.iter().map(|g| (g.vertical, g.pos)).collect();
+        assert_eq!((doc.units, guides), (vectorcraft_doc::Unit::Millimeters, vec![(true, 50.0), (false, 30.0)]), "{ext}");
+    }
+    let _ = std::fs::remove_dir_all(d);
 }

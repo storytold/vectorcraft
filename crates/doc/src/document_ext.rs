@@ -2,8 +2,8 @@ use super::graphic_style::GraphicStyle;
 use super::limits::MAX_NEXT_ID;
 use super::records::{ImageBlob, SavedSelection, SavedView};
 use super::{
-    Arc, Document, ImageObject, Node, NodeKind, SYMBOL_EXPORT_TYPE, SYMBOL_NINE_SLICE, SYMBOL_REGISTRATION, SymbolExportType, SymbolNineSlice,
-    SymbolRegistration,
+    Arc, Document, EnvelopeKind, ImageObject, LiveShape, Node, NodeKind, Point, SYMBOL_EXPORT_TYPE, SYMBOL_NINE_SLICE, SYMBOL_REGISTRATION,
+    SymbolExportType, SymbolNineSlice, SymbolRegistration, placed_document,
 };
 
 impl Document {
@@ -98,23 +98,188 @@ impl Document {
         self.views = kept;
     }
 
-    /// Leave opacity-mask editing: drop the temporary editing layer, a working copy of art the
-    /// mask already holds (the engine syncs it after every edit).
+    /// Leave opacity-mask editing and symbol editing: drop the temporary editing layer, a working
+    /// copy of art the mask or the symbol already holds (the engine syncs it after every edit). The
+    /// layer is removed wherever it is, also as a sublayer of another layer; an id that names
+    /// anything other than a layer is left alone.
     pub fn drop_edit_modes(&mut self) {
-        if let Some(me) = self.mask_edit.take() {
-            self.layers.retain(|l| l.id != me.layer);
+        let layers = [self.mask_edit.take().map(|me| me.layer), self.symbol_edit.take().map(|se| se.layer)];
+        for id in layers.into_iter().flatten() {
+            if self.node(id).is_some_and(Node::is_layer) {
+                let _ = self.remove(id);
+            }
         }
     }
 
-    /// The document as saved and exported: without the opacity-mask editing layer. Borrowed when
-    /// no mask is being edited. (Pattern editing is saved: its tile layer holds unapplied edits.)
+    /// The document as saved and exported: without the opacity-mask or symbol editing layer.
+    /// Borrowed when neither mode is on. (Pattern editing is saved: its tile layer holds unapplied
+    /// edits.)
     pub fn without_edit_modes(&self) -> std::borrow::Cow<'_, Document> {
-        if self.mask_edit.is_none() {
+        if self.mask_edit.is_none() && self.symbol_edit.is_none() {
             return std::borrow::Cow::Borrowed(self);
         }
         let mut d = self.clone();
         d.drop_edit_modes();
         std::borrow::Cow::Owned(d)
+    }
+
+    /// Does `wants` hold for a node anywhere in the document's art: the layers, symbol definitions,
+    /// graph designs, pattern swatches (the one being edited included) and their opacity masks?
+    pub fn any_node(&self, wants: impl Fn(&Node) -> bool) -> bool {
+        let roots = self
+            .layers
+            .iter()
+            .chain(self.symbols.iter().map(|s| &s.art))
+            .chain(self.graph_designs.iter().map(|g| &g.art))
+            .chain(self.patterns.iter().flat_map(|p| p.art.iter()))
+            .chain(self.pattern_edit.iter().filter_map(|pe| pe.original.as_ref()).flat_map(|p| p.art.iter()));
+        let mut any = false;
+        for root in roots {
+            crate::swatches::walk_with_masks(root, &mut |n| any |= wants(n));
+        }
+        any
+    }
+
+    /// Change with `f` every node for which `wants` holds, anywhere in the document's art (as
+    /// [`Self::any_node`] looks). Only the trees that hold such a node are copied out of the art
+    /// they share.
+    pub fn edit_nodes_where(&mut self, wants: impl Fn(&Node) -> bool, mut f: impl FnMut(&mut Node)) {
+        let roots = self
+            .layers
+            .iter_mut()
+            .chain(self.symbols.iter_mut().map(|s| &mut s.art))
+            .chain(self.graph_designs.iter_mut().map(|g| &mut g.art))
+            .chain(self.patterns.iter_mut().flat_map(|p| p.art.iter_mut()))
+            .chain(self.pattern_edit.iter_mut().filter_map(|pe| pe.original.as_mut()).flat_map(|p| p.art.iter_mut()));
+        for root in roots {
+            edit_branches_where(root, &wants, &mut f);
+        }
+    }
+
+    /// Round every path's anchors and handles to `decimals` decimal places: path objects (with
+    /// Live Corners' uncut outlines), blend spines, envelopes' top-object outlines and Intertwine
+    /// areas, in the layers, symbol definitions, graph designs, pattern swatches (the one being
+    /// edited included), opacity masks and the brushes kept as foreign data. Colors, transforms,
+    /// opacity, live shapes' own sizes, meshes and type (its frames and paths included) are left
+    /// as they are.
+    pub fn round_geometry(&mut self, decimals: u8) {
+        let scale = 10f64.powi(i32::from(decimals));
+        let round = |v: f64| {
+            let r = (v * scale).round() / scale;
+            if !r.is_finite() {
+                v
+            } else if r == 0.0 {
+                // `-0.0` is written as `0.0`.
+                0.0
+            } else {
+                r
+            }
+        };
+        let round_path = |path: &mut vectorcraft_geom::PathData| {
+            for a in path.subpaths.iter_mut().flat_map(|s| s.anchors.iter_mut()) {
+                for p in [&mut a.p, &mut a.h_in, &mut a.h_out] {
+                    *p = Point::new(round(p.x), round(p.y));
+                }
+            }
+        };
+        let mut fix = |n: &mut Node| {
+            match &mut n.kind {
+                NodeKind::Path { path, live, .. } => {
+                    round_path(path);
+                    // Live Corners' uncut outline.
+                    if let Some(LiveShape::Path { base, .. }) = live.as_deref_mut() {
+                        round_path(base);
+                    }
+                }
+                NodeKind::Blend { spec, .. } => {
+                    if let Some(spine) = &mut spec.spine {
+                        round_path(spine);
+                    }
+                }
+                NodeKind::Envelope { kind, .. } => {
+                    if let EnvelopeKind::TopObject { path, .. } = kind.as_mut() {
+                        round_path(path);
+                    }
+                }
+                _ => {}
+            }
+            if let Some(e) = n.extras_if_any() {
+                for area in e.intertwine.as_deref_mut().into_iter().chain(e.intertwine_tiers.iter_mut()) {
+                    round_path(area);
+                }
+            }
+        };
+        let roots = self
+            .layers
+            .iter_mut()
+            .chain(self.symbols.iter_mut().map(|s| &mut s.art))
+            .chain(self.graph_designs.iter_mut().map(|g| &mut g.art))
+            .chain(self.patterns.iter_mut().flat_map(|p| p.art.iter_mut()))
+            .chain(self.pattern_edit.iter_mut().filter_map(|pe| pe.original.as_mut()).flat_map(|p| p.art.iter_mut()));
+        for root in roots {
+            placed_document::each_mut(Arc::make_mut(root), &mut fix);
+        }
+        if self.unknown.contains_key("brushes")
+            && let Some(brushes) = self.unknown.get_mut("brushes")
+        {
+            round_json_paths(brushes, &round);
+        }
+    }
+}
+
+/// Change with `f` the nodes of `n`'s tree (opacity-mask art included) for which `wants` holds,
+/// copying out of the shared art only the branches that hold one.
+fn edit_branches_where(n: &mut Arc<Node>, wants: &impl Fn(&Node) -> bool, f: &mut impl FnMut(&mut Node)) {
+    let mut any = false;
+    crate::swatches::walk_with_masks(n, &mut |c| any |= wants(c));
+    if !any {
+        return;
+    }
+    let node = Arc::make_mut(n);
+    if wants(node) {
+        f(node);
+    }
+    if let Some(m) = node.extras_if_any().and_then(|e| e.mask.as_mut()) {
+        edit_branches_where(&mut m.art, wants, f);
+    }
+    for c in node.children_mut().into_iter().flatten() {
+        edit_branches_where(c, wants, f);
+    }
+}
+
+/// Round with `round` the anchors of the paths in `v`, nodes in their file form kept as JSON: every
+/// `{"subpaths": [{"anchors": [{"p", "in", "out"}]}]}` outside type (`{"type": "text"}`), as
+/// [`Document::round_geometry`] rounds the nodes it holds.
+fn round_json_paths(v: &mut serde_json::Value, round: &impl Fn(f64) -> f64) {
+    use serde_json::Value;
+    match v {
+        Value::Object(o) => {
+            if o.get("type").and_then(Value::as_str) == Some("text") {
+                return;
+            }
+            if let Some(subpaths) = o.get_mut("subpaths").and_then(Value::as_array_mut) {
+                let anchors = subpaths.iter_mut().filter_map(|s| s.get_mut("anchors").and_then(Value::as_array_mut)).flatten();
+                for a in anchors.filter_map(Value::as_object_mut) {
+                    let points = a.iter_mut().filter(|(k, _)| matches!(k.as_str(), "p" | "in" | "out")).filter_map(|(_, v)| v.as_array_mut());
+                    for xy in points {
+                        for n in xy.iter_mut().filter(|n| n.is_f64()) {
+                            if let Some(r) = n.as_f64().and_then(|x| serde_json::Number::from_f64(round(x))) {
+                                *n = Value::Number(r);
+                            }
+                        }
+                    }
+                }
+            }
+            for c in o.values_mut() {
+                round_json_paths(c, round);
+            }
+        }
+        Value::Array(a) => {
+            for c in a {
+                round_json_paths(c, round);
+            }
+        }
+        _ => {}
     }
 }
 

@@ -3,7 +3,7 @@
 use crate::*;
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::Appearance;
-use vectorcraft_geom::{Point, shapes};
+use vectorcraft_geom::{Anchor, PathData, Point, SubPath, Vec2, shapes};
 
 const W: u32 = 160;
 const H: u32 = 120;
@@ -220,7 +220,7 @@ fn an_unchanged_document_changes_nothing_and_a_new_symbol_everything() {
     assert_eq!(redraw(&old, &old.clone()), Changed::Nothing);
     let mut new = old.clone();
     let art = Arc::new(rect(&mut new, Rect::new(0.0, 0.0, 5.0, 5.0), Color::BLACK));
-    new.symbols.push(vectorcraft_doc::Symbol { name: "Dot".into(), art });
+    new.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Dot".into(), art });
     assert_eq!(redraw(&old, &new), Changed::Everything);
 }
 
@@ -257,4 +257,167 @@ fn moving_stretched_type_changes_where_its_stretched_strokes_reach() {
     let mut new = old.clone();
     new.node_mut(text).unwrap().transform(Affine::translate((9.0, 7.0)), false);
     area(redraw(&old, &new));
+}
+
+/// `n` anchors round an ellipse at (55, 40) with radii `rx` and `ry` and a ripple, every third a
+/// corner and the others smooth with handles along the ellipse.
+fn wavy(n: usize, rx: f64, ry: f64) -> SubPath {
+    let anchors = (0..n)
+        .map(|i| {
+            let t = i as f64 / n as f64 * std::f64::consts::TAU;
+            let k = 1.0 + 0.06 * (t * 12.0).sin();
+            let p = Point::new(55.0 + rx * k * t.cos(), 40.0 + ry * k * t.sin());
+            if i % 3 == 0 {
+                return Anchor::corner(p);
+            }
+            let along = Vec2::new(-rx * t.sin(), ry * t.cos()) * (0.4 / n as f64);
+            Anchor { h_in: p - along, h_out: p + along, ..Anchor::corner(p) }
+        })
+        .collect();
+    SubPath::new(anchors, true)
+}
+
+/// The seven-pointed star {7/3} round (55, 40), each edge split by 39 anchors on it: its edges
+/// cross, so parts of it are covered more than once.
+fn star() -> SubPath {
+    let tip = |i: usize| {
+        let t = (i * 3 % 7) as f64 / 7.0 * std::f64::consts::TAU;
+        Point::new(55.0 + 45.0 * t.sin(), 40.0 - 35.0 * t.cos())
+    };
+    let anchors = (0..7).flat_map(|i| (0..40).map(move |j| Anchor::corner(tip(i).lerp(tip(i + 1), j as f64 / 40.0)))).collect();
+    SubPath::new(anchors, true)
+}
+
+/// A document with path `sub` filled with `rule`, stroked `stroke` points wide when that is more
+/// than 0, and its id.
+fn long_path(sub: SubPath, rule: FillRule, stroke: f64) -> (Document, NodeId) {
+    let mut d = Document::new(110.0, 80.0);
+    let l = d.layers[0].id;
+    let id = d.alloc_id();
+    let line = if stroke > 0.0 { Paint::solid(Color::BLACK) } else { Paint::None };
+    let mut n = Node::path(id, PathData::single(sub), Appearance::basic(Paint::solid(Color::rgb(0.1, 0.5, 0.8)), line, stroke));
+    if let NodeKind::Path { rule: r, .. } = &mut n.kind {
+        *r = rule;
+    }
+    let id = d.insert(Some(l), 0, n).unwrap();
+    (d, id)
+}
+
+/// `d` with anchor `i` of the first subpath of path `id` and its handles moved by `by`.
+fn move_anchor(d: &Document, id: NodeId, i: usize, by: Vec2) -> Document {
+    let mut d = d.clone();
+    if let Some(NodeKind::Path { path, .. }) = d.node_mut(id).map(|n| &mut n.kind) {
+        let a = &mut path.subpaths[0].anchors[i];
+        (a.p, a.h_in, a.h_out) = (a.p + by, a.h_in + by, a.h_out + by);
+    }
+    d
+}
+
+/// Moving one anchor of a long filled path changes the fill only round the segments at that
+/// anchor, with either fill rule, a smooth or a corner anchor, and a closing segment.
+#[test]
+fn moving_an_anchor_of_a_long_path_changes_only_round_its_segments() {
+    for rule in [FillRule::NonZero, FillRule::EvenOdd] {
+        let (old, id) = long_path(wavy(2000, 45.0, 32.0), rule, 0.0);
+        for i in [0, 700, 1001] {
+            let a = area(redraw(&old, &move_anchor(&old, id, i, Vec2::new(4.0, -3.0))));
+            assert!(a.width() < 8.0 && a.height() < 8.0, "{rule:?}, anchor {i}: {a:?}");
+        }
+    }
+}
+
+/// The fill of an open path closes it with a line from its last anchor to its first: moving an
+/// end changes where that line was and is too.
+#[test]
+fn moving_an_end_of_an_open_filled_path_changes_the_line_that_closes_its_fill() {
+    let mut half = wavy(3000, 45.0, 32.0);
+    half.anchors.truncate(1500);
+    half.closed = false;
+    let (old, id) = long_path(half, FillRule::NonZero, 0.0);
+    for i in [0, 1499] {
+        redraw(&old, &move_anchor(&old, id, i, Vec2::new(0.0, 12.0)));
+    }
+}
+
+/// Where a path covers its middle twice, the two fill rules draw it differently: an anchor moved
+/// across that part changes only round its segments.
+#[test]
+fn moving_an_anchor_where_a_path_crosses_itself_changes_only_round_its_segments() {
+    for rule in [FillRule::NonZero, FillRule::EvenOdd] {
+        let (old, id) = long_path(star(), rule, 0.0);
+        let a = area(redraw(&old, &move_anchor(&old, id, 20, Vec2::new(-6.0, 5.0))));
+        assert!(a.width() < 12.0 && a.height() < 12.0, "{rule:?}: {a:?}");
+    }
+}
+
+/// A stroke with miter joints changes round the moved anchor's segments and as far as its spikes
+/// reach from them, and the open end of a stroke with square caps as far as its cap's corners.
+#[test]
+fn moving_an_anchor_of_a_stroked_path_changes_as_far_as_its_joints_reach() {
+    let (old, id) = long_path(star(), FillRule::NonZero, 1.5);
+    let a = area(redraw(&old, &move_anchor(&old, id, 60, Vec2::new(3.0, 4.0))));
+    assert!(a.width() < 30.0, "{a:?}");
+    let mut open = star();
+    open.closed = false;
+    let (old, id) = long_path(open, FillRule::NonZero, 3.0);
+    let mut sq = old.clone();
+    if let Some(AppearanceItem::Stroke(s)) = sq.node_mut(id).unwrap().appearance.items.get_mut(1) {
+        s.cap = vectorcraft_doc::LineCap::Square;
+    }
+    let a = area(redraw(&sq, &move_anchor(&sq, id, 279, Vec2::new(5.0, 2.0))));
+    assert!(a.width() < 50.0, "{a:?}");
+}
+
+/// A compound path with a hole changes only round the moved anchor of the member it moved in.
+#[test]
+fn moving_an_anchor_of_a_compound_path_changes_only_round_its_segments() {
+    for rule in [FillRule::NonZero, FillRule::EvenOdd] {
+        let mut old = Document::new(110.0, 80.0);
+        let l = old.layers[0].id;
+        let (outer, inner) = (old.alloc_id(), old.alloc_id());
+        let mut hole = wavy(600, 25.0, 15.0);
+        if rule == FillRule::NonZero {
+            // Wound the other way, so it is a hole by either rule.
+            hole.anchors.reverse();
+            for a in &mut hole.anchors {
+                std::mem::swap(&mut a.h_in, &mut a.h_out);
+            }
+        }
+        let members = vec![
+            Arc::new(Node::path(outer, PathData::single(wavy(1500, 45.0, 32.0)), Appearance::default())),
+            Arc::new(Node::path(inner, PathData::single(hole), Appearance::default())),
+        ];
+        let mut compound = Node::new(old.alloc_id(), NodeKind::Compound { children: members, rule });
+        compound.appearance = Appearance::basic(Paint::solid(Color::rgb(0.8, 0.3, 0.1)), Paint::None, 0.0).into();
+        old.insert(Some(l), 0, compound).unwrap();
+        let new = move_anchor(&old, inner, 150, Vec2::new(3.0, 3.0));
+        let a = area(redraw(&old, &new));
+        assert!(a.width() < 8.0 && a.height() < 8.0, "{rule:?}: {a:?}");
+    }
+}
+
+/// A gradient fill and a dashed stroke are laid out by the whole path: moving one anchor changes
+/// all of it, as does adding an anchor.
+#[test]
+fn a_path_painted_by_its_whole_shape_changes_whole_when_an_anchor_moves() {
+    let (plain, id) = long_path(wavy(400, 45.0, 32.0), FillRule::NonZero, 1.0);
+    let mut graded = plain.clone();
+    let stops = vec![vectorcraft_color::GradientStop::new(0.0, Color::BLACK), vectorcraft_color::GradientStop::new(1.0, Color::WHITE)];
+    graded.node_mut(id).unwrap().appearance.fill_mut().unwrap().paint = Paint::Gradient(Box::new(vectorcraft_color::GradientPaint::new(
+        vectorcraft_color::Gradient::new(vectorcraft_color::GradientKind::Linear, stops),
+    )));
+    let mut dashed = plain.clone();
+    if let Some(AppearanceItem::Stroke(s)) = dashed.node_mut(id).unwrap().appearance.items.get_mut(1) {
+        s.dash = Some(vectorcraft_doc::Dash { pattern: vec![3.0, 2.0], ..Default::default() });
+    }
+    for old in [graded, dashed] {
+        let a = area(redraw(&old, &move_anchor(&old, id, 100, Vec2::new(2.0, 2.0))));
+        assert!(a.width() > 80.0 && a.height() > 60.0, "{a:?}");
+    }
+    let mut added = plain.clone();
+    if let Some(NodeKind::Path { path, .. }) = added.node_mut(id).map(|n| &mut n.kind) {
+        path.subpaths[0].anchors.insert(10, Anchor::corner(Point::new(50.0, 40.0)));
+    }
+    let a = area(redraw(&plain, &added));
+    assert!(a.width() > 80.0 && a.height() > 60.0, "{a:?}");
 }

@@ -1,7 +1,7 @@
 //! The pages of a PDF to import: opening with a password, the pages picked, the box each page
 //! is cropped to ([`CropTo`]) and [`info`].
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use craft_pdf::syntax::object::{Array, Dict, MaybeRef, Name, Object, ObjectIdentifier, Stream, dict_or_stream};
 use craft_pdf::syntax::page::Page;
@@ -11,6 +11,7 @@ use kurbo::{Affine, Rect};
 use vectorcraft_doc::setup::MAX_BLEED;
 
 use crate::import_color::{direct, items, readable, values};
+use crate::streams::{Refusal, Refused, refused};
 use crate::{Choice, CropTo, ImportOptions, PdfError};
 
 /// What `info` tells about one page.
@@ -115,7 +116,8 @@ fn procedures_too_deep(o: &Object<'_>) -> bool {
     })
 }
 
-/// The error of a file with a stream the reader would fail on ([`crate::streams`]).
+/// The error of a file with an object or cross-reference stream the reader would fail on as it
+/// opens the file ([`crate::streams::unsafe_file_streams`]); [`stream_note`] names any other.
 const STREAM_NOTE: &str = "a stream in it would decode to more than 256 MB, or its decode parameters can't be applied";
 
 /// The error of a file with functions or color spaces built on one another past [`MAX_LINKS`]
@@ -125,33 +127,97 @@ const NESTED_NOTE: &str = "its functions or colour spaces are built on one anoth
 /// The error of a file with an array whose items can't all be read (a damaged file).
 const UNREADABLE_NOTE: &str = "an array in it is damaged and can't be read";
 
-/// Why `pdf` is refused, if it is: a stream the reader would fail on ([`STREAM_NOTE`]), or
+/// Why `pdf` is refused, if it is: a stream the reader would fail on ([`stream_note`]), or
 /// functions, color spaces or calculator procedures nested too deep ([`NESTED_NOTE`]). Every
 /// object is looked at, and every array, dictionary and stream written inside one, wherever it
 /// is used from: the interpreter builds functions and color spaces from resources, shadings,
 /// images, patterns, masks and graphics states alike.
-fn hostile(pdf: &Pdf) -> Option<&'static str> {
+fn hostile(pdf: &Pdf) -> Option<String> {
     let xref = pdf.xref();
     let mut known = HashMap::new();
     // The objects of the file, then what each holds directly (64 deep at most: the reader's cap).
     let mut pending: Vec<Object<'_>> = pdf.objects().into_iter().collect();
     while let Some(o) = pending.pop() {
         // A stream's own checks come first: a calculator function is decoded below.
-        if matches!(&o, Object::Stream(s) if crate::streams::unsafe_stream(s)) {
-            return Some(STREAM_NOTE);
+        if let Object::Stream(s) = &o
+            && let Some(r) = refused(s)
+        {
+            return Some(stream_note(pdf, s, r));
         }
         if procedures_too_deep(&o) || built_on(MaybeRef::NotRef(o.clone()), xref, &mut known, MAX_LINKS).is_none() {
-            return Some(NESTED_NOTE);
+            return Some(NESTED_NOTE.into());
         }
         match &o {
             // An array with an item that can't be read can't be looked at whole, and the
             // interpreter would still read its leading items: the file is refused.
-            Object::Array(a) if !readable(a) => return Some(UNREADABLE_NOTE),
+            Object::Array(a) if !readable(a) => return Some(UNREADABLE_NOTE.into()),
             Object::Array(a) => pending.extend(items(a).filter_map(direct)),
             _ => pending.extend(dict_or_stream(&o).into_iter().flat_map(|(d, _)| values(d)).filter_map(direct)),
         }
     }
     None
+}
+
+/// The error of a file with the stream `s` the reader would fail on, as [`refused`] says why:
+/// which object it is and what it holds, so a report of a file that can't be shared still says
+/// which stream it is (#4366).
+fn stream_note(pdf: &Pdf, s: &Stream<'_>, r: Refusal) -> String {
+    let id = s.obj_id();
+    // A stream written inside another object goes by that object; 0 is a stream the reader can't
+    // place.
+    let object = (id.obj_number > 0).then(|| format!("object {}", id.obj_number));
+    let what = match (r.inline_image, object) {
+        (true, Some(object)) => format!("an inline image in the content of {object}"),
+        (true, None) => "an inline image in it".to_string(),
+        (false, Some(object)) => format!("{} ({object})", stream_kind(pdf, id, s.dict())),
+        (false, None) => stream_kind(pdf, id, s.dict()),
+    };
+    match r.why {
+        Refused::TooBig(most) => format!("{what} would decode to more than {}", decoded_size(most)),
+        Refused::Parameters => format!("{what} has decode parameters that can't be applied"),
+    }
+}
+
+/// What the stream `id` with dictionary `dict` holds, for [`stream_note`]: an image (and its size
+/// in pixels), a form, a page's content, the editing data an `.ai` keeps in its first page's
+/// `PieceInfo`, or another stream.
+fn stream_kind(pdf: &Pdf, id: ObjectIdentifier, dict: &Dict<'_>) -> String {
+    let subtype = dict.get::<Name<'_>>(b"Subtype");
+    let subtype_is = |v: &[u8]| subtype.as_ref().is_some_and(|n| n.as_ref() == v);
+    if subtype_is(b"Image") {
+        let side = |key: &[u8]| dict.get::<u32>(key).unwrap_or(0);
+        return format!("an image of {} × {} px in it", side(b"Width"), side(b"Height"));
+    }
+    if subtype_is(b"Form") {
+        return "a form in it".to_string();
+    }
+    let is = |m: Option<MaybeRef<Object<'_>>>| matches!(m, Some(MaybeRef::Ref(r)) if ObjectIdentifier::from(r) == id);
+    let pages = pdf.pages();
+    // `Contents` is a stream or an array of them, the array in the page or an object of its own.
+    // Each object is read once however many pages share it, so a file can't make this quadratic.
+    let mut read = HashSet::new();
+    let content = pages.iter().any(|page| match page.raw().get_raw::<Object<'_>>(b"Contents") {
+        Some(MaybeRef::NotRef(Object::Array(a))) => items(&a).any(|m| is(Some(m))),
+        Some(MaybeRef::Ref(r)) => {
+            let at = ObjectIdentifier::from(r);
+            read.insert(at) && page.raw().get::<Array<'_>>(b"Contents").map_or(at == id, |a| items(&a).any(|m| is(Some(m))))
+        }
+        _ => false,
+    });
+    if content {
+        return "a page's content in it".to_string();
+    }
+    let private = pages.first().and_then(|p| p.raw().get::<Dict<'_>>(b"PieceInfo")?.get::<Dict<'_>>(PRIVATE_DATA_OWNER)?.get::<Dict<'_>>(b"Private"));
+    if private.is_some_and(|d| d.entries().any(|(key, m)| key.as_ref().starts_with(b"AI") && is(Some(m)))) {
+        return "its editing data".to_string();
+    }
+    "a stream in it".to_string()
+}
+
+/// `bytes` for a message, in whole megabytes, or gigabytes when it is a whole number of them.
+fn decoded_size(bytes: usize) -> String {
+    const GB: usize = 1 << 30;
+    if bytes >= GB && bytes.is_multiple_of(GB) { format!("{} GB", bytes / GB) } else { format!("{} MB", bytes >> 20) }
 }
 
 /// Read a PDF, decrypting it with `password` (none: the empty user password). The permissions
@@ -168,6 +234,84 @@ pub(crate) fn open(bytes: &[u8], password: Option<&str>) -> Result<Pdf, PdfError
     open_with_options(bytes, password, &open_options())
 }
 
+/// A PDF read and checked once ([`open_pdf`]), for reading several things from one file: the
+/// document it carries ([`Opened::editing`]), an editor's private data ([`Opened::illustrator_data`]),
+/// its File Info ([`Opened::file_info`]), its pages and boxes ([`Opened::info`]) and its art
+/// ([`crate::import_opened`]). Each of [`editing_with`](crate::editing_with), [`illustrator_data`],
+/// [`crate::file_info`], [`info`] and [`crate::import_with_report`] reads and checks the whole file
+/// again.
+pub struct Opened {
+    pub(crate) pdf: Pdf,
+}
+
+/// The PDF `bytes`, read and checked as [`crate::import_with_report`] reads it (with `password`, as
+/// [`info`] takes it, and on a thread with the import's stack), to read several things from.
+pub fn open_pdf(bytes: &[u8], password: Option<&str>) -> Result<Opened, PdfError> {
+    vectorcraft_doc::depth::with_deep_stack(|| open(bytes, password)).map(|pdf| Opened { pdf })
+}
+
+impl Opened {
+    /// The pages and their boxes, as [`info`] lists them.
+    pub fn info(&self) -> PdfInfo {
+        info_in(&self.pdf)
+    }
+
+    /// The native document the PDF carries, as [`editing`](crate::editing) reads it.
+    pub fn editing(&self) -> Option<crate::Editing> {
+        crate::editing::editing_in(&self.pdf)
+    }
+
+    /// The private data of an Illustrator `.ai`, as [`illustrator_data`] reads it.
+    pub fn illustrator_data(&self) -> Option<Vec<u8>> {
+        private_data(&self.pdf)
+    }
+
+    /// Does the first page carry an editor's copy of the art, as [`has_illustrator_data`] says?
+    pub fn has_illustrator_data(&self) -> bool {
+        has_private_data_keys(&self.pdf)
+    }
+
+    /// The File Info, as [`crate::file_info`] reads it.
+    pub fn file_info(&self) -> crate::FileInfo {
+        crate::file_info::file_info_in(&self.pdf)
+    }
+
+    /// How many pages the PDF has, as [`info`] lists them.
+    pub fn page_count(&self) -> usize {
+        self.pdf.pages().len()
+    }
+
+    /// The pages' trim boxes and bleed, as an import of every page on its trim box takes them,
+    /// without importing any page's art.
+    pub fn trim_pages(&self) -> TrimPages {
+        let pages = self.pdf.pages();
+        let mut bleed = [0.0; 4];
+        for page in pages.iter() {
+            for (side, b) in bleed.iter_mut().zip(self::bleed(page)) {
+                *side = f64::max(*side, b);
+            }
+        }
+        TrimPages {
+            sizes: pages.iter().map(|page| frame(page, CropTo::Trim).1).map(|r| (r.width(), r.height())).collect(),
+            user_unit: pages.first().map_or(1.0, |page| f64::from(page.user_unit())),
+            bleed,
+        }
+    }
+}
+
+/// A PDF's pages as an import on their trim boxes sizes them ([`Opened::trim_pages`]).
+#[derive(Clone, Debug, PartialEq)]
+pub struct TrimPages {
+    /// Each page's trim box (its crop box when it has none) in points, rotated as the page shows:
+    /// width and height.
+    pub sizes: Vec<(f64, f64)>,
+    /// The size in points of a unit of the first page's user space (its `UserUnit`).
+    pub user_unit: f64,
+    /// The bleed of the pages, `[top, bottom, left, right]` in points: on each side, the widest
+    /// of the pages' bleed, as the import makes it the document's bleed.
+    pub bleed: [f64; 4],
+}
+
 /// Preserve the application's existing accepted file sizes. Ordinary stream decoding still
 /// uses the shared reader's immutable per-document limits, and its input copy is fallible.
 pub(crate) fn open_options() -> craft_pdf::OpenOptions {
@@ -175,6 +319,33 @@ pub(crate) fn open_options() -> craft_pdf::OpenOptions {
 }
 
 pub(crate) fn open_with_options(bytes: &[u8], password: Option<&str>, options: &craft_pdf::OpenOptions) -> Result<Pdf, PdfError> {
+    // Twice: looking at every object makes the reader repair a damaged table of objects (once
+    // only), and the objects are other ones after that.
+    open_structural_with_options(bytes, password, options).and_then(|pdf| match (0..2).find_map(|_| hostile(&pdf)) {
+        Some(why) => Err(PdfError::Parse(why)),
+        None => Ok(pdf),
+    })
+}
+
+/// How many times each buffer has been read as a PDF, by its address (tests).
+#[cfg(any(test, feature = "read-count"))]
+static READS: std::sync::Mutex<std::collections::BTreeMap<usize, usize>> = std::sync::Mutex::new(std::collections::BTreeMap::new());
+
+/// How many times `bytes`, at its address, has been read as a PDF on any thread (tests).
+#[cfg(any(test, feature = "read-count"))]
+pub fn reads_of(bytes: &[u8]) -> usize {
+    READS.lock().ok().and_then(|r| r.get(&(bytes.as_ptr() as usize)).copied()).unwrap_or(0)
+}
+
+/// [`open_with_options`] without looking at the file's objects ([`hostile`]): the reader builds its
+/// table of objects and its page tree, and nothing on a page is read. For reading one object that
+/// is checked on its own ([`illustrator_data_without_pdf_part`]), never for importing a page.
+fn open_structural_with_options(bytes: &[u8], password: Option<&str>, options: &craft_pdf::OpenOptions) -> Result<Pdf, PdfError> {
+    #[cfg(any(test, feature = "read-count"))]
+    if let Ok(mut reads) = READS.lock() {
+        let n = reads.entry(bytes.as_ptr() as usize).or_default();
+        *n = n.saturating_add(1);
+    }
     if is_postscript(bytes) {
         return Err(PdfError::PostScript);
     }
@@ -199,18 +370,16 @@ pub(crate) fn open_with_options(bytes: &[u8], password: Option<&str>, options: &
             craft_pdf::OpenError::Load(LoadPdfError::Decryption(DecryptionError::PasswordProtected)) => PdfError::WrongPassword,
             e => PdfError::Parse(e.to_string()),
         })
-        // Twice: looking at every object makes the reader repair a damaged table of objects (once
-        // only), and the objects are other ones after that.
-        .and_then(|pdf| match (0..2).find_map(|_| hostile(&pdf)) {
-            Some(why) => Err(PdfError::Parse(why.into())),
-            None => Ok(pdf),
-        })
 }
 
 /// The pages and their boxes. An encrypted PDF needs its `password`
 /// ([`PdfError::NeedsPassword`] / [`PdfError::WrongPassword`]).
 pub fn info(bytes: &[u8], password: Option<&str>) -> Result<PdfInfo, PdfError> {
-    let pdf = open(bytes, password)?;
+    Ok(info_in(&open(bytes, password)?))
+}
+
+/// [`info`] of a parsed PDF.
+fn info_in(pdf: &Pdf) -> PdfInfo {
     let pages = pdf
         .pages()
         .iter()
@@ -227,7 +396,7 @@ pub fn info(bytes: &[u8], password: Option<&str>) -> Result<PdfInfo, PdfError> {
             PageInfo { width: w as f64, height: h as f64, rotation, boxes }
         })
         .collect();
-    Ok(PdfInfo { pages })
+    PdfInfo { pages }
 }
 
 /// The 0-based pages `opts` pick out of `count`.
@@ -301,7 +470,37 @@ const MAX_PRIVATE: usize = 256 << 20;
 /// `AIPrivateData1`. `None` for a PDF without either (or with a stream that can't be read).
 /// What it holds is the editor's own copy of the art (see `vectorcraft_eps::layered_ai`).
 pub fn illustrator_data(bytes: &[u8], password: Option<&str>) -> Option<Vec<u8>> {
-    let pdf = open(bytes, password).ok()?;
+    private_data(&open(bytes, password).ok()?)
+}
+
+/// The private data of a file whose PDF part can't be read ([`illustrator_data_without_pdf_part`]),
+/// with the size of its first page.
+#[derive(Clone, Debug, PartialEq)]
+pub struct IllustratorData {
+    /// The private data, as [`illustrator_data`] reads it.
+    pub data: Vec<u8>,
+    /// The size in points of a unit of the first page's user space (its `UserUnit`).
+    pub user_unit: f64,
+    /// The first page's trim box (its crop box when it has none) in points, rotated as the page
+    /// shows: width and height.
+    pub trim: (f64, f64),
+}
+
+/// [`illustrator_data`] for a file whose PDF part can't be read (a stream the import refuses, or
+/// objects built on one another without end): the file is opened without looking at its other
+/// objects, and only the private data streams are read, with the same limits. `None` when the
+/// file itself can't be opened, or as for [`illustrator_data`].
+pub fn illustrator_data_without_pdf_part(bytes: &[u8], password: Option<&str>) -> Option<IllustratorData> {
+    let pdf = open_structural_with_options(bytes, password, &open_options()).ok()?;
+    let data = private_data(&pdf)?;
+    let page = pdf.pages().first()?;
+    // (The page transform is in points: it applies the `UserUnit`.)
+    let trim = frame(page, CropTo::Trim).1;
+    Some(IllustratorData { data, user_unit: f64::from(page.user_unit()), trim: (trim.width(), trim.height()) })
+}
+
+/// The private data of `pdf`'s first page, as [`illustrator_data`] reads it.
+fn private_data(pdf: &Pdf) -> Option<Vec<u8>> {
     let page = pdf.pages().first()?;
     let private = page.raw().get::<Dict<'_>>(b"PieceInfo")?.get::<Dict<'_>>(PRIVATE_DATA_OWNER)?.get::<Dict<'_>>(b"Private")?;
     let key = if private.contains_key(b"AIPrivateData1") { "AIPrivateData" } else { "AIPDFPrivateData" };
@@ -317,24 +516,47 @@ pub fn illustrator_data(bytes: &[u8], password: Option<&str>) -> Option<Vec<u8>>
 /// (`AIPrivateData` keys) or a PDF saved with its editing data (`AIPDFPrivateData`, #1345)? Without
 /// reading the data. Either's trim boxes are its editor's artboards.
 pub fn has_illustrator_data(bytes: &[u8], password: Option<&str>) -> bool {
-    open(bytes, password).is_ok_and(|pdf| pdf.pages().first().is_some_and(|p| piece_info_has(p, &[b"AIPrivateData", b"AIPDFPrivateData"])))
+    open(bytes, password).is_ok_and(|pdf| has_private_data_keys(&pdf))
+}
+
+/// [`has_illustrator_data`] of a parsed PDF.
+fn has_private_data_keys(pdf: &Pdf) -> bool {
+    pdf.pages().first().is_some_and(|p| piece_info_has(p, &[b"AIPrivateData", b"AIPDFPrivateData"]))
 }
 
 /// `stream` decoded, up to `most` bytes: the decoder is run here rather than by the PDF reader's
 /// `decoded()`, which has no limit, so a stream of zeros can't grow to the size of the memory. Only a
-/// stream that is plain or only deflated is read (the private data is no other); else, or when it
-/// is larger once decoded, `None`.
+/// stream that is plain or only deflated is read (the private data is no other), without decode
+/// parameters; else, or when it is larger once decoded, `None`. A filter the reader doesn't know
+/// counts as another filter.
 fn inflated(stream: &Stream<'_>, most: usize) -> Option<Vec<u8>> {
     use std::io::Read;
-    if stream.dict().get::<Dict<'_>>(b"DecodeParms").is_some() {
+    let dict = stream.dict();
+    let named = |key: &[u8]| match dict.get::<Object<'_>>(key) {
+        None | Some(Object::Null(_)) => Some(0),
+        Some(Object::Name(_)) => Some(1),
+        Some(Object::Array(a)) => Some(items(&a).count()),
+        Some(_) => None,
+    };
+    let params = |key: &[u8]| match dict.get::<Object<'_>>(key) {
+        None | Some(Object::Null(_)) => false,
+        Some(Object::Array(a)) => items(&a).any(|m| !matches!(m, MaybeRef::NotRef(Object::Null(_)))),
+        Some(_) => true,
+    };
+    if params(b"DecodeParms") || params(b"DP") {
+        return None;
+    }
+    let filters = stream.filters();
+    // (The reader leaves out the filters it doesn't know.)
+    if named(b"Filter")?.max(named(b"F")?) != filters.len() {
         return None;
     }
     let raw = stream.raw_data();
     let mut out = vec![];
     let limit = u64::try_from(most).ok()?.checked_add(1)?;
-    match stream.filters().len() {
-        0 => out.extend_from_slice(&raw),
-        1 => {
+    match filters.as_slice() {
+        [] if raw.len() <= most => out.extend_from_slice(&raw),
+        [craft_pdf::syntax::Filter::FlateDecode] => {
             flate2::read::ZlibDecoder::new(&*raw).take(limit).read_to_end(&mut out).ok()?;
         }
         _ => return None,
@@ -365,4 +587,15 @@ fn piece_info_has(page: &Page<'_>, prefixes: &[&[u8]]) -> bool {
             })
     }
     page.raw().get::<Dict<'_>>(b"PieceInfo").is_some_and(|d| walk(&d, prefixes, 0))
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn decoded_sizes_read_in_whole_units() {
+        assert_eq!(super::decoded_size(256 << 20), "256 MB");
+        assert_eq!(super::decoded_size(418 << 20), "418 MB");
+        assert_eq!(super::decoded_size(1 << 30), "1 GB");
+        assert_eq!(super::decoded_size((1 << 30) + (1 << 20)), "1025 MB");
+    }
 }

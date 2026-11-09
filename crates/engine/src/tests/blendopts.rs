@@ -119,6 +119,72 @@ fn a_blend_and_an_object_make_one_blend_with_more_keys() {
     assert_eq!(vectorcraft_doc::live::expand_live(&n).len(), 3 + 2 * 3);
 }
 
+/// Choosing the Blend tool again (its button, W, `tool.select`) finishes the blend: the first
+/// pick and the chain are dropped, and the document and the selection stay. Choosing another
+/// tool again keeps its work: the Pen's open path stays open.
+#[test]
+fn choosing_the_blend_tool_again_finishes_the_blend() {
+    let mut s = session();
+    let (a, b, c) = (rect(&mut s, 0.0, 0.0, 40.0), rect(&mut s, 200.0, 0.0, 40.0), rect(&mut s, 400.0, 0.0, 40.0));
+    let v = ViewInfo::default();
+    s.select_tool("blend", v).unwrap();
+    let click = |s: &mut Session, x: f64, y: f64| s.pointer(&PointerEvent::new(PointerKind::Down, x, y), ViewInfo::default()).unwrap();
+    click(&mut s, 20.0, 20.0);
+    assert!(s.tool_busy());
+    let (layers, depth) = (s.doc().unwrap().doc.layers.clone(), s.doc().unwrap().history.undo.len());
+    s.select_tool("blend", v).unwrap();
+    assert!(!s.tool_busy(), "choosing the tool again drops the pick");
+    assert_eq!((&s.doc().unwrap().doc.layers, s.doc().unwrap().history.undo.len()), (&layers, depth), "and changes nothing");
+    assert_eq!(s.doc().unwrap().selection.objects, vec![a]);
+    // The next two clicks blend b and c; a is not part of it.
+    click(&mut s, 220.0, 20.0);
+    assert_eq!(s.doc().unwrap().doc.layers, layers, "b is picked first");
+    click(&mut s, 420.0, 20.0);
+    let g = s.doc().unwrap().selection.objects[0];
+    assert_eq!(spec(&s, g).0, vec![b, c]);
+    // Chosen again after the blend is made: the next click starts a new blend instead of adding.
+    s.select_tool("blend", v).unwrap();
+    assert_eq!(s.doc().unwrap().selection.objects, vec![g], "the blend stays selected");
+    click(&mut s, 20.0, 20.0);
+    assert_eq!(s.doc().unwrap().selection.objects, vec![a]);
+    assert_eq!(spec(&s, g).0, vec![b, c], "a was not added");
+    // The Pen chosen again goes on drawing its open path.
+    s.select_tool("pen", v).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    let pen = |s: &mut Session, x: f64, y: f64| {
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(kind, x, y), ViewInfo::default()).unwrap();
+        }
+    };
+    pen(&mut s, 100.0, 300.0);
+    pen(&mut s, 200.0, 300.0);
+    let p = s.doc().unwrap().selection.objects[0];
+    s.select_tool("pen", v).unwrap();
+    pen(&mut s, 300.0, 300.0);
+    let anchors = match node(&s, p).kind {
+        NodeKind::Path { path, .. } => path.subpaths[0].anchors.len(),
+        _ => 0,
+    };
+    assert_eq!(anchors, 3, "the Pen keeps drawing the same path");
+}
+
+#[test]
+fn the_blend_tool_picks_again_when_its_first_pick_is_deleted() {
+    let mut s = session();
+    let (a, b, c) = (rect(&mut s, 0.0, 0.0, 40.0), rect(&mut s, 200.0, 0.0, 40.0), rect(&mut s, 400.0, 0.0, 40.0));
+    s.select_tool("blend", ViewInfo::default()).unwrap();
+    let click = |s: &mut Session, x: f64, y: f64| s.pointer(&PointerEvent::new(PointerKind::Down, x, y), ViewInfo::default()).unwrap();
+    click(&mut s, 20.0, 20.0);
+    s.execute("edit.clear", &json!({"ids": [a.0]})).unwrap();
+    let (layers, depth) = (s.doc().unwrap().doc.layers.clone(), s.doc().unwrap().history.undo.len());
+    click(&mut s, 220.0, 20.0);
+    assert_eq!(s.doc().unwrap().selection.objects, vec![b], "b is picked first");
+    assert_eq!((&s.doc().unwrap().doc.layers, s.doc().unwrap().history.undo.len()), (&layers, depth), "the click changes no art");
+    click(&mut s, 420.0, 20.0);
+    let g = s.doc().unwrap().selection.objects[0];
+    assert_eq!(spec(&s, g).0, vec![b, c]);
+}
+
 #[test]
 fn the_blend_tool_blends_from_clicked_anchors_and_keeps_adding() {
     let mut s = session();

@@ -5,7 +5,14 @@
 //! start point and the dragged corner snap to Smart Guides ([`DrawSnap`]), hovering too.
 //! While dragging, ↑/↓ change the arc's slope, the spiral's segments, the grid rows or the
 //! concentric dividers; ←/→ change grid columns / radial dividers. C switches the arc between open
-//! and closed, and F switches its base between the X and Y axes.
+//! and closed, and F switches its base between the X and Y axes. While a spiral is dragged out, Alt
+//! and Ctrl/Cmd keep its inner end at the distance from the center on the first modified drag as
+//! the outer end follows the pointer: Alt adds or removes whole winds of four segments, and
+//! Ctrl/Cmd changes the decay.
+//! On a grid, F and V lower and raise
+//! the skew of the horizontal (rectangular) or radial (polar) dividers, and X and C lower and raise
+//! that of the vertical or concentric ones.
+//! Escape cancels the drag and puts back the options its keys and modifiers changed.
 
 use serde_json::{Value, json};
 use vectorcraft_geom::Point;
@@ -16,6 +23,9 @@ use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, Tool
 
 /// How much ↑ or ↓ changes the arc's slope while it is dragged out.
 const ARC_SLOPE_STEP: f64 = 10.0;
+
+/// How much F, V, X or C changes a grid's divider skew (percent) while it is dragged out.
+const GRID_SKEW_STEP: f64 = 10.0;
 
 pub struct FamilyTool {
     id: &'static str,
@@ -33,6 +43,11 @@ pub struct FamilyTool {
     pub decay: f64,
     pub segments: u32,
     pub clockwise: bool,
+    /// The natural logarithm of the radius of the spiral's inner end, held while Alt or Ctrl/Cmd
+    /// is down in a drag.
+    spiral_end: Option<f64>,
+    /// The segment count when Alt alone starts adjusting winds.
+    spiral_alt_base: Option<u32>,
     /// Rows / concentric dividers.
     pub rows: u32,
     /// Columns / radial dividers.
@@ -49,6 +64,22 @@ pub struct FamilyTool {
     /// its own). The Reference Point is `reference`.
     pub grid_size: (f64, f64),
     snap: DrawSnap,
+    /// The options a drag's keys and modifiers change, as they were when the drag began: Escape
+    /// puts them back.
+    before_drag: Option<DragOptions>,
+}
+
+/// The options that keys and modifiers change while a shape is dragged out.
+#[derive(Clone, Copy)]
+struct DragOptions {
+    slope: f64,
+    closed: bool,
+    base_along: &'static str,
+    decay: f64,
+    segments: u32,
+    rows: u32,
+    columns: u32,
+    skew: [f64; 2],
 }
 
 impl FamilyTool {
@@ -75,6 +106,8 @@ impl FamilyTool {
             decay: 80.0,
             segments: 10,
             clockwise: true,
+            spiral_end: None,
+            spiral_alt_base: None,
             rows: 5,
             columns: 5,
             skew: [0.0; 2],
@@ -83,7 +116,33 @@ impl FamilyTool {
             fill: false,
             grid_size: (100.0, 100.0),
             snap: DrawSnap::default(),
+            before_drag: None,
         }
+    }
+
+    fn drag_options(&self) -> DragOptions {
+        DragOptions {
+            slope: self.slope,
+            closed: self.closed,
+            base_along: self.base_along,
+            decay: self.decay,
+            segments: self.segments,
+            rows: self.rows,
+            columns: self.columns,
+            skew: self.skew,
+        }
+    }
+
+    /// Put back the options a canceled drag changed.
+    fn restore_drag_options(&mut self, o: DragOptions) {
+        self.slope = o.slope;
+        self.closed = o.closed;
+        self.base_along = o.base_along;
+        self.decay = o.decay;
+        self.segments = o.segments;
+        self.rows = o.rows;
+        self.columns = o.columns;
+        self.skew = o.skew;
     }
 
     fn label(&self) -> &'static str {
@@ -105,6 +164,65 @@ impl FamilyTool {
 
     fn is_grid(&self) -> bool {
         matches!(self.id, "rectangularGrid" | "polarGrid")
+    }
+
+    /// The natural logarithm of the radius of the inner end of a spiral of outer radius `r` drawn
+    /// with the tool's decay and segments (a logarithm, so that a low decay with many segments does
+    /// not round to 0). The decay ratio is clamped to 0.05…0.9999 as `shapes::spiral` clamps it.
+    fn spiral_inner_end_ln(&self, r: f64) -> f64 {
+        r.ln() + f64::from(self.segments) / 4.0 * (self.decay / 100.0).clamp(0.05, 0.9999).ln()
+    }
+
+    /// Alt or Ctrl/Cmd in a spiral drag from `start` to `p`: the inner end keeps the distance from
+    /// the center it had on the first modified drag while the outer end follows the pointer. With
+    /// Ctrl/Cmd the decay changes to fit (within 5…99.99 %, the decays `shapes::spiral` draws);
+    /// with Alt alone the count changes in whole winds of four segments from its Alt entry count
+    /// (within 2…1000). Ctrl/Cmd takes precedence when both modifiers are held.
+    /// The new values stay once the key is let go.
+    fn hold_spiral_end(&mut self, start: Point, p: Point, m: Mods) {
+        let r = p.distance(start).max(0.01);
+        match (m.cmd || m.alt, self.spiral_end) {
+            (true, None) => self.spiral_end = Some(self.spiral_inner_end_ln(r)),
+            (false, Some(_)) => self.spiral_end = None,
+            _ => {}
+        }
+        if m.alt && !m.cmd {
+            self.spiral_alt_base.get_or_insert(self.segments);
+        } else {
+            self.spiral_alt_base = None;
+        }
+        let Some(end) = self.spiral_end.filter(|e| e.is_finite()) else { return };
+        if m.cmd {
+            let ratio = ((end - r.ln()) * 4.0 / f64::from(self.segments)).exp();
+            if ratio.is_finite() {
+                self.decay = (ratio * 100.0).clamp(5.0, 99.99);
+            }
+        } else {
+            let fitted = (r.ln() - end) * 4.0 / -(self.decay / 100.0).clamp(0.05, 0.9999).ln();
+            if fitted.is_finite() {
+                let base = f64::from(self.spiral_alt_base.unwrap_or(self.segments));
+                self.segments = (base + 4.0 * ((fitted - base) / 4.0).round()).clamp(2.0, 1000.0) as u32;
+            }
+        }
+    }
+
+    /// The skew a letter changes while a grid is dragged out, as an index into `skew`, and the
+    /// direction: F lowers and V raises the skew of the horizontal dividers (a rectangular grid's
+    /// rows) or the radial dividers (a polar grid's), X lowers and C raises that of the vertical
+    /// dividers (columns) or the concentric dividers.
+    fn grid_skew_key(&self, key: ToolKey) -> Option<(usize, f64)> {
+        let (horizontal_or_radial, vertical_or_concentric) = match self.id {
+            "rectangularGrid" => (0, 1),
+            "polarGrid" => (1, 0),
+            _ => return None,
+        };
+        match key {
+            ToolKey::Letter('f') => Some((horizontal_or_radial, -1.0)),
+            ToolKey::Letter('v') => Some((horizontal_or_radial, 1.0)),
+            ToolKey::Letter('x') => Some((vertical_or_concentric, -1.0)),
+            ToolKey::Letter('c') => Some((vertical_or_concentric, 1.0)),
+            _ => None,
+        }
     }
 
     /// A grid's options a drag draws with: its dividers, skews and switches (the Default Size and
@@ -187,6 +305,9 @@ impl Tool for FamilyTool {
                 self.start = Some(p);
                 self.last = p;
                 self.began = false;
+                self.spiral_end = None;
+                self.spiral_alt_base = None;
+                self.before_drag = None;
                 vec![]
             }
             PointerKind::Drag => {
@@ -202,7 +323,11 @@ impl Tool for FamilyTool {
                         return out;
                     }
                     self.began = true;
+                    self.before_drag = Some(self.drag_options());
                     out.push(Action::Begin(self.label().into()));
+                }
+                if self.id == "spiral" {
+                    self.hold_spiral_end(s, ev.pos, ev.mods);
                 }
                 let (c, v) = self.command_at(s, ev.pos, ev.mods, cx.constrain_angle);
                 out.push(Action::Preview(c, v));
@@ -211,6 +336,9 @@ impl Tool for FamilyTool {
             PointerKind::Up => {
                 let Some(s) = self.start.take() else { return vec![] };
                 self.snap.clear();
+                self.spiral_end = None;
+                self.spiral_alt_base = None;
+                self.before_drag = None;
                 if std::mem::take(&mut self.began) { vec![Action::Commit] } else { vec![Action::Dialog(self.id.into(), json!({"x": s.x, "y": s.y}))] }
             }
             _ => vec![],
@@ -259,14 +387,32 @@ impl Tool for FamilyTool {
                 self.columns = self.columns.saturating_sub(1);
                 true
             }
+            ("rectangularGrid" | "polarGrid", ToolKey::Letter(_)) => match self.grid_skew_key(key) {
+                Some((i, sign)) => {
+                    let max = vectorcraft_geom::shapes::GRID_SKEW_MAX;
+                    self.skew[i] = (self.skew[i] + sign * GRID_SKEW_STEP).clamp(-max, max);
+                    true
+                }
+                None => false,
+            },
             _ => false,
         };
         if changed {
+            // An arrow with Alt or Ctrl/Cmd still held: the held inner end moves with the new segment count.
+            if self.spiral_end.is_some() {
+                self.spiral_end = Some(self.spiral_inner_end_ln(self.last.distance(s).max(0.01)));
+                self.spiral_alt_base = (self.mods.alt && !self.mods.cmd).then_some(self.segments);
+            }
             let (c, v) = self.command_at(s, self.last, self.mods, cx.constrain_angle);
             vec![Action::Preview(c, v)]
         } else if key == ToolKey::Escape {
             self.start = None;
             self.began = false;
+            self.spiral_end = None;
+            self.spiral_alt_base = None;
+            if let Some(o) = self.before_drag.take() {
+                self.restore_drag_options(o);
+            }
             self.snap.clear();
             vec![Action::Cancel]
         } else {
@@ -274,8 +420,14 @@ impl Tool for FamilyTool {
         }
     }
     /// The Arc tool takes C and F while an arc is dragged out: C switches it between open and closed, and F switches its base axis.
+    /// The grid tools take F, V, X and C while a grid is dragged out, for its divider skews.
     fn claims_key(&self, _cx: &ToolContext, key: ToolKey) -> bool {
-        self.id == "arc" && self.began && self.start.is_some() && matches!(key, ToolKey::Letter('c' | 'f'))
+        self.began
+            && self.start.is_some()
+            && match self.id {
+                "arc" => matches!(key, ToolKey::Letter('c' | 'f')),
+                _ => self.grid_skew_key(key).is_some(),
+            }
     }
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         let mut o = self.snap.guides().to_vec();
@@ -339,6 +491,23 @@ impl Tool for FamilyTool {
             "height" => self.grid_size.1 = grid_length(v, self.grid_size.1),
             _ => {}
         }
+        // An option set while a shape is dragged out stays when Escape cancels the drag; a value
+        // the match above ignores leaves the drag's starting value as it was.
+        if let Some(b) = self.before_drag.as_mut() {
+            let finite = v.as_f64().is_some_and(f64::is_finite);
+            match key {
+                "slope" if finite => b.slope = self.slope,
+                "closed" if v.is_boolean() => b.closed = self.closed,
+                "baseAlong" if v.is_string() => b.base_along = self.base_along,
+                "decay" if v.as_f64().is_some() => b.decay = self.decay,
+                "segments" => b.segments = self.segments,
+                "rows" | "concentric" => b.rows = self.rows,
+                "columns" | "radial" => b.columns = self.columns,
+                "rowSkew" | "concentricSkew" if finite => b.skew[0] = self.skew[0],
+                "columnSkew" | "radialSkew" if finite => b.skew[1] = self.skew[1],
+                _ => {}
+            }
+        }
     }
 }
 
@@ -392,6 +561,48 @@ mod tests {
         let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 90.0, 60.0));
         assert!(matches!(&a[..], [Action::Preview(_, v)] if v["x"] == 30.0 && v["width"] == 60.0 && v["height"] == 40.0), "{a:?}");
         assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 90.0, 60.0)), vec![Action::Commit]);
+    }
+
+    /// While a grid is dragged out, F/V lower/raise the skew of the horizontal (rectangular) or
+    /// radial (polar) dividers by 10 and X/C change that of the vertical or concentric ones, within
+    /// ±500; the grid drawn next keeps them.
+    #[test]
+    fn grid_drag_keys_change_the_divider_skews() {
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let mut cx = cx(&d, &s, &p);
+        cx.smart_guides = false;
+        let key = ToolKey::Letter;
+        for (id, horizontal_or_radial, vertical_or_concentric) in
+            [("rectangularGrid", "rowSkew", "columnSkew"), ("polarGrid", "radialSkew", "concentricSkew")]
+        {
+            let mut t = FamilyTool::new(id);
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+            assert!(!t.claims_key(&cx, key('f')), "{id}: no drag yet");
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 60.0, 40.0));
+            assert!("fvxc".chars().all(|c| t.claims_key(&cx, key(c))), "{id}");
+            assert!(!t.claims_key(&cx, key('e')), "{id}");
+            let skews = |a: Vec<Action>| match &a[..] {
+                [Action::Preview(c, v)] if c == &format!("shape.{id}") => (v[horizontal_or_radial].clone(), v[vertical_or_concentric].clone()),
+                _ => panic!("{id}: {a:?}"),
+            };
+            assert_eq!(skews(t.key(&cx, key('v'), Mods::default())), (json!(10.0), json!(0.0)), "{id}: V");
+            assert_eq!(skews(t.key(&cx, key('f'), Mods::default())), (json!(0.0), json!(0.0)), "{id}: F");
+            assert_eq!(skews(t.key(&cx, key('f'), Mods::default())), (json!(-10.0), json!(0.0)), "{id}: F");
+            assert_eq!(skews(t.key(&cx, key('c'), Mods::default())), (json!(-10.0), json!(10.0)), "{id}: C");
+            assert_eq!(skews(t.key(&cx, key('x'), Mods::default())), (json!(-10.0), json!(0.0)), "{id}: X");
+            for _ in 0..60 {
+                t.key(&cx, key('x'), Mods::default());
+                t.key(&cx, key('v'), Mods::default());
+            }
+            assert_eq!(skews(t.key(&cx, key('x'), Mods::default())), (json!(500.0), json!(-500.0)), "{id}: within ±500");
+            assert_eq!(skews(t.key(&cx, key('v'), Mods::default())), (json!(500.0), json!(-500.0)), "{id}: within ±500");
+            assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 60.0, 40.0)), vec![Action::Commit]);
+            assert!(!t.claims_key(&cx, key('v')), "{id}: the drag is over");
+            let o = t.options();
+            assert_eq!((o[horizontal_or_radial].clone(), o[vertical_or_concentric].clone()), (json!(500.0), json!(-500.0)), "{id}");
+        }
     }
 
     /// #1377: a drag draws with the tool's stored options, which keep to their types and range.
@@ -459,6 +670,265 @@ mod tests {
                 "fillArc": false,
             })
         );
+    }
+
+    /// While a spiral is dragged out, Alt and Ctrl/Cmd keep its inner end at the distance from the
+    /// center it had when the key went down as the outer end follows the pointer: Alt adds or
+    /// removes whole winds of four segments and Ctrl/Cmd changes the decay. The new values stay
+    /// once the key is let go, and for the next spiral. Both keys work with the lowest decay and
+    /// many segments.
+    #[test]
+    fn spiral_drag_alt_changes_its_segments_and_ctrl_its_decay() {
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let mut cx = cx(&d, &s, &p);
+        cx.smart_guides = false;
+        let alt = Mods { alt: true, ..Mods::default() };
+        let ctrl = Mods { cmd: true, ..Mods::default() };
+        let spiral = |a: Vec<Action>| match a.last() {
+            Some(Action::Preview(c, v)) if c == "shape.spiral" => {
+                (v["radius"].as_f64().unwrap(), v["decay"].as_f64().unwrap(), v["segments"].as_u64().unwrap())
+            }
+            _ => panic!("{a:?}"),
+        };
+        let mut t = FamilyTool::new("spiral");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+        assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 100.0))), (100.0, 80.0, 10));
+        // Alt rounds the fitted count to whole winds from the count when Alt goes down.
+        assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 100.0).with_mods(alt))), (100.0, 80.0, 10));
+        assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 300.0, 100.0).with_mods(alt))), (200.0, 80.0, 22));
+        // ↑ with Alt held adds one, and the held inner end moves with it.
+        assert_eq!(spiral(t.key(&cx, ToolKey::Up, alt)).2, 23);
+        assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 300.0, 100.0).with_mods(alt))).2, 23);
+        assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 100.0).with_mods(alt))), (50.0, 80.0, 2));
+        assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 101.0, 100.0).with_mods(alt))).2, 2, "at least two");
+        assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 100.0).with_mods(alt))).2, 2);
+        // The count stays as the radius follows the pointer again.
+        assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 100.0))), (100.0, 80.0, 2));
+        // Ctrl/Cmd fits the decay to the held inner end.
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 100.0).with_mods(ctrl));
+        let (r, decay, n) = spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 100.0).with_mods(ctrl)));
+        assert_eq!((r, decay, n), (50.0, 99.99, 2), "{r} {decay} {n}");
+        let (_, decay, _) = spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 400.0, 100.0).with_mods(ctrl)));
+        assert!((decay - 80.0 / 9.0).abs() < 1e-9, "{decay}");
+        assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 100.5, 100.0).with_mods(ctrl))).1, 99.99, "at most 99.99 %");
+        assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 1e20, 100.0).with_mods(ctrl))).1, 5.0, "at least 5 %");
+        let (_, decay, _) = spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 300.0, 100.0).with_mods(ctrl)));
+        assert!((decay - 20.0).abs() < 1e-9, "{decay}");
+        // Let go: the decay stays, and the spiral drawn next keeps both.
+        assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 250.0, 100.0))), (150.0, decay, 2));
+        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 100.0)), vec![Action::Commit]);
+        assert_eq!((t.options()["decay"].as_f64(), t.options()["segments"].clone()), (Some(decay), json!(2)));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+        let (_, d2, n2) = spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 100.0, 140.0).with_mods(alt)));
+        assert_eq!((d2, n2), (decay, 2), "a new drag holds the end anew");
+        // Low decay over many winds still fits using logarithms.
+        let mut t = FamilyTool::new("spiral");
+        t.set_option("decay", &json!(5.0));
+        t.set_option("segments", &json!(300));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 100.0).with_mods(ctrl));
+        let (_, decay, _) = spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 100.0).with_mods(ctrl)));
+        assert!((decay - 5.0 * 2f64.powf(4.0 / 300.0)).abs() < 1e-9, "{decay}");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 100.0));
+        // Alt: a large radius increase adds a whole wind.
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 120.0, 100.0).with_mods(alt));
+        assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200100.0, 100.0).with_mods(alt))).2, 312);
+    }
+
+    /// Switching between Alt and Ctrl/Cmd keeps the held inner end and uses the current segment
+    /// count when Alt resumes. Escape clears the held end and puts back the segments and decay
+    /// from before the drag.
+    #[test]
+    fn spiral_drag_switches_between_alt_and_ctrl_and_escape_lets_go_of_the_inner_end() {
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let mut cx = cx(&d, &s, &p);
+        cx.smart_guides = false;
+        let alt = Mods { alt: true, ..Mods::default() };
+        let ctrl = Mods { cmd: true, ..Mods::default() };
+        let both = Mods { alt: true, cmd: true, ..Mods::default() };
+        let mut t = FamilyTool::new("spiral");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 100.0).with_mods(alt));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 300.0, 100.0).with_mods(alt));
+        assert_eq!(t.segments, 22);
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 100.0).with_mods(both));
+        assert_eq!(t.segments, 22, "Ctrl/Cmd takes precedence");
+        let decay = t.decay;
+        assert!(decay > 80.0);
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 100.0).with_mods(ctrl));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 300.0, 100.0).with_mods(alt));
+        assert_eq!(t.segments, 50, "Alt resumes from the current count with the held end");
+        assert_eq!(t.decay, decay);
+        t.key(&cx, ToolKey::Escape, alt);
+        assert_eq!(t.spiral_end, None);
+        assert_eq!(t.spiral_alt_base, None);
+        assert_eq!((t.segments, t.decay), (10, 80.0), "the options from before the drag");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 100.0).with_mods(alt));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 300.0, 100.0).with_mods(alt));
+        assert_eq!(t.segments, 22, "a new drag holds a new inner end");
+    }
+
+    /// Escape during a drag puts back every option the drag's keys changed, for the next drag and
+    /// the tool's options; a drag that is let go keeps them.
+    #[test]
+    fn escape_puts_back_the_options_a_drag_changed() {
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let mut cx = cx(&d, &s, &p);
+        cx.smart_guides = false;
+        let keys = |id: &str| -> Vec<ToolKey> {
+            match id {
+                "arc" => vec![ToolKey::Up, ToolKey::Letter('c'), ToolKey::Letter('f')],
+                "spiral" => vec![ToolKey::Up],
+                _ => vec![ToolKey::Up, ToolKey::Right, ToolKey::Letter('v'), ToolKey::Letter('c')],
+            }
+        };
+        let arc_and_spiral = ["slope", "closed", "baseAlong", "segments", "decay"];
+        let grids = ["rows", "columns", "concentric", "radial", "rowSkew", "columnSkew", "concentricSkew", "radialSkew"];
+        let pick = |v: &Value| arc_and_spiral.iter().chain(&grids).filter_map(|f| v.get(*f).map(|x| (*f, x.clone()))).collect::<Vec<_>>();
+        for id in ["arc", "spiral", "rectangularGrid", "polarGrid"] {
+            let mut t = FamilyTool::new(id);
+            let preview = |a: Vec<Action>| match a.last() {
+                Some(Action::Preview(_, v)) => v.clone(),
+                _ => panic!("{id}: {a:?}"),
+            };
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+            let before = pick(&preview(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 60.0, 40.0))));
+            let options = t.options();
+            let mut changed = before.clone();
+            for k in keys(id) {
+                changed = pick(&preview(t.key(&cx, k, Mods::default())));
+            }
+            assert_ne!(changed, before, "{id}: the keys change the options");
+            assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![Action::Cancel], "{id}");
+            assert_eq!(t.options(), options, "{id}: the tool's options");
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+            let next = pick(&preview(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 60.0, 40.0))));
+            assert_eq!(next, before, "{id}: the next drag");
+            // A drag that is let go keeps what its keys changed.
+            for k in keys(id) {
+                t.key(&cx, k, Mods::default());
+            }
+            assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 60.0, 40.0)), vec![Action::Commit]);
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+            let kept = pick(&preview(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 60.0, 40.0))));
+            assert_eq!(kept, changed, "{id}: a finished drag keeps them");
+            t.key(&cx, ToolKey::Escape, Mods::default());
+            assert_eq!(pick(&t.options()), changed, "{id}: Escape puts back only what this drag changed");
+        }
+    }
+
+    /// Alt and Ctrl/Cmd change a spiral's segments and decay as it is dragged out; Escape puts
+    /// both back.
+    #[test]
+    fn escape_puts_back_the_spiral_decay_and_segments_alt_and_ctrl_changed() {
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let mut cx = cx(&d, &s, &p);
+        cx.smart_guides = false;
+        let alt = Mods { alt: true, ..Mods::default() };
+        let ctrl = Mods { cmd: true, ..Mods::default() };
+        let mut t = FamilyTool::new("spiral");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 100.0).with_mods(alt));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 300.0, 100.0).with_mods(alt));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 300.0, 100.0).with_mods(ctrl));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 100.0).with_mods(ctrl));
+        assert!(t.segments != 10 && t.decay != 80.0, "{} {}", t.segments, t.decay);
+        t.key(&cx, ToolKey::Escape, ctrl);
+        assert_eq!((t.segments, t.decay), (10, 80.0));
+    }
+
+    /// An option set while a shape is dragged out (`tool.setOption`) stays when Escape cancels
+    /// the drag; the options only the drag's keys changed go back.
+    #[test]
+    fn escape_keeps_an_option_set_during_the_drag() {
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let mut cx = cx(&d, &s, &p);
+        cx.smart_guides = false;
+        let mut t = FamilyTool::new("rectangularGrid");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 60.0, 40.0));
+        t.key(&cx, ToolKey::Up, Mods::default());
+        t.key(&cx, ToolKey::Right, Mods::default());
+        t.set_option("columns", &json!(9));
+        t.set_option("rowSkew", &json!(30.0));
+        t.key(&cx, ToolKey::Escape, Mods::default());
+        let o = t.options();
+        assert_eq!((o["rows"].clone(), o["columns"].clone(), o["rowSkew"].clone()), (json!(5), json!(9), json!(30.0)));
+        let mut t = FamilyTool::new("arc");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 60.0, 40.0));
+        t.key(&cx, ToolKey::Letter('c'), Mods::default());
+        t.set_option("slope", &json!(-20.0));
+        t.key(&cx, ToolKey::Escape, Mods::default());
+        let o = t.options();
+        assert_eq!((o["closed"].clone(), o["slope"].clone()), (json!(false), json!(-20.0)));
+        // A value the option ignores leaves the starting value for Escape.
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 60.0, 40.0));
+        t.key(&cx, ToolKey::Up, Mods::default());
+        t.key(&cx, ToolKey::Letter('c'), Mods::default());
+        t.key(&cx, ToolKey::Letter('f'), Mods::default());
+        for (k, v) in [("slope", json!("steep")), ("closed", json!(1)), ("baseAlong", json!(null))] {
+            t.set_option(k, &v);
+        }
+        t.key(&cx, ToolKey::Escape, Mods::default());
+        let o = t.options();
+        assert_eq!((o["slope"].clone(), o["closed"].clone(), o["baseAlong"].clone()), (json!(-20.0), json!(false), json!("x")));
+    }
+
+    /// Alt adjusts the segment count in whole winds while keeping it within 2 to 1000.
+    #[test]
+    fn spiral_drag_alt_keeps_the_segments_within_2_to_1000() {
+        let mut t = FamilyTool::new("spiral");
+        let alt = Mods { alt: true, ..Mods::default() };
+        let start = Point::new(0.0, 0.0);
+        t.hold_spiral_end(start, Point::new(100.0, 0.0), alt);
+        t.hold_spiral_end(start, Point::new(200.0, 0.0), alt);
+        assert_eq!(t.segments, 22);
+        t.hold_spiral_end(start, Point::new(0.01, 0.0), alt);
+        assert_eq!(t.segments, 2);
+        t.hold_spiral_end(start, Point::new(1e150, 0.0), alt);
+        assert_eq!(t.segments, 1000);
+    }
+
+    #[test]
+    fn spiral_drag_arrows_and_release_clear_the_right_held_state() {
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let mut cx = cx(&d, &s, &p);
+        cx.smart_guides = false;
+        let alt = Mods { alt: true, ..Mods::default() };
+        let both = Mods { alt: true, cmd: true, ..Mods::default() };
+        let mut t = FamilyTool::new("spiral");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 100.0).with_mods(both));
+        t.key(&cx, ToolKey::Up, both);
+        assert_eq!(t.segments, 11);
+        assert_eq!(t.spiral_alt_base, None, "Ctrl/Cmd still takes precedence after Up");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 100.0).with_mods(alt));
+        assert_eq!(t.spiral_alt_base, Some(11), "Alt starts from the current count");
+        t.key(&cx, ToolKey::Down, alt);
+        assert_eq!(t.segments, 10);
+        assert_eq!(t.spiral_alt_base, Some(10));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 200.0, 100.0).with_mods(alt));
+        assert_eq!(t.spiral_end, None);
+        assert_eq!(t.spiral_alt_base, None);
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 100.0, 100.0));
+        assert_eq!(t.spiral_end, None, "Up after Down clears the held end");
+        assert_eq!(t.spiral_alt_base, None, "Up after Down clears the Alt base");
     }
 
     #[test]
@@ -533,8 +1003,8 @@ mod tests {
         assert!(!t.claims_key(&cx, c), "the drag is over");
         let o = t.options();
         assert_eq!((o["closed"].clone(), o["baseAlong"].clone(), o["slope"].clone()), (json!(false), json!("y"), json!(100.0)));
-        // The other tools of the family leave C and F to their shortcuts.
-        let mut g = FamilyTool::new("rectangularGrid");
+        // The Spiral tool leaves C and F to their shortcuts.
+        let mut g = FamilyTool::new("spiral");
         g.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
         g.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 60.0, 40.0));
         assert!(!g.claims_key(&cx, c) && !g.claims_key(&cx, f));

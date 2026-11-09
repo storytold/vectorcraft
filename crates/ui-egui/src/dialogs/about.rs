@@ -32,11 +32,11 @@ pub(super) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             ui.separator();
             match tab {
                 1 => {
-                    ui.set_width(660.0);
+                    ui.set_width(820.0);
                     crate::credits::contributors_ui(app, ui);
                 }
                 2 => {
-                    ui.set_width(660.0);
+                    ui.set_width(820.0);
                     crate::credits::models_ui(ui);
                 }
                 _ => about_tab(app, ui),

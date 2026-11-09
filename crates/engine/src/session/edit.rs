@@ -19,25 +19,41 @@ impl Session {
         let doc = Arc::make_mut(&mut st.doc);
         // The Global Edit members the edit reached besides the selection.
         let mut spread = vec![];
+        let mut dim_changed = false;
         // Objects attached to a path follow it, and dimensions follow the art they measure.
         let result = match f(doc, &mut st.selection).and_then(|v| {
             // Global Edit: the other members take what the edit changed about the one it edited.
             if let Some(ge) = &st.global_edit {
                 spread = cmd::globaledit::propagate(&before, doc, ge, [&before_sel.objects, &st.selection.objects]);
             }
-            cmd::objects_on_path::refresh(&before, doc);
-            cmd::dimension::refresh(&before, doc)?;
+            // Pixel-aligned objects the edit changed go back on the pixel grid.
+            cmd::refresh_pixel_aligned(&before, doc);
+            let placed = cmd::objects_on_path::refresh(&before, doc);
+            // Pixel-aligned members that placing moved go back on the pixel grid.
+            cmd::keep_aligned_in(doc, &placed);
+            dim_changed = cmd::dimension::refresh(&before, doc)?;
             Ok(v)
         }) {
             Ok(v) => match cmd::shaper::refresh(&before, Arc::make_mut(&mut st.doc)) {
                 Err(e) => Err(e),
-                Ok(()) => {
+                Ok(shaper_changed) => {
                     // Attached Shaper groups whose art was rebuilt go back on their path.
-                    cmd::objects_on_path::refresh(&before, Arc::make_mut(&mut st.doc));
+                    if shaper_changed || dim_changed {
+                        let doc = Arc::make_mut(&mut st.doc);
+                        let placed = cmd::objects_on_path::refresh(&before, doc);
+                        cmd::keep_aligned_in(doc, &placed);
+                    }
+                    // Symbol editing: the symbol follows its art on the editing layer, before
+                    // inline graphics follow their symbols.
+                    let mut symbol_synced =
+                        if st.doc.symbol_edit.is_some() { cmd::symboledit::sync(&before, Arc::make_mut(&mut st.doc)) } else { Ok(()) };
                     // Inline graphics in text follow their symbols.
                     cmd::inline::refresh(&before, Arc::make_mut(&mut st.doc));
+                    // The document the passes below start from, for the symbol to follow what they
+                    // change on its editing layer.
+                    let synced = st.doc.symbol_edit.is_some().then(|| st.doc.clone());
                     // Text Wrap: area type follows its wrap objects; then threads re-flow.
-                    cmd::textwrap::refresh(Arc::make_mut(&mut st.doc));
+                    cmd::textwrap::refresh(&before, Arc::make_mut(&mut st.doc));
                     // Type in no thread numbers its list paragraphs from 1 (before the mask copies
                     // its editing layer's art).
                     cmd::threads::restart_unthreaded_counts(&mut st.doc);
@@ -49,6 +65,28 @@ impl Session {
                     if !st.doc.text_threads.is_empty() {
                         cmd::threads::reflow(&before, Arc::make_mut(&mut st.doc));
                     }
+                    // Symbol editing: the symbol also takes the text wrap, list numbering and
+                    // re-flow those passes gave its editing layer; when that changes the symbol, its
+                    // inline graphics follow it and the threads they are in re-flow.
+                    let editing = st.doc.symbol_edit.as_ref().map(|e| e.layer);
+                    if let Some(synced) = &synced
+                        && symbol_synced.is_ok()
+                        && editing.is_some()
+                        && before.symbol_edit.as_ref().map(|e| e.layer) == editing
+                    {
+                        let art =
+                            |d: &Document| d.symbol_edit.as_ref().and_then(|e| d.symbols.iter().find(|x| x.name == e.symbol)).map(|x| x.art.clone());
+                        let old = art(&st.doc);
+                        symbol_synced = cmd::symboledit::sync(synced, Arc::make_mut(&mut st.doc));
+                        let new = art(&st.doc);
+                        if symbol_synced.is_ok() && !matches!((&old, &new), (Some(a), Some(b)) if Arc::ptr_eq(a, b)) {
+                            let resynced = st.doc.clone();
+                            cmd::inline::refresh(synced, Arc::make_mut(&mut st.doc));
+                            if !st.doc.text_threads.is_empty() {
+                                cmd::threads::reflow(&resynced, Arc::make_mut(&mut st.doc));
+                            }
+                        }
+                    }
                     // Asset Export: assets let go of deleted art.
                     if !st.doc.assets.is_empty() {
                         Arc::make_mut(&mut st.doc).prune_assets();
@@ -57,7 +95,9 @@ impl Session {
                     if !st.doc.variables.bindings.is_empty() {
                         Arc::make_mut(&mut st.doc).prune_variable_bindings();
                     }
-                    if st.doc.too_deep(Some(&before)) {
+                    if let Err(e) = symbol_synced {
+                        Err(e)
+                    } else if st.doc.too_deep(Some(&before)) {
                         // Deeper trees overflow the stack of what walks them.
                         Err(EngineError::Other(TOO_DEEP.into()))
                     } else if doc_sane(&st.doc, &st.selection) && objects_in_range(&st.doc, &spread) {
@@ -79,6 +119,21 @@ impl Session {
                 // The art on a locked artboard can't stay selected, however it got there, except
                 // the new art this edit made and new art still selected.
                 st.protect_locked_artboards(&before_sel.objects, &before_sel.new_art, Some(&*before));
+                // Symbol or opacity mask editing ended because the edit deleted its layer:
+                // isolation on the layer or inside it leaves too, out of symbol editing to what it
+                // was before.
+                let mode_layer = before.symbol_edit.as_ref().map(|e| e.layer).or(before.mask_edit.map(|m| m.layer));
+                if let Some(layer) = mode_layer
+                    && st.doc.node(layer).is_none()
+                    && st.isolation.is_some_and(|i| i == layer || st.doc.node(i).is_none())
+                {
+                    if let Some(se) = &before.symbol_edit {
+                        cmd::symboledit::go_back(st, se);
+                    } else {
+                        st.isolation = None;
+                        st.active_layer = st.doc.default_layer();
+                    }
+                }
                 st.revision += 1;
                 if st.interaction.is_none() {
                     let selection = match st.history.undo.last() {
@@ -176,6 +231,7 @@ impl Session {
             cmd::settle_interaction(self)?;
         }
         self.clear_deferred_overlay_cache();
+        let paint = self.paint.clone();
         let st = self.doc_mut()?;
         if st.interaction.is_some() {
             return Ok(());
@@ -185,6 +241,10 @@ impl Session {
             doc: st.doc.clone(),
             selection: Arc::new(st.selection.clone()),
             preview: None,
+            paint,
+            preview_paint: None,
+            color_mode_paints: None,
+            deferred_color_mode: None,
             active_layer: st.active_layer,
             layer_rows: st.layer_rows.clone(),
             variables_highlight: st.variables_highlight.clone(),
@@ -197,10 +257,10 @@ impl Session {
 
     /// Re-apply `cmd` on top of the interaction snapshot (replacing the previous preview).
     pub fn preview(&mut self, cmd: &str, params: &Value) -> Result<Value> {
-        {
+        let (paint, restore_paint) = {
             let menu = self.menu.clone();
             let st = self.doc_mut()?;
-            let Some(it) = &st.interaction else { return Err(EngineError::Other("no interaction in progress".into())) };
+            let Some(it) = &mut st.interaction else { return Err(EngineError::Other("no interaction in progress".into())) };
             // Undoing the previous preview counts as a change, so views redraw even when the command
             // below returns without an edit.
             let selection_changed = st.selection != *it.selection;
@@ -208,6 +268,11 @@ impl Session {
                 st.revision += 1;
             }
             st.doc = it.doc.clone();
+            let restore_paint = cmd == "command.batch" || it.preview.as_ref().is_some_and(|(id, _)| id == "command.batch");
+            let paint = it.paint.clone();
+            it.preview_paint = None;
+            it.color_mode_paints = None;
+            it.deferred_color_mode = None;
             if selection_changed {
                 st.selection.clone_from(&it.selection);
             }
@@ -215,30 +280,54 @@ impl Session {
             // even when the preview fails.
             deselect_hidden(&menu, &st.doc, &mut st.selection);
             cmd::globaledit::follow_history(st);
+            (paint, restore_paint)
+        };
+        if restore_paint {
+            self.paint = paint.clone();
         }
-        // The previous preview's paint is undone with it.
         self.pending_paint = None;
         let rw = cmd::distortcmds::perspective_rewrite(self, cmd, params).or_else(|| cmd::bounds_rewrite(self, cmd, params));
         let (cmd, params) = rw.as_ref().map_or((cmd, params), |(c, p)| (c.as_str(), p));
+        // A selected object's converted appearance must not replace the current paints while
+        // this tentative color-mode preview is still cancellable.
+        let color_mode_paint = matches!(cmd, "file.documentColorMode" | "object.convertDocumentColorMode").then(|| self.paint.clone());
         let outer = std::mem::replace(&mut self.previewing, true);
         let r = self.execute(cmd, params);
         self.previewing = outer;
+        if let Some(paint) = color_mode_paint {
+            self.paint = paint;
+        }
         let params = self.noted(params);
+        let batch_paint = (r.is_ok() && cmd == "command.batch").then(|| self.paint.clone());
         let st = self.doc_mut()?;
         if let Some(it) = &mut st.interaction {
             // A failed preview leaves the document at the snapshot, so nothing is left to commit
             // (not even an earlier successful preview, which the reset above already undid).
             it.preview = r.is_ok().then(|| (cmd.to_string(), params));
+            if it.color_mode_paints.is_some() {
+                it.preview_paint = batch_paint.clone();
+            }
+        }
+        if batch_paint.is_some() && self.active().and_then(|st| st.interaction.as_ref()).is_some_and(|it| it.preview_paint.is_some()) {
+            self.paint = paint;
         }
         r
     }
 
     pub fn commit_interaction(&mut self) -> Result<()> {
         self.clear_deferred_overlay_cache();
+        if let Some(paint) = self.active().and_then(|st| st.interaction.as_ref()).and_then(|it| it.preview_paint.clone()) {
+            self.paint = paint;
+        }
         self.remember_pending_paint();
+        cmd::colormgmt::commit_new_art_colors(self)?;
+        let paint = self.paint.clone();
         let st = self.doc_mut()?;
         let Some(mut it) = st.interaction.take() else { return Ok(()) };
         let Some(preview) = it.preview.take() else { return Ok(()) };
+        if let Some((_, after)) = &mut it.color_mode_paints {
+            after.clone_from(&paint);
+        }
         let perspective_again = it.perspective_again.take();
         let copy = preview.0 == "object.transform" && preview.1.get("copy").and_then(Value::as_bool).unwrap_or(false);
         // Alt pressed or released during a move drag turns it into a copy or back: name it for
@@ -251,8 +340,13 @@ impl Session {
         // A preview that left the document as it was records no Transform Again either (as
         // `keep_interaction` records no undo step): the last real transformation stands.
         let changed = !Arc::ptr_eq(&it.doc, &st.doc);
+        // How far a drag of direct-selected anchors moved them (`path.moveAnchors`).
+        let moved = vectorcraft_geom::Vec2::new(
+            preview.1.get("dx").and_then(Value::as_f64).unwrap_or(0.0),
+            preview.1.get("dy").and_then(Value::as_f64).unwrap_or(0.0),
+        );
         st.keep_interaction(it);
-        if preview.0 == "object.transform" {
+        if preview.0 == "object.transform" && changed {
             let m = cmd::matrix_param(&preview.1, "matrix");
             if let Some(m) = m {
                 // The options are the last preview's params with the values it noted, without the
@@ -265,6 +359,16 @@ impl Session {
                 st.last_transform = Some(LastTransform::Matrix(m, options));
                 st.last_perspective = None;
             }
+        } else if preview.0 == "path.moveAnchors" && (moved.x != 0.0 || moved.y != 0.0) {
+            // A drag of direct-selected anchors (from an anchor, or from a fill with anchors
+            // selected): Transform Again moves the selected anchors and the objects selected whole
+            // by the same distance. A drag that ends where it began leaves the last transform.
+            let mut options = serde_json::json!({ "copy": false });
+            if let Some(patterns) = preview.1.get("patterns") {
+                options["patterns"] = patterns.clone();
+            }
+            st.last_transform = Some(LastTransform::Matrix(vectorcraft_geom::Affine::translate(moved), options));
+            st.last_perspective = None;
         } else if preview.0 == "object.transformEach" && changed {
             // Transform Again repeats it as it stood when OK was pressed.
             st.last_transform = Some(LastTransform::Each(preview.1.clone()));
@@ -289,6 +393,14 @@ impl Session {
     pub fn cancel_interaction(&mut self) -> Result<()> {
         self.clear_deferred_overlay_cache();
         self.pending_paint = None;
+        if let Some(paint) = self
+            .active()
+            .and_then(|st| st.interaction.as_ref())
+            .filter(|it| it.preview.as_ref().is_some_and(|(id, _)| id == "command.batch"))
+            .map(|it| it.paint.clone())
+        {
+            self.paint = paint;
+        }
         let menu = self.menu.clone();
         let st = self.doc_mut()?;
         st.undo_interaction();

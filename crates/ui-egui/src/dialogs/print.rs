@@ -545,7 +545,8 @@ fn art_texture(app: &mut VectorcraftApp, ctx: &egui::Context, layers: PrintLayer
     {
         return Some(tex);
     }
-    let mut doc = (*st.doc).clone();
+    // The artboards' background colors print behind the art.
+    let mut doc = st.doc.with_artboard_fills(0..st.doc.artboards.len()).unwrap_or_else(|| (*st.doc).clone());
     vectorcraft_pdf::keep_layers(&mut doc.layers, layers);
     let tex = widgets::region_texture(ctx, &mut app.canvas.renderer, "print-preview-art", &doc, area, px);
     ctx.data_mut(|m| m.insert_temp(key, (stamp, tex.clone())));
@@ -582,7 +583,7 @@ fn general(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
             }
         }
         let mut range = get(d, "range").as_str().unwrap_or_default().to_string();
-        let edit = egui::TextEdit::singleline(&mut range).desired_width(140.0).hint_text("1-3, 5");
+        let edit = egui::TextEdit::singleline(&mut range).align(egui::Align2::LEFT_CENTER).desired_width(140.0).hint_text("1-3, 5");
         if ui.add_enabled(artboards == PrintArtboards::Range, edit).changed() {
             set(d, "range", json!(range));
         }
@@ -627,7 +628,7 @@ fn general(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
         ui.add_enabled_ui(!tiles && !placed, |ui| {
             let origin = choice::<Origin>(d, "placement.origin").unwrap_or_default();
             let current = Origin::ALL.iter().position(|o| *o == origin).unwrap_or(4);
-            if let Some(o) = widgets::reference_point(ui, current).and_then(|i| Origin::ALL.get(i)) {
+            if let Some(o) = widgets::reference_point_named(ui, current, tl!("Placement:")).and_then(|i| Origin::ALL.get(i)) {
                 set(d, "placement.origin", json!(o.id()));
             }
             ui.label("X:");
@@ -850,7 +851,7 @@ fn summary(ui: &mut egui::Ui, d: &mut Dialog, pv: &Result<Value, String>, has_do
         Err(_) if !has_doc => {}
         Err(e) => {
             heading(ui, tl!("Error"));
-            ui.label(egui::RichText::new(format!("⚠ {e}")).color(t.text));
+            ui.label(egui::RichText::new(super::save_pdf::warning_line(crate::i18n::current(), e)).color(t.text));
         }
     }
     heading(ui, tl!("Options"));

@@ -5,6 +5,15 @@
 //! shortcuts, the ⌘K palette and the control channel ([`control`]).
 #![forbid(unsafe_code)]
 
+/// VectorCraft as craft-update knows it, with its 128 px icon and accent colour: the update
+/// prompt shows both, and an AppImage's menu entry gets the icon.
+#[cfg(not(target_arch = "wasm32"))]
+pub const UPDATE_APP: craft_update::app::App = craft_update::app::App {
+    icon_png: Some(include_bytes!("../../../assets/app-icon/hicolor/128x128/apps/ai.storyteller.vectorcraft.png")),
+    accent: Some([0xe8, 0x57, 0x3f]),
+    ..craft_update::suite::VECTORCRAFT
+};
+
 /// Translate a UI string literal into the language the UI is drawn in (see [`i18n`]).
 #[macro_export]
 macro_rules! tl {
@@ -13,6 +22,7 @@ macro_rules! tl {
     };
 }
 
+pub mod addons;
 pub mod background;
 mod brand;
 pub mod canvas;
@@ -22,7 +32,9 @@ pub mod community;
 pub mod control;
 pub mod credits;
 pub mod cursors;
+mod custom_toolbars;
 pub mod dialogs;
+pub mod doc_windows;
 pub mod dock;
 mod edit_toolbar;
 pub mod export_progress;
@@ -65,6 +77,7 @@ pub mod titlebar;
 pub mod toolbar;
 mod tools_float;
 pub mod touch;
+pub mod trace_runs;
 mod ui_fonts;
 pub mod unsaved;
 pub mod updates_ui;
@@ -91,7 +104,7 @@ use vectorcraft_engine::{Session, ViewInfo};
 
 pub use control::{ControlRequest, ControlResponse, Ticket as ControlTicket};
 pub use state::{UiState, View};
-pub use sysclip::{ClipboardProbeFactory, SystemClipboard};
+pub use sysclip::{ClipboardProbeFactory, ClipboardRead, MakeFlavour, SystemClipboard};
 
 mod app;
 mod caches;
@@ -101,6 +114,7 @@ mod services;
 pub use app::MAX_RECENT_FONTS;
 pub use caches::{CacheKey, CanvasCache, LivePaintGapsCache, Perf, PrintTilingCache, SliceCache};
 pub use clock::{now_ms, now_secs};
+pub use craft_ui::docking::Monitor as DockMonitor;
 #[cfg(test)]
 pub(crate) use services::browsable_url;
 pub use services::{
@@ -113,6 +127,10 @@ pub struct VectorcraftApp {
     pub session: Session,
     pub ui: UiState,
     pub views: Vec<View>,
+    /// The document ([`vectorcraft_engine::DocState::uid`]) each of `views` belonged to at the last
+    /// [`VectorcraftApp::sync_views`], which puts the views back with their documents after
+    /// `document.move` reorders them (#5663).
+    pub(crate) view_uids: Vec<u64>,
     pub services: Services,
     pub canvas: CanvasCache,
     pub perf: Perf,
@@ -123,12 +141,24 @@ pub struct VectorcraftApp {
     pub titlebar_inset: f32,
     /// Last applied effect (Effect → Apply Last Effect).
     pub last_effect: Option<(String, serde_json::Value)>,
+    /// Last successful destructive Pathfinder operation, repeated on the current selection.
+    pub last_pathfinder: Option<String>,
     /// Last confirmed Warp Options (bend, distortion, orientation) for the next new warp dialog.
     pub last_warp: Option<serde_json::Value>,
+    /// The Character panel field that takes the keyboard focus when the panel next draws it
+    /// ([`panels::character::highlight`]).
+    pub(crate) character_focus: Option<panels::character::Field>,
     /// Commands run through [`Self::run`] so far: the native menu bar reads its rows again when it
     /// moves ([`native_menu::sync`]).
     run_count: u64,
     control_rx: Option<Receiver<ControlRequest>>,
+    /// A `ui.pointer` request taken from the channel while synthetic input sent before it was not
+    /// yet applied: it runs, ahead of the channel, on the first frame after that input is applied.
+    deferred_control: Option<ControlRequest>,
+    /// When synthetic input was last dropped before a UI pass took it, the sequence number of the
+    /// next control request ([`ControlRequest::next_seq`]): a `ui.pointer` request made before it
+    /// came after that input and is answered with an error.
+    synthetic_dropped_before: u64,
     /// Window captures asked for and not answered yet.
     pending_screenshots: Vec<PendingScreenshot>,
     /// Admitted captures whose settled frame has not come yet (issued one at a time).
@@ -165,15 +195,23 @@ pub struct VectorcraftApp {
     clipboard_publishing: sysclip::Publishing,
     /// A URL to open through egui next frame (when the host has no `open_url` service).
     pending_url: Option<String>,
+    /// `VECTORCRAFT_TITLEBAR` chose this window's frame (Linux and the BSDs), so Preferences › User
+    /// Interface › VectorCraft Title Bar on Every Desktop does not apply while it is set. `false`
+    /// unless the host sets it.
+    pub titlebar_from_env: bool,
     /// Windows and Linux: the window has no OS decorations, so the app bar is the title bar (drag,
     /// double-click to maximize, caption buttons) and invisible edge zones resize the window.
     pub custom_titlebar: bool,
-    /// `VECTORCRAFT_TITLEBAR` chose this window's frame (Linux and the BSDs), so Preferences › User
-    /// Interface › System Title Bar does not apply while it is set. `false` unless the host sets it.
-    pub titlebar_from_env: bool,
+    /// The window has the desktop's own title bar: the OS or the window manager draws its frame,
+    /// icon and title. Set by the desktop app when it opens the window; `false` for embedders
+    /// without a window of their own.
+    pub desktop_frame: bool,
     /// Last window title sent to the OS (`ViewportCommand::Title`, see `chrome::sync_window_title`):
     /// sent again only when it changes, so idle frames don't spam the backend.
     pub(crate) last_window_title: String,
+    /// Whether a screen mode put the window full screen (`chrome::sync_fullscreen`), so Normal
+    /// Screen Mode takes it back out, and leaves a window the user made full screen as it is.
+    pub(crate) fullscreen_for_mode: bool,
     /// The graphics adapter the window renders with ("name (backend)"), as the host reports it:
     /// shown in Help › About and `ui.inspect` for GPU bug reports. `None` when unknown.
     pub graphics_adapter: Option<String>,
@@ -215,6 +253,8 @@ pub struct VectorcraftApp {
     pub plugin_runs: plugin_runs::PluginRuns,
     /// Files being read off the UI thread for Place ([`placing`]).
     pub placing: placing::Placing,
+    /// Image Traces running off the UI thread ([`trace_runs`]).
+    pub trace_runs: trace_runs::TraceRuns,
     /// Data Recovery's timer and startup question ([`recovery`]).
     pub recovery: recovery::Timer,
     /// Modifiers the keyboard holds (from the host's input), given back after synthetic input.
@@ -249,6 +289,9 @@ pub struct VectorcraftApp {
     pub(crate) ime_discard: bool,
     /// Preferences were confirmed (see [`Self::take_prefs_changed`]).
     pub(crate) prefs_changed: bool,
+    /// The export presets the Asset Export panel lists (`document.exportPresets.list`'s rows), built
+    /// again when the saved presets change ([`dialogs::screen_preset_list`]).
+    pub(crate) asset_export_presets: Value,
     /// Whether the last frame's input reported a touch screen (Preferences › Devices › Touch Workspace).
     pub touch_screen: bool,
     /// A numeric field is being scrubbed: the document's edits meanwhile are one undo step
@@ -280,6 +323,9 @@ pub struct VectorcraftApp {
     /// The context, viewport and frame `shortcuts::handle` already took in this host iteration.
     /// Interleaving root and auxiliary viewport passes cannot make an older frame look new again.
     pub(crate) shortcuts_frames: Vec<InputFrame>,
+    /// The single-key tool shortcuts held down, the last held last, and the tool each goes back to
+    /// when it is let go ([`shortcuts::HeldTool`]).
+    pub(crate) held_tool: Vec<shortcuts::HeldTool>,
     /// A synthetic batch is in the host's raw input and no settled UI pass has taken it yet.
     synthetic_injected: bool,
     /// The exact events of [`Self::synthetic_injected`], to remove them if the state they belong

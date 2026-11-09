@@ -4,7 +4,7 @@ use super::{Arc, ROTATE_VIEW_ANGLES, Sense, Stroke, Tokens, Ui, VectorcraftApp, 
 /// Draw the status message, bounded readouts and artboard navigation controls.
 pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
-    egui::Panel::bottom("status_bar")
+    let panel = egui::Panel::bottom("status_bar")
         .exact_size(24.0)
         .frame(egui::Frame::NONE.fill(t.panel).inner_margin(egui::Margin::symmetric(8, 0)).stroke(Stroke::new(1.0, t.border)))
         .show(ui, |ui| {
@@ -84,6 +84,7 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 status_readouts(app, ui, &t);
             });
         });
+    widgets::set_menu_floor(ui.ctx(), panel.response.rect.top());
 }
 
 /// The most recently measured status widths, scoped to this UI and display settings.

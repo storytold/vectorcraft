@@ -106,8 +106,11 @@ pub(crate) fn grid_from_data(v: &Value) -> Grid {
 /// columns past the data.
 pub(crate) fn data_from_grid(grid: &Grid) -> Value {
     let filled = |s: &String| !s.trim().is_empty();
-    let rows = grid.iter().rposition(|r| r.iter().any(filled)).map_or(1, |i| i + 1).max(1);
-    let cols = grid.iter().take(rows).filter_map(|r| r.iter().rposition(filled)).max().map_or(1, |i| i + 1).max(1);
+    // At most a graph's rows and columns, as a file gives (`grid_from_text`): a grid sent by
+    // automation is any size, and the values are their product.
+    let grid = &grid[..grid.len().min(MAX_ROWS)];
+    let rows = grid.iter().rposition(|r| r.iter().take(MAX_COLS).any(filled)).map_or(1, |i| i + 1).max(1);
+    let cols = grid.iter().take(rows).filter_map(|r| r.iter().take(MAX_COLS).rposition(filled)).max().map_or(1, |i| i + 1).max(1);
     let label = |s: &str| {
         let s = s.trim();
         // A label typed in straight quotes (as the CSV form takes a number as a label) is the text inside.
@@ -163,7 +166,7 @@ fn clean(s: &str) -> String {
     s.chars().map(|c| if matches!(c, '\t' | '\r' | '\n') { ' ' } else { c }).take(MAX_CELL).collect()
 }
 
-fn cell(grid: &Grid, r: usize, c: usize) -> String {
+fn cell(grid: &[Vec<String>], r: usize, c: usize) -> String {
     grid.get(r).and_then(|row| row.get(c)).cloned().unwrap_or_default()
 }
 
@@ -379,7 +382,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         let mut text = d.str("entry");
         // The entry box has the keys when the window opens, so Enter moves down instead of applying.
         widgets::take_dialog_focus(ui, entry_id, &text);
-        let r = ui.add(egui::TextEdit::singleline(&mut text).id(entry_id).desired_width(260.0));
+        let r = ui.add(egui::TextEdit::singleline(&mut text).id(entry_id).align(egui::Align2::LEFT_CENTER).desired_width(260.0));
         if r.changed() {
             d.fields.insert("entry".into(), json!(clean(&text)));
         }
@@ -512,6 +515,16 @@ mod tests {
         assert_eq!(decode(&utf16), "a\tb");
         let wide = vec!["x"; 400].join("\t");
         assert_eq!(grid_from_text(&wide)[0].len(), MAX_COLS);
+    }
+
+    #[test]
+    fn a_sheet_sent_wider_and_taller_than_a_graph_is_cut_to_one() {
+        // One long row and one long column: their product would be ten billion cells.
+        let mut grid: Grid = vec![vec!["1".to_string(); 100_000]];
+        grid.extend((0..100_000).map(|_| vec!["2".to_string()]));
+        let p = data_from_grid(&grid);
+        assert_eq!(p["rows"].as_array().unwrap().len(), MAX_ROWS - 1);
+        assert_eq!(p["series"].as_array().unwrap().len(), MAX_COLS - 1);
     }
 
     #[test]

@@ -535,6 +535,105 @@ fn backspace_deletes_selection_or_word() {
     assert_eq!(tool.caret, 6);
 }
 
+/// Tab and Shift+Tab with the caret at the start of a list paragraph move it a level down or up
+/// with one `text.setFormat` (one undo step), ending the typing first; at level 1 Shift+Tab and at
+/// level 9 Tab do nothing. Anywhere else Tab inserts a tab: in the middle or at the end of a list
+/// paragraph, with characters selected, and in a paragraph in no list.
+#[test]
+fn tab_at_the_start_of_a_list_paragraph_changes_its_level() {
+    use vectorcraft_doc::text::{Bullet, ParaList};
+    let (mut d, id, mut tool) = editing("One\nTwo\nThree");
+    let NodeKind::Text(t) = &mut d.node_mut(id).unwrap().kind else { panic!("text") };
+    let dot = |level| vectorcraft_doc::ParaStyle { list: Some(ParaList::bulleted(Bullet::Dot).at_level(level)), ..Default::default() };
+    t.set_paragraph_styles(vec![dot(1), dot(9), vectorcraft_doc::ParaStyle::default()]);
+    let press = |tool: &mut TypeTool, at: (usize, usize), mods: Mods| {
+        (tool.anchor, tool.caret) = at;
+        key(tool, &d, ToolKey::Tab, mods)
+    };
+    let level = |acts: &[Action]| match acts {
+        [Action::Exec(cmd, p)] if cmd == "text.setFormat" => {
+            assert_eq!((p["id"].as_u64(), p["end"].as_u64()), (Some(id.0), p["start"].as_u64()));
+            (p["start"].as_u64(), p["listLevel"].as_i64())
+        }
+        other => panic!("not a level change: {other:?}"),
+    };
+    assert_eq!(level(&press(&mut tool, (0, 0), Mods::default())), (Some(0), Some(2)));
+    assert_eq!(level(&press(&mut tool, (4, 4), SHIFT)), (Some(4), Some(8)));
+    assert!(press(&mut tool, (0, 0), SHIFT).is_empty(), "Shift+Tab at level 1 does nothing");
+    assert!(press(&mut tool, (4, 4), Mods::default()).is_empty(), "Tab at level 9 does nothing");
+    let inserts_tab = |acts: &[Action], at: u64| {
+        acts.iter().any(
+            |a| matches!(a, Action::Preview(cmd, p) if cmd == "text.editRange" && p["start"].as_u64() == Some(at) && p["runs"][0]["text"] == "\t"),
+        )
+    };
+    for (at, why) in [((1, 1), "mid-item"), ((3, 3), "at the item's end"), ((0, 2), "with characters selected"), ((8, 8), "in no list")] {
+        let mut fresh = TypeTool::new("type");
+        fresh.start_editing(id, 0);
+        let acts = press(&mut fresh, at, Mods::default());
+        assert!(inserts_tab(&acts, at.0 as u64), "{why}: {acts:?}");
+    }
+    // While typing, Tab at the start of a list paragraph ends the typing first.
+    let mut typing = TypeTool::new("type");
+    typing.start_editing(id, 3);
+    let snapshot = d.clone();
+    let mut after = d.clone();
+    let acts = typing.text_input(&cx(&d, &Selection::default(), &paint()), "!");
+    apply(&mut after, &snapshot, &acts);
+    // Tab at level 9 does nothing, and the typing goes on as one undo step.
+    (typing.anchor, typing.caret) = (5, 5);
+    let acts = typing.key(&cx(&after, &Selection::default(), &paint()), ToolKey::Tab, Mods::default());
+    assert!(acts.is_empty() && typing.typing.is_some(), "Tab at level 9 while typing: {acts:?}");
+    let acts = {
+        (typing.anchor, typing.caret) = (5, 5);
+        typing.key(&cx(&after, &Selection::default(), &paint()), ToolKey::Tab, SHIFT)
+    };
+    assert_eq!(acts.first(), Some(&Action::Commit));
+    assert!(matches!(&acts[1..], [Action::Exec(cmd, p)] if cmd == "text.setFormat" && p["listLevel"] == 8 && p["start"] == 5), "{acts:?}");
+}
+
+/// In a threaded frame, the start of the frame is the start of a list paragraph only when the
+/// frames before it end with a paragraph break: Tab there in a paragraph that goes on from the
+/// frame before inserts a tab, and Tab after the paragraph's end changes the next one's level.
+#[test]
+fn tab_at_the_start_of_a_threaded_frame_changes_a_level_only_at_a_paragraph_start() {
+    use vectorcraft_doc::text::{Bullet, ParaList};
+    let dot = vectorcraft_doc::ParaStyle { list: Some(ParaList::bulleted(Bullet::Dot)), ..Default::default() };
+    let threaded = |first: &str, second: &str| {
+        let (mut d, a) = doc_with_text(first);
+        let l = d.layers[0].id;
+        let b = d.alloc_id();
+        let mut t = TextObject::point(Point::new(100.0, 300.0), second, CharStyle { size: 20.0, ..Default::default() });
+        t.set_paragraph_styles(vec![dot.clone(); second.matches('\n').count() + 1]);
+        let NodeKind::Text(head) = &d.node(a).unwrap().kind else { panic!("text") };
+        t.first_para_continues = vectorcraft_text::thread::continued(&[head, &t])[1];
+        d.insert(Some(l), 0, Node::new(b, NodeKind::Text(Box::new(t)))).unwrap();
+        let NodeKind::Text(t) = &mut d.node_mut(a).unwrap().kind else { panic!("text") };
+        t.set_paragraph_styles(vec![dot.clone(); first.matches('\n').count() + 1]);
+        d.text_threads.push(vec![a, b]);
+        let mut tool = TypeTool::new("type");
+        tool.start_editing(b, 0);
+        (d, b, tool)
+    };
+    let level_change = |acts: &[Action]| matches!(acts, [Action::Exec(cmd, p)] if cmd == "text.setFormat" && p["listLevel"] == 2);
+    let inserts_tab =
+        |acts: &[Action]| acts.iter().any(|a| matches!(a, Action::Preview(cmd, p) if cmd == "text.editRange" && p["runs"][0]["text"] == "\t"));
+    // "Two" goes on from the first frame: Tab at the frame's start inserts a tab, and Tab at the
+    // start of "Three" changes its level.
+    let (d, _, mut tool) = threaded("One\nTw", "o\nThree");
+    let acts = key(&mut tool, &d, ToolKey::Tab, Mods::default());
+    assert!(inserts_tab(&acts), "mid-paragraph: {acts:?}");
+    let (d, _, mut tool) = threaded("One\nTw", "o\nThree");
+    (tool.anchor, tool.caret) = (2, 2);
+    let acts = key(&mut tool, &d, ToolKey::Tab, Mods::default());
+    assert!(level_change(&acts), "at the next paragraph: {acts:?}");
+    // A frame after a paragraph break, or after frames with no text, starts a paragraph.
+    for first in ["One\n", ""] {
+        let (d, _, mut tool) = threaded(first, "Two");
+        let acts = key(&mut tool, &d, ToolKey::Tab, Mods::default());
+        assert!(level_change(&acts), "after {first:?}: {acts:?}");
+    }
+}
+
 #[test]
 fn double_and_triple_click_select_word_and_paragraph() {
     let (d, id, mut tool) = editing("Alpha beta\ngamma");
@@ -601,6 +700,99 @@ fn a_drag_across_type_not_being_edited_selects_its_text() {
     tool.pointer(&c, &PointerEvent::new(PointerKind::Down, a.x + 0.1, a.y));
     tool.pointer(&c, &PointerEvent::new(PointerKind::Up, a.x + 0.1, a.y));
     assert_eq!((tool.editing, tool.sel()), (Some(id), (7, 7)));
+}
+
+#[test]
+fn a_dropped_press_keeps_the_type_in_editing() {
+    let (d, id, mut tool) = editing("Hello world");
+    let (sel, p) = (Selection::default(), paint());
+    let c = cx(&d, &sel, &p);
+    let t = TypeTool::text(&c, id).unwrap().clone();
+    let lay = vectorcraft_text::layout(FontDb::global(), &t);
+    let pt = |i: usize| {
+        let (a, b) = vectorcraft_text::caret_position(&lay, i);
+        t.xf * a.midpoint(b)
+    };
+    let (at, to) = (pt(3), pt(7));
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Down, at.x + 0.1, at.y));
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Drag, to.x + 0.1, to.y));
+    assert!(tool.busy());
+    assert_eq!(tool.sel(), (3, 7));
+    // The press is dropped: the caret and selection are as they were before it.
+    let out = tool.drop_press(&c);
+    assert!(!out.iter().any(|a| matches!(a, Action::SwitchTool(_))));
+    assert!(!tool.busy());
+    assert_eq!((tool.editing, tool.sel()), (Some(id), (0, 0)));
+    // The dropped press does not count toward a double or triple click.
+    assert_eq!(tool.clicks, (None, 0));
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Up, at.x + 0.1, at.y));
+    assert_eq!((tool.editing, tool.sel()), (Some(id), (0, 0)));
+    // A Shift-press that extends the selection, dropped, leaves the caret where a click put it.
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Down, at.x + 0.1, at.y));
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Up, at.x + 0.1, at.y));
+    assert_eq!(tool.sel(), (3, 3));
+    tool.pointer(&c, &PointerEvent { mods: SHIFT, ..PointerEvent::new(PointerKind::Down, to.x + 0.1, to.y) });
+    assert_eq!(tool.sel(), (3, 7));
+    tool.drop_press(&c);
+    assert_eq!((tool.editing, tool.sel()), (Some(id), (3, 3)));
+}
+
+#[test]
+fn a_dropped_press_on_other_type_restores_the_edit_target_and_selection() {
+    let (mut d, first, mut tool) = editing("First text");
+    let second = d.alloc_id();
+    let text = TextObject::point(Point::new(300.0, 100.0), "Second text", CharStyle { size: 20.0, ..Default::default() });
+    d.insert(Some(d.layers[0].id), 1, Node::new(second, NodeKind::Text(Box::new(text)))).unwrap();
+    tool.fresh = Some(first);
+    tool.caret = 5;
+    tool.anchor = 2;
+    let (mut selection, p) = (Selection::default(), paint());
+    selection.set([first]);
+    let c = cx(&d, &selection, &p);
+    let target = TypeTool::text(&c, second).unwrap();
+    let layout = vectorcraft_text::layout(FontDb::global(), target);
+    let (a, b) = vectorcraft_text::caret_position(&layout, 3);
+    let at = target.xf * a.midpoint(b);
+    let down = tool.pointer(&c, &PointerEvent::new(PointerKind::Down, at.x + 0.1, at.y));
+    assert!(down.contains(&Action::Exec("select.set".into(), json!({"ids": [second.0]}))));
+    assert_eq!(tool.editing, Some(second));
+    selection.set([second]);
+    let c = cx(&d, &selection, &p);
+    let dropped = tool.drop_press(&c);
+    assert!(dropped.is_empty());
+    assert_eq!((tool.editing, tool.caret, tool.anchor), (Some(first), 5, 2));
+    assert!(tool.pointer(&c, &PointerEvent::new(PointerKind::Up, at.x + 0.1, at.y)).is_empty());
+    assert_eq!(tool.editing, Some(first));
+    selection.set([first]);
+    let typed = tool.text_input(&cx(&d, &selection, &p), "!");
+    assert!(typed.iter().any(|action| matches!(action, Action::Preview(_, params) if params["id"] == first.0)));
+    let NodeKind::Text(first_text) = &mut d.node_mut(first).unwrap().kind else { panic!("text fixture") };
+    first_text.runs.clear();
+    let ended = tool.finish(&cx(&d, &selection, &p));
+    assert!(ended.contains(&Action::Exec("text.discardEmpty".into(), json!({"id": first.0}))));
+}
+
+#[test]
+fn a_dropped_press_does_not_reselect_discarded_empty_type() {
+    let (mut d, first, mut tool) = editing("");
+    tool.fresh = Some(first);
+    let second = d.alloc_id();
+    let text = TextObject::point(Point::new(300.0, 100.0), "Second text", CharStyle { size: 20.0, ..Default::default() });
+    d.insert(Some(d.layers[0].id), 1, Node::new(second, NodeKind::Text(Box::new(text)))).unwrap();
+    let (mut selection, p) = (Selection::default(), paint());
+    selection.set([first]);
+    let c = cx(&d, &selection, &p);
+    let target = TypeTool::text(&c, second).unwrap();
+    let layout = vectorcraft_text::layout(FontDb::global(), target);
+    let (a, b) = vectorcraft_text::caret_position(&layout, 3);
+    let at = target.xf * a.midpoint(b);
+    let down = tool.pointer(&c, &PointerEvent::new(PointerKind::Down, at.x + 0.1, at.y));
+    assert!(down.contains(&Action::Exec("text.discardEmpty".into(), json!({"id": first.0}))));
+    d.remove(first).unwrap();
+    selection.set([second]);
+    let dropped = tool.drop_press(&cx(&d, &selection, &p));
+    assert!(dropped.is_empty());
+    assert_eq!(tool.editing, None);
 }
 
 #[test]
@@ -807,13 +999,90 @@ fn the_pointer_shows_the_type_tool_shift_or_alt_switches_to() {
     assert_eq!(cursor("verticalType", away, SHIFT), Cursor::Text);
     assert_eq!(cursor("verticalAreaType", away, SHIFT), Cursor::Text);
     assert_eq!(cursor("areaType", on_line, Mods::default()), Cursor::Text, "no frame for area type");
-    assert_eq!(cursor("areaType", on_line, ALT), Cursor::Crosshair, "a baseline for type on a path");
+    assert_eq!(cursor("areaType", on_line, ALT), Cursor::TypeOnPath, "a baseline for type on a path");
     assert_eq!(cursor("typeOnPath", on_line, ALT), Cursor::Text);
     let mut tool = TypeTool::new("type");
     tool.pointer(&c, &PointerEvent::new(PointerKind::Down, away.x, away.y).with_mods(SHIFT));
     assert_eq!(tool.cursor(&c, away, Mods::default()), Cursor::TypeVertical, "the press keeps the tool it acts as");
     tool.pointer(&c, &PointerEvent::new(PointerKind::Up, away.x, away.y));
     assert_eq!(tool.cursor(&c, away, Mods::default()), Cursor::Text);
+}
+
+/// The plain Type tools make type in or along a path clicked on its outline: area type inside a
+/// closed path (Alt held or not: type along a closed path is Type on a Path's) and type on a path
+/// along an open one. A click away from paths still makes point type, a drag still draws a frame
+/// (even from a path's outline), and a click on existing type edits it. The pointer says which.
+#[test]
+fn the_type_tool_makes_type_in_or_along_a_clicked_path() {
+    let (mut d, rect, line) = doc_with_rect_and_line();
+    let (sel, p) = (Selection::default(), paint());
+    let (on_line, on_rect, away) = ((250.0, 400.0), (100.0, 150.0), (450.0, 450.0));
+    for id in ["type", "verticalType"] {
+        let vertical = id == "verticalType";
+        let c = cx(&d, &sel, &p);
+        for (at, mods, path, mode, cursor) in [
+            (on_rect, Mods::default(), rect, "area", if vertical { Cursor::TypeAreaVertical } else { Cursor::TypeArea }),
+            (on_line, Mods::default(), line, "onPath", if vertical { Cursor::TypeOnPathVertical } else { Cursor::TypeOnPath }),
+            (on_rect, ALT, rect, "area", if vertical { Cursor::TypeAreaVertical } else { Cursor::TypeArea }),
+            (on_line, ALT, line, "onPath", if vertical { Cursor::TypeOnPathVertical } else { Cursor::TypeOnPath }),
+        ] {
+            assert_eq!(TypeTool::new(id).cursor(&c, Point::new(at.0, at.1), mods), cursor, "{id} {at:?} {mods:?}");
+            let mut tool = TypeTool::new(id);
+            let acts = gesture(&mut tool, &c, at, None, mods, Mods::default());
+            let (cmd, params) = made(&acts).unwrap_or_else(|| panic!("{id} {at:?} {mods:?}: {acts:?}"));
+            assert_eq!(cmd, "text.createInPath", "{id} {at:?} {mods:?}");
+            assert_eq!(
+                (&params["path"], &params["mode"], &params["vertical"]),
+                (&json!(path.0), &json!(mode), &json!(vertical)),
+                "{id} {at:?} {mods:?}"
+            );
+            assert_eq!(tool.id(), id, "the tool chosen stays");
+        }
+        // Shift switches the direction over a path too.
+        let acts = gesture(&mut TypeTool::new(id), &c, on_rect, None, SHIFT, Mods::default());
+        assert_eq!(made(&acts).map(|(_, p)| (p["mode"].clone(), p["vertical"].clone())), Some((json!("area"), json!(!vertical))));
+        // Away from paths: point type.
+        assert_eq!(
+            TypeTool::new(id).cursor(&c, Point::new(away.0, away.1), Mods::default()),
+            if vertical { Cursor::TypeVertical } else { Cursor::Text }
+        );
+        let acts = gesture(&mut TypeTool::new(id), &c, away, None, Mods::default(), Mods::default());
+        let (cmd, params) = made(&acts).unwrap_or_else(|| panic!("{acts:?}"));
+        assert_eq!((cmd, params.get("area")), ("text.create", None), "{id}: point type");
+        // A drag from the rectangle's outline draws a frame.
+        let acts = gesture(&mut TypeTool::new(id), &c, on_rect, Some((200.0, 250.0)), Mods::default(), Mods::default());
+        let (cmd, params) = made(&acts).unwrap_or_else(|| panic!("{acts:?}"));
+        assert_eq!((cmd, &params["area"]), ("text.create", &json!({"width": 100.0, "height": 100.0})), "{id}: drag");
+    }
+    // A click on existing type over the rectangle's outline edits the type.
+    let l = d.layers[0].id;
+    let tid = d.alloc_id();
+    let t = TextObject::point(Point::new(95.0, 155.0), "Hello", Default::default());
+    d.insert(Some(l), 2, Node::new(tid, NodeKind::Text(Box::new(t)))).unwrap();
+    let c = cx(&d, &sel, &p);
+    let mut tool = TypeTool::new("type");
+    let acts = gesture(&mut tool, &c, (100.0, 150.0), None, Mods::default(), Mods::default());
+    assert!(made(&acts).is_none(), "{acts:?}");
+    assert_eq!(tool.editing, Some(tid));
+}
+
+/// A guide is no path to set type in or along while guides are hidden or locked: the click makes
+/// point type, as it does on the selection tools' terms.
+#[test]
+fn the_type_tool_leaves_hidden_or_locked_guides_alone() {
+    let (mut d, rect, _) = doc_with_rect_and_line();
+    if let Some(NodeKind::Path { guide, .. }) = d.node_mut(rect).map(|n| &mut n.kind) {
+        *guide = true;
+    }
+    let (sel, p) = (Selection::default(), paint());
+    let mut c = cx(&d, &sel, &p);
+    c.guides = false;
+    assert_eq!(TypeTool::new("type").cursor(&c, Point::new(100.0, 150.0), Mods::default()), Cursor::Text);
+    let acts = gesture(&mut TypeTool::new("type"), &c, (100.0, 150.0), None, Mods::default(), Mods::default());
+    assert_eq!(made(&acts).map(|(cmd, _)| cmd), Some("text.create"), "{acts:?}");
+    c.guides = true;
+    let acts = gesture(&mut TypeTool::new("type"), &c, (100.0, 150.0), None, Mods::default(), Mods::default());
+    assert_eq!(made(&acts).map(|(cmd, _)| cmd), Some("text.createInPath"), "{acts:?}");
 }
 
 /// While type is being edited, Shift and Alt switch no tool: a frame dragged out is the tool
@@ -896,6 +1165,65 @@ fn marked_text_is_underlined_with_the_converting_clause_thick() {
     let NodeKind::Text(t) = &d.node(id).unwrap().kind else { panic!() };
     assert_eq!(t.plain_text(), "曲雅楽演奏会");
     assert!(!tool.composing());
+}
+
+#[test]
+fn spacing_arrows_follow_each_text_objects_orientation() {
+    let cases = [
+        (ToolKey::Down, ALT, "kerning", 1.0),
+        (ToolKey::Up, ALT, "kerning", -1.0),
+        (ToolKey::Left, ALT, "leading", 1.0),
+        (ToolKey::Right, ALT, "leading", -1.0),
+        (ToolKey::Right, SHIFT_ALT, "baselineShift", 1.0),
+        (ToolKey::Left, SHIFT_ALT, "baselineShift", -1.0),
+        (ToolKey::Down, SHIFT_ALT, "kerning", 1.0),
+        (ToolKey::Up, SHIFT_ALT, "kerning", -1.0),
+        (ToolKey::Down, Mods { cmd: true, ..ALT }, "kerning", 5.0),
+        (ToolKey::Up, Mods { cmd: true, ..ALT }, "kerning", -5.0),
+    ];
+    for kind in 0..3 {
+        for selected in [false, true] {
+            let (mut d, id, mut tool) = editing("abcd");
+            let NodeKind::Text(t) = &mut d.node_mut(id).unwrap().kind else { panic!("text") };
+            t.vertical = true;
+            let path = vectorcraft_geom::PathData::from_bezpath(&Rect::new(0.0, 0.0, 100.0, 100.0).to_path(0.1));
+            t.kind = match kind {
+                1 => TextKind::Area { frame: path },
+                2 => TextKind::OnPath { path, start: 0.0, end: None },
+                _ => TextKind::Point,
+            };
+            tool.caret = 2;
+            tool.anchor = if selected { 1 } else { 2 };
+            for (key_code, mods, caret_attribute, by) in cases {
+                let before = (tool.anchor, tool.caret);
+                let actions = key(&mut tool, &d, key_code, mods);
+                let step = actions
+                    .iter()
+                    .find_map(|action| match action {
+                        Action::Exec(command, params) if command == "type.step" => Some(params),
+                        _ => None,
+                    })
+                    .expect("spacing command");
+                assert_eq!(
+                    step["attribute"],
+                    if selected && caret_attribute == "kerning" { "tracking" } else { caret_attribute },
+                    "kind {kind}, selected {selected}"
+                );
+                assert_eq!(step["by"], by);
+                assert_eq!((tool.anchor, tool.caret), before);
+            }
+        }
+    }
+    let (mut d, id, mut tool) = editing("abcd");
+    let NodeKind::Text(t) = &mut d.node_mut(id).unwrap().kind else { panic!("text") };
+    t.vertical = true;
+    key(&mut tool, &d, ToolKey::Down, SHIFT);
+    assert_eq!((tool.anchor, tool.caret), (0, 1));
+    let (d, _, mut tool) = editing("abcd");
+    let actions = key(&mut tool, &d, ToolKey::Right, ALT);
+    assert!(actions.iter().any(
+        |action| matches!(action, Action::Exec(command, params) if command == "type.step" && params["attribute"] == "kerning" && params["by"] == 1.0)
+    ));
 }
 
 #[test]
@@ -1036,6 +1364,29 @@ fn escape_returns_to_previous_tool_when_set() {
     let (d2, _id2, mut tool2) = editing("World");
     let acts2 = key(&mut tool2, &d2, ToolKey::Escape, Mods::default());
     assert_eq!(acts2.last(), Some(&Action::SwitchTool("selection".into())));
+}
+
+/// Cmd+Enter (Ctrl+Enter on Windows and Linux) ends editing as Escape does and types no line
+/// break. Ctrl+Enter on macOS, Shift and Alt with it still type one.
+#[test]
+fn cmd_enter_ends_editing_like_escape() {
+    let (d, _id, mut tool) = editing("Hello");
+    tool.set_option("prevTool", &json!("directSelection"));
+    let acts = key(&mut tool, &d, ToolKey::Enter, CMD);
+    assert!(acts.iter().all(|a| !matches!(a, Action::Preview(..))), "no line break: {acts:?}");
+    assert_eq!(acts.last(), Some(&Action::SwitchTool("directSelection".into())));
+    assert!(!tool.wants_text(), "editing ended");
+    // Ctrl+Enter on Windows and Linux, and Cmd+Ctrl+Enter on macOS.
+    let cmd_ctrl = Mods { ctrl: true, ..CMD };
+    let (d, _id, mut tool) = editing("Hello");
+    assert_eq!(key(&mut tool, &d, ToolKey::Enter, cmd_ctrl).last(), Some(&Action::SwitchTool("selection".into())));
+    let mac_ctrl = Mods { ctrl: true, ..Mods::default() };
+    for mods in [mac_ctrl, Mods { shift: true, ..CMD }, Mods { alt: true, ..CMD }] {
+        let (d, _id, mut tool) = editing("Hello");
+        let acts = key(&mut tool, &d, ToolKey::Enter, mods);
+        assert!(acts.iter().any(|a| matches!(a, Action::Preview(..))), "{mods:?} types a line break: {acts:?}");
+        assert!(tool.wants_text(), "{mods:?} keeps editing");
+    }
 }
 
 /// A click from `tool` at (x, y) → the actions of the press and the release.
@@ -1468,4 +1819,51 @@ fn ime_surrounding_reports_the_document_when_it_changed_under_the_session() {
     let stale = tool.ime_surrounding(&cx(&d, &sel, &p), 4000);
     assert_eq!(stale, ImeSurrounding::Available { text: "XYZ".into(), cursor: 3, anchor: 3 });
     assert!(!tool.ime_session_matches_document(&cx(&d, &sel, &p)), "the commit starts a fresh session");
+}
+
+#[test]
+fn shift_enter_inserts_soft_return() {
+    let (mut d, id, mut tool) = editing("Hello World");
+    let (sel, p) = (Selection::default(), paint());
+    tool.caret = 5;
+    tool.anchor = 5;
+    let snap = d.clone();
+    let shift = Mods { shift: true, ..Default::default() };
+    let acts = tool.key(&cx(&d, &sel, &p), ToolKey::Enter, shift);
+    apply(&mut d, &snap, &acts);
+    let NodeKind::Text(t) = &d.node(id).unwrap().kind else { panic!() };
+    assert_eq!(t.plain_text(), "Hello\u{2028} World");
+    // Plain Enter inserts standard newline
+    let acts = tool.key(&cx(&d, &sel, &p), ToolKey::Enter, Mods::default());
+    apply(&mut d, &snap, &acts);
+    let NodeKind::Text(t) = &d.node(id).unwrap().kind else { panic!() };
+    assert_eq!(t.plain_text(), "Hello\u{2028}\n World");
+}
+
+#[test]
+fn soft_return_in_a_list_item_keeps_tab_within_the_paragraph() {
+    use vectorcraft_doc::text::{Bullet, ParaList};
+
+    let (mut d, id, mut tool) = editing("One");
+    let NodeKind::Text(t) = &mut d.node_mut(id).unwrap().kind else { panic!("text") };
+    t.set_all_paras(vectorcraft_doc::ParaStyle { list: Some(ParaList::bulleted(Bullet::Dot)), ..Default::default() });
+    tool.caret = 3;
+    tool.anchor = 3;
+    let snapshot = d.clone();
+    let acts = key(&mut tool, &d, ToolKey::Enter, SHIFT);
+    apply(&mut d, &snapshot, &acts);
+    let NodeKind::Text(t) = &d.node(id).unwrap().kind else { panic!("text") };
+    assert_eq!(t.plain_text(), "One\u{2028}");
+    assert_eq!(t.paragraph_count(), 1);
+    assert_eq!(t.para_at(0).list, Some(ParaList::bulleted(Bullet::Dot)));
+
+    let acts = key(&mut tool, &d, ToolKey::Tab, Mods::default());
+    assert!(acts.iter().any(
+        |a| matches!(a, Action::Preview(cmd, p) if cmd == "text.editRange" && p["runs"][0]["text"].as_str().is_some_and(|s| s.ends_with('\t')))
+    ));
+
+    tool.caret = 0;
+    tool.anchor = 0;
+    let acts = key(&mut tool, &d, ToolKey::Tab, Mods::default());
+    assert!(acts.iter().any(|a| matches!(a, Action::Exec(cmd, p) if cmd == "text.setFormat" && p["listLevel"] == 2)));
 }

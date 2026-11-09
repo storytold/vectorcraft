@@ -23,6 +23,39 @@ fn click_mask(ctx: &egui::Context, app: &mut VectorcraftApp, modifiers: egui::Mo
     frame(ctx, app, vec![], egui::Modifiers::NONE);
 }
 
+/// In pattern editing mode a click or an Alt-click on the mask thumbnail of a masked object in the
+/// tile does not edit the mask, and the status bar says to finish editing the pattern first. Make
+/// Mask is off for one object, which it would take into mask editing. After Done a click edits the
+/// mask.
+#[test]
+fn the_mask_thumbnail_does_not_edit_the_mask_in_pattern_editing_mode() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+    run(&mut app, "file.new", json!({"width": 100, "height": 100}));
+    let a = run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50}))["id"].as_u64().unwrap();
+    let b = run(&mut app, "shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20}))["id"].clone();
+    run(&mut app, "select.set", json!({"ids": [a, b]}));
+    run(&mut app, "transparency.makeOpacityMask", json!({}));
+    run(&mut app, "select.set", json!({"ids": [a]}));
+    run(&mut app, "object.pattern.make", json!({"name": "P"}));
+    let tile = app.session.active().unwrap().isolation;
+    let ctx = egui::Context::default();
+    for modifiers in [egui::Modifiers::NONE, egui::Modifiers::ALT] {
+        app.ui.status.clear();
+        click_mask(&ctx, &mut app, modifiers);
+        let st = app.session.active().unwrap();
+        assert!(st.doc.mask_edit.is_none() && st.shown_mask().is_none(), "{modifiers:?}");
+        assert!(st.doc.pattern_edit.is_some() && st.isolation == tile, "{modifiers:?}");
+        assert!(app.ui.status.ends_with("finish editing the pattern first"), "{modifiers:?}: {}", app.ui.status);
+    }
+    run(&mut app, "shape.rectangle", json!({"x": 60, "y": 0, "width": 30, "height": 30}));
+    assert!(!crate::menus::enabled(&app, "transparency.makeOpacityMask"), "Make Mask is off for one object");
+    run(&mut app, "object.pattern.done", json!({}));
+    run(&mut app, "select.set", json!({"ids": [a]}));
+    click_mask(&ctx, &mut app, egui::Modifiers::NONE);
+    assert_eq!(app.session.active().unwrap().doc.mask_edit.map(|e| e.object.0), Some(a));
+}
+
 #[test]
 fn alt_clicking_the_mask_thumbnail_views_only_the_mask() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());

@@ -187,6 +187,34 @@ fn pivot_picks_the_point_that_sits_on_the_path() {
 }
 
 #[test]
+fn the_tool_options_set_pivot_and_rotate_for_the_objects_attached_next_only() {
+    let mut s = session();
+    let ([left, middle, right], path) = squares_and_line(&mut s);
+    let other = line(&mut s, (50.0, 380.0), (350.0, 380.0));
+    let third = line(&mut s, (50.0, 200.0), (350.0, 200.0));
+    let before = attach(&mut s, path, &[left], json!({}));
+    let rec = |s: &Session, g: NodeId| {
+        let r = s.doc().unwrap().doc.node(g).unwrap().extras().objects_on_path.as_deref().map(|r| (r.pivot, r.rotate));
+        r.unwrap()
+    };
+    assert_eq!(rec(&s, before), (4, 0.0), "the center, upright");
+    // Objects on Path Tool Options' Save (`tool.setOption`): the tool keeps them while another tool
+    // is chosen.
+    let values = |v: Value| v.as_object().cloned().unwrap_or_default();
+    s.set_tool_options(Some("objectsOnPath"), &values(json!({"pivot": 7, "rotate": 30})));
+    assert_eq!(s.tool_options_of("objectsOnPath"), json!({"pivot": 7, "rotate": 30.0}));
+    let next = attach(&mut s, other, &[middle], json!({}));
+    assert_eq!(rec(&s, next), (7, 30.0), "the objects attached next take them");
+    assert_eq!(rec(&s, before), (4, 0.0), "the ones already attached keep theirs");
+    // Values given to the command win over the tool's.
+    let given = attach(&mut s, third, &[right], json!({"pivot": 1, "rotate": 0}));
+    assert_eq!(rec(&s, given), (1, 0.0));
+    // Reset puts the center and 0 back.
+    s.set_tool_options(Some("objectsOnPath"), &values(json!({"pivot": 4, "rotate": 0})));
+    assert_eq!(s.tool_options_of("objectsOnPath"), json!({"pivot": 4, "rotate": 0.0}));
+}
+
+#[test]
 fn a_closed_path_spreads_the_objects_all_the_way_round_from_its_first_anchor() {
     let mut s = session();
     let ids: Vec<NodeId> = (0..4).map(|i| rect(&mut s, 10.0 + 40.0 * f64::from(i), 0.0, 10.0, 10.0)).collect();
@@ -431,4 +459,92 @@ fn options_and_expand_take_ids_without_a_selection() {
     assert_eq!(v["ids"], json!([g.0]));
     assert_eq!(s.doc().unwrap().doc.node(g).unwrap().kind_label(), "Group");
     assert!(s.execute("object.objectsOnPath.expand", &json!({"ids": [g.0]})).is_err(), "no longer an Objects on Path group");
+}
+
+/// The Space and start of group `g`.
+fn space(s: &Session, g: NodeId) -> (Option<f64>, f64) {
+    let rec = s.doc().unwrap().doc.node(g).unwrap().extras().objects_on_path.as_deref().cloned().unwrap();
+    (rec.spacing, rec.start)
+}
+
+#[test]
+fn space_sets_the_distance_between_the_objects_in_one_undo_step() {
+    let mut s = session();
+    let ([left, middle, right], path) = squares_and_line(&mut s);
+    let g = attach(&mut s, path, &[left, middle, right], json!({"rotate": 30, "pivot": 7}));
+    assert_eq!(space(&s, g), (None, 0.0), "Auto");
+    let before = (bounds(&s, left), bounds(&s, middle).width());
+    s.execute("object.objectsOnPath.options", &json!({"spacing": 60})).unwrap();
+    assert_eq!(space(&s, g), (Some(60.0), 0.0));
+    // The first object stays; the others come 60 pt apart, keeping Pivot and Rotate.
+    assert_eq!(bounds(&s, left), before.0);
+    let x = |s: &Session, id| bounds(s, id).center().x - bounds(s, left).center().x;
+    assert!((x(&s, middle) - 60.0).abs() < 1e-6 && (x(&s, right) - 120.0).abs() < 1e-6);
+    assert!((bounds(&s, middle).width() - before.1).abs() < 1e-6, "still turned by Rotate");
+    // Centered: from 90 pt along the 300 pt line.
+    s.execute("object.objectsOnPath.options", &json!({"spacing": 60, "start": 90})).unwrap();
+    assert!((x(&s, right) - 120.0).abs() < 1e-6);
+    assert!((bounds(&s, left).center().x - before.0.center().x - 90.0).abs() < 1e-6);
+    // Pivot and Rotate keep the Space.
+    s.execute("object.objectsOnPath.options", &json!({"rotate": 0, "pivot": 4})).unwrap();
+    assert_eq!(space(&s, g), (Some(60.0), 90.0));
+    assert_eq!(
+        (center(&s, left), center(&s, middle), center(&s, right)),
+        (Point::new(140.0, 300.0), Point::new(200.0, 300.0), Point::new(260.0, 300.0))
+    );
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(space(&s, g), (Some(60.0), 0.0), "each change is one undo step");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(space(&s, g), (None, 0.0));
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(space(&s, g), (Some(60.0), 0.0));
+    s.execute("object.objectsOnPath.options", &json!({"spacing": "auto", "start": 0})).unwrap();
+    assert_eq!(space(&s, g), (None, 0.0));
+    assert_eq!(center(&s, right).x - center(&s, left).x, 300.0, "Auto spreads them to the end again");
+}
+
+#[test]
+fn a_space_that_is_not_usable_is_refused_and_one_too_large_is_kept_to_the_path() {
+    let mut s = session();
+    let ([left, middle, right], path) = squares_and_line(&mut s);
+    let g = attach(&mut s, path, &[left, middle, right], json!({}));
+    for bad in
+        [json!({"spacing": -1}), json!({"spacing": "wide"}), json!({"spacing": true}), json!({"start": "x"}), json!({"spacing": 10, "start": [1]})]
+    {
+        assert!(s.execute("object.objectsOnPath.options", &bad).is_err(), "{bad}");
+        assert_eq!(space(&s, g), (None, 0.0), "{bad} changes nothing");
+    }
+    s.execute("object.objectsOnPath.options", &json!({"spacing": 1e9})).unwrap();
+    assert_eq!(space(&s, g), (Some(1e9), 0.0));
+    assert_eq!((center(&s, middle), center(&s, right)), (Point::new(200.0, 300.0), Point::new(350.0, 300.0)), "the last one reaches the end");
+    // A shorter path draws them closer; the full length brings the Space back.
+    s.execute("object.objectsOnPath.options", &json!({"spacing": 100})).unwrap();
+    set_line(&mut s, path, (50.0, 300.0), (150.0, 300.0));
+    assert_eq!((center(&s, middle), center(&s, right)), (Point::new(100.0, 300.0), Point::new(150.0, 300.0)));
+    assert_eq!(space(&s, g), (Some(100.0), 0.0));
+    set_line(&mut s, path, (50.0, 300.0), (350.0, 300.0));
+    assert_eq!((center(&s, middle), center(&s, right)), (Point::new(150.0, 300.0), Point::new(250.0, 300.0)));
+    // An object moved on its own goes back, and the Space stays.
+    s.execute("object.move", &json!({"ids": [middle.0], "dx": 30, "dy": -40})).unwrap();
+    assert_eq!(center(&s, middle), Point::new(150.0, 300.0));
+    assert_eq!(space(&s, g), (Some(100.0), 0.0));
+}
+
+#[test]
+fn the_space_saves_and_reopens_and_goes_with_a_copy() {
+    let mut s = session();
+    let ([left, middle, right], path) = squares_and_line(&mut s);
+    let g = attach(&mut s, path, &[left, middle, right], json!({}));
+    s.execute("object.objectsOnPath.options", &json!({"spacing": 40, "start": 25})).unwrap();
+    let data = s.execute("document.export", &json!({"format": "vectorcraft"})).unwrap()["dataBase64"].clone();
+    let mut o = Session::new();
+    o.execute("document.open", &json!({"name": "objects.vectorcraft", "dataBase64": data})).unwrap();
+    assert_eq!(space(&o, g), (Some(40.0), 25.0));
+    assert_eq!(center(&o, right), Point::new(155.0, 300.0));
+    select(&mut s, &[g]);
+    s.execute("edit.copy", &json!({})).unwrap();
+    s.execute("edit.paste", &json!({})).unwrap();
+    let copy = s.doc().unwrap().selection.objects.to_vec();
+    assert_eq!(space(&s, copy[0]), (Some(40.0), 25.0));
 }
