@@ -360,6 +360,84 @@ fn namespaces_survive_serialization() {
     );
 }
 
+const XML_NS: &str = "http://www.w3.org/XML/1998/namespace";
+const XMLNS_NS: &str = "http://www.w3.org/2000/xmlns/";
+
+#[test]
+fn markup_cannot_declare_a_reserved_namespace_binding() {
+    let declarations = [
+        "xmlns:xml='wrong'".to_string(),
+        "xmlns:xmlns='u'".to_string(),
+        format!("xmlns:xmlns='{XMLNS_NS}'"),
+        format!("xmlns:p='{XML_NS}'"),
+        format!("xmlns:p='{XMLNS_NS}'"),
+        format!("xmlns='{XML_NS}'"),
+        format!("xmlns='{XMLNS_NS}'"),
+    ];
+    for declaration in declarations {
+        assert_eq!(thrown_name(&format!("<a {declaration}/>")), "SyntaxError", "{declaration}");
+        assert_eq!(thrown_name(&format!("new XML(\"<a {declaration}/>\")")), "SyntaxError", "{declaration}");
+    }
+    assert_eq!(string(&format!("(<a xmlns:xml='{XML_NS}'/>).toXMLString()")), format!("<a xmlns:xml=\"{XML_NS}\"/>"));
+    assert_eq!(string("(<a xmlns=''/>).toXMLString()"), "<a xmlns=\"\"/>");
+}
+
+#[test]
+fn add_namespace_rejects_a_reserved_binding_and_keeps_the_element() {
+    for (prefix, uri) in [("xmlns", "u"), ("xmlns", XMLNS_NS), ("xml", "u"), ("p", XML_NS), ("p", XMLNS_NS)] {
+        let src =
+            format!("var x = <a/>; var name = 'none'; try {{ x.addNamespace(new Namespace('{prefix}', '{uri}')); }} catch (e) {{ name = e.name; }}");
+        assert_eq!(string(&format!("{src} name")), "TypeError", "{prefix} {uri}");
+        assert_eq!(string(&format!("{src} x.toXMLString()")), "<a/>", "{prefix} {uri}");
+    }
+    assert_eq!(
+        string(&format!("var x = <a/>; x.addNamespace(new Namespace('xml', '{XML_NS}')); x.toXMLString()")),
+        format!("<a xmlns:xml=\"{XML_NS}\"/>")
+    );
+}
+
+#[test]
+fn names_cannot_write_a_reserved_namespace_binding() {
+    for setter in [
+        "setNamespace(new Namespace('xmlns', 'u'))",
+        "setName(new QName(new Namespace('xml', 'u'), 'b'))",
+        "setNamespace(new Namespace('p', 'http://www.w3.org/2000/xmlns/'))",
+        "setNamespace('http://www.w3.org/2000/xmlns/')",
+    ] {
+        let src = format!("var x = <a/>; var name = 'none'; try {{ x.{setter}; }} catch (e) {{ name = e.name; }}");
+        assert_eq!(string(&format!("{src} name")), "TypeError", "{setter}");
+        assert_eq!(string(&format!("{src} x.toXMLString()")), "<a/>", "{setter}");
+    }
+    let q = |prefix: &str| format!("new QName(new Namespace('{prefix}', 'u'), 'b')");
+    assert_eq!(string(&format!("var x = <a/>; x[{}] = '1'; x.toXMLString()", q("xmlns"))), "<a>\n  <b xmlns=\"u\">1</b>\n</a>");
+    assert_eq!(string(&format!("var x = <a/>; x.@[{}] = '1'; x.toXMLString()", q("xml"))), "<a ns0:b=\"1\" xmlns:ns0=\"u\"/>");
+}
+
+#[test]
+fn an_attribute_cannot_be_renamed_xmlns() {
+    for setter in ["setName('xmlns')", "setLocalName('xmlns')"] {
+        let src = format!("var x = <a b='1'/>; var name = 'none'; try {{ x.@b[0].{setter}; }} catch (e) {{ name = e.name; }}");
+        assert_eq!(string(&format!("{src} name")), "TypeError", "{setter}");
+        assert_eq!(string(&format!("{src} x.toXMLString()")), "<a b=\"1\"/>", "{setter}");
+    }
+}
+
+#[test]
+fn new_nodes_cannot_take_a_reserved_name() {
+    let q = format!("new QName('{XMLNS_NS}', 'b')");
+    for update in ["x.@xmlns = 'u'".to_string(), format!("x[{q}] = '1'"), format!("x.@[{q}] = '1'"), format!("x[{q}][0] = '1'")] {
+        let src = format!("var x = <a/>; var name = 'none'; try {{ {update}; }} catch (e) {{ name = e.name; }}");
+        assert_eq!(string(&format!("{src} name")), "TypeError", "{update}");
+        assert_eq!(string(&format!("{src} x.toXMLString()")), "<a/>", "{update}");
+    }
+}
+
+#[test]
+fn the_xmlns_uri_cannot_be_the_default_namespace() {
+    assert_eq!(thrown_name(&format!("default xml namespace = '{XMLNS_NS}'")), "TypeError");
+    assert_eq!(thrown_name(&format!("setDefaultXMLNamespace('{XMLNS_NS}')")), "TypeError");
+}
+
 #[test]
 fn the_garbage_collector_keeps_trees_and_lists_alive() {
     let mut r = realm();

@@ -10,7 +10,9 @@ use crate::heap::{
 use crate::interp::{Abrupt, Interp, JsResult};
 use crate::string_builtins::{new_array, set_element};
 use crate::value::{Str, Value};
-use crate::xml::{Access, Content, NameRef, STAR, Xv, canonical_index, is_ncname, is_script_xml_name};
+use crate::xml::{
+    Access, Content, NameRef, RESERVED_NS_BINDING, STAR, Xv, canonical_index, is_ncname, is_script_xml_name, ns_binding_allowed, xml_name_writable,
+};
 
 const SETTINGS: [(&str, Value); 5] = [
     ("ignoreComments", Value::Bool(false)),
@@ -807,6 +809,9 @@ fn add_in_scope(interp: &mut Interp, x: ObjId, ns: XmlNs) -> JsResult<()> {
         return Ok(());
     }
     let Some(prefix) = ns.prefix.clone() else { return Ok(()) };
+    if !ns_binding_allowed(&prefix, &ns.uri) {
+        return Err(interp.type_error(RESERVED_NS_BINDING));
+    }
     let node = interp.xml_node(x)?;
     if prefix.is_empty() && node.name.as_ref().and_then(|n| n.uri.as_ref()).is_some_and(|u| u.is_empty()) {
         return Ok(());
@@ -998,7 +1003,8 @@ fn checked_local(interp: &mut Interp, local: &Key) -> JsResult<()> {
 
 fn set_local_name(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let x = this_node(interp, &this)?;
-    if matches!(interp.xml_kind(x)?, XmlKind::Text | XmlKind::Comment) {
+    let kind = interp.xml_kind(x)?;
+    if matches!(kind, XmlKind::Text | XmlKind::Comment) {
         return Ok(Value::Undefined);
     }
     let v = arg(args, 0);
@@ -1007,10 +1013,24 @@ fn set_local_name(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> 
         None => interp.to_str(&v)?.flat(),
     };
     checked_local(interp, &local)?;
+    if kind == XmlKind::Attribute
+        && let Some(old) = interp.xml_node(x)?.name.clone()
+    {
+        check_name_binding(interp, &XmlName { local: local.clone(), ..old }, true)?;
+    }
     if let Some(n) = &mut interp.xml_node_mut(x)?.name {
         n.local = local;
     }
     Ok(Value::Undefined)
+}
+
+/// Throws when an element or attribute named `name` could not be written as XML.
+fn check_name_binding(interp: &mut Interp, name: &XmlName, attribute: bool) -> JsResult<()> {
+    let uri = name.uri.as_deref().unwrap_or_default();
+    if !name.prefix.as_ref().is_none_or(|prefix| ns_binding_allowed(prefix, uri)) || !xml_name_writable(name, attribute) {
+        return Err(interp.type_error(RESERVED_NS_BINDING));
+    }
+    Ok(())
 }
 
 fn name_set_in_scope(interp: &mut Interp, x: ObjId, name: &XmlName) -> JsResult<()> {
@@ -1040,6 +1060,8 @@ fn set_name(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResu
     checked_local(interp, &name.local)?;
     if kind == XmlKind::Pi {
         name.uri = Some(empty());
+    } else {
+        check_name_binding(interp, &name, kind == XmlKind::Attribute)?;
     }
     interp.xml_node_mut(x)?.name = Some(name.clone());
     name_set_in_scope(interp, x, &name)?;
@@ -1048,12 +1070,14 @@ fn set_name(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResu
 
 fn set_namespace(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let x = this_node(interp, &this)?;
-    if matches!(interp.xml_kind(x)?, XmlKind::Text | XmlKind::Comment | XmlKind::Pi) {
+    let kind = interp.xml_kind(x)?;
+    if matches!(kind, XmlKind::Text | XmlKind::Comment | XmlKind::Pi) {
         return Ok(Value::Undefined);
     }
     let ns = build_namespace(interp, std::slice::from_ref(&arg(args, 0)))?;
     let Some(old) = interp.xml_node(x)?.name.clone() else { return Ok(Value::Undefined) };
     let name = XmlName { uri: Some(ns.uri), local: old.local, prefix: ns.prefix };
+    check_name_binding(interp, &name, kind == XmlKind::Attribute)?;
     interp.xml_node_mut(x)?.name = Some(name.clone());
     name_set_in_scope(interp, x, &name)?;
     Ok(Value::Undefined)

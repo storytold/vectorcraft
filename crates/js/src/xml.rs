@@ -27,6 +27,8 @@ fn parser_units(s: &str) -> Vec<u16> {
 
 pub(crate) const STAR: &[u16] = &[0x2A];
 const XML_URI: &str = "http://www.w3.org/XML/1998/namespace";
+const XMLNS_URI: &str = "http://www.w3.org/2000/xmlns/";
+pub(crate) const RESERVED_NS_BINDING: &str = "a namespace declaration uses a reserved prefix or URI";
 /// The hidden binding that holds a function's default XML namespace URI.
 const DEFAULT_NS_BINDING: &[u16] = &[0, 0x64, 0x78, 0x6E, 0x73];
 
@@ -221,6 +223,30 @@ fn prefix_in_scope<'a>(stack: &'a [XmlNs], prefix: &[u16]) -> Option<&'a XmlNs> 
     stack.iter().rev().find(|ns| ns.prefix.as_deref() == Some(prefix))
 }
 
+/// Whether Namespaces in XML allows declaring `prefix` for `uri`: `xml` only with its fixed URI,
+/// `xmlns` never, and neither fixed URI with another prefix or as the default namespace.
+pub(crate) fn ns_binding_allowed(prefix: &[u16], uri: &[u16]) -> bool {
+    if units_are(prefix, "xmlns") {
+        return false;
+    }
+    let is_xml_uri = units_are(uri, XML_URI);
+    if units_are(prefix, "xml") {
+        return is_xml_uri;
+    }
+    !is_xml_uri && !units_are(uri, XMLNS_URI)
+}
+
+/// Whether a node named `name` can be written as XML: no name is in the `xmlns` namespace, and
+/// no attribute in no namespace is named `xmlns`.
+pub(crate) fn xml_name_writable(name: &XmlName, attribute: bool) -> bool {
+    let uri = name.uri.as_deref().unwrap_or_default();
+    !units_are(uri, XMLNS_URI) && !(attribute && uri.is_empty() && units_are(&name.local, "xmlns"))
+}
+
+fn units_are(units: &[u16], text: &str) -> bool {
+    units.iter().copied().eq(text.encode_utf16())
+}
+
 /// A prefix no entry of `stack` uses.
 fn fresh_prefix(stack: &[XmlNs]) -> Key {
     let mut n = 0u32;
@@ -361,6 +387,12 @@ impl Interp {
 
     /// A new node. What `node` refers to must be reachable from the roots.
     pub(crate) fn new_xml_node(&mut self, node: XmlNode) -> JsResult<ObjId> {
+        if let Some(name) = &node.name
+            && matches!(node.kind, XmlKind::Element | XmlKind::Attribute)
+            && !xml_name_writable(name, node.kind == XmlKind::Attribute)
+        {
+            return Err(self.type_error(RESERVED_NS_BINDING));
+        }
         let extra = XML_NODE_BYTES + node.name.as_ref().map_or(0, name_bytes) + string_bytes(node.value.len());
         self.reserve_heap(OBJECT_BYTES + extra)?;
         self.heap.bytes = self.heap.bytes.saturating_add(extra);
@@ -432,6 +464,9 @@ impl Interp {
 
     /// Sets the default XML namespace of the running function, or of the global code.
     pub(crate) fn xml_set_default_uri(&mut self, uri: Key) -> JsResult<()> {
+        if units_are(&uri, XMLNS_URI) {
+            return Err(self.type_error(RESERVED_NS_BINDING));
+        }
         let env = self.frame()?.var_env;
         if let Some(Env::Decl { bindings, .. }) = self.heap.env_mut(env) {
             let value = Value::String(Str::from_rc(uri));
@@ -2151,6 +2186,9 @@ impl Interp {
         for (start, end, value) in &raw_attrs {
             let raw = src.get(*start..*end).unwrap_or_default();
             if raw == key("xmlns").as_ref() {
+                if !ns_binding_allowed(&[], value) {
+                    return Err(self.syntax(RESERVED_NS_BINDING));
+                }
                 if !seen_decl.insert(Vec::new()) {
                     return Err(self.syntax("a namespace is declared twice"));
                 }
@@ -2160,6 +2198,9 @@ impl Interp {
             {
                 if value.is_empty() {
                     return Err(self.syntax("a namespace prefix cannot be declared with an empty URI"));
+                }
+                if !ns_binding_allowed(local, value) {
+                    return Err(self.syntax(RESERVED_NS_BINDING));
                 }
                 if !seen_decl.insert(local.to_vec()) {
                     return Err(self.syntax("a namespace is declared twice"));
