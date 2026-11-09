@@ -1115,6 +1115,17 @@ font-technology	Variable	Variabla
 	Exporting {}	Exporterar {}
 	Export…	Exportera…
 	Extrude & Bevel…	Extrudera och fasa…
+	3D (Classic)	3D (klassisk)
+	Extrude & Bevel (Classic)…	Extrudera och fasa (klassisk)…
+	Surface	Yta
+	Wireframe	Trådram
+	No Shading	Ingen skuggning
+	Plastic	Plast
+	Highlight Intensity	Högdagerintensitet
+	Highlight Size	Högdagerstorlek
+	Blend Steps	Övergångssteg
+	Shading Color	Skuggningsfärg
+	Draw Hidden Faces	Rita dolda ytor
 	Eyedropper	Pipett
 	Eyedropper Applies:	Pipetten tillämpar:
 	Eyedropper Options	Pipettalternativ

@@ -239,8 +239,8 @@ out, perspective). No Adobe software, assets, presets or bevel shapes were used.
   counted on its own), Rotate (which only turns the outline) 65,536. The limit is counted on the shape as drawn and,
   when its contours meet, again on the merged outline, which can have more points (bars crossing in a grid trace
   every hole between them); past it, the shape is too complex for the effect.
-- **3D (Classic)** (the track cube, surface types, blend steps, map art), Turntable and 3D export are separate,
-  unbuilt items.
+- **3D (Classic)**: Extrude & Bevel (Classic) is built, with its surface types and blend steps. Revolve (Classic),
+  Rotate (Classic), the track cube, map art, Turntable and 3D export are separate, unbuilt items.
 
 Release measurements and a repeatable CLI scene are in [3D lighting performance](3d-lighting-performance.md).
 

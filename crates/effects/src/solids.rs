@@ -1,5 +1,5 @@
-//! Extrude & Bevel, Inflate and Rotate as live, shaded vector art, shared by the canvas and every
-//! exporter. Like Revolve, the source path stays editable and the effect draws its 3D faces.
+//! Extrude & Bevel, Inflate, Rotate and Extrude & Bevel (Classic) as live, shaded vector art,
+//! shared by the canvas and every exporter. Like Revolve, the source path stays editable and the effect draws its 3D faces.
 use std::sync::Arc;
 
 use serde_json::Value;
@@ -14,11 +14,14 @@ use vectorcraft_doc::color::Color;
 use crate::util::{flag, num, text};
 use crate::{GeomContext, apply_geometry_with, is_geometry};
 
+mod classic;
+pub use classic::{CLASSIC_EXTRUDE, SHADING_COLORS, classic_extrude_options, classic_shading};
+
 pub const EXTRUDE: &str = "threeD.extrude";
 pub const INFLATE: &str = "threeD.inflate";
 pub const ROTATE: &str = "threeD.rotate";
 /// The 3D effects this module draws (Revolve has its own).
-pub const SOLIDS: [&str; 3] = [EXTRUDE, INFLATE, ROTATE];
+pub const SOLIDS: [&str; 4] = [EXTRUDE, INFLATE, ROTATE, CLASSIC_EXTRUDE];
 
 /// Is `id` one of the 3D and Materials effects (Revolve included)?
 pub fn is_three_d(id: &str) -> bool {
@@ -119,6 +122,7 @@ pub fn extrude_options(p: &Value) -> Extrude {
             inside: flag(p, "bevelInside", false),
             both_sides: flag(p, "bevelBothSides", false),
         }),
+        hidden: false,
     }
 }
 
@@ -172,21 +176,32 @@ fn facets(id: &str, path: &PathData, rule: FillRule, bounds: Rect, p: &Value) ->
     let view = view_options(p);
     match id {
         EXTRUDE => vectorcraft_three_d::extrude(path, rule, bounds, extrude_options(p), view),
+        CLASSIC_EXTRUDE => vectorcraft_three_d::extrude(path, rule, bounds, classic_extrude_options(p), view),
         INFLATE => vectorcraft_three_d::inflate(path, rule, bounds, inflate_options(p), view),
         _ => vectorcraft_three_d::plane(path, rule, bounds, view),
     }
 }
 
-/// Validate before a command changes the document; the evaluator bounds loaded files too.
-pub fn validate_solid(n: &Node, id: &str, p: &Value) -> Result<(), String> {
+/// Check solid `id`'s parameter values `p` alone: the part of [`validate_solid`] that does not
+/// need the object.
+fn validate_solid_params(id: &str, p: &Value) -> Result<(), String> {
+    if id == CLASSIC_EXTRUDE {
+        classic::validate(p)?;
+    }
     crate::lighting::validate(p)?;
-    let label = crate::effect_info(id).map_or("This effect", |e| e.label.trim_end_matches('…'));
     if let Some(v) = p.get("bevel")
         && !v.as_str().is_some_and(|s| s == "none" || BevelShape::parse(s).is_some())
     {
         let names: Vec<_> = BevelShape::ALL.iter().map(|b| b.id()).collect();
         return Err(format!("bevel must be none or one of {}", names.join(", ")));
     }
+    Ok(())
+}
+
+/// Validate before a command changes the document; the evaluator bounds loaded files too.
+pub fn validate_solid(n: &Node, id: &str, p: &Value) -> Result<(), String> {
+    validate_solid_params(id, p)?;
+    let label = crate::effect_info(id).map_or("This effect", |e| e.label.trim_end_matches('…'));
     if is_container(n) {
         let shapes = members(n, label)?;
         let b = union_bounds(&shapes).ok_or_else(|| format!("{label} requires a group holding a shape with at least two anchors"))?;
@@ -271,6 +286,13 @@ fn members(n: &Node, label: &str) -> Result<Vec<Profile>, String> {
 /// [`validate_solid`].
 pub fn validate_three_d(n: &Node, id: &str, p: &Value) -> Result<(), String> {
     if id == crate::REVOLVE { crate::validate_revolve(n, p) } else { validate_solid(n, id, p) }
+}
+
+/// Are 3D effect `id`'s parameter values `p` valid? The checks of [`validate_three_d`] that do not
+/// build the art, for an edit that hides the effect: hidden, it draws nothing, so its object does
+/// not need to fit.
+pub fn validate_three_d_params(id: &str, p: &Value) -> Result<(), String> {
+    if id == crate::REVOLVE { crate::revolve::validate_revolve_params(p) } else { validate_solid_params(id, p) }
 }
 
 /// One surface: each facet a path shaded from `paint`, as a group with the paint's opacity and
@@ -384,7 +406,8 @@ fn reshape_members(n: &Node, before: &[Effect], shapes: &mut [Profile]) {
 fn art_for(n: &Node, fx: &Effect, shapes: &[Profile]) -> Option<Vec<Arc<Node>>> {
     let b = union_bounds(shapes)?;
     let p = crate::merged_params(&fx.id, &fx.params);
-    let colored = view_options(&p).has_colored_lights();
+    let classic = fx.id == CLASSIC_EXTRUDE;
+    let colored = !classic && view_options(&p).has_colored_lights();
     if fx.id == ROTATE {
         // Every part turns about the centre of the object's own bounds (a group's members about
         // the centre of theirs), so they stay together.
@@ -432,7 +455,8 @@ fn art_for(n: &Node, fx: &Effect, shapes: &[Profile]) -> Option<Vec<Arc<Node>>> 
         .map(|(item, member, f)| {
             let depths: Vec<f64> = f.iter().map(|f| f.depth).collect();
             let (paint, opacity, blend) = paint_of(item, member);
-            (depths, surface(n, f, &paint, opacity, blend, colored))
+            let art = if classic { classic::surface(n, f, &paint, opacity, blend, &p) } else { surface(n, f, &paint, opacity, blend, colored) };
+            (depths, art)
         })
         .collect();
     // One order takes a plain group of faces from each solid, one face for each facet. With

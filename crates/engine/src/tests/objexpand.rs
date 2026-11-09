@@ -164,6 +164,33 @@ fn a_placed_gradient_moved_by_a_transform_or_free_distort_expands_as_the_canvas_
     }
 }
 
+/// A gradient fitted to the object turns with a Transform effect on the canvas, and Object › Expand
+/// of the fill makes strips that draw the same.
+#[test]
+fn a_fitted_gradient_turned_by_a_transform_expands_as_the_canvas_draws_it() {
+    // The gray level at (x, y).
+    let gray = |r: &vectorcraft_render::Rendered, x: usize, y: usize| r.pixels[(y * 200 + x) * 4] as i32;
+    // The object's own effect, and the fill's (the first appearance item).
+    for (params, item) in
+        [(json!({"rotate": 90}), json!(null)), (json!({"rotate": 90}), json!(0)), (json!({"rotate": 30, "scaleH": 60}), json!(null))]
+    {
+        let mut s = session();
+        let id = gradient_rect(&mut s, Rect::new(60.0, 60.0, 140.0, 140.0), white_black(), false);
+        run(&mut s, "effect.apply", json!({"effect": "distort.transform", "params": params, "ids": [id.0], "item": item}));
+        let before = render(&s);
+        if params["rotate"] == 90 {
+            // The white to black ramp runs up or down the turned square, not across it.
+            let (top, bottom) = (gray(&before, 100, 70), gray(&before, 100, 130));
+            let (left, right) = (gray(&before, 70, 100), gray(&before, 130, 100));
+            assert!((top - bottom).abs() > 100 && (left - right).abs() < 20, "{params} on item {item}: {top} {bottom} {left} {right}");
+        }
+        run(&mut s, "object.expand", json!({"object": false, "stroke": false, "steps": 64}));
+        let after = render(&s);
+        let diff = mean_diff(&before, &after);
+        assert!(diff < 1.0, "{params} on item {item}: mean difference {diff}");
+    }
+}
+
 #[test]
 fn a_placed_gradient_moved_by_a_warp_expands_as_the_canvas_draws_it() {
     // The object's own effect, and the fill's (the first appearance item).
