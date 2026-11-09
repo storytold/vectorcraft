@@ -210,6 +210,54 @@ fn number(data: &[u8], at: usize, n: usize) -> Option<u64> {
     (n <= 8).then(|| bytes.iter().fold(0u64, |v, b| v << 8 | u64::from(*b)))
 }
 
+/// How a predefined Unicode CMap's codes encode their characters.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub(super) enum Unicode {
+    /// Two bytes a character (`UCS2`) or a UTF-16 surrogate pair, the high byte first.
+    Utf16,
+    Utf8,
+    /// Four bytes, the high byte first.
+    Utf32,
+}
+
+/// The encoding of predefined Unicode CMap `name` and whether it is vertical: one of Adobe's
+/// public CMap resources whose name says its codes are Unicode: `Uni` and a character
+/// collection, then `-UCS2`, `-UTF8`, `-UTF16` or `-UTF32` (and `-HW` for half-width forms),
+/// then `-H` or `-V` (`UniJIS-UCS2-H`, `UniGB-UTF16-V`:
+/// <https://github.com/adobe-type-tools/cmap-resources>).
+pub(super) fn unicode_cmap(name: &str) -> Option<(Unicode, bool)> {
+    let (rest, dir) = name.rsplit_once('-')?;
+    let vertical = match dir {
+        "H" => false,
+        "V" => true,
+        _ => return None,
+    };
+    let rest = rest.strip_suffix("-HW").unwrap_or(rest);
+    let (collection, form) = rest.rsplit_once('-')?;
+    if !(collection.len() > 3 && collection.starts_with("Uni") && !collection.contains('-')) {
+        return None;
+    }
+    let form = match form {
+        "UCS2" | "UTF16" => Unicode::Utf16,
+        "UTF8" => Unicode::Utf8,
+        "UTF32" => Unicode::Utf32,
+        _ => return None,
+    };
+    Some((form, vertical))
+}
+
+/// The characters show string `s` encodes in Unicode form `form` (invalid codes left out).
+pub(super) fn unicode_text(s: &[u8], form: Unicode) -> String {
+    match form {
+        Unicode::Utf16 => {
+            let units = s.as_chunks::<2>().0.iter().map(|b| u16::from_be_bytes(*b));
+            char::decode_utf16(units).filter_map(Result::ok).collect()
+        }
+        Unicode::Utf8 => String::from_utf8_lossy(s).chars().filter(|c| *c != char::REPLACEMENT_CHARACTER).collect(),
+        Unicode::Utf32 => s.as_chunks::<4>().0.iter().filter_map(|b| char::from_u32(u32::from_be_bytes(*b))).collect(),
+    }
+}
+
 /// A predefined Identity CMap: two-byte codes, each the CID of its own value; vertical for
 /// `Identity-V`.
 pub(super) fn identity(name: &str, vertical: bool) -> Obj {
@@ -365,16 +413,26 @@ impl Interp<'_> {
             return Ok(d.clone());
         }
         let key = name.key().ok_or(PsError::Ps("typecheck", "CMap".into()))?;
-        match self.instances(&Obj::name("CMap"))?.borrow().get(&key) {
-            Some(Obj::Dict(d)) => Ok(d.clone()),
-            _ => Err(PsError::Ps("undefinedresource", name.text().map(|t| t.to_string()).unwrap_or_default())),
+        if let Some(Obj::Dict(d)) = self.instances(&Obj::name("CMap"))?.borrow().get(&key) {
+            return Ok(d.clone());
+        }
+        let text = name.text().map(|t| t.to_string()).unwrap_or_default();
+        match unicode_cmap(&text) {
+            Some((_, vertical)) => {
+                let mut d = Dict::new();
+                d.insert(Key::name("CMapName"), Obj::name(&text));
+                d.insert(Key::name("CMapType"), Obj::Int(1));
+                d.insert(Key::name("WMode"), Obj::Int(i64::from(vertical)));
+                Ok(DictRef::new(d))
+            }
+            None => Err(PsError::Ps("undefinedresource", text)),
         }
     }
 
     /// CIDFont `name` (a name, or a dictionary itself): one the program defined, in the CIDFont
     /// category or as a font, else a CIDFont of that name without glyphs (its glyphs show
     /// nothing).
-    fn find_cid_font(&mut self, name: &Obj) -> Res<DictRef> {
+    pub(super) fn find_cid_font(&mut self, name: &Obj) -> Res<DictRef> {
         if let Obj::Dict(d) = name {
             return Ok(d.clone());
         }
@@ -405,6 +463,13 @@ impl Interp<'_> {
         for n in &names {
             deps.push(Obj::Dict(self.find_cid_font(n)?));
         }
+        let font = self.composed(key, cmap, deps);
+        self.push(Obj::Dict(font))
+    }
+
+    /// The Type 0 font `key` with `FMapType` 9 over CMap `cmap` and descendants `deps`, defined
+    /// as a font.
+    pub(super) fn composed(&mut self, key: Key, cmap: DictRef, deps: Vec<Obj>) -> DictRef {
         let mut d = Dict::new();
         d.insert(Key::name("FontName"), key.obj());
         d.insert(Key::name("FontType"), Obj::Int(0));
@@ -418,7 +483,7 @@ impl Interp<'_> {
         d.insert(Key::name("CMap"), Obj::Dict(cmap));
         let font = DictRef::new(d);
         self.fonts.borrow_mut().insert(key, Obj::Dict(font.clone()));
-        self.push(Obj::Dict(font))
+        font
     }
 
     /// `StartData`: `(Binary) n StartData` in a Type 0 CIDFont file reads its binary data section

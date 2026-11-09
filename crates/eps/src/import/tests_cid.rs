@@ -377,6 +377,48 @@ fn cmaps_map_codes_to_base_fonts_codes_and_glyph_names() {
     assert_eq!(text, "ABC");
 }
 
+/// A CID-keyed font over a predefined Unicode CMap the file doesn't define, its CIDFont only
+/// named: the codes say their characters, set as type in the font of the CIDFont's name,
+/// whether found as `CIDFont-CMap` or composed.
+#[test]
+fn named_cidfonts_over_unicode_cmaps_set_their_characters_as_type() {
+    let texts = |r: &crate::Imported| -> Vec<vectorcraft_doc::TextObject> {
+        all(&r.document)
+            .iter()
+            .filter_map(|n| match &n.kind {
+                NodeKind::Text(t) => Some((**t).clone()),
+                _ => None,
+            })
+            .collect()
+    };
+    let r = super::tests::read("/Ryumin-Light-UniJIS-UCS2-H findfont 20 scalefont setfont 10 20 moveto <4e2d0041> show");
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    let t = texts(&r);
+    assert_eq!(t.len(), 1, "{:?}", all(&r.document));
+    assert_eq!(t[0].plain_text(), "\u{4e2d}A");
+    assert_eq!((t[0].runs[0].style.font_family.as_str(), t[0].runs[0].style.size), ("Ryumin", 20.0));
+    let r = super::tests::read("/X /UniGB-UTF8-H [/NotInFile] composefont 20 scalefont setfont 10 20 moveto (\\344\\270\\255A) show");
+    assert_eq!(texts(&r).iter().map(|t| t.plain_text()).collect::<String>(), "\u{4e2d}A");
+    // The point moves past the type.
+    check("/Ryumin-Light-UniJIS-UCS2-H findfont 20 scalefont setfont <00410042> stringwidth pop dup 5 gt exch 40 lt and");
+}
+
+/// A Type 2 CIDFont the file carries (its glyph space one unit an em), over a Unicode CMap the
+/// file doesn't define, sets its characters as type at the font's size, not a thousand times it.
+#[test]
+fn type2_cidfonts_over_unicode_cmaps_set_type_at_their_size() {
+    let r =
+        super::tests::read(&format!("{}/X /UniGB-UCS2-H [/TestCID2] composefont 20 scalefont setfont 10 20 moveto <4e2d0041> show", cid2_font("0")));
+    let sizes: Vec<f64> = all(&r.document)
+        .iter()
+        .filter_map(|n| match &n.kind {
+            NodeKind::Text(t) => Some(t.runs[0].style.size * t.xf.determinant().abs().sqrt()),
+            _ => None,
+        })
+        .collect();
+    assert!(!sizes.is_empty() && sizes.iter().all(|s| (s - 20.0).abs() < 0.5), "{sizes:?} {:?}", r.warnings);
+}
+
 /// A code a base-font CMap doesn't map, in a base font, is that font's code 0 (`.notdef`): it
 /// moves the point by that glyph's width, not by a thousand ems, and the font isn't missing.
 #[test]
@@ -548,6 +590,17 @@ fn cid_glyphs_measured_in_a_loop_run_out_of_the_budget() {
     let font = format!("{}{list}{}", &font[..at], &font[end..]);
     check(&format!("{font}{CMAP} /TestFont 50 selectfont (B) stringwidth pop 25 sub abs 0.01 lt"));
     super::tests::runs_out_of_budget(&format!("{font}{CMAP} /TestFont 50 selectfont {{ (B) stringwidth pop pop }} loop"));
+}
+
+/// Setting type over a Unicode CMap copies the composite font for every string: the copy is
+/// charged by the font's size, so a font with a huge number of keys shown in a loop runs out of
+/// the operation budget.
+#[test]
+fn unicode_type_in_a_huge_font_in_a_loop_runs_out_of_the_budget() {
+    super::tests::runs_out_of_budget(
+        "/Ryumin-Light-UniJIS-UCS2-H findfont dup length 200000 add dict copy dup begin 0 1 199999 { dup def } for end\n\
+         /Huge exch definefont 20 scalefont setfont { <0041> stringwidth pop pop } loop",
+    );
 }
 
 /// A `beginbfrange` destination array that holds itself is read without recursing into it (an
