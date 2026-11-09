@@ -176,7 +176,7 @@ pub struct Prefs {
     pub system_title_bar: bool,
     /// Linux and the BSDs: draw the app bar as the title bar in sessions where the desktop draws
     /// the frame (X11, Wayland compositors with server-side decorations, XWayland), as on GNOME.
-    /// Read when the app starts; System Title Bar and `VECTORCRAFT_TITLEBAR` take precedence over it.
+    /// Read when the app starts; System Title Bar and `VECTORCRAFT_TITLEBAR` set to `app`, `system` or `desktop` take precedence over it.
     pub app_title_bar: bool,
     // Performance
     pub gpu_performance: bool,
