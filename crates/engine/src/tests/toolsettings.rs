@@ -268,6 +268,28 @@ fn escape_on_a_shape_drag_saves_the_option_it_put_back() {
     assert_eq!(s.prefs.corner_radius, radius);
 }
 
+/// Setting another tool's option during a polygon drag leaves the drag's options alone: Escape
+/// still puts back the side count the arrow changed.
+#[test]
+fn escape_puts_back_the_sides_after_another_tool_s_option_is_set() {
+    use vectorcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
+    let mut s = session();
+    let v = ViewInfo { smart_guides: false, ..Default::default() };
+    select(&mut s, "polygon");
+    s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 100.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 180.0), v).unwrap();
+    s.tool_key(ToolKey::Up, Mods::default(), v).unwrap();
+    // Saves every option, the one the arrow changed included.
+    s.set_tool_option("length", &json!(50));
+    let values = json!({"points": 9});
+    s.set_tool_options(Some("star"), values.as_object().unwrap());
+    assert_eq!(s.tool_options()["sides"], json!(7), "the drag keeps its side count");
+    s.tool_key(ToolKey::Escape, Mods::default(), v).unwrap();
+    assert_eq!(s.tool_options()["sides"], json!(6));
+    assert_eq!(s.prefs.tool_settings["polygon"]["sides"], json!(6));
+    assert_eq!(s.prefs.tool_settings["star"]["points"], json!(9));
+}
+
 /// The Fidelity an Alt smoothing drag uses on a selected path.
 fn alt_smooth_fidelity(s: &mut Session) -> Option<f64> {
     use vectorcraft_tools::{Action, Mods, PointerEvent, PointerKind};
