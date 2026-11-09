@@ -33,6 +33,9 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
     // encoder (an exporter plug-in is told the file it writes).
     let params = &if params.is_object() { params.clone() } else { json!({}) };
     let f = fileio::writable_format(format, path.as_deref())?;
+    // A Shape Builder merge still being computed for a click is exported with the document.
+    let r = app.session.finish_tool_edit();
+    crate::canvas::apply_requests(app, r);
     // A `.ai` file names the view's active artboard.
     remember_active_artboard(app);
     let st = app.session.active().ok_or("no document")?;
