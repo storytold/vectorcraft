@@ -60,7 +60,7 @@ use vectorcraft_effects::is_pathfinder;
 
 use super::brush::PathBrush;
 use super::lex::{Lexer, Tok};
-use super::obj::{self, V};
+use super::obj::{self, Names, V};
 use super::paint;
 
 const GLOW: &str = "Adobe Outer Glow"; // brand-ok: the filter's name in the files
@@ -389,8 +389,14 @@ fn closes(data: &[u8]) -> bool {
     false
 }
 
-/// The styles of the section `data` (between its markers), by name.
+/// [`art_styles_in`], names read in the default encoding.
 pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
+    art_styles_in(data, &mut Names::default())
+}
+
+/// The styles of the section `data` (between its markers), by name: the names of the styles and of
+/// the colours, gradients and patterns they paint with read by `names`.
+pub(super) fn art_styles_in(data: &[u8], names: &mut Names) -> HashMap<String, ArtStyle> {
     let mut styles = HashMap::new();
     let mut name: Option<String> = None;
     let mut filters: Vec<Filter> = vec![];
@@ -446,7 +452,7 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
                 }
                 b"FillStyle" => style_entry = Some(Kind::Fill),
                 b"StrokeStyle" | b"BlendStyle" => style_entry = Some(Kind::Other),
-                b"Name" if name.is_none() && filters.is_empty() => name = operands.iter().rev().find_map(V::text),
+                b"Name" if name.is_none() && filters.is_empty() => name = operands.iter().rev().find_map(|v| names.text(v)),
                 b"All" | b"[Registration]" | b"Registration" => operands.push(V::Name(obj::text(n))),
                 b"CompoundFilter" => pending = Some(true),
                 b"BasicFilter" => pending = Some(false),
@@ -473,7 +479,7 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
                 }
                 b"Array" => dict_array = Some(vec![]),
                 b"PluginObject" if in_basic => {
-                    let mut texts = operands.iter().rev().filter_map(V::text);
+                    let mut texts = operands.iter().rev().filter_map(|v| names.text(v));
                     if let (Some(plugin), Some(name), Some(f)) = (texts.next(), texts.next(), filters.last_mut()) {
                         f.plugin_object = Some((name, plugin));
                     }
@@ -544,7 +550,7 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
                     }
                 }
                 if let Some(f) = filters.last_mut() {
-                    paint_op(f, op, &operands);
+                    paint_op(f, op, &operands, names);
                 }
                 if op == "," || op == ";" || op.starts_with('X') || op.starts_with('B') || op.len() <= 2 {
                     operands.clear();
@@ -617,13 +623,13 @@ fn block_data(lex: &mut Lexer, encoded: &[u8]) -> Option<Vec<u8>> {
     None
 }
 
-/// A paint operator of a fill's or stroke's style.
-fn paint_op(f: &mut Filter, op: &str, vals: &[V]) {
+/// A paint operator of a fill's or stroke's style, the names it gives read by `names`.
+fn paint_op(f: &mut Filter, op: &str, vals: &[V], names: &mut Names) {
     let last = vals.iter().rev().find_map(V::num);
     match op {
         "Xa" | "k" | "g" | "x" | "Xx" | "Xk" | "Xs" | "Xz" | "XA" | "K" | "G" | "X" | "XX" | "XK" | "XS" | "XZ" | "xa" | "xx" | "xk" | "xs"
         | "xz" => {
-            let Some((p, _)) = paint::color_op(op, vals) else { return };
+            let Some((p, _)) = paint::color_op_in(op, vals, names) else { return };
             if op.ends_with(|c: char| c.is_ascii_lowercase()) {
                 f.fill = Some(p);
             } else {
@@ -684,13 +690,13 @@ fn paint_op(f: &mut Filter, op: &str, vals: &[V]) {
         "Bg" => {
             f.gradient = true;
             let at = vals.iter().rposition(|v| matches!(v, V::Str(_)));
-            let name = at.and_then(|i| vals.get(i)).and_then(V::text);
+            let name = at.and_then(|i| vals.get(i)).and_then(|v| names.text(v));
             let n: Vec<f64> = at.map_or(&[][..], |i| vals.get(i + 1..).unwrap_or_default()).iter().filter_map(V::num).collect();
             let angle = n.get(2).copied().filter(|a| a.is_finite()).unwrap_or(0.0);
             f.gradient_of = Some((name, angle));
         }
         "p" => {
-            let name = vals.iter().find_map(|v| if let V::Str(_) = v { v.text() } else { None });
+            let name = vals.iter().find(|v| matches!(v, V::Str(_))).and_then(|v| names.text(v));
             let matrix = vals.iter().rev().find_map(|v| match v {
                 V::Arr(a) => {
                     let n: Vec<f64> = a.iter().filter_map(V::num).collect();

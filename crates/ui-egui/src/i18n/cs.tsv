@@ -5090,6 +5090,9 @@ imageTrace	Outline	Obrys
 @msg	its section ending with `%{end}` doesn't end	jeho oddíl končící `%{end}` nemá konec
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	štětce, které VectorCraft zatím neumí načíst, byly vynechány z panelu Štětce ({_1})
 @msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objekty s více výplněmi nebo tahy, tahy s proměnnou šířkou, efekty či štětci byly načteny jako vykreslený vzhled ({_1}): jejich vzhled zatím nelze upravovat
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	název `{name}` není v UTF-8 a byl načten jako {label}: pokud vypadá špatně, otevřete soubor s jiným legacyNameEncoding
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	název `{name}` není v UTF-8 a jeho části nejsou platné ani v {label}: otevřete soubor s jiným legacyNameEncoding
+@msg	more names that aren't UTF-8 were read as {label} ({count})	další názvy, které nejsou v UTF-8, byly načteny jako {label} ({count})
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	přechod „{name}“ není v souboru definován: zastupuje ho plná barva
 @msg	an image VectorCraft can't read was left out	obrázek, který VectorCraft neumí přečíst, byl vynechán
 @msg	graphs come in as plain art, without their data or settings	grafy se načtou jako obyčejná grafika, bez svých dat a nastavení

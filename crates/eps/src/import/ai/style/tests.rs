@@ -1,6 +1,10 @@
 use super::*;
 use vectorcraft_color::Color;
 
+fn paint_op(f: &mut Filter, op: &str, vals: &[V]) {
+    super::paint_op(f, op, vals, &mut Names::default());
+}
+
 /// The style `Tapered`: a 30 pt stroke whose beautiful-strokes dictionary holds `arrays`.
 fn width_style(arrays: &str) -> ArtStyle {
     let data = format!(

@@ -8074,6 +8074,9 @@ theme	Appearance	अपीयरेंस
 # Align to Pixel Grid
 	Align to Pixel Grid	पिक्सेल ग्रिड से संरेखित करें
 @msg	only paths and compound paths can be aligned to the pixel grid	केवल पाथ और कंपाउंड पाथ को पिक्सेल ग्रिड से संरेखित किया जा सकता है
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	नाम `{name}` UTF-8 नहीं है और इसे {label} के रूप में पढ़ा गया: यदि यह गलत दिखे, तो फ़ाइल को किसी अन्य legacyNameEncoding से खोलें
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	नाम `{name}` UTF-8 नहीं है, और इसके कुछ हिस्से {label} में भी मान्य नहीं हैं: फ़ाइल को किसी अन्य legacyNameEncoding से खोलें
+@msg	more names that aren't UTF-8 were read as {label} ({count})	UTF-8 में न होने वाले और नाम {label} के रूप में पढ़े गए ({count})
 	Start Lists From Typed Markers	टाइप किए गए चिह्नों से सूचियाँ शुरू करें
 	Marquee Selection	मार्की चयन
 	Touching	स्पर्श करते हुए
