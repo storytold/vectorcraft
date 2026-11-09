@@ -13,7 +13,7 @@ Part of [target-app-parity.md](target-app-parity.md); open work is in [gaps.md](
 |---|---:|---:|---:|---:|
 | Illustrator effects (vector and stylize) | 50 | 50 | 100% | — |
 | Photoshop effects (raster, Effect Gallery) | 57 | 57 | 100% | 1–2 (Effect Gallery thumbnails and in-dialog preview) |
-| 3D and Materials | 4 (+3 Classic) | 4 (initial: Extrude & Bevel, Revolve, Inflate, Rotate) | ~25% | 25–45 |
+| 3D and Materials | 4 (+3 Classic) | 4 (+1 Classic; initial: Extrude & Bevel, Revolve, Inflate, Rotate, Extrude & Bevel (Classic)) | ~25% | 25–45 |
 | Beyond Illustrator: Effect › Color Adjustments (6), effect plug-ins (WebAssembly) | — | 6 + plug-ins | — | — |
 
 ## Illustrator effects
@@ -181,13 +181,13 @@ VectorCraft choices; an original approximation, never compared with another appl
 | Revolve | initial: live, editable profile, rotation and light gizmos, default-on Cap with continuous curved rims, smooth vector shading and round seam joins, SVG/PDF output, Expand Appearance ([revolve.md](revolve.md), #846) |
 | Extrude & Bevel, Inflate, Rotate | initial: live, depth, twist, taper, solid or hollow caps, five original bevel shapes, Inflate volume, both sides, twist, taper and cap, Rotate of every fill and stroke, groups and layers turned about one shared axis (#4506), contours that cross, touch or overlap merged first ([three-d.md](three-d.md)), Position presets, rotation and light gizmos, SVG/PDF output, Expand Appearance ([three-d.md](three-d.md)) |
 | Materials panel, lighting, ray-traced render | Window › 3D and Materials panel with the object types (Plane, Extrude, Revolve, Inflate) and the Object, Rotation and Lighting settings of the applied effect ([three-d.md](three-d.md#3d-and-materials-panel)); one to ten directional lights with per-light Color (opaque RGB, white by default), Intensity, Rotation, Height, Softness and neutral Ambient Light, Revolve and colored Inflate use smooth vector shading; Extrude & Bevel and Rotate retain planar shading; original Standard, Diffuse, Top Left and Right lighting rigs; no materials, shadows or ray tracing |
-| 3D (Classic): Extrude & Bevel, Revolve, Rotate | none |
+| 3D (Classic): Extrude & Bevel, Revolve, Rotate | Extrude & Bevel (Classic) initial: live, Extrude Depth, Cap, five original bevel shapes with Height and Bevel Extent In or Out, Position presets and rotation gizmo, Perspective, Wireframe, No Shading, Diffuse and Plastic surfaces with one to ten lights, Light Intensity, Ambient Light, Highlight Intensity and Size, Blend Steps, Black, Custom or no Shading Color, Draw Hidden Faces ([create 3D objects](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/create-3d-objects.html)); Revolve (Classic), Rotate (Classic) and Map Art: none |
 | Turntable (30.0 beta) | none |
 | Export 3D objects (OBJ, USDA, glTF) | initial: Asset Export's Export 3D Object collects an object with Extrude & Bevel, Revolve, Inflate or Rotate as a 3D asset, and Export writes its solids as a USDA (the default), USDZ, glTF or OBJ mesh with a material in each solid's paint color (`assets.add3D`, `assets.set3DFormat`, `assets.export3D`); no textures, map art or shading ([3D export help](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/export-3d-vector-artwork.html)) |
 
 The `three-d` crate (depends on `geom` and `pathops`, with no UI or GPU dependencies) builds, rotates, projects, shades and depth-sorts the surfaces;
 the effects crate turns them into art. What's left (materials and shadows, ray-traced rendering,
-angular cut caps, exact visibility, 3D Classic, Turntable) is 25–45 h.
+angular cut caps, exact visibility, the rest of 3D Classic (Revolve, Rotate, Map Art), Turntable) is 25–45 h.
 
 ## Revision history
 
