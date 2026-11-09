@@ -273,7 +273,46 @@ fn an_exporter_returns_its_file_with_an_export_s_budget() {
     // Its parameters are checked, and a filter is not an exporter.
     assert!(matches!(export::run(&p, b"{}", &json!({"level": "high"}), target), Err(Error::Params(_))));
     let filter = Plugin::load(&ok_module("(i64.const 0)"), Limits::default()).unwrap();
-    assert!(matches!(export::run(&filter, b"{}", &Value::Null, target), Err(Error::Params(_))));
+    let e = export::run(&filter, b"{}", &Value::Null, target).unwrap_err();
+    assert!(matches!(e, Error::Params(_)) && e.to_string().contains("is a plug-in of kind `filter`, not an exporter"), "{e}");
+    let importer = Plugin::load(&build(&tpl::returning(&tpl::importer("test.reads", r#"["tst"]"#, "{}"), "{}")), Limits::default()).unwrap();
+    let e = export::run(&importer, b"{}", &Value::Null, target).unwrap_err();
+    assert!(e.to_string().contains("is a plug-in of kind `importer`, not an exporter"), "{e}");
+}
+
+/// An importer runs on an import's budget, which replaces its own instruction and time budgets and
+/// keeps its other limits: a run that needs more than `fuel_base` finishes within `export_fuel`,
+/// and a run that needs more than `export_fuel` ends there, however large `fuel_base` is.
+#[test]
+fn an_importer_runs_on_an_import_s_budget() {
+    use vectorcraft_plugins::export;
+    use vectorcraft_plugins::import::{self, Source};
+    let run = format!(
+        "(local $n i32) (local.set $n (i32.const 100000)) \
+         (loop $work (local.set $n (i32.sub (local.get $n) (i32.const 1))) (br_if $work (local.get $n))) {}",
+        tpl::ECHO
+    );
+    let wasm = build(&tpl::module(&tpl::importer("test.import.budget", r#"["tst"]"#, "{}"), &run, "", 1));
+    let file = br#"{"objects":[{"type":"path","path":{"subpaths":[{"closed":false,"anchors":[{"p":[0,0]},{"p":[1,0]}]}]}}]}"#;
+    let source = Source { extension: "tst", name: "a" };
+
+    let limits = import::limits(&Plugin::load(&wasm, Limits::default()).unwrap());
+    assert_eq!((limits.fuel_base, limits.wall_time_ms), (export::FUEL, export::WALL_TIME_MS));
+    let own = Limits {
+        fuel_base: 9_000,
+        fuel_per_byte: 0,
+        wall_time_ms: 8_000,
+        export_fuel: 10_000_000,
+        export_wall_time_ms: 7_000,
+        max_output_bytes: 6_000,
+        ..Limits::default()
+    };
+    let p = Plugin::load(&wasm, own.clone()).unwrap();
+    assert_eq!(import::limits(&p), Limits { fuel_base: 10_000_000, wall_time_ms: 7_000, ..own });
+    assert_eq!(import::run(&p, file, &Value::Null, source).map(|i| i.objects.len()), Ok(1));
+
+    let p = Plugin::load(&wasm, Limits { fuel_base: 10_000_000, fuel_per_byte: 0, export_fuel: 9_000, ..Limits::default() }).unwrap();
+    assert_eq!(import::run(&p, file, &Value::Null, source), Err(Error::Limit("instruction budget".into())));
 }
 
 /// The echo exporter the engine and UI tests read back what they hand a plug-in with: its file is

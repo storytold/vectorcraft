@@ -653,6 +653,11 @@ font-technology	Variable	Biến thiên
 	Color Table ({n} colors)	Bảng màu ({n} màu)
 	Color Theme	Bộ màu
 	Color Themes	Bộ màu
+	Color Wheel	Bánh xe màu
+	Hue ring	Vòng sắc độ
+	Saturation and brightness	Độ bão hòa và độ sáng
+	Color field	Vùng chọn màu
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Loại màu:
 	Color:	Màu:
 	Colorization	Tô màu
@@ -2038,6 +2043,7 @@ digits	Hindi	Hindi
 	Keywords:	Từ khóa:
 	Kind	Loại
 	Kinsoku Set	Bộ Kinsoku
+	Kinsoku Shori Type	Kiểu Kinsoku Shori
 	Knife	Dao
 	Knockout Group	Nhóm Knockout
 	Lab	Lab
@@ -2906,6 +2912,9 @@ mark-style	Japanese	Kiểu Nhật
 	Puppet Warp	Biến dạng con rối
 	Puppet Warp Pins	Ghim biến dạng con rối
 	Puppet Warp Tool	Công cụ Biến dạng con rối
+	Push In First	Đẩy vào trước
+	Push Out First	Đẩy ra trước
+	Push Out Only	Chỉ đẩy ra
 	Put back in the toolbar	Đặt trở lại vào thanh công cụ
 	Quality	Chất lượng
 	Quality {quality}	Chất lượng {quality}
@@ -3923,6 +3932,8 @@ mark-style	Japanese	Kiểu Nhật
 	tile {number}	ô {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Các ô được đánh số từ ngang sang dọc; để trống phạm vi để in tất cả ô.
 	Tilt	Độ nghiêng
+	Copies per Sheet (as many as fit, in a grid)	Nhiều bản sao trên một tờ (xếp vừa bao nhiêu in bấy nhiêu, theo lưới)
+	Gutter:	Khoảng cách:
 	Tint	Tông màu
 	Tints	Sắc pha
 	Tints and Shades	Sắc pha và bóng
@@ -4927,6 +4938,13 @@ theme	Appearance	Giao diện
 @msg	select an Image Trace object	hãy chọn đối tượng vector hóa ảnh
 @msg	select an object in perspective	hãy chọn đối tượng trong phối cảnh
 @msg	select artwork (or a colour group) to recolor	hãy chọn tác phẩm (hoặc nhóm màu) để tô lại
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	Đã tô màu lại xong; không thay đổi: {locked} và {hidden}
+@msg	Recolor completed; {objects} were left unchanged	Đã tô màu lại xong; không thay đổi: {objects}
+@msg	Recolor completed; {objects} was left unchanged	Đã tô màu lại xong; không thay đổi: {objects}
+@msg	1 locked object	1 đối tượng bị khóa
+@msg	{n} locked objects	{n} đối tượng bị khóa
+@msg	1 hidden object	1 đối tượng bị ẩn
+@msg	{n} hidden objects	{n} đối tượng bị ẩn
 @msg	select at least two objects	hãy chọn ít nhất hai đối tượng
 @msg	exit isolation mode first	hãy thoát chế độ cô lập trước
 @msg	select objects, not layers	hãy chọn đối tượng, không phải lớp
@@ -5034,6 +5052,10 @@ theme	Appearance	Giao diện
 @msg	the PSD file is cut short	tệp PSD bị cắt ngắn
 @msg	the PSD file's header is damaged	tiêu đề tệp PSD bị hỏng
 @msg	the PSD file's image data can't be read: {e}	dữ liệu ảnh tệp PSD không thể đọc được: {e}
+@msg	the JPEG XL file is cut short	tệp JPEG XL bị cắt ngắn
+@msg	the JPEG XL container is too large to read	vùng chứa JPEG XL quá lớn để đọc
+@msg	CMYK JPEG XL images can't be read	ảnh JPEG XL hệ màu CMYK không thể đọc được
+@msg	the JPEG XL file can't be read: {e}	tệp JPEG XL không thể đọc được: {e}
 @msg	the PSD file's image data uses an unknown compression ({m})	dữ liệu ảnh tệp PSD dùng nén không xác định ({m})
 @msg	the PCX file is cut short	tệp PCX bị cắt ngắn
 @msg	the PCX file's header is damaged	phần đầu của tệp PCX bị hỏng
@@ -5515,6 +5537,8 @@ axis	Y Axis	Trục Y
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	mô-đun nhập `env.{name}`, thứ mà plug-in chỉ được dùng ở API plug-in cấp {PROGRESS_API} (`api` {PROGRESS_API}) và với quyền `{permission}`
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	mô-đun nhập `{from}.{name}`, thứ mà máy chủ không cung cấp: plug-in chỉ được nhập các hàm `env.vc_*` mà docs/plugins.md liệt kê (API plug-in cấp 2), không có WASI, tệp hay mạng
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` là {_1}; máy chủ này hỗ trợ các mức API plug-in từ 1 đến {API_LEVEL}
+@msg	`paintOutput` may only be true	`paintOutput` chỉ có thể là true
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` chỉ dành cho hiệu ứng trực tiếp (`kind` "effect") ở `api` 2
 @msg	`grant` must be a list of permission names	`grant` phải là danh sách tên quyền
 @msg	`grant` names an unknown permission `{shown}`	`grant` nêu một quyền không xác định `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	plug-in loại `{_1}` cần quyền `{_2}`
@@ -6184,6 +6208,24 @@ breakText	Glyphs	Glyph
 # 3D Box add-on
 	3D Box	Hộp 3D
 	3D Box Tool	Công cụ Hộp 3D
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Mở bằng
+	No importer plug-ins installed	Không có plug-in nhập được cài đặt
+	Read files you open in its format and make documents from them	Đọc các tệp bạn mở theo định dạng của nó và tạo tài liệu từ chúng
+@msg	{_1} is an importer (File › Open With)	{_1} là plug-in nhập (Tệp › Mở bằng)
+@msg	missing `importer` (see document.formats)	thiếu `importer` (xem document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` phải là id định dạng của một plug-in (xem document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	“{shown}” mở tệp {_1}, không phải `{_2}`
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` là plug-in loại `{_2}`, không phải plug-in nhập
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` là plug-in loại `{_2}`, không phải plug-in xuất
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` là plug-in nhập: hãy mở tệp bằng document.open {{"importer"}"}}
+@msg	the importer returned no objects	plug-in nhập không trả về đối tượng nào
+@msg	an importer returns `objects` and `warnings`, not `{key}`	plug-in nhập trả về `objects` và `warnings`, không phải `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	tệp lớn hơn {MAX_INPUT_BYTES} byte mà plug-in nhập đọc
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	plug-in nhập khai báo từ 1 đến {MAX_EXTENSIONS} `extensions`
+@msg	only an exporter or an importer declares `extensions`	chỉ plug-in xuất hoặc nhập mới khai báo `extensions`
+@msg	an importer always gets an import's budget: leave `budget` out	plug-in nhập luôn nhận ngân sách của một lần nhập: hãy bỏ `budget`
 
 # Safe Mode
 	Safe Mode…	Chế độ an toàn…

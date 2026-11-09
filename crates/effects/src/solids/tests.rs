@@ -330,7 +330,7 @@ fn export_and_expand_bake_faces_with_their_own_ids() {
         let mut n = square_node();
         n.id = d.alloc_id();
         n.appearance.effects.push(fx(id, json!({"bevel": "rounded"})));
-        assert_eq!(crate::bake_appearance(&n), solid_art(&n), "{id}");
+        assert_eq!(crate::bake_appearance(None, &n), solid_art(&n), "{id}");
         let mut stroke = |_: &mut Document, _: &PathData, _: FillRule, _: &StrokeLayer| None;
         let art = crate::expand_leaf(&mut d, &n, &mut stroke).unwrap();
         let mut ids = std::collections::HashSet::new();
@@ -356,7 +356,7 @@ fn a_twisted_tapered_hollow_inflate_exports_and_expands() {
     let params = json!({"twist": 120, "taper": 50, "cap": false, "bothSides": true, "rotationX": -20, "rotationY": 35});
     n.appearance.effects.push(fx(INFLATE, params));
     let art = solid_art(&n).unwrap();
-    assert_eq!(crate::bake_appearance(&n), Some(art.clone()));
+    assert_eq!(crate::bake_appearance(None, &n), Some(art.clone()));
     assert!(faces(&art).len() > 20, "{} faces", faces(&art).len());
     let mut stroke = |_: &mut Document, _: &PathData, _: FillRule, _: &StrokeLayer| None;
     let expanded = crate::expand_leaf(&mut d, &n, &mut stroke).unwrap();

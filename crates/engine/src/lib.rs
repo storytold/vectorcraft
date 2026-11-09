@@ -62,6 +62,10 @@ pub struct Session {
     /// While Cmd lends `tool` (a selection tool) for a drag: the tool it was lent to, which comes
     /// back as it was at the release ([`Session::pointer`]).
     pub(crate) lender: Option<Box<dyn Tool>>,
+    /// The active document (its uid) and its [`History::step`] when the tool last handled a pointer
+    /// event or drew its overlays: when they differ at the next one, the tool is told first
+    /// ([`vectorcraft_tools::Tool::history_moved`]). None until the first.
+    pub(crate) tool_step: Option<(u64, (u64, u64))>,
     /// The selection of the active document (its uid) as Cmd lent `tool`: what the lent tool's
     /// gesture found, so that one that leaves it as it was picks nothing.
     pub(crate) selection_at_lend: Option<(u64, vectorcraft_doc::Selection)>,
@@ -249,9 +253,10 @@ pub struct Session {
     /// Where folder searches may go; `None`: this computer's rules ([`cmd::findfiles::Rules`]).
     /// Tests set it.
     pub search_rules: Option<cmd::findfiles::Rules>,
-    /// Canvas feedback cached for the pending deferred preview ([`Session::overlays`]); cleared
-    /// when the preview params change or the interaction ends.
-    pub(crate) deferred_overlay_cache: Option<(String, Value, Vec<vectorcraft_tools::Overlay>)>,
+    /// Canvas feedback cached for the pending deferred preview ([`Session::overlays`],
+    /// [`Session::deferred_transform_box`]); cleared when the preview params change or the
+    /// interaction ends.
+    pub(crate) deferred_overlay_cache: Option<tooling::DeferredFeedback>,
     /// The walker threads a folder search starts; `None`: [`cmd::findfiles::threads`]. Tests set
     /// it.
     pub search_threads: Option<usize>,

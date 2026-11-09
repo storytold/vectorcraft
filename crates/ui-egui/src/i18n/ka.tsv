@@ -606,6 +606,11 @@
 	Color	ფერი
 	Color Guide	ფერის გზამკვლევი
 	Color Themes	ფერის თემები
+	Color Wheel	ფერთა წრე
+	Hue ring	ფერის ტონის რგოლი
+	Saturation and brightness	გაჯერება და სიკაშკაშე
+	Color field	ფერის ველი
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	CSS Properties	CSS თვისებები
 	Document Info	დოკუმენტის ინფორმაცია
 	Flattener Preview	გაბრტყელების წინასწარი ნახვა
@@ -1646,6 +1651,10 @@ digits	Malayalam	მალაიალამური
 	Stylistic	სტილისტური
 	Mojikumi Set	Mojikumi-ის ნაკრები
 	Kinsoku Set	Kinsoku-ის ნაკრები
+	Kinsoku Shori Type	Kinsoku Shori-ის ტიპი
+	Push In First	ჯერ შეტანა
+	Push Out First	ჯერ გატანა
+	Push Out Only	მხოლოდ გატანა
 	Hard	მკაცრი
 	Right Indent	მარჯვენა შეწევა
 	Right-to-Left Paragraph Direction	აბზაცის მიმართულება მარჯვნიდან მარცხნივ
@@ -4277,6 +4286,13 @@ font-technology	Variable	ცვლადი
 @msg	select an image	მონიშნეთ გამოსახულება
 @msg	select an object in perspective	მონიშნეთ ობიექტი პერსპექტივაში
 @msg	select artwork (or a colour group) to recolor	მონიშნეთ ხელახლა შესაფერადებელი ნახატი (ან ფერთა ჯგუფი)
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	ხელახლა შეფერადება დასრულდა; უცვლელი დარჩა: {locked} და {hidden}
+@msg	Recolor completed; {objects} were left unchanged	ხელახლა შეფერადება დასრულდა; უცვლელი დარჩა: {objects}
+@msg	Recolor completed; {objects} was left unchanged	ხელახლა შეფერადება დასრულდა; უცვლელი დარჩა: {objects}
+@msg	1 locked object	1 ჩაკეტილი ობიექტი
+@msg	{n} locked objects	{n} ჩაკეტილი ობიექტი
+@msg	1 hidden object	1 დამალული ობიექტი
+@msg	{n} hidden objects	{n} დამალული ობიექტი
 @msg	select at least two objects	მონიშნეთ ორი ობიექტი მაინც
 @msg	exit isolation mode first	ჯერ გამოდით იზოლაციის რეჟიმიდან
 @msg	select objects, not layers	მონიშნეთ ობიექტები და არა შრეები
@@ -4568,6 +4584,10 @@ font-technology	Variable	ცვლადი
 @msg	the PSD file is cut short	PSD ფაილი შეკვეცილია
 @msg	the PSD file's header is damaged	PSD ფაილის სათაური დაზიანებულია
 @msg	the PSD file's image data can't be read: {e}	PSD ფაილის გამოსახულების მონაცემების წაკითხვა ვერ ხერხდება: {e}
+@msg	the JPEG XL file is cut short	JPEG XL ფაილი შეკვეცილია
+@msg	the JPEG XL container is too large to read	JPEG XL კონტეინერი წასაკითხად ზედმეტად დიდია
+@msg	CMYK JPEG XL images can't be read	CMYK JPEG XL გამოსახულებების წაკითხვა ვერ ხერხდება
+@msg	the JPEG XL file can't be read: {e}	JPEG XL ფაილის წაკითხვა ვერ ხერხდება: {e}
 @msg	Imported library {name}	შემოტანილია ბიბლიოთეკა {name}
 @msg	Invalid panel layout; restored the default dock	პანელების განლაგება არასწორია; აღდგენილია ნაგულისხმევი დოკი
 @msg	action is required	action აუცილებელია
@@ -5842,6 +5862,8 @@ axis	Y Axis	Y ღერძი
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	მოდულს შემოაქვს `env.{name}`, რომლის გამოყენებაც პლაგინს მხოლოდ პლაგინის API-ის დონეზე {PROGRESS_API} (`api` {PROGRESS_API}) და ნებართვით `{permission}` შეუძლია
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	მოდულს შემოაქვს `{from}.{name}`, რომელსაც ჰოსტი არ გვთავაზობს: პლაგინს შეუძლია შემოიტანოს მხოლოდ docs/plugins.md-ში ჩამოთვლილი `env.vc_*` ფუნქციები (პლაგინის API-ის დონე 2) და არა WASI, ფაილები ან ქსელი
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` არის {_1}; ეს ჰოსტი პლაგინის API-ის დონეებს 1-დან {API_LEVEL}-მდე უჭერს მხარს
+@msg	`paintOutput` may only be true	`paintOutput` შეიძლება იყოს მხოლოდ true
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` მხოლოდ ცოცხალი ეფექტისთვისაა (`kind` "effect") `api` 2-ზე
 @msg	`grant` must be a list of permission names	`grant` ნებართვების სახელების სია უნდა იყოს
 @msg	`grant` names an unknown permission `{shown}`	`grant` უცნობ ნებართვას ასახელებს: `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` სახის პლაგინს სჭირდება ნებართვა `{_2}`
@@ -6645,6 +6667,24 @@ font-script	Japanese	იაპონური
 # 3D Box add-on
 	3D Box	3D ყუთი
 	3D Box Tool	3D ყუთის ხელსაწყო
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	გახსნა პროგრამით
+	No importer plug-ins installed	იმპორტის პლაგინები არ არის დაყენებული
+	Read files you open in its format and make documents from them	მის ფორმატში გახსნილი ფაილების წაკითხვა და მათგან დოკუმენტების შექმნა
+@msg	{_1} is an importer (File › Open With)	{_1} იმპორტის პლაგინია (ფაილი › გახსნა პროგრამით)
+@msg	missing `importer` (see document.formats)	`importer` აკლია (იხ. document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` უნდა იყოს პლაგინის ფორმატის ID (იხ. document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	„{shown}“ ხსნის {_1} ფაილებს და არა `{_2}`-ს
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` არის `{_2}` სახის პლაგინი და არა იმპორტის პლაგინი
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` არის `{_2}` სახის პლაგინი და არა ექსპორტის პლაგინი
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` იმპორტის პლაგინია: გახსენით ფაილი document.open {{"importer"}"}}-ით
+@msg	the importer returned no objects	იმპორტის პლაგინმა ობიექტები არ დააბრუნა
+@msg	an importer returns `objects` and `warnings`, not `{key}`	იმპორტის პლაგინი აბრუნებს `objects`-ს და `warnings`-ს და არა `{key}`-ს
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	ფაილი აღემატება {MAX_INPUT_BYTES} ბაიტს, რომელსაც იმპორტის პლაგინი კითხულობს
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	იმპორტის პლაგინი აცხადებს 1-დან {MAX_EXTENSIONS}-მდე `extensions`-ს
+@msg	only an exporter or an importer declares `extensions`	`extensions`-ს მხოლოდ ექსპორტის ან იმპორტის პლაგინი აცხადებს
+@msg	an importer always gets an import's budget: leave `budget` out	იმპორტის პლაგინი ყოველთვის იღებს იმპორტის ბიუჯეტს: გამოტოვეთ `budget`
 
 # Safe Mode
 	Safe Mode…	უსაფრთხო რეჟიმი…

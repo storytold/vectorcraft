@@ -654,6 +654,11 @@
 	Color	Warna
 	Color Guide	Panduan warna
 	Color Themes	Tema warna
+	Color Wheel	Roda warna
+	Hue ring	Cincin rona
+	Saturation and brightness	Saturasi dan kecerahan
+	Color field	Kolom warna
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	CSS Properties	Properti CSS
 	Document Info	Info dokumen
 	Flattener Preview	Pratinjau perata
@@ -1738,6 +1743,10 @@ digits	Malayalam	Malayalam
 	Stylistic	Stilistik
 	Mojikumi Set	Set Mojikumi
 	Kinsoku Set	Set Kinsoku
+	Kinsoku Shori Type	Jenis Kinsoku Shori
+	Push In First	Dorong masuk dahulu
+	Push Out First	Dorong keluar dahulu
+	Push Out Only	Hanya dorong keluar
 	Hard	Keras
 	Right Indent	Indentasi kanan
 	Right-to-Left Paragraph Direction	Arah paragraf kanan ke kiri
@@ -2498,6 +2507,7 @@ digits	Malayalam	Malayalam
 	Tile Range:	Rentang ubin:
 	tile {number}	ubin {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Ubin dinomori menyamping lalu ke bawah; biarkan rentang kosong untuk semua ubin.
+	Copies per Sheet (as many as fit, in a grid)	Salinan per lembar (sebanyak yang muat, dalam kisi)
 	Transverse (the page a quarter turn on the paper)	Melintang (halaman diputar seperempat putaran pada kertas)
 	Unprintable margin:	Margin yang tidak dapat dicetak:
 	{pages} in all, {count} per copy	{pages} total, {count} per salinan
@@ -6401,6 +6411,11 @@ breakText	Glyphs	Glif
 # 3D Box add-on
 	3D Box	Kotak 3D
 	3D Box Tool	Alat Kotak 3D
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Buka Dengan
+	No importer plug-ins installed	Tidak ada plug-in impor yang terinstal
+	Read files you open in its format and make documents from them	Membaca file yang Anda buka dalam formatnya dan membuat dokumen darinya
 
 # Safe Mode
 	Safe Mode…	Mode aman…

@@ -11,8 +11,8 @@ pub(super) const MAX_SUBREADERS: usize = 32;
 /// Most operands on the stack.
 pub(super) const MAX_STACK: usize = 1 << 20;
 
-/// Most objects read.
-pub(super) const MAX_NODES: usize = 4_000_000;
+/// Most objects read. The `.ai` editing data writer writes no more ([`crate::import::MAX_EDITING_OBJECTS`]).
+pub(crate) const MAX_NODES: usize = 4_000_000;
 
 /// The most objects all the blends of one import may lay out to be checked (each twice) and made
 /// live; past it, blends keep their drawn steps.

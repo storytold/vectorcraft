@@ -348,16 +348,16 @@ fn moved_type_group(n: &Node) -> Option<Node> {
 /// outlined as [`evaluate_container`] outlines it, and the other members become what it makes of
 /// them. `None` when no type stays type.
 fn container_keeping_type(d: &Document, n: &Node) -> Option<Node> {
-    fn keep(n: &mut Node, moves: &[serde_json::Value], clipping: bool, kept: &mut bool) {
+    fn keep(d: &Document, n: &mut Node, moves: &[serde_json::Value], clipping: bool, kept: &mut bool) {
         let clips = n.clips();
         let Some(ch) = n.children_mut() else { return };
         for (i, c) in ch.iter_mut().enumerate() {
             let clipping = clipping || (clips && i == 0);
             if !matches!(c.kind, NodeKind::Text(_)) {
                 if has_pathfinder(c) || has_own_paint(c) || !geometry_effects(c).is_empty() {
-                    outline_nested_text(Arc::make_mut(c), clipping);
+                    outline_nested_text(Some(d), Arc::make_mut(c), clipping);
                 } else if c.children().is_some() {
-                    keep(Arc::make_mut(c), moves, clipping, kept);
+                    keep(d, Arc::make_mut(c), moves, clipping, kept);
                 }
                 continue;
             }
@@ -372,7 +372,7 @@ fn container_keeping_type(d: &Document, n: &Node) -> Option<Node> {
                     }
                 }
                 None if clipping => outline_text(c).map(|o| Node { visible: c.visible, ..o }),
-                None => as_art(None, c, None),
+                None => as_art(Some(d), c, None),
             };
             if let Some(o) = art {
                 *c = Arc::new(o);
@@ -391,11 +391,11 @@ fn container_keeping_type(d: &Document, n: &Node) -> Option<Node> {
     }
     let mut m = crate::reshape::evaluated(Some(d), n);
     let mut kept = false;
-    keep(&mut m, &moves, false, &mut kept);
+    keep(d, &mut m, &moves, false, &mut kept);
     if !kept {
         return None;
     }
-    reshape_leaves(&mut m, &fx);
+    reshape_leaves(&mut m, &fx, Some(d));
     m.appearance.effects.retain(|e| !is_pathfinder(&e.id) && !is_geometry(&e.id));
     m.appearance.items.clear();
     m.appearance.contents_index = None;
@@ -547,9 +547,10 @@ pub fn expand_art(d: &mut Document, n: &mut Node, stroke_art: StrokeArt) {
 /// its gradient meshes clipped to the outline; a brushed stroke stays a stroke), in paint order, as
 /// the members of a group keeping `n`'s id, transparency, opacity mask and raster effects. A path
 /// with [`has_transform_art`](crate::has_transform_art) is first made into the art [`reshape`]
-/// makes of it, and each copy is baked this way. `None` when it has neither a stroke to outline nor
-/// a geometry effect, so bending first changes nothing.
-pub fn bake_appearance(n: &Node) -> Option<Node> {
+/// makes of it, and each copy is baked this way; the swatches and patterns that live-effect plug-ins
+/// painting their pieces name are looked up in `doc`. `None` when it has neither a stroke to
+/// outline nor a geometry effect, so bending first changes nothing.
+pub fn bake_appearance(doc: Option<&Document>, n: &Node) -> Option<Node> {
     if let Some(m) = crate::revolve_art(n).or_else(|| crate::solid_art(n)) {
         return Some(m);
     }
@@ -560,9 +561,9 @@ pub fn bake_appearance(n: &Node) -> Option<Node> {
     // patterns: the art Expand Appearance makes of it (each copy an object with its own strokes,
     // patterns and gradients), each piece baked in turn.
     if crate::has_transform_art(n)
-        && let Some(mut m) = reshape(None, n, None)
+        && let Some(mut m) = reshape(doc, n, None)
     {
-        bake_appearance_pieces(&mut m);
+        bake_appearance_pieces(doc, &mut m);
         return Some(m);
     }
     let outlined = |i: &AppearanceItem| paints(i) && matches!(i, AppearanceItem::Stroke(s) if s.brush.is_none());
@@ -617,15 +618,15 @@ pub fn bake_appearance(n: &Node) -> Option<Node> {
 }
 
 /// [`bake_appearance`] every path and compound path in `n` that it changes, in place.
-fn bake_appearance_pieces(n: &mut Node) {
+fn bake_appearance_pieces(doc: Option<&Document>, n: &mut Node) {
     if matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) {
-        if let Some(m) = bake_appearance(n) {
+        if let Some(m) = bake_appearance(doc, n) {
             *n = m;
         }
         return;
     }
     for c in n.children_mut().into_iter().flatten() {
-        bake_appearance_pieces(Arc::make_mut(c));
+        bake_appearance_pieces(doc, Arc::make_mut(c));
     }
 }
 

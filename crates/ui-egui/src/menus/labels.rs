@@ -138,17 +138,17 @@ pub(super) fn shows_a_name(id: &str, label: &str) -> bool {
     ];
     SLOTS.iter().any(|s| id.starts_with(s))
         || saved_selection_slot(id).is_some()
-        || matches!(id, "text.setStyle" | "plugin.dialog" | "window.toolbar.custom" | "svgFilter.apply")
+        || matches!(id, "text.setStyle" | "plugin.dialog" | "file.openWith" | "window.toolbar.custom" | "svgFilter.apply")
         || vectorcraft_engine::cmd::plugin::is_command_id(id)
         || (id == "window.workspace" && !crate::workspaces::is_builtin(label))
         || (matches!(id, "effect.apply" | "effect.dialog") && vectorcraft_effects::plugin_effects().iter().any(|e| e.label == label))
 }
 
-/// Does the menu item `id` with `params` list an installed plug-in (an Object › Plug-ins filter or
-/// an Effect › Plug-ins effect) or one of its commands, by the plug-in's own text? Told by the item
-/// itself, so it holds while another thread installs or removes plug-ins.
+/// Does the menu item `id` with `params` list an installed plug-in (an Object › Plug-ins filter, an
+/// Effect › Plug-ins effect or a File › Open With importer) or one of its commands, by the plug-in's
+/// own text? Told by the item itself, so it holds while another thread installs or removes plug-ins.
 pub(crate) fn lists_plugin(id: &str, params: &Value) -> bool {
-    id == "plugin.dialog"
+    matches!(id, "plugin.dialog" | "file.openWith")
         || vectorcraft_engine::cmd::plugin::is_command_id(id)
         || params.get("effect").and_then(Value::as_str).and_then(vectorcraft_plugins::effect::plugin_id).is_some()
 }
