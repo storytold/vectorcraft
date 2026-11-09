@@ -608,6 +608,63 @@ pub(crate) fn save_screenshot_with_limit(
 #[cfg(test)]
 mod tests;
 
+/// The window and coordinate mapping where a control-channel Rotate View drag began.
+#[derive(Clone, Copy)]
+struct RotateViewPress {
+    window: (u64, u32),
+    tool_resets: u64,
+    xf: Xf,
+    start_angle: f64,
+    start_rotation: f64,
+}
+
+/// Rotate View belongs to the canvas, not the engine's placeholder tool. Keep its press mapping
+/// across requests so document-coordinate drags do not move again as the view turns underneath.
+fn rotate_view_pointer(
+    app: &mut VectorcraftApp,
+    ctx: &egui::Context,
+    kind: PointerKind,
+    position: vectorcraft_geom::Point,
+    screen: bool,
+    shift: bool,
+) -> Result<(), String> {
+    let id = egui::Id::unique("control.rotateView");
+    match kind {
+        PointerKind::Up => {
+            ctx.data_mut(|d| d.remove::<RotateViewPress>(id));
+            return Ok(());
+        }
+        PointerKind::Move | PointerKind::DoubleClick => return Ok(()),
+        _ => {}
+    }
+    let window = app.session.active().zip(crate::doc_windows::current(app)).map(|(d, w)| (d.uid, w.1)).ok_or("no document")?;
+    let tool_resets = app.session.tool_resets();
+    let mut press = if kind == PointerKind::Down {
+        let rect = app.canvas_rect.ok_or("no canvas yet")?;
+        let view = app.view().ok_or("no document")?;
+        RotateViewPress { window, tool_resets, xf: Xf::new(rect, view), start_angle: 0.0, start_rotation: view.rotation }
+    } else {
+        ctx.data(|d| d.get_temp::<RotateViewPress>(id)).ok_or("Rotate View needs a down event before a drag")?
+    };
+    // A gesture cannot turn a different document/view or resume after another tool was chosen.
+    if (press.window, press.tool_resets) != (window, tool_resets) {
+        ctx.data_mut(|d| d.remove::<RotateViewPress>(id));
+        return Err("the Rotate View gesture's window or tool changed".into());
+    }
+    let point = if screen { egui::pos2(position.x as f32, position.y as f32) } else { press.xf.to_screen(position) };
+    let center = press.xf.rect.center();
+    if !point.is_finite() || !center.is_finite() {
+        return Err("Rotate View needs finite canvas coordinates".into());
+    }
+    if kind == PointerKind::Down {
+        press.start_angle = (point.y - center.y).atan2(point.x - center.x) as f64;
+        ctx.data_mut(|d| d.insert_temp(id, press));
+    } else {
+        app.view_mut().ok_or("no document")?.rotation = crate::canvas::drag_rotation(center, point, press.start_angle, press.start_rotation, shift);
+    }
+    Ok(())
+}
+
 /// `ui.pointer`: pointer events through the tools.
 fn pointer_events(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest) -> Outcome {
     let p = &req.params;
@@ -634,6 +691,13 @@ fn pointer_events(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRe
         let x = e.get("x").and_then(Value::as_f64).unwrap_or(0.0);
         let y = e.get("y").and_then(Value::as_f64).unwrap_or(0.0);
         let screen = e.get("space").and_then(Value::as_str) == Some("screen");
+        let mods = e.get("mods").and_then(|m| serde_json::from_value(m.clone()).ok()).unwrap_or(base_mods);
+        if app.session.tool_id() == "rotateView" {
+            if let Err(e) = rotate_view_pointer(app, ctx, kind, vectorcraft_geom::Point::new(x, y), screen, mods.shift) {
+                return err(e);
+            }
+            continue;
+        }
         let pos = if screen {
             match xf {
                 Some(xf) => xf.to_doc(egui::pos2(x as f32, y as f32)),
@@ -642,7 +706,6 @@ fn pointer_events(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRe
         } else {
             vectorcraft_geom::Point::new(x, y)
         };
-        let mods = e.get("mods").and_then(|m| serde_json::from_value(m.clone()).ok()).unwrap_or(base_mods);
         // A tilt given in screen axes leans the same way on the page as on the screen.
         let pen = PointerEvent::json_pen(e).map(|q| match xf {
             Some(xf) if screen => crate::canvas::pose_on_page(q, &xf),

@@ -1,6 +1,16 @@
 use super::drag::{drag_id, drop_press};
 use super::{CornerRadius, Drag, Point, Pos2, Rect, SCROLL_BAR, Sense, Stroke, Tokens, Ui, VectorcraftApp, View, Xf, pos2, vec2};
 
+/// The mouse and control-channel Rotate View gestures use the same angle and Shift snapping.
+pub(crate) fn drag_rotation(center: Pos2, point: Pos2, start_angle: f64, start_rotation: f64, snap: bool) -> f64 {
+    let angle = (point.y - center.y).atan2(point.x - center.x) as f64;
+    let mut degrees = start_rotation + (angle - start_angle).to_degrees();
+    if snap {
+        degrees = (degrees / 15.0).round() * 15.0;
+    }
+    vectorcraft_geom::normalize_deg(degrees)
+}
+
 /// Fit the view (View → Fit Artboard / Fit All / Actual Size, Arrange Tools › Zoom to Selection).
 pub fn fit(app: &mut VectorcraftApp, how: &str) {
     let Some(rect) = app.canvas_rect else {

@@ -55,6 +55,79 @@ fn view_rotate_turns_the_view_to_any_angle() {
     assert_eq!(empty.run("view.rotate", json!({"angle": 30})).unwrap_err(), "no document");
 }
 
+/// MCP's `pointer_gesture` reaches `ui.pointer`: view tools must turn the canvas there too,
+/// rather than silently sending the gesture to the engine's no-op tool.
+#[test]
+fn control_rotate_view_gesture_turns_the_canvas_and_reset_restores_it() {
+    let mut app = with_document();
+    let ctx = egui::Context::default();
+    app.canvas_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0)));
+    let view = app.view_mut().unwrap();
+    view.center = vectorcraft_geom::Point::new(200.0, 150.0);
+    view.zoom = 1.0;
+    let revision = app.session.active().unwrap().revision;
+    let send = super::synthetic::control;
+    send(&mut app, &ctx, "ui.tool.select", json!({"tool": "rotateView"}));
+    send(&mut app, &ctx, "ui.pointer", json!({"events": [{"kind": "down", "x": 300, "y": 150}]}));
+    send(
+        &mut app,
+        &ctx,
+        "ui.pointer",
+        json!({"events": [
+            {"kind": "drag", "x": 200, "y": 250},
+            {"kind": "up", "x": 200, "y": 250}
+        ]}),
+    );
+    let view = app.view().unwrap();
+    assert!((view.rotation - 90.0).abs() < 1e-3, "{}", view.rotation);
+    assert_eq!(view.center, vectorcraft_geom::Point::new(200.0, 150.0));
+    assert_eq!(view.zoom, 1.0);
+    assert_eq!(app.session.active().unwrap().revision, revision, "navigation does not edit the document");
+    send(&mut app, &ctx, "engine.execute", json!({"command": "view.rotateReset", "params": {}}));
+    assert_eq!(app.view().unwrap().rotation, 0.0);
+}
+
+#[test]
+fn control_rotate_view_keeps_press_coordinates_and_shift_snapping_across_requests() {
+    let mut app = with_document();
+    let ctx = egui::Context::default();
+    app.canvas_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0)));
+    let view = app.view_mut().unwrap();
+    view.center = vectorcraft_geom::Point::new(200.0, 150.0);
+    view.zoom = 1.0;
+    view.rotation = 30.0;
+    let send = super::synthetic::control;
+    send(&mut app, &ctx, "ui.tool.select", json!({"tool": "rotateView"}));
+    send(&mut app, &ctx, "ui.pointer", json!({"events": [{"kind": "down", "x": 300, "y": 150}]}));
+    let angle = 20_f64.to_radians();
+    let (x, y) = (200.0 + 100.0 * angle.cos(), 150.0 + 100.0 * angle.sin());
+    for _ in 0..2 {
+        send(&mut app, &ctx, "ui.pointer", json!({"mods": {"shift": true}, "events": [{"kind": "drag", "x": x, "y": y}]}));
+        assert_eq!(app.view().unwrap().rotation, 45.0, "the same document point does not turn again as the view changes");
+    }
+    send(&mut app, &ctx, "ui.pointer", json!({"events": [{"kind": "up", "x": x, "y": y}]}));
+    assert_eq!(app.view().unwrap().rotation, 45.0);
+}
+
+#[test]
+fn control_rotate_view_rejects_nonfinite_positions_and_a_changed_document() {
+    let mut app = with_document();
+    let ctx = egui::Context::default();
+    app.canvas_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0)));
+    let send = super::synthetic::control;
+    send(&mut app, &ctx, "ui.tool.select", json!({"tool": "rotateView"}));
+    let (req, _) = crate::control::ControlRequest::new("ui.pointer", json!({"events": [{"kind": "down", "x": 1e300, "y": 0}]}));
+    let crate::control::Outcome::Done(reply) = crate::control::handle(&mut app, &ctx, &req) else { panic!("not done") };
+    assert_eq!(reply["ok"], false);
+    assert_eq!(app.view().unwrap().rotation, 0.0);
+    send(&mut app, &ctx, "ui.pointer", json!({"events": [{"kind": "down", "x": 300, "y": 150}]}));
+    app.run("file.new", json!({})).unwrap();
+    let (req, _) = crate::control::ControlRequest::new("ui.pointer", json!({"events": [{"kind": "drag", "x": 200, "y": 250}]}));
+    let crate::control::Outcome::Done(reply) = crate::control::handle(&mut app, &ctx, &req) else { panic!("not done") };
+    assert_eq!(reply["ok"], false);
+    assert_eq!(app.view().unwrap().rotation, 0.0);
+}
+
 #[test]
 fn the_view_menu_lists_the_status_bar_angles_and_checks_the_current_one() {
     let mut app = with_document();
