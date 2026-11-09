@@ -462,7 +462,7 @@ fn an_artboard_larger_than_the_canvas_is_written_on_a_large_canvas() {
     let bounds = read.layers.iter().filter_map(|l| l.visual_bounds()).reduce(|a, b| a.union(b)).unwrap();
     assert!((bounds.x0 - 1000.0).abs() < 1e-6 && (bounds.y1 - 2000.0).abs() < 1e-6 && (bounds.width() - 2000.0).abs() < 1e-6, "{bounds:?}");
     // The same without a readable PDF part, on its first page's size.
-    let (alone, notes) = crate::ai_alone_on_page(&p.data, (20_000.0, 20_000.0), 1.389).unwrap();
+    let (alone, notes) = crate::ai_alone_on_page(&p.data, (20_000.0, 20_000.0), 1.389, crate::NameEncoding::default()).unwrap();
     assert_eq!(alone.artboards.iter().map(|a| a.rect).collect::<Vec<_>>(), [Rect::new(0.0, 0.0, 20_000.0, 20_000.0)], "{notes:?}");
     // And from the editing data alone, as a file saved without its PDF part opens.
     let alone = read_back(&doc);

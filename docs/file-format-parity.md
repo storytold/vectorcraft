@@ -266,6 +266,8 @@ A Scatter brush in the editing data whose last 15 numbers start with 1 comes int
 
 An object in a pattern's art or in a brush's art takes the file's art styles in the same way as an object on a layer: with a style VectorCraft reads, it comes in as itself with its effects live, not as the look it draws. An object in a pattern's art with a style in the file's style list keeps that graphic style's id. An art styles section inside a symbol's, a pattern's or a brush's art is skipped.
 
+Names in the editing data that aren't UTF-8 (layers, objects, artboards, colors, gradients, patterns, graphic styles, swatches, brushes, symbols, variables and data sets) are read as Windows-1252 unless `legacyNameEncoding` (`convert --legacy-name-encoding`) picks `macintosh`, `windows-949`, `shift_jis`, `gbk` or `big5`; the open result's warnings list the first three such names as read and count the rest. The text values of data sets are read in the same encoding.
+
 ## Format by format
 
 | Format | Illustrator | Ours: open/place | Ours: save/export | Fidelity and tests |

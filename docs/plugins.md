@@ -245,7 +245,9 @@ Every run gets a **fresh instance**, so no state survives between calls except w
 [settings and cache](#settings-and-cache). Traps, exhausted budgets, malformed
 modules, bad manifests, out-of-range pointers, negative return codes and invalid output all become errors, and the
 document is left untouched: a filter's output is checked completely before one edit applies it. A live effect that
-fails draws the object's geometry unchanged; `plugin.info` reports why (`lastError`).
+fails draws the object's geometry unchanged; `plugin.info` reports why (`lastError`). A run that succeeds clears the
+error of a failed run. A check that finds every swatch and pattern a painted result names clears only the error of a
+refused swatch or pattern.
 
 wasmi is built with its *portable* (loop) dispatcher: the default tail-call dispatcher relies on LLVM
 sibling-call optimisation, and when that doesn't happen a long-running module overflows the host stack, which aborts

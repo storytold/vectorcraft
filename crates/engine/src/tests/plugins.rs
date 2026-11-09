@@ -447,6 +447,42 @@ fn a_painted_effect_on_a_fill_and_refused_results() {
     }
 }
 
+/// A result refused for a swatch the document doesn't have stays cached: once the document has the
+/// swatch, the next check of that result clears the error.
+#[test]
+fn a_refused_swatch_s_error_clears_once_the_document_has_the_swatch() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    let mut later = solid("#00ff00");
+    later["swatch"] = json!("Later");
+    let output = json!({"objects": [{"path": square_at(40.0), "fills": [later]}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.laterswatch", true), &output));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.laterswatch"}));
+    drawn(&s);
+    assert!(run(&mut s, "plugin.info", json!({"id": "test.engine.laterswatch"}))["lastError"].is_string());
+    run(&mut s, "swatch.new", json!({"name": "Later", "color": "#00ff00", "global": true}));
+    drawn(&s);
+    assert_eq!(run(&mut s, "plugin.info", json!({"id": "test.engine.laterswatch"}))["lastError"], Value::Null);
+}
+
+/// An effect that paints nothing has no references to check, so replacing a refused painted effect
+/// with one clears the refusal's error once it runs.
+#[test]
+fn a_replacement_that_paints_nothing_clears_a_refused_swatch_s_error() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    let mut gone = solid("#00ff00");
+    gone["swatch"] = json!("Absent");
+    let output = json!({"objects": [{"path": square_at(40.0), "fills": [gone]}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.replaced", true), &output));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.replaced"}));
+    drawn(&s);
+    assert!(run(&mut s, "plugin.info", json!({"id": "test.engine.replaced"}))["lastError"].is_string());
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.replaced", false), &output));
+    drawn(&s);
+    assert_eq!(run(&mut s, "plugin.info", json!({"id": "test.engine.replaced"}))["lastError"], Value::Null);
+}
+
 /// A painted effect on a group may link its pieces to the document's swatches.
 #[test]
 fn a_painted_group_effect_links_to_the_document_s_swatches() {
