@@ -2701,14 +2701,23 @@ fn pen_cmd_selected_anchors_are_what_copy_and_cut_take() {
     // Cut takes the segment between them. The two surviving runs of an ordinary path
     // become independent objects, and this path keeps the first run (#3380).
     s.execute("edit.undo", &json!({})).unwrap();
+    let original = path(&s, id);
+    let picked = s.doc().unwrap().selection.clone();
     s.execute("edit.cut", &json!({})).unwrap();
-    let pieces = paths(&s);
-    let left = path(&s, id).subpaths.iter().map(|sp| sp.anchors.len()).collect::<Vec<_>>();
+    let left = paths(&s);
+    assert_eq!(left.len(), 2);
+    assert_eq!(left[0].0, id);
+    assert!(left.iter().all(|(_, p)| p.subpaths.len() == 1 && !p.subpaths[0].closed));
+    assert_eq!(left[0].1.subpaths[0].anchors, original.subpaths[0].anchors[..2]);
+    assert_eq!(left[1].1.subpaths[0].anchors, original.subpaths[0].anchors[2..]);
+    assert_eq!(s.doc().unwrap().selection.objects, left.iter().map(|(id, _)| *id).collect::<Vec<_>>());
     assert_eq!(s.clipboard.nodes.len(), 1);
-    assert_eq!(left, vec![2]);
-    assert_eq!(pieces.len(), 2);
-    assert!(pieces.iter().all(|(_, path)| path.subpaths.len() == 1 && path.subpaths[0].anchors.len() == 2));
-    assert_eq!(s.doc().unwrap().selection.objects.len(), 2);
+    assert_eq!(s.clipboard.nodes[0].path_data().unwrap().subpaths[0].anchors, original.subpaths[0].anchors[1..3]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(paths(&s), vec![(id, original.clone())]);
+    assert_eq!(s.doc().unwrap().selection, picked);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(paths(&s), left);
     // Drawing on: the last anchor the Pen leaves selected doesn't make Copy take that anchor.
     s.execute("edit.undo", &json!({})).unwrap();
     s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
