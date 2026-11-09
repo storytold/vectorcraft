@@ -184,7 +184,8 @@ fn through_editing_data(
 ) -> (Document, Vec<String>, bool) {
     let Some(layers) = layers else { return (doc, warnings, false) };
     let outlined = opts.text_as == vectorcraft_pdf::TextAs::Outlines;
-    let (doc, mut warnings, read) = vectorcraft_eps::layered_ai_from(layers, doc, warnings, outlined, opts.trust_editing_data, unit);
+    let (doc, mut warnings, read) =
+        vectorcraft_eps::layered_ai_from(layers, doc, warnings, outlined, opts.trust_editing_data, unit, opts.legacy_names);
     // The layers weren't read (or couldn't be): the notes of reading the PDF part still hold.
     if !read {
         return (doc, warnings, false);
@@ -209,12 +210,12 @@ fn from_editing_data_alone(opened: &vectorcraft_pdf::Opened, opts: &LoadOptions)
         return None;
     }
     let private = opened.illustrator_data()?;
-    Some(editing_copy_alone(&private))
+    Some(editing_copy_alone(&private, opts))
 }
 
 /// [`from_editing_data_alone`] of `private`, the editor's copy already read.
-fn editing_copy_alone(private: &[u8]) -> Result<(Document, Vec<String>)> {
-    vectorcraft_eps::ai_alone(private)
+fn editing_copy_alone(private: &[u8], opts: &LoadOptions) -> Result<(Document, Vec<String>)> {
+    vectorcraft_eps::ai_alone_with(private, opts.legacy_names)
         .map_err(|why| err(format!("this file was saved without PDF compatibility, and its editing data can't be read ({why})")))
 }
 
@@ -247,7 +248,7 @@ fn without_pdf_part(bytes: &[u8], opts: &LoadOptions, e: &EngineError) -> Option
         return None;
     }
     let private = vectorcraft_pdf::illustrator_data_without_pdf_part(bytes, opts.password.as_deref())?;
-    let (doc, warnings) = vectorcraft_eps::ai_alone_on_page(&private.data, private.trim, private.user_unit).ok()?;
+    let (doc, warnings) = vectorcraft_eps::ai_alone_on_page(&private.data, private.trim, private.user_unit, opts.legacy_names).ok()?;
     let notes = std::iter::once(format!("the PDF part couldn't be read ({e}): the file opened from its editing data")).chain(warnings).collect();
     Some(outlined_if_asked(doc, notes, opts))
 }
@@ -323,7 +324,7 @@ pub(crate) fn page_or_editing_data(
     match read {
         Ok((doc, notes)) => Ok((doc, notes, false)),
         Err(e) if is_placeholder(&e) => {
-            let l = load_with(name, bytes, &LoadOptions { password: opts.password.clone(), ..Default::default() })?;
+            let l = load_with(name, bytes, &LoadOptions { password: opts.password.clone(), legacy_names: opts.legacy_names, ..Default::default() })?;
             Ok((l.doc, l.warnings, true))
         }
         Err(e) if page_index == 0 => match load_with(name, bytes, &LoadOptions { pages: None, ..opts.clone() }) {
@@ -352,7 +353,7 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
         _ if matches!(format.id, "eps" | "ps") || vectorcraft_pdf::is_postscript(bytes) => {
             let editing = vectorcraft_eps::has_native(bytes).then_some((true, || vectorcraft_eps::native(bytes)));
             restore_or_import(editing, || {
-                let r = vectorcraft_eps::import_trusting(bytes, opts.editing_data, opts.trust_editing_data)
+                let r = vectorcraft_eps::import_names(bytes, opts.editing_data, opts.trust_editing_data, opts.legacy_names)
                     .map_err(|e| err(format!("can't open `{}`: {e}", file_name(name))))?;
                 Ok((r.document, r.warnings))
             })?
@@ -391,7 +392,7 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
                 if let Some((o, private)) = opened.as_ref().ok().filter(|_| reads_layers_alone(opts)).and_then(|o| Some((o, editing_copy(o, opts)?)))
                 {
                     let pages = o.trim_pages();
-                    match vectorcraft_eps::ai_layers_alone(&private, &pages.sizes, pages.user_unit) {
+                    match vectorcraft_eps::ai_layers_alone(&private, &pages.sizes, pages.user_unit, opts.legacy_names) {
                         Ok((mut doc, warnings)) => {
                             doc.setup.bleed = pages.bleed;
                             editing_data = true;
@@ -413,8 +414,10 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
                         // decoded draws nothing either): its notes are at most the page's own.
                         let empty = draws_nothing(&r.document) && r.warnings.iter().all(|w| is_page_note(w));
                         let copy_alone = || match &private {
-                            Some(private) => Some(editing_copy_alone(private)),
-                            None if layers.is_some() => opened.as_ref().ok().and_then(|o| editing_copy(o, opts)).map(|p| editing_copy_alone(&p)),
+                            Some(private) => Some(editing_copy_alone(private, opts)),
+                            None if layers.is_some() => {
+                                opened.as_ref().ok().and_then(|o| editing_copy(o, opts)).map(|p| editing_copy_alone(&p, opts))
+                            }
                             None => None,
                         };
                         let alone = (r.only_text || empty)

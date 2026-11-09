@@ -1022,6 +1022,21 @@ fn an_ai_file_saved_without_its_pdf_part_pastes_from_its_editing_data() {
     assert!(e.contains("placeholder"), "{e}");
 }
 
+/// `file.place` reads a `.ai` saved without its PDF part in the `legacyNameEncoding` it is given.
+#[test]
+fn an_ai_file_saved_without_its_pdf_part_places_in_the_encoding_picked() {
+    let mut data = ai::sample_data();
+    let at = data.windows(4).position(|w| w == b"Pair").unwrap();
+    // 빨강 in code page 949.
+    data.splice(at..at + 4, br"\273\241\260\255".iter().copied());
+    let file = vectorcraft_format::base64_encode(&ai::ai(&compressed(&data), PLACEHOLDER));
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let r = s.execute("file.place", &json!({"name": "art.ai", "dataBase64": file, "link": false, "legacyNameEncoding": "windows-949"})).unwrap();
+    let placed = s.doc().unwrap().doc.layers[0].children().unwrap()[0].clone();
+    assert_eq!(names(&placed.children().unwrap()[1..]), ["빨강", "Ring", "Window"], "{r}");
+}
+
 #[test]
 fn an_ai_file_saved_without_its_pdf_part_places_from_its_editing_data() {
     let [sample, damaged, plain] = placeholder_files();

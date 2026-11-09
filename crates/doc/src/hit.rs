@@ -128,11 +128,14 @@ fn live_inputs() -> u64 {
 }
 
 /// A live object evaluated by [`live_art`] on this thread: the object, its document's symbols (by
-/// name and art) and patterns and the [`LiveInputs`] as they were, the art and its [`art_size`].
+/// name and art), patterns, swatches and color groups and the [`LiveInputs`] as they were, the art
+/// and its [`art_size`].
 struct EvaluatedLive {
     node: Node,
     symbols: Vec<(String, Arc<Node>)>,
     patterns: Vec<crate::PatternDef>,
+    swatches: crate::Shared<Vec<vectorcraft_color::Swatch>>,
+    swatch_groups: crate::Shared<Vec<vectorcraft_color::SwatchGroup>>,
     inputs: u64,
     art: Rc<Vec<Node>>,
     size: usize,
@@ -146,6 +149,8 @@ impl EvaluatedLive {
             && self.symbols.iter().zip(&doc.symbols).all(|((name, art), s)| *name == s.name && Arc::ptr_eq(art, &s.art))
             && self.node == *n
             && self.patterns == doc.patterns
+            && self.swatches == doc.swatches
+            && self.swatch_groups == doc.swatch_groups
     }
 }
 
@@ -184,8 +189,8 @@ thread_local! {
 
 /// The art live object `n` of `doc` draws ([`set_live_art`]); [`crate::live::expand_live`] while
 /// nothing is registered. The art is evaluated again when `n`, a symbol of `doc`, a pattern of
-/// `doc` or the [`LiveInputs`] have changed since, and on every click while it or the document's
-/// symbols or patterns hold a placed document ([`holds_placed`]).
+/// `doc`, its swatches or color groups, or the [`LiveInputs`] have changed since, and on every
+/// click while it or the document's symbols or patterns hold a placed document ([`holds_placed`]).
 fn live_art(doc: &Document, n: &Node) -> Rc<Vec<Node>> {
     let inputs = live_inputs();
     let kept = EVALUATED.with_borrow_mut(|kept| {
@@ -206,7 +211,16 @@ fn live_art(doc: &Document, n: &Node) -> Rc<Vec<Node>> {
         return art;
     }
     let symbols = doc.symbols.iter().map(|s| (s.name.clone(), s.art.clone())).collect();
-    let e = EvaluatedLive { node: n.clone(), symbols, patterns: doc.patterns.clone(), inputs, art: art.clone(), size };
+    let e = EvaluatedLive {
+        node: n.clone(),
+        symbols,
+        patterns: doc.patterns.clone(),
+        swatches: doc.swatches.clone(),
+        swatch_groups: doc.swatch_groups.clone(),
+        inputs,
+        art: art.clone(),
+        size,
+    };
     EVALUATED.with_borrow_mut(|kept| {
         kept.insert(0, e);
         kept.truncate(LIVE_KEPT);
