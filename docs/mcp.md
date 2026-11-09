@@ -877,6 +877,12 @@ an EPS as its page, a `.ai` file from its PDF content (a `.ai` saved without PDF
 {"name":"run_command","arguments":{"command":"document.open","params":{"path":"/tmp/label.eps","editingData":false}}}
 ```
 
+Names in the editing data that aren't UTF-8 (layers, objects, artboards, colors, gradients, patterns, graphic styles,
+swatches, brushes, symbols, variables and data sets, and the text values of data sets) are read as Windows-1252 unless
+`document.open` takes `legacyNameEncoding`: `macintosh`, `windows-949` (also `euc-kr`), `shift_jis`, `gbk` or `big5`. An
+unknown label is refused. The `warnings` of the result name the first three such names as read and count the rest.
+`vectorcraft-cli convert --legacy-name-encoding ENC` passes it on.
+
 Opening a PDF (or `.ai`) imports every page as an artboard and layer; `document.open` takes `pages` ("2-3, 5", 1-based),
 `cropTo` (`bounding` (the art's bounds), `art`, `crop` (default), `trim`, `bleed`, `media`: the box each artboard gets;
 with `trim` the bleed box round it becomes the document's bleed, and a PDF-compatible `.ai` or a PDF saved with its editing data opens on its trim boxes for
