@@ -1,6 +1,6 @@
 # UI and interaction parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-09 · **Change:** minor (numeric fields step on wheel hover without taking keyboard focus, #5949) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-09 · **Change:** minor (floating tab groups collapse into the side icon rail and opened rail panels fold back into it, #5925 in part; numeric fields step on wheel hover without taking keyboard focus, #5949) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged)
 
 ## Feature submission evidence
 
@@ -341,6 +341,8 @@ next unit in the order a right-click on a ruler lists them, from Feet back to Po
 
 ## Panels, Control bar, Properties, context menus
 
+- **Panel collapse controls (#5925, in part):** The small » in a floating tab-group header moves that group into the side icon rail, reusing the existing rail or creating one. An opened rail panel has the same control to fold its flyout back into the rail, including after a tab switch. Both controls preserve the tab group and its menu; other floating groups and full-width docked headers stay as they were. Pointer regressions in `crates/ui-egui/src/panel_docking/tests.rs` cover grouped tabs, reopening, separate groups, a missing rail, the menu and flyout closure after switching tabs; `native_tests.rs` covers the native-window click and removal of the empty palette. Scores and estimates unchanged.
+
 | Interaction | Status | Evidence |
 |---|---|---|
 | Selection artwork drag hovers a visible document tab to activate it, then drops editable artwork on its canvas | done | `tests_document_drag`, `edit.dropSelection`, lossless resource and one-step Undo regressions; overflow and cross-window drag remain separate |
@@ -488,6 +490,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-08 | minor | Floating tab groups collapse into the side icon rail and opened rail panels fold back into it (#5925, in part); tab groups remain intact. Scores and estimates unchanged. |
 | 2026-11-09 | minor | Numeric fields step on wheel hover without taking focus; keyboard focus and existing rounding rules remain (#5949). Scores and estimates unchanged. |
 | 2026-11-07 | minor | Pen and Curvature tool with Cmd/Ctrl held: Edit › Copy and Cut take the anchors and segments the lent Direct Selection picked, as with Direct Selection chosen, not the whole path; with the Pen's own last anchor selected Copy still takes the whole path (#6123); scores and estimates unchanged |
 | 2026-11-07 | minor | Live Corners: with Direct Selection, while every corner of a path is selected, a Shift-click on a corner widget picks that corner alone instead of deselecting it (#5188); adding a hidden corner's widget by Shift-click stays open (#1232); scores and estimates unchanged |
