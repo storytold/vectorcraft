@@ -189,7 +189,7 @@ fn make(s: &mut Session, p: &Value) -> Result<Value> {
 /// that has a shape. A shape taken from inside a group, or from the art of a blend, an envelope or
 /// a warped group, also takes that object's opacity and blend mode.
 fn top_style(d: &Document, n: &Node, hook: effects::OutlineHook) -> Option<Style> {
-    if let Some(art) = effects::shape_art(n, Some(hook)) {
+    if let Some(art) = effects::shape_art(Some(d), n, Some(hook)) {
         let mut lv = vec![];
         pf_leaves(d, &art, &mut lv);
         let inside = matches!(art.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }) && !art.is_compound_shape();
@@ -199,7 +199,7 @@ fn top_style(d: &Document, n: &Node, hook: effects::OutlineHook) -> Option<Style
         NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } if !n.is_compound_shape() => {
             children.iter().rev().find_map(|c| top_style(d, c, hook)).map(|s| s.within(n))
         }
-        NodeKind::SymbolInstance { .. } => effects::member_leaves(n, Some(hook)).last().map(style_of),
+        NodeKind::SymbolInstance { .. } => effects::member_leaves(Some(d), n, Some(hook)).last().map(style_of),
         _ => {
             let mut lv = vec![];
             pf_leaves(d, n, &mut lv);
@@ -267,7 +267,7 @@ fn expand(s: &mut Session, _: &Value) -> Result<Value> {
         for id in &shapes {
             let shape = d.node(*id).cloned().ok_or(EngineError::NoNode(*id))?;
             let hook = |c: &Node| effects::outline_object(Some(d), c);
-            let area = effects::compound_shape_area(&shape, Some(&hook))
+            let area = effects::compound_shape_area(Some(d), &shape, Some(&hook))
                 .ok_or_else(|| EngineError::Other("the compound shape is too complex to expand".into()))?;
             if area.is_empty() {
                 return Err(EngineError::Other(format!("{LABEL} produced an empty result")));

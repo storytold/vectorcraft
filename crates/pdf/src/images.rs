@@ -101,6 +101,22 @@ pub(crate) fn from_rgba_in(mut rgba: Vec<u8>, width: u32, height: u32, interpola
     from_rgba(&rgba, width, height, interpolate, pixels)
 }
 
+/// A `width` × `height` image of CMYK ink amounts `inks` (four bytes a pixel), converted by
+/// `convert` (when given), with straight `alpha` (one byte a pixel) carried only when some pixel
+/// isn't opaque. `None` when the buffers don't hold that many pixels.
+pub(crate) fn from_inks(inks: Vec<u8>, alpha: Vec<u8>, width: u32, height: u32, interpolate: bool, convert: Option<&CmykPixels>) -> Option<Image> {
+    let pixels = u64::from(width) * u64::from(height);
+    if pixels == 0 || inks.len() as u64 != pixels * 4 || alpha.len() as u64 != pixels {
+        return None;
+    }
+    let alpha = alpha.iter().any(|a| *a < 255).then_some(alpha);
+    let (samples, space) = match convert {
+        Some(p) => p.convert(&inks),
+        None => (inks, ImageColorspace::Cmyk),
+    };
+    lossless(samples, alpha, space, width, height, interpolate)
+}
+
 /// The kinds of images the Compression section has settings for.
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Kind {

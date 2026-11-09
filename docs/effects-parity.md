@@ -1,6 +1,6 @@
 # Effects parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-06 · **Change:** minor (Extrude & Bevel, Inflate and Rotate apply to groups and layers, their objects turning about one shared axis (#4506); the Transform effect's copies of a path with a fill and a stroke (or several fills and strokes, an even-odd fill, or a partly transparent one) are drawn each above the one before, as Expand Appearance makes them (#5920); Expand Appearance makes each copy of a path's Transform effect an object of its own (#5612); previously: Pixelate › Color Halftone: Max Radius in pixels of the Document Raster Effects resolution, 4–127 px, with older documents converted on opening and radii written back in points for older app versions (#3260); Effect dialogs clamp bounded length inputs immediately on commit and flash rejection on invalid input (#4638); previously: Drop Shadow Darkness uses fixed RGB subtraction and CMYK black addition; scores unchanged; Pathfinder › Trap: the Pathfinder panel's Trap… and Effect › Pathfinder › Trap… add an overprinting strip of the lighter colour where two solid colours meet; recounted with Hard Mix (#3061) and Soft Mix already in the catalogue: Pathfinder 13/13, Illustrator effects 49/50) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-08 · **Change:** minor (Extrude & Bevel, Inflate and Rotate merge contours that cross, touch or overlap, as type often draws a glyph, before building a solid; previously: Extrude & Bevel, Inflate and Rotate apply to groups and layers, their objects turning about one shared axis (#4506); the Transform effect's copies of a path with a fill and a stroke (or several fills and strokes, an even-odd fill, or a partly transparent one) are drawn each above the one before, as Expand Appearance makes them (#5920); Expand Appearance makes each copy of a path's Transform effect an object of its own (#5612); previously: Pixelate › Color Halftone: Max Radius in pixels of the Document Raster Effects resolution, 4–127 px, with older documents converted on opening and radii written back in points for older app versions (#3260); Effect dialogs clamp bounded length inputs immediately on commit and flash rejection on invalid input (#4638); previously: Drop Shadow Darkness uses fixed RGB subtraction and CMYK black addition; scores unchanged; Pathfinder › Trap: the Pathfinder panel's Trap… and Effect › Pathfinder › Trap… add an overprinting strip of the lighter colour where two solid colours meet; recounted with Hard Mix (#3061) and Soft Mix already in the catalogue: Pathfinder 13/13, Illustrator effects 49/50) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Every entry of Illustrator's Effect menu, by its public feature name, against VectorCraft's effects catalogue
 (`effect_catalog()` in `crates/effects/src/lib.rs`) and the Effect menu built from it
@@ -11,9 +11,9 @@ Part of [target-app-parity.md](target-app-parity.md); open work is in [gaps.md](
 
 | Group | Illustrator | VectorCraft | % | Remaining (h) |
 |---|---:|---:|---:|---:|
-| Illustrator effects (vector and stylize) | 50 | 49 | 98% | 4–8 |
+| Illustrator effects (vector and stylize) | 50 | 50 | 100% | — |
 | Photoshop effects (raster, Effect Gallery) | 57 | 57 | 100% | 1–2 (Effect Gallery thumbnails and in-dialog preview) |
-| 3D and Materials | 4 (+3 Classic) | 4 (initial: Extrude & Bevel, Revolve, Inflate, Rotate) | ~25% | 25–45 |
+| 3D and Materials | 4 (+3 Classic) | 4 (+1 Classic; initial: Extrude & Bevel, Revolve, Inflate, Rotate, Extrude & Bevel (Classic)) | ~25% | 25–45 |
 | Beyond Illustrator: Effect › Color Adjustments (6), effect plug-ins (WebAssembly) | — | 6 + plug-ins | — | — |
 
 ## Illustrator effects
@@ -27,7 +27,7 @@ Part of [target-app-parity.md](target-app-parity.md); open work is in [gaps.md](
 | Pathfinder | Add, Intersect, Exclude, Subtract, Minus Back, Divide, Trim, Merge, Crop, Outline, Hard Mix, Soft Mix, Trap | 13/13 | Trap traps only solid fills (gradients and patterns hide what is below them but don't trap) and spreads each colour's visible area as a whole; the public page gives no default values, so Trap's 0.25 pt, 100% and 40% are VectorCraft's own |
 | Rasterize | Rasterize… (as a live effect) | 1/1 | — |
 | Stylize | Drop Shadow, Feather, Inner Glow, Outer Glow, Round Corners, Scribble | 6/6 | Scribble Options' Settings presets |
-| SVG Filters | Apply SVG Filter… and the filter list | 0/1 | the whole submenu (SVG filters on import round-trip already) |
+| SVG Filters | Apply SVG Filter… and the filter list | 1/1 | The submenu lists the document's own filters: VectorCraft ships no default filters. A filter that is the object's last effect is written to SVG as a `<filter>` element; otherwise SVG export draws the object as an image. A filter on a turned or skewed object in an imported SVG is left out with a warning |
 | Warp | Arc, Arc Lower, Arc Upper, Arch, Bulge, Shell Lower, Shell Upper, Flag, Wave, Fish, Rise, Fisheye, Inflate, Squeeze, Twist | 15/15 | warp point editing in envelopes; Arc is a circular arc in the object's own proportions (#1578) |
 
 Document Raster Effects Settings exists. When the 64 million pixel cap on an effect image lowers
@@ -179,20 +179,21 @@ VectorCraft choices; an original approximation, never compared with another appl
 | Item | Ours |
 |---|---|
 | Revolve | initial: live, editable profile, rotation and light gizmos, default-on Cap with continuous curved rims, smooth vector shading and round seam joins, SVG/PDF output, Expand Appearance ([revolve.md](revolve.md), #846) |
-| Extrude & Bevel, Inflate, Rotate | initial: live, depth, twist, taper, solid or hollow caps, five original bevel shapes, Inflate volume, both sides, twist, taper and cap, Rotate of every fill and stroke, groups and layers turned about one shared axis (#4506), Position presets, rotation and light gizmos, SVG/PDF output, Expand Appearance ([three-d.md](three-d.md)) |
-| Materials panel, lighting, ray-traced render | one to ten directional lights with per-light Color (opaque RGB, white by default), Intensity, Rotation, Height, Softness and neutral Ambient Light, Revolve and colored Inflate use smooth vector shading; Extrude & Bevel and Rotate retain planar shading; original Standard, Diffuse, Top Left and Right lighting rigs; no materials, shadows or ray tracing |
-| 3D (Classic): Extrude & Bevel, Revolve, Rotate | none |
+| Extrude & Bevel, Inflate, Rotate | initial: live, depth, twist, taper, solid or hollow caps, five original bevel shapes, Inflate volume, both sides, twist, taper and cap, Rotate of every fill and stroke, groups and layers turned about one shared axis (#4506), contours that cross, touch or overlap merged first ([three-d.md](three-d.md)), Position presets, rotation and light gizmos, SVG/PDF output, Expand Appearance ([three-d.md](three-d.md)) |
+| Materials panel, lighting, ray-traced render | Window › 3D and Materials panel with the object types (Plane, Extrude, Revolve, Inflate) and the Object, Rotation and Lighting settings of the applied effect ([three-d.md](three-d.md#3d-and-materials-panel)); one to ten directional lights with per-light Color (opaque RGB, white by default), Intensity, Rotation, Height, Softness and neutral Ambient Light, Revolve and colored Inflate use smooth vector shading; Extrude & Bevel and Rotate retain planar shading; original Standard, Diffuse, Top Left and Right lighting rigs; no materials, shadows or ray tracing |
+| 3D (Classic): Extrude & Bevel, Revolve, Rotate | Extrude & Bevel (Classic) initial: live, Extrude Depth, Cap, five original bevel shapes with Height and Bevel Extent In or Out, Position presets and rotation gizmo, Perspective, Wireframe, No Shading, Diffuse and Plastic surfaces with one to ten lights, Light Intensity, Ambient Light, Highlight Intensity and Size, Blend Steps, Black, Custom or no Shading Color, Draw Hidden Faces ([create 3D objects](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/create-3d-objects.html)); Revolve (Classic), Rotate (Classic) and Map Art: none |
 | Turntable (30.0 beta) | none |
-| Export 3D objects (OBJ, USDA, glTF) | none |
+| Export 3D objects (OBJ, USDA, glTF) | initial: Asset Export's Export 3D Object collects an object with Extrude & Bevel, Revolve, Inflate or Rotate as a 3D asset, and Export writes its solids as a USDA (the default), USDZ, glTF or OBJ mesh with a material in each solid's paint color (`assets.add3D`, `assets.set3DFormat`, `assets.export3D`); no textures, map art or shading ([3D export help](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/export-3d-vector-artwork.html)) |
 
 The `three-d` crate (depends on `geom` and `pathops`, with no UI or GPU dependencies) builds, rotates, projects, shades and depth-sorts the surfaces;
 the effects crate turns them into art. What's left (materials and shadows, ray-traced rendering,
-angular cut caps, exact visibility, 3D Classic, Turntable, 3D export) is 25–45 h.
+angular cut caps, exact visibility, the rest of 3D Classic (Revolve, Rotate, Map Art), Turntable) is 25–45 h.
 
 ## Revision history
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-08 | minor | Extrude & Bevel, Inflate and Rotate merge contours that cross, touch or overlap (a glyph's arm across its stem) before building a solid, so the solid follows the shape as it is filled; others are built as drawn ([three-d.md](three-d.md)); scores and estimates unchanged |
 | 2026-11-06 | minor | Extrude & Bevel, Inflate and Rotate apply to a group or layer: a solid for every path, compound path and type in it, all turned about one shared axis as the public documentation describes for groups ([three-d.md](three-d.md#groups), #4506); scores and estimates unchanged |
 | 2026-11-06 | minor | The Transform effect's copies of a path or compound path whose fills and strokes stack (a fill and a stroke, several of either, an even-odd fill, or a partly transparent or blended one) are drawn each as an object of its own above the one before, as Expand Appearance makes them, instead of one path of every copy whose fill lay under every copy's stroke (#5920). A single opaque stroke or nonzero fill still draws as one path. Counts unchanged. |
 | 2026-11-04 | minor | Expand Appearance of a path or compound path whose Transform effect makes copies gives a group of one object per copy, each with the path's fills and strokes, instead of one compound path of every copy; copies of copies nest (#5612). Counts unchanged. |
