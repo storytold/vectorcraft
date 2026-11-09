@@ -23,6 +23,7 @@ impl<'p> Builder<'p> {
             glyphs: None,
             text: None,
             text_as,
+            actual: Default::default(),
             images: HashMap::new(),
             image_keys: HashMap::new(),
             cmyk_keys: HashSet::new(),
@@ -102,6 +103,7 @@ impl<'p> Builder<'p> {
         self.mask = None;
         self.masked.clear();
         self.marked.clear();
+        self.actual = Default::default();
         (self.scan, self.tag_at, self.aligned, self.paint_at) = (scan, 0, true, 0);
         if self.scan.overprints && self.scan.zero_mode {
             self.warn(OVERPRINT_ZERO_MODE);
@@ -749,6 +751,7 @@ impl<'p> Builder<'p> {
         if self.text_as != TextAs::Text || self.nested > 0 {
             return false;
         }
+        let authored = self.actual.active();
         let key = o.font_cache_key();
         let glyph = o.glyph_id().to_u32();
         let (unicode, from_cid) = match o.as_unicode().filter(|u| !replacement(u)) {
@@ -773,6 +776,7 @@ impl<'p> Builder<'p> {
         let text: String = match unicode {
             Some(BfString::Char(c)) => c.to_string(),
             Some(BfString::String(s)) => s,
+            None if authored => String::new(),
             None => {
                 // Invisible text isn't kept as outlines: the caller says it was left out.
                 if paint.is_some() && o.as_unicode().is_some_and(|u| replacement(&u)) {
@@ -785,7 +789,7 @@ impl<'p> Builder<'p> {
         // Adobe's CID tables map some ideographs to their look-alike Kangxi radicals.
         let text: String = if from_cid { text.chars().map(unify_radical).collect() } else { text };
         let Some(at) = Placement::of(m) else { return false };
-        if text.is_empty() || text.chars().any(|c| c.is_control()) {
+        if !authored && (text.is_empty() || text.chars().any(|c| c.is_control())) {
             return false;
         }
         let width = o.advance_width().filter(|w| w.is_finite());
@@ -849,6 +853,9 @@ impl<'p> Builder<'p> {
             fill: if stroke.is_none() { paint } else { None },
             stroke,
         };
+        if authored {
+            return self.actual_glyph(o, m, at, look, opacity);
+        }
         let advance = width.map_or(at.size * 0.5, |w| w as f64 / 1000.0 * at.size * at.h_scale / 100.0);
         // A glyph set vertically is drawn from its origin, which the file puts the position
         // vector's vx (from the font's `W2`, else half its width from `W` or `DW`) to the left of
