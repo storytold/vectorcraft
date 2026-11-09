@@ -20,10 +20,13 @@
 //! `constructor` is the global its `type:` names. Its counts are printed apart from the parse
 //! counts, and its failures go to `run-failures.txt`.
 //!
-//! A third test runs the tests under `test/built-ins/String`, `Number`, `RegExp` and `Date` the same
-//! way, counting the tests that name an ES5 section apart from the other tests without a feature
-//! tag; its failures go to `builtins-failures.txt`. The interpreter tests fail when the
-//! interpreter panics, when a harness or test file cannot be read, or when no ES5 test runs.
+//! A third test runs the tests of the ES5 built-ins the same way: those under the folders
+//! [`ES5_BUILT_INS`] names that have an `es5id:` (or, under `annexB/`, any edition's id) and no
+//! `features:` tag. Its failures go to `built-ins-failures.txt`. A fourth test runs the tests under
+//! `test/built-ins/String`, `Number`, `RegExp` and `Date` the same way, counting the tests that name
+//! an ES5 section apart from the other tests without a feature tag; its failures go to
+//! `builtins-failures.txt`. The interpreter tests fail when the interpreter panics, when a harness
+//! or test file cannot be read, or when no ES5 test runs.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -198,15 +201,37 @@ fn es5_parse_subset() {
     );
 }
 
-/// Globals and method names the interpreter does not provide yet: a test that names one is
-/// skipped.
-const MISSING_BUILTINS: &str = "Array String Number Boolean Math JSON Date RegExp parseInt parseFloat isNaN isFinite encodeURI \
-    decodeURI encodeURIComponent decodeURIComponent escape unescape print $262 $DONE Symbol Proxy Reflect Promise Map Set WeakMap \
-    WeakSet ArrayBuffer DataView Int8Array Uint8Array Float64Array defineProperty defineProperties getOwnPropertyDescriptor \
-    getOwnPropertyNames getPrototypeOf create keys freeze isFrozen seal isSealed preventExtensions isExtensible push pop shift unshift \
-    slice splice concat join reverse sort indexOf lastIndexOf every some forEach map filter reduce reduceRight charAt charCodeAt \
-    fromCharCode substring substr split replace match search exec test toUpperCase toLowerCase trim toFixed toPrecision toExponential \
-    bind now isArray compareArray verifyProperty fnGlobalObject";
+/// Globals and method names the interpreter does not provide yet: a test that names one, in its
+/// own source or in a harness file it includes, is skipped.
+const MISSING_BUILTINS: &str = "String Number Boolean Date RegExp print $262 $DONE Symbol Proxy Reflect Promise Map Set WeakMap \
+    WeakSet ArrayBuffer DataView Int8Array Uint8Array Float64Array charAt charCodeAt fromCharCode substring substr split replace \
+    match search exec test toUpperCase toLowerCase trim toFixed toPrecision toExponential now";
+
+/// The directories under `test/built-ins/` and `test/annexB/built-ins/` that hold tests of the
+/// ES5 built-ins (ECMA-262 5.1 sections 15.1 to 15.12 and Annex B.2).
+const ES5_BUILT_INS: &[&str] = &[
+    "built-ins/Object",
+    "built-ins/Function",
+    "built-ins/Array",
+    "built-ins/Error",
+    "built-ins/NativeErrors",
+    "built-ins/Math",
+    "built-ins/JSON",
+    "built-ins/global",
+    "built-ins/Infinity",
+    "built-ins/NaN",
+    "built-ins/undefined",
+    "built-ins/parseInt",
+    "built-ins/parseFloat",
+    "built-ins/isNaN",
+    "built-ins/isFinite",
+    "built-ins/encodeURI",
+    "built-ins/encodeURIComponent",
+    "built-ins/decodeURI",
+    "built-ins/decodeURIComponent",
+    "annexB/built-ins/escape",
+    "annexB/built-ins/unescape",
+];
 
 /// The names in [`MISSING_BUILTINS`] that `String`, `Number`, `RegExp` and `Date` provide.
 const TEXT_BUILTINS: &str = "String Number Date RegExp charAt charCodeAt fromCharCode substring substr split replace match search exec test \
@@ -310,9 +335,47 @@ fn run_language_subset(dir: &Path) {
 }
 
 #[test]
-fn es5_text_builtins_run() {
+fn es5_built_ins_subset_runs() {
     let Some(dir) = suite_dir() else {
         println!("test262 built-ins: SKIPPED (no suite; run cargo xtask test262)");
+        return;
+    };
+    let handle = std::thread::Builder::new().stack_size(64 << 20).spawn(move || run_built_ins(&dir)).unwrap();
+    handle.join().unwrap();
+}
+
+/// Runs the tests under the folders [`ES5_BUILT_INS`] names, prints the counts and writes the
+/// failures to `built-ins-failures.txt` beside the suite. The Annex B tests name the edition they
+/// were written for with `esid:`, so they run without an `es5id:`.
+fn run_built_ins(dir: &Path) {
+    let missing = missing_builtins(&[TEXT_BUILTINS]);
+    let mut all = RunCounts::default();
+    for folder in ES5_BUILT_INS {
+        let root = dir.join("test").join(folder);
+        assert!(root.is_dir(), "{} is not a test262 checkout", dir.display());
+        let (es5, later) = run_tests(dir, &root, &missing, folder.starts_with("annexB"));
+        for counts in [es5, later] {
+            all.tests += counts.tests;
+            all.skipped += counts.skipped;
+            all.passed += counts.passed;
+            all.failed += counts.failed;
+            all.panicked += counts.panicked;
+            all.failures.push_str(&counts.failures);
+        }
+    }
+    assert!(all.tests > 0, "no ES5 built-ins tests ran under {}", dir.display());
+    let report = dir.join("built-ins-failures.txt");
+    if let Err(e) = std::fs::write(&report, &all.failures) {
+        println!("could not write {}: {e}", report.display());
+    }
+    println!("test262 ES5 built-ins subset through the interpreter: {}. Failures: {}", all.summary(), report.display());
+    assert_eq!(all.panicked, 0, "the interpreter panicked; see {}", report.display());
+}
+
+#[test]
+fn es5_text_builtins_run() {
+    let Some(dir) = suite_dir() else {
+        println!("test262 text built-ins: SKIPPED (no suite; run cargo xtask test262)");
         return;
     };
     let handle = std::thread::Builder::new().stack_size(64 << 20).spawn(move || run_text_builtins(&dir)).unwrap();

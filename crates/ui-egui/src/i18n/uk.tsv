@@ -2019,6 +2019,10 @@ file-filter	Templates	Шаблони
 	Stylistic	Стилістичні
 	Mojikumi Set	Набір mojikumi
 	Kinsoku Set	Набір kinsoku
+	Kinsoku Shori Type	Тип kinsoku shori
+	Push In First	Спершу втягувати
+	Push Out First	Спершу виштовхувати
+	Push Out Only	Лише виштовхувати
 	Hard	Суворий
 	Soft	М’який
 	Monitor RGB	RGB монітора
@@ -6183,6 +6187,24 @@ breakText	Glyphs	Гліфи
 # 3D Box add-on
 	3D Box	3D-паралелепіпед
 	3D Box Tool	Інструмент «3D-паралелепіпед»
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Відкрити за допомогою
+	No importer plug-ins installed	Модулі імпорту не встановлено
+	Read files you open in its format and make documents from them	Читати файли, які ви відкриваєте в його форматі, і створювати з них документи
+@msg	{_1} is an importer (File › Open With)	{_1} - модуль імпорту (Файл › Відкрити за допомогою)
+@msg	missing `importer` (see document.formats)	не вказано `importer` (див. document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` має бути ідентифікатором формату модуля (див. document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	«{shown}» відкриває файли {_1}, а не `{_2}`
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` є модулем виду `{_2}`, а не модулем імпорту
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` є модулем виду `{_2}`, а не модулем експорту
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` - модуль імпорту: відкрийте файл за допомогою document.open {{"importer"}"}}
+@msg	the importer returned no objects	модуль імпорту не повернув жодного об’єкта
+@msg	an importer returns `objects` and `warnings`, not `{key}`	модуль імпорту повертає `objects` і `warnings`, а не `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	файл більший за {MAX_INPUT_BYTES} байтів, які читає модуль імпорту
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	модуль імпорту оголошує від 1 до {MAX_EXTENSIONS} `extensions`
+@msg	only an exporter or an importer declares `extensions`	`extensions` оголошує лише модуль експорту або імпорту
+@msg	an importer always gets an import's budget: leave `budget` out	модуль імпорту завжди отримує бюджет імпорту: не вказуйте `budget`
 
 # Safe Mode
 	Safe Mode…	Безпечний режим…

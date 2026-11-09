@@ -1990,6 +1990,10 @@ font-technology	Variable	Variables
 	Stylistic	Stylistique
 	Mojikumi Set	Jeu de mojikumi
 	Kinsoku Set	Jeu de kinsoku
+	Kinsoku Shori Type	Type de kinsoku shori
+	Push In First	D’abord vers l’intérieur
+	Push Out First	D’abord vers l’extérieur
+	Push Out Only	Vers l’extérieur uniquement
 	Hard	Fort
 	Soft	Souple
 	Monitor RGB	RVB du moniteur
@@ -6578,6 +6582,24 @@ breakText	Glyphs	Glyphes
 # 3D Box add-on
 	3D Box	Boîte 3D
 	3D Box Tool	Outil Boîte 3D
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Ouvrir avec
+	No importer plug-ins installed	Aucun module externe d’importation installé
+	Read files you open in its format and make documents from them	Lire les fichiers que vous ouvrez dans son format et en faire des documents
+@msg	{_1} is an importer (File › Open With)	{_1} est un module externe d’importation (Fichier › Ouvrir avec)
+@msg	missing `importer` (see document.formats)	`importer` manquant (voir document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` doit être l’identifiant de format d’un module externe (voir document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	« {shown} » ouvre les fichiers {_1}, pas `{_2}`
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` est un module externe de type `{_2}`, pas un module externe d’importation
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` est un module externe de type `{_2}`, pas un module externe d’exportation
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` est un module externe d’importation : ouvrez un fichier avec document.open {{"importer"}"}}
+@msg	the importer returned no objects	le module externe d’importation n’a renvoyé aucun objet
+@msg	an importer returns `objects` and `warnings`, not `{key}`	un module externe d’importation renvoie `objects` et `warnings`, pas `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	le fichier dépasse les {MAX_INPUT_BYTES} octets qu’un module externe d’importation lit
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	un module externe d’importation déclare de 1 à {MAX_EXTENSIONS} `extensions`
+@msg	only an exporter or an importer declares `extensions`	seul un module externe d’exportation ou d’importation déclare `extensions`
+@msg	an importer always gets an import's budget: leave `budget` out	un module externe d’importation reçoit toujours le budget d’une importation : omettez `budget`
 
 # Safe Mode
 	Safe Mode…	Mode sans échec…

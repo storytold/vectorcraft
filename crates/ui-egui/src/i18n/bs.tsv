@@ -1905,6 +1905,10 @@ digits	Malayalam	Malajalam
 	Stylistic	Stilsko
 	Mojikumi Set	Mojikumi skup
 	Kinsoku Set	Kinsoku skup
+	Kinsoku Shori Type	Vrsta Kinsoku Shori
+	Push In First	Prvo uvlačenje
+	Push Out First	Prvo izbacivanje
+	Push Out Only	Samo izbacivanje
 	Hard	Tvrdo
 	Right Indent	Desna uvlaka
 	Right-to-Left Paragraph Direction	Smjer pasusa s desna nalijevo
@@ -6437,6 +6441,11 @@ shape	Open	Otvoren
 # 3D Box add-on
 	3D Box	3D kutija
 	3D Box Tool	Alat za 3D kutiju
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Otvori pomoću
+	No importer plug-ins installed	Nisu instalirani dodaci za uvoz
+	Read files you open in its format and make documents from them	Čitati datoteke koje otvarate u njegovom formatu i od njih praviti dokumente
 
 # Safe Mode
 	Safe Mode…	Sigurni način rada…

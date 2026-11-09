@@ -5427,7 +5427,7 @@ antiAlias	Sharp	शार्प
 @msg	`{_1}` can't be edited or removed	`{_1}` को संपादित या हटाया नहीं जा सकता है
 @msg	`{_1}` has no brushes to apply	`{_1}` को लागू करने के लिए कोई ब्रश नहीं है
 @msg	`{_1}` has no symbols to place	`{_1}` के पास कोई सिंबल नहीं है
-@msg	`{_1}` is a {_2}, not an exporter	`{_1}` एक {_2} है, एक निर्यातक नहीं है
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` `{_2}` प्रकार का प्लग-इन है, निर्यातक नहीं
 @msg	`{_1}` is a live effect: apply it with effect.apply {{"effect"}"}}	`{_1}` एक लाइव इफ़ेक्ट है: इसे effect.apply {{"effect"}"}} के साथ लागू करें
 @msg	`{_1}` is an exporter: export with document.export {{"format"}"}}	`{_1}` एक एक्सपोर्टर है: document.export {{"format"}"}} से एक्सपोर्ट करें
 @msg	`{_1}` is built in and always listed	`{_1}` बनाया गया है और हमेशा सूचीबद्ध है
@@ -6992,7 +6992,7 @@ antiAlias	Sharp	शार्प
 @msg	Offset Path: the path is too complex to offset	ऑफसेट पाथ: पाथ ऑफसेट करने के लिए बहुत जटिल है
 @msg	on must be true or false	on को true या false होना चाहिए
 @msg	only a dock group above or below others collapses, not one beside another	केवल दूसरों के ऊपर या नीचे एक डॉक समूह गिर जाता है, एक दूसरे के बगल में नहीं
-@msg	only an exporter declares `extensions`	केवल निर्यातक `extensions` घोषित करता है
+@msg	only an exporter or an importer declares `extensions`	केवल एक्सपोर्टर या इंपोर्टर `extensions` घोषित करता है
 @msg	only an object of the Global Edit other than the one it started from can be left out	केवल ग्लोबल एडिट का एक ऑब्जेक्ट, इसके अलावा इसे शुरू किया जा सकता है, छोड़ दिया जा सकता है
 @msg	only groups, layers, type and images have a Contents (Characters) row	केवल समूहों, लेयर्स, प्रकार और इमेज में एक सामग्री (Character) पंक्ति है
 @msg	only http, https and mailto URLs open in the browser, not “{url}”	केवल http, https और Mailto URL ब्राउज़र में खुलते हैं, न कि "{url}"
@@ -8058,3 +8058,19 @@ theme	Appearance	अपीयरेंस
 	Touching	स्पर्श करते हुए
 	Fully Enclosed	पूरी तरह घिरे हुए
 	Drag Direction	खींचने की दिशा
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	इसके साथ खोलें
+	No importer plug-ins installed	कोई इंपोर्टर प्लग-इन स्थापित नहीं है
+	Read files you open in its format and make documents from them	उसके फ़ॉर्मेट में खोली गई फ़ाइलें पढ़ना और उनसे डॉक्यूमेंट बनाना
+@msg	{_1} is an importer (File › Open With)	{_1} एक इंपोर्टर है (फ़ाइल › इसके साथ खोलें)
+@msg	missing `importer` (see document.formats)	`importer` नहीं दिया गया (document.formats देखें)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` किसी प्लग-इन का फ़ॉर्मेट id होना चाहिए (document.formats देखें)
+@msg	“{shown}” opens {_1} files, not `{_2}`	“{shown}” {_1} फ़ाइलें खोलता है, `{_2}` नहीं
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` `{_2}` प्रकार का प्लग-इन है, इंपोर्टर नहीं
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` एक इंपोर्टर है: document.open {{"importer"}"}} से फ़ाइल खोलें
+@msg	the importer returned no objects	इंपोर्टर ने कोई ऑब्जेक्ट नहीं लौटाया
+@msg	an importer returns `objects` and `warnings`, not `{key}`	इंपोर्टर `objects` और `warnings` लौटाता है, `{key}` नहीं
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	फ़ाइल उन {MAX_INPUT_BYTES} बाइट्स से बड़ी है जो इंपोर्टर पढ़ता है
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	इंपोर्टर 1 से {MAX_EXTENSIONS} `extensions` घोषित करता है
+@msg	an importer always gets an import's budget: leave `budget` out	इंपोर्टर को हमेशा इंपोर्ट का बजट मिलता है: `budget` छोड़ दें

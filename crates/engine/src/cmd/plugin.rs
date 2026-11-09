@@ -7,7 +7,8 @@
 //! plug-in that fails leaves the document untouched), and read and write the data they keep with
 //! the document ([`vectorcraft_doc::plugin_data`], theirs alone); live-effect plug-ins are applied
 //! like any effect (`effect.apply {effect: "plugin.<id>"}`) and drawn by `vectorcraft-effects`;
-//! exporters add a file format that `document.export` writes (`fileio::plugin_formats`).
+//! exporters add a file format that `document.export` writes, and importers one that
+//! `document.open` reads (`fileio::plugin_formats`).
 //!
 //! A filter may ask for a heavy budget (`Budget::Heavy`: minutes rather than a minute, for routing,
 //! packing or simulation). It installs only once the user agrees (`plugin.install {allowHeavy}`),
@@ -65,7 +66,7 @@ pub fn describe(p: &Plugin) -> Value {
     });
     match m.kind {
         Kind::Effect => v["effect"] = json!(effect::effect_id(&m.id)),
-        Kind::Exporter => {
+        Kind::Exporter | Kind::Importer => {
             v["format"] = json!(export::format_id(&m.id));
             v["extensions"] = json!(m.extensions);
         }
@@ -156,6 +157,12 @@ impl FilterRun {
                 return Err(bad(
                     C,
                     format!("`{}` is an exporter: export with document.export {{\"format\": \"{}\"}}", m.id, export::format_id(&m.id)),
+                ));
+            }
+            Kind::Importer => {
+                return Err(bad(
+                    C,
+                    format!("`{}` is an importer: open a file with document.open {{\"importer\": \"{}\"}}", m.id, export::format_id(&m.id)),
                 ));
             }
         }
@@ -446,8 +453,13 @@ pub(crate) fn run_command(s: &mut Session, id: &str, p: &Value) -> Result<Value>
 /// Texturizer) comes as the effect stores it, never as a file to read: a plug-in can't have the
 /// host read one.
 fn admit_effects(fx: &[Effect], n: &Node) -> std::result::Result<Vec<Effect>, String> {
+    admit_effects_for("plugin.run", fx, n)
+}
+
+/// [`admit_effects`] for command `cmd`, which bad parameters name: `plugin.run`, or `document.open`
+/// for the objects an importer plug-in returns.
+pub(crate) fn admit_effects_for(cmd: &str, fx: &[Effect], n: &Node) -> std::result::Result<Vec<Effect>, String> {
     use vectorcraft_render::effects;
-    const C: &str = "plugin.run";
     let mut out = Vec::with_capacity(fx.len());
     for (j, e) in fx.iter().enumerate() {
         if n.appearance.effects.contains(e) {
@@ -460,7 +472,7 @@ fn admit_effects(fx: &[Effect], n: &Node) -> std::result::Result<Vec<Effect>, St
             Some(plugin) => {
                 plugin.manifest().resolve_params(&params).map_err(|why| refuse(why.to_string()))?;
             }
-            None => super::params::check_effect_params(C, &e.id, &params).map_err(|why| refuse(why.to_string()))?,
+            None => super::params::check_effect_params(cmd, &e.id, &params).map_err(|why| refuse(why.to_string()))?,
         }
         if super::effectcmd::texture_load_effect(&e.id)
             && let Some(t) = params.get(effects::pixel::TEXTURE_IMAGE)
@@ -859,7 +871,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "List Plug-ins",
             [],
             None,
-            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's format id, plugin.<id>, for document.export, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines; settings: it may keep settings of its own; cache: it may keep a cache of its own), hash (the module's SHA-256), api (the plug-in API level it was built for, 1 or 2), cacheBytes (the bytes its cache holds; see plugin.clearCache), commands?: [{id, command (its command id, plugin.<id>.<command id>, which runs it), label, params (doc), paramsSchema}] (the menu commands a filter or live effect adds)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}]} | null, safeMode: bool (no plug-in loads or runs, see plugin.safeMode), disabled: [{id, file, name, label}] (turned off for the next launch, see plugin.setEnabled)}",
+            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\"|\"importer\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's or importer's format id, plugin.<id>, for document.export or document.open's importer, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines; settings: it may keep settings of its own; cache: it may keep a cache of its own), hash (the module's SHA-256), api (the plug-in API level it was built for, 1 or 2), cacheBytes (the bytes its cache holds; see plugin.clearCache), commands?: [{id, command (its command id, plugin.<id>.<command id>, which runs it), label, params (doc), paramsSchema}] (the menu commands a filter or live effect adds)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}]} | null, safeMode: bool (no plug-in loads or runs, see plugin.safeMode), disabled: [{id, file, name, label}] (turned off for the next launch, see plugin.setEnabled)}",
             always,
             list
         ),
