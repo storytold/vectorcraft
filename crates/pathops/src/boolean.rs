@@ -20,6 +20,8 @@ use crate::fit::{end_tangent, fit_single, is_straight, sample, start_tangent};
 thread_local! {
     /// The contour passes made over an arrangement on this thread, each of which walks all of it.
     pub(crate) static CONTOUR_PASSES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// The sweeps [`normalize_bez`] made on this thread.
+    static NORMALIZE_SWEEPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// Default curve-refit tolerance (document points) used to merge split curve pieces back together.
@@ -822,6 +824,8 @@ pub fn try_normalize(path: &PathData, rule: FillRule) -> Result<PathData, PathOp
 }
 
 pub(crate) fn normalize_bez(bp: &BezPath, rule: FillRule) -> Result<Contours, PathOpsError> {
+    #[cfg(test)]
+    NORMALIZE_SWEEPS.with(|n| n.set(n.get() + 1));
     let eps = eps_for([bp])?;
     let mut bp = bp.clone();
     snap_horizontals(&mut [&mut bp], eps);
@@ -983,25 +987,20 @@ pub fn try_unite_all_with(paths: &[(&PathData, FillRule)], precision: f64) -> Re
 
 /// [`try_unite_all_with`] with the sweeps run on `paths` as they are.
 pub(crate) fn try_unite_all_upright(paths: &[(&PathData, FillRule)], precision: f64) -> Result<PathData, PathOpsError> {
-    let mut all = BezPath::new();
-    for (p, r) in paths {
-        let bp = fill_bezpath(p);
+    let bps: Vec<BezPath> = paths.iter().map(|(p, _)| fill_bezpath(p)).collect();
+    let mut parts = Vec::new();
+    for (bp, (_, r)) in bps.iter().zip(paths) {
         if bp.elements().is_empty() {
             continue;
         }
-        for ct in normalize_bez(&bp, *r)?.contours() {
-            all.extend(ct.path.iter());
-        }
+        parts.push((normalize_bez(bp, *r)?, bp.segments().count()));
     }
-    if all.elements().is_empty() {
-        return Ok(PathData::default());
-    }
-    let tidy = Tidy::keeping(precision, paths.iter().map(|(p, _)| fill_bezpath(p)).collect::<Vec<_>>().iter());
-    Ok(all_contours_to_path(&normalize_bez(&all, FillRule::NonZero)?, &tidy))
+    unite_parts(&parts, &bps, precision)
 }
 
 /// Union of many filled paths. Each input is first normalised on its own, then all are swept
 /// together with a single integer winding number, which keeps this fast for thousands of shapes.
+/// A single input whose own sweep split none of its segments is not swept a second time.
 pub fn unite_all(paths: &[(&PathData, FillRule)]) -> PathData {
     unite_all_with(paths, DEFAULT_PRECISION)
 }
@@ -1019,25 +1018,57 @@ pub fn unite_all_with(paths: &[(&PathData, FillRule)], precision: f64) -> PathDa
 
 /// [`unite_all_with`] with the sweeps run on `paths` as they are.
 pub(crate) fn unite_all_upright(paths: &[(&PathData, FillRule)], precision: f64) -> PathData {
-    let mut all = BezPath::new();
-    for (p, r) in paths {
-        let bp = fill_bezpath(p);
+    let bps: Vec<BezPath> = paths.iter().map(|(p, _)| fill_bezpath(p)).collect();
+    let mut parts = Vec::new();
+    for (bp, (_, r)) in bps.iter().zip(paths) {
         if bp.elements().is_empty() {
             continue;
         }
-        let Ok(c) = normalize_bez(&bp, *r) else { continue };
+        let Ok(c) = normalize_bez(bp, *r) else { continue };
+        parts.push((c, bp.segments().count()));
+    }
+    unite_parts(&parts, &bps, precision).unwrap_or_default()
+}
+
+/// The union of `parts`, each the contours [`normalize_bez`] made of one input with that input's
+/// segment count, refit to `precision` keeping the anchors of `inputs`.
+///
+/// When there is one part and its sweep split none of the input's segments, its contours are the
+/// union and are refit as they are. Otherwise all the contours are swept again together under
+/// NonZero, which also merges the short pieces the first sweeps leave where a path crosses itself.
+fn unite_parts(parts: &[(Contours, usize)], inputs: &[BezPath], precision: f64) -> Result<PathData, PathOpsError> {
+    let mut all = BezPath::new();
+    for (c, _) in parts {
         for ct in c.contours() {
             all.extend(ct.path.iter());
         }
     }
     if all.elements().is_empty() {
-        return PathData::default();
+        return Ok(PathData::default());
     }
-    let tidy = Tidy::keeping(precision, paths.iter().map(|(p, _)| fill_bezpath(p)).collect::<Vec<_>>().iter());
-    match normalize_bez(&all, FillRule::NonZero) {
-        Ok(c) => all_contours_to_path(&c, &tidy),
-        Err(_) => PathData::default(),
+    let tidy = Tidy::keeping(precision, inputs.iter());
+    if let [(c, input_segments)] = parts
+        && splits_nothing(c, *input_segments, &tidy)
+    {
+        return Ok(all_contours_to_path(c, &tidy));
     }
+    Ok(all_contours_to_path(&normalize_bez(&all, FillRule::NonZero)?, &tidy))
+}
+
+/// Are the contours `c` the input's own segments: as many as `input_segments`, each starting at an
+/// anchor `tidy` keeps? A segment split where paths cross gives a piece that starts away from the
+/// anchors, and a piece dropped inside another path leaves fewer segments than the input.
+fn splits_nothing(c: &Contours, input_segments: usize, tidy: &Tidy) -> bool {
+    let mut n = 0;
+    for ct in c.contours() {
+        for s in ct.path.segments() {
+            if !tidy.is_kept(to_seg(s).c.p0) {
+                return false;
+            }
+            n += 1;
+        }
+    }
+    n == input_segments
 }
 
 /// [`area`] that reports a refused input instead of an area of zero.
@@ -1314,6 +1345,121 @@ mod tests {
         let (s, t) = (poly(&[(0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)]), poly(&[(2.0, 2.0), (6.0, 2.0), (6.0, 6.0), (2.0, 6.0)]));
         let arr = Arrangement::new(vec![(s.clone(), FillRule::NonZero), (t.clone(), FillRule::EvenOdd)]).unwrap();
         assert!(arrangement_adds_up(&arr, [&s, &t]));
+    }
+
+    /// The union with every input swept on its own and then all their contours swept together.
+    fn unite_swept_twice(paths: &[(&PathData, FillRule)], precision: f64) -> PathData {
+        let bps: Vec<BezPath> = paths.iter().map(|(p, _)| fill_bezpath(p)).collect();
+        let mut all = BezPath::new();
+        for (bp, (_, r)) in bps.iter().zip(paths) {
+            for ct in normalize_bez(bp, *r).unwrap().contours() {
+                all.extend(ct.path.iter());
+            }
+        }
+        all_contours_to_path(&normalize_bez(&all, FillRule::NonZero).unwrap(), &Tidy::keeping(precision, bps.iter()))
+    }
+
+    /// The unions of `paths` by [`unite_all_with`] and [`try_unite_all_with`], each with the sweeps it made.
+    fn unite_counting_sweeps(paths: &[(&PathData, FillRule)]) -> [(PathData, usize); 2] {
+        let counted = |f: &dyn Fn() -> PathData| {
+            NORMALIZE_SWEEPS.with(|n| n.set(0));
+            let out = f();
+            (out, NORMALIZE_SWEEPS.with(std::cell::Cell::get))
+        };
+        [counted(&|| unite_all_with(paths, DEFAULT_PRECISION)), counted(&|| try_unite_all_with(paths, DEFAULT_PRECISION).unwrap())]
+    }
+
+    /// Disjoint rings, each a circle with a circular hole, as one even-odd compound path.
+    fn rings(n: usize) -> PathData {
+        let mut bp = BezPath::new();
+        for i in 0..n {
+            let c = Point::new((i % 10) as f64 * 30.0, (i / 10) as f64 * 30.0);
+            bp.extend(kurbo::Circle::new(c, 12.0).path_elements(0.1));
+            bp.extend(kurbo::Circle::new(c, 5.0).path_elements(0.1));
+        }
+        PathData::from_bezpath(&bp)
+    }
+
+    /// A polygon with `n` teeth of different heights along its top.
+    fn zigzag(n: usize) -> PathData {
+        let mut pts: Vec<Point> = (0..=n).map(|i| Point::new(i as f64 * 4.0, if i % 2 == 0 { 0.0 } else { -10.0 - (i * 37 % 11) as f64 })).collect();
+        pts.push(Point::new(n as f64 * 4.0, 20.0));
+        pts.push(Point::new(0.0, 20.0));
+        PathData::single(vectorcraft_geom::SubPath::polyline(&pts, true))
+    }
+
+    #[test]
+    fn a_lone_input_its_own_sweep_does_not_split_is_swept_once() {
+        for (name, path, rule) in [("rings", rings(40), FillRule::EvenOdd), ("zigzag", zigzag(301), FillRule::NonZero)] {
+            let want = unite_swept_twice(&[(&path, rule)], DEFAULT_PRECISION);
+            assert!(!want.is_empty(), "{name}");
+            for (got, sweeps) in unite_counting_sweeps(&[(&path, rule)]) {
+                assert_eq!(sweeps, 1, "{name}");
+                assert_eq!(got, want, "{name}");
+            }
+        }
+    }
+
+    #[test]
+    fn inputs_that_cross_or_are_several_are_swept_again_together() {
+        // Overlapping circles in one compound path: the first sweep splits them where they cross.
+        let mut bp = BezPath::new();
+        for i in 0..12 {
+            bp.extend(kurbo::Circle::new(((i % 4) as f64 * 15.0, (i / 4) as f64 * 15.0), 10.0).path_elements(0.1));
+        }
+        let overlapping = PathData::from_bezpath(&bp);
+        let want = unite_swept_twice(&[(&overlapping, FillRule::NonZero)], DEFAULT_PRECISION);
+        for (got, sweeps) in unite_counting_sweeps(&[(&overlapping, FillRule::NonZero)]) {
+            assert_eq!(sweeps, 2);
+            assert_eq!(got, want);
+        }
+        // Two overlapping squares in one compound path, each with an anchor where the other crosses it: the first sweep
+        // splits no segment and starts every piece at an anchor, but drops the pieces inside the other square.
+        let mut bp = BezPath::new();
+        for pts in [
+            [(0.0, 0.0), (10.0, 0.0), (10.0, 5.0), (10.0, 10.0), (5.0, 10.0), (0.0, 10.0)],
+            [(5.0, 5.0), (10.0, 5.0), (15.0, 5.0), (15.0, 15.0), (5.0, 15.0), (5.0, 10.0)],
+        ] {
+            bp.move_to(pts[0]);
+            for p in &pts[1..] {
+                bp.line_to(*p);
+            }
+            bp.close_path();
+        }
+        let anchored = PathData::from_bezpath(&bp);
+        let want = unite_swept_twice(&[(&anchored, FillRule::NonZero)], DEFAULT_PRECISION);
+        for (got, sweeps) in unite_counting_sweeps(&[(&anchored, FillRule::NonZero)]) {
+            assert_eq!(sweeps, 2);
+            assert_eq!(got, want);
+        }
+        // Two plain overlapping squares in one compound path: as many segments come out as go in, because the sweep drops
+        // the two pieces inside the other square and adds two where the outlines cross.
+        let mut bp = BezPath::new();
+        for (x, y) in [(0.0, 0.0), (5.0, 5.0)] {
+            bp.move_to((x, y));
+            bp.line_to((x + 10.0, y));
+            bp.line_to((x + 10.0, y + 10.0));
+            bp.line_to((x, y + 10.0));
+            bp.close_path();
+        }
+        let balanced = PathData::from_bezpath(&bp);
+        assert_eq!(
+            normalize_bez(&fill_bezpath(&balanced), FillRule::NonZero).unwrap().contours().map(|c| c.path.segments().count()).sum::<usize>(),
+            8
+        );
+        let want = unite_swept_twice(&[(&balanced, FillRule::NonZero)], DEFAULT_PRECISION);
+        for (got, sweeps) in unite_counting_sweeps(&[(&balanced, FillRule::NonZero)]) {
+            assert_eq!(sweeps, 2);
+            assert_eq!(got, want);
+        }
+        // Two inputs that do not cross each other or themselves are still swept together.
+        let (a, b) = (square(0.0, 0.0, 10.0), square(20.0, 0.0, 10.0));
+        let both = [(&a, FillRule::NonZero), (&b, FillRule::NonZero)];
+        let want = unite_swept_twice(&both, DEFAULT_PRECISION);
+        for (got, sweeps) in unite_counting_sweeps(&both) {
+            assert_eq!(sweeps, 3);
+            assert_eq!(got, want);
+        }
     }
 
     #[test]
