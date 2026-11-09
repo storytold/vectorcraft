@@ -18,16 +18,47 @@
 //! `SyntaxError` ("nesting too deep") instead of exhausting the stack, binary operators, `if` …
 //! `else if` chains, labels and prefix operators are read with loops, and the syntax tree is
 //! dropped without recursion.
+//!
+//! A [`Realm`] runs scripts. It compiles the syntax tree to bytecode, checks the bytecode with a
+//! verifier, and runs it on an interpreter that keeps JavaScript calls on its own frame stack, so
+//! deep recursion in a script does not use the native stack. Objects and environments live in an
+//! arena with a mark-and-sweep collector; strings built by repeated `+` are flattened and dropped
+//! with loops. The realm provides the language (sections 10 to 14 of ECMA-262 5.1) and these
+//! built-ins: the global functions and constants (15.1, with Annex B's `escape` and `unescape`),
+//! `Object` (15.2), `Function` with `call`, `apply` and `bind` (15.3), `Array` (15.4), `String`
+//! (15.5), `Boolean.prototype`'s `toString` and `valueOf` (15.6.4), `Number` (15.7), `Math` (15.8),
+//! `Date` (15.9), `RegExp` (15.10), the error types (15.11) and `JSON` (15.12). The array methods
+//! visit only the indices an array or array-like object has, so a sparse array of length 2^32-1
+//! costs as much as its elements, and `JSON.parse`, `JSON.stringify` and the reviver walk use no
+//! native recursion. Regular expressions run on a backtracking matcher that keeps its choice points
+//! on its own stack and takes fuel for every step; `Date` reads the clock and time zone the host
+//! sets with [`Realm::set_clock`] and [`Realm::set_time_zone`]. The prototype methods are writable
+//! and configurable, so scripts can replace them. Every run is bounded
+//! by [`Limits`]: instructions run (fuel), heap bytes, frames, nested host calls, and an
+//! [`Interrupt`] flag another thread can set. A run that reaches a limit ends with
+//! [`RunErrorKind::Limit`], which a script's `try` cannot catch.
 #![forbid(unsafe_code)]
 
 pub mod ast;
+mod builtins;
+mod bytecode;
 mod chars;
+mod compiler;
+mod date_builtins;
 mod error;
+mod heap;
+mod interp;
 mod lexer;
 mod number;
+mod number_builtins;
 mod parser;
+mod realm;
 mod regexp;
+mod regexp_builtins;
+mod regexp_vm;
+mod string_builtins;
 mod token;
+mod value;
 
 pub use ast::{
     AssignOp, Ast, BinaryOp, CatchClause, Expr, ExprId, ForInTarget, ForInit, Function, FunctionId, FunctionKind, LogicalOp, Name, Program, Property,
@@ -36,6 +67,7 @@ pub use ast::{
 pub use error::{SyntaxError, TOO_DEEP, TOO_LONG};
 pub use lexer::{Goal, Lexer};
 pub use number::to_string as number_to_string;
+pub use realm::{Interrupt, JsValue, LimitKind, Limits, Realm, RunError, RunErrorKind};
 pub use token::{Directive, DirectiveName, Keyword, Punct, Span, Token, TokenKind};
 
 /// How a script is read.
@@ -136,6 +168,11 @@ impl LineTable {
         (u32::try_from(line).unwrap_or(u32::MAX), offset.saturating_sub(start) + 1)
     }
 
+    /// The estimated bytes the table holds.
+    pub(crate) fn heap_bytes(&self) -> usize {
+        32 + 4 * self.starts.len()
+    }
+
     pub(crate) fn line_count(&self) -> u32 {
         if self.empty {
             return 0;
@@ -146,4 +183,10 @@ impl LineTable {
 }
 
 #[cfg(test)]
+mod builtins_tests;
+#[cfg(test)]
+mod interp_tests;
+#[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod text_tests;

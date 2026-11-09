@@ -290,7 +290,9 @@ pub(super) fn live(o: &Obj, before: Option<Node>, inner: Vec<Node>) -> Option<No
         }
         3 => {
             let (rows, cols, pts) = upright(shape?)?;
-            EnvelopeKind::TopObject { path: outline(rows, cols, &pts)? }
+            // The outline runs clockwise from the top left corner, one segment per grid edge.
+            let corners = [0, cols, cols.checked_add(rows)?, cols.checked_mul(2)?.checked_add(rows)?];
+            EnvelopeKind::TopObject { path: outline(rows, cols, &pts)?, corners: Some(corners) }
         }
         _ => return None,
     };

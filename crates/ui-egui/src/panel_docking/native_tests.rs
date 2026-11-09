@@ -25,6 +25,7 @@ struct Window {
     frames: usize,
     /// The texts its last frame drew, with their rects in the window.
     texts: Vec<(String, Rect)>,
+    accessibility: Vec<egui::accesskit::Node>,
 }
 
 struct Host {
@@ -82,7 +83,14 @@ impl Host {
             let mut host = host.borrow_mut();
             let builder = &viewport.builder;
             let rect = Rect::from_min_size(builder.position.unwrap_or_default(), builder.inner_size.unwrap_or(vec2(300.0, 200.0)));
-            host.windows.entry(id).or_insert_with(|| Window { rect, events: Vec::new(), dropped: Vec::new(), frames: 0, texts: Vec::new() });
+            host.windows.entry(id).or_insert_with(|| Window {
+                rect,
+                events: Vec::new(),
+                dropped: Vec::new(),
+                frames: 0,
+                texts: Vec::new(),
+                accessibility: Vec::new(),
+            });
             let viewports = host.infos();
             let (time, focused) = (host.time, host.focus == id);
             let Some(window) = host.windows.get_mut(&id) else { return };
@@ -171,10 +179,13 @@ impl Host {
         }
         let mut shown = Vec::new();
         full.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
+        let accessibility =
+            full.platform_output.accesskit_update.take().map(|update| update.nodes.into_iter().map(|(_, node)| node).collect()).unwrap_or_default();
         let mut host = host.borrow_mut();
         host.child_layer_order.insert(id, layer_order);
         if let Some(window) = host.windows.get_mut(&id) {
             window.texts = shown;
+            window.accessibility = accessibility;
         }
         host.apply(&full);
     }
@@ -349,6 +360,22 @@ fn open_button_menu(h: &mut Harness, viewport: ViewportId, side: f32, rank: impl
     menu
 }
 
+/// Click a named button, independent of other controls sharing its size or position.
+fn open_named_button_menu(h: &mut Harness, viewport: ViewportId, name: &str) -> Pos2 {
+    let buttons: Vec<Rect> = h.host.borrow().windows[&viewport]
+        .accessibility
+        .iter()
+        .filter(|node| node.role() == egui::accesskit::Role::Button && node.label() == Some(name))
+        .filter_map(|node| node.bounds())
+        .map(|bounds| Rect::from_min_max(pos2(bounds.x0 as f32, bounds.y0 as f32), pos2(bounds.x1 as f32, bounds.y1 as f32)))
+        .collect();
+    assert_eq!(buttons.len(), 1, "one visible button named {name}");
+    let at = buttons[0].center();
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([Event::PointerMoved(at), button(at, true), button(at, false)]);
+    h.frames(8);
+    at
+}
+
 /// A click on the ≡ button in the OS window `viewport`, the 16 pt square at the right end of the
 /// panel's tab strip. Returns where the button is.
 fn open_panel_menu(h: &mut Harness, viewport: ViewportId) -> Pos2 {
@@ -421,14 +448,18 @@ fn the_library_submenu_scrolls_inside_a_short_native_window() {
     assert_submenu_reaches_its_end(&mut h, "swatches", 240.0, "Open Swatch Library", "Default Swatches", "Other Library…");
 }
 
-/// The Layers panel's Filter popup, under the topmost 24 pt button: the wheel brings its last row
+/// The Layers panel's named Filter button opens its popup: the wheel brings its last row
 /// into a short window.
 #[test]
 fn the_layers_filter_popup_scrolls_inside_a_short_native_window() {
     let mut h = Harness::new();
+    h.ctx.enable_accesskit();
     let viewport = h.float("layers");
     resize_window(&mut h, viewport, 160.0);
-    open_button_menu(&mut h, viewport, 24.0, |at| -at.y);
+    // The header's collapse control is also 24 pt square and sits above Filter.
+    assert!(text_rect(&h, viewport, "»").is_some(), "keep the competing header control in this regression");
+    open_named_button_menu(&mut h, viewport, "Filter");
+    assert!(floating_window(&layout_of(&h.app.ui), "layers").is_some(), "Filter must not collapse the panel");
     let over = text_rect(&h, viewport, "By Object").expect("the popup's By Object heading");
     assert!(text_rect(&h, viewport, "Hidden").is_none_or(|end| end.bottom() > 160.0), "the popup opens at the top of its list");
     wheel_down(&mut h, viewport, over.center(), 5000.0);
@@ -750,7 +781,38 @@ fn a_flyout_or_drawer_of_a_hidden_toolbar_leaves_the_palette_windows_shown() {
     h.app.run("window.panels", json!({})).unwrap();
     h.frames(1);
     assert!(!h.app.ui.toolbar && h.app.ui.flyout.is_some(), "the flyout is left set with the Tools panel hidden");
-    assert_eq!(take_palette_commands(&h, viewport).0.last(), Some(&true), "shown again: the flyout does not draw");
+    assert_eq!(take_palette_commands(&h, viewport).0, [true], "shown again: the flyout does not draw");
+}
+
+/// A strip torn off a flyout and a toolbar made with New Toolbar stay on screen like panels, so the
+/// palette windows stay shown beside them.
+#[test]
+fn a_torn_off_strip_or_a_new_toolbar_leaves_the_palette_windows_shown() {
+    let mut h = Harness::new();
+    let viewport = h.float("navigator");
+    h.host.borrow_mut().focus = ViewportId::ROOT;
+    h.frames(2);
+    take_palette_commands(&h, viewport);
+    // The commands go only on a change, so the drawer opening and closing shows the palette windows
+    // were on screen before the strip and the toolbar.
+    h.app.run("window.editToolbar", json!({"open": true})).unwrap();
+    h.frames(2);
+    assert_eq!(take_palette_commands(&h, viewport).0, [false], "hidden under the drawer");
+    h.app.run("window.editToolbar", json!({"open": false})).unwrap();
+    h.frames(2);
+    assert_eq!(take_palette_commands(&h, viewport).0, [true], "shown when the drawer closes");
+    h.app.run("window.floatTools", json!({"tool": "pen"})).unwrap();
+    h.app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+    h.frames(2);
+    let strips: Vec<&str> = h.app.ui.floating_flyouts.iter().filter_map(|strip| strip.tools.first().map(String::as_str)).collect();
+    assert_eq!(strips, ["pen"], "the Pen strip floats");
+    let toolbars: Vec<(&str, bool)> = h.app.ui.custom_toolbars.iter().map(|toolbar| (toolbar.name.as_str(), toolbar.shown)).collect();
+    assert_eq!(toolbars, [("Mine", true)], "the new toolbar shows");
+    assert_eq!(h.app.ui.flyout, None, "no flyout is open");
+    assert_eq!(take_palette_commands(&h, viewport), (vec![], vec![]), "the palette windows are left as they were");
+    h.app.run("window.editToolbar", json!({"open": true})).unwrap();
+    h.frames(2);
+    assert_eq!(take_palette_commands(&h, viewport).0, [false], "still shown: the drawer hides them again");
 }
 
 /// The frame in which a click elsewhere closes a flyout or the drawer shows the palette windows, as
@@ -1510,4 +1572,32 @@ fn wheel_without_a_move_uses_the_floating_viewports_pointer() {
     h.frame(vec![]);
     h.frame(vec![]);
     assert_ne!(h.app.run("text.fonts", json!({})).unwrap(), before);
+}
+
+#[test]
+fn floating_collapse_arrow_in_a_native_window_moves_the_group_to_the_rail() {
+    let mut h = Harness::new();
+    h.app.run("window.panel.float", json!({"panel": "layers", "group": true})).unwrap();
+    h.app.run("window.panel.activate", json!({"panel": "layers"})).unwrap();
+    h.frames(3);
+    let viewport = h.viewport("layers");
+    h.host.borrow_mut().focus = viewport;
+    let arrow = h.host.borrow().windows[&viewport]
+        .texts
+        .iter()
+        .find(|(text, _)| text == "»")
+        .map(|(_, rect)| rect.center())
+        .expect("the native floating header paints a collapse arrow");
+    for pressed in [true, false] {
+        h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([Event::PointerMoved(arrow), button(arrow, pressed)]);
+        h.frames(1);
+    }
+    h.frames(3);
+    let layout = layout_of(&h.app.ui);
+    assert!(floating_window(&layout, "layers").is_none());
+    assert_eq!(group_of(&layout, &"layers".into()), ["properties", "layers", "libraries"]);
+    assert!(["properties", "layers", "libraries"].iter().all(|p| in_iconic_column(&layout, p)));
+    let frames = h.host.borrow().windows[&viewport].frames;
+    h.frames(3);
+    assert_eq!(h.host.borrow().windows[&viewport].frames, frames, "the emptied palette is no longer rendered");
 }

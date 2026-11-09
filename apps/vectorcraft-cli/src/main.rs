@@ -1,10 +1,11 @@
 //! `vectorcraft-cli`: VectorCraft from the command line.
 //!
 //! ```text
+//! vectorcraft-cli --safe-mode SUBCOMMAND ...
 //! vectorcraft-cli mcp [--connect 127.0.0.1:7979 | --headless] [--automation-read-root DIR]... [--automation-write-root DIR]...
 //! vectorcraft-cli run [--in FILE] [--cmd id [--params '{json}'] | --commands FILE|-]... [--export out.svg]... [--scale 2] [--ppi 300]
 //! vectorcraft-cli commands
-//! vectorcraft-cli convert IN OUT [--scale 2] [--ppi 300] [--artboard 0 | --range 1-3,5] [--outline-text] [--decimals N] [--replace-lossy] [--editing-data] [--preserve-editing] [--ai-version 7|pdf] [--hidden-objects layer|omit|visible] [--transparent-images flatten|omit]
+//! vectorcraft-cli convert IN OUT [--scale 2] [--ppi 300] [--artboard 0 | --range 1-3,5] [--outline-text] [--decimals N] [--replace-lossy] [--editing-data] [--legacy-name-encoding ENC] [--preserve-editing] [--ai-version 7|pdf] [--hidden-objects layer|omit|visible] [--transparent-images flatten|omit]
 //! vectorcraft-cli info FILE
 //! vectorcraft-cli bench FILE [--size 2880x1800] [--iters 5]
 //! vectorcraft-cli perf [--paths 50000] [--deep]
@@ -72,6 +73,11 @@ const USAGE: &str = "\
 vectorcraft-cli — VectorCraft automation
 
 USAGE:
+  vectorcraft-cli --safe-mode SUBCOMMAND ...
+      Run any subcommand without plug-ins: none loads or runs, and plug-in commands report that
+      Safe Mode is on. Plug-ins stay installed. `--safe-mode mcp` serves a headless session and
+      does not take --connect.
+
   vectorcraft-cli mcp [--connect ADDR | --headless] [--automation-read-root DIR]... [--automation-write-root DIR]...
       Run the MCP server on stdio. Default: connect to a running app at 127.0.0.1:7979
       (vectorcraft --control 7979), falling back to a headless in-process session.
@@ -95,7 +101,7 @@ USAGE:
   vectorcraft-cli commands
       Print the command catalogue as JSON.
 
-  vectorcraft-cli convert IN OUT [--scale N] [--ppi N] [--artboard I | --range R] [--outline-text] [--decimals N] [--replace-lossy] [--editing-data] [--preserve-editing] [--ai-version 7|pdf] [--hidden-objects layer|omit|visible] [--transparent-images flatten|omit]
+  vectorcraft-cli convert IN OUT [--scale N] [--ppi N] [--artboard I | --range R] [--outline-text] [--decimals N] [--replace-lossy] [--editing-data] [--legacy-name-encoding ENC] [--preserve-editing] [--ai-version 7|pdf] [--hidden-objects layer|omit|visible] [--transparent-images flatten|omit]
       Open IN (any readable format) and export OUT in the format its extension picks (see Writable
       formats). Raster resolution: --ppi, else 72 times --scale, else the document's raster effects
       resolution; other formats leave them out. --artboard is 0-based, --range 1-based (\"1-3,5\"); a PDF gets every artboard
@@ -108,7 +114,10 @@ USAGE:
       IN left things out (hidden text, art or layers it could not read; the notes say which) unless
       --replace-lossy is given. --editing-data opens a .ai or an EPS with editing data from its editing copy
       even where that draws differently from its PDF part or page (which can be older), as long as
-      it can be read. A PDF OUT omits the embedded native document unless --preserve-editing is
+      it can be read. --legacy-name-encoding reads the names in a .ai's or an EPS's editing data
+      that aren't UTF-8 (layers, objects, artboards, colors, gradients, patterns, graphic styles,
+      swatches, brushes, symbols, variables and data sets, and data sets' text values) in
+      windows-1252 (the default), macintosh, windows-949, shift_jis, gbk or big5. A PDF OUT omits the embedded native document unless --preserve-editing is
       given (the app's Save As PDF still defaults to keeping it). With --preserve-editing, when the
       attachment is written the result's warnings say so (it is left out, with its own warning, for
       --artboard or a --range without every artboard).
@@ -128,12 +137,17 @@ USAGE:
       Render FILE (any readable format) fitted to WxH (default 2880x1800) and print ms per frame
       (warm), multithreaded and single-threaded.
 
-  vectorcraft-cli perf [--paths N] [--deep]
+  vectorcraft-cli perf [--paths N] [--deep] [--native-io [--artboards 1..4]]
       Check the performance budgets (render, pan, hit test, save/load, SVG, Pathfinder, handle
       and segment drags) on a synthetic N-path document (default 50000). Exits non-zero if a
       budget is exceeded, unless the report says the machine is busy. --deep also times work with
       no budget yet and prints memory use (the working set on Windows), with the peak so far on
       Windows and Linux.
+      --native-io instead measures the application's native save/open commands (one warmup,
+      five samples, no disk I/O), including preview, PDF, compression and API base64 costs.
+      It reports the default and explicit PDF opt-out, with and without preview/compression;
+      --artboards repeats the same artwork
+      on 1 to 4 overlapping artboards. This mode allows at most 50000 paths.
 ";
 
 /// The usage text plus the formats `document.open` reads and `document.export` writes.
@@ -175,12 +189,18 @@ fn main() -> ExitCode {
     #[cfg(target_os = "macos")]
     mac_fonts::install();
     prefs_dir::install_fonts();
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
+    // Before any subcommand attaches the plug-in folder.
+    let safe_mode = args.first().is_some_and(|a| a == "--safe-mode");
+    if safe_mode {
+        args.remove(0);
+        vectorcraft_engine::cmd::plugin::start_in_safe_mode();
+    }
     let r = match args.first().map(String::as_str) {
         // `commands` and `info` take no options, so `--help` or `-h` anywhere after them prints the
         // usage. The other subcommands check for it themselves.
         Some("commands" | "info") if help_requested(&args[1..], &[]) => help(),
-        Some("mcp") => mcp(&args[1..]),
+        Some("mcp") => mcp(&args[1..], safe_mode),
         Some("run") => run(&args[1..]),
         Some("commands") => commands(),
         Some("convert") => convert(&args[1..]),
@@ -213,7 +233,9 @@ fn with_stores(mut h: Headless) -> Headless {
     h
 }
 
-fn mcp(args: &[String]) -> Result<(), String> {
+/// `mcp`. With `--safe-mode` (`safe_mode`) it serves a headless session: a running app loads its own
+/// plug-ins, so `--connect` is refused and the default does not connect.
+fn mcp(args: &[String], safe_mode: bool) -> Result<(), String> {
     if help_requested(args, &["--connect", "--automation-read-root", "--automation-write-root"]) {
         return help();
     }
@@ -240,6 +262,9 @@ fn mcp(args: &[String]) -> Result<(), String> {
     if headless && connect.is_some() {
         return Err("use either --connect or --headless".into());
     }
+    if safe_mode && connect.is_some() {
+        return Err("--safe-mode runs a headless session without plug-ins; a running app loads its own: start it with `vectorcraft --safe-mode --control <port>`".into());
+    }
     let read: Vec<&Path> = read_roots.iter().map(Path::new).collect();
     let write: Vec<&Path> = write_roots.iter().map(Path::new).collect();
     let roots = AutomationRoots::new(&read, &write)?;
@@ -252,7 +277,7 @@ fn mcp(args: &[String]) -> Result<(), String> {
         file_access::confine_process(roots.clone());
         eprintln!("vectorcraft-cli: files confined: {}", roots.describe());
         Box::new(Headless::with_document().with_automation_roots(Some(roots)))
-    } else if headless {
+    } else if headless || safe_mode {
         Box::new(with_stores(Headless::with_document()))
     } else if let Some(addr) = connect {
         // Explicit address: fail loudly if the app isn't there.
@@ -280,8 +305,20 @@ fn commands() -> Result<(), String> {
 }
 
 fn convert(args: &[String]) -> Result<(), String> {
-    let valued =
-        ["--scale", "-s", "--ppi", "--artboard", "-a", "--range", "-r", "--decimals", "--ai-version", "--hidden-objects", "--transparent-images"];
+    let valued = [
+        "--scale",
+        "-s",
+        "--ppi",
+        "--artboard",
+        "-a",
+        "--range",
+        "-r",
+        "--decimals",
+        "--ai-version",
+        "--hidden-objects",
+        "--transparent-images",
+        "--legacy-name-encoding",
+    ];
     if help_requested(args, &valued) {
         return help();
     }
@@ -290,6 +327,9 @@ fn convert(args: &[String]) -> Result<(), String> {
         (None::<f64>, None::<u64>, None::<String>, false, false, false, false);
     let mut ppi = None::<f64>;
     let mut decimals = None::<u64>;
+    // The encoding of a legacy `.ai`'s names that aren't UTF-8, passed on as `document.open`'s
+    // `legacyNameEncoding`; the engine checks it.
+    let mut legacy_names = None::<String>;
     // Legacy `.ai` options, passed on as the export's own (`aiVersion`, `hiddenObjects`,
     // `transparentImages`); the engine checks their values.
     let mut legacy: Vec<(&str, String)> = vec![];
@@ -312,6 +352,9 @@ fn convert(args: &[String]) -> Result<(), String> {
             "--replace-lossy" => replace_lossy = true,
             "--editing-data" => editing_data = true,
             "--preserve-editing" => preserve_editing = true,
+            "--legacy-name-encoding" => {
+                legacy_names = Some(it.next().cloned().ok_or("--legacy-name-encoding needs an encoding such as windows-949")?);
+            }
             "--ai-version" => legacy.push(("aiVersion", it.next().cloned().ok_or("--ai-version needs 7 or pdf")?)),
             "--hidden-objects" => legacy.push(("hiddenObjects", it.next().cloned().ok_or("--hidden-objects needs layer, omit or visible")?)),
             "--transparent-images" => legacy.push(("transparentImages", it.next().cloned().ok_or("--transparent-images needs flatten or omit")?)),
@@ -324,8 +367,14 @@ fn convert(args: &[String]) -> Result<(), String> {
         return Err("a .ait template holds every artboard: --artboard and --range don't apply".into());
     }
     let mut h = Headless::new();
-    let opened = if editing_data {
-        let params = json!({"path": input, "editingData": "always"});
+    let opened = if editing_data || legacy_names.is_some() {
+        let mut params = json!({"path": input});
+        if editing_data {
+            params["editingData"] = json!("always");
+        }
+        if let Some(e) = &legacy_names {
+            params["legacyNameEncoding"] = json!(e);
+        }
         h.call("engine.execute", json!({"command": "document.open", "params": params})).map_err(|e| format!("open {input}: {e}"))?
     } else {
         h.call("app.open", json!({"path": input})).map_err(|e| format!("open {input}: {e}"))?
