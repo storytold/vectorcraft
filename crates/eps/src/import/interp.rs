@@ -82,6 +82,9 @@ pub(crate) struct Interp<'a> {
     /// The mappings of the CMaps shown with so far, by their range arrays (see `cid`), the most
     /// recent last.
     pub cmaps: super::cid::CMaps,
+    /// The Type 1 fonts read from the encrypted part of their programs, by the `CharStrings`
+    /// dictionary given to their font dictionaries (see `type1`).
+    pub type1: Vec<(DictRef, Rc<super::type1::Font>)>,
     /// The decrypted subroutines of Type 0 CIDFonts (see `cid`).
     pub cid_subrs: super::cid::CidSubrs,
     /// The font number `usefont` gave the CMap mappings that follow.
@@ -222,6 +225,7 @@ impl<'a> Interp<'a> {
             glyph_width: None,
             type42: vec![],
             cmaps: vec![],
+            type1: vec![],
             cid_subrs: vec![],
             cmap_font: 0,
             type42_counted: HashSet::new(),
@@ -1459,6 +1463,21 @@ impl<'a> Interp<'a> {
             Obj::Dict(d) => Ok(d),
             _ => ps_err("typecheck", ""),
         })
+    }
+
+    /// Is `o` the standard encoding (`Some(false)`) or the ISO Latin-1 encoding (`Some(true)`)
+    /// of systemdict, whose names here are all `.notdef`?
+    pub fn standard_encoding(&self, o: &Obj) -> Option<bool> {
+        let items = o.items()?;
+        let s = self.system.borrow();
+        let is = |k: &str| s.get(&Key::name(k)).and_then(Obj::items).is_some_and(|e| e.same(items));
+        if is("StandardEncoding") {
+            Some(false)
+        } else if is("ISOLatin1Encoding") {
+            Some(true)
+        } else {
+            None
+        }
     }
 
     /// The instances of `category`: `FontDirectory` for fonts.
