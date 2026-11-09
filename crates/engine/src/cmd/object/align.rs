@@ -1,4 +1,4 @@
-use super::transform::transform_patterns;
+use super::transform::{selection_length, transform_patterns};
 use super::{
     Affine, Document, EngineError, NodeId, OrientedBox, Point, Rect, Result, Scaling, Session, Value, Vec2, bad, check_numbers, check_switches,
     effects, has_multi, ok, selected_roots, str_param,
@@ -16,6 +16,11 @@ impl Session {
     /// box, see [`Document::oriented_bounds`]).
     pub fn transform_box(&self, ids: &[NodeId]) -> Option<OrientedBox> {
         effects::preview::oriented_bounds(&self.doc().ok()?.doc, ids, self.prefs.use_preview_bounds)
+    }
+    /// The Path Length panel's reading for `ids`: the summed length of every path in their
+    /// subtrees ([`selection_length`]), or `None` with no document open.
+    pub fn selection_length(&self, ids: &[NodeId]) -> Option<f64> {
+        Some(selection_length(&self.doc().ok()?.doc, ids))
     }
 }
 

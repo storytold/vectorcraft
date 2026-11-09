@@ -1254,6 +1254,7 @@ font-technology	Variable	Variables
 	Number:	Nombre :
 	Longest:	Le plus long :
 	Path:	Tracé :
+	Selection has no length to scale	La sélection n’a pas de longueur à mettre à l’échelle
 	Largest:	Le plus grand :
 	Direction:	Direction :
 	Symbolism Tools Options	Options des outils de symbolisme
@@ -3121,6 +3122,7 @@ digits	Malayalam	Malayalam
 	Set Bounds	Définir les limites
 	Set Current Layer	Définir le calque actif
 	Set Keyboard Shortcut	Définir un raccourci clavier
+	Set Length	Définir la longueur
 	Set Mesh Point Color	Définir la couleur du point de filet
 	Set Preference	Définir une préférence
 	Set Slice Rectangle	Définir le rectangle de tranche

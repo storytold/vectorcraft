@@ -1226,6 +1226,8 @@ font-technology	Variable	可變
 	Number:	數量：
 	Longest:	最長：
 	Path:	路徑：
+	Length:	長度：
+	Selection has no length to scale	選取範圍沒有可縮放的長度
 	Largest:	最大：
 	Direction:	方向：
 	Symbolism Tools Options	符號工具選項
@@ -4057,6 +4059,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Set Bounds	設定邊界
 	Set Current Layer	設定目前圖層
 	Set Keyboard Shortcut	設定鍵盤快速鍵
+	Set Length	設定長度
 	Set Mesh Point Color	設定網格點顏色
 	Set Preference	設定偏好設定
 	Set Slice Rectangle	設定切片矩形

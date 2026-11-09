@@ -5369,6 +5369,8 @@ mark-style	Japanese	Jepang
 	Edge Only	Hanya tepi
 	Overlay Edge	Hamparkan tepi
 	Path Length	Panjang jalur
+	Set Length	Atur Panjang
+	Selection has no length to scale	Seleksi tidak memiliki panjang untuk diskalakan
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	lapisan file tidak terbaca ({_1}): file masuk sebagai halamannya, dalam satu lapisan
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	lapisan file tidak terbaca dari data pengeditannya ({_1}): lapisannya berasal dari bagian PDF file
 @msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	tidak semua ikatan variabel file terbaca (ikatan yang dilewati: {_1}): objek-objek itu tidak terikat ke variabelnya

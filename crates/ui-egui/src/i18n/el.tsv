@@ -2549,6 +2549,9 @@ lighting	Light	Φως
 	Lasso	Λάσο
 	Legal	Μέγεθος Legal
 	Length	Μήκος
+	Path Length	Μήκος διαδρομής
+	Set Length	Ορισμός μήκους
+	Selection has no length to scale	Η επιλογή δεν έχει μήκος για κλιμάκωση
 	Length:	Μήκος:
 	Linear	Γραμμικό
 	Measure	Μέτρηση

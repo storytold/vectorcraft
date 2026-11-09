@@ -1067,6 +1067,7 @@ lighting	Light	Światło
 	Saved Selection 9	Zapisane zaznaczenie 9
 	Select Tool	Wybierz narzędzie
 	Set Keyboard Shortcut	Ustaw skrót klawiaturowy
+	Set Length	Ustaw długość
 	Set Zoom	Ustaw powiększenie
 	Show Package	Pokaż pakiet
 	Show Panel	Pokaż panel
@@ -2359,6 +2360,8 @@ digits	Malayalam	Malajalam
 	Number:	Liczba:
 	Longest:	Najdłuższy:
 	Path:	Ścieżka:
+	Length:	Długość:
+	Selection has no length to scale	Zaznaczenie nie ma długości do skalowania
 	Largest:	Największy:
 	Anti-alias Rasters	Wygładzaj rastry
 	Clip Complex Regions	Przytnij złożone obszary

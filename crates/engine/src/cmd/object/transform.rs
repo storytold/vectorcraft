@@ -1,7 +1,7 @@
 use super::align::choice;
 use super::{
     Affine, Arc, Document, EngineError, LastTransform, Node, NodeId, NodeKind, Point, Result, Scaling, Session, Value, Vec2, bad, bool_or,
-    check_numbers, check_switches, duplicate_in, effects, f64_or, f64_req, ids_param, json, matrix_param, ok, outermost, point_param,
+    check_numbers, check_switches, duplicate_in, effects, f64_or, f64_req, ids_param, json, matrix_param, ok, outermost, point_param, selected_roots,
     selected_roots_to_transform,
 };
 
@@ -365,6 +365,36 @@ pub(super) fn scale(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad("object.scale", "scale must be non-zero"));
     }
     apply_transform(s, "Scale", ids, about(o, Affine::scale_non_uniform(sx, sy)), p, true)
+}
+
+/// The total length of every path in `ids`' subtrees (every `NodeKind::Path`, so a compound
+/// path's children and the paths inside a selected group all count): a path's own length plus
+/// its descendants', summed across `ids`. `path` is already in document units, so no per-node
+/// transform needs applying.
+pub(crate) fn selection_length(d: &Document, ids: &[NodeId]) -> f64 {
+    let mut total = 0.0;
+    for n in ids.iter().filter_map(|id| d.node(*id)) {
+        n.walk(&mut |c| {
+            if let NodeKind::Path { path, .. } = &c.kind {
+                total += path.length();
+            }
+        });
+    }
+    total
+}
+
+pub(super) fn set_length(s: &mut Session, p: &Value) -> Result<Value> {
+    let ids = selected_roots(s)?;
+    let o = origin_of(s, p, &ids)?;
+    let cur = selection_length(&s.doc()?.doc, &ids);
+    if cur <= 1e-9 {
+        return Err(bad("object.setLength", "selection has no length to scale"));
+    }
+    let len = f64_req(p, "length", "object.setLength")?;
+    if len <= 0.0 {
+        return Err(bad("object.setLength", "length must be greater than zero"));
+    }
+    apply_transform(s, "Set Length", ids, about(o, Affine::scale(len / cur)), p, true)
 }
 
 pub(super) fn reflect(s: &mut Session, p: &Value) -> Result<Value> {

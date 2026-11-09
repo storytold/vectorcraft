@@ -463,6 +463,23 @@ fn rotate_and_scale() {
 }
 
 #[test]
+fn set_length_scales_selection_uniformly() {
+    let mut s = session();
+    // A 10x10 square: perimeter (its path length) 40.
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    assert_eq!(s.selection_length(&[a]), Some(40.0));
+    s.execute("object.setLength", &json!({"length": 80})).unwrap();
+    assert_eq!(s.selection_length(&[a]), Some(80.0));
+    // Uniform: both sides doubled along with the perimeter, the shape unchanged.
+    let b = s.doc().unwrap().doc.node(a).unwrap().geometric_bounds().unwrap();
+    assert!((b.width() - 20.0).abs() < 1e-9 && (b.height() - 20.0).abs() < 1e-9);
+    // Zero and negative lengths are rejected; the selection is left as it was.
+    assert!(s.execute("object.setLength", &json!({"length": 0})).is_err());
+    assert!(s.execute("object.setLength", &json!({"length": -5})).is_err());
+    assert_eq!(s.selection_length(&[a]), Some(80.0));
+}
+
+#[test]
 fn copy_paste_front_back() {
     let mut s = session();
     let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);

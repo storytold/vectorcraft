@@ -4172,6 +4172,7 @@ antiAlias	Sharp	शार्प
 	Selected: {n}, Total number of files to export: {m}	सिलेक्टेड: {n}, निर्यात करने के लिए फ़ाइलों की कुल संख्या: {m}
 	Selection	सिलेक्शन
 	Selection & Anchor Display	सिलेक्शन और एंकर प्रदर्शन
+	Selection has no length to scale	सिलेक्शन में स्केल करने के लिए कोई लंबाई नहीं है
 	Selection Only	केवल सिलेक्शन
 	Selection Tool	सिलेक्शन टूल
 	Selection Tools	सिलेक्शन टूल
@@ -4209,6 +4210,7 @@ antiAlias	Sharp	शार्प
 	Set Font Height Reference	फ़ॉन्ट ऊंचाई संदर्भ सेट करें
 	Set History Limit…	इतिहास लिमिट सेट करें…
 	Set Keyboard Shortcut	कीबोर्ड शॉर्टकट सेट करें
+	Set Length	लंबाई सेट करें
 	Set Mesh Point Color	मेश पॉइंट का रंग सेट करें
 	Set Options	ऑप्शन्स सेट
 	Set Options…	ऑप्शन्स सेट करें…

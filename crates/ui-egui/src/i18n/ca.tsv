@@ -3845,6 +3845,7 @@ digits	Malayalam	Malaiàlam
 	Fully Enclosed	Totalment inclosos
 	Drag Direction	Direcció de l’arrossegament
 	Selection & Anchor Display	Selecció i visualització d’ancoratges
+	Selection has no length to scale	La selecció no té longitud per escalar
 	Selection Only	Només la selecció
 	Selection Tool	Eina de selecció
 	Selection:	Selecció:
@@ -3872,6 +3873,7 @@ digits	Malayalam	Malaiàlam
 	Set Current Layer	Defineix la capa actual
 	Set History Limit…	Defineix el límit de l’historial…
 	Set Keyboard Shortcut	Defineix la drecera de teclat
+	Set Length	Defineix la longitud
 	Set Mesh Point Color	Defineix el color del punt de malla
 	Set Options	Defineix les opcions
 	Action Options…	Opcions de l’acció…

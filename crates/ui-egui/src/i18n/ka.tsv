@@ -5296,6 +5296,8 @@ imageTrace	Outline	კონტური
 	Hide Template	შაბლონის დამალვა
 	Show Template	შაბლონის ჩვენება
 	Path Length	ტრაექტორიის სიგრძე
+	Set Length	სიგრძის დაყენება
+	Selection has no length to scale	მონიშნულს არ აქვს მასშტაბირებადი სიგრძე
 	Filter	ფილტრი
 	Clear All	ყველას გასუფთავება
 	By Object	ობიექტის მიხედვით

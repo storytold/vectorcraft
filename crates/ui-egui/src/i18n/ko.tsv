@@ -2542,7 +2542,6 @@ antiAlias	Sharp	날카롭게
 	Pathfinder Options…	패스파인더 옵션…
 	Pathfinders:	패스파인더:
 	Paths	패스
-	Path Length	패스 길이
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	패스: {paths}    앵커: {anchors}    색상: {colors}
 	Pattern Editing	패턴 편집
 	Pattern options are available in pattern editing mode.	패턴 옵션은 패턴 편집 모드에서 사용할 수 있습니다.
@@ -3007,6 +3006,7 @@ mark-style	Japanese	일본식
 	Set Bounds	경계 설정
 	Set Current Layer	현재 레이어 설정
 	Set Keyboard Shortcut	키보드 단축키 설정
+	Set Length	길이 설정
 	Set Mesh Point Color	메시 점 색상 설정
 	Set Preference	환경 설정 지정
 	Set Slice Rectangle	슬라이스 사각형 설정
@@ -3610,6 +3610,9 @@ gradient-kind	Radial	방사형
 	Number:	개수:
 	Longest:	최장:
 	Path:	패스:
+	Length:	길이:
+	Path Length	패스 길이
+	Selection has no length to scale	선택 항목에 조정할 길이가 없습니다
 	Largest:	최대:
 	Direction:	방향:
 	Symbolism Tools Options	심볼 도구 옵션
