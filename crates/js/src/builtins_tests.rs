@@ -722,6 +722,14 @@ fn json_parse_keeps_its_text_counted_for_the_whole_parse() {
     assert_eq!(realm.run(setup), Ok(JsValue::Number(0.0)));
     realm.interp().collect_garbage();
     assert_eq!(limit(&mut realm, parse), LimitKind::Heap);
+    // The text is released before the reviver runs, so the reviver can use the room it took.
+    let setup = "var ws = new Array(65537).join(' '); var o = {toString: function () { return ws + '1'; }}; 0";
+    let mut measure = small(Limits::default());
+    assert_eq!(measure.run(setup), Ok(JsValue::Number(0.0)));
+    let heap_bytes = measure.collect_garbage() + 2 * 65537 + (16 << 10);
+    let mut realm = small(Limits { heap_bytes, ..Limits::default() });
+    assert_eq!(realm.run(setup), Ok(JsValue::Number(0.0)));
+    assert_eq!(realm.run("JSON.parse(o, function () { return new Array(40001).join('x').length; })"), Ok(JsValue::Number(40000.0)));
 }
 
 #[test]

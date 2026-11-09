@@ -162,15 +162,16 @@ fn parse(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Val
     let mark = interp.temp_roots.len();
     // The text stays rooted for the whole parse, so a collection still counts it.
     interp.temp_roots.push(source.clone());
-    let r = super::global::units_of(interp, std::slice::from_ref(&source)).and_then(|text| {
-        let v = parse_text(interp, &text)?;
-        let reviver = arg(args, 1);
-        if !interp.is_callable(&reviver) {
-            return Ok(v);
-        }
-        interp.temp_roots.push(v.clone());
-        revive(interp, v, &reviver)
-    });
+    let parsed = super::global::units_of(interp, std::slice::from_ref(&source)).and_then(|text| parse_text(interp, &text));
+    interp.temp_roots.truncate(mark);
+    drop(source);
+    let v = parsed?;
+    let reviver = arg(args, 1);
+    if !interp.is_callable(&reviver) {
+        return Ok(v);
+    }
+    interp.temp_roots.push(v.clone());
+    let r = revive(interp, v, &reviver);
     interp.temp_roots.truncate(mark);
     r
 }
