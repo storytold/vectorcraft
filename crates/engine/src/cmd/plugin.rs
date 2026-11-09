@@ -11,15 +11,18 @@
 //! `document.open` reads (`fileio::plugin_formats`).
 //!
 //! A filter may ask for a heavy budget (`Budget::Heavy`: minutes rather than a minute, for routing,
-//! packing or simulation). It installs only once the user agrees (`plugin.install {allowHeavy}`),
-//! which loading a folder doesn't ask, so folders skip it; the app runs it in the background with
-//! Cancel ([`FilterRun`]).
+//! packing or simulation). It installs only once a person agrees, which loading a folder doesn't
+//! ask, so folders skip it; the app runs it in the background with Cancel ([`FilterRun`]).
 //!
-//! A plug-in whose manifest lists permissions installs once the user grants them
-//! (`plugin.install {grant}`, recorded with the module's hash and kept in the plug-in store), and
-//! a filter does only what they allow: without `doc.read` it is given no objects, without
-//! `doc.write` an output that changes the document is refused, and without `state` it neither
-//! reads nor writes the data it keeps with the document.
+//! A plug-in whose manifest lists permissions installs once a person grants them (recorded with
+//! the module's hash and kept in the plug-in store), and a filter does only what they allow:
+//! without `doc.read` it is given no objects, without `doc.write` an output that changes the
+//! document is refused, and without `state` it neither reads nor writes the data it keeps with
+//! the document.
+//!
+//! `plugin.install {grant, allowHeavy}` takes effect only with an [`InstallApproval`], which no
+//! command can set, or in a session started to accept them from requests
+//! ([`Session::allow_plugin_grants_from_requests`]).
 //!
 //! A filter or a live effect may add menu commands of its own (its manifest's `commands`). Each
 //! is the command `plugin.<plug-in id>.<command id>` while the plug-in is installed
@@ -555,6 +558,45 @@ fn grant_param(c: &str, p: &Value) -> Result<Option<Vec<Permission>>> {
     Ok(Some(out))
 }
 
+/// What a person approved for one install: the module they were shown (its id, SHA-256 and the
+/// permissions it lists) and whether they agreed to its heavy budget. Only the code that asked the
+/// person sets it ([`Session::approve_plugin_install`]); no command can.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct InstallApproval {
+    pub id: String,
+    pub hash: String,
+    pub permissions: Vec<String>,
+    pub heavy: bool,
+}
+
+impl InstallApproval {
+    /// Is `plugin` the module this approval was given for?
+    fn covers(&self, plugin: &Plugin) -> bool {
+        let m = plugin.manifest();
+        self.id == m.id && self.hash == plugin.hash() && self.permissions.iter().map(String::as_str).eq(permissions::names(&m.permissions()))
+    }
+}
+
+impl Session {
+    /// Lets the next `plugin.install` take its `grant` and `allowHeavy`, for the module `approval`
+    /// describes. Call it only with what a person approved, just before that install.
+    pub fn approve_plugin_install(&mut self, approval: InstallApproval) {
+        self.plugin_install_approval = Some(approval);
+    }
+
+    /// Drops an approval that no install has spent.
+    pub fn clear_plugin_install_approval(&mut self) {
+        self.plugin_install_approval = None;
+    }
+
+    /// Makes `plugin.install` accept `grant` and `allowHeavy` from any request in this session.
+    /// For the person starting the process (`vectorcraft-cli --allow-plugin-grants`), never for
+    /// a request.
+    pub fn allow_plugin_grants_from_requests(&mut self) {
+        self.plugin_grants_from_requests = true;
+    }
+}
+
 /// Would installing `plugin` take another module's place: one installed with its id and other
 /// bytes, or, with none installed, the settings and cache the plug-in store keeps for its id?
 fn takes_over(s: &Session, plugin: &Plugin) -> bool {
@@ -564,14 +606,17 @@ fn takes_over(s: &Session, plugin: &Plugin) -> bool {
     }
 }
 
-/// `plugin.install`: loads and checks the module, refuses one that asks for a heavy budget unless
-/// `allowHeavy` says the user agreed, one that lists permissions the user hasn't granted this very
-/// module unless `grant` lists them all, one that would take another module's place ([`takes_over`])
-/// unless `replace` is true, and one whose SHA-256 isn't the `hash` given; records the grant with
-/// the module's hash, keeps it for the next start and installs it → its `plugin.list` entry. A
-/// module that lists no permissions ends any grant held for its id.
+/// `plugin.install`: loads and checks the module, refuses `grant` and `allowHeavy` that neither an
+/// [`InstallApproval`] for this module nor the session allows, one that asks for a heavy budget
+/// unless `allowHeavy` says a person agreed, one that lists permissions no person has granted this
+/// very module unless `grant` lists them all, one that would take another module's place
+/// ([`takes_over`]) unless `replace` is true, and one whose SHA-256 isn't the `hash` given; records
+/// the grant with the module's hash, keeps it for the next start and installs it → its
+/// `plugin.list` entry. A module that lists no permissions ends any grant held for its id.
 fn install(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "plugin.install";
+    // One use: spent whatever this install does.
+    let approval = s.plugin_install_approval.take();
     let replace = match p.get("replace") {
         None | Some(Value::Null) => None,
         Some(_) => Some(switch_or(p, "replace", false, C)?),
@@ -600,25 +645,38 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
             ),
         ));
     }
-    // A heavy plug-in is installed once the user agrees: whoever installs it asks them first.
+    // `grant` and `allowHeavy` say that a person agreed, and a request alone can't say that.
+    let approval = approval.filter(|a| a.covers(&plugin));
+    if !s.plugin_grants_from_requests && ((grant.is_some() && approval.is_none()) || (allow_heavy && !approval.is_some_and(|a| a.heavy))) {
+        return Err(bad(
+            C,
+            "`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app",
+        ));
+    }
+    // A heavy plug-in is installed once a person agrees.
     if plugin.manifest().budget == Budget::Heavy && !allow_heavy {
         let (minutes, times) = vectorcraft_plugins::heavy_terms();
         return Err(bad(
             C,
             format!(
-                "“{}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees",
+                "“{}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants",
                 plugin.manifest().name
             ),
         ));
     }
-    // A plug-in that lists permissions installs once the user grants them: whoever installs it
-    // asks them first, unless they already granted this very module all of them.
+    // A plug-in that lists permissions installs once they are granted, unless a grant recorded for
+    // this very module already covers all of them.
     let m = plugin.manifest();
     let wanted = m.permissions();
     if !s.plugin_approved(&plugin) && !grant.as_ref().is_some_and(|g| wanted.iter().all(|w| g.contains(w))) {
         let name = permissions::display_text(&m.name, permissions::MAX_SHOWN_NAME);
         let asked = permissions::names(&wanted).join(", ");
-        return Err(bad(C, format!("“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees")));
+        return Err(bad(
+            C,
+            format!(
+                "“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants"
+            ),
+        ));
     }
     // Installed plug-ins stay installed after a restart (#2541). The module is written first and its
     // grant only once it is there; when the grant can't be written, the store gets the module it
@@ -939,7 +997,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Install Plug-in",
             [],
             None,
-            "{path: a .wasm file (desktop) | dataBase64: the module (+ name?: shown as its source), replace?: bool (true once the user agreed: a module with other bytes than the plug-in installed with its id, or with none installed, one whose id has settings or a cache in the plug-in store, installs only with it, takes that plug-in's place and gets its settings and cache; false: one whose id is installed is refused; left out, the same module installs again), name?: file name (with dataBase64), allowHeavy?: bool (true once the user agreed to a heavy budget: a filter whose manifest asks for one, budget \"heavy\" in plugin.inspect, installs only with it), grant?: [permission] (the permissions the user granted: a plug-in whose manifest lists permissions, needsApproval in plugin.inspect, installs only when grant holds every one of them; the grant is recorded with the module's hash and covers only that module, so a module with other bytes needs a new grant even when it lists the same permissions; installing a module that lists no permissions forgets the grant held for its id; a refused install keeps the grant, a failed write of the module to the plug-in store leaves the grant in the store, and a stored module that is disabled or not read in Safe Mode keeps the grant for its id; with a plug-in store attached, only the grants kept there count), hash?: string (the module's SHA-256 as plugin.inspect gave it: a module with other bytes is refused)} validate and install a WebAssembly plug-in for this session → its plugin.list entry",
+            "{path: a .wasm file (desktop) | dataBase64: the module (+ name?: shown as its source), replace?: bool (true once the user agreed: a module with other bytes than the plug-in installed with its id, or with none installed, one whose id has settings or a cache in the plug-in store, installs only with it, takes that plug-in's place and gets its settings and cache; false: one whose id is installed is refused; left out, the same module installs again), name?: file name (with dataBase64), allowHeavy?: bool (a filter whose manifest asks for a heavy budget, budget \"heavy\" in plugin.inspect, installs only with it), grant?: [permission] (a plug-in whose manifest lists permissions, needsApproval in plugin.inspect, installs only when grant holds every one of them; the grant is recorded with the module's hash and covers only that module, so a module with other bytes needs a new grant even when it lists the same permissions; installing a module that lists no permissions forgets the grant held for its id; a refused install keeps the grant, a failed write of the module to the plug-in store leaves the grant in the store, and a stored module that is disabled or not read in Safe Mode keeps the grant for its id; with a plug-in store attached, only the grants kept there count; a request's allowHeavy and grant are refused unless the session was started with vectorcraft-cli --allow-plugin-grants: in the desktop app a person approves the install, see ui.installPlugin, and a module whose hash is already recorded, by a person's approval or by a grant accepted under that flag, needs no grant), hash?: string (the module's SHA-256 as plugin.inspect gave it: a module with other bytes is refused)} validate and install a WebAssembly plug-in for this session → its plugin.list entry",
             always,
             install
         ),
@@ -948,7 +1006,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Inspect Plug-in",
             [],
             None,
-            "{path: a .wasm file (desktop) | dataBase64: the module, name?: the file name shown as its source (with dataBase64)} validate a WebAssembly plug-in without installing it → the plugin.list entry it would have, plus needsApproval: bool (true when it lists permissions the user hasn't granted this very module, its bytes included: plugin.install then needs grant) and needsReplace: bool (true when it would take the place of another module with its id: plugin.install then needs replace: true)",
+            "{path: a .wasm file (desktop) | dataBase64: the module, name?: the file name shown as its source (with dataBase64)} validate a WebAssembly plug-in without installing it → the plugin.list entry it would have, plus needsApproval: bool (true when it lists permissions no person has granted this very module, its bytes included: it then needs a person's approval, see plugin.install) and needsReplace: bool (true when it would take the place of another module with its id: plugin.install then needs replace: true)",
             always,
             inspect
         ),

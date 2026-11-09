@@ -85,6 +85,8 @@ impl Session {
             plugin_dir: None,
             ignored_plugin_grants: Default::default(),
             plugin_output: None,
+            plugin_install_approval: None,
+            plugin_grants_from_requests: false,
             recent_urls: vec![],
             trace_preset_changes: Default::default(),
             ui_language: None,
