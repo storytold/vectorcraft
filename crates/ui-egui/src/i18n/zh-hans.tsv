@@ -512,6 +512,11 @@ antiAlias	Sharp	锐利
 	Color Table ({n} colors)	颜色表 ({n} 色)
 	Color Theme	色彩主题
 	Color Themes	颜色主题
+	Color Wheel	色轮
+	Hue ring	色相环
+	Saturation and brightness	饱和度和亮度
+	Color field	颜色区域
+	{name1} {value1}, {name2} {value2}	{name1} {value1}，{name2} {value2}
 	Color Type:	颜色类型：
 	Color:	颜色：
 	Colorize	上色
@@ -4222,7 +4227,10 @@ imageTrace	Outline	轮廓
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	为保留图层，{_1} × {_2} 像素的嵌入图像已缩小为 {_3} × {_4} 像素
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	文件中未定义渐变“{name}”：已改用纯色代替
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	VectorCraft 尚无法读取的画笔未加入“画笔”面板 ({_1})
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	带有多个填色或描边、效果或画笔的对象已按其绘制外观导入 ({_1})：其外观尚不可编辑
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	带有多个填色或描边、可变宽度描边、效果或画笔的对象已按其绘制外观导入 ({_1})：其外观尚不可编辑
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	名称 `{name}` 不是 UTF-8，已按 {label} 读取：如果显示不正确，请使用其他 legacyNameEncoding 打开文件
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	名称 `{name}` 不是 UTF-8，且部分内容在 {label} 中也无效：请使用其他 legacyNameEncoding 打开文件
+@msg	more names that aren't UTF-8 were read as {label} ({count})	其他非 UTF-8 名称已按 {label} 读取 ({count})
 @msg	patterns nested too deeply are filled with mid-grey	嵌套过深的图案以中灰色填充
 @msg	shadings of an unknown type were left out	已略去未知类型的着色
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	函数类型未知的着色以其中间颜色填充
@@ -5138,7 +5146,7 @@ axis	Both	两者
 	Dock to Bottom	停放到底部
 	Dock Control Bar	停放控制栏
 	Drag to float the toolbar	拖动以浮动工具栏
-	Drag to the window's left edge to dock	拖到窗口左边缘以停放
+	Drag to the window's left or right edge to dock	拖到窗口左边缘或右边缘以停放
 	Float Tool Group	浮动工具组
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
@@ -5780,6 +5788,13 @@ axis	Y Axis	Y 轴
 @msg	at most {MAX_PERMISSIONS} `permissions`	最多 {MAX_PERMISSIONS} 个 `permissions`
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	权限 `{shown}` 不适用于 `{_1}` 类型的增效工具
 @msg	permission `{shown}` is listed twice	权限 `{shown}` 列出了两次
+@msg	only a filter declares `inputs`	只有滤镜才能声明 `inputs`
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` 列出了未知的对象类型 `{shown}`：请使用 type、image 或 symbolInstance
+@msg	`inputs` lists `{shown}` twice	`inputs` 列出了两次 `{shown}`
+@msg	`inputs` needs `api` 2 or later	`inputs` 需要 `api` 2 或更高
+@msg	`inputs` needs the permission `doc.read`	`inputs` 需要权限 `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	内存预算（对象 {_1} 需要 {size} 字节的输入，剩余 {left}）
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	对象预算（超过 {MAX_OBJECTS} 个只读对象）
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	权限 `{shown}` 保留给以后的增效工具 API；此主机不授予该权限
 @msg	unknown permission `{shown}`	未知权限 `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}”需要权限 {asked}：请在用户同意后使用列出这些权限的 `grant` 安装
@@ -6482,3 +6497,4 @@ breakText	Glyphs	字形
 # Align to Pixel Grid
 	Align to Pixel Grid	对齐像素网格
 @msg	only paths and compound paths can be aligned to the pixel grid	只有路径和复合路径可以对齐像素网格
+@msg	side is left or right, not `{s}`	side 应为 left 或 right，而不是 `{s}`

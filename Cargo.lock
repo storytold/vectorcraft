@@ -1059,7 +1059,7 @@ dependencies = [
 [[package]]
 name = "craft-update"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=c365d75c48b0e47f4b43cdb6592d0cdc39d2d52e#c365d75c48b0e47f4b43cdb6592d0cdc39d2d52e"
+source = "git+https://github.com/storytold/craft-libs?rev=1b34eba41e62138fc2438d2734523b302840b45d#1b34eba41e62138fc2438d2734523b302840b45d"
 dependencies = [
  "chrono",
  "dunce",
@@ -6511,6 +6511,7 @@ name = "vectorcraft-eps"
 version = "0.21.0"
 dependencies = [
  "craft-pdf",
+ "encoding_rs",
  "fax",
  "flate2",
  "hayro-ccitt",
@@ -6651,6 +6652,8 @@ dependencies = [
 name = "vectorcraft-plugins"
 version = "0.21.0"
 dependencies = [
+ "craft-vectorcraft-format",
+ "image",
  "log",
  "serde",
  "serde_json",

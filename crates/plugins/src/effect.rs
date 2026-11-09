@@ -174,7 +174,25 @@ fn weight(key: &Key, out: Option<&Out>) -> usize {
     };
     anchors(&key.path) + out + (key.params.len() + key.paints.len()) / 50 + 1
 }
-static ERRORS: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
+static ERRORS: Mutex<Option<HashMap<String, Failures>>> = Mutex::new(None);
+
+/// The errors recorded for a live-effect plug-in, one for each kind of outcome that can clear it.
+#[derive(Default)]
+struct Failures {
+    /// From a run of the plug-in.
+    run: Option<String>,
+    /// From checking the swatches and patterns a painted result names against the document.
+    references: Option<String>,
+    /// Was the latest failure a refused reference?
+    references_latest: bool,
+}
+
+/// Which of a plug-in's [`Failures`] an outcome replaces.
+#[derive(Clone, Copy)]
+enum Origin {
+    Run,
+    References,
+}
 
 /// Where an installation ([`crate::Plugin::serial`]) stands as a live effect in this process.
 enum Runs {
@@ -227,21 +245,42 @@ fn end_run(serial: u64, cancelled: bool) {
     }
 }
 
-/// The last error of live-effect plug-in `id` (cleared when it next succeeds).
+/// The last error of live-effect plug-in `id`: the latest failure that still stands. A run that
+/// succeeds clears a failed run's error, and a reference check that passes clears a refused
+/// reference's.
 pub fn last_error(id: &str) -> Option<String> {
-    ERRORS.lock().unwrap_or_else(|e| e.into_inner()).as_ref()?.get(id).cloned()
+    let errors = ERRORS.lock().unwrap_or_else(|e| e.into_inner());
+    let failures = errors.as_ref()?.get(id)?;
+    let (latest, other) = if failures.references_latest { (&failures.references, &failures.run) } else { (&failures.run, &failures.references) };
+    latest.clone().or_else(|| other.clone())
 }
 
-/// Records how a run of plug-in `id` went: a failure as its last error (a painted effect's named
-/// after the plug-in, [`painted::named`]), a success clearing it.
-fn note(id: &str, plugin: &crate::Plugin, r: std::result::Result<(), &Error>) {
+/// Records how a run of plug-in `id`, or a check of what its result names, went: a failure as that
+/// origin's error (a painted effect's named after the plug-in, [`painted::named`]), a success
+/// clearing that origin's error. A run of an effect that paints nothing clears a refused
+/// reference's error too.
+fn note(id: &str, plugin: &crate::Plugin, origin: Origin, r: std::result::Result<(), &Error>) {
+    let message = r.err().map(|e| if plugin.manifest().paint_output { painted::named(&plugin.manifest().name, e) } else { e.to_string() });
     let mut errors = ERRORS.lock().unwrap_or_else(|e| e.into_inner());
     let errors = errors.get_or_insert_with(HashMap::new);
-    match r {
-        Ok(()) => errors.remove(id),
-        Err(e) if plugin.manifest().paint_output => errors.insert(id.to_string(), painted::named(&plugin.manifest().name, e)),
-        Err(e) => errors.insert(id.to_string(), e.to_string()),
-    };
+    let failures = errors.entry(id.to_string()).or_default();
+    if message.is_some() {
+        failures.references_latest = matches!(origin, Origin::References);
+    }
+    match origin {
+        Origin::Run => {
+            failures.run = message;
+            // Nothing checks the references of an effect that paints nothing, such as one that
+            // replaced a painted effect under this id.
+            if !plugin.manifest().paint_output {
+                failures.references = None;
+            }
+        }
+        Origin::References => failures.references = message,
+    }
+    if failures.run.is_none() && failures.references.is_none() {
+        errors.remove(id);
+    }
 }
 
 /// Does live-effect plug-in `id` return painted pieces (its manifest declares `paintOutput`)?
@@ -294,7 +333,7 @@ pub fn apply_painted(
 fn references_found(id: &str, plugin: &crate::Plugin, pieces: &[Piece], doc: Option<&Document>) -> Option<()> {
     let checked = painted::check_references(pieces, doc);
     if doc.is_some() {
-        note(id, plugin, checked.as_ref().map(|_| ()));
+        note(id, plugin, Origin::References, checked.as_ref().map(|_| ()));
     }
     checked.ok()
 }
@@ -334,7 +373,7 @@ fn evaluate(id: &str, params: &Value, path: &PathData, bounds: Rect, rule: FillR
     if cancelled {
         return None;
     }
-    note(id, &plugin, r.as_ref().map(|_| ()));
+    note(id, &plugin, Origin::Run, r.as_ref().map(|_| ()));
     let out = r.ok();
     let size = weight(&key, out.as_ref());
     if size > CACHE_ANCHORS / 4 {
@@ -377,6 +416,7 @@ fn run(plugin: &crate::Plugin, mut params: Value, path: &PathData, bounds: Rect,
 mod tests {
     use vectorcraft_color::{Color, Paint};
     use vectorcraft_doc::{FillLayer, StrokeLayer};
+    use vectorcraft_geom::{Point, SubPath};
 
     use super::*;
 
@@ -398,6 +438,63 @@ mod tests {
         assert_eq!(given(Some(9)).item, json!("object"), "no such item");
         let none = Paints::default().given();
         assert_eq!((none.fills, none.strokes, none.item), (vec![], vec![], json!("object")));
+    }
+
+    /// A result taken from the cache passes its reference check without clearing the error of a
+    /// failed run, and the next run that succeeds clears that error.
+    #[test]
+    fn a_passed_reference_check_keeps_a_failed_run_s_error() {
+        let _lock = crate::safe_mode::TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        crate::safe_mode::set_active(None);
+        const ID: &str = "test.effect.lasterror";
+        let manifest = format!(r#"{{"id":"{ID}","name":"Test","version":"1","kind":"effect","api":2,"paintOutput":true,"params":{{}}}}"#);
+        // Traps on a long input.
+        let first = "(if (i32.gt_u (local.get $il) (i32.const 4096)) (then unreachable))";
+        let src = crate::wat::with_imports(&manifest, "", first, r#"{"objects":[]}"#);
+        registry::install(crate::Plugin::load(&wat::parse_str(&src).unwrap(), Limits::default()).unwrap());
+        let doc = Document::new(100.0, 100.0);
+        let line = |n: usize| PathData::single(SubPath::polyline(&(0..n).map(|i| Point::new(i as f64, 0.0)).collect::<Vec<_>>(), false));
+        let draw =
+            |path: &PathData| apply_painted(ID, &json!({}), path, Rect::new(0.0, 0.0, 1.0, 1.0), FillRule::NonZero, Paints::default(), Some(&doc));
+        let short = line(2);
+        assert!(draw(&short).is_some());
+        assert_eq!(last_error(ID), None);
+        assert!(draw(&line(1000)).is_none());
+        let failed = last_error(ID).unwrap();
+        assert!(draw(&short).is_some(), "from the cache");
+        assert_eq!(last_error(ID), Some(failed));
+        assert!(draw(&line(3)).is_some(), "a new run");
+        assert_eq!(last_error(ID), None);
+        registry::remove(ID);
+    }
+
+    /// With a refused reference and a failed run both standing, the latest of the two is reported.
+    #[test]
+    fn the_latest_of_a_refused_reference_and_a_failed_run_is_reported() {
+        let _lock = crate::safe_mode::TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        crate::safe_mode::set_active(None);
+        const ID: &str = "test.effect.latesterror";
+        let manifest = format!(r#"{{"id":"{ID}","name":"Test","version":"1","kind":"effect","api":2,"paintOutput":true,"params":{{}}}}"#);
+        let mut fill = serde_json::to_value(Paint::solid(Color::WHITE)).unwrap();
+        fill["swatch"] = json!("Missing");
+        let square = PathData::single(SubPath::polyline(&[(0.0, 0.0), (9.0, 0.0), (9.0, 9.0)].map(|(x, y)| Point::new(x, y)), true));
+        let output = json!({"objects": [{"path": square, "fills": [fill]}]}).to_string();
+        // Traps on a long input.
+        let first = "(if (i32.gt_u (local.get $il) (i32.const 4096)) (then unreachable))";
+        let src = crate::wat::with_imports(&manifest, "", first, &output);
+        registry::install(crate::Plugin::load(&wat::parse_str(&src).unwrap(), Limits::default()).unwrap());
+        let doc = Document::new(100.0, 100.0);
+        let line = |n: usize| PathData::single(SubPath::polyline(&(0..n).map(|i| Point::new(i as f64, 0.0)).collect::<Vec<_>>(), false));
+        let draw =
+            |path: &PathData| apply_painted(ID, &json!({}), path, Rect::new(0.0, 0.0, 1.0, 1.0), FillRule::NonZero, Paints::default(), Some(&doc));
+        let short = line(2);
+        assert!(draw(&short).is_none());
+        assert!(last_error(ID).unwrap().contains("swatch"));
+        assert!(draw(&line(1000)).is_none());
+        assert!(last_error(ID).unwrap().contains("trapped"));
+        assert!(draw(&short).is_none(), "from the cache, refused again");
+        assert!(last_error(ID).unwrap().contains("swatch"));
+        registry::remove(ID);
     }
 
     /// A first run that is cancelled leaves the next run to be the first: the launch marker names

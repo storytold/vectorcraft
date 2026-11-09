@@ -606,6 +606,11 @@
 	Color	ფერი
 	Color Guide	ფერის გზამკვლევი
 	Color Themes	ფერის თემები
+	Color Wheel	ფერთა წრე
+	Hue ring	ფერის ტონის რგოლი
+	Saturation and brightness	გაჯერება და სიკაშკაშე
+	Color field	ფერის ველი
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	CSS Properties	CSS თვისებები
 	Document Info	დოკუმენტის ინფორმაცია
 	Flattener Preview	გაბრტყელების წინასწარი ნახვა
@@ -1139,7 +1144,7 @@ lighting	Light	სინათლე
 	Toggle single/double column	ერთი/ორი სვეტის გადართვა
 	W:	სიგ.:
 	Drag to float the toolbar	გადაათრიეთ ხელსაწყოთა ზოლის მცურავად გადასაქცევად
-	Drag to the window's left edge to dock	მისამაგრებლად გადაათრიეთ ფანჯრის მარცხენა კიდესთან
+	Drag to the window's left or right edge to dock	მისამაგრებლად გადაათრიეთ ფანჯრის მარცხენა ან მარჯვენა კიდესთან
 	Crystallize	კრისტალიზაცია
 	Add Anchor Point Tool	საყრდენი წერტილის დამატების ხელსაწყო
 	Anchor Point Tool	საყრდენი წერტილის ხელსაწყო
@@ -4510,7 +4515,10 @@ font-technology	Variable	ცვლადი
 @msg	its objects are nested too deeply	მისი ობიექტები ზედმეტად ღრმადაა ჩადგმული
 @msg	its section ending with `%{end}` doesn't end	მისი სექცია, რომელიც `%{end}`-ით მთავრდება, არ სრულდება
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	ფუნჯები, რომლებსაც VectorCraft ჯერ ვერ კითხულობს, ფუნჯების პანელში არ დაემატა ({_1})
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	რამდენიმე შევსების ან კონტურის, ეფექტის ან ფუნჯის მქონე ობიექტები შემოვიდა დახატული სახით ({_1}): მათი იერსახე ჯერ არ რედაქტირდება
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	რამდენიმე შევსების ან კონტურის, ცვლადი სისქის კონტურის, ეფექტის ან ფუნჯის მქონე ობიექტები შემოვიდა დახატული სახით ({_1}): მათი იერსახე ჯერ არ რედაქტირდება
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	სახელი `{name}` არ არის UTF-8 და წაკითხულია როგორც {label}: თუ არასწორად გამოიყურება, გახსენით ფაილი სხვა legacyNameEncoding-ით
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	სახელი `{name}` არ არის UTF-8 და მისი ნაწილები არც {label}-ში არის სწორი: გახსენით ფაილი სხვა legacyNameEncoding-ით
+@msg	more names that aren't UTF-8 were read as {label} ({count})	სხვა სახელები, რომლებიც არ არის UTF-8, წაკითხულია როგორც {label} ({count})
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	გრადიენტი „{name}“ ფაილში განსაზღვრული არ არის: მის ნაცვლად ერთგვაროვანი ფერია
 @msg	an image VectorCraft can't read was left out	გამოსახულება, რომელსაც VectorCraft ვერ კითხულობს, გამოტოვებულია
 @msg	graphs come in as plain art, without their data or settings	დიაგრამები შემოდის როგორც ჩვეულებრივი გრაფიკა, მათი მონაცემებისა და პარამეტრების გარეშე
@@ -5865,6 +5873,13 @@ axis	Y Axis	Y ღერძი
 @msg	at most {MAX_PERMISSIONS} `permissions`	მაქსიმუმ {MAX_PERMISSIONS} `permissions`
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	ნებართვა `{shown}` არ ეხება `{_1}` სახის პლაგინს
 @msg	permission `{shown}` is listed twice	ნებართვა `{shown}` ორჯერაა ჩამოთვლილი
+@msg	only a filter declares `inputs`	`inputs`-ის გამოცხადება მხოლოდ ფილტრს შეუძლია
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` უცნობ ობიექტის სახეობას ასახელებს `{shown}`: გამოიყენეთ type, image ან symbolInstance
+@msg	`inputs` lists `{shown}` twice	`inputs`-ში `{shown}` ორჯერაა ჩამოთვლილი
+@msg	`inputs` needs `api` 2 or later	`inputs`-ს სჭირდება `api` 2 ან უფრო ახალი
+@msg	`inputs` needs the permission `doc.read`	`inputs`-ს სჭირდება ნებართვა `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	მეხსიერების ბიუჯეტი (ობიექტს {_1} სჭირდება შეყვანის {size} ბაიტი, დარჩენილია {left})
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	ობიექტების ბიუჯეტი ({MAX_OBJECTS}-ზე მეტი მხოლოდ წასაკითხი ობიექტი)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	ნებართვა `{shown}` დაჯავშნილია პლაგინების მომავალი API-სთვის; ეს ჰოსტი მას არ გასცემს
 @msg	unknown permission `{shown}`	უცნობი ნებართვა `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	„{name}“ ითხოვს ნებართვებს {asked}: მომხმარებლის თანხმობის შემდეგ დააყენეთ ის `grant` პარამეტრით, რომელშიც ისინი ჩამოთვლილია
@@ -6702,3 +6717,4 @@ font-script	Japanese	იაპონური
 # Align to Pixel Grid
 	Align to Pixel Grid	პიქსელურ ბადეზე გასწორება
 @msg	only paths and compound paths can be aligned to the pixel grid	პიქსელურ ბადეზე მხოლოდ ტრაექტორიების და შედგენილი ტრაექტორიების გასწორებაა შესაძლებელი
+@msg	side is left or right, not `{s}`	side არის left ან right და არა `{s}`

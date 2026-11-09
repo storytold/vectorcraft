@@ -553,6 +553,11 @@ font-technology	Variable	Variabla
 	Color Table ({n} colors)	Färgtabell ({n} färger)
 	Color Theme	Färgtema
 	Color Themes	Färgteman
+	Color Wheel	Färghjul
+	Hue ring	Nyansring
+	Saturation and brightness	Mättnad och ljusstyrka
+	Color field	Färgfält
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Färgtyp:
 	Color:	Färg:
 	Colorize	Färglägg
@@ -3933,7 +3938,7 @@ axis	Both	Båda
 	Dock to Bottom	Docka nederst
 	Dock Control Bar	Docka kontrollfältet
 	Drag to float the toolbar	Dra för att göra verktygsfältet flytande
-	Drag to the window's left edge to dock	Dra till fönstrets vänsterkant för att docka
+	Drag to the window's left or right edge to dock	Dra till fönstrets vänster- eller högerkant för att docka
 	Float Tool Group	Gör verktygsgruppen flytande
 @msg	no library `{id}`	inget bibliotek `{id}`
 @msg	select some type first	markera någon text först
@@ -4674,7 +4679,10 @@ axis	Both	Båda
 @msg	its objects are nested too deeply	dess objekt är för djupt kapslade
 @msg	its section ending with `%{end}` doesn't end	dess avsnitt som slutar med `%{end}` avslutas aldrig
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	penslar som VectorCraft ännu inte kan läsa utelämnades från panelen Penslar ({_1})
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objekt med flera fyllningar eller konturer, effekter eller penslar importerades som sitt ritade utseende ({_1}): deras utseende går inte att redigera än
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objekt med flera fyllningar eller konturer, konturer med variabel bredd, effekter eller penslar importerades som sitt ritade utseende ({_1}): deras utseende går inte att redigera än
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	namnet `{name}` är inte UTF-8 och lästes som {label}: om det ser fel ut, öppna filen med en annan legacyNameEncoding
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	namnet `{name}` är inte UTF-8, och delar av det är inte heller giltig {label}: öppna filen med en annan legacyNameEncoding
+@msg	more names that aren't UTF-8 were read as {label} ({count})	fler namn som inte är UTF-8 lästes som {label} ({count})
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	gradienten ”{name}” är inte definierad i filen: en enfärgad fyllning används i stället
 @msg	an image VectorCraft can't read was left out	en bild som VectorCraft inte kan läsa utelämnades
 @msg	graphs come in as plain art, without their data or settings	diagram läses in som vanlig grafik, utan sina data och inställningar
@@ -5965,6 +5973,13 @@ axis	Y Axis	Y-axel
 @msg	at most {MAX_PERMISSIONS} `permissions`	högst {MAX_PERMISSIONS} `permissions`
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	behörigheten `{shown}` gäller inte ett plugin av typen `{_1}`
 @msg	permission `{shown}` is listed twice	behörigheten `{shown}` står två gånger
+@msg	only a filter declares `inputs`	bara ett filter anger `inputs`
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` anger en okänd objekttyp `{shown}`: använd type, image eller symbolInstance
+@msg	`inputs` lists `{shown}` twice	`inputs` anger `{shown}` två gånger
+@msg	`inputs` needs `api` 2 or later	`inputs` kräver `api` 2 eller senare
+@msg	`inputs` needs the permission `doc.read`	`inputs` kräver behörigheten `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	minnesbudget (objekt {_1} behöver {size} byte indata, {left} återstår)
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	objektbudget (fler än {MAX_OBJECTS} skrivskyddade objekt)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	behörigheten `{shown}` är reserverad för ett senare plugin-API; den här värden beviljar den inte
 @msg	unknown permission `{shown}`	okänd behörighet `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	”{name}” begär behörigheterna {asked}: installera det med en `grant` som listar dem när användaren har godkänt
@@ -8126,3 +8141,4 @@ digits	Hindi	Hindi
 # Align to Pixel Grid
 	Align to Pixel Grid	Justera mot pixelrutnät
 @msg	only paths and compound paths can be aligned to the pixel grid	bara banor och sammansatta banor kan justeras mot pixelrutnätet
+@msg	side is left or right, not `{s}`	side är left eller right, inte `{s}`

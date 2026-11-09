@@ -526,6 +526,11 @@ font-technology	Variable	Μεταβλητές
 	Color Table ({n} colors)	Πίνακας χρωμάτων ({n} χρώματα)
 	Color Theme	Χρωματικό θέμα
 	Color Themes	Χρωματικά θέματα
+	Color Wheel	Χρωματικός τροχός
+	Hue ring	Δακτύλιος απόχρωσης
+	Saturation and brightness	Κορεσμός και φωτεινότητα
+	Color field	Πεδίο χρώματος
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Τύπος χρώματος:
 	Color:	Χρώμα:
 	Colorize	Χρωματισμός
@@ -4140,7 +4145,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Drag to float as a toolbar	Σύρετε για αποδέσμευση ως γραμμή εργαλείων
 	Put back in the toolbar	Επαναφορά στη γραμμή εργαλείων
 	Drag to float the toolbar	Σύρετε για αποδέσμευση της γραμμής εργαλείων
-	Drag to the window's left edge to dock	Σύρετε στο αριστερό άκρο του παραθύρου για σύνδεση
+	Drag to the window's left or right edge to dock	Σύρετε στο αριστερό ή στο δεξί άκρο του παραθύρου για σύνδεση
 	Float Tool Group	Αποδέσμευση ομάδας εργαλείων
 @msg	a PostScript error ({name} in `{op}`)	σφάλμα PostScript ({name} στην εντολή `{op}`)
 @msg	a PostScript error ({name} in `{op}`), in {procs}	σφάλμα PostScript ({name} στην εντολή `{op}`), στις διαδικασίες {procs}
@@ -4724,7 +4729,10 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	its objects are nested too deeply	τα αντικείμενά του έχουν υπερβολικά βαθιά ένθεση
 @msg	its section ending with `%{end}` doesn't end	η ενότητά του που τελειώνει σε `%{end}` δεν τερματίζεται
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	τα πινέλα που το VectorCraft δεν μπορεί ακόμη να διαβάσει παραλείφθηκαν από τον πίνακα Πινέλα ({_1})
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	τα αντικείμενα με πολλαπλά γεμίσματα, περιγράμματα, εφέ ή πινέλα εισήχθησαν ως απεικονίσεις ({_1}): η εμφάνισή τους δεν είναι ακόμη επεξεργάσιμη
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	τα αντικείμενα με πολλαπλά γεμίσματα, περιγράμματα, περιγράμματα μεταβλητού πλάτους, εφέ ή πινέλα εισήχθησαν ως απεικονίσεις ({_1}): η εμφάνισή τους δεν είναι ακόμη επεξεργάσιμη
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	το όνομα `{name}` δεν είναι UTF-8 και διαβάστηκε ως {label}: αν φαίνεται λάθος, ανοίξτε το αρχείο με άλλο legacyNameEncoding
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	το όνομα `{name}` δεν είναι UTF-8 και τμήματά του δεν είναι έγκυρα ούτε σε {label}: ανοίξτε το αρχείο με άλλο legacyNameEncoding
+@msg	more names that aren't UTF-8 were read as {label} ({count})	περισσότερα ονόματα που δεν είναι UTF-8 διαβάστηκαν ως {label} ({count})
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	το ντεγκραντέ «{name}» δεν ορίζεται στο αρχείο: χρησιμοποιείται στη θέση του ένα συμπαγές χρώμα
 @msg	an image VectorCraft can't read was left out	παραλείφθηκε εικόνα που δεν μπορεί να διαβάσει το VectorCraft
 @msg	graphs come in as plain art, without their data or settings	τα γραφήματα εισάγονται ως απλή γραφική, χωρίς τα δεδομένα και τις ρυθμίσεις τους
@@ -5893,6 +5901,13 @@ axis	Y Axis	Άξονας Y
 @msg	at most {MAX_PERMISSIONS} `permissions`	το πολύ {MAX_PERMISSIONS} `permissions`
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	το δικαίωμα `{shown}` δεν ισχύει για πρόσθετο τύπου `{_1}`
 @msg	permission `{shown}` is listed twice	το δικαίωμα `{shown}` αναφέρεται δύο φορές
+@msg	only a filter declares `inputs`	μόνο ένα φίλτρο δηλώνει `inputs`
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	το `inputs` αναφέρει άγνωστο είδος αντικειμένου `{shown}`: χρησιμοποιήστε type, image ή symbolInstance
+@msg	`inputs` lists `{shown}` twice	το `inputs` αναφέρει το `{shown}` δύο φορές
+@msg	`inputs` needs `api` 2 or later	το `inputs` απαιτεί `api` 2 ή νεότερο
+@msg	`inputs` needs the permission `doc.read`	το `inputs` απαιτεί το δικαίωμα `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	προϋπολογισμός μνήμης (το αντικείμενο {_1} χρειάζεται {size} byte εισόδου, απομένουν {left})
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	προϋπολογισμός αντικειμένων (περισσότερα από {MAX_OBJECTS} αντικείμενα μόνο για ανάγνωση)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	το δικαίωμα `{shown}` είναι δεσμευμένο για μεταγενέστερο API προσθέτων· αυτός ο κεντρικός υπολογιστής δεν το παραχωρεί
 @msg	unknown permission `{shown}`	άγνωστο δικαίωμα `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	το «{name}» ζητά τα δικαιώματα {asked}: εγκαταστήστε το με ένα `grant` που τα απαριθμεί μόλις συμφωνήσει ο χρήστης
@@ -6593,3 +6608,4 @@ breakText	Glyphs	Γλύφοι
 # Align to Pixel Grid
 	Align to Pixel Grid	Στοίχιση στο πλέγμα εικονοστοιχείων
 @msg	only paths and compound paths can be aligned to the pixel grid	μόνο διαδρομές και σύνθετες διαδρομές μπορούν να στοιχιστούν στο πλέγμα εικονοστοιχείων
+@msg	side is left or right, not `{s}`	το side είναι left ή right, όχι `{s}`

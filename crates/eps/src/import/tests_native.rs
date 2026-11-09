@@ -1411,6 +1411,89 @@ fn an_ai_file_without_layers_keeps_the_gradients_of_its_palette_unlinked() {
     assert_eq!(g.gradient.stops.len(), 2);
 }
 
+/// A file that comes in as its PDF part reads the palette's names that aren't UTF-8 in the encoding
+/// picked, with the notes on them; a layer name that isn't UTF-8, in layers that aren't used, gets
+/// none.
+#[test]
+fn an_ai_file_that_comes_in_as_its_pdf_part_notes_its_palette_names_in_a_legacy_encoding() {
+    let image = "%AI5_File:\n%AI5_BeginRaster\n() 1 XG\n/DeviceGray XN\n[ 1 0 0 1 0 100 ] 6000 6000 0 Xh\n\
+         [ 1 0 0 1 0 100 ] 0 0 6000 6000 6000 6000 8 1 0 0 1 0 4 4 0 0\n%%BeginData: 1\rXI\n\u{0}%%EndData\r\nXH\r\n%AI5_EndRaster\r\nN";
+    // 빨강 (red) in code page 949, for the group and its ink; 그라 for the layer.
+    let palette = PALETTE.replace("Inks", r"\273\241\260\255").replace("Red ink", r"\273\241\260\255 ink");
+    let art = native(&format!("{palette}{}", layer(r"\261\327\266\363", true, &format!("{}\n{image}", square(10, 10)))));
+    // An image past 2^25 pixels isn't read here, and the page has no art of its own in its box.
+    let (d, warnings, read) = crate::import::ai::with_image_limits(1 << 26, 1 << 25, 512 << 20, || {
+        crate::layered_ai_from(crate::AiLayers::decode(&private(&art)), pdf_part(10.0, 86.0), vec![], false, true, 1.0, crate::NameEncoding::Korean)
+    });
+    assert!(!read, "the PDF part is used: {warnings:?}");
+    let groups: Vec<&str> = d.swatch_groups.iter().map(|g| g.name.as_str()).collect();
+    assert_eq!(groups, ["빨강"]);
+    assert!(d.swatch("빨강 ink").is_some_and(|s| s.spot));
+    let notes: Vec<&String> = warnings.iter().filter(|w| w.contains("isn't UTF-8")).collect();
+    assert_eq!(notes.len(), 2, "{warnings:?}");
+    assert!(notes.iter().all(|n| n.contains("windows-949") && !n.contains("그라")), "{notes:?}");
+}
+
+/// A library without layers reads the names of its brushes, graphic styles, symbols, variables and
+/// data sets that aren't UTF-8 in the encoding picked, with a note on each name it brings in.
+#[test]
+fn an_ai_library_without_layers_reads_its_names_in_a_legacy_encoding() {
+    // 빨강 and 그라 in code page 949.
+    let (red, gra) = (r"\273\241\260\255", r"\261\327\266\363");
+    let art = format!("%AI8_BeginBrushPattern\n({gra})\n0 0 m\n4 0 L\n4 4 L\nf\n%AI8_EndBrushPattern\n");
+    let spray = format!(
+        "%AI8_BeginPluginObject\n(Adobe Scatter Brush Tool)\n({red})\n(2 /{gra}/ 5 1 0 0 / 0 0.5 1.5 1 1.2 2 0 -0.25 0.25 2 -45 30 1 1 0) .\n%AI8_EndPluginObject\n"
+    );
+    let order = format!(
+        "%AI8_BeginPluginObject\n(Adobe Brush Manager Order)\n(Adobe Brush Manager Order)\n( Adobe Scatter Brush Tool/ {red}/) .\n%AI8_EndPluginObject\n"
+    );
+    let styles =
+        format!("%AI9_BeginArtStyles\n{}%AI9_EndArtStyles\n%AI9_BeginArtStyleList\n({red})\n%AI9_EndArtStyleList\n", stroke_art_style(red, 1.0, ""));
+    let symbols = format!("%AI5_Begin_NonPrinting\n{}%AI5_End_NonPrinting--\n", symbol_def(gra, &symbol_square(-2.0, -2.0, 2.0, 2.0), 1));
+    let variables = vectorcraft_testkit::ai::variable_library(&["QVARQ"], &["QSETQ"]).replace("QVARQ", red).replace("QSETQ", gra);
+    let library = format!(
+        "%!PS-Adobe-3.0 \n%%BoundingBox: 0 0 100 100\n%%BeginSetup\n{art}{order}{spray}{styles}{symbols}{variables}%%EndSetup\n%%PageTrailer\n%%Trailer\n"
+    );
+    let (d, warnings, read) = crate::layered_ai_from(
+        crate::AiLayers::decode(&private(&library)),
+        pdf_part(10.0, 86.0),
+        vec![],
+        false,
+        true,
+        1.0,
+        crate::NameEncoding::Korean,
+    );
+    assert!(!read, "{warnings:?}");
+    assert_eq!(vectorcraft_brush::library(&d).iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), ["빨강"], "{warnings:?}");
+    assert_eq!(d.graphic_styles.iter().map(|g| g.name.as_str()).collect::<Vec<_>>(), ["빨강"], "{warnings:?}");
+    assert_eq!(d.symbols.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["그라"], "{warnings:?}");
+    assert_eq!(d.variables.variables.iter().map(|v| v.name.as_str()).collect::<Vec<_>>(), ["빨강"], "{warnings:?}");
+    assert_eq!(d.variables.datasets.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["그라"], "{warnings:?}");
+    let notes: Vec<&String> = warnings.iter().filter(|w| w.contains("isn't UTF-8") || w.contains("aren't UTF-8")).collect();
+    assert_eq!(notes.len(), 2, "{warnings:?}");
+    assert!(notes.iter().all(|n| n.contains("windows-949")), "{notes:?}");
+}
+
+/// A pattern of a file without layers that takes a free name beside a pattern of the PDF part has
+/// a note on the name it was read under.
+#[test]
+fn a_renamed_pattern_of_a_file_without_layers_has_a_note_on_its_legacy_name() {
+    // 빨강 in code page 949.
+    let red = r"\273\241\260\255";
+    let tile = format!("%AI3_BeginPattern: ({red})\n({red}) 0 0 4 4\n%_0 0 0 1 k\n%_1 1 m\n%_3 1 L\n%_3 3 L\n%_1 3 L\n%_f\nE\n%AI3_EndPattern\n");
+    let palette = format!("%AI5_BeginPalette\n0 0 Pb\n({red}) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n(Tile)\nPc\nPB\n%AI5_EndPalette\n");
+    let art = native(&format!("{tile}{palette}"));
+    let mut part = pdf_part(10.0, 86.0);
+    part.patterns.push(vectorcraft_doc::PatternDef::new("빨강", vec![]));
+    let (d, warnings, read) =
+        crate::layered_ai_from(crate::AiLayers::decode(&private(&art)), part, vec![], false, true, 1.0, crate::NameEncoding::Korean);
+    assert!(!read, "{warnings:?}");
+    assert!(d.pattern("빨강 2").is_some(), "{:?}", d.patterns.iter().map(|p| &p.name).collect::<Vec<_>>());
+    let notes: Vec<&String> = warnings.iter().filter(|w| w.contains("isn't UTF-8")).collect();
+    assert_eq!(notes.len(), 1, "{warnings:?}");
+    assert!(notes[0].contains("`빨강`"), "{notes:?}");
+}
+
 /// A `.ai` pattern library (a palette of pattern swatches and no layers) whose PDF part defines no
 /// pattern gets the patterns its editing data defines with the palette's pattern swatches.
 #[test]
@@ -5689,6 +5772,36 @@ fn type_with_convert_to_shape_comes_in_as_type_with_it_live() {
             &serde_json::json!({"relative": true, "extraW": 8.0, "extraH": 4.0, "width": 36.0, "height": 36.0, "radius": 3.0})
         )
     );
+}
+
+#[test]
+fn type_with_a_variable_width_stroke_keeps_it_live() {
+    // GUARDS: other objects with a variable-width stroke come in as their drawn look; type keeps the
+    // stroke, since its drawn look can't be retyped.
+    use vectorcraft_doc::AppearanceItem;
+    let doc = text_document(&[("Bang\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let style = "%AI9_BeginArtStyles\n/KnownStyle :\n(Tapered) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+        /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/BasicFilter :\n(Stroke Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+        2 /FillOrStroke ,\n/Dictionary : /NotRecorded ,\n/StrokeStyle : 0 R\n0 0 0 1 0 0 0 XA\n0 J 0 j 2 w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n\
+        /Dictionary : /NotRecorded ,\n/Array :\n0 /Real ,\n0.5 /Real ,\n1 /Real ,\n; (BSVariableWidthTValuesArray) ,\n\
+        /Array :\n0 /Real ,\n1 /Real ,\n0 /Real ,\n; (BSCenteredWidthsArray) ,\n; (kAIBeautifulStrokesParamsDictKey) ,\n; /Dict ;\n /Part ,\n\
+        /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n /Part ,\n;\n%AI9_EndArtStyles\n";
+    let drawing = "0 0 0 1 k\n54 56 m\n100 56 L\n100 80 L\n54 80 L\nf";
+    let look = format!("u\n/AI11Text :\n1 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\n{drawing}\nU\n9 () XW\n");
+    let own: String = text_object(0).lines().map(|l| format!("%_{l}\n")).collect();
+    let art = native_with_text(&(style.to_string() + &layer("Art", true, &format!("{look}{own}1 (Tapered) XW\n"))), &doc);
+    let (d, notes) = crate::ai_alone(&private(&art)).unwrap();
+    let mut texts = vec![];
+    d.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            texts.push((t.plain_text(), n.appearance.clone()));
+        }
+    });
+    let [(text, a)] = texts.as_slice() else { panic!("{texts:?} {notes:?}") };
+    assert_eq!(text, "Bang");
+    let [AppearanceItem::Stroke(stroke)] = a.items.as_slice() else { panic!("{a:?}") };
+    assert_eq!(stroke.profile.as_ref().map(|p| p.points.clone()), Some(vec![(0.0, 0.0, 0.0), (0.5, 1.0, 1.0), (1.0, 0.0, 0.0)]));
+    assert!(!notes.iter().any(|w| w.contains("drawn look")), "{notes:?}");
 }
 
 #[test]

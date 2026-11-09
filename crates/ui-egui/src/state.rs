@@ -74,8 +74,9 @@ pub const ROTATE_VIEW_ANGLES: [(&str, f64); 12] = [
     ("-90°", -90.0),
 ];
 
-use super::{ControlResponse, Sender};
+use super::ControlResponse;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::Sender;
 
 /// Zoom stop stepping reads this (set each UI frame and before commands) so canvas wheel zoom
 /// matches the status bar when Display Print Size at 100% Zoom is on.
@@ -201,6 +202,7 @@ pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     ("attributes", "Attributes", "settings"),
     (crate::panels::svg_interactivity::ID, "SVG Interactivity", "spline-pointer"),
     ("colorThemes", "Color Themes", "sun"),
+    (crate::panels::color_wheel::ID, "Color Wheel", "circle"),
     (crate::panels::links::ID, "Links", "link"),
     (crate::panels::asset_export::ID, "Asset Export", "share-2"),
     (crate::panels::css_properties::ID, "CSS Properties", "globe"),
@@ -471,6 +473,11 @@ pub struct UiState {
     /// `window.toolsBesideCanvas`). Off by default, and off in state saved without it.
     #[serde(default)]
     pub tools_beside_canvas: bool,
+    /// The docked Tools panel stands on the right, between the canvas and the panels, instead of on
+    /// the left (dropped there, or `window.panel.dock {panel: "tools", side: "right"}`). Off by
+    /// default, and off in state saved without it.
+    #[serde(default)]
+    pub toolbar_right: bool,
     pub status_bar: bool,
     pub help_bar: bool,
     pub dock: bool,
@@ -1008,6 +1015,7 @@ impl Default for UiState {
             dock_width: None,
             toolbar_pos: None,
             tools_beside_canvas: false,
+            toolbar_right: false,
             status_bar: true,
             help_bar: true,
             dock: true,

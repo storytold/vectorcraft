@@ -714,6 +714,11 @@ digits	Malayalam	マラヤーラム数字
 	Color	カラー
 	Color Guide	カラーガイド
 	Color Themes	カラーテーマ
+	Color Wheel	カラーホイール
+	Hue ring	色相リング
+	Saturation and brightness	彩度と明るさ
+	Color field	カラーフィールド
+	{name1} {value1}, {name2} {value2}	{name1} {value1}、{name2} {value2}
 	CSS Properties	CSS プロパティ
 	Document Info	ドキュメント情報
 	Flattener Preview	分割・統合プレビュー
@@ -4001,7 +4006,7 @@ axis	Both	両方
 	Dock to Bottom	下部にドッキング
 	Dock Control Bar	コントロールバーをドッキング
 	Drag to float the toolbar	ドラッグしてツールバーをフローティング
-	Drag to the window's left edge to dock	ウィンドウの左端までドラッグしてドッキング
+	Drag to the window's left or right edge to dock	ウィンドウの左端または右端までドラッグしてドッキング
 	Float Tool Group	ツールグループをフローティング
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
@@ -4509,7 +4514,10 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	表示に使われるフォントの 1 行に対して低すぎるフレーム内のエリア内文字は、フレームを高くしました ({_1}): そうしないと文字が表示されません
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	グラデーション「{name}」はファイル内で定義されていません: 代わりに単色を使用しています
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	VectorCraft がまだ読み込めないブラシ {_1} 個はブラシパネルに追加されませんでした
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	塗りや線が複数ある、または効果やブラシを適用したオブジェクト {_1} 個は見た目のまま読み込まれました: アピアランスはまだ編集できません
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	塗りや線が複数ある、可変幅の線がある、または効果やブラシを適用したオブジェクト {_1} 個は見た目のまま読み込まれました: アピアランスはまだ編集できません
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	名前 `{name}` は UTF-8 ではないため {label} として読み込みました: 正しくない場合は別の legacyNameEncoding でファイルを開いてください
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	名前 `{name}` は UTF-8 ではなく、一部は {label} としても無効です: 別の legacyNameEncoding でファイルを開いてください
+@msg	more names that aren't UTF-8 were read as {label} ({count})	UTF-8 ではないほかの名前を {label} として読み込みました ({count})
 @msg	patterns nested too deeply are filled with mid-grey	入れ子が深すぎるパターンは中間のグレーで塗りつぶされています
 @msg	shadings of an unknown type were left out	種類が不明なシェーディングは除外されました
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	関数の種類が不明なシェーディングは中間の色で塗りつぶされています
@@ -5624,6 +5632,13 @@ axis	Y Axis	Y 軸
 @msg	at most {MAX_PERMISSIONS} `permissions`	`permissions` は最大 {MAX_PERMISSIONS} 個です
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	権限 `{shown}` は種類 `{_1}` のプラグインには適用されません
 @msg	permission `{shown}` is listed twice	権限 `{shown}` が 2 回指定されています
+@msg	only a filter declares `inputs`	`inputs` を宣言できるのはフィルターだけです
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` に不明なオブジェクトの種類 `{shown}` があります。type、image、symbolInstance のいずれかを使ってください
+@msg	`inputs` lists `{shown}` twice	`inputs` に `{shown}` が 2 回指定されています
+@msg	`inputs` needs `api` 2 or later	`inputs` には `api` 2 以上が必要です
+@msg	`inputs` needs the permission `doc.read`	`inputs` には権限 `doc.read` が必要です
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	メモリ予算 (オブジェクト {_1} には {size} バイトの入力が必要ですが、残りは {left} です)
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	オブジェクト予算 ({MAX_OBJECTS} 個を超える読み取り専用オブジェクト)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	権限 `{shown}` は今後のプラグイン API 用に予約されています。このホストはこの権限を付与しません
 @msg	unknown permission `{shown}`	不明な権限 `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	「{name}」は権限 {asked} を求めています。ユーザーが同意したら、それらを列挙した `grant` を指定してインストールしてください
@@ -6327,3 +6342,4 @@ breakText	Glyphs	字形
 # Align to Pixel Grid
 	Align to Pixel Grid	ピクセルグリッドに整合
 @msg	only paths and compound paths can be aligned to the pixel grid	ピクセルグリッドに整合できるのはパスと複合パスのみです
+@msg	side is left or right, not `{s}`	side は left または right です（`{s}` ではありません）

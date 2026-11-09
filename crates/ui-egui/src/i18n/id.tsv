@@ -654,6 +654,11 @@
 	Color	Warna
 	Color Guide	Panduan warna
 	Color Themes	Tema warna
+	Color Wheel	Roda warna
+	Hue ring	Cincin rona
+	Saturation and brightness	Saturasi dan kecerahan
+	Color field	Kolom warna
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	CSS Properties	Properti CSS
 	Document Info	Info dokumen
 	Flattener Preview	Pratinjau perata
@@ -1199,7 +1204,7 @@ lighting	Light	Cahaya
 	X:	X:
 	Y:	Y:
 	Drag to float the toolbar	Seret untuk mengambangkan bilah alat
-	Drag to the window's left edge to dock	Seret ke tepi kiri jendela untuk memasang
+	Drag to the window's left or right edge to dock	Seret ke tepi kiri atau kanan jendela untuk memasang
 	Crystallize	Kristalisasi
 	Add Anchor Point Tool	Alat tambah titik jangkar
 	Anchor Point Tool	Alat titik jangkar
@@ -4701,7 +4706,10 @@ imageTrace	Outline	Kontur
 @msg	its objects are nested too deeply	objeknya bersarang terlalu dalam
 @msg	its section ending with `%{end}` doesn't end	bagian yang berakhir dengan `%{end}` tidak berakhir
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	kuas yang belum dapat dibaca VectorCraft tidak dimasukkan ke panel Kuas ({_1})
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objek dengan beberapa isian atau goresan, efek, atau kuas masuk sebagai tampilan gambarnya ({_1}): penampilannya belum dapat diedit
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objek dengan beberapa isian atau goresan, goresan dengan lebar bervariasi, efek, atau kuas masuk sebagai tampilan gambarnya ({_1}): penampilannya belum dapat diedit
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	nama `{name}` bukan UTF-8 dan dibaca sebagai {label}: jika terlihat salah, buka file dengan legacyNameEncoding lain
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	nama `{name}` bukan UTF-8, dan sebagiannya juga bukan {label} yang valid: buka file dengan legacyNameEncoding lain
+@msg	more names that aren't UTF-8 were read as {label} ({count})	nama lain yang bukan UTF-8 dibaca sebagai {label} ({count})
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	gradien “{name}” tidak didefinisikan dalam berkas: warna polos dipakai sebagai pengganti
 @msg	an image VectorCraft can't read was left out	gambar yang tidak dapat dibaca VectorCraft tidak disertakan
 @msg	an image whose data is cut short was left out	gambar yang datanya terpotong tidak disertakan
@@ -6432,3 +6440,4 @@ breakText	Glyphs	Glif
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Sejajarkan ke grid piksel
+@msg	side is left or right, not `{s}`	side adalah left atau right, bukan `{s}`

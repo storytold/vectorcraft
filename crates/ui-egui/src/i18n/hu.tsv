@@ -742,6 +742,11 @@ font-technology	Variable	Változó
 	Color Table ({n} colors)	Színtábla ({n} szín)
 	Color Theme	Színtéma
 	Color Themes	Színtémák
+	Color Wheel	Színkör
+	Hue ring	Színárnyalat-gyűrű
+	Saturation and brightness	Telítettség és fényesség
+	Color field	Színmező
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Színtípus:
 	Color:	Szín:
 	Colorization	Színezés
@@ -1156,7 +1161,7 @@ font-technology	Variable	Változó
 	Drag to float as a toolbar	Húzd el, hogy önálló eszköztárként lebegjen
 	Drag to float the toolbar	Húzd el az eszköztár lebegtetéséhez
 	Drag to move	Húzással áthelyezhető
-	Drag to the window's left edge to dock	Dokkoláshoz húzd az ablak bal szélére
+	Drag to the window's left or right edge to dock	Dokkoláshoz húzd az ablak bal vagy jobb szélére
 	Step up or down	Léptetés fel vagy le
 	Drag values or labels. Double-click a value to type.	Húzd az értékeket vagy a címkéket. Gépeléshez kattints duplán egy értékre.
 	Draw	Rajzolás
@@ -5164,7 +5169,10 @@ imageTrace	Outline	Körvonal
 @msg	object {id} is not a path	az objektum nem útvonal: {id}
 @msg	object {id} is not a selected top-level object	az objektum nem kijelölt legfelső szintű objektum: {id}
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	a VectorCraft által még nem olvasható ecsetek kimaradtak az Ecsetek panelről ({_1})
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	a több kitöltésű vagy körvonalú, effektusos vagy ecsetes objektumok a megrajzolt kinézetükkel kerültek be ({_1}): a megjelenésük még nem szerkeszthető
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	a több kitöltésű vagy körvonalú, változó szélességű körvonalú, effektusos vagy ecsetes objektumok a megrajzolt kinézetükkel kerültek be ({_1}): a megjelenésük még nem szerkeszthető
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	a(z) `{name}` név nem UTF-8, ezért {label} kódolással lett beolvasva: ha hibásnak tűnik, nyissa meg a fájlt másik legacyNameEncoding értékkel
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	a(z) `{name}` név nem UTF-8, és egyes részei {label} kódolásban sem érvényesek: nyissa meg a fájlt másik legacyNameEncoding értékkel
+@msg	more names that aren't UTF-8 were read as {label} ({count})	további nem UTF-8 nevek lettek {label} kódolással beolvasva ({count})
 @msg	Offset Path: select paths	Útvonal eltolása: jelölj ki útvonalakat
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Útvonal eltolása: az eltolás után semmi sem marad a kijelölt útvonalakból (a befelé eltolás nagyobb az alakzatoknál)
 @msg	onto must name a floating panel	az onto egy lebegő panelt kell megnevezzen
@@ -5925,6 +5933,13 @@ axis	Y Axis	Y tengely
 @msg	at most {MAX_PERMISSIONS} `permissions`	legfeljebb {MAX_PERMISSIONS} `permissions`
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	a(z) `{shown}` engedély nem vonatkozik `{_1}` fajtájú bővítményre
 @msg	permission `{shown}` is listed twice	a(z) `{shown}` engedély kétszer szerepel
+@msg	only a filter declares `inputs`	`inputs` kulcsot csak szűrő adhat meg
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	az `inputs` ismeretlen objektumfajtát nevez meg: `{shown}`; használja a type, image vagy symbolInstance értéket
+@msg	`inputs` lists `{shown}` twice	az `inputs` kétszer sorolja fel ezt: `{shown}`
+@msg	`inputs` needs `api` 2 or later	az `inputs` használatához `api` 2 vagy újabb szükséges
+@msg	`inputs` needs the permission `doc.read`	az `inputs` használatához a(z) `doc.read` engedély szükséges
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	memóriakeret (a(z) {_1} objektumnak {size} bájt bemenet kell, {left} maradt)
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	objektumkeret (több mint {MAX_OBJECTS} csak olvasható objektum)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	a(z) `{shown}` engedély egy későbbi bővítmény-API számára van fenntartva; ez a gazdaprogram nem adja meg
 @msg	unknown permission `{shown}`	ismeretlen engedély: `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	a(z) „{name}” a következő engedélyeket kéri: {asked}; telepítsd egy őket felsoroló `grant` értékkel, ha a felhasználó beleegyezik
@@ -6625,3 +6640,4 @@ breakText	Glyphs	Glifák
 # Align to Pixel Grid
 	Align to Pixel Grid	Igazítás a pixelrácshoz
 @msg	only paths and compound paths can be aligned to the pixel grid	csak útvonalak és összetett útvonalak igazíthatók a pixelrácshoz
+@msg	side is left or right, not `{s}`	a side értéke left vagy right lehet, nem `{s}`

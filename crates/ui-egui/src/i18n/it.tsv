@@ -566,6 +566,11 @@ font-technology	Variable	Variabili
 	Color Table ({n} colors)	Tabella colori ({n} colori)
 	Color Theme	Tema colore
 	Color Themes	Temi colore
+	Color Wheel	Ruota dei colori
+	Hue ring	Anello tonalità
+	Saturation and brightness	Saturazione e luminosità
+	Color field	Campo colore
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Tipo di colore:
 	Color:	Colore:
 	Colorize	Colora
@@ -4059,7 +4064,7 @@ axis	Both	Entrambi
 	Dock to Bottom	Ancora in basso
 	Dock Control Bar	Ancora barra di controllo
 	Drag to float the toolbar	Trascina per rendere mobile la barra degli strumenti
-	Drag to the window's left edge to dock	Trascina sul bordo sinistro della finestra per ancorare
+	Drag to the window's left or right edge to dock	Trascina sul bordo sinistro o destro della finestra per ancorare
 	Float Tool Group	Rendi mobile gruppo strumenti
 
 # Status and error messages (`@msg`), translated where the status bar shows them; the message itself
@@ -4818,7 +4823,10 @@ axis	Both	Entrambi
 @msg	its objects are nested too deeply	i loro oggetti sono annidati troppo in profondità
 @msg	its section ending with `%{end}` doesn't end	la loro sezione che termina con `%{end}` non termina
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	i pennelli che VectorCraft non sa ancora leggere sono stati esclusi dal pannello Pennelli ({_1})
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	gli oggetti con più riempimenti o tratti, effetti o pennelli sono stati importati come appaiono disegnati ({_1}): il loro aspetto non è ancora modificabile
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	gli oggetti con più riempimenti o tratti, tratti a larghezza variabile, effetti o pennelli sono stati importati come appaiono disegnati ({_1}): il loro aspetto non è ancora modificabile
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	il nome `{name}` non è in UTF-8 ed è stato letto come {label}: se sembra errato, apri il file con un altro legacyNameEncoding
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	il nome `{name}` non è in UTF-8 e alcune sue parti non sono valide nemmeno in {label}: apri il file con un altro legacyNameEncoding
+@msg	more names that aren't UTF-8 were read as {label} ({count})	altri nomi non in UTF-8 sono stati letti come {label} ({count})
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	la sfumatura “{name}” non è definita nel file: la sostituisce un colore pieno
 @msg	an image VectorCraft can't read was left out	un'immagine che VectorCraft non può leggere è stata omessa
 @msg	graphs come in as plain art, without their data or settings	i grafici vengono importati come grafica semplice, senza i loro dati e le loro impostazioni
@@ -5559,6 +5567,13 @@ axis	Y Axis	Asse Y
 @msg	at most {MAX_PERMISSIONS} `permissions`	al massimo {MAX_PERMISSIONS} `permissions`
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	l’autorizzazione `{shown}` non si applica a un plug-in di tipo `{_1}`
 @msg	permission `{shown}` is listed twice	l’autorizzazione `{shown}` è elencata due volte
+@msg	only a filter declares `inputs`	solo un filtro dichiara `inputs`
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` indica un tipo di oggetto sconosciuto `{shown}`: usa type, image o symbolInstance
+@msg	`inputs` lists `{shown}` twice	`inputs` elenca `{shown}` due volte
+@msg	`inputs` needs `api` 2 or later	`inputs` richiede `api` 2 o successivo
+@msg	`inputs` needs the permission `doc.read`	`inputs` richiede l’autorizzazione `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	budget di memoria (l’oggetto {_1} richiede {size} byte di input, ne restano {left})
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	budget di oggetti (più di {MAX_OBJECTS} oggetti di sola lettura)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	l’autorizzazione `{shown}` è riservata a un’API dei plug-in successiva; questo host non la concede
 @msg	unknown permission `{shown}`	autorizzazione sconosciuta `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}” chiede le autorizzazioni {asked}: installalo con un `grant` che le elenca quando l’utente acconsente
@@ -6262,3 +6277,4 @@ breakText	Glyphs	Glifi
 # Align to Pixel Grid
 	Align to Pixel Grid	Allinea alla griglia pixel
 @msg	only paths and compound paths can be aligned to the pixel grid	solo i tracciati e i tracciati composti possono essere allineati alla griglia pixel
+@msg	side is left or right, not `{s}`	side è left o right, non `{s}`

@@ -567,6 +567,11 @@ font-technology	Variable	Variables
 	Color Table ({n} colors)	Table des couleurs ({n} couleurs)
 	Color Theme	Thème de couleurs
 	Color Themes	Thèmes de couleurs
+	Color Wheel	Roue chromatique
+	Hue ring	Anneau de teinte
+	Saturation and brightness	Saturation et luminosité
+	Color field	Champ de couleur
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Type de couleur :
 	Color:	Couleur :
 	Colorize	Coloriser
@@ -4006,7 +4011,7 @@ axis	Both	Les deux
 	Dock to Bottom	Ancrer en bas
 	Dock Control Bar	Ancrer la barre de contrôle
 	Drag to float the toolbar	Faire glisser pour rendre la barre d’outils flottante
-	Drag to the window's left edge to dock	Faire glisser vers le bord gauche de la fenêtre pour ancrer
+	Drag to the window's left or right edge to dock	Faire glisser vers le bord gauche ou droit de la fenêtre pour ancrer
 	Float Tool Group	Rendre le groupe d’outils flottant
 
 # Status and error messages (`@msg`), translated where the status bar shows them; the message itself
@@ -4763,7 +4768,10 @@ axis	Both	Les deux
 @msg	its objects are nested too deeply	leurs objets sont imbriqués trop profondément
 @msg	its section ending with `%{end}` doesn't end	leur section qui se termine par `%{end}` ne se termine pas
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	les formes que VectorCraft ne sait pas encore lire ont été omises du panneau Formes ({_1})
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	les objets à plusieurs fonds ou contours, effets ou formes ont été importés tels qu’ils sont dessinés ({_1}) : leur aspect n’est pas encore modifiable
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	les objets à plusieurs fonds ou contours, contours de largeur variable, effets ou formes ont été importés tels qu’ils sont dessinés ({_1}) : leur aspect n’est pas encore modifiable
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	le nom `{name}` n’est pas en UTF-8 et a été lu en {label} : s’il semble incorrect, ouvrez le fichier avec un autre legacyNameEncoding
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	le nom `{name}` n’est pas en UTF-8, et certaines parties ne sont pas non plus du {label} valide : ouvrez le fichier avec un autre legacyNameEncoding
+@msg	more names that aren't UTF-8 were read as {label} ({count})	d’autres noms qui ne sont pas en UTF-8 ont été lus en {label} ({count})
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	le dégradé « {name} » n’est pas défini dans le fichier : une couleur unie le remplace
 @msg	an image VectorCraft can't read was left out	une image que VectorCraft ne peut pas lire a été ignorée
 @msg	graphs come in as plain art, without their data or settings	les graphes sont importés comme illustration ordinaire, sans leurs données ni leurs réglages
@@ -5938,6 +5946,13 @@ axis	Y Axis	Axe Y
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	l’autorisation `{shown}` ne s’applique pas à un module externe de type `{_1}`
 @msg	permission `{shown}` is listed twice	l’autorisation `{shown}` figure deux fois
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	l’autorisation `{shown}` est réservée à une future API de module externe ; cet hôte ne l’accorde pas
+@msg	only a filter declares `inputs`	seul un filtre déclare `inputs`
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` désigne un type d’objet inconnu `{shown}` : utilisez type, image ou symbolInstance
+@msg	`inputs` lists `{shown}` twice	`inputs` mentionne `{shown}` deux fois
+@msg	`inputs` needs `api` 2 or later	`inputs` nécessite `api` 2 ou plus
+@msg	`inputs` needs the permission `doc.read`	`inputs` nécessite l’autorisation `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	budget mémoire (l’objet {_1} nécessite {size} octets d’entrée, il en reste {left})
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	budget d’objets (plus de {MAX_OBJECTS} objets en lecture seule)
 @msg	unknown permission `{shown}`	autorisation inconnue `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	« {name} » demande les autorisations {asked} : installez-le avec `grant` qui les liste une fois que l’utilisateur l’accepte
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	« {name} » n’a pas reçu `{p}`, dont sa sortie a besoin : rien n’a été modifié
@@ -6636,3 +6651,4 @@ breakText	Glyphs	Glyphes
 # Align to Pixel Grid
 	Align to Pixel Grid	Aligner sur la grille de pixels
 @msg	only paths and compound paths can be aligned to the pixel grid	seuls les tracés et les tracés transparents peuvent être alignés sur la grille de pixels
+@msg	side is left or right, not `{s}`	side vaut left ou right, pas `{s}`

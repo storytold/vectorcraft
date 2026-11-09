@@ -707,6 +707,11 @@ digits	Malayalam	말라얄람어
 	Color	색상
 	Color Guide	색상 가이드
 	Color Themes	색상 테마
+	Color Wheel	색상환
+	Hue ring	색조 링
+	Saturation and brightness	채도 및 밝기
+	Color field	색상 필드
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	CSS Properties	CSS 속성
 	Document Info	문서 정보
 	Flattener Preview	병합 미리 보기
@@ -3985,7 +3990,7 @@ axis	Both	양쪽
 	Dock to Bottom	아래쪽에 고정
 	Dock Control Bar	컨트롤 막대 고정
 	Drag to float the toolbar	드래그하여 도구 모음 분리
-	Drag to the window's left edge to dock	창 왼쪽 가장자리로 드래그하여 고정
+	Drag to the window's left or right edge to dock	창 왼쪽 또는 오른쪽 가장자리로 드래그하여 고정
 	Float Tool Group	도구 그룹 분리
 	Services	서비스
 	Hide VectorCraft	VectorCraft 숨기기
@@ -4436,7 +4441,10 @@ theme	Appearance	외관
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	표시되는 글꼴의 한 줄보다 낮은 프레임의 영역 문자는 프레임을 더 높였습니다({_1}). 그렇지 않으면 문자가 표시되지 않습니다
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	그레이디언트 “{name}”이(가) 파일에 정의되어 있지 않아 단색으로 대체했습니다
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	VectorCraft에서 아직 읽을 수 없는 브러시는 브러시 패널에서 제외되었습니다({_1})
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	칠이나 선이 여러 개인 개체, 효과, 브러시가 있는 개체는 그려진 모양({_1})으로 가져왔습니다: 모양새는 아직 편집할 수 없습니다
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	칠이나 선이 여러 개인 개체, 폭이 변하는 선, 효과, 브러시가 있는 개체는 그려진 모양({_1})으로 가져왔습니다: 모양새는 아직 편집할 수 없습니다
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	이름 `{name}`은(는) UTF-8이 아니어서 {label}(으)로 읽었습니다: 잘못 보이면 다른 legacyNameEncoding으로 파일을 여세요
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	이름 `{name}`은(는) UTF-8이 아니고 일부는 {label}에서도 올바르지 않습니다: 다른 legacyNameEncoding으로 파일을 여세요
+@msg	more names that aren't UTF-8 were read as {label} ({count})	UTF-8이 아닌 다른 이름도 {label}(으)로 읽었습니다({count})
 @msg	patterns nested too deeply are filled with mid-grey	너무 깊게 중첩된 패턴은 중간 회색으로 채웁니다
 @msg	shadings of an unknown type were left out	알 수 없는 종류의 셰이딩은 제외했습니다
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	함수 종류를 알 수 없는 셰이딩은 중간 색상으로 채웁니다
@@ -5520,6 +5528,13 @@ axis	Y Axis	Y축
 @msg	at most {MAX_PERMISSIONS} `permissions`	`permissions`는 최대 {MAX_PERMISSIONS}개입니다
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	`{shown}` 권한은 `{_1}` 종류의 플러그인에 적용되지 않습니다
 @msg	permission `{shown}` is listed twice	`{shown}` 권한이 두 번 나열되어 있습니다
+@msg	only a filter declares `inputs`	필터만 `inputs`를 선언할 수 있습니다
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs`에 알 수 없는 개체 종류 `{shown}`이(가) 있습니다. type, image 또는 symbolInstance를 사용하세요
+@msg	`inputs` lists `{shown}` twice	`inputs`에 `{shown}`이(가) 두 번 나열되어 있습니다
+@msg	`inputs` needs `api` 2 or later	`inputs`에는 `api` 2 이상이 필요합니다
+@msg	`inputs` needs the permission `doc.read`	`inputs`에는 `doc.read` 권한이 필요합니다
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	메모리 예산(개체 {_1}에 입력 {size}바이트가 필요하지만 {left}바이트 남음)
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	개체 예산(읽기 전용 개체 {MAX_OBJECTS}개 초과)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	`{shown}` 권한은 이후 플러그인 API용으로 예약되어 있습니다. 이 호스트는 이 권한을 부여하지 않습니다
 @msg	unknown permission `{shown}`	알 수 없는 권한 `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}”은(는) {asked} 권한을 요청합니다. 사용자가 동의하면 이를 나열한 `grant`로 설치하세요
@@ -6223,3 +6238,4 @@ breakText	Glyphs	글리프
 # Align to Pixel Grid
 	Align to Pixel Grid	픽셀 격자에 정렬
 @msg	only paths and compound paths can be aligned to the pixel grid	패스와 컴파운드 패스만 픽셀 격자에 정렬할 수 있습니다
+@msg	side is left or right, not `{s}`	side는 left 또는 right입니다(`{s}` 아님)
