@@ -6356,7 +6356,7 @@ breakText	Glyphs	Glyphs
 	Reset Symbol Instance	Symboolinstantie opnieuw instellen
 @msg	type must be static or dynamic, not {v}	type moet static of dynamic zijn, niet {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` is een statisch symbool: stel eerst het symbooltype in op Dynamisch
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	Van een pad, samengesteld pad of tekst die in een symboolinstantie is geselecteerd, kan alleen de effen kleur van vulling en lijn veranderen
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	Van een pad, samengesteld pad of tekst geselecteerd in een symboolinstantie kunnen alleen de vulling, lijn, dekking en overvloeimodus worden gewijzigd
 @msg	path must be a list of child indices	path moet een lijst met onderliggende indexen zijn
 @msg	no object at path {shown} in the symbol's art	geen object op pad {shown} in de illustratie van het symbool
 @msg	give fill, stroke, opacity and/or blend	geef fill, stroke, opacity en/of blend op
