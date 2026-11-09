@@ -125,6 +125,27 @@ fn an_export_step_or_preset_with_a_key_no_longer_read_still_runs() {
     s.execute("document.export", &json!({"format": "pdf", "preset": "Old"})).unwrap();
 }
 
+/// So does a save, or an Export for Screens, with a key that is no longer read, and an Export for
+/// Screens preset file that holds one in a row still loads and exports. `Session::execute`
+/// refuses the same options.
+#[test]
+fn a_save_or_screens_step_with_a_key_no_longer_read_still_runs() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let save = json!({"format": "pdf", "noSuchOption": true, "options": {"retired": 1, "marks": {"useDocumentBleed": true}}});
+    assert!(check_params("file.saveCopy", &save).is_err());
+    assert!(s.execute("file.saveCopy", &save).is_err());
+    s.replay("file.saveCopy", &save).unwrap();
+    let screens = json!({"noSuchOption": true, "formats": [{"format": "png", "retired": 1}], "settings": {"pdf": {"marks": {"retired": true}}}});
+    assert!(check_params("document.exportForScreens", &screens).is_err());
+    assert!(s.execute("document.exportForScreens", &screens).is_err());
+    s.replay("document.exportForScreens", &screens).unwrap();
+    let file = json!({"format": "vcexportpresets", "presets": [{"name": "Old", "settings": {"formats": [{"format": "png", "noLongerRead": 1}]}}]});
+    s.execute("document.exportPresets.import", &json!({"data": file.to_string()})).unwrap();
+    check_params("document.exportForScreens", &json!({"exportPreset": "Old"})).unwrap();
+    s.execute("document.exportForScreens", &json!({"exportPreset": "Old"})).unwrap();
+}
+
 /// So do an effect's own parameters (#1592): a journal or a file with a key the effect doesn't
 /// take, or a value of another type, replays and opens; the effect reads what it knows, clamped.
 #[test]

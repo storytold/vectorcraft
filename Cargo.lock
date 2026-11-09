@@ -6511,6 +6511,7 @@ name = "vectorcraft-eps"
 version = "0.21.0"
 dependencies = [
  "craft-pdf",
+ "encoding_rs",
  "fax",
  "flate2",
  "hayro-ccitt",
