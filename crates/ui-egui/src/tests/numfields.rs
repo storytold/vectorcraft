@@ -159,6 +159,106 @@ fn typing_into_a_hex_field_commits_it() {
     }
 }
 
+/// Keyboard focus selects a hex field's digits. A pasted code replaces them wherever the caret is,
+/// hex digits that fit edit them in place, and a paste that is not a color leaves them as they were.
+/// Typing digit by digit is not affected.
+#[test]
+fn a_paste_into_a_hex_field_replaces_or_edits_its_digits() {
+    let hex = Cell::new(None);
+    let hex_id = Cell::new(egui::Id::NULL);
+    let draw = |ui: &mut egui::Ui| {
+        let red = widgets::plain_field(ui, "red", 255.0, "", 0, 80.0);
+        hex_id.set(ui.scope_id().with("hex"));
+        hex.set(widgets::hex_field(ui, "hex", "FF8000"));
+        red
+    };
+    let (tab, end) = (|| key(Key::Tab, Modifiers::NONE), || key(Key::End, Modifiers::NONE));
+    let paste = |text: &str| vec![Event::Paste(text.into())];
+    let digit = |text: &str| vec![Event::Text(text.into())];
+    // Its name, the events after the field has the focus, the text they leave and what Tab commits.
+    type Case<'a> = (&'a str, Vec<Vec<Event>>, &'a str, Option<&'a str>);
+    let select_left = |n: usize| std::iter::once(end()).chain(std::iter::repeat_n(key(Key::ArrowLeft, Modifiers::SHIFT), n)).collect::<Vec<_>>();
+    let cases: [Case; 25] = [
+        ("three selected, three digits", vec![select_left(3), paste("ABC")], "FF8ABC", Some("FF8ABC")),
+        ("three characters, caret, three digits", vec![digit("FF8"), paste("ABC")], "FF8ABC", Some("FF8ABC")),
+        ("five characters, two selected, three digits", vec![digit("12345"), select_left(2), paste("ABC")], "123ABC", Some("123ABC")),
+        ("two characters, caret, three digits", vec![digit("12"), paste("ABC")], "ABC", Some("AABBCC")),
+        ("four selected, three digits", vec![select_left(4), paste("0f0")], "0f0", Some("00ff00")),
+        ("selected digits", vec![paste("00FF00")], "00FF00", Some("00FF00")),
+        ("caret, a code", vec![vec![end()], paste("00FF00")], "00FF00", Some("00FF00")),
+        ("caret, a code with #", vec![vec![end()], paste("#00ff00")], "00ff00", Some("00ff00")),
+        ("caret, three digits", vec![vec![end()], paste("0f0")], "0f0", Some("00ff00")),
+        ("caret, a line break after the code", vec![vec![end()], paste("#00FF00\n")], "00FF00", Some("00FF00")),
+        ("caret, a word", vec![vec![end()], paste("hello")], "FF8000", None),
+        ("caret, too few digits", vec![vec![end()], paste("12")], "FF8000", None),
+        ("selected digits, too many digits", vec![paste("12345678")], "FF8000", None),
+        ("part selected, digits that fit", vec![select_left(2), paste("AB")], "FF80AB", Some("FF80AB")),
+        ("typed # and two digits, four digits", vec![digit("#12"), paste("3456")], "#123456", Some("123456")),
+        ("typed # and three digits, three digits", vec![digit("#FFF"), paste("ABC")], "#FFFABC", Some("FFFABC")),
+        ("typed # and two digits, three digits", vec![digit("#12"), paste("ABC")], "ABC", Some("AABBCC")),
+        ("typed #, two digits", vec![digit("#"), paste("12")], "#12", Some("12")),
+        ("empty field, two digits", vec![vec![key(Key::Backspace, Modifiers::NONE)], paste("12")], "12", Some("12")),
+        ("the same color in other letters", vec![paste("ff8000")], "ff8000", None),
+        ("typed digit by digit", ["0", "0", "F", "F", "0", "0"].map(digit).to_vec(), "00FF00", Some("00FF00")),
+        ("typed with #", vec![digit("#00FF00")], "#00FF00", Some("00FF00")),
+        ("typed in part", vec![digit("00")], "00", Some("00")),
+        ("typed three digits with #", vec![digit("#0f0")], "#0f0", Some("00ff00")),
+        ("typed three letters that are not digits", vec![digit("xyz")], "xyz", Some("xyz")),
+    ];
+    for (name, events, shows, commits) in cases {
+        let mut f = Field::new();
+        f.frame(vec![], &draw);
+        f.frame(vec![tab()], &draw);
+        f.frame(vec![tab()], &draw);
+        f.frame(vec![], &draw);
+        let selected = egui::TextEdit::load_state(&f.ctx, hex_id.get()).and_then(|st| st.cursor.char_range()).map(|r| r.as_sorted_char_range());
+        assert_eq!(selected.map(|r| (r.start.0, r.end.0)), Some((0, 6)), "{name}: keyboard focus selects the digits");
+        for events in events {
+            f.frame(events, &draw);
+            assert_eq!(hex.take(), None, "{name}: nothing is committed before Tab");
+        }
+        assert_eq!(f.ctx.data(|d| d.get_temp::<String>(hex_id.get())).as_deref(), Some(shows), "{name}: the text");
+        f.frame(vec![tab()], &draw);
+        assert_eq!(hex.take().as_deref(), commits, "{name}: what Tab commits");
+    }
+    // Escape drops a pasted code.
+    let mut f = Field::new();
+    f.frame(vec![], &draw);
+    f.frame(vec![tab()], &draw);
+    f.frame(vec![tab()], &draw);
+    f.frame(paste("00FF00"), &draw);
+    assert_eq!(hex.take(), None);
+    f.frame(vec![key(Key::Escape, Modifiers::NONE)], &draw);
+    assert_eq!(hex.take(), None, "Escape commits nothing");
+    f.frame(vec![], &draw);
+    assert_eq!(f.ctx.data(|d| d.get_temp::<String>(hex_id.get())).as_deref(), Some("FF8000"), "the field shows its color again");
+    // A press outside the field commits in the frame of the press, before the press acts.
+    let mut f = Field::new();
+    f.frame(vec![], &draw);
+    f.frame(vec![tab()], &draw);
+    f.frame(vec![tab()], &draw);
+    f.frame(paste("00FF00"), &draw);
+    let away = Pos2::new(390.0, 190.0);
+    f.frame(vec![Event::PointerMoved(away)], &draw);
+    assert_eq!(hex.take(), None);
+    f.frame(vec![Event::PointerButton { pos: away, button: PointerButton::Primary, pressed: true, modifiers: Modifiers::NONE }], &draw);
+    assert_eq!(hex.take().as_deref(), Some("00FF00"), "the press commits");
+    // Three digits that spell the color the field holds commit nothing.
+    let same = |ui: &mut egui::Ui| {
+        let red = widgets::plain_field(ui, "red", 255.0, "", 0, 80.0);
+        hex.set(widgets::hex_field(ui, "hex", "AABBCC"));
+        red
+    };
+    let mut f = Field::new();
+    f.frame(vec![], &same);
+    f.frame(vec![tab()], &same);
+    f.frame(vec![tab()], &same);
+    f.frame(paste("abc"), &same);
+    assert_eq!(hex.take(), None);
+    f.frame(vec![tab()], &same);
+    assert_eq!(hex.take(), None, "abc over AABBCC commits nothing");
+}
+
 /// #1692: the Stroke panel's dash and gap fields ([`widgets::opt_field`]) are blank while the
 /// selected objects' dashes differ. Tab out of the dash after typing into it gives the gap the
 /// focus; the gap then shows the dash's length, which the committed dash repeats as its gap. Tab
@@ -316,6 +416,181 @@ fn enter() -> Event {
 
 fn key(key: Key, modifiers: Modifiers) -> Event {
     Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers }
+}
+
+/// What [`preset_row`]'s fields committed or picked in a frame: the two numbers, the text and the
+/// pick of the field with an Auto entry.
+type PresetPicks = (Option<f64>, Option<f64>, Option<String>, Option<widgets::SpinPick>);
+
+const NO_PICK: PresetPicks = (None, None, None, None);
+
+thread_local! {
+    /// Whether the last [`preset_row`] frame left an Enter press for a dialog drawn after it.
+    static ENTER_LEFT: Cell<bool> = const { Cell::new(false) };
+}
+
+/// One frame in `ctx` with `events` of a row of two numeric fields with a spinner and presets
+/// (Stroke Weight, and a font size that is none of its presets), a text field with presets (Export
+/// for Screens' scale) and a numeric field whose list starts with Auto, which is on (Leading).
+fn preset_row(ctx: &egui::Context, time: &Cell<f64>, events: Vec<Event>) -> PresetPicks {
+    time.set(time.get() + 0.05);
+    let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(600.0, 300.0)));
+    let mut got = NO_PICK;
+    let mut out = ctx.run_ui(egui::RawInput { events, time: Some(time.get()), screen_rect, focused: true, ..Default::default() }, |ui| {
+        ui.horizontal(|ui| {
+            got.0 = widgets::spin_field(ui, "weight", Some(2.0), Unit::Points, 100.0, 1.0, 0.0, &[1.0, 2.0, 4.0]);
+            got.1 = widgets::spin_field(ui, "size", Some(13.0), Unit::Points, 100.0, 1.0, 0.0, &[9.0, 12.0]);
+            got.2 = widgets::text_presets(ui, "scale", "1x", &["1x", "2x"], 100.0);
+            got.3 = widgets::spin_field_auto(ui, "leading", Some(14.0), Some(true), Unit::Points, 100.0, 1.0, 0.0, &[12.0, 14.0]);
+        });
+        ENTER_LEFT.set(crate::shortcuts::pressed_anew(ui.ctx(), Key::Enter));
+    });
+    out.textures_delta.clear();
+    got
+}
+
+/// Tab goes from one field to the next in one press: it does not stop on a field's spinner or on
+/// the chevron that opens its presets, and Shift+Tab goes back the same way.
+#[test]
+fn tab_goes_from_field_to_field_past_the_spinner_and_the_preset_chevron() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let time = Cell::new(0.0);
+    preset_row(&ctx, &time, vec![]);
+    preset_row(&ctx, &time, vec![]);
+    let stops = crate::widgets::accessibility_tests::tab_stops(&ctx, 8, |events| {
+        preset_row(&ctx, &time, events);
+    });
+    let widths: Vec<f32> = stops.iter().filter_map(|id| ctx.read_response(*id)).map(|r| r.rect.width()).collect();
+    assert_eq!(widths.len(), 8, "{stops:?}");
+    assert!(widths.iter().all(|w| *w > 40.0), "only the fields are Tab stops, not the spinners or chevrons: {widths:?}");
+    assert_eq!(stops[..4], stops[4..], "four fields, then back to the first: {widths:?}");
+    let mut back = vec![];
+    for _ in 0..2 {
+        preset_row(&ctx, &time, vec![key(Key::Tab, Modifiers::SHIFT)]);
+        preset_row(&ctx, &time, vec![]);
+        back.extend(ctx.memory(|m| m.focused()));
+    }
+    assert_eq!(back, [stops[2], stops[1]], "Shift+Tab goes back field by field");
+}
+
+/// The Transparency row's opacity slider chevron is not a Tab stop either: Tab goes from the
+/// Opacity field straight to the next field.
+#[test]
+fn tab_goes_from_the_opacity_field_past_its_slider_chevron() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let time = Cell::new(0.0);
+    let frame = |events: Vec<Event>| {
+        time.set(time.get() + 0.05);
+        let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(600.0, 300.0)));
+        let mut out = ctx.run_ui(egui::RawInput { events, time: Some(time.get()), screen_rect, focused: true, ..Default::default() }, |ui| {
+            ui.horizontal(|ui| {
+                widgets::opacity_blend(ui, "transparency", Some(0.5), None, true);
+                widgets::spin_field(ui, "weight", Some(2.0), Unit::Points, 100.0, 1.0, 0.0, &[]);
+            });
+        });
+        out.textures_delta.clear();
+    };
+    frame(vec![]);
+    frame(vec![]);
+    let stops = crate::widgets::accessibility_tests::tab_stops(&ctx, 6, frame);
+    let widths: Vec<f32> = stops.iter().filter_map(|id| ctx.read_response(*id)).map(|r| r.rect.width()).collect();
+    assert_eq!(widths.len(), 6, "{stops:?}");
+    assert!(widths.iter().all(|w| *w > 20.0), "the 18 pt slider chevron is not a Tab stop: {widths:?}");
+    assert_eq!(stops[..3], stops[3..], "blend mode, Opacity and the next field, then back: {widths:?}");
+}
+
+/// Gives the keyboard focus to the field that `tabs` presses of Tab reach in [`preset_row`], with
+/// every list closed, and returns that field.
+fn focus_preset_field(ctx: &egui::Context, time: &Cell<f64>, tabs: usize) -> Option<egui::Id> {
+    egui::Popup::close_all(ctx);
+    ctx.memory_mut(|m| m.surrender_focus(m.focused().unwrap_or(egui::Id::NULL)));
+    preset_row(ctx, time, vec![]);
+    for _ in 0..tabs {
+        preset_row(ctx, time, vec![key(Key::Tab, Modifiers::NONE)]);
+    }
+    preset_row(ctx, time, vec![]);
+    ctx.memory(|m| m.focused())
+}
+
+/// The presets stay in reach of the keyboard: Alt+↓ in a field opens its preset list with the
+/// keyboard focus on the chosen preset (the first entry when none is chosen, Auto when it is on),
+/// Tab goes on to the next one and Enter picks it, without reaching a dialog's OK. The field then
+/// has the keyboard focus again.
+#[test]
+fn alt_down_opens_a_fields_presets_for_the_keyboard() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let time = Cell::new(0.0);
+    let alt_down = || key(Key::ArrowDown, Modifiers::ALT);
+    // (Tabs to the field, the pick after Tab and Enter in its list.)
+    let cases = [
+        (1, (Some(4.0), None, None, None)),
+        (2, (None, Some(12.0), None, None)),
+        (3, (None, None, Some("2x".to_string()), None)),
+        (4, (None, None, None, Some(widgets::SpinPick::Value(12.0)))),
+    ];
+    for (tabs, picked) in cases {
+        let field = focus_preset_field(&ctx, &time, tabs);
+        assert!(field.is_some(), "{tabs}");
+        assert_eq!(preset_row(&ctx, &time, vec![alt_down()]), NO_PICK, "{tabs}");
+        preset_row(&ctx, &time, vec![]);
+        let entry = ctx.memory(|m| m.focused());
+        assert!(entry.is_some() && entry != field, "{tabs}: the list takes the focus");
+        let layer = ctx.read_response(entry.unwrap_or(egui::Id::NULL)).map(|r| r.layer_id.order);
+        assert_eq!(layer, Some(egui::Order::Foreground), "{tabs}: on an entry of the list");
+        preset_row(&ctx, &time, vec![key(Key::Tab, Modifiers::NONE)]);
+        preset_row(&ctx, &time, vec![]);
+        let mut got = preset_row(&ctx, &time, vec![enter()]);
+        assert!(!ENTER_LEFT.get(), "{tabs}: the list takes the Enter, so a dialog's OK does not");
+        if got == NO_PICK {
+            got = preset_row(&ctx, &time, vec![]);
+        }
+        assert_eq!(got, picked, "{tabs}: Enter picks the next preset");
+        preset_row(&ctx, &time, vec![]);
+        preset_row(&ctx, &time, vec![]);
+        assert!(!egui::Popup::is_any_open(&ctx), "{tabs}: the list closed");
+        assert_eq!(ctx.memory(|m| m.focused()), field, "{tabs}: the field has the keyboard focus again");
+    }
+}
+
+/// Escape closes a preset list that Alt+↓ opened without picking anything, and the field has the
+/// keyboard focus again.
+#[test]
+fn escape_closes_a_fields_presets_and_returns_to_the_field() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let time = Cell::new(0.0);
+    for tabs in [1, 3] {
+        let field = focus_preset_field(&ctx, &time, tabs);
+        preset_row(&ctx, &time, vec![key(Key::ArrowDown, Modifiers::ALT)]);
+        preset_row(&ctx, &time, vec![]);
+        assert!(egui::Popup::is_any_open(&ctx), "{tabs}: Alt+↓ opened the list");
+        let mut picks = vec![preset_row(&ctx, &time, vec![key(Key::Escape, Modifiers::NONE)])];
+        picks.push(preset_row(&ctx, &time, vec![]));
+        picks.push(preset_row(&ctx, &time, vec![]));
+        assert!(picks.iter().all(|p| *p == NO_PICK), "{tabs}: nothing picked: {picks:?}");
+        assert!(!egui::Popup::is_any_open(&ctx), "{tabs}: the list closed");
+        assert_eq!(ctx.memory(|m| m.focused()), field, "{tabs}: the field has the keyboard focus again");
+    }
+}
+
+/// Only Alt+↓ with no other modifier opens the presets: Shift+Alt+↓ in a field with presets
+/// steps it down by ten, as before, and leaves the list closed.
+#[test]
+fn shift_alt_down_still_steps_a_field_with_presets() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let time = Cell::new(0.0);
+    let field = focus_preset_field(&ctx, &time, 2);
+    let mut got = preset_row(&ctx, &time, vec![key(Key::ArrowDown, Modifiers::SHIFT | Modifiers::ALT)]);
+    if got == NO_PICK {
+        got = preset_row(&ctx, &time, vec![]);
+    }
+    assert_eq!(got.1, Some(3.0), "13 pt steps down by ten");
+    assert!(!egui::Popup::is_any_open(&ctx), "the list stays closed");
+    assert_eq!(ctx.memory(|m| m.focused()), field);
 }
 
 #[test]
@@ -645,11 +920,10 @@ fn wheel(at: Pos2, unit: egui::MouseWheelUnit, dy: f32, modifiers: Modifiers) ->
     ]
 }
 
-/// The mouse wheel over a focused numeric field steps it as ↑/↓ do (#485): a notch a step, Shift
-/// ten, Ctrl/Cmd a tenth; a trackpad's points add up to notches. Unfocused, or with the pointer
-/// elsewhere, the wheel isn't the field's.
+/// Hover stepping (#5949) keeps the existing units, modifiers and trackpad accumulation,
+/// without taking keyboard focus. Outside the field, the wheel is left alone.
 #[test]
-fn the_wheel_steps_a_focused_field_under_the_pointer() {
+fn the_wheel_steps_a_hovered_field_without_taking_focus() {
     use egui::MouseWheelUnit::{Line, Point};
     let mut f = Field::new();
     let u = Unit::Millimeters;
@@ -657,16 +931,13 @@ fn the_wheel_steps_a_focused_field_under_the_pointer() {
     let draw = |ui: &mut egui::Ui| widgets::num_field(ui, "f", Some(u.to_pt(mm.get())), u, 80.0).inspect(|&v| mm.set(u.from_pt(v)));
     f.frame(vec![], &draw);
     let at = f.rect.get().center();
-    assert_eq!(f.frame(wheel(at, Line, 1.0, Modifiers::NONE), &draw), None, "unfocused");
-    f.frame(f.click(1), &draw);
-    f.frame(vec![], &draw);
     for (dy, mods, want) in
         [(1.0, Modifiers::NONE, 5.0), (2.0, Modifiers::SHIFT, 25.0), (-1.0, Modifiers::COMMAND, 24.9), (-1.0, Modifiers::NONE, 24.0)]
     {
         assert!(f.frame(wheel(at, Line, dy, mods), &draw).is_some(), "{dy} {mods:?}");
         assert!((mm.get() - want).abs() < 1e-6, "{dy} {mods:?}: {}", mm.get());
     }
-    assert_eq!(f.selection(), Some((0, "24 mm".len())), "the new value is selected");
+    assert!(!f.ctx.memory(|m| m.has_focus(f.id.get())), "hover never takes keyboard focus");
     // Points: a step for each line's worth, what is left carried to the next turn.
     let line = f.ctx.options(|o| o.input_options.line_scroll_speed);
     assert_eq!(f.frame(wheel(at, Point, line * 0.6, Modifiers::NONE), &draw), None);
@@ -682,16 +953,16 @@ fn the_wheel_steps_a_focused_field_under_the_pointer() {
     assert_eq!(f.frame(wheel(f.rect.get().center(), Line, -1.0, Modifiers::NONE), &count), Some(2.0));
 }
 
-/// The wheel over a focused field steps it and leaves the panel where it is; over an unfocused one
-/// it scrolls the panel as before.
+/// Both focused and unfocused hovered fields own the wheel, including its smoothing tail.
 #[test]
-fn the_wheel_scrolls_the_panel_unless_over_the_focused_field() {
+fn the_wheel_scrolls_the_panel_unless_over_a_numeric_field() {
     for focus in [false, true] {
         let mut f = Field::new();
         let offset = Cell::new(0.0);
+        let value = Cell::new(10.0);
         let draw = |ui: &mut egui::Ui| {
             let out = egui::ScrollArea::vertical().max_height(60.0).show(ui, |ui| {
-                let v = widgets::plain_field(ui, "f", 10.0, "", 0, 80.0);
+                let v = widgets::plain_field(ui, "f", value.get(), "", 0, 80.0).inspect(|&v| value.set(v));
                 ui.add_space(600.0);
                 v
             });
@@ -719,11 +990,59 @@ fn the_wheel_scrolls_the_panel_unless_over_the_focused_field() {
         for _ in 0..20 {
             f.frame(vec![], &draw);
         }
-        if focus {
-            assert_eq!((stepped, offset.get()), (Some(8.0), 0.0));
-        } else {
-            assert!(stepped.is_none() && offset.get() > 0.0, "{stepped:?} {}", offset.get());
+        assert_eq!((stepped, offset.get()), (Some(8.0), 0.0), "focus {focus}");
+        let line = f.ctx.options(|o| o.input_options.line_scroll_speed);
+        assert_eq!(f.frame(wheel(at, egui::MouseWheelUnit::Point, -line * 0.6, Modifiers::NONE), &draw), None);
+        assert_eq!(offset.get(), 0.0);
+        assert_eq!(f.frame(wheel(at, egui::MouseWheelUnit::Point, -line * 0.6, Modifiers::NONE), &draw), Some(7.0));
+        for _ in 0..20 {
+            f.frame(vec![], &draw);
         }
+        assert_eq!(offset.get(), 0.0);
+        assert_eq!(f.frame(wheel(Pos2::new(20.0, 45.0), egui::MouseWheelUnit::Line, -2.0, Modifiers::NONE), &draw), None);
+        for _ in 0..20 {
+            f.frame(vec![], &draw);
+        }
+        assert!(offset.get() > 0.0, "outside the field scrolls the panel");
+    }
+}
+
+/// A wheel turn over an unfocused field steps it without consuming an arrow key in the same frame.
+#[test]
+fn hover_wheel_keeps_arrow_keys_for_the_keyboard_focus() {
+    let mut f = Field::new();
+    let arrows = Cell::new(false);
+    let draw = |ui: &mut egui::Ui| {
+        let v = widgets::plain_field(ui, "f", 1.123, "", 3, 80.0);
+        arrows.set(ui.input(|i| i.events.iter().any(|e| matches!(e, Event::Key { key: Key::ArrowUp, .. }))));
+        v
+    };
+    f.frame(vec![], &draw);
+    let at = f.rect.get().center();
+    assert_eq!(f.frame(vec![Event::PointerMoved(at), key(Key::ArrowUp, Modifiers::NONE)], &draw), None);
+    assert!(arrows.get());
+    let mut events = wheel(at, egui::MouseWheelUnit::Line, 1.0, Modifiers::NONE);
+    events.push(key(Key::ArrowUp, Modifiers::NONE));
+    assert_eq!(f.frame(events, &draw), Some(2.0), "existing next-multiple rounding, wheel only");
+    assert!(arrows.get(), "hover does not consume arrows");
+    assert!(!f.ctx.memory(|m| m.has_focus(f.id.get())));
+}
+
+/// Hover steps stop at both bounds, leave mixed values blank, and never edit disabled fields.
+#[test]
+fn hover_wheel_preserves_limits_mixed_values_and_disabled_fields() {
+    for (value, enabled, dy, want) in [
+        (Some(0.5), true, -1.0, Some(0.0)),
+        (Some(0.0), true, -1.0, None),
+        (Some(9.5), true, 1.0, Some(10.0)),
+        (Some(10.0), true, -1.0, Some(9.0)),
+        (None, true, -1.0, None),
+        (Some(10.0), false, -1.0, None),
+    ] {
+        let mut f = Field::new();
+        let draw = |ui: &mut egui::Ui| ui.add_enabled_ui(enabled, |ui| widgets::range_field(ui, "f", value, 0.0..=10.0, "", 3, 80.0)).inner;
+        f.frame(vec![], &draw);
+        assert_eq!(f.frame(wheel(f.rect.get().center(), egui::MouseWheelUnit::Line, dy, Modifiers::NONE), &draw), want);
     }
 }
 

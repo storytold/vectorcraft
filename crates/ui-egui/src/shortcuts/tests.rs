@@ -29,6 +29,53 @@ fn named_panel_default_chords_toggle_their_panels() {
 }
 
 #[test]
+fn edit_function_keys_dispatch_outside_text_editing_only() {
+    if crate::keymap::platform().is_mac() {
+        return;
+    }
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let shape = app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
+    app.session.execute("select.set", &json!({"ids": [shape]})).unwrap();
+    crate::shortcut_editor::sync(&app.ui);
+    frame(&mut app, press(Key::F3, Modifiers::NONE));
+    assert_eq!(app.session.clipboard.nodes.len(), 1, "F3 copies the selection");
+    frame(&mut app, press(Key::F2, Modifiers::NONE));
+    assert!(app.session.active().unwrap().selection.objects.is_empty(), "F2 cuts the selection");
+    frame(&mut app, press(Key::F4, Modifiers::NONE));
+    assert_eq!(app.session.active().unwrap().selection.objects.len(), 1, "F4 pastes the copied object");
+
+    let id = app.session.execute("text.create", &json!({"x": 20, "y": 50, "text": "Hi"})).unwrap()["id"].as_u64().unwrap();
+    app.select_tool("type");
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    assert!(app.session.tool_wants_text());
+    for key in [Key::F2, Key::F3, Key::F4] {
+        frame(&mut app, press(key, Modifiers::NONE));
+        assert_eq!(text_and_layers(&mut app, id).0, "Hi", "{key:?} leaves edited text alone");
+        assert!(app.session.tool_wants_text(), "{key:?} keeps editing");
+    }
+
+    app.select_tool("selection");
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let ctx = egui::Context::default();
+    let mut field = String::from("Field text");
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+        let response = ui.text_edit_singleline(&mut field);
+        ui.ctx().memory_mut(|m| m.request_focus(response.id));
+    });
+    out.textures_delta.clear();
+    for key in [Key::F2, Key::F3, Key::F4] {
+        let mut out = ctx.run_ui(egui::RawInput { events: press(key, Modifiers::NONE), ..Default::default() }, |ui| {
+            handle(&mut app, ui.ctx());
+            ui.text_edit_singleline(&mut field);
+        });
+        out.textures_delta.clear();
+        assert_eq!(field, "Field text", "{key:?} leaves focused text alone");
+        assert_eq!(app.session.active().unwrap().selection.objects.len(), 1, "{key:?} leaves the canvas selection alone");
+    }
+}
+
+#[test]
 fn other_panel_shortcuts_keep_plain_panel_params() {
     for panel in ["character", "swatches"] {
         let hit = CommandRef { id: "window.panel".into(), params: json!({"panel": panel}) };
@@ -223,6 +270,26 @@ fn presses_follow_the_users_shortcuts() {
     assert!(!zoom_in, "Zoom In has no shortcut");
     assert!(grid, "Show Grid's own chord");
     assert!(runs_a_shortcut("=", "Equal", cmd()), "the defaults again");
+}
+
+/// A user's shortcut for a command whose menu bar item gives params runs what a click on that item
+/// runs: Clean Up…, Print Ink Fixes… and Find and Replace… open their dialogs instead of running
+/// without the values the dialog asks for.
+#[test]
+fn a_shortcut_runs_what_its_menu_item_runs() {
+    let chord = vec![
+        egui::Event::ModifiersChanged(cmd() | Modifiers::ALT | Modifiers::SHIFT),
+        egui::Event::Key { key: Key::F9, physical_key: None, pressed: true, repeat: false, modifiers: cmd() | Modifiers::ALT | Modifiers::SHIFT },
+    ];
+    for id in ["object.path.cleanUp", "addon.color.printFixes", "edit.findReplace"] {
+        let mut app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Single.session(), Default::default());
+        crate::keymap::set_override(&mut app.ui.shortcut_overrides, id, "Cmd+Alt+Shift+F9");
+        app.ui.status.clear();
+        frame(&mut app, chord.clone());
+        crate::shortcut_editor::sync(&crate::state::UiState::default());
+        let d = app.ui.dialog.as_ref().unwrap_or_else(|| panic!("{id} opens its dialog: {}", app.ui.status));
+        assert_eq!(d.fields["__command"], json!(id), "{:?}", d.fields);
+    }
 }
 
 /// #2094: Cmd+Shift+O is Type › Create Outlines (not File › Open's Cmd+O, not the Artboard
@@ -490,7 +557,7 @@ fn cmd_alt_k_and_cmd_alt_shift_f_highlight_the_character_fields() {
     assert!(app.ui.dialog.is_none(), "not Preferences");
     // Keyboard Shortcuts lists all three under Type; Highlight Tracking has no default key.
     for id in ["type.highlightFontName", "type.highlightKerning", "type.highlightTracking"] {
-        assert_eq!(crate::shortcut_editor::entry(id).map(|e| e.group.as_str()), Some("Type"), "{id}");
+        assert_eq!(crate::shortcut_editor::entry(id).as_ref().map(|e| e.group.as_str()), Some("Type"), "{id}");
     }
     assert_eq!(crate::menus::shortcut_of("type.highlightTracking"), None);
 }
@@ -845,9 +912,65 @@ fn arrows_while_dragging_a_grid_change_its_rows_and_columns() {
     assert_eq!(grid(&mut app, &[Key::ArrowLeft, Key::ArrowDown]), (rows, columns + 1));
 }
 
+/// Grid letters change the stored skews once per press while a polar grid is dragged, plain or
+/// with Shift; with Alt, Ctrl or Cmd they do not reach the grid.
+#[test]
+fn grid_drag_letters_take_plain_and_shift_presses() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.select_tool("polarGrid");
+    let view = app.view_info();
+    app.session.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 80.0), view).unwrap();
+    app.session.pointer(&PointerEvent::new(PointerKind::Drag, 300.0, 220.0), view).unwrap();
+    let skews = |app: &VectorcraftApp| (app.session.tool_options()["radialSkew"].clone(), app.session.tool_options()["concentricSkew"].clone());
+    frame(&mut app, press(Key::V, Modifiers::NONE));
+    assert_eq!(skews(&app), (json!(10.0), json!(0.0)));
+    frame(&mut app, press(Key::F, Modifiers::SHIFT));
+    assert_eq!(skews(&app), (json!(0.0), json!(0.0)));
+    frame(&mut app, press(Key::V, Modifiers::SHIFT));
+    assert_eq!(skews(&app), (json!(10.0), json!(0.0)));
+    frame(&mut app, press(Key::X, Modifiers::SHIFT));
+    assert_eq!(skews(&app), (json!(10.0), json!(-10.0)));
+    frame(&mut app, press(Key::C, Modifiers::SHIFT));
+    assert_eq!(skews(&app), (json!(10.0), json!(0.0)));
+    frame(&mut app, press(Key::X, Modifiers::ALT));
+    assert_eq!(skews(&app), (json!(10.0), json!(0.0)));
+    for key in [Key::F, Key::X] {
+        frame(&mut app, press(key, command_key()));
+        assert_eq!(skews(&app), (json!(10.0), json!(0.0)), "{key:?} with Ctrl/Cmd");
+    }
+    app.session.pointer(&PointerEvent::new(PointerKind::Up, 300.0, 220.0), view).unwrap();
+    assert_eq!(skews(&app), (json!(10.0), json!(0.0)), "the options stay after release");
+}
+
 /// A press of `key` with `m` held.
 fn press(key: Key, m: Modifiers) -> Vec<egui::Event> {
     vec![egui::Event::ModifiersChanged(m), egui::Event::Key { key, physical_key: Some(key), pressed: true, repeat: false, modifiers: m }]
+}
+
+#[test]
+fn enclosing_lasso_escape_cancels_and_q_returns_to_anchor_lasso() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    crate::shortcut_editor::sync(&app.ui);
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    app.select_tool(vectorcraft_tools::addons::enclosing_lasso::ID);
+    let view = app.view_info();
+    app.session.pointer(&PointerEvent::new(PointerKind::Down, 90.0, 90.0), view).unwrap();
+    app.session.pointer(&PointerEvent::new(PointerKind::Drag, 210.0, 90.0), view).unwrap();
+    assert!(app.session.tool_busy());
+    frame(&mut app, press(Key::Escape, Modifiers::NONE));
+    assert!(!app.session.tool_busy());
+    app.session.pointer(&PointerEvent::new(PointerKind::Up, 90.0, 210.0), view).unwrap();
+    assert_eq!(app.session.active().unwrap().selection.objects, vec![vectorcraft_doc::NodeId(id)]);
+    let mut keys = press(Key::Q, Modifiers::NONE);
+    keys.push(egui::Event::Text("q".into()));
+    frame(&mut app, keys);
+    assert_eq!(app.session.tool_id(), "lasso");
 }
 
 /// Binds Show Grid to `chord`, or with `None` leaves every command its default shortcut.
@@ -988,7 +1111,8 @@ fn enter_opens_the_tools_dialog_and_leaves_it_open() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     let ctx = egui::Context::default();
-    let enter = || egui::Event::Key { key: Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE };
+    let key = |pressed| egui::Event::Key { key: Key::Enter, physical_key: None, pressed, repeat: false, modifiers: Modifiers::NONE };
+    let enter = || vec![key(true), key(false)];
     // A whole app frame: the shortcuts first, then the UI, where a dialog takes its Enter.
     let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
         let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 800.0)));
@@ -1002,7 +1126,7 @@ fn enter_opens_the_tools_dialog_and_leaves_it_open() {
     // The undo steps and the journal entries (the dialog's OK runs its command, which the journal records).
     let steps = |app: &VectorcraftApp| (app.session.active().unwrap().history.undo.len(), app.session.journal.len());
     app.select_tool("selection");
-    frame(&mut app, vec![enter()]);
+    frame(&mut app, enter());
     assert_eq!(kind(&app), None, "nothing is selected");
     app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 30})).unwrap();
     for (tool, dialog) in [
@@ -1016,20 +1140,322 @@ fn enter_opens_the_tools_dialog_and_leaves_it_open() {
     ] {
         app.select_tool(tool);
         let before = steps(&app);
-        frame(&mut app, vec![enter()]);
+        frame(&mut app, enter());
         assert_eq!(kind(&app).as_deref(), Some(dialog), "{tool}: Enter opens it");
         frame(&mut app, vec![]);
         assert_eq!(kind(&app).as_deref(), Some(dialog), "{tool}: and it stays open");
         assert_eq!(steps(&app), before, "{tool}: the Enter that opened it didn't confirm it");
         // The next Enter is its OK. With its default values only Reflect changes the art, so only
         // Reflect records an undo step.
-        frame(&mut app, vec![enter()]);
+        frame(&mut app, enter());
         let after = (before.0 + usize::from(dialog == "reflect"), before.1 + 1);
         assert_eq!((kind(&app), steps(&app)), (None, after), "{tool}: Enter confirms");
     }
     app.select_tool("rectangle");
-    frame(&mut app, vec![enter()]);
+    frame(&mut app, enter());
     assert_eq!(kind(&app), None, "another tool has its own Enter");
+}
+
+/// A key held down across whole app frames: the context stays, so egui marks the press after the
+/// first as a repeat until `release` lets go.
+struct HeldKey {
+    ctx: egui::Context,
+    key: Key,
+    modifiers: Modifiers,
+}
+
+impl HeldKey {
+    fn new(key: Key, modifiers: Modifiers) -> Self {
+        Self { ctx: egui::Context::default(), key, modifiers }
+    }
+
+    fn frame(&self, app: &mut VectorcraftApp, mut events: Vec<egui::Event>) {
+        events.insert(0, egui::Event::ModifiersChanged(self.modifiers));
+        let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 800.0)));
+        let mut out = self.ctx.run_ui(egui::RawInput { events, screen_rect, ..Default::default() }, |ui| {
+            app.logic(ui.ctx());
+            app.ui(ui);
+        });
+        out.textures_delta.clear();
+    }
+
+    fn key(&self, app: &mut VectorcraftApp, pressed: bool) {
+        let event = egui::Event::Key { key: self.key, physical_key: None, pressed, repeat: false, modifiers: self.modifiers };
+        self.frame(app, vec![event]);
+    }
+
+    /// The press, or while the key is down, one repeat.
+    fn press(&self, app: &mut VectorcraftApp) {
+        self.key(app, true);
+    }
+
+    fn release(&self, app: &mut VectorcraftApp) {
+        self.key(app, false);
+    }
+}
+
+fn app_with_a_selected_rectangle() -> VectorcraftApp {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 30})).unwrap();
+    app
+}
+
+fn open_dialog(app: &VectorcraftApp) -> Option<String> {
+    app.ui.dialog.as_ref().map(|d| d.kind.clone())
+}
+
+/// Holding Enter with a selection opens Move once: the repeats neither confirm it nor open it
+/// again. A new press confirms it, and that press's repeats do not open it again.
+fn hold_enter_on_a_selection(modifiers: Modifiers) {
+    let mut app = app_with_a_selected_rectangle();
+    let held = HeldKey::new(Key::Enter, modifiers);
+    let steps = |app: &VectorcraftApp| (app.session.active().unwrap().history.undo.len(), app.session.journal.len());
+    app.select_tool("selection");
+    let before = steps(&app);
+    for repeat in 0..8 {
+        held.press(&mut app);
+        assert_eq!(open_dialog(&app).as_deref(), Some("move"), "repeat {repeat}: Move stays open");
+        assert_eq!(steps(&app), before, "repeat {repeat}: nothing moved");
+    }
+    assert!(held.ctx.memory(|m| m.focused().is_some()), "its first field keeps the keyboard");
+    held.release(&mut app);
+    assert_eq!(open_dialog(&app).as_deref(), Some("move"), "letting go leaves it open");
+    held.press(&mut app);
+    assert_eq!(open_dialog(&app), None, "a new press confirms");
+    let confirmed = steps(&app);
+    assert_eq!(confirmed.1, before.1 + 1, "the new press ran Move once");
+    for repeat in 0..8 {
+        held.press(&mut app);
+        assert_eq!(open_dialog(&app), None, "repeat {repeat}: Move stays closed");
+        assert_eq!(steps(&app), confirmed, "repeat {repeat}: nothing else ran");
+    }
+}
+
+#[test]
+fn holding_enter_opens_the_move_dialog_once_and_a_new_press_confirms_it() {
+    hold_enter_on_a_selection(Modifiers::NONE);
+}
+
+#[test]
+fn holding_shift_enter_opens_the_move_dialog_once_and_a_new_press_confirms_it() {
+    hold_enter_on_a_selection(Modifiers::SHIFT);
+}
+
+/// After a drag Move opens on the drag's offset, and holding Enter leaves the object where it is.
+#[test]
+fn holding_enter_after_a_drag_does_not_move_the_object_again() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut app = app_with_a_selected_rectangle();
+    let left = |app: &VectorcraftApp| app.session.doc().unwrap().doc.layers[0].children().unwrap()[0].geometric_bounds().unwrap().x0;
+    app.select_tool("selection");
+    let view = app.view_info();
+    for (kind, x) in [(PointerKind::Down, 35.0), (PointerKind::Drag, 55.0), (PointerKind::Drag, 75.0), (PointerKind::Up, 75.0)] {
+        app.session.pointer(&PointerEvent::new(kind, x, 25.0), view).unwrap();
+    }
+    let dragged = left(&app);
+    assert!(dragged > 10.0);
+    let held = HeldKey::new(Key::Enter, Modifiers::NONE);
+    held.frame(&mut app, vec![]);
+    for repeat in 0..8 {
+        held.press(&mut app);
+        assert_eq!(left(&app), dragged, "repeat {repeat}: the object stays");
+    }
+}
+
+/// A chord no command is bound to opens Move through the tool's Enter too. That press is not also
+/// the dialog's OK.
+fn press_a_chord_on_a_selection(modifiers: Modifiers) {
+    let mut app = app_with_a_selected_rectangle();
+    let journal = app.session.journal.len();
+    let held = HeldKey::new(Key::Enter, modifiers);
+    app.select_tool("selection");
+    held.press(&mut app);
+    assert_eq!(open_dialog(&app).as_deref(), Some("move"), "Move stays open");
+    assert_eq!(app.session.journal.len(), journal, "nothing ran");
+}
+
+#[test]
+fn the_press_of_ctrl_enter_that_opens_a_dialog_does_not_confirm_it() {
+    press_a_chord_on_a_selection(Modifiers::CTRL);
+}
+
+#[test]
+fn the_press_of_cmd_enter_that_opens_a_dialog_does_not_confirm_it() {
+    press_a_chord_on_a_selection(Modifiers::COMMAND);
+}
+
+/// A command bound to Enter opens its dialog once: the repeats of the press do not confirm it, and
+/// the repeats of the press that confirms it do not run the command again.
+#[test]
+fn holding_enter_bound_to_a_dialog_command_opens_it_once() {
+    let mut app = app_with_a_selected_rectangle();
+    app.run("shortcuts.set", json!({"id": "object.move", "shortcut": "Enter", "force": true})).unwrap();
+    let journal = app.session.journal.len();
+    app.select_tool("rectangle");
+    let held = HeldKey::new(Key::Enter, Modifiers::NONE);
+    held.frame(&mut app, vec![]);
+    for repeat in 0..4 {
+        held.press(&mut app);
+        assert_eq!(open_dialog(&app).as_deref(), Some("move"), "repeat {repeat}: Move stays open");
+    }
+    held.release(&mut app);
+    held.press(&mut app);
+    assert_eq!(open_dialog(&app), None, "a new press confirms");
+    let confirmed = app.session.journal.len();
+    assert_eq!(confirmed, journal + 1);
+    for repeat in 0..4 {
+        held.press(&mut app);
+        assert_eq!(open_dialog(&app), None, "repeat {repeat}: the command does not run again");
+    }
+}
+
+/// The repeats of the Enter that confirms a dialog type no line break into the text being edited.
+#[test]
+fn holding_the_enter_that_confirms_a_dialog_types_no_line_break() {
+    let mut app = app_with_a_selected_rectangle();
+    let text = app.session.execute("text.create", &json!({"x": 20, "y": 250, "text": "Hi"})).unwrap()["id"].as_u64().unwrap();
+    app.select_tool("type");
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    assert!(app.session.tool_wants_text());
+    crate::menus::invoke(&mut app, "object.move", json!({}));
+    assert_eq!(open_dialog(&app).as_deref(), Some("move"));
+    let held = HeldKey::new(Key::Enter, Modifiers::NONE);
+    held.frame(&mut app, vec![]);
+    held.press(&mut app);
+    assert_eq!(open_dialog(&app), None, "the press confirms");
+    assert!(app.session.tool_wants_text());
+    let before = text_and_layers(&mut app, text).0;
+    for repeat in 0..4 {
+        held.press(&mut app);
+        assert_eq!(text_and_layers(&mut app, text).0, before, "repeat {repeat}: no line break");
+    }
+    held.release(&mut app);
+    held.press(&mut app);
+    assert_ne!(text_and_layers(&mut app, text).0, before, "a new press types one");
+}
+
+/// A held Cmd+Enter ends text editing once. Its repeats add no line break and do not open the Move
+/// dialog for the type it leaves selected; a new press does, as after Escape.
+#[test]
+fn holding_cmd_enter_ends_text_editing_once() {
+    let mut app = app_with_a_selected_rectangle();
+    let text = app.session.execute("text.create", &json!({"x": 20, "y": 250, "text": "Hi"})).unwrap()["id"].as_u64().unwrap();
+    app.select_tool("type");
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    assert!(app.session.tool_wants_text());
+    let held = HeldKey::new(Key::Enter, Modifiers::COMMAND);
+    held.frame(&mut app, vec![]);
+    let before = text_and_layers(&mut app, text);
+    held.press(&mut app);
+    assert!(!app.session.tool_wants_text(), "the press ends editing");
+    assert_eq!(app.session.tool_id(), "selection");
+    for repeat in 0..4 {
+        held.press(&mut app);
+        assert_eq!(text_and_layers(&mut app, text), before, "repeat {repeat}: no line break");
+        assert_eq!(open_dialog(&app), None, "repeat {repeat}: no dialog");
+    }
+    held.release(&mut app);
+    held.press(&mut app);
+    assert_eq!(open_dialog(&app).as_deref(), Some("move"), "a new press opens Move");
+}
+
+/// A release that never reaches the main window costs the next press: egui takes that press for a
+/// repeat, and its release clears the key, so the press after it acts again.
+#[test]
+fn a_lost_release_costs_one_press_of_enter() {
+    let mut app = app_with_a_selected_rectangle();
+    let held = HeldKey::new(Key::Enter, Modifiers::NONE);
+    app.select_tool("rectangle");
+    held.press(&mut app);
+    app.select_tool("selection");
+    held.press(&mut app);
+    assert_eq!(open_dialog(&app), None, "the first press after the lost release is taken for a repeat");
+    held.release(&mut app);
+    held.press(&mut app);
+    assert_eq!(open_dialog(&app).as_deref(), Some("move"), "the next press opens Move");
+}
+
+/// A dialog that appears while Enter is down, as one the command search's Enter opens does, waits
+/// for a new press. That covers the dialogs that draw their own window too.
+#[test]
+fn a_dialog_that_opens_while_enter_is_down_waits_for_a_new_press() {
+    fn open_move(app: &mut VectorcraftApp) {
+        let _ = crate::toolbar::open_options(app, "selection");
+    }
+    fn open_simplify(app: &mut VectorcraftApp) {
+        crate::menus::invoke(app, "object.path.simplify", json!({}));
+    }
+    let new_document = crate::dialogs::open_new_document;
+    for (name, open) in [("Move", open_move as fn(&mut VectorcraftApp)), ("New Document", new_document), ("Simplify", open_simplify)] {
+        let mut app = app_with_a_selected_rectangle();
+        let documents = app.session.documents().len();
+        let held = HeldKey::new(Key::Enter, Modifiers::NONE);
+        app.select_tool("rectangle");
+        held.press(&mut app);
+        assert_eq!(open_dialog(&app), None, "{name}: the Rectangle tool opens nothing on Enter");
+        open(&mut app);
+        let kind = open_dialog(&app);
+        assert!(kind.is_some(), "{name}: it opens");
+        for repeat in 0..4 {
+            held.press(&mut app);
+            assert_eq!(open_dialog(&app), kind, "{name}, repeat {repeat}: it stays open");
+            assert_eq!(app.session.documents().len(), documents, "{name}, repeat {repeat}: nothing was created");
+        }
+    }
+}
+
+/// The command search opens while Enter is down: the repeats do not run its highlighted result.
+#[test]
+fn the_command_search_that_opens_while_enter_is_down_waits_for_a_new_press() {
+    let mut app = app_with_a_selected_rectangle();
+    let held = HeldKey::new(Key::Enter, Modifiers::NONE);
+    app.select_tool("rectangle");
+    held.press(&mut app);
+    app.ui.palette_open = true;
+    for repeat in 0..4 {
+        held.press(&mut app);
+        assert!(app.ui.palette_open, "repeat {repeat}: it stays open");
+    }
+    held.release(&mut app);
+    held.press(&mut app);
+    assert!(!app.ui.palette_open, "a new press runs the highlighted result");
+}
+
+/// A field that rejects its text on Enter keeps the dialog open, while the key is held too.
+#[test]
+fn holding_enter_on_a_rejected_value_leaves_the_dialog_open() {
+    let mut app = app_with_a_selected_rectangle();
+    let journal = app.session.journal.len();
+    let held = HeldKey::new(Key::Enter, Modifiers::NONE);
+    let _ = crate::toolbar::open_options(&mut app, "selection");
+    held.frame(&mut app, vec![]);
+    held.frame(&mut app, vec![]);
+    held.frame(&mut app, vec![egui::Event::Text("abc".into())]);
+    for repeat in 0..4 {
+        held.press(&mut app);
+        assert_eq!(open_dialog(&app).as_deref(), Some("move"), "repeat {repeat}: Move stays open");
+        assert_eq!(app.session.journal.len(), journal, "repeat {repeat}: nothing ran");
+    }
+}
+
+/// Holding Enter in the Type tool goes on typing line breaks.
+#[test]
+fn holding_enter_in_the_type_tool_repeats_line_breaks() {
+    for modifiers in [Modifiers::NONE, Modifiers::SHIFT] {
+        let mut app = app_with_a_selected_rectangle();
+        let text = app.session.execute("text.create", &json!({"x": 20, "y": 250, "text": "Hi"})).unwrap()["id"].as_u64().unwrap();
+        app.select_tool("type");
+        app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+        assert!(app.session.tool_wants_text());
+        let held = HeldKey::new(Key::Enter, modifiers);
+        for _ in 0..4 {
+            held.press(&mut app);
+        }
+        let typed = text_and_layers(&mut app, text).0;
+        assert_eq!(typed.chars().filter(|c| matches!(c, '\n' | '\r' | '\u{2028}' | '\u{3}')).count(), 4, "{modifiers:?}: {typed:?}");
+        assert_eq!(open_dialog(&app), None, "{modifiers:?}");
+    }
 }
 
 /// A drag with the Selection tool, then Enter: the Move dialog opens on the drag's offset, and
@@ -1042,7 +1468,8 @@ fn enter_after_a_drag_repeats_its_offset() {
     app.session.execute("file.new", &json!({"width": 800, "height": 300})).unwrap();
     app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
     let ctx = egui::Context::default();
-    let enter = || egui::Event::Key { key: Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE };
+    let key = |pressed| egui::Event::Key { key: Key::Enter, physical_key: None, pressed, repeat: false, modifiers: Modifiers::NONE };
+    let enter = || vec![key(true), key(false)];
     let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
         let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 800.0)));
         let mut out = ctx.run_ui(egui::RawInput { events, screen_rect, ..Default::default() }, |ui| {
@@ -1067,26 +1494,26 @@ fn enter_after_a_drag_repeats_its_offset() {
     assert!(step > 0.0);
     // Keys reach the canvas from the second frame on.
     frame(&mut app, vec![]);
-    frame(&mut app, vec![enter()]);
+    frame(&mut app, enter());
     let d = app.ui.dialog.as_mut().expect("Enter opens Move");
     assert_eq!((d.kind.as_str(), d.f64("dx", f64::NAN).round(), d.f64("dy", f64::NAN)), ("move", step, 0.0));
     d.fields.insert("copy".into(), json!(true));
-    frame(&mut app, vec![enter()]);
+    frame(&mut app, enter());
     for _ in 0..2 {
-        frame(&mut app, vec![enter()]);
-        frame(&mut app, vec![enter()]);
+        frame(&mut app, enter());
+        frame(&mut app, enter());
     }
     assert!(app.ui.dialog.is_none());
     assert_eq!(lefts(&app), (0..4).map(|i| moved + step * f64::from(i)).collect::<Vec<_>>());
     // With Preview on too, each Enter, Enter still makes one copy, and one undo step.
-    frame(&mut app, vec![enter()]);
+    frame(&mut app, enter());
     app.ui.dialog.as_mut().expect("Move").fields.insert("preview".into(), json!(true));
-    frame(&mut app, vec![enter()]);
+    frame(&mut app, enter());
     let steps = app.session.active().unwrap().history.undo.len();
     for _ in 0..2 {
-        frame(&mut app, vec![enter()]);
+        frame(&mut app, enter());
         assert!(app.ui.dialog.as_ref().is_some_and(|d| d.bool("preview") && d.bool("copy")) && app.session.in_interaction());
-        frame(&mut app, vec![enter()]);
+        frame(&mut app, enter());
         assert!(app.ui.dialog.is_none() && !app.session.in_interaction());
     }
     assert_eq!(app.session.active().unwrap().history.undo.len(), steps + 2);
@@ -1771,6 +2198,37 @@ fn a_shortcut_on_the_backtick_key_runs_on_every_layout() {
     assert_eq!(count(&app), 1);
 }
 
+/// The ISO key next to left Shift (`<` on Turkish Q and many European layouts, egui's
+/// `IntlBackslash`) records, saves and runs its shortcut, apart from the `\` key (#4559).
+#[test]
+fn a_shortcut_on_the_iso_key_next_to_left_shift_records_and_runs() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let recorded = crate::shortcut_editor::chord_from_event(Key::IntlBackslash, Modifiers::NONE).unwrap();
+    assert_eq!(recorded, "IntlBackslash");
+    crate::shortcut_editor::assign(&mut app.ui.shortcut_overrides, "edit.clear", Some(&recorded), false).unwrap();
+    assert_eq!(crate::shortcut_editor::effective_in(&app.ui.shortcut_overrides, "edit.clear").as_deref(), Some("IntlBackslash"));
+    for text in ["Cmd+IntlBackslash", "Shift+IntlBackslash", "Cmd+Alt+Shift+IntlBackslash"] {
+        assert_eq!(crate::shortcut_editor::normalize(text).as_deref(), Some(text));
+    }
+    let count = |app: &VectorcraftApp| app.session.doc().unwrap().doc.layers[0].children().map_or(0, |c| c.len());
+    let id = app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let backslash =
+        egui::Event::Key { key: Key::Backslash, physical_key: Some(Key::Backslash), pressed: true, repeat: false, modifiers: Modifiers::NONE };
+    frame(&mut app, vec![backslash, egui::Event::Text("\\".into())]);
+    assert_eq!(count(&app), 1, "the `\\` key is another key");
+    let press = egui::Event::Key {
+        key: Key::IntlBackslash,
+        physical_key: Some(Key::IntlBackslash),
+        pressed: true,
+        repeat: false,
+        modifiers: Modifiers::NONE,
+    };
+    frame(&mut app, vec![press, egui::Event::Text("<".into())]);
+    assert_eq!(count(&app), 0, "the key next to left Shift runs Edit › Clear");
+}
+
 /// eframe's web build with no text field focused sends the text before its key: the key after
 /// the `"` it typed is read when no press comes right before it.
 #[test]
@@ -1860,7 +2318,7 @@ fn parses() {
 
 /// An IME replacement on the Type tool arrives as `DeleteSurroundingBytes` + `Commit` events
 /// and is taken once, in order: the marked text is dropped, the committed text replaces it, and
-/// the events never reach `route_type_input` as typed characters.
+/// the events are never typed as characters.
 #[test]
 fn ime_delete_surrounding_bytes_edits_the_type_tool_once() {
     use vectorcraft_tools::{PointerEvent, PointerKind};
@@ -1954,4 +2412,345 @@ fn all_registered_shortcuts_parse() {
             assert!(parse(c.2).is_some(), "{} has unparsable shortcut {}", c.0, c.2);
         }
     }
+}
+
+/// #3296: each Effect menu item can be given a shortcut of its own (`effect:<id>`): the editor
+/// lists it under its menu path, the menu shows the shortcut, and pressing it opens that effect's
+/// dialog for the selection.
+#[test]
+fn an_effect_menu_item_takes_a_shortcut_of_its_own() {
+    let entry = crate::shortcut_editor::entry("effect:distort.transform").expect("Transform is listed");
+    assert_eq!(entry.group, "Effect › Distort & Transform");
+    assert_eq!(crate::keymap::command_of("effect:distort.transform").id, "effect.dialog");
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let id = app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    crate::keymap::set_override(&mut app.ui.shortcut_overrides, "effect:distort.transform", "Cmd+Alt+Shift+F11");
+    crate::shortcut_editor::sync(&app.ui);
+    assert_eq!(crate::menus::item_shortcut("effect.dialog", &json!({"effect": "distort.transform"})), Some("Cmd+Alt+Shift+F11"));
+    let f11 =
+        egui::Event::Key { key: Key::F11, physical_key: None, pressed: true, repeat: false, modifiers: cmd() | Modifiers::ALT | Modifiers::SHIFT };
+    frame(&mut app, vec![f11]);
+    let d = app.ui.dialog.as_ref().expect("the effect's dialog opens");
+    assert_eq!(d.fields.get("__effect").and_then(serde_json::Value::as_str), Some("distort.transform"), "{:?}", d.kind);
+    crate::shortcut_editor::sync(&crate::state::UiState::default());
+}
+
+/// #3296 review: an effect bound to Cmd+Enter runs the effect; the Selection tool doesn't take the
+/// Enter first and open its Move dialog.
+#[test]
+fn cmd_enter_bound_to_an_effect_runs_the_effect_not_the_tool() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let id = app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
+    app.select_tool("selection");
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    crate::keymap::set_override(&mut app.ui.shortcut_overrides, "effect:distort.transform", "Cmd+Enter");
+    crate::shortcut_editor::sync(&app.ui);
+    assert!(
+        crate::shortcuts::all_shortcuts()
+            .iter()
+            .any(|(sc, c, p)| sc.logical_key == Key::Enter && *c == "effect.dialog" && p["effect"] == "distort.transform"),
+        "the effect's chord is among the command shortcuts"
+    );
+    frame(&mut app, press(Key::Enter, cmd()));
+    let d = app.ui.dialog.as_ref().expect("a dialog opens");
+    assert_eq!(d.fields.get("__effect").and_then(serde_json::Value::as_str), Some("distort.transform"), "the effect's, not Move: {:?}", d.kind);
+    crate::shortcut_editor::sync(&crate::state::UiState::default());
+}
+
+/// A live-effect plug-in installed after Keyboard Shortcuts built its list has a row of its own:
+/// it takes a shortcut, `shortcuts.list` and its Effect › Plug-ins item show it, and the key
+/// applies the effect. While the plug-in is removed it has no row and no key is bound to it; the
+/// saved shortcut is the effect's again when the plug-in comes back, now opening the dialog of the
+/// options it has.
+#[test]
+fn a_live_effect_plugin_installed_later_takes_a_shortcut_of_its_own() {
+    use vectorcraft_plugins::wat as tpl;
+    let (plugin, effect, key) = ("test.ui.keyedfx", "plugin.test.ui.keyedfx", "effect:plugin.test.ui.keyedfx");
+    let install = |params: &str| {
+        let src = tpl::module(&tpl::manifest(plugin, "effect", params), tpl::ECHO, "", 1);
+        vectorcraft_plugins::registry::install_bytes(&wat::parse_str(src).unwrap()).unwrap();
+    };
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let id = app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let node = vectorcraft_doc::NodeId(id.as_u64().unwrap());
+    let effects =
+        |app: &VectorcraftApp| app.session.doc().unwrap().doc.node(node).unwrap().appearance.effects.iter().filter(|e| e.id == effect).count();
+    let shown = |app: &mut VectorcraftApp| {
+        let list = crate::shortcut_editor::run_command(app, "shortcuts.list", &json!({ "query": effect })).unwrap().unwrap();
+        list.as_array().unwrap().iter().map(|e| (e["id"].as_str().unwrap_or_default().to_string(), e["shortcut"].clone())).collect::<Vec<_>>()
+    };
+    let chord = "Cmd+Alt+Shift+F6";
+    let f6 = || press(Key::F6, cmd() | Modifiers::ALT | Modifiers::SHIFT);
+    // The lists and the keymap in effect are built before the plug-in is installed.
+    assert!(crate::shortcut_editor::entry(key).is_none());
+    crate::shortcut_editor::sync(&app.ui);
+    assert!(crate::shortcuts::all_shortcuts().iter().all(|(_, _, p)| p["effect"] != effect));
+    install("{}");
+    let e = crate::shortcut_editor::entry(key).expect("listed once installed");
+    assert_eq!((e.label.as_str(), e.group.as_str()), ("Test test.ui.keyedfx", "Effect › Plug-ins"));
+    assert_eq!(crate::keymap::command_of(key).id, "effect.apply", "it has no options");
+    let set = crate::shortcut_editor::run_command(&mut app, "shortcuts.set", &json!({"id": key, "shortcut": chord})).unwrap().unwrap();
+    assert_eq!(set["shortcut"], chord);
+    assert_eq!(shown(&mut app), vec![(key.to_string(), json!(chord))]);
+    assert_eq!(crate::menus::item_shortcut("effect.apply", &json!({ "effect": effect })), Some(chord));
+    frame(&mut app, f6());
+    assert_eq!(effects(&app), 1, "the key applies the effect");
+    // Removed: no row, and no key is bound to the effect; the saved shortcut stays.
+    vectorcraft_plugins::registry::remove(plugin);
+    assert!(crate::shortcut_editor::entry(key).is_none());
+    assert_eq!(shown(&mut app), vec![]);
+    assert!(crate::shortcuts::all_shortcuts().iter().all(|(_, _, p)| p["effect"] != effect), "no key is bound to the removed effect");
+    assert!(crate::keymap::has_override(&app.ui.shortcut_overrides, key));
+    // Back, now with options: the saved shortcut opens its dialog.
+    install(r#"{"wiggle":{"type":"bool"}}"#);
+    assert_eq!(crate::keymap::command_of(key).id, "effect.dialog");
+    assert_eq!(shown(&mut app), vec![(key.to_string(), json!(chord))]);
+    assert_eq!(crate::menus::item_shortcut("effect.dialog", &json!({ "effect": effect })), Some(chord));
+    frame(&mut app, f6());
+    let d = app.ui.dialog.as_ref().expect("the effect's dialog opens");
+    assert_eq!(d.fields.get("__effect").and_then(serde_json::Value::as_str), Some(effect), "{:?}", d.kind);
+    vectorcraft_plugins::registry::remove(plugin);
+    crate::shortcut_editor::sync(&crate::state::UiState::default());
+}
+
+/// Each filter plug-in's Object › Plug-ins item has a row of its own (`plugin:<id>`), with no
+/// default shortcut, even when two filters share a name: a key given to one shows in its menu item
+/// and opens that filter's dialog, and the other stays unbound. While the plug-in is removed it
+/// has no row and no key is bound to it; the saved shortcut is the filter's again when it comes
+/// back, now running it at once since it has no parameters.
+#[test]
+fn each_filter_plugin_takes_a_shortcut_of_its_own() {
+    use serde_json::Value;
+    use vectorcraft_plugins::wat as tpl;
+    let (one, two) = ("test.UI.key_filter-one", "test.UI.key_filter-two");
+    let (key_one, key_two) = (format!("plugin:{one}"), format!("plugin:{two}"));
+    let install = |id: &str, name: &str, params: &str| {
+        let manifest = format!(r#"{{"id":"{id}","name":"{name}","version":"1","kind":"filter","params":{params}}}"#);
+        vectorcraft_plugins::registry::install_bytes(&wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap()).unwrap();
+    };
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let id = app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let shown = |app: &mut VectorcraftApp| {
+        let list = crate::shortcut_editor::run_command(app, "shortcuts.list", &json!({ "query": "test.ui.key_filter-" })).unwrap().unwrap();
+        list.as_array().unwrap().iter().map(|e| (e["id"].as_str().unwrap_or_default().to_string(), e["shortcut"].clone())).collect::<Vec<_>>()
+    };
+    let chord = "Cmd+Alt+Shift+F7";
+    let f7 = || press(Key::F7, cmd() | Modifiers::ALT | Modifiers::SHIFT);
+    crate::shortcut_editor::sync(&app.ui);
+    install(one, "Same Name", "{}");
+    install(two, "Same Name", r#"{"wiggle":{"type":"bool"}}"#);
+    let rows: Vec<_> = [&key_one, &key_two].iter().map(|k| crate::shortcut_editor::entry(k).map(|e| (e.label, e.group, e.is_tool))).collect();
+    let group = "Object › Plug-ins".to_string();
+    assert_eq!(rows, [Some(("Same Name".into(), group.clone(), false)), Some(("Same Name…".into(), group.clone(), false))]);
+    for key in [&key_one, &key_two] {
+        assert_eq!(crate::shortcut_editor::default_of(key), None, "no default shortcut");
+        let command = crate::keymap::command_of(key);
+        assert_eq!(command.id, "plugin.dialog");
+        assert_eq!(crate::keymap::entry_key(&command), *key, "the id is kept whole");
+        assert_eq!(crate::keymap::entry_of_stored(&crate::keymap::stored_key(key)), *key);
+    }
+    assert_eq!(shown(&mut app), vec![(key_one.clone(), Value::Null), (key_two.clone(), Value::Null)]);
+    let set = crate::shortcut_editor::run_command(&mut app, "shortcuts.set", &json!({"id": key_two, "shortcut": chord})).unwrap().unwrap();
+    assert_eq!(set["shortcut"], chord);
+    assert_eq!(shown(&mut app), vec![(key_one.clone(), Value::Null), (key_two.clone(), json!(chord))]);
+    assert_eq!(crate::menus::item_shortcut("plugin.dialog", &json!({ "id": two })), Some(chord));
+    assert_eq!(crate::menus::item_shortcut("plugin.dialog", &json!({ "id": one })), None);
+    let text = crate::shortcut_editor::export_text("Custom", &app.ui.shortcut_overrides);
+    let lines: Vec<&str> = text.lines().filter(|l| l.starts_with("Object › Plug-ins › Same Name")).collect();
+    assert_eq!(lines.len(), 2, "{text}");
+    assert_eq!(lines[0], "Object › Plug-ins › Same Name\t");
+    assert_eq!(lines[1], format!("Object › Plug-ins › Same Name…\t{}", crate::menus::pretty_shortcut(chord)));
+    // A chord an Effect menu item holds is a conflict.
+    crate::keymap::set_override(&mut app.ui.shortcut_overrides, "effect:distort.transform", "Cmd+Alt+Shift+F8");
+    let conflicts = crate::shortcut_editor::conflicts_with(&app.ui.shortcut_overrides, "Cmd+Alt+Shift+F8", &key_one);
+    assert_eq!(conflicts, vec!["effect:distort.transform".to_string()]);
+    crate::keymap::remove_override(&mut app.ui.shortcut_overrides, "effect:distort.transform");
+    frame(&mut app, f7());
+    let d = app.ui.dialog.take().expect("the filter's dialog opens");
+    assert_eq!((d.kind.as_str(), d.str("__plugin")), ("plugin", two.to_string()));
+    let bound = |app: &VectorcraftApp| {
+        crate::keymap::vc_chord(chord).and_then(|c| crate::keymap::lookup(&crate::keymap::keymap_with(&app.ui.shortcut_overrides), &c))
+    };
+    assert_eq!(bound(&app).map(|c| crate::keymap::entry_key(&c)), Some(key_two.clone()));
+    // Removed: no row, and no key is bound to the filter; the saved shortcut stays.
+    vectorcraft_plugins::registry::remove(two);
+    assert_eq!(bound(&app), None, "the key runs nothing");
+    assert!(crate::shortcut_editor::entry(&key_two).is_none());
+    assert_eq!(shown(&mut app), vec![(key_one.clone(), Value::Null)]);
+    assert!(crate::shortcuts::all_shortcuts().iter().all(|(_, _, p)| p["id"] != two), "no key is bound to the removed filter");
+    assert!(crate::keymap::has_override(&app.ui.shortcut_overrides, &key_two));
+    // Back under another name and without parameters: the saved shortcut runs it at once.
+    install(two, "Renamed", "{}");
+    assert_eq!(crate::shortcut_editor::entry(&key_two).map(|e| e.label), Some("Renamed".into()));
+    assert_eq!(shown(&mut app), vec![(key_one.clone(), Value::Null), (key_two.clone(), json!(chord))]);
+    let undo = app.session.doc().unwrap().history.undo.len();
+    frame(&mut app, f7());
+    assert!(app.ui.dialog.is_none(), "no dialog: {:?}", app.ui.dialog.as_ref().map(|d| &d.kind));
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "the filter ran as one undo step");
+    vectorcraft_plugins::registry::remove(one);
+    vectorcraft_plugins::registry::remove(two);
+    crate::shortcut_editor::sync(&crate::state::UiState::default());
+}
+
+/// A filter plug-in replaced under its id, or reinstalled from a folder by Reload Plug-ins, keeps
+/// its shortcut, which runs the plug-in as it is now. With no document open the key does nothing,
+/// as the dimmed menu item does.
+#[test]
+fn a_filter_plugin_keeps_its_shortcut_when_replaced_or_reloaded() {
+    use vectorcraft_plugins::wat as tpl;
+    let id = "test.UI.replaced_filter";
+    let key = format!("plugin:{id}");
+    let wasm = |name: &str, params: &str| {
+        let manifest = format!(r#"{{"id":"{id}","name":"{name}","version":"1","kind":"filter","params":{params}}}"#);
+        wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap()
+    };
+    let with_params = r#"{"wiggle":{"type":"bool"}}"#;
+    let chord = "Cmd+Alt+Shift+F6";
+    let f6 = || press(Key::F6, cmd() | Modifiers::ALT | Modifiers::SHIFT);
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    vectorcraft_plugins::registry::install_bytes(&wasm("Original", "{}")).unwrap();
+    crate::shortcut_editor::run_command(&mut app, "shortcuts.set", &json!({"id": key, "shortcut": chord})).unwrap().unwrap();
+
+    vectorcraft_plugins::registry::install_bytes(&wasm("Replaced", with_params)).unwrap();
+    assert_eq!(crate::shortcut_editor::entry(&key).map(|e| e.label), Some("Replaced…".into()));
+    assert_eq!(crate::menus::item_shortcut("plugin.dialog", &json!({ "id": id })), Some(chord));
+    frame(&mut app, f6());
+    assert_eq!(app.ui.dialog.take().expect("the replaced filter has parameters").str("__plugin"), id);
+
+    let folder = std::env::temp_dir().join(format!("vectorcraft-ui-filter-shortcut-{}", std::process::id()));
+    std::fs::create_dir_all(&folder).unwrap();
+    std::fs::write(folder.join("filter.wasm"), wasm("Reloaded", with_params)).unwrap();
+    app.run("plugin.reload", json!({ "path": folder.display().to_string() })).unwrap();
+    std::fs::remove_dir_all(&folder).ok();
+    assert_eq!(crate::shortcut_editor::entry(&key).map(|e| e.label), Some("Reloaded…".into()));
+    assert_eq!(crate::menus::item_shortcut("plugin.dialog", &json!({ "id": id })), Some(chord));
+
+    let mut empty = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    empty.ui.shortcut_overrides = app.ui.shortcut_overrides.clone();
+    frame(&mut empty, f6());
+    assert!(empty.ui.dialog.is_none(), "no document: no dialog");
+    vectorcraft_plugins::registry::remove(id);
+    crate::shortcut_editor::sync(&crate::state::UiState::default());
+}
+
+/// The key of a heavy filter does what a click on its item does: one without parameters starts in
+/// the background, and one with parameters opens its dialog, which has no Preview.
+#[test]
+fn a_heavy_filter_plugin_runs_from_its_shortcut_as_from_its_menu_item() {
+    use vectorcraft_plugins::wat as tpl;
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let (at_once, asks) = ("test.UI.heavy_filter-at-once", "test.UI.heavy_filter-asks");
+    for (id, params, chord) in [(at_once, "{}", "Cmd+Alt+Shift+F7"), (asks, r#"{"wiggle":{"type":"bool"}}"#, "Cmd+Alt+Shift+F8")] {
+        let manifest = format!(r#"{{"id":"{id}","name":"Heavy {id}","version":"1","kind":"filter","budget":"heavy","params":{params}}}"#);
+        let wasm = wat::parse_str(tpl::spinning(&manifest, 1 << 40, r#"{"objects":[]}"#)).unwrap();
+        app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "allowHeavy": true})).unwrap();
+        crate::shortcut_editor::run_command(&mut app, "shortcuts.set", &json!({"id": format!("plugin:{id}"), "shortcut": chord})).unwrap().unwrap();
+    }
+
+    frame(&mut app, press(Key::F7, cmd() | Modifiers::ALT | Modifiers::SHIFT));
+    assert_eq!(app.plugin_runs.running.len(), 1, "started in the background");
+    assert_eq!(app.ui.status, format!("Running “Heavy {at_once}”…"));
+
+    frame(&mut app, press(Key::F8, cmd() | Modifiers::ALT | Modifiers::SHIFT));
+    let d = app.ui.dialog.take().expect("the heavy filter with parameters opens its dialog");
+    assert_eq!(d.str("__plugin"), asks);
+    assert!(d.fields.get("preview").is_none(), "no Preview");
+
+    assert_eq!(app.run("plugin.cancelRuns", json!({})).unwrap()["cancelled"], 1);
+    vectorcraft_plugins::registry::remove(at_once);
+    vectorcraft_plugins::registry::remove(asks);
+    crate::shortcut_editor::sync(&crate::state::UiState::default());
+}
+
+/// Keyboard Shortcuts translates a menu path one segment at a time and the label of a built-in
+/// item. A filter plug-in's name stays as the plug-in gives it, even when it reads like a command.
+#[test]
+fn a_filter_plugin_row_translates_its_path_and_not_its_name() {
+    let zh = crate::i18n::Lang::from_code("zh-hant").unwrap();
+    crate::i18n::set_current(zh);
+    let entry =
+        |key: &str| crate::shortcut_editor::Entry { key: key.into(), label: "Group".into(), group: "Object › Plug-ins".into(), is_tool: false };
+    let path = format!("{} › {}", crate::i18n::tr(zh, "Object"), crate::i18n::tr(zh, "Plug-ins"));
+    let (filter, command) = (crate::shortcut_editor::shown_name(&entry("plugin:a.b")), crate::shortcut_editor::shown_name(&entry("object.group")));
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    assert_ne!(path, "Object › Plug-ins");
+    assert_eq!(filter, format!("{path} › Group"));
+    assert_eq!(command, format!("{path} › {}", crate::i18n::tr(zh, "Group")));
+}
+
+/// #2898 review: Up and Down change the corner kind only while a corner widget is pressed. With
+/// none pressed, a plain Up still nudges the selected rectangle and leaves its corners alone; with
+/// one pressed, Up steps the kind and the rectangle stays where it is.
+#[test]
+fn a_plain_up_nudges_unless_a_corner_widget_is_pressed() {
+    use vectorcraft_doc::{LiveShape, NodeId, NodeKind};
+    use vectorcraft_geom::shapes::CornerKind;
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = app.session.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 120, "height": 80})).unwrap()["id"].as_u64().unwrap();
+    let id = NodeId(id);
+    app.select_tool("selection");
+    app.session.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let state = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        let b = st.doc.bounds_of(&[id], false).unwrap();
+        let NodeKind::Path { live: Some(l), .. } = &st.doc.node(id).unwrap().kind else { panic!("not live") };
+        let LiveShape::Rectangle { kinds, .. } = &**l else { panic!("not a rectangle") };
+        ((b.x0, b.y0), kinds[0])
+    };
+    let ((x, y), kind) = state(&app);
+    frame(&mut app, press(Key::ArrowUp, Modifiers::NONE));
+    let ((x1, y1), kind1) = state(&app);
+    assert_eq!(x1, x, "no sideways move");
+    assert!((y1 - y).abs() > 0.5, "a plain Up nudges the rectangle: {y} → {y1}");
+    assert_eq!(kind1, kind, "and leaves its corners alone");
+    // Press a corner widget: now Up steps the corner kind and the rectangle stays put.
+    let view = app.view_info();
+    let st = app.session.active().unwrap();
+    let w = vectorcraft_tools::corners::CornerWidgets::showing(&st.doc, &st.selection, view.zoom, false, true, 180.0).expect("corner widgets show");
+    let at = w.visible().next().expect("a widget");
+    app.session.pointer(&PointerEvent::new(PointerKind::Down, at.x, at.y), view).unwrap();
+    frame(&mut app, press(Key::ArrowUp, Modifiers::NONE));
+    app.session.pointer(&PointerEvent::new(PointerKind::Up, at.x, at.y), view).unwrap();
+    let ((x2, y2), kind2) = state(&app);
+    assert_eq!((x2, y2), (x1, y1), "no nudge while the widget is pressed");
+    assert_eq!(kind2, CornerKind::InvertedRound, "Up stepped the kind");
+}
+
+/// #5218: the status bar navigator's four buttons are commands of their own, listed in Edit ›
+/// Keyboard Shortcuts without a default key, so a user can give them one (Page Up and Page Down
+/// here) and step through the artboards from the keyboard.
+#[test]
+fn artboard_navigation_commands_can_be_given_keys() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
+    for id in ["view.firstArtboard", "view.previousArtboard", "view.nextArtboard", "view.lastArtboard"] {
+        let list = app.run("shortcuts.list", json!({ "query": id })).unwrap();
+        assert!(list.as_array().unwrap().iter().any(|e| e["id"] == id), "{id} is listed: {list}");
+        assert_eq!(crate::shortcut_editor::default_command_shortcut(id), None, "{id} has no default key");
+    }
+    let at = |app: &VectorcraftApp| app.view().unwrap().artboard;
+    assert_eq!(app.run("view.lastArtboard", json!({})), Ok(json!({"index": 2})));
+    assert_eq!(app.run("view.nextArtboard", json!({})), Ok(json!({"index": 2})), "the last artboard stays");
+    assert_eq!(app.run("view.firstArtboard", json!({})), Ok(json!({"index": 0})));
+    assert_eq!(app.run("view.previousArtboard", json!({})), Ok(json!({"index": 0})), "the first artboard stays");
+    crate::keymap::set_override(&mut app.ui.shortcut_overrides, "view.nextArtboard", "PageDown");
+    crate::keymap::set_override(&mut app.ui.shortcut_overrides, "view.previousArtboard", "PageUp");
+    let press = |key| vec![egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE }];
+    frame(&mut app, press(Key::PageDown));
+    assert_eq!(at(&app), 1, "Page Down goes to the next artboard");
+    frame(&mut app, press(Key::PageDown));
+    assert_eq!(at(&app), 2);
+    frame(&mut app, press(Key::PageUp));
+    assert_eq!(at(&app), 1, "Page Up goes to the previous artboard");
 }

@@ -260,6 +260,39 @@ fn shaper_sources_are_no_targets() {
     assert!(gives_corner(&Targets::points_near(&d, &[b], near)));
 }
 
+/// Art inside a hidden group or layer is no target, even while its own visibility is on: not
+/// for drawing, the Knife's straight cut, a move or a transform tool's reference point on the
+/// shown group around it.
+#[test]
+fn art_in_hidden_groups_and_layers_is_no_target() {
+    use std::sync::Arc;
+    use vectorcraft_doc::{Appearance, Node};
+    let (mut d, _) = doc_with_rect();
+    let l = d.layers[0].id;
+    let square = Node::path(d.alloc_id(), vectorcraft_geom::shapes::rectangle(Rect::new(300.0, 300.0, 400.0, 400.0)), Appearance::default_art());
+    let mut inner = Node::group(d.alloc_id(), vec![Arc::new(square)]);
+    inner.visible = false;
+    let outer = Node::group(d.alloc_id(), vec![Arc::new(inner)]);
+    let g = outer.id;
+    d.insert(Some(l), 1, outer).unwrap();
+    let corner = Point::new(300.0, 300.0);
+    let gives = |t: &Targets, at: Point| {
+        t.points.iter().any(|(p, _)| *p == at)
+            || t.xs.iter().chain(&t.ys).any(|(_, p, _)| *p == at)
+            || t.segments.iter().any(|(_, s)| s.start() == at || s.end() == at)
+    };
+    assert!(!gives(&Targets::collect(&d, &[], None), corner));
+    assert!(!gives(&Targets::for_drawing(&d, &[], None, None), corner));
+    assert!(!gives(&Targets::for_drawing(&d, &[], None, None).anchors_and_paths(), corner));
+    assert!(!gives(&Targets::points_near(&d, &[g], Rect::new(296.0, 296.0, 304.0, 304.0)), corner));
+    // The shown rectangle on the same layer still is one, until the layer is hidden.
+    let shown = Point::new(100.0, 100.0);
+    assert!(gives(&Targets::for_drawing(&d, &[], None, None).anchors_and_paths(), shown));
+    d.node_mut(l).unwrap().visible = false;
+    assert!(!gives(&Targets::collect(&d, &[], None), shown));
+    assert!(!gives(&Targets::for_drawing(&d, &[], None, None).anchors_and_paths(), shown));
+}
+
 /// #2120: the dragged end of a straight segment at any angle lands on the segment's own
 /// extension (Line Extension), past its other end or short of it, the guide drawn from that
 /// end; with two anchors moving there is none to keep to.
@@ -804,7 +837,7 @@ fn each_snap_to_glyph_option_takes_away_only_its_own_guides() {
     for (off, less) in [
         (GlyphSnap { baseline: false, ..all }, [1, 0, 0, 0]),
         (GlyphSnap { x_height: false, ..all }, [1, 0, 0, 0]),
-        (GlyphSnap { bounds: false, ..all }, [4, 4, 0, 0]),
+        (GlyphSnap { bounds: false, ..all }, [2, 2, 0, 0]),
         (GlyphSnap { proximity: false, ..all }, [0, 2, 0, 0]),
         (GlyphSnap { anchors: false, ..all }, [0, 0, 0, anchors]),
         (GlyphSnap { angular: false, ..all }, [0, 0, 0, 0]),
@@ -818,8 +851,8 @@ fn each_snap_to_glyph_option_takes_away_only_its_own_guides() {
     let p = Point::new(400.0, x_height + 2.0);
     assert!((Targets::for_drawing(&d, &[], None, Some(all)).snap_point(p, 4.0).0.y - x_height).abs() < 1e-9);
     assert_eq!(Targets::for_drawing(&d, &[], None, Some(GlyphSnap { x_height: false, ..all })).snap_point(p, 4.0).0.y, p.y);
-    // Rotated type: its baseline, x-height and width edges and its strokes run at an angle, all
-    // Angular Guides; its glyph bounds still run across and down the page.
+    // Rotated type: its baseline, x-height, width edges, glyph bounds and strokes run at an angle,
+    // all Angular Guides (the corners of its glyph bounds stay points to land on).
     let (d, _) = glyph_doc("H", 20f64.to_radians());
     let (on, off) = (count(&d, all), count(&d, GlyphSnap { angular: false, ..all }));
     assert!(on[2] > 0, "{on:?}");
@@ -857,4 +890,46 @@ fn a_shift_constrained_point_slides_onto_a_rotated_baseline() {
     let from = Leave::segment(&c, crossing - Vec2::new(60.0, 0.0), true);
     let (q, _) = Targets::for_drawing(&d, &[], None, Some(GlyphSnap::default())).snap_from(crossing + Vec2::new(1.5, 0.3), Some(&from), 4.0);
     assert!(q.distance(crossing) < 1e-9, "{q:?} vs {crossing:?}");
+}
+
+/// The corners of a glyph's bounds, from its outline in its own frame placed as the glyph is.
+fn glyph_corners(t: &vectorcraft_doc::TextObject) -> [Point; 4] {
+    let lay = layout_text(FontDb::global(), t);
+    let g = lay.glyphs.iter().find(|g| !g.outline.elements().is_empty()).expect("a glyph with an outline");
+    let r = (g.xf.inverse() * g.outline.clone()).bounding_box();
+    [Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x1, r.y1), Point::new(r.x0, r.y1)].map(|p| t.xf * g.xf * p)
+}
+
+/// Snap to Glyph › Glyph Bounds (#5112): each corner of a glyph's bounds is a point a drawn point
+/// lands on, also where its outline curves (the right of `B`, where no anchor is), and the corners
+/// turn with rotated type. Glyph Bounds off, they are gone.
+#[test]
+fn a_drawn_point_lands_on_a_corner_of_a_glyphs_bounds() {
+    let style = vectorcraft_doc::CharStyle { size: 200.0, ..Default::default() };
+    for angle in [0.0, 30f64.to_radians()] {
+        let (d, t) = glyph_doc_with("B", angle, style.clone());
+        let corners = glyph_corners(&t);
+        for (i, c) in corners.into_iter().enumerate() {
+            let p = c + Vec2::new(2.0, -1.5);
+            let (q, ov) = Targets::for_drawing(&d, &[], None, Some(GlyphSnap::default())).snap_point(p, 4.0);
+            assert!(q.distance(c) < 1e-9, "angle {angle}: {q:?} vs corner {c:?}");
+            // The left corners of `B` are anchors of its stem too; the right ones, on its curved
+            // side, come from its bounds alone.
+            if i == 0 || i == 3 {
+                continue;
+            }
+            assert!(ov.iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "glyph")), "{ov:?}");
+            let off = GlyphSnap { bounds: false, ..GlyphSnap::default() };
+            let (q, _) = Targets::for_drawing(&d, &[], None, Some(off)).snap_point(p, 4.0);
+            assert!(q.distance(c) > 1e-3, "Glyph Bounds off: {q:?} still on {c:?}");
+        }
+        // The right edge of the rotated glyph runs at its angle: a point beside it, far from the
+        // corners, lands on it.
+        let (tr, br) = (corners[1], corners[2]);
+        let dir = (br - tr) / (br - tr).hypot();
+        let p = tr.midpoint(br) + Vec2::new(-dir.y, dir.x) * 1.5;
+        let (q, _) =
+            Targets::for_drawing(&d, &[], None, Some(GlyphSnap { anchors: false, proximity: false, ..GlyphSnap::default() })).snap_point(p, 4.0);
+        assert!((q - tr).cross(dir).abs() < 1e-6, "angle {angle}: {q:?} is off the right edge");
+    }
 }

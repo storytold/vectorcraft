@@ -1,6 +1,6 @@
 //! Untrusted text files placed with File → Place never crash: any bytes, with any Text Import
 //! Options, place as area type or fail with an error, and so do hostile RTF files, Word documents
-//! and Word 97-2003 documents.
+//! and Word 97-2003 documents, including ones whose compound file container is damaged.
 //!
 //! `PROPTEST_CASES=20000 cargo test -p vectorcraft-engine --test text_import_fuzz` runs a deeper search.
 // Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
@@ -38,8 +38,8 @@ proptest! {
                 "replaceSpaces": spaces,
             });
             let p = json!({"name": "fuzz.txt", "dataBase64": vectorcraft_format::base64_encode(&data), "text": text, "thumbnail": 8});
-            let _ = s.execute("file.place.info", &p);
-            let _ = s.execute("file.place", &p);
+            let _ = no_panic(s.execute("file.place.info", &p));
+            let _ = no_panic(s.execute("file.place", &p));
         });
         prop_assert!(r.is_ok(), "panicked: {:?}", r.err());
     }
@@ -55,8 +55,8 @@ proptest! {
             let mut s = vectorcraft_engine::Session::new();
             s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
             let p = json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(&data), "thumbnail": 8});
-            let _ = s.execute("file.place.info", &p);
-            let _ = s.execute("file.place", &p);
+            let _ = no_panic(s.execute("file.place.info", &p));
+            let _ = no_panic(s.execute("file.place", &p));
         });
         prop_assert!(r.is_ok(), "panicked: {:?}", r.err());
     }
@@ -86,8 +86,8 @@ proptest! {
             let mut s = vectorcraft_engine::Session::new();
             s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
             let p = json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(&data), "thumbnail": 8});
-            let _ = s.execute("file.place.info", &p);
-            let _ = s.execute("file.place", &p);
+            let _ = no_panic(s.execute("file.place.info", &p));
+            let _ = no_panic(s.execute("file.place", &p));
         });
         prop_assert!(r.is_ok(), "panicked: {:?}", r.err());
     }
@@ -117,20 +117,223 @@ proptest! {
             let i = at.index(stream.len());
             stream[i] = byte;
         }
-        let mut cf = cfb::CompoundFile::create(std::io::Cursor::new(Vec::new())).unwrap();
-        std::io::Write::write_all(&mut cf.create_stream("WordDocument").unwrap(), &wd).unwrap();
-        std::io::Write::write_all(&mut cf.create_stream("1Table").unwrap(), &table).unwrap();
-        cf.flush().unwrap();
-        let data = cf.into_inner().into_inner();
+        let data = compound_file(&wd, &table, cfb::Version::V4);
         let r = catch_quiet(|| {
             let mut s = vectorcraft_engine::Session::new();
             s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
             let p = json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(&data), "thumbnail": 8});
-            let _ = s.execute("file.place.info", &p);
-            let _ = s.execute("file.place", &p);
+            let _ = no_panic(s.execute("file.place.info", &p));
+            let _ = no_panic(s.execute("file.place", &p));
         });
         prop_assert!(r.is_ok(), "panicked: {:?}", r.err());
     }
+
+    #[test]
+    fn any_damaged_doc_container_places_without_panics(
+        text in prop::collection::vec(prop::sample::select(DOC_CHARS.chars().collect::<Vec<_>>()), 1..60),
+        compressed in any::<bool>(),
+        v3 in any::<bool>(),
+        large in any::<bool>(),
+        damage in prop::collection::vec(arb_cfb_damage(), 1..4),
+        name in prop::sample::select(vec!["fuzz.doc", "fuzz.bin"]),
+    ) {
+        vectorcraft_text::FontDb::global().set_system_fallback(false);
+        // A letter first, so that the undamaged document has text to place.
+        let text: String = std::iter::once('a').chain(text).collect();
+        let (mut wd, table) = word97(&text, compressed, &[], 0, &[], &[], &[]);
+        // Past the mini stream cutoff (4,096 bytes) the WordDocument stream is kept in sectors the
+        // FAT chains; below it, both streams are kept in the mini stream the mini FAT chains.
+        if large {
+            wd.resize(9000, 0);
+        }
+        let mut data = compound_file(&wd, &table, if v3 { cfb::Version::V3 } else { cfb::Version::V4 });
+        let mut s = vectorcraft_engine::Session::new();
+        s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        let p = json!({"name": "fuzz.doc", "dataBase64": vectorcraft_format::base64_encode(&data)});
+        let placed = s.execute("file.place", &p);
+        prop_assert!(placed.is_ok(), "the undamaged document doesn't place: {:?}", placed.err());
+        let layout = CfbLayout::of(&data);
+        for d in &damage {
+            d.apply(&mut data, &layout);
+        }
+        let r = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+            let p = json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(&data), "thumbnail": 8});
+            let _ = no_panic(s.execute("file.place.info", &p));
+            let _ = no_panic(s.execute("file.place", &p));
+        });
+        prop_assert!(r.is_ok(), "panicked: {:?}", r.err());
+    }
+}
+
+/// `r`, after failing the case if the command panicked. The engine's guard reports a panic as
+/// `EngineError::Internal`.
+fn no_panic(r: Result<serde_json::Value, vectorcraft_engine::EngineError>) -> Result<serde_json::Value, vectorcraft_engine::EngineError> {
+    if let Err(vectorcraft_engine::EngineError::Internal { cmd, msg }) = &r {
+        panic!("{cmd} panicked: {msg}");
+    }
+    r
+}
+
+/// A compound file of `version` holding the WordDocument stream `wd` and the table stream `table`.
+fn compound_file(wd: &[u8], table: &[u8], version: cfb::Version) -> Vec<u8> {
+    let mut cf = cfb::CompoundFile::create_with_version(version, std::io::Cursor::new(Vec::new())).unwrap();
+    std::io::Write::write_all(&mut cf.create_stream("WordDocument").unwrap(), wd).unwrap();
+    std::io::Write::write_all(&mut cf.create_stream("1Table").unwrap(), table).unwrap();
+    cf.flush().unwrap();
+    cf.into_inner().into_inner()
+}
+
+/// The compound file header's fields (\[MS-CFB\] §2.2) a damage changes: their offset and width.
+const CFB_HEADER: [(usize, usize); 17] = [
+    (0, 4),  // signature
+    (24, 2), // minor version
+    (26, 2), // major version
+    (28, 2), // byte order
+    (30, 2), // sector shift
+    (32, 2), // mini sector shift
+    (40, 4), // directory sectors
+    (44, 4), // FAT sectors
+    (48, 4), // first directory sector
+    (52, 4), // transaction signature
+    (56, 4), // mini stream cutoff
+    (60, 4), // first mini FAT sector
+    (64, 4), // mini FAT sectors
+    (68, 4), // first DIFAT sector
+    (72, 4), // DIFAT sectors
+    (76, 4), // DIFAT[0]
+    (80, 4), // DIFAT[1]
+];
+
+/// A directory entry's fields (\[MS-CFB\] §2.6.1) a damage changes: their offset and width.
+const CFB_ENTRY: [(usize, usize); 10] = [
+    (0, 2),   // first character of the name
+    (64, 2),  // name length
+    (66, 1),  // object type
+    (67, 1),  // color
+    (68, 4),  // left sibling
+    (72, 4),  // right sibling
+    (76, 4),  // child
+    (116, 4), // starting sector
+    (120, 4), // stream size, low
+    (124, 4), // stream size, high
+];
+
+/// Where an undamaged compound file keeps its directory, FAT and mini FAT.
+struct CfbLayout {
+    /// The bytes of one sector.
+    sector: usize,
+    /// The offsets of the first directory sector, the first FAT sector and the first mini FAT
+    /// sector.
+    directory: usize,
+    fat: usize,
+    mini_fat: usize,
+}
+
+impl CfbLayout {
+    fn of(data: &[u8]) -> Self {
+        let u32_at = |at: usize| u32::from_le_bytes(data[at..at + 4].try_into().unwrap()) as usize;
+        let sector = 1 << u16::from_le_bytes(data[30..32].try_into().unwrap());
+        let at = |n: usize| (n + 1) * sector;
+        let layout = Self { sector, directory: at(u32_at(48)), fat: at(u32_at(76)), mini_fat: at(u32_at(60)) };
+        // The root entry's name opens the directory, the FAT marks its own sector, and the mini FAT
+        // has a sector.
+        assert_eq!(&data[layout.directory..layout.directory + 4], b"R\0o\0");
+        assert_eq!(u32_at(layout.fat + 4 * u32_at(76)), 0xFFFF_FFFD);
+        assert!(u32_at(64) >= 1);
+        layout
+    }
+}
+
+/// A change to the container of a compound file rather than to the bytes of its streams.
+#[derive(Clone, Debug)]
+enum CfbDamage {
+    /// A header field set to a value.
+    Header(prop::sample::Index, u32),
+    /// A field of one of the first directory sector's entries set to a value.
+    Entry(prop::sample::Index, prop::sample::Index, u32),
+    /// An entry of the first FAT sector (the next sector of a chain) set to a value.
+    Fat(prop::sample::Index, u32),
+    /// An entry of the first mini FAT sector set to a value.
+    MiniFat(prop::sample::Index, u32),
+    /// A byte anywhere set to a value.
+    Byte(prop::sample::Index, u8),
+    /// The file cut short.
+    Truncate(prop::sample::Index),
+}
+
+impl CfbDamage {
+    fn apply(&self, data: &mut Vec<u8>, layout: &CfbLayout) {
+        let mut put = |at: usize, width: usize, value: u32| {
+            if let Some(b) = data.get_mut(at..at + width) {
+                b.copy_from_slice(&value.to_le_bytes()[..width]);
+            }
+        };
+        match self {
+            Self::Header(field, value) => {
+                let (at, width) = CFB_HEADER[field.index(CFB_HEADER.len())];
+                put(at, width, *value);
+            }
+            Self::Entry(entry, field, value) => {
+                let (at, width) = CFB_ENTRY[field.index(CFB_ENTRY.len())];
+                put(layout.directory + 128 * entry.index(layout.sector / 128) + at, width, *value);
+            }
+            Self::Fat(entry, value) => put(layout.fat + 4 * entry.index(layout.sector / 4), 4, *value),
+            Self::MiniFat(entry, value) => put(layout.mini_fat + 4 * entry.index(layout.sector / 4), 4, *value),
+            // A file cut to nothing has no byte to change and nothing to cut.
+            Self::Byte(..) | Self::Truncate(_) if data.is_empty() => {}
+            Self::Byte(at, value) => {
+                let i = at.index(data.len());
+                data[i] = *value;
+            }
+            Self::Truncate(at) => data.truncate(at.index(data.len())),
+        }
+    }
+}
+
+/// A sector number, size, count or shift: the special sector numbers (\[MS-CFB\] §2.1), small and
+/// huge values, or any.
+fn arb_cfb_value() -> impl Strategy<Value = u32> {
+    prop_oneof![
+        3 => prop::sample::select(vec![
+            0,
+            1,
+            2,
+            3,
+            6,
+            7,
+            9,
+            12,
+            13,
+            16,
+            31,
+            64,
+            0x1000,
+            0x1001,
+            0x7FFF_FFFF,
+            0xFFFF_FFFA,
+            0xFFFF_FFFB,
+            0xFFFF_FFFC,
+            0xFFFF_FFFD,
+            0xFFFF_FFFE,
+            0xFFFF_FFFF,
+        ]),
+        1 => any::<u32>(),
+    ]
+}
+
+/// A [`CfbDamage`].
+fn arb_cfb_damage() -> impl Strategy<Value = CfbDamage> {
+    let index = any::<prop::sample::Index>;
+    prop_oneof![
+        3 => (index(), arb_cfb_value()).prop_map(|(f, v)| CfbDamage::Header(f, v)),
+        3 => (index(), index(), arb_cfb_value()).prop_map(|(e, f, v)| CfbDamage::Entry(e, f, v)),
+        2 => (index(), arb_cfb_value()).prop_map(|(e, v)| CfbDamage::Fat(e, v)),
+        2 => (index(), arb_cfb_value()).prop_map(|(e, v)| CfbDamage::MiniFat(e, v)),
+        1 => (index(), any::<u8>()).prop_map(|(at, v)| CfbDamage::Byte(at, v)),
+        1 => index().prop_map(CfbDamage::Truncate),
+    ]
 }
 
 /// Characters of a Word document's text: letters, marks of paragraphs, cells and breaks, fields,

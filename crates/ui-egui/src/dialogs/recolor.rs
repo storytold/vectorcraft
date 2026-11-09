@@ -5,33 +5,47 @@
 //! Grays (they open as OK on art last left them), the rows (click to select, Shift or Cmd/Ctrl-click
 //! to add; a row's arrow excludes or includes it; the hex field edits its new colour, and a
 //! double-click on it opens the Color Picker,
-//! whose OK sets it in the model it was picked in), Merge and Separate, Randomize order or
+//! whose OK sets it in the model it was picked in), the color mode menu and its sliders (HSB, RGB,
+//! CMYK or Lab, and Tint when the new color is a spot color of the library), which edit the
+//! first selected row's new color (once they have, OK gives the art each new color in its own
+//! model), Merge and Separate, Randomize order or
 //! saturation and brightness, Reset, the Method and Limit to Library (its folder button imports a
 //! library file and limits to it; a library's colours apply as its swatches: a spot colour stays a
 //! spot colour, and joins the document's swatches). Edit tab: a hue and
 //! saturation wheel with a marker per new colour (drag one; with linked handles they all turn and
-//! scale together), a brightness slider and the harmony rules. The preset menu sets up a 1, 2 or 3
+//! scale together), a brightness slider, the harmony rules, and the color sliders with their mode
+//! menu, whose Global Adjust shows Saturation, Brightness, Temperature and Luminosity (-100% to
+//! 100%, 0% changes nothing), which change every new color at once. The buttons beside the wheel
+//! show the new colors on the smooth wheel, on a segmented wheel (solid patches of 24 hues by 5
+//! saturations; its markers move as freely) or as color bars (one per new color, in row order: click
+//! one to select it for the sliders, drag one to move its row, which changes no color); the dialog
+//! opens on the smooth wheel. The preset menu sets up a 1, 2 or 3
 //! colour job or a library. Opened on a colour group (Edit or Apply Color Group), OK also rewrites
 //! the group with the new colours (renamed by `groupName`); without art only the group changes.
 //! Opened on colours alone (the Color Guide's Edit or Apply Colors without art), OK saves the new
 //! colours as a colour group named `groupName`.
 //!
-//! Fields (`ui.dialog.set`): `rows` ([{from: [keys], to: key, exclude?}]), `colors` (null: Auto, or a
-//! count), `method`, `preserveWhite`, `preserveBlack`, `preserveGrays`, `limitTo` (library id,
-//! "document" for the document's swatches, "" for none), `group`, `groupName`, `tab` (`assign` or
-//! `edit`), `rule` (harmony id), `linked`, `preview`. Changing `colors`, a preserve flag or
-//! `limitTo` reduces the rows again.
+//! Fields (`ui.dialog.set`): `rows` ([{from: [keys], to: key, exclude?, tint?: percent of a spot
+//! color}]), `colors` (null: Auto, or a count), `method`, `preserveWhite`, `preserveBlack`,
+//! `preserveGrays`, `limitTo` (library id, "document" for the document's swatches, "" for none),
+//! `group`, `groupName`, `tab` (`assign` or `edit`), `rule` (harmony id), `linked`, `preview`,
+//! `sliderMode` (`hsb`, `rgb`, `cmyk`, `lab` or `tint`; unset: the row color's own model, HSB for
+//! a gray and Tint for a spot color; `global`: Global Adjust, on the Edit tab), `globalAdjust`
+//! (`{saturation, brightness, temperature, luminosity}` in percent, sent as `recolor.apply`'s
+//! `globalAdjust` in every slider mode), `display` (the Edit tab's `smooth`, `segmented` or `bars`;
+//! unset: `smooth`). Changing `colors`, a preserve flag or `limitTo` reduces the rows again.
 
 use egui::{Rect, Sense, Ui, pos2, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::harmony::{Harmony, move_on_wheel};
-use vectorcraft_color::recolor::{ColorKey, Method};
+use vectorcraft_color::recolor::{ColorKey, GlobalAdjust, Method};
 use vectorcraft_color::{Color, keep_model};
 use vectorcraft_engine::cmd::color_value;
 use vectorcraft_engine::cmd::swatchlib;
 
 use super::{DialogSpec, form};
 use crate::panels::c32;
+use crate::panels::color::{Mode, components, from_components, track_color};
 use crate::panels::swatches::{DOCUMENT_SWATCHES, colour_libraries, limit_key};
 use crate::state::Dialog;
 use crate::theme::{self, Tokens};
@@ -55,12 +69,32 @@ const CMD: &str = "recolor.apply";
 const CURRENT_W: f32 = 250.0;
 /// Diameter of the Edit tab's colour wheel.
 const WHEEL: f32 = 220.0;
+/// Height of the Edit tab's color bars area (the wheel with its Brightness slider), and of a bar.
+const BARS_H: f32 = WHEEL + 31.0;
+const BAR_H: f32 = 22.0;
 /// Height of the rows table, and of either tab (so switching tabs doesn't resize the dialog).
-const TABLE_H: f32 = 220.0;
+const TABLE_H: f32 = 182.0;
 const TAB_H: f32 = 400.0;
 const PRESETS: [&str; 5] = ["Custom", "1 Color Job", "2 Color Job", "3 Color Job", "Color Library"];
 /// The id of row `i`'s new colour chip, with `i`.
 const NEW_CHIP: &str = "recolor-new";
+/// The color modes of the sliders under the rows; a row whose new color is a spot color of the
+/// library also has Tint.
+const SLIDER_MODES: [Mode; 4] = [Mode::Hsb, Mode::Rgb, Mode::Cmyk, Mode::Lab];
+/// Widths of a color slider's label, of the slider and of its number field.
+const SLIDER_LABEL_W: f32 = 12.0;
+const SLIDER_W: f32 = 170.0;
+const SLIDER_FIELD_W: f32 = 48.0;
+/// The `sliderMode` of the Edit tab's Global Adjust sliders, and the menu's name for it.
+const GLOBAL: &str = "global";
+const GLOBAL_ADJUST: &str = "Global Adjust";
+/// The `globalAdjust` field's keys (and `recolor.apply`'s), in the order of the sliders.
+const ADJUSTS: [&str; 4] = ["saturation", "brightness", "temperature", "luminosity"];
+/// Widths of a Global Adjust slider's label and of the slider.
+const GLOBAL_LABEL_W: f32 = 76.0;
+const GLOBAL_SLIDER_W: f32 = 110.0;
+/// The slider values last shown: `{row, key, mode, v}` (HSB keeps its hue at no saturation).
+const COMPS: &str = "__comps";
 
 /// Open Recolor Artwork (`ui.recolorDialog {colors?, library?, group?}`) on the selected art and,
 /// with `group`, on that colour group: art is reduced to as many rows as the group has colours,
@@ -147,6 +181,10 @@ fn sync(app: &mut VectorcraftApp, d: &mut Dialog) {
     if !d.bool("__art") || d.fields.get(DONE) == Some(&sig) {
         return;
     }
+    // The art's own colors are reduced, not those of the preview, which runs again afterwards.
+    if d.fields.remove(super::form::PREVIEWED).is_some() {
+        let _ = app.session.cancel_interaction();
+    }
     let mut p = sig.clone();
     p["method"] = json!(d.str("method"));
     match app.session.execute("recolor.reduce", &p) {
@@ -159,6 +197,8 @@ fn sync(app: &mut VectorcraftApp, d: &mut Dialog) {
             snap(app, d, &mut rows);
             d.fields.insert("rows".into(), Value::Array(rows));
             d.fields.insert("__sel".into(), json!([]));
+            // The new rows hold no slider edit.
+            d.fields.remove(COMPS);
         }
         Err(e) => app.status(e.to_string()),
     }
@@ -187,6 +227,37 @@ fn to_color(row: &Value) -> Option<Color> {
     color_value(&row["to"])
 }
 
+/// Give `row` the new color `c`, without a tint of the spot color it had or the model a slider
+/// edit gave it.
+fn set_to(row: &mut Value, c: &Color) {
+    row["to"] = key(c);
+    if let Some(r) = row.as_object_mut() {
+        r.remove("tint");
+        r.remove("model");
+    }
+}
+
+/// Set for the frame in which Randomly change color order shuffled the rows' new colors.
+const SHUFFLED: &str = "__shuffled";
+
+/// Give each row of `rows` whose current colors and new color are those of the same row of
+/// `before` that row's tint and model again, when it has none: a change that snaps back to the
+/// same new color keeps the tint of it and the model a slider edit gave it.
+fn keep_tints(before: &[Value], rows: &mut [Value]) {
+    for (r, b) in rows.iter_mut().zip(before) {
+        if r["from"] != b["from"] || r["to"] != b["to"] {
+            continue;
+        }
+        for k in ["tint", "model"] {
+            if r.get(k).is_none()
+                && let Some(v) = b.get(k)
+            {
+                r[k] = v.clone();
+            }
+        }
+    }
+}
+
 fn excluded(row: &Value) -> bool {
     row["exclude"].as_bool().unwrap_or(false)
 }
@@ -207,7 +278,13 @@ fn apply_params(d: &Dialog) -> Value {
         let rename = (!name.trim().is_empty() && name != g).then_some(name);
         json!({"group": g, "groupColors": colors, "rename": rename})
     });
+    // A row edited with the sliders carries `model: "new"`: its art takes the mode they showed.
     let mut p = json!({"map": rs, "method": d.str("method"), "limitTo": d.str("limitTo")});
+    // The Global Adjust amounts, kept while the sliders show another mode; at 0% they are left out.
+    let values = adjust_values(d);
+    if values.iter().any(|v| *v != 0.0) {
+        p["globalAdjust"] = Value::Object(ADJUSTS.iter().zip(values).map(|(k, v)| (k.to_string(), json!(v))).collect());
+    }
     if let (Some(Value::Object(g)), Some(p)) = (group, p.as_object_mut()) {
         p.extend(g.into_iter().filter(|(_, v)| !v.is_null()));
     }
@@ -236,12 +313,16 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
     ui.add_space(4.0);
     let mut rs = rows(d);
     let top = ui.cursor().top();
-    let (changed, pick) = if d.str("tab") == "edit" { (edit_tab(ui, d, &mut rs), None) } else { assign_tab(app, ui, d, &mut rs) };
+    let (changed, pick) = if d.str("tab") == "edit" { (edit_tab(app, ui, d, &mut rs), None) } else { assign_tab(app, ui, d, &mut rs) };
     if d.str("tab") != "edit" {
         ui.add_space((TAB_H - (ui.cursor().top() - top)).max(0.0));
     }
     if changed {
         snap(app, d, &mut rs);
+        // A shuffle by `recolor.randomize` has already moved each tint with its color.
+        if d.fields.remove(SHUFFLED).is_none() {
+            keep_tints(&rows(d), &mut rs);
+        }
         d.fields.insert("rows".into(), Value::Array(rs));
     }
     if d.fields.get("group").is_some_and(Value::is_string) || d.bool("__newGroup") {
@@ -265,8 +346,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
 pub(super) fn with_new_color(app: &VectorcraftApp, mut d: Dialog, i: usize, c: Color) -> Dialog {
     let mut rs = rows(&d);
     if let Some(r) = rs.get_mut(i) {
-        r["to"] = key(&c);
+        set_to(r, &c);
         snap(app, &d, &mut rs);
+        keep_tints(&rows(&d), &mut rs);
         d.fields.insert("rows".into(), Value::Array(rs));
     }
     d
@@ -278,7 +360,24 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let mut d = d.clone();
     sync(app, &mut d);
     if d.bool("__newGroup") {
-        let colors: Vec<Value> = rows(&d).into_iter().filter(|r| !excluded(r)).map(|r| r["to"].clone()).collect();
+        // The new colors with the Global Adjust, snapped to Limit to Library, as `recolor.apply`
+        // gives them to a group.
+        let adjust = global_adjust(adjust_values(&d));
+        let limit = d.str("limitTo");
+        let palette = Some(limit).filter(|l| !l.is_empty()).and_then(|l| swatchlib::limit_palette(&app.session, &l));
+        let colors: Vec<Value> = rows(&d)
+            .into_iter()
+            .filter(|r| !excluded(r))
+            .map(|r| {
+                to_color(&r).filter(|_| !adjust.is_identity()).map_or_else(
+                    || r["to"].clone(),
+                    |c| {
+                        let c = adjust.apply(c);
+                        key(&palette.as_ref().map_or(c, |p| p.nearest(c)))
+                    },
+                )
+            })
+            .collect();
         return form::commit_preview(app, "swatch.newGroup", json!({"name": d.str("groupName"), "colors": colors, "keepModel": true}));
     }
     let r = form::commit_preview(app, CMD, apply_params(&d))?;
@@ -361,6 +460,7 @@ fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut 
     let mut sel = selection(d);
     let mut clicked: Option<usize> = None;
     let mut pick: Option<usize> = None;
+    let shown: Vec<Color> = rows.iter().map(|r| new_shown(app, d, r)).collect();
     widgets::list_box(ui, |ui| {
         egui::ScrollArea::vertical().id_salt("recolor-rows").max_height(TABLE_H).show(ui, |ui| {
             ui.set_width(ui.available_width());
@@ -393,7 +493,7 @@ fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut 
                     let (nr, _) = ui.allocate_exact_size(vec2(46.0, 20.0), Sense::hover());
                     let nresp = ui.interact(nr, egui::Id::unique((NEW_CHIP, i)), Sense::click());
                     let to = to_color(row).unwrap_or_default();
-                    chip(ui, nr, to, off);
+                    chip(ui, nr, shown.get(i).copied().unwrap_or_default(), off);
                     if nresp.clicked() {
                         clicked = Some(i);
                     }
@@ -406,7 +506,7 @@ fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut 
                     if let Some(h) = widgets::hex_field_named(ui, ("recolor-hex", i), Some(&hex_name), &hex)
                         && let Some(c) = crate::panels::color::parse_hex(&h)
                     {
-                        row["to"] = key(&keep_model(to, c));
+                        set_to(row, &keep_model(to, c));
                         changed = true;
                     }
                 });
@@ -452,6 +552,9 @@ fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut 
                 match app.session.execute("recolor.randomize", &p) {
                     Ok(r) => {
                         *rows = r["map"].as_array().cloned().unwrap_or_default();
+                        if !sb {
+                            d.fields.insert(SHUFFLED.into(), json!(true));
+                        }
                         changed = true;
                     }
                     Err(e) => app.status(e.to_string()),
@@ -460,8 +563,18 @@ fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut 
         }
         if widgets::icon_button(ui, "rotate-ccw", tl!("Reset the rows to the artwork's colors"), false, 24.0).clicked() {
             d.fields.remove("__reduced");
+            d.fields.remove(COMPS);
+            // The rows keep no slider edit, also when they cannot be reduced again.
+            let saved = d.fields.get_mut("rows").and_then(Value::as_array_mut).into_iter().flatten();
+            for r in rows.iter_mut().chain(saved).filter_map(Value::as_object_mut) {
+                r.remove("model");
+            }
         }
+        let target = SliderTarget::of(app, d, rows);
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| mode_menu(ui, d, &target, false));
     });
+    ui.add_space(6.0);
+    changed |= sliders(app, ui, d, rows);
     ui.add_space(8.0);
     egui::Grid::new("recolor-options").num_columns(2).spacing([10.0, 8.0]).show(ui, |ui| {
         ui.label(egui::RichText::new(tl!("Method:")).color(t.text_dim));
@@ -530,6 +643,256 @@ fn arrow(ui: &Ui, r: Rect, on: bool, hovered: bool) {
     }
 }
 
+/// The tint (0..1) `row` gives its spot color (1 without one).
+fn row_tint(row: &Value) -> f32 {
+    row["tint"].as_f64().map_or(1.0, |t| (t / 100.0).clamp(0.0, 1.0) as f32)
+}
+
+/// Tint `t` (0..1) of spot color `c` as art linked to it shows it: a Lab spot color is the active
+/// document's working-CMYK equivalent while the Spot Colors options use CMYK values
+/// ([`vectorcraft_doc::Document::linked_color`]), and its inks scale.
+fn spot_tinted(app: &VectorcraftApp, c: Color, t: f32) -> Color {
+    app.session.active().map_or(c, |st| st.doc.linked_color(c, true)).tinted(t)
+}
+
+/// The color row `row`'s new color chip shows: what the art takes, at the row's tint (a spot color
+/// of the library as [`spot_tinted`] shows it).
+fn new_shown(app: &VectorcraftApp, d: &Dialog, row: &Value) -> Color {
+    let to = to_color(row).unwrap_or_default();
+    // Only a Lab spot color can show another color; the library lookup is skipped for the rest.
+    if matches!(to, Color::Lab { .. }) && d.bool("__art") && spot_of(app, d, &to).is_some() {
+        spot_tinted(app, to, row_tint(row))
+    } else {
+        to.tinted(row_tint(row))
+    }
+}
+
+/// The `sliderMode` id of `m` (`hsb`, `rgb`, `cmyk`, `lab`).
+fn mode_id(m: Mode) -> String {
+    serde_json::to_value(m).ok().and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default()
+}
+
+/// The name of the library swatch (Limit to Library) that `recolor.apply` gives new color `c`, when
+/// it is a spot color: the first swatch of the library color nearest `c`.
+fn spot_of(app: &VectorcraftApp, d: &Dialog, c: &Color) -> Option<String> {
+    let lib = d.str("limitTo");
+    if lib.is_empty() {
+        return None;
+    }
+    let near = swatchlib::limit_palette(&app.session, &lib)?.nearest(*c);
+    swatchlib::library_swatches(&app.session, &lib)?.into_iter().find(|w| w.paint.color() == Some(near)).filter(|w| w.spot).map(|w| w.name)
+}
+
+/// The mode the sliders show new color `c` in, `None` for Tint: the mode picked in the menu, else
+/// `c`'s own model (HSB for a gray), or Tint for a spot color (`spot`).
+fn slider_mode(d: &Dialog, c: &Color, spot: bool) -> Option<Mode> {
+    let picked = d.str("sliderMode");
+    match SLIDER_MODES.into_iter().find(|m| mode_id(*m) == picked) {
+        Some(m) => Some(m),
+        None if spot => None,
+        None => Some(match Mode::of(c) {
+            Mode::Grayscale => Mode::Hsb,
+            m => m,
+        }),
+    }
+}
+
+/// The values the sliders show for row `i`'s new color `c` in `mode`: those they set last while
+/// the color is the one they set, else `c`'s.
+fn slider_values(d: &Dialog, rows: &[Value], i: usize, c: &Color, mode: Mode) -> Vec<f32> {
+    let held = d.fields.get(COMPS).filter(|s| s["row"] == json!(i) && s["key"] == rows[i]["to"] && s["mode"] == json!(mode_id(mode)));
+    let v: Option<Vec<f32>> = held.and_then(|s| s["v"].as_array()).map(|a| a.iter().filter_map(Value::as_f64).map(|x| x as f32).collect());
+    v.filter(|v| v.len() == mode.labels().len()).unwrap_or_else(|| components(mode, c))
+}
+
+/// What the color sliders edit: the first selected row, its new color, and the name of the
+/// library's spot color that color is.
+struct SliderTarget {
+    row: Option<usize>,
+    color: Option<Color>,
+    spot: Option<String>,
+}
+
+impl SliderTarget {
+    fn of(app: &VectorcraftApp, d: &Dialog, rows: &[Value]) -> Self {
+        let row = selection(d).into_iter().filter(|i| *i < rows.len()).min();
+        let color = row.and_then(|i| to_color(&rows[i]));
+        // A row tint acts only on art, so without art a spot color shows the process modes.
+        let spot = color.filter(|_| d.bool("__art")).and_then(|c| spot_of(app, d, &c));
+        Self { row, color, spot }
+    }
+
+    /// The mode the sliders show (`None`: Tint).
+    fn mode(&self, d: &Dialog) -> Option<Mode> {
+        slider_mode(d, &self.color.unwrap_or_default(), self.spot.is_some())
+    }
+}
+
+/// The color mode menu of the sliders (HSB, RGB, CMYK, Lab, Tint for a spot color, and with
+/// `global` Global Adjust), drawn right to left: the menu, then its label.
+fn mode_menu(ui: &mut Ui, d: &mut Dialog, target: &SliderTarget, global: bool) {
+    let t = Tokens::get(ui.ctx());
+    let mut labels: Vec<&str> = SLIDER_MODES.iter().map(|m| m.label()).collect();
+    if target.spot.is_some() {
+        labels.push("Tint");
+    }
+    if global {
+        labels.push(GLOBAL_ADJUST);
+    }
+    let adjusting = global && d.str("sliderMode") == GLOBAL;
+    let current = if adjusting { GLOBAL_ADJUST } else { target.mode(d).map_or("Tint", Mode::label) };
+    // The label is drawn after the menu (right-to-left), so it cannot name it by adjacency.
+    let chosen = ui
+        .add_enabled_ui(target.color.is_some() || global, |ui| {
+            widgets::dropdown_named(ui, "recolor-slider-mode", Some(tl!("Color Mode:")), current, &labels, if global { 110.0 } else { 90.0 })
+        })
+        .inner;
+    if let Some(i) = chosen {
+        let id = match SLIDER_MODES.get(i) {
+            Some(m) => mode_id(*m),
+            None if labels.get(i) == Some(&GLOBAL_ADJUST) => GLOBAL.to_string(),
+            None => "tint".to_string(),
+        };
+        d.fields.insert("sliderMode".into(), json!(id));
+    }
+    ui.label(egui::RichText::new(tl!("Color Mode:")).color(t.text_dim));
+}
+
+/// The Global Adjust amounts, in percent from -100 to 100, of `ADJUSTS`' keys in the
+/// `globalAdjust` field (0 for one it lacks).
+fn adjust_values(d: &Dialog) -> [f64; 4] {
+    let given = d.fields.get("globalAdjust");
+    ADJUSTS.map(|k| given.and_then(|g| g.get(k)).and_then(Value::as_f64).unwrap_or(0.0).clamp(-100.0, 100.0))
+}
+
+/// The Global Adjust of `values` (percent, in the order of `ADJUSTS`).
+fn global_adjust(values: [f64; 4]) -> GlobalAdjust {
+    let [saturation, brightness, temperature, luminosity] = values.map(|v| (v / 100.0) as f32);
+    GlobalAdjust { saturation, brightness, temperature, luminosity }
+}
+
+/// The Global Adjust sliders, two to a line: Saturation, Brightness, Temperature and Luminosity,
+/// each from -100% to 100% (0% changes nothing). They change every new color at once, so they
+/// edit no row; each rail shows its amounts on `sample`.
+fn global_sliders(ui: &mut Ui, d: &mut Dialog, sample: Color) {
+    let labels = [tl!("Saturation"), tl!("Brightness"), tl!("Temperature"), tl!("Luminosity")];
+    let values = adjust_values(d);
+    let mut set: Option<(usize, f64)> = None;
+    egui::Grid::new("recolor-global-adjust").num_columns(6).spacing([6.0, 4.0]).show(ui, |ui| {
+        for (n, lbl) in labels.iter().enumerate() {
+            let shown = widgets::SliderValue::field(values[n], -100.0..=100.0, "%", 0);
+            // The rail: `sample` with this slider's amount alone.
+            let track = |x: f32| {
+                let mut one = [0.0; 4];
+                one[n] = f64::from(x) * 200.0 - 100.0;
+                c32(&global_adjust(one).apply(sample))
+            };
+            if let Some(v) = slider_cell(ui, ("global", n), lbl, shown, "%", &track, GLOBAL_LABEL_W, GLOBAL_SLIDER_W) {
+                set = Some((n, v));
+            }
+            if n % 2 == 1 {
+                ui.end_row();
+            }
+        }
+    });
+    if let Some((n, v)) = set {
+        let mut values = values;
+        values[n] = v;
+        d.fields.insert("globalAdjust".into(), Value::Object(ADJUSTS.iter().zip(values).map(|(k, v)| (k.to_string(), json!(v))).collect()));
+    }
+}
+
+/// One color slider in the grid: its label `label_w` wide, its rail with `track` `slider_w` wide
+/// and its number field, showing `shown` with `suffix`. Returns the whole number in `shown`'s
+/// range that a drag, a key or the field sets.
+#[allow(clippy::too_many_arguments)]
+fn slider_cell(
+    ui: &mut Ui,
+    id: impl std::hash::Hash + Copy,
+    label: &str,
+    shown: widgets::SliderValue,
+    suffix: &str,
+    track: &dyn Fn(f32) -> egui::Color32,
+    label_w: f32,
+    slider_w: f32,
+) -> Option<f64> {
+    let t = Tokens::get(ui.ctx());
+    let (lo, hi) = (*shown.range.start(), *shown.range.end());
+    let value = shown.value;
+    ui.add_sized(vec2(label_w, 22.0), egui::Label::new(egui::RichText::new(label).size(12.5).color(t.text)));
+    let unit = ((value - lo) / (hi - lo)) as f32;
+    let (dragged, _, keyed) = widgets::color_slider_stepped(ui, ("recolor-slider", id), label, Some(shown), unit, slider_w, track);
+    let typed = widgets::plain_field_named(ui, ("recolor-slider-field", id), Some(label), value, suffix, 0, SLIDER_FIELD_W);
+    dragged.map(|x| (lo + f64::from(x) * (hi - lo)).round()).or(keyed).or(typed).map(|v| v.clamp(lo, hi)).filter(|v| (v - value).abs() > 1e-6)
+}
+
+/// The color sliders under the rows, two to a line: they edit the first selected row's new color
+/// (the others keep theirs) in the mode of [`mode_menu`], or its tint of a spot color of the
+/// library. Without a selected row they are disabled. Returns true when they changed a row.
+fn sliders(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut [Value]) -> bool {
+    let target = SliderTarget::of(app, d, rows);
+    let mode = target.mode(d);
+    let mut changed = false;
+    let top = ui.cursor().top();
+    let lines = mode.map_or(1, |m| m.labels().len().div_ceil(2));
+    ui.add_enabled_ui(target.color.is_some(), |ui| {
+        egui::Grid::new("recolor-sliders").num_columns(6).spacing([6.0, 4.0]).show(ui, |ui| {
+            let (Some(i), Some(c)) = (target.row, target.color) else {
+                // Nothing to edit: the mode's sliders, disabled.
+                let mode = mode.unwrap_or(Mode::Hsb);
+                let input = Tokens::get(ui.ctx()).input;
+                let gray = move |_: f32| input;
+                for (n, lbl) in mode.labels().iter().enumerate() {
+                    let shown = widgets::SliderValue::field(0.0, f64::from(mode.min(n))..=f64::from(mode.max(n)), mode.suffix(n), 0);
+                    slider_cell(ui, n, lbl, shown, mode.suffix(n), &gray, SLIDER_LABEL_W, SLIDER_W);
+                    if n % 2 == 1 {
+                        ui.end_row();
+                    }
+                }
+                return;
+            };
+            let Some(mode) = mode else {
+                // Tint of the spot color, and its name.
+                let tint = f64::from(row_tint(&rows[i])) * 100.0;
+                let shown = widgets::SliderValue::field(tint, 0.0..=100.0, "%", 0);
+                if let Some(v) = slider_cell(ui, usize::MAX, "T", shown, "%", &|x| c32(&spot_tinted(app, c, x)), SLIDER_LABEL_W, SLIDER_W) {
+                    rows[i]["tint"] = json!(v);
+                    changed = true;
+                }
+                ui.label(egui::RichText::new(target.spot.as_deref().unwrap_or_default()).color(Tokens::get(ui.ctx()).text));
+                return;
+            };
+            let comps = slider_values(d, rows, i, &c, mode);
+            let mut set: Option<Vec<f32>> = None;
+            for (n, lbl) in mode.labels().iter().enumerate() {
+                let v = comps.get(n).copied().unwrap_or(0.0);
+                let shown = widgets::SliderValue::field(f64::from(v), f64::from(mode.min(n))..=f64::from(mode.max(n)), mode.suffix(n), 0);
+                if let Some(nv) = slider_cell(ui, n, lbl, shown, mode.suffix(n), &|x| c32(&track_color(mode, &comps, n, x)), SLIDER_LABEL_W, SLIDER_W)
+                {
+                    let mut c2 = comps.clone();
+                    c2[n] = nv as f32;
+                    set = Some(c2);
+                }
+                if n % 2 == 1 {
+                    ui.end_row();
+                }
+            }
+            if let Some(c2) = set {
+                // The mode stays as the edit changes the color's model (a gray edited in HSB is RGB).
+                d.fields.insert("sliderMode".into(), json!(mode_id(mode)));
+                set_to(&mut rows[i], &from_components(mode, &c2));
+                d.fields.insert(COMPS.into(), json!({"row": i, "key": rows[i]["to"], "mode": mode_id(mode), "v": c2}));
+                rows[i]["model"] = json!("new");
+                changed = true;
+            }
+        });
+    });
+    // Room for two lines of sliders whatever the mode, so the dialog keeps its height.
+    let per = (ui.cursor().top() - top) / lines as f32;
+    ui.add_space(per * (2 - lines.min(2)) as f32);
+    changed
+}
+
 /// Merge the selected rows into the first of them (its new colour stays).
 fn merge(rows: &mut Vec<Value>, sel: &[usize]) {
     let mut sel: Vec<usize> = sel.iter().copied().filter(|i| *i < rows.len()).collect();
@@ -571,8 +934,8 @@ fn move_color(rows: &mut [Value], i: usize, hsb: [f32; 3], linked: bool) {
     let mut colors = before.clone();
     move_on_wheel(&mut colors, k, hsb, linked);
     for ((&j, c), old) in active.iter().zip(&colors).zip(&before) {
-        if c != old {
-            rows[j]["to"] = key(c);
+        if key(c) != key(old) {
+            set_to(&mut rows[j], c);
         }
     }
 }
@@ -581,13 +944,14 @@ fn move_color(rows: &mut [Value], i: usize, hsb: [f32; 3], linked: bool) {
 const DRAG: &str = "__drag";
 
 /// The Edit tab. Returns true when the rows changed.
-fn edit_tab(ui: &mut Ui, d: &mut Dialog, rows: &mut [Value]) -> bool {
+fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut [Value]) -> bool {
     let top = ui.cursor().top();
     let t = Tokens::get(ui.ctx());
     let mut changed = false;
     let linked = d.bool("linked");
     let active = active_rows(rows);
     let base = selection(d).into_iter().find(|i| active.contains(i)).or(active.first().copied());
+    let target = SliderTarget::of(app, d, rows);
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new(tl!("Harmony Rules:")).color(t.text_dim));
         let rule = Harmony::parse(&d.str("rule")).unwrap_or(Harmony::Complementary);
@@ -606,11 +970,37 @@ fn edit_tab(ui: &mut Ui, d: &mut Dialog, rows: &mut [Value]) -> bool {
             if widgets::icon_button(ui, if linked { "link" } else { "link-2-off" }, tip, linked, 24.0).clicked() {
                 d.fields.insert("linked".into(), json!(!linked));
             }
+            ui.add_space(8.0);
+            // The mode of the color sliders under the wheel: the selected new color in a color
+            // mode, or Global Adjust for all of them.
+            mode_menu(ui, d, &target, true);
         });
     });
     ui.add_space(8.0);
     let colors: Vec<Color> = active.iter().filter_map(|&i| to_color(&rows[i])).collect();
-    let w = widgets::harmony_wheel(ui, "recolor-wheel", WHEEL, &colors, base.and_then(|b| active.iter().position(|&i| i == b)));
+    let marked = base.and_then(|b| active.iter().position(|&i| i == b));
+    let display = d.str("display");
+    let mut w = widgets::WheelResponse::default();
+    ui.horizontal(|ui| {
+        // The display buttons, beside the wheel so the tab keeps its height.
+        ui.vertical(|ui| {
+            for (id, icon, tip) in [
+                ("smooth", "circle", tl!("Show smooth color wheel")),
+                ("segmented", "dc-polar-grid", tl!("Show segmented color wheel")),
+                ("bars", "dc-list-view", tl!("Show color bars")),
+            ] {
+                let on = display == id || (id == "smooth" && !matches!(display.as_str(), "segmented" | "bars"));
+                if widgets::icon_button(ui, icon, tip, on, 24.0).clicked() {
+                    d.fields.insert("display".into(), json!(id));
+                }
+            }
+        });
+        ui.vertical(|ui| match display.as_str() {
+            "segmented" => w = widgets::segmented_wheel(ui, "recolor-wheel", WHEEL, &colors, marked),
+            "bars" => changed |= color_bars(ui, d, rows, &active, base),
+            _ => w = widgets::harmony_wheel(ui, "recolor-wheel", WHEEL, &colors, marked),
+        });
+    });
     if let Some(k) = w.pressed {
         d.fields.insert("__sel".into(), json!([active[k]]));
     }
@@ -635,6 +1025,12 @@ fn edit_tab(ui: &mut Ui, d: &mut Dialog, rows: &mut [Value]) -> bool {
         d.fields.remove(DRAG);
     }
     ui.add_space(6.0);
+    if d.str("sliderMode") == GLOBAL {
+        let sample = base.and_then(|b| to_color(&rows[b])).unwrap_or(Color::rgb(0.8, 0.45, 0.25));
+        global_sliders(ui, d, sample);
+    } else {
+        changed |= sliders(app, ui, d, rows);
+    }
     // The new colours: click one to make it the base colour.
     let min_height = (TAB_H - (ui.cursor().top() - top)).max(0.0);
     super::modal::scrolled_rows(ui, "recolor-edit-colors", |ui| {
@@ -656,14 +1052,97 @@ fn edit_tab(ui: &mut Ui, d: &mut Dialog, rows: &mut [Value]) -> bool {
     changed
 }
 
+/// The Edit tab's color bars: a solid bar per row of `active` with its new color, in row order, the
+/// base row's framed, scrolling past the wheel's height. A click on a bar selects its row (the
+/// sliders under it edit that row's new color); a drag moves the bar's row to where the line under
+/// the pointer shows, keeping every new color. Returns true when the rows moved.
+fn color_bars(ui: &mut Ui, d: &mut Dialog, rows: &mut [Value], active: &[usize], base: Option<usize>) -> bool {
+    let t = Tokens::get(ui.ctx());
+    let mut rects: Vec<Rect> = Vec::with_capacity(active.len());
+    let (mut dragging, mut released, mut dropped) = (None, None, None);
+    // The area is given its full height first: in the row beside the display buttons a scroll area
+    // alone is only as tall as the room the row has.
+    let area = vec2(ui.available_width(), BARS_H);
+    ui.allocate_ui_with_layout(area, egui::Layout::top_down(egui::Align::Min), |ui| {
+        ui.set_min_size(area);
+        egui::ScrollArea::vertical().id_salt("recolor-bars").max_height(BARS_H).show(ui, |ui| {
+            ui.set_min_height(BARS_H);
+            ui.set_width(ui.available_width());
+            if active.is_empty() {
+                ui.add_space(8.0);
+                widgets::dim_label(ui, tl!("No colors to recolor (preserved colors are left out)."));
+            }
+            for (n, &i) in active.iter().enumerate() {
+                let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width() - 4.0, BAR_H), Sense::click_and_drag());
+                chip(ui, r, to_color(&rows[i]).unwrap_or_default(), false);
+                if Some(i) == base {
+                    ui.painter().rect_stroke(r, 2.0, egui::Stroke::new(2.0, t.accent), egui::StrokeKind::Inside);
+                }
+                let name = format!("{} {}", tl!("Color"), i + 1);
+                resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), &name));
+                if resp.clicked() || resp.drag_started() {
+                    d.fields.insert("__sel".into(), json!([i]));
+                }
+                if resp.dragged() {
+                    dragging = Some(n);
+                }
+                if resp.drag_stopped() {
+                    released = Some(n);
+                }
+                rects.push(r);
+                resp.on_hover_text(rows[i]["to"].as_str().unwrap_or_default());
+            }
+            // The place a dragged bar goes: before the first bar whose middle is below the pointer.
+            let at = ui.input(|i| i.pointer.latest_pos()).map(|p| rects.iter().filter(|r| r.center().y < p.y).count());
+            if let (Some(n), Some(to)) = (dragging, at)
+                && to != n
+                && to != n + 1
+            {
+                let y = rects.get(to).map_or_else(|| rects.last().map_or(0.0, |r| r.bottom() + 1.5), |r| r.top() - 1.5);
+                let x = rects.first().map_or(ui.max_rect().x_range(), |r| r.x_range());
+                ui.painter().hline(x, y, egui::Stroke::new(2.0, t.accent));
+            }
+            dropped = released.zip(at);
+        });
+    });
+    let Some(moved) = dropped.and_then(|(n, to)| move_bar(rows, active, n, to)) else { return false };
+    d.fields.insert("__sel".into(), json!([moved]));
+    // The slider values held are those of a row index that may now hold another row.
+    d.fields.remove(COMPS);
+    true
+}
+
+/// Move the row of the `from`th active row (of `active`, ascending row indexes) to before the
+/// `to`th, or after the last for `active.len()`; the rows between shift by one. Returns the row's
+/// new index, or `None` when it stays where it is.
+fn move_bar(rows: &mut [Value], active: &[usize], from: usize, to: usize) -> Option<usize> {
+    let &src = active.get(from)?;
+    if to == from || to == from + 1 || to > active.len() {
+        return None;
+    }
+    if to > from {
+        let dst = active[to - 1];
+        rows[src..=dst].rotate_left(1);
+        Some(dst)
+    } else {
+        let dst = active[to];
+        rows[dst..=src].rotate_right(1);
+        Some(dst)
+    }
+}
+
 /// Give the rows `active` the colours of `rule` from the base colour `b` of row `base` (the base row
-/// first, then the others in order, the rule's colours repeating), each in its row's model.
+/// first, then the others in order, the rule's colours repeating), each in its row's model. A row
+/// whose new color changes loses its tint.
 fn apply_rule(rows: &mut [Value], rule: Harmony, base: usize, b: Color, active: &[usize]) {
     let colors = rule.apply(b);
     let order = std::iter::once(base).chain(active.iter().copied().filter(|i| *i != base));
     for (n, i) in order.enumerate() {
         let old = to_color(&rows[i]).unwrap_or(b);
-        rows[i]["to"] = key(&keep_model(old, colors[n % colors.len()]));
+        let c = keep_model(old, colors[n % colors.len()]);
+        if key(&c) != rows[i]["to"] {
+            set_to(&mut rows[i], &c);
+        }
     }
 }
 
@@ -687,6 +1166,33 @@ mod tests {
         let d = app.ui.dialog.as_ref().unwrap();
         assert!(!d.fields.contains_key("model"));
         assert!(apply_params(d).get("model").is_none());
+    }
+
+    /// `recolor.apply` gets the Global Adjust amounts only when one of them is not 0%, whatever
+    /// mode the sliders show.
+    #[test]
+    fn apply_params_send_global_adjust_only_when_it_changes_colors() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("ui.recolorDialog", json!({"colors": ["#ff8000"]})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        assert!(apply_params(d).get("globalAdjust").is_none(), "no field");
+        d.fields.insert("globalAdjust".into(), json!({"saturation": 0, "brightness": 0}));
+        assert!(apply_params(d).get("globalAdjust").is_none(), "all 0%");
+        d.fields.insert("globalAdjust".into(), json!({"temperature": 25, "luminosity": 500}));
+        d.fields.insert("sliderMode".into(), json!("hsb"));
+        assert_eq!(
+            apply_params(d)["globalAdjust"],
+            json!({"saturation": 0.0, "brightness": 0.0, "temperature": 25.0, "luminosity": 100.0}),
+            "every amount, clamped to 100%"
+        );
+        // Colors opened alone become a new color group with the adjustment.
+        d.fields.insert("globalAdjust".into(), json!({"saturation": -100}));
+        let d = d.clone();
+        confirm(&mut app, &d).unwrap();
+        let g = app.session.doc().unwrap().doc.swatch_groups.last().expect("a new color group");
+        let c = g.swatches[0].paint.color().unwrap();
+        assert!(c.to_hsb()[1] < 1e-3, "{c:?}");
     }
 
     #[test]
@@ -724,6 +1230,69 @@ mod tests {
         let mut r = rows();
         apply_rule(&mut r, Harmony::Triad, 0, Color::rgb(1.0, 0.0, 0.0), &[0, 1, 2]);
         assert_eq!([&r[0]["to"], &r[1]["to"], &r[2]["to"]], ["rgb 255 0 0", "rgb 0 255 0", "rgb 0 0 255"]);
+    }
+
+    /// A rule or a wheel move that gives a row a new color drops the row's tint; a row whose
+    /// color stays keeps it.
+    #[test]
+    fn a_new_color_from_the_edit_tab_drops_the_rows_tint() {
+        let tinted = || {
+            let mut r = rows();
+            for row in &mut r {
+                row["tint"] = json!(40.0);
+            }
+            r
+        };
+        let mut r = tinted();
+        apply_rule(&mut r, Harmony::Triad, 0, Color::rgb(1.0, 0.0, 0.0), &[0, 1, 2]);
+        assert_eq!(r[0]["tint"], json!(40.0), "the base row's color stays");
+        assert!(r[1].get("tint").is_none() && r[2].get("tint").is_none(), "{r:?}");
+        let mut r = tinted();
+        move_color(&mut r, 0, [120.0, 1.0, 1.0], false);
+        assert!(r[0].get("tint").is_none(), "the moved row: {:?}", r[0]);
+        assert_eq!(r[1]["tint"], json!(40.0), "unlinked: the other rows keep theirs");
+    }
+
+    /// The Color Picker's OK keeps a row's tint when the row's new color stays, and drops it otherwise.
+    #[test]
+    fn a_picked_color_keeps_the_tint_only_of_the_same_color() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("ui.recolorDialog", json!({"colors": ["#ff0000"]})).unwrap();
+        let mut d = app.ui.dialog.clone().unwrap();
+        d.fields.insert("rows".into(), json!([{"from": ["rgb 255 0 0"], "to": "rgb 255 0 0", "tint": 40.0}]));
+        let same = with_new_color(&app, d.clone(), 0, Color::rgb(1.0, 0.0, 0.0));
+        assert_eq!(super::rows(&same)[0]["tint"], json!(40.0));
+        let other = with_new_color(&app, d, 0, Color::rgb(0.0, 1.0, 0.0));
+        assert!(super::rows(&other)[0].get("tint").is_none(), "{:?}", super::rows(&other));
+    }
+
+    /// With the Spot Colors options on CMYK values, a row whose new color is a Lab spot color of the
+    /// library shows the art's color at its tint: the working-CMYK equivalent with its inks scaled.
+    #[test]
+    fn a_tinted_lab_spot_row_shows_the_cmyk_color_the_art_takes() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        let lab = json!({"l": 50, "a": 60, "b": -20});
+        app.run("swatch.new", json!({"name": "Lab Ink", "color": lab, "spot": true})).unwrap();
+        let data = app.run("swatch.library.save", json!({"names": ["Lab Ink"], "name": "Inks"})).unwrap()["data"].as_str().unwrap().to_string();
+        let lib = app.run("swatch.library.load", json!({"data": data, "name": "inks.vcswatches"})).unwrap()["library"].as_str().unwrap().to_string();
+        app.run("swatch.delete", json!({"names": ["Lab Ink"]})).unwrap();
+        app.run("swatch.spotOptions", json!({"useLab": false})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
+        app.run("paint.setFill", json!({"ids": [id], "color": lab})).unwrap();
+        app.run("paint.setStroke", json!({"ids": [id], "none": true})).unwrap();
+        app.run("select.all", json!({})).unwrap();
+        app.run("ui.recolorDialog", json!({"library": lib})).unwrap();
+        let mut d = app.ui.dialog.clone().unwrap();
+        sync(&mut app, &mut d);
+        let mut rs = super::rows(&d);
+        rs[0]["tint"] = json!(50.0);
+        let c = to_color(&rs[0]).unwrap();
+        assert!(matches!(c, Color::Lab { .. }), "{c:?}");
+        let cmyk = app.session.doc().unwrap().doc.linked_color(c, true);
+        assert!(matches!(cmyk, Color::Cmyk { .. }), "{cmyk:?}");
+        assert_eq!(new_shown(&app, &d, &rs[0]), cmyk.tinted(0.5));
     }
 
     /// Runs one frame of the open dialog at `time` and returns row `i`'s new color chip, when the

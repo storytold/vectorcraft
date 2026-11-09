@@ -62,7 +62,7 @@ impl Loader for Folder {
 
 /// The bytes the base64 text `b64` holds, up to `max` and a few more: only the text they take is
 /// decoded.
-fn decode_head(b64: &str, max: usize) -> Option<Vec<u8>> {
+pub(super) fn decode_head(b64: &str, max: usize) -> Option<Vec<u8>> {
     let chars = max.div_ceil(3).saturating_mul(4);
     let mut kept = 0usize;
     let end = b64

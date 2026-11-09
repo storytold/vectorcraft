@@ -176,6 +176,41 @@ fn digits_are_written_as_drawn() {
     assert!(!text.contains("page 4") && !text.contains("page ٥"), "{svg}");
 }
 
+/// A character drawn with a chosen glyph is written as outlines: a reader's `<text>` would draw the
+/// default glyph.
+#[test]
+fn a_chosen_glyph_is_written_as_outlines() {
+    use vectorcraft_text::test_fonts::{alternates_family, alternates_font, unencoded_glyphs};
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(alternates_font(true).unwrap());
+    let [u1, ..] = unencoded_glyphs().unwrap();
+    let face = db.face(alternates_family(true), "Regular").unwrap();
+    let plain = CharStyle { font_family: alternates_family(true).into(), ..style(12.0) };
+    let chosen = CharStyle { glyph_alternate: Some(face.choice('a', u1)), ..plain.clone() };
+    let svg = export(&area_doc(vec![run("xay", plain.clone())], 280.0, Justify::Left), &ExportOptions::default());
+    assert!(svg.contains("<text"), "without a choice the text stays live: {svg}");
+    let d = area_doc(vec![run("x", plain.clone()), run("a", chosen), run("y", plain)], 280.0, Justify::Left);
+    let svg = export(&d, &ExportOptions::default());
+    assert!(!svg.contains("<text") && svg.contains("<path"), "{svg}");
+}
+
+/// A run whose font size measures the cap height is written at the em size it is drawn at: 14 pt
+/// measuring a 0.7 em cap height is `font-size="20"`, after a 12 pt run measuring the em box,
+/// which takes the `<text>` element's 12.
+#[test]
+fn font_height_reference_writes_the_size_drawn() {
+    use vectorcraft_doc::FontHeightReference;
+    use vectorcraft_text::test_fonts::{HEIGHT_FAMILY, height_font};
+    vectorcraft_text::FontDb::global().add_font(height_font(true).unwrap());
+    let em_box = CharStyle { font_family: HEIGHT_FAMILY.into(), ..style(12.0) };
+    let cap = CharStyle { size: 14.0, font_height_reference: FontHeightReference::CapHeight, ..em_box.clone() };
+    let d = area_doc(vec![run("Hx ", em_box), run("Hx", cap)], 280.0, Justify::Left);
+    let svg = export(&d, &ExportOptions::default());
+    assert!(svg.contains("font-size=\"12\" fill"), "{svg}");
+    let sizes: Vec<_> = tspans(&svg).iter().map(|t| attr(t, "font-size")).collect();
+    assert_eq!(sizes, [None, Some(20.0)], "{svg}");
+}
+
 #[test]
 fn fewer_tspans_writes_one_per_line() {
     let bold = CharStyle { font_style: "Bold".into(), ..style(12.0) };
@@ -399,6 +434,17 @@ fn numbers_are_written_as_their_characters_where_they_are_drawn() {
     let at = |s: &str| svg.find(s).unwrap_or_else(|| panic!("{s} in {svg}"));
     assert!(at(">I.\t<") < at("alpha") && at("alpha") < at(">II.\t<") && at(">II.\t<") < at("zeta") && at("zeta") < at(">III.\t<"), "{svg}");
     assert!(!svg.contains(">-<"), "{svg}");
+    assert_drawn_in_place(&d);
+    // Aligned right: the gap comes before each number, which a viewer draws where the canvas does,
+    // against the text.
+    let mut t = TextObject::point(Point::new(20.0, 20.0), "alpha beta gamma delta epsilon\nzeta\neta", style(12.0));
+    t.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(0.0, 0.0, 120.0, 160.0)) };
+    t.para.list = Some(ParaList::numbered(NumberStyle::UpperRoman).aligned(vectorcraft_doc::text::ListAlign::Right));
+    t.para.left_indent = 18.0;
+    t.para.first_line_indent = -18.0;
+    let d = doc(t);
+    let svg = export(&d, &ExportOptions::default());
+    assert!(svg.contains(">III.<") && !svg.contains(">III.\t<") && !svg.contains(">-<"), "{svg}");
     assert_drawn_in_place(&d);
     let mut line = BezPath::new();
     line.move_to((0.0, 50.0));

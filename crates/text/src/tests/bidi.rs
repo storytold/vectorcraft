@@ -164,6 +164,10 @@ fn lines_of_clusters(lines: &[&[(usize, usize, f64)]], rtl: bool) -> TextLayout 
                 colour: None,
                 bend: None,
                 unturned: Affine::IDENTITY,
+                pivot: Point::new(x, baseline),
+                carets: Vec::new(),
+                width: advance,
+                width_start: 0.0,
             });
             x += advance;
         }

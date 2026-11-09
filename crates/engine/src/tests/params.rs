@@ -64,7 +64,7 @@ fn an_unknown_key_is_named_with_the_nearest_accepted_one() {
         ("file.new", json!(null)),
         // Keys listed by reference, and any key where the description says so.
         ("file.newPresets.save", json!({"name": "a", "width": 300})),
-        ("document.export", json!({"format": "png", "anyFormatOption": 1})),
+        ("document.export", json!({"format": "png", "styling": "style"})),
         // Not a command: running it says so.
         ("no.such", json!({"x": 1})),
     ] {
@@ -72,6 +72,130 @@ fn an_unknown_key_is_named_with_the_nearest_accepted_one() {
     }
     assert!(check_keys("x", "{a, …as file.new}", &json!({"a": 1, "width": 2})).is_ok());
     assert!(check_keys("x", "{a, …as file.new}", &json!({"b": 1})).is_err());
+}
+
+/// An export's options: a key no format reads is refused, at the top level and in the PDF objects,
+/// under each command that takes them.
+#[test]
+fn export_options_refuse_a_key_no_format_reads() {
+    for id in ["document.export", "document.exportSelection", "document.serialize"] {
+        assert_eq!(
+            refusal(id, json!({"format": "pdf", "standard": "pdfX4", "noSuchOption": true})),
+            "unknown parameter `noSuchOption`; no format takes it (see document.formats)"
+        );
+        assert_eq!(refusal(id, json!({"format": "pdf", "standardd": "pdfX4"})), "unknown parameter `standardd`; did you mean `standard`?");
+        assert_eq!(
+            refusal(id, json!({"format": "pdf", "options": {"standard": "pdfX4"}})),
+            "unknown parameter `options`; no format takes it (see document.formats)"
+        );
+    }
+    // A command that writes one format refuses another format's option, and says which format.
+    for (id, why) in [
+        ("document.exportPdf", "PDF doesn't take it"),
+        ("document.pdfSettings", "PDF doesn't take it"),
+        ("pdf.preset.save", "PDF doesn't take it"),
+        ("document.exportEps", "EPS doesn't take it"),
+        ("document.exportDxf", "DXF doesn't take it"),
+    ] {
+        for key in ["noSuchOption", "quality"] {
+            assert_eq!(refusal(id, json!({key: 1})), format!("unknown parameter `{key}`; {why} (see document.formats)"));
+        }
+    }
+    assert_eq!(
+        refusal("document.exportEps", json!({"flattener": {"balanse": 50}})),
+        "unknown parameter `flattener.balanse`; did you mean `flattener.balance`?"
+    );
+    assert!(refusal("document.exportDxf", json!({"flattener": {}})).contains("DXF doesn't take it"));
+    assert!(refusal("document.exportEps", json!({"marks": {}})).contains("EPS doesn't take it"));
+    for id in ["document.pdfSettings", "pdf.preset.save"] {
+        assert!(refusal(id, json!({"marks": {"useDocumentBleed": true}})).starts_with("unknown parameter `marks.useDocumentBleed`;"), "{id}");
+    }
+    for (given, message) in [
+        (json!({"marks": {"useDocumentBleed": true}}), "unknown parameter `marks.useDocumentBleed`; `marks` takes:"),
+        (json!({"bleed": {"useDocumen": true}}), "unknown parameter `bleed.useDocumen`; did you mean `bleed.useDocument`?"),
+        (json!({"output": {"intent": "x"}}), "unknown parameter `output.intent`;"),
+        (json!({"advanced": {"outlineTxt": true}}), "unknown parameter `advanced.outlineTxt`; did you mean `advanced.outlineText`?"),
+        (json!({"security": {"openPasswrd": "x"}}), "unknown parameter `security.openPasswrd`; did you mean `security.openPassword`?"),
+        (json!({"compression": {"color": {"dpi": 300}}}), "unknown parameter `compression.color.dpi`;"),
+        (json!({"flattener": {"balanse": 50}}), "unknown parameter `flattener.balanse`; did you mean `flattener.balance`?"),
+    ] {
+        for id in ["document.export", "document.exportPdf"] {
+            let got = refusal(id, given.clone());
+            assert!(got.starts_with(message), "{id} {given}: {got}");
+        }
+    }
+}
+
+/// The check passes each key `document.formats` lists, each key a command's own description names,
+/// and each field of the PDF settings and the flattener options. A key an encoder reads that none
+/// of these names is outside this test.
+#[test]
+fn export_options_pass_every_listed_key() {
+    use crate::cmd::fileio::{FORMATS, dxf, eps, pdf::OPTIONS};
+    for f in FORMATS.iter().filter(|f| f.write) {
+        for o in f.options {
+            let params = json!({"format": f.id, o.name: null});
+            assert!(check_params("document.export", &params).is_ok(), "{params}");
+        }
+    }
+    for (id, options) in [("document.exportEps", eps::OPTIONS), ("document.exportDxf", dxf::OPTIONS), ("document.exportPdf", OPTIONS)] {
+        for o in options {
+            assert!(check_params(id, &json!({o.name: null})).is_ok(), "{id} {}", o.name);
+        }
+    }
+    for id in [
+        "document.export",
+        "document.exportSelection",
+        "document.serialize",
+        "document.exportPdf",
+        "document.pdfSettings",
+        "pdf.preset.save",
+        "document.exportEps",
+        "document.exportDxf",
+    ] {
+        // An export reads these two when it writes over the file a lossy document came from. The
+        // PDF settings and preset commands take them through document.exportPdf's description.
+        check_params(id, &json!({"path": "a", "acknowledgeLoss": true})).unwrap_or_else(|e| panic!("{id}: {e}"));
+        let keys = doc_keys(find_command(id).unwrap().params).unwrap().keys;
+        let refused: Vec<&str> = keys.into_iter().filter(|key| check_params(id, &json!({*key: null})).is_err()).collect();
+        // `document.exportPdf`'s description explains the page boxes as `BleedBox = …` between its
+        // keys, which reads as two more keys.
+        let prose = if id == "document.exportPdf" { vec!["BleedBox", "MediaBox"] } else { vec![] };
+        assert_eq!(refused, prose, "{id} names and refuses these");
+    }
+    let settings = serde_json::to_value(vectorcraft_pdf::PdfSettings::default()).unwrap();
+    for key in settings.as_object().unwrap().keys() {
+        assert!(OPTIONS.iter().any(|o| o.name == key), "document.formats doesn't list the PDF option `{key}`");
+    }
+    let mut every = settings;
+    every["flattener"] = serde_json::to_value(crate::cmd::flatten::FlattenOptions::default()).unwrap();
+    every["security"]["openPassword"] = json!("a");
+    every["security"]["permissionsPassword"] = json!("b");
+    every["preset"] = json!("High Quality Print");
+    for id in ["document.export", "document.exportPdf", "document.pdfSettings", "pdf.preset.save"] {
+        check_params(id, &every).unwrap_or_else(|e| panic!("{id}: {e}"));
+    }
+}
+
+/// `stroke.set` names every key it reads (its own, `item`, and `ids`/`id`/`target`), so a
+/// misnamed one is refused instead of answering `objects: 1` with nothing changed.
+#[test]
+fn stroke_set_refuses_an_unknown_key() {
+    assert!(!UNCHECKED.contains(&"stroke.set"));
+    let e = refusal("stroke.set", json!({"ids": [7], "width": 0.5}));
+    assert!(e.starts_with("unknown parameter `width`") && e.contains("weight"), "{e}");
+    for ok in [
+        json!({"ids": [7], "weight": 0.5}),
+        json!({"id": 7, "weight": 1, "cap": "round", "join": "bevel", "miterLimit": 4, "align": "inside"}),
+        json!({"dash": [6, 3], "dashOffset": 1, "alignDashes": true, "startArrow": "Arrow", "endArrow": null, "arrowAlign": "tip"}),
+        json!({"profile": "lens", "item": null, "target": "contents"}),
+        // `item_target` reads `aligned` for an explicit item.
+        json!({"item": 1, "aligned": true, "weight": 2}),
+        // What document.inspect reports in strokeOptions reads back unchanged.
+        json!({"widthPoints": null, "gradientMode": "within"}),
+    ] {
+        assert!(check_params("stroke.set", &ok).is_ok(), "{ok}");
+    }
 }
 
 /// A command that takes the keys of one that isn't checked yet isn't checked either.
@@ -105,7 +229,7 @@ fn effect_params_are_the_effects_own() {
         check_effect_params("effect.apply", e.id, &e.defaults).unwrap_or_else(|why| panic!("{}'s defaults: {why}", e.id));
     }
     let apply = |effect: &str, params| json!({"effect": effect, "params": params});
-    assert_eq!(refusal("effect.apply", apply("blur.gaussian", json!({"blurr": 3}))), "unknown parameter `blurr`; the command takes: radius");
+    assert_eq!(refusal("effect.apply", apply("blur.gaussian", json!({"blurr": 3}))), "unknown parameter `blurr`; the command takes: radius, linear");
     assert_eq!(
         refusal("appearance.addEffect", apply("stylize.dropShadow", json!({"opacty": 50}))),
         "unknown parameter `opacty`; did you mean `opacity`?"

@@ -62,6 +62,14 @@ pub struct Session {
     /// While Cmd lends `tool` (a selection tool) for a drag: the tool it was lent to, which comes
     /// back as it was at the release ([`Session::pointer`]).
     pub(crate) lender: Option<Box<dyn Tool>>,
+    /// The selection of the active document (its uid) as Cmd lent `tool`: what the lent tool's
+    /// gesture found, so that one that leaves it as it was picks nothing.
+    pub(crate) selection_at_lend: Option<(u64, vectorcraft_doc::Selection)>,
+    /// The selection a lent tool's gesture changed and left as it gave `lender` back, in the
+    /// document (its uid) it was made in: while it is still that document's selection, the anchors
+    /// in it are ones picked, not the Pen's last anchor, and Copy and Cut take them with the Pen or
+    /// Curvature tool back too (#6123).
+    pub(crate) lent_selection: Option<(u64, vectorcraft_doc::Selection)>,
     /// The selection tool chosen last (Selection, Direct Selection or Group Selection): the one Cmd
     /// lends the other tools. None until one is chosen.
     pub(crate) last_selection_tool: Option<&'static str>,
@@ -70,6 +78,9 @@ pub struct Session {
     /// cursor asked for again over an unchanged document and selection measures nothing again.
     pub(crate) preview_memo: vectorcraft_tools::select::PreviewMemo,
     depth: u32,
+    /// Set while saved steps play ([`Session::replay`]): [`Session::execute`] then takes keys the
+    /// command's params description doesn't name instead of refusing them.
+    replaying: bool,
     /// Set when the active tool panicked (see [`guard`]); reported by the next tool event.
     tool_panic: Option<EngineError>,
     /// How many times switching or closing documents, or replacing the active one, has started the
@@ -157,12 +168,34 @@ pub struct Session {
     /// groups: for each step, the documents ([`DocState::uid`]) whose undo groups it belongs to, and
     /// the index of the document it left active when it changed the active document.
     pub(crate) batch_steps: Option<Vec<(Vec<u64>, Option<usize>)>>,
+    /// After `command.batch` kept a color-mode step's new-art colors, until the top-level command
+    /// has inherited the selection's appearance: the documents ([`DocState::uid`]) whose newest
+    /// history step takes the colors the batch finally left.
+    pub(crate) batch_paint_docs: Vec<u64>,
+    /// The composite fonts (lowercase names) that the open documents defined when the font
+    /// database was last brought in step with them ([`cmd::compositefonts::sync`]).
+    pub(crate) composite_names: Vec<String>,
+    /// Every composite font (lowercase name) this session has registered in the font database:
+    /// type read for opening may have been laid out in one that is gone by the time it opens.
+    pub(crate) composite_names_registered: std::collections::HashSet<String>,
+    /// While a command that changes nothing in the document runs (a query, or one of
+    /// [`command_sets::JOURNALED_READS`]): it reads the instance of an object selected in a symbol
+    /// instance's art.
+    pub(crate) reading: bool,
     /// While [`Session::place_read`] runs `file.place`: the file read for it, which the command
     /// places instead of reading the file; `None` otherwise.
     pub(crate) place_hand_off: Option<cmd::place::PlaceRead>,
     /// While [`Session::place_queue_read`] runs `file.place.queue`: the files read for it, which
     /// the command loads the place cursor with instead of reading them; `None` otherwise.
     pub(crate) queue_hand_off: Option<cmd::place::QueueRead>,
+    /// The automation roots in force when the place cursor was last loaded (`None`: none were).
+    /// The cursor places its files later, on a click that may come from the person at the
+    /// keyboard: those files, and the files they link to, are read under these roots, so a queue
+    /// an agent loaded never reads beyond what it was given.
+    pub(crate) place_queue_roots: Option<std::sync::Arc<file_access::AutomationRoots>>,
+    /// While [`Session::import_image_read`] runs `clipboard.importImage`: the image read for it,
+    /// which the command loads instead of reading `dataBase64`; `None` otherwise.
+    pub(crate) image_hand_off: Option<cmd::clipboard::ImageRead>,
     /// What a [`cmd::TraceRun`] traced, until the next `imageTrace.make` or
     /// `imageTrace.makeAndExpand` takes it ([`cmd::Traced::hand_in`]).
     pub(crate) trace_hand_off: Option<cmd::Traced>,
@@ -195,6 +228,14 @@ pub struct Session {
     /// The pointer button is held: the last pointer event was a press or a drag, not a release or
     /// a move ([`Session::pointer_held`]).
     pub(crate) pointer_held: bool,
+    /// The id and persistent options of the tool when the press under way began, which a dropped
+    /// press puts back ([`Session::drop_tool_press`]).
+    pub(crate) press_options: Option<(String, serde_json::Map<String, serde_json::Value>)>,
+    /// The engine saves the selection and active layer before a Type press and restores them if it drops.
+    pub(crate) press_type_selection: Option<(Selection, Option<NodeId>)>,
+    /// The freeform gradient point selected once the tool took the press under way, which a
+    /// dropped press selects again ([`Session::drop_tool_press`]).
+    pub(crate) press_point: Option<Option<(usize, cmd::gradient::StopOwner)>>,
     /// A guide being dragged out of a ruler ([`Session::ruler_guide`]).
     pub(crate) ruler_guide: Option<vectorcraft_tools::rulerguide::NewGuide>,
     /// Which selected type overflows its frame, for the ports every tool but the Type tools shows.
@@ -223,6 +264,9 @@ pub struct Session {
     /// The Global Edit Options Start Global Edit matches with (`select.globalEditOptions`); not
     /// saved.
     pub global_edit_options: cmd::globaledit::Options,
+    /// Set while [`Session::tool_typed_text`] passes keyboard input to the active tool
+    /// ([`vectorcraft_tools::ToolContext::typed_from_keyboard`]).
+    keyboard_text: bool,
 }
 
 impl Default for Session {

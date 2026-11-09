@@ -3,11 +3,13 @@ use kurbo::{Affine, Shape};
 use vectorcraft_doc::{CharStyle, Justify, TextKind, TextRun};
 use vectorcraft_geom::PathData;
 
+mod alternates;
 mod axes;
 mod bidi;
 mod bitmaps;
 mod colr;
 mod combos;
+mod composite;
 mod devanagari;
 mod embed;
 mod fit;
@@ -15,9 +17,12 @@ mod hang;
 mod inline;
 mod joiners;
 mod justify;
+mod kept_layouts;
+mod ligature_carets;
 mod path_joins;
 mod ruby;
 mod scripts;
+mod shape_plans;
 mod snap;
 mod svg_glyphs;
 mod sysfonts;
@@ -450,6 +455,158 @@ fn on_path_effects_orient_glyphs() {
     assert_eq!(PathEffect::parse("stair step"), Some(PathEffect::StairStep));
 }
 
+/// Type on a straight path from (0, 50) to (500, 50), one run per style: how far each glyph's
+/// baseline lies below the path under each Align to Path option, or with `ink` the middle of its
+/// drawn outline.
+fn path_align_drops(db: &FontDb, styles: &[CharStyle], vertical: bool, ink: bool) -> Vec<(vectorcraft_doc::PathAlign, Vec<f64>)> {
+    use vectorcraft_doc::PathAlign;
+    let mut line = BezPath::new();
+    line.move_to((0.0, 50.0));
+    line.line_to((500.0, 50.0));
+    let mut t = point("", style(12.0));
+    t.runs = styles.iter().map(|st| TextRun::new("x", st.clone())).collect();
+    t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+    t.vertical = vertical;
+    [PathAlign::Baseline, PathAlign::Ascender, PathAlign::Center, PathAlign::Descender]
+        .into_iter()
+        .map(|align| {
+            t.path_align = align;
+            let drop = |g: &PositionedGlyph| {
+                let b = g.outline.bounding_box();
+                if ink { (b.y0 + b.y1) * 0.5 - 50.0 } else { g.origin.y - 50.0 }
+            };
+            (align, layout(db, &t).glyphs.iter().map(drop).collect())
+        })
+        .collect()
+}
+
+/// Align to Path moves each glyph's baseline off the path by its own face, size and vertical
+/// scale: Ascender by the top of an em box centered on the cap height, Center by half the height
+/// of the top of the H in whole thousandths of an em, Descender up by the bottom of the font's
+/// bounding box. Without an OS/2 cap height, the em box is centered on the lower of the tops of H
+/// and O; without an H, Center takes half the OS/2 cap height. A face with no cap height and no H
+/// or O takes an em box from 0.12 em below the baseline to 0.88 em above it and, with a bounding
+/// box above the baseline, its descent. Leading and horizontal scale do not count.
+#[test]
+fn on_path_align_runs_each_glyph_by_its_own_metrics() {
+    use crate::test_fonts::{PATH_ALIGN_BARE_FAMILY, PATH_ALIGN_CAPITAL_FAMILY, PATH_ALIGN_LOWER_FAMILY, PATH_ALIGN_ROMAN_FAMILY, path_align_font};
+    use vectorcraft_doc::PathAlign;
+    let db = FontDb::with_font_dirs(vec![]);
+    for family in [PATH_ALIGN_ROMAN_FAMILY, PATH_ALIGN_BARE_FAMILY, PATH_ALIGN_LOWER_FAMILY, PATH_ALIGN_CAPITAL_FAMILY] {
+        db.add_font(path_align_font(family).unwrap());
+    }
+    let bare = db.face(PATH_ALIGN_BARE_FAMILY, "Regular").unwrap();
+    let bare_descent = bare.vertical_metrics().1 / bare.units_per_em();
+    let st = |family: &str, size: f64| CharStyle { font_family: family.into(), ..style(size) };
+    let styles = [
+        st(PATH_ALIGN_ROMAN_FAMILY, 20.0),
+        st(PATH_ALIGN_ROMAN_FAMILY, 40.0),
+        CharStyle { v_scale: 200.0, ..st(PATH_ALIGN_ROMAN_FAMILY, 20.0) },
+        CharStyle { h_scale: 200.0, leading: Some(90.0), ..st(PATH_ALIGN_ROMAN_FAMILY, 20.0) },
+        st(PATH_ALIGN_BARE_FAMILY, 20.0),
+        st(PATH_ALIGN_LOWER_FAMILY, 20.0),
+        st(PATH_ALIGN_CAPITAL_FAMILY, 20.0),
+    ];
+    // Per em: the cap height is 0.66 em, the H 0.656 em tall, the bounding box's bottom -0.295 em;
+    // the lower face's H is 0.668 em tall and its O 0.656 em; the capital face's em box runs from
+    // its `BASE` table's `ideo` at -0.15 em.
+    for (align, drops) in path_align_drops(&db, &styles, false, false) {
+        let (roman, bare, lower, capital) = match align {
+            PathAlign::Baseline => (0.0, 0.0, 0.0, 0.0),
+            PathAlign::Ascender => ((0.66 + 1.0) / 2.0, 0.88, (0.656 + 1.0) / 2.0, 0.85),
+            PathAlign::Center => (0.328, 0.38, 0.334, 0.33),
+            PathAlign::Descender => (-0.295, -bare_descent, -0.295, -0.295),
+        };
+        let want = [roman * 20.0, roman * 40.0, roman * 40.0, roman * 20.0, bare * 20.0, lower * 20.0, capital * 20.0];
+        assert!(drops.len() == 7 && drops.iter().zip(want).all(|(d, w)| (d - w).abs() < 1e-6), "{align:?}: {drops:?}, want {want:?}");
+    }
+}
+
+/// The em box whose top Ascender runs along the path, by the kind of face: a `BASE` table's
+/// ideographic baseline, unless its roman baseline lies below it; in a face with a Chinese,
+/// Japanese or Korean code page, a typographic box that holds the ink of 永 and is one em tall or
+/// leaves margins within 197/65,536 em of each other, else a ┼ one em tall, else an em box
+/// centered on the ink of 永; else 0.88 em. Center measures the H, not the OS/2 cap height (0.7 em
+/// in the heights face).
+#[test]
+fn on_path_align_finds_the_em_box_of_each_kind_of_face() {
+    use crate::test_fonts::{
+        HEIGHT_FAMILY, PATH_ALIGN_BASE_FAMILY, PATH_ALIGN_CROSS_FAMILY, PATH_ALIGN_DAMAGED_FAMILY, PATH_ALIGN_HHEA_FAMILY,
+        PATH_ALIGN_IDEOGRAPH_FAMILY, PATH_ALIGN_MARGINS_FAMILY, PATH_ALIGN_NONE_FAMILY, PATH_ALIGN_TYPO_FAMILY, PATH_ALIGN_UNEVEN_FAMILY,
+        height_font, path_align_font,
+    };
+    use vectorcraft_doc::PathAlign;
+    let db = FontDb::with_font_dirs(vec![]);
+    let families = [
+        PATH_ALIGN_BASE_FAMILY,
+        PATH_ALIGN_IDEOGRAPH_FAMILY,
+        PATH_ALIGN_CROSS_FAMILY,
+        PATH_ALIGN_TYPO_FAMILY,
+        PATH_ALIGN_HHEA_FAMILY,
+        PATH_ALIGN_NONE_FAMILY,
+        PATH_ALIGN_MARGINS_FAMILY,
+        PATH_ALIGN_UNEVEN_FAMILY,
+        PATH_ALIGN_DAMAGED_FAMILY,
+    ];
+    for family in families {
+        db.add_font(path_align_font(family).unwrap());
+    }
+    db.add_font(height_font(true).unwrap());
+    let styles: Vec<CharStyle> = families.iter().chain([&HEIGHT_FAMILY]).map(|f| CharStyle { font_family: (*f).into(), ..style(10.0) }).collect();
+    let drops = path_align_drops(&db, &styles, false, false);
+    let of = |align: PathAlign| drops.iter().find(|(a, _)| *a == align).map(|(_, d)| d.clone()).unwrap();
+    // BASE -150 + one em; Japanese: the ⌠'s ink -51 to 949 centered, the | from -250 to 750, the
+    // typographic box -100 to 900, the `hhea` box -100 to 900 under an empty typographic box,
+    // nothing, the typographic box -101 to 1,002 (margins 3/1,000 em apart), the ink centered
+    // under a box -101 to 1,003 (4/1,000 em apart); a damaged BASE table's face by its cap height
+    // 660; the heights face's BASE `idtp` 880.
+    let want = [0.85, 0.949, 0.75, 0.9, 0.9, 0.88, 1.002, 0.949, 0.83, 0.88].map(|em| em * 10.0);
+    let ascender = of(PathAlign::Ascender);
+    assert!(ascender.len() == 10 && ascender.iter().zip(want).all(|(d, w)| (d - w).abs() < 1e-6), "{ascender:?}, want {want:?}");
+    let center = of(PathAlign::Center);
+    assert!((center[9] - 3.28).abs() < 1e-6, "{center:?}");
+}
+
+/// A variable font's instance takes its em box from the typographic box its `MVAR` table varies:
+/// from -100 to 900 in Regular, from 0 to 1,000 in Bold.
+#[test]
+fn on_path_align_takes_a_variable_font_instances_em_box() {
+    use crate::test_fonts::{PATH_ALIGN_VARIABLE_FAMILY, path_align_font};
+    use vectorcraft_doc::PathAlign;
+    let db = FontDb::with_font_dirs(vec![]);
+    db.add_font(path_align_font(PATH_ALIGN_VARIABLE_FAMILY).unwrap());
+    let st = |font_style: &str| CharStyle { font_family: PATH_ALIGN_VARIABLE_FAMILY.into(), font_style: font_style.into(), ..style(10.0) };
+    let drops = path_align_drops(&db, &[st("Regular"), st("Bold")], false, false);
+    let ascender = drops.iter().find(|(a, _)| *a == PathAlign::Ascender).map(|(_, d)| d.clone()).unwrap();
+    assert!(ascender.len() == 2 && (ascender[0] - 9.0).abs() < 1e-6 && (ascender[1] - 10.0).abs() < 1e-6, "{ascender:?}");
+}
+
+/// In vertical type, Align to Path moves the glyphs half an em, with their horizontal scale and not
+/// their vertical scale, for Ascender and Descender, and leaves them on the path for Center: their
+/// baselines and their drawn outlines both.
+#[test]
+fn on_path_align_in_vertical_type_moves_half_an_em() {
+    use crate::test_fonts::{PATH_ALIGN_ROMAN_FAMILY, path_align_font};
+    use vectorcraft_doc::PathAlign;
+    let db = FontDb::with_font_dirs(vec![]);
+    db.add_font(path_align_font(PATH_ALIGN_ROMAN_FAMILY).unwrap());
+    let st = CharStyle { font_family: PATH_ALIGN_ROMAN_FAMILY.into(), ..style(20.0) };
+    let styles = [st.clone(), CharStyle { h_scale: 200.0, ..st.clone() }, CharStyle { v_scale: 200.0, ..st }];
+    for ink in [false, true] {
+        let baseline = path_align_drops(&db, &styles, true, ink).first().map(|(_, d)| d.clone()).unwrap();
+        for (align, drops) in path_align_drops(&db, &styles, true, ink) {
+            let half = match align {
+                PathAlign::Ascender => 10.0,
+                PathAlign::Descender => -10.0,
+                _ => 0.0,
+            };
+            let want = [half, half * 2.0, half];
+            let moved: Vec<f64> = drops.iter().zip(&baseline).map(|(d, b)| d - b).collect();
+            assert!(moved.len() == 3 && moved.iter().zip(want).all(|(m, w)| (m - w).abs() < 1e-6), "{align:?}, ink {ink}: {moved:?}, want {want:?}");
+        }
+    }
+}
+
 #[test]
 fn on_path_circle_and_overflow() {
     let circle = kurbo::Circle::new((0.0, 0.0), 100.0).to_path(0.1);
@@ -552,6 +709,113 @@ fn multiple_runs_and_styles() {
     assert_eq!(l.glyphs[3].run, 1);
     assert!(l.lines[0].ascent > 30.0);
     assert_ne!(l.glyphs[0].font_id, l.glyphs[3].font_id);
+}
+
+/// Each run's glyphs are set in its own style's face, and each empty paragraph's line takes the
+/// ascent and descent of its own style's face: families mixed in a paragraph, a missing family that
+/// falls back, a style the family does not have, and a change of family in the middle of a
+/// paragraph.
+#[test]
+fn each_run_and_paragraph_takes_its_own_face() {
+    let styles = [
+        serif(30.0),
+        CharStyle { font_family: "No Such Family".into(), font_style: "Bold".into(), ..style(10.0) },
+        CharStyle { font_family: "Inter".into(), font_style: "Bold Italic".into(), ..style(20.0) },
+        CharStyle { font_family: "JetBrains Mono".into(), ..style(14.0) },
+        style(16.0),
+    ];
+    let run = |text: &str, i: usize| TextRun::new(text, styles[i].clone());
+    let mut t = point("", style(10.0));
+    t.runs = vec![run("Ab", 0), run("cd\n", 1), run("\n", 2), run("\n", 3), run("xy", 1), run("zw", 4), run("Qr", 2)];
+    let l = layout(db(), &t);
+    let faces: Vec<_> = styles.iter().map(|st| db().style_face(st).unwrap()).collect();
+    let face_of_run = [0, 1, 2, 3, 1, 4, 2];
+    let text = t.plain_text();
+    let drawn: Vec<_> = l.glyphs.iter().filter(|g| text.get(g.byte..).is_some_and(|s| s.starts_with(char::is_alphabetic))).collect();
+    assert_eq!(drawn.len(), 10);
+    for g in drawn {
+        assert_eq!(g.font_id, faces[face_of_run[g.run]].id(), "run {}", g.run);
+    }
+    assert_eq!(l.lines.len(), 4);
+    for (line, i) in [(1, 2), (2, 3)] {
+        let (face, size) = (&faces[i], styles[i].size);
+        let (ascent, descent) = (face.ascent * size / face.upem, face.descent * size / face.upem);
+        assert!((l.lines[line].ascent - ascent).abs() < 1e-9, "line {line}: {} versus {ascent}", l.lines[line].ascent);
+        assert!((l.lines[line].descent - descent).abs() < 1e-9, "line {line}: {} versus {descent}", l.lines[line].descent);
+    }
+    assert_ne!(faces[2].id(), faces[3].id());
+}
+
+/// Faces kept per run lay text out exactly as looking each face up again at every use does
+/// ([`crate::layout::layout_faces_per_call`]): the same glyphs, positions, bounds and baselines,
+/// with mixed families, a missing family that falls back, Bold and Italic asked of families
+/// without those styles (their closest style stands in), and families that change in the middle of
+/// a paragraph, in point, vertical, area and path type.
+#[test]
+fn faces_kept_per_run_lay_out_as_faces_looked_up_at_each_use() {
+    let styles = [
+        serif(24.0),
+        CharStyle { font_family: "No Such Family".into(), ..style(12.0) },
+        CharStyle { font_family: "Source Serif 4".into(), font_style: "Bold".into(), ..style(18.0) },
+        CharStyle { font_family: "Inter".into(), font_style: "Italic".into(), ..style(20.0) },
+        CharStyle { font_family: "JetBrains Mono".into(), font_style: "Bold Italic".into(), ..style(14.0) },
+        style(16.0),
+    ];
+    let matched = [(1, FontMatch::Missing), (2, FontMatch::Style), (3, FontMatch::Style), (4, FontMatch::Style)];
+    for (i, m) in matched {
+        let st = &styles[i];
+        assert_eq!(db().resolve(&st.font_family, &st.font_style).map(|(_, m)| m), Some(m), "{} {}", st.font_family, st.font_style);
+    }
+    let style_of_run = [0, 1, 2, 3, 4, 2, 4, 5, 3, 1];
+    let texts = ["Ab ", "cd ef\n", "\n", "gh ", "ij", " kl\n", "\n", "mn ", "op ", "qr"];
+    let runs: Vec<_> = texts.into_iter().zip(style_of_run).map(|(text, i)| TextRun::new(text, styles[i].clone())).collect();
+    let mut horizontal = point("", style(10.0));
+    horizontal.runs = runs;
+    let mut vertical = horizontal.clone();
+    vertical.vertical = true;
+    let mut wrapped = area("", style(10.0), Rect::new(0.0, 0.0, 60.0, 400.0), Justify::Left);
+    wrapped.runs = horizontal.runs.clone();
+    let mut on_path = horizontal.clone();
+    let path = kurbo::Line::new((0.0, 0.0), (400.0, 60.0)).to_path(0.1);
+    on_path.kind = TextKind::OnPath { path: PathData::from_bezpath(&path), start: 0.0, end: None };
+    let mut empty_path = on_path.clone();
+    empty_path.runs = vec![TextRun::new("", styles[1].clone())];
+    let glyph = |g: &PositionedGlyph| {
+        let b = g.outline.bounding_box();
+        (g.font_id, g.gid, g.run, g.byte, g.line, [g.origin.x, g.origin.y, g.advance, g.width, b.x0, b.y0, b.x1, b.y1], g.xf.as_coeffs())
+    };
+    let line = |l: &LineInfo| [l.baseline, l.first_baseline, l.ascent, l.descent, l.x0, l.x1];
+    for (name, t) in [("point", &horizontal), ("vertical", &vertical), ("area", &wrapped), ("path", &on_path), ("empty path", &empty_path)] {
+        let kept = layout(db(), t);
+        let looked_up = crate::layout::layout_faces_per_call(db(), t);
+        assert_eq!(kept.glyphs.iter().map(glyph).collect::<Vec<_>>(), looked_up.glyphs.iter().map(glyph).collect::<Vec<_>>(), "{name}: glyphs");
+        assert_eq!(kept.lines.iter().map(line).collect::<Vec<_>>(), looked_up.lines.iter().map(line).collect::<Vec<_>>(), "{name}: lines");
+        assert_eq!(kept.bounds, looked_up.bounds, "{name}: bounds");
+        assert_eq!(kept.line_xf, looked_up.line_xf, "{name}: line transform");
+        assert_eq!(kept.overflow, looked_up.overflow, "{name}: overflow");
+    }
+    // The stand-in faces set the glyphs of the runs that ask for a missing family or style.
+    let l = layout(db(), &horizontal);
+    let text = horizontal.plain_text();
+    let drawn: Vec<_> = l.glyphs.iter().filter(|g| text.get(g.byte..).is_some_and(|s| s.starts_with(char::is_alphabetic))).collect();
+    assert_eq!(drawn.len(), 18);
+    for g in drawn {
+        assert_eq!(Some(g.font_id), db().style_face(&styles[style_of_run[g.run]]).map(|f| f.id()), "run {}", g.run);
+    }
+    assert_eq!(l.lines.len(), 5);
+}
+
+#[test]
+fn many_paragraphs_of_their_own_runs_lay_out_in_linear_time() {
+    // 20,000 one-letter paragraphs, each a run of its own: every paragraph looking through every
+    // run would be 400 million steps.
+    let n = 20_000;
+    let mut t = point("", style(10.0));
+    t.runs = (0..n).map(|i| TextRun { text: "a\n".into(), style: style(if i % 2 == 0 { 10.0 } else { 11.0 }), inline: None }).collect();
+    let start = std::time::Instant::now();
+    let l = layout(db(), &t);
+    assert!(start.elapsed() < std::time::Duration::from_secs(60), "{:?}", start.elapsed());
+    assert!(l.glyphs.iter().any(|g| g.run == n - 1));
 }
 
 #[test]
@@ -1091,6 +1355,157 @@ fn a_right_to_left_numbered_paragraph_has_its_period_left_of_its_number() {
     assert!((last.origin.x + last.advance - 200.0).abs() < 1e-6, "the number ends the line at the right: {last:?}");
 }
 
+/// Bullets and Numbering › Alignment: Left puts a list paragraph's marker at the first line's
+/// start, and Right puts it against the text, which starts at the same place with either. Numbers
+/// of different widths aligned right end at the same place, the caret before the first character
+/// stands at the text, and the lines the paragraph wraps to start at the left indent. A number
+/// wider than the room before the left indent takes the text to the next tab stop and ends there.
+/// In a right-to-left paragraph, a marker aligned right starts where the text ends.
+#[test]
+fn a_list_marker_aligned_right_ends_where_the_text_starts() {
+    use vectorcraft_doc::text::{Bullet, ListAlign, NumberStyle, ParaList};
+    // Each marker's characters' left and right edges, and where its line's text starts.
+    let spans = |t: &TextObject| -> Vec<(f64, f64, f64)> {
+        let lay = layout(db(), t);
+        let mut out = vec![];
+        for m in &lay.markers {
+            let chars: Vec<usize> = m.glyphs.clone().filter(|&i| i != m.tab).collect();
+            let left = chars.iter().map(|&i| lay.glyphs[i].origin.x).fold(f64::MAX, f64::min);
+            let right = chars.iter().map(|&i| lay.glyphs[i].origin.x + lay.glyphs[i].advance).fold(f64::MIN, f64::max);
+            let line = &lay.lines[lay.glyphs[m.tab].line];
+            let text = lay.glyphs[line.glyph_start..line.glyph_end].iter().find(|g| g.len > 0).unwrap();
+            out.push((left, right, text.origin.x));
+        }
+        out
+    };
+    let numbered = |align: ListAlign, count: u32| {
+        let mut t = listed("One\nTwo", &[Some(ParaList::numbered(NumberStyle::Arabic).aligned(align)); 2]);
+        t.list_count = count;
+        t
+    };
+    // "9." and "10.": aligned left, both start at the first-line indent (0); aligned right, both end
+    // at the left indent (18), where the text starts either way.
+    let left = spans(&numbered(ListAlign::Left, 8));
+    let right = spans(&numbered(ListAlign::Right, 8));
+    assert_eq!((left.len(), right.len()), (2, 2));
+    for (k, ((l0, r0, text0), (l, r, text))) in left.iter().zip(&right).enumerate() {
+        assert!(l0.abs() < 1e-6 && (text0 - 18.0).abs() < 1e-6, "item {k} aligned left: {l0} {text0}");
+        assert!((r - 18.0).abs() < 1e-6 && (text - text0).abs() < 1e-6, "item {k} aligned right ends at the text: {r} {text}");
+        assert!(((r - l) - (r0 - l0)).abs() < 1e-6, "item {k} keeps its width");
+    }
+    assert!(right[1].0 < right[0].0, "the wider number starts further left: {right:?}");
+    let t = numbered(ListAlign::Right, 0);
+    let lay = layout(db(), &t);
+    let m = &lay.markers[0];
+    assert_eq!((m.tab, lay.marker_text(m.tab), lay.marker_text(m.glyphs.start + 1)), (m.glyphs.start, Some("\t"), Some("1.")));
+    let (top, _) = caret_position(&lay, 0);
+    assert!((top.x - 18.0).abs() < 1e-6, "the caret before the first character: {top:?}");
+    // A wrapped paragraph's other lines start at the left indent.
+    let long = listed(LOREM, &[Some(ParaList::bulleted(Bullet::Dot).aligned(ListAlign::Right))]);
+    let lay = layout(db(), &long);
+    assert!(lay.lines.len() > 2, "the paragraph wraps");
+    for (i, line) in lay.lines.iter().enumerate() {
+        let first = lay.glyphs[line.glyph_start..line.glyph_end].iter().find(|g| g.len > 0).unwrap();
+        assert!((first.origin.x - 18.0).abs() < 1e-6, "line {i} starts at {}", first.origin.x);
+    }
+    let bullet = &spans(&long)[0];
+    assert!((bullet.1 - 18.0).abs() < 1e-6 && bullet.0 > 0.0, "{bullet:?}");
+    // "1000." is wider than the 18 pt before the left indent: the text and the number's end go to
+    // the next default stop.
+    let mut wide = listed("One", &[Some(ParaList::numbered(NumberStyle::ThreeDigits).aligned(ListAlign::Right))]);
+    wide.list_count = 999;
+    let (_, end, text) = spans(&wide)[0];
+    assert!((text - 36.0).abs() < 1e-6 && (end - 36.0).abs() < 1e-6, "{end} {text}");
+    // Right to left: aligned left the bullet ends the line at the right; aligned right it starts
+    // where the text ends, and the text ends where it does aligned left.
+    let rtl = |align: ListAlign| {
+        let mut t = listed("שלום עולם", &[Some(ParaList::bulleted(Bullet::Dot).aligned(align))]);
+        t.edit_paras(None, |p| p.justify = Justify::Auto);
+        let lay = layout(db(), &t);
+        let m = &lay.markers[0];
+        let bullet = m.glyphs.clone().find(|&i| i != m.tab).map(|i| (lay.glyphs[i].origin.x, lay.glyphs[i].origin.x + lay.glyphs[i].advance));
+        let text_right = lay.glyphs.iter().filter(|g| g.len > 0).map(|g| g.origin.x + g.advance).fold(0.0, f64::max);
+        (bullet.unwrap(), text_right)
+    };
+    let ((_, end), text_left_aligned) = rtl(ListAlign::Left);
+    assert!((end - 200.0).abs() < 1e-6, "{end}");
+    let ((start, _), text_right_aligned) = rtl(ListAlign::Right);
+    assert!((start - text_right_aligned).abs() < 1e-6 && (text_right_aligned - text_left_aligned).abs() < 1e-6, "{start} {text_right_aligned}");
+}
+
+/// A list paragraph breaks its lines where the same paragraph without a marker, its text at the
+/// same indent, breaks them: with either marker alignment, a bullet or a letter, and either
+/// composer, the marker and its gap count at their own width and the first word hyphenates.
+#[test]
+fn a_list_paragraph_breaks_its_lines_as_its_text_alone_does() {
+    use vectorcraft_doc::text::{Bullet, ListAlign, NumberStyle, ParaList};
+    let text = "Extraordinarily comprehensive typographical considerations notwithstanding everything.";
+    // Each line's end, and whether it ends with a hyphen.
+    let breaks = |list: Option<ParaList>, composer: vectorcraft_doc::Composer| {
+        let mut t = area(text, style(14.0), Rect::new(0.0, 0.0, 98.0, 600.0), Justify::Left);
+        t.para.left_indent = 18.0;
+        t.para.first_line_indent = if list.is_some() { -18.0 } else { 0.0 };
+        t.para.hyphenate = true;
+        t.para.composer = composer;
+        t.para.list = list;
+        let lay = layout(db(), &t);
+        let hyphen = |k: usize| lay.glyphs[k].len == 0 && lay.marker_of(k).is_none();
+        lay.lines.iter().map(|l| (l.end, (l.glyph_start..l.glyph_end).any(hyphen))).collect::<Vec<_>>()
+    };
+    for composer in [vectorcraft_doc::Composer::SingleLine, vectorcraft_doc::Composer::EveryLine] {
+        let alone = breaks(None, composer);
+        assert!(alone.first().is_some_and(|&(_, hyphen)| hyphen), "the first word hyphenates: {alone:?}");
+        for list in [ParaList::bulleted(Bullet::Dot), ParaList::numbered(NumberStyle::UpperLetters)] {
+            for align in [ListAlign::Left, ListAlign::Right] {
+                assert_eq!(breaks(Some(list.aligned(align)), composer), alone, "{composer:?} {list:?} {align:?}");
+            }
+        }
+    }
+}
+
+/// List levels: a paragraph at a level past the first is set 18 pt further in for each level, its
+/// marker, its text and the lines it wraps to; each level counts its own numbers, a deeper level
+/// starting at 1 and a shallower one going on with its count, from the counts the earlier frames of
+/// a thread carry. A right-to-left list paragraph is set that much further in from the right.
+#[test]
+fn a_list_paragraph_at_a_deeper_level_is_set_further_in_and_counts_on_its_own() {
+    use vectorcraft_doc::text::{Bullet, ListCounts, NumberStyle, ParaList};
+    let num = |level| Some(ParaList::numbered(NumberStyle::Arabic).at_level(level));
+    let t = listed("One\nTwo\nThree\nFour\nFive\nSix\nSeven", &[num(1), num(2), num(2), num(3), num(2), num(1), num(2)]);
+    assert_eq!(marker_texts(&t), ["1.", "1.", "2.", "1.", "3.", "2.", "1."]);
+    let lay = layout(db(), &t);
+    for (k, (m, level)) in lay.markers.iter().zip([1, 2, 2, 3, 2, 1, 2]).enumerate() {
+        let number = &lay.glyphs[m.glyphs.start];
+        let line = &lay.lines[number.line];
+        let text = lay.glyphs[line.glyph_start..line.glyph_end].iter().find(|g| g.len > 0).unwrap();
+        let step = 18.0 * f64::from(level - 1);
+        assert!((number.origin.x - step).abs() < 1e-6, "item {k}: the number starts at {}", number.origin.x);
+        assert!((text.origin.x - 18.0 - step).abs() < 1e-6, "item {k}: the text starts at {}", text.origin.x);
+    }
+    // The counts the earlier frames carry, per level.
+    let mut t = listed("Two\nThree\nFour", &[num(2), num(3), num(1)]);
+    t.set_list_counts(ListCounts([4, 6, 0, 0, 0, 0, 0, 0, 0]));
+    assert_eq!(marker_texts(&t), ["7.", "1.", "5."]);
+    // The lines a deeper paragraph wraps to start at its left indent plus the level's 18 pt.
+    let long = listed(LOREM, &[Some(ParaList::bulleted(Bullet::Dot).at_level(3))]);
+    let lay = layout(db(), &long);
+    assert!(lay.lines.len() > 2, "the paragraph wraps");
+    assert!((lay.glyphs[lay.markers[0].glyphs.start].origin.x - 36.0).abs() < 1e-6);
+    for (i, line) in lay.lines.iter().enumerate() {
+        let first = lay.glyphs[line.glyph_start..line.glyph_end].iter().find(|g| g.len > 0).unwrap();
+        assert!((first.origin.x - 54.0).abs() < 1e-6, "line {i} starts at {}", first.origin.x);
+    }
+    // Right to left: the bullet at level 2 ends 18 pt before the right edge.
+    let rtl = |level| {
+        let mut t = listed("שלום עולם", &[Some(ParaList::bulleted(Bullet::Dot).at_level(level))]);
+        t.edit_paras(None, |p| p.justify = Justify::Auto);
+        let lay = layout(db(), &t);
+        let m = &lay.markers[0];
+        m.glyphs.clone().find(|&i| i != m.tab).map(|i| lay.glyphs[i].origin.x + lay.glyphs[i].advance).unwrap()
+    };
+    assert!((rtl(1) - 200.0).abs() < 1e-6 && (rtl(2) - 182.0).abs() < 1e-6, "{} {}", rtl(1), rtl(2));
+}
+
 /// Are the Japanese craft-fonts faces built in? Tests of Japanese glyphs skip (and say so) when
 /// they aren't: the bundled fonts have none, and [`db`] reads no system fonts.
 fn japanese_fonts() -> bool {
@@ -1344,6 +1759,62 @@ fn character_alignment_on_the_icf_lines_small_characters_up_with_the_largest_fac
         let em_bottom = place("Shippori Mincho", CharAlign::EmBoxBottom, vertical_type);
         let icf_bottom = place("Shippori Mincho", CharAlign::IcfBottom, vertical_type);
         assert!(near(icf_bottom - em_bottom, bottom * 20.0), "vertical {vertical_type}: {em_bottom} {icf_bottom} {m:?}");
+    }
+}
+
+/// The font height reference: 20 pt type that measures the cap height is set at the em size at
+/// which the font's cap height (OS/2) is 20 pt, and the same for the x height and for the ideographic
+/// character face's height (its width in vertical type); the em box keeps 20 pt to the em, and
+/// so does every reference in a font without these values. Auto leading follows the em size,
+/// and two runs that measure different heights each take their own em size.
+#[test]
+fn font_size_measures_the_font_height_reference() {
+    use crate::test_fonts::{HEIGHT_CAP, HEIGHT_FAMILY, HEIGHT_ICF, HEIGHT_X, HEIGHTLESS_FAMILY, height_font};
+    use vectorcraft_doc::FontHeightReference as R;
+    let db = FontDb::with_font_dirs(vec![]);
+    db.add_font(height_font(true).unwrap());
+    db.add_font(height_font(false).unwrap());
+    let st = |family: &str, r: R| CharStyle { font_family: family.into(), font_height_reference: r, ..style(20.0) };
+    // The em size each glyph of `t` is drawn at (its transform's scale times 1,000 units).
+    let ems = |t: &TextObject| layout(&db, t).glyphs.iter().map(|g| g.xf.determinant().abs().sqrt() * 1000.0).collect::<Vec<_>>();
+    let near = |a: f64, b: f64| (a - b).abs() < 1e-6;
+    let (cap, x) = (f64::from(HEIGHT_CAP) / 1000.0, f64::from(HEIGHT_X) / 1000.0);
+    for vertical_type in [false, true] {
+        for (r, h) in [(R::EmBox, 1.0), (R::CapHeight, cap), (R::XHeight, x), (R::IcfBox, HEIGHT_ICF)] {
+            let mut t = point("Hx", st(HEIGHT_FAMILY, r));
+            t.vertical = vertical_type;
+            assert!(ems(&t).iter().all(|e| near(*e, 20.0 / h)), "{r:?} vertical {vertical_type}: {:?}", ems(&t));
+            t.runs[0].style.font_family = HEIGHTLESS_FAMILY.into();
+            assert!(ems(&t).iter().all(|e| near(*e, 20.0)), "{r:?} without the value, vertical {vertical_type}: {:?}", ems(&t));
+        }
+    }
+    let face = db.face(HEIGHT_FAMILY, "Regular").unwrap();
+    assert_eq!(face.font_height(R::CapHeight, false), Some(cap));
+    assert_eq!(db.face(HEIGHTLESS_FAMILY, "Regular").unwrap().font_height(R::XHeight, false), None);
+    // Auto leading: 120% of the em size the line is set at.
+    let lines = layout(&db, &point("H\nH", st(HEIGHT_FAMILY, R::CapHeight))).lines;
+    assert!(near(lines[1].baseline - lines[0].baseline, 1.2 * 20.0 / cap), "{lines:?}");
+    // One run at the em box, the next at the cap height.
+    let mut t = point("H", st(HEIGHT_FAMILY, R::EmBox));
+    t.runs.push(TextRun { text: "H".into(), style: st(HEIGHT_FAMILY, R::CapHeight), inline: None });
+    let set = ems(&t);
+    assert!(set.len() == 2 && near(set[0], 20.0) && near(set[1], 20.0 / cap), "{set:?}");
+}
+
+/// A font height outside 0.1 to 2 ems is not used: 20 pt type that measures a font's 2.5 em cap
+/// height or its 0.05 em x height is set at 20 pt to the em.
+#[test]
+fn a_font_height_outside_a_tenth_to_two_ems_measures_the_em_box() {
+    use crate::test_fonts::{HEIGHT_OUTSIDE_FAMILY, height_outside_font};
+    use vectorcraft_doc::FontHeightReference as R;
+    let db = FontDb::with_font_dirs(vec![]);
+    db.add_font(height_outside_font().unwrap());
+    let face = db.face(HEIGHT_OUTSIDE_FAMILY, "Regular").unwrap();
+    for r in [R::CapHeight, R::XHeight] {
+        assert_eq!(face.font_height(r, false), None, "{r:?}");
+        let st = CharStyle { font_family: HEIGHT_OUTSIDE_FAMILY.into(), font_height_reference: r, ..style(20.0) };
+        let ems = layout(&db, &point("Hx", st)).glyphs.iter().map(|g| g.xf.determinant().abs().sqrt() * 1000.0).collect::<Vec<_>>();
+        assert!(!ems.is_empty() && ems.iter().all(|e| (e - 20.0).abs() < 1e-6), "{r:?}: {ems:?}");
     }
 }
 

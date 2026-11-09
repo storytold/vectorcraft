@@ -16,6 +16,52 @@ fn three_boards() -> Headless {
     h
 }
 
+/// The tool, `app.export` and `file.export` refuse a key no format takes, at the top level of
+/// `options` and inside a PDF object.
+#[test]
+fn an_option_no_format_takes_is_an_error() {
+    let mut h = Headless::new();
+    h.call("engine.execute", json!({"command": "file.new", "params": {"width": 50, "height": 30}})).unwrap();
+    for (options, named) in [
+        (json!({"standard": "pdfX4", "noSuchOption": true}), "noSuchOption"),
+        (json!({"marks": {"useDocumentBleed": true}}), "marks.useDocumentBleed"),
+    ] {
+        let r = call_tool(&mut h, "export", &json!({"format": "pdf", "options": options}));
+        assert!(r.is_error && r.content[0]["text"].as_str().unwrap().contains(named), "{r:?}");
+        let mut params = options.clone();
+        params["format"] = json!("pdf");
+        for method in ["app.export", "file.export"] {
+            let e = if method == "app.export" {
+                h.call(method, params.clone()).unwrap_err()
+            } else {
+                h.call("engine.execute", json!({"command": method, "params": params})).unwrap_err()
+            };
+            assert!(e.contains(named), "{method}: {e}");
+        }
+    }
+    // One object can still carry several formats' options.
+    let r = call_tool(&mut h, "export", &json!({"format": "pdf", "options": {"quality": 80, "styling": "style"}}));
+    assert!(!r.is_error, "{r:?}");
+}
+
+#[test]
+fn raster_export_uses_document_resolution_unless_overridden() {
+    let mut h = Headless::new();
+    h.call("engine.execute", json!({"command": "file.new", "params": {"width": 72, "height": 36, "rasterEffectsPpi": 300}})).unwrap();
+    for (args, size) in [
+        (json!({}), (300, 150)),
+        (json!({"scale": 1}), (72, 36)),
+        (json!({"options": {"scale": 2}}), (144, 72)),
+        (json!({"scale": 2, "options": {"ppi": 150}}), (150, 75)),
+    ] {
+        let mut params = args.clone();
+        params["format"] = json!("png");
+        let r = text(&call_tool(&mut h, "export", &params));
+        let bytes = vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap();
+        assert_eq!(image::load_from_memory(&bytes).unwrap().to_rgba8().dimensions(), size, "{args}");
+    }
+}
+
 #[test]
 fn export_with_a_range_writes_one_file_per_artboard() {
     let mut h = three_boards();
