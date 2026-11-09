@@ -2390,9 +2390,14 @@ fn plugin_storage_writes_are_atomic(st: &dyn vectorcraft_plugins::storage::Stora
     std::fs::remove_file(&entry_copy).unwrap();
 }
 
+/// Gives the file at `path` the modified time `when`, whatever the file system's clock says.
+fn set_modified(path: &std::path::Path, when: std::time::SystemTime) {
+    std::fs::File::options().write(true).open(path).unwrap().set_modified(when).unwrap();
+}
+
 /// Each storage call is charged the bytes it reads and writes, before it does: a settings call the
-/// whole settings file it reads and the whole file it writes, a cache call the entry it reads or
-/// writes. A call that would pass what its meter has left fails and changes nothing.
+/// whole settings file when it reads the file and the whole file when it writes it, a cache call the
+/// entry it reads or writes. A call that would pass what its meter has left fails and changes nothing.
 fn plugin_storage_calls_are_charged_the_files_they_read_and_write() {
     use vectorcraft_plugins::storage::{Meter, StorageError};
     let folder = crate::tests_links::Folder::new("plugin-storage-meter");
@@ -2406,22 +2411,25 @@ fn plugin_storage_calls_are_charged_the_files_they_read_and_write() {
     st.set_setting("big", &[7; 60_000], &mut Meter::unlimited()).unwrap();
     st.set_setting("small", b"x", &mut Meter::unlimited()).unwrap();
 
-    // Reading a one-byte setting reads the whole file.
+    // A file another window changed is read whole, even for a one-byte setting.
+    let touch = || set_modified(&file, std::fs::metadata(&file).unwrap().modified().unwrap() + std::time::Duration::from_secs(1));
+    touch();
     let before = size();
     let mut m = Meter::unlimited();
     assert_eq!(st.setting("small", &mut m).unwrap(), Some(b"x".to_vec()));
     assert_eq!(m.used(), before);
-    // Setting it reads the file and writes it again, and so does deleting one.
+    // Setting it writes the file again, and so does deleting one.
     let mut m = Meter::unlimited();
     st.set_setting("small", b"yz", &mut m).unwrap();
-    assert_eq!(m.used(), before + size());
-    let (before, mut m) = (size(), Meter::unlimited());
+    assert_eq!(m.used(), size());
+    let mut m = Meter::unlimited();
     assert!(st.delete_setting("small", &mut m).unwrap());
-    assert_eq!(m.used(), before + size());
+    assert_eq!(m.used(), size());
     st.set_setting("small", b"y", &mut Meter::unlimited()).unwrap();
 
     // Less left than the file: nothing is read. Enough to read it but not to write it again:
     // nothing changes.
+    touch();
     let mut m = Meter::new(size() - 1);
     assert_eq!(st.setting("small", &mut m), Err(StorageError::Budget));
     assert_eq!(m.used(), 0);
@@ -2438,6 +2446,122 @@ fn plugin_storage_calls_are_charged_the_files_they_read_and_write() {
     assert_eq!(st.cache_entry("tile", &mut Meter::new(999)), Err(StorageError::Budget));
     assert_eq!(st.set_cache_entry("tile", &[2; 10], &mut Meter::new(9)), Err(StorageError::Budget));
     assert_eq!(st.cache_entry("tile", &mut Meter::unlimited()).unwrap().map(|v| v.len()), Some(1000));
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// A session with the plug-in `id` installed in a new store → its storage and the path of its
+/// settings file.
+fn storage_in(
+    s: &mut Session,
+    folder: &crate::tests_links::Folder,
+    id: &str,
+) -> (std::sync::Arc<dyn vectorcraft_plugins::storage::Storage>, std::path::PathBuf) {
+    s.attach_plugin_store(folder.0.clone());
+    install_storing(s, id, "");
+    (vectorcraft_plugins::registry::storage(id).unwrap(), crate::store::plugin_data_dir(&folder.0, id).join("settings.json"))
+}
+
+/// The settings stay in memory while the file keeps its size and modified time: a read doesn't open
+/// the file, a set to the value already there doesn't write it, a real change is in the file when
+/// the call returns, and a file with another time is read again.
+#[test]
+fn plugin_settings_are_read_from_memory_until_the_file_changes() {
+    use vectorcraft_plugins::storage::{Meter, StorageError};
+    let folder = crate::tests_links::Folder::new("plugin-storage-kept");
+    let id = "test.engine.storagekept";
+    let mut s = session();
+    let (st, file) = storage_in(&mut s, &folder, id);
+    st.set_setting("zoom", b"hello", &mut Meter::unlimited()).unwrap();
+    let written = std::fs::metadata(&file).unwrap().modified().unwrap();
+
+    // Other bytes of the same size and the same time: the storage can't tell, so what it answers
+    // shows that it did not read the file.
+    let other =
+        std::fs::read_to_string(&file).unwrap().replace(&vectorcraft_format::base64_encode(b"hello"), &vectorcraft_format::base64_encode(b"world"));
+    std::fs::write(&file, &other).unwrap();
+    set_modified(&file, written);
+    let mut m = Meter::unlimited();
+    assert_eq!(st.setting("zoom", &mut m).unwrap(), Some(b"hello".to_vec()));
+    assert_eq!(m.used(), 0, "answered from memory");
+
+    // Setting the value it has writes nothing: the file still holds the other bytes.
+    let mut m = Meter::unlimited();
+    st.set_setting("zoom", b"hello", &mut m).unwrap();
+    assert_eq!(m.used(), 0, "nothing to write");
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), other);
+
+    // Another time: read again.
+    set_modified(&file, written + std::time::Duration::from_secs(1));
+    let mut m = Meter::unlimited();
+    assert_eq!(st.setting("zoom", &mut m).unwrap(), Some(b"world".to_vec()));
+    assert_eq!(m.used(), other.len() as u64);
+
+    // A change reaches the file before the call returns, and a failed one is not kept.
+    st.set_setting("tile", b"x", &mut Meter::unlimited()).unwrap();
+    assert!(std::fs::read_to_string(&file).unwrap().contains("\"tile\""));
+    assert_eq!(st.set_setting("tile", b"y", &mut Meter::new(0)), Err(StorageError::Budget));
+    assert_eq!(st.setting("tile", &mut Meter::unlimited()).unwrap(), Some(b"x".to_vec()));
+    assert!(st.delete_setting("tile", &mut Meter::unlimited()).unwrap());
+    assert!(!std::fs::read_to_string(&file).unwrap().contains("\"tile\""));
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// `plugin.remove` drops what was kept: a file put back with the removed settings' size and time is
+/// read from disk by the storage of the id installed again.
+#[test]
+fn removing_a_plugin_drops_its_settings_from_memory() {
+    use vectorcraft_plugins::storage::Meter;
+    let folder = crate::tests_links::Folder::new("plugin-storage-kept-removed");
+    let id = "test.engine.storagekeptremoved";
+    let mut s = session();
+    let (st, file) = storage_in(&mut s, &folder, id);
+    st.set_setting("zoom", b"hello", &mut Meter::unlimited()).unwrap();
+    let (bytes, written) = (std::fs::read(&file).unwrap(), std::fs::metadata(&file).unwrap().modified().unwrap());
+    run(&mut s, "plugin.remove", json!({"id": id}));
+
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(&file, &bytes).unwrap();
+    set_modified(&file, written);
+    s.attach_plugin_storage(id);
+    let st = vectorcraft_plugins::registry::storage(id).unwrap();
+    let mut m = Meter::unlimited();
+    assert_eq!(st.setting("zoom", &mut m).unwrap(), Some(b"hello".to_vec()));
+    assert_eq!(m.used(), bytes.len() as u64, "read from the file");
+    s.remove_plugin_storage(id).unwrap();
+}
+
+/// The cache's total stays in memory while the cache folder keeps its time; a write and a clear
+/// update it, and removing an entry drops it. A file whose length changes behind the storage leaves
+/// the folder's time alone, so the total it reports shows that it did not list the folder.
+#[test]
+fn plugin_cache_total_is_kept_and_follows_writes_removals_and_clears() {
+    use vectorcraft_plugins::storage::Meter;
+    let folder = crate::tests_links::Folder::new("plugin-storage-kept-cache");
+    let id = "test.engine.storagekeptcache";
+    let mut s = session();
+    let (st, file) = storage_in(&mut s, &folder, id);
+    let cache = file.parent().unwrap().join("cache");
+    let m = &mut Meter::unlimited();
+    let grow = |name: &str, len: u64| std::fs::File::options().write(true).open(cache.join(name)).unwrap().set_len(len).unwrap();
+
+    st.set_cache_entry("tile", b"abc", m).unwrap();
+    grow("tile.bin", 10);
+    assert_eq!(st.cache_bytes(), 3, "the write set the total");
+    // A write lists the folder for its caps, and starts from what it finds.
+    st.set_cache_entry("more", b"12345", m).unwrap();
+    grow("more.bin", 5);
+    assert_eq!(st.cache_bytes(), 15);
+    assert!(st.remove_cache_entry("more").unwrap());
+    assert_eq!(st.cache_bytes(), 10, "after a removal the total comes from the folder");
+    grow("tile.bin", 20);
+    assert_eq!(st.cache_bytes(), 10, "and is kept again");
+    assert_eq!(st.clear_cache().unwrap(), 20);
+    assert_eq!(st.cache_bytes(), 0);
+
+    // A folder deleted behind the storage is noticed.
+    st.set_cache_entry("tile", b"abc", m).unwrap();
+    std::fs::remove_dir_all(&cache).unwrap();
+    assert_eq!(st.cache_bytes(), 0);
     run(&mut s, "plugin.remove", json!({"id": id}));
 }
 

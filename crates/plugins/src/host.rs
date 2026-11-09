@@ -91,7 +91,7 @@ pub const STORAGE_BUDGET: i32 = -7;
 pub const MAX_STORAGE_CALLS: usize = 10_000;
 
 /// Most bytes one run's storage calls read and write, all together, counting the whole settings
-/// file each settings call reads and writes and each cache entry read or written; a call that would
+/// file each time it is read or written and each cache entry read or written; a call that would
 /// pass it returns [`STORAGE_BUDGET`].
 pub const MAX_STORAGE_BYTES: usize = 1 << 30;
 
