@@ -1420,6 +1420,17 @@ font-technology	Variable	Változó
 	Exporting {}	Exportálás: {}
 	Export…	Exportálás…
 	Extrude & Bevel…	Kihúzás és élletörés…
+	3D (Classic)	3D (klasszikus)
+	Extrude & Bevel (Classic)…	Kihúzás és élletörés (klasszikus)…
+	Surface	Felület
+	Wireframe	Drótváz
+	No Shading	Nincs árnyékolás
+	Plastic	Műanyag
+	Highlight Intensity	Csillanás erőssége
+	Highlight Size	Csillanás mérete
+	Blend Steps	Átmenetlépések
+	Shading Color	Árnyékolás színe
+	Draw Hidden Faces	Rejtett lapok rajzolása
 	Eyedropper	Pipetta
 	Sample Color from Screen	Szín mintavétele a képernyőről
 	This system has no screen color sampler	Ezen a rendszeren nincs képernyős színmintavevő

@@ -579,9 +579,9 @@ fn asking(id: &str, permissions: &str, output: &Value) -> Vec<u8> {
 
 /// A plug-in whose manifest lists permissions installs only once they are all granted (`grant`),
 /// which `plugin.inspect` tells beforehand (`needsApproval`) with the permissions and the module's
-/// hash. The grant is recorded with that hash: replacing the plug-in (`replace: true`) with one
-/// that lists the same permissions needs no new grant, and one that lists another needs one. Removing it forgets the
-/// grant. A plug-in without `permissions` installs as before, with the ones its kind implies.
+/// hash. The grant is recorded with that hash and covers only that module: replacing the plug-in
+/// (`replace: true`) with one with other bytes needs a new grant. Removing it forgets the grant. A
+/// plug-in without `permissions` installs as before, with the ones its kind implies.
 #[test]
 fn a_plugin_that_lists_permissions_installs_once_they_are_granted() {
     let mut s = session();
@@ -617,11 +617,11 @@ fn a_plugin_that_lists_permissions_installs_once_they_are_granted() {
     assert_eq!(installed["permissions"], json!(["doc.read"]));
     let g = vectorcraft_plugins::registry::granted(id).unwrap();
     assert_eq!((g.hash.as_str(), g.permissions.as_slice()), (hash.as_str(), &[vectorcraft_plugins::permissions::Permission::DocRead][..]));
-    // Replaced with another module that lists the same permissions: no new grant needed, and the
-    // grant now records the new module's hash.
+    // Replaced with another module that lists the same permissions: granted again, the grant now
+    // records the new module's hash.
     let other = asking(id, r#"["doc.read"]"#, &json!({"objects": [], "error": null}));
-    assert_eq!(run(&mut s, "plugin.inspect", json!({"dataBase64": vectorcraft_format::base64_encode(&other)}))["needsApproval"], false);
-    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&other), "replace": true}));
+    assert_eq!(run(&mut s, "plugin.inspect", json!({"dataBase64": vectorcraft_format::base64_encode(&other)}))["needsApproval"], true);
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&other), "grant": ["doc.read"], "replace": true}));
     assert_eq!(vectorcraft_plugins::registry::granted(id).unwrap().hash, vectorcraft_plugins::permissions::sha256_hex(&other));
     // One that asks for more is refused until it is granted all of them.
     let more = data(r#"["doc.read","doc.write"]"#);
@@ -639,6 +639,221 @@ fn a_plugin_that_lists_permissions_installs_once_they_are_granted() {
     let plain = install(&mut s, DESATURATE);
     assert_eq!(plain["permissions"], json!(["doc.read", "doc.write", "state"]));
     assert_eq!(run(&mut s, "plugin.inspect", json!({"dataBase64": vectorcraft_format::base64_encode(DESATURATE)}))["needsApproval"], false);
+}
+
+/// A module with other bytes under an id that was granted is not covered, even when it lists the
+/// same permissions: `plugin.inspect` says so, `plugin.install` refuses it and leaves the installed
+/// module and its grant alone, and a new `grant` installs it and records its hash. The same bytes
+/// install again without asking, and a module that lists no permissions never asks.
+#[test]
+fn a_grant_covers_only_the_module_that_was_approved() {
+    use vectorcraft_plugins::permissions::sha256_hex;
+    let mut s = session();
+    let id = "test.engine.permissions.bytes";
+    let first = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+    let changed = asking(id, r#"["doc.read"]"#, &json!({"objects": [], "error": null}));
+    let (first_data, changed_data) = (vectorcraft_format::base64_encode(&first), vectorcraft_format::base64_encode(&changed));
+    let (first_hash, changed_hash) = (sha256_hex(&first), sha256_hex(&changed));
+    run(&mut s, "plugin.install", json!({"dataBase64": first_data, "grant": ["doc.read"]}));
+    assert_eq!(run(&mut s, "plugin.inspect", json!({"dataBase64": changed_data}))["needsApproval"], true);
+    let e = s.execute("plugin.install", &json!({"dataBase64": changed_data, "replace": true})).unwrap_err().to_string();
+    assert!(e.contains("doc.read") && e.contains("`grant`"), "{e}");
+    let e = s.execute("plugin.install", &json!({"dataBase64": changed_data, "replace": true, "hash": changed_hash})).unwrap_err().to_string();
+    assert!(e.contains("`grant`"), "`hash` is not an approval: {e}");
+    assert_eq!(vectorcraft_plugins::registry::get(id).unwrap().hash(), first_hash, "the installed module stays");
+    assert_eq!(vectorcraft_plugins::registry::granted(id).unwrap().hash, first_hash, "its grant stays");
+    // The same bytes need no new grant.
+    assert_eq!(run(&mut s, "plugin.inspect", json!({"dataBase64": first_data}))["needsApproval"], false);
+    run(&mut s, "plugin.install", json!({"dataBase64": first_data}));
+    // A new grant installs the changed module, and the old bytes are no longer covered.
+    run(&mut s, "plugin.install", json!({"dataBase64": changed_data, "grant": ["doc.read"], "hash": changed_hash, "replace": true}));
+    assert_eq!(vectorcraft_plugins::registry::get(id).unwrap().hash(), changed_hash);
+    assert_eq!(vectorcraft_plugins::registry::granted(id).unwrap().hash, changed_hash);
+    assert_eq!(run(&mut s, "plugin.inspect", json!({"dataBase64": first_data}))["needsApproval"], true);
+    run(&mut s, "plugin.remove", json!({"id": id}));
+
+    // A manifest without a list, or with an empty one, asks for nothing, whatever its bytes.
+    let exempt = "test.engine.permissions.exempt";
+    for (permissions, out) in [("null", json!({"objects": []})), ("null", json!({"objects": [], "error": null})), ("[]", json!({"objects": []}))] {
+        let data = vectorcraft_format::base64_encode(&asking(exempt, permissions, &out));
+        assert_eq!(run(&mut s, "plugin.inspect", json!({"dataBase64": data}))["needsApproval"], false, "{permissions}");
+        run(&mut s, "plugin.install", json!({"dataBase64": data, "replace": true}));
+    }
+    run(&mut s, "plugin.remove", json!({"id": exempt}));
+}
+
+/// A stored module whose bytes changed is skipped at the next start and stays in the store with its
+/// grant, and the original bytes load again. A stored grant whose hash is malformed covers nothing.
+/// With a store attached, a matching grant held only by the process doesn't count.
+#[test]
+fn a_stored_grant_covers_only_the_stored_module_it_recorded() {
+    use vectorcraft_plugins::permissions::{Grant, Permission, sha256_hex};
+    let folder = crate::tests_links::Folder::new("plugin-store-recorded-module");
+    let id = "test.engine.permissions.storedbytes";
+    let first = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+    let changed = asking(id, r#"["doc.read"]"#, &json!({"objects": [], "error": null}));
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&first), "grant": ["doc.read"]}));
+    let grants = folder.0.join("grants.json");
+    let recorded = std::fs::read(&grants).unwrap();
+    let module = std::fs::read_dir(&folder.0)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .find(|p| p.extension().is_some_and(|x| x == "wasm"))
+        .expect("the stored module");
+    let forget = || {
+        vectorcraft_plugins::registry::remove(id);
+        vectorcraft_plugins::registry::revoke(id);
+    };
+    let starts = || {
+        forget();
+        let mut next = session();
+        next.attach_plugin_store(folder.0.clone());
+        vectorcraft_plugins::registry::get(id).is_some()
+    };
+    assert!(starts(), "the module that was approved loads");
+    std::fs::write(&module, &changed).unwrap();
+    assert!(!starts(), "other bytes under the old grant are skipped");
+    assert_eq!(std::fs::read(&module).unwrap(), changed, "the module stays in the store");
+    assert_eq!(std::fs::read(&grants).unwrap(), recorded, "its grant stays");
+    std::fs::write(&module, &first).unwrap();
+    assert!(starts(), "the approved bytes load again");
+
+    // A malformed hash is no wildcard, even for the module on disk.
+    let upper = sha256_hex(&first).to_uppercase();
+    for hash in ["", "00", upper.as_str()] {
+        std::fs::write(&grants, serde_json::to_vec(&json!([{"id": id, "hash": hash, "permissions": ["doc.read"]}])).unwrap()).unwrap();
+        assert!(!starts(), "hash {hash:?}");
+    }
+
+    // The store's grants are the ones that count, even when the process holds one for these bytes.
+    std::fs::write(&grants, &recorded).unwrap();
+    assert!(starts());
+    let mut attached = session();
+    attached.attach_plugin_store(folder.0.clone());
+    vectorcraft_plugins::registry::grant(Grant { id: id.into(), hash: sha256_hex(&changed), permissions: vec![Permission::DocRead] });
+    let inspected = run(&mut attached, "plugin.inspect", json!({"dataBase64": vectorcraft_format::base64_encode(&changed)}));
+    assert_eq!(inspected["needsApproval"], true, "a grant held only by the process doesn't count with a store attached");
+    run(&mut attached, "plugin.remove", json!({"id": id}));
+}
+
+/// A write to the plug-in store that fails leaves the store's module beside the grant that approved
+/// it, so the old module loads at the next start: a module that can't be written doesn't update the
+/// grant, and a grant that can't be written puts the old module back. On a first install, it takes
+/// the new module out again.
+#[test]
+fn a_failed_store_write_keeps_the_stored_module_with_its_grant() {
+    use vectorcraft_plugins::permissions::sha256_hex;
+    let folder = crate::tests_links::Folder::new("plugin-store-failed-write");
+    let id = "test.engine.permissions.failedwrite";
+    let first = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+    let changed = asking(id, r#"["doc.read","doc.write"]"#, &json!({"objects": []}));
+    let first_data = vectorcraft_format::base64_encode(&first);
+    let update = json!({"dataBase64": vectorcraft_format::base64_encode(&changed), "grant": ["doc.read", "doc.write"], "replace": true});
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": first_data, "grant": ["doc.read"]}));
+    let grants = folder.0.join("grants.json");
+    let recorded = std::fs::read(&grants).unwrap();
+    let module = std::path::PathBuf::from(s.stored_plugin_file(id).unwrap());
+    let starts = || {
+        vectorcraft_plugins::registry::remove(id);
+        vectorcraft_plugins::registry::revoke(id);
+        let mut next = session();
+        next.attach_plugin_store(folder.0.clone());
+        vectorcraft_plugins::registry::get(id).map(|p| p.hash().to_string())
+    };
+    let block = |path: &std::path::Path| {
+        std::fs::remove_file(path).unwrap();
+        std::fs::create_dir_all(path.join("block")).unwrap();
+    };
+
+    // The module can't be written: the grant stays the old module's.
+    block(&module);
+    run(&mut s, "plugin.install", update.clone());
+    assert_eq!(std::fs::read(&grants).unwrap(), recorded, "the grant isn't updated for a module that wasn't stored");
+    std::fs::remove_dir_all(&module).unwrap();
+    std::fs::write(&module, &first).unwrap();
+    assert_eq!(starts(), Some(sha256_hex(&first)), "the old module loads after a failed module write");
+
+    // The grants file is full: the new grant, which is longer, doesn't fit.
+    let cap = 1 << 20;
+    let mut entries: Vec<Value> = serde_json::from_slice(&recorded).unwrap();
+    entries.push(json!({"id": "", "pad": ""}));
+    let room = cap - serde_json::to_vec(&entries).unwrap().len();
+    *entries.last_mut().unwrap() = json!({"id": "", "pad": "x".repeat(room)});
+    let full = serde_json::to_vec(&entries).unwrap();
+    assert_eq!(full.len(), cap);
+    std::fs::write(&grants, &full).unwrap();
+    run(&mut s, "plugin.install", update.clone());
+    assert_eq!(std::fs::read(&grants).unwrap(), full, "not written past the cap");
+    assert_eq!(std::fs::read(&module).unwrap(), first, "the old module is put back");
+    assert_eq!(starts(), Some(sha256_hex(&first)), "the old module loads after a failed grant write");
+
+    // The grants file can't be read, so nothing can be recorded in it.
+    block(&grants);
+    run(&mut s, "plugin.install", update.clone());
+    assert_eq!(std::fs::read(&module).unwrap(), first, "the old module is put back");
+    std::fs::remove_dir_all(&grants).unwrap();
+    std::fs::write(&grants, &recorded).unwrap();
+    assert_eq!(starts(), Some(sha256_hex(&first)), "the old module loads once the grants are readable");
+
+    // A stored module that can't be read back isn't replaced, so a failed grant write can't lose it.
+    let oversized = vectorcraft_plugins::Limits::default().max_module_bytes as u64 + 1;
+    std::fs::File::options().write(true).open(&module).unwrap().set_len(oversized).unwrap();
+    block(&grants);
+    run(&mut s, "plugin.install", update);
+    assert_eq!(std::fs::metadata(&module).unwrap().len(), oversized, "the stored module stays");
+    std::fs::remove_dir_all(&grants).unwrap();
+    std::fs::write(&grants, &recorded).unwrap();
+    std::fs::write(&module, &first).unwrap();
+
+    // A first install whose grant can't be written leaves no module without a grant in the store.
+    run(&mut s, "plugin.remove", json!({"id": id}));
+    assert!(!module.exists() && !grants.exists());
+    std::fs::create_dir_all(grants.join("block")).unwrap();
+    run(&mut s, "plugin.install", json!({"dataBase64": first_data, "grant": ["doc.read"]}));
+    assert!(!module.exists(), "the store holds no module its grants don't cover");
+    vectorcraft_plugins::registry::remove(id);
+    vectorcraft_plugins::registry::revoke(id);
+}
+
+/// A plug-in folder reports a changed module as needing approval and still loads the other files;
+/// granted on its own, the changed module loads from the folder. A session without a store uses the
+/// grants held by the process.
+#[test]
+fn a_plugin_folder_skips_a_changed_module_until_it_is_approved() {
+    let mut s = session();
+    let id = "test.engine.permissions.folderbytes";
+    let plain = "test.engine.permissions.folderplain";
+    let first = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+    let changed = asking(id, r#"["doc.read"]"#, &json!({"objects": [], "error": null}));
+    let dir = crate::tests_links::Folder::new("plugin-folder-changed-module");
+    let file = dir.0.join("asks.wasm");
+    std::fs::write(&file, &first).unwrap();
+    std::fs::write(dir.0.join("plain.wasm"), asking(plain, "null", &json!({"objects": []}))).unwrap();
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&first), "grant": ["doc.read"]}));
+    let path = json!({"path": dir.0.display().to_string()});
+    let r = run(&mut s, "plugin.reload", path.clone());
+    assert_eq!((r["loaded"].as_array().unwrap().len(), r["failed"].as_array().unwrap().len()), (2, 0), "{r}");
+
+    std::fs::write(&file, &changed).unwrap();
+    let r = run(&mut s, "plugin.reload", path.clone());
+    assert_eq!(r["loaded"], json!([plain]), "the other file still loads");
+    let failed = r["failed"].as_array().unwrap();
+    assert_eq!(failed.len(), 1, "{r}");
+    assert!(failed[0]["file"].as_str().unwrap().ends_with("asks.wasm"), "{r}");
+    let why = failed[0]["error"].as_str().unwrap();
+    assert!(why.contains("needs approval") && why.contains("doc.read"), "{why}");
+    let hash = vectorcraft_plugins::permissions::sha256_hex(&first);
+    assert_eq!(vectorcraft_plugins::registry::get(id).unwrap().hash(), hash, "the module installed earlier stays");
+
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&changed), "grant": ["doc.read"], "replace": true}));
+    let r = run(&mut s, "plugin.reload", path);
+    assert_eq!(r["failed"], json!([]), "approved on its own, it loads: {r}");
+    run(&mut s, "plugin.remove", json!({"id": id}));
+    run(&mut s, "plugin.remove", json!({"id": plain}));
 }
 
 /// The host enforces what a filter was granted: without `doc.write` an output that changes the
@@ -876,18 +1091,25 @@ fn a_grant_covers_only_the_module_it_was_given_to() {
     std::fs::write(&stored[0], &other).unwrap();
     vectorcraft_plugins::registry::remove(id);
     vectorcraft_plugins::registry::revoke(id);
+    vectorcraft_plugins::registry::set_storage(id, None);
+    let no_storage = |how: &str| {
+        assert!(vectorcraft_plugins::registry::storage(id).is_none(), "{how} gives another module the id's settings and cache");
+    };
     let mut next = session();
     next.attach_plugin_store(folder.0.clone());
     assert!(vectorcraft_plugins::registry::get(id).is_none(), "another module isn't loaded under the grant");
+    no_storage("the next start");
     let dir = crate::tests_links::Folder::new("plugin-folder-grant-hash");
     std::fs::write(dir.0.join("other.wasm"), &other).unwrap();
     let r = run(&mut next, "plugin.reload", json!({"path": dir.0.display().to_string()}));
     assert_eq!(r["loaded"], json!([]));
     let why = r["failed"][0]["error"].as_str().unwrap();
     assert!(why.contains("needs approval"), "{why}");
+    no_storage("a folder load");
     let data = vectorcraft_format::base64_encode(&other);
     let e = next.execute("plugin.install", &json!({"dataBase64": data, "replace": true})).unwrap_err().to_string();
     assert!(e.contains("`grant`"), "{e}");
+    no_storage("a refused install");
     // Granted, it reads the settings the first module set.
     run(&mut next, "plugin.install", json!({"dataBase64": data, "grant": ["settings", "cache"], "replace": true}));
     run(&mut next, "plugin.run", json!({"id": id, "ids": []}));

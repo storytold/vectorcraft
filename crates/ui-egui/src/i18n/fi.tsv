@@ -472,6 +472,17 @@
 	Inflate	Täytä ilmalla
 	Select objects, then pick an object type to give them a 3D effect.	Valitse objektit ja valitse sitten objektityyppi, niin niille tulee 3D-tehoste.
 	Extrude & Bevel…	Pursota ja viistä…
+	3D (Classic)	3D (perinteinen)
+	Extrude & Bevel (Classic)…	Pursota ja viistä (perinteinen)…
+	Surface	Pinta
+	Wireframe	Rautalanka
+	No Shading	Ei varjostusta
+	Plastic	Muovi
+	Highlight Intensity	Kiillon voimakkuus
+	Highlight Size	Kiillon koko
+	Blend Steps	Sulautusvaiheet
+	Shading Color	Varjostusväri
+	Draw Hidden Faces	Piirrä piilotetut pinnat
 	Revolve…	Pyöräytä…
 	Inflate…	Täytä ilmalla…
 	Materials…	Materiaalit…

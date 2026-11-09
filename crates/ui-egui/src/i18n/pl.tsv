@@ -434,6 +434,17 @@
 	Inflate	Nadmuchanie
 	Select objects, then pick an object type to give them a 3D effect.	Zaznacz obiekty, a następnie wybierz typ obiektu, aby nadać im efekt 3D.
 	Extrude & Bevel…	Wyciągnięcie i fazowanie…
+	3D (Classic)	3D (klasyczne)
+	Extrude & Bevel (Classic)…	Wyciągnięcie i fazowanie (klasyczne)…
+	Surface	Powierzchnia
+	Wireframe	Szkielet
+	No Shading	Bez cieniowania
+	Plastic	Plastik
+	Highlight Intensity	Intensywność połysku
+	Highlight Size	Rozmiar połysku
+	Blend Steps	Kroki przejścia
+	Shading Color	Kolor cieniowania
+	Draw Hidden Faces	Rysuj ukryte ściany
 	Revolve…	Obrót…
 	Inflate…	Nadmuchanie…
 	Materials…	Materiały…
