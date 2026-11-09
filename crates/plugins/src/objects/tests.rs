@@ -481,6 +481,212 @@ fn cmyk_image_pixels_go_through_the_working_cmyk_profile() {
     assert_ne!(&pixels[..3], &[0, 0, 0], "not converted without the profile");
 }
 
+/// The image object for `key` in `d`'s layer, `size` pixels.
+fn placed(d: &mut Document, layer: NodeId, key: &str, size: (u32, u32)) -> NodeId {
+    let n = image_node(d, key, size, None);
+    d.insert(Some(layer), usize::MAX, n).unwrap()
+}
+
+/// The largest pixels one image may have fill exactly [`MAX_INPUT_PIXELS`] characters of base64
+/// (512 × 384); one pixel more doesn't fit.
+#[test]
+fn an_image_at_the_limit_is_given_and_one_pixel_more_is_omitted() {
+    let (mut d, _, layer, _) = mixed();
+    for ((w, h), omitted) in [((512, 384), false), ((1, 196_609), true)] {
+        d.images.insert("limit".into(), ImageBlob::png(png(w, h)));
+        let id = placed(&mut d, layer, "limit", (w, h));
+        let o = encode_read_only(&d, d.node(id).unwrap()).unwrap();
+        assert_eq!(o["pixelsOmitted"], json!(omitted), "{w} × {h}");
+        assert_eq!(o.get("pixelsBase64").and_then(Value::as_str).map(str::len), (!omitted).then_some(MAX_INPUT_PIXELS), "{w} × {h}");
+    }
+}
+
+/// Sixteen images at the per-image limit fill [`MAX_INPUT_PIXELS_TOTAL`] exactly and are all given;
+/// the next one in paint order, even a small one, comes with `pixelsOmitted`.
+#[test]
+fn images_fill_the_pixel_total_and_the_next_is_omitted() {
+    let (mut d, _, layer, [_, embedded, ..]) = mixed();
+    d.images.insert("limit".into(), ImageBlob::png(png(512, 384)));
+    let mut ids: Vec<NodeId> = (0..16).map(|_| placed(&mut d, layer, "limit", (512, 384))).collect();
+    ids.push(embedded);
+    let (bytes, _) = encode_input_with(&d, &ids, &[InputKind::Image], usize::MAX).unwrap();
+    let v: Value = serde_json::from_slice(&bytes).unwrap();
+    let objects = v["objects"].as_array().unwrap();
+    assert_eq!(objects.len(), 17);
+    let given: usize = objects.iter().filter_map(|o| o.get("pixelsBase64")?.as_str()).map(str::len).sum();
+    assert_eq!(given, MAX_INPUT_PIXELS_TOTAL);
+    let omitted: Vec<bool> = objects.iter().map(|o| o["pixelsOmitted"] == json!(true)).collect();
+    assert_eq!(omitted, [vec![false; 16], vec![true]].concat());
+}
+
+/// Type whose runs and paragraphs together fill [`MAX_INPUT_TEXT_TOTAL`] exactly is all given, and
+/// type after it in paint order comes with `truncated`. With one byte more, the last type that
+/// doesn't fit comes with `truncated` and what it leaves still goes to the type after it.
+#[test]
+fn type_fills_the_text_total_and_what_follows_is_truncated() {
+    use vectorcraft_doc::{CharStyle, TextObject};
+    let (mut d, _, layer, _) = mixed();
+    let place = |d: &mut Document, len: usize| {
+        let t = TextObject::point(Point::new(0.0, 0.0), &"x".repeat(len), CharStyle::default());
+        let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+        d.insert(Some(layer), usize::MAX, n).unwrap()
+    };
+    let one = place(&mut d, 1);
+    let o = encode_read_only(&d, d.node(one).unwrap()).unwrap();
+    // Everything but the text itself, with the commas between runs and paragraphs and without
+    // their brackets.
+    let overhead: usize = ["runs", "paragraphs"].iter().map(|k| o["text"][k].to_string().len() - 2).sum::<usize>() - 1;
+    let full = overhead + MAX_INPUT_TEXT;
+    let count = MAX_INPUT_TEXT_TOTAL / full;
+    let rest = MAX_INPUT_TEXT_TOTAL - count * full - overhead;
+    assert!((1..=MAX_INPUT_TEXT).contains(&rest));
+    for (filler, truncated) in [(rest, [false, true]), (rest + 1, [true, false])] {
+        let mut ids: Vec<NodeId> = (0..count).map(|_| place(&mut d, MAX_INPUT_TEXT)).collect();
+        ids.push(place(&mut d, filler));
+        ids.push(one);
+        let (bytes, _) = encode_input_with(&d, &ids, &[InputKind::Type], usize::MAX).unwrap();
+        let v: Value = serde_json::from_slice(&bytes).unwrap();
+        let objects = v["objects"].as_array().unwrap();
+        assert_eq!(objects.len(), count + 2);
+        assert!(objects[..count].iter().all(|o| o["truncated"] == json!(false)), "filler {filler}");
+        assert_eq!([&objects[count]["truncated"], &objects[count + 1]["truncated"]], truncated.map(|t| json!(t)).each_ref(), "filler {filler}");
+    }
+}
+
+/// A CMYK TIFF `w` × `h` pixels of no ink.
+fn cmyk_blob(w: u32, h: u32) -> ImageBlob {
+    let inks = vectorcraft_doc::cmyk::Inks::new(w, h, vec![0; (w * h * 4) as usize]).unwrap();
+    ImageBlob::cmyk_tiff(&inks).unwrap()
+}
+
+/// `blob`, a little-endian TIFF, with its strip offset past the end of the file: its header still
+/// reads and its pixels don't.
+fn without_strips(blob: &ImageBlob) -> ImageBlob {
+    let mut bytes = blob.bytes.to_vec();
+    assert_eq!(&bytes[..2], b"II");
+    let word = |b: &[u8], at: usize| u32::from_le_bytes(b[at..at + 4].try_into().unwrap()) as usize;
+    let ifd = word(&bytes, 4);
+    let count = usize::from(u16::from_le_bytes([bytes[ifd], bytes[ifd + 1]]));
+    let entry = (0..count).map(|i| ifd + 2 + i * 12).find(|&e| bytes[e..e + 2] == 273u16.to_le_bytes()).unwrap();
+    let past = (bytes.len() as u32 + 4096).to_le_bytes();
+    bytes[entry + 8..entry + 12].copy_from_slice(&past);
+    ImageBlob::png(bytes)
+}
+
+/// An image that can't be given isn't decoded: past the per-image limit, past what is left of the
+/// total, once the total is used up, when its header disagrees with its object, and when it is
+/// linked, a CMYK image as much as any other. One that fits is decoded once.
+#[test]
+fn an_image_that_cannot_be_given_is_not_decoded() {
+    let (mut d, _, layer, [_, embedded, linked, ..]) = mixed();
+    d.images.insert("big".into(), ImageBlob::png(png(1, 196_609)));
+    d.images.insert("k".into(), cmyk_blob(2, 1));
+    let big = placed(&mut d, layer, "big", (1, 196_609));
+    let wrong = placed(&mut d, layer, "e", (3, 1));
+    let cmyk = placed(&mut d, layer, "k", (2, 1));
+    let cmyk_wrong = placed(&mut d, layer, "k", (3, 1));
+    let within = |pixels: usize| Allowance { pixels, ..Allowance::FULL };
+    for (id, left, omitted, decodes, what) in [
+        (big, Allowance::FULL, true, 0, "past the per-image limit"),
+        (embedded, within(11), true, 0, "past what is left of the total"),
+        (embedded, within(0), true, 0, "the total used up"),
+        (wrong, Allowance::FULL, true, 0, "another size than its object"),
+        (linked, Allowance::FULL, true, 0, "linked"),
+        (embedded, within(12), false, 1, "fits"),
+        (cmyk, within(11), true, 0, "CMYK past what is left of the total"),
+        (cmyk_wrong, Allowance::FULL, true, 0, "CMYK of another size than its object"),
+        (cmyk, within(12), false, 1, "CMYK that fits"),
+    ] {
+        DECODES.with(|n| n.set(0));
+        let (bytes, _) = encode_input_within(&d, &[id], &[InputKind::Image], left).unwrap();
+        let v: Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(v["objects"][0]["pixelsOmitted"], json!(omitted), "{what}");
+        assert_eq!(DECODES.with(|n| n.get()), decodes, "{what}");
+    }
+}
+
+/// An image that reaches the decoder and fails takes its size from the total, a broken CMYK image
+/// as much as a broken PNG: the next image doesn't fit what the broken one left.
+#[test]
+fn an_image_that_fails_to_decode_takes_from_the_total() {
+    let (mut d, _, layer, [_, embedded, ..]) = mixed();
+    let mut png_data = png(2, 1);
+    let idat = png_data.windows(4).position(|w| w == b"IDAT").unwrap();
+    png_data[idat + 6] ^= 0xFF;
+    for (what, blob, expect_cmyk) in [("PNG", ImageBlob::png(png_data), false), ("CMYK", without_strips(&cmyk_blob(2, 1)), true)] {
+        assert_eq!(blob.is_cmyk(), expect_cmyk, "{what}");
+        d.images.insert("broken".into(), blob);
+        let bad = placed(&mut d, layer, "broken", (2, 1));
+        let omitted = |pixels: usize| {
+            DECODES.with(|n| n.set(0));
+            let left = Allowance { pixels, ..Allowance::FULL };
+            let (bytes, _) = encode_input_within(&d, &[bad, embedded], &[InputKind::Image], left).unwrap();
+            let v: Value = serde_json::from_slice(&bytes).unwrap();
+            (v["objects"][0]["pixelsOmitted"].clone(), v["objects"][1]["pixelsOmitted"].clone(), DECODES.with(|n| n.get()))
+        };
+        assert_eq!(omitted(12), (json!(true), json!(true), 1), "{what}: one decode fits 12 characters");
+        assert_eq!(omitted(24), (json!(true), json!(false), 2), "{what}: the next image fits what is left");
+    }
+}
+
+/// Runs in one paragraph keep their own leading: each run comes with its character attributes, and
+/// the paragraph is one paragraph style.
+#[test]
+fn runs_in_one_paragraph_keep_their_own_leading() {
+    use vectorcraft_doc::{CharStyle, TextObject, TextRun};
+    let (mut d, _, layer, _) = mixed();
+    let mut t = TextObject::point(Point::new(0.0, 0.0), "", CharStyle::default());
+    let leading = CharStyle { leading: Some(14.0), ..CharStyle::default() };
+    t.runs = vec![TextRun::new("a".to_string(), leading), TextRun::new("b".to_string(), CharStyle::default())];
+    let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+    let id = d.insert(Some(layer), usize::MAX, n).unwrap();
+    let o = encode_read_only(&d, d.node(id).unwrap()).unwrap();
+    assert_eq!(o["text"]["runs"][0]["style"]["leading"], json!(14.0));
+    assert_eq!((&o["text"]["runs"][1]["text"], &o["text"]["runs"][1]["style"]["leading"]), (&json!("b"), &Value::Null));
+    assert_eq!(o["text"]["paragraphs"].as_array().unwrap().len(), 1);
+}
+
+/// Each read-only object's place in the input holds that object, pixels included, and the input's
+/// paths have no place. An output that echoes an object is compared with what that place holds; an
+/// input that doesn't hold it refuses the output, as the host's own error rather than the
+/// plug-in's.
+#[test]
+fn read_only_objects_are_read_from_their_place_in_the_input_and_fail_closed() {
+    let (d, ids, _, [text, embedded, ..]) = mixed();
+    let order = [ids[0], text, embedded];
+    let (bytes, read_only) = encode_input_with(&d, &order, &InputKind::ALL, usize::MAX).unwrap();
+    let v: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(read_only.len(), 2);
+    let at = |id: NodeId| serde_json::from_slice::<Value>(&bytes[read_only[&id].clone()]).unwrap();
+    assert_eq!(at(text), v["objects"][1]);
+    assert_eq!(at(embedded), v["objects"][2]);
+    assert!(at(embedded)["pixelsBase64"].is_string());
+    let echo = json!({"objects": [v["objects"][1], v["objects"][2]]}).to_string();
+    assert!(decode_output_with(echo.as_bytes(), &bytes, &read_only).is_ok());
+    let garbage = vec![b'x'; bytes.len()];
+    for input in [garbage.as_slice(), b"not json", br#"{"objects":[]}"#, b"{}", b""] {
+        let e = decode_output_with(echo.as_bytes(), input, &read_only).unwrap_err().to_string();
+        assert!(!e.starts_with("plug-in"), "{e}");
+    }
+    // `{"id": …}` alone needs nothing from the input.
+    let kept = json!({"objects": [{"id": text.0}, {"id": embedded.0}]}).to_string();
+    assert!(decode_output_with(kept.as_bytes(), b"", &read_only).is_ok());
+}
+
+/// A path's effect parameters can nest deeper than the JSON reader goes. Checking the output reads
+/// only the read-only objects from the input, so such a path beside one doesn't fail the run.
+#[test]
+fn a_path_nested_past_the_json_reader_beside_a_read_only_object_passes_the_check() {
+    let (mut d, ids, _, [text, ..]) = mixed();
+    let params = (0..200).fold(json!(1), |inner, _| json!([inner]));
+    d.node_mut(ids[0]).unwrap().appearance.effects.push(vectorcraft_doc::Effect { id: "x".into(), params, visible: true });
+    let (bytes, read_only) = encode_input_with(&d, &[ids[0], text], &[InputKind::Type], usize::MAX).unwrap();
+    assert!(serde_json::from_slice::<Value>(&bytes).is_err(), "the input is deeper than the reader goes");
+    let echo = serde_json::from_slice::<Value>(&bytes[read_only[&text].clone()]).unwrap();
+    let out = decode_output_with(json!({"objects": [echo]}).to_string().as_bytes(), &bytes, &read_only).unwrap();
+    assert_eq!(out.objects.iter().filter(|o| o.kept).count(), 1);
+}
+
 /// A symbol instance comes with the symbol it shows and its transform, never its art; one whose
 /// symbol the document lacks says so.
 #[test]
@@ -521,7 +727,7 @@ fn input_totals_cover_images_and_type_in_order() {
     assert!(objects[1]["text"]["runs"].as_array().unwrap().is_empty() && objects[4].get("pixelsBase64").is_none());
     assert_eq!(objects[3]["pixelsBase64"], encode_read_only(&d, d.node(embedded).unwrap()).unwrap()["pixelsBase64"]);
     for o in objects {
-        assert_eq!(Some(o), read_only.get(&NodeId(o["id"].as_u64().unwrap())));
+        assert!(read_only.contains_key(&NodeId(o["id"].as_u64().unwrap())));
     }
     // Within the full totals every one of them is given.
     let (bytes, _) = encode_input_with(&d, &ids, &InputKind::ALL, usize::MAX).unwrap();
@@ -689,7 +895,7 @@ fn a_changed_field_is_named_escaped_and_short() {
     let at = v["objects"].as_array().unwrap().iter().position(|o| o["id"] == json!(text.0)).unwrap();
     let key = format!("\u{202E}{}", "k".repeat(500));
     v["objects"][at][key.as_str()] = json!(1);
-    let e = decode_output_with(v.to_string().as_bytes(), &read_only).unwrap_err().to_string();
+    let e = decode_output_with(v.to_string().as_bytes(), &bytes, &read_only).unwrap_err().to_string();
     let shown = e.split('\'').nth(1).unwrap_or_default();
     assert!(!e.contains('\u{202E}') && shown.starts_with("\\u{202E}kkk") && shown.ends_with('…'), "{e}");
     assert_eq!(shown.chars().count(), crate::permissions::MAX_SHOWN_FIELD, "{e}");
@@ -707,7 +913,7 @@ fn read_only_kind_field_and_omission_refuse() {
     assert_eq!(read_only.len(), 5);
     let input: Value = serde_json::from_slice(&bytes).unwrap();
     let before = d.clone();
-    let out = decode_output_with(&bytes, &read_only).unwrap();
+    let out = decode_output_with(&bytes, &bytes, &read_only).unwrap();
     assert_eq!(out.objects.iter().filter(|o| o.kept).count(), 5);
     apply_output(&mut d, &targets, out.objects, None, &keep).unwrap();
     assert_eq!(d, before, "an exact echo changes nothing");
@@ -716,19 +922,20 @@ fn read_only_kind_field_and_omission_refuse() {
     // Numbers written another way are the same numbers.
     let mut echo = input.clone();
     echo["objects"][3]["transform"] = json!([1, 0, 0, 1, 5, 50]);
-    assert!(decode_output_with(echo.to_string().as_bytes(), &read_only).is_ok());
+    assert!(decode_output_with(echo.to_string().as_bytes(), &bytes, &read_only).is_ok());
     // So is an id written as a float; a fractional one names no object.
     let id = input["objects"][3]["id"].as_u64().unwrap();
     let mut echo = input.clone();
     echo["objects"][3]["id"] = json!(id as f64);
-    let out = decode_output_with(echo.to_string().as_bytes(), &read_only).unwrap();
+    let out = decode_output_with(echo.to_string().as_bytes(), &bytes, &read_only).unwrap();
     assert_eq!(out.objects.iter().filter(|o| o.kept).count(), 5);
     echo["objects"][3]["id"] = json!(id as f64 + 0.5);
-    assert!(decode_output_with(echo.to_string().as_bytes(), &read_only).is_err());
+    assert!(decode_output_with(echo.to_string().as_bytes(), &bytes, &read_only).is_err());
     // `{"id"}` alone keeps it; the paths left out are deleted and a new path goes above the type.
     let ro = |id: NodeId| json!({"id": id.0});
     let out = json!({"objects": [ro(text), {"name": "new", "path": square(0.0)}, ro(embedded), ro(linked), ro(star), ro(ghost)]});
-    let made = apply_output(&mut d, &targets, decode_output_with(out.to_string().as_bytes(), &read_only).unwrap().objects, None, &keep).unwrap();
+    let made =
+        apply_output(&mut d, &targets, decode_output_with(out.to_string().as_bytes(), &bytes, &read_only).unwrap().objects, None, &keep).unwrap();
     assert_eq!(names(&d, layer), ["?", "?", "T", "new", "E", "L", "S", "G"]);
     assert_eq!(made.len(), 6);
     assert!(ids.iter().all(|id| d.node(*id).is_none()));
@@ -767,7 +974,7 @@ fn read_only_kind_field_and_omission_refuse() {
             "`type` must be \"path\" or \"compound\"".to_string(),
         ),
     ] {
-        let e = decode_output_with(out.to_string().as_bytes(), &read_only).unwrap_err().to_string();
+        let e = decode_output_with(out.to_string().as_bytes(), &bytes, &read_only).unwrap_err().to_string();
         assert!(e.contains(&says), "{says}: {e}");
     }
     // Writing one or leaving one out is refused when applying too, whatever decoded the output.

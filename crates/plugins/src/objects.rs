@@ -6,6 +6,7 @@
 //! in-range coordinates, capped counts, clamped colours) before it reaches the document.
 
 use std::collections::{HashMap, HashSet};
+use std::ops::Range;
 use std::sync::{Arc, Mutex};
 
 use serde_json::{Value, json};
@@ -46,7 +47,8 @@ pub const MAX_INPUT_RUNS: usize = 4_096;
 /// image comes with `pixelsOmitted`.
 pub const MAX_INPUT_PIXELS: usize = 1 << 20;
 /// Most pixels a filter is given over all the images of one input, in characters of base64: an
-/// image whose pixels don't fit what the images before it left comes with `pixelsOmitted`.
+/// image whose pixels don't fit what the images before it left comes with `pixelsOmitted`, and an
+/// image the host starts to decode takes its size from the total even when decoding fails.
 pub const MAX_INPUT_PIXELS_TOTAL: usize = 16 << 20;
 /// Most text a filter is given over all the type of one input, in bytes of the JSON of their runs
 /// and paragraphs: type that doesn't fit what the type before it left comes with `truncated`.
@@ -191,11 +193,14 @@ pub fn encode_input(doc: &Document, ids: &[NodeId]) -> Vec<u8> {
 /// `truncated`), a read-only object whose other fields alone don't fit is an [`Error::Limit`]
 /// naming it and its size, a path or compound path that doesn't fit is the limit the runtime gives
 /// an input past its share, and more than [`MAX_OBJECTS`] read-only objects, more than an output
-/// may list, is an [`Error::Limit`] too. Also returns those objects by id, which the filter
-/// must return as they were ([`decode_output_with`]).
-pub fn encode_input_with(doc: &Document, ids: &[NodeId], kinds: &[InputKind], capacity: usize) -> Result<(Vec<u8>, HashMap<NodeId, Value>)> {
+/// may list, is an [`Error::Limit`] too. Also returns where those objects are in the input, which
+/// the filter must return as they were ([`decode_output_with`]).
+pub fn encode_input_with(doc: &Document, ids: &[NodeId], kinds: &[InputKind], capacity: usize) -> Result<(Vec<u8>, ReadOnlySpans)> {
     encode_input_within(doc, ids, kinds, Allowance { input: capacity.saturating_sub(EMPTY_INPUT.len()), ..Allowance::FULL })
 }
+
+/// Where each read-only object of an input is in the input's bytes.
+pub type ReadOnlySpans = HashMap<NodeId, Range<usize>>;
 
 /// The input with no objects; each object adds its JSON and a comma.
 const EMPTY_INPUT: &[u8] = b"{\"objects\":[]}";
@@ -214,27 +219,23 @@ impl Allowance {
     const FULL: Allowance = Allowance { pixels: MAX_INPUT_PIXELS_TOTAL, text: MAX_INPUT_TEXT_TOTAL, input: usize::MAX };
 }
 
-/// [`encode_input_with`] within `left` of the totals. Each read-only object is kept once, in the map
-/// it returns, and written into the input from there.
-fn encode_input_within(doc: &Document, ids: &[NodeId], kinds: &[InputKind], mut left: Allowance) -> Result<(Vec<u8>, HashMap<NodeId, Value>)> {
+/// [`encode_input_with`] within `left` of the totals. Each object is held only while it is written
+/// into the input.
+fn encode_input_within(doc: &Document, ids: &[NodeId], kinds: &[InputKind], mut left: Allowance) -> Result<(Vec<u8>, ReadOnlySpans)> {
     let mut read_only = HashMap::new();
     let symbols = doc.symbol_boxes();
     let mut out = b"{\"objects\":[".to_vec();
     let mut first = true;
     for n in ids.iter().filter_map(|id| doc.node(*id)) {
-        let path;
-        let (o, checked): (&Value, bool) = match input_kind(n).filter(|k| kinds.contains(k)) {
+        let (o, checked) = match input_kind(n).filter(|k| kinds.contains(k)) {
             // The output must return every read-only object, and lists at most `MAX_OBJECTS`.
             Some(_) if read_only.len() >= MAX_OBJECTS => return Err(too_many_read_only()),
             Some(_) => match encode_read_only_within(doc, n, &symbols, &mut left)? {
-                Some(o) => (read_only.entry(n.id).insert_entry(o).into_mut(), true),
+                Some(o) => (o, true),
                 None => continue,
             },
             None => match encode(n) {
-                Some(o) => {
-                    path = o;
-                    (&path, false)
-                }
+                Some(o) => (o, false),
                 None => continue,
             },
         };
@@ -242,8 +243,12 @@ fn encode_input_within(doc: &Document, ids: &[NodeId], kinds: &[InputKind], mut 
         if !std::mem::take(&mut first) {
             out.push(b',');
         }
-        if serde_json::to_writer(&mut out, o).is_err() {
+        let object = out.len();
+        if serde_json::to_writer(&mut out, &o).is_err() {
             return Ok((Vec::new(), HashMap::new()));
+        }
+        if checked {
+            read_only.insert(n.id, object..out.len());
         }
         let size = out.len() - start;
         // A path or compound path past what is left fails the run as the runtime would fail it,
@@ -291,7 +296,8 @@ fn affine_json(xf: Affine) -> Value {
 /// - an image (`"image"`): `pixelSize: [w, h]`, `colorMode: "rgb"|"cmyk"|"gray"|"unknown"`,
 ///   `linked`, `pixelsOmitted`, and for an embedded image of at most [`MAX_INPUT_PIXELS`]
 ///   `pixelsBase64`: straight RGBA, 8 bits a channel, row by row from the top (a CMYK image's inks
-///   through the working CMYK profile). A linked image's file and path are never read or given;
+///   through the working CMYK profile, as sRGB). A linked image's file and path are never read or
+///   given;
 /// - a symbol instance (`"symbolInstance"`): `symbolId` (the symbol's name), `missing: true` when
 ///   the document has no such symbol, and `overrides: {}`.
 pub fn encode_read_only(doc: &Document, n: &Node) -> Option<Value> {
@@ -354,13 +360,13 @@ fn encode_read_only_within(doc: &Document, n: &Node, symbols: &SymbolBoxes, left
         NodeKind::Image(im) => {
             let blob = doc.image_blob(im);
             let max = MAX_INPUT_PIXELS.min(left.pixels).min(room.saturating_sub(PIXELS_KEY));
+            let mut charged = 0;
             // A linked image's pixels are its file's: never given (nor its path).
-            let pixels = blob.filter(|_| im.link.is_none()).and_then(|b| rgba_pixels(b, im.width, im.height, max));
+            let pixels = blob.filter(|_| im.link.is_none()).and_then(|b| rgba_pixels(b, im.width, im.height, max, &mut charged));
+            left.pixels = left.pixels.saturating_sub(charged);
             o["pixelsOmitted"] = json!(pixels.is_none());
             if let Some(p) = pixels {
-                let b64 = craft_vectorcraft_format::base64::encode(&p);
-                left.pixels = left.pixels.saturating_sub(b64.len());
-                o["pixelsBase64"] = json!(b64);
+                o["pixelsBase64"] = json!(craft_vectorcraft_format::base64::encode(&p));
             }
         }
         _ => {}
@@ -458,19 +464,33 @@ fn color_mode(b: &ImageBlob) -> &'static str {
     if readable.is_some() { "rgb" } else { "unknown" }
 }
 
+#[cfg(test)]
+thread_local! {
+    /// How many images [`rgba_pixels`] has started to decode on this thread.
+    static DECODES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// The pixels of image `b` as straight RGBA, when it is `w` × `h` pixels and they fit `max`
 /// characters of base64; the size is checked, and read from the header, before anything is decoded.
-fn rgba_pixels(b: &ImageBlob, w: u32, h: u32, max: usize) -> Option<Vec<u8>> {
+/// `charged` gets the characters of base64 an image that reaches the decoder takes from the total,
+/// which it takes even when decoding fails.
+fn rgba_pixels(b: &ImageBlob, w: u32, h: u32, max: usize, charged: &mut usize) -> Option<Vec<u8>> {
     let bytes = u64::from(w).checked_mul(u64::from(h))?.checked_mul(4)?;
-    if bytes == 0 || bytes.div_ceil(3).saturating_mul(4) > max as u64 || oversized_tiff(&b.bytes).is_some() {
+    let cost = bytes.div_ceil(3).saturating_mul(4);
+    if bytes == 0 || cost > max as u64 || oversized_tiff(&b.bytes).is_some() {
         return None;
     }
-    if b.is_cmyk() {
-        return cmyk_rgba(b, w, h);
-    }
+    let cmyk = b.is_cmyk();
     let reader = || image::ImageReader::new(std::io::Cursor::new(b.bytes.as_slice())).with_guessed_format().ok();
-    if reader()?.into_dimensions().ok()? != (w, h) {
+    let size = if cmyk { b.header_size()? } else { reader()?.into_dimensions().ok()? };
+    if size != (w, h) {
         return None;
+    }
+    *charged = cost as usize;
+    #[cfg(test)]
+    DECODES.with(|n| n.set(n.get() + 1));
+    if cmyk {
+        return cmyk_rgba(b, w, h);
     }
     let mut r = reader()?;
     let mut limits = image::Limits::default();
@@ -484,13 +504,10 @@ fn rgba_pixels(b: &ImageBlob, w: u32, h: u32, max: usize) -> Option<Vec<u8>> {
 /// The inks → XYZ table of [`cmyk_rgba`] and the color settings it was built with.
 static CMYK_DISPLAY: Mutex<Option<(Arc<Cms>, Arc<CmykLut>)>> = Mutex::new(None);
 
-/// The pixels of CMYK image `b` as straight RGBA, when it is `w` × `h` pixels (checked from its
-/// header first): its inks shown through the working CMYK profile, by a table built as
-/// `vectorcraft-render`'s `InkLut` builds its own and kept for the active color settings.
+/// The pixels of CMYK image `b` as straight RGBA, when it is `w` × `h` pixels: its inks shown
+/// through the working CMYK profile, by a table built as `vectorcraft-render`'s `InkLut` builds its
+/// own and kept for the active color settings.
 fn cmyk_rgba(b: &ImageBlob, w: u32, h: u32) -> Option<Vec<u8>> {
-    if b.header_size()? != (w, h) {
-        return None;
-    }
     let inks = b.cmyk().filter(|i| (i.width, i.height) == (w, h))?;
     let lut = {
         let cms = cms::active();
@@ -761,16 +778,18 @@ pub struct Output {
 /// Parses a filter's output: `{"objects": [...], "documentData"?: …}`, or `{"error": "message"}`
 /// when the plug-in declined (the message reaches the user).
 pub fn decode_output(bytes: &[u8]) -> Result<Output> {
-    decode_output_with(bytes, &HashMap::new())
+    decode_output_with(bytes, &[], &HashMap::new())
 }
 
-/// [`decode_output`] for a filter given `read_only` objects ([`encode_input_with`]): it must list
-/// each of them exactly once, as `{"id": …}` alone or exactly as it was given (numbers compared by
-/// value), and such an entry is [`OutObject::kept`]. Any other entry for one of them, and one left
-/// out, is refused naming the object and the first field that differs, before anything changes.
-pub fn decode_output_with(bytes: &[u8], read_only: &HashMap<NodeId, Value>) -> Result<Output> {
+/// [`decode_output`] for a filter given `read_only` objects, at those places in `input`
+/// ([`encode_input_with`]): it must list each of them exactly once, as `{"id": …}` alone or exactly
+/// as it was given (numbers compared by value), and such an entry is [`OutObject::kept`]. Any other
+/// entry for one of them, and one left out, is refused naming the object and the first field that
+/// differs, before anything changes. Each object is parsed from `input` only to compare it, one at
+/// a time, and an object that can't be read from there is an error.
+pub fn decode_output_with(bytes: &[u8], input: &[u8], read_only: &ReadOnlySpans) -> Result<Output> {
     let mut v: Value = serde_json::from_slice(bytes).map_err(|e| Error::Output(format!("not JSON: {e}")))?;
-    let objects = decode_objects(&v, read_only)?;
+    let objects = decode_objects(&v, input, read_only)?;
     let document_data = match v.get_mut("documentData").map(Value::take) {
         None => None,
         Some(Value::Null) => Some(None),
@@ -789,12 +808,12 @@ pub fn decode_output_with(bytes: &[u8], read_only: &HashMap<NodeId, Value>) -> R
 /// declined (the message reaches the user). A live effect's other keys don't matter.
 pub fn decode(bytes: &[u8]) -> Result<Vec<OutObject>> {
     let v: Value = serde_json::from_slice(bytes).map_err(|e| Error::Output(format!("not JSON: {e}")))?;
-    decode_objects(&v, &HashMap::new())
+    decode_objects(&v, &[], &HashMap::new())
 }
 
 /// The objects of output `v`, or its decline; entries for `read_only` objects as
 /// [`decode_output_with`] reads them.
-fn decode_objects(v: &Value, read_only: &HashMap<NodeId, Value>) -> Result<Vec<OutObject>> {
+fn decode_objects(v: &Value, input: &[u8], read_only: &ReadOnlySpans) -> Result<Vec<OutObject>> {
     if let Some(e) = declined(v) {
         return Err(e);
     }
@@ -808,12 +827,16 @@ fn decode_objects(v: &Value, read_only: &HashMap<NodeId, Value>) -> Result<Vec<O
         .iter()
         .enumerate()
         .map(|(i, o)| match output_id(o).and_then(|id| Some((id, read_only.get(&id)?))) {
-            Some((id, given)) => {
+            Some((id, span)) => {
                 let at = format!("objects[{i}] (id {})", id.0);
                 if !returned.insert(id) {
                     return Err(out_err(&at, "is listed twice"));
                 }
-                check_unchanged(o, given, &at)?;
+                // `{"id": …}` alone keeps the object, so there is nothing to compare it with.
+                if o.as_object().is_none_or(|m| m.len() != 1) {
+                    let given = serde_json::from_slice(input.get(span.clone()).unwrap_or_default()).map_err(|e| Error::Io(e.to_string()))?;
+                    check_unchanged(o, &given, &at)?;
+                }
                 Ok(OutObject { id: Some(id), kept: true, ..OutObject::default() })
             }
             None => decode_object(o, &format!("objects[{i}]"), &mut anchors),
@@ -836,15 +859,12 @@ fn output_id(o: &Value) -> Option<NodeId> {
     id.as_u64().or_else(|| id.as_f64().filter(|f| f.fract() == 0.0 && (0.0..=9_007_199_254_740_992.0).contains(f)).map(|f| f as u64)).map(NodeId)
 }
 
-/// Checks entry `o` of a filter's output for a read-only object it was `given`: `{"id": …}` alone,
-/// or `given` itself, numbers compared by value. Otherwise the error names the first field that
-/// differs (`text.runs[0].text`): a field the entry gives before one it leaves out, shown as
+/// Checks entry `o` of a filter's output for a read-only object it was `given`: `given` itself,
+/// numbers compared by value. Otherwise the error names the first field that differs
+/// (`text.runs[0].text`): a field the entry gives before one it leaves out, shown as
 /// [`crate::permissions::display_text`] shows a manifest string, since the entry's keys are the
 /// plug-in's.
 fn check_unchanged(o: &Value, given: &Value, at: &str) -> Result<()> {
-    if o.as_object().is_some_and(|m| m.len() == 1) {
-        return Ok(());
-    }
     let changed = match (o, given) {
         (Value::Object(x), Value::Object(y)) => {
             let mut keys: Vec<&String> = x.keys().collect();

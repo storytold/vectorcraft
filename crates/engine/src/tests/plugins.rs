@@ -1639,6 +1639,69 @@ fn read_only_kind_field_and_omission_refuse_without_undo() {
     assert!(e.contains("`inputs` needs `api` 2"), "{e}");
 }
 
+/// A run past its memory budget fails before the plug-in starts, with the document and undo
+/// history as they were: a read-only object whose other fields don't fit, a path and a compound
+/// path that don't fit, and parameters past the input's half of the cap, with objects selected or
+/// with none. The module has one page of memory, the most it may have, so a run that started would
+/// report that the plug-in ran out of memory instead.
+#[test]
+fn a_run_past_the_memory_budget_fails_before_the_plugin_starts() {
+    use std::sync::Arc;
+    use vectorcraft_doc::{Appearance, Node, NodeKind};
+    use vectorcraft_geom::FillRule;
+    use vectorcraft_plugins::{Limits, Plugin, registry};
+    let id = "test.engine.inputs.budget";
+    let params: Vec<String> = (0..9).map(|i| format!(r#""p{i}":{{"type":"string","maxLength":4096}}"#)).collect();
+    let manifest = format!(
+        r#"{{"id":"{id}","name":"Budget","kind":"filter","api":2,"permissions":["doc.read","doc.write"],"inputs":["type"],"params":{{{}}}}}"#,
+        params.join(",")
+    );
+    let module = wat::parse_str(tpl::module(&manifest, "unreachable", "", 1)).unwrap();
+    // One page of memory: the input and the parameters share 32 KiB.
+    registry::install(Plugin::load(&module, Limits { max_memory_bytes: 1 << 16, ..Limits::default() }).unwrap());
+    let mut s = session();
+    let small = rect(&mut s, 10.0, "#ff0000");
+    let long = rect(&mut s, 30.0, "#00ff00");
+    let t = NodeId(run(&mut s, "text.create", json!({"x": 10, "y": 80, "text": "Hi"}))["id"].as_u64().unwrap());
+    let mut compound = NodeId(0);
+    s.edit("Set up", |d, _| {
+        d.node_mut(t).unwrap().name = Some("n".repeat(40_000));
+        let points: Vec<Point> = (0..4_000).map(|i| Point::new(f64::from(i), 0.0)).collect();
+        let outline = PathData::single(SubPath::polyline(&points, false));
+        if let NodeKind::Path { path, .. } = &mut d.node_mut(long).unwrap().kind {
+            *path = outline.clone();
+        }
+        let member = Node::path(d.alloc_id(), outline, Appearance::default());
+        let n = Node::new(d.alloc_id(), NodeKind::Compound { children: vec![Arc::new(member)], rule: FillRule::NonZero });
+        let layer = d.layers[0].id;
+        compound = d.insert(Some(layer), usize::MAX, n).unwrap();
+        Ok(())
+    })
+    .unwrap();
+    let padding: Value = (0..9).map(|i| (format!("p{i}"), json!("x".repeat(4096)))).collect::<serde_json::Map<_, _>>().into();
+    let too_large = "memory budget (the selection is too large to hand over)";
+    let named = format!("memory budget (object {} needs", t.0);
+    let with_padding = |ids: Vec<u64>| {
+        let mut p = padding.clone();
+        p["id"] = json!(id);
+        p["ids"] = json!(ids);
+        p
+    };
+    let before = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+    for (p, says) in [
+        (json!({"id": id, "ids": [t.0]}), named.as_str()),
+        (json!({"id": id, "ids": [long.0]}), too_large),
+        (json!({"id": id, "ids": [compound.0]}), too_large),
+        (with_padding(vec![small.0]), too_large),
+        (with_padding(vec![]), too_large),
+    ] {
+        let e = s.execute("plugin.run", &p).unwrap_err().to_string();
+        assert!(e.contains(says), "{says}: {e}");
+        assert_eq!((s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len()), before, "{says}");
+    }
+    assert!(registry::remove(id));
+}
+
 /// What the user granted is kept in the plug-in store with the module: the next session installs
 /// the plug-in again without asking. A stored plug-in that lists permissions nobody granted it is
 /// skipped, even when another store granted it, and so is one in the Additional Plug-ins Folder

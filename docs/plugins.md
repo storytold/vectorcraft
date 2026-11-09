@@ -524,8 +524,9 @@ In this example the character and paragraph styles are cut short; a filter gets 
 - An image (`"image"`): `pixelSize` is its width and height in pixels; `colorMode` is `"rgb"`, `"cmyk"`, `"gray"` or
   `"unknown"`, read from the image itself. An embedded image whose pixels take at most 1 MiB in base64 (443 × 443
   pixels fit) has them in `pixelsBase64`: straight RGBA, 8 bits a channel, row by row from the top, and
-  `pixelsOmitted: false`. A CMYK image's pixels are its inks through the working CMYK profile. The pixels of all the
-  images in one input take at most 16 MiB in base64. A larger image, one whose pixels don't fit what the images before
+  `pixelsOmitted: false`. A CMYK image's pixels are its inks through the working CMYK profile, as sRGB. The pixels of
+  all the images in one input take at most 16 MiB in base64, and an image the host starts to decode takes its size
+  from those 16 MiB even when decoding fails. A larger image, one whose pixels don't fit what the images before
   it in paint order left, and a linked image (`linked: true`) have
   `pixelsOmitted: true` and no pixels; the host checks an image's size before it decodes the image. An image of any
   size also has `pixelsOmitted: true` when its data is missing from the document, when its width or height is 0, when
