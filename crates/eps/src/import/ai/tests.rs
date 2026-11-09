@@ -6427,7 +6427,7 @@ fn each_pathfinder_operation_on_a_group_draws_as_vectorcraft_draws_it() {
         // Each result's box and paints; Outline's lines start where each square's path starts, so
         // the results are compared in a sorted order.
         let faces = |g: &Node| -> Vec<String> {
-            let mut faces: Vec<String> = vectorcraft_effects::pathfinder_children(g, None)
+            let mut faces: Vec<String> = vectorcraft_effects::pathfinder_children(None, g, None)
                 .unwrap()
                 .iter()
                 .map(|n| {
@@ -8882,6 +8882,54 @@ fn a_pattern_brushs_five_slots_are_kept() {
     assert!(matches!(d.kind, brush::DraftKind::Art { ref art, .. } if art == "Ribbon art"), "{d:?}");
 }
 
+/// An Art brush in the older form (first number 1: one field fewer before its 8 numbers) is read
+/// with the art of its section, but not as plain (its numbers aren't known); a Scatter brush in
+/// that form isn't read (its values aren't all there).
+#[test]
+fn an_older_art_brush_comes_in_with_its_art() {
+    const OLD_RIBBON: &str = "1 / Ribbon art/ / / / / 0 1 /  1 0 1 0 1 0 0 0";
+    let d = brush::parse_tool_object(brush::Tool::Art, "Ribbon", OLD_RIBBON).unwrap();
+    assert!(matches!(d.kind, brush::DraftKind::Art { ref art, plain: false, .. } if art == "Ribbon art"), "{d:?}");
+    let brush::DraftKind::Art { ref brush, .. } = d.kind else { panic!("art") };
+    assert_eq!(brush.colorization, vectorcraft_brush::ArtBrush::default().colorization, "the default colorization");
+    // A count of numbers neither form has isn't read.
+    for bad in ["1 / Ribbon art/ / / / / 0 1 /  1 0 1 0 1 0 0", "1 / Ribbon art/ / / / / 0 1 /  1 0 1 0 1 0 0 0 0 0 0 0 0 0 0 0"] {
+        assert_eq!(brush::parse_tool_object(brush::Tool::Art, "Ribbon", bad), Err(brush::BrushError::Values), "{bad}");
+    }
+    assert_eq!(brush::parse_tool_object(brush::Tool::Scatter, "Spray", "1 /Dot art/ 0 1 /  1 0 1 0 1 0 0 0"), Err(brush::BrushError::Values));
+    // 8 numbers are the older form whatever the first number says: read with the defaults.
+    let d = brush::parse_tool_object(brush::Tool::Art, "Ribbon", "0 / Ribbon art/ / / / / 0 1 /  1 0 1 0 1 0 0 0").unwrap();
+    let brush::DraftKind::Art { ref brush, ref art, plain } = d.kind else { panic!("art") };
+    assert_eq!((art.as_str(), plain, brush.colorization), ("Ribbon art", false, vectorcraft_brush::ArtBrush::default().colorization));
+    let objects = [plugin_object(ART_BRUSH, "Ribbon", OLD_RIBBON), plugin_object(ART_BRUSH, "Bare", "1 / / / / / / 0 1 /  1 0 1 0 1 0 0 0")].concat();
+    let r = read_ok(&format!("{}{objects}{}", brush_art("Ribbon art", 4.0), layer("")));
+    let lib = vectorcraft_brush::library(&r.doc);
+    let vectorcraft_brush::BrushKind::Art(a) = brush_named(&lib, "Ribbon") else { panic!("art") };
+    assert_eq!(a.art.geometric_bounds().map(|b| (b.width(), b.height())), Some((4.0, 4.0)), "the art of its section");
+    assert_eq!(lib.len(), 1, "a brush naming no art is left out");
+    assert!(r.warnings.iter().any(|w| w.ends_with("Brushes panel (1)")), "{:?}", r.warnings);
+}
+
+/// A Pattern brush needs only its first 3 numbers, its scale the third (as a percentage), so the
+/// older form's 8 numbers read too; fewer than 3 aren't read.
+#[test]
+fn a_pattern_brush_reads_its_scale_from_three_or_more_numbers() {
+    const SLOTS: &str = "1 / Tile one/ Tile two/ / / Tile five/ 0 1 / ";
+    for numbers in ["1 0 0.5", "1 0 0.5 0 1 0 0 0"] {
+        let d = brush::parse_tool_object(brush::Tool::Pattern, "Fence", &format!("{SLOTS}{numbers}")).unwrap();
+        let brush::DraftKind::Pattern { tiles, scale } = d.kind else { panic!("{d:?}") };
+        assert_eq!(tiles[1].as_deref(), Some("Tile two"), "{numbers}");
+        assert!((scale - 50.0).abs() < 1e-9, "{numbers}: {scale}");
+    }
+    for numbers in ["", "1", "1 0"] {
+        assert_eq!(
+            brush::parse_tool_object(brush::Tool::Pattern, "Fence", &format!("{SLOTS}{numbers}")),
+            Err(brush::BrushError::Values),
+            "{numbers:?}"
+        );
+    }
+}
+
 /// A brush's art filled with a pattern the file defines before it is read, with that pattern.
 #[test]
 fn a_brushs_art_takes_the_patterns_defined_before_it() {
@@ -10224,6 +10272,40 @@ fn symbol_names_are_read_in_the_encoding_picked() {
     assert_eq!(names, ["그라", "빨강"], "{:?}", s.warnings);
     assert!(matches!(&art(&s.doc)[0].kind, NodeKind::SymbolInstance { symbol, .. } if symbol == "빨강"), "{:?}", art(&s.doc)[0].kind);
     assert_eq!(name_notes(&s).len(), 2, "{:?}", s.warnings);
+}
+
+/// A symbol library read without its layers has notes on the names of the objects in its art.
+#[test]
+fn a_symbol_librarys_art_has_notes_on_its_object_names() {
+    let inner = format!("{}{}", dot(), vectorcraft_testkit::ai::named(KO_GRA));
+    let data = stream(&symbols(&symbol(KO_RED, &inner, 5)));
+    let mut names = obj::Names::new(NameEncoding::Korean);
+    assert!(super::symbols(data.as_bytes(), &mut names).is_some());
+    let notes = names.notes();
+    assert_eq!(notes.len(), 2, "{notes:?}");
+    assert!(notes.iter().any(|n| n.contains("`그라`")), "{notes:?}");
+}
+
+/// An object without a name of its own takes the one its XML id gives it, read in the encoding
+/// picked, with a note on that name.
+#[test]
+fn an_object_named_by_its_xml_id_is_read_in_the_encoding_picked() {
+    let square = format!("{RED}{}f\n{}", rect_path(0.0, 0.0, 10.0, 10.0), vectorcraft_testkit::ai::named(&format!("{KO_RED}_1")));
+    let s = read_names(&layer(&square), "windows-949");
+    assert_eq!(art(&s.doc)[0].name.as_deref(), Some("빨강 1"), "{:?}", s.warnings);
+    let notes = name_notes(&s);
+    assert_eq!(notes.len(), 1, "{notes:?}");
+    assert!(notes[0].contains("`빨강 1`"), "{notes:?}");
+}
+
+/// The strings of a plug-in object that isn't a brush, and the name of a brush that isn't read,
+/// have no notes.
+#[test]
+fn plug_in_objects_that_are_not_read_have_no_name_notes() {
+    let other = format!("%AI8_BeginPluginObject\n(Other Tool)\n({KO_RED})\n(x) .\n%AI8_EndPluginObject\n");
+    let broken = format!("%AI8_BeginPluginObject\n({SCATTER})\n({KO_GRA})\n(not a brush) .\n%AI8_EndPluginObject\n");
+    let s = read_names(&format!("{other}{broken}{}", layer("")), "windows-949");
+    assert!(name_notes(&s).is_empty(), "{:?}", s.warnings);
 }
 
 /// A graphic style's name, in the art styles and in the style list, and an object's link to it are

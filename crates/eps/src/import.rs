@@ -74,8 +74,11 @@ use interp::{Fault, Interp};
 use obj::PsError;
 
 pub use ai::NameEncoding;
+#[cfg(test)]
+pub(crate) use ai::objects_read;
 pub(crate) use ai::{
-    MAX_GRADIENT_STOPS, MAX_LISTED, MAX_LISTED_NAME, MAX_SYMBOLS, read_art_style, read_style_list, style_moves_with, symbol_art_member, warp_number,
+    MAX_EDITING_OBJECTS, MAX_GRADIENT_STOPS, MAX_LISTED, MAX_LISTED_NAME, MAX_SYMBOLS, read_art_style, read_style_list, style_moves_with,
+    symbol_art_member, warp_number,
 };
 pub(crate) use ate::{MAX_BYTES as MAX_TEXT_DOCUMENT, MAX_FRAMES, MAX_SEGMENTS, MAX_STORY, MAX_VALUES as MAX_TEXT_VALUES};
 pub use native::{AiLayers, ai_alone, ai_alone_on_page, ai_alone_with, ai_layers_alone, ai_opened_artboard, is_loss, layered_ai, layered_ai_from};
@@ -253,8 +256,8 @@ pub fn import_trusting(bytes: &[u8], editing_data: bool, trust: bool) -> Result<
 }
 
 /// [`import_trusting`], with the names in the editing copy that aren't UTF-8 (layers, objects,
-/// colors, gradients, patterns, graphic styles, swatches, brushes, symbols, variables and data
-/// sets) read in `names`.
+/// artboards, colors, gradients, patterns, graphic styles, swatches, brushes, symbols, variables
+/// and data sets) read in `names`.
 pub fn import_names(bytes: &[u8], editing_data: bool, trust: bool, names: NameEncoding) -> Result<Imported, String> {
     let ps = program(bytes)?;
     let dsc = Dsc::read(ps);

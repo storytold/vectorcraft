@@ -3435,6 +3435,10 @@ font-technology	Variable	Variáveis
 	Stylistic	Estilístico
 	Mojikumi Set	Conjunto Mojikumi
 	Kinsoku Set	Conjunto Kinsoku
+	Kinsoku Shori Type	Tipo de Kinsoku Shori
+	Push In First	Primeiro para dentro
+	Push Out First	Primeiro para fora
+	Push Out Only	Somente para fora
 	Hard	Duro
 	Soft	Macio
 	Monospaced	Monoespaçado
@@ -4097,6 +4101,13 @@ axis	Both	Ambos
 @msg	select an image	selecione uma imagem
 @msg	select an object in perspective	selecione um objeto em perspectiva
 @msg	select artwork (or a colour group) to recolor	selecione uma arte-final (ou um grupo de cores) para recolorir
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	Recoloração concluída; sem alteração: {locked} e {hidden}
+@msg	Recolor completed; {objects} were left unchanged	Recoloração concluída; sem alteração: {objects}
+@msg	Recolor completed; {objects} was left unchanged	Recoloração concluída; sem alteração: {objects}
+@msg	1 locked object	1 objeto bloqueado
+@msg	{n} locked objects	{n} objetos bloqueados
+@msg	1 hidden object	1 objeto oculto
+@msg	{n} hidden objects	{n} objetos ocultos
 @msg	select at least two objects	selecione pelo menos dois objetos
 @msg	exit isolation mode first	saia do modo de isolamento primeiro
 @msg	select objects, not layers	selecione objetos, não camadas
@@ -4406,6 +4417,10 @@ axis	Both	Ambos
 @msg	the PSD file is cut short	o arquivo PSD está incompleto
 @msg	the PSD file's header is damaged	o cabeçalho do arquivo PSD está danificado
 @msg	the PSD file's image data can't be read: {e}	os dados de imagem do arquivo PSD não podem ser lidos: {e}
+@msg	the JPEG XL file is cut short	o arquivo JPEG XL está incompleto
+@msg	the JPEG XL container is too large to read	o contêiner JPEG XL é grande demais para ser lido
+@msg	CMYK JPEG XL images can't be read	imagens JPEG XL em CMYK não podem ser lidas
+@msg	the JPEG XL file can't be read: {e}	o arquivo JPEG XL não pode ser lido: {e}
 @msg	Imported library {name}	Biblioteca {name} importada
 	Define a variable first	Defina uma variável primeiro
 	Text	Texto
@@ -5836,6 +5851,8 @@ axis	Y Axis	Eixo Y
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	o módulo importa `env.{name}`, que um plug-in só pode usar no nível de API de plug-in {PROGRESS_API} (`api` {PROGRESS_API}) e com a permissão `{permission}`
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	o módulo importa `{from}.{name}`, que o host não oferece: um plug-in só pode importar as funções `env.vc_*` listadas em docs/plugins.md (nível de API de plug-in 2), e nenhum WASI, arquivo ou rede
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` é {_1}; este host aceita os níveis de API de plug-in de 1 a {API_LEVEL}
+@msg	`paintOutput` may only be true	`paintOutput` só pode ser true
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` é só para um efeito dinâmico (`kind` "effect") com `api` 2
 @msg	`grant` must be a list of permission names	`grant` deve ser uma lista de nomes de permissões
 @msg	`grant` names an unknown permission `{shown}`	`grant` cita uma permissão desconhecida `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	um plug-in do tipo `{_1}` precisa da permissão `{_2}`
@@ -6659,6 +6676,24 @@ swatch	Yellow Green	Verde-amarelado
 # 3D Box add-on
 	3D Box	Caixa 3D
 	3D Box Tool	Ferramenta Caixa 3D
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Abrir Com
+	No importer plug-ins installed	Nenhum plug-in de importação instalado
+	Read files you open in its format and make documents from them	Ler os arquivos que você abre no formato dele e criar documentos a partir deles
+@msg	{_1} is an importer (File › Open With)	{_1} é um plug-in de importação (Arquivo › Abrir Com)
+@msg	missing `importer` (see document.formats)	falta `importer` (consulte document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` deve ser o id de formato de um plug-in (consulte document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	“{shown}” abre arquivos {_1}, não `{_2}`
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` é um plug-in do tipo `{_2}`, não um plug-in de importação
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` é um plug-in do tipo `{_2}`, não um plug-in de exportação
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` é um plug-in de importação: abra um arquivo com document.open {{"importer"}"}}
+@msg	the importer returned no objects	o plug-in de importação não retornou nenhum objeto
+@msg	an importer returns `objects` and `warnings`, not `{key}`	um plug-in de importação retorna `objects` e `warnings`, não `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	o arquivo é maior que os {MAX_INPUT_BYTES} bytes que um plug-in de importação lê
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	um plug-in de importação declara de 1 a {MAX_EXTENSIONS} `extensions`
+@msg	only an exporter or an importer declares `extensions`	só um plug-in de exportação ou de importação declara `extensions`
+@msg	an importer always gets an import's budget: leave `budget` out	um plug-in de importação sempre recebe o orçamento de uma importação: omita `budget`
 
 # Safe Mode
 	Safe Mode…	Modo de Segurança…

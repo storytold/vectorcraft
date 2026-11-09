@@ -42,6 +42,8 @@ pub(crate) use frames::text_frames;
 pub use obj::{NameEncoding, Names};
 pub(crate) use paint::MAX_STOPS as MAX_GRADIENT_STOPS;
 #[cfg(test)]
+pub(crate) use read::objects_read;
+#[cfg(test)]
 pub use read::read;
 #[cfg(test)]
 pub(crate) use read::with_image_limits;
@@ -50,7 +52,8 @@ pub use read::{
     palette, read_beside, read_in, symbols, variables,
 };
 pub(crate) use read::{
-    MAX_SYMBOLS, join_and, read_art_style, read_over_page, read_style_list, slot_frame, slot_of, style_moves_with, symbol_art_member,
+    MAX_NODES as MAX_EDITING_OBJECTS, MAX_SYMBOLS, join_and, read_art_style, read_over_page, read_style_list, slot_frame, slot_of, style_moves_with,
+    symbol_art_member,
 };
 
 pub(crate) use read::is_look_slot;

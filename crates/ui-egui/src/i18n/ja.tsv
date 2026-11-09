@@ -76,6 +76,10 @@ digits	Malayalam	マラヤーラム数字
 	Stylistic	スタイリスティック
 	Mojikumi Set	文字組み
 	Kinsoku Set	禁則処理
+	Kinsoku Shori Type	禁則調整方式
+	Push In First	追い込み優先
+	Push Out First	追い出し優先
+	Push Out Only	追い出しのみ
 	Hard	強い禁則
 	Soft	弱い禁則
 	Latin	欧文
@@ -4695,6 +4699,13 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	print settings are not an object	プリント設定がオブジェクト形式ではありません
 @msg	no colour group `{g}`	カラーグループ `{g}` が見つかりません
 @msg	select artwork (or a colour group) to recolor	再配色するアートワーク (またはカラーグループ) を選択してください
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	再配色が完了しました。変更されなかったもの: {locked}、{hidden}
+@msg	Recolor completed; {objects} were left unchanged	再配色が完了しました。変更されなかったもの: {objects}
+@msg	Recolor completed; {objects} was left unchanged	再配色が完了しました。変更されなかったもの: {objects}
+@msg	1 locked object	ロックされたオブジェクト 1 個
+@msg	{n} locked objects	ロックされたオブジェクト {n} 個
+@msg	1 hidden object	非表示のオブジェクト 1 個
+@msg	{n} hidden objects	非表示のオブジェクト {n} 個
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	「ブラウザーでプレビュー」にはデスクトップアプリが必要です (Web 版では代わりにファイルをダウンロードします)
 @msg	no file system here	この環境にはファイルシステムがありません
 @msg	nothing to preview	プレビューするものがありません
@@ -4952,6 +4963,10 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the PSD file is cut short	PSD ファイルが途中で切れています
 @msg	the PSD file's header is damaged	PSD ファイルのヘッダーが破損しています
 @msg	the PSD file's image data can't be read: {e}	PSD ファイルの画像データを読み込めません：{e}
+@msg	the JPEG XL file is cut short	JPEG XL ファイルが途中で切れています
+@msg	the JPEG XL container is too large to read	JPEG XL コンテナが大きすぎて読み込めません
+@msg	CMYK JPEG XL images can't be read	CMYK の JPEG XL 画像は読み込めません
+@msg	the JPEG XL file can't be read: {e}	JPEG XL ファイルを読み込めません：{e}
 	Video	ビデオ
 	De-Interlace…	インターレース解除…
 	De-Interlace	インターレース解除
@@ -5602,6 +5617,8 @@ axis	Y Axis	Y 軸
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	モジュールが `env.{name}` をインポートしていますが、プラグインがこれを使用できるのはプラグイン API レベル {PROGRESS_API} (`api` {PROGRESS_API}) で権限 `{permission}` がある場合だけです
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	モジュールがホストの提供しない `{from}.{name}` をインポートしています。プラグインがインポートできるのは docs/plugins.md に記載された `env.vc_*` 関数 (プラグイン API レベル 2) だけで、WASI、ファイル、ネットワークは使用できません
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` は {_1} です。このホストが対応するプラグイン API レベルは 1 から {API_LEVEL} です
+@msg	`paintOutput` may only be true	`paintOutput` には true のみ指定できます
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` は `api` 2 のライブ効果 (`kind` "effect") 専用です
 @msg	`grant` must be a list of permission names	`grant` は権限名のリストにしてください
 @msg	`grant` names an unknown permission `{shown}`	`grant` に不明な権限 `{shown}` が含まれています
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	種類 `{_1}` のプラグインには権限 `{_2}` が必要です
@@ -6271,6 +6288,24 @@ breakText	Glyphs	字形
 # 3D Box add-on
 	3D Box	3Dボックス
 	3D Box Tool	3Dボックスツール
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	このアプリケーションで開く
+	No importer plug-ins installed	読み込みプラグインはインストールされていません
+	Read files you open in its format and make documents from them	独自形式で開いたファイルの読み取りとドキュメントの作成
+@msg	{_1} is an importer (File › Open With)	{_1} は読み込みプラグインです (「ファイル › このアプリケーションで開く」から使用してください)
+@msg	missing `importer` (see document.formats)	`importer` がありません (document.formats を参照)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` にはプラグインの形式 ID を指定してください (document.formats を参照)
+@msg	“{shown}” opens {_1} files, not `{_2}`	「{shown}」が開くのは {_1} ファイルで、`{_2}` ではありません
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` は種類 `{_2}` のプラグインで、読み込みプラグインではありません
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` は種類 `{_2}` のプラグインで、書き出しプラグインではありません
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` は読み込みプラグインです: document.open {{"importer"}"}} でファイルを開いてください
+@msg	the importer returned no objects	読み込みプラグインがオブジェクトを返しませんでした
+@msg	an importer returns `objects` and `warnings`, not `{key}`	読み込みプラグインが返すのは `objects` と `warnings` で、`{key}` ではありません
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	ファイルが読み込みプラグインの読み取る {MAX_INPUT_BYTES} バイトを超えています
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	読み込みプラグインは `extensions` を 1～{MAX_EXTENSIONS} 個宣言します
+@msg	only an exporter or an importer declares `extensions`	`extensions` を宣言できるのは書き出しプラグインと読み込みプラグインだけです
+@msg	an importer always gets an import's budget: leave `budget` out	読み込みプラグインには常に読み込みの予算が割り当てられます: `budget` は省略してください
 
 # Safe Mode
 	Safe Mode…	セーフモード…

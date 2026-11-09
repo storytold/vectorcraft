@@ -115,8 +115,9 @@ USAGE:
       --replace-lossy is given. --editing-data opens a .ai or an EPS with editing data from its editing copy
       even where that draws differently from its PDF part or page (which can be older), as long as
       it can be read. --legacy-name-encoding reads the names in a .ai's or an EPS's editing data
-      that aren't UTF-8 (layers, objects, colors, swatches) in windows-1252 (the default),
-      macintosh, windows-949, shift_jis, gbk or big5. A PDF OUT omits the embedded native document unless --preserve-editing is
+      that aren't UTF-8 (layers, objects, artboards, colors, gradients, patterns, graphic styles,
+      swatches, brushes, symbols, variables and data sets, and data sets' text values) in
+      windows-1252 (the default), macintosh, windows-949, shift_jis, gbk or big5. A PDF OUT omits the embedded native document unless --preserve-editing is
       given (the app's Save As PDF still defaults to keeping it). With --preserve-editing, when the
       attachment is written the result's warnings say so (it is left out, with its own warning, for
       --artboard or a --range without every artboard).

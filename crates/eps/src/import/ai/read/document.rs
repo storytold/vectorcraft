@@ -289,6 +289,26 @@ fn beside(mut defined: Vec<PatternDef>, have: &[PatternDef]) -> (Vec<PatternDef>
     (defined, renamed)
 }
 
+/// The names of the objects in `art` and what they hold, masks included.
+fn art_names<'a>(art: impl IntoIterator<Item = &'a Node>) -> Vec<&'a str> {
+    let mut stack: Vec<&Node> = art.into_iter().collect();
+    let mut names = vec![];
+    while let Some(n) = stack.pop() {
+        stack.extend(n.children().into_iter().flatten().chain(n.extras().mask.as_ref().map(|m| &m.art)).map(|c| &**c));
+        names.extend(n.name.as_deref());
+    }
+    names
+}
+
+/// The names read for the patterns `added` that the patterns don't show as their own: those
+/// `renamed` replaced, and the names of the objects of their art.
+fn pattern_names_read<'a>(added: &'a [PatternDef], renamed: &'a std::collections::BTreeMap<String, String>) -> Vec<&'a str> {
+    let shown: std::collections::HashSet<&str> = added.iter().map(|p| p.name.as_str()).collect();
+    let mut names: Vec<&str> = renamed.iter().filter(|(_, new)| shown.contains(new.as_str())).map(|(old, _)| old.as_str()).collect();
+    names.extend(art_names(added.iter().flat_map(|p| p.art.iter().map(|a| &**a))));
+    names
+}
+
 /// `n` and what it holds painting with the patterns `renamed` renames (old to new) by their new names.
 fn repoint(n: &mut Node, renamed: &std::collections::BTreeMap<String, String>) {
     for p in vectorcraft_doc::swatches::node_paints_mut(n) {
@@ -349,6 +369,7 @@ pub fn palette(data: &[u8], patterns: &[PatternDef], names: &mut obj::Names) -> 
         .map(|s| s.name.as_str())
         .chain(groups.iter().map(|g| g.name.as_str()))
         .chain(added.iter().map(|p| p.name.as_str()))
+        .chain(pattern_names_read(&added, &renamed))
         .collect();
     names.absorb_among(std::mem::take(&mut r.names), &used);
     Some(PaletteSwatches { swatches, groups, patterns: added, images })
@@ -407,7 +428,13 @@ pub fn brushes(data: &[u8], patterns: &[PatternDef], names: &mut obj::Names) -> 
             images.insert(im.key.clone(), blob.clone());
         }
     });
-    let used: Vec<&str> = lib.iter().map(|b| b.name.as_str()).chain(added.iter().map(|p| p.name.as_str())).collect();
+    let used: Vec<&str> = lib
+        .iter()
+        .map(|b| b.name.as_str())
+        .chain(added.iter().map(|p| p.name.as_str()))
+        .chain(pattern_names_read(&added, &renamed))
+        .chain(art_names(lib.iter().flat_map(|b| b.art())))
+        .collect();
     names.absorb_among(std::mem::take(&mut r.names), &used);
     Some(Brushes { brushes: lib, patterns: added, images, note: (unread > 0).then(|| brush::left_out_note(unread)) })
 }
@@ -495,7 +522,12 @@ pub fn symbols(data: &[u8], names: &mut obj::Names) -> Option<Symbols> {
             (s, reg)
         })
         .collect::<Vec<_>>();
-    let used: Vec<&str> = symbols.iter().map(|(s, _)| s.name.as_str()).chain(swatches.iter().map(|s| s.name.as_str())).collect();
+    let used: Vec<&str> = symbols
+        .iter()
+        .map(|(s, _)| s.name.as_str())
+        .chain(swatches.iter().map(|s| s.name.as_str()))
+        .chain(art_names(symbols.iter().map(|(s, _)| &*s.art)))
+        .collect();
     names.absorb_among(std::mem::take(&mut r.names), &used);
     Some(Symbols { symbols, images, swatches })
 }
@@ -783,8 +815,8 @@ impl<'a> Reader<'a> {
         }
         let name = match self.names.entry(o, "AIArtName") {
             Some(name) => name,
-            None => match o.obj("AI10_ArtUID").and_then(Obj::content_text) {
-                Some(id) => obj::xml_name(&id),
+            None => match o.obj("AI10_ArtUID").and_then(|id| self.names.xml_id_name(id)) {
+                Some(name) => name,
                 None => return,
             },
         };

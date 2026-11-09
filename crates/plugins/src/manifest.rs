@@ -18,7 +18,7 @@ pub const MAX_UNGROUPED: usize = 64;
 pub const MAX_TEXT: usize = 4_096;
 /// Most numbers a `numberList` parameter may hold.
 pub const MAX_LIST: usize = 256;
-/// Most file extensions an exporter may declare.
+/// Most file extensions an exporter or an importer may declare.
 pub const MAX_EXTENSIONS: usize = 8;
 /// Most menu commands a plug-in may add (`commands`).
 pub const MAX_COMMANDS: usize = 32;
@@ -38,6 +38,9 @@ pub enum Kind {
     /// An exporter: writes the document in a file format of its own, whose extensions the manifest
     /// lists (File › Export › Export As, `document.export`; see [`crate::export`]).
     Exporter,
+    /// An importer: reads a file in a format of its own, whose extensions the manifest lists, into
+    /// a new document (File › Open, `document.open`; see [`crate::import`]).
+    Importer,
 }
 
 impl Kind {
@@ -46,6 +49,7 @@ impl Kind {
             Kind::Filter => "filter",
             Kind::Effect => "effect",
             Kind::Exporter => "exporter",
+            Kind::Importer => "importer",
         }
     }
 }
@@ -281,13 +285,17 @@ pub struct Manifest {
     /// Parameters in declaration (dialog) order; a JSON object `{"name": spec, …}` in the manifest.
     #[serde(default, deserialize_with = "ordered_params", serialize_with = "params_as_object")]
     pub params: Vec<(String, Param)>,
-    /// An exporter's file extensions, lower case and without the dot; the first is the one its
-    /// files get. Only exporters declare them.
+    /// An exporter's or an importer's file extensions, lower case and without the dot; the first is
+    /// the one an exporter's files get. Only exporters and importers declare them.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub extensions: Vec<String>,
     /// How much a run may compute: only a filter may be [`Budget::Heavy`].
     #[serde(default, skip_serializing_if = "Budget::is_light")]
     pub budget: Budget,
+    /// A live effect at `api` 2 that returns painted pieces ([`crate::painted`]): `true` when the
+    /// manifest has `"paintOutput": true`, the only value the key may hold.
+    #[serde(default, rename = "paintOutput", skip_serializing_if = "std::ops::Not::not")]
+    pub paint_output: bool,
     /// The menu commands it adds, in menu order (a filter or a live effect only).
     #[serde(default, deserialize_with = "ordered_commands", skip_serializing_if = "Vec::is_empty")]
     pub commands: Vec<Command>,
@@ -300,6 +308,9 @@ impl Manifest {
             return Err(Error::Manifest(format!("manifest is {} bytes (limit {MAX_MANIFEST_BYTES})", bytes.len())));
         }
         let text = std::str::from_utf8(bytes).map_err(|_| Error::Manifest("manifest is not UTF-8".into()))?;
+        if serde_json::from_str::<Value>(text).is_ok_and(|v| v.get("paintOutput").is_some_and(|p| *p != Value::Bool(true))) {
+            return Err(Error::Manifest("`paintOutput` may only be true".into()));
+        }
         let man: Manifest = serde_json::from_str(text).map_err(|e| Error::Manifest(format!("manifest: {e}")))?;
         man.validate()?;
         Ok(man)
@@ -319,6 +330,7 @@ impl Manifest {
             params: Vec::new(),
             extensions: Vec::new(),
             budget: Budget::Light,
+            paint_output: false,
             commands: Vec::new(),
         }
     }
@@ -358,6 +370,9 @@ impl Manifest {
             let permission = host.name();
             return Err(Error::Manifest(format!("permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}")));
         }
+        if self.paint_output && (self.kind != Kind::Effect || self.api < 2) {
+            return Err(Error::Manifest("`paintOutput` is only for a live effect (`kind` \"effect\") at `api` 2".into()));
+        }
         self.validate_extensions()?;
         match (self.budget, self.kind) {
             (Budget::Light, _) | (Budget::Heavy, Kind::Filter) => {}
@@ -366,6 +381,9 @@ impl Manifest {
             }
             (Budget::Heavy, Kind::Exporter) => {
                 return Err(Error::Manifest("an exporter always gets an export's budget: leave `budget` out".into()));
+            }
+            (Budget::Heavy, Kind::Importer) => {
+                return Err(Error::Manifest("an importer always gets an import's budget: leave `budget` out".into()));
             }
         }
         self.validate_params()?;
@@ -394,7 +412,7 @@ impl Manifest {
         if self.commands.is_empty() {
             return Ok(());
         }
-        if self.kind == Kind::Exporter {
+        if matches!(self.kind, Kind::Exporter | Kind::Importer) {
             return Err(Error::Manifest("only a filter or a live effect declares `commands`".into()));
         }
         if self.budget == Budget::Heavy {
@@ -428,17 +446,17 @@ impl Manifest {
         Ok(())
     }
 
-    /// An exporter lists 1 to [`MAX_EXTENSIONS`] distinct extensions of 1 to 16 lower-case
-    /// letters and digits; other kinds list none.
+    /// An exporter or an importer lists 1 to [`MAX_EXTENSIONS`] distinct extensions of 1 to 16
+    /// lower-case letters and digits; other kinds list none.
     fn validate_extensions(&self) -> Result<()> {
         let exts = &self.extensions;
+        let count_ok = !exts.is_empty() && exts.len() <= MAX_EXTENSIONS;
         match self.kind {
-            Kind::Exporter => {}
+            Kind::Exporter if !count_ok => return Err(Error::Manifest(format!("an exporter declares 1 to {MAX_EXTENSIONS} `extensions`"))),
+            Kind::Importer if !count_ok => return Err(Error::Manifest(format!("an importer declares 1 to {MAX_EXTENSIONS} `extensions`"))),
+            Kind::Exporter | Kind::Importer => {}
             _ if exts.is_empty() => return Ok(()),
-            _ => return Err(Error::Manifest("only an exporter declares `extensions`".into())),
-        }
-        if exts.is_empty() || exts.len() > MAX_EXTENSIONS {
-            return Err(Error::Manifest(format!("an exporter declares 1 to {MAX_EXTENSIONS} `extensions`")));
+            _ => return Err(Error::Manifest("only an exporter or an importer declares `extensions`".into())),
         }
         for (i, e) in exts.iter().enumerate() {
             if !(1..=16).contains(&e.len()) || !e.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit()) {
@@ -819,6 +837,31 @@ mod tests {
         }
     }
 
+    /// An importer lists the extensions it reads by the exporter's rules, and gets an import's
+    /// budget and the `import.read` permission.
+    #[test]
+    fn an_importer_lists_its_extensions() {
+        let m = Manifest::parse(br#"{"id":"org.example.plotter","name":"Plotter","kind":"importer","extensions":["plt","hpgl"]}"#).unwrap();
+        assert_eq!((m.kind, m.extensions.as_slice()), (Kind::Importer, &["plt".to_string(), "hpgl".to_string()][..]));
+        assert_eq!(serde_json::to_value(&m).unwrap()["kind"], json!("importer"));
+        assert_eq!(m.permissions(), [Permission::ImportRead]);
+        for (bad, says) in [
+            (r#"{"id":"a","name":"x","kind":"importer"}"#, "an importer declares 1 to 8"),
+            (r#"{"id":"a","name":"x","kind":"importer","extensions":[]}"#, "an importer declares 1 to 8"),
+            (r#"{"id":"a","name":"x","kind":"importer","extensions":["a","b","c","d","e","f","g","h","i"]}"#, "an importer declares 1 to 8"),
+            (r#"{"id":"a","name":"x","kind":"importer","extensions":["Plt"]}"#, "lower-case"),
+            (r#"{"id":"a","name":"x","kind":"importer","extensions":[".plt"]}"#, "without the dot"),
+            (r#"{"id":"a","name":"x","kind":"importer","extensions":["abcdefghijklmnopq"]}"#, "1-16"),
+            (r#"{"id":"a","name":"x","kind":"importer","extensions":["plt","plt"]}"#, "listed twice"),
+            (r#"{"id":"a","name":"x","kind":"importer","extensions":["plt"],"budget":"heavy"}"#, "an import's budget"),
+            (r#"{"id":"a","name":"x","kind":"importer","extensions":["plt"],"permissions":["doc.read"]}"#, "doesn't apply"),
+            (r#"{"id":"a","name":"x","kind":"filter","extensions":["plt"]}"#, "only an exporter or an importer"),
+        ] {
+            let e = Manifest::parse(bad.as_bytes()).unwrap_err().to_string();
+            assert!(e.contains(says), "{bad}: {e}");
+        }
+    }
+
     /// A filter may ask for a heavy budget; a live effect runs while the document is drawn and an
     /// exporter has an export's budget, so they can't. Light, the default, isn't written back.
     #[test]
@@ -895,6 +938,46 @@ mod tests {
             let e = Manifest::parse(bad.as_bytes()).unwrap_err().to_string();
             assert!(e.contains(says), "{bad}: {e}");
         }
+    }
+
+    /// A live effect at `api` 2 may declare `"paintOutput": true`, and only that value; any other
+    /// kind or level, and `false`, `null` or another type, is refused naming the key. Without the
+    /// key, at any level, the effect returns geometry only.
+    #[test]
+    fn only_a_level_2_live_effect_declares_paint_output() {
+        let painted = Manifest::parse(br#"{"id":"org.example.tone","name":"Tone","kind":"effect","api":2,"paintOutput":true}"#).unwrap();
+        assert!(painted.paint_output);
+        assert_eq!(serde_json::to_value(&painted).unwrap()["paintOutput"], json!(true));
+        let listed =
+            Manifest::parse(br#"{"id":"a","name":"x","kind":"effect","api":2,"paintOutput":true,"permissions":["doc.read","effect.render"]}"#)
+                .unwrap();
+        assert!(listed.paint_output);
+        for plain in [r#"{"id":"a","name":"x","kind":"effect","api":2}"#, r#"{"id":"a","name":"x","kind":"effect"}"#] {
+            let m = Manifest::parse(plain.as_bytes()).unwrap();
+            assert!(!m.paint_output, "{plain}");
+            assert!(serde_json::to_value(&m).unwrap().get("paintOutput").is_none(), "{plain}");
+        }
+        for bad in [
+            r#"{"id":"a","name":"x","kind":"effect","api":2,"paintOutput":false}"#,
+            r#"{"id":"a","name":"x","kind":"effect","api":2,"paintOutput":null}"#,
+            r#"{"id":"a","name":"x","kind":"effect","api":2,"paintOutput":1}"#,
+            r#"{"id":"a","name":"x","kind":"effect","api":2,"paintOutput":"true"}"#,
+            r#"{"id":"a","name":"x","kind":"effect","paintOutput":true}"#,
+            r#"{"id":"a","name":"x","kind":"effect","api":1,"paintOutput":true}"#,
+            r#"{"id":"a","name":"x","kind":"filter","api":2,"paintOutput":true}"#,
+            r#"{"id":"a","name":"x","kind":"exporter","api":2,"extensions":["plt"],"paintOutput":true}"#,
+            r#"{"id":"a","name":"x","kind":"effect","api":2,"paintOutput":true,"permissions":["doc.read"]}"#,
+        ] {
+            let e = Manifest::parse(bad.as_bytes()).unwrap_err().to_string();
+            assert!(e.contains("paintOutput") || e.contains("effect.render"), "{bad}: {e}");
+        }
+    }
+
+    #[test]
+    fn commands_and_paint_output_may_both_be_declared_on_a_live_effect() {
+        let m = Manifest::parse(br#"{"id":"a","name":"x","kind":"effect","api":2,"paintOutput":true,"commands":[{"id":"c","label":"C"}]}"#).unwrap();
+        assert!(m.paint_output);
+        assert_eq!(m.commands.len(), 1);
     }
 
     /// A filter or a live effect lists menu commands with their own parameters; a `menu` key is

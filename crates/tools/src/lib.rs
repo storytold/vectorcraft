@@ -148,8 +148,13 @@ pub trait Tool: Send {
         false
     }
     /// Is a drag moving, scaling or rotating the selection (the canvas then hides the bounding box,
-    /// so only the art is seen going with the pointer)?
+    /// so only the art is seen going with the pointer, except during a handle resize)?
     fn transforming(&self) -> bool {
+        false
+    }
+    /// Is the transforming drag a resize by a bounding-box handle? The canvas then keeps drawing
+    /// the bounding box at the changing bounds.
+    fn resizing(&self) -> bool {
         false
     }
     /// Does the tool take `key` now, ahead of the command shortcuts bound to it (the Gradient tool
@@ -239,6 +244,10 @@ pub trait Tool: Send {
     fn after_command(&mut self, _cx: &ToolContext) -> Vec<Action> {
         vec![]
     }
+    /// The undo history moved outside the tool (an edit, Undo or Redo the tool did not make), or
+    /// another document became active. The Blend tool drops its first pick and stops adding to the
+    /// blend it just made.
+    fn history_moved(&mut self) {}
     /// Time passes while the pointer button is held (`dt` seconds since the last tick, whether or
     /// not the pointer moved): tools that keep working while the brush holds still (Twirl, Pucker,
     /// Bloat) act on it. The host supplies the time, so tests and agents drive it exactly.

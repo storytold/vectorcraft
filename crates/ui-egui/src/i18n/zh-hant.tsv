@@ -2255,6 +2255,13 @@ file-filter	Templates	範本
 @msg	print settings are not an object	列印設定不是物件
 @msg	no colour group `{g}`	沒有顏色群組 `{g}`
 @msg	select artwork (or a colour group) to recolor	請選取要重新上色的圖稿 (或顏色群組)
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	重新上色已完成；未變更：{locked}和{hidden}
+@msg	Recolor completed; {objects} were left unchanged	重新上色已完成；未變更：{objects}
+@msg	Recolor completed; {objects} was left unchanged	重新上色已完成；未變更：{objects}
+@msg	1 locked object	1 個鎖定的物件
+@msg	{n} locked objects	{n} 個鎖定的物件
+@msg	1 hidden object	1 個隱藏的物件
+@msg	{n} hidden objects	{n} 個隱藏的物件
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	「在瀏覽器中預覽」需要桌面應用程式 (網頁版會改為下載檔案)
 @msg	no file system here	此處沒有檔案系統
 @msg	nothing to preview	沒有可預覽的內容
@@ -2500,6 +2507,10 @@ file-filter	Templates	範本
 @msg	the PSD file is cut short	PSD 檔案不完整
 @msg	the PSD file's header is damaged	PSD 檔頭已損毀
 @msg	the PSD file's image data can't be read: {e}	無法讀取 PSD 檔案的影像資料：{e}
+@msg	the JPEG XL file is cut short	JPEG XL 檔案不完整
+@msg	the JPEG XL container is too large to read	JPEG XL 容器過大，無法讀取
+@msg	CMYK JPEG XL images can't be read	無法讀取 CMYK 模式的 JPEG XL 影像
+@msg	the JPEG XL file can't be read: {e}	無法讀取 JPEG XL 檔案：{e}
 @msg	Imported library {name}	已匯入資料庫 {name}
 @msg	invalid restored panel group	還原的面板群組無效
 @msg	Invalid panel layout; restored the default dock	面板配置無效；已還原預設停駐區
@@ -2888,6 +2899,10 @@ file-filter	Templates	範本
 	Stylistic	風格化
 	Mojikumi Set	標點間距
 	Kinsoku Set	Kinsoku 集
+	Kinsoku Shori Type	Kinsoku 處理方式
+	Push In First	先推入
+	Push Out First	先推出
+	Push Out Only	只推出
 	Hard	強
 	Soft	弱
 	Monitor RGB	顯示器 RGB
@@ -5555,6 +5570,8 @@ axis	Y Axis	Y 軸
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	模組匯入了 `env.{name}`，增效模組只有在增效模組 API 層級 {PROGRESS_API}（`api` {PROGRESS_API}）且具有權限 `{permission}` 時才能使用它
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	模組匯入了主機未提供的 `{from}.{name}`：增效模組只能匯入 docs/plugins.md 列出的 `env.vc_*` 函式（增效模組 API 層級 2），不能使用 WASI、檔案或網路
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` 為 {_1}；此主機支援的增效模組 API 層級為 1 到 {API_LEVEL}
+@msg	`paintOutput` may only be true	`paintOutput` 只能為 true
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` 僅適用於 `api` 2 的即時效果 (`kind` "effect")
 @msg	`grant` must be a list of permission names	`grant` 必須是權限名稱的清單
 @msg	`grant` names an unknown permission `{shown}`	`grant` 包含未知權限 `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` 類型的增效模組需要權限 `{_2}`
@@ -6224,6 +6241,24 @@ breakText	Glyphs	字符
 # 3D Box add-on
 	3D Box	3D 盒子
 	3D Box Tool	3D 盒子工具
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	開啟方式
+	No importer plug-ins installed	未安裝匯入增效模組
+	Read files you open in its format and make documents from them	讀取以其格式開啟的檔案並據此建立文件
+@msg	{_1} is an importer (File › Open With)	{_1} 是匯入增效模組 (檔案 › 開啟方式)
+@msg	missing `importer` (see document.formats)	未提供 `importer` (請參閱 document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` 必須是增效模組的格式 ID (請參閱 document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	「{shown}」開啟的是 {_1} 檔案，不是 `{_2}`
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` 是 `{_2}` 類型的增效模組，不是匯入增效模組
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` 是 `{_2}` 類型的增效模組，不是匯出增效模組
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` 是匯入增效模組：請用 document.open {{"importer"}"}} 開啟檔案
+@msg	the importer returned no objects	匯入增效模組未傳回任何物件
+@msg	an importer returns `objects` and `warnings`, not `{key}`	匯入增效模組傳回 `objects` 和 `warnings`，不是 `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	檔案超過匯入增效模組讀取的 {MAX_INPUT_BYTES} 位元組
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	匯入增效模組宣告 1 到 {MAX_EXTENSIONS} 個 `extensions`
+@msg	only an exporter or an importer declares `extensions`	只有匯出或匯入增效模組才宣告 `extensions`
+@msg	an importer always gets an import's budget: leave `budget` out	匯入增效模組一律取得匯入的預算：請勿指定 `budget`
 
 # Safe Mode
 	Safe Mode…	安全模式…

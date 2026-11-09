@@ -1826,6 +1826,10 @@ font-technology	Variable	Değişken
 	Mojikumi	Mojikumi
 	Mojikumi Set	Mojikumi Seti
 	Kinsoku Set	Kinsoku Seti
+	Kinsoku Shori Type	Kinsoku Shori Türü
+	Push In First	Önce İçeri
+	Push Out First	Önce Dışarı
+	Push Out Only	Yalnızca Dışarı
 	Hard	Sert
 	Soft	Yumuşak
 	Monitor RGB	RGB'yi izleyin
@@ -4278,6 +4282,13 @@ axis	Both	Her İkisi
 @msg	select an image	bir resim seç
 @msg	select an object in perspective	perspektifte bir nesne seç
 @msg	select artwork (or a colour group) to recolor	yeniden renklendirilecek resmi (veya bir renk grubunu) seçin
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	Yeniden renklendirme tamamlandı; değiştirilmeden kalan: {locked} ve {hidden}
+@msg	Recolor completed; {objects} were left unchanged	Yeniden renklendirme tamamlandı; değiştirilmeden kalan: {objects}
+@msg	Recolor completed; {objects} was left unchanged	Yeniden renklendirme tamamlandı; değiştirilmeden kalan: {objects}
+@msg	1 locked object	1 kilitli nesne
+@msg	{n} locked objects	{n} kilitli nesne
+@msg	1 hidden object	1 gizli nesne
+@msg	{n} hidden objects	{n} gizli nesne
 @msg	select at least two objects	en az iki nesne seç
 @msg	exit isolation mode first	önce izolasyon modundan çık
 @msg	select objects, not layers	katmanları değil nesneleri seçin
@@ -4618,6 +4629,10 @@ axis	Both	Her İkisi
 @msg	the PSD file is cut short	PSD dosyası kısa kesildi
 @msg	the PSD file's header is damaged	PSD dosyasının başlığı hasarlı
 @msg	the PSD file's image data can't be read: {e}	PSD dosyasının görüntü verileri okunamıyor: {e}
+@msg	the JPEG XL file is cut short	JPEG XL dosyası kısa kesildi
+@msg	the JPEG XL container is too large to read	JPEG XL kapsayıcısı okunamayacak kadar büyük
+@msg	CMYK JPEG XL images can't be read	CMYK JPEG XL görüntüleri okunamıyor
+@msg	the JPEG XL file can't be read: {e}	JPEG XL dosyası okunamıyor: {e}
 	Video	video
 	De-Interlace…	Taramasızlaştırma…
 	De-Interlace	Taramasızlaştırma
@@ -5878,6 +5893,8 @@ axis	Y Axis	Y ekseni
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	modül `env.{name}` öğesini içe aktarıyor; bir eklenti bunu yalnızca eklenti API düzeyi {PROGRESS_API} (`api` {PROGRESS_API}) ile ve `{permission}` izniyle kullanabilir
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	modül, ana bilgisayarın sunmadığı `{from}.{name}` öğesini içe aktarıyor: bir eklenti yalnızca docs/plugins.md dosyasında listelenen `env.vc_*` işlevlerini (eklenti API düzeyi 2) içe aktarabilir; WASI, dosya veya ağ kullanamaz
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` değeri {_1}; bu ana bilgisayar 1 ile {API_LEVEL} arasındaki eklenti API düzeylerini destekler
+@msg	`paintOutput` may only be true	`paintOutput` yalnızca true olabilir
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` yalnızca `api` 2 düzeyindeki canlı efekt (`kind` "effect") içindir
 @msg	`grant` must be a list of permission names	`grant` izin adlarından oluşan bir liste olmalıdır
 @msg	`grant` names an unknown permission `{shown}`	`grant` bilinmeyen bir izin adlandırıyor: `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` türündeki bir eklentinin `{_2}` iznine ihtiyacı vardır
@@ -6543,6 +6560,24 @@ breakText	Glyphs	Glifler
 # 3D Box add-on
 	3D Box	3B Kutu
 	3D Box Tool	3B Kutu Aracı
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Birlikte Aç
+	No importer plug-ins installed	İçe aktarma eklentisi yüklü değil
+	Read files you open in its format and make documents from them	Kendi biçiminde açtığınız dosyaları okuma ve bunlardan belge oluşturma
+@msg	{_1} is an importer (File › Open With)	{_1} bir içe aktarma eklentisidir (Dosya › Birlikte Aç)
+@msg	missing `importer` (see document.formats)	`importer` eksik (bkz. document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` bir eklentinin biçim kimliği olmalıdır (bkz. document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	“{shown}” {_1} dosyalarını açar, `{_2}` dosyasını değil
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}`, `{_2}` türünde bir eklentidir, içe aktarma eklentisi değildir
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}`, `{_2}` türünde bir eklentidir, dışa aktarma eklentisi değildir
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` bir içe aktarma eklentisidir: dosyayı document.open {{"importer"}"}} ile açın
+@msg	the importer returned no objects	içe aktarma eklentisi hiç nesne döndürmedi
+@msg	an importer returns `objects` and `warnings`, not `{key}`	içe aktarma eklentisi `{key}` değil, `objects` ve `warnings` döndürür
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	dosya, içe aktarma eklentisinin okuduğu {MAX_INPUT_BYTES} bayttan büyük
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	içe aktarma eklentisi 1 ile {MAX_EXTENSIONS} arasında `extensions` bildirir
+@msg	only an exporter or an importer declares `extensions`	`extensions` yalnızca dışa veya içe aktarma eklentisi bildirir
+@msg	an importer always gets an import's budget: leave `budget` out	içe aktarma eklentisi her zaman bir içe aktarmanın bütçesini alır: `budget` değerini çıkarın
 
 # Safe Mode
 	Safe Mode…	Güvenli Mod…

@@ -48,8 +48,9 @@ pub(super) fn text(bytes: &[u8]) -> String {
 }
 
 /// The encoding names in the editing data that aren't UTF-8 are read in (layers, objects,
-/// artboards, colors, gradients, patterns, graphic styles, swatches). Legacy files store them in
-/// the code page of the system that wrote them and don't say which.
+/// artboards, colors, gradients, patterns, graphic styles, swatches, brushes, symbols, variables
+/// and data sets, and data sets' text values). Legacy files store them in the code page of the
+/// system that wrote them and don't say which.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum NameEncoding {
     /// Windows-1252, Latin-1 for its gaps.
@@ -191,6 +192,22 @@ impl Names {
     pub(super) fn entry(&mut self, o: &Obj, key: &str) -> Option<String> {
         let v = o.get(key)?.iter().find(|v| matches!(v, V::Str(_)))?;
         self.text(v)
+    }
+
+    /// The name the XML id in `id` (an `AI10_ArtUID`) gives its object ([`xml_name`]): a string that
+    /// isn't UTF-8 is read in the encoding, with a note on the name.
+    pub(super) fn xml_id_name(&mut self, id: &Obj) -> Option<String> {
+        match id.content.iter().find(|v| matches!(v, V::Str(_) | V::Name(_)))? {
+            V::Str(bytes) => {
+                let d = self.encoding.decode(bytes);
+                let name = xml_name(&d.text);
+                if d.fallback {
+                    self.note(&name, d.replaced);
+                }
+                Some(name)
+            }
+            v => v.text().map(|t| xml_name(&t)),
+        }
     }
 
     /// A note on `name`, which wasn't UTF-8 (`replaced`: parts of it weren't valid in the encoding

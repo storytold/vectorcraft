@@ -4410,6 +4410,13 @@ imageTrace	Outline	轮廓
 @msg	print settings are not an object	打印设置不是对象
 @msg	no colour group `{g}`	没有颜色组 `{g}`
 @msg	select artwork (or a colour group) to recolor	请选择要重新着色的图稿 (或颜色组)
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	重新着色已完成；未更改：{locked}和{hidden}
+@msg	Recolor completed; {objects} were left unchanged	重新着色已完成；未更改：{objects}
+@msg	Recolor completed; {objects} was left unchanged	重新着色已完成；未更改：{objects}
+@msg	1 locked object	1 个锁定的对象
+@msg	{n} locked objects	{n} 个锁定的对象
+@msg	1 hidden object	1 个隐藏的对象
+@msg	{n} hidden objects	{n} 个隐藏的对象
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	“在浏览器中预览”需要桌面应用 (网页版会改为下载文件)
 @msg	no file system here	此处没有文件系统
 @msg	nothing to preview	没有可预览的内容
@@ -5050,6 +5057,10 @@ font-technology	Variable	可变
 	Stylistic	风格化
 	Mojikumi Set	标点挤压集
 	Kinsoku Set	Kinsoku 集
+	Kinsoku Shori Type	Kinsoku 处理方式
+	Push In First	先推入
+	Push Out First	先推出
+	Push Out Only	只推出
 	Hard	强
 	Soft	弱
 	Saved Selection 1	已保存的选区 1
@@ -5450,6 +5461,10 @@ lighting	Light	光源
 @msg	unknown parameter `{key}`; the command takes: {keys}	未知参数 `{key}`；该命令接受：{keys}
 	Load EPS into Clipboard	将 EPS 载入剪贴板
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} 像素的图像过大，无法绘制
+@msg	the JPEG XL file is cut short	JPEG XL 文件不完整
+@msg	the JPEG XL container is too large to read	JPEG XL 容器过大，无法读取
+@msg	CMYK JPEG XL images can't be read	无法读取 CMYK 模式的 JPEG XL 图像
+@msg	the JPEG XL file can't be read: {e}	无法读取 JPEG XL 文件：{e}
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}：不是 PNG、JPEG、WebP、TIFF 或 BMP 图像
 @msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	图像为 {iw} × {ih} 像素，而画板在该宽度下为 {rw} × {rh} 像素：两者的比例不同
 @msg	`threshold` must be a number from 0 to 1	`threshold` 必须是 0 到 1 之间的数字
@@ -5759,6 +5774,8 @@ axis	Y Axis	Y 轴
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	模块导入了 `env.{name}`，增效工具只有在增效工具 API 级别 {PROGRESS_API}（`api` {PROGRESS_API}）且具有权限 `{permission}` 时才能使用它
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	模块导入了宿主不提供的 `{from}.{name}`：增效工具只能导入 docs/plugins.md 列出的 `env.vc_*` 函数（增效工具 API 级别 2），不能使用 WASI、文件或网络
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` 为 {_1}；此主机支持的增效工具 API 级别为 1 到 {API_LEVEL}
+@msg	`paintOutput` may only be true	`paintOutput` 只能为 true
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` 仅适用于 `api` 2 的实时效果 (`kind` "effect")
 @msg	`grant` must be a list of permission names	`grant` 必须是权限名称的列表
 @msg	`grant` names an unknown permission `{shown}`	`grant` 包含未知权限 `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` 类型的增效工具需要权限 `{_2}`
@@ -6427,6 +6444,24 @@ breakText	Glyphs	字形
 # 3D Box add-on
 	3D Box	3D 盒子
 	3D Box Tool	3D 盒子工具
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	打开方式
+	No importer plug-ins installed	未安装导入增效工具
+	Read files you open in its format and make documents from them	读取以其格式打开的文件并据此创建文档
+@msg	{_1} is an importer (File › Open With)	{_1} 是导入增效工具 (文件 › 打开方式)
+@msg	missing `importer` (see document.formats)	缺少 `importer` (参见 document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` 必须是增效工具的格式 ID (参见 document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	“{shown}” 打开的是 {_1} 文件，不是 `{_2}`
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` 是 `{_2}` 类型的增效工具，不是导入增效工具
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` 是 `{_2}` 类型的增效工具，不是导出增效工具
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` 是导入增效工具：请用 document.open {{"importer"}"}} 打开文件
+@msg	the importer returned no objects	导入增效工具未返回任何对象
+@msg	an importer returns `objects` and `warnings`, not `{key}`	导入增效工具返回 `objects` 和 `warnings`，不是 `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	文件超过导入增效工具读取的 {MAX_INPUT_BYTES} 字节
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	导入增效工具声明 1 到 {MAX_EXTENSIONS} 个 `extensions`
+@msg	only an exporter or an importer declares `extensions`	只有导出或导入增效工具才声明 `extensions`
+@msg	an importer always gets an import's budget: leave `budget` out	导入增效工具始终获得导入的预算：请省略 `budget`
 
 # Safe Mode
 	Safe Mode…	安全模式…

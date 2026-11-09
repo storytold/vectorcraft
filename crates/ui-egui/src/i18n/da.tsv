@@ -1738,6 +1738,10 @@ digits	Malayalam	Malayalam
 	Stylistic	Stilistisk
 	Mojikumi Set	Mojikumi-sæt
 	Kinsoku Set	Kinsoku-sæt
+	Kinsoku Shori Type	Kinsoku Shori-type
+	Push In First	Skub ind først
+	Push Out First	Skub ud først
+	Push Out Only	Kun skub ud
 	Hard	Hård
 	Right Indent	Højre indrykning
 	Right-to-Left Paragraph Direction	Afsnitsretning fra højre mod venstre
@@ -6404,6 +6408,11 @@ breakText	Glyphs	Glyffer
 # 3D Box add-on
 	3D Box	3D-boks
 	3D Box Tool	3D-boksværktøj
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Åbn med
+	No importer plug-ins installed	Ingen import-plug-ins installeret
+	Read files you open in its format and make documents from them	Læse filer, du åbner i dens format, og lave dokumenter ud fra dem
 
 # Safe Mode
 	Safe Mode…	Sikker tilstand…

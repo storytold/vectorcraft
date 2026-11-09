@@ -340,7 +340,7 @@ impl Renderer {
             let e = match self.fx_geom.remove(&key) {
                 Some(e) if Arc::ptr_eq(&e.node, &o) => e,
                 _ => {
-                    let (g, carry) = effected_path_carrying(n, bp);
+                    let (g, carry) = effected_path_carrying(f.symbols.document(), n, bp);
                     FxGeom { g: Arc::new(g), carried: carried(n, &carry), items: vec![None; n.appearance.items.len()], node: o, stamp }
                 }
             };
@@ -349,7 +349,7 @@ impl Renderer {
         let (g, carried) = match &cached {
             Some((_, e)) => (e.g.clone(), e.carried.clone()),
             None => {
-                let (g, carry) = effected_path_carrying(n, bp);
+                let (g, carry) = effected_path_carrying(f.symbols.document(), n, bp);
                 (Arc::new(g), carried(n, &carry))
             }
         };
@@ -380,7 +380,7 @@ impl Renderer {
             self.hairline(ctx, f, g, [0, 0, 0, 255]);
             return;
         }
-        let gctx = GeomContext::of(paints);
+        let gctx = GeomContext { doc: Some(f.symbols.document()), ..GeomContext::of(paints) };
         let rfx = effects::raster_effects(&n.appearance.effects);
         // Document-space reach of the painted geometry (strokes, arrowheads…).
         let outset = n.appearance.outset();

@@ -69,6 +69,10 @@ digits	Malayalam	말라얄람어
 	Stylistic	스타일
 	Mojikumi Set	모지쿠미 세트
 	Kinsoku Set	긴소쿠 세트
+	Kinsoku Shori Type	긴소쿠 처리 유형
+	Push In First	밀어 넣기 우선
+	Push Out First	밀어내기 우선
+	Push Out Only	밀어내기만
 	Hard	강하게
 	Soft	약하게
 	Latin	라틴어
@@ -4622,6 +4626,13 @@ theme	Appearance	외관
 @msg	print settings are not an object	인쇄 설정이 개체가 아닙니다
 @msg	no colour group `{g}`	색상 그룹 `{g}`이(가) 없습니다
 @msg	select artwork (or a colour group) to recolor	리컬러할 아트웍(또는 색상 그룹)을 선택하세요
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	색상 재지정이 완료되었습니다. 변경되지 않음: {locked}, {hidden}
+@msg	Recolor completed; {objects} were left unchanged	색상 재지정이 완료되었습니다. 변경되지 않음: {objects}
+@msg	Recolor completed; {objects} was left unchanged	색상 재지정이 완료되었습니다. 변경되지 않음: {objects}
+@msg	1 locked object	잠긴 개체 1개
+@msg	{n} locked objects	잠긴 개체 {n}개
+@msg	1 hidden object	숨겨진 개체 1개
+@msg	{n} hidden objects	숨겨진 개체 {n}개
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	브라우저에서 미리 보기는 데스크톱 앱이 필요합니다(웹에서는 파일을 다운로드합니다)
 @msg	no file system here	여기에는 파일 시스템이 없습니다
 @msg	nothing to preview	미리 볼 항목이 없습니다
@@ -4879,6 +4890,10 @@ theme	Appearance	외관
 @msg	the PSD file is cut short	PSD 파일이 잘려 있습니다
 @msg	the PSD file's header is damaged	PSD 파일의 헤더가 손상되었습니다
 @msg	the PSD file's image data can't be read: {e}	PSD 파일의 이미지 데이터를 읽을 수 없습니다: {e}
+@msg	the JPEG XL file is cut short	JPEG XL 파일이 잘려 있습니다
+@msg	the JPEG XL container is too large to read	JPEG XL 컨테이너가 너무 커서 읽을 수 없습니다
+@msg	CMYK JPEG XL images can't be read	CMYK JPEG XL 이미지는 읽을 수 없습니다
+@msg	the JPEG XL file can't be read: {e}	JPEG XL 파일을 읽을 수 없습니다: {e}
 	Video	비디오
 	De-Interlace…	디인터레이스…
 	De-Interlace	디인터레이스
@@ -5498,6 +5513,8 @@ axis	Y Axis	Y축
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	모듈이 `env.{name}`을(를) 가져오지만, 플러그인은 이를 플러그인 API 수준 {PROGRESS_API}(`api` {PROGRESS_API})에서 `{permission}` 권한이 있을 때만 사용할 수 있습니다
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	모듈이 호스트가 제공하지 않는 `{from}.{name}`을(를) 가져옵니다. 플러그인은 docs/plugins.md에 나열된 `env.vc_*` 함수(플러그인 API 수준 2)만 가져올 수 있으며 WASI, 파일, 네트워크는 사용할 수 없습니다
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api`가 {_1}입니다. 이 호스트는 플러그인 API 수준 1부터 {API_LEVEL}까지 지원합니다
+@msg	`paintOutput` may only be true	`paintOutput`에는 true만 지정할 수 있습니다
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput`은 `api` 2의 라이브 효과(`kind` "effect")에만 쓸 수 있습니다
 @msg	`grant` must be a list of permission names	`grant`는 권한 이름 목록이어야 합니다
 @msg	`grant` names an unknown permission `{shown}`	`grant`에 알 수 없는 권한 `{shown}`이(가) 있습니다
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` 종류의 플러그인에는 `{_2}` 권한이 필요합니다
@@ -6167,6 +6184,24 @@ breakText	Glyphs	글리프
 # 3D Box add-on
 	3D Box	3D 상자
 	3D Box Tool	3D 상자 도구
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	연결 프로그램
+	No importer plug-ins installed	설치된 가져오기 플러그인 없음
+	Read files you open in its format and make documents from them	자체 형식으로 연 파일을 읽고 문서로 만들기
+@msg	{_1} is an importer (File › Open With)	{_1}은(는) 가져오기 플러그인입니다(파일 › 연결 프로그램)
+@msg	missing `importer` (see document.formats)	`importer`가 없습니다(document.formats 참조)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer`는 플러그인의 형식 ID여야 합니다(document.formats 참조)
+@msg	“{shown}” opens {_1} files, not `{_2}`	“{shown}”은(는) {_1} 파일을 엽니다. `{_2}`은(는) 열지 않습니다
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}`은(는) `{_2}` 종류의 플러그인이며 가져오기 플러그인이 아닙니다
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}`은(는) `{_2}` 종류의 플러그인이며 내보내기 플러그인이 아닙니다
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}`은(는) 가져오기 플러그인입니다: document.open {{"importer"}"}}로 파일을 여세요
+@msg	the importer returned no objects	가져오기 플러그인이 개체를 반환하지 않았습니다
+@msg	an importer returns `objects` and `warnings`, not `{key}`	가져오기 플러그인은 `{key}`가 아닌 `objects`와 `warnings`를 반환합니다
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	파일이 가져오기 플러그인이 읽는 {MAX_INPUT_BYTES}바이트보다 큽니다
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	가져오기 플러그인은 `extensions`를 1~{MAX_EXTENSIONS}개 선언합니다
+@msg	only an exporter or an importer declares `extensions`	`extensions`는 내보내기 또는 가져오기 플러그인만 선언합니다
+@msg	an importer always gets an import's budget: leave `budget` out	가져오기 플러그인은 항상 가져오기 예산을 받습니다: `budget`을 생략하세요
 
 # Safe Mode
 	Safe Mode…	안전 모드…

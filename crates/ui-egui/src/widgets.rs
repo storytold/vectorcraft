@@ -711,6 +711,25 @@ mod gradient_chip_tests {
         assert_eq!(colors[0], Color32::BLACK);
     }
 
+    #[test]
+    fn freeform_chip_mixes_points_in_the_model_they_share() {
+        use vectorcraft_color::{Color, Freeform, FreeformPoint};
+        use vectorcraft_geom::kurbo::Point;
+        let chip = |a: Color, b: Color| {
+            let p = |x, c| FreeformPoint::new(Point::new(x, 10.0), c);
+            let mut gp = paint(GradientKind::Freeform, 0.0);
+            gp.freeform = Some(Freeform { points: vec![p(0.0, a), p(20.0, b)], ..Default::default() });
+            gradient_chip_colors(&gp, 20.0, 20.0, 4, 4)[2 * 5 + 2]
+        };
+        let near = |got: Color32, want: [u8; 4]| [got.r(), got.g(), got.b()].iter().zip(want).all(|(g, w)| g.abs_diff(w) <= 3);
+        let got = chip(Color::cmyk(1.0, 0.0, 0.0, 0.0), Color::cmyk(0.0, 0.0, 0.0, 1.0));
+        let want = Color::cmyk(0.5, 0.0, 0.0, 0.5).to_rgba8(1.0);
+        assert!(near(got, want), "CMYK: {got:?} vs {want:?}");
+        let got = chip(Color::lab(90.0, -60.0, 40.0), Color::lab(30.0, 60.0, -40.0));
+        let want = Color::lab(60.0, 0.0, 0.0).to_rgba8(1.0);
+        assert!(near(got, want), "Lab: {got:?} vs {want:?}");
+    }
+
     /// At a position and display scale that fall between pixels, the gradient chip covers the same
     /// pixel rows as a colour or None chip beside it (#3826). Filled rectangles are drawn on whole
     /// pixels, so the toolbar's Gradient button sat up to half a pixel off its neighbors.

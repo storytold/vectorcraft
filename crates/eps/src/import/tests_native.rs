@@ -1474,6 +1474,26 @@ fn an_ai_library_without_layers_reads_its_names_in_a_legacy_encoding() {
     assert!(notes.iter().all(|n| n.contains("windows-949")), "{notes:?}");
 }
 
+/// A pattern of a file without layers that takes a free name beside a pattern of the PDF part has
+/// a note on the name it was read under.
+#[test]
+fn a_renamed_pattern_of_a_file_without_layers_has_a_note_on_its_legacy_name() {
+    // 빨강 in code page 949.
+    let red = r"\273\241\260\255";
+    let tile = format!("%AI3_BeginPattern: ({red})\n({red}) 0 0 4 4\n%_0 0 0 1 k\n%_1 1 m\n%_3 1 L\n%_3 3 L\n%_1 3 L\n%_f\nE\n%AI3_EndPattern\n");
+    let palette = format!("%AI5_BeginPalette\n0 0 Pb\n({red}) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n(Tile)\nPc\nPB\n%AI5_EndPalette\n");
+    let art = native(&format!("{tile}{palette}"));
+    let mut part = pdf_part(10.0, 86.0);
+    part.patterns.push(vectorcraft_doc::PatternDef::new("빨강", vec![]));
+    let (d, warnings, read) =
+        crate::layered_ai_from(crate::AiLayers::decode(&private(&art)), part, vec![], false, true, 1.0, crate::NameEncoding::Korean);
+    assert!(!read, "{warnings:?}");
+    assert!(d.pattern("빨강 2").is_some(), "{:?}", d.patterns.iter().map(|p| &p.name).collect::<Vec<_>>());
+    let notes: Vec<&String> = warnings.iter().filter(|w| w.contains("isn't UTF-8")).collect();
+    assert_eq!(notes.len(), 1, "{warnings:?}");
+    assert!(notes[0].contains("`빨강`"), "{notes:?}");
+}
+
 /// A `.ai` pattern library (a palette of pattern swatches and no layers) whose PDF part defines no
 /// pattern gets the patterns its editing data defines with the palette's pattern swatches.
 #[test]

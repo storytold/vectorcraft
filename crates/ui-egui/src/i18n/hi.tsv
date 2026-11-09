@@ -5273,6 +5273,8 @@ antiAlias	Sharp	शार्प
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	मॉड्यूल `env.{name}` आयात करता है, जिसे प्लग-इन केवल प्लग-इन API स्तर {PROGRESS_API} (`api` {PROGRESS_API}) पर और अनुमति `{permission}` के साथ उपयोग कर सकता है
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	मॉड्यूल `{from}.{name}` आयात करता है, जिसे होस्ट उपलब्ध नहीं कराता: प्लग-इन केवल वे `env.vc_*` फ़ंक्शन आयात कर सकता है जो docs/plugins.md में सूचीबद्ध हैं (प्लग-इन API स्तर 2), और कोई WASI, फ़ाइल या नेटवर्क नहीं
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` {_1} है; यह होस्ट प्लग-इन API स्तर 1 से {API_LEVEL} तक का समर्थन करता है
+@msg	`paintOutput` may only be true	`paintOutput` केवल true हो सकता है
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` केवल `api` 2 पर लाइव इफ़ेक्ट (`kind` "effect") के लिए है
 @msg	`grant` must be a list of permission names	`grant` अनुमति नामों की सूची होनी चाहिए
 @msg	`grant` names an unknown permission `{shown}`	`grant` एक अज्ञात अनुमति `{shown}` बताता है
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` प्रकार के प्लग-इन को `{_2}` अनुमति चाहिए
@@ -5427,7 +5429,7 @@ antiAlias	Sharp	शार्प
 @msg	`{_1}` can't be edited or removed	`{_1}` को संपादित या हटाया नहीं जा सकता है
 @msg	`{_1}` has no brushes to apply	`{_1}` को लागू करने के लिए कोई ब्रश नहीं है
 @msg	`{_1}` has no symbols to place	`{_1}` के पास कोई सिंबल नहीं है
-@msg	`{_1}` is a {_2}, not an exporter	`{_1}` एक {_2} है, एक निर्यातक नहीं है
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` `{_2}` प्रकार का प्लग-इन है, निर्यातक नहीं
 @msg	`{_1}` is a live effect: apply it with effect.apply {{"effect"}"}}	`{_1}` एक लाइव इफ़ेक्ट है: इसे effect.apply {{"effect"}"}} के साथ लागू करें
 @msg	`{_1}` is an exporter: export with document.export {{"format"}"}}	`{_1}` एक एक्सपोर्टर है: document.export {{"format"}"}} से एक्सपोर्ट करें
 @msg	`{_1}` is built in and always listed	`{_1}` बनाया गया है और हमेशा सूचीबद्ध है
@@ -6992,7 +6994,7 @@ antiAlias	Sharp	शार्प
 @msg	Offset Path: the path is too complex to offset	ऑफसेट पाथ: पाथ ऑफसेट करने के लिए बहुत जटिल है
 @msg	on must be true or false	on को true या false होना चाहिए
 @msg	only a dock group above or below others collapses, not one beside another	केवल दूसरों के ऊपर या नीचे एक डॉक समूह गिर जाता है, एक दूसरे के बगल में नहीं
-@msg	only an exporter declares `extensions`	केवल निर्यातक `extensions` घोषित करता है
+@msg	only an exporter or an importer declares `extensions`	केवल एक्सपोर्टर या इंपोर्टर `extensions` घोषित करता है
 @msg	only an object of the Global Edit other than the one it started from can be left out	केवल ग्लोबल एडिट का एक ऑब्जेक्ट, इसके अलावा इसे शुरू किया जा सकता है, छोड़ दिया जा सकता है
 @msg	only groups, layers, type and images have a Contents (Characters) row	केवल समूहों, लेयर्स, प्रकार और इमेज में एक सामग्री (Character) पंक्ति है
 @msg	only http, https and mailto URLs open in the browser, not “{url}”	केवल http, https और Mailto URL ब्राउज़र में खुलते हैं, न कि "{url}"
@@ -7226,6 +7228,13 @@ antiAlias	Sharp	शार्प
 @msg	select area type and closed paths (at least one area type object)	क्षेत्र प्रकार और बंद पाथ (कम से कम एक क्षेत्र प्रकार ऑब्जेक्ट) सिलेक्ट करें
 @msg	select area type whose first line can fit its frame	क्षेत्र के प्रकार सिलेक्ट करें जिनकी पहली पंक्ति अपने फ्रेम को फिट कर सकती है
 @msg	select artwork (or a colour group) to recolor	फिर से रंग करने के लिए आर्टवर्क (या एक रंग समूह) सिलेक्ट करें
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	रीकलर पूरा हुआ; ये अपरिवर्तित रहे: {locked} और {hidden}
+@msg	Recolor completed; {objects} were left unchanged	रीकलर पूरा हुआ; ये अपरिवर्तित रहे: {objects}
+@msg	Recolor completed; {objects} was left unchanged	रीकलर पूरा हुआ; यह अपरिवर्तित रहा: {objects}
+@msg	1 locked object	1 लॉक किया गया ऑब्जेक्ट
+@msg	{n} locked objects	{n} लॉक किए गए ऑब्जेक्ट
+@msg	1 hidden object	1 छिपा हुआ ऑब्जेक्ट
+@msg	{n} hidden objects	{n} छिपे हुए ऑब्जेक्ट
 @msg	select artwork to add its colours	अपने रंगों को जोड़ने के लिए आर्टवर्क सिलेक्ट करें
 @msg	select artwork to make a group of its colours	अपने रंगों का एक समूह बनाने के लिए आर्टवर्क सिलेक्ट करें
 @msg	select artwork to recolour, or give a colour `group`	रंग बदलने के लिए आर्टवर्क चुनें या रंग `group` दें
@@ -8061,3 +8070,19 @@ theme	Appearance	अपीयरेंस
 	Touching	स्पर्श करते हुए
 	Fully Enclosed	पूरी तरह घिरे हुए
 	Drag Direction	खींचने की दिशा
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	इसके साथ खोलें
+	No importer plug-ins installed	कोई इंपोर्टर प्लग-इन स्थापित नहीं है
+	Read files you open in its format and make documents from them	उसके फ़ॉर्मेट में खोली गई फ़ाइलें पढ़ना और उनसे डॉक्यूमेंट बनाना
+@msg	{_1} is an importer (File › Open With)	{_1} एक इंपोर्टर है (फ़ाइल › इसके साथ खोलें)
+@msg	missing `importer` (see document.formats)	`importer` नहीं दिया गया (document.formats देखें)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` किसी प्लग-इन का फ़ॉर्मेट id होना चाहिए (document.formats देखें)
+@msg	“{shown}” opens {_1} files, not `{_2}`	“{shown}” {_1} फ़ाइलें खोलता है, `{_2}` नहीं
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` `{_2}` प्रकार का प्लग-इन है, इंपोर्टर नहीं
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` एक इंपोर्टर है: document.open {{"importer"}"}} से फ़ाइल खोलें
+@msg	the importer returned no objects	इंपोर्टर ने कोई ऑब्जेक्ट नहीं लौटाया
+@msg	an importer returns `objects` and `warnings`, not `{key}`	इंपोर्टर `objects` और `warnings` लौटाता है, `{key}` नहीं
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	फ़ाइल उन {MAX_INPUT_BYTES} बाइट्स से बड़ी है जो इंपोर्टर पढ़ता है
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	इंपोर्टर 1 से {MAX_EXTENSIONS} `extensions` घोषित करता है
+@msg	an importer always gets an import's budget: leave `budget` out	इंपोर्टर को हमेशा इंपोर्ट का बजट मिलता है: `budget` छोड़ दें

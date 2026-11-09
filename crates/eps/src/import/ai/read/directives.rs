@@ -726,7 +726,7 @@ impl<'a> Reader<'a> {
     /// order or a brush ([`brush`]); other objects are left alone. A brush without a name is counted
     /// as not read.
     fn plugin_object(&mut self, section: &[u8]) {
-        let Some((kind, name, params)) = brush::plugin_strings(section, &mut self.names) else { return };
+        let Some((kind, name, params)) = brush::plugin_strings(section, &self.names) else { return };
         if kind == brush::MANAGER {
             if name.is_some() {
                 self.brush_objects = true;
@@ -744,8 +744,12 @@ impl<'a> Reader<'a> {
             self.brushes_unread += 1;
             return;
         }
-        match brush::parse_tool_object(tool, &name, &params) {
-            Ok(d) => self.brush_drafts.push(d),
+        match brush::parse_tool_object(tool, &self.names.quiet(&name), &params) {
+            Ok(d) => {
+                // Only the name of a brush that is read gets a note.
+                self.names.bytes(&name);
+                self.brush_drafts.push(d);
+            }
             Err(_) => self.brushes_unread += 1,
         }
     }
