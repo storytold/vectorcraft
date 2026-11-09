@@ -2864,7 +2864,7 @@ fn removing_a_plugin_drops_its_settings_from_memory() {
     let mut m = Meter::unlimited();
     assert_eq!(st.setting("zoom", &mut m).unwrap(), Some(b"hello".to_vec()));
     assert_eq!(m.used(), bytes.len() as u64, "read from the file");
-    s.remove_plugin_storage(id).unwrap();
+    s.remove_plugin_storage(id, || true).unwrap();
 }
 
 /// The cache's total stays in memory while the cache folder keeps its time; a write and a clear
