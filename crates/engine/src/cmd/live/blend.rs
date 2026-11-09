@@ -504,6 +504,10 @@ fn replace_spine_path(n: &Node) -> Option<PathData> {
     first
 }
 
+/// Object › Blend › Replace Spine (`object.blend.replaceSpine`): use the selected path, or a
+/// compound path's first member path, as the spine of the first selected blend and consume it. The
+/// path gives only its first subpath ([`live::blend_spine`]), and the command fails without changing
+/// anything when the selection has no blend and path, or when the path gives no spine of length.
 pub(super) fn blend_replace_spine(s: &mut Session, _: &Value) -> Result<Value> {
     let blends = selected_of(s, is_blend);
     let st = s.doc()?;
