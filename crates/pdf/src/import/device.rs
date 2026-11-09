@@ -338,6 +338,7 @@ impl<'a> Device<'a> for Builder<'_> {
         if self.nested > 0 {
             return;
         }
+        self.actual.begin();
         let at = self.tag_at;
         self.tag_at += 1;
         let group = match self.scan.tags.get(at) {
@@ -376,5 +377,12 @@ impl<'a> Device<'a> for Builder<'_> {
             self.flush();
         }
         self.marked.pop();
+        self.actual.end();
+    }
+
+    fn actual_text(&mut self, text: &[u8]) {
+        if self.nested == 0 && self.text_as == crate::TextAs::Text && !self.actual.set(text) {
+            self.warn("ActualText beyond the import size or nesting limit was left to glyph mappings");
+        }
     }
 }
