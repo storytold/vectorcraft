@@ -568,7 +568,8 @@ fn takes_over(s: &Session, plugin: &Plugin) -> bool {
 /// `allowHeavy` says the user agreed, one that lists permissions the user hasn't granted this very
 /// module unless `grant` lists them all, one that would take another module's place ([`takes_over`])
 /// unless `replace` is true, and one whose SHA-256 isn't the `hash` given; records the grant with
-/// the module's hash, keeps it for the next start and installs it → its `plugin.list` entry.
+/// the module's hash, keeps it for the next start and installs it → its `plugin.list` entry. A
+/// module that lists no permissions ends any grant held for its id.
 fn install(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "plugin.install";
     let replace = match p.get("replace") {
@@ -632,6 +633,22 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
         if stored && !s.store_grant(&m.id, Some(g)) {
             s.put_back_plugin(plugin.id(), previous.ok().flatten().as_deref());
             stored = false;
+        }
+    } else {
+        // This module takes the id over, so nothing the user approved for the id applies any more.
+        registry::revoke(&m.id);
+        // When the write failed, the old stored module stays in the folder and needs its grant at
+        // the next launch. A grant that can't be removed still approves the old bytes, so the store
+        // gets the module it held back. When that module can't be read or written back, or there
+        // was none, no module goes with the grant, and the grant stops counting for this session. A
+        // grants file that is too large or doesn't hold a list approves nothing, and the new module
+        // stays; one that can't be opened or read may approve the old bytes once it reads again.
+        if stored && !s.store_grant(&m.id, None) && s.holds_plugin_grant(&m.id) {
+            let back = previous.as_ref().is_ok_and(|held| s.put_back_plugin(plugin.id(), held.as_deref()));
+            stored = !back;
+            if !back || matches!(previous, Ok(None)) {
+                s.ignore_stored_grant(&m.id);
+            }
         }
     }
     // It gets the settings and cache kept for its id.
@@ -843,19 +860,25 @@ fn remove(s: &mut Session, p: &Value) -> Result<Value> {
     let installed = registry::get(id).is_some();
     // Settings and cache the store keeps for an id that isn't installed are deleted too.
     let stored = !installed && vectorcraft_plugins::manifest::valid_id(id) && s.has_plugin_storage(id);
-    // Its settings and cache go first: when they can't be moved aside, the plug-in stays installed,
-    // as it was, and a second `plugin.remove` tries again.
-    if (installed || stored)
-        && let Err(e) = s.remove_plugin_storage(id)
-    {
+    // Installed again, it asks again. A grant that can't be removed still approves the module, and
+    // so may a grants file that can't be opened or read. One that is too large or doesn't hold a
+    // list approves nothing and doesn't stop the removal.
+    let forget = || s.store_grant(id, None) || !s.holds_plugin_grant(id);
+    // Its settings and cache are moved aside and its grant removed before anything is deleted: when
+    // either can't be done, the plug-in stays installed, as it was, and a second `plugin.remove`
+    // tries again.
+    let failed = if installed || stored {
+        s.remove_plugin_storage(id, forget).err().map(|e| e.to_string())
+    } else {
+        (!forget()).then(|| crate::store::GRANT_NOT_REMOVED.to_string())
+    };
+    if let Some(e) = failed {
         if installed {
             s.attach_plugin_storage(id);
         }
-        return Err(EngineError::Other(e.to_string()));
+        return Err(EngineError::Other(e));
     }
-    // Installed again, it asks again.
     registry::revoke(id);
-    s.store_grant(id, None);
     s.unstore_plugin(id);
     if !stored && (!installed || !registry::remove(id)) {
         return Err(err(vectorcraft_plugins::Error::NotFound(id.into())));
@@ -916,7 +939,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Install Plug-in",
             [],
             None,
-            "{path: a .wasm file (desktop) | dataBase64: the module (+ name?: shown as its source), replace?: bool (true once the user agreed: a module with other bytes than the plug-in installed with its id, or with none installed, one whose id has settings or a cache in the plug-in store, installs only with it, takes that plug-in's place and gets its settings and cache; false: one whose id is installed is refused; left out, the same module installs again), name?: file name (with dataBase64), allowHeavy?: bool (true once the user agreed to a heavy budget: a filter whose manifest asks for one, budget \"heavy\" in plugin.inspect, installs only with it), grant?: [permission] (the permissions the user granted: a plug-in whose manifest lists permissions, needsApproval in plugin.inspect, installs only when grant holds every one of them; the grant is recorded with the module's hash and covers only that module, so a module with other bytes needs a new grant even when it lists the same permissions; with a plug-in store attached, only the grants kept there count), hash?: string (the module's SHA-256 as plugin.inspect gave it: a module with other bytes is refused)} validate and install a WebAssembly plug-in for this session → its plugin.list entry",
+            "{path: a .wasm file (desktop) | dataBase64: the module (+ name?: shown as its source), replace?: bool (true once the user agreed: a module with other bytes than the plug-in installed with its id, or with none installed, one whose id has settings or a cache in the plug-in store, installs only with it, takes that plug-in's place and gets its settings and cache; false: one whose id is installed is refused; left out, the same module installs again), name?: file name (with dataBase64), allowHeavy?: bool (true once the user agreed to a heavy budget: a filter whose manifest asks for one, budget \"heavy\" in plugin.inspect, installs only with it), grant?: [permission] (the permissions the user granted: a plug-in whose manifest lists permissions, needsApproval in plugin.inspect, installs only when grant holds every one of them; the grant is recorded with the module's hash and covers only that module, so a module with other bytes needs a new grant even when it lists the same permissions; installing a module that lists no permissions forgets the grant held for its id; a refused install keeps the grant, a failed write of the module to the plug-in store leaves the grant in the store, and a stored module that is disabled or not read in Safe Mode keeps the grant for its id; with a plug-in store attached, only the grants kept there count), hash?: string (the module's SHA-256 as plugin.inspect gave it: a module with other bytes is refused)} validate and install a WebAssembly plug-in for this session → its plugin.list entry",
             always,
             install
         ),
@@ -934,7 +957,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Remove Plug-in",
             [],
             None,
-            "{id} uninstall a plug-in (its live effects then leave the geometry as it is) and delete the settings and cache it kept (when their folder can't be moved aside, the command fails and the plug-in stays installed); for an id that isn't installed, deletes the settings and cache the plug-in store still keeps for it → {removed}",
+            "{id} uninstall a plug-in (its live effects then leave the geometry as it is) and delete the settings and cache it kept (when their folder can't be moved aside, or its grant can't be removed from the plug-in store, the command fails and the plug-in stays installed); for an id that isn't installed, deletes the settings and cache the plug-in store still keeps for it → {removed}",
             always,
             remove
         ),
