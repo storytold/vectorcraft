@@ -183,6 +183,8 @@ struct Failures {
     run: Option<String>,
     /// From checking the swatches and patterns a painted result names against the document.
     references: Option<String>,
+    /// Was the latest failure a refused reference?
+    references_latest: bool,
 }
 
 /// Which of a plug-in's [`Failures`] an outcome replaces.
@@ -243,13 +245,14 @@ fn end_run(serial: u64, cancelled: bool) {
     }
 }
 
-/// The last error of live-effect plug-in `id`: a refused reference if there is one, else a failed
-/// run's. A run that succeeds clears a failed run's error, and a reference check that passes clears
-/// a refused reference's.
+/// The last error of live-effect plug-in `id`: the latest failure that still stands. A run that
+/// succeeds clears a failed run's error, and a reference check that passes clears a refused
+/// reference's.
 pub fn last_error(id: &str) -> Option<String> {
     let errors = ERRORS.lock().unwrap_or_else(|e| e.into_inner());
     let failures = errors.as_ref()?.get(id)?;
-    failures.references.clone().or_else(|| failures.run.clone())
+    let (latest, other) = if failures.references_latest { (&failures.references, &failures.run) } else { (&failures.run, &failures.references) };
+    latest.clone().or_else(|| other.clone())
 }
 
 /// Records how a run of plug-in `id`, or a check of what its result names, went: a failure as that
@@ -261,6 +264,9 @@ fn note(id: &str, plugin: &crate::Plugin, origin: Origin, r: std::result::Result
     let mut errors = ERRORS.lock().unwrap_or_else(|e| e.into_inner());
     let errors = errors.get_or_insert_with(HashMap::new);
     let failures = errors.entry(id.to_string()).or_default();
+    if message.is_some() {
+        failures.references_latest = matches!(origin, Origin::References);
+    }
     match origin {
         Origin::Run => {
             failures.run = message;
@@ -459,6 +465,35 @@ mod tests {
         assert_eq!(last_error(ID), Some(failed));
         assert!(draw(&line(3)).is_some(), "a new run");
         assert_eq!(last_error(ID), None);
+        registry::remove(ID);
+    }
+
+    /// With a refused reference and a failed run both standing, the latest of the two is reported.
+    #[test]
+    fn the_latest_of_a_refused_reference_and_a_failed_run_is_reported() {
+        let _lock = crate::safe_mode::TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        crate::safe_mode::set_active(None);
+        const ID: &str = "test.effect.latesterror";
+        let manifest = format!(r#"{{"id":"{ID}","name":"Test","version":"1","kind":"effect","api":2,"paintOutput":true,"params":{{}}}}"#);
+        let mut fill = serde_json::to_value(Paint::solid(Color::WHITE)).unwrap();
+        fill["swatch"] = json!("Missing");
+        let square = PathData::single(SubPath::polyline(&[(0.0, 0.0), (9.0, 0.0), (9.0, 9.0)].map(|(x, y)| Point::new(x, y)), true));
+        let output = json!({"objects": [{"path": square, "fills": [fill]}]}).to_string();
+        // Traps on a long input.
+        let first = "(if (i32.gt_u (local.get $il) (i32.const 4096)) (then unreachable))";
+        let src = crate::wat::with_imports(&manifest, "", first, &output);
+        registry::install(crate::Plugin::load(&wat::parse_str(&src).unwrap(), Limits::default()).unwrap());
+        let doc = Document::new(100.0, 100.0);
+        let line = |n: usize| PathData::single(SubPath::polyline(&(0..n).map(|i| Point::new(i as f64, 0.0)).collect::<Vec<_>>(), false));
+        let draw =
+            |path: &PathData| apply_painted(ID, &json!({}), path, Rect::new(0.0, 0.0, 1.0, 1.0), FillRule::NonZero, Paints::default(), Some(&doc));
+        let short = line(2);
+        assert!(draw(&short).is_none());
+        assert!(last_error(ID).unwrap().contains("swatch"));
+        assert!(draw(&line(1000)).is_none());
+        assert!(last_error(ID).unwrap().contains("trapped"));
+        assert!(draw(&short).is_none(), "from the cache, refused again");
+        assert!(last_error(ID).unwrap().contains("swatch"));
         registry::remove(ID);
     }
 
