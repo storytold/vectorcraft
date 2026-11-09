@@ -7226,6 +7226,13 @@ antiAlias	Sharp	शार्प
 @msg	select area type and closed paths (at least one area type object)	क्षेत्र प्रकार और बंद पाथ (कम से कम एक क्षेत्र प्रकार ऑब्जेक्ट) सिलेक्ट करें
 @msg	select area type whose first line can fit its frame	क्षेत्र के प्रकार सिलेक्ट करें जिनकी पहली पंक्ति अपने फ्रेम को फिट कर सकती है
 @msg	select artwork (or a colour group) to recolor	फिर से रंग करने के लिए आर्टवर्क (या एक रंग समूह) सिलेक्ट करें
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	रीकलर पूरा हुआ; ये अपरिवर्तित रहे: {locked} और {hidden}
+@msg	Recolor completed; {objects} were left unchanged	रीकलर पूरा हुआ; ये अपरिवर्तित रहे: {objects}
+@msg	Recolor completed; {objects} was left unchanged	रीकलर पूरा हुआ; यह अपरिवर्तित रहा: {objects}
+@msg	1 locked object	1 लॉक किया गया ऑब्जेक्ट
+@msg	{n} locked objects	{n} लॉक किए गए ऑब्जेक्ट
+@msg	1 hidden object	1 छिपा हुआ ऑब्जेक्ट
+@msg	{n} hidden objects	{n} छिपे हुए ऑब्जेक्ट
 @msg	select artwork to add its colours	अपने रंगों को जोड़ने के लिए आर्टवर्क सिलेक्ट करें
 @msg	select artwork to make a group of its colours	अपने रंगों का एक समूह बनाने के लिए आर्टवर्क सिलेक्ट करें
 @msg	select artwork to recolour, or give a colour `group`	रंग बदलने के लिए आर्टवर्क चुनें या रंग `group` दें
