@@ -52,7 +52,8 @@ static TRANSPARENCY_GRID: ParamSchema = ParamSchema::new(
     &[Param::new("on", Type::Boolean).default_note("toggle").null_omitted()],
     "show the transparency grid behind the active document's artboards (each document has its own setting)",
 )
-.returns("{on}");
+.returns("{on}")
+.writes(Writes::Session);
 
 static GLYPH_SNAP: ParamSchema = ParamSchema::new(
     &[

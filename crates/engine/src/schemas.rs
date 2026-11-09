@@ -29,7 +29,7 @@ use crate::{EngineError, Result};
 pub const API_VERSION: u32 = 1;
 
 /// [`schema_hash`] at each API level, oldest first; the last row is [`API_VERSION`]'s.
-pub const SCHEMA_HASHES: &[(u32, u64)] = &[(1, 0x7552_6395_fcbb_1b90)];
+pub const SCHEMA_HASHES: &[(u32, u64)] = &[(1, 0xda5b_4c1e_fe4e_c697)];
 
 /// The hash of every built-in command's schema ([`vectorcraft_apischema::hash`]).
 pub fn schema_hash() -> u64 {
@@ -310,6 +310,25 @@ mod tests {
         assert_eq!(listed["schema"]["required"], json!(["center", "zoom"]));
         let without = serde_json::to_value(all.iter().find(|c| c.id == "file.new").unwrap()).unwrap();
         assert!(without.get("schema").is_none());
+    }
+
+    /// The listing says what each View command changes when it runs. Only the commands that make an
+    /// undo step list `document`.
+    #[test]
+    fn each_view_command_lists_what_it_writes() {
+        let listed: Vec<(&str, Value)> = schemas().into_iter().map(|(id, schema)| (id, schema.to_json()["x-writes"].clone())).collect();
+        let expected = [
+            ("view.capsLock", "session"),
+            ("view.saved.new", "document"),
+            ("view.saved.edit", "document"),
+            ("view.saved.list", "nothing"),
+            ("view.transparencyGrid", "session"),
+            ("view.snapToGlyph.options", "preferences"),
+        ];
+        for (id, writes) in expected {
+            let got = listed.iter().find(|(c, _)| *c == id).map(|(_, w)| w.clone());
+            assert_eq!(got, Some(json!(writes)), "{id}");
+        }
     }
 
     /// Values of type `ty` that pass it.
