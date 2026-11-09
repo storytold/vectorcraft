@@ -6595,6 +6595,7 @@ breakText	Glyphs	Глифы
 digits	Hindi	Хинди
 font-script	Japanese	Японский
 shape	Open	Открытый
+	Help Bar	Панель подсказок
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	Инструменты текста
 	Text Tweaker…	Настройка текста…

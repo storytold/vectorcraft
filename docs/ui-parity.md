@@ -17,6 +17,8 @@ Group Selection keeps an already selected component selected during a drag; a co
 
 Creating a gradient from solid or empty paint uses the document's color model for its default stops, including drawing its vector with the Gradient tool. Explicit `keepModel: true` retains RGB defaults, and existing gradients keep their own colors. Scores and estimates are unchanged.
 
+Window → Help Bar toggles the bottom tool-help strip independently of the status bar. Its visibility is saved with workspaces and UI preferences; Presentation Mode hides both bars. Scores and estimates are unchanged.
+
 **Feature evidence last updated:** 2026-11-03.
 
 Enclosing Lasso is an add-on under Object › Plug-ins with its own heading in All Tools. It has
@@ -75,6 +77,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 | 2026-11-03 | minor | Enclosing Lasso provides whole-object enclosure selection as an add-on with no default shortcut or Basic toolbar slot. Scores and estimates remain unchanged. |
 | 2026-11-03 | minor | Transform previews valid typed values while numeric fields remain focused. Effect dialogs use the object, group, or layer targeted in Appearance. |
 | 2026-11-03 | minor | New gradients use CMYK default stops in CMYK documents, including Gradient tool creation. Scores and estimates unchanged. |
+| 2026-11-03 | minor | Help Bar has its own Window menu toggle and workspace visibility setting. Scores and estimates unchanged. |
 | 2026-10-26 | minor | Pencil Fidelity goes down to 0.01 pt (dialog, tool and engine; Smooth keeps 0.05) on a logarithmic slider across the Tool Options row, with hundredths in the field and key steps that fit the range (#3328); scores and estimates unchanged (estimated) |
 | 2026-10-22 | minor | Reconcile upstream documentation after review F-3; preserve every dated revision and the original scaleArt runtime evidence without repeating completed jobs. |
 | 2026-10-22 | minor | Reconcile upstream documentation after review F-2; preserve every dated revision and the original scaleArt runtime evidence without repeating completed jobs. |
@@ -407,6 +410,7 @@ next unit in the order a right-click on a ruler lists them, from Feet back to Po
 | SVG Interactivity, Retype, Comments, Version History panels | missing | the last two are cloud features (out of scope) |
 | Workspaces (save, reset, switch); each remembers the layout changes made in it across switches and restarts until Reset <name> | done | `UiState::workspace_changes` |
 | Opening a file: after 0.4 s a progress window with the file name, a moving bar (reading counts no steps), how many more files wait, Cancel (Esc: the file doesn't open) and Continue in Background; never over another dialog or progress window | done | #5930; `opening::show`, `file.cancelOpen`, `file.openInBackground`. Save, Place and Close still show only the status bar's spinner (Place and Save run off the UI thread; Close is immediate) |
+| Window › Help Bar shows or hides the tool-help strip apart from the status bar; kept with the preferences and in saved workspaces; Presentation Mode hides both bars | done | `window.helpBar`; `help_bar_toggle_is_independent_and_saved_in_workspaces`, `help_bar_and_status_bar_render_independently`, `legacy_help_bar_visibility_follows_each_layouts_status_bar` |
 | Background Export: a progress dialog with the file name, the artboard count and a bar (busy for one artboard and for formats made in one go), Cancel (Esc) and Continue in Background; it opens after 0.4 s and never over another dialog. A cancelled export writes no file | done | #2564; on the shared `vectorcraft_doc::cancel` token (#2546), so a cancelled render keeps no half-drawn pattern tile or effect raster. The bar moves between artboards, not within one. Save As, Export for Screens and Export Selection don't show it yet |
 | Swatch, graphic style and symbol library panels: each library opens in a panel of its own, several at once, that floats, groups, docks and closes like any panel; opening an open library brings its panel forward; Previous / Next Library change the library in place; the panel menu's Persistent reopens the panel at startup with its view and find field (a library loaded from a file is read again; when its file is missing the panel reopens showing the file's path with Locate Library…, and the status bar names the file) | done | #2603; panel ids `library:<kind>:<id>`, `ui.libraryPanel {panel, library?, view?, showFind?, persistent?}`, `ui.libraryPanel.locate {panel, path?}`; the library panels have no sort option, as before |
 | DXF export/import preserves intended curve closure | done | #1299; R13–2018 closed SPLINE bit set/read; an open curve ending at its start stays open; knots and control points unchanged; native CIRCLE/ARC export and CNC preset remain pending |
