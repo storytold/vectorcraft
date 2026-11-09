@@ -308,11 +308,7 @@ impl Interp<'_> {
             let w = self.type3_glyph(font, Glyph::Code(code), at, true)?;
             let d = spacing.advance(i, i64::from(code), w);
             self.g.cur = Some(self.xf() * (at + d));
-            if let (Spacing::Kern(p), Some(next)) = (spacing, s.get(i + 1)) {
-                self.push(Obj::Int(i64::from(code)))?;
-                self.push(Obj::Int(i64::from(*next)))?;
-                self.call(p.clone())?;
-            }
+            self.kern(spacing, s, i, at + d)?;
         }
         let text: String = s.iter().map(|b| char::from(*b)).filter(|c| !c.is_control()).collect();
         self.group_glyphs(start, &text);
@@ -544,6 +540,9 @@ impl Interp<'_> {
         let inv = f1.inverse();
         let mut moves = Vec::with_capacity(s.len());
         let mut k = 0;
+        // What `kshow`'s procedure draws goes after the type.
+        let start = self.out.drawn.len();
+        let mut pen = at;
         for (i, (&code, c)) in s.iter().zip(&chars).enumerate() {
             let own = match &plain {
                 Some((_, glyphs)) => glyphs.get(i).map_or(0.0, |g| g.width),
@@ -551,7 +550,9 @@ impl Interp<'_> {
                 None => 0.0,
             };
             k += usize::from(c.is_some());
-            let d = spacing.advance(i, i64::from(code), em(own));
+            let mut d = spacing.advance(i, i64::from(code), em(own));
+            d += self.kern(spacing, s, i, pen + d)?;
+            pen += d;
             let e = inv * Point::new(d.x, d.y) - inv * Point::ZERO;
             if ![d.x, d.y, e.x * size, e.y * size].iter().all(|v| v.is_finite()) {
                 return ps_err("undefinedresult", "a show");
@@ -618,21 +619,36 @@ impl Interp<'_> {
                 t.xf = Affine::translate(self.xf() * Point::new(lead.x, lead.y) - self.xf() * Point::ZERO) * t.xf;
             }
             let clips = self.g.clips.clone();
-            self.out.push(Node::new(NodeId(0), NodeKind::Text(Box::new(t))), &clips);
+            if self.out.push(Node::new(NodeId(0), NodeKind::Text(Box::new(t))), &clips).is_some()
+                && let Some(after) = self.out.drawn.get_mut(start..)
+            {
+                after.rotate_right(1);
+            }
         }
         self.g.cur = Some(self.xf() * (at + total));
         Ok(())
     }
 
+    /// `kshow` between character `i` of `s` and the next: its procedure run with the two codes
+    /// and the current point at user point `pen` (PLRM 3rd ed., `kshow`: the procedure may
+    /// change the current point, as kerning does) → how far it moved the point (user space).
+    /// Nothing for other show operators or after the last character.
+    fn kern(&mut self, spacing: &Spacing, s: &[u8], i: usize, pen: Point) -> Res<Vec2> {
+        let (Spacing::Kern(p), Some(&code), Some(&next)) = (spacing, s.get(i), s.get(i + 1)) else { return Ok(Vec2::ZERO) };
+        self.g.cur = Some(self.xf() * pen);
+        self.push(Obj::Int(i64::from(code)))?;
+        self.push(Obj::Int(i64::from(next)))?;
+        self.call(p.clone())?;
+        Ok(self.user_point()? - pen)
+    }
+
     /// `s` in a Type 42 font, some of whose glyphs stand for no character, drawn from the font's
     /// outlines at the current point (one group), spaced as `spacing` says.
     fn show_type42_outlines(&mut self, data: &Embedded, glyphs: &[Plain], s: &[u8], spacing: &Spacing, at: Point, f1: Affine) -> Res {
-        // Each glyph's place, checked before anything is painted: moves that overflow (two
-        // `1e308` numbers in `xshow`) are an error, as in `show_plain`, not glyphs at infinity.
-        let mut places = Vec::with_capacity(glyphs.len());
+        // The moves, checked before anything is painted: moves that overflow (two `1e308`
+        // numbers in `xshow`) are an error, as in `show_plain`, not glyphs at infinity.
         let mut pen = at;
         for (i, (g, &code)) in glyphs.iter().zip(s).enumerate() {
-            places.push(pen);
             pen += spacing.advance(i, i64::from(code), f1 * Point::new(g.width, 0.0) - f1 * Point::ZERO);
             if !(pen.x.is_finite() && pen.y.is_finite()) {
                 return ps_err("undefinedresult", "a show");
@@ -640,11 +656,19 @@ impl Interp<'_> {
         }
         let start = self.out.drawn.len();
         let mut text = String::new();
-        for (g, place) in glyphs.iter().zip(places) {
+        let mut pen = at;
+        for (i, (g, &code)) in glyphs.iter().zip(s).enumerate() {
             let glyph = data.glyph(g.gid);
             self.spend(data.take_work())?;
             if let Some(outline) = glyph.map(|o| o.0) {
-                self.type42_paint(outline, place, f1, Draw::Fill)?;
+                self.type42_paint(outline, pen, f1, Draw::Fill)?;
+            }
+            let d = spacing.advance(i, i64::from(code), f1 * Point::new(g.width, 0.0) - f1 * Point::ZERO);
+            // `kshow`'s procedure moves the point as it runs, so its moves are checked as they come.
+            let d = d + self.kern(spacing, s, i, pen + d)?;
+            pen += d;
+            if !(pen.x.is_finite() && pen.y.is_finite()) {
+                return ps_err("undefinedresult", "a show");
             }
             text.push(g.ch.unwrap_or('\u{2022}'));
         }
