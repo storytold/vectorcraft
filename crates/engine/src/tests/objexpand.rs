@@ -165,6 +165,48 @@ fn a_placed_gradient_moved_by_a_transform_or_free_distort_expands_as_the_canvas_
 }
 
 #[test]
+fn a_placed_gradient_moved_by_a_warp_expands_as_the_canvas_draws_it() {
+    // The object's own effect, and the fill's (the first appearance item).
+    for (effect, params, item) in [
+        ("warp.arc", json!({"bend": 40}), json!(null)),
+        ("warp.bulge", json!({"bend": 40, "orientation": "vertical"}), json!(null)),
+        ("warp.inflate", json!({"bend": 40}), json!(0)),
+    ] {
+        let mut s = session();
+        let id = gradient_rect(&mut s, Rect::new(40.0, 70.0, 160.0, 130.0), white_black(), false);
+        // Placed from a quarter of the way across to the right edge.
+        run(&mut s, "paint.setGradientGeom", json!({"start": [70, 100], "end": [160, 100], "stroke": false}));
+        let placed = s.doc().unwrap().doc.node(id).and_then(|n| match n.appearance.fill_paint() {
+            vectorcraft_color::Paint::Gradient(g) => g.geom,
+            _ => None,
+        });
+        assert!(placed.is_some(), "the fill's gradient is placed");
+        run(&mut s, "effect.apply", json!({"effect": effect, "params": params, "ids": [id.0], "item": item}));
+        let before = render(&s);
+        // Fill alone: the gradient becomes strips inside the outline the warp makes.
+        run(&mut s, "object.expand", json!({"object": false, "stroke": false, "steps": 64}));
+        let after = render(&s);
+        let diff = mean_diff(&before, &after);
+        assert!(diff < 1.0, "{effect} {params} on item {item}: mean difference {diff}");
+        // The ramp's midpoint, 115 pt before the warp, moves and scales with the warped bounds.
+        let doc = &s.doc().unwrap().doc;
+        let b = doc.node(doc.layers[0].id).and_then(|l| l.geometric_bounds()).unwrap();
+        let want = b.x0 + (115.0 - 40.0) / 120.0 * b.width();
+        assert!((want - 115.0).abs() > 2.0, "{effect} {params}: the warp moves the midpoint ({b:?})");
+        let red = |x: usize| f64::from(after.pixels[(100 * 200 + x) * 4]);
+        // White turns dark once on row 100, and gradually, so the crossing is the ramp's midpoint
+        // and not an edge of the outline.
+        let crossings: Vec<usize> =
+            (b.x0.ceil() as usize + 3..b.x1.floor() as usize - 4).filter(|&x| red(x) >= 127.5 && red(x + 1) < 127.5).collect();
+        assert_eq!(crossings.len(), 1, "{effect} {params}: white turns dark once on row 100: {crossings:?}");
+        let x = crossings[0];
+        assert!(red(x - 2) - red(x + 3) < 100.0, "{effect} {params}: the ramp, not an edge: {} to {}", red(x - 2), red(x + 3));
+        let half = x as f64 + 0.5 + (red(x) - 127.5) / (red(x) - red(x + 1));
+        assert!((half - want).abs() < 1.0, "{effect} {params} on item {item}: the midpoint is at {half}, want {want}");
+    }
+}
+
+#[test]
 fn eight_strips_match_the_gradient_samples() {
     let mut s = session();
     gradient_rect(&mut s, Rect::new(20.0, 20.0, 180.0, 120.0), white_black(), false);

@@ -160,8 +160,11 @@ fn next_edit_session() -> u64 {
 pub struct TypeTool {
     vertical: bool,
     mode: Mode,
-    /// The tool that was active before type editing began, which Escape and Cmd+Enter return to.
-    /// Clicks that move editing to other text keep it.
+    /// The tool whose double-click on type chose this tool, which Escape and Cmd+Enter return to.
+    /// The canvas sets it; choosing the Type tool another way (the toolbar) leaves it unset, and
+    /// Escape then goes to the Selection tool. Clicks that end editing or move it to other text
+    /// keep it. Choosing another tool clears it, and so does deactivating this tool when another
+    /// document or another window of the document becomes active.
     prev_tool: Option<String>,
     /// Text object being edited.
     editing: Option<NodeId>,
@@ -412,8 +415,8 @@ impl TypeTool {
         out
     }
 
-    /// Stop editing and go back to the tool that was active before type editing began (or to the
-    /// Selection tool), and leave the type selected.
+    /// Stop editing and go back to the tool whose double-click on type chose this tool (or to the
+    /// Selection tool when none did), and leave the type selected.
     fn end_editing(&mut self, cx: &ToolContext) -> Vec<Action> {
         let target = self.prev_tool.take().unwrap_or_else(|| "selection".into());
         let mut out = self.finish(cx);
