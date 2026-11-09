@@ -53,8 +53,9 @@ pub use blend_spec::{BlendDefaults, BlendEase, BlendEaseType, BlendOrientation, 
 #[cfg(test)]
 use blend_spec::{blend_color_shift, blend_ramp};
 pub use envelope::{
-    EnvelopeKind, EnvelopeMap, EnvelopeOptions, H_DOWN, H_LEFT, H_RIGHT, H_UP, PreserveShape, envelope_bounds, envelope_content_boxes,
-    envelope_expand, envelope_frame, envelope_grid, envelope_mapper, envelope_of, envelope_overlay, envelope_stroke_margin, smooth_handles,
+    EnvelopeKind, EnvelopeMap, EnvelopeOptions, H_DOWN, H_LEFT, H_RIGHT, H_UP, PreserveShape, TypeInk, envelope_bounds, envelope_content_bounds,
+    envelope_content_boxes, envelope_expand, envelope_frame, envelope_grid, envelope_mapper, envelope_of, envelope_overlay, envelope_stroke_margin,
+    set_type_ink, smooth_handles,
 };
 pub(crate) use expand::max_outset;
 pub use expand::{
@@ -171,6 +172,303 @@ mod tests {
         assert!((p.x + 5.0).abs() < 1e-6 && (p.y - 110.0).abs() < 1e-6, "{p:?}");
         let c = Coons::from_path(&shapes::rectangle(r)).unwrap().eval(1.05, -0.1);
         assert!((c.x - 105.0).abs() < 1e-6 && (c.y + 10.0).abs() < 1e-6, "{c:?}");
+    }
+
+    /// A 100 × 50 outline whose top side runs (0,0) → (30,0) → (100,0) as two straight segments.
+    fn top_split_at_30() -> PathData {
+        let a = |x: f64, y: f64| Anchor::corner(Point::new(x, y));
+        PathData::single(SubPath::new(vec![a(0.0, 0.0), a(30.0, 0.0), a(100.0, 0.0), a(100.0, 50.0), a(0.0, 50.0)], true))
+    }
+
+    /// The length of `c`'s control polygon.
+    fn polygon(c: CubicBez) -> f64 {
+        c.p0.distance(c.p1) + c.p1.distance(c.p2) + c.p2.distance(c.p3)
+    }
+
+    /// An anchor and its incoming and outgoing handles.
+    type Knot = ((f64, f64), (f64, f64), (f64, f64));
+
+    /// A closed path through `pts`.
+    fn outline(pts: &[Knot]) -> PathData {
+        let a = |&(p, i, o): &Knot| Anchor { p: p.into(), h_in: i.into(), h_out: o.into(), ..Anchor::corner(p.into()) };
+        PathData::single(SubPath::new(pts.iter().map(a).collect(), true))
+    }
+
+    #[test]
+    fn a_top_object_side_of_straight_segments_spreads_by_length() {
+        // The top side runs (0,0) → (30,0) → (100,0): each straight piece takes its length's share.
+        let kind = EnvelopeKind::TopObject { path: top_split_at_30(), corners: None };
+        let map = envelope_mapper(&kind, Rect::new(0.0, 0.0, 100.0, 50.0));
+        for (q, want) in [((50.0, 0.0), (50.0, 0.0)), ((15.0, 0.0), (15.0, 0.0)), ((80.0, 0.0), (80.0, 0.0)), ((50.0, 25.0), (50.0, 25.0))] {
+            let p = map(Point::new(q.0, q.1));
+            assert!(p.distance(Point::new(want.0, want.1)) < 1e-6, "{q:?} → {p:?}, want {want:?}");
+        }
+    }
+
+    #[test]
+    fn a_top_object_shares_a_side_by_control_polygon_length() {
+        // Two curves of unequal polygons make the top side; the anchor between them lands at the
+        // first one's share, and inside each curve the content follows its parameter.
+        let first = CubicBez::new((0.0, 0.0), (10.0, -20.0), (30.0, -20.0), (40.0, 0.0));
+        let second = CubicBez::new((40.0, 0.0), (60.0, 10.0), (90.0, 10.0), (100.0, 0.0));
+        let path = outline(&[
+            ((0.0, 0.0), (0.0, 0.0), (10.0, -20.0)),
+            ((40.0, 0.0), (30.0, -20.0), (60.0, 10.0)),
+            ((100.0, 0.0), (90.0, 10.0), (100.0, 0.0)),
+            ((100.0, 80.0), (100.0, 80.0), (100.0, 80.0)),
+            ((0.0, 80.0), (0.0, 80.0), (0.0, 80.0)),
+        ]);
+        let c = Coons::from_top_object(&path, None).unwrap();
+        let share = polygon(first) / (polygon(first) + polygon(second));
+        assert!(c.eval(share, 0.0).distance(Point::new(40.0, 0.0)) < 1e-9, "{:?}", c.eval(share, 0.0));
+        for f in [0.25, 0.5, 0.75] {
+            let p = c.eval(share * f, 0.0);
+            assert!(p.distance(first.eval(f)) < 1e-9, "first curve at {f}: {p:?}");
+            let p = c.eval(share + (1.0 - share) * f, 0.0);
+            assert!(p.distance(second.eval(f)) < 1e-9, "second curve at {f}: {p:?}");
+        }
+    }
+
+    #[test]
+    fn a_rounded_rectangle_top_object_stays_close_to_the_identity() {
+        // The corners fall at the middle of each corner arc. Each half arc takes the share of its
+        // control polygon, so the straight edges stay close to where the content was.
+        let r = Rect::new(0.0, 0.0, 200.0, 100.0);
+        let path = shapes::rounded_rectangle(r, 10.0);
+        let c = Coons::from_top_object(&path, None).unwrap();
+        let [tl, tr, br, bl] = c.corners();
+        let k = 10.0 * (1.0 - std::f64::consts::FRAC_1_SQRT_2);
+        for (p, want) in [(tl, (k, k)), (tr, (200.0 - k, k)), (br, (200.0 - k, 100.0 - k)), (bl, (k, 100.0 - k))] {
+            assert!(p.distance(Point::from(want)) < 0.01, "corner {p:?}, want {want:?}");
+        }
+        for (u, v) in [(0.25, 0.0), (0.5, 0.0), (0.8, 1.0), (0.0, 0.5), (0.5, 0.5), (1.0, 0.3)] {
+            let p = c.eval(u, v);
+            assert!(p.distance(Point::new(200.0 * u, 100.0 * v)) < 3.0, "({u}, {v}) → {p:?}");
+        }
+        // The top edge starts after the first half arc's share.
+        let sp = &path.subpaths[0];
+        let edge = Point::new(10.0, 0.0);
+        let arc = (0..sp.segment_count())
+            .filter(|i| !sp.segment_is_line(*i))
+            .map(|i| sp.segment(i))
+            .find(|s| s.p0.distance(edge) < 1e-9 || s.p3.distance(edge) < 1e-9)
+            .unwrap();
+        let half = polygon(if arc.p3.distance(edge) < 1e-9 { arc.subsegment(0.5..1.0) } else { arc.subsegment(0.0..0.5) });
+        let p = c.eval(half / (2.0 * half + 180.0), 0.0);
+        assert!(p.distance(Point::new(10.0, 0.0)) < 1e-6, "{p:?}");
+    }
+
+    #[test]
+    fn a_top_object_corner_inside_a_bulging_curve_is_the_nearest_outline_point() {
+        // The top left anchor's handle bulges out past the corner, so the anchor turns inward
+        // there and the corner falls inside the curve.
+        // The outline's bounding box starts at (-7.957, -22.222); the top curve's point nearest
+        // that corner, found by sampling the curve 2,000,000 times, is (-5.072093, -18.127254).
+        let path = outline(&[
+            ((0.0, 0.0), (0.0, 0.0), (-50.0, -50.0)),
+            ((200.0, 0.0), (150.0, 0.0), (200.0, 0.0)),
+            ((200.0, 100.0), (200.0, 100.0), (200.0, 100.0)),
+            ((0.0, 100.0), (0.0, 100.0), (0.0, 100.0)),
+        ]);
+        let want = Point::new(-5.072093, -18.127254);
+        let tl = Coons::from_top_object(&path, None).unwrap().corners()[0];
+        assert!(tl.distance(want) < 1e-5, "{tl:?}, want {want:?}");
+        assert!(tl.distance(Point::ZERO) > 1.0, "{tl:?}");
+    }
+
+    #[test]
+    fn a_top_object_corner_takes_an_anchor_only_near_its_box_corner() {
+        // A chamfered top left corner of a 200 × 100 outline. With both chamfer anchors within
+        // 47.5% of the box from its corner, the nearer anchor is the corner.
+        let chamfer = |a: (f64, f64), b: (f64, f64)| {
+            let c = |p: (f64, f64)| (p, p, p);
+            outline(&[c(a), c(b), c((200.0, 0.0)), c((200.0, 100.0)), c((0.0, 100.0))])
+        };
+        let tl = Coons::from_top_object(&chamfer((0.0, 46.0), (94.0, 0.0)), None).unwrap().corners()[0];
+        assert!(tl.distance(Point::new(0.0, 46.0)) < 1e-9, "{tl:?}");
+        // Farther out, neither anchor counts: the corner is the chamfer's point nearest the box corner.
+        let tl = Coons::from_top_object(&chamfer((0.0, 50.0), (100.0, 0.0)), None).unwrap().corners()[0];
+        assert!(tl.distance(Point::new(20.0, 40.0)) < 1e-6, "{tl:?}");
+    }
+
+    #[test]
+    fn a_top_object_corner_skips_smooth_and_inward_anchors() {
+        // A top left anchor whose outgoing handle turns from its incoming one by `deg` degrees
+        // (positive turns out of the outline). The top side bulges up past it.
+        let shape = |deg: f64| {
+            let a = deg.to_radians();
+            let (hx, hy) = (50.0 * a.cos() + 40.0 * a.sin(), 40.0 * a.cos() - 50.0 * a.sin());
+            outline(&[
+                ((50.0, -300.0), (25.0, -280.0), (50.0 + hx, -300.0 - hy)),
+                ((250.0, -300.0), (200.0, -340.0), (250.0, -300.0)),
+                ((250.0, -200.0), (250.0, -200.0), (250.0, -200.0)),
+                ((50.0, -200.0), (50.0, -200.0), (50.0, -230.0)),
+            ])
+        };
+        let corner = |deg: f64| Coons::from_top_object(&shape(deg), None).unwrap().corners()[0];
+        let anchor = Point::new(50.0, -300.0);
+        for deg in [0.0, 0.4, 0.6, -1.5] {
+            assert!(corner(deg).distance(anchor) > 1.0, "{deg}°: {:?}", corner(deg));
+        }
+        for deg in [0.9, 1.5, 10.0] {
+            assert!(corner(deg).distance(anchor) < 1e-9, "{deg}°: {:?}", corner(deg));
+        }
+    }
+
+    #[test]
+    fn a_top_object_corner_skips_an_inward_anchor_between_straight_segments() {
+        // A 200 × 100 outline of straight segments with a notch at its top left: (40,40) is the
+        // anchor nearest the box corner, but it turns into the outline, so (60,0) is the corner.
+        let c = |p: (f64, f64)| (p, p, p);
+        let path = outline(&[c((60.0, 0.0)), c((200.0, 0.0)), c((200.0, 100.0)), c((0.0, 100.0)), c((0.0, 60.0)), c((40.0, 40.0))]);
+        let tl = Coons::from_top_object(&path, None).unwrap().corners()[0];
+        assert!(tl.distance(Point::new(60.0, 0.0)) < 1e-9, "{tl:?}");
+    }
+
+    #[test]
+    fn a_top_object_corner_tie_goes_to_the_first_anchor() {
+        // Both chamfer anchors lie 30 from the box corner: the first one along the outline, in
+        // the order it was drawn, wins.
+        let c = |p: (f64, f64)| (p, p, p);
+        let tl = |pts: &[Knot]| Coons::from_top_object(&outline(pts), None).unwrap().corners()[0];
+        let from_left = tl(&[c((0.0, 30.0)), c((30.0, 0.0)), c((100.0, 0.0)), c((100.0, 100.0)), c((0.0, 100.0))]);
+        assert!(from_left.distance(Point::new(0.0, 30.0)) < 1e-9, "{from_left:?}");
+        let from_top = tl(&[c((30.0, 0.0)), c((100.0, 0.0)), c((100.0, 100.0)), c((0.0, 100.0)), c((0.0, 30.0))]);
+        assert!(from_top.distance(Point::new(30.0, 0.0)) < 1e-9, "{from_top:?}");
+        // Drawn counter-clockwise, the anchor met first in that order wins.
+        let back = tl(&[c((0.0, 100.0)), c((100.0, 100.0)), c((100.0, 0.0)), c((30.0, 0.0)), c((0.0, 30.0))]);
+        assert!(back.distance(Point::new(30.0, 0.0)) < 1e-9, "{back:?}");
+        let back = tl(&[c((0.0, 30.0)), c((0.0, 100.0)), c((100.0, 100.0)), c((100.0, 0.0)), c((30.0, 0.0))]);
+        assert!(back.distance(Point::new(0.0, 30.0)) < 1e-9, "{back:?}");
+    }
+
+    #[test]
+    fn a_reflected_top_object_keeps_the_corners_a_file_gives() {
+        // Reflecting the outline across x = 0 keeps its anchors in the same order, now running
+        // counter-clockwise: the corners stay on the same anchors, so the content is reflected too.
+        let mut path = top_split_at_30();
+        path.transform(Affine::FLIP_X);
+        let c = Coons::from_top_object(&path, Some([1, 2, 3, 4])).unwrap();
+        let want = [(-30.0, 0.0), (-100.0, 0.0), (-100.0, 50.0), (0.0, 50.0)].map(Point::from);
+        assert!(c.corners().iter().zip(want).all(|(p, q)| p.distance(q) < 1e-9), "{:?}", c.corners());
+        let p = c.eval(0.5, 0.5);
+        assert!(p.distance(Point::new(-50.0, 17.5)) < 1e-9, "{p:?}");
+    }
+
+    #[test]
+    fn a_top_object_keeps_the_corners_a_file_gives() {
+        let same = |a: [Point; 4], b: [Point; 4]| a.iter().zip(b).all(|(p, q)| p.distance(q) < 1e-9);
+        let want = [(30.0, 0.0), (100.0, 0.0), (100.0, 50.0), (0.0, 50.0)].map(Point::from);
+        let c = Coons::from_top_object(&top_split_at_30(), Some([1, 2, 3, 4])).unwrap();
+        assert!(same(c.corners(), want), "{:?}", c.corners());
+        // Drawn the other way round, with the corners counted along that order.
+        let mut back = top_split_at_30();
+        back.subpaths[0].reverse();
+        let c = Coons::from_top_object(&back, Some([3, 2, 1, 0])).unwrap();
+        assert!(same(c.corners(), want), "{:?}", c.corners());
+        // Corners that repeat, run out of order or go past the outline are found from it instead.
+        let found = [(0.0, 0.0), (100.0, 0.0), (100.0, 50.0), (0.0, 50.0)].map(Point::from);
+        for bad in [[0, 0, 3, 4], [2, 1, 3, 4], [1, 2, 3, 9]] {
+            let c = Coons::from_top_object(&top_split_at_30(), Some(bad)).unwrap();
+            assert!(same(c.corners(), found), "{bad:?}: {:?}", c.corners());
+        }
+    }
+
+    #[test]
+    fn a_split_curve_moves_the_top_object_share_to_its_new_anchor() {
+        // Splitting the top curve at t = 0.3 keeps its shape but changes the polygon shares: the
+        // new anchor lands at the first piece's share, not at u = 0.3.
+        let top = CubicBez::new((0.0, 0.0), (40.0, -40.0), (160.0, -40.0), (200.0, 0.0));
+        let (a, b) = (top.subsegment(0.0..0.3), top.subsegment(0.3..1.0));
+        let path = outline(&[
+            ((0.0, 0.0), (0.0, 0.0), a.p1.into()),
+            (a.p3.into(), a.p2.into(), b.p1.into()),
+            ((200.0, 0.0), b.p2.into(), (200.0, 0.0)),
+            ((200.0, 100.0), (200.0, 100.0), (200.0, 100.0)),
+            ((0.0, 100.0), (0.0, 100.0), (0.0, 100.0)),
+        ]);
+        let c = Coons::from_top_object(&path, None).unwrap();
+        let share = polygon(a) / (polygon(a) + polygon(b));
+        assert!(c.eval(share, 0.0).distance(a.p3) < 1e-9, "{:?}", c.eval(share, 0.0));
+        assert!((share - 0.3).abs() > 0.01, "{share}");
+    }
+
+    #[test]
+    fn a_rectangle_top_object_is_the_identity() {
+        let r = Rect::new(10.0, 20.0, 110.0, 70.0);
+        let c = Coons::from_top_object(&shapes::rectangle(r), None).unwrap();
+        for (u, v) in [(0.125, 0.3), (0.9, 0.05), (0.37, 0.81)] {
+            let p = c.eval(u, v);
+            assert!(p.distance(Point::new(10.0 + 100.0 * u, 20.0 + 50.0 * v)) < 1e-9, "({u}, {v}) → {p:?}");
+        }
+    }
+
+    #[test]
+    fn a_straight_line_top_object_maps_onto_its_bounding_box() {
+        let line = PathData::single(SubPath::new(vec![Anchor::corner(Point::new(0.0, 0.0)), Anchor::corner(Point::new(100.0, 40.0))], false));
+        let p = Coons::from_top_object(&line, None).unwrap().eval(0.25, 0.75);
+        assert!(p.distance(Point::new(25.0, 30.0)) < 1e-9, "{p:?}");
+    }
+
+    #[test]
+    fn a_top_object_spreads_a_segment_by_its_parameter() {
+        // The top side is one straight segment whose handles sit at 60 and 80: its parameter
+        // reaches the middle at x = 63.75, not at 45.
+        let mut top = vec![Anchor::corner(Point::new(0.0, 0.0)), Anchor::corner(Point::new(90.0, 0.0))];
+        top[0].h_out = Point::new(60.0, 0.0);
+        top[1].h_in = Point::new(80.0, 0.0);
+        top.extend([Anchor::corner(Point::new(90.0, 40.0)), Anchor::corner(Point::new(0.0, 40.0))]);
+        let kind = EnvelopeKind::TopObject { path: PathData::single(SubPath::new(top, true)), corners: None };
+        let map = envelope_mapper(&kind, Rect::new(0.0, 0.0, 10.0, 10.0));
+        let p = map(Point::new(5.0, 0.0));
+        assert!(p.distance(Point::new(63.75, 0.0)) < 1e-6, "{p:?}");
+        let p = map(Point::new(5.0, 10.0));
+        assert!(p.distance(Point::new(45.0, 40.0)) < 1e-6, "{p:?}");
+    }
+
+    #[test]
+    fn a_top_object_follows_a_curved_side_by_its_parameter() {
+        // The top side bends down from (0,0) to (100,0) through handles at (20,30) and (90,30):
+        // halfway along its parameter it passes (53.75, 22.5).
+        let mut top = vec![Anchor::corner(Point::new(0.0, 0.0)), Anchor::corner(Point::new(100.0, 0.0))];
+        top[0].h_out = Point::new(20.0, 30.0);
+        top[1].h_in = Point::new(90.0, 30.0);
+        top.extend([Anchor::corner(Point::new(100.0, 80.0)), Anchor::corner(Point::new(0.0, 80.0))]);
+        let path = PathData::single(SubPath::new(top, true));
+        let c = Coons::from_top_object(&path, None).unwrap();
+        for (u, t) in [(0.5, 0.5), (0.25, 0.25), (0.8125, 0.8125)] {
+            let want = CubicBez::new((0.0, 0.0), (20.0, 30.0), (90.0, 30.0), (100.0, 0.0)).eval(t);
+            let p = c.eval(u, 0.0);
+            assert!(p.distance(want) < 1e-6, "u {u}: {p:?} vs {want:?}");
+        }
+        // Drawn the other way round, the outline gives the same patch.
+        let mut back = path.clone();
+        back.subpaths[0].reverse();
+        let p = Coons::from_top_object(&back, None).unwrap().eval(0.5, 0.0);
+        assert!(p.distance(Point::new(53.75, 22.5)) < 1e-6, "{p:?}");
+    }
+
+    #[test]
+    fn a_top_object_side_of_many_segments_keeps_each_corner() {
+        // The top side zigzags through `n` straight segments, between y = 0 and y = 2.
+        for n in [3, 100] {
+            let w = f64::from(n);
+            let zig = |i: i32| Point::new(f64::from(i) * 100.0 / w, if i % 2 == 1 { 2.0 } else { 0.0 });
+            let mut pts: Vec<Anchor> = (0..=n).map(|i| Anchor::corner(zig(i))).collect();
+            pts.extend([Anchor::corner(Point::new(100.0, 50.0)), Anchor::corner(Point::new(0.0, 50.0))]);
+            let c = Coons::from_top_object(&PathData::single(SubPath::new(pts, true)), None).unwrap();
+            for i in (1..n).filter(|i| n < 10 || [1, 37, 38, 99].contains(i)) {
+                let p = c.eval(f64::from(i) / w, 0.0);
+                assert!(p.distance(zig(i)) < 1e-9, "{n} segments, anchor {i}: {p:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_gradient_mesh_outline_keeps_its_sides_measured_by_length() {
+        let c = Coons::from_path(&top_split_at_30()).unwrap();
+        let p = c.eval(0.5, 0.0);
+        assert!(p.distance(Point::new(50.0, 0.0)) < 1e-6, "{p:?}");
     }
 
     #[test]

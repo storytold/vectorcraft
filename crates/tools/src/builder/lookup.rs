@@ -284,4 +284,6 @@ pub(super) fn faces_of(regions: Vec<po::Region>) -> Vec<Face> {
 thread_local! {
     /// The Shape Builder maps built on this thread ([`maps_built`]).
     pub(super) static MAPS_BUILT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// The Shape Builder merges computed on this thread ([`merges_computed`]).
+    pub(super) static MERGES_COMPUTED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }

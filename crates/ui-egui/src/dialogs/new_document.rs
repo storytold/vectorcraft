@@ -358,8 +358,9 @@ fn details(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, b: &mut 
     let top = ui.cursor().top();
     ui.label(egui::RichText::new(tl!("PRESET DETAILS")).font(theme::semibold(11.0)).color(t.text_dim));
     ui.add_space(8.0);
+    let caption = form::caption(ui, tl!("Document Name"));
     ui.horizontal(|ui| {
-        form::text(ui, d, "name", DETAILS - 50.0);
+        ui.label_inputs_by(caption.id, |ui| form::text(ui, d, "name", DETAILS - 50.0));
         save_button(app, ui, d);
     });
     if d.bool(SAVING) {
@@ -367,16 +368,16 @@ fn details(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, b: &mut 
     }
     ui.add_space(8.0);
     let unit = unit(d);
-    form::caption(ui, tl!("Width"));
+    let caption = form::caption(ui, tl!("Width"));
     ui.horizontal(|ui| {
-        form::length(ui, d, "width", unit, DETAILS - 124.0);
-        units_dropdown(ui, d, 112.0);
+        ui.label_inputs_by(caption.id, |ui| form::length(ui, d, "width", unit, DETAILS - 124.0));
+        ui.name_inputs(tl!("Units"), |ui| units_dropdown(ui, d, 112.0));
     });
     ui.add_space(4.0);
     ui.horizontal_top(|ui| {
         ui.vertical(|ui| {
-            form::caption(ui, tl!("Height"));
-            form::length(ui, d, "height", unit, 104.0);
+            let caption = form::caption(ui, tl!("Height"));
+            ui.label_inputs_by(caption.id, |ui| form::length(ui, d, "height", unit, 104.0));
         });
         ui.add_space(6.0);
         ui.vertical(|ui| {
@@ -385,16 +386,16 @@ fn details(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, b: &mut 
         });
         ui.add_space(6.0);
         ui.vertical(|ui| {
-            form::caption(ui, tl!("Artboards"));
-            artboards(ui, d, 76.0);
+            let caption = form::caption(ui, tl!("Artboards"));
+            ui.label_inputs_by(caption.id, |ui| artboards(ui, d, 76.0));
         });
     });
     ui.add_space(8.0);
     form::caption(ui, tl!("Bleed"));
     form::bleed(ui, d, unit, 52.0);
     ui.add_space(8.0);
-    form::caption(ui, tl!("Background Contents"));
-    background(ui, d, DETAILS - 34.0);
+    let caption = form::caption(ui, tl!("Background Contents"));
+    ui.label_inputs_by(caption.id, |ui| background(ui, d, DETAILS - 34.0));
     ui.add_space(8.0);
     advanced(ui, d, 110.0, DETAILS - 116.0);
     ui.add_space(12.0);
@@ -426,9 +427,10 @@ fn save_button(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
 /// Save Preset: the preset's name, Save and Cancel.
 fn save_row(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     ui.add_space(4.0);
-    form::caption(ui, tl!("Preset Name"));
+    let caption = form::caption(ui, tl!("Preset Name"));
     ui.horizontal(|ui| {
-        let enter = form::text_edit(ui, d, "presetName", DETAILS - 140.0).lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+        let name = ui.label_inputs_by(caption.id, |ui| form::text_edit(ui, d, "presetName", DETAILS - 140.0));
+        let enter = name.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
         if widgets::flat_button(ui, tl!("Save"), 54.0).clicked() || enter {
             let mut p: Map<String, Value> = PARAMS.iter().filter_map(|k| Some((k.to_string(), d.fields.get(*k)?.clone()))).collect();
             p.insert("name".into(), json!(d.str("presetName")));
@@ -874,6 +876,44 @@ mod tests {
         let t = thumbs(&out);
         assert!(!t.is_empty() && t.iter().all(|s| s.y >= s.x), "the cards turned: {t:?}");
         assert!(selected(&out), "the turned preset stays chosen: {:?}", field(&app, "preset"));
+    }
+
+    /// The document's name field has a caption of its own under the Preset Details heading, and
+    /// the column stays inside the dialog's height with Save Preset and Advanced Options open.
+    #[test]
+    fn the_name_field_is_captioned_and_the_column_fits() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.newDialog", json!({})).unwrap();
+        set(&mut app, "advanced", json!(true));
+        set(&mut app, super::SAVING, json!(true));
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut time = 0.0;
+        let mut run = |app: &mut VectorcraftApp| {
+            time += 0.5;
+            let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 1000.0)));
+            let raw = egui::RawInput { screen_rect, time: Some(time), ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| crate::dialogs::show(app, ui.ctx()));
+            out.textures_delta.clear();
+            out
+        };
+        run(&mut app);
+        let out = run(&mut app);
+        fn walk(s: &egui::Shape, out: &mut Vec<(String, egui::Rect)>) {
+            match s {
+                egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.visual_bounding_rect())),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+                _ => {}
+            }
+        }
+        let mut texts = vec![];
+        out.shapes.iter().for_each(|c| walk(&c.shape, &mut texts));
+        let at = |name: &str| texts.iter().find(|(t, _)| t == name).map(|(_, r)| *r).unwrap_or_else(|| panic!("{name} is missing: {texts:?}"));
+        let (heading, caption, value) = (at("PRESET DETAILS"), at("Document Name"), at("Untitled-1"));
+        assert!(heading.bottom() <= caption.top() && caption.bottom() <= value.top(), "{heading:?} {caption:?} {value:?}");
+        assert!(value.bottom() <= at("Preset Name").top(), "the preset's own name field follows");
+        let used = at("Create").bottom() - heading.top();
+        assert!(used <= super::HEIGHT, "the column used {used}");
     }
 
     #[test]

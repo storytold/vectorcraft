@@ -33,9 +33,10 @@ pub(super) fn roots_param(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
     selected_roots(s)
 }
 
-/// Selected nodes of a kind (the selection itself or an ancestor).
+/// Selected nodes of a kind (the selection itself or an ancestor). None while an object of a
+/// dynamic symbol instance's art is selected.
 pub(super) fn selected_of(s: &Session, pred: fn(&Node) -> bool) -> Vec<NodeId> {
-    let Some(st) = s.active() else { return vec![] };
+    let Some(st) = s.active().filter(|st| st.selection.symbol_part.is_none()) else { return vec![] };
     let mut out = vec![];
     for id in &st.selection.objects {
         for a in st.doc.ancestry(*id).unwrap_or_default().into_iter().rev() {
@@ -64,16 +65,19 @@ pub(super) fn is_mesh(n: &Node) -> bool {
 
 pub(super) fn has_blend(s: &Session) -> std::result::Result<(), String> {
     has_selection(s)?;
+    crate::cmd::edit::no_symbol_part(s)?;
     if selected_of(s, is_blend).is_empty() { Err("select a blend".into()) } else { Ok(()) }
 }
 
 pub(super) fn has_envelope(s: &Session) -> std::result::Result<(), String> {
     has_selection(s)?;
+    crate::cmd::edit::no_symbol_part(s)?;
     if selected_of(s, is_envelope).is_empty() { Err("select an envelope".into()) } else { Ok(()) }
 }
 
 pub(super) fn has_mesh(s: &Session) -> std::result::Result<(), String> {
     has_selection(s)?;
+    crate::cmd::edit::no_symbol_part(s)?;
     if selected_of(s, is_mesh).is_empty() { Err("select a gradient mesh".into()) } else { Ok(()) }
 }
 

@@ -106,6 +106,60 @@ impl super::Document {
         d.layers.insert(0, Arc::new(layer));
         Some(d)
     }
+
+    /// Where an artboard the size of artboard `i` goes on `side` of it, [`ARTBOARD_GAP`] away,
+    /// when there is room for it there: every side within [`crate::MAX_COORD`] of the origin and
+    /// no other artboard overlapping it (touching edges don't overlap). `None` when there is no
+    /// such artboard or no room.
+    pub fn room_beside_artboard(&self, i: usize, side: ArtboardSide) -> Option<Rect> {
+        let src = self.artboards.get(i)?.rect;
+        let r = src + side.offset(src);
+        let in_canvas = [r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite() && v.abs() <= crate::MAX_COORD);
+        let clear = self.artboards.iter().all(|a| !(r.x0 < a.rect.x1 && a.rect.x0 < r.x1 && r.y0 < a.rect.y1 && a.rect.y0 < r.y1));
+        (in_canvas && clear).then_some(r)
+    }
+}
+
+/// The space between an artboard and one added or duplicated beside it (VectorCraft's own value,
+/// the space New Artboard and Duplicate Artboards leave right of the last artboard).
+pub const ARTBOARD_GAP: f64 = 20.0;
+
+/// A side of an artboard, where an artboard added or duplicated beside it goes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ArtboardSide {
+    Left,
+    Right,
+    Top,
+    Bottom,
+}
+
+impl ArtboardSide {
+    pub const ALL: [Self; 4] = [Self::Top, Self::Right, Self::Bottom, Self::Left];
+
+    /// The side a command's `side` param names: "left", "right", "top" or "bottom".
+    pub fn parse(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|s| s.name() == name)
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Left => "left",
+            Self::Right => "right",
+            Self::Top => "top",
+            Self::Bottom => "bottom",
+        }
+    }
+
+    /// How far a copy of `r` moves to sit on this side of it, [`ARTBOARD_GAP`] away (y down).
+    pub fn offset(self, r: Rect) -> vectorcraft_geom::Vec2 {
+        let (w, h) = (r.width() + ARTBOARD_GAP, r.height() + ARTBOARD_GAP);
+        match self {
+            Self::Left => vectorcraft_geom::Vec2::new(-w, 0.0),
+            Self::Right => vectorcraft_geom::Vec2::new(w, 0.0),
+            Self::Top => vectorcraft_geom::Vec2::new(0.0, -h),
+            Self::Bottom => vectorcraft_geom::Vec2::new(0.0, h),
+        }
+    }
 }
 
 /// A document's locked artboards ([`Document::locked_artboards`]).

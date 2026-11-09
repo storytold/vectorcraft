@@ -7,6 +7,9 @@
 //! and its video display options, Show Video Safe Areas and Video Ruler Pixel Aspect Ratio
 //! (`showVideoSafeAreas`, `videoRulerPixelAspectRatio`)
 //! (https://helpx.adobe.com/illustrator/desktop/create-manage-artboards/organize-manage-artboards/set-video-display-options-for-artboards.html).
+//! Under Global, Fade Region Outside Artboard and Update While Dragging set the application
+//! preferences `fadeRegionOutsideArtboard` and `artboardUpdateWhileDragging` for every document
+//! (https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf, Artboard options).
 //! Sizing choices also go to the other selected artboards; fitting changes only the active
 //! artboard around stationary artwork.
 
@@ -28,8 +31,8 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     body,
     confirm,
     // A new artboard's dialog opens without these; its swatch, checkboxes and Video Ruler Pixel
-    // Aspect Ratio field add them.
-    inputs: |_| &["color", "showCenterMark", "showCrossHairs", "showVideoSafeAreas", PIXEL_ASPECT],
+    // Aspect Ratio field add them. The Global checkboxes' fields come from the preferences.
+    inputs: |_| &["color", "showCenterMark", "showCrossHairs", "showVideoSafeAreas", PIXEL_ASPECT, FADE, UPDATE_WHILE_DRAGGING],
     ..DialogSpec::FORM
 };
 
@@ -47,7 +50,8 @@ fn placed(d: &Dialog) -> Rect {
 /// reference point where it was, as their sizes do.
 /// Then Background Color: the Fill list (None, White, Black; Custom for another color) and a swatch
 /// that picks a color of its own, the Show Center Mark, Show Cross Hairs and Show Video Safe Areas
-/// checkboxes, and the Video Ruler Pixel Aspect Ratio field.
+/// checkboxes, and the Video Ruler Pixel Aspect Ratio field. Last, under Global, the Fade Region
+/// Outside Artboard and Update While Dragging checkboxes.
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let (unit, origin, refi) = (app.session.general_unit(), app.ruler_origin(), reference_index(ui));
     let (was, w0, h0) = (placed(d), d.f64("width", 0.0), d.f64("height", 0.0));
@@ -126,7 +130,57 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             }
         });
     });
+    ui.add_space(8.0);
+    ui.label(egui::RichText::new(tl!("Global")).strong());
+    form::check(ui, d, FADE, tl!("Fade Region Outside Artboard"));
+    form::check(ui, d, UPDATE_WHILE_DRAGGING, tl!("Update While Dragging"));
     false
+}
+
+/// The preference and field of Fade Region Outside Artboard: while the Artboard tool is active,
+/// the canvas draws everything outside the artboards darker.
+const FADE: &str = "fadeRegionOutsideArtboard";
+/// The preference and field of Update While Dragging: the area outside the artboards stays darker
+/// while the Artboard tool moves or resizes an artboard.
+const UPDATE_WHILE_DRAGGING: &str = "artboardUpdateWhileDragging";
+
+/// `fields` with the Global checkboxes ([`global_fields`]) added.
+fn with_globals(app: &VectorcraftApp, mut fields: Value) -> Value {
+    for (key, on) in global_fields(app) {
+        fields[key] = json!(on);
+    }
+    fields
+}
+
+/// The Global checkboxes as the preferences have them, for the dialog's fields.
+fn global_fields(app: &VectorcraftApp) -> [(&'static str, bool); 2] {
+    let prefs = &app.session.prefs;
+    [(FADE, prefs.fade_region_outside_artboard), (UPDATE_WHILE_DRAGGING, prefs.artboard_update_while_dragging)]
+}
+
+/// The Global checkboxes' preferences that the form changed. A value that is not true or false is
+/// an error, which keeps the dialog open before anything changes.
+fn global_changes(app: &VectorcraftApp, d: &Dialog) -> Result<serde_json::Map<String, Value>, String> {
+    let mut values = serde_json::Map::new();
+    for (key, now) in global_fields(app) {
+        match d.fields.get(key) {
+            Some(Value::Bool(on)) if *on != now => {
+                values.insert(key.into(), json!(on));
+            }
+            Some(Value::Bool(_)) | None => {}
+            Some(_) => return Err(format!("`{key}` must be true or false")),
+        }
+    }
+    Ok(values)
+}
+
+/// OK sets the Global checkboxes' preferences that the form changed ([`global_changes`]), in one
+/// `prefs.set`, and leaves the preferences alone when none changed.
+fn set_globals(app: &mut VectorcraftApp, values: serde_json::Map<String, Value>) -> Result<(), String> {
+    if values.is_empty() {
+        return Ok(());
+    }
+    app.run("prefs.set", json!({ "values": values })).map(drop)
 }
 
 /// The field of the Video Ruler Pixel Aspect Ratio, as `artboard.setProps` takes it.
@@ -243,7 +297,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
         "showCenterMark": a.show_center_mark, "showCrossHairs": a.show_cross_hairs,
         "showVideoSafeAreas": a.show_video_safe_areas, PIXEL_ASPECT: a.video_ruler_pixel_aspect_ratio,
     });
-    app.ui.dialog = Some(Dialog::new(KIND, fields));
+    app.ui.dialog = Some(Dialog::new(KIND, with_globals(app, fields)));
     Ok(json!({ "dialog": KIND }))
 }
 
@@ -252,10 +306,14 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
 /// one is among them), each resized about the reference
 /// point the form's last Width or Height change used (fields `__refx` and `__refy`, its column and
 /// row; the top-left corner when the form set none), all in one undo step. Fitting applies only
-/// to this artboard and never moves its artwork.
+/// to this artboard and never moves its artwork. The Global checkboxes' preferences are set only
+/// after the artboard command succeeds, so an error leaves them as they were.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    let globals = global_changes(app, d)?;
     if d.bool("new") {
-        return confirm_new(app, d);
+        let r = confirm_new(app, d)?;
+        set_globals(app, globals)?;
+        return Ok(r);
     }
     let mut p = Value::Object(d.fields.clone());
     for k in ["x", "y", "width", "height", PIXEL_ASPECT] {
@@ -264,7 +322,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         }
     }
     if let Some(o) = p.as_object_mut() {
-        o.retain(|k, _| !k.starts_with("__"));
+        o.retain(|k, _| !k.starts_with("__") && k != FADE && k != UPDATE_WHILE_DRAGGING);
     }
     let index = p["index"].as_u64().and_then(|i| usize::try_from(i).ok()).unwrap_or(0);
     let was = app.session.active().and_then(|st| st.doc.artboards.get(index)).map(|a| a.rect);
@@ -295,7 +353,9 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         "moveArt": !d.bool("__fit") && crate::panels::artboards::move_art(app),
     });
     let p = crate::panels::artboards::set_props_params(common, entries).ok_or("no artboard")?;
-    run_and_close(app, "artboard.setProps", p)
+    let r = run_and_close(app, "artboard.setProps", p)?;
+    set_globals(app, globals)?;
+    Ok(r)
 }
 
 /// `ui.newArtboard` (Alt-click on the Artboards panel's New Artboard): Artboard Options for a new
@@ -309,7 +369,7 @@ pub fn open_new(app: &mut VectorcraftApp) -> Result<Value, String> {
         "new": true, "name": format!("Artboard {}", abs.len() + 1),
         "x": last.x1 + 20.0, "y": last.y0, "width": last.width(), "height": last.height(),
     });
-    app.ui.dialog = Some(Dialog::new(KIND, fields));
+    app.ui.dialog = Some(Dialog::new(KIND, with_globals(app, fields)));
     Ok(json!({ "dialog": KIND }))
 }
 
