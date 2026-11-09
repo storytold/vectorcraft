@@ -168,6 +168,7 @@ impl VectorcraftApp {
             scrub_scope: None,
             automation_roots: None,
             synthetic_frame: false,
+            pending_plugin_install: None,
             pen_end: Default::default(),
             host_iteration: 0,
             #[cfg(test)]

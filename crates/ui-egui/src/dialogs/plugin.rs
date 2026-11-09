@@ -13,16 +13,22 @@
 //! Export button writes the file. Importers open the files File › Open finds no built-in format
 //! for, and File › Open With lists them, to open a file with one of them by name; one with
 //! parameters opens dialog `pluginImport` once the file is picked, and its Open button opens it.
+//!
+//! Dialog `pluginInstall` asks a person to approve a plug-in's permissions or heavy budget. What it
+//! shows and installs is held by the app, not in its fields; a control request or synthetic input
+//! can't confirm it. Enter confirms it only when OK has the keyboard focus.
 
 use std::sync::Arc;
 
 use serde_json::{Map, Value, json};
+use vectorcraft_engine::cmd::plugin::InstallApproval;
 use vectorcraft_plugins::{Budget, Kind, Manifest, Plugin, permissions, registry};
 
-use super::{DialogSpec, form};
+use super::{DialogAction, DialogSpec, form};
 use crate::VectorcraftApp;
 use crate::menus::Item;
 use crate::state::Dialog;
+use crate::widgets;
 
 /// The dialog kind of plug-in filters.
 pub const KIND: &str = "plugin";
@@ -309,4 +315,72 @@ fn import_confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String>
     app.ui.dialog = None;
     let picked = p["picked"] == true;
     crate::io::open_with_on(app, &p, picked && crate::opening::available())
+}
+
+/// The dialog kind of the approval of a plug-in install.
+pub const INSTALL_KIND: &str = "pluginInstall";
+
+/// A plug-in install waiting for a person's answer.
+pub(crate) struct PendingInstall {
+    /// The question and the lines under it, in the UI language.
+    pub message: String,
+    pub detail: String,
+    /// `plugin.install`'s params for OK.
+    pub params: Value,
+    /// What OK approves: the module the question is about.
+    pub approval: InstallApproval,
+}
+
+/// No OK in the shared footer: the OK in its body is a `Sense::click` button, which Enter clicks
+/// only when it has the keyboard focus.
+pub(super) const INSTALL_SPEC: DialogSpec = DialogSpec {
+    heading: |_| tl!("Install Plug-in…").trim_end_matches('…').to_string(),
+    body_with_actions: Some(install_body),
+    confirm: install_confirm,
+    ok: None,
+    max_width: Some(420.0),
+    ..DialogSpec::FORM
+};
+
+/// Asks a person whether to install what `pending` describes. → `{pending}`.
+pub(crate) fn ask_install(app: &mut VectorcraftApp, pending: PendingInstall) -> Value {
+    app.pending_plugin_install = Some(pending);
+    app.ui.dialog = Some(Dialog::new(INSTALL_KIND, json!({})));
+    json!({ "pending": INSTALL_KIND })
+}
+
+fn install_body(app: &mut VectorcraftApp, ui: &mut egui::Ui, _: &mut Dialog) -> DialogAction {
+    let Some(pending) = app.pending_plugin_install.as_ref() else { return DialogAction::Cancel };
+    ui.label(egui::RichText::new(&pending.message).strong());
+    ui.add_space(8.0);
+    ui.label(egui::RichText::new(&pending.detail).color(crate::theme::Tokens::get(ui.ctx()).text_dim));
+    ui.add_space(16.0);
+    let mut action = DialogAction::None;
+    let row = egui::vec2(ui.min_rect().width(), ui.spacing().interact_size.y);
+    ui.allocate_ui_with_layout(row, egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        if widgets::primary_button_enabled(ui, "OK", true).clicked() {
+            action = DialogAction::Confirm;
+        }
+        ui.add_space(8.0);
+        if widgets::secondary_button(ui, "Cancel").clicked() {
+            action = DialogAction::Cancel;
+        }
+    });
+    action
+}
+
+/// OK: installs the module the dialog showed, if a person pressed it; automation is refused and the
+/// dialog stays open.
+fn install_confirm(app: &mut VectorcraftApp, _: &Dialog) -> Result<Value, String> {
+    if app.automation_is_acting() {
+        return Err("Only the person at the keyboard can approve installing a plug-in".into());
+    }
+    app.ui.dialog = None;
+    let Some(pending) = app.pending_plugin_install.take() else { return Ok(Value::Null) };
+    app.session.approve_plugin_install(pending.approval);
+    let r = app.run("plugin.install", pending.params);
+    app.session.clear_plugin_install_approval();
+    let r = r?;
+    crate::io::report_installed(app, &r);
+    Ok(r)
 }
