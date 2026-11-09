@@ -88,8 +88,10 @@ USAGE:
       enforces its own (vectorcraft --control PORT --automation-read-root DIR …).
       --allow-plugin-grants lets plugin.install's grant and allowHeavy take effect in this session,
       so whoever sends the commands can give a plug-in the permissions it lists, and a heavy budget,
-      with nobody approving them. Without it they are refused, and a plug-in installs only when a
-      person already approved its hash in the desktop app. It implies --headless.
+      with nobody approving them. Without it they are refused, and a plug-in that lists permissions
+      installs only when its hash is already recorded in grants.json, by a person's approval in the
+      desktop app or by a grant accepted under this flag. A grant accepted under this flag stays
+      recorded and counts as approved in later sessions. It implies --headless.
 
   vectorcraft-cli run [--in FILE] [--cmd ID [--params JSON] | --commands FILE|-]... [--export FILE]... [--scale N] [--ppi N] [--allow-plugin-grants]
       Headless batch: open FILE (any readable format) or start a new document, run commands in
