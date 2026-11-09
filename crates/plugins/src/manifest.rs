@@ -18,7 +18,7 @@ pub const MAX_UNGROUPED: usize = 64;
 pub const MAX_TEXT: usize = 4_096;
 /// Most numbers a `numberList` parameter may hold.
 pub const MAX_LIST: usize = 256;
-/// Most file extensions an exporter may declare.
+/// Most file extensions an exporter or an importer may declare.
 pub const MAX_EXTENSIONS: usize = 8;
 /// Most menu commands a plug-in may add (`commands`).
 pub const MAX_COMMANDS: usize = 32;
@@ -38,6 +38,9 @@ pub enum Kind {
     /// An exporter: writes the document in a file format of its own, whose extensions the manifest
     /// lists (File › Export › Export As, `document.export`; see [`crate::export`]).
     Exporter,
+    /// An importer: reads a file in a format of its own, whose extensions the manifest lists, into
+    /// a new document (File › Open, `document.open`; see [`crate::import`]).
+    Importer,
 }
 
 impl Kind {
@@ -46,6 +49,7 @@ impl Kind {
             Kind::Filter => "filter",
             Kind::Effect => "effect",
             Kind::Exporter => "exporter",
+            Kind::Importer => "importer",
         }
     }
 }
@@ -281,8 +285,8 @@ pub struct Manifest {
     /// Parameters in declaration (dialog) order; a JSON object `{"name": spec, …}` in the manifest.
     #[serde(default, deserialize_with = "ordered_params", serialize_with = "params_as_object")]
     pub params: Vec<(String, Param)>,
-    /// An exporter's file extensions, lower case and without the dot; the first is the one its
-    /// files get. Only exporters declare them.
+    /// An exporter's or an importer's file extensions, lower case and without the dot; the first is
+    /// the one an exporter's files get. Only exporters and importers declare them.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub extensions: Vec<String>,
     /// How much a run may compute: only a filter may be [`Budget::Heavy`].
@@ -367,6 +371,9 @@ impl Manifest {
             (Budget::Heavy, Kind::Exporter) => {
                 return Err(Error::Manifest("an exporter always gets an export's budget: leave `budget` out".into()));
             }
+            (Budget::Heavy, Kind::Importer) => {
+                return Err(Error::Manifest("an importer always gets an import's budget: leave `budget` out".into()));
+            }
         }
         self.validate_params()?;
         self.validate_commands()
@@ -394,7 +401,7 @@ impl Manifest {
         if self.commands.is_empty() {
             return Ok(());
         }
-        if self.kind == Kind::Exporter {
+        if matches!(self.kind, Kind::Exporter | Kind::Importer) {
             return Err(Error::Manifest("only a filter or a live effect declares `commands`".into()));
         }
         if self.budget == Budget::Heavy {
@@ -428,17 +435,17 @@ impl Manifest {
         Ok(())
     }
 
-    /// An exporter lists 1 to [`MAX_EXTENSIONS`] distinct extensions of 1 to 16 lower-case
-    /// letters and digits; other kinds list none.
+    /// An exporter or an importer lists 1 to [`MAX_EXTENSIONS`] distinct extensions of 1 to 16
+    /// lower-case letters and digits; other kinds list none.
     fn validate_extensions(&self) -> Result<()> {
         let exts = &self.extensions;
+        let count_ok = !exts.is_empty() && exts.len() <= MAX_EXTENSIONS;
         match self.kind {
-            Kind::Exporter => {}
+            Kind::Exporter if !count_ok => return Err(Error::Manifest(format!("an exporter declares 1 to {MAX_EXTENSIONS} `extensions`"))),
+            Kind::Importer if !count_ok => return Err(Error::Manifest(format!("an importer declares 1 to {MAX_EXTENSIONS} `extensions`"))),
+            Kind::Exporter | Kind::Importer => {}
             _ if exts.is_empty() => return Ok(()),
-            _ => return Err(Error::Manifest("only an exporter declares `extensions`".into())),
-        }
-        if exts.is_empty() || exts.len() > MAX_EXTENSIONS {
-            return Err(Error::Manifest(format!("an exporter declares 1 to {MAX_EXTENSIONS} `extensions`")));
+            _ => return Err(Error::Manifest("only an exporter or an importer declares `extensions`".into())),
         }
         for (i, e) in exts.iter().enumerate() {
             if !(1..=16).contains(&e.len()) || !e.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit()) {
@@ -816,6 +823,31 @@ mod tests {
             r#"{"id":"a","name":"x","kind":"effect","extensions":["plt"]}"#,
         ] {
             assert!(Manifest::parse(bad.as_bytes()).is_err(), "{bad}");
+        }
+    }
+
+    /// An importer lists the extensions it reads by the exporter's rules, and gets an import's
+    /// budget and the `import.read` permission.
+    #[test]
+    fn an_importer_lists_its_extensions() {
+        let m = Manifest::parse(br#"{"id":"org.example.plotter","name":"Plotter","kind":"importer","extensions":["plt","hpgl"]}"#).unwrap();
+        assert_eq!((m.kind, m.extensions.as_slice()), (Kind::Importer, &["plt".to_string(), "hpgl".to_string()][..]));
+        assert_eq!(serde_json::to_value(&m).unwrap()["kind"], json!("importer"));
+        assert_eq!(m.permissions(), [Permission::ImportRead]);
+        for (bad, says) in [
+            (r#"{"id":"a","name":"x","kind":"importer"}"#, "an importer declares 1 to 8"),
+            (r#"{"id":"a","name":"x","kind":"importer","extensions":[]}"#, "an importer declares 1 to 8"),
+            (r#"{"id":"a","name":"x","kind":"importer","extensions":["a","b","c","d","e","f","g","h","i"]}"#, "an importer declares 1 to 8"),
+            (r#"{"id":"a","name":"x","kind":"importer","extensions":["Plt"]}"#, "lower-case"),
+            (r#"{"id":"a","name":"x","kind":"importer","extensions":[".plt"]}"#, "without the dot"),
+            (r#"{"id":"a","name":"x","kind":"importer","extensions":["abcdefghijklmnopq"]}"#, "1-16"),
+            (r#"{"id":"a","name":"x","kind":"importer","extensions":["plt","plt"]}"#, "listed twice"),
+            (r#"{"id":"a","name":"x","kind":"importer","extensions":["plt"],"budget":"heavy"}"#, "an import's budget"),
+            (r#"{"id":"a","name":"x","kind":"importer","extensions":["plt"],"permissions":["doc.read"]}"#, "doesn't apply"),
+            (r#"{"id":"a","name":"x","kind":"filter","extensions":["plt"]}"#, "only an exporter or an importer"),
+        ] {
+            let e = Manifest::parse(bad.as_bytes()).unwrap_err().to_string();
+            assert!(e.contains(says), "{bad}: {e}");
         }
     }
 

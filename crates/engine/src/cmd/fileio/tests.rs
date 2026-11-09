@@ -377,8 +377,8 @@ fn open_exts_cover_every_readable_format() {
     assert_eq!(filters[0], ("All readable files", OPEN_EXTS));
     assert_eq!(
         filters.len(),
-        10 + FORMATS.iter().filter(|f| f.read).count(),
-        "and swatch libraries, libraries, flattener, PDF, print and export presets, shortcut sets, scripts, plug-ins"
+        11 + FORMATS.iter().filter(|f| f.read).count(),
+        "and swatch libraries, libraries, flattener, PDF, print and export presets, composite fonts, shortcut sets, scripts, plug-ins"
     );
     assert!(filters.contains(&("Export presets", SCREEN_EXPORT_PRESET_EXTS)), "File › Open imports export presets");
     assert!(filters.contains(&("Scripts", crate::cmd::scripts::EXTS)), "File › Open checks scripts");
@@ -890,4 +890,27 @@ fn a_photo_places_the_way_its_exif_orientation_says() {
     let px = image::load_from_memory(&img.blob.bytes).unwrap().to_rgb8();
     let red = |p: &image::Rgb<u8>| p[0] > 150 && p[1] < 80;
     assert!(red(px.get_pixel(4, 3)) && !red(px.get_pixel(4, 12)), "the left half is on top");
+}
+
+/// With `importer` named, a file up to the importer's limit is read whole and a larger one is an
+/// error, whatever its content.
+#[test]
+fn read_path_for_a_named_importer_stops_at_the_limit() {
+    let limit = vectorcraft_plugins::import::MAX_INPUT_BYTES as u64;
+    let dir = tmp_dir("read-path-limit");
+    let path = dir.join("drawing.tuv");
+    let name = path.to_string_lossy().into_owned();
+    let named = json!({"importer": "plugin.test.notinstalled"});
+    let sized = |len: u64| {
+        std::fs::write(&path, b"\x89PNG\r\n\x1a\n").unwrap();
+        std::fs::OpenOptions::new().write(true).open(&path).unwrap().set_len(len).unwrap();
+    };
+    for len in [8, 64 << 10, 70_000, limit] {
+        sized(len);
+        assert_eq!(importer::read_path(&name, &named).unwrap().len() as u64, len);
+    }
+    sized(limit + 1);
+    let e = importer::read_path(&name, &named).unwrap_err();
+    assert!(e.to_string().contains("larger than") && e.to_string().contains("drawing.tuv"), "{e}");
+    let _ = std::fs::remove_dir_all(&dir);
 }

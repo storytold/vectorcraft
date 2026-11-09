@@ -56,7 +56,7 @@ use vectorcraft_doc::{Document, ImageBlob};
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use atomic::{sync_file, write_atomic, write_atomic_with, write_new_with};
-pub use craft_vectorcraft_format::base64::{decode as base64_decode, encode as base64_encode};
+pub use craft_vectorcraft_format::base64::{decode as base64_decode, decoded_len as base64_decoded_len, encode as base64_encode};
 pub use craft_vectorcraft_format::{
     BLOB_MAGIC, COMPRESSED_SINCE, EXTENSION, ICC_MIME, INLINE_MAX, LEGACY_EXTENSION, MIN_VERSION, PREVIEW_MAX, VERSION, is_compressed, json_part,
     sniff,
