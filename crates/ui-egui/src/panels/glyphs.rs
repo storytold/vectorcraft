@@ -304,6 +304,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     let resp = resp.on_hover_ui(|ui| {
                         let tip = match (c, &pick) {
                             (Some(c), _) => encoded_tip(&face, c, gid),
+                            (None, Some(Some(Pick::Glyph(_)))) => format!(
+                                "{}\n{}\n{}",
+                                unencoded_tip(&face, gid),
+                                tl!("Double-click to replace"),
+                                tl!("No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.")
+                            ),
                             (None, Some(Some(_))) => format!("{}\n{}", unencoded_tip(&face, gid), tl!("Double-click to replace")),
                             (None, Some(None)) => {
                                 let why = fit.as_ref().map(|f| f.why(&face, gid)).unwrap_or_default();
@@ -1202,6 +1208,7 @@ mod tests {
         for view in ["Alternates for Current Selection", "Entire Font"] {
             let (mut app, id) = editing("\u{628}\u{646}\u{62A}");
             app.run("text.setRangeStyle", json!({"id": id, "font": JOINING_ALTERNATES_FAMILY})).unwrap();
+            set_cell_index(&mut app, 0);
             let plain = glyph_ids(&app, &id);
             select(&mut app, 2, 4);
             let ctx = egui::Context::default();
