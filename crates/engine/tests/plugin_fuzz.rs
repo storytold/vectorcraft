@@ -863,6 +863,7 @@ proptest! {
             prop_assert!(kinds.is_empty() || (man.asks_permissions() && reads), "{}", text);
         }
         let mut s = rich_session();
+        s.allow_plugin_grants_from_requests();
         let module = wat::parse_str(tpl::module(&text, tpl::ECHO, "", 1)).unwrap();
         let data = vectorcraft_format::base64_encode(&module);
         let grant = json!(["doc.read", "doc.write", "state", "effect.render", "export.write"]);
