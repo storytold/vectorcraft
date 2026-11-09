@@ -14,7 +14,8 @@ use serde::{Deserialize, Serialize};
 use crate::{Error, Kind, Result};
 
 /// The plug-in API level this host implements. A manifest's `api` (1 when left out) may be at most
-/// this.
+/// this. Level 2 adds the host imports ([`PROGRESS_API`]) and a live effect's `paintOutput`
+/// ([`crate::painted`]).
 pub const API_LEVEL: u32 = 2;
 
 /// The API level that adds the host imports ([`crate::host::IMPORTS`]) and the `progress`,

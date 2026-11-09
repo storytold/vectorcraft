@@ -505,6 +505,8 @@ pub const FORMATS: &[Format] = &[
     reader("jpeg2000", "JPEG 2000", &["jpf", "jpx", "jp2", "j2k", "j2c", "jpc"], "image/jp2", true),
     // HEVC-coded HEIF still images, decoded to PNG; image sequences are not read.
     reader("heif", "HEIC/HEIF", &["heic", "heif"], "image/heic", true),
+    // jxl-oxide reads a JPEG XL file's first frame, which is stored as PNG. Exports don't write it.
+    reader("jxl", "JPEG XL", &["jxl"], "image/jxl", true),
 ];
 
 /// Every extension `document.open` reads (the "All readable files" filter of open dialogs).
@@ -544,6 +546,7 @@ pub const OPEN_EXTS: &[&str] = &[
     "psd",
     "pdd",
     "psb",
+    "jxl",
     "vctemplate",
     "dxf",
     "emf",
@@ -558,12 +561,12 @@ pub const OPEN_EXTS: &[&str] = &[
 
 /// Extensions in [`OPEN_EXTS`] the packaging declares no type for: Photoshop documents belong to
 /// raster editors, so Finder and file managers don't offer a vector app for them, and there is no
-/// `.epsf`, `.ps`, Targa, PCX, Pixar, JPEG 2000 or HEIC/HEIF type, nor one for the `.pns`, `.dib` and `.rle` names of
+/// `.epsf`, `.ps`, Targa, PCX, Pixar, JPEG 2000, HEIC/HEIF or JPEG XL type, nor one for the `.pns`, `.dib` and `.rle` names of
 /// PNG and BMP files (File › Open and Place still read them all). On Linux the desktop entry's EPS
 /// type (shared-mime-info's) also covers `.epsf`, so file managers offer VectorCraft for it.
 pub const UNASSOCIATED_EXTS: &[&str] = &[
     "psd", "pdd", "psb", "epsf", "ps", "pns", "dib", "rle", "tga", "vda", "icb", "vst", "pcx", "pxr", "jpf", "jpx", "jp2", "j2k", "j2c", "jpc",
-    "heic", "heif",
+    "heic", "heif", "jxl",
 ];
 
 /// The extension that picks each writable format when exporting (the format's first; PNG-8 shares
@@ -632,6 +635,7 @@ pub const PLACE_EXTS: &[&str] = &[
     "psd",
     "pdd",
     "psb",
+    "jxl",
     "vctemplate",
     "dxf",
     "emf",
