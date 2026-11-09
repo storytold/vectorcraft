@@ -76,6 +76,12 @@ pub struct Renderer {
     /// The plug-in revision ([`effects::plugin_revision`]) that `geom`, `fx_geom` and `fx_arts` were
     /// last checked against (see [`Self::check_plugins`]).
     plugin_revision: u64,
+    /// Is a live-effect plug-in that paints its pieces installed (found when `plugin_revision`
+    /// changes)?
+    painting_plugins: bool,
+    /// The hash of the document's swatch and pattern names at the last check, kept while
+    /// `painting_plugins` holds (see [`Self::check_plugins`]).
+    paint_names: u64,
     /// Expanded stroke outlines keyed by ([`Self::stroke_owner`], stroke layer address, width bits,
     /// tolerance level): panning re-renders reuse them instead of re-expanding every stroke.
     strokes: PtrMap<StrokeKey, StrokeEntry>,

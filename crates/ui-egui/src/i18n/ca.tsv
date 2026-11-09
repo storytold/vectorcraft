@@ -5627,6 +5627,13 @@ digits	Malayalam	Malaiàlam
 @msg	select an object in perspective	selecciona un objecte en perspectiva
 @msg	select an Objects on Path group	selecciona un grup d’objectes sobre un traçat
 @msg	select artwork (or a colour group) to recolor	selecciona la il·lustració (o un grup de colors) per recolorejar
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	Recoloració completada; sense canvis: {locked} i {hidden}
+@msg	Recolor completed; {objects} were left unchanged	Recoloració completada; sense canvis: {objects}
+@msg	Recolor completed; {objects} was left unchanged	Recoloració completada; sense canvis: {objects}
+@msg	1 locked object	1 objecte bloquejat
+@msg	{n} locked objects	{n} objectes bloquejats
+@msg	1 hidden object	1 objecte ocult
+@msg	{n} hidden objects	{n} objectes ocults
 @msg	select at least two objects	selecciona almenys dos objectes
 @msg	select objects, not layers	selecciona objectes, no capes
 @msg	select one object	selecciona un objecte
@@ -5935,6 +5942,8 @@ digits	Malayalam	Malaiàlam
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	el mòdul importa `env.{name}`, que un complement només pot fer servir al nivell d’API de complements {PROGRESS_API} (`api` {PROGRESS_API}) i amb el permís `{permission}`
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	el mòdul importa `{from}.{name}`, que l’amfitrió no ofereix: un complement només pot importar les funcions `env.vc_*` que enumera docs/plugins.md (nivell d’API de complements 2), i cap WASI, fitxer ni xarxa
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` és {_1}; aquest amfitrió admet els nivells d’API de complements de l’1 al {API_LEVEL}
+@msg	`paintOutput` may only be true	`paintOutput` només pot ser true
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` només és per a un efecte dinàmic (`kind` "effect") amb `api` 2
 @msg	`grant` must be a list of permission names	`grant` ha de ser una llista de noms de permisos
 @msg	`grant` names an unknown permission `{shown}`	`grant` esmenta un permís desconegut `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	un complement del tipus `{_1}` necessita el permís `{_2}`
@@ -6337,6 +6346,10 @@ breakText	Glyphs	Glifs
 @msg	`by` must be lines, paragraphs, words or glyphs, not {other}	`by` ha de ser lines, paragraphs, words o glyphs, no {other}
 @msg	`kind` must be "line" or "paragraph", not {other}	`kind` ha de ser "line" o "paragraph", no {other}
 @msg	`align` must be "left", "center" or "right", not {other}	`align` ha de ser "left", "center" o "right", no {other}
+@msg	the JPEG XL file is cut short	el fitxer JPEG XL està truncat
+@msg	the JPEG XL container is too large to read	el contenidor JPEG XL és massa gran per llegir-lo
+@msg	CMYK JPEG XL images can't be read	les imatges JPEG XL en CMYK no es poden llegir
+@msg	the JPEG XL file can't be read: {e}	no es pot llegir el fitxer JPEG XL: {e}
 	File + Number	Fitxer + número
 	File + Data Set Name	Fitxer + nom del conjunt de dades
 	Data Set Name	Nom del conjunt de dades

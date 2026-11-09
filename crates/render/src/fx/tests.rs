@@ -7,6 +7,30 @@ use super::{DRAG_PIXEL_BUDGET, Drawn, PIXEL_BUDGET, drag_scale, filter_region, f
 use crate::tests_fontchange::{fonts_steady, with_fonts_unchanged};
 use crate::{RenderOptions, Rendered, Renderer};
 
+/// The hash renderers compare to redraw art linked to swatches changes with a global swatch's
+/// color and spot flag and with the Spot Colors option.
+#[test]
+fn paint_names_follow_global_swatch_colors_and_spot_flags() {
+    let mut d = Document::new(100.0, 100.0);
+    d.swatches.push(vectorcraft_doc::color::Swatch {
+        name: "Brand".into(),
+        paint: Paint::solid(Color::rgb(1.0, 0.0, 0.0)),
+        global: true,
+        spot: false,
+    });
+    let last = d.swatches.len() - 1;
+    let first = super::paint_names(&d);
+    d.swatches[last].spot = true;
+    assert_ne!(super::paint_names(&d), first, "spot flag");
+    d.swatches[last].spot = false;
+    assert_eq!(super::paint_names(&d), first, "nothing changed");
+    d.swatches[last].paint = Paint::solid(Color::rgb(0.0, 0.0, 1.0));
+    assert_ne!(super::paint_names(&d), first, "color");
+    d.swatches[last].paint = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    d.spot_use_lab = !d.spot_use_lab;
+    assert_ne!(super::paint_names(&d), first, "Spot Colors option");
+}
+
 /// #1706: the raster a shadow or glow is filtered in stays within the pixel budget however
 /// far the blur spreads at the zoom (it was up to 65535 pixels a side: 16 GB).
 #[test]

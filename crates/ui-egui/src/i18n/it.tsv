@@ -4572,6 +4572,13 @@ axis	Both	Entrambi
 @msg	select an image	seleziona un'immagine
 @msg	select an object in perspective	seleziona un oggetto in prospettiva
 @msg	select artwork (or a colour group) to recolor	seleziona la grafica (o un gruppo colori) da ricolorare
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	Ricolorazione completata; senza modifiche: {locked} e {hidden}
+@msg	Recolor completed; {objects} were left unchanged	Ricolorazione completata; senza modifiche: {objects}
+@msg	Recolor completed; {objects} was left unchanged	Ricolorazione completata; senza modifiche: {objects}
+@msg	1 locked object	1 oggetto bloccato
+@msg	{n} locked objects	{n} oggetti bloccati
+@msg	1 hidden object	1 oggetto nascosto
+@msg	{n} hidden objects	{n} oggetti nascosti
 @msg	select at least two objects	seleziona almeno due oggetti
 @msg	exit isolation mode first	esci prima dalla modalità isolamento
 @msg	select objects, not layers	seleziona oggetti, non livelli
@@ -4912,6 +4919,10 @@ axis	Both	Entrambi
 @msg	the PSD file is cut short	il file PSD è troncato
 @msg	the PSD file's header is damaged	l'intestazione del file PSD è danneggiata
 @msg	the PSD file's image data can't be read: {e}	i dati immagine del file PSD non possono essere letti: {e}
+@msg	the JPEG XL file is cut short	il file JPEG XL è troncato
+@msg	the JPEG XL container is too large to read	il contenitore JPEG XL è troppo grande per essere letto
+@msg	CMYK JPEG XL images can't be read	le immagini JPEG XL in CMYK non possono essere lette
+@msg	the JPEG XL file can't be read: {e}	il file JPEG XL non può essere letto: {e}
 	Video	Video
 	De-Interlace…	Deinterlaccia…
 	De-Interlace	Deinterlaccia
@@ -5538,6 +5549,8 @@ axis	Y Axis	Asse Y
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	il modulo importa `env.{name}`, che un plug-in può usare solo al livello API dei plug-in {PROGRESS_API} (`api` {PROGRESS_API}) e con l’autorizzazione `{permission}`
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	il modulo importa `{from}.{name}`, che l’host non offre: un plug-in può importare solo le funzioni `env.vc_*` elencate in docs/plugins.md (livello API dei plug-in 2), e nessun WASI, file o rete
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` è {_1}; questo host supporta i livelli API dei plug-in da 1 a {API_LEVEL}
+@msg	`paintOutput` may only be true	`paintOutput` può essere solo true
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` vale solo per un effetto dinamico (`kind` "effect") con `api` 2
 @msg	`grant` must be a list of permission names	`grant` deve essere un elenco di nomi di autorizzazioni
 @msg	`grant` names an unknown permission `{shown}`	`grant` indica un’autorizzazione sconosciuta `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	un plug-in di tipo `{_1}` richiede l’autorizzazione `{_2}`

@@ -526,11 +526,11 @@ fn cmyk_rgba(b: &ImageBlob, w: u32, h: u32) -> Option<Vec<u8>> {
     Some(out)
 }
 
-fn out_err(at: &str, msg: impl std::fmt::Display) -> Error {
+pub(crate) fn out_err(at: &str, msg: impl std::fmt::Display) -> Error {
     Error::Output(format!("{at}: {msg}"))
 }
 
-fn check_point(p: Point, at: &str) -> Result<()> {
+pub(crate) fn check_point(p: Point, at: &str) -> Result<()> {
     if p.x.is_finite() && p.y.is_finite() && p.x.abs() <= MAX_COORD && p.y.abs() <= MAX_COORD {
         Ok(())
     } else {
@@ -540,7 +540,7 @@ fn check_point(p: Point, at: &str) -> Result<()> {
 
 /// A path from plug-in output: native `PathData` JSON, every coordinate finite and in range, empty
 /// subpaths dropped; `anchors` counts towards [`MAX_ANCHORS`].
-fn decode_path(v: &Value, at: &str, anchors: &mut usize) -> Result<PathData> {
+pub(crate) fn decode_path(v: &Value, at: &str, anchors: &mut usize) -> Result<PathData> {
     let mut path: PathData = serde_json::from_value(v.clone()).map_err(|e| out_err(at, e))?;
     path.subpaths.retain(|sp| !sp.anchors.is_empty());
     *anchors = anchors.saturating_add(path.anchor_count());
@@ -943,7 +943,7 @@ fn admit_paint(doc: &Document, p: Paint, was: Option<&Paint>, at: &str) -> Resul
 /// Sets the paints of `ap`'s fills (`fill`) or strokes to `new` (a fill keeps everything but its
 /// paint), in paint order: extra items are removed (from the top), missing ones added above the
 /// last item of their kind (fills at the bottom, strokes on top when the object has none).
-fn set_items(ap: &mut Appearance, fill: bool, new: Vec<OutStroke>) {
+pub(crate) fn set_items(ap: &mut Appearance, fill: bool, new: Vec<OutStroke>) {
     let idx: Vec<usize> = ap.items.iter().enumerate().filter(|(_, i)| i.is_fill() == fill).map(|(k, _)| k).collect();
     for &i in idx.iter().skip(new.len()).rev() {
         ap.remove_item(i);
@@ -970,7 +970,7 @@ fn set_items(ap: &mut Appearance, fill: bool, new: Vec<OutStroke>) {
 }
 
 /// Gives stroke `s` the paint of `o` and each of its weight, join, cap and miter limit it has.
-fn style(s: &mut StrokeLayer, o: OutStroke) {
+pub(crate) fn style(s: &mut StrokeLayer, o: OutStroke) {
     s.paint = o.paint;
     s.width = o.width.unwrap_or(s.width);
     s.join = o.join.unwrap_or(s.join);

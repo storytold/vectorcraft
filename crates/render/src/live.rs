@@ -99,17 +99,19 @@ pub fn expand_live(n: &Node) -> Vec<Node> {
 /// the fonts, the plug-ins and the color settings, hashed: the art of the symbols, the tilings of
 /// the patterns and the reads of the placed files it shows ([`hash_resources`]), the font
 /// generation ([`vectorcraft_text::FontDb::generation`]) when it shows type or a placed file, the
-/// plug-in revision ([`crate::effects::plugin_revision`]) when it shows an object with a plug-in
-/// effect, and the color settings (`cms`, their address). Art is hashed by the addresses of its
-/// `Arc`s, which copies of the document share: a copy of the document has the same key. It also
-/// returns weak references to the reads found, and what the walk found ([`Walked`]) when it found
-/// no placed file.
-fn resources_key(doc: &Document, cms: usize, n: &Node) -> (u64, Vec<Weak<ReadDocument>>, Option<Walked>) {
+/// plug-in revision ([`crate::effects::plugin_revision`]) and `names` (the hash of the document's
+/// swatch and pattern names, [`DocInputs`]) when it shows an object with a plug-in effect, since a
+/// plug-in that paints its pieces ([`crate::effects::has_painted_plugin_effect`]) draws them only
+/// while the swatches and patterns they name are in the document, and the color settings (`cms`,
+/// their address). Art is hashed by the addresses of its `Arc`s, which copies of the document
+/// share: a copy of the document has the same key. It also returns weak references to the reads
+/// found, and what the walk found ([`Walked`]) when it found no placed file.
+fn resources_key(doc: &Document, cms: usize, names: u64, n: &Node) -> (u64, Vec<Weak<ReadDocument>>, Option<Walked>) {
     let mut h = DefaultHasher::new();
     let mut shown = Shown::default();
     hash_resources(doc, n, &mut shown, &mut h);
     let walked = Walked { hash: h.finish(), text: shown.text, plugins: shown.plugins };
-    (walked.key(cms), shown.reads, (!shown.placed).then_some(walked))
+    (walked.key(cms, names), shown.reads, (!shown.placed).then_some(walked))
 }
 
 /// What [`hash_resources`] found in a node: the hash of what it walked, whether it found type or
@@ -123,9 +125,11 @@ struct Walked {
 
 impl Walked {
     /// The [`resources_key`] of the node walked: the walk's hash, the font generation when it found
-    /// type or a placed file, the plug-in revision when it found a plug-in effect, and the color
-    /// settings `cms`.
-    fn key(self, cms: usize) -> u64 {
+    /// type or a placed file, the plug-in revision and the hash of the document's swatch and pattern
+    /// names (`names`) when it found a plug-in effect, and the color settings `cms`. Whether a
+    /// plug-in paints its pieces depends on the plug-ins installed, so the names count for every
+    /// plug-in effect.
+    fn key(self, cms: usize, names: u64) -> u64 {
         let mut h = DefaultHasher::new();
         self.hash.hash(&mut h);
         if self.text {
@@ -133,6 +137,7 @@ impl Walked {
         }
         if self.plugins {
             crate::effects::plugin_revision().hash(&mut h);
+            names.hash(&mut h);
         }
         cms.hash(&mut h);
         h.finish()
@@ -445,13 +450,13 @@ impl Renderer {
             && std::ptr::eq(node.as_ptr(), Arc::as_ptr(n))
             && read.same_art(&inputs)
         {
-            return (walked.key(inputs.cms), inputs, vec![]);
+            return (walked.key(inputs.cms, inputs.names), inputs, vec![]);
         }
         #[cfg(test)]
         {
             self.live.walked += 1;
         }
-        let (key, reads, walked) = resources_key(doc, inputs.cms, n);
+        let (key, reads, walked) = resources_key(doc, inputs.cms, inputs.names, n);
         if let Some(walked) = walked {
             // The bytes count the key and the entry, and the node's allocation that the weak
             // reference keeps.
@@ -478,7 +483,7 @@ impl Renderer {
             self.live.evaluated += 1;
         }
         let hook = |c: &Node| crate::effects::outline_object(Some(doc), c);
-        let v: Expanded = match crate::effects::pathfinder_children(a, Some(&hook)) {
+        let v: Expanded = match crate::effects::pathfinder_children(Some(doc), a, Some(&hook)) {
             Some(children) => Arc::new(children),
             None => Arc::new(crate::effects::expand_live(Some(doc), a).into_iter().map(Arc::new).collect()),
         };
@@ -788,7 +793,7 @@ mod tests {
         let envelope = Node::new(d.alloc_id(), envelope);
         let key = |d: &Document| {
             std::thread::scope(|s| {
-                std::thread::Builder::new().stack_size(256 << 10).spawn_scoped(s, || resources_key(d, 0, &envelope).0).unwrap().join().unwrap()
+                std::thread::Builder::new().stack_size(256 << 10).spawn_scoped(s, || resources_key(d, 0, 0, &envelope).0).unwrap().join().unwrap()
             })
         };
         let before = key(&d);
@@ -820,8 +825,8 @@ mod tests {
             frame: Box::new(Affine::IDENTITY),
         };
         let envelope = Node::new(d.alloc_id(), envelope);
-        let before = resources_key(&d, 0, &envelope).0;
+        let before = resources_key(&d, 0, 0, &envelope).0;
         d.symbols[2].art = y.clone();
-        assert_ne!(resources_key(&d, 0, &envelope).0, before, "the art of every instance is hashed");
+        assert_ne!(resources_key(&d, 0, 0, &envelope).0, before, "the art of every instance is hashed");
     }
 }
