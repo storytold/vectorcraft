@@ -2,7 +2,10 @@
 //! (`text.spelling.check`) and the words they suggest instead (`text.spelling.suggest`), checked
 //! by craft-proof in each run's language
 //! ([Check and correct spelling](https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/check-and-correct-spelling.html)).
-//! A word is changed with `text.editRange` over the bytes the check gives.
+//! A word is changed with `text.editRange` over the bytes the check gives. Add and Edit Custom
+//! Dictionary keep words in the custom dictionary (`text.spelling.dictionary`, `addWord`,
+//! `removeWord`, `changeWord`), which every document's check takes as right; Ignore All
+//! (`text.spelling.ignoreAll`) skips a word in the active document only.
 
 use std::ops::Range;
 
@@ -12,7 +15,7 @@ use vectorcraft_doc::{Document, NodeId, NodeKind};
 
 use super::menucmds::whole_or;
 use super::typemenu::{all_texts, text_ids};
-use super::{CommandSpec, Result, Session, bad, checked_ids_param, cmd, has_doc, str_param};
+use super::{CommandSpec, Result, Session, always, bad, checked_ids_param, cmd, has_doc, str_param};
 
 /// Most unknown words one check lists; past it the result says `more`.
 pub const MAX_WORDS: usize = 10_000;
@@ -44,6 +47,51 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             suggest
         ),
+        cmd!(
+            query "text.spelling.dictionary",
+            "Edit Custom Dictionary",
+            [],
+            None,
+            "{} the words of the custom dictionary, sorted (lower case, as they are kept) → {words: [word…]}",
+            always,
+            dictionary
+        ),
+        cmd!(
+            query "text.spelling.addWord",
+            "Add to Custom Dictionary",
+            [],
+            None,
+            "{word} adds word (one word, at most 64 characters; kept in lower case) to the custom dictionary, which every language's check takes as right, and saves it → {word, added: bool (false: it was there already)}",
+            always,
+            add_word
+        ),
+        cmd!(
+            query "text.spelling.removeWord",
+            "Delete from Custom Dictionary",
+            [],
+            None,
+            "{word} deletes word from the custom dictionary and saves it (an error when it isn't there) → {word}",
+            always,
+            remove_word
+        ),
+        cmd!(
+            query "text.spelling.changeWord",
+            "Change in Custom Dictionary",
+            [],
+            None,
+            "{word, to} replaces word in the custom dictionary with to and saves it (an error when word isn't there) → {word: to}",
+            always,
+            change_word
+        ),
+        cmd!(
+            query "text.spelling.ignoreAll",
+            "Ignore All",
+            [],
+            None,
+            "{word} the active document's spelling checks skip word from now on, until it closes (not saved, not undoable) → {word}",
+            has_doc,
+            ignore_all
+        ),
     ]
 }
 
@@ -58,6 +106,7 @@ fn check(s: &mut Session, p: &Value) -> Result<Value> {
         None => all_texts(&s.doc()?.doc),
     };
     let st = s.doc()?;
+    let ignored = &st.spelling_ignored;
     let opts = Options::default();
     let mut words = vec![];
     let mut more = false;
@@ -91,6 +140,9 @@ fn check(s: &mut Session, p: &Value) -> Result<Value> {
                 }
                 let (start, end) = (para_start + issue.start, para_start + issue.end);
                 let Some(word) = text.get(start..end) else { continue };
+                if craft_proof::custom_word(word).is_some_and(|w| ignored.contains(&w)) {
+                    continue;
+                }
                 if words.len() == MAX_WORDS {
                     more = true;
                     break 'texts;
@@ -127,4 +179,83 @@ fn suggest(_s: &mut Session, p: &Value) -> Result<Value> {
     // `max` is at most MAX_SUGGESTIONS, so it fits.
     let suggestions = craft_proof::suggest_in(word, usize::try_from(max).unwrap_or(5), lang);
     Ok(json!({ "suggestions": suggestions }))
+}
+
+/// `p`'s `key` as a custom-dictionary word (trimmed, lower case), or an error naming what it must be.
+fn word_param(p: &Value, key: &str, command: &str) -> Result<String> {
+    let w = str_param(p, key).ok_or_else(|| bad(command, format!("missing `{key}`")))?;
+    craft_proof::custom_word(w)
+        .ok_or_else(|| bad(command, format!("`{key}` must be one word of at most {} characters", craft_proof::MAX_CUSTOM_WORD_CHARS)))
+}
+
+/// Write the custom dictionary to its file when the session has one, leaving out `removed`.
+fn save_dictionary(s: &Session, removed: &[String], command: &str) -> Result<()> {
+    let Some(path) = &s.dictionary_file else { return Ok(()) };
+    craft_proof::save_user_dictionary(path, removed)
+        .map_err(|e| bad(command, format!("the custom dictionary couldn't be saved to {}: {e}", path.display())))
+}
+
+/// `text.spelling.dictionary`: the custom dictionary's words.
+fn dictionary(_s: &mut Session, _p: &Value) -> Result<Value> {
+    Ok(json!({ "words": craft_proof::user_dictionary() }))
+}
+
+/// `text.spelling.addWord`: Add, and Edit Custom Dictionary's Add.
+fn add_word(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "text.spelling.addWord";
+    let word = word_param(p, "word", C)?;
+    let added = !craft_proof::user_dictionary().contains(&word);
+    craft_proof::add_word(&word);
+    save_dictionary(s, &[], C)?;
+    Ok(json!({ "word": word, "added": added }))
+}
+
+/// `text.spelling.removeWord`: Edit Custom Dictionary's Delete.
+fn remove_word(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "text.spelling.removeWord";
+    let word = word_param(p, "word", C)?;
+    if !craft_proof::remove_word(&word) {
+        return Err(bad(C, format!("`{word}` isn't in the custom dictionary")));
+    }
+    save_dictionary(s, std::slice::from_ref(&word), C)?;
+    Ok(json!({ "word": word }))
+}
+
+/// `text.spelling.changeWord`: Edit Custom Dictionary's Change.
+fn change_word(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "text.spelling.changeWord";
+    let word = word_param(p, "word", C)?;
+    let to = word_param(p, "to", C)?;
+    if !craft_proof::user_dictionary().contains(&word) {
+        return Err(bad(C, format!("`{word}` isn't in the custom dictionary")));
+    }
+    let removed = if word == to {
+        vec![]
+    } else {
+        craft_proof::remove_word(&word);
+        craft_proof::add_word(&to);
+        vec![word]
+    };
+    save_dictionary(s, &removed, C)?;
+    Ok(json!({ "word": to }))
+}
+
+/// `text.spelling.ignoreAll`: Ignore All, for the active document.
+fn ignore_all(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "text.spelling.ignoreAll";
+    let word = word_param(p, "word", C)?;
+    // Not a change to the document, so its revision stays: a tool edit computed meanwhile still
+    // applies (`command_sweep`'s check of commands that don't wait for one).
+    s.doc_mut()?.spelling_ignored.insert(word.clone());
+    Ok(json!({ "word": word }))
+}
+
+impl Session {
+    /// Keep the custom dictionary in the file at `path` (the desktop app's, beside its
+    /// preferences), and take in the words already there. A missing or unreadable file reads as
+    /// no words; a hostile one is capped by craft-proof.
+    pub fn attach_custom_dictionary(&mut self, path: std::path::PathBuf) {
+        craft_proof::load_user_dictionary(&path);
+        self.dictionary_file = Some(path);
+    }
 }

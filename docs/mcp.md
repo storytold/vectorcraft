@@ -5912,6 +5912,19 @@ default 5). Both only read the document.
 {"name":"run_command","arguments":{"command":"text.spelling.suggest","params":{"word":"drawng","lang":"en"}}}
 ```
 
+The custom dictionary holds words every check takes as right, in every language. `text.spelling.addWord {word}`
+adds one (Check Spelling's Add; one word of at most 64 characters, kept in lower case) and says whether it was new;
+`text.spelling.removeWord {word}` deletes one and `text.spelling.changeWord {word, to}` replaces one (Edit Custom
+Dictionary's Delete and Change; an error when `word` isn't there); `text.spelling.dictionary` lists them, sorted. The
+desktop app keeps them in `Custom Dictionary.txt` next to its preferences, one word per line; elsewhere they last
+until the app closes. `text.spelling.ignoreAll {word}` is Ignore All: the active document's checks skip the word, in
+any case, while the document is open. It is not saved and not an undo step.
+
+```json
+{"name":"run_command","arguments":{"command":"text.spelling.addWord","params":{"word":"VectorCraft"}}}
+{"name":"run_command","arguments":{"command":"text.spelling.ignoreAll","params":{"word":"Zqvwkx"}}}
+```
+
 
 ## Justification options
 

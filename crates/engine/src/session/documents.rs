@@ -80,6 +80,7 @@ impl Session {
             brush_libraries: Default::default(),
             libraries: Default::default(),
             pdf_preset_dir: None,
+            dictionary_file: None,
             profile_dir: None,
             plugin_dir: None,
             ignored_plugin_grants: Default::default(),

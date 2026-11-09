@@ -57,6 +57,14 @@ pub fn attach_pdf_preset_store(session: &mut vectorcraft_engine::Session) {
     }
 }
 
+/// Keep the custom dictionary (Edit › Spelling › Add, Edit Custom Dictionary) in the
+/// `Custom Dictionary.txt` file next to the settings, one word per line, and take in its words.
+pub fn attach_custom_dictionary(session: &mut vectorcraft_engine::Session) {
+    if let Some(path) = store_dir("Custom Dictionary.txt") {
+        session.attach_custom_dictionary(path);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

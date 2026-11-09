@@ -148,6 +148,9 @@ pub struct Session {
     /// Where the saved PDF presets are kept, one file each; `None`: only for the session
     /// ([`Session::attach_pdf_preset_store`]).
     pdf_preset_dir: Option<std::path::PathBuf>,
+    /// The custom dictionary file Edit › Spelling › Add and Edit Custom Dictionary save to; `None`:
+    /// the words are kept only for the process ([`Session::attach_custom_dictionary`]).
+    dictionary_file: Option<std::path::PathBuf>,
     /// Where the ICC profiles `color.loadProfile` loads are kept; `None`: only for the process
     /// ([`Session::attach_profile_store`]).
     profile_dir: Option<std::path::PathBuf>,
