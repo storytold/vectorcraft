@@ -11,16 +11,19 @@ pub mod action_batch;
 pub mod action_new;
 pub mod action_playback;
 pub mod action_set_options;
+pub mod action_stop;
 pub mod artboard_options;
 pub mod blend_options;
 mod brush_art_options;
 pub mod brush_delete;
 pub mod brush_options;
+pub mod bullets_numbering;
 pub mod char_style_options;
 pub mod color_balance;
 pub mod color_guide_options;
 mod color_picker;
 mod command;
+pub mod composite_fonts;
 pub mod confirm;
 pub mod corners;
 pub mod dimension;
@@ -91,9 +94,11 @@ pub mod raster_effects;
 pub mod rearrange_artboards;
 pub mod recolor;
 mod recovery;
+pub mod relink;
 pub mod rename_artboards;
-mod revolve;
+pub(crate) mod revolve;
 pub(crate) mod revolve_gizmo;
+pub mod safe_mode;
 pub mod saturate;
 pub mod save_brush_library;
 mod save_changes;
@@ -111,6 +116,7 @@ pub(crate) mod simplify_slider;
 pub mod slices;
 pub(crate) mod smooth_slider;
 pub mod spot_colors;
+pub mod svg_filter;
 pub(crate) mod svg_options;
 pub mod swatch_conflict;
 pub mod swatch_options;
@@ -120,6 +126,7 @@ pub mod symbolism_options;
 pub mod tate_chu_yoko;
 mod text_export;
 pub mod text_import;
+mod three_d_classic;
 mod tiff_bmp_tga;
 pub mod tile_edge_color;
 mod tools;
@@ -343,10 +350,13 @@ registry! {
     Corners: [corners::KIND] => corners::SPEC,
     Hyphenation: [hyphenation::KIND] => hyphenation::SPEC,
     Justification: [justification::KIND] => justification::SPEC,
+    BulletsAndNumbering: [bullets_numbering::KIND] => bullets_numbering::SPEC,
     TateChuYokoSettings: [tate_chu_yoko::KIND] => tate_chu_yoko::SPEC,
+    CompositeFonts: [composite_fonts::KIND] => composite_fonts::SPEC,
     SavePdf: [save_pdf::KIND] => save_pdf::SPEC,
     SvgOptions: [svg_options::KIND] => svg_options::SPEC,
     JavaScriptFiles: [javascript_files::KIND] => javascript_files::SPEC,
+    SvgFilter: [svg_filter::KIND] => svg_filter::SPEC,
     NewDocumentMore: [new_document::MORE] => new_document::MORE_SPEC,
     Place: [place::KIND] => place::SPEC,
     RasterOptions: ["pngOptions", "jpgOptions", "webpOptions", "gifOptions", "png8Options"] => png_options::SPEC,
@@ -367,15 +377,20 @@ registry! {
     OfficeExport: [office_export::KIND] => office_export::SPEC,
     DxfOptions: [dxf_options::KIND] => dxf_options::SPEC,
     PlacementOptions: [placement_options::KIND] => placement_options::SPEC,
+    Relink: [relink::KIND] => relink::SPEC,
     Package: [package::KIND] => package::SPEC,
     ActionBatch: [action_batch::KIND] => action_batch::SPEC,
     ActionSetOptions: [action_set_options::KIND] => action_set_options::SPEC,
     ActionNew: [action_new::KIND] => action_new::SPEC,
     ActionPlayback: [action_playback::KIND] => action_playback::SPEC,
+    ActionStopRecord: [action_stop::RECORD_KIND] => action_stop::RECORD_SPEC,
+    ActionStopMessage: [action_stop::MESSAGE_KIND] => action_stop::MESSAGE_SPEC,
     SliceOptions: [slices::OPTIONS] => slices::OPTIONS_SPEC,
     DivideSlices: [slices::DIVIDE] => slices::DIVIDE_SPEC,
     EpsOptions: [eps_options::KIND] => eps_options::SPEC,
     Recovery: [crate::recovery::KIND] => recovery::SPEC,
+    PluginStopped: [safe_mode::STOPPED] => safe_mode::STOPPED_SPEC,
+    SafeMode: [safe_mode::KIND] => safe_mode::SPEC,
     DxfImport: [dxf_import::KIND] => dxf_import::SPEC,
     RasterFormatOptions: ["tiffOptions", "bmpOptions", "tgaOptions"] => png_options::SPEC,
     SaveForWeb: [save_for_web::KIND] => save_for_web::SPEC,
@@ -385,6 +400,7 @@ registry! {
     PrintPresets: [print_presets::KIND] => print_presets::SPEC,
     Plugin: [plugin::KIND] => plugin::SPEC,
     PluginExport: [plugin::EXPORT_KIND] => plugin::EXPORT_SPEC,
+    PluginImport: [plugin::IMPORT_KIND] => plugin::IMPORT_SPEC,
     ScriptCheck: [script_check::KIND] => script_check::SPEC,
     VectorHalftone: [halftone::KIND] => halftone::SPEC,
     SimplifySlider: [simplify_slider::KIND] => simplify_slider::SPEC,
@@ -468,7 +484,8 @@ pub fn accepts_field(d: &Dialog, field: &str) -> bool {
 /// Pattern Brush Options corner tile set this way is saved by OK, as one chosen from its menu is,
 /// an Edit Data Set field set this way is no longer the row's empty text value, and a Layer
 /// Options setting set this way for several rows is sent to every row (Template also sets Lock
-/// and Dim Images, as its checkbox does).
+/// and Dim Images, as its checkbox does). A DXF Options preset set this way sets its fields, as
+/// one picked from its menu does, and the preset it shows follows the DXF options set this way.
 pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     if d.kind == brush_options::KIND {
         brush_art_options::note_set(d, &field);
@@ -479,7 +496,11 @@ pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     if d.kind == layer_options::KIND {
         layer_options::note_set(d, &field, &value);
     }
+    let dxf = (d.kind == dxf_options::KIND).then(|| field.clone());
     d.fields.insert(field, value);
+    if let Some(field) = dxf {
+        dxf_options::note_set(d, &field);
+    }
 }
 
 /// The fields `ui.dialog.set` can set on `d`, sorted, without the `__` ones: those it holds,
@@ -541,6 +562,9 @@ pub fn cancel(app: &mut VectorcraftApp) {
         if d.kind == swatch_conflict::KIND {
             crate::placing::cancel_swatch_paste(app);
         }
+        if d.kind == safe_mode::STOPPED {
+            safe_mode::cancel_stopped(app);
+        }
         // Toolbar-only Flare options start no preview and must not cancel a gesture
         // that was already active before opening them. The generic parameter dialog has a spec
         // without a preview, yet previews some commands (Grid Repeat Options) when asked to.
@@ -582,13 +606,15 @@ pub fn confirm(app: &mut VectorcraftApp) -> DialogResult {
 
 /// After a dialog closes, and each frame: a Missing Fonts dialog that another dialog replaced waits
 /// for its turn again, the search a Missing Fonts or Find Linked Files dialog started stops once
-/// that dialog is gone, and with no dialog open the next document's Missing Fonts dialog opens
-/// (one dialog at a time).
+/// that dialog is gone, and with no dialog open the choice about a stopped plug-in that another
+/// dialog replaced opens again, else the next document's Missing Fonts dialog (one dialog at a
+/// time).
 pub(crate) fn settle(app: &mut VectorcraftApp) {
     crate::placing::settle_swatch_paste(app);
     missing_fonts::requeue_replaced(app);
     missing_fonts::stop_when_closed(app);
     find_links::stop_when_closed(app);
+    safe_mode::reopen(app);
     missing_fonts::open_next(app);
 }
 
@@ -799,6 +825,8 @@ mod tests_package;
 mod tests_plugin_export;
 #[cfg(test)]
 mod tests_plugin_fields;
+#[cfg(test)]
+mod tests_plugin_import;
 #[cfg(test)]
 mod tests_raster_formats;
 #[cfg(test)]

@@ -150,6 +150,7 @@
 	Report copied	Zpráva zkopírována
 	Line {line}	Řádek {line}
 	Line {line}: {name}: {status}	Řádek {line}: {name}: {status}
+	Read Action Set File	Přečíst soubor sady akcí
 	Read Shortcut Set File	Přečíst soubor sady klávesových zkratek
 	Import Matches	Přiřazení z importů
 	Remember Import Matches	Zapamatovat přiřazení z importů
@@ -187,6 +188,11 @@
 	Ungroup	Oddělit
 	Lock	Zamknout
 	Selection	Výběr
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Obdélníkový výběr
+	Touching	Dotčené objekty
+	Fully Enclosed	Zcela uvnitř
+	Drag Direction	Směr tažení
 	All Artwork Above	Veškerou kresbu výše
 	Other Layers	Ostatní vrstvy
 	Unlock All	Odemknout vše
@@ -334,6 +340,13 @@
 	Apply Bullets	Použít odrážky
 	Numbered List	Číslovaný seznam
 	Apply Numbers	Použít číslování
+	Bullets and Numbering…	Odrážky a číslování…
+	Numbers	Čísla
+	Level:	Úroveň:
+	Bullet Character:	Znak odrážky:
+	Number Style:	Styl číslování:
+	Left Indent:	Odsazení zleva:
+	First Line Indent:	Odsazení prvního řádku:
 	Convert to Text	Převést na text
 	Filled Dot	Plná tečka
 	Dash	Pomlčka
@@ -456,7 +469,23 @@
 	Document Raster Effects Settings…	Nastavení rastrových efektů dokumentu…
 	Vector Effects	Vektorové efekty
 	3D and Materials	3D a materiály
+	Plane	Rovina
+	Extrude	Vysunutí
+	Revolve	Rotační těleso
+	Inflate	Nafouknutí
+	Select objects, then pick an object type to give them a 3D effect.	Vyberte objekty a pak zvolte typ objektu, abyste jim dali 3D efekt.
 	Extrude & Bevel…	Vysunutí a zkosení…
+	3D (Classic)	3D (klasické)
+	Extrude & Bevel (Classic)…	Vysunutí a zkosení (klasické)…
+	Surface	Povrch
+	Wireframe	Drátový model
+	No Shading	Bez stínování
+	Plastic	Plast
+	Highlight Intensity	Intenzita odlesku
+	Highlight Size	Velikost odlesku
+	Blend Steps	Kroky prolnutí
+	Shading Color	Barva stínování
+	Draw Hidden Faces	Kreslit skryté stěny
 	Revolve…	Rotační těleso…
 	Inflate…	Nafouknutí…
 	Materials…	Materiály…
@@ -668,6 +697,7 @@
 	Toolbars	Panely nástrojů
 	Advanced	Rozšířené
 	Double Column	Dva sloupce
+	Keep Tools Beside the Canvas	Nástroje vedle plátna
 	Actions	Akce
 	Asset Export	Export prvků
 	Attributes	Atributy
@@ -819,6 +849,9 @@
 	Put back in the toolbar	Vrátit do panelu nástrojů
 	Float Panel	Plovoucí panel
 	Dock Panel	Ukotvit panel
+	Dock to Top	Ukotvit nahoru
+	Dock to Bottom	Ukotvit dolů
+	Dock Control Bar	Ukotvit ovládací panel
 	Float Tool Group	Plovoucí skupina nástrojů
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
@@ -880,6 +913,9 @@
 	Stained Glass…	Vitráž…
 	Texturizer…	Texturovač…
 	System Title Bar	Systémové záhlaví okna
+	VectorCraft Title Bar on Every Desktop	Záhlaví okna VectorCraftu v každém desktopovém prostředí
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Dokud je proměnná prostředí VECTORCRAFT_TITLEBAR nastavena, záhlaví okna volí ona.
+	System Title Bar takes precedence over this option while it is on.	Dokud je Systémové záhlaví okna zapnuté, má přednost před touto volbou.
 	Exit	Ukončit
 	Distort	Zkreslení
 	Diffuse Glow…	Rozptýlená záře…
@@ -957,6 +993,8 @@ lighting	Light	Světlo
 	Expand Layers Panel Rows	Rozbalit řádky panelu Vrstvy
 	Export CSS…	Exportovat CSS…
 	Export Keyboard Shortcuts…	Exportovat klávesové zkratky…
+	Export Keyboard Shortcuts as Text…	Exportovat klávesové zkratky jako text…
+	Export Text…	Exportovat text…
 	File Info Dialog	Dialogové okno Informace o souboru
 	Go to Artboard	Přejít na pracovní plochu
 	First Artboard	První pracovní plocha
@@ -1309,6 +1347,7 @@ lighting	Light	Světlo
 	Rotate Tool	Nástroj Otočení
 	Rotate View Tool	Nástroj Otočení zobrazení
 	Trackpad Gesture to Rotate View	Otáčet zobrazení gestem na trackpadu
+	Hold a Tool Shortcut to Use the Tool Temporarily	Podržením klávesové zkratky nástroj dočasně použít
 	Rotate View	Otočení zobrazení
 	Rounded Rectangle Tool	Nástroj Zaoblený obdélník
 	Scale Tool	Nástroj Změna velikosti
@@ -1504,6 +1543,15 @@ digits	Malayalam	Malajálamské
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Nastavení Tate-chu-yoko…
 	Tate-chu-yoko Settings	Nastavení Tate-chu-yoko
+	Composite Fonts…	Složená písma…
+	Composite Fonts	Složená písma
+	Export Composite Fonts	Exportovat složená písma
+	Import Composite Fonts	Importovat složená písma
+	Delete Font	Odstranit písmo
+	Kanji	Kandži
+	Kana	Kana
+	Numerals	Číslice
+	Scale at Center	Měřítko od středu
 	Up/Down:	Nahoru/dolů:
 	Left/Right:	Vlevo/vpravo:
 	Underline	Podtržení
@@ -1634,6 +1682,7 @@ digits	Malayalam	Malajálamské
 	Step Backward	Krok zpět
 	Step Forward	Krok vpřed
 	Clear History	Vymazat historii
+	New Document from State	Nový dokument ze stavu
 	Set History Limit…	Nastavit limit historie…
 	Open a document to see its history.	Otevřete dokument, abyste viděli jeho historii.
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -1883,6 +1932,10 @@ digits	Malayalam	Malajálamské
 	Stylistic	Stylistický
 	Mojikumi Set	Sada Mojikumi
 	Kinsoku Set	Sada Kinsoku
+	Kinsoku Shori Type	Typ Kinsoku Shori
+	Push In First	Nejprve vtáhnout
+	Push Out First	Nejprve vysunout
+	Push Out Only	Pouze vysunout
 	Hard	Pevné
 	Right Indent	Odsazení zprava
 	Right-to-Left Paragraph Direction	Směr odstavce zprava doleva
@@ -2081,6 +2134,14 @@ digits	Malayalam	Malajálamské
 	Location	Umístění
 	No images	Žádné obrázky
 	Relink to Folder…	Znovu propojit ke složce…
+	Each Link Separately	Každé propojení zvlášť
+	Selected Instances	Vybrané instance
+	All Instances	Všechny instance
+	Missing Links from This Folder	Chybějící propojení z této složky
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} není each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each a paths patří k sobě: paths uvádí položky s ids a path místo ids, path a folder
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	položka {i} v paths potřebuje path a ids (ID objektů, které nemá žádná jiná položka)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder bere path: ve složce tohoto souboru se hledají ostatní chybějící propojení
 	Show Missing	Zobrazit chybějící
 	Sort by Status	Seřadit podle stavu
 	Clear Overrides	Vymazat přepsání
@@ -2586,6 +2647,8 @@ digits	Malayalam	Malajálamské
 	Show Cross Hairs	Zobrazit nitkový kříž
 	Show Video Safe Areas	Zobrazit bezpečné oblasti videa
 	Video Ruler Pixel Aspect Ratio:	Poměr stran pixelu video pravítek:
+	Fade Region Outside Artboard	Ztmavit oblast mimo pracovní plochu
+	Update While Dragging	Aktualizovat při tažení
 	Hide Video Rulers	Skrýt video pravítka
 	Client-side (.html)	Na straně klienta (.html)
 	Color Reduction:	Redukce barev:
@@ -2721,6 +2784,10 @@ digits	Malayalam	Malajálamské
 	< 1 sec	< 1 s
 	[Unnamed]	[Bez názvu]
 	Amount:	Míra:
+	Anti-aliasing Method	Metoda vyhlazování
+antiAlias	Sharp	Ostré
+	Crisp	Jasné
+	Strong	Silné
 	Anti-aliasing:	Vyhlazování:
 	Artboard:	Pracovní plocha:
 	Color Table	Tabulka barev
@@ -3159,6 +3226,14 @@ theme	Appearance	Motiv
 	Asset Export Settings	Nastavení exportu prvků
 	Assets	Prvky
 	Export Assets	Exportovat prvky
+	Export 3D Object	Exportovat 3D objekt
+	3D Export Format	Formát 3D exportu
+	Export 3D Assets	Exportovat 3D prvky
+@msg	{what} can't be exported in 3D: {e}	{what} nelze exportovat ve 3D: {e}
+@msg	asset {id} isn't a 3D asset	prvek {id} není 3D prvek
+@msg	asset {id} is a 3D asset: assets.export3D writes it	prvek {id} je 3D prvek: zapisuje jej assets.export3D
+@msg	no 3D assets yet: collect an object with a 3D effect first (assets.add3D)	zatím žádné 3D prvky: nejprve shromážděte objekt s 3D efektem (assets.add3D)
+@msg	select an object with a 3D effect (or give its ids)	vyberte objekt s 3D efektem (nebo zadejte jeho ID)
 	Remove Asset	Odebrat prvek
 	Rename Asset	Přejmenovat prvek
 	Fill Rule	Pravidlo výplně
@@ -3199,6 +3274,7 @@ theme	Appearance	Motiv
 	Redefine Symbol	Předefinovat symbol
 	Remove Brush Stroke	Odebrat tah štětcem
 	Replace Symbol	Nahradit symbol
+	Reset Transformation	Obnovit transformaci
 	Select All Instances	Vybrat všechny instance
 	Symbol Sprayer	Rozprašovač symbolů
 	Symbolism Tool	Nástroj symbolů
@@ -3226,6 +3302,9 @@ theme	Appearance	Motiv
 	Convert Document Color Mode	Převést barevný režim dokumentu
 	Gamut Warning	Upozornění na gamut
 	Load Color Profile…	Načíst barevný profil…
+	Load Character Styles…	Načíst styly znaků…
+	Load Paragraph Styles…	Načíst styly odstavců…
+	Load All Styles…	Načíst všechny styly…
 	Remove Color Profile…	Odebrat barevný profil…
 	Plates	Desky
 	Spot Color	Přímá barva
@@ -3290,6 +3369,7 @@ theme	Appearance	Motiv
 	Document JSON	JSON dokumentu
 	Duplicate	Duplikovat
 	Find Objects	Najít objekty
+	Compare with Image	Porovnat s obrazem
 	Inspect Document	Prozkoumat dokument
 	Inspect Object	Prozkoumat objekt
 	Begin Undo Group	Zahájit skupinu kroků zpět
@@ -3593,6 +3673,7 @@ theme	Appearance	Motiv
 	Feet	Stopy
 	Files	Soubory
 	Fill New Type Objects With Placeholder Text	Vyplňovat nové textové objekty zástupným textem
+	Start Lists From Typed Markers	Začínat seznamy z napsaných značek
 	Folder	Složka
 	Font Preview Size	Velikost náhledu písma
 	Get Preferences	Získat předvolby
@@ -3671,6 +3752,8 @@ theme	Appearance	Motiv
 	Real-time Drawing and Editing	Kreslení a úpravy v reálném čase
 	Render Threads (-1 = Automatic)	Vlákna vykreslování (-1 = automaticky)
 	Reset Preferences	Obnovit předvolby
+	Search Preferences	Hledat v předvolbách
+	No settings found	Nenalezena žádná nastavení
 	Scale Corners	Měnit velikost rohů
 	Scale Cursor Proportional to UI	Měnit velikost kurzoru úměrně rozhraní
 	Scale Strokes & Effects	Měnit velikost tahů a efektů
@@ -3691,6 +3774,7 @@ theme	Appearance	Motiv
 	Snapping Tolerance	Tolerance přichytávání
 	Spacing Guides	Vodítka rozestupů
 	Invoke Distance Guides	Vyvolat vodítka vzdálenosti
+	Snap to Last Location	Přichytávat k poslednímu umístění
 	Spanish	Španělština
 	Subdivisions	Dělení
 	Templates Folder	Složka šablon
@@ -3714,6 +3798,7 @@ theme	Appearance	Motiv
 	Yards	Yardy
 	Zoom to Selection	Zvětšit na výběr
 	Zoom with Mouse Wheel	Zvětšovat kolečkem myši
+	Scroll Sideways with Cmd/Ctrl + Wheel	Posouvat vodorovně kolečkem s Cmd/Ctrl
 	Scrub Numeric Fields by Dragging	Měnit číselné hodnoty tažením
 	Linux Display Server	Zobrazovací server Linuxu
 	Print Preview	Náhled tisku
@@ -3858,6 +3943,8 @@ axis	Both	Obě
 	Center	Střed
 	Transform in Perspective	Transformovat v perspektivě
 	Grayscale	Stupně šedi
+	High Color	Mnoho barev
+	Low Color	Málo barev
 	Embed	Vložit
 	Star	Hvězda
 	Power Saving (integrated)	Úsporný režim (integrovaná)
@@ -3998,6 +4085,7 @@ effect	Regular	Pravidelný
 	Find in Folder…	Najít ve složce…
 	Replace With Font	Nahradit písmem
 	Replace With Font From	Nahradit písmem z
+	Find In	Hledat v
 	System	Systém
 	  — substituted by {style}	  — nahrazeno řezem {style}
 	  — {n} characters from another font	  — znaky z jiného písma: {n}
@@ -4247,7 +4335,7 @@ imageTrace	Outline	Obrys
 # Status and error messages
 @msg	no library `{id}`	knihovna `{id}` neexistuje
 @msg	select some type first	nejprve vyberte text
-@msg	kerning must be a number, "auto", or "optical"	Vyrovnání párů musí být číslo, „auto“ nebo „optical“
+@msg	kerning must be a number, "auto", or "optical"	kerning musí být číslo, „auto“ nebo „optical“
 @msg	the selection has no gradient fill	výběr nemá přechodovou výplň
 @msg	the selection has no gradient stroke	výběr nemá přechodový tah
 @msg	the selection has no pattern fill	výběr nemá vzorkovou výplň
@@ -4350,6 +4438,7 @@ imageTrace	Outline	Obrys
 @msg	Split Into Grid: select paths large enough for the grid	Rozdělit do mřížky: vyberte cesty dost velké pro mřížku
 @msg	Targa files are RGB: colorModel rgb	soubory Targa jsou RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Obtékání textu: vyberte objekt obtékání
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` musí být "none", "sharp", "crisp" nebo "strong"
 @msg	`aspect` must be a number (%)	`aspect` musí být číslo (%)
 @msg	`at` must be [x, y]	`at` musí být [x, y]
 @msg	`color` must be a colour	`color` musí být barva
@@ -4459,7 +4548,7 @@ imageTrace	Outline	Obrys
 @msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: none, art nebo type
 @msg	artboard {0} does not exist	pracovní plocha {0} neexistuje
 @msg	at this scale the drawing is {w} × {h} pt, more than the canvas holds: choose a smaller scale or fit it to the artboard	v tomto měřítku má kresba {w} × {h} pt, víc než pojme plátno: zvolte menší měřítko nebo ji přizpůsobte pracovní ploše
-@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	osa musí být "vertical", "horizontal" nebo úhel ve stupních, ne `{v}`
+@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis musí být "vertical", "horizontal" nebo úhel ve stupních, ne `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	pozadí {other}: transparent, white, black nebo barva jako "#ff8800"
 @msg	bad color {v}	chybná barva {v}
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio musí být číslo od 0,1 do 10
@@ -4473,9 +4562,9 @@ imageTrace	Outline	Obrys
 @msg	bad shortcut	chybná klávesová zkratka
 @msg	bad stream length	chybná délka datového proudu
 @msg	bad trailer	chybný trailer
-@msg	balance must be between 0 and 100	vyvážení musí být mezi 0 a 100
+@msg	balance must be between 0 and 100	balance musí být mezi 0 a 100
 @msg	batch step {_1} (`{id}`) failed: {e}	krok dávky {_1} (`{id}`) selhal: {e}
-@msg	brightness must be dark|mediumDark|mediumLight|light	jas musí být dark|mediumDark|mediumLight|light
+@msg	brightness must be dark|mediumDark|mediumLight|light	brightness musí být dark|mediumDark|mediumLight|light
 @msg	can't encode the document: {0}	dokument nelze zakódovat: {0}
 @msg	can't parse shortcut `{c}`	klávesovou zkratku `{c}` nelze analyzovat
 @msg	can't parse shortcut `{s}` for `{k}`	klávesovou zkratku `{s}` pro `{k}` nelze analyzovat
@@ -4500,7 +4589,7 @@ imageTrace	Outline	Obrys
 @msg	compound paths can only contain paths	složené cesty mohou obsahovat jen cesty
 @msg	compressed (RLE) bitmaps can't be read yet	komprimované bitmapy (RLE) zatím nelze načíst
 @msg	damaged	poškozeno
-@msg	decimals must be {_1}–{_2} (got {_3})	počet desetinných míst musí být {_1}–{_2} (zadáno {_3})
+@msg	decimals must be {_1}–{_2} (got {_3})	decimals musí být {_1}–{_2} (zadáno {_3})
 @msg	divide into 1 to {MAX_PIECES} slices	rozdělit lze na 1 až {MAX_PIECES} řezů
 @msg	effect {k} is `{_1}`, not `{id}`	efekt {k} je `{_1}`, ne `{id}`
 @msg	empty brush stroke	prázdný tah štětcem
@@ -4625,6 +4714,8 @@ imageTrace	Outline	Obrys
 @msg	no such action set	taková sada akcí neexistuje
 @msg	the action sets changed; nothing was deleted	sady akcí se změnily; nic nebylo odstraněno
 @msg	no action set to save	žádná sada akcí k uložení
+@msg	the action set file can't be read in full	soubor sady akcí nelze přečíst celý
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Načteno „{name}“: vynechán {n} krok|Načteno „{name}“: vynechány {n} kroky|Načteno „{name}“: vynecháno {n} kroků
 @msg	not an action set file	není to soubor sady akcí
 @msg	the action set file is larger than 8 MiB	soubor sady akcí je větší než 8 MiB
 @msg	the action set file holds more than 1,000 actions	soubor sady akcí obsahuje více než 1 000 akcí
@@ -4682,6 +4773,7 @@ imageTrace	Outline	Obrys
 @msg	nothing to save: the document has no visible art	není co uložit: dokument nemá žádnou viditelnou kresbu
 @msg	nothing to undo	není co vrátit
 @msg	no history to clear	není žádná historie k vymazání
+@msg	no history state {v}	žádný stav historie {v}
 @msg	nothing to warp	není co pokřivit
 @msg	nothing to wrap	není co obtékat
 @msg	object {0} cannot have children	objekt {0} nemůže mít potomky
@@ -4697,9 +4789,9 @@ imageTrace	Outline	Obrys
 @msg	replace: the object to replace was changed or deleted	replace: objekt k nahrazení byl změněn nebo odstraněn
 @msg	pattern missing	chybí vzorek
 @msg	patterns nested too deeply are filled with mid-grey	příliš hluboko vnořené vzorky se vyplní středně šedou
-@msg	percent must be above 0 and at most 6400, not {p}	procento musí být větší než 0 a nejvýše 6400, ne {p}
+@msg	percent must be above 0 and at most 6400, not {p}	percent musí být větší než 0 a nejvýše 6400, ne {p}
 @msg	pick a colour, gradient or pattern to save as a swatch	vyberte barvu, přechod nebo vzorek, který se má uložit do vzorníku
-@msg	plane must be left, right or ground	rovina musí být left, right nebo ground
+@msg	plane must be left, right or ground	plane musí být left, right nebo ground
 @msg	plug-in ABI: {0}	ABI zásuvného modulu: {0}
 @msg	plug-in exceeded its {0}	zásuvný modul překročil limit: {0}
 @msg	plug-in failed: {0}	zásuvný modul selhal: {0}
@@ -4718,8 +4810,8 @@ imageTrace	Outline	Obrys
 @msg	result would exceed the canvas (coordinates out of range)	výsledek by přesáhl plátno (souřadnice mimo rozsah)
 @msg	objects can't be nested more than 32 deep	objekty nelze vnořit hlouběji než do 32 úrovní
 @msg	the SVG's elements are nested more than {0} deep	prvky SVG jsou vnořeny hlouběji než do {0} úrovní
-@msg	scale must be a number from {_1} to {_2}, not {_3}	měřítko musí být číslo od {_1} do {_2}, ne {_3}
-@msg	scale must be a number from {_1} to {_2}, not {s}	měřítko musí být číslo od {_1} do {_2}, ne {s}
+@msg	scale must be a number from {_1} to {_2}, not {_3}	scale musí být číslo od {_1} do {_2}, ne {_3}
+@msg	scale must be a number from {_1} to {_2}, not {s}	scale musí být číslo od {_1} do {_2}, ne {s}
 @msg	select (or target) objects whose appearance isn't basic	vyberte (nebo zacilte) objekty, jejichž vzhled není základní
 @msg	select a Live Paint group	vyberte skupinu živé malby
 @msg	select a blend	vyberte prolnutí
@@ -4930,6 +5022,7 @@ imageTrace	Outline	Obrys
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} obrázek nelze dekódovat: zobrazuje se jako přeškrtnutý rámeček|{n} obrázky nelze dekódovat: zobrazují se jako přeškrtnuté rámečky|{n} obrázků nelze dekódovat: zobrazují se jako přeškrtnuté rámečky
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	Na disku se změnil {n} propojený obrázek: novou verzi zobrazí Aktualizovat propojení|Na disku se změnily {n} propojené obrázky: nové verze zobrazí Aktualizovat propojení|Na disku se změnilo {n} propojených obrázků: nové verze zobrazí Aktualizovat propojení
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Aktualizován {n} propojený soubor změněný na disku|Aktualizovány {n} propojené soubory změněné na disku|Aktualizováno {n} propojených souborů změněných na disku
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	dokument nastavuje spadávku, kterou tento soubor PDF/X vynechává: zapněte „Použít nastavení spadávky dokumentu“
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Exportováno: {what}, {n} poznámka: {first}|Exportováno: {what}, {n} poznámky: {first}|Exportováno: {what}, {n} poznámek: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} soubor písma je nyní ve složce {folder}|{n} soubory písem jsou nyní ve složce {folder}|{n} souborů písem je nyní ve složce {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} soubor písma je nyní ve složce {folder}; nepodařilo se přidat {failed}: {reason}|{n} soubory písem jsou nyní ve složce {folder}; nepodařilo se přidat {failed}: {reason}|{n} souborů písem je nyní ve složce {folder}; nepodařilo se přidat {failed}: {reason}
@@ -4988,6 +5081,7 @@ imageTrace	Outline	Obrys
 @msg	an image VectorCraft can't read was left out	obrázek, který VectorCraft neumí přečíst, byl vynechán
 @msg	graphs come in as plain art, without their data or settings	grafy se načtou jako obyčejná grafika, bez svých dat a nastavení
 @msg	an image whose data is cut short was left out	obrázek s useknutými daty byl vynechán
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	vložený obrázek o rozměrech {_1} × {_2} pixelů byl zmenšen na {_3} × {_4} pixelů, aby se zachovaly vrstvy
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	propojené obrázky se zobrazují jako náhled v nízkém rozlišení uložený v souboru, dokud se nenajdou jejich soubory: znovu je propojte v panelu Propojení
 @msg	linked type areas past VectorCraft's limits were left out	propojené textové oblasti nad limity aplikace VectorCraft byly vynechány
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	text, který mění směr psaní uvnitř textového objektu, se otevře ve směru svého prvního znaku
@@ -5016,12 +5110,14 @@ imageTrace	Outline	Obrys
 @msg	No linked files to look for	Žádné propojené soubory k vyhledání
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` je odkaz na krok {r}, který vyhodnocují jen `run` a `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` musí být pole ID objektů, ne {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` musí být pole barev, ne {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` musí být pole indexů kotevních bodů, ne {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: výsledek kroku {i} takovou hodnotu nemá (pro samotný znak $ napište $$)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: před tímto krokem není krok {i} (kroky se číslují od 0; pro samotný znak $ napište $$)
 @msg	object ids are non-negative integers, not {v}	ID objektů jsou nezáporná celá čísla, ne {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} musí být pole ID objektů, která jsou nezáporná celá čísla
 @msg	invalid object id {value}: expected a non-negative integer	neplatné ID objektu {value}: očekává se nezáporné celé číslo
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	položka {index} v `{key}` je {value}, nikoli ID objektu (nezáporné celé číslo)
 @msg	no such object id {value}	objekt s ID {value} neexistuje
 @msg	id {value} is a layer, not an object	ID {value} je vrstva, nikoli objekt
 @msg	id {value} is a layer, not an object; move layers with layer.move	ID {value} je vrstva, nikoli objekt; vrstvy přesunete pomocí layer.move
@@ -5048,6 +5144,9 @@ imageTrace	Outline	Obrys
 @msg	the Pixar file's image data is damaged	obrazová data souboru Pixar jsou poškozená
 @msg	the JPEG 2000 file can't be read	soubor JPEG 2000 nelze přečíst
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	soubor JPEG 2000 obsahuje nepodporovaný barevný prostor nebo obsah JPX
+@msg	the HEIC or HEIF file can't be read	soubor HEIC nebo HEIF nelze přečíst
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	soubor HEIC nebo HEIF obsahuje druh obrázku, který nelze přečíst
+@msg	HEIC and HEIF images can't be opened in this build	obrázky HEIC a HEIF nelze v tomto sestavení otevřít
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	obraz PSD je příliš velký na přečtení ({_1} × {_2} obrazových bodů)
 @msg	zipped 32-bit PSD image data with prediction can't be read	zazipovaná 32bitová obrazová data PSD s predikcí nelze přečíst
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}bitové soubory PSD v tomto barevném režimu nelze přečíst
@@ -5478,6 +5577,11 @@ mark-style	Japanese	Japonské
 @msg	unknown parameter `{key}`; the command takes: {keys}	neznámý parametr `{key}`; příkaz přijímá: {keys}
 	Load EPS into Clipboard	Načíst EPS do schránky
 @msg	an image of {w} × {h} pixels is too large to draw	obraz o velikosti {w} × {h} obrazových bodů je příliš velký na vykreslení
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: není obraz PNG, JPEG, WebP, TIFF ani BMP
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	obraz má {iw} × {ih} obrazových bodů a pracovní plocha v této šířce má {rw} × {rh} obrazových bodů: jejich proporce se liší
+@msg	`threshold` must be a number from 0 to 1	`threshold` musí být číslo od 0 do 1
+@msg	background {v}: a color such as "#808080"	pozadí {v}: barva jako "#808080"
+@msg	comparing with an image file isn't available in the browser	porovnání se souborem obrazu není v prohlížeči k dispozici
 @msg	an image of {w} × {h} pixels is shown at reduced size	obraz o velikosti {w} × {h} obrazových bodů se zobrazuje ve zmenšené velikosti
 @msg	the image can't be read as a texture	obraz nelze načíst jako texturu
 	Fill and Stroke Controls	Ovládací prvky výplně a tahu
@@ -5671,11 +5775,19 @@ mark-style	Japanese	Japonské
 @msg	too many library panels were opened in this session	v této relaci bylo otevřeno příliš mnoho panelů knihoven
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	Obraz má {_1} × {_2} pixelů, na jedné straně více než {LARGE_TRACE_SIDE}: vektorizuje se, ale pomaleji. Rychleji se vektorizuje s předvolbou nižší věrnosti nebo menší kopie obrazu.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	Obraz byl vektorizován v rozlišení {_1} × {_2} pixelů, zmenšený z {_3} × {_4} (nejvýše {_5} megapixelů).
+@msg	byColor must be true or false	byColor musí být true nebo false
+@msg	byColor can't split Auto Grouping groups: trace without Auto Grouping	byColor nerozdělí skupiny z Automatického seskupení: vektorizujte bez Automatického seskupení
+@msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	byColor nemůže přeskupit trasování s živým efektem Pathfinder: rozbalte bez byColor
 	Snapping	Přichytávání
 	Snap to Tangent	Přichytávat k tečně
 	Snap to Perpendicular	Přichytávat ke kolmici
 @msg	unknown snap option `{key}` (use {options})	neznámá možnost přichytávání `{key}` (použijte {options})
 	Gap Length:	Délka mezery:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Režim Ploché logo nepoužívá keepColors: vektorizuje barvy uvedené v logoColors nebo barvy, které najde.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Nic nebylo vektorizováno: žádná z barev, které vektorizace našla, neodpovídá keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Nic nebylo vektorizováno: Ignorovat barvu vynechává všechny oblasti barev uvedených v keepColors.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	Nic nebylo vektorizováno: z barev odpovídajících keepColors nevznikly žádné cesty.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: žádná z barev, které vektorizace našla, neodpovídá {c}, takže z ní není nic vektorizováno.
 @msg	`colorGroup` needs `library: "document"`	`colorGroup` vyžaduje `library: "document"`
 @msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` vyžaduje `palette: "documentLibrary"`
 @msg	`colorGroup` needs `mode: "color"`	`colorGroup` vyžaduje `mode: "color"`
@@ -5788,6 +5900,47 @@ axis	Y Axis	osa Y
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	živý efekt běží během vykreslování dokumentu, takže nemůže být `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	exportní zásuvný modul dostává vždy rozpočet exportu: klíč `budget` vynechte
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	„{_1}“ žádá o velký výpočetní rozpočet (každé spuštění až {minutes} minut a {times}krát víc instrukcí než obvykle): nainstalujte ho s `allowHeavy: true`, jakmile uživatel souhlasí
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	Nainstalovat „{name}“, který žádá o tato oprávnění?
+	ID: {id}	ID: {id}
+	Version: {version}	Verze: {version}
+	Install “{name}” in place of the plug-in with the same ID?	Nainstalovat „{name}“ místo zásuvného modulu se stejným ID?
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Tento soubor není zásuvný modul dříve nainstalovaný s tímto ID. Získá nastavení a mezipaměť uchovávané pro toto ID.
+@msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	„{name}“ je jiný modul než zásuvný modul s ID {_1} a získal by nastavení a mezipaměť uchovávané pro něj: nainstalujte ho s `replace: true`, jakmile uživatel souhlasí
+	File SHA-256: {hash}	SHA-256 souboru: {hash}
+	Read the objects it is given	Číst objekty, které dostane
+	Change, add and delete objects in the document	Měnit, přidávat a mazat objekty v dokumentu
+	Keep data of its own with the document	Ukládat vlastní data s dokumentem
+	Change how the objects its effect is applied to are drawn	Měnit, jak se kreslí objekty, na které je použit jeho efekt
+	Write the document as a file in its own format	Zapsat dokument jako soubor ve vlastním formátu
+	Show its progress, see Cancel and write log lines	Zobrazit průběh, rozpoznat zrušení a zapisovat řádky protokolu
+	Keep settings of its own	Uchovávat vlastní nastavení
+	Keep a cache of its own, which you can clear	Uchovávat vlastní mezipaměť, kterou můžete vymazat
+	Clear Plug-in Cache	Vymazat mezipaměť zásuvného modulu
+@msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	oprávnění `{permission}` vyžaduje úroveň API zásuvných modulů {PROGRESS_API}: uveďte `api` {PROGRESS_API}
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	modul importuje `env.{name}` s jiným typem, než má hostitel: typ hostitele je {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	modul importuje `env.{name}`, který zásuvný modul smí používat jen na úrovni API zásuvných modulů {PROGRESS_API} (`api` {PROGRESS_API}) a s oprávněním `{permission}`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	modul importuje `{from}.{name}`, který hostitel nenabízí: zásuvný modul smí importovat jen funkce `env.vc_*`, které uvádí docs/plugins.md (úroveň API zásuvných modulů 2), a žádné WASI, soubory ani síť
+@msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` je {_1}; tento hostitel podporuje úrovně API zásuvných modulů 1 až {API_LEVEL}
+@msg	`grant` must be a list of permission names	`grant` musí být seznam názvů oprávnění
+@msg	`grant` names an unknown permission `{shown}`	`grant` uvádí neznámé oprávnění `{shown}`
+@msg	a plug-in of kind `{_1}` needs the permission `{_2}`	zásuvný modul druhu `{_1}` potřebuje oprávnění `{_2}`
+@msg	at most {MAX_PERMISSIONS} `permissions`	nejvýše {MAX_PERMISSIONS} `permissions`
+@msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	oprávnění `{shown}` se nevztahuje na zásuvný modul druhu `{_1}`
+@msg	permission `{shown}` is listed twice	oprávnění `{shown}` je uvedeno dvakrát
+@msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	oprávnění `{shown}` je vyhrazeno pro pozdější API zásuvných modulů; tento hostitel ho neuděluje
+@msg	unknown permission `{shown}`	neznámé oprávnění `{shown}`
+@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	„{name}“ žádá o oprávnění {asked}: nainstalujte ho s `grant`, který je uvádí, jakmile uživatel souhlasí
+@msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	„{name}“ nedostal `{p}`, které jeho výstup potřebuje: nic se nezměnilo
+@msg	a heavy filter runs in the background, so it can't declare `commands`	těžký filtr běží na pozadí, takže nemůže deklarovat `commands`
+@msg	at most {MAX_COMMANDS} `commands`	nejvýše {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	příkaz {name} je deklarován dvakrát
+@msg	command {name}: `label` must be 1-64 printable characters	příkaz {name}: `label` musí mít 1-64 tisknutelných znaků
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	příkaz {name}: použijte id o 1-{MAX_COMMAND_ID} znacích z a-z 0-9 _, které začíná písmenem
+@msg	command {name}: {e}	příkaz {name}: {e}
+@msg	only a filter or a live effect declares `commands`	`commands` deklaruje jen filtr nebo živý efekt
+@msg	“{name}” › {label}: {e}	„{name}“ › {label}: {e}
+@msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	modul nemá SHA-256 uvedený v `hash`: nic nebylo nainstalováno
 # Actions panel: action sets (#3712).
 	New Set…	Nová sada…
 	New Set	Nová sada
@@ -5796,6 +5949,19 @@ axis	Y Axis	osa Y
 	Action Options…	Možnosti akce…
 	Action Options	Možnosti akce
 	Playback Options…	Možnosti přehrávání…
+	Insert Stop…	Vložit zastavení…
+	Insert Stop	Vložit zastavení
+	Record Stop	Zaznamenat zastavení
+	Allow Continue	Povolit pokračování
+	Continue	Pokračovat
+	Continue Action	Pokračovat v akci
+	Delete Action Step	Odstranit krok akce
+	Press Play Current Selection in the Actions panel to go on.	Chcete-li pokračovat, stiskněte na panelu Akce tlačítko Přehrát aktuální výběr.
+	Stop: {message}	Zastavení: {message}
+@msg	no action is waiting at a stop	žádná akce nečeká na zastavení
+@msg	message must be text	message musí být text
+@msg	allowContinue must be true or false	allowContinue musí být true nebo false
+@msg	Batch cannot play an action with a stop	Dávka nemůže přehrát akci se zastavením
 	Playback Options	Možnosti přehrávání
 	Accelerated	Zrychleně
 	Step by Step	Krok za krokem
@@ -6191,6 +6357,8 @@ breakText	Glyphs	Glyfy
 	File + Data Set Name	Soubor + název sady dat
 	Data Set Name	Název sady dat
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` musí být `fileNumber`, `fileDataSetName` nebo `dataSetName`
+	Each data set saves over the same file, which keeps only the last data set.	Každá sada dat se uloží přes stejný soubor, ve kterém zůstane jen poslední sada dat.
+@msg	save the document with Save As before Save and Close	před „Uložit a zavřít“ uložte dokument pomocí „Uložit jako“
 @msg	no free data set file name in destination folder	V cílové složce není volný název souboru sady dat
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).
@@ -6234,6 +6402,7 @@ breakText	Glyphs	Glyfy
 	Gap 5	Mezera 5
 
 @msg	{_1}: they came in as the page's art	{_1}: byly načteny jako kresba ze stránky
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	pokřivené textové objekty načtené jako kresba, ne jako upravitelný text: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	objekty, které se vykreslily jinak než vlastní stránka souboru, byly načteny jako kresba ze stránky: {_1}
 
 @msg	You must choose a side pattern.	Musíte zvolit boční vzorek.
@@ -6309,9 +6478,20 @@ breakText	Glyphs	Glyfy
 	Reset Symbol Instance	Obnovit instanci symbolu
 @msg	type must be static or dynamic, not {v}	type musí být static nebo dynamic, ne {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` je statický symbol: nejprve nastavte jeho typ symbolu na Dynamický
+@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	U cesty, složené cesty nebo textu vybraného v instanci symbolu lze měnit jen plnou barvu výplně a tahu
 @msg	path must be a list of child indices	path musí být seznam indexů potomků
 @msg	no object at path {shown} in the symbol's art	v kresbě symbolu není na cestě {shown} žádný objekt
 @msg	give fill, stroke, opacity and/or blend	zadejte fill, stroke, opacity a/nebo blend
+@msg	{key} cannot be set on a guide	{key} nelze nastavit u vodítka
+@msg	{key} cannot be set on a blend	{key} nelze nastavit u prolnutí
+@msg	{key} cannot be set on an envelope	{key} nelze nastavit u obálky
+@msg	{key} cannot be set on a gradient mesh	{key} nelze nastavit u přechodové sítě
+@msg	{key} cannot be set on a Repeat	{key} nelze nastavit u opakování
+@msg	{key} cannot be set on a placed document	{key} nelze nastavit u umístěného dokumentu
+@msg	{key} cannot be set on an Intertwine group	{key} nelze nastavit u propletené skupiny
+@msg	stroke cannot be set on a symbol instance	stroke nelze nastavit u instance symbolu
+@msg	fill on a symbol instance must be a solid color or none	fill instance symbolu musí být plná barva nebo none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} nelze nastavit u obrazu bez efektu Převést na tvar nebo Převést objekt na obrys
 @msg	pass newName, registration, exportType, nineSlice and/or type	zadejte newName, registration, exportType, nineSlice a/nebo type
 	Text Flow	Tok textu
 	By Rows	Po řádcích
@@ -6341,6 +6521,7 @@ breakText	Glyphs	Glyfy
 	Create Swatch Legend	Vytvořit legendu vzorníku
 	Create Swatch Legend…	Vytvořit legendu vzorníku…
 	HEX	HEX
+	Help Bar	Panel nápovědy
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	Nástroje textu
 	Text Tweaker…	Ladění textu…
@@ -6406,3 +6587,43 @@ breakText	Glyphs	Glyfy
 # 3D Box add-on
 	3D Box	3D kvádr
 	3D Box Tool	Nástroj 3D kvádr
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Otevřít pomocí
+	No importer plug-ins installed	Nejsou nainstalovány žádné importní zásuvné moduly
+	Read files you open in its format and make documents from them	Číst soubory, které otevřete v jeho formátu, a vytvářet z nich dokumenty
+@msg	{_1} is an importer (File › Open With)	{_1} je importní zásuvný modul (Soubor › Otevřít pomocí)
+@msg	missing `importer` (see document.formats)	chybí `importer` (viz document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` musí být ID formátu zásuvného modulu (viz document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	„{shown}“ otevírá soubory {_1}, ne `{_2}`
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` je zásuvný modul druhu `{_2}`, ne importní zásuvný modul
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` je zásuvný modul druhu `{_2}`, ne exportní zásuvný modul
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` je importní zásuvný modul: otevřete soubor pomocí document.open {{"importer"}"}}
+@msg	the importer returned no objects	importní zásuvný modul nevrátil žádné objekty
+@msg	an importer returns `objects` and `warnings`, not `{key}`	importní zásuvný modul vrací `objects` a `warnings`, ne `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	soubor je větší než {MAX_INPUT_BYTES} bajtů, které importní zásuvný modul čte
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	importní zásuvný modul deklaruje 1 až {MAX_EXTENSIONS} `extensions`
+@msg	only an exporter or an importer declares `extensions`	`extensions` deklaruje jen exportní nebo importní zásuvný modul
+@msg	an importer always gets an import's budget: leave `budget` out	importní zásuvný modul dostává vždy rozpočet importu: vynechte `budget`
+
+# Safe Mode
+	Safe Mode…	Nouzový režim…
+	Safe Mode	Nouzový režim
+	Help › Safe Mode…	Nápověda › Nouzový režim…
+	Enable on Re-launch	Povolit při příštím spuštění
+	The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it.	Poslední spuštění aplikace VectorCraft se zastavilo během načítání zásuvného modulu {name}. Tento modul nemusí být příčinou.
+	Disable and Continue	Zakázat a pokračovat
+	Start Normally	Spustit normálně
+	Start in Safe Mode	Spustit v nouzovém režimu
+	VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.	VectorCraft je v nouzovém režimu: zásuvné moduly se nenačítají ani nespouštějí, dokud se aplikace nespustí normálně.
+	Disabled plug-ins	Zakázané zásuvné moduly
+	No plug-ins are disabled.	Žádné zásuvné moduly nejsou zakázány.
+@msg	Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally	Nouzový režim je zapnutý: zásuvné moduly se nenačítají ani nespouštějí, dokud se VectorCraft nespustí normálně
+@msg	give `id` or `file` (see plugin.safeMode)	zadejte `id` nebo `file` (viz plugin.safeMode)
+@msg	that plug-in isn't disabled (see plugin.safeMode)	tento zásuvný modul není zakázán (viz plugin.safeMode)
+@msg	Couldn't save the disabled plug-ins for the next launch	Zakázané zásuvné moduly nebylo možné uložit pro příští spuštění
+@msg	Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode	Rozložit vzhled: efekt zásuvného modulu ve výběru nelze v nouzovém režimu rozložit
+
+# Align to Pixel Grid
+	Align to Pixel Grid	Zarovnat na mřížku obrazových bodů
+@msg	only paths and compound paths can be aligned to the pixel grid	na mřížku obrazových bodů lze zarovnat jen cesty a složené cesty

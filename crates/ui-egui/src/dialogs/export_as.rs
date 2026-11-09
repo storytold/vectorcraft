@@ -28,7 +28,7 @@ const UNAVAILABLE: [(&str, &str); 1] = [("dwg", "DWG (use DXF)")];
 
 /// The formats Export As writes: the built-in ones, then those of the installed exporter plug-ins.
 pub(super) fn formats() -> Vec<&'static Format> {
-    BUILT_IN.iter().copied().chain(fileio::plugin_formats()).collect()
+    BUILT_IN.iter().copied().chain(fileio::plugin_formats().into_iter().filter(|f| f.write)).collect()
 }
 
 /// Is `f` an exporter plug-in's format?

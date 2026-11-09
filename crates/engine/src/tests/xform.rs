@@ -407,7 +407,7 @@ fn an_alt_drag_in_perspective_on_a_grid_from_an_older_file_attaches_the_copies()
 /// first one kept, and the drag leaves what one `perspective.move` with copy leaves, as one undo
 /// step.
 #[test]
-fn alt_drag_in_perspective_of_30000_objects_finishes_within_20_s() {
+fn alt_drag_in_perspective_of_30000_objects_takes_few_tree_walks() {
     // The squares are 6 pt wide and 10 pt apart, in rows of 150, between the left vanishing point
     // of the two-point grid and its origin.
     let on_the_left = |d: &mut Document, k: usize| {
@@ -904,6 +904,31 @@ fn coordinate_moves_journal_the_locked_art_preference() {
     s.prefs.move_locked_with_artboard = false;
     s.execute(&id, &p).unwrap();
     assert_eq!(bounds(&s, locked), Rect::new(130.0, 100.0, 330.0, 200.0));
+    s.execute("edit.undo", &json!({})).unwrap();
+    // A null reads as a key left out, and journals the value it resolved to.
+    s.prefs.move_locked_with_artboard = true;
+    s.execute("artboard.setProps", &json!({"index": 0, "x": 30, "moveArt": true, "lockedAndHidden": null})).unwrap();
+    assert_eq!(s.journal.last().unwrap().1["lockedAndHidden"], true);
+}
+
+/// A drag with the Artboard tool journals whether locked art went along, so a replay under the
+/// other preference moves the same art.
+#[test]
+fn artboard_tool_drag_journals_the_locked_art_preference() {
+    let mut s = session();
+    let locked = rect(&mut s, 100.0, 100.0, 50.0, 50.0);
+    s.execute("object.lock", &json!({})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.prefs.move_locked_with_artboard = true;
+    gesture(&mut s, "artboard", &[(400.0, 300.0), (420.0, 310.0), (450.0, 330.0), (450.0, 330.0)], Mods::default());
+    let moved = Rect::new(150.0, 130.0, 200.0, 180.0);
+    assert!(close(bounds(&s, locked), moved));
+    let (id, p) = s.journal.last().unwrap().clone();
+    assert_eq!((id.as_str(), &p["lockedAndHidden"]), ("artboard.move", &json!(true)));
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.prefs.move_locked_with_artboard = false;
+    s.execute(&id, &p).unwrap();
+    assert!(close(bounds(&s, locked), moved));
 }
 
 /// Locked and hidden art scales only with Move Locked and Hidden Artwork with Artboard, as it
@@ -999,6 +1024,19 @@ fn lasso_picks_gradient_mesh_points() {
 
 /// Shift-drag a marquee with the Selection tool (#483): the selected objects it reaches are
 /// deselected and the others selected, the rest of the selection staying as it was.
+#[test]
+fn a_selection_tool_click_gives_new_art_the_objects_fill() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 50.0, 50.0);
+    s.execute("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
+    rect(&mut s, 200.0, 100.0, 50.0, 50.0);
+    s.execute("paint.setFill", &json!({"color": "#0000ff"})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    gesture(&mut s, "selection", &[(125.0, 125.0), (125.0, 125.0)], Mods::default());
+    assert_eq!(s.doc().unwrap().selection.objects, vec![a]);
+    assert_eq!(s.paint.fill, s.doc().unwrap().doc.node(a).unwrap().appearance.fill_paint());
+}
+
 #[test]
 fn selection_shift_marquee_toggles_objects() {
     let mut s = session();

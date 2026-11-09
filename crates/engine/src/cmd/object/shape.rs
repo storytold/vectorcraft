@@ -254,6 +254,9 @@ pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
             };
             recut(path, live, partial, &picked, radius, kind);
         }
+        for id in &ids {
+            super::pixelgrid::resnap(d, *id);
+        }
         Ok(())
     })?;
     ok()
