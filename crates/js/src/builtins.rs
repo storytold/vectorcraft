@@ -1,8 +1,9 @@
 //! The built-in objects (ECMA-262 5.1 section 15): `Object` with `Object.prototype` and the
 //! ES5 statics, `Function` with `Function.prototype.call`, `apply`, `bind` and `toString`,
 //! `Array`, the error constructors, `Math`, `JSON`, the global functions and constants, Annex
-//! B's `escape` and `unescape`, and the prototypes primitive values look properties up on.
-//! `String`, `Number`, `Boolean`, `RegExp` and `Date` are not here yet.
+//! B's `escape` and `unescape`, and the prototypes primitive values look properties up on, with
+//! `Boolean.prototype`'s `toString` and `valueOf`. `String`, `Number`, `RegExp` and `Date` are in
+//! their own modules.
 //!
 //! Every loop in a built-in takes a unit of fuel for each step, and every string, array, object
 //! or property it makes is checked against the heap limit before it is made, so no built-in can
@@ -29,33 +30,33 @@ fn alloc(interp: &mut Interp, class: Class, proto: Option<ObjId>) -> ObjId {
 }
 
 /// A built-in function object.
-fn native(interp: &mut Interp, name: &'static str, f: NativeFn, length: u32, kind: NativeKind, constructor: bool) -> JsResult<ObjId> {
+pub(crate) fn native(interp: &mut Interp, name: &'static str, f: NativeFn, length: u32, kind: NativeKind, constructor: bool) -> JsResult<ObjId> {
     let proto = interp.intrinsics.function_proto;
     let o = alloc(interp, Class::Function(Func::Native { f, kind, constructor, name }), Some(proto));
     interp.define(o, key("length"), Prop::Data { value: Value::Number(f64::from(length)), flags: 0 })?;
     Ok(o)
 }
 
-fn method(interp: &mut Interp, on: ObjId, name: &'static str, f: NativeFn, length: u32) -> JsResult<()> {
+pub(crate) fn method(interp: &mut Interp, on: ObjId, name: &'static str, f: NativeFn, length: u32) -> JsResult<()> {
     let m = native(interp, name, f, length, NativeKind::Plain, false)?;
     interp.define(on, key(name), Prop::Data { value: Value::Object(m), flags: HIDDEN })
 }
 
-fn data(interp: &mut Interp, on: ObjId, name: &str, value: Value, flags: u8) -> JsResult<()> {
+pub(crate) fn data(interp: &mut Interp, on: ObjId, name: &str, value: Value, flags: u8) -> JsResult<()> {
     interp.define(on, key(name), Prop::Data { value, flags })
 }
 
 /// Links a constructor and its prototype and makes the constructor a global.
-fn constructor(interp: &mut Interp, name: &'static str, ctor: ObjId, proto: ObjId) -> JsResult<()> {
+pub(crate) fn constructor(interp: &mut Interp, name: &'static str, ctor: ObjId, proto: ObjId) -> JsResult<()> {
     data(interp, ctor, "prototype", Value::Object(proto), 0)?;
     data(interp, proto, "constructor", Value::Object(ctor), HIDDEN)?;
     let global = interp.global;
     data(interp, global, name, Value::Object(ctor), HIDDEN)
 }
 
-/// Creates the built-ins and the global object's properties. Installing is not bounded by
-/// [`crate::Limits`]; if it fails, the failure is kept in `interp.install_error` and every run of
-/// the realm ends with it.
+/// Creates the built-ins and the global object's properties. The caller installs them before it
+/// sets the realm's limits, so no limit stops the install. If it fails, the failure is kept in
+/// `interp.install_error` and every run of the realm ends with it.
 pub(crate) fn install(interp: &mut Interp) {
     if let Err(e) = try_install(interp) {
         let reason = match e {
@@ -84,7 +85,8 @@ fn try_install(interp: &mut Interp) -> JsResult<()> {
     interp.intrinsics.array_proto = alloc(interp, Class::Array { length: 0, length_writable: true }, Some(object_proto));
     interp.intrinsics.string_proto = alloc(interp, Class::String(Str::from("")), Some(object_proto));
     interp.intrinsics.number_proto = alloc(interp, Class::Number(0.0), Some(object_proto));
-    interp.intrinsics.boolean_proto = alloc(interp, Class::Boolean(false), Some(object_proto));
+    let boolean_proto = alloc(interp, Class::Boolean(false), Some(object_proto));
+    interp.intrinsics.boolean_proto = boolean_proto;
     interp.intrinsics.regexp_proto = alloc(interp, Class::Ordinary, Some(object_proto));
     let thrower = native(interp, "", throw_type_error, 0, NativeKind::Plain, false)?;
     if let Some(t) = interp.heap.object_mut(thrower) {
@@ -117,12 +119,19 @@ fn try_install(interp: &mut Interp) -> JsResult<()> {
     method(interp, function_proto, "bind", function_bind, 1)?;
     method(interp, function_proto, "toString", function_to_string, 0)?;
 
+    method(interp, boolean_proto, "toString", boolean_to_string, 0)?;
+    method(interp, boolean_proto, "valueOf", boolean_value_of, 0)?;
+
     install_errors(interp, object_proto)?;
     object::install(interp, object)?;
     array::install(interp)?;
     math::install(interp)?;
     json::install(interp)?;
-    global::install(interp)
+    global::install(interp)?;
+    crate::string_builtins::install(interp)?;
+    crate::number_builtins::install(interp)?;
+    crate::regexp_builtins::install(interp)?;
+    crate::date_builtins::install(interp)
 }
 
 // ---- helpers for the built-ins ----
@@ -320,7 +329,7 @@ fn install_errors(interp: &mut Interp, object_proto: ObjId) -> JsResult<()> {
     Ok(())
 }
 
-fn arg(args: &[Value], i: usize) -> Value {
+pub(crate) fn arg(args: &[Value], i: usize) -> Value {
     args.get(i).cloned().unwrap_or(Value::Undefined)
 }
 
@@ -360,28 +369,34 @@ fn object_to_string(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> J
     Ok(Value::str(&format!("[object {class}]")))
 }
 
-/// The string form of a Number, String or Boolean object's [[PrimitiveValue]] (sections 8.6.2 and
-/// 9.9), when `toString` is not found on the object or on its prototype chain up to and including
-/// its standard prototype. Returns `None` otherwise, and for any other object.
-fn boxed_primitive_string(interp: &mut Interp, o: ObjId) -> JsResult<Option<Value>> {
-    let (primitive, proto) = match interp.heap.object(o).map(|x| &x.class) {
-        Some(Class::Number(n)) => (Value::Number(*n), interp.intrinsics.number_proto),
-        Some(Class::String(s)) => (Value::String(s.clone()), interp.intrinsics.string_proto),
-        Some(Class::Boolean(b)) => (Value::Bool(*b), interp.intrinsics.boolean_proto),
-        _ => return Ok(None),
+/// The Boolean a `Boolean.prototype` method was called on (sections 15.6.4.2 and 15.6.4.3): a
+/// primitive, or the primitive value of a Boolean object.
+fn this_boolean(interp: &mut Interp, this: &Value, name: &str) -> JsResult<bool> {
+    let b = match this {
+        Value::Bool(b) => Some(*b),
+        Value::Object(o) => match interp.heap.object(*o).map(|x| &x.class) {
+            Some(Class::Boolean(b)) => Some(*b),
+            _ => None,
+        },
+        _ => None,
     };
-    if !json::reaches_prototype(interp, o, proto, "toString")? {
-        return Ok(None);
-    }
-    Ok(Some(Value::String(interp.primitive_to_str(&primitive))))
+    b.ok_or_else(|| interp.type_error(&format!("Boolean.prototype.{name} was called on a value that is not a Boolean")))
+}
+
+/// `Boolean.prototype.toString` (section 15.6.4.2).
+fn boolean_to_string(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
+    let b = this_boolean(interp, &this, "toString")?;
+    Ok(Value::str(if b { "true" } else { "false" }))
+}
+
+/// `Boolean.prototype.valueOf` (section 15.6.4.3).
+fn boolean_value_of(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
+    this_boolean(interp, &this, "valueOf").map(Value::Bool)
 }
 
 /// `Object.prototype.toLocaleString` (section 15.2.4.3).
 fn object_to_locale_string(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
     let o = interp.to_object(&this)?;
-    if let Some(s) = boxed_primitive_string(interp, o)? {
-        return Ok(s);
-    }
     let receiver = Value::Object(o);
     let f = interp.get_from(o, &key("toString"), &receiver)?;
     if !interp.is_callable(&f) {

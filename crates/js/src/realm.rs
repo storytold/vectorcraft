@@ -214,6 +214,21 @@ impl Realm {
         let _ = interp.define(global, key(name), Prop::Data { value: v, flags: HIDDEN });
     }
 
+    /// Sets the clock `Date.now()` and `new Date()` read: the current time in milliseconds since
+    /// 1970-01-01 UTC. By default it is the system clock; a wasm build has none, and its default
+    /// gives NaN.
+    pub fn set_clock(&mut self, clock: impl Fn() -> f64 + 'static) {
+        self.interp.date_host.clock = std::rc::Rc::new(clock);
+    }
+
+    /// Sets the time zone `Date` uses for local time: `offset` gives local time's offset from UTC
+    /// in milliseconds at a time value (milliseconds since 1970-01-01 UTC), so it can follow
+    /// daylight saving time. An offset that is not finite or is a day or more counts as 0. By
+    /// default local time is UTC.
+    pub fn set_time_zone(&mut self, offset: impl Fn(f64) -> f64 + 'static) {
+        self.interp.date_host.offset = std::rc::Rc::new(offset);
+    }
+
     /// Collects garbage now and returns the heap's estimated size in bytes afterwards.
     pub fn collect_garbage(&mut self) -> usize {
         self.interp.collect_garbage();

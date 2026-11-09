@@ -183,6 +183,10 @@
 	Anti-Alias	Kenar Yumuşatma
 	Anti-alias Rasters	Kenar Yumuşatma Rasterleri
 	Anti-aliased Artwork	Kenar Yumuşatılmış Sanat Çalışması
+	Anti-aliasing Method	Kenar Yumuşatma Yöntemi
+antiAlias	Sharp	Keskin
+	Crisp	Net
+	Strong	Güçlü
 	Anti-aliasing:	Kenar yumuşatma:
 	Any Kind	Her Türlü
 	Font Technology	Yazı Tipi Teknolojisi
@@ -3901,6 +3905,7 @@ axis	Both	Her İkisi
 @msg	Targa files are RGB: colorModel rgb	Targa dosyaları RGB'dir: colorModel rgb
 @msg	Text Wrap: select a wrap object	Metin Sarma: bir sarma nesnesi seçin
 @msg	This shortcut file is in a form VectorCraft can't read.	Bu kısayol dosyası VectorCraft'ın okuyamayacağı bir biçimdedir.
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` "none", "sharp", "crisp" veya "strong" olmalıdır
 @msg	`aspect` must be a number (%)	`aspect` bir sayı olmalıdır (%)
 @msg	`at` must be [x, y]	`at` [x, y] olmalıdır
 @msg	`color` must be a colour	`color` bir renk olmalıdır
@@ -5760,6 +5765,11 @@ theme	Appearance	Görünüm
 @msg	byColor can't split Auto Grouping groups: trace without Auto Grouping	byColor, Otomatik Gruplama gruplarını bölemez: Otomatik Gruplama olmadan izleyin
 @msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	byColor, canlı Pathfinder efekti olan bir izlemeyi yeniden gruplayamaz: byColor olmadan genişletin
 	Gap Length:	Boşluk Uzunluğu:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Düz Logo modu keepColors kullanmaz: logoColors içinde adı verilen renkleri veya bulduğu renkleri izler.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Hiçbir şey izlenmedi: izlemenin bulduğu renklerin hiçbiri keepColors ({_1}) ile eşleşmiyor.
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Hiçbir şey izlenmedi: Rengi Yoksay, keepColors içinde listelenen renklerin tüm alanlarını dışarıda bırakıyor.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	Hiçbir şey izlenmedi: keepColors ile eşleşen renkler hiçbir yol oluşturmuyor.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: izlemenin bulduğu renklerin hiçbiri {c} ile eşleşmiyor, bu yüzden bu renkten hiçbir şey izlenmiyor.
 @msg	`colorGroup` needs `library: "document"`	`colorGroup` için `library: "document"` gerekir
 @msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` için `palette: "documentLibrary"` gerekir
 @msg	`colorGroup` needs `mode: "color"`	`colorGroup` için `mode: "color"` gerekir
@@ -5864,6 +5874,14 @@ axis	Y Axis	Y ekseni
 @msg	unknown permission `{shown}`	bilinmeyen izin `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}” {asked} izinlerini istiyor: kullanıcı onayladıktan sonra bunları listeleyen bir `grant` ile yükleyin
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	“{name}” öğesine çıktısının ihtiyaç duyduğu `{p}` izni verilmedi: hiçbir şey değiştirilmedi
+@msg	a heavy filter runs in the background, so it can't declare `commands`	ağır bir filtre arka planda çalışır, bu yüzden `commands` bildiremez
+@msg	at most {MAX_COMMANDS} `commands`	en fazla {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	{name} komutu iki kez bildirilmiş
+@msg	command {name}: `label` must be 1-64 printable characters	{name} komutu: `label` 1-64 yazdırılabilir karakter olmalıdır
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	{name} komutu: a-z 0-9 _ karakterlerinden oluşan ve harfle başlayan 1-{MAX_COMMAND_ID} karakterlik bir kimlik kullanın
+@msg	command {name}: {e}	{name} komutu: {e}
+@msg	only a filter or a live effect declares `commands`	`commands` yalnızca bir filtre veya canlı efekt tarafından bildirilir
+@msg	“{name}” › {label}: {e}	“{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	modül `hash` içinde verilen SHA-256 değerine sahip değil: hiçbir şey yüklenmedi
 # Actions panel: action sets (#3712).
 	New Set…	Yeni Set…

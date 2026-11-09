@@ -68,6 +68,7 @@ pub(crate) struct Intrinsics {
     pub(crate) number_proto: ObjId,
     pub(crate) boolean_proto: ObjId,
     pub(crate) regexp_proto: ObjId,
+    pub(crate) date_proto: ObjId,
     pub(crate) error_protos: [ObjId; 7],
     pub(crate) eval: ObjId,
     pub(crate) throw_type_error: ObjId,
@@ -84,6 +85,7 @@ impl Intrinsics {
             number_proto: o,
             boolean_proto: o,
             regexp_proto: o,
+            date_proto: o,
             error_protos: [o; 7],
             eval: o,
             throw_type_error: o,
@@ -112,6 +114,7 @@ impl Intrinsics {
             self.number_proto,
             self.boolean_proto,
             self.regexp_proto,
+            self.date_proto,
             self.eval,
             self.throw_type_error,
         ];
@@ -172,6 +175,56 @@ pub(crate) struct Interp {
     pub(crate) held_bytes: usize,
     /// Why installing the built-ins failed; a realm with this set runs no script.
     pub(crate) install_error: Option<String>,
+    /// The clock and time zone `Date` reads.
+    pub(crate) date_host: crate::date_builtins::DateHost,
+    /// The bytes native code holds outside the heap's cells through [`HeldBytes`].
+    pub(crate) held: Rc<HeldCount>,
+}
+
+/// The bytes all live [`HeldBytes`] hold, and the bytes dropped holders released that the heap's
+/// total still counts.
+#[derive(Default)]
+pub(crate) struct HeldCount {
+    now: std::cell::Cell<usize>,
+    released: std::cell::Cell<usize>,
+}
+
+/// Bytes that native code holds in Rust memory while it works (a matcher's state and stack, a
+/// replacement being built, a pattern being compiled), counted against the heap limit. They are
+/// in the heap's total, and in the live total of each collection, until the holder is dropped;
+/// the heap's total gives them back before the next limit check.
+pub(crate) struct HeldBytes {
+    count: Rc<HeldCount>,
+    bytes: usize,
+}
+
+impl HeldBytes {
+    pub(crate) fn new(interp: &Interp) -> Self {
+        Self { count: interp.held.clone(), bytes: 0 }
+    }
+
+    /// The bytes this holder holds.
+    #[cfg(test)]
+    pub(crate) fn bytes(&self) -> usize {
+        self.bytes
+    }
+
+    /// Holds `n` more bytes, ending the run with the heap limit when they would not fit after a
+    /// collection. Everything the caller still needs must be reachable from the roots.
+    pub(crate) fn add(&mut self, interp: &mut Interp, n: usize) -> JsResult<()> {
+        interp.reserve_heap(n)?;
+        interp.heap.bytes = interp.heap.bytes.saturating_add(n);
+        self.bytes = self.bytes.saturating_add(n);
+        self.count.now.set(self.count.now.get().saturating_add(n));
+        Ok(())
+    }
+}
+
+impl Drop for HeldBytes {
+    fn drop(&mut self) {
+        self.count.now.set(self.count.now.get().saturating_sub(self.bytes));
+        self.count.released.set(self.count.released.get().saturating_add(self.bytes));
+    }
 }
 
 /// The least heap size a collection waits for.
@@ -297,8 +350,10 @@ impl Interp {
             global,
             global_env,
             intrinsics: Intrinsics::placeholder(),
-            fuel: limits.fuel,
-            limits,
+            fuel: u64::MAX,
+            // The built-ins are installed without limits; the realm's limits apply from the
+            // first run.
+            limits: Limits { fuel: u64::MAX, heap_bytes: usize::MAX, frames: usize::MAX, reentry: usize::MAX },
             options,
             interrupt: Arc::new(AtomicBool::new(false)),
             reentry: 0,
@@ -310,8 +365,12 @@ impl Interp {
             join_stack: Vec::new(),
             held_bytes: 0,
             install_error: None,
+            date_host: crate::date_builtins::DateHost::default(),
+            held: Rc::default(),
         };
         crate::builtins::install(&mut interp);
+        interp.fuel = limits.fuel;
+        interp.limits = limits;
         interp.gc_threshold = interp.next_threshold();
         interp
     }
@@ -412,6 +471,7 @@ impl Interp {
 
     fn tick(&mut self) -> JsResult<()> {
         self.use_fuel()?;
+        self.settle_held();
         if self.heap.bytes > self.gc_threshold {
             self.collect_garbage();
             if self.heap.bytes > self.limits.heap_bytes {
@@ -425,6 +485,7 @@ impl Interp {
     /// Ends the run with the heap limit when `bytes` more would not fit in it after a
     /// collection. Everything the caller still needs must be reachable from the roots.
     pub(crate) fn reserve_heap(&mut self, bytes: usize) -> JsResult<()> {
+        self.settle_held();
         if self.heap.bytes.saturating_add(bytes) <= self.limits.heap_bytes {
             return Ok(());
         }
@@ -434,6 +495,19 @@ impl Interp {
             return Err(Abrupt::Limit(LimitKind::Heap));
         }
         Ok(())
+    }
+
+    /// Takes the bytes that dropped [`HeldBytes`] released off the heap's total.
+    fn settle_held(&mut self) {
+        let released = self.held.released.replace(0);
+        self.heap.bytes = self.heap.bytes.saturating_sub(released);
+    }
+
+    /// Collects garbage now and sets when the next collection runs.
+    #[cfg(test)]
+    pub(crate) fn collect_for_room(&mut self) {
+        self.collect_garbage();
+        self.gc_threshold = self.next_threshold();
     }
 
     /// Charges code compiled at run time to the heap, reserving its estimated size and `extra`
@@ -463,7 +537,9 @@ impl Interp {
         roots.objects.extend(self.intrinsics.all());
         roots.envs.push(self.global_env);
         self.heap.collect(&roots);
-        self.heap.bytes = self.heap.bytes.saturating_add(self.held_bytes);
+        // The collection counts the live total again, so bytes already released are not in it.
+        self.held.released.set(0);
+        self.heap.bytes = self.heap.bytes.saturating_add(self.held_bytes).saturating_add(self.held.now.get());
     }
 
     /// Runs frames until the boundary frame on top returns, and returns its value.
@@ -1552,16 +1628,7 @@ impl Interp {
 
     fn op_regexp(&mut self, i: u32) -> JsResult<()> {
         let Some((source, flags)) = self.frame()?.code.regexps.get(i as usize).cloned() else { return internal("regular expression out of range") };
-        let proto = self.intrinsics.regexp_proto;
-        let r = self.heap.alloc_object(Object::new(Class::RegExp, Some(proto)));
-        let flag_units = flags.flat();
-        let has = |c: u8| flag_units.contains(&u16::from(c));
-        let (g, i_, m) = (has(b'g'), has(b'i'), has(b'm'));
-        self.define(r, key("source"), Prop::Data { value: Value::String(source), flags: 0 })?;
-        self.define(r, key("global"), Prop::Data { value: Value::Bool(g), flags: 0 })?;
-        self.define(r, key("ignoreCase"), Prop::Data { value: Value::Bool(i_), flags: 0 })?;
-        self.define(r, key("multiline"), Prop::Data { value: Value::Bool(m), flags: 0 })?;
-        self.define(r, key("lastIndex"), Prop::Data { value: Value::Number(0.0), flags: WRITABLE })?;
+        let r = crate::regexp_builtins::new_regexp(self, &source, &flags)?;
         self.push(Value::Object(r))
     }
 
@@ -2180,7 +2247,9 @@ impl Interp {
     #[allow(clippy::wrong_self_convention)]
     pub(crate) fn to_primitive(&mut self, v: &Value, hint: Hint) -> JsResult<Value> {
         let Value::Object(o) = v else { return Ok(v.clone()) };
-        let order = if hint == Hint::String { ["toString", "valueOf"] } else { ["valueOf", "toString"] };
+        // Without a hint, a Date object converts as with the String hint.
+        let date = hint == Hint::Default && matches!(self.heap.object(*o).map(|ob| &ob.class), Some(Class::Date(_)));
+        let order = if hint == Hint::String || date { ["toString", "valueOf"] } else { ["valueOf", "toString"] };
         for name in order {
             let f = self.get_from(*o, &key(name), v)?;
             if self.is_callable(&f) {

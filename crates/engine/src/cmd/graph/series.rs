@@ -1,3 +1,5 @@
+use vectorcraft_color::BlendMode;
+
 use super::axis::radar_axis;
 use super::labels::{Role, filled_lines_on, label_style};
 use super::{Arc, CharStyle, Color, Document, GraphKind, GraphSpec, HashMap, Node, NodeId, NodeKind, Paint, Result, Session, Value, bad};
@@ -26,26 +28,43 @@ pub(super) fn series_marks(g: &GraphSpec, i: usize, series_fill: bool, stroke: P
     (fill, stroke, width)
 }
 
-/// The paths directly inside series `i`'s group (`items`) with the series' kept fill and stroke opacity on their
-/// topmost fill and stroke. Other art, such as a graph design, keeps its own opacity. A value read from a file is
-/// held to 0..1, and one that is not a number is left out.
+/// The paths directly inside series `i`'s group (`items`) with the series' kept fill and stroke opacity and blend mode on
+/// their topmost fill and stroke, and its kept object opacity and blend mode. Other art, such as a graph design, keeps its
+/// own. An opacity read from a file is held to 0..1, and one that is not a number is left out.
 pub(super) fn with_series_opacity(g: &GraphSpec, i: usize, mut items: Vec<Arc<Node>>) -> Vec<Arc<Node>> {
     let Some(slot) = g.series_paints.get(i) else { return items };
     let kept = |o: Option<f32>| o.filter(|o| o.is_finite()).map(|o| o.clamp(0.0, 1.0));
-    let (fill, stroke) = (kept(slot.fill_opacity), kept(slot.stroke_opacity));
-    if fill.is_none() && stroke.is_none() {
+    let (fill, stroke, object) = (kept(slot.fill_opacity), kept(slot.stroke_opacity), kept(slot.opacity));
+    if fill.is_none() && stroke.is_none() && object.is_none() && slot.fill_blend.is_none() && slot.stroke_blend.is_none() && slot.blend.is_none() {
         return items;
     }
     for item in &mut items {
         if !matches!(item.kind, NodeKind::Path { .. }) {
             continue;
         }
-        let ap = &mut Arc::make_mut(item).appearance;
-        if let (Some(o), Some(f)) = (fill, ap.fill_mut()) {
-            f.opacity = o;
+        let n = Arc::make_mut(item);
+        if let Some(o) = object {
+            n.opacity = o;
         }
-        if let (Some(o), Some(st)) = (stroke, ap.stroke_mut()) {
-            st.opacity = o;
+        if let Some(b) = slot.blend {
+            n.blend = b;
+        }
+        let ap = &mut n.appearance;
+        if let Some(f) = ap.fill_mut() {
+            if let Some(o) = fill {
+                f.opacity = o;
+            }
+            if let Some(b) = slot.fill_blend {
+                f.blend = b;
+            }
+        }
+        if let Some(st) = ap.stroke_mut() {
+            if let Some(o) = stroke {
+                st.opacity = o;
+            }
+            if let Some(b) = slot.stroke_blend {
+                st.blend = b;
+            }
         }
     }
     items
@@ -216,10 +235,10 @@ fn store_series_paints(doc: &mut Document, captures: Vec<(NodeId, usize, bool, P
     changed
 }
 
-/// Copy the opacity of the topmost visible fill (`true`) or stroke (`false`) of generated series art just edited (`edited`:
-/// each object with the kind of row) into that series' fill or stroke opacity; art left without a row of that kind
-/// keeps none. Called inside the same document edit, so both undo together. Returns whether a series' kept opacity
-/// changed.
+/// Copy the opacity and blend mode of the topmost visible fill (`true`) or stroke (`false`) of generated series art just
+/// edited (`edited`: each object with the kind of row) into that series' fill or stroke opacity and blend mode; art left
+/// without a row of that kind keeps neither. Called inside the same document edit, so both undo together. Returns
+/// whether a series' kept opacity or blend mode changed.
 pub(crate) fn capture_series_opacity(doc: &mut Document, edited: &[(NodeId, bool)]) -> bool {
     if edited.is_empty() {
         return false;
@@ -236,14 +255,15 @@ pub(crate) fn capture_series_opacity(doc: &mut Document, edited: &[(NodeId, bool
             let node = doc.node(*id).filter(|n| matches!(n.kind, NodeKind::Path { .. }))?;
             let row = node.appearance.items.iter().rev().find(|it| it.is_fill() == *fill && it.visible());
             let opacity = row.map_or(1.0, vectorcraft_doc::AppearanceItem::opacity);
-            Some((r.graph, r.index, *fill, (opacity < 1.0).then_some(opacity)))
+            let blend = row.map_or(BlendMode::Normal, vectorcraft_doc::AppearanceItem::blend);
+            Some((r.graph, r.index, *fill, (opacity < 1.0).then_some(opacity), (blend != BlendMode::Normal).then_some(blend)))
         })
         .collect();
     let mut changed = false;
-    for (graph, index, fill, kept) in captures {
+    for (graph, index, fill, kept, blend) in captures {
         let Some(spec) = doc.node_mut(graph).and_then(|n| n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) else { continue };
-        // A fully opaque row on a series the graph keeps nothing for leaves the graph as it is.
-        if kept.is_none() && spec.series_paints.len() <= index {
+        // A fully opaque Normal row on a series the graph keeps nothing for leaves the graph as it is.
+        if kept.is_none() && blend.is_none() && spec.series_paints.len() <= index {
             continue;
         }
         let was = spec.series_paints.clone();
@@ -253,13 +273,71 @@ pub(crate) fn capture_series_opacity(doc: &mut Document, edited: &[(NodeId, bool
         }
         let Some(slot) = spec.series_paints.get_mut(index) else { continue };
         if fill {
-            slot.fill_opacity = kept;
+            (slot.fill_opacity, slot.fill_blend) = (kept, blend);
         } else {
-            slot.stroke_opacity = kept;
+            (slot.stroke_opacity, slot.stroke_blend) = (kept, blend);
         }
         changed |= spec.series_paints != was;
     }
     changed
+}
+
+/// Copy the object opacity and blend mode of generated series art just edited (`edited`) into that series' object opacity
+/// and blend mode. Called inside the same document edit, so both undo together. Returns whether a series' kept object
+/// opacity or blend mode changed.
+pub(crate) fn capture_series_object_opacity(doc: &mut Document, edited: &[NodeId]) -> bool {
+    let mut changed = false;
+    for (graph, index, opacity, blend) in object_opacity_captures(doc, edited) {
+        let Some(spec) = doc.node_mut(graph).and_then(|n| n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) else { continue };
+        // A fully opaque Normal object on a series the graph keeps nothing for leaves the graph as it is.
+        if opacity.is_none() && blend.is_none() && spec.series_paints.len() <= index {
+            continue;
+        }
+        let was = spec.series_paints.clone();
+        // `index` is below the graph's series count (`series_members`).
+        if spec.series_paints.len() <= index {
+            spec.series_paints.resize(index + 1, vectorcraft_doc::SeriesPaint::default());
+        }
+        let Some(slot) = spec.series_paints.get_mut(index) else { continue };
+        (slot.opacity, slot.blend) = (opacity, blend);
+        changed |= spec.series_paints != was;
+    }
+    changed
+}
+
+/// Would [`capture_series_object_opacity`] change what the graph stores for `edited`? Reads the document without copying
+/// it.
+pub(crate) fn series_object_opacity_differs(doc: &Document, edited: &[NodeId]) -> bool {
+    let mut after: HashMap<(NodeId, usize), (Option<f32>, Option<BlendMode>)> = HashMap::new();
+    let stored = |graph: NodeId, index: usize| {
+        let spec = doc.node(graph).and_then(|n| n.extras().graph.as_deref());
+        spec.and_then(|g| g.series_paints.get(index)).map_or((None, None), |slot| (slot.opacity, slot.blend))
+    };
+    for (graph, index, opacity, blend) in object_opacity_captures(doc, edited) {
+        after.insert((graph, index), (opacity, blend));
+    }
+    after.into_iter().any(|((graph, index), pair)| stored(graph, index) != pair)
+}
+
+/// The series and object opacity and blend mode (None for 100% and Normal) of each of `edited` that is a path directly in a
+/// series group, in order.
+fn object_opacity_captures(doc: &Document, edited: &[NodeId]) -> Vec<(NodeId, usize, Option<f32>, Option<BlendMode>)> {
+    if edited.is_empty() {
+        return Vec::new();
+    }
+    let members = series_members(doc);
+    if members.is_empty() {
+        return Vec::new();
+    }
+    edited
+        .iter()
+        .filter_map(|id| {
+            // Only the paths the graph draws again, not the copy of a graph design.
+            let r = members.get(id).filter(|r| doc.parent_of(*id) == Some(r.group))?;
+            let node = doc.node(*id).filter(|n| matches!(n.kind, NodeKind::Path { .. }))?;
+            Some((r.graph, r.index, (node.opacity < 1.0).then_some(node.opacity), (node.blend != BlendMode::Normal).then_some(node.blend)))
+        })
+        .collect()
 }
 
 /// Graph Data › Transpose row/column: categories become series and series categories.
