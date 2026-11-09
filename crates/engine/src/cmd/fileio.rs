@@ -34,6 +34,7 @@ pub mod eps;
 mod export;
 pub(crate) mod imagemap;
 mod importer;
+pub mod jxlread;
 mod legacy_ai;
 mod load;
 mod mesh3d;
@@ -207,6 +208,8 @@ mod tests_pdfoutput;
 #[cfg(test)]
 mod tests_tiffbmp;
 
+#[cfg(test)]
+mod tests_jxlread;
 #[cfg(test)]
 mod tests_pdfx;
 #[cfg(test)]

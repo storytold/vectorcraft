@@ -308,7 +308,7 @@ pub(crate) fn pf_leaves(d: &Document, n: &Node, out: &mut Vec<Node>) {
     match &n.kind {
         NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => {
             let hook = |c: &Node| vectorcraft_render::effects::outline_object(Some(d), c);
-            match vectorcraft_render::effects::compound_shape_art(n, Some(&hook)) {
+            match vectorcraft_render::effects::compound_shape_art(Some(d), n, Some(&hook)) {
                 Some(art) => out.push(art),
                 None => children.iter().for_each(|c| pf_leaves(d, c, out)),
             }
@@ -912,7 +912,7 @@ pub(crate) fn outline_strokes(d: &mut Document, brushes: &[vectorcraft_brush::Br
         outline_member_strokes(d, brushes, &mut art);
         return Some(d.reid(&art));
     }
-    let reshaped = reshaped(l);
+    let reshaped = reshaped(d, l);
     let l = reshaped.as_ref().unwrap_or(l);
     let (path, rule) = node_path(l)?;
     let ctx = GeomContext::of(l);
@@ -923,7 +923,7 @@ pub(crate) fn outline_strokes(d: &mut Document, brushes: &[vectorcraft_brush::Br
     for item in &l.appearance.items {
         match item {
             AppearanceItem::Fill(f) if f.visible && !f.paint.is_none() => {
-                let shaped = f.effects.iter().any(seeded).then(|| path.bounds().and_then(|b| fill_shape(l, item, &path, b))).flatten();
+                let shaped = f.effects.iter().any(seeded).then(|| path.bounds().and_then(|b| fill_shape(d, l, item, &path, b))).flatten();
                 let Some((shape, _, _, moved)) = shaped else {
                     fills.push(item.clone());
                     continue;

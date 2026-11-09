@@ -974,19 +974,48 @@ fn expanded_colours_keep_the_stops_colour_model() {
     assert!((c - 0.625).abs() < 1e-5 && (m - 0.375).abs() < 1e-5, "interpolated in CMYK: {c} {m}");
 }
 
+/// A new 200 × 200 CMYK document.
+fn cmyk_session() -> Session {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 200, "colorMode": "cmyk"})).unwrap();
+    s
+}
+
+/// The selection's freeform gradient expanded: the mesh's colors, after checking that it draws
+/// within `most` (mean channel difference) of the gradient.
+fn expanded(s: &mut Session, most: f64) -> Vec<Color> {
+    let before = render(s);
+    run(s, "object.expand", json!({}));
+    let diff = mean_diff(&before, &render(s));
+    assert!(diff < most, "looks the same: {diff}");
+    let NodeKind::Mesh(m) = selected(s).kind else { panic!("a mesh: {:?}", selected(s).kind) };
+    m.points.into_iter().map(|p| p.color).collect()
+}
+
+/// Cyan and black points mix as inks: cyan and black only, adding up to one. The gradient and the
+/// mesh both mix inks, so the two draw alike.
+fn cyan_and_black_points_expand_as_they_draw(mut s: Session) {
+    let (cyan, black) = (json!({"c": 1.0, "m": 0.0, "y": 0.0, "k": 0.0}), json!({"c": 0.0, "m": 0.0, "y": 0.0, "k": 1.0}));
+    freeform_rect(&mut s, Rect::new(20.0, 20.0, 180.0, 180.0), [cyan.clone(), cyan, black.clone(), black]);
+    for c in expanded(&mut s, 2.5) {
+        let [c, m, y, k] = inks(c);
+        assert!(m.abs() < 1e-5 && y.abs() < 1e-5 && (c + k - 1.0).abs() < 1e-5, "C{c} M{m} Y{y} K{k}");
+    }
+}
+
+#[test]
+fn cyan_and_black_freeform_points_expand_as_they_draw_in_an_rgb_document() {
+    cyan_and_black_points_expand_as_they_draw(session());
+}
+
+#[test]
+fn cyan_and_black_freeform_points_expand_as_they_draw_in_a_cmyk_document() {
+    cyan_and_black_points_expand_as_they_draw(cmyk_session());
+}
+
 #[test]
 fn a_freeform_gradient_expands_with_the_inks_of_its_points() {
     let ink = |c: f32, m: f32, y: f32, k: f32| json!({"c": c, "m": m, "y": y, "k": k});
-    // The mesh's colors, after checking that it draws within `most` (mean channel difference) of
-    // the gradient.
-    let expanded = |s: &mut Session, most: f64| {
-        let before = render(s);
-        run(s, "object.expand", json!({}));
-        let diff = mean_diff(&before, &render(s));
-        assert!(diff < most, "looks the same: {diff}");
-        let NodeKind::Mesh(m) = selected(s).kind else { panic!("a mesh: {:?}", selected(s).kind) };
-        m.points.into_iter().map(|p| p.color).collect::<Vec<_>>()
-    };
     // Points of one ink set give every mesh point that ink set.
     let mut s = session();
     let one = ink(0.5, 0.2, 0.0, 0.1);
@@ -994,19 +1023,9 @@ fn a_freeform_gradient_expands_with_the_inks_of_its_points() {
     for c in expanded(&mut s, 1.0) {
         assert!(close_inks(inks(c), [0.5, 0.2, 0.0, 0.1]), "{c:?}");
     }
-    // Cyan and black points mix as inks: cyan and black only, adding up to one. The gradient blends
-    // the points' display colors and the mesh blends their inks, so the two draw a little apart in between.
-    let mut s = session();
-    let (cyan, black) = (ink(1.0, 0.0, 0.0, 0.0), ink(0.0, 0.0, 0.0, 1.0));
-    freeform_rect(&mut s, Rect::new(20.0, 20.0, 180.0, 180.0), [cyan.clone(), cyan.clone(), black.clone(), black]);
-    for c in expanded(&mut s, 7.5) {
-        let [c, m, y, k] = inks(c);
-        assert!(m.abs() < 1e-5 && y.abs() < 1e-5 && (c + k - 1.0).abs() < 1e-5, "C{c} M{m} Y{y} K{k}");
-    }
     // Points in different models mix in display RGB, stored in a CMYK document as CMYK.
-    let mut s = Session::new();
-    s.execute("file.new", &json!({"width": 200, "height": 200, "colorMode": "cmyk"})).unwrap();
-    let gray = json!({"gray": 0.5});
+    let (cyan, gray) = (ink(1.0, 0.0, 0.0, 0.0), json!({"gray": 0.5}));
+    let mut s = cmyk_session();
     freeform_rect(&mut s, Rect::new(20.0, 20.0, 180.0, 180.0), [cyan.clone(), cyan, gray.clone(), gray]);
     for c in expanded(&mut s, 2.5) {
         inks(c);
