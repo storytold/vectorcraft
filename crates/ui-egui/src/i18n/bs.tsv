@@ -696,6 +696,11 @@
 	Color	Boja
 	Color Guide	Vodič za boje
 	Color Themes	Teme boja
+	Color Wheel	Kotač boja
+	Hue ring	Prsten nijanse
+	Saturation and brightness	Zasićenje i svjetlina
+	Color field	Polje boje
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	CSS Properties	CSS svojstva
 	Document Info	Informacije o dokumentu
 	Flattener Preview	Pregled spljoštavanja
