@@ -90,7 +90,9 @@ pub fn list() -> Vec<Arc<Plugin>> {
 
 /// Uninstalls `id`; false if it wasn't installed.
 pub fn remove(id: &str) -> bool {
-    let gone = PLUGINS.write().unwrap_or_else(|e| e.into_inner()).remove(id).is_some();
+    // The revision moves while the write lock is held, as in `install`.
+    let mut plugins = PLUGINS.write().unwrap_or_else(|e| e.into_inner());
+    let gone = plugins.remove(id).is_some();
     if gone {
         REVISION.fetch_add(1, Ordering::Relaxed);
     }
