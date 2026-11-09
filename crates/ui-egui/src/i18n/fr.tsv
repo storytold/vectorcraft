@@ -4011,7 +4011,7 @@ axis	Both	Les deux
 	Dock to Bottom	Ancrer en bas
 	Dock Control Bar	Ancrer la barre de contrôle
 	Drag to float the toolbar	Faire glisser pour rendre la barre d’outils flottante
-	Drag to the window's left edge to dock	Faire glisser vers le bord gauche de la fenêtre pour ancrer
+	Drag to the window's left or right edge to dock	Faire glisser vers le bord gauche ou droit de la fenêtre pour ancrer
 	Float Tool Group	Rendre le groupe d’outils flottant
 
 # Status and error messages (`@msg`), translated where the status bar shows them; the message itself
@@ -6651,3 +6651,4 @@ breakText	Glyphs	Glyphes
 # Align to Pixel Grid
 	Align to Pixel Grid	Aligner sur la grille de pixels
 @msg	only paths and compound paths can be aligned to the pixel grid	seuls les tracés et les tracés transparents peuvent être alignés sur la grille de pixels
+@msg	side is left or right, not `{s}`	side vaut left ou right, pas `{s}`

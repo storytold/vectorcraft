@@ -4058,7 +4058,7 @@ axis	Both	Оба
 	Dock to Bottom	Прикрепить снизу
 	Dock Control Bar	Прикрепить панель управления
 	Drag to float the toolbar	Перетащите, чтобы сделать панель инструментов плавающей
-	Drag to the window's left edge to dock	Перетащите к левому краю окна для прикрепления
+	Drag to the window's left or right edge to dock	Перетащите к левому или правому краю окна для прикрепления
 	Float Tool Group	Сделать группу инструментов плавающей
 
 # Status and error messages (`@msg`), translated where the status bar shows them; the message itself
@@ -6745,3 +6745,4 @@ shape	Open	Открытый
 # Align to Pixel Grid
 	Align to Pixel Grid	Выровнять по пиксельной сетке
 @msg	only paths and compound paths can be aligned to the pixel grid	по пиксельной сетке можно выровнять только контуры и составные контуры
+@msg	side is left or right, not `{s}`	side — это left или right, а не `{s}`

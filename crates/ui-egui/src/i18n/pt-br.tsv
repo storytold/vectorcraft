@@ -3610,7 +3610,7 @@ axis	Horizontal	Horizontal
 axis	Vertical	Vertical
 axis	Both	Ambos
 	Drag to float the toolbar	Arraste para flutuar a barra de ferramentas
-	Drag to the window's left edge to dock	Arraste até a borda esquerda da janela para encaixar
+	Drag to the window's left or right edge to dock	Arraste até a borda esquerda ou direita da janela para encaixar
 @msg	no library `{id}`	nenhuma biblioteca `{id}`
 @msg	select some type first	selecione algum texto primeiro
 @msg	kerning must be a number, "auto", or "optical"	O kerning deve ser um número, “auto” ou “optical”
@@ -6729,3 +6729,4 @@ swatch	Yellow Green	Verde-amarelado
 # Align to Pixel Grid
 	Align to Pixel Grid	Alinhar à Grade de Pixels
 @msg	only paths and compound paths can be aligned to the pixel grid	somente caminhos e caminhos compostos podem ser alinhados à grade de pixels
+@msg	side is left or right, not `{s}`	side é left ou right, não `{s}`

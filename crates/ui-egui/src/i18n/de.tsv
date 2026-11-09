@@ -3937,7 +3937,7 @@ theme	Appearance	Erscheinungsbild
 	Dock to Bottom	Unten andocken
 	Dock Control Bar	Steuerungsleiste andocken
 	Drag to float the toolbar	Ziehen, um die Werkzeugleiste abzulösen
-	Drag to the window's left edge to dock	Zum Andocken an den linken Fensterrand ziehen
+	Drag to the window's left or right edge to dock	Zum Andocken an den linken oder rechten Fensterrand ziehen
 	Float Tool Group	Werkzeuggruppe ablösen
 
 # Status and error messages (`@msg`), translated where the status bar shows them; the message itself
@@ -6243,3 +6243,4 @@ breakText	Glyphs	Glyphen
 # Align to Pixel Grid
 	Align to Pixel Grid	Am Pixelraster ausrichten
 @msg	only paths and compound paths can be aligned to the pixel grid	nur Pfade und zusammengesetzte Pfade können am Pixelraster ausgerichtet werden
+@msg	side is left or right, not `{s}`	side ist left oder right, nicht `{s}`

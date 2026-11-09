@@ -1269,7 +1269,7 @@ lighting	Light	Svjetlo
 	X:	X:
 	Y:	Y:
 	Drag to float the toolbar	Prevucite da odvojite traku s alatima
-	Drag to the window's left edge to dock	Prevucite do lijeve ivice prozora za sidrenje
+	Drag to the window's left or right edge to dock	Prevucite do lijeve ili desne ivice prozora za sidrenje
 	Crystallize	Kristalizuj
 	Add Anchor Point Tool	Alat za dodavanje sidrene tačke
 	Anchor Point Tool	Alat sidrena tačka
@@ -6475,3 +6475,4 @@ shape	Open	Otvoren
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Poravnaj s mrežom piksela
+@msg	side is left or right, not `{s}`	side je left ili right, a ne `{s}`

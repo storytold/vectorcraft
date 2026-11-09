@@ -1161,7 +1161,7 @@ font-technology	Variable	Változó
 	Drag to float as a toolbar	Húzd el, hogy önálló eszköztárként lebegjen
 	Drag to float the toolbar	Húzd el az eszköztár lebegtetéséhez
 	Drag to move	Húzással áthelyezhető
-	Drag to the window's left edge to dock	Dokkoláshoz húzd az ablak bal szélére
+	Drag to the window's left or right edge to dock	Dokkoláshoz húzd az ablak bal vagy jobb szélére
 	Step up or down	Léptetés fel vagy le
 	Drag values or labels. Double-click a value to type.	Húzd az értékeket vagy a címkéket. Gépeléshez kattints duplán egy értékre.
 	Draw	Rajzolás
@@ -6640,3 +6640,4 @@ breakText	Glyphs	Glifák
 # Align to Pixel Grid
 	Align to Pixel Grid	Igazítás a pixelrácshoz
 @msg	only paths and compound paths can be aligned to the pixel grid	csak útvonalak és összetett útvonalak igazíthatók a pixelrácshoz
+@msg	side is left or right, not `{s}`	a side értéke left vagy right lehet, nem `{s}`

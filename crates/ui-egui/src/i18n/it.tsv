@@ -4064,7 +4064,7 @@ axis	Both	Entrambi
 	Dock to Bottom	Ancora in basso
 	Dock Control Bar	Ancora barra di controllo
 	Drag to float the toolbar	Trascina per rendere mobile la barra degli strumenti
-	Drag to the window's left edge to dock	Trascina sul bordo sinistro della finestra per ancorare
+	Drag to the window's left or right edge to dock	Trascina sul bordo sinistro o destro della finestra per ancorare
 	Float Tool Group	Rendi mobile gruppo strumenti
 
 # Status and error messages (`@msg`), translated where the status bar shows them; the message itself
@@ -6277,3 +6277,4 @@ breakText	Glyphs	Glifi
 # Align to Pixel Grid
 	Align to Pixel Grid	Allinea alla griglia pixel
 @msg	only paths and compound paths can be aligned to the pixel grid	solo i tracciati e i tracciati composti possono essere allineati alla griglia pixel
+@msg	side is left or right, not `{s}`	side è left o right, non `{s}`

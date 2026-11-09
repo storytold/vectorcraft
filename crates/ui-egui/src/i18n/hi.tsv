@@ -1384,7 +1384,7 @@ antiAlias	Sharp	शार्प
 	Drag to float as a toolbar	एक टूलबार के रूप में तैरने के लिए खींचें
 	Drag to float the toolbar	टूलबार को तैरने के लिए खींचें
 	Drag to move	आगे बढ़ने के लिए
-	Drag to the window's left edge to dock	खिड़की के बाएं किनारे पर डॉक करने के लिए खींचें
+	Drag to the window's left or right edge to dock	खिड़की के बाएं या दाएं किनारे पर डॉक करने के लिए खींचें
 	Drag values or labels. Double-click a value to type.	मूल्यों या लेबल खींचें। टाइप करने के लिए एक मान को डबल क्लिक करें।
 	Draw	ड्रा
 	Draw Behind	पीछे खींचना
@@ -8098,3 +8098,4 @@ theme	Appearance	अपीयरेंस
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	फ़ाइल उन {MAX_INPUT_BYTES} बाइट्स से बड़ी है जो इंपोर्टर पढ़ता है
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	इंपोर्टर 1 से {MAX_EXTENSIONS} `extensions` घोषित करता है
 @msg	an importer always gets an import's budget: leave `budget` out	इंपोर्टर को हमेशा इंपोर्ट का बजट मिलता है: `budget` छोड़ दें
+@msg	side is left or right, not `{s}`	side left या right होना चाहिए, `{s}` नहीं

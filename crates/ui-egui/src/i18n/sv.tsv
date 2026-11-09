@@ -3938,7 +3938,7 @@ axis	Both	Båda
 	Dock to Bottom	Docka nederst
 	Dock Control Bar	Docka kontrollfältet
 	Drag to float the toolbar	Dra för att göra verktygsfältet flytande
-	Drag to the window's left edge to dock	Dra till fönstrets vänsterkant för att docka
+	Drag to the window's left or right edge to dock	Dra till fönstrets vänster- eller högerkant för att docka
 	Float Tool Group	Gör verktygsgruppen flytande
 @msg	no library `{id}`	inget bibliotek `{id}`
 @msg	select some type first	markera någon text först
@@ -8141,3 +8141,4 @@ digits	Hindi	Hindi
 # Align to Pixel Grid
 	Align to Pixel Grid	Justera mot pixelrutnät
 @msg	only paths and compound paths can be aligned to the pixel grid	bara banor och sammansatta banor kan justeras mot pixelrutnätet
+@msg	side is left or right, not `{s}`	side är left eller right, inte `{s}`
