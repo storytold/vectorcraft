@@ -1862,9 +1862,12 @@ already walks Image Trace. Short agent entry points:
   `paint.setFill` and `paint.setStroke` (solid, none, gradient or pattern) and `paint.invert` and `paint.complement`
   on a solid color change that object's fill or stroke for this instance only when `ids`, `id` and `item` are omitted.
   `transparency.set` with opacity and/or blend does the same when `ids`, `id` and `item` are omitted; with `ids` or
-  `id` it edits those objects, so the instance's id changes the instance. `appearance.copyFrom` takes the source's
-  fill and stroke (including a gradient or pattern) for this instance only when `ids`, `reverse`, `append` and
-  `defaultsOnly` are omitted; with `ids` it copies onto those objects. Each of these is one undo step. A painted stroke on type without a weight gets 1 pt. `paint.invert` and `paint.complement`
+  `id` it edits those objects, so the instance's id changes the instance. It records an undo step only when the
+  override changes, so the same opacity again records none. `appearance.copyFrom` takes the source's fill and
+  stroke (including a gradient or pattern) for this instance only when `ids` is omitted and `reverse`, `append`
+  and `defaultsOnly` are false or omitted. With `ids`, and `reverse` false or omitted, it copies onto those
+  objects; with `reverse` true it copies from the first of `ids` onto `source`. The paint commands and the
+  Eyedropper each record one undo step. A painted stroke on type without a weight gets 1 pt. `paint.invert` and `paint.complement`
   on a gradient or pattern, or on type whose characters differ in color, are refused with a status message, and so are
   Eyedropper options that pick up neither color, an Eyedropper source that is not a path, compound path or type (a
   symbol instance or a group, for which the paint defaults stay as they are too), isolate, knockout, knockoutShape,
