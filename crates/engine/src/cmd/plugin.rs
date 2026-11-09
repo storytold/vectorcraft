@@ -20,6 +20,13 @@
 //! `doc.write` an output that changes the document is refused, and without `state` it neither
 //! reads nor writes the data it keeps with the document.
 //!
+//! A filter or a live effect may add menu commands of its own (its manifest's `commands`). Each
+//! is the command `plugin.<plug-in id>.<command id>` while the plug-in is installed
+//! ([`command_specs`], which [`super::find_command`] and the command listings read): under
+//! Object › Plug-ins › the plug-in's name (Effect › Plug-ins for a live effect's), journaled so
+//! actions record it, and run as a filter run of the plug-in ([`run_command`]) with the command's
+//! id in `_context`, its own checked parameters and the plug-in's permissions, as one undo step.
+//!
 //! A plug-in of API level 2 that lists `progress` may import the host's `vc_progress`,
 //! `vc_cancelled` and `vc_log` ([`vectorcraft_plugins::host`]): run inside a
 //! [`vectorcraft_doc::cancel::scope`] (the app's heavy filters and background exports), its
@@ -29,11 +36,11 @@
 //! `plugin.clearCache` empties the cache, `plugin.list` and `plugin.info` give its size
 //! (`cacheBytes`), replacing the plug-in keeps both and `plugin.remove` deletes them.
 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::{Effect, Node};
-use vectorcraft_plugins::{Budget, Kind, Plugin, effect, export, objects, registry, safe_mode};
+use vectorcraft_plugins::{Budget, Command, Kind, Plugin, effect, export, objects, registry, safe_mode};
 
 use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, cmd, has_doc, ids_param, str_param, switch_or};
 
@@ -67,6 +74,18 @@ pub fn describe(p: &Plugin) -> Value {
     if m.budget == Budget::Heavy {
         v["budget"] = json!("heavy");
     }
+    if !m.commands.is_empty() {
+        let commands: Vec<Value> = m
+            .commands
+            .iter()
+            .map(|c| {
+                let run = m.for_command(c);
+                json!({"id": c.id, "command": command_id(&m.id, &c.id), "label": c.shown_label(), "params": run.params_doc(),
+                       "paramsSchema": serde_json::to_value(&run).ok().and_then(|v| v.get("params").cloned())})
+            })
+            .collect();
+        v["commands"] = json!(commands);
+    }
     v
 }
 
@@ -97,6 +116,8 @@ fn plugin_by_id(cmd: &str, p: &Value) -> Result<Arc<Plugin>> {
 /// like any other command.
 pub struct FilterRun {
     plugin: Arc<Plugin>,
+    /// The plug-in command it runs (`plugin.<id>.<command>`), if it isn't `plugin.run`'s run.
+    command: Option<Command>,
     input: Vec<u8>,
     params: Vec<u8>,
     /// The objects the plug-in is given, and the container new objects go in.
@@ -138,13 +159,23 @@ impl FilterRun {
                 ));
             }
         }
-        // Bad parameters fail before anything runs.
-        let mut params = Value::Object(m.resolve_params(&plugin_params(p)).map_err(|e| bad(C, e.to_string()))?);
+        Self::prepare_with(s, plugin, None, C, p)
+    }
+
+    /// The run of `plugin`, or of its `command`, that command `c`'s params `p` ask for, on the
+    /// active document. Bad parameters fail before anything runs.
+    fn prepare_with(s: &Session, plugin: Arc<Plugin>, command: Option<Command>, c: &str, p: &Value) -> Result<FilterRun> {
+        let m = plugin.manifest();
+        let resolved = match &command {
+            Some(cmd) => m.for_command(cmd).resolve_params(&plugin_params(p)),
+            None => m.resolve_params(&plugin_params(p)),
+        };
+        let mut params = Value::Object(resolved.map_err(|e| bad(c, e.to_string()))?);
         let may = m.permissions();
         let st = s.doc()?;
         // While an object of a dynamic symbol instance's art is selected, the selection is refused,
         // as `selected_roots` refuses it.
-        let selected = match ids_param(p, "ids", C)? {
+        let selected = match ids_param(p, "ids", c)? {
             Some(ids) => ids,
             None => {
                 super::edit::refuse_symbol_part(s)?;
@@ -160,10 +191,15 @@ impl FilterRun {
         // What the plug-in keeps with the document, as it last wrote it.
         let data = st.doc.plugin_data(&m.id).filter(|_| may.contains(&Permission::State)).cloned().unwrap_or(Value::Null);
         params["_context"] = json!({"mode": "filter", "bounds": bounds.map(rect), "artboard": board.map(|a| rect(a.rect)), "documentData": data});
+        // A command run says which command it is.
+        if let Some(cmd) = &command {
+            params["_context"]["mode"] = json!("command");
+            params["_context"]["command"] = json!(cmd.id);
+        }
         let input = objects::encode_input(&st.doc, &inputs);
-        let params = serde_json::to_vec(&params).map_err(|e| bad(C, e.to_string()))?;
+        let params = serde_json::to_vec(&params).map_err(|e| bad(c, e.to_string()))?;
         let document = (st.uid, st.revision);
-        Ok(FilterRun { plugin, input, params, inputs, parent, document })
+        Ok(FilterRun { plugin, command, input, params, inputs, parent, document })
     }
 
     /// The plug-in, for its name and budget.
@@ -214,7 +250,9 @@ impl FilterRun {
         }
         let may_write = may.contains(&Permission::DocWrite);
         let (inputs, parent) = (self.inputs, self.parent);
-        let ids = s.edit(m.name.trim_end_matches('…'), |d, sel| {
+        // A command's undo step is named after the command.
+        let label = self.command.as_ref().map_or_else(|| m.name.trim_end_matches('…').to_string(), Command::shown_label);
+        let ids = s.edit(&label, |d, sel| {
             let before = (!may_write).then(|| d.layers.clone());
             let ids = objects::apply_output(d, &inputs, out.objects, parent, &admit_effects).map_err(err)?;
             if before.is_some_and(|b| b != d.layers) {
@@ -226,7 +264,11 @@ impl FilterRun {
             sel.set(ids.iter().copied().filter(|&id| d.node(id).is_some_and(objects::selectable)));
             Ok(ids)
         })?;
-        Ok(json!({"plugin": m.id, "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()}))
+        let mut out = json!({"plugin": m.id, "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()});
+        if let Some(cmd) = &self.command {
+            out["command"] = json!(cmd.id);
+        }
+        Ok(out)
     }
 }
 
@@ -254,6 +296,146 @@ fn run(s: &mut Session, p: &Value) -> Result<Value> {
         None => r.run()?,
     };
     r.finish(s, &output)
+}
+
+/// The command id of plug-in `plugin`'s command `command`: `plugin.<plugin>.<command>`.
+pub fn command_id(plugin: &str, command: &str) -> String {
+    format!("{}{plugin}.{command}", vectorcraft_plugins::PREFIX)
+}
+
+/// Is `id` shaped as a plug-in command's id (`plugin.<plug-in id>.<command id>`)? This module's
+/// own `plugin.*` commands have no dot after the prefix, and a command id has none.
+pub fn is_command_id(id: &str) -> bool {
+    id.strip_prefix(vectorcraft_plugins::PREFIX).is_some_and(|rest| rest.contains('.'))
+}
+
+/// The installed plug-in and its command that command id `id` names.
+pub fn command_of(id: &str) -> Option<(Arc<Plugin>, Command)> {
+    let (plugin, command) = id.strip_prefix(vectorcraft_plugins::PREFIX)?.rsplit_once('.')?;
+    let p = registry::get(plugin)?;
+    let c = p.manifest().command(command)?.clone();
+    Some((p, c))
+}
+
+/// The plug-in commands of the installed plug-ins, the registry revision they were listed at, and
+/// a count that changes whenever the list does ([`commands_generation`]).
+struct Listed {
+    revision: Option<u64>,
+    generation: u64,
+    specs: Vec<&'static CommandSpec>,
+}
+
+static LISTED: RwLock<Listed> = RwLock::new(Listed { revision: None, generation: 0, specs: Vec::new() });
+
+/// Every command spec made for a plug-in command, made once: specs hold static strings, so memory
+/// stays bounded by the plug-in commands ever installed.
+static MADE: Mutex<Vec<&'static CommandSpec>> = Mutex::new(Vec::new());
+
+/// The commands the installed plug-ins add, in plug-in id order and then in each manifest's order.
+pub fn command_specs() -> Vec<&'static CommandSpec> {
+    let revision = registry::revision();
+    if let Ok(l) = LISTED.read()
+        && l.revision == Some(revision)
+    {
+        return l.specs.clone();
+    }
+    let specs: Vec<&'static CommandSpec> =
+        registry::list().iter().flat_map(|p| p.manifest().commands.iter().map(|c| spec_of(p, c)).collect::<Vec<_>>()).collect();
+    // When a plug-in was installed or removed during the listing, the list may not match
+    // `revision`. It is returned without being cached, and the next call lists again.
+    if registry::revision() != revision {
+        return specs;
+    }
+    let mut l = LISTED.write().unwrap_or_else(|e| e.into_inner());
+    if l.specs.len() != specs.len() || l.specs.iter().zip(&specs).any(|(a, b)| !std::ptr::eq(*a, *b)) {
+        l.generation += 1;
+    }
+    l.revision = Some(revision);
+    l.specs.clone_from(&specs);
+    specs
+}
+
+/// Changes whenever the plug-in commands [`command_specs`] lists change, for caches built from
+/// them (the keyboard shortcuts' catalogue).
+pub fn commands_generation() -> u64 {
+    command_specs();
+    LISTED.read().map(|l| l.generation).unwrap_or_else(|e| e.into_inner().generation)
+}
+
+/// The spec of installed plug-in command `id`.
+pub fn find_spec(id: &str) -> Option<&'static CommandSpec> {
+    if !is_command_id(id) {
+        return None;
+    }
+    command_specs().into_iter().find(|c| c.id == id)
+}
+
+/// The command spec of plug-in `p`'s command `c`: its id, its label as menus show it (escaped and
+/// capped), its menu (Object › Plug-ins › the plug-in's name, or Effect › Plug-ins › it for a live
+/// effect: never a menu the manifest names) and its params description.
+fn spec_of(p: &Plugin, c: &Command) -> &'static CommandSpec {
+    let m = p.manifest();
+    let id = command_id(&m.id, &c.id);
+    let label = c.shown_label();
+    let top = if m.kind == Kind::Effect { "Effect" } else { "Object" };
+    let name = permissions::display_text(m.name.trim(), permissions::MAX_SHOWN_NAME);
+    let mut fields =
+        String::from("ids?: [object id] (left out or null: the selection), params?: {…} (its parameters; or give them as top-level keys)");
+    let doc = m.for_command(c).params_doc();
+    if let Some(own) = doc.strip_prefix('{').and_then(|d| d.strip_suffix('}')).filter(|d| !d.is_empty()) {
+        fields.push_str(", ");
+        fields.push_str(own);
+    }
+    let params = format!(
+        "{{{fields}}} run “{label}”, a command of plug-in {}, on the selected paths and compound paths as plugin.run runs a filter, with _context.command {:?}: one undo step → {{plugin, command, ids}}",
+        m.id, c.id
+    );
+    let mut made = MADE.lock().unwrap_or_else(|e| e.into_inner());
+    let same = |s: &&&'static CommandSpec| s.id == id && s.label == label && s.menu == [top, "Plug-ins", name.as_str()] && s.params == params;
+    if let Some(s) = made.iter().find(same) {
+        return s;
+    }
+    let menu: &'static [&'static str] = Box::leak(vec![top, "Plug-ins", registry::intern(&name)].into_boxed_slice());
+    let spec: &'static CommandSpec = Box::leak(Box::new(CommandSpec {
+        id: registry::intern(&id),
+        label: registry::intern(&label),
+        menu,
+        shortcut: None,
+        params: registry::intern(&params),
+        enabled: has_doc,
+        run: unrouted,
+        journal: true,
+    }));
+    made.push(spec);
+    spec
+}
+
+/// A plug-in command's `run`: plug-in commands run through [`super::run_spec`], which passes
+/// [`run_command`] the command id.
+fn unrouted(_: &mut Session, _: &Value) -> Result<Value> {
+    Err(EngineError::Internal { cmd: "plugin".into(), msg: "a plug-in command runs through Session::execute".into() })
+}
+
+/// Runs plug-in command `id` (`plugin.<plug-in id>.<command id>`): a filter run of the plug-in on
+/// `ids` (else the selection) with the command's own parameters, checked before it runs, and
+/// `_context.command`, under the plug-in's permissions and budget, applied as one undo step named
+/// after the command → `{plugin, command, ids}`. A run that fails (a trap, an exhausted budget, an
+/// output it may not make) leaves the document as it was, and the error names the plug-in and the
+/// command.
+pub(crate) fn run_command(s: &mut Session, id: &str, p: &Value) -> Result<Value> {
+    // An output handed in is for `plugin.run` alone.
+    s.plugin_output = None;
+    let (plugin, command) = command_of(id).ok_or_else(|| EngineError::UnknownCommand(id.into()))?;
+    let failed = {
+        let (name, label) = (permissions::display_text(&plugin.manifest().name, permissions::MAX_SHOWN_NAME), command.shown_label());
+        move |e: EngineError| match e {
+            EngineError::Cancelled => EngineError::Cancelled,
+            e => EngineError::Other(format!("“{name}” › {label}: {e}")),
+        }
+    };
+    let r = FilterRun::prepare_with(s, plugin, Some(command), id, p)?;
+    let output = r.run().map_err(&failed)?;
+    r.finish(s, &output).map_err(failed)
 }
 
 /// Admits the effect records a filter returned for object `n` (written, its effects still its own)
@@ -669,7 +851,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "List Plug-ins",
             [],
             None,
-            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's format id, plugin.<id>, for document.export, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines; settings: it may keep settings of its own; cache: it may keep a cache of its own), hash (the module's SHA-256), api (the plug-in API level it was built for, 1 or 2), cacheBytes (the bytes its cache holds; see plugin.clearCache)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}]} | null, safeMode: bool (no plug-in loads or runs, see plugin.safeMode), disabled: [{id, file, name, label}] (turned off for the next launch, see plugin.setEnabled)}",
+            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's format id, plugin.<id>, for document.export, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines; settings: it may keep settings of its own; cache: it may keep a cache of its own), hash (the module's SHA-256), api (the plug-in API level it was built for, 1 or 2), cacheBytes (the bytes its cache holds; see plugin.clearCache), commands?: [{id, command (its command id, plugin.<id>.<command id>, which runs it), label, params (doc), paramsSchema}] (the menu commands a filter or live effect adds)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}]} | null, safeMode: bool (no plug-in loads or runs, see plugin.safeMode), disabled: [{id, file, name, label}] (turned off for the next launch, see plugin.setEnabled)}",
             always,
             list
         ),
@@ -687,7 +869,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Run Plug-in",
             [],
             None,
-            "{id, params?: {…} (the plug-in's parameters; or give them as top-level keys; missing ones take their defaults, see plugin.info), ids?: [..] (default: the selection), …the plug-in's parameters as top-level keys} run an object filter on the selected paths and compound paths (inside selected groups and layers too; hidden, locked, guide and clipping paths are left out): it may change, delete or add objects, as one undo step; the result is selected, except the objects it locked or made guides. With nothing selected it gets no objects (generators add theirs to the current layer) → {plugin, ids}",
+            "{id, params?: {…} (the plug-in's parameters; or give them as top-level keys; missing ones take their defaults, see plugin.info), ids?: [object id] (left out or null: the selection), …the plug-in's parameters as top-level keys} run an object filter on the selected paths and compound paths (inside selected groups and layers too; hidden, locked, guide and clipping paths are left out): it may change, delete or add objects, as one undo step; the result is selected, except the objects it locked or made guides. With nothing selected it gets no objects (generators add theirs to the current layer) → {plugin, ids}",
             has_doc,
             run
         ),

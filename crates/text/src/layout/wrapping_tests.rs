@@ -78,7 +78,20 @@ fn indic_hyphenation_reaches_both_composers_without_splitting_marks() {
         }
         let cands = candidates(&text, &glyphs, Some(&opts), Kinsoku::None);
         assert_eq!(cands.iter().filter(|b| b.hyphen > 0.0).map(|b| b.end).collect::<Vec<_>>(), (2..16).step_by(2).collect::<Vec<_>>(), "{tag}");
-        let (end, hyphen) = break_line(&text, &glyphs, 0, 4.5, &[], 0.0, Some((&opts, 0.0)), Burasagari::None, Kinsoku::None);
+        let (end, hyphen) = break_line(
+            &text,
+            &glyphs,
+            0,
+            4.5,
+            &[],
+            0.0,
+            Some((&opts, 0.0)),
+            Burasagari::None,
+            Kinsoku::None,
+            KinsokuShoriType::PushOutOnly,
+            false,
+            false,
+        );
         assert_eq!((end, hyphen), (4, true), "{tag}");
         let params = Params { justify_last: false, ragged: true, tolerance: 1.0, uniform_from: 0, hyphen_limit: 0 };
         let lines = compose(&glyphs, &|_| 4.5, &|_| 0.0, &cands, &[], &params).expect("every-line composition");
