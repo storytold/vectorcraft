@@ -520,7 +520,7 @@ fn expand_piece_leaves(
 /// visible geometry effect. The swatches and patterns that live-effect plug-ins painting their
 /// pieces name are looked up in `doc`. This merges the pieces of such a plug-in into one path, so a
 /// path that one paints goes through [`expand_pieces`] instead.
-fn reshaped(doc: &Document, l: &Node) -> Option<Node> {
+pub(crate) fn reshaped(doc: &Document, l: &Node) -> Option<Node> {
     use vectorcraft_render::effects::{GeomContext, apply_geometry_carrying, has_geometry, is_geometry};
     if !has_geometry(&l.appearance.effects) {
         return None;
@@ -540,7 +540,13 @@ fn reshaped(doc: &Document, l: &Node) -> Option<Node> {
 /// outline, box and fill: when the fill has visible geometry effects, `l` with the outline they
 /// make of `path` as a plain path, that outline's box, and the fill with its gradient moved along
 /// with the outline.
-fn fill_shape(doc: &Document, l: &Node, item: &AppearanceItem, path: &PathData, bounds: Rect) -> Option<(Node, PathData, Rect, AppearanceItem)> {
+pub(crate) fn fill_shape(
+    doc: &Document,
+    l: &Node,
+    item: &AppearanceItem,
+    path: &PathData,
+    bounds: Rect,
+) -> Option<(Node, PathData, Rect, AppearanceItem)> {
     use vectorcraft_render::effects::{GeomContext, apply_geometry_carrying, has_geometry};
     if !has_geometry(item.effects()) {
         return Some((l.clone(), path.clone(), bounds, item.clone()));
@@ -1056,10 +1062,13 @@ fn moves_only(a: Affine) -> bool {
     (m0 - 1.0).abs() <= eps && m1.abs() <= eps && m2.abs() <= eps && (m3 - 1.0).abs() <= eps
 }
 
+/// Is `e` a visible Transform effect with Random on (which takes its seed from the object's id)?
+pub(crate) fn seeded(e: &vectorcraft_doc::Effect) -> bool {
+    e.visible && e.id == "distort.transform" && e.params.get("random").and_then(Value::as_bool) == Some(true)
+}
+
 /// Does `n` have a visible Transform effect with Random on, its own or a fill's or stroke's?
 fn seeded_here(n: &Node) -> bool {
-    let seeded =
-        |e: &vectorcraft_doc::Effect| e.visible && e.id == "distort.transform" && e.params.get("random").and_then(Value::as_bool) == Some(true);
     n.appearance.effects.iter().any(seeded) || n.appearance.items.iter().any(|i| i.effects().iter().any(seeded))
 }
 

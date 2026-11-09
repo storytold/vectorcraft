@@ -299,6 +299,10 @@
 	Anti-alias Rasters	Antialiàsing de ràsters
 	Anti-aliased Artwork	Art amb antialiàsing
 	Anti-aliasing:	Antialiàsing:
+	Anti-aliasing Method	Mètode d'antialiàsing
+antiAlias	Sharp	Nítid
+	Crisp	Definit
+	Strong	Intens
 	Any except extracting pages	Qualsevol excepte extreure pàgines
 	Any Kind	Qualsevol tipus
 	Appearance	Aparença
@@ -4901,6 +4905,7 @@ digits	Malayalam	Malaiàlam
 3d	Solid	Sòlid
 3d	Space	Espai
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" no és un color: escriviu-lo com a #rrggbb
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` ha de ser "none", "sharp", "crisp" o "strong"
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all o un interval com ara 1, 3-5, no {v}
 @msg	`aspect` must be a number (%)	`aspect` ha de ser un nombre (%)
 @msg	`at` must be [x, y]	`at` ha de ser [x, y]
@@ -5701,6 +5706,11 @@ digits	Malayalam	Malaiàlam
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	La imatge fa {_1} × {_2} píxels, més de {LARGE_TRACE_SIDE} per costat: es traça, però més lentament. Un preajust de menys fidelitat o una còpia més petita de la imatge es traça més de pressa.
 @msg	the image is {width} × {height} pixels, more than Image Trace takes ({max} megapixels)	la imatge fa {width} × {height} píxels, més del que admet Image Trace ({max} megapíxels)
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	La imatge s’ha traçat a {_1} × {_2} píxels, reduïda des de {_3} × {_4} ({_5} megapíxels com a màxim).
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	El mode Logotip pla no fa servir keepColors: traça els colors indicats a logoColors o els colors que troba.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	No s’ha traçat res: cap dels colors que ha trobat el traçat coincideix amb keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	No s’ha traçat res: Ignora el color omet totes les àrees dels colors que llista keepColors.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	No s’ha traçat res: els colors que coincideixen amb keepColors no produeixen cap traçat.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: cap dels colors que ha trobat el traçat coincideix amb {c}, per tant no se’n traça res.
 @msg	the image's pixels can't be read	no es poden llegir els píxels de la imatge
 @msg	the image's pixels don't match its size	els píxels de la imatge no coincideixen amb la seva mida
 @msg	The last start of VectorCraft ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	L’últim inici de VectorCraft va acabar a {name} abans que aparegués la seva finestra, així que s’ha iniciat amb {summary}. Per tornar a provar aquell processador gràfic, canvia Preferències › Rendiment › Processador gràfic o inicia amb WGPU_BACKEND definit
@@ -5922,6 +5932,14 @@ digits	Malayalam	Malaiàlam
 @msg	unknown permission `{shown}`	permís desconegut `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	«{name}» demana els permisos {asked}: instal·la’l amb un `grant` que els enumeri quan l’usuari hi estigui d’acord
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	a «{name}» no se li ha concedit `{p}`, que la seva sortida necessita: no s’ha canviat res
+@msg	a heavy filter runs in the background, so it can't declare `commands`	un filtre pesat s’executa en segon pla, de manera que no pot declarar `commands`
+@msg	at most {MAX_COMMANDS} `commands`	com a màxim {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	l’ordre {name} està declarada dues vegades
+@msg	command {name}: `label` must be 1-64 printable characters	ordre {name}: `label` ha de tenir 1-64 caràcters imprimibles
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	ordre {name}: fes servir un id d’1-{MAX_COMMAND_ID} caràcters d’a-z 0-9 _ que comenci per una lletra
+@msg	command {name}: {e}	ordre {name}: {e}
+@msg	only a filter or a live effect declares `commands`	només un filtre o un efecte dinàmic declara `commands`
+@msg	“{name}” › {label}: {e}	«{name}» › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	el mòdul no té el SHA-256 que indica `hash`: no s’ha instal·lat res
 @msg	“{name}” is not a file	«{name}» no és un fitxer
 axis	Both	Tots dos
@@ -6472,6 +6490,7 @@ breakText	Glyphs	Glifs
 	Create Swatch Legend	Crea una llegenda de mostres
 	Create Swatch Legend…	Crea una llegenda de mostres…
 	HEX	HEX
+	Help Bar	Barra d’ajuda
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	Eines de text
 	Text Tweaker…	Ajustador de text…

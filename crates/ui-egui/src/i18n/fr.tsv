@@ -199,6 +199,10 @@
 	Anti-Alias	Lissage
 	Anti-alias Rasters	Lisser les images pixellisées
 	Anti-aliased Artwork	Illustration lissée
+	Anti-aliasing Method	Méthode de lissage
+antiAlias	Sharp	Net
+	Crisp	Précis
+	Strong	Fort
 	Anti-aliasing:	Lissage :
 	Any Kind	Tout type
 	Font Technology	Technologie de police
@@ -4099,6 +4103,7 @@ axis	Both	Les deux
 @msg	Targa files are RGB: colorModel rgb	Les fichiers Targa sont en RVB : colorModel rgb
 @msg	Text Wrap: select a wrap object	Habillage de texte : sélectionnez un objet d’habillage
 @msg	This shortcut file is in a form VectorCraft can't read.	Ce fichier de raccourcis est dans un format que VectorCraft ne sait pas lire.
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` doit être "none", "sharp", "crisp" ou "strong"
 @msg	`aspect` must be a number (%)	`aspect` doit être un nombre (%)
 @msg	`at` must be [x, y]	`at` doit être [x, y]
 @msg	`color` must be a colour	`color` doit être une couleur
@@ -5758,6 +5763,11 @@ theme	Appearance	Apparence
 	Snap to Perpendicular	Magnétisme de la perpendiculaire
 @msg	unknown snap option `{key}` (use {options})	option de magnétisme inconnue `{key}` (utilisez {options})
 	Gap Length:	Longueur de lacune :
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Le mode Logo en aplats n’utilise pas keepColors : il vectorise les couleurs indiquées dans logoColors ou celles qu’il trouve.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Rien n’a été vectorisé : aucune des couleurs trouvées par la vectorisation ne correspond à keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Rien n’a été vectorisé : Ignorer la couleur omet toutes les zones des couleurs indiquées dans keepColors.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	Rien n’a été vectorisé : les couleurs correspondant à keepColors ne produisent aucun tracé.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors : aucune des couleurs trouvées par la vectorisation ne correspond à {c}, donc rien n’en est vectorisé.
 @msg	`colorGroup` needs `library: "document"`	`colorGroup` nécessite `library: "document"`
 @msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` nécessite `palette: "documentLibrary"`
 @msg	`colorGroup` needs `mode: "color"`	`colorGroup` nécessite `mode: "color"`
@@ -5904,6 +5914,14 @@ axis	Y Axis	Axe Y
 @msg	unknown permission `{shown}`	autorisation inconnue `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	« {name} » demande les autorisations {asked} : installez-le avec `grant` qui les liste une fois que l’utilisateur l’accepte
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	« {name} » n’a pas reçu `{p}`, dont sa sortie a besoin : rien n’a été modifié
+@msg	a heavy filter runs in the background, so it can't declare `commands`	un filtre lourd s’exécute en arrière-plan, il ne peut donc pas déclarer `commands`
+@msg	at most {MAX_COMMANDS} `commands`	au plus {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	la commande {name} est déclarée deux fois
+@msg	command {name}: `label` must be 1-64 printable characters	commande {name} : `label` doit compter 1-64 caractères imprimables
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	commande {name} : utilisez un id de 1-{MAX_COMMAND_ID} caractères parmi a-z 0-9 _ commençant par une lettre
+@msg	command {name}: {e}	commande {name} : {e}
+@msg	only a filter or a live effect declares `commands`	seul un filtre ou un effet dynamique déclare `commands`
+@msg	“{name}” › {label}: {e}	« {name} » › {label} : {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	le module n’a pas le SHA-256 indiqué par `hash` : rien n’a été installé
 # Actions panel: action sets (#3712).
 	New Set…	Nouveau jeu…
@@ -6485,6 +6503,7 @@ breakText	Glyphs	Glyphes
 	Create Swatch Legend	Créer une légende des nuances
 	Create Swatch Legend…	Créer une légende des nuances…
 	HEX	HEX
+	Help Bar	Barre d’aide
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	Outils de texte
 	Text Tweaker…	Ajusteur de texte…

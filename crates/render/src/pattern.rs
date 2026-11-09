@@ -201,6 +201,7 @@ fn rasterize(
             px: 1.0 / v.determinant().abs().sqrt().max(1e-12),
             opts: &opts,
             ink,
+            output: v,
             plates: None,
         };
         for a in &def.art {
@@ -345,7 +346,8 @@ impl Renderer {
         let comp = crate::group::Composite { opacity: dim, ..Default::default() };
         self.group(ctx, f, comp, &mut |r, c, fr| {
             for o in offsets {
-                let frame = Frame { view: fr.view * Affine::translate(*o), visible: fr.visible - *o, ..*fr };
+                let moved = Affine::translate(*o);
+                let frame = Frame { view: fr.view * moved, visible: fr.visible - *o, output: fr.output * moved, ..*fr };
                 for a in children {
                     r.draw_arc(c, &frame, a);
                 }
