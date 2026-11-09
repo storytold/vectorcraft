@@ -46,6 +46,29 @@ fn open(content: &str) -> ImportReport {
     import_with_report(&pdf(&[content]), &ImportOptions::default()).unwrap()
 }
 
+// Geometry assertions need the PDF and layout to use the same widths. Unembedded
+// Helvetica is not installed on every platform; missing-font layout fits the overall
+// line length, so removing characters changes even an ordinary suffix's position.
+fn open_positioned(content: &str) -> ImportReport {
+    let data = include_bytes!("../../../../assets/fonts/SourceSans3-Regular.ttf");
+    let face = vectorcraft_text::FontDb::global().find_postscript("SourceSans3-Regular").unwrap();
+    assert_eq!(face.file_data(), data);
+    let widths = (32u8..=126)
+        .map(|c| {
+            let glyph = face.glyph_for(char::from(c));
+            assert_ne!(glyph, 0);
+            (face.advance(glyph) * 1000.0 / face.units_per_em()).to_string()
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    let font = format!(
+        "<< /Type /Font /Subtype /TrueType /BaseFont /SourceSans3-Regular /Encoding /WinAnsiEncoding /FontDescriptor 6 0 R /FirstChar 32 /LastChar 126 /Widths [{widths}] >>"
+    );
+    let descriptor = b"<< /Type /FontDescriptor /FontName /SourceSans3-Regular /Flags 32 /FontBBox [-500 -300 1500 1000] /ItalicAngle 0 /Ascent 1000 /Descent -300 /CapHeight 700 /StemV 80 /FontFile2 7 0 R >>".to_vec();
+    let bytes = custom_pdf(content, font.as_bytes(), "", &[descriptor, stream("", data)]);
+    import_with_report(&bytes, &ImportOptions::default()).unwrap()
+}
+
 fn texts(report: &ImportReport) -> Vec<TextObject> {
     let mut result = vec![];
     report.document.walk(|node| {
@@ -78,8 +101,8 @@ fn character_origin(report: &ImportReport, character: char) -> kurbo::Point {
 
 #[test]
 fn actual_text_replaces_once_and_keeps_suffix_position() {
-    let replaced = open("/Span << /ActualText (AB) >> BDC (xy) Tj EMC (C) Tj");
-    let ordinary = open("(xyC) Tj");
+    let replaced = open_positioned("/Span << /ActualText (AB) >> BDC (xy) Tj EMC (C) Tj");
+    let ordinary = open_positioned("(xyC) Tj");
     assert_eq!(plain(&replaced), "ABC");
     let delta = character_origin(&replaced, 'C') - character_origin(&ordinary, 'C');
     assert!(delta.hypot() < 0.05, "suffix moved: {delta:?}");
@@ -115,11 +138,11 @@ fn actual_text_decodes_pdf_strings_and_preserves_authored_order() {
 
 #[test]
 fn actual_text_across_operations_styles_and_line_flushes() {
-    let report = open("/Span << /ActualText (AB) >> BDC (x) Tj [(y) -400 (z)] TJ 1 0 0 rg /F 24 Tf (w) Tj EMC (C) Tj");
+    let report = open_positioned("/Span << /ActualText (AB) >> BDC (x) Tj [(y) -400 (z)] TJ 1 0 0 rg /F 24 Tf (w) Tj EMC (C) Tj");
     assert_eq!(plain(&report), "ABC");
-    let report = open("/Span << /ActualText (AB) >> BDC (x) Tj 0 -40 Td (y) Tj EMC (C) Tj");
+    let report = open_positioned("/Span << /ActualText (AB) >> BDC (x) Tj 0 -40 Td (y) Tj EMC (C) Tj");
     assert_eq!(plain(&report), "ABC");
-    let ordinary = open("(x) Tj 0 -40 Td (yC) Tj");
+    let ordinary = open_positioned("(x) Tj 0 -40 Td (yC) Tj");
     assert!((character_origin(&report, 'C') - character_origin(&ordinary, 'C')).hypot() < 0.05);
     // The replacement belongs to the first placed glyph's style and line.
     assert_eq!(texts(&report)[0].plain_text(), "AB");
@@ -243,8 +266,8 @@ fn actual_text_empty_span_keeps_following_position_without_slots() {
         ("(P) Tj /Span << /ActualText () >> BDC (xy) Tj EMC (CD) Tj", "(PxyCD) Tj"),
         ("/Span << /ActualText () >> BDC (xy) Tj EMC (CD) Tj", "(xyCD) Tj"),
     ] {
-        let report = open(content);
-        let ordinary = open(baseline);
+        let report = open_positioned(content);
+        let ordinary = open_positioned(baseline);
         assert_eq!(plain(&report), if content.starts_with("(P)") { "PCD" } else { "CD" });
         for c in ['C', 'D'] {
             assert!((character_origin(&report, c) - character_origin(&ordinary, c)).hypot() < 0.05, "{content}: {c}");
