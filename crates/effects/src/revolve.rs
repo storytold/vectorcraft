@@ -2,12 +2,12 @@
 use std::sync::Arc;
 
 use serde_json::Value;
-use vectorcraft_doc::color::{BlendMode, Color, Paint};
+use vectorcraft_doc::color::{Color, Paint};
 use vectorcraft_doc::{Appearance, AppearanceItem, Effect, FillLayer, LineJoin, Node, NodeId, NodeKind, StrokeLayer};
 use vectorcraft_geom::{PathData, Rect};
 use vectorcraft_three_d::{Edge, Revolve};
 
-use crate::solids::{Profile, is_container, members, object_profile, profile, reshape_members, solid_paints, union_bounds};
+use crate::solids::{Profile, Scope, is_container, members, object_profile, profile, reshape_members, solid_paints, union_bounds};
 use crate::util::{flag, num, text};
 use crate::{GeomContext, apply_geometry_with, is_geometry, merged_params};
 
@@ -431,33 +431,34 @@ fn art(n: &Node, expand: bool) -> Option<Node> {
     Some(art)
 }
 
-/// The members' `surfaces` in order, from the blending mode at `level` of each one's
-/// `Profile::blends` inward: the surfaces of consecutive members that share a group with a mode
-/// other than Normal go in one group with that mode, so each mode applies once, at its own level.
-fn blended(id: NodeId, surfaces: Vec<(&[(usize, BlendMode)], Node)>, level: usize) -> Vec<Arc<Node>> {
-    fn close(id: NodeId, run: &mut Vec<(&[(usize, BlendMode)], Node)>, key: Option<(usize, BlendMode)>, level: usize, out: &mut Vec<Arc<Node>>) {
-        if let Some((_, blend)) = key {
-            let mut group = Node::group(id, blended(id, std::mem::take(run), level + 1));
-            group.blend = blend;
+/// The members' `surfaces` in order, from the [`Scope`] at `level` of each one's `Profile::scopes`
+/// inward: the surfaces of consecutive members that share a scope go in one group with its opacity
+/// and blending mode, so each applies once, to the members it holds together.
+fn scoped(id: NodeId, surfaces: Vec<(&[Scope], Node)>, level: usize) -> Vec<Arc<Node>> {
+    fn close(id: NodeId, run: &mut Vec<(&[Scope], Node)>, scope: Option<Scope>, level: usize, out: &mut Vec<Arc<Node>>) {
+        if let Some(scope) = scope {
+            let mut group = Node::group(id, scoped(id, std::mem::take(run), level + 1));
+            group.opacity = scope.opacity;
+            group.blend = scope.blend;
             out.push(Arc::new(group));
         }
     }
     let mut out = vec![];
     let mut run = vec![];
-    let mut key = None;
-    for (blends, s) in surfaces {
-        let at = blends.get(level).copied();
-        if at != key {
-            close(id, &mut run, key, level, &mut out);
-            key = at;
+    let mut scope = None;
+    for (scopes, s) in surfaces {
+        let at = scopes.get(level).copied();
+        if at.map(|a| a.key) != scope.map(|s: Scope| s.key) {
+            close(id, &mut run, scope, level, &mut out);
+            scope = at;
         }
-        if key.is_some() {
-            run.push((blends, s));
+        if scope.is_some() {
+            run.push((scopes, s));
         } else {
             out.push(Arc::new(s));
         }
     }
-    close(id, &mut run, key, level, &mut out);
+    close(id, &mut run, scope, level, &mut out);
     out
 }
 
@@ -477,13 +478,13 @@ fn group_art(n: &Node, expand: bool) -> Option<Node> {
     let mut opaque = true;
     for s in &shapes {
         let Some(item) = surface_item(&s.items) else { continue };
+        // The opacity and blending of the member and the groups it is in apply through its scopes.
         let (paint, opacity, blend) = paint_of(item);
-        let opacity = opacity * s.opacity;
-        opaque &= opacity >= 1.0 && blend == Default::default() && s.blends.is_empty();
-        // A member with non-normal blending keeps every face, as a blended object does.
-        let expand = expand && s.blends.is_empty();
+        opaque &= opacity >= 1.0 && blend == Default::default() && s.scopes.is_empty();
+        // A member with transparency of its own keeps every face, as a transparent object does.
+        let expand = expand && s.scopes.is_empty();
         let (depths, art) = surface(n, &s.path, b, options, fx, paint, opacity, blend, expand, &mut copies)?;
-        surfaces.push((depths, art, s.blends.as_slice()));
+        surfaces.push((depths, art, s.scopes.as_slice()));
     }
     if surfaces.is_empty() {
         return None;
@@ -500,7 +501,7 @@ fn group_art(n: &Node, expand: bool) -> Option<Node> {
         faces.sort_by(|a, b| a.0.total_cmp(&b.0));
         vec![Arc::new(Node::group(n.id, faces.into_iter().map(|(_, face)| face).collect()))]
     } else {
-        blended(n.id, surfaces.into_iter().map(|(_, s, blends)| (blends, s)).collect(), 0)
+        scoped(n.id, surfaces.into_iter().map(|(_, s, scopes)| (scopes, s)).collect(), 0)
     };
     let remaining =
         n.appearance.effects.iter().enumerate().filter(|(i, e)| *i != index && (!is_geometry(&e.id) || *i > index)).map(|(_, e)| e.clone()).collect();
@@ -752,6 +753,7 @@ mod tests {
 
     #[test]
     fn blending_modes_apply_once_to_the_member_or_group_that_has_them() {
+        use vectorcraft_doc::color::BlendMode;
         let blend = |n: Arc<Node>, mode: BlendMode| {
             let mut n = (*n).clone();
             n.blend = mode;
@@ -775,6 +777,14 @@ mod tests {
         assert_ne!(expand_revolve_art(&plain), revolve_art(&plain), "an opaque member's hidden faces are removed");
         let multiplied = group_with(json!({}), vec![blend(member(1, 0.0), BlendMode::Multiply)]);
         assert_eq!(expand_revolve_art(&multiplied), revolve_art(&multiplied), "a blended member keeps every face");
+        // A nested group's opacity applies once, to its members' surfaces together.
+        let mut faded = Node::group(NodeId(6), vec![member(3, 40.0), member(4, 45.0)]);
+        faded.opacity = 0.5;
+        let art = revolve_art(&group_with(json!({}), vec![member(1, 0.0), Arc::new(faded)])).expect("revolved");
+        let NodeKind::Group { children, .. } = &art.kind else { panic!("a group") };
+        let opacities = |n: &Node| n.children().unwrap().iter().map(|c| c.opacity).collect::<Vec<_>>();
+        assert_eq!(children.iter().map(|c| c.opacity).collect::<Vec<_>>(), [1.0, 0.5]);
+        assert_eq!(opacities(&children[1]), [1.0, 1.0], "the faded group's members, together");
     }
 
     #[test]

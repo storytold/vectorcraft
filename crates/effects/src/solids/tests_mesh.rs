@@ -51,7 +51,7 @@ fn the_meshes_of_one_object_share_one_triangle_budget() {
     assert!(keep_mesh(&mut out, &mut total, meshes[1].clone(), first).is_err());
     assert_eq!(out.len(), 1);
     // Building past the budget stops with an error instead of holding every mesh.
-    let shapes = [Profile { path: profile(&n).unwrap().0, rule: FillRule::NonZero, items: solid_paints(&n), opacity: 1.0, blends: vec![] }];
+    let shapes = [Profile { path: profile(&n).unwrap().0, rule: FillRule::NonZero, items: solid_paints(&n), opacity: 1.0, scopes: vec![] }];
     let Some(effect) = n.appearance.effects.first() else { panic!("no effect") };
     let mut total = 0;
     assert!(meshes_for(effect, &shapes, &mut total, MAX_MESH_TRIANGLES).is_ok());
