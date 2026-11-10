@@ -6052,6 +6052,11 @@ axis	Y Axis	osa Y
 	Button	Tlačítko
 	Panel	Panel
 	UI Frames	Rámce UI
+	Map Markers	Mapové značky
+	Pin	Špendlík
+	Flag	Vlajka
+	Crosshair	Zaměřovač
+	Checkpoint	Kontrolní bod
 	Open Symbol Library	Otevřít knihovnu symbolů
 	Save Symbol Library	Uložit knihovnu symbolů
 	Save Symbol Library…	Uložit knihovnu symbolů…

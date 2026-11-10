@@ -41,6 +41,9 @@ use crate::import::native::compare::{MAX_DIFFERENCE, MAX_SOLID_DIFFERENCE, compa
 pub(super) const PLUGIN: &str = "Adobe Deform Plugin"; // brand-ok: the plugin name the files use
 /// The note for an envelope that keeps its drawn art.
 pub(crate) const DRAWN: &str = "an envelope VectorCraft couldn't read as a live envelope comes in as its drawn art";
+/// The note for an envelope of type, which keeps its drawn art with its type hidden (unless the
+/// text document gives the type nothing, which a note of its own then says).
+pub(crate) const TYPE_DRAWN: &str = "type in an envelope comes in as the envelope's drawn art, not as editable type";
 /// The note for warped type that keeps its drawn art, before how many.
 pub(crate) const WARPED_TYPE_DRAWN: &str = "warped text objects that came in as drawn art, not as editable type";
 /// The most envelopes waiting for their drawn art at once.

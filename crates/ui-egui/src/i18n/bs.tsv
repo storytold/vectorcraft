@@ -5888,6 +5888,11 @@ axis	Y Axis	Y osa
 	Button	Dugme
 	Panel	Panel
 	UI Frames	UI okviri
+	Map Markers	Markeri mape
+	Pin	Pin
+	Flag	Zastava
+	Crosshair	Nišan
+	Checkpoint	Kontrolna tačka
 	Open Symbol Library	Otvori biblioteku simbola
 	Save Symbol Library	Sačuvaj biblioteku simbola
 	Save Symbol Library…	Sačuvaj biblioteku simbola…

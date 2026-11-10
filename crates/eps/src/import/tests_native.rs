@@ -5222,7 +5222,8 @@ fn envelope_options_keep_the_source_text_hidden_under_its_outlined_appearance() 
         }
     });
     assert_eq!(texts, [("CHONKYCATS".to_string(), false)], "{:?}", r.warnings);
-    assert!(super::tests::program_warnings(&r.warnings).is_empty(), "{:?}", r.warnings);
+    // The notes say the type isn't editable.
+    assert_eq!(super::tests::program_warnings(&r.warnings), [crate::import::ai::ENVELOPE_TYPE_DRAWN], "{:?}", r.warnings);
 }
 
 /// A live envelope that draws a little apart from its drawn art, in layers that already differ

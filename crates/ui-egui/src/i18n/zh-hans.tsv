@@ -5890,6 +5890,11 @@ axis	Y Axis	Y 轴
 	Button	按钮
 	Panel	面板
 	UI Frames	UI 框架
+	Map Markers	地图标记
+	Pin	图钉
+	Flag	旗帜
+	Crosshair	准星
+	Checkpoint	检查点
 	Open Symbol Library	打开符号库
 	Save Symbol Library	保存符号库
 	Save Symbol Library…	保存符号库…

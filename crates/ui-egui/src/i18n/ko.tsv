@@ -5630,6 +5630,11 @@ axis	Y Axis	Y축
 	Button	버튼
 	Panel	패널
 	UI Frames	UI 프레임
+	Map Markers	지도 마커
+	Pin	핀
+	Flag	깃발
+	Crosshair	십자선
+	Checkpoint	체크포인트
 	Open Symbol Library	심볼 라이브러리 열기
 	Save Symbol Library	심볼 라이브러리 저장
 	Save Symbol Library…	심볼 라이브러리 저장…

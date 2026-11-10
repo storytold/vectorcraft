@@ -5734,6 +5734,11 @@ axis	Y Axis	Y 軸
 	Button	ボタン
 	Panel	パネル
 	UI Frames	UIフレーム
+	Map Markers	マップマーカー
+	Pin	ピン
+	Flag	旗
+	Crosshair	クロスヘア
+	Checkpoint	チェックポイント
 	Open Symbol Library	シンボルライブラリを開く
 	Save Symbol Library	シンボルライブラリを保存
 	Save Symbol Library…	シンボルライブラリを保存…
