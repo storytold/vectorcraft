@@ -106,6 +106,7 @@ pub(super) fn mark_options(app: &VectorcraftApp, curve_points_from_tool: bool) -
     }
 }
 
+/// Draw selection marks and widgets, keeping the box but hiding dot marks during Halftone Preview.
 pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf, curve_points_from_tool: bool, marks: &mut SelectionMarks) {
     // The Selection tool's bounding box (rotated with the objects after a rotation), also shown by
     // the shape tools that keep a shape just drawn ready to adjust while they draw none (#5477). It
