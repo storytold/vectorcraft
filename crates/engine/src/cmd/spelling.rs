@@ -86,6 +86,15 @@ pub fn specs() -> Vec<CommandSpec> {
             change_word
         ),
         cmd!(
+            query "text.spelling.editDictionary",
+            "Edit Custom Dictionary",
+            [],
+            None,
+            "{remove?: [word…], add?: [word…] (each one word, at most 64 characters; at most 10000 of each)} deletes the words of remove that are there and adds those of add, then saves once: all of it, or none of it when the save fails (Edit Custom Dictionary's Done) → {removed: [word…], added: [word…]}",
+            always,
+            edit_dictionary
+        ),
+        cmd!(
             query "text.spelling.ignoreAll",
             "Ignore All",
             [],
@@ -223,6 +232,12 @@ fn suggest(_s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "suggestions": suggestions }))
 }
 
+/// `w` as the custom dictionary keeps it (trimmed, lower case), or None when it isn't one word of at
+/// most `craft_proof::MAX_CUSTOM_WORD_CHARS` characters: what `text.spelling.addWord` takes.
+pub fn custom_word(w: &str) -> Option<String> {
+    craft_proof::custom_word(w)
+}
+
 /// `p`'s `key` as a custom-dictionary word (trimmed, lower case), or an error naming what it must be.
 fn word_param(p: &Value, key: &str, command: &str) -> Result<String> {
     let w = str_param(p, key).ok_or_else(|| bad(command, format!("missing `{key}`")))?;
@@ -340,6 +355,62 @@ fn change_word(s: &mut Session, p: &Value) -> Result<Value> {
         craft_proof::add_word(&word);
     })?;
     Ok(json!({ "word": to }))
+}
+
+/// Most words `text.spelling.editDictionary` takes in each of its lists.
+const MAX_EDIT_WORDS: usize = 10_000;
+
+/// `p`'s `key`, a list of custom-dictionary words (none when it is missing), deduplicated.
+fn word_list(p: &Value, key: &str, command: &str) -> Result<BTreeSet<String>> {
+    let Some(v) = p.get(key) else { return Ok(BTreeSet::new()) };
+    let words = v.as_array().ok_or_else(|| bad(command, format!("`{key}` must be a list of words")))?;
+    if words.len() > MAX_EDIT_WORDS {
+        return Err(bad(command, format!("`{key}` holds more than {MAX_EDIT_WORDS} words")));
+    }
+    words
+        .iter()
+        .map(|w| {
+            w.as_str()
+                .and_then(craft_proof::custom_word)
+                .ok_or_else(|| bad(command, format!("`{key}` must hold single words of at most {} characters", craft_proof::MAX_CUSTOM_WORD_CHARS)))
+        })
+        .collect()
+}
+
+/// `text.spelling.editDictionary`: Edit Custom Dictionary's Done. Every delete and add is made,
+/// then saved once; when the save fails, all of them are taken back, so a failed Done leaves the
+/// dictionary as it was rather than half changed.
+fn edit_dictionary(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "text.spelling.editDictionary";
+    let (remove, add) = (word_list(p, "remove", C)?, word_list(p, "add", C)?);
+    let before: BTreeSet<String> = craft_proof::user_dictionary().into_iter().collect();
+    // A word in both lists stays; a word to delete that another window deleted already is skipped.
+    let removed: Vec<String> = remove.iter().filter(|w| !add.contains(*w) && before.contains(*w)).cloned().collect();
+    let added: Vec<String> = add.iter().filter(|w| !before.contains(*w)).cloned().collect();
+    if removed.is_empty() && added.is_empty() {
+        return Ok(json!({ "removed": removed, "added": added }));
+    }
+    for w in &removed {
+        craft_proof::remove_word(w);
+    }
+    for w in &added {
+        craft_proof::add_word(w);
+    }
+    let saved = save_dictionary(s, &removed, C);
+    dictionary_changed();
+    saved.inspect_err(|_| {
+        for w in &added {
+            craft_proof::remove_word(w);
+        }
+        for w in &removed {
+            craft_proof::add_word(w);
+        }
+        // Words the save took in from the file stay, as for one word.
+        if !added.is_empty() {
+            retake_file_words(s);
+        }
+    })?;
+    Ok(json!({ "removed": removed, "added": added }))
 }
 
 /// `text.spelling.ignoreAll`: Ignore All, for the active document.

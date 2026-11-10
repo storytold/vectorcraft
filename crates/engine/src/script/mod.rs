@@ -502,6 +502,8 @@ struct Job {
     /// The documents open when the run began, by [`DocState::uid`].
     start_uids: Vec<u64>,
     name: String,
+    /// The file-access scope `script.run` came in, which every slice runs in.
+    scope: crate::file_access::ScopeHandle,
 }
 
 /// The `Data` for a JSON value, within `limits`. When it does not fit, the error is the place in
@@ -986,7 +988,8 @@ impl Session {
             self.script_report = Some(report);
             return Err(EngineError::Other(message));
         }
-        let job = Job { realm, host, world: World::working(self), start_uids: open, name: request.name };
+        let scope = crate::file_access::ScopeHandle::capture();
+        let job = Job { realm, host, world: World::working(self), start_uids: open, name: request.name, scope };
         let id = NEXT_JOB.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         JOBS.with(|jobs| jobs.borrow_mut().insert(id, job));
         self.script_key = Some(JobKey(id));
@@ -1170,20 +1173,24 @@ fn failure_text(report: &Value) -> String {
 }
 
 /// A run's slice: the working copy in, the real session lent to the host functions, one measured
-/// slice run, and everything back. A panic in the interpreter is the outer `Err`.
+/// slice run in the file-access scope the run began in, and everything back. A panic in the
+/// interpreter is the outer `Err`.
 fn run_slice(s: &mut Session, job: &mut Job) -> std::result::Result<std::result::Result<Progress, RunError>, String> {
     let depth = std::mem::replace(&mut s.depth, 0);
     job.world.swap(s);
     s.script_in_run = true;
     let cell = job.host.session.clone();
     std::mem::swap(s, &mut *cell.borrow_mut());
+    let scope = job.scope.clone();
     let realm = &mut job.realm;
-    let r = guard::catch_panic(|| {
-        #[cfg(test)]
-        if PANIC_IN_SLICE.with(Cell::get) {
-            panic!("a slice failed");
-        }
-        realm.advance(SLICE_FUEL)
+    let r = scope.run(|| {
+        guard::catch_panic(|| {
+            #[cfg(test)]
+            if PANIC_IN_SLICE.with(Cell::get) {
+                panic!("a slice failed");
+            }
+            realm.advance(SLICE_FUEL)
+        })
     });
     std::mem::swap(s, &mut *cell.borrow_mut());
     s.script_in_run = false;

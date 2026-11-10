@@ -1,5 +1,7 @@
-use super::rings::{MAX_PIECES, MAX_PLANE_POINTS, MAX_SOLID_POINTS, inset, left, signed_area, solid_rings};
-use super::{Bevel, Extrude, Facet, FillRule, MAX_FACES, PathData, Point, Rect, Revolve, V3, View, eye_distance, perspective_scale};
+use super::rings::{
+    CURVE_PIECES, MAX_PIECES, MAX_PLANE_POINTS, MAX_SOLID_POINTS, TOO_COMPLEX_SURFACE, curve_pieces, inset, left, signed_area, solid_rings,
+};
+use super::{Bevel, Extrude, Facet, FillRule, MAX_FACES, MAX_SOLID_FACES, PathData, Point, Rect, Revolve, V3, View, eye_distance, perspective_scale};
 
 /// Turns 3D points into document points and shades faces for one view.
 pub(super) struct Camera {
@@ -87,8 +89,8 @@ impl Builder<'_> {
         }
         if let Some(mesh) = &mut self.mesh {
             mesh.push((contours, n.unit()));
-            if mesh.len() > MAX_FACES {
-                return Err("The 3D surface is too complex; simplify the shape".into());
+            if mesh.len() > MAX_SOLID_FACES {
+                return Err(TOO_COMPLEX_SURFACE.into());
             }
             return Ok(());
         }
@@ -135,8 +137,8 @@ impl Builder<'_> {
             #[cfg(test)]
             view,
         });
-        if self.facets.len() > MAX_FACES {
-            return Err("The 3D surface is too complex; simplify the shape".into());
+        if self.facets.len() > MAX_SOLID_FACES {
+            return Err(TOO_COMPLEX_SURFACE.into());
         }
         Ok(())
     }
@@ -407,15 +409,25 @@ pub(crate) fn extrude_faces(path: &PathData, rule: FillRule, bounds: Rect, optio
     if o.depth <= 0.0 {
         return plane_faces(path, rule, bounds, view, mesh);
     }
-    let rings = solid_rings(path, rule, bounds.width().max(bounds.height()), MAX_SOLID_POINTS)?;
+    let steps = steps(&o);
+    // One face for each edge of the outline in each band between two steps, and the two caps:
+    // counted before any point is sampled, and again on the rings, which can have more points
+    // once contours that meet are merged.
+    let (bands, caps) = (steps.len().saturating_sub(1), if o.cap { 2 } else { 0 });
+    let size = bounds.width().max(bounds.height());
+    let most = curve_pieces(path, size, bands, caps)?;
+    let rings = solid_rings(path, rule, size, MAX_SOLID_POINTS, most)?;
+    let edges = rings.iter().map(Vec::len).fold(0usize, usize::saturating_add);
+    if edges.saturating_mul(bands).saturating_add(caps) > MAX_SOLID_FACES {
+        return Err(TOO_COMPLEX_SURFACE.into());
+    }
     let camera = Camera::new(view, bounds, o.depth);
     let mut b = Builder { camera: &camera, closed: o.cap, hidden: o.hidden, facets: vec![], mesh: mesh.then(Vec::new) };
-    let steps = steps(&o);
     let z = |t: f64| o.depth / 2.0 - o.depth * t;
     let ring_at =
         |ring: &[Point], s: &Step| -> Vec<V3> { section(&inset(ring, s.inset), bounds, &o, s.t).iter().map(|p| camera.place(*p, z(s.t))).collect() };
     // Every band of a twisted outline, bevels included, is cut as its walls' first slice is (with
-    // bevels and no walls, as its shallowest band is), within the facet limit.
+    // bevels and no walls, as its shallowest band is), within [`MAX_FACES`] facets.
     let depth_of = |s: &[Step]| s.get(1).zip(s.first()).map_or(0.0, |(b, a)| (b.t - a.t).abs());
     let wall = steps
         .windows(2)
@@ -465,7 +477,7 @@ pub fn plane(path: &PathData, rule: FillRule, bounds: Rect, view: View) -> Resul
 /// [`plane`], or with `mesh` its face before projection instead of its facet.
 pub(crate) fn plane_faces(path: &PathData, rule: FillRule, bounds: Rect, view: View, mesh: bool) -> Result<Built, String> {
     check_bounds(bounds)?;
-    let rings = solid_rings(path, rule, bounds.width().max(bounds.height()), MAX_PLANE_POINTS)?;
+    let rings = solid_rings(path, rule, bounds.width().max(bounds.height()), MAX_PLANE_POINTS, CURVE_PIECES)?;
     let camera = Camera::new(view, bounds, 0.0);
     let mut b = Builder { camera: &camera, closed: false, hidden: false, facets: vec![], mesh: mesh.then(Vec::new) };
     let contours: Vec<Vec<V3>> = rings.iter().map(|r| r.iter().map(|p| camera.place(*p, 0.0)).collect()).collect();

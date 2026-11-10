@@ -2578,6 +2578,12 @@ solid, false open behind), `volume` (0..100%, default 50), `bothSides`.
 All three take `rotationX/Y/Z` (degrees, -180..180, default the Off-Axis Front position -21.88/-23.4/9.06),
 `perspectiveAngle` and the lighting parameters as Revolve. See [three-d.md](three-d.md) for the Position presets,
 the scope and what differs from the public documentation.
+`threeD.extrude` and `threeD.inflate` take up to 65,536 outline points and build up to 163,840 faces for each solid
+(VectorCraft's own limits); with more faces than that, each curve takes fewer pieces, down to 4. A shape past the
+points returns "The shape is too complex for a 3D effect", and one whose faces do not fit at 4 pieces a curve returns
+"The 3D surface is too complex; simplify the shape". `threeD.inflate` also returns the surface error when its outline
+has so many points across so many of its grid's cells that filling the grid would pass its work limit. `threeD.rotate`
+takes up to 65,536 points.
 
 ## Extrude & Bevel (Classic)
 
@@ -6133,6 +6139,11 @@ desktop app and `vectorcraft-cli` (its `mcp` and `run` sessions) keep them in `C
 preferences, one word per line; without preferences (`VECTORCRAFT_NO_PREFS`, the web app) they last until the app
 closes. `text.spelling.ignoreAll {word}` is Ignore All: the active document's checks skip the word, in
 any case, while the document is open. It is not saved and not an undo step.
+
+In the app, Edit › Edit Custom Dictionary… (`text.spelling.dictionary` with no params, from the menus) opens a dialog of
+the words, with an Entry field and Add, Delete and Change; Done runs `text.spelling.editDictionary {remove, add}` for
+the words that differ, which deletes and adds them and saves once, all or none (a save that fails keeps none of them),
+and Cancel changes nothing.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.spelling.addWord","params":{"word":"VectorCraft"}}}

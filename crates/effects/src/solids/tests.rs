@@ -205,12 +205,12 @@ fn a_stroked_open_path_builds_a_ribbon() {
 /// still draws.
 #[test]
 fn a_stroke_past_the_limits_is_left_out() {
-    // 1,500 corners: within the 2,048 points of the fill's solid, but not the stroke's outline.
-    let points: Vec<Point> = (0..1500)
+    // 40,000 corners: within the 65,536 points of the fill's solid, but not the stroke's outline.
+    let points: Vec<Point> = (0..40_000)
         .map(|k| {
-            let (s, c) = (k as f64 * std::f64::consts::TAU / 1500.0).sin_cos();
-            let r = if k % 2 == 0 { 100.0 } else { 96.0 };
-            Point::new(200.0 + r * c, 200.0 + r * s)
+            let (s, c) = (k as f64 * std::f64::consts::TAU / 40_000.0).sin_cos();
+            let r = if k % 2 == 0 { 10_000.0 } else { 9_999.0 };
+            Point::new(20_000.0 + r * c, 20_000.0 + r * s)
         })
         .collect();
     let path = PathData::single(vectorcraft_geom::SubPath::polyline(&points, true));

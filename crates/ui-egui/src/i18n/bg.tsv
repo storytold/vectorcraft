@@ -6453,3 +6453,5 @@ breakText	Glyphs	Глифи
 # Align to Pixel Grid
 	Align to Pixel Grid	Подравняване към пикселната мрежа
 @msg	side is left or right, not `{s}`	side е left или right, а не `{s}`
+	Edit Custom Dictionary	Редактиране на потребителски речник
+	Entry:	Запис:

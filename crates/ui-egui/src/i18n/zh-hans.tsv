@@ -6558,3 +6558,5 @@ breakText	Glyphs	字形
 	Align to Pixel Grid	对齐像素网格
 @msg	only paths and compound paths can be aligned to the pixel grid	只有路径和复合路径可以对齐像素网格
 @msg	side is left or right, not `{s}`	side 应为 left 或 right，而不是 `{s}`
+	Edit Custom Dictionary	编辑自定义词典
+	Entry:	条目：
