@@ -176,6 +176,51 @@ fn without_doc_write_a_call_that_edits_is_refused() {
     run(&mut s, "plugin.remove", json!({"id": "test.call.reader"}));
 }
 
+/// Installs filter `id` that may read and change the document and call `allowlist`, whose `vc_run`
+/// makes `calls` (command id and arguments) in order, dropping their codes, then returns nothing.
+fn install_calls(s: &mut Session, id: &str, allowlist: &str, calls: &[(&str, &str)]) {
+    let mut imports = r#"(import "env" "vc_call" (func $vc_call (param i32 i32 i32 i32) (result i32)))"#.to_string();
+    let mut first = String::new();
+    for (i, (cmd, args)) in calls.iter().enumerate() {
+        let at = 0x3000 + i * 0x400;
+        imports += &format!(r#" (data (i32.const {at}) "{}") (data (i32.const {}) "{}")"#, tpl::string(cmd), at + 0x100, tpl::string(args));
+        first += &format!("(drop (call $vc_call (i32.const {at}) (i32.const {}) (i32.const {}) (i32.const {})))", cmd.len(), at + 0x100, args.len());
+    }
+    let manifest = format!(
+        r#"{{"id":"{id}","name":"Test {id}","kind":"filter","api":2,"permissions":["doc.read","doc.write","commands"],"commandAllowlist":{allowlist}}}"#
+    );
+    let wasm = wat::parse_str(tpl::with_imports(&manifest, &imports, &first, EMPTY)).unwrap();
+    let data = vectorcraft_format::base64_encode(&wasm);
+    let grant = json!(["doc.read", "doc.write", "commands"]);
+    run(s, "plugin.install", json!({"dataBase64": data, "grant": grant, "replace": true}));
+}
+
+/// Arguments that carry a file or folder key at any depth, such as an effect's
+/// `textureImage.path`, are refused before the command runs, so no file is read; arguments nested
+/// without one run.
+#[test]
+fn a_call_whose_arguments_name_a_file_is_refused() {
+    let mut s = document();
+    let before = state(&mut s);
+    let allowlist = r#"["select.all","effect.apply","effect.setParams"]"#;
+    let select = ("select.all", "");
+    for (cmd, args) in [
+        ("effect.apply", r#"{"effect":"distort.glass","params":{"textureImage":{"path":"missing-texture.png"}}}"#),
+        ("effect.setParams", r#"{"index":0,"params":{"textureImage":{"path":"missing-texture.png"}}}"#),
+        ("effect.apply", r#"{"effect":"distort.glass","params":{"layers":[{"name":"a"},{"file":"missing-texture.png"}]}}"#),
+    ] {
+        install_calls(&mut s, "test.call.files", allowlist, &[select, (cmd, args)]);
+        let e = run_plugin(&mut s, "test.call.files").unwrap_err();
+        assert!(e.contains("may not call") && e.contains(cmd), "{args}: {e}");
+        assert_eq!(state(&mut s), before, "{args}");
+    }
+    // The same effect with ordinary nested params runs.
+    install_calls(&mut s, "test.call.files", allowlist, &[select, ("effect.apply", r#"{"effect":"distort.glass","params":{"distortion":5}}"#)]);
+    run_plugin(&mut s, "test.call.files").unwrap();
+    assert_eq!(state(&mut s).1, before.1 + 1, "one undo step");
+    run(&mut s, "plugin.remove", json!({"id": "test.call.files"}));
+}
+
 /// A command's result describes the document, so a plug-in without `doc.read` may call nothing.
 #[test]
 fn without_doc_read_every_call_is_refused() {

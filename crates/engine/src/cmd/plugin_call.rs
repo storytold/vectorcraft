@@ -13,7 +13,9 @@
 //! changes preferences, runs a script, an action or a plug-in (a plug-in command, or an effect a
 //! plug-in adds), opens, closes or switches documents, or undoes or redoes, whatever its manifest
 //! lists. A command whose params name a file or folder is refused unless [`NOT_FILES`] says that
-//! key names part of the document in it. Every other command is refused too unless
+//! key names part of the document in it, and so is a call whose arguments carry such a key at any
+//! depth ([`names_file`]); a call runs with no file or folder readable or writable
+//! ([`execute_confined`]). Every other command is refused too unless
 //! [`reviewed::ALLOWED`] lists it, so a command added to the registry later is refused until
 //! someone decides.
 
@@ -180,6 +182,30 @@ pub(crate) fn names_key(text: &str, key: &str) -> bool {
     })
 }
 
+/// Does `args`, the arguments of a call of command `id`, carry a key in [`FILE_KEYS`] at any depth
+/// (in objects and in arrays), such as an effect's `textureImage.path`? Only a key [`NOT_FILES`]
+/// names for `id`, at the top level, isn't counted. The walk keeps its own stack, so deep
+/// arguments can't overflow the thread's.
+fn names_file(id: &str, args: &Value) -> bool {
+    let mut stack = vec![(args, true)];
+    while let Some((v, top)) = stack.pop() {
+        match v {
+            Value::Array(a) => stack.extend(a.iter().map(|x| (x, false))),
+            Value::Object(o) => {
+                for (k, x) in o {
+                    let k = k.as_str();
+                    if FILE_KEYS.contains(&k) && !(top && NOT_FILES.contains(&(id, k))) {
+                        return true;
+                    }
+                    stack.push((x, false));
+                }
+            }
+            _ => {}
+        }
+    }
+    false
+}
+
 /// Param keys whose value names an effect or a command (`id` is `effect.apply`'s other name for
 /// `effect`).
 const PLUGIN_KEYS: &[&str] = &["effect", "effects", "id", "command", "commands"];
@@ -255,11 +281,11 @@ pub(crate) fn call(s: &mut Session, run: &Calls, id: &str, args: &Value) -> std:
     let Some(spec) = super::find_command(id) else {
         return Err(CallFailure { code: CALL_UNKNOWN_COMMAND, why: super::params::unknown_command(id).to_string() });
     };
-    if denied(spec).is_some() || names_plugin(args) {
+    if denied(spec).is_some() || names_plugin(args) || names_file(id, args) {
         return Err(refused());
     }
     let before = s.active().map(|d| d.doc.clone());
-    let r = s.execute(id, args);
+    let r = execute_confined(s, id, args);
     let value = match r {
         Ok(v) => v,
         Err(e @ EngineError::Disabled(..)) => return Err(CallFailure { code: CALL_DISABLED, why: e.to_string() }),
@@ -270,6 +296,13 @@ pub(crate) fn call(s: &mut Session, run: &Calls, id: &str, args: &Value) -> std:
         return Err(refused());
     }
     Ok(value)
+}
+
+/// Runs command `id` with `args` in `s` with no file or folder readable or writable: every path the
+/// command reaches through the checked file access ([`crate::file_access`]) is refused, whatever
+/// param carries it.
+fn execute_confined(s: &mut Session, id: &str, args: &Value) -> Result<Value> {
+    crate::file_access::confine(Some(&crate::file_access::AutomationRoots::none()), || s.execute(id, args))
 }
 
 /// Runs `f`, a plug-in run that makes command calls, as one undo step named `label` in the active
@@ -485,6 +518,51 @@ mod tests {
         assert!(!names_plugin(&json!({"text": "plugin.example"})));
         assert!(!names_plugin(&json!({"name": "plugin.style", "effect": "drop-shadow"})));
         assert!(!names_plugin(&json!({"effect": {"name": "plugin.style"}})));
+    }
+
+    /// A file or folder key counts at any depth, in objects and in arrays; a key [`NOT_FILES`] names
+    /// for the command only at the top level; ordinary nested params don't count.
+    #[test]
+    fn a_file_key_counts_at_any_depth() {
+        use serde_json::json;
+        let texture = json!({"effect": "distort.glass", "params": {"textureImage": {"path": "/tmp/t.png"}}});
+        assert!(names_file("effect.apply", &texture));
+        assert!(names_file("effect.setParams", &texture));
+        assert!(names_file("effect.apply", &json!({"params": {"layers": [{"name": "a"}, {"folder": "/tmp"}]}})));
+        assert!(names_file("select.all", &json!([[[{"url": "file:///etc/hosts"}]]])));
+        assert!(!names_file("effect.apply", &json!({"effect": "distort.glass", "params": {"distortion": 5, "textureImage": "frosted"}})));
+        assert!(!names_file("object.move", &json!({"dx": 5, "dy": 0, "ids": [1, 2], "opts": {"copy": false}})));
+        // `path` is a shape's path in object.setLiveShape, but only as its own param.
+        assert!(!names_file("object.setLiveShape", &json!({"path": [[0, 0], [1, 1]]})));
+        assert!(names_file("object.setLiveShape", &json!({"options": {"path": "/tmp/x"}})));
+        assert!(names_file("object.move", &json!({"path": [[0, 0]]})));
+        // Deep nesting is walked without recursion.
+        let mut deep = json!({"file": "/tmp/x"});
+        for _ in 0..10_000 {
+            deep = Value::Array(vec![deep]);
+        }
+        assert!(names_file("select.all", &deep));
+        std::mem::forget(deep);
+    }
+
+    /// A call reads no file even when a param the checks above don't know carries its path: the
+    /// command runs with no file readable. Run as an ordinary request, the same texture loads.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn a_confined_call_reads_no_file() {
+        use serde_json::json;
+        let file = std::env::temp_dir().join(format!("vc-plugin-call-texture-{}.png", std::process::id()));
+        let png = vectorcraft_trace::Raster::from_fn(8, 8, |x, y| if (x + y) % 2 == 0 { [0, 0, 0, 255] } else { [255, 255, 255, 255] }).encode_png();
+        std::fs::write(&file, png).unwrap();
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+        let p = json!({"effect": "distort.glass", "params": {"textureImage": {"path": file.to_string_lossy()}}});
+        let e = execute_confined(&mut s, "effect.apply", &p).map(|_| ()).unwrap_err().to_string();
+        let read = s.execute("effect.apply", &p).map(|_| ());
+        let _ = std::fs::remove_file(&file);
+        assert!(e.contains("read authority is absent"), "{e}");
+        read.unwrap();
     }
 
     #[test]

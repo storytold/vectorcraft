@@ -422,6 +422,10 @@ the module's start function, or in a run that isn't a filter's run on a document
   whole app, and for a command VectorCraft adds later until it has been checked for plug-in calls. Installing a
   manifest that lists such a command is refused, and the error names it; `plugin.inspect` lists them as
   `refusedCommands`.
+- A call whose arguments hold a file or folder key (`path`, `paths`, `file`, `files`, `folder`, `folders`, `dir`,
+  `directory`, `destinationFolder`, `sourceFolder` or `url`) at any depth, such as an effect's `textureImage.path`,
+  returns `-6`; only a key that names part of the document in that command, as its own param, is let through. A
+  command a plug-in calls can't read or write any file or folder.
 - An id in `commandAllowlist` that no command has installs, so a plug-in can list a command a later version adds;
   `plugin.install` and `plugin.inspect` list such ids as `unknownCommands`, and calling one returns `-5` (`-6` without
   `doc.read`).
