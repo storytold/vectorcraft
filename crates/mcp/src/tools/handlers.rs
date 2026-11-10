@@ -246,6 +246,16 @@ pub(super) fn select_ids(b: &mut dyn Backend, a: &Args) -> Result<(), String> {
 
 pub(super) fn add_text(b: &mut dyn Backend, a: &Args) -> Result<Value, String> {
     let text = a.get("text").and_then(Value::as_str).ok_or("missing string argument `text`")?;
+    // Creating type on a path replaces the path. Refuse an invalid effect before editing.
+    let path_effect = match a.get("pathEffect") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(effect)) if vectorcraft_doc::PathEffect::parse(effect).is_some() => Some(effect),
+        Some(Value::String(effect)) => return Err(format!("unknown path effect `{effect}`")),
+        Some(_) => return Err("`pathEffect` must be a string".into()),
+    };
+    if path_effect.is_some() && (!a.contains_key("path") || a.get("mode").is_some_and(|m| !matches!(m.as_str(), Some("onPath" | "path")))) {
+        return Err("`pathEffect` requires type on a path".into());
+    }
     let mut style = json!({});
     for k in ["size", "font", "color", "justify", "vertical"] {
         if let Some(v) = a.get(k) {
@@ -275,12 +285,12 @@ pub(super) fn add_text(b: &mut dyn Backend, a: &Args) -> Result<Value, String> {
         }
         exec(b, "text.create", p)?
     };
-    if let Some(e) = a.get("pathEffect").and_then(Value::as_str) {
+    if let Some(e) = path_effect {
         exec(b, "type.pathOptions", json!({"effect": e}))?;
     }
     let mut made = json!({"id": r.get("id")});
     // A path effect is applied after the text is made: ask again how it fits then.
-    let overflow = match r.get("id").filter(|_| a.get("pathEffect").is_some()) {
+    let overflow = match r.get("id").filter(|_| path_effect.is_some()) {
         Some(id) => exec(b, "document.node", json!({"id": id, "summary": true}))?.get("overflow").and_then(Value::as_bool) == Some(true),
         None => r.get("overflow").is_some(),
     };
