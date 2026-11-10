@@ -3170,6 +3170,13 @@ digits	Malayalam	Малаялам
 	Settings…	Параметры…
 	Setup…	Настройка…
 	Shadows and Glows	Тени и свечения
+	Game HUD	Игровой HUD
+	Health Fill	Здоровье
+	Mana Glow	Мана
+	Damage Flash	Урон
+	Quest Outline	Квест
+	Coin Shine	Монета
+	Boss Alert	Босс
 	Shape	Фигура
 	Shape Builder	Создание фигур
 	Shape Builder Regions	Области создания фигур
@@ -4103,6 +4110,28 @@ axis	Both	Оба
 @msg	Combine Slices: the slices have no bounds	Объединение фрагментов: у фрагментов нет границ
 @msg	Convert to Artboards: selection has no area	Преобразование в монтажные области: у выделения нет области
 @msg	Convert to Shape: no rectangles or ellipses selected	Преобразование в фигуру: не выделены прямоугольники или эллипсы
+	Run	Выполнить
+	Run Script	Выполнить скрипт
+	Stop Script	Остановить скрипт
+	Show External Script Warning	Показывать предупреждение о внешних скриптах
+	A Script Is Running	Выполняется скрипт
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Скрипт может изменять открытые документы и записывать файлы с помощью выполняемых команд. Запускайте только те скрипты, которым доверяете.
+	Do not show this warning again	Больше не показывать это предупреждение
+	Stop the script and undo what it did? Then quit again.	Остановить скрипт и отменить его изменения? Затем выйдите ещё раз.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Этот скрипт добавил очень много объектов. Продолжить или остановить его и отменить его изменения?
+@msg	Choose a .js or .jsx script	Выберите скрипт .js или .jsx
+@msg	Ran {name}	Выполнено: {name}
+@msg	The script was stopped and its changes were undone	Скрипт остановлен, его изменения отменены
+@msg	a script is running: stop it or wait for it to finish	выполняется скрипт: остановите его или дождитесь завершения
+@msg	this is a compiled script, which cannot be run; use its source text	это скомпилированный скрипт, его нельзя выполнить; используйте его исходный текст
+@msg	the script is not UTF-8 text	скрипт не является текстом UTF-8
+@msg	the script is too large to run	скрипт слишком велик для выполнения
+@msg	a drag or an undo group is open; finish it before running a script	открыто перетаскивание или группа отмены; завершите их перед запуском скрипта
+@msg	the script left a document that cannot be kept	скрипт оставил документ, который нельзя сохранить
+@msg	the script's run is no longer available	выполнение скрипта больше недоступно
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	неудавшаяся команда изменила шаги отмены, которые не удалось восстановить, поэтому скрипт остановлен
+@msg	a recovery copy could not be written, so the script was not run	не удалось записать копию для восстановления, поэтому скрипт не выполнен
+@msg	Running a script	Выполняется скрипт
 @msg	Copied the script report	Отчёт о сценарии скопирован
 @msg	Corners edits the corners of a path	«Углы» редактирует углы контура
 @msg	Couldn't copy to the system clipboard: {e}	Не удалось скопировать в системный буфер обмена: {e}
@@ -5641,6 +5670,11 @@ axis	Y Axis	Ось Y
 	Button	Кнопка
 	Panel	Панель
 	UI Frames	UI-рамки
+	Map Markers	Маркеры карты
+	Pin	Булавка
+	Flag	Флаг
+	Crosshair	Прицел
+	Checkpoint	Контрольная точка
 	Open Symbol Library	Открыть библиотеку символов
 	Save Symbol Library	Сохранить библиотеку символов
 	Save Symbol Library…	Сохранить библиотеку символов…

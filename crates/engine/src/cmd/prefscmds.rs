@@ -140,6 +140,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("disableAutoAddDelete", "General", "Options", "Disable Auto Add/Delete", bool),
     p!("usePreciseCursors", "General", "Options", "Use Precise Cursors", bool),
     p!("showToolTips", "General", "Options", "Show Tool Tips", bool),
+    p!("showExternalScriptWarning", "General", "Options", "Show External Script Warning", bool),
     p!("antiAliasedArtwork", "General", "Options", "Anti-aliased Artwork", bool),
     p!("selectSameTintPercent", "General", "Options", "Select Same Tint %", bool),
     p!("showHomeScreen", "General", "Options", "Show The Home Screen When No Documents Are Open", bool),

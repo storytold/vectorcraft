@@ -975,12 +975,12 @@ source = "git+https://github.com/storytold/craft-libs?rev=9be9a63782298ab59cd9b7
 [[package]]
 name = "craft-fonts-build"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb#9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb"
+source = "git+https://github.com/storytold/craft-libs?rev=bb8320f5fa5d20fa78a026d0de06fe4e2f08a099#bb8320f5fa5d20fa78a026d0de06fe4e2f08a099"
 
 [[package]]
 name = "craft-i18n"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb#9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb"
+source = "git+https://github.com/storytold/craft-libs?rev=bb8320f5fa5d20fa78a026d0de06fe4e2f08a099#bb8320f5fa5d20fa78a026d0de06fe4e2f08a099"
 dependencies = [
  "fixed_decimal",
  "icu_decimal",
@@ -1049,7 +1049,7 @@ dependencies = [
 [[package]]
 name = "craft-ui"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb#9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb"
+source = "git+https://github.com/storytold/craft-libs?rev=bb8320f5fa5d20fa78a026d0de06fe4e2f08a099#bb8320f5fa5d20fa78a026d0de06fe4e2f08a099"
 dependencies = [
  "craft-fonts-build",
  "craft-i18n",
@@ -6652,6 +6652,8 @@ dependencies = [
  "kurbo 0.13.1",
  "log",
  "md-5",
+ "objc2-core-foundation",
+ "objc2-core-graphics",
  "roxmltree 0.21.2",
  "serde",
  "serde_json",

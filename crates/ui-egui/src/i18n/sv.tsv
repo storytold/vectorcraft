@@ -3063,6 +3063,13 @@ digits	Malayalam	Malayalam
 	Settings…	Inställningar…
 	Setup…	Konfigurera…
 	Shadows and Glows	Skuggor och glöd
+	Game HUD	Spel-HUD
+	Health Fill	Hälsa
+	Mana Glow	Mana
+	Damage Flash	Skada
+	Quest Outline	Uppdrag
+	Coin Shine	Mynt
+	Boss Alert	Boss
 	Shape	Form
 	Shape Builder	Formbyggare
 	Shape Builder Regions	Formbyggarområden
@@ -3977,6 +3984,28 @@ axis	Both	Båda
 @msg	Combine Slices: the slices have no bounds	Kombinera skivor: skivorna har inga gränser
 @msg	Convert to Artboards: selection has no area	Konvertera till ritytor: markeringen har ingen area
 @msg	Convert to Shape: no rectangles or ellipses selected	Konvertera till form: inga rektanglar eller ellipser är markerade
+	Run	Kör
+	Run Script	Kör skript
+	Stop Script	Stoppa skript
+	Show External Script Warning	Visa varning för externa skript
+	A Script Is Running	Ett skript körs
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Ett skript kan ändra de öppna dokumenten och skriva filer genom de kommandon det kör. Kör bara skript du litar på.
+	Do not show this warning again	Visa inte den här varningen igen
+	Stop the script and undo what it did? Then quit again.	Stoppa skriptet och ångra det det gjort? Avsluta sedan igen.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Det här skriptet har lagt till väldigt många objekt. Fortsätta, eller stoppa det och ångra det det gjort?
+@msg	Choose a .js or .jsx script	Välj ett .js- eller .jsx-skript
+@msg	Ran {name}	Körde {name}
+@msg	The script was stopped and its changes were undone	Skriptet stoppades och dess ändringar ångrades
+@msg	a script is running: stop it or wait for it to finish	ett skript körs: stoppa det eller vänta tills det är klart
+@msg	this is a compiled script, which cannot be run; use its source text	det här är ett kompilerat skript som inte kan köras; använd dess källtext
+@msg	the script is not UTF-8 text	skriptet är inte UTF-8-text
+@msg	the script is too large to run	skriptet är för stort för att köras
+@msg	a drag or an undo group is open; finish it before running a script	en dragning eller ångragrupp är öppen; avsluta den innan du kör ett skript
+@msg	the script left a document that cannot be kept	skriptet lämnade ett dokument som inte kan behållas
+@msg	the script's run is no longer available	skriptets körning är inte längre tillgänglig
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	ett misslyckat kommando ändrade ångrasteg som inte kunde återställas, så skriptet stoppades
+@msg	a recovery copy could not be written, so the script was not run	en återställningskopia kunde inte skrivas, så skriptet kördes inte
+@msg	Running a script	Kör ett skript
 @msg	Copied the script report	Kopierade skriptrapporten
 @msg	Corners edits the corners of a path	Hörn redigerar hörnen på en bana
 @msg	Couldn't copy to the system clipboard: {e}	Kunde inte kopiera till systemets urklipp: {e}
@@ -6053,6 +6082,11 @@ axis	Y Axis	Y-axel
 	Button	Knapp
 	Panel	Panel
 	UI Frames	UI-ramar
+	Map Markers	Kartmarkörer
+	Pin	Nål
+	Flag	Flagga
+	Crosshair	Hårkors
+	Checkpoint	Kontrollpunkt
 	Open Symbol Library	Öppna symbolbibliotek
 	Save Symbol Library	Spara symbolbibliotek
 	Save Symbol Library…	Spara symbolbibliotek…

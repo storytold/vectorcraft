@@ -662,6 +662,13 @@
 	Other Library…	სხვა ბიბლიოთეკა…
 	Graphic Style Libraries	გრაფიკული სტილების ბიბლიოთეკები
 	Shadows and Glows	ჩრდილები და ნათებები
+	Game HUD	თამაშის HUD
+	Health Fill	სიცოცხლე
+	Mana Glow	მანა
+	Damage Flash	ზიანი
+	Quest Outline	ქვესტი
+	Coin Shine	მონეტა
+	Boss Alert	ბოსი
 	Outlines and Rules	კონტურები და ხაზები
 	Hand-Drawn	ხელით დახატული
 	Gradient Finishes	გრადიენტული ზედაპირები
@@ -5133,6 +5140,28 @@ mark-style	Japanese	იაპონური
 	Auto Grouping	ავტომატური დაჯგუფება
 	Ignore Color	ფერის იგნორირება
 imageTrace	Outline	კონტური
+	Run	გაშვება
+	Run Script	სკრიპტის გაშვება
+	Stop Script	სკრიპტის შეჩერება
+	Show External Script Warning	გარე სკრიპტის გაფრთხილების ჩვენება
+	A Script Is Running	სკრიპტი მუშაობს
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	სკრიპტს შეუძლია ღია დოკუმენტების შეცვლა და მის მიერ გაშვებული ბრძანებებით ფაილების ჩაწერა. გაუშვით მხოლოდ სანდო სკრიპტები.
+	Do not show this warning again	აღარ აჩვენო ეს გაფრთხილება
+	Stop the script and undo what it did? Then quit again.	შეჩერდეს სკრიპტი და გაუქმდეს მისი ცვლილებები? შემდეგ ხელახლა გამოდით.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	ამ სკრიპტმა ძალიან ბევრი ობიექტი დაამატა. გაგრძელდეს, თუ შეჩერდეს და გაუქმდეს მისი ცვლილებები?
+@msg	Choose a .js or .jsx script	აირჩიეთ .js ან .jsx სკრიპტი
+@msg	Ran {name}	გაშვებულია: {name}
+@msg	The script was stopped and its changes were undone	სკრიპტი შეჩერდა და მისი ცვლილებები გაუქმდა
+@msg	a script is running: stop it or wait for it to finish	სკრიპტი მუშაობს: შეაჩერეთ ან დაელოდეთ დასრულებას
+@msg	this is a compiled script, which cannot be run; use its source text	ეს კომპილირებული სკრიპტია და მისი გაშვება შეუძლებელია; გამოიყენეთ მისი საწყისი ტექსტი
+@msg	the script is not UTF-8 text	სკრიპტი არ არის UTF-8 ტექსტი
+@msg	the script is too large to run	სკრიპტი გასაშვებად ძალიან დიდია
+@msg	a drag or an undo group is open; finish it before running a script	ღიაა გადათრევა ან გაუქმების ჯგუფი; დაასრულეთ სკრიპტის გაშვებამდე
+@msg	the script left a document that cannot be kept	სკრიპტმა დატოვა დოკუმენტი, რომლის შენახვა შეუძლებელია
+@msg	the script's run is no longer available	სკრიპტის გაშვება აღარ არის ხელმისაწვდომი
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	წარუმატებელმა ბრძანებამ შეცვალა გაუქმების ნაბიჯები, რომელთა აღდგენა ვერ მოხერხდა, ამიტომ სკრიპტი შეჩერდა
+@msg	a recovery copy could not be written, so the script was not run	აღდგენის ასლის ჩაწერა ვერ მოხერხდა, ამიტომ სკრიპტი არ გაეშვა
+@msg	Running a script	სკრიპტი მუშაობს
 @msg	Copied the script report	კოპირებულია სკრიპტის ანგარიში
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	ტრაექტორიის წანაცვლება: წანაცვლების შემდეგ მონიშნული ტრაექტორიებიდან არაფერი რჩება (შიგნით წანაცვლება ფიგურებზე დიდია)
 @msg	{path}: not a file	{path}: ფაილი არ არის
@@ -5953,6 +5982,11 @@ axis	Y Axis	Y ღერძი
 	Button	ღილაკი
 	Panel	პანელი
 	UI Frames	UI ჩარჩოები
+	Map Markers	რუკის ნიშნულები
+	Pin	ქინძისთავი
+	Flag	დროშა
+	Crosshair	სამიზნე
+	Checkpoint	საკონტროლო წერტილი
 	Open Symbol Library	სიმბოლოების ბიბლიოთეკის გახსნა
 	Save Symbol Library	სიმბოლოების ბიბლიოთეკის შენახვა
 	Save Symbol Library…	სიმბოლოების ბიბლიოთეკის შენახვა…

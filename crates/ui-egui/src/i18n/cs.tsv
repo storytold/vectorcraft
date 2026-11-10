@@ -775,6 +775,13 @@
 	Other Library…	Jiná knihovna…
 	Graphic Style Libraries	Knihovny grafických stylů
 	Shadows and Glows	Stíny a záře
+	Game HUD	Herní HUD
+	Health Fill	Život
+	Mana Glow	Mana
+	Damage Flash	Poškození
+	Quest Outline	Úkol
+	Coin Shine	Mince
+	Boss Alert	Boss
 	Outlines and Rules	Obrysy a linky
 	Hand-Drawn	Ručně kreslené
 	Gradient Finishes	Přechodové povrchy
@@ -4377,6 +4384,28 @@ imageTrace	Outline	Obrys
 @msg	Combine Slices: the slices have no bounds	Spojit řezy: řezy nemají hranice
 @msg	Convert to Artboards: selection has no area	Převést na pracovní plochy: výběr nemá žádnou plochu
 @msg	Convert to Shape: no rectangles or ellipses selected	Převést na tvar: nejsou vybrány žádné obdélníky ani elipsy
+	Run	Spustit
+	Run Script	Spustit skript
+	Stop Script	Zastavit skript
+	Show External Script Warning	Zobrazit upozornění u externích skriptů
+	A Script Is Running	Běží skript
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skript může měnit otevřené dokumenty a prostřednictvím příkazů, které spouští, zapisovat soubory. Spouštějte jen skripty, kterým důvěřujete.
+	Do not show this warning again	Toto upozornění již nezobrazovat
+	Stop the script and undo what it did? Then quit again.	Zastavit skript a vrátit jeho změny? Potom aplikaci ukončete znovu.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Tento skript přidal velmi mnoho objektů. Pokračovat, nebo jej zastavit a vrátit jeho změny?
+@msg	Choose a .js or .jsx script	Vyberte skript .js nebo .jsx
+@msg	Ran {name}	Spuštěno: {name}
+@msg	The script was stopped and its changes were undone	Skript byl zastaven a jeho změny byly vráceny
+@msg	a script is running: stop it or wait for it to finish	běží skript: zastavte jej nebo počkejte na jeho dokončení
+@msg	this is a compiled script, which cannot be run; use its source text	toto je zkompilovaný skript, který nelze spustit; použijte jeho zdrojový text
+@msg	the script is not UTF-8 text	skript není text v kódování UTF-8
+@msg	the script is too large to run	skript je příliš velký na spuštění
+@msg	a drag or an undo group is open; finish it before running a script	je otevřené tažení nebo skupina kroků zpět; před spuštěním skriptu ji dokončete
+@msg	the script left a document that cannot be kept	skript zanechal dokument, který nelze zachovat
+@msg	the script's run is no longer available	běh skriptu již není k dispozici
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	neúspěšný příkaz změnil kroky zpět, které nebylo možné obnovit, proto byl skript zastaven
+@msg	a recovery copy could not be written, so the script was not run	záložní kopii se nepodařilo zapsat, proto skript nebyl spuštěn
+@msg	Running a script	Běží skript
 @msg	Copied the script report	Zpráva o skriptu zkopírována
 @msg	Corners edits the corners of a path	Rohy upravuje rohy cesty
 @msg	Couldn't copy to the system clipboard: {e}	Nelze kopírovat do systémové schránky: {e}
@@ -6030,6 +6059,11 @@ axis	Y Axis	osa Y
 	Button	Tlačítko
 	Panel	Panel
 	UI Frames	Rámce UI
+	Map Markers	Mapové značky
+	Pin	Špendlík
+	Flag	Vlajka
+	Crosshair	Zaměřovač
+	Checkpoint	Kontrolní bod
 	Open Symbol Library	Otevřít knihovnu symbolů
 	Save Symbol Library	Uložit knihovnu symbolů
 	Save Symbol Library…	Uložit knihovnu symbolů…

@@ -2967,6 +2967,13 @@ digits	Malayalam	Malayalam
 	Settings…	Ayarlar…
 	Setup…	Kurulum…
 	Shadows and Glows	Gölgeler ve Parıltılar
+	Game HUD	Oyun HUD
+	Health Fill	Can
+	Mana Glow	Mana
+	Damage Flash	Hasar
+	Quest Outline	Görev
+	Coin Shine	Jeton
+	Boss Alert	Boss
 	Shape	Şekil
 	Shape Builder	Şekil Oluşturucu
 	Shape Builder Regions	Şekil Oluşturucu Bölgeleri
@@ -3859,6 +3866,28 @@ axis	Both	Her İkisi
 @msg	Combine Slices: the slices have no bounds	Dilimleri Birleştir: dilimlerin sınırları yoktur
 @msg	Convert to Artboards: selection has no area	Çalışma Yüzeylerine Dönüştür: seçimin alanı yok
 @msg	Convert to Shape: no rectangles or ellipses selected	Şekle Dönüştür: seçili dikdörtgen veya elips yok
+	Run	Çalıştır
+	Run Script	Betiği Çalıştır
+	Stop Script	Betiği Durdur
+	Show External Script Warning	Harici Betik Uyarısını Göster
+	A Script Is Running	Bir Betik Çalışıyor
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Bir betik açık belgeleri değiştirebilir ve çalıştırdığı komutlarla dosya yazabilir. Yalnızca güvendiğiniz betikleri çalıştırın.
+	Do not show this warning again	Bu uyarıyı bir daha gösterme
+	Stop the script and undo what it did? Then quit again.	Betik durdurulsun ve yaptıkları geri alınsın mı? Ardından yeniden çıkın.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Bu betik çok sayıda nesne ekledi. Devam edilsin mi, yoksa durdurulup yaptıkları geri mi alınsın?
+@msg	Choose a .js or .jsx script	Bir .js veya .jsx betiği seçin
+@msg	Ran {name}	{name} çalıştırıldı
+@msg	The script was stopped and its changes were undone	Betik durduruldu ve değişiklikleri geri alındı
+@msg	a script is running: stop it or wait for it to finish	bir betik çalışıyor: durdurun veya bitmesini bekleyin
+@msg	this is a compiled script, which cannot be run; use its source text	bu derlenmiş bir betik, çalıştırılamaz; kaynak metnini kullanın
+@msg	the script is not UTF-8 text	betik UTF-8 metni değil
+@msg	the script is too large to run	betik çalıştırılamayacak kadar büyük
+@msg	a drag or an undo group is open; finish it before running a script	bir sürükleme veya geri alma grubu açık; betiği çalıştırmadan önce tamamlayın
+@msg	the script left a document that cannot be kept	betik, saklanamayan bir belge bıraktı
+@msg	the script's run is no longer available	betiğin çalıştırması artık kullanılamıyor
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	başarısız bir komut geri yüklenemeyen geri alma adımlarını değiştirdi, bu yüzden betik durduruldu
+@msg	a recovery copy could not be written, so the script was not run	kurtarma kopyası yazılamadı, bu nedenle betik çalıştırılmadı
+@msg	Running a script	Betik çalıştırılıyor
 @msg	Copied the script report	Komut dosyası raporu kopyalandı
 @msg	Corners edits the corners of a path	Köşeler bir yolun köşelerini düzenler
 @msg	Couldn't copy to the system clipboard: {e}	Sistem panosuna kopyalanamadı: {e}
@@ -5986,6 +6015,11 @@ axis	Y Axis	Y ekseni
 	Button	Düğme
 	Panel	Panel
 	UI Frames	UI çerçeveleri
+	Map Markers	Harita İşaretleri
+	Pin	İğne
+	Flag	Bayrak
+	Crosshair	Nişangah
+	Checkpoint	Kontrol noktası
 	Open Symbol Library	Sembol Kitaplığını Aç
 	Save Symbol Library	Sembol Kitaplığını Kaydet
 	Save Symbol Library…	Sembol Kitaplığını Kaydet…

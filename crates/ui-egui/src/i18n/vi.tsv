@@ -3499,6 +3499,13 @@ mark-style	Japanese	Kiểu Nhật
 	Setup…	Thiết lập…
 	Shading	Tô bóng
 	Shadows and Glows	Bóng và ánh sáng
+	Game HUD	HUD trò chơi
+	Health Fill	Máu
+	Mana Glow	Mana
+	Damage Flash	Sát thương
+	Quest Outline	Nhiệm vụ
+	Coin Shine	Xu
+	Boss Alert	Trùm
 	Shape	Hình dạng
 	Shape Builder	Tạo hình dạng
 	Shape Builder Regions	Vùng Tạo hình dạng
@@ -4511,6 +4518,28 @@ theme	Appearance	Giao diện
 @msg	compressed (RLE) bitmaps can't be read yet	bitmap nén (RLE) chưa thể đọc được
 @msg	Convert to Artboards: selection has no area	Chuyển thành bảng vẽ: vùng chọn không có diện tích
 @msg	Convert to Shape: no rectangles or ellipses selected	Chuyển thành hình dạng: chưa chọn hình chữ nhật hay hình elip
+	Run	Chạy
+	Run Script	Chạy tập lệnh
+	Stop Script	Dừng tập lệnh
+	Show External Script Warning	Hiện cảnh báo tập lệnh bên ngoài
+	A Script Is Running	Một tập lệnh đang chạy
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Tập lệnh có thể thay đổi các tài liệu đang mở và ghi tệp thông qua các lệnh mà nó chạy. Chỉ chạy những tập lệnh bạn tin cậy.
+	Do not show this warning again	Không hiện lại cảnh báo này
+	Stop the script and undo what it did? Then quit again.	Dừng tập lệnh và hoàn tác những gì nó đã làm? Sau đó hãy thoát lại.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Tập lệnh này đã thêm rất nhiều đối tượng. Tiếp tục, hay dừng lại và hoàn tác những gì nó đã làm?
+@msg	Choose a .js or .jsx script	Chọn một tập lệnh .js hoặc .jsx
+@msg	Ran {name}	Đã chạy {name}
+@msg	The script was stopped and its changes were undone	Tập lệnh đã dừng và các thay đổi của nó đã được hoàn tác
+@msg	a script is running: stop it or wait for it to finish	một tập lệnh đang chạy: hãy dừng nó hoặc chờ nó kết thúc
+@msg	this is a compiled script, which cannot be run; use its source text	đây là tập lệnh đã biên dịch, không thể chạy; hãy dùng văn bản nguồn của nó
+@msg	the script is not UTF-8 text	tập lệnh không phải là văn bản UTF-8
+@msg	the script is too large to run	tập lệnh quá lớn để chạy
+@msg	a drag or an undo group is open; finish it before running a script	đang có thao tác kéo hoặc nhóm hoàn tác; hãy hoàn thành trước khi chạy tập lệnh
+@msg	the script left a document that cannot be kept	tập lệnh để lại một tài liệu không thể giữ
+@msg	the script's run is no longer available	lần chạy tập lệnh không còn khả dụng
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	một lệnh thất bại đã thay đổi các bước hoàn tác không thể khôi phục, nên tập lệnh đã bị dừng
+@msg	a recovery copy could not be written, so the script was not run	không thể ghi bản sao khôi phục nên tập lệnh không được chạy
+@msg	Running a script	Đang chạy tập lệnh
 @msg	Copied the script report	Đã sao chép báo cáo script
 @msg	Corners edits the corners of a path	Corners chỉnh sửa các góc của đường dẫn
 @msg	could not decode image: {0}	không thể giải mã ảnh: {0}
@@ -5628,6 +5657,11 @@ axis	Y Axis	Trục Y
 	Button	Nút
 	Panel	Bảng
 	UI Frames	Khung UI
+	Map Markers	Đánh dấu bản đồ
+	Pin	Ghim
+	Flag	Cờ
+	Crosshair	Tâm ngắm
+	Checkpoint	Điểm kiểm tra
 	Open Symbol Library	Mở thư viện ký hiệu
 	Save Symbol Library	Lưu thư viện ký hiệu
 	Save Symbol Library…	Lưu thư viện ký hiệu…

@@ -3753,6 +3753,13 @@ mark-style	Japanese	Japán
 	Shades of Gray	Szürkeárnyalatok
 	Shading	Árnyékolás
 	Shadows and Glows	Árnyékok és ragyogások
+	Game HUD	Játék HUD
+	Health Fill	Életerő
+	Mana Glow	Mana
+	Damage Flash	Sebzés
+	Quest Outline	Küldetés
+	Coin Shine	Érme
+	Boss Alert	Főellenség
 	Shape	Alakzat
 	Shape Builder	Alakzatépítő
 	Shape Builder Regions	Alakzatépítő területei
@@ -4862,6 +4869,28 @@ imageTrace	Outline	Körvonal
 @msg	compressed (RLE) bitmaps can't be read yet	a tömörített (RLE) bitképek még nem olvashatók
 @msg	Convert to Artboards: selection has no area	Átalakítás rajztáblákká: a kijelölésnek nincs területe
 @msg	Convert to Shape: no rectangles or ellipses selected	Átalakítás alakzattá: nincs kijelölt téglalap vagy ellipszis
+	Run	Futtatás
+	Run Script	Parancsfájl futtatása
+	Stop Script	Parancsfájl leállítása
+	Show External Script Warning	Figyelmeztetés külső parancsfájlok előtt
+	A Script Is Running	Egy parancsfájl fut
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	A parancsfájl módosíthatja a megnyitott dokumentumokat, és a futtatott parancsokkal fájlokat írhat. Csak megbízható parancsfájlokat futtasson.
+	Do not show this warning again	Ne jelenjen meg többé ez a figyelmeztetés
+	Stop the script and undo what it did? Then quit again.	Leállítja a parancsfájlt, és visszavonja a módosításait? Ezután lépjen ki újra.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Ez a parancsfájl nagyon sok objektumot adott hozzá. Folytatja, vagy leállítja és visszavonja a módosításait?
+@msg	Choose a .js or .jsx script	Válasszon .js vagy .jsx parancsfájlt
+@msg	Ran {name}	Lefutott: {name}
+@msg	The script was stopped and its changes were undone	A parancsfájl leállt, a módosításai visszavonva
+@msg	a script is running: stop it or wait for it to finish	egy parancsfájl fut: állítsa le, vagy várja meg, hogy befejeződjön
+@msg	this is a compiled script, which cannot be run; use its source text	ez lefordított parancsfájl, amely nem futtatható; használja a forrásszövegét
+@msg	the script is not UTF-8 text	a parancsfájl nem UTF-8 szöveg
+@msg	the script is too large to run	a parancsfájl túl nagy a futtatáshoz
+@msg	a drag or an undo group is open; finish it before running a script	húzás vagy visszavonási csoport van folyamatban; fejezze be a parancsfájl futtatása előtt
+@msg	the script left a document that cannot be kept	a parancsfájl olyan dokumentumot hagyott hátra, amely nem tartható meg
+@msg	the script's run is no longer available	a parancsfájl futása már nem érhető el
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	egy sikertelen parancs olyan visszavonási lépéseket módosított, amelyeket nem lehetett visszaállítani, ezért a parancsfájl leállt
+@msg	a recovery copy could not be written, so the script was not run	a helyreállítási másolatot nem sikerült kiírni, ezért a parancsfájl nem futott le
+@msg	Running a script	Parancsfájl futtatása
 @msg	Copied the script report	Szkriptjelentés másolva
 @msg	Corners edits the corners of a path	a Sarkok parancs egy útvonal sarkait szerkeszti
 @msg	could not decode image: {0}	a kép nem dekódolható: {0}
@@ -6013,6 +6042,11 @@ axis	Y Axis	Y tengely
 	Button	Gomb
 	Panel	Panel
 	UI Frames	UI keretek
+	Map Markers	Térképjelölők
+	Pin	Gombostű
+	Flag	Zászló
+	Crosshair	Célkereszt
+	Checkpoint	Ellenőrzőpont
 	Open Symbol Library	Szimbólumkönyvtár megnyitása
 	Save Symbol Library	Szimbólumkönyvtár mentése
 	Save Symbol Library…	Szimbólumkönyvtár mentése…

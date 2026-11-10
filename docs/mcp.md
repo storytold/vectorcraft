@@ -1520,6 +1520,75 @@ the included files too.
 vectorcraft-cli run --cmd script.check --params '{"path": "Tidy Layers.jsx"}'
 ```
 
+`script.run {path? | source?, name?, args?, answers?, maxFuel?}` runs a JavaScript file against the open documents.
+File › Scripts › Other Script… (Cmd+F12) picks a `.js` or `.jsx` file and runs it the same way; the help page
+https://helpx.adobe.com/illustrator/desktop/automate-visualize-data/automate-actions/install-and-run-scripts.html
+describes that menu item. Pass exactly one of `path` and `source`. A `path` must end in `.js` or `.jsx`, in any
+case. A `.jsxbin` file or text that starts with `@JSXBIN@` is compiled and ends with an error, as does text that is
+not UTF-8. The language is ES5.1. The script reaches the app through one global object:
+
+- `vc.run(id, params)` runs a command and returns its result. A command that fails throws an error the script can
+  catch. The documents and the session state the command changed, preferences included, go back, and any file it
+  wrote stays written and is named in the report. A result too large to cross throws a `RangeError`, and the
+  command's changes go back the same way.
+- `vc.document` is a snapshot of the active document, or `null` when none is open. A snapshot too large to cross
+  throws a `RangeError`.
+- `vc.commands` lists the commands a script may run.
+- `vc.log(value)` adds a value to the report.
+- `vc.args` is the `args` object.
+- `vc.api.version` is `"1.0"`, and `vc.api.has(feature)` says whether the API has a feature.
+
+The run is one transaction. When the script ends, each document it changed gets one undo step named Run Script. A
+run that changes no document adds no undo step. The journal records each command the run finished, as it records
+commands run one at a time. A preference the run changed takes the run's value, and a preference changed in the app
+while the run went on keeps that change. On an uncaught error, a limit or `script.stop`, every open document and the
+session go back to their state before the run. A script can write files through the commands it runs, such as
+export commands. A file written before the run failed stays on disk, and the error names it. A run from the menu
+shows a warning first, unless you ticked Do not show this warning again or set the preference
+`showExternalScriptWarning` to false.
+
+While a script runs, every other command that changes anything ends with the error `a script is running: stop it or
+wait for it to finish`. MCP reports that error as JSON-RPC error `-32003`. `script.stop {}` stops the run and
+returns `{stopped}`. `notifications/cancelled` stops a run only while the `tools/call` that started it is waiting
+for it, as in a headless server; use `script.stop` for a run the app started. A script cannot run commands that
+change anything outside the documents: `script.*` except `script.check`, `plugin.*`, `prefs.*`, `actionSet.*`,
+`shortcutSet.*`, `help.*`, `print.*`, `library.*`, `importMatches.*`, `edit.undoGroup.*`, `file.recovery.*`,
+`stroke.widthProfile.*`, saving, importing or deleting a preset, `text.addFontFiles`, `text.findFontFiles`,
+`text.rescanFonts`, `links.findFiles`, `file.place.queue`, `color.loadProfile`, `color.removeProfile`, `file.print`,
+`view.proofSetup`, `view.proofColors`, `view.overprintPreview` and `view.separationsPreview`. It also cannot run
+`edit.clearHistory`: a run keeps each document's undo steps from before it and adds one. Calling one of these throws
+an error. With Data Recovery off for complex documents, a run in the web build does not start while a complex document
+has unsaved changes.
+
+VectorCraft sets these limits itself:
+
+| Limit | Value |
+|-------|-------|
+| Source text | 8 MiB |
+| Heap | 256 MiB (128 MiB on the web) |
+| Host calls | 2,000,000 |
+| `maxFuel`, instructions in all | 1 to 100,000,000,000; 1,000,000,000 by default |
+| Instructions without a pause | 200,000,000 |
+| Nesting depth | 64 levels |
+| A value crossing to or from a command | 16 MiB and 1,048,576 entries |
+| `args` as JSON | 1 MiB |
+| Log | 10,000 entries and 4 MiB |
+| Growth before a person is asked | 100,000 objects and 512 MiB of new document data |
+
+In the app, a script past the growth limit stops at a question to continue or to stop and undo. Stop, Escape and
+`ui.dialog.cancel` all stop the run. A run with nobody to ask, such as a call over MCP or the command line, ends
+with an error at that limit. The headless reply is `{ok: true, name, changed, written, log, fuelUsed, hostCalls}`.
+In the app the reply is `{running: true, name}`, and the report appears later as `scriptReport` in `ui.inspect`.
+`answers` takes only an empty object, since scripts have no prompts yet.
+
+```json
+{"name":"run_command","arguments":{"command":"script.run","params":{"source":"vc.run('shape.rectangle', {x: 0, y: 0, width: 10, height: 10});"}}}
+```
+
+```sh
+vectorcraft-cli run --cmd script.run --params '{"path": "Tidy Layers.js", "args": {"margin": 12}}'
+```
+
 ## Transparency and opacity masks
 
 Transparency and opacity-mask commands take `ids` (or `id`), so they need no selection. Opacity is a percentage
@@ -2722,7 +2791,7 @@ as a value left out.
 ## Graphic style libraries
 
 Graphic style libraries are read-only sets of graphic styles generated in code (Shadows and Glows, Outlines and
-Rules, Hand-Drawn, Gradient Finishes, Shape Effects, Blends and Transparency). `graphicStyle.libraries` lists them
+Rules, Hand-Drawn, Gradient Finishes, Shape Effects, Blends and Transparency, Game HUD). `graphicStyle.libraries` lists them
 (`id`, `name`, `category`: `builtIn`, `user` or `loaded`, `count`) and `graphicStyle.library {library}` returns one's
 styles in the `graphicStyle.list` shape (`library` is an id or a name). `graphicStyle.addFromLibrary {library, name? |
 names?}` copies styles into the document's Graphic Styles as one undo step (no names: the whole library); styles the
@@ -3255,11 +3324,13 @@ and `stroke.widthProfile.reset` removes every saved one. `stroke.set {profile}` 
 
 ## Arrowheads
 
-`stroke.set {startArrow, endArrow}` takes any of 40 generated heads by name (the params doc lists them; `null` for
-none): arrows (`Arrow`, `Barbed`, `Concave`, `DoubleArrow`, `HalfArrowLeft`/`Right`, `Chevron`, `Feather`,
+`stroke.set {startArrow, endArrow}` takes any of 41 generated heads by name (the params doc lists them; `null` for
+none): arrows (`Arrow`, `LineArrow`, `Barbed`, `Concave`, `DoubleArrow`, `HalfArrowLeft`/`Right`, `Chevron`, `Feather`,
 `Swallowtail`…), filled and open shapes (`Triangle`, `Circle`, `Oval`, `Target`, `Tag`, `Diamond`, `Hexagon`, `Star`,
 the `…Open` rings…) and marks (`Bar`, `DoubleBar`, `DotOnBar`, `Slash`, `DoubleSlash`, `Bracket`, `Fork`, `Cross`,
-`Plus`). Each head fits a box about four times its weight (stroke weight × `arrowScale`) long and wide.
+`Plus`). Each head fits a box about four times its weight long and wide. A head's weight is the stroke weight scaled by
+`arrowScale`, at least 0.25 pt. `LineArrow` has two arms of the head's weight (the line's weight at 100 % for lines of
+0.25 pt or more) at right angles and spreads twice as wide.
 
 ## Stroke bounds and clicks
 
@@ -4122,7 +4193,21 @@ every document they read except a native file and the native document that an SV
 
 `view.rotate {angle}` (desktop app) turns the view to `angle` degrees about the center of the canvas; a positive angle
 turns the art clockwise on screen. View › Rotate View and the status bar's angle menu run it. It returns `{angle}`, the
-angle it set, normalized to (-180, 180], and `view.rotateReset` turns the view back to 0.
+angle it set, normalized to (-180, 180], and `view.rotateReset` turns the view back to 0, returning `null` on success.
+
+Select the Rotate View Tool with `select_tool` and the tool id `rotateView`. Its `pointer_gesture`
+drags turn the canvas about its center; Shift snaps to 15°. Document coordinates for a rotation
+gesture use the view at the initial down event, including when the gesture spans several calls.
+The control channel rejects malformed rotation packets without changing the angle and cancels
+the current press. Start a new down event after an error.
+Reset Rotate View is the command `view.rotateReset`:
+
+```json
+{"name":"select_tool","arguments":{"tool":"rotateView"}}
+{"name":"pointer_gesture","arguments":{"events":[{"kind":"down","x":300,"y":150},{"kind":"drag","x":200,"y":250},{"kind":"up","x":200,"y":250}]}}
+{"name":"command_run","arguments":{"id":"view.rotateReset","params":{}}}
+```
+
 `view.rotateToSelection` (desktop app, View › Rotate View to Selection) turns the view about the center of the canvas to
 the angle the selected objects share (`selectionRotation` in `document.inspect`, 0 when their angles differ), so their
 bounding box is square to the window. It returns `{angle}`, and with nothing selected it returns "nothing selected".
@@ -5833,6 +5918,9 @@ undo step. Object › Transform › Scale, the Scale tool and the Transform pane
 `text.reshapePath {id, anchors: [[subpath, anchor]…], dx, dy}` does the same for the path of type on a path
 (Direct Selection dragging one of its anchors): the start and end brackets keep their fractions of the path and the
 text reflows along it.
+`text.setPathHandle {id, subpath?, anchor, which: "in"|"out", x, y, independent?}` moves a direction handle of one
+of its anchors, as `path.setHandle` moves a path's (Direct Selection dragging a handle of the path, #3565), in one
+undo step.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.reshapeArea","params":{"id":42,"anchors":[[0,2]],"dx":40,"dy":60}}}
@@ -6057,7 +6145,7 @@ lines up to date as the type, the custom dictionary and the Ignore All words cha
 A right-click on an underlined word puts at the top of the canvas context menu the words `text.spelling.suggest` gives
 for it (each a `text.editRange {id, start, end, insert}` item labelled with its word), or No Suggestions, then Ignore
 All (`text.spelling.ignoreAll {word}`) and Add to Dictionary (`text.spelling.addWord {word}`); the context menu's
-entries list them with their params.
+entries list them with their params. A right-click on type also has Spelling › Auto Spell Check (`edit.autoSpellCheck`).
 
 
 ## Justification options

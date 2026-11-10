@@ -712,6 +712,13 @@
 	Other Library…	Andet bibliotek…
 	Graphic Style Libraries	Biblioteker med grafiske stile
 	Shadows and Glows	Skygger og gløder
+	Game HUD	Spil-HUD
+	Health Fill	Helbred
+	Mana Glow	Mana
+	Damage Flash	Skade
+	Quest Outline	Quest
+	Coin Shine	Mønt
+	Boss Alert	Boss
 	Outlines and Rules	Konturer og linjer
 	Hand-Drawn	Håndtegnet
 	Gradient Finishes	Gradientfinish
@@ -4073,6 +4080,15 @@ imageTrace	Outline	Kontur
 @msg	Combine Slices: the slices have no bounds	Kombinér udsnit: udsnittene har ingen grænser
 @msg	Convert to Artboards: selection has no area	Konvertér til tegneflader: markeringen har intet areal
 @msg	Convert to Shape: no rectangles or ellipses selected	Konvertér til figur: ingen rektangler eller ellipser er markeret
+	Run	Kør
+	Run Script	Kør script
+	Stop Script	Stop script
+	Show External Script Warning	Vis advarsel om eksterne scripts
+	A Script Is Running	Et script kører
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Et script kan ændre de åbne dokumenter og skrive filer gennem de kommandoer, det kører. Kør kun scripts, du stoler på.
+	Do not show this warning again	Vis ikke denne advarsel igen
+	Stop the script and undo what it did? Then quit again.	Stop scriptet og fortryd det, det har gjort? Afslut derefter igen.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Dette script har tilføjet rigtig mange objekter. Fortsæt, eller stop det og fortryd det, det har gjort?
 @msg	Copied the script report	Kopierede scriptrapporten
 @msg	Corners edits the corners of a path	Hjørner redigerer hjørnerne på en kurve
 @msg	Couldn't copy to the system clipboard: {e}	Kunne ikke kopiere til systemets udklipsholder: {e}
@@ -5850,6 +5866,11 @@ axis	Y Axis	Y-akse
 	Button	Knap
 	Panel	Panel
 	UI Frames	UI-rammer
+	Map Markers	Kortmarkører
+	Pin	Nål
+	Flag	Flag
+	Crosshair	Sigtekorn
+	Checkpoint	Kontrolpunkt
 	Open Symbol Library	Åbn symbolbibliotek
 	Save Symbol Library	Gem symbolbibliotek
 	Save Symbol Library…	Gem symbolbibliotek…

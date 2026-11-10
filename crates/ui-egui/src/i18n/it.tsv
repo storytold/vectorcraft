@@ -3175,6 +3175,13 @@ digits	Malayalam	Malayalam
 	Settings…	Impostazioni…
 	Setup…	Configurazione…
 	Shadows and Glows	Ombre e bagliori
+	Game HUD	HUD di gioco
+	Health Fill	Salute
+	Mana Glow	Mana
+	Damage Flash	Danno
+	Quest Outline	Missione
+	Coin Shine	Moneta
+	Boss Alert	Boss
 	Shape	Forma
 	Shape Builder	Generatore forme
 	Shape Builder Regions	Aree del Generatore forme
@@ -4109,6 +4116,28 @@ axis	Both	Entrambi
 @msg	Combine Slices: the slices have no bounds	Combina sezioni: le sezioni non hanno limiti
 @msg	Convert to Artboards: selection has no area	Converti in tavole da disegno: la selezione non ha area
 @msg	Convert to Shape: no rectangles or ellipses selected	Converti in forma: nessun rettangolo o ellisse selezionato
+	Run	Esegui
+	Run Script	Esegui script
+	Stop Script	Interrompi script
+	Show External Script Warning	Mostra avviso per gli script esterni
+	A Script Is Running	È in esecuzione uno script
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Uno script può modificare i documenti aperti e scrivere file tramite i comandi che esegue. Esegui solo script di cui ti fidi.
+	Do not show this warning again	Non mostrare più questo avviso
+	Stop the script and undo what it did? Then quit again.	Interrompere lo script e annullare ciò che ha fatto? Poi esci di nuovo.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Questo script ha aggiunto moltissimi oggetti. Continuare, oppure interromperlo e annullare ciò che ha fatto?
+@msg	Choose a .js or .jsx script	Scegli uno script .js o .jsx
+@msg	Ran {name}	{name} eseguito
+@msg	The script was stopped and its changes were undone	Lo script è stato interrotto e le sue modifiche sono state annullate
+@msg	a script is running: stop it or wait for it to finish	è in esecuzione uno script: interrompilo o attendi che finisca
+@msg	this is a compiled script, which cannot be run; use its source text	questo è uno script compilato, che non può essere eseguito; usa il suo testo sorgente
+@msg	the script is not UTF-8 text	lo script non è testo UTF-8
+@msg	the script is too large to run	lo script è troppo grande per essere eseguito
+@msg	a drag or an undo group is open; finish it before running a script	è aperto un trascinamento o un gruppo di annullamento; completalo prima di eseguire uno script
+@msg	the script left a document that cannot be kept	lo script ha lasciato un documento che non può essere conservato
+@msg	the script's run is no longer available	l'esecuzione dello script non è più disponibile
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	un comando non riuscito ha modificato passaggi di annullamento che non è stato possibile ripristinare, quindi lo script è stato interrotto
+@msg	a recovery copy could not be written, so the script was not run	non è stato possibile scrivere una copia di recupero, quindi lo script non è stato eseguito
+@msg	Running a script	Esecuzione di uno script
 @msg	Copied the script report	Rapporto dello script copiato
 @msg	Corners edits the corners of a path	Angoli modifica gli angoli di un tracciato
 @msg	Couldn't copy to the system clipboard: {e}	Impossibile copiare negli appunti di sistema: {e}
@@ -5647,6 +5676,11 @@ axis	Y Axis	Asse Y
 	Button	Pulsante
 	Panel	Pannello
 	UI Frames	Cornici UI
+	Map Markers	Marcatori mappa
+	Pin	Spillo
+	Flag	Bandiera
+	Crosshair	Mirino
+	Checkpoint	Punto di controllo
 	Open Symbol Library	Apri libreria simboli
 	Save Symbol Library	Salva libreria simboli
 	Save Symbol Library…	Salva libreria simboli…
