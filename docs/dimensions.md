@@ -4,8 +4,11 @@ The **Dimension Tool** is in the Modify section of the toolbar. Its strip offers
 **Angular**, **Radial** and **Tool Options…** (double-clicking the tool opens Tool Options too).
 
 - **Linear:** hover a path segment and drag outwards: releasing places the dimension. Or click two
-  points (anchors snap, Shift constrains to 45°), then click to place. A curved segment is measured
-  from end to end. With Smart Guides on, both points also snap into line with other objects'
+  points (anchors snap, Shift constrains to 45°), then click to place. A click within 8 pixels of
+  an anchor of any path, in groups and compound paths too, takes that anchor, and the dimension
+  stays linked to it. A press on an anchor picks it when the pointer moves less than 8 pixels
+  before the release; a longer drag drags out the dimension of the segment under the pointer. A
+  curved segment is measured from end to end. With Smart Guides on, both points also snap into line with other objects'
   anchors and centres, and the second onto the construction guides through the first; the guides
   show while hovering, before each click.
 - **Angular:** hover a corner where two straight segments meet and drag outwards. Or click two

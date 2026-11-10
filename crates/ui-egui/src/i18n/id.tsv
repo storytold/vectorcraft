@@ -4073,6 +4073,15 @@ imageTrace	Outline	Kontur
 @msg	Combine Slices: the slices have no bounds	Gabungkan irisan: irisan tidak memiliki batas
 @msg	Convert to Artboards: selection has no area	Konversi ke artboard: seleksi tidak memiliki area
 @msg	Convert to Shape: no rectangles or ellipses selected	Konversi ke bentuk: tidak ada persegi panjang atau elips yang dipilih
+	Run	Jalankan
+	Run Script	Jalankan Skrip
+	Stop Script	Hentikan Skrip
+	Show External Script Warning	Tampilkan Peringatan Skrip Eksternal
+	A Script Is Running	Skrip Sedang Berjalan
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skrip dapat mengubah dokumen yang terbuka dan menulis file melalui perintah yang dijalankannya. Jalankan hanya skrip yang Anda percayai.
+	Do not show this warning again	Jangan tampilkan peringatan ini lagi
+	Stop the script and undo what it did? Then quit again.	Hentikan skrip dan batalkan yang telah dilakukannya? Lalu keluar lagi.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Skrip ini telah menambahkan sangat banyak objek. Lanjutkan, atau hentikan dan batalkan yang telah dilakukannya?
 @msg	Copied the script report	Berhasil menyalin laporan skrip
 @msg	Corners edits the corners of a path	Corners menyunting sudut jalur
 @msg	Couldn't copy to the system clipboard: {e}	Tidak dapat menyalin ke papan klip sistem: {e}
