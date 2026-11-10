@@ -70,7 +70,8 @@ pub fn revolve_options(p: &Value) -> Revolve {
 pub fn validate_revolve(n: &Node, p: &Value) -> Result<(), String> {
     validate_revolve_params(p)?;
     let effects = &n.appearance.effects;
-    let before = effects.iter().position(|e| e.visible && e.id == REVOLVE).and_then(|i| effects.get(..i)).unwrap_or(effects);
+    // The profile is measured before the object's one Revolve, hidden or shown.
+    let before = effects.iter().position(|e| e.id == REVOLVE).and_then(|i| effects.get(..i)).unwrap_or(effects);
     if is_container(n) {
         const EMPTY: &str = "Revolve requires a group holding a shape with at least two anchors";
         let mut shapes = members(n, "Revolve")?;
@@ -810,6 +811,23 @@ mod tests {
         assert!(validate_revolve(&object, &json!({})).is_ok());
         object.appearance.effects.insert(0, roughen);
         assert!(validate_revolve(&object, &json!({})).is_err(), "a reshaped object not yet revolved");
+    }
+
+    #[test]
+    fn validation_of_a_hidden_revolve_leaves_out_the_geometry_effects_after_it() {
+        let roughen = crate::new_effect("distort.roughen", &json!({"size": 1, "detail": 100})).unwrap();
+        let mut hidden = crate::new_effect(REVOLVE, &json!({})).unwrap();
+        hidden.visible = false;
+        let mut object = (*star(1)).clone();
+        object.appearance.effects = vec![hidden.clone(), roughen.clone()];
+        assert_eq!(validate_revolve(&object, &json!({})), Ok(()), "an object whose Revolve is shown again");
+        let mut group = group_with(json!({}), vec![star(1)]);
+        group.appearance.effects = vec![hidden, roughen];
+        assert_eq!(validate_revolve(&group, &json!({})), Ok(()), "a group whose Revolve is shown again");
+        for n in [&mut object, &mut group] {
+            n.appearance.effects[0].visible = true;
+            assert!(revolve_art(n).is_some(), "shown, the Revolve draws");
+        }
     }
 
     #[test]
