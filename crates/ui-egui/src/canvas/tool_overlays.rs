@@ -175,18 +175,25 @@ pub(crate) fn misspelled_word_at(app: &mut VectorcraftApp, p: Point) -> Option<c
     // The topmost type whose glyphs `p` is on, and whether it or a layer or group holding it is
     // locked: a word under other type isn't the one right-clicked, whether that type's word there
     // is right or not.
-    let mut top: Option<(&Node, bool)> = None;
-    fn walk<'a>(nodes: &'a [std::sync::Arc<Node>], locked: bool, f: &mut impl FnMut(&'a Node, bool)) {
+    let mut top: Option<(vectorcraft_doc::NodeId, bool)> = None;
+    // Back to front as drawn at `p`: an Intertwine group's members by their tier there, those of
+    // one tier in their stacking order ([`vectorcraft_doc::intertwine`]).
+    fn walk(nodes: &[std::sync::Arc<Node>], p: Point, locked: bool, f: &mut impl FnMut(&Node, bool)) {
         for n in nodes.iter().filter(|n| n.visible) {
             let locked = locked || n.locked;
             f(n, locked);
-            if let Some(children) = n.children() {
-                walk(children, locked, f);
+            let Some(children) = n.children() else { continue };
+            if matches!(n.kind, NodeKind::Intertwine { .. }) {
+                let mut drawn = children.to_vec();
+                drawn.sort_by_key(|c| vectorcraft_doc::intertwine::tier_at(c, p));
+                walk(&drawn, p, locked, f);
+            } else {
+                walk(children, p, locked, f);
             }
         }
     }
-    // Paint order: a later hit is on top.
-    walk(&st.doc.layers, false, &mut |n, locked| {
+    // A later hit is on top.
+    walk(&st.doc.layers, p, false, &mut |n, locked| {
         let NodeKind::Text(tx) = &n.kind else { return };
         if n.geometric_bounds().is_none_or(|b| !b.contains(p)) {
             return;
@@ -194,10 +201,11 @@ pub(crate) fn misspelled_word_at(app: &mut VectorcraftApp, p: Point) -> Option<c
         let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), tx);
         let on = vectorcraft_text::selection_quads(&lay, 0, tx.plain_text().len()).iter().any(|q| in_quad(q.map(|c| tx.xf * c), p));
         if on {
-            top = Some((n, locked));
+            top = Some((n.id, locked));
         }
     });
-    let (n, locked) = top?;
+    let (id, locked) = top?;
+    let n = st.doc.node(id)?;
     let NodeKind::Text(tx) = &n.kind else { return None };
     if locked || !auto_spell_checks(n) {
         return None;
@@ -207,7 +215,6 @@ pub(crate) fn misspelled_word_at(app: &mut VectorcraftApp, p: Point) -> Option<c
     let w = words
         .into_iter()
         .find(|w| vectorcraft_text::selection_quads(&lay, w.range.start, w.range.end).iter().any(|q| in_quad(q.map(|c| tx.xf * c), p)))?;
-    let id = n.id;
     let word = tx.plain_text().get(w.range.clone())?.to_string();
     let uid = st.uid;
     let suggestions = app

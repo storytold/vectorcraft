@@ -528,3 +528,43 @@ fn a_word_under_other_type_is_not_the_one_right_clicked() {
     let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
     assert!(!has(&texts, "Ignore All"), "under right type: {texts:?}");
 }
+
+/// In an Intertwine group, the type drawn on top at the right-click is the one whose word is
+/// offered: a member brought to the front there, though earlier in the stacking order.
+#[test]
+fn in_an_intertwine_group_the_type_drawn_on_top_is_the_one_right_clicked() {
+    let mut app = app();
+    let under = spelled(&mut app, "Qzvxtrwk");
+    let over =
+        NodeId(app.run("text.create", json!({"x": 20, "y": 60, "text": "the cat sat on the mat", "size": 24})).unwrap()["id"].as_u64().unwrap());
+    app.run("select.set", json!({"ids": [under.0, over.0]})).unwrap();
+    let g = NodeId(app.run("object.intertwine.make", json!({})).unwrap()["id"].as_u64().unwrap());
+    app.select_tool("selection");
+    app.run("select.none", json!({})).unwrap();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    // A point on the word where glyphs of both overlap: Intertwine's areas follow the outlines.
+    let quad = {
+        let st = app.session.active().unwrap();
+        let Some(NodeKind::Text(t)) = st.doc.node(under).map(|n| &n.kind) else { panic!("type") };
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+        vectorcraft_text::selection_quads(&lay, 0, 8)[0].map(|c| t.xf * c)
+    };
+    let (x0, x1) = (quad.iter().map(|c| c.x).fold(f64::MAX, f64::min), quad.iter().map(|c| c.x).fold(f64::MIN, f64::max));
+    let (y0, y1) = (quad.iter().map(|c| c.y).fold(f64::MAX, f64::min), quad.iter().map(|c| c.y).fold(f64::MIN, f64::max));
+    let overlap = (0..40)
+        .flat_map(|i| (0..20).map(move |j| Point::new(x0 + (x1 - x0) * (i as f64 + 0.5) / 40.0, y0 + (y1 - y0) * (j as f64 + 0.5) / 20.0)))
+        .find(|q| app.run("object.intertwine.arrange", json!({"id": g.0, "at": [q.x, q.y], "order": "back", "member": under.0})).is_ok())
+        .expect("glyphs of both overlap somewhere on the word");
+    let p = screen(&app, overlap.x, overlap.y);
+    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert!(!has(&texts, "Ignore All"), "under the right type: {texts:?}");
+    frame(
+        &mut app,
+        &ctx,
+        vec![Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }],
+    );
+    app.run("object.intertwine.arrange", json!({"id": g.0, "at": [overlap.x, overlap.y], "order": "front", "member": under.0})).unwrap();
+    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert!(has(&texts, "Ignore All"), "brought to the front there: {texts:?}");
+}
