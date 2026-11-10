@@ -6069,6 +6069,11 @@ axis	Y Axis	Άξονας Y
 	User Brush Library 9	Βιβλιοθήκη πινέλων χρήστη 9
 	User Brush Library 10	Βιβλιοθήκη πινέλων χρήστη 10
 	Art Ribbons	Γραφικές κορδέλες
+	Zigzag	Ζιγκζάγκ
+	Burst Ray	Ακτίνα κρούσης
+	Dash Trail	Διακεκομμένο ίχνος
+	Speed Line	Γραμμή ταχύτητας
+	Game Trails	Ίχνη παιχνιδιού
 	Calligraphic Nibs	Καλλιγραφικές πένες
 	Pattern Borders	Περιθώρια μοτίβου
 	Scatter Shapes	Σχήματα διασποράς
@@ -6658,3 +6663,5 @@ breakText	Glyphs	Γλύφοι
 	Ignore All	Παράβλεψη όλων
 	Add to Dictionary	Προσθήκη στο λεξικό
 	No Suggestions	Καμία πρόταση
+	Edit Custom Dictionary	Επεξεργασία προσαρμοσμένου λεξικού
+	Entry:	Λήμμα:

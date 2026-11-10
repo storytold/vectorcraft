@@ -5753,6 +5753,11 @@ axis	Y Axis	Y 軸
 	User Brush Library 9	使用者筆刷資料庫 9
 	User Brush Library 10	使用者筆刷資料庫 10
 	Art Ribbons	藝術緞帶
+	Zigzag	鋸齒
+	Burst Ray	衝擊射線
+	Dash Trail	虛線軌跡
+	Speed Line	速度線
+	Game Trails	遊戲軌跡
 	Calligraphic Nibs	書法筆尖
 	Pattern Borders	圖樣邊框
 	Scatter Shapes	散佈形狀
@@ -6342,3 +6347,5 @@ breakText	Glyphs	字符
 	Align to Pixel Grid	對齊像素格點
 @msg	only paths and compound paths can be aligned to the pixel grid	只有路徑和複合路徑可以對齊像素格點
 @msg	side is left or right, not `{s}`	side 應為 left 或 right，而不是 `{s}`
+	Edit Custom Dictionary	編輯自訂字典
+	Entry:	項目：

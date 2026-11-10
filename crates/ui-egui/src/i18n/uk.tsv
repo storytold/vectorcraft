@@ -5715,6 +5715,11 @@ axis	Y Axis	Вісь Y
 	User Brush Library 9	Користувацька бібліотека пензлів 9
 	User Brush Library 10	Користувацька бібліотека пензлів 10
 	Art Ribbons	Художні стрічки
+	Zigzag	Зигзаг
+	Burst Ray	Ударний промінь
+	Dash Trail	Пунктирний слід
+	Speed Line	Лінія швидкості
+	Game Trails	Ігрові сліди
 	Calligraphic Nibs	Каліграфічні пера
 	Pattern Borders	Візерункові облямівки
 	Scatter Shapes	Розсіяні фігури
@@ -6307,3 +6312,5 @@ breakText	Glyphs	Гліфи
 	Ignore All	Пропустити все
 	Add to Dictionary	Додати до словника
 	No Suggestions	Немає варіантів
+	Edit Custom Dictionary	Редагувати словник користувача
+	Entry:	Запис:

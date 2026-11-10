@@ -5904,6 +5904,11 @@ axis	Y Axis	Y ос
 	User Brush Library 9	Потребителска библиотека с четки 9
 	User Brush Library 10	Потребителска библиотека с четки 10
 	Art Ribbons	Арт ленти
+	Zigzag	Зигзаг
+	Burst Ray	Лъч на удар
+	Dash Trail	Пунктирна следа
+	Speed Line	Линия на скорост
+	Game Trails	Игрови следи
 	Calligraphic Nibs	Калиграфски писци
 	Pattern Borders	Бордюри с мостри
 	Scatter Shapes	Разсеяни фигури
@@ -6452,3 +6457,5 @@ breakText	Glyphs	Глифи
 # Align to Pixel Grid
 	Align to Pixel Grid	Подравняване към пикселната мрежа
 @msg	side is left or right, not `{s}`	side е left или right, а не `{s}`
+	Edit Custom Dictionary	Редактиране на потребителски речник
+	Entry:	Запис:

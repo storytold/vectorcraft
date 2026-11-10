@@ -6101,6 +6101,11 @@ axis	Y Axis	Y tengely
 	User Brush Library 9	Felhasználói ecsetkönyvtár 9
 	User Brush Library 10	Felhasználói ecsetkönyvtár 10
 	Art Ribbons	Grafikus szalagok
+	Zigzag	Cikkcakk
+	Burst Ray	Ütéssugár
+	Dash Trail	Szaggatott nyom
+	Speed Line	Sebességvonal
+	Game Trails	Játéknyomok
 	Calligraphic Nibs	Kalligrafikus tollhegyek
 	Pattern Borders	Mintázatszegélyek
 	Scatter Shapes	Szórt alakzatok
@@ -6690,3 +6695,5 @@ breakText	Glyphs	Glifák
 	Ignore All	Az összes kihagyása
 	Add to Dictionary	Hozzáadás a szótárhoz
 	No Suggestions	Nincs javaslat
+	Edit Custom Dictionary	Egyéni szótár szerkesztése
+	Entry:	Bejegyzés:

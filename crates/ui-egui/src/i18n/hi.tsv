@@ -421,6 +421,11 @@ antiAlias	Sharp	शार्प
 	Art Brush Options	आर्ट ब्रश ऑप्शन्स
 	Art Optimized	आर्टवर्क के लिए अनुकूलित
 	Art Ribbons	आर्ट रिबन
+	Zigzag	ज़िगज़ैग
+	Burst Ray	बर्स्ट रे
+	Dash Trail	डैश ट्रेल
+	Speed Line	स्पीड लाइन
+	Game Trails	गेम ट्रेल्स
 	Art using a deleted global swatch keeps its colour.	हटाए गए ग्लोबल स्वॉच वाला आर्टवर्क अपना रंग बनाए रखता है।
 	Artboard	आर्टबोर्ड
 	Artboard {n} of {total}	{total} में से आर्टबोर्ड {n}
@@ -8147,3 +8152,5 @@ theme	Appearance	अपीयरेंस
 	Ignore All	सभी को अनदेखा करें
 	Add to Dictionary	शब्दकोश में जोड़ें
 	No Suggestions	कोई सुझाव नहीं
+	Edit Custom Dictionary	कस्टम शब्दकोश संपादित करें
+	Entry:	प्रविष्टि:

@@ -6041,6 +6041,11 @@ axis	Y Axis	Y ღერძი
 	User Brush Library 9	მომხმარებლის ფუნჯების ბიბლიოთეკა 9
 	User Brush Library 10	მომხმარებლის ფუნჯების ბიბლიოთეკა 10
 	Art Ribbons	ნახატის ლენტები
+	Zigzag	ზიგზაგი
+	Burst Ray	დარტყმის სხივი
+	Dash Trail	წყვეტილი კვალი
+	Speed Line	სიჩქარის ხაზი
+	Game Trails	თამაშის კვალი
 	Calligraphic Nibs	კალიგრაფიული წვერები
 	Pattern Borders	პატერნის ბორდიურები
 	Scatter Shapes	გაბნეული ფიგურები
@@ -6767,3 +6772,5 @@ font-script	Japanese	იაპონური
 	Ignore All	ყველას იგნორირება
 	Add to Dictionary	ლექსიკონში დამატება
 	No Suggestions	შემოთავაზებები არ არის
+	Edit Custom Dictionary	მომხმარებლის ლექსიკონის რედაქტირება
+	Entry:	ჩანაწერი:

@@ -5954,6 +5954,11 @@ axis	Y Axis	Y osa
 	User Brush Library 9	Korisnička biblioteka četkica 9
 	User Brush Library 10	Korisnička biblioteka četkica 10
 	Art Ribbons	Umjetničke trake
+	Zigzag	Cik-cak
+	Burst Ray	Zraka udara
+	Dash Trail	Isprekidani trag
+	Speed Line	Linija brzine
+	Game Trails	Tragovi igre
 	Calligraphic Nibs	Kaligrafski vrhovi
 	Pattern Borders	Ivice od uzoraka
 	Scatter Shapes	Raspršeni oblici
@@ -6503,3 +6508,5 @@ shape	Open	Otvoren
 # Align to Pixel Grid
 	Align to Pixel Grid	Poravnaj s mrežom piksela
 @msg	side is left or right, not `{s}`	side je left ili right, a ne `{s}`
+	Edit Custom Dictionary	Uredi prilagođeni rječnik
+	Entry:	Unos:

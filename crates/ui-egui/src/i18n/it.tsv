@@ -5735,6 +5735,11 @@ axis	Y Axis	Asse Y
 	User Brush Library 9	Libreria pennelli utente 9
 	User Brush Library 10	Libreria pennelli utente 10
 	Art Ribbons	Nastri grafici
+	Zigzag	Zigzag
+	Burst Ray	Raggio d’impatto
+	Dash Trail	Scia tratteggiata
+	Speed Line	Linea di velocità
+	Game Trails	Scia di gioco
 	Calligraphic Nibs	Pennini calligrafici
 	Pattern Borders	Bordi a motivo
 	Scatter Shapes	Forme a dispersione
@@ -6327,3 +6332,5 @@ breakText	Glyphs	Glifi
 	Ignore All	Ignora tutto
 	Add to Dictionary	Aggiungi al dizionario
 	No Suggestions	Nessun suggerimento
+	Edit Custom Dictionary	Modifica dizionario personalizzato
+	Entry:	Voce:

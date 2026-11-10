@@ -5696,6 +5696,11 @@ axis	Y Axis	Y축
 	User Brush Library 9	사용자 브러시 라이브러리 9
 	User Brush Library 10	사용자 브러시 라이브러리 10
 	Art Ribbons	아트 리본
+	Zigzag	지그재그
+	Burst Ray	버스트 레이
+	Dash Trail	대시 트레일
+	Speed Line	스피드 라인
+	Game Trails	게임 트레일
 	Calligraphic Nibs	서예 펜촉
 	Pattern Borders	패턴 테두리
 	Scatter Shapes	흩뿌리기 모양
@@ -6288,3 +6293,5 @@ breakText	Glyphs	글리프
 	Ignore All	모두 무시
 	Add to Dictionary	사전에 추가
 	No Suggestions	제안 없음
+	Edit Custom Dictionary	사용자 사전 편집
+	Entry:	항목:

@@ -5970,6 +5970,11 @@ axis	Y Axis	Y-as
 	User Brush Library 9	Penseelbibliotheek van gebruiker 9
 	User Brush Library 10	Penseelbibliotheek van gebruiker 10
 	Art Ribbons	Illustratielinten
+	Zigzag	Zigzag
+	Burst Ray	Inslagstraal
+	Dash Trail	Streepspoor
+	Speed Line	Snelheidslijn
+	Game Trails	Spelsporen
 	Calligraphic Nibs	Kalligrafische penpunten
 	Pattern Borders	Patroonranden
 	Scatter Shapes	Strooivormen
@@ -6517,3 +6522,5 @@ breakText	Glyphs	Glyphs
 # Align to Pixel Grid
 	Align to Pixel Grid	Uitlijnen op pixelraster
 @msg	side is left or right, not `{s}`	side is left of right, niet `{s}`
+	Edit Custom Dictionary	Aangepast woordenboek bewerken
+	Entry:	Item:

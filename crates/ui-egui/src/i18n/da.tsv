@@ -5919,6 +5919,11 @@ axis	Y Axis	Y-akse
 	User Brush Library 9	Brugerpenselbibliotek 9
 	User Brush Library 10	Brugerpenselbibliotek 10
 	Art Ribbons	Kunstbånd
+	Zigzag	Zigzag
+	Burst Ray	Burststråle
+	Dash Trail	Streget spor
+	Speed Line	Hastighedslinje
+	Game Trails	Spilspor
 	Calligraphic Nibs	Kalligrafiske penne
 	Pattern Borders	Mønsterborter
 	Scatter Shapes	Spredte former
@@ -6466,3 +6471,5 @@ breakText	Glyphs	Glyffer
 # Align to Pixel Grid
 	Align to Pixel Grid	Juster efter pixelgitter
 @msg	side is left or right, not `{s}`	side er left eller right, ikke `{s}`
+	Edit Custom Dictionary	Redigér egen ordliste
+	Entry:	Opslag:

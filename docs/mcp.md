@@ -1525,7 +1525,9 @@ File › Scripts › Other Script… (Cmd+F12) picks a `.js` or `.jsx` file and 
 https://helpx.adobe.com/illustrator/desktop/automate-visualize-data/automate-actions/install-and-run-scripts.html
 describes that menu item. Pass exactly one of `path` and `source`. A `path` must end in `.js` or `.jsx`, in any
 case. A `.jsxbin` file or text that starts with `@JSXBIN@` is compiled and ends with an error, as does text that is
-not UTF-8. The language is ES5.1. The script reaches the app through one global object:
+not UTF-8. The language is ES5.1, except that identifiers take the characters Unicode's `ID_Start` and
+`ID_Continue` properties allow, as later editions define them, and may use `\u{...}` escapes. The script reaches the
+app through one global object:
 
 - `vc.run(id, params)` runs a command and returns its result. A command that fails throws an error the script can
   catch. The documents and the session state the command changed, preferences included, go back, and any file it
@@ -2578,6 +2580,12 @@ solid, false open behind), `volume` (0..100%, default 50), `bothSides`.
 All three take `rotationX/Y/Z` (degrees, -180..180, default the Off-Axis Front position -21.88/-23.4/9.06),
 `perspectiveAngle` and the lighting parameters as Revolve. See [three-d.md](three-d.md) for the Position presets,
 the scope and what differs from the public documentation.
+`threeD.extrude` and `threeD.inflate` take up to 65,536 outline points and build up to 163,840 faces for each solid
+(VectorCraft's own limits); with more faces than that, each curve takes fewer pieces, down to 4. A shape past the
+points returns "The shape is too complex for a 3D effect", and one whose faces do not fit at 4 pieces a curve returns
+"The 3D surface is too complex; simplify the shape". `threeD.inflate` also returns the surface error when its outline
+has so many points across so many of its grid's cells that filling the grid would pass its work limit. `threeD.rotate`
+takes up to 65,536 points.
 
 ## Extrude & Bevel (Classic)
 
@@ -2839,10 +2847,10 @@ error.
 
 ## Brush libraries
 
-Brush libraries are read-only sets of brushes: four generated in code (Art Ribbons, Calligraphic Nibs, Pattern
-Borders, Scatter Shapes), the `.vectorcraft` files in the user library folder of the desktop app (User Defined) and
-the brushes of any document loaded with `brush.loadLibrary` (a document without brushes of its own has the default
-ones). `brush.libraries` lists them (`id`, `name`, `category`: `builtIn`, `user` or `loaded`, `count`) and
+Brush libraries are read-only sets of brushes: five generated in code (Art Ribbons, Calligraphic Nibs, Pattern
+Borders, Scatter Shapes, Game Trails), the `.vectorcraft` files in the user library folder of the desktop app (User
+Defined) and the brushes of any document loaded with `brush.loadLibrary` (a document without brushes of its own has
+the default ones). `brush.libraries` lists them (`id`, `name`, `category`: `builtIn`, `user` or `loaded`, `count`) and
 `brush.library {library}` returns one's brushes (`name`, `type`; `library` is an id or a name).
 `brush.addFromLibrary {library, name? | names?}` copies brushes into the document's Brushes as one undo step (no
 names: the whole library), with the resources their art uses: patterns, symbols, swatches (`swatchConflict` as for
@@ -4083,8 +4091,9 @@ outlines and its underline and strikethrough bars. This applies to each point ty
 default.
 
 A width or height typed with the option on scales the type until its ink has that size. The type stays live type: its
-font size changes by the scale, so `object.setBounds {height: 72}` on "H" gives the cap height 72 pt, not a 72 pt
-font. With Use Preview Bounds on, the ink takes in the characters' strokes, and type with geometry effects is
+font size changes by the vertical scale, so `object.setBounds {height: 72}` on "H" gives the cap height 72 pt, not a
+72 pt font. A width typed alone, out of proportion, changes the horizontal scale and keeps the font size, and a height
+typed alone keeps the width, so the horizontal scale changes the other way. With Use Preview Bounds on, the ink takes in the characters' strokes, and type with geometry effects is
 measured as drawn. Rotated type keeps its own angle, and skewed type is measured by its glyph outlines. Type that
 draws nothing (no text, or only spaces without underline or strikethrough), area type, type on a path and type inside
 a selected group are measured as before. Arrange in Grid and Group Overlapping Objects measure visual bounds as
@@ -6133,6 +6142,11 @@ desktop app and `vectorcraft-cli` (its `mcp` and `run` sessions) keep them in `C
 preferences, one word per line; without preferences (`VECTORCRAFT_NO_PREFS`, the web app) they last until the app
 closes. `text.spelling.ignoreAll {word}` is Ignore All: the active document's checks skip the word, in
 any case, while the document is open. It is not saved and not an undo step.
+
+In the app, Edit › Edit Custom Dictionary… (`text.spelling.dictionary` with no params, from the menus) opens a dialog of
+the words, with an Entry field and Add, Delete and Change; Done runs `text.spelling.editDictionary {remove, add}` for
+the words that differ, which deletes and adds them and saves once, all or none (a save that fails keeps none of them),
+and Cancel changes nothing.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.spelling.addWord","params":{"word":"VectorCraft"}}}

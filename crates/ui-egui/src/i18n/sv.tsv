@@ -6141,6 +6141,11 @@ axis	Y Axis	Y-axel
 	User Brush Library 9	Användarbibliotek för penslar 9
 	User Brush Library 10	Användarbibliotek för penslar 10
 	Art Ribbons	Konstband
+	Zigzag	Sicksack
+	Burst Ray	Stötstråle
+	Dash Trail	Streckat spår
+	Speed Line	Hastighetslinje
+	Game Trails	Spår från spel
 	Calligraphic Nibs	Kalligrafiska pennspetsar
 	Pattern Borders	Mönsterbårder
 	Scatter Shapes	Spridningsformer
@@ -8191,3 +8196,5 @@ digits	Hindi	Hindi
 	Ignore All	Ignorera alla
 	Add to Dictionary	Lägg till i ordlistan
 	No Suggestions	Inga förslag
+	Edit Custom Dictionary	Redigera egen ordlista
+	Entry:	Post:
