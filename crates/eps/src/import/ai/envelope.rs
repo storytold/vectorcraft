@@ -529,8 +529,11 @@ impl WarpedType {
         }
         let mut shown = BTreeSet::new();
         doc.layers.iter().for_each(|l| collect_shown(l, &mut shown));
-        for envelope in std::mem::take(&mut self.envelopes) {
-            match self.typed_live(doc, envelope, &type_of, &shown) {
+        let envelopes = std::mem::take(&mut self.envelopes);
+        let mut waiting = envelopes.len();
+        for envelope in envelopes {
+            waiting -= 1;
+            match self.typed_live(doc, envelope, &type_of, &shown, waiting) {
                 Ok(put_back) => {
                     settled.live += 1;
                     settled.put_back.push(put_back);
@@ -541,14 +544,16 @@ impl WarpedType {
         settled
     }
 
-    /// [`Self::settle_envelopes`] for `envelope`, the shown objects of `doc` being `shown`: the live
-    /// envelope's id and what takes its place again, or why its drawn art stays.
+    /// [`Self::settle_envelopes`] for `envelope`, the shown objects of `doc` being `shown` and
+    /// `waiting` envelopes of type still to come: the live envelope's id and what takes its place
+    /// again, or why its drawn art stays.
     fn typed_live(
         &mut self,
         doc: &mut Document,
         envelope: TypedEnvelope,
         type_of: &impl Fn(&Document, NodeId) -> Option<(NodeId, Node)>,
         shown: &BTreeSet<NodeId>,
+        waiting: usize,
     ) -> Result<(NodeId, Vec<Node>), TypeKept> {
         let TypedEnvelope { obj, mut before, mut inner, drawn } = envelope;
         let art = doc.node(drawn).cloned().ok_or(TypeKept::Read)?;
@@ -595,8 +600,11 @@ impl WarpedType {
         (plain.visible, plain.opacity) = (true, 1.0);
         let page = self.page.filter(|_| shown.contains(&drawn));
         let mut alike = None;
-        for kind in kinds {
-            if self.checks == 0 {
+        for (i, kind) in kinds.into_iter().enumerate() {
+            // A second try is only made while more checks are left than there are envelopes of
+            // type and warped text objects still to come (some of which may need none): one
+            // envelope's tries don't use up the checks of the others.
+            if self.checks == 0 || (i > 0 && self.checks <= waiting + self.looks.len()) {
                 return Err(TypeKept::Budget);
             }
             self.checks -= 1;

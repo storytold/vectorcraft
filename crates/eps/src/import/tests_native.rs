@@ -5826,6 +5826,82 @@ fn a_warp_of_type_without_a_saved_grid_keeps_its_drawn_art() {
     assert_eq!(super::tests::program_warnings(&r.warnings), [crate::import::ai::ENVELOPE_TYPE_DRAWN], "{:?}", r.warnings);
 }
 
+/// A warp of type tried again on its saved grid leaves a check for each envelope of type still to
+/// come: with one check too few for both, the next envelope, whose first try opens it, gets it.
+#[test]
+fn a_warp_of_type_tried_again_leaves_the_next_envelope_its_check() {
+    use vectorcraft_doc::live::EnvelopeKind;
+    let Some(family) = installed_family() else { return };
+    let story = ("FLUX\r", 0, (8170.0, 8180.0), (0.0, 0.0), 0.0);
+    let mut doc = text_document(&[story, story]).replace("(Helvetica)", &format!("({family})"));
+    // [`native_with_text`] writes 60 characters a line: the end of the data, `~>`, isn't split.
+    while ascii85(doc.as_bytes()).len() % 60 == 1 {
+        doc.push('\n');
+    }
+    let text = made_envelope_type(&doc);
+    // The first envelope, of story 0, draws as its saved grid and not as its warp: two checks.
+    let mut shown = text.clone();
+    shown.visible = true;
+    let options = vectorcraft_doc::live::EnvelopeOptions::NEW;
+    let shaped = Node::new(
+        vectorcraft_doc::NodeId(1_000_000),
+        NodeKind::Envelope {
+            content: vec![std::sync::Arc::new(shown)],
+            kind: Box::new(rising_kind()),
+            fidelity: 50.0,
+            editing: false,
+            options,
+            frame: Box::default(),
+        },
+    );
+    let (drawn_grid, page_grid) = drawn_envelope(&shaped);
+    let grid = type_envelope_on(&arc_keys(0.3), &rising_grid(), &drawn_grid, "");
+    // The second, of story 1, draws as its warp: one check.
+    let (drawn_arc, page_arc) = drawn_envelope(&arc_envelope(&text, 30.0));
+    let arc = type_envelope(&arc_keys(0.3), &drawn_arc).replace("%_0 /StoryIndex", "%_1 /StoryIndex");
+    // Envelopes of art before them use all but `left` of the import's checks.
+    let hidden = |s: &str| -> String { s.lines().map(|l| format!("%_{l}\n")).collect() };
+    let rect = "20 5 m\n20 95 L\n80 95 L\n80 5 L\n20 5 L\n";
+    let corner = |x: f64, y: f64, nx: f64, ny: f64, px: f64, py: f64| format!("[0.8 1 {x} {y} {nx} {ny} 1 {px} {py} 1] /N X#\n");
+    let mesh = format!(
+        "/Mesh X!\n2 /Version X#\n/Cartesian /Type X#\n[1 1] /Size X#\n/Data X#\n/DeviceGray /CS X#\n[0 0] /P X#\n{}{}{}{}/E X#\n/End X!\n",
+        corner(20.0, 5.0, 20.0, 35.0, 40.0, 5.0),
+        corner(20.0, 95.0, 40.0, 95.0, 20.0, 65.0),
+        corner(80.0, 95.0, 80.0, 65.0, 60.0, 95.0),
+        corner(80.0, 5.0, 60.0, 5.0, 80.0, 35.0),
+    );
+    let red = "0 1 1 0 1 0 0 Xa\n";
+    let filler = format!(
+        "{}%_/ArtDictionary :\n%_131073 /Int (AIDeformOptionsKey) ,\n%_50 /Int (AIDeformFidelityKey) ,\n%_0 /Bool (AIDeformEditModeKey) ,\n%_X=\n{}%_X+\n%_ (AIDeformArtKey) ,\n%_2 /Int (AIDeformStyle) ,\n%_;\n%_\nu\n{red}{rect}f\nU\n(Adobe Deform Plugin) 1 0 0 XP\n",
+        hidden(&format!("u\n{mesh}U\n")),
+        hidden(&format!("u\n{red}{rect}f\nU\n")),
+    );
+    let page =
+        format!("{}\n1 0 0 setrgbcolor 20 5 moveto 20 95 lineto 80 95 lineto 80 5 lineto closepath fill\n{page_grid}{page_arc}", page_square(10, 10));
+    let file = |left: usize| {
+        let body = format!("{}\n{}{grid}{arc}", square(10, 10), filler.repeat(crate::import::ai::MAX_CHECKED - left));
+        eps(&page, &native_with_text(&layer("Art", true, &body), &doc))
+    };
+    // The live envelopes of type, by kind.
+    let typed = |d: &Document| {
+        let mut out = vec![];
+        d.walk(|n| {
+            if let NodeKind::Envelope { content, kind, .. } = &n.kind
+                && content.iter().any(|c| matches!(c.kind, NodeKind::Text(_)))
+            {
+                out.push(if matches!(**kind, EnvelopeKind::Mesh { .. }) { "mesh" } else { "warp" });
+            }
+        });
+        out
+    };
+    let r = import(&file(3)).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    assert_eq!(typed(&r.document), ["mesh", "warp"], "{:?}", r.warnings);
+    let r = import(&file(2)).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    assert_eq!(typed(&r.document), ["warp"], "{:?}", r.warnings);
+}
+
 /// The fill of the first run of type `n`.
 fn text_fill(n: &Node) -> Option<vectorcraft_color::Color> {
     let NodeKind::Text(t) = &n.kind else { return None };
