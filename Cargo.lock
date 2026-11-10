@@ -6499,6 +6499,7 @@ dependencies = [
  "ruzstd",
  "serde",
  "serde_json",
+ "skrifa 0.47.0",
  "thiserror 2.0.21",
  "vectorcraft-affinity",
  "vectorcraft-apischema",

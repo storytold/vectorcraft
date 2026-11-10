@@ -1243,6 +1243,7 @@ antiAlias	Sharp	날카롭게
 	Coming soon — tracked in the parity plan	곧 제공 예정 — 기능 동등성 계획에서 관리 중
 	Command Click to Select Objects Behind	Command-클릭으로 뒤쪽 개체 선택
 	Command Dialog	명령 대화상자
+	Command API Reference	명령 API 참조
 	Community	커뮤니티
 	Compatibility:	호환성:
 	Compatible Gradient and Gradient Mesh Printing	호환 그레이디언트 및 그레이디언트 메시 인쇄
@@ -4728,6 +4729,7 @@ theme	Appearance	외관
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	“{name}”을(를) 불러왔습니다. 단계 {n}개를 제외했습니다
 @msg	not an action set file	액션 세트 파일이 아닙니다
 @msg	the action set file is larger than 8 MiB	액션 세트 파일이 8 MiB보다 큽니다
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: 참조가 {MAX_BYTES}바이트보다 커집니다
 @msg	the action set file holds more than 1,000 actions	액션 세트 파일의 액션이 1,000개를 넘습니다
 @msg	the action set file needs a later version of VectorCraft	이 액션 세트 파일을 열려면 최신 버전의 VectorCraft가 필요합니다
 @msg	an action in the action set file has more than 10,000 steps	액션 세트 파일에 단계가 10,000개를 넘는 액션이 있습니다
@@ -5702,6 +5704,8 @@ axis	Y Axis	Y축
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	포인트 문자
 	Area Text	영역 문자
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	글리프 경계로 문자 측정
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	글리프에 스냅 옵션 표시
 	Hide Snap to Glyph Options	글리프에 스냅 옵션 숨기기

@@ -1611,6 +1611,7 @@ fn create_in_path(s: &mut Session, p: &Value) -> Result<Value> {
         list_level_counts: Vec::new(),
         cached_bounds: None,
         cached_baselines: Vec::new(),
+        cached_ink: None,
     };
     super::create::new_type_alignment(s, p, C, &mut t)?;
     if !on_path {
@@ -1901,6 +1902,7 @@ fn headline_tracking(t: &TextObject, target: f64) -> Option<f64> {
             list_level_counts: Vec::new(),
             cached_bounds: None,
             cached_baselines: Vec::new(),
+            cached_ink: None,
         };
         for r in &mut h.runs {
             r.style.tracking = tr;

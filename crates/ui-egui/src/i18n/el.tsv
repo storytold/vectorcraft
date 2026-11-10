@@ -542,6 +542,7 @@ font-technology	Variable	Μεταβλητές
 	Coming soon — tracked in the parity plan	Προσεχώς — περιλαμβάνεται στο σχέδιο αντιστοιχίας λειτουργιών
 	Command Click to Select Objects Behind	Command-κλικ για επιλογή αντικειμένων από πίσω
 	Command Dialog	Παράθυρο εντολών
+	Command API Reference	Αναφορά API εντολών
 	Community	Κοινότητα
 	Compatibility:	Συμβατότητα:
 	Compatible Gradient and Gradient Mesh Printing	Συμβατή εκτύπωση ντεγκραντέ και πλέγματος ντεγκραντέ
@@ -4389,6 +4390,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Φορτώθηκε το «{name}»: παραλείφθηκε {n} βήμα|Φορτώθηκε το «{name}»: παραλείφθηκαν {n} βήματα
 @msg	not an action set file	δεν είναι αρχείο συνόλου ενεργειών
 @msg	the action set file is larger than 8 MiB	το αρχείο συνόλου ενεργειών είναι μεγαλύτερο από 8 MiB
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: η αναφορά θα ήταν μεγαλύτερη από {MAX_BYTES} byte
 @msg	the action set file holds more than 1,000 actions	το αρχείο συνόλου ενεργειών περιέχει περισσότερες από 1.000 ενέργειες
 @msg	the action set file needs a later version of VectorCraft	το αρχείο συνόλου ενεργειών απαιτεί νεότερη έκδοση του VectorCraft
 @msg	an action in the action set file has more than 10,000 steps	μια ενέργεια στο αρχείο συνόλου ενεργειών έχει περισσότερα από 10.000 βήματα
@@ -6075,6 +6077,8 @@ axis	Y Axis	Άξονας Y
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Κείμενο σημείου
 	Area Text	Κείμενο περιοχής
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Μέτρηση κειμένου με βάση τα όρια γλυφής
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Εμφάνιση επιλογών προσκόλλησης σε γλυφή
 	Hide Snap to Glyph Options	Απόκρυψη επιλογών προσκόλλησης σε γλυφή

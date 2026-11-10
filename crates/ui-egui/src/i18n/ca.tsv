@@ -794,6 +794,7 @@ antiAlias	Sharp	Nítid
 	Command	Ordre
 	Command Click to Select Objects Behind	Clic amb Ordre per seleccionar els objectes del darrere
 	Command Dialog	Diàleg d’ordres
+	Command API Reference	Referència de l’API d’ordres
 	Comment not closed	Comentari no tancat
 	Commenting, filling in form fields and signing	Comentar, emplenar camps de formulari i signar
 	Commits	Commits
@@ -5454,6 +5455,7 @@ digits	Malayalam	Malaiàlam
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	S’ha carregat “{name}”: s’ha omès {n} pas|S’ha carregat “{name}”: s’han omès {n} passos
 @msg	not an action set file	no és un fitxer de conjunt d’accions
 @msg	the action set file is larger than 8 MiB	el fitxer de conjunt d’accions supera els 8 MiB
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: la referència superaria els {MAX_BYTES} bytes
 @msg	the action set file holds more than 1,000 actions	el fitxer de conjunt d’accions conté més de 1.000 accions
 @msg	the action set file needs a later version of VectorCraft	el fitxer de conjunt d’accions necessita una versió més recent del VectorCraft
 @msg	an action in the action set file has more than 10,000 steps	una acció del fitxer de conjunt d’accions té més de 10.000 passos
@@ -6087,6 +6089,8 @@ theme	Appearance	Aparença
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Text de punt
 	Area Text	Text d’àrea
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Mesura el text pels límits del glif
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Mostra les opcions d’ajust al glif
 	Hide Snap to Glyph Options	Amaga les opcions d’ajust al glif

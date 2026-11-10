@@ -528,6 +528,7 @@ antiAlias	Sharp	锐利
 	Coming soon — tracked in the parity plan	即将推出 — 在对标计划中跟踪
 	Command Click to Select Objects Behind	按住 Command 单击选择后方对象
 	Command Dialog	命令对话框
+	Command API Reference	命令 API 参考
 	Community	社区
 	Compatibility:	兼容性：
 	Compatible Gradient and Gradient Mesh Printing	兼容渐变和渐变网格打印
@@ -4508,6 +4509,7 @@ imageTrace	Outline	轮廓
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	已载入“{name}”：已略过 {n} 个步骤
 @msg	not an action set file	不是动作组文件
 @msg	the action set file is larger than 8 MiB	动作组文件大于 8 MiB
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`：参考将大于 {MAX_BYTES} 字节
 @msg	the action set file holds more than 1,000 actions	动作组文件包含超过 1,000 个动作
 @msg	the action set file needs a later version of VectorCraft	动作组文件需要更高版本的 VectorCraft
 @msg	an action in the action set file has more than 10,000 steps	动作组文件中有动作超过 10,000 个步骤
@@ -5962,6 +5964,8 @@ axis	Y Axis	Y 轴
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	点文字
 	Area Text	区域文字
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	按字形边界度量文字
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	显示靠齐字符选项
 	Hide Snap to Glyph Options	隐藏靠齐字符选项

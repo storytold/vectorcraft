@@ -187,6 +187,7 @@ mod transformfx;
 mod transparencygrid;
 mod trap;
 mod typearea;
+mod typeglyphbounds;
 mod typescale;
 mod typeundo;
 mod units;

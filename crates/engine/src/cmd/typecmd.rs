@@ -304,6 +304,7 @@ pub(crate) fn refresh_bounds(t: &mut TextObject) {
     let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
     t.cached_bounds = Some(lay.bounds);
     t.cached_baselines = lay.baselines();
+    t.cached_ink = Some((lay.bounds, vectorcraft_render::effects::preview::laid_out_ink(&lay, t)));
 }
 
 /// [`refresh_bounds`] for a document that is opening: the first frame takes the layout
@@ -315,6 +316,7 @@ pub(crate) fn refresh_bounds_for_first_frame(t: &mut TextObject) {
     let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
     t.cached_bounds = Some(lay.bounds);
     t.cached_baselines = lay.baselines();
+    t.cached_ink = Some((lay.bounds, vectorcraft_render::effects::preview::laid_out_ink(&lay, t)));
     vectorcraft_text::keep_layout(t, stamp, lay);
 }
 

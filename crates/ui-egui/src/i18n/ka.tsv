@@ -858,6 +858,7 @@ lighting	Light	სინათლე
 	Color Picker…	ფერის ამრჩევი…
 	Coming soon — tracked in the parity plan	მალე — აღრიცხულია თანხვედრის გეგმაში
 	Command Dialog	ბრძანების დიალოგი
+	Command API Reference	ბრძანებების API ცნობარი
 	Copy Selected Style	მონიშნული სტილის კოპირება
 	Corners…	კუთხეები…
 	Define Perspective Grid…	პერსპექტივის ბადის განსაზღვრა…
@@ -4180,6 +4181,7 @@ font-technology	Variable	ცვლადი
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	ჩაიტვირთა „{name}“; გამოტოვებული ნაბიჯები: {n}
 @msg	not an action set file	ეს არ არის მოქმედებების ნაკრების ფაილი
 @msg	the action set file is larger than 8 MiB	მოქმედებების ნაკრების ფაილი 8 MiB-ზე დიდია
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: ცნობარი {MAX_BYTES} ბაიტზე დიდი იქნებოდა
 @msg	the action set file holds more than 1,000 actions	მოქმედებების ნაკრების ფაილი 1000-ზე მეტ მოქმედებას შეიცავს
 @msg	the action set file needs a later version of VectorCraft	მოქმედებების ნაკრების ფაილს VectorCraft-ის უფრო ახალი ვერსია სჭირდება
 @msg	an action in the action set file has more than 10,000 steps	მოქმედებების ნაკრების ფაილში ერთ-ერთ მოქმედებას 10 000-ზე მეტი ნაბიჯი აქვს
@@ -6120,6 +6122,8 @@ swatch	Bright Violet	კაშკაშა იისფერი
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	წერტილოვანი ტექსტი
 	Area Text	არის ტექსტი
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	ტექსტის გაზომვა გლიფის საზღვრებით
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	გლიფზე მიბმის პარამეტრების ჩვენება
 	Hide Snap to Glyph Options	გლიფზე მიბმის პარამეტრების დამალვა

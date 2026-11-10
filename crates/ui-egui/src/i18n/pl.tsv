@@ -921,6 +921,7 @@ lighting	Light	Światło
 	Color Picker…	Próbnik kolorów…
 	Coming soon — tracked in the parity plan	Już wkrótce — ujęte w planie zgodności
 	Command Dialog	Okno polecenia
+	Command API Reference	Dokumentacja API poleceń
 	Copy Selected Style	Kopiuj zaznaczony styl
 	Corners…	Narożniki…
 	Define Perspective Grid…	Zdefiniuj siatkę perspektywy…
@@ -4567,6 +4568,7 @@ imageTrace	Outline	Kontur
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Wczytano „{name}”: pominięto {n} krok|Wczytano „{name}”: pominięto {n} kroki|Wczytano „{name}”: pominięto {n} kroków
 @msg	not an action set file	to nie jest plik zestawu operacji
 @msg	the action set file is larger than 8 MiB	plik zestawu operacji jest większy niż 8 MiB
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: dokumentacja byłaby większa niż {MAX_BYTES} bajtów
 @msg	the action set file holds more than 1,000 actions	plik zestawu operacji zawiera ponad 1000 operacji
 @msg	the action set file needs a later version of VectorCraft	plik zestawu operacji wymaga nowszej wersji programu VectorCraft
 @msg	an action in the action set file has more than 10,000 steps	operacja w pliku zestawu operacji ma ponad 10 000 kroków
@@ -5978,6 +5980,8 @@ axis	Y Axis	Oś Y
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Tekst punktowy
 	Area Text	Tekst akapitowy
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Mierz tekst według granic glifów
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Pokaż opcje przyciągania do glifów
 	Hide Snap to Glyph Options	Ukryj opcje przyciągania do glifów
