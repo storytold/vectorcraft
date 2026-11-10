@@ -1396,8 +1396,8 @@ as left out is an `anyOf` with `{"type": "null"}`. Null params read as `{}`, so 
 the root `type` `["object", "null"]`. A schema with a required parameter has the root `type` `"object"`, and the engine
 refuses null params for it as a missing parameter. A number with no fractional part, such as `2.0`, is an integer, as
 JSON Schema defines one, and the command receives `2`. An `x-lenient` parameter's schema states the documented type,
-and the engine also passes a value of another type to the command. The command's `params` text is written from the same
-schema.
+and the engine also passes a value of another type to the command. The command's `params` text equals the text the
+schema writes, and a test checks that they are the same.
 
 The engine checks the params of such a command against its schema before the command runs, for every new call: from
 the desktop app, the control channel, MCP or the CLI, and when one command runs another. The steps of `command.batch`
