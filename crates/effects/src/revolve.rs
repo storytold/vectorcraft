@@ -2,8 +2,8 @@
 use std::sync::Arc;
 
 use serde_json::Value;
-use vectorcraft_doc::color::{Color, Paint};
-use vectorcraft_doc::{Appearance, AppearanceItem, Effect, FillLayer, LineJoin, Node, NodeKind, StrokeLayer};
+use vectorcraft_doc::color::{BlendMode, Color, Paint};
+use vectorcraft_doc::{Appearance, AppearanceItem, Effect, FillLayer, LineJoin, Node, NodeId, NodeKind, StrokeLayer};
 use vectorcraft_geom::{PathData, Rect};
 use vectorcraft_three_d::{Edge, Revolve};
 
@@ -431,6 +431,36 @@ fn art(n: &Node, expand: bool) -> Option<Node> {
     Some(art)
 }
 
+/// The members' `surfaces` in order, from the blending mode at `level` of each one's
+/// `Profile::blends` inward: the surfaces of consecutive members that share a group with a mode
+/// other than Normal go in one group with that mode, so each mode applies once, at its own level.
+fn blended(id: NodeId, surfaces: Vec<(&[(usize, BlendMode)], Node)>, level: usize) -> Vec<Arc<Node>> {
+    fn close(id: NodeId, run: &mut Vec<(&[(usize, BlendMode)], Node)>, key: Option<(usize, BlendMode)>, level: usize, out: &mut Vec<Arc<Node>>) {
+        if let Some((_, blend)) = key {
+            let mut group = Node::group(id, blended(id, std::mem::take(run), level + 1));
+            group.blend = blend;
+            out.push(Arc::new(group));
+        }
+    }
+    let mut out = vec![];
+    let mut run = vec![];
+    let mut key = None;
+    for (blends, s) in surfaces {
+        let at = blends.get(level).copied();
+        if at != key {
+            close(id, &mut run, key, level, &mut out);
+            key = at;
+        }
+        if key.is_some() {
+            run.push((blends, s));
+        } else {
+            out.push(Arc::new(s));
+        }
+    }
+    close(id, &mut run, key, level, &mut out);
+    out
+}
+
 /// [`art`] of group or layer `n`: every member swept about one axis on the bounds of all of them,
 /// each in its own paint. Opaque members' faces are drawn in one back-to-front order. `None` when
 /// the effect is only on the group's own fills or strokes or when its members can't be revolved.
@@ -449,16 +479,19 @@ fn group_art(n: &Node, expand: bool) -> Option<Node> {
         let Some(item) = surface_item(&s.items) else { continue };
         let (paint, opacity, blend) = paint_of(item);
         let opacity = opacity * s.opacity;
-        opaque &= opacity >= 1.0 && blend == Default::default();
-        surfaces.push(surface(n, &s.path, b, options, fx, paint, opacity, blend, expand, &mut copies)?);
+        opaque &= opacity >= 1.0 && blend == Default::default() && s.blends.is_empty();
+        // A member with non-normal blending keeps every face, as a blended object does.
+        let expand = expand && s.blends.is_empty();
+        let (depths, art) = surface(n, &s.path, b, options, fx, paint, opacity, blend, expand, &mut copies)?;
+        surfaces.push((depths, art, s.blends.as_slice()));
     }
     if surfaces.is_empty() {
         return None;
     }
-    let plain = surfaces.iter().all(|(depths, s)| matches!(&s.kind, NodeKind::Group { children, clip: false } if children.len() == depths.len()));
+    let plain = surfaces.iter().all(|(depths, s, _)| matches!(&s.kind, NodeKind::Group { children, clip: false } if children.len() == depths.len()));
     let children = if opaque && plain {
         let mut faces = vec![];
-        for (depths, s) in surfaces {
+        for (depths, s, _) in surfaces {
             if let NodeKind::Group { children, .. } = s.kind {
                 faces.extend(depths.into_iter().zip(children));
             }
@@ -467,7 +500,7 @@ fn group_art(n: &Node, expand: bool) -> Option<Node> {
         faces.sort_by(|a, b| a.0.total_cmp(&b.0));
         vec![Arc::new(Node::group(n.id, faces.into_iter().map(|(_, face)| face).collect()))]
     } else {
-        surfaces.into_iter().map(|(_, s)| Arc::new(s)).collect()
+        blended(n.id, surfaces.into_iter().map(|(_, s, blends)| (blends, s)).collect(), 0)
     };
     let remaining =
         n.appearance.effects.iter().enumerate().filter(|(i, e)| *i != index && (!is_geometry(&e.id) || *i > index)).map(|(_, e)| e.clone()).collect();
@@ -715,6 +748,33 @@ mod tests {
         let refused = validate_revolve(&both, &json!({})).unwrap_err();
         assert!(refused.contains("reduce Segments"), "{refused}");
         assert_eq!(revolve_art(&both), None, "past the limits the source draws");
+    }
+
+    #[test]
+    fn blending_modes_apply_once_to_the_member_or_group_that_has_them() {
+        let blend = |n: Arc<Node>, mode: BlendMode| {
+            let mut n = (*n).clone();
+            n.blend = mode;
+            Arc::new(n)
+        };
+        let inner = blend(member(4, 60.0), BlendMode::Multiply);
+        let screened = blend(Arc::new(Node::group(NodeId(5), vec![member(3, 40.0), inner])), BlendMode::Screen);
+        let group = group_with(json!({}), vec![blend(member(1, 0.0), BlendMode::Multiply), member(2, 20.0), screened]);
+        let art = revolve_art(&group).expect("revolved");
+        let modes = |n: &Node| match &n.kind {
+            NodeKind::Group { children, .. } => children.iter().map(|c| c.blend).collect::<Vec<_>>(),
+            _ => panic!("a group"),
+        };
+        assert_eq!(modes(&art), [BlendMode::Multiply, BlendMode::Normal, BlendMode::Screen], "a surface or group for each member");
+        let NodeKind::Group { children, .. } = &art.kind else { panic!("a group") };
+        let screened = &children[2];
+        assert_eq!(modes(screened), [BlendMode::Normal, BlendMode::Multiply], "the screened group's members, together, in their own modes");
+        let NodeKind::Group { children: inner, .. } = &screened.kind else { panic!("a group") };
+        assert_eq!(modes(&inner[1]).len(), 1, "the multiplied member's surface");
+        let plain = group_with(json!({}), vec![member(1, 0.0)]);
+        assert_ne!(expand_revolve_art(&plain), revolve_art(&plain), "an opaque member's hidden faces are removed");
+        let multiplied = group_with(json!({}), vec![blend(member(1, 0.0), BlendMode::Multiply)]);
+        assert_eq!(expand_revolve_art(&multiplied), revolve_art(&multiplied), "a blended member keeps every face");
     }
 
     #[test]

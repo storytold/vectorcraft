@@ -225,12 +225,16 @@ pub(crate) fn object_profile(n: &Node, label: &str) -> Result<(PathData, FillRul
 }
 
 /// One shape a solid is built from: its outline and fill rule, the fills and strokes that paint
-/// it, and the opacity of the objects it is in (1 for the object with the effect itself).
+/// it, the opacity of the objects it is in (1 for the object with the effect itself) and their
+/// blending modes other than Normal (none for the object itself). `blends` runs from the outermost
+/// group in the effect's group down to the member itself, each with a key that the members of
+/// one group share. Group Revolve draws the surfaces in those modes.
 pub(crate) struct Profile {
     pub(crate) path: PathData,
     pub(crate) rule: FillRule,
     pub(crate) items: Vec<AppearanceItem>,
     pub(crate) opacity: f32,
+    pub(crate) blends: Vec<(usize, BlendMode)>,
 }
 
 /// Is `n` a group or layer (a 3D effect on it turns its members about one shared axis)?
@@ -256,14 +260,25 @@ const MAX_MESH_TRIANGLES: usize = 2_000_000;
 /// reference app, they turn about one shared axis (the centre of their bounds together) rather
 /// than each about its own. An error names what the group holds that can't become a solid.
 pub(crate) fn members(n: &Node, label: &str) -> Result<Vec<Profile>, String> {
-    fn walk(n: &Node, opacity: f32, label: &str, out: &mut Vec<Profile>) -> Result<(), String> {
+    struct Walk<'a> {
+        label: &'a str,
+        out: Vec<Profile>,
+        keys: usize,
+    }
+    fn walk(n: &Node, opacity: f32, blends: &[(usize, BlendMode)], w: &mut Walk) -> Result<(), String> {
+        let label = w.label;
         for c in n.children().into_iter().flatten() {
             if !c.visible || matches!(c.kind, NodeKind::Path { guide: true, .. }) {
                 continue;
             }
             let opacity = opacity * c.opacity;
+            let mut blends = blends.to_vec();
+            if c.blend != BlendMode::Normal {
+                w.keys += 1;
+                blends.push((w.keys, c.blend));
+            }
             if is_container(c) {
-                walk(c, opacity, label, out)?;
+                walk(c, opacity, &blends, w)?;
                 continue;
             }
             let Some((path, rule)) = profile(c) else {
@@ -276,19 +291,19 @@ pub(crate) fn members(n: &Node, label: &str) -> Result<Vec<Profile>, String> {
                 };
                 return Err(format!("{label} on a group needs paths, compound paths and type: release or expand its {what} first."));
             };
-            if out.len() >= MAX_MEMBERS {
+            if w.out.len() >= MAX_MEMBERS {
                 return Err(format!("{label} on a group takes at most {MAX_MEMBERS} objects"));
             }
             let path = geometry(&path, &c.appearance.effects, &GeomContext::of(c));
             if path.bounds().is_some() {
-                out.push(Profile { path, rule, items: solid_paints(c), opacity });
+                w.out.push(Profile { path, rule, items: solid_paints(c), opacity, blends });
             }
         }
         Ok(())
     }
-    let mut out = vec![];
-    walk(n, 1.0, label, &mut out)?;
-    Ok(out)
+    let mut w = Walk { label, out: vec![], keys: 0 };
+    walk(n, 1.0, &[], &mut w)?;
+    Ok(w.out)
 }
 
 /// Can 3D effect `id` (Revolve included, [`is_three_d`]) with parameters `p` draw `n`? Checked
@@ -524,7 +539,7 @@ pub fn solid_art(n: &Node) -> Option<Node> {
     let remaining: Vec<Effect>;
     if let Some((index, fx)) = solid(&n.appearance.effects) {
         let path = geometry(&path, n.appearance.effects.get(..index)?, &ctx);
-        children.extend(art_for(n, fx, &[Profile { path, rule, items: paints, opacity: 1.0 }])?);
+        children.extend(art_for(n, fx, &[Profile { path, rule, items: paints, opacity: 1.0, blends: vec![] }])?);
         // Later geometry effects act on the projected art as a whole.
         remaining = n
             .appearance
@@ -540,7 +555,7 @@ pub fn solid_art(n: &Node) -> Option<Node> {
         for item in &paints {
             if let Some((index, fx)) = solid(item.effects()) {
                 let p = geometry(&path, item.effects().get(..index)?, &ctx.item(item));
-                for mut art in art_for(n, fx, &[Profile { path: p, rule, items: vec![item.clone()], opacity: 1.0 }])? {
+                for mut art in art_for(n, fx, &[Profile { path: p, rule, items: vec![item.clone()], opacity: 1.0, blends: vec![] }])? {
                     Arc::make_mut(&mut art).appearance.effects =
                         item.effects().iter().skip(index + 1).filter(|e| !is_three_d(&e.id)).cloned().collect();
                     children.push(art);
@@ -703,14 +718,14 @@ fn meshes_within(n: &Node, total: &mut usize, limit: usize) -> Result<Vec<SolidM
         let paints = solid_paints(n);
         if let Some((index, fx)) = solid(&n.appearance.effects) {
             let path = geometry(&path, n.appearance.effects.get(..index).unwrap_or_default(), &ctx);
-            meshes_for(fx, &[Profile { path, rule, items: paints, opacity: 1.0 }], total, limit)?
+            meshes_for(fx, &[Profile { path, rule, items: paints, opacity: 1.0, blends: vec![] }], total, limit)?
         } else {
             let path = geometry(&path, &n.appearance.effects, &ctx);
             let mut out = vec![];
             for item in &paints {
                 if let Some((index, fx)) = solid(item.effects()) {
                     let p = geometry(&path, item.effects().get(..index).unwrap_or_default(), &ctx.item(item));
-                    out.extend(meshes_for(fx, &[Profile { path: p, rule, items: vec![item.clone()], opacity: 1.0 }], total, limit)?);
+                    out.extend(meshes_for(fx, &[Profile { path: p, rule, items: vec![item.clone()], opacity: 1.0, blends: vec![] }], total, limit)?);
                 }
             }
             out
