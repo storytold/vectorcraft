@@ -71,7 +71,8 @@ fn in_safe_mode_nothing_loads_or_runs() {
     assert_eq!(registry::load_folder(&dir), Err(Error::SafeMode));
     assert!(registry::get("test.safe.folder").is_none());
     let path = PathData::default();
-    let drawn = effect::apply("test.safe.effect", &json!({}), &path, Rect::new(0.0, 0.0, 1.0, 1.0), FillRule::NonZero, effect::Paints::default());
+    let drawn =
+        effect::apply("test.safe.effect", &json!({}), &path, Rect::new(0.0, 0.0, 1.0, 1.0), FillRule::NonZero, effect::Paints::default(), None);
     assert_eq!(drawn, None, "the geometry is drawn unchanged");
     assert_eq!(effect::last_error("test.safe.effect"), None, "not a failure of the plug-in");
     assert_eq!(Error::SafeMode.to_string(), "Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally");

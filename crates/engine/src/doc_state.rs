@@ -58,6 +58,9 @@ pub struct DocState {
     /// View Opacity Mask (Alt-click the mask thumbnail): the masked object whose mask the canvas
     /// shows alone, in greyscale, while that mask is edited (see [`DocState::shown_mask`]).
     pub mask_view: Option<NodeId>,
+    /// Check Spelling's Ignore All: the words (as craft-proof keys them, lower case) a spelling
+    /// check of this document skips. Kept while the document is open: not saved, not undoable.
+    pub spelling_ignored: std::collections::BTreeSet<String>,
     /// View → Show Transparency Grid, per document (saved view state, not undoable).
     pub transparency_grid: bool,
     /// The format Save writes ([`cmd::fileio::SAVE_FORMATS`]): the one the document was opened
@@ -109,6 +112,8 @@ pub struct DocState {
     pub opened_by: Option<Arc<file_access::AutomationRoots>>,
     /// What [`DocState::any_empty_artboards`] last measured. Not saved.
     empty_artboards: std::cell::RefCell<EmptyArtboards>,
+    /// What [`DocState::any_art_to_fit`] last measured. Not saved.
+    art_to_fit: std::cell::RefCell<Option<ArtToFit>>,
 }
 
 /// Whether a document has an artboard for Delete Empty Artboards to delete, with the document that
@@ -121,10 +126,25 @@ struct EmptyArtboards {
     any: bool,
 }
 
+/// Whether an unlocked artboard of those asked about has art that Fit to Artwork Bounds fits it
+/// to, with what was measured: the document (held as [`EmptyArtboards::doc`] holds it), the
+/// artboards, and the generations of what the measure reads outside the document. One is kept for
+/// each open document, and its weak reference keeps the measured document's allocation (not its
+/// contents) until the next measure or until the document closes.
+#[derive(Clone, Debug)]
+struct ArtToFit {
+    doc: std::sync::Weak<Document>,
+    indices: Vec<usize>,
+    outside: (u64, u64),
+    any: bool,
+}
+
 #[cfg(test)]
 thread_local! {
     /// Tests: how many times [`DocState::any_empty_artboards`] measured a document on this thread.
     pub(crate) static EMPTY_ARTBOARD_MEASURES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Tests: how many times [`DocState::any_art_to_fit`] measured a document on this thread.
+    pub(crate) static ART_TO_FIT_MEASURES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 static NEXT_DOC_UID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
@@ -288,6 +308,7 @@ impl DocState {
             uid: NEXT_DOC_UID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             opened_as_tab: true,
             mask_view: None,
+            spelling_ignored: Default::default(),
             transparency_grid,
             format: "vectorcraft",
             save_options: Default::default(),
@@ -305,6 +326,7 @@ impl DocState {
             last_perspective: None,
             opened_by: file_access::current(),
             empty_artboards: Default::default(),
+            art_to_fit: Default::default(),
         }
     }
     /// `measure`'s answer for the document now. `measure` runs once for each version of the document,
@@ -318,6 +340,38 @@ impl DocState {
             *last = EmptyArtboards { doc: Arc::downgrade(&self.doc), any: measure(&self.doc) };
         }
         last.any
+    }
+    /// Whether an unlocked artboard of `indices` has art that Fit to Artwork Bounds fits it to. A
+    /// menu asks on every frame it is open, and measuring builds the solids of 3D effects, so the
+    /// answer is kept for this version of the document and those artboards, and a change of the
+    /// selection or the view keeps it. It is measured again when what the measure reads outside the
+    /// document changes: the installed plug-ins, whose effects draw art, and the installed fonts,
+    /// which set the bounds of all type.
+    pub fn any_art_to_fit(&self, indices: &[usize]) -> bool {
+        self.any_art_to_fit_with(indices, (vectorcraft_plugins::registry::revision(), vectorcraft_text::FontDb::global().generation()))
+    }
+    /// [`Self::any_art_to_fit`], with `outside` the generations of the plug-ins and the fonts.
+    pub(crate) fn any_art_to_fit_with(&self, indices: &[usize], outside: (u64, u64)) -> bool {
+        // Measuring runs renderer and plug-in code; should it ever ask again while measuring, it
+        // is measured without being kept rather than borrowed twice.
+        let Ok(mut last) = self.art_to_fit.try_borrow_mut() else {
+            let mut r = vectorcraft_render::Renderer::new();
+            return indices.iter().filter_map(|i| self.doc.artboards.get(*i)).any(|a| !a.locked && r.art_bounds_on(&self.doc, a.rect).is_some());
+        };
+        if let Some(k) = last.as_ref()
+            && std::ptr::eq(k.doc.as_ptr(), Arc::as_ptr(&self.doc))
+            && k.indices == indices
+            && k.outside == outside
+        {
+            return k.any;
+        }
+        #[cfg(test)]
+        ART_TO_FIT_MEASURES.with(|c| c.set(c.get() + 1));
+        // One renderer measures every artboard: each object once.
+        let mut r = vectorcraft_render::Renderer::new();
+        let any = indices.iter().filter_map(|i| self.doc.artboards.get(*i)).any(|a| !a.locked && r.art_bounds_on(&self.doc, a.rect).is_some());
+        *last = Some(ArtToFit { doc: Arc::downgrade(&self.doc), indices: indices.to_vec(), outside, any });
+        any
     }
     /// Unsaved changes: the document differs from the saved one (selection changes and changes that
     /// are not edits to save don't count, [`DocState::same_content`]).
@@ -392,7 +446,7 @@ impl DocState {
         }
         let e = HistoryEntry::kept(label, doc, selection, &self.doc);
         self.history.undo.push(e);
-        self.history.redo.clear();
+        self.history.clear_redo();
         self.history.trim();
     }
     /// End the interaction in progress, undoing what it changed.

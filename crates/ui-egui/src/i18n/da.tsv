@@ -433,6 +433,17 @@
 	Inflate	Pust op
 	Select objects, then pick an object type to give them a 3D effect.	Markér objekter, og vælg derefter en objekttype for at give dem en 3D-effekt.
 	Extrude & Bevel…	Ekstrudér og facet…
+	3D (Classic)	3D (klassisk)
+	Extrude & Bevel (Classic)…	Ekstrudér og facet (klassisk)…
+	Surface	Overflade
+	Wireframe	Trådmodel
+	No Shading	Ingen skyggelægning
+	Plastic	Plastik
+	Highlight Intensity	Højlysintensitet
+	Highlight Size	Højlysstørrelse
+	Blend Steps	Overgangstrin
+	Shading Color	Skyggefarve
+	Draw Hidden Faces	Tegn skjulte flader
 	Revolve…	Omdrej…
 	Inflate…	Pust op…
 	Materials…	Materialer…
@@ -548,6 +559,7 @@
 	Hide Guides	Skjul hjælpelinjer
 	Show Guides	Vis hjælpelinjer
 	Lock Guides	Lås hjælpelinjer
+	Lock Guides by Default	Lås hjælpelinjer som standard
 	Unlock Guides	Lås hjælpelinjer op
 	Make Guides	Opret hjælpelinjer
 	Release Guides	Frigør hjælpelinjer
@@ -643,6 +655,11 @@
 	Color	Farve
 	Color Guide	Farveguide
 	Color Themes	Farvetemaer
+	Color Wheel	Farvehjul
+	Hue ring	Ring for farvetone
+	Saturation and brightness	Mætning og lysstyrke
+	Color field	Farvefelt
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	CSS Properties	CSS-egenskaber
 	Document Info	Dokumentoplysninger
 	Flattener Preview	Udjævningsforhåndsvisning
@@ -889,6 +906,7 @@ lighting	Light	Lys
 	Color Picker…	Farvevælger…
 	Coming soon — tracked in the parity plan	Kommer snart — følges i paritetsplanen
 	Command Dialog	Kommandodialog
+	Command API Reference	API-reference for kommandoer
 	Copy Selected Style	Kopiér markeret typografi
 	Corners…	Hjørner…
 	Define Perspective Grid…	Definér perspektivgitter…
@@ -1188,7 +1206,7 @@ lighting	Light	Lys
 	X:	X:
 	Y:	Y:
 	Drag to float the toolbar	Træk for at frigøre værktøjslinjen
-	Drag to the window's left edge to dock	Træk til vinduets venstre kant for at fastgøre
+	Drag to the window's left or right edge to dock	Træk til vinduets venstre eller højre kant for at fastgøre
 	Crystallize	Krystallisér
 	Add Anchor Point Tool	Tilføj ankerpunkt-værktøj
 	Anchor Point Tool	Ankerpunktværktøj
@@ -1727,6 +1745,10 @@ digits	Malayalam	Malayalam
 	Stylistic	Stilistisk
 	Mojikumi Set	Mojikumi-sæt
 	Kinsoku Set	Kinsoku-sæt
+	Kinsoku Shori Type	Kinsoku Shori-type
+	Push In First	Skub ind først
+	Push Out First	Skub ud først
+	Push Out Only	Kun skub ud
 	Hard	Hård
 	Right Indent	Højre indrykning
 	Right-to-Left Paragraph Direction	Afsnitsretning fra højre mod venstre
@@ -2330,15 +2352,12 @@ digits	Malayalam	Malayalam
 	Selected Swatches	Markerede farveprøver
 	Advanced Options	Avancerede indstillinger
 	Background Contents	Baggrundens indhold
-	Background Contents:	Baggrundens indhold:
 	BLANK DOCUMENT PRESETS	TOMME DOKUMENTFORUDINDSTILLINGER
 	Bleed	Beskæring
 	Change to Right-to-Left Layout	Skift til højre-til-venstre-layout
 	Columns:	Kolonner:
-	Create Document	Opret dokument
 	Documents you create appear here.	Dokumenter, du opretter, vises her.
 	More Settings	Flere indstillinger
-	New from Template	Nyt fra skabelon
 	Number of Artboards:	Antal tegnebrætter:
 	Orientation:	Orientering:
 	PRESET DETAILS	FORUDINDSTILLINGSDETALJER
@@ -2349,7 +2368,6 @@ digits	Malayalam	Malayalam
 	RECENT	SENESTE
 	RECENT (1)	SENESTE (1)
 	SAVED	GEMT
-	Templates…	Skabeloner…
 	Transparent (Default)	Gennemsigtig (standard)
 	Save for Office Documents	Gem til Office-dokumenter
 	Transparent Background	Gennemsigtig baggrund
@@ -2487,6 +2505,7 @@ digits	Malayalam	Malayalam
 	Tile Range:	Fliseinterval:
 	tile {number}	flise {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Fliser nummereres på tværs og derefter nedad; lad intervallet stå tomt for alle fliser.
+	Copies per Sheet (as many as fit, in a grid)	Kopier pr. ark (så mange der er plads til, i et gitter)
 	Transverse (the page a quarter turn on the paper)	På tværs (siden drejes en kvart omgang på papiret)
 	Unprintable margin:	Ikke-udskrivbar margen:
 	{pages} in all, {count} per copy	{pages} i alt, {count} pr. kopi
@@ -3252,6 +3271,7 @@ theme	Appearance	Udseende
 	Arrange by Row	Arranger efter række
 	Arrange by Column	Arranger efter kolonne
 	Save Preset	Gem forudindstilling
+	Save Document Preset	Gem dokumentforudindstilling
 	Screen (72 ppi)	Skærm (72 ppi)
 	Social Square Post 1080×1080	Socialt firkantet opslag 1080×1080
 	Distribute	Fordel
@@ -4053,6 +4073,15 @@ imageTrace	Outline	Kontur
 @msg	Combine Slices: the slices have no bounds	Kombinér udsnit: udsnittene har ingen grænser
 @msg	Convert to Artboards: selection has no area	Konvertér til tegneflader: markeringen har intet areal
 @msg	Convert to Shape: no rectangles or ellipses selected	Konvertér til figur: ingen rektangler eller ellipser er markeret
+	Run	Kør
+	Run Script	Kør script
+	Stop Script	Stop script
+	Show External Script Warning	Vis advarsel om eksterne scripts
+	A Script Is Running	Et script kører
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Et script kan ændre de åbne dokumenter og skrive filer gennem de kommandoer, det kører. Kør kun scripts, du stoler på.
+	Do not show this warning again	Vis ikke denne advarsel igen
+	Stop the script and undo what it did? Then quit again.	Stop scriptet og fortryd det, det har gjort? Afslut derefter igen.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Dette script har tilføjet rigtig mange objekter. Fortsæt, eller stop det og fortryd det, det har gjort?
 @msg	Copied the script report	Kopierede scriptrapporten
 @msg	Corners edits the corners of a path	Hjørner redigerer hjørnerne på en kurve
 @msg	Couldn't copy to the system clipboard: {e}	Kunne ikke kopiere til systemets udklipsholder: {e}
@@ -4685,7 +4714,10 @@ imageTrace	Outline	Kontur
 @msg	its objects are nested too deeply	dens objekter er indlejret for dybt
 @msg	its section ending with `%{end}` doesn't end	dens sektion, der ender med `%{end}`, ender ikke
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	pensler, som VectorCraft endnu ikke kan læse, blev udeladt af panelet Pensler ({_1})
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objekter med flere fyld eller streger, effekter eller pensler kom ind, som de er tegnet ({_1}): deres udseende er endnu ikke redigerbart
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objekter med flere fyld eller streger, streger med variabel bredde, effekter eller pensler kom ind, som de er tegnet ({_1}): deres udseende er endnu ikke redigerbart
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	navnet `{name}` er ikke UTF-8 og blev læst som {label}: hvis det ser forkert ud, så åbn filen med en anden legacyNameEncoding
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	navnet `{name}` er ikke UTF-8, og dele af det er heller ikke gyldig {label}: åbn filen med en anden legacyNameEncoding
+@msg	more names that aren't UTF-8 were read as {label} ({count})	flere navne, der ikke er UTF-8, blev læst som {label} ({count})
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	gradienten »{name}« er ikke defineret i filen: der bruges en flad farve i stedet
 @msg	an image VectorCraft can't read was left out	et billede, som VectorCraft ikke kan læse, blev udeladt
 @msg	an image whose data is cut short was left out	et billede, hvis data er afkortet, blev udeladt
@@ -5824,6 +5856,14 @@ axis	Y Axis	Y-akse
 @plural	Result: {n}|Results: {n}	Resultat: {n}|Resultater: {n}
 	Add to Symbols	Føj til symboler
 	Basic Shapes	Grundlæggende former
+	Button	Knap
+	Panel	Panel
+	UI Frames	UI-rammer
+	Map Markers	Kortmarkører
+	Pin	Nål
+	Flag	Flag
+	Crosshair	Sigtekorn
+	Checkpoint	Kontrolpunkt
 	Open Symbol Library	Åbn symbolbibliotek
 	Save Symbol Library	Gem symbolbibliotek
 	Save Symbol Library…	Gem symbolbibliotek…
@@ -5884,6 +5924,8 @@ axis	Y Axis	Y-akse
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Punkttekst
 	Area Text	Områdetekst
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Mål tekst efter glyfafgrænsning
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Vis indstillinger for fastgørelse til tegn
 	Hide Snap to Glyph Options	Skjul indstillinger for fastgørelse til tegn
@@ -6281,7 +6323,7 @@ breakText	Glyphs	Glyffer
 	Reset Symbol Instance	Nulstil symbolforekomst
 @msg	type must be static or dynamic, not {v}	type skal være static eller dynamic, ikke {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` er et statisk symbol: indstil først symboltypen til Dynamisk
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	For en kurve, sammensat kurve eller tekst, der er markeret i en symbolforekomst, kan kun ensfarvet fyld og streg ændres
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	For en kurve, sammensat kurve eller tekst markeret i en symbolforekomst kan kun fyld, streg, opacitet og blanding ændres
 @msg	path must be a list of child indices	path skal være en liste over underordnede indekser
 @msg	no object at path {shown} in the symbol's art	intet objekt ved stien {shown} i symbolets grafik
 @msg	give fill, stroke, opacity and/or blend	angiv fill, stroke, opacity og/eller blend
@@ -6324,6 +6366,7 @@ breakText	Glyphs	Glyffer
 	Create Swatch Legend	Opret farveprøveforklaring
 	Create Swatch Legend…	Opret farveprøveforklaring…
 	HEX	HEX
+	Help Bar	Hjælpelinje
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	Tekstværktøjer
 	Text Tweaker…	Tekstjustering…
@@ -6390,6 +6433,11 @@ breakText	Glyphs	Glyffer
 	3D Box	3D-boks
 	3D Box Tool	3D-boksværktøj
 
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Åbn med
+	No importer plug-ins installed	Ingen import-plug-ins installeret
+	Read files you open in its format and make documents from them	Læse filer, du åbner i dens format, og lave dokumenter ud fra dem
+
 # Safe Mode
 	Safe Mode…	Sikker tilstand…
 	Safe Mode	Sikker tilstand
@@ -6410,3 +6458,4 @@ breakText	Glyphs	Glyffer
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Juster efter pixelgitter
+@msg	side is left or right, not `{s}`	side er left eller right, ikke `{s}`

@@ -447,6 +447,17 @@
 	Inflate	Opblazen
 	Select objects, then pick an object type to give them a 3D effect.	Selecteer objecten en kies dan een objecttype om ze een 3D-effect te geven.
 	Extrude & Bevel…	Extruderen en afschuinen…
+	3D (Classic)	3D (klassiek)
+	Extrude & Bevel (Classic)…	Extruderen en afschuinen (klassiek)…
+	Surface	Oppervlak
+	Wireframe	Draadmodel
+	No Shading	Geen arcering
+	Plastic	Plastic
+	Highlight Intensity	Glansintensiteit
+	Highlight Size	Glansgrootte
+	Blend Steps	Overvloeistappen
+	Shading Color	Arceringskleur
+	Draw Hidden Faces	Verborgen vlakken tekenen
 	Revolve…	Draaien…
 	Inflate…	Opblazen…
 	Materials…	Materialen…
@@ -562,6 +573,7 @@
 	Hide Guides	Hulplijnen verbergen
 	Show Guides	Hulplijnen tonen
 	Lock Guides	Hulplijnen vergrendelen
+	Lock Guides by Default	Hulplijnen standaard vergrendelen
 	Unlock Guides	Hulplijnen ontgrendelen
 	Make Guides	Hulplijnen maken
 	Release Guides	Hulplijnen vrijgeven
@@ -657,6 +669,11 @@
 	Color	Kleur
 	Color Guide	Kleurhulp
 	Color Themes	Kleurthema's
+	Color Wheel	Kleurenwiel
+	Hue ring	Tintring
+	Saturation and brightness	Verzadiging en helderheid
+	Color field	Kleurveld
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	CSS Properties	CSS-eigenschappen
 	Document Info	Documentinfo
 	Flattener Preview	Afvlakvoorbeeld
@@ -903,6 +920,7 @@ lighting	Light	Licht
 	Color Picker…	Kleurkiezer…
 	Coming soon — tracked in the parity plan	Binnenkort beschikbaar — opgenomen in het pariteitsplan
 	Command Dialog	Opdrachtdialoogvenster
+	Command API Reference	API-naslag voor opdrachten
 	Copy Selected Style	Geselecteerde stijl kopiëren
 	Corners…	Hoeken…
 	Define Perspective Grid…	Perspectiefraster definiëren…
@@ -1202,7 +1220,7 @@ lighting	Light	Licht
 	X:	X:
 	Y:	Y:
 	Drag to float the toolbar	Sleep om de werkbalk zwevend te maken
-	Drag to the window's left edge to dock	Sleep naar de linkerrand van het venster om te dokken
+	Drag to the window's left or right edge to dock	Sleep naar de linker- of rechterrand van het venster om te dokken
 	Crystallize	Kristalliseren
 	Add Anchor Point Tool	Ankerpunt toevoegen
 	Anchor Point Tool	Ankerpunt-gereedschap
@@ -1741,6 +1759,10 @@ digits	Malayalam	Malayalam
 	Stylistic	Stilistisch
 	Mojikumi Set	Mojikumi-set
 	Kinsoku Set	Kinsoku-set
+	Kinsoku Shori Type	Kinsoku Shori-type
+	Push In First	Eerst inschuiven
+	Push Out First	Eerst uitschuiven
+	Push Out Only	Alleen uitschuiven
 	Hard	Hard
 	Right Indent	Rechts inspringen
 	Right-to-Left Paragraph Direction	Alinearichting van rechts naar links
@@ -2344,15 +2366,12 @@ digits	Malayalam	Malayalam
 	Selected Swatches	Geselecteerde stalen
 	Advanced Options	Geavanceerde opties
 	Background Contents	Achtergrondinhoud
-	Background Contents:	Achtergrondinhoud:
 	BLANK DOCUMENT PRESETS	LEGE DOCUMENTVOORINSTELLINGEN
 	Bleed	Afrulling
 	Change to Right-to-Left Layout	Omschakelen naar lay-out van rechts naar links
 	Columns:	Kolommen:
-	Create Document	Document maken
 	Documents you create appear here.	Documenten die je maakt, verschijnen hier.
 	More Settings	Meer instellingen
-	New from Template	Nieuw uit sjabloon
 	Number of Artboards:	Aantal tekenborden:
 	Orientation:	Oriëntatie:
 	PRESET DETAILS	VOORINSTELLINGSDETAILS
@@ -2363,7 +2382,6 @@ digits	Malayalam	Malayalam
 	RECENT	RECENT
 	RECENT (1)	RECENT (1)
 	SAVED	OPGESLAGEN
-	Templates…	Sjablonen…
 	Transparent (Default)	Transparant (standaard)
 	Save for Office Documents	Opslaan voor Office-documenten
 	Transparent Background	Transparante achtergrond
@@ -2501,6 +2519,7 @@ digits	Malayalam	Malayalam
 	Tile Range:	Tegelbereik:
 	tile {number}	tegel {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Tegels worden van links naar rechts en vervolgens van boven naar beneden genummerd; laat het bereik leeg voor alle tegels.
+	Copies per Sheet (as many as fit, in a grid)	Kopieën per vel (zoveel als er passen, in een raster)
 	Transverse (the page a quarter turn on the paper)	Dwars (de pagina een kwartslag op het papier)
 	Unprintable margin:	Niet afdrukbare marge:
 	{pages} in all, {count} per copy	{pages} in totaal, {count} per exemplaar
@@ -3266,6 +3285,7 @@ theme	Appearance	Vormgeving
 	Arrange by Row	Ordenen op rij
 	Arrange by Column	Ordenen op kolom
 	Save Preset	Voorinstelling opslaan
+	Save Document Preset	Documentvoorinstelling opslaan
 	Screen (72 ppi)	Scherm (72 ppi)
 	Social Square Post 1080×1080	Vierkante socialmediapost 1080×1080
 	Distribute	Verdelen
@@ -4067,6 +4087,15 @@ imageTrace	Outline	Contour
 @msg	Combine Slices: the slices have no bounds	Slices combineren: de slices hebben geen grenzen
 @msg	Convert to Artboards: selection has no area	Converteren naar tekengebieden: de selectie heeft geen oppervlakte
 @msg	Convert to Shape: no rectangles or ellipses selected	Converteren naar vorm: geen rechthoeken of ellipsen geselecteerd
+	Run	Uitvoeren
+	Run Script	Script uitvoeren
+	Stop Script	Script stoppen
+	Show External Script Warning	Waarschuwing voor externe scripts tonen
+	A Script Is Running	Er wordt een script uitgevoerd
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Een script kan de geopende documenten wijzigen en via de uitgevoerde opdrachten bestanden schrijven. Voer alleen scripts uit die u vertrouwt.
+	Do not show this warning again	Deze waarschuwing niet meer tonen
+	Stop the script and undo what it did? Then quit again.	Het script stoppen en de wijzigingen ervan ongedaan maken? Sluit daarna opnieuw af.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Dit script heeft heel veel objecten toegevoegd. Doorgaan, of het stoppen en de wijzigingen ervan ongedaan maken?
 @msg	Copied the script report	Scriptrapport gekopieerd
 @msg	Corners edits the corners of a path	Hoeken bewerkt de hoeken van een pad
 @msg	Couldn't copy to the system clipboard: {e}	Kon niet naar het systeemklembord kopiëren: {e}
@@ -4697,7 +4726,10 @@ imageTrace	Outline	Contour
 @msg	its objects are nested too deeply	de objecten ervan zijn te diep genest
 @msg	its section ending with `%{end}` doesn't end	zijn sectie die op `%{end}` eindigt, eindigt niet
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	penselen die VectorCraft nog niet kan lezen, zijn weggelaten uit het deelvenster Penselen ({_1})
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objecten met meerdere vullingen of lijnen, effecten of penselen zijn als hun getekende uiterlijk binnengekomen ({_1}): hun vormgeving is nog niet bewerkbaar
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objecten met meerdere vullingen of lijnen, lijnen met variabele breedte, effecten of penselen zijn als hun getekende uiterlijk binnengekomen ({_1}): hun vormgeving is nog niet bewerkbaar
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	de naam `{name}` is geen UTF-8 en is gelezen als {label}: als die er verkeerd uitziet, open het bestand dan met een andere legacyNameEncoding
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	de naam `{name}` is geen UTF-8, en delen ervan zijn ook geen geldige {label}: open het bestand met een andere legacyNameEncoding
+@msg	more names that aren't UTF-8 were read as {label} ({count})	meer namen die geen UTF-8 zijn, zijn gelezen als {label} ({count})
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	verloop „{name}” is niet gedefinieerd in het bestand: er is een effen kleur voor gebruikt
 @msg	an image VectorCraft can't read was left out	een afbeelding die VectorCraft niet kan lezen, is weggelaten
 @msg	an image whose data is cut short was left out	een afbeelding waarvan de gegevens zijn afgekapt, is weggelaten
@@ -5875,6 +5907,14 @@ axis	Y Axis	Y-as
 @plural	Result: {n}|Results: {n}	Resultaat: {n}|Resultaten: {n}
 	Add to Symbols	Aan symbolen toevoegen
 	Basic Shapes	Basisvormen
+	Button	Knop
+	Panel	Paneel
+	UI Frames	UI-kaders
+	Map Markers	Kaartmarkeringen
+	Pin	Speld
+	Flag	Vlag
+	Crosshair	Vizier
+	Checkpoint	Controlepunt
 	Open Symbol Library	Symboolbibliotheek openen
 	Save Symbol Library	Symboolbibliotheek opslaan
 	Save Symbol Library…	Symboolbibliotheek opslaan…
@@ -5935,6 +5975,8 @@ axis	Y Axis	Y-as
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Punttekst
 	Area Text	Vlaktekst
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Tekst meten op glyphbegrenzing
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Opties voor uitlijnen op glyph tonen
 	Hide Snap to Glyph Options	Opties voor uitlijnen op glyph verbergen
@@ -6332,7 +6374,7 @@ breakText	Glyphs	Glyphs
 	Reset Symbol Instance	Symboolinstantie opnieuw instellen
 @msg	type must be static or dynamic, not {v}	type moet static of dynamic zijn, niet {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` is een statisch symbool: stel eerst het symbooltype in op Dynamisch
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	Van een pad, samengesteld pad of tekst die in een symboolinstantie is geselecteerd, kan alleen de effen kleur van vulling en lijn veranderen
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	Van een pad, samengesteld pad of tekst geselecteerd in een symboolinstantie kunnen alleen de vulling, lijn, dekking en overvloeimodus worden gewijzigd
 @msg	path must be a list of child indices	path moet een lijst met onderliggende indexen zijn
 @msg	no object at path {shown} in the symbol's art	geen object op pad {shown} in de illustratie van het symbool
 @msg	give fill, stroke, opacity and/or blend	geef fill, stroke, opacity en/of blend op
@@ -6375,6 +6417,7 @@ breakText	Glyphs	Glyphs
 	Create Swatch Legend	Stalenlegenda maken
 	Create Swatch Legend…	Stalenlegenda maken…
 	HEX	HEX
+	Help Bar	Helpbalk
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	Teksthulpmiddelen
 	Text Tweaker…	Tekst bijstellen…
@@ -6441,6 +6484,11 @@ breakText	Glyphs	Glyphs
 	3D Box	3D-doos
 	3D Box Tool	3D-doosgereedschap
 
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Openen met
+	No importer plug-ins installed	Geen importplug-ins geïnstalleerd
+	Read files you open in its format and make documents from them	Bestanden lezen die u in zijn indeling opent en er documenten van maken
+
 # Safe Mode
 	Safe Mode…	Veilige modus…
 	Safe Mode	Veilige modus
@@ -6461,3 +6509,4 @@ breakText	Glyphs	Glyphs
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Uitlijnen op pixelraster
+@msg	side is left or right, not `{s}`	side is left of right, niet `{s}`

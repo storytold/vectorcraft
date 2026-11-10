@@ -20,6 +20,7 @@ mod numeric;
 mod panel_chrome;
 mod text;
 mod toggles;
+mod wheel_stream;
 
 pub use blend::{
     TransparencyEdit, angle_dial, blend_dropdown, blend_param, blend_param_dropdown, blend_separator_before, opacity_blend, reference_point,
@@ -33,12 +34,12 @@ pub(crate) use buttons::{button_width, icon_button_info, primary_button_width, s
 #[cfg(test)]
 use chips::gradient_chip_colors;
 pub use chips::{ProxyClicks, chip_button, chip_button_named, fill_stroke_proxy, gradient_chip, paint_chip, proxy_chip, swatch_tile};
-pub(crate) use color::{HEX_FIELD_CHARS, hex_text, pointer_phase};
 pub use color::{
-    Live, SliderValue, WheelResponse, channel_slider, channel_slider_named, channel_slider_valued, color_field, color_mesh, color_slider,
-    color_slider_named, color_slider_stepped, color_slider_valued, harmony_wheel, hex_field, hex_field_named, region_texture, segment_color,
-    segmented_wheel, stepped_area,
+    FieldAxis, Live, RingResponse, SliderValue, WheelResponse, channel_slider, channel_slider_named, channel_slider_valued, color_field, color_mesh,
+    color_slider, color_slider_named, color_slider_stepped, color_slider_valued, harmony_wheel, hex_field, hex_field_named, hsb32, hue_ring,
+    region_texture, ring_square, segment_color, segmented_wheel, stepped_area,
 };
+pub(crate) use color::{HEX_FIELD_CHARS, hex_text, pointer_phase};
 pub use drag::{
     PanelDrag, RowClick, SwatchRows, apply_row_click, art_drop, doc_preview, drag_ghost, drag_source, drop_target_outline, ghost_row, row_click,
 };
@@ -72,6 +73,9 @@ pub use text::{
     text_presets_named,
 };
 pub use toggles::{check, check_box, check_name, check_tip, check3, check3_tip, radio, radio_button};
+#[cfg(test)]
+pub(crate) use wheel_stream::WHEEL_STREAM_GAP;
+pub(crate) use wheel_stream::{ArmedWheelField, WheelStream, WheelStreamOwner, taken_from_raw_id};
 
 /// A widget id salt that needs only [`std::hash::Hash`]. egui 0.37's [`egui::AsIdSalt`] also
 /// requires `Debug` for its debug-only id-source registry; VectorCraft's public field helpers do
@@ -709,6 +713,25 @@ mod gradient_chip_tests {
         let colors = gradient_chip_colors(&paint(GradientKind::Radial, 0.0), 20.0, 20.0, 4, 4);
         assert_eq!(colors[2 * 5 + 2], Color32::WHITE);
         assert_eq!(colors[0], Color32::BLACK);
+    }
+
+    #[test]
+    fn freeform_chip_mixes_points_in_the_model_they_share() {
+        use vectorcraft_color::{Color, Freeform, FreeformPoint};
+        use vectorcraft_geom::kurbo::Point;
+        let chip = |a: Color, b: Color| {
+            let p = |x, c| FreeformPoint::new(Point::new(x, 10.0), c);
+            let mut gp = paint(GradientKind::Freeform, 0.0);
+            gp.freeform = Some(Freeform { points: vec![p(0.0, a), p(20.0, b)], ..Default::default() });
+            gradient_chip_colors(&gp, 20.0, 20.0, 4, 4)[2 * 5 + 2]
+        };
+        let near = |got: Color32, want: [u8; 4]| [got.r(), got.g(), got.b()].iter().zip(want).all(|(g, w)| g.abs_diff(w) <= 3);
+        let got = chip(Color::cmyk(1.0, 0.0, 0.0, 0.0), Color::cmyk(0.0, 0.0, 0.0, 1.0));
+        let want = Color::cmyk(0.5, 0.0, 0.0, 0.5).to_rgba8(1.0);
+        assert!(near(got, want), "CMYK: {got:?} vs {want:?}");
+        let got = chip(Color::lab(90.0, -60.0, 40.0), Color::lab(30.0, 60.0, -40.0));
+        let want = Color::lab(60.0, 0.0, 0.0).to_rgba8(1.0);
+        assert!(near(got, want), "Lab: {got:?} vs {want:?}");
     }
 
     /// At a position and display scale that fall between pixels, the gradient chip covers the same

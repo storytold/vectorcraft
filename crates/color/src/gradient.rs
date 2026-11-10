@@ -456,6 +456,41 @@ impl Gradient {
         }
         Some(out)
     }
+    /// A gradient whose stops are all CMYK as a ramp of C, M, Y, K and opacity: the stops' own
+    /// inks, an off-center midpoint halfway between its two stops' inks, and a Perceptual
+    /// gradient's curve as [`Self::ink_mixes`] mixes the inks. `None` when a stop is in another
+    /// model, there are no stops, or [`Self::ink_mixes`] gives none for the curve.
+    fn ink_ramp(&self) -> Option<Ramp<5>> {
+        let inks: Vec<[f32; 4]> = self
+            .stops
+            .iter()
+            .map(|s| match s.color {
+                Color::Cmyk { c, m, y, k } => Some([c, m, y, k]),
+                _ => None,
+            })
+            .collect::<Option<_>>()?;
+        if inks.is_empty() {
+            return None;
+        }
+        let entry = |i: usize, w: f32, o: f32| {
+            let (a, b) = (inks[i], inks.get(i + 1).copied().unwrap_or(inks[i]));
+            let [c, m, y, k]: [f32; 4] = std::array::from_fn(|n| a[n] + (b[n] - a[n]) * w);
+            [c, m, y, k, o]
+        };
+        if !self.method.is_classic() {
+            return Some(Ramp { stops: self.ink_mixes()?.into_iter().map(|(t, i, w, o)| (t, entry(i, w, o))).collect() });
+        }
+        let mut stops = Vec::with_capacity(inks.len());
+        for (i, s) in self.stops.iter().enumerate() {
+            stops.push((s.offset, entry(i, 0.0, s.opacity)));
+            if let Some(n) = self.stops.get(i + 1)
+                && (s.midpoint - 0.5).abs() > 1e-3
+            {
+                stops.push((s.offset + (n.offset - s.offset) * s.midpoint, entry(i, 0.5, (s.opacity + n.opacity) / 2.0)));
+            }
+        }
+        Some(Ramp { stops })
+    }
     /// The same ramp the other way round: the stops in reverse order at mirrored offsets, each
     /// segment's midpoint mirrored with it.
     pub fn reverse(&mut self) {
@@ -895,19 +930,45 @@ impl GradientPaint {
         fill: bool,
         rgb: &dyn Fn(&Color) -> [f32; 3],
     ) -> impl Iterator<Item = [u8; 4]> + use<> {
+        self.grid(Ramp::new(&self.gradient, rgb), bounds, area, cols, rows, cells, fill, false)
+    }
+    /// [`Self::pixels`] of a linear or radial gradient whose stops are all CMYK, as C, M, Y, K
+    /// and opacity levels mixed from the stops' inks; `None` when a stop is in another model,
+    /// there are no stops, or a Perceptual curve has too many stops for [`Gradient::ink_mixes`].
+    /// Dither's noise adds no ink where the ramp has none.
+    pub fn ink_pixels(&self, bounds: Rect, area: Rect, cols: u16, rows: u16, fill: bool) -> Option<impl Iterator<Item = [u8; 5]> + use<>> {
+        let ramp = self.gradient.ink_ramp()?;
+        Some(self.grid(ramp, bounds, area, cols, rows, [0..cols, 0..rows], fill, true))
+    }
+    /// `ramp` sampled at each cell's center in columns `cells[0]` and rows `cells[1]` of the grid,
+    /// its last channel (opacity) rounded and each other channel with dither's noise, except
+    /// (`inks`) where that channel is empty.
+    #[allow(clippy::too_many_arguments)]
+    fn grid<const N: usize>(
+        &self,
+        ramp: Ramp<N>,
+        bounds: Rect,
+        area: Rect,
+        cols: u16,
+        rows: u16,
+        cells: [std::ops::Range<u16>; 2],
+        fill: bool,
+        inks: bool,
+    ) -> impl Iterator<Item = [u8; N]> + use<N> {
         let (kind, geom, dither) = (self.gradient.kind, self.resolve(bounds), fill && self.gradient.dither);
-        let ramp = Ramp::new(&self.gradient, rgb);
         let (cw, ch) = (area.width() / f64::from(cols.max(1)), area.height() / f64::from(rows.max(1)));
         let (x0, y0) = (area.x0, area.y0);
         let [across, down] = cells.map(|r| u32::from(r.start)..u32::from(r.end));
         down.flat_map(move |j| across.clone().map(move |i| (i, j))).map(move |(i, j)| {
             let p = Point::new(x0 + (f64::from(i) + 0.5) * cw, y0 + (f64::from(j) + 0.5) * ch);
             let c = ramp.at(geom.param_at(kind, p) as f32);
-            let level = |k: usize| {
-                let noise = if dither { dither_noise(i, j, k as u32) } else { 0.0 };
+            std::array::from_fn(|k| {
+                if k + 1 == N {
+                    return (c[k].clamp(0.0, 1.0) * 255.0).round() as u8;
+                }
+                let noise = if dither && !(inks && c[k] <= 0.0) { dither_noise(i, j, k as u32) } else { 0.0 };
                 (c[k].clamp(0.0, 1.0) * 255.0 + noise).round().clamp(0.0, 255.0) as u8
-            };
-            [level(0), level(1), level(2), (c[3].clamp(0.0, 1.0) * 255.0).round() as u8]
+            })
         })
     }
 }
@@ -916,9 +977,9 @@ impl GradientPaint {
 /// (display RGB, or an ink's coverage): its stops, midpoints and a Perceptual gradient's
 /// in-between colours as stops (as [`Gradient::expanded_stops`]), each turned into that space
 /// once, with colour and opacity mixed linearly between them, each on its own (as the renderer's
-/// vector gradients mix them).
-pub struct Ramp {
-    stops: Vec<(f32, [f32; 4])>,
+/// vector gradients mix them). `N` counts the channels, with opacity last.
+pub struct Ramp<const N: usize = 4> {
+    stops: Vec<(f32, [f32; N])>,
 }
 
 impl Ramp {
@@ -932,10 +993,13 @@ impl Ramp {
             .collect();
         Self { stops }
     }
+}
+
+impl<const N: usize> Ramp<N> {
     /// Unpremultiplied colour and opacity at `t`, padded past the ends (transparent black
     /// without stops).
-    pub fn at(&self, t: f32) -> [f32; 4] {
-        let Some(&(t0, first)) = self.stops.first() else { return [0.0; 4] };
+    pub fn at(&self, t: f32) -> [f32; N] {
+        let Some(&(t0, first)) = self.stops.first() else { return [0.0; N] };
         // Not after the first stop (or not a number): its colour.
         if t.partial_cmp(&t0) != Some(std::cmp::Ordering::Greater) {
             return first;
@@ -947,7 +1011,7 @@ impl Ramp {
                 return std::array::from_fn(|k| ca[k] + (cb[k] - ca[k]) * u);
             }
         }
-        self.stops.last().map_or([0.0; 4], |s| s.1)
+        self.stops.last().map_or([0.0; N], |s| s.1)
     }
 }
 

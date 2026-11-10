@@ -167,6 +167,11 @@ pub fn exporter(id: &str, extensions: &str, params: &str) -> String {
     format!(r#"{{"id":"{id}","name":"Test {id}","version":"1","kind":"exporter","extensions":{extensions},"params":{params}}}"#)
 }
 
+/// The manifest of a test importer `id` reading `extensions` (a JSON list) with `params`.
+pub fn importer(id: &str, extensions: &str, params: &str) -> String {
+    format!(r#"{{"id":"{id}","name":"Test {id}","version":"1","kind":"importer","extensions":{extensions},"params":{params}}}"#)
+}
+
 /// What [`echo_exporter`] writes as its file.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Echo {

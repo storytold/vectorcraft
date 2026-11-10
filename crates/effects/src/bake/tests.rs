@@ -210,6 +210,139 @@ fn baked_free_distort_moves_placed_gradients_from_the_bounds_to_the_distorted_bo
     assert_eq!(baked(&fitted, distort()).1.geom, None);
 }
 
+/// A gradient fitted to the object turns, reflects and stretches with a Transform effect that a
+/// refit would not reproduce: it is fixed to its fit on the geometry the effect takes, then mapped.
+/// Moves and even scales leave it fitted.
+#[test]
+fn a_fitted_gradient_turns_reflects_and_stretches_with_a_transform_effect() {
+    use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let fitted = |kind| Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(kind, stops.clone()))));
+    let geom = |start: (f64, f64), end: (f64, f64)| GradientGeom { start: start.into(), end: end.into(), aspect: 1.0, focal: None };
+    // The geometry of the baked fill (`own`: the Transform effect is the fill's own effect).
+    let baked = |kind, effects: &[Effect], own: bool| {
+        let mut ap = Appearance::basic(fitted(kind), Paint::None, 0.0);
+        if own {
+            *ap.items[0].effects_mut() = effects.to_vec();
+        }
+        let mut n = Node::path(NodeId(50), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), ap);
+        if !own {
+            n.appearance.effects = effects.to_vec();
+        }
+        let d = bake_document(&doc_with(n)).unwrap();
+        let mut found = vec![];
+        d.node(NodeId(50)).unwrap().walk(&mut |c: &Node| {
+            if let Paint::Gradient(g) = c.appearance.fill_paint() {
+                found.push(g.geom);
+            }
+        });
+        assert_eq!(found.len(), 1, "{effects:?}, own {own}");
+        found[0]
+    };
+    let t = |params| fx("distort.transform", params);
+    let offset = fx("path.offsetPath", json!({"offset": 10.0, "joins": "miter"}));
+    let corners = json!({"corners": [[1.0, 0.0], [2.0, 0.0], [2.0, 1.0], [1.0, 1.0]]});
+    let linear = GradientKind::Linear;
+    let cases = [
+        // A quarter turn about the center: the left to right ramp runs from the bottom up.
+        (linear, vec![t(json!({"rotate": 90.0}))], geom((50.0, 100.0), (50.0, 0.0))),
+        // Reflected left to right: the ramp runs from right to left.
+        (linear, vec![t(json!({"reflectX": true}))], geom((100.0, 50.0), (0.0, 50.0))),
+        // With Scale Strokes & Effects on, the same.
+        (linear, vec![t(json!({"rotate": 90.0, "strokes": true}))], geom((50.0, 100.0), (50.0, 0.0))),
+        // Offset Path grows the square to -10..110 first: the turn takes the fit across 120 pt.
+        (linear, vec![offset.clone(), t(json!({"rotate": 90.0}))], geom((50.0, 110.0), (50.0, -10.0))),
+        // Stretched to twice the width: the circle of radius 50 about the center becomes an
+        // ellipse 100 pt across and 50 pt tall.
+        (GradientKind::Radial, vec![t(json!({"scaleH": 200.0}))], GradientGeom { aspect: 0.5, ..geom((50.0, 50.0), (150.0, 50.0)) }),
+        // Turned, then moved one width right by Free Distort: the fixed gradient moves with it.
+        (linear, vec![t(json!({"rotate": 90.0})), fx("distort.freeDistort", corners)], geom((150.0, 100.0), (150.0, 0.0))),
+    ];
+    for (kind, effects, want) in cases {
+        for own in [false, true] {
+            let what = format!("{kind:?} {effects:?}, own {own}");
+            let got = baked(kind, &effects, own).unwrap_or_else(|| panic!("{what}: fixed to its fit"));
+            assert_geom_near(got, want, &what);
+        }
+    }
+    // A move and an even scale are what a refit gives: the gradient stays fitted.
+    for effects in [vec![t(json!({"moveH": 30.0}))], vec![t(json!({"scaleH": 150.0, "scaleV": 150.0})), offset]] {
+        for own in [false, true] {
+            assert_eq!(baked(linear, &effects, own), None, "{effects:?}, own {own}");
+        }
+    }
+    // A stroke's gradient is fixed to its fit on the box grown by half its weight (4 pt), -2..102,
+    // with Scale Strokes & Effects off or on.
+    let stroked = |effects: &[Effect], own: bool| {
+        let mut ap = Appearance::basic(Paint::None, fitted(linear), 4.0);
+        let Some(stroke) = ap.items.iter_mut().find(|i| matches!(i, AppearanceItem::Stroke(_))) else { panic!("a stroke") };
+        if own {
+            *stroke.effects_mut() = effects.to_vec();
+        }
+        let mut n = Node::path(NodeId(50), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), ap);
+        if !own {
+            n.appearance.effects = effects.to_vec();
+        }
+        let d = bake_document(&doc_with(n)).unwrap();
+        let mut found = vec![];
+        d.node(NodeId(50)).unwrap().walk(&mut |c: &Node| {
+            for item in &c.appearance.items {
+                if let AppearanceItem::Stroke(s) = item
+                    && let Paint::Gradient(g) = &s.paint
+                {
+                    found.push(g.geom);
+                }
+            }
+        });
+        assert_eq!(found.len(), 1, "{effects:?}, own {own}");
+        found[0]
+    };
+    for strokes in [false, true] {
+        for own in [false, true] {
+            let what = format!("stroke, strokes {strokes}, own {own}");
+            let got = stroked(&[t(json!({"rotate": 90.0, "strokes": strokes}))], own).unwrap_or_else(|| panic!("{what}: fixed to its fit"));
+            assert_geom_near(got, geom((50.0, 102.0), (50.0, -2.0)), &what);
+        }
+    }
+}
+
+/// A Transform effect that scales the geometry to nothing across leaves a fitted gradient fitted:
+/// mapping it with the effect would flatten it to one color.
+#[test]
+fn a_transform_effect_that_scales_to_nothing_leaves_a_fitted_gradient_fitted() {
+    use vectorcraft_color::{Gradient, GradientKind, GradientPaint, GradientStop};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let fitted = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+    // With Scale Strokes & Effects or Transform Patterns on, and for each copy, as without them.
+    for (options, strokes) in [
+        (json!({}), 1),
+        (json!({"strokes": true}), 1),
+        (json!({"patterns": true}), 1),
+        (json!({"copies": 2}), 3),
+        (json!({"strokes": true, "copies": 2}), 3),
+        (json!({"patterns": true, "copies": 2}), 3),
+    ] {
+        let mut n = Node::path(NodeId(50), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::basic(Paint::None, fitted.clone(), 4.0));
+        let mut p = json!({"scaleH": 0.0, "rotate": 30.0});
+        if let (Some(p), Some(o)) = (p.as_object_mut(), options.as_object()) {
+            p.extend(o.clone());
+        }
+        n.appearance.effects = vec![fx("distort.transform", p)];
+        let d = bake_document(&doc_with(n)).unwrap();
+        let mut found = vec![];
+        d.node(NodeId(50)).unwrap().walk(&mut |c: &Node| {
+            for item in &c.appearance.items {
+                if let AppearanceItem::Stroke(s) = item
+                    && let Paint::Gradient(g) = &s.paint
+                {
+                    found.push(g.geom);
+                }
+            }
+        });
+        assert_eq!(found, vec![None; strokes], "{options}");
+    }
+}
+
 #[test]
 fn baked_warps_move_placed_gradients_from_the_bounds_to_the_warped_bounds() {
     use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
@@ -403,7 +536,7 @@ fn a_baked_stroke_keeps_its_raster_effects() {
         s.effects.push(fx("path.offsetPath", json!({"offset": 5.0})));
         s.effects.push(fx("stylize.dropShadow", json!({})));
     }
-    let m = bake_appearance(&n).unwrap();
+    let m = bake_appearance(None, &n).unwrap();
     let ch = m.children().unwrap();
     let Some(AppearanceItem::Fill(f)) = ch[1].appearance.items.first() else { panic!("the outline is filled") };
     assert_eq!(f.effects.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["stylize.dropShadow"]);
@@ -418,7 +551,7 @@ fn a_baked_stroke_leaves_dither_behind() {
         g.gradient.dither = true;
         s.paint = Paint::Gradient(Box::new(g));
     }
-    let m = bake_appearance(&n).unwrap();
+    let m = bake_appearance(None, &n).unwrap();
     let ch = m.children().unwrap();
     let Some(AppearanceItem::Fill(f)) = ch[1].appearance.items.first() else { panic!("the outline is filled") };
     let Paint::Gradient(g) = &f.paint else { panic!("a gradient fill") };
@@ -434,7 +567,7 @@ fn a_baked_stroke_with_a_gradient_along_it_becomes_meshes_clipped_to_its_outline
         s.gradient_mode = vectorcraft_doc::StrokeGradientMode::Along;
         s.opacity = 0.5;
     }
-    let m = bake_appearance(&n).unwrap();
+    let m = bake_appearance(None, &n).unwrap();
     let ch = m.children().unwrap();
     let NodeKind::Group { children, clip: true } = &ch[1].kind else { panic!("a clip group: {:?}", ch[1].kind) };
     assert!(matches!(children[0].kind, NodeKind::Path { clipping: true, .. }));
@@ -467,10 +600,10 @@ fn a_baked_transform_copy_keeps_its_scaled_stroke() {
     // Distort Appearance: the 200% copy's stroke is 4 pt, as outside the envelope, so its outline
     // is 204 pt wide.
     let n = transformed(Paint::None, Paint::solid(Color::BLACK), 2.0, json!({"scaleH": 200, "scaleV": 200, "copies": 1, "strokes": true}));
-    let m = bake_appearance(&n).unwrap();
+    let m = bake_appearance(None, &n).unwrap();
     let w = widths(&m);
     assert_eq!(w.len(), 2, "{w:?}");
-    assert!((w[0] - 102.0).abs() < 0.5 && (w[1] - 204.0).abs() < 0.5, "{w:?}");
+    assert!((w[1] - 102.0).abs() < 0.5 && (w[0] - 204.0).abs() < 0.5, "the original on top: {w:?}");
     assert!(baked_paths(&m).iter().all(|p| p.appearance.stroke().is_none()), "the strokes are outlined");
 }
 
@@ -478,7 +611,7 @@ fn a_baked_transform_copy_keeps_its_scaled_stroke() {
 fn a_baked_transform_copy_keeps_its_moved_pattern() {
     let paint = Paint::Pattern { pattern: "p".into(), xf: vectorcraft_geom::Affine::IDENTITY };
     let n = transformed(paint, Paint::None, 0.0, json!({"moveH": 30, "copies": 1, "patterns": true}));
-    let m = bake_appearance(&n).unwrap();
+    let m = bake_appearance(None, &n).unwrap();
     let xs: Vec<f64> = baked_paths(&m)
         .iter()
         .map(|p| match p.appearance.fill_paint() {
@@ -486,14 +619,14 @@ fn a_baked_transform_copy_keeps_its_moved_pattern() {
             p => panic!("not a pattern: {p:?}"),
         })
         .collect();
-    assert_eq!(xs, vec![0.0, 30.0]);
+    assert_eq!(xs, vec![30.0, 0.0], "the original on top");
 }
 
 #[test]
 fn a_baked_transform_without_its_options_outlines_the_copies_together() {
     // Without Scale Strokes & Effects the copy keeps the 2 pt stroke: one outline of both squares.
     let n = transformed(Paint::None, Paint::solid(Color::BLACK), 2.0, json!({"scaleH": 200, "scaleV": 200, "copies": 1}));
-    let m = bake_appearance(&n).unwrap();
+    let m = bake_appearance(None, &n).unwrap();
     let w = widths(&m);
     assert_eq!(w.len(), 1, "{w:?}");
     assert!((w[0] - 202.0).abs() < 0.5, "{w:?}");

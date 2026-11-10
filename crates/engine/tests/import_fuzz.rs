@@ -1,5 +1,5 @@
 //! Untrusted files never crash the app: garbage, truncated, mutated and hostile SVG, PDF and DXF input,
-//! mutated raster images (Photoshop documents among them) placed with File → Place, and swatch (`.vcswatches`, `.gpl`, `.ase`), graphic style (`.vcstyles`), flattener preset
+//! mutated raster images (Photoshop documents and JPEG XL images among them) placed with File → Place, and swatch (`.vcswatches`, `.gpl`, `.ase`), graphic style (`.vcstyles`), flattener preset
 //! (`.vcflattener`) and export preset (`.vcexportpresets`) libraries, shortcut sets and action sets other apps save as text (`.kys`, `.aia`), and native files (compressed, damaged, saved for older versions),
 //! must load as an error or as a document that then renders and exports, without a panic; nor may
 //! bitmaps, PDF and text pasted from other apps, nor EMF and WMF pictures (damaged files, records
@@ -1743,6 +1743,22 @@ fn raster_samples() -> Vec<(&'static str, Vec<u8>)> {
     psb.extend((0..8).flat_map(|_| 2u32.to_be_bytes()));
     psb.extend((0..8u8).flat_map(|v| [0xfe, v * 30]));
     out.push(("a.psb", psb));
+    // JPEG XL: an 8-bit RGBA codestream, and a 16-bit gray one in the container.
+    use zune_core::{bit_depth::BitDepth, colorspace::ColorSpace, options::EncoderOptions};
+    let jxl = |space, depth, samples: &[u8]| {
+        let mut b = vec![];
+        zune_jpegxl::JxlSimpleEncoder::new(samples, EncoderOptions::new(5, 3, space, depth)).encode(&mut b).unwrap();
+        b
+    };
+    out.push(("a.jxl", jxl(ColorSpace::RGBA, BitDepth::Eight, &(0..60).map(|i| (i * 17) as u8).collect::<Vec<_>>())));
+    let gray = jxl(ColorSpace::Luma, BitDepth::Sixteen, &(0..30).map(|i| (i * 41) as u8).collect::<Vec<_>>());
+    let mut boxed = vec![0, 0, 0, 0x0c, b'J', b'X', b'L', b' ', 0x0d, 0x0a, 0x87, 0x0a];
+    boxed.extend(20u32.to_be_bytes());
+    boxed.extend(b"ftypjxl \0\0\0\0jxl ");
+    boxed.extend((8 + gray.len() as u32).to_be_bytes());
+    boxed.extend(b"jxlc");
+    boxed.extend(gray);
+    out.push(("b.jxl", boxed));
     out
 }
 
@@ -2398,6 +2414,64 @@ proptest! {
         }
         let text = type42_composite_eps(&font, gid);
         survive("damaged Type 42 glyphs", || vectorcraft_eps::import(text.as_bytes()).ok().map(|r| r.document))?;
+    }
+
+    /// CID-keyed fonts with hostile CMaps (codespace ranges of any length, mappings past them)
+    /// and Type 0 CIDFonts with damaged binary data (offset table, charstrings, subroutine table,
+    /// any FDBytes and GDBytes), shown with any bytes: drawn, measured and outlined, or refused.
+    #[test]
+    fn eps_cid_fonts_never_panic(
+        space in prop::collection::vec((prop::collection::vec(any::<u8>(), 0..6), prop::collection::vec(any::<u8>(), 0..6)), 0..4),
+        cids in prop::collection::vec((prop::collection::vec(any::<u8>(), 1..5), any::<u16>()), 0..6),
+        data in prop::collection::vec(any::<u8>(), 0..200),
+        fd_bytes in 0u8..6,
+        gd_bytes in 0u8..6,
+        len_iv in -2i8..8,
+        shown in prop::collection::vec(any::<u8>(), 0..24),
+    ) {
+        let hex = |b: &[u8]| b.iter().map(|x| format!("{x:02x}")).collect::<String>();
+        let ranges: String = space.iter().map(|(lo, hi)| format!("<{}> <{}>\n", hex(lo), hex(hi))).collect();
+        let maps: String = cids.iter().map(|(c, cid)| format!("<{}> <{}> {cid}\n", hex(c), hex(c))).collect();
+        let text = format!(
+            "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n\
+             /CIDInit /ProcSet findresource begin 20 dict begin /CIDFontName /F def /CIDFontType 0 def\n\
+             /FDArray [4 dict begin /FontMatrix [0.001 0 0 0.001 0 0] def /Private 4 dict dup begin /lenIV {len_iv} def\n\
+             /SubrMapOffset 3 def /SDBytes 2 def /SubrCount 4 def end def currentdict end] def\n\
+             /CIDMapOffset 0 def /FDBytes {fd_bytes} def /GDBytes {gd_bytes} def /CIDCount 40 def\n\
+             (Hex) {} StartData\n{}\n\
+             /CIDInit /ProcSet findresource begin 12 dict begin begincmap /CMapName /M def\n\
+             {} begincodespacerange\n{ranges}endcodespacerange\n{} begincidrange\n{maps}endcidrange\n\
+             endcmap CMapName currentdict /CMap defineresource pop end end\n\
+             /C /M [/F] composefont 40 scalefont setfont 10 20 moveto <{}> show <{}> stringwidth pop pop\n\
+             10 60 moveto <{}> true charpath fill\nshowpage\n%%EOF\n",
+            data.len(), hex(&data), space.len(), cids.len(), hex(&shown), hex(&shown), hex(&shown)
+        );
+        survive("hostile CID-keyed fonts", || vectorcraft_eps::import(text.as_bytes()).ok().map(|r| r.document))?;
+    }
+
+    /// Embedded Type 1 fonts whose encrypted part is damaged or hostile (any bytes, binary or
+    /// hexadecimal), shown, measured and outlined: drawn, or left out.
+    #[test]
+    fn eps_type1_programs_never_panic(
+        part in prop::collection::vec(any::<u8>(), 0..400),
+        hex in any::<bool>(),
+        shown in prop::collection::vec(any::<u8>(), 0..12),
+    ) {
+        let hexed = |b: &[u8]| b.iter().map(|x| format!("{x:02x}")).collect::<String>();
+        // Bytes that would end the part early are left out, as `cleartomark` ends it.
+        let part: Vec<u8> = part.into_iter().filter(|b| *b != b'c').collect();
+        let mut bytes = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n\
+            12 dict begin /FontName /T1 def /FontType 1 def /FontMatrix [0.001 0 0 0.001 0 0] def /FontBBox [0 0 1000 1000] def\n\
+            /Encoding StandardEncoding def currentdict end currentfile eexec\n"
+            .to_vec();
+        if hex {
+            bytes.extend(hexed(&part).into_bytes());
+        } else {
+            bytes.extend(part);
+        }
+        bytes.extend(format!("\n{}\ncleartomark\n/T1 findfont 40 scalefont setfont 10 20 moveto <{}> show <{}> stringwidth pop pop\n\
+            10 60 moveto <{}> true charpath fill\nshowpage\n%%EOF\n", "0".repeat(512), hexed(&shown), hexed(&shown), hexed(&shown)).into_bytes());
+        survive("hostile Type 1 programs", || vectorcraft_eps::import(&bytes).ok().map(|r| r.document))?;
     }
 }
 
@@ -3223,6 +3297,50 @@ fn text_editing_of(document: &str, objects: &str) -> String {
 
 /// Area Type Options as an area frame's data may keep them: rows, columns, gutters and the first
 /// baseline, and keys besides, each with a value of any kind, in or out of range.
+/// A paragraph's attributes as a text document might keep them: an alignment (key 0), auto leading
+/// (7), hyphenation options (10 to 15) and tab stops (30) of any value or type, the stops a list of
+/// any length whose entries may be anything.
+fn arb_paragraph_attributes() -> impl Strategy<Value = String> {
+    let values = prop::sample::select(vec![
+        "0",
+        "1",
+        "2",
+        "3",
+        "6",
+        "7",
+        "-1",
+        "2.5",
+        "1e400",
+        "-1e400",
+        "NaN",
+        "inf",
+        "1e9",
+        "(x)",
+        "true",
+        "false",
+        "/nil",
+        "[ 1 ]",
+        "<< /0 1 >>",
+    ]);
+    let keys = prop::sample::select(vec!["0", "7", "10", "11", "12", "13", "14", "15"]);
+    let stop = (values.clone(), values.clone(), 0usize..3).prop_map(|(at, align, shape)| match shape {
+        0 => format!("<< /0 {at} /1 {align} >>"),
+        1 => format!("<< /1 {align} >>"),
+        _ => at.to_string(),
+    });
+    let tabs = (prop::collection::vec(stop, 0..40), 0usize..4).prop_map(|(stops, shape)| match shape {
+        0 => format!("/30 << /0 [ {} ] >>", stops.join(" ")),
+        1 => "/30 << /0 7 >>".to_string(),
+        2 => "/30 [ 1 2 ]".to_string(),
+        _ => String::new(),
+    });
+    (prop::collection::vec((keys, values), 0..8), tabs).prop_map(|(kv, tabs)| {
+        let mut attrs: Vec<String> = kv.iter().map(|(k, v)| format!("/{k} {v}")).collect();
+        attrs.push(tabs);
+        attrs.join(" ")
+    })
+}
+
 fn arb_area_options() -> impl Strategy<Value = String> {
     let keys = prop::sample::select(vec!["3", "4", "5", "7", "8", "10", "13", "14"]);
     let values = prop::sample::select(vec![
@@ -3383,6 +3501,23 @@ fn the_shown_stories_fixture_opens_with_its_layers() {
     assert!(texts.iter().all(|t| t.contains('\u{2028}') && t.contains('\n')), "{texts:?}");
 }
 
+/// The fuzzed editing data with its layer, pattern and global colour named in code page 949 opens
+/// with those names, read in that encoding, from its layers.
+#[test]
+fn the_editing_fixture_reads_names_in_a_legacy_encoding() {
+    // 레이어 1, then 빨강.
+    let text = editing_text()
+        .replace("(One) Ln", r"(\267\271\300\314\276\356 1) Ln")
+        .replace("(Dots)", r"(\273\241\260\255)")
+        .replace("(Black global)", r"(\273\241\260\255 global)");
+    let bytes = editing_eps(&text);
+    let r = vectorcraft_eps::import_names(&bytes, true, true, vectorcraft_eps::NameEncoding::Korean).unwrap();
+    let names: Vec<_> = r.document.layers.iter().map(|l| l.name.clone().unwrap_or_default()).collect();
+    assert_eq!(names, ["레이어 1", "Two"], "{:?}", r.warnings);
+    assert!(r.document.pattern("빨강").is_some(), "{:?}", r.warnings);
+    assert!(r.document.swatch("빨강 global").is_some_and(|s| s.global), "{:?}", r.warnings);
+}
+
 proptest! {
     #![proptest_config(config())]
 
@@ -3430,6 +3565,18 @@ proptest! {
         survive(".ai text frames with hostile area options", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
     }
 
+    /// The same text document with hostile paragraph attributes: an alignment, auto leading,
+    /// hyphenation options and tab stops of any value, type or size.
+    #[test]
+    fn text_frames_with_hostile_paragraph_attributes_never_panic(attrs in arb_paragraph_attributes()) {
+        let text = frames_document_text().replace("/5 << /0 2 /1 4 /2 6 >>", &format!("/5 << /1 4 /2 6 {attrs} >>"));
+        let editing = text_editing_of(&text, FRAME_OBJECTS);
+        let bytes = editing_eps(&editing);
+        survive("EPS text frames with hostile paragraph attributes", || vectorcraft_engine::cmd::fileio::load("x.eps", &bytes).ok().map(|l| l.doc))?;
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&editing)].concat();
+        survive(".ai text frames with hostile paragraph attributes", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
+    }
+
     /// The type on a path of the same text document with hostile Type on a Path Options, opened as
     /// an EPS document and as a `.ai`'s editing data.
     #[test]
@@ -3457,6 +3604,26 @@ proptest! {
         let text = mutate_text(&editing_text(), cut, &edits);
         let bytes = editing_eps(&text);
         survive("mutated EPS editing data", || vectorcraft_eps::import(&bytes).ok().map(|r| r.document))?;
+    }
+
+    /// Names of any bytes (a layer's, a pattern's, a global colour's) read in any legacy name
+    /// encoding: each byte written as an octal escape, so every code page sees bytes it doesn't
+    /// define, cut sequences and UTF-8 alike.
+    #[test]
+    fn eps_editing_data_names_in_any_encoding_never_panic(
+        name in prop::collection::vec(any::<u8>(), 0..24),
+        encoding in prop::sample::select(vectorcraft_eps::NameEncoding::LABELS.to_vec()),
+    ) {
+        let escaped: String = name.iter().map(|b| format!("\\{b:03o}")).collect();
+        let text = editing_text()
+            .replace("(One) Ln", &format!("({escaped}) Ln"))
+            .replace("(Dots)", &format!("({escaped})"))
+            .replace("(Black global)", &format!("({escaped} global)"));
+        let bytes = editing_eps(&text);
+        let encoding = vectorcraft_eps::NameEncoding::from_label(encoding).unwrap();
+        survive("EPS editing data names in a legacy encoding", || {
+            vectorcraft_eps::import_names(&bytes, true, false, encoding).ok().map(|r| r.document)
+        })?;
     }
 
     /// A `.ai` whose envelopes are damaged or hostile: any kind, warp style, options word,
@@ -5066,6 +5233,9 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "-9 /Real (CornerRadius) ,",
             "1 /Bool (Absolute) ,",
             "-0.5 /Real ,",
+            "0.5 /Real ,",
+            "1 /Real ,",
+            "1e308 /Real ,",
             "1.5 /Real ,",
             "-2 /Real ,",
             "; (BSLeftWidthsArray) ,",

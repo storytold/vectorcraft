@@ -272,20 +272,23 @@ impl Exporter<'_> {
                     let count = art.count() as u64;
                     let map = doc.symbol_slice_map(symbol, *xf);
                     let most = map.map_or(count, |m| m.most_placed(art, doc));
-                    let placed = vectorcraft_doc::charge_symbol_art(&mut self.symbol_nodes, most, || {
-                        let art = match map {
-                            Some(m) => m.place(art, doc),
-                            None => {
-                                let mut a = art.clone();
-                                a.transform(*xf, false);
-                                a
-                            }
-                        };
-                        // As `most_placed`, placed art counts its opacity-mask art.
-                        let count = if map.is_some() { art.count_with_masks() } else { art.count() } as u64;
-                        (art, count)
+                    let within = self.symbol_nodes.saturating_add(most) <= self.symbol_limit;
+                    let placed = within.then(|| {
+                        vectorcraft_doc::charge_symbol_art(&mut self.symbol_nodes, most, || {
+                            let art = match map {
+                                Some(m) => m.place(art, doc),
+                                None => {
+                                    let mut a = art.clone();
+                                    a.transform(*xf, false);
+                                    a
+                                }
+                            };
+                            // As `most_placed`, placed art counts its opacity-mask art.
+                            let count = if map.is_some() { art.count_with_masks() } else { art.count() } as u64;
+                            (art, count)
+                        })
                     });
-                    if let Some(art) = placed {
+                    if let Some(art) = placed.flatten() {
                         self.node(s, &art, page, true);
                     }
                 }

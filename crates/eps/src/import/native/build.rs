@@ -22,7 +22,8 @@ pub(super) enum Page {
 
 /// How art moved from a page to its place in the layers' document transforms: its pattern tiles
 /// move with it.
-pub(super) const PAGE_MOVE: Scaling = Scaling { strokes: false, effects: None, keep_type_strokes: false, keep_corners: false, patterns: true };
+pub(super) const PAGE_MOVE: Scaling =
+    Scaling { strokes: false, effects: None, keep_type_strokes: false, keep_corners: false, patterns: true, keep_fit_when_flat: false };
 
 /// The page (`visible`, the file read as its page) and the place of its area in the layers'
 /// document.
@@ -48,7 +49,7 @@ pub(super) struct Frame<'a> {
 /// (a `.ai` saved without its PDF part), its type is made from the file's text document alone and
 /// nothing is compared. `outlined`: the page's type was read as outlines, so it has none to put in
 /// the text objects. `unit`: the size in points of a unit of the page's user space (see
-/// [`layered_ai`]).
+/// [`layered_ai`]). `names`: the encoding of names that aren't UTF-8.
 pub(super) fn build(
     data: &[u8],
     visible: Option<&Document>,
@@ -56,11 +57,12 @@ pub(super) fn build(
     outlined: bool,
     trust: bool,
     unit: f64,
+    names: ai::NameEncoding,
 ) -> Result<(Document, Vec<String>), String> {
     // An EPS (its page is its art) draws a Large Canvas page at full size; a `.ai` keeps its art
     // space, as its PDF part may (#2031).
     let large_canvas = matches!(page, Page::Art);
-    let structure = if visible.is_some() { ai::read_over_page(data, large_canvas)? } else { ai::read(data, large_canvas)? };
+    let structure = if visible.is_some() { ai::read_over_page(data, large_canvas, names)? } else { ai::read_in(data, large_canvas, names)? };
     build_from(structure, data, visible, page, outlined, trust, unit)
 }
 
@@ -68,9 +70,10 @@ pub(super) fn build(
 /// (width and height, either way round) points large in units of `unit` points: the document is
 /// drawn `unit` times as large when its first artboard, or its art's box, has the page's size in
 /// those units and not in points, as [`build_from`] decides with a page; else as many times as
-/// large as its declared large canvas scale when it has the page's size at that scale.
-pub(super) fn build_on_page(data: &[u8], page: (f64, f64), unit: f64) -> Result<(Document, Vec<String>), String> {
-    let structure = ai::read(data, false)?;
+/// large as its declared large canvas scale when it has the page's size at that scale. `names`: the
+/// encoding of names that aren't UTF-8.
+pub(super) fn build_on_page(data: &[u8], page: (f64, f64), unit: f64, names: ai::NameEncoding) -> Result<(Document, Vec<String>), String> {
+    let structure = ai::read_in(data, false, names)?;
     let board = structure.artboard.map(|a| structure.to_doc.transform_rect_bbox(a));
     let art = structure.bbox.map(|[a, b, c, d]| structure.to_doc.transform_rect_bbox(Rect::new(a, b, c, d)));
     let (w, h) = page;

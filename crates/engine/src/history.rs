@@ -1,7 +1,13 @@
 use super::{Arc, Document, Selection};
 
+#[cfg(test)]
+thread_local! {
+    /// Tests: how many undo steps were copied on this thread.
+    pub(crate) static ENTRY_CLONES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// One undo step.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct HistoryEntry {
     pub label: String,
     /// The document as it was. It keeps no lookup cache ([`Document::drop_lookup_cache`]): a
@@ -19,10 +25,37 @@ pub struct HistoryEntry {
     next: usize,
     /// The template and name `label` was made from ([`Session::edit_named`]).
     pub(crate) named: Option<NamedStep>,
+    /// A number no other step takes ([`History::step`]).
+    serial: u64,
     /// Original and converted new-art colors, only for steps that change document color mode.
     pub(crate) color_mode_paints: Option<(vectorcraft_tools::PaintDefaults, vectorcraft_tools::PaintDefaults)>,
     /// Owned new-art snapshots included in both directional estimates.
     color_mode_bytes: usize,
+}
+
+impl Clone for HistoryEntry {
+    fn clone(&self) -> Self {
+        #[cfg(test)]
+        ENTRY_CLONES.with(|n| n.set(n.get() + 1));
+        HistoryEntry {
+            label: self.label.clone(),
+            doc: self.doc.clone(),
+            selection: self.selection.clone(),
+            bytes: self.bytes,
+            next_bytes: self.next_bytes,
+            next: self.next,
+            named: self.named.clone(),
+            serial: self.serial,
+            color_mode_paints: self.color_mode_paints.clone(),
+            color_mode_bytes: self.color_mode_bytes,
+        }
+    }
+}
+
+/// The next [`HistoryEntry::serial`]: 1 for the first step made, so 0 never names a step.
+fn next_serial() -> u64 {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
 /// A step name made by filling the `{name}` placeholder of a template with a name
@@ -57,6 +90,7 @@ impl HistoryEntry {
             next_bytes,
             next: std::ptr::from_ref(next) as usize,
             named: None,
+            serial: next_serial(),
             color_mode_paints: None,
             color_mode_bytes: 0,
         }
@@ -88,6 +122,7 @@ impl HistoryEntry {
             next_bytes: costs.bytes,
             next: Arc::as_ptr(now) as usize,
             named: None,
+            serial: next_serial(),
             color_mode_paints: None,
             color_mode_bytes: 0,
         }
@@ -138,11 +173,52 @@ pub struct History {
     /// About the most memory the steps may keep ([`HistoryEntry::bytes`]): past it the oldest
     /// steps go, but never the last [`History::MIN_STEPS`] undo (and redo) steps.
     pub byte_budget: usize,
+    /// Counts the changes made in place to steps below the newest ([`History::put_back`]).
+    pub(crate) rewrites: u64,
+    /// Between [`History::mark`] and [`History::release`] or [`History::put_back`].
+    pub(crate) held: bool,
+    /// The redo steps a new step cleared while held ([`History::clear_redo`]).
+    pub(crate) set_aside: Option<Vec<HistoryEntry>>,
 }
 
 impl Default for History {
     fn default() -> Self {
-        History { undo: vec![], redo: vec![], limit: 0, byte_budget: default_history_budget() }
+        History { undo: vec![], redo: vec![], limit: 0, byte_budget: default_history_budget(), rewrites: 0, held: false, set_aside: None }
+    }
+}
+
+/// What [`History::put_back`] needs to give a history back as it was when [`History::mark`] took
+/// it: the newest undo and redo steps, and where each stack stood under them. It holds no other
+/// step, so taking one costs the same however many the history holds.
+pub(crate) struct HistoryMark {
+    undo: StackMark,
+    redo: StackMark,
+    limit: usize,
+    byte_budget: usize,
+    rewrites: u64,
+}
+
+/// One stack of a [`HistoryMark`].
+struct StackMark {
+    len: usize,
+    /// [`HistoryEntry::serial`] of the step under the newest one, 0 for none.
+    below: u64,
+    newest: Option<HistoryEntry>,
+}
+
+impl StackMark {
+    fn of(steps: &[HistoryEntry]) -> Self {
+        let len = steps.len();
+        StackMark { len, below: len.checked_sub(2).and_then(|i| steps.get(i)).map_or(0, |e| e.serial), newest: steps.last().cloned() }
+    }
+
+    /// Puts `steps` back as they were. → `false` when a step under the newest one was removed since.
+    fn put_back(self, steps: &mut Vec<HistoryEntry>) -> bool {
+        let kept = self.len.saturating_sub(1);
+        let intact = steps.len() >= kept && kept.checked_sub(1).is_none_or(|i| steps.get(i).is_some_and(|e| e.serial == self.below));
+        steps.truncate(kept);
+        steps.extend(self.newest);
+        intact
     }
 }
 
@@ -153,6 +229,13 @@ impl History {
     /// Roughly the memory the steps keep of their own ([`HistoryEntry::bytes`]).
     pub fn bytes(&self) -> usize {
         self.undo.iter().chain(&self.redo).map(|e| e.bytes).sum()
+    }
+
+    /// Which step the document is at: the newest undo step and the next redo step, by numbers no
+    /// other step takes (0 for none). Every new step, Undo, Redo and edit merged into the newest
+    /// step (an undo group) changes it; a selection change does not.
+    pub fn step(&self) -> (u64, u64) {
+        (self.undo.last().map_or(0, |e| e.serial), self.redo.last().map_or(0, |e| e.serial))
     }
 
     /// The document at row `row` of the History panel, `now` being the document now: the rows before
@@ -191,14 +274,67 @@ impl History {
         self.redo.drain(..n);
     }
 
+    /// A [`HistoryMark`] of the history now. Until [`History::release`] or [`History::put_back`],
+    /// [`History::trim`] lets no step go, so the steps under the newest one stay where they are, and
+    /// [`History::clear_redo`] sets the redo steps aside.
+    pub(crate) fn mark(&mut self) -> HistoryMark {
+        let mark = HistoryMark {
+            undo: StackMark::of(&self.undo),
+            redo: StackMark::of(&self.redo),
+            limit: self.limit,
+            byte_budget: self.byte_budget,
+            rewrites: self.rewrites,
+        };
+        self.limit = usize::MAX;
+        self.byte_budget = usize::MAX;
+        self.held = true;
+        self.set_aside = None;
+        mark
+    }
+
+    /// Removes the redo steps, as a new step does. While held ([`History::mark`]) the first call
+    /// keeps them for [`History::put_back`].
+    pub(crate) fn clear_redo(&mut self) {
+        if self.held && self.set_aside.is_none() {
+            self.set_aside = Some(std::mem::take(&mut self.redo));
+        } else {
+            self.redo.clear();
+        }
+    }
+
+    /// Keeps the history as it is now: the limits `mark` held back apply again.
+    pub(crate) fn release(&mut self, mark: &HistoryMark) {
+        self.held = false;
+        self.set_aside = None;
+        self.limit = mark.limit;
+        self.byte_budget = mark.byte_budget;
+        self.trim();
+    }
+
+    /// Gives the history back as it was at `mark`. → `false` when that is not possible: an undo or
+    /// redo step under the newest one was removed or changed in place since.
+    pub(crate) fn put_back(&mut self, mark: HistoryMark) -> bool {
+        if let Some(redo) = self.set_aside.take() {
+            self.redo = redo;
+        }
+        let undo = mark.undo.put_back(&mut self.undo);
+        let redo = mark.redo.put_back(&mut self.redo);
+        let intact = self.rewrites == mark.rewrites && undo && redo;
+        self.held = false;
+        self.limit = mark.limit;
+        self.byte_budget = mark.byte_budget;
+        intact
+    }
+
     /// Estimate the newest undo step again, its next state now being `now` (the steps after it were
-    /// merged into it, or an undo group extended it).
+    /// merged into it, or an undo group extended it). It takes a new number ([`History::step`]).
     pub(crate) fn recost_last(&mut self, now: &Document) {
         if let Some(e) = self.undo.last_mut() {
             let (before, after) = e.doc.retained_bytes_each(now);
             e.bytes = before.saturating_add(e.color_mode_bytes);
             e.next_bytes = after.saturating_add(e.color_mode_bytes);
             e.next = std::ptr::from_ref(now) as usize;
+            e.serial = next_serial();
         }
     }
 }

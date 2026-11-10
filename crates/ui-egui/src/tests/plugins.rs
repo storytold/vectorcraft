@@ -130,8 +130,9 @@ fn asking(id: &str, name: &str, permissions: &str) -> Vec<u8> {
 
 /// Installing a plug-in that lists permissions asks first, showing its name, id, version, file hash
 /// and each permission in plain words, with hidden characters from the manifest escaped. Cancel
-/// installs nothing, OK installs it; another module with its id and the same permissions asks only
-/// whether to take the installed one's place, and one that asks for another permission asks again.
+/// installs nothing, OK installs it; installing the same module again doesn't ask, one with other
+/// bytes asks again, even when it lists the same permissions, and in the same dialog whether to
+/// take the installed one's place, as does one that asks for another permission.
 #[test]
 fn installing_a_plugin_that_lists_permissions_asks_first() {
     let mut app = app();
@@ -142,60 +143,111 @@ fn installing_a_plugin_that_lists_permissions_asks_first() {
     let bytes = asking(id, name, r#"["doc.read","doc.write"]"#);
     let data = vectorcraft_format::base64_encode(&bytes);
     let r = app.run("ui.installPlugin", json!({"dataBase64": data, "name": "tidy.wasm"})).unwrap();
-    assert_eq!(r["pending"], dialogs::confirm::KIND);
-    let d = app.ui.dialog.as_ref().unwrap();
-    assert_eq!(d.str("message"), "Install “Tidy\\u{202E}fdp.exe\\u{2066}”, which asks for these permissions?");
+    assert_eq!(r["pending"], dialogs::plugin::INSTALL_KIND);
+    let pending = app.pending_plugin_install.as_ref().unwrap();
+    assert_eq!(pending.message, "Install “Tidy\\u{202E}fdp.exe\\u{2066}”, which asks for these permissions?");
     let hash = vectorcraft_plugins::permissions::sha256_hex(&bytes);
-    assert_eq!(d.fields.get("__params").map(|p| p["hash"].clone()), Some(json!(hash)), "OK installs the module shown");
-    let detail = d.str("detail");
+    assert_eq!(pending.params["hash"], json!(hash), "OK installs the module shown");
+    let detail = pending.detail.clone();
     assert_eq!(
         detail,
         format!(
             "ID: {id}\nVersion: 3.0\\u{{202E}}\\u{{0009}}\\u{{0007}}\nFile SHA-256: {hash}\n\n• Read the objects it is given\n• Change, add and delete objects in the document"
         )
     );
-    assert!(!detail.chars().chain(d.str("message").chars()).any(|c| matches!(c, '\u{202E}' | '\u{2066}' | '\t' | '\u{0007}')));
+    assert!(!detail.chars().chain(pending.message.chars()).any(|c| matches!(c, '\u{202E}' | '\u{2066}' | '\t' | '\u{0007}')));
     assert!(vectorcraft_plugins::registry::get(id).is_none(), "not before the user agrees");
     dialogs::cancel(&mut app);
     assert!(vectorcraft_plugins::registry::get(id).is_none(), "Cancel installs nothing");
+    assert!(app.pending_plugin_install.is_none(), "Cancel drops what it asked about");
     // File › Open asks too, and OK installs it with what it lists granted.
     io::open_bytes(&mut app, "tidy.wasm", &bytes, None).unwrap();
-    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(dialogs::confirm::KIND));
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(dialogs::plugin::INSTALL_KIND));
     dialogs::confirm(&mut app).unwrap();
     assert!(app.ui.dialog.is_none());
     assert!(vectorcraft_plugins::registry::get(id).is_some());
     assert_eq!(vectorcraft_plugins::registry::granted(id).map(|g| g.hash), Some(hash));
-    // Another module with the same permissions asks for none of them again, but asks before it
-    // takes the installed one's place, showing its id and file hash.
+    // The same module again: installed without asking.
+    app.run("ui.installPlugin", json!({"dataBase64": data})).unwrap();
+    assert!(app.ui.dialog.is_none(), "the same bytes don't ask again");
+    // Other bytes with the same permissions ask for them, from both ways in; Cancel keeps the one
+    // installed.
     let again = asking(id, "Tidy 2", r#"["doc.write","doc.read"]"#);
     let r = app.run("ui.installPlugin", json!({"dataBase64": vectorcraft_format::base64_encode(&again)})).unwrap();
-    assert_eq!(r["pending"], dialogs::confirm::KIND);
-    let d = app.ui.dialog.as_ref().unwrap();
-    assert_eq!(d.str("message"), "Install “Tidy 2” in place of the plug-in with the same ID?");
-    let again_hash = vectorcraft_plugins::permissions::sha256_hex(&again);
-    assert_eq!(
-        d.str("detail"),
-        format!(
-            "ID: {id}\nFile SHA-256: {again_hash}\n\nThis file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID."
-        )
-    );
+    assert_eq!(r["pending"], dialogs::plugin::INSTALL_KIND, "other bytes ask again");
+    assert_eq!(app.pending_plugin_install.as_ref().unwrap().message, "Install “Tidy 2”, which asks for these permissions?");
     dialogs::cancel(&mut app);
     assert_eq!(vectorcraft_plugins::registry::get(id).map(|p| p.manifest().name.clone()), Some(name.into()), "Cancel keeps the one installed");
+    io::open_bytes(&mut app, "tidy2.wasm", &again, None).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(dialogs::plugin::INSTALL_KIND), "File › Open asks too");
+    // The same dialog says it takes the installed one's place, and OK replaces it; Cancel keeps the
+    // one installed and records no grant.
+    let pending = app.pending_plugin_install.as_ref().unwrap();
+    let again_hash = vectorcraft_plugins::permissions::sha256_hex(&again);
+    assert!(pending.detail.contains(&format!("File SHA-256: {again_hash}")), "{}", pending.detail);
+    assert!(
+        pending.detail.ends_with("\n\nThis file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID."),
+        "{}",
+        pending.detail
+    );
+    assert_eq!(pending.params["replace"], json!(true), "OK replaces the one installed");
+    dialogs::cancel(&mut app);
+    assert_eq!(vectorcraft_plugins::registry::get(id).map(|p| p.manifest().name.clone()), Some(name.into()), "Cancel keeps the one installed");
+    assert_ne!(vectorcraft_plugins::registry::granted(id).map(|g| g.hash), Some(again_hash), "Cancel records no grant");
     app.run("ui.installPlugin", json!({"dataBase64": vectorcraft_format::base64_encode(&again)})).unwrap();
     dialogs::confirm(&mut app).unwrap();
-    assert!(app.ui.dialog.is_none(), "the same permissions don't ask again");
+    assert!(app.ui.dialog.is_none(), "one question");
     assert_eq!(vectorcraft_plugins::registry::get(id).map(|p| p.manifest().name.clone()), Some("Tidy 2".into()));
+    let new_hash = vectorcraft_plugins::permissions::sha256_hex(&again);
+    assert_eq!(vectorcraft_plugins::registry::granted(id).map(|g| g.hash), Some(new_hash), "OK records the new module's hash");
     // One that asks for another permission asks again.
     let more = asking(id, "Tidy 3", r#"["doc.read","doc.write","state"]"#);
     let r = app.run("ui.installPlugin", json!({"dataBase64": vectorcraft_format::base64_encode(&more)})).unwrap();
-    assert_eq!(r["pending"], dialogs::confirm::KIND);
-    assert!(app.ui.dialog.as_ref().unwrap().str("detail").ends_with("• Keep data of its own with the document"));
+    assert_eq!(r["pending"], dialogs::plugin::INSTALL_KIND);
+    assert!(app.pending_plugin_install.as_ref().unwrap().detail.contains("• Keep data of its own with the document"));
     dialogs::cancel(&mut app);
     assert_eq!(vectorcraft_plugins::registry::get(id).map(|p| p.manifest().name.clone()), Some("Tidy 2".into()), "Cancel keeps the one installed");
     // OK keeps the `replace` it was asked with: `false` leaves the installed one in place.
     app.run("ui.installPlugin", json!({"dataBase64": vectorcraft_format::base64_encode(&more), "replace": false})).unwrap();
     let _ = dialogs::confirm(&mut app);
     assert_eq!(vectorcraft_plugins::registry::get(id).map(|p| p.manifest().name.clone()), Some("Tidy 2".into()), "replace: false is kept");
+    app.run("plugin.remove", json!({"id": id})).unwrap();
+}
+
+/// A module with other bytes than the one installed with its id asks before taking its place: in
+/// the ordinary confirm when it needs nothing that only a person can approve, and in the approval
+/// dialog, with its id and file hash, when it also asks for a heavy budget.
+#[test]
+fn installing_a_plugin_over_another_module_asks_first() {
+    let mut app = app();
+    let id = "test.ui.replaces";
+    let plain = |output: &str| wat::parse_str(tpl::returning(&format!(r#"{{"id":"{id}","name":"Plain","kind":"filter"}}"#), output)).unwrap();
+    let module = |wasm: &[u8]| json!({"dataBase64": vectorcraft_format::base64_encode(wasm)});
+    let takes_place = "This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.";
+    app.run("ui.installPlugin", module(&plain(r#"{"objects":[]}"#))).unwrap();
+    assert!(app.ui.dialog.is_none(), "nothing to take the place of");
+
+    let other = plain(r#"{"objects":[],"error":null}"#);
+    let other_hash = vectorcraft_plugins::permissions::sha256_hex(&other);
+    let r = app.run("ui.installPlugin", module(&other)).unwrap();
+    assert_eq!(r["pending"], dialogs::confirm::KIND);
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!(d.str("message"), "Install “Plain” in place of the plug-in with the same ID?");
+    assert_eq!(d.str("detail"), format!("ID: {id}\nFile SHA-256: {other_hash}\n\n{takes_place}"));
+    dialogs::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(vectorcraft_plugins::registry::get(id).map(|p| p.hash().to_string()), Some(other_hash));
+
+    let manifest = format!(r#"{{"id":"{id}","name":"Heavy","kind":"filter","budget":"heavy"}}"#);
+    let heavy = wat::parse_str(tpl::spinning(&manifest, 1, r#"{"objects":[]}"#)).unwrap();
+    let heavy_hash = vectorcraft_plugins::permissions::sha256_hex(&heavy);
+    let r = app.run("ui.installPlugin", module(&heavy)).unwrap();
+    assert_eq!(r["pending"], dialogs::plugin::INSTALL_KIND);
+    let pending = app.pending_plugin_install.as_ref().unwrap();
+    assert!(pending.detail.ends_with(&format!("\n\nID: {id}\nFile SHA-256: {heavy_hash}\n\n{takes_place}")), "{}", pending.detail);
+    assert_eq!(pending.params["replace"], json!(true), "OK replaces the one installed");
+    dialogs::confirm(&mut app).unwrap();
+    assert_eq!(vectorcraft_plugins::registry::get(id).map(|p| p.hash().to_string()), Some(heavy_hash));
     app.run("plugin.remove", json!({"id": id})).unwrap();
 }
 
@@ -284,6 +336,63 @@ fn a_shortcut_runs_a_plugin_command() {
     app.run("plugin.remove", json!({"id": id})).unwrap();
 }
 
+/// The `grant` and `allowHeavy` that `ui.installPlugin` is given approve nothing: it asks all the
+/// same, and what OK would approve comes from the manifest. A module with nothing to approve
+/// installs without either.
+#[test]
+fn ui_install_plugin_takes_no_grant_or_heavy_budget_from_its_params() {
+    let mut app = app();
+    let id = "test.ui.approval.params";
+    let manifest = format!(r#"{{"id":"{id}","name":"Asks","kind":"filter","permissions":["doc.read"]}}"#);
+    let asks = wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap();
+    let given = |wasm: &[u8]| json!({"dataBase64": vectorcraft_format::base64_encode(wasm), "grant": ["doc.read", "doc.write"], "allowHeavy": true});
+    let r = app.run("ui.installPlugin", given(&asks)).unwrap();
+    assert_eq!(r["pending"], dialogs::plugin::INSTALL_KIND);
+    assert!(vectorcraft_plugins::registry::get(id).is_none() && vectorcraft_plugins::registry::granted(id).is_none());
+    let pending = app.pending_plugin_install.as_ref().unwrap();
+    assert_eq!(pending.approval.permissions, ["doc.read"], "the permissions the manifest lists");
+    assert_eq!(pending.params["grant"], json!(["doc.read"]));
+    assert!(!pending.approval.heavy && pending.params.get("allowHeavy").is_none(), "no heavy budget was asked about");
+    dialogs::cancel(&mut app);
+    assert!(vectorcraft_plugins::registry::get(id).is_none());
+
+    let heavy_id = "test.ui.approval.params.heavy";
+    let manifest = format!(r#"{{"id":"{heavy_id}","name":"Heavy","kind":"filter","budget":"heavy"}}"#);
+    let heavy = wat::parse_str(tpl::spinning(&manifest, 1, r#"{"objects":[]}"#)).unwrap();
+    let r = app.run("ui.installPlugin", given(&heavy)).unwrap();
+    assert_eq!(r["pending"], dialogs::plugin::INSTALL_KIND, "allowHeavy skips no question");
+    assert!(vectorcraft_plugins::registry::get(heavy_id).is_none());
+    dialogs::cancel(&mut app);
+
+    let plain_id = "test.ui.approval.params.plain";
+    let manifest = format!(r#"{{"id":"{plain_id}","name":"Plain","kind":"filter"}}"#);
+    let plain = wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap();
+    let r = app.run("ui.installPlugin", given(&plain)).unwrap();
+    assert!(r.get("pending").is_none() && app.ui.dialog.is_none(), "{r}");
+    assert!(vectorcraft_plugins::registry::get(plain_id).is_some());
+    assert!(vectorcraft_plugins::registry::granted(plain_id).is_none(), "the grant it was given isn't recorded");
+    app.run("plugin.remove", json!({"id": plain_id})).unwrap();
+}
+
+/// An action's step can't grant what only a person approves: a played `plugin.install` with `grant`
+/// is refused at Accelerated and at Step by Step, and nothing is installed.
+#[test]
+fn an_action_step_cannot_grant_a_plugin_its_permissions() {
+    use crate::panels::actions::{Action, ActionSet, PlaybackSpeed, play};
+    let mut app = app();
+    let id = "test.ui.approval.action";
+    let manifest = format!(r#"{{"id":"{id}","name":"Asks","kind":"filter","permissions":["doc.read"]}}"#);
+    let wasm = wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap();
+    let step = json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "grant": ["doc.read"]});
+    app.ui.action_sets = vec![ActionSet::new("Test", vec![Action::new("Install", vec![("plugin.install".into(), step)])])];
+    for speed in [PlaybackSpeed::Accelerated, PlaybackSpeed::Step] {
+        app.ui.action_playback.speed = speed;
+        let e = play(&mut app, 0, 0).unwrap_err();
+        assert!(e.contains("take effect only in a session started with --allow-plugin-grants"), "{e}");
+        assert!(vectorcraft_plugins::registry::get(id).is_none() && vectorcraft_plugins::registry::granted(id).is_none());
+    }
+}
+
 /// A plug-in of API level 2 that lists `progress` names it in plain words when it asks.
 #[test]
 fn installing_a_plugin_that_reports_progress_says_so() {
@@ -292,8 +401,8 @@ fn installing_a_plugin_that_reports_progress_says_so() {
     let manifest = format!(r#"{{"id":"{id}","name":"Count","kind":"filter","api":2,"permissions":["doc.read","progress"]}}"#);
     let bytes = wat::parse_str(tpl::reporting(&manifest, "(call $vc_progress (i64.const 1) (i64.const 2))", r#"{"objects":[]}"#)).unwrap();
     let r = app.run("ui.installPlugin", json!({"dataBase64": vectorcraft_format::base64_encode(&bytes)})).unwrap();
-    assert_eq!(r["pending"], dialogs::confirm::KIND);
-    let detail = app.ui.dialog.as_ref().unwrap().str("detail");
+    assert_eq!(r["pending"], dialogs::plugin::INSTALL_KIND);
+    let detail = app.pending_plugin_install.as_ref().unwrap().detail.clone();
     assert!(detail.ends_with("• Read the objects it is given\n• Show its progress, see Cancel and write log lines"), "{detail}");
     dialogs::confirm(&mut app).unwrap();
     assert_eq!(vectorcraft_plugins::registry::granted(id).map(|g| g.permissions.len()), Some(2));

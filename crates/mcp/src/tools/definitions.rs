@@ -98,7 +98,7 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "command_list",
             "List commands",
-            "Discover command ids, labels, parameter descriptions and enabled state. Returns an array. The whole catalogue is large: narrow it with filter (or query), menu, and brief. list_commands lists the same commands; it takes enabledOnly instead of enabled_only and returns {count, commands}.",
+            "Discover command ids, labels, parameter descriptions and enabled state. A command with a parameter schema also lists it as schema (JSON Schema 2020-12) and as inputSchema (the same schema with an object root, the form of a tool's inputSchema). Returns an array. The whole catalogue is large: narrow it with filter (or query), menu, and brief. list_commands lists the same commands; it takes enabledOnly instead of enabled_only and returns {count, commands}.",
             obj(
                 json!({"filter": string("Case-insensitive id, label or menu substring"), "query": string("Same as filter"), "menu": string(MENU_FILTER), "enabled_only": {"type":"boolean"}, "brief": {"type":"boolean", "description": BRIEF}}),
                 &[],
@@ -156,7 +156,7 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "list_commands",
             "List commands",
-            "List VectorCraft commands (id, label, menu path, shortcut, parameter description, enabled state). Every editing action is a command; run any of them with run_command. Coordinates are points in document space, y down, origin at the first artboard's top-left. command_list lists the same commands as a bare array and takes enabled_only.",
+            "List VectorCraft commands (id, label, menu path, shortcut, parameter description, enabled state, and schema and inputSchema for a command with a parameter schema). Every editing action is a command; run any of them with run_command. Coordinates are points in document space, y down, origin at the first artboard's top-left. command_list lists the same commands as a bare array and takes enabled_only.",
             obj(
                 json!({"filter": string("Case-insensitive substring matched against id, label and menu path (e.g. \"align\", \"Object\")"), "query": string("Same as filter"), "menu": string(MENU_FILTER), "enabledOnly": {"type": "boolean", "description": "Only commands that can run right now"}, "brief": {"type": "boolean", "description": BRIEF}}),
                 &[],
@@ -357,10 +357,17 @@ pub fn tool_definitions() -> Vec<Value> {
             "open_file",
             "Open file",
             &format!(
-                "Open a file as a new, active document: .{} (see run_command document.formats). Templates (.ait, native templates) open as a new untitled document. The reply's `warnings` say what didn't come in as it was (an EPS shown as its preview image says why its PostScript couldn't be read).",
+                "Open a file as a new, active document: .{} (see run_command document.formats). Templates (.ait, native templates) open as a new untitled document. The reply's `warnings` say what didn't come in as it was (an EPS shown as its preview image says why its PostScript couldn't be read). A file of an extension no built-in format reads opens with the installed importer plug-in that lists it; `importer` names the importer to use (File › Open With), also for an extension a built-in format reads, and `params` gives that importer's parameters.",
                 OPEN_EXTS.join(", .")
             ),
-            obj(json!({"path": string("File path")}), &["path"]),
+            obj(
+                json!({
+                    "path": string("File path"),
+                    "importer": string("An importer plug-in's format id, plugin.<id> (see run_command document.formats), which must list the file's extension (default: the built-in format that reads the file, else the first importer by id that lists its extension)"),
+                    "params": {"type": "object", "description": "The importer plug-in's parameters (see run_command plugin.list; default: the defaults its manifest declares)"},
+                }),
+                &["path"],
+            ),
             false,
         ),
         tool(

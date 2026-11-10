@@ -173,6 +173,8 @@ impl Headless {
                 UiRequest::Place(p) => {
                     self.session.execute("file.place", &p).map_err(|e| e.to_string())?;
                 }
+                // The host keeps its view's artboard on a press, as for the presses it hands over.
+                UiRequest::HeldPress { .. } => {}
             }
         }
         Ok(())
@@ -204,10 +206,11 @@ impl Headless {
             };
             let reqs = self.session.pointer(&ev, self.view).map_err(|e| e.to_string())?;
             self.apply_ui_requests(reqs, &mut requests)?;
-            // With no frames to show the highlight in later, a hover waits for the work the tool
-            // runs on another thread.
-            if kind == PointerKind::Move && self.session.tool_waiting() {
-                self.session.tool_poll(self.view, true).map_err(|e| e.to_string())?;
+            // With no frames to show the highlight or apply an edit in later, each event waits for
+            // the work the tool runs on another thread (a hover's map, a release's merge).
+            if self.session.tool_waiting() {
+                let reqs = self.session.tool_poll(self.view, true).map_err(|e| e.to_string())?;
+                self.apply_ui_requests(reqs, &mut requests)?;
             }
             let hold = PointerEvent::json_hold(e);
             if hold > 0.0 {
@@ -295,11 +298,18 @@ impl Headless {
         Ok(out)
     }
 
-    /// `app.open {path}`: any readable file as a new active document (`document.open`).
+    /// `app.open {path, importer?, params?}`: any readable file as a new active document
+    /// (`document.open`, with the importer plug-in `importer` names and its parameters `params`).
     pub fn open(&mut self, p: &Value) -> Result<Value, String> {
         let path = s(p, "path").ok_or("missing `path`")?;
+        let mut params = json!({"path": path});
+        for k in ["importer", "params"] {
+            if let Some(v) = p.get(k).filter(|v| !v.is_null()) {
+                params[k] = v.clone();
+            }
+        }
         let roots = self.roots.clone();
-        file_access::confine(roots.as_ref(), || self.session.execute("document.open", &json!({"path": path}))).map_err(|e| e.to_string())
+        file_access::confine(roots.as_ref(), || self.session.execute("document.open", &params)).map_err(|e| e.to_string())
     }
 
     /// `app.save {path?, format?, options?}`: `document.save` (by default the document's own path and

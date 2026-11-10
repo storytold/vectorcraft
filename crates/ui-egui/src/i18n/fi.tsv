@@ -472,6 +472,17 @@
 	Inflate	Täytä ilmalla
 	Select objects, then pick an object type to give them a 3D effect.	Valitse objektit ja valitse sitten objektityyppi, niin niille tulee 3D-tehoste.
 	Extrude & Bevel…	Pursota ja viistä…
+	3D (Classic)	3D (perinteinen)
+	Extrude & Bevel (Classic)…	Pursota ja viistä (perinteinen)…
+	Surface	Pinta
+	Wireframe	Rautalanka
+	No Shading	Ei varjostusta
+	Plastic	Muovi
+	Highlight Intensity	Kiillon voimakkuus
+	Highlight Size	Kiillon koko
+	Blend Steps	Sulautusvaiheet
+	Shading Color	Varjostusväri
+	Draw Hidden Faces	Piirrä piilotetut pinnat
 	Revolve…	Pyöräytä…
 	Inflate…	Täytä ilmalla…
 	Materials…	Materiaalit…
@@ -589,6 +600,7 @@
 	Hide Guides	Piilota apuviivat
 	Show Guides	Näytä apuviivat
 	Lock Guides	Lukitse apuviivat
+	Lock Guides by Default	Lukitse apuviivat oletuksena
 	Unlock Guides	Avaa apuviivojen lukitus
 	Make Guides	Luo apuviivat
 	Release Guides	Vapauta apuviivat
@@ -685,6 +697,11 @@
 	Color	Väri
 	Color Guide	Väriopas
 	Color Themes	Väriteemat
+	Color Wheel	Väriympyrä
+	Hue ring	Sävyrengas
+	Saturation and brightness	Kylläisyys ja kirkkaus
+	Color field	Värikenttä
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	CSS Properties	CSS-ominaisuudet
 	Document Info	Asiakirjan tiedot
 	Flattener Preview	Litistyksen esikatselu
@@ -947,6 +964,7 @@ lighting	Light	Valo
 	Color Picker…	Värivalitsin…
 	Coming soon — tracked in the parity plan	Tulossa pian — seurataan yhdenmukaisuussuunnitelmassa
 	Command Dialog	Komentovalintaikkuna
+	Command API Reference	Komentojen API-viite
 	Copy Selected Style	Kopioi valittu tyyli
 	Corners…	Kulmat…
 	Define Perspective Grid…	Määritä perspektiiviruudukko…
@@ -1251,7 +1269,7 @@ lighting	Light	Valo
 	X:	X:
 	Y:	Y:
 	Drag to float the toolbar	Kelluta työkaluriviä vetämällä
-	Drag to the window's left edge to dock	Telakoi vetämällä ikkunan vasempaan reunaan
+	Drag to the window's left or right edge to dock	Telakoi vetämällä ikkunan vasempaan tai oikeaan reunaan
 	Crystallize	Kiteytä
 	Add Anchor Point Tool	Lisää ankkuripiste -työkalu
 	Anchor Point Tool	Ankkuripistetyökalu
@@ -1882,6 +1900,10 @@ digits	Malayalam	Malajalam
 	Stylistic	Tyylitelty
 	Mojikumi Set	Mojikumi-joukko
 	Kinsoku Set	Kinsoku-joukko
+	Kinsoku Shori Type	Kinsoku Shori -tyyppi
+	Push In First	Ensin sisään
+	Push Out First	Ensin ulos
+	Push Out Only	Vain ulos
 	Hard	Tiukka
 	Right Indent	Oikea sisennys
 	Right-to-Left Paragraph Direction	Kappaleen suunta oikealta vasemmalle
@@ -2486,15 +2508,12 @@ digits	Malayalam	Malajalam
 	Selected Swatches	Valitut värimallit
 	Advanced Options	Lisäasetukset
 	Background Contents	Taustan sisältö
-	Background Contents:	Taustan sisältö:
 	BLANK DOCUMENT PRESETS	TYHJÄN ASIAKIRJAN ESIASETUKSET
 	Bleed	Leikkuuvara
 	Change to Right-to-Left Layout	Vaihda oikealta vasemmalle -asetteluun
 	Columns:	Sarakkeet:
-	Create Document	Luo asiakirja
 	Documents you create appear here.	Luomasi asiakirjat näkyvät tässä.
 	More Settings	Lisää asetuksia
-	New from Template	Uusi mallista
 	Number of Artboards:	Piirtoalustojen määrä:
 	Orientation:	Suunta:
 	PRESET DETAILS	ESIASETUKSEN TIEDOT
@@ -2505,7 +2524,6 @@ digits	Malayalam	Malajalam
 	RECENT	VIIMEISIMMÄT
 	RECENT (1)	VIIMEISIMMÄT (1)
 	SAVED	TALLENNETUT
-	Templates…	Mallit…
 	Transparent (Default)	Läpinäkyvä (oletus)
 	Save for Office Documents	Tallenna Office-asiakirjoja varten
 	Transparent Background	Läpinäkyvä tausta
@@ -2643,6 +2661,7 @@ digits	Malayalam	Malajalam
 	Tile Range:	Ruutualue:
 	tile {number}	ruutu {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Ruudut numeroidaan vaakasuunnassa ja sitten alaspäin; jätä alue tyhjäksi, niin kaikki ruudut tulostetaan.
+	Copies per Sheet (as many as fit, in a grid)	Kopioita arkille (niin monta kuin mahtuu, ruudukkoon)
 	Transverse (the page a quarter turn on the paper)	Poikittainen (sivu neljänneskierroksen käännettynä paperilla)
 	Unprintable margin:	Tulostumaton reunus:
 	{pages} in all, {count} per copy	{pages} yhteensä, {count} kopiota kohden
@@ -3453,6 +3472,7 @@ theme	Appearance	Ulkoasu
 	Arrange by Row	Järjestä riveittäin
 	Arrange by Column	Järjestä sarakkeittain
 	Save Preset	Tallenna esiasetus
+	Save Document Preset	Tallenna asiakirjan esiasetus
 	Screen (72 ppi)	Näyttö (72 ppi)
 	Social Square Post 1080×1080	Neliömäinen somejulkaisu 1080×1080
 	Distribute	Jaa tasaisesti
@@ -4271,6 +4291,28 @@ imageTrace	Outline	Ääriviiva
 @msg	Combine Slices: the slices have no bounds	Yhdistä viipaleet: viipaleilla ei ole rajoja
 @msg	Convert to Artboards: selection has no area	Muunna piirtoalustoiksi: valinnalla ei ole pinta-alaa
 @msg	Convert to Shape: no rectangles or ellipses selected	Muunna muodoksi: suorakulmioita tai ellipsejä ei ole valittu
+	Run	Suorita
+	Run Script	Suorita komentosarja
+	Stop Script	Pysäytä komentosarja
+	Show External Script Warning	Näytä ulkoisten komentosarjojen varoitus
+	A Script Is Running	Komentosarja on käynnissä
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Komentosarja voi muuttaa avoimia asiakirjoja ja kirjoittaa tiedostoja suorittamillaan komennoilla. Suorita vain komentosarjoja, joihin luotat.
+	Do not show this warning again	Älä näytä tätä varoitusta uudelleen
+	Stop the script and undo what it did? Then quit again.	Pysäytetäänkö komentosarja ja kumotaan sen muutokset? Lopeta sitten uudelleen.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Tämä komentosarja on lisännyt hyvin paljon objekteja. Jatketaanko, vai pysäytetäänkö se ja kumotaan sen muutokset?
+@msg	Choose a .js or .jsx script	Valitse .js- tai .jsx-komentosarja
+@msg	Ran {name}	Suoritettu: {name}
+@msg	The script was stopped and its changes were undone	Komentosarja pysäytettiin ja sen muutokset kumottiin
+@msg	a script is running: stop it or wait for it to finish	komentosarja on käynnissä: pysäytä se tai odota sen valmistumista
+@msg	this is a compiled script, which cannot be run; use its source text	tämä on käännetty komentosarja, jota ei voi suorittaa; käytä sen lähdetekstiä
+@msg	the script is not UTF-8 text	komentosarja ei ole UTF-8-tekstiä
+@msg	the script is too large to run	komentosarja on liian suuri suoritettavaksi
+@msg	a drag or an undo group is open; finish it before running a script	vetäminen tai kumousryhmä on kesken; viimeistele se ennen komentosarjan suorittamista
+@msg	the script left a document that cannot be kept	komentosarja jätti asiakirjan, jota ei voi säilyttää
+@msg	the script's run is no longer available	komentosarjan suoritus ei ole enää käytettävissä
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	epäonnistunut komento muutti kumoamisvaiheita, joita ei voitu palauttaa, joten komentosarja pysäytettiin
+@msg	a recovery copy could not be written, so the script was not run	palautuskopiota ei voitu kirjoittaa, joten komentosarjaa ei suoritettu
+@msg	Running a script	Suoritetaan komentosarjaa
 @msg	Copied the script report	Komentosarjan raportti kopioitiin
 @msg	Corners edits the corners of a path	Kulmat-toiminto muokkaa polun kulmia
 @msg	Couldn't copy to the system clipboard: {e}	Järjestelmän leikepöydälle ei voitu kopioida: {e}
@@ -4611,6 +4653,7 @@ imageTrace	Outline	Ääriviiva
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Ladattiin ”{name}”: jätettiin pois {n} vaihe|Ladattiin ”{name}”: jätettiin pois {n} vaihetta
 @msg	not an action set file	ei ole toimintosarjatiedosto
 @msg	the action set file is larger than 8 MiB	toimintosarjatiedosto on suurempi kuin 8 MiB
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: viite olisi suurempi kuin {MAX_BYTES} tavua
 @msg	the action set file holds more than 1,000 actions	toimintosarjatiedostossa on yli 1 000 toimintoa
 @msg	the action set file needs a later version of VectorCraft	toimintosarjatiedosto vaatii uudemman VectorCraft-version
 @msg	an action in the action set file has more than 10,000 steps	toimintosarjatiedoston toiminnossa on yli 10 000 vaihetta
@@ -4726,6 +4769,13 @@ imageTrace	Outline	Ääriviiva
 @msg	select an image	valitse kuva
 @msg	select an object in perspective	valitse perspektiivissä oleva objekti
 @msg	select artwork (or a colour group) to recolor	valitse uudelleenväritettävä kuvitus (tai väriryhmä)
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	Uudelleenväritys valmis; muuttamatta jäi: {locked} ja {hidden}
+@msg	Recolor completed; {objects} were left unchanged	Uudelleenväritys valmis; muuttamatta jäi: {objects}
+@msg	Recolor completed; {objects} was left unchanged	Uudelleenväritys valmis; muuttamatta jäi: {objects}
+@msg	1 locked object	1 lukittu objekti
+@msg	{n} locked objects	{n} lukittua objektia
+@msg	1 hidden object	1 piilotettu objekti
+@msg	{n} hidden objects	{n} piilotettua objektia
 @msg	select at least two objects	valitse vähintään kaksi objektia
 @msg	exit isolation mode first	poistu ensin eristystilasta
 @msg	select objects, not layers	valitse objekteja, ei tasoja
@@ -4963,7 +5013,10 @@ imageTrace	Outline	Ääriviiva
 @msg	its objects are nested too deeply	sen objektit ovat liian syvällä sisäkkäin
 @msg	its section ending with `%{end}` doesn't end	sen `%{end}`-merkintään päättyvä osio ei pääty
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	siveltimet, joita VectorCraft ei vielä osaa lukea, jätettiin pois Siveltimet-paneelista ({_1})
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objektit, joilla on useita täyttöjä tai viivoja, tehosteita tai siveltimiä, tuotiin piirretyn näköisinä ({_1}): niiden ulkoasua ei voi vielä muokata
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objektit, joilla on useita täyttöjä tai viivoja, vaihtelevan levyisiä viivoja, tehosteita tai siveltimiä, tuotiin piirretyn näköisinä ({_1}): niiden ulkoasua ei voi vielä muokata
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	nimi `{name}` ei ole UTF-8:aa, ja se luettiin koodauksella {label}: jos se näyttää väärältä, avaa tiedosto toisella legacyNameEncoding-arvolla
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	nimi `{name}` ei ole UTF-8:aa, eivätkä kaikki sen osat ole kelvollista {label}-koodausta: avaa tiedosto toisella legacyNameEncoding-arvolla
+@msg	more names that aren't UTF-8 were read as {label} ({count})	muita nimiä, jotka eivät ole UTF-8:aa, luettiin koodauksella {label} ({count})
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	liukuväriä “{name}” ei ole määritetty tiedostossa: sen tilalla on tasaväri
 @msg	an image VectorCraft can't read was left out	kuva, jota VectorCraft ei voi lukea, jätettiin pois
 @msg	graphs come in as plain art, without their data or settings	kaaviot tuodaan tavallisena grafiikkana ilman niiden tietoja ja asetuksia
@@ -5040,6 +5093,10 @@ imageTrace	Outline	Ääriviiva
 @msg	the PSD file is cut short	tämä PSD-tiedosto on katkennut
 @msg	the PSD file's header is damaged	tämän PSD-tiedoston otsake on vaurioitunut
 @msg	the PSD file's image data can't be read: {e}	tämän PSD-tiedoston kuvadataa ei voi lukea: {e}
+@msg	the JPEG XL file is cut short	tämä JPEG XL -tiedosto on katkennut
+@msg	the JPEG XL container is too large to read	JPEG XL -säiliö on liian suuri luettavaksi
+@msg	CMYK JPEG XL images can't be read	CMYK-tilassa olevia JPEG XL -kuvia ei voi lukea
+@msg	the JPEG XL file can't be read: {e}	tätä JPEG XL -tiedostoa ei voi lukea: {e}
 @msg	Imported library {name}	Tuotiin kirjasto {name}
 @msg	Invalid panel layout; restored the default dock	Virheellinen paneeliasettelu; oletustelakka palautettiin
 @msg	action is required	action vaaditaan
@@ -5436,7 +5493,7 @@ mark-style	Japanese	Japanilainen
 	Bevel both sides	Viiste molemmin puolin
 	Presets	Esiasetukset
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Objektilla voi olla yksi 3D-tehoste. Muokkaa olemassa olevan tehosteen asetuksia tai poista se ensin.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} vaatii tällä hetkellä polun tai yhdistelmäpolun. Muunna teksti, kuvat ja ryhmät ensin poluiksi.
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} vaatii tällä hetkellä polun, yhdistelmäpolun, tekstin tai ryhmän. Muunna kuvat ja muut objektit ensin poluiksi.
 @msg	{label} requires a shape with at least two anchors	{label} vaatii muodon, jossa on vähintään kaksi ankkuria
 @msg	The shape is too complex for a 3D effect	Muoto on liian monimutkainen 3D-tehosteelle
 @msg	The 3D surface is too complex; simplify the shape	3D-pinta on liian monimutkainen; yksinkertaista muotoa
@@ -5444,6 +5501,11 @@ mark-style	Japanese	Japanilainen
 @msg	unknown parameter `{key}`; did you mean `{near}`?	tuntematon parametri `{key}`; tarkoititko `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	tuntematon parametri `{key}`; komento ei ota parametreja
 @msg	unknown parameter `{key}`; the command takes: {keys}	tuntematon parametri `{key}`; komennon parametrit: {keys}
+@msg	the params must be an object, not {got}	parametrien on oltava objekti, ei {got}
+@msg	unknown parameter `{path}`; the object takes no keys	tuntematon parametri `{path}`; objekti ei ota avaimia
+@msg	unknown parameter `{path}`; it takes: {keys}	tuntematon parametri `{path}`; parametrit: {keys}
+@msg	missing `{path}`	`{path}` puuttuu
+@msg	`{path}` must be {expected}, not {got}	`{path}` on oltava {expected}, ei {got}
 	Load EPS into Clipboard	Lataa EPS leikepöydälle
 @msg	an image of {w} × {h} pixels is too large to draw	kuva, jonka koko on {w} × {h} pikseliä, on liian suuri piirrettäväksi
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: ei ole PNG-, JPEG-, WebP-, TIFF- tai BMP-kuva
@@ -5914,7 +5976,7 @@ axis	Y Axis	Y-akseli
 @msg	Running “{name}”…	Suoritetaan ”{name}”…
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	live-tehoste suoritetaan asiakirjaa piirrettäessä, joten se ei voi olla `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	vientilaajennus saa aina viennin budjetin: jätä `budget` pois
-@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	”{_1}” pyytää suurta laskentabudjettia (jokainen ajo enintään {minutes} minuuttia ja {times} kertaa tavallinen määrä käskyjä): asenna se asetuksella `allowHeavy: true`, kun käyttäjä hyväksyy
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	”{_1}” pyytää suurta laskentabudjettia (jokainen ajo enintään {minutes} minuuttia ja {times} kertaa tavallinen määrä käskyjä): ihmisen on hyväksyttävä se työpöytäsovelluksessa, tai anna `allowHeavy: true` istunnossa, joka on käynnistetty valitsimella --allow-plugin-grants
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Asennetaanko ”{name}”, joka pyytää näitä käyttöoikeuksia?
 	ID: {id}	Tunnus: {id}
@@ -5937,15 +5999,26 @@ axis	Y Axis	Y-akseli
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	moduuli tuo kohteen `env.{name}`, jota laajennus saa käyttää vain laajennus-API:n tasolla {PROGRESS_API} (`api` {PROGRESS_API}) ja käyttöoikeudella `{permission}`
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	moduuli tuo kohteen `{from}.{name}`, jota isäntä ei tarjoa: laajennus saa tuoda vain docs/plugins.md-tiedostossa luetellut `env.vc_*`-funktiot (laajennus-API:n taso 2) eikä mitään WASIa, tiedostoja tai verkkoa
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` on {_1}; tämä isäntä tukee laajennus-API:n tasoja 1 ja {API_LEVEL} välillä
+@msg	`paintOutput` may only be true	`paintOutput` voi olla vain true
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` on vain reaaliaikaiselle tehosteelle (`kind` "effect") tasolla `api` 2
 @msg	`grant` must be a list of permission names	`grant` on oltava luettelo käyttöoikeuksien nimistä
 @msg	`grant` names an unknown permission `{shown}`	`grant` nimeää tuntemattoman käyttöoikeuden `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	lajin `{_1}` laajennus tarvitsee käyttöoikeuden `{_2}`
 @msg	at most {MAX_PERMISSIONS} `permissions`	enintään {MAX_PERMISSIONS} `permissions`
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	käyttöoikeus `{shown}` ei koske lajin `{_1}` laajennusta
 @msg	permission `{shown}` is listed twice	käyttöoikeus `{shown}` on lueteltu kahdesti
+@msg	only a filter declares `inputs`	vain suodatin voi määrittää `inputs`-avaimen
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` nimeää tuntemattoman objektilajin `{shown}`: käytä arvoa type, image tai symbolInstance
+@msg	`inputs` lists `{shown}` twice	`inputs` luettelee kohteen `{shown}` kahdesti
+@msg	`inputs` needs `api` 2 or later	`inputs` edellyttää `api`-tasoa 2 tai uudempaa
+@msg	`inputs` needs the permission `doc.read`	`inputs` edellyttää käyttöoikeutta `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	muistibudjetti (objekti {_1} tarvitsee {size} tavua syötettä, jäljellä {left})
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	objektibudjetti (yli {MAX_OBJECTS} vain luku -objektia)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	käyttöoikeus `{shown}` on varattu myöhemmälle laajennus-API:lle; tämä isäntä ei myönnä sitä
 @msg	unknown permission `{shown}`	tuntematon käyttöoikeus `{shown}`
-@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	”{name}” pyytää käyttöoikeuksia {asked}: asenna se `grant`-luettelolla, jossa ne ovat, kun käyttäjä suostuu
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	”{name}” pyytää käyttöoikeuksia {asked}: ihmisen on hyväksyttävä ne työpöytäsovelluksessa, tai anna `grant` istunnossa, joka on käynnistetty valitsimella --allow-plugin-grants
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` ja `allowHeavy` toimivat vain istunnossa, joka on käynnistetty valitsimella --allow-plugin-grants: hyväksy laajennus työpöytäsovelluksessa
+@msg	Only the person at the keyboard can approve installing a plug-in	Vain näppäimistön ääressä oleva ihminen voi hyväksyä laajennuksen asennuksen
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	”{name}” ei saanut käyttöoikeutta `{p}`, jota sen tulos tarvitsee: mitään ei muutettu
 @msg	a heavy filter runs in the background, so it can't declare `commands`	raskas suodin suoritetaan taustalla, joten se ei voi määritellä `commands`-kohtaa
 @msg	at most {MAX_COMMANDS} `commands`	enintään {MAX_COMMANDS} `commands`
@@ -6006,6 +6079,14 @@ axis	Y Axis	Y-akseli
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all tai alue, kuten 1, 3-5, ei {v}
 	Add to Symbols	Lisää symboleihin
 	Basic Shapes	Perusmuodot
+	Button	Painike
+	Panel	Paneeli
+	UI Frames	UI-kehykset
+	Map Markers	Karttamerkit
+	Pin	Nasta
+	Flag	Lippu
+	Crosshair	Tähtäin
+	Checkpoint	Tarkastuskohta
 	Open Symbol Library	Avaa symbolikirjasto
 	Save Symbol Library	Tallenna symbolikirjasto
 	Save Symbol Library…	Tallenna symbolikirjasto…
@@ -6080,6 +6161,8 @@ axis	Y Axis	Y-akseli
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Pisteteksti
 	Area Text	Alueteksti
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Mittaa teksti merkin rajoista
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Näytä merkkiin kohdistuksen asetukset
 	Hide Snap to Glyph Options	Piilota merkkiin kohdistuksen asetukset
@@ -6493,7 +6576,7 @@ breakText	Glyphs	Merkit
 	Reset Symbol Instance	Palauta symboli-ilmentymä
 @msg	type must be static or dynamic, not {v}	type-arvon on oltava static tai dynamic, ei {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` on staattinen symboli: aseta ensin sen symbolin tyypiksi Dynaaminen
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	Symboli-ilmentymästä valitusta polusta, yhdistelmäpolusta tai tekstistä voi muuttaa vain täytön ja viivan yhtenäistä väriä
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	Symbolin esiintymässä valitun polun, yhdistelmäpolun tai tekstin täyttöä, viivaa, peittävyyttä ja sekoitusta voi vain muuttaa
 @msg	path must be a list of child indices	path-arvon on oltava luettelo alikohteiden indeksejä
 @msg	no object at path {shown} in the symbol's art	symbolin kuvituksessa ei ole objektia polussa {shown}
 @msg	give fill, stroke, opacity and/or blend	anna fill, stroke, opacity ja/tai blend
@@ -6536,6 +6619,7 @@ breakText	Glyphs	Merkit
 	Create Swatch Legend	Luo värimallien selite
 	Create Swatch Legend…	Luo värimallien selite…
 	HEX	HEX
+	Help Bar	Ohjepalkki
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	Tekstityökalut
 	Text Tweaker…	Tekstin säätö…
@@ -6607,6 +6691,24 @@ breakText	Glyphs	Merkit
 	3D Box	3D-laatikko
 	3D Box Tool	3D-laatikkotyökalu
 
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Avaa ohjelmalla
+	No importer plug-ins installed	Tuontilaajennuksia ei ole asennettu
+	Read files you open in its format and make documents from them	Lukea sen muodossa avaamasi tiedostot ja tehdä niistä asiakirjoja
+@msg	{_1} is an importer (File › Open With)	{_1} on tuontilaajennus (Tiedosto › Avaa ohjelmalla)
+@msg	missing `importer` (see document.formats)	`importer` puuttuu (katso document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` on oltava laajennuksen muototunnus (katso document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	”{shown}” avaa {_1}-tiedostoja, ei `{_2}`
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` on lajin `{_2}` laajennus, ei tuontilaajennus
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` on lajin `{_2}` laajennus, ei vientilaajennus
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` on tuontilaajennus: avaa tiedosto komennolla document.open {{"importer"}"}}
+@msg	the importer returned no objects	tuontilaajennus ei palauttanut objekteja
+@msg	an importer returns `objects` and `warnings`, not `{key}`	tuontilaajennus palauttaa `objects` ja `warnings`, ei `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	tiedosto on suurempi kuin tuontilaajennuksen lukemat {MAX_INPUT_BYTES} tavua
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	tuontilaajennus ilmoittaa 1–{MAX_EXTENSIONS} `extensions`
+@msg	only an exporter or an importer declares `extensions`	vain vienti- tai tuontilaajennus ilmoittaa `extensions`
+@msg	an importer always gets an import's budget: leave `budget` out	tuontilaajennus saa aina tuonnin budjetin: jätä `budget` pois
+
 # Safe Mode
 	Safe Mode…	Vikasietotila…
 	Safe Mode	Vikasietotila
@@ -6628,3 +6730,7 @@ breakText	Glyphs	Merkit
 # Align to Pixel Grid
 	Align to Pixel Grid	Tasaa pikseliruudukkoon
 @msg	only paths and compound paths can be aligned to the pixel grid	vain polut ja yhdistelmäpolut voi tasata pikseliruudukkoon
+@msg	side is left or right, not `{s}`	side on left tai right, ei `{s}`
+	Ignore All	Ohita kaikki
+	Add to Dictionary	Lisää sanastoon
+	No Suggestions	Ei ehdotuksia

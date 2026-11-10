@@ -138,17 +138,17 @@ pub(super) fn shows_a_name(id: &str, label: &str) -> bool {
     ];
     SLOTS.iter().any(|s| id.starts_with(s))
         || saved_selection_slot(id).is_some()
-        || matches!(id, "text.setStyle" | "plugin.dialog" | "window.toolbar.custom" | "svgFilter.apply")
+        || matches!(id, "text.setStyle" | "plugin.dialog" | "file.openWith" | "window.toolbar.custom" | "svgFilter.apply")
         || vectorcraft_engine::cmd::plugin::is_command_id(id)
         || (id == "window.workspace" && !crate::workspaces::is_builtin(label))
         || (matches!(id, "effect.apply" | "effect.dialog") && vectorcraft_effects::plugin_effects().iter().any(|e| e.label == label))
 }
 
-/// Does the menu item `id` with `params` list an installed plug-in (an Object › Plug-ins filter or
-/// an Effect › Plug-ins effect) or one of its commands, by the plug-in's own text? Told by the item
-/// itself, so it holds while another thread installs or removes plug-ins.
+/// Does the menu item `id` with `params` list an installed plug-in (an Object › Plug-ins filter, an
+/// Effect › Plug-ins effect or a File › Open With importer) or one of its commands, by the plug-in's
+/// own text? Told by the item itself, so it holds while another thread installs or removes plug-ins.
 pub(crate) fn lists_plugin(id: &str, params: &Value) -> bool {
-    id == "plugin.dialog"
+    matches!(id, "plugin.dialog" | "file.openWith")
         || vectorcraft_engine::cmd::plugin::is_command_id(id)
         || params.get("effect").and_then(Value::as_str).and_then(vectorcraft_plugins::effect::plugin_id).is_some()
 }
@@ -214,6 +214,12 @@ pub(super) fn unlock_item_label(app: &VectorcraftApp, id: &str, p: &Value, lang:
     Some(crate::panels::layers::shown_name(app, n, lang))
 }
 
+/// A context menu suggestion's label: the word it puts in (`text.editRange {insert}`), as it is,
+/// untranslated ([`super::context`]'s `spelling_items`).
+pub(super) fn spelling_item_label(id: &str, p: &Value) -> Option<String> {
+    (id == "text.editRange").then(|| p.get("insert")?.as_str().map(str::to_string)).flatten()
+}
+
 /// The shortcut a menu item shows: its command's (items without params), a panel's for the
 /// Window menu's `window.panel {panel}` items, an effect's for the Effect menu's items, or a filter
 /// plug-in's for Object › Plug-ins' `plugin.dialog {id}` items.
@@ -235,6 +241,9 @@ pub fn item_shortcut(id: &str, p: &Value) -> Option<&'static str> {
 /// Labels only the canvas context menu ([`context_items`]) shows, so the catalog tests can insist
 /// every one of them is translated (a test checks the list against the menu).
 pub const CONTEXT_LABELS: &[&str] = &[
+    "Ignore All",
+    "Add to Dictionary",
+    "No Suggestions",
     "Isolate Selected Group",
     "Exit Isolation Mode",
     "Lock Artboards",

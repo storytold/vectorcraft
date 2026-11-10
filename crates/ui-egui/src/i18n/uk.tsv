@@ -291,7 +291,6 @@ font-technology	Variable	Варіативні
 	Update While Dragging	Оновлювати під час перетягування
 	Hide Video Rulers	Приховати відео-лінійки
 	Background Contents	Вміст фону
-	Background Contents:	Вміст фону:
 	Background:	Фон:
 	Backspace	Backspace
 	Bar Graph Tool	Інструмент «Гістограма»
@@ -560,6 +559,11 @@ font-technology	Variable	Варіативні
 	Color Table ({n} colors)	Таблиця кольорів ({n} кольорів)
 	Color Theme	Колірна тема
 	Color Themes	Колірні теми
+	Color Wheel	Колірне коло
+	Hue ring	Кільце відтінків
+	Saturation and brightness	Насиченість і яскравість
+	Color field	Колірне поле
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Тип кольору:
 	Color:	Колір:
 	Colorize	Тонувати
@@ -572,6 +576,7 @@ font-technology	Variable	Варіативні
 	Coming soon — tracked in the parity plan	Незабаром відстежується в плані розвитку
 	Command Click to Select Objects Behind	Cmd+клацання для вибору об’єктів позаду
 	Command Dialog	Діалогове вікно команди
+	Command API Reference	Довідник API команд
 	Community	Спільнота
 	Compatibility:	Сумісність:
 	Compatible Gradient and Gradient Mesh Printing	Сумісний друк градієнтів та градієнтних сіток
@@ -658,7 +663,6 @@ font-technology	Variable	Варіативні
 	Couldn't {} {name}: {e}	Не вдалося {} {name}: {e}
 	Create	Створити
 	Create Clipping Mask	Створити відсічну маску
-	Create Document	Створити документ
 	Create from Guides	Створити з напрямних
 	Create from Selection	Створити із виділення
 	Create From:	Створити з:
@@ -1131,6 +1135,17 @@ font-technology	Variable	Варіативні
 	Exporting {}	Експорт {}
 	Export…	Експорт…
 	Extrude & Bevel…	Видавлювання та фаска…
+	3D (Classic)	3D (класичні)
+	Extrude & Bevel (Classic)…	Видавлювання та фаска (класичне)…
+	Surface	Поверхня
+	Wireframe	Каркас
+	No Shading	Без затінення
+	Plastic	Пластик
+	Highlight Intensity	Інтенсивність відблиску
+	Highlight Size	Розмір відблиску
+	Blend Steps	Кроки переходу
+	Shading Color	Колір затінення
+	Draw Hidden Faces	Малювати приховані грані
 	Eyedropper	Піпетка
 	Sample Color from Screen	Взяти колір з екрана
 	This system has no screen color sampler	У цій системі немає засобу вибору кольору з екрана
@@ -1903,6 +1918,7 @@ file-filter	Templates	Шаблони
 	Lock (⌘2)	Заблокувати (⌘2)
 	Lock Grid	Заблокувати сітку
 	Lock Guides	Заблокувати напрямні
+	Lock Guides by Default	Блокувати напрямні за замовчуванням
 	Lock Others	Заблокувати решту
 	Lock Slices	Заблокувати фрагменти
 	Lock Station Point	Заблокувати точку стояння
@@ -2008,6 +2024,10 @@ file-filter	Templates	Шаблони
 	Stylistic	Стилістичні
 	Mojikumi Set	Набір mojikumi
 	Kinsoku Set	Набір kinsoku
+	Kinsoku Shori Type	Тип kinsoku shori
+	Push In First	Спершу втягувати
+	Push Out First	Спершу виштовхувати
+	Push Out Only	Лише виштовхувати
 	Hard	Суворий
 	Soft	М’який
 	Monitor RGB	RGB монітора
@@ -2147,7 +2167,6 @@ file-filter	Templates	Шаблони
 	New Color Group…	Нова колірна група…
 	New Document Presets	Набір нових документів
 	New file	Новий файл
-	New from Template	Створити із шаблону
 	New from Template…	Створити із шаблону…
 	New Graphic Style	Новий графічний стиль
 	New Graphic Style (Alt-click to name it)	Новий графічний стиль (Alt+клацання, щоб задати ім’я)
@@ -2939,6 +2958,7 @@ digits	Malayalam	Малаялам
 	Save PDF Preset	Зберегти набір PDF
 	Save Perspective Grid Preset	Зберегти набір сітки перспективи
 	Save Preset	Зберегти набір
+	Save Document Preset	Зберегти набір документа
 	Preset {number}	Набір {number}
 	Save Preset…	Зберегти набір…
 	Save Print Preset	Зберегти набір друку
@@ -3519,7 +3539,6 @@ effect	Points	Точки
 	Template	Шаблон
 	Templates	Шаблони
 	Templates Folder	Папка шаблонів
-	Templates…	Шаблони…
 	Text Displayed in Cell:	Текст, що відображається в комірці:
 	Text Export Options	Параметри експорту тексту
 	Text Fill & Stroke Color	Колір заливки та обведення тексту
@@ -3565,6 +3584,8 @@ effect	Points	Точки
 	Tile Type:	Тип плитки:
 	tile {number}	плитка {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Плитки нумеруються зліва направо, потім униз; Залишіть діапазон порожнім для всіх плиток.
+	Copies per Sheet (as many as fit, in a grid)	Копій на аркуш (скільки поміститься, сіткою)
+	Gutter:	Проміжок:
 	Tint	Відтінок
 	Tip extends past the end point	Кінчик виходить за кінцеву точку
 	Tip on the end point	Кінчик на кінцевій точці
@@ -4031,7 +4052,7 @@ axis	Both	Обидві
 	Dock to Bottom	Прикріпити внизу
 	Dock Control Bar	Прикріпити панель керування
 	Drag to float the toolbar	Перетягніть, щоб від’єднати панель інструментів
-	Drag to the window's left edge to dock	Перетягніть до лівого краю вікна для прикріплення
+	Drag to the window's left or right edge to dock	Перетягніть до лівого або правого краю вікна для прикріплення
 	Float Tool Group	Від’єднати групу інструментів
 @msg	no library `{id}`	немає бібліотеки `{id}`
 @msg	select some type first	спочатку виділіть текст
@@ -4072,6 +4093,28 @@ axis	Both	Обидві
 @msg	Combine Slices: the slices have no bounds	Об’єднання фрагментів: фрагменти не мають кордонів
 @msg	Convert to Artboards: selection has no area	Перетворення на монтажні області: виділення не має області
 @msg	Convert to Shape: no rectangles or ellipses selected	Перетворення на фігуру: не виділено прямокутники або еліпси
+	Run	Виконати
+	Run Script	Виконати скрипт
+	Stop Script	Зупинити скрипт
+	Show External Script Warning	Показувати попередження про зовнішні скрипти
+	A Script Is Running	Виконується скрипт
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Скрипт може змінювати відкриті документи й записувати файли за допомогою команд, які виконує. Запускайте лише ті скрипти, яким довіряєте.
+	Do not show this warning again	Більше не показувати це попередження
+	Stop the script and undo what it did? Then quit again.	Зупинити скрипт і скасувати його зміни? Потім вийдіть ще раз.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Цей скрипт додав дуже багато об’єктів. Продовжити чи зупинити його та скасувати його зміни?
+@msg	Choose a .js or .jsx script	Виберіть скрипт .js або .jsx
+@msg	Ran {name}	Виконано: {name}
+@msg	The script was stopped and its changes were undone	Скрипт зупинено, його зміни скасовано
+@msg	a script is running: stop it or wait for it to finish	виконується скрипт: зупиніть його або дочекайтеся завершення
+@msg	this is a compiled script, which cannot be run; use its source text	це скомпільований скрипт, його не можна виконати; використайте його вихідний текст
+@msg	the script is not UTF-8 text	скрипт не є текстом UTF-8
+@msg	the script is too large to run	скрипт завеликий для виконання
+@msg	a drag or an undo group is open; finish it before running a script	відкрито перетягування або групу скасування; завершіть їх перед запуском скрипта
+@msg	the script left a document that cannot be kept	скрипт залишив документ, який не можна зберегти
+@msg	the script's run is no longer available	виконання скрипта більше не доступне
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	невдала команда змінила кроки скасування, які не вдалося відновити, тому скрипт зупинено
+@msg	a recovery copy could not be written, so the script was not run	не вдалося записати копію для відновлення, тому скрипт не виконано
+@msg	Running a script	Виконується скрипт
 @msg	Copied the script report	Звіт про сценарій скопійовано
 @msg	Corners edits the corners of a path	«Кути» редагує кути контуру
 @msg	Couldn't copy to the system clipboard: {e}	Не вдалося скопіювати до системного буфера обміну: {e}
@@ -4419,6 +4462,7 @@ axis	Both	Обидві
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Завантажено «{name}»: пропущено {n} крок|Завантажено «{name}»: пропущено {n} кроки|Завантажено «{name}»: пропущено {n} кроків
 @msg	not an action set file	це не файл набору дій
 @msg	the action set file is larger than 8 MiB	файл набору дій більший за 8 MiB
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: довідник був би більшим за {MAX_BYTES} байтів
 @msg	the action set file holds more than 1,000 actions	файл набору дій містить понад 1000 дій
 @msg	the action set file needs a later version of VectorCraft	для файлу набору дій потрібна новіша версія VectorCraft
 @msg	an action in the action set file has more than 10,000 steps	у файлі набору дій є дія з понад 10 000 кроків
@@ -4541,6 +4585,13 @@ axis	Both	Обидві
 @msg	select an image	виділіть зображення
 @msg	select an object in perspective	виділіть об’єкт у перспективі
 @msg	select artwork (or a colour group) to recolor	виділіть малюнок (або колірну групу) для перефарбовування
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	Перефарбовування завершено; без змін: {locked} і {hidden}
+@msg	Recolor completed; {objects} were left unchanged	Перефарбовування завершено; без змін: {objects}
+@msg	Recolor completed; {objects} was left unchanged	Перефарбовування завершено; без змін: {objects}
+@msg	1 locked object	заблокований об’єкт (1)
+@msg	{n} locked objects	заблоковані об’єкти ({n})
+@msg	1 hidden object	прихований об’єкт (1)
+@msg	{n} hidden objects	приховані об’єкти ({n})
 @msg	select at least two objects	виділіть як мінімум два об’єкти
 @msg	exit isolation mode first	спочатку вийдіть з режиму ізоляції
 @msg	select objects, not layers	виділіть об’єкти, а не шари
@@ -4778,7 +4829,10 @@ axis	Both	Обидві
 @msg	its objects are nested too deeply	об’єкти в них вкладені надто глибоко
 @msg	its section ending with `%{end}` doesn't end	розділ, що закінчується на `%{end}`, не закінчується
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	пензлі, які VectorCraft поки не вміє читати, не додано до панелі «Пензлі» ({_1})
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	об’єкти з кількома заливками або обведеннями, ефектами або пензлями імпортовані в намальованому вигляді ({_1}): їх оформлення поки що не можна редагувати
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	об’єкти з кількома заливками або обведеннями, обведеннями змінної ширини, ефектами або пензлями імпортовані в намальованому вигляді ({_1}): їх оформлення поки що не можна редагувати
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	назва `{name}` не в UTF-8 і прочитана як {label}: якщо вона виглядає неправильно, відкрийте файл з іншим legacyNameEncoding
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	назва `{name}` не в UTF-8, і її частини недійсні також у {label}: відкрийте файл з іншим legacyNameEncoding
+@msg	more names that aren't UTF-8 were read as {label} ({count})	інші назви не в UTF-8 прочитано як {label} ({count})
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	градієнт «{name}» не визначено у файлі: замість нього використовується суцільний колір
 @msg	an image VectorCraft can't read was left out	зображення, яке VectorCraft не може прочитати, пропущено
 @msg	graphs come in as plain art, without their data or settings	діаграми імпортуються як звичайна графіка, без їхніх даних і налаштувань
@@ -4881,6 +4935,10 @@ axis	Both	Обидві
 @msg	the PSD file is cut short	файл PSD обрізаний
 @msg	the PSD file's header is damaged	заголовок файлу PSD пошкоджено
 @msg	the PSD file's image data can't be read: {e}	не вдається прочитати дані зображення файлу PSD: {e}
+@msg	the JPEG XL file is cut short	файл JPEG XL обрізаний
+@msg	the JPEG XL container is too large to read	контейнер JPEG XL завеликий для читання
+@msg	CMYK JPEG XL images can't be read	зображення JPEG XL у режимі CMYK не читаються
+@msg	the JPEG XL file can't be read: {e}	не вдається прочитати файл JPEG XL: {e}
 	Video	Відео
 	De-Interlace…	Усунення черезрядковості…
 	De-Interlace	Усунення черезрядковості
@@ -5140,7 +5198,7 @@ lighting	Light	Світло
 	Bevel both sides	Фаска з обох боків
 	Presets	Набори
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Об'єкт може мати лише один 3D-ефект. Змініть параметри наявного ефекту або спершу вилучіть його.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label}: поки що потрібен контур або складений контур. Спершу перетворіть текст, зображення та групи на контури.
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label}: поки що потрібен контур, складений контур, текст або група. Спершу перетворіть зображення та інші об'єкти на контури.
 @msg	{label} requires a shape with at least two anchors	{label}: потрібна фігура щонайменше з двома опорними точками
 @msg	The shape is too complex for a 3D effect	Фігура надто складна для 3D-ефекту
 @msg	The 3D surface is too complex; simplify the shape	3D-поверхня надто складна; спростіть фігуру
@@ -5148,6 +5206,11 @@ lighting	Light	Світло
 @msg	unknown parameter `{key}`; did you mean `{near}`?	невідомий параметр `{key}`; можливо, ви мали на увазі `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	невідомий параметр `{key}`; команда не має параметрів
 @msg	unknown parameter `{key}`; the command takes: {keys}	невідомий параметр `{key}`; команда приймає: {keys}
+@msg	the params must be an object, not {got}	параметри мають бути об'єктом, а не {got}
+@msg	unknown parameter `{path}`; the object takes no keys	невідомий параметр `{path}`; об'єкт не приймає ключів
+@msg	unknown parameter `{path}`; it takes: {keys}	невідомий параметр `{path}`; приймає: {keys}
+@msg	missing `{path}`	відсутнє `{path}`
+@msg	`{path}` must be {expected}, not {got}	`{path}` має бути {expected}, а не {got}
 	Load EPS into Clipboard	Завантажити EPS у буфер обміну
 @msg	an image of {w} × {h} pixels is too large to draw	зображення розміром {w} × {h} пікселів завелике для відображення
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: це не зображення PNG, JPEG, WebP, TIFF чи BMP
@@ -5480,7 +5543,7 @@ axis	Y Axis	Вісь Y
 @msg	Running “{name}”…	Виконується «{name}»…
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	динамічний ефект виконується під час відмальовування документа, тому він не може бути `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	модуль експорту завжди отримує бюджет експорту: не вказуйте `budget`
-@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	«{_1}» запитує великий обчислювальний бюджет (кожен запуск до {minutes} хвилин і в {times} разів більше інструкцій, ніж зазвичай): встановіть його з `allowHeavy: true`, коли користувач погодиться
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	«{_1}» запитує великий обчислювальний бюджет (кожен запуск до {minutes} хвилин і в {times} разів більше інструкцій, ніж зазвичай): його має схвалити людина в настільному застосунку, або передайте `allowHeavy: true` у сеансі, запущеному з --allow-plugin-grants
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Встановити «{name}», якому потрібні ці дозволи?
 	ID: {id}	ID: {id}
@@ -5503,15 +5566,26 @@ axis	Y Axis	Вісь Y
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	модуль імпортує `env.{name}`, який модуль може використовувати лише на рівні API модулів {PROGRESS_API} (`api` {PROGRESS_API}) і з дозволом `{permission}`
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	модуль імпортує `{from}.{name}`, який хост не надає: модуль може імпортувати лише функції `env.vc_*`, перелічені в docs/plugins.md (рівень API модулів 2), без WASI, файлів і мережі
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` дорівнює {_1}; цей хост підтримує рівні API модулів від 1 до {API_LEVEL}
+@msg	`paintOutput` may only be true	`paintOutput` може бути лише true
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` дозволено лише для динамічного ефекту (`kind` "effect") з `api` 2
 @msg	`grant` must be a list of permission names	`grant` має бути списком назв дозволів
 @msg	`grant` names an unknown permission `{shown}`	`grant` називає невідомий дозвіл `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	модулю виду `{_1}` потрібен дозвіл `{_2}`
 @msg	at most {MAX_PERMISSIONS} `permissions`	щонайбільше {MAX_PERMISSIONS} `permissions`
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	дозвіл `{shown}` не стосується модуля виду `{_1}`
 @msg	permission `{shown}` is listed twice	дозвіл `{shown}` указано двічі
+@msg	only a filter declares `inputs`	`inputs` може оголошувати лише фільтр
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	в `inputs` указано невідомий вид об’єкта `{shown}`: використовуйте type, image або symbolInstance
+@msg	`inputs` lists `{shown}` twice	в `inputs` `{shown}` указано двічі
+@msg	`inputs` needs `api` 2 or later	для `inputs` потрібен `api` 2 або новіший
+@msg	`inputs` needs the permission `doc.read`	для `inputs` потрібен дозвіл `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	бюджет пам’яті (об’єкту {_1} потрібно {size} байтів вхідних даних, залишилося {left})
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	бюджет об’єктів (понад {MAX_OBJECTS} об’єктів лише для читання)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	дозвіл `{shown}` зарезервовано для пізнішого API модулів; цей хост його не надає
 @msg	unknown permission `{shown}`	невідомий дозвіл `{shown}`
-@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	«{name}» запитує дозволи {asked}: установіть його з `grant`, де їх перелічено, коли користувач погодиться
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	«{name}» запитує дозволи {asked}: їх має схвалити людина в настільному застосунку, або передайте `grant` у сеансі, запущеному з --allow-plugin-grants
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` і `allowHeavy` діють лише в сеансі, запущеному з --allow-plugin-grants: схваліть плагін у настільному застосунку
+@msg	Only the person at the keyboard can approve installing a plug-in	Схвалити встановлення плагіна може лише людина за клавіатурою
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	«{name}» не отримав дозволу `{p}`, потрібного для його результату: нічого не змінено
 @msg	a heavy filter runs in the background, so it can't declare `commands`	важкий фільтр виконується у фоні, тому не може оголошувати `commands`
 @msg	at most {MAX_COMMANDS} `commands`	щонайбільше {MAX_COMMANDS} `commands`
@@ -5572,6 +5646,14 @@ axis	Y Axis	Вісь Y
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all або діапазон, наприклад 1, 3-5, а не {v}
 	Add to Symbols	Додати до символів
 	Basic Shapes	Базові фігури
+	Button	Кнопка
+	Panel	Панель
+	UI Frames	UI-рамки
+	Map Markers	Маркери карти
+	Pin	Шпилька
+	Flag	Прапор
+	Crosshair	Приціл
+	Checkpoint	Контрольна точка
 	Open Symbol Library	Відкрити бібліотеку символів
 	Save Symbol Library	Зберегти бібліотеку символів
 	Save Symbol Library…	Зберегти бібліотеку символів…
@@ -5646,6 +5728,8 @@ axis	Y Axis	Вісь Y
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Точковий текст
 	Area Text	Текст в області
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Вимірювати текст за межами гліфа
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Показати параметри прив’язки до гліфа
 	Hide Snap to Glyph Options	Приховати параметри прив’язки до гліфа
@@ -6063,7 +6147,7 @@ breakText	Glyphs	Гліфи
 	Reset Symbol Instance	Скинути екземпляр символу
 @msg	type must be static or dynamic, not {v}	type має бути static або dynamic, а не {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` — статичний символ: спершу встановіть для нього тип символу «Динамічний»
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	У контуру, складеного контуру або тексту, виділеного в екземплярі символу, можна змінити лише суцільний колір заливки й обведення
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	У контуру, складеного контуру або тексту, виділеного в екземплярі символу, можна змінити лише заливку, обведення, непрозорість і режим накладання
 @msg	path must be a list of child indices	path має бути списком індексів дочірніх об’єктів
 @msg	no object at path {shown} in the symbol's art	у графіці символу немає об’єкта за шляхом {shown}
 @msg	give fill, stroke, opacity and/or blend	вкажіть fill, stroke, opacity та/або blend
@@ -6106,6 +6190,7 @@ breakText	Glyphs	Гліфи
 	Create Swatch Legend	Створити легенду зразків
 	Create Swatch Legend…	Створити легенду зразків…
 	HEX	HEX
+	Help Bar	Панель підказок
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	Інструменти тексту
 	Text Tweaker…	Налаштування тексту…
@@ -6172,6 +6257,24 @@ breakText	Glyphs	Гліфи
 	3D Box	3D-паралелепіпед
 	3D Box Tool	Інструмент «3D-паралелепіпед»
 
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Відкрити за допомогою
+	No importer plug-ins installed	Модулі імпорту не встановлено
+	Read files you open in its format and make documents from them	Читати файли, які ви відкриваєте в його форматі, і створювати з них документи
+@msg	{_1} is an importer (File › Open With)	{_1} - модуль імпорту (Файл › Відкрити за допомогою)
+@msg	missing `importer` (see document.formats)	не вказано `importer` (див. document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` має бути ідентифікатором формату модуля (див. document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	«{shown}» відкриває файли {_1}, а не `{_2}`
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` є модулем виду `{_2}`, а не модулем імпорту
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` є модулем виду `{_2}`, а не модулем експорту
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` - модуль імпорту: відкрийте файл за допомогою document.open {{"importer"}"}}
+@msg	the importer returned no objects	модуль імпорту не повернув жодного об’єкта
+@msg	an importer returns `objects` and `warnings`, not `{key}`	модуль імпорту повертає `objects` і `warnings`, а не `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	файл більший за {MAX_INPUT_BYTES} байтів, які читає модуль імпорту
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	модуль імпорту оголошує від 1 до {MAX_EXTENSIONS} `extensions`
+@msg	only an exporter or an importer declares `extensions`	`extensions` оголошує лише модуль експорту або імпорту
+@msg	an importer always gets an import's budget: leave `budget` out	модуль імпорту завжди отримує бюджет імпорту: не вказуйте `budget`
+
 # Safe Mode
 	Safe Mode…	Безпечний режим…
 	Safe Mode	Безпечний режим
@@ -6193,3 +6296,7 @@ breakText	Glyphs	Гліфи
 # Align to Pixel Grid
 	Align to Pixel Grid	Вирівняти за піксельною сіткою
 @msg	only paths and compound paths can be aligned to the pixel grid	за піксельною сіткою можна вирівняти лише контури і складені контури
+@msg	side is left or right, not `{s}`	side — це left або right, а не `{s}`
+	Ignore All	Пропустити все
+	Add to Dictionary	Додати до словника
+	No Suggestions	Немає варіантів

@@ -158,6 +158,9 @@ pub(crate) type NativeFn = fn(&mut crate::interp::Interp, Value, &[Value], bool)
 /// A function the embedding defines.
 pub(crate) type HostFn = dyn Fn(&[crate::JsValue]) -> Result<crate::JsValue, String>;
 
+/// A function the embedding defines that takes and gives structured values.
+pub(crate) type DataFn = crate::host::HostFunction;
+
 /// The built-ins the interpreter treats specially when it calls them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum NativeKind {
@@ -170,11 +173,15 @@ pub(crate) enum NativeKind {
     Eval,
 }
 
+/// What a function object runs. `Bound` is a function made by `Function.prototype.bind` (section
+/// 15.3.4.5): calling it calls `target` with `this` and `args` before the arguments it is given.
 #[derive(Clone)]
 pub(crate) enum Func {
     Closure { code: Rc<Code>, env: EnvId },
     Native { f: NativeFn, kind: NativeKind, constructor: bool, name: &'static str },
     Host { f: Rc<HostFn>, name: Rc<str> },
+    Data { f: DataFn, name: Rc<str> },
+    Bound { target: ObjId, this: Value, args: Rc<[Value]> },
 }
 
 /// A sloppy mode `arguments` object's link to its function's parameters (section 10.6): index
@@ -204,8 +211,8 @@ pub(crate) enum Class {
     Function(Func),
     Error,
     Arguments(Box<ArgMap>),
-    /// A `Boolean` object made by ToObject.
-    Boolean,
+    /// A `Boolean` object made by ToObject, with its primitive value.
+    Boolean(bool),
     /// A `Number` object and its number.
     Number(f64),
     String(Str),
@@ -213,18 +220,24 @@ pub(crate) enum Class {
     /// A `Date` object and its time value.
     Date(f64),
     ForIn(Box<ForIn>),
+    /// The `Math` object (section 15.8).
+    Math,
+    /// The `JSON` object (section 15.12).
+    Json,
 }
 
 impl Class {
     /// The `[[Class]]` name `Object.prototype.toString` reports.
     pub(crate) fn name(&self) -> &'static str {
         match self {
+            Class::Math => "Math",
+            Class::Json => "JSON",
             Class::Ordinary | Class::ForIn(_) => "Object",
             Class::Array { .. } => "Array",
             Class::Function(_) => "Function",
             Class::Error => "Error",
             Class::Arguments(_) => "Arguments",
-            Class::Boolean => "Boolean",
+            Class::Boolean(_) => "Boolean",
             Class::Number(_) => "Number",
             Class::String(_) => "String",
             Class::RegExp(_) => "RegExp",
@@ -292,6 +305,8 @@ pub(crate) const OBJECT_BYTES: usize = 96;
 pub(crate) const ENV_BYTES: usize = 64;
 /// The estimated bytes of a rope node.
 pub(crate) const ROPE_BYTES: usize = 48;
+/// The estimated bytes of each argument a bound function holds.
+pub(crate) const BOUND_ARG_BYTES: usize = 24;
 /// The estimated bytes of a piece of code without its instructions, tables and strings.
 const CODE_BYTES: usize = 384;
 
@@ -308,6 +323,10 @@ pub(crate) struct Heap {
     pub(crate) bytes: usize,
     /// How many collections have run.
     pub(crate) collections: usize,
+    /// Counts the properties whose names start with a digit (the array indices among them) added
+    /// to any object, so an operation that lists the indices an object has can tell whether a
+    /// script added one since.
+    pub(crate) index_epoch: u64,
 }
 
 impl Heap {
@@ -524,10 +543,19 @@ fn trace_object(o: &Object, work: &mut Vec<u32>, strings: &mut StringSizes) -> u
             Prop::Accessor { get, set, .. } => work.extend(get.iter().chain(set.iter()).map(|f| f.0)),
         }
     }
+    let mut extra = 0;
     match &o.class {
         Class::Function(Func::Closure { env, code }) => {
             work.push(env.0);
             mark_code(code, strings);
+        }
+        Class::Function(Func::Bound { target, this, args }) => {
+            work.push(target.0);
+            mark_value(this, work, strings);
+            for a in args.iter() {
+                mark_value(a, work, strings);
+            }
+            extra = BOUND_ARG_BYTES * args.len();
         }
         Class::Arguments(map) => work.push(map.env.0),
         Class::String(s) => strings.add(s),
@@ -542,7 +570,7 @@ fn trace_object(o: &Object, work: &mut Vec<u32>, strings: &mut StringSizes) -> u
         }
         _ => {}
     }
-    OBJECT_BYTES + PROP_BYTES * o.props.len()
+    OBJECT_BYTES + PROP_BYTES * o.props.len() + extra
 }
 
 fn trace_env(e: &Env, work: &mut Vec<u32>, strings: &mut StringSizes) -> usize {

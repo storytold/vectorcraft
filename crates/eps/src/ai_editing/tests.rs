@@ -462,7 +462,7 @@ fn an_artboard_larger_than_the_canvas_is_written_on_a_large_canvas() {
     let bounds = read.layers.iter().filter_map(|l| l.visual_bounds()).reduce(|a, b| a.union(b)).unwrap();
     assert!((bounds.x0 - 1000.0).abs() < 1e-6 && (bounds.y1 - 2000.0).abs() < 1e-6 && (bounds.width() - 2000.0).abs() < 1e-6, "{bounds:?}");
     // The same without a readable PDF part, on its first page's size.
-    let (alone, notes) = crate::ai_alone_on_page(&p.data, (20_000.0, 20_000.0), 1.389).unwrap();
+    let (alone, notes) = crate::ai_alone_on_page(&p.data, (20_000.0, 20_000.0), 1.389, crate::NameEncoding::default()).unwrap();
     assert_eq!(alone.artboards.iter().map(|a| a.rect).collect::<Vec<_>>(), [Rect::new(0.0, 0.0, 20_000.0, 20_000.0)], "{notes:?}");
     // And from the editing data alone, as a file saved without its PDF part opens.
     let alone = read_back(&doc);
@@ -831,6 +831,178 @@ fn nested_symbol_instances_stop_at_the_symbol_art_limit() {
     // On the layers; the symbols' definitions come before them, in the setup.
     let layers = text.split_once("%%EndSetup").unwrap().1;
     assert_eq!(layers.matches("\r\nf\r\n").count(), 3198, "the squares of the leaves written");
+}
+
+/// The documents [`the_writer_counts_objects_as_the_reader_reads_them`] writes: groups, compound
+/// paths, guides, sublayers, clipping groups and layers, painted clipping paths, opacity masks,
+/// gradients, pattern definitions and tiles, images, type, symbol definitions and instances,
+/// objects with art styles and objects bound to variables.
+fn counted() -> Vec<(&'static str, Document)> {
+    vec![
+        ("sample", sample()),
+        ("unsupported", unsupported()),
+        ("transparent", transparent()),
+        ("gradients and patterns", gradients_and_patterns()),
+        ("images", images_doc()),
+        ("typed", typed()),
+        ("variables", variables_doc()),
+        ("symbols", symbols_document()),
+        ("styles", styles_document()),
+        ("painted clips", painted_clips()),
+        ("blend", blend_doc()),
+    ]
+}
+
+/// A blend of two squares 20 pt apart with a step every 10 pt, written as its steps.
+fn blend_doc() -> Document {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let keys = vec![
+        Arc::new(square(&mut doc, Rect::new(10.0, 10.0, 12.0, 12.0), Color::gray(0.5))),
+        Arc::new(square(&mut doc, Rect::new(30.0, 10.0, 32.0, 12.0), Color::gray(0.5))),
+    ];
+    let spec = vectorcraft_doc::BlendSpec { spacing: vectorcraft_doc::BlendSpacing::Distance(10.0), ..Default::default() };
+    let blend = Node::new(doc.alloc_id(), NodeKind::Blend { children: keys, spec: Box::new(spec) });
+    doc.insert(Some(layer), usize::MAX, blend).unwrap();
+    doc
+}
+
+/// Clipping groups whose clipping paths are filled: a square with a color, and a ring (a path of
+/// two subpaths) with a color, with a gradient, and with a color and a gradient stroke.
+fn painted_clips() -> Document {
+    let mut doc = Document::new(260.0, 100.0);
+    let layer = doc.layers[0].id;
+    let ring = |x: f64| {
+        let mut p = shapes::rectangle(Rect::new(x, 10.0, x + 20.0, 30.0));
+        p.subpaths.extend(shapes::rectangle(Rect::new(x + 5.0, 15.0, x + 15.0, 25.0)).subpaths);
+        p
+    };
+    let g = Gradient::new(
+        GradientKind::Linear,
+        vec![GradientStop::new(0.0, Color::rgb(1.0, 1.0, 1.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 0.0))],
+    );
+    let shade = || Paint::Gradient(Box::new(GradientPaint::new(g.clone())));
+    let clips = [
+        (10.0, shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0)), solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None),
+        (70.0, ring(70.0), solid(Color::rgb(0.0, 0.0, 1.0)), Paint::None),
+        (130.0, ring(130.0), shade(), Paint::None),
+        (190.0, ring(190.0), solid(Color::rgb(0.0, 1.0, 0.0)), shade()),
+    ];
+    for (x, path, fill, stroke) in clips {
+        let mut clip = clipping(&mut doc, path);
+        let width = if matches!(stroke, Paint::None) { 0.0 } else { 2.0 };
+        clip.appearance = Appearance::basic(fill, stroke, width).into();
+        let inside = square(&mut doc, Rect::new(x - 5.0, 5.0, x + 10.0, 20.0), Color::gray(0.5));
+        let g = group(&mut doc, vec![clip, inside], true);
+        doc.insert(Some(layer), usize::MAX, g).unwrap();
+    }
+    doc
+}
+
+/// The writer counts the objects it writes as the reader counts the objects it reads: with room
+/// for as many objects as the reader reads, nothing is left out; with one less, art is left out,
+/// with a warning. With room for fewer, the reader never reads more objects than there is room for.
+#[test]
+fn the_writer_counts_objects_as_the_reader_reads_them() {
+    let objects = |out: &AiEditingOutput| crate::import::objects_read(&out.program).unwrap();
+    let limited = |out: &AiEditingOutput| out.warnings.iter().any(|w| w == writer::OBJECT_LIMIT);
+    for (name, doc) in counted() {
+        let all = export_ai_editing(&doc, &opts()).unwrap();
+        let read = objects(&all);
+        assert!(read > 0 && !limited(&all), "{name}: {read} objects, {:?}", all.warnings);
+        let room = export_within(&doc, &opts(), read).unwrap();
+        assert!(!limited(&room), "{name}: nothing is left out with room for {read} objects");
+        assert_eq!(room.program, all.program, "{name}");
+        for max in 0..read {
+            let out = export_within(&doc, &opts(), max).unwrap();
+            assert!(limited(&out), "{name}: art is left out with room for {max} of {read} objects");
+            assert!(objects(&out) <= max, "{name}: {} objects read with room for {max}", objects(&out));
+        }
+    }
+}
+
+/// An opacity mask whose art doesn't all fit within the object limit is left out with its art,
+/// and the object it masks is written without it; the art left out leaves room for the objects
+/// after it.
+#[test]
+fn a_mask_whose_art_passes_the_object_limit_is_left_out() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let mut masked = square(&mut doc, Rect::new(10.0, 10.0, 50.0, 50.0), Color::gray(0.5));
+    let a = square(&mut doc, Rect::new(0.0, 0.0, 30.0, 30.0), Color::rgb(1.0, 1.0, 1.0));
+    let b = square(&mut doc, Rect::new(30.0, 30.0, 60.0, 60.0), Color::rgb(1.0, 1.0, 1.0));
+    let art = group(&mut doc, vec![a, b], false);
+    masked.extras_mut().mask = Some(Box::new(OpacityMask::new(art, false)));
+    doc.insert(Some(layer), usize::MAX, masked).unwrap();
+    let after = square(&mut doc, Rect::new(100.0, 10.0, 140.0, 50.0), Color::gray(0.5));
+    doc.insert(Some(layer), usize::MAX, after).unwrap();
+    let text = |max: usize| {
+        let out = export_within(&doc, &opts(), max).unwrap();
+        let limited = out.warnings.iter().any(|w| w == writer::OBJECT_LIMIT);
+        (String::from_utf8_lossy(&out.program).replace("\r\n", "\n"), limited)
+    };
+    let read = crate::import::objects_read(&export_ai_editing(&doc, &opts()).unwrap().program).unwrap();
+    let (all, limited) = text(read);
+    assert!(!limited && all.contains("(AI9_Mask)"), "{all}");
+    let has_mask = |max: usize| text(max).0.contains("(AI9_Mask)");
+    let Some(fit) = (0..=read).find(|&max| has_mask(max)) else { panic!("the mask fits with room for {read} objects") };
+    assert!(fit > 2, "the mask needs room beyond the two squares: {fit}");
+    for max in fit..=read {
+        assert!(has_mask(max), "room for {max} of {read}, the mask fits in {fit}");
+    }
+    let (short, limited) = text(fit - 1);
+    assert!(limited);
+    assert!(!short.contains("(AI9_Mask)") && !short.contains("%_/ArtDictionary :\n%_/Mask"), "{short}");
+    assert_eq!(short.matches("\nf\n").count(), 2, "both squares are written: {short}");
+}
+
+/// A symbol's definition is written only when there is room for its instance too.
+#[test]
+fn a_symbol_definition_is_written_only_with_room_for_its_instance() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let a = square(&mut doc, Rect::new(0.0, 0.0, 10.0, 10.0), Color::gray(0.5));
+    let b = square(&mut doc, Rect::new(10.0, 10.0, 20.0, 20.0), Color::gray(0.5));
+    let art = group(&mut doc, vec![a, b], false);
+    doc.symbols.push(Symbol { dynamic: false, name: "Pair".into(), art: Arc::new(art) });
+    let placed = instance(&mut doc, "Pair", Affine::translate((50.0, 10.0)));
+    doc.insert(Some(layer), usize::MAX, placed).unwrap();
+    add_rect(&mut doc, Rect::new(100.0, 10.0, 110.0, 20.0));
+    let program = export_ai_editing(&doc, &opts()).unwrap().program;
+    let all = String::from_utf8_lossy(&program).replace("\r\n", "\n");
+    assert!(all.contains("%AI14_BeginSymbol") && all.contains("/SymbolInstance :"), "{all}");
+    let read = crate::import::objects_read(&program).unwrap();
+    for max in 0..read {
+        let out = export_within(&doc, &opts(), max).unwrap();
+        let text = String::from_utf8_lossy(&out.program).replace("\r\n", "\n");
+        let defined = text.contains("%AI14_BeginSymbol");
+        assert_eq!(defined, text.contains("/SymbolInstance :"), "room for {max} of {read}: {text}");
+        assert!(out.warnings.iter().any(|w| w == writer::OBJECT_LIMIT), "art is left out with room for {max} of {read} objects");
+        let objects = crate::import::objects_read(&out.program).unwrap();
+        assert!(objects <= max, "{objects} objects read with room for {max}");
+    }
+}
+
+/// The writer's limit is the reader's, which its warning names.
+#[test]
+fn the_object_limit_is_the_readers() {
+    assert_eq!(crate::import::MAX_EDITING_OBJECTS, 4_000_000);
+    assert!(writer::OBJECT_LIMIT.contains("4,000,000"));
+}
+
+/// Paths past the object limit are left out of a layer of many paths, with a warning: the paths
+/// that fit are written.
+#[test]
+fn paths_past_the_object_limit_are_left_out() {
+    let mut doc = Document::new(200.0, 100.0);
+    for i in 0..10 {
+        add_rect(&mut doc, Rect::new(f64::from(i) * 10.0, 0.0, f64::from(i) * 10.0 + 5.0, 5.0));
+    }
+    let out = export_within(&doc, &opts(), 6).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::OBJECT_LIMIT), "{:?}", out.warnings);
+    assert_eq!(crate::import::objects_read(&out.program).unwrap(), 6);
+    let text = String::from_utf8_lossy(&out.program).replace("\r\n", "\n");
+    assert_eq!(text.matches("\nf\n").count(), 6, "the first six paths are written");
 }
 
 /// On a canvas of the usual size, nested symbols whose instances multiply, written as their art in

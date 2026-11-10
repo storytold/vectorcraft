@@ -23,9 +23,11 @@ impl<'p> Builder<'p> {
             glyphs: None,
             text: None,
             text_as,
+            actual: Default::default(),
             images: HashMap::new(),
             image_keys: HashMap::new(),
             cmyk_keys: HashSet::new(),
+            separation_paints: HashMap::new(),
             opaque: HashSet::new(),
             warnings: vec![],
             fonts: HashMap::new(),
@@ -101,6 +103,7 @@ impl<'p> Builder<'p> {
         self.mask = None;
         self.masked.clear();
         self.marked.clear();
+        self.actual = Default::default();
         (self.scan, self.tag_at, self.aligned, self.paint_at) = (scan, 0, true, 0);
         if self.scan.overprints && self.scan.zero_mode {
             self.warn(OVERPRINT_ZERO_MODE);
@@ -582,8 +585,19 @@ impl<'p> Builder<'p> {
         Some(Paint::Pattern { pattern: name, xf })
     }
 
+    /// Image `st` of one ink (`w` × `h` pixels) as the paint of its ink at 100 % (a spot swatch, a
+    /// process plate or Registration, found by its colour space) and its tints as gray pixels
+    /// ([`crate::import_image::tint_gray`]). `None` for another image, an ink whose colour can't
+    /// be told, or tints that can't be read (with a warning): the image opens in RGB. The ink is
+    /// only marked used once the tints are read.
+    pub(super) fn separation_image(&mut self, st: &craft_pdf::syntax::object::Stream<'_>, w: u32, h: u32) -> Option<(Paint, Vec<u8>)> {
+        let space = self.colors.array_space(&crate::import_image::one_ink_space(st)?)?;
+        let gray = crate::import_image::tint_gray(st, w, h).map_err(|why| self.warn(why)).ok()?;
+        Some((self.colors.native(space, &[1.0])?.paint(), gray))
+    }
+
     pub(super) fn add_image(&mut self, key: u128, make: impl FnOnce() -> Option<(ImageBlob, u32, u32)>, xf: Affine) {
-        self.add_image_masked(key, make, xf, None);
+        self.add_image_masked(key, make, xf, None, None);
     }
 
     /// An image's alpha (its soft mask, stencil mask or colour key, at its own resolution) as a
@@ -626,12 +640,15 @@ impl<'p> Builder<'p> {
         Some(OpacityMask::new(art, true))
     }
 
+    /// An image of key `key` (its blob made by `make` the first time), placed by `xf`, with opacity
+    /// mask `mask` and the solid paint that colorizes it (`colorize`, for a grayscale image).
     pub(super) fn add_image_masked(
         &mut self,
         key: u128,
         make: impl FnOnce() -> Option<(ImageBlob, u32, u32)>,
         xf: Affine,
         mask: Option<OpacityMask>,
+        colorize: Option<Paint>,
     ) {
         let (k, w, h) = if let Some(v) = self.image_keys.get(&key).cloned() {
             v
@@ -652,6 +669,7 @@ impl<'p> Builder<'p> {
             NodeKind::Image(Box::new(ImageObject { key: k, width: w, height: h, xf, link: None, placement: Default::default(), pixels: None })),
         );
         n.extras_mut().mask = mask.map(Box::new);
+        n.extras_mut().colorize = colorize.map(Box::new);
         self.push_node(n);
     }
 
@@ -733,6 +751,7 @@ impl<'p> Builder<'p> {
         if self.text_as != TextAs::Text || self.nested > 0 {
             return false;
         }
+        let authored = self.actual.active();
         let key = o.font_cache_key();
         let glyph = o.glyph_id().to_u32();
         let (unicode, from_cid) = match o.as_unicode().filter(|u| !replacement(u)) {
@@ -757,6 +776,7 @@ impl<'p> Builder<'p> {
         let text: String = match unicode {
             Some(BfString::Char(c)) => c.to_string(),
             Some(BfString::String(s)) => s,
+            None if authored => String::new(),
             None => {
                 // Invisible text isn't kept as outlines: the caller says it was left out.
                 if paint.is_some() && o.as_unicode().is_some_and(|u| replacement(&u)) {
@@ -769,7 +789,7 @@ impl<'p> Builder<'p> {
         // Adobe's CID tables map some ideographs to their look-alike Kangxi radicals.
         let text: String = if from_cid { text.chars().map(unify_radical).collect() } else { text };
         let Some(at) = Placement::of(m) else { return false };
-        if text.is_empty() || text.chars().any(|c| c.is_control()) {
+        if !authored && (text.is_empty() || text.chars().any(|c| c.is_control())) {
             return false;
         }
         let width = o.advance_width().filter(|w| w.is_finite());
@@ -833,6 +853,9 @@ impl<'p> Builder<'p> {
             fill: if stroke.is_none() { paint } else { None },
             stroke,
         };
+        if authored {
+            return self.actual_glyph(o, m, at, look, opacity);
+        }
         let advance = width.map_or(at.size * 0.5, |w| w as f64 / 1000.0 * at.size * at.h_scale / 100.0);
         // A glyph set vertically is drawn from its origin, which the file puts the position
         // vector's vx (from the font's `W2`, else half its width from `W` or `DW`) to the left of

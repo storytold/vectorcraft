@@ -129,6 +129,13 @@ fn lent_composite_fonts_last_as_long_as_a_guard() {
     db.set_composite_font(&replaced);
     drop(lent);
     assert_eq!(db.composite_font("Lent").unwrap().parts.roman.size, 60.0);
+    // So does the same definition set while lent, after every guard lending it drops.
+    assert!(db.remove_composite_font("Lent"));
+    let (one, two) = (db.lend_composite_fonts(&fonts[..1]), db.lend_composite_fonts(&fonts[..1]));
+    assert!(!db.set_composite_font(&fonts[0]));
+    drop(one);
+    drop(two);
+    assert!(db.composite_font("Lent").is_some());
     // A guard whose font was removed doesn't give back a later guard's loan of that name.
     assert!(db.remove_composite_font("Lent"));
     let old = db.lend_composite_fonts(&fonts[..1]);

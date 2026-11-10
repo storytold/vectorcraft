@@ -7,6 +7,9 @@ impl Session {
     /// Run `f` on a mutable copy of the active document. Outside an interaction this records one
     /// undo step labelled `label`; inside one it just mutates (the interaction commits later).
     pub fn edit<T>(&mut self, label: &str, f: impl FnOnce(&mut Document, &mut Selection) -> Result<T>) -> Result<T> {
+        if self.script_running() {
+            return Err(EngineError::Busy);
+        }
         // An edit made while typing (the Transform panel) is a step of its own: inside the typing
         // session, the next keystroke's preview would start again from before it (#1881).
         if !self.previewing && cmd::typing_in_progress(self) {
@@ -225,10 +228,18 @@ impl Session {
     }
 
     pub fn begin_interaction(&mut self, label: &str) -> Result<()> {
+        if self.script_running() {
+            return Err(EngineError::Busy);
+        }
         // Typing in progress is kept first: a drag or a dialog's preview would otherwise start
         // from the snapshot taken before the typing, and drop it (#1881).
         if label != "Typing" && cmd::typing_in_progress(self) {
             cmd::settle_interaction(self)?;
+        }
+        // An edit the tool computes on another thread (a Shape Builder merge) is applied first too,
+        // so the snapshot the interaction previews from and goes back to holds it.
+        if !self.in_interaction() {
+            self.finish_tool_edit_later()?;
         }
         self.clear_deferred_overlay_cache();
         let paint = self.paint.clone();
@@ -257,6 +268,9 @@ impl Session {
 
     /// Re-apply `cmd` on top of the interaction snapshot (replacing the previous preview).
     pub fn preview(&mut self, cmd: &str, params: &Value) -> Result<Value> {
+        if self.script_running() {
+            return Err(EngineError::Busy);
+        }
         let (paint, restore_paint) = {
             let menu = self.menu.clone();
             let st = self.doc_mut()?;

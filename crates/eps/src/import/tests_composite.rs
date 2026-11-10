@@ -11,10 +11,10 @@ use vectorcraft_doc::NodeKind;
 
 use super::tests::{all, bounds, fill, read};
 
-const FONT: &[u8] = include_bytes!("../../../../assets/fonts/SourceSans3-Regular.ttf");
+pub(super) const FONT: &[u8] = include_bytes!("../../../../assets/fonts/SourceSans3-Regular.ttf");
 
 /// The glyph index of `c` in [`FONT`] and its advance width in ems.
-fn glyph(c: char) -> (u32, f64) {
+pub(super) fn glyph(c: char) -> (u32, f64) {
     let font = FontRef::new(FONT).unwrap();
     let gid = font.charmap().map(c).unwrap();
     let upem = f64::from(font.metrics(Size::unscaled(), LocationRef::default()).units_per_em);
@@ -24,7 +24,7 @@ fn glyph(c: char) -> (u32, f64) {
 
 /// `sfnts` strings of [`FONT`]: the first of odd length, ending in a padding byte that isn't part
 /// of the font, the rest split at even lengths.
-fn sfnts() -> String {
+pub(super) fn sfnts() -> String {
     let hex = |b: &[u8]| b.iter().map(|x| format!("{x:02x}")).collect::<String>();
     let mut out = format!("<{}00>\n", hex(&FONT[..20000]));
     for chunk in FONT[20000..].chunks(40000) {
@@ -250,4 +250,17 @@ fn unreadable_type42_data_read_again_runs_out_of_the_budget() {
          /Encoding [{picks}] def /FDepVector [{deps}] def FontName currentdict end definefont pop\n\
          /Comp findfont 50 scalefont setfont {{ ({s}) stringwidth pop pop }} loop"
     ));
+}
+
+/// Characters that map to no glyph (an empty `FDepVector`) cost nothing to draw, but finding that
+/// out reads the whole string: a `loop` showing, measuring or outlining a long string of them runs
+/// out of the operation budget instead of stalling the import.
+#[test]
+fn unmapped_composite_characters_in_a_loop_run_out_of_the_budget() {
+    let font = "16 dict begin /FontName /Comp def /FontType 0 def /FontMatrix [1 0 0 1 0 0] def /FMapType 2 def\n\
+                /Encoding [0] def /FDepVector [] def FontName currentdict end definefont pop\n\
+                /Comp findfont 50 scalefont setfont /s 100000 string def";
+    for body in ["{ 0 0 moveto s show } loop", "{ s stringwidth pop pop } loop", "{ newpath 0 0 moveto s false charpath } loop"] {
+        super::tests::runs_out_of_budget(&format!("{font} {body}"));
+    }
 }

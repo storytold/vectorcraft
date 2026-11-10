@@ -83,6 +83,23 @@ pub enum UiRequest {
     /// Place a file with these `file.place` params: a click or drag of the place cursor, when
     /// [`Session::place_cursor_requests`] is set.
     Place(Value),
+    /// A press held while the tool computed an edit on another thread was made now, at `pos` in the
+    /// document with [`crate::DocState::uid`] `doc`, with tool `tool` active (the selection tool Cmd
+    /// lent): the frontend does what it does after a press it hands over itself.
+    HeldPress {
+        doc: Option<u64>,
+        pos: Point,
+        tool: &'static str,
+    },
+}
+
+/// Pointer or key input that came while the active tool computed an edit on another thread
+/// ([`Tool::editing`]), made in order once the edit is applied ([`Session::tool_poll`],
+/// [`Session::finish_tool_edit`]).
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum HeldInput {
+    Pointer(PointerEvent),
+    Key(ToolKey, Mods),
 }
 
 impl Session {
@@ -106,6 +123,7 @@ impl Session {
 
     /// Choose a tool (the toolbar, its shortcut, MCP), finishing any pending tool work first.
     pub fn select_tool(&mut self, id: &str, view: ViewInfo) -> Result<()> {
+        self.finish_tool_edit_later()?;
         // Choosing a perspective tool shows the document's perspective grid; Hide Grid hides it
         // again, the tool staying chosen.
         if matches!(id, "perspectiveGrid" | "perspectiveSelection")
@@ -129,6 +147,8 @@ impl Session {
     /// Switch to tool `id` without choosing it afresh (back from a temporary tool: a hidden
     /// perspective grid stays hidden), finishing any pending tool work first.
     pub fn switch_tool(&mut self, id: &str, view: ViewInfo) -> Result<()> {
+        // The edit the tool computes on another thread and the input held for it come first.
+        self.finish_tool_edit_later()?;
         self.give_back_tool(view)?;
         if self.tool.id() == id {
             return Ok(());
@@ -257,7 +277,15 @@ impl Session {
 
     /// Give `t` the persistent options stored for it in `prefs`.
     fn restore_tool_settings(prefs: &Prefs, t: &mut dyn Tool) {
+        Self::restore_stores(prefs, t, |_| true);
+    }
+
+    /// Give `t` the persistent options stored for it in `prefs`, from the stores `wanted` accepts.
+    fn restore_stores(prefs: &Prefs, t: &mut dyn Tool, wanted: impl Fn(&str) -> bool) {
         for (store, keys) in settings::stores(t.id()) {
+            if !wanted(store) {
+                continue;
+            }
             let Some(saved) = prefs.tool_settings.get(store) else { continue };
             for k in keys {
                 if let Some(v) = saved.get(*k) {
@@ -267,6 +295,7 @@ impl Session {
         }
         // Alt switches the Pencil, Paintbrush or Blob Brush to Smooth, using Smooth Tool Options' Fidelity.
         if matches!(t.id(), "pencil" | "paintbrush" | "blobBrush")
+            && wanted("smooth")
             && let Some(v) = prefs.tool_settings.get("smooth").and_then(|s| s.get("fidelity"))
         {
             t.set_option("smoothFidelity", v);
@@ -336,6 +365,7 @@ impl Session {
             freeform_point: self.selected_freeform_point(),
             raster_sample: self.prefs.eyedropper.sample_size,
             preview_bounds: self.prefs.use_preview_bounds,
+            glyph_bounds: self.prefs.type_glyph_bounds,
             preview_memo: Some(&self.preview_memo),
             unit,
             stroke_unit,
@@ -402,8 +432,107 @@ impl Session {
         self.tool_panic.take().map_or(Ok(()), Err)
     }
 
-    /// Feed a pointer event to the active tool. Returns requests for the UI.
+    /// The active document (its uid) and its [`crate::History::step`].
+    fn history_step(&self) -> Option<(u64, (u64, u64))> {
+        self.active().map(|d| (d.uid, d.history.step()))
+    }
+
+    /// Tell the active tool when the history moved, or another document became active, since it
+    /// last handled a pointer event or was last told ([`vectorcraft_tools::Tool::history_moved`]).
+    /// A lent selection tool is not told.
+    fn tell_tool_history_moved(&mut self) {
+        if self.lender.is_some() {
+            return;
+        }
+        let now = self.history_step();
+        if self.tool_step.is_some_and(|seen| Some(seen) != now) {
+            self.tool.history_moved();
+        }
+        self.tool_step = now;
+    }
+
+    /// Feed a pointer event to the active tool. Returns requests for the UI. While the tool computes
+    /// an edit on another thread, a press and what follows it are held and made once the edit is
+    /// applied, in order ([`Session::tool_poll`]); moves of the pointer with no button held go to
+    /// the tool at once.
     pub fn pointer(&mut self, ev: &PointerEvent, view: ViewInfo) -> Result<Vec<UiRequest>> {
+        if self.script_running() {
+            return if ev.kind == PointerKind::Move { Ok(vec![]) } else { Err(EngineError::Busy) };
+        }
+        let n = self.next_input();
+        if ev.kind != PointerKind::Move && (!self.held_input.is_empty() || self.tool_edit_pending()) {
+            self.held_input.push_back((n, HeldInput::Pointer(*ev), view));
+            return Ok(vec![]);
+        }
+        let r = self.pointer_now(ev, view);
+        self.note_edit_start(n);
+        r
+    }
+
+    /// The number of the next pointer or key event handed to the session.
+    fn next_input(&mut self) -> u64 {
+        let n = self.input_count;
+        self.input_count = n.wrapping_add(1);
+        n
+    }
+
+    /// How many pointer and key events have been handed to the session ([`Session::pointer`],
+    /// [`Session::tool_key`]); with [`Session::input_applied`], a frontend tells when the events it
+    /// handed over have been made.
+    pub fn input_count(&self) -> u64 {
+        self.input_count
+    }
+
+    /// Have the events numbered `from..to` ([`Session::input_count`] before and after handing them
+    /// over) been made, and the edit they started on another thread applied?
+    pub fn input_applied(&self, from: u64, to: u64) -> bool {
+        let ours = |n: &u64| (from..to).contains(n);
+        !self.held_input.iter().any(|(n, ..)| ours(n)) && !(self.tool_edit_pending() && self.edit_started_by.as_ref().is_some_and(ours))
+    }
+
+    /// After event `n` was made: the event that started the edit being computed, if one is.
+    fn note_edit_start(&mut self, n: u64) {
+        if !self.tool_edit_pending() {
+            self.edit_started_by = None;
+        } else if self.edit_started_by.is_none() {
+            self.edit_started_by = Some(n);
+        }
+    }
+
+    /// Is the active tool, or the tool Cmd lent the selection tool's drag away from, computing an
+    /// edit on another thread?
+    fn tool_edit_pending(&self) -> bool {
+        self.tool.editing() || self.lender.as_ref().is_some_and(|t| t.editing())
+    }
+
+    /// Makes the input held while the tool computed an edit, in order, until a held gesture starts
+    /// another such edit.
+    fn replay_held_input(&mut self) -> Result<Vec<UiRequest>> {
+        let mut ui = vec![];
+        let mut failed = None;
+        while !self.tool_edit_pending()
+            && let Some((n, input, view)) = self.held_input.pop_front()
+        {
+            let r = match input {
+                HeldInput::Pointer(ev) => self.pointer_now(&ev, view).map(|mut r| {
+                    if ev.kind == PointerKind::Down {
+                        r.push(UiRequest::HeldPress { doc: self.active().map(|d| d.uid), pos: ev.pos, tool: self.tool.id() });
+                    }
+                    r
+                }),
+                HeldInput::Key(key, mods) => self.tool_key_now(key, mods, view),
+            };
+            self.note_edit_start(n);
+            match r {
+                Ok(r) => ui.extend(r),
+                // The input after it is still made, as it was when each event came on its own.
+                Err(e) => failed = failed.or(Some(e)),
+            }
+        }
+        failed.map_or(Ok(ui), Err)
+    }
+
+    fn pointer_now(&mut self, ev: &PointerEvent, view: ViewInfo) -> Result<Vec<UiRequest>> {
         self.pointer_event(ev, view, true)
     }
 
@@ -414,8 +543,25 @@ impl Session {
     /// nothing and a click opens no size dialog. The tool gets back the persistent options it had
     /// when the press began, and none of the press's changes to them are stored. A dropped Type
     /// press restores the prior selection. The freeform gradient point selected once the tool
-    /// took the press is selected again.
+    /// took the press is selected again. A press held while the tool computes an edit on another
+    /// thread has not reached the tool: it is removed from the held input with the pointer events
+    /// and tool keys held after it, and the tool is left as it is. A perspective plane key held
+    /// after it stays held, since the plane it picks outlasts a dropped press. Pointer events held
+    /// after the last held release belong to the press the tool has, and are removed with it.
     pub fn drop_tool_press(&mut self, view: ViewInfo) -> Result<()> {
+        let (from, held) = self.held_press();
+        let keep: Vec<bool> = (self.held_input.iter().enumerate())
+            .map(|(j, (_, input, _))| match input {
+                _ if j < from => true,
+                HeldInput::Pointer(_) => false,
+                HeldInput::Key(key, _) => !held || self.plane_key(*key).is_some(),
+            })
+            .collect();
+        let mut keep = keep.into_iter();
+        self.held_input.retain(|_| keep.next().unwrap_or(true));
+        if held {
+            return Ok(());
+        }
         // Nothing to roll back without a document; the tool still drops the press and gets the release.
         let _ = self.cancel_interaction();
         let before = self.press_options.take();
@@ -457,6 +603,19 @@ impl Session {
         r.map(drop)
     }
 
+    /// Where the input of the press in progress starts in the held input, and whether the press
+    /// itself is held: the last held press when no release is held after it; otherwise the input
+    /// after the last held release (all of it when none is held), which follows a press the tool
+    /// already has.
+    fn held_press(&self) -> (usize, bool) {
+        let ends = |kind: PointerKind| matches!(kind, PointerKind::Down | PointerKind::Up);
+        match self.held_input.iter().rposition(|(_, input, _)| matches!(input, HeldInput::Pointer(ev) if ends(ev.kind))) {
+            Some(i) if matches!(self.held_input.get(i), Some((_, HeldInput::Pointer(ev), _)) if ev.kind == PointerKind::Down) => (i, true),
+            Some(i) => (i + 1, false),
+            None => (0, false),
+        }
+    }
+
     /// The options of `t` that [`Self::store_tool_settings`] stores.
     fn persistent_options(t: &dyn Tool) -> Map<String, Value> {
         let opts = t.options();
@@ -495,7 +654,9 @@ impl Session {
             return r;
         }
         self.leave_draw_inside(ev, view)?;
+        self.tell_tool_history_moved();
         let ev = &self.lend_selection_tool(ev);
+        let lent = self.lender.is_some();
         let mut acts = self.with_tool_cx(view, |t, cx| t.pointer(cx, ev));
         if !keep {
             acts.retain(|a| matches!(a, Action::Cancel | Action::Notify(_)));
@@ -507,6 +668,11 @@ impl Session {
             }
             self.apply_actions(acts)
         });
+        // The tool's own edits do not move the history for it. A selection tool that Cmd lends
+        // edits for the lender, which hears of the edit at its next event.
+        if !lent {
+            self.tool_step = self.history_step();
+        }
         match ev.kind {
             PointerKind::Down => self.press_point = Some(self.freeform_point),
             PointerKind::Up => self.press_point = None,
@@ -584,19 +750,151 @@ impl Session {
         self.tool.wants_samples()
     }
 
-    /// Is the active tool waiting for work it runs on another thread ([`Tool::waiting`])?
+    /// Is the active tool waiting for work it runs on another thread ([`Tool::waiting`]), is input
+    /// held until an edit it computes is applied, or are requests for the UI left from making it?
     pub fn tool_waiting(&self) -> bool {
-        self.tool.waiting()
+        self.tool.waiting() || !self.held_input.is_empty() || !self.held_ui.is_empty()
     }
 
     /// Lets the active tool check on the work [`Session::tool_waiting`] reports, and with `wait`
-    /// wait for it to finish ([`Tool::poll`]).
-    pub fn tool_poll(&mut self, view: ViewInfo, wait: bool) -> Result<()> {
-        self.with_tool_cx(view, |t, cx| t.poll(cx, wait));
-        self.take_tool_panic()
+    /// wait for it to finish ([`Tool::poll`]); an edit the work made is applied, and then the input
+    /// held for it is made. Returns requests for the UI, those left from making held input where
+    /// nothing could take them first ([`Session::finish_tool_edit_later`]).
+    pub fn tool_poll(&mut self, view: ViewInfo, wait: bool) -> Result<Vec<UiRequest>> {
+        if self.settling_tool_edit {
+            return Ok(vec![]);
+        }
+        self.settling_tool_edit = true;
+        let r = self.tool_poll_now(view, wait);
+        self.settling_tool_edit = false;
+        // On an error the requests left wait for the next poll.
+        let r = r?;
+        let mut ui = std::mem::take(&mut self.held_ui);
+        ui.extend(r);
+        Ok(ui)
     }
 
+    fn tool_poll_now(&mut self, view: ViewInfo, wait: bool) -> Result<Vec<UiRequest>> {
+        let acts = self.with_tool_cx(view, |t, cx| t.poll(cx, wait));
+        self.take_tool_panic()?;
+        let applied = !acts.is_empty();
+        let mut ui = self.apply_actions(acts)?;
+        if !self.tool_edit_pending() {
+            self.edit_started_by = None;
+            // The input held for an edit applied now is made at the next poll, so what waits for the
+            // edit alone (a `ui.pointer` reply) sees the document as the edit left it.
+            if !applied {
+                ui.extend(self.replay_held_input()?);
+            }
+        }
+        Ok(ui)
+    }
+
+    /// Is the active tool computing an edit on another thread ([`Tool::editing`]), or is input held
+    /// until it is applied?
+    pub fn tool_editing(&self) -> bool {
+        self.tool_edit_pending() || !self.held_input.is_empty()
+    }
+
+    /// Waits for the edit the active tool computes on another thread and applies it
+    /// ([`Tool::finish_edit`]), then makes the input held for it, waiting in turn for an edit that
+    /// starts, so what runs next sees the document as the gestures left it. Commands, saves, option
+    /// changes, interactions, undo scopes and tool or document switches call it first. Returns
+    /// requests for the UI, with those left from earlier ([`Session::finish_tool_edit_later`]); on
+    /// an error, the next [`Session::tool_poll`] returns them.
+    pub fn finish_tool_edit(&mut self) -> Result<Vec<UiRequest>> {
+        if self.settling_tool_edit {
+            return Ok(vec![]);
+        }
+        let mut ui = std::mem::take(&mut self.held_ui);
+        if self.tool_editing() {
+            self.settling_tool_edit = true;
+            let r = self.finish_tool_edit_now();
+            self.settling_tool_edit = false;
+            match r {
+                Ok(r) => ui.extend(r),
+                Err(e) => {
+                    ui.append(&mut self.held_ui);
+                    self.held_ui = ui;
+                    return Err(e);
+                }
+            }
+        }
+        Ok(ui)
+    }
+
+    /// [`Session::finish_tool_edit`] for a caller that cannot hand requests to the UI (a command, a
+    /// tool switch): the next [`Session::tool_poll`] returns them, and [`Session::tool_waiting`]
+    /// holds until then.
+    pub(crate) fn finish_tool_edit_later(&mut self) -> Result<()> {
+        let ui = self.finish_tool_edit()?;
+        self.held_ui.extend(ui);
+        Ok(())
+    }
+
+    fn finish_tool_edit_now(&mut self) -> Result<Vec<UiRequest>> {
+        let mut ui = vec![];
+        let mut failed = None;
+        loop {
+            match self.finish_pending_edit() {
+                Ok(r) => ui.extend(r),
+                Err(e) => failed = failed.or(Some(e)),
+            }
+            // A tool that cannot finish its edit keeps the input held.
+            if self.tool_edit_pending() {
+                break;
+            }
+            self.edit_started_by = None;
+            if self.held_input.is_empty() {
+                break;
+            }
+            match self.replay_held_input() {
+                Ok(r) => ui.extend(r),
+                Err(e) => failed = failed.or(Some(e)),
+            }
+        }
+        match failed {
+            None => Ok(ui),
+            Some(e) => {
+                self.held_ui.extend(ui);
+                Err(e)
+            }
+        }
+    }
+
+    /// Waits for the edit being computed and applies it: the active tool's, or that of the tool
+    /// Cmd lent the selection tool's drag away from, which is active meanwhile.
+    fn finish_pending_edit(&mut self) -> Result<Vec<UiRequest>> {
+        if self.tool.editing() {
+            let acts = self.with_tool_cx(self.last_view, |t, cx| t.finish_edit(cx));
+            self.take_tool_panic()?;
+            return self.apply_actions(acts);
+        }
+        let Some(lender) = self.lender.take_if(|t| t.editing()) else { return Ok(vec![]) };
+        let lent = std::mem::replace(&mut self.tool, lender);
+        let acts = self.with_tool_cx(self.last_view, |t, cx| t.finish_edit(cx));
+        let r = self.take_tool_panic().and_then(|()| self.apply_actions(acts));
+        self.lender = Some(std::mem::replace(&mut self.tool, lent));
+        r
+    }
+
+    /// A key for the active tool. While the tool computes an edit on another thread, the key is held
+    /// and made once the edit is applied, after the input held before it.
     pub fn tool_key(&mut self, key: ToolKey, mods: Mods, view: ViewInfo) -> Result<Vec<UiRequest>> {
+        if self.script_running() {
+            return Err(EngineError::Busy);
+        }
+        let n = self.next_input();
+        if self.tool_editing() {
+            self.held_input.push_back((n, HeldInput::Key(key, mods), view));
+            return Ok(vec![]);
+        }
+        let r = self.tool_key_now(key, mods, view);
+        self.note_edit_start(n);
+        r
+    }
+
+    fn tool_key_now(&mut self, key: ToolKey, mods: Mods, view: ViewInfo) -> Result<Vec<UiRequest>> {
         // 1–4 pick the active perspective plane while the grid is shown.
         if let Some(plane) = self.plane_key(key) {
             self.execute("perspective.plane.set", &serde_json::json!({ "plane": plane.id() }))?;
@@ -619,6 +917,9 @@ impl Session {
 
     /// Typed text for the active tool (Type tool).
     pub fn tool_text(&mut self, text: &str, view: ViewInfo) -> Result<Vec<UiRequest>> {
+        if self.script_running() {
+            return Err(EngineError::Busy);
+        }
         let acts = self.with_tool_cx(view, |t, cx| t.text_input(cx, text));
         self.take_tool_panic()?;
         self.apply_actions(acts)
@@ -740,6 +1041,11 @@ impl Session {
         self.tool.transforming()
     }
 
+    /// Is the active tool resizing the selection by a bounding-box handle?
+    pub fn tool_resizing(&self) -> bool {
+        self.tool.resizing()
+    }
+
     /// With Real-time Drawing off, how far a Selection-tool move drag has carried the selection
     /// so far: the document moves on release, and the bounding box shows at this offset meanwhile.
     pub fn deferred_move(&self) -> Option<vectorcraft_geom::Vec2> {
@@ -763,7 +1069,15 @@ impl Session {
         self.plane_key(key).is_some() || self.with_tool_cx(view, |t, cx| t.claims_key(cx, key))
     }
 
+    /// Has the active tool started something that Escape ends while no button is pressed (see
+    /// `Tool::ends_on_escape`)?
+    pub fn tool_ends_on_escape(&mut self, view: ViewInfo) -> bool {
+        self.with_tool_cx(view, |t, cx| t.ends_on_escape(cx))
+    }
+
     pub fn overlays(&mut self, view: ViewInfo) -> Vec<Overlay> {
+        // The Blend tool's first pick is not marked after an edit that dropped it.
+        self.tell_tool_history_moved();
         let mut v = self.with_tool_cx(view, |t, cx| t.overlays(cx));
         // The Type tools draw the ports of selected type themselves.
         if !matches!(self.tool.id(), "type" | "areaType" | "typeOnPath" | "verticalType" | "verticalAreaType" | "verticalTypeOnPath") {
@@ -795,7 +1109,8 @@ impl Session {
     /// it is on, makes the drawing tools' a crosshair, [`Cursor::precise`]). With Cmd held, the pointer of the selection tool a
     /// press would borrow ([`Self::lend_selection_tool`]).
     pub fn cursor(&mut self, p: Point, mods: Mods, view: ViewInfo) -> Cursor {
-        let lent = if mods.cmd && self.lender.is_none() { self.lent_tool(self.tool.id(), &mods) } else { None };
+        // While an edit is computed, a Cmd press is held for the active tool, which shows it is busy.
+        let lent = if mods.cmd && self.lender.is_none() && !self.tool_editing() { self.lent_tool(self.tool.id(), &mods) } else { None };
         let c = match lent {
             Some(id) => {
                 let lent = self.make_tool(id);
@@ -818,6 +1133,9 @@ impl Session {
         self.tool.options()
     }
     pub fn set_tool_option(&mut self, key: &str, v: &Value) {
+        // The active tool's edit being computed is applied with the options it was started with. A
+        // failure to apply it was the edit's own, and the option is set all the same.
+        let _ = self.finish_tool_edit_later();
         if key == "queue" && self.tool.id() == "place" {
             self.note_place_queue_roots();
         }
@@ -874,7 +1192,10 @@ impl Session {
                 }
                 Self::restore_tool_settings(&self.prefs, lender);
             }
-            Self::restore_tool_settings(&self.prefs, self.tool.as_mut());
+            // Only the stores it shares with the tool set: the active tool's own options stay as they
+            // are, also in the middle of a drag that Escape can cancel.
+            let set = other.id();
+            Self::restore_stores(&self.prefs, self.tool.as_mut(), |store| settings::stores(set).any(|(s, _)| s == store));
         }
         out
     }
@@ -888,6 +1209,10 @@ impl Session {
             && vectorcraft_tools::tool_info(t).is_none()
         {
             return Err(format!("unknown tool `{t}`"));
+        }
+        // The active tool's merge being computed is applied with the options it was started with.
+        if tool.is_none_or(|t| t == self.tool.id()) {
+            self.finish_tool_edit_later().map_err(|e| e.to_string())?;
         }
         let mut values = p.get("values").and_then(Value::as_object).cloned().unwrap_or_default();
         if let Some(k) = p.get("key").and_then(Value::as_str) {
@@ -1059,25 +1384,48 @@ impl Session {
         Ok(ui)
     }
 
-    /// Canvas feedback while Real-time Drawing is off: run the pending preview command once, take
-    /// outlines from the objects it touched, then put the document back at the interaction snapshot.
-    fn deferred_preview_overlays_from_command(&mut self, cmd: &str, p: &Value) -> Vec<Overlay> {
-        if self.deferred_overlay_cache.as_ref().is_some_and(|(c, params, _)| c == cmd && params == p) {
-            return self.deferred_overlay_cache.as_ref().map(|(_, _, o)| o.clone()).unwrap_or_default();
+    /// With Real-time Drawing off, the selection's transform box ([`Session::transform_box`]) as the
+    /// pending preview of a handle resize leaves it, measured once per preview step; `None` when no
+    /// such preview is pending, or when the preview fails.
+    pub fn deferred_transform_box(&mut self) -> Option<vectorcraft_doc::OrientedBox> {
+        if !self.tool.resizing() {
+            return None;
         }
+        let (cmd, p) = self.unapplied_interaction_preview()?;
+        self.deferred_feedback(&cmd, &p)?.transform_box
+    }
+
+    fn deferred_preview_overlays_from_command(&mut self, cmd: &str, p: &Value) -> Vec<Overlay> {
+        self.deferred_feedback(cmd, p).map(|f| f.overlays.clone()).unwrap_or_default()
+    }
+
+    /// Canvas feedback while Real-time Drawing is off: run the pending preview command once, take
+    /// outlines from the objects it touched (and, during a handle resize, their transform box), then
+    /// put the document back at the interaction snapshot.
+    fn deferred_feedback(&mut self, cmd: &str, p: &Value) -> Option<&DeferredFeedback> {
+        if !self.deferred_overlay_cache.as_ref().is_some_and(|f| f.cmd == cmd && f.params == *p) {
+            let feedback = self.measure_deferred_preview(cmd, p)?;
+            self.deferred_overlay_cache = Some(feedback);
+        }
+        self.deferred_overlay_cache.as_ref()
+    }
+
+    fn measure_deferred_preview(&mut self, cmd: &str, p: &Value) -> Option<DeferredFeedback> {
         let (snapshot, selection, revision, paint, interaction_fields) = {
-            let Some(st) = self.active() else { return vec![] };
-            let Some(it) = st.interaction.as_ref() else { return vec![] };
+            let st = self.active()?;
+            let it = st.interaction.as_ref()?;
             if !std::sync::Arc::ptr_eq(&it.doc, &st.doc) {
-                return vec![];
+                return None;
             }
             let interaction_fields = (it.preview.clone(), it.copies.clone(), it.perspective_again.clone());
             (st.doc.clone(), st.selection.clone(), st.revision, self.pending_paint.clone(), interaction_fields)
         };
-        let overlays = if self.preview(cmd, p).is_ok() {
-            self.active().map(|st| outlines_for_selection(&st.doc, &st.selection)).unwrap_or_default()
+        let (overlays, transform_box) = if self.preview(cmd, p).is_ok() {
+            let overlays = self.active().map(|st| outlines_for_selection(&st.doc, &st.selection)).unwrap_or_default();
+            let objects = self.active().map(|st| st.selection.objects.clone()).unwrap_or_default();
+            (overlays, if self.tool.resizing() { self.transform_box(&objects) } else { None })
         } else {
-            vec![]
+            (vec![], None)
         };
         if let Ok(st) = self.doc_mut() {
             st.doc = snapshot;
@@ -1090,9 +1438,16 @@ impl Session {
             }
         }
         self.pending_paint = paint;
-        self.deferred_overlay_cache = Some((cmd.to_string(), p.clone(), overlays.clone()));
-        overlays
+        Some(DeferredFeedback { cmd: cmd.to_string(), params: p.clone(), overlays, transform_box })
     }
+}
+
+/// What the canvas shows for a deferred preview: see [`Session::deferred_transform_box`].
+pub(crate) struct DeferredFeedback {
+    cmd: String,
+    params: Value,
+    overlays: Vec<Overlay>,
+    transform_box: Option<vectorcraft_doc::OrientedBox>,
 }
 
 /// The most points the outlines of [`outlines_for_selection`] are drawn for, the same number as the

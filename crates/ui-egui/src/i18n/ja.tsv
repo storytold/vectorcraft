@@ -76,6 +76,10 @@ digits	Malayalam	マラヤーラム数字
 	Stylistic	スタイリスティック
 	Mojikumi Set	文字組み
 	Kinsoku Set	禁則処理
+	Kinsoku Shori Type	禁則調整方式
+	Push In First	追い込み優先
+	Push Out First	追い出し優先
+	Push Out Only	追い出しのみ
 	Hard	強い禁則
 	Soft	弱い禁則
 	Latin	欧文
@@ -506,6 +510,17 @@ digits	Malayalam	マラヤーラム数字
 	Inflate	膨張
 	Select objects, then pick an object type to give them a 3D effect.	オブジェクトを選択してから、オブジェクトの種類を選んで 3D 効果を適用してください。
 	Extrude & Bevel…	押し出しとベベル…
+	3D (Classic)	3D（クラシック）
+	Extrude & Bevel (Classic)…	押し出しとベベル（クラシック）…
+	Surface	表面
+	Wireframe	ワイヤーフレーム
+	No Shading	陰影なし
+	Plastic	プラスチック
+	Highlight Intensity	ハイライトの強さ
+	Highlight Size	ハイライトのサイズ
+	Blend Steps	ブレンドの階調
+	Shading Color	陰影のカラー
+	Draw Hidden Faces	隠れた面を描画
 	Revolve…	回転体…
 	Inflate…	膨張…
 	Materials…	マテリアル…
@@ -612,6 +627,7 @@ digits	Malayalam	マラヤーラム数字
 	Guides	ガイド
 	Hide Guides	ガイドを隠す
 	Lock Guides	ガイドをロック
+	Lock Guides by Default	ガイドを初期設定でロック
 	Make Guides	ガイドを作成
 	Release Guides	ガイドを解除
 	Clear Guides	ガイドを消去
@@ -699,6 +715,11 @@ digits	Malayalam	マラヤーラム数字
 	Color	カラー
 	Color Guide	カラーガイド
 	Color Themes	カラーテーマ
+	Color Wheel	カラーホイール
+	Hue ring	色相リング
+	Saturation and brightness	彩度と明るさ
+	Color field	カラーフィールド
+	{name1} {value1}, {name2} {value2}	{name1} {value1}、{name2} {value2}
 	CSS Properties	CSS プロパティ
 	Document Info	ドキュメント情報
 	Flattener Preview	分割・統合プレビュー
@@ -1056,7 +1077,6 @@ antiAlias	Sharp	シャープ
 	Update While Dragging	ドラッグ中に更新
 	Hide Video Rulers	ビデオ定規を隠す
 	Background Contents	背景のカラー
-	Background Contents:	背景のカラー:
 	Background:	背景:
 	Bar Graph Tool	棒グラフツール
 	Baseline Shift	ベースラインシフト
@@ -1233,6 +1253,7 @@ antiAlias	Sharp	シャープ
 	Coming soon — tracked in the parity plan	近日対応予定
 	Command Click to Select Objects Behind	Command+クリックで背面のオブジェクトを選択
 	Command Dialog	コマンドダイアログ
+	Command API Reference	コマンド API リファレンス
 	Community	コミュニティ
 	Compatibility:	互換性:
 	Compatible Gradient and Gradient Mesh Printing	互換性のあるグラデーションとグラデーションメッシュのプリント
@@ -1282,7 +1303,6 @@ antiAlias	Sharp	シャープ
 	Corners…	コーナー…
 	Chamfer	面取り
 	Create Clipping Mask	クリッピングマスクを作成
-	Create Document	ドキュメントを作成
 	Create From:	作成元:
 	Create Graph	グラフを作成
 	Create New Layer	新規レイヤーを作成
@@ -2342,7 +2362,6 @@ antiAlias	Sharp	シャープ
 	New Symbol…	新規シンボル…
 	New Workspace	新規ワークスペース
 	New file	新規ファイル
-	New from Template	テンプレートから新規作成
 	New theme from the current color	現在のカラーから新規テーマ
 	New {kind} Style…	新規{kind}スタイル…
 	Next	次へ
@@ -2885,6 +2904,7 @@ mark-style	Japanese	日本式
 	Save PDF Preset	PDF プリセットを保存
 	Save Perspective Grid Preset	遠近グリッドプリセットを保存
 	Save Preset	プリセットを保存
+	Save Document Preset	ドキュメントプリセットを保存
 	Preset {number}	プリセット {number}
 	Save Preset…	保存…
 	Save Print Preset	プリントプリセットを保存
@@ -3233,7 +3253,6 @@ mark-style	Japanese	日本式
 	Target Contents	内容をターゲット
 	Target:	ターゲット:
 	Templates Folder	テンプレートフォルダー
-	Templates…	テンプレート…
 	Text Displayed in Cell:	セルに表示するテキスト:
 	Text Export Options	テキスト書き出しオプション
 	Text Import Options	テキスト読み込みオプション
@@ -3264,6 +3283,8 @@ mark-style	Japanese	日本式
 	Tile Range:	分割範囲:
 	Tile Type:	タイルの種類:
 	Tiles are numbered across, then down; leave the range empty for every tile.	タイルは左から右、上から下の順に番号が付きます。範囲を空にするとすべてのタイルが対象です。
+	Copies per Sheet (as many as fit, in a grid)	用紙ごとに複数コピー (収まるだけグリッド状に配置)
+	Gutter:	間隔:
 	Toggle Fill/Stroke Focus	塗り／線の切り替え
 	Toggle Selection	選択を切り替え
 	Toggle single/double column	1 列／2 列を切り替え
@@ -3984,7 +4005,7 @@ axis	Both	両方
 	Dock to Bottom	下部にドッキング
 	Dock Control Bar	コントロールバーをドッキング
 	Drag to float the toolbar	ドラッグしてツールバーをフローティング
-	Drag to the window's left edge to dock	ウィンドウの左端までドラッグしてドッキング
+	Drag to the window's left or right edge to dock	ウィンドウの左端または右端までドラッグしてドッキング
 	Float Tool Group	ツールグループをフローティング
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
@@ -4492,7 +4513,10 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	表示に使われるフォントの 1 行に対して低すぎるフレーム内のエリア内文字は、フレームを高くしました ({_1}): そうしないと文字が表示されません
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	グラデーション「{name}」はファイル内で定義されていません: 代わりに単色を使用しています
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	VectorCraft がまだ読み込めないブラシ {_1} 個はブラシパネルに追加されませんでした
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	塗りや線が複数ある、または効果やブラシを適用したオブジェクト {_1} 個は見た目のまま読み込まれました: アピアランスはまだ編集できません
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	塗りや線が複数ある、可変幅の線がある、または効果やブラシを適用したオブジェクト {_1} 個は見た目のまま読み込まれました: アピアランスはまだ編集できません
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	名前 `{name}` は UTF-8 ではないため {label} として読み込みました: 正しくない場合は別の legacyNameEncoding でファイルを開いてください
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	名前 `{name}` は UTF-8 ではなく、一部は {label} としても無効です: 別の legacyNameEncoding でファイルを開いてください
+@msg	more names that aren't UTF-8 were read as {label} ({count})	UTF-8 ではないほかの名前を {label} として読み込みました ({count})
 @msg	patterns nested too deeply are filled with mid-grey	入れ子が深すぎるパターンは中間のグレーで塗りつぶされています
 @msg	shadings of an unknown type were left out	種類が不明なシェーディングは除外されました
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	関数の種類が不明なシェーディングは中間の色で塗りつぶされています
@@ -4681,6 +4705,13 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	print settings are not an object	プリント設定がオブジェクト形式ではありません
 @msg	no colour group `{g}`	カラーグループ `{g}` が見つかりません
 @msg	select artwork (or a colour group) to recolor	再配色するアートワーク (またはカラーグループ) を選択してください
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	再配色が完了しました。変更されなかったもの: {locked}、{hidden}
+@msg	Recolor completed; {objects} were left unchanged	再配色が完了しました。変更されなかったもの: {objects}
+@msg	Recolor completed; {objects} was left unchanged	再配色が完了しました。変更されなかったもの: {objects}
+@msg	1 locked object	ロックされたオブジェクト 1 個
+@msg	{n} locked objects	ロックされたオブジェクト {n} 個
+@msg	1 hidden object	非表示のオブジェクト 1 個
+@msg	{n} hidden objects	非表示のオブジェクト {n} 個
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	「ブラウザーでプレビュー」にはデスクトップアプリが必要です (Web 版では代わりにファイルをダウンロードします)
 @msg	no file system here	この環境にはファイルシステムがありません
 @msg	nothing to preview	プレビューするものがありません
@@ -4771,6 +4802,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	「{name}」を読み込みました。{n} 個のステップは省きました
 @msg	not an action set file	アクションセットファイルではありません
 @msg	the action set file is larger than 8 MiB	アクションセットファイルが 8 MiB を超えています
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: リファレンスが {MAX_BYTES} バイトを超えます
 @msg	the action set file holds more than 1,000 actions	アクションセットファイルのアクションが 1,000 個を超えています
 @msg	the action set file needs a later version of VectorCraft	このアクションセットファイルには新しいバージョンの VectorCraft が必要です
 @msg	an action in the action set file has more than 10,000 steps	アクションセットファイルに 10,000 ステップを超えるアクションがあります
@@ -4787,6 +4819,28 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the library item is damaged	ライブラリの項目が破損しています
 @msg	{_1} font families available	{_1} 個のフォントファミリーを使用できます
 @msg	{_1} has no {_2} style	{_1} には {_2} スタイルがありません
+	Run	実行
+	Run Script	スクリプトを実行
+	Stop Script	スクリプトを停止
+	Show External Script Warning	外部スクリプトの警告を表示
+	A Script Is Running	スクリプトの実行中
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	スクリプトは開いているドキュメントを変更でき、実行するコマンドを通じてファイルを書き込むこともできます。信頼できるスクリプトだけを実行してください。
+	Do not show this warning again	今後この警告を表示しない
+	Stop the script and undo what it did? Then quit again.	スクリプトを停止して変更を取り消しますか？その後、もう一度終了してください。
+	This script has added a great many objects. Continue, or stop it and undo what it did?	このスクリプトは非常に多くのオブジェクトを追加しました。続行しますか、それとも停止して変更を取り消しますか？
+@msg	Choose a .js or .jsx script	.js または .jsx スクリプトを選択してください
+@msg	Ran {name}	{name} を実行しました
+@msg	The script was stopped and its changes were undone	スクリプトを停止し、変更を取り消しました
+@msg	a script is running: stop it or wait for it to finish	スクリプトの実行中です: 停止するか、終了するまでお待ちください
+@msg	this is a compiled script, which cannot be run; use its source text	これはコンパイル済みのスクリプトなので実行できません。ソーステキストを使用してください
+@msg	the script is not UTF-8 text	スクリプトは UTF-8 テキストではありません
+@msg	the script is too large to run	スクリプトが大きすぎて実行できません
+@msg	a drag or an undo group is open; finish it before running a script	ドラッグまたは取り消しグループが開いています。スクリプトを実行する前に完了してください
+@msg	the script left a document that cannot be kept	スクリプトが保持できないドキュメントを残しました
+@msg	the script's run is no longer available	スクリプトの実行は利用できなくなりました
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	失敗したコマンドが元に戻せない取り消し手順を変更したため、スクリプトを停止しました
+@msg	a recovery copy could not be written, so the script was not run	復元用のコピーを書き込めなかったため、スクリプトは実行されませんでした
+@msg	Running a script	スクリプトを実行中
 @msg	Copied the script report	スクリプトのレポートをコピーしました
 @msg	Exported {path}	{path} を書き出しました
 @msg	no CSS to copy: select objects with CSS of their own	コピーする CSS がありません: 独自の CSS を持つオブジェクトを選択してください
@@ -4938,6 +4992,10 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the PSD file is cut short	PSD ファイルが途中で切れています
 @msg	the PSD file's header is damaged	PSD ファイルのヘッダーが破損しています
 @msg	the PSD file's image data can't be read: {e}	PSD ファイルの画像データを読み込めません：{e}
+@msg	the JPEG XL file is cut short	JPEG XL ファイルが途中で切れています
+@msg	the JPEG XL container is too large to read	JPEG XL コンテナが大きすぎて読み込めません
+@msg	CMYK JPEG XL images can't be read	CMYK の JPEG XL 画像は読み込めません
+@msg	the JPEG XL file can't be read: {e}	JPEG XL ファイルを読み込めません：{e}
 	Video	ビデオ
 	De-Interlace…	インターレース解除…
 	De-Interlace	インターレース解除
@@ -5202,7 +5260,7 @@ lighting	Light	ライト
 	Bevel both sides	両面にベベル
 	Presets	プリセット
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	1 つのオブジェクトに適用できる 3D 効果は 1 つです。既存の効果のオプションを編集するか、先に削除してください。
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} には現在、パスまたは複合パスが必要です。テキスト、画像、グループは先にパスに変換してください。
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} には現在、パス、複合パス、テキスト、またはグループが必要です。画像やその他のオブジェクトは先にパスに変換してください。
 @msg	{label} requires a shape with at least two anchors	{label} には 2 つ以上のアンカーポイントを持つシェイプが必要です
 @msg	The shape is too complex for a 3D effect	シェイプが複雑すぎるため 3D 効果を適用できません
 @msg	The 3D surface is too complex; simplify the shape	3D サーフェスが複雑すぎます。シェイプを単純化してください
@@ -5210,6 +5268,11 @@ lighting	Light	ライト
 @msg	unknown parameter `{key}`; did you mean `{near}`?	`{key}` は不明なパラメーターです。`{near}` のことですか?
 @msg	unknown parameter `{key}`; the command takes no parameters	`{key}` は不明なパラメーターです。このコマンドにパラメーターはありません
 @msg	unknown parameter `{key}`; the command takes: {keys}	`{key}` は不明なパラメーターです。このコマンドで使えるパラメーター: {keys}
+@msg	the params must be an object, not {got}	パラメーターはオブジェクトにしてください ({got} は使えません)
+@msg	unknown parameter `{path}`; the object takes no keys	`{path}` は不明なパラメーターです。このオブジェクトにはキーを指定できません
+@msg	unknown parameter `{path}`; it takes: {keys}	`{path}` は不明なパラメーターです。使えるパラメーター: {keys}
+@msg	missing `{path}`	`{path}` が指定されていません
+@msg	`{path}` must be {expected}, not {got}	`{path}` は {expected} にしてください ({got} は使えません)
 	Load EPS into Clipboard	EPS をクリップボードに読み込む
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} ピクセルの画像は大きすぎて描画できません
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: PNG、JPEG、WebP、TIFF、BMP のいずれの画像でもありません
@@ -5565,7 +5628,7 @@ axis	Y Axis	Y 軸
 @msg	Running “{name}”…	「{name}」を実行中…
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	ライブ効果はドキュメントの描画中に実行されるため、`heavy` にはできません
 @msg	an exporter always gets an export's budget: leave `budget` out	書き出しプラグインには常に書き出しの予算が割り当てられます。`budget` は省略してください
-@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	「{_1}」は大きな計算予算を求めています (1 回の実行につき最大 {minutes} 分、通常の {times} 倍の命令)。ユーザーが同意したら `allowHeavy: true` を指定してインストールしてください
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	「{_1}」は大きな計算予算を求めています (1 回の実行につき最大 {minutes} 分、通常の {times} 倍の命令)。デスクトップ アプリで人が承認するか、--allow-plugin-grants を付けて開始したセッションで `allowHeavy: true` を指定してください
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	これらの権限を求める「{name}」をインストールしますか？
 	ID: {id}	ID: {id}
@@ -5588,15 +5651,26 @@ axis	Y Axis	Y 軸
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	モジュールが `env.{name}` をインポートしていますが、プラグインがこれを使用できるのはプラグイン API レベル {PROGRESS_API} (`api` {PROGRESS_API}) で権限 `{permission}` がある場合だけです
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	モジュールがホストの提供しない `{from}.{name}` をインポートしています。プラグインがインポートできるのは docs/plugins.md に記載された `env.vc_*` 関数 (プラグイン API レベル 2) だけで、WASI、ファイル、ネットワークは使用できません
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` は {_1} です。このホストが対応するプラグイン API レベルは 1 から {API_LEVEL} です
+@msg	`paintOutput` may only be true	`paintOutput` には true のみ指定できます
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` は `api` 2 のライブ効果 (`kind` "effect") 専用です
 @msg	`grant` must be a list of permission names	`grant` は権限名のリストにしてください
 @msg	`grant` names an unknown permission `{shown}`	`grant` に不明な権限 `{shown}` が含まれています
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	種類 `{_1}` のプラグインには権限 `{_2}` が必要です
 @msg	at most {MAX_PERMISSIONS} `permissions`	`permissions` は最大 {MAX_PERMISSIONS} 個です
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	権限 `{shown}` は種類 `{_1}` のプラグインには適用されません
 @msg	permission `{shown}` is listed twice	権限 `{shown}` が 2 回指定されています
+@msg	only a filter declares `inputs`	`inputs` を宣言できるのはフィルターだけです
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` に不明なオブジェクトの種類 `{shown}` があります。type、image、symbolInstance のいずれかを使ってください
+@msg	`inputs` lists `{shown}` twice	`inputs` に `{shown}` が 2 回指定されています
+@msg	`inputs` needs `api` 2 or later	`inputs` には `api` 2 以上が必要です
+@msg	`inputs` needs the permission `doc.read`	`inputs` には権限 `doc.read` が必要です
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	メモリ予算 (オブジェクト {_1} には {size} バイトの入力が必要ですが、残りは {left} です)
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	オブジェクト予算 ({MAX_OBJECTS} 個を超える読み取り専用オブジェクト)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	権限 `{shown}` は今後のプラグイン API 用に予約されています。このホストはこの権限を付与しません
 @msg	unknown permission `{shown}`	不明な権限 `{shown}`
-@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	「{name}」は権限 {asked} を求めています。ユーザーが同意したら、それらを列挙した `grant` を指定してインストールしてください
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	「{name}」は権限 {asked} を求めています。デスクトップ アプリで人が承認するか、--allow-plugin-grants を付けて開始したセッションで `grant` を指定してください
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` と `allowHeavy` は --allow-plugin-grants を付けて開始したセッションでのみ有効です。デスクトップ アプリでプラグインを承認してください
+@msg	Only the person at the keyboard can approve installing a plug-in	プラグインのインストールを承認できるのはキーボードの前にいる人だけです
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	「{name}」には出力に必要な `{p}` が付与されていません。何も変更されませんでした
 @msg	a heavy filter runs in the background, so it can't declare `commands`	重いフィルターはバックグラウンドで実行されるため、`commands` を宣言できません
 @msg	at most {MAX_COMMANDS} `commands`	`commands` は最大 {MAX_COMMANDS} 個です
@@ -5657,6 +5731,14 @@ axis	Y Axis	Y 軸
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all または 1, 3-5 のような範囲を指定してください ({v} ではなく)
 	Add to Symbols	シンボルに追加
 	Basic Shapes	基本シェイプ
+	Button	ボタン
+	Panel	パネル
+	UI Frames	UIフレーム
+	Map Markers	マップマーカー
+	Pin	ピン
+	Flag	旗
+	Crosshair	クロスヘア
+	Checkpoint	チェックポイント
 	Open Symbol Library	シンボルライブラリを開く
 	Save Symbol Library	シンボルライブラリを保存
 	Save Symbol Library…	シンボルライブラリを保存…
@@ -5731,6 +5813,8 @@ axis	Y Axis	Y 軸
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	ポイント文字
 	Area Text	エリア内文字
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	文字を字形の境界で測定
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	グリフにスナップのオプションを表示
 	Hide Snap to Glyph Options	グリフにスナップのオプションを隠す
@@ -6148,7 +6232,7 @@ breakText	Glyphs	字形
 	Reset Symbol Instance	シンボルインスタンスをリセット
 @msg	type must be static or dynamic, not {v}	type は static または dynamic にしてください({v} は無効です)
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` はスタティックシンボルです。先にシンボルの種類をダイナミックに設定してください
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	シンボルインスタンス内で選択したパス、複合パス、テキストは、塗りと線の単色のみ変更できます
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	シンボルインスタンス内で選択したパス、複合パス、または文字について変更できるのは塗り、線、不透明度、描画モードだけです
 @msg	path must be a list of child indices	path は子のインデックスのリストにしてください
 @msg	no object at path {shown} in the symbol's art	シンボルのアートのパス {shown} にオブジェクトがありません
 @msg	give fill, stroke, opacity and/or blend	fill、stroke、opacity、blend のいずれかを指定してください
@@ -6191,6 +6275,7 @@ breakText	Glyphs	字形
 	Create Swatch Legend	スウォッチの凡例を作成
 	Create Swatch Legend…	スウォッチの凡例を作成…
 	HEX	HEX
+	Help Bar	ヘルプバー
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	テキストツール
 	Text Tweaker…	テキストの調整…
@@ -6257,6 +6342,24 @@ breakText	Glyphs	字形
 	3D Box	3Dボックス
 	3D Box Tool	3Dボックスツール
 
+# Importer plug-ins (File › Open With, document.open)
+	Open With	このアプリケーションで開く
+	No importer plug-ins installed	読み込みプラグインはインストールされていません
+	Read files you open in its format and make documents from them	独自形式で開いたファイルの読み取りとドキュメントの作成
+@msg	{_1} is an importer (File › Open With)	{_1} は読み込みプラグインです (「ファイル › このアプリケーションで開く」から使用してください)
+@msg	missing `importer` (see document.formats)	`importer` がありません (document.formats を参照)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` にはプラグインの形式 ID を指定してください (document.formats を参照)
+@msg	“{shown}” opens {_1} files, not `{_2}`	「{shown}」が開くのは {_1} ファイルで、`{_2}` ではありません
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` は種類 `{_2}` のプラグインで、読み込みプラグインではありません
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` は種類 `{_2}` のプラグインで、書き出しプラグインではありません
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` は読み込みプラグインです: document.open {{"importer"}"}} でファイルを開いてください
+@msg	the importer returned no objects	読み込みプラグインがオブジェクトを返しませんでした
+@msg	an importer returns `objects` and `warnings`, not `{key}`	読み込みプラグインが返すのは `objects` と `warnings` で、`{key}` ではありません
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	ファイルが読み込みプラグインの読み取る {MAX_INPUT_BYTES} バイトを超えています
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	読み込みプラグインは `extensions` を 1～{MAX_EXTENSIONS} 個宣言します
+@msg	only an exporter or an importer declares `extensions`	`extensions` を宣言できるのは書き出しプラグインと読み込みプラグインだけです
+@msg	an importer always gets an import's budget: leave `budget` out	読み込みプラグインには常に読み込みの予算が割り当てられます: `budget` は省略してください
+
 # Safe Mode
 	Safe Mode…	セーフモード…
 	Safe Mode	セーフモード
@@ -6278,3 +6381,7 @@ breakText	Glyphs	字形
 # Align to Pixel Grid
 	Align to Pixel Grid	ピクセルグリッドに整合
 @msg	only paths and compound paths can be aligned to the pixel grid	ピクセルグリッドに整合できるのはパスと複合パスのみです
+@msg	side is left or right, not `{s}`	side は left または right です（`{s}` ではありません）
+	Ignore All	すべて無視
+	Add to Dictionary	辞書に追加
+	No Suggestions	候補なし

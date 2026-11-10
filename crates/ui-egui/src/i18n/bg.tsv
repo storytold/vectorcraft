@@ -284,7 +284,6 @@ font-technology	Variable	Променливи
 	Update While Dragging	Обновяване при плъзгане
 	Hide Video Rulers	Скриване на видеолинийките
 	Background Contents	Съдържание на фона
-	Background Contents:	Съдържание на фона:
 	Background:	Фон:
 	Backspace	Backspace
 	Bar Graph Tool	Инструмент „Стълбчеста диаграма“
@@ -551,6 +550,11 @@ font-technology	Variable	Променливи
 	Color Table ({n} colors)	Цветова таблица ({n} цвята)
 	Color Theme	Цветова тема
 	Color Themes	Цветови теми
+	Color Wheel	Цветно колело
+	Hue ring	Пръстен на оттенъка
+	Saturation and brightness	Насищане и яркост
+	Color field	Цветово поле
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Цветен тип:
 	Color:	Цвят:
 	Colorize	Оцветяване
@@ -563,6 +567,7 @@ font-technology	Variable	Променливи
 	Coming soon — tracked in the parity plan	Очаквайте скоро — следи се в плана за съвместимост
 	Command Click to Select Objects Behind	Щракване с Command за избор на обекти отзад
 	Command Dialog	Диалогов прозорец за команда
+	Command API Reference	Справочник за API на командите
 	Community	Общност
 	Compatibility:	Съвместимост:
 	Compatible Gradient and Gradient Mesh Printing	Съвместим печат на градиент и градиентна мрежа
@@ -649,7 +654,6 @@ font-technology	Variable	Променливи
 	Couldn't {} {name}: {e}	Неуспешно {name} на {}: {e}
 	Create	Създаване
 	Create Clipping Mask	Създаване на маска за изрязване
-	Create Document	Създаване на документ
 	Create from Guides	Създаване от водачи
 	Create from Selection	Създаване от селекцията
 	Create From:	Създаване от:
@@ -1102,6 +1106,17 @@ font-technology	Variable	Променливи
 	Exporting {}	Експортиране на {}
 	Export…	Експортиране…
 	Extrude & Bevel…	Избутване и фасетка…
+	3D (Classic)	3D (класически)
+	Extrude & Bevel (Classic)…	Избутване и фасетка (класически)…
+	Surface	Повърхност
+	Wireframe	Телена рамка
+	No Shading	Без засенчване
+	Plastic	Пластмаса
+	Highlight Intensity	Интензивност на отблясъка
+	Highlight Size	Размер на отблясъка
+	Blend Steps	Стъпки на преливане
+	Shading Color	Цвят на засенчването
+	Draw Hidden Faces	Изчертаване на скритите страни
 	Eyedropper	Пипета
 	Eyedropper Applies:	Пипетата прилага:
 	Eyedropper Options	Опции за пипетата
@@ -1810,6 +1825,7 @@ font-technology	Variable	Променливи
 	Lock (⌘2)	Заключване (⌘2)
 	Lock Grid	Заключване на мрежата
 	Lock Guides	Заключване на водачите
+	Lock Guides by Default	Заключване на водачите по подразбиране
 	Lock Others	Заключване на другите
 	Lock Slices	Заключване на фрагментите
 	Lock Station Point	Заключване на базовата точка
@@ -1915,6 +1931,10 @@ font-technology	Variable	Променливи
 	Stylistic	Стилистично
 	Mojikumi Set	Набор Mojikumi
 	Kinsoku Set	Набор Kinsoku
+	Kinsoku Shori Type	Тип Kinsoku Shori
+	Push In First	Първо прибиране
+	Push Out First	Първо изтласкване
+	Push Out Only	Само изтласкване
 	Hard	Твърдо
 	Soft	Меко
 	Monitor RGB	RGB на монитора
@@ -2054,7 +2074,6 @@ font-technology	Variable	Променливи
 	New Color Group…	Нова цветова група…
 	New Document Presets	Предварителни настройки за нов документ
 	New file	Нов файл
-	New from Template	Нов от шаблон
 	New from Template…	Нов от шаблон…
 	New Graphic Style	Нов графичен стил
 	New Graphic Style (Alt-click to name it)	Нов графичен стил (кликнете с Alt, за да го наименувате)
@@ -2838,6 +2857,7 @@ digits	Malayalam	Малаялам
 	Save PDF Preset	Запази PDF предварителна настройка
 	Save Perspective Grid Preset	Запази предварителна настройка на перспективната мрежа
 	Save Preset	Запази предварителна настройка
+	Save Document Preset	Запази предварителна настройка на документа
 	Save Preset…	Запази предварителна настройка…
 	Save Print Preset	Запази предварителна настройка за печат
 	Save Recovery Data	Запази данни за възстановяване
@@ -3402,7 +3422,6 @@ digits	Malayalam	Малаялам
 	Template	Шаблон
 	Templates	Шаблони
 	Templates Folder	Папка с шаблони
-	Templates…	Шаблони…
 	Text Displayed in Cell:	Текст, показван в клетката:
 	Text Export Options	Опции за експортиране на текст
 	Text Fill & Stroke Color	Цвят на запълване и щрих на текста
@@ -3448,6 +3467,7 @@ digits	Malayalam	Малаялам
 	Tile Type:	Тип плочка:
 	tile {number}	плочка {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Плочките се номерират напречно, след това надолу; оставете диапазона празен за всяка плочка.
+	Copies per Sheet (as many as fit, in a grid)	Копия на лист (колкото се побират, в мрежа)
 	Tint	Оттенък
 	Tip extends past the end point	Връхът продължава след крайната точка
 	Tip on the end point	Връх върху крайната точка
@@ -3907,7 +3927,7 @@ axis	Both	И двете
 	Dock to Bottom	Закотвяне долу
 	Dock Control Bar	Закотвяне на контролната лента
 	Drag to float the toolbar	Плъзнете, за да направите лентата с инструменти плаваща
-	Drag to the window's left edge to dock	Плъзнете до левия ръб на прозореца за закотвяне
+	Drag to the window's left or right edge to dock	Плъзнете до левия или десния ръб на прозореца за закотвяне
 	Float Tool Group	Плаваща група инструменти
 @msg	no library `{id}`	няма библиотека `{id}`
 @msg	select some type first	първо изберете текст
@@ -3934,6 +3954,15 @@ axis	Both	И двете
 @msg	Combine Slices: the slices have no bounds	Обединяване на парчета: парчетата нямат граници
 @msg	Convert to Artboards: selection has no area	Преобразуване в работни области: селекцията няма площ
 @msg	Convert to Shape: no rectangles or ellipses selected	Преобразуване в фигура: няма избрани правоъгълници или елипси
+	Run	Изпълни
+	Run Script	Изпълни скрипт
+	Stop Script	Спри скрипта
+	Show External Script Warning	Показвай предупреждение за външни скриптове
+	A Script Is Running	Изпълнява се скрипт
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Скриптът може да променя отворените документи и да записва файлове чрез командите, които изпълнява. Изпълнявайте само скриптове, на които имате доверие.
+	Do not show this warning again	Не показвай повече това предупреждение
+	Stop the script and undo what it did? Then quit again.	Да се спре ли скриптът и да се отменят ли промените му? След това излезте отново.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Този скрипт добави изключително много обекти. Да продължи ли, или да се спре и да се отменят промените му?
 @msg	Copied the script report	Копиран е отчетът за скрипта
 @msg	Corners edits the corners of a path	Ъглите редактират ъглите на пътя
 @msg	Couldn't copy to the system clipboard: {e}	Неуспешно копиране в системния клипборд: {e}
@@ -4597,7 +4626,10 @@ axis	Both	И двете
 @msg	its objects are nested too deeply	обектите му са вложени твърде дълбоко
 @msg	its section ending with `%{end}` doesn't end	разделът му, завършващ на `%{end}`, няма край
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	четките, които VectorCraft все още не може да прочете, бяха пропуснати от панела „Четки“ ({_1})
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	обектите с множество запълвания или щрихове, ефекти или четки се появиха във вид на изрисувания си изглед ({_1}): тяхната поява все още не подлежи на редактиране
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	обектите с множество запълвания или щрихове, щрихове с променлива ширина, ефекти или четки се появиха във вид на изрисувания си изглед ({_1}): тяхната поява все още не подлежи на редактиране
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	името `{name}` не е в UTF-8 и е прочетено като {label}: ако изглежда грешно, отворете файла с друго legacyNameEncoding
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	името `{name}` не е в UTF-8, а части от него не са валидни и в {label}: отворете файла с друго legacyNameEncoding
+@msg	more names that aren't UTF-8 were read as {label} ({count})	още имена, които не са в UTF-8, са прочетени като {label} ({count})
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	градиентът „{name}“ не е дефиниран във файла: заменен е с обикновен цвят
 @msg	an image VectorCraft can't read was left out	изображение, което VectorCraft не може да разчете, беше пропуснато
 @msg	an image whose data is cut short was left out	изображение с непълни данни беше пропуснато
@@ -5809,6 +5841,14 @@ axis	Y Axis	Y ос
 @plural	Result: {n}|Results: {n}	Резултат: {n}|Резултати: {n}
 	Add to Symbols	Добавяне към символи
 	Basic Shapes	Основни фигури
+	Button	Бутон
+	Panel	Панел
+	UI Frames	UI рамки
+	Map Markers	Маркери на карта
+	Pin	Карфица
+	Flag	Флаг
+	Crosshair	Мерник
+	Checkpoint	Контролна точка
 	Open Symbol Library	Отваряне на библиотека със символи
 	Save Symbol Library	Запазване на библиотека със символи
 	Save Symbol Library…	Запази библиотека със символи…
@@ -5869,6 +5909,8 @@ axis	Y Axis	Y ос
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Точков текст
 	Area Text	Текст в зона
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Измерване на текста по границите на глифа
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Показване на опциите за прилепване към глиф
 	Hide Snap to Glyph Options	Скриване на опциите за прилепване към глиф
@@ -6267,7 +6309,7 @@ breakText	Glyphs	Глифи
 	Reset Symbol Instance	Нулиране на екземпляра на символ
 @msg	type must be static or dynamic, not {v}	type трябва да е static или dynamic, а не {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` е статичен символ: първо задайте типа на символа на „Динамичен“
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	На път, съставен път или текст, избран в екземпляр на символ, могат да се променят само плътните цветове на запълването и контура
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	На път, съставен път или текст, избран в екземпляр на символ, могат да се променят само запълването, контурът, непрозрачността и режим на смесване
 @msg	path must be a list of child indices	path трябва да е списък с индекси на дъщерни обекти
 @msg	no object at path {shown} in the symbol's art	в графиката на символа няма обект на пътя {shown}
 @msg	give fill, stroke, opacity and/or blend	задайте fill, stroke, opacity и/или blend
@@ -6310,6 +6352,7 @@ breakText	Glyphs	Глифи
 	Create Swatch Legend	Създаване на легенда на образците
 	Create Swatch Legend…	Създаване на легенда на образците…
 	HEX	HEX
+	Help Bar	Лента за помощ
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	Инструменти за текст
 	Text Tweaker…	Настройка на текста…
@@ -6376,6 +6419,11 @@ breakText	Glyphs	Глифи
 	3D Box	3D кутия
 	3D Box Tool	Инструмент за 3D кутия
 
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Отваряне с
+	No importer plug-ins installed	Няма инсталирани плъгини за импортиране
+	Read files you open in its format and make documents from them	Четене на файлове, които отваряте в неговия формат, и създаване на документи от тях
+
 # Safe Mode
 	Safe Mode…	Безопасен режим…
 	Safe Mode	Безопасен режим
@@ -6396,3 +6444,4 @@ breakText	Glyphs	Глифи
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Подравняване към пикселната мрежа
+@msg	side is left or right, not `{s}`	side е left или right, а не `{s}`

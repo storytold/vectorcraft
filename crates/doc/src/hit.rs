@@ -84,8 +84,9 @@ impl Default for HitOptions {
 
 /// The shapes that an image's own fills and strokes paint, each with its fill rule and the fill or
 /// stroke that paints it (none for fills and strokes that paint nothing). Effects are evaluated
-/// above this crate, so the engine registers one with [`set_image_paint`].
-pub type ImagePaint = fn(&Node) -> Vec<(BezPath, FillRule, AppearanceItem)>;
+/// above this crate, so the engine registers one with [`set_image_paint`]. It looks up swatches and
+/// patterns in the document it is given.
+pub type ImagePaint = fn(Option<&Document>, &Node) -> Vec<(BezPath, FillRule, AppearanceItem)>;
 
 static IMAGE_PAINT: OnceLock<ImagePaint> = OnceLock::new();
 
@@ -98,8 +99,8 @@ pub fn set_image_paint(f: ImagePaint) {
 
 /// The shapes that the image `n`'s own fills and strokes paint ([`set_image_paint`]), none while
 /// nothing is registered.
-pub(crate) fn image_paint(n: &Node) -> Vec<(BezPath, FillRule, AppearanceItem)> {
-    IMAGE_PAINT.get().map_or_else(Vec::new, |f| f(n))
+pub(crate) fn image_paint(doc: Option<&Document>, n: &Node) -> Vec<(BezPath, FillRule, AppearanceItem)> {
+    IMAGE_PAINT.get().map_or_else(Vec::new, |f| f(doc, n))
 }
 
 /// One level of evaluation of a live object in a document, as the canvas draws it: type in an
@@ -127,11 +128,14 @@ fn live_inputs() -> u64 {
 }
 
 /// A live object evaluated by [`live_art`] on this thread: the object, its document's symbols (by
-/// name and art) and patterns and the [`LiveInputs`] as they were, the art and its [`art_size`].
+/// name and art), patterns, swatches and color groups and the [`LiveInputs`] as they were, the art
+/// and its [`art_size`].
 struct EvaluatedLive {
     node: Node,
     symbols: Vec<(String, Arc<Node>)>,
     patterns: Vec<crate::PatternDef>,
+    swatches: crate::Shared<Vec<vectorcraft_color::Swatch>>,
+    swatch_groups: crate::Shared<Vec<vectorcraft_color::SwatchGroup>>,
     inputs: u64,
     art: Rc<Vec<Node>>,
     size: usize,
@@ -145,6 +149,8 @@ impl EvaluatedLive {
             && self.symbols.iter().zip(&doc.symbols).all(|((name, art), s)| *name == s.name && Arc::ptr_eq(art, &s.art))
             && self.node == *n
             && self.patterns == doc.patterns
+            && self.swatches == doc.swatches
+            && self.swatch_groups == doc.swatch_groups
     }
 }
 
@@ -183,8 +189,8 @@ thread_local! {
 
 /// The art live object `n` of `doc` draws ([`set_live_art`]); [`crate::live::expand_live`] while
 /// nothing is registered. The art is evaluated again when `n`, a symbol of `doc`, a pattern of
-/// `doc` or the [`LiveInputs`] have changed since, and on every click while it or the document's
-/// symbols or patterns hold a placed document ([`holds_placed`]).
+/// `doc`, its swatches or color groups, or the [`LiveInputs`] have changed since, and on every
+/// click while it or the document's symbols or patterns hold a placed document ([`holds_placed`]).
 fn live_art(doc: &Document, n: &Node) -> Rc<Vec<Node>> {
     let inputs = live_inputs();
     let kept = EVALUATED.with_borrow_mut(|kept| {
@@ -205,7 +211,16 @@ fn live_art(doc: &Document, n: &Node) -> Rc<Vec<Node>> {
         return art;
     }
     let symbols = doc.symbols.iter().map(|s| (s.name.clone(), s.art.clone())).collect();
-    let e = EvaluatedLive { node: n.clone(), symbols, patterns: doc.patterns.clone(), inputs, art: art.clone(), size };
+    let e = EvaluatedLive {
+        node: n.clone(),
+        symbols,
+        patterns: doc.patterns.clone(),
+        swatches: doc.swatches.clone(),
+        swatch_groups: doc.swatch_groups.clone(),
+        inputs,
+        art: art.clone(),
+        size,
+    };
     EVALUATED.with_borrow_mut(|kept| {
         kept.insert(0, e);
         kept.truncate(LIVE_KEPT);
@@ -871,7 +886,7 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
             if opt.outline {
                 return None;
             }
-            image_paint(n).iter().rev().find_map(|(bp, rule, item)| match item {
+            image_paint(Some(symbols.document()), n).iter().rev().find_map(|(bp, rule, item)| match item {
                 AppearanceItem::Stroke(s) => s.hits(bp, *rule, p, opt.tol).then_some(HitKind::Stroke),
                 AppearanceItem::Fill(_) => (!opt.path_only && fill_contains(bp, *rule, p)).then_some(HitKind::Fill),
             })

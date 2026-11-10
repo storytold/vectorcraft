@@ -91,3 +91,27 @@ fn lighting_presets_reject_a_mixed_selection_before_changing_any_effect() {
     assert_eq!(s.doc().unwrap().history.undo.len(), history);
     assert!(!s.doc().unwrap().is_dirty());
 }
+
+#[test]
+fn lighting_presets_refuse_extrude_and_bevel_classic_and_leave_a_mixed_selection_unchanged() {
+    let (mut s, first) = setup("threeD.rotate", Value::Null);
+    let classic = s.execute("shape.rectangle", &json!({"x":250,"y":100,"width":80,"height":80})).unwrap()["id"].as_u64().unwrap();
+    s.execute("effect.apply", &json!({"effect":"threeD.classicExtrude","item":null,"params":{"surface":"diffuse","lightRotation":40}})).unwrap();
+    for ids in [vec![classic], vec![first.0, classic]] {
+        for preset in LIGHTING_PRESETS {
+            s.doc_mut().unwrap().mark_saved();
+            let before = s.doc().unwrap().doc.clone();
+            let history = s.doc().unwrap().history.undo.len();
+            let p = json!({"ids":ids,"index":0,"item":null,"preset":preset.id});
+            let err = s.execute("effect.lightingPreset", &p).unwrap_err().to_string();
+            assert!(err.contains(&format!("object {classic}: Extrude & Bevel (Classic) at index 0 has no lighting presets")), "{err}");
+            assert_eq!(s.doc().unwrap().doc, before);
+            assert_eq!(s.doc().unwrap().history.undo.len(), history);
+            assert!(!s.doc().unwrap().is_dirty());
+        }
+    }
+    // Its lights are set with its own parameters instead.
+    s.execute("effect.setParams", &json!({"ids":[classic],"index":0,"item":null,"params":{"lightRotation":135,"lightHeight":45}})).unwrap();
+    let params = &s.doc().unwrap().doc.node(NodeId(classic)).unwrap().appearance.effects[0].params;
+    assert_eq!((params["lightRotation"].as_f64(), params["lightHeight"].as_f64()), (Some(135.0), Some(45.0)));
+}

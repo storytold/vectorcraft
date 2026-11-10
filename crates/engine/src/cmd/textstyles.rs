@@ -48,7 +48,7 @@ impl Kind {
 
 /// One command spec (the `cmd!` macro wants literals; these ids are built with `concat!`).
 const fn spec(id: &'static str, label: &'static str, menu: &'static [&'static str], params: &'static str, run: Run, journal: bool) -> CommandSpec {
-    CommandSpec { id, label, menu, shortcut: None, params, enabled: has_doc, run, journal }
+    CommandSpec { id, label, menu, shortcut: None, params, enabled: has_doc, run, journal, schema: None }
 }
 
 macro_rules! style_cmds {
@@ -226,6 +226,7 @@ pub fn para_attrs(v: &ParaStyle) -> Map<String, Value> {
         ("leading_model", json!(v.leading_model)),
         ("burasagari", json!(v.burasagari)),
         ("kinsoku", json!(v.kinsoku)),
+        ("kinsoku_type", json!(v.kinsoku_type)),
         ("roman_hanging", json!(v.roman_hanging)),
         ("kashida", json!(v.kashida)),
     ] {

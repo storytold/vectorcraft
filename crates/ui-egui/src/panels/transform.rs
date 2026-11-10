@@ -576,6 +576,11 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if menu_item(ui, tl!("Scale Strokes & Effects"), true, ss) {
         set_pref(app, "scaleStrokes", !ss);
     }
+    // The panel's values and the bounding box measure point type by its glyphs' ink.
+    let glyphs = app.session.prefs.type_glyph_bounds;
+    if menu_item(ui, tl!("Measure Type by Glyph Bounds"), true, glyphs) {
+        set_pref(app, "typeGlyphBounds", !glyphs);
+    }
     ui.separator();
     // What the panel transforms (Transform Object Only / Pattern Only / Both), one checked.
     let current = pattern_mode(app);

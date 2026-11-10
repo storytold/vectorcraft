@@ -296,6 +296,31 @@ fn masks_in_symbols_move_with_the_art_when_linked() {
     }
 }
 
+/// A masked object in a symbol's art, drawn by an instance that scales it down: its stroke keeps
+/// its weight, and the mask's region still covers all of it.
+#[test]
+fn a_mask_in_a_scaled_instance_covers_the_strokes_at_their_weight() {
+    let mut d = Document::new(120.0, 120.0);
+    let stroked = Appearance::basic(Paint::solid(Color::rgb8(200, 0, 0)), Paint::solid(Color::BLACK), 20.0);
+    let mut art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), stroked);
+    let shape = Node::path(
+        d.alloc_id(),
+        shapes::rectangle(Rect::new(0.0, 0.0, 50.0, 100.0)),
+        Appearance::basic(Paint::solid(Color::WHITE), Paint::None, 0.0),
+    );
+    art.extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(shape, false)));
+    d.symbols.push(Symbol { dynamic: false, name: "Framed".into(), art: Arc::new(art) });
+    instance(&mut d, "Framed", Affine::translate((50.0, 50.0)) * Affine::scale(0.2));
+    let svg = export(&d, &ExportOptions::default());
+    let (canvas, written) = (render_artboard(&d), resvg_render(&svg, 120, 120));
+    // The stroke runs 10 either side of the 20 × 20 square's edge at (50, 50).
+    for (x, y) in [(43, 60), (77, 60), (60, 43), (60, 77)] {
+        let (c, w) = (canvas.over_white(x, y), written.over_white(x, y));
+        assert!(c.iter().all(|v| *v < 60), "the stroke shows on the canvas at {x},{y}: {c:?}");
+        assert!(c.iter().zip(w).all(|(a, b)| (*a as i32 - b as i32).abs() <= 8), "at {x},{y}: canvas {c:?}, svg {w:?}\n{svg}");
+    }
+}
+
 #[test]
 fn symbols_inside_themselves_end() {
     let mut d = symbol_doc(1.0, &[Affine::translate((50.0, 50.0))]);

@@ -1,4 +1,4 @@
-use super::{CROP_MARKS, EXTRUDE, INFLATE, PATHFINDER_EFFECTS, RASTERIZE, REVOLVE, ROTATE, TRAP, Value, json, trap};
+use super::{CLASSIC_EXTRUDE, CROP_MARKS, EXTRUDE, INFLATE, PATHFINDER_EFFECTS, RASTERIZE, REVOLVE, ROTATE, TRAP, Value, json, trap};
 
 /// Catalogue entry for one effect.
 #[derive(Clone, Debug, PartialEq)]
@@ -80,6 +80,7 @@ fn lengths_of(id: &str) -> Lengths {
         "path.offsetPath" => always(&["offset"]),
         "threeD.revolve" => always(&["offset"]),
         "threeD.extrude" => always(&["depth", "bevelWidth", "bevelHeight"]),
+        "threeD.classicExtrude" => always(&["depth", "bevelHeight"]),
         "threeD.inflate" => always(&["depth"]),
         "path.outlineStroke" => always(&["width"]),
         "stylize.roundCorners" | "stylize.feather" | "blur.gaussian" | "blur.smart" | "sharpen.unsharpMask" => always(&["radius"]),
@@ -200,6 +201,13 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             json!({"rotationX":-21.88,"rotationY":-23.4,"rotationZ":9.06,"perspectiveAngle":0.0,"shade":true,"lightColor":"#ffffff","lights":null,"lightRotation":125.26438968275465,"lightHeight":30.0,"lightBehind":false,"lightIntensity":80.0,"lightSoftness":0.0,"ambient":25.0}),
         ),
         g(
+            CLASSIC_EXTRUDE,
+            "Extrude & Bevel (Classic)…",
+            &["Effect", "3D and Materials", "3D (Classic)"],
+            "{depth: pt (0..2000, 50), cap: bool (true: solid; false: hollow), bevel: none|classic|rounded|cove|step|ogee (none), bevelHeight: pt (1..100, 4; the bevel is as wide as it is tall), bevelInside: bool (false: added around the shape; true: carved into it), rotationX: degrees (-180..180, -21.88), rotationY: degrees (-180..180, -23.4), rotationZ: degrees (-180..180, 9.06; the defaults are the Off-Axis Front position), perspectiveAngle: degrees (0..160, 0; 0 is none, wider brings the eye nearer), surface: wireframe|none|diffuse|plastic (plastic; wireframe draws the edges of every face, hidden ones included, and fills none; none keeps the paint unlit; diffuse lights the faces softly; plastic adds a glossy highlight), lights: null or array of 1..10 objects (intensity: % 0..100, rotation: degrees -180..180, height: degrees 0..90, behind: bool; overrides the single-light fields; the lights add up; color and softness are not used), lightRotation: degrees (-180..180, 125.26; round the object on the page, 0 on its right, counterclockwise), lightHeight: degrees (0..90, 30; 0 beside the object, 90 straight in front), lightBehind: bool (false; true lights it from behind), lightIntensity: % (0..100, 100), ambient: % (0..100, 50; Ambient Light, every face whichever way it faces), highlightIntensity: % (0..100, 60; plastic only), highlightSize: % (0..100, 90; 100 broad, 0 a small spot; plastic only), blendSteps: integer (1..256, 25; how many levels the shading and the highlight are rounded to), shadingColor: black|custom|none (black; the color the faces darken toward; none keeps the paint and adds only the highlight), shadingCustom: #rrggbb (#000000; the color shadingColor custom darkens toward), drawHiddenFaces: bool (false; also draws the faces turned away, behind the others)}. The front face is the art, extruded backwards about the center of its bounds; a solid is built for the top fill and for each stroke, each in its own paint. The defaults are VectorCraft's own.",
+            json!({"depth":50.0,"cap":true,"bevel":"none","bevelHeight":4.0,"bevelInside":false,"rotationX":-21.88,"rotationY":-23.4,"rotationZ":9.06,"perspectiveAngle":0.0,"surface":"plastic","lights":null,"lightRotation":125.26438968275465,"lightHeight":30.0,"lightBehind":false,"lightIntensity":100.0,"ambient":50.0,"highlightIntensity":60.0,"highlightSize":90.0,"blendSteps":25,"shadingColor":"black","shadingCustom":"#000000","drawHiddenFaces":false}),
+        ),
+        g(
             "convertToShape.rectangle",
             "Rectangle…",
             SHAPE,
@@ -239,7 +247,7 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             "distort.transform",
             "Transform…",
             DT,
-            "{scaleH: % (100), scaleV: % (100), moveH: pt (0; right = +), moveV: pt (0; down = +), rotate: deg (0; counter-clockwise), copies: 0..1000 (0; each copy transforms the last again; placed gradients transform with the object and with each copy), reflectX: bool (false; flips left to right), reflectY: bool (false; flips top to bottom), reference: 0..8 (4; the point of the bounds' 9-point grid it scales, rotates and reflects about: 0 top left, 4 centre, 8 bottom right), random: bool (false; each scale goes a random share of the way from 100 % to its value, each move and the angle a random share of theirs, differently for each object and the same on every redraw), objects: bool (true; Transform Objects: off, the geometry stays where it is and makes no copies, and only the two options below apply, once), patterns: bool (false; Transform Patterns: pattern fills and strokes transform along; with copies the original keeps its pattern and copy k takes the transformation k times), strokes: bool (false; Scale Strokes & Effects: stroke weights and dashes, and the distances of the effects on the fills and strokes, scale by the mean scale √|scaleH·scaleV|, copy k by its k-th power)}",
+            "{scaleH: % (100), scaleV: % (100), moveH: pt (0; right = +), moveV: pt (0; down = +), rotate: deg (0; counter-clockwise; when the effect turns, reflects or scales the object unevenly, a gradient fitted to the object is fixed to its fit and turns with the object and with each copy), copies: 0..1000 (0; each copy transforms the last again and is painted below it, the object on top; a group's copies each hold all its members, and a group with a member that carries a geometry, Pathfinder or 3D effect copies each member in its place; placed gradients transform with the object and with each copy), reflectX: bool (false; flips left to right), reflectY: bool (false; flips top to bottom), reference: 0..8 (4; the point of the bounds' 9-point grid it scales, rotates and reflects about: 0 top left, 4 centre, 8 bottom right), random: bool (false; each scale goes a random share of the way from 100 % to its value, each move and the angle a random share of theirs, differently for each object and the same on every redraw), objects: bool (true; Transform Objects: off, the geometry stays where it is and makes no copies, and only the two options below apply, once), patterns: bool (false; Transform Patterns: pattern fills and strokes transform along; with copies the original keeps its pattern and copy k takes the transformation k times), strokes: bool (false; Scale Strokes & Effects: stroke weights and dashes, and the distances of the effects on the fills and strokes, scale by the mean scale √|scaleH·scaleV|, copy k by its k-th power)}",
             json!({"scaleH": 100.0, "scaleV": 100.0, "moveH": 0.0, "moveV": 0.0, "rotate": 0.0, "copies": 0, "reflectX": false, "reflectY": false, "reference": 4, "random": false, "objects": true, "patterns": false, "strokes": false}),
         ),
         g(

@@ -750,6 +750,7 @@ fn lerp_text(o: &mut TextObject, x: &TextObject, y: &TextObject, t: f64, tc: f64
     if resized {
         o.cached_bounds = None;
         o.cached_baselines.clear();
+        o.cached_ink = None;
     }
 }
 
@@ -904,12 +905,16 @@ pub struct Spine {
     cum: Vec<f64>,
     anchors: Vec<f64>,
     closed: bool,
-    path: PathData,
+    /// The subpath the spine was flattened from, kept so [`Spine::at_length`] can read the
+    /// original curves' tangents. Only the first subpath is stored: the others never affect a
+    /// spine.
+    subpath: SubPath,
 }
 
 impl Spine {
     /// Build a spine from the first subpath of `path`: flatten it to a polyline, record cumulative
-    /// arc lengths, and the arc length at each anchor.
+    /// arc lengths, and the arc length at each anchor. `None` when `path` has no subpath, or when
+    /// the first one flattens to fewer than two points (so it has no length to walk).
     pub fn new(path: &PathData) -> Option<Self> {
         let sp = path.subpaths.first()?;
         let mut pts: Vec<Point> = Vec::new();
@@ -946,7 +951,7 @@ impl Spine {
         if pts.len() < 2 {
             return None;
         }
-        Some(Self { pts, cum, anchors, closed: sp.closed, path: path.clone() })
+        Some(Self { pts, cum, anchors, closed: sp.closed, subpath: sp.clone() })
     }
     /// The spine's flattened length in arc length.
     pub fn length(&self) -> f64 {
@@ -1012,7 +1017,7 @@ impl Spine {
     /// `Align to Path` jump between chords instead of following the curve smoothly.
     pub fn at_length(&self, s: f64) -> (Point, f64) {
         let s = if s.is_finite() { s.clamp(0.0, self.length()) } else { 0.0 };
-        let Some(sp) = self.path.subpaths.first() else { return (self.pts.first().copied().unwrap_or_default(), 0.0) };
+        let sp = &self.subpath;
         let n = sp.segment_count();
         let mut start = 0.0;
         for i in 0..n {

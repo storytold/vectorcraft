@@ -109,6 +109,7 @@ pub mod save_style_library;
 pub mod save_swatch_library;
 pub mod save_symbol_library;
 pub mod script_check;
+pub mod script_run;
 pub mod shape_builder_options;
 pub(crate) mod shapes;
 pub mod shortcut_import;
@@ -126,6 +127,7 @@ pub mod symbolism_options;
 pub mod tate_chu_yoko;
 mod text_export;
 pub mod text_import;
+mod three_d_classic;
 mod tiff_bmp_tga;
 pub mod tile_edge_color;
 mod tools;
@@ -143,6 +145,7 @@ pub use document_setup::open as open_document_setup;
 pub use effect::open as open_effect_dialog;
 pub(crate) use effect::{FILM_GRAIN_FIELDS, PAINT_DAUB_BRUSH_TYPE_LABELS, SHADES, shown_choices};
 pub use export_as::open as open_export_as;
+pub(crate) use export_for_screens::drop_unread_screen_settings;
 pub use export_for_screens::open as open_export_for_screens;
 pub(crate) use export_for_screens::{
     KIND as EXPORT_FOR_SCREENS, PresetPick as ScreenPresetPick, export_preset as screen_export_preset, formats as screen_formats,
@@ -150,8 +153,8 @@ pub(crate) use export_for_screens::{
     saved_options as screen_saved_options, saved_rows as screen_saved_rows,
 };
 pub(crate) use form::{humanize, number_list_text, plugin_color_button, read_number_list, unit_suffix};
-pub(crate) use new_document::preset_name;
 pub use new_document::{create_without_dialog as new_document_without_dialog, open as open_new_document, preset_card};
+pub(crate) use new_document::{popup_open as new_document_popup_open, preset_name};
 pub use png_options::open as open_raster_options;
 pub use save_pdf::{open as open_save_pdf, open_preset as open_pdf_preset};
 pub use tools::open_tool_dialog;
@@ -399,7 +402,12 @@ registry! {
     PrintPresets: [print_presets::KIND] => print_presets::SPEC,
     Plugin: [plugin::KIND] => plugin::SPEC,
     PluginExport: [plugin::EXPORT_KIND] => plugin::EXPORT_SPEC,
+    PluginImport: [plugin::IMPORT_KIND] => plugin::IMPORT_SPEC,
+    PluginInstall: [plugin::INSTALL_KIND] => plugin::INSTALL_SPEC,
     ScriptCheck: [script_check::KIND] => script_check::SPEC,
+    ScriptRun: [script_run::KIND] => script_run::SPEC,
+    ScriptGrowth: [script_run::GROWTH_KIND] => script_run::GROWTH_SPEC,
+    ScriptClose: [script_run::CLOSE_KIND] => script_run::CLOSE_SPEC,
     VectorHalftone: [halftone::KIND] => halftone::SPEC,
     SimplifySlider: [simplify_slider::KIND] => simplify_slider::SPEC,
     SmoothSlider: [smooth_slider::KIND] => smooth_slider::SPEC,
@@ -556,12 +564,23 @@ pub(crate) fn field_set(app: &mut VectorcraftApp, field: &str, old: Option<&Valu
 /// opened over (`ui.dialog.cancel`).
 pub fn cancel(app: &mut VectorcraftApp) {
     missing_fonts::requeue_replaced(app);
+    // More Settings' pop-up and Save Preset end on their own; New Document stays.
+    if app.ui.dialog.as_mut().is_some_and(new_document::close_popup) {
+        return;
+    }
     if let Some(d) = app.ui.dialog.take() {
         if d.kind == swatch_conflict::KIND {
             crate::placing::cancel_swatch_paste(app);
         }
+        if d.kind == plugin::INSTALL_KIND {
+            app.pending_plugin_install = None;
+        }
         if d.kind == safe_mode::STOPPED {
             safe_mode::cancel_stopped(app);
+        }
+        // The growth question's Cancel button is its Stop button.
+        if d.kind == script_run::GROWTH_KIND {
+            app.session.script_request_stop();
         }
         // Toolbar-only Flare options start no preview and must not cancel a gesture
         // that was already active before opening them. The generic parameter dialog has a spec
@@ -823,6 +842,8 @@ mod tests_package;
 mod tests_plugin_export;
 #[cfg(test)]
 mod tests_plugin_fields;
+#[cfg(test)]
+mod tests_plugin_import;
 #[cfg(test)]
 mod tests_raster_formats;
 #[cfg(test)]

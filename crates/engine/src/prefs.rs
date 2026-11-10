@@ -31,6 +31,8 @@ pub struct Prefs {
     pub disable_auto_add_delete: bool,
     pub use_precise_cursors: bool,
     pub show_tool_tips: bool,
+    /// Other Script… warns before it runs a chosen script.
+    pub show_external_script_warning: bool,
     pub anti_aliased_artwork: bool,
     pub select_same_tint_percent: bool,
     pub show_home_screen: bool,
@@ -41,6 +43,12 @@ pub struct Prefs {
     /// Align panel menu › Align to Glyph Bounds › Area Text: the same for area type, instead of
     /// its frame.
     pub align_glyph_bounds_area: bool,
+    /// Preferences › Type › Glyph Bounds › Measure Type by Glyph Bounds (also in the Transform
+    /// panel menu): the bounding box, the Transform panel's, Control bar's and Properties panel's X,
+    /// Y, W and H, and `object.setBounds` measure each point type object selected as an object (not
+    /// inside a selected group) by the ink of its glyphs instead of its em box
+    /// ([`crate::Session::bounds_measure`]).
+    pub type_glyph_bounds: bool,
     /// Artboard Options › Fade Region Outside Artboard: while the Artboard tool is active, the
     /// canvas draws everything outside the artboards darker, the pasteboard and the art on it.
     pub fade_region_outside_artboard: bool,
@@ -114,6 +122,8 @@ pub struct Prefs {
     // Guides & Grid
     pub guide_color: String,
     pub guide_style: String,
+    /// Lock Guides by Default: the app starts with View › Guides › Lock Guides on.
+    pub lock_guides_by_default: bool,
     pub grid_color: String,
     pub grid_style: String,
     pub gridline_every: f64,
@@ -176,7 +186,7 @@ pub struct Prefs {
     pub system_title_bar: bool,
     /// Linux and the BSDs: draw the app bar as the title bar in sessions where the desktop draws
     /// the frame (X11, Wayland compositors with server-side decorations, XWayland), as on GNOME.
-    /// Read when the app starts; System Title Bar and `VECTORCRAFT_TITLEBAR` take precedence over it.
+    /// Read when the app starts; System Title Bar and `VECTORCRAFT_TITLEBAR` set to `app`, `system` or `desktop` take precedence over it.
     pub app_title_bar: bool,
     // Performance
     pub gpu_performance: bool,
@@ -364,12 +374,14 @@ impl Default for Prefs {
             disable_auto_add_delete: false,
             use_precise_cursors: false,
             show_tool_tips: true,
+            show_external_script_warning: true,
             anti_aliased_artwork: true,
             select_same_tint_percent: false,
             show_home_screen: true,
             use_preview_bounds: false,
             align_glyph_bounds_point: false,
             align_glyph_bounds_area: false,
+            type_glyph_bounds: false,
             fade_region_outside_artboard: true,
             artboard_update_while_dragging: true,
             display_print_size: false,
@@ -421,6 +433,7 @@ impl Default for Prefs {
             identify_objects_by: s("objectName"),
             guide_color: s("#4affff"),
             guide_style: s("lines"),
+            lock_guides_by_default: false,
             grid_color: s("#c8c8c8"),
             grid_style: s("lines"),
             gridline_every: 72.0,

@@ -32,6 +32,9 @@ pub const HEAVY_FUEL: u64 = 1_000_000_000;
 /// Wall-clock budget of a heavy filter's run, in milliseconds (native builds).
 pub const HEAVY_WALL_TIME_MS: u64 = 300_000;
 
+/// The limit a run reports when its input and parameters together are past half its memory.
+pub(crate) const SELECTION_TOO_LARGE: &str = "memory budget (the selection is too large to hand over)";
+
 /// A heavy run's budget as people read it: (minutes it may take, times the instructions a light
 /// run gets).
 pub fn heavy_terms() -> (u64, u64) {
@@ -61,6 +64,10 @@ pub struct Limits {
     /// raise. Set them to `fuel_base` and `wall_time_ms` to give heavy filters nothing more.
     pub heavy_fuel: u64,
     pub heavy_wall_time_ms: u64,
+    /// What one export or import is given instead of `fuel_base` and `wall_time_ms`
+    /// ([`crate::export::limits`]).
+    pub export_fuel: u64,
+    pub export_wall_time_ms: u64,
 }
 
 impl Default for Limits {
@@ -75,6 +82,8 @@ impl Default for Limits {
             wall_time_ms: 60_000,
             heavy_fuel: HEAVY_FUEL,
             heavy_wall_time_ms: HEAVY_WALL_TIME_MS,
+            export_fuel: crate::export::FUEL,
+            export_wall_time_ms: crate::export::WALL_TIME_MS,
         }
     }
 }
@@ -305,7 +314,7 @@ impl Plugin {
 
     fn run_inner(&self, input: &[u8], params: &[u8], limits: &Limits, report: &mut Report) -> Result<Vec<u8>> {
         let total = input.len().checked_add(params.len()).filter(|b| *b <= i32::MAX as usize && *b <= self.limits.max_memory_bytes / 2);
-        total.ok_or_else(|| Error::Limit("memory budget (the selection is too large to hand over)".into()))?;
+        total.ok_or_else(|| Error::Limit(SELECTION_TOO_LARGE.into()))?;
         let deadline = Deadline::new(limits.wall_time_ms);
         let m = &self.manifest;
         let run = Run::new(&m.id, m.kind != Kind::Effect, true, deadline).with_storage(crate::registry::storage(&m.id));

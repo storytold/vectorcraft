@@ -23,8 +23,8 @@ pub use composite::{
     CompositeParts,
 };
 pub use para_style::{
-    Burasagari, Composer, FirstBaseline, HyphenationOptions, JustificationOptions, Justify, Kashida, Kinsoku, LeadingModel, Mojikumi, ParaDirection,
-    ParaStyle, SingleWordJustify,
+    Burasagari, Composer, FirstBaseline, HyphenationOptions, JustificationOptions, Justify, Kashida, Kinsoku, KinsokuShoriType, LeadingModel,
+    Mojikumi, ParaDirection, ParaStyle, SingleWordJustify,
 };
 pub use runs::{INLINE_CHAR, INLINE_MAX_SCALE, InlineArt, RubyAlign, RubyPosition, RubySpan, TextKind, TextRun, TextStyleDef, TypeAntiAlias};
 pub use tabs_lists::{
@@ -121,6 +121,12 @@ pub struct TextObject {
     /// vertical column's centre line), filled in with `cached_bounds` (not serialized).
     #[serde(skip)]
     pub cached_baselines: Vec<(Point, Point)>,
+    /// Cached ink of the glyphs in text space, underline and strikethrough bars included
+    /// (`vectorcraft_effects::preview::laid_out_ink`, `None` when nothing draws),
+    /// with the `cached_bounds` it was measured with: filled in with `cached_bounds` by the engine's
+    /// text edits, and stale once `cached_bounds` differs ([`Self::ink`]). Not serialized.
+    #[serde(skip)]
+    pub cached_ink: Option<(Rect, Option<Rect>)>,
 }
 
 /// Conversion from stored character attributes to document-space type controls.

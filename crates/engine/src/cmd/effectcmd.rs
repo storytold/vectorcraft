@@ -78,7 +78,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "3D Lighting Preset",
             [],
             None,
-            "{index: int, preset: standard|diffuse|topLeft|right, item?: appearance item index|null (omitted: the active item, else the object's), ids?|id?: [..], target?: object|contents, aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection)} replace an applied 3D effect's light rig and ambient with an original lighting preset; preserve shading, geometry and view; all targets must have a 3D effect at index; one undo step → {ids}",
+            "{index: int, preset: standard|diffuse|topLeft|right, item?: appearance item index|null (omitted: the active item, else the object's), ids?|id?: [..], target?: object|contents, aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection)} replace an applied 3D effect's light rig and ambient with an original lighting preset; preserve shading, geometry and view; all targets must have a 3D effect at index other than Extrude & Bevel (Classic), which has no lighting presets; one undo step → {ids}",
             has_doc,
             lighting_preset
         ),
@@ -280,9 +280,13 @@ pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let item = item_target(s, p, C)?;
     if effects::is_three_d(id) {
-        for target in appearance_targets(s, p)? {
+        let targets = appearance_targets(s, p)?;
+        for (target, at) in targets.iter().copied().zip(item.per_target(s, &targets)) {
             let n = s.doc()?.doc.node(target).ok_or(EngineError::NoNode(target))?;
-            effects::validate_three_d(n, id, &effect.params).map_err(|e| bad(C, e))?;
+            // A new effect goes after the item's others.
+            let on = at.and_then(|at| at.effects_item(&n.appearance, C).ok()).flatten();
+            let on = on.and_then(|i| Some((i, n.appearance.items.get(i)?.effects().len())));
+            effects::validate_three_d_at(n, id, &effect.params, on).map_err(|e| bad(C, e))?;
             if id == effects::REVOLVE && effects::has_revolve(n) {
                 return Err(bad(C, "A profile supports one Revolve effect. Edit the existing effect's options instead."));
             }
@@ -505,6 +509,13 @@ fn lighting_preset(s: &mut Session, p: &Value) -> Result<Value> {
         if !effect.is_some_and(|e| effects::is_three_d(&e.id)) {
             return Err(bad(C, format!("object {} needs a 3D effect at index {index}", id.0)));
         }
+        // Extrude & Bevel (Classic) has no lighting presets; its lights are set in its own options.
+        if effect.is_some_and(|e| e.id == effects::CLASSIC_EXTRUDE) {
+            return Err(bad(
+                C,
+                format!("object {}: Extrude & Bevel (Classic) at index {index} has no lighting presets; set its lights with effect.setParams", id.0),
+            ));
+        }
     }
     let mut options = p.clone();
     let map = options.as_object_mut().ok_or_else(|| bad(C, "parameters must be an object"))?;
@@ -516,7 +527,7 @@ fn lighting_preset(s: &mut Session, p: &Value) -> Result<Value> {
 /// `effect.setParams`: merges `params` into the effect at `index` of the targets' active item, and
 /// sets its Warp style (`warpStyle`), its 3D type (`threeDType`) or visibility (`visible`), as one
 /// undo step. They are checked as `effect.apply` checks them, and a visible 3D effect must still
-/// fit. → `{ids}`.
+/// fit; a hidden one has its given values checked. → `{ids}`.
 fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "effect.setParams";
     let index = index_param(p, "index", C)?;
@@ -574,7 +585,6 @@ fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
         }
         if let Some(e) = effect
             && effects::is_three_d(&e.id)
-            && visible != Some(false)
         {
             let to = kind.unwrap_or(&e.id);
             let mut prospective =
@@ -582,7 +592,14 @@ fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
             if let (Some(cur), Value::Object(new)) = (prospective.as_object_mut(), effects::upgrade_params(to, &params)) {
                 cur.extend(new);
             }
-            effects::validate_three_d(n, to, &prospective).map_err(|e| bad(C, e))?;
+            if visible != Some(false) {
+                effects::validate_three_d_at(n, to, &prospective, target.map(|item| (item, index))).map_err(|e| bad(C, e))?;
+            } else {
+                // Hidden, the effect draws nothing, so its object need not fit. The values given are
+                // checked, and after a change of 3D type so is every value it keeps.
+                let checked = if to == e.id { effects::upgrade_params(to, &params) } else { prospective };
+                effects::validate_three_d_params(to, &checked).map_err(|e| bad(C, e))?;
+            }
         }
     }
     let ids = edit_effects(s, p, item, C, "Effect Options", &format!("{C}: no effect at index {index}"), index, |fx, index| {
@@ -852,8 +869,8 @@ fn expanded_node(d: &mut Document, mut n: Node, brushes: &[vectorcraft_brush::Br
         // keeps it as its only member).
         Some((image, false)) => Some(rasterfx::replace_with_image(v, image)),
         image => {
-            let m = if container && effects::has_solid(&v) {
-                // A group's or layer's 3D effect: the shaded faces of its members' solids.
+            let m = if (container || matches!(n.kind, NodeKind::Text(_))) && (effects::has_solid(&v) || effects::has_revolve(&v)) {
+                // A 3D effect on a group or layer, or on type: the shaded faces of its solids.
                 effects::expand_leaf(d, &v, &mut stroke_art)
             } else if container {
                 // A group's or layer's own fills and strokes become art among its members.

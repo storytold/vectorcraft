@@ -20,7 +20,7 @@ use std::sync::{Arc, Mutex};
 
 use vectorcraft_color::blend::{cmyk_planes, planes_cmyk};
 use vectorcraft_color::cms::{self, Cms, CmykLut, ProofLut, lab};
-use vectorcraft_color::{Color, Gradient};
+use vectorcraft_color::{Color, Freeform, Gradient};
 use vectorcraft_doc::cmyk::Inks;
 use vectorcraft_doc::{ColorMode, Document, ImageBlob};
 use vello_cpu::Pixmap;
@@ -126,6 +126,23 @@ impl Ink {
         Some(g)
     }
 
+    /// Transform original freeform points before their colors mix, as [`Self::gradient`] does for
+    /// stops.
+    pub(crate) fn freeform(self, f: &Freeform) -> Option<Freeform> {
+        let amount = self.darkness()?;
+        let mut f = f.clone();
+        for point in &mut f.points {
+            point.color = Self::darkened_color(&point.color, amount, self.black_endpoint());
+        }
+        Some(f)
+    }
+
+    /// Whether this ink paints a point of `f` as RGB black: Appearance of Black's Rich setting and
+    /// a point of pure CMYK black.
+    pub(crate) fn blacks_a_point(self, f: &Freeform) -> bool {
+        self.base() == Ink::RichBlack && f.points.iter().any(|p| matches!(p.color, Color::Cmyk { c, m, y, k } if is_pure_black([c, m, y, k])))
+    }
+
     /// The three values painted for colour `c`.
     pub(crate) fn rgb(self, c: &Color) -> [f32; 3] {
         if let Some(amount) = self.darkness() {
@@ -135,6 +152,15 @@ impl Ink {
             (Ink::RichBlack, Color::Cmyk { c, m, y, k }) if is_pure_black([c, m, y, k]) => [0.0; 3],
             (Ink::Display | Ink::RichBlack, _) => c.to_rgb(),
             _ => self.plane(inks(c)),
+        }
+    }
+
+    /// [`Self::rgb`] for colors sampled densely (a freeform gradient's grid): on an ink plane, RGB
+    /// colors go through the separation tables placed images use.
+    pub(crate) fn rgb_sampled(self, c: &Color) -> [f32; 3] {
+        match (self, c) {
+            (Ink::Cmy | Ink::K, Color::Rgb { .. }) => separation().0[(self == Ink::K) as usize].apply(c.to_rgb()),
+            _ => self.rgb(c),
         }
     }
 
@@ -150,7 +176,7 @@ impl Ink {
         peniko::Color::from_rgba8(r, g, b, a)
     }
 
-    fn fixed8(self, [r, g, b, a]: [u8; 4]) -> [u8; 4] {
+    pub(crate) fn fixed8(self, [r, g, b, a]: [u8; 4]) -> [u8; 4] {
         match self.base() {
             Ink::Display | Ink::RichBlack => [r, g, b, a],
             _ => {

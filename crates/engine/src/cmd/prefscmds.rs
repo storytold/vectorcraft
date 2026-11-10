@@ -140,6 +140,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("disableAutoAddDelete", "General", "Options", "Disable Auto Add/Delete", bool),
     p!("usePreciseCursors", "General", "Options", "Use Precise Cursors", bool),
     p!("showToolTips", "General", "Options", "Show Tool Tips", bool),
+    p!("showExternalScriptWarning", "General", "Options", "Show External Script Warning", bool),
     p!("antiAliasedArtwork", "General", "Options", "Anti-aliased Artwork", bool),
     p!("selectSameTintPercent", "General", "Options", "Select Same Tint %", bool),
     p!("showHomeScreen", "General", "Options", "Show The Home Screen When No Documents Are Open", bool),
@@ -227,6 +228,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     // Guides & Grid
     p!("guideColor", "Guides & Grid", "Guides", "Color", color),
     p!("guideStyle", "Guides & Grid", "Guides", "Style", choice(LINE_STYLE)),
+    p!("lockGuidesByDefault", "Guides & Grid", "Guides", "Lock Guides by Default", bool),
     p!("gridColor", "Guides & Grid", "Grid", "Color", color),
     p!("gridStyle", "Guides & Grid", "Grid", "Style", choice(LINE_STYLE)),
     p!("gridlineEvery", "Guides & Grid", "Grid", "Gridline every", len(1.0, 16383.0, General)),
@@ -434,6 +436,8 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     // The Align panel menu's Align to Glyph Bounds: Align and Distribute measure type by its glyphs' ink.
     p!("alignGlyphBoundsPoint", "Type", "Align to Glyph Bounds", "Point Text", bool),
     p!("alignGlyphBoundsArea", "Type", "Align to Glyph Bounds", "Area Text", bool),
+    // The bounding box and the Transform panel measure point type by its glyphs' ink (also in the Transform panel menu).
+    p!("typeGlyphBounds", "Type", "Glyph Bounds", "Measure Type by Glyph Bounds", bool),
     // Artboard Options › Global: the canvas darkens the area outside the artboards while the Artboard tool is active.
     p!("fadeRegionOutsideArtboard", "General", "Artboard Options", "Fade Region Outside Artboard", bool),
     p!("artboardUpdateWhileDragging", "General", "Artboard Options", "Update While Dragging", bool),
@@ -678,16 +682,28 @@ impl Session {
         for e in self.prefs.keep_folders(&mut p) {
             log::warn!("{e}");
         }
+        // The edit the active tool computes on another thread is applied first (the Preferences
+        // dialog applies its settings here, outside a command). A failure to apply it was the
+        // edit's own, and the preferences apply all the same.
+        if self.depth == 0 {
+            let _ = self.finish_tool_edit_later();
+        }
         let grid_changed = p.gridline_every != self.prefs.gridline_every || p.grid_subdivisions != self.prefs.grid_subdivisions;
         let history_changed = p.history_states != self.prefs.history_states;
         let tile_edge_changed = p.pattern_tile_edge_color != self.prefs.pattern_tile_edge_color;
         let fonts_folder_changed = p.fonts_folder != self.prefs.fonts_folder;
         let hyphen_exceptions_changed = p.hyphenation_exceptions != self.prefs.hyphenation_exceptions;
         let corner_radius_changed = p.corner_radius != self.prefs.corner_radius;
+        let lock_guides_changed = p.lock_guides_by_default != self.prefs.lock_guides_by_default;
         if p.trace_presets != self.prefs.trace_presets {
             self.trace_preset_changes.replaced();
         }
         self.prefs = p;
+        // Guides & Grid › Lock Guides by Default sets the lock when it changes, the saved value at
+        // start included. Otherwise the lock stays as View › Guides › Lock Guides left it.
+        if lock_guides_changed {
+            self.set_guides_locked(self.prefs.lock_guides_by_default);
+        }
         if corner_radius_changed {
             // General › Corner Radius is the Rounded Rectangle tool's radius (#394): a tool already
             // made (active, or lent a selection tool for a drag) takes the new value.

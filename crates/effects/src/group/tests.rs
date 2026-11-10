@@ -27,7 +27,7 @@ fn area(n: &Node) -> f64 {
 }
 
 fn overlap_cmyk(g: &Node) -> [f32; 4] {
-    let faces = pathfinder_children(g, None).unwrap();
+    let faces = pathfinder_children(None, g, None).unwrap();
     assert_eq!(faces.len(), 3);
     let overlap = faces
         .iter()
@@ -61,7 +61,7 @@ fn trap_effect_adds_an_overprinting_strip_above_the_members() {
     let mut g = Node::group(NodeId(10), vec![sq(1, 0.0, yellow), sq(2, 10.0, blue)]);
     let params = serde_json::json!({"thickness": 1.0, "tintReduction": 100});
     g.appearance.effects.push(Effect { id: crate::trap::TRAP.into(), params, visible: true });
-    let out = pathfinder_children(&g, None).unwrap();
+    let out = pathfinder_children(None, &g, None).unwrap();
     assert_eq!(out.len(), 3, "both squares and one trap");
     assert_eq!((out[0].id, out[1].id), (NodeId(1), NodeId(2)));
     let b = out[2].geometric_bounds().unwrap();
@@ -89,17 +89,17 @@ fn soft_mix_blends_cmyk_bottom_to_top_and_drops_strokes() {
 
 #[test]
 fn shape_modes_follow_the_pathfinder_panel() {
-    let add = pathfinder_children(&group_with("pathfinder.add"), None).unwrap();
+    let add = pathfinder_children(None, &group_with("pathfinder.add"), None).unwrap();
     assert_eq!(add.len(), 1);
     assert!((area(&add[0]) - 150.0).abs() < 1e-3);
     // Add keeps the front object's paint, Subtract the back one's.
     assert_eq!(add[0].id, NodeId(2));
-    let sub = pathfinder_children(&group_with("pathfinder.subtract"), None).unwrap();
+    let sub = pathfinder_children(None, &group_with("pathfinder.subtract"), None).unwrap();
     assert_eq!(sub[0].id, NodeId(1));
     assert!((area(&sub[0]) - 50.0).abs() < 1e-3);
-    let int = pathfinder_children(&group_with("pathfinder.intersect"), None).unwrap();
+    let int = pathfinder_children(None, &group_with("pathfinder.intersect"), None).unwrap();
     assert!((area(&int[0]) - 50.0).abs() < 1e-3);
-    let div = pathfinder_children(&group_with("pathfinder.divide"), None).unwrap();
+    let div = pathfinder_children(None, &group_with("pathfinder.divide"), None).unwrap();
     assert_eq!(div.len(), 3);
 }
 
@@ -112,7 +112,7 @@ fn divide_and_outline_draw_nothing_for_unpainted_members() {
     for effect in ["pathfinder.divide", "pathfinder.outline"] {
         let mut g = Node::group(NodeId(10), vec![sq(1, 0.0, Color::rgb(1.0, 0.0, 0.0)), unpainted.clone()]);
         g.appearance.effects.push(Effect { id: effect.into(), params: serde_json::json!({}), visible: true });
-        let out = pathfinder_children(&g, None).unwrap();
+        let out = pathfinder_children(None, &g, None).unwrap();
         assert!(out.iter().any(|n| n.id == NodeId(1)) && out.iter().any(|n| n.id == NodeId(2)), "{effect}: {out:#?}");
         for n in out.iter().filter(|n| n.id == NodeId(2)) {
             assert!(n.appearance.items.iter().all(|i| i.paint().is_none()), "{effect}: {n:#?}");
@@ -138,7 +138,7 @@ fn square_and(front: Option<Node>, effect: &str) -> Node {
 
 /// Returns the Pathfinder results of `g`, with type outlined as the renderer outlines it.
 fn results(g: &Node) -> Vec<Arc<Node>> {
-    pathfinder_children(g, crate::text_outliner()).unwrap()
+    pathfinder_children(None, g, crate::text_outliner()).unwrap()
 }
 
 #[test]
@@ -167,7 +167,7 @@ fn type_changes_the_result_of_every_pathfinder_effect() {
     assert!((with_type("pathfinder.intersect") + with_type("pathfinder.minusBack") - glyph_area).abs() < 0.5, "{glyph_area}");
     // Outline art nested one group deeper takes part as well.
     let nested: OutlineHook = &|n: &Node| crate::outline_text(n).map(|g| Node::group(n.id, vec![Arc::new(g)]));
-    let sub = pathfinder_children(&square_and(Some(type_h()), "pathfinder.subtract"), Some(nested)).unwrap();
+    let sub = pathfinder_children(None, &square_and(Some(type_h()), "pathfinder.subtract"), Some(nested)).unwrap();
     assert!((sub.iter().map(|n| area(n)).sum::<f64>() - with_type("pathfinder.subtract")).abs() < 1e-6);
 }
 
@@ -243,7 +243,7 @@ fn type_in_a_group_keeps_its_look_when_the_groups_geometry_effects_outline_it() 
 fn hidden_effect_or_plain_group_is_untouched() {
     let mut g = group_with("pathfinder.add");
     g.appearance.effects[0].visible = false;
-    assert!(pathfinder_children(&g, None).is_none());
+    assert!(pathfinder_children(None, &g, None).is_none());
     assert!(!has_pathfinder(&sq(1, 0.0, Color::BLACK)));
 }
 
@@ -320,12 +320,12 @@ fn shape_art_moves_gradients_with_a_transform_effect() {
     };
     let mut path = Node::path(NodeId(1), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::basic(placed.clone(), Paint::None, 0.0));
     path.appearance.effects.push(moved());
-    let got = starts(&shape_art(&path, None).unwrap());
+    let got = starts(&shape_art(None, &path, None).unwrap());
     assert!(got.len() == 1 && (got[0] - 40.0).abs() < 1e-6, "the path's gradient: {got:?}");
     let mut g = Node::group(NodeId(10), vec![sq(2, 0.0, Color::BLACK)]);
     g.appearance.items.push(AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(placed)));
     g.appearance.effects.push(moved());
-    let got = starts(&shape_art(&g, None).unwrap());
+    let got = starts(&shape_art(None, &g, None).unwrap());
     assert!(!got.is_empty() && got.iter().all(|s| (s - 40.0).abs() < 1e-6), "the group's own fill: {got:?}");
 }
 
@@ -343,7 +343,7 @@ fn shape_art_moves_the_gradient_of_a_symbol_instances_art_with_its_transform() {
     let hook = move |_: &Node| Some(art.clone());
     let mut instance = Node::new(NodeId(1), NodeKind::SymbolInstance { symbol: "s".into(), xf: vectorcraft_geom::Affine::IDENTITY });
     instance.appearance.effects.push(Effect { id: "distort.transform".into(), params: serde_json::json!({"moveH": 30}), visible: true });
-    let out = shape_art(&instance, Some(&hook)).unwrap();
+    let out = shape_art(None, &instance, Some(&hook)).unwrap();
     let Paint::Gradient(g) = out.appearance.fill_paint() else { panic!("a gradient: {:?}", out.appearance) };
     assert!((g.geom.unwrap().start.x - 30.0).abs() < 1e-6, "{:?}", g.geom);
     assert!((out.geometric_bounds().unwrap().x0 - 30.0).abs() < 1e-6, "the art moves");
@@ -377,11 +377,11 @@ fn shape_art_moves_the_gradients_of_a_symbol_instances_art_and_a_compound_shape_
         let hook = move |_: &Node| Some(art.clone());
         let mut instance = Node::new(NodeId(1), NodeKind::SymbolInstance { symbol: "s".into(), xf: vectorcraft_geom::Affine::IDENTITY });
         instance.appearance.effects.push(warp());
-        check(&shape_art(&instance, Some(&hook)).unwrap(), Rect::new(0.0, 0.0, 10.0, 10.0), &format!("warp.{style} on a symbol instance"));
+        check(&shape_art(None, &instance, Some(&hook)).unwrap(), Rect::new(0.0, 0.0, 10.0, 10.0), &format!("warp.{style} on a symbol instance"));
         let mut shape = compound_shape(ShapeMode::Add);
         shape.appearance = Appearance::basic(placed.clone(), Paint::None, 0.0).into();
         shape.appearance.effects.push(warp());
-        check(&shape_art(&shape, None).unwrap(), Rect::new(0.0, 0.0, 15.0, 10.0), &format!("warp.{style} on a compound shape"));
+        check(&shape_art(None, &shape, None).unwrap(), Rect::new(0.0, 0.0, 15.0, 10.0), &format!("warp.{style} on a compound shape"));
     }
 }
 
@@ -594,8 +594,72 @@ fn a_groups_transform_moves_the_gradients_placed_on_an_images_own_fills() {
     };
     for kind in [image as fn() -> NodeKind, instance] {
         assert_eq!(starts(kind(), serde_json::json!({"moveH": 30})), [30.0], "{:?}", kind());
-        assert_eq!(starts(kind(), serde_json::json!({"moveH": 30, "copies": 2})), [0.0, 30.0, 60.0], "{:?}", kind());
+        assert_eq!(starts(kind(), serde_json::json!({"moveH": 30, "copies": 2})), [60.0, 30.0, 0.0], "{:?}", kind());
     }
+}
+
+/// A group's Transform effect that turns its art turns the gradients fitted to its paths, to the
+/// group's own fill, to a nested group's own fill and to an image's and a symbol instance's own
+/// fills: each is fixed to its fit on its own object first. A move leaves the members' gradients
+/// fitted.
+#[test]
+fn a_groups_transform_turns_the_gradients_fitted_to_its_members_and_its_own_fill() {
+    use vectorcraft_color::{Gradient, GradientKind, GradientPaint, GradientStop};
+    use vectorcraft_doc::ImageObject;
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let fitted = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+    let square = |id: u64, x: f64| {
+        Arc::new(Node::path(NodeId(id), shapes::rectangle(Rect::new(x, 0.0, x + 10.0, 10.0)), Appearance::basic(fitted.clone(), Paint::None, 0.0)))
+    };
+    let mut image = Node::new(
+        NodeId(4),
+        NodeKind::Image(Box::new(ImageObject {
+            key: "k".into(),
+            width: 10,
+            height: 10,
+            xf: vectorcraft_geom::Affine::translate((30.0, 0.0)),
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        })),
+    );
+    image.appearance = Appearance::basic(fitted.clone(), Paint::None, 0.0).into();
+    // A symbol instance whose symbol is not in a document is measured as the 20 pt square about
+    // its origin: here 22.5..27.5 across and 2.5..7.5 down.
+    let at = vectorcraft_geom::Affine::translate((25.0, 5.0)) * vectorcraft_geom::Affine::scale(0.25);
+    let mut instance = Node::new(NodeId(6), NodeKind::SymbolInstance { symbol: "s".into(), xf: at });
+    instance.appearance = Appearance::basic(fitted.clone(), Paint::None, 0.0).into();
+    // Ends of each gradient by object id; none for a gradient still fitted.
+    let ends = |params: serde_json::Value| {
+        let mut inner = Node::group(NodeId(5), vec![square(2, 10.0)]);
+        inner.appearance.items.push(AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(fitted.clone())));
+        let mut g = Node::group(NodeId(10), vec![square(1, 0.0), Arc::new(inner), Arc::new(image.clone()), Arc::new(instance.clone())]);
+        g.appearance.items.push(AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(fitted.clone())));
+        g.appearance.effects.push(Effect { id: "distort.transform".into(), params, visible: true });
+        let art = evaluate_container(None, &g).unwrap();
+        let mut out = std::collections::BTreeMap::new();
+        art.walk(&mut |c: &Node| {
+            if let Paint::Gradient(p) = c.appearance.fill_paint() {
+                out.insert(c.id.0, p.geom.map(|g| (g.start, g.end)));
+            }
+        });
+        out
+    };
+    let near = |a: Point, b: Point| a.distance(b) < 1e-6;
+    // A quarter turn about the group's center (20, 5): (x, 5) goes to (20, 5 + 20 - x), so a ramp
+    // from (x0, 5) to (x1, 5) runs from (20, 25 - x0) up to (20, 25 - x1).
+    let turned = ends(serde_json::json!({"rotate": 90}));
+    let want = [(1, 0.0, 10.0), (2, 10.0, 20.0), (5, 10.0, 20.0), (4, 30.0, 40.0), (6, 22.5, 27.5), (10, 0.0, 40.0)];
+    for (id, x0, x1) in want {
+        let got = turned.get(&id).copied().flatten();
+        let ok = got.is_some_and(|(s, e)| near(s, Point::new(20.0, 25.0 - x0)) && near(e, Point::new(20.0, 25.0 - x1)));
+        assert!(ok, "object {id}: {got:?} in {turned:?}");
+    }
+    // The group's own fill is fixed to its fit on the art it paints, which the move took to 30..70.
+    let moved = ends(serde_json::json!({"moveH": 30}));
+    let group = moved.get(&10).copied().flatten();
+    assert!(group.is_some_and(|(s, e)| near(s, Point::new(30.0, 5.0)) && near(e, Point::new(70.0, 5.0))), "{moved:?}");
+    assert!(moved.len() == 6 && [1, 2, 4, 5, 6].iter().all(|id| moved[id].is_none()), "{moved:?}");
 }
 
 #[test]
@@ -613,7 +677,8 @@ fn a_transform_on_a_group_paints_each_copy_with_its_own_gradient() {
         let art = evaluate_container(None, &g).unwrap();
         let copies = art.children().unwrap()[0].children().expect("the object and its copies are objects of their own");
         assert_eq!(copies.len(), 3);
-        for (i, c) in copies.iter().enumerate() {
+        // The original is on top, after the copies below it.
+        for (i, c) in copies.iter().rev().enumerate() {
             // Each copy's own box: an unplaced gradient fits it, a placed one moved with it.
             assert!((c.geometric_bounds().unwrap().x0 - 30.0 * i as f64).abs() < 1e-6);
             match c.appearance.fill_paint() {
@@ -650,7 +715,7 @@ fn pathfinder_past_its_budget_draws_the_source_art() {
     // n² crossings past the cap: no evaluation (#3591), the source art as it is.
     for n in [130, 800] {
         let g = crossing_bars(n, "pathfinder.divide");
-        let out = pathfinder_children(&g, None).unwrap();
+        let out = pathfinder_children(None, &g, None).unwrap();
         assert_eq!(out.len(), 2 * n, "{n} x {n} bars");
         let ids: Vec<NodeId> = out.iter().map(|c| c.id).collect();
         let src: Vec<NodeId> = g.children().unwrap().iter().map(|c| c.id).collect();
@@ -665,7 +730,7 @@ fn pathfinder_within_its_budget_still_divides() {
     // n x n bars divide into 3·n² pieces, and 128 x 128 bars, which overlap in exactly
     // `PATHFINDER_MAX_OVERLAPS` pairs, must still divide.
     for n in [8, 128] {
-        let out = pathfinder_children(&crossing_bars(n, "pathfinder.divide"), None).unwrap();
+        let out = pathfinder_children(None, &crossing_bars(n, "pathfinder.divide"), None).unwrap();
         assert_eq!(out.len(), 3 * n * n, "{n} x {n} bars");
     }
 }
@@ -683,7 +748,7 @@ fn pathfinder_on_many_stacked_bars_still_runs() {
         .collect();
     let mut g = Node::group(NodeId(10), children);
     g.appearance.effects.push(Effect { id: "pathfinder.add".into(), params: serde_json::json!({}), visible: true });
-    let out = pathfinder_children(&g, None).unwrap();
+    let out = pathfinder_children(None, &g, None).unwrap();
     assert_eq!(out.len(), 1);
 }
 
@@ -704,9 +769,9 @@ fn compound_shapes_draw_the_area_their_shape_modes_make() {
     for (mode, want) in [(ShapeMode::Add, 150.0), (ShapeMode::Subtract, 50.0), (ShapeMode::Intersect, 50.0), (ShapeMode::Exclude, 100.0)] {
         let g = compound_shape(mode);
         assert!(has_pathfinder(&g), "{mode:?}");
-        let area_path = compound_shape_area(&g, None).unwrap();
+        let area_path = compound_shape_area(None, &g, None).unwrap();
         assert!((po::area(&area_path, FillRule::NonZero).abs() - want).abs() < 0.01, "{mode:?}");
-        let out = pathfinder_children(&g, None).unwrap();
+        let out = pathfinder_children(None, &g, None).unwrap();
         assert_eq!(out.len(), 1, "{mode:?}");
         assert!(out[0].appearance.items.is_empty(), "the group's own appearance paints it");
         let art = evaluate_container(None, &g).unwrap();
@@ -723,7 +788,7 @@ fn compound_shapes_draw_the_area_their_shape_modes_make() {
         back.extras_mut().shape_mode = ShapeMode::Subtract;
         ch[0] = Arc::new(back);
     }
-    assert!((po::area(&compound_shape_area(&g, None).unwrap(), FillRule::NonZero).abs() - 150.0).abs() < 0.01);
+    assert!((po::area(&compound_shape_area(None, &g, None).unwrap(), FillRule::NonZero).abs() - 150.0).abs() < 0.01);
     // Hidden members take no part; the mark on a clip group is ignored.
     let mut g = compound_shape(ShapeMode::Subtract);
     if let Some(ch) = g.children_mut() {
@@ -731,10 +796,10 @@ fn compound_shapes_draw_the_area_their_shape_modes_make() {
         front.visible = false;
         ch[1] = Arc::new(front);
     }
-    assert!((po::area(&compound_shape_area(&g, None).unwrap(), FillRule::NonZero).abs() - 100.0).abs() < 0.01);
+    assert!((po::area(&compound_shape_area(None, &g, None).unwrap(), FillRule::NonZero).abs() - 100.0).abs() < 0.01);
     let mut clip = compound_shape(ShapeMode::Add);
     clip.kind = NodeKind::Group { children: clip.children().unwrap().clone(), clip: true };
-    assert!(!clip.is_compound_shape() && compound_shape_area(&clip, None).is_none());
+    assert!(!clip.is_compound_shape() && compound_shape_area(None, &clip, None).is_none());
 }
 
 /// A compound shape inside another (and inside an Effect › Pathfinder group) takes part as its area,
@@ -747,10 +812,10 @@ fn nested_compound_shapes_take_part_as_their_area() {
     let mut outer = Node::group(NodeId(20), vec![Arc::new(inner.clone()), Arc::new(cutter)]);
     outer.extras_mut().compound_shape = true;
     // (0–5 of the inner area) ∩ (2–12) = 2–5 by 10 high.
-    assert!((po::area(&compound_shape_area(&outer, None).unwrap(), FillRule::NonZero).abs() - 30.0).abs() < 0.01);
+    assert!((po::area(&compound_shape_area(None, &outer, None).unwrap(), FillRule::NonZero).abs() - 30.0).abs() < 0.01);
     let mut effect = Node::group(NodeId(30), vec![Arc::new(inner)]);
     effect.appearance.effects.push(Effect { id: "pathfinder.add".into(), params: serde_json::json!({}), visible: true });
-    let out = pathfinder_children(&effect, None).unwrap();
+    let out = pathfinder_children(None, &effect, None).unwrap();
     assert_eq!(out.len(), 1);
     assert!((area(&out[0]) - 50.0).abs() < 0.01);
     assert_eq!(out[0].appearance.fill_paint().color(), Some(Color::rgb(0.0, 1.0, 0.0)), "styled like the compound shape");

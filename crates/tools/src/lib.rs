@@ -148,13 +148,24 @@ pub trait Tool: Send {
         false
     }
     /// Is a drag moving, scaling or rotating the selection (the canvas then hides the bounding box,
-    /// so only the art is seen going with the pointer)?
+    /// so only the art is seen going with the pointer, except during a handle resize)?
     fn transforming(&self) -> bool {
+        false
+    }
+    /// Is the transforming drag a resize by a bounding-box handle? The canvas then keeps drawing
+    /// the bounding box at the changing bounds.
+    fn resizing(&self) -> bool {
         false
     }
     /// Does the tool take `key` now, ahead of the command shortcuts bound to it (the Gradient tool
     /// with a stop selected takes Delete and the arrows)?
     fn claims_key(&self, _cx: &ToolContext, _key: ToolKey) -> bool {
+        false
+    }
+    /// Has the tool started something that Escape ends while no button is pressed (a path being
+    /// drawn, the Blend tool's first pick)? That Escape ends nothing else, such as isolation mode or
+    /// a rotated view.
+    fn ends_on_escape(&self, _cx: &ToolContext) -> bool {
         false
     }
     /// Does the tool want typed text (Type tool editing)? Single-key shortcuts are suppressed.
@@ -239,6 +250,10 @@ pub trait Tool: Send {
     fn after_command(&mut self, _cx: &ToolContext) -> Vec<Action> {
         vec![]
     }
+    /// The undo history moved outside the tool (an edit, Undo or Redo the tool did not make), or
+    /// another document became active. The Blend tool drops its first pick and stops adding to the
+    /// blend it just made.
+    fn history_moved(&mut self) {}
     /// Time passes while the pointer button is held (`dt` seconds since the last tick, whether or
     /// not the pointer moved): tools that keep working while the brush holds still (Twirl, Pucker,
     /// Bloat) act on it. The host supplies the time, so tests and agents drive it exactly.
@@ -258,19 +273,39 @@ pub trait Tool: Send {
         false
     }
     /// Is the tool waiting for work it runs on another thread (the planar map of a large selection
-    /// for the Shape Builder and the Live Paint Bucket)? It highlights no region under the pointer
-    /// until the work is done. While this holds, the desktop app calls [`Tool::poll`] each frame,
-    /// and hosts without frames call it with `wait` after a [`PointerKind::Move`].
+    /// for the Shape Builder and the Live Paint Bucket, a Shape Builder merge of one)? It
+    /// highlights nothing under the pointer until a map is done. While this holds, the desktop app
+    /// calls [`Tool::poll`] each frame, and hosts without frames call it with `wait` after each
+    /// pointer event.
     fn waiting(&self) -> bool {
         false
     }
-    /// Checks on the work [`Tool::waiting`] reports, waiting for it to finish with `wait`. Once it
-    /// is done, the tool shows the highlight under the pointer where it last moved.
-    fn poll(&mut self, _cx: &ToolContext, _wait: bool) {}
+    /// Is the tool computing an edit on another thread, which [`Tool::poll`] applies once it is
+    /// done (a Shape Builder merge of a large selection)?
+    fn editing(&self) -> bool {
+        false
+    }
+    /// Checks on the work [`Tool::waiting`] reports, waiting for it to finish with `wait`. Once a
+    /// map is done, the tool shows the highlight under the pointer where it last moved; once an
+    /// edit is done, the actions returned apply it.
+    fn poll(&mut self, _cx: &ToolContext, _wait: bool) -> Vec<Action> {
+        vec![]
+    }
+    /// Waits for the edit [`Tool::editing`] reports and returns the actions that apply it, before
+    /// a command runs on the document; none when the document's revision or the selection changed
+    /// since the gesture.
+    fn finish_edit(&mut self, _cx: &ToolContext) -> Vec<Action> {
+        vec![]
+    }
     /// The Shape Builder's planar map of the selection, with the outline edges, and the gap it
     /// closes, when the tool has one. `shapeBuilder.merge` uses it in place of a map of its own
     /// when the map's inputs are the merge's inputs.
     fn shape_builder_map(&self) -> Option<(std::sync::Arc<builder::BuilderMap>, f64)> {
+        None
+    }
+    /// The Shape Builder merge the tool computed on another thread for its last gesture, which
+    /// `shapeBuilder.merge` takes when it would compute the same ([`builder::PreparedMerge`]).
+    fn shape_builder_merge(&self) -> Option<std::sync::Arc<builder::PreparedMerge>> {
         None
     }
 }
@@ -507,6 +542,7 @@ pub(crate) mod testutil {
             freeform_point: None,
             raster_sample: 1,
             preview_bounds: false,
+            glyph_bounds: false,
             preview_memo: None,
             unit: Unit::Points,
             stroke_unit: Unit::Points,
