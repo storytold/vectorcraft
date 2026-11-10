@@ -82,6 +82,7 @@ impl Session {
             pdf_preset_dir: None,
             dictionary_file: None,
             profile_dir: None,
+            color_settings_file: None,
             plugin_dir: None,
             ignored_plugin_grants: Default::default(),
             plugin_output: None,

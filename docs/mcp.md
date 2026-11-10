@@ -1114,7 +1114,7 @@ before anything runs, with the step's number and its entry (`entry 3`) or line (
 
 ### What a headless session remembers
 
-`vectorcraft-cli run` and the headless `mcp` server keep two things between runs, in folders next to the
+`vectorcraft-cli run` and the headless `mcp` server keep these between runs, in folders and files next to the
 preferences (the folder the desktop app uses, so both see the same ones; `VECTORCRAFT_CONFIG_DIR` moves it):
 
 - **Saved PDF presets** (`pdf.preset.save`, `.delete`, `.import`): one `.vcpdfpresets` file per preset in
@@ -1125,8 +1125,12 @@ preferences (the folder the desktop app uses, so both see the same ones; `VECTOR
   command, so `edit.colorSettings {"cmyk": "…"}` or a preset's output intent can name it in a later run. The
   copy is what counts: the original may move or be deleted. `color.removeProfile {name}` forgets a profile and its
   copy (not while it is a working space).
+- **Color Settings** (`edit.colorSettings`): the RGB and CMYK working spaces, intent and black point
+  compensation go into `Color Settings.json` when they change, and are the active settings again at the next
+  start, after the profiles above are registered (#6335). Saved settings that name a profile that is no longer
+  there, or a damaged file, leave the defaults (logged), and the next change writes over the file.
 
-Not remembered: Color Settings, the document, anything else. Nothing is read or written when
+Not remembered: the document, anything else. Nothing is read or written when
 `VECTORCRAFT_NO_PREFS` is set, and a server confined with `--automation-read-root` or
 `--automation-write-root` keeps nothing either (the folders are outside its roots). A file that is damaged, too large
 (a profile over 32 MB, a presets file over 1 MB) or not a valid preset or profile is skipped and logged. When the

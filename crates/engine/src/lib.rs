@@ -155,6 +155,9 @@ pub struct Session {
     /// Where the ICC profiles `color.loadProfile` loads are kept; `None`: only for the process
     /// ([`Session::attach_profile_store`]).
     profile_dir: Option<std::path::PathBuf>,
+    /// The file Edit › Color Settings are kept in; `None`: only for the process
+    /// ([`Session::attach_color_settings`]).
+    color_settings_file: Option<std::path::PathBuf>,
     /// Where the plug-ins `plugin.install` installs are kept; `None`: only for the process
     /// ([`Session::attach_plugin_store`]).
     plugin_dir: Option<std::path::PathBuf>,
