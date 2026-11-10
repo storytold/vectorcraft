@@ -121,8 +121,9 @@ pub const CALL_COMMAND_FAILED: i32 = -8;
 pub const CALL_LIMIT: i32 = -9;
 /// What `vc_call_result` returns: no call has a result yet.
 pub const CALL_NO_RESULT: i32 = -10;
-/// What `vc_call` returns: nothing can be called now (while the module is being loaded, or in a
-/// run that isn't a filter's run on a document). In a run, this fails it too.
+/// What `vc_call` returns: nothing can be called now (while the module is being loaded, in a run
+/// that isn't a filter's run on a document, or after a call in the run failed). In a run, this
+/// fails it too.
 pub const CALL_NO_CONTEXT: i32 = -11;
 
 /// Most `vc_call` calls one run makes.
@@ -429,9 +430,14 @@ impl Run {
 
     /// `vc_call`: checks the call to the command at `id` with the arguments at `args` in `memory`
     /// and leaves it in [`Run::pending`] for the host to make, or → the code for why it can't be
-    /// made, which fails the run. The size of the arguments is checked before they are read.
+    /// made, which fails the run. The size of the arguments is checked before they are read. After
+    /// the run's first failed call, every call returns [`CALL_NO_CONTEXT`] and none is made.
     fn call_request(&mut self, memory: &[u8], id: (usize, usize), args: (usize, usize)) -> std::result::Result<(), i32> {
         self.call_result = None;
+        // No call is made after the run's first failed call.
+        if self.call_failure.is_some() {
+            return Err(CALL_NO_CONTEXT);
+        }
         if self.allowed.is_none() {
             let why = "vc_call: no command can be called here (while the module loads, or in a run that can't make calls)";
             return Err(self.fail(CALL_NO_CONTEXT, Error::Abi(why.into())));
