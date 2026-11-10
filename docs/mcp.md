@@ -6135,8 +6135,9 @@ closes. `text.spelling.ignoreAll {word}` is Ignore All: the active document's ch
 any case, while the document is open. It is not saved and not an undo step.
 
 In the app, Edit › Edit Custom Dictionary… (`text.spelling.dictionary` with no params, from the menus) opens a dialog of
-the words, with an Entry field and Add, Delete and Change; Done runs `text.spelling.removeWord` and
-`text.spelling.addWord` for the words that differ, and Cancel changes nothing.
+the words, with an Entry field and Add, Delete and Change; Done runs `text.spelling.editDictionary {remove, add}` for
+the words that differ, which deletes and adds them and saves once, all or none (a save that fails keeps none of them),
+and Cancel changes nothing.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.spelling.addWord","params":{"word":"VectorCraft"}}}

@@ -3,7 +3,7 @@
 //! [Check and correct spelling](https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/check-and-correct-spelling.html)
 //! page describes it: enter a word and Add it, select a word and Delete it, or select a word, edit it
 //! in the Entry field and Change it. Nothing changes until Done, which deletes and adds the words
-//! that differ (`text.spelling.removeWord`, `text.spelling.addWord`); Cancel leaves the dictionary as
+//! that differ in one `text.spelling.editDictionary`, all or none; Cancel leaves the dictionary as
 //! it was.
 //!
 //! Fields: `orig` (the words when the dialog opened), `words` (as edited, sorted), `entry` (the
@@ -21,6 +21,9 @@ pub const KIND: &str = "editCustomDictionary";
 
 /// The command its menu item runs: with no params, it opens this dialog.
 pub const COMMAND: &str = "text.spelling.dictionary";
+
+/// The command Done runs: every delete and add, saved once.
+const EDIT: &str = "text.spelling.editDictionary";
 
 pub(super) const SPEC: DialogSpec =
     DialogSpec { heading: |_| tl!("Edit Custom Dictionary").into(), body, confirm, ok: Some("Done"), min_width: 420.0, ..DialogSpec::FORM };
@@ -136,19 +139,14 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     false
 }
 
-/// Done: deletes the words no longer in the list, then adds the new ones. A word that can't be
-/// saved keeps the dialog open with the error, its list as edited.
+/// Done: deletes the words no longer in the list and adds the new ones in one
+/// `text.spelling.editDictionary`, saved once. When it can't be saved, none of it is kept: the
+/// dialog stays open with the error, its list as edited, and Cancel leaves the dictionary as it was.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let (orig, words) = (list(d, "orig"), list(d, "words"));
-    // The dictionary as it is now: another window may have deleted a word already.
-    let now = app.run(COMMAND, json!({})).map_err(|e| e.to_string())?.get("words").cloned().unwrap_or_default();
-    let kept = |w: &String| now.as_array().is_some_and(|a| a.contains(&json!(w)));
-    for w in orig.iter().filter(|w| !words.contains(w) && kept(w)) {
-        app.run("text.spelling.removeWord", json!({ "word": w })).map_err(|e| e.to_string())?;
-    }
-    for w in words.iter().filter(|w| !orig.contains(w)) {
-        app.run("text.spelling.addWord", json!({ "word": w })).map_err(|e| e.to_string())?;
-    }
+    let remove: Vec<&String> = orig.iter().filter(|w| !words.contains(w)).collect();
+    let add: Vec<&String> = words.iter().filter(|w| !orig.contains(w)).collect();
+    app.run(EDIT, json!({ "remove": remove, "add": add })).map_err(|e| e.to_string())?;
     app.ui.dialog = None;
     Ok(Value::Null)
 }
@@ -280,6 +278,34 @@ mod tests {
         assert!(app.ui.dialog.is_none(), "Done closes it");
         assert!(!has(&mut app, A) && has(&mut app, B) && has(&mut app, "zqvdictc"));
         forget(&mut app, &[A, B, "zqvdictc"]);
+    }
+
+    /// Done that can't be saved keeps none of the edits: the dialog stays open with the error and
+    /// Cancel leaves the dictionary as it was.
+    #[test]
+    fn a_done_that_cant_be_saved_changes_nothing() {
+        const P: &str = "zqvdictp";
+        const Q: &str = "zqvdictq";
+        let mut app = app();
+        forget(&mut app, &[P, Q]);
+        app.run("text.spelling.addWord", json!({ "word": P })).unwrap();
+        let folder = vectorcraft_testkit::temp_dir("custom-dictionary-done").join("Custom Dictionary.txt");
+        std::fs::create_dir_all(&folder).unwrap();
+        let mut failing = self::app();
+        failing.session.attach_custom_dictionary(folder);
+        super::open(&mut failing).unwrap();
+        let ctx = context();
+        set(&mut failing, "selected", json!(P));
+        click(&mut failing, &ctx, "Delete");
+        set(&mut failing, "entry", json!(Q));
+        click(&mut failing, &ctx, "Add");
+        assert_eq!(words(&failing, &[P, Q]), [Q]);
+        click(&mut failing, &ctx, "Done");
+        assert!(failing.ui.dialog.is_some(), "the dialog stays open with the error");
+        assert!(has(&mut app, P) && !has(&mut app, Q), "neither the delete nor the add is kept");
+        crate::dialogs::cancel(&mut failing);
+        assert!(has(&mut app, P) && !has(&mut app, Q));
+        forget(&mut app, &[P, Q]);
     }
 
     /// Add and Change need one word that isn't in the list yet; Delete and Change need a word
