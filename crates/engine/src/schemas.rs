@@ -26,10 +26,10 @@ use crate::cmd::{CommandSpec, bad, command_specs};
 use crate::{EngineError, Result};
 
 /// The API level of the commands' parameters.
-pub const API_VERSION: u32 = 1;
+pub const API_VERSION: u32 = 2;
 
 /// [`schema_hash`] at each API level, oldest first; the last row is [`API_VERSION`]'s.
-pub const SCHEMA_HASHES: &[(u32, u64)] = &[(1, 0x9cdb_1087_7074_855c)];
+pub const SCHEMA_HASHES: &[(u32, u64)] = &[(1, 0x9cdb_1087_7074_855c), (2, 0x0e31_5d96_7bc9_2653)];
 
 /// The hash of every built-in command's schema ([`vectorcraft_apischema::hash`]).
 pub fn schema_hash() -> u64 {
@@ -296,8 +296,12 @@ mod tests {
             ("view.capsLock", json!([])),
             ("view.saved.new", json!(5)),
             ("view.transparencyGrid", json!("on")),
+            ("engine.apiReference", json!({})),
+            ("engine.apiReference", json!(null)),
+            ("engine.apiReference", json!({"prefix": "view."})),
+            ("engine.apiReference", json!([])),
         ];
-        assert_eq!(schemas().len(), 6);
+        assert_eq!(schemas().len(), 7);
         for (id, schema) in schemas() {
             let written = schema.to_json();
             check_schema(&written, id).unwrap_or_else(|e| panic!("{e}\n{written:#}"));
@@ -321,6 +325,66 @@ mod tests {
         assert_eq!(listed["schema"]["required"], json!(["center", "zoom"]));
         let without = serde_json::to_value(all.iter().find(|c| c.id == "file.new").unwrap()).unwrap();
         assert!(without.get("schema").is_none());
+    }
+
+    /// The listing gives each command with a schema an `inputSchema`, the form an MCP tool's input
+    /// schema takes: the same schema with the root `type` `"object"`, and every other keyword kept,
+    /// nested parameters, required names, defaults and VectorCraft's own fields included. A command
+    /// with no schema lists neither.
+    #[test]
+    fn engine_commands_list_an_input_schema_with_an_object_root() {
+        let s = Session::new();
+        let listed: Vec<Value> = s.commands().iter().map(|c| serde_json::to_value(c).unwrap()).collect();
+        let mut with_schema = 0;
+        for c in &listed {
+            let id = c["id"].as_str().unwrap();
+            let Some(schema) = c.get("schema") else {
+                assert!(c.get("inputSchema").is_none(), "{id}");
+                continue;
+            };
+            with_schema += 1;
+            let input = c.get("inputSchema").unwrap_or_else(|| panic!("{id} has no inputSchema"));
+            assert_eq!(input["type"], "object", "{id}");
+            assert_eq!(input["$schema"], vectorcraft_apischema::DIALECT, "{id}");
+            check_schema(input, id).unwrap_or_else(|e| panic!("{e}\n{input:#}"));
+            assert!(!instance_valid(input, &Value::Null), "{id}: the arguments are an object");
+            let without_type = |v: &Value| {
+                let mut v = v.clone();
+                v.as_object_mut().map(|o| o.remove("type"));
+                v
+            };
+            assert_eq!(without_type(schema), without_type(input), "{id}");
+        }
+        assert_eq!(with_schema, schemas().len());
+        let get = |id: &str| listed.iter().find(|c| c["id"] == id).unwrap();
+        // No required parameter: the schema also takes null, the input schema does not.
+        let list = get("view.saved.list");
+        assert_eq!(list["schema"]["type"], json!(["object", "null"]));
+        assert_eq!(list["inputSchema"]["type"], "object");
+        // Required parameters and their constraints are kept.
+        let new_view = get("view.saved.new");
+        assert_eq!(new_view["inputSchema"]["required"], json!(["center", "zoom"]));
+        assert_eq!(new_view["inputSchema"]["properties"], new_view["schema"]["properties"]);
+        // Nested objects in an array keep their keys.
+        let edit = &get("view.saved.edit")["inputSchema"]["properties"]["edits"];
+        assert!(edit.to_string().contains("newName"), "{edit}");
+        assert!(get("file.new").get("inputSchema").is_none());
+    }
+
+    /// A deprecated command and a deprecated parameter keep their deprecation in the input schema.
+    #[test]
+    fn an_input_schema_keeps_deprecation() {
+        static PARAMS: [Param; 2] = [Param::new("old", Type::Boolean).optional().deprecated(1), Param::new("on", Type::Boolean).optional()];
+        let schema = ParamSchema::new(&PARAMS, "Old command.").deprecated(1).to_json();
+        let input = crate::cmd::input_schema(&schema);
+        check_schema(&input, "synthetic").unwrap_or_else(|e| panic!("{e}\n{input:#}"));
+        assert_eq!(schema["type"], json!(["object", "null"]));
+        assert_eq!(input["type"], "object");
+        assert_eq!(input["deprecated"], true);
+        assert_eq!(input["x-deprecatedSince"], 1);
+        assert_eq!(input["properties"]["old"], schema["properties"]["old"]);
+        assert_eq!(input["properties"]["old"]["deprecated"], true);
+        assert_eq!(input["description"], "Old command.");
     }
 
     /// The listing says what each View command changes when it runs. Only the commands that make an

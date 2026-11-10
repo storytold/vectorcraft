@@ -423,7 +423,6 @@ antiAlias	Sharp	Nítid
 	Back	Enrere
 	Background Color:	Color de fons:
 	Background Contents	Contingut del fons
-	Background Contents:	Contingut del fons:
 	Background Level	Nivell de fons
 	Background:	Fons:
 	Backspace	Retrocés
@@ -444,6 +443,11 @@ antiAlias	Sharp	Nítid
 	Button	Botó
 	Panel	Panell
 	UI Frames	Marcs d’IU
+	Map Markers	Marcadors de mapa
+	Pin	Xinxeta
+	Flag	Bandera
+	Crosshair	Punt de mira
+	Checkpoint	Punt de control
 	Batch	Lot
 	Batch…	Lot…
 	Bearing	Orientació
@@ -795,6 +799,7 @@ antiAlias	Sharp	Nítid
 	Command	Ordre
 	Command Click to Select Objects Behind	Clic amb Ordre per seleccionar els objectes del darrere
 	Command Dialog	Diàleg d’ordres
+	Command API Reference	Referència de l’API d’ordres
 	Comment not closed	Comentari no tancat
 	Commenting, filling in form fields and signing	Comentar, emplenar camps de formulari i signar
 	Commits	Commits
@@ -917,7 +922,6 @@ antiAlias	Sharp	Nítid
 	Create Clipping Mask	Crea una màscara de retall
 	Create Compound Path From Ellipses	Crea un traçat compost a partir d’el·lipses
 	Create Dimension	Crea una dimensió
-	Create Document	Crea un document
 	Create from Guides	Crea a partir de guies
 	Create from Selection	Crea a partir de la selecció
 	Create From:	Crea a partir de:
@@ -2339,6 +2343,7 @@ digits	Malayalam	Malaiàlam
 	Lock Artboards	Bloca els taulers
 	Lock Grid	Bloca la quadrícula
 	Lock Guides	Bloca les guies
+	Lock Guides by Default	Bloca les guies per defecte
 	Lock Others	Bloca la resta
 	Lock Selected	Bloca la selecció
 	Lock Slices	Bloca els talls
@@ -2597,7 +2602,6 @@ digits	Malayalam	Malaiàlam
 	New Design	Disseny nou
 	New Document Presets	Preajustos de document nous
 	New file	Fitxer nou
-	New from Template	Nou a partir d’una plantilla
 	New from Template…	Nou a partir d’una plantilla…
 	New Graphic Style	Estil gràfic nou
 	New Graphic Style (Alt-click to name it)	Estil gràfic nou (Alt+clic per posar-hi nom)
@@ -3643,6 +3647,7 @@ digits	Malayalam	Malaiàlam
 	Save PDF Preset	Desa el preajust de PDF
 	Save Perspective Grid Preset	Desa el preajust de quadrícula en perspectiva
 	Save Preset	Desa el preajust
+	Save Document Preset	Desa el preajust de document
 	Save Preset…	Desa el preajust…
 	Save Print Preset	Desa el preajust d’impressió
 	Save Recovery Data	Desa les dades de recuperació
@@ -4369,7 +4374,6 @@ digits	Malayalam	Malaiàlam
 	Template literal not closed	El literal de plantilla no està tancat
 	Templates	Plantilles
 	Templates Folder	Carpeta de plantilles
-	Templates…	Plantilles…
 	Tetrad	Tètrada
 	Tetrad 2	Tètrada 2
 	Tetrad 3	Tètrada 3
@@ -5155,6 +5159,28 @@ digits	Malayalam	Malaiàlam
 @msg	control must be fillStroke, coloring, drawMode or screenMode	control ha de ser fillStroke, coloring, drawMode o screenMode
 @msg	Convert to Artboards: selection has no area	Converteix en taulers: la selecció no té àrea
 @msg	Convert to Shape: no rectangles or ellipses selected	Converteix en forma: no s’ha seleccionat cap rectangle ni el·lipse
+	Run	Executa
+	Run Script	Executa l'script
+	Stop Script	Atura l'script
+	Show External Script Warning	Mostra l'avís dels scripts externs
+	A Script Is Running	S'està executant un script
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Un script pot canviar els documents oberts i escriure fitxers mitjançant les ordres que executa. Executeu només scripts de confiança.
+	Do not show this warning again	No tornis a mostrar aquest avís
+	Stop the script and undo what it did? Then quit again.	Voleu aturar l'script i desfer el que ha fet? Després, torneu a sortir.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Aquest script ha afegit moltíssims objectes. Voleu continuar, o aturar-lo i desfer el que ha fet?
+@msg	Choose a .js or .jsx script	Trieu un script .js o .jsx
+@msg	Ran {name}	S'ha executat {name}
+@msg	The script was stopped and its changes were undone	L'script s'ha aturat i s'han desfet els seus canvis
+@msg	a script is running: stop it or wait for it to finish	s'està executant un script: atureu-lo o espereu que acabi
+@msg	this is a compiled script, which cannot be run; use its source text	aquest és un script compilat, que no es pot executar; useu el seu text font
+@msg	the script is not UTF-8 text	l'script no és text UTF-8
+@msg	the script is too large to run	l'script és massa gran per executar-lo
+@msg	a drag or an undo group is open; finish it before running a script	hi ha un arrossegament o un grup de desfer obert; acabeu-lo abans d'executar un script
+@msg	the script left a document that cannot be kept	l'script ha deixat un document que no es pot conservar
+@msg	the script's run is no longer available	l'execució de l'script ja no està disponible
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	una ordre fallida ha canviat passos de desfer que no s'han pogut restaurar, així que l'script s'ha aturat
+@msg	a recovery copy could not be written, so the script was not run	no s'ha pogut escriure una còpia de recuperació, per tant l'script no s'ha executat
+@msg	Running a script	S'està executant un script
 @msg	Copied the script report	S’ha copiat l’informe de l’script
 @msg	Corners edits the corners of a path	Cantonades edita les cantonades d’un traçat
 @msg	could not decode image: {0}	no s’ha pogut descodificar la imatge: {0}
@@ -5434,6 +5460,7 @@ digits	Malayalam	Malaiàlam
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	S’ha carregat “{name}”: s’ha omès {n} pas|S’ha carregat “{name}”: s’han omès {n} passos
 @msg	not an action set file	no és un fitxer de conjunt d’accions
 @msg	the action set file is larger than 8 MiB	el fitxer de conjunt d’accions supera els 8 MiB
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: la referència superaria els {MAX_BYTES} bytes
 @msg	the action set file holds more than 1,000 actions	el fitxer de conjunt d’accions conté més de 1.000 accions
 @msg	the action set file needs a later version of VectorCraft	el fitxer de conjunt d’accions necessita una versió més recent del VectorCraft
 @msg	an action in the action set file has more than 10,000 steps	una acció del fitxer de conjunt d’accions té més de 10.000 passos
@@ -5917,7 +5944,7 @@ digits	Malayalam	Malaiàlam
 @msg	{key} must be a finite coordinate	{key} ha de ser una coordenada finita
 @msg	{key} must be an array of non-negative integer object ids	{key} ha de ser una matriu d’identificadors d’objecte enters no negatius
 @msg	{key} must be Unix seconds (an integer) or null	{key} ha de ser segons Unix (un enter) o null
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} actualment requereix un traçat o un traçat compost. Converteix primer els textos, les imatges i els grups en traçats.
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} actualment requereix un traçat, un traçat compost, text o un grup. Converteix primer les imatges i altres objectes en traçats.
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} conserva 1 dels {n} taulers del document: el fitxer es reobre amb un. Activa Conserva les capacitats d’edició per conservar-los tots.
 @msg	{label} produced an empty result	{label} ha produït un resultat buit
 @msg	{label} requires a shape with at least two anchors	{label} requereix una forma amb com a mínim dos punts d’ancoratge
@@ -6067,6 +6094,8 @@ theme	Appearance	Aparença
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Text de punt
 	Area Text	Text d’àrea
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Mesura el text pels límits del glif
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Mostra les opcions d’ajust al glif
 	Hide Snap to Glyph Options	Amaga les opcions d’ajust al glif
@@ -6648,3 +6677,6 @@ breakText	Glyphs	Glifs
 	Align to Pixel Grid	Alinea a la quadrícula de píxels
 @msg	only paths and compound paths can be aligned to the pixel grid	només els traçats i els traçats compostos es poden alinear a la quadrícula de píxels
 @msg	side is left or right, not `{s}`	side ha de ser left o right, no `{s}`
+	Ignore All	Ignora-ho tot
+	Add to Dictionary	Afegeix al diccionari
+	No Suggestions	No hi ha suggeriments

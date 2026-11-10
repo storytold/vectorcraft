@@ -585,13 +585,13 @@ impl<'p> Builder<'p> {
         Some(Paint::Pattern { pattern: name, xf })
     }
 
-    /// Separation image `st` (`w` × `h` pixels) as the paint of its ink at 100 % (a spot swatch, a
+    /// Image `st` of one ink (`w` × `h` pixels) as the paint of its ink at 100 % (a spot swatch, a
     /// process plate or Registration, found by its colour space) and its tints as gray pixels
     /// ([`crate::import_image::tint_gray`]). `None` for another image, an ink whose colour can't
     /// be told, or tints that can't be read (with a warning): the image opens in RGB. The ink is
     /// only marked used once the tints are read.
     pub(super) fn separation_image(&mut self, st: &craft_pdf::syntax::object::Stream<'_>, w: u32, h: u32) -> Option<(Paint, Vec<u8>)> {
-        let space = self.colors.array_space(&crate::import_image::separation_space(st)?)?;
+        let space = self.colors.array_space(&crate::import_image::one_ink_space(st)?)?;
         let gray = crate::import_image::tint_gray(st, w, h).map_err(|why| self.warn(why)).ok()?;
         Some((self.colors.native(space, &[1.0])?.paint(), gray))
     }

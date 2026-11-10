@@ -600,6 +600,7 @@
 	Hide Guides	Sakrij vodilice
 	Show Guides	Prikaži vodilice
 	Lock Guides	Zaključaj vodilice
+	Lock Guides by Default	Zaključaj vodilice po zadanom
 	Unlock Guides	Otključaj vodilice
 	Make Guides	Napravi vodilice
 	Release Guides	Oslobodi vodilice
@@ -964,6 +965,7 @@ lighting	Light	Svjetlo
 	Color Picker…	Birač boja…
 	Coming soon — tracked in the parity plan	Uskoro — prati se u planu usklađenosti
 	Command Dialog	Dijalog naredbe
+	Command API Reference	Referenca API-ja naredbi
 	Copy Selected Style	Kopiraj odabrani stil
 	Corners…	Uglovi…
 	Define Perspective Grid…	Definiši mrežu perspektive…
@@ -2531,15 +2533,12 @@ digits	Malayalam	Malajalam
 	Selected Swatches	Odabrani uzorci boja
 	Advanced Options	Napredne opcije
 	Background Contents	Sadržaj pozadine
-	Background Contents:	Sadržaj pozadine:
 	BLANK DOCUMENT PRESETS	PREDLOŠCI PRAZNIH DOKUMENATA
 	Bleed	Napust
 	Change to Right-to-Left Layout	Prebaci na raspored s desna nalijevo
 	Columns:	Kolone:
-	Create Document	Kreiraj dokument
 	Documents you create appear here.	Dokumenti koje kreirate pojavljuju se ovdje.
 	More Settings	Više postavki
-	New from Template	Novo iz predloška
 	Number of Artboards:	Broj radnih ploča:
 	Orientation:	Orijentacija:
 	PRESET DETAILS	DETALJI PREDLOŠKA
@@ -2550,7 +2549,6 @@ digits	Malayalam	Malajalam
 	RECENT	NEDAVNO
 	RECENT (1)	NEDAVNO (1)
 	SAVED	SAČUVANO
-	Templates…	Predlošci…
 	Transparent (Default)	Prozirno (zadano)
 	Save for Office Documents	Sačuvaj za Office dokumente
 	Transparent Background	Prozirna pozadina
@@ -3486,6 +3484,7 @@ theme	Appearance	Izgled
 	Arrange by Row	Rasporedi po redu
 	Arrange by Column	Rasporedi po koloni
 	Save Preset	Sačuvaj predložak
+	Save Document Preset	Sačuvaj predložak dokumenta
 	Screen (72 ppi)	Ekran (72 ppi)
 	Social Square Post 1080×1080	Kvadratna objava za društvene mreže 1080×1080
 	Distribute	Rasporedi ravnomjerno
@@ -4320,6 +4319,15 @@ imageTrace	Outline	Obris
 @msg	Combine Slices: the slices have no bounds	Kombinuj isječke: isječci nemaju granice
 @msg	Convert to Artboards: selection has no area	Pretvori u radne ploče: odabir nema površinu
 @msg	Convert to Shape: no rectangles or ellipses selected	Pretvori u oblik: nisu odabrani pravougaonici ni elipse
+	Run	Pokreni
+	Run Script	Pokreni skriptu
+	Stop Script	Zaustavi skriptu
+	Show External Script Warning	Prikaži upozorenje za vanjske skripte
+	A Script Is Running	Skripta se izvršava
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skripta može mijenjati otvorene dokumente i pisati datoteke putem naredbi koje pokreće. Pokrećite samo skripte kojima vjerujete.
+	Do not show this warning again	Ne prikazuj više ovo upozorenje
+	Stop the script and undo what it did? Then quit again.	Zaustaviti skriptu i poništiti ono što je uradila? Zatim ponovo izađite.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Ova skripta je dodala veoma mnogo objekata. Nastaviti, ili je zaustaviti i poništiti ono što je uradila?
 @msg	Copied the script report	Izvještaj skripte kopiran
 @msg	Corners edits the corners of a path	Uglovi uređuje uglove putanje
 @msg	Couldn't copy to the system clipboard: {e}	Nije moguće kopirati u sistemski međuspremnik: {e}
@@ -5880,6 +5888,11 @@ axis	Y Axis	Y osa
 	Button	Dugme
 	Panel	Panel
 	UI Frames	UI okviri
+	Map Markers	Markeri mape
+	Pin	Pin
+	Flag	Zastava
+	Crosshair	Nišan
+	Checkpoint	Kontrolna tačka
 	Open Symbol Library	Otvori biblioteku simbola
 	Save Symbol Library	Sačuvaj biblioteku simbola
 	Save Symbol Library…	Sačuvaj biblioteku simbola…
@@ -5952,6 +5965,8 @@ axis	Y Axis	Y osa
 	Live preview	Pregled uživo
 	Point Text	Tačkasti tekst
 	Area Text	Tekst u oblasti
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Mjeri tekst po granicama glifa
 	Show Snap to Glyph Options	Prikaži opcije prianjanja uz glif
 	Hide Snap to Glyph Options	Sakrij opcije prianjanja uz glif
 	Snap to Glyph Options	Opcije prianjanja uz glif

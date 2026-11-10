@@ -282,7 +282,6 @@ font-technology	Variable	Değişken
 	Update While Dragging	Sürüklerken Güncelle
 	Hide Video Rulers	Video Cetvellerini Gizle
 	Background Contents	Arka Plan İçeriği
-	Background Contents:	Arkaplan İçeriği:
 	Background:	Arka plan:
 	Backspace	Geri tuşu
 	Bar Graph Tool	Çubuk Grafik Aracı
@@ -564,6 +563,7 @@ font-technology	Variable	Değişken
 	Coming soon — tracked in the parity plan	Çok yakında — eşlik planında takip ediliyor
 	Command Click to Select Objects Behind	Komut Arkasındaki Nesneleri Seçmek İçin Tıklayın
 	Command Dialog	Komut İletişim Kutusu
+	Command API Reference	Komut API Başvurusu
 	Community	Topluluk
 	Compatibility:	Uyumluluk:
 	Compatible Gradient and Gradient Mesh Printing	Uyumlu Degrade ve Degrade Mesh Baskı
@@ -648,7 +648,6 @@ font-technology	Variable	Değişken
 	Couldn't {} {name}: {e}	{} yapılamadı {name}: {e}
 	Create	Oluştur
 	Create Clipping Mask	Kırpma Maskesi Oluştur
-	Create Document	Belge Oluştur
 	Create from Guides	Rehberlerden Oluştur
 	Create from Selection	Seçimden Oluştur
 	Create From:	Şuradan Oluştur:
@@ -1730,6 +1729,7 @@ font-technology	Variable	Değişken
 	Lock (⌘2)	Kilitle (⌘2)
 	Lock Grid	Izgarayı Kilitle
 	Lock Guides	Kilit Kılavuzları
+	Lock Guides by Default	Kılavuzları Varsayılan Olarak Kilitle
 	Lock Others	Diğerlerini Kilitle
 	Lock Slices	Dilimleri Kilitle
 	Lock Station Point	Kilit İstasyon Noktası
@@ -1958,7 +1958,6 @@ font-technology	Variable	Değişken
 	New Color Group…	Yeni Renk Grubu…
 	New Document Presets	Yeni Belge Ön Ayarları
 	New file	Yeni dosya
-	New from Template	Şablondan yeni
 	New from Template…	Şablondan yeni…
 	New Graphic Style	Yeni Grafik Stili
 	New Graphic Style (Alt-click to name it)	Yeni Grafik Stili (Adını vermek için Alt tuşuna basarak tıklayın)
@@ -2734,6 +2733,7 @@ digits	Malayalam	Malayalam
 	Save PDF Preset	PDF Hazır Ayarını Kaydet
 	Save Perspective Grid Preset	Perspektif Izgarası Ön Ayarını Kaydet
 	Save Preset	Ön Ayarı Kaydet
+	Save Document Preset	Belge Ön Ayarını Kaydet
 	Save Preset…	Ön Ayarı Kaydet…
 	Save Print Preset	Yazdırma Ön Ayarını Kaydet
 	Save Recovery Data	Kurtarma Verilerini Kaydet
@@ -3323,7 +3323,6 @@ digits	Malayalam	Malayalam
 	Template	Şablon
 	Templates	Şablonlar
 	Templates Folder	Şablonlar Klasörü
-	Templates…	Şablonlar…
 	Text Displayed in Cell:	Hücrede Görüntülenen Metin:
 	Text Export Options	Metin Dışa Aktarma Seçenekleri
 	Text Fill & Stroke Color	Metin Dolgu ve Kontur Rengi
@@ -3860,6 +3859,28 @@ axis	Both	Her İkisi
 @msg	Combine Slices: the slices have no bounds	Dilimleri Birleştir: dilimlerin sınırları yoktur
 @msg	Convert to Artboards: selection has no area	Çalışma Yüzeylerine Dönüştür: seçimin alanı yok
 @msg	Convert to Shape: no rectangles or ellipses selected	Şekle Dönüştür: seçili dikdörtgen veya elips yok
+	Run	Çalıştır
+	Run Script	Betiği Çalıştır
+	Stop Script	Betiği Durdur
+	Show External Script Warning	Harici Betik Uyarısını Göster
+	A Script Is Running	Bir Betik Çalışıyor
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Bir betik açık belgeleri değiştirebilir ve çalıştırdığı komutlarla dosya yazabilir. Yalnızca güvendiğiniz betikleri çalıştırın.
+	Do not show this warning again	Bu uyarıyı bir daha gösterme
+	Stop the script and undo what it did? Then quit again.	Betik durdurulsun ve yaptıkları geri alınsın mı? Ardından yeniden çıkın.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Bu betik çok sayıda nesne ekledi. Devam edilsin mi, yoksa durdurulup yaptıkları geri mi alınsın?
+@msg	Choose a .js or .jsx script	Bir .js veya .jsx betiği seçin
+@msg	Ran {name}	{name} çalıştırıldı
+@msg	The script was stopped and its changes were undone	Betik durduruldu ve değişiklikleri geri alındı
+@msg	a script is running: stop it or wait for it to finish	bir betik çalışıyor: durdurun veya bitmesini bekleyin
+@msg	this is a compiled script, which cannot be run; use its source text	bu derlenmiş bir betik, çalıştırılamaz; kaynak metnini kullanın
+@msg	the script is not UTF-8 text	betik UTF-8 metni değil
+@msg	the script is too large to run	betik çalıştırılamayacak kadar büyük
+@msg	a drag or an undo group is open; finish it before running a script	bir sürükleme veya geri alma grubu açık; betiği çalıştırmadan önce tamamlayın
+@msg	the script left a document that cannot be kept	betik, saklanamayan bir belge bıraktı
+@msg	the script's run is no longer available	betiğin çalıştırması artık kullanılamıyor
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	başarısız bir komut geri yüklenemeyen geri alma adımlarını değiştirdi, bu yüzden betik durduruldu
+@msg	a recovery copy could not be written, so the script was not run	kurtarma kopyası yazılamadı, bu nedenle betik çalıştırılmadı
+@msg	Running a script	Betik çalıştırılıyor
 @msg	Copied the script report	Komut dosyası raporu kopyalandı
 @msg	Corners edits the corners of a path	Köşeler bir yolun köşelerini düzenler
 @msg	Couldn't copy to the system clipboard: {e}	Sistem panosuna kopyalanamadı: {e}
@@ -4179,6 +4200,7 @@ axis	Both	Her İkisi
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	“{name}” yüklendi: {n} adım atlandı
 @msg	not an action set file	bir eylem seti dosyası değil
 @msg	the action set file is larger than 8 MiB	eylem seti dosyası 8 MiB'den büyük
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: başvuru {MAX_BYTES} bayttan büyük olur
 @msg	the action set file holds more than 1,000 actions	eylem seti dosyası 1.000'den fazla eylem içeriyor
 @msg	the action set file needs a later version of VectorCraft	eylem seti dosyası VectorCraft'ın daha yeni bir sürümünü gerektiriyor
 @msg	an action in the action set file has more than 10,000 steps	eylem seti dosyasındaki bir eylemde 10.000'den fazla adım var
@@ -4858,7 +4880,7 @@ lighting	Light	Işık
 	Bevel both sides	Her iki tarafa da eğim verin
 	Presets	Ön ayarlar
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Bir nesne bir 3D efekti alır. Mevcut efektin seçeneklerini düzenleyin veya önce onu kaldırın.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} şu anda bir yol veya bileşik yol gerektiriyor. Önce türü, görüntüleri ve grupları yollara dönüştürün.
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} şu anda bir yol, bileşik yol, yazı veya grup gerektiriyor. Önce görüntüleri ve diğer nesneleri yollara dönüştürün.
 @msg	{label} requires a shape with at least two anchors	{label} en az iki bağlantı noktasına sahip bir şekil gerektirir
 @msg	The shape is too complex for a 3D effect	Şekli 3 boyutlu bir efekt için fazla karmaşık
 @msg	The 3D surface is too complex; simplify the shape	3 boyutlu yüzey çok karmaşık; şekli basitleştir
@@ -5986,6 +6008,11 @@ axis	Y Axis	Y ekseni
 	Button	Düğme
 	Panel	Panel
 	UI Frames	UI çerçeveleri
+	Map Markers	Harita İşaretleri
+	Pin	İğne
+	Flag	Bayrak
+	Crosshair	Nişangah
+	Checkpoint	Kontrol noktası
 	Open Symbol Library	Sembol Kitaplığını Aç
 	Save Symbol Library	Sembol Kitaplığını Kaydet
 	Save Symbol Library…	Sembol Kitaplığını Kaydet…
@@ -6060,6 +6087,8 @@ axis	Y Axis	Y ekseni
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Nokta Metni
 	Area Text	Alan Metni
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Yazıyı Glif Sınırlarına Göre Ölç
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Glif'e Yapışma Seçeneklerini Göster
 	Hide Snap to Glyph Options	Glif'e Yapışma Seçeneklerini Gizle
@@ -6623,3 +6652,6 @@ breakText	Glyphs	Glifler
 	Align to Pixel Grid	Piksel Izgarasına Hizala
 @msg	only paths and compound paths can be aligned to the pixel grid	piksel ızgarasına yalnızca yollar ve bileşik yollar hizalanabilir
 @msg	side is left or right, not `{s}`	side left veya right olmalıdır, `{s}` değil
+	Ignore All	Tümünü Yoksay
+	Add to Dictionary	Sözlüğe Ekle
+	No Suggestions	Öneri Yok

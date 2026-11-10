@@ -87,7 +87,7 @@ pub use revolve::{REVOLVE, has_revolve, revolve_art, revolve_options, validate_r
 pub use solids::{
     CLASSIC_EXTRUDE, EXTRUDE, INFLATE, ROTATE, ROTATION_PRESETS, SHADING_COLORS, SOLIDS, SolidMesh, THREE_D_TYPES, classic_extrude_options,
     classic_shading, extrude_options, has_solid, inflate_options, is_three_d, solid_art, three_d_meshes, three_d_meshes_of, three_d_params_as,
-    validate_solid, validate_three_d, validate_three_d_params, view_options,
+    validate_solid, validate_three_d, validate_three_d_at, validate_three_d_params, view_options,
 };
 pub use stylize::{ScribbleSetting, scribble_setting_id, scribble_settings};
 pub use svg_filter::SVG_FILTER;

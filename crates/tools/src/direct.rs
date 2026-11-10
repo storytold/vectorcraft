@@ -1437,7 +1437,7 @@ impl DirectSelectionTool {
             // them, an edge on a gridline on each axis), not that point (#3835).
             let grid = segment && (cx.snap_to_grid || cx.snap_to_pixel);
             self.partial_grid =
-                grid.then(|| MoveSnap::grid_only(vectorcraft_effects::preview::anchor_bounds(cx.selection, cx.doc, cx.preview_bounds)));
+                grid.then(|| MoveSnap::grid_only(vectorcraft_effects::preview::anchor_bounds_with(cx.selection, cx.doc, cx.bounds_measure())));
         }
         let mut d = move_delta(start, p, ev.mods.shift, cx.constrain_angle);
         let unsnapped = d;
@@ -1474,7 +1474,7 @@ impl DirectSelectionTool {
             self.partial_snap = (!cx.selection.anchors.is_empty()).then(|| PointSnap::new(cx, || Targets::for_anchor_drag(cx.doc, cx.selection)));
             let grid = self.partial_snap.is_some() && grab.is_none() && (cx.snap_to_grid || cx.snap_to_pixel);
             self.partial_grid =
-                grid.then(|| MoveSnap::grid_only(vectorcraft_effects::preview::anchor_bounds(cx.selection, cx.doc, cx.preview_bounds)));
+                grid.then(|| MoveSnap::grid_only(vectorcraft_effects::preview::anchor_bounds_with(cx.selection, cx.doc, cx.bounds_measure())));
             let copy = ev.mods.alt && self.partial_snap.is_none();
             out.push(Action::Begin(if copy { "Copy".into() } else { "Move".into() }));
             self.state = State::MoveObject { start, grab, hold, began: true, deselect: None };

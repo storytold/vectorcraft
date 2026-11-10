@@ -320,7 +320,6 @@ font-technology	Variable	Biến thiên
 	Update While Dragging	Cập nhật khi kéo
 	Hide Video Rulers	Ẩn thước video
 	Background Contents	Nội dung nền
-	Background Contents:	Nội dung nền:
 	Background:	Nền:
 	Backspace	Backspace
 	Balance	Cân bằng
@@ -672,6 +671,7 @@ font-technology	Variable	Biến thiên
 	Coming soon — tracked in the parity plan	Sắp ra mắt — đang theo dõi trong kế hoạch đối chiếu tính năng
 	Command Click to Select Objects Behind	Command-bấm để chọn đối tượng phía sau
 	Command Dialog	Hộp thoại lệnh
+	Command API Reference	Tài liệu tham khảo API lệnh
 	Commits	Commit
 	Community	Cộng đồng
 	Company	Công ty
@@ -765,7 +765,6 @@ font-technology	Variable	Biến thiên
 	Create	Tạo
 	Create Clipping Mask	Tạo mặt nạ cắt
 	Create Compound Path From Ellipses	Tạo đường dẫn phức từ hình elip
-	Create Document	Tạo tài liệu
 	Create from Guides	Tạo từ đường căn
 	Create from Selection	Tạo từ vùng chọn
 	Create From:	Tạo từ:
@@ -2203,6 +2202,7 @@ digits	Hindi	Hindi
 	Lock (⌘2)	Khóa (⌘2)
 	Lock Grid	Khóa lưới
 	Lock Guides	Khóa đường căn
+	Lock Guides by Default	Khóa đường căn theo mặc định
 	Lock Others	Khóa các mục khác
 	Lock Slices	Khóa lát cắt
 	Lock Station Point	Khóa điểm trạm
@@ -2408,7 +2408,6 @@ digits	Hindi	Hindi
 	New Design	Thiết kế mới
 	New Document Presets	Thiết lập sẵn tài liệu mới
 	New file	Tệp mới
-	New from Template	Mới từ mẫu
 	New from Template…	Mới từ mẫu…
 	New Graphic Style	Kiểu đồ họa mới
 	New Graphic Style (Alt-click to name it)	Kiểu đồ họa mới (Alt-bấm để đặt tên)
@@ -3272,6 +3271,7 @@ mark-style	Japanese	Kiểu Nhật
 	Save PDF Preset	Lưu thiết lập sẵn PDF
 	Save Perspective Grid Preset	Lưu thiết lập sẵn lưới phối cảnh
 	Save Preset	Lưu thiết lập sẵn
+	Save Document Preset	Lưu thiết lập sẵn tài liệu
 	Preset {number}	Thiết lập sẵn {number}
 	Save Preset…	Lưu thiết lập sẵn…
 	Save Print Preset	Lưu thiết lập sẵn in
@@ -3873,7 +3873,6 @@ mark-style	Japanese	Kiểu Nhật
 	Template	Mẫu
 	Templates	Mẫu
 	Templates Folder	Thư mục mẫu
-	Templates…	Mẫu…
 	Text	Văn bản
 	Text Displayed in Cell:	Văn bản hiển thị trong ô:
 	Text Export Options	Tùy chọn xuất văn bản
@@ -4512,6 +4511,28 @@ theme	Appearance	Giao diện
 @msg	compressed (RLE) bitmaps can't be read yet	bitmap nén (RLE) chưa thể đọc được
 @msg	Convert to Artboards: selection has no area	Chuyển thành bảng vẽ: vùng chọn không có diện tích
 @msg	Convert to Shape: no rectangles or ellipses selected	Chuyển thành hình dạng: chưa chọn hình chữ nhật hay hình elip
+	Run	Chạy
+	Run Script	Chạy tập lệnh
+	Stop Script	Dừng tập lệnh
+	Show External Script Warning	Hiện cảnh báo tập lệnh bên ngoài
+	A Script Is Running	Một tập lệnh đang chạy
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Tập lệnh có thể thay đổi các tài liệu đang mở và ghi tệp thông qua các lệnh mà nó chạy. Chỉ chạy những tập lệnh bạn tin cậy.
+	Do not show this warning again	Không hiện lại cảnh báo này
+	Stop the script and undo what it did? Then quit again.	Dừng tập lệnh và hoàn tác những gì nó đã làm? Sau đó hãy thoát lại.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Tập lệnh này đã thêm rất nhiều đối tượng. Tiếp tục, hay dừng lại và hoàn tác những gì nó đã làm?
+@msg	Choose a .js or .jsx script	Chọn một tập lệnh .js hoặc .jsx
+@msg	Ran {name}	Đã chạy {name}
+@msg	The script was stopped and its changes were undone	Tập lệnh đã dừng và các thay đổi của nó đã được hoàn tác
+@msg	a script is running: stop it or wait for it to finish	một tập lệnh đang chạy: hãy dừng nó hoặc chờ nó kết thúc
+@msg	this is a compiled script, which cannot be run; use its source text	đây là tập lệnh đã biên dịch, không thể chạy; hãy dùng văn bản nguồn của nó
+@msg	the script is not UTF-8 text	tập lệnh không phải là văn bản UTF-8
+@msg	the script is too large to run	tập lệnh quá lớn để chạy
+@msg	a drag or an undo group is open; finish it before running a script	đang có thao tác kéo hoặc nhóm hoàn tác; hãy hoàn thành trước khi chạy tập lệnh
+@msg	the script left a document that cannot be kept	tập lệnh để lại một tài liệu không thể giữ
+@msg	the script's run is no longer available	lần chạy tập lệnh không còn khả dụng
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	một lệnh thất bại đã thay đổi các bước hoàn tác không thể khôi phục, nên tập lệnh đã bị dừng
+@msg	a recovery copy could not be written, so the script was not run	không thể ghi bản sao khôi phục nên tập lệnh không được chạy
+@msg	Running a script	Đang chạy tập lệnh
 @msg	Copied the script report	Đã sao chép báo cáo script
 @msg	Corners edits the corners of a path	Corners chỉnh sửa các góc của đường dẫn
 @msg	could not decode image: {0}	không thể giải mã ảnh: {0}
@@ -4750,6 +4771,7 @@ theme	Appearance	Giao diện
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Đã tải “{name}”: bỏ qua {n} bước
 @msg	not an action set file	không phải tệp bộ hành động
 @msg	the action set file is larger than 8 MiB	tệp bộ hành động lớn hơn 8 MiB
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: tài liệu tham khảo sẽ lớn hơn {MAX_BYTES} byte
 @msg	the action set file holds more than 1,000 actions	tệp bộ hành động chứa hơn 1.000 hành động
 @msg	the action set file needs a later version of VectorCraft	tệp bộ hành động cần phiên bản VectorCraft mới hơn
 @msg	an action in the action set file has more than 10,000 steps	một hành động trong tệp bộ hành động có hơn 10.000 bước
@@ -5176,7 +5198,7 @@ theme	Appearance	Giao diện
 @msg	{C}: no effect at index {from}	{C}: không có hiệu ứng tại chỉ mục {from}
 @msg	{depth}-bit PSD files in this colour mode can't be read	tệp PSD {depth}-bit ở chế độ màu này không thể đọc được
 @msg	{key} must be a finite coordinate	{key} phải là tọa độ hữu hạn
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} hiện yêu cầu một đường dẫn hoặc đường dẫn phức. Hãy chuyển văn bản, hình ảnh và nhóm thành đường dẫn trước.
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} hiện yêu cầu một đường dẫn, đường dẫn phức, văn bản hoặc nhóm. Hãy chuyển hình ảnh và các đối tượng khác thành đường dẫn trước.
 @msg	{label} produced an empty result	{label} tạo ra kết quả trống
 @msg	{label} requires a shape with at least two anchors	{label} yêu cầu một hình dạng có ít nhất hai điểm neo
 @msg	{label}: lost track of a shape's style	{label}: mất dấu kiểu của hình dạng
@@ -5628,6 +5650,11 @@ axis	Y Axis	Trục Y
 	Button	Nút
 	Panel	Bảng
 	UI Frames	Khung UI
+	Map Markers	Đánh dấu bản đồ
+	Pin	Ghim
+	Flag	Cờ
+	Crosshair	Tâm ngắm
+	Checkpoint	Điểm kiểm tra
 	Open Symbol Library	Mở thư viện ký hiệu
 	Save Symbol Library	Lưu thư viện ký hiệu
 	Save Symbol Library…	Lưu thư viện ký hiệu…
@@ -5702,6 +5729,8 @@ axis	Y Axis	Trục Y
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Chữ điểm
 	Area Text	Chữ vùng
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Đo chữ theo giới hạn glyph
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Hiện tùy chọn hút vào glyph
 	Hide Snap to Glyph Options	Ẩn tùy chọn hút vào glyph
@@ -6269,3 +6298,6 @@ breakText	Glyphs	Glyph
 	Align to Pixel Grid	Căn theo lưới pixel
 @msg	only paths and compound paths can be aligned to the pixel grid	chỉ đường dẫn và đường dẫn phức mới căn theo lưới pixel được
 @msg	side is left or right, not `{s}`	side là left hoặc right, không phải `{s}`
+	Ignore All	Bỏ qua tất cả
+	Add to Dictionary	Thêm vào từ điển
+	No Suggestions	Không có gợi ý
