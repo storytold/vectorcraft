@@ -855,13 +855,14 @@ fn spin_generic(
         sresp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, tl!("Step up or down")));
         // A blank field (values that differ) has nothing to step from. A click steps once; an
         // arrow held down steps again and again after a pause, as a spin button does (#4267).
-        let repeat = held_repeat(ui, &sresp);
-        if (repeat == Some(true) || (sresp.clicked() && repeat.is_none()))
-            && let Some(p) = sresp.interact_pointer_pos()
-            && let Some(v) = value
-        {
+        let is_up = match held_repeat(ui, &sresp) {
+            Some(true) => Some(ui.rect_contains_pointer(up)),
+            None if sresp.clicked() => sresp.interact_pointer_pos().map(|p| up.contains(p)),
+            _ => None,
+        };
+        if let (Some(is_up), Some(v)) = (is_up, value) {
             let modifiers = ui.input(|i| i.modifiers);
-            out = Some(SpinPick::Value(spinner_step(v, step, min, up.contains(p), modifiers, stops, fmt)));
+            out = Some(SpinPick::Value(spinner_step(v, step, min, is_up, modifiers, stops, fmt)));
         }
         let fw = if presets.is_empty() { width - 15.0 } else { width - 34.0 };
         let keyed = if presets.is_empty() { None } else { alt_down_in_field(ui, Rect::from_x_y_ranges(sr.right()..=sr.right() + fw, sr.y_range())) };
@@ -914,9 +915,15 @@ const REPEAT_EVERY: f64 = 0.06;
 /// must not step once more.
 fn held_repeat(ui: &Ui, resp: &egui::Response) -> Option<bool> {
     let id = resp.id.with("repeat");
-    let now = ui.input(|i| i.time);
+    let click_dist = ui.ctx().options(|o| o.input_options.max_click_dist);
+    let (now, primary_held) = ui.input(|i| {
+        let stayed = i.pointer.total_drag_delta().is_some_and(|d| d.length_sq() <= click_dist * click_dist);
+        (i.time, i.focused && i.pointer.primary_down() && stayed)
+    });
     let state: Option<(f64, f64, bool)> = ui.data(|d| d.get_temp(id));
-    if !resp.is_pointer_button_down_on() {
+    // Start from an egui press, but keep tracking it past the click timeout without taking drags from a scroll area (#6307).
+    let down_here = primary_held && resp.contains_pointer() && !resp.long_touched();
+    if !resp.enabled() || !down_here || (state.is_none() && !resp.is_pointer_button_down_on()) {
         ui.data_mut(|d| d.remove::<(f64, f64, bool)>(id));
         return state.filter(|(_, _, repeated)| *repeated).map(|_| false);
     }

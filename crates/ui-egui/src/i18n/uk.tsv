@@ -291,7 +291,6 @@ font-technology	Variable	Варіативні
 	Update While Dragging	Оновлювати під час перетягування
 	Hide Video Rulers	Приховати відео-лінійки
 	Background Contents	Вміст фону
-	Background Contents:	Вміст фону:
 	Background:	Фон:
 	Backspace	Backspace
 	Bar Graph Tool	Інструмент «Гістограма»
@@ -663,7 +662,6 @@ font-technology	Variable	Варіативні
 	Couldn't {} {name}: {e}	Не вдалося {} {name}: {e}
 	Create	Створити
 	Create Clipping Mask	Створити відсічну маску
-	Create Document	Створити документ
 	Create from Guides	Створити з напрямних
 	Create from Selection	Створити із виділення
 	Create From:	Створити з:
@@ -1919,6 +1917,7 @@ file-filter	Templates	Шаблони
 	Lock (⌘2)	Заблокувати (⌘2)
 	Lock Grid	Заблокувати сітку
 	Lock Guides	Заблокувати напрямні
+	Lock Guides by Default	Блокувати напрямні за замовчуванням
 	Lock Others	Заблокувати решту
 	Lock Slices	Заблокувати фрагменти
 	Lock Station Point	Заблокувати точку стояння
@@ -2167,7 +2166,6 @@ file-filter	Templates	Шаблони
 	New Color Group…	Нова колірна група…
 	New Document Presets	Набір нових документів
 	New file	Новий файл
-	New from Template	Створити із шаблону
 	New from Template…	Створити із шаблону…
 	New Graphic Style	Новий графічний стиль
 	New Graphic Style (Alt-click to name it)	Новий графічний стиль (Alt+клацання, щоб задати ім’я)
@@ -2959,6 +2957,7 @@ digits	Malayalam	Малаялам
 	Save PDF Preset	Зберегти набір PDF
 	Save Perspective Grid Preset	Зберегти набір сітки перспективи
 	Save Preset	Зберегти набір
+	Save Document Preset	Зберегти набір документа
 	Preset {number}	Набір {number}
 	Save Preset…	Зберегти набір…
 	Save Print Preset	Зберегти набір друку
@@ -3539,7 +3538,6 @@ effect	Points	Точки
 	Template	Шаблон
 	Templates	Шаблони
 	Templates Folder	Папка шаблонів
-	Templates…	Шаблони…
 	Text Displayed in Cell:	Текст, що відображається в комірці:
 	Text Export Options	Параметри експорту тексту
 	Text Fill & Stroke Color	Колір заливки та обведення тексту
@@ -6289,3 +6287,6 @@ breakText	Glyphs	Гліфи
 	Align to Pixel Grid	Вирівняти за піксельною сіткою
 @msg	only paths and compound paths can be aligned to the pixel grid	за піксельною сіткою можна вирівняти лише контури і складені контури
 @msg	side is left or right, not `{s}`	side — це left або right, а не `{s}`
+	Ignore All	Пропустити все
+	Add to Dictionary	Додати до словника
+	No Suggestions	Немає варіантів

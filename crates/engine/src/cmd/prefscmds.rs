@@ -228,6 +228,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     // Guides & Grid
     p!("guideColor", "Guides & Grid", "Guides", "Color", color),
     p!("guideStyle", "Guides & Grid", "Guides", "Style", choice(LINE_STYLE)),
+    p!("lockGuidesByDefault", "Guides & Grid", "Guides", "Lock Guides by Default", bool),
     p!("gridColor", "Guides & Grid", "Grid", "Color", color),
     p!("gridStyle", "Guides & Grid", "Grid", "Style", choice(LINE_STYLE)),
     p!("gridlineEvery", "Guides & Grid", "Grid", "Gridline every", len(1.0, 16383.0, General)),
@@ -691,10 +692,16 @@ impl Session {
         let fonts_folder_changed = p.fonts_folder != self.prefs.fonts_folder;
         let hyphen_exceptions_changed = p.hyphenation_exceptions != self.prefs.hyphenation_exceptions;
         let corner_radius_changed = p.corner_radius != self.prefs.corner_radius;
+        let lock_guides_changed = p.lock_guides_by_default != self.prefs.lock_guides_by_default;
         if p.trace_presets != self.prefs.trace_presets {
             self.trace_preset_changes.replaced();
         }
         self.prefs = p;
+        // Guides & Grid › Lock Guides by Default sets the lock when it changes, the saved value at
+        // start included. Otherwise the lock stays as View › Guides › Lock Guides left it.
+        if lock_guides_changed {
+            self.set_guides_locked(self.prefs.lock_guides_by_default);
+        }
         if corner_radius_changed {
             // General › Corner Radius is the Rounded Rectangle tool's radius (#394): a tool already
             // made (active, or lent a selection tool for a drag) takes the new value.

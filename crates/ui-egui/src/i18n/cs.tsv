@@ -609,6 +609,7 @@
 	Hide Guides	Skrýt vodítka
 	Show Guides	Zobrazit vodítka
 	Lock Guides	Zamknout vodítka
+	Lock Guides by Default	Ve výchozím stavu zamknout vodítka
 	Unlock Guides	Odemknout vodítka
 	Make Guides	Vytvořit vodítka
 	Release Guides	Uvolnit vodítka
@@ -2562,15 +2563,12 @@ digits	Malayalam	Malajálamské
 	Selected Swatches	Vybrané položky vzorníku
 	Advanced Options	Rozšířené možnosti
 	Background Contents	Obsah pozadí
-	Background Contents:	Obsah pozadí:
 	BLANK DOCUMENT PRESETS	PŘEDNASTAVENÍ PRÁZDNÝCH DOKUMENTŮ
 	Bleed	Spadávka
 	Change to Right-to-Left Layout	Změnit na rozvržení zprava doleva
 	Columns:	Sloupce:
-	Create Document	Vytvořit dokument
 	Documents you create appear here.	Zde se zobrazí dokumenty, které vytvoříte.
 	More Settings	Další nastavení
-	New from Template	Nový ze šablony
 	Number of Artboards:	Počet pracovních ploch:
 	Orientation:	Orientace:
 	PRESET DETAILS	PODROBNOSTI PŘEDNASTAVENÍ
@@ -2581,7 +2579,6 @@ digits	Malayalam	Malajálamské
 	RECENT	NEDÁVNÉ
 	RECENT (1)	NEDÁVNÉ (1)
 	SAVED	ULOŽENÉ
-	Templates…	Šablony…
 	Transparent (Default)	Průhledné (výchozí)
 	Save for Office Documents	Uložit pro kancelářské dokumenty
 	Transparent Background	Průhledné pozadí
@@ -3536,6 +3533,7 @@ theme	Appearance	Motiv
 	Arrange by Row	Uspořádat po řádcích
 	Arrange by Column	Uspořádat po sloupcích
 	Save Preset	Uložit přednastavení
+	Save Document Preset	Uložit přednastavení dokumentu
 	Screen (72 ppi)	Obrazovka (72 ppi)
 	Social Square Post 1080×1080	Čtvercový příspěvek pro sociální sítě 1080×1080
 	Distribute	Rozmístit
@@ -6688,3 +6686,6 @@ breakText	Glyphs	Glyfy
 	Align to Pixel Grid	Zarovnat na mřížku obrazových bodů
 @msg	only paths and compound paths can be aligned to the pixel grid	na mřížku obrazových bodů lze zarovnat jen cesty a složené cesty
 @msg	side is left or right, not `{s}`	side je left nebo right, ne `{s}`
+	Ignore All	Ignorovat vše
+	Add to Dictionary	Přidat do slovníku
+	No Suggestions	Žádné návrhy

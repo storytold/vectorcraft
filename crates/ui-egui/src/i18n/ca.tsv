@@ -423,7 +423,6 @@ antiAlias	Sharp	Nítid
 	Back	Enrere
 	Background Color:	Color de fons:
 	Background Contents	Contingut del fons
-	Background Contents:	Contingut del fons:
 	Background Level	Nivell de fons
 	Background:	Fons:
 	Backspace	Retrocés
@@ -917,7 +916,6 @@ antiAlias	Sharp	Nítid
 	Create Clipping Mask	Crea una màscara de retall
 	Create Compound Path From Ellipses	Crea un traçat compost a partir d’el·lipses
 	Create Dimension	Crea una dimensió
-	Create Document	Crea un document
 	Create from Guides	Crea a partir de guies
 	Create from Selection	Crea a partir de la selecció
 	Create From:	Crea a partir de:
@@ -2339,6 +2337,7 @@ digits	Malayalam	Malaiàlam
 	Lock Artboards	Bloca els taulers
 	Lock Grid	Bloca la quadrícula
 	Lock Guides	Bloca les guies
+	Lock Guides by Default	Bloca les guies per defecte
 	Lock Others	Bloca la resta
 	Lock Selected	Bloca la selecció
 	Lock Slices	Bloca els talls
@@ -2597,7 +2596,6 @@ digits	Malayalam	Malaiàlam
 	New Design	Disseny nou
 	New Document Presets	Preajustos de document nous
 	New file	Fitxer nou
-	New from Template	Nou a partir d’una plantilla
 	New from Template…	Nou a partir d’una plantilla…
 	New Graphic Style	Estil gràfic nou
 	New Graphic Style (Alt-click to name it)	Estil gràfic nou (Alt+clic per posar-hi nom)
@@ -3643,6 +3641,7 @@ digits	Malayalam	Malaiàlam
 	Save PDF Preset	Desa el preajust de PDF
 	Save Perspective Grid Preset	Desa el preajust de quadrícula en perspectiva
 	Save Preset	Desa el preajust
+	Save Document Preset	Desa el preajust de document
 	Save Preset…	Desa el preajust…
 	Save Print Preset	Desa el preajust d’impressió
 	Save Recovery Data	Desa les dades de recuperació
@@ -4369,7 +4368,6 @@ digits	Malayalam	Malaiàlam
 	Template literal not closed	El literal de plantilla no està tancat
 	Templates	Plantilles
 	Templates Folder	Carpeta de plantilles
-	Templates…	Plantilles…
 	Tetrad	Tètrada
 	Tetrad 2	Tètrada 2
 	Tetrad 3	Tètrada 3
@@ -6669,3 +6667,6 @@ breakText	Glyphs	Glifs
 	Align to Pixel Grid	Alinea a la quadrícula de píxels
 @msg	only paths and compound paths can be aligned to the pixel grid	només els traçats i els traçats compostos es poden alinear a la quadrícula de píxels
 @msg	side is left or right, not `{s}`	side ha de ser left o right, no `{s}`
+	Ignore All	Ignora-ho tot
+	Add to Dictionary	Afegeix al diccionari
+	No Suggestions	No hi ha suggeriments

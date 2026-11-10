@@ -622,6 +622,7 @@ digits	Malayalam	말라얄람어
 	Guides	안내선
 	Hide Guides	안내선 숨기기
 	Lock Guides	안내선 잠그기
+	Lock Guides by Default	기본적으로 안내선 잠그기
 	Make Guides	안내선 만들기
 	Release Guides	안내선 해제
 	Clear Guides	안내선 지우기
@@ -1066,7 +1067,6 @@ antiAlias	Sharp	날카롭게
 	Update While Dragging	드래그하는 동안 업데이트
 	Hide Video Rulers	비디오 눈금자 숨기기
 	Background Contents	배경 내용
-	Background Contents:	배경 내용:
 	Background:	배경:
 	Bar Graph Tool	막대 그래프 도구
 	Baseline Shift	기준선 이동
@@ -1292,7 +1292,6 @@ antiAlias	Sharp	날카롭게
 	Corners…	모퉁이…
 	Chamfer	모따기
 	Create Clipping Mask	클리핑 마스크 만들기
-	Create Document	문서 만들기
 	Create From:	만들기 기준:
 	Create Graph	그래프 만들기
 	Create New Layer	새 레이어 만들기
@@ -2352,7 +2351,6 @@ antiAlias	Sharp	날카롭게
 	New Symbol…	새 심볼…
 	New Workspace	새 작업 영역
 	New file	새 파일
-	New from Template	템플릿에서 새로 만들기
 	New theme from the current color	현재 색상으로 새 테마 만들기
 	New {kind} Style…	새 {kind} 스타일…
 	Next	다음
@@ -2894,6 +2892,7 @@ mark-style	Japanese	일본식
 	Save PDF Preset	PDF 사전 설정 저장
 	Save Perspective Grid Preset	원근 격자 사전 설정 저장
 	Save Preset	사전 설정 저장
+	Save Document Preset	문서 사전 설정 저장
 	Preset {number}	사전 설정 {number}
 	Save Preset…	사전 설정 저장…
 	Save Print Preset	인쇄 사전 설정 저장
@@ -3242,7 +3241,6 @@ mark-style	Japanese	일본식
 	Target Contents	대상 내용
 	Target:	대상:
 	Templates Folder	템플릿 폴더
-	Templates…	템플릿…
 	Text Displayed in Cell:	셀에 표시할 텍스트:
 	Text Export Options	텍스트 내보내기 옵션
 	Text Import Options	텍스트 가져오기 옵션
@@ -6270,3 +6268,6 @@ breakText	Glyphs	글리프
 	Align to Pixel Grid	픽셀 격자에 정렬
 @msg	only paths and compound paths can be aligned to the pixel grid	패스와 컴파운드 패스만 픽셀 격자에 정렬할 수 있습니다
 @msg	side is left or right, not `{s}`	side는 left 또는 right입니다(`{s}` 아님)
+	Ignore All	모두 무시
+	Add to Dictionary	사전에 추가
+	No Suggestions	제안 없음

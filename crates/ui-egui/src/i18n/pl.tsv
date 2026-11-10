@@ -566,6 +566,7 @@
 	Hide Guides	Ukryj linie pomocnicze
 	Show Guides	Pokaż linie pomocnicze
 	Lock Guides	Zablokuj linie pomocnicze
+	Lock Guides by Default	Domyślnie blokuj linie pomocnicze
 	Unlock Guides	Odblokuj linie pomocnicze
 	Make Guides	Utwórz linie pomocnicze
 	Release Guides	Uwolnij linie pomocnicze
@@ -2476,15 +2477,12 @@ digits	Malayalam	Malajalam
 	Selected Swatches	Zaznaczone próbki
 	Advanced Options	Opcje zaawansowane
 	Background Contents	Zawartość tła
-	Background Contents:	Zawartość tła:
 	BLANK DOCUMENT PRESETS	USTAWIENIA PUSTEGO DOKUMENTU
 	Bleed	Spad
 	Change to Right-to-Left Layout	Zmień na układ od prawej do lewej
 	Columns:	Kolumny:
-	Create Document	Utwórz dokument
 	Documents you create appear here.	Tu pojawią się utworzone dokumenty.
 	More Settings	Więcej ustawień
-	New from Template	Nowy z szablonu
 	Number of Artboards:	Liczba obszarów kompozycji:
 	Orientation:	Orientacja:
 	PRESET DETAILS	SZCZEGÓŁY USTAWIENIA
@@ -2494,7 +2492,6 @@ digits	Malayalam	Malajalam
 	Preview Mode	Tryb podglądu
 	RECENT	OSTATNIE
 	SAVED	ZAPISANE
-	Templates…	Szablony…
 	Transparent (Default)	Przezroczyste (domyślnie)
 	Save for Office Documents	Zapisz dla dokumentów biurowych
 	Transparent Background	Przezroczyste tło
@@ -3415,6 +3412,7 @@ theme	Appearance	Wygląd
 	Arrange by Row	Ułóż według wierszy
 	Arrange by Column	Ułóż według kolumn
 	Save Preset	Zapisz ustawienie
+	Save Document Preset	Zapisz ustawienie dokumentu
 	Screen (72 ppi)	Ekran (72 ppi)
 	Social Square Post 1080×1080	Kwadratowy post społecznościowy 1080×1080
 	Distribute	Rozmieść
@@ -6544,3 +6542,6 @@ breakText	Glyphs	Glify
 	Align to Pixel Grid	Wyrównaj do siatki pikseli
 @msg	only paths and compound paths can be aligned to the pixel grid	do siatki pikseli można wyrównać tylko ścieżki i ścieżki złożone
 @msg	side is left or right, not `{s}`	side to left lub right, a nie `{s}`
+	Ignore All	Ignoruj wszystko
+	Add to Dictionary	Dodaj do słownika
+	No Suggestions	Brak sugestii

@@ -285,6 +285,22 @@ fn revolve_on_a_fill_is_checked_in_that_fills_paint() {
     assert!(err.contains("simplify the gradient"), "{err}");
 }
 
+/// A hidden Revolve still counts as the object's one Revolve: a second one is refused, and the
+/// hidden one can be shown again over the geometry effects after it.
+#[test]
+fn a_second_revolve_is_refused_over_a_hidden_one() {
+    let (mut s, id) = session_with_rect();
+    s.execute("effect.apply", &json!({"effect": "threeD.revolve", "ids": [id.0], "item": null})).unwrap();
+    s.execute("effect.setParams", &json!({"index": 0, "ids": [id.0], "item": null, "visible": false})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "distort.roughen", "ids": [id.0], "item": null})).unwrap();
+    let err = s.execute("effect.apply", &json!({"effect": "threeD.revolve", "ids": [id.0], "item": null})).unwrap_err().to_string();
+    assert!(err.contains("one Revolve effect"), "{err}");
+    let ids: Vec<_> = node(&s, id).appearance.effects.iter().map(|e| e.id.clone()).collect();
+    assert_eq!(ids, ["threeD.revolve", "distort.roughen"]);
+    s.execute("effect.setParams", &json!({"index": 0, "ids": [id.0], "item": null, "visible": true})).unwrap();
+    assert!(node(&s, id).appearance.effects[0].visible);
+}
+
 /// Revolve on a group sweeps every member about one axis on the left edge of their bounds, keeps
 /// each member's paint, follows an edited member, expands and undoes as one step.
 #[test]
