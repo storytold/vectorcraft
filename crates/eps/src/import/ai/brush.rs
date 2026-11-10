@@ -57,7 +57,7 @@ use vectorcraft_color::Paint;
 use vectorcraft_doc::{AppearanceItem, Node, NodeKind};
 
 use super::lex::{Lexer, Tok};
-use super::obj;
+use super::obj::Names;
 
 /// The brush manager's order: the plug-in name of its object.
 pub(super) const MANAGER: &str = "Adobe Brush Manager Order"; // brand-ok: the plug-in name the files use
@@ -157,16 +157,17 @@ pub(super) enum BrushError {
 }
 
 /// The strings of a plug-in object's section (`section`: what follows `%AI8_BeginPluginObject`):
-/// its plug-in name, its name and its parameters, joined. The name is `None` with one string, and
-/// the whole is `None` with none.
-pub(super) fn plugin_strings(section: &[u8]) -> Option<(String, Option<String>, String)> {
+/// its plug-in name, the bytes of its name and its parameters, joined, read by `names` without
+/// notes. The name is `None` with one string, and the whole is `None` with none. A brush's name has
+/// its note when the brush is read, and the names of its art when their art is read.
+pub(super) fn plugin_strings(section: &[u8], names: &Names) -> Option<(String, Option<Vec<u8>>, String)> {
     let mut lex = Lexer::new(section);
     let mut strings = vec![];
     let mut params = vec![];
     while let Some(t) = lex.next_token() {
         if let Tok::Str(s) | Tok::Hex(s) = t.tok {
             if strings.len() < 2 {
-                strings.push(obj::text(&s));
+                strings.push(s);
             } else {
                 // Joined before they are text: a string may end inside a character.
                 let room = MAX_PARAMS.saturating_sub(params.len());
@@ -175,8 +176,8 @@ pub(super) fn plugin_strings(section: &[u8]) -> Option<(String, Option<String>, 
         }
     }
     let mut strings = strings.into_iter();
-    let kind = strings.next()?;
-    Some((kind, strings.next(), obj::text(&params)))
+    let kind = names.quiet(&strings.next()?);
+    Some((kind, strings.next(), names.quiet(&params)))
 }
 
 /// The brush manager's order (`params`: its parameters): the kind and name of each brush. Pairs

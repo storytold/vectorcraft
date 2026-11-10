@@ -1,6 +1,6 @@
 use super::{
     CommandSpec, EngineError, JOURNALED_READS, NodeId, Result, SELECTS_GIVEN_IDS, Selection, Session, Value, cmd, find_command, given_ids, guard,
-    strip_replay_only,
+    strip_replay_only, waits_for_tool_edit,
 };
 
 impl Session {
@@ -39,6 +39,12 @@ impl Session {
     /// Execute a command by id. This is THE entry point for every frontend.
     pub fn execute(&mut self, id: &str, params: &Value) -> Result<Value> {
         let spec = find_command(id).ok_or_else(|| cmd::params::unknown_command(id))?;
+        // An edit the active tool is computing on another thread (a Shape Builder merge) is
+        // applied before a command that may edit, select, save or give a document a new revision,
+        // as the click came first. Queries that only read do not wait for it.
+        if self.depth == 0 && waits_for_tool_edit(id) {
+            self.finish_tool_edit_later()?;
+        }
         let outer = std::mem::replace(&mut self.reading, !spec.journal || JOURNALED_READS.contains(&id));
         let r = self.execute_spec(spec, id, params);
         self.reading = outer;
@@ -54,6 +60,11 @@ impl Session {
         if !self.replaying {
             self.check_params(id, params)?;
         }
+        // A command with a parameter schema runs only with params that pass it, and with the
+        // defaults of omitted values filled in; the journal keeps the params as given. Saved steps
+        // keep their keys the schema doesn't name, as above.
+        let checked = crate::schemas::check(spec, params, self.replaying)?;
+        let run_params = checked.as_ref().unwrap_or(params);
         // Objects given as `id` (where it stands for `ids` of one) or as `ids` beside it are checked
         // before anything else: a malformed one, or one naming no object, is an error under this
         // command's id, never the selection in its place. `effect.apply {id: "stylize.dropShadow"}`
@@ -120,7 +131,7 @@ impl Session {
             if let Some(ids) = &select_first {
                 s.execute("select.set", &serde_json::json!({ "ids": ids }))?;
             }
-            let r = cmd::run_spec(s, spec, params);
+            let r = cmd::run_spec(s, spec, run_params);
             if r.is_err()
                 && let Some((uid, selection, layer)) = selected_before
                 && let Some(st) = s.docs.iter_mut().find(|d| d.uid == uid)

@@ -90,7 +90,9 @@ pub fn list() -> Vec<Arc<Plugin>> {
 
 /// Uninstalls `id`; false if it wasn't installed.
 pub fn remove(id: &str) -> bool {
-    let gone = PLUGINS.write().unwrap_or_else(|e| e.into_inner()).remove(id).is_some();
+    // The revision moves while the write lock is held, as in `install`.
+    let mut plugins = PLUGINS.write().unwrap_or_else(|e| e.into_inner());
+    let gone = plugins.remove(id).is_some();
     if gone {
         REVISION.fetch_add(1, Ordering::Relaxed);
     }
@@ -163,7 +165,9 @@ pub fn load_folder(dir: &std::path::Path) -> Result<FolderReport> {
 /// permissions only those `approve` accepts; the others are reported as failed with the reason. A plug-in the user disabled ([`crate::safe_mode::skipped`]) is reported and
 /// skipped, by its file before it loads or by its id after (its file is then disabled too, so the
 /// next load skips it before it runs); the launch marker names each file while it loads
-/// ([`crate::safe_mode::loading`]). In Safe Mode nothing loads ([`Error::SafeMode`]).
+/// ([`crate::safe_mode::loading`]). In Safe Mode nothing loads ([`Error::SafeMode`]). When the
+/// module a load leaves under an id lists no permissions, the process's grant for that id is
+/// forgotten.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn load_folder_where(
     dir: &std::path::Path,
@@ -209,6 +213,11 @@ pub fn load_folder_where(
             }
             Ok(p) => report.loaded.push(install(p).id().to_string()),
             Err(e) => report.failed.push((f.display().to_string(), e.to_string())),
+        }
+    }
+    for id in &report.loaded {
+        if get(id).is_some_and(|p| !p.manifest().asks_permissions()) {
+            revoke(id);
         }
     }
     Ok(report)

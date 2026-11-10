@@ -512,6 +512,11 @@ antiAlias	Sharp	锐利
 	Color Table ({n} colors)	颜色表 ({n} 色)
 	Color Theme	色彩主题
 	Color Themes	颜色主题
+	Color Wheel	色轮
+	Hue ring	色相环
+	Saturation and brightness	饱和度和亮度
+	Color field	颜色区域
+	{name1} {value1}, {name2} {value2}	{name1} {value1}，{name2} {value2}
 	Color Type:	颜色类型：
 	Color:	颜色：
 	Colorize	上色
@@ -3415,6 +3420,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Tile Type:	拼贴类型：
 	tile {number}	拼贴 {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	拼贴先由左至右再由上至下编号；范围留空表示全部拼贴。
+	Copies per Sheet (as many as fit, in a grid)	每张纸印多份 (尽量排满，按网格排列)
 	Tint	色调
 	Tip extends past the end point	箭头超出端点
 	Tip on the end point	箭头位于端点
@@ -4222,7 +4228,10 @@ imageTrace	Outline	轮廓
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	为保留图层，{_1} × {_2} 像素的嵌入图像已缩小为 {_3} × {_4} 像素
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	文件中未定义渐变“{name}”：已改用纯色代替
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	VectorCraft 尚无法读取的画笔未加入“画笔”面板 ({_1})
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	带有多个填色或描边、效果或画笔的对象已按其绘制外观导入 ({_1})：其外观尚不可编辑
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	带有多个填色或描边、可变宽度描边、效果或画笔的对象已按其绘制外观导入 ({_1})：其外观尚不可编辑
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	名称 `{name}` 不是 UTF-8，已按 {label} 读取：如果显示不正确，请使用其他 legacyNameEncoding 打开文件
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	名称 `{name}` 不是 UTF-8，且部分内容在 {label} 中也无效：请使用其他 legacyNameEncoding 打开文件
+@msg	more names that aren't UTF-8 were read as {label} ({count})	其他非 UTF-8 名称已按 {label} 读取 ({count})
 @msg	patterns nested too deeply are filled with mid-grey	嵌套过深的图案以中灰色填充
 @msg	shadings of an unknown type were left out	已略去未知类型的着色
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	函数类型未知的着色以其中间颜色填充
@@ -5138,7 +5147,7 @@ axis	Both	两者
 	Dock to Bottom	停放到底部
 	Dock Control Bar	停放控制栏
 	Drag to float the toolbar	拖动以浮动工具栏
-	Drag to the window's left edge to dock	拖到窗口左边缘以停放
+	Drag to the window's left or right edge to dock	拖到窗口左边缘或右边缘以停放
 	Float Tool Group	浮动工具组
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
@@ -5457,8 +5466,17 @@ lighting	Light	光源
 @msg	unknown parameter `{key}`; did you mean `{near}`?	未知参数 `{key}`；您是否想输入 `{near}`？
 @msg	unknown parameter `{key}`; the command takes no parameters	未知参数 `{key}`；该命令没有参数
 @msg	unknown parameter `{key}`; the command takes: {keys}	未知参数 `{key}`；该命令接受：{keys}
+@msg	the params must be an object, not {got}	参数必须是对象，而不是 {got}
+@msg	unknown parameter `{path}`; the object takes no keys	未知参数 `{path}`；该对象不接受任何键
+@msg	unknown parameter `{path}`; it takes: {keys}	未知参数 `{path}`；它接受：{keys}
+@msg	missing `{path}`	缺少 `{path}`
+@msg	`{path}` must be {expected}, not {got}	`{path}` 必须是 {expected}，而不是 {got}
 	Load EPS into Clipboard	将 EPS 载入剪贴板
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} 像素的图像过大，无法绘制
+@msg	the JPEG XL file is cut short	JPEG XL 文件不完整
+@msg	the JPEG XL container is too large to read	JPEG XL 容器过大，无法读取
+@msg	CMYK JPEG XL images can't be read	无法读取 CMYK 模式的 JPEG XL 图像
+@msg	the JPEG XL file can't be read: {e}	无法读取 JPEG XL 文件：{e}
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}：不是 PNG、JPEG、WebP、TIFF 或 BMP 图像
 @msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	图像为 {iw} × {ih} 像素，而画板在该宽度下为 {rw} × {rh} 像素：两者的比例不同
 @msg	`threshold` must be a number from 0 to 1	`threshold` 必须是 0 到 1 之间的数字
@@ -5745,7 +5763,7 @@ axis	Y Axis	Y 轴
 @msg	Running “{name}”…	正在运行“{name}”…
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	实时效果在绘制文档时运行，因此不能为 `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	导出增效工具始终使用导出的预算：请省略 `budget`
-@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	“{_1}”需要大量计算预算（每次运行最多 {minutes} 分钟，指令数为通常的 {times} 倍）：请在用户同意后使用 `allowHeavy: true` 安装
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}”需要大量计算预算（每次运行最多 {minutes} 分钟，指令数为通常的 {times} 倍）：需要有人在桌面应用中批准，或在以 --allow-plugin-grants 启动的会话中传入 `allowHeavy: true`
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	要安装需要这些权限的“{name}”吗？
 	ID: {id}	ID：{id}
@@ -5768,15 +5786,26 @@ axis	Y Axis	Y 轴
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	模块导入了 `env.{name}`，增效工具只有在增效工具 API 级别 {PROGRESS_API}（`api` {PROGRESS_API}）且具有权限 `{permission}` 时才能使用它
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	模块导入了宿主不提供的 `{from}.{name}`：增效工具只能导入 docs/plugins.md 列出的 `env.vc_*` 函数（增效工具 API 级别 2），不能使用 WASI、文件或网络
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` 为 {_1}；此主机支持的增效工具 API 级别为 1 到 {API_LEVEL}
+@msg	`paintOutput` may only be true	`paintOutput` 只能为 true
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` 仅适用于 `api` 2 的实时效果 (`kind` "effect")
 @msg	`grant` must be a list of permission names	`grant` 必须是权限名称的列表
 @msg	`grant` names an unknown permission `{shown}`	`grant` 包含未知权限 `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` 类型的增效工具需要权限 `{_2}`
 @msg	at most {MAX_PERMISSIONS} `permissions`	最多 {MAX_PERMISSIONS} 个 `permissions`
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	权限 `{shown}` 不适用于 `{_1}` 类型的增效工具
 @msg	permission `{shown}` is listed twice	权限 `{shown}` 列出了两次
+@msg	only a filter declares `inputs`	只有滤镜才能声明 `inputs`
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` 列出了未知的对象类型 `{shown}`：请使用 type、image 或 symbolInstance
+@msg	`inputs` lists `{shown}` twice	`inputs` 列出了两次 `{shown}`
+@msg	`inputs` needs `api` 2 or later	`inputs` 需要 `api` 2 或更高
+@msg	`inputs` needs the permission `doc.read`	`inputs` 需要权限 `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	内存预算（对象 {_1} 需要 {size} 字节的输入，剩余 {left}）
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	对象预算（超过 {MAX_OBJECTS} 个只读对象）
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	权限 `{shown}` 保留给以后的增效工具 API；此主机不授予该权限
 @msg	unknown permission `{shown}`	未知权限 `{shown}`
-@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}”需要权限 {asked}：请在用户同意后使用列出这些权限的 `grant` 安装
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	“{name}”需要权限 {asked}：需要有人在桌面应用中批准，或在以 --allow-plugin-grants 启动的会话中传入 `grant`
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` 和 `allowHeavy` 仅在以 --allow-plugin-grants 启动的会话中生效：请在桌面应用中批准此插件
+@msg	Only the person at the keyboard can approve installing a plug-in	只有键盘前的人才能批准安装插件
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	“{name}”未获授予其输出所需的 `{p}`：未作任何更改
 @msg	a heavy filter runs in the background, so it can't declare `commands`	重型滤镜在后台运行，因此不能声明 `commands`
 @msg	at most {MAX_COMMANDS} `commands`	最多 {MAX_COMMANDS} 个 `commands`
@@ -5837,6 +5866,9 @@ axis	Y Axis	Y 轴
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`：应为 all 或 1, 3-5 这样的范围，而不是 {v}
 	Add to Symbols	添加到符号
 	Basic Shapes	基本形状
+	Button	按钮
+	Panel	面板
+	UI Frames	UI 框架
 	Open Symbol Library	打开符号库
 	Save Symbol Library	保存符号库
 	Save Symbol Library…	保存符号库…
@@ -6327,7 +6359,7 @@ breakText	Glyphs	字形
 	Reset Symbol Instance	重置符号实例
 @msg	type must be static or dynamic, not {v}	type 必须是 static 或 dynamic,而不是 {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` 是静态符号:请先将其符号类型设为动态
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	在符号实例中选中的路径、复合路径或文字只能更改填色和描边的纯色
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	在符号实例中选中的路径、复合路径或文字只能更改填色、描边、不透明度和混合模式
 @msg	path must be a list of child indices	path 必须是子项索引列表
 @msg	no object at path {shown} in the symbol's art	符号图稿中路径 {shown} 处没有对象
 @msg	give fill, stroke, opacity and/or blend	请提供 fill、stroke、opacity 和/或 blend
@@ -6476,3 +6508,4 @@ breakText	Glyphs	字形
 # Align to Pixel Grid
 	Align to Pixel Grid	对齐像素网格
 @msg	only paths and compound paths can be aligned to the pixel grid	只有路径和复合路径可以对齐像素网格
+@msg	side is left or right, not `{s}`	side 应为 left 或 right，而不是 `{s}`

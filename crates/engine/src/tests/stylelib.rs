@@ -251,11 +251,16 @@ fn every_builtin_style_paints_visibly_on_a_rectangle() {
         let (_, lib) = cmd::stylelib::library(&s, b.id).unwrap();
         for g in &lib.styles {
             run(&mut s, "file.new", json!({"width": 100, "height": 100}));
+            // Art under the rectangle: a blend mode shows only against art, not the bare page.
+            let under = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+            run(&mut s, "paint.setFill", json!({"color": "#336699", "ids": [under.0]}));
+            run(&mut s, "paint.setStroke", json!({"none": true, "ids": [under.0]}));
             let id = rect(&mut s, 25.0, 30.0, 50.0, 40.0);
             run(&mut s, "graphicStyle.addFromLibrary", json!({"library": b.id, "name": g.name, "apply": true}));
             assert_eq!(doc(&s).node(id).unwrap().extras().graphic_style, doc(&s).graphic_style(&g.name).map(|x| x.id), "{}", g.name);
             let img = renderer.render_region(doc(&s), Rect::new(0.0, 0.0, 100.0, 100.0), 0.5, true);
-            let painted = img.pixels.as_chunks::<4>().0.iter().filter(|p| p[..3] != [255, 255, 255]).count();
+            let bare = img.pixel(0, 0);
+            let painted = (0..img.height).flat_map(|y| (0..img.width).map(move |x| (x, y))).filter(|&(x, y)| img.pixel(x, y) != bare).count();
             assert!(painted > 40, "{} / {} paints {painted} pixels", b.id, g.name);
         }
     }

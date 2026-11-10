@@ -560,6 +560,11 @@ font-technology	Variable	Варіативні
 	Color Table ({n} colors)	Таблиця кольорів ({n} кольорів)
 	Color Theme	Колірна тема
 	Color Themes	Колірні теми
+	Color Wheel	Колірне коло
+	Hue ring	Кільце відтінків
+	Saturation and brightness	Насиченість і яскравість
+	Color field	Колірне поле
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Тип кольору:
 	Color:	Колір:
 	Colorize	Тонувати
@@ -3581,6 +3586,8 @@ effect	Points	Точки
 	Tile Type:	Тип плитки:
 	tile {number}	плитка {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Плитки нумеруються зліва направо, потім униз; Залишіть діапазон порожнім для всіх плиток.
+	Copies per Sheet (as many as fit, in a grid)	Копій на аркуш (скільки поміститься, сіткою)
+	Gutter:	Проміжок:
 	Tint	Відтінок
 	Tip extends past the end point	Кінчик виходить за кінцеву точку
 	Tip on the end point	Кінчик на кінцевій точці
@@ -4047,7 +4054,7 @@ axis	Both	Обидві
 	Dock to Bottom	Прикріпити внизу
 	Dock Control Bar	Прикріпити панель керування
 	Drag to float the toolbar	Перетягніть, щоб від’єднати панель інструментів
-	Drag to the window's left edge to dock	Перетягніть до лівого краю вікна для прикріплення
+	Drag to the window's left or right edge to dock	Перетягніть до лівого або правого краю вікна для прикріплення
 	Float Tool Group	Від’єднати групу інструментів
 @msg	no library `{id}`	немає бібліотеки `{id}`
 @msg	select some type first	спочатку виділіть текст
@@ -4801,7 +4808,10 @@ axis	Both	Обидві
 @msg	its objects are nested too deeply	об’єкти в них вкладені надто глибоко
 @msg	its section ending with `%{end}` doesn't end	розділ, що закінчується на `%{end}`, не закінчується
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	пензлі, які VectorCraft поки не вміє читати, не додано до панелі «Пензлі» ({_1})
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	об’єкти з кількома заливками або обведеннями, ефектами або пензлями імпортовані в намальованому вигляді ({_1}): їх оформлення поки що не можна редагувати
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	об’єкти з кількома заливками або обведеннями, обведеннями змінної ширини, ефектами або пензлями імпортовані в намальованому вигляді ({_1}): їх оформлення поки що не можна редагувати
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	назва `{name}` не в UTF-8 і прочитана як {label}: якщо вона виглядає неправильно, відкрийте файл з іншим legacyNameEncoding
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	назва `{name}` не в UTF-8, і її частини недійсні також у {label}: відкрийте файл з іншим legacyNameEncoding
+@msg	more names that aren't UTF-8 were read as {label} ({count})	інші назви не в UTF-8 прочитано як {label} ({count})
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	градієнт «{name}» не визначено у файлі: замість нього використовується суцільний колір
 @msg	an image VectorCraft can't read was left out	зображення, яке VectorCraft не може прочитати, пропущено
 @msg	graphs come in as plain art, without their data or settings	діаграми імпортуються як звичайна графіка, без їхніх даних і налаштувань
@@ -4904,6 +4914,10 @@ axis	Both	Обидві
 @msg	the PSD file is cut short	файл PSD обрізаний
 @msg	the PSD file's header is damaged	заголовок файлу PSD пошкоджено
 @msg	the PSD file's image data can't be read: {e}	не вдається прочитати дані зображення файлу PSD: {e}
+@msg	the JPEG XL file is cut short	файл JPEG XL обрізаний
+@msg	the JPEG XL container is too large to read	контейнер JPEG XL завеликий для читання
+@msg	CMYK JPEG XL images can't be read	зображення JPEG XL у режимі CMYK не читаються
+@msg	the JPEG XL file can't be read: {e}	не вдається прочитати файл JPEG XL: {e}
 	Video	Відео
 	De-Interlace…	Усунення черезрядковості…
 	De-Interlace	Усунення черезрядковості
@@ -5171,6 +5185,11 @@ lighting	Light	Світло
 @msg	unknown parameter `{key}`; did you mean `{near}`?	невідомий параметр `{key}`; можливо, ви мали на увазі `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	невідомий параметр `{key}`; команда не має параметрів
 @msg	unknown parameter `{key}`; the command takes: {keys}	невідомий параметр `{key}`; команда приймає: {keys}
+@msg	the params must be an object, not {got}	параметри мають бути об'єктом, а не {got}
+@msg	unknown parameter `{path}`; the object takes no keys	невідомий параметр `{path}`; об'єкт не приймає ключів
+@msg	unknown parameter `{path}`; it takes: {keys}	невідомий параметр `{path}`; приймає: {keys}
+@msg	missing `{path}`	відсутнє `{path}`
+@msg	`{path}` must be {expected}, not {got}	`{path}` має бути {expected}, а не {got}
 	Load EPS into Clipboard	Завантажити EPS у буфер обміну
 @msg	an image of {w} × {h} pixels is too large to draw	зображення розміром {w} × {h} пікселів завелике для відображення
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: це не зображення PNG, JPEG, WebP, TIFF чи BMP
@@ -5503,7 +5522,7 @@ axis	Y Axis	Вісь Y
 @msg	Running “{name}”…	Виконується «{name}»…
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	динамічний ефект виконується під час відмальовування документа, тому він не може бути `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	модуль експорту завжди отримує бюджет експорту: не вказуйте `budget`
-@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	«{_1}» запитує великий обчислювальний бюджет (кожен запуск до {minutes} хвилин і в {times} разів більше інструкцій, ніж зазвичай): встановіть його з `allowHeavy: true`, коли користувач погодиться
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	«{_1}» запитує великий обчислювальний бюджет (кожен запуск до {minutes} хвилин і в {times} разів більше інструкцій, ніж зазвичай): його має схвалити людина в настільному застосунку, або передайте `allowHeavy: true` у сеансі, запущеному з --allow-plugin-grants
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Встановити «{name}», якому потрібні ці дозволи?
 	ID: {id}	ID: {id}
@@ -5526,15 +5545,26 @@ axis	Y Axis	Вісь Y
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	модуль імпортує `env.{name}`, який модуль може використовувати лише на рівні API модулів {PROGRESS_API} (`api` {PROGRESS_API}) і з дозволом `{permission}`
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	модуль імпортує `{from}.{name}`, який хост не надає: модуль може імпортувати лише функції `env.vc_*`, перелічені в docs/plugins.md (рівень API модулів 2), без WASI, файлів і мережі
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` дорівнює {_1}; цей хост підтримує рівні API модулів від 1 до {API_LEVEL}
+@msg	`paintOutput` may only be true	`paintOutput` може бути лише true
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` дозволено лише для динамічного ефекту (`kind` "effect") з `api` 2
 @msg	`grant` must be a list of permission names	`grant` має бути списком назв дозволів
 @msg	`grant` names an unknown permission `{shown}`	`grant` називає невідомий дозвіл `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	модулю виду `{_1}` потрібен дозвіл `{_2}`
 @msg	at most {MAX_PERMISSIONS} `permissions`	щонайбільше {MAX_PERMISSIONS} `permissions`
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	дозвіл `{shown}` не стосується модуля виду `{_1}`
 @msg	permission `{shown}` is listed twice	дозвіл `{shown}` указано двічі
+@msg	only a filter declares `inputs`	`inputs` може оголошувати лише фільтр
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	в `inputs` указано невідомий вид об’єкта `{shown}`: використовуйте type, image або symbolInstance
+@msg	`inputs` lists `{shown}` twice	в `inputs` `{shown}` указано двічі
+@msg	`inputs` needs `api` 2 or later	для `inputs` потрібен `api` 2 або новіший
+@msg	`inputs` needs the permission `doc.read`	для `inputs` потрібен дозвіл `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	бюджет пам’яті (об’єкту {_1} потрібно {size} байтів вхідних даних, залишилося {left})
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	бюджет об’єктів (понад {MAX_OBJECTS} об’єктів лише для читання)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	дозвіл `{shown}` зарезервовано для пізнішого API модулів; цей хост його не надає
 @msg	unknown permission `{shown}`	невідомий дозвіл `{shown}`
-@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	«{name}» запитує дозволи {asked}: установіть його з `grant`, де їх перелічено, коли користувач погодиться
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	«{name}» запитує дозволи {asked}: їх має схвалити людина в настільному застосунку, або передайте `grant` у сеансі, запущеному з --allow-plugin-grants
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` і `allowHeavy` діють лише в сеансі, запущеному з --allow-plugin-grants: схваліть плагін у настільному застосунку
+@msg	Only the person at the keyboard can approve installing a plug-in	Схвалити встановлення плагіна може лише людина за клавіатурою
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	«{name}» не отримав дозволу `{p}`, потрібного для його результату: нічого не змінено
 @msg	a heavy filter runs in the background, so it can't declare `commands`	важкий фільтр виконується у фоні, тому не може оголошувати `commands`
 @msg	at most {MAX_COMMANDS} `commands`	щонайбільше {MAX_COMMANDS} `commands`
@@ -5595,6 +5625,9 @@ axis	Y Axis	Вісь Y
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all або діапазон, наприклад 1, 3-5, а не {v}
 	Add to Symbols	Додати до символів
 	Basic Shapes	Базові фігури
+	Button	Кнопка
+	Panel	Панель
+	UI Frames	UI-рамки
 	Open Symbol Library	Відкрити бібліотеку символів
 	Save Symbol Library	Зберегти бібліотеку символів
 	Save Symbol Library…	Зберегти бібліотеку символів…
@@ -6086,7 +6119,7 @@ breakText	Glyphs	Гліфи
 	Reset Symbol Instance	Скинути екземпляр символу
 @msg	type must be static or dynamic, not {v}	type має бути static або dynamic, а не {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` — статичний символ: спершу встановіть для нього тип символу «Динамічний»
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	У контуру, складеного контуру або тексту, виділеного в екземплярі символу, можна змінити лише суцільний колір заливки й обведення
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	У контуру, складеного контуру або тексту, виділеного в екземплярі символу, можна змінити лише заливку, обведення, непрозорість і режим накладання
 @msg	path must be a list of child indices	path має бути списком індексів дочірніх об’єктів
 @msg	no object at path {shown} in the symbol's art	у графіці символу немає об’єкта за шляхом {shown}
 @msg	give fill, stroke, opacity and/or blend	вкажіть fill, stroke, opacity та/або blend
@@ -6235,3 +6268,4 @@ breakText	Glyphs	Гліфи
 # Align to Pixel Grid
 	Align to Pixel Grid	Вирівняти за піксельною сіткою
 @msg	only paths and compound paths can be aligned to the pixel grid	за піксельною сіткою можна вирівняти лише контури і складені контури
+@msg	side is left or right, not `{s}`	side — це left або right, а не `{s}`

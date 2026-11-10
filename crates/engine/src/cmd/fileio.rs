@@ -34,6 +34,7 @@ pub mod eps;
 mod export;
 pub(crate) mod imagemap;
 mod importer;
+pub mod jxlread;
 mod legacy_ai;
 mod load;
 mod mesh3d;
@@ -92,15 +93,16 @@ pub use save::{
     remembered_save_options, save_filters, save_format, save_job, save_plan, save_with, stamp_save_dates, template_filters, templates_dialog_folder,
     templates_folder,
 };
+pub(crate) use screens::{
+    PARAM_KEYS as SCREEN_PARAM_KEYS, ROW_KEYS as SCREEN_ROW_KEYS, UNWRITTEN_FORMATS as SCREEN_UNWRITTEN_FORMATS,
+    check_settings as check_screen_settings, export as export_screens, safe_file_name, store_settings as store_screen_settings,
+    with_export_preset as with_screen_export_preset,
+};
 pub use screens::{
     PRESET_FILE_EXTS as SCREEN_EXPORT_PRESET_EXTS, PRESET_FILE_FORMAT as SCREEN_EXPORT_PRESET_FORMAT, PRESET_KEYS as SCREEN_EXPORT_PRESET_KEYS,
     PRESETS as SCREEN_PRESETS, SHARED_KEYS as SCREEN_SETTINGS_KEYS, ScreenExport, ScreenExportPreset, ScreenSize,
     builtin_presets as screen_export_builtin_presets, first_file as screen_first_file, preset_list as screen_export_preset_list,
     preset_rows as screen_preset_rows,
-};
-pub(crate) use screens::{
-    check_settings as check_screen_settings, export as export_screens, safe_file_name, store_settings as store_screen_settings,
-    with_export_preset as with_screen_export_preset,
 };
 pub use svg::options_map as svg_options;
 /// Atomic file writes (a temporary file renamed over the target: a failed write never damages the
@@ -207,6 +209,8 @@ mod tests_pdfoutput;
 #[cfg(test)]
 mod tests_tiffbmp;
 
+#[cfg(test)]
+mod tests_jxlread;
 #[cfg(test)]
 mod tests_pdfx;
 #[cfg(test)]

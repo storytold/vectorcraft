@@ -441,6 +441,9 @@ antiAlias	Sharp	Nítid
 	Basic	Bàsic
 	Basic Latin	Llatí bàsic
 	Basic Shapes	Formes bàsiques
+	Button	Botó
+	Panel	Panell
+	UI Frames	Marcs d’IU
 	Batch	Lot
 	Batch…	Lot…
 	Bearing	Orientació
@@ -766,6 +769,11 @@ antiAlias	Sharp	Nítid
 	Color Table ({n} colors)	Taula de colors ({n} colors)
 	Color Theme	Tema de colors
 	Color Themes	Temes de colors
+	Color Wheel	Roda de colors
+	Hue ring	Anell de to
+	Saturation and brightness	Saturació i lluentor
+	Color field	Camp de color
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Tipus de color:
 	Color wheel	Roda de color
 	Color:	Color:
@@ -1248,7 +1256,7 @@ antiAlias	Sharp	Nítid
 	Drag to float as a toolbar	Arrossega per surar com a barra d’eines
 	Drag to float the toolbar	Arrossega per fer surar la barra d’eines
 	Drag to move	Arrossega per moure
-	Drag to the window's left edge to dock	Arrossega fins a la vora esquerra de la finestra per acoblar
+	Drag to the window's left or right edge to dock	Arrossega fins a la vora esquerra o dreta de la finestra per acoblar
 	Drag values or labels. Double-click a value to type.	Arrossega els valors o les etiquetes. Fes doble clic en un valor per escriure’l.
 	Draw	Dibuixa
 	Draw Behind	Dibuixa al darrere
@@ -5503,7 +5511,10 @@ digits	Malayalam	Malaiàlam
 @msg	objects can't be nested more than 32 deep	els objectes no es poden niar més de 32 nivells
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	els objectes dins d’una fusió, un embolcall, una repetició o un grup Intertwine no es poden adjuntar a un traçat
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	els pinzells que VectorCraft encara no pot llegir s'han deixat fora del tauler Pinzells ({_1})
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	els objectes amb diversos farciments o traços, efectes o pinzells han arribat amb el seu aspecte dibuixat ({_1}): la seva aparença encara no és editable
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	els objectes amb diversos farciments o traços, traços d’amplada variable, efectes o pinzells han arribat amb el seu aspecte dibuixat ({_1}): la seva aparença encara no és editable
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	el nom `{name}` no és UTF-8 i s’ha llegit com a {label}: si sembla incorrecte, obriu el fitxer amb un altre legacyNameEncoding
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	el nom `{name}` no és UTF-8, i algunes parts tampoc no són {label} vàlid: obriu el fitxer amb un altre legacyNameEncoding
+@msg	more names that aren't UTF-8 were read as {label} ({count})	s’han llegit com a {label} més noms que no són UTF-8 ({count})
 @msg	Offset Path: select paths	Desplaça el traçat: selecciona traçats
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Desplaça el traçat: el desplaçament no deixa res dels traçats seleccionats (una retracció més gran que les formes)
 @msg	only a dock group above or below others collapses, not one beside another	només es plega un grup d’acoblament situat a sobre o a sota d’altres, no un al costat d’un altre
@@ -5844,6 +5855,11 @@ digits	Malayalam	Malaiàlam
 @msg	unknown parameter `{key}`; did you mean `{near}`?	paràmetre desconegut `{key}`; volies dir `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	paràmetre desconegut `{key}`; l’ordre no admet cap paràmetre
 @msg	unknown parameter `{key}`; the command takes: {keys}	paràmetre desconegut `{key}`; l’ordre admet: {keys}
+@msg	the params must be an object, not {got}	els paràmetres han de ser un objecte, no {got}
+@msg	unknown parameter `{path}`; the object takes no keys	paràmetre desconegut `{path}`; l’objecte no admet claus
+@msg	unknown parameter `{path}`; it takes: {keys}	paràmetre desconegut `{path}`; admet: {keys}
+@msg	missing `{path}`	falta `{path}`
+@msg	`{path}` must be {expected}, not {got}	`{path}` ha de ser {expected}, no {got}
 @msg	unknown preference `{key}`	preferència desconeguda `{key}`
 @msg	unknown preset (one of {_1})	preajust desconegut (un de {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	preajust desconegut `{name}` (high, medium, low o un de desat: consulta flattener.presets.list)
@@ -5920,7 +5936,7 @@ digits	Malayalam	Malaiàlam
 @msg	{path}: {e}	{path}: {e}
 @msg	{status} ({e})	{status} ({e})
 @msg	{tool} isn't in a toolbar group of several tools	{tool} no forma part d’un grup de diverses eines a la barra d’eines
-@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	«{_1}» demana un pressupost elevat (cada execució fins a {minutes} minuts i {times} vegades les instruccions habituals): instal·la’l amb `allowHeavy: true` quan l’usuari hi estigui d’acord
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	«{_1}» demana un pressupost elevat (cada execució fins a {minutes} minuts i {times} vegades les instruccions habituals): una persona l’ha d’aprovar a l’aplicació d’escriptori, o passa `allowHeavy: true` en una sessió iniciada amb --allow-plugin-grants
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Instal·la «{name}», que demana aquests permisos?
 	ID: {id}	ID: {id}
@@ -5943,15 +5959,26 @@ digits	Malayalam	Malaiàlam
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	el mòdul importa `env.{name}`, que un complement només pot fer servir al nivell d’API de complements {PROGRESS_API} (`api` {PROGRESS_API}) i amb el permís `{permission}`
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	el mòdul importa `{from}.{name}`, que l’amfitrió no ofereix: un complement només pot importar les funcions `env.vc_*` que enumera docs/plugins.md (nivell d’API de complements 2), i cap WASI, fitxer ni xarxa
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` és {_1}; aquest amfitrió admet els nivells d’API de complements de l’1 al {API_LEVEL}
+@msg	`paintOutput` may only be true	`paintOutput` només pot ser true
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` només és per a un efecte dinàmic (`kind` "effect") amb `api` 2
 @msg	`grant` must be a list of permission names	`grant` ha de ser una llista de noms de permisos
 @msg	`grant` names an unknown permission `{shown}`	`grant` esmenta un permís desconegut `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	un complement del tipus `{_1}` necessita el permís `{_2}`
 @msg	at most {MAX_PERMISSIONS} `permissions`	com a màxim {MAX_PERMISSIONS} `permissions`
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	el permís `{shown}` no s’aplica a un complement del tipus `{_1}`
 @msg	permission `{shown}` is listed twice	el permís `{shown}` apareix dues vegades
+@msg	only a filter declares `inputs`	només un filtre declara `inputs`
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` anomena un tipus d’objecte desconegut `{shown}`: feu servir type, image o symbolInstance
+@msg	`inputs` lists `{shown}` twice	`inputs` inclou `{shown}` dues vegades
+@msg	`inputs` needs `api` 2 or later	`inputs` requereix `api` 2 o posterior
+@msg	`inputs` needs the permission `doc.read`	`inputs` requereix el permís `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	pressupost de memòria (l’objecte {_1} necessita {size} bytes d’entrada, en queden {left})
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	pressupost d’objectes (més de {MAX_OBJECTS} objectes de només lectura)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	el permís `{shown}` està reservat per a una API de complements posterior; aquest amfitrió no el concedeix
 @msg	unknown permission `{shown}`	permís desconegut `{shown}`
-@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	«{name}» demana els permisos {asked}: instal·la’l amb un `grant` que els enumeri quan l’usuari hi estigui d’acord
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	«{name}» demana els permisos {asked}: una persona els ha d’aprovar a l’aplicació d’escriptori, o passa `grant` en una sessió iniciada amb --allow-plugin-grants
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` i `allowHeavy` només tenen efecte en una sessió iniciada amb --allow-plugin-grants: aprova el complement a l’aplicació d’escriptori
+@msg	Only the person at the keyboard can approve installing a plug-in	Només la persona al teclat pot aprovar la instal·lació d’un complement
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	a «{name}» no se li ha concedit `{p}`, que la seva sortida necessita: no s’ha canviat res
 @msg	a heavy filter runs in the background, so it can't declare `commands`	un filtre pesat s’executa en segon pla, de manera que no pot declarar `commands`
 @msg	at most {MAX_COMMANDS} `commands`	com a màxim {MAX_COMMANDS} `commands`
@@ -6338,6 +6365,10 @@ breakText	Glyphs	Glifs
 @msg	`by` must be lines, paragraphs, words or glyphs, not {other}	`by` ha de ser lines, paragraphs, words o glyphs, no {other}
 @msg	`kind` must be "line" or "paragraph", not {other}	`kind` ha de ser "line" o "paragraph", no {other}
 @msg	`align` must be "left", "center" or "right", not {other}	`align` ha de ser "left", "center" o "right", no {other}
+@msg	the JPEG XL file is cut short	el fitxer JPEG XL està truncat
+@msg	the JPEG XL container is too large to read	el contenidor JPEG XL és massa gran per llegir-lo
+@msg	CMYK JPEG XL images can't be read	les imatges JPEG XL en CMYK no es poden llegir
+@msg	the JPEG XL file can't be read: {e}	no es pot llegir el fitxer JPEG XL: {e}
 	File + Number	Fitxer + número
 	File + Data Set Name	Fitxer + nom del conjunt de dades
 	Data Set Name	Nom del conjunt de dades
@@ -6468,7 +6499,7 @@ breakText	Glyphs	Glifs
 	Reset Symbol Instance	Restableix la instància de símbol
 @msg	type must be static or dynamic, not {v}	type ha de ser static o dynamic, no {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` és un símbol estàtic: primer establiu el tipus de símbol a Dinàmic
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	D'un traçat, un traçat compost o un text seleccionat en una instància de símbol només es pot canviar el color sòlid de l'emplenament i el traç
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	En un traçat, traçat compost o text seleccionat en una instància de símbol només es poden canviar l'emplenament, el traç, l'opacitat i la fusió
 @msg	path must be a list of child indices	path ha de ser una llista d’índexs de fills
 @msg	no object at path {shown} in the symbol's art	no hi ha cap objecte al camí {shown} de l’art del símbol
 @msg	give fill, stroke, opacity and/or blend	indiqueu fill, stroke, opacity i/o blend
@@ -6617,3 +6648,4 @@ breakText	Glyphs	Glifs
 # Align to Pixel Grid
 	Align to Pixel Grid	Alinea a la quadrícula de píxels
 @msg	only paths and compound paths can be aligned to the pixel grid	només els traçats i els traçats compostos es poden alinear a la quadrícula de píxels
+@msg	side is left or right, not `{s}`	side ha de ser left o right, no `{s}`

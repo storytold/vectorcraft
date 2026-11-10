@@ -158,6 +158,22 @@ fn the_exporter_is_given_its_parameters_and_the_file_it_writes() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// Export for Screens writes an exporter's format from a row, with the row's `params`, and takes
+/// settings for that format.
+#[test]
+fn export_for_screens_takes_an_exporter_s_format_and_params() {
+    let mut s = session();
+    let params = r#"{"density":{"type":"number","min":0,"max":10,"default":4}}"#;
+    install(&mut s, &tpl::echo_exporter(&tpl::exporter("test.screens", r#"["tss"]"#, params), Echo::Params));
+    let r = s.execute("document.exportForScreens", &json!({"formats": [{"format": "plugin.test.screens", "params": {"density": 7}}]})).unwrap();
+    let file = &r["files"][0];
+    assert!(file["name"].as_str().unwrap().ends_with(".tss"), "{r}");
+    let got: Value = serde_json::from_slice(&vectorcraft_format::base64_decode(file["dataBase64"].as_str().unwrap()).unwrap()).unwrap();
+    assert_eq!(got["density"], json!(7.0));
+    let settings = json!({"formats": [{"format": "plugin.test.screens"}], "settings": {"plugin.test.screens": {"params": {"density": 2}}}});
+    s.execute("document.exportForScreens", &settings).unwrap();
+}
+
 /// Only the selected objects, with `selectedOnly`, as for the built-in formats.
 #[test]
 fn selected_only_hands_over_the_selection() {

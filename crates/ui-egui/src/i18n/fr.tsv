@@ -567,6 +567,11 @@ font-technology	Variable	Variables
 	Color Table ({n} colors)	Table des couleurs ({n} couleurs)
 	Color Theme	Thème de couleurs
 	Color Themes	Thèmes de couleurs
+	Color Wheel	Roue chromatique
+	Hue ring	Anneau de teinte
+	Saturation and brightness	Saturation et luminosité
+	Color field	Champ de couleur
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Type de couleur :
 	Color:	Couleur :
 	Colorize	Coloriser
@@ -3543,6 +3548,7 @@ digits	Malayalam	Malayalam
 	Tile Range:	Plage de carreaux :
 	Tile Type:	Type de carreau :
 	tile {number}	carreau {number}
+	Copies per Sheet (as many as fit, in a grid)	Copies par feuille (autant qu’il en tient, en grille)
 	Tiles are numbered across, then down; leave the range empty for every tile.	Les carreaux sont numérotés de gauche à droite, puis de haut en bas ; laissez la plage vide pour tous les carreaux.
 	Tint	Teinte
 	Tip extends past the end point	La pointe dépasse le point d’extrémité
@@ -4006,7 +4012,7 @@ axis	Both	Les deux
 	Dock to Bottom	Ancrer en bas
 	Dock Control Bar	Ancrer la barre de contrôle
 	Drag to float the toolbar	Faire glisser pour rendre la barre d’outils flottante
-	Drag to the window's left edge to dock	Faire glisser vers le bord gauche de la fenêtre pour ancrer
+	Drag to the window's left or right edge to dock	Faire glisser vers le bord gauche ou droit de la fenêtre pour ancrer
 	Float Tool Group	Rendre le groupe d’outils flottant
 
 # Status and error messages (`@msg`), translated where the status bar shows them; the message itself
@@ -4763,7 +4769,10 @@ axis	Both	Les deux
 @msg	its objects are nested too deeply	leurs objets sont imbriqués trop profondément
 @msg	its section ending with `%{end}` doesn't end	leur section qui se termine par `%{end}` ne se termine pas
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	les formes que VectorCraft ne sait pas encore lire ont été omises du panneau Formes ({_1})
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	les objets à plusieurs fonds ou contours, effets ou formes ont été importés tels qu’ils sont dessinés ({_1}) : leur aspect n’est pas encore modifiable
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	les objets à plusieurs fonds ou contours, contours de largeur variable, effets ou formes ont été importés tels qu’ils sont dessinés ({_1}) : leur aspect n’est pas encore modifiable
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	le nom `{name}` n’est pas en UTF-8 et a été lu en {label} : s’il semble incorrect, ouvrez le fichier avec un autre legacyNameEncoding
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	le nom `{name}` n’est pas en UTF-8, et certaines parties ne sont pas non plus du {label} valide : ouvrez le fichier avec un autre legacyNameEncoding
+@msg	more names that aren't UTF-8 were read as {label} ({count})	d’autres noms qui ne sont pas en UTF-8 ont été lus en {label} ({count})
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	le dégradé « {name} » n’est pas défini dans le fichier : une couleur unie le remplace
 @msg	an image VectorCraft can't read was left out	une image que VectorCraft ne peut pas lire a été ignorée
 @msg	graphs come in as plain art, without their data or settings	les graphes sont importés comme illustration ordinaire, sans leurs données ni leurs réglages
@@ -4886,6 +4895,10 @@ axis	Both	Les deux
 @msg	the PSD file is cut short	le fichier PSD est tronqué
 @msg	the PSD file's header is damaged	l'en-tête du fichier PSD est endommagé
 @msg	the PSD file's image data can't be read: {e}	les données d'image du fichier PSD ne peuvent pas être lues : {e}
+@msg	the JPEG XL file is cut short	le fichier JPEG XL est tronqué
+@msg	the JPEG XL container is too large to read	le conteneur JPEG XL est trop volumineux pour être lu
+@msg	CMYK JPEG XL images can't be read	les images JPEG XL en CMJN ne peuvent pas être lues
+@msg	the JPEG XL file can't be read: {e}	le fichier JPEG XL ne peut pas être lu : {e}
 	Video	Vidéo
 	De-Interlace…	Désentrelacement…
 	De-Interlace	Désentrelacement
@@ -5154,6 +5167,11 @@ lighting	Light	Lumière
 @msg	unknown parameter `{key}`; did you mean `{near}`?	paramètre inconnu `{key}` ; vouliez-vous dire `{near}` ?
 @msg	unknown parameter `{key}`; the command takes no parameters	paramètre inconnu `{key}` ; la commande n’a aucun paramètre
 @msg	unknown parameter `{key}`; the command takes: {keys}	paramètre inconnu `{key}` ; la commande accepte : {keys}
+@msg	the params must be an object, not {got}	les paramètres doivent être un objet, pas {got}
+@msg	unknown parameter `{path}`; the object takes no keys	paramètre inconnu `{path}` ; l’objet n’accepte aucune clé
+@msg	unknown parameter `{path}`; it takes: {keys}	paramètre inconnu `{path}` ; il accepte : {keys}
+@msg	missing `{path}`	`{path}` manquant
+@msg	`{path}` must be {expected}, not {got}	`{path}` doit être {expected}, pas {got}
 	1 Layer	1 calque
 	1 bit	1 bit
 	16 Colors	16 couleurs
@@ -5902,7 +5920,7 @@ axis	Y Axis	Axe Y
 @msg	Running “{name}”…	Exécution de « {name} »…
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	un effet dynamique s’exécute pendant le tracé du document, il ne peut donc pas être `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	un module externe d’exportation reçoit toujours le budget d’une exportation : omettez `budget`
-@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	« {_1} » demande un budget de calcul important (chaque exécution jusqu’à {minutes} minutes et {times} fois les instructions habituelles) : installez-le avec `allowHeavy: true` une fois que l’utilisateur l’accepte
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	« {_1} » demande un budget de calcul important (chaque exécution jusqu’à {minutes} minutes et {times} fois les instructions habituelles) : une personne doit l’approuver dans l’application de bureau, ou passez `allowHeavy: true` dans une session démarrée avec --allow-plugin-grants
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Installer « {name} », qui demande ces autorisations ?
 	ID: {id}	ID : {id}
@@ -5925,6 +5943,8 @@ axis	Y Axis	Axe Y
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	le module importe `env.{name}`, qu’un module externe ne peut utiliser qu’au niveau d’API de module externe {PROGRESS_API} (`api` {PROGRESS_API}) et avec l’autorisation `{permission}`
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	le module importe `{from}.{name}`, que l’hôte ne propose pas : un module externe ne peut importer que les fonctions `env.vc_*` que liste docs/plugins.md (niveau d’API de module externe 2), et aucun WASI, fichier ni réseau
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` vaut {_1} ; cet hôte prend en charge les niveaux d’API de module externe 1 à {API_LEVEL}
+@msg	`paintOutput` may only be true	`paintOutput` ne peut valoir que true
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` est réservé à un effet dynamique (`kind` "effect") avec `api` 2
 @msg	`grant` must be a list of permission names	`grant` doit être une liste de noms d’autorisations
 @msg	`grant` names an unknown permission `{shown}`	`grant` nomme une autorisation inconnue `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	un module externe de type `{_1}` a besoin de l’autorisation `{_2}`
@@ -5932,8 +5952,17 @@ axis	Y Axis	Axe Y
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	l’autorisation `{shown}` ne s’applique pas à un module externe de type `{_1}`
 @msg	permission `{shown}` is listed twice	l’autorisation `{shown}` figure deux fois
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	l’autorisation `{shown}` est réservée à une future API de module externe ; cet hôte ne l’accorde pas
+@msg	only a filter declares `inputs`	seul un filtre déclare `inputs`
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` désigne un type d’objet inconnu `{shown}` : utilisez type, image ou symbolInstance
+@msg	`inputs` lists `{shown}` twice	`inputs` mentionne `{shown}` deux fois
+@msg	`inputs` needs `api` 2 or later	`inputs` nécessite `api` 2 ou plus
+@msg	`inputs` needs the permission `doc.read`	`inputs` nécessite l’autorisation `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	budget mémoire (l’objet {_1} nécessite {size} octets d’entrée, il en reste {left})
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	budget d’objets (plus de {MAX_OBJECTS} objets en lecture seule)
 @msg	unknown permission `{shown}`	autorisation inconnue `{shown}`
-@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	« {name} » demande les autorisations {asked} : installez-le avec `grant` qui les liste une fois que l’utilisateur l’accepte
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	« {name} » demande les autorisations {asked} : une personne doit les approuver dans l’application de bureau, ou passez `grant` dans une session démarrée avec --allow-plugin-grants
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` et `allowHeavy` ne prennent effet que dans une session démarrée avec --allow-plugin-grants : approuvez le module externe dans l’application de bureau
+@msg	Only the person at the keyboard can approve installing a plug-in	Seule la personne au clavier peut approuver l’installation d’un module externe
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	« {name} » n’a pas reçu `{p}`, dont sa sortie a besoin : rien n’a été modifié
 @msg	a heavy filter runs in the background, so it can't declare `commands`	un filtre lourd s’exécute en arrière-plan, il ne peut donc pas déclarer `commands`
 @msg	at most {MAX_COMMANDS} `commands`	au plus {MAX_COMMANDS} `commands`
@@ -5994,6 +6023,9 @@ axis	Y Axis	Axe Y
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards` : all ou une plage telle que 1, 3-5, et non {v}
 	Add to Symbols	Ajouter aux symboles
 	Basic Shapes	Formes de base
+	Button	Bouton
+	Panel	Panneau
+	UI Frames	Cadres d’IU
 	Open Symbol Library	Ouvrir une bibliothèque de symboles
 	Save Symbol Library	Enregistrer la bibliothèque de symboles
 	Save Symbol Library…	Enregistrer la bibliothèque de symboles…
@@ -6481,7 +6513,7 @@ breakText	Glyphs	Glyphes
 	Reset Symbol Instance	Réinitialiser l'instance de symbole
 @msg	type must be static or dynamic, not {v}	type doit être static ou dynamic, et non {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` est un symbole statique : définissez d'abord son type de symbole sur Dynamique
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	Seules les couleurs unies du fond et du contour d'un tracé, d'un tracé transparent ou d'un texte sélectionné dans une instance de symbole peuvent changer
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	Seul le fond, le contour, l’opacité et le mode de fusion d’un tracé, tracé composé ou texte sélectionné dans une occurrence de symbole peuvent être modifiés
 @msg	path must be a list of child indices	path doit être une liste d'indices d'enfants
 @msg	no object at path {shown} in the symbol's art	aucun objet au chemin {shown} dans l'illustration du symbole
 @msg	give fill, stroke, opacity and/or blend	indiquez fill, stroke, opacity et/ou blend
@@ -6630,3 +6662,4 @@ breakText	Glyphs	Glyphes
 # Align to Pixel Grid
 	Align to Pixel Grid	Aligner sur la grille de pixels
 @msg	only paths and compound paths can be aligned to the pixel grid	seuls les tracés et les tracés transparents peuvent être alignés sur la grille de pixels
+@msg	side is left or right, not `{s}`	side vaut left ou right, pas `{s}`

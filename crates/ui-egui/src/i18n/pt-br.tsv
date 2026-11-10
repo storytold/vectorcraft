@@ -511,6 +511,11 @@ antiAlias	Sharp	Nítido
 	Color Swatches	Amostras de Cor
 	Color Table	Tabela de Cores
 	Color Themes	Temas de Cores
+	Color Wheel	Roda de Cores
+	Hue ring	Anel de Tom
+	Saturation and brightness	Saturação e Brilho
+	Color field	Campo de Cor
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Tipo de Cor:
 	Color blindness – Deuteranopia-type	Daltonismo – tipo deuteranopia
 	Color blindness – Protanopia-type	Daltonismo – tipo protanopia
@@ -2917,6 +2922,7 @@ digits	Malayalam	Malaiala
 	Tile Range:	Intervalo de Blocos:
 	Tile Type:	Tipo de Bloco:
 	Tiles are numbered across, then down; leave the range empty for every tile.	Os blocos são numerados horizontalmente, depois para baixo; deixe o intervalo vazio para cada bloco.
+	Copies per Sheet (as many as fit, in a grid)	Cópias por Folha (quantas couberem, em grade)
 	Title Case	Tipo de Título
 	Toggle Fill/Stroke Focus	Alternar Foco de Preenchimento/Traçado
 	Toggle Selection	Alternar Seleção
@@ -3605,7 +3611,7 @@ axis	Horizontal	Horizontal
 axis	Vertical	Vertical
 axis	Both	Ambos
 	Drag to float the toolbar	Arraste para flutuar a barra de ferramentas
-	Drag to the window's left edge to dock	Arraste até a borda esquerda da janela para encaixar
+	Drag to the window's left or right edge to dock	Arraste até a borda esquerda ou direita da janela para encaixar
 @msg	no library `{id}`	nenhuma biblioteca `{id}`
 @msg	select some type first	selecione algum texto primeiro
 @msg	kerning must be a number, "auto", or "optical"	O kerning deve ser um número, “auto” ou “optical”
@@ -4345,7 +4351,10 @@ axis	Both	Ambos
 @msg	its objects are nested too deeply	seus objetos estão aninhados com profundidade excessiva
 @msg	its section ending with `%{end}` doesn't end	sua seção que termina com `%{end}` não termina
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	os pincéis que o VectorCraft ainda não consegue ler ficaram fora do painel Pincéis ({_1})
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objetos com vários preenchimentos ou traços, efeitos ou pincéis entraram com a aparência desenhada ({_1}): sua aparência ainda não é editável
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objetos com vários preenchimentos ou traços, traços de largura variável, efeitos ou pincéis entraram com a aparência desenhada ({_1}): sua aparência ainda não é editável
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	o nome `{name}` não está em UTF-8 e foi lido como {label}: se parecer errado, abra o arquivo com outro legacyNameEncoding
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	o nome `{name}` não está em UTF-8, e partes dele também não são {label} válido: abra o arquivo com outro legacyNameEncoding
+@msg	more names that aren't UTF-8 were read as {label} ({count})	mais nomes que não estão em UTF-8 foram lidos como {label} ({count})
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	o gradiente “{name}” não está definido no arquivo: uma cor sólida o substitui
 @msg	an image VectorCraft can't read was left out	uma imagem que o VectorCraft não consegue ler foi omitida
 @msg	graphs come in as plain art, without their data or settings	os gráficos são importados como arte comum, sem seus dados nem configurações
@@ -4415,6 +4424,10 @@ axis	Both	Ambos
 @msg	the PSD file is cut short	o arquivo PSD está incompleto
 @msg	the PSD file's header is damaged	o cabeçalho do arquivo PSD está danificado
 @msg	the PSD file's image data can't be read: {e}	os dados de imagem do arquivo PSD não podem ser lidos: {e}
+@msg	the JPEG XL file is cut short	o arquivo JPEG XL está incompleto
+@msg	the JPEG XL container is too large to read	o contêiner JPEG XL é grande demais para ser lido
+@msg	CMYK JPEG XL images can't be read	imagens JPEG XL em CMYK não podem ser lidas
+@msg	the JPEG XL file can't be read: {e}	o arquivo JPEG XL não pode ser lido: {e}
 @msg	Imported library {name}	Biblioteca {name} importada
 	Define a variable first	Defina uma variável primeiro
 	Text	Texto
@@ -4493,6 +4506,11 @@ axis	Both	Ambos
 @msg	unknown parameter `{key}`; did you mean `{near}`?	parâmetro desconhecido `{key}`; você quis dizer `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	parâmetro desconhecido `{key}`; o comando não tem parâmetros
 @msg	unknown parameter `{key}`; the command takes: {keys}	parâmetro desconhecido `{key}`; o comando aceita: {keys}
+@msg	the params must be an object, not {got}	os parâmetros devem ser um objeto, não {got}
+@msg	unknown parameter `{path}`; the object takes no keys	parâmetro desconhecido `{path}`; o objeto não aceita chaves
+@msg	unknown parameter `{path}`; it takes: {keys}	parâmetro desconhecido `{path}`; aceita: {keys}
+@msg	missing `{path}`	falta `{path}`
+@msg	`{path}` must be {expected}, not {got}	`{path}` deve ser {expected}, não {got}
 	Load EPS into Clipboard	Carregar EPS na Área de Transferência
 	Drawer menu	Menu da gaveta
 	Toolbar: Show Controls	Barra de ferramentas: Mostrar controles
@@ -5822,7 +5840,7 @@ axis	Y Axis	Eixo Y
 @msg	Running “{name}”…	Executando “{name}”…
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	um efeito dinâmico é executado enquanto o documento é desenhado, então não pode ser `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	um plug-in de exportação sempre recebe o orçamento de uma exportação: omita `budget`
-@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	“{_1}” pede um orçamento de processamento grande (cada execução até {minutes} minutos e {times} vezes as instruções habituais): instale-o com `allowHeavy: true` depois que o usuário concordar
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}” pede um orçamento de processamento grande (cada execução até {minutes} minutos e {times} vezes as instruções habituais): uma pessoa precisa aprová-lo no aplicativo de desktop, ou passe `allowHeavy: true` em uma sessão iniciada com --allow-plugin-grants
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Instalar “{name}”, que pede estas permissões?
 	ID: {id}	ID: {id}
@@ -5845,15 +5863,26 @@ axis	Y Axis	Eixo Y
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	o módulo importa `env.{name}`, que um plug-in só pode usar no nível de API de plug-in {PROGRESS_API} (`api` {PROGRESS_API}) e com a permissão `{permission}`
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	o módulo importa `{from}.{name}`, que o host não oferece: um plug-in só pode importar as funções `env.vc_*` listadas em docs/plugins.md (nível de API de plug-in 2), e nenhum WASI, arquivo ou rede
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` é {_1}; este host aceita os níveis de API de plug-in de 1 a {API_LEVEL}
+@msg	`paintOutput` may only be true	`paintOutput` só pode ser true
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` é só para um efeito dinâmico (`kind` "effect") com `api` 2
 @msg	`grant` must be a list of permission names	`grant` deve ser uma lista de nomes de permissões
 @msg	`grant` names an unknown permission `{shown}`	`grant` cita uma permissão desconhecida `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	um plug-in do tipo `{_1}` precisa da permissão `{_2}`
 @msg	at most {MAX_PERMISSIONS} `permissions`	no máximo {MAX_PERMISSIONS} `permissions`
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	a permissão `{shown}` não se aplica a um plug-in do tipo `{_1}`
 @msg	permission `{shown}` is listed twice	a permissão `{shown}` aparece duas vezes
+@msg	only a filter declares `inputs`	somente um filtro declara `inputs`
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` cita um tipo de objeto desconhecido `{shown}`: use type, image ou symbolInstance
+@msg	`inputs` lists `{shown}` twice	`inputs` lista `{shown}` duas vezes
+@msg	`inputs` needs `api` 2 or later	`inputs` exige `api` 2 ou posterior
+@msg	`inputs` needs the permission `doc.read`	`inputs` exige a permissão `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	orçamento de memória (o objeto {_1} precisa de {size} bytes de entrada, restam {left})
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	orçamento de objetos (mais de {MAX_OBJECTS} objetos somente leitura)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	a permissão `{shown}` está reservada para uma API de plug-in futura; este host não a concede
 @msg	unknown permission `{shown}`	permissão desconhecida `{shown}`
-@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}” pede as permissões {asked}: instale-o com `grant` listando-as depois que o usuário concordar
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	“{name}” pede as permissões {asked}: uma pessoa precisa aprová-las no aplicativo de desktop, ou passe `grant` em uma sessão iniciada com --allow-plugin-grants
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` e `allowHeavy` só têm efeito em uma sessão iniciada com --allow-plugin-grants: aprove o plug-in no aplicativo de desktop
+@msg	Only the person at the keyboard can approve installing a plug-in	Somente a pessoa ao teclado pode aprovar a instalação de um plug-in
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	“{name}” não recebeu `{p}`, de que sua saída precisa: nada foi alterado
 @msg	a heavy filter runs in the background, so it can't declare `commands`	um filtro pesado é executado em segundo plano, então não pode declarar `commands`
 @msg	at most {MAX_COMMANDS} `commands`	no máximo {MAX_COMMANDS} `commands`
@@ -5914,6 +5943,9 @@ axis	Y Axis	Eixo Y
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all ou um intervalo como 1, 3-5, não {v}
 	Add to Symbols	Adicionar aos Símbolos
 	Basic Shapes	Formas Básicas
+	Button	Botão
+	Panel	Painel
+	UI Frames	Molduras de IU
 	Open Symbol Library	Abrir Biblioteca de Símbolos
 	Save Symbol Library	Salvar Biblioteca de Símbolos
 	Save Symbol Library…	Salvar Biblioteca de Símbolos…
@@ -6404,7 +6436,7 @@ breakText	Glyphs	Glifos
 	Reset Symbol Instance	Redefinir instância de símbolo
 @msg	type must be static or dynamic, not {v}	type deve ser static ou dynamic, não {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` é um símbolo estático: defina primeiro o tipo de símbolo como Dinâmico
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	De um caminho, caminho composto ou texto selecionado em uma instância de símbolo só é possível alterar a cor sólida do preenchimento e do traçado
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	De um caminho, caminho composto ou texto selecionado em uma instância de símbolo só é possível alterar o preenchimento, o traçado, a opacidade e a mesclagem
 @msg	path must be a list of child indices	path deve ser uma lista de índices de filhos
 @msg	no object at path {shown} in the symbol's art	nenhum objeto no caminho {shown} na arte do símbolo
 @msg	give fill, stroke, opacity and/or blend	informe fill, stroke, opacity e/ou blend
@@ -6708,3 +6740,4 @@ swatch	Yellow Green	Verde-amarelado
 # Align to Pixel Grid
 	Align to Pixel Grid	Alinhar à Grade de Pixels
 @msg	only paths and compound paths can be aligned to the pixel grid	somente caminhos e caminhos compostos podem ser alinhados à grade de pixels
+@msg	side is left or right, not `{s}`	side é left ou right, não `{s}`

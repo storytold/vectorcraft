@@ -3931,6 +3931,96 @@ fn hidden_corner_widgets_do_not_answer_the_pointer() {
     assert!(radius(&app).is_some_and(|r| r > 0.0), "{:?}", radius(&app));
 }
 
+/// One headless canvas frame → the bounding box drawn: its outline's corners on screen (the
+/// closed four-point line in the layer color; `None` when it is hidden) and the number of its
+/// handles (white 6 px squares).
+fn bounding_box_drawn(app: &mut VectorcraftApp, ctx: &egui::Context) -> (Option<Vec<Pos2>>, usize) {
+    let st = app.session.active().unwrap();
+    let layer = egui::epaint::ColorMode::Solid(c32(st.doc.layer_color(st.selection.objects[0])));
+    let drawn = shapes(app, ctx);
+    let outline = drawn.iter().find_map(|s| match s {
+        Shape::Path(ps) if ps.closed && ps.points.len() == 4 && ps.stroke.color == layer => Some(ps.points.clone()),
+        _ => None,
+    });
+    let handle = |s: &&Shape| matches!(s, Shape::Rect(r) if r.rect.size() == vec2(6.0, 6.0) && r.fill == Color32::WHITE);
+    (outline, drawn.iter().filter(handle).count())
+}
+
+/// The selection's bounding box corners on screen, as measured from the document.
+fn box_corners(app: &mut VectorcraftApp) -> Vec<Pos2> {
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    app.selection_box().unwrap().corners().iter().map(|q| xf.to_screen(*q)).collect()
+}
+
+/// Do two outlines have the same corners, to 0.01 px?
+fn same_corners(a: &[Pos2], b: &[Pos2]) -> bool {
+    a.len() == b.len() && a.iter().zip(b).all(|(p, q)| p.distance(*q) < 0.01)
+}
+
+/// #3526: a resize by a bounding-box handle keeps the bounding box and its handles drawn at the
+/// bounds the drag gives, with Real-time Drawing on and off (off, the document stays at the drag's
+/// snapshot until the release).
+#[test]
+fn a_resize_drag_keeps_the_bounding_box_at_the_new_bounds() {
+    for real_time in [true, false] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.session.execute("shape.ellipse", &json!({"x": 100, "y": 100, "width": 100, "height": 60})).unwrap();
+        app.session.execute("prefs.set", &json!({"key": "realTimeDrawing", "value": real_time})).unwrap();
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        app.select_tool("selection");
+        let before = box_corners(&mut app);
+        let (outline, handles) = bounding_box_drawn(&mut app, &ctx);
+        assert!(outline.is_some_and(|o| same_corners(&o, &before)) && handles == 8, "real time {real_time}: the box at rest");
+        let view = app.view_info();
+        app.session.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 160.0), view).unwrap();
+        app.session.pointer(&PointerEvent::new(PointerKind::Drag, 263.0, 211.0), view).unwrap();
+        assert!(app.session.tool_resizing(), "real time {real_time}: the handle was hit");
+        let (during, handles) = bounding_box_drawn(&mut app, &ctx);
+        assert_eq!(handles, 8, "real time {real_time}: the handles show during the resize");
+        app.session.pointer(&PointerEvent::new(PointerKind::Up, 263.0, 211.0), view).unwrap();
+        let after = box_corners(&mut app);
+        assert!(!same_corners(&after, &before), "real time {real_time}: the drag resized the ellipse");
+        assert!(during.as_ref().is_some_and(|o| same_corners(o, &after)), "real time {real_time}: {during:?}, resized to {after:?}");
+        let (outline, handles) = bounding_box_drawn(&mut app, &ctx);
+        assert!(outline.is_some_and(|o| same_corners(&o, &after)) && handles == 8, "real time {real_time}: the box after the release");
+    }
+}
+
+/// A move, a rotation and a corner-radius drag keep hiding the bounding box and its handles until
+/// the release (#712, #1229).
+#[test]
+fn a_move_rotate_or_corner_radius_drag_hides_the_bounding_box() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    app.select_tool("selection");
+    let drag = |app: &mut VectorcraftApp, from: Point, to: Point| {
+        let view = app.view_info();
+        app.session.pointer(&PointerEvent::new(PointerKind::Down, from.x, from.y), view).unwrap();
+        app.session.pointer(&PointerEvent::new(PointerKind::Drag, to.x, to.y), view).unwrap();
+        assert!(app.session.tool_transforming() && !app.session.tool_resizing());
+        let during = bounding_box_drawn(app, &ctx);
+        app.session.pointer(&PointerEvent::new(PointerKind::Up, to.x, to.y), view).unwrap();
+        during
+    };
+    assert_eq!(bounding_box_drawn(&mut app, &ctx).1, 8);
+    assert_eq!(drag(&mut app, Point::new(150.0, 150.0), Point::new(160.0, 160.0)), (None, 0), "a move");
+    assert_eq!(bounding_box_drawn(&mut app, &ctx).1, 8, "back after the move");
+    let offset = 10.0 / app.view_info().zoom;
+    assert_eq!(drag(&mut app, Point::new(210.0 + offset, 210.0 + offset), Point::new(260.0, 160.0)), (None, 0), "a rotation");
+    assert_eq!(bounding_box_drawn(&mut app, &ctx).1, 8, "back after the rotation");
+    let corner = {
+        let st = app.session.active().unwrap();
+        vectorcraft_tools::corners::CornerWidgets::of(&st.doc, &st.selection, app.view_info().zoom, false).unwrap().visible().next().unwrap()
+    };
+    assert_eq!(drag(&mut app, corner, corner + vectorcraft_geom::Vec2::new(10.0, 10.0)), (None, 0), "a corner-radius drag");
+    assert_eq!(bounding_box_drawn(&mut app, &ctx).1, 8, "back after the corner-radius drag");
+}
+
 /// View › Hide Edges hides the bounding box and the type widget beside it, and the Selection
 /// tool then answers neither: a double-click on the widget's place leaves point type as it is,
 /// and a drag from a corner handle's place does not scale. With edges shown, both answer.
@@ -4555,7 +4645,7 @@ fn wheel_over_a_numeric_panel_field_does_not_start_a_canvas_zoom_glide() {
 /// `ui.wheel`: with Zoom with Mouse Wheel off, Cmd/Ctrl-wheel zooms about the pointer while the
 /// option is off and scrolls sideways while it is on, and a trackpad pinch, two fingers spread on a touch
 /// screen, Alt + Cmd/Ctrl-wheel and Alt-wheel still zoom. A Cmd/Ctrl-wheel notch with a plain
-/// one right after it scrolls two notches in all, and a trackpad gesture during which Cmd/Ctrl
+/// one right after it scrolls two notches in all, and a wheel gesture during which Cmd/Ctrl
 /// is pressed and released scrolls sideways until the gesture ends, while an Alt gesture that
 /// pauses past egui's scroll timeout no longer holds Alt for the next move. With Zoom with
 /// Mouse Wheel also on, Cmd/Ctrl-wheel scrolls sideways and the wheel zooms.
@@ -4657,16 +4747,16 @@ fn cmd_wheel_scrolls_sideways_preference() {
         (zoom - 1.25).abs() < 1e-6 && moved.x > notch - 0.5 && moved.x < 1.25 * notch + 0.5 && moved.y.abs() < 1e-3,
         "on: a pinch during a Cmd-wheel notch zooms by the pinch, and the notch scrolls sideways ({zoom}, {moved:?})"
     );
-    // A trackpad gesture starts with no modifier, and Cmd is pressed and released during it:
-    // egui keeps Cmd in its wheel state until the gesture ends, and the canvas keeps scrolling
-    // sideways until then.
+    // A gesture egui names as a wheel starts with no modifier, and Cmd is pressed and released
+    // during it: egui keeps Cmd in its wheel state until the gesture ends, and the canvas keeps
+    // scrolling sideways until then.
     let before = *app.view().unwrap();
     let swipe = |phase, modifiers| egui::Event::MouseWheel {
         unit: egui::MouseWheelUnit::Point,
         delta: vec2(0.0, 6.0),
         phase,
         modifiers,
-        source: egui::MouseWheelSource::Unknown,
+        source: egui::MouseWheelSource::Wheel,
     };
     app.synthetic.extend([
         egui::Event::PointerMoved(at),
@@ -4682,7 +4772,7 @@ fn cmd_wheel_scrolls_sideways_preference() {
     let scroll = (after.center - before.center) * after.zoom;
     assert!(
         (after.zoom / before.zoom - 1.0).abs() < 1e-9 && (scroll.x + 12.0).abs() < 0.01 && scroll.y == 0.0,
-        "on: a trackpad gesture scrolls sideways to its end after Cmd is let go ({}, {scroll:?})",
+        "on: a wheel gesture scrolls sideways to its end after Cmd is let go ({}, {scroll:?})",
         after.zoom / before.zoom
     );
     // An Alt-wheel gesture pauses past egui's scroll timeout with no frame in between: egui
@@ -4728,6 +4818,184 @@ fn cmd_wheel_scrolls_sideways_preference() {
         "with Zoom with Mouse Wheel: Cmd-wheel scrolls sideways ({zoom}, {scroll:?})"
     );
     assert!(zooms_in(turn(&mut app, "")), "with Zoom with Mouse Wheel: the wheel zooms in about the pointer");
+}
+
+/// With Scroll Sideways with Cmd/Ctrl + Wheel on, Cmd/Ctrl with a touchpad zooms about the pointer
+/// while whole line notches scroll sideways: a trackpad or point source, line deltas smaller than
+/// a notch, and a whole notch later in the same turn. With Zoom with Mouse Wheel on, Cmd/Ctrl with
+/// a touchpad zooms too.
+#[test]
+fn cmd_with_a_touchpad_zooms_and_a_whole_notch_scrolls_sideways() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let ctx = egui::Context::default();
+    let mut t = 0.0;
+    let mut run = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        t += 1.0 / 60.0;
+        let raw = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))),
+            time: Some(t),
+            events,
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+        out.textures_delta.clear();
+    };
+    run(&mut app, vec![]);
+    let rect = app.canvas_rect.unwrap();
+    let at = rect.center() + vec2(60.0, 40.0);
+    let ev = |unit, dy: f32, source| egui::Event::MouseWheel {
+        unit,
+        delta: vec2(0.0, dy),
+        phase: egui::TouchPhase::Move,
+        modifiers: egui::Modifiers::COMMAND,
+        source,
+    };
+    // Sends each event on its own frame, then lets egui finish and end the turn:
+    // → (zoom ratio, scroll in points, how far the point under `at` moved).
+    let mut turn = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        let before = *app.view().unwrap();
+        run(app, vec![egui::Event::PointerMoved(at)]);
+        for e in events {
+            run(app, vec![e]);
+        }
+        for _ in 0..40 {
+            run(app, vec![]);
+        }
+        let after = *app.view().unwrap();
+        let moved = Xf::new(rect, &after).to_doc(at).distance(Xf::new(rect, &before).to_doc(at));
+        (after.zoom / before.zoom, (after.center - before.center) * after.zoom, moved)
+    };
+    use egui::{MouseWheelSource as S, MouseWheelUnit as U};
+    let zooms_in = |(zoom, _, moved): (f64, _, f64)| zoom > 1.0005 && moved < 1e-6;
+    let zooms_by = |(zoom, _, moved): (f64, vectorcraft_geom::Vec2, f64), want: f64| (zoom / want - 1.0).abs() < 1e-6 && moved < 1e-6;
+    // `lines` wheel lines to the left.
+    let line = f64::from(ctx.options(|o| o.input_options.line_scroll_speed));
+    let sideways = |(zoom, scroll, _): (f64, vectorcraft_geom::Vec2, f64), lines: f64| {
+        (zoom - 1.0).abs() < 1e-9 && (scroll.x + lines * line).abs() < 0.5 && scroll.y == 0.0
+    };
+    assert!(app.session.prefs.ctrl_wheel_scrolls_sideways, "the option is on by default");
+    // A wheel message of 30 is a quarter of a 120 notch, and arrives as a quarter line. The zoom
+    // is exponential in the wheel's motion, so more motion in a turn multiplies the quarter's.
+    let small = turn(&mut app, vec![ev(U::Line, 0.25, S::Unknown)]);
+    assert!(zooms_in(small), "a line delta smaller than a notch zooms");
+    let quarter = small.0;
+    assert!(
+        zooms_by(turn(&mut app, vec![ev(U::Line, 0.25, S::Unknown), ev(U::Line, 0.25, S::Unknown)]), quarter.powi(2)),
+        "several small deltas zoom"
+    );
+    assert!(
+        zooms_by(turn(&mut app, vec![ev(U::Line, 0.25, S::Unknown), ev(U::Line, 1.0, S::Unknown)]), quarter.powi(5)),
+        "a whole notch in the same turn adds its zoom"
+    );
+    let point = turn(&mut app, vec![ev(U::Point, 6.0, S::Unknown)]);
+    assert!(zooms_in(point), "point deltas of an unnamed source zoom");
+    assert!(zooms_by(turn(&mut app, vec![ev(U::Point, 6.0, S::Trackpad)]), point.0), "a trackpad scroll zooms as far");
+    assert!(zooms_by(turn(&mut app, vec![ev(U::Point, 6.0, S::Momentum)]), point.0), "its momentum zooms as far");
+    assert!(sideways(turn(&mut app, vec![ev(U::Line, 1.0, S::Unknown)]), 1.0), "a whole notch scrolls sideways");
+    assert!(sideways(turn(&mut app, vec![ev(U::Line, 2.0, S::Unknown)]), 2.0), "a turn of two notches scrolls sideways");
+    assert!(sideways(turn(&mut app, vec![ev(U::Line, 0.25, S::Wheel)]), 0.25), "a part of a line from a named wheel scrolls sideways");
+    // A turn ends when the wheel goes idle, so the next whole notch scrolls sideways again.
+    assert!(zooms_in(turn(&mut app, vec![ev(U::Line, 0.25, S::Unknown)])), "a touchpad turn");
+    assert!(sideways(turn(&mut app, vec![ev(U::Line, 1.0, S::Unknown)]), 1.0), "the notch after it scrolls sideways");
+    app.session.execute("prefs.set", &json!({"key": "zoomWithMouseWheel", "value": true})).unwrap();
+    let small = turn(&mut app, vec![ev(U::Line, 0.25, S::Unknown)]);
+    assert!(zooms_in(small), "with Zoom with Mouse Wheel: a small line delta zooms");
+    let quarter = small.0;
+    assert!(
+        zooms_by(turn(&mut app, vec![ev(U::Line, 0.25, S::Unknown), ev(U::Line, 1.0, S::Unknown)]), quarter.powi(5)),
+        "with Zoom with Mouse Wheel: a whole notch in the same turn adds its zoom"
+    );
+    assert!(zooms_in(turn(&mut app, vec![ev(U::Point, 6.0, S::Trackpad)])), "with Zoom with Mouse Wheel: a trackpad scroll zooms");
+    assert!(sideways(turn(&mut app, vec![ev(U::Line, 1.0, S::Unknown)]), 1.0), "with Zoom with Mouse Wheel: a whole notch scrolls sideways");
+}
+
+/// A wheel turn that a touchpad began ends with an End or Cancel phase, also in the frame the next
+/// notch arrives, and after egui's scroll timeout with no frame in between. Under either
+/// preference, the whole notch after it scrolls sideways. A notch inside the turn zooms.
+#[test]
+fn a_touchpad_wheel_turn_ends_with_its_end_phase_or_the_scroll_timeout() {
+    use egui::{MouseWheelSource as S, MouseWheelUnit as U, TouchPhase as P};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let ctx = egui::Context::default();
+    let mut t = 0.0;
+    let frame_time = 1.0 / 60.0;
+    let mut run = |app: &mut VectorcraftApp, dt: f64, events: Vec<egui::Event>| {
+        t += dt;
+        let raw = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))),
+            time: Some(t),
+            events,
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+        out.textures_delta.clear();
+    };
+    run(&mut app, frame_time, vec![]);
+    let rect = app.canvas_rect.unwrap();
+    let at = rect.center() + vec2(60.0, 40.0);
+    let line = f64::from(ctx.options(|o| o.input_options.line_scroll_speed));
+    let ev =
+        |unit, dy: f32, phase, source| egui::Event::MouseWheel { unit, delta: vec2(0.0, dy), phase, modifiers: egui::Modifiers::COMMAND, source };
+    // Point deltas zoom at once, so no glide is left when the next event comes.
+    let small = || ev(U::Point, 6.0, P::Move, S::Unknown);
+    let notch = || ev(U::Line, 1.0, P::Move, S::Unknown);
+    // A frame with a small delta, then `events` in one frame `dt` seconds later, and the wheel
+    // going idle: → (zoom ratio, scroll in points) since the small delta.
+    let mut turn = |app: &mut VectorcraftApp, dt: f64, events: Vec<egui::Event>| {
+        run(app, frame_time, vec![egui::Event::PointerMoved(at)]);
+        run(app, frame_time, vec![small()]);
+        let before = *app.view().unwrap();
+        run(app, dt, events);
+        for _ in 0..40 {
+            run(app, frame_time, vec![]);
+        }
+        let after = *app.view().unwrap();
+        (after.zoom / before.zoom, (after.center - before.center) * after.zoom)
+    };
+    let sideways = |(zoom, scroll): (f64, vectorcraft_geom::Vec2)| (zoom - 1.0).abs() < 1e-9 && (scroll.x + line).abs() < 0.5 && scroll.y == 0.0;
+    for wheel_zooms in [false, true] {
+        app.session.execute("prefs.set", &json!({"key": "zoomWithMouseWheel", "value": wheel_zooms})).unwrap();
+        assert!(turn(&mut app, frame_time, vec![notch()]).0 > 1.01, "a notch inside the turn zooms ({wheel_zooms})");
+        assert!(
+            turn(&mut app, frame_time, vec![ev(U::Point, 0.0, P::Start, S::Trackpad), notch()]).0 > 1.01,
+            "a Start phase does not end the turn ({wheel_zooms})"
+        );
+        for phase in [P::End, P::Cancel] {
+            let r = turn(&mut app, frame_time, vec![ev(U::Point, 0.0, phase, S::Trackpad), notch()]);
+            assert!(sideways(r), "the notch after {phase:?} in the same frame scrolls sideways ({wheel_zooms}, {r:?})");
+        }
+        let (zoom, scroll) = turn(&mut app, 0.2, vec![notch()]);
+        assert!(
+            (zoom - 1.0).abs() < 1e-9 && scroll.x < -1.0 && scroll.y == 0.0,
+            "the notch after the scroll timeout scrolls sideways ({wheel_zooms}, {zoom}, {scroll:?})"
+        );
+    }
+}
+
+/// Which wheel events count as a touchpad: a named trackpad or its momentum, never a named wheel,
+/// and for an unnamed source, point deltas or line and page deltas more than 0.001 from a whole
+/// number on either axis.
+#[test]
+fn fine_steps_tells_touchpad_input_from_whole_notches() {
+    use egui::{MouseWheelSource as S, MouseWheelUnit as U};
+    for unit in [U::Point, U::Line, U::Page] {
+        for delta in [vec2(0.0, 1.0), vec2(0.0, 0.25), vec2(-1.5, 0.0)] {
+            assert!(view::fine_steps(unit, delta, S::Trackpad), "{unit:?} {delta:?} from a trackpad");
+            assert!(view::fine_steps(unit, delta, S::Momentum), "{unit:?} {delta:?} from its momentum");
+            assert!(!view::fine_steps(unit, delta, S::Wheel), "{unit:?} {delta:?} from a named wheel");
+        }
+    }
+    assert!(view::fine_steps(U::Point, vec2(0.0, 1.0), S::Unknown), "whole points from an unnamed source");
+    for unit in [U::Line, U::Page] {
+        for (x, y) in [(0.0, 0.25), (0.0, -0.25), (0.25, 1.0), (1.0, -0.5), (0.0, 0.002), (0.0, 0.998), (0.0, 1.002), (0.0, 1.0 / 120.0)] {
+            assert!(view::fine_steps(unit, vec2(x, y), S::Unknown), "{unit:?} ({x}, {y}) is finer than a notch");
+        }
+        for (x, y) in [(0.0, 0.0), (0.0, 1.0), (0.0, -1.0), (0.0, 2.0), (-3.0, 1.0), (0.0, 0.9995), (0.0, 1.0005), (0.0, 0.0005)] {
+            assert!(!view::fine_steps(unit, vec2(x, y), S::Unknown), "{unit:?} ({x}, {y}) is a whole notch");
+        }
+    }
 }
 
 /// With Scroll Sideways with Cmd/Ctrl + Wheel on and Animated Zoom off, Alt + Cmd-wheel zooms
@@ -10565,4 +10833,239 @@ fn direct_selection_shows_the_bounding_box_while_cmd_is_held() {
     assert!(handle_drawn(&mut app, egui::Modifiers::COMMAND), "Cmd held shows the Selection tool's box");
     assert!(!handle_drawn(&mut app, egui::Modifiers::NONE), "gone once Cmd is released");
     assert!(app.ui.view.bounding_box, "View › Show Bounding Box is unchanged");
+}
+
+/// An edit to a 3D effect renders the part it changed on this thread, measured by the renderer
+/// that drew the frame shown ([`vectorcraft_render::Renderer::changed`]): it draws the part with
+/// the 3D art it made to measure it.
+#[test]
+fn an_edit_to_a_3d_effect_redraws_with_the_art_measured() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+    app.canvas.worker_started = true; // render on this thread
+    let id = app.run("shape.rectangle", json!({"x": 380, "y": 280, "width": 40, "height": 40})).unwrap()["id"].clone();
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "ids": [id], "params": {"depth": 60.0}})).unwrap();
+    let ctx = egui::Context::default();
+    shapes(&mut app, &ctx);
+    assert_eq!(app.canvas.renderer.stats.three_d_built, 1, "the whole frame made the art");
+    app.run("effect.setParams", json!({"ids": [id], "index": 0, "item": null, "params": {"depth": 5.0}})).unwrap();
+    // Drawing only a part keeps the whole frame's time; drawing it whole measures it again.
+    app.canvas.last_ms = 7.25;
+    shapes(&mut app, &ctx);
+    assert!(!app.canvas.from_worker);
+    assert_eq!(app.canvas.last_ms, 7.25, "only the part that changed was drawn");
+    assert_eq!(app.canvas.renderer.stats.three_d_built, 0, "the part was drawn with the art made to measure the edit");
+}
+
+/// An edit to a 3D effect off the view, and one the render worker draws, leave none of the art made
+/// to measure them held by this thread's renderer.
+#[test]
+fn art_measured_for_an_edit_not_drawn_here_is_let_go() {
+    for worker in [false, true] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+        app.canvas.worker_started = true; // render on this thread
+        // Off the view, or filling it, for the worker to draw.
+        let (x, size) = if worker { (0, 800) } else { (5000, 40) };
+        let id = app.run("shape.rectangle", json!({"x": x, "y": 0, "width": size, "height": size})).unwrap()["id"].clone();
+        app.run("effect.apply", json!({"effect": "threeD.extrude", "ids": [id], "params": {"depth": 60.0}})).unwrap();
+        let ctx = egui::Context::default();
+        shapes(&mut app, &ctx);
+        // A worker whose jobs the test receives: none finishes unless the test says so.
+        let mut jobs = None;
+        if worker {
+            let (w, rx, done) = crate::render_worker::Worker::test_channel();
+            app.canvas.worker = Some(w);
+            jobs = Some((rx, done));
+            app.canvas.last_ms = 100.0;
+        }
+        app.run("effect.setParams", json!({"ids": [id], "index": 0, "item": null, "params": {"depth": 5.0}})).unwrap();
+        // Measured through the canvas's renderer, the edit holds the art made for it.
+        let (shown, opts) = app.canvas.shown.clone().unwrap();
+        let now = app.session.active().unwrap().doc.clone();
+        app.canvas.renderer.changed(&shown, &now, &opts);
+        assert!(app.canvas.renderer.measured_bytes() > 0, "worker {worker}: art held");
+        if !worker {
+            app.canvas.last_ms = 7.25;
+        }
+        shapes(&mut app, &ctx);
+        if !worker {
+            // Nothing in view to draw: no frame, whole or part, began since the measure.
+            assert_eq!(app.canvas.last_ms, 7.25, "not drawn whole");
+            assert!(app.canvas.renderer.stats.three_d_built > 0, "no part drawn");
+        }
+        if let Some((rx, _)) = &jobs {
+            assert!(rx.try_recv().is_ok(), "the worker draws it");
+        }
+        assert_eq!(app.canvas.renderer.measured_bytes(), 0, "worker {worker}");
+        app.canvas.worker = None;
+    }
+}
+
+/// The real canvas decision must stay visible without a native host, with no painted glyph.
+#[cfg(target_os = "macos")]
+#[test]
+fn mac_cursor_canvas_without_host_keeps_visible_fallback() {
+    use crate::cursors::native_request;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let ctx = egui::Context::default();
+    let view = vectorcraft_engine::ViewInfo::default();
+    for (tool, expected) in [("selection", egui::CursorIcon::Default), ("type", egui::CursorIcon::Text), ("pen", egui::CursorIcon::Crosshair)] {
+        app.session.select_tool(tool, view).unwrap();
+        app.hover_doc = Some(Point::new(200.0, 150.0));
+        let output =
+            mac_cursor_headless(&ctx, egui::RawInput { events: vec![egui::Event::PointerMoved(pos2(200.0, 150.0))], ..Default::default() }, |ui| {
+                native_request::clear(ui.ctx());
+                canvas_cursor(&mut app, ui, view, true);
+            });
+        assert_eq!(output.platform_output.cursor_icon, expected, "{tool}: the fallback stays visible without a host");
+        assert!(output.platform_output.cursor_image.is_none());
+        assert!(output.shapes.iter().all(|s| matches!(s.shape, egui::Shape::Noop)), "no tool glyph is painted");
+        assert!(native_request::take(&ctx).is_some(), "{tool}: publish a native request");
+    }
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn mac_cursor_canvas_respects_precise_scaling_focus_and_presentation() {
+    use crate::cursors::native_request;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let view = vectorcraft_engine::ViewInfo::default();
+    app.session.select_tool("pen", view).unwrap();
+    app.hover_doc = Some(Point::new(200.0, 150.0));
+    let ctx = egui::Context::default();
+    ctx.set_zoom_factor(1.5);
+    let frame = |app: &mut VectorcraftApp, focused| {
+        let _ = mac_cursor_headless(
+            &ctx,
+            egui::RawInput { focused, events: vec![egui::Event::PointerMoved(pos2(200.0, 150.0))], ..Default::default() },
+            |ui| {
+                native_request::clear(ui.ctx());
+                canvas_cursor(app, ui, view, true);
+            },
+        );
+        native_request::take(&ctx)
+    };
+    let normal = frame(&mut app, true).unwrap();
+    app.run("prefs.set", json!({"key": "usePreciseCursors", "value": true})).unwrap();
+    let precise = frame(&mut app, true).unwrap();
+    assert_ne!(normal.key, precise.key);
+    let _ = mac_cursor_headless(&ctx, egui::RawInput { events: vec![egui::Event::PointerMoved(pos2(200.0, 150.0))], ..Default::default() }, |ui| {
+        native_request::request(ui.ctx(), Cursor::Crosshair, egui::CursorIcon::Crosshair, true, 1.0);
+    });
+    assert_eq!(native_request::take(&ctx).unwrap().key, precise.key);
+    app.run("prefs.set", json!({"key": "scaleCursorWithUi", "value": true})).unwrap();
+    let scaled = frame(&mut app, true).unwrap();
+    assert_ne!(scaled.key, precise.key);
+    assert!(scaled.bitmap.representations[0].size[0] > precise.bitmap.representations[0].size[0]);
+    assert!(frame(&mut app, false).is_none());
+    assert_eq!(frame(&mut app, true).unwrap().key, scaled.key);
+    app.ui.screen_mode = 3;
+    assert!(frame(&mut app, true).is_none());
+}
+
+#[cfg(target_os = "macos")]
+fn mac_cursor_headless(ctx: &egui::Context, input: egui::RawInput, draw: impl FnMut(&mut egui::Ui)) -> egui::FullOutput {
+    let mut output = ctx.run_ui(input, draw);
+    output.textures_delta.clear();
+    output
+}
+
+/// The shapes Edit › Spelling › Auto Spell Check draws in one frame, seen through `xf`.
+fn spelling_lines(app: &mut VectorcraftApp, ctx: &egui::Context, xf: &Xf) -> Vec<Shape> {
+    let raw = egui::RawInput { screen_rect: Some(xf.rect), ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| spelling_overlay(app, ui.painter(), xf));
+    out.textures_delta.clear();
+    out.shapes.into_iter().map(|c| c.shape).collect()
+}
+
+/// A document with one point type object of `text` at the top left, and a view of it.
+fn spelling_doc(text: &str) -> (VectorcraftApp, u64, Xf) {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let id = app.session.execute("text.create", &json!({"x": 20, "y": 60, "text": text})).unwrap()["id"].as_u64().unwrap();
+    let xf = Xf { rect: egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0)), zoom: 1.0, center: Point::new(200.0, 150.0), rot: 0.0 };
+    (app, id, xf)
+}
+
+/// Auto Spell Check draws one wavy line under each unknown word, under its glyphs, and none under
+/// the words the dictionaries know.
+#[test]
+fn auto_spell_check_underlines_the_unknown_words() {
+    let ctx = egui::Context::default();
+    let (mut app, _, xf) = spelling_doc("the cat sat");
+    assert!(spelling_lines(&mut app, &ctx, &xf).is_empty(), "every word is known");
+    let (mut app, id, xf) = spelling_doc("the Qzvbtrw sat\nZvqtrbx");
+    let lines = spelling_lines(&mut app, &ctx, &xf);
+    assert_eq!(lines.len(), 2, "one line under each unknown word: {lines:?}");
+    // The first line runs under the second word: below the type's top and within its width.
+    let bounds = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap();
+    let on_screen = xf.rect_to_screen(bounds);
+    let Shape::Path(first) = &lines[0] else { panic!("{:?}", lines[0]) };
+    let xs = || first.points.iter().map(|p| p.x);
+    let (left, right) = (xs().fold(f32::MAX, f32::min), xs().fold(f32::MIN, f32::max));
+    assert!(left > on_screen.left() + 5.0 && right < on_screen.right() - 5.0, "under the middle word: {left}..{right} in {on_screen:?}");
+    assert!(first.points.iter().all(|p| p.y > on_screen.top() && p.y < on_screen.center().y + on_screen.height()), "{first:?}");
+    assert!(first.points.windows(2).any(|w| w[0].y != w[1].y), "wavy");
+}
+
+/// The lines follow the type and the dictionaries: an edit, Ignore All and Add to Dictionary each
+/// change what is underlined in the next frame, and a frame with no change checks no type again.
+#[test]
+fn auto_spell_check_follows_edits_ignore_all_and_the_dictionary() {
+    let ctx = egui::Context::default();
+    let (mut app, id, xf) = spelling_doc("Wqzxvtr and Pzxqvrt");
+    let kept = |app: &VectorcraftApp| app.canvas.spelling.lines[&vectorcraft_doc::NodeId(id)].1.clone();
+    assert_eq!(spelling_lines(&mut app, &ctx, &xf).len(), 2);
+    // Tests running alongside add fonts and words, which checks all type again: frames are drawn
+    // until neither changed between two of them.
+    let again = (0..100).any(|_| {
+        let (inputs, before) = (app.canvas.spelling.inputs.clone(), kept(&app));
+        spelling_lines(&mut app, &ctx, &xf);
+        app.canvas.spelling.inputs == inputs && std::sync::Arc::ptr_eq(&kept(&app), &before)
+    });
+    assert!(again, "a frame keeps the lines of the frame before");
+    app.session.execute("text.setText", &json!({"id": id, "text": "Wqzxvtr and Pzxqvrt or Qxzvwtr"})).unwrap();
+    assert_eq!(spelling_lines(&mut app, &ctx, &xf).len(), 3, "the edit is checked");
+    app.session.execute("text.spelling.ignoreAll", &json!({"word": "wqzxvtr"})).unwrap();
+    assert_eq!(spelling_lines(&mut app, &ctx, &xf).len(), 2, "Ignore All");
+    app.session.execute("text.spelling.addWord", &json!({"word": "Pzxqvrt"})).unwrap();
+    let after_add = spelling_lines(&mut app, &ctx, &xf).len();
+    app.session.execute("text.spelling.removeWord", &json!({"word": "pzxqvrt"})).unwrap();
+    assert_eq!(after_add, 1, "Add to Dictionary");
+    assert_eq!(spelling_lines(&mut app, &ctx, &xf).len(), 2, "deleted from the dictionary again");
+}
+
+/// Type with an effect shown, and hidden type, has no lines: the helpx page leaves type with
+/// effects out of Auto Spell Check.
+#[test]
+fn auto_spell_check_leaves_out_type_with_effects_and_hidden_type() {
+    let ctx = egui::Context::default();
+    let (mut app, id, xf) = spelling_doc("Xqzvtrw");
+    assert_eq!(spelling_lines(&mut app, &ctx, &xf).len(), 1);
+    app.session.execute("effect.apply", &json!({"ids": [id], "effect": "distort.roughen", "params": {"size": 1}})).unwrap();
+    assert!(spelling_lines(&mut app, &ctx, &xf).is_empty(), "an effect");
+    app.session.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(spelling_lines(&mut app, &ctx, &xf).len(), 1, "undone");
+    app.session.execute("object.hide", &json!({"ids": [id]})).unwrap();
+    assert!(spelling_lines(&mut app, &ctx, &xf).is_empty(), "hidden");
+}
+
+/// Edit › Spelling › Auto Spell Check is a toggle, off at first: on, the canvas draws the lines;
+/// off again, it draws none and keeps no text node.
+#[test]
+fn auto_spell_check_is_a_toggle_of_the_canvas_lines() {
+    let ctx = egui::Context::default();
+    let (mut app, _, _) = spelling_doc("Yqzvtrx");
+    let red = |s: &Shape| matches!(s, Shape::Path(p) if p.stroke.color == egui::epaint::ColorMode::Solid(Color32::from_rgb(0xe0, 0x20, 0x20)));
+    let count = |app: &mut VectorcraftApp| shapes(app, &ctx).iter().filter(|s| red(s)).count();
+    assert!(!app.ui.view.auto_spell_check, "off at first");
+    assert_eq!(count(&mut app), 0);
+    assert_eq!(app.run("edit.autoSpellCheck", json!({})).unwrap(), json!(true));
+    assert_eq!(count(&mut app), 1, "on");
+    assert_eq!(app.run("edit.autoSpellCheck", json!({})).unwrap(), json!(false));
+    assert_eq!(count(&mut app), 0, "off");
+    assert!(app.canvas.spelling.lines.is_empty(), "no node is kept");
 }

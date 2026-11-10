@@ -528,6 +528,11 @@ font-technology	Variable	可變
 	Color Table ({n} colors)	顏色表 ({n} 色)
 	Color Theme	色彩主題
 	Color Themes	色彩主題
+	Color Wheel	色輪
+	Hue ring	色相環
+	Saturation and brightness	飽和度和亮度
+	Color field	顏色區域
+	{name1} {value1}, {name2} {value2}	{name1} {value1}，{name2} {value2}
 	Color Type:	顏色類型：
 	Color:	顏色：
 	Colorize	上色
@@ -2064,7 +2069,10 @@ file-filter	Templates	範本
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	為保留圖層，{_1} × {_2} 像素的內嵌影像已縮小為 {_3} × {_4} 像素
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	檔案中未定義漸層「{name}」：已改用單色替代
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	VectorCraft 尚無法讀取的筆刷未加入「筆刷」面板 ({_1})
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	具有多個填色或筆畫、效果或筆刷的物件已依其繪製外觀匯入 ({_1})：其外觀目前尚無法編輯
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	具有多個填色或筆畫、可變寬度筆畫、效果或筆刷的物件已依其繪製外觀匯入 ({_1})：其外觀目前尚無法編輯
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	名稱 `{name}` 不是 UTF-8，已依 {label} 讀取：若顯示不正確，請以其他 legacyNameEncoding 開啟檔案
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	名稱 `{name}` 不是 UTF-8，且部分內容在 {label} 中也無效：請以其他 legacyNameEncoding 開啟檔案
+@msg	more names that aren't UTF-8 were read as {label} ({count})	其他非 UTF-8 名稱已依 {label} 讀取 ({count})
 @msg	patterns nested too deeply are filled with mid-grey	巢狀層級過深的圖樣以中灰色填滿
 @msg	shadings of an unknown type were left out	已略過類型未知的著色
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	函數類型未知的著色以其中間顏色填滿
@@ -2505,6 +2513,10 @@ file-filter	Templates	範本
 @msg	the PSD file is cut short	PSD 檔案不完整
 @msg	the PSD file's header is damaged	PSD 檔頭已損毀
 @msg	the PSD file's image data can't be read: {e}	無法讀取 PSD 檔案的影像資料：{e}
+@msg	the JPEG XL file is cut short	JPEG XL 檔案不完整
+@msg	the JPEG XL container is too large to read	JPEG XL 容器過大，無法讀取
+@msg	CMYK JPEG XL images can't be read	無法讀取 CMYK 模式的 JPEG XL 影像
+@msg	the JPEG XL file can't be read: {e}	無法讀取 JPEG XL 檔案：{e}
 @msg	Imported library {name}	已匯入資料庫 {name}
 @msg	invalid restored panel group	還原的面板群組無效
 @msg	Invalid panel layout; restored the default dock	面板配置無效；已還原預設停駐區
@@ -4473,6 +4485,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Tile Type:	拼貼類型：
 	tile {number}	拼貼 {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	拼貼先由左至右再由上至下編號；範圍留空表示全部拼貼。
+	Copies per Sheet (as many as fit, in a grid)	每張紙印多份 (盡量排滿，以格點排列)
+	Gutter:	間距：
 	Tint	色調
 	Tip extends past the end point	尖端延伸超過終點
 	Tip on the end point	尖端位於終點
@@ -4956,7 +4970,7 @@ axis	Both	兩者
 	Dock to Bottom	停駐到底部
 	Dock Control Bar	停駐控制列
 	Drag to float the toolbar	拖曳以浮動工具列
-	Drag to the window's left edge to dock	拖曳到視窗左側邊緣以停駐
+	Drag to the window's left or right edge to dock	拖曳到視窗左側或右側邊緣以停駐
 	Float Tool Group	浮動工具組
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
@@ -5278,6 +5292,11 @@ lighting	Light	光源
 @msg	unknown parameter `{key}`; did you mean `{near}`?	未知的參數 `{key}`；您是指 `{near}` 嗎？
 @msg	unknown parameter `{key}`; the command takes no parameters	未知的參數 `{key}`；此指令沒有參數
 @msg	unknown parameter `{key}`; the command takes: {keys}	未知的參數 `{key}`；此指令接受：{keys}
+@msg	the params must be an object, not {got}	參數必須是物件，而不是 {got}
+@msg	unknown parameter `{path}`; the object takes no keys	未知的參數 `{path}`；此物件不接受任何鍵
+@msg	unknown parameter `{path}`; it takes: {keys}	未知的參數 `{path}`；它接受：{keys}
+@msg	missing `{path}`	未提供 `{path}`
+@msg	`{path}` must be {expected}, not {got}	`{path}` 必須是 {expected}，而不是 {got}
 	Load EPS into Clipboard	將 EPS 載入剪貼簿
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} 像素的影像過大，無法繪製
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}：不是 PNG、JPEG、WebP、TIFF 或 BMP 影像
@@ -5541,7 +5560,7 @@ axis	Y Axis	Y 軸
 @msg	Running “{name}”…	正在執行「{name}」…
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	即時效果會在繪製文件時執行，因此不能是 `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	匯出增效模組一律使用匯出的預算：請移除 `budget`
-@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	「{_1}」需要大量運算預算（每次執行最多 {minutes} 分鐘，指令數為一般的 {times} 倍）：請在使用者同意後以 `allowHeavy: true` 安裝
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	「{_1}」需要大量運算預算（每次執行最多 {minutes} 分鐘，指令數為一般的 {times} 倍）：需要有人在桌面應用程式中核准，或在以 --allow-plugin-grants 啟動的工作階段中傳入 `allowHeavy: true`
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	要安裝需要這些權限的「{name}」嗎？
 	ID: {id}	ID：{id}
@@ -5564,15 +5583,26 @@ axis	Y Axis	Y 軸
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	模組匯入了 `env.{name}`，增效模組只有在增效模組 API 層級 {PROGRESS_API}（`api` {PROGRESS_API}）且具有權限 `{permission}` 時才能使用它
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	模組匯入了主機未提供的 `{from}.{name}`：增效模組只能匯入 docs/plugins.md 列出的 `env.vc_*` 函式（增效模組 API 層級 2），不能使用 WASI、檔案或網路
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` 為 {_1}；此主機支援的增效模組 API 層級為 1 到 {API_LEVEL}
+@msg	`paintOutput` may only be true	`paintOutput` 只能為 true
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` 僅適用於 `api` 2 的即時效果 (`kind` "effect")
 @msg	`grant` must be a list of permission names	`grant` 必須是權限名稱的清單
 @msg	`grant` names an unknown permission `{shown}`	`grant` 包含未知權限 `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` 類型的增效模組需要權限 `{_2}`
 @msg	at most {MAX_PERMISSIONS} `permissions`	最多 {MAX_PERMISSIONS} 個 `permissions`
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	權限 `{shown}` 不適用於 `{_1}` 類型的增效模組
 @msg	permission `{shown}` is listed twice	權限 `{shown}` 列出了兩次
+@msg	only a filter declares `inputs`	只有濾鏡才能宣告 `inputs`
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` 列出了未知的物件類型 `{shown}`：請使用 type、image 或 symbolInstance
+@msg	`inputs` lists `{shown}` twice	`inputs` 列出了兩次 `{shown}`
+@msg	`inputs` needs `api` 2 or later	`inputs` 需要 `api` 2 或更高
+@msg	`inputs` needs the permission `doc.read`	`inputs` 需要權限 `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	記憶體預算（物件 {_1} 需要 {size} 位元組的輸入，剩餘 {left}）
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	物件預算（超過 {MAX_OBJECTS} 個唯讀物件）
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	權限 `{shown}` 保留給日後的增效模組 API；此主機不授予該權限
 @msg	unknown permission `{shown}`	未知權限 `{shown}`
-@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	「{name}」需要權限 {asked}：請在使用者同意後以列出這些權限的 `grant` 安裝
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	「{name}」需要權限 {asked}：需要有人在桌面應用程式中核准，或在以 --allow-plugin-grants 啟動的工作階段中傳入 `grant`
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` 和 `allowHeavy` 僅在以 --allow-plugin-grants 啟動的工作階段中生效：請在桌面應用程式中核准此外掛
+@msg	Only the person at the keyboard can approve installing a plug-in	只有鍵盤前的人才能核准安裝外掛
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	「{name}」未獲授予其輸出所需的 `{p}`：未做任何變更
 @msg	a heavy filter runs in the background, so it can't declare `commands`	重型濾鏡在背景執行，因此不能宣告 `commands`
 @msg	at most {MAX_COMMANDS} `commands`	最多 {MAX_COMMANDS} 個 `commands`
@@ -5633,6 +5663,9 @@ axis	Y Axis	Y 軸
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`：應為 all 或 1, 3-5 這類範圍，而不是 {v}
 	Add to Symbols	新增至符號
 	Basic Shapes	基本形狀
+	Button	按鈕
+	Panel	面板
+	UI Frames	UI 框架
 	Open Symbol Library	開啟符號資料庫
 	Save Symbol Library	儲存符號資料庫
 	Save Symbol Library…	儲存符號資料庫…
@@ -6124,7 +6157,7 @@ breakText	Glyphs	字符
 	Reset Symbol Instance	重設符號實體
 @msg	type must be static or dynamic, not {v}	type 必須是 static 或 dynamic,而不是 {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` 是靜態符號:請先將其符號類型設為動態
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	在符號實體中選取的路徑、複合路徑或文字只能變更填色和筆畫的純色
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	在符號實體中選取的路徑、複合路徑或文字只能變更填色、筆畫、不透明度和混合模式
 @msg	path must be a list of child indices	path 必須是子項索引清單
 @msg	no object at path {shown} in the symbol's art	符號圖稿中路徑 {shown} 處沒有物件
 @msg	give fill, stroke, opacity and/or blend	請提供 fill、stroke、opacity 和/或 blend
@@ -6273,3 +6306,4 @@ breakText	Glyphs	字符
 # Align to Pixel Grid
 	Align to Pixel Grid	對齊像素格點
 @msg	only paths and compound paths can be aligned to the pixel grid	只有路徑和複合路徑可以對齊像素格點
+@msg	side is left or right, not `{s}`	side 應為 left 或 right，而不是 `{s}`

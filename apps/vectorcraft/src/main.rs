@@ -36,6 +36,8 @@ mod logging;
 #[cfg(all(target_os = "macos", feature = "wgpu"))]
 mod mac_color_space;
 #[cfg(target_os = "macos")]
+mod mac_cursor;
+#[cfg(target_os = "macos")]
 mod mac_fonts;
 #[cfg(target_os = "macos")]
 mod mac_menu;
@@ -97,7 +99,7 @@ use titlebar::opted_into_system_title_bar;
 #[cfg(windows)]
 use titlebar::set_taskbar_icon;
 #[cfg(all(test, feature = "wgpu"))]
-use titlebar::{app_draws_frame, opted_into_app_title_bar, start_frame};
+use titlebar::{app_draws_frame, opted_into_app_title_bar, start_frame, system_title_bar_applies};
 use titlebar::{custom_titlebar, native_options, titlebar_from_env};
 
 struct App {
@@ -466,6 +468,8 @@ fn main() -> std::process::ExitCode {
                 // The saved PDF presets live in their own folder (also read by vectorcraft-cli),
                 // which takes over from the copy the preferences file used to hold.
                 prefs_dir::attach_pdf_preset_store(&mut app.session);
+                // The custom dictionary's words, kept in their own file next to the preferences.
+                prefs_dir::attach_custom_dictionary(&mut app.session);
                 // Fit the window to its monitor, or put it back where it was (still hidden).
                 let winit_window = cc.winit_window().cloned();
                 if let Some(w) = &winit_window {
@@ -549,6 +553,7 @@ fn main() -> std::process::ExitCode {
                     if !in_window_menus {
                         app.services.native_menu = mac_menu::install(&cc.egui_ctx, &app);
                     }
+                    mac_cursor::install(&cc.egui_ctx, winit_window.as_ref());
                 }
                 #[cfg(not(target_os = "macos"))]
                 {

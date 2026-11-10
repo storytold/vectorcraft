@@ -581,7 +581,7 @@ fn expand_appearance_makes_each_copy_of_a_transform_an_object() {
     let copies = n.children().unwrap();
     assert_eq!(copies.len(), 3, "the path and its two copies");
     let xs: Vec<f64> = copies.iter().map(|c| c.geometric_bounds().unwrap().x0).collect();
-    assert_eq!(xs, vec![100.0, 250.0, 400.0]);
+    assert_eq!(xs, vec![400.0, 250.0, 100.0], "the original on top");
     for c in copies {
         assert!(matches!(c.kind, NodeKind::Path { .. }), "{}", c.kind_label());
         assert_eq!(fill(c), Some(Color::rgb(1.0, 0.0, 0.0)));
@@ -600,10 +600,10 @@ fn expand_appearance_makes_each_copy_of_a_transform_an_object() {
     s.execute("effect.expandAppearance", &json!({"ids":[id.0]})).unwrap();
     let columns = node(&s, id).children().unwrap().to_vec();
     assert_eq!(columns.len(), 3);
-    for (col, x) in columns.iter().zip([100.0, 250.0, 400.0]) {
+    for (col, x) in columns.iter().zip([400.0, 250.0, 100.0]) {
         let cells = col.children().unwrap_or_else(|| panic!("a column is a group: {}", col.kind_label()));
         let ys: Vec<(f64, f64)> = cells.iter().map(|c| (c.geometric_bounds().unwrap().x0, c.geometric_bounds().unwrap().y0)).collect();
-        assert_eq!(ys, vec![(x, 100.0), (x, 250.0)]);
+        assert_eq!(ys, vec![(x, 250.0), (x, 100.0)]);
         assert!(cells.iter().all(|c| matches!(c.appearance.fill_paint(), Paint::Solid { .. })));
     }
 }

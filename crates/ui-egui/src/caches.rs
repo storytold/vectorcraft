@@ -7,7 +7,7 @@ pub struct CanvasCache {
     pub key: Option<CacheKey>,
     /// The document the frame shown was rendered from, and the options it was rendered with, with
     /// [`Self::key`]: when only the document changes, the canvas renders again only where it
-    /// changed ([`vectorcraft_render::changed`]).
+    /// changed, measured by [`Self::renderer`], which drew it ([`vectorcraft_render::Renderer::changed`]).
     pub shown: Option<(std::sync::Arc<vectorcraft_doc::Document>, vectorcraft_render::RenderOptions)>,
     pub last_ms: f64,
     /// The frame shown drew raster effects from rasters made before their objects moved, or at a
@@ -45,6 +45,9 @@ pub struct CanvasCache {
     /// The marks Type → Show Hidden Characters drew on each text object in the last frame. A frame
     /// that does not draw them drops them ([`canvas::show`]).
     pub hidden_chars: canvas::HiddenChars,
+    /// The words Edit › Spelling › Auto Spell Check underlined on each text object in the last
+    /// frame; dropped while it is off.
+    pub spelling: canvas::SpellingMarks,
     /// The selected objects' outlines, anchors and handles as drawn in the last frame. A frame that
     /// does not draw them drops them ([`canvas::show`]).
     pub selection_marks: canvas::SelectionMarks,

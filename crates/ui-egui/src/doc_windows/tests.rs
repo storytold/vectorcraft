@@ -451,6 +451,41 @@ fn closing_an_os_window_keeps_it_while_its_unsaved_document_stays_open() {
     );
 }
 
+/// The update prompt, opening on its own, takes the keyboard once from a document's OS window that
+/// has it, and leaves the keyboard alone when none of those windows has it.
+#[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn the_update_prompt_takes_the_keyboard_from_a_document_window() {
+    let _host = native_host();
+    let ctx = egui::Context::default();
+    ctx.set_embed_viewports(false);
+    let mut app = app_with(2);
+    if !native(&app, &ctx) {
+        // Wayland: the windows are inside the main window.
+        return;
+    }
+    frame(&mut app, &ctx, vec![]);
+    app.run("window.arrange.floatInWindow", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    let focus_commands = |app: &mut VectorcraftApp| {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::updates_ui::show(app, ui.ctx()));
+        out.textures_delta.clear();
+        out.viewport_output.get(&egui::ViewportId::ROOT).map_or(0, |v| v.commands.iter().filter(|c| **c == egui::ViewportCommand::Focus).count())
+    };
+
+    app.ui.floating[0].focused = true;
+    assert_eq!(focus_commands(&mut app), 0, "no prompt is open");
+    crate::updates_ui::open_prompt_for_test(&mut app);
+    assert_eq!(focus_commands(&mut app), 1, "the main window gets the keyboard");
+    assert_eq!(focus_commands(&mut app), 0, "once");
+
+    crate::updates_ui::close_dialogs_for_test(&mut app);
+    assert_eq!(focus_commands(&mut app), 0, "the prompt closed");
+    app.ui.floating[0].focused = false;
+    crate::updates_ui::open_prompt_for_test(&mut app);
+    assert_eq!(focus_commands(&mut app), 0, "no document window has the keyboard");
+}
+
 /// Where the last frame drew the title of `title`'s tab in the tab strip.
 fn tab_at(shapes: &[Shape], title: &str) -> Pos2 {
     shapes

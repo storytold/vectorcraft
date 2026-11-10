@@ -606,6 +606,11 @@
 	Color	ფერი
 	Color Guide	ფერის გზამკვლევი
 	Color Themes	ფერის თემები
+	Color Wheel	ფერთა წრე
+	Hue ring	ფერის ტონის რგოლი
+	Saturation and brightness	გაჯერება და სიკაშკაშე
+	Color field	ფერის ველი
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	CSS Properties	CSS თვისებები
 	Document Info	დოკუმენტის ინფორმაცია
 	Flattener Preview	გაბრტყელების წინასწარი ნახვა
@@ -1139,7 +1144,7 @@ lighting	Light	სინათლე
 	Toggle single/double column	ერთი/ორი სვეტის გადართვა
 	W:	სიგ.:
 	Drag to float the toolbar	გადაათრიეთ ხელსაწყოთა ზოლის მცურავად გადასაქცევად
-	Drag to the window's left edge to dock	მისამაგრებლად გადაათრიეთ ფანჯრის მარცხენა კიდესთან
+	Drag to the window's left or right edge to dock	მისამაგრებლად გადაათრიეთ ფანჯრის მარცხენა ან მარჯვენა კიდესთან
 	Crystallize	კრისტალიზაცია
 	Add Anchor Point Tool	საყრდენი წერტილის დამატების ხელსაწყო
 	Anchor Point Tool	საყრდენი წერტილის ხელსაწყო
@@ -4511,7 +4516,10 @@ font-technology	Variable	ცვლადი
 @msg	its objects are nested too deeply	მისი ობიექტები ზედმეტად ღრმადაა ჩადგმული
 @msg	its section ending with `%{end}` doesn't end	მისი სექცია, რომელიც `%{end}`-ით მთავრდება, არ სრულდება
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	ფუნჯები, რომლებსაც VectorCraft ჯერ ვერ კითხულობს, ფუნჯების პანელში არ დაემატა ({_1})
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	რამდენიმე შევსების ან კონტურის, ეფექტის ან ფუნჯის მქონე ობიექტები შემოვიდა დახატული სახით ({_1}): მათი იერსახე ჯერ არ რედაქტირდება
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	რამდენიმე შევსების ან კონტურის, ცვლადი სისქის კონტურის, ეფექტის ან ფუნჯის მქონე ობიექტები შემოვიდა დახატული სახით ({_1}): მათი იერსახე ჯერ არ რედაქტირდება
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	სახელი `{name}` არ არის UTF-8 და წაკითხულია როგორც {label}: თუ არასწორად გამოიყურება, გახსენით ფაილი სხვა legacyNameEncoding-ით
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	სახელი `{name}` არ არის UTF-8 და მისი ნაწილები არც {label}-ში არის სწორი: გახსენით ფაილი სხვა legacyNameEncoding-ით
+@msg	more names that aren't UTF-8 were read as {label} ({count})	სხვა სახელები, რომლებიც არ არის UTF-8, წაკითხულია როგორც {label} ({count})
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	გრადიენტი „{name}“ ფაილში განსაზღვრული არ არის: მის ნაცვლად ერთგვაროვანი ფერია
 @msg	an image VectorCraft can't read was left out	გამოსახულება, რომელსაც VectorCraft ვერ კითხულობს, გამოტოვებულია
 @msg	graphs come in as plain art, without their data or settings	დიაგრამები შემოდის როგორც ჩვეულებრივი გრაფიკა, მათი მონაცემებისა და პარამეტრების გარეშე
@@ -4580,6 +4588,10 @@ font-technology	Variable	ცვლადი
 @msg	the PSD file is cut short	PSD ფაილი შეკვეცილია
 @msg	the PSD file's header is damaged	PSD ფაილის სათაური დაზიანებულია
 @msg	the PSD file's image data can't be read: {e}	PSD ფაილის გამოსახულების მონაცემების წაკითხვა ვერ ხერხდება: {e}
+@msg	the JPEG XL file is cut short	JPEG XL ფაილი შეკვეცილია
+@msg	the JPEG XL container is too large to read	JPEG XL კონტეინერი წასაკითხად ზედმეტად დიდია
+@msg	CMYK JPEG XL images can't be read	CMYK JPEG XL გამოსახულებების წაკითხვა ვერ ხერხდება
+@msg	the JPEG XL file can't be read: {e}	JPEG XL ფაილის წაკითხვა ვერ ხერხდება: {e}
 @msg	Imported library {name}	შემოტანილია ბიბლიოთეკა {name}
 @msg	Invalid panel layout; restored the default dock	პანელების განლაგება არასწორია; აღდგენილია ნაგულისხმევი დოკი
 @msg	action is required	action აუცილებელია
@@ -4956,6 +4968,11 @@ font-technology	Variable	ცვლადი
 @msg	unknown parameter `{key}`; did you mean `{near}`?	უცნობი პარამეტრი `{key}`; იქნებ `{near}` იგულისხმეთ?
 @msg	unknown parameter `{key}`; the command takes no parameters	უცნობი პარამეტრი `{key}`; ბრძანება პარამეტრებს არ იღებს
 @msg	unknown parameter `{key}`; the command takes: {keys}	უცნობი პარამეტრი `{key}`; ბრძანება იღებს: {keys}
+@msg	the params must be an object, not {got}	პარამეტრები უნდა იყოს ობიექტი და არა {got}
+@msg	unknown parameter `{path}`; the object takes no keys	უცნობი პარამეტრი `{path}`; ობიექტი გასაღებებს არ იღებს
+@msg	unknown parameter `{path}`; it takes: {keys}	უცნობი პარამეტრი `{path}`; იღებს: {keys}
+@msg	missing `{path}`	აკლია `{path}`
+@msg	`{path}` must be {expected}, not {got}	`{path}` უნდა იყოს {expected} და არა {got}
 file-filter	All readable files	ყველა წაკითხვადი ფაილი
 file-filter	All placeable files	ყველა განთავსებადი ფაილი
 file-filter	Swatch libraries	ფერის ნიმუშების ბიბლიოთეკები
@@ -5831,7 +5848,7 @@ axis	Y Axis	Y ღერძი
 @msg	Running “{name}”…	მიმდინარეობს „{name}“-ის გაშვება…
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	ცოცხალი ეფექტი დოკუმენტის დახატვისას ეშვება, ამიტომ ის ვერ იქნება `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	ექსპორტის პლაგინი ყოველთვის ექსპორტის ბიუჯეტს იღებს: გამოტოვეთ `budget`
-@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	„{_1}“ დიდ გამოთვლით ბიუჯეტს ითხოვს (თითო გაშვება {minutes} წუთამდე და ჩვეულებრივზე {times}-ჯერ მეტი ინსტრუქცია): მომხმარებლის თანხმობის შემდეგ დააყენეთ ის `allowHeavy: true` პარამეტრით
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	„{_1}“ დიდ გამოთვლით ბიუჯეტს ითხოვს (თითო გაშვება {minutes} წუთამდე და ჩვეულებრივზე {times}-ჯერ მეტი ინსტრუქცია): ის დესკტოპის აპში ადამიანმა უნდა დაამტკიცოს, ან გადაეცით `allowHeavy: true` --allow-plugin-grants-ით გაშვებულ სესიაში
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	დავაყენოთ „{name}“, რომელიც ამ ნებართვებს ითხოვს?
 	ID: {id}	ID: {id}
@@ -5854,15 +5871,26 @@ axis	Y Axis	Y ღერძი
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	მოდულს შემოაქვს `env.{name}`, რომლის გამოყენებაც პლაგინს მხოლოდ პლაგინის API-ის დონეზე {PROGRESS_API} (`api` {PROGRESS_API}) და ნებართვით `{permission}` შეუძლია
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	მოდულს შემოაქვს `{from}.{name}`, რომელსაც ჰოსტი არ გვთავაზობს: პლაგინს შეუძლია შემოიტანოს მხოლოდ docs/plugins.md-ში ჩამოთვლილი `env.vc_*` ფუნქციები (პლაგინის API-ის დონე 2) და არა WASI, ფაილები ან ქსელი
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` არის {_1}; ეს ჰოსტი პლაგინის API-ის დონეებს 1-დან {API_LEVEL}-მდე უჭერს მხარს
+@msg	`paintOutput` may only be true	`paintOutput` შეიძლება იყოს მხოლოდ true
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` მხოლოდ ცოცხალი ეფექტისთვისაა (`kind` "effect") `api` 2-ზე
 @msg	`grant` must be a list of permission names	`grant` ნებართვების სახელების სია უნდა იყოს
 @msg	`grant` names an unknown permission `{shown}`	`grant` უცნობ ნებართვას ასახელებს: `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` სახის პლაგინს სჭირდება ნებართვა `{_2}`
 @msg	at most {MAX_PERMISSIONS} `permissions`	მაქსიმუმ {MAX_PERMISSIONS} `permissions`
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	ნებართვა `{shown}` არ ეხება `{_1}` სახის პლაგინს
 @msg	permission `{shown}` is listed twice	ნებართვა `{shown}` ორჯერაა ჩამოთვლილი
+@msg	only a filter declares `inputs`	`inputs`-ის გამოცხადება მხოლოდ ფილტრს შეუძლია
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` უცნობ ობიექტის სახეობას ასახელებს `{shown}`: გამოიყენეთ type, image ან symbolInstance
+@msg	`inputs` lists `{shown}` twice	`inputs`-ში `{shown}` ორჯერაა ჩამოთვლილი
+@msg	`inputs` needs `api` 2 or later	`inputs`-ს სჭირდება `api` 2 ან უფრო ახალი
+@msg	`inputs` needs the permission `doc.read`	`inputs`-ს სჭირდება ნებართვა `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	მეხსიერების ბიუჯეტი (ობიექტს {_1} სჭირდება შეყვანის {size} ბაიტი, დარჩენილია {left})
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	ობიექტების ბიუჯეტი ({MAX_OBJECTS}-ზე მეტი მხოლოდ წასაკითხი ობიექტი)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	ნებართვა `{shown}` დაჯავშნილია პლაგინების მომავალი API-სთვის; ეს ჰოსტი მას არ გასცემს
 @msg	unknown permission `{shown}`	უცნობი ნებართვა `{shown}`
-@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	„{name}“ ითხოვს ნებართვებს {asked}: მომხმარებლის თანხმობის შემდეგ დააყენეთ ის `grant` პარამეტრით, რომელშიც ისინი ჩამოთვლილია
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	„{name}“ ითხოვს ნებართვებს {asked}: ისინი დესკტოპის აპში ადამიანმა უნდა დაამტკიცოს, ან გადაეცით `grant` --allow-plugin-grants-ით გაშვებულ სესიაში
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` და `allowHeavy` მოქმედებს მხოლოდ --allow-plugin-grants-ით გაშვებულ სესიაში: დაამტკიცეთ დამატება დესკტოპის აპში
+@msg	Only the person at the keyboard can approve installing a plug-in	დამატების დაყენებას მხოლოდ კლავიატურასთან მყოფი ადამიანი ამტკიცებს
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	„{name}“-ს არ მიეცა `{p}`, რომელიც მის შედეგს სჭირდება: არაფერი შეცვლილა
 @msg	a heavy filter runs in the background, so it can't declare `commands`	მძიმე ფილტრი ფონურ რეჟიმში მუშაობს, ამიტომ მას არ შეუძლია `commands`-ის გამოცხადება
 @msg	at most {MAX_COMMANDS} `commands`	მაქსიმუმ {MAX_COMMANDS} `commands`
@@ -5923,6 +5951,9 @@ axis	Y Axis	Y ღერძი
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all ან დიაპაზონი, მაგალითად 1, 3-5, და არა {v}
 	Add to Symbols	სიმბოლოებში დამატება
 	Basic Shapes	ძირითადი ფიგურები
+	Button	ღილაკი
+	Panel	პანელი
+	UI Frames	UI ჩარჩოები
 	Open Symbol Library	სიმბოლოების ბიბლიოთეკის გახსნა
 	Save Symbol Library	სიმბოლოების ბიბლიოთეკის შენახვა
 	Save Symbol Library…	სიმბოლოების ბიბლიოთეკის შენახვა…
@@ -6484,7 +6515,7 @@ breakText	Glyphs	გლიფები
 	Reset Symbol Instance	სიმბოლოს ეგზემპლარის ჩამოყრა
 @msg	type must be static or dynamic, not {v}	type უნდა იყოს static ან dynamic და არა {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` სტატიკური სიმბოლოა: ჯერ სიმბოლოს ტიპად დააყენეთ „დინამიკური“
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	სიმბოლოს ეგზემპლარში მონიშნულ ტრაექტორიას, შედგენილ ტრაექტორიას ან ტექსტს მხოლოდ შევსებისა და კონტურის მთლიანი ფერი შეეცვლება
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	სიმბოლოს ეგზემპლარში მონიშნული მრუდის, შედგენილი მრუდის ან ტექსტის მხოლოდ შევსება, კონტური, გამჭვირვალობა და შერევა შეიძლება შეიცვალოს
 @msg	path must be a list of child indices	path უნდა იყოს შვილობილი ინდექსების სია
 @msg	no object at path {shown} in the symbol's art	სიმბოლოს გრაფიკაში გზაზე {shown} ობიექტი არ არის
 @msg	give fill, stroke, opacity and/or blend	მიუთითეთ fill, stroke, opacity და/ან blend
@@ -6697,3 +6728,4 @@ font-script	Japanese	იაპონური
 # Align to Pixel Grid
 	Align to Pixel Grid	პიქსელურ ბადეზე გასწორება
 @msg	only paths and compound paths can be aligned to the pixel grid	პიქსელურ ბადეზე მხოლოდ ტრაექტორიების და შედგენილი ტრაექტორიების გასწორებაა შესაძლებელი
+@msg	side is left or right, not `{s}`	side არის left ან right და არა `{s}`

@@ -564,6 +564,11 @@ font-technology	Variable	Вариативные
 	Color Table ({n} colors)	Цветовая таблица ({n} цветов)
 	Color Theme	Цветовая тема
 	Color Themes	Цветовые темы
+	Color Wheel	Цветовой круг
+	Hue ring	Кольцо оттенков
+	Saturation and brightness	Насыщенность и яркость
+	Color field	Цветовое поле
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Тип цвета:
 	Color:	Цвет:
 	Colorize	Тонировать
@@ -3583,6 +3588,7 @@ digits	Malayalam	Малаялам
 	Tile Type:	Тип плитки:
 	tile {number}	плитка {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Плитки нумеруются слева направо, затем вниз; оставьте диапазон пустым для всех плиток.
+	Copies per Sheet (as many as fit, in a grid)	Копий на лист (сколько поместится, сеткой)
 	Tint	Оттенок
 	Tip extends past the end point	Кончик выходит за конечную точку
 	Tip on the end point	Кончик на конечной точке
@@ -4053,7 +4059,7 @@ axis	Both	Оба
 	Dock to Bottom	Прикрепить снизу
 	Dock Control Bar	Прикрепить панель управления
 	Drag to float the toolbar	Перетащите, чтобы сделать панель инструментов плавающей
-	Drag to the window's left edge to dock	Перетащите к левому краю окна для прикрепления
+	Drag to the window's left or right edge to dock	Перетащите к левому или правому краю окна для прикрепления
 	Float Tool Group	Сделать группу инструментов плавающей
 
 # Status and error messages (`@msg`), translated where the status bar shows them; the message itself
@@ -4812,7 +4818,10 @@ axis	Both	Оба
 @msg	its objects are nested too deeply	объекты в них вложены слишком глубоко
 @msg	its section ending with `%{end}` doesn't end	раздел, заканчивающийся на `%{end}`, не заканчивается
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	кисти, которые VectorCraft пока не умеет читать, не добавлены в панель «Кисти» ({_1})
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	объекты с несколькими заливками или обводками, эффектами или кистями импортированы в нарисованном виде ({_1}): их оформление пока нельзя редактировать
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	объекты с несколькими заливками или обводками, обводками переменной ширины, эффектами или кистями импортированы в нарисованном виде ({_1}): их оформление пока нельзя редактировать
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	имя `{name}` не в UTF-8 и прочитано как {label}: если оно выглядит неверно, откройте файл с другим legacyNameEncoding
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	имя `{name}` не в UTF-8, и его части недопустимы и в {label}: откройте файл с другим legacyNameEncoding
+@msg	more names that aren't UTF-8 were read as {label} ({count})	другие имена не в UTF-8 прочитаны как {label} ({count})
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	градиент «{name}» не определён в файле: вместо него используется сплошной цвет
 @msg	an image VectorCraft can't read was left out	изображение, которое VectorCraft не может прочитать, пропущено
 @msg	graphs come in as plain art, without their data or settings	диаграммы импортируются как обычная графика, без их данных и настроек
@@ -4917,6 +4926,10 @@ axis	Both	Оба
 @msg	the PSD file is cut short	файл PSD обрезан
 @msg	the PSD file's header is damaged	заголовок файла PSD повреждён
 @msg	the PSD file's image data can't be read: {e}	не удаётся прочитать данные изображения файла PSD: {e}
+@msg	the JPEG XL file is cut short	файл JPEG XL обрезан
+@msg	the JPEG XL container is too large to read	контейнер JPEG XL слишком велик для чтения
+@msg	CMYK JPEG XL images can't be read	изображения JPEG XL в режиме CMYK не читаются
+@msg	the JPEG XL file can't be read: {e}	не удаётся прочитать файл JPEG XL: {e}
 	Video	Видео
 	De-Interlace…	Устранение чересстрочности…
 	De-Interlace	Устранение чересстрочности
@@ -5186,6 +5199,11 @@ lighting	Light	Свет
 @msg	unknown parameter `{key}`; did you mean `{near}`?	неизвестный параметр `{key}`; возможно, имелся в виду `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	неизвестный параметр `{key}`; у команды нет параметров
 @msg	unknown parameter `{key}`; the command takes: {keys}	неизвестный параметр `{key}`; команда принимает: {keys}
+@msg	the params must be an object, not {got}	параметры должны быть объектом, а не {got}
+@msg	unknown parameter `{path}`; the object takes no keys	неизвестный параметр `{path}`; объект не принимает ключей
+@msg	unknown parameter `{path}`; it takes: {keys}	неизвестный параметр `{path}`; принимает: {keys}
+@msg	missing `{path}`	отсутствует `{path}`
+@msg	`{path}` must be {expected}, not {got}	`{path}` должно быть {expected}, а не {got}
 	Load EPS into Clipboard	Загрузить EPS в буфер обмена
 @msg	an image of {w} × {h} pixels is too large to draw	изображение размером {w} × {h} пикселей слишком велико для отрисовки
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: это не изображение PNG, JPEG, WebP, TIFF или BMP
@@ -5518,7 +5536,7 @@ axis	Y Axis	Ось Y
 @msg	Running “{name}”…	Выполняется «{name}»…
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	динамический эффект выполняется во время отрисовки документа, поэтому он не может быть `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	модуль экспорта всегда получает бюджет экспорта: не указывайте `budget`
-@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	«{_1}» запрашивает большой вычислительный бюджет (каждый запуск до {minutes} минут и в {times} раз больше инструкций, чем обычно): установите его с `allowHeavy: true`, когда пользователь согласится
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	«{_1}» запрашивает большой вычислительный бюджет (каждый запуск до {minutes} минут и в {times} раз больше инструкций, чем обычно): его должен одобрить человек в настольном приложении, либо передайте `allowHeavy: true` в сеансе, запущенном с --allow-plugin-grants
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Установить «{name}», которому нужны эти разрешения?
 	ID: {id}	ID: {id}
@@ -5541,15 +5559,26 @@ axis	Y Axis	Ось Y
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	модуль импортирует `env.{name}`, который модуль может использовать только на уровне API модулей {PROGRESS_API} (`api` {PROGRESS_API}) и с разрешением `{permission}`
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	модуль импортирует `{from}.{name}`, который хост не предоставляет: модуль может импортировать только функции `env.vc_*`, перечисленные в docs/plugins.md (уровень API модулей 2), без WASI, файлов и сети
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` равно {_1}; этот хост поддерживает уровни API модулей от 1 до {API_LEVEL}
+@msg	`paintOutput` may only be true	`paintOutput` может быть только true
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` допустим только для динамического эффекта (`kind` "effect") с `api` 2
 @msg	`grant` must be a list of permission names	`grant` должен быть списком имён разрешений
 @msg	`grant` names an unknown permission `{shown}`	`grant` называет неизвестное разрешение `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	модулю вида `{_1}` нужно разрешение `{_2}`
 @msg	at most {MAX_PERMISSIONS} `permissions`	не более {MAX_PERMISSIONS} `permissions`
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	разрешение `{shown}` не относится к модулю вида `{_1}`
 @msg	permission `{shown}` is listed twice	разрешение `{shown}` указано дважды
+@msg	only a filter declares `inputs`	`inputs` может объявлять только фильтр
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	в `inputs` указан неизвестный вид объекта `{shown}`: используйте type, image или symbolInstance
+@msg	`inputs` lists `{shown}` twice	в `inputs` `{shown}` указано дважды
+@msg	`inputs` needs `api` 2 or later	для `inputs` нужен `api` 2 или выше
+@msg	`inputs` needs the permission `doc.read`	для `inputs` нужно разрешение `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	бюджет памяти (объекту {_1} нужно {size} байт входных данных, осталось {left})
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	бюджет объектов (более {MAX_OBJECTS} объектов только для чтения)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	разрешение `{shown}` зарезервировано для будущего API модулей; этот хост его не выдаёт
 @msg	unknown permission `{shown}`	неизвестное разрешение `{shown}`
-@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	«{name}» запрашивает разрешения {asked}: установите его с `grant`, где они перечислены, когда пользователь согласится
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	«{name}» запрашивает разрешения {asked}: их должен одобрить человек в настольном приложении, либо передайте `grant` в сеансе, запущенном с --allow-plugin-grants
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` и `allowHeavy` действуют только в сеансе, запущенном с --allow-plugin-grants: одобрите плагин в настольном приложении
+@msg	Only the person at the keyboard can approve installing a plug-in	Одобрить установку плагина может только человек за клавиатурой
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	«{name}» не получил разрешение `{p}`, нужное для его результата: ничего не изменено
 @msg	a heavy filter runs in the background, so it can't declare `commands`	тяжёлый фильтр выполняется в фоне, поэтому не может объявлять `commands`
 @msg	at most {MAX_COMMANDS} `commands`	не более {MAX_COMMANDS} `commands`
@@ -5610,6 +5639,9 @@ axis	Y Axis	Ось Y
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all или диапазон, например 1, 3-5, а не {v}
 	Add to Symbols	Добавить в символы
 	Basic Shapes	Базовые фигуры
+	Button	Кнопка
+	Panel	Панель
+	UI Frames	UI-рамки
 	Open Symbol Library	Открыть библиотеку символов
 	Save Symbol Library	Сохранить библиотеку символов
 	Save Symbol Library…	Сохранить библиотеку символов…
@@ -6463,7 +6495,7 @@ breakText	Glyphs	Глифы
 	Reset Symbol Instance	Сбросить экземпляр символа
 @msg	type must be static or dynamic, not {v}	type должен быть static или dynamic, а не {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` — статический символ: сначала задайте для него тип символа «Динамический»
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	У контура, составного контура или текста, выделенного в экземпляре символа, можно изменить только сплошной цвет заливки и обводки
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	У контура, составного контура или текста, выделенного в экземпляре символа, можно изменить только заливку, обводку, непрозрачность и режим наложения
 @msg	path must be a list of child indices	path должен быть списком индексов дочерних объектов
 @msg	no object at path {shown} in the symbol's art	в графике символа нет объекта по пути {shown}
 @msg	give fill, stroke, opacity and/or blend	укажите fill, stroke, opacity и/или blend
@@ -6724,3 +6756,4 @@ shape	Open	Открытый
 # Align to Pixel Grid
 	Align to Pixel Grid	Выровнять по пиксельной сетке
 @msg	only paths and compound paths can be aligned to the pixel grid	по пиксельной сетке можно выровнять только контуры и составные контуры
+@msg	side is left or right, not `{s}`	side — это left или right, а не `{s}`

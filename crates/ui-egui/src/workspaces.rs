@@ -61,6 +61,9 @@ pub struct Workspace {
     /// The docked Tools panel sits beside the canvas, inside any left-side panels (built-in
     /// workspaces and workspaces saved without it: at the window's left edge).
     pub tools_beside_canvas: bool,
+    /// The docked Tools panel stands on the right, left of the panels (built-in workspaces and
+    /// workspaces saved without it: on the left).
+    pub toolbar_right: bool,
     /// Main dock column width in screen points while `docking` is none (#1753).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dock_width: Option<f32>,
@@ -203,6 +206,7 @@ pub fn capture(ui: &UiState, name: &str) -> Workspace {
         docking_collapsed: Default::default(),
         toolbar_pos: ui.toolbar_pos,
         tools_beside_canvas: ui.tools_beside_canvas,
+        toolbar_right: ui.toolbar_right,
         dock_width: ui.dock_width,
         toolbars: ui.custom_toolbars.clone(),
     }
@@ -231,6 +235,7 @@ pub fn apply(ui: &mut UiState, w: &Workspace) {
     ui.docking_hidden_groups = w.docking_hidden_groups.clone();
     ui.toolbar_pos = w.toolbar_pos;
     ui.tools_beside_canvas = w.tools_beside_canvas;
+    ui.toolbar_right = w.toolbar_right;
     ui.dock_width = w.dock_width;
     crate::state::sanitize_toolbar_pos(&mut ui.toolbar_pos);
     ui.custom_toolbars = w.toolbars.clone();
