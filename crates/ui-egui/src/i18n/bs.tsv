@@ -600,6 +600,7 @@
 	Hide Guides	Sakrij vodilice
 	Show Guides	Prikaži vodilice
 	Lock Guides	Zaključaj vodilice
+	Lock Guides by Default	Zaključaj vodilice po zadanom
 	Unlock Guides	Otključaj vodilice
 	Make Guides	Napravi vodilice
 	Release Guides	Oslobodi vodilice
@@ -2531,15 +2532,12 @@ digits	Malayalam	Malajalam
 	Selected Swatches	Odabrani uzorci boja
 	Advanced Options	Napredne opcije
 	Background Contents	Sadržaj pozadine
-	Background Contents:	Sadržaj pozadine:
 	BLANK DOCUMENT PRESETS	PREDLOŠCI PRAZNIH DOKUMENATA
 	Bleed	Napust
 	Change to Right-to-Left Layout	Prebaci na raspored s desna nalijevo
 	Columns:	Kolone:
-	Create Document	Kreiraj dokument
 	Documents you create appear here.	Dokumenti koje kreirate pojavljuju se ovdje.
 	More Settings	Više postavki
-	New from Template	Novo iz predloška
 	Number of Artboards:	Broj radnih ploča:
 	Orientation:	Orijentacija:
 	PRESET DETAILS	DETALJI PREDLOŠKA
@@ -2550,7 +2548,6 @@ digits	Malayalam	Malajalam
 	RECENT	NEDAVNO
 	RECENT (1)	NEDAVNO (1)
 	SAVED	SAČUVANO
-	Templates…	Predlošci…
 	Transparent (Default)	Prozirno (zadano)
 	Save for Office Documents	Sačuvaj za Office dokumente
 	Transparent Background	Prozirna pozadina
@@ -3486,6 +3483,7 @@ theme	Appearance	Izgled
 	Arrange by Row	Rasporedi po redu
 	Arrange by Column	Rasporedi po koloni
 	Save Preset	Sačuvaj predložak
+	Save Document Preset	Sačuvaj predložak dokumenta
 	Screen (72 ppi)	Ekran (72 ppi)
 	Social Square Post 1080×1080	Kvadratna objava za društvene mreže 1080×1080
 	Distribute	Rasporedi ravnomjerno

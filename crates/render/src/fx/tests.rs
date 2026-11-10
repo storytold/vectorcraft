@@ -3,7 +3,7 @@ use std::sync::Arc;
 use serde_json::json;
 use vectorcraft_doc::color::{Color, Paint};
 use vectorcraft_doc::{Appearance, Document, Effect, Node};
-use vectorcraft_geom::{Affine, Rect, shapes};
+use vectorcraft_geom::{Affine, Point, Rect, shapes};
 
 use super::{DRAG_PIXEL_BUDGET, Drawn, PIXEL_BUDGET, drag_scale, filter_region, filter_region_within, pan_margin};
 use crate::tests_fontchange::{fonts_steady, with_fonts_unchanged};
@@ -214,6 +214,19 @@ fn a_coarser_glow_kept_whole_draws_after_a_pan_as_made_again() {
             fresh.threads = 2;
             if pan.0.fract() == 0.0 && pan.1.fract() == 0.0 {
                 assert!(panned.pixels == fresh.render(&d, size.0, size.1, xf, &opts).pixels, "blur {blur}, pan {pan:?}");
+            } else {
+                // Right of the rectangle's soft edge the frame holds only the glow, which the kept raster
+                // places at the whole pixel nearest the pan, where a fresh render draws it too. A pan of
+                // half a pixel is as near to the pixels on both sides, so either one is accepted.
+                let right = (xf * Point::new(rect.x1, rect.y0)).x.ceil() as usize + 3;
+                let row = size.0 as usize * 4;
+                let glow = |p: &[u8]| p.chunks(row).flat_map(|r| r[right * 4..].to_vec()).collect::<Vec<_>>();
+                let nearest = |v: f64| if (v - v.trunc()).abs() == 0.5 { vec![v.floor(), v.ceil()] } else { vec![v.round()] };
+                let found = nearest(pan.0).into_iter().flat_map(|x| nearest(pan.1).into_iter().map(move |y| (x, y))).any(|whole| {
+                    let at = Affine::translate(whole) * base;
+                    glow(&panned.pixels) == glow(&fresh.render(&d, size.0, size.1, at, &opts).pixels)
+                });
+                assert!(found, "blur {blur}, pan {pan:?}: the glow is drawn at the whole pixel nearest the pan");
             }
         }
     }
@@ -887,8 +900,8 @@ fn the_brush_library_is_checked_only_after_3d_art_is_measured() {
     assert_eq!(r.brush_library, None);
 }
 
-/// An object whose 3D effect builds nothing (Revolve on a group) is measured by the renderer as the
-/// free measure does it: as the renderer draws it, by its members.
+/// An object whose 3D effect builds nothing (Revolve on a group's fill) is measured by the renderer
+/// as the free measure does it: as the renderer draws it, by its members.
 #[test]
 fn a_3d_effect_that_builds_nothing_is_measured_alike() {
     let mut d = Document::new(100.0, 100.0);
@@ -904,10 +917,12 @@ fn a_3d_effect_that_builds_nothing_is_measured_alike() {
         Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
     );
     let mut g = Node::group(d.alloc_id(), vec![Arc::new(hidden), Arc::new(shown)]);
-    g.appearance.effects = vec![Effect { id: "threeD.revolve".into(), params: json!({}), visible: true }];
+    g.appearance = Appearance::basic(Paint::None, Paint::None, 0.0).into();
+    *g.appearance.items[0].effects_mut() = vec![Effect { id: "threeD.revolve".into(), params: json!({}), visible: true }];
     let l = d.layers[0].id;
     d.insert(Some(l), 0, g).unwrap();
     let n = d.layers[0].children().unwrap()[0].clone();
+    assert!(crate::effects::has_revolve(&n) && crate::effects::revolve_art(&n).is_none(), "builds nothing");
     let symbols = d.symbol_boxes();
     assert_eq!(Renderer::new().effect_bounds(&symbols, &n), crate::effect_bounds(&symbols, &n));
     assert_eq!(Renderer::new().bounds_of(&symbols, &n), crate::brush_fx::cull_bounds(&symbols, &n));
@@ -1748,8 +1763,8 @@ fn an_image_inner_glow_follows_its_visible_pixels() {
     }
 }
 
-/// A 3D effect on a path's fill or stroke that builds nothing (Revolve after Roughen) draws the
-/// item as without it: the art made for the object is drawn without it, not as an object with
+/// A 3D effect on a path's fill or stroke that builds nothing (Revolve after Roughen, in a paint
+/// whose copies on the faces would pass the budget) draws the item as without it: the art made for the object is drawn without it, not as an object with
 /// effects again, and that art again, without end. A stroked object draws exactly as without the
 /// 3D effect, with a raster effect of its own (Drop Shadow, Gaussian Blur) too. An object with
 /// only a fill and a raster effect draws from that art, where without the 3D effect it draws as a
@@ -1762,6 +1777,12 @@ fn a_3d_effect_that_builds_nothing_draws_the_item_as_without_it() {
     let rough =
         Effect { id: "distort.roughen".into(), params: json!({"size": 10, "relative": false, "detail": 10, "points": "smooth"}), visible: true };
     let revolve = Effect { id: "threeD.revolve".into(), params: json!({}), visible: true };
+    // A gradient of one color with 1,000 stops.
+    let ramp = |c: Color| {
+        use vectorcraft_doc::color::{Gradient, GradientKind, GradientPaint, GradientStop};
+        let stops = (0..1000).map(|i| GradientStop::new(i as f32 / 1000.0, c)).collect();
+        Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))))
+    };
     let shadow = Effect { id: "stylize.dropShadow".into(), params: json!({}), visible: true };
     let blur = Effect { id: "blur.gaussian".into(), params: json!({"radius": 2}), visible: true };
     let cases = [
@@ -1776,8 +1797,8 @@ fn a_3d_effect_that_builds_nothing_draws_the_item_as_without_it() {
     for (object, on_fill, stroked) in cases {
         let draw = |object: &[Effect], three: bool| {
             let mut d = Document::new(100.0, 100.0);
-            let stroke = if stroked { Paint::solid(Color::rgb(0.0, 0.0, 1.0)) } else { Paint::None };
-            let ap = Appearance::basic(Paint::solid(Color::BLACK), stroke, 2.0);
+            let stroke = if stroked { ramp(Color::rgb(0.0, 0.0, 1.0)) } else { Paint::None };
+            let ap = Appearance::basic(ramp(Color::BLACK), stroke, 2.0);
             let n = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(30.0, 30.0, 60.0, 60.0)), ap);
             let l = d.layers[0].id;
             let id = d.insert(Some(l), 0, n).unwrap();

@@ -275,7 +275,6 @@ font-technology	Variable	Μεταβλητές
 	Update While Dragging	Ενημέρωση κατά τη μεταφορά
 	Hide Video Rulers	Απόκρυψη χαράκων βίντεο
 	Background Contents	Περιεχόμενα φόντου
-	Background Contents:	Περιεχόμενο φόντου:
 	Background:	Φόντο:
 	Backspace	Backspace
 	Bar Graph Tool	Ραβδόγραμμα (Bar Graph Tool)
@@ -628,7 +627,6 @@ font-technology	Variable	Μεταβλητές
 	Couldn't {} {name}: {e}	Δεν ήταν δυνατή η {} του {name}: {e}
 	Create	Δημιουργία
 	Create Clipping Mask	Δημιουργία μάσκας αποκοπής
-	Create Document	Δημιουργία εγγράφου
 	Create from Guides	Δημιουργία από οδηγούς
 	Create from Selection	Δημιουργία από επιλογή
 	Create From:	Δημιουργία από:
@@ -1725,6 +1723,7 @@ font-technology	Variable	Μεταβλητές
 	Location:	Θέση:
 	Lock	Κλείδωμα
 	Lock Guides	Κλείδωμα οδηγών
+	Lock Guides by Default	Κλείδωμα οδηγών από προεπιλογή
 	Lock Slices	Κλείδωμα τομών
 	Low	Χαμηλή
 	Luminosity	Φωτεινότητα
@@ -2074,7 +2073,6 @@ font-technology	Variable	Μεταβλητές
 	Temperature	Θερμοκρασία
 	Template	Πρότυπο
 	Templates	Πρότυπα
-	Templates…	Πρότυπα…
 	Threshold	Κατώφλι
 	Tile	Παράθεση
 	Tint	Χρωματική απόχρωση
@@ -2902,7 +2900,6 @@ theme	Appearance	Εμφάνιση
 	New Color Group…	Νέα ομάδα χρωμάτων…
 	New Document Presets	Νέες προεπιλογές εγγράφου
 	New file	Νέο αρχείο
-	New from Template	Νέο από πρότυπο
 	New from Template…	Νέο από πρότυπο…
 	New Graphic Style	Νέο στυλ γραφικών
 	New Graphic Style (Alt-click to name it)	Νέο στυλ γραφικών (Alt-κλικ για ονομασία)
@@ -3466,6 +3463,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Save PDF Preset	Αποθήκευση προεπιλογής PDF
 	Save Perspective Grid Preset	Αποθήκευση προεπιλογής πλέγματος προοπτικής
 	Save Preset	Αποθήκευση προεπιλογής
+	Save Document Preset	Αποθήκευση προεπιλογής εγγράφου
 	Save Print Preset	Αποθήκευση προεπιλογής εκτύπωσης
 	Save Recovery Data	Αποθήκευση δεδομένων ανάκτησης
 	Save Save for Web Preset	Αποθήκευση προεπιλογής για ιστό
@@ -4948,7 +4946,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Bevel Inside	Εσωτερική λοξότμηση
 	Bevel both sides	Λοξότμηση και των δύο πλευρών
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Ένα αντικείμενο δέχεται ένα εφέ 3D. Επεξεργαστείτε τις επιλογές του υπάρχοντος εφέ ή αφαιρέστε το πρώτα.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	Το {label} απαιτεί προς το παρόν διαδρομή ή σύνθετη διαδρομή. Μετατρέψτε πρώτα το κείμενο, τις εικόνες και τις ομάδες σε διαδρομές.
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	Το {label} απαιτεί προς το παρόν διαδρομή, σύνθετη διαδρομή, κείμενο ή ομάδα. Μετατρέψτε πρώτα τις εικόνες και τα άλλα αντικείμενα σε διαδρομές.
 @msg	{label} requires a shape with at least two anchors	το {label} απαιτεί σχήμα με τουλάχιστον δύο σημεία αγκύρωσης
 @msg	The shape is too complex for a 3D effect	Το σχήμα είναι πολύ σύνθετο για εφέ 3D
 @msg	The 3D surface is too complex; simplify the shape	Η επιφάνεια 3D είναι πολύ σύνθετη· απλοποιήστε το σχήμα
@@ -6619,3 +6617,6 @@ breakText	Glyphs	Γλύφοι
 	Align to Pixel Grid	Στοίχιση στο πλέγμα εικονοστοιχείων
 @msg	only paths and compound paths can be aligned to the pixel grid	μόνο διαδρομές και σύνθετες διαδρομές μπορούν να στοιχιστούν στο πλέγμα εικονοστοιχείων
 @msg	side is left or right, not `{s}`	το side είναι left ή right, όχι `{s}`
+	Ignore All	Παράβλεψη όλων
+	Add to Dictionary	Προσθήκη στο λεξικό
+	No Suggestions	Καμία πρόταση

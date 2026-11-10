@@ -298,7 +298,6 @@ font-technology	Variable	Variables
 	Update While Dragging	Mettre à jour pendant le déplacement
 	Hide Video Rulers	Masquer les règles vidéo
 	Background Contents	Contenu de l’arrière-plan
-	Background Contents:	Contenu de l’arrière-plan :
 	Background:	Arrière-plan :
 	Backspace	Retour arrière
 	Bar Graph Tool	Outil Graphe à barres
@@ -670,7 +669,6 @@ font-technology	Variable	Variables
 	Couldn't {} {name}: {e}	Impossible de {} {name} : {e}
 	Create	Créer
 	Create Clipping Mask	Créer un masque d’écrêtage
-	Create Document	Créer un document
 	Create from Guides	Créer à partir des repères
 	Create from Selection	Créer à partir de la sélection
 	Create From:	Créer à partir de :
@@ -1890,6 +1888,7 @@ font-technology	Variable	Variables
 	Lock (⌘2)	Verrouiller (⌘2)
 	Lock Grid	Verrouiller la grille
 	Lock Guides	Verrouiller les repères
+	Lock Guides by Default	Verrouiller les repères par défaut
 	Lock Others	Verrouiller les autres
 	Lock Slices	Verrouiller les tranches
 	Lock Station Point	Verrouiller le point d’observation
@@ -2138,7 +2137,6 @@ font-technology	Variable	Variables
 	New Color Group…	Nouveau groupe de couleurs…
 	New Document Presets	Paramètres prédéfinis de nouveau document
 	New file	Nouveau fichier
-	New from Template	Nouveau d’après un modèle
 	New from Template…	Nouveau d’après un modèle…
 	New Graphic Style	Nouveau style graphique
 	New Graphic Style (Alt-click to name it)	Nouveau style graphique (Alt+clic pour le nommer)
@@ -2925,6 +2923,7 @@ digits	Malayalam	Malayalam
 	Save PDF Preset	Enregistrer le paramètre prédéfini PDF
 	Save Perspective Grid Preset	Enregistrer le paramètre prédéfini de grille de perspective
 	Save Preset	Enregistrer le paramètre prédéfini
+	Save Document Preset	Enregistrer le paramètre prédéfini du document
 	Save Preset…	Enregistrer le paramètre prédéfini…
 	Save Print Preset	Enregistrer le paramètre prédéfini d’impression
 	Save Recovery Data	Enregistrer les données de récupération
@@ -3502,7 +3501,6 @@ digits	Malayalam	Malayalam
 	Template	Modèle
 	Templates	Modèles
 	Templates Folder	Dossier des modèles
-	Templates…	Modèles…
 	Text Displayed in Cell:	Texte affiché dans la cellule :
 	Text Export Options	Options d’exportation du texte
 	Text Fill & Stroke Color	Couleur de fond et de contour du texte
@@ -5158,7 +5156,7 @@ lighting	Light	Lumière
 	Bevel both sides	Biseau des deux côtés
 	Presets	Paramètres prédéfinis
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Un objet n'accepte qu'un seul effet 3D. Modifiez les options de l'effet existant ou supprimez-le d'abord.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} nécessite pour l'instant un tracé ou un tracé transparent. Convertissez d'abord le texte, les images et les groupes en tracés.
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} nécessite pour l'instant un tracé, un tracé transparent, du texte ou un groupe. Convertissez d'abord les images et les autres objets en tracés.
 @msg	{label} requires a shape with at least two anchors	{label} nécessite une forme comportant au moins deux points d'ancrage
 @msg	The shape is too complex for a 3D effect	La forme est trop complexe pour un effet 3D
 @msg	The 3D surface is too complex; simplify the shape	La surface 3D est trop complexe ; simplifiez la forme
@@ -6662,3 +6660,6 @@ breakText	Glyphs	Glyphes
 	Align to Pixel Grid	Aligner sur la grille de pixels
 @msg	only paths and compound paths can be aligned to the pixel grid	seuls les tracés et les tracés transparents peuvent être alignés sur la grille de pixels
 @msg	side is left or right, not `{s}`	side vaut left ou right, pas `{s}`
+	Ignore All	Tout ignorer
+	Add to Dictionary	Ajouter au dictionnaire
+	No Suggestions	Aucune suggestion

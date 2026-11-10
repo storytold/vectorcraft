@@ -297,7 +297,6 @@ font-technology	Variable	Variables
 	Update While Dragging	Actualizar al arrastrar
 	Hide Video Rulers	Ocultar reglas de video
 	Background Contents	Contenido de fondo
-	Background Contents:	Contenido de fondo:
 	Background:	Fondo:
 	Backspace	Retroceso
 	Bar Graph Tool	Herramienta Gráfico de barras
@@ -669,7 +668,6 @@ font-technology	Variable	Variables
 	Couldn't {} {name}: {e}	No se pudo {} {name}: {e}
 	Create	Crear
 	Create Clipping Mask	Crear máscara de recorte
-	Create Document	Crear documento
 	Create from Guides	Crear a partir de guías
 	Create from Selection	Crear a partir de la selección
 	Create From:	Crear a partir de:
@@ -1896,6 +1894,7 @@ font-technology	Variable	Variables
 	Lock (⌘2)	Bloquear (⌘2)
 	Lock Grid	Bloquear cuadrícula
 	Lock Guides	Bloquear guías
+	Lock Guides by Default	Bloquear guías de forma predeterminada
 	Lock Others	Bloquear otros
 	Lock Slices	Bloquear sectores
 	Lock Station Point	Bloquear punto de estación
@@ -2146,7 +2145,6 @@ font-technology	Variable	Variables
 	New Color Group…	Nuevo grupo de colores…
 	New Document Presets	Preajustes de documento nuevo
 	New file	Archivo nuevo
-	New from Template	Nuevo a partir de plantilla
 	New from Template…	Nuevo a partir de plantilla…
 	New Graphic Style	Nuevo estilo gráfico
 	New Graphic Style (Alt-click to name it)	Nuevo estilo gráfico (Alt+clic para darle nombre)
@@ -2933,6 +2931,7 @@ digits	Malayalam	Malayálam
 	Save PDF Preset	Guardar preajuste de PDF
 	Save Perspective Grid Preset	Guardar preajuste de cuadrícula de perspectiva
 	Save Preset	Guardar preajuste
+	Save Document Preset	Guardar preajuste de documento
 	Save Preset…	Guardar preajuste…
 	Save Print Preset	Guardar preajuste de impresión
 	Save Recovery Data	Guardar datos de recuperación
@@ -3510,7 +3509,6 @@ digits	Malayalam	Malayálam
 	Template	Plantilla
 	Templates	Plantillas
 	Templates Folder	Carpeta de plantillas
-	Templates…	Plantillas…
 	Text Displayed in Cell:	Texto mostrado en la celda:
 	Text Export Options	Opciones de exportación de texto
 	Text Fill & Stroke Color	Color de relleno y trazo del texto
@@ -5528,7 +5526,7 @@ mark-style	Japanese	Japonesas
 	Bevel both sides	Bisel en ambos lados
 	Presets	Ajustes preestablecidos
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Un objeto admite un solo efecto 3D. Edite las opciones del efecto existente o quítelo primero.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} requiere por ahora un trazado o un trazado compuesto. Convierta primero el texto, las imágenes y los grupos en trazados.
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} requiere por ahora un trazado, un trazado compuesto, texto o un grupo. Convierta primero las imágenes y otros objetos en trazados.
 @msg	{label} requires a shape with at least two anchors	{label} requiere una forma con al menos dos puntos de ancla
 @msg	The shape is too complex for a 3D effect	La forma es demasiado compleja para un efecto 3D
 @msg	The 3D surface is too complex; simplify the shape	La superficie 3D es demasiado compleja; simplifique la forma
@@ -6610,3 +6608,6 @@ breakText	Glyphs	Glifos
 	Align to Pixel Grid	Alinear con cuadrícula de píxeles
 @msg	only paths and compound paths can be aligned to the pixel grid	solo los trazados y los trazados compuestos se pueden alinear con la cuadrícula de píxeles
 @msg	side is left or right, not `{s}`	side es left o right, no `{s}`
+	Ignore All	Omitir todo
+	Add to Dictionary	Añadir al diccionario
+	No Suggestions	No hay sugerencias

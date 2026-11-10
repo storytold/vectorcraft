@@ -375,7 +375,7 @@ impl Renderer {
     }
 
     /// Render any node (also one outside the tree, e.g. opacity-mask art) fitted into
-    /// `size`×`size` pixels, optionally over a solid premultiplied background. A symbol instance
+    /// `size`×`size` pixels, optionally over a solid straight-alpha background. A symbol instance
     /// is fitted by its symbol's art in `doc`.
     pub fn render_node_thumbnail(&mut self, doc: &Document, n: &Node, size: u32, background: Option<[u8; 4]>) -> Option<Rendered> {
         self.render_node_thumbnail_with(doc, n, size, background, &RenderOptions::default())

@@ -369,10 +369,10 @@ The older names below remain listed because existing workflows use them.
 
 | Tool | Arguments and result |
 |---|---|
-| `command_list` | Optional `filter` (or `query`), `menu` (a menu path substring, levels joined with ` > `), `enabled_only`, `brief` (no `params` text); returns the command array. `list_commands` lists the same commands; it takes `enabledOnly` and returns `{count, commands}` |
+| `command_list` | Optional `filter` (or `query`), `menu` (a menu path substring, levels joined with ` > `), `enabled_only`, `brief` (no `params` text, `schema` or `inputSchema`); returns the command array. A command with a parameter schema lists `schema` and `inputSchema` (see [Parameter schemas](#parameter-schemas)). `list_commands` lists the same commands; it takes `enabledOnly` and returns `{count, commands}` |
 | `command_run` | `id`, optional `params`; runs the command through the existing backend. An unknown key in `params` is an error that names it and the nearest key the command takes (`invalid parameters for `file.new`: unknown parameter `widht`; did you mean `width`?`), so a misspelt key no longer runs the command with its default (see [Parameter keys](#parameter-keys)). `run_command` runs a command the same way and takes its id as `command` |
 | `command_batch` | `steps: [{id, params?}]` (at most 256), optional `stop_on_error` (default true), `atomic` and `label`; returns `completed`, `failed`, `results: [{ok, result\|error}]` and `created` (the ids the `draw_path` / `draw_shape` steps made, in order). A step's `id` is a command id, or `draw_path` / `draw_shape` with that tool's arguments as `params` (checked as `tools/call` checks them; the step's result is the tool's, so `"$N.id"` is the new object). Each edit has its own undo step, or with `atomic: true` the batch's edits are one undo step named `label` (else after its first edit; `edit.undoGroup.begin`/`end` underneath), and the edits made in a document that a step opens or creates (`document.open`, `file.new`) are one undo step there, named the same, also when no document was open before the batch. In a document that was open before the batch and that a step switches to (`document.activate`), each edit stays its own undo step; failures set `isError`. A param string `"$N.path"` or `"$last.path"` takes a value from an earlier step's result (see `run` below). Kept step results total at most 8 MiB; past that the batch stops with the reason. This is the MCP tool, not the engine command `command.batch` (that one takes `commands: [{command, params}]` and is what the Actions panel plays); use `command_run` with `command.batch` when replaying a recorded action |
-| `command_list` | Optional `filter` (or `query`), `menu` (a menu path substring, levels joined with ` > `), `enabled_only`, `brief` (no `params` text); returns the command array |
+| `command_list` | Optional `filter` (or `query`), `menu` (a menu path substring, levels joined with ` > `), `enabled_only`, `brief` (no `params` text, `schema` or `inputSchema`); returns the command array |
 | `command_run` | `id`, optional `params`; runs the command through the existing backend. An unknown key in `params` is an error that names it and the nearest key the command takes (`invalid parameters for `file.new`: unknown parameter `widht`; did you mean `width`?`), so a misspelt key no longer runs the command with its default (see [Parameter keys](#parameter-keys)) |
 | `doc_inspect` | Optional `depth`, `childLimit`, `ids`, `kind`, `limit`, `offset`; same summary as `inspect_document` |
 | `render_preview` | Optional `max_side` (1–4096, default 1024), `artboard` (0-based, default 0) and `traceViews`; inline PNG of that artboard without editing it, drawn as `export` draws a PNG with `background: "white"` at the scale that fits `max_side` (at most 1). With `traceViews: true`, Image Trace objects draw in the view set with `imageTrace.setView` (outlines, the source image…), as in the app's window; by default they draw their tracing result. Artboards too large to render within the allocation bound return a tool error |
@@ -446,7 +446,7 @@ opens the picker through `run_command` with the remote backend.
 
 | Tool | Arguments | Notes |
 |---|---|---|
-| `list_commands` | `{filter?, query?, menu?, enabledOnly?, brief?}` | The command catalogue: id, label, menu, shortcut, params doc (left out with `brief`), enablement. |
+| `list_commands` | `{filter?, query?, menu?, enabledOnly?, brief?}` | The command catalogue: id, label, menu, shortcut, params doc, enablement, and `schema` and `inputSchema` for a command with a parameter schema (the params doc and both schemas are left out with `brief`). |
 | `run_command` | `{command, params?}` | Runs any command. Use it for everything without a dedicated tool. |
 | `inspect_document` | `{depth?, childLimit?, ids?, kind?, limit?, offset?}` | Artboards (with `color`, `#rrggbb`, for one with a background color), layer tree (ids, kinds, bounds, paint), selection, history, tool. A type node's `fill`, `stroke` and `strokeWidth` are the paint its characters show (its first run's); fills and strokes of the type object itself come as `objectFill`, `objectStroke` and `objectStrokeWidth`. Paint comes as a label (`"#ff0000"`, `"None"`, `"G1 40% (#ff9999)"` for a swatch at a tint); `paint.proxies` gives it as an object. |
 | `inspect_ui` | `{}` | UI state. Remote mode only. |
@@ -1387,9 +1387,13 @@ vectorcraft-cli run --cmd file.new --params '{"width":600,"height":200}'   --cmd
 Some commands have a machine-readable parameter schema: at present `view.capsLock`, `view.saved.new`,
 `view.saved.edit`, `view.saved.list`, `view.transparencyGrid` and `view.snapToGlyph.options`. The engine's
 `engine.commands` list gives such a command a `schema` field: an object schema in the shape of JSON Schema 2020-12
-(https://json-schema.org/draft/2020-12), with `type`, `properties`, `required`, `additionalProperties: false`,
-`minimum`, `maximum`, `exclusiveMinimum` and `exclusiveMaximum` for ranges, `enum`, and `default` for a default the engine fills in. VectorCraft's own
-fields are `x-since` (the API level that added the command or the parameter), `x-deprecatedSince`, `x-lenient`,
+(https://json-schema.org/draft/2020-12). Its root has `$schema` (the 2020-12 dialect), `description` when the
+command has a summary, and `deprecated: true` when the command is deprecated. The schema uses `type`, `properties`, `required` and
+`additionalProperties: false` for objects; `minimum`, `maximum`, `exclusiveMinimum` and `exclusiveMaximum` for ranges;
+`enum` for a list of names; `items` for the values of a list; `prefixItems`, `items: false` and `minItems: 2` for a
+point; `anyOf` and `minItems: 3` for a color, which is a string, a list of at least three numbers or an object;
+`description` for a parameter's doc text; `default` for a default the engine fills in; and `deprecated: true` for a
+deprecated parameter. VectorCraft's own fields are `x-since` (the API level that added the command or the parameter), `x-deprecatedSince`, `x-lenient`,
 `x-unit`, `x-kind` (`id`, `color` or `point`), `x-default` (a default the command works out, such as `toggle`),
 `x-cost`, `x-writes` (`nothing`, `session`, `preferences` or `document`) and `x-returns`. A parameter that reads null
 as left out is an `anyOf` with `{"type": "null"}`. Null params read as `{}`, so a schema with no required parameter has
@@ -1398,6 +1402,15 @@ refuses null params for it as a missing parameter. A number with no fractional p
 JSON Schema defines one, and the command receives `2`. An `x-lenient` parameter's schema states the documented type,
 and the engine also passes a value of another type to the command. The command's `params` text equals the text the
 schema writes, and a test checks that they are the same.
+
+The `engine.commands` list and the `command_list` and `list_commands` tools also give such a command an `inputSchema`
+field: the same schema in the form of an MCP tool's `inputSchema`
+(https://modelcontextprotocol.io/specification/2025-06-18/schema), whose root `type` is always `"object"`
+(https://modelcontextprotocol.io/specification/2026-07-28/schema). It differs from `schema` only in the root `type`,
+which is `"object"` also when no parameter is required; every other keyword, `$schema` and the `x-` fields included,
+is the same. A command without a schema lists neither field. The commands remain commands run with `command_run`
+or `run_command`: `tools/list` does not list them as tools. With `brief`, the listings leave out `schema` and
+`inputSchema` as well as the `params` text; a listing with the command's id as `filter` gives them.
 
 The engine checks the params of such a command against its schema before the command runs, for every new call: from
 the desktop app, the control channel, MCP or the CLI, and when one command runs another. The steps of `command.batch`
@@ -1822,6 +1835,11 @@ View › Guides › Lock Guides (`view.guides.lock`) deselects them and the path
 document, and refuses these commands until unlocked. While it is on, a command that selects art, such as `edit.undo`,
 `edit.redo`, `object.exitIsolation`, `object.unlockAll`, `object.showAll` or `edit.paste`, leaves the guides out.
 `view.guides.lock` rejects a `locked` value that is not a boolean. Omitting `locked` toggles the current value.
+While guides are locked, `guide.add` and a guide dragged out of a ruler still make new guides, which are locked too.
+Preferences › Guides & Grid › Lock Guides by Default (`lockGuidesByDefault`, off by default) locks guides when the
+desktop app starts. Changing the preference, with `prefs.set` or `prefs.reset`, sets the lock to the new value at once.
+`view.guides.lock` changes the lock for the session and does not change the preference. A headless session starts
+with guides unlocked, as the preference is off until `prefs.set` turns it on.
 
 `view.guides.release {index?, ids?}` (View › Guides › Release Guides) turns guides into paths → `{count}`. With
 `index` it releases that ruler guide, and with `ids` it releases those guide paths (and the guide paths inside them).
@@ -2383,10 +2401,12 @@ default) white ones knock out instead; `"discard"` writes none.
 
 ## Revolve (initial 3D effect)
 
-`effect.apply {effect: "threeD.revolve", params: {...}, ids?, item?}` applies a live Revolve to a path
-or compound path. `effect.dialog` opens compact options with artboard rotation and light gizmos, `effect.setParams` edits it, and
+`effect.apply {effect: "threeD.revolve", params: {...}, ids?, item?}` applies a live Revolve to a path,
+compound path, type, or a group or layer of them. `effect.dialog` opens compact options with artboard rotation and light gizmos, `effect.setParams` edits it, and
 `effect.expandAppearance` bakes it into shaded vector faces. Native saves keep the editable source;
 SVG/PDF exports bake the same faces the canvas draws. Only one Revolve is supported per profile.
+Type sweeps as its glyph outlines and stays type. On a group or layer, every visible member sweeps about one axis on the chosen edge of the members' bounds together, in its own paint, and the members stay editable. A group holding a clipping group, an image, a symbol instance or another object that can't be swept is refused, and so is type with no outlines or a group with no shape in it.
+A surface takes at most 16,384 profile points and 163,840 faces, the members of a group together, counted after any geometry effects before the Revolve. A straight segment takes one point, a curve takes at least four, and each contour takes one. Each curved segment takes 16 samples; on a surface over those limits every curve takes as many as fit, down to 4, and the call is refused below that with "reduce Segments or simplify the profile". The call is also refused with "reduce Segments or simplify the gradient" when the faces' copies of the paint would take more than 256 MiB, counted together for the members of a group and for the fills and strokes of one object that carry a Revolve. To find the holes, mesh export cuts each sampled piece of a closed contour where it crosses another closed contour, adding a profile point at each cut, and tests the middle of each part against the closed contours whose bounds share its cell of a grid over the profile. It refuses the profile as too complex when its contours overlap so much that the search would take more than 16,000,000 steps, where each path element tested, each contour looked at and each contour placed in a grid cell counts one.
 
 Parameters: `angle` (degrees, 0..360, default 360), `offset` (points, 0..100000, default 0),
 `edge` (`"left"` or `"right"`), `rotationX/Y/Z` (degrees, defaults 0/0/0), `perspectiveAngle`
@@ -2459,7 +2479,8 @@ checked as that effect's. It is one undo step. Any other `threeDType` value, or 
 
 `effect.apply {effect: "threeD.extrude" | "threeD.inflate" | "threeD.rotate", params: {...}, ids?, item?}` applies
 the other 3D types to a path or compound path, live like Revolve (the source stays editable; SVG/PDF exports and
-`effect.expandAppearance` use the same shaded faces). An object takes one 3D effect, Revolve included.
+`effect.expandAppearance` use the same shaded faces). An object takes one 3D effect, Revolve included. On a group or
+layer the 3D effect goes on the group itself: `effect.apply` and `effect.setParams` refuse one on its fill or stroke.
 
 `threeD.extrude`: `depth` (points, 0..2000, default 50), `twist` (degrees, 0..360, 0), `taper` (1..100%, 100),
 `cap` (true solid, false hollow), `bevel` (`none`, `classic`, `rounded`, `cove`, `step`, `ogee`), `bevelWidth`
@@ -3227,7 +3248,11 @@ of the line's weight at right angles, spreads twice as wide.
 Visual bounds (Fit to Selected Art, Rasterize, exporting all art) and clicks on the canvas take
 in the whole stroke as drawn: arrowheads, inside/outside alignment (an outside stroke is hit outside the path, an
 inside one inside it), the width profile's width where you click, projecting caps and miter spikes up to the miter
-limit. A rectangle's right-angle miters stay within half the weight of its edges.
+limit. A rectangle's right-angle miters stay within half the weight of its edges. A butt-capped stroke on an open
+path does not reach past the path's ends: a straight segment's box comes from the four corners of its stroked
+rectangle. Past an end, only a round or projecting cap or an arrowhead adds to the box. A curve that bends more
+tightly than half the stroke weight can measure a little larger than it paints, and a butt-dashed path whose first or
+last dash is a gap is measured to the path's ends.
 
 A symbol instance is measured by its symbol's art, placed by the instance's transform. The bounds in
 `document.inspect` and `document.node`, the Align commands, `object.setBounds`, the bounding box, clicks, marquees,
@@ -5977,6 +6002,10 @@ any case, while the document is open. It is not saved and not an undo step.
 In the app, Edit › Spelling › Auto Spell Check (the UI command `edit.autoSpellCheck`, which returns whether it is now
 on) underlines on the canvas the words `text.spelling.check` lists, in the visible type without effects, and keeps the
 lines up to date as the type, the custom dictionary and the Ignore All words change.
+A right-click on an underlined word puts at the top of the canvas context menu the words `text.spelling.suggest` gives
+for it (each a `text.editRange {id, start, end, insert}` item labelled with its word), or No Suggestions, then Ignore
+All (`text.spelling.ignoreAll {word}`) and Add to Dictionary (`text.spelling.addWord {word}`); the context menu's
+entries list them with their params.
 
 
 ## Justification options
@@ -7683,7 +7712,9 @@ Tools:
   `bezier` or `arc`; E cycles it. Shift steps the length by the keyboard increment.
 - **Measure & Inspect tool** (`measureInspect`): a drag measures distance, angle and offsets, as the Measure tool does
   (`tool.options` reports the last one); hovering a path reads it, as `addon.pathtools.inspect` does. Nothing goes into
-  the document.
+  the document. With Snap to Glyph, Smart Guides and Alignment Guides on, and Snap to Grid and Snap to Pixel off, both ends
+  of either tool's drag land within the snapping tolerance on the guides of live type, except Anchor Point, and the guide
+  shows during the drag.
 - **Parametric Shape Tool** (`parametricShape`): draws shapes that stay editable as numbers. A drag from the centre runs
   `addon.pathtools.shape.create`: the drag's length is the shape's size (height 2 × the distance, width in the last
   shape's proportions), its direction the rotation (Shift: 45° steps). While dragging, ↑/↓ change the kind's count or

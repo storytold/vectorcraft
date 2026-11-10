@@ -355,6 +355,296 @@ fn activating_the_family_popup_leaves_its_wheel_input_available() {
     }
 }
 
+/// A family field at `top`, the input's clock at `time`. Returns the wheel events left in the
+/// input, the notches the field took and the point in the middle of the field.
+fn stream_frame(ctx: &egui::Context, top: Option<f32>, time: f64, events: Vec<egui::Event>) -> (usize, i32, egui::Pos2) {
+    covered_stream_frame(ctx, top, false, time, events)
+}
+
+/// [`stream_frame`], with an overlay over the whole field when `covered` is set.
+fn covered_stream_frame(ctx: &egui::Context, top: Option<f32>, covered: bool, time: f64, events: Vec<egui::Event>) -> (usize, i32, egui::Pos2) {
+    let mut raw = egui::RawInput { time: Some(time), events, ..Default::default() };
+    super::take_raw_wheel(ctx, &mut raw);
+    let left = raw.events.iter().filter(|e| matches!(e, egui::Event::MouseWheel { .. })).count();
+    let mut notches = 0;
+    let mut point = egui::Pos2::ZERO;
+    let mut out = ctx.run_ui(raw, |ui| {
+        let Some(top) = top else { return };
+        let rect = egui::Rect::from_min_size(egui::pos2(10.0, top), egui::vec2(120.0, 24.0));
+        let resp = ui.put(rect, egui::Button::new("Family"));
+        point = resp.rect.center();
+        for turn in super::remember_wheel_field(ui, &resp, true) {
+            if let super::WheelInput::Notches(n) = turn {
+                notches += n;
+            }
+        }
+        if covered {
+            let cover = rect.expand(5.0);
+            egui::Area::new(egui::Id::unique("stream overlay")).order(egui::Order::Foreground).fixed_pos(cover.min).show(ui.ctx(), |ui| {
+                ui.allocate_exact_size(cover.size(), egui::Sense::click());
+            });
+        }
+    });
+    out.textures_delta.clear();
+    (left, notches, point)
+}
+
+fn stream_turn(phase: egui::TouchPhase, source: egui::MouseWheelSource, dy: f32) -> egui::Event {
+    egui::Event::MouseWheel { unit: egui::MouseWheelUnit::Line, delta: egui::vec2(0.0, dy), phase, modifiers: Default::default(), source }
+}
+
+fn plain_turn() -> egui::Event {
+    stream_turn(egui::TouchPhase::Move, egui::MouseWheelSource::Unknown, -1.0)
+}
+
+/// A context with a family field drawn at `top` for three frames, from clock time 100.
+fn stream_context(top: f32) -> (egui::Context, egui::Pos2) {
+    let ctx = egui::Context::default();
+    let mut point = egui::Pos2::ZERO;
+    for i in 0..3 {
+        point = stream_frame(&ctx, Some(top), 100.0 + f64::from(i), vec![]).2;
+    }
+    (ctx, point)
+}
+
+/// A field that moved under a pointer that stayed put leaves the wheel, including a reported
+/// pointer position that did not change, until the pointer really moves.
+#[test]
+fn a_field_that_slides_under_a_still_pointer_leaves_the_wheel() {
+    let (ctx, point) = stream_context(40.0);
+    let below = egui::pos2(point.x, point.y + 200.0);
+    stream_frame(&ctx, Some(40.0), 110.0, vec![egui::Event::PointerMoved(below)]);
+    stream_frame(&ctx, Some(40.0 + 200.0), 111.0, vec![]);
+    let (left, notches, moved) = stream_frame(&ctx, Some(240.0), 120.0, vec![plain_turn()]);
+    assert_eq!(moved, below);
+    assert_eq!((left, notches), (1, 0), "the pointer did not move");
+    let (left, notches, _) = stream_frame(&ctx, Some(240.0), 130.0, vec![egui::Event::PointerMoved(below), plain_turn()]);
+    assert_eq!((left, notches), (1, 0), "a report of the same position is not a move");
+    let nudged = below + egui::vec2(2.0, 0.0);
+    let (left, notches, _) = stream_frame(&ctx, Some(240.0), 140.0, vec![egui::Event::PointerMoved(nudged), plain_turn()]);
+    assert_eq!((left, notches), (0, 1), "the pointer moved onto the field");
+}
+
+/// A field the pointer was moved onto loses that when the field moves, even back to the same
+/// place, or when it is missing from a pass.
+#[test]
+fn a_field_that_moves_away_and_back_needs_the_pointer_moved_again() {
+    let (ctx, point) = stream_context(40.0);
+    stream_frame(&ctx, Some(40.0), 110.0, vec![egui::Event::PointerMoved(point)]);
+    stream_frame(&ctx, Some(44.0), 111.0, vec![]);
+    stream_frame(&ctx, Some(40.0), 112.0, vec![]);
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 120.0, vec![plain_turn()]);
+    assert_eq!((left, notches), (1, 0), "the field moved after the pointer did");
+
+    let (ctx, point) = stream_context(40.0);
+    stream_frame(&ctx, Some(40.0), 110.0, vec![egui::Event::PointerMoved(point)]);
+    stream_frame(&ctx, None, 111.0, vec![]);
+    stream_frame(&ctx, Some(40.0), 112.0, vec![]);
+    stream_frame(&ctx, Some(40.0), 113.0, vec![]);
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 120.0, vec![plain_turn()]);
+    assert_eq!((left, notches), (1, 0), "the field was gone for a pass");
+
+    let (ctx, point) = stream_context(40.0);
+    stream_frame(&ctx, Some(40.0), 110.0, vec![egui::Event::PointerMoved(point), egui::Event::PointerGone]);
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 120.0, vec![plain_turn()]);
+    assert_eq!((left, notches), (1, 0), "the pointer left the window");
+}
+
+/// An overlay that comes and goes over a still pointer, with no input while it is up, leaves the
+/// field needing the pointer moved again; a stream the field held leaves it.
+#[test]
+fn a_field_covered_by_an_overlay_needs_the_pointer_moved_again() {
+    let (ctx, point) = stream_context(40.0);
+    stream_frame(&ctx, Some(40.0), 110.0, vec![egui::Event::PointerMoved(point)]);
+    covered_stream_frame(&ctx, Some(40.0), true, 111.0, vec![]);
+    covered_stream_frame(&ctx, Some(40.0), true, 112.0, vec![]);
+    stream_frame(&ctx, Some(40.0), 113.0, vec![]);
+    stream_frame(&ctx, Some(40.0), 114.0, vec![]);
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 120.0, vec![plain_turn()]);
+    assert_eq!((left, notches), (1, 0), "the overlay covered the field");
+    let nudged = point + egui::vec2(2.0, 0.0);
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 130.0, vec![egui::Event::PointerMoved(nudged), plain_turn()]);
+    assert_eq!((left, notches), (0, 1), "the pointer moved onto the field again");
+
+    let (ctx, point) = stream_context(40.0);
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.0, vec![egui::Event::PointerMoved(point), plain_turn()]);
+    assert_eq!((left, notches), (0, 1));
+    covered_stream_frame(&ctx, Some(40.0), true, 110.1, vec![]);
+    covered_stream_frame(&ctx, Some(40.0), true, 110.2, vec![]);
+    stream_frame(&ctx, Some(40.0), 110.3, vec![]);
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.4, vec![plain_turn()]);
+    assert_eq!((left, notches), (1, 0), "the overlay covered the field during the stream");
+}
+
+/// A field missing from a pass loses the pointer's placement while another font field keeps
+/// drawing in that pass, as when a panel collapses and the Control bar's field stays.
+#[test]
+fn a_field_gone_for_a_pass_beside_another_field_needs_the_pointer_moved_again() {
+    let ctx = egui::Context::default();
+    let field_at = |ui: &mut egui::Ui, top: f32| {
+        let rect = egui::Rect::from_min_size(egui::pos2(10.0, top), egui::vec2(120.0, 24.0));
+        let resp = ui.put(rect, egui::Button::new("Family"));
+        super::remember_wheel_field(ui, &resp, true);
+    };
+    let frame = |time: f64, family: bool, events: Vec<egui::Event>| {
+        let mut raw = egui::RawInput { time: Some(time), events, ..Default::default() };
+        super::take_raw_wheel(&ctx, &mut raw);
+        let left = raw.events.iter().filter(|e| matches!(e, egui::Event::MouseWheel { .. })).count();
+        let mut out = ctx.run_ui(raw, |ui| {
+            field_at(ui, 200.0);
+            if family {
+                field_at(ui, 40.0);
+            }
+        });
+        out.textures_delta.clear();
+        left
+    };
+    for i in 0..3 {
+        frame(100.0 + f64::from(i), true, vec![]);
+    }
+    let point = egui::pos2(70.0, 52.0);
+    assert_eq!(frame(110.0, true, vec![egui::Event::PointerMoved(point), plain_turn()]), 0, "the pointer moved onto the field");
+    frame(120.0, false, vec![]);
+    frame(121.0, true, vec![]);
+    frame(122.0, true, vec![]);
+    assert_eq!(frame(130.0, true, vec![plain_turn()]), 1, "the field was gone for a pass");
+}
+
+/// A pointer at rest on a field that stayed put keeps stepping it, stream after stream.
+#[test]
+fn a_pointer_resting_on_its_field_keeps_the_wheel_across_streams() {
+    let (ctx, point) = stream_context(40.0);
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.0, vec![egui::Event::PointerMoved(point), plain_turn()]);
+    assert_eq!((left, notches), (0, 1));
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.0 + super::WHEEL_STREAM_GAP / 2.0, vec![plain_turn()]);
+    assert_eq!((left, notches), (0, 1), "the same stream");
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 200.0, vec![plain_turn()]);
+    assert_eq!((left, notches), (0, 1), "a new stream, with the pointer still on the field");
+}
+
+/// A stream that began elsewhere stays there when the pointer moves onto a field, until a gap
+/// with no wheel input ends it.
+#[test]
+fn a_wheel_stream_that_began_elsewhere_stays_there_until_a_gap() {
+    let (ctx, point) = stream_context(40.0);
+    let away = point + egui::vec2(0.0, 200.0);
+    let step = super::WHEEL_STREAM_GAP * 0.8;
+    let (left, _, _) = stream_frame(&ctx, Some(40.0), 110.0, vec![egui::Event::PointerMoved(away), plain_turn()]);
+    assert_eq!(left, 1, "the stream began off the field");
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.0 + step, vec![egui::Event::PointerMoved(point), plain_turn()]);
+    assert_eq!((left, notches), (1, 0), "a nudge onto the field does not take a running stream");
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.0 + 2.0 * step, vec![plain_turn()]);
+    assert_eq!((left, notches), (1, 0), "each event renews the stream");
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.0 + 2.0 * step + super::WHEEL_STREAM_GAP, vec![plain_turn()]);
+    assert_eq!((left, notches), (0, 1), "the stream ended, and the pointer was moved onto the field");
+}
+
+/// A stream that leaves its field goes to what is under the pointer and does not come back.
+#[test]
+fn a_wheel_stream_that_leaves_its_field_does_not_return() {
+    let (ctx, point) = stream_context(40.0);
+    let away = point + egui::vec2(0.0, 200.0);
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.0, vec![egui::Event::PointerMoved(point), plain_turn()]);
+    assert_eq!((left, notches), (0, 1));
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.1, vec![egui::Event::PointerMoved(away), plain_turn()]);
+    assert_eq!((left, notches), (1, 0), "the pointer left the field");
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.2, vec![egui::Event::PointerMoved(point), plain_turn()]);
+    assert_eq!((left, notches), (1, 0), "the stream stays off the field");
+}
+
+/// A stream loses its field when the pointer leaves without a wheel turn or when the field moves.
+#[test]
+fn a_wheel_stream_loses_its_field_when_the_pointer_leaves_or_the_field_moves() {
+    let (ctx, point) = stream_context(40.0);
+    let away = point + egui::vec2(0.0, 200.0);
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.0, vec![egui::Event::PointerMoved(point), plain_turn()]);
+    assert_eq!((left, notches), (0, 1));
+    stream_frame(&ctx, Some(40.0), 110.1, vec![egui::Event::PointerMoved(away)]);
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.2, vec![egui::Event::PointerMoved(point), plain_turn()]);
+    assert_eq!((left, notches), (1, 0), "the pointer left the field during the stream");
+
+    let (ctx, point) = stream_context(40.0);
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.0, vec![egui::Event::PointerMoved(point), plain_turn()]);
+    assert_eq!((left, notches), (0, 1));
+    stream_frame(&ctx, Some(44.0), 110.1, vec![]);
+    let (left, notches, _) = stream_frame(&ctx, Some(44.0), 110.2, vec![plain_turn()]);
+    assert_eq!((left, notches), (1, 0), "the field moved during the stream");
+
+    let (ctx, point) = stream_context(40.0);
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.0, vec![egui::Event::PointerMoved(point), plain_turn()]);
+    assert_eq!((left, notches), (0, 1));
+    stream_frame(&ctx, Some(40.0), 110.1, vec![egui::Event::PointerGone]);
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.2, vec![egui::Event::PointerMoved(point), plain_turn()]);
+    assert_eq!((left, notches), (1, 0), "the pointer left the window during the stream");
+}
+
+/// Trackpad momentum and zero-delta phase events keep their stream going, and momentum alone does
+/// not start a stream on a field.
+#[test]
+fn trackpad_momentum_stays_with_its_stream() {
+    use egui::{MouseWheelSource::Momentum, MouseWheelSource::Trackpad, TouchPhase};
+    let (ctx, point) = stream_context(40.0);
+    let away = point + egui::vec2(0.0, 200.0);
+    let step = super::WHEEL_STREAM_GAP * 0.8;
+    stream_frame(&ctx, Some(40.0), 110.0, vec![egui::Event::PointerMoved(away), stream_turn(TouchPhase::Move, Trackpad, -1.0)]);
+    // The fingers lift with no delta, the pointer moves onto the field, and momentum follows.
+    stream_frame(&ctx, Some(40.0), 110.0 + step, vec![stream_turn(TouchPhase::End, Trackpad, 0.0)]);
+    let (left, notches, _) =
+        stream_frame(&ctx, Some(40.0), 110.0 + 2.0 * step, vec![egui::Event::PointerMoved(point), stream_turn(TouchPhase::Start, Momentum, -1.0)]);
+    assert_eq!((left, notches), (1, 0), "momentum continues the stream that began off the field");
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 200.0, vec![stream_turn(TouchPhase::Move, Momentum, -1.0)]);
+    assert_eq!((left, notches), (1, 0), "momentum does not start a stream on the field");
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 300.0, vec![stream_turn(TouchPhase::Move, Trackpad, -1.0)]);
+    assert_eq!((left, notches), (0, 1), "fingers on the trackpad do");
+}
+
+/// A stream that began as a sideways scroll stays off the field when it turns vertical.
+#[test]
+fn a_sideways_turn_that_starts_a_stream_keeps_it_off_the_field() {
+    let (ctx, point) = stream_context(40.0);
+    let sideways = egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Line,
+        delta: egui::vec2(-1.0, 0.0),
+        phase: egui::TouchPhase::Move,
+        modifiers: Default::default(),
+        source: egui::MouseWheelSource::Unknown,
+    };
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.0, vec![egui::Event::PointerMoved(point), sideways]);
+    assert_eq!((left, notches), (1, 0));
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.1, vec![plain_turn()]);
+    assert_eq!((left, notches), (1, 0), "the stream began as a sideways scroll");
+}
+
+/// A stream loses its field when a layout pass is skipped, even though the field comes back in the
+/// same place before the stream ends.
+#[test]
+fn a_wheel_stream_loses_its_field_when_a_pass_is_skipped() {
+    let (ctx, point) = stream_context(40.0);
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.0, vec![egui::Event::PointerMoved(point), plain_turn()]);
+    assert_eq!((left, notches), (0, 1));
+    stream_frame(&ctx, None, 110.1, vec![]);
+    stream_frame(&ctx, Some(40.0), 110.2, vec![]);
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.3, vec![plain_turn()]);
+    assert_eq!((left, notches), (1, 0), "the field missed a pass during the stream");
+}
+
+/// A modified turn is left in the input and keeps the stream away from the field.
+#[test]
+fn a_modified_turn_that_starts_a_stream_keeps_it_off_the_field() {
+    let (ctx, point) = stream_context(40.0);
+    let zoom = egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Line,
+        delta: egui::vec2(0.0, -1.0),
+        phase: egui::TouchPhase::Move,
+        modifiers: egui::Modifiers::COMMAND,
+        source: egui::MouseWheelSource::Unknown,
+    };
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.0, vec![egui::Event::PointerMoved(point), zoom]);
+    assert_eq!((left, notches), (1, 0));
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.1, vec![plain_turn()]);
+    assert_eq!((left, notches), (1, 0), "the stream began as a modified turn");
+}
+
 /// The Font Technology filter's Variable is the font adjective, not the Variables panel's noun.
 #[test]
 fn the_variable_filter_is_named_as_fonts_are() {

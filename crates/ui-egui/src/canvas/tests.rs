@@ -4868,29 +4868,134 @@ fn cmd_with_a_touchpad_zooms_and_a_whole_notch_scrolls_sideways() {
     };
     use egui::{MouseWheelSource as S, MouseWheelUnit as U};
     let zooms_in = |(zoom, _, moved): (f64, _, f64)| zoom > 1.0005 && moved < 1e-6;
-    let sideways = |(zoom, scroll, _): (f64, vectorcraft_geom::Vec2, f64)| (zoom - 1.0).abs() < 1e-9 && scroll.x < -1.0 && scroll.y == 0.0;
+    let zooms_by = |(zoom, _, moved): (f64, vectorcraft_geom::Vec2, f64), want: f64| (zoom / want - 1.0).abs() < 1e-6 && moved < 1e-6;
+    // `lines` wheel lines to the left.
+    let line = f64::from(ctx.options(|o| o.input_options.line_scroll_speed));
+    let sideways = |(zoom, scroll, _): (f64, vectorcraft_geom::Vec2, f64), lines: f64| {
+        (zoom - 1.0).abs() < 1e-9 && (scroll.x + lines * line).abs() < 0.5 && scroll.y == 0.0
+    };
     assert!(app.session.prefs.ctrl_wheel_scrolls_sideways, "the option is on by default");
-    // A wheel message of 30 is a quarter of a 120 notch, and arrives as a quarter line.
-    assert!(zooms_in(turn(&mut app, vec![ev(U::Line, 0.25, S::Unknown)])), "a line delta smaller than a notch zooms");
-    assert!(zooms_in(turn(&mut app, vec![ev(U::Line, 0.25, S::Unknown), ev(U::Line, 0.25, S::Unknown)])), "several small deltas zoom");
-    assert!(zooms_in(turn(&mut app, vec![ev(U::Line, 0.25, S::Unknown), ev(U::Line, 1.0, S::Unknown)])), "a whole notch in the same turn zooms");
-    assert!(zooms_in(turn(&mut app, vec![ev(U::Point, 6.0, S::Unknown)])), "point deltas of an unnamed source zoom");
-    assert!(zooms_in(turn(&mut app, vec![ev(U::Point, 6.0, S::Trackpad)])), "a trackpad scroll zooms");
-    assert!(zooms_in(turn(&mut app, vec![ev(U::Point, 6.0, S::Momentum)])), "its momentum zooms");
-    assert!(sideways(turn(&mut app, vec![ev(U::Line, 1.0, S::Unknown)])), "a whole notch scrolls sideways");
-    assert!(sideways(turn(&mut app, vec![ev(U::Line, 2.0, S::Unknown)])), "a turn of two notches scrolls sideways");
-    assert!(sideways(turn(&mut app, vec![ev(U::Line, 0.25, S::Wheel)])), "a part of a line from a named wheel scrolls sideways");
+    // A wheel message of 30 is a quarter of a 120 notch, and arrives as a quarter line. The zoom
+    // is exponential in the wheel's motion, so more motion in a turn multiplies the quarter's.
+    let small = turn(&mut app, vec![ev(U::Line, 0.25, S::Unknown)]);
+    assert!(zooms_in(small), "a line delta smaller than a notch zooms");
+    let quarter = small.0;
+    assert!(
+        zooms_by(turn(&mut app, vec![ev(U::Line, 0.25, S::Unknown), ev(U::Line, 0.25, S::Unknown)]), quarter.powi(2)),
+        "several small deltas zoom"
+    );
+    assert!(
+        zooms_by(turn(&mut app, vec![ev(U::Line, 0.25, S::Unknown), ev(U::Line, 1.0, S::Unknown)]), quarter.powi(5)),
+        "a whole notch in the same turn adds its zoom"
+    );
+    let point = turn(&mut app, vec![ev(U::Point, 6.0, S::Unknown)]);
+    assert!(zooms_in(point), "point deltas of an unnamed source zoom");
+    assert!(zooms_by(turn(&mut app, vec![ev(U::Point, 6.0, S::Trackpad)]), point.0), "a trackpad scroll zooms as far");
+    assert!(zooms_by(turn(&mut app, vec![ev(U::Point, 6.0, S::Momentum)]), point.0), "its momentum zooms as far");
+    assert!(sideways(turn(&mut app, vec![ev(U::Line, 1.0, S::Unknown)]), 1.0), "a whole notch scrolls sideways");
+    assert!(sideways(turn(&mut app, vec![ev(U::Line, 2.0, S::Unknown)]), 2.0), "a turn of two notches scrolls sideways");
+    assert!(sideways(turn(&mut app, vec![ev(U::Line, 0.25, S::Wheel)]), 0.25), "a part of a line from a named wheel scrolls sideways");
     // A turn ends when the wheel goes idle, so the next whole notch scrolls sideways again.
     assert!(zooms_in(turn(&mut app, vec![ev(U::Line, 0.25, S::Unknown)])), "a touchpad turn");
-    assert!(sideways(turn(&mut app, vec![ev(U::Line, 1.0, S::Unknown)])), "the notch after it scrolls sideways");
+    assert!(sideways(turn(&mut app, vec![ev(U::Line, 1.0, S::Unknown)]), 1.0), "the notch after it scrolls sideways");
     app.session.execute("prefs.set", &json!({"key": "zoomWithMouseWheel", "value": true})).unwrap();
-    assert!(zooms_in(turn(&mut app, vec![ev(U::Line, 0.25, S::Unknown)])), "with Zoom with Mouse Wheel: a small line delta zooms");
+    let small = turn(&mut app, vec![ev(U::Line, 0.25, S::Unknown)]);
+    assert!(zooms_in(small), "with Zoom with Mouse Wheel: a small line delta zooms");
+    let quarter = small.0;
     assert!(
-        zooms_in(turn(&mut app, vec![ev(U::Line, 0.25, S::Unknown), ev(U::Line, 1.0, S::Unknown)])),
-        "with Zoom with Mouse Wheel: a whole notch in the same turn zooms"
+        zooms_by(turn(&mut app, vec![ev(U::Line, 0.25, S::Unknown), ev(U::Line, 1.0, S::Unknown)]), quarter.powi(5)),
+        "with Zoom with Mouse Wheel: a whole notch in the same turn adds its zoom"
     );
     assert!(zooms_in(turn(&mut app, vec![ev(U::Point, 6.0, S::Trackpad)])), "with Zoom with Mouse Wheel: a trackpad scroll zooms");
-    assert!(sideways(turn(&mut app, vec![ev(U::Line, 1.0, S::Unknown)])), "with Zoom with Mouse Wheel: a whole notch scrolls sideways");
+    assert!(sideways(turn(&mut app, vec![ev(U::Line, 1.0, S::Unknown)]), 1.0), "with Zoom with Mouse Wheel: a whole notch scrolls sideways");
+}
+
+/// A wheel turn that a touchpad began ends with an End or Cancel phase, also in the frame the next
+/// notch arrives, and after egui's scroll timeout with no frame in between. Under either
+/// preference, the whole notch after it scrolls sideways. A notch inside the turn zooms.
+#[test]
+fn a_touchpad_wheel_turn_ends_with_its_end_phase_or_the_scroll_timeout() {
+    use egui::{MouseWheelSource as S, MouseWheelUnit as U, TouchPhase as P};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let ctx = egui::Context::default();
+    let mut t = 0.0;
+    let frame_time = 1.0 / 60.0;
+    let mut run = |app: &mut VectorcraftApp, dt: f64, events: Vec<egui::Event>| {
+        t += dt;
+        let raw = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))),
+            time: Some(t),
+            events,
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+        out.textures_delta.clear();
+    };
+    run(&mut app, frame_time, vec![]);
+    let rect = app.canvas_rect.unwrap();
+    let at = rect.center() + vec2(60.0, 40.0);
+    let line = f64::from(ctx.options(|o| o.input_options.line_scroll_speed));
+    let ev =
+        |unit, dy: f32, phase, source| egui::Event::MouseWheel { unit, delta: vec2(0.0, dy), phase, modifiers: egui::Modifiers::COMMAND, source };
+    // Point deltas zoom at once, so no glide is left when the next event comes.
+    let small = || ev(U::Point, 6.0, P::Move, S::Unknown);
+    let notch = || ev(U::Line, 1.0, P::Move, S::Unknown);
+    // A frame with a small delta, then `events` in one frame `dt` seconds later, and the wheel
+    // going idle: → (zoom ratio, scroll in points) since the small delta.
+    let mut turn = |app: &mut VectorcraftApp, dt: f64, events: Vec<egui::Event>| {
+        run(app, frame_time, vec![egui::Event::PointerMoved(at)]);
+        run(app, frame_time, vec![small()]);
+        let before = *app.view().unwrap();
+        run(app, dt, events);
+        for _ in 0..40 {
+            run(app, frame_time, vec![]);
+        }
+        let after = *app.view().unwrap();
+        (after.zoom / before.zoom, (after.center - before.center) * after.zoom)
+    };
+    let sideways = |(zoom, scroll): (f64, vectorcraft_geom::Vec2)| (zoom - 1.0).abs() < 1e-9 && (scroll.x + line).abs() < 0.5 && scroll.y == 0.0;
+    for wheel_zooms in [false, true] {
+        app.session.execute("prefs.set", &json!({"key": "zoomWithMouseWheel", "value": wheel_zooms})).unwrap();
+        assert!(turn(&mut app, frame_time, vec![notch()]).0 > 1.01, "a notch inside the turn zooms ({wheel_zooms})");
+        assert!(
+            turn(&mut app, frame_time, vec![ev(U::Point, 0.0, P::Start, S::Trackpad), notch()]).0 > 1.01,
+            "a Start phase does not end the turn ({wheel_zooms})"
+        );
+        for phase in [P::End, P::Cancel] {
+            let r = turn(&mut app, frame_time, vec![ev(U::Point, 0.0, phase, S::Trackpad), notch()]);
+            assert!(sideways(r), "the notch after {phase:?} in the same frame scrolls sideways ({wheel_zooms}, {r:?})");
+        }
+        let (zoom, scroll) = turn(&mut app, 0.2, vec![notch()]);
+        assert!(
+            (zoom - 1.0).abs() < 1e-9 && scroll.x < -1.0 && scroll.y == 0.0,
+            "the notch after the scroll timeout scrolls sideways ({wheel_zooms}, {zoom}, {scroll:?})"
+        );
+    }
+}
+
+/// Which wheel events count as a touchpad: a named trackpad or its momentum, never a named wheel,
+/// and for an unnamed source, point deltas or line and page deltas more than 0.001 from a whole
+/// number on either axis.
+#[test]
+fn fine_steps_tells_touchpad_input_from_whole_notches() {
+    use egui::{MouseWheelSource as S, MouseWheelUnit as U};
+    for unit in [U::Point, U::Line, U::Page] {
+        for delta in [vec2(0.0, 1.0), vec2(0.0, 0.25), vec2(-1.5, 0.0)] {
+            assert!(view::fine_steps(unit, delta, S::Trackpad), "{unit:?} {delta:?} from a trackpad");
+            assert!(view::fine_steps(unit, delta, S::Momentum), "{unit:?} {delta:?} from its momentum");
+            assert!(!view::fine_steps(unit, delta, S::Wheel), "{unit:?} {delta:?} from a named wheel");
+        }
+    }
+    assert!(view::fine_steps(U::Point, vec2(0.0, 1.0), S::Unknown), "whole points from an unnamed source");
+    for unit in [U::Line, U::Page] {
+        for (x, y) in [(0.0, 0.25), (0.0, -0.25), (0.25, 1.0), (1.0, -0.5), (0.0, 0.002), (0.0, 0.998), (0.0, 1.002), (0.0, 1.0 / 120.0)] {
+            assert!(view::fine_steps(unit, vec2(x, y), S::Unknown), "{unit:?} ({x}, {y}) is finer than a notch");
+        }
+        for (x, y) in [(0.0, 0.0), (0.0, 1.0), (0.0, -1.0), (0.0, 2.0), (-3.0, 1.0), (0.0, 0.9995), (0.0, 1.0005), (0.0, 0.0005)] {
+            assert!(!view::fine_steps(unit, vec2(x, y), S::Unknown), "{unit:?} ({x}, {y}) is a whole notch");
+        }
+    }
 }
 
 /// With Scroll Sideways with Cmd/Ctrl + Wheel on and Animated Zoom off, Alt + Cmd-wheel zooms
