@@ -7,7 +7,6 @@ use vectorcraft_geom::hit::fill_contains;
 use vectorcraft_geom::kurbo::{ParamCurveArclen, ParamCurveExtrema, ParamCurveNearest};
 use vectorcraft_geom::{BezPath, FillRule, ParamCurve, PathSeg, Point, Rect, Shape, Vec2};
 
-use crate::appearance::HEAD_REACH;
 use crate::{Appearance, ArrowAlign, Dash, LineCap, LineJoin, StrokeAlign, StrokeLayer, WidthProfile};
 
 /// Arc-length accuracy for placing a point along a profile (document points).
@@ -386,18 +385,19 @@ impl StrokeLayer {
     }
 
     /// Is `p` within `tol` of where the start (`end == false`) or end arrowhead at `at` (the path
-    /// leaving along `out`) can paint? Heads are at most about 4.6 weights long and 4 wide. With
+    /// leaving along `out`) can paint? A head reaches [`crate::Arrowhead::reach`] weights from its tip and
+    /// [`crate::Arrowhead::half_width`] either side of its line (4.6 and 2 for most). With
     /// [`ArrowAlign::Extend`] a head points along `out` with its tip up to its length (or the cap)
     /// past the end; with [`ArrowAlign::Tip`] its tip is on the end and it lies back along the
     /// chord the path bends through under it, so anywhere within its length of the end.
     fn head_contains(&self, at: Point, out: Vec2, end: bool, p: Point, tol: f64) -> bool {
-        let hw = self.arrow_weight(end);
-        let v = p - at;
+        let Some(kind) = (if end { self.end_arrow } else { self.start_arrow }) else { return false };
+        let (hw, v) = (self.arrow_weight(end), p - at);
         match self.arrow_align {
-            ArrowAlign::Tip => v.hypot() <= HEAD_REACH * hw + tol,
+            ArrowAlign::Tip => v.hypot() <= kind.reach() * hw + tol,
             ArrowAlign::Extend => {
                 let along = v.dot(out);
-                v.cross(out).abs() <= 2.0 * hw + tol && along <= 4.0 * hw + self.width / 2.0 + tol && along >= -HEAD_REACH * hw - tol
+                v.cross(out).abs() <= kind.half_width() * hw + tol && along <= 4.0 * hw + self.width / 2.0 + tol && along >= -kind.reach() * hw - tol
             }
         }
     }
