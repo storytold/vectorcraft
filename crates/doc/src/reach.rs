@@ -115,14 +115,38 @@ fn gentle(seg: &PathSeg, side: f64) -> bool {
     slowest > 0.0 && side * bend < slowest * slowest
 }
 
+/// The box a stroke reaching `side` from `seg` paints across it, from the directions its tangent
+/// can take: the tangent is a mix of the nonzero control differences, so when their directions all
+/// lie within a quarter turn of the directions' sum, every point across the stroke is in `seg`'s
+/// box moved `side` along a normal of one of those directions. `None` when they do not. A handle on
+/// its end point adds no direction, so a straight curve with one measures as a line.
+fn turning_box(seg: &PathSeg, side: f64) -> Option<Rect> {
+    let c = seg.to_cubic();
+    let d = [c.p1 - c.p0, c.p2 - c.p1, c.p3 - c.p2];
+    let moving = || d.iter().map(|v| (*v, v.hypot())).filter(|(_, h)| *h > 0.0).map(|(v, h)| v / h);
+    let along = unit(moving().fold(Vec2::ZERO, |s, v| s + v));
+    if moving().any(|v| v.dot(along) <= 0.0) {
+        return None;
+    }
+    let angle = |v: &Vec2| along.cross(*v).atan2(along.dot(*v));
+    let lo = moving().min_by(|a, b| angle(a).total_cmp(&angle(b)))?;
+    let hi = moving().max_by(|a, b| angle(a).total_cmp(&angle(b)))?;
+    let n = |t: Vec2| (Vec2::new(t.y, -t.x) * side).to_point();
+    let one_side = round_join_box(Point::ZERO, lo, hi, side).unwrap_or_else(|| Rect::from_points(n(lo), n(hi)));
+    let reach = one_side.union(Rect::new(-one_side.x1, -one_side.y1, -one_side.x0, -one_side.y0));
+    let b = ParamCurveExtrema::bounding_box(seg);
+    Some(Rect::new(b.x0 + reach.x0, b.y0 + reach.y0, b.x1 + reach.x1, b.y1 + reach.y1))
+}
+
 /// The box a stroke reaching `side` from `seg` paints when it stops square at both ends of `seg`:
 /// the corners at the ends and the points across the stroke where the tangent is square to an axis.
 /// A curve that bends tighter than `side` is halved up to `depth` times, and a piece still bending
-/// that much is grown by `side` on every side.
+/// that much is measured by [`turning_box`], or grown by `side` on every side when its tangent
+/// turns too far.
 fn swept_box(seg: &PathSeg, side: f64, depth: u32) -> Rect {
     if !matches!(seg, PathSeg::Line(_)) && !gentle(seg, side) {
         if depth == 0 {
-            return ParamCurveExtrema::bounding_box(seg).inflate(side, side);
+            return turning_box(seg, side).unwrap_or_else(|| ParamCurveExtrema::bounding_box(seg).inflate(side, side));
         }
         return swept_box(&seg.subsegment(0.0..0.5), side, depth - 1).union(swept_box(&seg.subsegment(0.5..1.0), side, depth - 1));
     }
@@ -612,6 +636,45 @@ mod tests {
         let b = stroke(4.0, |s| s.cap = LineCap::Butt).bounds_on(&arc, arc.bounding_box());
         assert!((b.y0 + 2.0).abs() < 1e-9 && (b.x0 + 2.0).abs() < 1e-9 && (b.x1 - 102.0).abs() < 1e-9, "{b:?}");
         assert!((b.y1 - 50.0).abs() < 1e-9, "{b:?}");
+    }
+
+    #[test]
+    fn a_butt_curve_with_a_handle_on_its_end_point_stops_near_that_end() {
+        let butt = stroke(2.0, |s| s.cap = LineCap::Butt);
+        // A straight curve whose first or last handle sits on its end point measures like a line.
+        let mut first = BezPath::new();
+        first.move_to((50.0, 10.0));
+        first.curve_to((50.0, 10.0), (50.0, 40.0), (50.0, 60.0));
+        let mut last = BezPath::new();
+        last.move_to((50.0, 10.0));
+        last.curve_to((50.0, 20.0), (50.0, 60.0), (50.0, 60.0));
+        for bp in [first, last] {
+            assert_eq!(butt.bounds_on(&bp, bp.bounding_box()), Rect::new(49.0, 10.0, 51.0, 60.0));
+        }
+        // A bend that leaves its start straight up from a handle on the start point: the stroke
+        // reaches only a little below the start, not half the weight.
+        let mut bend = BezPath::new();
+        bend.move_to((0.0, 50.0));
+        bend.curve_to((0.0, 50.0), (0.0, 0.0), (50.0, 0.0));
+        let b = stroke(4.0, |s| s.cap = LineCap::Butt).bounds_on(&bend, bend.bounding_box());
+        assert!(b.y1 >= 50.0 && b.y1 < 50.2, "{b:?}");
+        assert!((b.x0 + 2.0).abs() < 1e-9 && (b.y0 + 2.0).abs() < 1e-9 && (b.x1 - 50.0).abs() < 1e-9, "{b:?}");
+        // Nearly a cusp: the curve turns back at its lowest point, where its tangent is level and
+        // the stroke reaches the full half weight below it.
+        let (a0, a1, a2) = (1e5 * 81.0 / 256.0, -1e5 * 9.0 / 8.0, 1e5);
+        let x = |i: f64| 2e-9 * i / 3.0;
+        let mut cusp = BezPath::new();
+        cusp.move_to((x(0.0), a0));
+        cusp.curve_to((x(1.0), a0 + a1 / 3.0), (x(2.0), a0 + 2.0 * a1 / 3.0 + a2 / 3.0), (x(3.0), a0 + a1 + a2));
+        let b = butt.bounds_on(&cusp, cusp.bounding_box());
+        assert!(b.y0 <= -1.0 + 1e-6, "{b:?}");
+        // A curve far shorter than the weight still reaches half the weight above where its
+        // tangent is level.
+        let mut tiny = BezPath::new();
+        tiny.move_to((0.0, 0.9e-12));
+        tiny.curve_to((0.3e-12, -0.5e-12), (1.7e-12, -0.2e-12), (2e-12, 1e-12));
+        let b = butt.bounds_on(&tiny, tiny.bounding_box());
+        assert!(b.y0 <= -1.0 + 1e-9, "{b:?}");
     }
 
     #[test]
