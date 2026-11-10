@@ -291,6 +291,8 @@ fn a_dictionary_edit_is_saved_whole_or_not_at_all() {
         assert!(s.execute(EDIT, &p).is_err(), "{EDIT} refuses a bad list");
         assert!(in_dictionary(&mut s, "pqzvkb"), "{EDIT} changed nothing");
     }
+    let e = s.execute(EDIT, &json!({"add": ["a b"]})).unwrap_err().to_string();
+    assert!(e.contains("must hold single words of at most 64 characters"), "{e}");
     run(&mut s, EDIT, json!({"remove": ["pqzvkb", "pqzvkc"]}));
     assert!(!in_dictionary(&mut s, "pqzvkb") && !in_dictionary(&mut s, "pqzvkc"));
 }

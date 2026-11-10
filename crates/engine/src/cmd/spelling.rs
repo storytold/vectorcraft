@@ -370,9 +370,9 @@ fn word_list(p: &Value, key: &str, command: &str) -> Result<BTreeSet<String>> {
     words
         .iter()
         .map(|w| {
-            w.as_str().and_then(craft_proof::custom_word).ok_or_else(|| {
-                bad(command, format!("`{key}` must hold words of one word, at most {} characters", craft_proof::MAX_CUSTOM_WORD_CHARS))
-            })
+            w.as_str()
+                .and_then(craft_proof::custom_word)
+                .ok_or_else(|| bad(command, format!("`{key}` must hold single words of at most {} characters", craft_proof::MAX_CUSTOM_WORD_CHARS)))
         })
         .collect()
 }
