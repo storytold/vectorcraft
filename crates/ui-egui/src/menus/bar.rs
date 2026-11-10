@@ -127,13 +127,20 @@ pub(super) fn render_items(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Ite
                 ui.menu_button(label, |ui| {
                     widgets::menu_scroll(ui, |ui| {
                         ui.set_min_width(200.0);
-                        render_items(app, ui, children, checks, clicked);
+                        render_items(app, ui, children, checks || only_toggles(app, children), clicked);
                     });
                 });
             }
             Entry::Item(row) => render_row(app, ui, &row, checks, clicked),
         }
     }
+}
+
+/// Whether every item of a submenu can be on or off: a menu drawn without check marks (the canvas
+/// context menu) still shows them there, since its label alone can't say whether it is on.
+fn only_toggles(app: &VectorcraftApp, items: &[Item]) -> bool {
+    let mut rows = items.iter().filter_map(|it| entry(app, it)).filter(|e| !matches!(e, Entry::Sep)).peekable();
+    rows.peek().is_some() && rows.all(|e| matches!(e, Entry::Item(r) if r.checked.is_some()))
 }
 
 /// One menu item: its label (with a check mark, or the room for one, under `checks`), its shortcut,
