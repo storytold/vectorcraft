@@ -21,7 +21,11 @@ pub fn poll(app: &mut VectorcraftApp) {
         return;
     }
     let name = app.session.script_name().unwrap_or_default();
+    let cursor_settings = (app.session.caps_lock, app.session.prefs.use_precise_cursors);
     let Some(result) = app.session.script_pump() else { return };
+    if cursor_settings != (app.session.caps_lock, app.session.prefs.use_precise_cursors) {
+        app.canvas.hover_cursor = None;
+    }
     if app.ui.dialog.as_ref().is_some_and(|d| d.kind == script_run::GROWTH_KIND) {
         app.ui.dialog = None;
     }

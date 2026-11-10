@@ -279,6 +279,12 @@ fn a_failed_run_puts_back_the_choices_its_commands_made() {
         {command: 'no.such', params: {}}]}); } catch (e) {}";
     run(&mut s, source).unwrap();
     assert_eq!(s.global_edit_options, before, "the failed command's choice went back");
+
+    assert!(!s.caps_lock);
+    assert!(run(&mut s, "vc.run('view.capsLock', {on: true}); throw new Error('x');").is_err());
+    assert!(!s.caps_lock, "the Caps Lock state went back");
+    run(&mut s, "vc.run('view.capsLock', {on: true});").unwrap();
+    assert!(s.caps_lock, "a finished run keeps it");
 }
 
 #[test]
@@ -296,8 +302,10 @@ fn a_finished_run_keeps_its_preferences_and_the_ones_the_app_changed_meanwhile()
     paused(&mut s, &format!("vc.run('appearance.setNewArtBasic', {{on: {}}}); for (var i = 0; i < 2000000; i++) {{}}", !basic));
     assert_eq!(s.prefs.new_art_basic, basic, "between slices the app sees the preferences before the run");
     s.prefs.keyboard_increment = increment + 1.0;
+    s.execute("view.capsLock", &json!({"on": true})).unwrap();
     while s.script_pump().is_none() {}
     assert_eq!((s.prefs.new_art_basic, s.prefs.keyboard_increment), (!basic, increment + 1.0));
+    assert!(s.caps_lock, "the Caps Lock state the app reported during the run stays");
 }
 
 #[test]

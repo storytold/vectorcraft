@@ -170,14 +170,17 @@ struct World {
     journal: Journal,
     /// The preferences when the run started.
     start_prefs: crate::Prefs,
+    /// The Caps Lock state when the run started.
+    start_caps_lock: bool,
 }
 
 /// The choices outside the documents that a script's commands can change: the preferences, the
 /// global edit options, the recent URLs, the chosen gradient stop, freeform point and appearance
-/// item, the Eyedropper's sample and the envelope defaults.
+/// item, the Eyedropper's sample, the envelope defaults and the Caps Lock state.
 #[derive(Clone)]
 struct Choices {
     prefs: crate::Prefs,
+    caps_lock: bool,
     eyedropper_sample: Option<Arc<vectorcraft_doc::Node>>,
     global_edit_options: cmd::globaledit::Options,
     recent_urls: Vec<String>,
@@ -191,6 +194,7 @@ impl Choices {
     fn of(s: &Session) -> Self {
         Self {
             prefs: s.prefs.clone(),
+            caps_lock: s.caps_lock,
             eyedropper_sample: s.eyedropper_sample.clone(),
             global_edit_options: s.global_edit_options.clone(),
             recent_urls: s.recent_urls.clone(),
@@ -203,6 +207,7 @@ impl Choices {
 
     fn put(self, s: &mut Session) {
         s.prefs = self.prefs;
+        s.caps_lock = self.caps_lock;
         s.eyedropper_sample = self.eyedropper_sample;
         s.global_edit_options = self.global_edit_options;
         s.recent_urls = self.recent_urls;
@@ -215,6 +220,7 @@ impl Choices {
     fn swap(&mut self, s: &mut Session) {
         use std::mem::swap;
         swap(&mut self.prefs, &mut s.prefs);
+        swap(&mut self.caps_lock, &mut s.caps_lock);
         swap(&mut self.eyedropper_sample, &mut s.eyedropper_sample);
         swap(&mut self.global_edit_options, &mut s.global_edit_options);
         swap(&mut self.recent_urls, &mut s.recent_urls);
@@ -267,6 +273,7 @@ impl World {
             choices: Choices::of(s),
             journal: Journal::default(),
             start_prefs: s.prefs.clone(),
+            start_caps_lock: s.caps_lock,
         }
     }
 
@@ -933,6 +940,10 @@ impl Session {
         // The working copy goes into the session; `job.world` holds the state before the run.
         job.world.swap(self);
         self.prefs = merged_prefs(&job.world.start_prefs, &self.prefs, &job.world.choices.prefs);
+        // The Caps Lock state takes the run's value only when the run changed it.
+        if self.caps_lock == job.world.start_caps_lock {
+            self.caps_lock = job.world.choices.caps_lock;
+        }
         note_ids(self);
         raise_ids(self);
         let start = std::mem::take(&mut job.world.docs);
