@@ -99,8 +99,8 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
         knockout: doc.page_knockout,
         anonymous: false,
         knockout_filters: HashMap::new(),
-        region_boxes: std::cell::OnceCell::new(),
-        art_reach: std::cell::RefCell::default(),
+        region_boxes: None,
+        art_reach: HashMap::new(),
         warnings: vec![],
         id_prefix,
         linked: Vec::new(),
@@ -261,9 +261,9 @@ struct Writer<'a> {
     /// attributes they were defined with.
     knockout_filters: HashMap<String, String>,
     /// The document's symbol boxes, measured once for every mask and filter region.
-    region_boxes: std::cell::OnceCell<vectorcraft_doc::SymbolBoxes<'a>>,
+    region_boxes: Option<vectorcraft_doc::SymbolBoxes<'a>>,
     /// How far each symbol's art paints past its box, by name, once measured for a region.
-    art_reach: std::cell::RefCell<HashMap<String, f64>>,
+    art_reach: HashMap<String, f64>,
     /// The brush library, parsed when the first brushed stroke is written.
     brushes: Option<Vec<vectorcraft_brush::Brush>>,
     /// Features written approximately (once each).

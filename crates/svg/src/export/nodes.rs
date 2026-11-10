@@ -1,11 +1,9 @@
-use std::collections::HashMap;
-
 use super::output::{sanitize_id, valid_xml_value, xml_attr_escape, xml_attr_valid};
 use super::paint::{StrokePlan, has_raster, pixel_gradient};
 use super::text::OUTLINE_TOLERANCE;
 use super::{
-    Affine, AppearanceItem, BezPath, BlendMode, Document, FillRule, Node, NodeKind, Paint, PathData, Props, Rect, StrokeAlign, StrokeLayer, Writer,
-    Written, WrittenShape, blend_css, css, fmt_num, stroke, xml_escape,
+    Affine, AppearanceItem, BezPath, BlendMode, Document, FillRule, HashMap, Node, NodeKind, Paint, PathData, Props, Rect, StrokeAlign, StrokeLayer,
+    Writer, Written, WrittenShape, blend_css, css, fmt_num, stroke, xml_escape,
 };
 
 /// A symbol's `<symbol>` def and the instance transforms that can `<use>` it.
@@ -409,17 +407,27 @@ impl Writer<'_> {
 
     /// The `x`, `y`, `width` and `height` of a mask or filter region over `nodes`, in the current
     /// user space: the box of everything they paint ([`Self::paint_reach`]), 2 larger on each
-    /// side for antialiasing. [`BIG`] when none of them has a box, or when one nests deeper than
-    /// [`MAX_REACH_DEPTH`]. The art of a symbol instance written in place keeps its strokes and
-    /// effects at their own size while the instance scales its geometry, so the region also covers
-    /// the geometry's box, placed, grown by the strokes' and effects' reach unscaled.
-    fn region_attrs(&self, nodes: &[&Node]) -> String {
-        let symbols = self.region_boxes.get_or_init(|| self.doc.symbol_boxes());
-        let mut art_reach = self.art_reach.borrow_mut();
+    /// side for antialiasing. [`BIG`] when none of them has a box, when one holds type (a reader
+    /// sets live type in its own font, which can be wider, and type on a path is measured by its
+    /// path), or when one nests deeper than [`MAX_REACH_DEPTH`]. The art of a symbol instance
+    /// written in place keeps its strokes and effects at their own size while the instance scales
+    /// its geometry, so the region also covers the geometry's box, placed, grown by the strokes'
+    /// and effects' reach unscaled.
+    fn region_attrs(&mut self, nodes: &[&Node]) -> String {
+        let symbols = self.region_boxes.take().unwrap_or_else(|| self.doc.symbol_boxes());
+        let mut art_reach = std::mem::take(&mut self.art_reach);
+        let region = self.region_of(&symbols, &mut art_reach, nodes);
+        self.region_boxes = Some(symbols);
+        self.art_reach = art_reach;
+        region
+    }
+
+    /// [`Self::region_attrs`] with the document's symbol boxes and the symbols' art reach so far.
+    fn region_of(&self, symbols: &vectorcraft_doc::SymbolBoxes, art_reach: &mut HashMap<String, f64>, nodes: &[&Node]) -> String {
         let mut painted: Option<Rect> = None;
         for n in nodes {
             let Some(v) = n.visual_bounds_with(symbols) else { continue };
-            let Some(r) = self.paint_reach(symbols, &mut art_reach, n, v, 0) else {
+            let Some(r) = self.paint_reach(symbols, art_reach, n, v, 0) else {
                 return BIG.to_string();
             };
             let g = n.geometric_bounds_with(symbols).unwrap_or(v);
@@ -440,8 +448,10 @@ impl Writer<'_> {
     /// how far brush art can paint past its brushed strokes (`16 × w + 8` for the widest brushed
     /// stroke `w`, as the canvas allows for it), and the most that one of its members or its
     /// symbol's art reaches past its own box, spread by its own effects. `art_reach` keeps each
-    /// symbol's art reach by name once measured, so art used many times is measured once. `None`
-    /// when members or symbol art nest deeper than [`MAX_REACH_DEPTH`].
+    /// symbol's art reach by name once measured, so art used many times is measured once. A live
+    /// object is measured as the art it is written as: expanded on its own, as [`Self::node`]
+    /// expands it, so with the same limits. `None` when `n`, its members or its symbol's art hold
+    /// type, or nest deeper than [`MAX_REACH_DEPTH`].
     fn paint_reach(
         &self,
         symbols: &vectorcraft_doc::SymbolBoxes,
@@ -451,6 +461,10 @@ impl Writer<'_> {
         depth: u32,
     ) -> Option<f64> {
         use vectorcraft_effects::RasterFx;
+        // Type draws past its measured box in a reader's own font.
+        if matches!(n.kind, NodeKind::Text(_)) {
+            return None;
+        }
         // An Outer Glow's silhouette grows by a quarter of a pixel of the document's raster grid first.
         let grow = 18.0 / self.doc.raster_ppi();
         let reach = |effects: &[vectorcraft_doc::Effect]| -> f64 {
@@ -468,6 +482,15 @@ impl Writer<'_> {
             0.0
         };
         let own = reach(&n.appearance.effects) + items + brush;
+        if vectorcraft_doc::live::is_live(n) {
+            if depth >= MAX_REACH_DEPTH {
+                return None;
+            }
+            let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
+            let Some(gb) = g.visual_bounds_with(symbols) else { return Some(own) };
+            let past = [b.x0 - gb.x0, b.y0 - gb.y0, gb.x1 - b.x1, gb.y1 - b.y1].into_iter().fold(0.0, f64::max);
+            return Some(own + past + self.paint_reach(symbols, art_reach, &g, gb, depth + 1)?);
+        }
         let symbol = match &n.kind {
             NodeKind::SymbolInstance { symbol, xf } => self.doc.symbols.iter().find(|s| s.name == *symbol).map(|s| (s, xf)),
             _ => None,
