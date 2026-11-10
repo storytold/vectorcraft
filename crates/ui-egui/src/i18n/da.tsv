@@ -712,6 +712,13 @@
 	Other Library…	Andet bibliotek…
 	Graphic Style Libraries	Biblioteker med grafiske stile
 	Shadows and Glows	Skygger og gløder
+	Game HUD	Spil-HUD
+	Health Fill	Helbred
+	Mana Glow	Mana
+	Damage Flash	Skade
+	Quest Outline	Quest
+	Coin Shine	Mønt
+	Boss Alert	Boss
 	Outlines and Rules	Konturer og linjer
 	Hand-Drawn	Håndtegnet
 	Gradient Finishes	Gradientfinish
@@ -5860,6 +5867,11 @@ axis	Y Axis	Y-akse
 	Button	Knap
 	Panel	Panel
 	UI Frames	UI-rammer
+	Map Markers	Kortmarkører
+	Pin	Nål
+	Flag	Flag
+	Crosshair	Sigtekorn
+	Checkpoint	Kontrolpunkt
 	Open Symbol Library	Åbn symbolbibliotek
 	Save Symbol Library	Gem symbolbibliotek
 	Save Symbol Library…	Gem symbolbibliotek…

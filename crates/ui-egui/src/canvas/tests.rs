@@ -1567,6 +1567,73 @@ fn cmd_with_another_tool_drags_with_the_selection_tool_used_last() {
     assert_eq!(cmd_drag(&mut app, inside, inside), "selection");
 }
 
+/// #6369: only the selection box remains over the temporary halftone, and the original
+/// selection's marks come back when Preview is turned off or the dialog is cancelled.
+#[test]
+fn halftone_preview_hides_dot_outlines_and_keeps_selection_bounds() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.ui.task_bar = false;
+    app.ui.view.rulers = false;
+    app.ui.view.bounding_box = true;
+    let original = app.run("shape.ellipse", json!({"x": 50, "y": 50, "width": 120, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    let original = vectorcraft_doc::NodeId(original);
+    app.run("paint.setFill", json!({"color": "#000000"})).unwrap();
+    let canvas = egui::Context::default();
+    let dialog = egui::Context::default();
+    let dialog_frame = |app: &mut VectorcraftApp| {
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
+        let mut out = dialog.run_ui(raw, |ui| crate::dialogs::show(app, ui.ctx()));
+        out.textures_delta.clear();
+    };
+    let has_interior_marks = |app: &mut VectorcraftApp| {
+        frame(app, &canvas, vec![]);
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let corners = app.selection_box().unwrap().corners().map(|p| xf.to_screen(p));
+        let inside = egui::Rect::from_points(&corners).shrink(10.0);
+        let st = app.session.active().unwrap();
+        let color = c32(st.doc.layer_color(st.selection.objects[0]));
+        let points = drawn_in(app, &canvas, color, 1.0);
+        assert!(corners.iter().all(|p| points.contains(p)), "the outer selection box is still drawn");
+        points.iter().any(|p| inside.contains(*p))
+    };
+    assert!(has_interior_marks(&mut app), "the selected ellipse shows its outline");
+
+    app.run("ui.menuDialog", json!({"command": "object.vectorHalftone"})).unwrap();
+    dialog_frame(&mut app);
+    assert!(app.session.in_interaction());
+    assert_ne!(app.session.active().unwrap().selection.objects, vec![original], "the halftone is previewed and selected");
+    assert!(!has_interior_marks(&mut app), "selection marks cover the halftone dots");
+
+    let set_preview = |app: &mut VectorcraftApp, on| {
+        crate::dialogs::set_field(app.ui.dialog.as_mut().unwrap(), "preview".into(), json!(on));
+        dialog_frame(app);
+    };
+    set_preview(&mut app, false);
+    assert_eq!(app.session.active().unwrap().selection.objects, vec![original]);
+    assert!(has_interior_marks(&mut app), "turning Preview off restores the outline");
+
+    set_preview(&mut app, true);
+    assert!(!has_interior_marks(&mut app), "turning Preview back on hides the dot marks again");
+    crate::dialogs::cancel(&mut app);
+    assert_eq!(app.session.active().unwrap().selection.objects, vec![original]);
+    assert!(has_interior_marks(&mut app), "Cancel restores the outline");
+
+    app.run("ui.menuDialog", json!({"command": "object.move"})).unwrap();
+    crate::dialogs::set_field(app.ui.dialog.as_mut().unwrap(), "preview".into(), json!(true));
+    dialog_frame(&mut app);
+    assert!(app.session.in_interaction());
+    assert!(has_interior_marks(&mut app), "another dialog's preview keeps selection marks");
+    crate::dialogs::cancel(&mut app);
+
+    app.run("ui.menuDialog", json!({"command": "object.vectorHalftone"})).unwrap();
+    dialog_frame(&mut app);
+    assert!(!has_interior_marks(&mut app));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none() && !app.session.in_interaction());
+    assert!(has_interior_marks(&mut app), "OK restores ordinary selection marks on the applied dots");
+}
+
 /// #525: a selection with more anchors than the overlay draws (a traced photo) shows its bounds,
 /// not every outline and anchor, which made a mesh larger than the GPU takes; an ordinary one
 /// still shows its outline and anchors.

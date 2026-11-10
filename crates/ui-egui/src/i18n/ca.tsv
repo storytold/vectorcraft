@@ -443,6 +443,11 @@ antiAlias	Sharp	Nítid
 	Button	Botó
 	Panel	Panell
 	UI Frames	Marcs d’IU
+	Map Markers	Marcadors de mapa
+	Pin	Xinxeta
+	Flag	Bandera
+	Crosshair	Punt de mira
+	Checkpoint	Punt de control
 	Batch	Lot
 	Batch…	Lot…
 	Bearing	Orientació
@@ -3921,6 +3926,13 @@ digits	Malayalam	Malaiàlam
 	Shading	Sombra
 	Shadow Intensity	Intensitat de l’ombra
 	Shadows and Glows	Ombres i resplendors
+	Game HUD	HUD de joc
+	Health Fill	Salut
+	Mana Glow	Mana
+	Damage Flash	Dany
+	Quest Outline	Missió
+	Coin Shine	Moneda
+	Boss Alert	Cap
 	Shape	Forma
 	Shape Builder	Constructor de formes
 	Shape Builder Delete	Suprimeix del constructor de formes

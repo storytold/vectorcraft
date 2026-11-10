@@ -3139,6 +3139,13 @@ digits	Malayalam	Malayálam
 	Settings…	Ajustes…
 	Setup…	Configuración…
 	Shadows and Glows	Sombras y resplandores
+	Game HUD	HUD de juego
+	Health Fill	Salud
+	Mana Glow	Maná
+	Damage Flash	Daño
+	Quest Outline	Misión
+	Coin Shine	Moneda
+	Boss Alert	Jefe
 	Shape	Forma
 	Shape Builder	Generador de formas
 	Shape Builder Regions	Regiones del generador de formas
@@ -6008,6 +6015,11 @@ axis	Y Axis	Eje Y
 	Button	Botón
 	Panel	Panel
 	UI Frames	Marcos de IU
+	Map Markers	Marcadores de mapa
+	Pin	Chincheta
+	Flag	Bandera
+	Crosshair	Punto de mira
+	Checkpoint	Punto de control
 	Open Symbol Library	Abrir biblioteca de símbolos
 	Save Symbol Library	Guardar biblioteca de símbolos
 	Save Symbol Library…	Guardar biblioteca de símbolos…

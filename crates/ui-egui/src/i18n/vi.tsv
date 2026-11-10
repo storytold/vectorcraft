@@ -3499,6 +3499,13 @@ mark-style	Japanese	Kiểu Nhật
 	Setup…	Thiết lập…
 	Shading	Tô bóng
 	Shadows and Glows	Bóng và ánh sáng
+	Game HUD	HUD trò chơi
+	Health Fill	Máu
+	Mana Glow	Mana
+	Damage Flash	Sát thương
+	Quest Outline	Nhiệm vụ
+	Coin Shine	Xu
+	Boss Alert	Trùm
 	Shape	Hình dạng
 	Shape Builder	Tạo hình dạng
 	Shape Builder Regions	Vùng Tạo hình dạng
@@ -5664,6 +5671,11 @@ axis	Y Axis	Trục Y
 	Button	Nút
 	Panel	Bảng
 	UI Frames	Khung UI
+	Map Markers	Đánh dấu bản đồ
+	Pin	Ghim
+	Flag	Cờ
+	Crosshair	Tâm ngắm
+	Checkpoint	Điểm kiểm tra
 	Open Symbol Library	Mở thư viện ký hiệu
 	Save Symbol Library	Lưu thư viện ký hiệu
 	Save Symbol Library…	Lưu thư viện ký hiệu…

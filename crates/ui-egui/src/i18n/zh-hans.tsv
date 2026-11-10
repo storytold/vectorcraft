@@ -3005,6 +3005,13 @@ digits	Malayalam	马拉雅拉姆数字
 	Settings…	设置…
 	Setup…	设置…
 	Shadows and Glows	阴影与光晕
+	Game HUD	游戏 HUD
+	Health Fill	生命
+	Mana Glow	法力
+	Damage Flash	伤害
+	Quest Outline	任务
+	Coin Shine	金币
+	Boss Alert	首领
 	Shape	形状
 	Shape Builder	形状生成器
 	Shape Builder Regions	形状生成器区域
@@ -5904,6 +5911,11 @@ axis	Y Axis	Y 轴
 	Button	按钮
 	Panel	面板
 	UI Frames	UI 框架
+	Map Markers	地图标记
+	Pin	图钉
+	Flag	旗帜
+	Crosshair	准星
+	Checkpoint	检查点
 	Open Symbol Library	打开符号库
 	Save Symbol Library	保存符号库
 	Save Symbol Library…	保存符号库…

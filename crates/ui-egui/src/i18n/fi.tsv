@@ -766,6 +766,13 @@
 	Other Library…	Muu kirjasto…
 	Graphic Style Libraries	Grafiikkatyylikirjastot
 	Shadows and Glows	Varjot ja hehkut
+	Game HUD	Peli-HUD
+	Health Fill	Terveys
+	Mana Glow	Mana
+	Damage Flash	Vahinko
+	Quest Outline	Tehtävä
+	Coin Shine	Kolikko
+	Boss Alert	Bossi
 	Outlines and Rules	Ääriviivat ja viivat
 	Hand-Drawn	Käsin piirretyt
 	Gradient Finishes	Liukuväriviimeistelyt
@@ -6096,6 +6103,11 @@ axis	Y Axis	Y-akseli
 	Button	Painike
 	Panel	Paneeli
 	UI Frames	UI-kehykset
+	Map Markers	Karttamerkit
+	Pin	Nasta
+	Flag	Lippu
+	Crosshair	Tähtäin
+	Checkpoint	Tarkastuskohta
 	Open Symbol Library	Avaa symbolikirjasto
 	Save Symbol Library	Tallenna symbolikirjasto
 	Save Symbol Library…	Tallenna symbolikirjasto…

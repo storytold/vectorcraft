@@ -157,6 +157,7 @@ pub struct BuiltinSymbolLibrary {
 pub const BUILTIN: &[BuiltinSymbolLibrary] = &[
     BuiltinSymbolLibrary { id: "basic-shapes", name: "Basic Shapes", make: basic_shapes },
     BuiltinSymbolLibrary { id: "ui-frames", name: "UI Frames", make: ui_frames },
+    BuiltinSymbolLibrary { id: "map-markers", name: "Map Markers", make: map_markers },
 ];
 
 /// Built-in library `id`, made once.
@@ -219,6 +220,33 @@ fn ui_frames() -> SymbolLibrary {
     }
     doc.title = "UI Frames".into();
     SymbolLibrary { name: "UI Frames".into(), doc }
+}
+
+/// Map Markers: pin, flag, crosshair and checkpoint for map/HUD art (original, no 9-slice).
+fn map_markers() -> SymbolLibrary {
+    let c = Point::ZERO;
+    let pin = [(0.0, 22.0), (-9.0, 4.0), (-12.0, -6.0), (-8.0, -16.0), (0.0, -20.0), (8.0, -16.0), (12.0, -6.0), (9.0, 4.0)];
+    let flag = [(-16.0, 22.0), (-12.0, 22.0), (-12.0, -8.0), (18.0, -14.0), (-12.0, -20.0), (-12.0, -22.0), (-16.0, -22.0)];
+    let pin: Vec<Point> = pin.iter().map(|&(x, y)| Point::new(x, y)).collect();
+    let flag: Vec<Point> = flag.iter().map(|&(x, y)| Point::new(x, y)).collect();
+    let markers = [
+        ("Pin", vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&pin, true)), "#e74c3c"),
+        ("Flag", vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&flag, true)), "#3498db"),
+        ("Crosshair", shapes::star(c, 20.0, 5.0, 4, 0.0), "#2c3e50"),
+        ("Checkpoint", shapes::polygon(c, 18.0, 4, 0.0), "#27ae60"),
+    ];
+    let mut doc = Document::new(100.0, 100.0);
+    for (name, path, hex) in markers {
+        let fill = Color::from_hex(hex).unwrap_or(Color::BLACK);
+        let edge = fill.lerp(&Color::BLACK, 0.35);
+        let id = doc.alloc_id();
+        let art = Node::path(id, path, Appearance::basic(Paint::solid(fill), Paint::solid(edge), 1.25));
+        let Ok((art, size, _)) = normalize(art) else { continue };
+        doc.symbols.push(Symbol { dynamic: false, name: name.into(), art: Arc::new(art) });
+        set_natural_size(&mut doc, name, Some(size));
+    }
+    doc.title = "Map Markers".into();
+    SymbolLibrary { name: "Map Markers".into(), doc }
 }
 
 /// An instance of symbol `name` (what the resource gathering follows).

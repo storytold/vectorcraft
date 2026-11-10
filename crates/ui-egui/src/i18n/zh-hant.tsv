@@ -4090,6 +4090,13 @@ digits	Malayalam	馬來亞拉姆數字
 	Settings…	設定…
 	Setup…	設定…
 	Shadows and Glows	陰影與光暈
+	Game HUD	遊戲 HUD
+	Health Fill	生命
+	Mana Glow	魔力
+	Damage Flash	傷害
+	Quest Outline	任務
+	Coin Shine	金幣
+	Boss Alert	首領
 	Shape	形狀
 	Shape Builder	形狀建立
 	Shape Builder Regions	形狀建立區域
@@ -5701,6 +5708,11 @@ axis	Y Axis	Y 軸
 	Button	按鈕
 	Panel	面板
 	UI Frames	UI 框架
+	Map Markers	地圖標記
+	Pin	圖釘
+	Flag	旗幟
+	Crosshair	準星
+	Checkpoint	檢查點
 	Open Symbol Library	開啟符號資料庫
 	Save Symbol Library	儲存符號資料庫
 	Save Symbol Library…	儲存符號資料庫…

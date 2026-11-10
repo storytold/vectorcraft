@@ -766,6 +766,13 @@
 	Other Library…	Druga biblioteka…
 	Graphic Style Libraries	Biblioteke grafičkih stilova
 	Shadows and Glows	Sjene i sjajevi
+	Game HUD	Igraći HUD
+	Health Fill	Zdravlje
+	Mana Glow	Mana
+	Damage Flash	Šteta
+	Quest Outline	Zadatak
+	Coin Shine	Novčić
+	Boss Alert	Bos
 	Outlines and Rules	Obrisi i linije
 	Hand-Drawn	Ručno crtano
 	Gradient Finishes	Gradijentne završnice
@@ -5889,6 +5896,11 @@ axis	Y Axis	Y osa
 	Button	Dugme
 	Panel	Panel
 	UI Frames	UI okviri
+	Map Markers	Markeri mape
+	Pin	Pin
+	Flag	Zastava
+	Crosshair	Nišan
+	Checkpoint	Kontrolna tačka
 	Open Symbol Library	Otvori biblioteku simbola
 	Save Symbol Library	Sačuvaj biblioteku simbola
 	Save Symbol Library…	Sačuvaj biblioteku simbola…

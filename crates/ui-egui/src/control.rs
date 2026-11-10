@@ -610,10 +610,116 @@ pub(crate) fn save_screenshot_with_limit(
 #[cfg(test)]
 mod tests;
 
+/// The window and coordinate mapping where a control-channel Rotate View drag began.
+#[derive(Clone, Copy)]
+pub(crate) struct RotateViewPress {
+    window: (u64, u32),
+    document_resets: u64,
+    xf: Xf,
+    start_angle: f64,
+    start_rotation: f64,
+}
+
+/// Rotate View belongs to the canvas, not the engine's placeholder tool. Keep its press mapping
+/// across requests so document-coordinate drags do not move again as the view turns underneath.
+fn rotate_view_pointer(
+    app: &mut VectorcraftApp,
+    kind: PointerKind,
+    position: vectorcraft_geom::Point,
+    screen: bool,
+    shift: bool,
+) -> Result<(), String> {
+    let window = app.session.active().zip(crate::doc_windows::current(app)).map(|(d, w)| (d.uid, w.1)).ok_or("no document")?;
+    let document_resets = app.session.tool_resets();
+    let stored = if kind == PointerKind::Down { None } else { app.control_rotate_press };
+    if kind == PointerKind::Drag && stored.is_none() {
+        return Err("Rotate View needs a down event before a drag".into());
+    }
+    let mut press = match stored {
+        Some(press) => press,
+        None => {
+            let rect = app.canvas_rect.ok_or("no canvas yet")?;
+            let view = app.view().ok_or("no document")?;
+            RotateViewPress { window, document_resets, xf: Xf::new(rect, view), start_angle: 0.0, start_rotation: view.rotation }
+        }
+    };
+    // A gesture cannot turn a different document/view or resume after its document was reset.
+    if (press.window, press.document_resets) != (window, document_resets) {
+        return Err("the Rotate View gesture's window or document changed".into());
+    }
+    let point = if screen { egui::pos2(position.x as f32, position.y as f32) } else { press.xf.to_screen(position) };
+    let center = press.xf.rect.center();
+    if !point.is_finite() || !center.is_finite() {
+        return Err("Rotate View needs finite canvas coordinates".into());
+    }
+    match kind {
+        PointerKind::Down => {
+            press.start_angle = (point.y - center.y).atan2(point.x - center.x) as f64;
+            app.control_rotate_press = Some(press);
+        }
+        PointerKind::Drag => {
+            app.view_mut().ok_or("no document")?.rotation =
+                crate::canvas::drag_rotation(center, point, press.start_angle, press.start_rotation, shift);
+        }
+        PointerKind::Up => {
+            app.control_rotate_press = None;
+        }
+        PointerKind::Move | PointerKind::DoubleClick => {}
+    }
+    Ok(())
+}
+
+/// A Rotate View packet accepts only the documented boolean modifier fields.
+fn validate_rotate_view_mods(value: Option<&Value>) -> Result<(), String> {
+    let Some(value) = value else { return Ok(()) };
+    let Some(fields) = value.as_object() else { return Err("Rotate View `mods` must be an object of booleans".into()) };
+    if fields.iter().any(|(key, value)| !matches!(key.as_str(), "shift" | "alt" | "cmd" | "ctrl" | "space") || !value.is_boolean()) {
+        return Err("Rotate View `mods` accepts only boolean shift, alt, cmd, ctrl and space".into());
+    }
+    Ok(())
+}
+
+/// Reject malformed coordinates and modifiers before any event can change the angle or press.
+fn validate_rotate_view_events(params: &Value, events: &[Value]) -> Result<(), String> {
+    validate_rotate_view_mods(params.get("mods"))?;
+    for event in events {
+        for axis in ["x", "y"] {
+            if event.get(axis).and_then(Value::as_f64).filter(|value| value.is_finite()).is_none() {
+                return Err(format!("Rotate View `{axis}` must be a finite number"));
+            }
+        }
+        validate_rotate_view_mods(event.get("mods"))?;
+        if event.get("space").is_some_and(|space| !matches!(space.as_str(), Some("doc" | "screen"))) {
+            return Err("Rotate View `space` must be doc or screen".into());
+        }
+    }
+    Ok(())
+}
+
 /// `ui.pointer`: pointer events through the tools.
 fn pointer_events(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest) -> Outcome {
+    let rotating = app.session.tool_id() == "rotateView";
+    let before = if rotating { app.view().map(|view| view.rotation) } else { None };
+    let outcome = pointer_events_inner(app, ctx, req);
+    if rotating && matches!(&outcome, Outcome::Done(reply) if reply.get("ok").and_then(Value::as_bool) == Some(false)) {
+        // A failed packet must neither leave a partial turn nor allow a later drag to resume it.
+        app.control_rotate_press = None;
+        if let (Some(before), Some(view)) = (before, app.view_mut()) {
+            view.rotation = before;
+        }
+        ctx.request_repaint();
+    }
+    outcome
+}
+
+/// Apply a pointer packet after Rotate View validation; other tools retain their existing routing.
+fn pointer_events_inner(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest) -> Outcome {
     let p = &req.params;
     let Some(events) = p.get("events").and_then(Value::as_array) else { return err("missing `events`") };
+    let rotating = app.session.tool_id() == "rotateView";
+    if rotating && let Err(error) = validate_rotate_view_events(p, events) {
+        return err(error);
+    }
     let base_mods: Mods = p.get("mods").and_then(|m| serde_json::from_value(m.clone()).ok()).unwrap_or_default();
     let view = app.view_info();
     let xf = app.canvas_rect.zip(app.view().copied()).map(|(rect, v)| Xf::new(rect, &v));
@@ -636,6 +742,13 @@ fn pointer_events(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRe
         let x = e.get("x").and_then(Value::as_f64).unwrap_or(0.0);
         let y = e.get("y").and_then(Value::as_f64).unwrap_or(0.0);
         let screen = e.get("space").and_then(Value::as_str) == Some("screen");
+        let mods = e.get("mods").and_then(|m| serde_json::from_value(m.clone()).ok()).unwrap_or(base_mods);
+        if rotating {
+            if let Err(e) = rotate_view_pointer(app, kind, vectorcraft_geom::Point::new(x, y), screen, mods.shift) {
+                return err(e);
+            }
+            continue;
+        }
         let pos = if screen {
             match xf {
                 Some(xf) => xf.to_doc(egui::pos2(x as f32, y as f32)),
@@ -644,7 +757,6 @@ fn pointer_events(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRe
         } else {
             vectorcraft_geom::Point::new(x, y)
         };
-        let mods = e.get("mods").and_then(|m| serde_json::from_value(m.clone()).ok()).unwrap_or(base_mods);
         // A tilt given in screen axes leans the same way on the page as on the screen.
         let pen = PointerEvent::json_pen(e).map(|q| match xf {
             Some(xf) if screen => crate::canvas::pose_on_page(q, &xf),

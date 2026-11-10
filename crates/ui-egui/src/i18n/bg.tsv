@@ -3052,6 +3052,13 @@ digits	Malayalam	Малаялам
 	Settings…	Настройки…
 	Setup…	Настройка…
 	Shadows and Glows	Сенки и блясъци
+	Game HUD	Игрови HUD
+	Health Fill	Здраве
+	Mana Glow	Мана
+	Damage Flash	Щета
+	Quest Outline	Квест
+	Coin Shine	Монета
+	Boss Alert	Бос
 	Shape	Фигура
 	Shape Builder	Създател на фигури
 	Shape Builder Regions	Области на създателя на фигури
@@ -5845,6 +5852,11 @@ axis	Y Axis	Y ос
 	Button	Бутон
 	Panel	Панел
 	UI Frames	UI рамки
+	Map Markers	Маркери на карта
+	Pin	Карфица
+	Flag	Флаг
+	Crosshair	Мерник
+	Checkpoint	Контролна точка
 	Open Symbol Library	Отваряне на библиотека със символи
 	Save Symbol Library	Запазване на библиотека със символи
 	Save Symbol Library…	Запази библиотека със символи…

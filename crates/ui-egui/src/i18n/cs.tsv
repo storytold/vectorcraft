@@ -775,6 +775,13 @@
 	Other Library…	Jiná knihovna…
 	Graphic Style Libraries	Knihovny grafických stylů
 	Shadows and Glows	Stíny a záře
+	Game HUD	Herní HUD
+	Health Fill	Život
+	Mana Glow	Mana
+	Damage Flash	Poškození
+	Quest Outline	Úkol
+	Coin Shine	Mince
+	Boss Alert	Boss
 	Outlines and Rules	Obrysy a linky
 	Hand-Drawn	Ručně kreslené
 	Gradient Finishes	Přechodové povrchy
@@ -6066,6 +6073,11 @@ axis	Y Axis	osa Y
 	Button	Tlačítko
 	Panel	Panel
 	UI Frames	Rámce UI
+	Map Markers	Mapové značky
+	Pin	Špendlík
+	Flag	Vlajka
+	Crosshair	Zaměřovač
+	Checkpoint	Kontrolní bod
 	Open Symbol Library	Otevřít knihovnu symbolů
 	Save Symbol Library	Uložit knihovnu symbolů
 	Save Symbol Library…	Uložit knihovnu symbolů…

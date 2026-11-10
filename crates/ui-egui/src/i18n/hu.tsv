@@ -3753,6 +3753,13 @@ mark-style	Japanese	Japán
 	Shades of Gray	Szürkeárnyalatok
 	Shading	Árnyékolás
 	Shadows and Glows	Árnyékok és ragyogások
+	Game HUD	Játék HUD
+	Health Fill	Életerő
+	Mana Glow	Mana
+	Damage Flash	Sebzés
+	Quest Outline	Küldetés
+	Coin Shine	Érme
+	Boss Alert	Főellenség
 	Shape	Alakzat
 	Shape Builder	Alakzatépítő
 	Shape Builder Regions	Alakzatépítő területei
@@ -6049,6 +6056,11 @@ axis	Y Axis	Y tengely
 	Button	Gomb
 	Panel	Panel
 	UI Frames	UI keretek
+	Map Markers	Térképjelölők
+	Pin	Gombostű
+	Flag	Zászló
+	Crosshair	Célkereszt
+	Checkpoint	Ellenőrzőpont
 	Open Symbol Library	Szimbólumkönyvtár megnyitása
 	Save Symbol Library	Szimbólumkönyvtár mentése
 	Save Symbol Library…	Szimbólumkönyvtár mentése…

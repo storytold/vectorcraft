@@ -3601,6 +3601,13 @@ digits	Malayalam	Μαλαγιάλαμ
 	Set Zoom	Ορισμός ζουμ
 	Setup…	Ρύθμιση…
 	Shadows and Glows	Σκιές και λάμψεις
+	Game HUD	HUD παιχνιδιού
+	Health Fill	Υγεία
+	Mana Glow	Μάνα
+	Damage Flash	Ζημιά
+	Quest Outline	Αποστολή
+	Coin Shine	Νόμισμα
+	Boss Alert	Αρχηγός
 	Shape Builder Regions	Περιοχές δημιουργίας σχημάτων
 	Shape Effects	Εφέ σχημάτων
 	Shape Mode	Λειτουργία σχήματος
@@ -6017,6 +6024,11 @@ axis	Y Axis	Άξονας Y
 	Button	Κουμπί
 	Panel	Πίνακας
 	UI Frames	Πλαίσια UI
+	Map Markers	Δείκτες χάρτη
+	Pin	Καρφίτσα
+	Flag	Σημαία
+	Crosshair	Σταυρόνημα
+	Checkpoint	Σημείο ελέγχου
 	Open Symbol Library	Άνοιγμα βιβλιοθήκης συμβόλων
 	Save Symbol Library	Αποθήκευση βιβλιοθήκης συμβόλων
 	Save Symbol Library…	Αποθήκευση βιβλιοθήκης συμβόλων…

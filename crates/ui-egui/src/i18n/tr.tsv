@@ -2967,6 +2967,13 @@ digits	Malayalam	Malayalam
 	Settings…	Ayarlar…
 	Setup…	Kurulum…
 	Shadows and Glows	Gölgeler ve Parıltılar
+	Game HUD	Oyun HUD
+	Health Fill	Can
+	Mana Glow	Mana
+	Damage Flash	Hasar
+	Quest Outline	Görev
+	Coin Shine	Jeton
+	Boss Alert	Boss
 	Shape	Şekil
 	Shape Builder	Şekil Oluşturucu
 	Shape Builder Regions	Şekil Oluşturucu Bölgeleri
@@ -6022,6 +6029,11 @@ axis	Y Axis	Y ekseni
 	Button	Düğme
 	Panel	Panel
 	UI Frames	UI çerçeveleri
+	Map Markers	Harita İşaretleri
+	Pin	İğne
+	Flag	Bayrak
+	Crosshair	Nişangah
+	Checkpoint	Kontrol noktası
 	Open Symbol Library	Sembol Kitaplığını Aç
 	Save Symbol Library	Sembol Kitaplığını Kaydet
 	Save Symbol Library…	Sembol Kitaplığını Kaydet…

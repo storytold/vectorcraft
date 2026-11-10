@@ -2631,6 +2631,13 @@ digits	Malayalam	Malaiala
 	Set the selected color to the current color	Definir a cor selecionada para a cor atual
 	Setup…	Configuração…
 	Shadows and Glows	Sombras e Brilhos
+	Game HUD	HUD de jogo
+	Health Fill	Vida
+	Mana Glow	Mana
+	Damage Flash	Dano
+	Quest Outline	Missão
+	Coin Shine	Moeda
+	Boss Alert	Chefe
 	Shape	Forma
 	Shape Builder	Construtor de Formas
 	Shape Builder Regions	Regiões do Construtor de Formas
@@ -5981,6 +5988,11 @@ axis	Y Axis	Eixo Y
 	Button	Botão
 	Panel	Painel
 	UI Frames	Molduras de IU
+	Map Markers	Marcadores de mapa
+	Pin	Alfinete
+	Flag	Bandeira
+	Crosshair	Mira
+	Checkpoint	Ponto de verificação
 	Open Symbol Library	Abrir Biblioteca de Símbolos
 	Save Symbol Library	Salvar Biblioteca de Símbolos
 	Save Symbol Library…	Salvar Biblioteca de Símbolos…

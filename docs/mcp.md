@@ -2791,7 +2791,7 @@ as a value left out.
 ## Graphic style libraries
 
 Graphic style libraries are read-only sets of graphic styles generated in code (Shadows and Glows, Outlines and
-Rules, Hand-Drawn, Gradient Finishes, Shape Effects, Blends and Transparency). `graphicStyle.libraries` lists them
+Rules, Hand-Drawn, Gradient Finishes, Shape Effects, Blends and Transparency, Game HUD). `graphicStyle.libraries` lists them
 (`id`, `name`, `category`: `builtIn`, `user` or `loaded`, `count`) and `graphicStyle.library {library}` returns one's
 styles in the `graphicStyle.list` shape (`library` is an id or a name). `graphicStyle.addFromLibrary {library, name? |
 names?}` copies styles into the document's Graphic Styles as one undo step (no names: the whole library); styles the
@@ -3324,11 +3324,13 @@ and `stroke.widthProfile.reset` removes every saved one. `stroke.set {profile}` 
 
 ## Arrowheads
 
-`stroke.set {startArrow, endArrow}` takes any of 40 generated heads by name (the params doc lists them; `null` for
-none): arrows (`Arrow`, `Barbed`, `Concave`, `DoubleArrow`, `HalfArrowLeft`/`Right`, `Chevron`, `Feather`,
+`stroke.set {startArrow, endArrow}` takes any of 41 generated heads by name (the params doc lists them; `null` for
+none): arrows (`Arrow`, `LineArrow`, `Barbed`, `Concave`, `DoubleArrow`, `HalfArrowLeft`/`Right`, `Chevron`, `Feather`,
 `Swallowtail`…), filled and open shapes (`Triangle`, `Circle`, `Oval`, `Target`, `Tag`, `Diamond`, `Hexagon`, `Star`,
 the `…Open` rings…) and marks (`Bar`, `DoubleBar`, `DotOnBar`, `Slash`, `DoubleSlash`, `Bracket`, `Fork`, `Cross`,
-`Plus`). Each head fits a box about four times its weight (stroke weight × `arrowScale`) long and wide.
+`Plus`). Each head fits a box about four times its weight long and wide. A head's weight is the stroke weight scaled by
+`arrowScale`, at least 0.25 pt. `LineArrow` has two arms of the head's weight (the line's weight at 100 % for lines of
+0.25 pt or more) at right angles and spreads twice as wide.
 
 ## Stroke bounds and clicks
 
@@ -4191,7 +4193,21 @@ every document they read except a native file and the native document that an SV
 
 `view.rotate {angle}` (desktop app) turns the view to `angle` degrees about the center of the canvas; a positive angle
 turns the art clockwise on screen. View › Rotate View and the status bar's angle menu run it. It returns `{angle}`, the
-angle it set, normalized to (-180, 180], and `view.rotateReset` turns the view back to 0.
+angle it set, normalized to (-180, 180], and `view.rotateReset` turns the view back to 0, returning `null` on success.
+
+Select the Rotate View Tool with `select_tool` and the tool id `rotateView`. Its `pointer_gesture`
+drags turn the canvas about its center; Shift snaps to 15°. Document coordinates for a rotation
+gesture use the view at the initial down event, including when the gesture spans several calls.
+The control channel rejects malformed rotation packets without changing the angle and cancels
+the current press. Start a new down event after an error.
+Reset Rotate View is the command `view.rotateReset`:
+
+```json
+{"name":"select_tool","arguments":{"tool":"rotateView"}}
+{"name":"pointer_gesture","arguments":{"events":[{"kind":"down","x":300,"y":150},{"kind":"drag","x":200,"y":250},{"kind":"up","x":200,"y":250}]}}
+{"name":"command_run","arguments":{"id":"view.rotateReset","params":{}}}
+```
+
 `view.rotateToSelection` (desktop app, View › Rotate View to Selection) turns the view about the center of the canvas to
 the angle the selected objects share (`selectionRotation` in `document.inspect`, 0 when their angles differ), so their
 bounding box is square to the window. It returns `{angle}`, and with nothing selected it returns "nothing selected".
@@ -5902,6 +5918,9 @@ undo step. Object › Transform › Scale, the Scale tool and the Transform pane
 `text.reshapePath {id, anchors: [[subpath, anchor]…], dx, dy}` does the same for the path of type on a path
 (Direct Selection dragging one of its anchors): the start and end brackets keep their fractions of the path and the
 text reflows along it.
+`text.setPathHandle {id, subpath?, anchor, which: "in"|"out", x, y, independent?}` moves a direction handle of one
+of its anchors, as `path.setHandle` moves a path's (Direct Selection dragging a handle of the path, #3565), in one
+undo step.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.reshapeArea","params":{"id":42,"anchors":[[0,2]],"dx":40,"dy":60}}}

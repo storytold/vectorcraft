@@ -126,6 +126,7 @@ impl VectorcraftApp {
             updates_rt: Default::default(),
             frame_rate: Default::default(),
             canvas_rect: None,
+            control_rotate_press: None,
             hover_doc: None,
             titlebar_from_env: false,
             custom_titlebar: false,

@@ -3099,6 +3099,13 @@ digits	Malayalam	Malayalam
 	Settings…	Einstellungen…
 	Setup…	Einrichten…
 	Shadows and Glows	Schatten und Leuchteffekte
+	Game HUD	Spiel-HUD
+	Health Fill	Leben
+	Mana Glow	Mana
+	Damage Flash	Schaden
+	Quest Outline	Quest
+	Coin Shine	Münze
+	Boss Alert	Boss
 	Shape	Form
 	Shape Builder	Formerstellung
 	Shape Builder Regions	Formerstellungsbereiche
@@ -5649,6 +5656,11 @@ axis	Y Axis	Y-Achse
 	Button	Schaltfläche
 	Panel	Bedienfeld
 	UI Frames	UI-Rahmen
+	Map Markers	Kartenmarkierungen
+	Pin	Stecknadel
+	Flag	Flagge
+	Crosshair	Fadenkreuz
+	Checkpoint	Kontrollpunkt
 	Open Symbol Library	Symbol-Bibliothek öffnen
 	Save Symbol Library	Symbol-Bibliothek speichern
 	Save Symbol Library…	Symbol-Bibliothek speichern…
