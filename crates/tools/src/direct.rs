@@ -492,7 +492,7 @@ fn hit_anchor(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usize, us
             break;
         }
         if let Some(pd) = cx.doc.node(id).and_then(editable_path)
-            && let Some((si, ai, a)) = nearest_anchor(&pd, p, tol)
+            && let Some((si, ai, a)) = nearest_anchor(&pd, p, tol, cx.selection.partial(id))
         {
             return Some((id, si, ai, a));
         }
@@ -524,7 +524,7 @@ fn hit_anchor(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usize, us
             return None;
         }
         let pd = cx.doc.node(id).and_then(editable_path)?;
-        nearest_anchor(&pd, p, tol).map(|(si, ai, a)| (id, si, ai, a))
+        nearest_anchor(&pd, p, tol, None).map(|(si, ai, a)| (id, si, ai, a))
     })
 }
 
@@ -535,9 +535,14 @@ fn over_path_type_anchor(cx: &ToolContext, p: Point) -> bool {
     hit_anchor(cx, p, cx.point_tol()).is_some_and(|(id, ..)| cx.doc.node(id).is_some_and(is_path_type))
 }
 
-/// The anchor of `pd` within `tol` of `p` nearest to it: (subpath, anchor, where it is).
-fn nearest_anchor(pd: &PathData, p: Point, tol: f64) -> Option<(usize, usize, Point)> {
-    pd.anchors().map(|(si, ai, a)| (si, ai, a.p)).filter(|(.., a)| a.distance(p) <= tol).min_by(|x, y| x.2.distance(p).total_cmp(&y.2.distance(p)))
+/// The anchor of `pd` within `tol` of `p` nearest to it: (subpath, anchor, where it is). Of anchors
+/// on top of each other, such as the two ends a cut leaves, one in `picked` comes first.
+fn nearest_anchor(pd: &PathData, p: Point, tol: f64, picked: Option<&BTreeSet<AnchorRef>>) -> Option<(usize, usize, Point)> {
+    let unpicked = |si: usize, ai: usize| !picked.is_some_and(|set| set.contains(&(si, ai)));
+    pd.anchors()
+        .map(|(si, ai, a)| (si, ai, a.p))
+        .filter(|(.., a)| a.distance(p) <= tol)
+        .min_by(|x, y| x.2.distance(p).total_cmp(&y.2.distance(p)).then_with(|| unpicked(x.0, x.1).cmp(&unpicked(y.0, y.1))))
 }
 
 /// An edge of an area type frame under `p`, topmost first: (text, the edge's two anchors).
@@ -1145,7 +1150,7 @@ fn hovered_anchor_with_hit(cx: &ToolContext, p: Point, hit: Option<&Hit>) -> Opt
     let under = hit.map(|h| cx.doc.node(h.leaf).and_then(|n| compound_part_at(n, p, tol)).unwrap_or(h.leaf));
     cx.selection.objects.iter().copied().filter(|id| in_scope(cx.doc, cx.isolation, *id)).chain(under).find_map(|id| {
         let path = cx.doc.node(id).and_then(editable_path)?;
-        nearest_anchor(&path, p, tol).map(|(.., a)| (id, a))
+        nearest_anchor(&path, p, tol, None).map(|(.., a)| (id, a))
     })
 }
 

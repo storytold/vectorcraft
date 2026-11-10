@@ -1058,9 +1058,86 @@ fn scissors_splits_open_path_in_two() {
     assert!(near(path(&s, id).subpaths[0].anchors[1].p, Point::new(150.0, 100.0)));
     assert!(near(ps[1].1.subpaths[0].anchors[0].p, Point::new(150.0, 100.0)));
     assert_eq!(ps[1].1.subpaths[0].anchors[1].p, Point::new(300.0, 100.0));
-    assert_eq!(s.doc().unwrap().selection.objects.len(), 2);
+    // One of the two new end points is selected: a Direct Selection drag from the cut pulls the
+    // second piece's end away and leaves the first piece as it was.
+    assert_eq!(s.doc().unwrap().selection.objects, [ps[1].0]);
+    assert_eq!(selected_anchors(&s, ps[1].0), [(0, 0)]);
+    drag(&mut s, "directSelection", &[(150.0, 100.0), (150.0, 115.0), (150.0, 130.0)], Mods::default());
+    assert_eq!(path(&s, id), ps[0].1);
+    let moved = anchor_points(&s, ps[1].0);
+    assert!(near(moved[0], Point::new(150.0, 130.0)) && moved[1] == Point::new(300.0, 100.0), "{moved:?}");
     // Clicking an end point is refused without panicking.
     assert!(s.execute("path.split", &json!({"id": id.0, "subpath": 0, "anchor": 0})).is_err());
+}
+
+/// An ellipse cut once with the Scissors tool, at an anchor or along a segment, opens with its two
+/// ends on top of each other and one of them selected. A short Direct Selection drag from there,
+/// plain or with Shift, moves that end alone with its handles, in one undo step, so the open path
+/// becomes one turn that spirals out; every other anchor stays where it was.
+#[test]
+fn scissors_cut_ellipse_end_drags_alone() {
+    let mods = [Mods::default(), Mods { shift: true, ..Mods::default() }];
+    for at_anchor in [true, false] {
+        for m in mods {
+            let mut s = session();
+            drag(&mut s, "ellipse", &[(100.0, 100.0), (200.0, 200.0), (300.0, 200.0)], Mods::default());
+            let id = paths(&s)[0].0;
+            let ellipse = path(&s, id);
+            let cut = if at_anchor {
+                ellipse.subpaths[0].anchors[0].p
+            } else {
+                use kurbo::ParamCurve;
+                ellipse.subpaths[0].segment(1).eval(0.5)
+            };
+            click(&mut s, "scissors", cut.x, cut.y);
+            let opened = path(&s, id);
+            let sp = &opened.subpaths[0];
+            assert!(!sp.closed && near(sp.anchors[0].p, cut) && near(sp.anchors[sp.anchors.len() - 1].p, cut), "{sp:?}");
+            assert_eq!(s.doc().unwrap().selection.objects, [id]);
+            assert_eq!(selected_anchors(&s, id), [(0, 0)]);
+            // Shift is pressed once the drag is under way: held at the press it toggles the anchor.
+            let v = view();
+            s.select_tool("directSelection", v).unwrap();
+            let undo = undo_steps(&s);
+            s.pointer(&PointerEvent::new(PointerKind::Down, cut.x, cut.y), v).unwrap();
+            s.pointer(&PointerEvent::new(PointerKind::Drag, cut.x + 4.0, cut.y + 4.0).with_mods(m), v).unwrap();
+            s.pointer(&PointerEvent::new(PointerKind::Drag, cut.x + 8.0, cut.y + 8.0).with_mods(m), v).unwrap();
+            s.pointer(&PointerEvent::new(PointerKind::Up, cut.x + 8.0, cut.y + 8.0).with_mods(m), v).unwrap();
+            assert_eq!(undo_steps(&s), undo + 1);
+            let after = path(&s, id);
+            let (old, new) = (&sp.anchors, &after.subpaths[0].anchors);
+            assert_eq!(new.len(), old.len());
+            assert_eq!(new[1..], old[1..], "only the dragged end moves (at anchor: {at_anchor}, {m:?})");
+            let d = Point::new(cut.x + 8.0, cut.y + 8.0) - cut;
+            assert!(near(new[0].p, old[0].p + d) && near(new[0].h_out, old[0].h_out + d) && near(new[0].h_in, new[0].p), "{:?}", new[0]);
+        }
+    }
+}
+
+/// The Scissors tool on a path of several subpaths: the cut end stays selected in the subpath it
+/// opened, and a second cut of that subpath selects the end of the new piece.
+#[test]
+fn scissors_cut_in_a_compound_path_selects_the_cut_end() {
+    let mut s = session();
+    let id = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    let square =
+        |x: f64| json!({"closed": true, "anchors": [{"x": x, "y": 100}, {"x": x + 100.0, "y": 100}, {"x": x + 100.0, "y": 200}, {"x": x, "y": 200}]});
+    s.execute("path.setAnchors", &json!({"id": id.0, "subpaths": [square(100.0), square(300.0)]})).unwrap();
+    click(&mut s, "scissors", 400.0, 100.0);
+    let pd = path(&s, id);
+    assert!(pd.subpaths[0].closed && !pd.subpaths[1].closed && pd.subpaths[1].anchors[0].p == Point::new(400.0, 100.0), "{pd:?}");
+    assert_eq!(selected_anchors(&s, id), [(1, 0)]);
+    // Cut again at the opened subpath's corner (400, 200): its second piece follows it.
+    click(&mut s, "scissors", 400.0, 200.0);
+    let pd = path(&s, id);
+    assert_eq!(pd.subpaths.len(), 3);
+    assert_eq!(pd.subpaths[2].anchors[0].p, Point::new(400.0, 200.0));
+    assert_eq!(selected_anchors(&s, id), [(2, 0)]);
+    drag(&mut s, "directSelection", &[(400.0, 200.0), (410.0, 210.0), (420.0, 220.0)], Mods::default());
+    let after = path(&s, id);
+    assert_eq!(after.subpaths[2].anchors[0].p, Point::new(420.0, 220.0));
+    assert_eq!(after.subpaths[1], pd.subpaths[1]);
+    assert_eq!(after.subpaths[0], pd.subpaths[0]);
 }
 
 #[test]
