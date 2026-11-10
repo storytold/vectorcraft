@@ -203,6 +203,25 @@ fn stored_profiles_register_again_and_removing_one_removes_its_copy() {
     s.execute("color.removeProfile", &json!({"name": other})).unwrap();
 }
 
+/// Puts the default Color Settings back, unregisters `profile` and deletes `paths` when dropped,
+/// also after a failed assertion, so the next test holding `GLOBAL` starts from a clean state.
+struct ColorSettingsReset {
+    profile: Option<&'static str>,
+    paths: Vec<std::path::PathBuf>,
+}
+
+impl Drop for ColorSettingsReset {
+    fn drop(&mut self) {
+        let _ = cms::set_active(&cms::ColorSettings::default());
+        if let Some(name) = self.profile {
+            cms::unregister_icc(name);
+        }
+        for path in &self.paths {
+            let _ = std::fs::remove_dir_all(path).or_else(|_| std::fs::remove_file(path));
+        }
+    }
+}
+
 /// #6335: Edit › Color Settings come back in the next session: the working spaces (a loaded
 /// profile among them, registered again by the profile store first), the intent and black point
 /// compensation. A session nobody attached a file to keeps nothing, and nothing is written before
@@ -214,6 +233,7 @@ fn color_settings_come_back_in_the_next_session() {
     let (profiles, file) = (root.join("Color Profiles"), root.join("Color Settings.json"));
     let loaded = "StoreRGB-6";
     let icc = vectorcraft_testkit::temp_dir("store-color-settings").join("loaded.icc");
+    let _reset = ColorSettingsReset { profile: Some(loaded), paths: vec![root.clone(), icc.clone()] };
     std::fs::write(&icc, icc_named(loaded)).unwrap();
 
     let mut a = Session::new();
@@ -238,9 +258,6 @@ fn color_settings_come_back_in_the_next_session() {
     c.execute("edit.colorSettings", &json!({"bpc": true})).unwrap();
     let saved: cms::ColorSettings = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
     assert_eq!(saved, chosen, "the file is left alone");
-
-    cms::set_active(&cms::ColorSettings::default()).unwrap();
-    b.execute("color.removeProfile", &json!({"name": loaded})).unwrap();
 }
 
 /// #6335: saved Color Settings that can't be used (a profile that is gone, a damaged or oversized
@@ -248,8 +265,10 @@ fn color_settings_come_back_in_the_next_session() {
 #[test]
 fn saved_color_settings_that_cannot_be_used_leave_the_defaults() {
     let _g = super::colormgmt::GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
-    let file = fresh_dir("color-settings-bad").join("Color Settings.json");
-    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    let dir = fresh_dir("color-settings-bad");
+    let _reset = ColorSettingsReset { profile: None, paths: vec![dir.clone()] };
+    let file = dir.join("Color Settings.json");
+    std::fs::create_dir_all(&dir).unwrap();
     let gone = json!({"rgb": cms::SRGB, "cmyk": "A Profile That Is Gone", "intent": "perceptual", "bpc": false}).to_string().into_bytes();
     let oversized = vec![b' '; MAX_PRESET_FILE as usize + 1];
     for bytes in [gone, b"not json".to_vec(), oversized] {
@@ -263,5 +282,4 @@ fn saved_color_settings_that_cannot_be_used_leave_the_defaults() {
         let saved: cms::ColorSettings = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
         assert!(!saved.bpc && saved.cmyk == cms::GENERIC_CMYK, "written over by the next change: {saved:?}");
     }
-    cms::set_active(&cms::ColorSettings::default()).unwrap();
 }
