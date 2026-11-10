@@ -1054,7 +1054,7 @@ fn wheel_over_a_floating_character_font_field_changes_the_font() {
 
     h.host.borrow_mut().child_overlay = None;
     h.frame(vec![]);
-    h.host.borrow_mut().time += crate::font_menu::WHEEL_STREAM_GAP;
+    h.host.borrow_mut().time += crate::widgets::WHEEL_STREAM_GAP;
     h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([
         Event::PointerMoved(pointer + vec2(1.0, 0.0)),
         Event::MouseWheel {
@@ -1088,7 +1088,7 @@ fn wheel_over_a_floating_character_font_field_changes_the_font() {
     h.host.borrow_mut().child_transparent_overlay = None;
     h.host.borrow_mut().child_pass_through_overlay = Some((viewport, field.expand(10.0)));
     h.frames(2);
-    h.host.borrow_mut().time += crate::font_menu::WHEEL_STREAM_GAP;
+    h.host.borrow_mut().time += crate::widgets::WHEEL_STREAM_GAP;
     h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([
         Event::PointerMoved(pointer + vec2(2.0, 0.0)),
         Event::MouseWheel {

@@ -5,6 +5,7 @@ use super::panel_chrome::{
 use super::text::{
     after_shift_enter, focus_field, recessed_text, select_all, select_all_on_focus, shift_enter_keeps_focus, take_armed_focus, take_dialog_focus,
 };
+use super::{ArmedWheelField, WheelStream, WheelStreamOwner};
 use super::{CornerRadius, RangeInclusive, Rect, Response, Sense, Stroke, StrokeKind, Tokens, Ui, Unit, id_with, pos2, scrub, vec2};
 
 /// Preferences › Units › Numbers Without Units Are Points (#394; on until set): the app sets it
@@ -247,9 +248,10 @@ pub(super) fn shown_alike(show: impl Fn(f64) -> String) -> impl Fn(f64, f64) -> 
 /// a weight stops at 0, a miter limit at 1), and a plain step also stops at each of `stops`
 /// ([`step_through`]). The new value is applied at once, as in
 /// Illustrator's panels and dialogs, and the new text replaces `buf`, all selected so typing
-/// replaces it when focused. Returns the new number when a step was taken. While the pointer is
-/// over an enabled field the wheel is the field's (the panel under it doesn't scroll), without
-/// taking keyboard focus. Arrow keys still require keyboard focus.
+/// replaces it when focused. Returns the new number when a step was taken. An enabled field takes
+/// the wheel without taking keyboard focus, and the panel under it doesn't scroll, when the wheel
+/// stream began over the field and the pointer was moved onto it, or pressed on it, after the
+/// field last moved or was covered ([`number_wheel_turns`]). Arrow keys still require keyboard focus.
 fn step_value(
     ui: &Ui,
     resp: &Response,
@@ -266,8 +268,10 @@ fn step_value(
     }
     let focused = ui.memory(|m| m.has_focus(resp.id));
     use egui::{Event, Key, MouseWheelUnit};
-    let wheel = resp.contains_pointer();
-    if !focused && !wheel {
+    let (taken, owns) = number_wheel_turns(ui, resp);
+    let wheel = !taken.is_empty();
+    let hold = wheel || owns && resp.contains_pointer();
+    if !focused && !hold {
         return None;
     }
     // Wheel turns in notches: a line each, or `line` points of a trackpad or a fine wheel; what is
@@ -277,14 +281,18 @@ fn step_value(
     // Each press and each turn of whole notches in the order they came: its modifiers and size from
     // [`STEPS`], and how many steps up (down when negative).
     let mut steps: Vec<(egui::Modifiers, f64, f64)> = Vec::new();
+    let mut taken = taken;
     ui.input_mut(|i| {
         i.events.retain(|e| {
+            // Each taken event is matched once by its value, so wheel events that other code adds
+            // or removes before the field runs do not shift which events the field takes.
+            let mine = taken.iter().position(|t| t == e).map(|at| taken.swap_remove(at)).is_some();
             let (Event::Key { modifiers, .. } | Event::MouseWheel { modifiers, .. }) = e else { return true };
             let Some(&(mods, size)) = STEPS.iter().find(|(m, _)| modifiers.matches_logically(*m)) else { return true };
             let n = match e {
                 Event::Key { key: Key::ArrowUp, pressed: true, .. } if focused => 1.0,
                 Event::Key { key: Key::ArrowDown, pressed: true, .. } if focused => -1.0,
-                Event::MouseWheel { unit, delta, .. } if wheel => {
+                Event::MouseWheel { unit, delta, .. } if mine => {
                     // Shift may turn the wheel sideways (the Mac does).
                     let d = if modifiers.shift { delta.x + delta.y } else { delta.y };
                     notches += match unit {
@@ -302,7 +310,7 @@ fn step_value(
             }
             false
         });
-        if wheel {
+        if hold {
             // The rest of a turn egui spreads over the next frames scrolls nothing either.
             i.smooth_scroll_delta = egui::Vec2::ZERO;
         }
@@ -333,6 +341,194 @@ fn step_value(
         select_all(ui, resp.id, buf);
     }
     Some(v)
+}
+
+/// An enabled number field as the wheel finds it.
+#[derive(Clone, Copy)]
+struct WheelTarget {
+    id: egui::Id,
+    rect: Rect,
+    layer: egui::LayerId,
+}
+
+/// Where the pointer was, the field it was last moved onto, and the running wheel stream.
+#[derive(Clone, Copy, Default)]
+struct WheelWalk {
+    pointer: Option<egui::Pos2>,
+    armed: Option<ArmedWheelField>,
+    stream: WheelStream,
+}
+
+/// The number fields' wheel state in one viewport.
+#[derive(Clone, Default)]
+struct NumberWheel {
+    /// The pass whose events `walk` and `taken` cover.
+    pass: Option<u64>,
+    /// The enabled number fields drawn in the pass before `pass`.
+    before: Vec<WheelTarget>,
+    /// The enabled number fields drawn so far in `pass`.
+    drawn: Vec<WheelTarget>,
+    walk: WheelWalk,
+    /// Each wheel event of `pass` that a field takes, with the field.
+    taken: Vec<(egui::Id, egui::Event)>,
+}
+
+/// The wheel events of this pass that number field `resp` takes, and whether the field holds the
+/// wheel stream after them. The first field drawn in a pass reads the pass's events for every
+/// field, using where the fields were drawn in the pass before. A field takes a wheel stream only
+/// when the stream begins with the pointer over it and the pointer was moved onto it, or pressed
+/// on it, after the field last moved or was covered by a window or overlay. A stream that began
+/// anywhere else stays there until it ends ([`WheelStream`]) or the pointer is pressed on a field,
+/// and a stream that leaves its field does not return to it. Trackpad momentum never starts a
+/// stream on a field.
+fn number_wheel_turns(ui: &Ui, resp: &Response) -> (Vec<egui::Event>, bool) {
+    let ctx = ui.ctx();
+    let key = egui::Id::unique("number-field-wheel").with(ctx.viewport_id());
+    let pass = ctx.cumulative_pass_nr();
+    let font_key = super::taken_from_raw_id(ctx.viewport_id());
+    let fresh = ui.data_mut(|d| {
+        let state = d.get_temp_mut_or_default::<NumberWheel>(key);
+        if state.pass == Some(pass) {
+            return None;
+        }
+        let follows = state.pass.is_some_and(|last| last + 1 == pass);
+        state.before = if follows { std::mem::take(&mut state.drawn) } else { Vec::new() };
+        state.drawn.clear();
+        state.pass = Some(pass);
+        if !follows {
+            state.walk.pointer = None;
+            state.walk.armed = None;
+            state.walk.stream.release_any();
+        }
+        // Turns the font family field took from the raw input belong to its stream.
+        let font_took = d.remove_temp::<f64>(font_key);
+        let state = d.get_temp_mut_or_default::<NumberWheel>(key);
+        if let Some(at) = font_took {
+            state.walk.stream.note_taken_elsewhere(at);
+        }
+        // A field that missed a pass may have moved.
+        if let Some(armed) = state.walk.armed
+            && !state.before.iter().any(|t| t.id == armed.id)
+        {
+            state.walk.armed = None;
+            state.walk.stream.release(armed.id);
+        }
+        Some((state.walk, state.before.clone()))
+    });
+    let walked = fresh.map(|(walk, before)| {
+        let (events, now) = ui.input(|i| (i.events.clone(), i.time));
+        walk_wheel(ctx, walk, &events, &before, now, pass)
+    });
+    let target = WheelTarget { id: resp.id, rect: resp.interact_rect, layer: resp.layer_id };
+    let (armed_here, pointer) = ui.data_mut(|d| {
+        let state = d.get_temp_mut_or_default::<NumberWheel>(key);
+        if let Some((walk, taken)) = walked {
+            state.walk = walk;
+            state.taken = taken;
+        }
+        (state.walk.armed.is_some_and(|armed| armed.id == resp.id), state.walk.pointer)
+    });
+    // A window or overlay over the pointer covers the armed field even when no input arrives.
+    let covered = armed_here && pointer.is_some_and(|p| target.rect.contains(p) && ctx.layer_id_at(p) != Some(target.layer));
+    ui.data_mut(|d| {
+        let state = d.get_temp_mut_or_default::<NumberWheel>(key);
+        if let Some(armed) = &mut state.walk.armed
+            && armed.id == resp.id
+        {
+            if armed.rect == target.rect && !covered {
+                armed.pass = pass;
+            } else {
+                // The field moved or is covered, so the pass's turns stay with the panel.
+                state.walk.armed = None;
+                state.walk.stream.release(resp.id);
+                state.taken.retain(|&(id, _)| id != resp.id);
+            }
+        }
+        state.drawn.push(target);
+        let mut mine = Vec::new();
+        state.taken.retain(|(id, event)| {
+            if *id == resp.id {
+                mine.push(event.clone());
+            }
+            *id != resp.id
+        });
+        (mine, state.walk.stream.owner == Some(WheelStreamOwner::Field(resp.id)))
+    })
+}
+
+/// `walk` after `events`, with `fields` where the pointer finds them, at input time `now`; and the
+/// wheel events a field takes (see [`NumberWheel::taken`]).
+fn walk_wheel(
+    ctx: &egui::Context,
+    mut walk: WheelWalk,
+    events: &[egui::Event],
+    fields: &[WheelTarget],
+    now: f64,
+    pass: u64,
+) -> (WheelWalk, Vec<(egui::Id, egui::Event)>) {
+    let under = |p: Option<egui::Pos2>| {
+        let p = p?;
+        let layer = ctx.layer_id_at(p);
+        fields.iter().rev().find(|t| t.rect.contains(p) && layer == Some(t.layer)).copied()
+    };
+    let mut taken = Vec::new();
+    let mut left = false;
+    for event in events {
+        match event {
+            egui::Event::PointerMoved(p) | egui::Event::PointerButton { pos: p, .. } => {
+                let pressed = matches!(event, egui::Event::PointerButton { pressed: true, .. });
+                if walk.pointer != Some(*p) || pressed {
+                    let field = under(Some(*p));
+                    walk.armed = field.map(|t| ArmedWheelField { id: t.id, rect: t.rect, pass });
+                    if let Some(WheelStreamOwner::Field(id)) = walk.stream.owner
+                        && field.is_none_or(|t| t.id != id)
+                    {
+                        walk.stream.release(id);
+                    }
+                    // A press on a field gives it the rest of a running stream.
+                    if pressed
+                        && let Some(t) = field
+                        && walk.stream.owner != Some(WheelStreamOwner::Field(t.id))
+                    {
+                        walk.stream.owner = None;
+                    }
+                }
+                walk.pointer = Some(*p);
+            }
+            egui::Event::PointerGone => {
+                walk.pointer = None;
+                walk.armed = None;
+                walk.stream.release_any();
+            }
+            egui::Event::MouseWheel { delta, source, .. } => {
+                walk.stream.note_input(now);
+                let field = under(walk.pointer);
+                if *delta != egui::Vec2::ZERO {
+                    let starts = field
+                        .filter(|t| walk.armed.is_some_and(|armed| armed.id == t.id) && *source != egui::MouseWheelSource::Momentum)
+                        .map_or(WheelStreamOwner::Elsewhere, |t| WheelStreamOwner::Field(t.id));
+                    let owner = *walk.stream.owner.get_or_insert(starts);
+                    if field.is_none_or(|t| owner != WheelStreamOwner::Field(t.id)) {
+                        walk.stream.owner = Some(WheelStreamOwner::Elsewhere);
+                    }
+                }
+                if let Some(t) = field
+                    && walk.stream.owner == Some(WheelStreamOwner::Field(t.id))
+                {
+                    taken.push((t.id, event.clone()));
+                } else {
+                    left |= *delta != egui::Vec2::ZERO;
+                }
+            }
+            _ => {}
+        }
+    }
+    // egui smooths a pass's wheel input as a whole before any field runs, so a field cannot take
+    // part of it: a pass whose wheel input also scrolls something else is left whole to the panel.
+    if left {
+        taken.clear();
+    }
+    (walk, taken)
 }
 
 /// A [`num_field`] for a width or height (Transform panel, Properties panel, Control bar): Ctrl/Cmd+Enter

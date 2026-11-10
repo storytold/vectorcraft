@@ -26,6 +26,7 @@ use vectorcraft_text::FontClass;
 use crate::VectorcraftApp;
 use crate::theme::Tokens;
 use crate::widgets;
+use crate::widgets::{ArmedWheelField, WheelStream, WheelStreamOwner};
 
 /// What happened in the menu this frame.
 #[derive(Clone, Debug, PartialEq)]
@@ -441,54 +442,6 @@ struct WheelField {
     owner: Option<WheelOwner>,
     rect: egui::Rect,
     layer: egui::LayerId,
-}
-
-/// The seconds without wheel input that end a wheel stream. This is VectorCraft's own value.
-pub(crate) const WHEEL_STREAM_GAP: f64 = 0.5;
-
-/// The field the pointer was last moved onto, while that field stays where it was.
-#[derive(Clone, Copy)]
-struct ArmedWheelField {
-    id: egui::Id,
-    rect: egui::Rect,
-    pass: u64,
-}
-
-#[derive(Clone, Copy, PartialEq)]
-enum WheelStreamOwner {
-    Field(egui::Id),
-    Elsewhere,
-}
-
-/// One run of wheel input with no gap of [`WHEEL_STREAM_GAP`] in it, trackpad momentum included.
-#[derive(Clone, Copy, Default)]
-struct WheelStream {
-    last: Option<f64>,
-    owner: Option<WheelStreamOwner>,
-}
-
-impl WheelStream {
-    /// Note wheel input at `now`; a gap since the last input starts a new stream with no owner.
-    fn note_input(&mut self, now: f64) {
-        if !self.last.is_some_and(|last| (0.0..WHEEL_STREAM_GAP).contains(&(now - last))) {
-            self.owner = None;
-        }
-        self.last = Some(now);
-    }
-
-    /// Leave the rest of the stream to the panel when `field` holds it.
-    fn release(&mut self, field: egui::Id) {
-        if self.owner == Some(WheelStreamOwner::Field(field)) {
-            self.owner = Some(WheelStreamOwner::Elsewhere);
-        }
-    }
-
-    /// Leave the rest of the stream to the panel when any field holds it.
-    fn release_any(&mut self) {
-        if let Some(WheelStreamOwner::Field(field)) = self.owner {
-            self.release(field);
-        }
-    }
 }
 
 #[derive(Clone)]
@@ -941,6 +894,7 @@ pub(crate) fn take_raw_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
     fields.pointer = pointer;
     ctx.data_mut(|d| d.insert_temp(key, fields));
     if captured {
+        ctx.data_mut(|d| d.insert_temp(widgets::taken_from_raw_id(raw.viewport_id), now));
         ctx.request_repaint();
     }
 }
