@@ -5205,6 +5205,11 @@ lighting	Light	Світло
 @msg	unknown parameter `{key}`; did you mean `{near}`?	невідомий параметр `{key}`; можливо, ви мали на увазі `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	невідомий параметр `{key}`; команда не має параметрів
 @msg	unknown parameter `{key}`; the command takes: {keys}	невідомий параметр `{key}`; команда приймає: {keys}
+@msg	the params must be an object, not {got}	параметри мають бути об'єктом, а не {got}
+@msg	unknown parameter `{path}`; the object takes no keys	невідомий параметр `{path}`; об'єкт не приймає ключів
+@msg	unknown parameter `{path}`; it takes: {keys}	невідомий параметр `{path}`; приймає: {keys}
+@msg	missing `{path}`	відсутнє `{path}`
+@msg	`{path}` must be {expected}, not {got}	`{path}` має бути {expected}, а не {got}
 	Load EPS into Clipboard	Завантажити EPS у буфер обміну
 @msg	an image of {w} × {h} pixels is too large to draw	зображення розміром {w} × {h} пікселів завелике для відображення
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: це не зображення PNG, JPEG, WebP, TIFF чи BMP

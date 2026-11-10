@@ -174,6 +174,12 @@ pub struct FrameStats {
     /// ([`Renderer::draw_type_edges`]). Type drawn from the pixels an earlier frame kept is not
     /// counted.
     pub type_edges: usize,
+    /// The art of 3D effects (Revolve, Extrude & Bevel, Inflate, Rotate) this renderer made for the
+    /// objects it draws or measures itself (`Renderer::bounds_of`) since its last frame
+    /// began: none it found kept, and none made by measures without a renderer (the free bounds
+    /// functions), which this renderer doesn't see. A view that measured what changed through the
+    /// renderer ([`crate::Renderer::changed`]) made the art then, and draws it with none made.
+    pub three_d_built: usize,
     pub micros: u64,
 }
 

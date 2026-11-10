@@ -7815,6 +7815,11 @@ antiAlias	Sharp	शार्प
 @msg	unknown parameter `{key}`; did you mean `{near}`?	अज्ञात पैरामीटर `{key}`; क्या आपको `{near}` का मतलब है?
 @msg	unknown parameter `{key}`; the command takes no parameters	अज्ञात पैरामीटर `{key}`; कमांड कोई पैरामीटर नहीं लेता है
 @msg	unknown parameter `{key}`; the command takes: {keys}	अज्ञात पैरामीटर `{key}`; कमांड लेता है: {keys}
+@msg	the params must be an object, not {got}	पैरामीटर एक ऑब्जेक्ट होने चाहिए, {got} नहीं
+@msg	unknown parameter `{path}`; the object takes no keys	अज्ञात पैरामीटर `{path}`; ऑब्जेक्ट कोई कुंजी नहीं लेता
+@msg	unknown parameter `{path}`; it takes: {keys}	अज्ञात पैरामीटर `{path}`; यह लेता है: {keys}
+@msg	missing `{path}`	लापता `{path}`
+@msg	`{path}` must be {expected}, not {got}	`{path}` {expected} होना चाहिए, {got} नहीं
 @msg	unknown PDF preset `{name}` (presets: {_1})	अज्ञात PDF प्रीसेट `{name}` (presets: {_1})
 @msg	unknown pieLegend `{v}` (none, standard or wedges)	अज्ञात pieLegend `{v}` (one, मानक या wedges)
 @msg	unknown piePosition `{v}` (even, ratio or stacked)	अज्ञात piePosition `{v}` (यहां तक कि अनुपात या स्टैक्ड)

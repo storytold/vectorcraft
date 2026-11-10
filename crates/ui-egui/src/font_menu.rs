@@ -12,6 +12,8 @@
 //! the mouse wheel turned over the closed field applies the next family (or previous one) to the
 //! selected text, one undo step per notch. The menu's order at the first turn stays fixed until the
 //! pointer leaves the field or the text selection changes; steps stop at its first and last family.
+//! The field takes the wheel only when the pointer was moved onto it after the field last moved and
+//! the wheel stream began there.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -441,6 +443,54 @@ struct WheelField {
     layer: egui::LayerId,
 }
 
+/// The seconds without wheel input that end a wheel stream. This is VectorCraft's own value.
+pub(crate) const WHEEL_STREAM_GAP: f64 = 0.5;
+
+/// The field the pointer was last moved onto, while that field stays where it was.
+#[derive(Clone, Copy)]
+struct ArmedWheelField {
+    id: egui::Id,
+    rect: egui::Rect,
+    pass: u64,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum WheelStreamOwner {
+    Field(egui::Id),
+    Elsewhere,
+}
+
+/// One run of wheel input with no gap of [`WHEEL_STREAM_GAP`] in it, trackpad momentum included.
+#[derive(Clone, Copy, Default)]
+struct WheelStream {
+    last: Option<f64>,
+    owner: Option<WheelStreamOwner>,
+}
+
+impl WheelStream {
+    /// Note wheel input at `now`; a gap since the last input starts a new stream with no owner.
+    fn note_input(&mut self, now: f64) {
+        if !self.last.is_some_and(|last| (0.0..WHEEL_STREAM_GAP).contains(&(now - last))) {
+            self.owner = None;
+        }
+        self.last = Some(now);
+    }
+
+    /// Leave the rest of the stream to the panel when `field` holds it.
+    fn release(&mut self, field: egui::Id) {
+        if self.owner == Some(WheelStreamOwner::Field(field)) {
+            self.owner = Some(WheelStreamOwner::Elsewhere);
+        }
+    }
+
+    /// Leave the rest of the stream to the panel when any field holds it.
+    fn release_any(&mut self) {
+        if let Some(WheelStreamOwner::Field(field)) = self.owner {
+            self.release(field);
+        }
+    }
+}
+
 #[derive(Clone)]
 struct QueuedWheel {
     #[cfg(not(target_arch = "wasm32"))]
@@ -478,6 +528,8 @@ struct WheelFields {
     pending: HashMap<egui::Id, Vec<WheelInput>>,
     queued: Vec<QueuedWheel>,
     replay: Vec<ReplayWheel>,
+    armed: Option<ArmedWheelField>,
+    stream: WheelStream,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -524,6 +576,7 @@ impl egui::Plugin for WheelLayerSnapshot {
             let id = event.field.with("wheel");
             if !active {
                 ctx.data_mut(|d| d.remove::<f32>(id));
+                fields.stream.release(event.field);
                 if let Some(target) = ctx.layer_id_at(event.position) {
                     fields.replay.push(ReplayWheel { target, position: event.position, event: event.event });
                 }
@@ -636,7 +689,8 @@ pub(crate) fn sync_wheel_target(app: &VectorcraftApp, ctx: &egui::Context, viewp
     let key = wheel_fields_id(viewport);
     let (previous, mut fields) = ctx.data(|d| (d.get_temp::<WheelTarget>(key.with("target")), d.get_temp::<WheelFields>(key)));
     if previous.is_some_and(|old| old != target) {
-        fields = None;
+        // A new target keeps the armed field and the running wheel stream.
+        fields = fields.map(|old| WheelFields { pass: old.pass, armed: old.armed, stream: old.stream, ..Default::default() });
     }
     let mut hidden = Vec::new();
     if let Some(fields) = &mut fields {
@@ -685,6 +739,16 @@ fn remember_owned_wheel_field(ui: &Ui, resp: &egui::Response, enabled: bool, men
             fields.fields.clear();
         }
         fields.fields.retain(|f| f.id != resp.id);
+        if let Some(armed) = &mut fields.armed
+            && armed.id == resp.id
+        {
+            if armed.rect == resp.interact_rect && pass.saturating_sub(armed.pass) <= 1 {
+                armed.pass = pass;
+            } else {
+                fields.armed = None;
+                fields.stream.release(resp.id);
+            }
+        }
         if enabled {
             fields.fields.push(WheelField { id: resp.id, menu, owner, rect: resp.interact_rect, layer: resp.layer_id });
         }
@@ -695,7 +759,10 @@ fn remember_owned_wheel_field(ui: &Ui, resp: &egui::Response, enabled: bool, men
 }
 
 /// Take the closed font fields' wheel events before egui smooths and combines them. Other
-/// events stay in the input, so scrolling elsewhere keeps its own delta and event order.
+/// events stay in the input, so scrolling elsewhere keeps its own delta and event order. A field
+/// takes a wheel stream only when the stream begins with the pointer over it and the pointer was
+/// moved onto it after the field last moved. A stream that began anywhere else stays there until
+/// it ends, and a stream that leaves its field does not return to it.
 pub(crate) fn take_raw_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
     let key = wheel_fields_id(raw.viewport_id);
     let Some(mut fields) = ctx.data(|d| d.get_temp::<WheelFields>(key)) else { return };
@@ -712,7 +779,10 @@ pub(crate) fn take_raw_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
     if pass < fields.pass || pass.saturating_sub(fields.pass) > 1 {
         fields.fields.clear();
         fields.pointer = None;
+        fields.armed = None;
+        fields.stream.release_any();
     }
+    let now = raw.time.unwrap_or_else(|| ctx.input_for(raw.viewport_id, |i| i.time) + f64::from(raw.predicted_dt));
     if fields.pending_frame != frame {
         fields.pending_frame = frame;
         fields.pending.clear();
@@ -766,8 +836,20 @@ pub(crate) fn take_raw_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
         {
             fields.activating.push(id);
         }
+        if matches!(event, egui::Event::MouseWheel { .. }) {
+            fields.stream.note_input(now);
+        }
         match event {
             egui::Event::PointerMoved(p) | egui::Event::PointerButton { pos: p, .. } => {
+                if pointer != Some(*p) {
+                    let pass = fields.pass;
+                    fields.armed = fields.fields.iter().rev().find(|f| over(f, Some(*p))).map(|f| ArmedWheelField { id: f.id, rect: f.rect, pass });
+                    if let Some(WheelStreamOwner::Field(id)) = fields.stream.owner
+                        && !fields.fields.iter().any(|f| f.id == id && over(f, Some(*p)))
+                    {
+                        fields.stream.release(id);
+                    }
+                }
                 mark_queued_wheel_leaves(&mut fields, Some(*p));
                 for field in &fields.fields {
                     if pointer.is_some_and(|point| field.rect.contains(point))
@@ -782,6 +864,8 @@ pub(crate) fn take_raw_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
             }
             egui::Event::PointerGone => {
                 pointer = None;
+                fields.armed = None;
+                fields.stream.release_any();
                 mark_queued_wheel_leaves(&mut fields, None);
                 for field in &fields.fields {
                     if !fields.queued.iter().any(|event| event.field == field.id) {
@@ -790,8 +874,13 @@ pub(crate) fn take_raw_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
                     }
                 }
             }
-            egui::Event::MouseWheel { unit, delta, modifiers, .. } if modifiers.is_none() && delta.y != 0.0 => {
-                if let Some(field) = fields.fields.iter().rev().find(|f| !fields.activating.contains(&f.id) && over(f, pointer)).copied() {
+            egui::Event::MouseWheel { unit, delta, modifiers, source, .. } if modifiers.is_none() && delta.y != 0.0 => {
+                let under = fields.fields.iter().rev().find(|f| !fields.activating.contains(&f.id) && over(f, pointer)).copied();
+                let starts_on_field = under
+                    .filter(|f| fields.armed.is_some_and(|armed| armed.id == f.id) && !matches!(source, egui::MouseWheelSource::Momentum))
+                    .map(|f| f.id);
+                let owner = *fields.stream.owner.get_or_insert(starts_on_field.map_or(WheelStreamOwner::Elsewhere, WheelStreamOwner::Field));
+                if let Some(field) = under.filter(|f| owner == WheelStreamOwner::Field(f.id)) {
                     let amount = -match unit {
                         egui::MouseWheelUnit::Point => delta.y / line,
                         egui::MouseWheelUnit::Line | egui::MouseWheelUnit::Page => delta.y,
@@ -823,6 +912,10 @@ pub(crate) fn take_raw_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
                     captured = true;
                     return false;
                 }
+                fields.stream.owner = Some(WheelStreamOwner::Elsewhere);
+            }
+            egui::Event::MouseWheel { delta, .. } if *delta != egui::Vec2::ZERO => {
+                fields.stream.owner.get_or_insert(WheelStreamOwner::Elsewhere);
             }
             _ => {}
         }

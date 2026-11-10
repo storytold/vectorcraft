@@ -5267,6 +5267,11 @@ lighting	Light	ライト
 @msg	unknown parameter `{key}`; did you mean `{near}`?	`{key}` は不明なパラメーターです。`{near}` のことですか?
 @msg	unknown parameter `{key}`; the command takes no parameters	`{key}` は不明なパラメーターです。このコマンドにパラメーターはありません
 @msg	unknown parameter `{key}`; the command takes: {keys}	`{key}` は不明なパラメーターです。このコマンドで使えるパラメーター: {keys}
+@msg	the params must be an object, not {got}	パラメーターはオブジェクトにしてください ({got} は使えません)
+@msg	unknown parameter `{path}`; the object takes no keys	`{path}` は不明なパラメーターです。このオブジェクトにはキーを指定できません
+@msg	unknown parameter `{path}`; it takes: {keys}	`{path}` は不明なパラメーターです。使えるパラメーター: {keys}
+@msg	missing `{path}`	`{path}` が指定されていません
+@msg	`{path}` must be {expected}, not {got}	`{path}` は {expected} にしてください ({got} は使えません)
 	Load EPS into Clipboard	EPS をクリップボードに読み込む
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} ピクセルの画像は大きすぎて描画できません
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: PNG、JPEG、WebP、TIFF、BMP のいずれの画像でもありません

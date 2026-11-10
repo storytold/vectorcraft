@@ -5500,6 +5500,11 @@ mark-style	Japanese	Japanilainen
 @msg	unknown parameter `{key}`; did you mean `{near}`?	tuntematon parametri `{key}`; tarkoititko `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	tuntematon parametri `{key}`; komento ei ota parametreja
 @msg	unknown parameter `{key}`; the command takes: {keys}	tuntematon parametri `{key}`; komennon parametrit: {keys}
+@msg	the params must be an object, not {got}	parametrien on oltava objekti, ei {got}
+@msg	unknown parameter `{path}`; the object takes no keys	tuntematon parametri `{path}`; objekti ei ota avaimia
+@msg	unknown parameter `{path}`; it takes: {keys}	tuntematon parametri `{path}`; parametrit: {keys}
+@msg	missing `{path}`	`{path}` puuttuu
+@msg	`{path}` must be {expected}, not {got}	`{path}` on oltava {expected}, ei {got}
 	Load EPS into Clipboard	Lataa EPS leikepöydälle
 @msg	an image of {w} × {h} pixels is too large to draw	kuva, jonka koko on {w} × {h} pikseliä, on liian suuri piirrettäväksi
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: ei ole PNG-, JPEG-, WebP-, TIFF- tai BMP-kuva

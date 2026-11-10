@@ -5616,6 +5616,11 @@ mark-style	Japanese	Japonské
 @msg	unknown parameter `{key}`; did you mean `{near}`?	neznámý parametr `{key}`; mysleli jste `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	neznámý parametr `{key}`; příkaz nemá žádné parametry
 @msg	unknown parameter `{key}`; the command takes: {keys}	neznámý parametr `{key}`; příkaz přijímá: {keys}
+@msg	the params must be an object, not {got}	parametry musí být objekt, nikoli {got}
+@msg	unknown parameter `{path}`; the object takes no keys	neznámý parametr `{path}`; objekt nepřijímá žádné klíče
+@msg	unknown parameter `{path}`; it takes: {keys}	neznámý parametr `{path}`; přijímá: {keys}
+@msg	missing `{path}`	chybí `{path}`
+@msg	`{path}` must be {expected}, not {got}	`{path}` musí být {expected}, nikoli {got}
 	Load EPS into Clipboard	Načíst EPS do schránky
 @msg	an image of {w} × {h} pixels is too large to draw	obraz o velikosti {w} × {h} obrazových bodů je příliš velký na vykreslení
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: není obraz PNG, JPEG, WebP, TIFF ani BMP

@@ -64,6 +64,7 @@ pub const TABLE: &[(&str, Class)] = &[
     ("affinity", Class::Standalone),
     ("scriptcheck", Class::Standalone),
     ("js", Class::Standalone),
+    ("apischema", Class::Standalone),
 ];
 
 /// Explicit orderings *within* a layer (earlier may be used by later).

@@ -5183,6 +5183,11 @@ lighting	Light	Licht
 @msg	unknown parameter `{key}`; did you mean `{near}`?	unbekannter Parameter `{key}`; meinten Sie `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	unbekannter Parameter `{key}`; der Befehl hat keine Parameter
 @msg	unknown parameter `{key}`; the command takes: {keys}	unbekannter Parameter `{key}`; der Befehl akzeptiert: {keys}
+@msg	the params must be an object, not {got}	die Parameter müssen ein Objekt sein, nicht {got}
+@msg	unknown parameter `{path}`; the object takes no keys	unbekannter Parameter `{path}`; das Objekt akzeptiert keine Schlüssel
+@msg	unknown parameter `{path}`; it takes: {keys}	unbekannter Parameter `{path}`; akzeptiert werden: {keys}
+@msg	missing `{path}`	`{path}` fehlt
+@msg	`{path}` must be {expected}, not {got}	`{path}` muss {expected} sein, nicht {got}
 	Load EPS into Clipboard	EPS in die Zwischenablage laden
 @msg	an image of {w} × {h} pixels is too large to draw	ein Bild mit {w} × {h} Pixeln ist zu groß, um gezeichnet zu werden
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: kein PNG-, JPEG-, WebP-, TIFF- oder BMP-Bild

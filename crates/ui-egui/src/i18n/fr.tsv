@@ -5187,6 +5187,11 @@ lighting	Light	Lumière
 @msg	unknown parameter `{key}`; did you mean `{near}`?	paramètre inconnu `{key}` ; vouliez-vous dire `{near}` ?
 @msg	unknown parameter `{key}`; the command takes no parameters	paramètre inconnu `{key}` ; la commande n’a aucun paramètre
 @msg	unknown parameter `{key}`; the command takes: {keys}	paramètre inconnu `{key}` ; la commande accepte : {keys}
+@msg	the params must be an object, not {got}	les paramètres doivent être un objet, pas {got}
+@msg	unknown parameter `{path}`; the object takes no keys	paramètre inconnu `{path}` ; l’objet n’accepte aucune clé
+@msg	unknown parameter `{path}`; it takes: {keys}	paramètre inconnu `{path}` ; il accepte : {keys}
+@msg	missing `{path}`	`{path}` manquant
+@msg	`{path}` must be {expected}, not {got}	`{path}` doit être {expected}, pas {got}
 	1 Layer	1 calque
 	1 bit	1 bit
 	16 Colors	16 couleurs

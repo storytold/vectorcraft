@@ -5140,6 +5140,11 @@ theme	Appearance	Giao diện
 @msg	unknown parameter `{key}`; did you mean `{near}`?	tham số không xác định `{key}`; ý bạn là `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	tham số không xác định `{key}`; lệnh này không nhận tham số
 @msg	unknown parameter `{key}`; the command takes: {keys}	tham số không xác định `{key}`; lệnh nhận: {keys}
+@msg	the params must be an object, not {got}	các tham số phải là một đối tượng, không phải {got}
+@msg	unknown parameter `{path}`; the object takes no keys	tham số không xác định `{path}`; đối tượng không nhận khóa nào
+@msg	unknown parameter `{path}`; it takes: {keys}	tham số không xác định `{path}`; nhận: {keys}
+@msg	missing `{path}`	thiếu `{path}`
+@msg	`{path}` must be {expected}, not {got}	`{path}` phải là {expected}, không phải {got}
 @msg	unknown preference `{key}`	tùy chọn không xác định `{key}`
 @msg	unknown preset (one of {_1})	thiết lập sẵn không xác định (một trong {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	thiết lập sẵn không xác định `{name}` (high, medium, low hoặc thiết lập đã lưu: xem flattener.presets.list)

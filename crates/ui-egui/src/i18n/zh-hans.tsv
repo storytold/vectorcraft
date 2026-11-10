@@ -5486,6 +5486,11 @@ lighting	Light	光源
 @msg	unknown parameter `{key}`; did you mean `{near}`?	未知参数 `{key}`；您是否想输入 `{near}`？
 @msg	unknown parameter `{key}`; the command takes no parameters	未知参数 `{key}`；该命令没有参数
 @msg	unknown parameter `{key}`; the command takes: {keys}	未知参数 `{key}`；该命令接受：{keys}
+@msg	the params must be an object, not {got}	参数必须是对象，而不是 {got}
+@msg	unknown parameter `{path}`; the object takes no keys	未知参数 `{path}`；该对象不接受任何键
+@msg	unknown parameter `{path}`; it takes: {keys}	未知参数 `{path}`；它接受：{keys}
+@msg	missing `{path}`	缺少 `{path}`
+@msg	`{path}` must be {expected}, not {got}	`{path}` 必须是 {expected}，而不是 {got}
 	Load EPS into Clipboard	将 EPS 载入剪贴板
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} 像素的图像过大，无法绘制
 @msg	the JPEG XL file is cut short	JPEG XL 文件不完整

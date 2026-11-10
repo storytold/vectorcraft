@@ -5875,6 +5875,11 @@ digits	Malayalam	Malaiàlam
 @msg	unknown parameter `{key}`; did you mean `{near}`?	paràmetre desconegut `{key}`; volies dir `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	paràmetre desconegut `{key}`; l’ordre no admet cap paràmetre
 @msg	unknown parameter `{key}`; the command takes: {keys}	paràmetre desconegut `{key}`; l’ordre admet: {keys}
+@msg	the params must be an object, not {got}	els paràmetres han de ser un objecte, no {got}
+@msg	unknown parameter `{path}`; the object takes no keys	paràmetre desconegut `{path}`; l’objecte no admet claus
+@msg	unknown parameter `{path}`; it takes: {keys}	paràmetre desconegut `{path}`; admet: {keys}
+@msg	missing `{path}`	falta `{path}`
+@msg	`{path}` must be {expected}, not {got}	`{path}` ha de ser {expected}, no {got}
 @msg	unknown preference `{key}`	preferència desconeguda `{key}`
 @msg	unknown preset (one of {_1})	preajust desconegut (un de {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	preajust desconegut `{name}` (high, medium, low o un de desat: consulta flattener.presets.list)
