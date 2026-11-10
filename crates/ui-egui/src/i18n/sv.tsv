@@ -569,6 +569,7 @@ font-technology	Variable	Variabla
 	Coming soon — tracked in the parity plan	Kommer snart — följs upp i paritetsplanen
 	Command Click to Select Objects Behind	Cmd-klicka för att markera objekt bakom
 	Command Dialog	Kommandodialog
+	Command API Reference	API-referens för kommandon
 	Community	Gemenskap
 	Compatibility:	Kompatibilitet:
 	Compatible Gradient and Gradient Mesh Printing	Kompatibel utskrift av gradienter och gradientnät
@@ -4317,6 +4318,7 @@ axis	Both	Båda
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Läste in ”{name}”: {n} steg utelämnades|Läste in ”{name}”: {n} steg utelämnades
 @msg	not an action set file	inte en fil med åtgärdsuppsättning
 @msg	the action set file is larger than 8 MiB	filen med åtgärdsuppsättningen är större än 8 MiB
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: referensen skulle bli större än {MAX_BYTES} byte
 @msg	the action set file holds more than 1,000 actions	filen med åtgärdsuppsättningen innehåller fler än 1 000 åtgärder
 @msg	the action set file needs a later version of VectorCraft	filen med åtgärdsuppsättningen kräver en nyare version av VectorCraft
 @msg	an action in the action set file has more than 10,000 steps	en åtgärd i filen med åtgärdsuppsättningen har fler än 10 000 steg

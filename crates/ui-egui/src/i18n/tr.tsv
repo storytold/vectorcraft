@@ -563,6 +563,7 @@ font-technology	Variable	Değişken
 	Coming soon — tracked in the parity plan	Çok yakında — eşlik planında takip ediliyor
 	Command Click to Select Objects Behind	Komut Arkasındaki Nesneleri Seçmek İçin Tıklayın
 	Command Dialog	Komut İletişim Kutusu
+	Command API Reference	Komut API Başvurusu
 	Community	Topluluk
 	Compatibility:	Uyumluluk:
 	Compatible Gradient and Gradient Mesh Printing	Uyumlu Degrade ve Degrade Mesh Baskı
@@ -4177,6 +4178,7 @@ axis	Both	Her İkisi
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	“{name}” yüklendi: {n} adım atlandı
 @msg	not an action set file	bir eylem seti dosyası değil
 @msg	the action set file is larger than 8 MiB	eylem seti dosyası 8 MiB'den büyük
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: başvuru {MAX_BYTES} bayttan büyük olur
 @msg	the action set file holds more than 1,000 actions	eylem seti dosyası 1.000'den fazla eylem içeriyor
 @msg	the action set file needs a later version of VectorCraft	eylem seti dosyası VectorCraft'ın daha yeni bir sürümünü gerektiriyor
 @msg	an action in the action set file has more than 10,000 steps	eylem seti dosyasındaki bir eylemde 10.000'den fazla adım var

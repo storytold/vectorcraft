@@ -671,6 +671,7 @@ font-technology	Variable	Biến thiên
 	Coming soon — tracked in the parity plan	Sắp ra mắt — đang theo dõi trong kế hoạch đối chiếu tính năng
 	Command Click to Select Objects Behind	Command-bấm để chọn đối tượng phía sau
 	Command Dialog	Hộp thoại lệnh
+	Command API Reference	Tài liệu tham khảo API lệnh
 	Commits	Commit
 	Community	Cộng đồng
 	Company	Công ty
@@ -4748,6 +4749,7 @@ theme	Appearance	Giao diện
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Đã tải “{name}”: bỏ qua {n} bước
 @msg	not an action set file	không phải tệp bộ hành động
 @msg	the action set file is larger than 8 MiB	tệp bộ hành động lớn hơn 8 MiB
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: tài liệu tham khảo sẽ lớn hơn {MAX_BYTES} byte
 @msg	the action set file holds more than 1,000 actions	tệp bộ hành động chứa hơn 1.000 hành động
 @msg	the action set file needs a later version of VectorCraft	tệp bộ hành động cần phiên bản VectorCraft mới hơn
 @msg	an action in the action set file has more than 10,000 steps	một hành động trong tệp bộ hành động có hơn 10.000 bước

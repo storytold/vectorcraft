@@ -964,6 +964,7 @@ lighting	Light	Valo
 	Color Picker…	Värivalitsin…
 	Coming soon — tracked in the parity plan	Tulossa pian — seurataan yhdenmukaisuussuunnitelmassa
 	Command Dialog	Komentovalintaikkuna
+	Command API Reference	Komentojen API-viite
 	Copy Selected Style	Kopioi valittu tyyli
 	Corners…	Kulmat…
 	Define Perspective Grid…	Määritä perspektiiviruudukko…
@@ -4630,6 +4631,7 @@ imageTrace	Outline	Ääriviiva
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Ladattiin ”{name}”: jätettiin pois {n} vaihe|Ladattiin ”{name}”: jätettiin pois {n} vaihetta
 @msg	not an action set file	ei ole toimintosarjatiedosto
 @msg	the action set file is larger than 8 MiB	toimintosarjatiedosto on suurempi kuin 8 MiB
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: viite olisi suurempi kuin {MAX_BYTES} tavua
 @msg	the action set file holds more than 1,000 actions	toimintosarjatiedostossa on yli 1 000 toimintoa
 @msg	the action set file needs a later version of VectorCraft	toimintosarjatiedosto vaatii uudemman VectorCraft-version
 @msg	an action in the action set file has more than 10,000 steps	toimintosarjatiedoston toiminnossa on yli 10 000 vaihetta

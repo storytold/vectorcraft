@@ -985,6 +985,7 @@ lighting	Light	Světlo
 	Color Picker…	Výběr barvy…
 	Coming soon — tracked in the parity plan	Připravujeme — sledováno v plánu parity
 	Command Dialog	Dialogové okno příkazu
+	Command API Reference	Reference API příkazů
 	Copy Selected Style	Kopírovat vybraný styl
 	Corners…	Rohy…
 	Define Perspective Grid…	Definovat perspektivní mřížku…
@@ -4722,6 +4723,7 @@ imageTrace	Outline	Obrys
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Načteno „{name}“: vynechán {n} krok|Načteno „{name}“: vynechány {n} kroky|Načteno „{name}“: vynecháno {n} kroků
 @msg	not an action set file	není to soubor sady akcí
 @msg	the action set file is larger than 8 MiB	soubor sady akcí je větší než 8 MiB
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: reference by byla větší než {MAX_BYTES} bajtů
 @msg	the action set file holds more than 1,000 actions	soubor sady akcí obsahuje více než 1 000 akcí
 @msg	the action set file needs a later version of VectorCraft	soubor sady akcí vyžaduje novější verzi aplikace VectorCraft
 @msg	an action in the action set file has more than 10,000 steps	akce v souboru sady akcí má více než 10 000 kroků
