@@ -2016,6 +2016,8 @@ fn a_dash_typed_in_a_stroke_popup_sticks_when_a_click_outside_closes_it() {
         let dash = |app: &VectorcraftApp| current_stroke(app).and_then(|s| s.dash).map(|d| d.pattern);
         assert_eq!(dash(&app), Some(vec![10.0]), "{link}: nothing set while typing");
         click(&ctx, &mut app, egui::pos2(5.0, 3000.0), show);
+        let surrender = ctx.options(|o| o.input_options.surrender_focus_on);
+        assert_eq!(surrender, egui::SurrenderFocusOn::Clicks, "{link}: fields let go of the keyboard on a click again");
         frame_events(&ctx, &mut app, vec![], show);
         assert_eq!(dash(&app).and_then(|p| p.first().copied()), Some(4.0), "{link}: the typed dash stuck: {:?}", dash(&app));
         let texts = frame_events(&ctx, &mut app, vec![], show);

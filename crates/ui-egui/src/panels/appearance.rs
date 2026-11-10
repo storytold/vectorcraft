@@ -398,11 +398,9 @@ pub(crate) fn row_popup(app: &mut VectorcraftApp, ctx: &egui::Context, panel: Re
         }
         last = true;
     }
-    // Fields let go of the keyboard on a click, which this press isn't yet.
-    let surrender = ctx.options(|o| o.input_options.surrender_focus_on);
-    if last {
-        ctx.options_mut(|o| o.input_options.surrender_focus_on = egui::SurrenderFocusOn::Presses);
-    }
+    // Fields let go of the keyboard on a click, which this press isn't yet. The app-wide option
+    // goes back however this function ends, a panic in the panel included.
+    let _surrender = last.then(|| SurrenderOnPress::set(ctx));
     let screen = ctx.content_rect();
     let left = panel.left() - POPUP_GAP - POPUP_W;
     let x = if left >= screen.left() + POPUP_GAP { left } else { (panel.right() + POPUP_GAP).min(screen.right() - POPUP_W - POPUP_GAP) };
@@ -430,8 +428,26 @@ pub(crate) fn row_popup(app: &mut VectorcraftApp, ctx: &egui::Context, panel: Re
         });
     });
     if last {
-        ctx.options_mut(|o| o.input_options.surrender_focus_on = surrender);
         close(app);
+    }
+}
+
+/// While it lives, a press anywhere makes a field let go of the keyboard, as a click does
+/// otherwise; dropped, egui's previous `surrender_focus_on` is back ([`row_popup`]'s last frame).
+struct SurrenderOnPress(egui::Context, egui::SurrenderFocusOn);
+
+impl SurrenderOnPress {
+    fn set(ctx: &egui::Context) -> Self {
+        let before = ctx.options(|o| o.input_options.surrender_focus_on);
+        ctx.options_mut(|o| o.input_options.surrender_focus_on = egui::SurrenderFocusOn::Presses);
+        Self(ctx.clone(), before)
+    }
+}
+
+impl Drop for SurrenderOnPress {
+    fn drop(&mut self) {
+        let before = self.1;
+        self.0.options_mut(|o| o.input_options.surrender_focus_on = before);
     }
 }
 
