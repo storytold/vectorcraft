@@ -140,7 +140,8 @@ pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf:
         None => b,
     });
     let st = app.session.active();
-    let big = st.is_some_and(|st| too_many_anchors(st.selection.objects.iter().filter_map(|id| st.doc.node(*id))));
+    let show_marks = !crate::dialogs::halftone::previewing(app);
+    let big = show_marks && st.is_some_and(|st| too_many_anchors(st.selection.objects.iter().filter_map(|id| st.doc.node(*id))));
     let big_bounds = if big { app.selection_bounds() } else { None };
     let app = &*app;
     let Some(st) = app.session.active() else { return };
@@ -152,24 +153,27 @@ pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf:
     let options = mark_options(app, curve_points_from_tool);
     let grow = options.look.grow;
     let anchor = |direct: bool| grow + if direct { 5.0 } else { 4.0 };
-    // Too many paths to outline: the selection's bounds stand for them.
-    if let Some((b, id)) = big_bounds.zip(st.selection.objects.first()) {
-        stroke_path(p, &vectorcraft_geom::shapes::rectangle(b).to_bezpath(), xf, Stroke::new(1.0, c32(st.doc.layer_color(*id))));
+    // The temporary halftone selects its dots; their marks obscure the art (#6369).
+    if show_marks {
+        // Too many paths to outline: the selection's bounds stand for them.
+        if let Some((b, id)) = big_bounds.zip(st.selection.objects.first()) {
+            stroke_path(p, &vectorcraft_geom::shapes::rectangle(b).to_bezpath(), xf, Stroke::new(1.0, c32(st.doc.layer_color(*id))));
+        }
+        // The key object (Align to Key Object): its outline drawn thicker, or its bounds when it has
+        // too many paths to outline.
+        let key = st.selection.key.and_then(|k| Some((k, st.doc.node(k)?)));
+        let (key_bounds, key_outline) = match key {
+            Some((k, n)) if too_many_anchors([n]) => (Some((k, n)), None),
+            Some((k, _)) => (None, Some(k)),
+            None => (None, None),
+        };
+        if let Some((k, n)) = key_bounds
+            && let Some(b) = n.geometric_bounds_with(&symbols)
+        {
+            stroke_path(p, &vectorcraft_geom::shapes::rectangle(b).to_bezpath(), xf, Stroke::new(KEY_OUTLINE, c32(st.doc.layer_color(k))));
+        }
+        marks.paint(st, p, xf, &options, key_outline, if big { &[] } else { &st.selection.objects });
     }
-    // The key object (Align to Key Object): its outline drawn thicker, or its bounds when it has
-    // too many paths to outline.
-    let key = st.selection.key.and_then(|k| Some((k, st.doc.node(k)?)));
-    let (key_bounds, key_outline) = match key {
-        Some((k, n)) if too_many_anchors([n]) => (Some((k, n)), None),
-        Some((k, _)) => (None, Some(k)),
-        None => (None, None),
-    };
-    if let Some((k, n)) = key_bounds
-        && let Some(b) = n.geometric_bounds_with(&symbols)
-    {
-        stroke_path(p, &vectorcraft_geom::shapes::rectangle(b).to_bezpath(), xf, Stroke::new(KEY_OUTLINE, c32(st.doc.layer_color(k))));
-    }
-    marks.paint(st, p, xf, &options, key_outline, if big { &[] } else { &st.selection.objects });
     // The spine of each selected blend (or of the blend a selected key object belongs to).
     let mut spines = vec![];
     for id in &st.selection.objects {
