@@ -5471,7 +5471,7 @@ mark-style	Japanese	Japanilainen
 	Bevel both sides	Viiste molemmin puolin
 	Presets	Esiasetukset
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Objektilla voi olla yksi 3D-tehoste. Muokkaa olemassa olevan tehosteen asetuksia tai poista se ensin.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} vaatii tällä hetkellä polun tai yhdistelmäpolun. Muunna teksti, kuvat ja ryhmät ensin poluiksi.
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} vaatii tällä hetkellä polun, yhdistelmäpolun, tekstin tai ryhmän. Muunna kuvat ja muut objektit ensin poluiksi.
 @msg	{label} requires a shape with at least two anchors	{label} vaatii muodon, jossa on vähintään kaksi ankkuria
 @msg	The shape is too complex for a 3D effect	Muoto on liian monimutkainen 3D-tehosteelle
 @msg	The 3D surface is too complex; simplify the shape	3D-pinta on liian monimutkainen; yksinkertaista muotoa

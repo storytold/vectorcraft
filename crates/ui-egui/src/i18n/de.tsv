@@ -5154,7 +5154,7 @@ lighting	Light	Licht
 	Bevel both sides	Abgeflachte Kante beidseitig
 	Presets	Vorgaben
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Ein Objekt kann nur einen 3D-Effekt haben. Bearbeiten Sie die Optionen des vorhandenen Effekts oder entfernen Sie ihn zuerst.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} erfordert derzeit einen Pfad oder zusammengesetzten Pfad. Wandeln Sie Text, Bilder und Gruppen zuerst in Pfade um.
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} erfordert derzeit einen Pfad, zusammengesetzten Pfad, Text oder eine Gruppe. Wandeln Sie Bilder und andere Objekte zuerst in Pfade um.
 @msg	{label} requires a shape with at least two anchors	{label} erfordert eine Form mit mindestens zwei Ankerpunkten
 @msg	The shape is too complex for a 3D effect	Die Form ist für einen 3D-Effekt zu komplex
 @msg	The 3D surface is too complex; simplify the shape	Die 3D-Oberfläche ist zu komplex; vereinfachen Sie die Form

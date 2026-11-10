@@ -115,7 +115,8 @@ pub(crate) fn subpath_selected_segments(
     let n = sp.anchors.len();
     let mut selected_segs = BTreeSet::new();
 
-    let has_explicit_segs = seg_refs.is_some_and(|segments| segments.iter().any(|&(s, _)| s == si));
+    // Segments picked anywhere on the path leave anchors out of it, as Clear does.
+    let has_explicit_segs = seg_refs.is_some_and(|segments| !segments.is_empty());
     if has_explicit_segs {
         if let Some(segments) = seg_refs {
             for &(s, seg) in segments {

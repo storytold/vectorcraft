@@ -5157,7 +5157,7 @@ lighting	Light	광원
 	Bevel both sides	양면 베벨
 	Presets	사전 설정
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	오브젝트에는 3D 효과를 하나만 적용할 수 있습니다. 기존 효과의 옵션을 편집하거나 먼저 제거하십시오.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label}에는 현재 패스 또는 컴파운드 패스가 필요합니다. 문자, 이미지 및 그룹을 먼저 패스로 변환하십시오.
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label}에는 현재 패스, 컴파운드 패스, 문자 또는 그룹이 필요합니다. 이미지 및 기타 개체를 먼저 패스로 변환하십시오.
 @msg	{label} requires a shape with at least two anchors	{label}에는 고정점이 두 개 이상인 모양이 필요합니다
 @msg	The shape is too complex for a 3D effect	모양이 너무 복잡하여 3D 효과를 적용할 수 없습니다
 @msg	The 3D surface is too complex; simplify the shape	3D 표면이 너무 복잡합니다. 모양을 단순화하십시오

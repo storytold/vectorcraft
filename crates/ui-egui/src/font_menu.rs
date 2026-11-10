@@ -12,8 +12,8 @@
 //! the mouse wheel turned over the closed field applies the next family (or previous one) to the
 //! selected text, one undo step per notch. The menu's order at the first turn stays fixed until the
 //! pointer leaves the field or the text selection changes; steps stop at its first and last family.
-//! The field takes the wheel only when the pointer was moved onto it after the field last moved and
-//! the wheel stream began there.
+//! The field takes the wheel only when the pointer was moved onto it after the field last moved or
+//! was covered by a window or overlay, and the wheel stream began there.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -685,6 +685,9 @@ fn remember_wheel_field(ui: &Ui, resp: &egui::Response, enabled: bool) -> Vec<Wh
 fn remember_owned_wheel_field(ui: &Ui, resp: &egui::Response, enabled: bool, menu: egui::Id, owner: Option<WheelOwner>) -> Vec<WheelInput> {
     let key = wheel_fields_id(ui.ctx().viewport_id());
     let pass = ui.ctx().cumulative_pass_nr();
+    // A window or overlay over the pointer covers the field even when no input arrives.
+    let pointer = ui.data_mut(|d| d.get_temp_mut_or_default::<WheelFields>(key).pointer).or_else(|| ui.ctx().input(|i| i.pointer.latest_pos()));
+    let covered = pointer.is_some_and(|p| resp.interact_rect.contains(p) && ui.ctx().layer_id_at(p) != Some(resp.layer_id));
     ui.data_mut(|d| {
         let mut fields: WheelFields = d.get_temp(key).unwrap_or_default();
         if fields.pass != pass {
@@ -695,7 +698,7 @@ fn remember_owned_wheel_field(ui: &Ui, resp: &egui::Response, enabled: bool, men
         if let Some(armed) = &mut fields.armed
             && armed.id == resp.id
         {
-            if armed.rect == resp.interact_rect && pass.saturating_sub(armed.pass) <= 1 {
+            if armed.rect == resp.interact_rect && pass.saturating_sub(armed.pass) <= 1 && !covered {
                 armed.pass = pass;
             } else {
                 fields.armed = None;
@@ -714,8 +717,8 @@ fn remember_owned_wheel_field(ui: &Ui, resp: &egui::Response, enabled: bool, men
 /// Take the closed font fields' wheel events before egui smooths and combines them. Other
 /// events stay in the input, so scrolling elsewhere keeps its own delta and event order. A field
 /// takes a wheel stream only when the stream begins with the pointer over it and the pointer was
-/// moved onto it after the field last moved. A stream that began anywhere else stays there until
-/// it ends, and a stream that leaves its field does not return to it.
+/// moved onto it after the field last moved or was covered. A stream that began anywhere else
+/// stays there until it ends, and a stream that leaves its field does not return to it.
 pub(crate) fn take_raw_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
     let key = wheel_fields_id(raw.viewport_id);
     let Some(mut fields) = ctx.data(|d| d.get_temp::<WheelFields>(key)) else { return };

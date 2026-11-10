@@ -1,6 +1,6 @@
 //! Wheel streams for the fields that step on the wheel (number fields and the closed font family
 //! field). A field takes a wheel stream only when the stream begins with the pointer over it and
-//! the pointer was moved onto it after the field last moved.
+//! the pointer was moved onto it after the field last moved or was covered by a window or overlay.
 
 /// The seconds without wheel input that end a wheel stream. This is VectorCraft's own value.
 pub(crate) const WHEEL_STREAM_GAP: f64 = 0.5;
@@ -11,7 +11,7 @@ pub(crate) fn taken_from_raw_id(viewport: egui::ViewportId) -> egui::Id {
     egui::Id::unique("wheel-taken-from-raw").with(viewport)
 }
 
-/// The field the pointer was last moved onto, while that field stays where it was.
+/// The field the pointer was last moved onto, while that field stays where it was and uncovered.
 #[derive(Clone, Copy)]
 pub(crate) struct ArmedWheelField {
     pub(crate) id: egui::Id,

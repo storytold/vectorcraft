@@ -358,6 +358,11 @@ fn activating_the_family_popup_leaves_its_wheel_input_available() {
 /// A family field at `top`, the input's clock at `time`. Returns the wheel events left in the
 /// input, the notches the field took and the point in the middle of the field.
 fn stream_frame(ctx: &egui::Context, top: Option<f32>, time: f64, events: Vec<egui::Event>) -> (usize, i32, egui::Pos2) {
+    covered_stream_frame(ctx, top, false, time, events)
+}
+
+/// [`stream_frame`], with an overlay over the whole field when `covered` is set.
+fn covered_stream_frame(ctx: &egui::Context, top: Option<f32>, covered: bool, time: f64, events: Vec<egui::Event>) -> (usize, i32, egui::Pos2) {
     let mut raw = egui::RawInput { time: Some(time), events, ..Default::default() };
     super::take_raw_wheel(ctx, &mut raw);
     let left = raw.events.iter().filter(|e| matches!(e, egui::Event::MouseWheel { .. })).count();
@@ -372,6 +377,12 @@ fn stream_frame(ctx: &egui::Context, top: Option<f32>, time: f64, events: Vec<eg
             if let super::WheelInput::Notches(n) = turn {
                 notches += n;
             }
+        }
+        if covered {
+            let cover = rect.expand(5.0);
+            egui::Area::new(egui::Id::unique("stream overlay")).order(egui::Order::Foreground).fixed_pos(cover.min).show(ui.ctx(), |ui| {
+                ui.allocate_exact_size(cover.size(), egui::Sense::click());
+            });
         }
     });
     out.textures_delta.clear();
@@ -476,6 +487,32 @@ fn a_field_that_moves_away_and_back_needs_the_pointer_moved_again() {
     stream_frame(&ctx, Some(40.0), 110.0, vec![egui::Event::PointerMoved(point), egui::Event::PointerGone]);
     let (left, notches, _) = stream_frame(&ctx, Some(40.0), 120.0, vec![plain_turn()]);
     assert_eq!((left, notches), (1, 0), "the pointer left the window");
+}
+
+/// An overlay that comes and goes over a still pointer, with no input while it is up, leaves the
+/// field needing the pointer moved again; a stream the field held leaves it.
+#[test]
+fn a_field_covered_by_an_overlay_needs_the_pointer_moved_again() {
+    let (ctx, point) = stream_context(40.0);
+    stream_frame(&ctx, Some(40.0), 110.0, vec![egui::Event::PointerMoved(point)]);
+    covered_stream_frame(&ctx, Some(40.0), true, 111.0, vec![]);
+    covered_stream_frame(&ctx, Some(40.0), true, 112.0, vec![]);
+    stream_frame(&ctx, Some(40.0), 113.0, vec![]);
+    stream_frame(&ctx, Some(40.0), 114.0, vec![]);
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 120.0, vec![plain_turn()]);
+    assert_eq!((left, notches), (1, 0), "the overlay covered the field");
+    let nudged = point + egui::vec2(2.0, 0.0);
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 130.0, vec![egui::Event::PointerMoved(nudged), plain_turn()]);
+    assert_eq!((left, notches), (0, 1), "the pointer moved onto the field again");
+
+    let (ctx, point) = stream_context(40.0);
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.0, vec![egui::Event::PointerMoved(point), plain_turn()]);
+    assert_eq!((left, notches), (0, 1));
+    covered_stream_frame(&ctx, Some(40.0), true, 110.1, vec![]);
+    covered_stream_frame(&ctx, Some(40.0), true, 110.2, vec![]);
+    stream_frame(&ctx, Some(40.0), 110.3, vec![]);
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.4, vec![plain_turn()]);
+    assert_eq!((left, notches), (1, 0), "the overlay covered the field during the stream");
 }
 
 /// A field missing from a pass loses the pointer's placement while another font field keeps

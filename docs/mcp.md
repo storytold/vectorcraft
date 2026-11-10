@@ -1387,9 +1387,13 @@ vectorcraft-cli run --cmd file.new --params '{"width":600,"height":200}'   --cmd
 Some commands have a machine-readable parameter schema: at present `view.capsLock`, `view.saved.new`,
 `view.saved.edit`, `view.saved.list`, `view.transparencyGrid` and `view.snapToGlyph.options`. The engine's
 `engine.commands` list gives such a command a `schema` field: an object schema in the shape of JSON Schema 2020-12
-(https://json-schema.org/draft/2020-12), with `type`, `properties`, `required`, `additionalProperties: false`,
-`minimum`, `maximum`, `exclusiveMinimum` and `exclusiveMaximum` for ranges, `enum`, and `default` for a default the engine fills in. VectorCraft's own
-fields are `x-since` (the API level that added the command or the parameter), `x-deprecatedSince`, `x-lenient`,
+(https://json-schema.org/draft/2020-12). Its root has `$schema` (the 2020-12 dialect), `description` when the
+command has a summary, and `deprecated: true` when the command is deprecated. The schema uses `type`, `properties`, `required` and
+`additionalProperties: false` for objects; `minimum`, `maximum`, `exclusiveMinimum` and `exclusiveMaximum` for ranges;
+`enum` for a list of names; `items` for the values of a list; `prefixItems`, `items: false` and `minItems: 2` for a
+point; `anyOf` and `minItems: 3` for a color, which is a string, a list of at least three numbers or an object;
+`description` for a parameter's doc text; `default` for a default the engine fills in; and `deprecated: true` for a
+deprecated parameter. VectorCraft's own fields are `x-since` (the API level that added the command or the parameter), `x-deprecatedSince`, `x-lenient`,
 `x-unit`, `x-kind` (`id`, `color` or `point`), `x-default` (a default the command works out, such as `toggle`),
 `x-cost`, `x-writes` (`nothing`, `session`, `preferences` or `document`) and `x-returns`. A parameter that reads null
 as left out is an `anyOf` with `{"type": "null"}`. Null params read as `{}`, so a schema with no required parameter has
@@ -2383,10 +2387,12 @@ default) white ones knock out instead; `"discard"` writes none.
 
 ## Revolve (initial 3D effect)
 
-`effect.apply {effect: "threeD.revolve", params: {...}, ids?, item?}` applies a live Revolve to a path
-or compound path. `effect.dialog` opens compact options with artboard rotation and light gizmos, `effect.setParams` edits it, and
+`effect.apply {effect: "threeD.revolve", params: {...}, ids?, item?}` applies a live Revolve to a path,
+compound path, type, or a group or layer of them. `effect.dialog` opens compact options with artboard rotation and light gizmos, `effect.setParams` edits it, and
 `effect.expandAppearance` bakes it into shaded vector faces. Native saves keep the editable source;
 SVG/PDF exports bake the same faces the canvas draws. Only one Revolve is supported per profile.
+Type sweeps as its glyph outlines and stays type. On a group or layer, every visible member sweeps about one axis on the chosen edge of the members' bounds together, in its own paint, and the members stay editable. A group holding a clipping group, an image, a symbol instance or another object that can't be swept is refused, and so is type with no outlines or a group with no shape in it.
+A surface takes at most 16,384 profile points and 163,840 faces, the members of a group together, counted after any geometry effects before the Revolve. A straight segment takes one point, a curve takes at least four, and each contour takes one. Each curved segment takes 16 samples; on a surface over those limits every curve takes as many as fit, down to 4, and the call is refused below that with "reduce Segments or simplify the profile". The call is also refused with "reduce Segments or simplify the gradient" when the faces' copies of the paint would take more than 256 MiB, counted together for the members of a group and for the fills and strokes of one object that carry a Revolve. To find the holes, mesh export cuts each sampled piece of a closed contour where it crosses another closed contour, adding a profile point at each cut, and tests the middle of each part against the closed contours whose bounds share its cell of a grid over the profile. It refuses the profile as too complex when its contours overlap so much that the search would take more than 16,000,000 steps, where each path element tested, each contour looked at and each contour placed in a grid cell counts one.
 
 Parameters: `angle` (degrees, 0..360, default 360), `offset` (points, 0..100000, default 0),
 `edge` (`"left"` or `"right"`), `rotationX/Y/Z` (degrees, defaults 0/0/0), `perspectiveAngle`
@@ -2459,7 +2465,8 @@ checked as that effect's. It is one undo step. Any other `threeDType` value, or 
 
 `effect.apply {effect: "threeD.extrude" | "threeD.inflate" | "threeD.rotate", params: {...}, ids?, item?}` applies
 the other 3D types to a path or compound path, live like Revolve (the source stays editable; SVG/PDF exports and
-`effect.expandAppearance` use the same shaded faces). An object takes one 3D effect, Revolve included.
+`effect.expandAppearance` use the same shaded faces). An object takes one 3D effect, Revolve included. On a group or
+layer the 3D effect goes on the group itself: `effect.apply` and `effect.setParams` refuse one on its fill or stroke.
 
 `threeD.extrude`: `depth` (points, 0..2000, default 50), `twist` (degrees, 0..360, 0), `taper` (1..100%, 100),
 `cap` (true solid, false hollow), `bevel` (`none`, `classic`, `rounded`, `cove`, `step`, `ogee`), `bevelWidth`
@@ -3226,7 +3233,11 @@ the `…Open` rings…) and marks (`Bar`, `DoubleBar`, `DotOnBar`, `Slash`, `Dou
 Visual bounds (Fit to Selected Art, Rasterize, exporting all art) and clicks on the canvas take
 in the whole stroke as drawn: arrowheads, inside/outside alignment (an outside stroke is hit outside the path, an
 inside one inside it), the width profile's width where you click, projecting caps and miter spikes up to the miter
-limit. A rectangle's right-angle miters stay within half the weight of its edges.
+limit. A rectangle's right-angle miters stay within half the weight of its edges. A butt-capped stroke on an open
+path does not reach past the path's ends: a straight segment's box comes from the four corners of its stroked
+rectangle. Past an end, only a round or projecting cap or an arrowhead adds to the box. A curve that bends more
+tightly than half the stroke weight can measure a little larger than it paints, and a butt-dashed path whose first or
+last dash is a gap is measured to the path's ends.
 
 A symbol instance is measured by its symbol's art, placed by the instance's transform. The bounds in
 `document.inspect` and `document.node`, the Align commands, `object.setBounds`, the bounding box, clicks, marquees,
