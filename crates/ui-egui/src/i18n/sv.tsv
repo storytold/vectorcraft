@@ -4215,6 +4215,10 @@ axis	Both	Båda
 @msg	internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)	internt fel i `{cmd}`: {msg} (dokumentet lämnades som det var innan; rapportera gärna felet)
 @msg	internal error: {msg} (please report this bug)	internt fel: {msg} (rapportera gärna felet)
 @msg	invalid PDF setting: {0}	ogiltig PDF-inställning: {0}
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	sidan för rityta {n} är {size}, längre än PDF:s sidgräns på 14 400 pt (200 in): den skrivs med en UserUnit på {unit}, så appar som ignorerar UserUnit visar den så många gånger mindre
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	sidan för rityta {n} är {size}, längre än PDF:s sidgräns på 14 400 pt (200 in): {label}-sidor skrivs utan UserUnit, i punkter, och appar som håller sig till gränsen beskär sidan till 200 in
+@msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 har ingen UserUnit, som en sida längre än 14 400 pt (200 in) behöver för att behålla sin storlek: filen skrivs som PDF 1.6
+@msg	{label} pages can be at most 14,400 pt (200 in) on a side, and the page of artboard {n} is {side} pt long: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label}-sidor kan ha högst 14 400 pt (200 in) per sida, och sidan för rityta {n} är {side} pt lång: välj PDF 1.6 eller senare utan PDF/X-standard, eller en mindre rityta
 @msg	invalid image data for `{0}`	ogiltiga bilddata för `{0}`
 @msg	invalid parameters for `{cmd}`: {msg}	ogiltiga parametrar för `{cmd}`: {msg}
 @msg	is not an image VectorCraft reads	är inte en bild som VectorCraft kan läsa

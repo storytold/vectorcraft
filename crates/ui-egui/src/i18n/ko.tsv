@@ -4528,6 +4528,10 @@ theme	Appearance	외관
 @msg	artboard {0} does not exist	아트보드 {0}이(가) 없습니다
 @msg	cannot read PDF: {0}	PDF를 읽을 수 없습니다: {0}
 @msg	invalid PDF setting: {0}	잘못된 PDF 설정: {0}
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	아트보드 {n}의 페이지는 {size}로 PDF 페이지 한도 14,400 pt (200 in)보다 깁니다: UserUnit {unit}(으)로 기록되므로 UserUnit을 무시하는 앱에서는 그 배수만큼 작게 표시됩니다
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	아트보드 {n}의 페이지는 {size}로 PDF 페이지 한도 14,400 pt (200 in)보다 깁니다: {label} 페이지는 UserUnit 없이 포인트 단위로 기록되며, 한도를 지키는 앱은 페이지를 200 in으로 자릅니다
+@msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5에는 14,400 pt (200 in)보다 긴 페이지가 크기를 유지하는 데 필요한 UserUnit이 없습니다: 파일이 PDF 1.6으로 기록됩니다
+@msg	{label} pages can be at most 14,400 pt (200 in) on a side, and the page of artboard {n} is {side} pt long: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label} 페이지는 한 변이 최대 14,400 pt (200 in)인데 아트보드 {n}의 페이지는 {side} pt입니다: PDF/X 표준 없이 PDF 1.6 이상을 선택하거나 더 작은 아트보드를 사용하세요
 @msg	page {0} does not exist (the PDF has {1})	페이지 {0}이(가) 없습니다(PDF의 페이지 수: {1})
 @msg	thumbnail: no page {n} (the file has 1)	thumbnail: 페이지 {n}이(가) 없습니다(파일의 페이지 수: 1)
 @msg	the PDF has no pages	PDF에 페이지가 없습니다

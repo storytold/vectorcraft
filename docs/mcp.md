@@ -837,7 +837,10 @@ transparency and rasterized areas are clipped to their regions. A file that woul
 export. PDF/X-1a and PDF/X-3 files are PDF 1.3 files too.
 A page with a side longer than 14,400 pt is written with a `UserUnit` (PDF 1.6): its longer side divided by 14,400,
 rounded up to the next thousandth, with the page's sizes and coordinates in those units, so that no side is longer than
-14,400 units (ISO 32000-1, Annex C.2). In PDF 1.3 to 1.5 files and PDF/X files, such a page is written in points.
+14,400 units (ISO 32000-1, Annex C.2). A PDF 1.5 file with such a page is written as PDF 1.6, with a warning; PDF 1.3
+and 1.4 files, PDF/X-1a and PDF/X-3 among them, have no `UserUnit` and the export fails with an error naming the
+page. PDF/X-4 files at PDF 1.5 or 1.6 write such a page in points, and apps that keep to the limit cut it to 200 in. Each such page
+adds a warning with its size and how it is written. File › Print writes pages in points, 14,400 pt at most.
 
 An Illustrator EPS (version 9 on) or `.ai` file opens from the editing data it carries (after the EPS page; in the
 `.ai` file's PDF private data): layers and sublayers (name, order, visibility, lock, printing, preview, dimming,

@@ -4314,6 +4314,10 @@ imageTrace	Outline	轮廓
 @msg	artboard {0} does not exist	画板 {0} 不存在
 @msg	cannot read PDF: {0}	无法读取 PDF：{0}
 @msg	invalid PDF setting: {0}	PDF 设置无效：{0}
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	画板 {n} 的页面为 {size}，超过 PDF 的页面上限 14,400 pt (200 in)：它以 UserUnit {unit} 写入，因此忽略 UserUnit 的应用会将其显示为缩小相应倍数
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	画板 {n} 的页面为 {size}，超过 PDF 的页面上限 14,400 pt (200 in)：{label} 页面不带 UserUnit，以点为单位写入，遵守上限的应用会将页面裁切为 200 in
+@msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 没有 UserUnit，而长于 14,400 pt (200 in) 的页面需要它来保持尺寸：文件将以 PDF 1.6 写入
+@msg	{label} pages can be at most 14,400 pt (200 in) on a side, and the page of artboard {n} is {side} pt long: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label} 页面每边最多 14,400 pt (200 in)，而画板 {n} 的页面长 {side} pt：请选择不带 PDF/X 标准的 PDF 1.6 或更高版本，或使用更小的画板
 @msg	page {0} does not exist (the PDF has {1})	页面 {0} 不存在 (该 PDF 有 {1} 页)
 @msg	thumbnail: no page {n} (the file has 1)	thumbnail：页面 {n} 不存在 (该文件有 1 页)
 @msg	the PDF has no pages	该 PDF 没有页面

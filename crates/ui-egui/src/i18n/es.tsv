@@ -4311,6 +4311,10 @@ axis	Both	Ambos
 @msg	internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)	error interno en `{cmd}`: {msg} (el documento quedó como estaba; por favor, informa de este error)
 @msg	internal error: {msg} (please report this bug)	error interno: {msg} (por favor, informa de este error)
 @msg	invalid PDF setting: {0}	ajuste de PDF no válido: {0}
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	la página de la mesa de trabajo {n} mide {size}, más que el límite de página de PDF de 14.400 pt (200 in): se escribe con un UserUnit de {unit}, así que las aplicaciones que ignoran UserUnit la muestran ese número de veces más pequeña
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	la página de la mesa de trabajo {n} mide {size}, más que el límite de página de PDF de 14.400 pt (200 in): las páginas {label} se escriben sin UserUnit, en puntos, y las aplicaciones que respetan el límite recortan la página a 200 in
+@msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 no tiene UserUnit, que una página de más de 14.400 pt (200 in) necesita para conservar su tamaño: el archivo se escribe como PDF 1.6
+@msg	{label} pages can be at most 14,400 pt (200 in) on a side, and the page of artboard {n} is {side} pt long: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	las páginas {label} pueden tener como máximo 14.400 pt (200 in) por lado, y la página de la mesa de trabajo {n} mide {side} pt: elija PDF 1.6 o posterior sin estándar PDF/X, o una mesa de trabajo más pequeña
 @msg	invalid image data for `{0}`	datos de imagen no válidos para `{0}`
 @msg	invalid parameters for `{cmd}`: {msg}	parámetros no válidos para `{cmd}`: {msg}
 @msg	is not an image VectorCraft reads	no es una imagen que VectorCraft pueda leer

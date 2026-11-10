@@ -6454,6 +6454,10 @@ antiAlias	Sharp	शार्प
 @msg	invalid parameters for `{cmd}`: {msg}	`{cmd}` के लिए अमान्य पैरामीटर: {msg}
 @msg	invalid pattern tile choice	अमान्य पैटर्न टाइल ऑप्शन
 @msg	invalid PDF setting: {0}	Invalid PDF सेटिंग: {0}
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	आर्टबोर्ड {n} का पेज {size} है, जो PDF की 14,400 pt (200 in) की पेज सीमा से लंबा है: इसे {unit} के UserUnit के साथ लिखा जाता है, इसलिए UserUnit को अनदेखा करने वाले ऐप इसे उतने गुना छोटा दिखाते हैं
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	आर्टबोर्ड {n} का पेज {size} है, जो PDF की 14,400 pt (200 in) की पेज सीमा से लंबा है: {label} पेज बिना UserUnit के, पॉइंट में लिखे जाते हैं, और सीमा मानने वाले ऐप पेज को 200 in पर काट देते हैं
+@msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 में UserUnit नहीं है, जिसकी 14,400 pt (200 in) से लंबे पेज को अपना आकार बनाए रखने के लिए ज़रूरत होती है: फ़ाइल PDF 1.6 के रूप में लिखी जाती है
+@msg	{label} pages can be at most 14,400 pt (200 in) on a side, and the page of artboard {n} is {side} pt long: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label} पेजों की हर भुजा अधिकतम 14,400 pt (200 in) हो सकती है, और आर्टबोर्ड {n} का पेज {side} pt लंबा है: बिना PDF/X मानक के PDF 1.6 या बाद का चुनें, या छोटा आर्टबोर्ड
 @msg	invalid point	अमानवीय बिंदु
 @msg	Invalid point	अमानवीय बिंदु
 @msg	Invalid real scale	अमानवीय वास्तविक पैमाने

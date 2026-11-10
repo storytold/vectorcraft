@@ -1,5 +1,6 @@
 use super::writer::{Sheet, Writer, date_time};
 use super::{Affine, Document, ExportReport, Exporter, HashSet, PageBoxes, PdfError, PdfOptions, Rect, write};
+use crate::{Compatibility, PdfSettings, Standard};
 
 /// Export `doc` as PDF bytes: one page per artboard (or the artboards chosen in `opts`).
 pub fn export(doc: &Document, opts: &PdfOptions) -> Result<Vec<u8>, PdfError> {
@@ -49,6 +50,8 @@ fn export_with_report_inner(doc: &Document, opts: &PdfOptions, left_out: &mut Ha
     vectorcraft_doc::cancel::check().map_err(|_| PdfError::Cancelled)?;
     let doc = baked.as_ref().unwrap_or(doc);
     let pages = pages(doc, opts)?;
+    let raised = for_long_pages(set, &pages)?;
+    let set = raised.as_ref().unwrap_or(set);
 
     let title = crate::pdfx::title(set.standard, opts.title.clone().unwrap_or_else(|| doc.title.clone()));
     // The time of writing (none on the web) dates the editing data and the page information.
@@ -59,6 +62,11 @@ fn export_with_report_inner(doc: &Document, opts: &PdfOptions, left_out: &mut Ha
     let mut w = Writer::new(doc, set, &title, created_at, doc.color_mode == vectorcraft_doc::ColorMode::Cmyk)?;
     // Preserve Editing: the native document as an embedded file (`check` refused PDF/A with it).
     let mut warnings = set.warnings();
+    if raised.is_some() {
+        warnings.push(
+            "PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6".into(),
+        );
+    }
     let native = opts.native.as_deref().filter(|_| set.preserve_editing);
     if let Some(native) = native {
         w.pdf.document_mut().embed_file(crate::editing::embedded_file(native, set.compression.compress_text, now.map(date_time)));
@@ -104,6 +112,9 @@ fn export_with_report_inner(doc: &Document, opts: &PdfOptions, left_out: &mut Ha
         // `unit` points.
         let unit = if scales { user_unit(m.width(), m.height()) } else { 1.0 };
         units.push(unit);
+        if m.width().max(m.height()) > MAX_PAGE_SIDE {
+            warnings.push(long_page_warning(set, i, m.width(), m.height(), unit));
+        }
         let shift = Affine::translate((-m.x0, -m.y0));
         let view = if unit > 1.0 { Affine::scale(1.0 / unit) * shift } else { shift };
         let sheet = Sheet {
@@ -138,7 +149,7 @@ fn export_with_report_inner(doc: &Document, opts: &PdfOptions, left_out: &mut Ha
     let bytes = crate::post::rights(bytes, &doc.metadata)?;
     warnings.extend(more);
     let bytes = crate::post::user_units(bytes, &units)?;
-    let bytes = crate::post::finish(bytes, opts, native.is_some(), &mut warnings)?;
+    let bytes = crate::post::finish(bytes, opts, set, native.is_some(), &mut warnings)?;
     warnings.dedup();
     Ok(ExportReport { bytes, warnings })
 }
@@ -174,6 +185,46 @@ pub(crate) const MAX_PAGE_SIDE: f64 = 14_400.0;
 fn user_unit(w: f64, h: f64) -> f64 {
     let side = w.abs().max(h.abs());
     if side.is_finite() && side > MAX_PAGE_SIDE { (side / MAX_PAGE_SIDE * 1000.0).ceil() / 1000.0 } else { 1.0 }
+}
+
+/// The settings `set` is written with when one of `pages` has a side longer than
+/// [`MAX_PAGE_SIDE`]: a PDF 1.5 file that isn't a PDF/X file is written as PDF 1.6, which has a
+/// page's `UserUnit` (`None`: `set` as it is). PDF 1.3 and 1.4 files, of any standard, have no
+/// `UserUnit` and are refused.
+fn for_long_pages(set: &PdfSettings, pages: &[(usize, PageBoxes)]) -> Result<Option<PdfSettings>, PdfError> {
+    let Some((i, side)) = pages.iter().map(|(i, b)| (*i, b.media.width().max(b.media.height()))).find(|(_, side)| *side > MAX_PAGE_SIDE) else {
+        return Ok(None);
+    };
+    match set.compatibility {
+        Compatibility::Pdf13 | Compatibility::Pdf14 => {
+            // PDF/X-1a and PDF/X-3 files are always PDF 1.3: the standard names the limit.
+            let label = if matches!(set.standard, Standard::PdfX1a | Standard::PdfX3) { set.standard.label() } else { set.compatibility.label() };
+            let (n, side) = (i + 1, format!("{:.0}", side.ceil()));
+            Err(PdfError::BadSetting(format!(
+                "{label} pages can be at most 14,400 pt (200 in) on a side, and the page of artboard {n} is {side} pt long: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard"
+            )))
+        }
+        Compatibility::Pdf15 if !set.standard.is_pdfx() => Ok(Some(PdfSettings { compatibility: Compatibility::Pdf16, ..set.clone() })),
+        _ => Ok(None),
+    }
+}
+
+/// The warning for the page of artboard `artboard` (0-based), `w` × `h` points large with a side
+/// longer than [`MAX_PAGE_SIDE`], written in units of `unit` points.
+fn long_page_warning(set: &PdfSettings, artboard: usize, w: f64, h: f64, unit: f64) -> String {
+    const METERS_PER_POINT: f64 = 0.0254 / 72.0;
+    let n = artboard + 1;
+    let size = format!("{w:.0} × {h:.0} pt ({:.2} × {:.2} m)", w * METERS_PER_POINT, h * METERS_PER_POINT);
+    if unit > 1.0 {
+        format!(
+            "the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller"
+        )
+    } else {
+        let label = set.standard.label();
+        format!(
+            "the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in"
+        )
+    }
 }
 
 /// The RGB colours and non-CMYK images a CMYK document carries, which the export separates into

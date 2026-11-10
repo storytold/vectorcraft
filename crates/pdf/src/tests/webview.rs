@@ -405,7 +405,7 @@ fn with_both_off_the_file_is_unchanged() {
     assert_eq!(export(&d, &off).unwrap(), plain, "the default export");
     // Finishing leaves the written file as it is.
     let mut warnings = vec![];
-    assert_eq!(crate::post::finish(plain.clone(), &off, false, &mut warnings).unwrap(), plain);
+    assert_eq!(crate::post::finish(plain.clone(), &off, &off.settings, false, &mut warnings).unwrap(), plain);
     assert!(warnings.is_empty());
     // Thumbnails given but not asked for are left out.
     let given = PdfOptions { thumbnails: vec![thumb(10, 10, 0); 2], ..off };

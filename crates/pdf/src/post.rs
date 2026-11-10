@@ -203,10 +203,10 @@ fn linearised(pdf: &[u8], set: &PdfSettings) -> Result<Vec<u8>, PdfError> {
     linearize::write(&encrypted, &plan, cipher.as_mut())
 }
 
-/// The file the export wrote (`pdf`), finished as `opts` say; `editing`: it carries the editing
-/// data, to seal once the pages are final. What can't be done comes back in `warnings`.
-pub(crate) fn finish(pdf: Vec<u8>, opts: &PdfOptions, editing: bool, warnings: &mut Vec<String>) -> Result<Vec<u8>, PdfError> {
-    let set = &opts.settings;
+/// The file the export wrote (`pdf`), finished as `opts` say with the settings `set` (`opts`'s, at
+/// the PDF version the export wrote); `editing`: it carries the editing data, to seal once the
+/// pages are final. What can't be done comes back in `warnings`.
+pub(crate) fn finish(pdf: Vec<u8>, opts: &PdfOptions, set: &PdfSettings, editing: bool, warnings: &mut Vec<String>) -> Result<Vec<u8>, PdfError> {
     let pdf = match (set.thumbnails, opts.thumbnails.is_empty()) {
         (true, false) => thumbnails(pdf, &opts.thumbnails, set.standard.is_pdfx())?,
         (true, true) => {

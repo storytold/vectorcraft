@@ -4074,6 +4074,10 @@ axis	Both	Her İkisi
 @msg	internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)	`{cmd}`de dahili hata: {msg} (belge daha önce olduğu gibi bırakıldı; lütfen bu hatayı bildirin)
 @msg	internal error: {msg} (please report this bug)	dahili hata: {msg} (lütfen bu hatayı bildirin)
 @msg	invalid PDF setting: {0}	geçersiz PDF ayarı: {0}
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	{n} çalışma yüzeyinin sayfası {size}, PDF'nin 14.400 pt (200 in) sayfa sınırından uzun: {unit} UserUnit değeriyle yazılır, bu yüzden UserUnit'i yok sayan uygulamalar onu o kadar kat küçük gösterir
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	{n} çalışma yüzeyinin sayfası {size}, PDF'nin 14.400 pt (200 in) sayfa sınırından uzun: {label} sayfaları UserUnit olmadan, punto cinsinden yazılır ve sınıra uyan uygulamalar sayfayı 200 in'de keser
+@msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5'te, 14.400 pt (200 in) uzunluğunu aşan bir sayfanın boyutunu koruması için gereken UserUnit yoktur: dosya PDF 1.6 olarak yazılır
+@msg	{label} pages can be at most 14,400 pt (200 in) on a side, and the page of artboard {n} is {side} pt long: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label} sayfalarının her kenarı en fazla 14.400 pt (200 in) olabilir ve {n} çalışma yüzeyinin sayfası {side} pt uzunluğunda: PDF/X standardı olmadan PDF 1.6 veya sonrasını ya da daha küçük bir çalışma yüzeyi seçin
 @msg	invalid image data for `{0}`	`{0}` için geçersiz resim verileri
 @msg	invalid parameters for `{cmd}`: {msg}	`{cmd}` için geçersiz parametreler: {msg}
 @msg	is not an image VectorCraft reads	VectorCraft'ın okuduğu bir resim değil
