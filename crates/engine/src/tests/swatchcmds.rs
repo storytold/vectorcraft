@@ -3,7 +3,7 @@
 //! document's colour mode.
 
 use serde_json::{Value, json};
-use vectorcraft_color::Paint;
+use vectorcraft_color::{Color, Paint};
 
 use crate::*;
 
@@ -125,6 +125,275 @@ fn add_used_colors_skips_colours_that_have_swatches() {
     assert!(doc(&s).swatch("R=171 G=205 B=239").unwrap().global);
 }
 
+/// Give `id` the fill `p` exactly as written (a command would round or convert some colors).
+fn set_fill(s: &mut Session, id: NodeId, p: Paint) {
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).unwrap().appearance.set_fill(p);
+}
+
+/// Rectangles filled with repeated colors, near-equal colors that get the same name, a color and
+/// its twin with a -0.0 component, a color whose name a swatch already has, and colors two
+/// swatches already have (one of them through -0.0). Returns the rectangles in paint order.
+fn used_colors_doc(s: &mut Session) -> Vec<NodeId> {
+    run(s, "swatch.new", json!({"name": "Gray K=33", "color": "#00ff00"}));
+    run(s, "swatch.new", json!({"name": "Zeroed", "color": "#0080ff"}));
+    let red = doc(s).swatch("Red").unwrap().paint.color().unwrap();
+    let colors = [
+        Color::rgb(0.2, 0.4, 0.6),
+        Color::rgb(0.2, 0.4, 0.6),
+        Color::rgb(0.2, 0.4, 0.6001),
+        Color::rgb(0.0, 0.4, 0.6),
+        Color::rgb(-0.0, 0.4, 0.6),
+        Color::gray(0.33),
+        Color::gray(0.3301),
+        red,
+        Color::rgb(-0.0, 128.0 / 255.0, 1.0),
+        Color::rgb(0.2, 0.4, 0.6001),
+    ];
+    colors
+        .into_iter()
+        .map(|c| {
+            let id = rect_filled(s, json!({"color": "#000000"}));
+            set_fill(s, id, Paint::solid(c));
+            id
+        })
+        .collect()
+}
+
+const USED_NAMES: [&str; 5] = ["R=51 G=102 B=153", "R=51 G=102 B=153 2", "R=0 G=102 B=153", "Gray K=33 2", "Gray K=33 3"];
+
+#[test]
+fn add_used_colors_adds_each_new_color_once_with_free_names() {
+    let mut s = session();
+    used_colors_doc(&mut s);
+    let before = doc(&s).clone();
+    let undo = undo_len(&s);
+    let r = run(&mut s, "swatch.addUsedColors", json!({}));
+    assert_eq!(r, json!({"added": USED_NAMES, "linked": 0}));
+    assert_eq!(names(&s, None)[names(&s, None).len() - 5..], USED_NAMES);
+    let color = |n: &str| doc(&s).swatch(n).unwrap().paint.color().unwrap();
+    assert_eq!(color("R=51 G=102 B=153 2"), Color::rgb(0.2, 0.4, 0.6001));
+    assert_eq!(color("Gray K=33 3"), Color::gray(0.3301));
+    assert_eq!(undo_len(&s), undo + 1);
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(*doc(&s), before);
+}
+
+#[test]
+fn add_used_colors_global_links_every_paint_of_a_new_color() {
+    let mut s = session();
+    let ids = used_colors_doc(&mut s);
+    let r = run(&mut s, "swatch.addUsedColors", json!({"global": true}));
+    assert_eq!(r, json!({"added": USED_NAMES, "linked": 8}));
+    let link = |s: &Session, id: NodeId| match fill(s, id) {
+        Paint::Solid { swatch, .. } => swatch,
+        p => panic!("{p:?}"),
+    };
+    // The index in USED_NAMES of the swatch each rectangle links to.
+    let want = [Some(0), Some(0), Some(1), Some(2), Some(2), Some(3), Some(4), None, None, Some(1)];
+    let got: Vec<Option<String>> = ids.iter().map(|id| link(&s, *id)).collect();
+    assert_eq!(got, want.map(|i: Option<usize>| i.map(|i| USED_NAMES[i].to_string())));
+    assert!(USED_NAMES.iter().all(|n| doc(&s).swatch(n).unwrap().global));
+}
+
+/// A paint linked to Registration keeps its link when a new global swatch has the same color.
+#[test]
+fn add_used_colors_global_leaves_registration_links_alone() {
+    let mut s = session();
+    let reg_paint = Paint::Solid { color: Color::cmyk(1.0, 1.0, 1.0, 1.0), swatch: Some(vectorcraft_color::swatch::REGISTRATION.into()), tint: 1.0 };
+    let registration = rect_filled(&mut s, json!({"color": "#000000"}));
+    set_fill(&mut s, registration, reg_paint.clone());
+    let plain = rect_filled(&mut s, json!({"color": "#000000"}));
+    set_fill(&mut s, plain, Paint::solid(Color::cmyk(1.0, 1.0, 1.0, 1.0)));
+    let r = run(&mut s, "swatch.addUsedColors", json!({"global": true}));
+    assert_eq!(r["linked"], json!(1), "{r}");
+    let name = r["added"][0].as_str().unwrap().to_string();
+    assert_eq!(fill(&s, registration), reg_paint);
+    assert_eq!(fill(&s, plain), Paint::Solid { color: Color::cmyk(1.0, 1.0, 1.0, 1.0), swatch: Some(name), tint: 1.0 });
+}
+
+#[test]
+fn unused_matches_links_tints_colors_gradients_and_patterns_exactly() {
+    let mut s = session();
+    run(&mut s, "swatch.edit", json!({"name": "Teal", "global": true}));
+    run(&mut s, "swatch.new", json!({"swatch": "Teal", "tint": 40}));
+    run(&mut s, "swatch.new", json!({"swatch": "Teal", "tint": 70}));
+    run(&mut s, "swatch.new", json!({"name": "Zeroed", "color": "#0080ff"}));
+    let teal = doc(&s).swatch("Teal").unwrap().paint.color().unwrap();
+    let tinted = rect_filled(&mut s, json!({"color": "#000000"}));
+    set_fill(&mut s, tinted, Paint::Solid { color: teal.tinted(0.4), swatch: Some("Teal".into()), tint: 0.4 });
+    let zero = rect_filled(&mut s, json!({"color": "#000000"}));
+    set_fill(&mut s, zero, Paint::solid(Color::rgb(-0.0, 128.0 / 255.0, 1.0)));
+    // Sunset's gradient without a link to it, beside gradients with Sunset's stop colors and a
+    // different midpoint or opacity; Ocean's with one stop moved, and Ocean's with another kind,
+    // method or dither.
+    let gradient = |s: &Session, n: &str| match &doc(s).swatch(n).unwrap().paint {
+        Paint::Gradient(g) => g.gradient.clone(),
+        p => panic!("{p:?}"),
+    };
+    let sunset = gradient(&s, "Sunset");
+    let (mut midpoint, mut opacity) = (sunset.clone(), sunset.clone());
+    midpoint.stops[0].midpoint = 0.3;
+    opacity.stops[1].opacity = 0.5;
+    let ocean = gradient(&s, "Ocean");
+    let (mut moved, mut radial, mut perceptual, mut dither) = (ocean.clone(), ocean.clone(), ocean.clone(), ocean);
+    moved.stops[0].offset += 0.25;
+    radial.kind = vectorcraft_color::GradientKind::Radial;
+    perceptual.method = vectorcraft_color::GradientMethod::Perceptual;
+    dither.dither = true;
+    for g in [midpoint, sunset.clone(), opacity, sunset, moved, radial, perceptual, dither] {
+        let id = rect_filled(&mut s, json!({"color": "#000000"}));
+        set_fill(&mut s, id, Paint::Gradient(Box::new(vectorcraft_color::GradientPaint::new(g))));
+    }
+    let r = rect_filled(&mut s, json!({"color": "#ff0000"}));
+    run(&mut s, "select.set", json!({"ids": [r.0]}));
+    run(&mut s, "object.pattern.make", json!({"name": "Dots", "width": 20, "height": 20}));
+    run(&mut s, "object.pattern.done", json!({}));
+    rect_filled(&mut s, json!({"swatch": "Dots"}));
+    let names = run(&mut s, "swatch.unused", json!({}))["names"].clone();
+    let names: Vec<&str> = names.as_array().unwrap().iter().filter_map(Value::as_str).collect();
+    for used in ["Teal", "Teal 40%", "Zeroed", "Sunset", "Dots"] {
+        assert!(!names.contains(&used), "{used} is used: {names:?}");
+    }
+    for unused in ["Teal 70%", "Ocean", "Orange", "Red"] {
+        assert!(names.contains(&unused), "{unused} is unused: {names:?}");
+    }
+}
+
+#[test]
+fn new_swatches_from_colors_are_numbered_after_names_already_taken() {
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "R=255 G=0 B=0 2", "color": "#0000ff"}));
+    run(&mut s, "swatch.newGroup", json!({"name": "Mine"}));
+    let before = doc(&s).clone();
+    let undo = undo_len(&s);
+    // Near-equal colors with the same name, and a Lab color and its twin with a -0.0 component.
+    let colors = json!([
+        "#ff0000",
+        "#ff0000",
+        "#ff0000",
+        "#00ff00",
+        "#00ff00",
+        [0.2, 0.4, 0.6],
+        [0.2, 0.4, 0.6001],
+        {"l": 50, "a": 0.0, "b": 0},
+        {"l": 50, "a": -0.0, "b": 0}
+    ]);
+    let r = run(&mut s, "swatch.new", json!({ "colors": colors }));
+    let want = [
+        "R=255 G=0 B=0",
+        "R=255 G=0 B=0 3",
+        "R=255 G=0 B=0 4",
+        "R=0 G=255 B=0",
+        "R=0 G=255 B=0 2",
+        "R=51 G=102 B=153",
+        "R=51 G=102 B=153 2",
+        "L=50 a=0 b=0",
+        "L=50 a=0 b=0 2",
+    ];
+    assert_eq!(r, json!({"name": want[0], "names": want}));
+    assert_eq!(names(&s, None)[names(&s, None).len() - want.len()..], want);
+    assert!(matches!(doc(&s).swatch("L=50 a=0 b=0 2").unwrap().paint.color(), Some(Color::Lab { a, .. }) if a.is_sign_negative()));
+    assert_eq!(undo_len(&s), undo + 1);
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(*doc(&s), before);
+    let r = run(&mut s, "swatch.new", json!({"colors": ["#ff0000", "#ff0000", "#ff0000"]}));
+    assert_eq!(r["names"], json!(["R=255 G=0 B=0", "R=255 G=0 B=0 3", "R=255 G=0 B=0 4"]));
+    let r = run(&mut s, "swatch.new", json!({"colors": ["#ff0000", "#ff0000"], "group": "Mine"}));
+    assert_eq!(r["names"], json!(["R=255 G=0 B=0 5", "R=255 G=0 B=0 6"]));
+    assert_eq!(names(&s, Some("Mine")), ["R=255 G=0 B=0 5", "R=255 G=0 B=0 6"]);
+}
+
+#[test]
+fn new_color_group_numbers_its_colors_after_the_group_and_its_moved_swatches() {
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "R=255 G=0 B=0 2", "color": "#0000ff"}));
+    let r = run(
+        &mut s,
+        "swatch.newGroup",
+        json!({"name": "R=255 G=0 B=0", "swatches": ["R=255 G=0 B=0 2"], "colors": ["#ff0000", "#ff0000", "#00ff00", "#ff0000"]}),
+    );
+    let want = ["R=255 G=0 B=0 2", "R=255 G=0 B=0 3", "R=255 G=0 B=0 4", "R=0 G=255 B=0", "R=255 G=0 B=0 5"];
+    assert_eq!(r, json!({"name": "R=255 G=0 B=0", "swatches": want, "linked": 0}));
+}
+
+/// New Color Group from artwork lists each color once in paint order: a repeat and a twin with a
+/// -0.0 component are the same color, near-equal colors with the same name are numbered after the
+/// names already taken, and a paint linked to Registration brings no color. One undo step.
+#[test]
+fn new_color_group_from_artwork_lists_each_color_once_with_free_names() {
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "R=0 G=102 B=153", "color": "#00ff00"}));
+    let colors = [
+        Color::rgb(0.2, 0.4, 0.6),
+        Color::rgb(0.0, 0.4, 0.6),
+        Color::rgb(0.2, 0.4, 0.6001),
+        Color::rgb(-0.0, 0.4, 0.6),
+        Color::rgb(0.2, 0.4, 0.6),
+        Color::lab(50.0, 0.0, 0.0),
+        Color::lab(50.0, -0.0, 0.0),
+        Color::lab(50.0, 0.0001, 0.0),
+    ];
+    let mut ids: Vec<u64> = vec![];
+    for c in colors {
+        let id = rect_filled(&mut s, json!({"color": "#000000"}));
+        set_fill(&mut s, id, Paint::solid(c));
+        ids.push(id.0);
+    }
+    let registration = rect_filled(&mut s, json!({"color": "#000000"}));
+    let reg_paint = Paint::Solid { color: Color::cmyk(1.0, 1.0, 1.0, 1.0), swatch: Some(vectorcraft_color::swatch::REGISTRATION.into()), tint: 1.0 };
+    set_fill(&mut s, registration, reg_paint);
+    ids.push(registration.0);
+    run(&mut s, "select.set", json!({ "ids": ids }));
+    let before = doc(&s).clone();
+    let undo = undo_len(&s);
+    let r = run(&mut s, "swatch.newGroup", json!({"name": "R=51 G=102 B=153 2", "fromArtwork": true}));
+    let want = ["R=51 G=102 B=153", "R=0 G=102 B=153 2", "R=51 G=102 B=153 3", "L=50 a=0 b=0", "L=50 a=0 b=0 2"];
+    assert_eq!(r, json!({"name": "R=51 G=102 B=153 2", "swatches": want, "linked": 8}));
+    assert_eq!(names(&s, Some("R=51 G=102 B=153 2")), want);
+    assert_eq!(undo_len(&s), undo + 1);
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(*doc(&s), before);
+}
+
+#[test]
+fn edit_color_group_numbers_extra_colors_after_the_names_it_keeps() {
+    let mut s = session();
+    run(&mut s, "swatch.newGroup", json!({"name": "Mine", "colors": ["#ff0000", "#00ff00", "#0000ff"]}));
+    let before = doc(&s).clone();
+    let undo = undo_len(&s);
+    // Near-equal colors with the same name, and a Lab color and its twin with a -0.0 component.
+    let colors = json!([
+        "#0000ff",
+        "#ff0000",
+        "#ff0000",
+        "#ff0000",
+        "#ff0000",
+        "#00ff00",
+        [0.2, 0.4, 0.6],
+        [0.2, 0.4, 0.6001],
+        {"l": 50, "a": 0.0, "b": 0},
+        {"l": 50, "a": -0.0, "b": 0}
+    ]);
+    let r = run(&mut s, "swatch.editGroup", json!({"group": "Mine", "colors": colors, "rename": "R=255 G=0 B=0 2"}));
+    let want = [
+        "R=255 G=0 B=0",
+        "R=0 G=255 B=0",
+        "R=0 G=0 B=255",
+        "R=255 G=0 B=0 3",
+        "R=255 G=0 B=0 4",
+        "R=0 G=255 B=0 2",
+        "R=51 G=102 B=153",
+        "R=51 G=102 B=153 2",
+        "L=50 a=0 b=0",
+        "L=50 a=0 b=0 2",
+    ];
+    assert_eq!(r, json!({"name": "R=255 G=0 B=0 2", "swatches": want, "relinked": 0}));
+    assert_eq!(names(&s, Some("R=255 G=0 B=0 2")), want);
+    assert_eq!(undo_len(&s), undo + 1);
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(*doc(&s), before);
+}
+
 #[test]
 fn unused_leaves_out_linked_colours_gradients_and_patterns_in_use() {
     let mut s = session();
@@ -234,7 +503,7 @@ fn a_cmyk_document_starts_with_cmyk_swatches_and_stores_new_colours_as_cmyk() {
     // A swatch made from a hex colour is CMYK as well; the document round-trips natively.
     let name = run(&mut s, "swatch.new", json!({"color": "#00ff00"}))["name"].as_str().unwrap().to_string();
     assert_eq!(doc(&s).swatch(&name).and_then(|w| w.paint.color()), Some(managed(Color::rgb(0.0, 1.0, 0.0))));
-    assert_eq!(name, "C=62 M=0 Y=100 K=0");
+    assert_eq!(name, "C=65 M=0 Y=100 K=0");
     let json = serde_json::to_string(doc(&s)).unwrap();
     assert_eq!(serde_json::from_str::<vectorcraft_doc::Document>(&json).unwrap(), *doc(&s));
 }

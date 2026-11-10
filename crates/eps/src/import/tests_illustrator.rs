@@ -444,7 +444,7 @@ fn a_version_7_palette_keeps_its_swatches_without_names() {
     let spot = d.swatch("Spot A").unwrap();
     assert!(spot.spot && spot.global, "{spot:?}");
     assert!(d.swatches.iter().filter(|s| s.name != "Spot A").all(|s| !s.spot && !s.global));
-    assert!(matches!(&d.swatch("B&W").unwrap().paint, Paint::Gradient(g) if g.swatch.as_deref() == Some("B&W")));
+    assert!(matches!(&d.swatch("B&W").unwrap().paint, Paint::Gradient(g) if g.swatch.is_none()));
     assert_eq!(d.swatch("Gray K=0").unwrap().paint.color(), Some(Color::gray(0.0)), "1 g is white");
 }
 
@@ -481,8 +481,8 @@ fn gradient_names_are_shown_up_to_their_newline() {
         let names: Vec<&str> = d.swatches.iter().map(|s| s.name.as_str()).collect();
         let expected: Vec<&str> = ["[None]"].into_iter().chain((!own.is_empty()).then_some("Sky")).chain([first, second]).collect();
         assert_eq!(names, expected, "{:?}", r.warnings);
-        assert_eq!(first_stop(&d.swatch(first).unwrap().paint), (Some(first.into()), Some(Color::gray(0.0))));
-        assert_eq!(first_stop(&d.swatch(second).unwrap().paint), (Some(second.into()), Some(Color::gray(0.5))));
+        assert_eq!(first_stop(&d.swatch(first).unwrap().paint), (None, Some(Color::gray(0.0))));
+        assert_eq!(first_stop(&d.swatch(second).unwrap().paint), (None, Some(Color::gray(0.5))));
         let art = d.layers[0].children().unwrap();
         let fills: Vec<_> = art.iter().map(|n| first_stop(&n.appearance.fill().unwrap().paint)).collect();
         assert_eq!(fills, [(Some(second.into()), Some(Color::gray(0.5))), (Some(first.into()), Some(Color::gray(0.0)))]);

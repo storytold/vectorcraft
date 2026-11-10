@@ -183,7 +183,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Lock Guides",
             ["View", "Guides"],
             Some("Cmd+Alt+;"),
-            "{locked?: bool} toggle (or set) the session's guide lock; locking deselects the ruler guides and guide paths in every open document → {locked}",
+            "{locked?: bool} toggle (or set) the session's guide lock, leaving the lockGuidesByDefault preference as it is; locking deselects the ruler guides and guide paths in every open document; guide.add and a guide dragged out of a ruler still make new guides while locked → {locked}",
             has_doc,
             lock_guides
         ),
@@ -256,7 +256,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Document Color Mode",
             ["File", "Document Color Mode"],
             None,
-            "{mode: \"cmyk\"|\"rgb\", convert?: true (convert every color of the art (opacity masks, effect colors and graphs' series and label paints included), symbols, graph designs, pattern tiles, graphic styles (their effect colors included), brushes, swatches and the paints new art takes through the color settings, together in one undo step (Undo restores their original values; Redo reapplies the conversion); swatch links kept; Gray colors stay Gray, on the black plate), intent?, grays?: \"profile\" (default: RGB grays separate through the CMYK profile like any color, into four-color grays and a rich black) | \"black\" (to CMYK, RGB grays with R = G = B go on the black plate only, K = their gray value)} → {changed: how many colors of the art, symbols, graph designs and pattern tiles changed; the colors of graphic styles and brushes are not counted}",
+            "{mode: \"cmyk\"|\"rgb\", convert?: true (convert every color of the art (opacity masks, effect colors and graphs' series and label paints included), symbols, graph designs, pattern tiles, graphic styles (their effect colors included), brushes, swatches and the paints new art takes through the color settings, together in one undo step (Undo restores their original values; Redo reapplies the conversion); swatch links kept; Gray colors stay Gray, on the black plate), intent?, grays?: \"profile\" (default: RGB grays separate through the CMYK profile like any color, into light grays in cyan, magenta and yellow only, darker four-color grays and a rich black) | \"black\" (to CMYK, RGB grays with R = G = B go on the black plate only, K = their gray value)} → {changed: how many colors of the art, symbols, graph designs and pattern tiles changed; the colors of graphic styles and brushes are not counted}",
             has_doc,
             super::colormgmt::convert_mode
         ),
@@ -276,6 +276,27 @@ impl Session {
     /// View → Guides → Lock Guides state (canvas guide dragging should honour it).
     pub fn guides_locked(&self) -> bool {
         self.menu.guides_locked
+    }
+
+    /// Set View → Guides → Lock Guides. Locked guides can't stay selected, ruler guides or guide
+    /// paths, in any open document ([`Session::select`] lets those go in the active one).
+    pub(crate) fn set_guides_locked(&mut self, locked: bool) {
+        self.menu.guides_locked = locked;
+        if !locked {
+            return;
+        }
+        let guides_selected =
+            self.doc().is_ok_and(|st| !st.selection.guides.is_empty() || st.selection.objects.iter().any(|id| crate::is_guide_path(&st.doc, *id)));
+        // It fails only without a document, and then no guide is selected.
+        if guides_selected {
+            let _ = self.select(|_, sel| sel.guides.clear());
+        }
+        let active = self.active;
+        for (i, st) in self.docs.iter_mut().enumerate() {
+            if Some(i) != active && crate::deselect_hidden(&self.menu, &st.doc, &mut st.selection) {
+                st.revision += 1;
+            }
+        }
     }
 }
 
@@ -717,21 +738,7 @@ fn release_guides(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn lock_guides(s: &mut Session, p: &Value) -> Result<Value> {
     let v = switch_or(p, "locked", !s.menu.guides_locked, "view.guides.lock")?;
-    s.menu.guides_locked = v;
-    // Locked guides can't stay selected, ruler guides or guide paths, in any open document
-    // ([`Session::select`] lets those go in the active one).
-    let st = s.doc()?;
-    if v && (!st.selection.guides.is_empty() || st.selection.objects.iter().any(|id| crate::is_guide_path(&st.doc, *id))) {
-        s.select(|_, sel| sel.guides.clear())?;
-    }
-    if v {
-        let active = s.active;
-        for (i, st) in s.docs.iter_mut().enumerate() {
-            if Some(i) != active && crate::deselect_hidden(&s.menu, &st.doc, &mut st.selection) {
-                st.revision += 1;
-            }
-        }
-    }
+    s.set_guides_locked(v);
     Ok(json!({ "locked": v }))
 }
 

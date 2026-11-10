@@ -70,6 +70,7 @@ mod presets;
 mod print;
 mod settings;
 mod streams;
+mod surface;
 mod syntax;
 
 pub use editing::{EDITING_FILE, Editing, LEGACY_EDITING_FILE, editing, editing_with};

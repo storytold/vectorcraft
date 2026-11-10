@@ -107,6 +107,11 @@ pub struct Services {
     /// Files that arrived asynchronously to be placed (web: picked for Place, or dropped on the
     /// canvas).
     pub place_inbox: Option<place::PlaceInbox>,
+    /// Web: start an async pick of a script to run (it arrives via `script_inbox`; a canceled pick
+    /// delivers nothing).
+    pub script_async: Option<Box<dyn FnMut()>>,
+    /// Scripts the web's picker delivered for File › Scripts › Other Script….
+    pub script_inbox: Option<crate::dialogs::script_run::ScriptInbox>,
     /// The system clipboard with all its formats (desktop): Copy offers text, SVG, PDF and PNG,
     /// Paste takes SVG, PDF, text and bitmaps from other apps. Without it, SVG text only (through
     /// egui and `clipboard_read`).
@@ -169,6 +174,11 @@ pub struct Services {
     /// bar's open menu) for floating panels in OS windows of their own: eframe runs the host's
     /// `raw_input_hook` for the main window only.
     pub native_input_hook: Option<NativeInputHook>,
+    /// The connected monitors, kept current by the desktop host: floating panels in OS windows of
+    /// their own store the monitor they are on and reopen on it. The rects are in the points egui
+    /// reports for a window on that monitor. Empty on the web, and where the host cannot place a
+    /// window by these points, which sends floating panels to the main window's monitor.
+    pub dock_monitors: Vec<craft_ui::docking::Monitor>,
 }
 
 /// Rewrites one window's raw input before egui reads it ([`Services::native_input_hook`]).

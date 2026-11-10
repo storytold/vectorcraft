@@ -119,6 +119,25 @@ fn variable_font_settings_are_not_highlighted_as_substituted_glyphs() {
     assert!(g.alternate_glyphs(&t).elements().is_empty());
 }
 
+/// Type in a composite font draws each class of character in its part's face, which is not a
+/// substitute: Document Setup's highlight of substituted glyphs leaves it alone.
+#[test]
+fn composite_font_parts_are_not_highlighted_as_substituted_glyphs() {
+    use vectorcraft_doc::{CompositeFont, CompositePart, CompositeParts};
+    let _adding = adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    let mut parts = CompositeParts::all(CompositePart::new("Source Sans 3", "Regular"));
+    parts.roman = CompositePart::new("JetBrains Mono", "Regular");
+    parts.numerals = CompositePart::new("Inter", "Regular");
+    db.set_composite_font(&CompositeFont { name: "CF Highlight".into(), parts });
+    let style = CharStyle { size: 40.0, font_family: "CF Highlight".into(), ..Default::default() };
+    let t = TextObject::point(Point::new(10.0, 60.0), "Ab12", style);
+    let g = text_geom(&t);
+    db.remove_composite_font("CF Highlight");
+    assert!(!g.all.elements().is_empty());
+    assert!(g.substituted_glyphs.elements().is_empty() && g.substituted_fonts.elements().is_empty());
+}
+
 /// Type at 80% opacity, in Multiply and with a drop shadow redraws in a font that becomes
 /// available: the glyph geometry kept for it is laid out again.
 #[test]
@@ -319,4 +338,67 @@ fn enveloped_type_under_effects_redraws_when_its_font_becomes_available() {
         assert_ne!(before, after, "{what}: drawn in the font that arrived");
         assert_eq!(after, Renderer::new().render(&d, 300, 150, Affine::IDENTITY, &opts).pixels, "{what}: as a new renderer draws it");
     }
+}
+
+/// Without an engine session, a renderer maps an envelope of type from its glyph outline bounds,
+/// and measures the type again when its font becomes available.
+#[test]
+fn a_renderer_maps_enveloped_type_from_its_glyphs_in_the_current_font() {
+    let _adding = adding_fonts();
+    const FAMILY: &str = "Mapped Serif 4";
+    let style = CharStyle { size: 50.0, font_family: FAMILY.into(), ..Default::default() };
+    let t = TextObject::point(Point::new(10.0, 60.0), "Hamburg", style);
+    let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true };
+    let envelope = Node::new(
+        vectorcraft_doc::NodeId(1),
+        NodeKind::Envelope {
+            content: vec![Arc::new(Node::new(vectorcraft_doc::NodeId(2), NodeKind::Text(Box::new(t.clone()))))],
+            kind: Box::new(kind),
+            fidelity: 50.0,
+            editing: false,
+            options: Default::default(),
+            frame: Box::new(Affine::IDENTITY),
+        },
+    );
+    let ink = || t.xf.transform_rect_bbox(vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t).ink_bounds().unwrap());
+    let src = || vectorcraft_doc::live::EnvelopeMap::of(&envelope).unwrap().src();
+    let off = |a: Rect, b: Rect| [a.x0 - b.x0, a.y0 - b.y0, a.x1 - b.x1, a.y1 - b.y1].iter().fold(0.0f64, |m, v| m.max(v.abs()));
+    let _ = Renderer::new();
+    let before = ink();
+    assert!(off(src(), before) < 1e-6, "{:?} vs {before:?}", src());
+    assert!(vectorcraft_text::FontDb::global().add_font(serif_as(FAMILY)) > 0);
+    let after = ink();
+    assert!(off(before, after) > 0.5, "the type draws in the font that arrived: {before:?} vs {after:?}");
+    assert!(off(src(), after) < 1e-6, "{:?} vs {after:?}", src());
+}
+
+/// 3D type measured for an edit ([`Renderer::changed`]) and drawn after its font became available
+/// is drawn in that font: the art made to measure it, in the font it had, isn't taken.
+#[test]
+fn three_d_type_measured_before_its_font_arrives_draws_in_it() {
+    let _adding = adding_fonts();
+    const FAMILY: &str = "Solid Serif 44";
+    let mut old = Document::new(300.0, 150.0);
+    let style = CharStyle { size: 60.0, font_family: FAMILY.into(), ..Default::default() };
+    let mut n = Node::new(NodeId(0), NodeKind::Text(Box::new(TextObject::point(Point::new(10.0, 100.0), "Hamburg", style))));
+    n.id = old.alloc_id();
+    let extrude = |depth: f64| vectorcraft_doc::Effect {
+        id: "threeD.extrude".into(),
+        params: serde_json::json!({"depth": depth, "position": "isometricTop"}),
+        visible: true,
+    };
+    n.appearance.effects.push(extrude(40.0));
+    let l = old.layers[0].id;
+    let id = old.insert(Some(l), 0, n).unwrap();
+    let mut new = old.clone();
+    new.node_mut(id).unwrap().appearance.effects[0] = extrude(10.0);
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut r = Renderer::new();
+    r.render(&old, 300, 150, Affine::IDENTITY, &opts);
+    let _ = r.changed(&old, &new, &opts);
+    assert!(vectorcraft_text::FontDb::global().add_font(serif_as(FAMILY)) > 0);
+    let drawn = r.render(&new, 300, 150, Affine::IDENTITY, &opts).pixels;
+    let fresh = Renderer::new().render(&new, 300, 150, Affine::IDENTITY, &opts).pixels;
+    let differ = drawn.iter().zip(&fresh).filter(|(a, b)| a != b).count();
+    assert_eq!(differ, 0, "as a new renderer draws it");
 }

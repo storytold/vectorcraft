@@ -7,6 +7,32 @@ use vectorcraft_tools::{PointerEvent, PointerKind};
 use crate::cmd::prefscmds::{PREF_CATEGORIES, PREF_GROUPS, PREF_SPECS, validate};
 use crate::*;
 
+/// The saved preference reaches the real tool; older preferences keep Touching and invalid
+/// values fail without changing the current setting.
+#[test]
+fn marquee_selection_preference_drives_the_selection_tool() {
+    assert_eq!(serde_json::from_value::<Prefs>(json!({})).unwrap().marquee_selection, "touching");
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("selection", v).unwrap();
+    for (mode, selected) in [("touching", true), ("enclosed", false), ("directional", false)] {
+        set_pref(&mut s, "marqueeSelection", json!(mode));
+        s.execute("select.none", &json!({})).unwrap();
+        for (k, x, y) in [(PointerKind::Down, 50.0, 50.0), (PointerKind::Drag, 150.0, 150.0), (PointerKind::Up, 150.0, 150.0)] {
+            s.pointer(&PointerEvent::new(k, x, y), v).unwrap();
+        }
+        assert_eq!(!s.doc().unwrap().selection.objects.is_empty(), selected, "{mode}");
+        let persisted = s.prefs.to_json();
+        assert_eq!(serde_json::from_value::<Prefs>(persisted).unwrap().marquee_selection, mode);
+    }
+    assert!(s.execute("prefs.set", &json!({"key": "marqueeSelection", "value": "unknown"})).is_err());
+    assert_eq!(s.prefs.marquee_selection, "directional");
+    s.execute("prefs.reset", &json!({})).unwrap();
+    assert_eq!(s.prefs.marquee_selection, "touching");
+}
+
 #[test]
 fn every_spec_matches_a_prefs_field_and_back() {
     let all = Prefs::default().to_json();
@@ -171,6 +197,110 @@ fn reset_category_and_all() {
     s.execute("prefs.reset", &json!({})).unwrap();
     assert_eq!(s.prefs, Prefs::default());
     assert!(s.execute("prefs.reset", &json!({"category": "Bogus"})).is_err());
+}
+
+/// A rectangle made into a guide path; nothing is selected after.
+fn guide_path(s: &mut Session, x: f64) -> NodeId {
+    let id = square(s, x, 0.0);
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("view.guides.make", &json!({})).unwrap();
+    id
+}
+
+/// Lock Guides by Default is off, and preferences saved before it existed leave guides unlocked.
+#[test]
+fn lock_guides_by_default_is_off_and_older_preferences_leave_guides_unlocked() {
+    assert!(!Prefs::default().lock_guides_by_default);
+    let older: Prefs = serde_json::from_value(json!({"keyboardIncrement": 4})).unwrap();
+    assert!(!older.lock_guides_by_default);
+    let mut s = Session::new();
+    s.apply_prefs(older);
+    assert!(!s.guides_locked());
+    assert!(s.execute("prefs.set", &json!({"key": "lockGuidesByDefault", "value": "yes"})).is_err());
+    assert!(!s.guides_locked() && !s.prefs.lock_guides_by_default);
+}
+
+/// Preferences saved with the option on start a session with guides locked. A document opened in
+/// it has its ruler guides and guide paths locked, and new guides can still be made. View › Guides
+/// › Lock Guides then unlocks them for the session and leaves the preference on.
+#[test]
+fn saved_lock_guides_by_default_locks_a_new_session_and_the_documents_it_opens() {
+    let file = std::env::temp_dir().join(format!("vc-lock-guides-{}.vectorcraft", std::process::id()));
+    let file = file.to_string_lossy().to_string();
+    let mut unlocked = new_doc();
+    assert!(!unlocked.guides_locked(), "a session without the preference");
+    let path = guide_path(&mut unlocked, 100.0);
+    unlocked.execute("guide.add", &json!({"vertical": true, "pos": 50})).unwrap();
+    unlocked.execute("document.save", &json!({"path": file})).unwrap();
+
+    // The preference is set with no document open, as a headless session can.
+    let mut first = Session::new();
+    first.execute("prefs.set", &json!({"key": "lockGuidesByDefault", "value": true})).unwrap();
+    let saved = first.prefs.to_json();
+    assert_eq!(saved["lockGuidesByDefault"], json!(true));
+
+    let mut s = Session::new();
+    s.apply_prefs(serde_json::from_value(saved).unwrap());
+    assert!(s.guides_locked());
+    s.execute("document.open", &json!({"path": file})).unwrap();
+    let _ = std::fs::remove_file(&file);
+    assert!(s.guides_locked(), "opening a document keeps the lock");
+    assert!(matches!(s.execute("guide.select", &json!({"indexes": [0]})), Err(EngineError::Disabled(..))));
+    s.execute("select.set", &json!({"ids": [path.0]})).unwrap();
+    assert!(s.doc().unwrap().selection.objects.is_empty(), "a guide path can't be selected");
+    assert_eq!(s.execute("guide.add", &json!({"vertical": false, "pos": 20})).unwrap()["index"], 1);
+
+    assert_eq!(s.execute("view.guides.lock", &json!({})).unwrap(), json!({"locked": false}));
+    assert!(s.prefs.lock_guides_by_default, "the menu leaves the preference as it is");
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    s.execute("select.set", &json!({"ids": [path.0]})).unwrap();
+    assert_eq!(s.doc().unwrap().selection.objects, [path]);
+}
+
+/// Changing the preference sets the lock at once and deselects guides in every open document.
+/// A change to any other preference, or setting it to the value it has, keeps the session's lock.
+#[test]
+fn changing_lock_guides_by_default_sets_the_lock_and_other_changes_keep_it() {
+    let mut s = new_doc();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 50})).unwrap();
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let path = guide_path(&mut s, 100.0);
+    s.execute("select.set", &json!({"ids": [path.0]})).unwrap();
+    let undo = s.doc().unwrap().history.undo.len();
+
+    set_pref(&mut s, "lockGuidesByDefault", json!(true));
+    assert!(s.guides_locked());
+    assert!(s.doc().unwrap().selection.objects.is_empty(), "the guide path in the active document");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step");
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    assert!(s.doc().unwrap().selection.guides.is_empty(), "the ruler guide in the other document");
+
+    s.execute("view.guides.lock", &json!({"locked": false})).unwrap();
+    set_pref(&mut s, "keyboardIncrement", json!(4));
+    set_pref(&mut s, "lockGuidesByDefault", json!(true));
+    assert!(!s.guides_locked(), "the session's unlock stays");
+
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    set_pref(&mut s, "lockGuidesByDefault", json!(false));
+    assert!(!s.guides_locked(), "turning the preference off unlocks guides");
+}
+
+/// Reset turns the option off and unlocks guides. With the option already off, a reset keeps a
+/// lock set from the View menu.
+#[test]
+fn resetting_lock_guides_by_default_unlocks_guides_only_when_it_was_on() {
+    let mut s = new_doc();
+    for params in [json!({"category": "Guides & Grid"}), json!({})] {
+        set_pref(&mut s, "lockGuidesByDefault", json!(true));
+        assert!(s.guides_locked());
+        s.execute("prefs.reset", &params).unwrap();
+        assert!(!s.prefs.lock_guides_by_default, "{params}");
+        assert!(!s.guides_locked(), "{params}");
+    }
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    s.execute("prefs.reset", &json!({})).unwrap();
+    assert!(s.guides_locked());
 }
 
 /// `prefs.set` refuses a recovery or plug-ins folder that is missing or is a file. Nothing changes,
@@ -812,6 +942,37 @@ fn invoke_distance_guides_measures_the_selection_to_the_object_under_alt() {
     assert!(shown(&mut s, ViewInfo { smart_guides: false, ..v }).is_empty(), "View › Smart Guides off");
     set_pref(&mut s, "distanceGuides", json!(false));
     assert!(shown(&mut s, v).is_empty(), "Invoke Distance Guides off");
+}
+
+/// Smart Guides › Snap to Last Location (off by default): on, a square dragged 6 pt right and 5 pt
+/// down with a 10 px Snapping Tolerance goes back to where it was; dragged 12 pt away, or with the
+/// option or View › Smart Guides off, it lands where it is dragged. A value that is not a boolean
+/// is refused.
+#[test]
+fn snap_to_last_location_puts_a_dragged_square_back() {
+    use vectorcraft_tools::PointerKind::{Down, Drag, Up};
+    let mut s = new_doc();
+    // Its edges and center stay out of reach of the 400 pt artboard's.
+    let m = square(&mut s, 100.0, 250.0);
+    let v = ViewInfo::default();
+    s.select_tool("selection", v).unwrap();
+    let drag = |s: &mut Session, v: ViewInfo, to: (f64, f64)| {
+        gesture(s, v, &[(Down, 125.0, 275.0), (Drag, 140.0, 290.0), (Drag, to.0, to.1), (Up, to.0, to.1)]);
+        let at = top_left(s, m);
+        if at != (100.0, 250.0) {
+            s.execute("edit.undo", &json!({})).unwrap();
+        }
+        at
+    };
+    set_pref(&mut s, "snappingTolerance", json!(10));
+    assert_eq!(drag(&mut s, v, (131.0, 280.0)), (106.0, 255.0), "off by default");
+    set_pref(&mut s, "snapToLastLocation", json!(true));
+    assert_eq!(drag(&mut s, v, (131.0, 280.0)), (100.0, 250.0), "7.8 pt away: back where it was");
+    assert_eq!(drag(&mut s, v, (134.0, 283.0)), (109.0, 258.0), "12 pt away");
+    assert_eq!(drag(&mut s, ViewInfo { smart_guides: false, ..v }, (131.0, 280.0)), (106.0, 255.0), "View › Smart Guides off");
+    let refused = s.execute("prefs.set", &json!({"key": "snapToLastLocation", "value": "yes"}));
+    assert!(refused.is_err(), "{refused:?}");
+    assert_eq!(s.execute("prefs.get", &json!({"key": "snapToLastLocation"})).unwrap(), json!(true), "unchanged");
 }
 
 /// Preferences › Smart Guides (#394): Color, Alignment Guides, Anchor/Path Labels, Measurement
@@ -1936,6 +2097,315 @@ fn real_time_drawing_off_draws_the_bounds_of_a_selection_too_big_to_outline() {
     assert!(moved.0 > 1.0 && moved.1 > 1.0 && moved.2.abs() < 1e-6 && moved.3.abs() < 1e-6, "the bounds moved with the drag: {moved:?}");
 }
 
+/// The bounding boxes (left, top, width) of the Real-time Drawing off feedback after a drag by (30, 40)
+/// from (x, y), left to right.
+fn dragged_feedback_boxes(s: &mut Session, x: f64, y: f64) -> Vec<(f64, f64, f64)> {
+    use vectorcraft_tools::Overlay;
+    use vectorcraft_tools::draw2::FEEDBACK;
+    let v = ViewInfo::default();
+    s.select_tool("selection", v).unwrap();
+    set_pref(s, "realTimeDrawing", json!(false));
+    s.pointer(&PointerEvent::new(PointerKind::Down, x, y), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, x + 30.0, y + 40.0), v).unwrap();
+    let mut boxes: Vec<_> = s
+        .overlays(v)
+        .into_iter()
+        .filter_map(|o| match o {
+            Overlay::Path { path, color, .. } if color == FEEDBACK => Some(kurbo::Shape::bounding_box(&path)),
+            _ => None,
+        })
+        .map(|b| ((b.x0 * 1e3).round() / 1e3, (b.y0 * 1e3).round() / 1e3, (b.width() * 1e3).round() / 1e3))
+        .collect();
+    boxes.sort_by(|p, q| p.0.total_cmp(&q.0));
+    boxes
+}
+
+/// The number of subpaths in each path of the Real-time Drawing off feedback the session shows now.
+fn feedback_subpaths(s: &mut Session) -> Vec<usize> {
+    use vectorcraft_tools::Overlay;
+    use vectorcraft_tools::draw2::FEEDBACK;
+    s.overlays(ViewInfo::default())
+        .into_iter()
+        .filter_map(|o| match o {
+            Overlay::Path { path, color, .. } if color == FEEDBACK => {
+                Some(path.elements().iter().filter(|el| matches!(el, kurbo::PathEl::MoveTo(_))).count())
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// With Real-time Drawing off, a dragged group draws the outline of each member, nested groups'
+/// members included, at the dragged position instead of one union of them all.
+#[test]
+fn real_time_drawing_off_outlines_a_dragged_group_member_by_member() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let rect = |s: &mut Session, x: f64| s.execute("shape.rectangle", &json!({"x": x, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    let (a, b, c) = (rect(&mut s, 100.0), rect(&mut s, 150.0), rect(&mut s, 200.0));
+    s.execute("select.set", &json!({"ids": [b, c]})).unwrap();
+    let inner = s.execute("object.group", &json!({})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a, inner]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    let boxes = dragged_feedback_boxes(&mut s, 120.0, 120.0);
+    assert_eq!(boxes, [(130.0, 140.0, 100.0), (180.0, 140.0, 100.0), (230.0, 140.0, 100.0)], "one moved outline per member");
+}
+
+/// With Real-time Drawing off, a hidden member of a dragged group draws no outline.
+#[test]
+fn real_time_drawing_off_skips_a_hidden_member_of_a_dragged_group() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let rect = |s: &mut Session, x: f64| s.execute("shape.rectangle", &json!({"x": x, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    let (a, b, c) = (rect(&mut s, 100.0), rect(&mut s, 150.0), rect(&mut s, 200.0));
+    s.execute("select.set", &json!({"ids": [b]})).unwrap();
+    s.execute("object.hide", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [a, b, c]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    let boxes = dragged_feedback_boxes(&mut s, 120.0, 120.0);
+    assert_eq!(boxes, [(130.0, 140.0, 100.0), (230.0, 140.0, 100.0)]);
+}
+
+/// With Real-time Drawing off, a dragged blend draws the outline of each of its objects and steps.
+#[test]
+fn real_time_drawing_off_outlines_a_dragged_blend_step_by_step() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    let b = s.execute("shape.rectangle", &json!({"x": 300, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("object.blend.make", &json!({"steps": 3})).unwrap();
+    let lefts: Vec<f64> = dragged_feedback_boxes(&mut s, 120.0, 120.0).iter().map(|b| b.0).collect();
+    assert_eq!(lefts, [130.0, 180.0, 230.0, 280.0, 330.0], "one moved outline per blended object and step");
+}
+
+/// With Real-time Drawing off, a dragged compound shape draws the outline of the area it makes.
+#[test]
+fn real_time_drawing_off_outlines_a_dragged_compound_shape_by_its_area() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    let b = s.execute("shape.rectangle", &json!({"x": 150, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    let shape = s.execute("object.compoundShape.make", &json!({"mode": "intersect"})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [shape]})).unwrap();
+    assert_eq!(dragged_feedback_boxes(&mut s, 170.0, 120.0), [(180.0, 140.0, 50.0)]);
+}
+
+/// With Real-time Drawing off, a dragged group with a Pathfinder effect draws the outline of the area
+/// the effect makes.
+#[test]
+fn real_time_drawing_off_outlines_a_dragged_pathfinder_group_by_its_area() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    let b = s.execute("shape.rectangle", &json!({"x": 150, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "pathfinder.intersect"})).unwrap();
+    assert_eq!(dragged_feedback_boxes(&mut s, 170.0, 120.0), [(180.0, 140.0, 50.0)]);
+}
+
+/// With Real-time Drawing off, a dragged group with a Drop Shadow draws the outline of each member
+/// instead of one union of them.
+#[test]
+fn real_time_drawing_off_outlines_a_dragged_group_with_an_effect_member_by_member() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    let b = s.execute("shape.rectangle", &json!({"x": 150, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "item": null})).unwrap();
+    assert_eq!(dragged_feedback_boxes(&mut s, 120.0, 120.0), [(130.0, 140.0, 100.0), (180.0, 140.0, 100.0)]);
+}
+
+/// With Real-time Drawing off, a dragged clip group draws only its clipping path, as its selection
+/// highlight does.
+#[test]
+fn real_time_drawing_off_outlines_a_dragged_clip_group_by_its_clipping_path() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let art = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 200, "height": 100})).unwrap()["id"].clone();
+    let clip = s.execute("shape.rectangle", &json!({"x": 120, "y": 110, "width": 50, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [art, clip]})).unwrap();
+    s.execute("object.clippingMask.make", &json!({})).unwrap();
+    assert_eq!(dragged_feedback_boxes(&mut s, 140.0, 130.0), [(150.0, 150.0, 50.0)]);
+}
+
+/// With Real-time Drawing off, a dragged envelope draws the outline of each object it evaluates to: each
+/// rectangle's fill and its outlined stroke.
+#[test]
+fn real_time_drawing_off_outlines_a_dragged_envelope_object_by_object() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    let b = s.execute("shape.rectangle", &json!({"x": 150, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("object.envelope.makeWithMesh", &json!({"rows": 1, "cols": 1})).unwrap();
+    let boxes = dragged_feedback_boxes(&mut s, 120.0, 120.0);
+    assert_eq!(boxes, [(129.5, 139.5, 101.0), (130.0, 140.0, 100.0), (179.5, 139.5, 101.0), (180.0, 140.0, 100.0)]);
+}
+
+/// With Real-time Drawing off, a dragged Shaper group draws the outline of its result and not of the
+/// source art it keeps.
+#[test]
+fn real_time_drawing_off_skips_the_source_art_of_a_dragged_shaper_group() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 150, "y": 100, "width": 100, "height": 100})).unwrap();
+    let points = [[125.0, 120.0], [175.0, 135.0], [130.0, 150.0], [225.0, 165.0], [175.0, 180.0], [225.0, 185.0]];
+    let shaper = s.execute("shaper.scribble", &json!({"points": points})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [shaper]})).unwrap();
+    let boxes = dragged_feedback_boxes(&mut s, 120.0, 120.0);
+    assert_eq!(boxes, [(130.0, 140.0, 150.0), (130.0, 140.0, 150.0)], "the merged result's fill and stroke");
+}
+
+/// With Real-time Drawing off, a dragged symbol instance draws the bounds its selection highlight
+/// shows, alone and as a member of a group.
+#[test]
+fn real_time_drawing_off_outlines_a_dragged_symbol_instance_by_its_bounds() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a]})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Box"})).unwrap();
+    assert_eq!(dragged_feedback_boxes(&mut s, 120.0, 120.0), [(130.0, 140.0, 100.0)]);
+    s.pointer(&PointerEvent::new(PointerKind::Up, 150.0, 160.0), ViewInfo::default()).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 400, "y": 100, "width": 50, "height": 50})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    assert_eq!(dragged_feedback_boxes(&mut s, 150.0, 160.0), [(160.0, 180.0, 100.0), (430.0, 140.0, 50.0)]);
+}
+
+/// With Real-time Drawing off, a handle resize of a group draws each member's outline at its new size.
+#[test]
+fn real_time_drawing_off_outlines_a_resized_group_member_by_member() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    let b = s.execute("shape.rectangle", &json!({"x": 300, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    // The Right handle, dragged 30 pt out: the group goes from 300 pt wide to 330.
+    assert_eq!(dragged_feedback_boxes(&mut s, 400.0, 125.0), [(100.0, 100.0, 110.0), (320.0, 100.0, 110.0)]);
+}
+
+/// With Real-time Drawing off, each copy of a gradient mesh in a dragged repeat draws its mesh lines
+/// once, without the pieces the mesh is drawn with.
+#[test]
+fn real_time_drawing_off_outlines_each_mesh_of_a_dragged_repeat_once() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a]})).unwrap();
+    s.execute("object.mesh.create", &json!({"rows": 2, "cols": 2})).unwrap();
+    s.execute("object.repeat.grid", &json!({"rows": 1, "cols": 2})).unwrap();
+    let boxes = dragged_feedback_boxes(&mut s, 120.0, 120.0);
+    assert_eq!(boxes.len(), 2, "one outline per copy: {boxes:?}");
+    assert_eq!(boxes[0], (130.0, 140.0, 100.0), "the first copy's mesh lines, moved");
+    let subpaths = feedback_subpaths(&mut s);
+    assert!(subpaths.len() == 2 && subpaths.iter().all(|&n| n > 1), "each copy's mesh lines, not one boundary: {subpaths:?}");
+}
+
+/// With Real-time Drawing off, a dragged gradient mesh with a Drop Shadow draws its mesh lines as one
+/// outline, without the pieces the mesh is drawn with.
+#[test]
+fn real_time_drawing_off_outlines_a_dragged_mesh_with_an_effect_by_its_lines() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a]})).unwrap();
+    s.execute("object.mesh.create", &json!({"rows": 2, "cols": 2})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "item": null})).unwrap();
+    assert_eq!(dragged_feedback_boxes(&mut s, 120.0, 120.0), [(130.0, 140.0, 100.0)]);
+    let subpaths = feedback_subpaths(&mut s);
+    assert!(matches!(subpaths.as_slice(), [n] if *n > 1), "the mesh's lines, not one boundary: {subpaths:?}");
+}
+
+/// With Real-time Drawing off, a dragged group with a Vector Halftone keeps its own fill, which is what
+/// the effect samples, so an unpainted member still gives an outline.
+#[test]
+fn real_time_drawing_off_outlines_a_dragged_halftone_group_with_its_own_fill() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap()["id"].clone();
+    s.execute("paint.setFill", &json!({"ids": [a], "none": true})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [a], "none": true})).unwrap();
+    s.execute("select.set", &json!({"ids": [a]})).unwrap();
+    let group = s.execute("object.group", &json!({})).unwrap()["id"].clone();
+    s.execute("paint.setFill", &json!({"color": "#000000", "ids": []})).unwrap();
+    s.execute("select.set", &json!({"ids": [group]})).unwrap();
+    s.execute("appearance.addFill", &json!({})).unwrap();
+    let fill = s.doc().unwrap().doc.node(vectorcraft_doc::NodeId(group.as_u64().unwrap())).unwrap().appearance.fill_paint().label();
+    assert_eq!(fill, "#000000", "the group's own fill");
+    s.execute("effect.apply", &json!({"effect": "addon.color.halftone", "item": null})).unwrap();
+    // The Right handle: the unpainted member gives nothing to press on.
+    assert!(!dragged_feedback_boxes(&mut s, 200.0, 150.0).is_empty(), "the halftone's dots are outlined");
+}
+
+/// With Real-time Drawing off, a dragged object with Crop Marks draws the object's outline without its
+/// marks.
+#[test]
+fn real_time_drawing_off_outlines_a_dragged_object_without_its_crop_marks() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a]})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "cropMarks", "item": null})).unwrap();
+    assert_eq!(dragged_feedback_boxes(&mut s, 120.0, 120.0), [(130.0, 140.0, 100.0)]);
+}
+
+/// With Real-time Drawing off, the objects a dragged repeat evaluates to count toward the limit with
+/// the points of their outlines: 18,000 rectangles have 90,000 points, and with the objects they come
+/// to 108,000.
+#[test]
+fn real_time_drawing_off_draws_the_bounds_of_a_repeat_with_too_many_objects() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 10, "height": 10})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a]})).unwrap();
+    s.execute("object.repeat.grid", &json!({"rows": 120, "cols": 150})).unwrap();
+    let boxes = dragged_feedback_boxes(&mut s, 105.0, 105.0);
+    assert_eq!(boxes.len(), 1, "one bounds rectangle: {} boxes", boxes.len());
+}
+
+/// With Real-time Drawing off, a dragged intertwine draws the outline of each member, without the
+/// area one of them is arranged over the other in.
+#[test]
+fn real_time_drawing_off_outlines_a_dragged_intertwine_member_by_member() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    let b = s.execute("shape.rectangle", &json!({"x": 150, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("object.intertwine.make", &json!({})).unwrap();
+    s.execute("object.intertwine.arrange", &json!({"at": [175, 125], "order": "back"})).unwrap();
+    let boxes = dragged_feedback_boxes(&mut s, 120.0, 120.0);
+    assert_eq!(boxes, [(130.0, 140.0, 100.0), (180.0, 140.0, 100.0)]);
+}
+
+/// With Real-time Drawing off, a dragged group whose members have more than 100,000 points between
+/// them shows its moved bounds, as a single path of that size does.
+#[test]
+fn real_time_drawing_off_draws_the_bounds_of_a_group_too_big_to_outline() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let path = |s: &mut Session, y: f64| {
+        let anchors: Vec<Value> =
+            (0..60_000).map(|i| json!({"x": 100.0 + f64::from(i) * 0.003, "y": if i % 2 == 0 { y } else { y + 50.0 }})).collect();
+        s.execute("path.create", &json!({"anchors": anchors, "closed": false})).unwrap()["id"].clone()
+    };
+    let (a, b) = (path(&mut s, 100.0), path(&mut s, 200.0));
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    let at_rest = s.doc().unwrap().doc.bounds_of(&s.doc().unwrap().selection.objects, true).unwrap();
+    let boxes = dragged_feedback_boxes(&mut s, 200.0, 100.0);
+    let [(x, y, width)] = boxes.as_slice() else { panic!("one bounds rectangle, got {boxes:?}") };
+    assert!((x - at_rest.x0 - 30.0).abs() < 1e-2 && (y - at_rest.y0 - 40.0).abs() < 1e-2 && (width - at_rest.width()).abs() < 1e-2, "{boxes:?}");
+}
+
 /// A deferred commit that fails its preview cancels the interaction instead of leaving it open.
 #[test]
 fn deferred_commit_preview_failure_cancels_interaction() {
@@ -2169,6 +2639,20 @@ fn a_straight_segment_dragged_by_direct_selection_lands_on_a_ruler_guide() {
         );
         s.execute("edit.undo", &json!({})).unwrap();
     }
+}
+
+/// General › Scroll Sideways with Cmd/Ctrl + Wheel starts on: in a new session, in a preferences
+/// file saved before the option existed and after a reset.
+#[test]
+fn scroll_sideways_with_cmd_wheel_is_on_by_default() {
+    assert!(Prefs::default().ctrl_wheel_scrolls_sideways);
+    let old: Prefs = serde_json::from_value(json!({"zoomWithMouseWheel": false})).unwrap();
+    assert!(old.ctrl_wheel_scrolls_sideways);
+    let mut s = Session::new();
+    s.execute("prefs.set", &json!({"key": "ctrlWheelScrollsSideways", "value": false})).unwrap();
+    assert!(!s.prefs.ctrl_wheel_scrolls_sideways);
+    s.execute("prefs.reset", &json!({})).unwrap();
+    assert!(s.prefs.ctrl_wheel_scrolls_sideways);
 }
 
 /// The Transform panel menu's choice starts as `default` (the panels follow General › Transform

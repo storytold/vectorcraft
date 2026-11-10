@@ -3,11 +3,12 @@ use std::collections::HashMap;
 use super::super::brush;
 use super::art::{four, sane, two};
 use super::ops::Dictionaries;
+use super::raster::{end_hex, push_hex};
 use super::types::{
-    FLIP, GState, Kind, MAX_DEPTH, MAX_HEX, MAX_LISTED, MAX_NODES, MAX_NOTE, MAX_PATTERNS, MAX_PLACED_FOLDER, MAX_STACK, MAX_SUBREADERS, MAX_SYMBOLS,
+    FLIP, GState, Kind, MAX_DEPTH, MAX_LISTED, MAX_NODES, MAX_NOTE, MAX_PATTERNS, MAX_PLACED_FOLDER, MAX_STACK, MAX_SUBREADERS, MAX_SYMBOLS,
     PatternHead, Place, Raster, SKIPPED, SymbolHead, VERSIONED_UNENDED,
 };
-use super::{Arc, Global, Lexer, Node, NodeKind, PatternDef, Reader, Rect, Tok, V, marker, obj};
+use super::{Arc, BrushArtColors, Global, Lexer, Node, NodeKind, PatternDef, Reader, Rect, Tok, V, marker, obj};
 use vectorcraft_doc::{NodeId, Symbol, SymbolRegistration};
 
 impl<'a> Reader<'a> {
@@ -52,9 +53,7 @@ impl<'a> Reader<'a> {
             && !line.is_empty()
             && line.bytes().all(|b| b.is_ascii_hexdigit())
         {
-            if r.hex.len() < MAX_HEX {
-                r.hex.extend_from_slice(line.as_bytes());
-            }
+            push_hex(&mut r.samples, &mut r.half, line.as_bytes(), r.max);
             return Ok(());
         }
         // The header's comments (AI7 specification §2.1.1; DSC 3.0).
@@ -121,7 +120,11 @@ impl<'a> Reader<'a> {
         }
         if m == "BeginArtStyles" {
             let section = self.section("EndArtStyles")?;
-            self.styles = crate::import::ai::style::art_styles(section);
+            // GUARDS: a definition's art takes the file's art styles and hands them back, so a
+            // section inside it would replace the file's own.
+            if self.subreader_depth == 0 {
+                self.styles = crate::import::ai::style::art_styles_in(section, &mut self.names);
+            }
             return Ok(());
         }
         if m == "BeginArtStyleList" {
@@ -131,7 +134,7 @@ impl<'a> Reader<'a> {
         }
         if m == "BeginPalette" {
             let section = self.section("EndPalette")?;
-            self.palette = crate::import::ai::palette::palette(section);
+            self.palette = crate::import::ai::palette::palette(section, &mut self.names);
             return Ok(());
         }
         if m == "BeginEncoding" {
@@ -178,8 +181,13 @@ impl<'a> Reader<'a> {
         } else if line.starts_with("AI5_EndRaster") {
             // A file `XG` named in this raster object is no later one's.
             self.image_link = None;
-            if let Some(Raster { operands: Some(vals), hex, .. }) = self.raster.take() {
-                return self.image_from(vals, &hex);
+            if let Some(Raster { operands: Some(vals), mut samples, half, max, ink, .. }) = self.raster.take() {
+                end_hex(&mut samples, half, max);
+                // The image's ink (`XC`) stays for `image_from` to read.
+                self.raster = Some(Raster { ink, ..Raster::default() });
+                let read = self.image_from(vals, &samples, true);
+                self.raster = None;
+                return read;
             }
         } else if line.starts_with("AI5_BeginPlace") {
             // One that is still open (no `~` ended it) isn't read.
@@ -305,7 +313,7 @@ impl<'a> Reader<'a> {
             return;
         }
         let Some(open) = v.iter().position(|&b| b == b'(') else { return };
-        let (Some(head), Some(name)) = (v.get(..open), v.get(open..).and_then(ps_string)) else { return };
+        let (Some(head), Some(name)) = (v.get(..open), v.get(open..).and_then(ps_bytes)) else { return };
         // One more than a color has, so that too many are seen.
         let parts: Vec<Option<f32>> = head
             .split(u8::is_ascii_whitespace)
@@ -318,6 +326,7 @@ impl<'a> Reader<'a> {
             [Some(r), Some(g), Some(b)] if !cmyk => vectorcraft_color::Color::rgb(*r, *g, *b),
             _ => return,
         };
+        let name = self.names.bytes(&name);
         if !name.trim().is_empty() && !self.custom_colors.iter().any(|n| n.name == name) {
             // A gradient or pattern defined after it does not take its swatch's name.
             self.global_names.reserve(&name);
@@ -374,11 +383,14 @@ impl<'a> Reader<'a> {
             Legacy::Yes(def) => return self.define_legacy_pattern(&def),
         }
         let mut sub = Reader::new(section);
+        sub.names = super::obj::Names::new(self.names.encoding);
         sub.subreader_depth = self.subreader_depth + 1;
         sub.pattern = Some(PatternHead::default());
-        // The gradients defined so far and the names given, lent (and those it defines kept).
+        // The gradients and art styles defined so far and the names given, lent (and the gradients
+        // it defines kept).
         sub.gradients = std::mem::take(&mut self.gradients);
         sub.global_names = std::mem::take(&mut self.global_names);
+        sub.styles = std::mem::take(&mut self.styles);
         sub.nodes = self.nodes;
         sub.template = self.template;
         self.lend_budgets(&mut sub);
@@ -386,7 +398,9 @@ impl<'a> Reader<'a> {
         self.take_back_budgets(&mut sub);
         self.nodes = sub.nodes;
         self.gradients = std::mem::take(&mut sub.gradients);
+        self.names.absorb(std::mem::take(&mut sub.names));
         self.global_names = std::mem::take(&mut sub.global_names);
+        self.styles = std::mem::take(&mut sub.styles);
         // Unread art in the definition, hidden or not, leaves the tile incomplete.
         let whole = read.is_ok()
             && sub.unsupported.is_empty()
@@ -402,10 +416,12 @@ impl<'a> Reader<'a> {
     /// tile's box (`_ &`). Each layer starts from the state the definition starts with.
     fn define_legacy_pattern(&mut self, def: &LegacyPattern) {
         let mut sub = Reader::new(b"");
+        sub.names = super::obj::Names::new(self.names.encoding);
         sub.subreader_depth = self.subreader_depth + 1;
-        sub.pattern = Some(PatternHead { taken: true, name: def.name.clone(), tile: Some(def.tile) });
+        sub.pattern = Some(PatternHead { taken: true, name: self.names.bytes(&def.name), tile: Some(def.tile) });
         sub.gradients = std::mem::take(&mut self.gradients);
         sub.global_names = std::mem::take(&mut self.global_names);
+        sub.styles = std::mem::take(&mut self.styles);
         sub.nodes = self.nodes;
         sub.template = self.template;
         self.lend_budgets(&mut sub);
@@ -420,6 +436,8 @@ impl<'a> Reader<'a> {
         self.nodes = sub.nodes;
         self.gradients = std::mem::take(&mut sub.gradients);
         self.global_names = std::mem::take(&mut sub.global_names);
+        self.styles = std::mem::take(&mut sub.styles);
+        self.names.absorb(std::mem::take(&mut sub.names));
         let whole = read.is_ok()
             && sub.unsupported.is_empty()
             && sub.unknown.is_empty()
@@ -494,7 +512,29 @@ impl<'a> Reader<'a> {
         let Some(tile) = head.tile.filter(|t| whole && sane(*t) && t.width() > 0.0 && t.height() > 0.0 && !frame.children.is_empty()) else {
             return;
         };
-        let art: Vec<Arc<Node>> = frame.children.iter().map(|n| Arc::new(self.doc.reid(n))).collect();
+        let art: Vec<Arc<Node>> = frame
+            .children
+            .iter()
+            .map(|n| {
+                let mut kept = self.doc.reid(n);
+                self.reid_masks(&mut kept, 0);
+                Arc::new(kept)
+            })
+            .collect();
+        // The objects of the art linked to graphic styles, by their ids in the document.
+        if !sub.style_links.is_empty() {
+            let mut ids = HashMap::new();
+            for (read, kept) in frame.children.iter().zip(&art) {
+                pair_ids(read, kept, &mut ids, 0);
+            }
+            for (id, style) in &sub.style_links {
+                if let Some(new) = ids.get(id)
+                    && self.style_links.len() < MAX_NODES
+                {
+                    self.style_links.push((*new, style.clone()));
+                }
+            }
+        }
         // Fills and the tables look the pattern up by its name in the file; the document has it by
         // the name it shows.
         let mut def = PatternDef::new(&self.global_names.define(Global::Pattern, &head.name), art);
@@ -538,10 +578,11 @@ impl<'a> Reader<'a> {
             return;
         }
         let name = match Lexer::new(section).next_token().map(|t| t.tok) {
-            Some(Tok::Str(bytes)) => obj::text(&bytes),
+            Some(Tok::Str(bytes)) => self.names.bytes(&bytes),
             _ => return,
         };
         let mut sub = Reader::new(section);
+        sub.names = super::obj::Names::new(self.names.encoding);
         sub.subreader_depth = self.subreader_depth + 1;
         sub.symbol = Some(SymbolHead::default());
         sub.template = self.template;
@@ -560,6 +601,7 @@ impl<'a> Reader<'a> {
         self.global_names = std::mem::take(&mut sub.global_names);
         self.styles = std::mem::take(&mut sub.styles);
         self.pattern_tiles = std::mem::take(&mut sub.pattern_tiles);
+        self.names.absorb(std::mem::take(&mut sub.names));
         // Art stopped by a trailer, or with an array, type, image, placed file, gradient mesh or
         // gradient still open at the end (as [`Reader::run_string`] checks), isn't whole.
         let open = sub.done
@@ -648,10 +690,10 @@ impl<'a> Reader<'a> {
         named
     }
 
-    /// Give the art of the opacity masks in `n` (a copy of a symbol's art with ids of this
+    /// Give the art of the opacity masks in `n` (a copy of a symbol's, a pattern's or a brush's art, or of a clipping path, with ids of this
     /// document, [`vectorcraft_doc::Document::reid`], which leaves masks as they are) ids of this
     /// document too.
-    fn reid_masks(&mut self, n: &mut Node, depth: usize) {
+    pub(super) fn reid_masks(&mut self, n: &mut Node, depth: usize) {
         if depth > MAX_DEPTH {
             return;
         }
@@ -678,7 +720,7 @@ impl<'a> Reader<'a> {
                 if names.len() >= MAX_LISTED {
                     break;
                 }
-                names.push(obj::text(&bytes));
+                names.push(self.names.quiet(&bytes));
             }
         }
         self.symbol_list = Some(names);
@@ -688,7 +730,7 @@ impl<'a> Reader<'a> {
     /// order or a brush ([`brush`]); other objects are left alone. A brush without a name is counted
     /// as not read.
     fn plugin_object(&mut self, section: &[u8]) {
-        let Some((kind, name, params)) = brush::plugin_strings(section) else { return };
+        let Some((kind, name, params)) = brush::plugin_strings(section, &self.names) else { return };
         if kind == brush::MANAGER {
             if name.is_some() {
                 self.brush_objects = true;
@@ -706,15 +748,22 @@ impl<'a> Reader<'a> {
             self.brushes_unread += 1;
             return;
         }
-        match brush::parse_tool_object(tool, &name, &params) {
-            Ok(d) => self.brush_drafts.push(d),
+        match brush::parse_tool_object(tool, &self.names.quiet(&name), &params) {
+            Ok(d) => {
+                // Only the name of a brush that is read gets a note.
+                self.names.bytes(&name);
+                self.brush_drafts.push(d);
+            }
             Err(_) => self.brushes_unread += 1,
         }
     }
 
     /// A brush's art (`section`: what follows `%AI8_BeginBrushPattern`, its name as a string, then
     /// the art), read by a reader of its own as a pattern's is, in a space with y down. Art it can't
-    /// read whole isn't kept: the brushes that use it aren't read.
+    /// read whole isn't kept: the brushes that use it aren't read. Kept art's colors are kept with
+    /// it, and count as the page's once a brush that is kept uses the art
+    /// ([`Reader::count_brush_art_colors`]): each name's first definition in the art, at most
+    /// [`brush::MAX_BRUSH_ART_COLORS`] names.
     fn define_brush_art(&mut self, section: &[u8]) {
         if self.brush_art_sections >= brush::MAX_BRUSH_ART || self.subreader_depth >= MAX_SUBREADERS {
             return;
@@ -722,13 +771,16 @@ impl<'a> Reader<'a> {
         self.brush_art_sections += 1;
         let mut lex = Lexer::new(section);
         let Some(Tok::Str(name) | Tok::Hex(name)) = lex.next_token().map(|t| t.tok) else { return };
-        let name = obj::text(&name);
+        let name = self.names.bytes(&name);
         let mut sub = Reader::new(lex.slice(lex.offset(), section.len()));
+        sub.names = obj::Names::new(self.names.encoding);
         // In a space of its own (y down), with no head to take.
         sub.pattern = Some(PatternHead { taken: true, ..PatternHead::default() });
         sub.subreader_depth = self.subreader_depth + 1;
-        // The gradients and patterns defined so far, and which patterns are in the version 7 form, lent.
+        // The gradients, art styles and patterns defined so far, and which patterns are in the
+        // version 7 form, lent.
         sub.gradients = std::mem::take(&mut self.gradients);
+        sub.styles = std::mem::take(&mut self.styles);
         sub.pattern_tiles = std::mem::take(&mut self.pattern_tiles);
         sub.v7_patterns = std::mem::take(&mut self.v7_patterns);
         sub.global_names = std::mem::take(&mut self.global_names);
@@ -739,9 +791,11 @@ impl<'a> Reader<'a> {
         self.take_back_budgets(&mut sub);
         self.nodes = sub.nodes;
         self.gradients = std::mem::take(&mut sub.gradients);
+        self.styles = std::mem::take(&mut sub.styles);
         self.pattern_tiles = std::mem::take(&mut sub.pattern_tiles);
         self.v7_patterns = std::mem::take(&mut sub.v7_patterns);
         self.global_names = std::mem::take(&mut sub.global_names);
+        self.names.absorb(std::mem::take(&mut sub.names));
         // Images aren't kept: the document's images don't count a brush's art among their users. Art
         // read with a note (something left out of it) isn't kept either.
         let whole = read.is_ok()
@@ -754,13 +808,25 @@ impl<'a> Reader<'a> {
             && sub.doc.images.is_empty();
         let Some(frame) = sub.frames.pop().filter(|f| whole && !f.children.is_empty()) else { return };
         self.brush_art_looks.insert(name.clone(), sub.drawn_looks);
-        let mut art: Vec<Arc<Node>> = frame.children.iter().map(|n| Arc::new(self.doc.reid(n))).collect();
+        let mut art: Vec<Arc<Node>> = frame
+            .children
+            .iter()
+            .map(|n| {
+                let mut kept = self.doc.reid(n);
+                self.reid_masks(&mut kept, 0);
+                Arc::new(kept)
+            })
+            .collect();
         let node = match art.len() {
             1 => art.pop().map(Arc::unwrap_or_clone),
             _ => Some(Node::group(self.doc.alloc_id(), art)),
-        };
+        }
+        .map(brush::without_frame);
         let Some(node) = node else { return };
-        self.brush_art.insert(name, node);
+        self.brush_art.insert(name.clone(), node);
+        let mut colors = BrushArtColors { spots: sub.spots, stop_spots: sub.stop_spots, cmyk: sub.cmyk_colors, rgb: sub.rgb_colors };
+        colors.keep_first(brush::MAX_BRUSH_ART_COLORS);
+        self.brush_art_colors.insert(name, colors);
     }
 
     /// Lend `sub`, a reader of a definition, what this import may still spend on laying out blends
@@ -785,7 +851,8 @@ impl<'a> Reader<'a> {
         head.taken = true;
         let Some(at) = vals.iter().position(|v| matches!(v, V::Str(_))) else { return vals };
         let tile = Self::nums(vals.get(at + 1..at + 5).unwrap_or_default());
-        let ([x0, y0, x1, y1], Some(name)) = (tile.as_slice(), vals.get(at).and_then(V::text)) else { return vals };
+        let [x0, y0, x1, y1] = tile.as_slice() else { return vals };
+        let Some(name) = vals.get(at).and_then(|v| self.names.text(v)) else { return vals };
         head.name = name;
         head.tile = Some(Rect::new(*x0, *y0, *x1, *y1));
         vals.split_off(at + 5)
@@ -804,7 +871,7 @@ const MAX_LAYERS: usize = 65_536;
 /// A pattern's definition in the version 7 form: its head, then a list of layers painted in order,
 /// the first the lowest.
 struct LegacyPattern {
-    name: String,
+    name: Vec<u8>,
     /// The tile in the pattern's space (y up).
     tile: Rect,
     layers: Vec<LegacyLayer>,
@@ -843,7 +910,7 @@ fn legacy_pattern(section: &[u8]) -> Legacy {
     let mut lex = super::Lexer::new(section);
     let mut next = || next_operand(&mut lex).ok().flatten().map(|t| (t.tok, t.hidden));
     let name = match next() {
-        Some((Tok::Str(s), _)) => super::obj::text(&s),
+        Some((Tok::Str(s), _)) => s,
         _ => return Legacy::No,
     };
     let mut tile = [0.0; 4];
@@ -912,6 +979,11 @@ const MAX_STRING: usize = 4096;
 /// The PostScript string `v` starts with (after spaces), its escapes read, when it ends on the line
 /// and holds at most [`MAX_STRING`] bytes.
 fn ps_string(v: &[u8]) -> Option<String> {
+    ps_bytes(v).map(|bytes| obj::text(&bytes))
+}
+
+/// [`ps_string`] as the string's bytes.
+fn ps_bytes(v: &[u8]) -> Option<Vec<u8>> {
     let mut bytes = v.trim_ascii_start().iter().copied().peekable();
     if bytes.next()? != b'(' {
         return None;
@@ -948,7 +1020,7 @@ fn ps_string(v: &[u8]) -> Option<String> {
                 out.push(b);
             }
             b')' => {
-                let Some(d) = depth.checked_sub(1) else { return Some(super::obj::text(&out)) };
+                let Some(d) = depth.checked_sub(1) else { return Some(out) };
                 depth = d;
                 out.push(b);
             }

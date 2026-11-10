@@ -1440,17 +1440,17 @@ fn spiral_drags_with_alt_and_ctrl_change_its_segments_and_decay() {
     };
     s.select_tool("spiral", v).unwrap();
     let undo = undo_steps(&s);
-    // Alt from a radius of 100 to 200: 10 segments become 14, one full wind of four quarter turns.
+    // Alt from a radius of 100 to 200: preserving the inner end adds three full winds.
     let (anchors, outer) = spiral(&mut s, Mods { alt: true, ..Mods::default() }, (300.0, 100.0));
-    assert_eq!(anchors, 15);
+    assert_eq!(anchors, 23);
     assert!(near(outer, Point::new(300.0, 100.0)), "{outer:?}");
-    assert_eq!(s.tool_options()["segments"], json!(14));
-    // Ctrl/Cmd from 100 to 50: the decay rises from 80 % to 80 × 2^(1/14) %.
+    assert_eq!(s.tool_options()["segments"], json!(22));
+    // Ctrl/Cmd from 100 to 50: the decay rises from 80 % to 80 × 2^(4/22) %.
     let (anchors, outer) = spiral(&mut s, Mods { cmd: true, ..Mods::default() }, (150.0, 100.0));
-    assert_eq!(anchors, 15);
+    assert_eq!(anchors, 23);
     assert!(near(outer, Point::new(150.0, 100.0)), "{outer:?}");
     let decay = s.tool_options()["decay"].as_f64().unwrap();
-    assert!((decay - 80.0 * 2f64.powf(1.0 / 14.0)).abs() < 1e-9, "{decay}");
+    assert!((decay - 80.0 * 2f64.powf(4.0 / 22.0)).abs() < 1e-9, "{decay}");
     assert_eq!(undo_steps(&s) - undo, 2, "one undo step a spiral");
 }
 
@@ -2673,6 +2673,98 @@ fn pen_with_cmd_borrows_direct_selection_and_goes_on_drawing() {
     assert_eq!(s.tool_id(), "rectangle");
 }
 
+/// #6123: anchors that Cmd (Ctrl) held with the Pen selects with the Direct Selection it lends are
+/// what Copy and Cut take, as with Direct Selection chosen; the last anchor the Pen leaves selected
+/// while drawing is not, Copy taking the whole path (#2122), nor after a Cmd gesture that picks
+/// nothing.
+#[test]
+fn pen_cmd_selected_anchors_are_what_copy_and_cut_take() {
+    let (none, cmd) = (Mods::default(), Mods { cmd: true, ..Mods::default() });
+    let v = view();
+    let mut s = session();
+    s.select_tool("pen", v).unwrap();
+    for x in [100.0, 200.0, 300.0, 400.0] {
+        gesture(&mut s, &[(x, 300.0)], none);
+    }
+    let id = s.doc().unwrap().selection.objects[0];
+    let pasted = |s: &mut Session| {
+        let ids = s.execute("edit.paste", &json!({})).unwrap()["ids"].clone();
+        let ids: Vec<NodeId> = ids.as_array().unwrap().iter().map(|i| NodeId(i.as_u64().unwrap())).collect();
+        ids.iter().map(|i| path(s, *i).subpaths[0].anchors.len()).collect::<Vec<_>>()
+    };
+    // A Cmd marquee around the middle two anchors: Copy takes them and the segment between.
+    gesture(&mut s, &[(150.0, 250.0), (350.0, 350.0)], cmd);
+    assert_eq!(s.tool_id(), "pen");
+    assert_eq!(s.doc().unwrap().selection.anchors[&id], [(0, 1), (0, 2)].into());
+    s.execute("edit.copy", &json!({})).unwrap();
+    assert_eq!(pasted(&mut s), [2]);
+    // Cut takes the two anchors out of the path, as Clear does (#6361): each side keeps one
+    // anchor, which makes no path, so nothing is left.
+    s.execute("edit.undo", &json!({})).unwrap();
+    let original = path(&s, id);
+    let picked = s.doc().unwrap().selection.clone();
+    s.execute("edit.cut", &json!({})).unwrap();
+    let left = paths(&s);
+    assert!(left.is_empty());
+    assert!(s.doc().unwrap().selection.objects.is_empty());
+    assert_eq!(s.clipboard.nodes.len(), 1);
+    assert_eq!(s.clipboard.nodes[0].path_data().unwrap().subpaths[0].anchors, original.subpaths[0].anchors[1..3]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(paths(&s), vec![(id, original.clone())]);
+    assert_eq!(s.doc().unwrap().selection, picked);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(paths(&s), left);
+    // Drawing on: the last anchor the Pen leaves selected doesn't make Copy take that anchor.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    gesture(&mut s, &[(500.0, 300.0)], none);
+    assert_eq!(s.doc().unwrap().selection.anchors[&id], [(0, 4)].into());
+    s.execute("edit.copy", &json!({})).unwrap();
+    assert_eq!(pasted(&mut s), [5]);
+    // A Cmd+Shift marquee over nothing picks nothing: the Pen's last anchor stays its own.
+    s.execute("edit.undo", &json!({})).unwrap();
+    let shift_cmd = Mods { shift: true, ..cmd };
+    gesture(&mut s, &[(600.0, 500.0), (700.0, 600.0)], shift_cmd);
+    assert_eq!(s.doc().unwrap().selection.anchors[&id], [(0, 4)].into());
+    s.execute("edit.copy", &json!({})).unwrap();
+    assert_eq!(pasted(&mut s), [5]);
+    // The tool started afresh in the same document (another view of it) keeps a pick picked.
+    s.execute("edit.undo", &json!({})).unwrap();
+    gesture(&mut s, &[(150.0, 250.0), (350.0, 350.0)], cmd);
+    s.reset_tool();
+    s.execute("edit.copy", &json!({})).unwrap();
+    assert_eq!(pasted(&mut s), [2]);
+}
+
+/// #6123: with the other tools, Cmd (Ctrl) lends the selection tool chosen last. Direct Selection
+/// lent picks anchors, which Copy takes, as with the Curvature tool, which Cmd lends Direct
+/// Selection until a selection tool is chosen; the Selection tool lent selects the path whole.
+#[test]
+fn cmd_selected_anchors_with_other_tools_are_what_copy_takes() {
+    let cmd = Mods { cmd: true, ..Mods::default() };
+    let v = view();
+    let copied = |tool: &str, last_selection: Option<&str>| {
+        let mut s = session();
+        let anchors = json!([{"x": 100, "y": 300}, {"x": 200, "y": 300}, {"x": 300, "y": 300}, {"x": 400, "y": 300}]);
+        s.execute("path.create", &json!({"anchors": anchors})).unwrap();
+        s.execute("select.none", &json!({})).unwrap();
+        if let Some(t) = last_selection {
+            s.select_tool(t, v).unwrap();
+        }
+        s.select_tool(tool, v).unwrap();
+        gesture(&mut s, &[(150.0, 250.0), (350.0, 350.0)], cmd);
+        assert_eq!(s.tool_id(), tool);
+        s.execute("edit.copy", &json!({})).unwrap();
+        let ids = s.execute("edit.paste", &json!({})).unwrap()["ids"].clone();
+        let id = NodeId(ids[0].as_u64().unwrap());
+        path(&s, id).subpaths[0].anchors.len()
+    };
+    assert_eq!(copied("rectangle", Some("directSelection")), 2);
+    assert_eq!(copied("ellipse", Some("directSelection")), 2);
+    assert_eq!(copied("curvature", None), 2);
+    assert_eq!(copied("rectangle", None), 4, "the Selection tool lent selects the path whole");
+}
+
 /// #4980: Cmd/Ctrl held with the Pen drags as Direct Selection: an anchor of the path being drawn
 /// moves on its own and the Pen goes on drawing that path from it; another path's straight segment
 /// moves both its ends and a curved one bends; each drag is one undo step and the pointer is the
@@ -3331,6 +3423,7 @@ fn a_filled_pencil_path_keeps_no_stroke() {
     assert!(!s.doc().unwrap().doc.node(id).unwrap().appearance.stroke_paint().is_none());
 }
 
+/// Interior and endpoint deletions preserve each surviving run without adding connecting segments.
 #[test]
 fn open_anchor_delete_splits_runs_without_new_connections() {
     let cases = [
@@ -3358,16 +3451,19 @@ fn open_anchor_delete_splits_runs_without_new_connections() {
             assert!(s.doc().unwrap().doc.node(id).is_none(), "only isolated points remain: {removed:?}");
             assert!(s.doc().unwrap().selection.objects.is_empty());
         } else {
-            let result = path(&s, id);
-            assert_eq!(result.subpaths.len(), expected.len(), "deleted anchors: {removed:?}");
-            for (sp, indices) in result.subpaths.iter().zip(&expected) {
+            let pieces = &s.doc().unwrap().selection.objects;
+            assert_eq!(pieces.len(), expected.len(), "deleted anchors: {removed:?}");
+            assert_eq!(pieces[0], id);
+            for (piece, indices) in pieces.iter().zip(&expected) {
+                let result = path(&s, *piece);
+                assert_eq!(result.subpaths.len(), 1);
+                let sp = &result.subpaths[0];
                 assert!(!sp.closed);
                 assert_eq!(sp.anchors.iter().map(|a| a.p).collect::<Vec<_>>(), indices.iter().map(|&i| original.anchors[i].p).collect::<Vec<_>>());
                 for (segment, pair) in indices.windows(2).enumerate() {
                     assert_eq!(sp.segment(segment), original.segment(pair[0]));
                 }
             }
-            assert_eq!(s.doc().unwrap().selection.objects, vec![id]);
         }
         assert_eq!(undo_steps(&s), undo + 1);
         assert!(s.doc().unwrap().selection.anchors.is_empty() && s.doc().unwrap().selection.segments.is_empty());
@@ -3466,6 +3562,7 @@ fn open_anchor_delete_does_not_change_explicit_remove_anchors() {
     }
 }
 
+/// Baked transforms and mixed whole/partial selection survive splitting and atomic Undo/Redo.
 #[test]
 fn open_anchor_delete_after_transform_keeps_mixed_selection_atomic() {
     use vectorcraft_geom::Affine;
@@ -3503,13 +3600,17 @@ fn open_anchor_delete_after_transform_keeps_mixed_selection_atomic() {
         let st = s.doc().unwrap();
         assert!(st.doc.node(whole).is_none());
         assert_eq!(st.doc.node(untouched), before.node(untouched));
-        let result = path(&s, id);
-        assert_eq!(result.subpaths.len(), 2);
-        for (sp, segment) in result.subpaths.iter().zip([0, 3]) {
+        let pieces = st.selection.objects.clone();
+        assert_eq!(pieces.len(), 2);
+        assert_eq!(pieces[0], id);
+        for (piece, segment) in pieces.iter().zip([0, 3]) {
+            let result = path(&s, *piece);
+            assert_eq!(result.subpaths.len(), 1);
+            let sp = &result.subpaths[0];
             assert_eq!(sp.segment_count(), 1);
             assert_eq!(sp.segment(0), original.subpaths[0].segment(segment));
         }
-        assert_eq!(st.selection.objects, vec![id]);
+        assert_eq!(st.selection.objects, pieces);
         assert!(st.selection.anchors.is_empty() && st.selection.segments.is_empty());
         assert_eq!(undo_steps(&s), undo + 1);
         let after = st.doc.clone();
@@ -3518,7 +3619,7 @@ fn open_anchor_delete_after_transform_keeps_mixed_selection_atomic() {
         assert_eq!(s.doc().unwrap().selection, selection);
         s.execute("edit.redo", &json!({})).unwrap();
         assert_eq!(s.doc().unwrap().doc, after);
-        assert_eq!(s.doc().unwrap().selection.objects, vec![id]);
+        assert_eq!(s.doc().unwrap().selection.objects, pieces);
     }
 }
 

@@ -1,5 +1,5 @@
 use super::fonts::MAX_RECENT_FONTS;
-use super::{Value, VectorcraftApp, dialogs, fileio, io, menus, panels, picks, toolbar};
+use super::{Value, VectorcraftApp, canvas, dialogs, fileio, io, menus, panels, picks, toolbar};
 use crate::placing;
 use crate::state::ReplaceFontWarning;
 
@@ -84,15 +84,38 @@ impl VectorcraftApp {
         result
     }
 
+    /// [`Self::run`] for saved steps (an action's): keys their commands no longer read are taken,
+    /// as [`vectorcraft_engine::Session::replay`] takes them, so an action recorded by an older
+    /// version still plays.
+    pub fn replay(&mut self, id: &str, params: Value) -> Result<Value, String> {
+        let outer = self.session.set_replaying(true);
+        let result = self.run(id, params);
+        self.session.set_replaying(outer);
+        result
+    }
+
+    /// A command that waits for the edit the tool computes on another thread and the input held
+    /// for it waits before the app adds the view's active artboard to its params: a held press
+    /// may change it. The app's own commands (its dialogs, panels and view) wait too.
+    fn wait_for_tool_edit(&mut self, id: &str) {
+        let ui_command = vectorcraft_engine::find_command(id).is_none();
+        if (ui_command || vectorcraft_engine::waits_for_tool_edit(id)) && self.session.tool_waiting() {
+            let r = self.session.finish_tool_edit();
+            canvas::apply_requests(self, r);
+        }
+    }
+
     /// [`Self::run`] it, inside what asks for file dialogs.
     fn run_now(&mut self, id: &str, params: Value) -> Result<Value, String> {
         crate::state::sync_zoom_stops_display_print_size(self.session.prefs.display_print_size);
         self.run_count = self.run_count.wrapping_add(1);
         // In debug builds the app's own calls are held to the params descriptions too (#1442): a
-        // panel passing a key its command doesn't read shows up in the tests.
-        if cfg!(debug_assertions) {
+        // panel passing a key its command doesn't read shows up in the tests. Saved steps aren't
+        // checked ([`Self::replay`]).
+        if cfg!(debug_assertions) && !self.session.replaying() {
             menus::check_params(&self.session, id, &params)?;
         }
+        self.wait_for_tool_edit(id);
         // A `.ai` file a command writes (a save, an export, a timestamped copy, a batch's save) names
         // the view's active artboard.
         io::remember_active_artboard(self);
@@ -239,7 +262,7 @@ impl VectorcraftApp {
                         let to = &params["to"];
                         to["family"].as_str().and_then(|family| {
                             let style = to["style"].as_str().unwrap_or("Regular");
-                            vectorcraft_text::FontDb::global().resolve(family, style).map(|(face, _)| face.family.clone())
+                            vectorcraft_text::FontDb::global().stored_family(family, style)
                         })
                     }
                     _ => None,
@@ -359,8 +382,10 @@ impl VectorcraftApp {
 
     /// Select a tool (also used by the toolbar and shortcuts).
     pub fn select_tool(&mut self, id: &str) {
-        // The tip of a pen whose eraser end selected the Eraser doesn't undo this choice.
+        // The tip of a pen whose eraser end selected the Eraser doesn't undo this choice, and
+        // neither does letting go of a held tool shortcut.
         self.pen_end.forget_tool();
+        self.held_tool.clear();
         self.activate_tool(id, true);
     }
 
@@ -378,6 +403,10 @@ impl VectorcraftApp {
         let switched = if fresh { self.session.select_tool(id, v) } else { self.session.switch_tool(id, v) };
         if let Err(e) = switched {
             self.ui.status = e.to_string();
+        }
+        if before != self.session.tool_id() {
+            // A control gesture cannot resume after another tool has owned the pointer.
+            self.control_rotate_press = None;
         }
         // A newly chosen Artboard tool starts on the active artboard (the view's).
         if before != "artboard"

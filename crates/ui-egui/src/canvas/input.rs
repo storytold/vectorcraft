@@ -147,12 +147,12 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
         app.session.tool_hover_ended(view);
         ui.ctx().request_repaint();
     }
-    // The tool works on another thread (a large selection's planar map): it checks each frame
-    // whether the work is done, and then shows the highlight under the pointer.
+    // The tool works on another thread (a large selection's planar map or merge): it checks each
+    // frame whether the work is done, and then shows the highlight under the pointer or applies
+    // the edit.
     if app.session.tool_waiting() {
-        if let Err(e) = app.session.tool_poll(view, false) {
-            app.status(e.to_string());
-        }
+        let r = app.session.tool_poll(view, false);
+        apply_requests(app, r);
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(16));
     }
     if pointer.primary_released()
@@ -202,12 +202,20 @@ fn wheel_view(
 ) -> (egui::PointerState, egui::Modifiers, bool, Option<Pos2>) {
     let line = ui.ctx().options(|o| o.input_options.line_scroll_speed);
     let wheel_zooms = app.session.prefs.zoom_with_mouse_wheel;
-    let animate = animated_zoom(&app.session.prefs);
+    // A docked field may be drawn later and has not consumed its wheel event yet. Only canvas
+    // hover may start a zoom glide; existing glides still decay outside the canvas in `wheel`.
+    let animate = animated_zoom(&app.session.prefs) && resp.hovered();
     let turn_id = egui::Id::unique("canvas-wheel-turn");
     let turn_before: WheelTurn = ui.data(|d| d.get_temp(turn_id)).unwrap_or_default();
     let mut turn = turn_before;
-    let (pointer, m, space, (factor, scroll)) =
-        ui.input(|i| (i.pointer.clone(), i.modifiers, i.key_down(egui::Key::Space), wheel(i, wheel_zooms, animate, line, rect.height(), &mut turn)));
+    let (pointer, m, space, (factor, scroll)) = ui.input(|i| {
+        (
+            i.pointer.clone(),
+            i.modifiers,
+            i.key_down(egui::Key::Space),
+            wheel(i, &app.session.prefs, wheel_zooms, animate, line, rect.height(), &mut turn),
+        )
+    });
     if turn != turn_before {
         ui.data_mut(|d| d.insert_temp(turn_id, turn));
     }
@@ -290,6 +298,11 @@ fn begin_drag(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, p: Pos2) {
         crate::document_drag::begin(app, ui.ctx(), ev.pos);
         Drag::Tool
     };
+    // A drag of the Zoom, Hand or Rotate View tool uses the tool of a held shortcut; held Space's
+    // view tools are not that tool.
+    if !space && matches!(d, Drag::ZoomBox { .. } | Drag::ZoomScrub { .. } | Drag::Pan { .. } | Drag::RotateView { .. }) {
+        crate::shortcuts::note_tool_use(app);
+    }
     // Panning, zooming or turning the view takes the pointer from the tool's hover.
     if !tool_holds(d) {
         app.session.tool_hover_ended(view);
@@ -324,14 +337,8 @@ fn drag_held(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Pos2) 
             }
         }
         Drag::RotateView { start_angle, start_rot, snaps } => {
-            let c = rect.center();
-            let a = (p.y - c.y).atan2(p.x - c.x) as f64;
-            let mut deg = start_rot + (a - start_angle).to_degrees();
-            if snaps && m.shift {
-                deg = (deg / 15.0).round() * 15.0;
-            }
             if let Some(vm) = app.view_mut() {
-                vm.rotation = vectorcraft_geom::normalize_deg(deg);
+                vm.rotation = super::view::drag_rotation(rect.center(), p, start_angle, start_rot, snaps && m.shift);
             }
         }
         Drag::ZoomBox { start } => {

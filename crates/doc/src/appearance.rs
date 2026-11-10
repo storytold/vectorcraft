@@ -8,7 +8,6 @@ mod layers;
 mod profile;
 mod stroke_style;
 
-pub(crate) use layers::HEAD_REACH;
 pub use layers::{Effect, FillLayer, StrokeGradientMode, StrokeLayer, stroke_paint_bounds};
 pub use profile::{AngleProfile, PressureProfile, ProfilePreset, SavedProfile, WidthProfile};
 pub use stroke_style::{ArrowAlign, Arrowhead, Dash, LineCap, LineJoin, StrokeAlign};
@@ -296,6 +295,28 @@ impl Appearance {
             scale(e, s);
         }
     }
+    /// The id of Effect › SVG Filters' effect, whose `origin` parameter is a point of the document.
+    pub const SVG_FILTER: &str = "svg.filter";
+
+    /// Does any effect (the object's or a fill's or stroke's) hold an SVG filter?
+    pub fn has_svg_filter(&self) -> bool {
+        self.effects.iter().chain(self.items.iter().flat_map(|i| i.effects().iter())).any(|e| e.id == Self::SVG_FILTER)
+    }
+
+    /// Move the `origin` of every SVG filter effect (where its user space starts in the document)
+    /// by `a`, as the object it is on moves.
+    pub fn transform_svg_filters(&mut self, a: kurbo::Affine) {
+        let items = self.items.iter_mut().flat_map(|i| i.effects_mut().iter_mut());
+        for e in self.effects.iter_mut().chain(items).filter(|e| e.id == Self::SVG_FILTER) {
+            let at =
+                |i: usize| e.params.get("origin").and_then(|o| o.get(i)).and_then(serde_json::Value::as_f64).filter(|v| v.is_finite()).unwrap_or(0.0);
+            let p = a * kurbo::Point::new(at(0), at(1));
+            if p.x.is_finite() && p.y.is_finite() && e.params.is_object() {
+                e.params["origin"] = serde_json::json!([p.x, p.y]);
+            }
+        }
+    }
+
     /// Gradient paints of the fills and strokes.
     fn gradients_mut(&mut self) -> impl Iterator<Item = &mut vectorcraft_color::GradientPaint> {
         self.items.iter_mut().filter_map(|i| match i {
@@ -353,6 +374,11 @@ impl Appearance {
     /// Does a fill or stroke carry a placed gradient (start and end in document space)?
     pub fn has_placed_gradient(&self) -> bool {
         self.has_gradient(true)
+    }
+    /// Does a fill or stroke carry a gradient that is drawn at a place in document space: a placed
+    /// one, or a freeform gradient with points of its own whose vector is fitted to the bounds?
+    pub fn has_positioned_gradient(&self) -> bool {
+        self.gradients().any(|g| g.is_placed() || g.has_freeform_points())
     }
     /// Fix unplaced gradients to their fit on `bounds` (the object's geometric bounds; strokes fit
     /// the stroke-inflated box), so they can follow transforms that refitting wouldn't reproduce.

@@ -10,7 +10,8 @@
 //! is left as it was and the save fails.
 //!
 //! On macOS `File::sync_all` is a full flush (`F_FULLFSYNC`), which SMB shares refuse with
-//! `ENOTSUP` while a plain `fsync` works: [`sync_file`] falls back to the plain one there (#1620).
+//! `ENOTSUP` and virtiofs shares (folders shared into a macOS VM) with `ENOTTY`, while a plain
+//! `fsync` works: [`sync_file`] falls back to the plain one there (#1620).
 
 use std::fs::{File, OpenOptions};
 use std::io::{self, Write as _};
@@ -180,8 +181,9 @@ fn copy_new(from: &Path, path: &Path) -> io::Result<()> {
 }
 
 /// Flush `file` to stable storage (`sync_all`). On Apple platforms that is a full flush
-/// (`F_FULLFSYNC`); where the volume refuses it with `ENOTSUP` (SMB shares, #1620) this falls back
-/// to a plain `fsync`. Any other error, and a failed `fsync`, is returned as it is.
+/// (`F_FULLFSYNC`); where the volume refuses it with `ENOTSUP` (SMB shares) or `ENOTTY` (virtiofs
+/// shares, #1620) this falls back to a plain `fsync`. Any other error, and a failed `fsync`, is
+/// returned as it is.
 pub fn sync_file(file: &File) -> io::Result<()> {
     match full_sync(file) {
         Err(e) if full_flush_unsupported(&e) => plain_fsync(file),
@@ -190,9 +192,10 @@ pub fn sync_file(file: &File) -> io::Result<()> {
 }
 
 /// Whether `e` is a volume refusing a full flush. Never off Apple platforms: there `sync_all` is
-/// already a plain `fsync`. Checked by its code because std maps `ENOTSUP` to `Uncategorized`.
+/// already a plain `fsync`. Checked by its code because std maps `ENOTSUP` and `ENOTTY` to
+/// `Uncategorized`.
 fn full_flush_unsupported(e: &io::Error) -> bool {
-    cfg!(target_vendor = "apple") && e.raw_os_error() == Some(ENOTSUP)
+    cfg!(target_vendor = "apple") && matches!(e.raw_os_error(), Some(ENOTSUP | ENOTTY))
 }
 
 #[cfg(target_vendor = "apple")]
@@ -232,6 +235,9 @@ fn full_sync(file: &File) -> io::Result<()> {
 const ENOTSUP: i32 = 45;
 #[cfg(not(target_vendor = "apple"))]
 const ENOTSUP: i32 = 95;
+/// What macOS answers when a virtiofs share (a folder shared into a VM) is asked for a full flush.
+/// The same number on every Unix.
+const ENOTTY: i32 = 25;
 
 #[cfg(test)]
 thread_local! {
@@ -412,6 +418,17 @@ mod tests {
         left.retain(|n| n != "new.otf");
         assert!(left.is_empty(), "no temporary file is left: {left:?}");
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// A save to a virtiofs share (#1620: a folder shared into a macOS VM): macOS refuses the full
+    /// flush there with `ENOTTY` (os error 25), which falls back to a plain `fsync` as `ENOTSUP` does.
+    /// Elsewhere neither is a refused full flush, and other errors never are.
+    #[test]
+    fn a_full_flush_refused_with_enotty_falls_back_like_enotsup() {
+        let apple = cfg!(target_vendor = "apple");
+        assert_eq!(full_flush_unsupported(&io::Error::from_raw_os_error(25)), apple, "ENOTTY");
+        assert_eq!(full_flush_unsupported(&io::Error::from_raw_os_error(ENOTSUP)), apple, "ENOTSUP");
+        assert!(!full_flush_unsupported(&io::Error::other("the connection was lost")));
     }
 
     fn denied<T>() -> io::Result<T> {

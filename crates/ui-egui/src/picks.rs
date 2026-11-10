@@ -68,14 +68,17 @@ pub(crate) enum Entry {
 /// document active at the time has closed meanwhile.
 const DOCUMENT_FREE: &[&str] = &[
     "file.open",
+    "file.openWith",
     "file.newFromTemplate",
     "ui.installPlugin",
     "ui.checkScript",
+    "ui.runScript",
     "window.swatchLibrary.other",
     "window.graphicStyleLibrary.other",
     "ui.libraryPanel.locate",
     "shortcuts.import",
     "shortcuts.export",
+    "shortcuts.exportText",
     "ui.shortcutImportDialog",
     crate::panels::actions::SAVE_SET,
     crate::panels::actions::LOAD_SET,

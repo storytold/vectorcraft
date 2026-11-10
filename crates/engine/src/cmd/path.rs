@@ -1,6 +1,7 @@
 //! Path editing commands (used by the Pen and Direct Selection tools and Object → Path).
 
 use std::collections::BTreeSet;
+use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind, Scaling};
@@ -40,7 +41,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Anchors",
             [],
             None,
-            "{dx, dy, patterns?: bool (Transform Patterns: pattern fills and strokes transform with the objects that move whole; default: prefs transformPatternTiles)} move direct-selected anchors (whole paths if fully selected)",
+            "{dx, dy, patterns?: bool (Transform Patterns: pattern fills and strokes transform with the objects that move whole; default: prefs transformPatternTiles)} move direct-selected anchors (whole paths if fully selected); refused while an object of a symbol instance's art is selected",
             has_selection,
             move_anchors
         ),
@@ -226,6 +227,8 @@ fn close(s: &mut Session, p: &Value) -> Result<Value> {
 pub(crate) fn move_anchors(s: &mut Session, p: &Value) -> Result<Value> {
     let d = Vec2::new(number_or(p, "dx", 0.0, "path.moveAnchors")?, number_or(p, "dy", 0.0, "path.moveAnchors")?);
     check_switches(p, &["patterns"], "path.moveAnchors")?;
+    // An object selected in a symbol instance's art stays where the symbol puts it.
+    super::edit::refuse_symbol_part(s)?;
     // Objects selected whole move as objects, and their pattern tiles move with them when
     // `patterns` (default: General › Transform Pattern Tiles) is on.
     let whole = s.doc()?.selection.whole();
@@ -260,11 +263,19 @@ pub(crate) fn transform_anchors(s: &mut Session, label: &str, xf: vectorcraft_ge
                             *a = a.transform(xf);
                         }
                     }
+                    // A pixel-aligned path, or the pixel-aligned compound path that holds it, snaps
+                    // to the pixel grid again after its anchors move.
+                    let top = compound_or_self(doc, *id);
+                    if let Some(n) = doc.node_mut(top) {
+                        super::object::snap_if_aligned(n);
+                    }
                 }
                 None => {
                     if let Some(n) = doc.node_mut(*id) {
                         n.transform(xf, sc);
+                        super::object::keep_pixel_aligned(n, sc);
                     }
+                    super::object::keep_compound_aligned(doc, *id, sc);
                 }
             }
         }
@@ -306,6 +317,12 @@ fn move_anchor(s: &mut Session, p: &Value) -> Result<Value> {
         let path = path_mut(d, id)?;
         let a = path.anchor_mut(si, ai).ok_or_else(|| EngineError::Other("no such anchor".into()))?;
         *a = a.transform(vectorcraft_geom::Affine::translate(pos - a.p));
+        // A pixel-aligned path, or the pixel-aligned compound path that holds it, snaps to the
+        // pixel grid again.
+        let top = compound_or_self(d, id);
+        if let Some(n) = d.node_mut(top) {
+            super::object::snap_if_aligned(n);
+        }
         Ok(())
     })?;
     ok()
@@ -335,13 +352,14 @@ fn set_anchors(s: &mut Session, p: &Value) -> Result<Value> {
     );
     s.edit("Reshape", |d, _| {
         *path_mut(d, id)? = data;
+        super::object::resnap(d, id);
         Ok(())
     })?;
     ok()
 }
 
 /// The compound path enclosing `id`, or `id` itself if it is not inside a compound path.
-pub(super) fn compound_or_self(d: &Document, id: NodeId) -> NodeId {
+pub(crate) fn compound_or_self(d: &Document, id: NodeId) -> NodeId {
     d.parent_of(id).filter(|p| matches!(d.node(*p).map(|n| &n.kind), Some(NodeKind::Compound { .. }))).unwrap_or(id)
 }
 
@@ -580,7 +598,7 @@ pub(super) fn join(s: &mut Session, p: &Value) -> Result<Value> {
         },
     };
 
-    if let Some(ids) = ids_param(p, "ids") {
+    if let Some(ids) = ids_param(p, "ids", C)? {
         if ends.is_some() && ids.len() > 2 {
             return Err(bad(C, "`ends` applies to joining exactly two paths"));
         }
@@ -1084,7 +1102,7 @@ fn average_join_ends(s: &Session, p: &Value, c: &str) -> Result<Option<[End; 2]>
     let doc = &st.doc;
     let subpath = |id: NodeId, si: usize| doc.node(id)?.path_data()?.subpaths.get(si).filter(|sp| !sp.closed && !sp.anchors.is_empty());
     let last = |sp: &SubPath| sp.anchors.len().saturating_sub(1);
-    let ids = ids_param(p, "ids");
+    let ids = ids_param(p, "ids", c)?;
     let ends = if ids.is_none() && !st.selection.anchors.is_empty() {
         let picked: Vec<End> = st.selection.anchors.iter().flat_map(|(&id, set)| set.iter().map(move |&(si, ai)| (id, si, ai))).collect();
         match picked.as_slice() {
@@ -1189,6 +1207,11 @@ fn convert_anchors(s: &mut Session, p: &Value) -> Result<Value> {
     ok()
 }
 
+/// Delete direct-selected anchors or segments and whole selected objects in one edit.
+/// Leave surviving pieces selected, splitting ordinary contours into independent sibling objects.
+/// `p.guides: true` also removes the selected ruler guides in that edit; otherwise guides remain.
+/// Layers are retained, and an object removed with a selected ancestor is not removed twice.
+/// Returns JSON `null` on success; selection is replaced by the surviving object IDs.
 pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
     // `guides: true` (Cut, #3226): the selected ruler guides go in the same undo step.
     let with_guides = switch_or(p, "guides", false, "path.deleteAnchors")?;
@@ -1220,11 +1243,13 @@ pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
             if d.node(*id).is_none() {
                 continue;
             }
-            let remove_node = {
+            let original = deletion_source(d, *id)?;
+            let subpaths: Vec<SubPath> = {
                 let path = path_mut(d, *id)?;
+                let subpaths = std::mem::take(&mut path.subpaths);
                 if let Some(refs) = segments.get(id) {
                     // A segment pick cuts its connection, keeping every neighboring cubic.
-                    path.subpaths = std::mem::take(&mut path.subpaths)
+                    subpaths
                         .into_iter()
                         .enumerate()
                         .flat_map(|(si, sp)| {
@@ -1232,11 +1257,11 @@ pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
                             without_segments(sp, &cuts)
                         })
                         .filter(|s| s.anchors.len() >= 2)
-                        .collect();
+                        .collect()
                 } else {
                     // Remove every selected anchor against the original indexes, keeping surviving
                     // stretches separate rather than joining across deleted anchors.
-                    path.subpaths = std::mem::take(&mut path.subpaths)
+                    subpaths
                         .into_iter()
                         .enumerate()
                         .flat_map(|(si, sp)| {
@@ -1244,16 +1269,14 @@ pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
                             without_anchors(sp, &gone)
                         })
                         .filter(|s| s.anchors.len() >= 2)
-                        .collect();
+                        .collect()
                 }
-                path.subpaths.retain(|s| s.anchors.len() >= 2);
-                path.subpaths.is_empty()
             };
-            if remove_node {
+            if subpaths.is_empty() {
                 emptied.put(d, *id, vec![])?;
             } else {
-                // The remainder is selected whole, so the next Delete removes it.
-                survivors.push(*id);
+                // Every remaining piece is selected whole, so the next Delete removes them.
+                survivors.extend(replace_deleted_pieces(d, &mut emptied, original, subpaths)?);
             }
         }
         emptied.finish(d)?;
@@ -1263,9 +1286,50 @@ pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
     ok()
 }
 
+/// Retain path `id` from `d` without copying its geometry before deletion takes its subpaths.
+/// The shared snapshot supplies the original path classification and, only if needed, gradient
+/// bounds after the working node's geometry has moved. Returns `NoNode` for a missing/non-path ID.
+pub(super) fn deletion_source(d: &Document, id: NodeId) -> Result<Arc<Node>> {
+    let (parent, index, _) = d.position(id).ok_or(EngineError::NoNode(id))?;
+    // Verify the cached position still names this path before retaining the shared node.
+    d.children(parent)
+        .and_then(|children| children.get(index))
+        .filter(|n| n.id == id && n.path_data().is_some())
+        .cloned()
+        .ok_or(EngineError::NoNode(id))
+}
+
+/// Replace the deleted path in `d` with the nonempty surviving runs in `subpaths`.
+/// `original` must be retained by [`deletion_source`] before taking the working node's geometry.
+/// An ordinary single-contour source becomes siblings; multi-subpath paths and compound members
+/// retain their node. Only actual splits pin unplaced gradients to `original`'s bounds; already
+/// placed gradients and connected remainders retain their placement behavior.
+///
+/// Returns the surviving IDs in `subpaths` order (the first keeps the source ID). The original
+/// node's geometry is updated immediately. Replacements are handed to `beside`, which may defer
+/// insertion; the caller must finish that [`Beside`] before using new IDs in `d`.
+/// Missing/invalid paths return an error.
+pub(super) fn replace_deleted_pieces(d: &mut Document, beside: &mut Beside, original: Arc<Node>, subpaths: Vec<SubPath>) -> Result<Vec<NodeId>> {
+    let id = original.id;
+    let single = original.path_data().is_some_and(|p| p.subpaths.len() == 1);
+    if single && compound_or_self(d, id) == id {
+        // Pin only actual splits: each new object's smaller bounds would otherwise refit its gradients.
+        if subpaths.len() > 1
+            && original.appearance.has_unplaced_gradient()
+            && let Some(bounds) = original.geometric_bounds()
+        {
+            d.node_mut(id).ok_or(EngineError::NoNode(id))?.appearance.pin_gradients(bounds);
+        }
+        super::draw2::replace_with_pieces(d, beside, id, subpaths.into_iter().map(PathData::single).collect())
+    } else {
+        path_mut(d, id)?.subpaths = subpaths;
+        Ok(vec![id])
+    }
+}
+
 /// Remove anchors and their incident segments, keeping each surviving stretch as an open path.
 /// Only a closed path can have a surviving stretch that wraps past the last anchor.
-fn without_anchors(sp: SubPath, removed: &BTreeSet<usize>) -> Vec<SubPath> {
+pub(super) fn without_anchors(sp: SubPath, removed: &BTreeSet<usize>) -> Vec<SubPath> {
     let n = sp.anchors.len();
     let gone: BTreeSet<usize> = removed.iter().copied().filter(|&i| i < n).collect();
     if gone.is_empty() {
