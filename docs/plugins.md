@@ -414,16 +414,20 @@ call commands on.
   traps, runs out of budget or is cancelled leaves every document, its selection and its history as they were.
 - Each call runs on the document the run is for, with its params checked as any request's are, and sees what the calls
   before it changed: a `select.all` followed by `object.move` moves everything. The filter's own input is the one it
-  was given when the run started.
+  was given when the run started; an edit still in progress (typing, or a shape being drawn) is kept as its own undo
+  step before that input is made.
 - A plug-in never calls a command that reads or writes a file or folder, uses the clipboard, changes preferences or
   the view, runs a script, an action or a plug-in (a `plugin.*` command, or arguments naming one, such as an
   `effect.apply` of `plugin.<id>`), opens, closes or switches documents, or undoes or redoes, whatever its manifest
   lists. The same goes for a command that changes a tool's options, keeps a drag's state or adds font names for the
-  whole app, and for a command VectorCraft adds later until it has been checked for plug-in calls. Installing a manifest that lists such a command is refused, and the error names it; `plugin.inspect` lists
-  them as `refusedCommands`.
+  whole app, and for a command VectorCraft adds later until it has been checked for plug-in calls. Installing a
+  manifest that lists such a command is refused, and the error names it; `plugin.inspect` lists them as
+  `refusedCommands`.
 - An id in `commandAllowlist` that no command has installs, so a plug-in can list a command a later version adds;
-  `plugin.install` and `plugin.inspect` list such ids as `unknownCommands`, and calling one returns `-5`.
-- Without `doc.write`, a call that changes the document fails with `-6`.
+  `plugin.install` and `plugin.inspect` list such ids as `unknownCommands`, and calling one returns `-5` (`-6` without
+  `doc.read`).
+- Without `doc.read`, every call of a listed id fails with `-6`, since a command's result describes the document.
+  Without `doc.write`, a call that changes the document fails with `-6`.
 - These limits are VectorCraft's own values: at most 1,000 calls a run, 8 MiB of arguments or result a call and 64 MiB
   of arguments and results a run. Each call costs 10,000 instructions of the run's budget, plus one for every 64 bytes
   of its arguments and its result, and the run checks Cancel and its time budget before and after each call.

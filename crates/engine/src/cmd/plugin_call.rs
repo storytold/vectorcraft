@@ -202,20 +202,35 @@ fn names_plugin_in(v: &Value, named: bool) -> bool {
     }
 }
 
+/// Commits an edit in progress in the active document (not a preview's), as [`transaction`] does →
+/// whether that changed the document or its selection. A run that calls commands is prepared again
+/// then, so its input is the document its calls change.
+pub(crate) fn settle(s: &mut Session) -> Result<bool> {
+    if s.previewing {
+        return Ok(false);
+    }
+    let Some(before) = s.active().map(|d| (d.doc.clone(), d.selection.clone())) else { return Ok(false) };
+    super::edit::settle_interaction(s)?;
+    Ok(s.active().is_none_or(|d| !Arc::ptr_eq(&before.0, &d.doc) || before.1 != d.selection))
+}
+
 /// What a run that makes command calls keeps fixed: the document it runs in, the documents open,
 /// whether an interaction holds its changes (its own, or a preview's), and whether the plug-in may
-/// change the document.
+/// read and change the document.
 pub(crate) struct Calls {
     document: Option<u64>,
     open: Vec<u64>,
     interaction: bool,
+    may_read: bool,
     may_write: bool,
 }
 
 impl Calls {
-    /// The run's fixed state in `s` as it is now; `may_write` is whether it has `doc.write`.
-    pub(crate) fn of(s: &Session, may_write: bool) -> Calls {
-        Calls { document: s.active().map(|d| d.uid), open: s.docs.iter().map(|d| d.uid).collect(), interaction: s.in_interaction(), may_write }
+    /// The run's fixed state in `s` as it is now; `may_read` and `may_write` are whether it has
+    /// `doc.read` and `doc.write`.
+    pub(crate) fn of(s: &Session, may_read: bool, may_write: bool) -> Calls {
+        let (document, open) = (s.active().map(|d| d.uid), s.docs.iter().map(|d| d.uid).collect());
+        Calls { document, open, interaction: s.in_interaction(), may_read, may_write }
     }
 
     /// Is `s` still as the run needs it: the same documents open, the same one active and the
@@ -230,9 +245,13 @@ impl Calls {
 /// Makes plug-in call `id` with `args` in `s` → its result, or why it didn't run or failed. A
 /// command a plug-in may never call ([`denied`]), one whose args name a plug-in, one that changes
 /// which documents are open or active or ends the run's edit, and one that changes the document for
-/// a plug-in without `doc.write` are refused.
+/// a plug-in without `doc.write` are refused, and so is every call of a plug-in without `doc.read`:
+/// a command's result describes the document.
 pub(crate) fn call(s: &mut Session, run: &Calls, id: &str, args: &Value) -> std::result::Result<Value, CallFailure> {
     let refused = || CallFailure { code: CALL_DENIED_COMMAND, why: EngineError::Other("a plug-in may not call this command".into()).to_string() };
+    if !run.may_read {
+        return Err(refused());
+    }
     let Some(spec) = super::find_command(id) else {
         return Err(CallFailure { code: CALL_UNKNOWN_COMMAND, why: super::params::unknown_command(id).to_string() });
     };

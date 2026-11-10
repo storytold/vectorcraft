@@ -175,3 +175,20 @@ fn without_doc_write_a_call_that_edits_is_refused() {
     run_plugin(&mut s, "test.call.reader").unwrap();
     run(&mut s, "plugin.remove", json!({"id": "test.call.reader"}));
 }
+
+/// A command's result describes the document, so a plug-in without `doc.read` may call nothing.
+#[test]
+fn without_doc_read_every_call_is_refused() {
+    let mut s = document();
+    let before = state(&mut s);
+    install(&mut s, "test.call.blind", r#"["commands"]"#, r#"["select.all"]"#, SELECT_ALL, EMPTY).unwrap();
+    let e = run_plugin(&mut s, "test.call.blind").unwrap_err();
+    assert!(e.contains("may not call") && e.contains("select.all"), "{e}");
+    assert_eq!(state(&mut s), before);
+    // The same for an id no command has: without `doc.read` the answer never depends on the command.
+    let unknown = "(drop (call $vc_call (i32.const 0x2020) (i32.const 11) (i32.const 0) (i32.const 0)))";
+    install(&mut s, "test.call.blind", r#"["commands"]"#, r#"["no.such.cmd"]"#, unknown, EMPTY).unwrap();
+    let e = run_plugin(&mut s, "test.call.blind").unwrap_err();
+    assert!(e.contains("may not call") && e.contains("no.such.cmd"), "{e}");
+    run(&mut s, "plugin.remove", json!({"id": "test.call.blind"}));
+}

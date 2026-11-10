@@ -270,7 +270,8 @@ impl FilterRun {
     /// Runs the plug-in in `s`, making the command calls it asks for on the active document
     /// ([`super::plugin_call::call`]) → its output.
     fn run_calling(&self, s: &mut Session) -> Result<Vec<u8>> {
-        let calls = super::plugin_call::Calls::of(s, self.plugin.manifest().permissions().contains(&Permission::DocWrite));
+        let may = self.plugin.manifest().permissions();
+        let calls = super::plugin_call::Calls::of(s, may.contains(&Permission::DocRead), may.contains(&Permission::DocWrite));
         let mut bridge = |id: &str, args: &Value| super::plugin_call::call(s, &calls, id, args);
         self.plugin.run_calling(&self.input, &self.params, self.plugin.limits(), &mut bridge).0.map_err(err)
     }
@@ -349,8 +350,10 @@ fn run(s: &mut Session, p: &Value) -> Result<Value> {
     // An output handed in is for this run only (the app hands it in just before), whatever it does.
     let handed = s.plugin_output.take();
     let r = FilterRun::prepare(s, p)?;
-    // One that calls commands runs here, where it can make them.
+    // One that calls commands runs here, where it can make them, on the document with any edit in
+    // progress committed.
     if r.calls() {
+        let r = if super::plugin_call::settle(s)? { FilterRun::prepare(s, p)? } else { r };
         return r.run_with_calls(s);
     }
     // Handed in for this very run (the app ran it in the background), it is what running the
@@ -501,6 +504,13 @@ pub(crate) fn run_command(s: &mut Session, id: &str, p: &Value) -> Result<Value>
     };
     let r = FilterRun::prepare_with(s, plugin, Some(command), id, p)?;
     if r.calls() {
+        let r = match super::plugin_call::settle(s)? {
+            true => {
+                let (plugin, command) = command_of(id).ok_or_else(|| EngineError::UnknownCommand(id.into()))?;
+                FilterRun::prepare_with(s, plugin, Some(command), id, p)?
+            }
+            false => r,
+        };
         return r.run_with_calls(s).map_err(failed);
     }
     let output = r.run().map_err(&failed)?;
