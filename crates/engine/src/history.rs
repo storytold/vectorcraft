@@ -171,7 +171,8 @@ pub struct History {
     /// Maximum undo depth (Illustrator has no hard limit; snapshots are cheap here).
     pub limit: usize,
     /// About the most memory the steps may keep ([`HistoryEntry::bytes`]): past it the oldest
-    /// steps go, but never the last [`History::MIN_STEPS`] undo (and redo) steps.
+    /// steps go, but never the last [`History::MIN_STEPS`] undo (and redo) steps. The histories of a
+    /// session's open documents also share [`Session::history_budget`](crate::Session::history_budget).
     pub byte_budget: usize,
     /// Counts the changes made in place to steps below the newest ([`History::put_back`]).
     pub(crate) rewrites: u64,
@@ -339,7 +340,80 @@ impl History {
     }
 }
 
-/// The default [`History::byte_budget`]: a quarter of the installed memory, or on Linux of the
+/// Let the oldest steps of `histories` go while together they keep more than `budget`
+/// ([`History::bytes`]): undo steps first, the oldest of all the histories first, then redo steps,
+/// the furthest ahead first. Each history keeps its last [`History::MIN_STEPS`] undo (and redo)
+/// steps, and a held one ([`History::mark`]) keeps all of its steps; their memory still counts.
+pub(crate) fn trim_together<'a>(histories: impl IntoIterator<Item = &'a mut History>, budget: usize) {
+    let all: Vec<&mut History> = histories.into_iter().collect();
+    let mut total = all.iter().fold(0usize, |t, h| t.saturating_add(h.bytes()));
+    if total <= budget {
+        return;
+    }
+    fn steps(h: &History, redo: bool) -> &[HistoryEntry] {
+        if redo { &h.redo } else { &h.undo }
+    }
+    let mut free: Vec<&mut History> = all.into_iter().filter(|h| !h.held).collect();
+    for redo in [false, true] {
+        // How many of each history's oldest steps go.
+        let mut gone = vec![0usize; free.len()];
+        while total > budget {
+            // The oldest step any history may still let go.
+            let next = free
+                .iter()
+                .zip(&gone)
+                .enumerate()
+                .filter(|(_, (h, n))| steps(h, redo).len().saturating_sub(**n) > History::MIN_STEPS)
+                .filter_map(|(i, (h, n))| steps(h, redo).get(*n).map(|e| (e.serial, i, e.bytes)))
+                .min();
+            let Some((_, i, bytes)) = next else { break };
+            total = total.saturating_sub(bytes);
+            if let Some(n) = gone.get_mut(i) {
+                *n += 1;
+            }
+        }
+        for (h, n) in free.iter_mut().zip(gone) {
+            let steps = if redo { &mut h.redo } else { &mut h.undo };
+            steps.drain(..n.min(steps.len()));
+        }
+    }
+}
+
+/// What [`Session::trim_histories`](crate::Session::trim_histories) last left: the budget, and for
+/// each open document its uid and what a new, undone, redone, merged, recosted, removed or put-back
+/// step changes in its history.
+pub(crate) type HistoriesSeen = (usize, Vec<(u64, (u64, u64), usize, usize, usize, u64, bool)>);
+
+impl crate::Session {
+    /// Let the oldest undo and redo steps of the open documents go while together they keep more
+    /// than [`Session::history_budget`](crate::Session::history_budget) ([`trim_together`]). While a
+    /// script runs, its commands leave the histories as they are: the run's end trims them. While an
+    /// undo group is open in any document, the histories stay as they are too, so a canceled group
+    /// leaves the other documents' steps in place: closing the groups trims them. When
+    /// neither the budget nor any history changed since the last call, the steps are not counted
+    /// again.
+    pub(crate) fn trim_histories(&mut self) {
+        if self.script_in_run || self.docs.iter().any(|d| d.undo_group.is_some()) {
+            return;
+        }
+        if self.histories_seen.as_ref() == Some(&self.histories_now()) {
+            return;
+        }
+        trim_together(self.docs.iter_mut().map(|d| &mut d.history), self.history_budget);
+        self.histories_seen = Some(self.histories_now());
+    }
+
+    fn histories_now(&self) -> HistoriesSeen {
+        let doc = |d: &crate::DocState| {
+            let h = &d.history;
+            (d.uid, h.step(), h.undo.len(), h.redo.len(), h.undo.last().map_or(0, |e| e.bytes), h.rewrites, h.held)
+        };
+        (self.history_budget, self.docs.iter().map(doc).collect())
+    }
+}
+
+/// The default [`History::byte_budget`] and [`Session::history_budget`](crate::Session::history_budget),
+/// which the open documents' histories share: a quarter of the installed memory, or on Linux of the
 /// process's cgroup memory limit where that is lower ([`vectorcraft_render::physical_memory`], see
 /// [`history_budget_for`]); 1 GiB where the installed memory can't be read, and 256 MiB on the web.
 pub fn default_history_budget() -> usize {

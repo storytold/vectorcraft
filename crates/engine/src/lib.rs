@@ -59,6 +59,13 @@ pub struct Session {
     pub clipboard: Clipboard,
     /// Executed commands (for actions and debugging), the most recent ones kept ([`Journal`]).
     pub journal: Journal,
+    /// About the most memory the undo steps of all the open documents may keep together
+    /// ([`History::bytes`]): past it the oldest steps of any of them go, but each keeps its last
+    /// [`History::MIN_STEPS`] undo (and redo) steps. [`default_history_budget`] by default.
+    pub history_budget: usize,
+    /// The budget and histories [`Session::trim_histories`] last left, so it does not count the
+    /// steps again while none of them changed.
+    pub(crate) histories_seen: Option<history::HistoriesSeen>,
     pub(crate) tool: Box<dyn Tool>,
     /// While Cmd lends `tool` (a selection tool) for a drag: the tool it was lent to, which comes
     /// back as it was at the release ([`Session::pointer`]).
