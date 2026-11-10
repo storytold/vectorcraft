@@ -146,7 +146,24 @@ fn a_clipping_groups_solid_is_built_from_its_art_inside_the_clip() {
     let colors = |n: &Node| three_d_meshes_in(Some(&d), &with(n.clone(), EXTRUDE, json!({}))).unwrap().iter().map(|m| m.color).collect::<Vec<_>>();
     let plain = colors(&Node::group(NodeId(10), vec![Arc::new(layered.clone())]));
     assert_eq!(plain.len(), 2, "the stroke's solid and the top fill's");
-    assert_eq!(colors(&clip_group(10, Rect::new(0.0, 0.0, 400.0, 400.0), layered)), plain);
+    assert_eq!(colors(&clip_group(10, Rect::new(0.0, 0.0, 400.0, 400.0), layered.clone())), plain);
+    // Rotate turns both fills and the stroke, each in its own place.
+    let turned = |n: &Node| three_d_meshes_in(Some(&d), &with(n.clone(), ROTATE, front())).unwrap().iter().map(|m| m.color).collect::<Vec<_>>();
+    let plain = turned(&Node::group(NodeId(10), vec![Arc::new(layered.clone())]));
+    assert_eq!(plain.len(), 3, "both fills' surfaces and the stroke's");
+    let clipped = clip_group(10, Rect::new(0.0, 0.0, 400.0, 400.0), layered);
+    assert_eq!(turned(&clipped), plain);
+    assert_eq!(validate_three_d_in(Some(&d), &clipped, ROTATE, &json!({})), Ok(()));
+    // Each fill Rotate turns counts against the limit on objects; another effect takes the top
+    // fill only, whatever 3D effect the object carries before it changes type.
+    let mut many = rect(12, 100.0, 100.0, 150.0, 200.0, 0.0);
+    many.appearance =
+        Appearance { items: vec![AppearanceItem::Fill(FillLayer::new(Paint::solid(Color::BLACK))); MAX_MEMBERS + 1], ..Default::default() }.into();
+    let rotated = with(clip_group(10, Rect::new(0.0, 0.0, 400.0, 400.0), many), ROTATE, front());
+    assert!(validate_three_d_in(Some(&d), &rotated, ROTATE, &json!({})).is_err_and(|e| e.contains("takes at most")));
+    for id in [EXTRUDE, crate::REVOLVE] {
+        assert_eq!(validate_three_d_in(Some(&d), &rotated, id, &json!({})), Ok(()), "Rotate changed to {id}");
+    }
     // Art nested past the limit inside a clipping group is refused, not followed to any depth.
     let mut deep = rect(12, 100.0, 100.0, 200.0, 200.0, 0.0);
     for i in 0..200 {

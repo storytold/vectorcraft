@@ -7,7 +7,7 @@ use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, FillLayer, L
 use vectorcraft_geom::{PathData, PathEl, Point, Rect, Vec2};
 use vectorcraft_three_d::{Edge, Revolve};
 
-use crate::solids::{Profile, Scope, is_container, members, object_profile, profile, reshape_members, resolve, solid_paints, union_bounds};
+use crate::solids::{Profile, Scope, is_container, members, object_profile, profile, reshape_members, resolve_for, solid_paints, union_bounds};
 use crate::util::{flag, num, text};
 use crate::{GeomContext, apply_geometry_with, is_geometry, merged_params};
 
@@ -79,10 +79,10 @@ pub fn validate_revolve(n: &Node, p: &Value) -> Result<(), String> {
 }
 
 /// [`validate_revolve`] with the symbols of `doc`: a symbol instance, a blend and a clipping group
-/// revolve the art they show ([`resolve`]).
+/// revolve the art they show ([`resolve_for`]), cut for Revolve whatever 3D effect `n` carries now.
 pub fn validate_revolve_in(doc: Option<&Document>, n: &Node, p: &Value) -> Result<(), String> {
     validate_revolve_params(p)?;
-    let n = &*resolve(doc, n, "Revolve")?;
+    let n = &*resolve_for(doc, n, "Revolve", false)?;
     let effects = &n.appearance.effects;
     // The profile is measured before the object's one Revolve, hidden or shown.
     let before = effects.iter().position(|e| e.id == REVOLVE).and_then(|i| effects.get(..i)).unwrap_or(effects);
@@ -329,7 +329,7 @@ pub fn revolve_art(n: &Node) -> Option<Node> {
 }
 
 /// [`revolve_art`] with the symbols of `doc`: a symbol instance, a blend and a clipping group, alone
-/// or in a group, revolve the art they show ([`resolve`]). `None` too when that art can't be
+/// or in a group, revolve the art they show ([`resolve_for`]). `None` too when that art can't be
 /// resolved.
 pub fn revolve_art_in(doc: Option<&Document>, n: &Node) -> Option<Node> {
     art(doc, n, false)
@@ -413,7 +413,7 @@ fn art(doc: Option<&Document>, n: &Node, expand: bool) -> Option<Node> {
     if !has_revolve(n) {
         return None;
     }
-    let n = &*resolve(doc, n, "Revolve").ok()?;
+    let n = &*resolve_for(doc, n, "Revolve", false).ok()?;
     if is_container(n) {
         return group_art(n, expand);
     }

@@ -52,12 +52,21 @@ fn needs(n: &Node) -> bool {
 /// is a symbol instance, a blend or a clipping group, otherwise a group with `n`'s id, appearance
 /// and transparency holding that art (a symbol instance's symbol art from `doc`). An error names
 /// what can't be resolved: an image, a missing symbol, art nested or numbering past the limits, or
-/// a clipping path too complex to cut the art with. `label` is the effect's name.
+/// a clipping path too complex to cut the art with. `label` is the effect's name. The art is cut
+/// for the solid effect `n` carries ([`resolve_for`]).
 pub(crate) fn resolve<'a>(doc: Option<&Document>, n: &'a Node, label: &str) -> Result<Cow<'a, Node>, String> {
+    let every_fill = super::solid(&n.appearance.effects).is_some_and(|(_, fx)| fx.id == super::ROTATE);
+    resolve_for(doc, n, label, every_fill)
+}
+
+/// [`resolve`] for the 3D effect that builds from `n`: `every_fill` for Rotate, which turns every
+/// fill, so each fill a clipping path cuts keeps its own place among the strokes. Otherwise the
+/// effect builds from the top fill, and the fills cut go together in the top fill's place.
+pub(crate) fn resolve_for<'a>(doc: Option<&Document>, n: &'a Node, label: &str, every_fill: bool) -> Result<Cow<'a, Node>, String> {
     if !needs(n) {
         return Ok(Cow::Borrowed(n));
     }
-    let mut r = Resolver { doc, label, leaves: 0, work: 0, shown: None };
+    let mut r = Resolver { doc, label, every_fill, leaves: 0, work: 0, shown: None };
     let children = r.content(n, 0);
     #[cfg(test)]
     WORK.with(|w| w.set(r.work));
@@ -75,6 +84,8 @@ thread_local! {
 struct Resolver<'a> {
     doc: Option<&'a Document>,
     label: &'a str,
+    /// Does each fill a clipping path cuts become a piece of its own ([`resolve_for`])?
+    every_fill: bool,
     /// The objects other than groups and layers kept so far, counted against [`MAX_MEMBERS`].
     leaves: usize,
     /// The objects visited or made so far, counted against [`MAX_WORK`].
@@ -268,10 +279,13 @@ impl Resolver<'_> {
         let Some((path, rule)) = profile(n) else { return Ok(Some(n.clone())) };
         let items = solid_paints(n);
         // The fills' piece goes where the top fill is, the one Extrude & Bevel and Inflate build
-        // their solid from, so the strokes above and below it keep their places.
+        // their solid from, so the strokes above and below it keep their places. Rotate turns
+        // every fill, so each fill is a piece in its own place.
         let top_fill = items.iter().rposition(|i| matches!(i, AppearanceItem::Fill(_)));
+        let fill_pieces =
+            if self.every_fill { items.iter().filter(|i| matches!(i, AppearanceItem::Fill(_))).count() } else { usize::from(top_fill.is_some()) };
         // Each cut makes a piece, counted before it is made: the shape was counted once already.
-        let made = usize::from(top_fill.is_some()) + items.iter().filter(|i| matches!(i, AppearanceItem::Stroke(_))).count();
+        let made = fill_pieces + items.iter().filter(|i| matches!(i, AppearanceItem::Stroke(_))).count();
         self.spend(made)?;
         self.leaves = self.leaves.saturating_add(made.saturating_sub(1));
         if self.leaves > MAX_MEMBERS {
@@ -284,12 +298,19 @@ impl Resolver<'_> {
             Ok(inside.bounds().is_some().then_some(inside))
         };
         let fills: Vec<AppearanceItem> = items.iter().filter(|i| matches!(i, AppearanceItem::Fill(_))).cloned().collect();
+        // Every fill paints the same area: it is cut once.
+        let mut fill_area: Option<Option<PathData>> = None;
         let mut pieces = vec![];
         for (k, item) in items.iter().enumerate() {
             match item {
-                AppearanceItem::Fill(_) if Some(k) == top_fill => {
-                    if let Some(area) = cut(&path, rule)? {
-                        pieces.push(Arc::new(shape(n, area, FillRule::NonZero, fills.clone())));
+                AppearanceItem::Fill(_) if self.every_fill || Some(k) == top_fill => {
+                    let area = match &fill_area {
+                        Some(area) => area.clone(),
+                        None => fill_area.insert(cut(&path, rule)?).clone(),
+                    };
+                    if let Some(area) = area {
+                        let painted = if self.every_fill { vec![item.clone()] } else { fills.clone() };
+                        pieces.push(Arc::new(shape(n, area, FillRule::NonZero, painted)));
                     }
                 }
                 AppearanceItem::Fill(_) => {}

@@ -18,7 +18,7 @@ mod classic;
 pub use classic::{CLASSIC_EXTRUDE, SHADING_COLORS, classic_extrude_options, classic_shading};
 
 mod source;
-pub(crate) use source::resolve;
+pub(crate) use source::{resolve, resolve_for};
 
 pub const EXTRUDE: &str = "threeD.extrude";
 pub const INFLATE: &str = "threeD.inflate";
@@ -216,7 +216,7 @@ pub fn validate_solid(n: &Node, id: &str, p: &Value) -> Result<(), String> {
 pub fn validate_solid_in(doc: Option<&Document>, n: &Node, id: &str, p: &Value) -> Result<(), String> {
     validate_solid_params(id, p)?;
     let label = label_of(id);
-    let n = &*resolve(doc, n, label)?;
+    let n = &*source::resolve_for(doc, n, label, id == ROTATE)?;
     if is_container(n) {
         let shapes = members(n, label)?;
         let b = union_bounds(&shapes).ok_or_else(|| format!("{label} requires a group holding a shape with at least two anchors"))?;
