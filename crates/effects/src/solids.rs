@@ -298,6 +298,17 @@ pub fn validate_three_d(n: &Node, id: &str, p: &Value) -> Result<(), String> {
     if id == crate::REVOLVE { crate::validate_revolve(n, p) } else { validate_solid(n, id, p) }
 }
 
+/// [`validate_three_d`] for an effect at `(item, index)`, index `index` of the effects of
+/// appearance item `item` of `n` (the effects' length for a new effect), or on the object itself
+/// when `at` is `None`. A Revolve on a fill or stroke is checked in that item's paint, after the
+/// item's geometry effects before it, together with the object's other items that carry a Revolve.
+pub fn validate_three_d_at(n: &Node, id: &str, p: &Value, at: Option<(usize, usize)>) -> Result<(), String> {
+    match at {
+        Some((item, index)) if id == crate::REVOLVE => crate::revolve::validate_item_revolve(n, p, item, index),
+        _ => validate_three_d(n, id, p),
+    }
+}
+
 /// Are 3D effect `id`'s parameter values `p` valid? The checks of [`validate_three_d`] that do not
 /// build the art, for an edit that hides the effect: hidden, it draws nothing, so its object does
 /// not need to fit.

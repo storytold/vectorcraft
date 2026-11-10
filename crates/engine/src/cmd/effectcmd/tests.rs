@@ -260,6 +260,31 @@ fn revolve_refuses_type_and_groups_without_a_shape() {
     assert!(node(&s, g).appearance.effects.is_empty());
 }
 
+/// A Revolve on one fill is checked in that fill's paint, and `effect.setParams` on it as well.
+#[test]
+fn revolve_on_a_fill_is_checked_in_that_fills_paint() {
+    use vectorcraft_color::{Color, Gradient, GradientKind, GradientPaint, GradientStop, Paint};
+    use vectorcraft_doc::{AppearanceItem, FillLayer};
+    let (mut s, id) = session_with_rect();
+    // The paint copies of 100 faces reach the 256 MiB budget: 8 segments stay under, 64 pass it.
+    let count = (256 << 20) / (4 * 100 * std::mem::size_of::<GradientStop>());
+    let stops = (0..count).map(|i| GradientStop::new(i as f32 / count as f32, Color::rgb(1.0, 0.0, 0.0))).collect();
+    let ramp = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+    s.edit("fills", |d, _| {
+        let n = d.node_mut(id).unwrap();
+        n.appearance.items =
+            vec![AppearanceItem::Fill(FillLayer::new(ramp)), AppearanceItem::Fill(FillLayer::new(Paint::solid(Color::rgb(0.0, 0.0, 1.0))))];
+        Ok(())
+    })
+    .unwrap();
+    let err = s.execute("effect.apply", &json!({"effect": "threeD.revolve", "ids": [id.0], "item": 0})).unwrap_err().to_string();
+    assert!(err.contains("simplify the gradient"), "{err}");
+    assert!(node(&s, id).appearance.items[0].effects().is_empty());
+    s.execute("effect.apply", &json!({"effect": "threeD.revolve", "ids": [id.0], "item": 0, "params": {"segments": 8}})).unwrap();
+    let err = s.execute("effect.setParams", &json!({"index": 0, "ids": [id.0], "item": 0, "params": {"segments": 128}})).unwrap_err().to_string();
+    assert!(err.contains("simplify the gradient"), "{err}");
+}
+
 /// Revolve on a group sweeps every member about one axis on the left edge of their bounds, keeps
 /// each member's paint, follows an edited member, expands and undoes as one step.
 #[test]

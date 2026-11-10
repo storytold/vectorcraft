@@ -3,9 +3,9 @@
 This initial implementation follows the scope agreed in [issue #605](https://github.com/storytold/vectorcraft/issues/605#issuecomment-6070543567).
 
 Select a path, compound path, type, or a group or layer of them, then choose **Effect > 3D and Materials > Revolve**.
-Type stays editable and sweeps as its glyph outlines. On a group or layer, every visible member sweeps about one axis
-on the chosen edge of the members' bounds together, in its own paint, as [the help page](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/create-3d-objects.html)
-describes for a group.
+On a group or layer, every visible member sweeps about one axis, as [the help page](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/create-3d-objects.html)
+describes for a group. The following rules are VectorCraft's own: type stays editable and sweeps as its glyph outlines,
+the shared axis lies on the chosen edge of the members' bounds together, and each member keeps its own paint.
 The profile's horizontal distance from a vertical axis is its radius. **Axis side** chooses the left or right
 edge of the profile's bounds; **Offset** moves the axis outward. For a cylinder made from a vertical
 line, give it a nonzero offset. A vertical line at zero offset lies on the axis and has no surface.

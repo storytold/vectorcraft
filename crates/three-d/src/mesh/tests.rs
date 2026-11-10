@@ -297,13 +297,15 @@ fn the_wall_of_a_counter_faces_into_the_hole() {
     };
     for (clockwise, rule) in [(true, FillRule::NonZero), (true, FillRule::EvenOdd), (false, FillRule::EvenOdd)] {
         let m = ring(clockwise, rule);
-        assert!(wall_directions(&m, 110.0).iter().all(|s| *s > 0.0), "outer wall, {clockwise} {rule:?}");
+        let outer = wall_directions(&m, 110.0);
+        assert!(!outer.is_empty() && outer.iter().all(|s| *s > 0.0), "outer wall, {clockwise} {rule:?}");
         let hole = wall_directions(&m, 90.0);
         assert!(!hole.is_empty() && hole.iter().all(|s| *s < 0.0), "the hole's far wall faces the axis, {clockwise} {rule:?}");
     }
     // Wound the same way under the nonzero rule, the inner square is not a hole.
     let m = ring(false, FillRule::NonZero);
-    assert!(wall_directions(&m, 90.0).iter().all(|s| *s > 0.0));
+    let inner = wall_directions(&m, 90.0);
+    assert!(!inner.is_empty() && inner.iter().all(|s| *s > 0.0));
 }
 
 #[test]

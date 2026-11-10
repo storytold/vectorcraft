@@ -93,6 +93,38 @@ pub fn validate_revolve(n: &Node, p: &Value) -> Result<(), String> {
     check_surface(&path, b, revolve_options(p), surface_item(&paints), &mut 0)
 }
 
+/// [`validate_revolve`] for a Revolve with parameters `p` at index `index` of the effects of
+/// appearance item `target` of `n`. The surfaces of every fill and stroke that carries a Revolve,
+/// `target`'s included, share one budget of paint copies, as in [`art`]. A visible object-level
+/// Revolve draws in place of those surfaces.
+pub(crate) fn validate_item_revolve(n: &Node, p: &Value, target: usize, index: usize) -> Result<(), String> {
+    if is_container(n) || visible(&n.appearance.effects) || target >= n.appearance.items.len() {
+        return validate_revolve(n, p);
+    }
+    validate_revolve_params(p)?;
+    const EMPTY: &str = "Revolve requires a shape with at least two anchors";
+    let (path, _) = object_profile(n, "Revolve")?;
+    if !has_two_anchors(&path) {
+        return Err(EMPTY.into());
+    }
+    let ctx = GeomContext::of(n);
+    let path = geometry(&path, &n.appearance.effects, &ctx);
+    let mut copies = 0;
+    for (i, item) in n.appearance.items.iter().enumerate() {
+        let effects = item.effects();
+        let at = if i == target { Some(index) } else { effects.iter().position(|e| e.visible && e.id == REVOLVE) };
+        let options = match at.and_then(|at| effects.get(at)) {
+            _ if i == target => revolve_options(p),
+            Some(fx) if crate::paints(item) => revolve_options(&merged_params(REVOLVE, &fx.params)),
+            _ => continue,
+        };
+        let path = geometry(&path, at.and_then(|at| effects.get(..at)).unwrap_or(effects), &ctx.item(item));
+        let b = path.bounds().ok_or(EMPTY)?;
+        check_surface(&path, b, options, crate::paints(item).then_some(item), &mut copies)?;
+    }
+    Ok(())
+}
+
 fn has_two_anchors(path: &PathData) -> bool {
     path.subpaths.iter().any(|sp| sp.anchors.len() >= 2)
 }
@@ -250,12 +282,13 @@ fn surface(
     Some((depths, group))
 }
 
-/// A surface of one object: `shape`'s own, built with options derived from `fx`, about `b`.
-fn object_surface(n: &Node, path: &PathData, fx: &Effect, item: &AppearanceItem, expand: bool) -> Option<Node> {
+/// A surface of one object about the bounds of `path`, built with options derived from `fx`.
+/// `copies` is the count [`surface`] adds to.
+fn object_surface(n: &Node, path: &PathData, fx: &Effect, item: &AppearanceItem, expand: bool, copies: &mut usize) -> Option<Node> {
     let b = path.bounds()?;
     let (paint, opacity, blend) = paint_of(item);
     let options = revolve_options(&merged_params(REVOLVE, &fx.params));
-    surface(n, path, b, options, fx, paint, opacity, blend, expand, &mut 0).map(|(_, art)| art)
+    surface(n, path, b, options, fx, paint, opacity, blend, expand, copies).map(|(_, art)| art)
 }
 
 fn shading_paint(g: vectorcraft_three_d::ShadeGradient, color: impl Fn(f64) -> Color, opacity: impl Fn(f64) -> f32) -> Paint {
@@ -357,6 +390,7 @@ fn art(n: &Node, expand: bool) -> Option<Node> {
     let (path, _) = profile(n)?;
     let ctx = GeomContext::of(n);
     let mut children = vec![];
+    let mut copies = 0;
     let mut remaining = n.appearance.effects.clone();
     if let Some(index) = n.appearance.effects.iter().position(|e| e.visible && e.id == REVOLVE) {
         let fx = n.appearance.effects.get(index)?;
@@ -365,7 +399,7 @@ fn art(n: &Node, expand: bool) -> Option<Node> {
         let paints = solid_paints(n);
         let item = surface_item(&paints)?;
         let expand = expand && !n.appearance.effects.iter().skip(index + 1).any(|e| e.visible && is_geometry(&e.id));
-        children.push(Arc::new(object_surface(n, &path, fx, item, expand)?));
+        children.push(Arc::new(object_surface(n, &path, fx, item, expand, &mut copies)?));
         // Later geometry acts on the projected art as a whole through container evaluation.
         remaining = n
             .appearance
@@ -383,7 +417,7 @@ fn art(n: &Node, expand: bool) -> Option<Node> {
                 let fx = item.effects().get(index)?;
                 let p = geometry(&path, item.effects().get(..index)?, &ctx.item(item));
                 let expand = expand && !item.effects().iter().skip(index + 1).any(|e| e.visible && is_geometry(&e.id));
-                let mut art = object_surface(n, &p, fx, item, expand)?;
+                let mut art = object_surface(n, &p, fx, item, expand, &mut copies)?;
                 art.appearance.effects = item.effects().iter().skip(index + 1).filter(|e| e.id != REVOLVE).cloned().collect();
                 children.push(Arc::new(art));
             } else {
@@ -719,6 +753,55 @@ mod tests {
         assert_eq!(revolve_art(&two), None, "past the budget the source draws");
         let object = painted(3, 0.0, stops * 2);
         assert!(validate_revolve(&object, &json!({})).is_err(), "one object past the budget");
+    }
+
+    #[test]
+    fn the_fills_of_one_object_share_the_budget_of_paint_copies() {
+        use vectorcraft_doc::color::{Gradient, GradientKind, GradientPaint, GradientStop};
+        let source = profile_node();
+        let NodeKind::Path { path: profile, .. } = &source.kind else { panic!("a path") };
+        let faces = vectorcraft_three_d::revolve(profile, profile.bounds().unwrap(), revolve_options(&json!({}))).unwrap().len();
+        let stops = MAX_PAINT_COPIES * 6 / 10 / (faces * 4) / std::mem::size_of::<GradientStop>();
+        let fill = |stops: usize, revolved: bool| {
+            let stops = (0..stops).map(|i| GradientStop::new(i as f32 / stops as f32, Color::BLACK)).collect();
+            let paint = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+            let mut item = AppearanceItem::Fill(FillLayer::new(paint));
+            if revolved {
+                item.effects_mut().push(fx());
+            }
+            item
+        };
+        let with = |items: Vec<AppearanceItem>| {
+            let mut n = source.clone();
+            n.appearance = Appearance { items, ..Default::default() }.into();
+            n
+        };
+        let one = with(vec![fill(stops, true)]);
+        assert!(revolve_art(&one).is_some());
+        assert_eq!(validate_item_revolve(&one, &json!({}), 0, 0), Ok(()));
+        let two = with(vec![fill(stops, true), fill(stops, true)]);
+        assert_eq!(revolve_art(&two), None, "past the budget the source draws");
+        let refused = validate_item_revolve(&two, &json!({}), 1, 0).unwrap_err();
+        assert!(refused.contains("simplify the gradient"), "{refused}");
+        let second = with(vec![fill(stops, true), fill(stops, false)]);
+        assert!(validate_item_revolve(&second, &json!({}), 1, 0).is_err(), "the item the effect goes on counts");
+        assert_eq!(validate_item_revolve(&second, &json!({}), 0, 0), Ok(()), "an item without a Revolve does not");
+        let below = with(vec![fill(stops * 2, false), fill(1, false)]);
+        assert!(validate_item_revolve(&below, &json!({}), 0, 0).is_err(), "the item's own paint, not the top fill");
+        assert_eq!(validate_item_revolve(&below, &json!({}), 1, 0), Ok(()));
+    }
+
+    #[test]
+    fn an_items_revolve_is_validated_after_only_the_geometry_effects_before_it() {
+        let roughen = crate::new_effect("distort.roughen", &json!({"size": 1, "detail": 100})).unwrap();
+        let mut object = (*star(1)).clone();
+        let mut hidden = fx();
+        hidden.visible = false;
+        let item = object.appearance.items.first_mut().unwrap();
+        item.effects_mut().push(hidden);
+        item.effects_mut().push(roughen);
+        assert_eq!(validate_item_revolve(&object, &json!({}), 0, 0), Ok(()), "the roughen after it is not swept");
+        assert!(validate_item_revolve(&object, &json!({}), 0, 2).is_err(), "a Revolve added after the roughen");
     }
 
     #[test]
