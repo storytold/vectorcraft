@@ -5,8 +5,6 @@
 ## Feature submission evidence
 
 **Feature evidence last updated:** 2026-11-02.
-| 2026-11-10 | minor | G4 type: a right-click on type has Spelling › Auto Spell Check, checked while it is on, #4936; the Check Spelling and Edit Custom Dictionary dialogs remain; scores and estimates unchanged. |
-| 2026-11-10 | minor | G4 type: a right-click on a word Auto Spell Check underlined lists its suggestions, Ignore All and Add to Dictionary, #4936; the Check Spelling and Edit Custom Dictionary dialogs remain; scores and estimates unchanged. |
 | 2026-11-06 | minor | Opening a file that takes longer than 0.4 s shows a progress window: the file name, a moving bar (reading reports no steps), how many more files wait, Cancel (Esc; the file doesn't open) and Continue in Background (`file.cancelOpen`, `file.openInBackground`); it never opens over another dialog or progress window (part of #5930); scores and estimates unchanged |
 Raster rendering fits and preflattens curved stroke outlines more tightly only below four times the raster tolerance, retaining thin-band coverage without changing stroke weight or vector export geometry. Current cached character/object outlines, cropped long strokes, gradient clips and effect rasters share the helper; cropped-region reuse and guarded flattening remain. The unchanged `fractional_curved_strokes_retain_coverage_between_notches` regression covers fractional weights, rotation, phase, opacity and f32-rounded endpoints. This is a quality/cost tradeoff, not a speed claim. Scores and estimates unchanged.
 
@@ -855,6 +853,8 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-10 | minor | G4 type: a right-click on type has Spelling › Auto Spell Check, checked while it is on, #4936; the Check Spelling and Edit Custom Dictionary dialogs remain; scores and estimates unchanged. |
+| 2026-11-10 | minor | G4 type: a right-click on a word Auto Spell Check underlined lists its suggestions, Ignore All and Add to Dictionary, #4936; the Check Spelling and Edit Custom Dictionary dialogs remain; scores and estimates unchanged. |
 | 2026-11-10 | minor | G2: the Effect Gallery shows a thumbnail of each filter and a preview area inside the dialog (an original landscape drawing passed through the filter). Estimate 1–2 h → 0. The canvas preview and one-undo OK are unchanged. |
 | 2026-11-09 | minor | G4 type: Auto Spell Check (`edit.autoSpellCheck`) underlines the unknown words of the visible type, #4936; the Check Spelling and Edit Custom Dictionary dialogs and the right-click Spelling menu remain; scores and estimates unchanged. |
 | 2026-11-09 | minor | G5: built-in UI Frames symbol library (Panel, Button, Bar with default 9-slice); Missing trimmed; estimate 12–22 → 11–21 h. |

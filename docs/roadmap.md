@@ -42,8 +42,6 @@ M7 type: Touch Type moves a right-to-left character along its line and up from i
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-11-10 | minor | M7: Spelling › Auto Spell Check in the context menu of type (#4936); the dialogs remain; scores and estimates unchanged. |
-| 2026-11-10 | minor | M7: right-click suggestions, Ignore All and Add to Dictionary on a word Auto Spell Check underlined (#4936); the dialogs remain; scores and estimates unchanged. |
 | 2026-11-07 | minor | M4/M7: `.ai`/EPS type from the text document keeps its paragraphs' tab stops, and right-aligned area type sets the text after a line's last tab against the right edge, the text before it at its stops from the left edge (#6147). Scores and estimates unchanged. |
 | 2026-11-07 | minor | M4/M7: `.ai`/EPS type from the text document keeps auto leading at the paragraph's share, the paragraph's hyphenation options and may show more of the last lines the file sets in an area frame of its own, when growing the frame by its lines' deepest descent plus 0.05 pt shows them, and a line a soft return ends is justified as a wrapped line is (#6137); a user's `.ai` that opened from its PDF part now opens from its layers. Limits: frames grow only for area type of one frame, horizontal, by its lines' deepest descent plus 0.05 pt; type in a font that isn't installed, and hyphenation in a language that isn't imported, still lay out differently. Scores and estimates unchanged. |
 | 2026-11-08 | minor | Character Styles panel: a double-click on a user style's row opens its Character Style Options (`ui.charStyleOptions`); the dialog keeps a fixed width and scrolls its sections in a shorter window, so OK and Cancel stay on screen. Tests `panels::text_styles::tests::double_clicking_a_character_style_row_opens_its_options` and `dialogs::char_style_options::tests::the_sections_scroll_in_a_window_shorter_than_the_general_list`. Scores and estimates unchanged. |
@@ -194,6 +192,8 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-10 | minor | M7: Spelling › Auto Spell Check in the context menu of type (#4936); the dialogs remain; scores and estimates unchanged. |
+| 2026-11-10 | minor | M7: right-click suggestions, Ignore All and Add to Dictionary on a word Auto Spell Check underlined (#4936); the dialogs remain; scores and estimates unchanged. |
 | 2026-11-10 | minor | Current focus: the Effect Gallery's filter thumbnails and in-dialog preview are in (G2). Scores and estimates of other areas unchanged. |
 | 2026-11-09 | minor | M7: Auto Spell Check (#4936); the dialogs and the right-click Spelling menu remain; scores and estimates unchanged. |
 | 2026-11-09 | minor | PDF editable import preserves authored ActualText once, including empty/nested spans and authored ordering (#6165); cross-line/style layout remains approximate; scores and estimates unchanged. Synthetic evidence: `crates/pdf/src/tests/actual_text.rs`. |
