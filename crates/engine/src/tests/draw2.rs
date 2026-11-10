@@ -2698,19 +2698,15 @@ fn pen_cmd_selected_anchors_are_what_copy_and_cut_take() {
     assert_eq!(s.doc().unwrap().selection.anchors[&id], [(0, 1), (0, 2)].into());
     s.execute("edit.copy", &json!({})).unwrap();
     assert_eq!(pasted(&mut s), [2]);
-    // Cut takes the segment between them. The two surviving runs of an ordinary path
-    // become independent objects, and this path keeps the first run (#3380).
+    // Cut takes the two anchors out of the path, as Clear does (#6361): each side keeps one
+    // anchor, which makes no path, so nothing is left.
     s.execute("edit.undo", &json!({})).unwrap();
     let original = path(&s, id);
     let picked = s.doc().unwrap().selection.clone();
     s.execute("edit.cut", &json!({})).unwrap();
     let left = paths(&s);
-    assert_eq!(left.len(), 2);
-    assert_eq!(left[0].0, id);
-    assert!(left.iter().all(|(_, p)| p.subpaths.len() == 1 && !p.subpaths[0].closed));
-    assert_eq!(left[0].1.subpaths[0].anchors, original.subpaths[0].anchors[..2]);
-    assert_eq!(left[1].1.subpaths[0].anchors, original.subpaths[0].anchors[2..]);
-    assert_eq!(s.doc().unwrap().selection.objects, left.iter().map(|(id, _)| *id).collect::<Vec<_>>());
+    assert!(left.is_empty());
+    assert!(s.doc().unwrap().selection.objects.is_empty());
     assert_eq!(s.clipboard.nodes.len(), 1);
     assert_eq!(s.clipboard.nodes[0].path_data().unwrap().subpaths[0].anchors, original.subpaths[0].anchors[1..3]);
     s.execute("edit.undo", &json!({})).unwrap();

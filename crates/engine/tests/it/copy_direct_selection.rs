@@ -192,7 +192,7 @@ fn pen_tool_drawing_copies_whole_path_not_single_anchor() {
 }
 
 #[test]
-fn cut_adjacent_anchors_clipboard_plus_remaining_equals_original() {
+fn cut_adjacent_anchors_takes_them_out_of_the_source() {
     let mut s = Session::new();
     run(&mut s, "file.new", json!({"width": 200, "height": 200}));
     let r = rect(&mut s, 10.0, 10.0, 100.0, 50.0);
@@ -207,15 +207,93 @@ fn cut_adjacent_anchors_clipboard_plus_remaining_equals_original() {
     assert_eq!(clip_path.subpaths[0].segment_count(), 1);
     assert_eq!(clip_path.subpaths[0].anchors.len(), 2);
 
-    // Remaining source path must have the remaining 3 segments (segments 0, 2, 3), not 1.
+    // The source keeps anchors 3 and 0 and the one segment between them.
     let src_node = s.doc().unwrap().doc.node(r).unwrap();
     let src_path = src_node.path_data().unwrap();
-    assert_eq!(src_path.subpaths[0].segment_count(), 3);
-    assert_eq!(src_path.subpaths[0].anchors.len(), 4);
+    assert_eq!(src_path.subpaths[0].segment_count(), 1);
+    assert_eq!(src_path.subpaths[0].anchors.len(), 2);
     assert!(!src_path.subpaths[0].closed);
+}
 
-    // Sum of segments in clipboard + remaining = 1 + 3 = 4 (the original 4 segments).
-    assert_eq!(clip_path.subpaths[0].segment_count() + src_path.subpaths[0].segment_count(), 4);
+/// Every contour left in the document after `command` runs on anchors `picked` of a four-anchor
+/// open path, as `[x, y]` lists. With `compound`, the path is a member of a compound path.
+fn contours_after(command: &str, picked: Value, compound: bool) -> Vec<Vec<[f64; 2]>> {
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 200, "height": 200}));
+    let id = NodeId(run(&mut s, "path.create", json!({"anchors": [{"x": 10, "y": 20}]}))["id"].as_u64().unwrap());
+    run(&mut s, "path.appendAnchor", json!({"id": id.0, "x": 60, "y": 20}));
+    run(&mut s, "path.appendAnchor", json!({"id": id.0, "x": 100, "y": 80}));
+    run(&mut s, "path.appendAnchor", json!({"id": id.0, "x": 150, "y": 80}));
+    if compound {
+        let other = rect(&mut s, 10.0, 100.0, 40.0, 40.0);
+        run(&mut s, "select.set", json!({"ids": [id.0, other.0]}));
+        run(&mut s, "object.compoundPath.make", json!({}));
+    }
+    run(&mut s, "select.anchors", json!({"id": id.0, "anchors": picked, "mode": "set"}));
+    run(&mut s, command, json!({}));
+    check_session(&s).unwrap();
+    contours(&s)
+}
+
+/// Every contour in the document, as `[x, y]` lists.
+fn contours(s: &Session) -> Vec<Vec<[f64; 2]>> {
+    let mut left = vec![];
+    for layer in &s.doc().unwrap().doc.layers {
+        layer.walk(&mut |n| {
+            if let Some(path) = n.path_data() {
+                left.extend(path.subpaths.iter().map(|sp| sp.anchors.iter().map(|a| [a.p.x, a.p.y]).collect::<Vec<_>>()));
+            }
+        });
+    }
+    left
+}
+
+#[test]
+fn cut_end_anchors_leaves_the_source_as_clear_does() {
+    for compound in [false, true] {
+        let picked = || json!([[0, 0], [0, 1]]);
+        let left = contours_after("edit.cut", picked(), compound);
+        assert_eq!(left, contours_after("edit.clear", picked(), compound), "compound: {compound}");
+        assert_eq!(left[0], [[100.0, 80.0], [150.0, 80.0]], "compound: {compound}");
+    }
+}
+
+#[test]
+fn cut_interior_anchors_leaves_the_source_as_clear_does() {
+    let picked = || json!([[0, 1], [0, 2]]);
+    let left = contours_after("edit.cut", picked(), true);
+    assert_eq!(left, contours_after("edit.clear", picked(), true));
+    assert!(left.iter().flatten().all(|p| p[0] != 60.0 && p[0] != 100.0), "the picked anchors are gone: {left:?}");
+}
+
+#[test]
+fn cut_one_end_anchor_of_a_compound_member_shortens_it() {
+    let left = contours_after("edit.cut", json!([[0, 3]]), true);
+    assert_eq!(left[0], [[10.0, 20.0], [60.0, 20.0], [100.0, 80.0]]);
+}
+
+#[test]
+fn cut_of_an_anchor_with_a_segment_on_another_contour_leaves_the_source_as_clear_does() {
+    let after = |command: &str| {
+        let mut s = Session::new();
+        run(&mut s, "file.new", json!({"width": 400, "height": 400}));
+        let id = NodeId(run(&mut s, "path.create", json!({"anchors": [{"x": 10, "y": 20}]}))["id"].as_u64().unwrap());
+        let contour = |y: i32| json!({"anchors": [{"x": 10, "y": y}, {"x": 60, "y": y}, {"x": 110, "y": y}], "closed": false});
+        run(&mut s, "path.setAnchors", json!({"id": id.0, "subpaths": [contour(20), contour(120)]}));
+        run(&mut s, "select.anchors", json!({"id": id.0, "anchors": [[0, 0]], "mode": "set"}));
+        run(&mut s, "select.segments", json!({"id": id.0, "segments": [[1, 1]], "mode": "add"}));
+        run(&mut s, command, json!({}));
+        check_session(&s).unwrap();
+        s
+    };
+    let cut = after("edit.cut");
+    assert_eq!(contours(&cut), contours(&after("edit.clear")));
+    assert!(contours(&cut).contains(&vec![[10.0, 20.0], [60.0, 20.0], [110.0, 20.0]]), "the picked anchor stays: {:?}", contours(&cut));
+    // The clipboard holds what left the source: the picked segment alone.
+    assert_eq!(cut.clipboard.nodes.len(), 1);
+    let clip = cut.clipboard.nodes[0].path_data().unwrap();
+    assert_eq!(clip.subpaths.len(), 1);
+    assert_eq!(clip.subpaths[0].anchors.iter().map(|a| [a.p.x, a.p.y]).collect::<Vec<_>>(), [[60.0, 120.0], [110.0, 120.0]]);
 }
 
 #[test]
