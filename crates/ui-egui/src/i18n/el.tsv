@@ -542,6 +542,7 @@ font-technology	Variable	Μεταβλητές
 	Coming soon — tracked in the parity plan	Προσεχώς — περιλαμβάνεται στο σχέδιο αντιστοιχίας λειτουργιών
 	Command Click to Select Objects Behind	Command-κλικ για επιλογή αντικειμένων από πίσω
 	Command Dialog	Παράθυρο εντολών
+	Command API Reference	Αναφορά API εντολών
 	Community	Κοινότητα
 	Compatibility:	Συμβατότητα:
 	Compatible Gradient and Gradient Mesh Printing	Συμβατή εκτύπωση ντεγκραντέ και πλέγματος ντεγκραντέ
@@ -2231,6 +2232,28 @@ axis	Both	Και τα δύο
 @msg	Combine Slices: the slices have no bounds	Συνδυασμός τομών: οι τομές δεν έχουν όρια
 @msg	Convert to Artboards: selection has no area	Μετατροπή σε πίνακες σχεδίασης: η επιλογή δεν έχει επιφάνεια
 @msg	Convert to Shape: no rectangles or ellipses selected	Μετατροπή σε σχήμα: δεν έχουν επιλεγεί ορθογώνια ή ελλείψεις
+	Run	Εκτέλεση
+	Run Script	Εκτέλεση σεναρίου
+	Stop Script	Διακοπή σεναρίου
+	Show External Script Warning	Εμφάνιση προειδοποίησης για εξωτερικά σενάρια
+	A Script Is Running	Εκτελείται ένα σενάριο
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Ένα σενάριο μπορεί να αλλάξει τα ανοιχτά έγγραφα και να γράψει αρχεία μέσω των εντολών που εκτελεί. Εκτελείτε μόνο σενάρια που εμπιστεύεστε.
+	Do not show this warning again	Να μην εμφανιστεί ξανά αυτή η προειδοποίηση
+	Stop the script and undo what it did? Then quit again.	Διακοπή του σεναρίου και αναίρεση όσων έκανε; Έπειτα κάντε ξανά έξοδο.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Αυτό το σενάριο πρόσθεσε πάρα πολλά αντικείμενα. Συνέχεια, ή διακοπή και αναίρεση όσων έκανε;
+@msg	Choose a .js or .jsx script	Επιλέξτε ένα σενάριο .js ή .jsx
+@msg	Ran {name}	Εκτελέστηκε: {name}
+@msg	The script was stopped and its changes were undone	Το σενάριο διακόπηκε και οι αλλαγές του αναιρέθηκαν
+@msg	a script is running: stop it or wait for it to finish	εκτελείται ένα σενάριο: διακόψτε το ή περιμένετε να τελειώσει
+@msg	this is a compiled script, which cannot be run; use its source text	αυτό είναι μεταγλωττισμένο σενάριο που δεν μπορεί να εκτελεστεί· χρησιμοποιήστε το πηγαίο κείμενό του
+@msg	the script is not UTF-8 text	το σενάριο δεν είναι κείμενο UTF-8
+@msg	the script is too large to run	το σενάριο είναι πολύ μεγάλο για εκτέλεση
+@msg	a drag or an undo group is open; finish it before running a script	είναι ανοιχτή μια μεταφορά ή ομάδα αναίρεσης· ολοκληρώστε την πριν εκτελέσετε σενάριο
+@msg	the script left a document that cannot be kept	το σενάριο άφησε ένα έγγραφο που δεν μπορεί να διατηρηθεί
+@msg	the script's run is no longer available	η εκτέλεση του σεναρίου δεν είναι πλέον διαθέσιμη
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	μια εντολή που απέτυχε άλλαξε βήματα αναίρεσης που δεν ήταν δυνατό να επαναφερθούν, οπότε το σενάριο σταμάτησε
+@msg	a recovery copy could not be written, so the script was not run	δεν ήταν δυνατή η εγγραφή αντιγράφου ανάκτησης, οπότε το σενάριο δεν εκτελέστηκε
+@msg	Running a script	Εκτελείται σενάριο
 @msg	Copied the script report	Η αναφορά του σεναρίου αντιγράφηκε
 @msg	Corners edits the corners of a path	Η εντολή Γωνίες επεξεργάζεται τις γωνίες μιας διαδρομής
 @msg	Couldn't copy to the system clipboard: {e}	Δεν ήταν δυνατή η αντιγραφή στο πρόχειρο συστήματος: {e}
@@ -4367,6 +4390,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Φορτώθηκε το «{name}»: παραλείφθηκε {n} βήμα|Φορτώθηκε το «{name}»: παραλείφθηκαν {n} βήματα
 @msg	not an action set file	δεν είναι αρχείο συνόλου ενεργειών
 @msg	the action set file is larger than 8 MiB	το αρχείο συνόλου ενεργειών είναι μεγαλύτερο από 8 MiB
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: η αναφορά θα ήταν μεγαλύτερη από {MAX_BYTES} byte
 @msg	the action set file holds more than 1,000 actions	το αρχείο συνόλου ενεργειών περιέχει περισσότερες από 1.000 ενέργειες
 @msg	the action set file needs a later version of VectorCraft	το αρχείο συνόλου ενεργειών απαιτεί νεότερη έκδοση του VectorCraft
 @msg	an action in the action set file has more than 10,000 steps	μια ενέργεια στο αρχείο συνόλου ενεργειών έχει περισσότερα από 10.000 βήματα
@@ -5979,6 +6003,11 @@ axis	Y Axis	Άξονας Y
 	Button	Κουμπί
 	Panel	Πίνακας
 	UI Frames	Πλαίσια UI
+	Map Markers	Δείκτες χάρτη
+	Pin	Καρφίτσα
+	Flag	Σημαία
+	Crosshair	Σταυρόνημα
+	Checkpoint	Σημείο ελέγχου
 	Open Symbol Library	Άνοιγμα βιβλιοθήκης συμβόλων
 	Save Symbol Library	Αποθήκευση βιβλιοθήκης συμβόλων
 	Save Symbol Library…	Αποθήκευση βιβλιοθήκης συμβόλων…
@@ -6053,6 +6082,8 @@ axis	Y Axis	Άξονας Y
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Κείμενο σημείου
 	Area Text	Κείμενο περιοχής
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Μέτρηση κειμένου με βάση τα όρια γλυφής
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Εμφάνιση επιλογών προσκόλλησης σε γλυφή
 	Hide Snap to Glyph Options	Απόκρυψη επιλογών προσκόλλησης σε γλυφή

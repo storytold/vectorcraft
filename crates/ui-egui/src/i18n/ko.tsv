@@ -1243,6 +1243,7 @@ antiAlias	Sharp	날카롭게
 	Coming soon — tracked in the parity plan	곧 제공 예정 — 기능 동등성 계획에서 관리 중
 	Command Click to Select Objects Behind	Command-클릭으로 뒤쪽 개체 선택
 	Command Dialog	명령 대화상자
+	Command API Reference	명령 API 참조
 	Community	커뮤니티
 	Compatibility:	호환성:
 	Compatible Gradient and Gradient Mesh Printing	호환 그레이디언트 및 그레이디언트 메시 인쇄
@@ -4728,6 +4729,7 @@ theme	Appearance	외관
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	“{name}”을(를) 불러왔습니다. 단계 {n}개를 제외했습니다
 @msg	not an action set file	액션 세트 파일이 아닙니다
 @msg	the action set file is larger than 8 MiB	액션 세트 파일이 8 MiB보다 큽니다
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: 참조가 {MAX_BYTES}바이트보다 커집니다
 @msg	the action set file holds more than 1,000 actions	액션 세트 파일의 액션이 1,000개를 넘습니다
 @msg	the action set file needs a later version of VectorCraft	이 액션 세트 파일을 열려면 최신 버전의 VectorCraft가 필요합니다
 @msg	an action in the action set file has more than 10,000 steps	액션 세트 파일에 단계가 10,000개를 넘는 액션이 있습니다
@@ -4744,6 +4746,28 @@ theme	Appearance	외관
 @msg	the library item is damaged	라이브러리 항목이 손상되었습니다
 @msg	{_1} font families available	사용 가능한 글꼴 패밀리 {_1}개
 @msg	{_1} has no {_2} style	{_1}에는 {_2} 스타일이 없습니다
+	Run	실행
+	Run Script	스크립트 실행
+	Stop Script	스크립트 중지
+	Show External Script Warning	외부 스크립트 경고 표시
+	A Script Is Running	스크립트 실행 중
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	스크립트는 열려 있는 문서를 변경하고 실행하는 명령을 통해 파일을 쓸 수 있습니다. 신뢰할 수 있는 스크립트만 실행하세요.
+	Do not show this warning again	이 경고를 다시 표시하지 않음
+	Stop the script and undo what it did? Then quit again.	스크립트를 중지하고 변경 내용을 취소할까요? 그런 다음 다시 종료하세요.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	이 스크립트가 매우 많은 개체를 추가했습니다. 계속할까요, 아니면 중지하고 변경 내용을 취소할까요?
+@msg	Choose a .js or .jsx script	.js 또는 .jsx 스크립트를 선택하세요
+@msg	Ran {name}	{name} 실행됨
+@msg	The script was stopped and its changes were undone	스크립트를 중지하고 변경 내용을 취소했습니다
+@msg	a script is running: stop it or wait for it to finish	스크립트 실행 중: 중지하거나 끝날 때까지 기다리세요
+@msg	this is a compiled script, which cannot be run; use its source text	컴파일된 스크립트이므로 실행할 수 없습니다. 소스 텍스트를 사용하세요
+@msg	the script is not UTF-8 text	스크립트가 UTF-8 텍스트가 아닙니다
+@msg	the script is too large to run	스크립트가 너무 커서 실행할 수 없습니다
+@msg	a drag or an undo group is open; finish it before running a script	드래그 또는 실행 취소 그룹이 열려 있습니다. 스크립트를 실행하기 전에 완료하세요
+@msg	the script left a document that cannot be kept	스크립트가 유지할 수 없는 문서를 남겼습니다
+@msg	the script's run is no longer available	스크립트 실행을 더 이상 사용할 수 없습니다
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	실패한 명령이 되돌릴 수 없는 실행 취소 단계를 변경하여 스크립트를 중지했습니다
+@msg	a recovery copy could not be written, so the script was not run	복구 사본을 쓸 수 없어 스크립트를 실행하지 않았습니다
+@msg	Running a script	스크립트 실행 중
 @msg	Copied the script report	스크립트 보고서를 복사했습니다
 @msg	Exported {path}	{path}을(를) 내보냈습니다
 @msg	no CSS to copy: select objects with CSS of their own	복사할 CSS가 없습니다: 자체 CSS가 있는 개체를 선택하세요
@@ -5606,6 +5630,11 @@ axis	Y Axis	Y축
 	Button	버튼
 	Panel	패널
 	UI Frames	UI 프레임
+	Map Markers	지도 마커
+	Pin	핀
+	Flag	깃발
+	Crosshair	십자선
+	Checkpoint	체크포인트
 	Open Symbol Library	심볼 라이브러리 열기
 	Save Symbol Library	심볼 라이브러리 저장
 	Save Symbol Library…	심볼 라이브러리 저장…
@@ -5680,6 +5709,8 @@ axis	Y Axis	Y축
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	포인트 문자
 	Area Text	영역 문자
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	글리프 경계로 문자 측정
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	글리프에 스냅 옵션 표시
 	Hide Snap to Glyph Options	글리프에 스냅 옵션 숨기기

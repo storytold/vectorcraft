@@ -140,6 +140,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("disableAutoAddDelete", "General", "Options", "Disable Auto Add/Delete", bool),
     p!("usePreciseCursors", "General", "Options", "Use Precise Cursors", bool),
     p!("showToolTips", "General", "Options", "Show Tool Tips", bool),
+    p!("showExternalScriptWarning", "General", "Options", "Show External Script Warning", bool),
     p!("antiAliasedArtwork", "General", "Options", "Anti-aliased Artwork", bool),
     p!("selectSameTintPercent", "General", "Options", "Select Same Tint %", bool),
     p!("showHomeScreen", "General", "Options", "Show The Home Screen When No Documents Are Open", bool),
@@ -435,6 +436,8 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     // The Align panel menu's Align to Glyph Bounds: Align and Distribute measure type by its glyphs' ink.
     p!("alignGlyphBoundsPoint", "Type", "Align to Glyph Bounds", "Point Text", bool),
     p!("alignGlyphBoundsArea", "Type", "Align to Glyph Bounds", "Area Text", bool),
+    // The bounding box and the Transform panel measure point type by its glyphs' ink (also in the Transform panel menu).
+    p!("typeGlyphBounds", "Type", "Glyph Bounds", "Measure Type by Glyph Bounds", bool),
     // Artboard Options › Global: the canvas darkens the area outside the artboards while the Artboard tool is active.
     p!("fadeRegionOutsideArtboard", "General", "Artboard Options", "Fade Region Outside Artboard", bool),
     p!("artboardUpdateWhileDragging", "General", "Artboard Options", "Update While Dragging", bool),

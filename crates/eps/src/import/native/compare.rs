@@ -56,6 +56,15 @@ pub(in crate::import) fn differ(p: &[u8; 4], q: &[u8; 4]) -> bool {
     lightness(p).abs_diff(lightness(q)) > SAME_PIXEL || (a.min(b) <= WHITE && a.abs_diff(b) > SAME_PIXEL)
 }
 
+/// Do two pixels look different seen on black: in lightness? An object drawn on its own and seen
+/// only on white hides what it draws in white (white type over nothing looks like nothing): seen
+/// on black too, that shows.
+pub(in crate::import) fn differ_on_black(p: &[u8; 4], q: &[u8; 4]) -> bool {
+    // Premultiplied, a pixel is what it shows on black.
+    let on_black = |p: &[u8; 4]| [0, 1, 2].map(|i| u32::from(p[i]));
+    p != q && lightness(on_black(p)).abs_diff(lightness(on_black(q))) > SAME_PIXEL
+}
+
 /// How far apart two pixels' red, green or blue may be for them to be the same colour (a colour
 /// and its CMYK equivalent stay within it; a red and a dark red don't).
 const SAME_COLOUR: u32 = 64;

@@ -31,6 +31,8 @@ pub struct Prefs {
     pub disable_auto_add_delete: bool,
     pub use_precise_cursors: bool,
     pub show_tool_tips: bool,
+    /// Other Script… warns before it runs a chosen script.
+    pub show_external_script_warning: bool,
     pub anti_aliased_artwork: bool,
     pub select_same_tint_percent: bool,
     pub show_home_screen: bool,
@@ -41,6 +43,12 @@ pub struct Prefs {
     /// Align panel menu › Align to Glyph Bounds › Area Text: the same for area type, instead of
     /// its frame.
     pub align_glyph_bounds_area: bool,
+    /// Preferences › Type › Glyph Bounds › Measure Type by Glyph Bounds (also in the Transform
+    /// panel menu): the bounding box, the Transform panel's, Control bar's and Properties panel's X,
+    /// Y, W and H, and `object.setBounds` measure each point type object selected as an object (not
+    /// inside a selected group) by the ink of its glyphs instead of its em box
+    /// ([`crate::Session::bounds_measure`]).
+    pub type_glyph_bounds: bool,
     /// Artboard Options › Fade Region Outside Artboard: while the Artboard tool is active, the
     /// canvas draws everything outside the artboards darker, the pasteboard and the art on it.
     pub fade_region_outside_artboard: bool,
@@ -366,12 +374,14 @@ impl Default for Prefs {
             disable_auto_add_delete: false,
             use_precise_cursors: false,
             show_tool_tips: true,
+            show_external_script_warning: true,
             anti_aliased_artwork: true,
             select_same_tint_percent: false,
             show_home_screen: true,
             use_preview_bounds: false,
             align_glyph_bounds_point: false,
             align_glyph_bounds_area: false,
+            type_glyph_bounds: false,
             fade_region_outside_artboard: true,
             artboard_update_while_dragging: true,
             display_print_size: false,

@@ -291,6 +291,46 @@ fn selected_type_has_apply_numbers() {
     assert_eq!(text.para_at(0).list.and_then(|l| l.number), Some(vectorcraft_doc::text::NumberStyle::Arabic));
 }
 
+/// A right-click on type has Spelling › Auto Spell Check, which turns it on or off as Edit ›
+/// Spelling does (helpx: Check and correct spelling, "Turn on Auto Spell Check"). The context menu
+/// draws no check marks, but this submenu holds only the toggle, so it shows whether it is on;
+/// other submenus stay without the room for one. Other art has no Spelling submenu.
+#[test]
+fn right_click_on_type_turns_auto_spell_check_on_and_off() {
+    let mut app = app();
+    let r = rect(&mut app, 200.0, 150.0);
+    let t = NodeId(app.run("text.create", json!({"x": 20, "y": 60, "text": "Hello", "size": 24})).unwrap()["id"].as_u64().unwrap());
+    app.run("select.none", json!({})).unwrap();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let p = screen(&app, 250.0, 200.0);
+    assert!(!has(&click(&mut app, &ctx, p, PointerButton::Secondary), "Spelling"), "a rectangle has no Spelling submenu");
+    assert_eq!(app.session.active().unwrap().selection.objects, [r]);
+    let away = screen(&app, 390.0, 290.0);
+    click(&mut app, &ctx, away, PointerButton::Primary);
+    // Right-click the type, open Spelling: Auto Spell Check, not checked.
+    let open_spelling = |app: &mut VectorcraftApp| {
+        let p = word_at(app, t, 0, 5);
+        let texts = click(app, &ctx, p, PointerButton::Secondary);
+        assert_eq!(app.session.active().unwrap().selection.objects, [t], "the type right-clicked is selected");
+        frame(app, &ctx, vec![Event::PointerMoved(at(&texts, "Spelling"))]);
+        frame(app, &ctx, vec![])
+    };
+    let texts = open_spelling(&mut app);
+    assert!(texts.iter().any(|(s, _)| s == "     Auto Spell Check"), "unchecked, with the room for a check mark: {texts:?}");
+    assert!(texts.iter().any(|(s, _)| s == "Transform"), "other items have no gutter: {texts:?}");
+    // Agents see it under the Spelling path.
+    let e = menus::context_entries(&app).into_iter().find(|e| e.command.as_deref() == Some("edit.autoSpellCheck")).expect("Auto Spell Check");
+    assert_eq!((e.path.as_slice(), e.label.as_str()), (&["Spelling".to_string()][..], "Auto Spell Check"));
+    let texts = click(&mut app, &ctx, at(&texts, "     Auto Spell Check"), PointerButton::Primary);
+    assert!(app.ui.view.auto_spell_check, "turned on");
+    assert!(!has(&texts, "Spelling"), "the menu closed: {texts:?}");
+    let texts = open_spelling(&mut app);
+    assert!(texts.iter().any(|(s, _)| s == "✓  Auto Spell Check"), "checked: {texts:?}");
+    click(&mut app, &ctx, at(&texts, "✓  Auto Spell Check"), PointerButton::Primary);
+    assert!(!app.ui.view.auto_spell_check, "turned off");
+}
+
 /// The members of the overlap area of Intertwine group `g` at (x, y), in the order they are drawn
 /// there, bottom first.
 fn intertwine_order(app: &VectorcraftApp, g: NodeId, x: f64, y: f64) -> Vec<NodeId> {
@@ -505,4 +545,66 @@ fn no_spelling_items_off_a_misspelled_word_or_with_auto_spell_check_off() {
     let p = word_at(&app, id, 4, 12);
     let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
     assert!(!has(&texts, "Ignore All"), "off: {texts:?}");
+}
+
+/// A right word in type on top of an underlined word in other type: the right-click is on the
+/// top type, so it lists no spelling items for the word under it.
+#[test]
+fn a_word_under_other_type_is_not_the_one_right_clicked() {
+    let mut app = app();
+    let under = spelled(&mut app, "Qzvxtrwk");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let p = word_at(&app, under, 0, 8);
+    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert!(has(&texts, "Ignore All"), "alone, the word is offered: {texts:?}");
+    frame(
+        &mut app,
+        &ctx,
+        vec![Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }],
+    );
+    app.run("text.create", json!({"x": 20, "y": 60, "text": "the cat sat on the mat", "size": 24})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert!(!has(&texts, "Ignore All"), "under right type: {texts:?}");
+}
+
+/// In an Intertwine group, the type drawn on top at the right-click is the one whose word is
+/// offered: a member brought to the front there, though earlier in the stacking order.
+#[test]
+fn in_an_intertwine_group_the_type_drawn_on_top_is_the_one_right_clicked() {
+    let mut app = app();
+    let under = spelled(&mut app, "Qzvxtrwk");
+    let over =
+        NodeId(app.run("text.create", json!({"x": 20, "y": 60, "text": "the cat sat on the mat", "size": 24})).unwrap()["id"].as_u64().unwrap());
+    app.run("select.set", json!({"ids": [under.0, over.0]})).unwrap();
+    let g = NodeId(app.run("object.intertwine.make", json!({})).unwrap()["id"].as_u64().unwrap());
+    app.select_tool("selection");
+    app.run("select.none", json!({})).unwrap();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    // A point on the word where glyphs of both overlap: Intertwine's areas follow the outlines.
+    let quad = {
+        let st = app.session.active().unwrap();
+        let Some(NodeKind::Text(t)) = st.doc.node(under).map(|n| &n.kind) else { panic!("type") };
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+        vectorcraft_text::selection_quads(&lay, 0, 8)[0].map(|c| t.xf * c)
+    };
+    let (x0, x1) = (quad.iter().map(|c| c.x).fold(f64::MAX, f64::min), quad.iter().map(|c| c.x).fold(f64::MIN, f64::max));
+    let (y0, y1) = (quad.iter().map(|c| c.y).fold(f64::MAX, f64::min), quad.iter().map(|c| c.y).fold(f64::MIN, f64::max));
+    let overlap = (0..40)
+        .flat_map(|i| (0..20).map(move |j| Point::new(x0 + (x1 - x0) * (i as f64 + 0.5) / 40.0, y0 + (y1 - y0) * (j as f64 + 0.5) / 20.0)))
+        .find(|q| app.run("object.intertwine.arrange", json!({"id": g.0, "at": [q.x, q.y], "order": "back", "member": under.0})).is_ok())
+        .expect("glyphs of both overlap somewhere on the word");
+    let p = screen(&app, overlap.x, overlap.y);
+    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert!(!has(&texts, "Ignore All"), "under the right type: {texts:?}");
+    frame(
+        &mut app,
+        &ctx,
+        vec![Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }],
+    );
+    app.run("object.intertwine.arrange", json!({"id": g.0, "at": [overlap.x, overlap.y], "order": "front", "member": under.0})).unwrap();
+    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert!(has(&texts, "Ignore All"), "brought to the front there: {texts:?}");
 }

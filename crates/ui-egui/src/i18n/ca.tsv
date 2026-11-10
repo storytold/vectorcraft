@@ -443,6 +443,11 @@ antiAlias	Sharp	Nítid
 	Button	Botó
 	Panel	Panell
 	UI Frames	Marcs d’IU
+	Map Markers	Marcadors de mapa
+	Pin	Xinxeta
+	Flag	Bandera
+	Crosshair	Punt de mira
+	Checkpoint	Punt de control
 	Batch	Lot
 	Batch…	Lot…
 	Bearing	Orientació
@@ -794,6 +799,7 @@ antiAlias	Sharp	Nítid
 	Command	Ordre
 	Command Click to Select Objects Behind	Clic amb Ordre per seleccionar els objectes del darrere
 	Command Dialog	Diàleg d’ordres
+	Command API Reference	Referència de l’API d’ordres
 	Comment not closed	Comentari no tancat
 	Commenting, filling in form fields and signing	Comentar, emplenar camps de formulari i signar
 	Commits	Commits
@@ -5153,6 +5159,28 @@ digits	Malayalam	Malaiàlam
 @msg	control must be fillStroke, coloring, drawMode or screenMode	control ha de ser fillStroke, coloring, drawMode o screenMode
 @msg	Convert to Artboards: selection has no area	Converteix en taulers: la selecció no té àrea
 @msg	Convert to Shape: no rectangles or ellipses selected	Converteix en forma: no s’ha seleccionat cap rectangle ni el·lipse
+	Run	Executa
+	Run Script	Executa l'script
+	Stop Script	Atura l'script
+	Show External Script Warning	Mostra l'avís dels scripts externs
+	A Script Is Running	S'està executant un script
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Un script pot canviar els documents oberts i escriure fitxers mitjançant les ordres que executa. Executeu només scripts de confiança.
+	Do not show this warning again	No tornis a mostrar aquest avís
+	Stop the script and undo what it did? Then quit again.	Voleu aturar l'script i desfer el que ha fet? Després, torneu a sortir.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Aquest script ha afegit moltíssims objectes. Voleu continuar, o aturar-lo i desfer el que ha fet?
+@msg	Choose a .js or .jsx script	Trieu un script .js o .jsx
+@msg	Ran {name}	S'ha executat {name}
+@msg	The script was stopped and its changes were undone	L'script s'ha aturat i s'han desfet els seus canvis
+@msg	a script is running: stop it or wait for it to finish	s'està executant un script: atureu-lo o espereu que acabi
+@msg	this is a compiled script, which cannot be run; use its source text	aquest és un script compilat, que no es pot executar; useu el seu text font
+@msg	the script is not UTF-8 text	l'script no és text UTF-8
+@msg	the script is too large to run	l'script és massa gran per executar-lo
+@msg	a drag or an undo group is open; finish it before running a script	hi ha un arrossegament o un grup de desfer obert; acabeu-lo abans d'executar un script
+@msg	the script left a document that cannot be kept	l'script ha deixat un document que no es pot conservar
+@msg	the script's run is no longer available	l'execució de l'script ja no està disponible
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	una ordre fallida ha canviat passos de desfer que no s'han pogut restaurar, així que l'script s'ha aturat
+@msg	a recovery copy could not be written, so the script was not run	no s'ha pogut escriure una còpia de recuperació, per tant l'script no s'ha executat
+@msg	Running a script	S'està executant un script
 @msg	Copied the script report	S’ha copiat l’informe de l’script
 @msg	Corners edits the corners of a path	Cantonades edita les cantonades d’un traçat
 @msg	could not decode image: {0}	no s’ha pogut descodificar la imatge: {0}
@@ -5432,6 +5460,7 @@ digits	Malayalam	Malaiàlam
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	S’ha carregat “{name}”: s’ha omès {n} pas|S’ha carregat “{name}”: s’han omès {n} passos
 @msg	not an action set file	no és un fitxer de conjunt d’accions
 @msg	the action set file is larger than 8 MiB	el fitxer de conjunt d’accions supera els 8 MiB
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: la referència superaria els {MAX_BYTES} bytes
 @msg	the action set file holds more than 1,000 actions	el fitxer de conjunt d’accions conté més de 1.000 accions
 @msg	the action set file needs a later version of VectorCraft	el fitxer de conjunt d’accions necessita una versió més recent del VectorCraft
 @msg	an action in the action set file has more than 10,000 steps	una acció del fitxer de conjunt d’accions té més de 10.000 passos
@@ -6065,6 +6094,8 @@ theme	Appearance	Aparença
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Text de punt
 	Area Text	Text d’àrea
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Mesura el text pels límits del glif
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Mostra les opcions d’ajust al glif
 	Hide Snap to Glyph Options	Amaga les opcions d’ajust al glif

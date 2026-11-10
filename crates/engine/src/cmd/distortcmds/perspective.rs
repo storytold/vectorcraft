@@ -635,6 +635,7 @@ pub(crate) fn finish_edit_text(st: &mut crate::DocState, id: NodeId) {
         }
     };
     st.change_unsaved(clear);
+    st.history.rewrites += 1;
     for e in st.history.undo.iter_mut().chain(st.history.redo.iter_mut()) {
         let saved = Arc::ptr_eq(&e.doc, &st.saved_doc);
         clear(&mut e.doc);

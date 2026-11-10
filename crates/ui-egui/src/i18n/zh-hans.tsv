@@ -528,6 +528,7 @@ antiAlias	Sharp	锐利
 	Coming soon — tracked in the parity plan	即将推出 — 在对标计划中跟踪
 	Command Click to Select Objects Behind	按住 Command 单击选择后方对象
 	Command Dialog	命令对话框
+	Command API Reference	命令 API 参考
 	Community	社区
 	Compatibility:	兼容性：
 	Compatible Gradient and Gradient Mesh Printing	兼容渐变和渐变网格打印
@@ -4508,6 +4509,7 @@ imageTrace	Outline	轮廓
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	已载入“{name}”：已略过 {n} 个步骤
 @msg	not an action set file	不是动作组文件
 @msg	the action set file is larger than 8 MiB	动作组文件大于 8 MiB
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`：参考将大于 {MAX_BYTES} 字节
 @msg	the action set file holds more than 1,000 actions	动作组文件包含超过 1,000 个动作
 @msg	the action set file needs a later version of VectorCraft	动作组文件需要更高版本的 VectorCraft
 @msg	an action in the action set file has more than 10,000 steps	动作组文件中有动作超过 10,000 个步骤
@@ -4524,6 +4526,28 @@ imageTrace	Outline	轮廓
 @msg	the library item is damaged	库项目已损坏
 @msg	{_1} font families available	有 {_1} 个可用的字体系列
 @msg	{_1} has no {_2} style	{_1} 没有 {_2} 样式
+	Run	运行
+	Run Script	运行脚本
+	Stop Script	停止脚本
+	Show External Script Warning	显示外部脚本警告
+	A Script Is Running	脚本正在运行
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	脚本可以更改打开的文档，并可通过其运行的命令写入文件。请只运行您信任的脚本。
+	Do not show this warning again	不再显示此警告
+	Stop the script and undo what it did? Then quit again.	要停止脚本并撤销其更改吗？然后请再次退出。
+	This script has added a great many objects. Continue, or stop it and undo what it did?	此脚本已添加大量对象。要继续，还是停止并撤销其更改？
+@msg	Choose a .js or .jsx script	请选择 .js 或 .jsx 脚本
+@msg	Ran {name}	已运行 {name}
+@msg	The script was stopped and its changes were undone	脚本已停止，其更改已撤销
+@msg	a script is running: stop it or wait for it to finish	脚本正在运行：请停止它或等待其完成
+@msg	this is a compiled script, which cannot be run; use its source text	这是已编译的脚本，无法运行；请使用其源文本
+@msg	the script is not UTF-8 text	脚本不是 UTF-8 文本
+@msg	the script is too large to run	脚本过大，无法运行
+@msg	a drag or an undo group is open; finish it before running a script	拖动或撤销组尚未结束；请在运行脚本前完成
+@msg	the script left a document that cannot be kept	脚本留下了无法保留的文档
+@msg	the script's run is no longer available	脚本运行已不可用
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	失败的命令更改了无法恢复的撤销步骤，因此脚本已停止
+@msg	a recovery copy could not be written, so the script was not run	无法写入恢复副本，因此未运行脚本
+@msg	Running a script	正在运行脚本
 @msg	Copied the script report	已复制脚本报告
 @msg	Exported {path}	已导出 {path}
 @msg	no CSS to copy: select objects with CSS of their own	没有可复制的 CSS：请选择带有自身 CSS 的对象
@@ -5866,6 +5890,11 @@ axis	Y Axis	Y 轴
 	Button	按钮
 	Panel	面板
 	UI Frames	UI 框架
+	Map Markers	地图标记
+	Pin	图钉
+	Flag	旗帜
+	Crosshair	准星
+	Checkpoint	检查点
 	Open Symbol Library	打开符号库
 	Save Symbol Library	保存符号库
 	Save Symbol Library…	保存符号库…
@@ -5940,6 +5969,8 @@ axis	Y Axis	Y 轴
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	点文字
 	Area Text	区域文字
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	按字形边界度量文字
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	显示靠齐字符选项
 	Hide Snap to Glyph Options	隐藏靠齐字符选项

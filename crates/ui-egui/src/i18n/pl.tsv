@@ -921,6 +921,7 @@ lighting	Light	Światło
 	Color Picker…	Próbnik kolorów…
 	Coming soon — tracked in the parity plan	Już wkrótce — ujęte w planie zgodności
 	Command Dialog	Okno polecenia
+	Command API Reference	Dokumentacja API poleceń
 	Copy Selected Style	Kopiuj zaznaczony styl
 	Corners…	Narożniki…
 	Define Perspective Grid…	Zdefiniuj siatkę perspektywy…
@@ -4199,6 +4200,28 @@ imageTrace	Outline	Kontur
 @msg	Combine Slices: the slices have no bounds	Połącz plasterki: plasterki nie mają granic
 @msg	Convert to Artboards: selection has no area	Konwertuj na obszary kompozycji: zaznaczenie nie ma powierzchni
 @msg	Convert to Shape: no rectangles or ellipses selected	Konwertuj na kształt: nie zaznaczono prostokątów ani elips
+	Run	Uruchom
+	Run Script	Uruchom skrypt
+	Stop Script	Zatrzymaj skrypt
+	Show External Script Warning	Pokazuj ostrzeżenie o skryptach zewnętrznych
+	A Script Is Running	Skrypt jest uruchomiony
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skrypt może zmieniać otwarte dokumenty i zapisywać pliki za pomocą wykonywanych poleceń. Uruchamiaj tylko skrypty, którym ufasz.
+	Do not show this warning again	Nie pokazuj więcej tego ostrzeżenia
+	Stop the script and undo what it did? Then quit again.	Zatrzymać skrypt i cofnąć jego zmiany? Następnie zakończ program ponownie.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Ten skrypt dodał bardzo wiele obiektów. Kontynuować, czy zatrzymać go i cofnąć jego zmiany?
+@msg	Choose a .js or .jsx script	Wybierz skrypt .js lub .jsx
+@msg	Ran {name}	Wykonano: {name}
+@msg	The script was stopped and its changes were undone	Skrypt został zatrzymany, a jego zmiany cofnięte
+@msg	a script is running: stop it or wait for it to finish	skrypt jest uruchomiony: zatrzymaj go lub poczekaj na jego zakończenie
+@msg	this is a compiled script, which cannot be run; use its source text	to jest skrypt skompilowany, którego nie można uruchomić; użyj jego tekstu źródłowego
+@msg	the script is not UTF-8 text	skrypt nie jest tekstem UTF-8
+@msg	the script is too large to run	skrypt jest zbyt duży, aby go uruchomić
+@msg	a drag or an undo group is open; finish it before running a script	otwarte jest przeciąganie lub grupa cofania; zakończ je przed uruchomieniem skryptu
+@msg	the script left a document that cannot be kept	skrypt pozostawił dokument, którego nie można zachować
+@msg	the script's run is no longer available	uruchomienie skryptu nie jest już dostępne
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	nieudane polecenie zmieniło kroki cofania, których nie udało się przywrócić, więc skrypt został zatrzymany
+@msg	a recovery copy could not be written, so the script was not run	nie udało się zapisać kopii odzyskiwania, więc skrypt nie został uruchomiony
+@msg	Running a script	Uruchamianie skryptu
 @msg	Copied the script report	Skopiowano raport skryptu
 @msg	Corners edits the corners of a path	Narożniki edytuje narożniki ścieżki
 @msg	Couldn't copy to the system clipboard: {e}	Nie udało się skopiować do schowka systemowego: {e}
@@ -4545,6 +4568,7 @@ imageTrace	Outline	Kontur
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Wczytano „{name}”: pominięto {n} krok|Wczytano „{name}”: pominięto {n} kroki|Wczytano „{name}”: pominięto {n} kroków
 @msg	not an action set file	to nie jest plik zestawu operacji
 @msg	the action set file is larger than 8 MiB	plik zestawu operacji jest większy niż 8 MiB
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: dokumentacja byłaby większa niż {MAX_BYTES} bajtów
 @msg	the action set file holds more than 1,000 actions	plik zestawu operacji zawiera ponad 1000 operacji
 @msg	the action set file needs a later version of VectorCraft	plik zestawu operacji wymaga nowszej wersji programu VectorCraft
 @msg	an action in the action set file has more than 10,000 steps	operacja w pliku zestawu operacji ma ponad 10 000 kroków
@@ -5882,6 +5906,11 @@ axis	Y Axis	Oś Y
 	Button	Przycisk
 	Panel	Panel
 	UI Frames	Ramki UI
+	Map Markers	Znaczniki mapy
+	Pin	Pinezka
+	Flag	Flaga
+	Crosshair	Celownik
+	Checkpoint	Punkt kontrolny
 	Open Symbol Library	Otwórz bibliotekę symboli
 	Save Symbol Library	Zapisz bibliotekę symboli
 	Save Symbol Library…	Zapisz bibliotekę symboli…
@@ -5956,6 +5985,8 @@ axis	Y Axis	Oś Y
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Tekst punktowy
 	Area Text	Tekst akapitowy
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Mierz tekst według granic glifów
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Pokaż opcje przyciągania do glifów
 	Hide Snap to Glyph Options	Ukryj opcje przyciągania do glifów

@@ -583,6 +583,7 @@ font-technology	Variable	Variables
 	Coming soon — tracked in the parity plan	Bientôt disponible — prévu dans le plan de parité
 	Command Click to Select Objects Behind	Cmd+clic pour sélectionner les objets situés derrière
 	Command Dialog	Boîte de dialogue des commandes
+	Command API Reference	Référence de l’API des commandes
 	Community	Communauté
 	Compatibility:	Compatibilité :
 	Compatible Gradient and Gradient Mesh Printing	Impression compatible des dégradés et des filets de dégradé
@@ -4055,6 +4056,28 @@ axis	Both	Les deux
 @msg	Combine Slices: the slices have no bounds	Combiner les tranches : les tranches n’ont pas de limites
 @msg	Convert to Artboards: selection has no area	Convertir en plans de travail : la sélection n’a pas de surface
 @msg	Convert to Shape: no rectangles or ellipses selected	Convertir en forme : aucun rectangle ni aucune ellipse sélectionné
+	Run	Exécuter
+	Run Script	Exécuter le script
+	Stop Script	Arrêter le script
+	Show External Script Warning	Afficher l’avertissement des scripts externes
+	A Script Is Running	Un script est en cours d’exécution
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Un script peut modifier les documents ouverts et écrire des fichiers au moyen des commandes qu’il exécute. N’exécutez que des scripts de confiance.
+	Do not show this warning again	Ne plus afficher cet avertissement
+	Stop the script and undo what it did? Then quit again.	Arrêter le script et annuler ce qu’il a fait ? Quittez ensuite à nouveau.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Ce script a ajouté un très grand nombre d’objets. Continuer, ou l’arrêter et annuler ce qu’il a fait ?
+@msg	Choose a .js or .jsx script	Choisissez un script .js ou .jsx
+@msg	Ran {name}	{name} exécuté
+@msg	The script was stopped and its changes were undone	Le script a été arrêté et ses modifications ont été annulées
+@msg	a script is running: stop it or wait for it to finish	un script est en cours d’exécution : arrêtez-le ou attendez qu’il se termine
+@msg	this is a compiled script, which cannot be run; use its source text	ce script est compilé et ne peut pas être exécuté ; utilisez son texte source
+@msg	the script is not UTF-8 text	le script n’est pas du texte UTF-8
+@msg	the script is too large to run	le script est trop volumineux pour être exécuté
+@msg	a drag or an undo group is open; finish it before running a script	un glissement ou un groupe d’annulation est ouvert ; terminez-le avant d’exécuter un script
+@msg	the script left a document that cannot be kept	le script a laissé un document qui ne peut pas être conservé
+@msg	the script's run is no longer available	l’exécution du script n’est plus disponible
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	une commande en échec a modifié des étapes d’annulation qui n’ont pas pu être rétablies, le script a donc été arrêté
+@msg	a recovery copy could not be written, so the script was not run	une copie de récupération n’a pas pu être écrite, le script n’a donc pas été exécuté
+@msg	Running a script	Exécution d’un script
 @msg	Copied the script report	Rapport du script copié
 @msg	Corners edits the corners of a path	Angles modifie les angles d’un tracé
 @msg	Couldn't copy to the system clipboard: {e}	Impossible de copier dans le presse-papiers du système : {e}
@@ -4402,6 +4425,7 @@ axis	Both	Les deux
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	« {name} » chargé : {n} étape a été ignorée|« {name} » chargé : {n} étapes ont été ignorées
 @msg	not an action set file	ce n’est pas un fichier de jeu de scripts
 @msg	the action set file is larger than 8 MiB	le fichier de jeu de scripts dépasse 8 Mio
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}` : la référence dépasserait {MAX_BYTES} octets
 @msg	the action set file holds more than 1,000 actions	le fichier de jeu de scripts contient plus de 1 000 scripts
 @msg	the action set file needs a later version of VectorCraft	le fichier de jeu de scripts nécessite une version plus récente de VectorCraft
 @msg	an action in the action set file has more than 10,000 steps	un script du fichier de jeu de scripts compte plus de 10 000 étapes
@@ -6023,6 +6047,11 @@ axis	Y Axis	Axe Y
 	Button	Bouton
 	Panel	Panneau
 	UI Frames	Cadres d’IU
+	Map Markers	Marqueurs de carte
+	Pin	Épingle
+	Flag	Drapeau
+	Crosshair	Réticule
+	Checkpoint	Point de contrôle
 	Open Symbol Library	Ouvrir une bibliothèque de symboles
 	Save Symbol Library	Enregistrer la bibliothèque de symboles
 	Save Symbol Library…	Enregistrer la bibliothèque de symboles…
@@ -6097,6 +6126,8 @@ axis	Y Axis	Axe Y
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Texte de point
 	Area Text	Texte captif
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Mesurer le texte d’après les limites du glyphe
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Afficher les options de magnétisme du glyphe
 	Hide Snap to Glyph Options	Masquer les options de magnétisme du glyphe

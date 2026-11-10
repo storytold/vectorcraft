@@ -148,6 +148,26 @@ fn a_look_that_stores_its_stamps_between_the_polls_reads_keeps_them() {
 }
 
 #[test]
+fn a_change_during_a_script_waits_for_the_script_to_end() {
+    let dir = Folder::new("watch-script");
+    let path = dir.file("art.png");
+    std::fs::write(&path, png(40, 40, RED)).unwrap();
+    let mut s = session();
+    s.prefs.update_links = "automatically".into();
+    let id = place(&mut s, &path);
+    look(&mut s);
+    save(&path, &png(40, 40, BLUE));
+    s.start_link_scan();
+    s.wait_link_scan();
+    s.script_frames = true;
+    s.execute("script.run", &json!({"source": "while (true) {}"})).unwrap();
+    assert!(s.poll_link_scan().is_none(), "the finished look waits");
+    assert!(s.script_abandon());
+    assert_eq!(s.poll_link_scan().expect("the stamps are applied").unwrap()["updated"], json!([id.0]));
+    assert_eq!(colour(&s), BLUE);
+}
+
+#[test]
 fn a_change_during_a_drag_waits_for_the_drag_to_end() {
     let dir = Folder::new("watch-drag");
     let path = dir.file("art.png");

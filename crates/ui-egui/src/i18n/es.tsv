@@ -582,6 +582,7 @@ font-technology	Variable	Variables
 	Coming soon — tracked in the parity plan	Próximamente: incluido en el plan de paridad
 	Command Click to Select Objects Behind	Cmd+clic para seleccionar objetos de detrás
 	Command Dialog	Cuadro de diálogo de comando
+	Command API Reference	Referencia de la API de comandos
 	Community	Comunidad
 	Compatibility:	Compatibilidad:
 	Compatible Gradient and Gradient Mesh Printing	Impresión compatible de degradados y mallas de degradado
@@ -4066,6 +4067,28 @@ axis	Both	Ambos
 @msg	Combine Slices: the slices have no bounds	Combinar sectores: los sectores no tienen límites
 @msg	Convert to Artboards: selection has no area	Convertir en mesas de trabajo: la selección no tiene área
 @msg	Convert to Shape: no rectangles or ellipses selected	Convertir en forma: no hay rectángulos ni elipses seleccionados
+	Run	Ejecutar
+	Run Script	Ejecutar script
+	Stop Script	Detener script
+	Show External Script Warning	Mostrar advertencia de scripts externos
+	A Script Is Running	Se está ejecutando un script
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Un script puede cambiar los documentos abiertos y escribir archivos mediante los comandos que ejecuta. Ejecute solo scripts de confianza.
+	Do not show this warning again	No volver a mostrar esta advertencia
+	Stop the script and undo what it did? Then quit again.	¿Detener el script y deshacer lo que hizo? Después, vuelva a salir.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Este script ha añadido muchísimos objetos. ¿Continuar, o detenerlo y deshacer lo que hizo?
+@msg	Choose a .js or .jsx script	Elija un script .js o .jsx
+@msg	Ran {name}	Se ejecutó {name}
+@msg	The script was stopped and its changes were undone	El script se detuvo y sus cambios se deshicieron
+@msg	a script is running: stop it or wait for it to finish	se está ejecutando un script: deténgalo o espere a que termine
+@msg	this is a compiled script, which cannot be run; use its source text	este es un script compilado, que no se puede ejecutar; use su texto fuente
+@msg	the script is not UTF-8 text	el script no es texto UTF-8
+@msg	the script is too large to run	el script es demasiado grande para ejecutarlo
+@msg	a drag or an undo group is open; finish it before running a script	hay un arrastre o un grupo de deshacer abierto; termínelo antes de ejecutar un script
+@msg	the script left a document that cannot be kept	el script dejó un documento que no se puede conservar
+@msg	the script's run is no longer available	la ejecución del script ya no está disponible
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	un comando fallido cambió pasos de deshacer que no se pudieron restaurar, así que el script se detuvo
+@msg	a recovery copy could not be written, so the script was not run	no se pudo escribir una copia de recuperación, así que el script no se ejecutó
+@msg	Running a script	Ejecutando un script
 @msg	Copied the script report	Se copió el informe del script
 @msg	Corners edits the corners of a path	Esquinas edita las esquinas de un trazado
 @msg	Couldn't copy to the system clipboard: {e}	No se pudo copiar al portapapeles del sistema: {e}
@@ -4413,6 +4436,7 @@ axis	Both	Ambos
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Se cargó “{name}”: se omitió {n} paso|Se cargó “{name}”: se omitieron {n} pasos
 @msg	not an action set file	no es un archivo de conjunto de acciones
 @msg	the action set file is larger than 8 MiB	el archivo de conjunto de acciones supera los 8 MiB
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: la referencia superaría los {MAX_BYTES} bytes
 @msg	the action set file holds more than 1,000 actions	el archivo de conjunto de acciones contiene más de 1000 acciones
 @msg	the action set file needs a later version of VectorCraft	el archivo de conjunto de acciones necesita una versión más reciente de VectorCraft
 @msg	an action in the action set file has more than 10,000 steps	una acción del archivo de conjunto de acciones tiene más de 10 000 pasos
@@ -5970,6 +5994,11 @@ axis	Y Axis	Eje Y
 	Button	Botón
 	Panel	Panel
 	UI Frames	Marcos de IU
+	Map Markers	Marcadores de mapa
+	Pin	Chincheta
+	Flag	Bandera
+	Crosshair	Punto de mira
+	Checkpoint	Punto de control
 	Open Symbol Library	Abrir biblioteca de símbolos
 	Save Symbol Library	Guardar biblioteca de símbolos
 	Save Symbol Library…	Guardar biblioteca de símbolos…
@@ -6044,6 +6073,8 @@ axis	Y Axis	Eje Y
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Texto de punto
 	Area Text	Texto de área
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Medir el texto por los límites del glifo
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Mostrar opciones de ajuste a glifo
 	Hide Snap to Glyph Options	Ocultar opciones de ajuste a glifo

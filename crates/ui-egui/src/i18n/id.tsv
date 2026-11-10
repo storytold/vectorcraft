@@ -906,6 +906,7 @@ lighting	Light	Cahaya
 	Color Picker…	Pemilih warna…
 	Coming soon — tracked in the parity plan	Segera hadir — dilacak dalam rencana paritas
 	Command Dialog	Dialog perintah
+	Command API Reference	Referensi API perintah
 	Copy Selected Style	Salin gaya terpilih
 	Corners…	Sudut…
 	Define Perspective Grid…	Definisikan kisi perspektif…
@@ -4072,6 +4073,15 @@ imageTrace	Outline	Kontur
 @msg	Combine Slices: the slices have no bounds	Gabungkan irisan: irisan tidak memiliki batas
 @msg	Convert to Artboards: selection has no area	Konversi ke artboard: seleksi tidak memiliki area
 @msg	Convert to Shape: no rectangles or ellipses selected	Konversi ke bentuk: tidak ada persegi panjang atau elips yang dipilih
+	Run	Jalankan
+	Run Script	Jalankan Skrip
+	Stop Script	Hentikan Skrip
+	Show External Script Warning	Tampilkan Peringatan Skrip Eksternal
+	A Script Is Running	Skrip Sedang Berjalan
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skrip dapat mengubah dokumen yang terbuka dan menulis file melalui perintah yang dijalankannya. Jalankan hanya skrip yang Anda percayai.
+	Do not show this warning again	Jangan tampilkan peringatan ini lagi
+	Stop the script and undo what it did? Then quit again.	Hentikan skrip dan batalkan yang telah dilakukannya? Lalu keluar lagi.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Skrip ini telah menambahkan sangat banyak objek. Lanjutkan, atau hentikan dan batalkan yang telah dilakukannya?
 @msg	Copied the script report	Berhasil menyalin laporan skrip
 @msg	Corners edits the corners of a path	Corners menyunting sudut jalur
 @msg	Couldn't copy to the system clipboard: {e}	Tidak dapat menyalin ke papan klip sistem: {e}
@@ -5849,6 +5859,11 @@ axis	Y Axis	Sumbu Y
 	Button	Tombol
 	Panel	Panel
 	UI Frames	Bingkai UI
+	Map Markers	Penanda Peta
+	Pin	Pin
+	Flag	Bendera
+	Crosshair	Bidik silang
+	Checkpoint	Pos pemeriksaan
 	Open Symbol Library	Buka pustaka simbol
 	Save Symbol Library	Simpan pustaka simbol
 	Save Symbol Library…	Simpan pustaka simbol…
@@ -5909,6 +5924,8 @@ axis	Y Axis	Sumbu Y
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Teks titik
 	Area Text	Teks area
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Ukur teks menurut batas glif
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Tampilkan opsi snap ke glif
 	Hide Snap to Glyph Options	Sembunyikan opsi snap ke glif

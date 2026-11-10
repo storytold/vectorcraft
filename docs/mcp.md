@@ -210,8 +210,10 @@ echo '{"jsonrpc":"2.0","id":1,"method":"prompts/get","params":{"name":"poster","
 
 ### Resource templates
 
-`vectorcraft://document` (summary), `vectorcraft://document/json` (the whole model), and
-`vectorcraft://commands` (the live command catalog with enabled state) are the fixed resources. The templates read one thing at a time, which matters on a real document: the full model
+`vectorcraft://document` (summary), `vectorcraft://document/json` (the whole model),
+`vectorcraft://commands` (the live command catalog with enabled state) and `vectorcraft://commands/reference` (the
+command API reference in Markdown, `text/markdown; charset=utf-8`; see [Parameter schemas](#parameter-schemas)) are
+the fixed resources. The templates read one thing at a time, which matters on a real document: the full model
 is thousands of lines an agent pays for again on every change.
 
 | `uriTemplate` | Reads |
@@ -748,6 +750,7 @@ Fixed resources and the four templates (same as [Resource templates](#resource-t
 | `vectorcraft://document` | `document.inspect` summary (JSON) |
 | `vectorcraft://document/json` | The complete document model (JSON) |
 | `vectorcraft://commands` | Live command catalog with enabled state |
+| `vectorcraft://commands/reference` | The command API reference (`engine.apiReference`), as Markdown (`text/markdown; charset=utf-8`) |
 | `vectorcraft://object/{id}` | One layer or object (`document.node {id, summary: true}`) |
 | `vectorcraft://command/{id}` | One command's metadata and enablement |
 | `vectorcraft://effect/{id}` | One live effect with parameters and defaults |
@@ -1385,7 +1388,7 @@ vectorcraft-cli run --cmd file.new --params '{"width":600,"height":200}'   --cmd
 ### Parameter schemas
 
 Some commands have a machine-readable parameter schema: at present `view.capsLock`, `view.saved.new`,
-`view.saved.edit`, `view.saved.list`, `view.transparencyGrid` and `view.snapToGlyph.options`. The engine's
+`view.saved.edit`, `view.saved.list`, `view.transparencyGrid`, `view.snapToGlyph.options` and `engine.apiReference`. The engine's
 `engine.commands` list gives such a command a `schema` field: an object schema in the shape of JSON Schema 2020-12
 (https://json-schema.org/draft/2020-12). Its root has `$schema` (the 2020-12 dialect), `description` when the
 command has a summary, and `deprecated: true` when the command is deprecated. The schema uses `type`, `properties`, `required` and
@@ -1427,9 +1430,25 @@ path to a value inside a list or an object, and the document and its undo histor
 
 An omitted value with a `default` takes it (`rotation` 0 in `view.saved.new`); the journal keeps the params as they
 were given. Saved steps played from a journal or an action keep a key the schema does not name, unless its value nests
-more than 16 levels deep, and the values of the parameters it names are checked as in a new call. The schemas of built-in commands belong to API level 1
-(`vectorcraft_engine::schemas::API_VERSION`); a change to any of them raises the level. Commands that plug-ins add have
-no schema here.
+more than 16 levels deep, and the values of the parameters it names are checked as in a new call. The schemas of built-in commands belong to API level 2
+(`vectorcraft_engine::schemas::API_VERSION`); a change to any of them raises the level. Level 2 added
+`engine.apiReference`. Commands that plug-ins add have no schema here.
+
+`engine.apiReference {}` → `{markdown}` returns the command API reference, written from these schemas each time it
+runs; no file of it is kept. It needs no open document and changes nothing. The reference has a `##` section for each
+built-in command that has a schema, in registry order (the order `engine.commands` lists them), and leaves out every
+command without one, plug-in commands included; `engine.commands` still lists those with their params text. A section
+lists the command's label, menu path, API level, deprecation level, what it writes (`x-writes`), cost, summary and
+return, then a table of its parameters in the schema's order with the columns Parameter, Type, Range, Unit, Default,
+Required, Since, Deprecated and Description. A member of an object parameter is a row of its own after it, named with
+dots and `[]` for a list (`edits[].name`). A range says whether each end is included ("more than 0", "at most 64"); a
+default is either the JSON value the engine fills in, marked "(JSON)", or the note of a default the command works out;
+the Description says when null reads as omitted and when the engine does not refuse a value of another type (a lenient
+parameter). Text from a schema is escaped as Markdown text: each of `` \ | [ ] < > ` * _ ! & # ~ : @ `` and the `.`
+after `www` get a backslash, and line breaks, tabs and other control characters become spaces, so a description cannot
+end a table cell or make a link, an image or HTML. A reference larger than 1 MiB (1,048,576 bytes) is an error naming
+`engine.apiReference`, and no part of it is returned. MCP serves the same text as the resource
+`vectorcraft://commands/reference`.
 
 ## Checking scripts written for the reference app
 
@@ -1499,6 +1518,75 @@ the included files too.
 
 ```sh
 vectorcraft-cli run --cmd script.check --params '{"path": "Tidy Layers.jsx"}'
+```
+
+`script.run {path? | source?, name?, args?, answers?, maxFuel?}` runs a JavaScript file against the open documents.
+File › Scripts › Other Script… (Cmd+F12) picks a `.js` or `.jsx` file and runs it the same way; the help page
+https://helpx.adobe.com/illustrator/desktop/automate-visualize-data/automate-actions/install-and-run-scripts.html
+describes that menu item. Pass exactly one of `path` and `source`. A `path` must end in `.js` or `.jsx`, in any
+case. A `.jsxbin` file or text that starts with `@JSXBIN@` is compiled and ends with an error, as does text that is
+not UTF-8. The language is ES5.1. The script reaches the app through one global object:
+
+- `vc.run(id, params)` runs a command and returns its result. A command that fails throws an error the script can
+  catch. The documents and the session state the command changed, preferences included, go back, and any file it
+  wrote stays written and is named in the report. A result too large to cross throws a `RangeError`, and the
+  command's changes go back the same way.
+- `vc.document` is a snapshot of the active document, or `null` when none is open. A snapshot too large to cross
+  throws a `RangeError`.
+- `vc.commands` lists the commands a script may run.
+- `vc.log(value)` adds a value to the report.
+- `vc.args` is the `args` object.
+- `vc.api.version` is `"1.0"`, and `vc.api.has(feature)` says whether the API has a feature.
+
+The run is one transaction. When the script ends, each document it changed gets one undo step named Run Script. A
+run that changes no document adds no undo step. The journal records each command the run finished, as it records
+commands run one at a time. A preference the run changed takes the run's value, and a preference changed in the app
+while the run went on keeps that change. On an uncaught error, a limit or `script.stop`, every open document and the
+session go back to their state before the run. A script can write files through the commands it runs, such as
+export commands. A file written before the run failed stays on disk, and the error names it. A run from the menu
+shows a warning first, unless you ticked Do not show this warning again or set the preference
+`showExternalScriptWarning` to false.
+
+While a script runs, every other command that changes anything ends with the error `a script is running: stop it or
+wait for it to finish`. MCP reports that error as JSON-RPC error `-32003`. `script.stop {}` stops the run and
+returns `{stopped}`. `notifications/cancelled` stops a run only while the `tools/call` that started it is waiting
+for it, as in a headless server; use `script.stop` for a run the app started. A script cannot run commands that
+change anything outside the documents: `script.*` except `script.check`, `plugin.*`, `prefs.*`, `actionSet.*`,
+`shortcutSet.*`, `help.*`, `print.*`, `library.*`, `importMatches.*`, `edit.undoGroup.*`, `file.recovery.*`,
+`stroke.widthProfile.*`, saving, importing or deleting a preset, `text.addFontFiles`, `text.findFontFiles`,
+`text.rescanFonts`, `links.findFiles`, `file.place.queue`, `color.loadProfile`, `color.removeProfile`, `file.print`,
+`view.proofSetup`, `view.proofColors`, `view.overprintPreview` and `view.separationsPreview`. It also cannot run
+`edit.clearHistory`: a run keeps each document's undo steps from before it and adds one. Calling one of these throws
+an error. With Data Recovery off for complex documents, a run in the web build does not start while a complex document
+has unsaved changes.
+
+VectorCraft sets these limits itself:
+
+| Limit | Value |
+|-------|-------|
+| Source text | 8 MiB |
+| Heap | 256 MiB (128 MiB on the web) |
+| Host calls | 2,000,000 |
+| `maxFuel`, instructions in all | 1 to 100,000,000,000; 1,000,000,000 by default |
+| Instructions without a pause | 200,000,000 |
+| Nesting depth | 64 levels |
+| A value crossing to or from a command | 16 MiB and 1,048,576 entries |
+| `args` as JSON | 1 MiB |
+| Log | 10,000 entries and 4 MiB |
+| Growth before a person is asked | 100,000 objects and 512 MiB of new document data |
+
+In the app, a script past the growth limit stops at a question to continue or to stop and undo. Stop, Escape and
+`ui.dialog.cancel` all stop the run. A run with nobody to ask, such as a call over MCP or the command line, ends
+with an error at that limit. The headless reply is `{ok: true, name, changed, written, log, fuelUsed, hostCalls}`.
+In the app the reply is `{running: true, name}`, and the report appears later as `scriptReport` in `ui.inspect`.
+`answers` takes only an empty object, since scripts have no prompts yet.
+
+```json
+{"name":"run_command","arguments":{"command":"script.run","params":{"source":"vc.run('shape.rectangle', {x: 0, y: 0, width: 10, height: 10});"}}}
+```
+
+```sh
+vectorcraft-cli run --cmd script.run --params '{"path": "Tidy Layers.js", "args": {"margin": 12}}'
 ```
 
 ## Transparency and opacity masks
@@ -3980,6 +4068,35 @@ an error that lists the choices of a `horizontal`, `vertical`, `to`, `axis` or `
 (`object.reflect` also takes an angle and names the value given), and one for a `spacing` that is not a number; nothing
 moves.
 
+## Glyph bounds for type
+
+The bounding box normally measures point type by its em box, which leaves room above and below the letters for
+ascenders, descenders and capitals. With the preference `typeGlyphBounds` on (`prefs.set {key: "typeGlyphBounds",
+value: true}`; also Preferences › Type › Glyph Bounds and the Transform panel menu's Measure Type by Glyph Bounds), the
+bounding box and its handles, the Transform panel's, Control bar's and Properties panel's X, Y, W and H,
+`object.setBounds`, the Scale, Rotate and Reflect tools' reference point, and Swap Objects, Replace with Top Object,
+Set Size of Each and Sort Objects measure point type, horizontal or vertical, by the ink of its glyphs: its glyph
+outlines and its underline and strikethrough bars. This applies to each point type object that is selected as an object
+(not inside a selected group), in a selection with other objects too. The option is VectorCraft's own and is off by
+default.
+
+A width or height typed with the option on scales the type until its ink has that size. The type stays live type: its
+font size changes by the scale, so `object.setBounds {height: 72}` on "H" gives the cap height 72 pt, not a 72 pt
+font. With Use Preview Bounds on, the ink takes in the characters' strokes, and type with geometry effects is
+measured as drawn. Rotated type keeps its own angle, and skewed type is measured by its glyph outlines. Type that
+draws nothing (no text, or only spaces without underline or strikethrough), area type, type on a path and type inside
+a selected group are measured as before. Arrange in Grid and Group Overlapping Objects measure visual bounds as
+before, and Align and Distribute follow Align to Glyph Bounds.
+
+When moved type snaps (Snap to Grid, Snap to Pixel, Smart Guides and ruler guides), the edges and center of its ink box
+snap, and the Distance Guides measure from that box. The other objects that it snaps to keep their usual boxes, as
+they do with Use Preview Bounds. The preference is not saved in documents.
+
+```json
+{"name":"run_command","arguments":{"command":"prefs.set","params":{"values":{"typeGlyphBounds":true}}}}
+{"name":"run_command","arguments":{"command":"object.setBounds","params":{"height":72,"proportional":true}}}
+```
+
 ## Selection preferences
 
 The Selection & Anchor Display and General preferences apply to `pointer_gesture` as they do to the mouse:
@@ -5191,7 +5308,12 @@ fallback font…), each note once; the export still writes or returns every file
 
 Batch exports (#1935):
 - **What:** `layers: [id…]` (each layer's art alone) or `selection: "one" | "each"` instead of artboards
-  (`assets`, `fullDocument` as before).
+  (`assets`, `fullDocument` as before). A selected object, a layer's object or an asset's object stays in the layers
+  and groups that hold it, so their clipping paths, opacity masks, effects, opacity and blend modes apply to it as on
+  the canvas, and the file is cropped to the bounds the renderer measures for that art (a clip group by its clip); an
+  object of a blend, envelope, repeat or intertwine is drawn on its own. Those layers are drawn even when they are
+  hidden, template or non-printing layers, and a PSD of the file names its layers after them.
+  `document.exportSelection` and the pictures of `css.export {rasterize: true}` draw the selected objects the same way.
 - **Names:** `name` is a pattern for every file: `<filename>` (the document's file name without its extension, or
   its title before it is saved; the Full Document file and the `.zip` use the same name), `<name>` (the artboard,
   asset, layer or object), `<index>`, `####` (a counter zero-padded to the run of `#`, from `counterStart`; `counterPer: "item"`
@@ -6004,7 +6126,7 @@ lines up to date as the type, the custom dictionary and the Ignore All words cha
 A right-click on an underlined word puts at the top of the canvas context menu the words `text.spelling.suggest` gives
 for it (each a `text.editRange {id, start, end, insert}` item labelled with its word), or No Suggestions, then Ignore
 All (`text.spelling.ignoreAll {word}`) and Add to Dictionary (`text.spelling.addWord {word}`); the context menu's
-entries list them with their params.
+entries list them with their params. A right-click on type also has Spelling › Auto Spell Check (`edit.autoSpellCheck`).
 
 
 ## Justification options

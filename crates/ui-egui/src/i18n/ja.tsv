@@ -1253,6 +1253,7 @@ antiAlias	Sharp	シャープ
 	Coming soon — tracked in the parity plan	近日対応予定
 	Command Click to Select Objects Behind	Command+クリックで背面のオブジェクトを選択
 	Command Dialog	コマンドダイアログ
+	Command API Reference	コマンド API リファレンス
 	Community	コミュニティ
 	Compatibility:	互換性:
 	Compatible Gradient and Gradient Mesh Printing	互換性のあるグラデーションとグラデーションメッシュのプリント
@@ -4801,6 +4802,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	「{name}」を読み込みました。{n} 個のステップは省きました
 @msg	not an action set file	アクションセットファイルではありません
 @msg	the action set file is larger than 8 MiB	アクションセットファイルが 8 MiB を超えています
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: リファレンスが {MAX_BYTES} バイトを超えます
 @msg	the action set file holds more than 1,000 actions	アクションセットファイルのアクションが 1,000 個を超えています
 @msg	the action set file needs a later version of VectorCraft	このアクションセットファイルには新しいバージョンの VectorCraft が必要です
 @msg	an action in the action set file has more than 10,000 steps	アクションセットファイルに 10,000 ステップを超えるアクションがあります
@@ -4817,6 +4819,28 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the library item is damaged	ライブラリの項目が破損しています
 @msg	{_1} font families available	{_1} 個のフォントファミリーを使用できます
 @msg	{_1} has no {_2} style	{_1} には {_2} スタイルがありません
+	Run	実行
+	Run Script	スクリプトを実行
+	Stop Script	スクリプトを停止
+	Show External Script Warning	外部スクリプトの警告を表示
+	A Script Is Running	スクリプトの実行中
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	スクリプトは開いているドキュメントを変更でき、実行するコマンドを通じてファイルを書き込むこともできます。信頼できるスクリプトだけを実行してください。
+	Do not show this warning again	今後この警告を表示しない
+	Stop the script and undo what it did? Then quit again.	スクリプトを停止して変更を取り消しますか？その後、もう一度終了してください。
+	This script has added a great many objects. Continue, or stop it and undo what it did?	このスクリプトは非常に多くのオブジェクトを追加しました。続行しますか、それとも停止して変更を取り消しますか？
+@msg	Choose a .js or .jsx script	.js または .jsx スクリプトを選択してください
+@msg	Ran {name}	{name} を実行しました
+@msg	The script was stopped and its changes were undone	スクリプトを停止し、変更を取り消しました
+@msg	a script is running: stop it or wait for it to finish	スクリプトの実行中です: 停止するか、終了するまでお待ちください
+@msg	this is a compiled script, which cannot be run; use its source text	これはコンパイル済みのスクリプトなので実行できません。ソーステキストを使用してください
+@msg	the script is not UTF-8 text	スクリプトは UTF-8 テキストではありません
+@msg	the script is too large to run	スクリプトが大きすぎて実行できません
+@msg	a drag or an undo group is open; finish it before running a script	ドラッグまたは取り消しグループが開いています。スクリプトを実行する前に完了してください
+@msg	the script left a document that cannot be kept	スクリプトが保持できないドキュメントを残しました
+@msg	the script's run is no longer available	スクリプトの実行は利用できなくなりました
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	失敗したコマンドが元に戻せない取り消し手順を変更したため、スクリプトを停止しました
+@msg	a recovery copy could not be written, so the script was not run	復元用のコピーを書き込めなかったため、スクリプトは実行されませんでした
+@msg	Running a script	スクリプトを実行中
 @msg	Copied the script report	スクリプトのレポートをコピーしました
 @msg	Exported {path}	{path} を書き出しました
 @msg	no CSS to copy: select objects with CSS of their own	コピーする CSS がありません: 独自の CSS を持つオブジェクトを選択してください
@@ -5710,6 +5734,11 @@ axis	Y Axis	Y 軸
 	Button	ボタン
 	Panel	パネル
 	UI Frames	UIフレーム
+	Map Markers	マップマーカー
+	Pin	ピン
+	Flag	旗
+	Crosshair	クロスヘア
+	Checkpoint	チェックポイント
 	Open Symbol Library	シンボルライブラリを開く
 	Save Symbol Library	シンボルライブラリを保存
 	Save Symbol Library…	シンボルライブラリを保存…
@@ -5784,6 +5813,8 @@ axis	Y Axis	Y 軸
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	ポイント文字
 	Area Text	エリア内文字
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	文字を字形の境界で測定
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	グリフにスナップのオプションを表示
 	Hide Snap to Glyph Options	グリフにスナップのオプションを隠す

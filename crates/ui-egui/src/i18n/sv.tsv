@@ -569,6 +569,7 @@ font-technology	Variable	Variabla
 	Coming soon — tracked in the parity plan	Kommer snart — följs upp i paritetsplanen
 	Command Click to Select Objects Behind	Cmd-klicka för att markera objekt bakom
 	Command Dialog	Kommandodialog
+	Command API Reference	API-referens för kommandon
 	Community	Gemenskap
 	Compatibility:	Kompatibilitet:
 	Compatible Gradient and Gradient Mesh Printing	Kompatibel utskrift av gradienter och gradientnät
@@ -3976,6 +3977,28 @@ axis	Both	Båda
 @msg	Combine Slices: the slices have no bounds	Kombinera skivor: skivorna har inga gränser
 @msg	Convert to Artboards: selection has no area	Konvertera till ritytor: markeringen har ingen area
 @msg	Convert to Shape: no rectangles or ellipses selected	Konvertera till form: inga rektanglar eller ellipser är markerade
+	Run	Kör
+	Run Script	Kör skript
+	Stop Script	Stoppa skript
+	Show External Script Warning	Visa varning för externa skript
+	A Script Is Running	Ett skript körs
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Ett skript kan ändra de öppna dokumenten och skriva filer genom de kommandon det kör. Kör bara skript du litar på.
+	Do not show this warning again	Visa inte den här varningen igen
+	Stop the script and undo what it did? Then quit again.	Stoppa skriptet och ångra det det gjort? Avsluta sedan igen.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Det här skriptet har lagt till väldigt många objekt. Fortsätta, eller stoppa det och ångra det det gjort?
+@msg	Choose a .js or .jsx script	Välj ett .js- eller .jsx-skript
+@msg	Ran {name}	Körde {name}
+@msg	The script was stopped and its changes were undone	Skriptet stoppades och dess ändringar ångrades
+@msg	a script is running: stop it or wait for it to finish	ett skript körs: stoppa det eller vänta tills det är klart
+@msg	this is a compiled script, which cannot be run; use its source text	det här är ett kompilerat skript som inte kan köras; använd dess källtext
+@msg	the script is not UTF-8 text	skriptet är inte UTF-8-text
+@msg	the script is too large to run	skriptet är för stort för att köras
+@msg	a drag or an undo group is open; finish it before running a script	en dragning eller ångragrupp är öppen; avsluta den innan du kör ett skript
+@msg	the script left a document that cannot be kept	skriptet lämnade ett dokument som inte kan behållas
+@msg	the script's run is no longer available	skriptets körning är inte längre tillgänglig
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	ett misslyckat kommando ändrade ångrasteg som inte kunde återställas, så skriptet stoppades
+@msg	a recovery copy could not be written, so the script was not run	en återställningskopia kunde inte skrivas, så skriptet kördes inte
+@msg	Running a script	Kör ett skript
 @msg	Copied the script report	Kopierade skriptrapporten
 @msg	Corners edits the corners of a path	Hörn redigerar hörnen på en bana
 @msg	Couldn't copy to the system clipboard: {e}	Kunde inte kopiera till systemets urklipp: {e}
@@ -4317,6 +4340,7 @@ axis	Both	Båda
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Läste in ”{name}”: {n} steg utelämnades|Läste in ”{name}”: {n} steg utelämnades
 @msg	not an action set file	inte en fil med åtgärdsuppsättning
 @msg	the action set file is larger than 8 MiB	filen med åtgärdsuppsättningen är större än 8 MiB
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: referensen skulle bli större än {MAX_BYTES} byte
 @msg	the action set file holds more than 1,000 actions	filen med åtgärdsuppsättningen innehåller fler än 1 000 åtgärder
 @msg	the action set file needs a later version of VectorCraft	filen med åtgärdsuppsättningen kräver en nyare version av VectorCraft
 @msg	an action in the action set file has more than 10,000 steps	en åtgärd i filen med åtgärdsuppsättningen har fler än 10 000 steg
@@ -6051,6 +6075,11 @@ axis	Y Axis	Y-axel
 	Button	Knapp
 	Panel	Panel
 	UI Frames	UI-ramar
+	Map Markers	Kartmarkörer
+	Pin	Nål
+	Flag	Flagga
+	Crosshair	Hårkors
+	Checkpoint	Kontrollpunkt
 	Open Symbol Library	Öppna symbolbibliotek
 	Save Symbol Library	Spara symbolbibliotek
 	Save Symbol Library…	Spara symbolbibliotek…
@@ -6125,6 +6154,8 @@ axis	Y Axis	Y-axel
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Punkttext
 	Area Text	Områdestext
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Mät text efter glyfgränser
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Visa alternativ för fäst mot glyf
 	Hide Snap to Glyph Options	Dölj alternativ för fäst mot glyf

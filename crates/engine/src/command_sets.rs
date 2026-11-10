@@ -83,6 +83,7 @@ pub(crate) fn strip_replay_only(id: &str, p: &mut Value) {
 /// Instances and Lock Guides change the selection, and the proof views, the preferences and added
 /// fonts give the documents new revisions (they draw again, and type lays out again).
 const WAIT_FOR_TOOL_EDIT: &[&str] = &[
+    "script.run",
     "command.batch",
     "document.find",
     "symbol.selectInstances",
