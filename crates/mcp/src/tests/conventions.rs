@@ -57,16 +57,61 @@ fn command_listings_take_query_menu_and_brief() {
         let menu: Vec<&str> = c["menu"].as_array().unwrap().iter().map(|m| m.as_str().unwrap()).collect();
         assert_eq!(menu.get(..2), Some(&["Object", "Path"][..]), "{c}");
     }
-    // `brief` drops the params text and nothing else.
+    // `brief` drops the params text and the schemas, and nothing else.
     let full = payload(&call(&mut s, "command_list", json!({})));
     let brief = payload(&call(&mut s, "command_list", json!({"brief":true})));
     assert_eq!(ids(&full), ids(&brief));
     assert!(full.as_array().unwrap().iter().any(|c| c.get("params").is_some()));
-    assert!(brief.as_array().unwrap().iter().all(|c| c.get("params").is_none() && c.get("label").is_some()));
+    assert!(full.as_array().unwrap().iter().any(|c| c.get("inputSchema").is_some()));
+    assert!(
+        brief
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|c| c.get("params").is_none() && c.get("schema").is_none() && c.get("inputSchema").is_none() && c.get("label").is_some())
+    );
     assert!(brief.to_string().len() * 2 < full.to_string().len(), "brief is much shorter");
     // The other listing takes them too.
     let r = payload(&call(&mut s, "list_commands", json!({"query":"rectangle","brief":true,"menu":""})));
     assert_eq!(ids(&r["commands"]), ids(&by_filter));
+}
+
+#[path = "../../../apischema/src/conformance.rs"]
+mod conformance;
+
+/// Both listings give a command with a parameter schema an `inputSchema` with an object root,
+/// which follows the 2020-12 rules, and the filters select the same commands as before.
+#[test]
+fn command_listings_carry_input_schemas() {
+    let mut s = Server::new(Box::new(Headless::with_document()));
+    let list = payload(&call(&mut s, "list_commands", json!({"filter":"view.saved"})));
+    let bare = payload(&call(&mut s, "command_list", json!({"filter":"view.saved"})));
+    assert_eq!(list["commands"], bare);
+    assert_eq!(list["count"], bare.as_array().unwrap().len());
+    let commands = bare.as_array().unwrap();
+    let with_input: Vec<&Value> = commands.iter().filter(|c| c.get("inputSchema").is_some()).collect();
+    assert!(with_input.len() >= 3, "{bare}");
+    for c in with_input {
+        let input = &c["inputSchema"];
+        assert_eq!(input["type"], "object", "{c}");
+        conformance::check_schema(input, c["id"].as_str().unwrap()).unwrap_or_else(|e| panic!("{e}\n{input:#}"));
+        assert!(!conformance::instance_valid(input, &Value::Null));
+        assert_eq!(conformance::instance_valid(&c["schema"], &Value::Null), c["schema"]["type"] != "object", "{c}");
+    }
+    let saved_list = commands.iter().find(|c| c["id"] == "view.saved.list").unwrap();
+    assert_eq!(saved_list["schema"]["type"], json!(["object", "null"]));
+    assert_eq!(saved_list["inputSchema"]["type"], "object");
+    // A command without a schema lists neither.
+    let new = payload(&call(&mut s, "command_list", json!({"filter":"file.new","enabled_only":true})));
+    let new = new.as_array().unwrap().iter().find(|c| c["id"] == "file.new").unwrap().clone();
+    assert!(new.get("schema").is_none() && new.get("inputSchema").is_none(), "{new}");
+    // `brief`, `menu` and the enabled filter select the same ids with and without the schemas.
+    let ids = |v: &Value| v.as_array().unwrap().iter().map(|c| c["id"].clone()).collect::<Vec<_>>();
+    let view = payload(&call(&mut s, "list_commands", json!({"menu":"view","enabledOnly":true})));
+    let view_brief = payload(&call(&mut s, "list_commands", json!({"menu":"view","enabledOnly":true,"brief":true})));
+    assert_eq!(ids(&view["commands"]), ids(&view_brief["commands"]));
+    assert_eq!(view["count"], view_brief["count"]);
+    assert!(view_brief["commands"].as_array().unwrap().iter().all(|c| c.get("inputSchema").is_none() && c.get("schema").is_none()));
 }
 
 #[test]
