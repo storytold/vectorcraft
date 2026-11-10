@@ -84,6 +84,21 @@ fn profile_dropdown(ui: &mut Ui, id: &str, current: &str, kind: ProfileKind, ext
 }
 
 fn settings_section(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let top = ui.cursor().top();
+    settings_rows(app, ui);
+    // Edit › Color Settings… / Assign Profile… opened the panel for this section: scroll it into
+    // view once, as the plates and Proof Setup above it fill a short window (#6419). At once, not
+    // animated: the panel has just opened. egui moves the scroll area on a later frame, so ask for
+    // one rather than wait for the pointer to move.
+    if app.ui.color_settings_scroll && !ui.is_sizing_pass() {
+        let rect = egui::Rect::from_x_y_ranges(ui.max_rect().x_range(), top..=ui.min_rect().bottom().max(top));
+        ui.scroll_to_rect_animation(rect, Some(egui::Align::TOP), egui::style::ScrollAnimation::none());
+        ui.ctx().request_repaint();
+        app.ui.color_settings_scroll = false;
+    }
+}
+
+fn settings_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
     let st = cms::active_settings();
     widgets::section_header(ui, tl!("Color Settings"));
     ui.horizontal(|ui| {
@@ -214,5 +229,56 @@ mod tests {
         assert_eq!(menu, panel);
         assert!(panel.iter().any(|(id, _)| id == "tritanopia"));
         assert!(panel.iter().all(|(id, _)| cms::ProofTarget::parse(id).is_some_and(|t| t.id() == *id)));
+    }
+
+    /// #6419: Edit › Assign Profile… and Color Settings… show the panel scrolled to its Color
+    /// Settings section, which a window shorter than the panel (a floated panel stops at 320
+    /// points) otherwise shows only after scrolling past the plates and Proof Setup. Once: a
+    /// scroll away afterwards stays.
+    #[test]
+    fn color_settings_and_assign_profile_scroll_the_color_settings_into_view() {
+        const VIEW: f32 = 120.0;
+        fn find(s: &egui::Shape, text: &str) -> Option<f32> {
+            match s {
+                egui::Shape::Text(t) if t.galley.text() == text => Some(t.pos.y),
+                egui::Shape::Vec(v) => v.iter().find_map(|s| find(s, text)),
+                _ => None,
+            }
+        }
+        // One frame of the panel in a scroll area VIEW points high, scrolled to `offset` when
+        // given: where the section's Black Point Compensation box shows in the view.
+        fn frame(ctx: &egui::Context, app: &mut VectorcraftApp, offset: Option<f32>) -> f32 {
+            let mut top = 0.0;
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+                top = ui.cursor().top();
+                let mut area = egui::ScrollArea::vertical().id_salt("separations").max_height(VIEW);
+                if let Some(y) = offset {
+                    area = area.vertical_scroll_offset(y);
+                }
+                area.show(ui, |ui| show(app, ui));
+            });
+            out.textures_delta.clear();
+            out.shapes.iter().find_map(|c| find(&c.shape, "Use Black Point Compensation")).unwrap() - top
+        }
+        let visible = |y: f32| (0.0..VIEW).contains(&y);
+        for id in ["edit.assignProfile", "edit.colorSettings"] {
+            let mut app = VectorcraftApp::new(Session::new(), Default::default());
+            app.run("file.new", json!({})).unwrap();
+            let ctx = egui::Context::default();
+            let before = frame(&ctx, &mut app, None);
+            assert!(!visible(before), "the section starts below the view: {before}");
+            app.run(id, json!({})).unwrap();
+            frame(&ctx, &mut app, None);
+            assert!(!app.ui.color_settings_scroll);
+            // egui moves a scroll area on the frame after the request and paints it moved on the
+            // one after that; both ask for a repaint.
+            assert!(ctx.has_requested_repaint());
+            frame(&ctx, &mut app, None);
+            assert!(ctx.has_requested_repaint());
+            let shown = frame(&ctx, &mut app, None);
+            assert!(visible(shown), "{id} scrolls the section into the view: {shown}");
+            frame(&ctx, &mut app, Some(0.0));
+            assert_eq!(frame(&ctx, &mut app, None), before, "scrolled back to the top, it stays there");
+        }
     }
 }
