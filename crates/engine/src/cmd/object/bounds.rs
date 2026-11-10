@@ -125,15 +125,20 @@ fn bounds_transform(s: &Session, p: &Value, ids: Vec<NodeId>, least: f64, anchor
     // The scales and the point above can miss the size or the reference point when the margins of
     // the objects differ, the members of groups and the objects in symbols' art included, and with
     // strokes that scale, when the sizes are out of proportion. The objects are then measured one
-    // by one ([`Spans::measure`]), and the scales solved for. Objects with geometry effects are
-    // measured as drawn after each scale tried instead ([`refit_drawn`]).
+    // by one ([`Spans::measure`]), and the scales solved for. Objects with geometry effects, and
+    // objects with a butt-capped stroke along a segment at a slant, whose margins change with the
+    // segment's direction, are measured as drawn after each scale tried instead ([`refit_drawn`]).
     let symbols = d.symbol_boxes();
-    let drawn = || ids.iter().filter_map(|id| d.node(*id)).any(|n| effects::preview::draws_geometry(&symbols, n));
+    let to_local = frame.to_doc().inverse();
+    let drawn = || {
+        ids.iter()
+            .filter_map(|id| d.node(*id))
+            .any(|n| effects::preview::draws_geometry(&symbols, n) || n.has_slanted_butt_stroke(&symbols, to_local))
+    };
     let solved = if !(s.prefs.use_preview_bounds && w >= 0.0 && h >= 0.0) {
         None
     } else if transforms_objects(p) && !bool_or(p, "typeAreas", false) && drawn() {
         let options = scaling_options(s, p);
-        let to_local = frame.to_doc().inverse();
         let measure = |sx: f64, sy: f64| {
             let xf = frame.conjugate(about(rp, Affine::scale_non_uniform(sx, sy)));
             let sc = if Scaling::factor(xf).is_some() { options } else { Scaling::default() };

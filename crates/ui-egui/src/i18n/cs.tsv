@@ -5608,7 +5608,7 @@ mark-style	Japanese	Japonské
 	Bevel both sides	Zkosení na obou stranách
 	Presets	Předvolby
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Objekt může mít jen jeden 3D efekt. Upravte volby stávajícího efektu, nebo jej nejprve odstraňte.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} zatím vyžaduje cestu nebo složenou cestu. Nejprve převeďte text, obrazy a skupiny na cesty.
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} zatím vyžaduje cestu, složenou cestu, text nebo skupinu. Obrazy a další objekty nejprve převeďte na cesty.
 @msg	{label} requires a shape with at least two anchors	{label} vyžaduje tvar alespoň se dvěma kotevními body
 @msg	The shape is too complex for a 3D effect	Tvar je pro 3D efekt příliš složitý
 @msg	The 3D surface is too complex; simplify the shape	3D povrch je příliš složitý; zjednodušte tvar

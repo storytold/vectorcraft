@@ -5197,7 +5197,7 @@ lighting	Light	Світло
 	Bevel both sides	Фаска з обох боків
 	Presets	Набори
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Об'єкт може мати лише один 3D-ефект. Змініть параметри наявного ефекту або спершу вилучіть його.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label}: поки що потрібен контур або складений контур. Спершу перетворіть текст, зображення та групи на контури.
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label}: поки що потрібен контур, складений контур, текст або група. Спершу перетворіть зображення та інші об'єкти на контури.
 @msg	{label} requires a shape with at least two anchors	{label}: потрібна фігура щонайменше з двома опорними точками
 @msg	The shape is too complex for a 3D effect	Фігура надто складна для 3D-ефекту
 @msg	The 3D surface is too complex; simplify the shape	3D-поверхня надто складна; спростіть фігуру

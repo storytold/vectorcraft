@@ -3,10 +3,11 @@ use std::sync::Arc;
 
 use serde_json::Value;
 use vectorcraft_doc::color::{Color, Paint};
-use vectorcraft_doc::{Appearance, AppearanceItem, Effect, FillLayer, LineJoin, Node, NodeKind, StrokeLayer};
+use vectorcraft_doc::{Appearance, AppearanceItem, Effect, FillLayer, LineJoin, Node, NodeId, NodeKind, StrokeLayer};
 use vectorcraft_geom::{PathData, Rect};
 use vectorcraft_three_d::{Edge, Revolve};
 
+use crate::solids::{Profile, Scope, is_container, members, object_profile, profile, reshape_members, solid_paints, union_bounds};
 use crate::util::{flag, num, text};
 use crate::{GeomContext, apply_geometry_with, is_geometry, merged_params};
 
@@ -60,6 +61,7 @@ pub fn revolve_options(p: &Value) -> Revolve {
         shade: flag(p, "shade", true),
         smooth_shading: true,
         cap_ends: flag(p, "cap", true),
+        curve_samples: None,
     }
 }
 
@@ -67,12 +69,93 @@ pub fn revolve_options(p: &Value) -> Revolve {
 /// by the evaluator; unsupported source kinds remain unchanged when rendered.
 pub fn validate_revolve(n: &Node, p: &Value) -> Result<(), String> {
     validate_revolve_params(p)?;
-    let path = profile(n).ok_or("Revolve currently requires a path or compound path. Select a profile drawn with the Pen tool.")?;
-    let b = path.bounds().ok_or("Revolve requires a profile with at least two anchors")?;
-    if !path.subpaths.iter().any(|sp| sp.anchors.len() >= 2) {
-        return Err("Revolve requires at least two anchors".into());
+    let effects = &n.appearance.effects;
+    let before = effects.iter().position(|e| e.visible && e.id == REVOLVE).and_then(|i| effects.get(..i)).unwrap_or(effects);
+    if is_container(n) {
+        const EMPTY: &str = "Revolve requires a group holding a shape with at least two anchors";
+        let mut shapes = members(n, "Revolve")?;
+        if !shapes.iter().any(|s| has_two_anchors(&s.path)) {
+            return Err(EMPTY.into());
+        }
+        reshape_members(n, before, &mut shapes);
+        let b = union_bounds(&shapes).ok_or(EMPTY)?;
+        let options = shared_options(&shapes, revolve_options(p))?;
+        let mut copies = 0;
+        return shapes.iter().try_for_each(|s| check_surface(&s.path, b, options, surface_item(&s.items), &mut copies));
     }
-    vectorcraft_three_d::revolve(&path, b, revolve_options(p)).map(|_| ())
+    let (path, _) = object_profile(n, "Revolve")?;
+    if !has_two_anchors(&path) {
+        return Err("Revolve requires a shape with at least two anchors".into());
+    }
+    let path = geometry(&path, before, &GeomContext::of(n));
+    let b = path.bounds().ok_or("Revolve requires a shape with at least two anchors")?;
+    let paints = solid_paints(n);
+    check_surface(&path, b, revolve_options(p), surface_item(&paints), &mut 0)
+}
+
+/// [`validate_revolve`] for a Revolve with parameters `p` at index `index` of the effects of
+/// appearance item `target` of `n`. The surfaces of every fill and stroke that carries a Revolve,
+/// `target`'s included, share one budget of paint copies, as in [`art`]. A visible object-level
+/// Revolve draws in place of those surfaces.
+pub(crate) fn validate_item_revolve(n: &Node, p: &Value, target: usize, index: usize) -> Result<(), String> {
+    if is_container(n) || visible(&n.appearance.effects) || target >= n.appearance.items.len() {
+        return validate_revolve(n, p);
+    }
+    validate_revolve_params(p)?;
+    const EMPTY: &str = "Revolve requires a shape with at least two anchors";
+    let (path, _) = object_profile(n, "Revolve")?;
+    if !has_two_anchors(&path) {
+        return Err(EMPTY.into());
+    }
+    let ctx = GeomContext::of(n);
+    let path = geometry(&path, &n.appearance.effects, &ctx);
+    let mut copies = 0;
+    for (i, item) in n.appearance.items.iter().enumerate() {
+        let effects = item.effects();
+        let at = if i == target { Some(index) } else { effects.iter().position(|e| e.visible && e.id == REVOLVE) };
+        let options = match at.and_then(|at| effects.get(at)) {
+            _ if i == target => revolve_options(p),
+            Some(fx) if crate::paints(item) => revolve_options(&merged_params(REVOLVE, &fx.params)),
+            _ => continue,
+        };
+        let path = geometry(&path, at.and_then(|at| effects.get(..at)).unwrap_or(effects), &ctx.item(item));
+        let b = path.bounds().ok_or(EMPTY)?;
+        check_surface(&path, b, options, crate::paints(item).then_some(item), &mut copies)?;
+    }
+    Ok(())
+}
+
+fn has_two_anchors(path: &PathData) -> bool {
+    path.subpaths.iter().any(|sp| sp.anchors.len() >= 2)
+}
+
+/// The bytes the copies of `paint` take on `faces` faces: a face's fill, its shadow and their seam
+/// strokes make up to four copies.
+fn paint_copies(faces: usize, paint: &Paint) -> usize {
+    faces.saturating_mul(4).saturating_mul(paint_bytes(paint))
+}
+
+/// An error when `path` does not revolve or when its surface in `item`'s paint takes `copies`, the
+/// bytes of an object's paint copies so far, past [`MAX_PAINT_COPIES`].
+fn check_surface(path: &PathData, b: Rect, options: Revolve, item: Option<&AppearanceItem>, copies: &mut usize) -> Result<(), String> {
+    let faces = vectorcraft_three_d::revolve(path, b, options)?;
+    *copies = copies.saturating_add(item.map_or(0, |i| paint_copies(faces.len(), &paint_of(i).0)));
+    if *copies > MAX_PAINT_COPIES {
+        return Err("Revolve paint is too complex for this surface; reduce Segments or simplify the gradient".into());
+    }
+    Ok(())
+}
+
+/// `options` with one number of samples for every curve of `shapes`, the members of one group: the
+/// members share Revolve's limits.
+fn shared_options(shapes: &[Profile], options: Revolve) -> Result<Revolve, String> {
+    let samples = vectorcraft_three_d::revolve_curve_samples(shapes.iter().map(|s| &s.path), options)?;
+    Ok(Revolve { curve_samples: Some(samples), ..options })
+}
+
+/// The item whose paint an object's surface takes: its top fill, else its top stroke.
+fn surface_item(items: &[AppearanceItem]) -> Option<&AppearanceItem> {
+    items.iter().rev().find(|i| matches!(i, AppearanceItem::Fill(_))).or_else(|| items.last())
 }
 
 /// Check Revolve's parameter values `p` alone: its lights, `edge` and `cap`.
@@ -87,38 +170,31 @@ pub(crate) fn validate_revolve_params(p: &Value) -> Result<(), String> {
     Ok(())
 }
 
-fn profile(n: &Node) -> Option<PathData> {
-    match &n.kind {
-        NodeKind::Path { path, guide: false, clipping: false, .. } => Some(path.clone()),
-        NodeKind::Compound { children, .. } => {
-            Some(PathData::new(children.iter().filter_map(|c| c.path_data()).flat_map(|p| p.subpaths.iter().cloned()).collect()))
-        }
-        _ => None,
-    }
-}
-
 fn geometry(path: &PathData, fx: &[Effect], ctx: &GeomContext) -> PathData {
     apply_geometry_with(fx, path, path.bounds().unwrap_or(Rect::ZERO), ctx)
 }
 
+/// One object's surface of revolution about the axis of `b`, and each face's depth. `copies` counts
+/// the bytes of the paint copies of every surface of the object.
 #[allow(clippy::too_many_arguments)]
 fn surface(
     n: &Node,
     path: &PathData,
+    b: Rect,
+    options: Revolve,
     fx: &Effect,
     paint: Paint,
     opacity: f32,
     blend: vectorcraft_doc::color::BlendMode,
     expand: bool,
-) -> Option<Node> {
-    let b = path.bounds()?;
+    copies: &mut usize,
+) -> Option<(Vec<f64>, Node)> {
     // A loaded file or a profile edited past the limits keeps drawing its source path instead
     // of crashing the frame. Commands validate the same evaluator and report its errors.
-    let options = revolve_options(&merged_params(REVOLVE, &fx.params));
     let colored = options.light_color != [1.0; 3] || options.lights.is_some();
     let faces = vectorcraft_three_d::revolve(path, b, options).ok()?;
-    // A face's fill, its shadow and their seam strokes: up to four copies of the paint.
-    if faces.len().saturating_mul(4).saturating_mul(paint_bytes(&paint)) > MAX_PAINT_COPIES {
+    *copies = copies.saturating_add(paint_copies(faces.len(), &paint));
+    if *copies > MAX_PAINT_COPIES {
         return None;
     }
     // Visibility is an expansion option, never a change to live geometry or export baking.
@@ -146,6 +222,7 @@ fn surface(
             })
             .collect()
     });
+    let depths: Vec<f64> = faces.iter().map(|f: &vectorcraft_three_d::VisibleFace| f.depth).collect();
     let children = faces
         .into_iter()
         .map(|face| {
@@ -202,7 +279,16 @@ fn surface(
     let mut group = Node::group(n.id, children);
     group.opacity = opacity;
     group.blend = blend;
-    Some(group)
+    Some((depths, group))
+}
+
+/// A surface of one object about the bounds of `path`, built with options derived from `fx`.
+/// `copies` is the count [`surface`] adds to.
+fn object_surface(n: &Node, path: &PathData, fx: &Effect, item: &AppearanceItem, expand: bool, copies: &mut usize) -> Option<Node> {
+    let b = path.bounds()?;
+    let (paint, opacity, blend) = paint_of(item);
+    let options = revolve_options(&merged_params(REVOLVE, &fx.params));
+    surface(n, path, b, options, fx, paint, opacity, blend, expand, copies).map(|(_, art)| art)
 }
 
 fn shading_paint(g: vectorcraft_three_d::ShadeGradient, color: impl Fn(f64) -> Color, opacity: impl Fn(f64) -> f32) -> Paint {
@@ -237,26 +323,23 @@ pub(crate) fn expand_revolve_art(n: &Node) -> Option<Node> {
 /// each of them. Each mesh adds its triangles to `total` as it is built, and the first that takes
 /// `total` past `limit` stops with an error before the next is built.
 pub(crate) fn revolve_meshes(n: &Node, total: &mut usize, limit: usize) -> Result<Vec<crate::SolidMesh>, String> {
-    let path = profile(n).ok_or("Revolve currently requires a path or compound path")?;
+    if is_container(n) {
+        return group_meshes(n, total, limit);
+    }
+    let (path, rule) = object_profile(n, "Revolve")?;
     let ctx = GeomContext::of(n);
     let mesh = |path: &PathData, fx: &Effect, item: &AppearanceItem| -> Result<crate::SolidMesh, String> {
-        let b = path.bounds().ok_or("Revolve requires a profile with at least two anchors")?;
+        let b = path.bounds().ok_or("Revolve requires a shape with at least two anchors")?;
         let (paint, opacity, _) = paint_of(item);
-        let mesh = vectorcraft_three_d::revolve_mesh(path, b, revolve_options(&merged_params(REVOLVE, &fx.params)))?;
+        let mesh = vectorcraft_three_d::revolve_mesh(path, rule, b, revolve_options(&merged_params(REVOLVE, &fx.params)))?;
         Ok(crate::SolidMesh { mesh, color: crate::solids::mesh_color(&paint, opacity) })
     };
     if let Some(index) = n.appearance.effects.iter().position(|e| e.visible && e.id == REVOLVE) {
         let before = n.appearance.effects.get(..index).unwrap_or_default();
         let Some(fx) = n.appearance.effects.get(index) else { return Ok(vec![]) };
         let path = geometry(&path, before, &ctx);
-        let item = n
-            .appearance
-            .items
-            .iter()
-            .rev()
-            .find(|i| matches!(i, AppearanceItem::Fill(_)) && crate::paints(i))
-            .or_else(|| n.appearance.items.iter().rev().find(|i| crate::paints(i)))
-            .ok_or("the revolved object has no fill or stroke")?;
+        let paints = solid_paints(n);
+        let item = surface_item(&paints).ok_or("the revolved object has no fill or stroke")?;
         let mut out = vec![];
         crate::solids::keep_mesh(&mut out, total, mesh(&path, fx, item)?, limit)?;
         return Ok(out);
@@ -274,28 +357,49 @@ pub(crate) fn revolve_meshes(n: &Node, total: &mut usize, limit: usize) -> Resul
     Ok(out)
 }
 
+/// [`revolve_meshes`] of group or layer `n`: one mesh for each member, about one shared axis.
+fn group_meshes(n: &Node, total: &mut usize, limit: usize) -> Result<Vec<crate::SolidMesh>, String> {
+    let index = n
+        .appearance
+        .effects
+        .iter()
+        .position(|e| e.visible && e.id == REVOLVE)
+        .ok_or("a 3D effect on a group's fill or stroke draws nothing to export")?;
+    let Some(fx) = n.appearance.effects.get(index) else { return Ok(vec![]) };
+    let mut shapes = members(n, "Revolve")?;
+    reshape_members(n, n.appearance.effects.get(..index).unwrap_or_default(), &mut shapes);
+    let b = union_bounds(&shapes).ok_or("Revolve requires a group holding a shape with at least two anchors")?;
+    let options = shared_options(&shapes, revolve_options(&merged_params(REVOLVE, &fx.params)))?;
+    let mut out = vec![];
+    for s in &shapes {
+        let Some(item) = surface_item(&s.items) else { continue };
+        let (paint, opacity, _) = paint_of(item);
+        let mesh = vectorcraft_three_d::revolve_mesh(&s.path, s.rule, b, options)?;
+        crate::solids::keep_mesh(&mut out, total, crate::SolidMesh { mesh, color: crate::solids::mesh_color(&paint, opacity * s.opacity) }, limit)?;
+    }
+    Ok(out)
+}
+
 fn art(n: &Node, expand: bool) -> Option<Node> {
     if !has_revolve(n) {
         return None;
     }
-    let path = profile(n)?;
+    if is_container(n) {
+        return group_art(n, expand);
+    }
+    let (path, _) = profile(n)?;
     let ctx = GeomContext::of(n);
     let mut children = vec![];
+    let mut copies = 0;
     let mut remaining = n.appearance.effects.clone();
     if let Some(index) = n.appearance.effects.iter().position(|e| e.visible && e.id == REVOLVE) {
         let fx = n.appearance.effects.get(index)?;
         let path = geometry(&path, n.appearance.effects.get(..index)?, &ctx);
         // An object's surface uses its top visible fill, falling back to its stroke.
-        let item = n
-            .appearance
-            .items
-            .iter()
-            .rev()
-            .find(|i| matches!(i, AppearanceItem::Fill(_)) && crate::paints(i))
-            .or_else(|| n.appearance.items.iter().rev().find(|i| crate::paints(i)))?;
-        let (paint, opacity, blend) = paint_of(item);
+        let paints = solid_paints(n);
+        let item = surface_item(&paints)?;
         let expand = expand && !n.appearance.effects.iter().skip(index + 1).any(|e| e.visible && is_geometry(&e.id));
-        children.push(Arc::new(surface(n, &path, fx, paint, opacity, blend, expand)?));
+        children.push(Arc::new(object_surface(n, &path, fx, item, expand, &mut copies)?));
         // Later geometry acts on the projected art as a whole through container evaluation.
         remaining = n
             .appearance
@@ -312,9 +416,8 @@ fn art(n: &Node, expand: bool) -> Option<Node> {
             if let Some(index) = item.effects().iter().position(|e| e.visible && e.id == REVOLVE) {
                 let fx = item.effects().get(index)?;
                 let p = geometry(&path, item.effects().get(..index)?, &ctx.item(item));
-                let (paint, opacity, blend) = paint_of(item);
                 let expand = expand && !item.effects().iter().skip(index + 1).any(|e| e.visible && is_geometry(&e.id));
-                let mut art = surface(n, &p, fx, paint, opacity, blend, expand)?;
+                let mut art = object_surface(n, &p, fx, item, expand, &mut copies)?;
                 art.appearance.effects = item.effects().iter().skip(index + 1).filter(|e| e.id != REVOLVE).cloned().collect();
                 children.push(Arc::new(art));
             } else {
@@ -322,6 +425,86 @@ fn art(n: &Node, expand: bool) -> Option<Node> {
             }
         }
     }
+    let mut art = n.clone();
+    art.kind = NodeKind::Group { children, clip: false };
+    art.appearance = Appearance { effects: remaining, ..Default::default() }.into();
+    Some(art)
+}
+
+/// The members' `surfaces` in order, from the [`Scope`] at `level` of each one's `Profile::scopes`
+/// inward: the surfaces of consecutive members that share a scope go in one group with its opacity
+/// and blending mode, so each applies once, to the members it holds together.
+fn scoped(id: NodeId, surfaces: Vec<(&[Scope], Node)>, level: usize) -> Vec<Arc<Node>> {
+    fn close(id: NodeId, run: &mut Vec<(&[Scope], Node)>, scope: Option<Scope>, level: usize, out: &mut Vec<Arc<Node>>) {
+        if let Some(scope) = scope {
+            let mut group = Node::group(id, scoped(id, std::mem::take(run), level + 1));
+            group.opacity = scope.opacity;
+            group.blend = scope.blend;
+            out.push(Arc::new(group));
+        }
+    }
+    let mut out = vec![];
+    let mut run = vec![];
+    let mut scope = None;
+    for (scopes, s) in surfaces {
+        let at = scopes.get(level).copied();
+        if at.map(|a| a.key) != scope.map(|s: Scope| s.key) {
+            close(id, &mut run, scope, level, &mut out);
+            scope = at;
+        }
+        if scope.is_some() {
+            run.push((scopes, s));
+        } else {
+            out.push(Arc::new(s));
+        }
+    }
+    close(id, &mut run, scope, level, &mut out);
+    out
+}
+
+/// [`art`] of group or layer `n`: every member swept about one axis on the bounds of all of them,
+/// each in its own paint. Opaque members' faces are drawn in one back-to-front order. `None` when
+/// the effect is only on the group's own fills or strokes or when its members can't be revolved.
+fn group_art(n: &Node, expand: bool) -> Option<Node> {
+    let index = n.appearance.effects.iter().position(|e| e.visible && e.id == REVOLVE)?;
+    let fx = n.appearance.effects.get(index)?;
+    let mut shapes = members(n, "").ok()?;
+    reshape_members(n, n.appearance.effects.get(..index)?, &mut shapes);
+    let b = union_bounds(&shapes)?;
+    let options = shared_options(&shapes, revolve_options(&merged_params(REVOLVE, &fx.params))).ok()?;
+    let expand = expand && !n.appearance.effects.iter().skip(index + 1).any(|e| e.visible && is_geometry(&e.id));
+    let mut copies = 0;
+    let mut surfaces = vec![];
+    let mut opaque = true;
+    for s in &shapes {
+        let Some(item) = surface_item(&s.items) else { continue };
+        // The opacity and blending of the member and the groups it is in apply through its scopes.
+        let (paint, opacity, blend) = paint_of(item);
+        opaque &= opacity >= 1.0 && blend == Default::default() && s.scopes.is_empty();
+        // A member with transparency of its own keeps every face, as a transparent object does.
+        let expand = expand && s.scopes.is_empty();
+        let (depths, art) = surface(n, &s.path, b, options, fx, paint, opacity, blend, expand, &mut copies)?;
+        surfaces.push((depths, art, s.scopes.as_slice()));
+    }
+    if surfaces.is_empty() {
+        return None;
+    }
+    let plain = surfaces.iter().all(|(depths, s, _)| matches!(&s.kind, NodeKind::Group { children, clip: false } if children.len() == depths.len()));
+    let children = if opaque && plain {
+        let mut faces = vec![];
+        for (depths, s, _) in surfaces {
+            if let NodeKind::Group { children, .. } = s.kind {
+                faces.extend(depths.into_iter().zip(children));
+            }
+        }
+        // A stable sort: faces at the same depth keep the members' order.
+        faces.sort_by(|a, b| a.0.total_cmp(&b.0));
+        vec![Arc::new(Node::group(n.id, faces.into_iter().map(|(_, face)| face).collect()))]
+    } else {
+        scoped(n.id, surfaces.into_iter().map(|(_, s, scopes)| (scopes, s)).collect(), 0)
+    };
+    let remaining =
+        n.appearance.effects.iter().enumerate().filter(|(i, e)| *i != index && (!is_geometry(&e.id) || *i > index)).map(|(_, e)| e.clone()).collect();
     let mut art = n.clone();
     art.kind = NodeKind::Group { children, clip: false };
     art.appearance = Appearance { effects: remaining, ..Default::default() }.into();
@@ -493,6 +676,213 @@ mod tests {
         let effect = n.appearance.effects.remove(0);
         n.appearance.items[0].effects_mut().push(effect);
         assert_eq!(expand_revolve_art(&n).unwrap().children().unwrap()[0], expanded.children().unwrap()[0]);
+    }
+
+    /// A closed rectangle `x` to `x + 10` across, filled solid.
+    fn member(id: u64, x: f64) -> Arc<Node> {
+        let mut b = BezPath::new();
+        b.move_to((x, 0.0));
+        b.line_to((x + 10.0, 0.0));
+        b.line_to((x + 10.0, 40.0));
+        b.line_to((x, 40.0));
+        b.close_path();
+        Arc::new(Node::path(NodeId(id), PathData::from_bezpath(&b), Appearance::basic(Paint::solid(Color::rgb(0.8, 0.2, 0.1)), Paint::None, 0.0)))
+    }
+
+    fn group_with(params: Value, children: Vec<Arc<Node>>) -> Node {
+        let mut g = Node::group(NodeId(9), children);
+        g.appearance.effects.push(crate::new_effect(REVOLVE, &params).unwrap());
+        g
+    }
+
+    #[test]
+    fn a_groups_members_share_the_axis_on_the_edge_of_them_all() {
+        let mut hidden = (*member(3, -500.0)).clone();
+        hidden.visible = false;
+        let nested = Arc::new(Node::group(NodeId(5), vec![member(4, 90.0)]));
+        let children = vec![member(1, 0.0), nested, Arc::new(hidden)];
+        // Left edge, 5 pt out: the axis at -5, the far wall (100) 105 from it.
+        let g = group_with(json!({"segments":32,"offset":5,"rotationX":0}), children.clone());
+        let b = revolve_art(&g).unwrap().visual_bounds().unwrap();
+        assert!((b.x0 + 110.0).abs() < 1.5 && (b.x1 - 100.0).abs() < 1.5, "{b:?}");
+        // Right edge, 5 pt out: the axis at 105, the far wall (0) 105 from it.
+        let g = group_with(json!({"segments":32,"offset":5,"edge":"right","rotationX":0}), children);
+        let b = revolve_art(&g).unwrap().visual_bounds().unwrap();
+        assert!((b.x1 - 210.0).abs() < 1.5 && (b.x0 - 0.0).abs() < 1.5, "{b:?}");
+    }
+
+    #[test]
+    fn opaque_members_share_one_back_to_front_order_and_others_keep_their_own_surfaces() {
+        let g = group_with(json!({"segments":16}), vec![member(1, 0.0), member(2, 50.0)]);
+        let art = revolve_art(&g).unwrap();
+        assert_eq!(art.children().unwrap().len(), 1, "one order for every face");
+        assert!(art.children().unwrap()[0].children().unwrap().len() > 16);
+        let mut faded = (*member(2, 50.0)).clone();
+        faded.opacity = 0.5;
+        let g = group_with(json!({"segments":16}), vec![member(1, 0.0), Arc::new(faded)]);
+        let art = revolve_art(&g).unwrap();
+        let surfaces = art.children().unwrap();
+        assert_eq!(surfaces.len(), 2, "a transparent member stays a surface of its own");
+        assert_eq!(surfaces[1].opacity, 0.5);
+    }
+
+    fn star(id: u64) -> Arc<Node> {
+        let anchors = (0..1200)
+            .map(|i| {
+                let (s, c) = (i as f64 * std::f64::consts::PI / 600.0).sin_cos();
+                let r = if i % 2 == 0 { 100.0 } else { 60.0 };
+                vectorcraft_geom::Anchor::corner(vectorcraft_geom::Point::new(200.0 + r * c, 200.0 + r * s))
+            })
+            .collect();
+        Arc::new(Node::path(
+            NodeId(id),
+            PathData::new(vec![vectorcraft_geom::SubPath::new(anchors, true)]),
+            Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+        ))
+    }
+
+    #[test]
+    fn a_groups_members_share_revolves_limits() {
+        let alone = group_with(json!({}), vec![star(1)]);
+        assert!(validate_revolve(&alone, &json!({})).is_ok());
+        let both = group_with(json!({}), vec![star(1), star(2)]);
+        let refused = validate_revolve(&both, &json!({})).unwrap_err();
+        assert!(refused.contains("reduce Segments"), "{refused}");
+        assert_eq!(revolve_art(&both), None, "past the limits the source draws");
+    }
+
+    #[test]
+    fn blending_modes_apply_once_to_the_member_or_group_that_has_them() {
+        use vectorcraft_doc::color::BlendMode;
+        let blend = |n: Arc<Node>, mode: BlendMode| {
+            let mut n = (*n).clone();
+            n.blend = mode;
+            Arc::new(n)
+        };
+        let inner = blend(member(4, 60.0), BlendMode::Multiply);
+        let screened = blend(Arc::new(Node::group(NodeId(5), vec![member(3, 40.0), inner])), BlendMode::Screen);
+        let group = group_with(json!({}), vec![blend(member(1, 0.0), BlendMode::Multiply), member(2, 20.0), screened]);
+        let art = revolve_art(&group).expect("revolved");
+        let modes = |n: &Node| match &n.kind {
+            NodeKind::Group { children, .. } => children.iter().map(|c| c.blend).collect::<Vec<_>>(),
+            _ => panic!("a group"),
+        };
+        assert_eq!(modes(&art), [BlendMode::Multiply, BlendMode::Normal, BlendMode::Screen], "a surface or group for each member");
+        let NodeKind::Group { children, .. } = &art.kind else { panic!("a group") };
+        let screened = &children[2];
+        assert_eq!(modes(screened), [BlendMode::Normal, BlendMode::Multiply], "the screened group's members, together, in their own modes");
+        let NodeKind::Group { children: inner, .. } = &screened.kind else { panic!("a group") };
+        assert_eq!(modes(&inner[1]).len(), 1, "the multiplied member's surface");
+        let plain = group_with(json!({}), vec![member(1, 0.0)]);
+        assert_ne!(expand_revolve_art(&plain), revolve_art(&plain), "an opaque member's hidden faces are removed");
+        let multiplied = group_with(json!({}), vec![blend(member(1, 0.0), BlendMode::Multiply)]);
+        assert_eq!(expand_revolve_art(&multiplied), revolve_art(&multiplied), "a blended member keeps every face");
+        // A nested group's opacity applies once, to its members' surfaces together.
+        let mut faded = Node::group(NodeId(6), vec![member(3, 40.0), member(4, 45.0)]);
+        faded.opacity = 0.5;
+        let art = revolve_art(&group_with(json!({}), vec![member(1, 0.0), Arc::new(faded)])).expect("revolved");
+        let NodeKind::Group { children, .. } = &art.kind else { panic!("a group") };
+        let opacities = |n: &Node| n.children().unwrap().iter().map(|c| c.opacity).collect::<Vec<_>>();
+        assert_eq!(children.iter().map(|c| c.opacity).collect::<Vec<_>>(), [1.0, 0.5]);
+        assert_eq!(opacities(&children[1]), [1.0, 1.0], "the faded group's members, together");
+    }
+
+    #[test]
+    fn a_3d_effect_on_a_groups_fill_is_refused() {
+        let mut group = Node::group(NodeId(9), vec![member(1, 0.0)]);
+        group.appearance = Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0).into();
+        for id in [REVOLVE, crate::EXTRUDE] {
+            assert!(crate::validate_three_d(&group, id, &json!({})).is_ok(), "{id} on the group itself");
+            let refused = crate::validate_three_d_at(&group, id, &json!({}), Some((0, 0))).unwrap_err();
+            assert!(refused.contains("on the group itself"), "{id}: {refused}");
+        }
+    }
+
+    #[test]
+    fn validation_measures_the_profile_after_the_geometry_effects_before_revolve() {
+        let roughen = crate::new_effect("distort.roughen", &json!({"size": 1, "detail": 100})).unwrap();
+        let mut group = group_with(json!({}), vec![star(1)]);
+        assert!(validate_revolve(&group, &json!({})).is_ok());
+        group.appearance.effects.insert(0, roughen.clone());
+        assert!(validate_revolve(&group, &json!({})).is_err(), "the group's reshaped member");
+        assert_eq!(revolve_art(&group), None);
+        let mut object = (*star(1)).clone();
+        assert!(validate_revolve(&object, &json!({})).is_ok());
+        object.appearance.effects.insert(0, roughen);
+        assert!(validate_revolve(&object, &json!({})).is_err(), "a reshaped object not yet revolved");
+    }
+
+    #[test]
+    fn paint_copies_past_the_budget_are_refused_for_the_whole_group() {
+        use vectorcraft_doc::color::{Gradient, GradientKind, GradientPaint, GradientStop};
+        let painted = |id: u64, x: f64, stops: usize| {
+            let stops = (0..stops).map(|i| GradientStop::new(i as f32 / stops as f32, Color::BLACK)).collect();
+            let paint = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+            let mut node = (*member(id, x)).clone();
+            node.appearance = Appearance::basic(paint, Paint::None, 0.0).into();
+            Arc::new(node)
+        };
+        let plain = member(1, 0.0);
+        let NodeKind::Path { path: profile, .. } = &plain.kind else { panic!("a path") };
+        let faces = vectorcraft_three_d::revolve(profile, profile.bounds().unwrap(), revolve_options(&json!({}))).unwrap().len();
+        let stops = MAX_PAINT_COPIES * 6 / 10 / (faces * 4) / std::mem::size_of::<GradientStop>();
+        let one = group_with(json!({}), vec![painted(1, 0.0, stops)]);
+        assert_eq!(validate_revolve(&one, &json!({})), Ok(()));
+        let two = group_with(json!({}), vec![painted(1, 0.0, stops), painted(2, 20.0, stops)]);
+        let refused = validate_revolve(&two, &json!({})).unwrap_err();
+        assert!(refused.contains("simplify the gradient"), "{refused}");
+        assert_eq!(revolve_art(&two), None, "past the budget the source draws");
+        let object = painted(3, 0.0, stops * 2);
+        assert!(validate_revolve(&object, &json!({})).is_err(), "one object past the budget");
+    }
+
+    #[test]
+    fn the_fills_of_one_object_share_the_budget_of_paint_copies() {
+        use vectorcraft_doc::color::{Gradient, GradientKind, GradientPaint, GradientStop};
+        let source = profile_node();
+        let NodeKind::Path { path: profile, .. } = &source.kind else { panic!("a path") };
+        let faces = vectorcraft_three_d::revolve(profile, profile.bounds().unwrap(), revolve_options(&json!({}))).unwrap().len();
+        let stops = MAX_PAINT_COPIES * 6 / 10 / (faces * 4) / std::mem::size_of::<GradientStop>();
+        let fill = |stops: usize, revolved: bool| {
+            let stops = (0..stops).map(|i| GradientStop::new(i as f32 / stops as f32, Color::BLACK)).collect();
+            let paint = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+            let mut item = AppearanceItem::Fill(FillLayer::new(paint));
+            if revolved {
+                item.effects_mut().push(fx());
+            }
+            item
+        };
+        let with = |items: Vec<AppearanceItem>| {
+            let mut n = source.clone();
+            n.appearance = Appearance { items, ..Default::default() }.into();
+            n
+        };
+        let one = with(vec![fill(stops, true)]);
+        assert!(revolve_art(&one).is_some());
+        assert_eq!(validate_item_revolve(&one, &json!({}), 0, 0), Ok(()));
+        let two = with(vec![fill(stops, true), fill(stops, true)]);
+        assert_eq!(revolve_art(&two), None, "past the budget the source draws");
+        let refused = validate_item_revolve(&two, &json!({}), 1, 0).unwrap_err();
+        assert!(refused.contains("simplify the gradient"), "{refused}");
+        let second = with(vec![fill(stops, true), fill(stops, false)]);
+        assert!(validate_item_revolve(&second, &json!({}), 1, 0).is_err(), "the item the effect goes on counts");
+        assert_eq!(validate_item_revolve(&second, &json!({}), 0, 0), Ok(()), "an item without a Revolve does not");
+        let below = with(vec![fill(stops * 2, false), fill(1, false)]);
+        assert!(validate_item_revolve(&below, &json!({}), 0, 0).is_err(), "the item's own paint, not the top fill");
+        assert_eq!(validate_item_revolve(&below, &json!({}), 1, 0), Ok(()));
+    }
+
+    #[test]
+    fn an_items_revolve_is_validated_after_only_the_geometry_effects_before_it() {
+        let roughen = crate::new_effect("distort.roughen", &json!({"size": 1, "detail": 100})).unwrap();
+        let mut object = (*star(1)).clone();
+        let mut hidden = fx();
+        hidden.visible = false;
+        let item = object.appearance.items.first_mut().unwrap();
+        item.effects_mut().push(hidden);
+        item.effects_mut().push(roughen);
+        assert_eq!(validate_item_revolve(&object, &json!({}), 0, 0), Ok(()), "the roughen after it is not swept");
+        assert!(validate_item_revolve(&object, &json!({}), 0, 2).is_err(), "a Revolve added after the roughen");
     }
 
     #[test]

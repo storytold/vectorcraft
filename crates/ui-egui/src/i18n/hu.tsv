@@ -5591,7 +5591,7 @@ imageTrace	Outline	Körvonal
 	Bevel both sides	Élletörés mindkét oldalon
 	Presets	Készletek
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Egy objektumnak csak egy 3D effektusa lehet. Szerkessze a meglévő effektus beállításait, vagy előbb távolítsa el.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} egyelőre görbét vagy összetett görbét igényel. Előbb alakítsa görbévé a szöveget, a képeket és a csoportokat.
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} egyelőre görbét, összetett görbét, szöveget vagy csoportot igényel. Előbb alakítsa görbévé a képeket és az egyéb objektumokat.
 @msg	{label} requires a shape with at least two anchors	{label} legalább két szerkesztőpontos alakzatot igényel
 @msg	The shape is too complex for a 3D effect	Az alakzat túl összetett a 3D effektushoz
 @msg	The 3D surface is too complex; simplify the shape	A 3D felület túl összetett; egyszerűsítse az alakzatot

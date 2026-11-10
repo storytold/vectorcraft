@@ -72,6 +72,37 @@ pub(super) fn color_op_in(op: &str, vals: &[V], names: &mut Names) -> Option<(Pa
     }
 }
 
+/// `n [c m y k /DeviceCMYK (name) /Separation] XC` (or `[r g b /DeviceRGB …]`) before an image: its
+/// samples are one ink's tints. The ink at 100 % as a paint, with the named colour that makes its
+/// spot swatch (none for Registration). `None` for a device space (`/DeviceGray XC`), the ink
+/// `None`, which paints nothing, or another form.
+pub(super) fn separation_ink(vals: &[V], names: &mut Names) -> Option<(Paint, Option<Named>)> {
+    let a = vals.iter().rev().find_map(|v| if let V::Arr(a) = v { Some(a) } else { None })?;
+    let [.., name @ V::Str(_), V::Name(kind)] = a.as_slice() else { return None };
+    if kind.trim_start_matches('/') != "Separation" {
+        return None;
+    }
+    let color = super::mesh::ink(a)?;
+    let name = names.text(name)?;
+    if name == "None" {
+        return None;
+    }
+    if is_registration(&name) {
+        let paint = Paint::Solid { color: Color::cmyk(1.0, 1.0, 1.0, 1.0), swatch: Some(vectorcraft_color::swatch::REGISTRATION.into()), tint: 1.0 };
+        return Some((paint, None));
+    }
+    // A process plate is its CMYK colour, not a spot ink: no swatch of its name.
+    if let Some(plate) = ["Cyan", "Magenta", "Yellow", "Black"].iter().position(|p| *p == name) {
+        let mut cmyk = [0.0; 4];
+        if let Some(v) = cmyk.get_mut(plate) {
+            *v = 1.0;
+        }
+        return Some((Paint::solid(Color::cmyk(cmyk[0], cmyk[1], cmyk[2], cmyk[3])), None));
+    }
+    let paint = Paint::Solid { color, swatch: Some(name.clone()), tint: 1.0 };
+    Some((paint, Some(Named { name, color, tint: 1.0, spot: true })))
+}
+
 fn is_registration(name: &str) -> bool {
     matches!(name, vectorcraft_color::swatch::REGISTRATION | "Registration" | "/All" | "All" | "/[Registration]")
 }

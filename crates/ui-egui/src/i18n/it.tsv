@@ -5217,7 +5217,7 @@ lighting	Light	Luce
 	Bevel both sides	Smusso su entrambi i lati
 	Presets	Predefiniti
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Un oggetto può avere un solo effetto 3D. Modificate le opzioni dell'effetto esistente oppure rimuovetelo prima.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} richiede per ora un tracciato o un tracciato composto. Convertite prima testo, immagini e gruppi in tracciati.
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} richiede per ora un tracciato, un tracciato composto, testo o un gruppo. Convertite prima immagini e altri oggetti in tracciati.
 @msg	{label} requires a shape with at least two anchors	{label} richiede una forma con almeno due punti di ancoraggio
 @msg	The shape is too complex for a 3D effect	La forma è troppo complessa per un effetto 3D
 @msg	The 3D surface is too complex; simplify the shape	La superficie 3D è troppo complessa; semplificate la forma

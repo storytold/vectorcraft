@@ -5478,7 +5478,7 @@ lighting	Light	光源
 	Bevel both sides	双面斜角
 	Presets	预设
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	一个对象只能应用一种 3D 效果。请编辑现有效果的选项，或先将其移去。
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label}目前需要路径或复合路径。请先将文字、图像和编组转换为路径。
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label}目前需要路径、复合路径、文字或编组。请先将图像和其他对象转换为路径。
 @msg	{label} requires a shape with at least two anchors	{label}需要至少有两个锚点的形状
 @msg	The shape is too complex for a 3D effect	形状过于复杂，无法应用 3D 效果
 @msg	The 3D surface is too complex; simplify the shape	3D 表面过于复杂；请简化形状

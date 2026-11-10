@@ -4969,7 +4969,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Bevel Inside	Εσωτερική λοξότμηση
 	Bevel both sides	Λοξότμηση και των δύο πλευρών
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Ένα αντικείμενο δέχεται ένα εφέ 3D. Επεξεργαστείτε τις επιλογές του υπάρχοντος εφέ ή αφαιρέστε το πρώτα.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	Το {label} απαιτεί προς το παρόν διαδρομή ή σύνθετη διαδρομή. Μετατρέψτε πρώτα το κείμενο, τις εικόνες και τις ομάδες σε διαδρομές.
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	Το {label} απαιτεί προς το παρόν διαδρομή, σύνθετη διαδρομή, κείμενο ή ομάδα. Μετατρέψτε πρώτα τις εικόνες και τα άλλα αντικείμενα σε διαδρομές.
 @msg	{label} requires a shape with at least two anchors	το {label} απαιτεί σχήμα με τουλάχιστον δύο σημεία αγκύρωσης
 @msg	The shape is too complex for a 3D effect	Το σχήμα είναι πολύ σύνθετο για εφέ 3D
 @msg	The 3D surface is too complex; simplify the shape	Η επιφάνεια 3D είναι πολύ σύνθετη· απλοποιήστε το σχήμα

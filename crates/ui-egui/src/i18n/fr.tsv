@@ -5179,7 +5179,7 @@ lighting	Light	Lumière
 	Bevel both sides	Biseau des deux côtés
 	Presets	Paramètres prédéfinis
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Un objet n'accepte qu'un seul effet 3D. Modifiez les options de l'effet existant ou supprimez-le d'abord.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} nécessite pour l'instant un tracé ou un tracé transparent. Convertissez d'abord le texte, les images et les groupes en tracés.
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} nécessite pour l'instant un tracé, un tracé transparent, du texte ou un groupe. Convertissez d'abord les images et les autres objets en tracés.
 @msg	{label} requires a shape with at least two anchors	{label} nécessite une forme comportant au moins deux points d'ancrage
 @msg	The shape is too complex for a 3D effect	La forme est trop complexe pour un effet 3D
 @msg	The 3D surface is too complex; simplify the shape	La surface 3D est trop complexe ; simplifiez la forme

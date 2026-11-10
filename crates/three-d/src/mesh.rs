@@ -76,10 +76,11 @@ pub fn inflate_meshes(
 }
 
 /// Revolve's surface ([`crate::revolve`]) as a mesh. As the effect draws it, a sweep of less than
-/// 360° caps its ends with sectors and leaves its two cut sides open ([`Revolve::cap_ends`]).
-pub fn revolve_mesh(path: &PathData, bounds: Rect, options: Revolve) -> Result<Mesh, String> {
+/// 360° caps its ends with sectors and leaves its two cut sides open ([`Revolve::cap_ends`]). The
+/// walls of holes under `rule`, such as the counter of an O, face into the hole.
+pub fn revolve_mesh(path: &PathData, rule: FillRule, bounds: Rect, options: Revolve) -> Result<Mesh, String> {
     let mut faces = vec![];
-    crate::revolve_faces(path, bounds, options, Some(&mut faces))?;
+    crate::revolve_faces(path, rule, bounds, options, Some(&mut faces))?;
     mesh(&faces)
 }
 
