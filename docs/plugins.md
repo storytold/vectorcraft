@@ -407,7 +407,7 @@ arguments as a JSON object, the params the command takes from any request:
 `-3` when the arguments are not a JSON object, `-4` when `commandAllowlist` doesn't list the id, `-5` when no command
 has the id, `-6` when a plug-in may not call the command, `-7` when the command can't run now (nothing is selected),
 `-8` when the command ran and failed, `-9` when a limit below is passed, and `-11` when nothing can be called (from
-the module's start function, or in a run that isn't a filter's run on a document).
+the module's start function, in a run that isn't a filter's run on a document, or after a call in the run failed).
 
 - Every code also fails the run, whatever the plug-in does next, and the error names the call and why it failed. The run's calls and its output are one undo step, named after the plug-in or its command. A run that fails,
   traps, runs out of budget or is canceled leaves every document, its selection and its history as they were.
