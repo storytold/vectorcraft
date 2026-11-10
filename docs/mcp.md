@@ -4083,8 +4083,9 @@ outlines and its underline and strikethrough bars. This applies to each point ty
 default.
 
 A width or height typed with the option on scales the type until its ink has that size. The type stays live type: its
-font size changes by the scale, so `object.setBounds {height: 72}` on "H" gives the cap height 72 pt, not a 72 pt
-font. With Use Preview Bounds on, the ink takes in the characters' strokes, and type with geometry effects is
+font size changes by the vertical scale, so `object.setBounds {height: 72}` on "H" gives the cap height 72 pt, not a
+72 pt font. A width typed alone, out of proportion, changes the horizontal scale and keeps the font size, and a height
+typed alone keeps the width, so the horizontal scale changes the other way. With Use Preview Bounds on, the ink takes in the characters' strokes, and type with geometry effects is
 measured as drawn. Rotated type keeps its own angle, and skewed type is measured by its glyph outlines. Type that
 draws nothing (no text, or only spaces without underline or strikethrough), area type, type on a path and type inside
 a selected group are measured as before. Arrange in Grid and Group Overlapping Objects measure visual bounds as
