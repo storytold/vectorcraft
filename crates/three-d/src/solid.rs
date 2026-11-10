@@ -11,7 +11,7 @@
 
 use vectorcraft_geom::{BezPath, FillRule, ParamCurve, PathData, Point, Rect, Vec2};
 
-use crate::{MAX_FACES, Revolve, V3, eye_distance, perspective_scale};
+use crate::{MAX_FACES, MAX_SOLID_FACES, Revolve, V3, eye_distance, perspective_scale};
 
 mod build;
 mod inflate;
@@ -319,3 +319,6 @@ mod tests;
 
 #[cfg(test)]
 mod tests_inflate_shading;
+
+#[cfg(test)]
+mod tests_limits;

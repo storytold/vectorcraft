@@ -277,11 +277,14 @@ fn malformed_and_degenerate_input_is_bounded() {
     // Too many anchors: refused, not truncated.
     let mut many = BezPath::new();
     many.move_to((0.0, 0.0));
-    for i in 0..3000 {
+    for i in 0..70_000 {
         many.line_to((f64::from(i), f64::from(i % 7)));
     }
     many.close_path();
-    assert!(extrude(&PathData::from_bezpath(&many), FillRule::EvenOdd, b, Extrude::default(), front()).is_err());
+    assert_eq!(
+        extrude(&PathData::from_bezpath(&many), FillRule::EvenOdd, b, Extrude::default(), front()).unwrap_err(),
+        "The shape is too complex for a 3D effect"
+    );
 }
 
 #[test]
@@ -374,8 +377,7 @@ fn bumps(count: usize) -> (PathData, Rect) {
 }
 
 /// Curves are followed within a tolerance rather than by sixteen points each: small curves take a
-/// few points, so shapes of many curves (outlined type) fit; Rotate, which only turns the outline,
-/// takes far more.
+/// few points, so shapes of many curves (outlined type) fit, in a solid and in Rotate.
 #[test]
 fn small_curves_take_few_points_and_rotate_takes_large_outlines() {
     // 300 curves were 4,800 points at sixteen each, over the old limit of 1,024.
@@ -383,10 +385,13 @@ fn small_curves_take_few_points_and_rotate_takes_large_outlines() {
     assert!(extrude(&p, FillRule::EvenOdd, r, Extrude::default(), front()).is_ok());
     assert!(inflate(&p, FillRule::EvenOdd, r, Inflate { volume: 20.0, ..Inflate::default() }, front()).is_ok());
     assert!(plane(&p, FillRule::EvenOdd, r, front()).is_ok());
-    // 4,000 curves: too many for a solid, not for Rotate.
+    // 4,000 curves fit a solid and Rotate alike; 70,000 fit neither.
     let (p, r) = bumps(4000);
-    assert!(extrude(&p, FillRule::EvenOdd, r, Extrude::default(), front()).unwrap_err().contains("too complex"));
+    assert!(extrude(&p, FillRule::EvenOdd, r, Extrude::default(), front()).is_ok());
     assert_eq!(plane(&p, FillRule::EvenOdd, r, front()).unwrap().len(), 1);
+    let (p, r) = bumps(70_000);
+    assert_eq!(extrude(&p, FillRule::EvenOdd, r, Extrude::default(), front()).unwrap_err(), "The shape is too complex for a 3D effect");
+    assert_eq!(plane(&p, FillRule::EvenOdd, r, front()).unwrap_err(), "The shape is too complex for a 3D effect");
     // Each piece stays within the tolerance of the curve: a circle's chords sag at most 0.05 pt
     // here (1/2000 of its 100 pt size is less).
     let mut c = BezPath::new();
@@ -1019,7 +1024,7 @@ fn flat_far_and_too_large_merges() {
     let squares: Vec<_> = (0..12).map(|i| rect(i as f64 * 20.0, 0.0, i as f64 * 20.0 + 10.0, 10.0)).collect();
     let line = vectorcraft_geom::SubPath::polyline(&[Point::new(0.0, 300.0), Point::new(50.0, 300.0), Point::new(100.0, 300.0)], false);
     let with_line = PathData::new(squares.iter().cloned().chain([line]).collect());
-    assert!(!rings::meets(&rings::sample(&with_line, 300.0, usize::MAX).unwrap(), &rings::closed_straight(&with_line)));
+    assert!(!rings::meets(&rings::sample(&with_line, 300.0, usize::MAX, rings::CURVE_PIECES).unwrap(), &rings::closed_straight(&with_line)));
     assert!(close(area(&plane(&with_line, FillRule::NonZero, with_line.bounds().unwrap(), front()).unwrap()), 1200.0, 1e-6));
     // Far from the origin the boolean snaps wider than 1e-6 (1.4e-6 at 9.9e7), and so does the
     // test for meeting: squares 1.35e-6 apart there are one outline, one cap of both areas.
@@ -1049,9 +1054,8 @@ fn flat_far_and_too_large_merges() {
     let b = wide.bounds().unwrap();
     let joined = plane(&wide, FillRule::NonZero, b, front()).unwrap();
     assert_eq!(joined.iter().map(|f| f.contours.len()).sum::<usize>(), 2, "the squares joined, the lobe apart");
-    // 24 bars each way: 192 points as drawn, some 2,400 once every hole between them is traced:
-    // past Extrude's and Inflate's 2,048 the shape is too complex (its contours as drawn cross, so
-    // they can't be built as they are), and Rotate's 65,536 takes it.
+    // 24 bars each way: 192 points as drawn, some 2,400 once every hole between them is traced,
+    // within the 65,536 points Extrude & Bevel, Inflate and Rotate take.
     let mut bars = vec![];
     for i in 0..24 {
         let x = i as f64 * 10.0;
@@ -1061,9 +1065,18 @@ fn flat_far_and_too_large_merges() {
     let grid = PathData::new(bars);
     let b = grid.bounds().unwrap();
     for rule in [FillRule::NonZero, FillRule::EvenOdd] {
-        assert_eq!(extrude(&grid, rule, b, Extrude::default(), front()).unwrap_err(), "The shape is too complex for a 3D effect", "{rule:?}");
-        assert_eq!(inflate(&grid, rule, b, Inflate::default(), front()).unwrap_err(), "The shape is too complex for a 3D effect", "{rule:?}");
-        assert!(close(area(&plane(&grid, rule, b, front()).unwrap()), vectorcraft_pathops::area(&grid, rule), 1e-6), "{rule:?}: Rotate");
+        // With a limit of 2,048 points the grid fits as drawn and its merged outline does not: its
+        // contours as drawn cross, so they can't be built as they are.
+        assert!(rings::sample(&grid, 240.0, 2048, rings::CURVE_PIECES).is_ok());
+        assert_eq!(
+            rings::solid_rings(&grid, rule, 240.0, 2048, rings::CURVE_PIECES),
+            Err("The shape is too complex for a 3D effect".into()),
+            "{rule:?}"
+        );
+        let expected = vectorcraft_pathops::area(&grid, rule);
+        assert!(close(area(&extrude(&grid, rule, b, Extrude::default(), front()).unwrap()), expected, 1e-6), "{rule:?}: Extrude & Bevel");
+        assert!(!inflate(&grid, rule, b, Inflate::default(), front()).unwrap().is_empty(), "{rule:?}: Inflate");
+        assert!(close(area(&plane(&grid, rule, b, front()).unwrap()), expected, 1e-6), "{rule:?}: Rotate");
     }
 }
 
@@ -1076,7 +1089,7 @@ fn meets_within_twice_the_boolean_tolerance() {
     let rect = |x0: f64, y0: f64, x1: f64, y1: f64| {
         vectorcraft_geom::SubPath::polyline(&[Point::new(x0, y0), Point::new(x1, y0), Point::new(x1, y1), Point::new(x0, y1)], true)
     };
-    let meets = |p: &PathData| rings::meets(&rings::sample(p, 300.0, usize::MAX).unwrap(), &rings::closed_straight(p));
+    let meets = |p: &PathData| rings::meets(&rings::sample(p, 300.0, usize::MAX, rings::CURVE_PIECES).unwrap(), &rings::closed_straight(p));
     // Two triangles whose facing 45° edges are 1.4e-6 apart, the second's corners 0.99e-6 lower on
     // the page (greater y) than the first's: snapped onto the first's heights, they are joined.
     let d = 0.99e-6;

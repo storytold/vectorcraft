@@ -1,7 +1,12 @@
 use super::build::{Builder, Built, Camera, Order, Turn, check_bounds, cuts, fit, newell, outward};
 use super::membrane::{Edges, MAX_MATERIAL_SEGMENTS, Membrane, cell_triangles, clip, filled, material};
-use super::rings::{MAX_SOLID_POINTS, signed_area, solid_rings};
-use super::{Facet, FillRule, Inflate, MAX_FACES, PathData, Point, Rect, V3, Vec2, View};
+use super::rings::{MAX_SOLID_POINTS, TOO_COMPLEX_SURFACE, curve_pieces, signed_area, solid_rings};
+use super::{Facet, FillRule, Inflate, MAX_FACES, MAX_SOLID_FACES, PathData, Point, Rect, V3, Vec2, View};
+
+/// The slices the sides are cut into: more to follow a twist or taper.
+fn slices(o: &Inflate) -> usize {
+    if o.twist != 0.0 || o.taper != 1.0 { ((o.twist.abs() / 6.0).ceil() as usize).clamp(8, 64) } else { 1 }
+}
 
 /// A shape to inflate: its rings and the membrane under them on the grid of the bounds.
 struct Puff {
@@ -18,11 +23,14 @@ struct Puff {
 
 /// The rings of `path` and its membrane on the grid of `bounds`; `None` for a shape with no area.
 fn puff(path: &PathData, rule: FillRule, bounds: Rect, o: &Inflate) -> Result<Option<Puff>, String> {
-    let rings = solid_rings(path, rule, bounds.width().max(bounds.height()), MAX_SOLID_POINTS)?;
+    // The sides take one face for each edge of the outline in each slice; the grid's faces are
+    // counted as they are built.
+    let size = bounds.width().max(bounds.height());
+    let most = curve_pieces(path, size, if o.depth > 0.0 { slices(o) } else { 0 }, 0)?;
+    let rings = solid_rings(path, rule, size, MAX_SOLID_POINTS, most)?;
     if rings.is_empty() {
         return Ok(None);
     }
-    let size = bounds.width().max(bounds.height());
     if size <= 0.0 {
         return Ok(None);
     }
@@ -312,7 +320,7 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64, mesh: boo
     }
     if o.depth > 0.0 {
         // The sides, cut into slices that follow a twist or taper.
-        let slices = if o.twist != 0.0 || o.taper != 1.0 { ((o.twist.abs() / 6.0).ceil() as usize).clamp(8, 64) } else { 1 };
+        let slices = slices(&o);
         let at = |ring: &[Point], k: usize| -> Vec<V3> {
             let t = k as f64 / slices as f64;
             let turn = Turn::new(bounds, o.twist, o.taper, t);
@@ -320,6 +328,10 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64, mesh: boo
         };
         let mut pieces: Vec<Vec<usize>> = rings.iter().map(|r| if o.twist != 0.0 { cuts(&at(r, 0), &at(r, 1)) } else { vec![] }).collect();
         fit(&mut pieces, slices, MAX_FACES.saturating_sub(b.len()));
+        let edges = rings.iter().map(Vec::len).fold(0usize, usize::saturating_add);
+        if b.len().saturating_add(edges.saturating_mul(slices)) > MAX_SOLID_FACES {
+            return Err(TOO_COMPLEX_SURFACE.into());
+        }
         for (ring, pieces) in rings.iter().zip(&pieces) {
             for k in 0..slices {
                 b.band(&at(ring, k), &at(ring, k + 1), pieces, |i| outward(ring, i, 0.0))?;

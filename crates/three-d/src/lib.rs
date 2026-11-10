@@ -25,6 +25,8 @@ const MAX_PROFILE_POINTS: usize = 16_384;
 const MAX_FACES: usize = 32768;
 /// Most faces Revolve builds for one object, its members together: about 460 MB of drawn art.
 const MAX_REVOLVE_FACES: usize = 163_840;
+/// Most faces Extrude & Bevel and Inflate build for one solid, as many as Revolve's.
+const MAX_SOLID_FACES: usize = MAX_REVOLVE_FACES;
 /// Samples a curved profile segment takes, and the fewest it takes on a surface over its budget.
 const CURVE_SAMPLES: usize = 16;
 const MIN_CURVE_SAMPLES: usize = 4;
