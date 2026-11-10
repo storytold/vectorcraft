@@ -4,7 +4,7 @@
 
 > Numeric spinner update (2026-11-10): held mouse arrows repeat past the click timeout; scores and estimates unchanged (#6307).
 
-> Shape Modes update (2026-11-10): Alt-click on Unite, Minus Front, Intersect or Exclude in the Properties panel, and on the Contextual Task Bar's Unite, makes a compound shape as the Pathfinder panel's buttons do; the Compound Shapes setting and selected members apply there too; scores and estimates unchanged (#6333).
+> Shape Modes update (2026-11-10): the Properties panel's Unite, Minus Front, Intersect and Exclude and the Contextual Task Bar's Unite act as the Pathfinder panel's Shape Modes: with no compound-shape members selected, Alt-click makes a compound shape and a plain click gives the permanent result (the other way round with the Compound Shapes setting on); with members selected, a click sets their mode and Alt-click makes a compound shape of them; scores and estimates unchanged (#6333).
 
 ## Feature submission evidence
 
@@ -501,7 +501,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 | Date | Change | Summary |
 |---|---|---|
 | 2026-11-10 | minor | Held numeric spinner arrows keep stepping past the click timeout and stop on release (#6307). Scores and estimates unchanged. |
-| 2026-11-10 | minor | Shape Modes: Alt-click on the Properties panel's Unite, Minus Front, Intersect and Exclude and on the Contextual Task Bar's Unite makes a compound shape as the Pathfinder panel's buttons do; the Compound Shapes setting and selected members apply there too (#6333). Scores and estimates unchanged. |
+| 2026-11-10 | minor | Shape Modes: the Properties panel's Unite, Minus Front, Intersect and Exclude and the Contextual Task Bar's Unite act as the Pathfinder panel's: with no compound-shape members selected, Alt-click makes a compound shape and a plain click gives the permanent result (the other way round with the Compound Shapes setting on); with members selected, a click sets their mode and Alt-click makes a compound shape of them (#6333). Scores and estimates unchanged. |
 | 2026-11-09 | minor | Interim macOS canvas cursor delivery (#2292): existing artwork in aligned 1×/2× AppKit representations, visible system fallback and host-owned restoration. Headless routing, bitmap and ownership coverage; native timing, menus, focus/handback, mixed displays, Spotlight and full-screen Spaces remain unverified. Scores and estimates unchanged. |
 | 2026-11-08 | minor | Floating tab groups collapse into the side icon rail and opened rail panels fold back into it (#5925, in part); tab groups remain intact. Scores and estimates unchanged. |
 | 2026-11-09 | minor | Numeric fields step on wheel hover without taking focus; keyboard focus and existing rounding rules remain (#5949). Scores and estimates unchanged. |

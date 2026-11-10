@@ -4,7 +4,7 @@
 
 > Numeric spinner update (2026-11-10): held mouse arrows repeat past the click timeout; scores and estimates unchanged (#6307).
 
-> Shape Modes update (2026-11-10): Alt-click on the Properties panel's Shape Modes and the Contextual Task Bar's Unite makes a compound shape, as in the Pathfinder panel; scores and estimates unchanged (#6333).
+> Shape Modes update (2026-11-10): the Properties panel's Shape Modes and the Contextual Task Bar's Unite act as the Pathfinder panel's: with no compound-shape members selected, Alt-click makes a compound shape and a plain click gives the permanent result (the other way round with the Compound Shapes setting on); with members selected, a click sets their mode and Alt-click makes a compound shape of them; scores and estimates unchanged (#6333).
 
 ## Feature submission evidence
 
@@ -206,7 +206,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 | 2026-11-08 | minor | M7: spell check engine, `text.spelling.check` and `text.spelling.suggest` on craft-proof (#4936); the dialog, Auto Spell Check and the custom dictionary remain; scores and estimates unchanged. |
 | 2026-11-08 | minor | Floating tab groups collapse into the side icon rail and opened rail panels fold back into it (#5925, in part); tab groups remain intact. Scores and estimates unchanged. |
 | 2026-11-10 | minor | Held numeric spinner arrows keep stepping past the click timeout and stop on release (#6307). Scores and estimates unchanged. |
-| 2026-11-10 | minor | Shape Modes: Alt-click on the Properties panel's Unite, Minus Front, Intersect and Exclude and on the Contextual Task Bar's Unite makes a compound shape as the Pathfinder panel's buttons do; the Compound Shapes setting and selected members apply there too (#6333). Scores and estimates unchanged. |
+| 2026-11-10 | minor | Shape Modes: the Properties panel's Unite, Minus Front, Intersect and Exclude and the Contextual Task Bar's Unite act as the Pathfinder panel's: with no compound-shape members selected, Alt-click makes a compound shape and a plain click gives the permanent result (the other way round with the Compound Shapes setting on); with members selected, a click sets their mode and Alt-click makes a compound shape of them (#6333). Scores and estimates unchanged. |
 | 2026-11-09 | minor | Numeric fields step on wheel hover without taking focus; keyboard focus and existing rounding rules remain (#5949). Scores and estimates unchanged. |
 | 2026-11-07 | minor | M2: with the Pen or Curvature tool, Edit › Copy and Cut take the anchors and segments a Cmd/Ctrl-lent Direct Selection picked, not the whole path (#6123); estimates unchanged |
 | 2026-11-07 | minor | Control bar › Snapping includes the existing Snap to Glyph and Alignment Guides toggles (#6164); scores and estimates unchanged. |
