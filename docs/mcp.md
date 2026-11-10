@@ -3081,6 +3081,14 @@ the old name. A rename gives the new name to the pattern's swatches that had the
 old name keeps it. A blank name gives "New Pattern N" in `object.pattern.make` and "`<pattern>` copy" in
 `object.pattern.saveCopy`, and `pattern.options` keeps the name.
 
+The pattern commands (`object.pattern.make`, `object.pattern.edit`, `object.pattern.saveCopy`, `pattern.options`,
+`pattern.delete`) and the Repeat commands (`object.repeat.radial`, `object.repeat.grid`, `object.repeat.mirror`,
+`object.repeat.options`) reject a param of the wrong type, such as `"instances": "8"`, `"edit": "false"` or
+`"tileType": 2`, and change nothing. `pattern.options` also rejects an `overlap` that is not an object, and an
+`overlap.h` other than `left` or `right` or an `overlap.v` other than `top` or `bottom`. `object.repeat.options` rejects
+a `center` that is not `[x, y]`, and `object.repeat.radial` rejects a negative `radius`. Omitting a param or giving null
+keeps its default.
+
 ```json
 {"name":"run_command","arguments":{"command":"pattern.options","params":{"showSwatchBounds":true}}}
 {"name":"run_command","arguments":{"command":"prefs.set","params":{"key":"patternTileEdgeColor","value":"#ff4f4f"}}}
