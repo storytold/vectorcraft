@@ -208,19 +208,38 @@ fn upright(m: &GradientMesh) -> Option<(u32, u32, Vec<GridPoint>)> {
     let mut pts: Vec<GridPoint> = m.points.iter().map(|q| (q.p, q.handles)).collect();
     let at = |pts: &[GridPoint], cols: u32, r: u32, c: u32| pts.get((r * (cols + 1) + c) as usize).map_or(Point::ZERO, |q| q.0);
     let remap = |h: [Vec2; 4], slots: [usize; 4]| slots.map(|s| h.get(s).copied().unwrap_or(Vec2::ZERO));
-    // How the grid runs along its rows (its first and last rows, end to end added up) and down its
-    // columns (its first and last columns): read from both sides, a grid bent far round (its end
-    // columns leaning more than halfway over) still reads the way it runs.
+    // How far the grid reaches: a run much shorter than that is rounding, not a direction.
+    let reach = {
+        let first = pts.first().map_or(Point::ZERO, |q| q.0);
+        let bounds = pts.iter().fold(Rect::from_points(first, first), |b, q| b.union_pt(q.0));
+        bounds.width().hypot(bounds.height()) * 1e-6
+    };
+    // How the grid runs along its rows (every row end to end, added up) and down its columns (every
+    // column): read from all of them, a grid bent far round (its end columns leaning more than
+    // halfway over) still reads the way it runs. Each sum comes with how long its parts are: where
+    // they nearly cancel out, as in a ring, what is left is rounding, not a direction, and the grid
+    // reads by its first row or column instead.
     let runs = |pts: &[GridPoint], rows: u32, cols: u32| {
-        let along = (at(pts, cols, 0, cols) - at(pts, cols, 0, 0)) + (at(pts, cols, rows, cols) - at(pts, cols, rows, 0));
-        let down = (at(pts, cols, rows, 0) - at(pts, cols, 0, 0)) + (at(pts, cols, rows, cols) - at(pts, cols, 0, cols));
-        (along, down)
+        let (mut along, mut down, mut along_len, mut down_len) = (Vec2::ZERO, Vec2::ZERO, 0.0, 0.0);
+        for r in 0..=rows {
+            let v = at(pts, cols, r, cols) - at(pts, cols, r, 0);
+            (along, along_len) = (along + v, along_len + v.hypot());
+        }
+        for c in 0..=cols {
+            let v = at(pts, cols, rows, c) - at(pts, cols, 0, c);
+            (down, down_len) = (down + v, down_len + v.hypot());
+        }
+        let clear = |v: Vec2, len: f64| (v.hypot() >= len * 0.01 && v.hypot() > reach).then_some(v);
+        let first_row = at(pts, cols, 0, cols) - at(pts, cols, 0, 0);
+        let first_col = at(pts, cols, rows, 0) - at(pts, cols, 0, 0);
+        (clear(along, along_len).unwrap_or(first_row), clear(down, down_len).unwrap_or(first_col))
     };
     // How much of a run is across the page.
     let level = |v: Vec2| if v.hypot() > 0.0 { v.x.abs() / v.hypot() } else { 0.0 };
-    // Columns that run across the page more than rows do: the grid goes the other way round.
+    // Columns that run across the page more than rows do: the grid goes the other way round. Nearly
+    // as much (a grid turned an eighth round) keeps the file's way round.
     let (along, down) = runs(&pts, rows, cols);
-    if level(down) > level(along) {
+    if level(down) > level(along) + 1e-3 {
         let mut t = Vec::with_capacity(len);
         for r in 0..=cols {
             for c in 0..=rows {
