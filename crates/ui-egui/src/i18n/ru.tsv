@@ -4375,6 +4375,11 @@ axis	Both	Оба
 @msg	internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)	внутренняя ошибка в `{cmd}`: {msg} (документ оставлен в прежнем состоянии; пожалуйста, сообщите об этой ошибке)
 @msg	internal error: {msg} (please report this bug)	внутренняя ошибка: {msg} (пожалуйста, сообщите об этой ошибке)
 @msg	invalid PDF setting: {0}	недопустимый параметр PDF: {0}
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	страница монтажной области {n} имеет размер {size}, что больше ограничения PDF на размер страницы в 14 400 pt (200 in): она записывается с UserUnit {unit}, поэтому приложения, которые игнорируют UserUnit, показывают её во столько же раз меньше
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	страница монтажной области {n} имеет размер {size}, что больше ограничения PDF на размер страницы в 14 400 pt (200 in): страницы {label} записываются без UserUnit, в пунктах, и приложения, соблюдающие ограничение, обрезают страницу до 200 in
+@msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	в PDF 1.5 нет UserUnit, который нужен странице длиннее 14 400 pt (200 in), чтобы сохранить размер: файл записывается как PDF 1.6
+@msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	страница монтажной области {n} имеет размер {size} и слишком длинная и узкая для сторон страницы PDF от 3 до 14 400 единиц: она записывается с UserUnit {unit}, которая держит короткую сторону не меньше 3 единиц, а приложения, соблюдающие предел, обрезают длинную сторону до 14 400 единиц
+@msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	файлы {label} вмещают вещественные числа до {max}, а странице монтажной области {n} длиной {side} pt нужны большие: выберите PDF 1.6 или новее без стандарта PDF/X или монтажную область меньшего размера
 @msg	invalid image data for `{0}`	недопустимые данные изображения для `{0}`
 @msg	invalid parameters for `{cmd}`: {msg}	недопустимые параметры для `{cmd}`: {msg}
 @msg	is not an image VectorCraft reads	не является изображением, которое читает VectorCraft
@@ -5581,6 +5586,20 @@ axis	Y Axis	Ось Y
 	Show its progress, see Cancel and write log lines	Показывать свой ход выполнения, замечать отмену и записывать строки журнала
 	Keep settings of its own	Хранить собственные настройки
 	Keep a cache of its own, which you can clear	Хранить собственный кэш, который можно очистить
+	Run these commands on the document: {ids}	Выполнять в документе эти команды: {ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	«{name}» указывает в `commandAllowlist` команду `{id}`, которую модуль вызывать не может
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: в `commandAllowlist` манифеста её нет
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: ID или аргументы лежат вне памяти модуля
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: ID или аргументы не в UTF-8
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: аргументы не являются объектом JSON
+@msg	only a filter with the usual budget declares `commandAllowlist`	`commandAllowlist` может объявлять только фильтр с обычным бюджетом
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	вызовы команд ({MAX_CALLS} вызовов и {MAX_CALL_BYTES} байт за запуск)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	размер вызова команды (vc_call `{shown}`: {len} байт, предел {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	не более {MAX_ALLOWED_COMMANDS} команд в `commandAllowlist`
+@msg	a plug-in may not call this command	модуль не может вызывать эту команду
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	для `commandAllowlist` нужно разрешение `commands`, а для `commands` нужен `commandAllowlist`
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist` указывает `{shown}`, который не является ID команды или указан дважды
 	Clear Plug-in Cache	Очистить кэш модуля
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	разрешению `{permission}` нужен уровень API модулей {PROGRESS_API}: укажите `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	модуль импортирует `env.{name}` с другим типом, чем у хоста: у хоста тип {signature}

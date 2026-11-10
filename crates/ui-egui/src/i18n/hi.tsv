@@ -5292,6 +5292,20 @@ antiAlias	Sharp	शार्प
 	Show its progress, see Cancel and write log lines	अपनी प्रगति दिखाना, रद्द करने का अनुरोध देखना और लॉग पंक्तियाँ लिखना
 	Keep settings of its own	अपनी सेटिंग्स रखना
 	Keep a cache of its own, which you can clear	अपना कैश रखना, जिसे आप साफ़ कर सकते हैं
+	Run these commands on the document: {ids}	दस्तावेज़ पर ये कमांड चलाना: {ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	“{name}” `commandAllowlist` में `{id}` सूचीबद्ध करता है, जिसे कोई प्लग-इन कॉल नहीं कर सकता
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: मैनिफ़ेस्ट की `commandAllowlist` में यह सूचीबद्ध नहीं है
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: आईडी या आर्ग्युमेंट मॉड्यूल की मेमोरी के बाहर हैं
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: आईडी या आर्ग्युमेंट UTF-8 नहीं हैं
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: आर्ग्युमेंट JSON ऑब्जेक्ट नहीं हैं
+@msg	only a filter with the usual budget declares `commandAllowlist`	केवल सामान्य बजट वाला फ़िल्टर `commandAllowlist` घोषित करता है
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	कमांड कॉल (हर रन में {MAX_CALLS} कॉल और {MAX_CALL_BYTES} बाइट)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	कमांड कॉल का आकार (vc_call `{shown}`: {len} बाइट, सीमा {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	`commandAllowlist` में अधिकतम {MAX_ALLOWED_COMMANDS} कमांड
+@msg	a plug-in may not call this command	कोई प्लग-इन इस कमांड को कॉल नहीं कर सकता
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	`commandAllowlist` को `commands` अनुमति चाहिए, और `commands` को `commandAllowlist` चाहिए
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist` में `{shown}` है, जो कमांड आईडी नहीं है या दो बार सूचीबद्ध है
 	Clear Plug-in Cache	प्लग-इन कैश साफ़ करें
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	अनुमति `{permission}` के लिए प्लग-इन API स्तर {PROGRESS_API} चाहिए: `api` {PROGRESS_API} दें
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	मॉड्यूल `env.{name}` को होस्ट से अलग प्रकार के साथ आयात करता है: होस्ट का प्रकार {signature} है
@@ -6493,6 +6507,11 @@ antiAlias	Sharp	शार्प
 @msg	invalid parameters for `{cmd}`: {msg}	`{cmd}` के लिए अमान्य पैरामीटर: {msg}
 @msg	invalid pattern tile choice	अमान्य पैटर्न टाइल ऑप्शन
 @msg	invalid PDF setting: {0}	Invalid PDF सेटिंग: {0}
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	आर्टबोर्ड {n} का पेज {size} है, जो PDF की 14,400 pt (200 in) की पेज सीमा से लंबा है: इसे {unit} के UserUnit के साथ लिखा जाता है, इसलिए UserUnit को अनदेखा करने वाले ऐप इसे उतने गुना छोटा दिखाते हैं
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	आर्टबोर्ड {n} का पेज {size} है, जो PDF की 14,400 pt (200 in) की पेज सीमा से लंबा है: {label} पेज बिना UserUnit के, पॉइंट में लिखे जाते हैं, और सीमा मानने वाले ऐप पेज को 200 in पर काट देते हैं
+@msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 में UserUnit नहीं है, जिसकी 14,400 pt (200 in) से लंबे पेज को अपना आकार बनाए रखने के लिए ज़रूरत होती है: फ़ाइल PDF 1.6 के रूप में लिखी जाती है
+@msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	आर्टबोर्ड {n} का पेज {size} है, जो PDF की 3 से 14,400 इकाई की पेज भुजाओं के लिए बहुत लंबा और संकरा है: इसे {unit} की UserUnit के साथ लिखा जाता है, जो छोटी भुजा को 3 इकाई या अधिक पर रखती है, और सीमा का पालन करने वाले ऐप लंबी भुजा को 14,400 इकाई पर काट देते हैं
+@msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label} फ़ाइलें {max} तक की वास्तविक संख्याएँ रखती हैं, और आर्टबोर्ड {n} का {side} pt लंबा पेज इससे बड़ी संख्याएँ माँगता है: बिना PDF/X मानक के PDF 1.6 या बाद का चुनें, या छोटा आर्टबोर्ड
 @msg	invalid point	अमानवीय बिंदु
 @msg	Invalid point	अमानवीय बिंदु
 @msg	Invalid real scale	अमानवीय वास्तविक पैमाने

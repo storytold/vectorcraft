@@ -5824,6 +5824,7 @@ axis	Y Axis	Y osa
 	Show its progress, see Cancel and write log lines	Prikazati napredak, prepoznati otkazivanje i zapisivati redove dnevnika
 	Keep settings of its own	Čuvati vlastite postavke
 	Keep a cache of its own, which you can clear	Čuvati vlastitu predmemoriju koju možete očistiti
+	Run these commands on the document: {ids}	Izvršavati ove naredbe na dokumentu: {ids}
 	Clear Plug-in Cache	Očisti predmemoriju dodatka
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	dozvola `{permission}` zahtijeva nivo API-ja dodataka {PROGRESS_API}: navedite `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	modul uvozi `env.{name}` s drugim tipom od domaćinovog: domaćinov tip je {signature}

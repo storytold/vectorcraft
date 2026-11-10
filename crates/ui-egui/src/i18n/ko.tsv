@@ -4534,6 +4534,11 @@ theme	Appearance	외관
 @msg	artboard {0} does not exist	아트보드 {0}이(가) 없습니다
 @msg	cannot read PDF: {0}	PDF를 읽을 수 없습니다: {0}
 @msg	invalid PDF setting: {0}	잘못된 PDF 설정: {0}
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	아트보드 {n}의 페이지는 {size}로 PDF 페이지 한도 14,400 pt (200 in)보다 깁니다: UserUnit {unit}(으)로 기록되므로 UserUnit을 무시하는 앱에서는 그 배수만큼 작게 표시됩니다
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	아트보드 {n}의 페이지는 {size}로 PDF 페이지 한도 14,400 pt (200 in)보다 깁니다: {label} 페이지는 UserUnit 없이 포인트 단위로 기록되며, 한도를 지키는 앱은 페이지를 200 in으로 자릅니다
+@msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5에는 14,400 pt (200 in)보다 긴 페이지가 크기를 유지하는 데 필요한 UserUnit이 없습니다: 파일이 PDF 1.6으로 기록됩니다
+@msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	아트보드 {n}의 페이지는 {size}로, PDF 페이지 변 3에서 14,400 단위에 비해 너무 길고 좁습니다: 짧은 변을 3 단위 이상으로 유지하는 UserUnit {unit}로 기록되며, 한도를 지키는 앱은 긴 변을 14,400 단위로 자릅니다
+@msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label} 파일은 실수를 최대 {max}까지 담는데 아트보드 {n}의 {side} pt 페이지에는 더 큰 값이 필요합니다: PDF/X 표준 없이 PDF 1.6 이상을 선택하거나 더 작은 아트보드를 사용하세요
 @msg	page {0} does not exist (the PDF has {1})	페이지 {0}이(가) 없습니다(PDF의 페이지 수: {1})
 @msg	thumbnail: no page {n} (the file has 1)	thumbnail: 페이지 {n}이(가) 없습니다(파일의 페이지 수: 1)
 @msg	the PDF has no pages	PDF에 페이지가 없습니다
@@ -5548,6 +5553,20 @@ axis	Y Axis	Y축
 	Show its progress, see Cancel and write log lines	진행률 표시, 취소 감지 및 로그 줄 쓰기
 	Keep settings of its own	자체 설정 보관
 	Keep a cache of its own, which you can clear	지울 수 있는 자체 캐시 보관
+	Run these commands on the document: {ids}	문서에서 다음 명령 실행: {ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	“{name}”의 `commandAllowlist`에 플러그인이 호출할 수 없는 `{id}`가 있습니다
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: 매니페스트의 `commandAllowlist`에 없습니다
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: ID 또는 인수가 모듈의 메모리 밖에 있습니다
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: ID 또는 인수가 UTF-8이 아닙니다
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: 인수가 JSON 객체가 아닙니다
+@msg	only a filter with the usual budget declares `commandAllowlist`	보통 예산의 필터만 `commandAllowlist`를 선언할 수 있습니다
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	명령 호출(실행당 {MAX_CALLS}회, {MAX_CALL_BYTES}바이트)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	명령 호출 크기(vc_call `{shown}`: {len}바이트, 제한 {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	`commandAllowlist`의 명령은 최대 {MAX_ALLOWED_COMMANDS}개입니다
+@msg	a plug-in may not call this command	플러그인은 이 명령을 호출할 수 없습니다
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	`commandAllowlist`에는 `commands` 권한이 필요하고, `commands`에는 `commandAllowlist`가 필요합니다
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist`의 `{shown}`은(는) 명령 ID가 아니거나 두 번 나열되었습니다
 	Clear Plug-in Cache	플러그인 캐시 지우기
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	`{permission}` 권한에는 플러그인 API 수준 {PROGRESS_API}이(가) 필요합니다. `api` {PROGRESS_API}을(를) 지정하십시오
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	모듈이 `env.{name}`을(를) 호스트와 다른 형식으로 가져옵니다. 호스트의 형식은 {signature}입니다

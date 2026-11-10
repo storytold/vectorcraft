@@ -75,7 +75,7 @@ mod syntax;
 
 pub use editing::{EDITING_FILE, Editing, LEGACY_EDITING_FILE, editing, editing_with};
 pub use encrypt::Encryption;
-pub use export::{MIN_RASTER_PPI, export, export_with_report, page_areas, pdf_raster_ppi};
+pub use export::{MIN_RASTER_PPI, check_page_sizes, export, export_with_report, page_areas, pdf_raster_ppi};
 pub use file_info::{FileInfo, file_info};
 #[cfg(any(test, feature = "read-count"))]
 pub use import::imports_of;

@@ -660,6 +660,7 @@ impl PluginIntField {
             budget: Default::default(),
             paint_output: false,
             commands: Vec::new(),
+            command_allowlist: Vec::new(),
         };
         let mut f = PluginIntField { ctx, d: Dialog::new(plugin::KIND, json!({ "seed": start })), m, pos: egui::Pos2::ZERO };
         fn number_rect(shape: &egui::Shape, text: &str) -> Option<egui::Rect> {

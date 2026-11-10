@@ -4607,6 +4607,11 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	artboard {0} does not exist	アートボード {0} は存在しません
 @msg	cannot read PDF: {0}	PDF を読み込めません: {0}
 @msg	invalid PDF setting: {0}	PDF の設定が正しくありません: {0}
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	アートボード {n} のページは {size} で、PDF のページ上限 14,400 pt (200 in) を超えています: UserUnit {unit} で書き出されるため、UserUnit を無視するアプリではその倍率だけ小さく表示されます
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	アートボード {n} のページは {size} で、PDF のページ上限 14,400 pt (200 in) を超えています: {label} のページは UserUnit なしでポイント単位で書き出され、上限を守るアプリではページが 200 in で切り取られます
+@msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 には、14,400 pt (200 in) を超えるページがサイズを保つために必要な UserUnit がありません: ファイルは PDF 1.6 として書き出されます
+@msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	アートボード {n} のページは {size} で、PDF のページ辺 3 から 14,400 単位には長く細すぎます: 短辺を 3 単位以上に保つ UserUnit {unit} で書き出され、上限を守るアプリは長辺を 14,400 単位で切り取ります
+@msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label} ファイルの実数は {max} までですが、アートボード {n} の {side} pt のページにはそれより大きな値が必要です: PDF/X 規格なしの PDF 1.6 以降を選ぶか、アートボードを小さくしてください
 @msg	page {0} does not exist (the PDF has {1})	ページ {0} は存在しません (この PDF のページ数は {1} です)
 @msg	thumbnail: no page {n} (the file has 1)	thumbnail: ページ {n} は存在しません (このファイルのページ数は 1 です)
 @msg	the PDF has no pages	PDF にページがありません
@@ -5652,6 +5657,20 @@ axis	Y Axis	Y 軸
 	Show its progress, see Cancel and write log lines	進行状況の表示、キャンセルの検知、ログ行の書き込み
 	Keep settings of its own	独自の設定の保持
 	Keep a cache of its own, which you can clear	消去できる独自のキャッシュの保持
+	Run these commands on the document: {ids}	ドキュメントでのこれらのコマンドの実行: {ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	「{name}」は `commandAllowlist` にプラグインが呼び出せない `{id}` を挙げています
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: マニフェストの `commandAllowlist` にありません
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: ID または引数がモジュールのメモリの外にあります
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: ID または引数が UTF-8 ではありません
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: 引数が JSON オブジェクトではありません
+@msg	only a filter with the usual budget declares `commandAllowlist`	`commandAllowlist` を宣言できるのは通常の予算のフィルターだけです
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	コマンド呼び出し (1 回の実行につき {MAX_CALLS} 回、{MAX_CALL_BYTES} バイト)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	コマンド呼び出しのサイズ (vc_call `{shown}`: {len} バイト、上限 {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	`commandAllowlist` のコマンドは最大 {MAX_ALLOWED_COMMANDS} 個です
+@msg	a plug-in may not call this command	プラグインはこのコマンドを呼び出せません
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	`commandAllowlist` には権限 `commands` が必要で、`commands` には `commandAllowlist` が必要です
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist` の `{shown}` はコマンド ID ではないか、2 回挙げられています
 	Clear Plug-in Cache	プラグインのキャッシュを消去
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	権限 `{permission}` にはプラグイン API レベル {PROGRESS_API} が必要です。`api` {PROGRESS_API} を指定してください
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	モジュールが `env.{name}` をホストと異なる型でインポートしています。ホストの型は {signature} です

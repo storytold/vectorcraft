@@ -4624,6 +4624,11 @@ theme	Appearance	Giao diện
 @msg	Invalid panel layout; restored the default dock	Bố cục bảng không hợp lệ; đã phục hồi dock mặc định
 @msg	invalid parameters for `{cmd}`: {msg}	tham số không hợp lệ cho `{cmd}`: {msg}
 @msg	invalid PDF setting: {0}	cài đặt PDF không hợp lệ: {0}
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	trang của bảng vẽ {n} có kích thước {size}, dài hơn giới hạn trang PDF 14.400 pt (200 in): trang được ghi với UserUnit là {unit}, nên các ứng dụng bỏ qua UserUnit sẽ hiển thị nó nhỏ đi bấy nhiêu lần
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	trang của bảng vẽ {n} có kích thước {size}, dài hơn giới hạn trang PDF 14.400 pt (200 in): các trang {label} được ghi không có UserUnit, theo đơn vị điểm, và các ứng dụng tuân theo giới hạn sẽ cắt trang ở 200 in
+@msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 không có UserUnit, thứ mà trang dài hơn 14.400 pt (200 in) cần để giữ kích thước: tệp được ghi dưới dạng PDF 1.6
+@msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	trang của bảng vẽ {n} có kích thước {size}, quá dài và hẹp so với cạnh trang PDF từ 3 đến 14.400 đơn vị: trang được ghi với UserUnit {unit}, giữ cạnh ngắn từ 3 đơn vị trở lên, và các ứng dụng tuân theo giới hạn sẽ cắt cạnh dài ở 14.400 đơn vị
+@msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	tệp {label} chỉ chứa số thực tối đa {max}, còn trang của bảng vẽ {n} dài {side} pt cần số lớn hơn: hãy chọn PDF 1.6 trở lên không theo tiêu chuẩn PDF/X, hoặc một bảng vẽ nhỏ hơn
 @msg	invalid restored panel group	nhóm bảng được phục hồi không hợp lệ
 @msg	is not an image VectorCraft reads	không phải ảnh mà VectorCraft đọc được
 @msg	it ends inside a group or compound path	nó kết thúc bên trong một nhóm hoặc đường dẫn phức
@@ -5568,6 +5573,20 @@ axis	Y Axis	Trục Y
 	Show its progress, see Cancel and write log lines	Hiển thị tiến độ, nhận biết yêu cầu hủy và ghi các dòng nhật ký
 	Keep settings of its own	Lưu cài đặt riêng
 	Keep a cache of its own, which you can clear	Lưu bộ nhớ đệm riêng mà bạn có thể xóa
+	Run these commands on the document: {ids}	Chạy các lệnh này trên tài liệu: {ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	“{name}” liệt kê `{id}` trong `commandAllowlist`, lệnh mà plug-in không được gọi
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: `commandAllowlist` của manifest không liệt kê lệnh này
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: ID hoặc đối số nằm ngoài bộ nhớ của mô-đun
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: ID hoặc đối số không phải UTF-8
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: đối số không phải là đối tượng JSON
+@msg	only a filter with the usual budget declares `commandAllowlist`	chỉ bộ lọc có ngân sách thông thường mới khai báo `commandAllowlist`
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	lệnh gọi lệnh ({MAX_CALLS} lần gọi và {MAX_CALL_BYTES} byte mỗi lần chạy)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	kích thước lệnh gọi lệnh (vc_call `{shown}`: {len} byte, giới hạn {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	tối đa {MAX_ALLOWED_COMMANDS} lệnh trong `commandAllowlist`
+@msg	a plug-in may not call this command	plug-in không được gọi lệnh này
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	`commandAllowlist` cần quyền `commands`, và `commands` cần một `commandAllowlist`
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist` nêu `{shown}`, không phải ID lệnh hoặc được liệt kê hai lần
 	Clear Plug-in Cache	Xóa bộ nhớ đệm của plug-in
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	quyền `{permission}` cần API plug-in cấp {PROGRESS_API}: hãy đặt `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	mô-đun nhập `env.{name}` với kiểu khác với kiểu của máy chủ: kiểu của máy chủ là {signature}

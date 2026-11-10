@@ -4293,6 +4293,11 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)	εσωτερικό σφάλμα στην εντολή `{cmd}`: {msg} (το έγγραφο έμεινε αμετάβλητο· αναφέρετε το σφάλμα)
 @msg	internal error: {msg} (please report this bug)	εσωτερικό σφάλμα: {msg} (αναφέρετε το σφάλμα)
 @msg	invalid PDF setting: {0}	μη έγκυρη ρύθμιση PDF: {0}
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	η σελίδα του πίνακα σχεδίασης {n} είναι {size}, μεγαλύτερη από το όριο σελίδας PDF των 14.400 pt (200 in): γράφεται με UserUnit {unit}, οπότε οι εφαρμογές που αγνοούν το UserUnit την εμφανίζουν τόσες φορές μικρότερη
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	η σελίδα του πίνακα σχεδίασης {n} είναι {size}, μεγαλύτερη από το όριο σελίδας PDF των 14.400 pt (200 in): οι σελίδες {label} γράφονται χωρίς UserUnit, σε στιγμές, και οι εφαρμογές που τηρούν το όριο κόβουν τη σελίδα στις 200 in
+@msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	το PDF 1.5 δεν έχει UserUnit, που χρειάζεται μια σελίδα μεγαλύτερη από 14.400 pt (200 in) για να κρατήσει το μέγεθός της: το αρχείο γράφεται ως PDF 1.6
+@msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	η σελίδα του πίνακα σχεδίασης {n} είναι {size}, πολύ μακριά και στενή για τις πλευρές σελίδας PDF από 3 έως 14.400 μονάδες: γράφεται με UserUnit {unit}, που κρατά τη μικρή πλευρά στις 3 μονάδες ή περισσότερο, και οι εφαρμογές που τηρούν το όριο κόβουν τη μεγάλη πλευρά στις 14.400 μονάδες
+@msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	τα αρχεία {label} δέχονται πραγματικούς αριθμούς έως {max}, και η σελίδα του πίνακα σχεδίασης {n}, μήκους {side} pt, χρειάζεται μεγαλύτερους: επιλέξτε PDF 1.6 ή νεότερο χωρίς πρότυπο PDF/X, ή μικρότερο πίνακα σχεδίασης
 @msg	invalid image data for `{0}`	μη έγκυρα δεδομένα εικόνας για `{0}`
 @msg	invalid parameters for `{cmd}`: {msg}	μη έγκυρες παράμετροι για `{cmd}`: {msg}
 @msg	is not an image VectorCraft reads	δεν είναι μορφή εικόνας που μπορεί να διαβάσει το VectorCraft
@@ -5921,6 +5926,20 @@ axis	Y Axis	Άξονας Y
 	Show its progress, see Cancel and write log lines	Εμφάνιση της προόδου, αναγνώριση της ακύρωσης και εγγραφή γραμμών καταγραφής
 	Keep settings of its own	Διατήρηση δικών του ρυθμίσεων
 	Keep a cache of its own, which you can clear	Διατήρηση δικής του κρυφής μνήμης, την οποία μπορείτε να εκκαθαρίσετε
+	Run these commands on the document: {ids}	Εκτέλεση αυτών των εντολών στο έγγραφο: {ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	το «{name}» αναφέρει το `{id}` στο `commandAllowlist`, το οποίο ένα πρόσθετο δεν επιτρέπεται να καλέσει
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: το `commandAllowlist` του μανιφέστου δεν την αναφέρει
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: το αναγνωριστικό ή τα ορίσματα βρίσκονται εκτός της μνήμης της λειτουργικής μονάδας
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: το αναγνωριστικό ή τα ορίσματα δεν είναι UTF-8
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: τα ορίσματα δεν είναι αντικείμενο JSON
+@msg	only a filter with the usual budget declares `commandAllowlist`	μόνο ένα φίλτρο με τον συνήθη προϋπολογισμό δηλώνει `commandAllowlist`
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	κλήσεις εντολών ({MAX_CALLS} κλήσεις και {MAX_CALL_BYTES} byte ανά εκτέλεση)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	μέγεθος κλήσης εντολής (vc_call `{shown}`: {len} byte, όριο {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	το πολύ {MAX_ALLOWED_COMMANDS} εντολές στο `commandAllowlist`
+@msg	a plug-in may not call this command	ένα πρόσθετο δεν επιτρέπεται να καλέσει αυτή την εντολή
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	το `commandAllowlist` χρειάζεται το δικαίωμα `commands`, και το `commands` χρειάζεται ένα `commandAllowlist`
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	το `commandAllowlist` αναφέρει το `{shown}`, που δεν είναι αναγνωριστικό εντολής ή αναφέρεται δύο φορές
 	Clear Plug-in Cache	Εκκαθάριση κρυφής μνήμης προσθέτου
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	το δικαίωμα `{permission}` χρειάζεται το επίπεδο API προσθέτων {PROGRESS_API}: δώστε `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	η λειτουργική μονάδα εισάγει το `env.{name}` με άλλον τύπο από αυτόν του κεντρικού υπολογιστή: ο τύπος του είναι {signature}

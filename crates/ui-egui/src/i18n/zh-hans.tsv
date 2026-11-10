@@ -4320,6 +4320,11 @@ imageTrace	Outline	轮廓
 @msg	artboard {0} does not exist	画板 {0} 不存在
 @msg	cannot read PDF: {0}	无法读取 PDF：{0}
 @msg	invalid PDF setting: {0}	PDF 设置无效：{0}
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	画板 {n} 的页面为 {size}，超过 PDF 的页面上限 14,400 pt (200 in)：它以 UserUnit {unit} 写入，因此忽略 UserUnit 的应用会将其显示为缩小相应倍数
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	画板 {n} 的页面为 {size}，超过 PDF 的页面上限 14,400 pt (200 in)：{label} 页面不带 UserUnit，以点为单位写入，遵守上限的应用会将页面裁切为 200 in
+@msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 没有 UserUnit，而长于 14,400 pt (200 in) 的页面需要它来保持尺寸：文件将以 PDF 1.6 写入
+@msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	画板 {n} 的页面为 {size}，对 PDF 3 至 14,400 单位的页面边长而言过长过窄：以 UserUnit {unit} 写入，使短边保持 3 单位以上，遵守上限的应用会把长边裁到 14,400 单位
+@msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label} 文件的实数最大为 {max}，而画板 {n} 的页面长 {side} pt，需要更大的数：请选择不带 PDF/X 标准的 PDF 1.6 或更高版本，或使用更小的画板
 @msg	page {0} does not exist (the PDF has {1})	页面 {0} 不存在 (该 PDF 有 {1} 页)
 @msg	thumbnail: no page {n} (the file has 1)	thumbnail：页面 {n} 不存在 (该文件有 1 页)
 @msg	the PDF has no pages	该 PDF 没有页面
@@ -5808,6 +5813,20 @@ axis	Y Axis	Y 轴
 	Show its progress, see Cancel and write log lines	显示进度、检测取消请求并写入日志行
 	Keep settings of its own	保存自己的设置
 	Keep a cache of its own, which you can clear	保存自己的缓存，您可以清除它
+	Run these commands on the document: {ids}	在文档上运行这些命令：{ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	“{name}”在 `commandAllowlist` 中列出了增效工具不能调用的 `{id}`
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`：{why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`：清单的 `commandAllowlist` 未列出它
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`：ID 或参数位于模块内存之外
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`：ID 或参数不是 UTF-8
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`：参数不是 JSON 对象
+@msg	only a filter with the usual budget declares `commandAllowlist`	只有使用通常预算的滤镜才能声明 `commandAllowlist`
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	命令调用（每次运行 {MAX_CALLS} 次调用和 {MAX_CALL_BYTES} 字节）
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	命令调用大小（vc_call `{shown}`：{len} 字节，上限 {MAX_CALL_DATA}）
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	`commandAllowlist` 中最多 {MAX_ALLOWED_COMMANDS} 个命令
+@msg	a plug-in may not call this command	增效工具不能调用此命令
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	`commandAllowlist` 需要权限 `commands`，而 `commands` 需要 `commandAllowlist`
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist` 列出的 `{shown}` 不是命令 ID，或列出了两次
 	Clear Plug-in Cache	清除增效工具缓存
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	权限 `{permission}` 需要增效工具 API 级别 {PROGRESS_API}：请设置 `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	模块以与宿主不同的类型导入 `env.{name}`：宿主的类型为 {signature}
