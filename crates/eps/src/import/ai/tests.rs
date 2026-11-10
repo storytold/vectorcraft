@@ -2755,6 +2755,108 @@ fn image_masks_are_colorized_with_the_fill() {
     assert_eq!(pixels(&doc).0.get_pixel(0, 0).0, [255, 0, 0, 255]);
 }
 
+/// A gray image `w` × 1 (`bits` bits a pixel, `alpha` channels, data `data`) whose colour space is
+/// set by `xc` (the operands of `XC`) instead of `/DeviceGray XN`.
+fn ink_image(xc: &str, bits: u32, alpha: u32, w: u32, data: &[u8]) -> Vec<u8> {
+    let mut out = image("[ 1 0 0 1 0 100 ]", (w, 1), ("DeviceGray", 1, alpha), data, data.len() + 3);
+    // In place, as bytes: the samples aren't text.
+    let mut swap = |from: &[u8], to: &[u8]| {
+        let at = out.windows(from.len()).position(|s| s == from).unwrap();
+        out.splice(at..at + from.len(), to.iter().copied());
+    };
+    swap(b"/DeviceGray XN\n", format!("{xc} XC\n").as_bytes());
+    swap(format!(" 8 1 {alpha} 0 1 0 ").as_bytes(), format!(" {bits} 1 {alpha} 0 1 0 ").as_bytes());
+    out
+}
+
+/// An image in one ink's Separation space (`n [… (name) /Separation] XC`): its samples are the
+/// ink's tints (255 at 100 %), so it opens as a grayscale image of them, black at 100 %, colorized
+/// by the ink's spot swatch; its alpha channel becomes its opacity mask.
+#[test]
+fn separation_images_are_colorized_with_their_ink() {
+    let black = "1 [0 0 0 1 /DeviceCMYK (Black Ink) /Separation]";
+    let r = read(&ink_image(black, 8, 0, 3, &[0, 128, 255])).unwrap();
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    let a = art(&r.doc);
+    let Some(Paint::Solid { color, swatch: Some(swatch), tint }) = a[0].extras().colorize.as_deref() else { panic!("{:?}", a[0].extras().colorize) };
+    assert_eq!((swatch.as_str(), *tint), ("Black Ink", 1.0));
+    assert_eq!(color.to_rgba8(1.0), Color::cmyk(0.0, 0.0, 0.0, 1.0).to_rgba8(1.0));
+    assert!(r.doc.swatch("Black Ink").is_some_and(|s| s.spot), "a spot swatch for the ink");
+    let NodeKind::Image(im) = &a[0].kind else { panic!("{:?}", a[0].kind) };
+    assert!(r.doc.images[&im.key].gray_source().is_some_and(|g| !g.alpha));
+    let img = pixels(&r.doc).0;
+    assert_eq!((0..3).map(|x| img.get_pixel(x, 0).0[0]).collect::<Vec<_>>(), [255, 127, 0], "no ink is white, 100 % black");
+
+    // An RGB alternate gives the ink's colour; an alpha channel becomes the opacity mask.
+    let white = "1 [1 1 1 /DeviceRGB (White Ink) /Separation]";
+    let r = read(&ink_image(white, 8, 1, 2, &[255, 255, 255, 0])).unwrap();
+    let a = art(&r.doc);
+    let Some(Paint::Solid { color, swatch: Some(swatch), .. }) = a[0].extras().colorize.as_deref() else { panic!("{:?}", a[0].extras().colorize) };
+    assert_eq!((swatch.as_str(), color.to_rgba8(1.0)), ("White Ink", Color::rgb(1.0, 1.0, 1.0).to_rgba8(1.0)));
+    assert!(a[0].extras().mask.is_some(), "the alpha channel as an opacity mask");
+
+    // 1 bit a pixel: a set bit is the ink at 100 % (101).
+    let r = read(&ink_image(black, 1, 0, 3, b"\xa0")).unwrap();
+    let a = art(&r.doc);
+    assert!(a[0].extras().colorize.is_some());
+    let img = pixels(&r.doc).0;
+    assert_eq!((0..3).map(|x| img.get_pixel(x, 0).0[0]).collect::<Vec<_>>(), [0, 255, 0]);
+
+    // A device space, and the ink None (which paints nothing), leave the image as it was.
+    for xc in ["/DeviceGray", "1 [0 0 0 1 /DeviceCMYK (None) /Separation]"] {
+        let doc = read(&ink_image(xc, 8, 0, 2, &[0, 200])).unwrap().doc;
+        assert!(art(&doc)[0].extras().colorize.is_none(), "{xc}");
+        assert_eq!(pixels(&doc).0.get_pixel(1, 0).0, [200, 200, 200, 255], "{xc}");
+    }
+}
+
+/// A process plate's Separation colorizes in the plate's CMYK colour, with no swatch of its name;
+/// Registration in the Registration colour.
+#[test]
+fn separation_images_of_process_plates_and_registration() {
+    let r = read(&ink_image("1 [0 0 0 1 /DeviceCMYK (Black) /Separation]", 8, 0, 2, &[0, 255])).unwrap();
+    assert_eq!(art(&r.doc)[0].extras().colorize.as_deref(), Some(&Paint::solid(Color::cmyk(0.0, 0.0, 0.0, 1.0))));
+    assert!(r.doc.swatches.iter().all(|s| !s.spot), "no spot swatch for a process plate");
+    let r = read(&ink_image("1 [1 1 1 1 /DeviceCMYK (All) /Separation]", 8, 0, 2, &[0, 255])).unwrap();
+    let swatch = art(&r.doc)[0].extras().colorize.as_deref().and_then(|p| if let Paint::Solid { swatch, .. } = p { swatch.clone() } else { None });
+    assert_eq!(swatch.as_deref(), Some(vectorcraft_color::swatch::REGISTRATION));
+}
+
+/// The version 7 form, with samples in hex comment lines after `XI`, keeps the image's ink.
+#[test]
+fn a_separation_image_with_hex_comment_lines_keeps_its_ink() {
+    let s = "%AI5_BeginLayer\n1 1 1 1 0 0 1 0 79 128 255 0 50 0 Lb\n(L) Ln\n%AI5_File:\n%AI5_BeginRaster\n() 1 XG\n\
+             1 [0 0 0 1 /DeviceCMYK (Black Ink) /Separation] XC\n[ 1 0 0 1 0 100 ] 3 1 0 Xh\n\
+             [ 1 0 0 1 0 100 ] 0 0 3 1 3 1 8 1 0 0 0 0 XI\n%0080FF\n%AI5_EndRaster\nN\nLB\n%AI5_EndLayer--\n";
+    let mut data = stream("").into_bytes();
+    let at = data.windows(14).position(|w| w == b"%%PageTrailer\n").unwrap();
+    data.splice(at..at, s.bytes());
+    let r = read(&data).unwrap();
+    let a = art(&r.doc);
+    assert!(
+        matches!(a[0].extras().colorize.as_deref(), Some(Paint::Solid { swatch: Some(s), .. }) if s == "Black Ink"),
+        "{:?}",
+        a[0].extras().colorize
+    );
+    let img = pixels(&r.doc).0;
+    assert_eq!((0..3).map(|x| img.get_pixel(x, 0).0[0]).collect::<Vec<_>>(), [255, 127, 0]);
+}
+
+/// A Separation image reduced to fit the limits keeps its ink, and its alpha channel becomes its
+/// opacity mask, as at its full size.
+#[test]
+fn a_reduced_separation_image_keeps_its_ink_and_its_alpha_as_a_mask() {
+    let samples = [255u8; 16].iter().chain([0u8; 16].iter()).copied().collect::<Vec<_>>();
+    let data = ink_image("1 [0 0 0 1 /DeviceCMYK (Black Ink) /Separation]", 8, 1, 16, &samples);
+    let r = super::with_image_limits(4, 1 << 31, 512 << 20, || read(&data).unwrap());
+    assert!(r.warnings.iter().any(|w| w.contains("was reduced")), "{:?}", r.warnings);
+    let a = art(&r.doc);
+    assert!(a[0].extras().colorize.is_some());
+    assert!(a[0].extras().mask.is_some(), "the alpha channel as an opacity mask");
+    let NodeKind::Image(im) = &a[0].kind else { panic!("{:?}", a[0].kind) };
+    assert!(r.doc.images[&im.key].gray_source().is_some_and(|g| !g.alpha), "no alpha in the pixels");
+}
+
 #[test]
 fn images_with_alpha_channels() {
     // RGB samples, then the alpha channel (not counted in the data's size).

@@ -1063,8 +1063,12 @@ fn cut_direct_selection(s: &mut Session, roots: &[NodeId]) -> Result<Value> {
                 let cuts = super::clipboard::subpath_selected_segments(&sp, si, seg_refs, anchor_refs);
                 if cuts.is_empty() {
                     subpaths.push(sp);
-                } else {
+                } else if seg_refs.is_some_and(|segments| !segments.is_empty()) {
                     subpaths.extend(super::path::without_segments(sp, &cuts));
+                } else {
+                    // Picked anchors leave the path with their connections, as Clear removes them.
+                    let gone: BTreeSet<usize> = anchor_refs.into_iter().flatten().filter_map(|&(s, a)| (s == si).then_some(a)).collect();
+                    subpaths.extend(super::path::without_anchors(sp, &gone));
                 }
             }
             subpaths.retain(|sp| sp.anchors.len() >= 2);
