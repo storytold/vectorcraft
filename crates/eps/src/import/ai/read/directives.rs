@@ -181,9 +181,13 @@ impl<'a> Reader<'a> {
         } else if line.starts_with("AI5_EndRaster") {
             // A file `XG` named in this raster object is no later one's.
             self.image_link = None;
-            if let Some(Raster { operands: Some(vals), mut samples, half, max, .. }) = self.raster.take() {
+            if let Some(Raster { operands: Some(vals), mut samples, half, max, ink, .. }) = self.raster.take() {
                 end_hex(&mut samples, half, max);
-                return self.image_from(vals, &samples, true);
+                // The image's ink (`XC`) stays for `image_from` to read.
+                self.raster = Some(Raster { ink, ..Raster::default() });
+                let read = self.image_from(vals, &samples, true);
+                self.raster = None;
+                return read;
             }
         } else if line.starts_with("AI5_BeginPlace") {
             // One that is still open (no `~` ended it) isn't read.
