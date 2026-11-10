@@ -150,6 +150,11 @@ fn art_for_artboard_copy_takes_artwork_larger_than_artboard_or_with_bleed() {
     let hanging = d.alloc_id();
     d.insert(Some(layer), usize::MAX, Node::path(hanging, shapes::rectangle(Rect::new(-20.0, 90.0, 10.0, 120.0)), Appearance::default_art()))
         .unwrap();
+    // A straight line hanging 60pt over the left edge (center outside, no area): it lies on the
+    // artboard for 40pt, so it is copied as a thin rectangle there would be.
+    let line = d.alloc_id();
+    d.insert(Some(layer), usize::MAX, Node::path(line, shapes::line(Point::new(-60.0, 150.0), Point::new(40.0, 150.0)), Appearance::default_art()))
+        .unwrap();
     // A shape completely outside the artboard.
     let outside = d.alloc_id();
     d.insert(Some(layer), usize::MAX, Node::path(outside, shapes::rectangle(Rect::new(300.0, 300.0, 400.0, 400.0)), Appearance::default_art()))
@@ -169,6 +174,7 @@ fn art_for_artboard_copy_takes_artwork_larger_than_artboard_or_with_bleed() {
     assert!(copy_art.contains(&bleed), "bleed shape is copied with artboard: {copy_art:?}");
     assert!(copy_art.contains(&bleed_margin_only), "bleed-margin-only shape is copied with artboard: {copy_art:?}");
     assert!(copy_art.contains(&hanging), "touching shape owned by artboard 0 is copied: {copy_art:?}");
+    assert!(copy_art.contains(&line), "a line hanging over the edge is copied: {copy_art:?}");
     assert!(!copy_art.contains(&outside), "outside shape is not copied: {copy_art:?}");
 
     // If Artboard 1 is added next to Artboard 0, art primarily on Artboard 1 is not copied with Artboard 0:
@@ -239,6 +245,20 @@ fn artboard_for_bounds_edge_cases_and_tie_breaks() {
     // Outside all boards:
     let b_zero_outside = Rect::new(150.0, 50.0, 150.0, 50.0);
     assert_eq!(d.artboard_for_bounds(b_zero_outside), None);
+
+    // 6. Straight lines whose center is outside every board: owned by the board they lie on most,
+    // as a rectangle of any thickness would be (they have no area to compare).
+    // Horizontal, from x = -100 to 50 on board 0: center (-25, 50).
+    assert_eq!(d.artboard_for_bounds(Rect::new(-100.0, 50.0, 50.0, 50.0)), Some(0));
+    assert_eq!(d.artboard_for_bounds(Rect::new(-100.0, 50.0, 50.0, 50.1)), Some(0), "the same as a thin rectangle");
+    // Vertical, from y = -100 to 50 on board 1: center (250, -25).
+    assert_eq!(d.artboard_for_bounds(Rect::new(250.0, -100.0, 250.0, 50.0)), Some(1));
+    // Below both boards.
+    assert_eq!(d.artboard_for_bounds(Rect::new(80.0, 120.0, 260.0, 120.0)), None);
+    // Across the gap between the boards, 20 pt on board 0 and 60 on board 1.
+    assert_eq!(d.artboard_for_bounds(Rect::new(80.0, 50.0, 260.0, 50.0)), Some(1), "center (170, 50) in the gap: board 1 holds more of it");
+    // Only touching a board's corner from outside: no overlap.
+    assert_eq!(d.artboard_for_bounds(Rect::new(-100.0, 0.0, 0.0, 0.0)), None);
 }
 
 /// The art on a locked artboard (each object of a layer whose bounds overlap it, a group as one

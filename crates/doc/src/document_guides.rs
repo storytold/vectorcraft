@@ -47,23 +47,30 @@ impl Document {
 
     /// Which artboard in the document owns object bounds `b`: the artboard that holds its center,
     /// or the one it has the greatest overlap area with if its center lies outside all artboards.
+    /// Bounds with no width or no height (a straight horizontal or vertical line) have no area, so
+    /// for them the overlap is the length of the line on the artboard.
     pub fn artboard_for_bounds(&self, b: Rect) -> Option<usize> {
         let c = b.center();
         if let Some(i) = self.artboard_holding(c, false) {
             return Some(i);
         }
+        let (flat_x, flat_y) = (b.x1 - b.x0 <= 1e-9, b.y1 - b.y0 <= 1e-9);
         let mut best: Option<(usize, f64)> = None;
         for (i, a) in self.artboards.iter().enumerate() {
             let r = a.rect;
-            let inter_x0 = b.x0.max(r.x0);
-            let inter_y0 = b.y0.max(r.y0);
-            let inter_x1 = b.x1.min(r.x1);
-            let inter_y1 = b.y1.min(r.y1);
-            if inter_x1 > inter_x0 && inter_y1 > inter_y0 {
-                let area = (inter_x1 - inter_x0) * (inter_y1 - inter_y0);
-                if area > 1e-9 && best.is_none_or(|(_, max_area)| area > max_area + 1e-9) {
-                    best = Some((i, area));
-                }
+            let w = b.x1.min(r.x1) - b.x0.max(r.x0);
+            let h = b.y1.min(r.y1) - b.y0.max(r.y0);
+            if w < 0.0 || h < 0.0 {
+                continue;
+            }
+            let overlap = match (flat_x, flat_y) {
+                (true, true) => 0.0,
+                (true, false) => h,
+                (false, true) => w,
+                (false, false) => w * h,
+            };
+            if overlap > 1e-9 && best.is_none_or(|(_, max)| overlap > max + 1e-9) {
+                best = Some((i, overlap));
             }
         }
         best.map(|(i, _)| i)
