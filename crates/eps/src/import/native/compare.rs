@@ -714,7 +714,8 @@ fn compared_with_solid(x: &vectorcraft_render::Rendered, y: &vectorcraft_render:
 }
 
 /// Where the type that shows in `nodes` is, in pixels of `region` drawn at `scale` (with a margin
-/// for the strokes round it).
+/// for the strokes round it). The type in a live envelope isn't: the envelope draws it bent, away
+/// from its text object's box, and is weighed as the art it draws, as its drawn art would be.
 fn type_areas(nodes: &[Arc<Node>], region: Rect, scale: f64, out: &mut Vec<Rect>) {
     for n in nodes.iter().filter(|n| n.visible) {
         if let NodeKind::Text(_) = n.kind
@@ -723,7 +724,9 @@ fn type_areas(nodes: &[Arc<Node>], region: Rect, scale: f64, out: &mut Vec<Rect>
             let px =
                 |r: Rect| Rect::new((r.x0 - region.x0) * scale, (r.y0 - region.y0) * scale, (r.x1 - region.x0) * scale, (r.y1 - region.y0) * scale);
             out.push(px(b.inflate(OUTLINE_REACH, OUTLINE_REACH)));
-        } else if let Some(c) = n.children() {
+        } else if !matches!(n.kind, NodeKind::Envelope { .. })
+            && let Some(c) = n.children()
+        {
             type_areas(c, region, scale, out);
         }
     }
