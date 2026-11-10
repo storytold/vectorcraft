@@ -122,6 +122,27 @@ fn unit_field(
     live: bool,
     empty: &str,
 ) -> Option<f64> {
+    unit_field_from(ui, id, label, name, value, unit, width, share_of_value, bounds, stops, live, None, empty)
+}
+
+/// [`unit_field`] whose blank field (`value` is `None`) steps from `blank_from` (points) with
+/// ↑/↓ and the wheel instead of doing nothing.
+#[allow(clippy::too_many_arguments)]
+fn unit_field_from(
+    ui: &mut Ui,
+    id: impl std::hash::Hash,
+    label: Option<PreviousLabel>,
+    name: Option<&str>,
+    value: Option<f64>,
+    unit: Unit,
+    width: f32,
+    share_of_value: bool,
+    bounds: RangeInclusive<f64>,
+    stops: &[f64],
+    live: bool,
+    blank_from: Option<f64>,
+    empty: &str,
+) -> Option<f64> {
     let id = id_with(ui.scope_id(), id);
     let shown = value.map(|v| unit.format(v)).unwrap_or_else(|| empty.to_string());
     take_dialog_focus(ui, id, &shown);
@@ -132,8 +153,13 @@ fn unit_field(
     let read = |b: &str| typed.parse(&decimal_point(b));
     let bounds_unit = unit.from_pt(*bounds.start())..=unit.from_pt(*bounds.end());
     let stops: Vec<f64> = stops.iter().map(|&s| unit.from_pt(s)).collect();
-    let stepped =
-        step_value(ui, &resp, &mut buf, &bounds_unit, (|b: &str| Some(unit.from_pt(read(b)?)), |v| unit.format(unit.to_pt(v))), None, &stops);
+    let blank_from = blank_from.filter(|_| value.is_none());
+    let read_unit = |b: &str| match read(b) {
+        Some(v) => Some(unit.from_pt(v)),
+        None if b.trim().is_empty() => blank_from.map(|v| unit.from_pt(v)),
+        None => None,
+    };
+    let stepped = step_value(ui, &resp, &mut buf, &bounds_unit, (read_unit, |v| unit.format(unit.to_pt(v))), None, &stops);
     let scrubbed = scrub::field(ui, id, rect, &buf, value.map(|v| unit.from_pt(v)), STEP_DECIMALS, &bounds_unit);
     let commit = commit && buf != shown;
     if commit {
@@ -821,11 +847,23 @@ pub fn spin_field_stops_named(
     presets: &[f64],
 ) -> Option<f64> {
     let label = take_previous_label(ui);
-    spin_generic(ui, label, value, None, None, None, width, step, min, presets, presets, &|v| unit.format(v), &mut |ui, fw, label| {
-        unit_field(ui, id, label, name, value, unit, fw, false, min..=f64::INFINITY, presets, false, "")
+    let blank_from = BLANK_WEIGHT_STEPS_FROM;
+    // A blank field steps in points from `blank_from`, whatever the unit's preset ladder (#5349).
+    let stops = if value.is_none() { &BLANK_WEIGHT_STOPS[..] } else { presets };
+    let fmt = |v: f64| unit.format(v);
+    spin_generic(ui, label, value, Some(blank_from), None, None, None, width, step, min, presets, stops, &fmt, &mut |ui, fw, label| {
+        unit_field_from(ui, id, label, name, value, unit, fw, false, min..=f64::INFINITY, stops, false, Some(blank_from), "")
     })
     .and_then(SpinPick::value)
 }
+
+/// Where a blank Stroke Weight (the selected objects differ) steps from, in points: up goes to
+/// 0.5 pt and down to 0 pt. This is the behaviour #5349 asks for.
+const BLANK_WEIGHT_STEPS_FROM: f64 = 0.25;
+
+/// The stops a blank Stroke Weight steps through, in points, so that up gives 0.5 pt in every
+/// Units > Stroke, not the first preset of the unit's own ladder above 0.25 pt.
+const BLANK_WEIGHT_STOPS: [f64; 2] = [BLANK_WEIGHT_STEPS_FROM, 0.5];
 
 /// A distance field with spinner arrows kept within `bounds` (points), as the Drop Shadow and
 /// Outer Glow dialogs show their offsets and blur: the spinner steps one `unit` at a time
@@ -842,7 +880,7 @@ pub fn spin_length_within(
     let label = take_previous_label(ui);
     let step = Some(unit.to_pt(1.0)).filter(|s| s.is_finite() && *s > 0.0).unwrap_or(1.0);
     let field = bounds.clone();
-    spin_generic(ui, label, value, None, None, None, width, step, *bounds.start(), &[], &[], &|v| unit.format(v), &mut |ui, fw, label| {
+    spin_generic(ui, label, value, None, None, None, None, width, step, *bounds.start(), &[], &[], &|v| unit.format(v), &mut |ui, fw, label| {
         unit_field(ui, id, label, None, value, unit, fw, false, field.clone(), &[], false, "")
     })
     .and_then(SpinPick::value)
@@ -867,7 +905,7 @@ pub fn spin_range(
     let places = decimals.min(6) as i32;
     let value = value.map(|v| within(v, &range));
     let fmt = |v: f64| format!("{v}{suffix}");
-    spin_generic(ui, label, value, None, None, None, width, step, *range.start(), &[], &[], &fmt, &mut |ui, fw, label| {
+    spin_generic(ui, label, value, None, None, None, None, width, step, *range.start(), &[], &[], &fmt, &mut |ui, fw, label| {
         bounded_field(ui, id, label, None, value, suffix, decimals, fw, &range, None, false, false)
     })
     .and_then(SpinPick::value)
@@ -925,7 +963,7 @@ pub fn spin_field_auto_named(
     presets: &[f64],
 ) -> Option<SpinPick> {
     let label = take_previous_label(ui);
-    spin_generic(ui, label, value, auto, None, None, width, step, min, presets, &[], &|v| unit.format(v), &mut |ui, fw, label| {
+    spin_generic(ui, label, value, None, auto, None, None, width, step, min, presets, &[], &|v| unit.format(v), &mut |ui, fw, label| {
         unit_field(ui, id, label, name, value, unit, fw, false, min..=f64::INFINITY, &[], false, "")
     })
 }
@@ -964,7 +1002,7 @@ pub fn spin_plain_named(
     let label = take_previous_label(ui);
     let value = value.into();
     let fmt = |v: f64| format!("{v}{suffix}");
-    spin_generic(ui, label, value, None, None, None, width, step, min, presets, &[], &fmt, &mut |ui, fw, label| {
+    spin_generic(ui, label, value, None, None, None, None, width, step, min, presets, &[], &fmt, &mut |ui, fw, label| {
         bounded_field(ui, id, label, name, value, suffix, decimals, fw, &(min..=f64::INFINITY), None, false, false)
     })
     .and_then(SpinPick::value)
@@ -990,6 +1028,7 @@ pub fn spin_kerning(
         ui,
         label,
         value,
+        None,
         automatic,
         optical,
         Some(optical_label),
@@ -1010,6 +1049,7 @@ fn spin_generic(
     ui: &mut Ui,
     label: Option<PreviousLabel>,
     value: Option<f64>,
+    blank_from: Option<f64>,
     auto: Option<bool>,
     optical: Option<bool>,
     optical_label: Option<&str>,
@@ -1049,14 +1089,14 @@ fn spin_generic(
             ui.painter().line_segment([m + vec2(0.0, d), m + vec2(3.0, -d)], Stroke::new(1.2, c));
         }
         sresp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, tl!("Step up or down")));
-        // A blank field (values that differ) has nothing to step from. A click steps once; an
+        // A blank field (values that differ) steps from `blank_from`, if any. A click steps once; an
         // arrow held down steps again and again after a pause, as a spin button does (#4267).
         let is_up = match held_repeat(ui, &sresp) {
             Some(true) => Some(ui.rect_contains_pointer(up)),
             None if sresp.clicked() => sresp.interact_pointer_pos().map(|p| up.contains(p)),
             _ => None,
         };
-        if let (Some(is_up), Some(v)) = (is_up, value) {
+        if let (Some(is_up), Some(v)) = (is_up, value.or(blank_from)) {
             let modifiers = ui.input(|i| i.modifiers);
             out = Some(SpinPick::Value(spinner_step(v, step, min, is_up, modifiers, stops, fmt)));
         }
