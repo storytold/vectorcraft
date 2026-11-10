@@ -6126,7 +6126,7 @@ lines up to date as the type, the custom dictionary and the Ignore All words cha
 A right-click on an underlined word puts at the top of the canvas context menu the words `text.spelling.suggest` gives
 for it (each a `text.editRange {id, start, end, insert}` item labelled with its word), or No Suggestions, then Ignore
 All (`text.spelling.ignoreAll {word}`) and Add to Dictionary (`text.spelling.addWord {word}`); the context menu's
-entries list them with their params.
+entries list them with their params. A right-click on type also has Spelling › Auto Spell Check (`edit.autoSpellCheck`).
 
 
 ## Justification options
