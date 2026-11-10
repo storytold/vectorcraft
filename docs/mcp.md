@@ -3411,6 +3411,8 @@ holds symbol instances that `object` expands, whether only their art holds it, w
 mesh points as the gradient paints them, with the colors Object › Expand gives them.
 `object.expand`, `effect.expandAppearance`, `type.createOutlines` and `object.path.outlineStroke` turn a dimension whose
 art they change into a plain group of that art, in the same undo step (see [dimensions.md](dimensions.md)).
+`object.expand` rejects a param of the wrong type, such as `"fill": "yes"`, `"gradient": 3` or `"steps": "16"`, and
+changes nothing. Omitting a param or giving null keeps its default.
 
 ```json
 {"name":"run_command","arguments":{"command":"object.expand","params":{"stroke":false,"gradient":"mesh"}}}
