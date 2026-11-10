@@ -4505,6 +4505,11 @@ axis	Both	Ambos
 @msg	unknown parameter `{key}`; did you mean `{near}`?	parâmetro desconhecido `{key}`; você quis dizer `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	parâmetro desconhecido `{key}`; o comando não tem parâmetros
 @msg	unknown parameter `{key}`; the command takes: {keys}	parâmetro desconhecido `{key}`; o comando aceita: {keys}
+@msg	the params must be an object, not {got}	os parâmetros devem ser um objeto, não {got}
+@msg	unknown parameter `{path}`; the object takes no keys	parâmetro desconhecido `{path}`; o objeto não aceita chaves
+@msg	unknown parameter `{path}`; it takes: {keys}	parâmetro desconhecido `{path}`; aceita: {keys}
+@msg	missing `{path}`	falta `{path}`
+@msg	`{path}` must be {expected}, not {got}	`{path}` deve ser {expected}, não {got}
 	Load EPS into Clipboard	Carregar EPS na Área de Transferência
 	Drawer menu	Menu da gaveta
 	Toolbar: Show Controls	Barra de ferramentas: Mostrar controles

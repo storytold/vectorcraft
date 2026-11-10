@@ -823,6 +823,13 @@ fn shape_builder_applies_a_merge_before_what_comes_next() {
             // No files: the command fails after the merge.
             assert!(s.execute("text.addFontFiles", &json!({"files": []})).is_err());
         }),
+        ("a call its schema refuses", |s, _, _| {
+            // The refused call adds no undo step of its own: the merge's is the last one.
+            let e = s.execute("view.saved.new", &json!({"center": [0, 0], "zoom": 0})).unwrap_err().to_string();
+            assert!(e.contains("`zoom`"), "{e}");
+            assert!(s.doc().unwrap().doc.views.is_empty());
+            assert_eq!(s.doc().unwrap().history.undo.last().map(|e| e.label.as_str()), Some("Shape Builder"));
+        }),
     ];
     let _proof = crate::tests_colormgmt::GLOBAL.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     let dir = vectorcraft_testkit::temp_dir("shape-builder-merge-first");

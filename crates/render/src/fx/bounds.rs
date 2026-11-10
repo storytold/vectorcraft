@@ -57,12 +57,6 @@ pub(super) fn item_effects(item: &AppearanceItem) -> &[Effect] {
 /// Visual bounds including geometry effects, stroke outsets and shadows/glows (symbol instances
 /// measured by their art from `symbols`).
 pub(crate) fn visual_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
-    if let Some(art) = effects::revolve_art(n).or_else(|| effects::solid_art(n)) {
-        return cull_bounds(symbols, &art).map(|b| {
-            let o = outset(symbols, &n.appearance.effects, b);
-            b.inflate(o, o)
-        });
-    }
     if let Some(art) = painted_art(symbols, n) {
         return art.visual_bounds_with(symbols).map(|r| with_raster_reach(symbols, n, r));
     }
@@ -109,6 +103,10 @@ fn paints(item: &AppearanceItem) -> bool {
 /// [`Node::visual_bounds_with`] measures them, without the reach of `n`'s own raster effects
 /// (symbol instances measured by their art from `symbols`): what Rasterize makes its image over.
 pub(crate) fn drawn_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
+    // A 3D effect's art holds its fills' and strokes' raster effects, measured with it.
+    if let Some(b) = three_d_bounds(symbols, n) {
+        return b;
+    }
     let b = art_bounds(symbols, n)?;
     let items = n.appearance.items.iter().filter(|i| paints(i) && !effects::raster_effects(item_effects(i)).is_empty());
     Some(items.map(|i| spread(symbols, item_effects(i), item_bounds(symbols.document(), n, i).unwrap_or(b))).fold(b, |acc, r| acc.union(r)))
@@ -168,13 +166,6 @@ fn shape_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
         members.iter().filter(|c| c.visible).fold(None, |acc, c| vectorcraft_geom::union_opt(acc, painted_reach(symbols, c)))
     };
     match &n.kind {
-        // A group's or layer's 3D effect: the art of its members' solids.
-        NodeKind::Layer { .. } | NodeKind::Group { clip: false, .. }
-            if effects::has_solid(n)
-                && let Some(art) = effects::solid_art(n) =>
-        {
-            drawn_bounds(symbols, &art)
-        }
         _ if effects::has_container_appearance(n) => {
             let art = effects::evaluate_container(Some(symbols.document()), n);
             let art = art.as_ref().unwrap_or(n);
@@ -182,10 +173,6 @@ fn shape_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
         }
         NodeKind::Layer { clip: false, .. } | NodeKind::Group { clip: false, .. } => union(n),
         _ if has_fx(n) => {
-            // A 3D effect's art.
-            if let Some(art) = effects::revolve_art(n).or_else(|| effects::solid_art(n)) {
-                return drawn_bounds(symbols, &art);
-            }
             if let Some(art) = painted_art(symbols, n) {
                 return art.visual_bounds_with(symbols);
             }
@@ -221,7 +208,7 @@ fn shape_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
                 Some(r) => r.visual_bounds_with(symbols),
                 None => None,
             }
-            .or_else(|| n.visual_bounds_with(symbols))?;
+            .or_else(|| own_box(symbols, n))?;
             let a = match &reshaped {
                 Some(r) => reshaped_art_effects_reach(symbols, n, r),
                 None => art_effects_reach(symbols, n),
@@ -385,6 +372,13 @@ fn cull_bounds_in(symbols: &SymbolBoxes, n: &Node, after_reshape: bool) -> Optio
             let reach = effects::addons::halftone::reach(n);
             inner(&effects::addons::halftone::split(n).0).map(|b| b.inflate(reach, reach))
         }
+        // A 3D effect's art, as the renderer draws it, and the raster effects' reach: the solid of
+        // type or of a group's members reaches past the letters or members the arms below measure.
+        _ if (effects::has_revolve(n) || effects::has_solid(n))
+            && let Some(b) = three_d_bounds(symbols, n) =>
+        {
+            b.map(|b| with_own_raster_reach(symbols, n, b))
+        }
         // The evaluated art (its fills, strokes and geometry effects) and the raster effects' reach.
         _ if effects::has_container_appearance(n) => {
             let art = effects::evaluate_container(Some(symbols.document()), n);
@@ -394,8 +388,7 @@ fn cull_bounds_in(symbols: &SymbolBoxes, n: &Node, after_reshape: bool) -> Optio
             } else {
                 art.children()?.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, inner(c)))
             }?;
-            let o = outset(symbols, &n.appearance.effects, b);
-            Some(b.inflate(o, o))
+            Some(with_own_raster_reach(symbols, n, b))
         }
         NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } => {
             children.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, inner(c)))
@@ -418,15 +411,14 @@ fn cull_bounds_in(symbols: &SymbolBoxes, n: &Node, after_reshape: bool) -> Optio
                 Some(r) => r.visual_bounds_with(symbols),
                 None => None,
             }
-            .or_else(|| n.visual_bounds_with(symbols))?;
+            .or_else(|| own_box(symbols, n))?;
             let a = match &reshaped {
                 Some(r) if after_reshape => reshaped_art_effects_reach(symbols, n, r),
                 _ => art_effects_reach(symbols, n),
             };
             let a = a.max(live_content_reach(symbols, n));
             let b = b.inflate(a, a);
-            let o = outset(symbols, &n.appearance.effects, b);
-            Some(b.inflate(o, o))
+            Some(with_own_raster_reach(symbols, n, b))
         }
         NodeKind::SymbolInstance { .. } => {
             let b = n.visual_bounds_with(symbols)?;
@@ -443,6 +435,61 @@ fn cull_bounds_in(symbols: &SymbolBoxes, n: &Node, after_reshape: bool) -> Optio
             Some(b.inflate(a, a))
         }
     }
+}
+
+/// The bounds of the art a 3D effect of `n` draws (Revolve, Extrude & Bevel, Inflate, Rotate),
+/// built now, without `n`'s own raster effects ([`three_d_art_bounds`]): `None` when it draws no
+/// such art, `Some(None)` when that art paints nothing. The renderer measures the art it keeps
+/// instead ([`crate::Renderer::bounds_of`]).
+fn three_d_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Option<Rect>> {
+    if !effects::has_revolve(n) && !effects::has_solid(n) {
+        return None;
+    }
+    let art = effects::revolve_art(n).or_else(|| effects::solid_art(n))?;
+    Some(three_d_art_bounds(symbols, &art))
+}
+
+/// The bounds of `art`, the art a 3D effect draws for an object, as the renderer draws it: with
+/// its geometry effects, without the raster effects the object paints over it (which
+/// [`with_own_raster_reach`] adds), and each object in it with the raster effects of its own fills
+/// and strokes and the art of its brushed strokes (a stroke without a 3D effect of its own keeps
+/// its brush): the art itself, which Rasterize and exports take, not the room culling leaves.
+pub(crate) fn three_d_art_bounds(symbols: &SymbolBoxes, art: &Node) -> Option<Rect> {
+    fn pieces(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
+        match &n.kind {
+            NodeKind::Group { children, clip: false } if !has_object_fx(n) => {
+                children.iter().filter(|c| c.visible).fold(None, |acc, c| vectorcraft_geom::union_opt(acc, pieces(symbols, c)))
+            }
+            // The art its brushed strokes draw, not the room culling leaves for it.
+            _ => {
+                let brushed = vectorcraft_brush::has_brush(n)
+                    .then(|| vectorcraft_brush::expand(symbols.document(), n))
+                    .flatten()
+                    .and_then(|art| art.visual_bounds_with(symbols));
+                vectorcraft_geom::union_opt(cull_bounds(symbols, n), brushed)
+            }
+        }
+    }
+    let mut art = art.clone();
+    art.appearance.effects.retain(|e| effects::is_geometry(&e.id));
+    let art = effects::evaluate_container(Some(symbols.document()), &art).unwrap_or(art);
+    pieces(symbols, &art)
+}
+
+/// `b`, the bounds of what `n` draws, grown by how far `n`'s own raster effects paint past it.
+pub(crate) fn with_own_raster_reach(symbols: &SymbolBoxes, n: &Node, b: Rect) -> Rect {
+    let o = outset(symbols, &n.appearance.effects, b);
+    b.inflate(o, o)
+}
+
+/// `n`'s own visual box, type's grown to hold its glyphs ([`glyphs_box`]): what it draws when its
+/// object effects leave it as it is (Revolve builds no art from type).
+fn own_box(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
+    let b = n.visual_bounds_with(symbols)?;
+    Some(match &n.kind {
+        NodeKind::Text(t) => vectorcraft_geom::union_opt(Some(b), glyphs_box(t, n.appearance.outset())).unwrap_or(b),
+        _ => b,
+    })
 }
 
 /// The box of type `t`'s glyphs as laid out (its layout bounds, else laid out now), grown by its

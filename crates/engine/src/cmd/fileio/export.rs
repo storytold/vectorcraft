@@ -126,13 +126,20 @@ fn selected_part(n: &Node, keep: &HashSet<NodeId>) -> Option<Node> {
 /// holds a symbol instance also stays when what the canvas paints for it reaches `rect`
 /// ([`vectorcraft_render::painted_bounds`]: the effects in the symbols' art and its own effects). A
 /// clipping layer keeps every object, its clipping path among them. An artboard's file then holds
-/// its own art, not a whole document of artboards.
-pub(super) fn art_over(doc: &Document, rect: vectorcraft_geom::Rect) -> Document {
-    fn kept(n: &Arc<Node>, doc: &Document, symbols: &SymbolBoxes, rect: vectorcraft_geom::Rect) -> Option<Arc<Node>> {
+/// its own art, not a whole document of artboards. `renderer` measures the 3D art, and keeps it for
+/// the next artboard of the same document.
+pub(super) fn art_over(doc: &Document, rect: vectorcraft_geom::Rect, renderer: &mut vectorcraft_render::Renderer) -> Document {
+    fn kept(
+        n: &Arc<Node>,
+        doc: &Document,
+        symbols: &SymbolBoxes,
+        rect: vectorcraft_geom::Rect,
+        renderer: &mut vectorcraft_render::Renderer,
+    ) -> Option<Arc<Node>> {
         if matches!(n.kind, NodeKind::Layer { clip: false, .. }) {
             let mut layer = Node::clone(n);
             let children = layer.children_mut()?;
-            *children = children.iter().filter_map(|c| kept(c, doc, symbols, rect)).collect();
+            *children = children.iter().filter_map(|c| kept(c, doc, symbols, rect, renderer)).collect();
             return Some(Arc::new(layer));
         }
         // A group that doesn't clip keeps only its members over the artboard, so art gathered in one
@@ -141,19 +148,18 @@ pub(super) fn art_over(doc: &Document, rect: vectorcraft_geom::Rect) -> Document
         if matches!(n.kind, NodeKind::Group { clip: false, .. }) && n.appearance.effects.is_empty() {
             let mut group = Node::clone(n);
             let children = group.children_mut()?;
-            *children = children.iter().filter_map(|c| kept(c, doc, symbols, rect)).collect();
+            *children = children.iter().filter_map(|c| kept(c, doc, symbols, rect, renderer)).collect();
             return (!children.is_empty()).then(|| Arc::new(group));
         }
         let over = |b: vectorcraft_geom::Rect| b.x0 <= rect.x1 && rect.x0 <= b.x1 && b.y0 <= rect.y1 && rect.y0 <= b.y1;
         let mut holds_instance = false;
         n.walk(&mut |c| holds_instance |= matches!(c.kind, NodeKind::SymbolInstance { .. }));
-        let drawn = || vectorcraft_render::effect_bounds(symbols, n).is_some_and(over);
         let painted = || holds_instance && vectorcraft_render::painted_bounds(doc, n).is_some_and(over);
-        (n.visual_bounds_with(symbols).is_none_or(over) || drawn() || painted()).then(|| n.clone())
+        (n.visual_bounds_with(symbols).is_none_or(over) || renderer.effect_bounds(symbols, n).is_some_and(over) || painted()).then(|| n.clone())
     }
     let symbols = doc.symbol_boxes().with_brush_art();
     let mut d = doc.clone();
-    d.layers = doc.layers.iter().filter_map(|l| kept(l, doc, &symbols, rect)).collect();
+    d.layers = doc.layers.iter().filter_map(|l| kept(l, doc, &symbols, rect, renderer)).collect();
     d
 }
 
