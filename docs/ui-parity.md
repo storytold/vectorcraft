@@ -1,7 +1,9 @@
 # UI and interaction parity
 
 > **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-10 · **Change:** minor (Shape Modes in the Properties panel and the Contextual Task Bar act as the Pathfinder panel's: Alt-click, the Compound Shapes setting and selected members, #6333; previously minor: interim macOS cursor delivery, #2292; native validation pending; scores and estimates unchanged; Control bar › Snapping includes the existing Snap to Glyph and Alignment Guides toggles (#6164); scores and estimates unchanged; floating tab groups collapse into the side icon rail and opened rail panels fold back into it, #5925 in part; numeric fields step on wheel hover without taking keyboard focus, #5949; Character Styles panel: a double-click on a style's row opens its Character Style Options; the dialog keeps a fixed width and scrolls its sections, so its buttons stay on screen; Selection QoL: marquee modes and visible feedback, #5313; #3380 deletion-only review follow-up: independent survivors keep gradient placement, owned subpaths avoid discarded copies, and contracts/status/evidence are clarified; endpoint highlighting remains open; scores and estimates unchanged; Drop Shadow and glow dialogs: spinner arrows, #5367, #5368; Stroke Weight Up and Down shortcuts, #5797; Layers: Rename (`ui.rename`) opens the name field of the selected layer, group or object, #5324; Properties in Edit Artboards: Transform section above the Artboards section, #5219; scrubby labels: the Control bar's Stroke: and Opacity: links and the Properties panel's Stroke link scrub their fields, #4088; Properties: Quick Actions has Repeat Options for one selected repeat, #5181; Direct Selection: Shift-click picks several blend spine points, which drag together, #5285; Direct Selection: Cmd/Ctrl held lends the Selection tool and shows its bounding box, #3901; Join tool trims two crossing open paths and joins them at the crossing, #5844; Control bar: Paragraph: link and Align left/center/right while type is selected, #5372; shape tools: a press on the selection's centre point moves it and one in the rotate zone outside a box corner turns it, #5477; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged)
-
+>
+> Vector Halftone preview update (2026-11-10): temporary dot selection marks are hidden, and the bounding box stays available (#6369).
+>
 > Numeric spinner update (2026-11-10): held mouse arrows repeat past the click timeout; scores and estimates unchanged (#6307).
 
 > Shape Modes update (2026-11-10): the Properties panel's Unite, Minus Front, Intersect and Exclude and the Contextual Task Bar's Unite act as the Pathfinder panel's Shape Modes: with no compound-shape members selected, Alt-click makes a compound shape and a plain click gives the permanent result (the other way round with the Compound Shapes setting on); with members selected, a click sets their mode and Alt-click makes a compound shape of them; scores and estimates unchanged (#6333).
@@ -254,6 +256,7 @@ tools, never checked side by side) isn't captured row by row.
 | Moving a rounded rectangle with Craquelure at high DPI | partial | Distance searches optimized; moved-viewport pixels unchanged for three texture effects; `texture_drag_perf` probe available. Idle Windows mouse-drag QA remains (#1257) |
 | Bounding-box handles: Shift proportional, Alt from centre, rotate outside the corners | done | |
 | Rotated objects keep a rotated bounding box and their angle; Reset Bounding Box | done | |
+| Vector Halftone Preview keeps the selection box and hides selection marks on the temporary dots | done | #6369; Preview off and Cancel restore the original marks. |
 | Free Transform, Scale and Reflect along a rotated box | missing | |
 | Free Transform widget: constrain, free distort, perspective distort; the key-held variants | done | |
 | Transform tools: click sets the reference point (snaps to anchors/centres), Alt-click opens the dialog, Alt-release copies | done | with anchors selected with Direct Selection, the tools, the dialogs and Move transform those anchors alone, about the centre of their box by default (#1408; the default point and whole-object copies are our choices) |
@@ -571,6 +574,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 | 2026-10-31 | minor | Artwork Cleanup add-on (a VectorCraft addition): its text tools in the panel and Object › Plug-ins › Artwork Cleanup; scores and estimates unchanged |
 | 2026-10-30 | minor | Color Effects add-on: live Duotone (one to four inks, spot tones kept) and Print Ink Fixes; scores and estimates unchanged |
 | 2026-10-30 | minor | Color Effects add-on: live Vector Halftone; scores and estimates unchanged |
+| 2026-11-10 | minor | Vector Halftone Preview leaves the dots unobscured and keeps the selection box (#6369). Scores and estimates unchanged. |
 | 2026-10-30 | minor | Path Precision Tools add-on: the Parametric Shape Tool (ten re-editable shape kinds), its panel and Convert to Parametric Shape; scores and estimates unchanged |
 | 2026-10-30 | minor | Smart Pen add-on: an Alt-drag away from paths selects points with a marquee; scores and estimates unchanged |
 | 2026-10-30 | minor | Color Effects add-on: Select by Color Kind; scores and estimates unchanged |
