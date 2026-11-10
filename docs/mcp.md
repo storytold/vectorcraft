@@ -5987,6 +5987,10 @@ any case, while the document is open. It is not saved and not an undo step.
 In the app, Edit › Spelling › Auto Spell Check (the UI command `edit.autoSpellCheck`, which returns whether it is now
 on) underlines on the canvas the words `text.spelling.check` lists, in the visible type without effects, and keeps the
 lines up to date as the type, the custom dictionary and the Ignore All words change.
+A right-click on an underlined word puts at the top of the canvas context menu the words `text.spelling.suggest` gives
+for it (each a `text.editRange {id, start, end, insert}` item labelled with its word), or No Suggestions, then Ignore
+All (`text.spelling.ignoreAll {word}`) and Add to Dictionary (`text.spelling.addWord {word}`); the context menu's
+entries list them with their params.
 
 
 ## Justification options

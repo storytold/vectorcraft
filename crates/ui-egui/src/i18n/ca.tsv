@@ -6648,3 +6648,6 @@ breakText	Glyphs	Glifs
 	Align to Pixel Grid	Alinea a la quadrícula de píxels
 @msg	only paths and compound paths can be aligned to the pixel grid	només els traçats i els traçats compostos es poden alinear a la quadrícula de píxels
 @msg	side is left or right, not `{s}`	side ha de ser left o right, no `{s}`
+	Ignore All	Ignora-ho tot
+	Add to Dictionary	Afegeix al diccionari
+	No Suggestions	No hi ha suggeriments

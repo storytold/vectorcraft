@@ -6728,3 +6728,6 @@ font-script	Japanese	იაპონური
 	Align to Pixel Grid	პიქსელურ ბადეზე გასწორება
 @msg	only paths and compound paths can be aligned to the pixel grid	პიქსელურ ბადეზე მხოლოდ ტრაექტორიების და შედგენილი ტრაექტორიების გასწორებაა შესაძლებელი
 @msg	side is left or right, not `{s}`	side არის left ან right და არა `{s}`
+	Ignore All	ყველას იგნორირება
+	Add to Dictionary	ლექსიკონში დამატება
+	No Suggestions	შემოთავაზებები არ არის
