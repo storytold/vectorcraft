@@ -677,7 +677,7 @@ fn a_tool_flyout_takes_escape_before_full_screen() {
 }
 
 #[test]
-fn a_rotation_pair_exits_full_screen_then_resets_with_selection_tool() {
+fn escape_exits_full_screen_then_resets_the_rotation_with_selection_tool() {
     for mode in [1, 2] {
         let ctx = egui::Context::default();
         let mut app = in_screen_mode(&ctx, mode);
@@ -686,7 +686,7 @@ fn a_rotation_pair_exits_full_screen_then_resets_with_selection_tool() {
         assert_eq!(app.ui.screen_mode, 0, "first Escape in mode {mode}");
         assert_eq!(app.view().unwrap().rotation, 30.0);
         frame(&mut app, &ctx, escape());
-        assert_eq!(app.view().unwrap().rotation, 0.0, "second Escape after mode {mode}");
+        assert_eq!(app.view().unwrap().rotation, 0.0, "the next Escape after mode {mode}");
     }
 }
 
