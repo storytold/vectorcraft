@@ -272,7 +272,6 @@ font-technology	Variable	Variabel
 	Update While Dragging	Beim Ziehen aktualisieren
 	Hide Video Rulers	Videolineale ausblenden
 	Background Contents	Hintergrundinhalt
-	Background Contents:	Hintergrundinhalt:
 	Background:	Hintergrund:
 	Backspace	Rücktaste
 	Bar Graph Tool	Balkendiagramm-Werkzeug
@@ -647,7 +646,6 @@ font-technology	Variable	Variabel
 	Couldn't {} {name}: {e}	Fehler bei „{}“ für {name}: {e}
 	Create	Erstellen
 	Create Clipping Mask	Schnittmaske erstellen
-	Create Document	Dokument erstellen
 	Create from Guides	Aus Hilfslinien erstellen
 	Create from Selection	Aus Auswahl erstellen
 	Create From:	Erstellen aus:
@@ -2100,7 +2098,6 @@ file-filter	Templates	Vorlagen
 	New Color Group…	Neue Farbgruppe…
 	New Document Presets	Vorgaben für neue Dokumente
 	New file	Neue Datei
-	New from Template	Neu aus Vorlage
 	New from Template…	Neu aus Vorlage…
 	New Graphic Style	Neuer Grafikstil
 	New Graphic Style (Alt-click to name it)	Neuer Grafikstil (Alt-Klick, um ihn zu benennen)
@@ -2892,6 +2889,7 @@ digits	Malayalam	Malayalam
 	Save PDF Preset	PDF-Vorgabe speichern
 	Save Perspective Grid Preset	Vorgabe für Perspektivenraster speichern
 	Save Preset	Vorgabe speichern
+	Save Document Preset	Dokumentvorgabe speichern
 	Preset {number}	Vorgabe {number}
 	Save Preset…	Vorgabe speichern…
 	Save Print Preset	Druckvorgabe speichern
@@ -3455,7 +3453,6 @@ effect	Points	Punkte
 	Template	Vorlage
 	Templates	Vorlagen
 	Templates Folder	Vorlagenordner
-	Templates…	Vorlagen…
 	Text Displayed in Cell:	In der Zelle angezeigter Text:
 	Text Export Options	Textexportoptionen
 	Text Fill & Stroke Color	Flächen- und Konturfarbe des Texts

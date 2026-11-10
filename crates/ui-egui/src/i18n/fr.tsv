@@ -298,7 +298,6 @@ font-technology	Variable	Variables
 	Update While Dragging	Mettre à jour pendant le déplacement
 	Hide Video Rulers	Masquer les règles vidéo
 	Background Contents	Contenu de l’arrière-plan
-	Background Contents:	Contenu de l’arrière-plan :
 	Background:	Arrière-plan :
 	Backspace	Retour arrière
 	Bar Graph Tool	Outil Graphe à barres
@@ -670,7 +669,6 @@ font-technology	Variable	Variables
 	Couldn't {} {name}: {e}	Impossible de {} {name} : {e}
 	Create	Créer
 	Create Clipping Mask	Créer un masque d’écrêtage
-	Create Document	Créer un document
 	Create from Guides	Créer à partir des repères
 	Create from Selection	Créer à partir de la sélection
 	Create From:	Créer à partir de :
@@ -2139,7 +2137,6 @@ font-technology	Variable	Variables
 	New Color Group…	Nouveau groupe de couleurs…
 	New Document Presets	Paramètres prédéfinis de nouveau document
 	New file	Nouveau fichier
-	New from Template	Nouveau d’après un modèle
 	New from Template…	Nouveau d’après un modèle…
 	New Graphic Style	Nouveau style graphique
 	New Graphic Style (Alt-click to name it)	Nouveau style graphique (Alt+clic pour le nommer)
@@ -2926,6 +2923,7 @@ digits	Malayalam	Malayalam
 	Save PDF Preset	Enregistrer le paramètre prédéfini PDF
 	Save Perspective Grid Preset	Enregistrer le paramètre prédéfini de grille de perspective
 	Save Preset	Enregistrer le paramètre prédéfini
+	Save Document Preset	Enregistrer le paramètre prédéfini du document
 	Save Preset…	Enregistrer le paramètre prédéfini…
 	Save Print Preset	Enregistrer le paramètre prédéfini d’impression
 	Save Recovery Data	Enregistrer les données de récupération
@@ -3503,7 +3501,6 @@ digits	Malayalam	Malayalam
 	Template	Modèle
 	Templates	Modèles
 	Templates Folder	Dossier des modèles
-	Templates…	Modèles…
 	Text Displayed in Cell:	Texte affiché dans la cellule :
 	Text Export Options	Options d’exportation du texte
 	Text Fill & Stroke Color	Couleur de fond et de contour du texte

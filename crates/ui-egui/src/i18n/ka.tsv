@@ -2253,15 +2253,12 @@ digits	Malayalam	მალაიალამური
 	Selected Swatches	მონიშნული ფერის ნიმუშები
 	Advanced Options	დამატებითი პარამეტრები
 	Background Contents	ფონის შიგთავსი
-	Background Contents:	ფონის შიგთავსი:
 	BLANK DOCUMENT PRESETS	ცარიელი დოკუმენტის პრესეტები
 	Bleed	ჭრისპირა არე
 	Change to Right-to-Left Layout	მარჯვნიდან მარცხნივ განლაგებაზე გადასვლა
 	Columns:	სვეტები:
-	Create Document	დოკუმენტის შექმნა
 	Documents you create appear here.	თქვენ მიერ შექმნილი დოკუმენტები აქ გამოჩნდება.
 	More Settings	მეტი პარამეტრი
-	New from Template	შაბლონიდან შექმნა
 	Number of Artboards:	სამუშაო დაფების რაოდენობა:
 	Orientation:	ორიენტაცია:
 	PRESET DETAILS	პრესეტის დეტალები
@@ -2271,7 +2268,6 @@ digits	Malayalam	მალაიალამური
 	Preview Mode	გადახედვის რეჟიმი
 	RECENT	ბოლოდროინდელი
 	SAVED	შენახული
-	Templates…	შაბლონები…
 	Transparent (Default)	გამჭვირვალე (ნაგულისხმევი)
 	Save for Office Documents	შენახვა Office-ის დოკუმენტებისთვის
 	Transparent Background	გამჭვირვალე ფონი
@@ -3096,6 +3092,7 @@ theme	Appearance	იერსახე
 	Arrange by Row	სტრიქონების მიხედვით დალაგება
 	Arrange by Column	სვეტების მიხედვით დალაგება
 	Save Preset	პრესეტის შენახვა
+	Save Document Preset	დოკუმენტის პრესეტის შენახვა
 	Screen (72 ppi)	ეკრანი (72 ppi)
 	Social Square Post 1080×1080	კვადრატული პოსტი 1080×1080
 	Distribute	განაწილება

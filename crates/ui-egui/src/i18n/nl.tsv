@@ -2365,15 +2365,12 @@ digits	Malayalam	Malayalam
 	Selected Swatches	Geselecteerde stalen
 	Advanced Options	Geavanceerde opties
 	Background Contents	Achtergrondinhoud
-	Background Contents:	Achtergrondinhoud:
 	BLANK DOCUMENT PRESETS	LEGE DOCUMENTVOORINSTELLINGEN
 	Bleed	Afrulling
 	Change to Right-to-Left Layout	Omschakelen naar lay-out van rechts naar links
 	Columns:	Kolommen:
-	Create Document	Document maken
 	Documents you create appear here.	Documenten die je maakt, verschijnen hier.
 	More Settings	Meer instellingen
-	New from Template	Nieuw uit sjabloon
 	Number of Artboards:	Aantal tekenborden:
 	Orientation:	Oriëntatie:
 	PRESET DETAILS	VOORINSTELLINGSDETAILS
@@ -2384,7 +2381,6 @@ digits	Malayalam	Malayalam
 	RECENT	RECENT
 	RECENT (1)	RECENT (1)
 	SAVED	OPGESLAGEN
-	Templates…	Sjablonen…
 	Transparent (Default)	Transparant (standaard)
 	Save for Office Documents	Opslaan voor Office-documenten
 	Transparent Background	Transparante achtergrond
@@ -3288,6 +3284,7 @@ theme	Appearance	Vormgeving
 	Arrange by Row	Ordenen op rij
 	Arrange by Column	Ordenen op kolom
 	Save Preset	Voorinstelling opslaan
+	Save Document Preset	Documentvoorinstelling opslaan
 	Screen (72 ppi)	Scherm (72 ppi)
 	Social Square Post 1080×1080	Vierkante socialmediapost 1080×1080
 	Distribute	Verdelen
