@@ -69,6 +69,17 @@ fn too_many_anchors_are_refused_as_a_profile() {
 }
 
 #[test]
+fn every_contour_takes_a_point_even_an_empty_one() {
+    // Contours of one anchor and of none, with no segment between them.
+    let lone = |i: usize| SubPath::new(if i.is_multiple_of(2) { vec![] } else { vec![Anchor::corner(Point::new(100.0, i as f64))] }, false);
+    let path = PathData::new((0..=MAX_PROFILE_POINTS).map(lone).collect());
+    assert_eq!(revolve_curve_samples([&path], Revolve::default()), Err(TOO_COMPLEX_PROFILE.to_string()));
+    assert_eq!(hole_segments(&path, FillRule::NonZero), Err(TOO_COMPLEX_PROFILE.to_string()), "before any contour is built");
+    let given = Revolve { curve_samples: Some(CURVE_SAMPLES), ..Revolve::default() };
+    assert_eq!(revolve_mesh(&path, FillRule::NonZero, path.bounds().unwrap(), given).map(|_| ()), Err(TOO_COMPLEX_PROFILE.to_string()));
+}
+
+#[test]
 fn a_profile_at_the_point_limit_is_taken_and_one_past_it_is_refused() {
     let straight = |anchors: usize| {
         let anchors = (0..anchors).map(|i| Anchor::corner(Point::new(100.0 + (i % 2) as f64, i as f64))).collect();

@@ -480,10 +480,10 @@ pub fn revolve_curve_samples<'a>(paths: impl IntoIterator<Item = &'a PathData>, 
     let (mut anchors, mut contours, mut lines, mut curves, mut caps) = (0usize, 0usize, 0usize, 0usize, 0usize);
     for sp in paths.into_iter().flat_map(|p| &p.subpaths) {
         anchors = anchors.saturating_add(sp.anchors.len());
-        if anchors > MAX_PROFILE_POINTS {
+        contours += 1;
+        if anchors > MAX_PROFILE_POINTS || contours > MAX_PROFILE_POINTS {
             return Err(TOO_COMPLEX_PROFILE.into());
         }
-        contours += 1;
         let segments = if sp.closed { sp.anchors.len() } else { sp.anchors.len().saturating_sub(1) };
         for i in 0..segments {
             if sp.segment_is_line(i) {
@@ -551,6 +551,10 @@ struct HoleSearch {
 
 impl HoleSearch {
     fn new(path: &PathData, rule: FillRule) -> Result<Self, String> {
+        // Each contour takes a profile point, as in `revolve_curve_samples`.
+        if path.subpaths.len() > MAX_PROFILE_POINTS {
+            return Err(TOO_COMPLEX_PROFILE.into());
+        }
         let contours: Vec<(BezPath, Rect, Option<i32>)> = path
             .subpaths
             .iter()
