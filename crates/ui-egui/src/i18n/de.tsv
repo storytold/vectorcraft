@@ -1893,6 +1893,7 @@ file-filter	Templates	Vorlagen
 	Lock (⌘2)	Sperren (⌘2)
 	Lock Grid	Raster sperren
 	Lock Guides	Hilfslinien sperren
+	Lock Guides by Default	Hilfslinien standardmäßig sperren
 	Lock Others	Andere sperren
 	Lock Slices	Slices sperren
 	Lock Station Point	Standpunkt sperren

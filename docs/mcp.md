@@ -1826,6 +1826,11 @@ View › Guides › Lock Guides (`view.guides.lock`) deselects them and the path
 document, and refuses these commands until unlocked. While it is on, a command that selects art, such as `edit.undo`,
 `edit.redo`, `object.exitIsolation`, `object.unlockAll`, `object.showAll` or `edit.paste`, leaves the guides out.
 `view.guides.lock` rejects a `locked` value that is not a boolean. Omitting `locked` toggles the current value.
+While guides are locked, `guide.add` and a guide dragged out of a ruler still make new guides, which are locked too.
+Preferences › Guides & Grid › Lock Guides by Default (`lockGuidesByDefault`, off by default) locks guides when the
+desktop app starts. Changing the preference, with `prefs.set` or `prefs.reset`, sets the lock to the new value at once.
+`view.guides.lock` changes the lock for the session and does not change the preference. A headless session starts
+with guides unlocked, as the preference is off until `prefs.set` turns it on.
 
 `view.guides.release {index?, ids?}` (View › Guides › Release Guides) turns guides into paths → `{count}`. With
 `index` it releases that ruler guide, and with `ids` it releases those guide paths (and the guide paths inside them).

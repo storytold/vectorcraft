@@ -1922,6 +1922,7 @@ file-filter	Templates	Шаблоны
 	Lock (⌘2)	Заблокировать (⌘2)
 	Lock Grid	Заблокировать сетку
 	Lock Guides	Заблокировать направляющие
+	Lock Guides by Default	Блокировать направляющие по умолчанию
 	Lock Others	Заблокировать остальные
 	Lock Slices	Заблокировать фрагменты
 	Lock Station Point	Заблокировать точку стояния

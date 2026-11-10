@@ -1896,6 +1896,7 @@ font-technology	Variable	Variables
 	Lock (⌘2)	Bloquear (⌘2)
 	Lock Grid	Bloquear cuadrícula
 	Lock Guides	Bloquear guías
+	Lock Guides by Default	Bloquear guías de forma predeterminada
 	Lock Others	Bloquear otros
 	Lock Slices	Bloquear sectores
 	Lock Station Point	Bloquear punto de estación

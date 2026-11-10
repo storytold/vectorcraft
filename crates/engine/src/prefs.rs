@@ -114,6 +114,8 @@ pub struct Prefs {
     // Guides & Grid
     pub guide_color: String,
     pub guide_style: String,
+    /// Lock Guides by Default: the app starts with View › Guides › Lock Guides on.
+    pub lock_guides_by_default: bool,
     pub grid_color: String,
     pub grid_style: String,
     pub gridline_every: f64,
@@ -421,6 +423,7 @@ impl Default for Prefs {
             identify_objects_by: s("objectName"),
             guide_color: s("#4affff"),
             guide_style: s("lines"),
+            lock_guides_by_default: false,
             grid_color: s("#c8c8c8"),
             grid_style: s("lines"),
             gridline_every: 72.0,

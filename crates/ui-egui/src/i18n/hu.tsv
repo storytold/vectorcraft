@@ -2377,6 +2377,7 @@ file-filter	Templates	Sablonok
 	Lock (⌘2)	Zárolás (⌘2)
 	Lock Grid	Rács zárolása
 	Lock Guides	Segédvonalak zárolása
+	Lock Guides by Default	Segédvonalak zárolása alapértelmezetten
 	Lock Others	Többi zárolása
 	Lock Slices	Szeletek zárolása
 	Lock Station Point	Nézőpont zárolása

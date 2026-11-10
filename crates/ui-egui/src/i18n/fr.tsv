@@ -1890,6 +1890,7 @@ font-technology	Variable	Variables
 	Lock (⌘2)	Verrouiller (⌘2)
 	Lock Grid	Verrouiller la grille
 	Lock Guides	Verrouiller les repères
+	Lock Guides by Default	Verrouiller les repères par défaut
 	Lock Others	Verrouiller les autres
 	Lock Slices	Verrouiller les tranches
 	Lock Station Point	Verrouiller le point d’observation

@@ -1725,6 +1725,7 @@ font-technology	Variable	Μεταβλητές
 	Location:	Θέση:
 	Lock	Κλείδωμα
 	Lock Guides	Κλείδωμα οδηγών
+	Lock Guides by Default	Κλείδωμα οδηγών από προεπιλογή
 	Lock Slices	Κλείδωμα τομών
 	Low	Χαμηλή
 	Luminosity	Φωτεινότητα

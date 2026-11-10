@@ -1919,6 +1919,7 @@ file-filter	Templates	Шаблони
 	Lock (⌘2)	Заблокувати (⌘2)
 	Lock Grid	Заблокувати сітку
 	Lock Guides	Заблокувати напрямні
+	Lock Guides by Default	Блокувати напрямні за замовчуванням
 	Lock Others	Заблокувати решту
 	Lock Slices	Заблокувати фрагменти
 	Lock Station Point	Заблокувати точку стояння
