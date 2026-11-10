@@ -506,3 +506,25 @@ fn no_spelling_items_off_a_misspelled_word_or_with_auto_spell_check_off() {
     let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
     assert!(!has(&texts, "Ignore All"), "off: {texts:?}");
 }
+
+/// A right word in type on top of an underlined word in other type: the right-click is on the
+/// top type, so it lists no spelling items for the word under it.
+#[test]
+fn a_word_under_other_type_is_not_the_one_right_clicked() {
+    let mut app = app();
+    let under = spelled(&mut app, "Qzvxtrwk");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let p = word_at(&app, under, 0, 8);
+    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert!(has(&texts, "Ignore All"), "alone, the word is offered: {texts:?}");
+    frame(
+        &mut app,
+        &ctx,
+        vec![Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }],
+    );
+    app.run("text.create", json!({"x": 20, "y": 60, "text": "the cat sat on the mat", "size": 24})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert!(!has(&texts, "Ignore All"), "under right type: {texts:?}");
+}

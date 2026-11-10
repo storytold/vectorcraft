@@ -6,6 +6,14 @@ use serde_json::{Value, json};
 use crate::cmd::spelling::MAX_DICTIONARY_FILE_BYTES;
 use crate::*;
 
+/// Held by each test that changes the custom dictionary, which the whole process shares: a save
+/// writes every word in it to the test's file and a reload takes the file's words back, so another
+/// test's word could come back after that test deleted it.
+fn dictionary_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 /// A session with a new 400 × 400 document.
 fn session() -> Session {
     let mut s = Session::new();
@@ -115,6 +123,7 @@ fn marked(s: &mut Session) -> Vec<String> {
 
 #[test]
 fn added_words_are_right_in_every_check_until_deleted() {
+    let _one_at_a_time = dictionary_lock();
     let mut s = session();
     text(&mut s, 50.0, "drawing Zqvwkx tools");
     assert_eq!(marked(&mut s), ["Zqvwkx"]);
@@ -137,6 +146,7 @@ fn added_words_are_right_in_every_check_until_deleted() {
 
 #[test]
 fn a_changed_word_replaces_the_old_one() {
+    let _one_at_a_time = dictionary_lock();
     let mut s = session();
     text(&mut s, 50.0, "xkvzqa xkvzqb");
     run(&mut s, "text.spelling.addWord", json!({"word": "xkvzqa"}));
@@ -150,6 +160,7 @@ fn a_changed_word_replaces_the_old_one() {
 
 #[test]
 fn the_custom_dictionary_file_is_read_and_kept_up_to_date() {
+    let _one_at_a_time = dictionary_lock();
     let dir = vectorcraft_testkit::temp_dir("spelling-dictionary");
     let file = dir.join("Custom Dictionary.txt");
     std::fs::write(&file, "kqzvwx\nnot one word\n\n").unwrap();
@@ -170,6 +181,7 @@ fn the_custom_dictionary_file_is_read_and_kept_up_to_date() {
 
 #[test]
 fn ignore_all_skips_a_word_in_the_active_document_only() {
+    let _one_at_a_time = dictionary_lock();
     let mut s = session();
     text(&mut s, 50.0, "Wqzxkv drawing wqzxkv vqzxkw");
     run(&mut s, "text.spelling.ignoreAll", json!({"word": "WQZXKV"}));
@@ -183,6 +195,7 @@ fn ignore_all_skips_a_word_in_the_active_document_only() {
 
 #[test]
 fn custom_dictionary_commands_refuse_what_isnt_one_word() {
+    let _one_at_a_time = dictionary_lock();
     let mut s = session();
     let long = "q".repeat(65);
     for (id, p) in [
@@ -210,6 +223,7 @@ fn in_dictionary(s: &mut Session, word: &str) -> bool {
 
 #[test]
 fn a_dictionary_file_that_cant_be_read_whole_is_never_written_over() {
+    let _one_at_a_time = dictionary_lock();
     let dir = vectorcraft_testkit::temp_dir("spelling-unreadable");
     // A folder where the file should be can't be read as one; a file past what craft-proof reads
     // would lose its other words if written back.
@@ -231,6 +245,7 @@ fn a_dictionary_file_that_cant_be_read_whole_is_never_written_over() {
 
 #[test]
 fn a_change_that_cant_be_saved_is_taken_back() {
+    let _one_at_a_time = dictionary_lock();
     let mut s = session();
     run(&mut s, "text.spelling.addWord", json!({"word": "wkqzvx"}));
     let dir = vectorcraft_testkit::temp_dir("spelling-rollback");
@@ -248,6 +263,7 @@ fn a_change_that_cant_be_saved_is_taken_back() {
 #[cfg(unix)]
 #[test]
 fn a_word_another_window_saved_stays_when_this_save_fails() {
+    let _one_at_a_time = dictionary_lock();
     use std::os::unix::fs::PermissionsExt;
     let dir = vectorcraft_testkit::temp_dir("spelling-readonly");
     let file = dir.join("Custom Dictionary.txt");
@@ -296,6 +312,7 @@ fn misspellings_of_one_object_are_what_the_check_lists() {
 /// what Auto Spell Check found before is checked again.
 #[test]
 fn custom_dictionary_changes_move_its_generation_on() {
+    let _one_at_a_time = dictionary_lock();
     use crate::cmd::spelling::dictionary_generation;
     let mut s = session();
     let mut last = dictionary_generation();
