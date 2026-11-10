@@ -123,18 +123,33 @@ impl Document {
         std::borrow::Cow::Owned(d)
     }
 
-    /// Does `wants` hold for a node anywhere in the document's art: the layers, symbol definitions,
-    /// graph designs, pattern swatches (the one being edited included) and their opacity masks?
-    pub fn any_node(&self, wants: impl Fn(&Node) -> bool) -> bool {
-        let roots = self
-            .layers
+    /// The roots of every tree of the document's art: the layers, symbol definitions, graph designs,
+    /// pattern swatches and the original of the pattern being edited. Opacity masks hang off nodes
+    /// in these trees.
+    pub fn art_roots(&self) -> impl Iterator<Item = &Arc<Node>> {
+        self.layers
             .iter()
             .chain(self.symbols.iter().map(|s| &s.art))
             .chain(self.graph_designs.iter().map(|g| &g.art))
             .chain(self.patterns.iter().flat_map(|p| p.art.iter()))
-            .chain(self.pattern_edit.iter().filter_map(|pe| pe.original.as_ref()).flat_map(|p| p.art.iter()));
+            .chain(self.pattern_edit.iter().filter_map(|pe| pe.original.as_ref()).flat_map(|p| p.art.iter()))
+    }
+
+    /// [`Self::art_roots`], to change.
+    pub fn art_roots_mut(&mut self) -> impl Iterator<Item = &mut Arc<Node>> {
+        self.layers
+            .iter_mut()
+            .chain(self.symbols.iter_mut().map(|s| &mut s.art))
+            .chain(self.graph_designs.iter_mut().map(|g| &mut g.art))
+            .chain(self.patterns.iter_mut().flat_map(|p| p.art.iter_mut()))
+            .chain(self.pattern_edit.iter_mut().filter_map(|pe| pe.original.as_mut()).flat_map(|p| p.art.iter_mut()))
+    }
+
+    /// Does `wants` hold for a node anywhere in the document's art ([`Self::art_roots`]) or its
+    /// opacity masks?
+    pub fn any_node(&self, wants: impl Fn(&Node) -> bool) -> bool {
         let mut any = false;
-        for root in roots {
+        for root in self.art_roots() {
             crate::swatches::walk_with_masks(root, &mut |n| any |= wants(n));
         }
         any
@@ -144,14 +159,7 @@ impl Document {
     /// [`Self::any_node`] looks). Only the trees that hold such a node are copied out of the art
     /// they share.
     pub fn edit_nodes_where(&mut self, wants: impl Fn(&Node) -> bool, mut f: impl FnMut(&mut Node)) {
-        let roots = self
-            .layers
-            .iter_mut()
-            .chain(self.symbols.iter_mut().map(|s| &mut s.art))
-            .chain(self.graph_designs.iter_mut().map(|g| &mut g.art))
-            .chain(self.patterns.iter_mut().flat_map(|p| p.art.iter_mut()))
-            .chain(self.pattern_edit.iter_mut().filter_map(|pe| pe.original.as_mut()).flat_map(|p| p.art.iter_mut()));
-        for root in roots {
+        for root in self.art_roots_mut() {
             edit_branches_where(root, &wants, &mut f);
         }
     }

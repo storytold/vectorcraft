@@ -39,6 +39,14 @@ impl Session {
     /// Execute a command by id. This is THE entry point for every frontend.
     pub fn execute(&mut self, id: &str, params: &Value) -> Result<Value> {
         let spec = find_command(id).ok_or_else(|| cmd::params::unknown_command(id))?;
+        // A clipboard import is a query that replaces the clipboard, which the end of a run sets too.
+        if self.depth == 0 && self.script_key.is_some() && (waits_for_tool_edit(id) || id.starts_with("clipboard.import")) {
+            return Err(EngineError::Busy);
+        }
+        // A step of a batch a script runs is held to the same rule as the script's own commands.
+        if self.script_in_run && crate::script::refused_to_scripts(id) {
+            return Err(EngineError::Other(crate::script::refused_text(id)));
+        }
         // An edit the active tool is computing on another thread (a Shape Builder merge) is
         // applied before a command that may edit, select, save or give a document a new revision,
         // as the click came first. Queries that only read do not wait for it.
@@ -302,8 +310,13 @@ impl Session {
     /// document goes back to how it was before the command (its art, selection, interaction and
     /// undo history), and the same document stays active, instead of crashing the frontend.
     pub(crate) fn run_guarded(&mut self, id: &str, f: impl FnOnce(&mut Self) -> Result<Value>) -> Result<Value> {
-        let snapshot: Vec<_> =
-            self.docs.iter().map(|d| (d.uid, d.doc.clone(), d.selection.clone(), d.interaction.clone(), d.history.clone())).collect();
+        // In a script's run a panic ends the run, and the run's rollback puts the histories back.
+        let in_run = self.script_in_run;
+        let snapshot: Vec<_> = self
+            .docs
+            .iter()
+            .map(|d| (d.uid, d.doc.clone(), d.selection.clone(), d.interaction.clone(), (!in_run).then(|| d.history.clone())))
+            .collect();
         let active = self.active().map(|d| d.uid);
         let r = match guard::catch_panic(|| self.run_nested(f)) {
             Ok(r) => r,
@@ -316,7 +329,9 @@ impl Session {
                     st.doc = doc;
                     st.selection = selection;
                     st.interaction = interaction;
-                    st.history = history;
+                    if let Some(history) = history {
+                        st.history = history;
+                    }
                     cmd::globaledit::follow_history(st);
                     st.drop_stale_variables_highlight();
                     st.revision += 1;

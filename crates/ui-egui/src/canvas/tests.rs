@@ -210,6 +210,27 @@ fn command_cursor_settings_refresh_hover_cursor_while_view_moves() {
     assert_eq!(hover_cursor(&mut app, mods, view, false), Some(Cursor::Crosshair));
 }
 
+/// A script that changes Caps Lock refreshes the pointer when its run ends.
+#[test]
+fn a_script_run_refreshes_hover_cursor_while_view_moves() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.session.select_tool("pen", vectorcraft_engine::ViewInfo::default()).unwrap();
+    app.hover_doc = Some(Point::new(200.0, 150.0));
+    let mods = Mods::default();
+    let view = vectorcraft_engine::ViewInfo::default();
+    assert_eq!(hover_cursor(&mut app, mods, view, false), Some(Cursor::Pen));
+    app.run("script.run", json!({"source": "vc.run('view.capsLock', {on: true});"})).unwrap();
+    for _ in 0..1_000 {
+        if !app.session.script_running() {
+            break;
+        }
+        crate::script_runs::poll(&mut app);
+    }
+    assert!(app.session.caps_lock);
+    assert_eq!(hover_cursor(&mut app, mods, view, false), Some(Cursor::Crosshair));
+}
+
 /// #826: in a turned view each ruler still has ticks along its whole length; at 0° the top one
 /// reads x where the canvas has it.
 #[test]
