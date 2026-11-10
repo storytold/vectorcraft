@@ -5473,6 +5473,24 @@ fn an_envelope_of_type_waits_on_the_page_of_layers_that_would_open_alone() {
     assert_eq!(loose, [("Note".to_string(), true)], "{notes:?}");
 }
 
+/// An envelope of type that draws as its drawn art doesn't open live where the page draws other art
+/// there (the warp bent the other way): the page check weighs the live envelope as the art it draws,
+/// not as type laid out again, so it sees the two differ. The file comes in as its page, as it does
+/// with the drawn art (#3179).
+#[test]
+fn an_envelope_of_type_that_draws_apart_from_the_page_does_not_open_live() {
+    let Some(family) = installed_family() else { return };
+    let doc = type_envelope_text(&family, None);
+    let text = made_envelope_type(&doc);
+    let (drawn, _) = drawn_envelope(&arc_envelope(&text, 30.0));
+    let (_, page) = drawn_envelope(&arc_envelope(&text, -30.0));
+    let art = native_with_text(&layer("Art", true, &format!("{}\n{}", square(10, 10), type_envelope(&arc_keys(0.3), &drawn))), &doc);
+    let r = import(&eps(&format!("{}\n{page}", page_square(10, 10)), &art)).unwrap();
+    let (envelopes, _) = envelopes_and_type(&r.document);
+    assert!(envelopes.is_empty(), "{envelopes:?} {:?}", r.warnings);
+    assert!(r.warnings.iter().any(|n| n.contains("layers weren't read") && n.contains("differs from the page's")), "{:?}", r.warnings);
+}
+
 /// The fill of the first run of type `n`.
 fn text_fill(n: &Node) -> Option<vectorcraft_color::Color> {
     let NodeKind::Text(t) = &n.kind else { return None };
