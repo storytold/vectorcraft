@@ -5587,6 +5587,20 @@ axis	Y Axis	Asse Y
 	Show its progress, see Cancel and write log lines	Mostrare il proprio avanzamento, rilevare l’annullamento e scrivere righe di registro
 	Keep settings of its own	Conservare impostazioni proprie
 	Keep a cache of its own, which you can clear	Conservare una cache propria, che è possibile svuotare
+	Run these commands on the document: {ids}	Eseguire questi comandi sul documento: {ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	“{name}” elenca `{id}` in `commandAllowlist`, che un plug-in non può chiamare
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: il `commandAllowlist` del manifesto non lo elenca
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: l’ID o gli argomenti si trovano fuori dalla memoria del modulo
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: l’ID o gli argomenti non sono UTF-8
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: gli argomenti non sono un oggetto JSON
+@msg	only a filter with the usual budget declares `commandAllowlist`	solo un filtro con il budget consueto dichiara `commandAllowlist`
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	chiamate di comandi ({MAX_CALLS} chiamate e {MAX_CALL_BYTES} byte per esecuzione)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	dimensione di una chiamata di comando (vc_call `{shown}`: {len} byte, limite {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	al massimo {MAX_ALLOWED_COMMANDS} comandi in `commandAllowlist`
+@msg	a plug-in may not call this command	un plug-in non può chiamare questo comando
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	`commandAllowlist` richiede l’autorizzazione `commands`, e `commands` richiede un `commandAllowlist`
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist` elenca `{shown}`, che non è un ID di comando o è elencato due volte
 	Clear Plug-in Cache	Svuota cache del plug-in
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	l’autorizzazione `{permission}` richiede il livello API dei plug-in {PROGRESS_API}: indicare `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	il modulo importa `env.{name}` con un tipo diverso da quello dell’host: quello dell’host è {signature}

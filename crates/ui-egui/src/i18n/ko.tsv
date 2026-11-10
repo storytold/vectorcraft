@@ -5548,6 +5548,20 @@ axis	Y Axis	Y축
 	Show its progress, see Cancel and write log lines	진행률 표시, 취소 감지 및 로그 줄 쓰기
 	Keep settings of its own	자체 설정 보관
 	Keep a cache of its own, which you can clear	지울 수 있는 자체 캐시 보관
+	Run these commands on the document: {ids}	문서에서 다음 명령 실행: {ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	“{name}”의 `commandAllowlist`에 플러그인이 호출할 수 없는 `{id}`가 있습니다
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: 매니페스트의 `commandAllowlist`에 없습니다
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: ID 또는 인수가 모듈의 메모리 밖에 있습니다
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: ID 또는 인수가 UTF-8이 아닙니다
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: 인수가 JSON 객체가 아닙니다
+@msg	only a filter with the usual budget declares `commandAllowlist`	보통 예산의 필터만 `commandAllowlist`를 선언할 수 있습니다
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	명령 호출(실행당 {MAX_CALLS}회, {MAX_CALL_BYTES}바이트)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	명령 호출 크기(vc_call `{shown}`: {len}바이트, 제한 {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	`commandAllowlist`의 명령은 최대 {MAX_ALLOWED_COMMANDS}개입니다
+@msg	a plug-in may not call this command	플러그인은 이 명령을 호출할 수 없습니다
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	`commandAllowlist`에는 `commands` 권한이 필요하고, `commands`에는 `commandAllowlist`가 필요합니다
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist`의 `{shown}`은(는) 명령 ID가 아니거나 두 번 나열되었습니다
 	Clear Plug-in Cache	플러그인 캐시 지우기
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	`{permission}` 권한에는 플러그인 API 수준 {PROGRESS_API}이(가) 필요합니다. `api` {PROGRESS_API}을(를) 지정하십시오
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	모듈이 `env.{name}`을(를) 호스트와 다른 형식으로 가져옵니다. 호스트의 형식은 {signature}입니다

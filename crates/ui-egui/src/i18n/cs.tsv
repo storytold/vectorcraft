@@ -5970,6 +5970,20 @@ axis	Y Axis	osa Y
 	Show its progress, see Cancel and write log lines	Zobrazit průběh, rozpoznat zrušení a zapisovat řádky protokolu
 	Keep settings of its own	Uchovávat vlastní nastavení
 	Keep a cache of its own, which you can clear	Uchovávat vlastní mezipaměť, kterou můžete vymazat
+	Run these commands on the document: {ids}	Spouštět v dokumentu tyto příkazy: {ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	„{name}“ uvádí v `commandAllowlist` příkaz `{id}`, který zásuvný modul nesmí volat
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: `commandAllowlist` manifestu ho neuvádí
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: ID nebo argumenty leží mimo paměť modulu
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: ID nebo argumenty nejsou v UTF-8
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: argumenty nejsou objekt JSON
+@msg	only a filter with the usual budget declares `commandAllowlist`	`commandAllowlist` deklaruje pouze filtr s obvyklým rozpočtem
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	volání příkazů ({MAX_CALLS} volání a {MAX_CALL_BYTES} bajtů na běh)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	velikost volání příkazu (vc_call `{shown}`: {len} bajtů, limit {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	nejvýše {MAX_ALLOWED_COMMANDS} příkazů v `commandAllowlist`
+@msg	a plug-in may not call this command	zásuvný modul nesmí volat tento příkaz
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	`commandAllowlist` potřebuje oprávnění `commands` a `commands` potřebuje `commandAllowlist`
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist` uvádí `{shown}`, což není ID příkazu nebo je uvedeno dvakrát
 	Clear Plug-in Cache	Vymazat mezipaměť zásuvného modulu
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	oprávnění `{permission}` vyžaduje úroveň API zásuvných modulů {PROGRESS_API}: uveďte `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	modul importuje `env.{name}` s jiným typem, než má hostitel: typ hostitele je {signature}

@@ -5953,6 +5953,20 @@ axis	Y Axis	Y tengely
 	Show its progress, see Cancel and write log lines	Megjelenítheti az előrehaladását, észlelheti a megszakítást és naplósorokat írhat
 	Keep settings of its own	Saját beállításokat tárolhat
 	Keep a cache of its own, which you can clear	Saját gyorsítótárat tárolhat, amelyet Ön kiüríthet
+	Run these commands on the document: {ids}	Ezeket a parancsokat futtathatja a dokumentumon: {ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	a(z) „{name}” a(z) `{id}` parancsot sorolja fel a `commandAllowlist` listában, amelyet bővítmény nem hívhat meg
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: a jegyzék `commandAllowlist` listája nem sorolja fel
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: az azonosító vagy az argumentumok a modul memóriáján kívül esnek
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: az azonosító vagy az argumentumok nem UTF-8 kódolásúak
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: az argumentumok nem JSON-objektumot alkotnak
+@msg	only a filter with the usual budget declares `commandAllowlist`	`commandAllowlist` listát csak a szokásos keretű szűrő adhat meg
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	parancshívások (futásonként {MAX_CALLS} hívás és {MAX_CALL_BYTES} bájt)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	parancshívás mérete (vc_call `{shown}`: {len} bájt, korlát {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	legfeljebb {MAX_ALLOWED_COMMANDS} parancs a `commandAllowlist` listában
+@msg	a plug-in may not call this command	bővítmény nem hívhatja meg ezt a parancsot
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	a `commandAllowlist` listához a `commands` engedély szükséges, a `commands` engedélyhez pedig `commandAllowlist` lista
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	a `commandAllowlist` a(z) `{shown}` elemet nevezi meg, amely nem parancsazonosító, vagy kétszer szerepel
 	Clear Plug-in Cache	Bővítmény gyorsítótárának kiürítése
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	a(z) `{permission}` engedélyhez {PROGRESS_API}. szintű bővítmény-API kell: adja meg az `api` {PROGRESS_API} értéket
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	a modul az `env.{name}` elemet a gazdaprogramétól eltérő típussal importálja: a gazdaprogram típusa {signature}

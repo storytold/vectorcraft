@@ -5921,6 +5921,20 @@ axis	Y Axis	Άξονας Y
 	Show its progress, see Cancel and write log lines	Εμφάνιση της προόδου, αναγνώριση της ακύρωσης και εγγραφή γραμμών καταγραφής
 	Keep settings of its own	Διατήρηση δικών του ρυθμίσεων
 	Keep a cache of its own, which you can clear	Διατήρηση δικής του κρυφής μνήμης, την οποία μπορείτε να εκκαθαρίσετε
+	Run these commands on the document: {ids}	Εκτέλεση αυτών των εντολών στο έγγραφο: {ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	το «{name}» αναφέρει το `{id}` στο `commandAllowlist`, το οποίο ένα πρόσθετο δεν επιτρέπεται να καλέσει
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: το `commandAllowlist` του μανιφέστου δεν την αναφέρει
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: το αναγνωριστικό ή τα ορίσματα βρίσκονται εκτός της μνήμης της λειτουργικής μονάδας
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: το αναγνωριστικό ή τα ορίσματα δεν είναι UTF-8
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: τα ορίσματα δεν είναι αντικείμενο JSON
+@msg	only a filter with the usual budget declares `commandAllowlist`	μόνο ένα φίλτρο με τον συνήθη προϋπολογισμό δηλώνει `commandAllowlist`
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	κλήσεις εντολών ({MAX_CALLS} κλήσεις και {MAX_CALL_BYTES} byte ανά εκτέλεση)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	μέγεθος κλήσης εντολής (vc_call `{shown}`: {len} byte, όριο {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	το πολύ {MAX_ALLOWED_COMMANDS} εντολές στο `commandAllowlist`
+@msg	a plug-in may not call this command	ένα πρόσθετο δεν επιτρέπεται να καλέσει αυτή την εντολή
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	το `commandAllowlist` χρειάζεται το δικαίωμα `commands`, και το `commands` χρειάζεται ένα `commandAllowlist`
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	το `commandAllowlist` αναφέρει το `{shown}`, που δεν είναι αναγνωριστικό εντολής ή αναφέρεται δύο φορές
 	Clear Plug-in Cache	Εκκαθάριση κρυφής μνήμης προσθέτου
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	το δικαίωμα `{permission}` χρειάζεται το επίπεδο API προσθέτων {PROGRESS_API}: δώστε `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	η λειτουργική μονάδα εισάγει το `env.{name}` με άλλον τύπο από αυτόν του κεντρικού υπολογιστή: ο τύπος του είναι {signature}

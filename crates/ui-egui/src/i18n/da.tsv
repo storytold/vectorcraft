@@ -5817,6 +5817,7 @@ axis	Y Axis	Y-akse
 	Show its progress, see Cancel and write log lines	Vise sin fremdrift, se en annullering og skrive logrækker
 	Keep settings of its own	Gemme sine egne indstillinger
 	Keep a cache of its own, which you can clear	Gemme sin egen cache, som du kan rydde
+	Run these commands on the document: {ids}	Køre disse kommandoer på dokumentet: {ids}
 	Clear Plug-in Cache	Ryd plug-in-cache
 # Actions panel: action sets (#3712).
 	New Set…	Nyt sæt…

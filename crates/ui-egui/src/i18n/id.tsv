@@ -5817,6 +5817,7 @@ axis	Y Axis	Sumbu Y
 	Show its progress, see Cancel and write log lines	Menampilkan kemajuannya, mengenali pembatalan, dan menulis baris log
 	Keep settings of its own	Menyimpan pengaturannya sendiri
 	Keep a cache of its own, which you can clear	Menyimpan cache-nya sendiri, yang dapat Anda kosongkan
+	Run these commands on the document: {ids}	Menjalankan perintah ini pada dokumen: {ids}
 	Clear Plug-in Cache	Kosongkan cache plug-in
 # Actions panel: action sets (#3712).
 	New Set…	Set baru…

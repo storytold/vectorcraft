@@ -27,11 +27,11 @@ This page is the contract for plug-in authors and the reference for the host (`c
 
 | Command | Params | What it does |
 |---|---|---|
-| `plugin.list` | `{}` | `{"plugins": [{id, name, version, kind, author, description, params, paramsSchema, effect?, format?, extensions?, budget?, commands?, size, source, api, paintOutput?, permissions, hash, cacheBytes}], "folder": report}` (`api` is the manifest's [plug-in API level](#permissions); `budget: "heavy"` for a [heavy filter](#heavy-filters); `commands` lists its [commands](#commands); `paintOutput: true` marks a [painted live effect](#painted-live-effects); `permissions` lists what it [may do](#permissions), `hash` is the module's SHA-256; `cacheBytes` is the size of its [cache](#settings-and-cache)) |
+| `plugin.list` | `{}` | `{"plugins": [{id, name, version, kind, author, description, params, paramsSchema, effect?, format?, extensions?, budget?, commands?, commandAllowlist?, size, source, api, paintOutput?, permissions, hash, cacheBytes}], "folder": report}` (`api` is the manifest's [plug-in API level](#permissions); `budget: "heavy"` for a [heavy filter](#heavy-filters); `commands` lists its [commands](#commands); `commandAllowlist` lists the commands it may [call](#command-calls); `paintOutput: true` marks a [painted live effect](#painted-live-effects); `permissions` lists what it [may do](#permissions), `hash` is the module's SHA-256; `cacheBytes` is the size of its [cache](#settings-and-cache)) |
 | `plugin.info` | `{"id"}` | One plug-in: the `plugin.list` entry plus `manifest`, `defaults` and `lastError` (a live effect's last failure). |
 | `plugin.run` | `{"id", "params"?: {…}, "ids"?: [...]}` (plug-in params may also be top-level keys) | Runs an object filter on the selection (or `ids`; an `ids` that is not a list of object ids is an error). One undo step; the result is selected, except the objects it locked or made guides. |
-| `plugin.install` | `{"path": "/x/y.wasm"}` (desktop) or `{"dataBase64": "…", "name"?}`, `"replace"?: bool`, `"allowHeavy": bool = false`, `"grant"?: [permission]`, `"hash"?: "sha256 hex"` | Validates and installs a module; returns its `plugin.list` entry. The desktop app and `vectorcraft-cli` keep it in the `Plug-ins` folder next to the preferences, so it is installed again after a restart (#2541). A module with other bytes than the plug-in installed with its id, or, with none installed, one whose id has [settings and a cache](#settings-and-cache) in the `Plug-ins` folder, installs only with `replace: true`, once the user agreed; it takes that plug-in's place and gets its settings and cache. The same module installs again without `replace`, and `replace: false` refuses a module whose id is installed. A [heavy filter](#heavy-filters) installs only with `allowHeavy: true`. A plug-in whose manifest lists [permissions](#permissions) installs only when `grant` lists every one of them, unless a grant is already recorded for a module with the same SHA-256. A request's `grant` and `allowHeavy` are refused except in a session started with `vectorcraft-cli --allow-plugin-grants`. With `hash`, a module whose SHA-256 differs is refused. |
-| `plugin.inspect` | as `plugin.install`: `{"path"}` or `{"dataBase64", "name"?}` | Validates a module without installing it; returns the `plugin.list` entry it would have, plus `needsApproval` (true when installing it needs a person's approval) and `needsReplace` (true when `plugin.install` needs `replace: true`). |
+| `plugin.install` | `{"path": "/x/y.wasm"}` (desktop) or `{"dataBase64": "…", "name"?}`, `"replace"?: bool`, `"allowHeavy": bool = false`, `"grant"?: [permission]`, `"hash"?: "sha256 hex"` | Validates and installs a module; returns its `plugin.list` entry. The desktop app and `vectorcraft-cli` keep it in the `Plug-ins` folder next to the preferences, so it is installed again after a restart (#2541). A module with other bytes than the plug-in installed with its id, or, with none installed, one whose id has [settings and a cache](#settings-and-cache) in the `Plug-ins` folder, installs only with `replace: true`, once the user agreed; it takes that plug-in's place and gets its settings and cache. The same module installs again without `replace`, and `replace: false` refuses a module whose id is installed. A [heavy filter](#heavy-filters) installs only with `allowHeavy: true`. A plug-in whose manifest lists [permissions](#permissions) installs only when `grant` lists every one of them, unless a grant is already recorded for a module with the same SHA-256. A request's `grant` and `allowHeavy` are refused except in a session started with `vectorcraft-cli --allow-plugin-grants`. With `hash`, a module whose SHA-256 differs is refused. A module whose `commandAllowlist` lists a command no plug-in may call is refused; ids no command has are listed as `unknownCommands` ([command calls](#command-calls)). |
+| `plugin.inspect` | as `plugin.install`: `{"path"}` or `{"dataBase64", "name"?}` | Validates a module without installing it; returns the `plugin.list` entry it would have, plus `needsApproval` (true when installing it needs a person's approval), `needsReplace` (true when `plugin.install` needs `replace: true`), and the `commandAllowlist` ids no command has (`unknownCommands`) and those no plug-in may call (`refusedCommands`). |
 | `plugin.remove` | `{"id"}` | Uninstalls, and deletes it from the `Plug-ins` folder with its [settings and cache](#settings-and-cache). |
 | `plugin.clearCache` | `{"id"?}` | Deletes every entry in the [cache](#settings-and-cache) of plug-in `id`, or of every installed plug-in; settings stay. Returns `{"cleared": [id], "bytesFreed"}`. |
 | `plugin.reload` | `{"path"?: "folder"}` (default: the preference folder) | Installs every `*.wasm` in a folder; a bad module is reported and skipped, and so are a heavy filter and a plug-in whose permissions the user hasn't granted (nobody was asked). |
@@ -178,6 +178,7 @@ capability model proposed for PhotoCraft plug-ins
 | `progress` | all | Show its progress, see Cancel and write log lines through the [host imports](#host-imports-api-level-2). Needs `api` 2. |
 | `settings` | all | Keep settings of its own between runs and sessions ([settings and cache](#settings-and-cache)). Needs `api` 2. |
 | `cache` | all | Keep a cache of its own, which the user can clear ([settings and cache](#settings-and-cache)). Needs `api` 2. |
+| `commands` | filter | Run the commands its `commandAllowlist` lists on the document ([command calls](#command-calls)). Needs `api` 2. |
 
 - A manifest without `permissions` gets the ones its kind implies, as plug-ins did before the key existed: a filter
   `doc.read`, `doc.write` and `state`; an effect `doc.read` and `effect.render`, and also `doc.write` and `state`
@@ -186,9 +187,10 @@ capability model proposed for PhotoCraft plug-ins
   these, and also installs without a prompt.
 - An effect, an exporter or an importer that lists permissions lists all of its implied ones (`doc.read` and
   `effect.render`; `doc.read` and `export.write`; `import.read`). An effect with commands may add `doc.write` and
-  `state`, which only its commands use. A filter may list any of its three.
+  `state`, which only its commands use. A filter may list any of its three, and `commands` with a `commandAllowlist`.
   Any kind may add `progress`, `settings` and `cache`, which no kind implies. An unknown name, a name listed twice, a
-  name that doesn't apply to the kind, more than 16 names, `progress`, `settings` or `cache` with an `api` below 2, or
+  name that doesn't apply to the kind, more than 16 names, `progress`, `settings`, `cache` or `commands` with an `api`
+  below 2, or
   one of the names kept for a later plug-in API
   (`ui.panel`, `ui.tool`) is refused when the module is installed, and the error names it.
 - **Installing asks first.** Install Plug-in… and File › Open show the plug-in's name, id, version, the SHA-256 of
@@ -308,7 +310,8 @@ module's memory.
 A plug-in whose manifest gives `"api": 2` and lists the [permission](#permissions) an import needs may import these
 functions from module `env` (the module a Rust or C toolchain gives `extern` functions by default). `vc_abi_version`
 still returns `1`. `vc_progress`, `vc_cancelled` and `vc_log` need `progress`; the `vc_settings_*` imports need
-`settings` and the `vc_cache_*` imports need `cache` ([settings and cache](#settings-and-cache)).
+`settings` and the `vc_cache_*` imports need `cache` ([settings and cache](#settings-and-cache)); `vc_call` and
+`vc_call_result` need `commands` ([command calls](#command-calls)).
 
 | Import | Signature | Meaning |
 |---|---|---|
@@ -389,6 +392,51 @@ A live effect runs while the art draws, so keep the entries it uses small.
   `plugin.info` give the cache's size as `cacheBytes`.
 - Without a `Plug-ins` folder (the web build, and embedders that attach none) the storage calls return `-5`.
 
+### Command calls
+
+A filter whose manifest lists the `commands` permission and names commands in `commandAllowlist` runs those commands
+on the document while it runs (#2186). It names each command by its id, as `command_list` lists it, and passes its
+arguments as a JSON object, the params the command takes from any request:
+
+| Import | Signature | Meaning |
+|---|---|---|
+| `vc_call` | `(id, id_len, args, args_len) -> i32` | Runs the command whose UTF-8 id is at `id` with the JSON object at `args` (`args_len` 0 means `{}`). Returns `0` when it ran, else a negative code. |
+| `vc_call_result` | `(out, out_cap) -> i32` | The JSON result of the last call that ran: its length in bytes. When it fits in the `out_cap` bytes at `out`, its bytes are copied there; otherwise nothing is copied. `-10` when no call has a result, `-1` when the buffer doesn't lie inside the module's memory. |
+
+`vc_call` returns `-1` when the id or the arguments don't lie inside the module's memory, `-2` when they are not UTF-8,
+`-3` when the arguments are not a JSON object, `-4` when `commandAllowlist` doesn't list the id, `-5` when no command
+has the id, `-6` when a plug-in may not call the command, `-7` when the command can't run now (nothing is selected),
+`-8` when the command ran and failed, `-9` when a limit below is passed, and `-11` when nothing can be called (from
+the module's start function, or in a run that isn't a filter's run on a document).
+
+- Every code also fails the run, whatever the plug-in does next, and the error names the call and why it failed. The run's calls and its output are one undo step, named after the plug-in or its command. A run that fails,
+  traps, runs out of budget or is canceled leaves every document, its selection and its history as they were.
+- Each call runs on the document the run is for, with its params checked as any request's are, and sees what the calls
+  before it changed: a `select.all` followed by `object.move` moves everything. The filter's own input is the one it
+  was given when the run started; an edit still in progress (typing, or a shape being drawn) is kept as its own undo
+  step before that input is made.
+- A plug-in never calls a command that reads or writes a file or folder, uses the clipboard, changes preferences or
+  the view, runs a script, an action or a plug-in (a `plugin.*` command, or arguments naming one, such as an
+  `effect.apply` of `plugin.<id>`), opens, closes or switches documents, or undoes or redoes, whatever its manifest
+  lists. The same goes for a command that changes a tool's options, keeps a drag's state or adds font names for the
+  whole app, and for a command VectorCraft adds later until it has been checked for plug-in calls. Installing a
+  manifest that lists such a command is refused, and the error names it; `plugin.inspect` lists them as
+  `refusedCommands`.
+- A call whose arguments hold a file or folder key (`path`, `paths`, `file`, `files`, `folder`, `folders`, `dir`,
+  `directory`, `destinationFolder`, `sourceFolder` or `url`) at any depth, such as an effect's `textureImage.path`,
+  returns `-6`; only a key that names part of the document in that command, as its own param, is let through. A
+  command a plug-in calls can't read or write any file or folder.
+- An id in `commandAllowlist` that no command has installs, so a plug-in can list a command a later version adds;
+  `plugin.install` and `plugin.inspect` list such ids as `unknownCommands`, and calling one returns `-5` (`-6` without
+  `doc.read`).
+- Without `doc.read`, every call of a listed id fails with `-6`, since a command's result describes the document.
+  Without `doc.write`, a call that changes the document fails with `-6`.
+- These limits are VectorCraft's own values: at most 1,000 calls a run, 8 MiB of arguments or result a call and 64 MiB
+  of arguments and results a run. Each call costs 10,000 instructions of the run's budget, plus one for every 64 bytes
+  of its arguments and its result, and the run checks Cancel and its time budget before and after each call.
+- A filter that calls commands runs on the app's main thread, so it can't ask for a heavy budget: a manifest with
+  `commandAllowlist` and `budget: "heavy"` is refused.
+
 ### Manifest
 
 ```json
@@ -437,6 +485,10 @@ A live effect runs while the art draws, so keep the entries it uses small.
   `a-z 0-9 _` that starts with a letter, and appears once. A `label` is 1–64 printable characters; menus show it with
   control and bidirectional characters escaped. `params` are declared as the plug-in's own `params` are. A malformed
   entry is refused when the module is installed, and the error names the command by its id (or its place, `[0]`).
+- `commandAllowlist` (filters at `api` 2 with the usual budget, and only with the `commands` permission, which needs
+  it): the ids of the commands the filter may [call](#command-calls), at most 256, each once (`"commandAllowlist":
+  ["select.all", "object.move"]`). An id is 1–128 characters from `A-Z a-z 0-9 . _ -` that starts with a letter, with
+  no empty part between dots. A malformed list is refused when the module is installed, and the error names the id.
 - `params`: in dialog order. Names are `[A-Za-z0-9_]`, not starting with `_`, and not `id`, `ids`, `params` or
   `preview`. The host validates the user's values before calling: missing values take the default, numbers are
   clamped to `min..max` (ints rounded), a wrong type or an unknown choice is an error. Numeric defaults

@@ -5292,6 +5292,20 @@ antiAlias	Sharp	शार्प
 	Show its progress, see Cancel and write log lines	अपनी प्रगति दिखाना, रद्द करने का अनुरोध देखना और लॉग पंक्तियाँ लिखना
 	Keep settings of its own	अपनी सेटिंग्स रखना
 	Keep a cache of its own, which you can clear	अपना कैश रखना, जिसे आप साफ़ कर सकते हैं
+	Run these commands on the document: {ids}	दस्तावेज़ पर ये कमांड चलाना: {ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	“{name}” `commandAllowlist` में `{id}` सूचीबद्ध करता है, जिसे कोई प्लग-इन कॉल नहीं कर सकता
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: मैनिफ़ेस्ट की `commandAllowlist` में यह सूचीबद्ध नहीं है
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: आईडी या आर्ग्युमेंट मॉड्यूल की मेमोरी के बाहर हैं
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: आईडी या आर्ग्युमेंट UTF-8 नहीं हैं
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: आर्ग्युमेंट JSON ऑब्जेक्ट नहीं हैं
+@msg	only a filter with the usual budget declares `commandAllowlist`	केवल सामान्य बजट वाला फ़िल्टर `commandAllowlist` घोषित करता है
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	कमांड कॉल (हर रन में {MAX_CALLS} कॉल और {MAX_CALL_BYTES} बाइट)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	कमांड कॉल का आकार (vc_call `{shown}`: {len} बाइट, सीमा {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	`commandAllowlist` में अधिकतम {MAX_ALLOWED_COMMANDS} कमांड
+@msg	a plug-in may not call this command	कोई प्लग-इन इस कमांड को कॉल नहीं कर सकता
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	`commandAllowlist` को `commands` अनुमति चाहिए, और `commands` को `commandAllowlist` चाहिए
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist` में `{shown}` है, जो कमांड आईडी नहीं है या दो बार सूचीबद्ध है
 	Clear Plug-in Cache	प्लग-इन कैश साफ़ करें
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	अनुमति `{permission}` के लिए प्लग-इन API स्तर {PROGRESS_API} चाहिए: `api` {PROGRESS_API} दें
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	मॉड्यूल `env.{name}` को होस्ट से अलग प्रकार के साथ आयात करता है: होस्ट का प्रकार {signature} है

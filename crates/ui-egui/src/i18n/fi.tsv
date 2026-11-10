@@ -6000,6 +6000,20 @@ axis	Y Axis	Y-akseli
 	Show its progress, see Cancel and write log lines	Näyttää edistymisensä, havaita peruutuksen ja kirjoittaa lokirivejä
 	Keep settings of its own	Säilyttää omat asetuksensa
 	Keep a cache of its own, which you can clear	Säilyttää oman välimuistin, jonka voit tyhjentää
+	Run these commands on the document: {ids}	Suorittaa nämä komennot asiakirjassa: {ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	”{name}” luettelee `commandAllowlist`-luettelossa komennon `{id}`, jota laajennus ei saa kutsua
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: manifestin `commandAllowlist` ei luettele sitä
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: tunnus tai argumentit ovat moduulin muistin ulkopuolella
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: tunnus tai argumentit eivät ole UTF-8:aa
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: argumentit eivät ole JSON-objekti
+@msg	only a filter with the usual budget declares `commandAllowlist`	vain tavallisen budjetin suodatin voi määrittää `commandAllowlist`-luettelon
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	komentokutsut ({MAX_CALLS} kutsua ja {MAX_CALL_BYTES} tavua ajoa kohden)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	komentokutsun koko (vc_call `{shown}`: {len} tavua, raja {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	enintään {MAX_ALLOWED_COMMANDS} komentoa `commandAllowlist`-luettelossa
+@msg	a plug-in may not call this command	laajennus ei saa kutsua tätä komentoa
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	`commandAllowlist` tarvitsee käyttöoikeuden `commands`, ja `commands` tarvitsee `commandAllowlist`-luettelon
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist` mainitsee kohteen `{shown}`, joka ei ole komennon tunnus tai on luettelossa kahdesti
 	Clear Plug-in Cache	Tyhjennä laajennuksen välimuisti
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	käyttöoikeus `{permission}` vaatii laajennus-API:n tason {PROGRESS_API}: anna `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	moduuli tuo kohteen `env.{name}` eri tyyppisenä kuin isäntä: isännän tyyppi on {signature}

@@ -5993,6 +5993,20 @@ axis	Y Axis	Y-axel
 	Show its progress, see Cancel and write log lines	Visa sitt förlopp, se när det avbryts och skriva loggrader
 	Keep settings of its own	Spara egna inställningar
 	Keep a cache of its own, which you can clear	Spara en egen cache, som du kan tömma
+	Run these commands on the document: {ids}	Köra dessa kommandon på dokumentet: {ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	”{name}” anger `{id}` i `commandAllowlist`, som ett plugin inte får anropa
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: manifestets `commandAllowlist` anger det inte
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: id:t eller argumenten ligger utanför modulens minne
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: id:t eller argumenten är inte UTF-8
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: argumenten är inte ett JSON-objekt
+@msg	only a filter with the usual budget declares `commandAllowlist`	bara ett filter med den vanliga budgeten anger `commandAllowlist`
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	kommandoanrop ({MAX_CALLS} anrop och {MAX_CALL_BYTES} byte per körning)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	storlek på ett kommandoanrop (vc_call `{shown}`: {len} byte, gräns {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	högst {MAX_ALLOWED_COMMANDS} kommandon i `commandAllowlist`
+@msg	a plug-in may not call this command	ett plugin får inte anropa det här kommandot
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	`commandAllowlist` behöver behörigheten `commands`, och `commands` behöver en `commandAllowlist`
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist` anger `{shown}`, som inte är ett kommando-id eller finns två gånger
 	Clear Plug-in Cache	Töm pluginets cache
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	behörigheten `{permission}` kräver plugin-API-nivå {PROGRESS_API}: ange `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	modulen importerar `env.{name}` med en annan typ än värdens: värdens typ är {signature}
