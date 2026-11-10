@@ -6115,6 +6115,10 @@ preferences, one word per line; without preferences (`VECTORCRAFT_NO_PREFS`, the
 closes. `text.spelling.ignoreAll {word}` is Ignore All: the active document's checks skip the word, in
 any case, while the document is open. It is not saved and not an undo step.
 
+In the app, Edit › Edit Custom Dictionary… (`text.spelling.dictionary` with no params, from the menus) opens a dialog of
+the words, with an Entry field and Add, Delete and Change; Done runs `text.spelling.removeWord` and
+`text.spelling.addWord` for the words that differ, and Cancel changes nothing.
+
 ```json
 {"name":"run_command","arguments":{"command":"text.spelling.addWord","params":{"word":"VectorCraft"}}}
 {"name":"run_command","arguments":{"command":"text.spelling.ignoreAll","params":{"word":"Zqvwkx"}}}

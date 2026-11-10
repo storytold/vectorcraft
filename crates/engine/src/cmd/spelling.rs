@@ -223,6 +223,12 @@ fn suggest(_s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "suggestions": suggestions }))
 }
 
+/// `w` as the custom dictionary keeps it (trimmed, lower case), or None when it isn't one word of at
+/// most `craft_proof::MAX_CUSTOM_WORD_CHARS` characters: what `text.spelling.addWord` takes.
+pub fn custom_word(w: &str) -> Option<String> {
+    craft_proof::custom_word(w)
+}
+
 /// `p`'s `key` as a custom-dictionary word (trimmed, lower case), or an error naming what it must be.
 fn word_param(p: &Value, key: &str, command: &str) -> Result<String> {
     let w = str_param(p, key).ok_or_else(|| bad(command, format!("missing `{key}`")))?;
