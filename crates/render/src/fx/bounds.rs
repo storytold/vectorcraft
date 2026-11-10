@@ -170,8 +170,8 @@ fn shape_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
     match &n.kind {
         // A group's or layer's 3D effect: the art of its members' solids.
         NodeKind::Layer { .. } | NodeKind::Group { clip: false, .. }
-            if effects::has_solid(n)
-                && let Some(art) = effects::solid_art(n) =>
+            if (effects::has_solid(n) || effects::has_revolve(n))
+                && let Some(art) = effects::revolve_art(n).or_else(|| effects::solid_art(n)) =>
         {
             drawn_bounds(symbols, &art)
         }

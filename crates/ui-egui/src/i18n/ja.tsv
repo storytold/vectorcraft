@@ -5238,7 +5238,7 @@ lighting	Light	ライト
 	Bevel both sides	両面にベベル
 	Presets	プリセット
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	1 つのオブジェクトに適用できる 3D 効果は 1 つです。既存の効果のオプションを編集するか、先に削除してください。
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} には現在、パスまたは複合パスが必要です。テキスト、画像、グループは先にパスに変換してください。
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} には現在、パス、複合パス、テキスト、またはグループが必要です。画像やその他のオブジェクトは先にパスに変換してください。
 @msg	{label} requires a shape with at least two anchors	{label} には 2 つ以上のアンカーポイントを持つシェイプが必要です
 @msg	The shape is too complex for a 3D effect	シェイプが複雑すぎるため 3D 効果を適用できません
 @msg	The 3D surface is too complex; simplify the shape	3D サーフェスが複雑すぎます。シェイプを単純化してください

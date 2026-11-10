@@ -138,7 +138,7 @@ pub fn inflate_options(p: &Value) -> Inflate {
 }
 
 /// The shape a solid is made from: a path's or a compound path's outline.
-fn profile(n: &Node) -> Option<(PathData, FillRule)> {
+pub(crate) fn profile(n: &Node) -> Option<(PathData, FillRule)> {
     match &n.kind {
         NodeKind::Path { path, rule, guide: false, clipping: false, .. } => Some((path.clone(), *rule)),
         NodeKind::Compound { children, rule } => {
@@ -156,7 +156,7 @@ fn profile(n: &Node) -> Option<(PathData, FillRule)> {
 
 /// What a 3D effect paints `n` with: its own fills and strokes, else, for type that has none, the
 /// fill and stroke of its first painted run (its characters' colours).
-fn solid_paints(n: &Node) -> Vec<AppearanceItem> {
+pub(crate) fn solid_paints(n: &Node) -> Vec<AppearanceItem> {
     let own: Vec<AppearanceItem> = n.appearance.items.iter().filter(|i| crate::paints(i)).cloned().collect();
     if !own.is_empty() || !matches!(n.kind, NodeKind::Text(_)) {
         return own;
@@ -207,29 +207,39 @@ pub fn validate_solid(n: &Node, id: &str, p: &Value) -> Result<(), String> {
         let b = union_bounds(&shapes).ok_or_else(|| format!("{label} requires a group holding a shape with at least two anchors"))?;
         return shapes.iter().try_for_each(|s| facets(id, &s.path, s.rule, b, p).map(|_| ()));
     }
-    let (path, rule) = profile(n).ok_or_else(|| {
-        format!("{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.")
-    })?;
+    let (path, rule) = object_profile(n, label)?;
     let b = path.bounds().ok_or_else(|| format!("{label} requires a shape with at least two anchors"))?;
     facets(id, &path, rule, b, p).map(|_| ())
 }
 
+/// [`profile`], or the error a command reports for object `n`: type with no outlines to build from
+/// (empty, or only spaces) is a shape without anchors, and any other object is the wrong kind.
+pub(crate) fn object_profile(n: &Node, label: &str) -> Result<(PathData, FillRule), String> {
+    profile(n).ok_or_else(|| {
+        if matches!(n.kind, NodeKind::Text(_)) {
+            format!("{label} requires a shape with at least two anchors")
+        } else {
+            format!("{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.")
+        }
+    })
+}
+
 /// One shape a solid is built from: its outline and fill rule, the fills and strokes that paint
 /// it, and the opacity of the objects it is in (1 for the object with the effect itself).
-struct Profile {
-    path: PathData,
-    rule: FillRule,
-    items: Vec<AppearanceItem>,
-    opacity: f32,
+pub(crate) struct Profile {
+    pub(crate) path: PathData,
+    pub(crate) rule: FillRule,
+    pub(crate) items: Vec<AppearanceItem>,
+    pub(crate) opacity: f32,
 }
 
 /// Is `n` a group or layer (a 3D effect on it turns its members about one shared axis)?
-fn is_container(n: &Node) -> bool {
+pub(crate) fn is_container(n: &Node) -> bool {
     matches!(n.kind, NodeKind::Group { clip: false, .. } | NodeKind::Layer { .. })
 }
 
 /// The bounds of every shape together: the centre a group's members turn about.
-fn union_bounds(shapes: &[Profile]) -> Option<Rect> {
+pub(crate) fn union_bounds(shapes: &[Profile]) -> Option<Rect> {
     shapes.iter().filter_map(|s| s.path.bounds()).reduce(|a, c| a.union(c))
 }
 
@@ -245,7 +255,7 @@ const MAX_MESH_TRIANGLES: usize = 2_000_000;
 /// effects and painted with its own fills and strokes. Like the effect on a group in the
 /// reference app, they turn about one shared axis (the centre of their bounds together) rather
 /// than each about its own. An error names what the group holds that can't become a solid.
-fn members(n: &Node, label: &str) -> Result<Vec<Profile>, String> {
+pub(crate) fn members(n: &Node, label: &str) -> Result<Vec<Profile>, String> {
     fn walk(n: &Node, opacity: f32, label: &str, out: &mut Vec<Profile>) -> Result<(), String> {
         for c in n.children().into_iter().flatten() {
             if !c.visible || matches!(c.kind, NodeKind::Path { guide: true, .. }) {
@@ -385,7 +395,7 @@ fn solid_parts(shapes: &[Profile], fallback: Rect) -> (Vec<(&AppearanceItem, f32
 
 /// `shapes`, the members of group or layer `n`, reshaped by the visible geometry effects `before`
 /// its 3D effect, about the bounds of all of them.
-fn reshape_members(n: &Node, before: &[Effect], shapes: &mut [Profile]) {
+pub(crate) fn reshape_members(n: &Node, before: &[Effect], shapes: &mut [Profile]) {
     if before.iter().any(|e| e.visible && is_geometry(&e.id))
         && let Some(b) = union_bounds(shapes)
     {

@@ -4858,7 +4858,7 @@ lighting	Light	Işık
 	Bevel both sides	Her iki tarafa da eğim verin
 	Presets	Ön ayarlar
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Bir nesne bir 3D efekti alır. Mevcut efektin seçeneklerini düzenleyin veya önce onu kaldırın.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} şu anda bir yol veya bileşik yol gerektiriyor. Önce türü, görüntüleri ve grupları yollara dönüştürün.
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} şu anda bir yol, bileşik yol, yazı veya grup gerektiriyor. Önce görüntüleri ve diğer nesneleri yollara dönüştürün.
 @msg	{label} requires a shape with at least two anchors	{label} en az iki bağlantı noktasına sahip bir şekil gerektirir
 @msg	The shape is too complex for a 3D effect	Şekli 3 boyutlu bir efekt için fazla karmaşık
 @msg	The 3D surface is too complex; simplify the shape	3 boyutlu yüzey çok karmaşık; şekli basitleştir

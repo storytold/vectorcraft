@@ -2347,10 +2347,12 @@ default) white ones knock out instead; `"discard"` writes none.
 
 ## Revolve (initial 3D effect)
 
-`effect.apply {effect: "threeD.revolve", params: {...}, ids?, item?}` applies a live Revolve to a path
-or compound path. `effect.dialog` opens compact options with artboard rotation and light gizmos, `effect.setParams` edits it, and
+`effect.apply {effect: "threeD.revolve", params: {...}, ids?, item?}` applies a live Revolve to a path,
+compound path, type, or a group or layer of them. `effect.dialog` opens compact options with artboard rotation and light gizmos, `effect.setParams` edits it, and
 `effect.expandAppearance` bakes it into shaded vector faces. Native saves keep the editable source;
 SVG/PDF exports bake the same faces the canvas draws. Only one Revolve is supported per profile.
+Type sweeps as its glyph outlines and stays type. On a group or layer, every visible member sweeps about one axis on the chosen edge of the members' bounds together, in its own paint, and the members stay editable. A group holding a clipping group, an image, a symbol instance or another object that can't be swept is refused, and so is type with no outlines or a group with no shape in it.
+A surface takes at most 16,384 profile points and 163,840 faces, the members of a group together, counted after any geometry effects before the Revolve. A straight segment takes one point, a curve takes at least four, and each contour takes one. Each curved segment takes 16 samples; on a surface over those limits every curve takes as many as fit, down to 4, and the call is refused below that with "reduce Segments or simplify the profile". The call is also refused with "reduce Segments or simplify the gradient" when the faces' copies of the paint would take more than 256 MiB. Mesh export refuses a profile as too complex when its closed contours nest so deeply that finding the holes would take more than 16,000,000 path element tests.
 
 Parameters: `angle` (degrees, 0..360, default 360), `offset` (points, 0..100000, default 0),
 `edge` (`"left"` or `"right"`), `rotationX/Y/Z` (degrees, defaults 0/0/0), `perspectiveAngle`
