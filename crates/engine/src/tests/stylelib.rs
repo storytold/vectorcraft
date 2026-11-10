@@ -63,6 +63,10 @@ fn builtin_libraries_are_listed_with_original_styles_using_catalogued_effects() 
     let id = rect(&mut s, 10.0, 20.0, 40.0, 30.0);
     let r = run(&mut s, "graphicStyle.addFromLibrary", json!({"library": "game-hud", "name": "Mana Glow", "apply": true, "ids": [id.0]}));
     assert_eq!((names(&r["added"]), r["applied"].as_str()), (vec!["Mana Glow"], Some("Mana Glow")));
+    let node = doc(&s).node(id).unwrap();
+    assert_eq!(node.appearance.fill_paint(), Paint::solid(vectorcraft_color::Color::from_hex("#3498db").unwrap()));
+    assert_eq!(node.appearance.stroke_paint(), Paint::None);
+    assert_eq!(node.appearance.effects.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["stylize.outerGlow"]);
     // By name in any case.
     assert_eq!(run(&mut s, "graphicStyle.library", json!({"library": "shadows and glows"}))["id"], "shadows-glows");
     assert!(s.execute("graphicStyle.library", &json!({"library": "nope"})).is_err());
