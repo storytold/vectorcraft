@@ -8894,7 +8894,8 @@ fn the_task_bar_lock_button_locks_selected_art_in_isolation_mode() {
 
 /// #6333: the Contextual Task Bar's Unite is the Pathfinder panel's Shape Mode. A click unites
 /// the selection into one path; Alt-click makes a live compound shape and keeps the originals;
-/// selected members of a compound shape take Add instead of being united.
+/// selected members of a compound shape take Add instead of being united; the Compound Shapes
+/// setting swaps click and Alt-click.
 #[test]
 fn the_task_bar_unite_makes_a_compound_shape_on_alt_click() {
     let two_squares = || {
@@ -8950,6 +8951,16 @@ fn the_task_bar_unite_makes_a_compound_shape_on_alt_click() {
         [vectorcraft_doc::ShapeMode::Add, vectorcraft_doc::ShapeMode::Add],
         "the members take Add"
     );
+
+    // With the Compound Shapes setting on, click and Alt-click swap.
+    let mut app = two_squares();
+    app.run("window.pathfinder.compoundShapes", json!({})).unwrap();
+    click_unite(&mut app, egui::Modifiers::NONE);
+    assert_eq!(top(&app), (1, 1), "with the setting on, a click makes a compound shape");
+    let mut app = two_squares();
+    app.run("window.pathfinder.compoundShapes", json!({})).unwrap();
+    click_unite(&mut app, egui::Modifiers::ALT);
+    assert_eq!(top(&app), (1, 0), "with the setting on, Alt-click is permanent");
 }
 
 /// The Contextual Task Bar shows Image Trace first for a selected image: it traces the image
