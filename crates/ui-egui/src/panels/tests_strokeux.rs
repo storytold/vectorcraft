@@ -247,8 +247,9 @@ fn a_spinner_step_from_a_weight_shown_as_a_preset_moves_past_it() {
 /// The screen rect of the Weight spinner in the Stroke panel, found by its accessibility label, so
 /// the tests do not depend on where the panel puts the field.
 fn weight_spinner_rect(ctx: &egui::Context, app: &mut VectorcraftApp) -> egui::Rect {
-    let out = ctx.run_ui(egui::RawInput::default(), |ui| stroke::show(app, ui));
-    let nodes = &out.platform_output.accesskit_update.as_ref().expect("accessibility is on").nodes;
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| stroke::show(app, ui));
+    out.textures_delta.clear();
+    let nodes =&out.platform_output.accesskit_update.as_ref().expect("accessibility is on").nodes;
     let b = nodes.iter().find(|(_, n)| n.label() == Some("Step up or down")).expect("the weight spinner").1.bounds().expect("its bounds");
     egui::Rect::from_min_max(egui::pos2(b.x0 as f32, b.y0 as f32), egui::pos2(b.x1 as f32, b.y1 as f32))
 }
