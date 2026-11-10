@@ -424,6 +424,70 @@ fn blend_replace_spine_follows_path() {
     assert!(first.distance(Point::new(100.0, 300.0)) < 1.0, "{first:?}");
 }
 
+/// Replace Spine takes a compound path: its first member path is the spine (that member's first
+/// subpath, as for any path of several subpaths) and the compound path is consumed whole, not just
+/// that member. The first member has two subpaths here, so only its first may carry the blend.
+#[test]
+fn blend_replace_spine_uses_a_compound_paths_first_member() {
+    let mut s = session();
+    let (_, _, g) = blend(&mut s, json!({"steps": 5}));
+    let a = id_of(&s.execute("path.create", &json!({"d": "M100 300 C100 245 145 200 200 200 M100 500 L400 500"})).unwrap());
+    let b = id_of(&s.execute("path.create", &json!({"d": "M200 200 C255 200 300 245 300 300"})).unwrap());
+    sel(&mut s, &[a, b]);
+    let compound = id_of(&s.execute("object.compoundPath.make", &json!({})).unwrap());
+    let member = node(&s, compound).children().and_then(|c| c.first()).and_then(|p| p.path_data()).unwrap().clone();
+    assert_eq!(member.subpaths.len(), 2, "the first member has two subpaths");
+    let (start, end) = (member.subpaths[0].anchors.first().unwrap().p, member.subpaths[0].anchors.last().unwrap().p);
+    let second = member.subpaths[1].anchors.last().unwrap().p;
+    sel(&mut s, &[g, compound]);
+    s.execute("object.blend.replaceSpine", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(compound).is_none(), "the compound path is consumed");
+    let st = steps_of(&s, g);
+    assert_eq!(st.len(), 7);
+    let first = st.first().unwrap().geometric_bounds().unwrap().center();
+    let last = st.last().unwrap().geometric_bounds().unwrap().center();
+    assert!(first.distance(start) < 1.0, "the keys start on the first member's first subpath: {first:?} vs {start:?}");
+    assert!(last.distance(end) < 1.0, "and end on it, not on its second subpath: {last:?} vs {end:?}");
+    assert!(last.distance(second) > 1.0, "the second subpath is not the spine: {last:?} vs {second:?}");
+}
+
+/// Replace Spine refuses `path`, which gives no spine (no length), before consuming it: the error
+/// names the reason, the path stays in the document, and the blend's steps and spine do not move.
+fn assert_replace_spine_refuses_no_length(s: &mut Session, g: NodeId, path: NodeId) {
+    sel(s, &[g, path]);
+    let centres = |s: &Session| steps_of(s, g).iter().map(|n| n.geometric_bounds().unwrap().center()).collect::<Vec<_>>();
+    let before = centres(s);
+    let info = s.execute("object.blend.info", &json!({})).unwrap();
+    match s.execute("object.blend.replaceSpine", &json!({})) {
+        Err(EngineError::Other(msg)) => assert!(msg.contains("no length"), "the error names the reason: {msg}"),
+        other => panic!("a spine of no length is refused: {other:?}"),
+    }
+    assert!(s.doc().unwrap().doc.node(path).is_some(), "the path is not consumed");
+    assert_eq!(centres(s), before, "no step moves");
+    assert_eq!(s.execute("object.blend.info", &json!({})).unwrap(), info, "the spine and options are unchanged");
+}
+
+/// A compound path whose first member has no length is refused before the compound is consumed.
+#[test]
+fn blend_replace_spine_refuses_a_compound_path_with_no_spine() {
+    let mut s = session();
+    let (_, _, g) = blend(&mut s, json!({"steps": 5}));
+    let a = id_of(&s.execute("path.create", &json!({"anchors": [{"x": 100.0, "y": 300.0}]})).unwrap());
+    let b = id_of(&s.execute("path.create", &json!({"anchors": [{"x": 200.0, "y": 300.0}]})).unwrap());
+    sel(&mut s, &[a, b]);
+    let compound = id_of(&s.execute("object.compoundPath.make", &json!({})).unwrap());
+    assert_replace_spine_refuses_no_length(&mut s, g, compound);
+}
+
+/// A plain path with no length is refused too, not only a compound path.
+#[test]
+fn blend_replace_spine_refuses_a_plain_path_with_no_spine() {
+    let mut s = session();
+    let (_, _, g) = blend(&mut s, json!({"steps": 5}));
+    let path = id_of(&s.execute("path.create", &json!({"anchors": [{"x": 100.0, "y": 300.0}]})).unwrap());
+    assert_replace_spine_refuses_no_length(&mut s, g, path);
+}
+
 #[test]
 fn blend_align_to_path_rotates_steps() {
     let mut s = session();
