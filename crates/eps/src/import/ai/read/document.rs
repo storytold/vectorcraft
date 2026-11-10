@@ -1165,9 +1165,8 @@ impl<'a> Reader<'a> {
             self.warn(super::types::GRAPH_UNENDED);
         }
         // Envelopes whose plugin never closed them keep their drawn art.
-        if !self.envelopes.is_empty() {
-            self.envelopes.clear();
-            self.warn(crate::import::ai::envelope::DRAWN);
+        for p in std::mem::take(&mut self.envelopes) {
+            self.warn(crate::import::ai::envelope::drawn_note(p.typed));
         }
         if !self.unknown.is_empty() {
             let ops: Vec<String> = self.unknown.iter().map(|o| format!("`{o}`")).collect();
@@ -1297,6 +1296,11 @@ impl<'a> Reader<'a> {
             for w in &mut self.warped_type {
                 vectorcraft_doc::swatches::map_node_solid_paints(&mut w.look, &mut follow);
             }
+            for e in &mut self.typed_envelopes {
+                for n in e.before.iter_mut().chain(e.inner.iter_mut()) {
+                    vectorcraft_doc::swatches::map_node_solid_paints(n, &mut follow);
+                }
+            }
         }
         let mut warnings = self.warnings;
         if let Some((lib, unread)) = brushes {
@@ -1341,6 +1345,7 @@ impl<'a> Reader<'a> {
             envelopes_drawn: self.envelopes_drawn,
             warped_type: super::super::envelope::WarpedType {
                 looks: self.warped_type,
+                envelopes: self.typed_envelopes,
                 checks: self.envelope_checks,
                 spent: self.envelope_spent,
                 page,

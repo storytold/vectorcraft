@@ -224,6 +224,9 @@ pub(super) struct PendingEnvelope {
     /// had: its drawn art is the one child after them.
     pub(super) depth: usize,
     pub(super) siblings: usize,
+    /// Its contents hold type: it is settled once the type is laid out
+    /// ([`super::super::envelope::TypedEnvelope`]).
+    pub(super) typed: bool,
 }
 
 /// What a reader of a pattern's definition has of its head, `(name) llx lly urx ury`: the operands

@@ -104,8 +104,7 @@ pub(super) type Built = Result<(Document, Vec<String>), String>;
 /// units ([`page_scale_alone`]). The document is drawn at that scale. Else `Err(structure)`, for
 /// [`build_from`] with the page.
 pub(super) fn build_without_page(structure: Structure, data: &[u8], pages: &[(f64, f64)], unit: f64) -> Result<Built, Box<Structure>> {
-    let Some(scale) = page_scale_alone(&structure, pages, unit).filter(|_| nothing_waits_on_page(&structure) && type_all_made(&structure, data))
-    else {
+    let Some(scale) = alone_scale(&structure, data, pages, unit) else {
         return Err(Box::new(structure));
     };
     let styles = structure.styles_read;
@@ -118,6 +117,12 @@ pub(super) fn build_without_page(structure: Structure, data: &[u8], pages: &[(f6
         (doc, notes)
     });
     Ok(built)
+}
+
+/// The scale [`build_without_page`] draws `structure` (the editing copy `data` read) at on `pages`
+/// in units of `unit` points, when it builds it without the page.
+pub(super) fn alone_scale(structure: &Structure, data: &[u8], pages: &[(f64, f64)], unit: f64) -> Option<f64> {
+    page_scale_alone(structure, pages, unit).filter(|_| nothing_waits_on_page(structure) && type_all_made(structure, data))
 }
 
 /// Is nothing in `structure` waiting on the page: no object unread (the page's art takes its
@@ -425,7 +430,17 @@ pub(super) fn build_from(
     // Area type flows around the wrap objects above it before it is compared with the page.
     resolve_text_wrap(&mut doc)?;
     let bound_text = text_bound_slots(&doc, &bindings, &xml_ids);
-    settle_warped_type(warped_type, &mut doc, &filled, &threaded_frames, &bound_text, &mut restyled, &mut notes)?;
+    // Without a page to compare the layers with, envelopes of type keep their drawn art: like the
+    // other live envelopes, one opens live only where the layers with it draw as the page.
+    let warped_type = warped_type.compared(frame.is_some(), &mut notes);
+    let typed = settle_warped_type(warped_type, &mut doc, &filled, &threaded_frames, &bound_text, &mut restyled, &mut notes)?;
+    // The live envelopes and what takes the place of each again, when the layers with them don't
+    // draw as the page, with the note that says so.
+    let envelopes_drawn: Vec<(NodeId, Vec<Node>, &str)> = envelopes_drawn
+        .into_iter()
+        .map(|(id, art)| (id, vec![art], ai::ENVELOPE_DRAWN))
+        .chain(typed.into_iter().map(|(id, nodes)| (id, nodes, ai::ENVELOPE_TYPE_DRAWN)))
+        .collect();
     if empty > 0 {
         notes.push(format!("{empty} {}", if frame.is_some() { TEXT_LEFT_OUT } else { TYPE_LEFT_OUT }));
     }
@@ -630,26 +645,44 @@ fn text_bound_slots(doc: &Document, bindings: &[ai::BindingRef], ids: &std::coll
 /// (`bound_text`, by slot). Elsewhere the look takes its place, and one note says how many did.
 /// `filled` says what each slot became, and the comparisons with the page leave out the boxes in
 /// `restyled`. Fails as [`resolve_text_wrap`] does when the looks give the wrap shapes too many
-/// anchors.
+/// anchors. Before that, the envelopes of type open live where they draw as their drawn art, with
+/// the type of their text slots (made type, one text object for the slot, not threaded, bound to
+/// no text variable and no wrap object); the others keep their drawn art, with a note. Returns
+/// each live envelope of type's id with what takes its place again (its hidden type, then its
+/// drawn art).
 fn settle_warped_type(
-    warped: ai::WarpedType,
+    mut warped: ai::WarpedType,
     doc: &mut Document,
     filled: &std::collections::HashMap<NodeId, Filled>,
     threaded: &BTreeSet<NodeId>,
     bound_text: &BTreeSet<NodeId>,
     restyled: &mut Vec<Rect>,
     notes: &mut Vec<String>,
-) -> Result<(), String> {
+) -> Result<Vec<(NodeId, Vec<Node>)>, String> {
     let made = |slot| match filled.get(&slot).map(|f| f.text.as_slice()).filter(|_| !bound_text.contains(&slot)) {
         Some(&[one]) => Some(one),
         _ => None,
     };
+    // An envelope's type: the one text object a slot became (hidden, with nothing else), named as
+    // the slot (made type is no longer weighed against the page: the envelope draws it).
+    let type_of = |doc: &Document, slot: NodeId| {
+        let id = made(slot).filter(|id| !threaded.contains(id) && filled.get(&slot).is_some_and(|f| f.objects == [*id]))?;
+        let mut text = doc.node(id).filter(|n| matches!(n.kind, NodeKind::Text(_)) && n.extras().wrap.is_none())?.clone();
+        if let Some(name) = text.name.as_deref().and_then(|n| n.strip_prefix(MADE)) {
+            text.name = (!name.is_empty()).then(|| name.to_string());
+        }
+        Some((id, text))
+    };
+    let typed = warped.settle_envelopes(doc, type_of);
+    if !typed.kept.is_empty() && !notes.iter().any(|n| n == ai::ENVELOPE_TYPE_DRAWN) {
+        notes.push(ai::ENVELOPE_TYPE_DRAWN.into());
+    }
     let replaced = warped.settle(doc, made, threaded, restyled);
     if replaced > 0 {
         notes.push(format!("{}: {replaced}", ai::WARPED_TYPE_DRAWN));
         resolve_text_wrap(doc)?;
     }
-    Ok(())
+    Ok(typed.put_back)
 }
 
 /// Most anchors copied into the wrap shapes of a file's area type ([`vectorcraft_doc::text::wrap_work`]).
@@ -1261,7 +1294,7 @@ fn drawn_or_trusted(
     frame: &Frame<'_>,
     view: &mut PageView,
     doc: &mut Document,
-    drawn: &[(NodeId, Node)],
+    drawn: &[(NodeId, Vec<Node>, &str)],
     notes: &[String],
     unseen: usize,
     trust: bool,
@@ -1270,18 +1303,19 @@ fn drawn_or_trusted(
 ) -> Result<Vec<String>, String> {
     let unseen_note = |n: usize| (n > 0).then(|| format!("{n} {UNSEEN_TEXT}"));
     let mut put_back = doc.clone();
-    let mut any = false;
-    for (id, art) in drawn {
-        if let Some(n) = put_back.node_mut(*id) {
-            *n = art.clone();
-            any = true;
-        }
-    }
+    // Each envelope still there, in place of the art it took the place of.
+    let there: Vec<&(NodeId, Vec<Node>, &str)> = drawn.iter().filter(|(id, ..)| put_back.node(*id).is_some()).collect();
+    let any = !there.is_empty() && put_back.insert_beside(there.iter().map(|(id, art, _)| (*id, art.clone())).collect(), true).is_ok();
     if any {
         let more = prune_unseen(frame, view, &mut put_back, reflow);
         if let Ok(note) = compare(frame, view, &put_back, reflow) {
             *doc = put_back;
-            let envelope = (!notes.iter().any(|n| n == ai::ENVELOPE_DRAWN)).then(|| ai::ENVELOPE_DRAWN.to_string());
+            let mut envelope: Vec<String> = vec![];
+            for (.., say) in there {
+                if !notes.iter().chain(&envelope).any(|n| n == say) {
+                    envelope.push(say.to_string());
+                }
+            }
             return Ok(envelope.into_iter().chain(unseen_note(unseen + more)).chain(note).collect());
         }
     }
