@@ -413,7 +413,7 @@ fn identifiers_take_the_other_id_start_and_continue_characters() {
         }
     }
     // Other_ID_Continue: may follow the first character, but cannot start a name.
-    for c in [0xB7, 0x387, 0x1369, 0x1371, 0x19DA, 0x30FB, 0xFF65] {
+    for c in [0xB7, 0x387].into_iter().chain(0x1369..=0x1371).chain([0x19DA, 0x200C, 0x200D, 0x30FB, 0xFF65]) {
         let ch = char::from_u32(c).unwrap_or_default();
         for src in [format!("var a{ch} = 1;"), format!("var a\\u{c:04X} = 1;"), format!("var a\\u{{{c:X}}} = 1;")] {
             ok(&src);
@@ -445,19 +445,29 @@ fn identifiers_refuse_pattern_syntax_surrogates_and_bad_escapes() {
     assert!(err("1\u{10000};").message.contains("immediately after numeric literal"));
 }
 
-#[test]
-fn no_pattern_syntax_or_white_space_character_is_an_identifier_character() {
-    use crate::chars::{is_id_part, is_id_start};
-    // Pattern_Syntax and Pattern_White_Space as Unicode's PropList lists them; Unicode does not
-    // change either set. `$` is Pattern_Syntax but an identifier character in scripts.
+/// The code point ranges of `Pattern_Syntax` and `Pattern_White_Space` as Unicode's PropList lists
+/// them; Unicode does not change either set.
+fn pattern_syntax_and_white_space() -> Vec<std::ops::RangeInclusive<u32>> {
     let pattern = "0009..000D 0020 0021..002F 003A..0040 005B..005E 0060 007B..007E 0085 00A1..00A7 00A9 00AB..00AC 00AE \
                    00B0..00B1 00B6 00BB 00BF 00D7 00F7 200E..200F 2010..2027 2028..2029 2030..203E 2041..2053 2055..205E \
                    2190..245F 2500..2775 2794..2BFF 2E00..2E7F 3001..3003 3008..3020 3030 FD3E..FD3F FE45..FE46";
+    pattern
+        .split_whitespace()
+        .map(|range| {
+            let (lo, hi) = range.split_once("..").unwrap_or((range, range));
+            let (Ok(lo), Ok(hi)) = (u32::from_str_radix(lo, 16), u32::from_str_radix(hi, 16)) else { panic!("{range}") };
+            lo..=hi
+        })
+        .collect()
+}
+
+#[test]
+fn no_pattern_syntax_or_white_space_character_is_an_identifier_character() {
+    use crate::chars::{is_id_part, is_id_start};
+    // `$` is Pattern_Syntax but an identifier character in scripts.
     let mut checked = 0;
-    for range in pattern.split_whitespace() {
-        let (lo, hi) = range.split_once("..").unwrap_or((range, range));
-        let (Ok(lo), Ok(hi)) = (u32::from_str_radix(lo, 16), u32::from_str_radix(hi, 16)) else { panic!("{range}") };
-        for c in (lo..=hi).filter(|&c| c != 0x24) {
+    for range in pattern_syntax_and_white_space() {
+        for c in range.filter(|&c| c != 0x24) {
             assert!(!is_id_start(c) && !is_id_part(c), "U+{c:04X}");
             checked += 1;
         }
@@ -467,6 +477,40 @@ fn no_pattern_syntax_or_white_space_character_is_an_identifier_character() {
         assert!(!is_id_start(c) && !is_id_part(c), "U+{c:04X}");
     }
     assert!(!is_id_start(0x110000) && !is_id_part(0x110000));
+}
+
+#[test]
+fn identifier_characters_are_unicode_16_id_start_and_id_continue() {
+    use crate::chars::{is_id_part, is_id_start};
+    use unicode_general_category::{GeneralCategory as G, get_general_category};
+    // Unicode Standard Annex #31: ID_Start is the categories Lu, Ll, Lt, Lm, Lo and Nl plus
+    // Other_ID_Start; ID_Continue adds Mn, Mc, Nd, Pc and Other_ID_Continue; both leave out
+    // Pattern_Syntax and Pattern_White_Space. Other_ID_Start and Other_ID_Continue as PropList 16.0
+    // lists them.
+    let other_start = [0x1885..=0x1886, 0x2118..=0x2118, 0x212E..=0x212E, 0x309B..=0x309C];
+    let other_continue = [0xB7..=0xB7, 0x387..=0x387, 0x1369..=0x1371, 0x19DA..=0x19DA, 0x200C..=0x200D, 0x30FB..=0x30FB, 0xFF65..=0xFF65];
+    let mut excluded = vec![false; 0x11_0000];
+    for range in pattern_syntax_and_white_space() {
+        for c in range {
+            excluded[c as usize] = true;
+        }
+    }
+    let (mut id_starts, mut id_continues) = (0, 0);
+    for c in (0..=0x10_FFFF_u32).filter(|c| !(0xD800..=0xDFFF).contains(c)) {
+        let Some(ch) = char::from_u32(c) else { panic!("U+{c:04X}") };
+        let g = get_general_category(ch);
+        let letter = matches!(g, G::UppercaseLetter | G::LowercaseLetter | G::TitlecaseLetter | G::ModifierLetter | G::OtherLetter | G::LetterNumber);
+        let id_start = (letter || other_start.iter().any(|r| r.contains(&c))) && !excluded[c as usize];
+        let continuing = matches!(g, G::NonspacingMark | G::SpacingMark | G::DecimalNumber | G::ConnectorPunctuation);
+        let id_continue = (id_start || continuing || other_continue.iter().any(|r| r.contains(&c))) && !excluded[c as usize];
+        id_starts += usize::from(id_start);
+        id_continues += usize::from(id_continue);
+        // Scripts add `$` and `_` at the start and `$` later (ECMA-262, Names and Keywords).
+        assert_eq!(is_id_start(c), id_start || c == 0x24 || c == 0x5F, "start U+{c:04X}");
+        assert_eq!(is_id_part(c), id_continue || c == 0x24, "part U+{c:04X}");
+    }
+    // The totals of ID_Start and ID_Continue in DerivedCoreProperties 16.0.
+    assert_eq!((id_starts, id_continues), (141_269, 144_541));
 }
 
 #[test]

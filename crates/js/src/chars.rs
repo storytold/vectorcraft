@@ -35,14 +35,13 @@ pub fn is_id_start(c: u32) -> bool {
     }
 }
 
-/// A character an identifier may hold after its first: a Unicode `ID_Continue` character, `$`,
-/// `_`, or the zero width non-joiner and joiner. `ID_Continue` adds to `ID_Start` the decimal
-/// digits (Nd), combining marks (Mn, Mc), connector punctuation (Pc) and `Other_ID_Continue`,
-/// less `Pattern_Syntax` and `Pattern_White_Space`.
+/// A character an identifier may hold after its first: a Unicode `ID_Continue` character or `$`.
+/// `ID_Continue` adds to `ID_Start` the decimal digits (Nd), combining marks (Mn, Mc), connector
+/// punctuation (Pc, which holds `_`) and `Other_ID_Continue` (which holds the zero width
+/// non-joiner and joiner), less `Pattern_Syntax` and `Pattern_White_Space`.
 pub fn is_id_part(c: u32) -> bool {
     match c {
         0x30..=0x39 => true,
-        0x200C | 0x200D => true,
         _ if is_id_start(c) => true,
         0..=0x7F => false,
         _ if is_other_id_continue(c) => true,
@@ -59,10 +58,10 @@ fn is_other_id_start(c: u32) -> bool {
     matches!(c, 0x1885 | 0x1886 | 0x2118 | 0x212E | 0x309B | 0x309C)
 }
 
-/// `Other_ID_Continue` (Unicode PropList) outside ASCII, less the zero width non-joiner and joiner,
-/// which [`is_id_part`] takes on their own.
+/// `Other_ID_Continue` (Unicode PropList 16.0): characters kept in `ID_Continue` though their
+/// category is not a letter, mark, digit or connector.
 fn is_other_id_continue(c: u32) -> bool {
-    matches!(c, 0xB7 | 0x387 | 0x1369..=0x1371 | 0x19DA | 0x30FB | 0xFF65)
+    matches!(c, 0xB7 | 0x387 | 0x1369..=0x1371 | 0x19DA | 0x200C | 0x200D | 0x30FB | 0xFF65)
 }
 
 /// Non-ASCII `Pattern_Syntax` ranges (Unicode PropList). Unicode does not change this set, and no
