@@ -275,6 +275,7 @@ impl Clipboard {
                     }
                     piece.opacity = parent.opacity;
                     piece.blend = parent.blend;
+                    piece.isolate = parent.isolate;
                     piece.knockout_shape = parent.knockout_shape;
                     let (mask, pixel_aligned) = (parent.extras().mask.clone(), parent.extras().pixel_aligned);
                     let mut extras = piece.extras_mut();

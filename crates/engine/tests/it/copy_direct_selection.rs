@@ -569,7 +569,7 @@ fn a_copied_member_keeps_the_compounds_transparency_mask_and_fill_rule() {
     let mask_art = s.doc().unwrap().doc.node(compound).unwrap().extras().mask.clone();
     assert!(mask_art.is_some(), "the compound has an opacity mask");
     run(&mut s, "select.set", json!({"ids": [compound.0]}));
-    run(&mut s, "transparency.set", json!({"opacity": 50, "blend": "Multiply"}));
+    run(&mut s, "transparency.set", json!({"opacity": 50, "blend": "Multiply", "isolate": true}));
     run(&mut s, "path.setFillRule", json!({"rule": "evenOdd"}));
     assert!(matches!(s.doc().unwrap().doc.node(m[0]).unwrap().kind, NodeKind::Path { rule: FillRule::NonZero, .. }), "the member keeps its own rule");
     let (opacity, blend) = {
@@ -581,6 +581,7 @@ fn a_copied_member_keeps_the_compounds_transparency_mask_and_fill_rule() {
     run(&mut s, "edit.copy", json!({}));
     assert_eq!(s.clipboard.nodes.iter().map(|n| (n.id, n.opacity, n.blend)).collect::<Vec<_>>(), [(m[0], opacity, blend)]);
     assert!(matches!(s.clipboard.nodes[0].kind, NodeKind::Path { rule: FillRule::EvenOdd, .. }));
+    assert!(s.clipboard.nodes[0].isolate, "the member keeps the compound's isolated blending");
     assert_eq!(s.clipboard.nodes[0].extras().mask, mask_art, "the member keeps the compound's opacity mask");
 }
 
