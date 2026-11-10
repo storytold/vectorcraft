@@ -7826,6 +7826,23 @@ fn an_envelope_that_doesnt_come_out_as_drawn_keeps_its_drawn_art() {
     assert_eq!(r.warnings, [super::envelope::DRAWN]);
 }
 
+/// The same, in white: white art seen on white looks like nothing, so the check sees it on black
+/// too, and a white envelope that draws elsewhere keeps its drawn art.
+#[test]
+fn a_white_envelope_that_doesnt_come_out_as_drawn_keeps_its_drawn_art() {
+    use vectorcraft_doc::live::EnvelopeKind;
+    const WHITE: &str = "0 0 0 0 1 1 1 Xa\n";
+    let other = EnvelopeKind::Warp { style: "arc".into(), bend: -50.0, h: 0.0, v: 0.0, horizontal: true };
+    let content = envelope_content().replace(RED, WHITE);
+    let drawn = drawn_content(&other).replace(RED, WHITE);
+    let body = envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), &warp_keys(1, 0.5, 0.0, 0.0, 0), &content, 1, &drawn);
+    let r = read_ok(&layer(&body));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Group { .. }), "{a:#?}");
+    assert_eq!(r.warnings, [super::envelope::DRAWN]);
+}
+
 /// A document of `n` warped text objects, with the art the live warp makes of each, in its look.
 fn warped_type_doc(n: usize) -> (Document, Vec<super::envelope::WarpedLook>) {
     use vectorcraft_doc::{Appearance, Effect, TextObject};
@@ -7869,6 +7886,36 @@ fn warped_type_past_the_budget_comes_in_as_its_look() {
     assert!(matches!(kept.kind, NodeKind::Group { .. } | NodeKind::Path { .. }), "{kept:#?}");
     assert_eq!((kept.name.as_deref(), kept.visible, kept.locked), (Some("Type 1"), true, false));
     assert_eq!(kept.extras().wrap, Some(wrap));
+}
+
+/// White warped type is checked as other type is: seen on white it looks like nothing, so the check
+/// sees it on black too. Type whose live warp draws as its look stays type; type whose look is
+/// warped the other way comes in as its look.
+#[test]
+fn white_warped_type_that_draws_elsewhere_comes_in_as_its_look() {
+    use vectorcraft_doc::{Appearance, CharStyle, Effect, TextObject};
+    let warp = |bend: f64| {
+        let mut appearance = Appearance::default();
+        appearance.effects.push(Effect { id: "warp.arc".into(), params: serde_json::json!({"bend": bend}), visible: true });
+        appearance
+    };
+    for (look_bend, replaced) in [(40.0, 0), (-40.0, 1)] {
+        let mut doc = Document::new(400.0, 200.0);
+        let mut layer = Node::layer(doc.alloc_id(), "Art", vectorcraft_doc::LayerColor::Preset(0));
+        let white = CharStyle { fill: Paint::solid(Color::WHITE), ..Default::default() };
+        let t = TextObject::point(kurbo::Point::new(20.0, 60.0), "TILT", white);
+        let mut text = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+        text.appearance = warp(40.0).into();
+        let mut other = text.clone();
+        other.appearance = warp(look_bend).into();
+        let mut look = vectorcraft_effects::expand_outlined(None, &other, None).unwrap();
+        look.id = doc.alloc_id();
+        let looks = vec![super::envelope::WarpedLook { slot: text.id, look, left_out: None }];
+        layer.children_mut().unwrap().push(Arc::new(text));
+        doc.layers = vec![Arc::new(layer)];
+        let warped = super::envelope::WarpedType { looks, checks: 1, ..Default::default() };
+        assert_eq!(warped.settle(&mut doc, Some, &Default::default(), &mut vec![]), replaced, "look bent {look_bend}");
+    }
 }
 
 /// The budget for warped type is what the envelopes left: their checks and the page's share they
