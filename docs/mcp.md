@@ -2461,7 +2461,8 @@ checked as that effect's. It is one undo step. Any other `threeDType` value, or 
 
 `effect.apply {effect: "threeD.extrude" | "threeD.inflate" | "threeD.rotate", params: {...}, ids?, item?}` applies
 the other 3D types to a path or compound path, live like Revolve (the source stays editable; SVG/PDF exports and
-`effect.expandAppearance` use the same shaded faces). An object takes one 3D effect, Revolve included.
+`effect.expandAppearance` use the same shaded faces). An object takes one 3D effect, Revolve included. On a group or
+layer the 3D effect goes on the group itself: `effect.apply` and `effect.setParams` refuse one on its fill or stroke.
 
 `threeD.extrude`: `depth` (points, 0..2000, default 50), `twist` (degrees, 0..360, 0), `taper` (1..100%, 100),
 `cap` (true solid, false hollow), `bevel` (`none`, `classic`, `rounded`, `cove`, `step`, `ogee`), `bevelWidth`

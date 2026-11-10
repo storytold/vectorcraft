@@ -302,8 +302,10 @@ pub fn validate_three_d(n: &Node, id: &str, p: &Value) -> Result<(), String> {
 /// appearance item `item` of `n` (the effects' length for a new effect), or on the object itself
 /// when `at` is `None`. A Revolve on a fill or stroke is checked in that item's paint, after the
 /// item's geometry effects before it, together with the object's other items that carry a Revolve.
+/// A group's or layer's fills and strokes take no 3D effect: only the group's own effect draws.
 pub fn validate_three_d_at(n: &Node, id: &str, p: &Value, at: Option<(usize, usize)>) -> Result<(), String> {
     match at {
+        Some(_) if is_container(n) => Err("A 3D effect on a group or layer goes on the group itself, not on its fill or stroke".into()),
         Some((item, index)) if id == crate::REVOLVE => crate::revolve::validate_item_revolve(n, p, item, index),
         _ => validate_three_d(n, id, p),
     }

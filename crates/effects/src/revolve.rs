@@ -718,6 +718,17 @@ mod tests {
     }
 
     #[test]
+    fn a_3d_effect_on_a_groups_fill_is_refused() {
+        let mut group = Node::group(NodeId(9), vec![member(1, 0.0)]);
+        group.appearance = Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0).into();
+        for id in [REVOLVE, crate::EXTRUDE] {
+            assert!(crate::validate_three_d(&group, id, &json!({})).is_ok(), "{id} on the group itself");
+            let refused = crate::validate_three_d_at(&group, id, &json!({}), Some((0, 0))).unwrap_err();
+            assert!(refused.contains("on the group itself"), "{id}: {refused}");
+        }
+    }
+
+    #[test]
     fn validation_measures_the_profile_after_the_geometry_effects_before_revolve() {
         let roughen = crate::new_effect("distort.roughen", &json!({"size": 1, "detail": 100})).unwrap();
         let mut group = group_with(json!({}), vec![star(1)]);
