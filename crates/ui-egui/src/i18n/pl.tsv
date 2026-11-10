@@ -5817,6 +5817,20 @@ axis	Y Axis	Oś Y
 	Show its progress, see Cancel and write log lines	Pokazywać swój postęp, wykrywać anulowanie i zapisywać wiersze dziennika
 	Keep settings of its own	Przechowywać własne ustawienia
 	Keep a cache of its own, which you can clear	Przechowywać własną pamięć podręczną, którą możesz wyczyścić
+	Run these commands on the document: {ids}	Uruchamiać w dokumencie te polecenia: {ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	„{name}” wymienia w `commandAllowlist` polecenie `{id}`, którego wtyczka nie może wywołać
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: `commandAllowlist` manifestu go nie wymienia
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: ID lub argumenty leżą poza pamięcią modułu
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: ID lub argumenty nie są w UTF-8
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: argumenty nie są obiektem JSON
+@msg	only a filter with the usual budget declares `commandAllowlist`	tylko filtr ze zwykłym budżetem deklaruje `commandAllowlist`
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	wywołania poleceń ({MAX_CALLS} wywołań i {MAX_CALL_BYTES} bajtów na uruchomienie)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	rozmiar wywołania polecenia (vc_call `{shown}`: {len} bajtów, limit {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	najwyżej {MAX_ALLOWED_COMMANDS} poleceń w `commandAllowlist`
+@msg	a plug-in may not call this command	wtyczka nie może wywołać tego polecenia
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	`commandAllowlist` potrzebuje uprawnienia `commands`, a `commands` potrzebuje `commandAllowlist`
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist` wymienia `{shown}`, które nie jest ID polecenia lub występuje dwa razy
 	Clear Plug-in Cache	Wyczyść pamięć podręczną wtyczki
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	uprawnienie `{permission}` wymaga poziomu API wtyczek {PROGRESS_API}: podaj `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	moduł importuje `env.{name}` z innym typem niż typ hosta: typ hosta to {signature}

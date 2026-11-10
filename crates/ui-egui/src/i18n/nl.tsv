@@ -5861,6 +5861,7 @@ axis	Y Axis	Y-as
 	Show its progress, see Cancel and write log lines	De voortgang tonen, een annulering zien en logregels schrijven
 	Keep settings of its own	Eigen instellingen bewaren
 	Keep a cache of its own, which you can clear	Een eigen cache bewaren, die u kunt legen
+	Run these commands on the document: {ids}	Deze opdrachten op het document uitvoeren: {ids}
 	Clear Plug-in Cache	Plug-incache legen
 # Actions panel: action sets (#3712).
 	New Set…	Nieuwe set…

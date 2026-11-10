@@ -5886,6 +5886,20 @@ axis	Y Axis	Y ღერძი
 	Show its progress, see Cancel and write log lines	პროგრესის ჩვენება, გაუქმების შემჩნევა და ჟურნალის სტრიქონების ჩაწერა
 	Keep settings of its own	საკუთარი პარამეტრების შენახვა
 	Keep a cache of its own, which you can clear	საკუთარი ქეშის შენახვა, რომლის გასუფთავებაც შეგიძლიათ
+	Run these commands on the document: {ids}	ამ ბრძანებების გაშვება დოკუმენტზე: {ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	„{name}“ `commandAllowlist`-ში ასახელებს `{id}`-ს, რომლის გამოძახებაც პლაგინს არ შეუძლია
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: მანიფესტის `commandAllowlist` მას არ ასახელებს
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: ID ან არგუმენტები მოდულის მეხსიერების გარეთაა
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: ID ან არგუმენტები UTF-8 არ არის
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: არგუმენტები JSON ობიექტი არ არის
+@msg	only a filter with the usual budget declares `commandAllowlist`	`commandAllowlist`-ის გამოცხადება მხოლოდ ჩვეულებრივი ბიუჯეტის ფილტრს შეუძლია
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	ბრძანებების გამოძახებები ({MAX_CALLS} გამოძახება და {MAX_CALL_BYTES} ბაიტი ერთ გაშვებაზე)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	ბრძანების გამოძახების ზომა (vc_call `{shown}`: {len} ბაიტი, ლიმიტი {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	მაქსიმუმ {MAX_ALLOWED_COMMANDS} ბრძანება `commandAllowlist`-ში
+@msg	a plug-in may not call this command	პლაგინს ამ ბრძანების გამოძახება არ შეუძლია
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	`commandAllowlist`-ს სჭირდება ნებართვა `commands`, ხოლო `commands`-ს სჭირდება `commandAllowlist`
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist` ასახელებს `{shown}`-ს, რომელიც ბრძანების ID არ არის ან ორჯერაა ჩამოთვლილი
 	Clear Plug-in Cache	პლაგინის ქეშის გასუფთავება
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	ნებართვას `{permission}` სჭირდება პლაგინის API-ის დონე {PROGRESS_API}: მიუთითეთ `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	მოდულს შემოაქვს `env.{name}` ჰოსტისგან განსხვავებული ტიპით: ჰოსტის ტიპია {signature}

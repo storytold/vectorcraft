@@ -5974,6 +5974,20 @@ digits	Malayalam	Malaiàlam
 	Show its progress, see Cancel and write log lines	Mostrar el progrés, detectar la cancel·lació i escriure línies de registre
 	Keep settings of its own	Desar una configuració pròpia
 	Keep a cache of its own, which you can clear	Desar una memòria cau pròpia, que podeu buidar
+	Run these commands on the document: {ids}	Executar aquestes ordres al document: {ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	«{name}» inclou `{id}` a `commandAllowlist`, que un complement no pot cridar
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: el `commandAllowlist` del manifest no la inclou
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: l’ID o els arguments són fora de la memòria del mòdul
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: l’ID o els arguments no són UTF-8
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: els arguments no són un objecte JSON
+@msg	only a filter with the usual budget declares `commandAllowlist`	només un filtre amb el pressupost habitual declara `commandAllowlist`
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	crides d’ordres ({MAX_CALLS} crides i {MAX_CALL_BYTES} bytes per execució)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	mida d’una crida d’ordre (vc_call `{shown}`: {len} bytes, límit {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	com a màxim {MAX_ALLOWED_COMMANDS} ordres a `commandAllowlist`
+@msg	a plug-in may not call this command	un complement no pot cridar aquesta ordre
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	`commandAllowlist` necessita el permís `commands`, i `commands` necessita un `commandAllowlist`
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist` inclou `{shown}`, que no és un ID d’ordre o hi apareix dues vegades
 	Clear Plug-in Cache	Buida la memòria cau del complement
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	el permís `{permission}` necessita el nivell d’API de complements {PROGRESS_API}: indiqueu `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	el mòdul importa `env.{name}` amb un tipus diferent del de l’amfitrió: el de l’amfitrió és {signature}

@@ -5801,6 +5801,20 @@ axis	Y Axis	Y 轴
 	Show its progress, see Cancel and write log lines	显示进度、检测取消请求并写入日志行
 	Keep settings of its own	保存自己的设置
 	Keep a cache of its own, which you can clear	保存自己的缓存，您可以清除它
+	Run these commands on the document: {ids}	在文档上运行这些命令：{ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	“{name}”在 `commandAllowlist` 中列出了增效工具不能调用的 `{id}`
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`：{why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`：清单的 `commandAllowlist` 未列出它
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`：ID 或参数位于模块内存之外
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`：ID 或参数不是 UTF-8
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`：参数不是 JSON 对象
+@msg	only a filter with the usual budget declares `commandAllowlist`	只有使用通常预算的滤镜才能声明 `commandAllowlist`
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	命令调用（每次运行 {MAX_CALLS} 次调用和 {MAX_CALL_BYTES} 字节）
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	命令调用大小（vc_call `{shown}`：{len} 字节，上限 {MAX_CALL_DATA}）
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	`commandAllowlist` 中最多 {MAX_ALLOWED_COMMANDS} 个命令
+@msg	a plug-in may not call this command	增效工具不能调用此命令
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	`commandAllowlist` 需要权限 `commands`，而 `commands` 需要 `commandAllowlist`
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist` 列出的 `{shown}` 不是命令 ID，或列出了两次
 	Clear Plug-in Cache	清除增效工具缓存
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	权限 `{permission}` 需要增效工具 API 级别 {PROGRESS_API}：请设置 `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	模块以与宿主不同的类型导入 `env.{name}`：宿主的类型为 {signature}

@@ -6915,7 +6915,13 @@ fit makes `plugin.run` return a memory-budget error naming the object and its si
 memory-budget error `the selection is too large to hand over`, and more than 100,000 of these objects make it return
 an object-budget error. Its output returns
 each of them as `{"id": …}` or exactly as given, otherwise `plugin.run` returns an error naming the object and the
-field, and the document and undo history are unchanged. A live-effect plug-in is an effect with
+field, and the document and undo history are unchanged. A filter at plug-in API level 2 whose manifest lists the
+`commands` permission and a `commandAllowlist` (both in its `plugin.list` entry) runs the commands that list names
+while it runs, through `vc_call`: the calls and its output are one undo step, and a run that fails or makes a call that
+fails leaves the documents, selections and history as they were. A command that reads or writes files, uses the
+clipboard, changes preferences or the view, runs a script, an action or a plug-in, switches documents or undoes is
+never called; `plugin.install` refuses a manifest that lists one, and `plugin.inspect` lists such ids as
+`refusedCommands` and ids no command has as `unknownCommands` (`plugin.install` lists those too). A live-effect plug-in is an effect with
 id `plugin.<id>`: `effect.apply`, `effect.setParams` and `effect.expandAppearance` work as for built-in effects, and
 `effect.list` lists it. One whose manifest declares `paintOutput` (at plug-in API level 2; `plugin.list` gives `api`
 and `paintOutput: true`) draws the pieces it returns with paints of their own, and `effect.expandAppearance` writes them

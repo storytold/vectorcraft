@@ -5919,6 +5919,20 @@ axis	Y Axis	Y ekseni
 	Show its progress, see Cancel and write log lines	İlerlemesini gösterme, iptali algılama ve günlük satırları yazma
 	Keep settings of its own	Kendi ayarlarını saklama
 	Keep a cache of its own, which you can clear	Temizleyebileceğiniz kendi önbelleğini saklama
+	Run these commands on the document: {ids}	Belgede şu komutları çalıştırma: {ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	“{name}”, `commandAllowlist` içinde bir eklentinin çağıramayacağı `{id}` komutunu listeliyor
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: bildirimin `commandAllowlist` listesinde yok
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: kimlik veya bağımsız değişkenler modülün belleğinin dışında
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: kimlik veya bağımsız değişkenler UTF-8 değil
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: bağımsız değişkenler bir JSON nesnesi değil
+@msg	only a filter with the usual budget declares `commandAllowlist`	`commandAllowlist` yalnızca olağan bütçeli bir filtrede bildirilebilir
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	komut çağrıları (çalıştırma başına {MAX_CALLS} çağrı ve {MAX_CALL_BYTES} bayt)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	komut çağrısı boyutu (vc_call `{shown}`: {len} bayt, sınır {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	`commandAllowlist` içinde en fazla {MAX_ALLOWED_COMMANDS} komut
+@msg	a plug-in may not call this command	bir eklenti bu komutu çağıramaz
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	`commandAllowlist` için `commands` izni, `commands` için de bir `commandAllowlist` gerekir
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist`, komut kimliği olmayan veya iki kez listelenen `{shown}` öğesini adlandırıyor
 	Clear Plug-in Cache	Eklenti Önbelleğini Temizle
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	`{permission}` izni için eklenti API düzeyi {PROGRESS_API} gerekir: `api` {PROGRESS_API} verin
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	modül `env.{name}` öğesini ana bilgisayarınkinden farklı bir türle içe aktarıyor: ana bilgisayarın türü {signature}

@@ -5598,6 +5598,20 @@ axis	Y Axis	Y 軸
 	Show its progress, see Cancel and write log lines	顯示進度、偵測取消要求並寫入記錄行
 	Keep settings of its own	保存自己的設定
 	Keep a cache of its own, which you can clear	保存自己的快取，您可以清除它
+	Run these commands on the document: {ids}	在文件上執行這些指令：{ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	「{name}」在 `commandAllowlist` 中列出了增效模組不能呼叫的 `{id}`
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`：{why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`：資訊清單的 `commandAllowlist` 未列出它
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`：ID 或引數位於模組記憶體之外
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`：ID 或引數不是 UTF-8
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`：引數不是 JSON 物件
+@msg	only a filter with the usual budget declares `commandAllowlist`	只有使用一般預算的濾鏡才能宣告 `commandAllowlist`
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	指令呼叫（每次執行 {MAX_CALLS} 次呼叫和 {MAX_CALL_BYTES} 位元組）
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	指令呼叫大小（vc_call `{shown}`：{len} 位元組，上限 {MAX_CALL_DATA}）
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	`commandAllowlist` 中最多 {MAX_ALLOWED_COMMANDS} 個指令
+@msg	a plug-in may not call this command	增效模組不能呼叫此指令
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	`commandAllowlist` 需要權限 `commands`，而 `commands` 需要 `commandAllowlist`
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist` 列出的 `{shown}` 不是指令 ID，或列出了兩次
 	Clear Plug-in Cache	清除增效模組快取
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	權限 `{permission}` 需要增效模組 API 層級 {PROGRESS_API}：請設定 `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	模組以與主機不同的類型匯入 `env.{name}`：主機的類型為 {signature}

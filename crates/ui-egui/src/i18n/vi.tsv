@@ -5561,6 +5561,20 @@ axis	Y Axis	Trục Y
 	Show its progress, see Cancel and write log lines	Hiển thị tiến độ, nhận biết yêu cầu hủy và ghi các dòng nhật ký
 	Keep settings of its own	Lưu cài đặt riêng
 	Keep a cache of its own, which you can clear	Lưu bộ nhớ đệm riêng mà bạn có thể xóa
+	Run these commands on the document: {ids}	Chạy các lệnh này trên tài liệu: {ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	“{name}” liệt kê `{id}` trong `commandAllowlist`, lệnh mà plug-in không được gọi
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: `commandAllowlist` của manifest không liệt kê lệnh này
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: ID hoặc đối số nằm ngoài bộ nhớ của mô-đun
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: ID hoặc đối số không phải UTF-8
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: đối số không phải là đối tượng JSON
+@msg	only a filter with the usual budget declares `commandAllowlist`	chỉ bộ lọc có ngân sách thông thường mới khai báo `commandAllowlist`
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	lệnh gọi lệnh ({MAX_CALLS} lần gọi và {MAX_CALL_BYTES} byte mỗi lần chạy)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	kích thước lệnh gọi lệnh (vc_call `{shown}`: {len} byte, giới hạn {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	tối đa {MAX_ALLOWED_COMMANDS} lệnh trong `commandAllowlist`
+@msg	a plug-in may not call this command	plug-in không được gọi lệnh này
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	`commandAllowlist` cần quyền `commands`, và `commands` cần một `commandAllowlist`
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist` nêu `{shown}`, không phải ID lệnh hoặc được liệt kê hai lần
 	Clear Plug-in Cache	Xóa bộ nhớ đệm của plug-in
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	quyền `{permission}` cần API plug-in cấp {PROGRESS_API}: hãy đặt `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	mô-đun nhập `env.{name}` với kiểu khác với kiểu của máy chủ: kiểu của máy chủ là {signature}

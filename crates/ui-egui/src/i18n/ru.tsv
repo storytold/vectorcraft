@@ -5574,6 +5574,20 @@ axis	Y Axis	Ось Y
 	Show its progress, see Cancel and write log lines	Показывать свой ход выполнения, замечать отмену и записывать строки журнала
 	Keep settings of its own	Хранить собственные настройки
 	Keep a cache of its own, which you can clear	Хранить собственный кэш, который можно очистить
+	Run these commands on the document: {ids}	Выполнять в документе эти команды: {ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	«{name}» указывает в `commandAllowlist` команду `{id}`, которую модуль вызывать не может
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: в `commandAllowlist` манифеста её нет
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: ID или аргументы лежат вне памяти модуля
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: ID или аргументы не в UTF-8
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: аргументы не являются объектом JSON
+@msg	only a filter with the usual budget declares `commandAllowlist`	`commandAllowlist` может объявлять только фильтр с обычным бюджетом
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	вызовы команд ({MAX_CALLS} вызовов и {MAX_CALL_BYTES} байт за запуск)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	размер вызова команды (vc_call `{shown}`: {len} байт, предел {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	не более {MAX_ALLOWED_COMMANDS} команд в `commandAllowlist`
+@msg	a plug-in may not call this command	модуль не может вызывать эту команду
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	для `commandAllowlist` нужно разрешение `commands`, а для `commands` нужен `commandAllowlist`
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist` указывает `{shown}`, который не является ID команды или указан дважды
 	Clear Plug-in Cache	Очистить кэш модуля
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	разрешению `{permission}` нужен уровень API модулей {PROGRESS_API}: укажите `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	модуль импортирует `env.{name}` с другим типом, чем у хоста: у хоста тип {signature}
