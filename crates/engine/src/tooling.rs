@@ -1060,6 +1060,12 @@ impl Session {
         self.plane_key(key).is_some() || self.with_tool_cx(view, |t, cx| t.claims_key(cx, key))
     }
 
+    /// Has the active tool started something that Escape ends while no button is pressed (see
+    /// `Tool::ends_on_escape`)?
+    pub fn tool_ends_on_escape(&mut self, view: ViewInfo) -> bool {
+        self.with_tool_cx(view, |t, cx| t.ends_on_escape(cx))
+    }
+
     pub fn overlays(&mut self, view: ViewInfo) -> Vec<Overlay> {
         // The Blend tool's first pick is not marked after an edit that dropped it.
         self.tell_tool_history_moved();
