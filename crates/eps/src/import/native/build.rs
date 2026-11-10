@@ -1325,7 +1325,18 @@ fn drawn_or_trusted(
     let mut put_back = doc.clone();
     // Each envelope still there, in place of the art it took the place of.
     let there: Vec<&(NodeId, Vec<Node>, &str)> = drawn.iter().filter(|(id, ..)| put_back.node(*id).is_some()).collect();
-    let any = !there.is_empty() && put_back.insert_beside(there.iter().map(|(id, art, _)| (*id, art.clone())).collect(), true).is_ok();
+    // One inside another's art goes with it: only the outermost are put back (a place inside
+    // another place fails the whole put-back).
+    let mut inside = std::collections::HashSet::new();
+    for n in there.iter().filter_map(|(id, ..)| put_back.node(*id)) {
+        n.walk(&mut |c| {
+            if c.id != n.id {
+                inside.insert(c.id);
+            }
+        });
+    }
+    let outermost = there.iter().filter(|(id, ..)| !inside.contains(id)).map(|(id, art, _)| (*id, art.clone())).collect();
+    let any = !there.is_empty() && put_back.insert_beside(outermost, true).is_ok();
     if any {
         let more = prune_unseen(frame, view, &mut put_back, reflow);
         if let Ok(note) = compare(frame, view, &put_back, reflow) {

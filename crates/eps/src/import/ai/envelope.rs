@@ -519,6 +519,9 @@ impl WarpedType {
         if !drawn_alike(&live_one, &plain, layer, &shared, page, &mut self.spent) {
             return Err(TypeKept::Differs);
         }
+        if doc.node(drawn).is_none() {
+            return Err(TypeKept::Read);
+        }
         // The type is the envelope's now: its hidden copy goes, kept for when the drawn art comes back.
         let mut put_back: Vec<Node> = hidden.into_iter().filter_map(|id| doc.remove(id).ok()).map(Arc::unwrap_or_clone).collect();
         let id = envelope.id;
