@@ -6375,6 +6375,11 @@ breakText	Glyphs	字形
 	Malayalam	马拉雅拉姆语
 	Odia	奥里亚语
 	Urdu	乌尔都语
+	Sanskrit	梵语
+	Nepali	尼泊尔语
+	Assamese	阿萨姆语
+	Konkani	孔卡尼语
+	Sindhi	信德语
 	VectorCraft {release} and later (version {n})	VectorCraft {release} 及更高版本 (版本 {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	将所有打开的文档导出为 PDF

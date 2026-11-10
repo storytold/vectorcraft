@@ -206,6 +206,13 @@ pub const LANGUAGES: &[(&str, &str, Quotes)] = &[
     ("Assamese", "as", Quotes::ENGLISH),
     ("Sanskrit", "sa", Quotes::ENGLISH),
     ("Urdu", "ur", Quotes::ENGLISH),
+    // “…” outside, ‘…’ inside: CLDR gives these no delimiters of their own (`↑↑↑`, inherited), so
+    // they take root's (https://github.com/unicode-org/cldr/blob/main/common/main/root.xml,
+    // `delimiters`): sa.xml, ne.xml, as.xml, kok.xml and sd.xml (Arabic script; sd_Deva.xml for
+    // Devanagari inherits too) in https://github.com/unicode-org/cldr/blob/main/common/main/.
+    ("Nepali", "ne", Quotes::ENGLISH),
+    ("Konkani", "kok", Quotes::ENGLISH),
+    ("Sindhi", "sd", Quotes::ENGLISH),
 ];
 
 /// The quotes of a [`LANGUAGES`] entry (case-insensitive).
@@ -412,6 +419,11 @@ mod tests {
         assert_eq!(char_language("BG"), Ok(Some("bg")));
         assert_eq!(char_language_name(Some("bg")), Some("Bulgarian"));
         assert_eq!(char_language_name(Some("sr-Cyrl")), Some("Serbian: Cyrillic"));
+        // Sanskrit, Nepali, Assamese, Konkani (a three-letter tag) and Sindhi, by name or tag.
+        for (name, tag) in [("Sanskrit", "sa"), ("Nepali", "ne"), ("Assamese", "as"), ("Konkani", "kok"), ("Sindhi", "sd")] {
+            assert_eq!((char_language(name), char_language(&tag.to_uppercase())), (Ok(Some(tag)), Ok(Some(tag))), "{name}");
+            assert_eq!(char_language_name(Some(tag)), Some(name));
+        }
         // Every entry has a tag of its own, and a name of its own.
         for (i, (n, t, _)) in LANGUAGES.iter().enumerate() {
             assert!(LANGUAGES.iter().skip(i + 1).all(|(n2, t2, _)| n2 != n && t2 != t), "{n} {t}");
@@ -435,6 +447,11 @@ mod tests {
         }
         let mut prev = None;
         assert_eq!(language_quotes("croatian").unwrap().apply("\"a 'b' c\"", &mut prev), "„a ‚b‘ c“");
+        // Sanskrit, Nepali, Assamese, Konkani and Sindhi take CLDR root's quotes.
+        for name in ["Sanskrit", "Nepali", "Assamese", "Konkani", "Sindhi"] {
+            let mut prev = None;
+            assert_eq!(language_quotes(name).unwrap().apply("\"a 'b' c\"", &mut prev), "“a ‘b’ c”", "{name}");
+        }
         // Only a typed `”` stands for a straight quote; the other curly quotes stay as typed.
         assert_eq!(Quotes::typed_as_straight('”'), Some('"'));
         assert!(['“', '„', '‘', '’', '‚', '"', '\'', '«', '»', '「', 'a'].iter().all(|&c| Quotes::typed_as_straight(c).is_none()));

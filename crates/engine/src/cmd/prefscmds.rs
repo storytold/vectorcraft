@@ -309,7 +309,10 @@ pub const PREF_SPECS: &[PrefSpec] = &[
             ("or", "Odia"),
             ("as", "Assamese"),
             ("sa", "Sanskrit"),
-            ("ur", "Urdu")
+            ("ur", "Urdu"),
+            ("ne", "Nepali"),
+            ("kok", "Konkani"),
+            ("sd", "Sindhi")
         ])
     ),
     p!("hyphenationExceptions", "Hyphenation", "", "Exceptions (comma separated)", text),
