@@ -43,8 +43,9 @@ pub struct Prefs {
     pub align_glyph_bounds_area: bool,
     /// Preferences › Type › Glyph Bounds › Measure Type by Glyph Bounds (also in the Transform
     /// panel menu): the bounding box, the Transform panel's, Control bar's and Properties panel's X,
-    /// Y, W and H, and `object.setBounds` measure point type selected on its own by the ink of its
-    /// glyphs instead of its em box ([`crate::Session::bounds_measure`]).
+    /// Y, W and H, and `object.setBounds` measure each point type object selected as an object (not
+    /// inside a selected group) by the ink of its glyphs instead of its em box
+    /// ([`crate::Session::bounds_measure`]).
     pub type_glyph_bounds: bool,
     /// Artboard Options › Fade Region Outside Artboard: while the Artboard tool is active, the
     /// canvas draws everything outside the artboards darker, the pasteboard and the art on it.

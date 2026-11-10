@@ -1,6 +1,6 @@
 //! Preferences › Type › Measure Type by Glyph Bounds (`typeGlyphBounds`): the bounding box, the
-//! Transform panel's values and `object.setBounds` measure point type selected on its own by the
-//! ink of its glyphs instead of its em box.
+//! Transform panel's values and `object.setBounds` measure each point type object selected as an
+//! object (not inside a selected group) by the ink of its glyphs instead of its em box.
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{NodeId, NodeKind, OrientedBox, TextObject};
@@ -280,6 +280,34 @@ fn saved_documents_do_not_depend_on_the_preference() {
     assert!(!off.contains("cached_ink") && !off.contains("cachedInk"), "the cached ink is not saved");
     glyphs(&mut s, true);
     assert_eq!(serde_json::to_string(&s.doc().unwrap().doc).unwrap(), off);
+}
+
+/// What the type draws on the page: its glyphs and its underline and strikethrough bars.
+fn drawn(s: &Session, id: NodeId) -> Rect {
+    let t = text(s, id);
+    vectorcraft_text::envelope_ink(&t, t.xf, None).unwrap()
+}
+
+/// Underline and strikethrough bars are drawn with the type, so the box takes them in and a typed
+/// height gives what is drawn that height. Underlined spaces are measured by their bar.
+#[test]
+fn underline_and_strikethrough_bars_count_as_ink() {
+    let (mut s, t) = with_type(json!({"x": 100, "y": 300, "size": 100, "text": "H"}));
+    run(&mut s, "text.setRangeStyle", json!({"id": t.0, "start": 0, "end": 1, "underline": true}));
+    glyphs(&mut s, true);
+    let b = s.transform_box(&[t]).unwrap().rect;
+    assert!(near(b, drawn(&s, t), 1e-9), "{b:?} != {:?}", drawn(&s, t));
+    assert!(b.y1 > ink(&s, t).y1 + 1.0, "the underline hangs below the glyph");
+    run(&mut s, "object.setBounds", json!({"height": 50}));
+    assert!((drawn(&s, t).height() - 50.0).abs() < 1e-6, "{:?}", drawn(&s, t));
+    assert!(near(s.transform_box(&[t]).unwrap().rect, drawn(&s, t), 1e-6));
+
+    let (mut s, t) = with_type(json!({"x": 100, "y": 300, "size": 40, "text": "   "}));
+    run(&mut s, "text.setRangeStyle", json!({"id": t.0, "start": 0, "end": 3, "strikethrough": true}));
+    glyphs(&mut s, true);
+    let b = s.transform_box(&[t]).unwrap().rect;
+    assert!(near(b, drawn(&s, t), 1e-9), "{b:?} != {:?}", drawn(&s, t));
+    assert!(em(&s, t).height() > b.height() + 10.0, "em box {:?}", em(&s, t));
 }
 
 /// A transform of type keeps its cached ink, which is in text space.

@@ -3969,17 +3969,23 @@ The bounding box normally measures point type by its em box, which leaves room a
 ascenders, descenders and capitals. With the preference `typeGlyphBounds` on (`prefs.set {key: "typeGlyphBounds",
 value: true}`; also Preferences › Type › Glyph Bounds and the Transform panel menu's Measure Type by Glyph Bounds), the
 bounding box and its handles, the Transform panel's, Control bar's and Properties panel's X, Y, W and H,
-`object.setBounds`, the Scale, Rotate and Reflect tools' reference point and the Arrange commands measure point type
-selected on its own, horizontal or vertical, by the ink of its glyphs. The option is VectorCraft's own and is off by
+`object.setBounds`, the Scale, Rotate and Reflect tools' reference point, and Swap Objects, Replace with Top Object,
+Set Size of Each and Sort Objects measure point type, horizontal or vertical, by the ink of its glyphs: its glyph
+outlines and its underline and strikethrough bars. This applies to each point type object that is selected as an object
+(not inside a selected group), in a selection with other objects too. The option is VectorCraft's own and is off by
 default.
 
 A width or height typed with the option on scales the type until its ink has that size. The type stays live type: its
 font size changes by the scale, so `object.setBounds {height: 72}` on "H" gives the cap height 72 pt, not a 72 pt
 font. With Use Preview Bounds on, the ink takes in the characters' strokes, and type with geometry effects is
 measured as drawn. Rotated type keeps its own angle, and skewed type is measured by its glyph outlines. Type that
-draws nothing (no text, only spaces), area type, type on a path and type inside a selected group are measured as
-before. Align and Distribute follow Align to Glyph Bounds, and snapping and clicks do not change. The preference is
-not saved in documents.
+draws nothing (no text, or only spaces without underline or strikethrough), area type, type on a path and type inside
+a selected group are measured as before. Arrange in Grid and Group Overlapping Objects measure visual bounds as
+before, and Align and Distribute follow Align to Glyph Bounds.
+
+When moved type snaps (Snap to Grid, Snap to Pixel, Smart Guides and ruler guides), the edges and center of its ink box
+snap, and the Distance Guides measure from that box. The other objects that it snaps to keep their usual boxes, as
+they do with Use Preview Bounds. The preference is not saved in documents.
 
 ```json
 {"name":"run_command","arguments":{"command":"prefs.set","params":{"values":{"typeGlyphBounds":true}}}}

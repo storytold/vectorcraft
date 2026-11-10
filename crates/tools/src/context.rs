@@ -178,8 +178,9 @@ pub struct ToolContext<'a> {
     pub raster_sample: u32,
     /// General → Use Preview Bounds: the bounding box measures visual bounds (strokes included).
     pub preview_bounds: bool,
-    /// Type › Measure Type by Glyph Bounds: the bounding box measures point type selected on its
-    /// own by the ink of its glyphs ([`vectorcraft_effects::preview::Measure`]).
+    /// Type › Measure Type by Glyph Bounds: the bounding box measures each point type object
+    /// selected as an object (not inside a selected group) by the ink of its glyphs
+    /// ([`vectorcraft_effects::preview::Measure`]).
     pub glyph_bounds: bool,
     /// The session's memo of the selection tools' measurements for the document as it is
     /// ([`select::PreviewMemo`]); without one they measure on every call.

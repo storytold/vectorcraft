@@ -165,8 +165,9 @@ fn measured_in(drawn: &Drawn, n: &Node, a: Affine, m: Measure) -> Option<Rect> {
 
 /// The box of the ink of type `t`'s glyphs with its text space mapped by `a * t.xf`: the cached
 /// ink ([`vectorcraft_doc::TextObject::ink`]) when that map keeps a rectangle square, else the
-/// glyph outlines mapped point by point ([`vectorcraft_text::TextLayout::ink_bounds_in`]). `None`
-/// when nothing draws (no text, only spaces, or glyphs without outlines).
+/// glyph outlines and the underline and strikethrough bars mapped point by point
+/// ([`vectorcraft_text::envelope_ink`]). `None` when nothing draws (no text, only spaces without
+/// underline or strikethrough, or glyphs without outlines).
 pub fn text_ink_in(t: &vectorcraft_doc::TextObject, a: Affine) -> Option<Rect> {
     let m = a * t.xf;
     let [p, q, r, s, _, _] = m.as_coeffs();
@@ -174,11 +175,20 @@ pub fn text_ink_in(t: &vectorcraft_doc::TextObject, a: Affine) -> Option<Rect> {
     if square {
         let ink = match t.ink() {
             Some(ink) => ink,
-            None => vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).ink_bounds(),
+            None => vectorcraft_text::envelope_ink(t, Affine::IDENTITY, None),
         };
         return ink.map(|i| m.transform_rect_bbox(i));
     }
-    vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).ink_bounds_in(m)
+    vectorcraft_text::envelope_ink(t, m, None)
+}
+
+/// The ink of type `t` laid out as `layout`, in text space: its glyphs
+/// ([`vectorcraft_text::TextLayout::ink_bounds`]) and its underline and strikethrough bars
+/// ([`vectorcraft_text::decorations`]), what [`text_ink_in`] measures. `None` when nothing draws.
+pub fn laid_out_ink(layout: &vectorcraft_text::TextLayout, t: &vectorcraft_doc::TextObject) -> Option<Rect> {
+    vectorcraft_text::decorations(layout, vectorcraft_text::FontDb::global(), t)
+        .into_iter()
+        .fold(layout.ink_bounds(), |acc, (_, bar)| union_opt(acc, Some(bar.bounding_box())))
 }
 
 /// The visual bounds of `n` as drawn: those of its [`drawn_art`], else
