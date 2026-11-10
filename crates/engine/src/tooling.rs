@@ -456,6 +456,9 @@ impl Session {
     /// applied, in order ([`Session::tool_poll`]); moves of the pointer with no button held go to
     /// the tool at once.
     pub fn pointer(&mut self, ev: &PointerEvent, view: ViewInfo) -> Result<Vec<UiRequest>> {
+        if self.script_running() {
+            return if ev.kind == PointerKind::Move { Ok(vec![]) } else { Err(EngineError::Busy) };
+        }
         let n = self.next_input();
         if ev.kind != PointerKind::Move && (!self.held_input.is_empty() || self.tool_edit_pending()) {
             self.held_input.push_back((n, HeldInput::Pointer(*ev), view));
@@ -878,6 +881,9 @@ impl Session {
     /// A key for the active tool. While the tool computes an edit on another thread, the key is held
     /// and made once the edit is applied, after the input held before it.
     pub fn tool_key(&mut self, key: ToolKey, mods: Mods, view: ViewInfo) -> Result<Vec<UiRequest>> {
+        if self.script_running() {
+            return Err(EngineError::Busy);
+        }
         let n = self.next_input();
         if self.tool_editing() {
             self.held_input.push_back((n, HeldInput::Key(key, mods), view));
@@ -911,6 +917,9 @@ impl Session {
 
     /// Typed text for the active tool (Type tool).
     pub fn tool_text(&mut self, text: &str, view: ViewInfo) -> Result<Vec<UiRequest>> {
+        if self.script_running() {
+            return Err(EngineError::Busy);
+        }
         let acts = self.with_tool_cx(view, |t, cx| t.text_input(cx, text));
         self.take_tool_panic()?;
         self.apply_actions(acts)

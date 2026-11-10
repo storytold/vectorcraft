@@ -109,6 +109,7 @@ pub mod save_style_library;
 pub mod save_swatch_library;
 pub mod save_symbol_library;
 pub mod script_check;
+pub mod script_run;
 pub mod shape_builder_options;
 pub(crate) mod shapes;
 pub mod shortcut_import;
@@ -404,6 +405,9 @@ registry! {
     PluginImport: [plugin::IMPORT_KIND] => plugin::IMPORT_SPEC,
     PluginInstall: [plugin::INSTALL_KIND] => plugin::INSTALL_SPEC,
     ScriptCheck: [script_check::KIND] => script_check::SPEC,
+    ScriptRun: [script_run::KIND] => script_run::SPEC,
+    ScriptGrowth: [script_run::GROWTH_KIND] => script_run::GROWTH_SPEC,
+    ScriptClose: [script_run::CLOSE_KIND] => script_run::CLOSE_SPEC,
     VectorHalftone: [halftone::KIND] => halftone::SPEC,
     SimplifySlider: [simplify_slider::KIND] => simplify_slider::SPEC,
     SmoothSlider: [smooth_slider::KIND] => smooth_slider::SPEC,
@@ -573,6 +577,10 @@ pub fn cancel(app: &mut VectorcraftApp) {
         }
         if d.kind == safe_mode::STOPPED {
             safe_mode::cancel_stopped(app);
+        }
+        // The growth question's Cancel button is its Stop button.
+        if d.kind == script_run::GROWTH_KIND {
+            app.session.script_request_stop();
         }
         // Toolbar-only Flare options start no preview and must not cancel a gesture
         // that was already active before opening them. The generic parameter dialog has a spec

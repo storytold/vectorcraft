@@ -92,6 +92,10 @@ pub fn context_items(app: &VectorcraftApp) -> Vec<Item> {
         // The paragraphs of the selected type, or those the Type tool's selection touches.
         if crate::panels::character::text_style(app).is_some() {
             v.push(sub("Bullets and Numbering", vec![c("Apply Bullets", "type.applyBullets"), c("Apply Numbers", "type.applyNumbers")]));
+            // A right-click on type turns Auto Spell Check on or off, as Edit › Spelling does, per
+            // the public [Check and correct spelling](https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/check-and-correct-spelling.html)
+            // page. Its submenu holds only toggles, so it shows the check mark (`render_items`).
+            v.push(sub("Spelling", vec![c("Auto Spell Check", "edit.autoSpellCheck")]));
         }
         v.extend([c("Make Guides", "view.guides.make"), Sep, sub("Transform", transform_items())]);
         if intertwine.is_none() {
@@ -265,7 +269,8 @@ fn prune(app: &VectorcraftApp, items: Vec<Item>) -> Vec<Item> {
 pub fn context_menu_body(app: &VectorcraftApp, ui: &mut egui::Ui, clicked: &mut Option<(String, Value)>) {
     widgets::menu_scroll(ui, |ui| {
         ui.set_min_width(200.0);
-        // Its toggles already say what they do (Show Rulers, Hide Guides): no check-mark gutter.
+        // Its toggles already say what they do (Show Rulers, Hide Guides): no check-mark gutter,
+        // except in a submenu of toggles alone (Spelling › Auto Spell Check).
         render_items(app, ui, &context_items(app), false, clicked);
     });
 }

@@ -4746,6 +4746,28 @@ theme	Appearance	외관
 @msg	the library item is damaged	라이브러리 항목이 손상되었습니다
 @msg	{_1} font families available	사용 가능한 글꼴 패밀리 {_1}개
 @msg	{_1} has no {_2} style	{_1}에는 {_2} 스타일이 없습니다
+	Run	실행
+	Run Script	스크립트 실행
+	Stop Script	스크립트 중지
+	Show External Script Warning	외부 스크립트 경고 표시
+	A Script Is Running	스크립트 실행 중
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	스크립트는 열려 있는 문서를 변경하고 실행하는 명령을 통해 파일을 쓸 수 있습니다. 신뢰할 수 있는 스크립트만 실행하세요.
+	Do not show this warning again	이 경고를 다시 표시하지 않음
+	Stop the script and undo what it did? Then quit again.	스크립트를 중지하고 변경 내용을 취소할까요? 그런 다음 다시 종료하세요.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	이 스크립트가 매우 많은 개체를 추가했습니다. 계속할까요, 아니면 중지하고 변경 내용을 취소할까요?
+@msg	Choose a .js or .jsx script	.js 또는 .jsx 스크립트를 선택하세요
+@msg	Ran {name}	{name} 실행됨
+@msg	The script was stopped and its changes were undone	스크립트를 중지하고 변경 내용을 취소했습니다
+@msg	a script is running: stop it or wait for it to finish	스크립트 실행 중: 중지하거나 끝날 때까지 기다리세요
+@msg	this is a compiled script, which cannot be run; use its source text	컴파일된 스크립트이므로 실행할 수 없습니다. 소스 텍스트를 사용하세요
+@msg	the script is not UTF-8 text	스크립트가 UTF-8 텍스트가 아닙니다
+@msg	the script is too large to run	스크립트가 너무 커서 실행할 수 없습니다
+@msg	a drag or an undo group is open; finish it before running a script	드래그 또는 실행 취소 그룹이 열려 있습니다. 스크립트를 실행하기 전에 완료하세요
+@msg	the script left a document that cannot be kept	스크립트가 유지할 수 없는 문서를 남겼습니다
+@msg	the script's run is no longer available	스크립트 실행을 더 이상 사용할 수 없습니다
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	실패한 명령이 되돌릴 수 없는 실행 취소 단계를 변경하여 스크립트를 중지했습니다
+@msg	a recovery copy could not be written, so the script was not run	복구 사본을 쓸 수 없어 스크립트를 실행하지 않았습니다
+@msg	Running a script	스크립트 실행 중
 @msg	Copied the script report	스크립트 보고서를 복사했습니다
 @msg	Exported {path}	{path}을(를) 내보냈습니다
 @msg	no CSS to copy: select objects with CSS of their own	복사할 CSS가 없습니다: 자체 CSS가 있는 개체를 선택하세요

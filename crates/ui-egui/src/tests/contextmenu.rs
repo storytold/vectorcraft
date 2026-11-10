@@ -291,6 +291,46 @@ fn selected_type_has_apply_numbers() {
     assert_eq!(text.para_at(0).list.and_then(|l| l.number), Some(vectorcraft_doc::text::NumberStyle::Arabic));
 }
 
+/// A right-click on type has Spelling › Auto Spell Check, which turns it on or off as Edit ›
+/// Spelling does (helpx: Check and correct spelling, "Turn on Auto Spell Check"). The context menu
+/// draws no check marks, but this submenu holds only the toggle, so it shows whether it is on;
+/// other submenus stay without the room for one. Other art has no Spelling submenu.
+#[test]
+fn right_click_on_type_turns_auto_spell_check_on_and_off() {
+    let mut app = app();
+    let r = rect(&mut app, 200.0, 150.0);
+    let t = NodeId(app.run("text.create", json!({"x": 20, "y": 60, "text": "Hello", "size": 24})).unwrap()["id"].as_u64().unwrap());
+    app.run("select.none", json!({})).unwrap();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let p = screen(&app, 250.0, 200.0);
+    assert!(!has(&click(&mut app, &ctx, p, PointerButton::Secondary), "Spelling"), "a rectangle has no Spelling submenu");
+    assert_eq!(app.session.active().unwrap().selection.objects, [r]);
+    let away = screen(&app, 390.0, 290.0);
+    click(&mut app, &ctx, away, PointerButton::Primary);
+    // Right-click the type, open Spelling: Auto Spell Check, not checked.
+    let open_spelling = |app: &mut VectorcraftApp| {
+        let p = word_at(app, t, 0, 5);
+        let texts = click(app, &ctx, p, PointerButton::Secondary);
+        assert_eq!(app.session.active().unwrap().selection.objects, [t], "the type right-clicked is selected");
+        frame(app, &ctx, vec![Event::PointerMoved(at(&texts, "Spelling"))]);
+        frame(app, &ctx, vec![])
+    };
+    let texts = open_spelling(&mut app);
+    assert!(texts.iter().any(|(s, _)| s == "     Auto Spell Check"), "unchecked, with the room for a check mark: {texts:?}");
+    assert!(texts.iter().any(|(s, _)| s == "Transform"), "other items have no gutter: {texts:?}");
+    // Agents see it under the Spelling path.
+    let e = menus::context_entries(&app).into_iter().find(|e| e.command.as_deref() == Some("edit.autoSpellCheck")).expect("Auto Spell Check");
+    assert_eq!((e.path.as_slice(), e.label.as_str()), (&["Spelling".to_string()][..], "Auto Spell Check"));
+    let texts = click(&mut app, &ctx, at(&texts, "     Auto Spell Check"), PointerButton::Primary);
+    assert!(app.ui.view.auto_spell_check, "turned on");
+    assert!(!has(&texts, "Spelling"), "the menu closed: {texts:?}");
+    let texts = open_spelling(&mut app);
+    assert!(texts.iter().any(|(s, _)| s == "✓  Auto Spell Check"), "checked: {texts:?}");
+    click(&mut app, &ctx, at(&texts, "✓  Auto Spell Check"), PointerButton::Primary);
+    assert!(!app.ui.view.auto_spell_check, "turned off");
+}
+
 /// The members of the overlap area of Intertwine group `g` at (x, y), in the order they are drawn
 /// there, bottom first.
 fn intertwine_order(app: &VectorcraftApp, g: NodeId, x: f64, y: f64) -> Vec<NodeId> {

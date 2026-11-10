@@ -140,7 +140,7 @@ pub(crate) fn enter(s: &mut Session, p: &Value) -> Result<Value> {
     }
     s.end_text_edit();
     let st = s.doc()?;
-    let back = Return { redo: st.history.redo.clone(), before: Some(st.doc.clone()) };
+    let back = Return { redo: Arc::new(st.history.redo.clone()), before: Some(st.doc.clone()) };
     let (isolation, active_layer) = (st.isolation, st.active_layer);
     let layer = s.edit(ENTER, |d, sel| {
         let layer = begin(d, sel, &name, xf, instance)?;
@@ -229,7 +229,7 @@ pub(crate) fn leave(s: &mut Session, _: &Value) -> Result<Value> {
         }
         st.selection = Arc::unwrap_or_clone(entry.selection);
         st.selection.prune(&st.doc);
-        st.history.redo = redo;
+        st.history.redo = Arc::unwrap_or_clone(redo);
         st.revision += 1;
     } else {
         s.edit("Exit Symbol Editing Mode", |d, sel| {
@@ -257,9 +257,10 @@ pub(crate) fn finish(d: &mut Document, sel: &mut Selection) {
 
 /// The redo steps entering symbol editing mode cleared, which leaving without an edit gives back,
 /// and the document entering started from, which tells the entering step apart from any other.
+/// Copies of the document's state share the redo steps.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct Return {
-    redo: Vec<crate::HistoryEntry>,
+    redo: Arc<Vec<crate::HistoryEntry>>,
     before: Option<Arc<Document>>,
 }
 
