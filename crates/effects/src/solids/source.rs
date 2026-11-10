@@ -99,12 +99,13 @@ impl Resolver<'_> {
     fn spend(&mut self, steps: usize) -> Result<(), String> {
         self.work = self.work.saturating_add(steps);
         if self.work > MAX_WORK {
-            return Err(format!(
-                "{} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects",
-                self.label
-            ));
+            return Err(self.too_much_work());
         }
         Ok(())
+    }
+
+    fn too_much_work(&self) -> String {
+        format!("{} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects", self.label)
     }
 
     /// `f` run on the art of `c`. The effects of an object or group can move its art into a clip,
@@ -129,6 +130,11 @@ impl Resolver<'_> {
         self.spend(1)?;
         match &n.kind {
             NodeKind::SymbolInstance { symbol, .. } => {
+                // Counted before the art is placed, so a symbol past the limit is never copied.
+                let held = self.doc.and_then(|d| d.symbols.iter().find(|s| s.name == *symbol)).map_or(0, |s| s.art.count_with_masks());
+                if self.work.saturating_add(held) > MAX_WORK {
+                    return Err(self.too_much_work());
+                }
                 let art = crate::outline_object(self.doc, n).ok_or_else(|| {
                     format!("{label} can't build a solid from the instance of symbol \"{symbol}\": the symbol's art isn't available")
                 })?;

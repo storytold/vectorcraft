@@ -364,6 +364,18 @@ fn nested_symbol_instances_that_repeat_hidden_art_are_refused_past_the_work_limi
 }
 
 #[test]
+fn a_symbol_holding_more_objects_than_the_work_limit_is_refused_before_its_art_is_placed() {
+    let mut d = document();
+    let members = (0..=source::MAX_WORK).map(|i| Arc::new(rect(0, i as f64, 0.0, i as f64 + 1.0, 1.0, 0.0))).collect();
+    d.symbols.push(Symbol { dynamic: false, name: "Big".into(), art: Arc::new(Node::group(NodeId(0), members)) });
+    let n = with(instance(30, "Big", Affine::IDENTITY), EXTRUDE, json!({}));
+    let err = validate_three_d_in(Some(&d), &n, EXTRUDE, &json!({})).unwrap_err();
+    assert!(err.contains("hold too many objects"), "{err}");
+    let work = source::WORK.with(std::cell::Cell::get);
+    assert!(work <= 2, "refused before the symbol's art is placed and listed: {work}");
+}
+
+#[test]
 fn empty_sources_and_sources_inside_sources_build_or_refuse_cleanly() {
     let mut d = document();
     d.symbols.push(Symbol { dynamic: false, name: "Empty".into(), art: Arc::new(Node::group(NodeId(0), vec![])) });
