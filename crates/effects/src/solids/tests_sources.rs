@@ -255,6 +255,14 @@ fn nested_symbol_instances_that_repeat_hidden_art_are_refused_past_the_work_limi
         assert!(art(&d, &n, id).is_none(), "{id}");
         assert!(three_d_meshes_in(Some(&d), &n).is_err(), "{id}");
     }
+    // A clipped shape with more strokes than a 3D effect takes objects is refused before its
+    // strokes are cut into pieces.
+    let mut stroked = rect(12, 100.0, 100.0, 200.0, 200.0, 0.0);
+    let strokes = (0..5000).map(|_| AppearanceItem::Stroke(StrokeLayer::new(Paint::solid(Color::BLACK), 2.0))).collect();
+    stroked.appearance = Appearance { items: strokes, ..Default::default() }.into();
+    let n = with(clip_group(10, Rect::new(100.0, 100.0, 150.0, 200.0), stroked), ROTATE, front());
+    let err = validate_three_d_in(Some(&d), &n, ROTATE, &json!({})).unwrap_err();
+    assert!(err.contains("takes at most 4096 objects") && !err.contains("on a group"), "{err}");
     // The same nesting with 1,024 visible squares stays far below the limit and builds: each
     // square, group and instance is visited once (an instance twice: listed, then resolved).
     let d = nested_symbols(5, 4, rect(0, 0.0, 0.0, 10.0, 10.0, 0.0));
@@ -344,6 +352,19 @@ fn resolved_objects_and_groups_in_a_three_d_group_keep_their_geometry_effects() 
     let resolved = bounds(&solid_art_in(Some(&d), &group_of(stroked(NodeKind::Blend { children, spec }))).unwrap());
     let plain = bounds(&solid_art(&group_of(stroked(NodeKind::Group { children: steps, clip: false }))).unwrap());
     assert!(close(resolved, plain, 0.01), "{resolved:?} {plain:?}");
+    // A member's opacity and blending mode stay on it when its group's effects reshape it in a clip.
+    let mut multiplied = left();
+    multiplied.opacity = 0.5;
+    multiplied.blend = BlendMode::Multiply;
+    let n = clip_group(60, clip, moved(Node::group(NodeId(62), vec![Arc::new(multiplied), Arc::new(left())])));
+    let resolved = resolve(Some(&d), &n, "").unwrap().into_owned();
+    let mut found = vec![];
+    resolved.walk(&mut |c| {
+        if c.blend == BlendMode::Multiply {
+            found.push((c.opacity, c.children().map_or(0, Vec::len)));
+        }
+    });
+    assert_eq!(found, vec![(0.5, 1)], "one Multiply group at 50% holding the one member's piece");
     // Groups nested past the limit under a group with geometry effects in a clipping group are
     // refused before the effects reshape them.
     let mut deep = left();

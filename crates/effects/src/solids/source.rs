@@ -11,7 +11,7 @@ use vectorcraft_doc::{Appearance, AppearanceItem, Document, FillLayer, Node, Nod
 use vectorcraft_geom::{FillRule, PathData};
 use vectorcraft_pathops as po;
 
-use super::{MAX_MEMBERS, geometry, is_container, members, profile, region, reshape_members, solid_paints};
+use super::{MAX_MEMBERS, Scope, geometry, is_container, members, profile, region, reshape_members, solid_paints};
 use crate::{GeomContext, is_geometry};
 
 /// The deepest nesting of symbol instances, blends and clipping groups resolved for one 3D effect.
@@ -215,13 +215,13 @@ impl Resolver<'_> {
                 }
                 let mut shapes = members(n, self.label)?;
                 reshape_members(n, &n.appearance.effects, &mut shapes);
+                let mut cut = vec![];
                 for s in shapes {
-                    let mut piece = shape(n, s.path, s.rule, s.items);
-                    piece.opacity = s.opacity;
-                    if let Some(c) = self.clipped(&piece, clip, depth + 1)? {
-                        kids.push(Arc::new(c));
+                    if let Some(c) = self.clipped(&shape(n, s.path, s.rule, s.items), clip, depth + 1)? {
+                        cut.push((s.scopes, c));
                     }
                 }
+                kids = nest(n, cut, 0);
             } else {
                 for c in n.children().into_iter().flatten() {
                     if !c.visible || matches!(c.kind, NodeKind::Path { guide: true, .. }) {
@@ -235,17 +235,24 @@ impl Resolver<'_> {
             return Ok((!kids.is_empty()).then(|| wrap(n, kids)));
         }
         let Some((path, rule)) = profile(n) else { return Ok(Some(n.clone())) };
+        let items = solid_paints(n);
+        // The fills' piece goes where the top fill is, the one Extrude & Bevel and Inflate build
+        // their solid from, so the strokes above and below it keep their places.
+        let top_fill = items.iter().rposition(|i| matches!(i, AppearanceItem::Fill(_)));
+        // Each cut makes a piece, counted before it is made: the shape was counted once already.
+        let made = usize::from(top_fill.is_some()) + items.iter().filter(|i| matches!(i, AppearanceItem::Stroke(_))).count();
+        self.spend(made)?;
+        self.leaves = self.leaves.saturating_add(made.saturating_sub(1));
+        if self.leaves > MAX_MEMBERS {
+            return Err(self.too_many());
+        }
         let path = geometry(&path, &n.appearance.effects, &GeomContext::of(n));
         let cut = |area: &PathData, rule: FillRule| -> Result<Option<PathData>, String> {
             let inside =
                 po::try_boolean(area, rule, &clip.0, clip.1, po::BoolOp::Intersect, po::DEFAULT_PRECISION).map_err(|_| self.too_complex())?;
             Ok(inside.bounds().is_some().then_some(inside))
         };
-        let items = solid_paints(n);
         let fills: Vec<AppearanceItem> = items.iter().filter(|i| matches!(i, AppearanceItem::Fill(_))).cloned().collect();
-        // The fills' piece goes where the top fill is, the one Extrude & Bevel and Inflate build
-        // their solid from, so the strokes above and below it keep their places.
-        let top_fill = items.iter().rposition(|i| matches!(i, AppearanceItem::Fill(_)));
         let mut pieces = vec![];
         for (k, item) in items.iter().enumerate() {
             match item {
@@ -275,6 +282,36 @@ impl Resolver<'_> {
 /// nothing.
 fn clip_area(first: &Node) -> (PathData, FillRule) {
     crate::clip_outline(first).map_or_else(|| (PathData::default(), FillRule::NonZero), |(bp, rule)| (PathData::from_bezpath(&bp), rule))
+}
+
+/// `pieces`, each with the [`Scope`]s of the groups it was in, back in groups of `n`'s id with
+/// those groups' opacity and blending mode: consecutive pieces sharing the scope at `level` go into
+/// one group, so its transparency applies to them together. `level` stays below the nesting the
+/// pieces came from ([`nested_past`]).
+fn nest(n: &Node, pieces: Vec<(Vec<Scope>, Node)>, level: usize) -> Vec<Arc<Node>> {
+    let mut out = vec![];
+    let mut run: Vec<(Vec<Scope>, Node)> = vec![];
+    let mut key = None;
+    let close = |run: &mut Vec<(Vec<Scope>, Node)>, scope: Option<Scope>, out: &mut Vec<Arc<Node>>| {
+        let Some(scope) = scope else { return };
+        let mut g = Node::group(n.id, nest(n, std::mem::take(run), level + 1));
+        g.opacity = scope.opacity;
+        g.blend = scope.blend;
+        out.push(Arc::new(g));
+    };
+    for (scopes, piece) in pieces {
+        let here = scopes.get(level).copied();
+        if here.map(|s| s.key) != key.map(|s: Scope| s.key) {
+            close(&mut run, key, &mut out);
+            key = here;
+        }
+        match here {
+            Some(_) => run.push((scopes, piece)),
+            None => out.push(Arc::new(piece)),
+        }
+    }
+    close(&mut run, key, &mut out);
+    out
 }
 
 /// Does `n` hold visible groups or layers nested more than `levels` deep? Walked without recursion.
