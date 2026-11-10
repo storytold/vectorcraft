@@ -6129,6 +6129,27 @@ antiAlias	Sharp	शार्प
 @msg	control must be fillStroke, coloring, drawMode or screenMode	control को fillStroke, coloring, drawMode या screenMode होना चाहिए
 @msg	Convert to Artboards: selection has no area	आर्टबोर्ड में कनवर्ट करें: सिलेक्शन में कोई क्षेत्र नहीं है
 @msg	Convert to Shape: no rectangles or ellipses selected	आकार में कनवर्ट करें: कोई आयत या अंडाकार सिलेक्शन नहीं
+	Run	चलाएँ
+	Run Script	स्क्रिप्ट चलाएँ
+	Stop Script	स्क्रिप्ट रोकें
+	Show External Script Warning	बाहरी स्क्रिप्ट की चेतावनी दिखाएँ
+	A Script Is Running	एक स्क्रिप्ट चल रही है
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	स्क्रिप्ट खुले दस्तावेज़ बदल सकती है और अपने चलाए कमांड से फ़ाइलें लिख सकती है। केवल भरोसेमंद स्क्रिप्ट चलाएँ।
+	Do not show this warning again	यह चेतावनी फिर न दिखाएँ
+	Stop the script and undo what it did? Then quit again.	स्क्रिप्ट रोककर उसके बदलाव पूर्ववत करें? फिर दोबारा बाहर निकलें।
+	This script has added a great many objects. Continue, or stop it and undo what it did?	इस स्क्रिप्ट ने बहुत सारे ऑब्जेक्ट जोड़े हैं। जारी रखें, या इसे रोककर इसके बदलाव पूर्ववत करें?
+@msg	Choose a .js or .jsx script	.js या .jsx स्क्रिप्ट चुनें
+@msg	Ran {name}	{name} चलाई गई
+@msg	The script was stopped and its changes were undone	स्क्रिप्ट रोकी गई और उसके बदलाव पूर्ववत किए गए
+@msg	a script is running: stop it or wait for it to finish	एक स्क्रिप्ट चल रही है: उसे रोकें या पूरा होने की प्रतीक्षा करें
+@msg	this is a compiled script, which cannot be run; use its source text	यह कंपाइल की हुई स्क्रिप्ट है, जिसे चलाया नहीं जा सकता; इसका स्रोत पाठ इस्तेमाल करें
+@msg	the script is not UTF-8 text	स्क्रिप्ट UTF-8 पाठ नहीं है
+@msg	the script is too large to run	स्क्रिप्ट चलाने के लिए बहुत बड़ी है
+@msg	a drag or an undo group is open; finish it before running a script	कोई ड्रैग या पूर्ववत समूह खुला है; स्क्रिप्ट चलाने से पहले उसे पूरा करें
+@msg	the script left a document that cannot be kept	स्क्रिप्ट ने ऐसा दस्तावेज़ छोड़ा है जिसे रखा नहीं जा सकता
+@msg	the script's run is no longer available	स्क्रिप्ट का रन अब उपलब्ध नहीं है
+@msg	a recovery copy could not be written, so the script was not run	रिकवरी प्रति नहीं लिखी जा सकी, इसलिए स्क्रिप्ट नहीं चलाई गई
+@msg	Running a script	स्क्रिप्ट चल रही है
 @msg	Copied the script report	Copied स्क्रिप्ट रिपोर्ट
 @msg	copy needs path: the file to copy into the document's folder	copy: प्रतिलिपि की जरूरत है पाथ: फ़ाइल को डॉक्यूमेंट के फ़ोल्डर में कॉपी करने के लिए
 @msg	copy takes images only: relink placed documents where their files are	copy: प्रतिलिपि केवल इमेज को लेती है: डॉक्यूमेंट्स को फिर से लिंक करें जहां उनकी फ़ाइलें हैं

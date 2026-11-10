@@ -1,0 +1,1091 @@
+//! Running a script: `script.run`, `script.stop` and the job behind them.
+//!
+//! A run works on its own copy of the open documents and the session state commands change (the
+//! working copy). Between two slices of a run, the session holds the state as it was before the
+//! run: what is drawn, what a read-only command returns and what Data Recovery copies never show a
+//! script's unfinished work. Each slice swaps the working copy in, advances the interpreter by one
+//! measured slice of fuel and swaps it out. A commit makes the working copy the session's state,
+//! with one undo step for each document whose art changed. A rollback drops the working copy.
+//!
+//! While a job exists, [`Session::execute`] refuses any command that can edit, select, save or give
+//! a document a new revision, and the tool events are refused the same way (the mutation lease).
+//! The script's own commands run through [`Session::execute`] inside a slice, each with its own
+//! parameter checks, enabled rule, undo history and journal entry, and a command that fails leaves
+//! no trace of itself. Inside a run, `edit.undo` reaches only steps the script made.
+//!
+//! Files a script's commands saved or exported before it failed stay written, and the failure names
+//! them. Ids given out in a run are never given out again for a document, also after an in-run
+//! undo or a rollback.
+//!
+//! The values here are VectorCraft's own limits: [`MAX_SOURCE_BYTES`], [`DEFAULT_FUEL`],
+//! [`MAX_FUEL`], [`SLICE_FUEL`], [`HEAP_BYTES`], [`MAX_HOST_CALLS`], [`GROWTH_OBJECTS`],
+//! [`GROWTH_BYTES`], [`MAX_CONTINUES`], [`MAX_LOG_LINES`], [`MAX_LOG_BYTES`], [`MAX_ARGS_BYTES`],
+//! and the 64 levels, 16 MiB and 1,048,576 entries of [`vectorcraft_js::DataLimits`]'s default.
+
+use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
+use std::rc::Rc;
+use std::sync::Arc;
+
+use serde_json::{Map, Value, json};
+use vectorcraft_js::{
+    Data, DataLimits, HostError, HostFunction, HostItem, Interrupt, LimitKind, Limits, Options, Progress, Realm, RunError, RunErrorKind,
+};
+
+use crate::{
+    Clipboard, DocState, DrawMode, EngineError, Journal, NodeId, PaintDefaults, Result, Session, cmd, command_specs, guard, waits_for_tool_edit,
+};
+
+/// The most bytes of source a run takes, as a file or as `source`.
+pub const MAX_SOURCE_BYTES: usize = 8 << 20;
+/// The instructions a run may execute when `maxFuel` is left out.
+pub const DEFAULT_FUEL: u64 = 1_000_000_000;
+/// The largest `maxFuel`.
+pub const MAX_FUEL: u64 = 100_000_000_000;
+/// The instructions one slice of a run executes before the interface draws again.
+pub const SLICE_FUEL: u64 = 500_000;
+/// The heap one run may use.
+#[cfg(not(target_arch = "wasm32"))]
+pub const HEAP_BYTES: usize = 256 << 20;
+/// The heap one run may use in a wasm build.
+#[cfg(target_arch = "wasm32")]
+pub const HEAP_BYTES: usize = 128 << 20;
+/// The most `vc.run` calls and getter reads of one run.
+pub const MAX_HOST_CALLS: u64 = 2_000_000;
+/// The objects a run may make before it is asked to continue or stop.
+pub const GROWTH_OBJECTS: u64 = 100_000;
+/// The bytes of new document data a run may keep before it is asked to continue or stop.
+pub const GROWTH_BYTES: u64 = 512 << 20;
+/// How many times a person may let a run go past its growth allowance; each time adds one more.
+pub const MAX_CONTINUES: u32 = 8;
+/// The most `vc.log` entries of one run.
+pub const MAX_LOG_LINES: usize = 10_000;
+/// The most bytes of `vc.log` entries of one run.
+pub const MAX_LOG_BYTES: usize = 4 << 20;
+/// The most bytes of `args` given to one run, as JSON.
+pub const MAX_ARGS_BYTES: usize = 1 << 20;
+/// The `vc.run` calls one slice makes before the interface draws again.
+const SLICE_HOST_CALLS: u32 = 256;
+/// The bytes that may cross between a script and the host in one run.
+const MAX_BRIDGE_BYTES: u64 = 4 << 30;
+
+/// The version `vc.api.version` gives.
+pub const API_VERSION: &str = "1.0";
+/// The features `vc.api.has` knows.
+pub const API_FEATURES: &[&str] = &["run", "document", "commands", "log", "args"];
+
+/// What the step of a run's one undo step is called.
+pub const STEP_LABEL: &str = "Run Script";
+
+/// `id`, as `vc.run` is given it, is one a script may not run: a command that would leave the run's
+/// transaction or change something outside the documents that a rollback could not put back.
+pub fn refused_to_scripts(id: &str) -> bool {
+    const PREFIXES: &[&str] = &[
+        "script.",
+        "plugin.",
+        "prefs.",
+        "actionSet.",
+        "shortcutSet.",
+        "help.",
+        "print.",
+        "library.",
+        "importMatches.",
+        "edit.undoGroup.",
+        "file.recovery.",
+        "stroke.widthProfile.",
+    ];
+    const IDS: &[&str] = &[
+        "text.addFontFiles",
+        "text.findFontFiles",
+        "text.rescanFonts",
+        "links.findFiles",
+        "file.place.queue",
+        "color.loadProfile",
+        "color.removeProfile",
+        "file.print",
+        "view.proofSetup",
+        "view.proofColors",
+        "view.overprintPreview",
+        "view.separationsPreview",
+    ];
+    let saved_preset = (id.contains("resets.") || id.contains(".preset.")) && !id.ends_with(".list") && !id.ends_with(".apply");
+    id != "script.check" && (saved_preset || PREFIXES.iter().any(|p| id.starts_with(p)) || IDS.contains(&id))
+}
+
+/// The error for a script's command that [`refused_to_scripts`] names.
+pub(crate) fn refused_text(id: &str) -> String {
+    format!("a script cannot run `{id}`")
+}
+
+/// A request to run a script.
+pub(crate) struct Request {
+    pub name: String,
+    pub source: String,
+    pub args: Map<String, Value>,
+    pub fuel: u64,
+}
+
+thread_local! {
+    /// The running jobs of this thread's sessions. A job is held here, and not in its session,
+    /// because it holds the interpreter, which stays on the thread that started it.
+    static JOBS: RefCell<HashMap<u64, Job>> = RefCell::new(HashMap::new());
+}
+
+static NEXT_JOB: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+/// A session's hold on its running job: while one exists the lease is held. Dropping it ends the job.
+#[derive(Debug)]
+pub struct JobKey(u64);
+
+impl Drop for JobKey {
+    fn drop(&mut self) {
+        let _ = JOBS.try_with(|jobs| {
+            if let Ok(mut jobs) = jobs.try_borrow_mut() {
+                jobs.remove(&self.0);
+            }
+        });
+    }
+}
+
+fn with_job<T>(key: &JobKey, f: impl FnOnce(&mut Job) -> T) -> Option<T> {
+    JOBS.with(|jobs| jobs.borrow_mut().get_mut(&key.0).map(f))
+}
+
+/// The state a script changes that a rollback puts back.
+struct World {
+    docs: Vec<DocState>,
+    active: Option<usize>,
+    paint: PaintDefaults,
+    fill_active: bool,
+    draw_mode: DrawMode,
+    draw_inside: Option<NodeId>,
+    clipboard: Clipboard,
+    untitled_counter: u32,
+    menu: cmd::menucmds::MenuState,
+    last_solid: crate::Color,
+    last_gradient: crate::GradientPaint,
+    recent_colors: Vec<crate::Color>,
+    pending_paint: Option<crate::Paint>,
+    choices: Choices,
+    journal: Journal,
+    /// The preferences when the run started.
+    start_prefs: crate::Prefs,
+}
+
+/// The choices outside the documents that a script's commands can change: the preferences, the
+/// global edit options, the recent URLs, the chosen gradient stop, freeform point and appearance
+/// item, the Eyedropper's sample and the envelope defaults.
+#[derive(Clone)]
+struct Choices {
+    prefs: crate::Prefs,
+    eyedropper_sample: Option<Arc<vectorcraft_doc::Node>>,
+    global_edit_options: cmd::globaledit::Options,
+    recent_urls: Vec<String>,
+    gradient_stop: Option<(usize, cmd::gradient::StopOwner)>,
+    freeform_point: Option<(usize, cmd::gradient::StopOwner)>,
+    active_appearance_item: Option<cmd::appearance::ActiveItem>,
+    envelope_defaults: Option<(vectorcraft_doc::live::EnvelopeOptions, f64)>,
+}
+
+impl Choices {
+    fn of(s: &Session) -> Self {
+        Self {
+            prefs: s.prefs.clone(),
+            eyedropper_sample: s.eyedropper_sample.clone(),
+            global_edit_options: s.global_edit_options.clone(),
+            recent_urls: s.recent_urls.clone(),
+            gradient_stop: s.gradient_stop,
+            freeform_point: s.freeform_point,
+            active_appearance_item: s.active_appearance_item.clone(),
+            envelope_defaults: s.envelope_defaults,
+        }
+    }
+
+    fn put(self, s: &mut Session) {
+        s.prefs = self.prefs;
+        s.eyedropper_sample = self.eyedropper_sample;
+        s.global_edit_options = self.global_edit_options;
+        s.recent_urls = self.recent_urls;
+        s.gradient_stop = self.gradient_stop;
+        s.freeform_point = self.freeform_point;
+        s.active_appearance_item = self.active_appearance_item;
+        s.envelope_defaults = self.envelope_defaults;
+    }
+
+    fn swap(&mut self, s: &mut Session) {
+        use std::mem::swap;
+        swap(&mut self.prefs, &mut s.prefs);
+        swap(&mut self.eyedropper_sample, &mut s.eyedropper_sample);
+        swap(&mut self.global_edit_options, &mut s.global_edit_options);
+        swap(&mut self.recent_urls, &mut s.recent_urls);
+        swap(&mut self.gradient_stop, &mut s.gradient_stop);
+        swap(&mut self.freeform_point, &mut s.freeform_point);
+        swap(&mut self.active_appearance_item, &mut s.active_appearance_item);
+        swap(&mut self.envelope_defaults, &mut s.envelope_defaults);
+    }
+}
+
+/// The preferences after a run: `current`, the session's, which the app may have changed while the
+/// run went on, with each preference the run changed from `start` set to the run's value.
+fn merged_prefs(start: &crate::Prefs, run: &crate::Prefs, current: &crate::Prefs) -> crate::Prefs {
+    let (Ok(Value::Object(start)), Ok(Value::Object(run)), Ok(Value::Object(mut out))) =
+        (serde_json::to_value(start), serde_json::to_value(run), serde_json::to_value(current))
+    else {
+        return current.clone();
+    };
+    for (key, value) in run {
+        if start.get(&key) != Some(&value) {
+            out.insert(key, value);
+        }
+    }
+    serde_json::from_value(Value::Object(out)).unwrap_or_else(|_| current.clone())
+}
+
+impl World {
+    /// A working copy of the session's state: its documents, each with an undo history of its own
+    /// that starts empty, and an empty journal.
+    fn working(s: &Session) -> Self {
+        let mut docs = s.docs.clone();
+        for st in &mut docs {
+            st.history.undo.clear();
+            st.history.redo.clear();
+        }
+        Self {
+            docs,
+            active: s.active,
+            paint: s.paint.clone(),
+            fill_active: s.fill_active,
+            draw_mode: s.draw_mode,
+            draw_inside: s.draw_inside,
+            clipboard: s.clipboard.clone(),
+            untitled_counter: s.untitled_counter,
+            menu: s.menu.clone(),
+            last_solid: s.last_solid,
+            last_gradient: s.last_gradient.clone(),
+            recent_colors: s.recent_colors.clone(),
+            pending_paint: s.pending_paint.clone(),
+            choices: Choices::of(s),
+            journal: Journal::default(),
+            start_prefs: s.prefs.clone(),
+        }
+    }
+
+    /// Exchanges this state with the session's.
+    fn swap(&mut self, s: &mut Session) {
+        use std::mem::swap;
+        swap(&mut self.docs, &mut s.docs);
+        swap(&mut self.active, &mut s.active);
+        swap(&mut self.paint, &mut s.paint);
+        swap(&mut self.fill_active, &mut s.fill_active);
+        swap(&mut self.draw_mode, &mut s.draw_mode);
+        swap(&mut self.draw_inside, &mut s.draw_inside);
+        swap(&mut self.clipboard, &mut s.clipboard);
+        swap(&mut self.untitled_counter, &mut s.untitled_counter);
+        swap(&mut self.menu, &mut s.menu);
+        swap(&mut self.last_solid, &mut s.last_solid);
+        swap(&mut self.last_gradient, &mut s.last_gradient);
+        swap(&mut self.recent_colors, &mut s.recent_colors);
+        swap(&mut self.pending_paint, &mut s.pending_paint);
+        self.choices.swap(s);
+        swap(&mut self.journal, &mut s.journal);
+    }
+}
+
+/// The commands that can change the clipboard and still fail, and that do not put it back
+/// themselves. The clipboard can hold a great deal, so a savepoint copies it only for these.
+const CAN_FAIL_AFTER_COPYING: &[&str] = &["action.batch", "edit.cut"];
+
+/// What one command may need to put back when it fails inside a run: the state of [`World`] the
+/// command can reach.
+pub(crate) struct Savepoint {
+    docs: Vec<DocState>,
+    active: Option<usize>,
+    paint: PaintDefaults,
+    fill_active: bool,
+    draw_mode: DrawMode,
+    draw_inside: Option<NodeId>,
+    clipboard: Option<Clipboard>,
+    untitled_counter: u32,
+    menu: cmd::menucmds::MenuState,
+    last_solid: crate::Color,
+    last_gradient: crate::GradientPaint,
+    recent_colors: Vec<crate::Color>,
+    pending_paint: Option<crate::Paint>,
+    choices: Choices,
+    journal: usize,
+}
+
+impl Savepoint {
+    pub(crate) fn take(s: &Session, id: &str) -> Self {
+        Self {
+            docs: s.docs.clone(),
+            active: s.active,
+            paint: s.paint.clone(),
+            fill_active: s.fill_active,
+            draw_mode: s.draw_mode,
+            draw_inside: s.draw_inside,
+            clipboard: CAN_FAIL_AFTER_COPYING.contains(&id).then(|| s.clipboard.clone()),
+            untitled_counter: s.untitled_counter,
+            menu: s.menu.clone(),
+            last_solid: s.last_solid,
+            last_gradient: s.last_gradient.clone(),
+            recent_colors: s.recent_colors.clone(),
+            pending_paint: s.pending_paint.clone(),
+            choices: Choices::of(s),
+            journal: s.journal.len(),
+        }
+    }
+
+    pub(crate) fn restore(self, s: &mut Session) {
+        s.docs = self.docs;
+        s.active = self.active;
+        s.paint = self.paint;
+        s.fill_active = self.fill_active;
+        s.draw_mode = self.draw_mode;
+        s.draw_inside = self.draw_inside;
+        if let Some(clipboard) = self.clipboard {
+            s.clipboard = clipboard;
+        }
+        s.untitled_counter = self.untitled_counter;
+        s.menu = self.menu;
+        s.last_solid = self.last_solid;
+        s.last_gradient = self.last_gradient;
+        s.recent_colors = self.recent_colors;
+        s.pending_paint = self.pending_paint;
+        self.choices.put(s);
+        s.journal.truncate(self.journal);
+    }
+}
+
+/// The counters and the session a script's host functions share. Between slices `session` holds a
+/// spare session; during a slice it holds the real one, because the interpreter cannot be given a
+/// borrow of it.
+struct Host {
+    session: Rc<RefCell<Session>>,
+    pause: Rc<Cell<bool>>,
+    /// The run is sliced by frames, so the person at the computer can be asked to continue.
+    framed: bool,
+    calls: Cell<u64>,
+    calls_this_slice: Cell<u32>,
+    objects: Cell<u64>,
+    bytes_kept: Cell<u64>,
+    bridge: Cell<u64>,
+    allowance_objects: Cell<u64>,
+    allowance_bytes: Cell<u64>,
+    continues: Cell<u32>,
+    /// Past the growth allowance, waiting for the person's answer.
+    waiting: Cell<bool>,
+    log: RefCell<Vec<Value>>,
+    log_bytes: Cell<usize>,
+    written: RefCell<Vec<String>>,
+}
+
+impl Host {
+    fn over(&self, limit: &str) -> HostError {
+        HostError::Abort(limit.to_string())
+    }
+
+    fn charge_call(&self, bytes: u64) -> std::result::Result<(), HostError> {
+        let calls = self.calls.get() + 1;
+        self.calls.set(calls);
+        if calls > MAX_HOST_CALLS {
+            return Err(self.over(OVER_CALLS));
+        }
+        let bridge = self.bridge.get().saturating_add(bytes);
+        self.bridge.set(bridge);
+        if bridge > MAX_BRIDGE_BYTES {
+            return Err(self.over(OVER_BRIDGE));
+        }
+        let n = self.calls_this_slice.get() + 1;
+        self.calls_this_slice.set(n);
+        if n >= SLICE_HOST_CALLS {
+            self.pause.set(true);
+        }
+        Ok(())
+    }
+
+    /// Counts what a command added to the documents, past which the person is asked or, without
+    /// anyone to ask, the run ends. A run that goes on past twice its allowance within one slice
+    /// ends too.
+    fn charge_growth(&self, objects: u64, bytes: u64) -> std::result::Result<(), HostError> {
+        self.objects.set(self.objects.get().saturating_add(objects));
+        self.bytes_kept.set(self.bytes_kept.get().saturating_add(bytes));
+        let (o, b) = (self.objects.get(), self.bytes_kept.get());
+        let (limit_o, limit_b) = (self.allowance_objects.get(), self.allowance_bytes.get());
+        if o <= limit_o && b <= limit_b {
+            return Ok(());
+        }
+        let may_ask = self.framed && self.continues.get() < MAX_CONTINUES;
+        if !may_ask || o > limit_o.saturating_mul(2) || b > limit_b.saturating_mul(2) {
+            return Err(self.over(OVER_GROWTH));
+        }
+        self.waiting.set(true);
+        self.pause.set(true);
+        Ok(())
+    }
+}
+
+/// A run in progress.
+struct Job {
+    realm: Realm,
+    host: Rc<Host>,
+    /// Between slices the working copy; during the last slice's commit the state before the run.
+    world: World,
+    /// The documents open when the run began, by [`DocState::uid`].
+    start_uids: Vec<u64>,
+    name: String,
+}
+
+/// The `Data` for a JSON value, within `limits`. When it does not fit, the error is the place in
+/// `v` where it stopped fitting, such as `.layers[2].name`, and empty for `v` itself.
+pub(crate) fn to_data(v: &Value, limits: &DataLimits, depth: usize, used: &mut (usize, usize)) -> std::result::Result<Data, String> {
+    if depth > limits.depth {
+        return Err(String::new());
+    }
+    used.0 = used.0.saturating_add(16);
+    used.1 = used.1.saturating_add(1);
+    if used.0 > limits.bytes || used.1 > limits.entries {
+        return Err(String::new());
+    }
+    Ok(match v {
+        Value::Null => Data::Null,
+        Value::Bool(b) => Data::Bool(*b),
+        Value::Number(n) => Data::Number(n.as_f64().unwrap_or(f64::NAN)),
+        Value::String(s) => {
+            used.0 = used.0.saturating_add(s.len());
+            if used.0 > limits.bytes {
+                return Err(String::new());
+            }
+            Data::String(s.clone())
+        }
+        Value::Array(a) => Data::Array(
+            a.iter()
+                .enumerate()
+                .map(|(i, x)| to_data(x, limits, depth + 1, used).map_err(|place| format!("[{i}]{place}")))
+                .collect::<std::result::Result<_, _>>()?,
+        ),
+        Value::Object(o) => Data::Object(
+            o.iter()
+                .map(|(k, x)| {
+                    used.0 = used.0.saturating_add(k.len());
+                    to_data(x, limits, depth + 1, used).map(|d| (k.clone(), d)).map_err(|place| format!(".{k}{place}"))
+                })
+                .collect::<std::result::Result<_, _>>()?,
+        ),
+    })
+}
+
+/// The JSON for a value a script gave; a whole number within a double's exact range is an integer,
+/// which is how commands read ids and counts.
+fn to_json(d: &Data) -> Value {
+    match d {
+        Data::Undefined | Data::Null => Value::Null,
+        Data::Bool(b) => Value::Bool(*b),
+        Data::Number(n) =>
+        {
+            #[allow(clippy::cast_possible_truncation)]
+            if n.fract() == 0.0 && n.abs() <= 9_007_199_254_740_992.0 {
+                json!(*n as i64)
+            } else {
+                serde_json::Number::from_f64(*n).map_or(Value::Null, Value::Number)
+            }
+        }
+        Data::String(s) => Value::String(s.clone()),
+        Data::Array(a) => Value::Array(a.iter().map(to_json).collect()),
+        Data::Object(o) => Value::Object(o.iter().map(|(k, v)| (k.clone(), to_json(v))).collect()),
+    }
+}
+
+/// Estimated bytes of `d`.
+fn data_size(d: &Data) -> u64 {
+    match d {
+        Data::Undefined | Data::Null | Data::Bool(_) => 4,
+        Data::Number(_) => 8,
+        Data::String(s) => s.len() as u64 + 2,
+        Data::Array(a) => 8 + a.iter().map(data_size).sum::<u64>(),
+        Data::Object(o) => 8 + o.iter().map(|(k, v)| k.len() as u64 + 2 + data_size(v)).sum::<u64>(),
+    }
+}
+
+/// Brings each open document's next id up to the highest one the session has given out for it.
+fn raise_ids(s: &mut Session) {
+    let marks = std::mem::take(&mut s.script_high_water);
+    for st in &mut s.docs {
+        if let Some(&mark) = marks.get(&st.uid)
+            && mark > st.doc.peek_next_id()
+        {
+            st.change_unsaved(|d| Arc::make_mut(d).raise_next_id(mark));
+        }
+    }
+    s.script_high_water = marks;
+}
+
+fn note_ids(s: &mut Session) {
+    for st in &s.docs {
+        let mark = s.script_high_water.entry(st.uid).or_insert(0);
+        *mark = (*mark).max(st.doc.peek_next_id());
+    }
+}
+
+/// Runs command `id` inside a slice. A command that fails puts everything back it had done.
+/// → its result, the objects it added, the bytes of document data it added and the state before
+/// it, for a result that cannot cross to the script.
+fn step(s: &mut Session, host: &Host, id: &str, params: &Value) -> Result<(Value, u64, u64, Option<Savepoint>)> {
+    raise_ids(s);
+    let mutating = waits_for_tool_edit(id);
+    let save = mutating.then(|| Savepoint::take(s, id));
+    let before: Vec<(u64, Arc<crate::Document>, u64)> =
+        if mutating { s.docs.iter().map(|d| (d.uid, d.doc.clone(), d.doc.peek_next_id())).collect() } else { Vec::new() };
+    crate::file_access::start_recording_writes();
+    let r = s.execute(id, params);
+    // A file a command wrote before it failed is on disk all the same.
+    let mut written = host.written.borrow_mut();
+    for path in crate::file_access::finish_recording_writes(r.is_ok()) {
+        if !written.contains(&path) {
+            written.push(path);
+        }
+    }
+    drop(written);
+    match r {
+        Ok(v) => {
+            note_ids(s);
+            let (mut objects, mut bytes) = (0, 0);
+            for st in &s.docs {
+                if let Some((_, d, ids)) = before.iter().find(|(uid, ..)| *uid == st.uid)
+                    && !Arc::ptr_eq(d, &st.doc)
+                {
+                    objects += st.doc.peek_next_id().saturating_sub(*ids);
+                    bytes += d.retained_bytes_each(&st.doc).1 as u64;
+                }
+            }
+            Ok((v, objects, bytes, save))
+        }
+        Err(e) => {
+            if let Some(save) = save {
+                save.restore(s);
+            }
+            Err(e)
+        }
+    }
+}
+
+fn vc_run(host: &Rc<Host>, args: Vec<Data>) -> std::result::Result<Data, HostError> {
+    let Some(Data::String(id)) = args.first() else { return Err(HostError::Type(NO_COMMAND_ID.to_string())) };
+    if args.len() > 2 {
+        return Err(HostError::Type(TOO_MANY_ARGUMENTS.to_string()));
+    }
+    let id = id.clone();
+    let params = match args.get(1) {
+        None | Some(Data::Undefined) => json!({}),
+        Some(d @ Data::Object(_)) => to_json(d),
+        Some(_) => return Err(HostError::Type(PARAMS_NOT_OBJECT.to_string())),
+    };
+    let bytes = args.iter().map(data_size).sum();
+    host.charge_call(bytes)?;
+    let session = host.session.clone();
+    let r = {
+        let mut s = session.borrow_mut();
+        step(&mut s, host, &id, &params)
+    };
+    let (value, objects, added, save) = match r {
+        Ok(done) => done,
+        // A bug is not something a script can handle, and neither is a request to stop.
+        Err(e @ EngineError::Internal { .. }) => return Err(HostError::Abort(e.to_string())),
+        Err(EngineError::Cancelled) => return Err(HostError::Abort("canceled".into())),
+        Err(e) => return Err(HostError::Error(e.to_string())),
+    };
+    let crossed = host.charge_growth(objects, added).and_then(|()| {
+        let data = to_data(&value, &result_limits(), 0, &mut (0, 0))
+            .map_err(|place| HostError::Range(format!("vc.run: the result{place} is too large for a script")))?;
+        host.charge_call(data_size(&data))?;
+        Ok(data)
+    });
+    // A command whose result does not reach the script is put back, like one that failed.
+    if crossed.is_err()
+        && let Some(save) = save
+    {
+        save.restore(&mut session.borrow_mut());
+    }
+    crossed
+}
+
+/// A bounded snapshot of the active document, or `null` with none open. A snapshot past the limits
+/// of a crossing throws a `RangeError`.
+fn vc_document(host: &Host) -> std::result::Result<Data, HostError> {
+    let s = host.session.borrow();
+    let Some(st) = s.active() else { return Ok(Data::Null) };
+    let ids: Vec<u64> = st.selection.objects.iter().take(1_000).map(|i| i.0).collect();
+    let v = json!({
+        "name": st.title(),
+        "path": st.path,
+        "modified": st.is_dirty(),
+        "artboards": st.doc.artboards.len(),
+        "layers": st.doc.layers.len(),
+        "selection": ids,
+        "selectionCount": st.selection.objects.len(),
+    });
+    to_data(&v, &DataLimits::default(), 0, &mut (0, 0)).map_err(|place| HostError::Range(format!("vc.document{place} is too large for a script")))
+}
+
+/// Every command a script may run: its id, label and parameters.
+fn vc_commands() -> Data {
+    Data::Array(
+        command_specs()
+            .iter()
+            .filter(|c| !refused_to_scripts(c.id))
+            .map(|c| {
+                Data::Object(vec![
+                    ("id".into(), Data::String(c.id.into())),
+                    ("label".into(), Data::String(c.label.into())),
+                    ("params".into(), Data::String(c.params.into())),
+                ])
+            })
+            .collect(),
+    )
+}
+
+fn vc_log(host: &Host, args: Vec<Data>) -> std::result::Result<Data, HostError> {
+    let entry = args.first().unwrap_or(&Data::Undefined);
+    let bytes = data_size(entry) as usize;
+    if host.log.borrow().len() >= MAX_LOG_LINES || host.log_bytes.get().saturating_add(bytes) > MAX_LOG_BYTES {
+        return Err(HostError::Range(LOG_FULL.to_string()));
+    }
+    host.log_bytes.set(host.log_bytes.get() + bytes);
+    host.log.borrow_mut().push(to_json(entry));
+    Ok(Data::Undefined)
+}
+
+fn function(f: impl Fn(Vec<Data>) -> std::result::Result<Data, HostError> + 'static) -> HostFunction {
+    Rc::new(f)
+}
+
+fn vc_object(host: &Rc<Host>, args: Data) -> Vec<(String, HostItem)> {
+    let run = {
+        let h = host.clone();
+        function(move |a| vc_run(&h, a))
+    };
+    let document = {
+        let h = host.clone();
+        function(move |_| {
+            h.charge_call(64)?;
+            vc_document(&h)
+        })
+    };
+    let commands = {
+        let h = host.clone();
+        let list = Rc::new(vc_commands());
+        let size = data_size(&list);
+        function(move |_| {
+            h.charge_call(size)?;
+            Ok((*list).clone())
+        })
+    };
+    let log = {
+        let h = host.clone();
+        function(move |a| {
+            h.charge_call(data_size(a.first().unwrap_or(&Data::Undefined)))?;
+            vc_log(&h, a)
+        })
+    };
+    let has = function(|a| Ok(Data::Bool(matches!(a.first(), Some(Data::String(f)) if API_FEATURES.contains(&f.as_str())))));
+    vec![
+        ("run".into(), HostItem::Function(run)),
+        ("document".into(), HostItem::Getter(document)),
+        ("commands".into(), HostItem::Getter(commands)),
+        ("log".into(), HostItem::Function(log)),
+        ("args".into(), HostItem::Value(args)),
+        (
+            "api".into(),
+            HostItem::Object(vec![("version".into(), HostItem::Value(Data::String(API_VERSION.into()))), ("has".into(), HostItem::Function(has))]),
+        ),
+    ]
+}
+
+/// A plain-words kind of a run's failure, as the report gives it.
+fn kind_id(kind: &RunErrorKind) -> &'static str {
+    match kind {
+        RunErrorKind::Syntax => "syntax",
+        RunErrorKind::Thrown => "thrown",
+        RunErrorKind::Limit(LimitKind::Interrupted) => "stopped",
+        RunErrorKind::Limit(_) => "limit",
+        RunErrorKind::Internal => "internal",
+    }
+}
+
+/// `message`, with what to do about a failure that comes from a script written for another program.
+fn explained(kind: &RunErrorKind, message: &str, source: &str, line: u32) -> String {
+    const HOST_OBJECTS: &[&str] =
+        &["app", "$", "alert", "confirm", "prompt", "File", "Folder", "Window", "BridgeTalk", "activeDocument", "documents"];
+    let names_host_object =
+        message.strip_prefix("ReferenceError: ").is_some_and(|m| HOST_OBJECTS.iter().any(|o| m.split_whitespace().next() == Some(o)));
+    let directive =
+        *kind == RunErrorKind::Syntax && line > 0 && source.lines().nth(line as usize - 1).is_some_and(|l| l.trim_start().starts_with('#'));
+    if *kind == RunErrorKind::Thrown && names_host_object {
+        format!("{message} (scripts here use the `vc` object; objects other applications give their scripts are not available)")
+    } else if directive {
+        format!("{message} (preprocessor lines such as `#target` and `#include` are not read yet)")
+    } else {
+        message.to_string()
+    }
+}
+
+impl Session {
+    /// Is a script running? While one is, the commands that change anything are refused.
+    pub fn script_running(&self) -> bool {
+        self.script_key.is_some()
+    }
+
+    /// The flag that stops the script running in this session from any thread, at its next
+    /// instruction.
+    pub fn script_interrupt(&self) -> Interrupt {
+        self.script_stop.clone()
+    }
+
+    /// The report of the run that ended last (`script.run`'s result, or its failure).
+    pub fn script_report(&self) -> Option<&Value> {
+        self.script_report.as_ref()
+    }
+
+    /// The error text of the last run when it failed: its name, place, message and kind, and the
+    /// files it left written.
+    pub fn script_failure_text(&self) -> Option<String> {
+        self.script_report.as_ref().filter(|r| r["ok"] == false).map(failure_text)
+    }
+
+    /// Has the running script used up its growth allowance, so a person must answer? A run asked
+    /// to stop no longer waits: the next [`Session::script_pump`] ends it.
+    pub fn script_waiting(&self) -> bool {
+        !self.script_stop.is_set() && self.script_key.as_ref().and_then(|k| with_job(k, |j| j.host.waiting.get())).unwrap_or(false)
+    }
+
+    /// The name of the running script.
+    pub fn script_name(&self) -> Option<String> {
+        self.script_key.as_ref().and_then(|k| with_job(k, |j| j.name.clone()))
+    }
+
+    /// Lets the run go past its growth allowance by one more allowance.
+    pub fn script_continue(&mut self) {
+        if let Some(k) = &self.script_key {
+            with_job(k, |j| {
+                let h = &j.host;
+                if h.waiting.replace(false) {
+                    h.continues.set(h.continues.get() + 1);
+                    h.allowance_objects.set(h.allowance_objects.get().saturating_add(growth_objects()));
+                    h.allowance_bytes.set(h.allowance_bytes.get().saturating_add(GROWTH_BYTES));
+                }
+            });
+        }
+    }
+
+    /// Asks the running script to stop; it is rolled back at the next slice. False with none running.
+    pub fn script_request_stop(&mut self) -> bool {
+        if self.script_key.is_none() {
+            return false;
+        }
+        self.script_stop.set();
+        true
+    }
+
+    /// Stops the running script at once and puts everything back, with the report of a stopped run
+    /// ([`Self::script_report`]). False with none running.
+    pub fn script_abandon(&mut self) -> bool {
+        let Some(key) = self.script_key.take() else { return false };
+        let Some(job) = JOBS.with(|jobs| jobs.borrow_mut().remove(&key.0)) else {
+            drop(key);
+            raise_ids(self);
+            self.script_stop.clear();
+            self.reset_tool();
+            cmd::compositefonts::sync(self);
+            return true;
+        };
+        drop(key);
+        let kind = LimitKind::Interrupted;
+        let e = RunError { kind: RunErrorKind::Limit(kind), message: format!("limit reached: {kind:?}"), line: 0, column: 0 };
+        let _ = self.script_failed(job, &e);
+        true
+    }
+
+    /// A script can't start while a document holds a drag in progress or an undo group, which its
+    /// one undo step could not take in.
+    fn settle_for_script(&mut self) -> Result<()> {
+        self.finish_tool_edit_later()?;
+        if self.active().is_some() {
+            cmd::settle_interaction(self)?;
+        }
+        if self.explicit_undo_group.is_some() || self.docs.iter().any(|d| d.undo_group.is_some() || d.interaction.is_some()) {
+            return Err(EngineError::Other(OPEN_EDIT.to_string()));
+        }
+        Ok(())
+    }
+
+    /// Begins a run of `request`.
+    pub(crate) fn script_start(&mut self, request: Request) -> Result<()> {
+        self.settle_for_script()?;
+        // In a build where a fault ends the program, every unsaved document has a copy first.
+        if self.script_copy_first && self.docs.iter().any(DocState::is_dirty) && cmd::recovery::save_copies(self).is_err() {
+            return Err(EngineError::Other(NO_RECOVERY_COPY.to_string()));
+        }
+        self.reset_tool();
+        let open: Vec<u64> = self.docs.iter().map(|d| d.uid).collect();
+        self.script_high_water.retain(|uid, _| open.contains(uid));
+        self.script_stop.clear();
+        self.script_report = None;
+        let limits = Limits { fuel: request.fuel, heap_bytes: HEAP_BYTES, ..Limits::default() };
+        let options = Options { max_source_units: MAX_SOURCE_BYTES.saturating_mul(2), ..Options::default() };
+        let mut realm = Realm::with_options(options, limits);
+        realm.share_interrupt(&self.script_stop);
+        realm.set_data_limits(DataLimits::default());
+        let host = Rc::new(Host {
+            session: Rc::new(RefCell::new(Session::new())),
+            pause: realm.pause_flag(),
+            framed: self.script_frames,
+            calls: Cell::new(0),
+            calls_this_slice: Cell::new(0),
+            objects: Cell::new(0),
+            bytes_kept: Cell::new(0),
+            bridge: Cell::new(0),
+            allowance_objects: Cell::new(growth_objects()),
+            allowance_bytes: Cell::new(GROWTH_BYTES),
+            continues: Cell::new(0),
+            waiting: Cell::new(false),
+            log: RefCell::new(Vec::new()),
+            log_bytes: Cell::new(0),
+            written: RefCell::new(Vec::new()),
+        });
+        let args = to_data(&Value::Object(request.args), &DataLimits::default(), 0, &mut (0, 0))
+            .map_err(|place| EngineError::BadParams { cmd: "script.run".into(), msg: format!("`args{place}` is nested more than 64 levels deep") })?;
+        let started = realm.define_host_object("vc", vc_object(&host, args)).and_then(|()| realm.start(&request.source));
+        if let Err(e) = started {
+            let report = failure_report(&request.name, &e, &request.source, &host, 0);
+            let message = failure_text(&report);
+            self.script_report = Some(report);
+            return Err(EngineError::Other(message));
+        }
+        let job = Job { realm, host, world: World::working(self), start_uids: open, name: request.name };
+        let id = NEXT_JOB.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        JOBS.with(|jobs| jobs.borrow_mut().insert(id, job));
+        self.script_key = Some(JobKey(id));
+        Ok(())
+    }
+
+    /// Advances the running script by one slice. `None` while it is still running; otherwise the
+    /// run has ended: its report, or the error that ended it, with the documents put back.
+    pub fn script_pump(&mut self) -> Option<Result<Value>> {
+        let key = self.script_key.take()?;
+        let Some(mut job) = JOBS.with(|jobs| jobs.borrow_mut().remove(&key.0)) else {
+            return Some(Err(EngineError::Other(JOB_GONE.to_string())));
+        };
+        if job.host.waiting.get() && !self.script_stop.is_set() {
+            JOBS.with(|jobs| jobs.borrow_mut().insert(key.0, job));
+            self.script_key = Some(key);
+            return None;
+        }
+        if vectorcraft_doc::cancel::check().is_err() {
+            self.script_stop.set();
+        }
+        job.host.calls_this_slice.set(0);
+        let outcome = run_slice(self, &mut job);
+        match outcome {
+            Err(panic) => {
+                let e = RunError { kind: RunErrorKind::Internal, message: panic, line: 0, column: 0 };
+                Some(self.script_failed(job, &e))
+            }
+            Ok(Err(e)) => Some(self.script_failed(job, &e)),
+            Ok(Ok(Progress::Paused)) => {
+                JOBS.with(|jobs| jobs.borrow_mut().insert(key.0, job));
+                self.script_key = Some(key);
+                None
+            }
+            Ok(Ok(Progress::Done(_))) => Some(self.script_commit(job)),
+        }
+    }
+
+    fn script_failed(&mut self, job: Job, e: &RunError) -> Result<Value> {
+        let report = failure_report(&job.name, e, "", &job.host, job.realm.fuel_left());
+        drop(job);
+        raise_ids(self);
+        self.script_stop.clear();
+        self.reset_tool();
+        cmd::compositefonts::sync(self);
+        let message = failure_text(&report);
+        self.script_report = Some(report);
+        Err(EngineError::Other(message))
+    }
+
+    /// Makes the working copy the session's state: one undo step for each document whose art
+    /// changed, nothing for the others.
+    fn script_commit(&mut self, mut job: Job) -> Result<Value> {
+        // The working copy goes into the session; `job.world` holds the state before the run.
+        job.world.swap(self);
+        self.prefs = merged_prefs(&job.world.start_prefs, &self.prefs, &job.world.choices.prefs);
+        note_ids(self);
+        raise_ids(self);
+        let start = std::mem::take(&mut job.world.docs);
+        for st in &self.docs {
+            let changed = start.iter().find(|b| b.uid == st.uid).is_none_or(|b| !st.same_content(&b.doc));
+            if changed && (!crate::sanity::doc_sane(&st.doc, &st.selection) || st.doc.too_deep(None)) {
+                job.world.docs = start;
+                job.world.swap(self);
+                let e = RunError { kind: RunErrorKind::Internal, message: INVALID_RESULT.to_string(), line: 0, column: 0 };
+                return self.script_failed(job, &e);
+            }
+        }
+        let mut changed_names = Vec::new();
+        for st in &mut self.docs {
+            let Some(b) = start.iter().find(|b| b.uid == st.uid) else {
+                // A document the script opened or made starts with no undo steps.
+                st.history = crate::History { limit: st.history.limit, ..crate::History::default() };
+                st.revision += 1;
+                changed_names.push(st.title());
+                continue;
+            };
+            let changed = !st.same_content(&b.doc);
+            st.history = b.history.clone();
+            st.recovery.clone_from(&b.recovery);
+            if changed {
+                st.push_undo(STEP_LABEL.to_string(), b.doc.clone(), Arc::new(b.selection.clone()));
+                changed_names.push(st.title());
+            }
+            if changed || st.revision != b.revision {
+                st.revision = st.revision.max(b.revision) + 1;
+            }
+            st.sync_new_art();
+        }
+        // A document a frontend opened while the run went on stays open.
+        for st in start.iter().filter(|b| !job.start_uids.contains(&b.uid)) {
+            self.docs.push(st.clone());
+        }
+        // A document the script closed is gone now, with its recovery copy.
+        for b in start.iter().filter(|b| job.start_uids.contains(&b.uid) && !self.docs.iter().any(|d| d.uid == b.uid)) {
+            cmd::recovery::forget_closed(self, b);
+        }
+        // A document the script saved has nothing left to recover.
+        cmd::recovery::forget_clean(self);
+        let entries: Vec<_> = self.journal.iter().cloned().collect();
+        self.journal = std::mem::take(&mut job.world.journal);
+        for (id, p) in entries {
+            self.journal.push((id, p));
+        }
+        self.script_stop.clear();
+        self.reset_tool();
+        cmd::compositefonts::sync(self);
+        let host = &job.host;
+        let report = json!({
+            "ok": true,
+            "name": job.name,
+            "changed": changed_names,
+            "written": *host.written.borrow(),
+            "log": *host.log.borrow(),
+            "fuelUsed": job.realm.limits().fuel - job.realm.fuel_left(),
+            "hostCalls": host.calls.get(),
+        });
+        self.script_report = Some(report.clone());
+        Ok(report)
+    }
+
+    /// Runs the running script until it ends.
+    pub(crate) fn script_run_to_end(&mut self) -> Result<Value> {
+        loop {
+            if let Some(result) = self.script_pump() {
+                return result;
+            }
+            if self.script_waiting() {
+                self.script_stop.set();
+            }
+        }
+    }
+}
+
+const OPEN_EDIT: &str = "a drag or an undo group is open; finish it before running a script";
+const INVALID_RESULT: &str = "the script left a document that cannot be kept";
+const JOB_GONE: &str = "the script's run is no longer available";
+// Text a script reads from the errors it catches, or that ends its run with its name and place.
+const OVER_CALLS: &str = "the script made more host calls than one run may make";
+const OVER_BRIDGE: &str = "the script passed more data to and from commands than one run may pass";
+const OVER_GROWTH: &str = "the script added more objects and data to the documents than one run may add";
+const NO_COMMAND_ID: &str = "vc.run: give a command id, as a string";
+const TOO_MANY_ARGUMENTS: &str = "vc.run: takes a command id and an object of parameters";
+const PARAMS_NOT_OBJECT: &str = "vc.run: the parameters must be an object";
+const LOG_FULL: &str = "vc.log: the log of this run is full";
+const NO_RECOVERY_COPY: &str = "a recovery copy could not be written, so the script was not run";
+
+/// The report of a run that failed.
+fn failure_report(name: &str, e: &RunError, source: &str, host: &Host, fuel_left: u64) -> Value {
+    json!({
+        "ok": false,
+        "kind": kind_id(&e.kind),
+        "message": explained(&e.kind, &e.message, source, e.line),
+        "name": name,
+        "line": e.line,
+        "column": e.column,
+        "written": *host.written.borrow(),
+        "log": *host.log.borrow(),
+        "fuelLeft": fuel_left,
+    })
+}
+
+/// The text of a failed run's error.
+fn failure_text(report: &Value) -> String {
+    let s = |k: &str| report[k].as_str().unwrap_or_default();
+    let (line, column) = (report["line"].as_u64().unwrap_or(0), report["column"].as_u64().unwrap_or(0));
+    let at = if line > 0 { format!(" line {line}, column {column}") } else { String::new() };
+    let written = report["written"].as_array().map_or(0, Vec::len);
+    let kept = if written > 0 {
+        let paths: Vec<&str> = report["written"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
+        format!(" (these files stay written: {})", paths.join(", "))
+    } else {
+        String::new()
+    };
+    format!("{}:{at}: {} ({}){kept}", s("name"), s("message"), s("kind"))
+}
+
+/// A run's slice: the working copy in, the real session lent to the host functions, one measured
+/// slice run, and everything back. A panic in the interpreter is the outer `Err`.
+fn run_slice(s: &mut Session, job: &mut Job) -> std::result::Result<std::result::Result<Progress, RunError>, String> {
+    let depth = std::mem::replace(&mut s.depth, 0);
+    job.world.swap(s);
+    s.script_in_run = true;
+    let cell = job.host.session.clone();
+    std::mem::swap(s, &mut *cell.borrow_mut());
+    let realm = &mut job.realm;
+    let r = guard::catch_panic(|| {
+        #[cfg(test)]
+        if PANIC_IN_SLICE.with(Cell::get) {
+            panic!("a slice failed");
+        }
+        realm.advance(SLICE_FUEL)
+    });
+    std::mem::swap(s, &mut *cell.borrow_mut());
+    s.script_in_run = false;
+    job.world.swap(s);
+    s.depth = depth;
+    r
+}
+
+/// The objects a run may add before it is asked to continue or stop.
+fn growth_objects() -> u64 {
+    #[cfg(test)]
+    if let Some(n) = TEST_GROWTH.with(Cell::get) {
+        return n;
+    }
+    GROWTH_OBJECTS
+}
+
+/// The limits of a command's result on its way to the script.
+fn result_limits() -> DataLimits {
+    #[cfg(test)]
+    if let Some(bytes) = TEST_RESULT_BYTES.with(Cell::get) {
+        return DataLimits { bytes, ..DataLimits::default() };
+    }
+    DataLimits::default()
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Tests: the bytes a command's result may hold on its way to the script.
+    pub(crate) static TEST_RESULT_BYTES: Cell<Option<usize>> = const { Cell::new(None) };
+    /// Tests: makes the next slice panic.
+    pub(crate) static PANIC_IN_SLICE: Cell<bool> = const { Cell::new(false) };
+    /// Tests: the objects a run may add in place of [`GROWTH_OBJECTS`].
+    pub(crate) static TEST_GROWTH: Cell<Option<u64>> = const { Cell::new(None) };
+}

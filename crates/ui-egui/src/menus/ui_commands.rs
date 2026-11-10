@@ -1521,6 +1521,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} close the progress window of the Image Traces running in the background; they go on, shown in the status bar → {hidden: n}",
     ),
     (
+        "ui.runScript",
+        "Other Script…",
+        "Cmd+F12",
+        "{path? | source?, name?} run a .js or .jsx file (script.run), after the warning unless Preferences › General › Show External Script Warning is off (dialog `scriptRun`: `name`, `script`, `dontShow`); without a file pick one (the web opens the browser's file picker)",
+    ),
+    (
         "ui.checkScript",
         "Check Script…",
         "",

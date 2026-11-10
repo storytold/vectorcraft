@@ -4088,6 +4088,15 @@ imageTrace	Outline	Contour
 @msg	Combine Slices: the slices have no bounds	Slices combineren: de slices hebben geen grenzen
 @msg	Convert to Artboards: selection has no area	Converteren naar tekengebieden: de selectie heeft geen oppervlakte
 @msg	Convert to Shape: no rectangles or ellipses selected	Converteren naar vorm: geen rechthoeken of ellipsen geselecteerd
+	Run	Uitvoeren
+	Run Script	Script uitvoeren
+	Stop Script	Script stoppen
+	Show External Script Warning	Waarschuwing voor externe scripts tonen
+	A Script Is Running	Er wordt een script uitgevoerd
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Een script kan de geopende documenten wijzigen en via de uitgevoerde opdrachten bestanden schrijven. Voer alleen scripts uit die u vertrouwt.
+	Do not show this warning again	Deze waarschuwing niet meer tonen
+	Stop the script and undo what it did? Then quit again.	Het script stoppen en de wijzigingen ervan ongedaan maken? Sluit daarna opnieuw af.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Dit script heeft heel veel objecten toegevoegd. Doorgaan, of het stoppen en de wijzigingen ervan ongedaan maken?
 @msg	Copied the script report	Scriptrapport gekopieerd
 @msg	Corners edits the corners of a path	Hoeken bewerkt de hoeken van een pad
 @msg	Couldn't copy to the system clipboard: {e}	Kon niet naar het systeemklembord kopiëren: {e}

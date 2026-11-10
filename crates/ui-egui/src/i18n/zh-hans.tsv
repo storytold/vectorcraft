@@ -4526,6 +4526,27 @@ imageTrace	Outline	轮廓
 @msg	the library item is damaged	库项目已损坏
 @msg	{_1} font families available	有 {_1} 个可用的字体系列
 @msg	{_1} has no {_2} style	{_1} 没有 {_2} 样式
+	Run	运行
+	Run Script	运行脚本
+	Stop Script	停止脚本
+	Show External Script Warning	显示外部脚本警告
+	A Script Is Running	脚本正在运行
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	脚本可以更改打开的文档，并可通过其运行的命令写入文件。请只运行您信任的脚本。
+	Do not show this warning again	不再显示此警告
+	Stop the script and undo what it did? Then quit again.	要停止脚本并撤销其更改吗？然后请再次退出。
+	This script has added a great many objects. Continue, or stop it and undo what it did?	此脚本已添加大量对象。要继续，还是停止并撤销其更改？
+@msg	Choose a .js or .jsx script	请选择 .js 或 .jsx 脚本
+@msg	Ran {name}	已运行 {name}
+@msg	The script was stopped and its changes were undone	脚本已停止，其更改已撤销
+@msg	a script is running: stop it or wait for it to finish	脚本正在运行：请停止它或等待其完成
+@msg	this is a compiled script, which cannot be run; use its source text	这是已编译的脚本，无法运行；请使用其源文本
+@msg	the script is not UTF-8 text	脚本不是 UTF-8 文本
+@msg	the script is too large to run	脚本过大，无法运行
+@msg	a drag or an undo group is open; finish it before running a script	拖动或撤销组尚未结束；请在运行脚本前完成
+@msg	the script left a document that cannot be kept	脚本留下了无法保留的文档
+@msg	the script's run is no longer available	脚本运行已不可用
+@msg	a recovery copy could not be written, so the script was not run	无法写入恢复副本，因此未运行脚本
+@msg	Running a script	正在运行脚本
 @msg	Copied the script report	已复制脚本报告
 @msg	Exported {path}	已导出 {path}
 @msg	no CSS to copy: select objects with CSS of their own	没有可复制的 CSS：请选择带有自身 CSS 的对象

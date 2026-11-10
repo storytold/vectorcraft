@@ -4094,6 +4094,27 @@ axis	Both	Обидві
 @msg	Combine Slices: the slices have no bounds	Об’єднання фрагментів: фрагменти не мають кордонів
 @msg	Convert to Artboards: selection has no area	Перетворення на монтажні області: виділення не має області
 @msg	Convert to Shape: no rectangles or ellipses selected	Перетворення на фігуру: не виділено прямокутники або еліпси
+	Run	Виконати
+	Run Script	Виконати скрипт
+	Stop Script	Зупинити скрипт
+	Show External Script Warning	Показувати попередження про зовнішні скрипти
+	A Script Is Running	Виконується скрипт
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Скрипт може змінювати відкриті документи й записувати файли за допомогою команд, які виконує. Запускайте лише ті скрипти, яким довіряєте.
+	Do not show this warning again	Більше не показувати це попередження
+	Stop the script and undo what it did? Then quit again.	Зупинити скрипт і скасувати його зміни? Потім вийдіть ще раз.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Цей скрипт додав дуже багато об’єктів. Продовжити чи зупинити його та скасувати його зміни?
+@msg	Choose a .js or .jsx script	Виберіть скрипт .js або .jsx
+@msg	Ran {name}	Виконано: {name}
+@msg	The script was stopped and its changes were undone	Скрипт зупинено, його зміни скасовано
+@msg	a script is running: stop it or wait for it to finish	виконується скрипт: зупиніть його або дочекайтеся завершення
+@msg	this is a compiled script, which cannot be run; use its source text	це скомпільований скрипт, його не можна виконати; використайте його вихідний текст
+@msg	the script is not UTF-8 text	скрипт не є текстом UTF-8
+@msg	the script is too large to run	скрипт завеликий для виконання
+@msg	a drag or an undo group is open; finish it before running a script	відкрито перетягування або групу скасування; завершіть їх перед запуском скрипта
+@msg	the script left a document that cannot be kept	скрипт залишив документ, який не можна зберегти
+@msg	the script's run is no longer available	виконання скрипта більше не доступне
+@msg	a recovery copy could not be written, so the script was not run	не вдалося записати копію для відновлення, тому скрипт не виконано
+@msg	Running a script	Виконується скрипт
 @msg	Copied the script report	Звіт про сценарій скопійовано
 @msg	Corners edits the corners of a path	«Кути» редагує кути контуру
 @msg	Couldn't copy to the system clipboard: {e}	Не вдалося скопіювати до системного буфера обміну: {e}

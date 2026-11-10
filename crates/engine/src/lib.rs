@@ -242,6 +242,21 @@ pub struct Session {
     pub(crate) screens_hand_off: Option<Option<cmd::fileio::ScreenExport>>,
     /// Where Data Recovery keeps its copies ([`cmd::recovery`]).
     pub recovery: cmd::recovery::Recovery,
+    /// The running script's job, while there is one: the mutation lease ([`script`]).
+    pub(crate) script_key: Option<script::JobKey>,
+    /// Stops the running script at its next instruction; the same flag for every run.
+    pub(crate) script_stop: vectorcraft_js::Interrupt,
+    /// The report of the run that ended last.
+    pub(crate) script_report: Option<Value>,
+    /// `script.run` starts the job and returns, and the frontend advances it once per frame
+    /// ([`Session::script_pump`]). Off, `script.run` advances it to its end.
+    pub script_frames: bool,
+    /// Each open document's highest next id a run has seen, by [`DocState::uid`].
+    pub(crate) script_high_water: std::collections::HashMap<u64, u64>,
+    /// While a slice of a script runs in this session.
+    pub(crate) script_in_run: bool,
+    /// Write recovery copies of the unsaved documents before a run, and don't start without them.
+    pub script_copy_first: bool,
     /// While the active tool's actions run: their commands aren't "a command from outside the
     /// tool" ([`Session::after_command`]).
     pub(crate) in_tool_actions: bool,
@@ -328,6 +343,7 @@ mod history;
 mod interaction;
 mod prefs;
 mod sanity;
+pub mod script;
 mod session;
 
 #[cfg(test)]
@@ -336,7 +352,7 @@ pub(crate) use command_sets::SELECTS_GIVEN_IDS;
 use command_sets::given_ids;
 pub use command_sets::{FIT_ACTIVE_ARTBOARD, ON_ACTIVE_ARTBOARD, waits_for_tool_edit};
 pub use doc_state::{DocState, OpenRows, RecalledSelection};
-pub use error::{EngineError, Result};
+pub use error::{EngineError, Result, SCRIPT_BUSY};
 pub use history::{History, HistoryEntry, NamedStep, default_history_budget};
 pub(crate) use interaction::PreviewCopies;
 pub use interaction::{Interaction, LastTransform, UndoGroup, UndoScope};

@@ -11,21 +11,135 @@ use vectorcraft_scriptcheck::{Limits, Loaded, Loader, Report};
 /// The ids a reply can hold, for the windows that show it.
 pub use vectorcraft_scriptcheck::{IncludeStatus, Need, OUTSIDE, PROBLEMS};
 
-use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, str_param};
+use super::{CommandSpec, EngineError, Result, Session, always, bad, bool_or, cmd, str_param};
+use crate::script;
 
 /// The extensions of the scripts File › Open shows a check for.
 pub const EXTS: &[&str] = &["jsx", "jsxinc", "jsxbin"];
 
+/// The extensions of the scripts `script.run` takes as a file, in any case.
+pub const RUN_EXTS: &[&str] = &["js", "jsx"];
+
+/// Does `path` name a file `script.run` takes?
+pub fn runs(path: &str) -> bool {
+    std::path::Path::new(path).extension().and_then(|e| e.to_str()).is_some_and(|e| RUN_EXTS.iter().any(|x| e.eq_ignore_ascii_case(x)))
+}
+
 pub fn specs() -> Vec<CommandSpec> {
-    vec![cmd!(
-        query "script.check",
-        "Check Script",
-        [],
-        None,
-        "{path? | data?: the script's text | dataBase64?, name?: the file's name (default: the path's; with a path, only the reply's name), includes?: false (with a path: also check the files its #include lines name, inside the script's folder; not on the web)} check a script written for the reference app (.jsx, .jsxinc, .js, or a compiled .jsxbin) without running any of it → {name, kind: script|compiled|module|notText|tooLarge, needs: [language|dom|files|menuCommands|dialogs|hostOnly], lines, targets: [{value, app, instance?, version?, locale?, line, file?}], directives: [{name, value, line, form: \"#\"|\"//@\", file?}], includes: [{value, line, status: checked|missing|notFollowed|cycle|notRead|limit|unreadable, path?, file?}], features: [{id, count, lines}], dom: {members: [{path, count}], types: [{name, count}]}, menuCommands: {strings: [{value, count, lines}], dynamic}, outside: [{id: filesWritten|filesOpened|network|nativeCode|otherApps|environment|unseenCode|preferences, count, lines, modes?}], problems: [{code, line?, file?, detail?}], truncated} (file: the included file it is in; lines: at most 20 of the script's own, while counts include the included files; at most 8 MiB a file and 32 MiB in all, 64 included files 16 deep, 1,024 paths looked up for them, 1,000 entries a list, text echoed cut to 120 characters)",
-        always,
-        check
-    )]
+    vec![
+        cmd!(
+            query "script.run",
+            "Run Script",
+            [],
+            None,
+            "{path?: a .js or .jsx file | source?: the script's text (exactly one of the two), name?: the name errors and the report use (default: the path's file name, or \"script\"), args?: {…} (at most 1 MiB as JSON; vc.args in the script), answers?: {} (no prompts exist yet: only an empty object is taken), maxFuel?: whole number from 1 to 100000000000 (instructions in all; default 1000000000)} run a JavaScript file against the open documents, through the vc object: vc.run(id, params) runs a command and returns its result, a failed command throws an error the script can catch and puts back the documents and the session state it changed, while any file it wrote stays written and is named; vc.document is a snapshot of the active document or null; vc.commands lists the commands a script may run; vc.log(value) adds to the report; vc.args is args; vc.api.version and vc.api.has(feature) describe the API. The run is one transaction: on success each changed document gets one undo step, Run Script, and each preference it changed keeps its value, and on an uncaught error, a limit or script.stop every open document and the session go back as they were; files a command wrote before that stay written and are named. While it runs, other commands that change anything end with a busy error. Commands that change anything outside the documents (script.*, except script.check, plugin.*, prefs.*, actionSet.*, shortcutSet.*, help.*, print.*, library.*, importMatches.*, edit.undoGroup.*, file.recovery.*, stroke.widthProfile.*, saving, importing or deleting a preset, text.addFontFiles, text.findFontFiles, text.rescanFonts, links.findFiles, file.place.queue, color.loadProfile, color.removeProfile, file.print, view.proofSetup, view.proofColors, view.overprintPreview, view.separationsPreview) throw. VectorCraft's own limits: 8 MiB of source, 256 MiB of heap (128 MiB on the web), 2000000 host calls, 200000000 instructions without a pause, 64 levels, 16 MiB and 1048576 entries for a value crossing to or from a command, 10000 log entries and 4 MiB of log, and 100000 objects and 512 MiB of new document data, past which a person is asked to continue or stop and a run with nobody to ask ends → {ok: true, name, changed: [document names], written: [paths], log: [values], fuelUsed, hostCalls}, or, in the app, {running: true, name} and the report later in ui.inspect's scriptReport",
+            always,
+            run
+        ),
+        cmd!(
+            query "script.stop",
+            "Stop Script",
+            [],
+            None,
+            "{} stop the running script, which puts every document back as it was before the run; asking again while it stops is harmless → {stopped: whether a script was running}",
+            always,
+            stop
+        ),
+        cmd!(
+            query "script.check",
+            "Check Script",
+            [],
+            None,
+            "{path? | data?: the script's text | dataBase64?, name?: the file's name (default: the path's; with a path, only the reply's name), includes?: false (with a path: also check the files its #include lines name, inside the script's folder; not on the web)} check a script written for the reference app (.jsx, .jsxinc, .js, or a compiled .jsxbin) without running any of it → {name, kind: script|compiled|module|notText|tooLarge, needs: [language|dom|files|menuCommands|dialogs|hostOnly], lines, targets: [{value, app, instance?, version?, locale?, line, file?}], directives: [{name, value, line, form: \"#\"|\"//@\", file?}], includes: [{value, line, status: checked|missing|notFollowed|cycle|notRead|limit|unreadable, path?, file?}], features: [{id, count, lines}], dom: {members: [{path, count}], types: [{name, count}]}, menuCommands: {strings: [{value, count, lines}], dynamic}, outside: [{id: filesWritten|filesOpened|network|nativeCode|otherApps|environment|unseenCode|preferences, count, lines, modes?}], problems: [{code, line?, file?, detail?}], truncated} (file: the included file it is in; lines: at most 20 of the script's own, while counts include the included files; at most 8 MiB a file and 32 MiB in all, 64 included files 16 deep, 1,024 paths looked up for them, 1,000 entries a list, text echoed cut to 120 characters)",
+            always,
+            check
+        ),
+    ]
+}
+
+/// A refusal of `script.run`'s parameters, which only a program's own call can give.
+fn param(msg: impl Into<String>) -> EngineError {
+    EngineError::BadParams { cmd: "script.run".into(), msg: msg.into() }
+}
+
+/// `maxFuel`: a whole number from 1 to [`script::MAX_FUEL`], or the default when omitted.
+fn max_fuel(p: &Value) -> Result<u64> {
+    let Some(v) = p.get("maxFuel") else { return Ok(script::DEFAULT_FUEL) };
+    v.as_u64()
+        .filter(|n| (1..=script::MAX_FUEL).contains(n))
+        .ok_or_else(|| param(format!("`maxFuel` must be a whole number from 1 to {}", script::MAX_FUEL)))
+}
+
+/// The text of a script read as bytes: a byte order mark is left out, and compiled scripts and
+/// bytes that are not UTF-8 are refused.
+fn script_text(bytes: &[u8]) -> Result<String> {
+    if bytes.starts_with(b"@JSXBIN@") {
+        return Err(EngineError::Other(COMPILED.to_string()));
+    }
+    let text = std::str::from_utf8(bytes).map_err(|_| EngineError::Other(NOT_TEXT.to_string()))?;
+    Ok(text.strip_prefix('\u{feff}').unwrap_or(text).to_string())
+}
+
+const COMPILED: &str = "this is a compiled script, which cannot be run; use its source text";
+const NOT_TEXT: &str = "the script is not UTF-8 text";
+/// The error for a script over [`script::MAX_SOURCE_BYTES`].
+pub const TOO_LARGE: &str = "the script is too large to run";
+
+fn run(s: &mut Session, p: &Value) -> Result<Value> {
+    let optional_str = |key: &str| match p.get(key) {
+        None => Ok(None),
+        Some(Value::String(t)) => Ok(Some(t.as_str())),
+        Some(_) => Err(param(format!("`{key}` must be a string"))),
+    };
+    let (path, source, given_name) = (optional_str("path")?, optional_str("source")?, optional_str("name")?);
+    let args = match p.get("args") {
+        None => serde_json::Map::new(),
+        Some(Value::Object(o)) => o.clone(),
+        Some(_) => return Err(param("`args` must be an object")),
+    };
+    if serde_json::to_vec(&args).map_or(true, |b| b.len() > script::MAX_ARGS_BYTES) {
+        return Err(param("`args` is larger than 1 MiB"));
+    }
+    match p.get("answers") {
+        None => {}
+        Some(Value::Object(o)) if o.is_empty() => {}
+        Some(_) => return Err(param("`answers` must be an empty object: scripts cannot ask questions yet")),
+    }
+    let fuel = max_fuel(p)?;
+    let text = match (path, source) {
+        (Some(""), None) => return Err(param("`path` is empty")),
+        (Some(path), None) => {
+            if path.to_ascii_lowercase().ends_with(".jsxbin") {
+                return Err(EngineError::Other(COMPILED.to_string()));
+            }
+            if !runs(path) {
+                return Err(param("`path` must name a .js or .jsx file"));
+            }
+            // One byte more than a script may have shows that the file is too large.
+            let bytes = super::fileio::read_file_head(path, script::MAX_SOURCE_BYTES + 1)?;
+            if bytes.len() > script::MAX_SOURCE_BYTES {
+                return Err(EngineError::Other(TOO_LARGE.to_string()));
+            }
+            script_text(&bytes)?
+        }
+        (None, Some(source)) => {
+            if source.len() > script::MAX_SOURCE_BYTES {
+                return Err(EngineError::Other(TOO_LARGE.to_string()));
+            }
+            script_text(source.as_bytes())?
+        }
+        _ => return Err(param("give exactly one of `path` and `source`")),
+    };
+    let name = given_name.map(str::to_string).or_else(|| path.map(super::fileio::file_name)).unwrap_or_else(|| "script".to_string());
+    s.script_start(script::Request { name: name.clone(), source: text, args, fuel })?;
+    if s.script_frames {
+        return Ok(json!({"running": true, "name": name}));
+    }
+    s.script_run_to_end()
+}
+
+fn stop(s: &mut Session, _: &Value) -> Result<Value> {
+    Ok(json!({"stopped": s.script_request_stop()}))
 }
 
 /// The folder a script is in, which its included files are read from.

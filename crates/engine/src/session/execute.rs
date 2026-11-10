@@ -39,6 +39,14 @@ impl Session {
     /// Execute a command by id. This is THE entry point for every frontend.
     pub fn execute(&mut self, id: &str, params: &Value) -> Result<Value> {
         let spec = find_command(id).ok_or_else(|| cmd::params::unknown_command(id))?;
+        // A clipboard import is a query that replaces the clipboard, which the end of a run sets too.
+        if self.depth == 0 && self.script_key.is_some() && (waits_for_tool_edit(id) || id.starts_with("clipboard.import")) {
+            return Err(EngineError::Busy);
+        }
+        // A step of a batch a script runs is held to the same rule as the script's own commands.
+        if self.script_in_run && crate::script::refused_to_scripts(id) {
+            return Err(EngineError::Other(crate::script::refused_text(id)));
+        }
         // An edit the active tool is computing on another thread (a Shape Builder merge) is
         // applied before a command that may edit, select, save or give a document a new revision,
         // as the click came first. Queries that only read do not wait for it.

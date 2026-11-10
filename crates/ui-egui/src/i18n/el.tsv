@@ -2233,6 +2233,27 @@ axis	Both	Και τα δύο
 @msg	Combine Slices: the slices have no bounds	Συνδυασμός τομών: οι τομές δεν έχουν όρια
 @msg	Convert to Artboards: selection has no area	Μετατροπή σε πίνακες σχεδίασης: η επιλογή δεν έχει επιφάνεια
 @msg	Convert to Shape: no rectangles or ellipses selected	Μετατροπή σε σχήμα: δεν έχουν επιλεγεί ορθογώνια ή ελλείψεις
+	Run	Εκτέλεση
+	Run Script	Εκτέλεση σεναρίου
+	Stop Script	Διακοπή σεναρίου
+	Show External Script Warning	Εμφάνιση προειδοποίησης για εξωτερικά σενάρια
+	A Script Is Running	Εκτελείται ένα σενάριο
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Ένα σενάριο μπορεί να αλλάξει τα ανοιχτά έγγραφα και να γράψει αρχεία μέσω των εντολών που εκτελεί. Εκτελείτε μόνο σενάρια που εμπιστεύεστε.
+	Do not show this warning again	Να μην εμφανιστεί ξανά αυτή η προειδοποίηση
+	Stop the script and undo what it did? Then quit again.	Διακοπή του σεναρίου και αναίρεση όσων έκανε; Έπειτα κάντε ξανά έξοδο.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Αυτό το σενάριο πρόσθεσε πάρα πολλά αντικείμενα. Συνέχεια, ή διακοπή και αναίρεση όσων έκανε;
+@msg	Choose a .js or .jsx script	Επιλέξτε ένα σενάριο .js ή .jsx
+@msg	Ran {name}	Εκτελέστηκε: {name}
+@msg	The script was stopped and its changes were undone	Το σενάριο διακόπηκε και οι αλλαγές του αναιρέθηκαν
+@msg	a script is running: stop it or wait for it to finish	εκτελείται ένα σενάριο: διακόψτε το ή περιμένετε να τελειώσει
+@msg	this is a compiled script, which cannot be run; use its source text	αυτό είναι μεταγλωττισμένο σενάριο που δεν μπορεί να εκτελεστεί· χρησιμοποιήστε το πηγαίο κείμενό του
+@msg	the script is not UTF-8 text	το σενάριο δεν είναι κείμενο UTF-8
+@msg	the script is too large to run	το σενάριο είναι πολύ μεγάλο για εκτέλεση
+@msg	a drag or an undo group is open; finish it before running a script	είναι ανοιχτή μια μεταφορά ή ομάδα αναίρεσης· ολοκληρώστε την πριν εκτελέσετε σενάριο
+@msg	the script left a document that cannot be kept	το σενάριο άφησε ένα έγγραφο που δεν μπορεί να διατηρηθεί
+@msg	the script's run is no longer available	η εκτέλεση του σεναρίου δεν είναι πλέον διαθέσιμη
+@msg	a recovery copy could not be written, so the script was not run	δεν ήταν δυνατή η εγγραφή αντιγράφου ανάκτησης, οπότε το σενάριο δεν εκτελέστηκε
+@msg	Running a script	Εκτελείται σενάριο
 @msg	Copied the script report	Η αναφορά του σεναρίου αντιγράφηκε
 @msg	Corners edits the corners of a path	Η εντολή Γωνίες επεξεργάζεται τις γωνίες μιας διαδρομής
 @msg	Couldn't copy to the system clipboard: {e}	Δεν ήταν δυνατή η αντιγραφή στο πρόχειρο συστήματος: {e}

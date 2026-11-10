@@ -4292,6 +4292,27 @@ imageTrace	Outline	Ääriviiva
 @msg	Combine Slices: the slices have no bounds	Yhdistä viipaleet: viipaleilla ei ole rajoja
 @msg	Convert to Artboards: selection has no area	Muunna piirtoalustoiksi: valinnalla ei ole pinta-alaa
 @msg	Convert to Shape: no rectangles or ellipses selected	Muunna muodoksi: suorakulmioita tai ellipsejä ei ole valittu
+	Run	Suorita
+	Run Script	Suorita komentosarja
+	Stop Script	Pysäytä komentosarja
+	Show External Script Warning	Näytä ulkoisten komentosarjojen varoitus
+	A Script Is Running	Komentosarja on käynnissä
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Komentosarja voi muuttaa avoimia asiakirjoja ja kirjoittaa tiedostoja suorittamillaan komennoilla. Suorita vain komentosarjoja, joihin luotat.
+	Do not show this warning again	Älä näytä tätä varoitusta uudelleen
+	Stop the script and undo what it did? Then quit again.	Pysäytetäänkö komentosarja ja kumotaan sen muutokset? Lopeta sitten uudelleen.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Tämä komentosarja on lisännyt hyvin paljon objekteja. Jatketaanko, vai pysäytetäänkö se ja kumotaan sen muutokset?
+@msg	Choose a .js or .jsx script	Valitse .js- tai .jsx-komentosarja
+@msg	Ran {name}	Suoritettu: {name}
+@msg	The script was stopped and its changes were undone	Komentosarja pysäytettiin ja sen muutokset kumottiin
+@msg	a script is running: stop it or wait for it to finish	komentosarja on käynnissä: pysäytä se tai odota sen valmistumista
+@msg	this is a compiled script, which cannot be run; use its source text	tämä on käännetty komentosarja, jota ei voi suorittaa; käytä sen lähdetekstiä
+@msg	the script is not UTF-8 text	komentosarja ei ole UTF-8-tekstiä
+@msg	the script is too large to run	komentosarja on liian suuri suoritettavaksi
+@msg	a drag or an undo group is open; finish it before running a script	vetäminen tai kumousryhmä on kesken; viimeistele se ennen komentosarjan suorittamista
+@msg	the script left a document that cannot be kept	komentosarja jätti asiakirjan, jota ei voi säilyttää
+@msg	the script's run is no longer available	komentosarjan suoritus ei ole enää käytettävissä
+@msg	a recovery copy could not be written, so the script was not run	palautuskopiota ei voitu kirjoittaa, joten komentosarjaa ei suoritettu
+@msg	Running a script	Suoritetaan komentosarjaa
 @msg	Copied the script report	Komentosarjan raportti kopioitiin
 @msg	Corners edits the corners of a path	Kulmat-toiminto muokkaa polun kulmia
 @msg	Couldn't copy to the system clipboard: {e}	Järjestelmän leikepöydälle ei voitu kopioida: {e}

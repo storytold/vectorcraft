@@ -3955,6 +3955,15 @@ axis	Both	И двете
 @msg	Combine Slices: the slices have no bounds	Обединяване на парчета: парчетата нямат граници
 @msg	Convert to Artboards: selection has no area	Преобразуване в работни области: селекцията няма площ
 @msg	Convert to Shape: no rectangles or ellipses selected	Преобразуване в фигура: няма избрани правоъгълници или елипси
+	Run	Изпълни
+	Run Script	Изпълни скрипт
+	Stop Script	Спри скрипта
+	Show External Script Warning	Показвай предупреждение за външни скриптове
+	A Script Is Running	Изпълнява се скрипт
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Скриптът може да променя отворените документи и да записва файлове чрез командите, които изпълнява. Изпълнявайте само скриптове, на които имате доверие.
+	Do not show this warning again	Не показвай повече това предупреждение
+	Stop the script and undo what it did? Then quit again.	Да се спре ли скриптът и да се отменят ли промените му? След това излезте отново.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Този скрипт добави изключително много обекти. Да продължи ли, или да се спре и да се отменят промените му?
 @msg	Copied the script report	Копиран е отчетът за скрипта
 @msg	Corners edits the corners of a path	Ъглите редактират ъглите на пътя
 @msg	Couldn't copy to the system clipboard: {e}	Неуспешно копиране в системния клипборд: {e}

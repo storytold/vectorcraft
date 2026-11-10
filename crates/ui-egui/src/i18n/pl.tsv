@@ -4201,6 +4201,27 @@ imageTrace	Outline	Kontur
 @msg	Combine Slices: the slices have no bounds	Połącz plasterki: plasterki nie mają granic
 @msg	Convert to Artboards: selection has no area	Konwertuj na obszary kompozycji: zaznaczenie nie ma powierzchni
 @msg	Convert to Shape: no rectangles or ellipses selected	Konwertuj na kształt: nie zaznaczono prostokątów ani elips
+	Run	Uruchom
+	Run Script	Uruchom skrypt
+	Stop Script	Zatrzymaj skrypt
+	Show External Script Warning	Pokazuj ostrzeżenie o skryptach zewnętrznych
+	A Script Is Running	Skrypt jest uruchomiony
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skrypt może zmieniać otwarte dokumenty i zapisywać pliki za pomocą wykonywanych poleceń. Uruchamiaj tylko skrypty, którym ufasz.
+	Do not show this warning again	Nie pokazuj więcej tego ostrzeżenia
+	Stop the script and undo what it did? Then quit again.	Zatrzymać skrypt i cofnąć jego zmiany? Następnie zakończ program ponownie.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Ten skrypt dodał bardzo wiele obiektów. Kontynuować, czy zatrzymać go i cofnąć jego zmiany?
+@msg	Choose a .js or .jsx script	Wybierz skrypt .js lub .jsx
+@msg	Ran {name}	Wykonano: {name}
+@msg	The script was stopped and its changes were undone	Skrypt został zatrzymany, a jego zmiany cofnięte
+@msg	a script is running: stop it or wait for it to finish	skrypt jest uruchomiony: zatrzymaj go lub poczekaj na jego zakończenie
+@msg	this is a compiled script, which cannot be run; use its source text	to jest skrypt skompilowany, którego nie można uruchomić; użyj jego tekstu źródłowego
+@msg	the script is not UTF-8 text	skrypt nie jest tekstem UTF-8
+@msg	the script is too large to run	skrypt jest zbyt duży, aby go uruchomić
+@msg	a drag or an undo group is open; finish it before running a script	otwarte jest przeciąganie lub grupa cofania; zakończ je przed uruchomieniem skryptu
+@msg	the script left a document that cannot be kept	skrypt pozostawił dokument, którego nie można zachować
+@msg	the script's run is no longer available	uruchomienie skryptu nie jest już dostępne
+@msg	a recovery copy could not be written, so the script was not run	nie udało się zapisać kopii odzyskiwania, więc skrypt nie został uruchomiony
+@msg	Running a script	Uruchamianie skryptu
 @msg	Copied the script report	Skopiowano raport skryptu
 @msg	Corners edits the corners of a path	Narożniki edytuje narożniki ścieżki
 @msg	Couldn't copy to the system clipboard: {e}	Nie udało się skopiować do schowka systemowego: {e}

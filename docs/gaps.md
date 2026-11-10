@@ -690,8 +690,9 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 
 ## G6 Automation and scripting
 
-- **Missing:** a scripting surface over the command registry (Illustrator: JavaScript, File › Scripts;
-  #1183 is open). Actions, Batch, Variables (text, visibility, image and graph), data set CSV import and
+- **Missing:** the document object model for scripts, a script console, the Scripts folder and script
+  directives (#1183 is open). File › Scripts › Other Script… and `script.run` run JavaScript files over the
+  command registry. Actions, Batch, Variables (text, visibility, image and graph), data set CSV import and
   export, and full agent control over MCP are done.
 - **Estimate:** 4–8 h.
 - **Done (2026-10-16):** the MCP server hears the client during a long call: `notifications/cancelled` stops a queued or running export (PDF pages, flattening, baking, drawing, artboards) without writing anything or changing the document, `ping` and the list methods answer at once, any other request that would wait behind a call running for two seconds or more is refused as busy (`-32003`, naming the call), and `_meta.progressToken` gets page progress (#2165, #2171, #2172). Reading the document during an export is not served (refused as busy); estimate unchanged.

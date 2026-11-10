@@ -28,7 +28,8 @@ const METHOD_NOT_FOUND: i64 = -32601;
 const INVALID_PARAMS: i64 = -32602;
 const INTERNAL_ERROR: i64 = -32603;
 const RESOURCE_NOT_FOUND: i64 = -32002;
-/// The engine is running a long call and this request was not run (implementation-defined range).
+/// The engine is running a long call or a script and this request was not run
+/// (implementation-defined range).
 pub(crate) const SERVER_BUSY: i64 = -32003;
 
 /// How long a call runs before a request that would have to wait behind it is refused as busy
@@ -435,7 +436,11 @@ impl Server {
                 if let Some(arguments) = args.as_object() {
                     crate::tools::check_tool_arguments(name, arguments).map_err(|e| (INVALID_PARAMS, e))?;
                 }
-                Ok(call_tool(self.backend.as_mut(), name, &args).to_value())
+                let result = call_tool(self.backend.as_mut(), name, &args);
+                match result.script_busy() {
+                    Some(message) => Err((SERVER_BUSY, message)),
+                    None => Ok(result.to_value()),
+                }
             }
             "resources/read" => {
                 let uri = params.get("uri").and_then(Value::as_str).ok_or((INVALID_PARAMS, "missing `uri`".to_string()))?;
