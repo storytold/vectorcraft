@@ -83,6 +83,8 @@ fn profile_dropdown(ui: &mut Ui, id: &str, current: &str, kind: ProfileKind, ext
     widgets::dropdown_names(ui, id, super::label_or_name(current, extra == Some(current)), &refs, 210.0).and_then(|i| names.get(i).cloned())
 }
 
+/// The Color Settings section (Edit › Color Settings… / Assign Profile…), scrolled into view once
+/// when one of those commands opened the panel ([`crate::state::UiState::color_settings_scroll`]).
 fn settings_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     let top = ui.cursor().top();
     settings_rows(app, ui);
@@ -98,6 +100,8 @@ fn settings_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
+/// The section's rows: the RGB and CMYK working spaces, intent, black point compensation, Load
+/// Profile… and Gamut Check, and the profile the active document is assigned.
 fn settings_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
     let st = cms::active_settings();
     widgets::section_header(ui, tl!("Color Settings"));
