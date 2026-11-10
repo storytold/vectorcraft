@@ -657,7 +657,8 @@ fn group_art(n: &Node, expand: bool) -> Option<Node> {
                 }
             }
             let runs = runs.into_iter().filter_map(|mut r| {
-                if r.member.is_none() {
+                // A face on its own needs a group only for the opacity or blending mode of its fill or stroke.
+                if r.member.is_none() && r.opacity >= 1.0 && r.blend == Default::default() {
                     return r.faces.pop().map(|face| (r.scopes, face));
                 }
                 let mut group = Node::group(n.id, r.faces);
@@ -947,6 +948,36 @@ mod tests {
         }
         let art = revolve_art(&group_with(json!({"segments":16}), vec![faded(1, 0.0), faded(2, 200.0), Arc::new(hidden)])).unwrap();
         assert_eq!(groups(&art), 2, "one group for each faded ring");
+    }
+
+    #[test]
+    fn a_member_whose_fill_or_stroke_paints_nothing_stays_invisible() {
+        let clear_fill = {
+            let mut n = (*member(3, 20.0)).clone();
+            if let Some(AppearanceItem::Fill(f)) = n.appearance.items.iter_mut().find(|i| matches!(i, AppearanceItem::Fill(_))) {
+                f.opacity = 0.0;
+            }
+            n
+        };
+        let clear_stroke = {
+            let mut n = (*member(4, 20.0)).clone();
+            n.appearance = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0).into();
+            for item in n.appearance.items.iter_mut() {
+                if let AppearanceItem::Stroke(s) = item {
+                    s.opacity = 0.0;
+                }
+            }
+            n
+        };
+        for clear in [clear_fill, clear_stroke] {
+            let art = revolve_art(&group_with(json!({"segments":16}), vec![member(1, 0.0), member(2, 50.0), Arc::new(clear)])).unwrap();
+            let faces = faces_in_order(&art);
+            let alone = faces_in_order(&revolve_art(&group_with(json!({"segments":16}), vec![member(1, 0.0), member(2, 50.0)])).unwrap());
+            let opaque: Vec<_> = faces.iter().filter(|(_, s)| s.is_empty()).map(|(f, _)| f).collect();
+            assert_eq!(opaque, alone.iter().map(|(f, _)| f).collect::<Vec<_>>(), "only the opaque members' faces draw without transparency");
+            assert!(faces.len() > alone.len(), "the clear member's faces stay in the art");
+            assert!(faces.iter().all(|(_, s)| s.is_empty() || s.iter().any(|(o, _)| *o == 0.0)), "each clear face is drawn at 0% opacity");
+        }
     }
 
     fn star(id: u64) -> Arc<Node> {
