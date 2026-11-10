@@ -5292,6 +5292,11 @@ digits	Malayalam	Malaiàlam
 @msg	Invalid panel layout; restored the default dock	Disposició de panells no vàlida; s’ha restaurat l’acoblament per defecte
 @msg	invalid parameters for `{cmd}`: {msg}	paràmetres no vàlids per a `{cmd}`: {msg}
 @msg	invalid PDF setting: {0}	configuració del PDF no vàlida: {0}
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	la pàgina del tauler {n} fa {size}, més que el límit de pàgina del PDF de 14.400 pt (200 in): s’escriu amb un UserUnit de {unit}, de manera que les aplicacions que ignoren UserUnit la mostren tantes vegades més petita
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	la pàgina del tauler {n} fa {size}, més que el límit de pàgina del PDF de 14.400 pt (200 in): les pàgines {label} s’escriuen sense UserUnit, en punts, i les aplicacions que respecten el límit retallen la pàgina a 200 in
+@msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	el PDF 1.5 no té UserUnit, que una pàgina de més de 14.400 pt (200 in) necessita per mantenir la mida: el fitxer s’escriu com a PDF 1.6
+@msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	la pàgina del tauler {n} fa {size}, massa llarga i estreta per als costats de pàgina del PDF de 3 a 14.400 unitats: s'escriu amb una UserUnit de {unit}, que manté el costat curt en 3 unitats o més, i les aplicacions que respecten el límit retallen el costat llarg a 14.400 unitats
+@msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	els fitxers {label} admeten nombres reals fins a {max}, i la pàgina del tauler {n}, de {side} pt, en necessita de més grans: trieu PDF 1.6 o posterior sense estàndard PDF/X, o un tauler més petit
 @msg	Invalid real scale	Escala real no vàlida
 @msg	invalid restored panel group	grup de panells restaurat no vàlid
 @msg	invalid stroke widths	amplades de traç no vàlides
@@ -5956,7 +5961,8 @@ digits	Malayalam	Malaiàlam
 @msg	{key} must be a finite coordinate	{key} ha de ser una coordenada finita
 @msg	{key} must be an array of non-negative integer object ids	{key} ha de ser una matriu d’identificadors d’objecte enters no negatius
 @msg	{key} must be Unix seconds (an integer) or null	{key} ha de ser segons Unix (un enter) o null
-@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} actualment requereix un traçat, un traçat compost, text o un grup. Converteix primer les imatges i altres objectes en traçats.
+@msg	{label} currently requires a path, compound path, type, group, blend or symbol instance. Expand other objects first.	{label} actualment requereix un traçat, un traçat compost, text, un grup, una fusió o una instància de símbol. Expandeix primer els altres objectes.
+@msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label} no pot crear un sòlid a partir d’una imatge: traça-la primer amb Objecte › Traçat d’imatge › Crea.
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} conserva 1 dels {n} taulers del document: el fitxer es reobre amb un. Activa Conserva les capacitats d’edició per conservar-los tots.
 @msg	{label} produced an empty result	{label} ha produït un resultat buit
 @msg	{label} requires a shape with at least two anchors	{label} requereix una forma amb com a mínim dos punts d’ancoratge
@@ -5991,6 +5997,20 @@ digits	Malayalam	Malaiàlam
 	Show its progress, see Cancel and write log lines	Mostrar el progrés, detectar la cancel·lació i escriure línies de registre
 	Keep settings of its own	Desar una configuració pròpia
 	Keep a cache of its own, which you can clear	Desar una memòria cau pròpia, que podeu buidar
+	Run these commands on the document: {ids}	Executar aquestes ordres al document: {ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	«{name}» inclou `{id}` a `commandAllowlist`, que un complement no pot cridar
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: el `commandAllowlist` del manifest no la inclou
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: l’ID o els arguments són fora de la memòria del mòdul
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: l’ID o els arguments no són UTF-8
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: els arguments no són un objecte JSON
+@msg	only a filter with the usual budget declares `commandAllowlist`	només un filtre amb el pressupost habitual declara `commandAllowlist`
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	crides d’ordres ({MAX_CALLS} crides i {MAX_CALL_BYTES} bytes per execució)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	mida d’una crida d’ordre (vc_call `{shown}`: {len} bytes, límit {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	com a màxim {MAX_ALLOWED_COMMANDS} ordres a `commandAllowlist`
+@msg	a plug-in may not call this command	un complement no pot cridar aquesta ordre
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	`commandAllowlist` necessita el permís `commands`, i `commands` necessita un `commandAllowlist`
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist` inclou `{shown}`, que no és un ID d’ordre o hi apareix dues vegades
 	Clear Plug-in Cache	Buida la memòria cau del complement
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	el permís `{permission}` necessita el nivell d’API de complements {PROGRESS_API}: indiqueu `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	el mòdul importa `env.{name}` amb un tipus diferent del de l’amfitrió: el de l’amfitrió és {signature}

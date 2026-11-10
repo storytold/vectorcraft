@@ -4327,6 +4327,11 @@ axis	Both	Les deux
 @msg	installing from a path is not available on the web; pass the module as `dataBase64`	l’installation depuis un chemin n’est pas disponible sur le web ; transmettez le module sous forme de `dataBase64`
 @msg	internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)	erreur interne dans `{cmd}` : {msg} (le document est resté tel qu’il était ; veuillez signaler ce bogue)
 @msg	internal error: {msg} (please report this bug)	erreur interne : {msg} (veuillez signaler ce bogue)
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	la page du plan de travail {n} mesure {size}, plus que la limite de page PDF de 14 400 pt (200 in) : elle est écrite avec une UserUnit de {unit}, donc les applications qui ignorent UserUnit l’affichent autant de fois plus petite
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	la page du plan de travail {n} mesure {size}, plus que la limite de page PDF de 14 400 pt (200 in) : les pages {label} sont écrites sans UserUnit, en points, et les applications qui respectent la limite coupent la page à 200 in
+@msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 n’a pas d’UserUnit, dont une page de plus de 14 400 pt (200 in) a besoin pour garder sa taille : le fichier est écrit en PDF 1.6
+@msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	la page du plan de travail {n} mesure {size}, trop longue et étroite pour les côtés de page PDF de 3 à 14 400 unités : elle est écrite avec une UserUnit de {unit}, qui garde le petit côté à 3 unités ou plus, et les apps qui respectent la limite coupent le grand côté à 14 400 unités
+@msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	les fichiers {label} acceptent des nombres réels jusqu’à {max}, et la page du plan de travail {n}, longue de {side} pt, en demande de plus grands : choisissez PDF 1.6 ou ultérieur sans norme PDF/X, ou un plan de travail plus petit
 @msg	invalid PDF setting: {0}	réglage PDF non valide : {0}
 @msg	invalid image data for `{0}`	données d’image non valides pour `{0}`
 @msg	invalid parameters for `{cmd}`: {msg}	paramètres non valides pour `{cmd}` : {msg}
@@ -5187,7 +5192,8 @@ lighting	Light	Lumière
 	Bevel both sides	Biseau des deux côtés
 	Presets	Paramètres prédéfinis
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Un objet n'accepte qu'un seul effet 3D. Modifiez les options de l'effet existant ou supprimez-le d'abord.
-@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} nécessite pour l'instant un tracé, un tracé transparent, du texte ou un groupe. Convertissez d'abord les images et les autres objets en tracés.
+@msg	{label} currently requires a path, compound path, type, group, blend or symbol instance. Expand other objects first.	{label} nécessite pour l'instant un tracé, un tracé transparent, du texte, un groupe, un dégradé de formes ou une instance de symbole. Décomposez d'abord les autres objets.
+@msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label} ne peut pas créer de solide à partir d'une image : vectorisez-la d'abord avec Objet › Vectorisation de l’image › Créer.
 @msg	{label} requires a shape with at least two anchors	{label} nécessite une forme comportant au moins deux points d'ancrage
 @msg	The shape is too complex for a 3D effect	La forme est trop complexe pour un effet 3D
 @msg	The 3D surface is too complex; simplify the shape	La surface 3D est trop complexe ; simplifiez la forme
@@ -5965,6 +5971,20 @@ axis	Y Axis	Axe Y
 	Show its progress, see Cancel and write log lines	Afficher sa progression, détecter l’annulation et écrire des lignes de journal
 	Keep settings of its own	Conserver ses propres réglages
 	Keep a cache of its own, which you can clear	Conserver son propre cache, que vous pouvez vider
+	Run these commands on the document: {ids}	Exécuter ces commandes sur le document : {ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	« {name} » indique `{id}` dans `commandAllowlist`, qu’un module externe ne peut pas appeler
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}` : {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}` : le `commandAllowlist` du manifeste ne l’indique pas
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}` : l’ID ou les arguments se trouvent hors de la mémoire du module
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}` : l’ID ou les arguments ne sont pas en UTF-8
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}` : les arguments ne sont pas un objet JSON
+@msg	only a filter with the usual budget declares `commandAllowlist`	seul un filtre au budget habituel déclare `commandAllowlist`
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	appels de commandes ({MAX_CALLS} appels et {MAX_CALL_BYTES} octets par exécution)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	taille d’un appel de commande (vc_call `{shown}` : {len} octets, limite {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	au plus {MAX_ALLOWED_COMMANDS} commandes dans `commandAllowlist`
+@msg	a plug-in may not call this command	un module externe ne peut pas appeler cette commande
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	`commandAllowlist` a besoin de l’autorisation `commands`, et `commands` a besoin d’un `commandAllowlist`
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist` indique `{shown}`, qui n’est pas un ID de commande ou figure deux fois
 	Clear Plug-in Cache	Vider le cache du module externe
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	l’autorisation `{permission}` nécessite le niveau d’API de module externe {PROGRESS_API} : indiquez `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	le module importe `env.{name}` avec un autre type que celui de l’hôte : celui de l’hôte est {signature}

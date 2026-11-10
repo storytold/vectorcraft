@@ -2158,6 +2158,11 @@ file-filter	Templates	範本
 @msg	artboard {0} does not exist	工作區域 {0} 不存在
 @msg	cannot read PDF: {0}	無法讀取 PDF：{0}
 @msg	invalid PDF setting: {0}	PDF 設定無效：{0}
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	工作區域 {n} 的頁面為 {size}，超過 PDF 的頁面上限 14,400 pt (200 in)：它以 UserUnit {unit} 寫入，因此忽略 UserUnit 的應用程式會將其顯示為縮小相應倍數
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	工作區域 {n} 的頁面為 {size}，超過 PDF 的頁面上限 14,400 pt (200 in)：{label} 頁面不含 UserUnit，以點為單位寫入，遵守上限的應用程式會將頁面裁切為 200 in
+@msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 沒有 UserUnit，而長於 14,400 pt (200 in) 的頁面需要它來保持尺寸：檔案將以 PDF 1.6 寫入
+@msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	工作區域 {n} 的頁面為 {size}，對 PDF 3 至 14,400 單位的頁面邊長而言過長過窄：以 UserUnit {unit} 寫入，使短邊保持 3 單位以上，遵守上限的應用程式會把長邊裁到 14,400 單位
+@msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label} 檔案的實數最大為 {max}，而工作區域 {n} 的頁面長 {side} pt，需要更大的數：請選擇不含 PDF/X 標準的 PDF 1.6 或更新版本，或使用較小的工作區域
 @msg	page {0} does not exist (the PDF has {1})	頁面 {0} 不存在 (此 PDF 有 {1} 頁)
 @msg	the PDF has no pages	此 PDF 沒有頁面
 @msg	the PDF is password-protected: give its password	此 PDF 受密碼保護：請提供其密碼
@@ -5312,7 +5317,8 @@ lighting	Light	光源
 	Bevel both sides	雙面斜角
 	Presets	預設集
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	一個物件只能套用一種 3D 效果。請編輯現有效果的選項，或先將其移除。
-@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label}目前需要路徑、複合路徑、文字或群組。請先將影像和其他物件轉換為路徑。
+@msg	{label} currently requires a path, compound path, type, group, blend or symbol instance. Expand other objects first.	{label}目前需要路徑、複合路徑、文字、群組、漸變或符號範例。請先展開其他物件。
+@msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label}無法從影像建立立體：請先使用「物件 › 影像描圖 › 製作」描圖。
 @msg	{label} requires a shape with at least two anchors	{label}需要至少有兩個錨點的形狀
 @msg	The shape is too complex for a 3D effect	形狀過於複雜，無法套用 3D 效果
 @msg	The 3D surface is too complex; simplify the shape	3D 表面過於複雜；請簡化形狀
@@ -5605,6 +5611,20 @@ axis	Y Axis	Y 軸
 	Show its progress, see Cancel and write log lines	顯示進度、偵測取消要求並寫入記錄行
 	Keep settings of its own	保存自己的設定
 	Keep a cache of its own, which you can clear	保存自己的快取，您可以清除它
+	Run these commands on the document: {ids}	在文件上執行這些指令：{ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	「{name}」在 `commandAllowlist` 中列出了增效模組不能呼叫的 `{id}`
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`：{why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`：資訊清單的 `commandAllowlist` 未列出它
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`：ID 或引數位於模組記憶體之外
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`：ID 或引數不是 UTF-8
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`：引數不是 JSON 物件
+@msg	only a filter with the usual budget declares `commandAllowlist`	只有使用一般預算的濾鏡才能宣告 `commandAllowlist`
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	指令呼叫（每次執行 {MAX_CALLS} 次呼叫和 {MAX_CALL_BYTES} 位元組）
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	指令呼叫大小（vc_call `{shown}`：{len} 位元組，上限 {MAX_CALL_DATA}）
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	`commandAllowlist` 中最多 {MAX_ALLOWED_COMMANDS} 個指令
+@msg	a plug-in may not call this command	增效模組不能呼叫此指令
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	`commandAllowlist` 需要權限 `commands`，而 `commands` 需要 `commandAllowlist`
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist` 列出的 `{shown}` 不是指令 ID，或列出了兩次
 	Clear Plug-in Cache	清除增效模組快取
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	權限 `{permission}` 需要增效模組 API 層級 {PROGRESS_API}：請設定 `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	模組以與主機不同的類型匯入 `env.{name}`：主機的類型為 {signature}

@@ -3889,6 +3889,11 @@ axis	Both	Ambos
 @msg	internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)	erro interno em `{cmd}`: {msg} (o documento foi mantido como estava; relate este bug)
 @msg	internal error: {msg} (please report this bug)	erro interno: {msg} (relate este bug)
 @msg	invalid PDF setting: {0}	configuração de PDF inválida: {0}
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	a página da prancheta {n} tem {size}, mais que o limite de página do PDF de 14.400 pt (200 in): ela é gravada com um UserUnit de {unit}, então apps que ignoram UserUnit a mostram essa quantidade de vezes menor
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	a página da prancheta {n} tem {size}, mais que o limite de página do PDF de 14.400 pt (200 in): páginas {label} são gravadas sem UserUnit, em pontos, e apps que respeitam o limite cortam a página em 200 in
+@msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	o PDF 1.5 não tem UserUnit, de que uma página com mais de 14.400 pt (200 in) precisa para manter seu tamanho: o arquivo é gravado como PDF 1.6
+@msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	a página da prancheta {n} tem {size}, longa e estreita demais para os lados de página do PDF, de 3 a 14.400 unidades: ela é gravada com uma UserUnit de {unit}, que mantém o lado menor em 3 unidades ou mais, e os apps que seguem o limite cortam o lado maior em 14.400 unidades
+@msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	os arquivos {label} aceitam números reais de até {max}, e a página da prancheta {n}, com {side} pt, precisa de números maiores: escolha PDF 1.6 ou posterior sem padrão PDF/X, ou uma prancheta menor
 @msg	invalid image data for `{0}`	dados de imagem inválidos para `{0}`
 @msg	invalid parameters for `{cmd}`: {msg}	parâmetros inválidos para `{cmd}`: {msg}
 @msg	is not an image VectorCraft reads	não é uma imagem que o VectorCraft lê
@@ -5561,7 +5566,8 @@ mark-style	Japanese	Japonesas
 	Bevel both sides	Chanfro nos Dois Lados
 	Presets	Predefinidos
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Um objeto aceita apenas um efeito 3D. Edite as opções do efeito existente ou remova-o primeiro.
-@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} exige, por enquanto, um caminho, caminho composto, texto ou grupo. Converta antes imagens e outros objetos em caminhos.
+@msg	{label} currently requires a path, compound path, type, group, blend or symbol instance. Expand other objects first.	{label} exige, por enquanto, um caminho, caminho composto, texto, grupo, mesclagem ou instância de símbolo. Expanda antes os outros objetos.
+@msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label} não pode criar um sólido a partir de uma imagem: rastreie-a antes com Objeto › Rastreamento de Imagem › Criar.
 @msg	{label} requires a shape with at least two anchors	{label} exige uma forma com pelo menos dois pontos de ancoragem
 @msg	The shape is too complex for a 3D effect	A forma é complexa demais para um efeito 3D
 @msg	The 3D surface is too complex; simplify the shape	A superfície 3D é complexa demais; simplifique a forma
@@ -5885,6 +5891,20 @@ axis	Y Axis	Eixo Y
 	Show its progress, see Cancel and write log lines	Mostrar seu progresso, detectar o cancelamento e gravar linhas de log
 	Keep settings of its own	Guardar configurações próprias
 	Keep a cache of its own, which you can clear	Guardar um cache próprio, que você pode limpar
+	Run these commands on the document: {ids}	Executar estes comandos no documento: {ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	“{name}” lista `{id}` em `commandAllowlist`, que um plug-in não pode chamar
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: o `commandAllowlist` do manifesto não o lista
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: o ID ou os argumentos estão fora da memória do módulo
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: o ID ou os argumentos não são UTF-8
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: os argumentos não são um objeto JSON
+@msg	only a filter with the usual budget declares `commandAllowlist`	somente um filtro com o orçamento habitual declara `commandAllowlist`
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	chamadas de comandos ({MAX_CALLS} chamadas e {MAX_CALL_BYTES} bytes por execução)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	tamanho de uma chamada de comando (vc_call `{shown}`: {len} bytes, limite {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	no máximo {MAX_ALLOWED_COMMANDS} comandos em `commandAllowlist`
+@msg	a plug-in may not call this command	um plug-in não pode chamar este comando
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	`commandAllowlist` precisa da permissão `commands`, e `commands` precisa de um `commandAllowlist`
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist` lista `{shown}`, que não é um ID de comando ou aparece duas vezes
 	Clear Plug-in Cache	Limpar cache do plug-in
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	a permissão `{permission}` exige o nível de API de plug-in {PROGRESS_API}: informe `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	o módulo importa `env.{name}` com um tipo diferente do tipo do host: o do host é {signature}

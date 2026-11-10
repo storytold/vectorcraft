@@ -4365,6 +4365,11 @@ axis	Both	Обидві
 @msg	internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)	внутрішня помилка `{cmd}`: {msg} (документ залишений у попередньому стані; будь ласка, повідомте про цю помилку)
 @msg	internal error: {msg} (please report this bug)	внутрішня помилка: {msg} (будь ласка, повідомте про цю помилку)
 @msg	invalid PDF setting: {0}	неприпустимий параметр PDF: {0}
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	сторінка монтажної області {n} має розмір {size}, що більше за обмеження PDF на розмір сторінки в 14 400 pt (200 in): її записано з UserUnit {unit}, тому застосунки, які ігнорують UserUnit, показують її в стільки ж разів меншою
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	сторінка монтажної області {n} має розмір {size}, що більше за обмеження PDF на розмір сторінки в 14 400 pt (200 in): сторінки {label} записуються без UserUnit, у пунктах, і застосунки, що дотримуються обмеження, обрізають сторінку до 200 in
+@msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	у PDF 1.5 немає UserUnit, який потрібен сторінці, довшій за 14 400 pt (200 in), щоб зберегти розмір: файл записується як PDF 1.6
+@msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	сторінка монтажної області {n} має розмір {size} і задовга та завузька для сторін сторінки PDF від 3 до 14 400 одиниць: її записано з UserUnit {unit}, що тримає коротку сторону не менше 3 одиниць, а застосунки, які дотримуються межі, обрізають довгу сторону до 14 400 одиниць
+@msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	файли {label} вміщують дійсні числа до {max}, а сторінці монтажної області {n} завдовжки {side} pt потрібні більші: виберіть PDF 1.6 або новіший без стандарту PDF/X чи меншу монтажну область
 @msg	invalid image data for `{0}`	неприпустимі дані зображення для `{0}`
 @msg	invalid parameters for `{cmd}`: {msg}	неприпустимі параметри для `{cmd}`: {msg}
 @msg	is not an image VectorCraft reads	не є зображенням, яке читає VectorCraft
@@ -5205,7 +5210,8 @@ lighting	Light	Світло
 	Bevel both sides	Фаска з обох боків
 	Presets	Набори
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Об'єкт може мати лише один 3D-ефект. Змініть параметри наявного ефекту або спершу вилучіть його.
-@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label}: поки що потрібен контур, складений контур, текст або група. Спершу перетворіть зображення та інші об'єкти на контури.
+@msg	{label} currently requires a path, compound path, type, group, blend or symbol instance. Expand other objects first.	{label}: поки що потрібен контур, складений контур, текст, група, перехід або екземпляр символу. Спершу розберіть інші об'єкти.
+@msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label}: із зображення не можна побудувати тіло. Спершу трасуйте його командою Об’єкт › Трасування зображення › Створити.
 @msg	{label} requires a shape with at least two anchors	{label}: потрібна фігура щонайменше з двома опорними точками
 @msg	The shape is too complex for a 3D effect	Фігура надто складна для 3D-ефекту
 @msg	The 3D surface is too complex; simplify the shape	3D-поверхня надто складна; спростіть фігуру
@@ -5567,6 +5573,20 @@ axis	Y Axis	Вісь Y
 	Show its progress, see Cancel and write log lines	Показувати свій поступ, помічати скасування і записувати рядки журналу
 	Keep settings of its own	Зберігати власні налаштування
 	Keep a cache of its own, which you can clear	Зберігати власний кеш, який можна очистити
+	Run these commands on the document: {ids}	Виконувати в документі ці команди: {ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	«{name}» вказує в `commandAllowlist` команду `{id}`, яку модуль викликати не може
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: у `commandAllowlist` маніфесту її немає
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: ID або аргументи лежать поза пам’яттю модуля
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: ID або аргументи не в UTF-8
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: аргументи не є об’єктом JSON
+@msg	only a filter with the usual budget declares `commandAllowlist`	`commandAllowlist` може оголошувати лише фільтр зі звичайним бюджетом
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	виклики команд ({MAX_CALLS} викликів і {MAX_CALL_BYTES} байтів за запуск)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	розмір виклику команди (vc_call `{shown}`: {len} байтів, межа {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	щонайбільше {MAX_ALLOWED_COMMANDS} команд у `commandAllowlist`
+@msg	a plug-in may not call this command	модуль не може викликати цю команду
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	для `commandAllowlist` потрібен дозвіл `commands`, а для `commands` потрібен `commandAllowlist`
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist` вказує `{shown}`, що не є ID команди або вказане двічі
 	Clear Plug-in Cache	Очистити кеш модуля
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	дозволу `{permission}` потрібен рівень API модулів {PROGRESS_API}: укажіть `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	модуль імпортує `env.{name}` з іншим типом, ніж у хоста: у хоста тип {signature}

@@ -3407,3 +3407,29 @@ fn another_module_under_an_id_with_settings_needs_replace() {
     install(&mut s, json!({})).unwrap();
     run(&mut s, "plugin.remove", json!({"id": id}));
 }
+
+/// A filter that calls commands runs on the document with the edit in progress kept first: a move
+/// still being previewed is its own undo step, and the filter is given the moved rectangle, which
+/// its empty output then removes.
+#[test]
+fn a_filter_that_calls_commands_is_given_the_edit_in_progress() {
+    let id = "test.engine.callsettle";
+    let mut s = session();
+    let grant = json!(["doc.read", "doc.write", "commands"]);
+    let manifest = format!(r#"{{"id":"{id}","name":"Test {id}","kind":"filter","api":2,"permissions":{grant},"commandAllowlist":["select.all"]}}"#);
+    let wasm = wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap();
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "grant": grant, "replace": true}));
+    let paths = |s: &Session| s.doc().unwrap().doc.layers.first().and_then(|l| l.children()).map_or(0, |c| c.len());
+    run(&mut s, "shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50}));
+    s.begin_interaction("Move").unwrap();
+    s.preview("object.move", &json!({"dx": 7, "dy": 0})).unwrap();
+    run(&mut s, "plugin.run", json!({"id": id}));
+    assert!(!s.in_interaction());
+    assert_eq!(paths(&s), 0, "the filter was given the moved rectangle and removed it");
+    let labels: Vec<&str> = s.doc().unwrap().history.undo.iter().rev().take(2).map(|e| e.label.as_str()).collect();
+    assert_eq!(labels, [format!("Test {id}").as_str(), "Move"]);
+    run(&mut s, "edit.undo", json!({}));
+    let x = run(&mut s, "document.inspect", json!({}))["layers"][0]["children"][0]["bounds"]["x"].clone();
+    assert_eq!(x, json!(17.0), "undoing the filter brings back the moved rectangle");
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}

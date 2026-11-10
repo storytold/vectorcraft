@@ -840,7 +840,16 @@ transparency and rasterized areas are clipped to their regions. A file that woul
 export. PDF/X-1a and PDF/X-3 files are PDF 1.3 files too.
 A page with a side longer than 14,400 pt is written with a `UserUnit` (PDF 1.6): its longer side divided by 14,400,
 rounded up to the next thousandth, with the page's sizes and coordinates in those units, so that no side is longer than
-14,400 units (ISO 32000-1, Annex C.2). In PDF 1.3 to 1.5 files and PDF/X files, such a page is written in points.
+14,400 units (ISO 32000-1, Annex C.2). A PDF 1.5 file with such a page is written as PDF 1.6, with a warning, and
+keeps PDF 1.5's encryption (128-bit RC4). PDF/X files and PDF 1.3 and 1.4 files write such a page in points, and apps
+that keep to the limit cut it to 200 in. In PDF 1.3 and 1.4 files, PDF/X-1a and PDF/X-3 among them, a real number can
+be at most 32,767, and whole numbers are written as integers: a page longer than 32,767 pt whose sides aren't whole
+numbers of points fails the export with an error naming the page before the thumbnails are drawn and the transparency is
+flattened, and one whose art needs a real number past 32,767 fails with the same error when the file is written. A page whose short side is 3 pt or longer but would be under 3 units at that
+`UserUnit` (Annex C.2 gives 3 as the smallest page side), such as 30 m × 6 mm, gets a smaller `UserUnit`: its short
+side divided by 3, rounded down to the next thousandth, so that the short side is at least 3 units and the long side is
+longer than 14,400 units. Each such page adds a warning with its size and how it is written. File › Print writes pages in
+points, 14,400 pt at most.
 
 An Illustrator EPS (version 9 on) or `.ai` file opens from the editing data it carries (after the EPS page; in the
 `.ai` file's PDF private data): layers and sublayers (name, order, visibility, lock, printing, preview, dimming,
@@ -1114,7 +1123,7 @@ before anything runs, with the step's number and its entry (`entry 3`) or line (
 
 ### What a headless session remembers
 
-`vectorcraft-cli run` and the headless `mcp` server keep two things between runs, in folders next to the
+`vectorcraft-cli run` and the headless `mcp` server keep these between runs, in folders and files next to the
 preferences (the folder the desktop app uses, so both see the same ones; `VECTORCRAFT_CONFIG_DIR` moves it):
 
 - **Saved PDF presets** (`pdf.preset.save`, `.delete`, `.import`): one `.vcpdfpresets` file per preset in
@@ -1125,8 +1134,12 @@ preferences (the folder the desktop app uses, so both see the same ones; `VECTOR
   command, so `edit.colorSettings {"cmyk": "…"}` or a preset's output intent can name it in a later run. The
   copy is what counts: the original may move or be deleted. `color.removeProfile {name}` forgets a profile and its
   copy (not while it is a working space).
+- **Color Settings** (`edit.colorSettings`): the RGB and CMYK working spaces, intent and black point
+  compensation go into `Color Settings.json` when they change, and are the active settings again at the next
+  start, after the profiles above are registered (#6335). Saved settings that name a profile that is no longer
+  there, or a damaged file, leave the defaults (logged), and the next change writes over the file.
 
-Not remembered: Color Settings, the document, anything else. Nothing is read or written when
+Not remembered: the document, anything else. Nothing is read or written when
 `VECTORCRAFT_NO_PREFS` is set, and a server confined with `--automation-read-root` or
 `--automation-write-root` keeps nothing either (the folders are outside its roots). A file that is damaged, too large
 (a profile over 32 MB, a presets file over 1 MB) or not a valid preset or profile is skipped and logged. When the
@@ -1617,6 +1630,12 @@ the editing layer. With gradient mesh points picked, `opacity` goes to those poi
 {"name":"run_command","arguments":{"command":"transparency.info","params":{"ids":[12,20]}}}
 ```
 
+`transparency.makeOpacityMask` rejects a `clip` or `invert` value that is not a boolean, such as `"clip": "false"`,
+and `transparency.setOpacityMask` does the same for `clip`, `invert`, `disabled` and `linked`. The toggles
+`transparency.toggleNewMasksClipping`, `transparency.toggleNewMasksInverted`, `transparency.togglePageKnockoutGroup`
+and `transparency.togglePageIsolatedBlending` reject a `value` that is not a boolean. A rejected call changes nothing.
+Omitting a param or giving null keeps its default.
+
 Knockout Group has three states: `transparency.set {knockout: "on"|"off"|"neutral"}` (`true` = on, `false` =
 neutral, the default). In a knockout group each child hides what it covers of the children below it; neutral groups
 pass the enclosing group's setting to their children, off groups never knock out. `knockoutShape: true` makes the
@@ -1717,16 +1736,17 @@ overrides selected anchors or guides. Every explicit id is validated before any 
 or unknown id leaves the document unchanged. An empty `ids` array does nothing. Layers themselves
 are kept, and selecting an ancestor together with its descendants deletes that subtree once.
 Without `ids`, direct-selected anchors or selected ruler guides retain their usual Clear behavior.
+With `ids`, `guides: true` also deletes the selected ruler guides. The command rejects a `guides` value that is not a
+boolean.
+
 `edit.copy` takes a compound-path member selected on its own (whole or in part, with Direct or Group Selection) as an
-ordinary path with the compound's paint, transparency, opacity mask and fill rule. A gradient fitted to the compound
-keeps the compound's fit. Copy takes the whole compound when the compound itself is selected, or when every member is
+ordinary path with the compound's paint, transparency, opacity mask and fill rule. The path is linked to the compound's
+graphic style while it has that style's look, and otherwise to no style. A gradient fitted to the compound keeps the compound's fit. Copy takes the whole compound when the compound itself is selected, or when every member is
 selected whole outside isolation mode, which includes the one member of a compound of one. In an isolated compound
 path each member is taken as itself. `edit.cut` removes the same objects it copies, so cutting one member leaves the
 other members in the compound, a compound of one member included. When Clear deletes every anchor or segment of every
 member, it also removes the compound. With a copied member still selected, `edit.pasteInFront` puts the path into the
 compound, just above the member.
-With `ids`, `guides: true` also deletes the selected ruler guides. The command rejects a `guides` value that is not a
-boolean.
 
 `object.setProps` with `visible: false` or `locked: true` deselects every selected object that is hidden or
 locked after the call: the selected objects it hides or locks, selected objects inside them, and selected objects
@@ -2508,10 +2528,10 @@ default) white ones knock out instead; `"discard"` writes none.
 ## Revolve (initial 3D effect)
 
 `effect.apply {effect: "threeD.revolve", params: {...}, ids?, item?}` applies a live Revolve to a path,
-compound path, type, or a group or layer of them. `effect.dialog` opens compact options with artboard rotation and light gizmos, `effect.setParams` edits it, and
+compound path, type, clipping group, blend, symbol instance, or a group or layer of them. `effect.dialog` opens compact options with artboard rotation and light gizmos, `effect.setParams` edits it, and
 `effect.expandAppearance` bakes it into shaded vector faces. Native saves keep the editable source;
 SVG/PDF exports bake the same faces the canvas draws. Only one Revolve is supported per profile.
-Type sweeps as its glyph outlines and stays type. On a group or layer, every visible member sweeps about one axis on the chosen edge of the members' bounds together, in its own paint, and the members stay editable. A group holding a clipping group, an image, a symbol instance or another object that can't be swept is refused, and so is type with no outlines or a group with no shape in it.
+Type sweeps as its glyph outlines and stays type. On a group or layer, every visible member sweeps about one axis on the chosen edge of the members' bounds together, in its own paint, and the members stay editable. A clipping group sweeps its art inside the clipping path, a blend its keys and steps, and a symbol instance its symbol's art where the instance places it, alone or in a group ([three-d.md](three-d.md#clipping-groups-blends-and-symbol-instances)). An image, alone or in a group, is refused with "trace it first with Object › Image Trace › Make"; a group holding another object that can't be swept is refused, and so is type with no outlines or a group with no shape in it.
 A surface takes at most 16,384 profile points and 163,840 faces, the members of a group together, counted after any geometry effects before the Revolve. A straight segment takes one point, a curve takes at least four, and each contour takes one. Each curved segment takes 16 samples; on a surface over those limits every curve takes as many as fit, down to 4, and the call is refused below that with "reduce Segments or simplify the profile". The call is also refused with "reduce Segments or simplify the gradient" when the faces' copies of the paint would take more than 256 MiB, counted together for the members of a group and for the fills and strokes of one object that carry a Revolve. To find the holes, mesh export cuts each sampled piece of a closed contour where it crosses another closed contour, adding a profile point at each cut, and tests the middle of each part against the closed contours whose bounds share its cell of a grid over the profile. It refuses the profile as too complex when its contours overlap so much that the search would take more than 16,000,000 steps, where each path element tested, each contour looked at and each contour placed in a grid cell counts one.
 
 Parameters: `angle` (degrees, 0..360, default 360), `offset` (points, 0..100000, default 0),
@@ -2587,6 +2607,11 @@ checked as that effect's. It is one undo step. Any other `threeDType` value, or 
 the other 3D types to a path or compound path, live like Revolve (the source stays editable; SVG/PDF exports and
 `effect.expandAppearance` use the same shaded faces). An object takes one 3D effect, Revolve included. On a group or
 layer the 3D effect goes on the group itself: `effect.apply` and `effect.setParams` refuse one on its fill or stroke.
+Every 3D type, `threeD.classicExtrude` and `threeD.revolve` included, also applies to a clipping group, a blend or a
+symbol instance, alone or in a group, and builds from the art it shows, the same way for the canvas, exports and
+`assets.add3D` ([three-d.md](three-d.md#clipping-groups-blends-and-symbol-instances)); like a group, it takes the
+effect on the object itself, not on a fill or stroke. An image, alone or in a group, is refused with "trace it first
+with Object › Image Trace › Make", and nothing changes.
 
 `threeD.extrude`: `depth` (points, 0..2000, default 50), `twist` (degrees, 0..360, 0), `taper` (1..100%, 100),
 `cap` (true solid, false hollow), `bevel` (`none`, `classic`, `rounded`, `cove`, `step`, `ogee`), `bevelWidth`
@@ -3427,6 +3452,8 @@ holds symbol instances that `object` expands, whether only their art holds it, w
 mesh points as the gradient paints them, with the colors Object › Expand gives them.
 `object.expand`, `effect.expandAppearance`, `type.createOutlines` and `object.path.outlineStroke` turn a dimension whose
 art they change into a plain group of that art, in the same undo step (see [dimensions.md](dimensions.md)).
+`object.expand` rejects a param of the wrong type, such as `"fill": "yes"`, `"gradient": 3` or `"steps": "16"`, and
+changes nothing. Omitting a param or giving null keeps its default.
 
 ```json
 {"name":"run_command","arguments":{"command":"object.expand","params":{"stroke":false,"gradient":"mesh"}}}
@@ -3663,6 +3690,11 @@ dialog `simplifySlider` with field `level`) at the Auto-Simplify level for the s
 `ui.dialog.confirm`. `ui.simplifyAuto` moves the open slider back to the Auto-Simplify level, and `ui.simplifyMoreOptions`
 opens the Simplify dialog at the slider's tolerance. When OK confirms the dialog with `retain` ticked, the menu item opens
 the dialog on those settings next time.
+
+`object.path.simplify`, `object.path.offsetPath`, `object.path.splitIntoGrid`, `object.path.cleanUp`,
+`object.pathfinder.trap` and `addon.contour.set` reject a param of the wrong type, such as `"offset": true`,
+`"joins": 3`, `"rows": "many"` or `"addGuides": "yes"`, and change nothing. A distance still takes a string with a unit
+(`"5 mm"`). `joins` must be `miter`, `round` or `bevel`. Omitting a param or giving null keeps its default.
 
 ## Smooth
 
@@ -6964,7 +6996,13 @@ fit makes `plugin.run` return a memory-budget error naming the object and its si
 memory-budget error `the selection is too large to hand over`, and more than 100,000 of these objects make it return
 an object-budget error. Its output returns
 each of them as `{"id": …}` or exactly as given, otherwise `plugin.run` returns an error naming the object and the
-field, and the document and undo history are unchanged. A live-effect plug-in is an effect with
+field, and the document and undo history are unchanged. A filter at plug-in API level 2 whose manifest lists the
+`commands` permission and a `commandAllowlist` (both in its `plugin.list` entry) runs the commands that list names
+while it runs, through `vc_call`: the calls and its output are one undo step, and a run that fails or makes a call that
+fails leaves the documents, selections and history as they were. Without `doc.read` every call fails. A command that
+reads or writes files, uses the clipboard, changes preferences or the view, runs a script, an action or a plug-in,
+switches documents or undoes is never called; `plugin.install` refuses a manifest that lists one, and `plugin.inspect` lists such ids as
+`refusedCommands` and ids no command has as `unknownCommands` (`plugin.install` lists those too). A live-effect plug-in is an effect with
 id `plugin.<id>`: `effect.apply`, `effect.setParams` and `effect.expandAppearance` work as for built-in effects, and
 `effect.list` lists it. One whose manifest declares `paintOutput` (at plug-in API level 2; `plugin.list` gives `api`
 and `paintOutput: true`) draws the pieces it returns with paints of their own, and `effect.expandAppearance` writes them

@@ -844,6 +844,69 @@ fn clean_up_removes_junk() {
     assert!(d.node(unpainted).is_none() && d.node(stray).is_none() && d.node(empty).is_none());
 }
 
+/// Offset Path, Simplify, Split Into Grid and Clean Up refuse a param of the wrong type with an
+/// error naming the param, and leave the document, the selection and the undo history as they were.
+/// Null keeps a param's default, and a distance still takes a string with a unit.
+#[test]
+fn path_commands_refuse_a_param_of_the_wrong_type() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 50.0, 40.0);
+    s.execute("path.create", &json!({"anchors": [{"x": 5, "y": 5}]})).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let state = |s: &Session| {
+        let st = s.doc().unwrap();
+        (st.doc.clone(), st.selection.objects.clone(), st.history.undo.len())
+    };
+    let before = state(&s);
+    let number = |k: &str, v: &str| format!("`{k}` must be a number, not {v}");
+    let switch = |k: &str| format!("`{k}` must be true or false");
+    for (cmd, p, want) in [
+        ("object.path.offsetPath", json!({"offset": true}), number("offset", "true")),
+        ("object.path.offsetPath", json!({"offset": "wide"}), number("offset", "\"wide\"")),
+        ("object.path.offsetPath", json!({"offset": 5, "joins": 3}), "`joins` must be a string".to_string()),
+        ("object.path.offsetPath", json!({"offset": 5, "joins": "pointy"}), "`joins` must be one of miter, round, bevel".to_string()),
+        ("object.path.offsetPath", json!({"offset": 5, "miterLimit": [4]}), number("miterLimit", "[4]")),
+        ("object.path.simplify", json!({"auto": "true"}), switch("auto")),
+        ("object.path.simplify", json!({"level": false}), number("level", "false")),
+        ("object.path.simplify", json!({"level": 50, "tolerance": {}}), number("tolerance", "{}")),
+        ("object.path.simplify", json!({"cornerAngle": "sharp"}), number("cornerAngle", "\"sharp\"")),
+        ("object.path.simplify", json!({"straightLines": 1}), switch("straightLines")),
+        ("object.path.simplify", json!({"wholePaths": "no"}), switch("wholePaths")),
+        ("object.path.splitIntoGrid", json!({"rows": "many"}), number("rows", "\"many\"")),
+        ("object.path.splitIntoGrid", json!({"columns": true}), number("columns", "true")),
+        ("object.path.splitIntoGrid", json!({"gutter": false}), number("gutter", "false")),
+        ("object.path.splitIntoGrid", json!({"rowGutter": 2, "gutter": "x"}), number("gutter", "\"x\"")),
+        ("object.path.splitIntoGrid", json!({"height": 5, "totalHeight": [1]}), number("totalHeight", "[1]")),
+        ("object.path.splitIntoGrid", json!({"width": "wide"}), number("width", "\"wide\"")),
+        ("object.path.splitIntoGrid", json!({"columnGutter": true}), number("columnGutter", "true")),
+        ("object.path.splitIntoGrid", json!({"totalWidth": {}}), number("totalWidth", "{}")),
+        ("object.path.splitIntoGrid", json!({"rowGutter": "a"}), number("rowGutter", "\"a\"")),
+        ("object.path.splitIntoGrid", json!({"addGuides": "yes"}), switch("addGuides")),
+        ("object.path.cleanUp", json!({"strayPoints": "false"}), switch("strayPoints")),
+        ("object.path.cleanUp", json!({"unpaintedObjects": 0}), switch("unpaintedObjects")),
+        ("object.path.cleanUp", json!({"emptyTextPaths": "no"}), switch("emptyTextPaths")),
+    ] {
+        let r = s.execute(cmd, &p);
+        assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if *msg == want), "{cmd} {p}: {r:?}");
+        assert!(state(&s) == before, "{cmd} {p} changed the document, the selection or the undo history");
+    }
+    // Null takes the default: a 10 pt offset with mitered joins.
+    let r = ids(&s.execute("object.path.offsetPath", &json!({"offset": null, "joins": null, "miterLimit": null})).unwrap());
+    assert!(close(bounds(&s, r[0]), Rect::new(90.0, 90.0, 160.0, 150.0), 1e-2), "{:?}", bounds(&s, r[0]));
+    // A distance with a unit, and a join named in capitals.
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let r = ids(&s.execute("object.path.offsetPath", &json!({"offset": "0.1 in", "joins": "Bevel"})).unwrap());
+    assert!(close(bounds(&s, r[0]), Rect::new(92.8, 92.8, 157.2, 147.2), 1e-2), "{:?}", bounds(&s, r[0]));
+    // Null switches keep Clean Up's defaults, which remove the stray point.
+    let r = s.execute("object.path.cleanUp", &json!({"strayPoints": null, "unpaintedObjects": null, "emptyTextPaths": null})).unwrap();
+    assert_eq!(r["removed"], 1);
+    // Split Into Grid with null counts and a gutter with a unit: two by two, 0.5 in apart.
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let r = ids(&s.execute("object.path.splitIntoGrid", &json!({"rows": null, "columns": null, "gutter": "0.5 in", "addGuides": null})).unwrap());
+    assert_eq!(r.len(), 4);
+    assert!(close(bounds(&s, r[0]), Rect::new(100.0, 100.0, 107.0, 102.0), 1e-9), "{:?}", bounds(&s, r[0]));
+}
+
 #[test]
 fn divide_objects_below_cuts() {
     let mut s = session();

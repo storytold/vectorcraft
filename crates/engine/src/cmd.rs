@@ -70,6 +70,7 @@ pub mod pdfcmds;
 pub mod perspgrid;
 pub mod place;
 pub mod plugin;
+pub(crate) mod plugin_call;
 pub mod prefscmds;
 pub mod print;
 pub(crate) mod printadvanced;

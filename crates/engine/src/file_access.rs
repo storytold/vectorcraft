@@ -85,6 +85,12 @@ impl AutomationRoots {
         Ok(Some(Arc::new(Self { read: open(read, Access::Read)?, write: open(write, Access::Write)? })))
     }
 
+    /// Roots that grant no access of either kind: inside [`confine`] with them, every path a
+    /// command reads or writes is refused.
+    pub(crate) fn none() -> Arc<Self> {
+        Arc::new(Self { read: Vec::new(), write: Vec::new() })
+    }
+
     /// May the file or folder at `path` be read (or written)? It must lie inside one of the roots
     /// of that kind. `Err` says why not.
     pub fn check(&self, path: &str, access: Access) -> Result<(), String> {
