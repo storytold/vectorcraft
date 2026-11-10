@@ -5578,6 +5578,11 @@ imageTrace	Outline	Körvonal
 @msg	unknown parameter `{key}`; did you mean `{near}`?	ismeretlen paraméter: `{key}`; erre gondolt: `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	ismeretlen paraméter: `{key}`; a parancsnak nincs paramétere
 @msg	unknown parameter `{key}`; the command takes: {keys}	ismeretlen paraméter: `{key}`; a parancs ezeket fogadja el: {keys}
+@msg	the params must be an object, not {got}	a paramétereknek objektumnak kell lenniük, nem ez: {got}
+@msg	unknown parameter `{path}`; the object takes no keys	ismeretlen paraméter: `{path}`; az objektum nem fogad el kulcsokat
+@msg	unknown parameter `{path}`; it takes: {keys}	ismeretlen paraméter: `{path}`; ezeket fogadja el: {keys}
+@msg	missing `{path}`	hiányzik: `{path}`
+@msg	`{path}` must be {expected}, not {got}	`{path}`: {expected} kell, nem ez: {got}
 	Load EPS into Clipboard	EPS betöltése a vágólapra
 @msg	an image of {w} × {h} pixels is too large to draw	egy {w} × {h} pixeles kép túl nagy a kirajzoláshoz
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: nem PNG, JPEG, WebP, TIFF vagy BMP kép

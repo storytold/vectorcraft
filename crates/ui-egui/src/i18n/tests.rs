@@ -1998,6 +1998,47 @@ fn dataset_import_repeated_column_error_is_translated() {
     }
 }
 
+/// The errors of a command's parameter schema are translated in every language that translates
+/// every message, with the parameter's path and the refused value kept.
+#[test]
+fn parameter_schema_errors_are_translated() {
+    use serde_json::json;
+    use vectorcraft_engine::Session;
+    let scanned = message_literals();
+    for template in [
+        "the params must be an object, not {got}",
+        "unknown parameter `{path}`; the object takes no keys",
+        "unknown parameter `{path}`; it takes: {keys}",
+        "missing `{path}`",
+        "`{path}` must be {expected}, not {got}",
+    ] {
+        assert!(scanned.contains(template), "{template}");
+    }
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let errors = [
+        (s.execute("view.saved.new", &json!({"center": [0, 0], "zoom": -1})).unwrap_err().to_string(), "`zoom`", "must be", "-1"),
+        (s.execute("view.saved.new", &json!({"center": [0, 0]})).unwrap_err().to_string(), "`zoom`", "missing", ""),
+        (s.execute("view.saved.list", &json!(5)).unwrap_err().to_string(), "5", "must be", ""),
+    ];
+    s.execute("view.saved.new", &json!({"name": "A", "center": [0, 0], "zoom": 1})).unwrap();
+    let nested = [
+        (s.execute("view.saved.edit", &json!({"edits": [{"name": "A"}, {"name": "A", "delete": 1}]})).unwrap_err().to_string(), "`edits[1].delete`"),
+        (s.execute("view.saved.edit", &json!({"edits": [{"name": "A", "x": 1}]})).unwrap_err().to_string(), "`edits[0].x`"),
+    ];
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for (e, kept, english, value) in &errors {
+            let shown = message(lang, e);
+            assert!(shown.contains(kept) && shown.contains(value) && !shown.contains(english), "{code}: {shown}");
+        }
+        for (e, kept) in &nested {
+            let shown = message(lang, e);
+            assert!(shown.contains(kept) && !shown.contains("unknown parameter") && !shown.contains("must be"), "{code}: {shown}");
+        }
+    }
+}
+
 /// The warning for a PDF/X file that leaves out the document's bleed is translated in every catalog,
 /// alone and in the status bar's note.
 #[test]
