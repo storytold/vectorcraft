@@ -623,7 +623,7 @@ mod portable {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::{Duration, Instant};
 
-    use super::{BITMAP, ClipboardRead, Flavour, PNG, SystemClipboard, TEXT, copied_file, decode_png, png_flavour, text_of};
+    use super::{BITMAP, ClipboardRead, Flavour, PNG, SVG, SystemClipboard, TEXT, copied_file, decode_png, png_flavour, text_of};
 
     /// What our last write put on the clipboard.
     #[derive(Clone)]
@@ -1261,6 +1261,24 @@ mod portable {
         }
     }
 
+    /// What [`SystemClipboard::write`] puts on a platform clipboard that holds one format at a
+    /// time. Include SVG Code (on by default) writes a shape copy's SVG markup under the TEXT
+    /// mime too, so its TEXT and SVG flavours hold the exact same bytes; real object text (a
+    /// type-only copy) never matches the document's SVG. Picking between them: prefer the PNG for
+    /// a shape copy, so Paste into an app that doesn't read SVG as text (Photoshop, Mail, …) still
+    /// gets a picture instead of nothing (#2282), while a genuine text copy keeps pasting as text
+    /// everywhere.
+    fn pick_one(flavours: &[Flavour]) -> (Option<String>, Option<image::RgbaImage>) {
+        let text = text_of(flavours);
+        let svg_as_text = text.as_deref().is_some_and(|t| flavours.iter().any(|f| f.mime == SVG && f.data == t.as_bytes()));
+        let text = if svg_as_text { None } else { text };
+        let image = match &text {
+            Some(_) => None,
+            None => flavours.iter().find(|f| f.mime == PNG).and_then(|f| decode_png(&f.data)),
+        };
+        (text, image)
+    }
+
     impl SystemClipboard for Clipboard {
         /// arboard takes the text, else the PNG as a bitmap; the Wayland core protocol offers the
         /// SVG, PNG and text together ([`DataClipboard::copy`](super::wayland::DataClipboard::copy)).
@@ -1274,11 +1292,7 @@ mod portable {
                 self.ours = wl.holds_ours().then_some(Ours::Source);
                 return Ok(());
             }
-            let text = text_of(flavours);
-            let image = match &text {
-                Some(_) => None,
-                None => flavours.iter().find(|f| f.mime == PNG).and_then(|f| decode_png(&f.data)),
-            };
+            let (text, image) = pick_one(flavours);
             let ours = match (text, image) {
                 (Some(t), _) => {
                     cb.set_text(t.as_str())?;
@@ -1776,6 +1790,48 @@ mod portable {
             assert!(ui.get(Asker::User, clock.now(), fail, name).is_none());
             assert!(LOGGED.load(Ordering::Relaxed));
             assert!(probe.opened().is_none() && ui.opened().is_none());
+        }
+
+        fn one_px_png() -> Vec<u8> {
+            let img = image::RgbaImage::from_pixel(1, 1, image::Rgba([255, 0, 0, 255]));
+            let mut data = vec![];
+            img.write_to(&mut std::io::Cursor::new(&mut data), image::ImageFormat::Png).expect("encode");
+            data
+        }
+
+        #[test]
+        fn a_shape_copy_writes_the_picture_not_the_svg_markup_as_text() {
+            // Include SVG Code (on by default) puts the same markup under TEXT and SVG for a
+            // shape copy (#2282: Paste into Photoshop or Mail read neither as a picture).
+            let svg = b"<svg>...</svg>".to_vec();
+            let flavours =
+                vec![Flavour { mime: TEXT, data: svg.clone() }, Flavour { mime: SVG, data: svg }, Flavour { mime: PNG, data: one_px_png() }];
+            let (text, image) = pick_one(&flavours);
+            assert!(text.is_none(), "the SVG markup is not written as text");
+            assert!(image.is_some(), "the picture is written instead");
+        }
+
+        #[test]
+        fn a_genuine_text_copy_still_writes_as_text() {
+            // A type-only copy's TEXT flavour is the objects' own text, never the SVG markup.
+            let flavours = vec![
+                Flavour { mime: TEXT, data: b"hello".to_vec() },
+                Flavour { mime: SVG, data: b"<svg>...</svg>".to_vec() },
+                Flavour { mime: PNG, data: one_px_png() },
+            ];
+            let (text, image) = pick_one(&flavours);
+            assert_eq!(text.as_deref(), Some("hello"));
+            assert!(image.is_none(), "text wins over the picture");
+        }
+
+        #[test]
+        fn a_shape_copy_without_svg_code_falls_back_to_the_picture_as_before() {
+            // No TEXT flavour at all (Include SVG Code off, not a type-only copy): unaffected by
+            // this change, same as before it.
+            let flavours = vec![Flavour { mime: PNG, data: one_px_png() }];
+            let (text, image) = pick_one(&flavours);
+            assert!(text.is_none());
+            assert!(image.is_some());
         }
     }
 }
