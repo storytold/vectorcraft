@@ -470,6 +470,384 @@ fn fit_edge(side: &[Point], span: (f64, f64), ends: (Point, Point)) -> Option<(V
     fit
 }
 
+/// The cubic from `p0` to `p3` leaving `p0` along `d0` and reaching `p3` against `d1` (unit
+/// vectors; `d1` points from `p3` back into the curve) that comes closest (least squares) to the
+/// points `qs`, which lie along the way in order; `None` when no such cubic has handles of positive
+/// length. Each point is matched to the curve's nearest point, refined over a few rounds, as in
+/// [`fit_edge`].
+fn fit_tangents(qs: &[Point], (p0, d0): (Point, Vec2), (p3, d1): (Point, Vec2)) -> Option<CubicBez> {
+    const ROUNDS: usize = 6;
+    let n = qs.len() + 1;
+    let mut ts: Vec<f64> = (1..n).map(|i| i as f64 / n as f64).collect();
+    let mut fit = None;
+    for _ in 0..ROUNDS {
+        let (mut c11, mut c12, mut c22, mut x1, mut x2) = (0.0, 0.0, 0.0, 0.0, 0.0);
+        for (q, &t) in qs.iter().zip(&ts) {
+            let s = 1.0 - t;
+            let (b0, b1, b2, b3) = (s * s * s, 3.0 * s * s * t, 3.0 * s * t * t, t * t * t);
+            let (a1, a2) = (d0 * b1, d1 * b2);
+            let r = q.to_vec2() - (b0 + b1) * p0.to_vec2() - (b2 + b3) * p3.to_vec2();
+            c11 += a1.dot(a1);
+            c12 += a1.dot(a2);
+            c22 += a2.dot(a2);
+            x1 += r.dot(a1);
+            x2 += r.dot(a2);
+        }
+        let det = c11 * c22 - c12 * c12;
+        if det.abs() < 1e-12 {
+            break;
+        }
+        let (l1, l2) = ((c22 * x1 - c12 * x2) / det, (c11 * x2 - c12 * x1) / det);
+        if !(l1.is_finite() && l2.is_finite() && l1 > 0.0 && l2 > 0.0) {
+            break;
+        }
+        let c = CubicBez::new(p0, p0 + d0 * l1, p3 + d1 * l2, p3);
+        fit = Some(c);
+        let (a, b, k) = (c.p1 - c.p0, c.p2 - c.p1, c.p3 - c.p2);
+        for (q, t) in qs.iter().zip(ts.iter_mut()) {
+            let s = 1.0 - *t;
+            let v = 3.0 * (s * s * a + 2.0 * s * *t * b + *t * *t * k);
+            let acc = 6.0 * (s * (b - a) + *t * (k - b));
+            let e = c.eval(*t) - *q;
+            let den = v.hypot2() + e.dot(acc);
+            if den.abs() > 1e-12 {
+                *t = (*t - e.dot(v) / den).clamp(0.0, 1.0);
+            }
+        }
+    }
+    fit
+}
+
+/// How far (in points) a border edge of a mesh made from a path may stray from the path's outline
+/// before the mesh takes a line through an anchor of the outline there; a thousandth of the outline's
+/// size when that is less.
+const BORDER_TOLERANCE: f64 = 0.1;
+
+/// The most lines each way a mesh made from a path takes to keep its border on the outline
+/// ([`BORDER_TOLERANCE`]); past that, each border edge keeps its closest fit.
+pub(super) const MAX_BORDER_LINES: usize = 256;
+
+/// The most rounds of new lines a mesh made from a path takes to keep its border on the outline.
+const MAX_BORDER_ROUNDS: usize = 64;
+
+/// An anchor whose directions in and out differ by more than this (radians) is a corner: a border
+/// edge that can't follow the outline takes a mesh line through its sharpest corner first.
+const SHARP_TURN: f64 = 0.01;
+
+/// Steps of each segment's parameter at which [`Outline`] measures the segment's length.
+const LENGTH_STEPS: usize = 32;
+
+/// Points of the outline each border edge of a mesh made from a path is fitted to
+/// ([`Outline::fit`]).
+const FIT_POINTS: usize = 32;
+
+/// Points of the outline, and of the fitted edge, at which [`Outline::fit`] measures how far the
+/// two stray from each other.
+const CHECK_POINTS: usize = 128;
+
+/// The outline a gradient mesh is made from: the largest subpath of a path, running clockwise on
+/// screen, an open one closed by a straight segment, without segments of no length. A place on it
+/// is a length from its first anchor, measured along a polyline through even steps of each
+/// segment's parameter; the same length always gives the same point.
+struct Outline {
+    segs: Vec<CubicBez>,
+    /// Where each segment starts, and the whole length last.
+    starts: Vec<f64>,
+    /// For each segment, the length from its start at each of [`LENGTH_STEPS`] + 1 even steps of
+    /// its parameter.
+    table: Vec<[f64; LENGTH_STEPS + 1]>,
+    /// Lengths closer than this are the same place.
+    eps: f64,
+}
+
+/// One side of the patch a mesh made from a path spans: the stretch of the outline from `start`,
+/// `len` long, run backwards when `reversed` (the bottom and left sides run against the outline).
+#[derive(Clone, Copy)]
+struct Side {
+    start: f64,
+    len: f64,
+    reversed: bool,
+}
+
+impl Side {
+    /// The place on the outline at `f` (0 to 1) along the side.
+    fn at(&self, f: f64) -> f64 {
+        self.start + if self.reversed { (1.0 - f) * self.len } else { f * self.len }
+    }
+}
+
+/// The direction a cubic leaves its start in (`false`) or reaches its end in (`true`), from the
+/// first handle or point that is not at the end; zero when all its points are together.
+fn cubic_tangent(c: &CubicBez, end: bool) -> Vec2 {
+    let near = 1e-12 * (c.p0.to_vec2().hypot() + c.p3.to_vec2().hypot() + 1.0);
+    let options = if end { [c.p3 - c.p2, c.p3 - c.p1, c.p3 - c.p0] } else { [c.p1 - c.p0, c.p2 - c.p0, c.p3 - c.p0] };
+    options.into_iter().find(|v| v.hypot() > near).unwrap_or(Vec2::ZERO)
+}
+
+impl Outline {
+    /// The outline of `path`; `None` when it has no subpath of two anchors or more, a point that
+    /// isn't finite, or all its points on one line (a line there and back).
+    fn new(path: &PathData) -> Option<Self> {
+        let sp = path.subpaths.iter().filter(|s| s.anchors.len() >= 2).max_by(|a, b| a.area().abs().total_cmp(&b.area().abs()))?;
+        if !sp.anchors.iter().all(|a| a.p.is_finite() && a.h_in.is_finite() && a.h_out.is_finite()) {
+            return None;
+        }
+        let mut sp = sp.clone();
+        if sp.signed_area() < 0.0 {
+            sp.reverse();
+        }
+        // A straight segment's parameter runs evenly along it.
+        let line = |a: Point, b: Point| CubicBez::new(a, a.lerp(b, 1.0 / 3.0), a.lerp(b, 2.0 / 3.0), b);
+        let mut segs: Vec<CubicBez> =
+            (0..sp.segment_count()).map(|i| if sp.segment_is_line(i) { line(sp.segment(i).p0, sp.segment(i).p3) } else { sp.segment(i) }).collect();
+        if !sp.closed
+            && let (Some(a), Some(b)) = (sp.anchors.last(), sp.anchors.first())
+        {
+            segs.push(line(a.p, b.p));
+        }
+        segs.retain(|c| [c.p1, c.p2, c.p3].iter().any(|p| p.distance(c.p0) > 1e-9));
+        if segs.len() < 2 {
+            return None;
+        }
+        let mut starts = Vec::with_capacity(segs.len() + 1);
+        let mut table = Vec::with_capacity(segs.len());
+        let mut total = 0.0;
+        for c in &segs {
+            let mut lens = [0.0; LENGTH_STEPS + 1];
+            let mut prev = c.p0;
+            for (k, len) in lens.iter_mut().enumerate().skip(1) {
+                let p = c.eval(k as f64 / LENGTH_STEPS as f64);
+                *len = prev.distance(p);
+                prev = p;
+            }
+            for k in 1..=LENGTH_STEPS {
+                lens[k] += lens[k - 1];
+            }
+            starts.push(total);
+            total += lens[LENGTH_STEPS];
+            table.push(lens);
+        }
+        starts.push(total);
+        if !(total.is_finite() && total > 0.0) {
+            return None;
+        }
+        // An outline whose points all lie on one line encloses nothing; one that crosses itself
+        // (a bow tie) may have areas that cancel, and is still followed.
+        let pts: Vec<Point> = segs.iter().flat_map(|c| [c.p0, c.p1, c.p2, c.p3]).collect();
+        let first = pts.first().copied()?;
+        let far = pts.iter().copied().max_by(|a, b| a.distance_squared(first).total_cmp(&b.distance_squared(first)))?;
+        let dir = far - first;
+        let width = pts.iter().map(|p| ((*p - first).cross(dir) / dir.hypot()).abs()).fold(0.0, f64::max);
+        if !(dir.hypot() > 0.0 && width > 1e-9 * total) {
+            return None;
+        }
+        Some(Self { segs, starts, table, eps: total * 1e-9 })
+    }
+
+    fn total(&self) -> f64 {
+        self.starts.last().copied().unwrap_or_default()
+    }
+
+    /// The bounding box of the outline.
+    fn bounds(&self) -> Option<Rect> {
+        self.segs.iter().map(|c| c.bounding_box()).reduce(|a, b| a.union(b))
+    }
+
+    /// The parameter of segment `i` `local` along it (clamped to the segment).
+    fn seg_t(&self, i: usize, local: f64) -> f64 {
+        let Some(lens) = self.table.get(i) else { return 0.0 };
+        let k = lens.partition_point(|x| *x <= local).clamp(1, LENGTH_STEPS) - 1;
+        let (l0, l1) = (lens[k], lens[k + 1]);
+        let f = if l1 > l0 { ((local - l0) / (l1 - l0)).clamp(0.0, 1.0) } else { 0.0 };
+        (k as f64 + f) / LENGTH_STEPS as f64
+    }
+
+    /// The segment and its parameter at place `s` (wrapping around); a place at the very end of a
+    /// segment is the start of the next.
+    fn locate(&self, s: f64) -> (usize, f64) {
+        let n = self.segs.len();
+        let s = s.rem_euclid(self.total());
+        let mut i = self.starts.partition_point(|x| *x <= s).clamp(1, n) - 1;
+        if self.starts.get(i + 1).is_some_and(|end| end - s <= self.eps) {
+            i = (i + 1) % n;
+            return (i, 0.0);
+        }
+        (i, self.seg_t(i, s - self.starts[i]))
+    }
+
+    fn point(&self, s: f64) -> Point {
+        let (i, t) = self.locate(s);
+        self.segs.get(i).map_or(Point::ZERO, |c| c.eval(t))
+    }
+
+    /// The anchors strictly inside the stretch from `a`, `len` long: each one's distance from `a`
+    /// and the segment it starts.
+    fn anchors_in(&self, a: f64, len: f64) -> Vec<(f64, usize)> {
+        let (total, n) = (self.total(), self.segs.len());
+        let a = a.rem_euclid(total);
+        let (lo, hi) = (a + self.eps, a + len - self.eps);
+        let mut out = vec![];
+        for lap in [0.0, total] {
+            let from = self.starts[..n].partition_point(|x| x + lap <= lo);
+            for (i, start) in self.starts[..n].iter().enumerate().skip(from) {
+                let p = start + lap;
+                if p >= hi {
+                    break;
+                }
+                out.push((p - a, i));
+            }
+        }
+        out
+    }
+
+    /// The piece of the outline from `a`, `len` long, which no anchor lies inside.
+    fn piece(&self, a: f64, len: f64) -> CubicBez {
+        let (i, t0) = self.locate(a);
+        let Some(c) = self.segs.get(i) else { return CubicBez::new(Point::ZERO, Point::ZERO, Point::ZERO, Point::ZERO) };
+        // At a segment's start (a place at the end of the one before counts as that), none of it is behind.
+        let behind = if t0 == 0.0 { 0.0 } else { a.rem_euclid(self.total()) - self.starts[i] };
+        let t1 = self.seg_t(i, behind + len);
+        c.subsegment(t0..t1.max(t0))
+    }
+
+    /// The direction the outline leaves place `s` in (`into` false) or reaches it in (`into` true).
+    fn tangent(&self, s: f64, into: bool) -> Vec2 {
+        let n = self.segs.len();
+        let (i, t) = self.locate(s);
+        let c = match (into, t <= 0.0) {
+            (true, true) => self.segs[(i + n - 1) % n],
+            (true, false) => self.segs[i].subsegment(0.0..t),
+            (false, _) => self.segs[i].subsegment(t..1.0),
+        };
+        cubic_tangent(&c, into)
+    }
+
+    /// How sharply the outline turns at the anchor starting segment `i` (radians, 0 to π).
+    fn turn(&self, i: usize) -> f64 {
+        let s = self.starts[i];
+        let (din, dout) = (self.tangent(s, true), self.tangent(s, false));
+        din.cross(dout).atan2(din.dot(dout)).abs()
+    }
+
+    /// The place on the outline nearest `q`.
+    fn nearest(&self, q: Point) -> f64 {
+        use vectorcraft_geom::kurbo::ParamCurveNearest;
+        let mut best = (f64::INFINITY, 0.0);
+        for (i, c) in self.segs.iter().enumerate() {
+            let near = c.nearest(q, 1e-9);
+            if near.distance_sq < best.0 {
+                // The length at that parameter, from the table.
+                let lens = &self.table[i];
+                let x = near.t * LENGTH_STEPS as f64;
+                let k = (x.floor() as usize).min(LENGTH_STEPS - 1);
+                let local = lens[k] + (lens[k + 1] - lens[k]) * (x - k as f64);
+                best = (near.distance_sq, self.starts[i] + local);
+            }
+        }
+        best.1
+    }
+
+    /// The cubic standing for the stretch from `a`, `len` long, and how far it strays from it: the
+    /// piece of the segment when no anchor lies inside, otherwise a cubic fitted to the outline with
+    /// its ends along the outline's own directions there.
+    fn fit(&self, a: f64, len: f64) -> (CubicBez, f64) {
+        let (p0, p3) = (self.point(a), self.point(a + len));
+        if len <= self.eps {
+            return (CubicBez::new(p0, p0, p0, p0), 0.0);
+        }
+        let anchors = self.anchors_in(a, len);
+        if anchors.is_empty() {
+            return (self.piece(a, len), 0.0);
+        }
+        let qs: Vec<Point> = (1..FIT_POINTS).map(|i| self.point(a + len * i as f64 / FIT_POINTS as f64)).collect();
+        let (d0, d1) = (self.tangent(a, false), -self.tangent(a + len, true));
+        let unit = |v: Vec2| if v.hypot() > 0.0 { Some(v / v.hypot()) } else { None };
+        let straight = CubicBez::new(p0, p0.lerp(p3, 1.0 / 3.0), p0.lerp(p3, 2.0 / 3.0), p3);
+        let c = match (unit(d0), unit(d1)) {
+            (Some(d0), Some(d1)) => fit_tangents(&qs, (p0, d0), (p3, d1)),
+            _ => None,
+        }
+        .unwrap_or(straight);
+        // Both ways: the outline's points from the cubic, and the cubic's points from the outline.
+        // The outline is checked at even steps and at every anchor inside, so a spike or a notch
+        // narrower than a step is not missed.
+        use vectorcraft_geom::kurbo::ParamCurveNearest;
+        let mut at: Vec<f64> = (0..=CHECK_POINTS).map(|i| len * i as f64 / CHECK_POINTS as f64).chain(anchors.iter().map(|(o, _)| *o)).collect();
+        at.sort_by(f64::total_cmp);
+        let line: Vec<Point> = at.iter().map(|o| self.point(a + o)).collect();
+        let off_outline = line.iter().map(|q| c.nearest(*q, 1e-9).distance_sq.sqrt()).fold(0.0, f64::max);
+        let off_cubic = (0..=CHECK_POINTS)
+            .map(|i| {
+                let p = c.eval(i as f64 / CHECK_POINTS as f64);
+                line.windows(2)
+                    .map(|w| {
+                        let (u, v) = (w[0], w[1]);
+                        let d = v - u;
+                        let t = if d.hypot2() > 0.0 { ((p - u).dot(d) / d.hypot2()).clamp(0.0, 1.0) } else { 0.0 };
+                        p.distance(u + d * t)
+                    })
+                    .fold(f64::INFINITY, f64::min)
+            })
+            .fold(0.0, f64::max);
+        (c, off_outline.max(off_cubic))
+    }
+
+    /// The border edge of `side` from `f0` to `f1` (0 to 1 along it, rising), run the way the side
+    /// runs, and when it strays from the outline by more than `tol`, where along the side (0 to 1)
+    /// a mesh line through an anchor would help: the sharpest corner inside it, or the anchor
+    /// nearest its middle when none is sharp.
+    fn edge(&self, side: &Side, f0: f64, f1: f64, tol: f64) -> (CubicBez, Option<f64>) {
+        let len = (f1 - f0) * side.len;
+        let a = side.at(if side.reversed { f1 } else { f0 });
+        let (c, off) = self.fit(a, len);
+        let c = if side.reversed { CubicBez::new(c.p3, c.p2, c.p1, c.p0) } else { c };
+        if off <= tol || side.len <= 0.0 {
+            return (c, None);
+        }
+        let anchors = self.anchors_in(a, len);
+        let sharpest = anchors.iter().map(|&(o, i)| (self.turn(i), o)).max_by(|x, y| x.0.total_cmp(&y.0));
+        let at = match sharpest {
+            Some((turn, o)) if turn > SHARP_TURN => Some(o),
+            _ => anchors.iter().map(|&(o, _)| o).min_by(|x, y| (x - len / 2.0).abs().total_cmp(&(y - len / 2.0).abs())),
+        };
+        let split = at.map(|o| if side.reversed { f1 - o / side.len } else { f0 + o / side.len });
+        (c, split.filter(|f| *f > f0 && *f < f1))
+    }
+
+    /// The cuts (0 to 1) of the lines across sides `one` and `other`: `even`, and as many more as
+    /// keep every border edge along them within `tol` of the outline (see [`Self::edge`]), at most
+    /// [`MAX_BORDER_LINES`] in all.
+    fn cuts(&self, one: &Side, other: &Side, even: Vec<f64>, tol: f64) -> Vec<f64> {
+        let mut cuts = even;
+        for _ in 0..MAX_BORDER_ROUNDS {
+            let mut add: Vec<f64> =
+                [one, other].iter().flat_map(|s| cuts.windows(2).filter_map(|w| self.edge(s, w[0], w[1], tol).1).collect::<Vec<_>>()).collect();
+            add.retain(|f| cuts.iter().all(|c| (c - f).abs() > 1e-9));
+            add.truncate((MAX_BORDER_LINES + 1).saturating_sub(cuts.len()));
+            if add.is_empty() {
+                break;
+            }
+            cuts.extend(add);
+            cuts.sort_by(f64::total_cmp);
+            cuts.dedup_by(|x, y| (*x - *y).abs() <= 1e-9);
+        }
+        cuts
+    }
+
+    /// The points along `side` at `knots` (rising, 0 to 1).
+    fn side_points(&self, side: &Side, knots: &[f64]) -> Vec<Point> {
+        knots.iter().map(|f| self.point(side.at(*f))).collect()
+    }
+}
+
+/// The sorted union of `cuts` and `SIDE` even steps.
+fn side_knots(cuts: &[f64]) -> Vec<f64> {
+    let mut k: Vec<f64> = (0..SIDE).map(|i| i as f64 / (SIDE - 1) as f64).chain(cuts.iter().copied()).collect();
+    k.sort_by(f64::total_cmp);
+    k.dedup_by(|x, y| (*x - *y).abs() <= 1e-9);
+    k
+}
+
 /// The handles of one cubic standing for two edges that meet at point `mid.0`, whose handles
 /// towards them are `mid.1` (towards `a`) and `mid.2` (towards `b`), as offsets from their outer
 /// ends: each outer handle grown back by the share of the curve its edge had, which undoes the
@@ -599,19 +977,104 @@ impl GradientMesh {
 
     /// Create Gradient Mesh for a path: the outline split at its corners, coloured per `appearance`.
     pub fn for_path(path: &PathData, rows: u32, cols: u32, base: Color, appearance: MeshAppearance, highlight: f64) -> Option<Self> {
-        let mut m = Self::for_path_with(path, rows, cols, &|_| (base, 1.0))?;
-        m.highlight(appearance, highlight);
+        Self::for_path_shaded(path, rows, cols, &|_| (base, 1.0), appearance, highlight)
+    }
+
+    /// As [`Self::for_path_with`], then lightened per `appearance` ([`Self::highlight`]), measured
+    /// by where each line crosses the patch.
+    pub fn for_path_shaded(
+        path: &PathData,
+        rows: u32,
+        cols: u32,
+        color_at: &dyn Fn(Point) -> (Color, f32),
+        appearance: MeshAppearance,
+        highlight: f64,
+    ) -> Option<Self> {
+        let (mut m, us, vs) = Self::build_for_path(path, rows, cols, color_at)?;
+        m.highlight_at(appearance, highlight, &us, &vs);
         Some(m)
     }
 
     /// Create Gradient Mesh for a path: the outline split at its corners, each point taking the
     /// colour and opacity `color_at` gives at its position (a gradient fill's, say).
     pub fn for_path_with(path: &PathData, rows: u32, cols: u32, color_at: &dyn Fn(Point) -> (Color, f32)) -> Option<Self> {
-        let coons = Coons::from_path(path)?;
+        Self::build_for_path(path, rows, cols, color_at).map(|(m, ..)| m)
+    }
+
+    /// The mesh of [`Self::for_path_with`] and where its column and row lines cross the patch (0
+    /// to 1). Its border lies on the outline of the path's largest subpath (#2752): the patch's
+    /// corners are the outline's places nearest the corners of its bounding box (when those don't
+    /// come in order round the outline, the top left one and the places a quarter, a half and three
+    /// quarters of the way round from it), its points on the
+    /// border sit on the outline, and each border edge is the piece of the outline between its
+    /// points, a single cubic. Where the outline bends through an anchor between two of the `rows`
+    /// × `cols` lines and no single cubic follows it within [`BORDER_TOLERANCE`], the mesh takes a
+    /// line through that anchor (its sharpest corner first), as many as that needs up to
+    /// [`MAX_BORDER_LINES`] each way. `None` when the path has no outline or a point that isn't
+    /// finite; an outline whose points all lie on one line gives the mesh of its bounding box.
+    fn build_for_path(path: &PathData, rows: u32, cols: u32, color_at: &dyn Fn(Point) -> (Color, f32)) -> Option<(Self, Vec<f64>, Vec<f64>)> {
+        if !path.subpaths.iter().flat_map(|s| &s.anchors).all(|a| a.p.is_finite() && a.h_in.is_finite() && a.h_out.is_finite()) {
+            return None;
+        }
         let (us, vs) = (even_steps(cols), even_steps(rows));
+        let Some((o, sides)) = Outline::new(path).and_then(|o| {
+            let r = o.bounds()?;
+            let [tl, mut tr, mut br, mut bl] = [(r.x0, r.y0), (r.x1, r.y0), (r.x1, r.y1), (r.x0, r.y1)].map(|(x, y)| o.nearest(Point::new(x, y)));
+            let span = |a: f64, b: f64| (b - a).rem_euclid(o.total());
+            // Corners met out of order around the outline would make sides that overlap: the
+            // other three then go a quarter of the way round from the top left each.
+            let around = span(tl, tr) + span(tr, br) + span(br, bl) + span(bl, tl);
+            if (around - o.total()).abs() > 1e-6 * o.total() {
+                let quarter = o.total() / 4.0;
+                (tr, br, bl) = (tl + quarter, tl + 2.0 * quarter, tl + 3.0 * quarter);
+            }
+            let sides = [
+                Side { start: tl, len: span(tl, tr), reversed: false },
+                Side { start: tr, len: span(tr, br), reversed: false },
+                Side { start: br, len: span(br, bl), reversed: true },
+                Side { start: bl, len: span(bl, tl), reversed: true },
+            ];
+            Some((o, sides))
+        }) else {
+            // No outline to follow: the patch of the flattened outline (its bounding box when it
+            // encloses nothing), with each border edge fitted.
+            let coons = Coons::from_path(path)?;
+            let mut m = Self::from_grid(&us, &vs, &|u, v| coons.eval(u, v), &|_, _, p| color_at(p));
+            m.fit_border(&coons, &us, &vs);
+            return Some((m, us, vs));
+        };
+        let [top, right, bottom, left] = sides;
+        let size = o.bounds().map_or(0.0, |r| r.width() + r.height());
+        let tol = BORDER_TOLERANCE.min(size * 1e-3).max(o.eps);
+        let us = o.cuts(&top, &bottom, us, tol);
+        let vs = o.cuts(&left, &right, vs, tol);
+        let (ku, kv) = (side_knots(&us), side_knots(&vs));
+        let coons = Coons {
+            top: o.side_points(&top, &ku),
+            right: o.side_points(&right, &kv),
+            bottom: o.side_points(&bottom, &ku),
+            left: o.side_points(&left, &kv),
+            knots: Some(Box::new([ku.clone(), kv.clone(), ku, kv])),
+        };
         let mut m = Self::from_grid(&us, &vs, &|u, v| coons.eval(u, v), &|_, _, p| color_at(p));
-        m.fit_border(&coons, &us, &vs);
-        Some(m)
+        let (rows, cols) = (m.rows as usize, m.cols as usize);
+        let edges = [(0, &top), (rows, &bottom)]
+            .map(|(r, side)| (r, side, true))
+            .into_iter()
+            .chain([(0, &left), (cols, &right)].map(|(c, side)| (c, side, false)));
+        for (line, side, along_u) in edges {
+            let steps = if along_u { &us } else { &vs };
+            for (k, w) in steps.windows(2).enumerate() {
+                let (a, b, out, back) =
+                    if along_u { (m.idx(line, k), m.idx(line, k + 1), H_RIGHT, H_LEFT) } else { (m.idx(k, line), m.idx(k + 1, line), H_DOWN, H_UP) };
+                let (c, _) = o.edge(side, w[0], w[1], tol);
+                m.points[a].p = c.p0;
+                m.points[b].p = c.p3;
+                m.points[a].handles[out] = c.p1 - c.p0;
+                m.points[b].handles[back] = c.p2 - c.p3;
+            }
+        }
+        Some((m, us, vs))
     }
 
     /// Give each edge on the mesh's border the handles that make it follow the outline it stands
@@ -657,11 +1120,21 @@ impl GradientMesh {
     /// the edges, by at most `highlight` %. Each point lightens towards white in its own colour
     /// model (paper white, no ink, for CMYK), so a CMYK or grey mesh keeps its inks (#3232).
     pub fn highlight(&mut self, appearance: MeshAppearance, highlight: f64) {
+        let even = |n: u32| (0..=n).map(|i| f64::from(i) / f64::from(n)).collect::<Vec<_>>();
+        let (us, vs) = (even(self.cols), even(self.rows));
+        self.highlight_at(appearance, highlight, &us, &vs);
+    }
+
+    /// As [`Self::highlight`], with the column lines at `us` and the row lines at `vs` (0 to 1
+    /// across the patch); a mesh whose lines don't match them is left as it is.
+    fn highlight_at(&mut self, appearance: MeshAppearance, highlight: f64, us: &[f64], vs: &[f64]) {
         let h = (highlight / 100.0).clamp(0.0, 1.0) as f32;
         let (rows, cols) = (self.rows as usize, self.cols as usize);
-        for r in 0..=rows {
-            for c in 0..=cols {
-                let (u, v) = (c as f64 / cols as f64, r as f64 / rows as f64);
+        if !self.is_valid() || us.len() != cols + 1 || vs.len() != rows + 1 {
+            return;
+        }
+        for (r, &v) in vs.iter().enumerate() {
+            for (c, &u) in us.iter().enumerate() {
                 let d = ((u - 0.5).abs().max((v - 0.5).abs()) * 2.0) as f32; // 0 centre … 1 edge
                 let w = match appearance {
                     MeshAppearance::Flat => 0.0,
