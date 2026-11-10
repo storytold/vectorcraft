@@ -40,7 +40,7 @@ mod text;
 mod writer;
 
 pub(crate) use entry::{RgbInCmyk, leaving_out_undecodable};
-pub use entry::{export, export_with_report, page_areas};
+pub use entry::{check_page_sizes, export, export_with_report, page_areas};
 #[cfg(test)]
 use exporter::{MAX_COORD, writable, xf};
 #[cfg(test)]
