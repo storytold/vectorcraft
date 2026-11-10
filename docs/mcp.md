@@ -1621,6 +1621,12 @@ the editing layer. With gradient mesh points picked, `opacity` goes to those poi
 {"name":"run_command","arguments":{"command":"transparency.info","params":{"ids":[12,20]}}}
 ```
 
+`transparency.makeOpacityMask` rejects a `clip` or `invert` value that is not a boolean, such as `"clip": "false"`,
+and `transparency.setOpacityMask` does the same for `clip`, `invert`, `disabled` and `linked`. The toggles
+`transparency.toggleNewMasksClipping`, `transparency.toggleNewMasksInverted`, `transparency.togglePageKnockoutGroup`
+and `transparency.togglePageIsolatedBlending` reject a `value` that is not a boolean. A rejected call changes nothing.
+Omitting a param or giving null keeps its default.
+
 Knockout Group has three states: `transparency.set {knockout: "on"|"off"|"neutral"}` (`true` = on, `false` =
 neutral, the default). In a knockout group each child hides what it covers of the children below it; neutral groups
 pass the enclosing group's setting to their children, off groups never knock out. `knockoutShape: true` makes the
