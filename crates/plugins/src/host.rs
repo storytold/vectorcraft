@@ -122,7 +122,7 @@ pub const CALL_LIMIT: i32 = -9;
 /// What `vc_call_result` returns: no call has a result yet.
 pub const CALL_NO_RESULT: i32 = -10;
 /// What `vc_call` returns: nothing can be called now (while the module is being loaded, or in a
-/// run that isn't a filter's run on a document).
+/// run that isn't a filter's run on a document). In a run, this fails it too.
 pub const CALL_NO_CONTEXT: i32 = -11;
 
 /// Most `vc_call` calls one run makes.
@@ -370,8 +370,8 @@ pub(crate) struct Run {
     storage: Option<Arc<dyn Storage>>,
     storage_calls: usize,
     storage_bytes: usize,
-    /// The commands `vc_call` may run (the manifest's `commandAllowlist`), when the run has
-    /// something to run them ([`Run::with_calls`]); `None` otherwise.
+    /// The commands `vc_call` may run (the manifest's `commandAllowlist`), once the module has
+    /// loaded and when the run has something to run them ([`Run::allow_calls`]); `None` otherwise.
     allowed: Option<Vec<String>>,
     /// How many `vc_call` calls the run made, and the bytes of arguments and results they moved.
     calls: usize,
@@ -416,10 +416,9 @@ impl Run {
         self
     }
 
-    /// The run, with `vc_call` running the commands in `allowed`.
-    pub(crate) fn with_calls(mut self, allowed: Vec<String>) -> Self {
+    /// From now on, `vc_call` runs the commands in `allowed`.
+    pub(crate) fn allow_calls(&mut self, allowed: Vec<String>) {
         self.allowed = Some(allowed);
-        self
     }
 
     /// Records the run's first failed call, `e`, and returns `code`.
@@ -434,7 +433,8 @@ impl Run {
     fn call_request(&mut self, memory: &[u8], id: (usize, usize), args: (usize, usize)) -> std::result::Result<(), i32> {
         self.call_result = None;
         if self.allowed.is_none() {
-            return Err(CALL_NO_CONTEXT);
+            let why = "vc_call: no command can be called here (while the module loads, or in a run that can't make calls)";
+            return Err(self.fail(CALL_NO_CONTEXT, Error::Abi(why.into())));
         }
         let shown = || {
             id.0.checked_add(id.1)

@@ -372,11 +372,12 @@ impl Plugin {
         total.ok_or_else(|| Error::Limit(SELECTION_TOO_LARGE.into()))?;
         let deadline = Deadline::new(limits.wall_time_ms);
         let m = &self.manifest;
-        let mut run = Run::new(&m.id, m.kind != Kind::Effect, true, deadline).with_storage(crate::registry::storage(&m.id));
-        if bridge.is_some() {
-            run = run.with_calls(m.command_allowlist.clone());
-        }
+        let run = Run::new(&m.id, m.kind != Kind::Effect, true, deadline).with_storage(crate::registry::storage(&m.id));
         let mut live = self.instantiate(run, &m.permissions(), report)?;
+        // Calls can be made from `vc_run` on, not from the start function.
+        if bridge.is_some() {
+            live.store.data_mut().run.allow_calls(m.command_allowlist.clone());
+        }
         let out = self.run_live(&mut live, input, params, limits, &deadline, bridge);
         let state = &mut live.store.data_mut().run;
         *report = std::mem::take(&mut state.report);

@@ -406,11 +406,10 @@ arguments as a JSON object, the params the command takes from any request:
 `vc_call` returns `-1` when the id or the arguments don't lie inside the module's memory, `-2` when they are not UTF-8,
 `-3` when the arguments are not a JSON object, `-4` when `commandAllowlist` doesn't list the id, `-5` when no command
 has the id, `-6` when a plug-in may not call the command, `-7` when the command can't run now (nothing is selected),
-`-8` when the command ran and failed, `-9` when a limit below is passed, and `-11` when the run has no document to
-call commands on.
+`-8` when the command ran and failed, `-9` when a limit below is passed, and `-11` when nothing can be called (from
+the module's start function, or in a run that isn't a filter's run on a document).
 
-- Every code but `-11` also fails the run, whatever the plug-in does next, and the error names the call and why it
-  failed. The run's calls and its output are one undo step, named after the plug-in or its command. A run that fails,
+- Every code also fails the run, whatever the plug-in does next, and the error names the call and why it failed. The run's calls and its output are one undo step, named after the plug-in or its command. A run that fails,
   traps, runs out of budget or is cancelled leaves every document, its selection and its history as they were.
 - Each call runs on the document the run is for, with its params checked as any request's are, and sees what the calls
   before it changed: a `select.all` followed by `object.move` moves everything. The filter's own input is the one it

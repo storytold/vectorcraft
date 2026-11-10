@@ -188,13 +188,25 @@ fn cancel_stops_a_run_at_its_next_call() {
 }
 
 /// Without a bridge (a run that isn't a filter's run on a document), and while the module is being
-/// loaded, `vc_call` returns [`CALL_NO_CONTEXT`] and the run goes on.
+/// loaded, `vc_call` returns [`CALL_NO_CONTEXT`]; in a run, that fails the run as any failed call
+/// does, also when the plug-in goes on.
 #[test]
 fn without_a_bridge_a_call_returns_no_context() {
+    let no_context = |out: vectorcraft_plugins::Result<Vec<u8>>| {
+        let e = out.unwrap_err();
+        assert!(matches!(e, Error::Abi(_)) && e.to_string().contains("no command can be called here"), "{e}");
+    };
+    // The start function's call gets the code, and the module loads; a run, with a bridge or
+    // without one, then fails on it, and the bridge is never asked.
     let start = format!("(func $start {}) (start $start)", expect(&select_all(), CALL_NO_CONTEXT));
-    let src = tpl::with_imports(&manifest("test.call.none"), &format!("{CALLS} {start}"), &expect(&select_all(), CALL_NO_CONTEXT), INPUT);
+    let src = tpl::with_imports(&manifest("test.call.none"), &format!("{CALLS} {start}"), "", INPUT);
     let p = Plugin::load(&wat::parse_str(&src).unwrap(), Limits::default()).unwrap();
-    assert_eq!(p.run(INPUT.as_bytes(), b"{}").unwrap(), INPUT.as_bytes());
+    no_context(p.run(INPUT.as_bytes(), b"{}"));
+    let (out, seen) = run_with(&p, |_| Ok(json!({})));
+    no_context(out);
+    assert!(seen.is_empty());
+    // A call from `vc_run` without a bridge.
+    no_context(calling("test.call.none", &expect(&select_all(), CALL_NO_CONTEXT)).run(INPUT.as_bytes(), b"{}"));
 }
 
 /// A module that imports `vc_call` or `vc_call_result` needs the permission `commands`, which needs
