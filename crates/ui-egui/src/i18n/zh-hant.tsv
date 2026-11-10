@@ -544,6 +544,7 @@ font-technology	Variable	可變
 	Coming soon — tracked in the parity plan	即將推出 — 已列入功能對等計畫
 	Command Click to Select Objects Behind	Cmd 加按一下可選取後方物件
 	Command Dialog	指令對話框
+	Command API Reference	指令 API 參考
 	Community	社群
 	Compatibility:	相容性：
 	Compatible Gradient and Gradient Mesh Printing	相容的漸層與漸層網格列印
@@ -2352,6 +2353,7 @@ file-filter	Templates	範本
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	已載入「{name}」：已略過 {n} 個步驟
 @msg	not an action set file	不是動作組檔案
 @msg	the action set file is larger than 8 MiB	動作組檔案大於 8 MiB
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`：參考將大於 {MAX_BYTES} 位元組
 @msg	the action set file holds more than 1,000 actions	動作組檔案包含超過 1,000 個動作
 @msg	the action set file needs a later version of VectorCraft	動作組檔案需要較新版本的 VectorCraft
 @msg	an action in the action set file has more than 10,000 steps	動作組檔案中有動作超過 10,000 個步驟
