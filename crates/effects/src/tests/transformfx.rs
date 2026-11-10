@@ -509,3 +509,170 @@ fn a_groups_copies_stop_at_the_node_limit() {
     assert!(nodes <= crate::distort::MAX_COPY_OBJECTS + 1, "{nodes}");
     assert!(g.children().unwrap().len() < 1001, "the limit stopped the copies");
 }
+
+#[test]
+fn a_groups_copies_count_the_art_of_opacity_masks() {
+    let empties = (0..5_000).map(|i| std::sync::Arc::new(Node::group(NodeId(100 + i), vec![]))).collect();
+    let mut g = two_squares(json!({}));
+    if let Some(members) = g.children_mut() {
+        let mask = vectorcraft_doc::OpacityMask::new(Node::group(NodeId(99), empties), true);
+        std::sync::Arc::make_mut(&mut members[0]).extras_mut().mask = Some(Box::new(mask));
+    }
+    g.appearance.effects.clear();
+    let copies = transform(json!({"moveH": 1, "copies": 1000}));
+    crate::reshape::reshape_leaves_within(&mut g, &[&copies], crate::geometry::Budget::EFFECTS, None);
+    let nodes = g.count_with_masks();
+    assert!(nodes <= crate::distort::MAX_COPY_OBJECTS + 1, "{nodes}");
+}
+
+/// The anchors `n` draws with every effect inside it evaluated, group by group and member by
+/// member as drawing and baking evaluate them. The count stops once it passes `limit`.
+fn drawn_anchors(n: &Node, limit: usize) -> usize {
+    fn count(n: &Node, limit: usize, total: &mut usize) {
+        if *total > limit {
+            return;
+        }
+        if n.children().is_some() && !matches!(n.kind, NodeKind::Compound { .. }) {
+            let art = crate::evaluate_container(None, n).unwrap_or_else(|| n.clone());
+            art.children().into_iter().flatten().for_each(|c| count(c, limit, total));
+            return;
+        }
+        if let Some(art) = reshape(None, n, None) {
+            count(&art, limit, total);
+            return;
+        }
+        let Some((path, _)) = crate::reshape::leaf_geometry(n) else { return };
+        let Some(bounds) = path.bounds() else { return };
+        let own = crate::apply_geometry(&n.appearance.effects, &path, bounds);
+        let items: Vec<usize> = n
+            .appearance
+            .items
+            .iter()
+            .filter(|i| crate::has_geometry(i.effects()))
+            .filter_map(|i| Some(crate::apply_geometry(i.effects(), &own, own.bounds()?).anchor_count()))
+            .collect();
+        *total += if items.is_empty() { own.anchor_count() } else { items.iter().sum() };
+    }
+    let mut total = 0;
+    count(n, limit, &mut total);
+    total
+}
+
+#[test]
+fn a_groups_copies_keep_what_the_effects_inside_them_make_to_the_budget() {
+    let most = crate::geometry::MAX_EFFECT_ANCHORS;
+    let copies = |key: &str| transform(json!({key: 1, "copies": 1000}));
+
+    // Copies of a group whose member group makes copies of its own.
+    let inner = two_squares(json!({"moveH": 1, "copies": 1000}));
+    let mut outer = Node::group(NodeId(30), vec![std::sync::Arc::new(inner)]);
+    outer.appearance.effects.push(copies("moveV"));
+    let drawn = drawn_anchors(&outer, 2 * most);
+    assert!(drawn <= most, "a group inside: {drawn}");
+
+    // Copies of a group whose member path makes copies of its own.
+    let mut own = two_squares(json!({"moveH": 1, "copies": 1000}));
+    if let Some(members) = own.children_mut() {
+        std::sync::Arc::make_mut(&mut members[0]).appearance.effects.push(copies("moveV"));
+    }
+    let drawn = drawn_anchors(&own, 2 * most);
+    assert!(drawn <= most, "a path's own effect: {drawn}");
+
+    // Copies of a group whose member's fill makes copies of its own.
+    let mut item = two_squares(json!({"moveH": 1, "copies": 1000}));
+    if let Some(members) = item.children_mut() {
+        std::sync::Arc::make_mut(&mut members[0]).appearance.items[0].effects_mut().push(copies("moveV"));
+    }
+    let drawn = drawn_anchors(&item, 2 * most);
+    assert!(drawn <= most, "a fill's own effect: {drawn}");
+}
+
+#[test]
+fn copies_with_scaled_effects_keep_what_each_one_makes_to_the_budget() {
+    // Each copy's Roughen is twice as large as the last's, and the rough edges take more lines.
+    let roughen = Effect { id: "distort.roughen".into(), params: json!({"size": 40, "relative": false, "detail": 20}), visible: true };
+    let lines = |budget: crate::geometry::Budget| {
+        let mut g = two_squares(json!({}));
+        if let Some(members) = g.children_mut() {
+            let m = std::sync::Arc::make_mut(&mut members[0]);
+            m.appearance.items.retain(AppearanceItem::is_fill);
+            m.appearance.effects.push(roughen.clone());
+            members.truncate(1);
+        }
+        g.appearance.effects.clear();
+        let copies = transform(json!({"scaleH": 200, "scaleV": 200, "copies": 5, "strokes": true}));
+        crate::reshape::reshape_leaves_within(&mut g, &[&copies], budget, None);
+        let (mut count, mut lines) = (0, 0);
+        for leaf in leaves(&g) {
+            count += 1;
+            let Some((path, _)) = crate::reshape::leaf_geometry(leaf) else { continue };
+            let drawn = crate::apply_geometry(&leaf.appearance.effects, &path, path.bounds().unwrap());
+            lines += crate::geometry::Budget::of(&drawn).lines;
+        }
+        (count, lines)
+    };
+    let (all, most) = lines(crate::geometry::Budget::EFFECTS);
+    assert_eq!(all, 6, "the original and 5 copies");
+    let cap = most / 2;
+    let budget = crate::geometry::Budget { anchors: crate::geometry::MAX_EFFECT_ANCHORS, lines: cap };
+    let (count, drawn) = lines(budget);
+    assert!(count < all, "the budget stopped the copies");
+    assert!(drawn <= cap, "{drawn} > {cap}");
+}
+
+#[test]
+fn a_groups_copies_are_whole_only_when_nothing_inside_makes_more_art() {
+    let copies = transform(json!({"moveH": 300, "copies": 2}));
+    let effect = |id: &str| Effect { id: id.into(), params: json!({}), visible: true };
+    let roughen = effect("distort.roughen");
+    // Two squares under a group with `change` made to the first member.
+    let whole = |change: &dyn Fn(&mut Node)| {
+        let mut g = two_squares(json!({}));
+        if let Some(members) = g.children_mut() {
+            change(std::sync::Arc::make_mut(&mut members[0]));
+        }
+        g.appearance.effects.clear();
+        crate::reshape::reshape_leaves_within(&mut g, &[&copies], crate::geometry::Budget::EFFECTS, None);
+        g.children().unwrap().len() == 3
+    };
+    // A group of one square with effect `e`, in place of the member.
+    let in_group = |m: &mut Node, e: &Effect| {
+        let square = Node::path(NodeId(40), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default());
+        let mut g = Node::group(NodeId(41), vec![std::sync::Arc::new(square), std::sync::Arc::new(m.clone())]);
+        g.appearance.effects.push(e.clone());
+        *m = g;
+    };
+    assert!(whole(&|_| {}));
+    // Effects that only change pixels, and effects turned off, are copied with the art.
+    assert!(whole(&|m| m.appearance.effects.push(effect("stylize.dropShadow"))));
+    assert!(whole(&|m| m.appearance.effects.push(Effect { visible: false, ..roughen.clone() })));
+    // Effects that draw nothing are copied with the art as well.
+    assert!(
+        whole(&|m| {
+            m.visible = false;
+            m.appearance.effects.push(roughen.clone());
+        }),
+        "a hidden member's effect"
+    );
+    assert!(
+        whole(&|m| {
+            *m.appearance.items[0].paint_mut() = Paint::None;
+            m.appearance.items[0].effects_mut().push(roughen.clone());
+        }),
+        "the effect of a fill that paints nothing"
+    );
+    assert!(whole(&|m| m.appearance.effects.push(effect("no.such.effect"))), "an unknown effect");
+    // Effects that make more art than a copy holds keep each member's copies in its place.
+    assert!(!whole(&|m| m.appearance.effects.push(roughen.clone())), "a member's own effect");
+    assert!(!whole(&|m| m.appearance.items[0].effects_mut().push(roughen.clone())), "a fill's own effect");
+    assert!(!whole(&|m| in_group(m, &roughen)), "a group's own effect");
+    assert!(!whole(&|m| in_group(m, &effect("pathfinder.add"))), "a Pathfinder effect");
+    assert!(
+        !whole(&|m| {
+            let mut art = Node::group(NodeId(43), vec![]);
+            in_group(&mut art, &roughen);
+            m.extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(art, true)));
+        }),
+        "an effect in an opacity mask"
+    );
+}

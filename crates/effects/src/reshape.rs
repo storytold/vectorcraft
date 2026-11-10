@@ -881,7 +881,8 @@ fn transform_leaf(
 /// group or layer of several objects, at least one of which paints, with no type left in it and no
 /// fill or stroke of its own that paints. Type that stays type is copied in its place by the baking
 /// that keeps it, a clipping group's first member is its clip, and the art's own fills and strokes
-/// paint the shape of everything under it, copies included.
+/// paint the shape of everything under it, copies included. A member that [`makes_art`] is copied
+/// in its place as well: each copy would make that art again, past what [`copy_art`] counts.
 fn copies_whole(art: &Node) -> bool {
     fn parts(n: &Node, count: &mut usize, painted: &mut bool, text: &mut bool) {
         match &n.kind {
@@ -906,7 +907,59 @@ fn copies_whole(art: &Node) -> bool {
     }
     let (mut count, mut painted, mut text) = (0, false, false);
     parts(art, &mut count, &mut painted, &mut text);
-    count > 1 && painted && !text
+    count > 1 && painted && !text && !art.children().into_iter().flatten().any(|c| makes_art(c))
+}
+
+/// Does `n` or anything visible under it, the art of its opacity masks included, carry a visible
+/// effect that makes art when it is drawn (its own or that of a fill or stroke that paints), or is
+/// any of them a compound shape? Raster effects, color adjustments and unknown effects make none.
+fn makes_art(n: &Node) -> bool {
+    let makes = |e: &Effect| {
+        e.visible
+            && (is_geometry(&e.id)
+                || crate::is_pathfinder(&e.id)
+                || crate::is_three_d(&e.id)
+                || e.id == crate::CROP_MARKS
+                || e.id == crate::addons::halftone::HALFTONE)
+    };
+    n.visible
+        && (n.is_compound_shape()
+            || n.appearance.effects.iter().any(makes)
+            || n.appearance.items.iter().any(|i| crate::paints(i) && i.effects().iter().any(makes))
+            || n.extras().mask.as_deref().is_some_and(|m| makes_art(&m.art))
+            || n.children().into_iter().flatten().any(|c| makes_art(c)))
+}
+
+/// What the paths under `n` cost together, those of its opacity masks included.
+fn copy_cost(n: &Node) -> Budget {
+    let mut cost = Budget { anchors: 0, lines: 0 };
+    vectorcraft_doc::swatches::walk_with_masks(n, &mut |c| {
+        if let NodeKind::Path { guide: false, path, .. } = &c.kind {
+            cost = cost.plus(Budget::of(path));
+        }
+    });
+    cost
+}
+
+/// What the geometry effects of `leaf` (with geometry `path`) and of its fills and strokes add to
+/// what `path` costs when it is drawn.
+fn effects_cost(leaf: &Node, path: &PathData) -> Budget {
+    let none = Budget { anchors: 0, lines: 0 };
+    let items: Vec<&AppearanceItem> = leaf.appearance.items.iter().filter(|i| crate::paints(i) && crate::has_geometry(i.effects())).collect();
+    if items.is_empty() && !crate::has_geometry(&leaf.appearance.effects) {
+        return none;
+    }
+    let Some(bounds) = path.bounds() else { return none };
+    let ctx = GeomContext { seed: leaf.id.0, ..GeomContext::of(leaf) };
+    let own = crate::apply_geometry_with(&leaf.appearance.effects, path, bounds, &ctx);
+    let item_cost = |i: &&AppearanceItem| {
+        let b = own.bounds()?;
+        Some(Budget::of(&crate::apply_geometry_with(i.effects(), &own, b, &ctx.item(i))))
+    };
+    // The object's geometry is drawn as it is only by what has no geometry effect of its own.
+    let plain = items.is_empty() || leaf.appearance.items.iter().any(|i| crate::paints(i) && !crate::has_geometry(i.effects()));
+    let base = if plain { Budget::of(&own) } else { none };
+    base.plus(items.iter().filter_map(item_cost).fold(none, Budget::plus)).minus(Budget::of(path))
 }
 
 /// Remove the guides anywhere under `n`.
@@ -919,17 +972,16 @@ fn without_guides(n: &mut Node) {
 /// Replace the members of `art` by groups of them: the original on top and `copies` more below it,
 /// each mapped once more by `m` than the last (with `scaling`), as a Transform effect copies a
 /// group, without its guides. The copies stop where [`copy_leaf`]'s would, before they pass `budget` or
-/// [`crate::distort::MAX_COPY_OBJECTS`] nodes in all. Returns what the art costs after.
+/// [`crate::distort::MAX_COPY_OBJECTS`] nodes in all, the art of opacity masks counted. Returns what
+/// the art costs after.
 fn copy_art(art: &mut Node, m: Affine, copies: usize, scaling: vectorcraft_doc::Scaling, budget: Budget) -> Budget {
     let Some(members) = art.children().cloned() else { return art_cost(art) };
     let original = Node::group(art.id, members);
-    let mut made = art_cost(&original);
+    let mut made = copy_cost(&original);
     let mut drawn = original.clone();
     without_guides(&mut drawn);
-    let mut nodes = 0usize;
-    original.walk(&mut |_| nodes += 1);
-    let mut one = 0usize;
-    drawn.walk(&mut |_| one += 1);
+    let mut nodes = original.count_with_masks();
+    let one = drawn.count_with_masks();
     let mut placements: Vec<Arc<Node>> = vec![];
     let mut xf = Affine::IDENTITY;
     for _ in 0..copies {
@@ -943,7 +995,7 @@ fn copy_art(art: &mut Node, m: Affine, copies: usize, scaling: vectorcraft_doc::
         }
         let mut copy = drawn.clone();
         copy.transform(xf, scaling);
-        let cost = art_cost(&copy);
+        let cost = copy_cost(&copy);
         if !budget.fits(made.plus(cost)) || !copy.geometric_bounds().is_some_and(crate::distort::within_reach) {
             break;
         }
@@ -964,25 +1016,25 @@ fn copy_art(art: &mut Node, m: Affine, copies: usize, scaling: vectorcraft_doc::
 /// copies an object. Each copy is an object of its own, so its gradients fit it (a placed gradient
 /// moves with it) rather than spanning every copy, and its strokes and patterns can differ from the
 /// others'. The copies stop where [`crate::distort::transform_within`]'s would, before they pass
-/// `budget`, and before one's strokes would scale past [`MAX_STROKE_SCALE`]. Returns what the
-/// copies cost, the original included.
+/// `budget` with what each copy's own geometry effects make ([`effects_cost`]), and before one's
+/// strokes would scale past [`MAX_STROKE_SCALE`]. Returns what the copies cost, the original
+/// included.
 fn copy_leaf(leaf: &mut Node, path: &PathData, m: Affine, copies: usize, scaling: vectorcraft_doc::Scaling, budget: Budget) -> Budget {
-    let mut made = Budget::of(path);
+    let mut made = Budget::of(path).plus(effects_cost(leaf, path));
     let mut placements: Vec<Arc<Node>> = vec![Arc::new(leaf.clone())];
     let mut xf = Affine::IDENTITY;
     for _ in 0..copies {
         xf *= m;
         // A copy scaled up is drawn with more lines.
-        let cost = Budget::of(&path.transformed(xf));
-        if !budget.fits(made.plus(cost)) {
-            break;
-        }
+        let moved = path.transformed(xf);
         if scaling.strokes && vectorcraft_doc::Scaling::factor(xf).is_some_and(|k| !(k.is_finite() && k <= MAX_STROKE_SCALE)) {
             break;
         }
         let mut copy = leaf.clone();
         copy.transform(xf, scaling);
-        if !copy.geometric_bounds().is_some_and(crate::distort::within_reach) {
+        // Each copy's own geometry effects make a different amount, as the copy and its effects scale.
+        let cost = Budget::of(&moved).plus(effects_cost(&copy, &moved));
+        if !budget.fits(made.plus(cost)) || !copy.geometric_bounds().is_some_and(crate::distort::within_reach) {
             break;
         }
         placements.push(Arc::new(copy));
