@@ -20,6 +20,7 @@ mod numeric;
 mod panel_chrome;
 mod text;
 mod toggles;
+mod wheel_stream;
 
 pub use blend::{
     TransparencyEdit, angle_dial, blend_dropdown, blend_param, blend_param_dropdown, blend_separator_before, opacity_blend, reference_point,
@@ -72,6 +73,9 @@ pub use text::{
     text_presets_named,
 };
 pub use toggles::{check, check_box, check_name, check_tip, check3, check3_tip, radio, radio_button};
+#[cfg(test)]
+pub(crate) use wheel_stream::WHEEL_STREAM_GAP;
+pub(crate) use wheel_stream::{ArmedWheelField, WheelStream, WheelStreamOwner, taken_from_raw_id};
 
 /// A widget id salt that needs only [`std::hash::Hash`]. egui 0.37's [`egui::AsIdSalt`] also
 /// requires `Debug` for its debug-only id-source registry; VectorCraft's public field helpers do
