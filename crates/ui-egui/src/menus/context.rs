@@ -14,7 +14,8 @@ pub fn context_items(app: &VectorcraftApp) -> Vec<Item> {
     let roots: Vec<&vectorcraft_doc::Node> = st.selection.objects.iter().filter_map(|id| st.doc.node(*id)).collect();
     let any = |f: fn(&NodeKind) -> bool| roots.iter().any(|n| f(&n.kind));
     let several = roots.len() >= 2;
-    let mut v = vec![c("Undo", "edit.undo"), c("Redo", "edit.redo"), Sep];
+    let mut v = spelling_items(app);
+    v.extend([c("Undo", "edit.undo"), c("Redo", "edit.redo"), Sep]);
     if st.isolation.is_some() {
         v.extend([c("Exit Isolation Mode", "object.exitIsolation"), Sep]);
     }
@@ -106,6 +107,39 @@ pub fn context_items(app: &VectorcraftApp) -> Vec<Item> {
         ]);
     }
     prune(app, v)
+}
+
+/// A right-click on a word Auto Spell Check underlined ([`crate::state::UiState::context_spelling`]):
+/// the words its dictionary suggests, each replacing it (`text.editRange`, one undo step;
+/// `spelling_item_label` shows the word), or No Suggestions; then Ignore All
+/// (`text.spelling.ignoreAll`) and Add to Dictionary (`text.spelling.addWord`), as the public
+/// [Check and correct spelling](https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/check-and-correct-spelling.html)
+/// page lists them. Nothing for another right-click, or after the document or the word changed.
+fn spelling_items(app: &VectorcraftApp) -> Vec<Item> {
+    let Some(st) = app.session.active() else { return vec![] };
+    let Some(w) = app.ui.context_spelling.as_ref().filter(|w| w.uid == st.uid) else { return vec![] };
+    let still = match st.doc.node(w.id).map(|n| &n.kind) {
+        Some(vectorcraft_doc::NodeKind::Text(t)) => t.plain_text().get(w.start..w.end) == Some(w.word.as_str()),
+        _ => false,
+    };
+    if !still {
+        return vec![];
+    }
+    let mut v: Vec<Item> = w
+        .suggestions
+        .iter()
+        .map(|s| cp("Suggestion", "text.editRange", json!({ "id": w.id.0, "start": w.start, "end": w.end, "insert": s })))
+        .collect();
+    if v.is_empty() {
+        v.push(Item::Header("No Suggestions"));
+    }
+    v.extend([
+        Sep,
+        cp("Ignore All", "text.spelling.ignoreAll", json!({ "word": w.word })),
+        cp("Add to Dictionary", "text.spelling.addWord", json!({ "word": w.word })),
+        Sep,
+    ]);
+    v
 }
 
 /// The locked objects under the pointer at the right-click, each unlocked as the Layers panel's

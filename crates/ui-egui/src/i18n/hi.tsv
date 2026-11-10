@@ -491,7 +491,6 @@ antiAlias	Sharp	शार्प
 	Back	वापस
 	Background Color:	बैकग्राउंड रंग:
 	Background Contents	बैकग्राउंड सामग्री
-	Background Contents:	बैकग्राउंड सामग्री:
 	Background Level	बैकग्राउंड स्तर
 	Background:	बैकग्राउंड:
 	Backspace	Backspace
@@ -1029,7 +1028,6 @@ antiAlias	Sharp	शार्प
 	Create Clipping Mask	क्लिपिंग मास्क बनाएँ
 	Create Compound Path From Ellipses	एलिप्स से कंपाउंड पाथ बनाएँ
 	Create Dimension	आयाम बनाएँ
-	Create Document	डॉक्यूमेंट बनाएं
 	Create from Guides	गाइड से बनाएँ
 	Create from Selection	सिलेक्शन से बनाएँ
 	Create From:	से बनाएँ:
@@ -2555,6 +2553,7 @@ antiAlias	Sharp	शार्प
 	Lock Artboards	लॉक आर्टबोर्ड
 	Lock Grid	लॉक ग्रिड
 	Lock Guides	गाइड्स लॉक करें
+	Lock Guides by Default	गाइड्स डिफ़ॉल्ट रूप से लॉक करें
 	Lock Others	लॉक अन्य
 	Lock Selected	लॉक सिलेक्टेड
 	Lock Slices	स्लाइस लॉक करें
@@ -2836,7 +2835,6 @@ antiAlias	Sharp	शार्प
 	New Design	नई डिजाइन
 	New Document Presets	नया डॉक्यूमेंट प्रीसेट
 	New file	नई फ़ाइल
-	New from Template	टेम्पलेट से नया
 	New from Template…	टेम्पलेट से नया…
 	New Graphic Style	नई ग्राफिक स्टाइल
 	New Graphic Style (Alt-click to name it)	नया ग्राफ़िक स्टाइल (नाम देने के लिए Alt-क्लिक करें)
@@ -3957,6 +3955,7 @@ antiAlias	Sharp	शार्प
 	Save PDF Preset	PDF प्रीसेट सेव करें
 	Save Perspective Grid Preset	सेव पर्सपेक्टिव ग्रिड प्रीसेट
 	Save Preset	प्रीसेट सेव करें
+	Save Document Preset	डॉक्यूमेंट प्रीसेट सेव करें
 	Save Preset…	प्रीसेट सेव करें…
 	Save Print Preset	सेव करें प्रिंट प्रीसेट
 	Save Recovery Data	रिकवरी डेटा सेव करें
@@ -4736,7 +4735,6 @@ antiAlias	Sharp	शार्प
 	Template literal not closed	टेम्पलेट साक्षर नहीं बंद
 	Templates	टेम्पलेट्स
 	Templates Folder	टेम्पलेट्स फ़ोल्डर
-	Templates…	टेम्पलेट्स…
 	Tetrad	टेट्राड
 	Tetrad 2	टेट्राड 2
 	Tetrad 3	टेट्राड 3
@@ -8109,3 +8107,6 @@ theme	Appearance	अपीयरेंस
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	इंपोर्टर 1 से {MAX_EXTENSIONS} `extensions` घोषित करता है
 @msg	an importer always gets an import's budget: leave `budget` out	इंपोर्टर को हमेशा इंपोर्ट का बजट मिलता है: `budget` छोड़ दें
 @msg	side is left or right, not `{s}`	side left या right होना चाहिए, `{s}` नहीं
+	Ignore All	सभी को अनदेखा करें
+	Add to Dictionary	शब्दकोश में जोड़ें
+	No Suggestions	कोई सुझाव नहीं

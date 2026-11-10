@@ -225,6 +225,54 @@ fn prefs_persist_through_ui_state() {
     assert_eq!(b.session.prefs.gridline_every, 50.0);
 }
 
+/// Guides & Grid › Lock Guides by Default: shown in its category, applied by OK, saved with the
+/// UI state and read back as locked guides. A file without the key leaves guides unlocked.
+#[test]
+fn lock_guides_by_default_shows_applies_and_restores() {
+    let mut a = app();
+    a.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    open(&mut a, Some("Guides & Grid"));
+    let text = crate::tests_labels::painted_text(&mut a, |a, ui| show(a, ui.ctx()));
+    assert!(text.contains("Lock Guides by Default"), "{text}");
+    assert_eq!(a.ui.dialog.as_ref().unwrap().fields["lockGuidesByDefault"], json!(false));
+    a.ui.dialog.as_mut().unwrap().fields.insert("lockGuidesByDefault".into(), json!(true));
+    confirm(&mut a).unwrap();
+    assert!(a.session.guides_locked());
+    assert_eq!(crate::menus::dynamic_label(&a, "view.guides.lock", ""), "Unlock Guides");
+    assert_eq!(a.ui.engine_prefs["lockGuidesByDefault"], json!(true));
+
+    let saved = serde_json::to_vec(&a.ui).unwrap();
+    let mut b = app();
+    assert!(!b.session.guides_locked());
+    b.ui = serde_json::from_slice::<crate::UiState>(&saved).unwrap().sanitized();
+    restore(&mut b);
+    assert!(b.session.guides_locked());
+
+    let mut older = app();
+    older.ui.engine_prefs = json!({"gridlineEvery": 50});
+    restore(&mut older);
+    assert!(!older.session.guides_locked());
+}
+
+/// OK with the option unchanged keeps the lock from the View menu. OK after turning the option
+/// off, as Reset Preferences does in the dialog, unlocks guides.
+#[test]
+fn preferences_ok_changes_the_guide_lock_only_with_the_option() {
+    let mut a = app();
+    a.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    a.run("view.guides.lock", json!({"locked": true})).unwrap();
+    open(&mut a, Some("Guides & Grid"));
+    confirm(&mut a).unwrap();
+    assert!(a.session.guides_locked(), "the option did not change");
+    a.run("view.guides.lock", json!({"locked": false})).unwrap();
+    a.run("prefs.set", json!({"key": "lockGuidesByDefault", "value": true})).unwrap();
+    assert!(a.session.guides_locked());
+    open(&mut a, Some("Guides & Grid"));
+    a.ui.dialog.as_mut().unwrap().fields.insert("lockGuidesByDefault".into(), Prefs::default().to_json()["lockGuidesByDefault"].clone());
+    confirm(&mut a).unwrap();
+    assert!(!a.session.guides_locked(), "the option went off");
+}
+
 #[test]
 fn old_pref_files_keep_their_brightness() {
     let mut a = app();

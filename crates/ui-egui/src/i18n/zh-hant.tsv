@@ -256,7 +256,6 @@ font-technology	Variable	可變
 	Update While Dragging	拖曳時更新
 	Hide Video Rulers	隱藏視訊尺標
 	Background Contents	背景內容
-	Background Contents:	背景內容：
 	Background:	背景：
 	Backspace	Backspace
 	Bar Graph Tool	橫條圖工具
@@ -631,7 +630,6 @@ font-technology	Variable	可變
 	Couldn't {} {name}: {e}	無法{} {name}：{e}
 	Create	建立
 	Create Clipping Mask	建立剪裁遮色片
-	Create Document	建立文件
 	Create from Guides	從參考線建立
 	Create from Selection	從選取範圍建立
 	Create From:	建立來源：
@@ -2800,6 +2798,7 @@ file-filter	Templates	範本
 	Lock (⌘2)	鎖定 (⌘2)
 	Lock Grid	鎖定格點
 	Lock Guides	鎖定參考線
+	Lock Guides by Default	預設鎖定參考線
 	Lock Others	鎖定其他
 	Lock Slices	鎖定切片
 	Lock Station Point	鎖定基準點
@@ -3064,7 +3063,6 @@ file-filter	Templates	範本
 	New Color Group…	新增顏色群組…
 	New Document Presets	新增文件預設集
 	New file	新增檔案
-	New from Template	從範本新增
 	New from Template…	從範本新增…
 	New Graphic Style	新增繪圖樣式
 	New Graphic Style (Alt-click to name it)	新增繪圖樣式 (Alt+點擊可命名)
@@ -3861,6 +3859,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Save PDF Preset	儲存 PDF 預設集
 	Save Perspective Grid Preset	儲存透視格點預設集
 	Save Preset	儲存預設集
+	Save Document Preset	儲存文件預設集
 	Preset {number}	預設集 {number}
 	Save Preset…	儲存預設集…
 	Save Print Preset	儲存列印預設集
@@ -4438,7 +4437,6 @@ digits	Malayalam	馬來亞拉姆數字
 	Template	範本
 	Templates	範本
 	Templates Folder	範本資料夾
-	Templates…	範本…
 	Text Displayed in Cell:	儲存格中顯示的文字：
 	Text Export Options	文字匯出選項
 	Text Fill & Stroke Color	文字填色與筆畫顏色

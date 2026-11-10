@@ -144,13 +144,7 @@ pub(super) fn spelling_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: 
     }
     walk(&st.doc.layers, &mut |n| {
         let NodeKind::Text(tx) = &n.kind else { return };
-        // An effect on the type or on one of its fills or strokes, shown (the Appearance panel's
-        // eye): the helpx page's "Auto spell check isn't available for text with effects applied".
-        let shown = |fx: &[vectorcraft_doc::Effect]| fx.iter().any(|e| e.visible);
-        if shown(&n.appearance.effects)
-            || n.appearance.items.iter().any(|i| shown(i.effects()))
-            || n.geometric_bounds().is_none_or(|b| !egui::Rect::from_points(&xf.quad(b)).intersects(clip))
-        {
+        if !auto_spell_checks(n) || n.geometric_bounds().is_none_or(|b| !egui::Rect::from_points(&xf.quad(b)).intersects(clip)) {
             return;
         }
         let lines = match last.remove(&n.id) {
@@ -162,6 +156,71 @@ pub(super) fn spelling_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: 
         }
         kept.lines.insert(n.id, (n.clone(), lines));
     });
+}
+
+/// Whether Auto Spell Check marks `n`'s words: not with an effect shown (the Appearance panel's
+/// eye) on the type or on one of its fills or strokes, as the helpx page says "Auto spell check
+/// isn't available for text with effects applied".
+fn auto_spell_checks(n: &Node) -> bool {
+    let shown = |fx: &[vectorcraft_doc::Effect]| fx.iter().any(|e| e.visible);
+    !shown(&n.appearance.effects) && !n.appearance.items.iter().any(|i| shown(i.effects()))
+}
+
+/// The word with Auto Spell Check's red line at `p` (document space), on top of the others: in
+/// the topmost visible, unlocked type object whose unknown word's glyphs `p` is on, with what its
+/// language's dictionary suggests instead. For the context menu's suggestions, Ignore All and Add
+/// to Dictionary ([Check and correct spelling](https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/check-and-correct-spelling.html)).
+pub(crate) fn misspelled_word_at(app: &mut VectorcraftApp, p: Point) -> Option<crate::state::ContextSpelling> {
+    let st = app.session.active()?;
+    let mut hit = None;
+    fn walk(nodes: &[std::sync::Arc<Node>], f: &mut impl FnMut(&Node)) {
+        for n in nodes.iter().filter(|n| n.visible && !n.locked) {
+            f(n);
+            if let Some(children) = n.children() {
+                walk(children, f);
+            }
+        }
+    }
+    // Paint order: a later hit is on top.
+    walk(&st.doc.layers, &mut |n| {
+        let NodeKind::Text(tx) = &n.kind else { return };
+        if !auto_spell_checks(n) || n.geometric_bounds().is_none_or(|b| !b.contains(p)) {
+            return;
+        }
+        let (words, _) = vectorcraft_engine::cmd::spelling::misspellings(tx, &st.spelling_ignored, MAX_UNDERLINED);
+        if words.is_empty() {
+            return;
+        }
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), tx);
+        for w in words {
+            let on = vectorcraft_text::selection_quads(&lay, w.range.start, w.range.end).iter().any(|q| in_quad(q.map(|c| tx.xf * c), p));
+            if on {
+                hit = Some((n.id, w));
+            }
+        }
+    });
+    let (id, w) = hit?;
+    let Some(NodeKind::Text(tx)) = st.doc.node(id).map(|n| &n.kind) else { return None };
+    let word = tx.plain_text().get(w.range.clone())?.to_string();
+    let uid = st.uid;
+    let suggestions = app
+        .session
+        .execute("text.spelling.suggest", &serde_json::json!({ "word": word, "lang": w.lang.tag() }))
+        .ok()
+        .and_then(|r| r.get("suggestions").and_then(|s| s.as_array()).map(|a| a.iter().filter_map(|s| s.as_str().map(str::to_string)).collect()))
+        .unwrap_or_default();
+    Some(crate::state::ContextSpelling { uid, id, start: w.range.start, end: w.range.end, word, suggestions })
+}
+
+/// Whether `p` is inside the convex quad `q` (its corners in order, either way round) or on its
+/// edge.
+fn in_quad(q: [Point; 4], p: Point) -> bool {
+    let sides = (0..4).map(|i| {
+        let (a, b) = (q[i], q[(i + 1) % 4]);
+        (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x)
+    });
+    let sides: Vec<f64> = sides.collect();
+    sides.iter().all(|s| *s >= 0.0) || sides.iter().all(|s| *s <= 0.0)
 }
 
 /// The most words underlined in one text object: past it the rest of the object isn't checked,

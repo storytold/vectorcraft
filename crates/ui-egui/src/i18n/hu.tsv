@@ -393,7 +393,6 @@ font-technology	Variable	Változó
 	Update While Dragging	Frissítés húzás közben
 	Hide Video Rulers	Videovonalzók elrejtése
 	Background Contents	Háttértartalom
-	Background Contents:	Háttértartalom:
 	Background:	Háttér:
 	Backspace	Backspace
 	Balance	Egyensúly
@@ -864,7 +863,6 @@ font-technology	Variable	Változó
 	Craquelure…	Repedezettség…
 	Create	Létrehozás
 	Create Clipping Mask	Vágómaszk létrehozása
-	Create Document	Dokumentum létrehozása
 	Create from Guides	Létrehozás segédvonalakból
 	Create from Selection	Létrehozás a kijelölésből
 	Create From:	Létrehozás ebből:
@@ -2377,6 +2375,7 @@ file-filter	Templates	Sablonok
 	Lock (⌘2)	Zárolás (⌘2)
 	Lock Grid	Rács zárolása
 	Lock Guides	Segédvonalak zárolása
+	Lock Guides by Default	Segédvonalak zárolása alapértelmezetten
 	Lock Others	Többi zárolása
 	Lock Slices	Szeletek zárolása
 	Lock Station Point	Nézőpont zárolása
@@ -2598,7 +2597,6 @@ file-filter	Templates	Sablonok
 	New Data Set…	Új adatkészlet…
 	New Document Presets	Új dokumentum előbeállításai
 	New file	Új fájl
-	New from Template	Új sablonból
 	New from Template…	Új sablonból…
 	New Graphic Style	Új grafikai stílus
 	New Graphic Style (Alt-click to name it)	Új grafikai stílus (Alt+kattintás: elnevezéssel)
@@ -3516,6 +3514,7 @@ mark-style	Japanese	Japán
 	Save PDF Preset	PDF-előbeállítás mentése
 	Save Perspective Grid Preset	Perspektivikus rács előbeállításának mentése
 	Save Preset	Előbeállítás mentése
+	Save Document Preset	Dokumentum-előbeállítás mentése
 	Preset {number}	Előbeállítás {number}
 	Save Preset…	Előbeállítás mentése…
 	Save Print Preset	Nyomtatási előbeállítás mentése
@@ -4164,7 +4163,6 @@ mark-style	Japanese	Japán
 	Template	Sablon
 	Templates	Sablonok
 	Templates Folder	Sablonok mappája
-	Templates…	Sablonok…
 	Tetrad	Tetrád
 	Tetrad 2	Tetrád 2
 	Tetrad 3	Tetrád 3
@@ -6651,3 +6649,6 @@ breakText	Glyphs	Glifák
 	Align to Pixel Grid	Igazítás a pixelrácshoz
 @msg	only paths and compound paths can be aligned to the pixel grid	csak útvonalak és összetett útvonalak igazíthatók a pixelrácshoz
 @msg	side is left or right, not `{s}`	a side értéke left vagy right lehet, nem `{s}`
+	Ignore All	Az összes kihagyása
+	Add to Dictionary	Hozzáadás a szótárhoz
+	No Suggestions	Nincs javaslat

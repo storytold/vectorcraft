@@ -627,6 +627,7 @@ digits	Malayalam	マラヤーラム数字
 	Guides	ガイド
 	Hide Guides	ガイドを隠す
 	Lock Guides	ガイドをロック
+	Lock Guides by Default	ガイドを初期設定でロック
 	Make Guides	ガイドを作成
 	Release Guides	ガイドを解除
 	Clear Guides	ガイドを消去
@@ -1076,7 +1077,6 @@ antiAlias	Sharp	シャープ
 	Update While Dragging	ドラッグ中に更新
 	Hide Video Rulers	ビデオ定規を隠す
 	Background Contents	背景のカラー
-	Background Contents:	背景のカラー:
 	Background:	背景:
 	Bar Graph Tool	棒グラフツール
 	Baseline Shift	ベースラインシフト
@@ -1302,7 +1302,6 @@ antiAlias	Sharp	シャープ
 	Corners…	コーナー…
 	Chamfer	面取り
 	Create Clipping Mask	クリッピングマスクを作成
-	Create Document	ドキュメントを作成
 	Create From:	作成元:
 	Create Graph	グラフを作成
 	Create New Layer	新規レイヤーを作成
@@ -2362,7 +2361,6 @@ antiAlias	Sharp	シャープ
 	New Symbol…	新規シンボル…
 	New Workspace	新規ワークスペース
 	New file	新規ファイル
-	New from Template	テンプレートから新規作成
 	New theme from the current color	現在のカラーから新規テーマ
 	New {kind} Style…	新規{kind}スタイル…
 	Next	次へ
@@ -2905,6 +2903,7 @@ mark-style	Japanese	日本式
 	Save PDF Preset	PDF プリセットを保存
 	Save Perspective Grid Preset	遠近グリッドプリセットを保存
 	Save Preset	プリセットを保存
+	Save Document Preset	ドキュメントプリセットを保存
 	Preset {number}	プリセット {number}
 	Save Preset…	保存…
 	Save Print Preset	プリントプリセットを保存
@@ -3253,7 +3252,6 @@ mark-style	Japanese	日本式
 	Target Contents	内容をターゲット
 	Target:	ターゲット:
 	Templates Folder	テンプレートフォルダー
-	Templates…	テンプレート…
 	Text Displayed in Cell:	セルに表示するテキスト:
 	Text Export Options	テキスト書き出しオプション
 	Text Import Options	テキスト読み込みオプション
@@ -6353,3 +6351,6 @@ breakText	Glyphs	字形
 	Align to Pixel Grid	ピクセルグリッドに整合
 @msg	only paths and compound paths can be aligned to the pixel grid	ピクセルグリッドに整合できるのはパスと複合パスのみです
 @msg	side is left or right, not `{s}`	side は left または right です（`{s}` ではありません）
+	Ignore All	すべて無視
+	Add to Dictionary	辞書に追加
+	No Suggestions	候補なし

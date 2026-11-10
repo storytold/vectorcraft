@@ -283,7 +283,6 @@ antiAlias	Sharp	Nítido
 	Update While Dragging	Atualizar ao Arrastar
 	Hide Video Rulers	Ocultar Réguas de Vídeo
 	Background Contents	Conteúdo do Plano de Fundo
-	Background Contents:	Conteúdo do Plano de Fundo:
 	Background:	Plano de Fundo:
 	Bar Graph Tool	Ferramenta Gráfico de Barras
 	Baseline Shift	Deslocamento da Linha de Base
@@ -596,7 +595,6 @@ antiAlias	Sharp	Nítido
 	Corners…	Cantos…
 	Create	Criar
 	Create Clipping Mask	Criar Máscara de Recorte
-	Create Document	Criar Documento
 	Create From:	Criar De:
 	Create Gradient Mesh…	Criar Malha de Gradiente…
 	Create Graph	Criar Gráfico
@@ -1617,6 +1615,7 @@ antiAlias	Sharp	Nítido
 	Lock (⌘2)	Bloquear (⌘2)
 	Lock Grid	Bloquear Grade
 	Lock Guides	Bloquear Guias
+	Lock Guides by Default	Bloquear Guias por Padrão
 	Lock Slices	Bloquear Fatias
 	Lock Station Point	Bloquear Ponto de Estação
 	Lossless (lossy WebP isn't available yet)	Sem Perdas (WebP com perdas ainda não está disponível)
@@ -1792,7 +1791,6 @@ antiAlias	Sharp	Nítido
 	Duplicate Toolbar	Duplicar Barra de Ferramentas
 	Delete Toolbar	Excluir Barra de Ferramentas
 	New file	Novo arquivo
-	New from Template	Novo a partir de Modelo
 	New from Template…	Novo a partir de Modelo…
 	New theme from the current color	Novo tema a partir da cor atual
 	New {kind} Style…	Novo Estilo de {kind}…
@@ -2457,6 +2455,7 @@ digits	Malayalam	Malaiala
 	Save PDF Preset	Salvar Predefinido de PDF
 	Save Perspective Grid Preset	Salvar Predefinido de Grade de Perspectiva
 	Save Preset	Salvar Predefinido
+	Save Document Preset	Salvar Predefinido de Documento
 	Save Preset…	Salvar Predefinido…
 	Save Print Preset	Salvar Predefinido de Impressão
 	Save Recovery Data	Salvar Dados de Recuperação
@@ -2880,7 +2879,6 @@ digits	Malayalam	Malaiala
 	Target:	Alvo:
 	Temperature/Tint…	Temperatura/Tom…
 	Templates Folder	Pasta de Modelos
-	Templates…	Modelos…
 	Text Displayed in Cell:	Texto Exibido na Célula:
 	Text Export Options	Opções de Exportação de Texto
 	Text Fill & Stroke Color	Cor de Preenchimento e Traçado do Texto
@@ -6740,3 +6738,6 @@ swatch	Yellow Green	Verde-amarelado
 	Align to Pixel Grid	Alinhar à Grade de Pixels
 @msg	only paths and compound paths can be aligned to the pixel grid	somente caminhos e caminhos compostos podem ser alinhados à grade de pixels
 @msg	side is left or right, not `{s}`	side é left ou right, não `{s}`
+	Ignore All	Ignorar Tudo
+	Add to Dictionary	Adicionar ao Dicionário
+	No Suggestions	Nenhuma Sugestão

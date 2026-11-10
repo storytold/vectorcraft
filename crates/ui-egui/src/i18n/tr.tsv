@@ -282,7 +282,6 @@ font-technology	Variable	Değişken
 	Update While Dragging	Sürüklerken Güncelle
 	Hide Video Rulers	Video Cetvellerini Gizle
 	Background Contents	Arka Plan İçeriği
-	Background Contents:	Arkaplan İçeriği:
 	Background:	Arka plan:
 	Backspace	Geri tuşu
 	Bar Graph Tool	Çubuk Grafik Aracı
@@ -648,7 +647,6 @@ font-technology	Variable	Değişken
 	Couldn't {} {name}: {e}	{} yapılamadı {name}: {e}
 	Create	Oluştur
 	Create Clipping Mask	Kırpma Maskesi Oluştur
-	Create Document	Belge Oluştur
 	Create from Guides	Rehberlerden Oluştur
 	Create from Selection	Seçimden Oluştur
 	Create From:	Şuradan Oluştur:
@@ -1730,6 +1728,7 @@ font-technology	Variable	Değişken
 	Lock (⌘2)	Kilitle (⌘2)
 	Lock Grid	Izgarayı Kilitle
 	Lock Guides	Kilit Kılavuzları
+	Lock Guides by Default	Kılavuzları Varsayılan Olarak Kilitle
 	Lock Others	Diğerlerini Kilitle
 	Lock Slices	Dilimleri Kilitle
 	Lock Station Point	Kilit İstasyon Noktası
@@ -1958,7 +1957,6 @@ font-technology	Variable	Değişken
 	New Color Group…	Yeni Renk Grubu…
 	New Document Presets	Yeni Belge Ön Ayarları
 	New file	Yeni dosya
-	New from Template	Şablondan yeni
 	New from Template…	Şablondan yeni…
 	New Graphic Style	Yeni Grafik Stili
 	New Graphic Style (Alt-click to name it)	Yeni Grafik Stili (Adını vermek için Alt tuşuna basarak tıklayın)
@@ -2734,6 +2732,7 @@ digits	Malayalam	Malayalam
 	Save PDF Preset	PDF Hazır Ayarını Kaydet
 	Save Perspective Grid Preset	Perspektif Izgarası Ön Ayarını Kaydet
 	Save Preset	Ön Ayarı Kaydet
+	Save Document Preset	Belge Ön Ayarını Kaydet
 	Save Preset…	Ön Ayarı Kaydet…
 	Save Print Preset	Yazdırma Ön Ayarını Kaydet
 	Save Recovery Data	Kurtarma Verilerini Kaydet
@@ -3323,7 +3322,6 @@ digits	Malayalam	Malayalam
 	Template	Şablon
 	Templates	Şablonlar
 	Templates Folder	Şablonlar Klasörü
-	Templates…	Şablonlar…
 	Text Displayed in Cell:	Hücrede Görüntülenen Metin:
 	Text Export Options	Metin Dışa Aktarma Seçenekleri
 	Text Fill & Stroke Color	Metin Dolgu ve Kontur Rengi
@@ -6623,3 +6621,6 @@ breakText	Glyphs	Glifler
 	Align to Pixel Grid	Piksel Izgarasına Hizala
 @msg	only paths and compound paths can be aligned to the pixel grid	piksel ızgarasına yalnızca yollar ve bileşik yollar hizalanabilir
 @msg	side is left or right, not `{s}`	side left veya right olmalıdır, `{s}` değil
+	Ignore All	Tümünü Yoksay
+	Add to Dictionary	Sözlüğe Ekle
+	No Suggestions	Öneri Yok
