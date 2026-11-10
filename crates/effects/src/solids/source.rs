@@ -135,6 +135,9 @@ impl Resolver<'_> {
             }
             _ if n.clips() => {
                 let Some((first, rest)) = kids(n).split_first() else { return Ok(vec![]) };
+                if clip_nested_past(first, MAX_DEPTH.saturating_sub(depth)) {
+                    return Err(self.too_deep());
+                }
                 let clip = clip_area(first);
                 // An image wholly outside every clip around it shows nothing and is left out.
                 let outer = self.shown;
@@ -185,10 +188,10 @@ impl Resolver<'_> {
                 continue;
             }
             if is_container(c) {
-                // Past the depth limit a group is kept, and not walked further, only when nothing
-                // in it needs resolving.
+                // At the depth limit a group is kept, and not walked further, only when it holds no
+                // group with members and nothing in it needs resolving.
                 if depth >= MAX_DEPTH {
-                    if needs(c) {
+                    if nested_past(c, 1) || needs(c) {
                         return Err(self.too_deep());
                     }
                     out.push(c.clone());
@@ -347,15 +350,40 @@ fn has_effects(n: &Node) -> bool {
     n.appearance.effects.iter().any(|e| e.visible)
 }
 
-/// Does `n` hold visible groups or layers nested more than `levels` deep? Walked without recursion.
+/// Does the group `n` hold shown objects nested more than `levels` deep in groups and layers?
+/// Only the members [`members`] walks are followed: hidden members are skipped, and the paths of
+/// a compound path are one shape. Walked without recursion.
 fn nested_past(n: &Node, levels: usize) -> bool {
     let mut stack = vec![(n, 0usize)];
     while let Some((n, level)) = stack.pop() {
         if level > levels {
             return true;
         }
-        if is_container(n) {
+        if level == 0 || is_container(n) {
             stack.extend(kids(n).iter().filter(|c| c.visible).map(|c| (&**c, level + 1)));
+        }
+    }
+    false
+}
+
+/// Does the clipping path `n` reach objects nested more than `levels` deep along the members that
+/// [`Node::clip_shapes`] visits: the first member of a clipping group, the shown members of other
+/// groups and layers (not a group's shaper), and every member of a live object. Walked without
+/// recursion.
+fn clip_nested_past(n: &Node, levels: usize) -> bool {
+    let mut stack = vec![(n, 0usize)];
+    while let Some((n, level)) = stack.pop() {
+        if level > levels {
+            return true;
+        }
+        match &n.kind {
+            NodeKind::Group { children, clip: true } => stack.extend(children.first().map(|c| (&**c, level + 1))),
+            NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => {
+                let skip = usize::from(n.extras().shaper.is_some());
+                stack.extend(children.iter().skip(skip).filter(|c| c.visible).map(|c| (&**c, level + 1)));
+            }
+            NodeKind::Compound { .. } | NodeKind::SymbolInstance { .. } => {}
+            _ => stack.extend(kids(n).iter().map(|c| (&**c, level + 1))),
         }
     }
     false

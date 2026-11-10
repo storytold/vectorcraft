@@ -152,9 +152,53 @@ fn a_clipping_groups_solid_is_built_from_its_art_inside_the_clip() {
     for i in 0..200 {
         deep = Node::group(NodeId(1000 + i), vec![Arc::new(deep)]);
     }
-    let n = with(clip_group(10, clip, deep), ROTATE, front());
+    let n = with(clip_group(10, clip, deep.clone()), ROTATE, front());
     assert!(validate_three_d_in(Some(&d), &n, ROTATE, &json!({})).is_err_and(|e| e.contains("levels deep")));
     assert!(solid_art_in(Some(&d), &n).is_none());
+    // So is a clipping path nested past the limit, and a symbol's art nested past it.
+    let by_deep =
+        Node::new(NodeId(10), NodeKind::Group { children: vec![Arc::new(deep.clone()), Arc::new(rect(12, 0.0, 0.0, 10.0, 10.0, 0.0))], clip: true });
+    let mut deep_symbol = d.clone();
+    deep_symbol.symbols.push(Symbol { dynamic: false, name: "Deep".into(), art: Arc::new(deep) });
+    for n in [with(by_deep, ROTATE, front()), with(instance(30, "Deep", Affine::IDENTITY), ROTATE, front())] {
+        assert!(validate_three_d_in(Some(&deep_symbol), &n, ROTATE, &json!({})).is_err_and(|e| e.contains("levels deep")), "{:?}", n.id);
+        assert!(three_d_meshes_in(Some(&deep_symbol), &n).is_err());
+    }
+    // A compound path counts as one shape at the depth limit: a symbol's art nested as deep as a
+    // path may be also takes a compound path there.
+    let square = rect(80, 0.0, 0.0, 10.0, 10.0, 0.0);
+    let mut compound =
+        Node::new(NodeId(81), NodeKind::Compound { children: vec![Arc::new(square.clone())], rule: vectorcraft_geom::FillRule::NonZero });
+    compound.appearance = square.appearance.clone();
+    let mut seen = vec![];
+    for levels in 60..70 {
+        let ok = |leaf: &Node| {
+            let mut art = leaf.clone();
+            for i in 0..levels {
+                art = Node::group(NodeId(2000 + i), vec![Arc::new(art)]);
+            }
+            let mut doc = d.clone();
+            doc.symbols.push(Symbol { dynamic: false, name: "Nested".into(), art: Arc::new(art) });
+            validate_three_d_in(Some(&doc), &with(instance(30, "Nested", Affine::IDENTITY), ROTATE, front()), ROTATE, &json!({})).is_ok()
+        };
+        let path_ok = ok(&square);
+        assert_eq!(ok(&compound), path_ok, "{levels} levels");
+        seen.push(path_ok);
+    }
+    assert!(seen.contains(&true) && seen.contains(&false), "the levels cross the limit: {seen:?}");
+    // A clipping group used as the clipping path clips by its first member only, so deep art it
+    // clips is not walked for the clip.
+    let mask = Node::new(
+        NodeId(70),
+        NodeKind::Group { children: vec![Arc::new(clipping_path(71, clip)), Arc::new(deep_symbol.symbols[1].art.as_ref().clone())], clip: true },
+    );
+    let by_deep_mask = with(
+        Node::new(NodeId(10), NodeKind::Group { children: vec![Arc::new(mask), Arc::new(rect(12, 100.0, 100.0, 200.0, 200.0, 0.0))], clip: true }),
+        ROTATE,
+        front(),
+    );
+    assert_eq!(validate_three_d_in(Some(&d), &by_deep_mask, ROTATE, &json!({})), Ok(()));
+    assert!(close(bounds(&solid_art_in(Some(&d), &by_deep_mask).unwrap()), bounds(&solid_art(&cut).unwrap()), 0.01));
     // A clip that shows none of the art builds nothing, and says so.
     let empty = clip_group(10, Rect::new(500.0, 500.0, 550.0, 550.0), rect(12, 100.0, 100.0, 200.0, 200.0, 2.0));
     for id in TYPES {
@@ -400,8 +444,12 @@ fn resolved_objects_and_groups_in_a_three_d_group_keep_their_geometry_effects() 
     for i in 0..200 {
         deep = Node::group(NodeId(1000 + i), vec![Arc::new(deep)]);
     }
-    let n = with(clip_group(60, clip, moved(deep)), ROTATE, front());
+    let n = with(clip_group(60, clip, moved(deep.clone())), ROTATE, front());
     assert!(validate_three_d_in(Some(&d), &n, ROTATE, &json!({})).is_err_and(|e| e.contains("levels deep")));
+    // A hidden member nested past the limit is left out, as it is drawn, and does not refuse.
+    deep.visible = false;
+    let n = with(clip_group(60, clip, moved(Node::group(NodeId(62), vec![Arc::new(deep), Arc::new(left())]))), ROTATE, front());
+    assert_eq!(validate_three_d_in(Some(&d), &n, ROTATE, &json!({})), Ok(()));
     // Hidden members of a group inside a clipping group build nothing.
     let mut hidden = rect(63, 100.0, 100.0, 150.0, 200.0, 0.0);
     hidden.visible = false;
