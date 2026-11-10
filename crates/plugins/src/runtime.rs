@@ -382,7 +382,7 @@ impl Plugin {
         let state = &mut live.store.data_mut().run;
         *report = std::mem::take(&mut state.report);
         // A failed call fails the run, whatever the plug-in did after it, unless the run was
-        // cancelled.
+        // canceled.
         match (state.call_failure.take(), out) {
             (_, Err(Error::Cancelled)) => Err(Error::Cancelled),
             (Some(e), _) => Err(e),

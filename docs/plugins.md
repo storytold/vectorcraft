@@ -410,7 +410,7 @@ has the id, `-6` when a plug-in may not call the command, `-7` when the command 
 the module's start function, or in a run that isn't a filter's run on a document).
 
 - Every code also fails the run, whatever the plug-in does next, and the error names the call and why it failed. The run's calls and its output are one undo step, named after the plug-in or its command. A run that fails,
-  traps, runs out of budget or is cancelled leaves every document, its selection and its history as they were.
+  traps, runs out of budget or is canceled leaves every document, its selection and its history as they were.
 - Each call runs on the document the run is for, with its params checked as any request's are, and sees what the calls
   before it changed: a `select.all` followed by `object.move` moves everything. The filter's own input is the one it
   was given when the run started; an edit still in progress (typing, or a shape being drawn) is kept as its own undo

@@ -6,7 +6,7 @@
 //! call it makes runs that command on the document the run is for, through [`Session::execute`] with
 //! its params checked as any request's are, and sees the selection the calls before it left. The
 //! calls and the filter's output are one undo step, named after the plug-in or its command; a run
-//! that fails, traps, runs out of budget or is cancelled, or makes a call that fails, leaves every
+//! that fails, traps, runs out of budget or is canceled, or makes a call that fails, leaves every
 //! document, its selection and its history as they were.
 //!
 //! A plug-in never calls a command that reads or writes a file or folder, uses the clipboard,
