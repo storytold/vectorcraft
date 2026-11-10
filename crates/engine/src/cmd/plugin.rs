@@ -433,6 +433,7 @@ fn spec_of(p: &Plugin, c: &Command) -> &'static CommandSpec {
         enabled: has_doc,
         run: unrouted,
         journal: true,
+        schema: None,
     }));
     made.push(spec);
     spec

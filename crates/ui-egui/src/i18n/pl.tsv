@@ -5434,6 +5434,11 @@ mark-style	Japanese	Japońskie
 @msg	unknown parameter `{key}`; did you mean `{near}`?	nieznany parametr `{key}`; czy chodziło o `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	nieznany parametr `{key}`; polecenie nie przyjmuje parametrów
 @msg	unknown parameter `{key}`; the command takes: {keys}	nieznany parametr `{key}`; polecenie przyjmuje: {keys}
+@msg	the params must be an object, not {got}	parametry muszą być obiektem, a nie {got}
+@msg	unknown parameter `{path}`; the object takes no keys	nieznany parametr `{path}`; obiekt nie przyjmuje kluczy
+@msg	unknown parameter `{path}`; it takes: {keys}	nieznany parametr `{path}`; przyjmuje: {keys}
+@msg	missing `{path}`	brak `{path}`
+@msg	`{path}` must be {expected}, not {got}	`{path}` musi być {expected}, a nie {got}
 	Load EPS into Clipboard	Wczytaj EPS do schowka
 @msg	an image of {w} × {h} pixels is too large to draw	obraz o wymiarach {w} × {h} pikseli jest zbyt duży, aby go narysować
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: to nie jest obraz PNG, JPEG, WebP, TIFF ani BMP

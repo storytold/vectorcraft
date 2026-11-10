@@ -4956,6 +4956,11 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	unknown parameter `{key}`; did you mean `{near}`?	άγνωστη παράμετρος `{key}`· μήπως εννοείτε `{near}`;
 @msg	unknown parameter `{key}`; the command takes no parameters	άγνωστη παράμετρος `{key}`· η εντολή δεν δέχεται παραμέτρους
 @msg	unknown parameter `{key}`; the command takes: {keys}	άγνωστη παράμετρος `{key}`· η εντολή δέχεται: {keys}
+@msg	the params must be an object, not {got}	οι παράμετροι πρέπει να είναι αντικείμενο, όχι {got}
+@msg	unknown parameter `{path}`; the object takes no keys	άγνωστη παράμετρος `{path}`· το αντικείμενο δεν δέχεται κλειδιά
+@msg	unknown parameter `{path}`; it takes: {keys}	άγνωστη παράμετρος `{path}`· δέχεται: {keys}
+@msg	missing `{path}`	λείπει το `{path}`
+@msg	`{path}` must be {expected}, not {got}	Το `{path}` πρέπει να είναι {expected}, όχι {got}
 	1 Layer	1 επίπεδο
 	1 bit	1 bit
 	16 Colors	16 χρώματα

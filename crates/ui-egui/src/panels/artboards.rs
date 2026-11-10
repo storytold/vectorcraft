@@ -312,14 +312,11 @@ pub struct MenuFacts {
     pub(crate) any_art: bool,
 }
 
-/// Whether an unlocked artboard of `indices` has art that Fit to Artwork Bounds fits it to.
+/// Whether an unlocked artboard of `indices` has art that Fit to Artwork Bounds fits it to, kept by
+/// the document ([`vectorcraft_engine::DocState::any_art_to_fit`]): the canvas menu asks on every
+/// frame it is open without its [`MenuFacts`].
 pub(crate) fn fit_has_art(app: &VectorcraftApp, indices: &[usize]) -> bool {
-    app.session.active().is_some_and(|st| {
-        indices
-            .iter()
-            .filter_map(|i| st.doc.artboards.get(*i))
-            .any(|a| !a.locked && vectorcraft_render::encode::art_bounds_on(&st.doc, a.rect).is_some())
-    })
+    app.session.active().is_some_and(|st| st.any_art_to_fit(indices))
 }
 
 /// A right-click on the canvas at `p` with the Artboard tool: an artboard under the pointer that

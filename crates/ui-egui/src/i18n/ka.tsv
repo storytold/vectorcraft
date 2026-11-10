@@ -4967,6 +4967,11 @@ font-technology	Variable	ცვლადი
 @msg	unknown parameter `{key}`; did you mean `{near}`?	უცნობი პარამეტრი `{key}`; იქნებ `{near}` იგულისხმეთ?
 @msg	unknown parameter `{key}`; the command takes no parameters	უცნობი პარამეტრი `{key}`; ბრძანება პარამეტრებს არ იღებს
 @msg	unknown parameter `{key}`; the command takes: {keys}	უცნობი პარამეტრი `{key}`; ბრძანება იღებს: {keys}
+@msg	the params must be an object, not {got}	პარამეტრები უნდა იყოს ობიექტი და არა {got}
+@msg	unknown parameter `{path}`; the object takes no keys	უცნობი პარამეტრი `{path}`; ობიექტი გასაღებებს არ იღებს
+@msg	unknown parameter `{path}`; it takes: {keys}	უცნობი პარამეტრი `{path}`; იღებს: {keys}
+@msg	missing `{path}`	აკლია `{path}`
+@msg	`{path}` must be {expected}, not {got}	`{path}` უნდა იყოს {expected} და არა {got}
 file-filter	All readable files	ყველა წაკითხვადი ფაილი
 file-filter	All placeable files	ყველა განთავსებადი ფაილი
 file-filter	Swatch libraries	ფერის ნიმუშების ბიბლიოთეკები
