@@ -206,9 +206,13 @@ fn run_ui_part2(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         }
         // Edit → Color Settings… / Assign Profile… (no params): show the colour-management panel
         // wherever it is, as Window › Separations Preview does (it isn't in an icon column, so a
-        // flyout for it never opened: #4542).
+        // flyout for it never opened: #4542), scrolled to its Color Settings section, which a short
+        // window shows only after scrolling past the plates and Proof Setup (#6419).
         "edit.colorSettings" | "edit.assignProfile" if p.as_object().is_none_or(|o| o.is_empty()) => {
-            crate::panel_docking::reveal_panel(app, "separations").and_then(|_| app.session.execute(id, p).map_err(|e| e.to_string()))
+            crate::panel_docking::reveal_panel(app, "separations").and_then(|_| {
+                app.ui.color_settings_scroll = true;
+                app.session.execute(id, p).map_err(|e| e.to_string())
+            })
         }
         // Outline or Preview is a setting of the active document's view.
         "view.outline" => match app.view_mut() {

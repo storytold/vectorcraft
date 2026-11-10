@@ -392,6 +392,11 @@ pub struct UiState {
     /// That popup's first text field is still to take the keyboard.
     #[serde(skip)]
     pub transient_focus: bool,
+    /// The Separations Preview panel is still to scroll its Color Settings section into view:
+    /// Edit › Color Settings… and Assign Profile… show the panel for it, and the section sits below
+    /// the plates and Proof Setup, out of sight in a short window (#6419).
+    #[serde(skip)]
+    pub color_settings_scroll: bool,
     /// Type › Find Font…'s last Find In choice (`find_font::FIND_IN`), kept while the app runs.
     #[serde(skip)]
     pub find_font_in: String,
@@ -1009,6 +1014,7 @@ impl Default for UiState {
             open_panel: None,
             transient_panel: None,
             transient_focus: false,
+            color_settings_scroll: false,
             find_font_in: String::new(),
             control_bar: false,
             control_bar_bottom: false,
