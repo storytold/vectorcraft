@@ -1712,8 +1712,8 @@ With `ids`, `guides: true` also deletes the selected ruler guides. The command r
 boolean.
 
 `edit.copy` takes a compound-path member selected on its own (whole or in part, with Direct or Group Selection) as an
-ordinary path with the compound's paint, transparency, opacity mask and fill rule. A gradient fitted to the compound
-keeps the compound's fit. Copy takes the whole compound when the compound itself is selected, or when every member is
+ordinary path with the compound's paint, transparency, opacity mask and fill rule. The path is linked to the compound's
+graphic style while it has that style's look, and otherwise to no style. A gradient fitted to the compound keeps the compound's fit. Copy takes the whole compound when the compound itself is selected, or when every member is
 selected whole outside isolation mode, which includes the one member of a compound of one. In an isolated compound
 path each member is taken as itself. `edit.cut` removes the same objects it copies, so cutting one member leaves the
 other members in the compound, a compound of one member included. When Clear deletes every anchor or segment of every
