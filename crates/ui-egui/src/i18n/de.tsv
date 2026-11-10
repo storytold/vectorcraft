@@ -272,7 +272,6 @@ font-technology	Variable	Variabel
 	Update While Dragging	Beim Ziehen aktualisieren
 	Hide Video Rulers	Videolineale ausblenden
 	Background Contents	Hintergrundinhalt
-	Background Contents:	Hintergrundinhalt:
 	Background:	Hintergrund:
 	Backspace	Rücktaste
 	Bar Graph Tool	Balkendiagramm-Werkzeug
@@ -647,7 +646,6 @@ font-technology	Variable	Variabel
 	Couldn't {} {name}: {e}	Fehler bei „{}“ für {name}: {e}
 	Create	Erstellen
 	Create Clipping Mask	Schnittmaske erstellen
-	Create Document	Dokument erstellen
 	Create from Guides	Aus Hilfslinien erstellen
 	Create from Selection	Aus Auswahl erstellen
 	Create From:	Erstellen aus:
@@ -1893,6 +1891,7 @@ file-filter	Templates	Vorlagen
 	Lock (⌘2)	Sperren (⌘2)
 	Lock Grid	Raster sperren
 	Lock Guides	Hilfslinien sperren
+	Lock Guides by Default	Hilfslinien standardmäßig sperren
 	Lock Others	Andere sperren
 	Lock Slices	Slices sperren
 	Lock Station Point	Standpunkt sperren
@@ -2099,7 +2098,6 @@ file-filter	Templates	Vorlagen
 	New Color Group…	Neue Farbgruppe…
 	New Document Presets	Vorgaben für neue Dokumente
 	New file	Neue Datei
-	New from Template	Neu aus Vorlage
 	New from Template…	Neu aus Vorlage…
 	New Graphic Style	Neuer Grafikstil
 	New Graphic Style (Alt-click to name it)	Neuer Grafikstil (Alt-Klick, um ihn zu benennen)
@@ -2891,6 +2889,7 @@ digits	Malayalam	Malayalam
 	Save PDF Preset	PDF-Vorgabe speichern
 	Save Perspective Grid Preset	Vorgabe für Perspektivenraster speichern
 	Save Preset	Vorgabe speichern
+	Save Document Preset	Dokumentvorgabe speichern
 	Preset {number}	Vorgabe {number}
 	Save Preset…	Vorgabe speichern…
 	Save Print Preset	Druckvorgabe speichern
@@ -3454,7 +3453,6 @@ effect	Points	Punkte
 	Template	Vorlage
 	Templates	Vorlagen
 	Templates Folder	Vorlagenordner
-	Templates…	Vorlagen…
 	Text Displayed in Cell:	In der Zelle angezeigter Text:
 	Text Export Options	Textexportoptionen
 	Text Fill & Stroke Color	Flächen- und Konturfarbe des Texts
@@ -5154,7 +5152,7 @@ lighting	Light	Licht
 	Bevel both sides	Abgeflachte Kante beidseitig
 	Presets	Vorgaben
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Ein Objekt kann nur einen 3D-Effekt haben. Bearbeiten Sie die Optionen des vorhandenen Effekts oder entfernen Sie ihn zuerst.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} erfordert derzeit einen Pfad oder zusammengesetzten Pfad. Wandeln Sie Text, Bilder und Gruppen zuerst in Pfade um.
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} erfordert derzeit einen Pfad, zusammengesetzten Pfad, Text oder eine Gruppe. Wandeln Sie Bilder und andere Objekte zuerst in Pfade um.
 @msg	{label} requires a shape with at least two anchors	{label} erfordert eine Form mit mindestens zwei Ankerpunkten
 @msg	The shape is too complex for a 3D effect	Die Form ist für einen 3D-Effekt zu komplex
 @msg	The 3D surface is too complex; simplify the shape	Die 3D-Oberfläche ist zu komplex; vereinfachen Sie die Form
@@ -6256,3 +6254,6 @@ breakText	Glyphs	Glyphen
 	Align to Pixel Grid	Am Pixelraster ausrichten
 @msg	only paths and compound paths can be aligned to the pixel grid	nur Pfade und zusammengesetzte Pfade können am Pixelraster ausgerichtet werden
 @msg	side is left or right, not `{s}`	side ist left oder right, nicht `{s}`
+	Ignore All	Alle ignorieren
+	Add to Dictionary	Zum Wörterbuch hinzufügen
+	No Suggestions	Keine Vorschläge

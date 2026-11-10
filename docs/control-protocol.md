@@ -577,9 +577,15 @@ New Document: File → New… (`file.newDialog`, Cmd+N) opens the `newDocument` 
 `colorMode`, `rasterEffectsPpi`, `previewMode`) plus `category` (the tab: Recent, Saved, Mobile, Web, Print, Film &
 Video, Art & Illustration, Branding, Social), `advanced` (Advanced Options open), `bleedLinked` and `presetName`
 (Save Preset's name). Setting `preset` to a name from `file.newPresets` fills the other fields from that preset;
-changing a field afterwards makes the settings custom (`preset` becomes ""). More Settings is the `newDocumentMore`
-dialog over the same fields (its Profile is `category`). `ui.dialog.confirm` runs `file.new` with the fields (with
-`previewMode: "pixel"` the app turns Pixel Preview on); on an error the dialog stays open.
+changing a field afterwards makes the settings custom (`preset` becomes ""). The `newDocumentMore` dialog is New
+Document with the More Settings pop-up open over it, which edits `artboards` and `artboardLayout` (layout, right-to-left,
+spacing and columns). While `__saving` is true, Preset Details shows Save Document Preset with the `presetName` field,
+Cancel and Save in place of the document's name and hides Close and Create. `ui.dialog.cancel` closes the More Settings
+pop-up first, then leaves saving, and keeps the fields each time. `ui.dialog.confirm` runs `file.new` with the fields
+(with `previewMode: "pixel"` the app turns Pixel Preview on); on an error the dialog stays open. While `__saving` is
+true, `ui.dialog.confirm` saves the preset and does not create a document; after a save `presetName` is empty, and the
+next Save Preset fills it with the first `Preset N` that no saved preset has. `ui.click` on the More Settings button
+opens the `newDocumentMore` pop-up.
 
 Swatch Conflict: through the app, when the pasted objects' global or spot swatches conflict with the document's
 (see `clipboard.conflicts`) and the params have no `swatchConflict`, every Paste command opens the `swatchConflict`

@@ -20,6 +20,8 @@ pub(super) fn context_menu(app: &mut VectorcraftApp, resp: &egui::Response, xf: 
             .active()
             .filter(|_| app.session.tool_id() == "intertwine")
             .and_then(|st| vectorcraft_tools::intertwine::menu_target(&st.doc, &st.selection.objects, p).map(|(g, m)| (st.uid, g, p, m)));
+        // Auto Spell Check: the underlined word right-clicked, for its suggestions.
+        app.ui.context_spelling = if app.ui.view.auto_spell_check { super::tool_overlays::misspelled_word_at(app, p) } else { None };
         let on_artboards = app.session.tool_id() == "artboard";
         if on_artboards {
             crate::panels::artboards::right_click(app, p);
@@ -39,6 +41,7 @@ pub(super) fn context_menu(app: &mut VectorcraftApp, resp: &egui::Response, xf: 
         app.ui.context_locked = None;
         app.ui.context_intertwine = None;
         app.ui.context_artboards = None;
+        app.ui.context_spelling = None;
     }
     if let Some((id, p)) = clicked {
         crate::menus::invoke(app, &id, p);

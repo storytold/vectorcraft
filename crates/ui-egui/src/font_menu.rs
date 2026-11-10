@@ -12,8 +12,8 @@
 //! the mouse wheel turned over the closed field applies the next family (or previous one) to the
 //! selected text, one undo step per notch. The menu's order at the first turn stays fixed until the
 //! pointer leaves the field or the text selection changes; steps stop at its first and last family.
-//! The field takes the wheel only when the pointer was moved onto it after the field last moved and
-//! the wheel stream began there.
+//! The field takes the wheel only when the pointer was moved onto it after the field last moved or
+//! was covered by a window or overlay, and the wheel stream began there.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -26,6 +26,7 @@ use vectorcraft_text::FontClass;
 use crate::VectorcraftApp;
 use crate::theme::Tokens;
 use crate::widgets;
+use crate::widgets::{ArmedWheelField, WheelStream, WheelStreamOwner};
 
 /// What happened in the menu this frame.
 #[derive(Clone, Debug, PartialEq)]
@@ -443,54 +444,6 @@ struct WheelField {
     layer: egui::LayerId,
 }
 
-/// The seconds without wheel input that end a wheel stream. This is VectorCraft's own value.
-pub(crate) const WHEEL_STREAM_GAP: f64 = 0.5;
-
-/// The field the pointer was last moved onto, while that field stays where it was.
-#[derive(Clone, Copy)]
-struct ArmedWheelField {
-    id: egui::Id,
-    rect: egui::Rect,
-    pass: u64,
-}
-
-#[derive(Clone, Copy, PartialEq)]
-enum WheelStreamOwner {
-    Field(egui::Id),
-    Elsewhere,
-}
-
-/// One run of wheel input with no gap of [`WHEEL_STREAM_GAP`] in it, trackpad momentum included.
-#[derive(Clone, Copy, Default)]
-struct WheelStream {
-    last: Option<f64>,
-    owner: Option<WheelStreamOwner>,
-}
-
-impl WheelStream {
-    /// Note wheel input at `now`; a gap since the last input starts a new stream with no owner.
-    fn note_input(&mut self, now: f64) {
-        if !self.last.is_some_and(|last| (0.0..WHEEL_STREAM_GAP).contains(&(now - last))) {
-            self.owner = None;
-        }
-        self.last = Some(now);
-    }
-
-    /// Leave the rest of the stream to the panel when `field` holds it.
-    fn release(&mut self, field: egui::Id) {
-        if self.owner == Some(WheelStreamOwner::Field(field)) {
-            self.owner = Some(WheelStreamOwner::Elsewhere);
-        }
-    }
-
-    /// Leave the rest of the stream to the panel when any field holds it.
-    fn release_any(&mut self) {
-        if let Some(WheelStreamOwner::Field(field)) = self.owner {
-            self.release(field);
-        }
-    }
-}
-
 #[derive(Clone)]
 struct QueuedWheel {
     #[cfg(not(target_arch = "wasm32"))]
@@ -732,6 +685,9 @@ fn remember_wheel_field(ui: &Ui, resp: &egui::Response, enabled: bool) -> Vec<Wh
 fn remember_owned_wheel_field(ui: &Ui, resp: &egui::Response, enabled: bool, menu: egui::Id, owner: Option<WheelOwner>) -> Vec<WheelInput> {
     let key = wheel_fields_id(ui.ctx().viewport_id());
     let pass = ui.ctx().cumulative_pass_nr();
+    // A window or overlay over the pointer covers the field even when no input arrives.
+    let pointer = ui.data_mut(|d| d.get_temp_mut_or_default::<WheelFields>(key).pointer).or_else(|| ui.ctx().input(|i| i.pointer.latest_pos()));
+    let covered = pointer.is_some_and(|p| resp.interact_rect.contains(p) && ui.ctx().layer_id_at(p) != Some(resp.layer_id));
     ui.data_mut(|d| {
         let mut fields: WheelFields = d.get_temp(key).unwrap_or_default();
         if fields.pass != pass {
@@ -742,7 +698,7 @@ fn remember_owned_wheel_field(ui: &Ui, resp: &egui::Response, enabled: bool, men
         if let Some(armed) = &mut fields.armed
             && armed.id == resp.id
         {
-            if armed.rect == resp.interact_rect && pass.saturating_sub(armed.pass) <= 1 {
+            if armed.rect == resp.interact_rect && pass.saturating_sub(armed.pass) <= 1 && !covered {
                 armed.pass = pass;
             } else {
                 fields.armed = None;
@@ -761,8 +717,8 @@ fn remember_owned_wheel_field(ui: &Ui, resp: &egui::Response, enabled: bool, men
 /// Take the closed font fields' wheel events before egui smooths and combines them. Other
 /// events stay in the input, so scrolling elsewhere keeps its own delta and event order. A field
 /// takes a wheel stream only when the stream begins with the pointer over it and the pointer was
-/// moved onto it after the field last moved. A stream that began anywhere else stays there until
-/// it ends, and a stream that leaves its field does not return to it.
+/// moved onto it after the field last moved or was covered. A stream that began anywhere else
+/// stays there until it ends, and a stream that leaves its field does not return to it.
 pub(crate) fn take_raw_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
     let key = wheel_fields_id(raw.viewport_id);
     let Some(mut fields) = ctx.data(|d| d.get_temp::<WheelFields>(key)) else { return };
@@ -941,6 +897,7 @@ pub(crate) fn take_raw_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
     fields.pointer = pointer;
     ctx.data_mut(|d| d.insert_temp(key, fields));
     if captured {
+        ctx.data_mut(|d| d.insert_temp(widgets::taken_from_raw_id(raw.viewport_id), now));
         ctx.request_repaint();
     }
 }

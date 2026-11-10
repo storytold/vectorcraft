@@ -3,15 +3,18 @@
 //! convention JPEG readers and the PDF writer take a CMYK JPEG to follow) is kept as it is; any
 //! other is decoded, its Decode array applied, and stored as a CMYK TIFF
 //! ([`ImageBlob::cmyk_tiff`]). A mask (`/SMask`, `/Mask`) doesn't change that: the importer
-//! carries it as the image's opacity mask ([`has_mask`]). A Separation image keeps its ink: its
-//! tints are read as a grayscale image ([`tint_gray`]) that the ink colorizes. Every other image is
-//! read as RGB by the interpreter.
+//! carries it as the image's opacity mask ([`has_mask`]). A DeviceN image of process plates only
+//! keeps them the same way, as a CMYK image ([`process_devicen`]). An image of one ink (a
+//! Separation, or a DeviceN of one colorant) keeps it: its tints are read as a grayscale image
+//! ([`tint_gray`]) that the ink colorizes. Every other image is read as RGB by the interpreter.
 
 use craft_pdf::syntax::Filter;
 use craft_pdf::syntax::object::stream::{ImageColorSpace, ImageDecodeParams};
 use craft_pdf::syntax::object::{Array, Dict, Name, Stream};
 use vectorcraft_doc::ImageBlob;
 use vectorcraft_doc::cmyk::{Inks, MAX_CMYK_PIXELS, jpeg_components};
+
+use crate::import_color::ink_names;
 
 /// A CMYK image read as RGB: why.
 pub(crate) const UNREAD: &str = "CMYK images whose samples couldn't be read in CMYK were imported in RGB";
@@ -57,7 +60,7 @@ fn decode_ranges(d: &Dict<'_>) -> [(f32, f32); 4] {
 pub(crate) fn cmyk(st: &Stream<'_>, width: u32, height: u32) -> Result<Option<ImageBlob>, &'static str> {
     let d = st.dict();
     if !cmyk_space(d) {
-        return Ok(None);
+        return process_devicen(st, width, height);
     }
     let ranges = decode_ranges(d);
     let filters = st.filters();
@@ -94,19 +97,86 @@ pub(crate) fn cmyk(st: &Stream<'_>, width: u32, height: u32) -> Result<Option<Im
 /// An image in a spot ink read as RGB: why.
 pub(crate) const UNREAD_TINTS: &str = "images in a spot ink whose samples couldn't be read were imported in RGB";
 
-/// The image's colour space when it is a Separation (`[/Separation name alt tint]`): one ink.
-/// `None` for the ink `None`, which paints nothing (ISO 32000-1 §8.6.6.4): the interpreter draws it.
-pub(crate) fn separation_space<'a>(st: &Stream<'a>) -> Option<Array<'a>> {
+/// The image's colour space when it lays one ink: a Separation (`[/Separation name alt tint]`), or
+/// a DeviceN of one colorant (`[/DeviceN [name] alt tint …]`). `None` for the ink `None`, which
+/// paints nothing (ISO 32000-1 §8.6.6.4): the interpreter draws it.
+pub(crate) fn one_ink_space<'a>(st: &Stream<'a>) -> Option<Array<'a>> {
     let d = st.dict();
     let a = d.get::<Array<'a>>(key(d, b"ColorSpace", b"CS"))?;
-    let one_ink = {
-        let mut it = a.flex_iter();
-        it.next::<Name<'_>>()?.as_ref() == b"Separation" && it.next::<Name<'_>>()?.as_ref() != b"None"
-    };
+    let one_ink = matches!(ink_names(&mut a.flex_iter()).as_ref().map(|(_, names)| names.as_slice()), Some([name]) if name != "None");
     one_ink.then_some(a)
 }
 
-/// The tints of the one-component image `st` (`width` × `height` pixels, a Separation image's)
+/// The CMYK channel of each colorant of the image's DeviceN space (`None` for the ink `None`) when
+/// it has two or more colorants and all are process plates, or `None`. One colorant is an image of
+/// one ink ([`one_ink_space`]).
+fn process_plates(d: &Dict<'_>) -> Option<Vec<Option<usize>>> {
+    let a = d.get::<Array<'_>>(key(d, b"ColorSpace", b"CS"))?;
+    let (device_n, names) = ink_names(&mut a.flex_iter())?;
+    // PDF's own limit is 32 colorants.
+    if !device_n || names.len() < 2 || names.len() > 32 {
+        return None;
+    }
+    let plates = names
+        .iter()
+        .map(|n| match n.as_str() {
+            "None" => Some(None),
+            n => ["Cyan", "Magenta", "Yellow", "Black"].iter().position(|p| *p == n).map(Some),
+        })
+        .collect::<Option<Vec<_>>>()?;
+    plates.iter().any(Option::is_some).then_some(plates)
+}
+
+/// A DeviceN image of process plates only ([`process_plates`]) in CMYK: each colorant's tint in
+/// its plate, its Decode array applied, as a CMYK TIFF. `Ok(None)` for any other image, `Err` (a
+/// warning) when its samples can't be read.
+fn process_devicen(st: &Stream<'_>, width: u32, height: u32) -> Result<Option<ImageBlob>, &'static str> {
+    let d = st.dict();
+    let Some(plates) = process_plates(d) else { return Ok(None) };
+    let bpc = d.get::<u8>(key(d, b"BitsPerComponent", b"BPC")).unwrap_or(8);
+    if !matches!(bpc, 8 | 16) {
+        return Err(UNREAD);
+    }
+    let n = u64::from(width) * u64::from(height);
+    if n == 0 || n > MAX_CMYK_PIXELS {
+        return Err(UNREAD);
+    }
+    let comps = plates.len();
+    let ranges: Vec<(f32, f32)> = match d.get::<Array<'_>>(key(d, b"Decode", b"D")).map(|a| a.iter::<f32>().collect::<Vec<_>>()) {
+        Some(v) if v.len() == 2 * comps && v.iter().all(|x| x.is_finite()) => v.as_chunks::<2>().0.iter().map(|p| (p[0], p[1])).collect(),
+        _ => vec![(0.0, 1.0); comps],
+    };
+    let size = usize::from(bpc / 8);
+    let params =
+        ImageDecodeParams { is_indexed: false, bpc: Some(bpc), num_components: u8::try_from(comps).ok(), target_dimension: None, width, height };
+    let decoded = st.decoded_image(&params).map_err(|_| UNREAD)?;
+    // An image codec lays its samples out its own way.
+    if decoded.image_data.is_some() {
+        return Err(UNREAD);
+    }
+    // Within `MAX_CMYK_PIXELS` and 32 colorants of 2 bytes this fits a 64-bit `usize`, not always a
+    // 32-bit one (the web build): checked.
+    let len = usize::try_from(n).ok().and_then(|n| n.checked_mul(comps)?.checked_mul(size)).ok_or(UNREAD)?;
+    let raw = decoded.data.get(..len).ok_or(UNREAD)?;
+    let value = |s: &[u8]| match *s {
+        [hi, lo] => u16::from_be_bytes([hi, lo]) as f32 / 65535.0,
+        [v] => v as f32 / 255.0,
+        _ => 0.0,
+    };
+    let mut inks = Vec::with_capacity(n as usize * 4);
+    for px in raw.chunks_exact(size * comps) {
+        let mut cmyk = [0.0f32; 4];
+        for ((s, plate), (lo, hi)) in px.chunks_exact(size).zip(&plates).zip(&ranges) {
+            if let Some(c) = plate.and_then(|p| cmyk.get_mut(p)) {
+                *c = c.max((lo + value(s) * (hi - lo)).clamp(0.0, 1.0));
+            }
+        }
+        inks.extend(cmyk.map(|v| (v * 255.0).round() as u8));
+    }
+    Inks::new(width, height, inks).and_then(|i| ImageBlob::cmyk_tiff(&i)).map(Some).ok_or(UNREAD)
+}
+
+/// The tints of the one-component image `st` (`width` × `height` pixels, an image of one ink)
 /// as a grayscale image: white where it lays no ink, black at 100 %, its Decode array applied.
 /// `Err` (a warning) when its samples can't be read.
 pub(crate) fn tint_gray(st: &Stream<'_>, width: u32, height: u32) -> Result<Vec<u8>, &'static str> {

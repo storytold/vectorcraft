@@ -432,3 +432,64 @@ fn a_separation_image_that_cant_be_read_stays_rgb() {
     assert!(r.document.swatches.iter().all(|s| !s.spot), "no swatch for an ink nothing uses");
     assert_eq!(r.warnings.iter().filter(|w| w.contains("spot ink")).count(), 1, "{:?}", r.warnings);
 }
+
+/// A Type 4 tint transform as an object, `code` its program.
+fn type4(code: &str, inputs: usize) -> String {
+    let domain = "0 1 ".repeat(inputs);
+    format!("<< /FunctionType 4 /Domain [{}] /Range [0 1 0 1 0 1 0 1] /Length {} >>\nstream\n{code}\nendstream", domain.trim_end(), code.len())
+}
+
+/// The imported images' blobs, in paint order.
+fn image_blobs(d: &Document) -> Vec<(ImageBlob, bool)> {
+    let mut out = vec![];
+    for l in &d.layers {
+        l.walk(&mut |n| {
+            if let NodeKind::Image(im) = &n.kind {
+                out.push((d.images[&im.key].clone(), n.extras().colorize.is_some()));
+            }
+        });
+    }
+    out
+}
+
+/// A DeviceN image of one colorant opens as a Separation image does: its tints, colorized by the ink.
+#[test]
+fn a_devicen_image_of_one_ink_opens_colorized_by_it() {
+    let space = "[/DeviceN [/SpotRed] /DeviceCMYK << /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [0 1 1 0] /N 1 >>]";
+    let d = separation_page(space, 4, 8, "", "0055AAFF", &[]);
+    let images = imported_images(&d);
+    assert_eq!(images.len(), 1);
+    assert_eq!(images[0].1, [255, 170, 85, 0]);
+    assert!(matches!(&images[0].0, Some(Paint::Solid { swatch: Some(s), .. }) if s == "SpotRed"), "{:?}", images[0].0);
+}
+
+/// A DeviceN image of process plates only opens in CMYK, each colorant's tint in its plate.
+#[test]
+fn a_devicen_image_of_process_plates_opens_in_cmyk() {
+    let space = format!("[/DeviceN [/Cyan /Magenta] /DeviceCMYK {} 0 R]", first_extra(1) + 1);
+    // Cyan and Magenta → (c, m, 0, 0); pixels: none, cyan, magenta, both.
+    let d = separation_page(&space, 4, 8, "", "0000FF0000FFFFFF", &[&type4("{ 0 0 }", 2)]);
+    let blobs = image_blobs(&d);
+    assert_eq!(blobs.len(), 1);
+    let (blob, colorized) = &blobs[0];
+    assert!(blob.is_cmyk() && !colorized, "a CMYK image");
+    let inks = blob.cmyk().unwrap().data;
+    assert_eq!(inks, [0, 0, 0, 0, 255, 0, 0, 0, 0, 255, 0, 0, 255, 255, 0, 0]);
+
+    // 16 bits a sample, the ink None among the plates, and a Decode array that inverts Cyan.
+    let space = format!("[/DeviceN [/Cyan /None /Black] /DeviceCMYK {} 0 R]", first_extra(1) + 1);
+    let d = separation_page(&space, 2, 16, "/Decode [1 0 0 1 0 1]", "FFFF0000000000000000FFFF", &[&type4("{ exch pop 0 0 3 -1 roll }", 3)]);
+    let blobs = image_blobs(&d);
+    assert_eq!(blobs[0].0.cmyk().unwrap().data, [0, 0, 0, 0, 255, 0, 0, 255]);
+}
+
+/// A DeviceN image of a spot ink and a process plate (a duotone) still opens as RGB: an image can
+/// hold one ink or the process plates, not both.
+#[test]
+fn a_duotone_devicen_image_still_opens_as_rgb() {
+    let space = format!("[/DeviceN [/Black /SpotRed] /DeviceCMYK {} 0 R]", first_extra(1) + 1);
+    let d = separation_page(&space, 2, 8, "", "FF0000FF", &[&type4("{ dup 3 -1 roll 0 4 1 roll }", 2)]);
+    let blobs = image_blobs(&d);
+    assert_eq!(blobs.len(), 1);
+    assert!(!blobs[0].0.is_cmyk() && !blobs[0].1, "RGB, not colorized");
+}
