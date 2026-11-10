@@ -286,7 +286,6 @@ font-technology	Variable	Variabla
 	Update While Dragging	Uppdatera vid dragning
 	Hide Video Rulers	Dölj videolinjaler
 	Background Contents	Bakgrundsinnehåll
-	Background Contents:	Bakgrundsinnehåll:
 	Background:	Bakgrund:
 	Backspace	Backspace
 	Bar Graph Tool	Stapeldiagramverktyg
@@ -570,6 +569,7 @@ font-technology	Variable	Variabla
 	Coming soon — tracked in the parity plan	Kommer snart — följs upp i paritetsplanen
 	Command Click to Select Objects Behind	Cmd-klicka för att markera objekt bakom
 	Command Dialog	Kommandodialog
+	Command API Reference	API-referens för kommandon
 	Community	Gemenskap
 	Compatibility:	Kompatibilitet:
 	Compatible Gradient and Gradient Mesh Printing	Kompatibel utskrift av gradienter och gradientnät
@@ -656,7 +656,6 @@ font-technology	Variable	Variabla
 	Couldn't {} {name}: {e}	Det gick inte att {} {name}: {e}
 	Create	Skapa
 	Create Clipping Mask	Skapa klippmask
-	Create Document	Skapa dokument
 	Create from Guides	Skapa från stödlinjer
 	Create from Selection	Skapa från markering
 	Create From:	Skapa från:
@@ -1837,6 +1836,7 @@ font-technology	Variable	Variabla
 	Lock (⌘2)	Lås (⌘2)
 	Lock Grid	Lås rutnät
 	Lock Guides	Lås stödlinjer
+	Lock Guides by Default	Lås stödlinjer som standard
 	Lock Others	Lås övriga
 	Lock Slices	Lås skivor
 	Lock Station Point	Lås betraktarpunkt
@@ -2085,7 +2085,6 @@ font-technology	Variable	Variabla
 	New Color Group…	Ny färggrupp…
 	New Document Presets	Förinställningar för nytt dokument
 	New file	Ny fil
-	New from Template	Ny från mall
 	New from Template…	Ny från mall…
 	New Graphic Style	Ny grafikstil
 	New Graphic Style (Alt-click to name it)	Ny grafikstil (Alt-klicka för att namnge den)
@@ -2869,6 +2868,7 @@ digits	Malayalam	Malayalam
 	Save PDF Preset	Spara PDF-förinställning
 	Save Perspective Grid Preset	Spara förinställning för perspektivrutnät
 	Save Preset	Spara förinställning
+	Save Document Preset	Spara dokumentförinställning
 	Save Preset…	Spara förinställning…
 	Save Print Preset	Spara utskriftsförinställning
 	Save Recovery Data	Spara återställningsdata
@@ -3063,6 +3063,13 @@ digits	Malayalam	Malayalam
 	Settings…	Inställningar…
 	Setup…	Konfigurera…
 	Shadows and Glows	Skuggor och glöd
+	Game HUD	Spel-HUD
+	Health Fill	Hälsa
+	Mana Glow	Mana
+	Damage Flash	Skada
+	Quest Outline	Uppdrag
+	Coin Shine	Mynt
+	Boss Alert	Boss
 	Shape	Form
 	Shape Builder	Formbyggare
 	Shape Builder Regions	Formbyggarområden
@@ -3432,7 +3439,6 @@ digits	Malayalam	Malayalam
 	Template	Mall
 	Templates	Mallar
 	Templates Folder	Mallmapp
-	Templates…	Mallar…
 	Text Displayed in Cell:	Text som visas i cellen:
 	Text Export Options	Alternativ för textexport
 	Text Fill & Stroke Color	Textens fyllnads- och konturfärg
@@ -3978,6 +3984,28 @@ axis	Both	Båda
 @msg	Combine Slices: the slices have no bounds	Kombinera skivor: skivorna har inga gränser
 @msg	Convert to Artboards: selection has no area	Konvertera till ritytor: markeringen har ingen area
 @msg	Convert to Shape: no rectangles or ellipses selected	Konvertera till form: inga rektanglar eller ellipser är markerade
+	Run	Kör
+	Run Script	Kör skript
+	Stop Script	Stoppa skript
+	Show External Script Warning	Visa varning för externa skript
+	A Script Is Running	Ett skript körs
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Ett skript kan ändra de öppna dokumenten och skriva filer genom de kommandon det kör. Kör bara skript du litar på.
+	Do not show this warning again	Visa inte den här varningen igen
+	Stop the script and undo what it did? Then quit again.	Stoppa skriptet och ångra det det gjort? Avsluta sedan igen.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Det här skriptet har lagt till väldigt många objekt. Fortsätta, eller stoppa det och ångra det det gjort?
+@msg	Choose a .js or .jsx script	Välj ett .js- eller .jsx-skript
+@msg	Ran {name}	Körde {name}
+@msg	The script was stopped and its changes were undone	Skriptet stoppades och dess ändringar ångrades
+@msg	a script is running: stop it or wait for it to finish	ett skript körs: stoppa det eller vänta tills det är klart
+@msg	this is a compiled script, which cannot be run; use its source text	det här är ett kompilerat skript som inte kan köras; använd dess källtext
+@msg	the script is not UTF-8 text	skriptet är inte UTF-8-text
+@msg	the script is too large to run	skriptet är för stort för att köras
+@msg	a drag or an undo group is open; finish it before running a script	en dragning eller ångragrupp är öppen; avsluta den innan du kör ett skript
+@msg	the script left a document that cannot be kept	skriptet lämnade ett dokument som inte kan behållas
+@msg	the script's run is no longer available	skriptets körning är inte längre tillgänglig
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	ett misslyckat kommando ändrade ångrasteg som inte kunde återställas, så skriptet stoppades
+@msg	a recovery copy could not be written, so the script was not run	en återställningskopia kunde inte skrivas, så skriptet kördes inte
+@msg	Running a script	Kör ett skript
 @msg	Copied the script report	Kopierade skriptrapporten
 @msg	Corners edits the corners of a path	Hörn redigerar hörnen på en bana
 @msg	Couldn't copy to the system clipboard: {e}	Kunde inte kopiera till systemets urklipp: {e}
@@ -4215,6 +4243,11 @@ axis	Both	Båda
 @msg	internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)	internt fel i `{cmd}`: {msg} (dokumentet lämnades som det var innan; rapportera gärna felet)
 @msg	internal error: {msg} (please report this bug)	internt fel: {msg} (rapportera gärna felet)
 @msg	invalid PDF setting: {0}	ogiltig PDF-inställning: {0}
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	sidan för rityta {n} är {size}, längre än PDF:s sidgräns på 14 400 pt (200 in): den skrivs med en UserUnit på {unit}, så appar som ignorerar UserUnit visar den så många gånger mindre
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	sidan för rityta {n} är {size}, längre än PDF:s sidgräns på 14 400 pt (200 in): {label}-sidor skrivs utan UserUnit, i punkter, och appar som håller sig till gränsen beskär sidan till 200 in
+@msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 har ingen UserUnit, som en sida längre än 14 400 pt (200 in) behöver för att behålla sin storlek: filen skrivs som PDF 1.6
+@msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	sidan för rityta {n} är {size}, för lång och smal för PDF:s sidlängder på 3 till 14 400 enheter: den skrivs med UserUnit {unit}, som håller den korta sidan på minst 3 enheter, och appar som följer gränsen klipper den långa sidan vid 14 400 enheter
+@msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label}-filer rymmer reella tal upp till {max}, och sidan för rityta {n}, {side} pt lång, behöver större: välj PDF 1.6 eller senare utan PDF/X-standard, eller en mindre rityta
 @msg	invalid image data for `{0}`	ogiltiga bilddata för `{0}`
 @msg	invalid parameters for `{cmd}`: {msg}	ogiltiga parametrar för `{cmd}`: {msg}
 @msg	is not an image VectorCraft reads	är inte en bild som VectorCraft kan läsa
@@ -4319,6 +4352,7 @@ axis	Both	Båda
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Läste in ”{name}”: {n} steg utelämnades|Läste in ”{name}”: {n} steg utelämnades
 @msg	not an action set file	inte en fil med åtgärdsuppsättning
 @msg	the action set file is larger than 8 MiB	filen med åtgärdsuppsättningen är större än 8 MiB
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: referensen skulle bli större än {MAX_BYTES} byte
 @msg	the action set file holds more than 1,000 actions	filen med åtgärdsuppsättningen innehåller fler än 1 000 åtgärder
 @msg	the action set file needs a later version of VectorCraft	filen med åtgärdsuppsättningen kräver en nyare version av VectorCraft
 @msg	an action in the action set file has more than 10,000 steps	en åtgärd i filen med åtgärdsuppsättningen har fler än 10 000 steg
@@ -5062,7 +5096,8 @@ lighting	Light	Ljus
 	Bevel both sides	Fasning på båda sidor
 	Presets	Förinställningar
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Ett objekt kan bara ha en 3D-effekt. Redigera alternativen för den befintliga effekten eller ta bort den först.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} kräver för närvarande en bana eller sammansatt bana. Konvertera text, bilder och grupper till banor först.
+@msg	{label} currently requires a path, compound path, type, group, blend or symbol instance. Expand other objects first.	{label} kräver för närvarande en bana, sammansatt bana, text, grupp, blandning eller symbolinstans. Expandera andra objekt först.
+@msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label} kan inte skapa en solid av en bild: kalkera den först med Objekt › Bildkalkering › Skapa.
 @msg	{label} requires a shape with at least two anchors	{label} kräver en form med minst två ankarpunkter
 @msg	The shape is too complex for a 3D effect	Formen är för komplex för en 3D-effekt
 @msg	The 3D surface is too complex; simplify the shape	3D-ytan är för komplex; förenkla formen
@@ -5070,6 +5105,11 @@ lighting	Light	Ljus
 @msg	unknown parameter `{key}`; did you mean `{near}`?	okänd parameter `{key}`; menade du `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	okänd parameter `{key}`; kommandot tar inga parametrar
 @msg	unknown parameter `{key}`; the command takes: {keys}	okänd parameter `{key}`; kommandot tar: {keys}
+@msg	the params must be an object, not {got}	parametrarna måste vara ett objekt, inte {got}
+@msg	unknown parameter `{path}`; the object takes no keys	okänd parameter `{path}`; objektet tar inga nycklar
+@msg	unknown parameter `{path}`; it takes: {keys}	okänd parameter `{path}`; den tar: {keys}
+@msg	missing `{path}`	`{path}` saknas
+@msg	`{path}` must be {expected}, not {got}	`{path}` måste vara {expected}, inte {got}
 	1 Layer	1 lager
 	1 bit	1 bit
 	16 Colors	16 färger
@@ -5959,6 +5999,20 @@ axis	Y Axis	Y-axel
 	Show its progress, see Cancel and write log lines	Visa sitt förlopp, se när det avbryts och skriva loggrader
 	Keep settings of its own	Spara egna inställningar
 	Keep a cache of its own, which you can clear	Spara en egen cache, som du kan tömma
+	Run these commands on the document: {ids}	Köra dessa kommandon på dokumentet: {ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	”{name}” anger `{id}` i `commandAllowlist`, som ett plugin inte får anropa
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: manifestets `commandAllowlist` anger det inte
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: id:t eller argumenten ligger utanför modulens minne
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: id:t eller argumenten är inte UTF-8
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: argumenten är inte ett JSON-objekt
+@msg	only a filter with the usual budget declares `commandAllowlist`	bara ett filter med den vanliga budgeten anger `commandAllowlist`
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	kommandoanrop ({MAX_CALLS} anrop och {MAX_CALL_BYTES} byte per körning)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	storlek på ett kommandoanrop (vc_call `{shown}`: {len} byte, gräns {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	högst {MAX_ALLOWED_COMMANDS} kommandon i `commandAllowlist`
+@msg	a plug-in may not call this command	ett plugin får inte anropa det här kommandot
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	`commandAllowlist` behöver behörigheten `commands`, och `commands` behöver en `commandAllowlist`
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist` anger `{shown}`, som inte är ett kommando-id eller finns två gånger
 	Clear Plug-in Cache	Töm pluginets cache
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	behörigheten `{permission}` kräver plugin-API-nivå {PROGRESS_API}: ange `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	modulen importerar `env.{name}` med en annan typ än värdens: värdens typ är {signature}
@@ -6048,6 +6102,11 @@ axis	Y Axis	Y-axel
 	Button	Knapp
 	Panel	Panel
 	UI Frames	UI-ramar
+	Map Markers	Kartmarkörer
+	Pin	Nål
+	Flag	Flagga
+	Crosshair	Hårkors
+	Checkpoint	Kontrollpunkt
 	Open Symbol Library	Öppna symbolbibliotek
 	Save Symbol Library	Spara symbolbibliotek
 	Save Symbol Library…	Spara symbolbibliotek…
@@ -6102,6 +6161,11 @@ axis	Y Axis	Y-axel
 	User Brush Library 9	Användarbibliotek för penslar 9
 	User Brush Library 10	Användarbibliotek för penslar 10
 	Art Ribbons	Konstband
+	Zigzag	Sicksack
+	Burst Ray	Stötstråle
+	Dash Trail	Streckat spår
+	Speed Line	Hastighetslinje
+	Game Trails	Spår från spel
 	Calligraphic Nibs	Kalligrafiska pennspetsar
 	Pattern Borders	Mönsterbårder
 	Scatter Shapes	Spridningsformer
@@ -6122,6 +6186,8 @@ axis	Y Axis	Y-axel
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Punkttext
 	Area Text	Områdestext
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Mät text efter glyfgränser
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Visa alternativ för fäst mot glyf
 	Hide Snap to Glyph Options	Dölj alternativ för fäst mot glyf
@@ -8147,3 +8213,8 @@ digits	Hindi	Hindi
 	Align to Pixel Grid	Justera mot pixelrutnät
 @msg	only paths and compound paths can be aligned to the pixel grid	bara banor och sammansatta banor kan justeras mot pixelrutnätet
 @msg	side is left or right, not `{s}`	side är left eller right, inte `{s}`
+	Ignore All	Ignorera alla
+	Add to Dictionary	Lägg till i ordlistan
+	No Suggestions	Inga förslag
+	Edit Custom Dictionary	Redigera egen ordlista
+	Entry:	Post:

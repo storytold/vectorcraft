@@ -256,7 +256,6 @@ font-technology	Variable	可變
 	Update While Dragging	拖曳時更新
 	Hide Video Rulers	隱藏視訊尺標
 	Background Contents	背景內容
-	Background Contents:	背景內容：
 	Background:	背景：
 	Backspace	Backspace
 	Bar Graph Tool	橫條圖工具
@@ -545,6 +544,7 @@ font-technology	Variable	可變
 	Coming soon — tracked in the parity plan	即將推出 — 已列入功能對等計畫
 	Command Click to Select Objects Behind	Cmd 加按一下可選取後方物件
 	Command Dialog	指令對話框
+	Command API Reference	指令 API 參考
 	Community	社群
 	Compatibility:	相容性：
 	Compatible Gradient and Gradient Mesh Printing	相容的漸層與漸層網格列印
@@ -631,7 +631,6 @@ font-technology	Variable	可變
 	Couldn't {} {name}: {e}	無法{} {name}：{e}
 	Create	建立
 	Create Clipping Mask	建立剪裁遮色片
-	Create Document	建立文件
 	Create from Guides	從參考線建立
 	Create from Selection	從選取範圍建立
 	Create From:	建立來源：
@@ -2159,6 +2158,11 @@ file-filter	Templates	範本
 @msg	artboard {0} does not exist	工作區域 {0} 不存在
 @msg	cannot read PDF: {0}	無法讀取 PDF：{0}
 @msg	invalid PDF setting: {0}	PDF 設定無效：{0}
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	工作區域 {n} 的頁面為 {size}，超過 PDF 的頁面上限 14,400 pt (200 in)：它以 UserUnit {unit} 寫入，因此忽略 UserUnit 的應用程式會將其顯示為縮小相應倍數
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	工作區域 {n} 的頁面為 {size}，超過 PDF 的頁面上限 14,400 pt (200 in)：{label} 頁面不含 UserUnit，以點為單位寫入，遵守上限的應用程式會將頁面裁切為 200 in
+@msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 沒有 UserUnit，而長於 14,400 pt (200 in) 的頁面需要它來保持尺寸：檔案將以 PDF 1.6 寫入
+@msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	工作區域 {n} 的頁面為 {size}，對 PDF 3 至 14,400 單位的頁面邊長而言過長過窄：以 UserUnit {unit} 寫入，使短邊保持 3 單位以上，遵守上限的應用程式會把長邊裁到 14,400 單位
+@msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label} 檔案的實數最大為 {max}，而工作區域 {n} 的頁面長 {side} pt，需要更大的數：請選擇不含 PDF/X 標準的 PDF 1.6 或更新版本，或使用較小的工作區域
 @msg	page {0} does not exist (the PDF has {1})	頁面 {0} 不存在 (此 PDF 有 {1} 頁)
 @msg	the PDF has no pages	此 PDF 沒有頁面
 @msg	the PDF is password-protected: give its password	此 PDF 受密碼保護：請提供其密碼
@@ -2354,6 +2358,7 @@ file-filter	Templates	範本
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	已載入「{name}」：已略過 {n} 個步驟
 @msg	not an action set file	不是動作組檔案
 @msg	the action set file is larger than 8 MiB	動作組檔案大於 8 MiB
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`：參考將大於 {MAX_BYTES} 位元組
 @msg	the action set file holds more than 1,000 actions	動作組檔案包含超過 1,000 個動作
 @msg	the action set file needs a later version of VectorCraft	動作組檔案需要較新版本的 VectorCraft
 @msg	an action in the action set file has more than 10,000 steps	動作組檔案中有動作超過 10,000 個步驟
@@ -2370,6 +2375,28 @@ file-filter	Templates	範本
 @msg	the library item is damaged	資料庫項目已損毀
 @msg	{_1} font families available	有 {_1} 個可用的字體家族
 @msg	{_1} has no {_2} style	{_1} 沒有 {_2} 樣式
+	Run	執行
+	Run Script	執行指令碼
+	Stop Script	停止指令碼
+	Show External Script Warning	顯示外部指令碼警告
+	A Script Is Running	指令碼正在執行
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	指令碼可以變更開啟的文件，並可透過其執行的命令寫入檔案。請只執行您信任的指令碼。
+	Do not show this warning again	不再顯示此警告
+	Stop the script and undo what it did? Then quit again.	要停止指令碼並還原其變更嗎？然後請再次結束。
+	This script has added a great many objects. Continue, or stop it and undo what it did?	此指令碼已新增大量物件。要繼續，還是停止並還原其變更？
+@msg	Choose a .js or .jsx script	請選擇 .js 或 .jsx 指令碼
+@msg	Ran {name}	已執行 {name}
+@msg	The script was stopped and its changes were undone	指令碼已停止，其變更已還原
+@msg	a script is running: stop it or wait for it to finish	指令碼正在執行：請停止它或等待其完成
+@msg	this is a compiled script, which cannot be run; use its source text	這是已編譯的指令碼，無法執行；請使用其原始文字
+@msg	the script is not UTF-8 text	指令碼不是 UTF-8 文字
+@msg	the script is too large to run	指令碼過大，無法執行
+@msg	a drag or an undo group is open; finish it before running a script	拖曳或還原群組尚未結束；請在執行指令碼前完成
+@msg	the script left a document that cannot be kept	指令碼留下了無法保留的文件
+@msg	the script's run is no longer available	指令碼執行已無法使用
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	失敗的命令變更了無法還原的復原步驟，因此指令碼已停止
+@msg	a recovery copy could not be written, so the script was not run	無法寫入復原副本，因此未執行指令碼
+@msg	Running a script	正在執行指令碼
 @msg	Copied the script report	已複製指令碼報告
 @msg	Exported {path}	已匯出 {path}
 @msg	no CSS to copy: select objects with CSS of their own	沒有可複製的 CSS：請選取有自己 CSS 的物件
@@ -2800,6 +2827,7 @@ file-filter	Templates	範本
 	Lock (⌘2)	鎖定 (⌘2)
 	Lock Grid	鎖定格點
 	Lock Guides	鎖定參考線
+	Lock Guides by Default	預設鎖定參考線
 	Lock Others	鎖定其他
 	Lock Slices	鎖定切片
 	Lock Station Point	鎖定基準點
@@ -3064,7 +3092,6 @@ file-filter	Templates	範本
 	New Color Group…	新增顏色群組…
 	New Document Presets	新增文件預設集
 	New file	新增檔案
-	New from Template	從範本新增
 	New from Template…	從範本新增…
 	New Graphic Style	新增繪圖樣式
 	New Graphic Style (Alt-click to name it)	新增繪圖樣式 (Alt+點擊可命名)
@@ -3861,6 +3888,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Save PDF Preset	儲存 PDF 預設集
 	Save Perspective Grid Preset	儲存透視格點預設集
 	Save Preset	儲存預設集
+	Save Document Preset	儲存文件預設集
 	Preset {number}	預設集 {number}
 	Save Preset…	儲存預設集…
 	Save Print Preset	儲存列印預設集
@@ -4067,6 +4095,13 @@ digits	Malayalam	馬來亞拉姆數字
 	Settings…	設定…
 	Setup…	設定…
 	Shadows and Glows	陰影與光暈
+	Game HUD	遊戲 HUD
+	Health Fill	生命
+	Mana Glow	魔力
+	Damage Flash	傷害
+	Quest Outline	任務
+	Coin Shine	金幣
+	Boss Alert	首領
 	Shape	形狀
 	Shape Builder	形狀建立
 	Shape Builder Regions	形狀建立區域
@@ -4438,7 +4473,6 @@ digits	Malayalam	馬來亞拉姆數字
 	Template	範本
 	Templates	範本
 	Templates Folder	範本資料夾
-	Templates…	範本…
 	Text Displayed in Cell:	儲存格中顯示的文字：
 	Text Export Options	文字匯出選項
 	Text Fill & Stroke Color	文字填色與筆畫顏色
@@ -5283,7 +5317,8 @@ lighting	Light	光源
 	Bevel both sides	雙面斜角
 	Presets	預設集
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	一個物件只能套用一種 3D 效果。請編輯現有效果的選項，或先將其移除。
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label}目前需要路徑或複合路徑。請先將文字、影像和群組轉換為路徑。
+@msg	{label} currently requires a path, compound path, type, group, blend or symbol instance. Expand other objects first.	{label}目前需要路徑、複合路徑、文字、群組、漸變或符號範例。請先展開其他物件。
+@msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label}無法從影像建立立體：請先使用「物件 › 影像描圖 › 製作」描圖。
 @msg	{label} requires a shape with at least two anchors	{label}需要至少有兩個錨點的形狀
 @msg	The shape is too complex for a 3D effect	形狀過於複雜，無法套用 3D 效果
 @msg	The 3D surface is too complex; simplify the shape	3D 表面過於複雜；請簡化形狀
@@ -5291,6 +5326,11 @@ lighting	Light	光源
 @msg	unknown parameter `{key}`; did you mean `{near}`?	未知的參數 `{key}`；您是指 `{near}` 嗎？
 @msg	unknown parameter `{key}`; the command takes no parameters	未知的參數 `{key}`；此指令沒有參數
 @msg	unknown parameter `{key}`; the command takes: {keys}	未知的參數 `{key}`；此指令接受：{keys}
+@msg	the params must be an object, not {got}	參數必須是物件，而不是 {got}
+@msg	unknown parameter `{path}`; the object takes no keys	未知的參數 `{path}`；此物件不接受任何鍵
+@msg	unknown parameter `{path}`; it takes: {keys}	未知的參數 `{path}`；它接受：{keys}
+@msg	missing `{path}`	未提供 `{path}`
+@msg	`{path}` must be {expected}, not {got}	`{path}` 必須是 {expected}，而不是 {got}
 	Load EPS into Clipboard	將 EPS 載入剪貼簿
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} 像素的影像過大，無法繪製
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}：不是 PNG、JPEG、WebP、TIFF 或 BMP 影像
@@ -5571,6 +5611,20 @@ axis	Y Axis	Y 軸
 	Show its progress, see Cancel and write log lines	顯示進度、偵測取消要求並寫入記錄行
 	Keep settings of its own	保存自己的設定
 	Keep a cache of its own, which you can clear	保存自己的快取，您可以清除它
+	Run these commands on the document: {ids}	在文件上執行這些指令：{ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	「{name}」在 `commandAllowlist` 中列出了增效模組不能呼叫的 `{id}`
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`：{why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`：資訊清單的 `commandAllowlist` 未列出它
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`：ID 或引數位於模組記憶體之外
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`：ID 或引數不是 UTF-8
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`：引數不是 JSON 物件
+@msg	only a filter with the usual budget declares `commandAllowlist`	只有使用一般預算的濾鏡才能宣告 `commandAllowlist`
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	指令呼叫（每次執行 {MAX_CALLS} 次呼叫和 {MAX_CALL_BYTES} 位元組）
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	指令呼叫大小（vc_call `{shown}`：{len} 位元組，上限 {MAX_CALL_DATA}）
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	`commandAllowlist` 中最多 {MAX_ALLOWED_COMMANDS} 個指令
+@msg	a plug-in may not call this command	增效模組不能呼叫此指令
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	`commandAllowlist` 需要權限 `commands`，而 `commands` 需要 `commandAllowlist`
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist` 列出的 `{shown}` 不是指令 ID，或列出了兩次
 	Clear Plug-in Cache	清除增效模組快取
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	權限 `{permission}` 需要增效模組 API 層級 {PROGRESS_API}：請設定 `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	模組以與主機不同的類型匯入 `env.{name}`：主機的類型為 {signature}
@@ -5660,6 +5714,11 @@ axis	Y Axis	Y 軸
 	Button	按鈕
 	Panel	面板
 	UI Frames	UI 框架
+	Map Markers	地圖標記
+	Pin	圖釘
+	Flag	旗幟
+	Crosshair	準星
+	Checkpoint	檢查點
 	Open Symbol Library	開啟符號資料庫
 	Save Symbol Library	儲存符號資料庫
 	Save Symbol Library…	儲存符號資料庫…
@@ -5714,6 +5773,11 @@ axis	Y Axis	Y 軸
 	User Brush Library 9	使用者筆刷資料庫 9
 	User Brush Library 10	使用者筆刷資料庫 10
 	Art Ribbons	藝術緞帶
+	Zigzag	鋸齒
+	Burst Ray	衝擊射線
+	Dash Trail	虛線軌跡
+	Speed Line	速度線
+	Game Trails	遊戲軌跡
 	Calligraphic Nibs	書法筆尖
 	Pattern Borders	圖樣邊框
 	Scatter Shapes	散佈形狀
@@ -5734,6 +5798,8 @@ axis	Y Axis	Y 軸
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	點狀文字
 	Area Text	區域文字
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	依字符邊界測量文字
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	顯示靠齊字符選項
 	Hide Snap to Glyph Options	隱藏靠齊字符選項
@@ -6301,3 +6367,5 @@ breakText	Glyphs	字符
 	Align to Pixel Grid	對齊像素格點
 @msg	only paths and compound paths can be aligned to the pixel grid	只有路徑和複合路徑可以對齊像素格點
 @msg	side is left or right, not `{s}`	side 應為 left 或 right，而不是 `{s}`
+	Edit Custom Dictionary	編輯自訂字典
+	Entry:	項目：

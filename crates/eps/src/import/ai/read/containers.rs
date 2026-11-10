@@ -516,16 +516,17 @@ impl<'a> Reader<'a> {
                         slot.visible = false;
                         self.add(slot, false)?;
                     }
-                    // An envelope of type keeps its drawn art and its type, hidden, as above: the
-                    // type is filled in after reading, which the envelope can't wait for.
-                    if typed {
-                        return Ok(());
-                    }
-                    if self.envelopes.len() >= crate::import::ai::envelope::MAX_PENDING {
-                        self.warn(crate::import::ai::envelope::DRAWN);
+                    // An envelope of type keeps its drawn art and its type, hidden, as above, until
+                    // the type is filled in after reading: then it opens live where it draws as its
+                    // drawn art ([`crate::import::ai::envelope::TypedEnvelope`]). In a symbol's or a
+                    // pattern's art it keeps them.
+                    let waits = !typed || (self.symbol.is_none() && self.pattern.is_none());
+                    if !waits || self.envelopes.len() >= crate::import::ai::envelope::MAX_PENDING {
+                        self.warn(crate::import::ai::envelope::drawn_note(typed));
                     } else {
                         let siblings = self.frames.last().map_or(0, |f| f.children.len());
-                        self.envelopes.push(PendingEnvelope { obj: *o, before, inner: children, depth: self.frames.len(), siblings });
+                        let depth = self.frames.len();
+                        self.envelopes.push(PendingEnvelope { obj: *o, before, inner: children, depth, siblings, typed });
                     }
                 }
             }
@@ -862,9 +863,8 @@ impl<'a> Reader<'a> {
     /// in containers that closed keep their drawn art.
     pub(super) fn end_envelope(&mut self) {
         let depth = self.frames.len();
-        while self.envelopes.last().is_some_and(|p| p.depth > depth) {
-            self.envelopes.pop();
-            self.warn(crate::import::ai::envelope::DRAWN);
+        while let Some(p) = self.envelopes.pop_if(|p| p.depth > depth) {
+            self.warn(crate::import::ai::envelope::drawn_note(p.typed));
         }
         if self.envelopes.last().is_none_or(|p| p.depth != depth) {
             return;
@@ -872,9 +872,13 @@ impl<'a> Reader<'a> {
         let Some(p) = self.envelopes.pop() else { return };
         let drawn = self.frames.last().filter(|f| f.children.len() == p.siblings + 1).and_then(|f| f.children.last());
         let Some(drawn) = drawn else {
-            self.warn(crate::import::ai::envelope::DRAWN);
+            self.warn(crate::import::ai::envelope::drawn_note(p.typed));
             return;
         };
+        if p.typed {
+            self.wait_for_type(p);
+            return;
+        }
         let live = (self.envelope_checks > 0).then(|| crate::import::ai::envelope::live(&p.obj, p.before, p.inner)).flatten();
         let Some(kind) = live else {
             self.warn(crate::import::ai::envelope::DRAWN);
@@ -928,6 +932,32 @@ impl<'a> Reader<'a> {
             let drawn = std::mem::replace(slot, envelope);
             self.envelopes_drawn.push((id, drawn));
         }
+    }
+}
+
+impl Reader<'_> {
+    /// An envelope of type `p` whose drawn art was just read (the last object of this container):
+    /// it waits for its type to be laid out ([`crate::import::ai::envelope::TypedEnvelope`]), unless
+    /// objects the reader couldn't read are in it, or too many already wait. Then it keeps its
+    /// drawn art and its type, hidden.
+    fn wait_for_type(&mut self, p: PendingEnvelope) {
+        let Some(drawn) = self.frames.last().and_then(|f| f.children.last()) else { return };
+        let mut ids = HashSet::new();
+        fn collect(n: &Node, ids: &mut HashSet<NodeId>) {
+            ids.insert(n.id);
+            for c in n.children().into_iter().flatten() {
+                collect(c, ids);
+            }
+        }
+        collect(drawn, &mut ids);
+        p.before.iter().chain(&p.inner).for_each(|n| collect(n, &mut ids));
+        let unread = self.unread.iter().any(|(id, _)| ids.contains(id));
+        if unread || self.typed_envelopes.len() >= crate::import::ai::envelope::MAX_CHECKED {
+            self.warn(crate::import::ai::envelope::TYPE_DRAWN);
+            return;
+        }
+        let drawn = drawn.id;
+        self.typed_envelopes.push(crate::import::ai::envelope::TypedEnvelope { obj: p.obj, before: p.before, inner: p.inner, drawn });
     }
 }
 

@@ -1167,9 +1167,11 @@ fn artboard_fit_art(s: &mut Session, p: &Value) -> Result<Value> {
         super::panelcmds::refuse_locked(d, &indices)?;
     }
     let mut fits = vec![];
+    // One renderer measures every artboard: each 3D solid is built once.
+    let mut renderer = vectorcraft_render::Renderer::new();
     for i in unlocked {
         let was = d.artboards.get(i).map(|a| a.rect).ok_or_else(|| EngineError::Other("no such artboard".into()))?;
-        if let Some(b) = vectorcraft_render::encode::art_bounds_on(d, was) {
+        if let Some(b) = renderer.art_bounds_on(d, was) {
             // At least 1 pt a side, as `rect_from` makes Artboard Options' sizes.
             fits.push((i, was, Rect::new(b.x0, b.y0, b.x0 + b.width().max(1.0), b.y0 + b.height().max(1.0))));
         }

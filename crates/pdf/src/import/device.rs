@@ -250,7 +250,7 @@ impl<'a> Device<'a> for Builder<'_> {
                     let mask = if crate::import_image::has_mask(st) { self.alpha_mask(key, &r, w, h, transform) } else { None };
                     return self.add_image_masked(key, || cmyk.map(|blob| (blob, w, h)), transform, mask, None);
                 }
-                // A Separation image keeps its ink: its tints as a grayscale image that the ink at
+                // An image of one ink keeps it: its tints as a grayscale image that the ink at
                 // 100 % colorizes, as a mask painted in the ink comes in. Its mask becomes an
                 // opacity mask, as a CMYK image's does. Read once per image: the decision is kept,
                 // so one that opens in RGB stays RGB, and the gray pixels have their own key.
@@ -378,6 +378,7 @@ impl<'a> Device<'a> for Builder<'_> {
         if self.nested > 0 {
             return;
         }
+        self.actual.begin();
         let at = self.tag_at;
         self.tag_at += 1;
         let group = match self.scan.tags.get(at) {
@@ -416,5 +417,12 @@ impl<'a> Device<'a> for Builder<'_> {
             self.flush();
         }
         self.marked.pop();
+        self.actual.end();
+    }
+
+    fn actual_text(&mut self, text: &[u8]) {
+        if self.nested == 0 && self.text_as == crate::TextAs::Text && !self.actual.set(text) {
+            self.warn("ActualText beyond the import size or nesting limit was left to glyph mappings");
+        }
     }
 }

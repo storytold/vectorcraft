@@ -23,6 +23,7 @@ impl<'p> Builder<'p> {
             glyphs: None,
             text: None,
             text_as,
+            actual: Default::default(),
             images: HashMap::new(),
             image_keys: HashMap::new(),
             cmyk_keys: HashSet::new(),
@@ -102,6 +103,7 @@ impl<'p> Builder<'p> {
         self.mask = None;
         self.masked.clear();
         self.marked.clear();
+        self.actual = Default::default();
         (self.scan, self.tag_at, self.aligned, self.paint_at) = (scan, 0, true, 0);
         if self.scan.overprints && self.scan.zero_mode {
             self.warn(OVERPRINT_ZERO_MODE);
@@ -583,13 +585,13 @@ impl<'p> Builder<'p> {
         Some(Paint::Pattern { pattern: name, xf })
     }
 
-    /// Separation image `st` (`w` × `h` pixels) as the paint of its ink at 100 % (a spot swatch, a
+    /// Image `st` of one ink (`w` × `h` pixels) as the paint of its ink at 100 % (a spot swatch, a
     /// process plate or Registration, found by its colour space) and its tints as gray pixels
     /// ([`crate::import_image::tint_gray`]). `None` for another image, an ink whose colour can't
     /// be told, or tints that can't be read (with a warning): the image opens in RGB. The ink is
     /// only marked used once the tints are read.
     pub(super) fn separation_image(&mut self, st: &craft_pdf::syntax::object::Stream<'_>, w: u32, h: u32) -> Option<(Paint, Vec<u8>)> {
-        let space = self.colors.array_space(&crate::import_image::separation_space(st)?)?;
+        let space = self.colors.array_space(&crate::import_image::one_ink_space(st)?)?;
         let gray = crate::import_image::tint_gray(st, w, h).map_err(|why| self.warn(why)).ok()?;
         Some((self.colors.native(space, &[1.0])?.paint(), gray))
     }
@@ -749,6 +751,7 @@ impl<'p> Builder<'p> {
         if self.text_as != TextAs::Text || self.nested > 0 {
             return false;
         }
+        let authored = self.actual.active();
         let key = o.font_cache_key();
         let glyph = o.glyph_id().to_u32();
         let (unicode, from_cid) = match o.as_unicode().filter(|u| !replacement(u)) {
@@ -773,6 +776,7 @@ impl<'p> Builder<'p> {
         let text: String = match unicode {
             Some(BfString::Char(c)) => c.to_string(),
             Some(BfString::String(s)) => s,
+            None if authored => String::new(),
             None => {
                 // Invisible text isn't kept as outlines: the caller says it was left out.
                 if paint.is_some() && o.as_unicode().is_some_and(|u| replacement(&u)) {
@@ -785,7 +789,7 @@ impl<'p> Builder<'p> {
         // Adobe's CID tables map some ideographs to their look-alike Kangxi radicals.
         let text: String = if from_cid { text.chars().map(unify_radical).collect() } else { text };
         let Some(at) = Placement::of(m) else { return false };
-        if text.is_empty() || text.chars().any(|c| c.is_control()) {
+        if !authored && (text.is_empty() || text.chars().any(|c| c.is_control())) {
             return false;
         }
         let width = o.advance_width().filter(|w| w.is_finite());
@@ -849,6 +853,9 @@ impl<'p> Builder<'p> {
             fill: if stroke.is_none() { paint } else { None },
             stroke,
         };
+        if authored {
+            return self.actual_glyph(o, m, at, look, opacity);
+        }
         let advance = width.map_or(at.size * 0.5, |w| w as f64 / 1000.0 * at.size * at.h_scale / 100.0);
         // A glyph set vertically is drawn from its origin, which the file puts the position
         // vector's vx (from the font's `W2`, else half its width from `W` or `DW`) to the left of
@@ -858,6 +865,9 @@ impl<'p> Builder<'p> {
             let vx = self.fonts.get(&key).and_then(|f| f.vertical.as_ref()).map_or(500.0, |v| v.centre(glyph));
             m * kurbo::Point::new(vx, 880.0)
         });
+        // A horizontal line is gathered in visual order and put back in logical order as a whole:
+        // a ligature's characters (lam-alef, lam-lam-heh) go in visual order too (#6072).
+        let text = if top.is_none() { visual_glyph_text(text) } else { text };
         let place = |line: &mut TextLine| match top {
             Some(top) => line.push_upright(&look, at, opacity, Upright { top }, &text),
             None => line.push(&look, at, opacity, advance, &text),
@@ -886,4 +896,17 @@ impl<'p> Builder<'p> {
         }
         true
     }
+}
+
+/// The characters of one glyph in the order they are drawn: a PDF names a ligature's characters
+/// in logical order (lam then alef for لا), while a horizontal line of type is gathered glyph by
+/// glyph in visual order and only then put back in logical order. Right-to-left characters are
+/// turned round here so that putting the line back restores them.
+fn visual_glyph_text(text: String) -> String {
+    if text.chars().nth(1).is_none() {
+        return text;
+    }
+    let Some((order, _)) = vectorcraft_text::logical_order(&text) else { return text };
+    let chars: Vec<char> = text.chars().collect();
+    order.iter().filter_map(|&i| chars.get(i)).collect()
 }

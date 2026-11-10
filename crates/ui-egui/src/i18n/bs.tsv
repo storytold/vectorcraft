@@ -600,6 +600,7 @@
 	Hide Guides	Sakrij vodilice
 	Show Guides	Prikaži vodilice
 	Lock Guides	Zaključaj vodilice
+	Lock Guides by Default	Zaključaj vodilice po zadanom
 	Unlock Guides	Otključaj vodilice
 	Make Guides	Napravi vodilice
 	Release Guides	Oslobodi vodilice
@@ -765,6 +766,13 @@
 	Other Library…	Druga biblioteka…
 	Graphic Style Libraries	Biblioteke grafičkih stilova
 	Shadows and Glows	Sjene i sjajevi
+	Game HUD	Igraći HUD
+	Health Fill	Zdravlje
+	Mana Glow	Mana
+	Damage Flash	Šteta
+	Quest Outline	Zadatak
+	Coin Shine	Novčić
+	Boss Alert	Bos
 	Outlines and Rules	Obrisi i linije
 	Hand-Drawn	Ručno crtano
 	Gradient Finishes	Gradijentne završnice
@@ -964,6 +972,7 @@ lighting	Light	Svjetlo
 	Color Picker…	Birač boja…
 	Coming soon — tracked in the parity plan	Uskoro — prati se u planu usklađenosti
 	Command Dialog	Dijalog naredbe
+	Command API Reference	Referenca API-ja naredbi
 	Copy Selected Style	Kopiraj odabrani stil
 	Corners…	Uglovi…
 	Define Perspective Grid…	Definiši mrežu perspektive…
@@ -2531,15 +2540,12 @@ digits	Malayalam	Malajalam
 	Selected Swatches	Odabrani uzorci boja
 	Advanced Options	Napredne opcije
 	Background Contents	Sadržaj pozadine
-	Background Contents:	Sadržaj pozadine:
 	BLANK DOCUMENT PRESETS	PREDLOŠCI PRAZNIH DOKUMENATA
 	Bleed	Napust
 	Change to Right-to-Left Layout	Prebaci na raspored s desna nalijevo
 	Columns:	Kolone:
-	Create Document	Kreiraj dokument
 	Documents you create appear here.	Dokumenti koje kreirate pojavljuju se ovdje.
 	More Settings	Više postavki
-	New from Template	Novo iz predloška
 	Number of Artboards:	Broj radnih ploča:
 	Orientation:	Orijentacija:
 	PRESET DETAILS	DETALJI PREDLOŠKA
@@ -2550,7 +2556,6 @@ digits	Malayalam	Malajalam
 	RECENT	NEDAVNO
 	RECENT (1)	NEDAVNO (1)
 	SAVED	SAČUVANO
-	Templates…	Predlošci…
 	Transparent (Default)	Prozirno (zadano)
 	Save for Office Documents	Sačuvaj za Office dokumente
 	Transparent Background	Prozirna pozadina
@@ -3486,6 +3491,7 @@ theme	Appearance	Izgled
 	Arrange by Row	Rasporedi po redu
 	Arrange by Column	Rasporedi po koloni
 	Save Preset	Sačuvaj predložak
+	Save Document Preset	Sačuvaj predložak dokumenta
 	Screen (72 ppi)	Ekran (72 ppi)
 	Social Square Post 1080×1080	Kvadratna objava za društvene mreže 1080×1080
 	Distribute	Rasporedi ravnomjerno
@@ -4320,6 +4326,15 @@ imageTrace	Outline	Obris
 @msg	Combine Slices: the slices have no bounds	Kombinuj isječke: isječci nemaju granice
 @msg	Convert to Artboards: selection has no area	Pretvori u radne ploče: odabir nema površinu
 @msg	Convert to Shape: no rectangles or ellipses selected	Pretvori u oblik: nisu odabrani pravougaonici ni elipse
+	Run	Pokreni
+	Run Script	Pokreni skriptu
+	Stop Script	Zaustavi skriptu
+	Show External Script Warning	Prikaži upozorenje za vanjske skripte
+	A Script Is Running	Skripta se izvršava
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skripta može mijenjati otvorene dokumente i pisati datoteke putem naredbi koje pokreće. Pokrećite samo skripte kojima vjerujete.
+	Do not show this warning again	Ne prikazuj više ovo upozorenje
+	Stop the script and undo what it did? Then quit again.	Zaustaviti skriptu i poništiti ono što je uradila? Zatim ponovo izađite.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Ova skripta je dodala veoma mnogo objekata. Nastaviti, ili je zaustaviti i poništiti ono što je uradila?
 @msg	Copied the script report	Izvještaj skripte kopiran
 @msg	Corners edits the corners of a path	Uglovi uređuje uglove putanje
 @msg	Couldn't copy to the system clipboard: {e}	Nije moguće kopirati u sistemski međuspremnik: {e}
@@ -5489,7 +5504,8 @@ mark-style	Japanese	Japanski
 	Bevel both sides	Zakošenje s obje strane
 	Presets	Unaprijed postavljene vrijednosti
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Objekat prima jedan 3D efekat. Uredite opcije postojećeg efekta ili ga prvo uklonite.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} trenutno zahtijeva putanju ili složenu putanju. Prvo pretvorite tekst, slike i grupe u putanje.
+@msg	{label} currently requires a path, compound path, type, group, blend or symbol instance. Expand other objects first.	{label} trenutno zahtijeva putanju, složenu putanju, tekst, grupu, stapanje ili instancu simbola. Prvo proširite ostale objekte.
+@msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label} ne može napraviti tijelo od slike: prvo je pratite pomoću Objekat › Praćenje slike › Napravi.
 @msg	{label} requires a shape with at least two anchors	{label} zahtijeva oblik s najmanje dva sidra
 @msg	The shape is too complex for a 3D effect	Oblik je previše složen za 3D efekat
 @msg	The 3D surface is too complex; simplify the shape	3D površina je previše složena; pojednostavite oblik
@@ -5809,6 +5825,7 @@ axis	Y Axis	Y osa
 	Show its progress, see Cancel and write log lines	Prikazati napredak, prepoznati otkazivanje i zapisivati redove dnevnika
 	Keep settings of its own	Čuvati vlastite postavke
 	Keep a cache of its own, which you can clear	Čuvati vlastitu predmemoriju koju možete očistiti
+	Run these commands on the document: {ids}	Izvršavati ove naredbe na dokumentu: {ids}
 	Clear Plug-in Cache	Očisti predmemoriju dodatka
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	dozvola `{permission}` zahtijeva nivo API-ja dodataka {PROGRESS_API}: navedite `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	modul uvozi `env.{name}` s drugim tipom od domaćinovog: domaćinov tip je {signature}
@@ -5880,6 +5897,11 @@ axis	Y Axis	Y osa
 	Button	Dugme
 	Panel	Panel
 	UI Frames	UI okviri
+	Map Markers	Markeri mape
+	Pin	Pin
+	Flag	Zastava
+	Crosshair	Nišan
+	Checkpoint	Kontrolna tačka
 	Open Symbol Library	Otvori biblioteku simbola
 	Save Symbol Library	Sačuvaj biblioteku simbola
 	Save Symbol Library…	Sačuvaj biblioteku simbola…
@@ -5934,6 +5956,11 @@ axis	Y Axis	Y osa
 	User Brush Library 9	Korisnička biblioteka četkica 9
 	User Brush Library 10	Korisnička biblioteka četkica 10
 	Art Ribbons	Umjetničke trake
+	Zigzag	Cik-cak
+	Burst Ray	Zraka udara
+	Dash Trail	Isprekidani trag
+	Speed Line	Linija brzine
+	Game Trails	Tragovi igre
 	Calligraphic Nibs	Kaligrafski vrhovi
 	Pattern Borders	Ivice od uzoraka
 	Scatter Shapes	Raspršeni oblici
@@ -5952,6 +5979,8 @@ axis	Y Axis	Y osa
 	Live preview	Pregled uživo
 	Point Text	Tačkasti tekst
 	Area Text	Tekst u oblasti
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Mjeri tekst po granicama glifa
 	Show Snap to Glyph Options	Prikaži opcije prianjanja uz glif
 	Hide Snap to Glyph Options	Sakrij opcije prianjanja uz glif
 	Snap to Glyph Options	Opcije prianjanja uz glif
@@ -6481,3 +6510,5 @@ shape	Open	Otvoren
 # Align to Pixel Grid
 	Align to Pixel Grid	Poravnaj s mrežom piksela
 @msg	side is left or right, not `{s}`	side je left ili right, a ne `{s}`
+	Edit Custom Dictionary	Uredi prilagođeni rječnik
+	Entry:	Unos:

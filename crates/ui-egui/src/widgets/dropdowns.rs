@@ -234,8 +234,13 @@ pub fn popover<R>(resp: &Response, toggle: bool, content: impl FnOnce(&mut Ui) -
             && click_pos.is_some_and(|pos| ctx.layer_id_at(pos).is_none_or(|l| l.order != egui::Order::Foreground));
         was_open && !clicked_elsewhere
     };
+    // Closing with a field in it that has the keyboard: it draws once more, so the field lets go of
+    // the keyboard to the click and commits what was typed, as in a panel (#6429).
+    let last = was_open && !open && field_focused_in(ctx, egui::LayerId::new(egui::Order::Foreground, id));
+    let mut shown = open || last;
     let inner =
-        egui::Popup::menu(resp).id(id).open_bool(&mut open).close_behavior(egui::PopupCloseBehavior::IgnoreClicks).show(content).map(|r| r.inner);
+        egui::Popup::menu(resp).id(id).open_bool(&mut shown).close_behavior(egui::PopupCloseBehavior::IgnoreClicks).show(content).map(|r| r.inner);
+    open = shown && !last;
     ctx.data_mut(|d| {
         if open {
             d.insert_temp(id, frame);
@@ -244,6 +249,13 @@ pub fn popover<R>(resp: &Response, toggle: bool, content: impl FnOnce(&mut Ui) -
         }
     });
     inner
+}
+
+/// Whether a field in the popup on `layer` has the keyboard. A popup closing with one draws once
+/// more before it goes: the field lets go of the keyboard to the click away and commits what was
+/// typed, as it does in a panel. A popup that closed without drawing again dropped it (#6429).
+pub(crate) fn field_focused_in(ctx: &egui::Context, layer: egui::LayerId) -> bool {
+    ctx.memory(|m| m.focused()).and_then(|id| ctx.read_response(id)).is_some_and(|r| r.layer_id == layer)
 }
 
 /// Whether the popover for this anchor was open in the latest completed frame.

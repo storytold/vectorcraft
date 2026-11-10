@@ -8,6 +8,7 @@ use vectorcraft_geom::{Affine, FillRule, PathData, Point, Rect, shapes};
 
 use crate::*;
 
+mod actual_text;
 mod blend;
 mod charstroke;
 mod cmykblend;
@@ -748,7 +749,7 @@ fn an_image_whose_pixels_cant_be_decoded_is_left_out_with_one_note() {
 }
 
 /// #2023: a group's Transform effect copies an image among its members as it does the paths: the
-/// PDF draws the image three times, where the effect put it.
+/// PDF draws the image three times, where the effect put it, the original on top.
 #[test]
 fn a_group_transform_effect_exports_its_image_copies() {
     let mut d = doc(200.0, 100.0);
@@ -775,7 +776,7 @@ fn a_group_transform_effect_exports_its_image_copies() {
     let out = roundtrip(&d);
     let lefts: Vec<f64> =
         leaves(&out).iter().filter(|n| matches!(n.kind, NodeKind::Image(_))).filter_map(|n| n.geometric_bounds()).map(|b| b.x0.round()).collect();
-    assert_eq!(lefts, [20.0, 70.0, 120.0]);
+    assert_eq!(lefts, [120.0, 70.0, 20.0]);
 }
 
 /// Build a PDF with a correct xref table from object bodies.

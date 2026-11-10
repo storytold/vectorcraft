@@ -297,7 +297,6 @@ font-technology	Variable	Variabili
 	Update While Dragging	Aggiorna durante il trascinamento
 	Hide Video Rulers	Nascondi righelli video
 	Background Contents	Contenuto sfondo
-	Background Contents:	Contenuto sfondo:
 	Background:	Sfondo:
 	Backspace	Backspace
 	Bar Graph Tool	Strumento Grafico a barre
@@ -583,6 +582,7 @@ font-technology	Variable	Variabili
 	Coming soon — tracked in the parity plan	Prossimamente — previsto nel piano di parità
 	Command Click to Select Objects Behind	Cmd+clic per selezionare gli oggetti retrostanti
 	Command Dialog	Finestra dei comandi
+	Command API Reference	Riferimento API dei comandi
 	Community	Comunità
 	Compatibility:	Compatibilità:
 	Compatible Gradient and Gradient Mesh Printing	Stampa compatibile di sfumature e trame sfumatura
@@ -669,7 +669,6 @@ font-technology	Variable	Variabili
 	Couldn't {} {name}: {e}	Impossibile {} {name}: {e}
 	Create	Crea
 	Create Clipping Mask	Crea maschera di ritaglio
-	Create Document	Crea documento
 	Create from Guides	Crea da guide
 	Create from Selection	Crea dalla selezione
 	Create From:	Crea da:
@@ -1925,6 +1924,7 @@ file-filter	Templates	Modelli
 	Lock (⌘2)	Blocca (⌘2)
 	Lock Grid	Blocca griglia
 	Lock Guides	Blocca guide
+	Lock Guides by Default	Blocca guide per impostazione predefinita
 	Lock Others	Blocca altri
 	Lock Slices	Blocca sezioni
 	Lock Station Point	Blocca punto di osservazione
@@ -2175,7 +2175,6 @@ file-filter	Templates	Modelli
 	New Color Group…	Nuovo gruppo colori…
 	New Document Presets	Preset nuovo documento
 	New file	Nuovo file
-	New from Template	Nuovo da modello
 	New from Template…	Nuovo da modello…
 	New Graphic Style	Nuovo stile grafico
 	New Graphic Style (Alt-click to name it)	Nuovo stile grafico (Alt+clic per assegnare un nome)
@@ -2967,6 +2966,7 @@ digits	Malayalam	Malayalam
 	Save PDF Preset	Salva preset PDF
 	Save Perspective Grid Preset	Salva preset griglia prospettica
 	Save Preset	Salva preset
+	Save Document Preset	Salva preset documento
 	Preset {number}	Preset {number}
 	Save Preset…	Salva preset…
 	Save Print Preset	Salva preset di stampa
@@ -3175,6 +3175,13 @@ digits	Malayalam	Malayalam
 	Settings…	Impostazioni…
 	Setup…	Configurazione…
 	Shadows and Glows	Ombre e bagliori
+	Game HUD	HUD di gioco
+	Health Fill	Salute
+	Mana Glow	Mana
+	Damage Flash	Danno
+	Quest Outline	Missione
+	Coin Shine	Moneta
+	Boss Alert	Boss
 	Shape	Forma
 	Shape Builder	Generatore forme
 	Shape Builder Regions	Aree del Generatore forme
@@ -3546,7 +3553,6 @@ digits	Malayalam	Malayalam
 	Template	Modello
 	Templates	Modelli
 	Templates Folder	Cartella modelli
-	Templates…	Modelli…
 	Text Displayed in Cell:	Testo visualizzato nella cella:
 	Text Export Options	Opzioni di esportazione testo
 	Text Fill & Stroke Color	Colore riempimento e traccia testo
@@ -4110,6 +4116,28 @@ axis	Both	Entrambi
 @msg	Combine Slices: the slices have no bounds	Combina sezioni: le sezioni non hanno limiti
 @msg	Convert to Artboards: selection has no area	Converti in tavole da disegno: la selezione non ha area
 @msg	Convert to Shape: no rectangles or ellipses selected	Converti in forma: nessun rettangolo o ellisse selezionato
+	Run	Esegui
+	Run Script	Esegui script
+	Stop Script	Interrompi script
+	Show External Script Warning	Mostra avviso per gli script esterni
+	A Script Is Running	È in esecuzione uno script
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Uno script può modificare i documenti aperti e scrivere file tramite i comandi che esegue. Esegui solo script di cui ti fidi.
+	Do not show this warning again	Non mostrare più questo avviso
+	Stop the script and undo what it did? Then quit again.	Interrompere lo script e annullare ciò che ha fatto? Poi esci di nuovo.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Questo script ha aggiunto moltissimi oggetti. Continuare, oppure interromperlo e annullare ciò che ha fatto?
+@msg	Choose a .js or .jsx script	Scegli uno script .js o .jsx
+@msg	Ran {name}	{name} eseguito
+@msg	The script was stopped and its changes were undone	Lo script è stato interrotto e le sue modifiche sono state annullate
+@msg	a script is running: stop it or wait for it to finish	è in esecuzione uno script: interrompilo o attendi che finisca
+@msg	this is a compiled script, which cannot be run; use its source text	questo è uno script compilato, che non può essere eseguito; usa il suo testo sorgente
+@msg	the script is not UTF-8 text	lo script non è testo UTF-8
+@msg	the script is too large to run	lo script è troppo grande per essere eseguito
+@msg	a drag or an undo group is open; finish it before running a script	è aperto un trascinamento o un gruppo di annullamento; completalo prima di eseguire uno script
+@msg	the script left a document that cannot be kept	lo script ha lasciato un documento che non può essere conservato
+@msg	the script's run is no longer available	l'esecuzione dello script non è più disponibile
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	un comando non riuscito ha modificato passaggi di annullamento che non è stato possibile ripristinare, quindi lo script è stato interrotto
+@msg	a recovery copy could not be written, so the script was not run	non è stato possibile scrivere una copia di recupero, quindi lo script non è stato eseguito
+@msg	Running a script	Esecuzione di uno script
 @msg	Copied the script report	Rapporto dello script copiato
 @msg	Corners edits the corners of a path	Angoli modifica gli angoli di un tracciato
 @msg	Couldn't copy to the system clipboard: {e}	Impossibile copiare negli appunti di sistema: {e}
@@ -4353,6 +4381,11 @@ axis	Both	Entrambi
 @msg	internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)	errore interno in `{cmd}`: {msg} (il documento è rimasto com'era; segnala questo bug)
 @msg	internal error: {msg} (please report this bug)	errore interno: {msg} (segnala questo bug)
 @msg	invalid PDF setting: {0}	impostazione PDF non valida: {0}
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	la pagina della tavola da disegno {n} misura {size}, più del limite di pagina PDF di 14.400 pt (200 in): viene scritta con una UserUnit di {unit}, quindi le app che ignorano UserUnit la mostrano altrettante volte più piccola
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	la pagina della tavola da disegno {n} misura {size}, più del limite di pagina PDF di 14.400 pt (200 in): le pagine {label} vengono scritte senza UserUnit, in punti, e le app che rispettano il limite tagliano la pagina a 200 in
+@msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 non ha UserUnit, che serve a una pagina più lunga di 14.400 pt (200 in) per mantenere le sue dimensioni: il file viene scritto come PDF 1.6
+@msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	la pagina della tavola da disegno {n} misura {size}, troppo lunga e stretta per i lati di pagina PDF da 3 a 14.400 unità: viene scritta con una UserUnit di {unit}, che tiene il lato corto a 3 unità o più, e le app che rispettano il limite tagliano il lato lungo a 14.400 unità
+@msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	i file {label} accettano numeri reali fino a {max}, e la pagina della tavola da disegno {n}, lunga {side} pt, ne richiede di più grandi: scegli PDF 1.6 o successivo senza standard PDF/X, oppure una tavola da disegno più piccola
 @msg	invalid image data for `{0}`	dati immagine non validi per `{0}`
 @msg	invalid parameters for `{cmd}`: {msg}	parametri non validi per `{cmd}`: {msg}
 @msg	is not an image VectorCraft reads	non è un'immagine che VectorCraft sa leggere
@@ -4457,6 +4490,7 @@ axis	Both	Entrambi
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Caricato “{name}”: {n} passaggio è stato omesso|Caricato “{name}”: {n} passaggi sono stati omessi
 @msg	not an action set file	non è un file di set di azioni
 @msg	the action set file is larger than 8 MiB	il file del set di azioni supera 8 MiB
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: il riferimento supererebbe {MAX_BYTES} byte
 @msg	the action set file holds more than 1,000 actions	il file del set di azioni contiene più di 1.000 azioni
 @msg	the action set file needs a later version of VectorCraft	il file del set di azioni richiede una versione più recente di VectorCraft
 @msg	an action in the action set file has more than 10,000 steps	un’azione nel file del set di azioni ha più di 10.000 passaggi
@@ -5196,7 +5230,8 @@ lighting	Light	Luce
 	Bevel both sides	Smusso su entrambi i lati
 	Presets	Predefiniti
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Un oggetto può avere un solo effetto 3D. Modificate le opzioni dell'effetto esistente oppure rimuovetelo prima.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} richiede per ora un tracciato o un tracciato composto. Convertite prima testo, immagini e gruppi in tracciati.
+@msg	{label} currently requires a path, compound path, type, group, blend or symbol instance. Expand other objects first.	{label} richiede per ora un tracciato, un tracciato composto, testo, un gruppo, una fusione o un'istanza di simbolo. Espandete prima gli altri oggetti.
+@msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label} non può creare un solido da un'immagine: ricalcatela prima con Oggetto › Ricalco immagine › Crea.
 @msg	{label} requires a shape with at least two anchors	{label} richiede una forma con almeno due punti di ancoraggio
 @msg	The shape is too complex for a 3D effect	La forma è troppo complessa per un effetto 3D
 @msg	The 3D surface is too complex; simplify the shape	La superficie 3D è troppo complessa; semplificate la forma
@@ -5204,6 +5239,11 @@ lighting	Light	Luce
 @msg	unknown parameter `{key}`; did you mean `{near}`?	parametro sconosciuto `{key}`; forse intendevate `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	parametro sconosciuto `{key}`; il comando non ha parametri
 @msg	unknown parameter `{key}`; the command takes: {keys}	parametro sconosciuto `{key}`; il comando accetta: {keys}
+@msg	the params must be an object, not {got}	i parametri devono essere un oggetto, non {got}
+@msg	unknown parameter `{path}`; the object takes no keys	parametro sconosciuto `{path}`; l'oggetto non accetta chiavi
+@msg	unknown parameter `{path}`; it takes: {keys}	parametro sconosciuto `{path}`; accetta: {keys}
+@msg	missing `{path}`	manca `{path}`
+@msg	`{path}` must be {expected}, not {got}	`{path}` deve essere {expected}, non {got}
 	Load EPS into Clipboard	Carica EPS negli appunti
 @msg	an image of {w} × {h} pixels is too large to draw	un'immagine di {w} × {h} pixel è troppo grande per essere disegnata
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: non è un'immagine PNG, JPEG, WebP, TIFF o BMP
@@ -5553,6 +5593,20 @@ axis	Y Axis	Asse Y
 	Show its progress, see Cancel and write log lines	Mostrare il proprio avanzamento, rilevare l’annullamento e scrivere righe di registro
 	Keep settings of its own	Conservare impostazioni proprie
 	Keep a cache of its own, which you can clear	Conservare una cache propria, che è possibile svuotare
+	Run these commands on the document: {ids}	Eseguire questi comandi sul documento: {ids}
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	“{name}” elenca `{id}` in `commandAllowlist`, che un plug-in non può chiamare
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: il `commandAllowlist` del manifesto non lo elenca
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: l’ID o gli argomenti si trovano fuori dalla memoria del modulo
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: l’ID o gli argomenti non sono UTF-8
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: gli argomenti non sono un oggetto JSON
+@msg	only a filter with the usual budget declares `commandAllowlist`	solo un filtro con il budget consueto dichiara `commandAllowlist`
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	chiamate di comandi ({MAX_CALLS} chiamate e {MAX_CALL_BYTES} byte per esecuzione)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	dimensione di una chiamata di comando (vc_call `{shown}`: {len} byte, limite {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	al massimo {MAX_ALLOWED_COMMANDS} comandi in `commandAllowlist`
+@msg	a plug-in may not call this command	un plug-in non può chiamare questo comando
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	`commandAllowlist` richiede l’autorizzazione `commands`, e `commands` richiede un `commandAllowlist`
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist` elenca `{shown}`, che non è un ID di comando o è elencato due volte
 	Clear Plug-in Cache	Svuota cache del plug-in
 @msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	l’autorizzazione `{permission}` richiede il livello API dei plug-in {PROGRESS_API}: indicare `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	il modulo importa `env.{name}` con un tipo diverso da quello dell’host: quello dell’host è {signature}
@@ -5642,6 +5696,11 @@ axis	Y Axis	Asse Y
 	Button	Pulsante
 	Panel	Pannello
 	UI Frames	Cornici UI
+	Map Markers	Marcatori mappa
+	Pin	Spillo
+	Flag	Bandiera
+	Crosshair	Mirino
+	Checkpoint	Punto di controllo
 	Open Symbol Library	Apri libreria simboli
 	Save Symbol Library	Salva libreria simboli
 	Save Symbol Library…	Salva libreria simboli…
@@ -5696,6 +5755,11 @@ axis	Y Axis	Asse Y
 	User Brush Library 9	Libreria pennelli utente 9
 	User Brush Library 10	Libreria pennelli utente 10
 	Art Ribbons	Nastri grafici
+	Zigzag	Zigzag
+	Burst Ray	Raggio d’impatto
+	Dash Trail	Scia tratteggiata
+	Speed Line	Linea di velocità
+	Game Trails	Scia di gioco
 	Calligraphic Nibs	Pennini calligrafici
 	Pattern Borders	Bordi a motivo
 	Scatter Shapes	Forme a dispersione
@@ -5716,6 +5780,8 @@ axis	Y Axis	Asse Y
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Testo per punti
 	Area Text	Testo in area
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Misura il testo in base ai limiti del glifo
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Mostra opzioni di aggancio a glifo
 	Hide Snap to Glyph Options	Nascondi opzioni di aggancio a glifo
@@ -6283,3 +6349,8 @@ breakText	Glyphs	Glifi
 	Align to Pixel Grid	Allinea alla griglia pixel
 @msg	only paths and compound paths can be aligned to the pixel grid	solo i tracciati e i tracciati composti possono essere allineati alla griglia pixel
 @msg	side is left or right, not `{s}`	side è left o right, non `{s}`
+	Ignore All	Ignora tutto
+	Add to Dictionary	Aggiungi al dizionario
+	No Suggestions	Nessun suggerimento
+	Edit Custom Dictionary	Modifica dizionario personalizzato
+	Entry:	Voce:

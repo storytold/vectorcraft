@@ -1086,6 +1086,43 @@ fn defaults_match_the_dialog_and_info_tells_what_applies() {
     assert!(matches!(selected(&s).kind, NodeKind::Path { live: Some(_), .. }));
 }
 
+/// Expand refuses an option of the wrong type with an error naming it, and leaves the art, the
+/// selection and the undo history as they were. Null counts as an option left out, which keeps its
+/// default.
+#[test]
+fn expand_refuses_an_option_of_the_wrong_type() {
+    let mut s = session();
+    let id = gradient_rect(&mut s, Rect::new(20.0, 20.0, 180.0, 120.0), white_black(), true);
+    let state = |s: &Session| {
+        let st = s.doc().unwrap();
+        (st.revision, st.history.undo.len(), st.history.redo.len(), st.selection.objects.clone())
+    };
+    let before = (state(&s), node(&s, id));
+    let switch = |k: &str| format!("`{k}` must be true or false");
+    for (p, want) in [
+        (json!({"object": "yes"}), switch("object")),
+        (json!({"object": 0}), switch("object")),
+        (json!({"fill": "false"}), switch("fill")),
+        (json!({"stroke": 1}), switch("stroke")),
+        (json!({"gradient": 3}), "`gradient` must be a string".to_string()),
+        (json!({"gradient": true}), "`gradient` must be a string".to_string()),
+        (json!({"steps": "16"}), "`steps` must be a number, not \"16\"".to_string()),
+        (json!({"steps": [16]}), "`steps` must be a number, not [16]".to_string()),
+    ] {
+        let r = s.execute("object.expand", &p);
+        assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if *msg == want), "{p}: {r:?}");
+        assert_eq!((state(&s), node(&s, id)), before, "{p}");
+    }
+    // Null options take their defaults: Object, Fill and Stroke on, 255 solid strips.
+    run(&mut s, "object.expand", json!({"object": null, "fill": null, "stroke": null, "gradient": null, "steps": null}));
+    let g = selected(&s);
+    let NodeKind::Group { children, .. } = &g.kind else { panic!("{:?}", g.kind) };
+    let (clip, strips) = clip_parts(&children[0]);
+    assert!(matches!(clip.kind, NodeKind::Path { live: None, .. }));
+    assert_eq!(strips.len(), 255);
+    assert!(children[1].appearance.stroke_paint().is_none(), "outlined stroke");
+}
+
 /// A selected open line with a 2 pt black stroke, no fill and a Zig Zag effect (#3089).
 fn zig_zag_line(s: &mut Session) -> NodeId {
     let id = NodeId(run(s, "path.create", json!({"d": "M 20 100 L 180 100"}))["id"].as_u64().unwrap());

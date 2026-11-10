@@ -3,8 +3,10 @@ use vectorcraft_geom::Point;
 use super::entry::RgbInCmyk;
 use super::{
     Affine, Arc, BezPath, BlendMode, Color, Compatibility, Document, Exporter, Fill, FillRule, HashMap, HashSet, Node, NormalizedF32, Path,
-    PathBuilder, PathEl, Rect, Shape, Standard, Surface, Transform, cmyk, krilla, luma, rgb,
+    PathBuilder, PathEl, Rect, Shape, Standard, Surface, cmyk, krilla, luma, rgb,
 };
+
+pub(super) use crate::surface::xf;
 
 /// How deep inline graphics nest before they are left out.
 pub(super) const MAX_INLINE_DEPTH: u32 = 4;
@@ -95,11 +97,6 @@ pub(super) const MAX_GRADIENT_PX: f64 = 4096.0;
 /// 6.1.13). The PDF writer writes a whole number in the `i32` range as an integer, and in builds
 /// with overflow checks it panics on -2,147,483,648.
 pub(super) const MAX_COORD: f64 = 1e9;
-
-pub(super) fn xf(a: Affine) -> Transform {
-    let c = a.as_coeffs();
-    Transform::from_row(c[0] as f32, c[1] as f32, c[2] as f32, c[3] as f32, c[4] as f32, c[5] as f32)
-}
 
 /// The current transform of surface `s` in the content stream it draws into, without that stream's
 /// root transform (a page's y flip).
@@ -203,9 +200,12 @@ pub(super) fn cover(s: &mut Surface, page: Rect, level: u8, opacity: f32) {
 /// group of that opacity that, unlike the writer's opacity groups, is not isolated.
 /// The cover is white, so a reader that takes every soft mask as a luminosity mask shows the same.
 pub(super) fn constant_mask(s: &mut Surface, page: Rect, alpha: f32) -> krilla::mask::Mask {
+    let transform = s.group_transform();
     let mut sb = s.stream_builder();
-    let mut ms = sb.surface();
+    let mut ms = Surface::stream(sb.surface());
+    ms.push_transform(&transform);
     cover(&mut ms, page, 255, alpha);
+    ms.pop();
     ms.finish();
     krilla::mask::Mask::new(sb.finish(), krilla::mask::MaskType::Alpha)
 }

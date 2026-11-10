@@ -41,6 +41,14 @@ pub fn attach_profile_store(session: &mut vectorcraft_engine::Session) {
     }
 }
 
+/// Make Edit › Color Settings kept in `Color Settings.json` the active ones (#6335), and keep them
+/// there when they change. After [`attach_profile_store`]: they may name a loaded profile.
+pub fn attach_color_settings(session: &mut vectorcraft_engine::Session) {
+    if let Some(path) = store_dir("Color Settings.json") {
+        session.attach_color_settings(path);
+    }
+}
+
 /// Install the plug-ins Install Plug-in kept in the `Plug-ins` folder (#2541), and keep the ones
 /// installed from now on there.
 pub fn attach_plugin_store(session: &mut vectorcraft_engine::Session) {
