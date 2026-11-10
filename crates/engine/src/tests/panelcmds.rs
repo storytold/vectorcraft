@@ -119,6 +119,60 @@ fn artboards_reorder_and_duplicate() {
     assert_eq!(s.doc().unwrap().doc.artboards[0].name, "Second");
 }
 
+/// `artboard.new {beside, side}` adds an empty artboard the size of artboard `beside`, 20 pt from
+/// that side of it, and `artboard.duplicate {index, side}` puts the copy and its art there; each is
+/// one undo step. An unknown side, `beside` without `side`, and `side` with a size or place are
+/// refused and change nothing.
+#[test]
+fn artboards_are_added_and_duplicated_on_a_side() {
+    let mut s = session();
+    let id = rect(&mut s);
+    let board = |s: &Session, i: usize| s.doc().unwrap().doc.artboards[i].rect;
+    let undo = |s: &Session| s.doc().unwrap().history.undo.len();
+    let src = board(&s, 0);
+    let before = undo(&s);
+    assert_eq!(s.execute("artboard.new", &json!({"beside": 0, "side": "bottom"})).unwrap()["index"], 1);
+    assert_eq!(board(&s, 1), src + vectorcraft_geom::Vec2::new(0.0, src.height() + 20.0), "same size, 20 pt below");
+    assert_eq!(undo(&s), before + 1, "one undo step");
+    assert!(!s.doc().unwrap().doc.artboard_has_art(board(&s, 1)), "the new artboard is empty");
+    s.execute("artboard.new", &json!({"beside": 0, "side": "left"})).unwrap();
+    assert_eq!(board(&s, 2), src + vectorcraft_geom::Vec2::new(-(src.width() + 20.0), 0.0));
+    s.execute("artboard.new", &json!({"side": "top"})).unwrap();
+    assert_eq!(board(&s, 3), board(&s, 2) + vectorcraft_geom::Vec2::new(0.0, -(src.height() + 20.0)), "by default beside the last");
+    s.execute("artboard.new", &json!({"side": "top", "beside": null, "x": null})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+
+    let before = undo(&s);
+    let out = s.execute("artboard.duplicate", &json!({"index": 0, "side": "right", "art": true})).unwrap();
+    assert_eq!(out["index"], 4);
+    let dv = vectorcraft_geom::Vec2::new(src.width() + 20.0, 0.0);
+    assert_eq!(board(&s, 4), src + dv, "the copy sits 20 pt right of the artboard it copies");
+    let copies: Vec<NodeId> = out["ids"].as_array().unwrap().iter().map(|v| NodeId(v.as_u64().unwrap())).collect();
+    assert_eq!(copies.len(), 1);
+    let bounds = |s: &Session, id: NodeId| s.doc().unwrap().doc.bounds_of(&[id], false).unwrap();
+    assert_eq!(bounds(&s, copies[0]), bounds(&s, id) + dv, "its art goes with it");
+    assert_eq!(undo(&s), before + 1, "one undo step");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.artboards.len(), 4, "undo takes the copy and its art away together");
+    assert!(s.doc().unwrap().doc.node(copies[0]).is_none());
+
+    let before = s.doc().unwrap().doc.clone();
+    let steps = undo(&s);
+    for (cmd, p, msg) in [
+        ("artboard.new", json!({"beside": 0, "side": "middle"}), "`side` must be"),
+        ("artboard.new", json!({"beside": 0, "side": 3}), "`side` must be"),
+        ("artboard.new", json!({"beside": 0}), "`beside` needs `side`"),
+        ("artboard.new", json!({"side": "left", "width": 100}), "leave out x, y, width and height"),
+        ("artboard.new", json!({"beside": 9, "side": "left"}), "no such artboard"),
+        ("artboard.duplicate", json!({"index": 0, "side": "inside"}), "`side` must be"),
+    ] {
+        let e = s.execute(cmd, &p).unwrap_err().to_string();
+        assert!(e.contains(msg), "{cmd} {p}: {e}");
+        assert_eq!(*s.doc().unwrap().doc, *before, "{cmd} {p} changes nothing");
+        assert_eq!(undo(&s), steps, "{cmd} {p}");
+    }
+}
+
 /// An artboard's background color (Properties › Artboards › Fill): `artboard.setProps {color}` sets
 /// it and `{color: null}` clears it, each in one undo step. A change without `color` leaves it, a
 /// duplicate keeps it, `inspect_document` reports it, `artboard.new {color}` starts with it, an
@@ -1762,6 +1816,54 @@ fn delete_empty_artboards_check_measures_a_document_once() {
     assert_eq!(delete_empty_enabled_counted(&s), (true, 0), "after a change of the selection");
     s.execute("select.none", &json!({})).unwrap();
     assert_eq!(delete_empty_enabled_counted(&s), (true, 0), "after another change of the selection");
+}
+
+/// Whether Fit to Artwork Bounds has art to fit on `indices`, as a menu asks for it, with the
+/// plug-ins' and fonts' generations `outside`, and how many times asking measured a document on
+/// this thread.
+fn art_to_fit_counted(s: &Session, indices: &[usize], outside: (u64, u64)) -> (bool, usize) {
+    let measures = || crate::doc_state::ART_TO_FIT_MEASURES.with(std::cell::Cell::get);
+    let before = measures();
+    let any = s.doc().unwrap().any_art_to_fit_with(indices, outside);
+    (any, measures() - before)
+}
+
+/// A menu asks whether Fit to Artwork Bounds has art on every frame while it is open: the answer is
+/// measured once for a version of the document and the artboards asked about, kept through a change
+/// of the selection or the view, and measured again after an edit, for other artboards, and when
+/// the plug-ins or the fonts change.
+#[test]
+fn art_to_fit_is_measured_once_for_a_version_of_the_document() {
+    let mut s = row_of_artboards(2);
+    let both = [0, 1];
+    assert_eq!(art_to_fit_counted(&s, &both, (0, 0)), (false, 1), "the first frame");
+    assert_eq!(art_to_fit_counted(&s, &both, (0, 0)), (false, 0), "a later frame");
+    let art = box_at(&mut s, 10.0, 20.0);
+    assert_eq!(art_to_fit_counted(&s, &both, (0, 0)), (true, 1), "an edit puts art on artboard 1");
+    s.execute("select.set", &json!({"ids": [art.0]})).unwrap();
+    assert_eq!(art_to_fit_counted(&s, &both, (0, 0)), (true, 0), "after a change of the selection");
+    s.execute("view.transparencyGrid", &json!({})).unwrap();
+    assert_eq!(art_to_fit_counted(&s, &both, (0, 0)), (true, 0), "after a change of the view");
+    assert_eq!(art_to_fit_counted(&s, &[1], (0, 0)), (false, 1), "other artboards");
+    assert_eq!(art_to_fit_counted(&s, &[1], (1, 0)), (false, 1), "a plug-in installed or removed");
+    assert_eq!(art_to_fit_counted(&s, &[1], (1, 1)), (false, 1), "fonts installed");
+    assert_eq!(art_to_fit_counted(&s, &[1], (1, 1)), (false, 0));
+}
+
+/// A change made to the document in place (`Arc::make_mut`, with no other holder and no change
+/// of revision) is measured again: the kept answer holds the document it measured weakly, so a
+/// changed document is a new allocation, not the old address.
+#[test]
+fn art_to_fit_follows_a_change_in_place() {
+    let mut s = row_of_artboards(2);
+    box_at(&mut s, 10.0, 20.0);
+    assert_eq!(art_to_fit_counted(&s, &[0], (0, 0)), (true, 1), "art on artboard 1");
+    let st = s.doc_mut().unwrap();
+    assert_eq!(Arc::strong_count(&st.doc), 1, "the undo history holds the document before the edit");
+    let (revision, empty_spot) = (st.revision, st.doc.artboards[1].rect);
+    Arc::make_mut(&mut st.doc).artboards[0].rect = empty_spot;
+    assert_eq!(st.revision, revision);
+    assert_eq!(art_to_fit_counted(&s, &[0], (0, 0)), (false, 1), "artboard 1 moved off the art");
 }
 
 /// The enabled state follows an edit, an undo, a redo, an added and a removed artboard, a locked

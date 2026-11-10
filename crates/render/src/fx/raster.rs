@@ -29,7 +29,7 @@ pub(super) fn pcolor(ink: Ink, c: &vectorcraft_doc::color::Color) -> peniko::Col
 
 /// Most pixels the raster of [`Renderer::pixel_content`] holds (a 4K screen's): larger content is
 /// cropped to the view when its effects only look nearby, else rendered at a lower resolution.
-pub(super) const PIXEL_BUDGET: f64 = 8.4e6;
+pub(crate) const PIXEL_BUDGET: f64 = 8.4e6;
 
 /// Most Rasterize effects of one stack that [`Renderer::raster_fx`] draws (the last ones): each
 /// draws the content again inside the one after it.
@@ -121,7 +121,7 @@ impl PixelEntry {
 }
 
 /// The four linear coefficients of `view` (zoom and rotation, not the pan), as cache keys.
-pub(super) fn linear_key(view: Affine) -> [u64; 4] {
+pub(crate) fn linear_key(view: Affine) -> [u64; 4] {
     let c = view.as_coeffs();
     [c[0].to_bits(), c[1].to_bits(), c[2].to_bits(), c[3].to_bits()]
 }

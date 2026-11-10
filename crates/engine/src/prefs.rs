@@ -31,6 +31,8 @@ pub struct Prefs {
     pub disable_auto_add_delete: bool,
     pub use_precise_cursors: bool,
     pub show_tool_tips: bool,
+    /// Other Script… warns before it runs a chosen script.
+    pub show_external_script_warning: bool,
     pub anti_aliased_artwork: bool,
     pub select_same_tint_percent: bool,
     pub show_home_screen: bool,
@@ -41,6 +43,12 @@ pub struct Prefs {
     /// Align panel menu › Align to Glyph Bounds › Area Text: the same for area type, instead of
     /// its frame.
     pub align_glyph_bounds_area: bool,
+    /// Preferences › Type › Glyph Bounds › Measure Type by Glyph Bounds (also in the Transform
+    /// panel menu): the bounding box, the Transform panel's, Control bar's and Properties panel's X,
+    /// Y, W and H, and `object.setBounds` measure each point type object selected as an object (not
+    /// inside a selected group) by the ink of its glyphs instead of its em box
+    /// ([`crate::Session::bounds_measure`]).
+    pub type_glyph_bounds: bool,
     /// Artboard Options › Fade Region Outside Artboard: while the Artboard tool is active, the
     /// canvas draws everything outside the artboards darker, the pasteboard and the art on it.
     pub fade_region_outside_artboard: bool,
@@ -54,6 +62,8 @@ pub struct Prefs {
     /// Scale Strokes & Effects.
     pub scale_strokes: bool,
     pub zoom_with_mouse_wheel: bool,
+    /// While Zoom with Mouse Wheel is off, Cmd/Ctrl-wheel scrolls sideways instead of zooming.
+    pub ctrl_wheel_scrolls_sideways: bool,
     /// A horizontal drag on a numeric field or its label steps its value (#400).
     pub scrub_numeric_fields: bool,
     /// A two-finger rotation on a Mac trackpad turns the view about the pointer once it reaches 5°.
@@ -65,6 +75,8 @@ pub struct Prefs {
     pub paste_offset: f64,
     // Selection & Anchor Display
     pub selection_tolerance: f64,
+    /// Selection-tool marquee: touching (default), enclosed, or screen drag direction.
+    pub marquee_selection: String,
     pub object_selection_by_path_only: bool,
     pub snap_to_point_tolerance: f64,
     pub ctrl_click_selects_behind: bool,
@@ -95,6 +107,9 @@ pub struct Prefs {
     /// font is highlighted, in every document (on by default).
     pub highlight_substituted_fonts: bool,
     pub placeholder_text: bool,
+    /// Type › Start Lists From Typed Markers: a list marker and a space typed at the start of a
+    /// paragraph start a list (on by default). Off, they stay as typed text.
+    pub typed_lists: bool,
     // Units
     pub units_general: String,
     pub units_stroke: String,
@@ -107,6 +122,8 @@ pub struct Prefs {
     // Guides & Grid
     pub guide_color: String,
     pub guide_style: String,
+    /// Lock Guides by Default: the app starts with View › Guides › Lock Guides on.
+    pub lock_guides_by_default: bool,
     pub grid_color: String,
     pub grid_style: String,
     pub gridline_every: f64,
@@ -167,6 +184,10 @@ pub struct Prefs {
     /// acting as the title bar (tiling window managers, desktops that draw their own decorations).
     /// Read when the app starts. macOS always uses the system's.
     pub system_title_bar: bool,
+    /// Linux and the BSDs: draw the app bar as the title bar in sessions where the desktop draws
+    /// the frame (X11, Wayland compositors with server-side decorations, XWayland), as on GNOME.
+    /// Read when the app starts; System Title Bar and `VECTORCRAFT_TITLEBAR` set to `app`, `system` or `desktop` take precedence over it.
+    pub app_title_bar: bool,
     // Performance
     pub gpu_performance: bool,
     pub animated_zoom: bool,
@@ -353,12 +374,14 @@ impl Default for Prefs {
             disable_auto_add_delete: false,
             use_precise_cursors: false,
             show_tool_tips: true,
+            show_external_script_warning: true,
             anti_aliased_artwork: true,
             select_same_tint_percent: false,
             show_home_screen: true,
             use_preview_bounds: false,
             align_glyph_bounds_point: false,
             align_glyph_bounds_area: false,
+            type_glyph_bounds: false,
             fade_region_outside_artboard: true,
             artboard_update_while_dragging: true,
             display_print_size: false,
@@ -367,11 +390,13 @@ impl Default for Prefs {
             scale_corners: false,
             scale_strokes: false,
             zoom_with_mouse_wheel: false,
+            ctrl_wheel_scrolls_sideways: true,
             scrub_numeric_fields: true,
             trackpad_rotate_view: true,
             hold_tool_keys: true,
             paste_offset: 10.0,
             selection_tolerance: 3.0,
+            marquee_selection: "touching".into(),
             object_selection_by_path_only: false,
             snap_to_point_tolerance: 2.0,
             ctrl_click_selects_behind: true,
@@ -399,6 +424,7 @@ impl Default for Prefs {
             highlight_alternate_glyphs: false,
             highlight_substituted_fonts: true,
             placeholder_text: true,
+            typed_lists: true,
             units_general: s("points"),
             units_stroke: s("points"),
             units_type: s("points"),
@@ -407,6 +433,7 @@ impl Default for Prefs {
             identify_objects_by: s("objectName"),
             guide_color: s("#4affff"),
             guide_style: s("lines"),
+            lock_guides_by_default: false,
             grid_color: s("#c8c8c8"),
             grid_style: s("lines"),
             gridline_every: 72.0,
@@ -447,6 +474,7 @@ impl Default for Prefs {
             scale_cursor_with_ui: false,
             interface_language: s("auto"),
             system_title_bar: false,
+            app_title_bar: false,
             gpu_performance: true,
             animated_zoom: true,
             gpu_preference: s("automatic"),

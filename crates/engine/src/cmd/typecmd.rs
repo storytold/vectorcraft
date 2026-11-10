@@ -16,15 +16,21 @@ use super::{
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
-        cmd!("type.orientation.vertical", "Vertical", ["Type", "Orientation"], None, "{ids?|id?} set vertical writing", has_selection, |s, p| {
-            orientation(s, p, true)
-        }),
+        cmd!(
+            "type.orientation.vertical",
+            "Vertical",
+            ["Type", "Orientation"],
+            None,
+            "{ids?|id?} set vertical writing for the selected type and every frame of its threads → {vertical, ids}",
+            has_selection,
+            |s, p| orientation(s, p, true)
+        ),
         cmd!(
             "type.orientation.horizontal",
             "Horizontal",
             ["Type", "Orientation"],
             None,
-            "{ids?|id?} set horizontal writing",
+            "{ids?|id?} set horizontal writing for the selected type and every frame of its threads → {vertical, ids}",
             has_selection,
             |s, p| orientation(s, p, false)
         ),
@@ -110,6 +116,15 @@ pub fn specs() -> Vec<CommandSpec> {
             reshape_path
         ),
         cmd!(
+            "text.setPathHandle",
+            "Move Type Path Handle",
+            [],
+            None,
+            "{id, subpath?, anchor, which: \"in\"|\"out\", x, y, independent?: bool} move a direction handle of an anchor of type on a path's path to (x, y), as path.setHandle moves a path's (independent: that side only, the anchor becomes a corner); the start and end brackets keep their fractions of the path and the text reflows along it (what Direct Selection does dragging a handle of the path)",
+            has_doc,
+            set_path_handle
+        ),
+        cmd!(
             "text.fitHeadline",
             "Fit Headline",
             ["Type"],
@@ -139,8 +154,10 @@ pub fn specs() -> Vec<CommandSpec> {
     ]
 }
 
+/// Type › Type Orientation: set vertical or horizontal writing on every selected text object and
+/// every frame of their threads, in one undo step.
 fn orientation(s: &mut Session, p: &Value, vertical: bool) -> Result<Value> {
-    let ids = text_targets(s, p, "Text Orientation")?;
+    let ids = super::threads::with_threads(&s.doc()?.doc, &text_targets(s, p, "Text Orientation")?);
     s.edit("Text Orientation", |d, _| {
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else {
@@ -296,6 +313,7 @@ pub(crate) fn refresh_bounds(t: &mut TextObject) {
     let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
     t.cached_bounds = Some(lay.bounds);
     t.cached_baselines = lay.baselines();
+    t.cached_ink = Some((lay.bounds, vectorcraft_render::effects::preview::laid_out_ink(&lay, t)));
 }
 
 /// [`refresh_bounds`] for a document that is opening: the first frame takes the layout
@@ -307,6 +325,7 @@ pub(crate) fn refresh_bounds_for_first_frame(t: &mut TextObject) {
     let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
     t.cached_bounds = Some(lay.bounds);
     t.cached_baselines = lay.baselines();
+    t.cached_ink = Some((lay.bounds, vectorcraft_render::effects::preview::laid_out_ink(&lay, t)));
     vectorcraft_text::keep_layout(t, stamp, lay);
 }
 
@@ -911,7 +930,7 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
                         super::textedit::unprotected_runs(&t.runs, a, b, &kept)
                     }
                 };
-                set.extend(styled.iter().map(|r| super::fonts::font_of(&r.style)));
+                set.extend(styled.iter().flat_map(super::fonts::run_fonts));
             }
             if let Some(j) = justify {
                 let span = para_span(range, t);
@@ -1258,6 +1277,35 @@ fn reshape_path(s: &mut Session, p: &Value) -> Result<Value> {
     ok()
 }
 
+fn set_path_handle(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "text.setPathHandle";
+    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let si = super::draw2::usize_opt(p, "subpath", C)?.unwrap_or(0);
+    let ai = p.get("anchor").and_then(Value::as_u64).map(index).ok_or_else(|| bad(C, "missing anchor"))?;
+    let out = str_param(p, "which") != Some("in");
+    let pos = vectorcraft_geom::Point::new(f64_req(p, "x", C)?, f64_req(p, "y", C)?);
+    let independent = switch_or(p, "independent", false, C)?;
+    let node = s.doc()?.doc.node(id);
+    let on_path = matches!(node.map(|n| &n.kind), Some(NodeKind::Text(t)) if matches!(t.kind, vectorcraft_doc::TextKind::OnPath { .. }));
+    if !on_path || node.is_some_and(|n| n.extras().perspective.is_some()) {
+        return Err(bad(C, "not type on a path outside perspective"));
+    }
+    s.edit("Reshape Type Path", |doc, _| {
+        let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) else { return Err(EngineError::NoNode(id)) };
+        let before = t.kind.clone();
+        let within = |t: &TextObject| {
+            t.type_path().and_then(|p| p.bounds()).is_some_and(|b| [b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.abs() <= crate::MAX_COORD))
+        };
+        if !(t.set_path_handle((si, ai), out, pos, independent) && within(t)) {
+            t.kind = before;
+            return Err(bad(C, "no such path anchor, or the path would reach past the canvas"));
+        }
+        refresh_bounds(t);
+        Ok(())
+    })?;
+    ok()
+}
+
 #[cfg(test)]
 mod area_tests;
 
@@ -1271,7 +1319,7 @@ fn headline_fit(t: &TextObject, tracking: f64) -> Option<(f64, f64, usize)> {
     let cell = lay.frames.first()?;
     let line = lay.lines.first()?;
     let para = t.para_at(0);
-    let avail = cell.width() - 2.0 * t.area.inset - para.left_indent - para.right_indent;
+    let avail = cell.width() - 2.0 * t.area.inset - para.laid_out_left_indent() - para.right_indent;
     Some((line.x1 - line.x0, avail, line.end))
 }
 

@@ -35,12 +35,15 @@ use vectorcraft_doc::{Appearance, Document, Effect, ImageBlob, LayerColor, Node,
 use vectorcraft_geom::PathData;
 
 use super::obj::Obj;
-use crate::import::native::compare::{MAX_DIFFERENCE, MAX_SOLID_DIFFERENCE, compare_scale, differ, differ_in_colour};
+use crate::import::native::compare::{MAX_DIFFERENCE, MAX_SOLID_DIFFERENCE, compare_scale, differ, differ_in_colour, differ_on_black};
 
 /// The plugin that writes envelopes.
 pub(super) const PLUGIN: &str = "Adobe Deform Plugin"; // brand-ok: the plugin name the files use
 /// The note for an envelope that keeps its drawn art.
 pub(crate) const DRAWN: &str = "an envelope VectorCraft couldn't read as a live envelope comes in as its drawn art";
+/// The note for an envelope of type, which keeps its drawn art with its type hidden (unless the
+/// text document gives the type nothing, which a note of its own then says).
+pub(crate) const TYPE_DRAWN: &str = "type in an envelope comes in as the envelope's drawn art, not as editable type";
 /// The note for warped type that keeps its drawn art, before how many.
 pub(crate) const WARPED_TYPE_DRAWN: &str = "warped text objects that came in as drawn art, not as editable type";
 /// The most envelopes waiting for their drawn art at once.
@@ -290,7 +293,9 @@ pub(super) fn live(o: &Obj, before: Option<Node>, inner: Vec<Node>) -> Option<No
         }
         3 => {
             let (rows, cols, pts) = upright(shape?)?;
-            EnvelopeKind::TopObject { path: outline(rows, cols, &pts)? }
+            // The outline runs clockwise from the top left corner, one segment per grid edge.
+            let corners = [0, cols, cols.checked_add(rows)?, cols.checked_mul(2)?.checked_add(rows)?];
+            EnvelopeKind::TopObject { path: outline(rows, cols, &pts)?, corners: Some(corners) }
         }
         _ => return None,
     };
@@ -323,9 +328,9 @@ fn alone(node: &Node, layer: NodeId, shared: &Shared<'_>) -> Document {
 }
 
 /// How `live` and `drawn`, drawn over `region` at `scale`, differ: the pixels that differ in
-/// lightness or colour, those whose neighbours all differ too (where one draws something the other
-/// doesn't, not an edge drawn a little apart), and the pixels either inks. `None` when they can't
-/// be drawn.
+/// lightness or colour, seen on white or on black (each is drawn on its own: white art shows only on
+/// black), those whose neighbours all differ too (where one draws something the other doesn't, not
+/// an edge drawn a little apart), and the pixels either inks. `None` when they can't be drawn.
 fn differing(live: &Document, drawn: &Document, region: Rect, scale: f64) -> Option<(usize, usize, usize)> {
     let x = vectorcraft_render::Renderer::new().render_region(live, region, scale, false);
     let y = vectorcraft_render::Renderer::new().render_region(drawn, region, scale, false);
@@ -334,7 +339,7 @@ fn differing(live: &Document, drawn: &Document, region: Rect, scale: f64) -> Opt
     }
     let (w, h) = (x.width as usize, x.height as usize);
     let (xs, ys) = (x.pixels.as_chunks::<4>().0, y.pixels.as_chunks::<4>().0);
-    let differs: Vec<bool> = xs.iter().zip(ys).map(|(p, q)| differ(p, q) || differ_in_colour(p, q)).collect();
+    let differs: Vec<bool> = xs.iter().zip(ys).map(|(p, q)| differ(p, q) || differ_in_colour(p, q) || differ_on_black(p, q)).collect();
     let inked = xs.iter().zip(ys).filter(|(p, q)| p[3] > 8 || q[3] > 8).count();
     let at = |i: usize, j: usize| differs.get(j * w + i).copied().unwrap_or(false);
     let any = differs.iter().filter(|d| **d).count();

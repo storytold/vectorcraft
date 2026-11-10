@@ -222,7 +222,16 @@ impl Record {
         extra.push(ascii.len() as u8);
         extra.extend(ascii);
         extra.resize(extra.len().next_multiple_of(4), 0);
-        let units: Vec<u16> = self.name.encode_utf16().take(255).collect();
+        // Cut before the character that would pass 255 units, never inside a surrogate pair.
+        let mut units: Vec<u16> = vec![];
+        for c in self.name.chars() {
+            let mut buf = [0; 2];
+            let encoded = c.encode_utf16(&mut buf);
+            if units.len() + encoded.len() > 255 {
+                break;
+            }
+            units.extend_from_slice(encoded);
+        }
         let mut luni = (units.len() as u32).to_be_bytes().to_vec();
         luni.extend(units.iter().flat_map(|u| u.to_be_bytes()));
         block(&mut extra, b"luni", &luni)?;

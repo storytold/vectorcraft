@@ -10,8 +10,7 @@ pub(super) const MENU_FILTER: &str =
     "Case-insensitive substring of the menu path, its levels joined with \" > \" (e.g. \"Object\", \"Object > Path\")";
 
 /// The `brief` argument of the command listings.
-pub(super) const BRIEF: &str =
-    "Leave out each command's params description (the bulk of the catalogue); run command_list with the id as filter to read it";
+pub(super) const BRIEF: &str = "Leave out each command's params description and its schema and inputSchema (the bulk of the catalogue); run command_list with the id as filter to read them";
 
 /// The `max_side` argument of the window captures.
 pub(super) const MAX_SIDE_WINDOW: &str =
@@ -30,7 +29,7 @@ pub(super) fn trace_views(a: &Args) -> Result<bool, String> {
 
 /// The command catalogue narrowed by the listing tools' arguments: `filter` (or `query`) on the
 /// id, label and menu path, `menu` on the menu path, `enabledOnly`, and `brief` (no `params`
-/// text: the full catalogue is too large for many clients, #2173).
+/// text, `schema` or `inputSchema`: the full catalogue is too large for many clients, #2173).
 fn filter_commands(all: Value, a: &Args) -> Value {
     let text = |k: &str| a.get(k).and_then(Value::as_str).map(str::to_lowercase).filter(|s| !s.is_empty());
     let needle = text("filter").or_else(|| text("query"));
@@ -63,7 +62,9 @@ fn filter_commands(all: Value, a: &Args) -> Value {
             .filter(hit)
             .map(|mut c| {
                 if brief && let Some(o) = c.as_object_mut() {
-                    o.remove("params");
+                    for key in ["params", "schema", "inputSchema"] {
+                        o.remove(key);
+                    }
                 }
                 c
             })
@@ -191,7 +192,13 @@ fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, Str
         "screenshot" => screenshot(b, a),
         "open_file" => {
             let path = absolute_path(b, req_str(a, "path")?)?;
-            j(b.call("app.open", json!({"path": path}))?)
+            let mut p = json!({"path": path});
+            for k in ["importer", "params"] {
+                if let Some(v) = a.get(k).filter(|v| !v.is_null()) {
+                    p[k] = v.clone();
+                }
+            }
+            j(b.call("app.open", p)?)
         }
         "save_file" => {
             let mut p = json!({"path": a.get("path").and_then(Value::as_str).map(|p| absolute_path(b, p)).transpose()?});

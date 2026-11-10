@@ -20,7 +20,7 @@ pub(crate) use held_tool::{HeldTool, note_tool_use};
 use paste::unclip_chords;
 pub(crate) use paste::{PasteChord, paste_command};
 pub(crate) use presentation::presentation_step;
-use presentation::{escape_pair_id, escape_press, escape_resets_rotation, presentation_keys};
+use presentation::{escape_resets_rotation, presentation_keys};
 #[cfg(test)]
 use typing::is_shortcut_chord;
 pub(crate) use typing::keep_marked_text;
@@ -99,7 +99,7 @@ pub(crate) fn is_modifier(key: Key) -> bool {
 /// command's params: `{}`, or `{panel}` for the panel shortcuts (`window.panel`).
 pub(crate) fn all_shortcuts() -> Vec<(KeyboardShortcut, &'static str, serde_json::Value)> {
     let mut v = vec![];
-    for c in vectorcraft_engine::command_specs() {
+    for c in vectorcraft_engine::command_specs().iter().chain(vectorcraft_engine::cmd::plugin::command_specs()) {
         if let Some(sc) = crate::menus::shortcut_of(c.id).and_then(parse) {
             v.push((sc, c.id, json!({})));
         }
@@ -116,9 +116,15 @@ pub(crate) fn all_shortcuts() -> Vec<(KeyboardShortcut, &'static str, serde_json
     }
     // Effect menu items with shortcuts of their own (#3296): a chord bound to one is a command's
     // too, so the tool doesn't take Cmd+Enter bound to an effect before the keymap runs it.
-    for e in crate::shortcut_editor::effect_items() {
+    for e in crate::shortcut_editor::effect_items().iter() {
         if let Some(sc) = crate::shortcut_editor::effect_shortcut(&e.effect).and_then(parse) {
             v.push((sc, e.command, json!({ "effect": e.effect })));
+        }
+    }
+    // Object › Plug-ins' filter items with shortcuts, for the same reason.
+    for f in crate::shortcut_editor::filter_items().iter() {
+        if let Some(sc) = crate::shortcut_editor::filter_shortcut(&f.id).and_then(parse) {
+            v.push((sc, "plugin.dialog", json!({ "id": f.id })));
         }
     }
     // Most specific (most modifiers) first: `paste_command` takes the first V chord the held keys
@@ -195,12 +201,15 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         crate::ime::controls_without_editor(app, ctx);
         return;
     }
-    // Taken before anything returns, so a press in a field or a dialog ends a pair of Escapes.
-    let mut escape_pair = escape_press(ctx);
     // Followed before anything returns, so a key typed in a field isn't taken for a paste.
     let textless_paste = ctx.input(|i| app.paste_chord.textless_paste(&i.events));
     // A numeric field being scrubbed has the keyboard: Escape cancels the drag.
     if crate::scrub::phase(ctx) != crate::scrub::Phase::Idle {
+        crate::ime::controls_without_editor(app, ctx);
+        return;
+    }
+    // The update prompt and the modal result window draw over everything and read Escape themselves.
+    if crate::updates_ui::blocks_input(app) {
         crate::ime::controls_without_editor(app, ctx);
         return;
     }
@@ -215,7 +224,9 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         }
         // Escape closes a dropdown list or popover open in the dialog (each closes itself on it) and
         // leaves the dialog open.
-        let popup = app.ui.dialog.as_ref().is_some_and(|d| egui::Popup::is_any_open(ctx) || crate::dialogs::brush_options::tips_open(d));
+        let popup = app.ui.dialog.as_ref().is_some_and(|d| {
+            egui::Popup::is_any_open(ctx) || crate::dialogs::brush_options::tips_open(d) || crate::dialogs::new_document_popup_open(d)
+        });
         // Escape in Preferences' search field with text clears the field first.
         if !popup && pressed_anew(ctx, Key::Escape) && !crate::prefs_dialog::clear_search_on_escape(app, ctx) {
             crate::dialogs::cancel(app);
@@ -225,7 +236,7 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
     if app.ui.screen_mode == 3 {
         crate::ime::controls_without_editor(app, ctx);
-        presentation_keys(app, ctx, escape_pair);
+        presentation_keys(app, ctx);
         return;
     }
     // Escape that cancels a ruler-origin drag or floating Tools move skips the tool and later Escape actions,
@@ -255,7 +266,6 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 continue;
             }
             if k == Key::Escape && escape_ended_gesture {
-                remember_escape_pair(ctx, k, escape_pair);
                 continue;
             }
             // A key the tool claims (Esc with a loaded place cursor) is only the tool's.
@@ -272,7 +282,12 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
                     .unwrap_or(i.modifiers);
                 crate::canvas::mods(m, false)
             });
+            let ends = k == Key::Escape && app.session.tool_ends_on_escape(view);
+            let before = (k == Key::Escape && !ends).then(|| document_revision(app));
             let r = app.session.tool_key(tk, mods, view);
+            // An Escape that ended something in the tool (a path being drawn, a selected point) ends
+            // nothing else. A hover highlight it clears does not count.
+            let tool_took = ends || before.is_some_and(|b| b != document_revision(app));
             // Enter also takes what the tool asks of the UI: Rotate, Scale, Reflect and Shear open
             // their dialog with it.
             if claimed || (k == Key::Enter && !busy) {
@@ -282,33 +297,9 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 ctx.input_mut(|i| i.consume_key(Modifiers::NONE, k));
                 ctx.input_mut(|i| i.consume_key(Modifiers::SHIFT, k));
             }
-            if k == Key::Escape && !busy && !claimed && !escape_held_by_drag {
-                if app.session.active().is_some_and(|d| d.doc.pattern_edit.is_some()) {
-                    let _ = app.run("object.pattern.done", json!({}));
-                } else if app.session.active().is_some_and(|d| d.isolation.is_some()) {
-                    let _ = app.run("object.exitIsolation", json!({}));
-                } else if app.session.active().is_some_and(|d| d.global_edit.is_some()) {
-                    let _ = app.run("select.globalEdit", json!({}));
-                } else if app.ui.flyout.is_some() {
-                    app.ui.flyout = None;
-                } else if escape_pair.is_some_and(|second| escape_resets_rotation(app, ctx, second)) {
-                    // Escape pressed twice resets a rotated view (with the Rotate View tool, once).
-                    let _ = app.run("view.rotateReset", json!({}));
-                    escape_pair = None;
-                } else if matches!(app.ui.screen_mode, 1 | 2)
-                    && !egui::Popup::is_any_open(ctx)
-                    && !text_focused_in_previous_frame(ctx)
-                    && ctx.input(|i| {
-                        i.events.iter().any(|e| {
-                            matches!(e, egui::Event::Key { key: Key::Escape, pressed: true, repeat: false, modifiers, .. } if *modifiers == Modifiers::NONE)
-                        })
-                    })
-                {
-                    let _ = app.run("view.screenMode", json!({ "mode": 0 }));
-                }
+            if k == Key::Escape && !busy && !claimed && !escape_held_by_drag && !tool_took {
+                escape_ends_one_thing(app, ctx);
             }
-            // An Escape that ended something can start a pair too. One that closed a popup cannot.
-            remember_escape_pair(ctx, k, escape_pair);
             if k == Key::Enter && !busy && !claimed {
                 // Enter with a selection tool opens the Move dialog, as a double-click on its button
                 // does.
@@ -475,11 +466,43 @@ fn escape_ended_gesture(ctx: &egui::Context) -> bool {
     held
 }
 
-fn remember_escape_pair(ctx: &egui::Context, key: Key, escape_pair: Option<bool>) {
-    if key == Key::Escape && escape_pair.is_some() && !egui::Popup::is_any_open(ctx) {
-        let now = ctx.input(|i| i.time);
-        ctx.data_mut(|d| d.insert_temp(escape_pair_id(), now));
+/// An Escape that no tool, field, popup or drag took ends the first of these that is on: pattern
+/// editing, isolation mode, Global Edit, a tool flyout, a full screen mode and a rotated view.
+fn escape_ends_one_thing(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    if app.session.active().is_some_and(|d| d.doc.pattern_edit.is_some()) {
+        let _ = app.run("object.pattern.done", json!({}));
+    } else if app.session.active().is_some_and(|d| d.isolation.is_some()) {
+        let _ = app.run("object.exitIsolation", json!({}));
+    } else if app.session.active().is_some_and(|d| d.global_edit.is_some()) {
+        let _ = app.run("select.globalEdit", json!({}));
+    } else if app.ui.flyout.is_some() {
+        app.ui.flyout = None;
+    } else if app.session.tool_id() == "rotateView" && escape_resets_rotation(app, ctx) {
+        // With the Rotate View tool, the view resets before a full screen mode ends.
+        let _ = app.run("view.rotateReset", json!({}));
+    } else if matches!(app.ui.screen_mode, 1 | 2)
+        && !egui::Popup::is_any_open(ctx)
+        && !text_focused_in_previous_frame(ctx)
+        && ctx.input(|i| {
+            i.events.iter().any(
+                |e| matches!(e, egui::Event::Key { key: Key::Escape, pressed: true, repeat: false, modifiers, .. } if *modifiers == Modifiers::NONE),
+            )
+        })
+    {
+        let _ = app.run("view.screenMode", json!({ "mode": 0 }));
+    } else if escape_resets_rotation(app, ctx) {
+        // An Escape that has nothing else to end resets a rotated view. After one that ended
+        // something, the next one does, however long after it comes. A modified Escape does not
+        // leave a full screen mode, so it resets the view there.
+        let _ = app.run("view.rotateReset", json!({}));
     }
+}
+
+/// What a tool's Escape can change besides what [`vectorcraft_engine::Session::tool_ends_on_escape`]
+/// reports: the document's revision (edits and selection changes, such as the Curvature tool
+/// letting go of a selected path's current point).
+fn document_revision(app: &VectorcraftApp) -> Option<u64> {
+    app.session.active().map(|d| d.revision)
 }
 
 /// Dispatch unmodified text keys to command bindings or tools.

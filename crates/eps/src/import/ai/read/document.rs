@@ -7,6 +7,7 @@ use super::{
     Affine, Arc, Artboard, CANVAS_CENTRE, ColorMode, Document, Global, HashMap, Node, NodeId, NodeKind, Obj, OpacityMask, Paint, Point, Reader, Rect,
     Structure, Swatch, Unit, V, obj,
 };
+use crate::import::ai::NameEncoding;
 use vectorcraft_doc::{DataSet, DataValue, GraphicStyle, Guide, ImageBlob, PatternDef, Symbol, TextWrap, Variable, VariableKind, Variables};
 
 /// `%AI5_RulerUnits` → [`Unit`] (Illustrator 7 spec table 3; centimeters is 4; pixels is 6 in later files).
@@ -141,21 +142,31 @@ pub(crate) const LOOK_SLOT: &str = "\u{0}text:look";
 
 /// The artboards (names, and rects in art space) of the editing data `data` that [`read`] can't
 /// read as a whole, as far as it gets: where to put the pages of its PDF part instead, and what to
-/// call them (#1068); and the index among them of the active artboard (`CropAreaActive`).
-pub fn artboards(data: &[u8]) -> (Vec<(String, Rect)>, Option<usize>) {
-    let found = artboards_read(data);
+/// call them (#1068); and the index among them of the active artboard (`CropAreaActive`). `names`
+/// reads their names and keeps the notes on them.
+pub fn artboards(data: &[u8], names: &mut obj::Names) -> (Vec<(String, Rect)>, Option<usize>) {
+    let mut from_start = obj::Names::new(names.encoding);
+    let found = artboards_read(data, &mut from_start);
     if !found.0.is_empty() && found.1.is_some() {
+        names.absorb(from_start);
         return found;
     }
     // Reading can stop before the artboards (art kept in the document's data comes first), or
     // between them and the active artboard's entry: read their array on its own.
-    let Some((boards, active)) = artboard_array_read(data) else { return found };
+    let mut from_array = obj::Names::new(names.encoding);
+    let Some((boards, active)) = artboard_array_read(data, &mut from_array) else {
+        names.absorb(from_start);
+        return found;
+    };
     if found.0.is_empty() {
+        names.absorb(from_array);
         (boards, active)
     } else if boards == found.0 {
         // The same array: its names and rects read alike.
+        names.absorb(from_start);
         (found.0, active)
     } else {
+        names.absorb(from_start);
         found
     }
 }
@@ -163,7 +174,7 @@ pub fn artboards(data: &[u8]) -> (Vec<(String, Rect)>, Option<usize>) {
 /// The index of the active artboard (`CropAreaActive`) in the `ArtboardArray` of the editing data
 /// `data`, as [`artboards`] reads it, from that array and the entry beside it alone.
 pub fn active_artboard(data: &[u8]) -> Option<usize> {
-    artboard_array_read(data)?.1
+    artboard_array_read(data, &mut obj::Names::default())?.1
 }
 
 /// Artboards as [`artboards`] gives them: names and rects in art space, and the active one's index.
@@ -171,7 +182,7 @@ type ArtboardsRead = (Vec<(String, Rect)>, Option<usize>);
 
 /// The `ArtboardArray` entry of the editing data `data` ([`artboard_array`]), with the
 /// `CropAreaActive` entry beside it, read on their own as [`artboards_read`] reads them.
-fn artboard_array_read(data: &[u8]) -> Option<ArtboardsRead> {
+fn artboard_array_read(data: &[u8], names: &mut obj::Names) -> Option<ArtboardsRead> {
     let (array, active) = artboard_array(data)?;
     let mut alone = b"%_/Document :\n%_/Dictionary :\n".to_vec();
     alone.extend_from_slice(array);
@@ -180,7 +191,7 @@ fn artboard_array_read(data: &[u8]) -> Option<ArtboardsRead> {
         alone.extend_from_slice(active);
     }
     alone.extend_from_slice(b"\n%_; /NotRecorded ,\n%_;\n");
-    Some(artboards_read(&alone))
+    Some(artboards_read(&alone, names))
 }
 
 /// The key that ends the `ArtboardArray` entry of the editing data.
@@ -278,6 +289,26 @@ fn beside(mut defined: Vec<PatternDef>, have: &[PatternDef]) -> (Vec<PatternDef>
     (defined, renamed)
 }
 
+/// The names of the objects in `art` and what they hold, masks included.
+fn art_names<'a>(art: impl IntoIterator<Item = &'a Node>) -> Vec<&'a str> {
+    let mut stack: Vec<&Node> = art.into_iter().collect();
+    let mut names = vec![];
+    while let Some(n) = stack.pop() {
+        stack.extend(n.children().into_iter().flatten().chain(n.extras().mask.as_ref().map(|m| &m.art)).map(|c| &**c));
+        names.extend(n.name.as_deref());
+    }
+    names
+}
+
+/// The names read for the patterns `added` that the patterns don't show as their own: those
+/// `renamed` replaced, and the names of the objects of their art.
+fn pattern_names_read<'a>(added: &'a [PatternDef], renamed: &'a std::collections::BTreeMap<String, String>) -> Vec<&'a str> {
+    let shown: std::collections::HashSet<&str> = added.iter().map(|p| p.name.as_str()).collect();
+    let mut names: Vec<&str> = renamed.iter().filter(|(_, new)| shown.contains(new.as_str())).map(|(old, _)| old.as_str()).collect();
+    names.extend(art_names(added.iter().flat_map(|p| p.art.iter().map(|a| &**a))));
+    names
+}
+
 /// `n` and what it holds painting with the patterns `renamed` renames (old to new) by their new names.
 fn repoint(n: &mut Node, renamed: &std::collections::BTreeMap<String, String>) {
     for p in vectorcraft_doc::swatches::node_paints_mut(n) {
@@ -301,9 +332,10 @@ fn repoint(n: &mut Node, renamed: &std::collections::BTreeMap<String, String>) {
 /// layers aren't read: the swatches its PDF part has are the defaults (#4036). They come as
 /// [`read`] makes them, with pattern swatches only for the patterns in `patterns` and those the
 /// editing data defines, which are named apart from `patterns` ([`beside`]); `None` when the
-/// palette is empty or reading stops before it.
-pub fn palette(data: &[u8], patterns: &[PatternDef]) -> Option<PaletteSwatches> {
-    let mut r = Reader::with_names(data);
+/// palette is empty or reading stops before it. `names` reads their names and keeps the notes on
+/// those the swatches take.
+pub fn palette(data: &[u8], patterns: &[PatternDef], names: &mut obj::Names) -> Option<PaletteSwatches> {
+    let mut r = Reader::with_names(data, names.encoding);
     // The palette, the gradients and the patterns it names come before the art, so an error in the
     // art leaves them read.
     let _ = r.run();
@@ -331,6 +363,15 @@ pub fn palette(data: &[u8], patterns: &[PatternDef]) -> Option<PaletteSwatches> 
             images.insert(im.key.clone(), blob.clone());
         }
     });
+    let used: Vec<&str> = swatches
+        .iter()
+        .chain(groups.iter().flat_map(|g| &g.swatches))
+        .map(|s| s.name.as_str())
+        .chain(groups.iter().map(|g| g.name.as_str()))
+        .chain(added.iter().map(|p| p.name.as_str()))
+        .chain(pattern_names_read(&added, &renamed))
+        .collect();
+    names.absorb_among(std::mem::take(&mut r.names), &used);
     Some(PaletteSwatches { swatches, groups, patterns: added, images })
 }
 
@@ -349,11 +390,12 @@ pub struct Brushes {
 /// The brushes of the editing data `data`, for a file whose layers aren't read (a brush library
 /// has none), as [`read`] makes them, with the patterns of the editing data their art paints with,
 /// named apart from `patterns` ([`beside`]) as [`palette`] names them. `None` when the file has no
-/// brush objects or reading stops before them.
-pub fn brushes(data: &[u8], patterns: &[PatternDef]) -> Option<Brushes> {
+/// brush objects or reading stops before them. `names` reads their names and keeps the notes on
+/// those it brings in.
+pub fn brushes(data: &[u8], patterns: &[PatternDef], names: &mut obj::Names) -> Option<Brushes> {
     // Brush objects are plug-in objects: data without one isn't read again.
     memchr::memmem::find(data, b"BeginPluginObject")?;
-    let mut r = Reader::with_names(data);
+    let mut r = Reader::with_names(data, names.encoding);
     // The brushes come before the art, so an error in the art leaves them read.
     let _ = r.run();
     let (mut lib, unread) = r.brush_library()?;
@@ -386,6 +428,14 @@ pub fn brushes(data: &[u8], patterns: &[PatternDef]) -> Option<Brushes> {
             images.insert(im.key.clone(), blob.clone());
         }
     });
+    let used: Vec<&str> = lib
+        .iter()
+        .map(|b| b.name.as_str())
+        .chain(added.iter().map(|p| p.name.as_str()))
+        .chain(pattern_names_read(&added, &renamed))
+        .chain(art_names(lib.iter().flat_map(|b| b.art())))
+        .collect();
+    names.absorb_among(std::mem::take(&mut r.names), &used);
     Some(Brushes { brushes: lib, patterns: added, images, note: (unread > 0).then(|| brush::left_out_note(unread)) })
 }
 
@@ -393,22 +443,100 @@ pub fn brushes(data: &[u8], patterns: &[PatternDef]) -> Option<Brushes> {
 /// style library has none), as [`read`] makes them, with ids from 1, and the data's declared large
 /// canvas scale (1 when it declares none). `large_canvas`: as [`read`] takes it. The styles are
 /// those the list names before reading stops, and none when the data has no style list or lists no
-/// style this reads.
-pub fn graphic_styles(data: &[u8], large_canvas: bool) -> (Vec<GraphicStyle>, f64) {
+/// style this reads. `names` reads their names and keeps the notes on them.
+pub fn graphic_styles(data: &[u8], large_canvas: bool, names: &mut obj::Names) -> (Vec<GraphicStyle>, f64) {
     if crate::import::ai::find(data, b"BeginArtStyleList").is_none() {
         return (vec![], 1.0);
     }
-    let mut r = Reader::with_names(data);
+    let mut r = Reader::with_names(data, names.encoding);
     r.large_canvas = large_canvas.then_some(1.0);
     // The styles come before the art, so an error in the art leaves them read.
     let _ = r.run();
-    (r.graphic_styles().0, r.canvas_scale)
+    let styles = r.graphic_styles().0;
+    let used: Vec<&str> = styles.iter().map(|s| s.name.as_str()).collect();
+    names.absorb_among(std::mem::take(&mut r.names), &used);
+    (styles, r.canvas_scale)
+}
+
+/// The symbols of a `.ai` file's editing data, as [`symbols`] reads them.
+pub struct Symbols {
+    /// The symbols in the Symbols panel's order, each with its Symbol Options › Registration.
+    pub symbols: Vec<(Symbol, vectorcraft_doc::SymbolRegistration)>,
+    /// The image blobs the symbols' art shows, by key.
+    pub images: std::collections::BTreeMap<String, ImageBlob>,
+    /// The global and spot colors the symbols' art is linked to, as swatches, as [`read`] adds
+    /// them to a document read from the layers.
+    pub swatches: Vec<Swatch>,
+}
+
+/// The symbols of the editing data `data`, for a file whose layers aren't read (a symbol library
+/// has none), as [`read`] makes them: in the symbol list's order, without those that hold an
+/// instance of a symbol the data doesn't define, and with each object of their art that is linked
+/// to a listed graphic style linked to it by the id [`graphic_styles`] gives that style. The
+/// symbols are those defined before reading stops and before the first layer; `None` when there
+/// are none. `names` reads their names and keeps the notes on those it brings in.
+pub fn symbols(data: &[u8], names: &mut obj::Names) -> Option<Symbols> {
+    crate::import::ai::find(data, b"BeginSymbol")?;
+    let mut r = Reader::with_names(data, names.encoding);
+    // The symbols come before the art, so an error in the art leaves them read.
+    let _ = r.run();
+    r.check_symbols();
+    r.order_symbols();
+    if r.doc.symbols.is_empty() {
+        return None;
+    }
+    let (styles, ids) = r.graphic_styles();
+    let links: HashMap<NodeId, u32> = r.style_links.iter().filter_map(|(node, name)| Some((*node, *ids.get(name)?))).collect();
+    if !links.is_empty() {
+        for symbol in &mut r.doc.symbols {
+            link_styles(std::slice::from_mut(&mut symbol.art), &links, &styles, 0);
+        }
+    }
+    let mut shown = Document::new(1.0, 1.0);
+    shown.symbols = std::mem::take(&mut r.doc.symbols);
+    let mut images = std::collections::BTreeMap::new();
+    shown.visit_images(|_, im| {
+        if let Some(blob) = r.doc.images.get(&im.key) {
+            images.insert(im.key.clone(), blob.clone());
+        }
+    });
+    // The colors the art is linked to that the file defines, once each.
+    let mut linked = std::collections::HashSet::new();
+    for s in &mut shown.symbols {
+        vectorcraft_doc::swatches::map_node_solid_paints(Arc::make_mut(&mut s.art), &mut |_, link, _| {
+            linked.extend(link.clone());
+            false
+        });
+    }
+    let mut swatches: Vec<Swatch> = vec![];
+    let colors = r.spots.iter().chain(&r.stop_spots).map(|n| (n, n.spot)).chain(r.custom_colors.iter().map(|n| (n, true)));
+    for (n, spot) in colors {
+        if linked.remove(&n.name) {
+            swatches.push(Swatch { name: n.name.clone(), paint: Paint::solid(n.color), global: true, spot });
+        }
+    }
+    let symbols = std::mem::take(&mut shown.symbols)
+        .into_iter()
+        .map(|s| {
+            let reg = r.doc.symbol_registration(&s.name);
+            (s, reg)
+        })
+        .collect::<Vec<_>>();
+    let used: Vec<&str> = symbols
+        .iter()
+        .map(|(s, _)| s.name.as_str())
+        .chain(swatches.iter().map(|s| s.name.as_str()))
+        .chain(art_names(symbols.iter().map(|(s, _)| &*s.art)))
+        .collect();
+    names.absorb_among(std::mem::take(&mut r.names), &used);
+    Some(Symbols { symbols, images, swatches })
 }
 
 /// [`artboards`] as far as reading `data` from its start gets: those read before an error, and
 /// those of a `/Document` still open when it stopped (its art can be what stopped it).
-fn artboards_read(data: &[u8]) -> (Vec<(String, Rect)>, Option<usize>) {
+fn artboards_read(data: &[u8], names: &mut obj::Names) -> (Vec<(String, Rect)>, Option<usize>) {
     let mut r = Reader::new(data);
+    r.names = obj::Names::new(names.encoding);
     let _ = r.run();
     let open: Vec<Obj> = r.frames.iter().filter_map(|f| if let Kind::Obj(o) = &f.kind { Some((**o).clone()) } else { None }).collect();
     for o in &open {
@@ -417,6 +545,8 @@ fn artboards_read(data: &[u8]) -> (Vec<(String, Rect)>, Option<usize>) {
         }
     }
     let active = r.active_board.filter(|i| *i < r.artboards.len());
+    let used: Vec<&str> = r.artboards.iter().map(|b| b.name.as_str()).collect();
+    names.absorb_among(std::mem::take(&mut r.names), &used);
     (r.artboards.into_iter().map(|b| (b.name, b.rect)).collect(), active)
 }
 
@@ -468,20 +598,27 @@ impl VariableRead {
 }
 
 /// The variable library of the editing data `data` ([`VariableRead`]), for a file whose layers
-/// [`read`] can't read. Data without a `variableSets` element isn't read.
-pub fn variables(data: &[u8]) -> VariableRead {
+/// [`read`] can't read. Data without a `variableSets` element isn't read. `names` reads the
+/// library's names and keeps the notes on them.
+pub fn variables(data: &[u8], names: &mut obj::Names) -> VariableRead {
     if crate::import::ai::find(data, b"variableSets").is_none() {
         return VariableRead::default();
     }
     let mut r = Reader::new(data);
+    r.names = obj::Names::new(names.encoding);
     let _ = r.run();
     if r.variables.present {
+        absorb_library_names(&r.variables, r.names, names);
         return r.variables;
     }
     // A `/Document` still open when reading stopped.
     let open: Vec<Obj> = r.frames.iter().filter_map(|f| if let Kind::Obj(o) = &f.kind { Some((**o).clone()) } else { None }).collect();
-    if let Some(found) = open.iter().filter(|o| o.ty == "Document").map(variable_library).find(|v| v.present) {
-        return found;
+    for o in open.iter().filter(|o| o.ty == "Document") {
+        let found = variable_library(o, &mut r.names);
+        if found.present {
+            absorb_library_names(&found, r.names, names);
+            return found;
+        }
     }
     // Reading can stop before the library: read its node on its own.
     variable_sets_node(data).map_or(r.variables, |node| {
@@ -489,9 +626,18 @@ pub fn variables(data: &[u8]) -> VariableRead {
         alone.extend_from_slice(node);
         alone.extend_from_slice(b"\n%_; (xmlnode-children) ,\n%_; /Recorded ,\n%_;\n");
         let mut r = Reader::new(&alone);
+        r.names = obj::Names::new(names.encoding);
         let _ = r.run();
+        absorb_library_names(&r.variables, r.names, names);
         r.variables
     })
+}
+
+/// Take into `names` the notes of `read` on the names of the variables and data sets of `library`.
+fn absorb_library_names(library: &VariableRead, read: obj::Names, names: &mut obj::Names) {
+    let used: Vec<&str> =
+        library.variables.variables.iter().map(|v| v.name.as_str()).chain(library.variables.datasets.iter().map(|d| d.name.as_str())).collect();
+    names.absorb_among(read, &used);
 }
 
 impl<'a> Reader<'a> {
@@ -502,6 +648,7 @@ impl<'a> Reader<'a> {
         if self.author.is_none() {
             self.author = outer.author;
         }
+        self.names.absorb(outer.names);
         for n in outer.custom_colors {
             if self.custom_colors.len() < super::directives::MAX_CUSTOM_COLORS && !self.custom_colors.iter().any(|c| c.name == n.name) {
                 self.custom_colors.push(n);
@@ -510,8 +657,8 @@ impl<'a> Reader<'a> {
     }
 
     /// A reader that has read the header of the program `ps` (its comment lines up to
-    /// `%%EndComments`).
-    pub(super) fn header_of(ps: &[u8]) -> Reader<'_> {
+    /// `%%EndComments`), its names that aren't UTF-8 read in `names`.
+    pub(super) fn header_of(ps: &[u8], names: NameEncoding) -> Reader<'_> {
         let mut end = 0;
         for line in ps.split_inclusive(|&b| b == b'\n' || b == b'\r') {
             if !line.starts_with(b"%") && !line.trim_ascii().is_empty() {
@@ -523,6 +670,7 @@ impl<'a> Reader<'a> {
             }
         }
         let mut outer = Reader::new(ps.get(..end).unwrap_or_default());
+        outer.names = obj::Names::new(names);
         let _ = outer.run();
         outer
     }
@@ -612,6 +760,7 @@ impl<'a> Reader<'a> {
             head.registration = Some(*r);
         }
         self.constraint_art(o);
+        self.placed_page(o);
         // A blend's key object or spine.
         if let Some(kind) = o.text("ShapeBlendPathType")
             && let Some(id) = self.last_object().map(|n| n.id)
@@ -664,10 +813,10 @@ impl<'a> Reader<'a> {
         {
             super::remember_xml_id(&mut self.xml_ids, &mut self.xml_id_bytes, uid, id);
         }
-        let name = match o.text("AIArtName") {
+        let name = match self.names.entry(o, "AIArtName") {
             Some(name) => name,
-            None => match o.obj("AI10_ArtUID").and_then(Obj::content_text) {
-                Some(id) => obj::xml_name(&id),
+            None => match o.obj("AI10_ArtUID").and_then(|id| self.names.xml_id_name(id)) {
+                Some(name) => name,
                 None => return,
             },
         };
@@ -685,7 +834,7 @@ impl<'a> Reader<'a> {
     /// Effects Settings, its variable library (the first one read), and its Objects on Path records.
     pub(super) fn document(&mut self, o: &Obj) {
         if !self.variables.present {
-            self.variables = variable_library(o);
+            self.variables = variable_library(o, &mut self.names);
         }
         self.constraint_data(o);
         if let Some(r) = find_entry(o, "AI Auto Rasterize", 0) {
@@ -701,7 +850,7 @@ impl<'a> Reader<'a> {
             if !sane(r) || r.area() <= 0.0 {
                 continue;
             }
-            let name = ab.text("Name").unwrap_or_else(|| format!("Artboard {}", i + 1));
+            let name = self.names.entry(ab, "Name").unwrap_or_else(|| format!("Artboard {}", i + 1));
             let mut board = AiArtboard::new(name, r);
             display_options(ab, &mut board);
             if active == Some(i as f64) {
@@ -819,12 +968,13 @@ impl<'a> Reader<'a> {
             let (paint, global, spot) = match e.cell {
                 Cell::Color { color, global, spot } => (Paint::solid(color), global, spot),
                 // A swatch named by its gradient or pattern takes the name that got in the document.
+                // A gradient swatch's own paint does not link to a swatch; art painted with the
+                // gradient links to it.
                 Cell::Gradient(g) => {
-                    let mut gp = vectorcraft_color::gradient::GradientPaint::new(self.gradients.get(&g)?.clone());
+                    let gp = vectorcraft_color::gradient::GradientPaint::new(self.gradients.get(&g)?.clone());
                     if e.name == g {
                         e.name = self.global_names.get(Global::Gradient, &g).to_string();
                     }
-                    gp.swatch = Some(e.name.clone());
                     (Paint::Gradient(Box::new(gp)), false, false)
                 }
                 Cell::Pattern(p) => {
@@ -988,7 +1138,7 @@ impl<'a> Reader<'a> {
         let mut styles: Vec<GraphicStyle> = vec![];
         let mut ids = HashMap::new();
         for raw in &self.style_list {
-            let name = obj::text(raw);
+            let name = self.names.quiet(raw);
             if name.is_empty() || ids.contains_key(&name) {
                 continue;
             }
@@ -1127,6 +1277,9 @@ impl<'a> Reader<'a> {
                 for symbol in &mut doc.symbols {
                     link_styles(std::slice::from_mut(&mut symbol.art), &links, &styles, 0);
                 }
+                for pattern in &mut doc.patterns {
+                    link_styles(&mut pattern.art, &links, &styles, 0);
+                }
             }
             doc.graphic_styles = styles.into();
         }
@@ -1155,7 +1308,7 @@ impl<'a> Reader<'a> {
         self.drawn_looks += self.pattern_looks.values().sum::<usize>();
         if self.drawn_looks > 0 {
             warnings.push(format!(
-                "objects with several fills or strokes, effects or brushes came in as their drawn look ({}): their appearance isn't editable yet",
+                "objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({}): their appearance isn't editable yet",
                 self.drawn_looks
             ));
         }
@@ -1170,6 +1323,7 @@ impl<'a> Reader<'a> {
         if !doc.symbols.is_empty() {
             doc.limit_depth_noting(&mut warnings);
         }
+        warnings.extend(self.names.notes());
         Ok(Structure {
             doc,
             to_doc,
@@ -1183,6 +1337,7 @@ impl<'a> Reader<'a> {
             restyled: self.restyled,
             placeholders: self.placeholders,
             placed_elsewhere: self.placed_elsewhere,
+            placed_pages: self.placed_pages,
             envelopes_drawn: self.envelopes_drawn,
             warped_type: super::super::envelope::WarpedType {
                 looks: self.warped_type,
@@ -1326,9 +1481,57 @@ const MAX_LIBRARY_BYTES: usize = 8 << 20;
 /// variable holds its value: `p` elements of text, one paragraph each; a `/Bool` text, whether its
 /// objects show; a linked file's URL (`file://`) or path. Graph values aren't read. What is
 /// malformed, repeated or past the caps (a declaration, a data set, a value, a setting, a second
-/// `variableSet`) is left out and counted; a library past [`MAX_LIBRARY_NODES`] isn't read.
-fn variable_library(o: &Obj) -> VariableRead {
-    find_variable_sets(o, 0).map_or_else(VariableRead::default, read_variable_sets)
+/// `variableSet`) is left out and counted; a library past [`MAX_LIBRARY_NODES`] isn't read. Text
+/// that isn't UTF-8 is read in the encoding of `names`, which gets a note on each such name of a
+/// variable or a data set.
+fn variable_library(o: &Obj, names: &mut obj::Names) -> VariableRead {
+    let Some(sets) = find_variable_sets(o, 0) else { return VariableRead::default() };
+    let mut legacy = HashMap::new();
+    let read = read_variable_sets(&library_in_utf8(sets, names.encoding, &mut legacy, 0));
+    for name in read.variables.variables.iter().map(|v| &v.name).chain(read.variables.datasets.iter().map(|d| &d.name)) {
+        if let Some(replaced) = legacy.get(name) {
+            names.note(name, *replaced);
+        }
+    }
+    read
+}
+
+/// The XML nodes of a variable library with their text (a `/String` or `/UnicodeString` entry, whose
+/// strings a long one is written across are joined first: a string may end inside a character) in
+/// UTF-8, so that an element named after a variable and that variable's name are alike whatever
+/// the encoding. `legacy` gets the text that wasn't UTF-8, trimmed as [`library_name`] trims it, and
+/// whether parts of it weren't valid in the encoding either.
+fn library_in_utf8(o: &Obj, encoding: NameEncoding, legacy: &mut HashMap<String, bool>, depth: usize) -> Obj {
+    let mut out = o.clone();
+    if depth > MAX_DEPTH {
+        return out;
+    }
+    for (_, values) in &mut out.entries {
+        match values.split_last_mut() {
+            Some((V::Name(ty), strings)) if matches!(ty.as_str(), "String" | "UnicodeString") && strings.iter().all(|v| matches!(v, V::Str(_))) => {
+                let bytes: Vec<u8> = strings.iter().flat_map(|v| if let V::Str(s) = v { s.as_slice() } else { &[] }).copied().collect();
+                let (text, not_utf8, replaced) = encoding.decoded(&bytes);
+                if not_utf8 {
+                    legacy.insert(text.trim().to_string(), replaced);
+                }
+                let ty = V::Name(ty.clone());
+                *values = vec![V::Str(text.into_bytes()), ty];
+            }
+            _ => {
+                for v in values.iter_mut() {
+                    if let V::Obj(child) = v {
+                        *child = std::rc::Rc::new(library_in_utf8(child, encoding, legacy, depth + 1));
+                    }
+                }
+            }
+        }
+    }
+    for v in &mut out.content {
+        if let V::Obj(child) = v {
+            *child = std::rc::Rc::new(library_in_utf8(child, encoding, legacy, depth + 1));
+        }
+    }
+    out
 }
 
 /// The `variableSets` XML node in `o` or the dictionaries it holds.

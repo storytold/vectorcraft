@@ -1377,6 +1377,7 @@ enum InclusionChange {
     Step(usize, usize, usize, bool),
 }
 
+/// Draw action sets, steps and playback controls, keeping the list above a pinned footer.
 pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let t = Tokens::get(ui.ctx());
     // The selected action as (set, action). Read as the type it is stored as: egui keeps a
@@ -1398,7 +1399,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let mut expanded: BTreeSet<u64> = pstate(ui.ctx(), "actions-expanded");
     let mut inclusion_changes = Vec::new();
     let mut play_req = None;
-    egui::ScrollArea::vertical().max_height(260.0).show(ui, |ui| {
+    let list_height = widgets::panel_list_height(ui, 260.0, 0.0).min(260.0);
+    egui::ScrollArea::vertical().max_height(list_height).min_scrolled_height(list_height.min(64.0)).show(ui, |ui| {
         for (si, set) in app.ui.action_sets.iter().enumerate() {
             let (r, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 20.0), egui::Sense::click());
             if sets_selected.contains(&si) && selected.is_none() {
@@ -1551,9 +1553,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     set_pstate(ui.ctx(), SELECTED_STEP, step_selected);
     app.ui.action_set = current;
     app.ui.action_sets_selected = sets_selected;
-    widgets::divider(ui);
+    if app.ui.action_sets.is_empty() {
+        dim_label(ui, tl!("No actions. Press ● to record."));
+    }
     // Bottom bar: stop, record, play, new set, new action, delete.
-    ui.horizontal(|ui| {
+    widgets::bottom_bar(ui, |ui| {
         let recording = app.ui.recording.is_some();
         if widgets::icon_button(ui, "square", tl!("Stop Playing/Recording"), false, 24.0).clicked()
             && let Err(e) = app.run(STOP_RECORDING, json!({}))
@@ -1598,15 +1602,63 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         app.status(e);
     }
     let _ = icons::exists;
-    if app.ui.action_sets.is_empty() {
-        dim_label(ui, tl!("No actions. Press ● to record."));
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use vectorcraft_engine::Session;
+
+    /// A short sized panel clips the list above its footer and can scroll to select its final row.
+    #[test]
+    fn a_short_actions_panel_keeps_its_last_row_reachable_above_the_footer() {
+        use egui::{Event, PointerButton, Rect, UiBuilder, UiStackInfo, pos2, vec2};
+        for height in [60.0, 120.0] {
+            let mut app = VectorcraftApp::new(Session::new(), Default::default());
+            let ctx = egui::Context::default();
+            let mut time = 0.0;
+            let mut frame = |app: &mut VectorcraftApp, events| {
+                time += 0.1;
+                let input = egui::RawInput {
+                    time: Some(time),
+                    screen_rect: Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(300.0, height))),
+                    events,
+                    ..Default::default()
+                };
+                let mut output = ctx.run_ui(input, |ui| {
+                    let info = UiStackInfo::default().with_tag_value(widgets::PANEL_FOOTER, Some(height));
+                    ui.scope_builder(UiBuilder::new().ui_stack_info(info), |ui| show(app, ui));
+                });
+                output.textures_delta.clear();
+                output.shapes
+            };
+            let last_row = |shapes: &[egui::epaint::ClippedShape]| {
+                shapes
+                    .iter()
+                    .find_map(|shape| match &shape.shape {
+                        egui::Shape::Text(text) if text.galley.text() == "Reflect Horizontal" => Some((text.visual_bounding_rect(), shape.clip_rect)),
+                        _ => None,
+                    })
+                    .expect("the final action is drawn")
+            };
+            for _ in 0..3 {
+                let shapes = frame(&mut app, vec![]);
+                assert!(last_row(&shapes).1.bottom() <= height - 31.0, "height={height}: the list overlaps its footer");
+            }
+            for _ in 0..12 {
+                frame(&mut app, crate::toolbar::tests::wheel(pos2(100.0, 12.0), 1000.0));
+            }
+            let shapes = frame(&mut app, vec![]);
+            let (row, clip) = last_row(&shapes);
+            assert!(clip.contains_rect(row), "height={height}: the final row {row:?} is outside {clip:?}");
+            let at = row.center();
+            let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+            for events in [vec![Event::PointerMoved(at)], vec![button(true)], vec![button(false)]] {
+                frame(&mut app, events);
+            }
+            assert_eq!(pstate::<Option<(usize, usize)>>(&ctx, "actions-selected"), Some((0, 5)));
+        }
+    }
 
     #[test]
     fn defaults_are_valid_commands() {
@@ -2678,6 +2730,191 @@ mod tests {
         assert_eq!(set_names(&app), before, "no set added");
         assert_eq!(app.run(LOAD_SET, json!({"path": "/sets/small.vcactions"})).unwrap()["name"], json!("Mine 2"));
         assert_eq!(*asked.borrow(), [files::MAX_SET_FILE + 1; 2], "each read stops one byte past the limit");
+    }
+
+    /// An action set as another app saves it as text, written from scratch: the set `name` (none
+    /// when empty) and actions of steps, each a label and whether it is on, with no recorded values.
+    fn aia_text(name: &str, actions: &[(&str, &[(&str, bool)])]) -> String {
+        let hex = |t: &str| format!("[ {} {} ]", t.len(), t.bytes().map(|b| format!("{b:02x}")).collect::<String>());
+        let mut out = String::from("/version 3\n");
+        if !name.is_empty() {
+            out += &format!("/name {}\n", hex(name));
+        }
+        out += &format!("/isOpen 1\n/actionCount {}\n", actions.len());
+        for (i, (action, steps)) in actions.iter().enumerate() {
+            out += &format!("/action-{} {{\n\t/name {}\n\t/eventCount {}\n", i + 1, hex(action), steps.len());
+            for (j, (label, on)) in steps.iter().enumerate() {
+                out += &format!(
+                    "\t/event-{} {{\n\t\t/internalName (sample_step_{j})\n\t\t/localizedName {}\n\t\t/isOn {}\n\t\t/parameterCount 0\n\t}}\n",
+                    j + 1,
+                    hex(label),
+                    u8::from(*on)
+                );
+            }
+            out += "}\n";
+        }
+        out
+    }
+
+    /// Load Actions… reads an action set another app saved as text: its actions come in with the
+    /// steps with no recorded values whose label is a VectorCraft command's that takes no values and
+    /// has no dialog, a step that is off stays excluded from playback, the other steps are left out
+    /// and listed, and the status bar says how many. An action plays the steps that are on.
+    #[test]
+    fn load_actions_reads_another_apps_action_set() {
+        let mut app = app_with_sets();
+        let text = aia_text(
+            "Tidy Up",
+            &[("Group Them", &[("group", true), ("Move", true), ("Ungroup", false)]), ("Nothing", &[]), ("", &[("Ungroup", true)])],
+        );
+        let r = app.run(LOAD_SET, json!({ "data": text })).unwrap();
+        let skipped = json!([{"action": "Group Them", "step": "Move"}]);
+        assert_eq!(r, json!({"set": 3, "name": "Tidy Up", "actions": 3, "skipped": skipped, "leftOut": 1}));
+        let set = &app.ui.action_sets[3];
+        assert_eq!(set.actions[0].name, "Group Them");
+        assert_eq!(set.actions[0].steps, [("object.group".to_string(), json!({})), ("object.ungroup".to_string(), json!({}))]);
+        assert_eq!(set.actions[0].excluded_steps, [1].into());
+        assert!(set.actions[1].steps.is_empty());
+        assert_eq!(set.actions[2].name, "Action 3", "an action with no name");
+        assert_eq!(app.ui.status, "Loaded “Tidy Up”: 1 step was left out");
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        for x in [0, 50] {
+            app.run("shape.rectangle", json!({"x": x, "y": 0, "width": 20, "height": 20})).unwrap();
+        }
+        app.run("select.all", json!({})).unwrap();
+        assert_eq!(app.session.active().unwrap().selection.objects.len(), 2);
+        play(&mut app, 3, 0).unwrap();
+        assert_eq!(app.session.active().unwrap().selection.objects.len(), 1, "the action grouped the rectangles and did not ungroup them");
+    }
+
+    /// A step recorded with values is left out even when a command has its label: a step that set an
+    /// opacity does not select by opacity. A step whose values name a menu command, in two or three
+    /// values, is left out too. The status bar counts the steps left out.
+    #[test]
+    fn recorded_values_keep_a_step_out() {
+        let hex = |t: &str| format!("[ {} {} ]", t.len(), t.bytes().map(|b| format!("{b:02x}")).collect::<String>());
+        let text = |t: &str| format!("/type (ustring) /value {}", hex(t));
+        let number = || "/type (real) /value 60.0".to_string();
+        let menu = |shown: &str| vec![text("some_command"), text(shown), number()];
+        let steps = [
+            ("Opacity", vec![number()]),
+            ("Stroke Weight", vec![number()]),
+            ("A Menu Step", menu("Group")),
+            ("A Menu Step", vec![text("some_command"), text("Ungroup")]),
+            ("Rename", vec![text("OldLayer"), text("Group")]),
+            ("Group", vec![number(), text("Group"), number()]),
+            ("Group", vec![]),
+        ];
+        let events: String = steps
+            .iter()
+            .enumerate()
+            .map(|(i, (label, values))| {
+                let params: String = values.iter().enumerate().map(|(n, v)| format!("/parameter-{} {{ {v} }} ", n + 1)).collect();
+                format!("/event-{} {{ /localizedName {} /parameterCount {} {params} }} ", i + 1, hex(label), values.len())
+            })
+            .collect();
+        let set = format!("/version 3 /name {} /action-1 {{ /name {} {events} }}", hex("Values"), hex("A"));
+        let mut app = app_with_sets();
+        let r = app.run(LOAD_SET, json!({ "data": set })).unwrap();
+        assert_eq!(app.ui.action_sets[3].actions[0].steps, [("object.group".to_string(), json!({}))]);
+        assert_eq!(r["leftOut"], 6);
+        let left_out: Vec<&str> = r["skipped"].as_array().unwrap().iter().map(|s| s["step"].as_str().unwrap()).collect();
+        assert_eq!(left_out, ["Opacity", "Stroke Weight", "A Menu Step", "A Menu Step", "Rename", "Group"]);
+        assert_eq!(app.ui.status, "Loaded “Values”: 6 steps were left out");
+    }
+
+    /// A step with no label, or a blank one, is left out and listed by its internal name, even when
+    /// that name is a command's label.
+    #[test]
+    fn a_step_with_no_label_is_left_out() {
+        let set = "/version 3 /name [ 4 4e6f6e65 ] /action-1 { /name [ 1 41 ] \
+                   /event-1 { /internalName (group) /parameterCount 0 } \
+                   /event-2 { /internalName (Ungroup) /localizedName [ 1 20 ] /parameterCount 0 } \
+                   /event-3 { /internalName (x) /localizedName [ 5 47726f7570 ] /parameterCount 0 } }";
+        let mut app = app_with_sets();
+        let r = app.run(LOAD_SET, json!({ "data": set })).unwrap();
+        assert_eq!(app.ui.action_sets[3].actions[0].steps, [("object.group".to_string(), json!({}))]);
+        assert_eq!(r["skipped"], json!([{"action": "A", "step": "group"}, {"action": "A", "step": "Ungroup"}]));
+        assert_eq!(r["leftOut"], 2);
+    }
+    /// Load Actions… picks action set files of both kinds, and a set another app saved without a
+    /// name takes the file's name, or `Actions` when there is no file; one named like a set in the
+    /// panel gets the next free number. A file that isn't UTF-8 still reads. A set past the reader's
+    /// caps, one whose text ends inside a block, one whose counts differ from what follows and one
+    /// with a damaged name are refused, and text that isn't an action set is not read.
+    #[test]
+    fn load_actions_names_another_apps_set_after_its_file() {
+        let mut app = app_with_sets();
+        let files = with_files(&mut app, "/sets/Mine.aia");
+        let mut bytes = aia_text("", &[("One", &[("Ungroup", true)])]).into_bytes();
+        bytes.extend(b"/note (\xFF)\n");
+        files.borrow_mut().insert("/sets/Mine.aia".into(), bytes);
+        let r = app.run(LOAD_SET, json!({})).unwrap();
+        assert_eq!((r["name"].clone(), r["leftOut"].clone()), (json!("Mine 2"), json!(0)));
+        assert_eq!(app.ui.action_sets[3].actions[0].steps, [("object.ungroup".to_string(), json!({}))]);
+        let actions = vec![("A", [("Group", true)].as_slice()); 1001];
+        let r = app.run(LOAD_SET, json!({ "data": aia_text("Big", &actions) }));
+        assert_eq!(r.unwrap_err(), "the action set file can't be read in full");
+        let cut = aia_text("Cut", &[("A", &[("Group", true)])]);
+        let cut = cut.trim_end().strip_suffix('}').unwrap().to_string();
+        assert_eq!(app.run(LOAD_SET, json!({ "data": cut })).unwrap_err(), "the action set file can't be read in full");
+        let counts = aia_text("Counts", &[("A", &[]), ("B", &[])]).replace("/actionCount 2", "/actionCount 1");
+        assert_eq!(app.run(LOAD_SET, json!({ "data": counts })).unwrap_err(), "the action set file can't be read in full");
+        for damaged in ["/version 3 /action-1 { /name [ 3 41 ] }", "/version 3 /name [ 3 41 ]"] {
+            assert_eq!(app.run(LOAD_SET, json!({ "data": damaged })).unwrap_err(), "the action set file can't be read in full");
+        }
+        for not_a_set in ["/version three", "/versionX 3"] {
+            assert_eq!(app.run(LOAD_SET, json!({ "data": not_a_set })).unwrap_err(), "not an action set file");
+        }
+        assert_eq!(app.ui.action_sets.len(), 4, "no set added");
+        let r = app.run(LOAD_SET, json!({ "data": aia_text("", &[]) })).unwrap();
+        assert_eq!(r["name"], "Actions");
+    }
+
+    /// A step stands for a command only when no other menu command has its label, and the command is
+    /// recordable, runs with no values, has no dialog and sits directly in a top menu. The item of a
+    /// submenu stands for nothing: its label alone does not say which command it is.
+    #[test]
+    fn steps_stand_for_commands_that_run_with_no_values() {
+        assert_eq!(files::step_command("Group"), Some("object.group"));
+        assert_eq!(files::step_command(" GROUP... "), Some("object.group"));
+        for label in ["Move", "Move…", "", "No Such Command"] {
+            assert_eq!(files::step_command(label), None, "{label}");
+        }
+        let submenu_items = ["Opacity", "Stroke Weight", "Fill Color", "Blending Mode", "Grid", "Radial", "Create", "Delete All"];
+        let matched: Vec<&str> = submenu_items.into_iter().filter(|label| files::step_command(label).is_some()).collect();
+        assert!(matched.is_empty(), "{matched:?}");
+        // The menu bar's Crop Image item runs another command, which opens the crop tool.
+        let not_on_the_menu_bar = ["Crop Image", "Expand Gradient Mesh", "Duplicate"];
+        let matched: Vec<&str> = not_on_the_menu_bar.into_iter().filter(|label| files::step_command(label).is_some()).collect();
+        assert!(matched.is_empty(), "{matched:?}");
+    }
+
+    /// A step does not stand for a command that closes, reverts or writes documents, for Paste, for
+    /// Undo or Redo, or for an add-on's command: such a step is left out, and nothing is closed on
+    /// playback.
+    #[test]
+    fn steps_do_not_stand_for_file_commands_paste_undo_or_add_ons() {
+        let labels = ["Close", "Close All", "Revert", "Export for Screens", "Paste", "Undo", "Redo", "Close Path", "Save a Timestamped Copy"];
+        let matched: Vec<&str> = labels.into_iter().filter(|label| files::step_command(label).is_some()).collect();
+        assert!(matched.is_empty(), "{matched:?}");
+        let mut app = app_with_sets();
+        let r = app.run(LOAD_SET, json!({ "data": aia_text("Closes", &[("A", &[("Close", true), ("Group", true)])]) })).unwrap();
+        assert_eq!(r["leftOut"], 1);
+        assert_eq!(app.ui.action_sets[3].actions[0].steps, [("object.group".to_string(), json!({}))]);
+    }
+
+    /// A set loaded from another app's file saves to VectorCraft's own file with its excluded steps,
+    /// and loads back the same.
+    #[test]
+    fn another_apps_set_saves_and_loads_back_with_its_excluded_steps() {
+        let mut app = app_with_sets();
+        let text = aia_text("Tidy", &[("A", &[("Group", true), ("Ungroup", false)])]);
+        app.run(LOAD_SET, json!({ "data": text })).unwrap();
+        let saved = files::write_set(&app.ui.action_sets[3]);
+        let r = app.run(LOAD_SET, json!({ "data": saved })).unwrap();
+        assert_eq!(r, json!({"set": 4, "name": "Tidy 2", "actions": 1}));
+        assert_eq!(app.ui.action_sets[4].actions[0].excluded_steps, [1].into());
     }
 
     /// Save Actions… does not write a set that Load Actions… would refuse: more than 1,000 actions.

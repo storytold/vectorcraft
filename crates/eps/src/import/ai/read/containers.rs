@@ -519,6 +519,7 @@ impl<'a> Reader<'a> {
                     // An envelope of type keeps its drawn art and its type, hidden, as above: the
                     // type is filled in after reading, which the envelope can't wait for.
                     if typed {
+                        self.warn(crate::import::ai::envelope::TYPE_DRAWN);
                         return Ok(());
                     }
                     if self.envelopes.len() >= crate::import::ai::envelope::MAX_PENDING {
@@ -640,7 +641,7 @@ impl<'a> Reader<'a> {
     /// comes in as the page draws it, within the symbol's box placed by the matrix when the box is
     /// known.
     fn symbol_instance(&mut self, o: &Obj) -> Result<(), String> {
-        let name = o.text("SymbolRef");
+        let name = self.names.entry(o, "SymbolRef");
         let affine = |n: &[f64]| match n {
             [a, b, c, d, e, f] if [a, b, c, d, e, f].iter().all(|v| v.is_finite()) => Some(super::Affine::new([*a, *b, *c, *d, *e, *f])),
             _ => None,

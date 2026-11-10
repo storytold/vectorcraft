@@ -737,7 +737,7 @@ fn embedded_font_programs_are_skipped() {
         let r = read(&program);
         let NodeKind::Text(t) = &objects(&r.document)[0].kind else { panic!("{program}: {:?}", r.warnings) };
         assert_eq!(t.runs[0].style.font_family, "My Font");
-        assert!(r.warnings.is_empty(), "{program}: {:?}", r.warnings);
+        assert!(program_warnings(&r.warnings).is_empty(), "{program}: {:?}", r.warnings);
     }
 }
 
@@ -833,12 +833,18 @@ fn device_settings_are_accepted_and_change_nothing() {
 }
 
 /// Check that `body` draws one square, blue: it sets blue when what it checks holds, else red.
+/// `warnings` without the note naming fonts that aren't available: which those are depends on the
+/// fonts installed where the tests run, not on the program.
+pub(super) fn program_warnings(warnings: &[String]) -> Vec<&String> {
+    warnings.iter().filter(|w| !w.starts_with(super::MISSING_FONTS_NOTE)).collect()
+}
+
 fn blue(body: &str) {
     let r = read(&format!("{body} 10 10 80 80 rectfill"));
     let o = objects(&r.document);
     assert_eq!(o.len(), 1, "{body}: {:?}", r.warnings);
     assert_eq!(fill(&o[0]), Some(&Paint::solid(Color::rgb(0.0, 0.0, 1.0))), "{body}");
-    assert!(r.warnings.is_empty(), "{body}: {:?}", r.warnings);
+    assert!(program_warnings(&r.warnings).is_empty(), "{body}: {:?}", r.warnings);
 }
 
 /// Check that PostScript `cond` leaves `true`.
@@ -983,8 +989,8 @@ fn intervals_share_their_arrays_and_strings() {
 fn resourceforall_enumerates_matching_names() {
     // #234.
     blue("(*) { pop } 128 string /Category resourceforall 0 0 1 setrgbcolor");
-    let count = |template: &str| format!("/n 0 def ({template}) {{ pop /n n 1 add def }} 128 string /ProcSet resourceforall n");
-    let define = "[/Foo /Fop /Bar /F*x] { 1 dict /ProcSet defineresource pop } forall";
+    let count = |template: &str| format!("/n 0 def ({template}) {{ pop /n n 1 add def }} 128 string /Form resourceforall n");
+    let define = "[/Foo /Fop /Bar /F*x] { 1 dict /Form defineresource pop } forall";
     check(&format!("{define} {} 4 eq", count("*")));
     check(&format!("{define} {} 2 eq", count("Fo?")));
     check(&format!("{define} {} 3 eq", count("F*")));
@@ -992,10 +998,10 @@ fn resourceforall_enumerates_matching_names() {
     check(&format!("{define} {} 0 eq", count("Q*")));
     check(&format!("{define} {} 1 eq", count("*a*")));
     // Each name is copied into the scratch string; exit stops.
-    check(&format!("{define} /last () def (B*) {{ dup length string copy /last exch def }} 8 string /ProcSet resourceforall last (Bar) eq"));
-    check(&format!("{define} /n 0 def (*) {{ pop /n n 1 add def exit }} 8 string /ProcSet resourceforall n 1 eq"));
+    check(&format!("{define} /last () def (B*) {{ dup length string copy /last exch def }} 8 string /Form resourceforall last (Bar) eq"));
+    check(&format!("{define} /n 0 def (*) {{ pop /n n 1 add def exit }} 8 string /Form resourceforall n 1 eq"));
     // A scratch string too small for the names, as the prolog probes it.
-    check(&format!("{define} {{ (*) {{ pop }} 2 string /ProcSet resourceforall }} stopped"));
+    check(&format!("{define} {{ (*) {{ pop }} 2 string /Form resourceforall }} stopped"));
     check("/n 0 def (Gen*) { pop /n n 1 add def } 16 string /Category resourceforall n 1 eq");
 }
 
@@ -1125,10 +1131,27 @@ fn read_within(body: &str, secs: u64) -> crate::Imported {
 /// budget. Running to the end of the budget can take over 20 s on a slow CI runner
 /// (`search_in_a_loop_runs_out_of_the_budget` searches about 3 GB, 14 s on a fast desktop), so the
 /// limit here only catches a program that never stops.
-fn runs_out_of_budget(body: &str) {
+pub(super) fn runs_out_of_budget(body: &str) {
     let r = read_within(&format!("0 0 10 10 rectfill {body}"), 120);
     assert_eq!(objects(&r.document).len(), 1, "{body}: {:?}", r.warnings);
     assert!(r.warnings.iter().any(|w| w.contains("the program runs too long")), "{body}: {:?}", r.warnings);
+}
+
+/// A large file that runs far more operations than a small one may, but only a few hundred for
+/// each object it draws, reads to its end: the operation budget grows with the program's length.
+#[test]
+fn a_large_file_with_many_objects_reads_to_its_end() {
+    let n = 200_000;
+    let mut body = String::from(
+        "/sq { 4 dict begin /y exch def /x exch def 0 1 200 { pop } for \
+                                 x y moveto x 1 add y lineto x y 1 add lineto closepath fill end } def\n",
+    );
+    for i in 0..n {
+        body.push_str(&format!("{} {} sq\n", i % 100, i / 2000));
+    }
+    let r = read_within(&body, 300);
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    assert_eq!(objects(&r.document).len(), n);
 }
 
 /// A loop of operators whose work grows with the path they make runs out of the operation budget
@@ -1245,6 +1268,15 @@ fn shading_functions_in_shared_arrays_stop_at_the_limits() {
     // more than the operation budget.
     let r = read(&format!("{} /sh {} def 2000 {{ sh shfill }} repeat", array(256), axial("a")));
     assert!(r.warnings.iter().any(|w| w.contains("the program runs too long")), "{:?}", r.warnings);
+}
+
+/// Type only measured (`stringwidth`) or drawn as outlines (`charpath`) adds no type to the
+/// document, so its font isn't named as one that shows in the fallback font.
+#[test]
+fn fonts_only_measured_or_outlined_are_not_named_as_missing() {
+    let r = read("/Nowhere-Bold 12 selectfont (Hi) stringwidth pop pop newpath 10 10 moveto (Hi) true charpath fill 10 10 80 80 rectfill");
+    assert!(!objects(&r.document).iter().any(|n| matches!(n.kind, NodeKind::Text(_))));
+    assert!(!r.warnings.iter().any(|w| w.starts_with(super::MISSING_FONTS_NOTE)), "{:?}", r.warnings);
 }
 
 #[test]
@@ -1419,6 +1451,31 @@ fn the_planes_of_multi_source_images_are_charged() {
     assert!(r.warnings.iter().any(|w| w.contains("too much memory")), "{:?}", r.warnings);
 }
 
+/// The planes an image is decoded from, and the decoder's copies of the strings a procedure gives
+/// to fill them, stop counting against the memory budget once the image is decoded: they are freed
+/// then. A procedure that hands back one large buffer for every image (1 MiB here, for a one-pixel
+/// image) charged the whole buffer each time, and a file of many images came in as its preview.
+#[test]
+fn an_images_transient_data_is_not_charged_after_it() {
+    let body = "/buf 1048576 string def\n1100 { 1 1 8 [1 0 0 1 0 0] { buf } image } repeat\n";
+    let r = import(&eps(body)).unwrap();
+    assert!(!r.warnings.iter().any(|w| w.contains("too much memory")), "{:?}", r.warnings);
+    let mut images = 0;
+    r.document.walk(|n| images += usize::from(matches!(n.kind, NodeKind::Image(_))));
+    assert_eq!(images, 1100);
+}
+
+/// What a data source procedure allocates stays counted, whatever image it fills: a procedure
+/// that keeps each new string (in an array here) still runs into the memory budget, however small
+/// the images it fills are.
+#[test]
+fn strings_a_data_source_keeps_stay_charged() {
+    let body = "/keep 1100 array def /i 0 def\n\
+        1100 { 1 1 8 [1 0 0 1 0 0] { keep i 1048576 string put keep i get /i i 1 add def } image } repeat\n";
+    let r = import(&eps(body)).unwrap();
+    assert!(r.warnings.iter().any(|w| w.contains("too much memory")), "{:?}", r.warnings);
+}
+
 /// #3568: a single sample plane over the data limit is refused.
 #[test]
 fn an_oversized_image_plane_is_refused() {
@@ -1444,4 +1501,90 @@ fn stored_graphics_states_use_up_the_memory_budget() {
 fn bitshift_by_the_most_negative_integer_does_not_panic() {
     let r = read("0 0 10 10 rectfill 1 -9223372036854775808 bitshift pop -1 -9223372036854775808 bitshift pop");
     assert_eq!(objects(&r.document).len(), 1, "{:?}", r.warnings);
+}
+
+/// The stops (offset, grey's black ink or red) and the start and end of the linear gradient `n` is
+/// filled with.
+fn linear_stops(n: &Node) -> (Vec<(f32, f32)>, Point, Point) {
+    let Some(Paint::Gradient(g)) = fill(n) else { panic!("not a gradient: {:?}", fill(n)) };
+    assert_eq!(g.gradient.kind, GradientKind::Linear);
+    let level = |c: &Color| match *c {
+        Color::Gray { k } => k,
+        Color::Rgb { r, .. } => r,
+        other => panic!("{other:?}"),
+    };
+    let geom = g.geom.unwrap();
+    (g.gradient.stops.iter().map(|s| (s.offset, level(&s.color))).collect(), geom.start, geom.end)
+}
+
+#[test]
+fn abutting_strips_of_a_gradient_become_one_gradient() {
+    // A grey ramp drawn right to left as 40 strips 2 pt wide under a clip, after a strip of no
+    // width on its right edge: the clip path filled with one linear gradient, without seams.
+    let r = read(
+        "gsave 10 10 80 80 rectclip 90 10 0 80 rectfill
+         0 1 39 { /i exch def i 39 div setgray 88 i 2 mul sub 10 2 80 rectfill } for grestore",
+    );
+    let o = objects(&r.document);
+    assert_eq!(o.len(), 1, "{o:#?}");
+    let n = &o[0];
+    assert!(matches!(n.kind, NodeKind::Path { .. }));
+    assert!(near(bounds(n), Rect::new(10.0, 10.0, 90.0, 90.0)), "{:?}", bounds(n));
+    let (stops, start, end) = linear_stops(n);
+    // A straight ramp needs only its two ends, at the middles of the end strips: black on the
+    // right, white on the left.
+    assert_eq!(stops.len(), 2, "{stops:?}");
+    let x = |t: f32| start.x + (end.x - start.x) * f64::from(t);
+    assert!((start.y - end.y).abs() < 1e-6);
+    let ((t0, k0), (t1, k1)) = (stops[0], stops[1]);
+    // A grey's level is its black ink: 1 for black.
+    let (dark, light) = if k0 > k1 { ((x(t0), k0), (x(t1), k1)) } else { ((x(t1), k1), (x(t0), k0)) };
+    assert!((dark.0 - 89.0).abs() < 0.01 && (dark.1 - 1.0).abs() < 1e-6, "{dark:?}");
+    assert!((light.0 - 11.0).abs() < 0.01 && light.1.abs() < 1e-6, "{light:?}");
+}
+
+#[test]
+fn strips_under_a_larger_clip_keep_the_clip() {
+    // The same ramp under a clip larger than the strips: the gradient fills only where the
+    // strips were, still clipped, not the whole clip.
+    let r = read(
+        "gsave 5 5 90 90 rectclip
+         0 1 39 { /i exch def i 39 div setgray 88 i 2 mul sub 10 2 80 rectfill } for grestore",
+    );
+    let o = objects(&r.document);
+    assert_eq!(o.len(), 1, "{o:#?}");
+    let NodeKind::Group { children, clip: true } = &o[0].kind else { panic!("not a clipping group: {:#?}", o[0]) };
+    let [_, fill] = children.as_slice() else { panic!("{children:#?}") };
+    assert!(near(bounds(fill), Rect::new(10.0, 10.0, 90.0, 90.0)), "{:?}", bounds(fill));
+    let (stops, _, _) = linear_stops(fill);
+    assert_eq!(stops.len(), 2, "{stops:?}");
+}
+
+#[test]
+fn turned_strips_become_a_gradient_across_them() {
+    // Strips drawn in a turned space: the gradient runs square to them.
+    let r = read("50 50 translate 30 rotate 0 1 19 { /i exch def i 19 div 0 0 setrgbcolor i 2 mul 20 sub -20 2 40 rectfill } for");
+    let o = objects(&r.document);
+    assert_eq!(o.len(), 1, "{o:#?}");
+    let (stops, start, end) = linear_stops(&o[0]);
+    assert_eq!(stops.len(), 2, "{stops:?}");
+    let d = end - start;
+    // 30° in PostScript's y-up space is −30° in the document's y-down one.
+    let angle = d.y.atan2(d.x).to_degrees();
+    assert!((angle + 30.0).abs() < 0.01 || (angle - 150.0).abs() < 0.01, "{angle}");
+    assert!((d.hypot() - 40.0).abs() < 0.01, "{}", d.hypot());
+}
+
+#[test]
+fn abutting_blocks_of_distinct_colours_stay_apart() {
+    // Side by side but each a different colour (a row of swatches): not a gradient.
+    let blocks: String =
+        (0..8).map(|i| format!("{} {} {} setrgbcolor {} 10 10 80 rectfill ", i % 2, (i / 2) % 2, (i / 4) % 2, 10 + i * 10)).collect();
+    assert_eq!(objects(&read(&blocks).document).len(), 8);
+    // Too few strips to be sure of.
+    let few: String = (0..5).map(|i| format!("{} setgray {} 10 2 80 rectfill ", f64::from(i) / 40.0, 10 + i * 2)).collect();
+    assert_eq!(objects(&read(&few).document).len(), 5);
+    // Strips with gaps between them.
+    let gaps: String = (0..10).map(|i| format!("{} setgray {} 10 2 80 rectfill ", f64::from(i) / 40.0, 10 + i * 3)).collect();
+    assert_eq!(objects(&read(&gaps).document).len(), 10);
 }

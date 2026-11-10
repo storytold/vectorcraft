@@ -29,6 +29,7 @@ mod stroke;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use vectorcraft_doc::text::TypeAntiAlias;
 use vectorcraft_doc::{AppearanceItem, Document, Node, NodeId, NodeKind, StrokeAlign, StrokeLayer, SymbolBoxes, TextObject, TraceView};
 use vectorcraft_geom::{Affine, BezPath, FillRule, Rect, Shape};
 use vello_cpu::kurbo;
@@ -47,6 +48,14 @@ pub use live::expand_live;
 pub use pattern::render_pattern_swatch;
 pub use vectorcraft_effects as effects;
 pub use vello_cpu;
+
+/// Art made to measure an object ([`Renderer::measured`]): the object, its art, and the key of
+/// what the art read from outside the object (`None`: nothing).
+type MeasuredArt = (Arc<Node>, Arc<Node>, Option<u64>);
+
+/// A 3D effect's art ([`Renderer::three_d_bounds`]), held weakly, and its bounds once measured at a
+/// raster effects resolution (its bits) with a brush library (its key).
+type ThreeDArt = (std::sync::Weak<Node>, Option<((u64, u64), Option<Rect>)>);
 
 /// Reusable renderer (keeps the render context, geometry and glyph caches between frames; decoded
 /// images are shared by all renderers, see [`set_image_cache_budget`]).
@@ -75,6 +84,17 @@ pub struct Renderer {
     /// The plug-in revision ([`effects::plugin_revision`]) that `geom`, `fx_geom` and `fx_arts` were
     /// last checked against (see [`Self::check_plugins`]).
     plugin_revision: u64,
+    /// The key of the brush library ([`brush_fx::BrushCache::library_key`]) when `geom`'s bounds of
+    /// 3D art were measured with it (see [`Self::check_symbols`]): set by the first such measure
+    /// and kept, whether or not those bounds still are, until the library changes. `None` until
+    /// then, and nothing is checked.
+    brush_library: Option<u64>,
+    /// Is a live-effect plug-in that paints its pieces installed (found when `plugin_revision`
+    /// changes)?
+    painting_plugins: bool,
+    /// The hash of the document's swatch and pattern names at the last check, kept while
+    /// `painting_plugins` holds (see [`Self::check_plugins`]).
+    paint_names: u64,
     /// Expanded stroke outlines keyed by ([`Self::stroke_owner`], stroke layer address, width bits,
     /// tolerance level): panning re-renders reuse them instead of re-expanding every stroke.
     strokes: PtrMap<StrokeKey, StrokeEntry>,
@@ -124,6 +144,9 @@ pub struct Renderer {
     /// Objects' content run through Photoshop-style effects, per object and content slot (see
     /// `fx`): kept only while drawn.
     pixel_fx: PtrMap<(usize, usize, Ink), fx::PixelEntry>,
+    /// Type drawn with an anti-aliasing method other than Sharp, per object and ink (see
+    /// [`Self::draw_type_edges`]).
+    type_edges: FrameCache<(usize, Ink), TypeEdgeEntry>,
     /// What the contents of those rasters read from the document, and the color settings, as last
     /// found for a frame (`stamp`) and document (address) (see [`Self::doc_inputs`]).
     doc_inputs: Option<((u64, usize), Arc<fx::DocInputs>)>,
@@ -138,6 +161,33 @@ pub struct Renderer {
     shape_of: usize,
     /// The art drawn for objects with effects that apply through it (see `fx::has_object_fx`).
     fx_arts: FrameCache<usize, FxArtEntry>,
+    /// The art of objects with object effects made to measure them ([`Renderer::bounds_of`]) and
+    /// not drawn yet, by the object's address, with the object and the key of what it read from
+    /// outside the object when it was made (`None`: nothing): drawing one keeps it in `fx_arts`
+    /// while that is unchanged; the frame's end lets go of the rest.
+    measured: PtrMap<usize, MeasuredArt>,
+    /// The bytes of the art in `measured` ([`lru::node_bytes`]), within `measured_budget`
+    /// ([`lru::MEASURED_BUDGET`]).
+    measured_bytes: usize,
+    measured_budget: usize,
+    /// The export bounds of the objects measured without their hidden members
+    /// (`encode::drawn_bounds`), by the object they were made from: kept for a pass over artboards,
+    /// let go when a frame ends.
+    pub(crate) pass_bounds: PtrMap<usize, (Arc<Node>, Option<Rect>)>,
+    /// The 3D effects' art among the art `fx_art` made, by its address, with the art (weakly: what
+    /// keeps the art is `fx_arts` and `measured`) and its bounds once measured. An entry is added
+    /// for every 3D art made, measured or not. Entries whose art is gone are swept when a frame
+    /// ends (`let_go_of_measured`) and, for a renderer that only measures, when the map reaches
+    /// twice the size it kept at the last sweep (at least 1024): it holds at most max(twice the
+    /// entries kept at the last sweep, 1024). Until swept, an entry's weak pointer keeps the art's
+    /// allocation (not its contents) alive.
+    three_d_bounds: PtrMap<usize, ThreeDArt>,
+    /// How many entries `three_d_bounds` kept when it last let go of the art no longer held: it
+    /// does so again when it holds twice as many.
+    three_d_kept: usize,
+    /// How many times `three_d_bounds` was swept for art no longer held between frames.
+    #[cfg(test)]
+    three_d_sweeps: usize,
     /// Symbol art as instances and inline graphics draw it (see [`Self::placed_art`]).
     placed_arts: FrameCache<PlacedKey, PlacedEntry>,
     /// The bitmap clock of [`placed_document`] when this frame first drew a placed document from
@@ -226,7 +276,10 @@ mod threads;
 
 pub use bounds::{drawn_bounds, drawn_outline, drawn_outlines, effect_bounds, painted_bounds};
 pub use frame::FrameStats;
-use frame::{ClipEntry, ClipPaintEntry, Frame, FxArtEntry, GeomEntry, PlacedEntry, PlacedKey, PtrHasher, PtrMap, SliceEntry, StrokeEntry, StrokeKey};
+use frame::{
+    ClipEntry, ClipPaintEntry, Frame, FxArtEntry, GeomEntry, PlacedEntry, PlacedKey, PtrHasher, PtrMap, SliceEntry, StrokeEntry, StrokeKey,
+    TypeEdgeEntry,
+};
 #[cfg(test)]
 use frame::{OFFSCREEN_PIXELS, Slices};
 pub use geometry::region_pixels;
@@ -236,6 +289,8 @@ use node_checks::painted_items;
 pub use options::{AntiAlias, ISOLATION_DIM, MAX_RASTER_PIXELS, MAX_RASTER_SIDE, RenderOptions, Rendered, raster_size, supersample_factor};
 pub(crate) use paint::blend_mode;
 use paint::fill_rule;
+#[cfg(test)]
+use renderer::{edge_coverage, edge_grid, type_reach};
 use text_geom::TextGeom;
 #[cfg(test)]
 pub(crate) use text_geom::is_opentype_alternate;

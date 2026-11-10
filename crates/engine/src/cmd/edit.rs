@@ -41,6 +41,15 @@ pub fn specs() -> Vec<CommandSpec> {
         cmd!(query "document.inspect", "Inspect Document", [], None, "{depth?, childLimit?, ids?: [id…] (list just these nodes, of any level, in this order, under `nodes` in place of `layers`; an unknown id is an error; at most 10000), kind?: panel label such as Layer; Group; Path; Type or Image (exact, ignoring case; list every such node under `nodes`, each with `path`, its ancestor ids with the layer first, searching the subtrees of `ids` when given), limit?: at most this many entries of the list, offset?: entries skipped first (default 0; with `ids`, `kind`, `limit` or `offset` the reply adds `total`, the entries before paging)} → layer tree (each node: id, name, kind, visible, locked, bounds, opacity (0–1) and opacityPct (0–100 %, the scale object.setProps takes) when below 1, blend when not Normal, fill, stroke and strokeWidth of objects and compound paths; a compound path's members have compoundMember: true instead of paint, which is the compound's), artboards, selection, history (a sliced tree reports childCount); without the scope options the reply is the whole layer tree", has_doc, doc_inspect),
         cmd!(query "document.node", "Inspect Object", [], None, "{id, summary?: compact summary, depth?: child levels in the summary (default all), childLimit?: children shown per node (default all; a level that shows fewer reports childCount)} → one object", has_doc, doc_node),
         cmd!(query "document.find", "Find Objects", [], None, "{name?: substring of the Layers panel name, kind?: panel label such as Group; Path; Type or Image (exact), text?: substring of type content, within?: [x, y, width, height] (an object's geometric bounds inside this rectangle, edges included; document points as document.inspect's bounds; layers never match this or the size filters), intersects?: [x, y, width, height] (bounds touching or overlapping it), minWidth?, maxWidth?, minHeight?, maxHeight?: pt (the bounds' size), minThickness?, maxThickness?: pt (the smaller of the bounds' width and height), minArea?, maxArea?: pt² (the bounds' width × height), minAnchors?, maxAnchors?: anchor points of a path (a compound path's members together; other objects never match), select?: bool (also select the matches, leaving out hidden and locked ones, those inside another match, and a compound path's members unless the compound path is isolated; Select > Reselect repeats it), limit?: max matches listed (default 100, 0 counts only)} → {matches: [{id, name, kind, path}], total, selected (with select: the count selected)}; at least one filter, all of them matching", has_doc, doc_find),
+        cmd!(
+            query "document.compare",
+            "Compare with Image",
+            [],
+            None,
+            "{path: an image file (PNG, JPEG, WebP, TIFF or BMP), artboard?: index=0, background?: \"#rrggbb\"=\"#ffffff\" (the render and the image are both flattened on it), threshold?: 0.08 (0–1), diffPath?: a PNG to write (each pixel's absolute R, G and B differences)} render the artboard at the image's size (the image's width in pixels over the artboard's width in points), drawn as document.export draws a PNG (linked images and placed documents from their files), and compare it with the image; an image whose height differs by more than a pixel from the artboard's height at that scale is refused (not in the browser) → {width, height, rmse: the root mean square of the R, G and B differences, 0–1 (6 decimals), over: the pixels with a channel that differs by more than threshold, total: the pixels, threshold, diffPath?, warnings?: as a PNG export's (type that doesn't fit its frame, an image that couldn't be decoded, type in a font or style that isn't available, previews drawn because a linked file can't be read)}",
+            has_doc,
+            doc_compare
+        ),
         cmd!(query "document.json", "Document JSON", [], None, "{} → complete document model", has_doc, |s, _| Ok(serde_json::to_value(&*s.doc()?.doc).unwrap_or(Value::Null))),
         cmd!(
             "document.setUnits",
@@ -148,7 +157,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Cut",
             ["Edit"],
             Some("Cmd+X"),
-            "{lockedAndHidden?: bool (the Artboard tool chosen, as artboard.cut)} (selected ruler guides go too; the Artboard tool chosen: artboard.cut)",
+            "{selectedArtboards?: [n…], art?: bool, lockedAndHidden?: bool (the Artboard tool chosen, as artboard.cut)} (as edit.copy) (selected ruler guides go too; the Artboard tool chosen, or selectedArtboards given: artboard.cut); refused while an object of a symbol instance's art is selected",
             has_selection_guides_or_artboard_tool,
             cut
         ),
@@ -157,7 +166,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Copy",
             ["Edit"],
             Some("Cmd+C"),
-            "{lockedAndHidden?: bool (the Artboard tool chosen, as artboard.copy)} the selection with what it uses, and the selected ruler guides (pasted on the layer new art goes to, moved as the objects are; alone, where they were); the Artboard tool chosen: artboard.copy → {copied, guides}",
+            "{selectedArtboards?: [n…] (the artboards the Artboard tool had selected, which the journal records for a replay; it runs artboard.copy with any tool chosen), art?: bool (default: the Artboard tool's moveArt option; the journal records it beside selectedArtboards), lockedAndHidden?: bool (the Artboard tool chosen, as artboard.copy)} the selection with what it uses, and the selected ruler guides (pasted on the layer new art goes to, moved as the objects are; alone, where they were); the Artboard tool chosen: artboard.copy; with an object of a symbol instance's art selected, the instance is copied whole → {copied, guides}",
             has_selection_guides_or_artboard_tool,
             copy
         ),
@@ -211,7 +220,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Clear",
             ["Edit"],
             Some("Delete"),
-            "{ids?, guides?: bool (with ids: also delete the selected ruler guides)} delete the objects `ids`, else the selection (fully selected objects and direct-selected anchors together, else ruler guides)",
+            "{ids?, guides?: bool (with ids: also delete the selected ruler guides)} delete the objects `ids`, else the selection (fully selected objects and direct-selected anchors together, else ruler guides); without ids, refused while an object of a symbol instance's art is selected",
             has_selection_or_guides,
             clear
         ),
@@ -383,6 +392,155 @@ fn select_found(s: &mut Session, p: &Value, ids: &[NodeId]) -> Result<Value> {
     super::select::select_where(s, "document.find", p, |d, n| {
         found.contains(&n.id) && (members || !d.parent_of(n.id).and_then(|p| d.node(p)).is_some_and(compound))
     })
+}
+
+/// Render an artboard at an image's size, drawn as a PNG export draws it (linked images and placed
+/// documents from their files, with the export's warnings), and measure how far the
+/// two are apart: both flattened on `background`, the root mean square of the R, G and B
+/// differences (0–1), and the pixels with a channel that differs by more than `threshold`.
+#[cfg(not(target_arch = "wasm32"))]
+fn doc_compare(s: &mut Session, p: &Value) -> Result<Value> {
+    use vectorcraft_render::encode::{RasterExportOptions, RasterFormat, png};
+    const C: &str = "document.compare";
+    let path = str_param(p, "path").ok_or_else(|| bad(C, "missing `path`"))?;
+    let diff_path = match p.get("diffPath") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(v)) => Some(v.as_str()),
+        Some(_) => {
+            let key = "diffPath";
+            return Err(bad(C, format!("`{key}` must be a string")));
+        }
+    };
+    let background = match p.get("background") {
+        None | Some(Value::Null) => [255; 3],
+        Some(v) => match super::fileio::background(v) {
+            Ok(Some(rgb)) => rgb,
+            _ => return Err(bad(C, format!("background {v}: a color such as \"#808080\""))),
+        },
+    };
+    let threshold = match p.get("threshold") {
+        None | Some(Value::Null) => 0.08,
+        Some(v) => v.as_f64().filter(|t| (0.0..=1.0).contains(t)).ok_or_else(|| bad(C, "`threshold` must be a number from 0 to 1"))?,
+    };
+    let doc = &s.doc()?.doc;
+    let count = doc.artboards.len();
+    let i = opt_u64(p, C, "artboard")?.unwrap_or(0);
+    let region = usize::try_from(i)
+        .ok()
+        .and_then(|i| doc.artboards.get(i))
+        .map(|a| a.rect)
+        .ok_or_else(|| bad(C, format!("no artboard {i} (0-based; the document has {count})")))?;
+    if let Some(d) = diff_path {
+        crate::file_access::check_write(d).map_err(EngineError::Other)?;
+    }
+    let image = compare_image(path)?;
+    let (iw, ih) = image.dimensions();
+    // The image's width sets the scale; its height may differ from the artboard's at that scale by
+    // the pixel the rounding of a render takes.
+    let scale = f64::from(iw) / region.width();
+    let rendered_height = region.height() * scale;
+    if iw == 0 || ih == 0 || !rendered_height.is_finite() || (rendered_height - f64::from(ih)).abs() > 1.0 {
+        let (rw, rh) = (iw, rendered_height.round());
+        return Err(bad(
+            C,
+            format!("the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ"),
+        ));
+    }
+    vectorcraft_render::raster_size(region, scale).map_err(|e| bad(C, e))?;
+    vectorcraft_render::raster_size(vectorcraft_geom::Rect::new(0.0, 0.0, f64::from(iw), f64::from(ih)), 1.0).map_err(|e| bad(C, e))?;
+    let view = Affine::scale(scale) * Affine::translate((-region.x0, -region.y0));
+    let opts = RasterExportOptions { background: Some(background), ..Default::default() }.render_options(RasterFormat::Png);
+    // As a PNG export: linked images and placed documents drawn from their files, not the
+    // previews saved for them.
+    let (full, linked) = super::place::document::full_documents(doc);
+    let failed = vectorcraft_render::decode_failures();
+    let rendered = vectorcraft_render::Renderer::new().render(&full, iw, ih, view, &opts);
+    // A canceled render stops drawing: the picture is not whole.
+    vectorcraft_doc::cancel::check()?;
+    // As a PNG export says, in its order: type on the artboard that doesn't fit its frame, an image
+    // the renderer couldn't decode (missing from the render), type in a missing font or style (drawn
+    // in another one), and linked files drawn from their previews.
+    let mut warnings: Vec<String> = super::fonts::export_overflow_warning(&full, &full.layers, Some(&[region])).into_iter().collect();
+    if let Some(w) = super::rasterfx::undecoded_warning(failed) {
+        warnings.push(w.into());
+    }
+    if let Some(w) = super::fonts::substitution_warning(&full) {
+        warnings.push(w);
+    }
+    warnings.extend(linked);
+    let rendered = rendered.to_straight();
+    let flat = |px: &[u8; 4]| {
+        let a = u32::from(px[3]);
+        [0, 1, 2].map(|k| ((u32::from(px[k]) * a + u32::from(background[k]) * (255 - a) + 127) / 255) as u8)
+    };
+    let row = iw as usize * 4;
+    let limit = threshold * 255.0;
+    let (mut squares, mut over) = (0.0f64, 0u64);
+    let mut diff = diff_path.map(|_| Vec::with_capacity(row * ih as usize));
+    for (a, b) in rendered.chunks_exact(row).zip(image.as_raw().chunks_exact(row)) {
+        vectorcraft_doc::cancel::check()?;
+        for (pa, pb) in a.as_chunks::<4>().0.iter().zip(b.as_chunks::<4>().0) {
+            let (fa, fb) = (flat(pa), flat(pb));
+            let d = [0, 1, 2].map(|k| fa[k].abs_diff(fb[k]));
+            squares += d.iter().map(|&x| f64::from(x) * f64::from(x)).sum::<f64>();
+            if d.iter().any(|&x| f64::from(x) > limit) {
+                over += 1;
+            }
+            if let Some(out) = &mut diff {
+                out.extend_from_slice(&[d[0], d[1], d[2], 255]);
+            }
+        }
+    }
+    let total = u64::from(iw) * u64::from(ih);
+    let rmse = (squares / (total as f64 * 3.0)).sqrt() / 255.0;
+    let mut out = json!({
+        "width": iw,
+        "height": ih,
+        "rmse": (rmse * 1e6).round() / 1e6,
+        "over": over,
+        "total": total,
+        "threshold": threshold,
+    });
+    if let (Some(d), Some(pixels)) = (diff_path, diff) {
+        let bytes = png::encode(&pixels, iw, ih, &png::PngOptions { ppi: None, interlaced: false }).map_err(EngineError::Other)?;
+        super::fileio::write_file(d, &bytes)?;
+        out["diffPath"] = json!(d);
+    }
+    if !warnings.is_empty() {
+        out["warnings"] = json!(warnings);
+    }
+    Ok(out)
+}
+
+/// The image `document.compare` reads from `path` (through the automation read root), as straight
+/// RGBA: a PNG, JPEG, WebP, TIFF or BMP within the allocation an opened image may take.
+#[cfg(not(target_arch = "wasm32"))]
+fn compare_image(path: &str) -> Result<image::RgbaImage> {
+    use image::ImageDecoder as _;
+    const C: &str = "document.compare";
+    let bytes = super::fileio::read_file(path)?;
+    if let Some((w, h)) = vectorcraft_doc::cmyk::oversized_tiff(&bytes) {
+        return Err(bad(C, format!("an image of {w} × {h} pixels is too large to draw")));
+    }
+    let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format().map_err(|e| bad(C, format!("{path}: {e}")))?;
+    let readable = [image::ImageFormat::Png, image::ImageFormat::Jpeg, image::ImageFormat::WebP, image::ImageFormat::Tiff, image::ImageFormat::Bmp];
+    if !reader.format().is_some_and(|f| readable.contains(&f)) {
+        return Err(bad(C, format!("{path}: not a PNG, JPEG, WebP, TIFF or BMP image")));
+    }
+    let mut limits = image::Limits::default();
+    limits.max_alloc = Some(vectorcraft_doc::MAX_RASTER_ALLOC);
+    reader.limits(limits);
+    let decoder = reader.into_decoder().map_err(|e| bad(C, format!("{path}: {e}")))?;
+    let (w, h) = decoder.dimensions();
+    if decoder.total_bytes() > vectorcraft_doc::MAX_RASTER_ALLOC || u64::from(w) * u64::from(h) * 4 > vectorcraft_doc::MAX_RASTER_ALLOC {
+        return Err(bad(C, format!("an image of {w} × {h} pixels is too large to draw")));
+    }
+    Ok(image::DynamicImage::from_decoder(decoder).map_err(|e| bad(C, format!("{path}: {e}")))?.to_rgba8())
+}
+
+#[cfg(target_arch = "wasm32")]
+fn doc_compare(_: &mut Session, _: &Value) -> Result<Value> {
+    Err(bad("document.compare", "comparing with an image file isn't available in the browser"))
 }
 
 /// Document Setup's units (also `document.setup {units}`).
@@ -636,11 +794,14 @@ fn new_document_from_state(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
     let mut doc = Document::clone(chosen.as_ref().unwrap_or(&st.doc));
     let (imported_from, import_losses, opened_by) = (st.imported_from.clone(), st.import_losses.clone(), st.opened_by.clone());
-    if let Some(path) = st.path.as_deref() {
+    let base = super::links::LinkBase::of(st);
+    if base.doc.is_some() {
         // Files are looked for within the asking caller's roots, else within those of the caller that opened the source.
         let roots = crate::file_access::current().or_else(|| opened_by.clone());
-        crate::file_access::confine(roots.as_ref(), || super::links::with_found_paths(&mut doc, path));
+        crate::file_access::confine(roots.as_ref(), || super::links::with_found_paths(&mut doc, base));
     }
+    // The copy's links keep their relative paths, which name places from the same file.
+    let links_from = base.relative.map(str::to_string);
     doc.drop_edit_modes();
     if doc.pattern_edit.is_some() {
         super::patterncmds::finish_edit(&mut doc, &mut vectorcraft_doc::Selection::default())?;
@@ -657,6 +818,7 @@ fn new_document_from_state(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc_mut()?;
     st.imported_from = imported_from;
     st.import_losses = import_losses;
+    st.links_from = links_from;
     st.opened_by = st.opened_by.take().or(opened_by);
     st.mark_unsaved();
     Ok(json!({ "index": i, "title": st.title() }))
@@ -671,16 +833,38 @@ fn shared_selection(selection: vectorcraft_doc::Selection, like: Option<&crate::
 }
 
 /// Selected top-level objects in paint order, dropping any whose ancestor is also selected.
+///
+/// Refused with [`super::brushsym::part_only`] while an object of a dynamic symbol instance's art
+/// is selected ([`super::brushsym::selected_part`]): only the paint commands change that object,
+/// and only its solid fill and stroke, so a command that gathers the selection here leaves the
+/// instance as it is. Copy copies the instance whole ([`copy_cut_targets`]).
 pub(crate) fn selected_roots(s: &Session) -> Result<Vec<NodeId>> {
+    refuse_symbol_part(s)?;
     let st = s.doc()?;
     Ok(roots_of(&st.doc, st.selection.in_paint_order(&st.doc)))
+}
+
+/// [`super::brushsym::part_only`] while an object of a dynamic symbol instance's art is selected:
+/// for the commands that read the selected objects without [`selected_roots`]. A command that
+/// changes nothing in the document ([`Session::reading`]) reads the instance instead.
+pub(crate) fn refuse_symbol_part(s: &Session) -> Result<()> {
+    if !s.reading && s.doc()?.selection.symbol_part.is_some() { Err(super::brushsym::part_only()) } else { Ok(()) }
+}
+
+/// [`refuse_symbol_part`] as a command's `enabled` check: the command is dimmed, and refused with
+/// [`super::brushsym::part_only`]'s message, while an object of a dynamic symbol instance's art is
+/// selected.
+pub(crate) fn no_symbol_part(s: &Session) -> std::result::Result<(), String> {
+    if !s.reading && s.active().is_some_and(|st| st.selection.symbol_part.is_some()) { Err(super::brushsym::part_only().to_string()) } else { Ok(()) }
 }
 
 /// [`selected_roots`] for the commands that move or reshape the art (Move, Transform, Rotate…): a
 /// path of a compound path selected on its own (Group Selection, or in the isolated compound path)
 /// is an object of its own, so the hole of a ring moves without the ring (#2441). Paint and the
-/// rest still go to the compound path, which holds the paint.
+/// rest still go to the compound path, which holds the paint. Refused while an object of a symbol
+/// instance's art is selected, as [`selected_roots`] is: it moves with its instance only.
 pub(crate) fn selected_roots_to_transform(s: &Session) -> Result<Vec<NodeId>> {
+    refuse_symbol_part(s)?;
     let st = s.doc()?;
     Ok(roots_within(&st.doc, st.selection.in_paint_order(&st.doc), |_, _| true))
 }
@@ -689,8 +873,10 @@ pub(crate) fn selected_roots_to_transform(s: &Session) -> Result<Vec<NodeId>> {
 /// ([`super::inside_isolation`]): `root` itself and objects outside it are left out before the
 /// objects held by another selected object are dropped. A selected path of a compound path stands
 /// for its compound unless the compound is `root` or `members` is set (as in
-/// [`selected_roots_to_transform`]).
+/// [`selected_roots_to_transform`]). Refused while an object of a symbol instance's art is
+/// selected, as [`selected_roots`] is.
 pub(crate) fn selected_roots_inside(s: &Session, root: NodeId, members: bool) -> Result<Vec<NodeId>> {
+    refuse_symbol_part(s)?;
     let st = s.doc()?;
     let ids = st.selection.in_paint_order(&st.doc).into_iter().filter(|id| super::inside_isolation(&st.doc, root, *id)).collect();
     Ok(roots_within(&st.doc, ids, |compound, _| members || compound == root))
@@ -748,7 +934,10 @@ fn without_inner(doc: &Document, placed: Vec<(NodeId, Option<Vec<usize>>)>) -> i
 /// The direct-selection flag and resolved root nodes for Copy and Cut operations.
 fn copy_cut_targets(s: &Session) -> Result<(bool, Vec<NodeId>)> {
     let st = s.doc()?;
-    let in_drawing_tool = matches!(s.tool_id(), "pen" | "curvature");
+    // The Pen and the Curvature tool leave the anchor they placed or edited selected: Copy takes
+    // the whole path then (#2122), unless a selection tool Cmd lent them picked the anchors (#6123).
+    let picked = s.lent_selection.as_ref().is_some_and(|(uid, sel)| *uid == st.uid && *sel == st.selection);
+    let in_drawing_tool = matches!(s.tool_id(), "pen" | "curvature") && !picked;
     let direct = !in_drawing_tool && (!st.selection.anchors.is_empty() || !st.selection.segments.is_empty());
     let in_isolated_compound = st.isolation.is_some_and(|iso| st.doc.node(iso).is_some_and(|n| matches!(n.kind, NodeKind::Compound { .. })));
     let roots = roots_within(&st.doc, st.selection.in_paint_order(&st.doc), |_compound, member| {
@@ -757,16 +946,29 @@ fn copy_cut_targets(s: &Session) -> Result<(bool, Vec<NodeId>)> {
     Ok((direct, roots))
 }
 
-/// The params edit.copy and edit.cut pass on to `artboard.copy` and `artboard.cut`.
-fn artboard_clipboard_params(p: &Value) -> Value {
-    p.get("lockedAndHidden").map_or_else(|| json!({}), |v| json!({ "lockedAndHidden": v }))
+/// Copy or Cut takes artboards: the Artboard tool is chosen, or the journal recorded the artboards
+/// it took then.
+fn takes_artboards(s: &Session, p: &Value) -> bool {
+    s.tool_id() == "artboard" || p.get("selectedArtboards").is_some()
+}
+
+/// Copy or Cut of artboards: `selectedArtboards`, `art` and `lockedAndHidden` of `p`, or their
+/// defaults from the Artboard tool, which the journal entry records.
+fn copy_artboards(s: &mut Session, p: &Value, cut: bool) -> Result<Value> {
+    let given: serde_json::Map<String, Value> =
+        ["selectedArtboards", "art", "lockedAndHidden"].into_iter().filter_map(|key| p.get(key).map(|v| (key.to_string(), v.clone()))).collect();
+    let given = Value::Object(given);
+    super::panelcmds::boards_and_art_noted(s, &given, if cut { "edit.cut" } else { "edit.copy" })?;
+    super::panelcmds::artboard_copy(s, &given, cut)
 }
 
 fn copy(s: &mut Session, p: &Value) -> Result<Value> {
+    switch_or(p, "art", false, "edit.copy")?;
     // The Artboard tool copies its artboard (and the art on it).
-    if s.tool_id() == "artboard" {
-        return super::panelcmds::artboard_copy(s, &artboard_clipboard_params(p), false);
+    if takes_artboards(s, p) {
+        return copy_artboards(s, p, false);
     }
+    // With an object of a dynamic symbol instance's art selected, the instance is copied.
     let (direct, targets) = copy_cut_targets(s)?;
     let st = s.doc()?;
     // Selected ruler guides come along (#3226), as canvas guides: their layer and artboard stay
@@ -804,9 +1006,11 @@ fn copy(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn cut(s: &mut Session, p: &Value) -> Result<Value> {
-    if s.tool_id() == "artboard" {
-        return super::panelcmds::artboard_copy(s, &artboard_clipboard_params(p), true);
+    switch_or(p, "art", false, "edit.cut")?;
+    if takes_artboards(s, p) {
+        return copy_artboards(s, p, true);
     }
+    refuse_symbol_part(s)?;
     // Ruler guides selected on their own: Copy takes them, Clear removes them.
     if s.doc()?.selection.is_empty() {
         copy(s, p)?;
@@ -823,6 +1027,12 @@ fn cut(s: &mut Session, p: &Value) -> Result<Value> {
     if !direct { clear(s, &json!({ "ids": roots, "guides": true })) } else { cut_direct_selection(s, &roots) }
 }
 
+/// Remove the geometry copied by a direct-selection Cut, including selected guides in one edit.
+/// Select every surviving piece while retaining intentional compound-path structure.
+/// `roots` contains the copied targets: whole-object roots are removed in full, while partial paths
+/// lose only the copied geometry. An exhausted partial path is removed, along with its compound
+/// parent if now empty; layers remain. Returns JSON `null` on success, replacing direct-selection
+/// references with surviving object IDs.
 fn cut_direct_selection(s: &mut Session, roots: &[NodeId]) -> Result<Value> {
     let st = s.doc()?;
     let sel = st.selection.clone();
@@ -831,6 +1041,7 @@ fn cut_direct_selection(s: &mut Session, roots: &[NodeId]) -> Result<Value> {
         let gone = selection.guides.clone();
         d.retain_guides(selection, |i, _| !gone.contains(&i));
         let mut survivors = vec![];
+        let mut pieces = super::pathops::Beside::replacing(d, roots);
         for id in roots {
             let Some(node) = d.node(*id) else { continue };
             let has_direct = sel.anchors.contains_key(id) || sel.segments.contains_key(id);
@@ -838,20 +1049,26 @@ fn cut_direct_selection(s: &mut Session, roots: &[NodeId]) -> Result<Value> {
                 d.remove(*id)?;
                 continue;
             }
-            let Some(path) = node.path_data() else {
+            if node.path_data().is_none() {
                 d.remove(*id)?;
                 continue;
-            };
+            }
+            let original = super::path::deletion_source(d, *id)?;
 
             let seg_refs = sel.segments.get(id);
             let anchor_refs = sel.anchors.get(id);
             let mut subpaths = Vec::new();
-            for (si, sp) in path.subpaths.iter().enumerate() {
-                let cuts = super::clipboard::subpath_selected_segments(sp, si, seg_refs, anchor_refs);
+            let owned = std::mem::take(&mut super::path::path_mut(d, *id)?.subpaths);
+            for (si, sp) in owned.into_iter().enumerate() {
+                let cuts = super::clipboard::subpath_selected_segments(&sp, si, seg_refs, anchor_refs);
                 if cuts.is_empty() {
-                    subpaths.push(sp.clone());
+                    subpaths.push(sp);
+                } else if seg_refs.is_some_and(|segments| !segments.is_empty()) {
+                    subpaths.extend(super::path::without_segments(sp, &cuts));
                 } else {
-                    subpaths.extend(super::path::without_segments(sp.clone(), &cuts));
+                    // Picked anchors leave the path with their connections, as Clear removes them.
+                    let gone: BTreeSet<usize> = anchor_refs.into_iter().flatten().filter_map(|&(s, a)| (s == si).then_some(a)).collect();
+                    subpaths.extend(super::path::without_anchors(sp, &gone));
                 }
             }
             subpaths.retain(|sp| sp.anchors.len() >= 2);
@@ -864,11 +1081,10 @@ fn cut_direct_selection(s: &mut Session, roots: &[NodeId]) -> Result<Value> {
                     d.remove(p)?;
                 }
             } else {
-                let path_node = super::path::path_mut(d, *id)?;
-                path_node.subpaths = subpaths;
-                survivors.push(*id);
+                survivors.extend(super::path::replace_deleted_pieces(d, &mut pieces, original, subpaths)?);
             }
         }
+        pieces.finish(d)?;
         selection.set(survivors);
         selection.anchors.clear();
         selection.segments.clear();
@@ -880,6 +1096,10 @@ fn cut_direct_selection(s: &mut Session, roots: &[NodeId]) -> Result<Value> {
 fn clear(s: &mut Session, p: &Value) -> Result<Value> {
     let guides = switch_or(p, "guides", false, "edit.clear")?;
     let explicit = if p.get("ids").is_some() { Some(checked_ids_param(s, p, "ids", "edit.clear")?) } else { None };
+    // An object of a symbol instance's art can't be removed from the instance alone.
+    if explicit.is_none() && s.doc()?.selection.symbol_part.is_some() {
+        return Err(super::brushsym::part_only());
+    }
     // Direct-selected anchors or segments: remove those, and any objects selected whole with them.
     if explicit.is_none() && (!s.doc()?.selection.anchors.is_empty() || !s.doc()?.selection.segments.is_empty()) {
         return super::path::delete_anchors(s, p);
@@ -1111,10 +1331,11 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
             for (k, n) in clip.nodes.iter().enumerate() {
                 let mut c = d.reid(n);
                 imported.apply(&mut c);
+                let sc = vectorcraft_doc::Scaling { patterns: mode == PasteMode::Drag, ..Default::default() };
                 if xf != Affine::IDENTITY {
                     // A cross-document drag carries the graphic's appearance with it,
                     // including the pattern phase, independently of transform-tool settings.
-                    c.transform(xf, vectorcraft_doc::Scaling { patterns: mode == PasteMode::Drag, ..Default::default() });
+                    c.transform(xf, sc);
                 }
                 let layer = match clip.source_layers.get(k) {
                     Some(Some(name)) if remember => Some(*layers.entry(name).or_insert_with(|| layer_named(d, name))),
@@ -1150,6 +1371,9 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
                                 if let NodeKind::Path { live, .. } = &mut child_node.kind {
                                     *live = None;
                                 }
+                                if child_node.extras().pixel_aligned {
+                                    child_node.extras_mut().pixel_aligned = false;
+                                }
                                 let insert_idx = if idx == usize::MAX { usize::MAX } else { idx.saturating_add(offset) };
                                 new_ids.push(d.insert(par, insert_idx, child_node)?);
                             }
@@ -1162,6 +1386,10 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
                             if let NodeKind::Path { live, .. } = &mut c.kind {
                                 *live = None;
                             }
+                            // A path inside a compound path snaps with the compound path, whose property it takes.
+                            if c.extras().pixel_aligned {
+                                c.extras_mut().pixel_aligned = false;
+                            }
                             new_ids.push(d.insert(par, idx, c)?);
                         }
                         _ => {
@@ -1170,13 +1398,18 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
                             let offset = *placed.entry(outer_par).or_default();
                             *placed.entry(outer_par).or_default() += 1;
                             let insert_idx = if beside_idx == usize::MAX { usize::MAX } else { beside_idx.saturating_add(offset) };
+                            super::object::keep_pixel_aligned(&mut c, sc);
                             new_ids.push(d.insert(outer_par, insert_idx, c)?);
                         }
                     }
                 } else {
+                    super::object::keep_pixel_aligned(&mut c, sc);
                     new_ids.push(d.insert(par, idx, c)?);
                 }
             }
+        }
+        for id in &new_ids {
+            super::object::keep_compound_aligned(d, *id, vectorcraft_doc::Scaling::default());
         }
         sel.set(new_ids.iter().copied());
         // Copied ruler guides (#3226): on the layer new art goes to, moved as the objects are (a
@@ -1249,7 +1482,10 @@ fn duplicate(s: &mut Session, p: &Value) -> Result<Value> {
 /// Duplicate `roots` directly above each original, transform the copies, select them
 /// ([`copy_above`]).
 pub(crate) fn duplicate_in(d: &mut Document, sel: &mut vectorcraft_doc::Selection, roots: &[NodeId], xf: Affine) -> Result<Vec<NodeId>> {
-    let out = copy_above(d, roots, |_, _, c| c.transform(xf, true))?;
+    let out = copy_above(d, roots, |_, _, c| {
+        c.transform(xf, true);
+        super::object::keep_pixel_aligned(c, true.into());
+    })?;
     sel.set(out.iter().copied());
     Ok(out)
 }

@@ -1,8 +1,8 @@
 //! Transform panel: reference point, X/Y/W/H with the constrain link, rotate and shear, flips,
-//! live-shape properties and the Scale Corners / Scale Strokes & Effects options. While the
-//! Artboard tool is in use it shows and edits the active artboard's X/Y/W/H instead (a new W or H
-//! resizes every selected artboard), and with only ruler guides selected their X (vertical guides)
-//! and Y (horizontal ones).
+//! live-shape properties and the Scale Corners / Scale Strokes & Effects / Align to Pixel Grid
+//! options. While the Artboard tool is in use it shows and edits the active artboard's X/Y/W/H
+//! instead (a new W or H resizes every selected artboard), and with only ruler guides selected
+//! their X (vertical guides) and Y (horizontal ones).
 
 use egui::Ui;
 use serde_json::json;
@@ -363,6 +363,32 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if widgets::check(ui, tl!("Scale Strokes & Effects"), ss, true) {
         set_pref(app, "scaleStrokes", !ss);
     }
+    pixel_grid_check(app, ui);
+}
+
+/// The selected objects' Align to Pixel Grid: on or off when they agree, `None` when they differ,
+/// with whether every one can be aligned (a path that is not a guide and not inside a compound path,
+/// or a compound path) and their ids. `None` with nothing selected.
+fn pixel_aligned_state(app: &VectorcraftApp) -> Option<(Option<bool>, bool, Vec<u64>)> {
+    let st = app.session.active()?;
+    let nodes: Vec<&Node> = st.selection.objects.iter().filter_map(|id| st.doc.node(*id)).collect();
+    let first = nodes.first()?.extras().pixel_aligned;
+    let value = nodes.iter().all(|n| n.extras().pixel_aligned == first).then_some(first);
+    let in_compound = |n: &Node| st.doc.parent_of(n.id).and_then(|p| st.doc.node(p)).is_some_and(|p| matches!(p.kind, NodeKind::Compound { .. }));
+    let alignable = nodes.iter().all(|n| matches!(n.kind, NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. }) && !in_compound(n));
+    Some((value, alignable, nodes.iter().map(|n| n.id.0).collect()))
+}
+
+/// The Align to Pixel Grid checkbox (`object.setPixelAligned`): a dash when the selected objects
+/// differ, and unavailable unless every selected object can be aligned. A click turns it on for
+/// them all, or off when it is on for them all.
+fn pixel_grid_check(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let (value, alignable, ids) = pixel_aligned_state(app).unwrap_or((Some(false), false, vec![]));
+    if widgets::check3(ui, tl!("Align to Pixel Grid"), value, alignable)
+        && let Err(e) = app.run("object.setPixelAligned", json!({"ids": ids, "on": value != Some(true)}))
+    {
+        app.status(e);
+    }
 }
 
 /// A live rectangle's, polygon's or ellipse's properties (Transform and Properties panels, and the
@@ -549,6 +575,11 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let ss = app.session.prefs.scale_strokes;
     if menu_item(ui, tl!("Scale Strokes & Effects"), true, ss) {
         set_pref(app, "scaleStrokes", !ss);
+    }
+    // The panel's values and the bounding box measure point type by its glyphs' ink.
+    let glyphs = app.session.prefs.type_glyph_bounds;
+    if menu_item(ui, tl!("Measure Type by Glyph Bounds"), true, glyphs) {
+        set_pref(app, "typeGlyphBounds", !glyphs);
     }
     ui.separator();
     // What the panel transforms (Transform Object Only / Pattern Only / Both), one checked.

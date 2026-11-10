@@ -65,6 +65,68 @@ use serde_json::json;
 use vectorcraft_engine::Session;
 
 #[test]
+fn help_bar_and_status_bar_render_independently() {
+    for (help, status, screen_mode) in [(true, true, 0), (false, true, 0), (true, false, 0), (false, false, 0), (true, true, 3)] {
+        let (mut app, ctx) = status_readout_app();
+        app.ui.help_bar = help;
+        app.ui.status_bar = status;
+        app.ui.screen_mode = screen_mode;
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 800.0));
+        let mut parent = None;
+        let mut output = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| {
+            parent = Some(ui.scope_id());
+            app.ui(ui);
+        });
+        output.textures_delta.clear();
+        for _ in 0..2 {
+            output = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| app.ui(ui));
+            output.textures_delta.clear();
+        }
+        fn text(shape: &egui::Shape, out: &mut Vec<String>) {
+            match shape {
+                egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+                egui::Shape::Vec(shapes) => shapes.iter().for_each(|s| text(s, out)),
+                _ => {}
+            }
+        }
+        let mut shown = Vec::new();
+        for shape in &output.shapes {
+            text(&shape.shape, &mut shown);
+        }
+        assert_eq!(shown.iter().any(|t| t == "?"), help && screen_mode < 3, "{help}/{status}/{screen_mode}: {shown:?}");
+        assert_eq!(shown.iter().any(|t| t.contains("Saved recovery data")), status && screen_mode < 3, "{help}/{status}/{screen_mode}: {shown:?}");
+        let floor = ctx.data(|data| data.get_temp::<f32>(egui::Id::unique("menu_floor").with(ctx.viewport_id()))).unwrap();
+        let expected = if screen_mode < 3 && (help || status) {
+            let id = parent.unwrap().with(if help { "hint_bar" } else { "status_bar" });
+            egui::containers::panel::PanelState::load(&ctx, id).unwrap().outer_rect.top()
+        } else {
+            screen.bottom()
+        };
+        assert!((floor - expected).abs() < 1.0, "menu floor {floor}, expected {expected}");
+    }
+}
+
+#[test]
+#[ignore = "Renders the Help Bar visibility examples; set HELP_BAR_SCREENSHOTS to an output directory"]
+fn help_bar_visibility_screenshots() {
+    let dir = std::path::PathBuf::from(std::env::var_os("HELP_BAR_SCREENSHOTS").expect("output directory"));
+    for shown in [true, false] {
+        let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 500, "height": 400})).unwrap();
+        if !shown {
+            crate::menus::run_ui_command(&mut app, "window.helpBar", &serde_json::Value::Null).unwrap().unwrap();
+        }
+        let mut h = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(1000.0, 700.0))
+            .with_accessibility_check(false)
+            .wgpu()
+            .build_ui_state(|ui, app: &mut crate::VectorcraftApp| app.ui(ui), app);
+        h.run_steps(6);
+        h.render().unwrap().save(dir.join(if shown { "help-visible.png" } else { "help-hidden.png" })).unwrap();
+    }
+}
+
+#[test]
 fn hints_name_keys_as_the_menus_do() {
     let text = |tool: &str| super::hint_segments(tool).into_iter().map(|(s, _)| s).collect::<String>();
     for tool in vectorcraft_tools::catalog::all_tools().map(|t| t.id) {
@@ -1230,9 +1292,19 @@ fn the_zoom_hint_follows_animated_zoom() {
 fn title_test_app(custom_titlebar: bool) -> crate::VectorcraftApp {
     let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
     app.custom_titlebar = custom_titlebar;
+    app.desktop_frame = !custom_titlebar;
     // The preference that makes the shell launch without its own title bar.
     app.run("prefs.set", json!({"key": "systemTitleBar", "value": !custom_titlebar})).unwrap();
     app
+}
+
+/// How many brand marks one frame of the app bar paints.
+fn brand_marks(app: &mut crate::VectorcraftApp) -> usize {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| super::app_bar(app, ui));
+    out.textures_delta.clear();
+    out.shapes.iter().filter(|c| matches!(&c.shape, egui::Shape::Mesh(m) if m.texture_id == crate::brand::texture_id(&ctx))).count()
 }
 
 #[test]
@@ -1240,6 +1312,31 @@ fn without_the_preference_the_mark_stays() {
     // The default (e.g. the web build): no custom bar, no preference.
     let app = crate::VectorcraftApp::new(Session::new(), Default::default());
     assert!(!super::system_title_bar(&app));
+    // An embedder without a window of its own keeps the mark with the preference on too.
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("prefs.set", json!({"key": "systemTitleBar", "value": true})).unwrap();
+    assert!(!super::system_title_bar(&app));
+    assert_eq!(brand_marks(&mut app), 1);
+}
+
+#[test]
+fn a_desktop_frame_hides_the_mark_whatever_the_preference_says() {
+    // Linux on a desktop that draws the frame (KDE, X11): the window has the desktop's title bar
+    // with System Title Bar off.
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.desktop_frame = true;
+    app.run("prefs.set", json!({"key": "systemTitleBar", "value": false})).unwrap();
+    let hidden = !cfg!(target_os = "macos");
+    assert_eq!(super::system_title_bar(&app), hidden);
+    assert_eq!(brand_marks(&mut app), if hidden { 0 } else { 1 });
+    // The preference applies at the next start: changing it now leaves the window's frame, and the mark, as they are.
+    let mut app = title_test_app(false);
+    app.run("prefs.set", json!({"key": "systemTitleBar", "value": false})).unwrap();
+    assert_eq!(super::system_title_bar(&app), hidden);
+    let mut app = title_test_app(true);
+    app.run("prefs.set", json!({"key": "systemTitleBar", "value": true})).unwrap();
+    assert!(!super::system_title_bar(&app));
+    assert_eq!(brand_marks(&mut app), 1);
 }
 
 #[test]
@@ -1801,6 +1898,118 @@ fn full_screen_modes_fill_the_screen_and_normal_mode_restores_the_window() {
     assert!(sent(&mut app, true).is_empty(), "still full screen, as the user had it");
 }
 
+/// Snapping quick access includes the existing glyph and alignment settings. Pointer clicks use
+/// their commands, and reopening reads the same state as View and Preferences (#6164).
+#[test]
+fn the_control_bar_snapping_menu_shares_glyph_and_alignment_settings() {
+    struct RestoreLanguage(crate::i18n::Lang);
+    impl Drop for RestoreLanguage {
+        fn drop(&mut self) {
+            crate::i18n::set_current(self.0);
+        }
+    }
+    let _language = RestoreLanguage(crate::i18n::current());
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.ui.view.snap_to_glyph = false;
+    app.run("prefs.set", json!({"key": "alignmentGuides", "value": true})).unwrap();
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 400.0));
+    let frame = |app: &mut crate::VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(app, ui));
+        out.textures_delta.clear();
+        out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default()
+    };
+    type Nodes = Vec<(egui::accesskit::NodeId, egui::accesskit::Node)>;
+    let find = |nodes: &Nodes, name: &str| {
+        nodes.iter().find(|(_, n)| n.label() == Some(name)).map(|(_, n)| n.clone()).unwrap_or_else(|| panic!("missing {name}"))
+    };
+    let center = |n: &egui::accesskit::Node| {
+        let b = n.bounds().expect("a visible menu control");
+        assert!(b.x0 >= 0.0 && b.y0 >= 0.0 && b.x1 <= 1200.0 && b.y1 <= 400.0, "menu control stays inside the window: {b:?}");
+        egui::pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32)
+    };
+    let click = |app: &mut crate::VectorcraftApp, at: egui::Pos2| {
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(app, vec![egui::Event::PointerMoved(at), press(true)]);
+        frame(app, vec![press(false)]);
+        frame(app, vec![]);
+        frame(app, vec![])
+    };
+    let check = |nodes: &Nodes, name: &str, on: bool| {
+        let node = find(nodes, name);
+        assert_eq!(node.role(), egui::accesskit::Role::CheckBox, "{name}");
+        assert_eq!(node.toggled(), Some(if on { egui::accesskit::Toggled::True } else { egui::accesskit::Toggled::False }), "{name}");
+        center(&node)
+    };
+    let dismiss = |app: &mut crate::VectorcraftApp| {
+        let before = (app.ui.view.snap_to_glyph, app.session.prefs.to_json(), app.run_count);
+        frame(
+            app,
+            vec![egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }],
+        );
+        frame(
+            app,
+            vec![egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: false, repeat: false, modifiers: Default::default() }],
+        );
+        let nodes = frame(app, vec![]);
+        assert!(!nodes.iter().any(|(_, n)| n.label() == Some("Snap to Glyph")), "Escape closes Snapping");
+        assert_eq!(
+            (app.ui.view.snap_to_glyph, app.session.prefs.to_json(), app.run_count),
+            before,
+            "dismissal changes no settings and runs no command"
+        );
+    };
+    frame(&mut app, vec![]);
+    let nodes = frame(&mut app, vec![]);
+    let menu = center(&find(&nodes, "Snapping"));
+    let nodes = click(&mut app, menu);
+    let glyph = check(&nodes, "Snap to Glyph", false);
+    check(&nodes, "Alignment Guides", true);
+    // The two extra rows still leave the original menu entries visible.
+    for name in ["Smart Guides", "Snap to Point", "Snap to Grid", "Snap to Pixel", "Snap to Tangent", "Snap to Perpendicular"] {
+        center(&find(&nodes, name));
+    }
+    click(&mut app, glyph);
+    assert!(app.ui.view.snap_to_glyph);
+    assert_eq!(crate::menus::checked(&app, "view.snapToGlyph", &json!({})), Some(true));
+    assert!(app.session.prefs.alignment_guides, "glyph snapping leaves Alignment Guides alone");
+    dismiss(&mut app);
+    let nodes = click(&mut app, menu);
+    check(&nodes, "Snap to Glyph", true);
+    let alignment = check(&nodes, "Alignment Guides", true);
+    let commands = app.run_count;
+    click(&mut app, alignment);
+    assert_eq!(app.run_count, commands + 1, "Alignment Guides uses the app command entry point");
+    assert_eq!(app.run("prefs.get", json!({"key": "alignmentGuides"})).unwrap(), json!(false));
+    assert!(!app.session.prefs.alignment_guides);
+    crate::prefs_dialog::snapshot(&mut app);
+    let saved = serde_json::to_string(&app.ui.engine_prefs).unwrap();
+    let mut restored = crate::VectorcraftApp::new(Session::new(), Default::default());
+    restored.ui.engine_prefs = serde_json::from_str(&saved).unwrap();
+    crate::prefs_dialog::restore(&mut restored);
+    assert_eq!(
+        restored.run("prefs.get", json!({"key": "alignmentGuides"})).unwrap(),
+        json!(false),
+        "Alignment Guides survives host preference persistence"
+    );
+    assert!(app.ui.view.snap_to_glyph, "Alignment Guides leaves glyph snapping alone");
+    dismiss(&mut app);
+    let nodes = click(&mut app, menu);
+    check(&nodes, "Snap to Glyph", true);
+    check(&nodes, "Alignment Guides", false);
+    // Changes made through the existing command surfaces are reflected on the next opening too.
+    crate::menus::invoke(&mut app, "view.snapToGlyph", json!({}));
+    app.run("prefs.set", json!({"key": "alignmentGuides", "value": true})).unwrap();
+    dismiss(&mut app);
+    let nodes = click(&mut app, menu);
+    check(&nodes, "Snap to Glyph", false);
+    check(&nodes, "Alignment Guides", true);
+}
+
 /// The window the Control bar docking tests draw the bar in.
 const DOCK_SCREEN: egui::Rect = egui::Rect { min: egui::Pos2::ZERO, max: egui::pos2(1200.0, 300.0) };
 
@@ -1911,7 +2120,8 @@ fn menus_stop_above_a_control_bar_docked_at_the_bottom() {
     let ctx = egui::Context::default();
     let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0));
     let floor = |app: &mut crate::VectorcraftApp, status: bool, bottom: bool, screen_mode: u8| {
-        (app.ui.status_bar, app.ui.control_bar, app.ui.control_bar_bottom, app.ui.screen_mode) = (status, true, bottom, screen_mode);
+        (app.ui.status_bar, app.ui.help_bar, app.ui.control_bar, app.ui.control_bar_bottom, app.ui.screen_mode) =
+            (status, status, true, bottom, screen_mode);
         for _ in 0..3 {
             let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| {
                 app.logic(ui.ctx());

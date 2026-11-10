@@ -6,6 +6,7 @@
 use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
+use vectorcraft_plugins::storage::{Meter, Storage, StorageError};
 use vectorcraft_plugins::{Error, HEAVY_FUEL, HEAVY_WALL_TIME_MS, Kind, Limits, Plugin, Report, heavy_terms, registry, wat as tpl};
 
 /// The example Desaturate plug-in, built from `crates/plugins/example`.
@@ -272,7 +273,46 @@ fn an_exporter_returns_its_file_with_an_export_s_budget() {
     // Its parameters are checked, and a filter is not an exporter.
     assert!(matches!(export::run(&p, b"{}", &json!({"level": "high"}), target), Err(Error::Params(_))));
     let filter = Plugin::load(&ok_module("(i64.const 0)"), Limits::default()).unwrap();
-    assert!(matches!(export::run(&filter, b"{}", &Value::Null, target), Err(Error::Params(_))));
+    let e = export::run(&filter, b"{}", &Value::Null, target).unwrap_err();
+    assert!(matches!(e, Error::Params(_)) && e.to_string().contains("is a plug-in of kind `filter`, not an exporter"), "{e}");
+    let importer = Plugin::load(&build(&tpl::returning(&tpl::importer("test.reads", r#"["tst"]"#, "{}"), "{}")), Limits::default()).unwrap();
+    let e = export::run(&importer, b"{}", &Value::Null, target).unwrap_err();
+    assert!(e.to_string().contains("is a plug-in of kind `importer`, not an exporter"), "{e}");
+}
+
+/// An importer runs on an import's budget, which replaces its own instruction and time budgets and
+/// keeps its other limits: a run that needs more than `fuel_base` finishes within `export_fuel`,
+/// and a run that needs more than `export_fuel` ends there, however large `fuel_base` is.
+#[test]
+fn an_importer_runs_on_an_import_s_budget() {
+    use vectorcraft_plugins::export;
+    use vectorcraft_plugins::import::{self, Source};
+    let run = format!(
+        "(local $n i32) (local.set $n (i32.const 100000)) \
+         (loop $work (local.set $n (i32.sub (local.get $n) (i32.const 1))) (br_if $work (local.get $n))) {}",
+        tpl::ECHO
+    );
+    let wasm = build(&tpl::module(&tpl::importer("test.import.budget", r#"["tst"]"#, "{}"), &run, "", 1));
+    let file = br#"{"objects":[{"type":"path","path":{"subpaths":[{"closed":false,"anchors":[{"p":[0,0]},{"p":[1,0]}]}]}}]}"#;
+    let source = Source { extension: "tst", name: "a" };
+
+    let limits = import::limits(&Plugin::load(&wasm, Limits::default()).unwrap());
+    assert_eq!((limits.fuel_base, limits.wall_time_ms), (export::FUEL, export::WALL_TIME_MS));
+    let own = Limits {
+        fuel_base: 9_000,
+        fuel_per_byte: 0,
+        wall_time_ms: 8_000,
+        export_fuel: 10_000_000,
+        export_wall_time_ms: 7_000,
+        max_output_bytes: 6_000,
+        ..Limits::default()
+    };
+    let p = Plugin::load(&wasm, own.clone()).unwrap();
+    assert_eq!(import::limits(&p), Limits { fuel_base: 10_000_000, wall_time_ms: 7_000, ..own });
+    assert_eq!(import::run(&p, file, &Value::Null, source).map(|i| i.objects.len()), Ok(1));
+
+    let p = Plugin::load(&wasm, Limits { fuel_base: 10_000_000, fuel_per_byte: 0, export_fuel: 9_000, ..Limits::default() }).unwrap();
+    assert_eq!(import::run(&p, file, &Value::Null, source), Err(Error::Limit("instruction budget".into())));
 }
 
 /// The echo exporter the engine and UI tests read back what they hand a plug-in with: its file is
@@ -356,8 +396,8 @@ fn load_err(bytes: &[u8]) -> String {
     Plugin::load(bytes, Limits::default()).expect_err("the module must be refused").to_string()
 }
 
-/// A module may import only the host's three functions, with the host's types, and only when its
-/// manifest gives `api` 2 and lists `progress`; the error names the import it refuses.
+/// A module may import only the host's functions, with the host's types, and the progress ones only
+/// when its manifest gives `api` 2 and lists `progress`; the error names the import it refuses.
 #[test]
 fn host_imports_are_checked_when_a_module_is_loaded() {
     let with = |manifest: &str, import: &str| build(&tpl::with_imports(manifest, import, "", INPUT));
@@ -500,6 +540,206 @@ fn what_a_start_function_reports_before_it_fails_is_kept() {
     assert!(out.is_err(), "{out:?}");
     assert_eq!(report.lines, [vectorcraft_plugins::LogLine { level: vectorcraft_plugins::LogLevel::Info, text: "hi".into() }]);
     assert_eq!(report.progress, Some((1, 4)));
+}
+
+/// Settings and a cache kept in memory, for the storage imports. Each call charges its meter the
+/// bytes of the value it reads or writes.
+#[derive(Default)]
+struct Kept {
+    settings: std::sync::Mutex<std::collections::BTreeMap<String, Vec<u8>>>,
+    cache: std::sync::Mutex<std::collections::BTreeMap<String, Vec<u8>>>,
+}
+
+/// The value `key` has in `kept`, once `meter` is charged its bytes.
+fn charged(
+    kept: &std::sync::Mutex<std::collections::BTreeMap<String, Vec<u8>>>,
+    key: &str,
+    meter: &mut Meter,
+) -> Result<Option<Vec<u8>>, StorageError> {
+    let value = kept.lock().unwrap().get(key).cloned();
+    meter.take(value.as_ref().map_or(0, |v| v.len() as u64))?;
+    Ok(value)
+}
+
+impl Storage for Kept {
+    fn setting(&self, key: &str, meter: &mut Meter) -> Result<Option<Vec<u8>>, StorageError> {
+        charged(&self.settings, key, meter)
+    }
+    fn set_setting(&self, key: &str, value: &[u8], meter: &mut Meter) -> Result<(), StorageError> {
+        meter.take(value.len() as u64)?;
+        self.settings.lock().unwrap().insert(key.into(), value.to_vec());
+        Ok(())
+    }
+    fn delete_setting(&self, key: &str, _: &mut Meter) -> Result<bool, StorageError> {
+        Ok(self.settings.lock().unwrap().remove(key).is_some())
+    }
+    fn cache_entry(&self, name: &str, meter: &mut Meter) -> Result<Option<Vec<u8>>, StorageError> {
+        charged(&self.cache, name, meter)
+    }
+    fn set_cache_entry(&self, name: &str, value: &[u8], meter: &mut Meter) -> Result<(), StorageError> {
+        meter.take(value.len() as u64)?;
+        self.cache.lock().unwrap().insert(name.into(), value.to_vec());
+        Ok(())
+    }
+    fn remove_cache_entry(&self, name: &str) -> Result<bool, StorageError> {
+        Ok(self.cache.lock().unwrap().remove(name).is_some())
+    }
+    fn clear_cache(&self) -> Result<u64, StorageError> {
+        let mut cache = self.cache.lock().unwrap();
+        let freed = cache.values().map(|v| v.len() as u64).sum();
+        cache.clear();
+        Ok(freed)
+    }
+    fn cache_bytes(&self) -> u64 {
+        self.cache.lock().unwrap().values().map(|v| v.len() as u64).sum()
+    }
+}
+
+/// A filter `id` of API level 2 that lists `settings` and `cache`.
+fn storing(id: &str) -> String {
+    format!(r#"{{"id":"{id}","name":"Storing","version":"1","kind":"filter","api":2,"permissions":["settings","cache"]}}"#)
+}
+
+/// Instructions that trap unless `call` returns `want`.
+fn expect(call: &str, want: i32) -> String {
+    format!("(if (i32.ne {call} (i32.const {want})) (then unreachable))")
+}
+
+/// The module fields of a storage test: the storage imports, keys at 0x2000 ("zoom", "..", "a/b",
+/// "CON", a tab, 65 "x"), the value "hello" at 0x2100; 0x3000 is free for an output buffer.
+fn storage_data() -> String {
+    format!(r#"{} (data (i32.const 0x2000) "zoom..a/bCON\09{}") (data (i32.const 0x2100) "hello")"#, tpl::STORAGE_IMPORTS, "x".repeat(65))
+}
+
+/// Each storage import needs its own permission: a module that imports one its manifest doesn't
+/// list is refused, and the error names the import and the permission.
+#[test]
+fn storage_imports_need_their_own_permission() {
+    let with = |manifest: &str, import: &str| build(&tpl::with_imports(manifest, import, "", INPUT));
+    let get = r#"(import "env" "vc_settings_get" (func (param i32 i32 i32 i32) (result i32)))"#;
+    let clear = r#"(import "env" "vc_cache_clear" (func (param i32 i32) (result i32)))"#;
+    let e = load_err(&with(LEVEL2, get));
+    assert!(
+        e.contains("imports `env.vc_settings_get`, which a plug-in may use only at plug-in API level 2 (`api` 2) and with the permission `settings`"),
+        "{e}"
+    );
+    let settings_only = r#"{"id":"test.settings","name":"S","kind":"filter","api":2,"permissions":["settings"]}"#;
+    assert!(Plugin::load(&with(settings_only, get), Limits::default()).is_ok());
+    let e = load_err(&with(settings_only, clear));
+    assert!(
+        e.contains("imports `env.vc_cache_clear`, which a plug-in may use only at plug-in API level 2 (`api` 2) and with the permission `cache`"),
+        "{e}"
+    );
+    let wrong = load_err(&with(&storing("test.wrong"), r#"(import "env" "vc_cache_clear" (func (param i32) (result i32)))"#));
+    assert!(wrong.contains("imports `env.vc_cache_clear` with another type than the host's: it is (param i32 i32) (result i32)"), "{wrong}");
+    assert!(Plugin::load(&build(&tpl::with_imports(&storing("test.all"), tpl::STORAGE_IMPORTS, "", INPUT)), Limits::default()).is_ok());
+}
+
+/// A plug-in sets, reads and removes its settings and cache entries through the storage imports,
+/// by key; a value too large for its buffer returns its length and copies nothing; a key or buffer
+/// outside its memory, a key that isn't a plain name and a value over its cap are errors it sees.
+#[test]
+fn storage_imports_read_and_write_the_plugins_own_storage() {
+    use vectorcraft_plugins::host::{STORAGE_BAD_NAME, STORAGE_DONE, STORAGE_FULL, STORAGE_NOT_FOUND, STORAGE_OUTSIDE_MEMORY};
+    let id = "test.storage.own";
+    let kept = std::sync::Arc::new(Kept::default());
+    registry::set_storage(id, Some(kept.clone()));
+    let zoom = "(i32.const 0x2000) (i32.const 4)";
+    let first = [
+        expect(&format!("(call $vc_settings_get {zoom} (i32.const 0x3000) (i32.const 16))"), STORAGE_NOT_FOUND),
+        expect(&format!("(call $vc_settings_set {zoom} (i32.const 0x2100) (i32.const 5))"), STORAGE_DONE),
+        // Too small a buffer: the length, and nothing copied.
+        expect(&format!("(call $vc_settings_get {zoom} (i32.const 0x3000) (i32.const 4))"), 5),
+        expect("(i32.load8_u (i32.const 0x3000))", 0),
+        expect(&format!("(call $vc_settings_get {zoom} (i32.const 0x3000) (i32.const 16))"), 5),
+        expect("(i32.load (i32.const 0x3000))", i32::from_le_bytes(*b"hell")),
+        expect(&format!("(call $vc_cache_write {zoom} (i32.const 0x2100) (i32.const 0))"), STORAGE_DONE),
+        expect(&format!("(call $vc_cache_read {zoom} (i32.const 0x3000) (i32.const 0))"), 0),
+        expect(&format!("(call $vc_cache_write {zoom} (i32.const 0x2100) (i32.const 3))"), STORAGE_DONE),
+        // Hostile keys: `..`, `a/b`, `CON`, a tab, 65 bytes, no bytes.
+        expect("(call $vc_settings_set (i32.const 0x2004) (i32.const 2) (i32.const 0x2100) (i32.const 5))", STORAGE_BAD_NAME),
+        expect("(call $vc_settings_set (i32.const 0x2006) (i32.const 3) (i32.const 0x2100) (i32.const 5))", STORAGE_BAD_NAME),
+        expect("(call $vc_cache_write (i32.const 0x2009) (i32.const 3) (i32.const 0x2100) (i32.const 5))", STORAGE_BAD_NAME),
+        expect("(call $vc_cache_read (i32.const 0x200c) (i32.const 1) (i32.const 0x3000) (i32.const 16))", STORAGE_BAD_NAME),
+        expect("(call $vc_settings_get (i32.const 0x200d) (i32.const 65) (i32.const 0x3000) (i32.const 16))", STORAGE_BAD_NAME),
+        expect("(call $vc_settings_delete (i32.const 0x2000) (i32.const 0))", STORAGE_BAD_NAME),
+        // Outside memory: the key, the value, the buffer.
+        expect("(call $vc_settings_get (i32.const -1) (i32.const 4) (i32.const 0x3000) (i32.const 16))", STORAGE_OUTSIDE_MEMORY),
+        expect(&format!("(call $vc_settings_set {zoom} (i32.const 0x2100) (i32.const -1))"), STORAGE_OUTSIDE_MEMORY),
+        expect(&format!("(call $vc_cache_read {zoom} (i32.mul (memory.size) (i32.const 65536)) (i32.const 1))"), STORAGE_OUTSIDE_MEMORY),
+        // A setting over its cap changes nothing.
+        expect(
+            &format!("(call $vc_settings_set {zoom} (i32.const 0) (i32.const {}))", vectorcraft_plugins::storage::MAX_SETTING_BYTES + 1),
+            STORAGE_FULL,
+        ),
+        expect(&format!("(call $vc_settings_get {zoom} (i32.const 0x3000) (i32.const 16))"), 5),
+    ]
+    .concat();
+    let p = Plugin::load(&build(&tpl::with_imports(&storing(id), &storage_data(), &first, INPUT)), Limits::default()).unwrap();
+    assert_eq!(p.run(INPUT.as_bytes(), b"{}").unwrap(), INPUT.as_bytes(), "every call returned what it should");
+    assert_eq!(kept.settings.lock().unwrap().get("zoom"), Some(&b"hello".to_vec()));
+    assert_eq!(kept.cache.lock().unwrap().get("zoom"), Some(&b"hel".to_vec()));
+    // Removing: one setting, then a missing one, then the whole cache, then a missing entry.
+    let removing = [
+        expect("(call $vc_settings_delete (i32.const 0x2000) (i32.const 4))", STORAGE_DONE),
+        expect("(call $vc_settings_delete (i32.const 0x2000) (i32.const 4))", STORAGE_NOT_FOUND),
+        expect("(call $vc_cache_clear (i32.const 0) (i32.const 0))", STORAGE_DONE),
+        expect("(call $vc_cache_clear (i32.const 0x2000) (i32.const 4))", STORAGE_NOT_FOUND),
+    ]
+    .concat();
+    let p = Plugin::load(&build(&tpl::with_imports(&storing(id), &storage_data(), &removing, INPUT)), Limits::default()).unwrap();
+    assert_eq!(p.run(INPUT.as_bytes(), b"{}").unwrap(), INPUT.as_bytes(), "every call returned what it should");
+    assert!(kept.settings.lock().unwrap().is_empty() && kept.cache.lock().unwrap().is_empty());
+    registry::set_storage(id, None);
+}
+
+/// A read counts the value's bytes toward the run's storage bytes even when its buffer is too small
+/// and nothing is copied, so reading a large entry into no buffer again and again ends in
+/// `STORAGE_BUDGET`.
+#[test]
+fn a_read_into_too_small_a_buffer_still_counts_its_bytes() {
+    use vectorcraft_plugins::host::{MAX_STORAGE_BYTES, STORAGE_BUDGET};
+    use vectorcraft_plugins::storage::MAX_CACHE_ENTRY;
+    let id = "test.storage.budget";
+    let kept = std::sync::Arc::new(Kept::default());
+    kept.cache.lock().unwrap().insert("zoom".into(), vec![0; MAX_CACHE_ENTRY]);
+    registry::set_storage(id, Some(kept.clone()));
+    let read = "(call $vc_cache_read (i32.const 0x2000) (i32.const 4) (i32.const 0x3000) (i32.const 0))";
+    let fits = MAX_STORAGE_BYTES / MAX_CACHE_ENTRY;
+    let reading = [vec![expect(read, MAX_CACHE_ENTRY as i32); fits], vec![expect(read, STORAGE_BUDGET)]].concat().concat();
+    let p = Plugin::load(&build(&tpl::with_imports(&storing(id), &storage_data(), &reading, INPUT)), Limits::default()).unwrap();
+    assert_eq!(p.run(INPUT.as_bytes(), b"{}").unwrap(), INPUT.as_bytes(), "every call returned what it should");
+    registry::set_storage(id, None);
+}
+
+/// A plug-in reaches only the storage of its own id, and a plug-in with none (not installed with a
+/// plug-in store, as on the web) gets `STORAGE_UNAVAILABLE`.
+#[test]
+fn a_plugin_reaches_only_its_own_storage() {
+    use vectorcraft_plugins::host::{STORAGE_DONE, STORAGE_NOT_FOUND, STORAGE_UNAVAILABLE};
+    let (mine, theirs) = (std::sync::Arc::new(Kept::default()), std::sync::Arc::new(Kept::default()));
+    registry::set_storage("test.storage.mine", Some(mine.clone()));
+    registry::set_storage("test.storage.theirs", Some(theirs.clone()));
+    theirs.settings.lock().unwrap().insert("zoom".into(), b"theirs".to_vec());
+    theirs.cache.lock().unwrap().insert("zoom".into(), b"theirs".to_vec());
+    let zoom = "(i32.const 0x2000) (i32.const 4)";
+    let looking = [
+        expect(&format!("(call $vc_settings_get {zoom} (i32.const 0x3000) (i32.const 16))"), STORAGE_NOT_FOUND),
+        expect(&format!("(call $vc_cache_read {zoom} (i32.const 0x3000) (i32.const 16))"), STORAGE_NOT_FOUND),
+        expect("(call $vc_cache_clear (i32.const 0) (i32.const 0))", STORAGE_DONE),
+        expect(&format!("(call $vc_settings_set {zoom} (i32.const 0x2100) (i32.const 5))"), STORAGE_DONE),
+    ]
+    .concat();
+    let p = Plugin::load(&build(&tpl::with_imports(&storing("test.storage.mine"), &storage_data(), &looking, INPUT)), Limits::default()).unwrap();
+    assert_eq!(p.run(INPUT.as_bytes(), b"{}").unwrap(), INPUT.as_bytes());
+    assert_eq!(theirs.settings.lock().unwrap().get("zoom"), Some(&b"theirs".to_vec()));
+    assert_eq!(theirs.cache_bytes(), 6);
+    assert_eq!(mine.settings.lock().unwrap().get("zoom"), Some(&b"hello".to_vec()));
+    let nowhere = expect(&format!("(call $vc_settings_set {zoom} (i32.const 0x2100) (i32.const 5))"), STORAGE_UNAVAILABLE);
+    let p = Plugin::load(&build(&tpl::with_imports(&storing("test.storage.nowhere"), &storage_data(), &nowhere, INPUT)), Limits::default()).unwrap();
+    assert_eq!(p.run(INPUT.as_bytes(), b"{}").unwrap(), INPUT.as_bytes());
+    registry::set_storage("test.storage.mine", None);
+    registry::set_storage("test.storage.theirs", None);
 }
 
 /// A heavy filter installs once the user agrees, which loading a folder doesn't ask: it is skipped

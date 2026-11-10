@@ -7,6 +7,32 @@ use vectorcraft_tools::{PointerEvent, PointerKind};
 use crate::cmd::prefscmds::{PREF_CATEGORIES, PREF_GROUPS, PREF_SPECS, validate};
 use crate::*;
 
+/// The saved preference reaches the real tool; older preferences keep Touching and invalid
+/// values fail without changing the current setting.
+#[test]
+fn marquee_selection_preference_drives_the_selection_tool() {
+    assert_eq!(serde_json::from_value::<Prefs>(json!({})).unwrap().marquee_selection, "touching");
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("selection", v).unwrap();
+    for (mode, selected) in [("touching", true), ("enclosed", false), ("directional", false)] {
+        set_pref(&mut s, "marqueeSelection", json!(mode));
+        s.execute("select.none", &json!({})).unwrap();
+        for (k, x, y) in [(PointerKind::Down, 50.0, 50.0), (PointerKind::Drag, 150.0, 150.0), (PointerKind::Up, 150.0, 150.0)] {
+            s.pointer(&PointerEvent::new(k, x, y), v).unwrap();
+        }
+        assert_eq!(!s.doc().unwrap().selection.objects.is_empty(), selected, "{mode}");
+        let persisted = s.prefs.to_json();
+        assert_eq!(serde_json::from_value::<Prefs>(persisted).unwrap().marquee_selection, mode);
+    }
+    assert!(s.execute("prefs.set", &json!({"key": "marqueeSelection", "value": "unknown"})).is_err());
+    assert_eq!(s.prefs.marquee_selection, "directional");
+    s.execute("prefs.reset", &json!({})).unwrap();
+    assert_eq!(s.prefs.marquee_selection, "touching");
+}
+
 #[test]
 fn every_spec_matches_a_prefs_field_and_back() {
     let all = Prefs::default().to_json();
@@ -171,6 +197,110 @@ fn reset_category_and_all() {
     s.execute("prefs.reset", &json!({})).unwrap();
     assert_eq!(s.prefs, Prefs::default());
     assert!(s.execute("prefs.reset", &json!({"category": "Bogus"})).is_err());
+}
+
+/// A rectangle made into a guide path; nothing is selected after.
+fn guide_path(s: &mut Session, x: f64) -> NodeId {
+    let id = square(s, x, 0.0);
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("view.guides.make", &json!({})).unwrap();
+    id
+}
+
+/// Lock Guides by Default is off, and preferences saved before it existed leave guides unlocked.
+#[test]
+fn lock_guides_by_default_is_off_and_older_preferences_leave_guides_unlocked() {
+    assert!(!Prefs::default().lock_guides_by_default);
+    let older: Prefs = serde_json::from_value(json!({"keyboardIncrement": 4})).unwrap();
+    assert!(!older.lock_guides_by_default);
+    let mut s = Session::new();
+    s.apply_prefs(older);
+    assert!(!s.guides_locked());
+    assert!(s.execute("prefs.set", &json!({"key": "lockGuidesByDefault", "value": "yes"})).is_err());
+    assert!(!s.guides_locked() && !s.prefs.lock_guides_by_default);
+}
+
+/// Preferences saved with the option on start a session with guides locked. A document opened in
+/// it has its ruler guides and guide paths locked, and new guides can still be made. View › Guides
+/// › Lock Guides then unlocks them for the session and leaves the preference on.
+#[test]
+fn saved_lock_guides_by_default_locks_a_new_session_and_the_documents_it_opens() {
+    let file = std::env::temp_dir().join(format!("vc-lock-guides-{}.vectorcraft", std::process::id()));
+    let file = file.to_string_lossy().to_string();
+    let mut unlocked = new_doc();
+    assert!(!unlocked.guides_locked(), "a session without the preference");
+    let path = guide_path(&mut unlocked, 100.0);
+    unlocked.execute("guide.add", &json!({"vertical": true, "pos": 50})).unwrap();
+    unlocked.execute("document.save", &json!({"path": file})).unwrap();
+
+    // The preference is set with no document open, as a headless session can.
+    let mut first = Session::new();
+    first.execute("prefs.set", &json!({"key": "lockGuidesByDefault", "value": true})).unwrap();
+    let saved = first.prefs.to_json();
+    assert_eq!(saved["lockGuidesByDefault"], json!(true));
+
+    let mut s = Session::new();
+    s.apply_prefs(serde_json::from_value(saved).unwrap());
+    assert!(s.guides_locked());
+    s.execute("document.open", &json!({"path": file})).unwrap();
+    let _ = std::fs::remove_file(&file);
+    assert!(s.guides_locked(), "opening a document keeps the lock");
+    assert!(matches!(s.execute("guide.select", &json!({"indexes": [0]})), Err(EngineError::Disabled(..))));
+    s.execute("select.set", &json!({"ids": [path.0]})).unwrap();
+    assert!(s.doc().unwrap().selection.objects.is_empty(), "a guide path can't be selected");
+    assert_eq!(s.execute("guide.add", &json!({"vertical": false, "pos": 20})).unwrap()["index"], 1);
+
+    assert_eq!(s.execute("view.guides.lock", &json!({})).unwrap(), json!({"locked": false}));
+    assert!(s.prefs.lock_guides_by_default, "the menu leaves the preference as it is");
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    s.execute("select.set", &json!({"ids": [path.0]})).unwrap();
+    assert_eq!(s.doc().unwrap().selection.objects, [path]);
+}
+
+/// Changing the preference sets the lock at once and deselects guides in every open document.
+/// A change to any other preference, or setting it to the value it has, keeps the session's lock.
+#[test]
+fn changing_lock_guides_by_default_sets_the_lock_and_other_changes_keep_it() {
+    let mut s = new_doc();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 50})).unwrap();
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let path = guide_path(&mut s, 100.0);
+    s.execute("select.set", &json!({"ids": [path.0]})).unwrap();
+    let undo = s.doc().unwrap().history.undo.len();
+
+    set_pref(&mut s, "lockGuidesByDefault", json!(true));
+    assert!(s.guides_locked());
+    assert!(s.doc().unwrap().selection.objects.is_empty(), "the guide path in the active document");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step");
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    assert!(s.doc().unwrap().selection.guides.is_empty(), "the ruler guide in the other document");
+
+    s.execute("view.guides.lock", &json!({"locked": false})).unwrap();
+    set_pref(&mut s, "keyboardIncrement", json!(4));
+    set_pref(&mut s, "lockGuidesByDefault", json!(true));
+    assert!(!s.guides_locked(), "the session's unlock stays");
+
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    set_pref(&mut s, "lockGuidesByDefault", json!(false));
+    assert!(!s.guides_locked(), "turning the preference off unlocks guides");
+}
+
+/// Reset turns the option off and unlocks guides. With the option already off, a reset keeps a
+/// lock set from the View menu.
+#[test]
+fn resetting_lock_guides_by_default_unlocks_guides_only_when_it_was_on() {
+    let mut s = new_doc();
+    for params in [json!({"category": "Guides & Grid"}), json!({})] {
+        set_pref(&mut s, "lockGuidesByDefault", json!(true));
+        assert!(s.guides_locked());
+        s.execute("prefs.reset", &params).unwrap();
+        assert!(!s.prefs.lock_guides_by_default, "{params}");
+        assert!(!s.guides_locked(), "{params}");
+    }
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    s.execute("prefs.reset", &json!({})).unwrap();
+    assert!(s.guides_locked());
 }
 
 /// `prefs.set` refuses a recovery or plug-ins folder that is missing or is a file. Nothing changes,
@@ -2509,6 +2639,20 @@ fn a_straight_segment_dragged_by_direct_selection_lands_on_a_ruler_guide() {
         );
         s.execute("edit.undo", &json!({})).unwrap();
     }
+}
+
+/// General › Scroll Sideways with Cmd/Ctrl + Wheel starts on: in a new session, in a preferences
+/// file saved before the option existed and after a reset.
+#[test]
+fn scroll_sideways_with_cmd_wheel_is_on_by_default() {
+    assert!(Prefs::default().ctrl_wheel_scrolls_sideways);
+    let old: Prefs = serde_json::from_value(json!({"zoomWithMouseWheel": false})).unwrap();
+    assert!(old.ctrl_wheel_scrolls_sideways);
+    let mut s = Session::new();
+    s.execute("prefs.set", &json!({"key": "ctrlWheelScrollsSideways", "value": false})).unwrap();
+    assert!(!s.prefs.ctrl_wheel_scrolls_sideways);
+    s.execute("prefs.reset", &json!({})).unwrap();
+    assert!(s.prefs.ctrl_wheel_scrolls_sideways);
 }
 
 /// The Transform panel menu's choice starts as `default` (the panels follow General › Transform
