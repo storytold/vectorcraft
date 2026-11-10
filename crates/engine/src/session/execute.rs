@@ -39,6 +39,14 @@ impl Session {
     /// Execute a command by id. This is THE entry point for every frontend.
     pub fn execute(&mut self, id: &str, params: &Value) -> Result<Value> {
         let spec = find_command(id).ok_or_else(|| cmd::params::unknown_command(id))?;
+        // A clipboard import is a query that replaces the clipboard, which the end of a run sets too.
+        if self.depth == 0 && self.script_key.is_some() && (waits_for_tool_edit(id) || id.starts_with("clipboard.import")) {
+            return Err(EngineError::Busy);
+        }
+        // A step of a batch a script runs is held to the same rule as the script's own commands.
+        if self.script_in_run && crate::script::refused_to_scripts(id) {
+            return Err(EngineError::Other(crate::script::refused_text(id)));
+        }
         // An edit the active tool is computing on another thread (a Shape Builder merge) is
         // applied before a command that may edit, select, save or give a document a new revision,
         // as the click came first. Queries that only read do not wait for it.
@@ -60,6 +68,11 @@ impl Session {
         if !self.replaying {
             self.check_params(id, params)?;
         }
+        // A command with a parameter schema runs only with params that pass it, and with the
+        // defaults of omitted values filled in; the journal keeps the params as given. Saved steps
+        // keep their keys the schema doesn't name, as above.
+        let checked = crate::schemas::check(spec, params, self.replaying)?;
+        let run_params = checked.as_ref().unwrap_or(params);
         // Objects given as `id` (where it stands for `ids` of one) or as `ids` beside it are checked
         // before anything else: a malformed one, or one naming no object, is an error under this
         // command's id, never the selection in its place. `effect.apply {id: "stylize.dropShadow"}`
@@ -126,7 +139,7 @@ impl Session {
             if let Some(ids) = &select_first {
                 s.execute("select.set", &serde_json::json!({ "ids": ids }))?;
             }
-            let r = cmd::run_spec(s, spec, params);
+            let r = cmd::run_spec(s, spec, run_params);
             if r.is_err()
                 && let Some((uid, selection, layer)) = selected_before
                 && let Some(st) = s.docs.iter_mut().find(|d| d.uid == uid)
@@ -297,8 +310,13 @@ impl Session {
     /// document goes back to how it was before the command (its art, selection, interaction and
     /// undo history), and the same document stays active, instead of crashing the frontend.
     pub(crate) fn run_guarded(&mut self, id: &str, f: impl FnOnce(&mut Self) -> Result<Value>) -> Result<Value> {
-        let snapshot: Vec<_> =
-            self.docs.iter().map(|d| (d.uid, d.doc.clone(), d.selection.clone(), d.interaction.clone(), d.history.clone())).collect();
+        // In a script's run a panic ends the run, and the run's rollback puts the histories back.
+        let in_run = self.script_in_run;
+        let snapshot: Vec<_> = self
+            .docs
+            .iter()
+            .map(|d| (d.uid, d.doc.clone(), d.selection.clone(), d.interaction.clone(), (!in_run).then(|| d.history.clone())))
+            .collect();
         let active = self.active().map(|d| d.uid);
         let r = match guard::catch_panic(|| self.run_nested(f)) {
             Ok(r) => r,
@@ -311,7 +329,9 @@ impl Session {
                     st.doc = doc;
                     st.selection = selection;
                     st.interaction = interaction;
-                    st.history = history;
+                    if let Some(history) = history {
+                        st.history = history;
+                    }
                     cmd::globaledit::follow_history(st);
                     st.drop_stale_variables_highlight();
                     st.revision += 1;

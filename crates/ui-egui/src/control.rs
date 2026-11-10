@@ -234,6 +234,8 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         fields.remove("floating_panels");
     }
     json!({
+        "scriptRunning": app.session.script_running(),
+        "scriptReport": app.session.script_report(),
         "tool": app.session.tool_id(),
         "toolOptions": app.session.tool_options(),
         "ui": ui,

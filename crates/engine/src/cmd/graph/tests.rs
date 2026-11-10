@@ -4205,3 +4205,8 @@ fn character_formats_are_kept_and_bigger_labels_space_out() {
         }
     }
 }
+
+#[test]
+fn csv_leading_byte_order_mark_is_ignored() {
+    assert_eq!(super::parse_csv("\u{feff}1,2\n3,4"), super::parse_csv("1,2\n3,4"));
+}

@@ -6,16 +6,23 @@ use super::{
 use vectorcraft_doc::{NodeKind, TextKind};
 
 impl Session {
-    /// The bounds of `ids` the Transform panel, the bounding box, Align and Distribute measure:
-    /// with Use Preview Bounds on, visual bounds as drawn (strokes and geometry effects included,
-    /// see [`effects::preview`]), else geometric bounds.
+    /// The bounds of `ids` the Transform panel and the bounding box measure: with Use Preview
+    /// Bounds on, visual bounds as drawn (strokes and geometry effects included, see
+    /// [`effects::preview`]), else geometric bounds; with Measure Type by Glyph Bounds on, point
+    /// type by the ink of its glyphs ([`Session::bounds_measure`]).
     pub fn transform_bounds(&self, ids: &[NodeId]) -> Option<Rect> {
-        effects::preview::bounds_of(&self.doc().ok()?.doc, ids, self.prefs.use_preview_bounds)
+        effects::preview::bounds_of_with(&self.doc().ok()?.doc, ids, self.bounds_measure())
     }
     /// [`Session::transform_bounds`] square to the objects' own angle (their rotated bounding
     /// box, see [`Document::oriented_bounds`]).
     pub fn transform_box(&self, ids: &[NodeId]) -> Option<OrientedBox> {
-        effects::preview::oriented_bounds(&self.doc().ok()?.doc, ids, self.prefs.use_preview_bounds)
+        effects::preview::oriented_bounds_with(&self.doc().ok()?.doc, ids, self.bounds_measure())
+    }
+    /// How the bounding box, the Transform panel and `object.setBounds` measure objects: Use
+    /// Preview Bounds, and point type by its glyphs with Measure Type by Glyph Bounds
+    /// (`typeGlyphBounds`).
+    pub fn bounds_measure(&self) -> effects::preview::Measure {
+        effects::preview::Measure { preview: self.prefs.use_preview_bounds, glyphs: self.prefs.type_glyph_bounds }
     }
 }
 

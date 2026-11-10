@@ -176,7 +176,7 @@ impl Ink {
         peniko::Color::from_rgba8(r, g, b, a)
     }
 
-    fn fixed8(self, [r, g, b, a]: [u8; 4]) -> [u8; 4] {
+    pub(crate) fn fixed8(self, [r, g, b, a]: [u8; 4]) -> [u8; 4] {
         match self.base() {
             Ink::Display | Ink::RichBlack => [r, g, b, a],
             _ => {

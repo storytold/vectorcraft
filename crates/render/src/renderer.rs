@@ -45,6 +45,7 @@ impl Renderer {
             kept: PtrMap::default(),
             symbols: vec![],
             plugin_revision: 0,
+            brush_library: None,
             painting_plugins: false,
             paint_names: 0,
             strokes: PtrMap::default(),
@@ -70,6 +71,14 @@ impl Renderer {
             knockout: false,
             shape_of: 0,
             fx_arts: FrameCache::new(lru::FX_ART_BUDGET, 256),
+            measured: PtrMap::default(),
+            measured_bytes: 0,
+            measured_budget: lru::MEASURED_BUDGET,
+            pass_bounds: PtrMap::default(),
+            three_d_bounds: PtrMap::default(),
+            three_d_kept: 0,
+            #[cfg(test)]
+            three_d_sweeps: 0,
             placed_arts: FrameCache::new(lru::PLACED_ART_BUDGET, 256),
             placed_frame: None,
             nested: 0,
@@ -227,12 +236,16 @@ impl Renderer {
         self.clips.sweep(g);
         self.clip_paints.sweep(g);
         self.fx_arts.sweep(g);
+        // Only the 3D art still kept (in `fx_arts`) keeps its bounds.
+        self.let_go_of_measured();
         self.placed_arts.sweep(g);
         self.brushes.entries.sweep(g);
         self.live.sweep(g);
     }
 
-    /// Draw frame `f` (`w`×`h` pixels): the background, the artboards and the page's art.
+    /// Draw frame `f` (`w`×`h` pixels): the artboards and the page's art, then the background
+    /// under them. The art blends only with itself, as it does on the canvas, where the paper is
+    /// drawn apart from it: a Screen glow on the bare page stays visible on a white background (#6125).
     fn draw_frame(&mut self, f: &Frame, w: u16, h: u16) -> Vec<u8> {
         let (threads, opts) = (self.threads, f.opts);
         let kept = self.contexts.iter().position(|(t, c)| *t == threads && c.width() == w && c.height() == h);
@@ -247,11 +260,6 @@ impl Renderer {
         ctx.set_aliasing_threshold(opts.anti_alias.threshold());
         let render_mode = if opts.precise { vello_cpu::RenderMode::OptimizeQuality } else { vello_cpu::RenderMode::OptimizeSpeed };
         self.raster = vello_cpu::RasterizerSettings { render_mode, ..Default::default() };
-        if let Some(bg) = opts.background {
-            ctx.set_transform(Affine::IDENTITY);
-            ctx.set_paint(f.ink.fixed(bg));
-            ctx.fill_rect(&kurbo::Rect::new(0.0, 0.0, w as f64, h as f64));
-        }
         if opts.artboards && !opts.outline {
             // Paper: white on screen, no ink on the ink planes.
             ctx.set_transform(f.view);
@@ -278,7 +286,11 @@ impl Renderer {
         if self.contexts.len() > 2 {
             self.contexts.remove(0);
         }
-        pm.data_as_u8_slice().to_vec()
+        let mut pixels = pm.data_as_u8_slice().to_vec();
+        if let Some(bg) = opts.background {
+            over_background(&mut pixels, f.ink.fixed8(bg));
+        }
+        pixels
     }
 
     /// The page's art: the layers (or the pattern being edited), inside the page group when the
@@ -363,7 +375,7 @@ impl Renderer {
     }
 
     /// Render any node (also one outside the tree, e.g. opacity-mask art) fitted into
-    /// `size`×`size` pixels, optionally over a solid premultiplied background. A symbol instance
+    /// `size`×`size` pixels, optionally over a solid straight-alpha background. A symbol instance
     /// is fitted by its symbol's art in `doc`.
     pub fn render_node_thumbnail(&mut self, doc: &Document, n: &Node, size: u32, background: Option<[u8; 4]>) -> Option<Rendered> {
         self.render_node_thumbnail_with(doc, n, size, background, &RenderOptions::default())
@@ -392,10 +404,6 @@ impl Renderer {
         let view = Affine::translate((w as f64 / 2.0, w as f64 / 2.0)) * Affine::scale(s) * Affine::translate(-b.center().to_vec2());
         let mut ctx = single_threaded_context(w, w);
         ctx.set_aliasing_threshold(opts.anti_alias.threshold());
-        if let Some(bg) = background {
-            ctx.set_paint(peniko::Color::from_rgba8(bg[0], bg[1], bg[2], bg[3]));
-            ctx.fill_rect(&kurbo::Rect::new(0.0, 0.0, w as f64, w as f64));
-        }
         let symbols = doc.symbol_boxes().quick();
         let frame = Frame {
             mt: false,
@@ -415,6 +423,22 @@ impl Renderer {
         self.draw_forced_arc(&mut ctx, &frame, &Arc::new(n.clone()));
         let pm = self.finish(&mut ctx, vello_cpu::RasterizerSettings::default());
         self.end_frame();
-        Some(Rendered { width: w as u32, height: w as u32, pixels: pm.data_as_u8_slice().to_vec() })
+        let mut pixels = pm.data_as_u8_slice().to_vec();
+        if let Some(bg) = background {
+            over_background(&mut pixels, bg);
+        }
+        Some(Rendered { width: w as u32, height: w as u32, pixels })
+    }
+}
+
+/// Premultiplied RGBA `pixels` drawn over the solid color `background` (`[r, g, b, a]`, straight).
+pub(crate) fn over_background(pixels: &mut [u8], [r, g, b, a]: [u8; 4]) {
+    let alpha = u32::from(a);
+    let under = [u32::from(r) * alpha / 255, u32::from(g) * alpha / 255, u32::from(b) * alpha / 255, alpha];
+    for p in pixels.as_chunks_mut::<4>().0 {
+        let rest = 255 - u32::from(p[3]);
+        for (v, bg) in p.iter_mut().zip(under) {
+            *v = (u32::from(*v) + (bg * rest + 127) / 255).min(255) as u8;
+        }
     }
 }

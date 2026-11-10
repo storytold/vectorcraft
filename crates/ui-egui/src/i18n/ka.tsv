@@ -521,6 +521,7 @@
 	Hide Guides	დამხმარე ხაზების დამალვა
 	Show Guides	დამხმარე ხაზების ჩვენება
 	Lock Guides	დამხმარე ხაზების ჩაკეტვა
+	Lock Guides by Default	დამხმარე ხაზების ნაგულისხმევად ჩაკეტვა
 	Unlock Guides	დამხმარე ხაზების განბლოკვა
 	Make Guides	დამხმარე ხაზების შექმნა
 	Release Guides	დამხმარე ხაზების მოხსნა
@@ -857,6 +858,7 @@ lighting	Light	სინათლე
 	Color Picker…	ფერის ამრჩევი…
 	Coming soon — tracked in the parity plan	მალე — აღრიცხულია თანხვედრის გეგმაში
 	Command Dialog	ბრძანების დიალოგი
+	Command API Reference	ბრძანებების API ცნობარი
 	Copy Selected Style	მონიშნული სტილის კოპირება
 	Corners…	კუთხეები…
 	Define Perspective Grid…	პერსპექტივის ბადის განსაზღვრა…
@@ -2252,15 +2254,12 @@ digits	Malayalam	მალაიალამური
 	Selected Swatches	მონიშნული ფერის ნიმუშები
 	Advanced Options	დამატებითი პარამეტრები
 	Background Contents	ფონის შიგთავსი
-	Background Contents:	ფონის შიგთავსი:
 	BLANK DOCUMENT PRESETS	ცარიელი დოკუმენტის პრესეტები
 	Bleed	ჭრისპირა არე
 	Change to Right-to-Left Layout	მარჯვნიდან მარცხნივ განლაგებაზე გადასვლა
 	Columns:	სვეტები:
-	Create Document	დოკუმენტის შექმნა
 	Documents you create appear here.	თქვენ მიერ შექმნილი დოკუმენტები აქ გამოჩნდება.
 	More Settings	მეტი პარამეტრი
-	New from Template	შაბლონიდან შექმნა
 	Number of Artboards:	სამუშაო დაფების რაოდენობა:
 	Orientation:	ორიენტაცია:
 	PRESET DETAILS	პრესეტის დეტალები
@@ -2270,7 +2269,6 @@ digits	Malayalam	მალაიალამური
 	Preview Mode	გადახედვის რეჟიმი
 	RECENT	ბოლოდროინდელი
 	SAVED	შენახული
-	Templates…	შაბლონები…
 	Transparent (Default)	გამჭვირვალე (ნაგულისხმევი)
 	Save for Office Documents	შენახვა Office-ის დოკუმენტებისთვის
 	Transparent Background	გამჭვირვალე ფონი
@@ -3095,6 +3093,7 @@ theme	Appearance	იერსახე
 	Arrange by Row	სტრიქონების მიხედვით დალაგება
 	Arrange by Column	სვეტების მიხედვით დალაგება
 	Save Preset	პრესეტის შენახვა
+	Save Document Preset	დოკუმენტის პრესეტის შენახვა
 	Screen (72 ppi)	ეკრანი (72 ppi)
 	Social Square Post 1080×1080	კვადრატული პოსტი 1080×1080
 	Distribute	განაწილება
@@ -4182,6 +4181,7 @@ font-technology	Variable	ცვლადი
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	ჩაიტვირთა „{name}“; გამოტოვებული ნაბიჯები: {n}
 @msg	not an action set file	ეს არ არის მოქმედებების ნაკრების ფაილი
 @msg	the action set file is larger than 8 MiB	მოქმედებების ნაკრების ფაილი 8 MiB-ზე დიდია
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: ცნობარი {MAX_BYTES} ბაიტზე დიდი იქნებოდა
 @msg	the action set file holds more than 1,000 actions	მოქმედებების ნაკრების ფაილი 1000-ზე მეტ მოქმედებას შეიცავს
 @msg	the action set file needs a later version of VectorCraft	მოქმედებების ნაკრების ფაილს VectorCraft-ის უფრო ახალი ვერსია სჭირდება
 @msg	an action in the action set file has more than 10,000 steps	მოქმედებების ნაკრების ფაილში ერთ-ერთ მოქმედებას 10 000-ზე მეტი ნაბიჯი აქვს
@@ -4959,7 +4959,7 @@ font-technology	Variable	ცვლადი
 	Bevel both sides	წაკვეთა ორივე მხარეს
 	Presets	პრესეტები
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	ობიექტს ერთი 3D ეფექტი შეიძლება ჰქონდეს. შეცვალეთ არსებული ეფექტის პარამეტრები ან ჯერ წაშალეთ ის.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label}: ამჟამად საჭიროა ტრაექტორია ან შედგენილი ტრაექტორია. ჯერ გარდაქმენით ტექსტი, გამოსახულებები და ჯგუფები ტრაექტორიებად.
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label}: ამჟამად საჭიროა ტრაექტორია, შედგენილი ტრაექტორია, ტექსტი ან ჯგუფი. ჯერ გარდაქმენით გამოსახულებები და სხვა ობიექტები ტრაექტორიებად.
 @msg	{label} requires a shape with at least two anchors	{label}: საჭიროა ფიგურა მინიმუმ ორი საყრდენი წერტილით
 @msg	The shape is too complex for a 3D effect	ფიგურა ზედმეტად რთულია 3D ეფექტისთვის
 @msg	The 3D surface is too complex; simplify the shape	3D ზედაპირი ზედმეტად რთულია; გაამარტივეთ ფიგურა
@@ -4967,6 +4967,11 @@ font-technology	Variable	ცვლადი
 @msg	unknown parameter `{key}`; did you mean `{near}`?	უცნობი პარამეტრი `{key}`; იქნებ `{near}` იგულისხმეთ?
 @msg	unknown parameter `{key}`; the command takes no parameters	უცნობი პარამეტრი `{key}`; ბრძანება პარამეტრებს არ იღებს
 @msg	unknown parameter `{key}`; the command takes: {keys}	უცნობი პარამეტრი `{key}`; ბრძანება იღებს: {keys}
+@msg	the params must be an object, not {got}	პარამეტრები უნდა იყოს ობიექტი და არა {got}
+@msg	unknown parameter `{path}`; the object takes no keys	უცნობი პარამეტრი `{path}`; ობიექტი გასაღებებს არ იღებს
+@msg	unknown parameter `{path}`; it takes: {keys}	უცნობი პარამეტრი `{path}`; იღებს: {keys}
+@msg	missing `{path}`	აკლია `{path}`
+@msg	`{path}` must be {expected}, not {got}	`{path}` უნდა იყოს {expected} და არა {got}
 file-filter	All readable files	ყველა წაკითხვადი ფაილი
 file-filter	All placeable files	ყველა განთავსებადი ფაილი
 file-filter	Swatch libraries	ფერის ნიმუშების ბიბლიოთეკები
@@ -5128,6 +5133,28 @@ mark-style	Japanese	იაპონური
 	Auto Grouping	ავტომატური დაჯგუფება
 	Ignore Color	ფერის იგნორირება
 imageTrace	Outline	კონტური
+	Run	გაშვება
+	Run Script	სკრიპტის გაშვება
+	Stop Script	სკრიპტის შეჩერება
+	Show External Script Warning	გარე სკრიპტის გაფრთხილების ჩვენება
+	A Script Is Running	სკრიპტი მუშაობს
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	სკრიპტს შეუძლია ღია დოკუმენტების შეცვლა და მის მიერ გაშვებული ბრძანებებით ფაილების ჩაწერა. გაუშვით მხოლოდ სანდო სკრიპტები.
+	Do not show this warning again	აღარ აჩვენო ეს გაფრთხილება
+	Stop the script and undo what it did? Then quit again.	შეჩერდეს სკრიპტი და გაუქმდეს მისი ცვლილებები? შემდეგ ხელახლა გამოდით.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	ამ სკრიპტმა ძალიან ბევრი ობიექტი დაამატა. გაგრძელდეს, თუ შეჩერდეს და გაუქმდეს მისი ცვლილებები?
+@msg	Choose a .js or .jsx script	აირჩიეთ .js ან .jsx სკრიპტი
+@msg	Ran {name}	გაშვებულია: {name}
+@msg	The script was stopped and its changes were undone	სკრიპტი შეჩერდა და მისი ცვლილებები გაუქმდა
+@msg	a script is running: stop it or wait for it to finish	სკრიპტი მუშაობს: შეაჩერეთ ან დაელოდეთ დასრულებას
+@msg	this is a compiled script, which cannot be run; use its source text	ეს კომპილირებული სკრიპტია და მისი გაშვება შეუძლებელია; გამოიყენეთ მისი საწყისი ტექსტი
+@msg	the script is not UTF-8 text	სკრიპტი არ არის UTF-8 ტექსტი
+@msg	the script is too large to run	სკრიპტი გასაშვებად ძალიან დიდია
+@msg	a drag or an undo group is open; finish it before running a script	ღიაა გადათრევა ან გაუქმების ჯგუფი; დაასრულეთ სკრიპტის გაშვებამდე
+@msg	the script left a document that cannot be kept	სკრიპტმა დატოვა დოკუმენტი, რომლის შენახვა შეუძლებელია
+@msg	the script's run is no longer available	სკრიპტის გაშვება აღარ არის ხელმისაწვდომი
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	წარუმატებელმა ბრძანებამ შეცვალა გაუქმების ნაბიჯები, რომელთა აღდგენა ვერ მოხერხდა, ამიტომ სკრიპტი შეჩერდა
+@msg	a recovery copy could not be written, so the script was not run	აღდგენის ასლის ჩაწერა ვერ მოხერხდა, ამიტომ სკრიპტი არ გაეშვა
+@msg	Running a script	სკრიპტი მუშაობს
 @msg	Copied the script report	კოპირებულია სკრიპტის ანგარიში
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	ტრაექტორიის წანაცვლება: წანაცვლების შემდეგ მონიშნული ტრაექტორიებიდან არაფერი რჩება (შიგნით წანაცვლება ფიგურებზე დიდია)
 @msg	{path}: not a file	{path}: ფაილი არ არის
@@ -5945,6 +5972,9 @@ axis	Y Axis	Y ღერძი
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all ან დიაპაზონი, მაგალითად 1, 3-5, და არა {v}
 	Add to Symbols	სიმბოლოებში დამატება
 	Basic Shapes	ძირითადი ფიგურები
+	Button	ღილაკი
+	Panel	პანელი
+	UI Frames	UI ჩარჩოები
 	Open Symbol Library	სიმბოლოების ბიბლიოთეკის გახსნა
 	Save Symbol Library	სიმბოლოების ბიბლიოთეკის შენახვა
 	Save Symbol Library…	სიმბოლოების ბიბლიოთეკის შენახვა…
@@ -6092,6 +6122,8 @@ swatch	Bright Violet	კაშკაშა იისფერი
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	წერტილოვანი ტექსტი
 	Area Text	არის ტექსტი
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	ტექსტის გაზომვა გლიფის საზღვრებით
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	გლიფზე მიბმის პარამეტრების ჩვენება
 	Hide Snap to Glyph Options	გლიფზე მიბმის პარამეტრების დამალვა
@@ -6720,3 +6752,6 @@ font-script	Japanese	იაპონური
 	Align to Pixel Grid	პიქსელურ ბადეზე გასწორება
 @msg	only paths and compound paths can be aligned to the pixel grid	პიქსელურ ბადეზე მხოლოდ ტრაექტორიების და შედგენილი ტრაექტორიების გასწორებაა შესაძლებელი
 @msg	side is left or right, not `{s}`	side არის left ან right და არა `{s}`
+	Ignore All	ყველას იგნორირება
+	Add to Dictionary	ლექსიკონში დამატება
+	No Suggestions	შემოთავაზებები არ არის

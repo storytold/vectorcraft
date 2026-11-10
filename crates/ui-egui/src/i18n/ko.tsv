@@ -622,6 +622,7 @@ digits	Malayalam	말라얄람어
 	Guides	안내선
 	Hide Guides	안내선 숨기기
 	Lock Guides	안내선 잠그기
+	Lock Guides by Default	기본적으로 안내선 잠그기
 	Make Guides	안내선 만들기
 	Release Guides	안내선 해제
 	Clear Guides	안내선 지우기
@@ -1066,7 +1067,6 @@ antiAlias	Sharp	날카롭게
 	Update While Dragging	드래그하는 동안 업데이트
 	Hide Video Rulers	비디오 눈금자 숨기기
 	Background Contents	배경 내용
-	Background Contents:	배경 내용:
 	Background:	배경:
 	Bar Graph Tool	막대 그래프 도구
 	Baseline Shift	기준선 이동
@@ -1243,6 +1243,7 @@ antiAlias	Sharp	날카롭게
 	Coming soon — tracked in the parity plan	곧 제공 예정 — 기능 동등성 계획에서 관리 중
 	Command Click to Select Objects Behind	Command-클릭으로 뒤쪽 개체 선택
 	Command Dialog	명령 대화상자
+	Command API Reference	명령 API 참조
 	Community	커뮤니티
 	Compatibility:	호환성:
 	Compatible Gradient and Gradient Mesh Printing	호환 그레이디언트 및 그레이디언트 메시 인쇄
@@ -1292,7 +1293,6 @@ antiAlias	Sharp	날카롭게
 	Corners…	모퉁이…
 	Chamfer	모따기
 	Create Clipping Mask	클리핑 마스크 만들기
-	Create Document	문서 만들기
 	Create From:	만들기 기준:
 	Create Graph	그래프 만들기
 	Create New Layer	새 레이어 만들기
@@ -2352,7 +2352,6 @@ antiAlias	Sharp	날카롭게
 	New Symbol…	새 심볼…
 	New Workspace	새 작업 영역
 	New file	새 파일
-	New from Template	템플릿에서 새로 만들기
 	New theme from the current color	현재 색상으로 새 테마 만들기
 	New {kind} Style…	새 {kind} 스타일…
 	Next	다음
@@ -2894,6 +2893,7 @@ mark-style	Japanese	일본식
 	Save PDF Preset	PDF 사전 설정 저장
 	Save Perspective Grid Preset	원근 격자 사전 설정 저장
 	Save Preset	사전 설정 저장
+	Save Document Preset	문서 사전 설정 저장
 	Preset {number}	사전 설정 {number}
 	Save Preset…	사전 설정 저장…
 	Save Print Preset	인쇄 사전 설정 저장
@@ -3242,7 +3242,6 @@ mark-style	Japanese	일본식
 	Target Contents	대상 내용
 	Target:	대상:
 	Templates Folder	템플릿 폴더
-	Templates…	템플릿…
 	Text Displayed in Cell:	셀에 표시할 텍스트:
 	Text Export Options	텍스트 내보내기 옵션
 	Text Import Options	텍스트 가져오기 옵션
@@ -4730,6 +4729,7 @@ theme	Appearance	외관
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	“{name}”을(를) 불러왔습니다. 단계 {n}개를 제외했습니다
 @msg	not an action set file	액션 세트 파일이 아닙니다
 @msg	the action set file is larger than 8 MiB	액션 세트 파일이 8 MiB보다 큽니다
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: 참조가 {MAX_BYTES}바이트보다 커집니다
 @msg	the action set file holds more than 1,000 actions	액션 세트 파일의 액션이 1,000개를 넘습니다
 @msg	the action set file needs a later version of VectorCraft	이 액션 세트 파일을 열려면 최신 버전의 VectorCraft가 필요합니다
 @msg	an action in the action set file has more than 10,000 steps	액션 세트 파일에 단계가 10,000개를 넘는 액션이 있습니다
@@ -4746,6 +4746,28 @@ theme	Appearance	외관
 @msg	the library item is damaged	라이브러리 항목이 손상되었습니다
 @msg	{_1} font families available	사용 가능한 글꼴 패밀리 {_1}개
 @msg	{_1} has no {_2} style	{_1}에는 {_2} 스타일이 없습니다
+	Run	실행
+	Run Script	스크립트 실행
+	Stop Script	스크립트 중지
+	Show External Script Warning	외부 스크립트 경고 표시
+	A Script Is Running	스크립트 실행 중
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	스크립트는 열려 있는 문서를 변경하고 실행하는 명령을 통해 파일을 쓸 수 있습니다. 신뢰할 수 있는 스크립트만 실행하세요.
+	Do not show this warning again	이 경고를 다시 표시하지 않음
+	Stop the script and undo what it did? Then quit again.	스크립트를 중지하고 변경 내용을 취소할까요? 그런 다음 다시 종료하세요.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	이 스크립트가 매우 많은 개체를 추가했습니다. 계속할까요, 아니면 중지하고 변경 내용을 취소할까요?
+@msg	Choose a .js or .jsx script	.js 또는 .jsx 스크립트를 선택하세요
+@msg	Ran {name}	{name} 실행됨
+@msg	The script was stopped and its changes were undone	스크립트를 중지하고 변경 내용을 취소했습니다
+@msg	a script is running: stop it or wait for it to finish	스크립트 실행 중: 중지하거나 끝날 때까지 기다리세요
+@msg	this is a compiled script, which cannot be run; use its source text	컴파일된 스크립트이므로 실행할 수 없습니다. 소스 텍스트를 사용하세요
+@msg	the script is not UTF-8 text	스크립트가 UTF-8 텍스트가 아닙니다
+@msg	the script is too large to run	스크립트가 너무 커서 실행할 수 없습니다
+@msg	a drag or an undo group is open; finish it before running a script	드래그 또는 실행 취소 그룹이 열려 있습니다. 스크립트를 실행하기 전에 완료하세요
+@msg	the script left a document that cannot be kept	스크립트가 유지할 수 없는 문서를 남겼습니다
+@msg	the script's run is no longer available	스크립트 실행을 더 이상 사용할 수 없습니다
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	실패한 명령이 되돌릴 수 없는 실행 취소 단계를 변경하여 스크립트를 중지했습니다
+@msg	a recovery copy could not be written, so the script was not run	복구 사본을 쓸 수 없어 스크립트를 실행하지 않았습니다
+@msg	Running a script	스크립트 실행 중
 @msg	Copied the script report	스크립트 보고서를 복사했습니다
 @msg	Exported {path}	{path}을(를) 내보냈습니다
 @msg	no CSS to copy: select objects with CSS of their own	복사할 CSS가 없습니다: 자체 CSS가 있는 개체를 선택하세요
@@ -5157,7 +5179,7 @@ lighting	Light	광원
 	Bevel both sides	양면 베벨
 	Presets	사전 설정
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	오브젝트에는 3D 효과를 하나만 적용할 수 있습니다. 기존 효과의 옵션을 편집하거나 먼저 제거하십시오.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label}에는 현재 패스 또는 컴파운드 패스가 필요합니다. 문자, 이미지 및 그룹을 먼저 패스로 변환하십시오.
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label}에는 현재 패스, 컴파운드 패스, 문자 또는 그룹이 필요합니다. 이미지 및 기타 개체를 먼저 패스로 변환하십시오.
 @msg	{label} requires a shape with at least two anchors	{label}에는 고정점이 두 개 이상인 모양이 필요합니다
 @msg	The shape is too complex for a 3D effect	모양이 너무 복잡하여 3D 효과를 적용할 수 없습니다
 @msg	The 3D surface is too complex; simplify the shape	3D 표면이 너무 복잡합니다. 모양을 단순화하십시오
@@ -5165,6 +5187,11 @@ lighting	Light	광원
 @msg	unknown parameter `{key}`; did you mean `{near}`?	알 수 없는 매개변수 `{key}`: `{near}`을(를) 의미하셨습니까?
 @msg	unknown parameter `{key}`; the command takes no parameters	알 수 없는 매개변수 `{key}`: 이 명령에는 매개변수가 없습니다
 @msg	unknown parameter `{key}`; the command takes: {keys}	알 수 없는 매개변수 `{key}`: 이 명령이 받는 매개변수: {keys}
+@msg	the params must be an object, not {got}	매개변수는 객체여야 합니다({got} 사용 불가)
+@msg	unknown parameter `{path}`; the object takes no keys	알 수 없는 매개변수 `{path}`: 이 객체는 키를 받지 않습니다
+@msg	unknown parameter `{path}`; it takes: {keys}	알 수 없는 매개변수 `{path}`: 받는 매개변수: {keys}
+@msg	missing `{path}`	`{path}`이(가) 없습니다
+@msg	`{path}` must be {expected}, not {got}	`{path}`은(는) {expected}이어야 합니다({got} 사용 불가)
 	Load EPS into Clipboard	EPS를 클립보드로 불러오기
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h}픽셀 이미지는 너무 커서 그릴 수 없습니다
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: PNG, JPEG, WebP, TIFF 또는 BMP 이미지가 아닙니다
@@ -5600,6 +5627,9 @@ axis	Y Axis	Y축
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all 또는 1, 3-5 같은 범위여야 합니다({v}이(가) 아님)
 	Add to Symbols	심볼에 추가
 	Basic Shapes	기본 모양
+	Button	버튼
+	Panel	패널
+	UI Frames	UI 프레임
 	Open Symbol Library	심볼 라이브러리 열기
 	Save Symbol Library	심볼 라이브러리 저장
 	Save Symbol Library…	심볼 라이브러리 저장…
@@ -5674,6 +5704,8 @@ axis	Y Axis	Y축
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	포인트 문자
 	Area Text	영역 문자
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	글리프 경계로 문자 측정
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	글리프에 스냅 옵션 표시
 	Hide Snap to Glyph Options	글리프에 스냅 옵션 숨기기
@@ -6241,3 +6273,6 @@ breakText	Glyphs	글리프
 	Align to Pixel Grid	픽셀 격자에 정렬
 @msg	only paths and compound paths can be aligned to the pixel grid	패스와 컴파운드 패스만 픽셀 격자에 정렬할 수 있습니다
 @msg	side is left or right, not `{s}`	side는 left 또는 right입니다(`{s}` 아님)
+	Ignore All	모두 무시
+	Add to Dictionary	사전에 추가
+	No Suggestions	제안 없음

@@ -347,6 +347,7 @@ impl Document {
             t.first_para_continues = false;
             t.cached_bounds = None;
             t.cached_baselines.clear();
+            t.cached_ink = None;
         }
         let on_path = n.extras().objects_on_path.is_some();
         let mut renamed = std::collections::HashMap::new();

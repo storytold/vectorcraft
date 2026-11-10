@@ -107,6 +107,11 @@ pub struct Services {
     /// Files that arrived asynchronously to be placed (web: picked for Place, or dropped on the
     /// canvas).
     pub place_inbox: Option<place::PlaceInbox>,
+    /// Web: start an async pick of a script to run (it arrives via `script_inbox`; a canceled pick
+    /// delivers nothing).
+    pub script_async: Option<Box<dyn FnMut()>>,
+    /// Scripts the web's picker delivered for File › Scripts › Other Script….
+    pub script_inbox: Option<crate::dialogs::script_run::ScriptInbox>,
     /// The system clipboard with all its formats (desktop): Copy offers text, SVG, PDF and PNG,
     /// Paste takes SVG, PDF, text and bitmaps from other apps. Without it, SVG text only (through
     /// egui and `clipboard_read`).

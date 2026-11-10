@@ -361,6 +361,14 @@ impl<'a> Reader<'a> {
                     r.space = vals.iter().rev().find_map(V::text);
                 }
             }
+            // `n [… (name) /Separation] XC`: the image's samples are that ink's tints. A device
+            // space (`/DeviceGray XC` after a linked image's file name) changes nothing read here.
+            "XC" => {
+                let ink = paint::separation_ink(&vals, &mut self.names);
+                if let Some(r) = self.raster.as_mut() {
+                    r.ink = ink;
+                }
+            }
             // Placed files.
             // `[a b c d tx ty] llx lly urx ury (path) `` ` ``, three more numbers before the path in
             // newer files: the version 7 form has no `%AI5_BeginPlace` before it. Before the art,
