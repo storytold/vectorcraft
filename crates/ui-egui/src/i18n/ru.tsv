@@ -6082,6 +6082,8 @@ theme	Appearance	Оформление
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Точечный текст
 	Area Text	Текст в области
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Измерять текст по границам глифа
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Показать параметры привязки к глифу
 	Hide Snap to Glyph Options	Скрыть параметры привязки к глифу

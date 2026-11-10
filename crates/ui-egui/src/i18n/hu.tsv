@@ -6088,6 +6088,8 @@ axis	Y Axis	Y tengely
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Pontszöveg
 	Area Text	Területszöveg
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Szöveg mérése a glifahatárok szerint
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Glifához illesztés beállításainak megjelenítése
 	Hide Snap to Glyph Options	Glifához illesztés beállításainak elrejtése
