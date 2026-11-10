@@ -1,6 +1,16 @@
 use super::drag::{drag_id, drop_press};
 use super::{CornerRadius, Drag, Point, Pos2, Rect, SCROLL_BAR, Sense, Stroke, Tokens, Ui, VectorcraftApp, View, Xf, pos2, vec2};
 
+/// The mouse and control-channel Rotate View gestures use the same angle and Shift snapping.
+pub(crate) fn drag_rotation(center: Pos2, point: Pos2, start_angle: f64, start_rotation: f64, snap: bool) -> f64 {
+    let angle = (point.y - center.y).atan2(point.x - center.x) as f64;
+    let mut degrees = start_rotation + (angle - start_angle).to_degrees();
+    if snap {
+        degrees = (degrees / 15.0).round() * 15.0;
+    }
+    vectorcraft_geom::normalize_deg(degrees)
+}
+
 /// Fit the view (View → Fit Artboard / Fit All / Actual Size, Arrange Tools › Zoom to Selection).
 pub fn fit(app: &mut VectorcraftApp, how: &str) {
     let Some(rect) = app.canvas_rect else {
@@ -52,8 +62,22 @@ const WHEEL_GLIDE: f64 = 0.05;
 /// What the wheel did across frames ([`wheel`]).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(super) struct WheelTurn {
-    /// The last wheel turn was an Alt-wheel one.
+    /// The last wheel turn was an Alt-wheel one: `held` had Alt without Cmd/Ctrl at its last Start
+    /// or Move.
     alt: bool,
+    /// The modifiers egui's wheel state holds, followed while Zoom with Mouse Wheel is off: each
+    /// wheel event's own, or, through a trackpad gesture, all those held since it began; none
+    /// while the wheel is idle.
+    held: egui::Modifiers,
+    /// A trackpad gesture is under way: egui has seen its Start phase and has not yet seen its End
+    /// or Cancel phase.
+    gesture: bool,
+    /// When the last wheel event came (`InputState::time`), and whether a trackpad sent it.
+    last: f64,
+    trackpad: bool,
+    /// A wheel event of this turn came from a touchpad ([`fine_steps`]), so Cmd/Ctrl zooms for the
+    /// rest of the turn, also through a whole notch.
+    fine: bool,
     /// The zoom (natural log) wheel notches still have to glide in.
     pub(super) glide: f64,
 }
@@ -340,15 +364,39 @@ struct ThumbDrag {
     max: f32,
 }
 
+/// Whether a wheel event comes from a touchpad and not from a mouse wheel's notches. egui names
+/// the source on the Mac and reports `Unknown` elsewhere. There, point deltas (Wayland) and line
+/// deltas that are not whole notches (Windows and X11) count as a touchpad. A browser reports a
+/// mouse wheel in points, so the web build counts only line deltas that are not whole notches.
+pub(super) fn fine_steps(unit: egui::MouseWheelUnit, delta: egui::Vec2, source: egui::MouseWheelSource) -> bool {
+    let notch = |d: f32| (d - d.round()).abs() < 1e-3;
+    match source {
+        egui::MouseWheelSource::Trackpad | egui::MouseWheelSource::Momentum => true,
+        egui::MouseWheelSource::Wheel => false,
+        egui::MouseWheelSource::Unknown if unit == egui::MouseWheelUnit::Point => !cfg!(target_arch = "wasm32"),
+        egui::MouseWheelSource::Unknown => !notch(delta.x) || !notch(delta.y),
+    }
+}
+
 /// What the wheel, a pinch and a two-finger drag on a touch screen did over the canvas this frame:
 /// a zoom factor (about the pointer) and a scroll (screen points the content moves). The wheel scrolls, Cmd- and Alt-wheel (Option
-/// on the Mac) zoom. With General › Zoom with Mouse Wheel (`wheel_zooms`) the wheel and Alt-wheel
-/// zoom, Shift-wheel scrolls up and down and Cmd/Ctrl-wheel sideways. `line` and `page`: points
+/// on the Mac) zoom; with General › Scroll Sideways with Cmd/Ctrl + Wheel, Cmd/Ctrl-wheel scrolls
+/// sideways instead, and Alt + Cmd/Ctrl-wheel still zooms. With General › Zoom with Mouse Wheel the
+/// wheel and Alt-wheel zoom, Shift-wheel scrolls up and down and Cmd/Ctrl-wheel sideways. Cmd/Ctrl
+/// with a touchpad ([`fine_steps`]) zooms under either preference. `line` and `page`: points
 /// per wheel line and page. `turn`: kept by the caller across frames. With Performance › Animated
 /// Zoom (`animate`) a mouse wheel's notches zoom in a glide over a few frames, as scrolling does
 /// (#888); off, each notch zooms on the frame it arrives (#4283). A trackpad's fine steps zoom at
 /// once either way.
-pub(super) fn wheel(i: &egui::InputState, wheel_zooms: bool, animate: bool, line: f32, page: f32, turn: &mut WheelTurn) -> (f64, egui::Vec2) {
+pub(super) fn wheel(
+    i: &egui::InputState,
+    prefs: &vectorcraft_engine::Prefs,
+    wheel_zooms: bool,
+    animate: bool,
+    line: f32,
+    page: f32,
+    turn: &mut WheelTurn,
+) -> (f64, egui::Vec2) {
     // Fingers on a touch screen pan the content with them (a trackpad sends scrolls instead).
     let pan = i.multi_touch().map_or(egui::Vec2::ZERO, |t| t.translation_delta);
     // A wheel event's motion in points.
@@ -360,17 +408,76 @@ pub(super) fn wheel(i: &egui::InputState, wheel_zooms: bool, animate: bool, line
     if !wheel_zooms {
         // egui makes Cmd-wheel (and a pinch) its zoom and the rest a scroll it spreads over a few
         // frames: the rest of an Alt-wheel turn zooms too, however soon Alt is let go.
-        if let Some(m) = i.events.iter().rev().find_map(|e| if let egui::Event::MouseWheel { modifiers, .. } = e { Some(modifiers) } else { None }) {
-            turn.alt = m.alt && !m.command;
+        // Each wheel event changes `turn.held` and `turn.gesture` as `WheelState::on_wheel_event`
+        // changes egui's wheel modifiers and status. Both are cleared while egui's wheel is idle.
+        // `turn.alt` follows `turn.held` after each Start or Move, so a trackpad gesture that held
+        // Alt keeps zooming until it ends, also after Alt is let go.
+        for e in &i.events {
+            if let egui::Event::MouseWheel { unit, delta, phase, modifiers, source, .. } = e {
+                // A wheel event that comes after egui's scroll timeout ends the turn first, as
+                // `on_wheel_event` does (1 s for fingers resting on a trackpad mid-gesture, else
+                // 0.15 s), also when no frame ran in between.
+                let timeout = if turn.gesture && turn.trackpad { 1.0 } else { 0.150 };
+                if i.time - turn.last > timeout {
+                    turn.gesture = false;
+                    turn.held = egui::Modifiers::NONE;
+                    turn.fine = false;
+                }
+                turn.last = i.time;
+                turn.trackpad = *source == egui::MouseWheelSource::Trackpad;
+                turn.fine |= fine_steps(*unit, *delta, *source);
+                match phase {
+                    egui::TouchPhase::Start => {
+                        turn.gesture = true;
+                        turn.held = *modifiers;
+                        turn.alt = turn.held.alt && !turn.held.command;
+                    }
+                    egui::TouchPhase::Move => {
+                        if turn.gesture {
+                            turn.held |= *modifiers;
+                        } else {
+                            turn.held = *modifiers;
+                        }
+                        turn.alt = turn.held.alt && !turn.held.command;
+                    }
+                    egui::TouchPhase::End | egui::TouchPhase::Cancel => {
+                        turn.gesture = false;
+                        turn.held = egui::Modifiers::NONE;
+                        turn.fine = false;
+                    }
+                }
+            }
         }
-        let (zoom, scroll) = (f64::from(i.zoom_delta()), i.smooth_scroll_delta);
+        if !i.is_scrolling() {
+            turn.gesture = false;
+            turn.held = egui::Modifiers::NONE;
+            turn.fine = false;
+        }
+        let (mut zoom, mut scroll) = (f64::from(i.zoom_delta()), i.smooth_scroll_delta);
+        // Scroll Sideways with Cmd/Ctrl + Wheel: while egui's wheel state holds Cmd/Ctrl without
+        // Alt, egui's zoom, less the pinches', is `exp(points × scroll_zoom_speed)`, at egui's
+        // default speed, which the app keeps. The canvas scrolls sideways by those points instead.
+        // A trackpad or web pinch still zooms. With fingers on a touch screen, egui's zoom is the
+        // fingers' alone, and the canvas leaves it as it is.
+        if prefs.ctrl_wheel_scrolls_sideways && turn.held.command && !turn.held.alt && !turn.fine && i.multi_touch().is_none() {
+            let pinch: f64 = i.events.iter().filter_map(|e| if let egui::Event::Zoom(f) = e { Some(f64::from(*f)) } else { None }).product();
+            let wheel_zoom = zoom / pinch;
+            if wheel_zoom.is_finite() && wheel_zoom > 0.0 {
+                scroll.x += (wheel_zoom.ln() / f64::from(egui::InputOptions::default().scroll_zoom_speed)) as f32;
+                zoom = pinch;
+            }
+        }
         if turn.alt && !animate {
             // Without Animated Zoom, Alt-wheel zooms by the wheel events themselves, on the frame
-            // they arrive; the rest of egui's spread scroll is dropped.
+            // they arrive; the rest of egui's spread scroll is dropped. Only Move events count, as
+            // `on_wheel_event` moves egui's scroll by Move events alone.
             let d: f32 = i
                 .events
                 .iter()
-                .filter_map(|e| if let egui::Event::MouseWheel { unit, delta, .. } = e { Some(points(unit, *delta)) } else { None })
+                .filter_map(|e| match e {
+                    egui::Event::MouseWheel { unit, delta, phase: egui::TouchPhase::Move, .. } => Some(points(unit, *delta)),
+                    _ => None,
+                })
                 .map(|d| d.x + d.y)
                 .sum();
             return (zoom * (f64::from(d) * WHEEL_ZOOM).exp(), pan);
@@ -386,9 +493,15 @@ pub(super) fn wheel(i: &egui::InputState, wheel_zooms: bool, animate: bool, line
     let mut scroll = pan;
     for e in &i.events {
         match e {
-            egui::Event::MouseWheel { unit, delta, modifiers, .. } => {
+            egui::Event::MouseWheel { unit, delta, phase, modifiers, source, .. } => {
                 let d = points(unit, *delta);
-                if modifiers.command {
+                // The turn ends after egui's scroll timeout, as above.
+                if i.time - turn.last > 0.150 {
+                    turn.fine = false;
+                }
+                turn.last = i.time;
+                turn.fine |= fine_steps(*unit, *delta, *source);
+                if modifiers.command && !turn.fine {
                     scroll.x += d.x + d.y;
                 } else if modifiers.shift {
                     scroll.y += d.x + d.y;
@@ -398,6 +511,9 @@ pub(super) fn wheel(i: &egui::InputState, wheel_zooms: bool, animate: bool, line
                 } else {
                     turn.glide += f64::from(d.y) * WHEEL_ZOOM;
                     scroll.x += d.x;
+                }
+                if matches!(phase, egui::TouchPhase::End | egui::TouchPhase::Cancel) {
+                    turn.fine = false;
                 }
             }
             egui::Event::Zoom(f) => zoom *= f64::from(*f),

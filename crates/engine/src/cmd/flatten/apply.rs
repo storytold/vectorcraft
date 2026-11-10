@@ -1,10 +1,10 @@
 use super::analysis::{Scratch, outlined_text, overlapping, reach};
-use super::compose::{Builder, CLEAR, Composer, Elem, Fill, Kind, WHITE};
+use super::compose::{Builder, CLEAR, Composer, Elem, Fill, Kind, Px, WHITE};
 use super::options::FlattenOptions;
 use super::{
     Affine, Appearance, AppearanceItem, Arc, BlendMode, Color, ColorMode, Document, EngineError, FillLayer, FillRule, ImageBlob, ImageObject, Inks,
-    MAX_PIXELS, Node, NodeId, NodeKind, Paint, PathData, Rect, Result, effects, isolated_doc, outline_strokes_under, planes_cmyk, po, separate,
-    shape_node, shapes, unique_key,
+    MAX_PIXELS, Node, NodeId, NodeKind, Paint, PathData, Rect, Result, composite, effects, isolated_doc, outline_strokes_under, planes_cmyk, po,
+    separate, shape_node, shapes, unique_key,
 };
 
 // ---------- plan ----------
@@ -150,9 +150,15 @@ fn flatten_group(plain: &[&Node], o: &FlattenOptions, cmyk: bool) -> Option<(Reg
     }
     // An unclipped full raster needs no regions.
     let whole = o.balance <= 0.0 && !o.clip_complex_regions;
-    let regions = if whole { vec![] } else { po::regions(&b.shapes) };
+    // Nor does one that splits into more regions than the balance allows: the build stops at the
+    // first region past the limit.
+    let (regions, over) = match o.region_limit().filter(|_| !every_region()) {
+        _ if whole => (vec![], false),
+        Some(limit) => po::regions_within(&b.shapes, limit).map_or((vec![], true), |r| (r, false)),
+        None => (po::regions(&b.shapes), false),
+    };
     // An arrangement that failed (degenerate geometry) leaves only rasterizing.
-    let all = regions.is_empty() || o.rasterize_all(regions.len());
+    let all = over || regions.is_empty() || o.rasterize_all(regions.len());
     let mut vector: Vec<(usize, RegionFill)> = vec![];
     let mut complex: Vec<usize> = vec![];
     let mut gradients_only = !all;
@@ -195,6 +201,32 @@ fn flatten_group(plain: &[&Node], o: &FlattenOptions, cmyk: bool) -> Option<(Reg
     Some((vector, area))
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Groups flattened on this thread build all of their regions ([`with_every_region`]).
+    static EVERY_REGION: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Whether groups build all of their regions, past the balance's limit too.
+#[cfg(test)]
+fn every_region() -> bool {
+    EVERY_REGION.with(std::cell::Cell::get)
+}
+
+#[cfg(not(test))]
+fn every_region() -> bool {
+    false
+}
+
+/// `f` with every group it flattens building all of its regions, past the balance's limit too.
+#[cfg(test)]
+pub(crate) fn with_every_region<T>(f: impl FnOnce() -> T) -> T {
+    EVERY_REGION.with(|e| e.set(true));
+    let out = f();
+    EVERY_REGION.with(|e| e.set(false));
+    out
+}
+
 /// The flat colour of a region covered by `sources` (CMYK in a `cmyk` document); `None` where
 /// nothing paints it.
 fn region_fill(elems: &[Elem], sources: &[usize], o: &FlattenOptions, cmyk: bool) -> Option<RegionFill> {
@@ -203,18 +235,14 @@ fn region_fill(elems: &[Elem], sources: &[usize], o: &FlattenOptions, cmyk: bool
     if alone[3] < 0.5 / 255.0 {
         return None;
     }
-    let start = if o.preserve_alpha { CLEAR } else { WHITE };
-    let px = if o.preserve_alpha {
-        alone
-    } else {
-        c.top = None;
-        c.eval(elems, start)
-    };
+    // The white goes under the finished art, as under the renderer's: blend modes read only the art.
+    let on_page = |p: Px| if o.preserve_alpha { p } else { composite(BlendMode::Normal, WHITE, p) };
+    let px = on_page(alone);
     let rgb = [px[0], px[1], px[2]];
     // The K plane composites the same way.
     let k = cmyk.then(|| {
         c.plane = 1;
-        c.eval(elems, start)[0]
+        on_page(c.eval(elems, CLEAR))[0]
     });
     // A paint showing as it is keeps its colour (spot, process, swatch) and overprint.
     let near = |a: &[f32], b: &[f32]| a.iter().zip(b).all(|(a, b)| (a - b).abs() < 1e-3);
@@ -234,7 +262,7 @@ fn region_fill(elems: &[Elem], sources: &[usize], o: &FlattenOptions, cmyk: bool
 }
 
 /// `art` rendered over `rect` at `ppi`: over white with the white the art doesn't cover taken out
-/// again (so blend modes see the white page), or over nothing with Preserve Alpha. The image and
+/// again, or over nothing with Preserve Alpha. The image and
 /// its `clip` reach a pixel further. An opaque image in a CMYK document holds the art's ink
 /// amounts (a CMYK TIFF), so its CMYK colours keep their numbers (#2160); other images are PNGs.
 /// Fails when the image can't be encoded.

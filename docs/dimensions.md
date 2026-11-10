@@ -4,8 +4,11 @@ The **Dimension Tool** is in the Modify section of the toolbar. Its strip offers
 **Angular**, **Radial** and **Tool Options…** (double-clicking the tool opens Tool Options too).
 
 - **Linear:** hover a path segment and drag outwards: releasing places the dimension. Or click two
-  points (anchors snap, Shift constrains to 45°), then click to place. A curved segment is measured
-  from end to end. With Smart Guides on, both points also snap into line with other objects'
+  points (anchors snap, Shift constrains to 45°), then click to place. A click within 8 pixels of
+  an anchor of any path, in groups and compound paths too, takes that anchor, and the dimension
+  stays linked to it. A press on an anchor picks it when the pointer moves less than 8 pixels
+  before the release; a longer drag drags out the dimension of the segment under the pointer. A
+  curved segment is measured from end to end. With Smart Guides on, both points also snap into line with other objects'
   anchors and centres, and the second onto the construction guides through the first; the guides
   show while hovering, before each click.
 - **Angular:** hover a corner where two straight segments meet and drag outwards. Or click two
@@ -36,8 +39,18 @@ changes); moved together with its art, it keeps its distance.
 
 Native `.vectorcraft` files keep the recipes and links. SVG, PDF and bitmap output contain
 ordinary paths and text, so exported dimensions look the same. Ungrouping a dimension leaves its
-paths and text as ordinary art. Pasted dimensions keep their geometry and drop their links, so
-they never bind to unrelated art in another document.
+paths and text as ordinary art. Object › Expand, Object › Expand Appearance, Type › Create Outlines
+and Object › Path › Outline Stroke turn a dimension whose art they change into a plain group of that
+art, also when they reach only a part of it: moving or scaling the group does not redraw it, it does
+not follow the art it measured, and undoing the command gives the live dimension back. The menus dim
+Object › Expand… while a whole dimension is selected, because its label has appearance items;
+Object › Expand Appearance and the `object.expand` command still reach it. A dimension selected with
+the art it measures also becomes a plain group when Object › Expand, Object › Expand Appearance or
+Object › Path › Outline Stroke changes only that art and the art no longer fits the dimension's link,
+for example because its number of anchors changed. When the art keeps its id and anchor count and the
+dimension's own art does not change, the dimension stays live and its label shows the new length. Pasted
+dimensions keep their geometry and drop their links, so they never bind to unrelated art in another
+document.
 
 ## Commands
 

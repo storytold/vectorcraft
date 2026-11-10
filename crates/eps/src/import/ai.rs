@@ -35,15 +35,31 @@ use super::lex::find;
 use crate::ps;
 
 pub(crate) use envelope::DRAWN as ENVELOPE_DRAWN;
+#[cfg(test)]
+pub(crate) use envelope::MAX_CHECKED;
+#[cfg(test)]
+pub(crate) use envelope::TYPE_DRAWN as ENVELOPE_TYPE_DRAWN;
+pub(crate) use envelope::{WARPED_TYPE_DRAWN, WarpedType};
 pub(crate) use frames::text_frames;
+pub use obj::{NameEncoding, Names};
 pub(crate) use paint::MAX_STOPS as MAX_GRADIENT_STOPS;
+#[cfg(test)]
+pub(crate) use read::objects_read;
+#[cfg(test)]
+pub use read::read;
+#[cfg(test)]
+pub(crate) use read::with_image_limits;
 pub use read::{
-    BindingRef, Brushes, IMAGE_TOO_LARGE, PaletteSwatches, Structure, artboards, bindings_note, brushes, graphic_styles, palette, read, read_beside,
-    variables,
+    BindingRef, Brushes, PaletteSwatches, PlacedPage, Structure, Symbols, active_artboard, artboards, bindings_note, brushes, graphic_styles,
+    palette, read_beside, read_in, symbols, variables,
 };
-pub(crate) use read::{join_and, slot_frame, slot_of};
+pub(crate) use read::{
+    MAX_NODES as MAX_EDITING_OBJECTS, MAX_SYMBOLS, join_and, read_art_style, read_over_page, read_style_list, slot_frame, slot_of, style_moves_with,
+    symbol_art_member,
+};
 
 pub(crate) use read::is_look_slot;
+pub(crate) use style::{MAX_LISTED, MAX_LISTED_NAME, warp_number};
 
 #[cfg(test)]
 mod tests;
@@ -73,6 +89,19 @@ fn data_limit(memory: Option<u64>) -> u64 {
 const MAX_ZSTD_WINDOW: u64 = 64 << 20;
 /// Most Zstandard frames read (the app writes one).
 const MAX_FRAMES: usize = 4096;
+
+#[cfg(test)]
+thread_local! {
+    /// How many bytes [`Codec::decode`] has looked at on this thread to find whether another
+    /// Zstandard frame follows or only zero padding is left.
+    static PADDING_LOOKS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// [`PADDING_LOOKS`] of this thread.
+#[cfg(test)]
+fn padding_looks() -> u64 {
+    PADDING_LOOKS.get()
+}
 
 const EPS_BEGIN: &[u8] = b"%AI9_PrivateDataBegin";
 const EPS_END: &[u8] = b"%AI9_PrivateDataEnd";
@@ -171,7 +200,11 @@ impl Codec {
                 // can itself end in a zero byte, so the padding is what is left after the last frame.
                 let mut src = data;
                 let mut frames = 0usize;
-                while src.iter().any(|b| *b != 0) {
+                while src.iter().any(|b| {
+                    #[cfg(test)]
+                    PADDING_LOOKS.set(PADDING_LOOKS.get().saturating_add(1));
+                    *b != 0
+                }) {
                     frames += 1;
                     if frames > MAX_FRAMES {
                         return Err(damaged("its Zstandard compression"));

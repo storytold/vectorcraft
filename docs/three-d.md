@@ -14,7 +14,44 @@ Select a path or compound path, then choose **Effect › 3D and Materials › Ex
   artboard.
 
 Preview changes are temporary until OK; Cancel restores the document; OK is one undo step. An object takes one
-3D effect: edit its options in the Appearance panel, or remove it before applying another.
+3D effect: edit its options in the Appearance panel or the 3D and Materials panel, or remove it before applying
+another.
+
+Each solid follows its shape as it is filled. Separate and nested contours are built as drawn. Contours that cross,
+touch or run along each other or themselves, as type often draws a glyph, are first merged into one outline by
+[`vectorcraft-pathops`](../crates/pathops/README.md), keeping every contour but the numerical debris a boolean leaves.
+Whether contours meet is judged on the outline as it is followed (see the curve tolerance below), so curves that
+overlap by less than that are built as drawn. All three effects share pathops'
+[limits](../crates/pathops/README.md#limits): a shape it refuses is built from its contours as drawn, where it can be.
+An open subpath is closed by a straight line either way.
+
+## 3D and Materials panel
+
+**Window › 3D and Materials** opens a panel that edits the 3D effect of the selection without a dialog, as the
+public [3D and Materials panel options](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/3d-materials-panel-options.html)
+and [Create 3D vector artwork](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/create-3d-vector-artwork.html)
+pages describe it.
+
+- The object types **Plane**, **Extrude**, **Revolve** and **Inflate** sit at the top. A type applies its effect
+  to each selected object that has no 3D effect (Plane is Rotate, Extrude is Extrude & Bevel), and changes the
+  3D effect of each other selected object in place (`effect.setParams` with `threeDType`): the settings both
+  effects take keep their values, and the rest start at the new effect's defaults. One click is one undo step,
+  and an object whose effect already has the type does not change.
+- Below them are the Object, Rotation and Lighting tabs of the effect's options dialog, with the same controls
+  and ranges, showing the 3D effect of the first selected object (its own effects first, then those of its fills
+  and strokes). A changed setting goes to the 3D effect of each selected object whose effect takes that setting;
+  other effects and objects without a 3D effect do not change. A setting the selected 3D effects hold with
+  different values shows its default with its reset dot filled; a checkbox shows a dash instead, and a mixed
+  Shading leaves the light settings available. Its reset dot, a choice from its menu or a click on its checkbox
+  (which turns a mixed one on) sets it on all of them; a typed or dragged number sets it when it differs from the
+  default shown. Other changes leave it as each effect has it.
+  The list of lights shows the first object's lights, and an edit to it (Add Light, Delete Light, or a setting
+  of one light in a list) reaches only the objects whose list of lights matches the first object's. Add Light is
+  unavailable while a setting of a single light differs between the selected effects.
+- Each change is one undo step. Dragging a value or a slider previews it on the artboard and records one step
+  when the pointer is released; a typed value is recorded when it is entered. Drawing the panel records nothing.
+- The Materials tab, shadows and ray-traced rendering are not built (see below). The rotation and light rings on
+  the artboard are part of the options dialog only.
 
 ## Extrude & Bevel
 
@@ -195,13 +232,15 @@ out, perspective). No Adobe software, assets, presets or bevel shapes were used.
   on top can still lie a few points behind another nearby piece.
 - Extrude & Bevel and Rotate retain planar shading. Colored Inflate uses smooth vector lighting; white-light Inflate keeps its original polygon shading; bounded cell triangulation leaves a cell flat when it contains a complete hole or an unusually complex/degenerate contour. Its geometric silhouette is still a polygon approximation.
 - Paths, compound paths, type and groups or layers of them (see [Groups](#groups)); images, symbol instances,
-  clipping groups and other live objects have to be converted first. Revolve on a group is not built yet. One 3D
-  effect per object.
+  clipping groups and other live objects have to be converted first. Revolve on a group sweeps its members about
+  one axis ([revolve.md](revolve.md)). One 3D effect per object.
 - Curves are followed within 1/2000 of the shape's size (at least 0.05 pt), so a small curve takes a few points
   and a large one up to 32. Extrude & Bevel and Inflate take up to 2,048 outline points (a stroke's outline is
-  counted on its own), Rotate (which only turns the outline) 65,536.
-- **3D (Classic)** (the track cube, surface types, blend steps, map art), Turntable and 3D export are separate,
-  unbuilt items.
+  counted on its own), Rotate (which only turns the outline) 65,536. The limit is counted on the shape as drawn and,
+  when its contours meet, again on the merged outline, which can have more points (bars crossing in a grid trace
+  every hole between them); past it, the shape is too complex for the effect.
+- **3D (Classic)**: Extrude & Bevel (Classic) is built, with its surface types and blend steps. Revolve (Classic),
+  Rotate (Classic), the track cube, map art, Turntable and 3D export are separate, unbuilt items.
 
 Release measurements and a repeatable CLI scene are in [3D lighting performance](3d-lighting-performance.md).
 
@@ -209,6 +248,7 @@ Release measurements and a repeatable CLI scene are in [3D lighting performance]
 
 | Date | Change |
 |---|---|
+| 2026-11-08 | Contours that cross, touch or overlap are merged by vectorcraft-pathops before Extrude & Bevel, Inflate and Rotate build a solid, sharing its limits; others are built as drawn. |
 | 2026-11-06 | Extrude & Bevel, Inflate and Rotate apply to groups and layers: every path, compound path and type in them turns about one shared axis (#4506). |
 | 2026-10-21 | Four original lighting presets, shared by all four 3D effects and commands, with effective-setting recognition and existing preview/history behavior. |
 | 2026-10-17 | Smooth colored Inflate lighting and surface batching; legacy white-light appearance and the 0.05 seam minimum preserved; shared light Color and multiple lights remain vector output. |

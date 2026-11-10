@@ -61,6 +61,25 @@ impl WindingNumber for Crossings {
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    /// [`work_done`] of this thread.
+    static WORK: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// How many items [`RectIndex::at`] has read and segments [`run_around`](super::run_around) has
+/// searched for the nearest point on a whole piece, on this thread.
+#[cfg(test)]
+pub(super) fn work_done() -> u64 {
+    WORK.get()
+}
+
+/// Adds `n` to [`work_done`].
+#[cfg(test)]
+pub(super) fn note_work(n: usize) {
+    WORK.set(WORK.get().saturating_add(n as u64));
+}
+
 /// A point in the middle of a run of segments.
 pub(super) fn mid(segs: &[Seg]) -> Option<Point> {
     segs.get(segs.len() / 2).map(|s| s.c.eval(0.5))
@@ -200,6 +219,8 @@ impl<T> RectIndex<T> {
                 }
             }
         }
+        #[cfg(test)]
+        note_work(found.len());
         found.sort_unstable();
         found.dedup();
         found.into_iter().filter_map(move |i| self.items.get(i)).filter(move |(r, _)| r.inflate(tol, tol).contains(p)).map(|(_, t)| t)

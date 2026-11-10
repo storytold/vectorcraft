@@ -649,6 +649,10 @@ impl Tool for CurvatureTool {
             self.id = Some(cx.selection.objects[0]);
         }
     }
+    /// A path being drawn: Escape ends it.
+    fn ends_on_escape(&self, cx: &ToolContext) -> bool {
+        self.active(cx).is_some()
+    }
     fn claims_key(&self, cx: &ToolContext, key: ToolKey) -> bool {
         matches!(key, ToolKey::Backspace | ToolKey::Delete)
             && self.drag.is_none()

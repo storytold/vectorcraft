@@ -849,11 +849,15 @@ fn the_control_bar_shows_the_artboard_tools_controls() {
     assert!(!has(&texts, "Snapping"), "{texts:?}");
     let link = text_rect(&texts, "Transform");
     assert!(link.right() < 790.0 && text_rect(&texts, "Artboard 1").right() < link.left(), "{texts:?}");
-    // Move and Scale Artwork with Artboard show as their boxes alone, inside the window, and the
-    // second one turns Scale Artwork with Artboard on.
+    // Move and Scale Artwork with Artboard show as their boxes alone, inside the window and left of
+    // the panel menu button at the bar's right end, and the second one turns Scale Artwork with
+    // Artboard on.
     assert!(!has(&texts, "Move Artwork with Artboard"), "{texts:?}");
-    let boxes = bar_buttons(&ctx, link.right(), 790.0);
+    let mut boxes = bar_buttons(&ctx, link.right(), 790.0);
+    let menu = boxes.pop().filter(|r| (r.width() - 16.0).abs() < 0.5 && r.right() > 785.0);
+    let menu = menu.unwrap_or_else(|| panic!("the panel menu button ends the bar: {boxes:?}"));
     assert_eq!(boxes.len(), 2, "{boxes:?}");
+    assert!(boxes[1].right() <= menu.left(), "{boxes:?} and the panel menu button at {menu:?}");
     let scale = |app: &VectorcraftApp| app.session.tool_options()["scaleArt"].as_bool();
     assert_eq!(scale(&app), Some(false));
     let press =
@@ -1650,6 +1654,29 @@ fn the_open_menu_reads_what_the_right_click_measured() {
     app.session.execute("artboard.setProps", &json!({"index": 1, "name": "Other"})).unwrap();
     let labels = menu_labels(&crate::menus::context_items(&app));
     assert!(labels.contains(&"Delete Empty Artboards") && !labels.contains(&"Fit to Artwork Bounds"), "{labels:?}");
+}
+
+/// Whether Fit to Artwork Bounds has art to fit is kept for a version of the document, not its
+/// revision: a document replaced with no revision moved (composite fonts synced as its tab comes
+/// to the front) is measured again.
+#[test]
+fn fit_to_art_is_measured_for_each_version_of_the_document() {
+    let mut app = menu_app(2);
+    assert!(!super::fit_has_art(&app, &[0, 1]));
+    // Art on the first artboard, the revision left as it was.
+    let st = app.session.active_mut().unwrap();
+    let mut doc = (*st.doc).clone();
+    let l = doc.layers[0].id;
+    let id = doc.alloc_id();
+    let art = vectorcraft_doc::Node::path(
+        id,
+        vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(10.0, 10.0, 20.0, 20.0)),
+        vectorcraft_doc::Appearance::basic(vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK), vectorcraft_color::Paint::None, 0.0),
+    );
+    doc.insert(Some(l), 0, art).unwrap();
+    st.doc = std::sync::Arc::new(doc);
+    assert!(super::fit_has_art(&app, &[0, 1]), "measured again");
+    assert!(!super::fit_has_art(&app, &[1]), "measured for the artboards asked about");
 }
 
 /// `artboard.selectAll` chooses the Artboard tool first when another tool is in use, and fails

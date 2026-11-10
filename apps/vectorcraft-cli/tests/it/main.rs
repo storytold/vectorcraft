@@ -5,3 +5,4 @@
 mod cli;
 mod fileio;
 mod mcp_e2e;
+mod script;

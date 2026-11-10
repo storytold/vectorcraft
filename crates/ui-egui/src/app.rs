@@ -53,6 +53,8 @@ impl VectorcraftApp {
         // The place cursor's clicks and drags place their files through the app
         // ([`place::place_from_cursor`]).
         session.place_cursor_requests = true;
+        // A script runs a slice per frame, so the window keeps drawing and Stop can be pressed.
+        session.script_frames = true;
         let views = session.documents().iter().map(View::of).collect();
         let view_uids = session.documents().iter().map(|d| d.uid).collect();
         let known = session.documents().iter().map(|d| d.uid).collect();
@@ -70,6 +72,7 @@ impl VectorcraftApp {
                 last_ms: 0.0,
                 moved: false,
                 from_worker: false,
+                reused: None,
                 waits_for_still: cfg!(target_arch = "wasm32"),
                 still: None,
                 fill: None,
@@ -80,6 +83,7 @@ impl VectorcraftApp {
                 print_tiling: None,
                 live_paint_gaps: None,
                 hidden_chars: Default::default(),
+                spelling: Default::default(),
                 selection_marks: Default::default(),
                 selection_box: None,
                 selection_bounds: None,
@@ -88,6 +92,7 @@ impl VectorcraftApp {
                 view_moved: None,
                 hover_cursor: None,
                 presented: None,
+                opening_fit: None,
                 panes: Default::default(),
                 windows: crate::doc_windows::Windows::new(known),
             },
@@ -108,6 +113,7 @@ impl VectorcraftApp {
             deferred_control: None,
             synthetic_dropped_before: 0,
             pending_screenshots: vec![],
+            pointer_replies: vec![],
             queued_screenshots: vec![],
             screenshot_token: 0,
             screenshot_reserved: 0,
@@ -120,8 +126,11 @@ impl VectorcraftApp {
             updates_rt: Default::default(),
             frame_rate: Default::default(),
             canvas_rect: None,
+            control_rotate_press: None,
             hover_doc: None,
+            titlebar_from_env: false,
             custom_titlebar: false,
+            desktop_frame: false,
             last_window_title: String::new(),
             fullscreen_for_mode: false,
             graphics_adapter: None,
@@ -163,6 +172,7 @@ impl VectorcraftApp {
             scrub_scope: None,
             automation_roots: None,
             synthetic_frame: false,
+            pending_plugin_install: None,
             pen_end: Default::default(),
             host_iteration: 0,
             #[cfg(test)]
@@ -170,6 +180,7 @@ impl VectorcraftApp {
             tick_iteration: None,
             input_frames: vec![],
             shortcuts_frames: vec![],
+            held_tool: Vec::new(),
             synthetic_injected: false,
             injected_events: vec![],
             injected_generation: InputGeneration::default(),
@@ -224,6 +235,19 @@ impl VectorcraftApp {
 /// eframe isn't a dependency of this crate (the host owns the event loop); these entry points are
 /// called from the host's `eframe::App` impl.
 impl VectorcraftApp {
+    /// Applies the work that finished off the UI thread. It stays pending while a script runs, since
+    /// every change to the documents ends in a busy error until the script ends.
+    pub(crate) fn poll_finished_work(&mut self) {
+        if self.session.script_running() {
+            return;
+        }
+        background::poll(self);
+        opening::poll(self);
+        plugin_runs::poll(self);
+        trace_runs::poll(self);
+        placing::poll(self);
+    }
+
     /// The language the UI is drawn in: the Preferences dialog's choice while it is open (so a
     /// change shows before OK), else the `interfaceLanguage` preference (`auto` = the system's).
     pub fn ui_language(&self) -> i18n::Lang {
@@ -255,6 +279,7 @@ impl VectorcraftApp {
         let confined = self.synthetic_frame.then(|| self.automation_roots.clone()).flatten();
         if let Err(msg) = file_access::confine(confined.as_ref(), || vectorcraft_engine::guard::catch_panic(|| self.tick_frame(ctx))) {
             self.picks.recover();
+            self.session.set_replaying(false);
             self.status(format!("Internal error: {msg} (please report this bug)"));
         }
     }
@@ -312,12 +337,12 @@ impl VectorcraftApp {
         // A Paste the host read before this iteration's formats were written must still wait for
         // them, even if the worker below finishes them during this same tick.
         ctx.data_mut(|d| d.insert_temp(egui::Id::unique("clipboard.pending-at-tick"), self.clipboard_publishing.is_pending()));
-        background::poll(self);
         screen_color::poll(self, ctx);
-        opening::poll(self);
-        plugin_runs::poll(self);
-        trace_runs::poll(self);
-        placing::poll(self);
+        self.poll_finished_work();
+        crate::script_runs::poll(self);
+        if self.session.script_running() && !self.session.script_waiting() {
+            ctx.request_repaint();
+        }
         #[cfg(not(target_arch = "wasm32"))]
         self.tick_link_updates(ctx, now);
         crate::addons::select::link_status::refresh(self, now);
@@ -331,8 +356,9 @@ impl VectorcraftApp {
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
         }
         // The window's close button (or the system quitting the app) asks about unsaved documents,
-        // once the saves running in the background are done. Not while a file dialog's sheet is on
-        // the window: what asked for it runs again when it answers.
+        // once the saves running in the background are done and a Shape Builder merge being
+        // computed is applied. Not while a file dialog's sheet is on the window: what asked for it
+        // runs again when it answers.
         if ctx.input(|i| i.viewport().close_requested()) {
             // This native viewport is going away: release its IME context. No request is
             // allocated here: the close prompt or file sheet publishes no custom descriptor, so a
@@ -340,8 +366,13 @@ impl VectorcraftApp {
             // fresh generation on the next pass (never inherits a composition across the prompt).
             crate::ime::close_viewport(self, ctx);
             self.ime_context.end_viewport(ctx.viewport_id());
-            background::wait_all(self);
-            if self.file_sheet_open() {
+            unsaved::finish_pending(self);
+            if self.session.script_running() {
+                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                if self.ui.dialog.is_none() {
+                    self.ui.dialog = Some(crate::state::Dialog::new(dialogs::script_run::CLOSE_KIND, serde_json::json!({})));
+                }
+            } else if self.file_sheet_open() {
                 ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
                 self.status(picks::busy());
             } else if unsaved::any_dirty(self) {
@@ -360,6 +391,7 @@ impl VectorcraftApp {
         }
         crate::keymap::note_os(ctx);
         shortcut_editor::sync(&self.ui);
+        crate::dialogs::svg_filter::sync(self);
         crate::panels::actions::sync_function_keys(&self.ui);
         prefs_dialog::apply_runtime(self, ctx);
         // The OS title bar (and the taskbar / Alt-Tab entry) follows the active file; with the
@@ -367,6 +399,7 @@ impl VectorcraftApp {
         crate::chrome::sync_window_title(self, ctx);
         crate::chrome::sync_fullscreen(self, ctx);
         self.drain_control(ctx);
+        self.answer_pointer_replies(ctx);
         // An egui `PasteImage` with a rich system clipboard: run the paste command now, once. It
         // goes through `run`, whose `edit.paste` branch calls `adopt_system_clipboard` (which clears
         // the request) to read the formats and then pastes them. A text paste in the same UI pass
@@ -450,7 +483,8 @@ impl VectorcraftApp {
     /// in a floating window, the tab strip's document draws as a pane.
     pub(crate) fn canvas_area(&mut self, ui: &mut egui::Ui) {
         let t = theme::Tokens::get(ui.ctx());
-        ui.painter().rect_filled(ui.max_rect(), 0.0, t.pasteboard);
+        // Tools may already occupy the left side of this panel.
+        ui.painter().rect_filled(ui.available_rect_before_wrap(), 0.0, t.pasteboard);
         self.canvas.windows.strip = None;
         if self.ui.screen_mode < 3 {
             chrome::doc_tabs(self, ui);
@@ -494,6 +528,7 @@ impl VectorcraftApp {
             })
         }) {
             self.picks.recover();
+            self.session.set_replaying(false);
             self.status(format!("Internal error: {msg} (please report this bug)"));
         }
         crate::ime::finish_ui(self, &ctx);
@@ -530,14 +565,29 @@ impl VectorcraftApp {
         }
         if self.ui.status_bar && self.ui.screen_mode < 3 {
             chrome::status_bar(self, ui);
+        }
+        if self.ui.help_bar && self.ui.screen_mode < 3 {
             chrome::hint_bar(self, ui);
-        } else {
-            // Keeps the previous frame's value valid for menus drawn above, before the bars.
+        }
+        if (self.ui.screen_mode >= 3 || (!self.ui.status_bar && !self.ui.help_bar))
+            && !(self.ui.control_bar && self.ui.control_bar_bottom && self.ui.screen_mode < 2)
+        {
+            // Keeps the previous frame's value valid for menus drawn above, before the bars. A
+            // Control bar docked at the bottom has set it to the bar's top.
             widgets::set_menu_floor(&ctx, ctx.content_rect().bottom());
         }
         if self.ui.toolbar && self.ui.screen_mode < 3 {
+            tools_float::set_window_dock_zone(&ctx, ui.available_rect_before_wrap());
+        }
+        if !self.ui.tools_beside_canvas {
+            // A canvas-edge target left from before the setting was turned off docks nothing.
+            tools_float::clear_canvas_dock_zone(&ctx);
+        }
+        // Beside the canvas, docked Tools draws inside the canvas panel (`toolbar::show_beside_canvas`).
+        // So does Tools docked on the right, left of the panels.
+        if self.ui.toolbar && self.ui.screen_mode < 3 && ((!self.ui.tools_beside_canvas && !self.ui.toolbar_right) || self.ui.toolbar_pos.is_some()) {
             toolbar::show(self, ui);
-        } else if self.ui.screen_mode < 3 && self.ui.tab_hid.is_none() {
+        } else if !self.ui.toolbar && self.ui.screen_mode < 3 && self.ui.tab_hid.is_none() {
             // Window › Tools hides the Tools panel alone; Tab hides the toolbars made with New
             // Toolbar too.
             toolbar::show_custom(self, ui.ctx());
@@ -553,6 +603,8 @@ impl VectorcraftApp {
         trace_runs::show(self, &ctx);
         opening::show(self, &ctx);
         palette::show(self, &ctx);
+        // After every panel had its chance to draw in this pass.
+        crate::panels::three_d::end_stale_drag(self, &ctx);
         if self.custom_titlebar {
             titlebar::resize_zones(ui);
         }

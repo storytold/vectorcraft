@@ -65,18 +65,19 @@ use overlays::{HandleLook, draw_inside_overlay, draw_overlays, hover_highlight, 
 pub use panes::Panes;
 pub(crate) use panes::{consolidate, pane, tile, tiled_area};
 use raster::{changed_pixels, pixel_region, upload};
-pub(crate) use raster::{color_image, color_image_owned};
+pub(crate) use raster::{color_image, color_image_owned, render_job};
 pub use selection_marks::SelectionMarks;
 use task_bar::task_bar;
 pub(crate) use task_bar::{has_colors, task_bar_rect};
-pub use tool_overlays::HiddenChars;
 #[cfg(test)]
 use tool_overlays::{DIAL_RADIUS, HiddenMarks};
+pub use tool_overlays::{HiddenChars, SpellingMarks};
 use tool_overlays::{
     grid_repeat_overlay, hidden_chars_overlay, live_paint_gap_overlays, mirror_axis_overlay, nine_slice_overlay, original_path_overlay,
-    print_tiling_overlay, rotate_view_dial, shaper_widget_overlay, slice_overlay, thread_overlays,
+    print_tiling_overlay, rotate_view_dial, shaper_widget_overlay, slice_overlay, spelling_overlay, thread_overlays,
 };
 pub(crate) use view::animated_zoom;
+pub(crate) use view::drag_rotation;
 pub use view::fit;
 use view::scroll_bars;
 #[cfg(test)]
@@ -186,6 +187,36 @@ fn view_rects(app: &VectorcraftApp, outer: egui::Rect, ppp: f32) -> (egui::Rect,
     (full, rect.round_to_pixels(ppp))
 }
 
+/// Whether the user pressed a button or a key, typed, scrolled or zoomed in this frame: the
+/// opening fit stops following the canvas then ([`crate::caches::CanvasCache::opening_fit`]).
+fn acted(i: &egui::InputState) -> bool {
+    i.pointer.any_pressed()
+        || i.events.iter().any(|e| {
+            matches!(
+                e,
+                egui::Event::Key { pressed: true, .. }
+                    | egui::Event::Text(_)
+                    | egui::Event::MouseWheel { .. }
+                    | egui::Event::Zoom(_)
+                    | egui::Event::Touch { .. }
+            )
+        })
+}
+
+/// The view `v` shows in the canvas `rect`, as the opening fit records it.
+fn view_key(v: &View, rect: egui::Rect) -> ViewKey {
+    ViewKey { rect, zoom: v.zoom, center: v.center, rotation: v.rotation }
+}
+
+/// Whether the opening fit still follows the canvas `rect` (the view is unfitted, or unmoved since
+/// the fit and the user hasn't acted), and whether the canvas moved under it this frame, so the view
+/// is fitted again.
+fn opening_fit_follows(app: &VectorcraftApp, ui: &Ui, rect: egui::Rect, fitted: bool) -> (bool, bool) {
+    let following = !fitted || (!ui.input(acted) && app.canvas.opening_fit.zip(app.view()).is_some_and(|(was, v)| view_key(v, was.rect) == was));
+    let settling = fitted && following && app.canvas.opening_fit.is_some_and(|was| was.rect != rect);
+    (following, settling)
+}
+
 /// Paint the document canvas, complete or cached artwork, navigation and tool overlays.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
@@ -225,13 +256,19 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let (full, rect) = view_rects(app, outer, ui.ctx().pixels_per_point());
     app.canvas_rect = Some(rect);
     let fitted = app.view().is_some_and(|v| v.fitted);
+    // A document's opening view is fitted to the canvas of the first frame that shows it, and the
+    // window's layout can still move the canvas's edges over the next frames. Until the view is
+    // moved or the user acts, the opening fit follows the canvas, so that the document opens at the
+    // zoom of the settled window.
+    let (following, settling) = opening_fit_follows(app, ui, rect, fitted);
     // Presentation Mode shows the active artboard on the whole screen and nothing but the art:
     // no selection, guides, grids or artboard edges (#4365).
     let presenting = app.ui.screen_mode == 3;
-    if !fitted || (presenting && app.canvas.presented != Some(rect)) {
+    if !fitted || settling || (presenting && app.canvas.presented != Some(rect)) {
         fit(app, "view.fitArtboard");
     }
     app.canvas.presented = presenting.then_some(rect);
+    app.canvas.opening_fit = following.then(|| app.view().map(|v| view_key(v, rect))).flatten();
     // Before the canvas's own interaction, so the view the canvas draws is the one they moved to.
     if bars {
         scroll_bars(app, ui, rect, outer, &t);
@@ -297,7 +334,18 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if let Some(secs) = wait {
         ui.ctx().request_repaint_after(std::time::Duration::from_secs_f64(secs));
     }
-    if wait.is_none() && (app.canvas.key.as_ref() != Some(&key) || app.canvas.texture.is_none()) {
+    // A frame with copied pixels renders whole once it has been shown for STILL_SECS with the view unmoved.
+    let same_frame = app.canvas.key.as_ref() == Some(&key);
+    let settle = app.canvas.reused.filter(|_| same_frame).is_some_and(|at| {
+        let waited = ui.input(|i| i.time) - at;
+        // The clock went back (a new egui context): don't wait for it to catch up.
+        let waiting = (0.0..STILL_SECS).contains(&waited);
+        if waiting {
+            ui.ctx().request_repaint_after(std::time::Duration::from_secs_f64(STILL_SECS - waited));
+        }
+        !waiting
+    });
+    if wait.is_none() && (!same_frame || app.canvas.texture.is_none() || settle) {
         let (w, h, view) = frame_view(pixel, (w, h), &v, ppp);
         let opts = frame_options(app, &key, mask_view, smooth_images);
         draw_frame(app, ui, Frame { key: &key, doc: &doc, size: (w, h), view, opts, pixel });
@@ -315,6 +363,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     fill_uncovered(app, ui.ctx(), &painter, &key, &doc, rect, &xf);
     reproject_frame(app, &painter, &xf, rect, (key.doc, v.rotation));
+    if fades_outside_artboards(app) {
+        fade_outside_artboards(&painter, &xf, &doc);
+    }
     if let Some(look) = grid_look.filter(|_| !grids_in_back) {
         grid(&painter, &xf, doc.grid.spacing, doc.grid.subdivisions, look);
     }
@@ -461,6 +512,11 @@ fn canvas_cursor(app: &mut VectorcraftApp, ui: &Ui, view_info: vectorcraft_engin
             // (#444). The system cursor stands in for cursors without a glyph. Over a window
             // without the focus, macOS shows its own pointer whichever cursor the window sets,
             // and the glyph is not painted there.
+            // Interim #2292: remove when pinned winit correctly handles macOS cursor image and hotspot sizing.
+            #[cfg(target_os = "macos")]
+            Some(_) if !app.services.wayland => {
+                crate::cursors::native_request::request(ui.ctx(), c, cursor_icon(c), custom, ui.ctx().zoom_factor() / ui_scale)
+            }
             Some(_) if custom && crate::cursors::os_cursors(crate::cursors::OS_CURSORS, app.services.wayland) => {
                 let ppp = ui.ctx().pixels_per_point() / ui_scale;
                 ui.ctx().set_cursor_image(app.canvas.cursors.get(c, ppp));
@@ -488,8 +544,9 @@ fn ruler_bands(app: &VectorcraftApp, ui: &Ui, xf: &Xf, (full, rect): (egui::Rect
     let painter = ui.painter_at(rect);
     if let Some(origin) = origin_preview {
         let at = xf.to_screen(origin);
-        painter.line_segment([pos2(at.x, rect.top()), pos2(at.x, rect.bottom())], Stroke::new(1.0, t.text_dim));
-        painter.line_segment([pos2(rect.left(), at.y), pos2(rect.right(), at.y)], Stroke::new(1.0, t.text_dim));
+        let color = dim_on_canvas(t, app.outline_view());
+        painter.line_segment([pos2(at.x, rect.top()), pos2(at.x, rect.bottom())], Stroke::new(1.0, color));
+        painter.line_segment([pos2(rect.left(), at.y), pos2(rect.right(), at.y)], Stroke::new(1.0, color));
     }
     // View › Rulers › Show Video Rulers counts the active artboard in video pixels.
     let video = app.ui.view.video_rulers.then(|| crate::dialogs::artboard_options::active_index(app));
@@ -571,7 +628,11 @@ fn show_worker_frame(app: &mut VectorcraftApp, ctx: &egui::Context, done: crate:
     app.canvas.key = Some(done.key);
     app.canvas.shown = Some((done.doc, done.opts));
     app.perf.render_ms = done.ms;
-    app.canvas.last_ms = done.ms;
+    // A frame with copied pixels leaves `last_ms` at the whole frame's.
+    if !done.reused {
+        app.canvas.last_ms = done.ms;
+    }
+    app.canvas.reused = done.reused.then(|| ctx.input(|i| i.time));
     app.canvas.moved = done.moved > 0;
     app.canvas.from_worker = true;
 }
@@ -671,12 +732,19 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
     let first = app.canvas.texture.is_none() || !same_doc;
     let heavy = first || app.canvas.last_ms > 8.0 || settling || staying;
     let changed = changed_pixels(app, key, doc, &opts, view, w, h);
+    // A new view can copy from the worker's last frame. The frame shown asked for again renders
+    // whole. The worker keeps either one for the next pan to copy from.
+    let may_copy = app.canvas.key.as_ref() != Some(key);
     let mut landed = None;
     match (&mut app.canvas.worker, heavy, changed) {
         // Only the document changed since the frame shown, in a part of it: that part is
         // rendered again, here, into the texture. `last_ms` stays the whole frame's.
         (_, _, Some(region)) => {
             let t0 = now_ms();
+            if region.is_none() {
+                // Nothing in view to draw again: what was made to measure the edit isn't drawn.
+                app.canvas.renderer.let_go_of_measured();
+            }
             if let (Some([x0, y0, x1, y1]), Some(tex)) = (region, &mut app.canvas.texture) {
                 let part = app.canvas.renderer.render(doc, x1 - x0, y1 - y0, Affine::translate((-f64::from(x0), -f64::from(y0))) * view, &opts);
                 let color = color_image(&part);
@@ -689,6 +757,9 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
             app.perf.render_ms = now_ms() - t0;
         }
         (Some(worker), true, None) => {
+            // The worker draws the frame: what this thread's renderer made to measure the edit
+            // isn't drawn here.
+            app.canvas.renderer.let_go_of_measured();
             let queued = worker.submit(crate::render_worker::Job {
                 key: key.clone(),
                 doc: doc.clone(),
@@ -697,6 +768,8 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
                 view,
                 opts,
                 scope: vectorcraft_engine::file_access::ScopeHandle::capture(),
+                may_copy,
+                may_keep: true,
             });
             // A light document's first frame is ready within the grace and shows in this frame,
             // with no frame of bare paper. Waited for once, when the frame is queued.
@@ -714,6 +787,7 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
             app.canvas.last_ms = app.perf.render_ms;
             app.canvas.moved = app.canvas.renderer.stats.moved > 0;
             app.canvas.from_worker = false;
+            app.canvas.reused = None;
         }
     }
     if let Some(done) = landed {
@@ -721,8 +795,17 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
     }
 }
 
-/// The pasteboard, the artboards' shadows and paper, and the outline mode's white artboards, of
-/// document `st`, in Outline when `outline`.
+/// The canvas color in Outline, whatever the interface brightness and Canvas Color: the paths draw
+/// as black hairlines, and the artboards as their edges only.
+const OUTLINE_CANVAS: Color32 = Color32::WHITE;
+
+/// The color of the artboards' names and the ruler origin's crosshair in Outline, on
+/// [`OUTLINE_CANVAS`].
+const OUTLINE_DIM: Color32 = Color32::from_gray(0x4b);
+
+/// The pasteboard and the artboards' shadows and paper of document `st`, or in Outline (`outline`)
+/// the whole canvas in [`OUTLINE_CANVAS`], with no paper drawn for the artboards: no Simulate
+/// Colored Paper color, no artboard background color, and no paper with View › Hide Artboards.
 fn paint_paper(
     app: &VectorcraftApp,
     st: &vectorcraft_engine::DocState,
@@ -733,6 +816,12 @@ fn paint_paper(
     (t, outline): (&Tokens, bool),
 ) {
     let doc = &st.doc;
+    if outline {
+        // The art draws in black on white over the pasteboard and the artboards alike, and the
+        // artboards show as their edges (`artboard_outlines`).
+        painter.rect_filled(rect, 0.0, OUTLINE_CANVAS);
+        return;
+    }
     // Pasteboard, artboard shadows and paper (Document Setup: the transparency grid's look, the
     // simulated paper colour; a white Background Contents hides the grid).
     // An artboard with a background color draws its paper in that color. With Simulate Colored Paper
@@ -743,7 +832,7 @@ fn paint_paper(
         // View › Hide Artboards: no edges and no pasteboard, the whole canvas paper (#4038).
         let setup = &doc.setup;
         painter.rect_filled(rect, 0.0, if setup.simulate_paper { crate::panels::c32(&setup.paper()) } else { Color32::WHITE });
-    } else if !outline {
+    } else {
         let setup = &doc.setup;
         let grid = (st.transparency_grid && setup.background == vectorcraft_doc::Background::Transparent).then(|| checker_texture(ui.ctx(), setup));
         let paper = if setup.simulate_paper { crate::panels::c32(&setup.paper()) } else { Color32::WHITE };
@@ -760,10 +849,6 @@ fn paint_paper(
                     painter.add(Shape::convex_polygon(q, fill, Stroke::NONE));
                 }
             }
-        }
-    } else {
-        for ab in &doc.artboards {
-            painter.add(Shape::convex_polygon(xf.quad(ab.rect), Color32::WHITE, Stroke::NONE));
         }
     }
 }
@@ -806,6 +891,116 @@ fn reproject_frame(app: &VectorcraftApp, painter: &egui::Painter, xf: &Xf, rect:
     }
 }
 
+/// Does the area outside the artboards draw darker? Artboard Options › Fade Region Outside Artboard
+/// darkens it while the Artboard tool is active, and with Update While Dragging off it draws as
+/// usual while the tool moves or resizes an artboard. Presentation Mode, exports and prints never
+/// draw the fade.
+fn fades_outside_artboards(app: &VectorcraftApp) -> bool {
+    let prefs = &app.session.prefs;
+    app.ui.screen_mode != 3
+        && app.session.tool_id() == "artboard"
+        && prefs.fade_region_outside_artboard
+        && (prefs.artboard_update_while_dragging || !app.session.tool_transforming())
+}
+
+/// The fade's color: black at 40% opacity, which shows each channel under it at 60% of its value.
+const FADE_OUTSIDE: Color32 = Color32::from_black_alpha(102);
+
+/// Fade Region Outside Artboard: over the pasteboard and the art on it, one mesh in [`FADE_OUTSIDE`]
+/// that covers the canvas outside the artboards of `doc`, drawn through the view. The mesh is not
+/// anti-aliased, so its rectangles meet without seams.
+fn fade_outside_artboards(painter: &egui::Painter, xf: &Xf, doc: &vectorcraft_doc::Document) {
+    let boards: Vec<Rect> = doc.artboards.iter().map(|a| a.rect).collect();
+    let mut mesh = egui::Mesh::default();
+    for (n, r) in (0u32..).zip(fade_rects(view_bounds(xf), &boards)) {
+        for p in xf.quad(r) {
+            mesh.colored_vertex(p, FADE_OUTSIDE);
+        }
+        let a = n * 4;
+        mesh.add_triangle(a, a + 1, a + 2);
+        mesh.add_triangle(a, a + 2, a + 3);
+    }
+    painter.add(Shape::mesh(mesh));
+}
+
+/// The most rectangles the fade draws exactly around the artboards.
+const FADE_MAX_RECTS: usize = 4096;
+
+/// The rectangles the fade covers: the parts of `bounds` outside the artboards ([`outside_rects`]),
+/// or, when those would be more than [`FADE_MAX_RECTS`], the parts outside the box around all the
+/// artboards, at most four.
+fn fade_rects(bounds: Rect, boards: &[Rect]) -> Vec<Rect> {
+    outside_rects(bounds, boards, FADE_MAX_RECTS).unwrap_or_else(|| {
+        let all: Vec<Rect> = boards.iter().copied().reduce(|a, b| a.union(b)).into_iter().collect();
+        outside_rects(bounds, &all, FADE_MAX_RECTS).unwrap_or_default()
+    })
+}
+
+/// The parts of `bounds` that no rectangle of `boards` covers, as rectangles that do not overlap:
+/// for each band between consecutive top and bottom edges, the gaps between the boards that cross
+/// it. A gap with the same left and right edges as a gap of the band above extends that gap's
+/// rectangle down, so each board edge adds at most a few rectangles. Boards that cross each other
+/// can leave many more gaps; past `limit` rectangles it stops and returns `None`.
+fn outside_rects(bounds: Rect, boards: &[Rect], limit: usize) -> Option<Vec<Rect>> {
+    let mut ys: Vec<f64> = boards.iter().flat_map(|b| [b.y0, b.y1]).filter(|y| *y > bounds.y0 && *y < bounds.y1).collect();
+    ys.extend([bounds.y0, bounds.y1]);
+    ys.sort_by(f64::total_cmp);
+    ys.dedup();
+    let mut by_top: Vec<Rect> = boards.iter().copied().filter(|b| b.y0 < bounds.y1 && b.y1 > bounds.y0).collect();
+    by_top.sort_by(|a, b| a.y0.total_cmp(&b.y0));
+    let mut next = 0;
+    // The boards that cross the current band, left to right.
+    let mut active: Vec<Rect> = vec![];
+    let mut out: Vec<Rect> = vec![];
+    // The indices in `out` of the band above's rectangles, left to right.
+    let mut above: Vec<usize> = vec![];
+    for band in ys.windows(2) {
+        let &[y0, y1] = band else { continue };
+        while let Some(b) = by_top.get(next).copied().filter(|b| b.y0 <= y0) {
+            let at = active.partition_point(|a| a.x0 <= b.x0);
+            active.insert(at, b);
+            next += 1;
+        }
+        active.retain(|b| b.y1 >= y1);
+        let mut gaps = vec![];
+        let mut x = bounds.x0;
+        for b in &active {
+            let (a, e) = (b.x0.max(bounds.x0), b.x1.min(bounds.x1));
+            if a >= e {
+                continue;
+            }
+            if a > x {
+                gaps.push((x, a));
+            }
+            x = x.max(e);
+        }
+        if x < bounds.x1 {
+            gaps.push((x, bounds.x1));
+        }
+        let mut prev = above.iter().copied().peekable();
+        let mut row = Vec::with_capacity(gaps.len());
+        for (a, e) in gaps {
+            while prev.next_if(|&i| out[i].x0 < a).is_some() {}
+            match prev.peek().copied() {
+                Some(i) if out[i].x0 == a && out[i].x1 == e => {
+                    out[i].y1 = y1;
+                    row.push(i);
+                    prev.next();
+                }
+                _ => {
+                    row.push(out.len());
+                    out.push(Rect::new(a, y0, e, y1));
+                }
+            }
+        }
+        above = row;
+        if out.len() > limit {
+            return None;
+        }
+    }
+    Some(out)
+}
+
 /// Do the artboards show? View › Hide Artboards hides them, except for the Artboard tool, which
 /// edits them.
 fn shows_artboards(app: &VectorcraftApp) -> bool {
@@ -825,16 +1020,22 @@ fn artboard_outlines(app: &VectorcraftApp, ui: &Ui, painter: &egui::Painter, xf:
     let tool_selected = artboards::tool_labelled(app);
     let editing_name = ui.data(|d| d.get_temp::<ArtboardNameEdit>(name_edit_id()).map(|e| e.index));
     let unlabelled = |i: usize| editing_name == Some(i) || u64::try_from(i).ok().is_some_and(|idx| tool_selected.contains(&idx));
-    artboard_edges(app, doc, (painter, xf, t), active_ab, unlabelled);
+    artboard_edges(app, doc, (painter, xf, t), (active_ab, dim_on_canvas(t, app.outline_view())), unlabelled);
 }
 
-/// The edges, bleeds, marks and names of `doc`'s artboards, `active_ab` the active one; the
-/// artboards `unlabelled` gives are not named.
+/// The color of the artboards' names and the ruler origin's crosshair over the pasteboard, or over
+/// [`OUTLINE_CANVAS`] in Outline (`outline`).
+fn dim_on_canvas(t: &Tokens, outline: bool) -> Color32 {
+    if outline { OUTLINE_DIM } else { t.text_dim }
+}
+
+/// The edges, bleeds, marks and names of `doc`'s artboards, `active_ab` the active one, the names
+/// in `label`; the artboards `unlabelled` gives are not named.
 fn artboard_edges(
     app: &VectorcraftApp,
     doc: &vectorcraft_doc::Document,
     (painter, xf, t): (&egui::Painter, &Xf, &Tokens),
-    active_ab: usize,
+    (active_ab, label): (usize, Color32),
     unlabelled: impl Fn(usize) -> bool,
 ) {
     let artboard_tool = app.session.tool_id() == "artboard";
@@ -852,7 +1053,7 @@ fn artboard_edges(
             // At the artboard's own top-left corner, which a rotated view turns away from its
             // bounding box's (#1095).
             let corner = xf.to_screen(Point::new(ab.rect.x0, ab.rect.y0));
-            artboard_label(painter, corner, (ab.rect.width() * xf.zoom) as f32, &format!("{:02} - {}", i + 1, ab.name), t.text_dim);
+            artboard_label(painter, corner, (ab.rect.width() * xf.zoom) as f32, &format!("{:02} - {}", i + 1, ab.name), label);
         }
     }
 }
@@ -932,6 +1133,13 @@ fn selection_visuals(
             app.canvas.hidden_chars = hidden_chars;
             hidden_chars_overlay(app, painter, xf);
         }
+    }
+    // Edit › Spelling › Auto Spell Check: shown with the edges hidden too, as it marks the type
+    // rather than the selection.
+    if app.ui.view.auto_spell_check && !revolve_edit {
+        spelling_overlay(app, painter, xf);
+    } else {
+        app.canvas.spelling = SpellingMarks::default();
     }
     overlays
 }

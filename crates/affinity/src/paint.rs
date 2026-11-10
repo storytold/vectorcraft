@@ -238,12 +238,13 @@ pub(crate) fn descriptor(r: &mut Reader, id: ObjId, local: Affine) -> Option<Pai
             };
             let grad = s.obj(fill, b"Grad")?;
             let cols = s.objs(grad, b"Cols");
-            let posn: Vec<Vec<f64>> = match s.field(grad, b"Posn") {
-                Some(Value::Array(a)) => a.iter().filter_map(floats).collect(),
-                _ => Vec::new(),
+            // Convert only the positions that pair with a colour, as shared attributes repeat this per run.
+            let posn: &[Value] = match s.field(grad, b"Posn") {
+                Some(Value::Array(a)) => a,
+                _ => &[],
             };
             let mut stops = Vec::new();
-            for (c, p) in cols.iter().zip(&posn).take(MAX_STOPS) {
+            for (c, p) in cols.iter().zip(posn.iter().filter_map(floats)).take(MAX_STOPS) {
                 let color = color(r, *c)?;
                 let offset = p.first().copied().filter(|v| v.is_finite()).unwrap_or(0.0).clamp(0.0, 1.0);
                 let bias = p.get(1).copied().filter(|v| v.is_finite()).unwrap_or(0.5).clamp(0.0, 1.0);
