@@ -318,7 +318,7 @@ pub(crate) fn members(n: &Node, label: &str) -> Result<Vec<Profile>, String> {
                     _ => "other objects",
                 };
                 return Err(format!(
-                    "{label} on a group needs paths, compound paths, type, blends and symbol instances: release or expand its {what} first."
+                    "{label} on a group needs paths, compound paths, type, groups, clipping groups, blends and symbol instances: release or expand its {what} first."
                 ));
             };
             if w.out.len() >= MAX_MEMBERS {

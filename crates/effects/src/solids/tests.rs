@@ -598,6 +598,7 @@ fn a_3d_effect_on_a_group_turns_every_member_about_one_shared_axis() {
     }
     let err = validate_solid(&g, EXTRUDE, &json!({})).unwrap_err();
     assert!(err.contains("release or expand its other objects"), "{err}");
+    assert!(err.contains("type, groups, clipping groups, blends and symbol instances"), "{err}");
     assert!(solid_art(&g).is_none(), "drawn as the group it is");
 }
 

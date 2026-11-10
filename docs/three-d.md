@@ -153,8 +153,8 @@ solids are ([Groups](#groups)), turned about one shared axis.
 - An image is refused, alone or in a group: trace it first with Object › Image Trace › Make. The help page routes
   images to 3D through Image Trace ([Create 3D vector artwork](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/create-3d-vector-artwork.html)).
   A hidden image in a group is left out like any hidden member, and so is an image in a clipping group whose bounds
-  lie wholly outside the clipping path's bounds, when neither the image nor a group holding it inside the clipping
-  group has effects.
+  lie wholly outside the clipping path's bounds, when the image has no visible fills or strokes of its own and
+  neither the image nor a group holding it inside the clipping group has effects.
 
 ## Rotate
 
