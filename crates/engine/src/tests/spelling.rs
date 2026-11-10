@@ -260,6 +260,43 @@ fn a_change_that_cant_be_saved_is_taken_back() {
     run(&mut s, "text.spelling.removeWord", json!({"word": "wkqzvx"}));
 }
 
+/// Edit Custom Dictionary's Done: its deletes and adds are saved together, or, when the save
+/// fails, none of them is kept (a delete saved before an add that failed would stay otherwise).
+#[test]
+fn a_dictionary_edit_is_saved_whole_or_not_at_all() {
+    let _one_at_a_time = dictionary_lock();
+    const EDIT: &str = "text.spelling.editDictionary";
+    let dir = vectorcraft_testkit::temp_dir("spelling-edit");
+    let file = dir.join("Custom Dictionary.txt");
+    std::fs::write(&file, "pqzvka\npqzvkb\n").unwrap();
+    let mut s = session();
+    s.attach_custom_dictionary(file.clone());
+    // A word already gone and a word already there are skipped; added words are kept in lower case.
+    let r = run(&mut s, EDIT, json!({"remove": ["pqzvka", "pqzvkz"], "add": ["PqzvkC", "pqzvkb"]}));
+    assert_eq!(r, json!({"removed": ["pqzvka"], "added": ["pqzvkc"]}));
+    let saved = std::fs::read_to_string(&file).unwrap();
+    let lines: Vec<&str> = saved.lines().collect();
+    assert!(lines.contains(&"pqzvkb") && lines.contains(&"pqzvkc") && !lines.contains(&"pqzvka"), "{saved}");
+    // A save that fails takes back every delete and add.
+    let folder = dir.join("folder");
+    std::fs::create_dir_all(&folder).unwrap();
+    let mut failing = session();
+    failing.attach_custom_dictionary(folder);
+    assert!(failing.execute(EDIT, &json!({"remove": ["pqzvkb", "pqzvkc"], "add": ["pqzvkd"]})).is_err());
+    assert!(in_dictionary(&mut s, "pqzvkb") && in_dictionary(&mut s, "pqzvkc"), "the deletes are taken back");
+    assert!(!in_dictionary(&mut s, "pqzvkd"), "the add is taken back");
+    // A list that isn't one of words is refused before anything changes.
+    let many: Vec<String> = (0..10_001).map(|i| format!("pqzv{i}")).collect();
+    for p in [json!({"remove": "pqzvkb"}), json!({"add": ["a b"]}), json!({"add": [5]}), json!({"remove": ["pqzvkb"], "add": many})] {
+        assert!(s.execute(EDIT, &p).is_err(), "{EDIT} refuses a bad list");
+        assert!(in_dictionary(&mut s, "pqzvkb"), "{EDIT} changed nothing");
+    }
+    let e = s.execute(EDIT, &json!({"add": ["a b"]})).unwrap_err().to_string();
+    assert!(e.contains("must hold single words of at most 64 characters"), "{e}");
+    run(&mut s, EDIT, json!({"remove": ["pqzvkb", "pqzvkc"]}));
+    assert!(!in_dictionary(&mut s, "pqzvkb") && !in_dictionary(&mut s, "pqzvkc"));
+}
+
 #[cfg(unix)]
 #[test]
 fn a_word_another_window_saved_stays_when_this_save_fails() {
