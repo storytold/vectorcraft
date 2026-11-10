@@ -366,9 +366,10 @@ fn local(kind: Arrowhead) -> BezPath {
         }
         Arrowhead::Oval => p.extend(kurbo::Ellipse::new((2.0, 0.0), (2.0, 1.2), 0.0).path_elements(LOCAL_TOL)),
         Arrowhead::LineArrow => {
-            // Arms one unit thick (the line's weight at 100 %) at right angles to each other, from
-            // a sharp tip to their outer corners at (4, ±4), cut square across: a unit across an
-            // arm at 45° is ½√2 along each axis, and the arms' inner edges meet √2 behind the tip.
+            // Arms one unit thick (the head's weight: the line's at 100 % for lines of 0.25 pt or
+            // more) at right angles to each other, from a sharp tip to their outer corners at
+            // (4, ±4), cut square across: a unit across an arm at 45° is ½√2 along each axis, and
+            // the arms' inner edges meet √2 behind the tip.
             let t = FRAC_1_SQRT_2;
             poly(&mut p, &[(0.0, 0.0), (4.0, 4.0), (4.0 + t, 4.0 - t), (2.0 * t, 0.0), (4.0 + t, t - 4.0), (4.0, -4.0)]);
         }

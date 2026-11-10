@@ -3241,8 +3241,8 @@ none): arrows (`Arrow`, `LineArrow`, `Barbed`, `Concave`, `DoubleArrow`, `HalfAr
 `Swallowtail`…), filled and open shapes (`Triangle`, `Circle`, `Oval`, `Target`, `Tag`, `Diamond`, `Hexagon`, `Star`,
 the `…Open` rings…) and marks (`Bar`, `DoubleBar`, `DotOnBar`, `Slash`, `DoubleSlash`, `Bracket`, `Fork`, `Cross`,
 `Plus`). Each head fits a box about four times its weight long and wide. A head's weight is the stroke weight scaled by
-`arrowScale`, at least 0.25 pt. `LineArrow` has two arms of the head's weight (the line's at 100 %) at right angles and
-spreads twice as wide.
+`arrowScale`, at least 0.25 pt. `LineArrow` has two arms of the head's weight (the line's weight at 100 % for lines of
+0.25 pt or more) at right angles and spreads twice as wide.
 
 ## Stroke bounds and clicks
 

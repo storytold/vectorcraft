@@ -98,8 +98,9 @@ pub enum Arrowhead {
     Kite,
     TriangleBar,
     Oval,
-    /// Two arms of the head's weight (the line's at 100 % scale) meeting at right angles in a
-    /// sharp tip, cut square at their ends. Twice as wide as the other heads.
+    /// Two arms of the head's weight (the line's weight at 100 % scale, for lines of 0.25 pt or
+    /// more) meeting at right angles in a sharp tip, cut square at their ends. Twice as wide as
+    /// the other heads.
     LineArrow,
 }
 
