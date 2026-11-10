@@ -2845,10 +2845,10 @@ error.
 
 ## Brush libraries
 
-Brush libraries are read-only sets of brushes: four generated in code (Art Ribbons, Calligraphic Nibs, Pattern
-Borders, Scatter Shapes), the `.vectorcraft` files in the user library folder of the desktop app (User Defined) and
-the brushes of any document loaded with `brush.loadLibrary` (a document without brushes of its own has the default
-ones). `brush.libraries` lists them (`id`, `name`, `category`: `builtIn`, `user` or `loaded`, `count`) and
+Brush libraries are read-only sets of brushes: five generated in code (Art Ribbons, Calligraphic Nibs, Pattern
+Borders, Scatter Shapes, Game Trails), the `.vectorcraft` files in the user library folder of the desktop app (User
+Defined) and the brushes of any document loaded with `brush.loadLibrary` (a document without brushes of its own has
+the default ones). `brush.libraries` lists them (`id`, `name`, `category`: `builtIn`, `user` or `loaded`, `count`) and
 `brush.library {library}` returns one's brushes (`name`, `type`; `library` is an id or a name).
 `brush.addFromLibrary {library, name? | names?}` copies brushes into the document's Brushes as one undo step (no
 names: the whole library), with the resources their art uses: patterns, symbols, swatches (`swatchConflict` as for
