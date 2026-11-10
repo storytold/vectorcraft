@@ -4,7 +4,8 @@ The other three 3D types of **Effect › 3D and Materials** next to [Revolve](re
 live effect: the source path stays editable, the effect draws shaded vector faces, and SVG/PDF export, native
 saves and **Object › Expand Appearance** use the same evaluator.
 
-Select a path or compound path, then choose **Effect › 3D and Materials › Extrude & Bevel…**, **Inflate…** or
+Select a path, compound path, type, clipping group, blend, symbol instance, or a group or layer of them, then choose
+**Effect › 3D and Materials › Extrude & Bevel…**, **Inflate…** or
 **Rotate…**. The options dialog opens beside the artboard with tabs:
 
 - **Object** (Extrude & Bevel and Inflate): the shape's own options, below.
@@ -122,8 +123,31 @@ them all. The members stay editable: moving or editing one reshapes the solids. 
   strokes, are not drawn. A member's opacity applies to its solids; its blending mode does not.
 - When every solid is opaque, all members' faces are drawn in one back-to-front order; otherwise each solid is drawn
   on its own, the backmost member's first.
-- Hidden members and guides are left out. A group holding an image, a symbol instance, a clipping group or another
-  live object is refused with a message saying what to release or expand; so is one with more than 4,096 shapes.
+- Hidden members and guides are left out. A group holding a live object other than a blend (an envelope, a mesh, a
+  repeat) is refused with a message saying what to release or expand; so is one with more than 4,096 shapes.
+
+## Clipping groups, blends and symbol instances
+
+Every 3D effect (Extrude & Bevel, Extrude & Bevel (Classic), Inflate, Rotate and Revolve) also applies to a clipping
+group, a blend or a symbol instance, alone or inside a group or layer. The help page says that effects apply to
+objects, groups or layers ([Apply and modify effects](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/apply-filter-effects/apply-and-modify-effects.html)),
+that a clipping mask hides everything outside its shape ([Clipping masks](https://helpx.adobe.com/illustrator/using/clipping-masks.html)),
+and that a blend is treated as one object ([Blending objects](https://helpx.adobe.com/illustrator/using/blending-objects.html)).
+How the solid is built from each is VectorCraft's own rule: it is built from what the object shows, as a group's
+solids are ([Groups](#groups)), turned about one shared axis.
+
+- A clipping group (or a layer with a clipping mask) builds from its art inside the clipping path: each shape's fill
+  area cut to the clip, and each stroke's outline cut to the clip and filled in the stroke's paint. The clipping path
+  draws no solid. A clipping group inside another keeps what both clips show. A clip that shows none of the art
+  leaves nothing to build, and the effect is refused.
+- A blend builds from its key objects and its steps, each in its own paint, in their order.
+- A symbol instance builds from its symbol's art where the instance places it. Redefining the symbol reshapes the
+  solid. An instance of a symbol that is not in the document, a symbol that holds an instance of itself, or art
+  nested more than 64 levels deep is refused.
+- The objects stay live: editing the clipping path, the blend's keys or the symbol reshapes the solid.
+- An image is refused, alone or in a group: trace it first with Object › Image Trace › Make. The help page routes
+  images to 3D through Image Trace ([Create 3D vector artwork](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/create-3d-vector-artwork.html)).
+  A hidden image in a group is left out like any hidden member.
 
 ## Rotate
 
@@ -231,9 +255,10 @@ out, perspective). No Adobe software, assets, presets or bevel shapes were used.
   drawn in pieces about as long as a wall slice is wide (fewer near the limit of 32,768 facets). The piece drawn
   on top can still lie a few points behind another nearby piece.
 - Extrude & Bevel and Rotate retain planar shading. Colored Inflate uses smooth vector lighting; white-light Inflate keeps its original polygon shading; bounded cell triangulation leaves a cell flat when it contains a complete hole or an unusually complex/degenerate contour. Its geometric silhouette is still a polygon approximation.
-- Paths, compound paths, type and groups or layers of them (see [Groups](#groups)); images, symbol instances,
-  clipping groups and other live objects have to be converted first. Revolve on a group sweeps its members about
-  one axis ([revolve.md](revolve.md)). One 3D effect per object.
+- Paths, compound paths, type, clipping groups, blends, symbol instances and groups or layers of them (see
+  [Groups](#groups) and [Clipping groups, blends and symbol instances](#clipping-groups-blends-and-symbol-instances));
+  images have to be traced first, and other live objects expanded. Revolve on a group sweeps its members about one
+  axis ([revolve.md](revolve.md)). One 3D effect per object.
 - Curves are followed within 1/2000 of the shape's size (at least 0.05 pt), so a small curve takes a few points
   and a large one up to 32. Extrude & Bevel and Inflate take up to 2,048 outline points (a stroke's outline is
   counted on its own), Rotate (which only turns the outline) 65,536. The limit is counted on the shape as drawn and,

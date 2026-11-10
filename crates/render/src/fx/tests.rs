@@ -612,6 +612,44 @@ fn an_export_and_rasterize_hold_the_solid_of_3d_type() {
     assert!(rasterized.width() > letters.width() + 15.0, "{letters:?} {rasterized:?}");
 }
 
+/// A symbol instance, a blend and a clipping group with Extrude & Bevel draw their solids on the
+/// canvas, in an export and in Object › Rasterize, not their flat art.
+#[test]
+fn a_symbol_instance_a_blend_and_a_clipping_group_draw_their_solids() {
+    use vectorcraft_doc::{BlendSpacing, BlendSpec, NodeId, NodeKind, Symbol};
+    let square = |x: f64, y: f64| {
+        Arc::new(Node::path(
+            NodeId(0),
+            shapes::rectangle(Rect::new(x, y, x + 20.0, y + 20.0)),
+            Appearance::basic(Paint::solid(Color::rgb(0.2, 0.5, 0.8)), Paint::None, 0.0),
+        ))
+    };
+    let mut d = Document::new(200.0, 200.0);
+    d.symbols.push(Symbol { dynamic: false, name: "Box".into(), art: square(0.0, 0.0) });
+    let mut clip = (*square(30.0, 30.0)).clone();
+    if let NodeKind::Path { clipping, .. } = &mut clip.kind {
+        *clipping = true;
+    }
+    let spec = Box::new(BlendSpec { spacing: BlendSpacing::Steps(2), ..Default::default() });
+    let kinds = [
+        NodeKind::SymbolInstance { symbol: "Box".into(), xf: Affine::translate((40.0, 40.0)) },
+        NodeKind::Blend { children: vec![square(30.0, 30.0), square(60.0, 40.0)], spec },
+        NodeKind::Group { children: vec![Arc::new(clip), square(20.0, 20.0)], clip: true },
+    ];
+    for kind in kinds {
+        let mut n = Node::new(d.alloc_id(), kind);
+        let flat = crate::encode::art_bounds(&doc_of(&mut d.clone(), n.clone())).unwrap();
+        n.appearance.effects =
+            vec![Effect { id: "threeD.extrude".into(), params: json!({"depth": 60.0, "position": "isometricTop"}), visible: true }];
+        let solid_doc = doc_of(&mut d.clone(), n);
+        let n = &solid_doc.layers[0].children().unwrap()[0];
+        let (solid, rasterized) = (crate::encode::art_bounds(&solid_doc).unwrap(), crate::drawn_bounds(&solid_doc, n).unwrap());
+        let size = |r: Rect| r.width() + r.height();
+        assert!(size(solid) > size(flat) + 20.0, "{:?}: {flat:?} {solid:?}", n.kind);
+        assert!(size(rasterized) > size(flat) + 20.0, "{:?}: {flat:?} {rasterized:?}", n.kind);
+    }
+}
+
 fn doc_of(d: &mut Document, n: Node) -> Document {
     let l = d.layers[0].id;
     d.insert(Some(l), 0, n).unwrap();

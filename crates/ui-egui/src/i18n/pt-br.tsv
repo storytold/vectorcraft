@@ -5532,7 +5532,8 @@ mark-style	Japanese	Japonesas
 	Bevel both sides	Chanfro nos Dois Lados
 	Presets	Predefinidos
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Um objeto aceita apenas um efeito 3D. Edite as opções do efeito existente ou remova-o primeiro.
-@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} exige, por enquanto, um caminho, caminho composto, texto ou grupo. Converta antes imagens e outros objetos em caminhos.
+@msg	{label} currently requires a path, compound path, type, group, blend or symbol instance. Expand other objects first.	{label} exige, por enquanto, um caminho, caminho composto, texto, grupo, mesclagem ou instância de símbolo. Expanda antes os outros objetos.
+@msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label} não pode criar um sólido a partir de uma imagem: rastreie-a antes com Objeto › Rastreamento de Imagem › Criar.
 @msg	{label} requires a shape with at least two anchors	{label} exige uma forma com pelo menos dois pontos de ancoragem
 @msg	The shape is too complex for a 3D effect	A forma é complexa demais para um efeito 3D
 @msg	The 3D surface is too complex; simplify the shape	A superfície 3D é complexa demais; simplifique a forma

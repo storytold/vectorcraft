@@ -591,13 +591,13 @@ fn a_3d_effect_on_a_group_turns_every_member_about_one_shared_axis() {
     // Hidden members and guides are left out; a group holding what can't become a solid is
     // refused with what to do.
     let mut g = group(EXTRUDE, json!({}));
-    let mut clip = Node::group(NodeId(5), vec![Arc::new(square_at(6, 0.0, RED))]);
-    clip.kind = NodeKind::Group { children: clip.children().unwrap().clone(), clip: true };
+    let mut woven = Node::group(NodeId(5), vec![Arc::new(square_at(6, 0.0, RED))]);
+    woven.kind = NodeKind::Intertwine { children: woven.children().unwrap().clone() };
     if let NodeKind::Group { children, .. } = &mut g.kind {
-        children.push(Arc::new(clip));
+        children.push(Arc::new(woven));
     }
     let err = validate_solid(&g, EXTRUDE, &json!({})).unwrap_err();
-    assert!(err.contains("clipping groups"), "{err}");
+    assert!(err.contains("release or expand its other objects"), "{err}");
     assert!(solid_art(&g).is_none(), "drawn as the group it is");
 }
 

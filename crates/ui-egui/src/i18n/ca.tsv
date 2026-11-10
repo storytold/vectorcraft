@@ -5917,7 +5917,8 @@ digits	Malayalam	Malaiàlam
 @msg	{key} must be a finite coordinate	{key} ha de ser una coordenada finita
 @msg	{key} must be an array of non-negative integer object ids	{key} ha de ser una matriu d’identificadors d’objecte enters no negatius
 @msg	{key} must be Unix seconds (an integer) or null	{key} ha de ser segons Unix (un enter) o null
-@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} actualment requereix un traçat, un traçat compost, text o un grup. Converteix primer les imatges i altres objectes en traçats.
+@msg	{label} currently requires a path, compound path, type, group, blend or symbol instance. Expand other objects first.	{label} actualment requereix un traçat, un traçat compost, text, un grup, una fusió o una instància de símbol. Expandeix primer els altres objectes.
+@msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label} no pot crear un sòlid a partir d’una imatge: traça-la primer amb Objecte › Traçat d’imatge › Crea.
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} conserva 1 dels {n} taulers del document: el fitxer es reobre amb un. Activa Conserva les capacitats d’edició per conservar-los tots.
 @msg	{label} produced an empty result	{label} ha produït un resultat buit
 @msg	{label} requires a shape with at least two anchors	{label} requereix una forma amb com a mínim dos punts d’ancoratge

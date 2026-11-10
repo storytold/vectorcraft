@@ -5062,7 +5062,8 @@ lighting	Light	Ljus
 	Bevel both sides	Fasning på båda sidor
 	Presets	Förinställningar
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Ett objekt kan bara ha en 3D-effekt. Redigera alternativen för den befintliga effekten eller ta bort den först.
-@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} kräver för närvarande en bana, sammansatt bana, text eller grupp. Konvertera bilder och andra objekt till banor först.
+@msg	{label} currently requires a path, compound path, type, group, blend or symbol instance. Expand other objects first.	{label} kräver för närvarande en bana, sammansatt bana, text, grupp, blandning eller symbolinstans. Expandera andra objekt först.
+@msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label} kan inte skapa en solid av en bild: kalkera den först med Objekt › Bildkalkering › Skapa.
 @msg	{label} requires a shape with at least two anchors	{label} kräver en form med minst två ankarpunkter
 @msg	The shape is too complex for a 3D effect	Formen är för komplex för en 3D-effekt
 @msg	The 3D surface is too complex; simplify the shape	3D-ytan är för komplex; förenkla formen
