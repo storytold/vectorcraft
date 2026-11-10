@@ -252,10 +252,16 @@ impl Clipboard {
         let d = &*st.doc;
         let mut nodes = vec![];
         let mut source_layers = vec![];
+        // Each compound's bounds, measured once however many of its members are copied.
+        let mut compound_bounds: std::collections::HashMap<NodeId, Option<vectorcraft_geom::Rect>> = std::collections::HashMap::new();
         for id in roots {
             let (Some(n), Some(anc)) = (d.node(*id), d.ancestry(*id)) else { continue };
             let layer_name = anc.iter().rev().skip(1).find_map(|a| d.node(*a).filter(|l| l.is_layer())).and_then(|l| l.name.clone());
             let compound_parent = anc.iter().rev().skip(1).find_map(|a| d.node(*a).filter(|p| matches!(p.kind, NodeKind::Compound { .. })));
+            // Gradients fitted to the compound's bounds are pinned there, as a split pins them.
+            let gradient_box = compound_parent
+                .filter(|p| p.appearance.has_unplaced_gradient())
+                .and_then(|p| *compound_bounds.entry(p.id).or_insert_with(|| p.geometric_bounds()));
             // A compound's member or piece copied on its own takes the compound's look (its paint,
             // transparency, opacity mask, pixel alignment and fill rule), so it pastes as it looked.
             let inherit_appearance = |mut piece: Node| {
@@ -264,6 +270,9 @@ impl Clipboard {
                 {
                     *rule = *compound_rule;
                     piece.appearance = parent.appearance.clone();
+                    if let Some(bounds) = gradient_box {
+                        piece.appearance.pin_gradients(bounds);
+                    }
                     piece.opacity = parent.opacity;
                     piece.blend = parent.blend;
                     piece.knockout_shape = parent.knockout_shape;

@@ -1232,6 +1232,12 @@ pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
             .copied()
             .filter(|id| !d.ancestry(*id).unwrap_or_default().iter().rev().skip(1).any(|ancestor| targets.contains(ancestor)))
             .collect();
+        // The compound paths that hold a deleted object; one left with no members goes too.
+        let compounds: BTreeSet<NodeId> = whole_ids
+            .iter()
+            .chain(sel.keys())
+            .filter_map(|id| d.parent_of(*id).filter(|p| matches!(d.node(*p).map(|n| &n.kind), Some(NodeKind::Compound { .. }))))
+            .collect();
         if !whole_ids.is_empty() {
             d.remove_many(&whole_ids)?;
         }
@@ -1280,6 +1286,11 @@ pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
             }
         }
         emptied.finish(d)?;
+        for p in compounds {
+            if d.node(p).is_some_and(|n| n.children().is_some_and(|c| c.is_empty())) {
+                d.remove(p)?;
+            }
+        }
         selection.set(survivors);
         Ok(())
     })?;

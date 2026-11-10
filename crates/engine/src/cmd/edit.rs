@@ -166,7 +166,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Copy",
             ["Edit"],
             Some("Cmd+C"),
-            "{selectedArtboards?: [n…] (the artboards the Artboard tool had selected, which the journal records for a replay; it runs artboard.copy with any tool chosen), art?: bool (default: the Artboard tool's moveArt option; the journal records it beside selectedArtboards), lockedAndHidden?: bool (the Artboard tool chosen, as artboard.copy)} the selection with what it uses (a compound-path member selected on its own, whole or in part, with Direct or Group Selection, is copied as an ordinary path with the compound's paint, transparency, opacity mask and fill rule; the compound is copied when every member is selected whole), and the selected ruler guides (pasted on the layer new art goes to, moved as the objects are; alone, where they were); the Artboard tool chosen: artboard.copy; with an object of a symbol instance's art selected, the instance is copied whole → {copied, guides}",
+            "{selectedArtboards?: [n…] (the artboards the Artboard tool had selected, which the journal records for a replay; it runs artboard.copy with any tool chosen), art?: bool (default: the Artboard tool's moveArt option; the journal records it beside selectedArtboards), lockedAndHidden?: bool (the Artboard tool chosen, as artboard.copy)} the selection with what it uses (a compound-path member selected on its own, whole or in part, with Direct or Group Selection, is copied as an ordinary path with the compound's paint, transparency, opacity mask and fill rule, a gradient keeping the compound's fit; the compound is copied when it is selected, or when every member is selected whole outside isolation mode), and the selected ruler guides (pasted on the layer new art goes to, moved as the objects are; alone, where they were); the Artboard tool chosen: artboard.copy; with an object of a symbol instance's art selected, the instance is copied whole → {copied, guides}",
             has_selection_guides_or_artboard_tool,
             copy
         ),
@@ -220,7 +220,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Clear",
             ["Edit"],
             Some("Delete"),
-            "{ids?, guides?: bool (with ids: also delete the selected ruler guides)} delete the objects `ids`, else the selection (fully selected objects and direct-selected anchors together, else ruler guides; a compound-path member selected on its own is deleted alone); without ids, refused while an object of a symbol instance's art is selected",
+            "{ids?, guides?: bool (with ids: also delete the selected ruler guides)} delete the objects `ids`, else the selection (fully selected objects and direct-selected anchors together, else ruler guides; a compound-path member selected on its own is deleted alone, and a compound left with no members goes too); without ids, refused while an object of a symbol instance's art is selected",
             has_selection_or_guides,
             clear
         ),
@@ -934,7 +934,8 @@ fn without_inner(doc: &Document, placed: Vec<(NodeId, Option<Vec<usize>>)>) -> i
 /// The direct-selection flag and resolved root nodes for Copy and Cut operations. A compound-path
 /// member selected on its own (whole, with Direct or Group Selection, or by some of its anchors or
 /// segments) is taken as itself, so Copy copies it as an ordinary path and Cut removes it alone. The
-/// compound is taken whole when every one of its members is selected whole.
+/// compound is taken whole when it is selected, or when every one of its members is selected whole
+/// outside isolation mode; in an isolated compound every member is taken as itself.
 fn copy_cut_targets(s: &Session) -> Result<(bool, Vec<NodeId>)> {
     let st = s.doc()?;
     // The Pen and the Curvature tool leave the anchor they placed or edited selected: Copy takes
@@ -1030,7 +1031,7 @@ fn cut(s: &mut Session, p: &Value) -> Result<Value> {
         return clear(s, &json!({}));
     }
     // Cut removes the same objects Copy takes: a compound member selected on its own, or the
-    // whole compound when every member is selected whole.
+    // whole compound when it is selected or every member is selected whole.
     let (direct, roots) = copy_cut_targets(s)?;
     let res = copy(s, p)?;
     if res.get("copied").and_then(Value::as_u64) == Some(0) {
