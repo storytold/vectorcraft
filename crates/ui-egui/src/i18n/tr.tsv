@@ -1730,6 +1730,7 @@ font-technology	Variable	Değişken
 	Lock (⌘2)	Kilitle (⌘2)
 	Lock Grid	Izgarayı Kilitle
 	Lock Guides	Kilit Kılavuzları
+	Lock Guides by Default	Kılavuzları Varsayılan Olarak Kilitle
 	Lock Others	Diğerlerini Kilitle
 	Lock Slices	Dilimleri Kilitle
 	Lock Station Point	Kilit İstasyon Noktası

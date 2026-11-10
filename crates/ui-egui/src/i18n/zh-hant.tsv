@@ -2800,6 +2800,7 @@ file-filter	Templates	範本
 	Lock (⌘2)	鎖定 (⌘2)
 	Lock Grid	鎖定格點
 	Lock Guides	鎖定參考線
+	Lock Guides by Default	預設鎖定參考線
 	Lock Others	鎖定其他
 	Lock Slices	鎖定切片
 	Lock Station Point	鎖定基準點
