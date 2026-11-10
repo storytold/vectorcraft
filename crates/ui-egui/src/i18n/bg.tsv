@@ -5844,6 +5844,11 @@ axis	Y Axis	Y ос
 	Button	Бутон
 	Panel	Панел
 	UI Frames	UI рамки
+	Map Markers	Маркери на карта
+	Pin	Карфица
+	Flag	Флаг
+	Crosshair	Мерник
+	Checkpoint	Контролна точка
 	Open Symbol Library	Отваряне на библиотека със символи
 	Save Symbol Library	Запазване на библиотека със символи
 	Save Symbol Library…	Запази библиотека със символи…

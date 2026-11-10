@@ -5859,6 +5859,11 @@ axis	Y Axis	Sumbu Y
 	Button	Tombol
 	Panel	Panel
 	UI Frames	Bingkai UI
+	Map Markers	Penanda Peta
+	Pin	Pin
+	Flag	Bendera
+	Crosshair	Bidik silang
+	Checkpoint	Pos pemeriksaan
 	Open Symbol Library	Buka pustaka simbol
 	Save Symbol Library	Simpan pustaka simbol
 	Save Symbol Library…	Simpan pustaka simbol…

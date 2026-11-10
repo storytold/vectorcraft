@@ -5650,6 +5650,11 @@ axis	Y Axis	Trục Y
 	Button	Nút
 	Panel	Bảng
 	UI Frames	Khung UI
+	Map Markers	Đánh dấu bản đồ
+	Pin	Ghim
+	Flag	Cờ
+	Crosshair	Tâm ngắm
+	Checkpoint	Điểm kiểm tra
 	Open Symbol Library	Mở thư viện ký hiệu
 	Save Symbol Library	Lưu thư viện ký hiệu
 	Save Symbol Library…	Lưu thư viện ký hiệu…

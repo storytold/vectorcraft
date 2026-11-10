@@ -6008,6 +6008,11 @@ axis	Y Axis	Y ekseni
 	Button	Düğme
 	Panel	Panel
 	UI Frames	UI çerçeveleri
+	Map Markers	Harita İşaretleri
+	Pin	İğne
+	Flag	Bayrak
+	Crosshair	Nişangah
+	Checkpoint	Kontrol noktası
 	Open Symbol Library	Sembol Kitaplığını Aç
 	Save Symbol Library	Sembol Kitaplığını Kaydet
 	Save Symbol Library…	Sembol Kitaplığını Kaydet…

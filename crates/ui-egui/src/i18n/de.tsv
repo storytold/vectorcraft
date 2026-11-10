@@ -5635,6 +5635,11 @@ axis	Y Axis	Y-Achse
 	Button	Schaltfläche
 	Panel	Bedienfeld
 	UI Frames	UI-Rahmen
+	Map Markers	Kartenmarkierungen
+	Pin	Stecknadel
+	Flag	Flagge
+	Crosshair	Fadenkreuz
+	Checkpoint	Kontrollpunkt
 	Open Symbol Library	Symbol-Bibliothek öffnen
 	Save Symbol Library	Symbol-Bibliothek speichern
 	Save Symbol Library…	Symbol-Bibliothek speichern…
