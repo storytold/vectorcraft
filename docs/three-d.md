@@ -250,7 +250,8 @@ out, perspective). No Adobe software, assets, presets or bevel shapes were used.
   curves, with smooth anchors where the art's are smooth, while visibility and depth are worked out on the
   sampled points. Without perspective and bevel each curve maps exactly. With perspective, a curve is split into
   cubics until each lies within 0.001 pt of the projected outline. A face inset or outset by a bevel follows its
-  sampled outline within the sampling tolerance above. The edges between two bevel steps or two wall slices, a
+  sampled outline within the sampling tolerance above, one curve for each sampled edge through its two sampled
+  points, so the cap and the walls next to it draw the edge they share as the same curves. The edges between two bevel steps or two wall slices, a
   piece of curve that does not fit after 8 halvings, an edge of a twisted wall cut into pieces, and the curves
   past 1,048,576 for one solid stay straight. The tolerances and limits are VectorCraft's own values. Inflate's
   faces are polygons.

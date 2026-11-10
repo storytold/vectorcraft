@@ -129,9 +129,11 @@ fn contour(path: &mut BezPath, ring: &Ring, points: &[Point], step: &Along, budg
             i += 1;
             continue;
         };
-        // The run of edges that follow this curve one after the other.
+        // The run of edges that follow this curve one after the other. An inset outline is fitted
+        // one edge at a time, as `wall` fits it, so a cap and its walls share the same curves.
         let (mut j, mut t1, mut last) = (i, span.t1, span.t0);
-        while let Some(Some(next)) = ring.spans.get(j + 1)
+        while step.map.is_some()
+            && let Some(Some(next)) = ring.spans.get(j + 1)
             && next.curve == span.curve
             && next.t0 == t1
         {

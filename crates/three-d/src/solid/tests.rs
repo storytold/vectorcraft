@@ -426,6 +426,40 @@ fn a_cap_in_perspective_fits_the_projected_curves() {
     }
 }
 
+/// A cap inset by a bevel and the walls next to it draw the edge they share as the same curves, so
+/// no gap or overlap opens between them.
+#[test]
+fn a_beveled_cap_and_its_walls_share_their_curves() {
+    for (r, width) in [(40.0, 4.0), (400.0, 40.0)] {
+        for art in [circle(Point::new(r, r), r), letter_d()] {
+            let (p, b) = shape(&art);
+            let o = Extrude { depth: 50.0, bevel: Some(Bevel { inside: true, width, height: width, ..Bevel::default() }), ..Extrude::default() };
+            let f = extrude(&p, FillRule::EvenOdd, b, o, View { rotation_x: 20.0, rotation_y: 30.0, ..front() }).unwrap();
+            let caps: Vec<&Facet> = f.iter().filter(|f| f.depth == f64::MAX).collect();
+            let outlines: Vec<Vec<Point>> = caps.iter().flat_map(|f| fine(&f.path().to_bezpath(), |q| q)).collect();
+            let on_cap = |q: Point| caps.iter().flat_map(|f| f.contours.iter().flatten()).any(|v| v.distance(q) < 1e-9);
+            let (mut far, mut shared) = (0.0f64, 0);
+            for wall in f.iter().filter(|f| f.depth != f64::MAX && f.outline.is_some()) {
+                let path = wall.path();
+                for sp in &path.subpaths {
+                    for i in (0..sp.anchors.len()).filter(|i| !sp.segment_is_line(*i)) {
+                        let c = sp.segment(i);
+                        if !on_cap(c.p0) || !on_cap(c.p3) {
+                            continue;
+                        }
+                        shared += 1;
+                        for k in 0..=16 {
+                            far = far.max(edge_distance(&outlines, c.eval(f64::from(k) / 16.0)));
+                        }
+                    }
+                }
+            }
+            assert!(shared > 0, "no wall shares a curved edge with a cap");
+            assert!(far <= 1e-4, "{far}");
+        }
+    }
+}
+
 /// A twisted, tapered back cap follows the turned, scaled art; a cap inset by a bevel stays
 /// within the sampling tolerance of the solid; a tiny circle and a curve with a handle of zero
 /// length keep their cubics.
