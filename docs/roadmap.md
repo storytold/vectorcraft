@@ -192,12 +192,12 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-11-10 | minor | Held numeric spinner arrows keep stepping past the click timeout and stop on release (#6307). Scores and estimates unchanged. |
 | 2026-11-09 | minor | Interim macOS canvas cursor delivery (#2292): existing artwork in aligned 1×/2× AppKit representations, visible system fallback and host-owned restoration. Headless routing, bitmap and ownership coverage; native timing, menus, focus/handback, mixed displays, Spotlight and full-screen Spaces remain unverified. Scores and estimates unchanged. |
 | 2026-11-09 | minor | M7: the custom dictionary commands and Ignore All (#4936); the dialogs and Auto Spell Check remain; scores and estimates unchanged. |
 | 2026-11-09 | minor | M4/G9: EPS import: the fonts an EPS carries draw their glyphs instead of being set as type in an installed font: composite (Type 0) fonts with the 8/8 mapping, plain Type 42 fonts (characters from their glyph names or character map, widths from the font), CID-keyed fonts over CMaps (Type 0 and Type 2 CIDFonts, CIDFonts in a FontSet's Compact Font Format data, base-font CMaps, named CIDFonts over predefined Unicode CMaps set as type) and embedded Type 1 fonts; the show operators' spacing along the baseline is kept as tracking, `kshow` included. Each step is charged to the interpreter's budgets. Hand-written test files only (no corpus file uses these fonts); scores and estimates unchanged. |
 | 2026-11-08 | minor | M7: spell check engine, `text.spelling.check` and `text.spelling.suggest` on craft-proof (#4936); the dialog, Auto Spell Check and the custom dictionary remain; scores and estimates unchanged. |
 | 2026-11-08 | minor | Floating tab groups collapse into the side icon rail and opened rail panels fold back into it (#5925, in part); tab groups remain intact. Scores and estimates unchanged. |
+| 2026-11-10 | minor | Held numeric spinner arrows keep stepping past the click timeout and stop on release (#6307). Scores and estimates unchanged. |
 | 2026-11-09 | minor | Numeric fields step on wheel hover without taking focus; keyboard focus and existing rounding rules remain (#5949). Scores and estimates unchanged. |
 | 2026-11-07 | minor | M2: with the Pen or Curvature tool, Edit › Copy and Cut take the anchors and segments a Cmd/Ctrl-lent Direct Selection picked, not the whole path (#6123); estimates unchanged |
 | 2026-11-07 | minor | Control bar › Snapping includes the existing Snap to Glyph and Alignment Guides toggles (#6164); scores and estimates unchanged. |
