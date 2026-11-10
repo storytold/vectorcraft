@@ -2,7 +2,7 @@ use super::entry::RgbInCmyk;
 use super::exporter::{constant_mask, cover, to_path, writable, xf};
 use super::{
     Affine, Arc, Archival, ColorOut, Compatibility, Document, Exporter, HashSet, Image, Metadata, Node, PageSettings, PdfError, PdfVersion, Rect,
-    Shape, Size, Standard, Vec2, find, krilla, rfind, write,
+    Shape, Size, Standard, Surface, Vec2, find, krilla, rfind, write,
 };
 
 /// A PDF being written, shared by export and print: the file's configuration and metadata, then
@@ -125,7 +125,7 @@ impl Writer {
         let size = Size::from_wh(w.max(least) as f32, h.max(least) as f32).ok_or_else(|| PdfError::BadSetting(format!("page size {w} × {h}")))?;
         let at = |b: Rect| krilla::geom::Rect::from_ltrb(b.x0 as f32, b.y0 as f32, b.x1 as f32, b.y1 as f32);
         let mut page = self.pdf.document_mut().start_page_with(PageSettings::new(size).with_trim_box(at(sheet.trim)).with_bleed_box(at(sheet.bleed)));
-        let mut s = page.surface();
+        let mut s = Surface::page(page.surface(), size.height());
         let paper = Rect::new(0.0, 0.0, w, h);
         if sheet.negative {
             cover(&mut s, paper, 255, 1.0);
