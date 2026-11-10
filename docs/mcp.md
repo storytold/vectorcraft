@@ -1708,7 +1708,14 @@ overrides selected anchors or guides. Every explicit id is validated before any 
 or unknown id leaves the document unchanged. An empty `ids` array does nothing. Layers themselves
 are kept, and selecting an ancestor together with its descendants deletes that subtree once.
 Without `ids`, direct-selected anchors or selected ruler guides retain their usual Clear behavior.
-Cut still removes the objects it copied, including a whole compound when a member is selected.
+`edit.copy` takes a compound-path member selected on its own (whole or in part, with Direct or Group Selection) as an
+ordinary path with the compound's paint, transparency, opacity mask and fill rule. A gradient fitted to the compound
+keeps the compound's fit. Copy takes the whole compound when the compound itself is selected, or when every member is
+selected whole outside isolation mode, which includes the one member of a compound of one. In an isolated compound
+path each member is taken as itself. `edit.cut` removes the same objects it copies, so cutting one member leaves the
+other members in the compound, a compound of one member included. When Clear deletes every anchor or segment of every
+member, it also removes the compound. With a copied member still selected, `edit.pasteInFront` puts the path into the
+compound, just above the member.
 With `ids`, `guides: true` also deletes the selected ruler guides. The command rejects a `guides` value that is not a
 boolean.
 
