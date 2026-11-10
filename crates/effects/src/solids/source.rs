@@ -129,16 +129,23 @@ impl Resolver<'_> {
         }
         self.spend(1)?;
         match &n.kind {
-            NodeKind::SymbolInstance { symbol, .. } => {
-                // Counted before the art is placed, so a symbol past the limit is never copied.
-                let held = self.doc.and_then(|d| d.symbols.iter().find(|s| s.name == *symbol)).map_or(0, |s| s.art.count_with_masks());
-                if self.work.saturating_add(held) > MAX_WORK {
+            NodeKind::SymbolInstance { symbol, xf } => {
+                let missing = || format!("{label} can't build a solid from the instance of symbol \"{symbol}\": the symbol's art isn't available");
+                let doc = self.doc.ok_or_else(missing)?;
+                let sym = doc.symbols.iter().find(|s| s.name == *symbol).ok_or_else(missing)?;
+                // Counted before the art is placed, so a symbol past the limit is never copied:
+                // first its own objects, which the instance's overrides keep, then the most
+                // objects placing makes, with those overrides and the symbol's 9-slice guides.
+                if self.work.saturating_add(sym.art.count_with_masks()) > MAX_WORK {
                     return Err(self.too_much_work());
                 }
-                let art = crate::outline_object(self.doc, n).ok_or_else(|| {
-                    format!("{label} can't build a solid from the instance of symbol \"{symbol}\": the symbol's art isn't available")
-                })?;
-                Ok(self.list(kids(&art), depth + 1)?.0)
+                let art = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n);
+                let most = doc.symbol_slice_map(symbol, *xf).map_or(art.count_with_masks() as u64, |m| m.most_placed(&art, doc));
+                if (self.work as u64).saturating_add(most) > MAX_WORK as u64 {
+                    return Err(self.too_much_work());
+                }
+                let placed = doc.place_symbol_art(symbol, &art, *xf).ok_or_else(missing)?;
+                Ok(self.list(&[Arc::new(placed)], depth + 1)?.0)
             }
             NodeKind::Blend { children, spec } => {
                 // Counted before the steps are made, so a blend past the limit is never expanded.
