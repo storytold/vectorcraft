@@ -2350,15 +2350,12 @@ digits	Malayalam	Malayalam
 	Selected Swatches	Swatch terpilih
 	Advanced Options	Opsi lanjutan
 	Background Contents	Konten latar belakang
-	Background Contents:	Konten latar belakang:
 	BLANK DOCUMENT PRESETS	PRESET DOKUMEN KOSONG
 	Bleed	Bleed
 	Change to Right-to-Left Layout	Ubah ke tata letak kanan ke kiri
 	Columns:	Kolom:
-	Create Document	Buat dokumen
 	Documents you create appear here.	Dokumen yang Anda buat muncul di sini.
 	More Settings	Pengaturan lainnya
-	New from Template	Baru dari templat
 	Number of Artboards:	Jumlah artboard:
 	Orientation:	Orientasi:
 	PRESET DETAILS	DETAIL PRESET
@@ -2369,7 +2366,6 @@ digits	Malayalam	Malayalam
 	RECENT	TERKINI
 	RECENT (1)	TERKINI (1)
 	SAVED	TERSIMPAN
-	Templates…	Templat…
 	Transparent (Default)	Transparan (default)
 	Save for Office Documents	Simpan untuk dokumen Office
 	Transparent Background	Latar belakang transparan
@@ -3273,6 +3269,7 @@ theme	Appearance	Tampilan
 	Arrange by Row	Susun per baris
 	Arrange by Column	Susun per kolom
 	Save Preset	Simpan preset
+	Save Document Preset	Simpan preset dokumen
 	Screen (72 ppi)	Layar (72 ppi)
 	Social Square Post 1080×1080	Postingan persegi media sosial 1080×1080
 	Distribute	Distribusikan

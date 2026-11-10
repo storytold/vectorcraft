@@ -286,7 +286,6 @@ font-technology	Variable	Variabla
 	Update While Dragging	Uppdatera vid dragning
 	Hide Video Rulers	Dölj videolinjaler
 	Background Contents	Bakgrundsinnehåll
-	Background Contents:	Bakgrundsinnehåll:
 	Background:	Bakgrund:
 	Backspace	Backspace
 	Bar Graph Tool	Stapeldiagramverktyg
@@ -656,7 +655,6 @@ font-technology	Variable	Variabla
 	Couldn't {} {name}: {e}	Det gick inte att {} {name}: {e}
 	Create	Skapa
 	Create Clipping Mask	Skapa klippmask
-	Create Document	Skapa dokument
 	Create from Guides	Skapa från stödlinjer
 	Create from Selection	Skapa från markering
 	Create From:	Skapa från:
@@ -2085,7 +2083,6 @@ font-technology	Variable	Variabla
 	New Color Group…	Ny färggrupp…
 	New Document Presets	Förinställningar för nytt dokument
 	New file	Ny fil
-	New from Template	Ny från mall
 	New from Template…	Ny från mall…
 	New Graphic Style	Ny grafikstil
 	New Graphic Style (Alt-click to name it)	Ny grafikstil (Alt-klicka för att namnge den)
@@ -2869,6 +2866,7 @@ digits	Malayalam	Malayalam
 	Save PDF Preset	Spara PDF-förinställning
 	Save Perspective Grid Preset	Spara förinställning för perspektivrutnät
 	Save Preset	Spara förinställning
+	Save Document Preset	Spara dokumentförinställning
 	Save Preset…	Spara förinställning…
 	Save Print Preset	Spara utskriftsförinställning
 	Save Recovery Data	Spara återställningsdata
@@ -3432,7 +3430,6 @@ digits	Malayalam	Malayalam
 	Template	Mall
 	Templates	Mallar
 	Templates Folder	Mallmapp
-	Templates…	Mallar…
 	Text Displayed in Cell:	Text som visas i cellen:
 	Text Export Options	Alternativ för textexport
 	Text Fill & Stroke Color	Textens fyllnads- och konturfärg

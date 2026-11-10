@@ -2350,15 +2350,12 @@ digits	Malayalam	Malayalam
 	Selected Swatches	Markerede farveprøver
 	Advanced Options	Avancerede indstillinger
 	Background Contents	Baggrundens indhold
-	Background Contents:	Baggrundens indhold:
 	BLANK DOCUMENT PRESETS	TOMME DOKUMENTFORUDINDSTILLINGER
 	Bleed	Beskæring
 	Change to Right-to-Left Layout	Skift til højre-til-venstre-layout
 	Columns:	Kolonner:
-	Create Document	Opret dokument
 	Documents you create appear here.	Dokumenter, du opretter, vises her.
 	More Settings	Flere indstillinger
-	New from Template	Nyt fra skabelon
 	Number of Artboards:	Antal tegnebrætter:
 	Orientation:	Orientering:
 	PRESET DETAILS	FORUDINDSTILLINGSDETALJER
@@ -2369,7 +2366,6 @@ digits	Malayalam	Malayalam
 	RECENT	SENESTE
 	RECENT (1)	SENESTE (1)
 	SAVED	GEMT
-	Templates…	Skabeloner…
 	Transparent (Default)	Gennemsigtig (standard)
 	Save for Office Documents	Gem til Office-dokumenter
 	Transparent Background	Gennemsigtig baggrund
@@ -3273,6 +3269,7 @@ theme	Appearance	Udseende
 	Arrange by Row	Arranger efter række
 	Arrange by Column	Arranger efter kolonne
 	Save Preset	Gem forudindstilling
+	Save Document Preset	Gem dokumentforudindstilling
 	Screen (72 ppi)	Skærm (72 ppi)
 	Social Square Post 1080×1080	Socialt firkantet opslag 1080×1080
 	Distribute	Fordel

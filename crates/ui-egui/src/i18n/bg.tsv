@@ -284,7 +284,6 @@ font-technology	Variable	Променливи
 	Update While Dragging	Обновяване при плъзгане
 	Hide Video Rulers	Скриване на видеолинийките
 	Background Contents	Съдържание на фона
-	Background Contents:	Съдържание на фона:
 	Background:	Фон:
 	Backspace	Backspace
 	Bar Graph Tool	Инструмент „Стълбчеста диаграма“
@@ -654,7 +653,6 @@ font-technology	Variable	Променливи
 	Couldn't {} {name}: {e}	Неуспешно {name} на {}: {e}
 	Create	Създаване
 	Create Clipping Mask	Създаване на маска за изрязване
-	Create Document	Създаване на документ
 	Create from Guides	Създаване от водачи
 	Create from Selection	Създаване от селекцията
 	Create From:	Създаване от:
@@ -2074,7 +2072,6 @@ font-technology	Variable	Променливи
 	New Color Group…	Нова цветова група…
 	New Document Presets	Предварителни настройки за нов документ
 	New file	Нов файл
-	New from Template	Нов от шаблон
 	New from Template…	Нов от шаблон…
 	New Graphic Style	Нов графичен стил
 	New Graphic Style (Alt-click to name it)	Нов графичен стил (кликнете с Alt, за да го наименувате)
@@ -2858,6 +2855,7 @@ digits	Malayalam	Малаялам
 	Save PDF Preset	Запази PDF предварителна настройка
 	Save Perspective Grid Preset	Запази предварителна настройка на перспективната мрежа
 	Save Preset	Запази предварителна настройка
+	Save Document Preset	Запази предварителна настройка на документа
 	Save Preset…	Запази предварителна настройка…
 	Save Print Preset	Запази предварителна настройка за печат
 	Save Recovery Data	Запази данни за възстановяване
@@ -3422,7 +3420,6 @@ digits	Malayalam	Малаялам
 	Template	Шаблон
 	Templates	Шаблони
 	Templates Folder	Папка с шаблони
-	Templates…	Шаблони…
 	Text Displayed in Cell:	Текст, показван в клетката:
 	Text Export Options	Опции за експортиране на текст
 	Text Fill & Stroke Color	Цвят на запълване и щрих на текста

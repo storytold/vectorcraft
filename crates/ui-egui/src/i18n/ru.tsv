@@ -295,7 +295,6 @@ font-technology	Variable	Вариативные
 	Update While Dragging	Обновлять при перетаскивании
 	Hide Video Rulers	Скрыть видео-линейки
 	Background Contents	Содержимое фона
-	Background Contents:	Содержимое фона:
 	Background:	Фон:
 	Backspace	Backspace
 	Bar Graph Tool	Инструмент «Гистограмма»
@@ -667,7 +666,6 @@ font-technology	Variable	Вариативные
 	Couldn't {} {name}: {e}	Не удалось {} {name}: {e}
 	Create	Создать
 	Create Clipping Mask	Создать маску обрезки
-	Create Document	Создать документ
 	Create from Guides	Создать из направляющих
 	Create from Selection	Создать из выделения
 	Create From:	Создать из:
@@ -2170,7 +2168,6 @@ file-filter	Templates	Шаблоны
 	New Color Group…	Новая цветовая группа…
 	New Document Presets	Наборы новых документов
 	New file	Новый файл
-	New from Template	Создать из шаблона
 	New from Template…	Создать из шаблона…
 	New Graphic Style	Новый графический стиль
 	New Graphic Style (Alt-click to name it)	Новый графический стиль (Alt+щелчок, чтобы задать имя)
@@ -2962,6 +2959,7 @@ digits	Malayalam	Малаялам
 	Save PDF Preset	Сохранить набор PDF
 	Save Perspective Grid Preset	Сохранить набор сетки перспективы
 	Save Preset	Сохранить набор
+	Save Document Preset	Сохранить набор документа
 	Preset {number}	Набор {number}
 	Save Preset…	Сохранить набор…
 	Save Print Preset	Сохранить набор печати
@@ -3541,7 +3539,6 @@ digits	Malayalam	Малаялам
 	Template	Шаблон
 	Templates	Шаблоны
 	Templates Folder	Папка шаблонов
-	Templates…	Шаблоны…
 	Text Displayed in Cell:	Текст, отображаемый в ячейке:
 	Text Export Options	Параметры экспорта текста
 	Text Fill & Stroke Color	Цвет заливки и обводки текста

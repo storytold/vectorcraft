@@ -320,7 +320,6 @@ font-technology	Variable	Biến thiên
 	Update While Dragging	Cập nhật khi kéo
 	Hide Video Rulers	Ẩn thước video
 	Background Contents	Nội dung nền
-	Background Contents:	Nội dung nền:
 	Background:	Nền:
 	Backspace	Backspace
 	Balance	Cân bằng
@@ -765,7 +764,6 @@ font-technology	Variable	Biến thiên
 	Create	Tạo
 	Create Clipping Mask	Tạo mặt nạ cắt
 	Create Compound Path From Ellipses	Tạo đường dẫn phức từ hình elip
-	Create Document	Tạo tài liệu
 	Create from Guides	Tạo từ đường căn
 	Create from Selection	Tạo từ vùng chọn
 	Create From:	Tạo từ:
@@ -2408,7 +2406,6 @@ digits	Hindi	Hindi
 	New Design	Thiết kế mới
 	New Document Presets	Thiết lập sẵn tài liệu mới
 	New file	Tệp mới
-	New from Template	Mới từ mẫu
 	New from Template…	Mới từ mẫu…
 	New Graphic Style	Kiểu đồ họa mới
 	New Graphic Style (Alt-click to name it)	Kiểu đồ họa mới (Alt-bấm để đặt tên)
@@ -3272,6 +3269,7 @@ mark-style	Japanese	Kiểu Nhật
 	Save PDF Preset	Lưu thiết lập sẵn PDF
 	Save Perspective Grid Preset	Lưu thiết lập sẵn lưới phối cảnh
 	Save Preset	Lưu thiết lập sẵn
+	Save Document Preset	Lưu thiết lập sẵn tài liệu
 	Preset {number}	Thiết lập sẵn {number}
 	Save Preset…	Lưu thiết lập sẵn…
 	Save Print Preset	Lưu thiết lập sẵn in
@@ -3873,7 +3871,6 @@ mark-style	Japanese	Kiểu Nhật
 	Template	Mẫu
 	Templates	Mẫu
 	Templates Folder	Thư mục mẫu
-	Templates…	Mẫu…
 	Text	Văn bản
 	Text Displayed in Cell:	Văn bản hiển thị trong ô:
 	Text Export Options	Tùy chọn xuất văn bản
