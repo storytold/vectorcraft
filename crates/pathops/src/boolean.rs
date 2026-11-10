@@ -995,12 +995,13 @@ pub(crate) fn try_unite_all_upright(paths: &[(&PathData, FillRule)], precision: 
         }
         parts.push((normalize_bez(bp, *r)?, bp.segments().count()));
     }
-    unite_parts(&parts, &bps, precision)
+    unite_parts(parts, bps, precision)
 }
 
 /// Union of many filled paths. Each input is first normalised on its own, then all are swept
 /// together with a single integer winding number, which keeps this fast for thousands of shapes.
-/// A single input whose own sweep split none of its segments is not swept a second time.
+/// A single input whose own sweep split none of its segments, with no two of them within twice the
+/// sweep tolerance, is not swept a second time.
 pub fn unite_all(paths: &[(&PathData, FillRule)]) -> PathData {
     unite_all_with(paths, DEFAULT_PRECISION)
 }
@@ -1027,16 +1028,29 @@ pub(crate) fn unite_all_upright(paths: &[(&PathData, FillRule)], precision: f64)
         let Ok(c) = normalize_bez(bp, *r) else { continue };
         parts.push((c, bp.segments().count()));
     }
-    unite_parts(&parts, &bps, precision).unwrap_or_default()
+    unite_parts(parts, bps, precision).unwrap_or_default()
 }
 
 /// The union of `parts`, each the contours [`normalize_bez`] made of one input with that input's
 /// segment count, refit to `precision` keeping the anchors of `inputs`.
 ///
-/// When there is one part and its sweep split none of the input's segments, its contours are the
-/// union and are refit as they are. Otherwise all the contours are swept again together under
-/// NonZero, which also merges the short pieces the first sweeps leave where a path crosses itself.
-fn unite_parts(parts: &[(Contours, usize)], inputs: &[BezPath], precision: f64) -> Result<PathData, PathOpsError> {
+/// When there is one part, its sweep split none of the input's segments and none of them lies
+/// within twice the sweep tolerance of another, its contours are the union and are refit as they
+/// are. Otherwise all the contours are swept again together under NonZero, which also merges the
+/// short pieces the first sweeps leave where a path crosses itself, and contours that lie within
+/// that distance of each other.
+fn unite_parts(parts: Vec<(Contours, usize)>, inputs: Vec<BezPath>, precision: f64) -> Result<PathData, PathOpsError> {
+    if parts.is_empty() {
+        return Ok(PathData::default());
+    }
+    let tidy = Tidy::keeping(precision, inputs.iter());
+    if let [(c, input_segments)] = parts.as_slice()
+        && splits_nothing(c, *input_segments, &tidy)
+        && eps_for(inputs.iter()).is_ok_and(|eps| !comes_close(c, 2.0 * eps))
+    {
+        return Ok(all_contours_to_path(c, &tidy));
+    }
+    drop(inputs);
     let mut all = BezPath::new();
     for (c, _) in parts {
         for ct in c.contours() {
@@ -1045,12 +1059,6 @@ fn unite_parts(parts: &[(Contours, usize)], inputs: &[BezPath], precision: f64) 
     }
     if all.elements().is_empty() {
         return Ok(PathData::default());
-    }
-    let tidy = Tidy::keeping(precision, inputs.iter());
-    if let [(c, input_segments)] = parts
-        && splits_nothing(c, *input_segments, &tidy)
-    {
-        return Ok(all_contours_to_path(c, &tidy));
     }
     Ok(all_contours_to_path(&normalize_bez(&all, FillRule::NonZero)?, &tidy))
 }
@@ -1069,6 +1077,122 @@ fn splits_nothing(c: &Contours, input_segments: usize, tidy: &Tidy) -> bool {
         }
     }
     n == input_segments
+}
+
+/// The pairs of segments [`comes_close`] compares for each segment. Past it the answer is yes.
+const MAX_CLOSE_PAIRS: usize = 512;
+
+/// One segment of a contour for [`comes_close`]: its control points' extents along and across the
+/// side the segments are sorted on, and its place in its contour.
+struct CloseSeg {
+    c: CubicBez,
+    line: bool,
+    lo: f64,
+    hi: f64,
+    across_lo: f64,
+    across_hi: f64,
+    contour: usize,
+    index: usize,
+    len: usize,
+}
+
+impl CloseSeg {
+    fn new(seg: Seg, contour: usize, index: usize, len: usize) -> Self {
+        let pts = [seg.c.p0, seg.c.p1, seg.c.p2, seg.c.p3];
+        let (lo, hi) = pts.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(l, h), p| (l.min(p.x), h.max(p.x)));
+        let (across_lo, across_hi) = pts.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(l, h), p| (l.min(p.y), h.max(p.y)));
+        Self { c: seg.c, line: seg.line, lo, hi, across_lo, across_hi, contour, index, len }
+    }
+}
+
+/// Does a segment of the contours `c` lie within `touch` of another? A sweep can join such
+/// segments or leave them apart depending on the order it meets them in, so a second sweep can
+/// answer differently from the first. Segments whose control points can't be told apart from
+/// `touch` count as close, which costs only that second sweep.
+fn comes_close(c: &Contours, touch: f64) -> bool {
+    let mut segs = Vec::new();
+    for (contour, ct) in c.contours().enumerate() {
+        let len = ct.path.segments().count();
+        for (index, s) in ct.path.segments().enumerate() {
+            segs.push(CloseSeg::new(to_seg(s), contour, index, len));
+        }
+    }
+    // Sort along the longer side of the whole, where fewer segments overlap.
+    let extent = |lo: fn(&CloseSeg) -> f64, hi: fn(&CloseSeg) -> f64| {
+        segs.iter().map(hi).fold(f64::NEG_INFINITY, f64::max) - segs.iter().map(lo).fold(f64::INFINITY, f64::min)
+    };
+    if extent(|s| s.across_lo, |s| s.across_hi) > extent(|s| s.lo, |s| s.hi) {
+        for s in &mut segs {
+            std::mem::swap(&mut s.lo, &mut s.across_lo);
+            std::mem::swap(&mut s.hi, &mut s.across_hi);
+        }
+    }
+    segs.sort_by(|a, b| a.lo.total_cmp(&b.lo));
+    let (mut pairs, budget) = (0usize, segs.len().saturating_mul(MAX_CLOSE_PAIRS));
+    for (i, a) in segs.iter().enumerate() {
+        for b in segs.iter().skip(i + 1) {
+            if b.lo > a.hi + touch {
+                break;
+            }
+            pairs += 1;
+            if pairs > budget {
+                return true;
+            }
+            if a.across_lo > b.across_hi + touch || b.across_lo > a.across_hi + touch {
+                continue;
+            }
+            let neighbors = a.contour == b.contour && ((a.index + 1) % a.len == b.index || (b.index + 1) % b.len == a.index);
+            let close = if neighbors { neighbors_run_together(a, b, touch) } else { !hulls_apart(&a.c, &b.c, touch) };
+            if close {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// The sine of the angle below which two segments leaving a shared end count as parallel.
+const PARALLEL_SINE: f64 = 1e-3;
+
+/// Do segments `a` and `b`, which share an end, run along each other within `touch`? Straight
+/// segments do when the far end of either lies within `touch` of the other. A curve does when the
+/// two leave their shared end in the same direction, or when their extents overlap by more than
+/// `touch` both ways.
+fn neighbors_run_together(a: &CloseSeg, b: &CloseSeg, touch: f64) -> bool {
+    use kurbo::ParamCurveNearest;
+    if a.line && b.line {
+        let (shared, p, q) = if a.c.p3 == b.c.p0 { (a.c.p3, a.c.p0, b.c.p3) } else { (a.c.p0, a.c.p3, b.c.p0) };
+        let near = |p: Point, q: Point| kurbo::Line::new(shared, q).nearest(p, 0.0).distance_sq.sqrt() <= touch;
+        return near(q, p) || near(p, q);
+    }
+    let (from_a, from_b) = if a.c.p3 == b.c.p0 {
+        ([a.c.p3, a.c.p2, a.c.p1, a.c.p0], [b.c.p0, b.c.p1, b.c.p2, b.c.p3])
+    } else {
+        ([a.c.p0, a.c.p1, a.c.p2, a.c.p3], [b.c.p3, b.c.p2, b.c.p1, b.c.p0])
+    };
+    let away = |pts: [Point; 4]| pts.iter().skip(1).map(|p| *p - pts[0]).find(|v| v.hypot2() > 0.0);
+    if let (Some(u), Some(v)) = (away(from_a), away(from_b))
+        && u.dot(v) > 0.0
+        && u.cross(v).abs() <= PARALLEL_SINE * u.hypot() * v.hypot()
+    {
+        return true;
+    }
+    a.hi.min(b.hi) - a.lo.max(b.lo) > touch && a.across_hi.min(b.across_hi) - a.across_lo.max(b.across_lo) > touch
+}
+
+/// Is there a direction, along or across a side of either segment's control polygon or chord, in
+/// which the control points of `a` and `b` lie more than `touch` apart?
+fn hulls_apart(a: &CubicBez, b: &CubicBez, touch: f64) -> bool {
+    let (pa, pb) = ([a.p0, a.p1, a.p2, a.p3], [b.p0, b.p1, b.p2, b.p3]);
+    let apart = |d: kurbo::Vec2| {
+        let span =
+            |pts: &[Point; 4]| pts.iter().map(|p| p.to_vec2().dot(d)).fold((f64::INFINITY, f64::NEG_INFINITY), |(l, h), v| (l.min(v), h.max(v)));
+        let ((la, ha), (lb, hb)) = (span(&pa), span(&pb));
+        let gap = touch * d.hypot();
+        gap > 0.0 && (lb - ha > gap || la - hb > gap)
+    };
+    let sides = |p: [Point; 4]| [p[3] - p[0], p[1] - p[0], p[2] - p[1], p[3] - p[2]];
+    sides(pa).into_iter().chain(sides(pb)).any(|d| apart(d) || apart(kurbo::Vec2::new(-d.y, d.x)))
 }
 
 /// [`area`] that reports a refused input instead of an area of zero.
@@ -1386,6 +1510,70 @@ mod tests {
         pts.push(Point::new(n as f64 * 4.0, 20.0));
         pts.push(Point::new(0.0, 20.0));
         PathData::single(vectorcraft_geom::SubPath::polyline(&pts, true))
+    }
+
+    /// A sweep can leave segments within its tolerance apart where a second sweep joins them.
+    #[test]
+    fn a_lone_input_with_segments_within_the_tolerance_is_swept_again() {
+        use vectorcraft_geom::SubPath;
+        let triangles = |gap: f64, lift: f64| {
+            PathData::new(vec![
+                SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(10.0, 0.0), Point::new(0.0, 10.0)], true),
+                SubPath::polyline(&[Point::new(10.0 + gap, lift), Point::new(10.0 + gap, 10.0 + lift), Point::new(gap, 10.0 + lift)], true),
+            ])
+        };
+        let mut bp = BezPath::new();
+        bp.extend(kurbo::Circle::new((0.0, 0.0), 10.0).path_elements(0.1));
+        bp.extend(kurbo::Circle::new((20.000001, 0.0), 10.0).path_elements(0.1));
+        let circles = PathData::from_bezpath(&bp);
+        for (name, path, joined) in
+            [("snapped", triangles(0.99e-6, 0.99e-6), Some(1)), ("same heights", triangles(0.9e-6, 0.0), Some(1)), ("circles", circles, None)]
+        {
+            let want = unite_swept_twice(&[(&path, FillRule::NonZero)], DEFAULT_PRECISION);
+            if let Some(n) = joined {
+                assert_eq!(want.subpaths.len(), n, "{name}");
+            }
+            for (got, sweeps) in unite_counting_sweeps(&[(&path, FillRule::NonZero)]) {
+                assert_eq!(sweeps, 2, "{name}");
+                assert_eq!(got, want, "{name}");
+            }
+        }
+        // Farther apart than that, the sweep's own contours stand.
+        let apart = triangles(1e-5, 0.0);
+        let want = unite_swept_twice(&[(&apart, FillRule::NonZero)], DEFAULT_PRECISION);
+        assert_eq!(want.subpaths.len(), 2);
+        for (got, sweeps) in unite_counting_sweeps(&[(&apart, FillRule::NonZero)]) {
+            assert_eq!(sweeps, 1);
+            assert_eq!(got, want);
+        }
+    }
+
+    #[test]
+    fn a_lone_part_beside_a_refused_input_keeps_its_union() {
+        use vectorcraft_geom::SubPath;
+        let polygon = |pts: &[(f64, f64)]| PathData::single(SubPath::polyline(&pts.iter().map(|p| Point::new(p.0, p.1)).collect::<Vec<_>>(), true));
+        let square = polygon(&[(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]);
+        let refused = polygon(&[(f64::NAN, 0.0), (1.0, 1.0), (0.0, 1.0)]);
+        let want = unite_swept_twice(&[(&square, FillRule::NonZero)], DEFAULT_PRECISION);
+        assert_eq!(unite_all(&[(&square, FillRule::NonZero), (&refused, FillRule::NonZero)]), want);
+    }
+
+    #[test]
+    fn neighboring_segments_run_together_when_one_lies_along_the_other() {
+        let line = |a: (f64, f64), b: (f64, f64)| CloseSeg::new(Seg::line(a.into(), b.into()), 0, 0, 2);
+        let curve = |p: [(f64, f64); 4]| CloseSeg::new(Seg { c: CubicBez::new(p[0], p[1], p[2], p[3]), line: false }, 0, 0, 2);
+        let touch = 2e-6;
+        // The two sides of a needle's tip, and an ordinary corner.
+        assert!(neighbors_run_together(&line((10.0, 10.0), (30.0, 30.0)), &line((30.0, 30.0), (10.0, 10.000001)), touch));
+        assert!(!neighbors_run_together(&line((0.0, 0.0), (10.0, 0.0)), &line((10.0, 0.0), (10.0, 10.0)), touch));
+        // Curves that fold back over each other, and two quarters of a circle.
+        let out = curve([(0.0, 0.0), (5.0, 8.0), (10.0, 8.0), (20.0, 0.0)]);
+        assert!(neighbors_run_together(&out, &curve([(20.0, 0.0), (10.0, 6.0), (5.0, 6.0), (0.0, 1.0)]), touch));
+        // A curved hairpin that lies within the tolerance along its length.
+        let there = curve([(0.0, 0.0), (5.0, 1e-7), (15.0, 1e-7), (20.0, 0.0)]);
+        assert!(neighbors_run_together(&there, &curve([(20.0, 0.0), (15.0, 2e-7), (5.0, 2e-7), (0.0, 1e-6)]), touch));
+        let quarter = curve([(10.0, 0.0), (10.0, 5.5), (5.5, 10.0), (0.0, 10.0)]);
+        assert!(!neighbors_run_together(&quarter, &curve([(0.0, 10.0), (-5.5, 10.0), (-10.0, 5.5), (-10.0, 0.0)]), touch));
     }
 
     #[test]
