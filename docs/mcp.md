@@ -2595,7 +2595,8 @@ Every 3D type, `threeD.classicExtrude` and `threeD.revolve` included, also appli
 symbol instance, alone or in a group, and builds from the art it shows, the same way for the canvas, exports and
 `assets.add3D` ([three-d.md](three-d.md#clipping-groups-blends-and-symbol-instances)); like a group, it takes the
 effect on the object itself, not on a fill or stroke. An image, alone or in a group, is refused with "trace it first
-with Object › Image Trace › Make", and nothing changes.
+with Object › Image Trace › Make", and nothing changes. On a group, an opacity mask on a member, or on a group inside
+it, masks that member's solids ([three-d.md](three-d.md#groups)).
 
 `threeD.extrude`: `depth` (points, 0..2000, default 50), `twist` (degrees, 0..360, 0), `taper` (1..100%, 100),
 `cap` (true solid, false hollow), `bevel` (`none`, `classic`, `rounded`, `cove`, `step`, `ogee`), `bevelWidth`

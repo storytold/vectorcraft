@@ -343,25 +343,22 @@ fn clip_area(first: &Node) -> (PathData, FillRule) {
 }
 
 /// `pieces`, each with the [`Scope`]s of the groups it was in, back in groups of `n`'s id with
-/// those groups' opacity and blending mode: consecutive pieces sharing the scope at `level` go into
-/// one group, so its transparency applies to them together. `level` stays below the nesting the
-/// pieces came from ([`nested_past`]).
+/// those groups' opacity, blending mode and opacity mask: consecutive pieces sharing the scope at
+/// `level` go into one group, so its transparency applies to them together. `level` stays below the
+/// nesting the pieces came from ([`nested_past`]).
 fn nest(n: &Node, pieces: Vec<(Vec<Scope>, Node)>, level: usize) -> Vec<Arc<Node>> {
     let mut out = vec![];
     let mut run: Vec<(Vec<Scope>, Node)> = vec![];
-    let mut key = None;
+    let mut key: Option<Scope> = None;
     let close = |run: &mut Vec<(Vec<Scope>, Node)>, scope: Option<Scope>, out: &mut Vec<Arc<Node>>| {
         let Some(scope) = scope else { return };
-        let mut g = Node::group(n.id, nest(n, std::mem::take(run), level + 1));
-        g.opacity = scope.opacity;
-        g.blend = scope.blend;
-        out.push(Arc::new(g));
+        out.push(Arc::new(scope.group(n.id, nest(n, std::mem::take(run), level + 1))));
     };
     for (scopes, piece) in pieces {
-        let here = scopes.get(level).copied();
-        if here.map(|s| s.key) != key.map(|s: Scope| s.key) {
-            close(&mut run, key, &mut out);
-            key = here;
+        let here = scopes.get(level).cloned();
+        if here.as_ref().map(|s| s.key) != key.as_ref().map(|s| s.key) {
+            close(&mut run, key.take(), &mut out);
+            key = here.clone();
         }
         match here {
             Some(_) => run.push((scopes, piece)),
@@ -430,12 +427,15 @@ fn shape(n: &Node, path: PathData, rule: FillRule, items: Vec<AppearanceItem>) -
     piece
 }
 
-/// A plain group of `children` with `n`'s id, visibility, opacity and blending mode.
+/// A plain group of `children` with `n`'s id, visibility, opacity, blending mode and opacity mask.
 fn wrap(n: &Node, children: Vec<Arc<Node>>) -> Node {
     let mut g = Node::group(n.id, children);
     g.name = n.name.clone();
     g.opacity = n.opacity;
     g.blend = n.blend;
+    if let Some(mask) = &n.extras().mask {
+        g.extras_mut().mask = Some(mask.clone());
+    }
     g
 }
 
