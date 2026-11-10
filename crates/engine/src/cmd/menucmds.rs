@@ -962,16 +962,17 @@ fn crop_pixels(doc: &vectorcraft_doc::Document, im: &ImageObject, r: Rect) -> Op
     if blob.is_cmyk() || b.abs() > 1e-9 || c.abs() > 1e-9 || a.abs() < 1e-9 || d.abs() < 1e-9 {
         return None;
     }
-    let px = decode_rgba("object.cropImage", blob).ok()?;
     let inv = im.xf.inverse();
     let (p0, p1) = (inv * Point::new(r.x0, r.y0), inv * Point::new(r.x1, r.y1));
-    let (w, h) = px.dimensions();
-    if w == 0 || h == 0 || (w, h) != (im.width, im.height) {
-        return None;
-    }
     // Only a rect on the pixel grid is cut from the pixels; one between pixels keeps its exact bounds by being drawn.
+    // Checked before decoding, so an off-grid crop of a large image doesn't decode it for nothing.
     let on_grid = |v: f64| (v - v.round()).abs() < 1e-3;
     if ![p0.x, p0.y, p1.x, p1.y].into_iter().all(on_grid) {
+        return None;
+    }
+    let px = decode_rgba("object.cropImage", blob).ok()?;
+    let (w, h) = px.dimensions();
+    if w == 0 || h == 0 || (w, h) != (im.width, im.height) {
         return None;
     }
     let lo = |v: f64, max: u32| v.round().clamp(0.0, f64::from(max)) as u32;
