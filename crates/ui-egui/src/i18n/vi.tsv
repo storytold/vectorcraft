@@ -5176,7 +5176,7 @@ theme	Appearance	Giao diện
 @msg	{C}: no effect at index {from}	{C}: không có hiệu ứng tại chỉ mục {from}
 @msg	{depth}-bit PSD files in this colour mode can't be read	tệp PSD {depth}-bit ở chế độ màu này không thể đọc được
 @msg	{key} must be a finite coordinate	{key} phải là tọa độ hữu hạn
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} hiện yêu cầu một đường dẫn hoặc đường dẫn phức. Hãy chuyển văn bản, hình ảnh và nhóm thành đường dẫn trước.
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} hiện yêu cầu một đường dẫn, đường dẫn phức, văn bản hoặc nhóm. Hãy chuyển hình ảnh và các đối tượng khác thành đường dẫn trước.
 @msg	{label} produced an empty result	{label} tạo ra kết quả trống
 @msg	{label} requires a shape with at least two anchors	{label} yêu cầu một hình dạng có ít nhất hai điểm neo
 @msg	{label}: lost track of a shape's style	{label}: mất dấu kiểu của hình dạng

@@ -232,8 +232,8 @@ out, perspective). No Adobe software, assets, presets or bevel shapes were used.
   on top can still lie a few points behind another nearby piece.
 - Extrude & Bevel and Rotate retain planar shading. Colored Inflate uses smooth vector lighting; white-light Inflate keeps its original polygon shading; bounded cell triangulation leaves a cell flat when it contains a complete hole or an unusually complex/degenerate contour. Its geometric silhouette is still a polygon approximation.
 - Paths, compound paths, type and groups or layers of them (see [Groups](#groups)); images, symbol instances,
-  clipping groups and other live objects have to be converted first. Revolve on a group is not built yet. One 3D
-  effect per object.
+  clipping groups and other live objects have to be converted first. Revolve on a group sweeps its members about
+  one axis ([revolve.md](revolve.md)). One 3D effect per object.
 - Curves are followed within 1/2000 of the shape's size (at least 0.05 pt), so a small curve takes a few points
   and a large one up to 32. Extrude & Bevel and Inflate take up to 2,048 outline points (a stroke's outline is
   counted on its own), Rotate (which only turns the outline) 65,536. The limit is counted on the shape as drawn and,
