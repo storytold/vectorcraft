@@ -14,13 +14,16 @@
 //! Images are the exception (`transparentImages`): an image with see-through pixels, opacity or a
 //! blending mode written opaque is a box hiding the art under it (version 7 images have no alpha
 //! channel, §8.1). With `flatten` (the default) each becomes an opaque image of itself and the art
-//! under it, rendered from the document as it is, clipped to the area where it changes what shows;
+//! under it, rendered from the document as it is, clipped to the area where it changes what shows
+//! (a smooth outline of its rendered pixels, not a staircase of them);
 //! the art under it stays as it was. An image in a group with opacity or a blending mode is
 //! flattened the same way, and a pattern fill that paints a transparent image (see-through
 //! pixels, or opacity or a blending mode on the image, the fill, the shape or a group it is in) is
 //! expanded into its tiles first so its images flatten too. With `omit` the images with
 //! see-through pixels, opacity or a blending mode of their own are left out, and pattern fills stay
-//! as the writer draws them (their tiles opaque over white). An image that can't be decoded is
+//! as the writer draws them (their tiles opaque over white). A colorized image is flattened or
+//! left out the same way, unless its pixels are all black or white: the writer writes that one as
+//! a 1-bit image mask in its color, which keeps its white pixels clear. An image that can't be decoded is
 //! missing from the images that flattening and expanding raster effects draw, and the warnings
 //! then carry the raster exports' note once.
 //!
@@ -28,7 +31,7 @@
 //! layer's hidden objects go to a hidden layer of their own just above it, with `omit` they are
 //! left out, with `visible` they show where they are. Type is written as text the format's reader
 //! lays out again, in the fonts it names; `outlineText` writes its outlines instead (as type that
-//! 8-bit text can't hold always is).
+//! 8-bit text can't hold and type with rotated characters always are).
 
 use std::sync::Arc;
 
@@ -37,11 +40,11 @@ use vectorcraft_color::BlendMode;
 use vectorcraft_doc::{Document, ImageBlob, ImageObject, Node, NodeKind};
 use vectorcraft_geom::{Anchor, FillRule, PathData, Point, Rect, SubPath};
 
-use super::super::*;
+use super::super::{Affine, EngineError, NodeId, Result, bad};
 use super::{ArtboardPick, Encoded, Format};
 
 /// Does `p` ask a save in `f` for a legacy `.ai` file of version 7 (`aiVersion: "7"`)? An unknown
-/// version is an error, and so is version 7 for a `.ait` template, which is PDF-compatible only.
+/// version is an error, and so is version 7 for a `.ait` template, which is never a legacy file.
 pub(super) fn wanted(cmd: &str, f: &Format, p: &Value) -> Result<bool> {
     let legacy = match p.get("aiVersion") {
         None | Some(Value::Null) => false,
@@ -51,9 +54,15 @@ pub(super) fn wanted(cmd: &str, f: &Format, p: &Value) -> Result<bool> {
         Some(v) => return Err(bad(cmd, format!("aiVersion {v}: \"pdf\" (PDF-compatible, the default) or \"7\" (legacy .ai, version 7)"))),
     };
     if legacy && f.id == "ait" {
-        return Err(bad(cmd, "aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible"));
+        return Err(bad(cmd, "aiVersion 7 writes legacy .ai files, not .ait templates"));
     }
     Ok(legacy)
+}
+
+/// `f` (the `.ai` format, whose label names the PDF-compatible file) named, in its errors, as the
+/// legacy `.ai` file.
+pub(super) fn named(f: &Format) -> Format {
+    Format { label: "legacy .ai (version 7)", ..*f }
 }
 
 /// What a legacy `.ai` does with the images it can't hold (`transparentImages`).
@@ -109,7 +118,7 @@ pub(super) fn encode(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Result
     }
     let mode = see_through(cmd, p)?;
     let (hidden, outline_text) = (hidden_objects(cmd, p)?, outline_text(cmd, p)?);
-    let picked: ArtboardPick = super::encode::options(f, p)?;
+    let picked: ArtboardPick = super::encode::options(&named(f), p)?;
     let boards = picked.resolve(n).map_err(|e| bad(cmd, e))?.unwrap_or_else(|| (0..n).collect());
     let mut enc = Encoded { warnings: vec![FIDELITY.to_string()], ..Encoded::default() };
     if boards.len() > 1 {
@@ -161,21 +170,22 @@ fn expand_appearances(d: &mut Document) {
     }
 }
 
-/// Expand every layer's pattern fills that paint a transparent image into their tiles, so those
-/// images flatten like any other transparent image. The writer would otherwise draw them opaque
-/// over white.
+/// Expand every layer's pattern fills that paint an image with see-through pixels, a colorize paint,
+/// opacity or blending into their tiles, so those images can be flattened.
 fn expand_image_patterns(d: &mut Document) -> Result<()> {
     let keys = super::super::flatten::see_through_images(d);
     let layers: Vec<NodeId> = d.layers.iter().map(|l| l.id).collect();
     for id in layers {
-        super::super::expand::expand_transparent_image_patterns(d, id, &keys)?;
+        super::super::expand::expand_transparent_image_patterns(d, id, &keys, &|_, _| true)?;
     }
     Ok(())
 }
 
 /// The images of `d` a legacy `.ai` can't hold, in paint order with their places in it (as
-/// [`Document::walk`] counts). These are the images with see-through pixels, and the images
-/// that have opacity or a blending mode of their own or, with `flatten`, of a group they are in.
+/// [`Document::walk`] counts). These have see-through pixels or a colorize paint (except the
+/// colorized images the writer writes as image masks, clear pixels included,
+/// [`vectorcraft_eps::writes_image_mask`]), or
+/// have opacity or a blending mode of their own or, with `flatten`, of a group they are in.
 /// With `flatten` only visible images are returned, because a hidden one (which the hidden objects
 /// option may write) is written over white. With `omit` all of them are returned.
 fn see_through_images(d: &Document, mode: SeeThrough) -> Vec<(usize, NodeId)> {
@@ -184,7 +194,10 @@ fn see_through_images(d: &Document, mode: SeeThrough) -> Vec<(usize, NodeId)> {
     let mut at = 0;
     d.walk(|n| {
         if let NodeKind::Image(im) = &n.kind
-            && (keys.contains(&im.key) || n.opacity < 1.0 || n.blend != BlendMode::Normal || (mode == SeeThrough::Flatten && transparent(d, n.id)))
+            && (((keys.contains(&im.key) || n.extras().colorize.is_some()) && !vectorcraft_eps::writes_image_mask(d, n))
+                || n.opacity < 1.0
+                || n.blend != BlendMode::Normal
+                || (mode == SeeThrough::Flatten && transparent(d, n.id)))
         {
             out.push((at, n.id));
         }
@@ -241,8 +254,11 @@ const MAX_PPI: f64 = 600.0;
 const MIN_PPI: f64 = 72.0;
 /// A rendered pixel channel changes when it changes by more than this.
 const CHANGED: u8 = 2;
-/// The clip outline follows cells of about this many points.
-const CELL: f64 = 2.0;
+/// The clip outline follows the rendered pixels, in blocks of them when there would be more than
+/// this many: a huge image's clip would have millions of anchors.
+const MAX_CELLS: usize = 4 << 20;
+/// How far (in cells) the clip outline may stray from the staircase it smooths.
+const SMOOTH: f64 = 0.35;
 
 /// The image `id` (the `at`th node in paint order of `src`) flattened: `src` drawn up to and
 /// including it, over white, cropped and clipped to the cells where drawing it changes the
@@ -276,18 +292,21 @@ fn flattened(src: &Document, at: usize, id: NodeId) -> Result<Option<Flat>> {
     if w == 0 || h == 0 || shown.pixels.len() != w * h * 4 || under.pixels.len() != shown.pixels.len() {
         return Ok(None);
     }
-    // The cells where it changes anything.
-    let c = (CELL * scale).round().max(1.0) as usize;
+    // The cells where it changes anything: its pixels, or blocks of them for a huge image.
+    let c = if w * h <= MAX_CELLS { 1 } else { ((w * h) as f64 / MAX_CELLS as f64).sqrt().ceil() as usize };
     let (cw, ch) = (w.div_ceil(c), h.div_ceil(c));
-    let mut cells = vec![false; cw * ch];
+    let mut changed = vec![false; cw * ch];
     for (k, (a, b)) in shown.pixels.as_chunks::<4>().0.iter().zip(under.pixels.as_chunks::<4>().0).enumerate() {
         if a.iter().zip(b).any(|(a, b)| a.abs_diff(*b) > CHANGED) {
             let (x, y) = (k % w, k / w);
-            if let Some(cell) = cells.get_mut(y / c * cw + x / c) {
+            if let Some(cell) = changed.get_mut(y / c * cw + x / c) {
                 *cell = true;
             }
         }
     }
+    // Grown by a cell, so the clip takes in the whole anti-aliased edge: where the image changes
+    // nothing it is the art under it, so a clip a little too large shows nothing more.
+    let cells = grown(&changed, cw, ch);
     let marked = || cells.iter().enumerate().filter(|(_, on)| **on).map(|(k, _)| (k % cw, k / cw));
     let (Some(x0), Some(x1), Some(y0), Some(y1)) =
         (marked().map(|p| p.0).min(), marked().map(|p| p.0).max(), marked().map(|p| p.1).min(), marked().map(|p| p.1).max())
@@ -304,12 +323,16 @@ fn flattened(src: &Document, at: usize, id: NodeId) -> Result<Option<Flat>> {
     let crop = vectorcraft_render::Rendered { width: (px1 - px0) as u32, height: (py1 - py0) as u32, pixels };
     let png = crop.to_png().map_err(EngineError::Other)?;
     let at = |x: usize, y: usize| Point::new(region.x0 + (x.min(w)) as f64 / scale, region.y0 + (y.min(h)) as f64 / scale);
+    // A cell corner, in cells, as a point of the page.
+    let (wf, hf, cf) = (w as f64, h as f64, c as f64);
+    let page = |(x, y): (f64, f64)| Point::new(region.x0 + (x * cf).clamp(0.0, wf) / scale, region.y0 + (y * cf).clamp(0.0, hf) / scale);
     let mut clip = PathData::new(vec![]);
     for comp in vectorcraft_trace::trace_mask(&cells, cw, ch) {
         for lp in std::iter::once(&comp.outer).chain(&comp.holes) {
-            let pts: Vec<(i32, i32)> = corners(&lp.pts);
-            let anchors = pts.iter().map(|&(x, y)| Anchor::corner(at(x.max(0) as usize * c, y.max(0) as usize * c))).collect();
-            clip.subpaths.push(SubPath::new(anchors, true));
+            let anchors: Vec<Anchor> = smoothed(&lp.pts).into_iter().map(|p| Anchor::corner(page(p))).collect();
+            if anchors.len() >= 3 {
+                clip.subpaths.push(SubPath::new(anchors, true));
+            }
         }
     }
     let xf = Affine::translate(at(px0, py0).to_vec2()) * Affine::scale(1.0 / scale);
@@ -331,17 +354,64 @@ fn up_to(n: &Node, last: usize, i: &mut usize) -> Option<Node> {
     Some(n)
 }
 
-/// A loop's corners: its points without those in the middle of a straight run.
-fn corners(pts: &[(i32, i32)]) -> Vec<(i32, i32)> {
+/// `mask` (`w × h` cells) with every cell next to a set one set too.
+fn grown(mask: &[bool], w: usize, h: usize) -> Vec<bool> {
+    let set = |x: usize, y: usize| mask.get(y * w + x).copied().unwrap_or(false);
+    let mut out = vec![false; mask.len()];
+    for (k, cell) in out.iter_mut().enumerate() {
+        let (x, y) = (k % w, k / w);
+        *cell = (y.saturating_sub(1)..(y + 2).min(h)).any(|y| (x.saturating_sub(1)..(x + 2).min(w)).any(|x| set(x, y)));
+    }
+    out
+}
+
+/// A loop of cell corners (a staircase) as a smooth outline, in cells: the middle of each cell
+/// edge along it, so that a run of one-cell steps becomes the sloped line it stands for, without
+/// the points that lie (within [`SMOOTH`]) on a straight line between their neighbours.
+fn smoothed(pts: &[(i32, i32)]) -> Vec<(f64, f64)> {
+    let mut mids = Vec::with_capacity(pts.len());
+    for (k, &(ax, ay)) in pts.iter().enumerate() {
+        let Some(&(bx, by)) = pts.get(k + 1).or(pts.first()) else { break };
+        let (dx, dy) = ((bx - ax).signum(), (by - ay).signum());
+        let steps = (bx - ax).unsigned_abs().max((by - ay).unsigned_abs());
+        for i in 0..steps as i32 {
+            let (x, y) = (ax + dx * i, ay + dy * i);
+            mids.push((f64::from(x) + 0.5 * f64::from(dx), f64::from(y) + 0.5 * f64::from(dy)));
+        }
+    }
+    simplify_closed(&mids, SMOOTH)
+}
+
+/// The points of closed polyline `pts` that Douglas–Peucker keeps with tolerance `tol`.
+fn simplify_closed(pts: &[(f64, f64)], tol: f64) -> Vec<(f64, f64)> {
     let n = pts.len();
-    let get = |k: usize| pts.get(k % n.max(1)).copied();
-    (0..n)
-        .filter_map(|k| {
-            let (a, b, c) = (get(k + n - 1)?, get(k)?, get(k + 1)?);
-            let straight = (a.0 == b.0 && b.0 == c.0) || (a.1 == b.1 && b.1 == c.1);
-            (!straight).then_some(b)
-        })
-        .collect()
+    if n < 4 {
+        return pts.to_vec();
+    }
+    let d2 = |a: (f64, f64), b: (f64, f64)| (a.0 - b.0).powi(2) + (a.1 - b.1).powi(2);
+    let Some(&first) = pts.first() else { return vec![] };
+    // Split at the first point and the point farthest from it: two open runs.
+    let far = (1..n).max_by(|&i, &j| d2(first, pts[i]).total_cmp(&d2(first, pts[j]))).unwrap_or(n / 2);
+    let mut keep = vec![false; n];
+    keep[0] = true;
+    keep[far] = true;
+    let mut todo = vec![(0, far), (far, n)];
+    while let Some((a, b)) = todo.pop() {
+        if b <= a + 1 {
+            continue;
+        }
+        let (p, q) = (pts[a], pts[b % n]);
+        let (ux, uy) = (q.0 - p.0, q.1 - p.1);
+        let len = ux.hypot(uy);
+        let dist = |r: (f64, f64)| if len > 0.0 { ((r.0 - p.0) * uy - (r.1 - p.1) * ux).abs() / len } else { d2(p, r).sqrt() };
+        let Some((m, dm)) = (a + 1..b).map(|i| (i, dist(pts[i]))).max_by(|x, y| x.1.total_cmp(&y.1)) else { continue };
+        if dm > tol {
+            keep[m] = true;
+            todo.push((a, m));
+            todo.push((m, b));
+        }
+    }
+    pts.iter().zip(&keep).filter(|(_, k)| **k).map(|(p, _)| *p).collect()
 }
 
 fn note(warnings: &mut Vec<String>, w: &str) {

@@ -1,4 +1,7 @@
-use super::*;
+use super::super::unique_name;
+use super::{
+    Result, Session, TEMPLATE_FORMATS, UNSUPPORTED, Unsupported, Value, bad, dxf, eps, json, metafile, native, pdf, screens, svg, text, unsupported,
+};
 
 /// One option a format's encoder reads from the export params.
 #[derive(Clone, Copy, Debug)]
@@ -73,7 +76,26 @@ pub(super) const RANGE: FormatOption = FormatOption {
     description: "1-based artboards such as \"1-3, 5\", or \"all\" (wins over artboards and artboard)",
 };
 
-const SCALE: FormatOption = FormatOption { name: "scale", ty: "number", default: "1", description: "pixels per point (0.01–64)" };
+const SCALE: FormatOption = FormatOption {
+    name: "scale",
+    ty: "number",
+    default: "null",
+    description: "pixels per point (0.01–64); without ppi or scale, uses the document's raster effects resolution",
+};
+
+const WIDTH: FormatOption = FormatOption {
+    name: "width",
+    ty: "number",
+    default: "null",
+    description: "the width of each file in pixels: each artboard, rect or art bounds gets its own scale (0.01–64 pixels per point, stored in the file except in GIF, WebP and Targa); wins over height, ppi and scale",
+};
+
+const HEIGHT: FormatOption = FormatOption {
+    name: "height",
+    ty: "number",
+    default: "null",
+    description: "the height of each file in pixels, as width; wins over ppi and scale",
+};
 
 const QUALITY: FormatOption =
     FormatOption { name: "quality", ty: "integer", default: "90", description: "JPEG quality 0–100 (the JPEG Options dialog shows 0–10)" };
@@ -95,15 +117,15 @@ const RECT: FormatOption = FormatOption {
 const PPI: FormatOption = FormatOption {
     name: "ppi",
     ty: "number",
-    default: "72",
-    description: "resolution in pixels per inch (72 = one pixel per point; 150, 300…), stored in the file; wins over scale",
+    default: "null",
+    description: "resolution in pixels per inch (72 = one pixel per point; 150, 300…), stored in the file except in GIF, WebP and Targa; wins over scale; without either, uses the document's raster effects resolution",
 };
 
 const BACKGROUND: FormatOption = FormatOption {
     name: "background",
     ty: "string",
     default: "\"transparent\"",
-    description: "transparent, white, black or a colour such as \"#ff8800\" (JPEG: white when transparent)",
+    description: "transparent, white, black or a colour such as \"#ff8800\" (JPEG: white when transparent); drawn under the finished art, so blend modes do not read it",
 };
 
 const ANTI_ALIAS: FormatOption = FormatOption {
@@ -198,6 +220,8 @@ const PALETTE_OPTIONS: &[FormatOption] = &[
     RECT,
     PPI,
     SCALE,
+    WIDTH,
+    HEIGHT,
     BACKGROUND,
     ANTI_ALIAS,
     INTERLACED,
@@ -219,7 +243,7 @@ const BYTE_ORDER: FormatOption = FormatOption {
 };
 
 const TIFF_OPTIONS: &[FormatOption] =
-    &[ARTBOARD, ARTBOARDS, RANGE, USE_ARTBOARDS, RECT, PPI, SCALE, BACKGROUND, ANTI_ALIAS, COLOR_MODEL, LZW, BYTE_ORDER, EMBED_ICC];
+    &[ARTBOARD, ARTBOARDS, RANGE, USE_ARTBOARDS, RECT, PPI, SCALE, WIDTH, HEIGHT, BACKGROUND, ANTI_ALIAS, COLOR_MODEL, LZW, BYTE_ORDER, EMBED_ICC];
 
 const BMP_COLOR_MODEL: FormatOption =
     FormatOption { name: "colorModel", ty: "string", default: "\"rgb\"", description: "rgb or gray (greys at every depth)" };
@@ -256,6 +280,8 @@ const BMP_OPTIONS: &[FormatOption] = &[
     RECT,
     PPI,
     SCALE,
+    WIDTH,
+    HEIGHT,
     BACKGROUND,
     ANTI_ALIAS,
     BMP_COLOR_MODEL,
@@ -275,7 +301,7 @@ const TGA_DEPTH: FormatOption = FormatOption {
     description: "bits per pixel: 16 (one-bit alpha), 24 (flattened on white) or 32 (keeps transparency)",
 };
 
-const TGA_OPTIONS: &[FormatOption] = &[ARTBOARD, ARTBOARDS, RANGE, USE_ARTBOARDS, RECT, PPI, SCALE, BACKGROUND, ANTI_ALIAS, TGA_DEPTH];
+const TGA_OPTIONS: &[FormatOption] = &[ARTBOARD, ARTBOARDS, RANGE, USE_ARTBOARDS, RECT, PPI, SCALE, WIDTH, HEIGHT, BACKGROUND, ANTI_ALIAS, TGA_DEPTH];
 
 const PSD_LAYERS: FormatOption = FormatOption {
     name: "layers",
@@ -306,6 +332,8 @@ const PSD_OPTIONS: &[FormatOption] = &[
     RECT,
     PPI,
     SCALE,
+    WIDTH,
+    HEIGHT,
     BACKGROUND,
     ANTI_ALIAS,
     COLOR_MODEL,
@@ -374,7 +402,7 @@ pub const FORMATS: &[Format] = &[
         read: true,
         write: true,
         raster: true,
-        options: &[ARTBOARD, ARTBOARDS, RANGE, USE_ARTBOARDS, RECT, PPI, SCALE, BACKGROUND, ANTI_ALIAS, INTERLACED, EMBED_ICC],
+        options: &[ARTBOARD, ARTBOARDS, RANGE, USE_ARTBOARDS, RECT, PPI, SCALE, WIDTH, HEIGHT, BACKGROUND, ANTI_ALIAS, INTERLACED, EMBED_ICC],
     },
     Format {
         id: "jpg",
@@ -392,6 +420,8 @@ pub const FORMATS: &[Format] = &[
             RECT,
             PPI,
             SCALE,
+            WIDTH,
+            HEIGHT,
             BACKGROUND,
             ANTI_ALIAS,
             QUALITY,
@@ -411,7 +441,7 @@ pub const FORMATS: &[Format] = &[
         read: true,
         write: true,
         raster: true,
-        options: &[ARTBOARD, ARTBOARDS, RANGE, USE_ARTBOARDS, RECT, PPI, SCALE, BACKGROUND, ANTI_ALIAS, LOSSLESS, WEBP_QUALITY],
+        options: &[ARTBOARD, ARTBOARDS, RANGE, USE_ARTBOARDS, RECT, PPI, SCALE, WIDTH, HEIGHT, BACKGROUND, ANTI_ALIAS, LOSSLESS, WEBP_QUALITY],
     },
     Format {
         id: "tiff",
@@ -467,6 +497,16 @@ pub const FORMATS: &[Format] = &[
     reader("psb", "PSB", &["psb"], "image/x-psb", true),
     // PostScript programs, read as EPS files are; Print to PostScript writes them, exports don't.
     reader("ps", "PostScript", &["ps"], "application/postscript", false),
+    // ZSoft PCX images, read by `pcxread` and stored as PNG; exports don't write them.
+    reader("pcx", "PCX", &["pcx"], "image/x-pcx", true),
+    // Pixar picture files, read by `pxrread` and stored as PNG; exports don't write them.
+    reader("pxr", "Pixar", &["pxr"], "image/x-pixar", true),
+    // JP2 and raw codestreams are decoded to PNG; JPX composition is not supported.
+    reader("jpeg2000", "JPEG 2000", &["jpf", "jpx", "jp2", "j2k", "j2c", "jpc"], "image/jp2", true),
+    // HEVC-coded HEIF still images, decoded to PNG; image sequences are not read.
+    reader("heif", "HEIC/HEIF", &["heic", "heif"], "image/heic", true),
+    // jxl-oxide reads a JPEG XL file's first frame, which is stored as PNG. Exports don't write it.
+    reader("jxl", "JPEG XL", &["jxl"], "image/jxl", true),
 ];
 
 /// Every extension `document.open` reads (the "All readable files" filter of open dialogs).
@@ -479,6 +519,7 @@ pub const OPEN_EXTS: &[&str] = &[
     "ai",
     "ait",
     "png",
+    "pns",
     "jpg",
     "jpeg",
     "gif",
@@ -486,12 +527,26 @@ pub const OPEN_EXTS: &[&str] = &[
     "tif",
     "tiff",
     "bmp",
+    "dib",
+    "rle",
     "tga",
     "vda",
     "icb",
     "vst",
+    "pcx",
+    "pxr",
+    "jpf",
+    "jpx",
+    "jp2",
+    "j2k",
+    "j2c",
+    "jpc",
+    "heic",
+    "heif",
     "psd",
+    "pdd",
     "psb",
+    "jxl",
     "vctemplate",
     "dxf",
     "emf",
@@ -506,10 +561,13 @@ pub const OPEN_EXTS: &[&str] = &[
 
 /// Extensions in [`OPEN_EXTS`] the packaging declares no type for: Photoshop documents belong to
 /// raster editors, so Finder and file managers don't offer a vector app for them, and there is no
-/// `.epsf`, `.ps` or Targa type (File › Open and Place still read them all). On Linux the desktop
-/// entry's EPS type (shared-mime-info's) also covers `.epsf`, so file managers offer VectorCraft
-/// for it.
-pub const UNASSOCIATED_EXTS: &[&str] = &["psd", "psb", "epsf", "ps", "tga", "vda", "icb", "vst"];
+/// `.epsf`, `.ps`, Targa, PCX, Pixar, JPEG 2000, HEIC/HEIF or JPEG XL type, nor one for the `.pns`, `.dib` and `.rle` names of
+/// PNG and BMP files (File › Open and Place still read them all). On Linux the desktop entry's EPS
+/// type (shared-mime-info's) also covers `.epsf`, so file managers offer VectorCraft for it.
+pub const UNASSOCIATED_EXTS: &[&str] = &[
+    "psd", "pdd", "psb", "epsf", "ps", "pns", "dib", "rle", "tga", "vda", "icb", "vst", "pcx", "pxr", "jpf", "jpx", "jp2", "j2k", "j2c", "jpc",
+    "heic", "heif", "jxl",
+];
 
 /// The extension that picks each writable format when exporting (the format's first; PNG-8 shares
 /// `.png` with PNG, so `.png` comes once), in [`FORMATS`] order.
@@ -533,8 +591,14 @@ pub const RTF_EXTS: &[&str] = &["rtf"];
 /// Word documents: File → Place sets them as area type with their formatting.
 pub const DOCX_EXTS: &[&str] = &["docx"];
 
-/// Every extension File → Place reads: [`OPEN_EXTS`], [`TEXT_EXTS`], [`RTF_EXTS`] and
-/// [`DOCX_EXTS`].
+/// Word 97-2003 documents: File → Place sets them as area type with their formatting.
+pub const DOC_EXTS: &[&str] = &["doc"];
+
+/// The Place dialog's Word filter: Word documents and Word 97-2003 documents.
+const WORD_EXTS: &[&str] = &["docx", "doc"];
+
+/// Every extension File → Place reads: [`OPEN_EXTS`], [`TEXT_EXTS`], [`RTF_EXTS`],
+/// [`DOCX_EXTS`] and [`DOC_EXTS`].
 pub const PLACE_EXTS: &[&str] = &[
     "vectorcraft",
     "drawcraft",
@@ -544,6 +608,7 @@ pub const PLACE_EXTS: &[&str] = &[
     "ai",
     "ait",
     "png",
+    "pns",
     "jpg",
     "jpeg",
     "gif",
@@ -551,12 +616,26 @@ pub const PLACE_EXTS: &[&str] = &[
     "tif",
     "tiff",
     "bmp",
+    "dib",
+    "rle",
     "tga",
     "vda",
     "icb",
     "vst",
+    "pcx",
+    "pxr",
+    "jpf",
+    "jpx",
+    "jp2",
+    "j2k",
+    "j2c",
+    "jpc",
+    "heic",
+    "heif",
     "psd",
+    "pdd",
     "psb",
+    "jxl",
     "vctemplate",
     "dxf",
     "emf",
@@ -570,24 +649,142 @@ pub const PLACE_EXTS: &[&str] = &[
     "txt",
     "rtf",
     "docx",
+    "doc",
 ];
+
+/// The extensions File › Open and Place read PNG, BMP and Photoshop files by: the format's own,
+/// then the other names its files have (`.pns`, `.dib` and `.rle`, `.pdd`). Exports write only
+/// the format's own extension.
+const READ_ALIASES: &[(&str, &[&str])] = &[("png", &["png", "pns"]), ("bmp", &["bmp", "dib", "rle"]), ("psd", &["psd", "pdd"])];
+
+/// The extensions File › Open and Place read format `f` by: its own, and for PNG, BMP and PSD
+/// those of [`READ_ALIASES`].
+pub fn read_extensions(f: &Format) -> &'static [&'static str] {
+    READ_ALIASES.iter().find(|(id, _)| *id == f.id).map_or(f.extensions, |(_, exts)| *exts)
+}
+
+/// The built-in readable format of extension `ext` (any case, leading dot allowed): [`format`]'s
+/// when it reads, else the one [`READ_ALIASES`] gives it (`.dib` is BMP). Importer plug-ins are
+/// not looked at ([`importer_formats`]).
+pub fn readable_format(ext: &str) -> Option<&'static Format> {
+    let k = ext.trim_start_matches('.').to_ascii_lowercase();
+    builtin(&k).filter(|f| f.read).or_else(|| READ_ALIASES.iter().find(|(_, exts)| exts.contains(&k.as_str())).and_then(|(id, _)| builtin(id)))
+}
+
+/// The readable format a file name's extension names ([`readable_format`]).
+pub fn readable_format_for_name(name: &str) -> Option<&'static Format> {
+    Some(extension(name)).filter(|e| !e.is_empty()).and_then(|e| readable_format(&e))
+}
 
 /// One dialog filter per readable format.
 fn format_filters() -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
-    FORMATS.iter().filter(|f| f.read).map(|f| (f.label, f.extensions))
+    FORMATS.iter().filter(|f| f.read).map(|f| (f.label, read_extensions(f)))
 }
 
-/// Open-dialog filters: "All readable files" first, then one per readable format, then swatch
-/// libraries (which open in the library panel), Libraries panel libraries, flattener, PDF and print
-/// presets (imported), scripts (checked without running them) and plug-ins (installed).
+/// Whether a file named `name` can only be read by an importer plug-in: an installed importer lists
+/// its extension and File › Place does not read that extension.
+pub fn opens_with_importer(name: &str) -> bool {
+    let ext = extension(name);
+    !ext.is_empty() && !PLACE_EXTS.contains(&ext.as_str()) && !vectorcraft_plugins::import::for_extension(&ext).is_empty()
+}
+
+/// Whether File › Open opens a file of extension `ext` (lower case) as something other than a
+/// document: a plug-in (installed), a shortcut set, a script (checked), flattener, PDF, print,
+/// perspective grid or export presets or composite fonts (imported), a Libraries panel library, or a
+/// swatch or graphic style library.
+pub fn opens_as_other(ext: &str) -> bool {
+    [
+        crate::cmd::plugin::EXTS,
+        crate::cmd::shortcutset::EXTS,
+        crate::cmd::scripts::EXTS,
+        crate::cmd::flatten::PRESET_EXTS,
+        crate::cmd::pdfcmds::PRESET_EXTS,
+        crate::cmd::printpresets::PRESET_EXTS,
+        crate::cmd::perspgrid::PRESET_EXTS,
+        screens::PRESET_FILE_EXTS,
+        crate::cmd::compositefonts::EXTS,
+        crate::cmd::library::LIBRARY_EXTS,
+        crate::cmd::swatchlib::LIBRARY_EXTS,
+        std::slice::from_ref(&vectorcraft_doc::style_libs::STYLES_EXT),
+    ]
+    .iter()
+    .any(|exts| exts.contains(&ext))
+}
+
+/// File › Open's extensions and filters for the installed importer plug-ins.
+type ImporterPart = (&'static [&'static str], Vec<(&'static str, &'static [&'static str])>);
+
+/// File › Open's part for the installed importer plug-ins: the extensions of "All readable files"
+/// ([`OPEN_EXTS`], then the importers' extensions in plug-in id order) and one filter per importer
+/// that has extensions left, under its name. An importer's extensions leave out those a built-in
+/// format reads, which File › Open reads with that format, and those File › Open opens as something
+/// else ([`opens_as_other`]). Made once for each set of installed plug-ins, so it lives as long as
+/// the dialogs that hold it.
+fn importer_open_part() -> ImporterPart {
+    use vectorcraft_plugins::registry;
+    static MADE: std::sync::Mutex<Option<(u64, ImporterPart)>> = std::sync::Mutex::new(None);
+    let mut made = MADE.lock().unwrap_or_else(|e| e.into_inner());
+    let revision = registry::revision();
+    if let Some((r, part)) = made.as_ref()
+        && *r == revision
+    {
+        return part.clone();
+    }
+    let mut exts: Vec<&'static str> = OPEN_EXTS.to_vec();
+    let mut filters = Vec::new();
+    for f in importer_formats() {
+        let own: Vec<&'static str> = f.extensions.iter().copied().filter(|e| readable_format(e).is_none() && !opens_as_other(e)).collect();
+        if own.is_empty() {
+            continue;
+        }
+        for &e in &own {
+            if !exts.contains(&e) {
+                exts.push(e);
+            }
+        }
+        let own: &'static [&'static str] = if own.len() == f.extensions.len() { f.extensions } else { Box::leak(own.into_boxed_slice()) };
+        filters.push((f.label, own));
+    }
+    let exts: &'static [&'static str] = if exts.len() == OPEN_EXTS.len() { OPEN_EXTS } else { Box::leak(exts.into_boxed_slice()) };
+    let part = (exts, filters);
+    *made = Some((revision, part.clone()));
+    part
+}
+
+/// Every extension File › Open reads as a document: [`OPEN_EXTS`], then the extensions the
+/// installed importer plug-ins list that no built-in format reads and that File › Open doesn't open
+/// as something else ([`opens_as_other`]), in plug-in id order.
+pub fn open_extensions() -> &'static [&'static str] {
+    importer_open_part().0
+}
+
+/// File › Open's filters: "All readable files" first, then one per readable format, then one per
+/// importer plug-in (under its name, with the extensions [`open_extensions`] takes from it), then
+/// swatch libraries (which open in the library panel), Libraries panel libraries, flattener, PDF,
+/// print and export presets (imported), scripts (checked without running them) and plug-ins
+/// (installed).
 pub fn open_filters() -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
-    std::iter::once(("All readable files", OPEN_EXTS))
-        .chain(format_filters())
-        .chain(std::iter::once(("Swatch libraries", crate::cmd::swatchlib::LIBRARY_EXTS)))
+    let (all, importers) = importer_open_part();
+    std::iter::once(("All readable files", all)).chain(format_filters()).chain(importers).chain(other_open_filters())
+}
+
+/// [`open_filters`] without the importer plug-ins: "All readable files" lists [`OPEN_EXTS`]. For
+/// open dialogs whose files the built-in readers read (New from Template, Load Styles, a document
+/// picked for its swatches, symbols, brushes or graphic styles).
+pub fn builtin_open_filters() -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
+    std::iter::once(("All readable files", OPEN_EXTS)).chain(format_filters()).chain(other_open_filters())
+}
+
+/// The open-dialog filters after the document formats: swatch libraries, Libraries panel
+/// libraries, presets, composite fonts, shortcut sets, scripts and plug-ins.
+fn other_open_filters() -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
+    std::iter::once(("Swatch libraries", crate::cmd::swatchlib::LIBRARY_EXTS))
         .chain(std::iter::once(("Libraries", crate::cmd::library::LIBRARY_EXTS)))
         .chain(std::iter::once(("Flattener presets", crate::cmd::flatten::PRESET_EXTS)))
         .chain(std::iter::once(("PDF presets", crate::cmd::pdfcmds::PRESET_EXTS)))
         .chain(std::iter::once(("Print presets", crate::cmd::printpresets::PRESET_EXTS)))
+        .chain(std::iter::once(("Export presets", screens::PRESET_FILE_EXTS)))
+        .chain(std::iter::once(("Composite fonts", crate::cmd::compositefonts::EXTS)))
         .chain(std::iter::once(("Shortcut sets", crate::cmd::shortcutset::EXTS)))
         .chain(std::iter::once(("Scripts", crate::cmd::scripts::EXTS)))
         .chain(std::iter::once(("Plug-ins", crate::cmd::plugin::EXTS)))
@@ -596,45 +793,60 @@ pub fn open_filters() -> impl Iterator<Item = (&'static str, &'static [&'static 
 /// Open-dialog filters for Swatch Libraries and Graphic Style Libraries Other Library… and Locate
 /// Library…. The library formats come first so Linux file portals (which grey out files that don't
 /// match the default filter) still list `.ase` and the other library extensions; then the same
-/// filters as [`open_filters`] so a document can be picked for its swatches or graphic styles.
+/// filters as [`builtin_open_filters`] so a document can be picked for its swatches or graphic
+/// styles.
 pub fn library_open_filters(
     library_label: &'static str,
     library_exts: &'static [&'static str],
 ) -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
-    std::iter::once((library_label, library_exts)).chain(open_filters())
+    std::iter::once((library_label, library_exts)).chain(builtin_open_filters())
 }
 
 /// File → Place dialog filters: "All placeable files", then one per placeable format, then text,
-/// RTF and Word.
+/// RTF and Word (`.docx` and `.doc`).
 pub fn place_filters() -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
     std::iter::once(("All placeable files", PLACE_EXTS))
         .chain(format_filters().filter(|(_, exts)| exts.iter().all(|ext| PLACE_EXTS.contains(ext))))
         .chain(std::iter::once(("Text", TEXT_EXTS)))
         .chain(std::iter::once(("RTF", RTF_EXTS)))
-        .chain(std::iter::once(("Word", DOCX_EXTS)))
+        .chain(std::iter::once(("Word", WORD_EXTS)))
 }
 
 /// A format by id or extension (any case, leading dot allowed; `jpeg` finds `jpg`): a built-in
-/// one, else one an exporter plug-in adds ([`plugin_formats`]). A built-in format keeps its
-/// extension, so an exporter that lists it too is found by its format id.
+/// one, else one a plug-in adds ([`plugin_formats`]), an exporter's before an importer's for an
+/// extension both list. A built-in format keeps its extension, so an exporter or importer that
+/// lists it too is found by its format id.
 pub fn format(id_or_ext: &str) -> Option<&'static Format> {
     let k = id_or_ext.trim_start_matches('.').to_ascii_lowercase();
-    FORMATS.iter().find(|f| f.id == k).or_else(|| FORMATS.iter().find(|f| f.extensions.contains(&k.as_str()))).or_else(|| {
+    builtin(&k).or_else(|| {
         let added = plugin_formats();
-        added.iter().find(|f| f.id.eq_ignore_ascii_case(&k)).or_else(|| added.iter().find(|f| f.extensions.contains(&k.as_str()))).copied()
+        let by_ext = |f: &&&Format| f.extensions.contains(&k.as_str());
+        added
+            .iter()
+            .find(|f| f.id.eq_ignore_ascii_case(&k))
+            .or_else(|| added.iter().filter(|f| f.write).find(by_ext))
+            .or_else(|| added.iter().find(by_ext))
+            .copied()
     })
 }
 
-/// The formats the installed exporter plug-ins add ([`vectorcraft_plugins::export`]), by plug-in
-/// id: write only, with the plug-in's name as the label and its extensions. Each is made once for
-/// each installation of its plug-in, its strings interned, so formats live as long as the catalogues
+/// A built-in format by id or extension (lower case, without the dot).
+fn builtin(k: &str) -> Option<&'static Format> {
+    FORMATS.iter().find(|f| f.id == k).or_else(|| FORMATS.iter().find(|f| f.extensions.contains(&k)))
+}
+
+/// The formats the installed exporter and importer plug-ins add ([`vectorcraft_plugins::export`],
+/// [`vectorcraft_plugins::import`]), by plug-in id: an exporter's write only and an importer's read
+/// only, with the plug-in's name as the label and its extensions. Each is made once for each
+/// installation of its plug-in, its strings interned, so formats live as long as the catalogues
 /// that hold them.
 pub fn plugin_formats() -> Vec<&'static Format> {
-    use vectorcraft_plugins::{export, registry};
+    use vectorcraft_plugins::{Kind, export, registry};
     static MADE: std::sync::Mutex<Vec<(u64, &'static Format)>> = std::sync::Mutex::new(Vec::new());
     let mut made = MADE.lock().unwrap_or_else(|e| e.into_inner());
-    export::installed()
+    registry::list()
         .iter()
+        .filter(|p| matches!(p.manifest().kind, Kind::Exporter | Kind::Importer))
         .map(|p| {
             if let Some((_, f)) = made.iter().find(|(serial, _)| *serial == p.serial()) {
                 return *f;
@@ -646,8 +858,8 @@ pub fn plugin_formats() -> Vec<&'static Format> {
                 label: registry::intern(&m.name),
                 extensions: Box::leak(extensions.into_boxed_slice()),
                 mime: "application/octet-stream",
-                read: false,
-                write: true,
+                read: m.kind == Kind::Importer,
+                write: m.kind == Kind::Exporter,
                 raster: false,
                 options: &[],
             }));
@@ -655,6 +867,11 @@ pub fn plugin_formats() -> Vec<&'static Format> {
             f
         })
         .collect()
+}
+
+/// The formats the installed importer plug-ins add ([`plugin_formats`] that read), by plug-in id.
+pub fn importer_formats() -> Vec<&'static Format> {
+    plugin_formats().into_iter().filter(|f| f.read).collect()
 }
 
 /// The lower-case extension of a file name or path (empty when it has none).
@@ -665,6 +882,25 @@ pub fn extension(name: &str) -> String {
 /// A file name or path without its folder and extension (`/a/Poster.svg` → `Poster`).
 pub fn file_stem(name: &str) -> String {
     std::path::Path::new(name).file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| name.to_string())
+}
+
+/// The name an imported preset `base` takes: `base` if `taken` doesn't claim it, else for a name
+/// that ends in a space and a number ("Logo Package 2") the first free name with a higher number
+/// ("Logo Package 3"), and for any other name the first free "base 2", "base 3"… ([`unique_name`]).
+pub(crate) fn import_name(base: &str, taken: impl Fn(&str) -> bool) -> String {
+    if !taken(base) {
+        return base.to_string();
+    }
+    let numbered = base
+        .rsplit_once(' ')
+        .filter(|(stem, n)| !stem.trim().is_empty() && !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+        .and_then(|(stem, n)| Some((stem, n.parse::<u64>().ok()?)));
+    match numbered {
+        Some((stem, n)) => {
+            (n.saturating_add(1)..=u64::MAX).map(|i| format!("{stem} {i}")).find(|c| !taken(c)).unwrap_or_else(|| unique_name(base, &taken))
+        }
+        None => unique_name(base, taken),
+    }
 }
 
 /// What a `format` export of `doc`, whose file is `path`, writes when it isn't `doc` itself: a
@@ -726,7 +962,7 @@ pub(super) fn formats(_: &mut Session, _: &Value) -> Result<Value> {
         "formats": all().map(listed).collect::<Vec<_>>(),
         "readable": ids(|f| f.read),
         "writable": ids(|f| f.write),
-        "openExtensions": OPEN_EXTS,
+        "openExtensions": open_extensions(),
         "unsupported": UNSUPPORTED.iter().map(Unsupported::to_json).collect::<Vec<_>>(),
     }))
 }

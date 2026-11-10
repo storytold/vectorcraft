@@ -6,7 +6,7 @@
 use serde_json::Value;
 use vectorcraft_geom::{PathData, Point, Rect};
 
-use crate::util::*;
+use crate::util::{map_nonlinear_within, num, text};
 
 pub use vectorcraft_doc::live::{WarpStyle, warp_point};
 
@@ -31,4 +31,15 @@ pub fn warp(path: &PathData, b: Rect, style: WarpStyle, p: &Value, max: usize) -
     };
     let piece = b.width().hypot(b.height()) / 24.0;
     map_nonlinear_within(path, piece, max, f)
+}
+
+/// Does warp effect `id` with params `p` move any point? Every style leaves the box as it is with
+/// no bend and no distortion, and Arc (`warp.arc`) takes a bend under 0.0001 % as none: the
+/// threshold must match the one in [`warp_point`]'s Arc case (`warp_bends_when_the_warp_moves_the_outline`
+/// tests both sides of it).
+pub(crate) fn bends(id: &str, p: &Value) -> bool {
+    let share = |key: &str, default: f64| num(p, key, default).clamp(-100.0, 100.0) / 100.0;
+    let bend = share("bend", 50.0);
+    let bent = if id == "warp.arc" { bend.abs() >= 1e-6 } else { bend != 0.0 };
+    bent || share("horizontal", 0.0) != 0.0 || share("vertical", 0.0) != 0.0
 }

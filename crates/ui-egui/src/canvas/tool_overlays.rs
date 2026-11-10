@@ -1,6 +1,6 @@
 use super::grid::{clip_segment, pref_color};
 use super::outline::{OVERLAY_MAX_ANCHORS, c32, stroke_path};
-use super::*;
+use super::{Color32, CornerRadius, Node, NodeKind, Overlay, Point, Pos2, Rect, Shape, Stroke, StrokeKind, Tokens, VectorcraftApp, Xf, pos2, vec2};
 
 /// Type → Show Hidden Characters: spaces as dots, ¶ at paragraph ends, # at the end of a story.
 /// The marks of each text object are kept from one frame to the next ([`HiddenChars`]).
@@ -105,6 +105,207 @@ impl HiddenMarks {
     }
 }
 
+/// Edit › Spelling › Auto Spell Check: a red wavy line under each word of the visible type its
+/// dictionaries don't know ([`vectorcraft_engine::cmd::spelling::misspellings`], what
+/// `text.spelling.check` lists), in the run's language, without the active document's Ignore All
+/// words. Type with effects isn't underlined
+/// ([Check and correct spelling](https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/check-and-correct-spelling.html)).
+/// Each text object's lines are kept from one frame to the next ([`SpellingMarks`]).
+pub(super) fn spelling_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
+    let kept = &mut app.canvas.spelling;
+    let Some(st) = app.session.active() else {
+        *kept = SpellingMarks::default();
+        return;
+    };
+    let clip = p.clip_rect();
+    // `last` holds the lines of the last frame; the objects this frame doesn't draw are dropped.
+    let mut last = std::mem::take(&mut kept.lines);
+    let inputs = SpellingInputs {
+        fonts: vectorcraft_text::FontDb::global().generation(),
+        hyphenation: vectorcraft_text::hyphenation_exceptions(),
+        dictionary: vectorcraft_engine::cmd::spelling::dictionary_generation(),
+        doc: st.uid,
+        // Ignore All only adds words while the document is open.
+        ignored: st.spelling_ignored.len(),
+    };
+    if kept.inputs.as_ref() != Some(&inputs) {
+        last.clear();
+        kept.inputs = Some(inputs);
+    }
+    let stroke = Stroke::new(1.0, Color32::from_rgb(0xe0, 0x20, 0x20));
+    // Depth first in paint order, leaving out hidden objects and what is inside them.
+    fn walk(nodes: &[std::sync::Arc<Node>], f: &mut impl FnMut(&std::sync::Arc<Node>)) {
+        for n in nodes.iter().filter(|n| n.visible) {
+            f(n);
+            if let Some(children) = n.children() {
+                walk(children, f);
+            }
+        }
+    }
+    walk(&st.doc.layers, &mut |n| {
+        let NodeKind::Text(tx) = &n.kind else { return };
+        if !auto_spell_checks(n) || n.geometric_bounds().is_none_or(|b| !egui::Rect::from_points(&xf.quad(b)).intersects(clip)) {
+            return;
+        }
+        let lines = match last.remove(&n.id) {
+            Some((was, lines)) if std::sync::Arc::ptr_eq(&was, n) => lines,
+            _ => std::sync::Arc::new(underlines(tx, &st.spelling_ignored)),
+        };
+        for &(a, b) in lines.iter() {
+            wavy_line(p, xf.to_screen(a), xf.to_screen(b), stroke);
+        }
+        kept.lines.insert(n.id, (n.clone(), lines));
+    });
+}
+
+/// Whether Auto Spell Check marks `n`'s words: not with an effect shown (the Appearance panel's
+/// eye) on the type or on one of its fills or strokes, as the helpx page says "Auto spell check
+/// isn't available for text with effects applied".
+fn auto_spell_checks(n: &Node) -> bool {
+    let shown = |fx: &[vectorcraft_doc::Effect]| fx.iter().any(|e| e.visible);
+    !shown(&n.appearance.effects) && !n.appearance.items.iter().any(|i| shown(i.effects()))
+}
+
+/// The word with Auto Spell Check's red line at `p` (document space): in the topmost visible type
+/// object whose glyphs `p` is on, when that object isn't locked and Auto Spell Check marks it and
+/// its word at `p` is one it underlines, with what its language's dictionary suggests instead. For the context menu's suggestions, Ignore All and Add
+/// to Dictionary ([Check and correct spelling](https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/check-and-correct-spelling.html)).
+pub(crate) fn misspelled_word_at(app: &mut VectorcraftApp, p: Point) -> Option<crate::state::ContextSpelling> {
+    let st = app.session.active()?;
+    // The topmost type whose glyphs `p` is on, and whether it or a layer or group holding it is
+    // locked: a word under other type isn't the one right-clicked, whether that type's word there
+    // is right or not.
+    let mut top: Option<(vectorcraft_doc::NodeId, bool)> = None;
+    // Back to front as drawn at `p`: an Intertwine group's members by their tier there, those of
+    // one tier in their stacking order ([`vectorcraft_doc::intertwine`]).
+    fn walk(nodes: &[std::sync::Arc<Node>], p: Point, locked: bool, f: &mut impl FnMut(&Node, bool)) {
+        for n in nodes.iter().filter(|n| n.visible) {
+            let locked = locked || n.locked;
+            f(n, locked);
+            let Some(children) = n.children() else { continue };
+            if matches!(n.kind, NodeKind::Intertwine { .. }) {
+                let mut drawn = children.to_vec();
+                drawn.sort_by_key(|c| vectorcraft_doc::intertwine::tier_at(c, p));
+                walk(&drawn, p, locked, f);
+            } else {
+                walk(children, p, locked, f);
+            }
+        }
+    }
+    // A later hit is on top.
+    walk(&st.doc.layers, p, false, &mut |n, locked| {
+        let NodeKind::Text(tx) = &n.kind else { return };
+        if n.geometric_bounds().is_none_or(|b| !b.contains(p)) {
+            return;
+        }
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), tx);
+        let on = vectorcraft_text::selection_quads(&lay, 0, tx.plain_text().len()).iter().any(|q| in_quad(q.map(|c| tx.xf * c), p));
+        if on {
+            top = Some((n.id, locked));
+        }
+    });
+    let (id, locked) = top?;
+    let n = st.doc.node(id)?;
+    let NodeKind::Text(tx) = &n.kind else { return None };
+    if locked || !auto_spell_checks(n) {
+        return None;
+    }
+    let (words, _) = vectorcraft_engine::cmd::spelling::misspellings(tx, &st.spelling_ignored, MAX_UNDERLINED);
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), tx);
+    let w = words
+        .into_iter()
+        .find(|w| vectorcraft_text::selection_quads(&lay, w.range.start, w.range.end).iter().any(|q| in_quad(q.map(|c| tx.xf * c), p)))?;
+    let word = tx.plain_text().get(w.range.clone())?.to_string();
+    let uid = st.uid;
+    let suggestions = app
+        .session
+        .execute("text.spelling.suggest", &serde_json::json!({ "word": word, "lang": w.lang.tag() }))
+        .ok()
+        .and_then(|r| r.get("suggestions").and_then(|s| s.as_array()).map(|a| a.iter().filter_map(|s| s.as_str().map(str::to_string)).collect()))
+        .unwrap_or_default();
+    Some(crate::state::ContextSpelling { uid, id, start: w.range.start, end: w.range.end, word, suggestions })
+}
+
+/// Whether `p` is inside the convex quad `q` (its corners in order, either way round) or on its
+/// edge.
+fn in_quad(q: [Point; 4], p: Point) -> bool {
+    let sides = (0..4).map(|i| {
+        let (a, b) = (q[i], q[(i + 1) % 4]);
+        (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x)
+    });
+    let sides: Vec<f64> = sides.collect();
+    sides.iter().all(|s| *s >= 0.0) || sides.iter().all(|s| *s <= 0.0)
+}
+
+/// The most words underlined in one text object: past it the rest of the object isn't checked,
+/// so a long story of unknown words costs one check's worth.
+const MAX_UNDERLINED: usize = 1_000;
+
+/// The document-space segments under the unknown words of `tx`: for each word, the bottom edge of
+/// each piece of it on a line, from the start of the line to its end.
+fn underlines(tx: &vectorcraft_doc::TextObject, ignored: &std::collections::BTreeSet<String>) -> Vec<(Point, Point)> {
+    let (words, _) = vectorcraft_engine::cmd::spelling::misspellings(tx, ignored, MAX_UNDERLINED);
+    if words.is_empty() {
+        return vec![];
+    }
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), tx);
+    words
+        .iter()
+        .flat_map(|w| vectorcraft_text::selection_quads(&lay, w.range.start, w.range.end))
+        // Clockwise from the top left: q[3] and q[2] are the bottom left and right.
+        .map(|q| (tx.xf * q[3], tx.xf * q[2]))
+        .collect()
+}
+
+/// A wavy line from `a` to `b` on screen, waves 4 pixels long and 1.5 high.
+fn wavy_line(p: &egui::Painter, a: Pos2, b: Pos2, stroke: Stroke) {
+    const STEP: f32 = 2.0;
+    const HIGH: f32 = 1.5;
+    let d = b - a;
+    let len = d.length();
+    if !len.is_finite() || len < 1.0 {
+        return;
+    }
+    let along = d / len;
+    // Down the page from the line, whichever way the type runs.
+    let across = vec2(-along.y, along.x);
+    // At most 2000 waves on one line, however far the view is zoomed in.
+    let n = ((len / STEP) as usize).clamp(1, 4_000);
+    let step = len / n as f32;
+    let points: Vec<Pos2> = (0..=n).map(|i| a + along * (step * i as f32) + across * if i % 2 == 0 { 0.0 } else { HIGH }).collect();
+    p.add(Shape::line(points, stroke));
+}
+
+/// What Auto Spell Check's kept lines depend on beyond the text object itself: when any of it
+/// changes, all type is checked again.
+#[derive(Clone, Debug, PartialEq)]
+pub(super) struct SpellingInputs {
+    /// The fonts' generation ([`vectorcraft_text::FontDb::generation`]).
+    fonts: u64,
+    /// The hyphenation exceptions, which move line breaks.
+    hyphenation: String,
+    /// The custom dictionary's generation
+    /// ([`vectorcraft_engine::cmd::spelling::dictionary_generation`]).
+    dictionary: u64,
+    /// The document the lines are of.
+    doc: u64,
+    /// How many Ignore All words the document has.
+    ignored: usize,
+}
+
+/// The lines Auto Spell Check drew under each text object in the last frame
+/// ([`crate::CanvasCache::spelling`]). Each is kept with the object it was found in: an edited
+/// object is a new `Arc` and is checked again.
+#[derive(Default)]
+pub struct SpellingMarks {
+    pub(super) inputs: Option<SpellingInputs>,
+    /// Each text object drawn, by id: the node it was checked in and its lines in document space.
+    pub(super) lines: std::collections::HashMap<vectorcraft_doc::NodeId, (std::sync::Arc<Node>, Underlines)>,
+}
+
+/// One text object's Auto Spell Check lines: the document-space ends of each.
+pub(super) type Underlines = std::sync::Arc<Vec<(Point, Point)>>;
+
 /// View › Show Text Threads: for each thread with a selected frame, a line in its first frame's
 /// layer colour from each frame's out port to the next frame's in port, both showing the arrow of a
 /// threaded port, where the tools draw the ports of selected type ([`vectorcraft_tools::text`]).
@@ -163,6 +364,23 @@ pub(super) fn original_path_overlay(app: &VectorcraftApp, p: &egui::Painter, xf:
     };
     for (id, path) in paths {
         stroke_path(p, &path.to_bezpath(), xf, Stroke::new(3.0, c32(st.doc.layer_color(id)).gamma_multiply(0.4)));
+    }
+}
+
+/// The 9-slice guides of the symbol edited in symbol editing mode: four thin dotted lines across
+/// its art's box, with any tool, whether ruler guides are shown or hidden. The Selection tool drags
+/// them ([`vectorcraft_tools::nineslice`]) at the places drawn here.
+pub(super) fn nine_slice_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
+    let Some(e) = app.session.active().and_then(|st| st.doc.edited_nine_slice()) else { return };
+    let color = Tokens::get(p.ctx()).selection;
+    for (_, a, b) in e.lines() {
+        let (a, b) = (xf.to_screen(a), xf.to_screen(b));
+        if !a.is_finite() || !b.is_finite() {
+            continue;
+        }
+        if let Some((a, b)) = clip_segment(a, b, xf.rect) {
+            p.extend(Shape::dashed_line(&[a, b], Stroke::new(1.0, color), 2.0, 2.0));
+        }
     }
 }
 

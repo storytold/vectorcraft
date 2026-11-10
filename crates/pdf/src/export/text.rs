@@ -1,6 +1,11 @@
+use vectorcraft_geom::Point;
+
 use super::exporter::{GlyphLine, MAX_INLINE_DEPTH, in_range, norm, to_path, writable, xf};
 use super::images::embed;
-use super::*;
+use super::{
+    Affine, AppearanceItem, BezPath, BlendMode, Color, Cow, Embedding, Exporter, Fill, FillRule, Glyph, GlyphId, KrillaGlyph, ListMarker, Mark, Node,
+    NormalizedF32, Paint, Path, Rect, Shape, Size, Surface, TextLayout, TextObject, krilla, write,
+};
 
 impl Exporter<'_> {
     ///
@@ -170,7 +175,7 @@ impl Exporter<'_> {
     /// text space; `text` is the plain text, whose characters the glyphs stand for, which makes
     /// the text selectable and searchable) → the outlines of the glyphs left to draw as paths:
     /// those of fonts that can't be embedded, and missing glyphs. Glyphs sharing a font, a frame
-    /// (size, scale, rotation) and a baseline are written together. Colour glyphs (bitmap emoji,
+    /// (size, scale, rotation) and a layout line are written together. Colour glyphs (bitmap emoji,
     /// COLR, SVG), with `images`, are written as text too, which draws their images or layers; the
     /// indices of those it can't write or draw (SVG glyphs) are returned with the outlines. The
     /// hyphen the layout adds where it breaks a line inside a word ([`break_hyphen`]) is written
@@ -267,31 +272,33 @@ impl Exporter<'_> {
             }
             let size = upem * sy;
             let frame = g.xf * Affine::scale(1.0 / sy);
-            // Its pen position along the frame's baseline, when it continues the line (a
-            // line-break hyphen never does).
-            let x = line
+            // Keep offset marks with their cluster so the writer maps its characters once.
+            // Layout-line identity preserves line/column boundaries despite these offsets.
+            let position = line
                 .as_ref()
-                .filter(|l| hyphen.is_none() && l.face == g.font_id && (l.size - size).abs() < 1e-6 && l.marker == marker_at)
+                .filter(|l| {
+                    hyphen.is_none() && l.layout_line == g.line && l.face == g.font_id && (l.size - size).abs() < 1e-6 && l.marker == marker_at
+                })
                 .and_then(|l| {
                     let [a, b, c, d, e, f] = (l.frame.inverse() * frame).as_coeffs();
-                    let same = (a - 1.0).abs() < 1e-6 && b.abs() < 1e-6 && c.abs() < 1e-6 && (d - 1.0).abs() < 1e-6 && f.abs() < 1e-4;
-                    same.then_some(e)
+                    let same = (a - 1.0).abs() < 1e-6 && b.abs() < 1e-6 && c.abs() < 1e-6 && (d - 1.0).abs() < 1e-6;
+                    same.then_some(Point::new(e, f))
                 });
-            let x = match x {
-                Some(x) => x,
+            let position = match position {
+                Some(position) => position,
                 None => {
                     if let Some(l) = line.take() {
                         let text = text_of(&l);
                         self.draw_glyph_line(s, l, text, fill, layout.bounds);
                     }
-                    line = Some(GlyphLine { face: g.font_id, font, size, frame, glyphs: vec![], marker: marker_at });
-                    0.0
+                    line = Some(GlyphLine { face: g.font_id, font, size, frame, layout_line: g.line, glyphs: vec![], marker: marker_at });
+                    Point::ORIGIN
                 }
             };
             // The glyph's advance in frame units (the last one's ends the line).
             let advance = g.advance * sy / sx;
             if let Some(l) = line.as_mut() {
-                l.glyphs.push((g.gid, x, advance, range));
+                l.glyphs.push((g.gid, position, advance, range));
             }
             // A line-break hyphen is written on its own.
             if hyphen.is_some()
@@ -337,14 +344,17 @@ impl Exporter<'_> {
             .glyphs
             .iter()
             .enumerate()
-            .map(|(i, (gid, x, advance, range))| {
-                let next = line.glyphs.get(i + 1).map_or(x + advance, |n| n.1);
-                KrillaGlyph::new(GlyphId::new(*gid), ((next - x) / size) as f32, 0.0, 0.0, 0.0, range.clone(), None)
+            .map(|(i, (gid, position, advance, range))| {
+                let next = line.glyphs.get(i + 1).map_or(position.x + advance, |n| n.1.x);
+                // Horizontal placement is already in the advances; krilla offsets use y up.
+                KrillaGlyph::new(GlyphId::new(*gid), ((next - position.x) / size) as f32, 0.0, (-position.y / size) as f32, 0.0, range.clone(), None)
             })
             .collect();
-        let pens =
-            line.glyphs.iter().fold(Rect::new(0.0, -size, 0.0, size), |r, (_, x, advance, _)| r.union_pt((*x, 0.0)).union_pt((x + advance, 0.0)));
-        let spacing: Vec<f64> = glyphs.iter().map(|g| f64::from(g.x_advance(1.0)) * 1000.0).collect();
+        let pens = line
+            .glyphs
+            .iter()
+            .fold(Rect::new(0.0, -size, 0.0, size), |r, (_, p, advance, _)| r.union_pt((p.x, p.y - size)).union_pt((p.x + advance, p.y + size)));
+        let spacing: Vec<f64> = glyphs.iter().flat_map(|g| [f64::from(g.x_advance(1.0)) * 1000.0, f64::from(g.y_offset(1.0)) * 1000.0]).collect();
         if !(writable(s, line.frame, pens) && in_range(&spacing)) {
             return;
         }

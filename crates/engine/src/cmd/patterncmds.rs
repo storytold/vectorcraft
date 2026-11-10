@@ -19,7 +19,10 @@ use vectorcraft_geom::Rect;
 
 use super::edit::{outermost, selected_roots};
 use super::pathops::Beside;
-use super::*;
+use super::{
+    CommandSpec, EngineError, Result, Session, bad, bool_or, cmd, f64_or, has_doc, has_selection, ids_param, matrix_param, ok, point_param,
+    str_param, targets,
+};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -29,8 +32,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make",
             ["Object", "Pattern"],
             None,
-            "{ids?, name? (trimmed; blank: New Pattern N), tileType?: grid|brickByRow|brickByColumn|hexByColumn|hexByRow, brickOffset?: 0..1 (0.5), width?, height?, edit?: bool (true)} make a pattern swatch from the selection and enter pattern editing mode → {name}",
-            has_selection,
+            "{ids?, name? (trimmed; blank: New Pattern N), tileType?: grid|brickByRow|brickByColumn|hexByColumn|hexByRow, brickOffset?: 0..1 (0.5), width?, height?, edit?: bool (true)} make a pattern swatch from the selection and enter pattern editing mode; refused while an opacity mask is edited → {name}",
+            can_make_pattern,
             pattern_make
         ),
         cmd!(
@@ -38,7 +41,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Pattern",
             ["Object", "Pattern"],
             Some("Cmd+Shift+F8"),
-            "{name?} edit a pattern (default: the selected object's fill pattern) in pattern editing mode",
+            "{name?} edit a pattern (default: the selected object's fill pattern) in pattern editing mode; refused while an opacity mask is edited",
             can_edit_pattern,
             pattern_edit
         ),
@@ -158,11 +161,27 @@ fn in_pattern_edit(s: &Session) -> std::result::Result<(), String> {
     editing(s).map(|_| ()).ok_or_else(|| "not in pattern editing mode".into())
 }
 
+/// Make: a selection, and no opacity mask or symbol is being edited
+/// ([`super::maskedit::outside_mask_editing`], [`outside_symbol_editing`]), since the tile layer
+/// would replace that mode's editing layer as the isolated layer.
+fn can_make_pattern(s: &Session) -> std::result::Result<(), String> {
+    has_selection(s)?;
+    super::maskedit::outside_mask_editing(s)?;
+    outside_symbol_editing(s)
+}
+
+/// No symbol is being edited (symbol editing mode shows the symbol in isolation mode).
+fn outside_symbol_editing(s: &Session) -> std::result::Result<(), String> {
+    if s.active().is_some_and(|st| st.doc.symbol_edit.is_some()) { Err("exit isolation mode first".into()) } else { Ok(()) }
+}
+
 fn can_edit_pattern(s: &Session) -> std::result::Result<(), String> {
     has_doc(s)?;
     if editing(s).is_some() {
         return Err("already editing a pattern".into());
     }
+    super::maskedit::outside_mask_editing(s)?;
+    outside_symbol_editing(s)?;
     if s.active().is_some_and(|st| st.doc.patterns.is_empty()) { Err("the document has no patterns".into()) } else { Ok(()) }
 }
 
@@ -170,8 +189,10 @@ fn has_selection_or_ids(s: &Session) -> std::result::Result<(), String> {
     has_doc(s)
 }
 
+/// The repeats of the selection: selected ones, and those around a selected object. None while
+/// an object of a dynamic symbol instance's art is selected.
 fn selected_repeats(s: &Session) -> Vec<NodeId> {
-    let Some(st) = s.active() else { return vec![] };
+    let Some(st) = s.active().filter(|st| st.selection.symbol_part.is_none()) else { return vec![] };
     let mut out = vec![];
     for id in &st.selection.objects {
         for a in st.doc.ancestry(*id).unwrap_or_default().into_iter().rev() {
@@ -188,6 +209,7 @@ fn selected_repeats(s: &Session) -> Vec<NodeId> {
 
 fn has_repeat(s: &Session) -> std::result::Result<(), String> {
     has_selection(s)?;
+    super::edit::no_symbol_part(s)?;
     if selected_repeats(s).is_empty() { Err("select a repeat".into()) } else { Ok(()) }
 }
 
@@ -197,8 +219,8 @@ fn ids_json(ids: &[NodeId]) -> Value {
     json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() })
 }
 
-fn roots(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
-    match ids_param(p, "ids") {
+fn roots(s: &Session, p: &Value, cmd: &str) -> Result<Vec<NodeId>> {
+    match ids_param(p, "ids", cmd)? {
         Some(ids) => {
             let st = s.doc()?;
             let mut sel = Selection::default();
@@ -284,7 +306,7 @@ fn pattern_make(s: &mut Session, p: &Value) -> Result<Value> {
     if editing(s).is_some() {
         return Err(bad(C, "already in pattern editing mode"));
     }
-    let roots = roots(s, p)?;
+    let roots = roots(s, p, C)?;
     if roots.is_empty() {
         return Err(bad(C, "select the art for the pattern tile"));
     }
@@ -352,19 +374,28 @@ fn pattern_name(p: &Paint) -> Option<String> {
     }
 }
 
-fn pattern_done(s: &mut Session, _: &Value) -> Result<Value> {
-    let name = s.edit("Done Editing Pattern", |d, sel| {
-        let (pe, art) = leave_edit(d, sel)?;
-        if let Some(def) = d.pattern_mut(&pe.pattern) {
-            def.art = art;
-            if def.size_tile_to_art {
-                def.fit_tile_to_art();
-            }
-        }
-        Ok(pe.pattern)
-    })?;
+/// Save the edited tile art into the pattern and leave pattern editing mode (`object.pattern.done`).
+/// `object.exitIsolation` runs it too while a pattern is edited.
+pub(crate) fn pattern_done(s: &mut Session, _: &Value) -> Result<Value> {
+    if editing(s).is_some() {
+        s.end_text_edit();
+    }
+    let name = s.edit("Done Editing Pattern", finish_edit)?;
     after_edit_mode(s, None)?;
     Ok(json!({ "name": name }))
+}
+
+/// Leave pattern editing mode in `d`, storing the editing layer's art as the pattern's tile art
+/// (resizing the tile to the art when the pattern does so) → the pattern's name.
+pub(crate) fn finish_edit(d: &mut Document, sel: &mut Selection) -> Result<String> {
+    let (pe, art) = leave_edit(d, sel)?;
+    if let Some(def) = d.pattern_mut(&pe.pattern) {
+        def.art = art;
+        if def.size_tile_to_art {
+            def.fit_tile_to_art();
+        }
+    }
+    Ok(pe.pattern)
 }
 
 fn pattern_cancel(s: &mut Session, _: &Value) -> Result<Value> {
@@ -634,9 +665,9 @@ fn pattern_transform(s: &mut Session, p: &Value) -> Result<Value> {
 // ---------- Repeat ----------
 
 /// Make a repeat from the selection, or switch the selected repeat's kind.
-fn make_repeat(s: &mut Session, p: &Value, label: &str, make: impl Fn(Vec<Arc<Node>>) -> RepeatSpec) -> Result<Value> {
+fn make_repeat(s: &mut Session, p: &Value, cmd: &str, label: &str, make: impl Fn(Vec<Arc<Node>>) -> RepeatSpec) -> Result<Value> {
     let existing = selected_repeats(s);
-    if ids_param(p, "ids").is_none()
+    if ids_param(p, "ids", cmd)?.is_none()
         && let [r] = existing.as_slice()
     {
         let r = *r;
@@ -649,7 +680,7 @@ fn make_repeat(s: &mut Session, p: &Value, label: &str, make: impl Fn(Vec<Arc<No
         })?;
         return Ok(json!({ "id": r.0 }));
     }
-    let roots = roots(s, p)?;
+    let roots = roots(s, p, cmd)?;
     if roots.is_empty() {
         return Err(EngineError::Other("select the art to repeat".into()));
     }
@@ -668,14 +699,14 @@ fn repeat_radial(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad("object.repeat.radial", "instances must be 1..1000"));
     }
     let radius = p.get("radius").and_then(Value::as_f64).filter(|r| r.is_finite() && *r >= 0.0);
-    make_repeat(s, p, "Radial Repeat", |src| RepeatSpec::radial(src, n as u32, radius))
+    make_repeat(s, p, "object.repeat.radial", "Radial Repeat", |src| RepeatSpec::radial(src, n as u32, radius))
 }
 
 fn repeat_grid(s: &mut Session, p: &Value) -> Result<Value> {
     let (hs, vs) = (p.get("hSpacing").and_then(Value::as_f64), p.get("vSpacing").and_then(Value::as_f64));
     let rows = p.get("rows").and_then(Value::as_u64).map(|v| v.clamp(1, 500) as u32);
     let cols = p.get("cols").and_then(Value::as_u64).map(|v| v.clamp(1, 500) as u32);
-    make_repeat(s, p, "Grid Repeat", |src| {
+    make_repeat(s, p, "object.repeat.grid", "Grid Repeat", |src| {
         let b = vectorcraft_doc::live::nodes_bounds(&src).unwrap_or(Rect::new(0.0, 0.0, 10.0, 10.0));
         let mut r = RepeatSpec::grid(src, hs.unwrap_or(b.width() / 4.0), vs.unwrap_or(b.height() / 4.0));
         if let RepeatKind::Grid { rows: rr, cols: cc, .. } = &mut r.kind {
@@ -689,7 +720,7 @@ fn repeat_grid(s: &mut Session, p: &Value) -> Result<Value> {
 fn repeat_mirror(s: &mut Session, p: &Value) -> Result<Value> {
     let angle = f64_or(p, "angle", 90.0);
     let offset = f64_or(p, "offset", 10.0);
-    make_repeat(s, p, "Mirror Repeat", |src| RepeatSpec::mirror(src, angle, offset))
+    make_repeat(s, p, "object.repeat.mirror", "Mirror Repeat", |src| RepeatSpec::mirror(src, angle, offset))
 }
 
 fn repeat_release(s: &mut Session, _: &Value) -> Result<Value> {

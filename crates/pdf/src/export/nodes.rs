@@ -1,10 +1,27 @@
-use super::exporter::{address, blend, constant_mask, cover, in_range, norm, rects_overlap, rule, to_path, writable};
-use super::*;
+use super::exporter::{UNDECODED, address, blend, color, constant_mask, cover, in_range, norm, rects_overlap, rule, to_path, writable, xf};
+use super::{
+    Affine, AppearanceItem, BezPath, BlendMode, Exporter, Fill, FillRule, LineCap, LineJoin, Mark, Node, NodeKind, NormalizedF32, Paint, Path, Rect,
+    Shape, Stroke, StrokeAlign, StrokeDash, StrokeLayer, Surface, WrittenShape, krilla, stroke,
+};
+
+/// An object's visual box for leaving out what is off the page. A plain group or layer also holds
+/// the boxes of the members it is measured through ([`Node::editing_children`], in order), so that
+/// the walk measures them once.
+struct Measured {
+    bounds: Option<Rect>,
+    members: Vec<Measured>,
+}
+
+#[cfg(test)]
+std::thread_local! {
+    /// The objects this thread has measured for the walk and for the links (tests).
+    pub(crate) static MEASURES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
 
 impl Exporter<'_> {
     /// Opacity mask → luminosity soft mask. Outside the art the backdrop is black (clip) or white;
     /// invert is a white Difference rect on top (luminance is linear, so luma(1 − c) = 1 − luma(c)).
-    fn soft_mask(&mut self, s: &mut Surface, m: &vectorcraft_doc::OpacityMask, page: Rect) -> krilla::mask::Mask {
+    fn soft_mask(&mut self, s: &mut Surface, m: &vectorcraft_doc::OpacityMask, page: Rect) -> Option<krilla::mask::Mask> {
         let mut sb = s.stream_builder();
         let mut ms = sb.surface();
         // An opaque backdrop when it matters: white outside the art (no clip), or black for the
@@ -16,22 +33,34 @@ impl Exporter<'_> {
         // and has no inks to overprint.
         let knockout = std::mem::take(&mut self.knockout);
         let overprint = std::mem::take(&mut self.overprint);
+        let image_left_out = self.image_left_out.replace(false);
         self.node(&mut ms, &m.art, page, true);
+        let incomplete = self.image_left_out.unwrap_or(false);
+        self.image_left_out = image_left_out.map(|outer| outer || incomplete);
         (self.knockout, self.overprint) = (knockout, overprint);
+        if incomplete {
+            return None;
+        }
         if m.invert {
             ms.push_blend_mode(krilla::blend::BlendMode::Difference);
             cover(&mut ms, page, 255, 1.0);
             ms.pop();
         }
         ms.finish();
-        krilla::mask::Mask::new(sb.finish(), krilla::mask::MaskType::Luminosity)
+        Some(krilla::mask::Mask::new(sb.finish(), krilla::mask::MaskType::Luminosity))
     }
 
     /// The children of a group, as the elements of a knockout group when it is one.
     pub(super) fn children(&mut self, s: &mut Surface, children: &[std::sync::Arc<Node>], page: Rect) {
+        self.measured_children(s, children, page, &[]);
+    }
+
+    /// [`Self::children`] with the boxes of the last members in `measured`.
+    fn measured_children(&mut self, s: &mut Surface, children: &[std::sync::Arc<Node>], page: Rect, measured: &[Measured]) {
         if !self.knockout {
-            for c in children {
-                self.node(s, c, page, false);
+            let unmeasured = children.len().saturating_sub(measured.len());
+            for (i, c) in children.iter().enumerate() {
+                self.measured_node(s, c, page, false, i.checked_sub(unmeasured).and_then(|i| measured.get(i)));
             }
             return;
         }
@@ -41,23 +70,25 @@ impl Exporter<'_> {
         self.warn("knockout groups are written as soft-masked groups (same look, but not editable as knockout groups)");
         let elements: Vec<_> = Node::knockout_elements(children)
             .into_iter()
-            .filter(|c| c.visual_bounds_with(&self.symbols).is_some_and(|b| rects_overlap(b.inflate(1.0, 1.0), page)))
+            .map(|c| (c, self.measure(c)))
+            .filter(|(_, m)| m.bounds.is_some_and(|b| rects_overlap(b.inflate(1.0, 1.0), page)))
             .collect();
-        let Some((first, rest)) = elements.split_first() else { return };
-        for c in rest.iter().rev() {
-            let mask = self.knockout_mask(s, c, page);
+        let Some(((first, measured), rest)) = elements.split_first() else { return };
+        for (c, m) in rest.iter().rev() {
+            let mask = self.knockout_mask(s, c, page, m);
             s.push_mask(mask);
         }
-        self.node(s, first, page, false);
-        for c in rest {
+        self.measured_node(s, first, page, false, Some(measured));
+        for (c, m) in rest {
             s.pop();
-            self.node(s, c, page, false);
+            self.measured_node(s, c, page, false, Some(m));
         }
     }
 
-    /// A luminosity mask that is 1 − the knockout shape of `c`: white, then black through an alpha
-    /// mask of `c` (at full object opacity without its own mask, unless those define its shape).
-    fn knockout_mask(&mut self, s: &mut Surface, c: &Node, page: Rect) -> krilla::mask::Mask {
+    /// A luminosity mask that is 1 − the knockout shape of `c`, whose box is in `measured`: white,
+    /// then black through an alpha mask of `c` (at full object opacity without its own mask, unless
+    /// those define its shape).
+    fn knockout_mask(&mut self, s: &mut Surface, c: &Node, page: Rect, measured: &Measured) -> krilla::mask::Mask {
         let shape = if c.knockout_shape {
             c.clone()
         } else {
@@ -72,7 +103,7 @@ impl Exporter<'_> {
             let mut ab = ms.stream_builder();
             let mut als = ab.surface();
             let overprint = std::mem::take(&mut self.overprint);
-            self.node(&mut als, &shape, page, false);
+            self.measured_node(&mut als, &shape, page, false, Some(measured));
             self.overprint = overprint;
             als.finish();
             krilla::mask::Mask::new(ab.finish(), krilla::mask::MaskType::Alpha)
@@ -84,7 +115,23 @@ impl Exporter<'_> {
         krilla::mask::Mask::new(sb.finish(), krilla::mask::MaskType::Luminosity)
     }
 
+    /// The box of `n`, and of the members of a plain group or layer.
+    fn measure(&self, n: &Node) -> Measured {
+        if !matches!(n.kind, NodeKind::Layer { clip: false, .. } | NodeKind::Group { clip: false, .. }) {
+            #[cfg(test)]
+            MEASURES.with(|m| m.set(m.get() + 1));
+            return Measured { bounds: n.visual_bounds_with(&self.symbols), members: vec![] };
+        }
+        let members: Vec<_> = n.editing_children().iter().map(|c| self.measure(c)).collect();
+        Measured { bounds: n.visual_of_members(members.iter().map(|m| m.bounds)), members }
+    }
+
     pub(super) fn node(&mut self, s: &mut Surface, n: &Node, page: Rect, force: bool) {
+        self.measured_node(s, n, page, force, None);
+    }
+
+    /// [`Self::node`] with the box of `n` in `measured`, when its parent measured it.
+    fn measured_node(&mut self, s: &mut Surface, n: &Node, page: Rect, force: bool, measured: Option<&Measured>) {
         if self.layers
             && self.in_layer != address(n)
             && let NodeKind::Layer { printable, .. } = n.kind
@@ -93,7 +140,8 @@ impl Exporter<'_> {
         {
             // A PDF layer: hidden layers and sublayers are written too (their group is off).
             let enclosing = std::mem::replace(&mut self.in_layer, address(n));
-            crate::forms::form(s, Mark::Layer(i), |s| self.node(s, n, page, true));
+            let paper = self.paper;
+            crate::forms::layer_form(s, i, paper, |s| self.node(s, n, page, true));
             self.in_layer = enclosing;
             return;
         }
@@ -105,9 +153,12 @@ impl Exporter<'_> {
         {
             return;
         }
-        match n.visual_bounds_with(&self.symbols) {
-            Some(b) if !force && !rects_overlap(b.inflate(1.0, 1.0), page) => return,
-            None if !n.is_container() => return,
+        // A container written whatever its box is has no use for one.
+        let own = (measured.is_none() && !(force && n.is_container())).then(|| self.measure(n));
+        let measured = measured.or(own.as_ref());
+        match measured.map(|m| m.bounds) {
+            Some(Some(b)) if !force && !rects_overlap(b.inflate(1.0, 1.0), page) => return,
+            Some(None) if !n.is_container() => return,
             _ => {}
         }
         self.warn_raster(&n.appearance.effects, || format!("{} objects", n.kind_label().to_lowercase()));
@@ -134,18 +185,26 @@ impl Exporter<'_> {
         }
         let mask = n.extras().mask.as_deref().filter(|m| !m.disabled);
         let alpha = match (&n.kind, mask) {
-            (NodeKind::Image(im), Some(m)) => self.masked_image(im, m),
+            (NodeKind::Image(im), Some(m)) => self.masked_image(im, m, !n.extras().pixelated),
             _ => None,
         };
         if let Some(m) = mask
             && alpha.is_none()
         {
-            let mask = self.soft_mask(s, m, page);
+            let Some(mask) = self.soft_mask(s, m, page) else {
+                self.knockout = enclosing;
+                for _ in 0..pushes {
+                    s.pop();
+                }
+                return;
+            };
             s.push_mask(mask);
             pushes += 1;
         }
         match &n.kind {
-            NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } => self.children(s, children, page),
+            NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } => {
+                self.measured_children(s, children, page, measured.map_or(&[], |m| m.members.as_slice()));
+            }
             NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
                 // The region every output clips to; nothing to clip by hides the clipped art. The
                 // clipping path's fill paints behind the clipped art and its stroke over it, unclipped.
@@ -179,19 +238,63 @@ impl Exporter<'_> {
                 self.shape(s, n, &bp, *rule, page);
             }
             NodeKind::Text(t) => self.text(s, n, t, page),
-            NodeKind::Image(im) => self.image(s, im, alpha),
+            NodeKind::Image(im) => match n.extras().colorize.as_deref() {
+                Some(p @ Paint::Solid { .. }) if self.doc.image_blob(im).is_none_or(vectorcraft_doc::ImageBlob::takes_colorize) => {
+                    if writable(s, im.xf, Rect::new(0.0, 0.0, im.width.max(1).into(), im.height.max(1).into())) {
+                        if let Some(colorized) = self.colorized_image(im, p, !n.extras().pixelated) {
+                            self.image(s, im, Some(colorized), n.extras().pixelated);
+                        } else {
+                            self.image_left_out = self.image_left_out.map(|_| true);
+                            self.warn(UNDECODED);
+                        }
+                    } else if self.image_left_out.is_some() {
+                        self.image_left_out = Some(true);
+                        self.warn(super::exporter::UNWRITABLE_IMAGE);
+                    }
+                }
+                _ => self.image(s, im, alpha, n.extras().pixelated),
+            },
             NodeKind::SymbolInstance { symbol, xf } => {
                 // Within the objects a frame may draw of symbol instances, as on screen: nested
                 // instances multiply.
-                let sym = self.doc.symbols.iter().find(|x| &x.name == symbol);
-                let total = sym.map_or(0, |sym| self.symbol_nodes.saturating_add(sym.art.count() as u64));
-                if let Some(sym) = sym.filter(|_| total <= vectorcraft_doc::MAX_SYMBOL_NODES) {
-                    self.symbol_nodes = total;
-                    let mut art = (*sym.art).clone();
-                    art.transform(*xf, false);
-                    self.node(s, &art, page, true);
+                // Placing through 9-slice guides needs room for the most objects it can make
+                // (`NineSliceMap::most_placed`), and the objects it makes count.
+                // A dynamic symbol's instance shows its own appearance changes.
+                let doc = self.doc;
+                if let Some(sym) = doc.symbols.iter().find(|x| &x.name == symbol) {
+                    let changed;
+                    let art: &Node = if n.extras().symbol_overrides.is_empty() {
+                        &sym.art
+                    } else {
+                        changed = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n);
+                        &changed
+                    };
+                    let count = art.count() as u64;
+                    let map = doc.symbol_slice_map(symbol, *xf);
+                    let most = map.map_or(count, |m| m.most_placed(art, doc));
+                    let within = self.symbol_nodes.saturating_add(most) <= self.symbol_limit;
+                    let placed = within.then(|| {
+                        vectorcraft_doc::charge_symbol_art(&mut self.symbol_nodes, most, || {
+                            let art = match map {
+                                Some(m) => m.place(art, doc),
+                                None => {
+                                    let mut a = art.clone();
+                                    a.transform(*xf, false);
+                                    a
+                                }
+                            };
+                            // As `most_placed`, placed art counts its opacity-mask art.
+                            let count = if map.is_some() { art.count_with_masks() } else { art.count() } as u64;
+                            (art, count)
+                        })
+                    });
+                    if let Some(art) = placed.flatten() {
+                        self.node(s, &art, page, true);
+                    }
                 }
             }
+            // A gradient mesh is a smooth patch shading where it can be written as one.
+            NodeKind::Mesh(m) if self.mesh(s, m) => {}
             // Live blends/envelopes/meshes export their evaluated (expanded) form.
             NodeKind::Blend { .. }
             | NodeKind::Envelope { .. }
@@ -209,6 +312,56 @@ impl Exporter<'_> {
         for _ in 0..pushes {
             s.pop();
         }
+    }
+
+    /// Gradient mesh `m` as one PDF Type 6 (Coons patch) shading filling its outline (ISO 32000-1,
+    /// 8.7.4.5.7): each patch blends its corner colours bilinearly, as the canvas draws it, and
+    /// the viewer or RIP does so smoothly at its own resolution. Cutting the mesh into flat quads
+    /// instead banded, left seams between them, and made files with many meshes very large.
+    /// Corner colours are written as [`Self::page_color`] writes any colour; RGB among other
+    /// models goes through RGB, as the writer needs one colour space a shading (ink-based ones:
+    /// CMYK and grey, merge). `false` when it isn't written so: the caller draws it expanded.
+    /// That is a mesh with see-through points (their opacities would be a soft mask of another
+    /// patch shading, which a common viewer, Poppler, draws with gaps and too opaque; the quads
+    /// carry their own opacity), an invalid mesh, or one beyond the coordinates a file holds.
+    fn mesh(&mut self, s: &mut Surface, m: &vectorcraft_doc::live::GradientMesh) -> bool {
+        if !m.is_valid() || !m.points.iter().all(|p| p.opacity >= 1.0) {
+            return false;
+        }
+        let Some(bounds) = m.bounds() else { return false };
+        if !writable(s, Affine::IDENTITY, bounds) {
+            return false;
+        }
+        let Some(path) = to_path(s, &m.outline().to_bezpath()) else { return false };
+        let page: Vec<vectorcraft_color::Color> = m.points.iter().map(|p| self.page_color(&p.color)).collect();
+        let mixed = page.windows(2).any(|w| w[0].model() != w[1].model());
+        let rgb = page.iter().any(|c| matches!(c, vectorcraft_color::Color::Rgb { .. } | vectorcraft_color::Color::Lab { .. }));
+        let colors: Vec<krilla::color::Color> =
+            page.iter().map(|c| if mixed && rgb { color(&c.in_model(vectorcraft_color::cms::Model::Rgb)) } else { color(c) }).collect();
+        let pt = |p: vectorcraft_geom::Point| (p.x as f32, p.y as f32);
+        let mut patches = Vec::with_capacity(m.rows as usize * m.cols as usize);
+        for r in 0..m.rows as usize {
+            for c in 0..m.cols as usize {
+                // The corners in the order a Type 6 shading lists them: down the left edge (v),
+                // along the bottom (u), back up the right edge and back along the top.
+                let corners = [m.idx(r, c), m.idx(r + 1, c), m.idx(r + 1, c + 1), m.idx(r, c + 1)];
+                let (left, bottom, right, top) = (m.edge_v(r, c), m.edge_u(r + 1, c), m.edge_v(r, c + 1), m.edge_u(r, c));
+                let points =
+                    [left.p0, left.p1, left.p2, left.p3, bottom.p1, bottom.p2, bottom.p3, right.p2, right.p1, right.p0, top.p2, top.p1].map(pt);
+                let Some(colors) =
+                    corners.iter().map(|&i| colors.get(i).cloned()).collect::<Option<Vec<_>>>().and_then(|v| <[_; 4]>::try_from(v).ok())
+                else {
+                    return false;
+                };
+                patches.push(krilla::paint::MeshPatch { points, colors, opacities: [NormalizedF32::ONE; 4] });
+            }
+        }
+        let mesh = krilla::paint::MeshGradient { patches, transform: xf(Affine::IDENTITY), anti_alias: false };
+        s.set_stroke(None);
+        s.set_fill(Some(Fill { paint: mesh.into(), opacity: NormalizedF32::ONE, rule: krilla::paint::FillRule::NonZero }));
+        s.draw_path(&path);
+        s.set_fill(None);
+        true
     }
 
     fn shape(&mut self, s: &mut Surface, n: &Node, bp: &BezPath, r: FillRule, page: Rect) {
@@ -266,11 +419,12 @@ impl Exporter<'_> {
 
     /// Is `p` a paint PDF has no paint for when it paints a fill (`fill`) or a stroke, which
     /// [`Self::area`] draws as art: a pattern swatch or a gradient drawn as pixels
-    /// ([`vectorcraft_color::GradientPaint::draws_as_pixels`])?
+    /// ([`vectorcraft_color::GradientPaint::draws_as_pixels`]), but not a Perceptual one of spot
+    /// inks ([`Self::perceptual_spot`])?
     pub(super) fn area_paint(&self, p: &Paint, fill: bool) -> bool {
         match p {
             Paint::Pattern { pattern, .. } => self.doc.pattern(pattern).is_some(),
-            Paint::Gradient(g) => g.draws_as_pixels(fill),
+            Paint::Gradient(g) => g.draws_as_pixels(fill) && !self.perceptual_spot(g, fill),
             _ => false,
         }
     }

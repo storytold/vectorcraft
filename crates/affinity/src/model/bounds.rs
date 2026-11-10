@@ -1,5 +1,5 @@
 use super::read::MAX_TREE_DEPTH;
-use super::*;
+use super::{Affine, Kind, Node, ObjId, Point, Rect, Stream, Tag};
 
 /// The bounds of what visible `nodes` draw (control points of outlines, corners of images, frames
 /// and tables), in document pixels.

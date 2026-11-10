@@ -8,12 +8,15 @@
 //! The mode follows the colour's own model (the last mode picked comes back for colours in its
 //! model and shows the defaults for new art; the app keeps it between sessions). Alt-clicking the
 //! spectrum or a chip paints the inactive proxy; Shift-clicking the spectrum cycles the modes;
+//! Cmd/Ctrl-clicking it applies Complement and Cmd/Ctrl+Shift-clicking it applies Invert, both to
+//! the inactive proxy when Alt is also held;
 //! Shift-dragging a slider moves the others in tandem; RGB and HSB show the out-of-gamut warning;
 //! Hide Options leaves just the proxy and the spectrum (the app keeps it between sessions too).
 //! `ui.colorPanel` picks a mode and shows or hides the options as the panel menu does.
 
 use egui::{Color32, Rect, Sense, Stroke, StrokeKind, Ui, vec2};
 use serde_json::{Value, json};
+use vectorcraft_color::cms;
 use vectorcraft_color::{Color, GradientKind, Paint};
 
 use super::{active_paint, color_json, live_run, pstate, set_pstate};
@@ -100,7 +103,19 @@ impl Mode {
     }
 }
 
-/// Displayed component values of `c` in `mode` (RGB 0–255, HSB °/%/%, CMYK %, K %, Lab L*a*b*).
+/// The color's numeric components in the active working RGB space.
+pub(crate) fn working_rgb(c: &Color) -> [f32; 3] {
+    let cms = cms::active();
+    cms.convert(c, cms::Model::Rgb, cms.settings().intent).to_rgb_uncalibrated()
+}
+
+/// HSB of the working RGB components, with hue in degrees.
+pub(crate) fn working_hsb(c: &Color) -> [f32; 3] {
+    let hsb = egui::ecolor::Hsva::from_rgb(working_rgb(c));
+    [hsb.h * 360.0, hsb.s, hsb.v]
+}
+
+/// Numeric component values of `c` in `mode` (working RGB 0 to 255, HSB °/%/%, CMYK %, K %, Lab L*a*b*).
 pub fn components(mode: Mode, c: &Color) -> Vec<f32> {
     match mode {
         Mode::Grayscale => {
@@ -113,9 +128,9 @@ pub fn components(mode: Mode, c: &Color) -> Vec<f32> {
             };
             vec![k * 100.0]
         }
-        Mode::Rgb | Mode::WebSafe => c.to_rgb().iter().map(|v| (v * 255.0).clamp(0.0, 255.0)).collect(),
+        Mode::Rgb | Mode::WebSafe => working_rgb(c).iter().map(|v| (v * 255.0).clamp(0.0, 255.0)).collect(),
         Mode::Hsb => {
-            let [h, s, b] = c.to_hsb();
+            let [h, s, b] = working_hsb(c);
             vec![h, s * 100.0, b * 100.0]
         }
         Mode::Cmyk => c.to_cmyk().iter().map(|v| v * 100.0).collect(),
@@ -144,15 +159,16 @@ pub fn from_components(mode: Mode, v: &[f32]) -> Color {
     }
 }
 
-/// The nearest web-safe colour (each channel a multiple of 0x33).
+/// The nearest web-safe color (each working RGB channel a multiple of 0x33).
 pub fn web_safe(c: &Color) -> Color {
     let q = |v: f32| (v.clamp(0.0, 1.0) * 5.0).round() / 5.0;
-    let [r, g, b] = c.to_rgb();
+    let [r, g, b] = working_rgb(c);
     Color::rgb(q(r), q(g), q(b))
 }
 
+/// Whether the working RGB hex value uses only web-safe channel levels.
 pub fn is_web_safe(c: &Color) -> bool {
-    web_safe(c).to_hex() == c.to_hex()
+    hex_digits(&web_safe(c)) == hex_digits(c)
 }
 
 /// Track colour of slider `i` at position `t` (0..1) with the other components fixed (dynamic
@@ -188,14 +204,16 @@ pub fn spectrum_at(mode: Mode, x: f32, y: f32) -> Color {
     }
 }
 
-/// The hex field text of a colour (`E67828`).
+/// The hex field text of a color's working RGB components (`E67828`).
 pub fn hex_digits(c: &Color) -> String {
-    c.to_hex().trim_start_matches('#').to_uppercase()
+    let [r, g, b] = working_rgb(c).map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8);
+    format!("{r:02X}{g:02X}{b:02X}")
 }
 
 /// Parse a hex field (`E67828`, `#e67828`, `fff`).
 pub fn parse_hex(s: &str) -> Option<Color> {
-    let s = s.trim().trim_start_matches('#');
+    let s = s.trim();
+    let s = s.strip_prefix('#').unwrap_or(s);
     if !(s.len() == 3 || s.len() == 6) || !s.chars().all(|c| c.is_ascii_hexdigit()) {
         return None;
     }
@@ -217,7 +235,7 @@ pub(crate) fn warning_chip(ui: &mut Ui, (icon, warning): (&str, &str), fix: &Col
         widgets::swatch_tile(ui, r, &Paint::solid(*fix), false, resp.hovered());
         resp.on_hover_text(crate::i18n::fmt(
             tl!("{warning}: click to correct to the closest color ({hex})"),
-            &[("warning", tl!(warning)), ("hex", &fix.to_hex())],
+            &[("warning", tl!(warning)), ("hex", &format!("#{}", hex_digits(fix).to_ascii_lowercase()))],
         ))
         .clicked()
     })
@@ -336,7 +354,7 @@ fn to32(c: &Color) -> Color32 {
 }
 
 /// The global or spot swatch a colour is a tint of (Tint mode).
-struct Tint {
+pub(crate) struct Tint {
     swatch: String,
     spot: bool,
     /// 0..1.
@@ -357,20 +375,20 @@ impl Tint {
 
 /// What the panel is editing: the active proxy's solid colour or a selected gradient stop (with
 /// the global swatch it is a tint of), or a selected freeform point.
-enum Target {
+pub(crate) enum Target {
     Paint(Option<Color>, Option<Tint>),
     Stop { paint: Paint, index: usize, color: Color, tint: Option<Tint> },
     Point { index: usize, color: Color },
 }
 
 impl Target {
-    fn color(&self) -> Option<Color> {
+    pub(crate) fn color(&self) -> Option<Color> {
         match self {
             Target::Paint(c, _) => *c,
             Target::Stop { color, .. } | Target::Point { color, .. } => Some(*color),
         }
     }
-    fn tint(&self) -> Option<&Tint> {
+    pub(crate) fn tint(&self) -> Option<&Tint> {
         match self {
             Target::Paint(_, t) | Target::Stop { tint: t, .. } => t.as_ref(),
             Target::Point { .. } => None,
@@ -407,9 +425,14 @@ fn target_with(app: &VectorcraftApp, mixed: bool) -> Target {
     }
 }
 
+/// [`target`] for the Color Wheel panel, which edits what this panel's sliders edit.
+pub(crate) fn wheel_target(app: &VectorcraftApp, ui: &Ui) -> Target {
+    target(app, ui)
+}
+
 /// Apply `c` to the target, or with `behind` (an Alt-click) to the inactive proxy as a solid
 /// colour, keeping the active proxy in front.
-fn apply(app: &mut VectorcraftApp, tgt: &Target, c: Color, phase: Live, behind: bool) {
+pub(crate) fn apply(app: &mut VectorcraftApp, tgt: &Target, c: Color, phase: Live, behind: bool) {
     match tgt {
         Target::Stop { paint: Paint::Gradient(g), index, .. } if !behind => {
             let mut stops = g.gradient.stops.clone();
@@ -428,6 +451,15 @@ fn apply(app: &mut VectorcraftApp, tgt: &Target, c: Color, phase: Live, behind: 
             live_run(app, "Color", cmd, json!({"color": color_json(&c), "focus": !behind, "keepModel": true}), phase);
         }
     }
+}
+
+/// [`apply`] a color chosen in the panel; once the pick ends, it also becomes the Color Guide's
+/// base color.
+fn choose(app: &mut VectorcraftApp, tgt: &Target, c: Color, phase: Live, behind: bool) {
+    if phase == Live::Released {
+        super::color_guide::choose_base(app, c);
+    }
+    apply(app, tgt, c, phase, behind);
 }
 
 /// Set the target's tint of its swatch to `t` (0..1), keeping the link (the T slider).
@@ -456,6 +488,26 @@ fn set_mode(app: &mut VectorcraftApp, tgt: &Target, mode: Mode) {
         if conv != c || tgt.tint().is_some() {
             apply(app, tgt, conv, Live::Released, false);
         }
+    }
+}
+
+/// Invert (`invert`) or Complement, as the panel menu's items do: a gradient stop or freeform point
+/// is recolored in place, and a solid color or a "?" proxy goes through `paint.invert` or
+/// `paint.complement` (each selected object keeps its color model). Without a color or a "?"
+/// proxy nothing changes. With `behind` (Alt held) the command recolors the inactive proxy instead.
+fn recolor(app: &mut VectorcraftApp, ui: &Ui, tgt: &Target, invert: bool, behind: bool) {
+    let (cmd, f): (&str, fn(&Color) -> Color) =
+        if invert { ("paint.invert", Color::invert_keep_model) } else { ("paint.complement", Color::complement_keep_model) };
+    if behind {
+        app.run(cmd, json!({ "stroke": app.session.fill_active })).ok();
+        return;
+    }
+    match (tgt, tgt.color()) {
+        (Target::Stop { .. } | Target::Point { .. }, Some(c)) => apply(app, tgt, f(&c), Live::Released, false),
+        (_, color) if color.is_some() || super::active_mixed(app, ui.ctx()) => {
+            app.run(cmd, json!({})).ok();
+        }
+        _ => {}
     }
 }
 
@@ -516,6 +568,10 @@ enum SpectrumHit {
     Pick(Color, Live),
     /// Shift-click: the next colour mode.
     Cycle,
+    /// Cmd/Ctrl-click: Complement, or with Shift also held (`invert`) Invert.
+    Recolor {
+        invert: bool,
+    },
 }
 
 /// The spectrum ramp: hue across, white to full colour to black down (a grey ramp in Grayscale).
@@ -528,13 +584,18 @@ fn spectrum(ui: &mut Ui, mode: Mode, size: egui::Vec2) -> Option<SpectrumHit> {
     if let Some(p) = resp.hover_pos() {
         ui.painter().rect_stroke(Rect::from_center_size(p, vec2(5.0, 5.0)), 0.0, Stroke::new(1.0, Color32::WHITE), StrokeKind::Middle);
     }
-    if resp.clicked() && ui.input(|i| i.modifiers.shift) {
+    let (command, shift) = ui.input(|i| (i.modifiers.command, i.modifiers.shift));
+    if resp.clicked() && command {
+        return Some(SpectrumHit::Recolor { invert: shift });
+    }
+    if resp.clicked() && shift {
         return Some(SpectrumHit::Cycle);
     }
     let (p, phase) = widgets::pointer_phase(&resp)?;
     Some(SpectrumHit::Pick(spectrum_at(mode, (p.x - r.left()) / r.width(), (p.y - r.top()) / r.height()), phase))
 }
 
+/// Draw numeric paint controls, retaining live components while the color and settings match.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let tgt = target(app, ui);
@@ -550,15 +611,17 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             })
             .inner;
         match hit {
-            Some(SpectrumHit::Pick(c, phase)) => apply(app, &tgt, c, phase, alt),
+            Some(SpectrumHit::Pick(c, phase)) => choose(app, &tgt, c, phase, alt),
             Some(SpectrumHit::Cycle) => set_mode(app, &tgt, mode.next()),
+            Some(SpectrumHit::Recolor { invert }) => recolor(app, ui, &tgt, invert, alt),
             None => {}
         }
         return;
     }
-    // Keep the displayed components while the colour is unchanged (hue survives S = 0 etc.).
-    let key = color.map(|c| (c.to_hex(), mode as u8));
-    let comps: Vec<f32> = match (color, pstate::<Option<((String, u8), Vec<f32>)>>(ui.ctx(), "color-comps")) {
+    // Keep the components while the native color and settings are unchanged (hue survives S = 0).
+    let settings = cms::active_settings();
+    let key = color.map(|c| (c, mode as u8, settings.clone()));
+    let comps: Vec<f32> = match (color, pstate::<Option<((Color, u8, cms::ColorSettings), Vec<f32>)>>(ui.ctx(), "color-comps")) {
         (Some(_), Some((k, v))) if Some(&k) == key.as_ref() => v,
         (Some(c), _) => components(mode, &c),
         (None, _) => vec![0.0; mode.labels().len()],
@@ -683,18 +746,22 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     match spectrum(ui, mode, vec2(ui.available_width(), 46.0)) {
         Some(SpectrumHit::Pick(c, phase)) => pick(c, phase, &mut new),
         Some(SpectrumHit::Cycle) => set_mode(app, &tgt, mode.next()),
+        Some(SpectrumHit::Recolor { invert }) => recolor(app, ui, &tgt, invert, alt),
         None => {}
     }
     if let Some((c, phase)) = behind {
-        apply(app, &tgt, c, phase, true);
+        choose(app, &tgt, c, phase, true);
     }
     if let (Some((t, phase)), Some(tint)) = (tinted, tgt.tint()) {
+        if phase == Live::Released {
+            super::color_guide::choose_base(app, tint.base.tinted(t));
+        }
         apply_tint(app, &tgt, tint, t, phase);
     }
     if let Some((c, phase, comps2)) = new {
-        let key = (c.to_hex(), mode as u8);
+        let key = (c, mode as u8, settings);
         set_pstate(ui.ctx(), "color-comps", Some((key, comps2)));
-        apply(app, &tgt, c, phase, false);
+        choose(app, &tgt, c, phase, false);
     }
 }
 
@@ -714,20 +781,10 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     }
     ui.separator();
-    // Solid colours (and a "?" proxy) go through the proxy commands (each selected object keeps
-    // its colour model); a gradient stop is recoloured in place.
-    let recolor = color.is_some() || super::active_mixed(app, ui.ctx());
-    for (label, cmd, f) in [
-        (tl!("Invert"), "paint.invert", Color::invert_keep_model as fn(&Color) -> Color),
-        (tl!("Complement"), "paint.complement", Color::complement_keep_model),
-    ] {
-        if menu_item(ui, label, recolor, false) {
-            match (&tgt, color) {
-                (Target::Stop { .. } | Target::Point { .. }, Some(c)) => apply(app, &tgt, f(&c), Live::Released, false),
-                _ => {
-                    app.run(cmd, json!({})).ok();
-                }
-            }
+    let enabled = color.is_some() || super::active_mixed(app, ui.ctx());
+    for (label, invert) in [(tl!("Invert"), true), (tl!("Complement"), false)] {
+        if menu_item(ui, label, enabled, false) {
+            recolor(app, ui, &tgt, invert, false);
         }
     }
     ui.separator();
@@ -744,7 +801,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if menu_item(ui, tl!("Copy Color Value (Hex)"), color.is_some(), false)
         && let Some(c) = color
     {
-        ui.ctx().copy_text(c.to_hex());
+        ui.ctx().copy_text(format!("#{}", hex_digits(&c).to_ascii_lowercase()));
     }
 }
 

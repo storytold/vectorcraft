@@ -1,4 +1,4 @@
-use super::*;
+use super::{Affine, Arc, Blend, BlendMode, Builder, FillRule, Kind, LayerColor, Node, NodeKind, OpacityMask, Rect, af};
 
 /// Deepest node tree mapped (the reader bounds trees well below this).
 pub(super) const MAX_DEPTH: usize = 160;
@@ -9,6 +9,15 @@ pub(super) fn rect_of(r: af::Rect) -> Rect {
 
 pub(super) fn affine(a: af::Affine) -> Affine {
     Affine::new(a.0)
+}
+
+/// Are all of `p`'s points, mapped by `to_doc`, finite and within `MAX_COORD` of the origin?
+pub(super) fn path_in_range(p: &af::Path, to_doc: Affine) -> bool {
+    let ok = |q: &af::Point| {
+        let d = to_doc * kurbo::Point::new(q.x, q.y);
+        [d.x, d.y].iter().all(|v| v.is_finite() && v.abs() <= crate::MAX_COORD)
+    };
+    p.subpaths.iter().all(|s| ok(&s.start) && s.segments.iter().flatten().all(ok))
 }
 
 impl Builder {
@@ -107,6 +116,12 @@ impl Builder {
                 return None;
             }
         }
+        // So must its vector mask, which becomes a clipping path: every control point, not just
+        // the finite ones a bounding box takes.
+        if n.mask.as_ref().is_some_and(|m| !path_in_range(m, to_doc)) {
+            self.warn("objects beyond the document range VectorCraft supports (left out)");
+            return None;
+        }
         let n = &*self.overlaid(n);
         // Register before descending so nested artboards keep their document order. Inside an
         // embedded document an artboard is just its content's frame.
@@ -186,14 +201,19 @@ impl Builder {
                     return Some(Arc::new(g));
                 };
                 self.outline_text(&n.effects, &mut text);
-                let mut node = self.base(n, NodeKind::Text(Box::new(text)));
-                node.opacity *= alpha;
-                if !children.is_empty() {
-                    let mut kids = vec![Arc::new(node)];
+                if children.is_empty() {
+                    let mut node = self.base(n, NodeKind::Text(Box::new(text)));
+                    node.opacity *= alpha;
+                    node
+                } else {
+                    // Text clips its children as a shape does: the type is the clipping path, its
+                    // characters' fill behind the clipped art and their stroke over it.
+                    let mut clip = Node::new(self.doc.alloc_id(), NodeKind::Text(Box::new(text)));
+                    clip.opacity = alpha;
+                    let mut kids = vec![Arc::new(clip)];
                     kids.extend(children);
-                    node = Node::group(self.doc.alloc_id(), kids);
+                    self.base(n, NodeKind::Group { children: kids, clip: true })
                 }
-                node
             }
             Kind::Table(t) => {
                 let mut kids = self.table(t, to_doc);
@@ -245,5 +265,27 @@ impl Builder {
             out.appearance.effects.extend(fx);
         }
         Some(Arc::new(out))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn path(points: &[(f64, f64)]) -> af::Path {
+        let p = |&(x, y): &(f64, f64)| af::Point { x, y };
+        let start = p(&points[0]);
+        let segments = points[1..].iter().map(|q| [start, p(q), p(q)]).collect();
+        af::Path { subpaths: vec![af::SubPath { start, segments, closed: true }] }
+    }
+
+    /// A mask's control points are checked as mapped into the document, NaN ones included.
+    #[test]
+    fn mask_paths_must_stay_in_the_document_range() {
+        let k = Affine::scale(0.75);
+        assert!(path_in_range(&path(&[(0.0, 0.0), (100.0, 0.0), (100.0, 100.0)]), k));
+        assert!(!path_in_range(&path(&[(0.0, 0.0), (1.0e7, 0.0)]), k));
+        assert!(!path_in_range(&path(&[(0.0, 0.0), (f64::NAN, 0.0)]), k));
+        assert!(!path_in_range(&path(&[(0.0, 0.0), (1.0, 1.0)]), Affine::scale(1.0e9)));
     }
 }

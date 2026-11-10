@@ -1,5 +1,5 @@
 use super::shape::scale_across;
-use super::*;
+use super::{Affine, Document, Node, NodeId, NodeKind, OrientedBox, Point, Rect};
 
 /// One axis of an object that [`set_bounds`] sizes, square to its frame: the geometric box runs
 /// from `lo` to `hi`, and the visual box reaches past each end (before, after) by a margin that

@@ -168,11 +168,46 @@ fn right_clicking_a_ruler_swaps_the_document_units() {
     assert!(texts.iter().any(|(t, _)| t == "✓  Millimeters"), "the left ruler reflects the current unit: {texts:?}");
 }
 
+/// Cmd+Alt+Shift+U is Switch Units by default (Ctrl+Alt+Shift+U on Windows and Linux,
+/// Option+Shift+Command+U on macOS): pressed, the document goes to the unit after its own in the
+/// ruler's menu, and Smart Guides (Cmd+U) stay as they are. No other default has the key.
+#[test]
+fn cmd_alt_shift_u_switches_to_the_next_unit() {
+    use crate::shortcut_editor as ed;
+    use vectorcraft_doc::Unit;
+    assert_eq!(ed::default_command_shortcut("document.switchUnits"), Some("Cmd+Alt+Shift+U"));
+    assert_eq!(ed::command_for_key("Cmd+Alt+Shift+U"), Some("document.switchUnits"));
+    let shown = menus::pretty_shortcut("Cmd+Alt+Shift+U");
+    assert_eq!(shown, if cfg!(target_os = "macos") { "⌥⇧⌘U" } else { "Ctrl+Alt+Shift+U" });
+    let mut app = app();
+    let listed = app.run("shortcuts.list", json!({"query": "document.switchUnits"})).unwrap();
+    let rows: Vec<_> = listed.as_array().expect("rows").iter().map(|r| (r["label"].clone(), r["group"].clone(), r["default"].clone())).collect();
+    assert_eq!(rows, [(json!("Switch Units"), json!("Document"), json!("Cmd+Alt+Shift+U"))], "Keyboard Shortcuts lists it under Document");
+    assert_eq!(app.run("shortcuts.conflicts", json!({})).unwrap(), json!([]), "no other default has the key");
+    fn press(app: &mut VectorcraftApp) {
+        let ctx = egui::Context::default();
+        let modifiers = egui::Modifiers::COMMAND | egui::Modifiers::ALT | egui::Modifiers::SHIFT;
+        let ev = Event::Key { key: egui::Key::U, physical_key: None, pressed: true, repeat: false, modifiers };
+        let mut out = ctx.run_ui(egui::RawInput { events: vec![ev], ..Default::default() }, |ui| crate::shortcuts::handle(app, ui.ctx()));
+        out.textures_delta.clear();
+    }
+    let guides = app.ui.view.smart_guides;
+    press(&mut app);
+    assert_eq!(app.session.general_unit(), Unit::Picas, "Points → Picas");
+    assert_eq!(app.ui.view.smart_guides, guides, "Smart Guides stay as they are");
+    app.run("document.setUnits", json!({"units": "Feet"})).unwrap();
+    press(&mut app);
+    assert_eq!(app.session.general_unit(), Unit::Points, "Feet → Points");
+}
+
 fn labels(items: &[Item]) -> Vec<&'static str> {
     items
         .iter()
         .flat_map(|it| match it {
+            // A spelling suggestion shows the word it puts in, not its label.
+            Item::Cmd(_, "text.editRange", _) => vec![],
             Item::Cmd(l, ..) => vec![*l],
+            Item::Header(l) => vec![*l],
             Item::Sub(l, ch) => std::iter::once(*l).chain(labels(ch)).collect(),
             _ => vec![],
         })
@@ -256,6 +291,101 @@ fn selected_type_has_apply_numbers() {
     assert_eq!(text.para_at(0).list.and_then(|l| l.number), Some(vectorcraft_doc::text::NumberStyle::Arabic));
 }
 
+/// A right-click on type has Spelling › Auto Spell Check, which turns it on or off as Edit ›
+/// Spelling does (helpx: Check and correct spelling, "Turn on Auto Spell Check"). The context menu
+/// draws no check marks, but this submenu holds only the toggle, so it shows whether it is on;
+/// other submenus stay without the room for one. Other art has no Spelling submenu.
+#[test]
+fn right_click_on_type_turns_auto_spell_check_on_and_off() {
+    let mut app = app();
+    let r = rect(&mut app, 200.0, 150.0);
+    let t = NodeId(app.run("text.create", json!({"x": 20, "y": 60, "text": "Hello", "size": 24})).unwrap()["id"].as_u64().unwrap());
+    app.run("select.none", json!({})).unwrap();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let p = screen(&app, 250.0, 200.0);
+    assert!(!has(&click(&mut app, &ctx, p, PointerButton::Secondary), "Spelling"), "a rectangle has no Spelling submenu");
+    assert_eq!(app.session.active().unwrap().selection.objects, [r]);
+    let away = screen(&app, 390.0, 290.0);
+    click(&mut app, &ctx, away, PointerButton::Primary);
+    // Right-click the type, open Spelling: Auto Spell Check, not checked.
+    let open_spelling = |app: &mut VectorcraftApp| {
+        let p = word_at(app, t, 0, 5);
+        let texts = click(app, &ctx, p, PointerButton::Secondary);
+        assert_eq!(app.session.active().unwrap().selection.objects, [t], "the type right-clicked is selected");
+        frame(app, &ctx, vec![Event::PointerMoved(at(&texts, "Spelling"))]);
+        frame(app, &ctx, vec![])
+    };
+    let texts = open_spelling(&mut app);
+    assert!(texts.iter().any(|(s, _)| s == "     Auto Spell Check"), "unchecked, with the room for a check mark: {texts:?}");
+    assert!(texts.iter().any(|(s, _)| s == "Transform"), "other items have no gutter: {texts:?}");
+    // Agents see it under the Spelling path.
+    let e = menus::context_entries(&app).into_iter().find(|e| e.command.as_deref() == Some("edit.autoSpellCheck")).expect("Auto Spell Check");
+    assert_eq!((e.path.as_slice(), e.label.as_str()), (&["Spelling".to_string()][..], "Auto Spell Check"));
+    let texts = click(&mut app, &ctx, at(&texts, "     Auto Spell Check"), PointerButton::Primary);
+    assert!(app.ui.view.auto_spell_check, "turned on");
+    assert!(!has(&texts, "Spelling"), "the menu closed: {texts:?}");
+    let texts = open_spelling(&mut app);
+    assert!(texts.iter().any(|(s, _)| s == "✓  Auto Spell Check"), "checked: {texts:?}");
+    click(&mut app, &ctx, at(&texts, "✓  Auto Spell Check"), PointerButton::Primary);
+    assert!(!app.ui.view.auto_spell_check, "turned off");
+}
+
+/// The members of the overlap area of Intertwine group `g` at (x, y), in the order they are drawn
+/// there, bottom first.
+fn intertwine_order(app: &VectorcraftApp, g: NodeId, x: f64, y: f64) -> Vec<NodeId> {
+    use vectorcraft_tools::intertwine::{drawn_order, face_at, faces};
+    let st = app.session.active().unwrap();
+    let children = st.doc.node(g).unwrap().children().unwrap();
+    let face = face_at(&faces(children), Point::new(x, y)).unwrap();
+    drawn_order(children, &face).into_iter().map(|i| children[i].id).collect()
+}
+
+/// With the Intertwine tool, a right-click where three or more objects of the group overlap lists
+/// Bring to Front, Bring Forward, Send Backward and Send to Back for the object nearest to the
+/// pointer in place of the Arrange submenu, and they move it in that overlap area only. Elsewhere
+/// the menu is the usual one.
+#[test]
+fn right_click_where_three_intertwined_objects_overlap_arranges_the_nearest_one() {
+    let mut app = app();
+    // Rectangles from x = 50, 90 and 130, 120 wide: all three overlap from x = 130 to 170.
+    let wide = |app: &mut VectorcraftApp, x: f64| {
+        NodeId(app.run("shape.rectangle", json!({"x": x, "y": 50, "width": 120, "height": 100})).unwrap()["id"].as_u64().unwrap())
+    };
+    let (a, b, c) = (wide(&mut app, 50.0), wide(&mut app, 90.0), wide(&mut app, 130.0));
+    app.run("select.set", json!({"ids": [a.0, b.0, c.0]})).unwrap();
+    let g = NodeId(app.run("object.intertwine.make", json!({})).unwrap()["id"].as_u64().unwrap());
+    assert_eq!(app.session.tool_id(), "intertwine");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let items = ["Bring to Front", "Bring Forward", "Send Backward", "Send to Back"];
+    // By the right edge of A (the first rectangle), where all three overlap.
+    let p = screen(&app, 169.0, 100.0);
+    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert_eq!(app.session.active().unwrap().selection.objects, [g], "the selection stays the group");
+    for label in items {
+        assert!(has(&texts, label), "{label} in {texts:?}");
+    }
+    assert!(!has(&texts, "Arrange"), "no Arrange submenu: {texts:?}");
+    let rows: Vec<f32> = items.iter().map(|l| at(&texts, l).y).collect();
+    assert!(rows.windows(2).all(|w| w[0] < w[1]), "in that order: {rows:?}");
+    let Some(Item::Cmd(_, id, params)) = menus::context_items(&app).into_iter().find(|i| matches!(i, Item::Cmd("Bring Forward", ..))) else {
+        panic!("no Bring Forward item")
+    };
+    assert_eq!(id, "object.intertwine.arrange");
+    assert_eq!((&params["id"], &params["order"], &params["member"]), (&json!(g.0), &json!("forward"), &json!(a.0)));
+    // Bring Forward moves A one place up in that area only.
+    assert_eq!(intertwine_order(&app, g, 150.0, 100.0), [a, b, c]);
+    let texts = click(&mut app, &ctx, at(&texts, "Bring Forward"), PointerButton::Primary);
+    assert!(!has(&texts, "Bring Forward"), "the menu closes");
+    assert_eq!(intertwine_order(&app, g, 150.0, 100.0), [b, a, c]);
+    assert_eq!(intertwine_order(&app, g, 110.0, 100.0), [a, b], "where only A and B overlap");
+    // Where only two overlap, the menu is the usual one.
+    let p = screen(&app, 110.0, 100.0);
+    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert!(has(&texts, "Arrange") && !has(&texts, "Bring Forward"), "{texts:?}");
+}
+
 /// Every label the context menu can show is a menu string, so complete catalogs must translate it.
 #[test]
 fn every_context_label_is_a_menu_string() {
@@ -283,14 +413,198 @@ fn every_context_label_is_a_menu_string() {
     app.run("layer.setProps", json!({"ids": [a.0], "locked": true})).unwrap();
     app.ui.context_locked = Some((app.session.active().unwrap().uid, vec![a]));
     shown.extend(labels(&menus::context_items(&app)));
+    // A word Auto Spell Check underlined, with no suggestions: Ignore All, Add to Dictionary.
+    let text = NodeId(app.run("text.create", json!({"x": 10, "y": 200, "text": "Zqxvbtkw"})).unwrap()["id"].as_u64().unwrap());
+    app.ui.context_spelling = Some(crate::state::ContextSpelling {
+        uid: app.session.active().unwrap().uid,
+        id: text,
+        start: 0,
+        end: 8,
+        word: "Zqxvbtkw".into(),
+        suggestions: vec![],
+    });
+    shown.extend(labels(&menus::context_items(&app)));
+    app.ui.context_spelling = None;
     // The Lock Artboards and Unlock Artboards submenus of the Artboard tool.
-    app.run("artboard.new", json!({"x": 400, "y": 0, "width": 100, "height": 100})).unwrap();
+    app.run("artboard.new", json!({"x": 400, "y": 0, "width": 100, "height": 80})).unwrap();
     app.run("artboard.setProps", json!({"index": 0, "locked": true})).unwrap();
     app.select_tool("artboard");
+    shown.extend(labels(&menus::context_items(&app)));
+    // Lock Selected with the artboard that isn't locked active.
+    crate::panels::artboards::select(&mut app, 1);
     shown.extend(labels(&menus::context_items(&app)));
     let missing: Vec<_> = shown.iter().filter(|l| !strings.contains(**l)).collect();
     assert!(missing.is_empty(), "context menu labels missing from menu_strings: {missing:?}");
     for label in menus::CONTEXT_LABELS {
         assert!(shown.contains(label), "`{label}` is listed but the context menu never shows it");
     }
+}
+
+/// Point type holding `t` at (20, 60), with Auto Spell Check on.
+fn spelled(app: &mut VectorcraftApp, t: &str) -> NodeId {
+    let id = NodeId(app.run("text.create", json!({"x": 20, "y": 60, "text": t, "size": 24})).unwrap()["id"].as_u64().unwrap());
+    app.run("select.none", json!({})).unwrap();
+    app.run("edit.autoSpellCheck", json!({})).unwrap();
+    id
+}
+
+/// Where on screen the middle of bytes `a..b` of type object `id` is.
+fn word_at(app: &VectorcraftApp, id: NodeId, a: usize, b: usize) -> Pos2 {
+    let st = app.session.active().unwrap();
+    let Some(NodeKind::Text(t)) = st.doc.node(id).map(|n| &n.kind) else { panic!("type") };
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    let q = vectorcraft_text::selection_quads(&lay, a, b)[0].map(|c| t.xf * c);
+    let c = Point::new(q.iter().map(|p| p.x).sum::<f64>() / 4.0, q.iter().map(|p| p.y).sum::<f64>() / 4.0);
+    screen(app, c.x, c.y)
+}
+
+fn plain(app: &VectorcraftApp, id: NodeId) -> String {
+    match app.session.active().unwrap().doc.node(id).map(|n| &n.kind) {
+        Some(NodeKind::Text(t)) => t.plain_text(),
+        _ => panic!("type"),
+    }
+}
+
+/// With Auto Spell Check on, right-clicking an underlined word lists what the dictionary suggests
+/// instead, then Ignore All and Add to Dictionary; a suggestion replaces the word in one undo step
+/// (helpx: Check and correct spelling, "Correct spelling errors during Auto Spell Check").
+#[test]
+fn right_click_on_an_underlined_word_offers_its_suggestions() {
+    let mut app = app();
+    let id = spelled(&mut app, "the speling cat");
+    let want: Vec<String> = app.session.execute("text.spelling.suggest", &json!({"word": "speling"})).unwrap()["suggestions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s.as_str().unwrap().to_string())
+        .collect();
+    assert!(!want.is_empty(), "the dictionary has suggestions for `speling`");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let p = word_at(&app, id, 4, 11);
+    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
+    for w in &want {
+        assert!(has(&texts, w), "`{w}` in {texts:?}");
+    }
+    assert!(has(&texts, "Ignore All") && has(&texts, "Add to Dictionary"), "{texts:?}");
+    // Agents see them at the top of the menu, a suggestion by its word.
+    let entries = menus::context_entries(&app);
+    assert_eq!((entries[0].label.as_str(), entries[0].command.as_deref()), (want[0].as_str(), Some("text.editRange")));
+    let steps = app.session.active().unwrap().history.undo.len();
+    let texts = click(&mut app, &ctx, at(&texts, &want[0]), PointerButton::Primary);
+    assert_eq!(plain(&app, id), format!("the {} cat", want[0]), "the word is replaced");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), steps + 1, "in one undo step");
+    assert!(!has(&texts, "Ignore All"), "the menu closed: {texts:?}");
+}
+
+/// Ignore All and Add to Dictionary from the menu: the word's line goes, in this document for
+/// Ignore All, in every check for Add. A word with nothing to suggest says so.
+#[test]
+fn ignore_all_and_add_to_dictionary_from_the_context_menu() {
+    let mut app = app();
+    let id = spelled(&mut app, "Qzvxtrwk and Kwqzvxtr");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let p = word_at(&app, id, 0, 8);
+    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert!(has(&texts, "No Suggestions"), "{texts:?}");
+    click(&mut app, &ctx, at(&texts, "Ignore All"), PointerButton::Primary);
+    assert!(app.session.active().unwrap().spelling_ignored.contains("qzvxtrwk"));
+    let p = word_at(&app, id, 13, 21);
+    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
+    click(&mut app, &ctx, at(&texts, "Add to Dictionary"), PointerButton::Primary);
+    let added = craft_proof_has(&mut app, "kwqzvxtr");
+    app.run("text.spelling.removeWord", json!({"word": "kwqzvxtr"})).unwrap();
+    assert!(added, "added to the custom dictionary");
+    // Nothing left underlined there: a right-click on it offers no spelling items.
+    let p = word_at(&app, id, 0, 8);
+    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert!(!has(&texts, "Ignore All"), "{texts:?}");
+}
+
+fn craft_proof_has(app: &mut VectorcraftApp, w: &str) -> bool {
+    app.run("text.spelling.dictionary", json!({})).unwrap()["words"].as_array().unwrap().iter().any(|x| x == w)
+}
+
+/// With Auto Spell Check off, or on a word that is right, a right-click lists no spelling items.
+#[test]
+fn no_spelling_items_off_a_misspelled_word_or_with_auto_spell_check_off() {
+    let mut app = app();
+    let id = spelled(&mut app, "the Vqzxtrwk");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let p = word_at(&app, id, 0, 3);
+    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert!(!has(&texts, "Ignore All"), "a right word: {texts:?}");
+    app.run("edit.autoSpellCheck", json!({})).unwrap();
+    frame(
+        &mut app,
+        &ctx,
+        vec![Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }],
+    );
+    let p = word_at(&app, id, 4, 12);
+    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert!(!has(&texts, "Ignore All"), "off: {texts:?}");
+}
+
+/// A right word in type on top of an underlined word in other type: the right-click is on the
+/// top type, so it lists no spelling items for the word under it.
+#[test]
+fn a_word_under_other_type_is_not_the_one_right_clicked() {
+    let mut app = app();
+    let under = spelled(&mut app, "Qzvxtrwk");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let p = word_at(&app, under, 0, 8);
+    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert!(has(&texts, "Ignore All"), "alone, the word is offered: {texts:?}");
+    frame(
+        &mut app,
+        &ctx,
+        vec![Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }],
+    );
+    app.run("text.create", json!({"x": 20, "y": 60, "text": "the cat sat on the mat", "size": 24})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert!(!has(&texts, "Ignore All"), "under right type: {texts:?}");
+}
+
+/// In an Intertwine group, the type drawn on top at the right-click is the one whose word is
+/// offered: a member brought to the front there, though earlier in the stacking order.
+#[test]
+fn in_an_intertwine_group_the_type_drawn_on_top_is_the_one_right_clicked() {
+    let mut app = app();
+    let under = spelled(&mut app, "Qzvxtrwk");
+    let over =
+        NodeId(app.run("text.create", json!({"x": 20, "y": 60, "text": "the cat sat on the mat", "size": 24})).unwrap()["id"].as_u64().unwrap());
+    app.run("select.set", json!({"ids": [under.0, over.0]})).unwrap();
+    let g = NodeId(app.run("object.intertwine.make", json!({})).unwrap()["id"].as_u64().unwrap());
+    app.select_tool("selection");
+    app.run("select.none", json!({})).unwrap();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    // A point on the word where glyphs of both overlap: Intertwine's areas follow the outlines.
+    let quad = {
+        let st = app.session.active().unwrap();
+        let Some(NodeKind::Text(t)) = st.doc.node(under).map(|n| &n.kind) else { panic!("type") };
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+        vectorcraft_text::selection_quads(&lay, 0, 8)[0].map(|c| t.xf * c)
+    };
+    let (x0, x1) = (quad.iter().map(|c| c.x).fold(f64::MAX, f64::min), quad.iter().map(|c| c.x).fold(f64::MIN, f64::max));
+    let (y0, y1) = (quad.iter().map(|c| c.y).fold(f64::MAX, f64::min), quad.iter().map(|c| c.y).fold(f64::MIN, f64::max));
+    let overlap = (0..40)
+        .flat_map(|i| (0..20).map(move |j| Point::new(x0 + (x1 - x0) * (i as f64 + 0.5) / 40.0, y0 + (y1 - y0) * (j as f64 + 0.5) / 20.0)))
+        .find(|q| app.run("object.intertwine.arrange", json!({"id": g.0, "at": [q.x, q.y], "order": "back", "member": under.0})).is_ok())
+        .expect("glyphs of both overlap somewhere on the word");
+    let p = screen(&app, overlap.x, overlap.y);
+    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert!(!has(&texts, "Ignore All"), "under the right type: {texts:?}");
+    frame(
+        &mut app,
+        &ctx,
+        vec![Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }],
+    );
+    app.run("object.intertwine.arrange", json!({"id": g.0, "at": [overlap.x, overlap.y], "order": "front", "member": under.0})).unwrap();
+    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert!(has(&texts, "Ignore All"), "brought to the front there: {texts:?}");
 }

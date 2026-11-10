@@ -98,7 +98,7 @@ fn warnings_reach_the_status_and_errors_keep_the_dialog_open() {
     app.run("ui.savePdfDialog", json!({"path": "/tmp/w.pdf"})).unwrap();
     set_field(&mut app, "security.printing", json!("low"));
     super::super::confirm(&mut app).unwrap();
-    assert!(app.ui.status.contains("1 note(s)") && app.ui.status.contains("permissions"), "{}", app.ui.status);
+    assert!(app.ui.status.contains("1 note:") && app.ui.status.contains("permissions"), "{}", app.ui.status);
     assert!(opened.borrow().is_empty(), "not opened unless asked");
     app.run("ui.savePdfDialog", json!({"path": "/tmp/bad.pdf"})).unwrap();
     set_field(&mut app, "__allArtboards", json!(false));
@@ -126,23 +126,32 @@ fn warnings_reach_the_status_and_errors_keep_the_dialog_open() {
     assert!(r["warnings"].is_array());
 }
 
+/// The Summary's warnings are translated as far as the catalog has them: a warning without a row
+/// keeps its words, and a colon in it can still take the catalog's punctuation.
+#[test]
+fn summary_warnings_are_translated() {
+    let fr = crate::i18n::Lang::from_code("fr").unwrap();
+    let shown = warning_line(fr, vectorcraft_engine::cmd::fileio::pdf::BLEED_LEFT_OUT);
+    assert!(shown.starts_with("⚠ ") && !shown.contains("leaves out"), "{shown}");
+    assert_eq!(warning_line(fr, "no row for this note"), "⚠ no row for this note");
+    assert_eq!(warning_line(fr, "no row: for this note"), "⚠ no row\u{a0}: for this note");
+}
+
 /// A placed image whose pixel data can't be decoded is left out of the PDF, and the status bar
 /// shows the note raster exports give.
 #[test]
 fn an_image_that_couldnt_be_decoded_is_named_in_the_status() {
     let (mut app, written, _) = app();
-    // A PNG whose header reads (so it places at its size) but whose pixel data is cut short.
-    let mut cut = vec![];
+    // A PNG whose header reads but whose pixel data is cut short.
+    let mut png = vec![];
     image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut cut), image::ImageFormat::Png)
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
         .unwrap();
-    let idat = cut.windows(4).position(|w| w == b"IDAT").unwrap();
-    cut.truncate(idat + 8);
     // The image is placed on the first artboard.
-    app.run("file.place", json!({"name": "cut.png", "dataBase64": vectorcraft_format::base64_encode(&cut), "at": [60, 50]})).unwrap();
+    vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &png, json!({"at": [60, 50]}));
     app.run("ui.savePdfDialog", json!({"path": "/tmp/cut.pdf"})).unwrap();
     super::super::confirm(&mut app).unwrap();
-    assert_eq!(app.ui.status, "Saved /tmp/cut.pdf with 1 note(s): an image couldn't be decoded and is missing from the picture");
+    assert_eq!(app.ui.status, "Saved /tmp/cut.pdf with 1 note: an image couldn't be decoded and is missing from the picture");
     assert_eq!(written.borrow().len(), 1);
 }
 

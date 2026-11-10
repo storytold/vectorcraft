@@ -1,5 +1,9 @@
 use super::align::choice;
-use super::*;
+use super::{
+    Affine, Arc, Document, EngineError, LastTransform, Node, NodeId, NodeKind, Point, Result, Scaling, Session, Value, Vec2, bad, bool_or,
+    check_numbers, check_switches, duplicate_in, effects, f64_or, f64_req, ids_param, json, matrix_param, ok, outermost, point_param,
+    selected_roots_to_transform,
+};
 
 fn origin_of(s: &Session, p: &Value, ids: &[NodeId]) -> Result<Point> {
     if let Some(o) = point_param(p, "origin") {
@@ -8,7 +12,7 @@ fn origin_of(s: &Session, p: &Value, ids: &[NodeId]) -> Result<Point> {
     // Direct-selected anchors transform alone (see [`apply_transform`]), about their own centre.
     let st = s.doc()?;
     if !bool_or(p, "copy", false)
-        && let Some(b) = effects::preview::anchor_bounds(&st.selection, &st.doc, s.prefs.use_preview_bounds)
+        && let Some(b) = effects::preview::anchor_bounds_with(&st.selection, &st.doc, s.bounds_measure())
     {
         return Ok(b.center());
     }
@@ -66,10 +70,12 @@ pub(crate) fn transforms_objects(p: &Value) -> bool {
 /// check them with [`check_switches`] before they change anything.
 pub(super) const TRANSFORM_SWITCHES: [&str; 6] = ["copy", "strokes", "corners", "patterns", "objects", "typeAreas"];
 
-/// `xf` on `n` with Transform Objects (`objects`, see [`transforms_objects`]) on or off.
+/// `xf` on `n` with Transform Objects (`objects`, see [`transforms_objects`]) on or off. The objects
+/// in `n` that are aligned to the pixel grid snap to it again ([`super::pixelgrid::keep_pixel_aligned`]).
 pub(crate) fn transform_node(n: &mut Node, xf: Affine, sc: Scaling, objects: bool) {
     if objects {
         n.transform(xf, sc);
+        super::pixelgrid::keep_pixel_aligned(n, sc);
     } else if sc.patterns {
         vectorcraft_doc::pattern::transform_patterns_only(n, xf);
     }
@@ -108,13 +114,17 @@ fn apply_transform_moving_guides(
     let c = xf.as_coeffs();
     let is_translation = (c[0] - 1.0).abs() < 1e-9 && c[1].abs() < 1e-9 && c[2].abs() < 1e-9 && (c[3] - 1.0).abs() < 1e-9;
     let delta = guides.unwrap_or(Vec2::new(c[4], c[5]));
-    let with_guides = objects && ids_param(p, "ids").is_none() && is_translation;
+    let with_guides = objects && p.get("ids").is_none_or(Value::is_null) && is_translation;
     let has_guides = with_guides && !s.doc()?.selection.guides.is_empty();
     // A transform of ids that name no object, or an identity transform without a copy, moves
     // nothing: the document and its undo history stay as they are, and Transform Again repeats it.
     // With a copy, the reply lists the copies, and there are none.
+    // An edit normally preserves the tree positions already found here. Settling an active
+    // typing session can change the document before the edit closure runs, so look up again then.
+    let reindex = copy || (!s.previewing && crate::cmd::typing_in_progress(s));
     let d = &s.doc()?.doc;
-    let none = d.index_paths(ids.iter().copied()).is_empty() && !has_guides;
+    let paths = d.index_paths(ids.iter().copied());
+    let none = paths.is_empty() && !has_guides;
     let ids = if anchors && objects && !copy && !s.doc()?.selection.anchors.is_empty() {
         if xf != Affine::IDENTITY {
             crate::cmd::path::transform_anchors(s, label, xf, sc)?;
@@ -150,13 +160,19 @@ fn apply_transform_moving_guides(
                 }
                 None => ids.clone(),
             };
-            // Transforms don't move nodes in the tree, so the paths found up front stay right.
-            let paths = d.index_paths(targets.iter().copied());
+            // Transforms don't move nodes in the tree, so reuse the paths found for the no-copy
+            // case; copies and a settled typing session need paths from the edited document.
+            let paths = if reindex { d.index_paths(targets.iter().copied()) } else { paths };
             for id in &targets {
                 if let Some(n) = paths.get(id).and_then(|p| d.node_mut_at(p))
                     && !(objects && areas && resize_type_area(n, xf))
                 {
                     transform_node(n, xf, sc, objects);
+                }
+            }
+            if objects {
+                for id in &targets {
+                    super::pixelgrid::keep_compound_aligned(d, *id, sc);
                 }
             }
             if with_guides && (delta.x != 0.0 || delta.y != 0.0) {
@@ -231,13 +247,45 @@ fn resize_type_area(n: &mut Node, xf: Affine) -> bool {
 
 pub(super) fn transform(s: &mut Session, p: &Value) -> Result<Value> {
     check_switches(p, &TRANSFORM_SWITCHES, "object.transform")?;
-    check_switches(p, &["anchors"], "object.transform")?;
+    check_switches(p, &["anchors", "releaseOutside"], "object.transform")?;
     let m = matrix_param(p, "matrix").ok_or_else(|| bad("object.transform", "missing matrix [a,b,c,d,e,f]"))?;
-    let (ids, anchors) = match ids_param(p, "ids") {
+    // An object selected in a symbol instance's art stays where the symbol puts it: the selection
+    // is left as it is, and the reply's warning goes to the status bar.
+    if p.get("ids").is_none() && crate::cmd::brushsym::selected_part(s)?.is_some() {
+        return Ok(json!({ "warning": crate::cmd::brushsym::part_only().to_string() }));
+    }
+    let (ids, anchors) = match ids_param(p, "ids", "object.transform")? {
         Some(v) => (outermost(&s.doc()?.doc, v), false),
         None => (selected_roots_to_transform(s)?, bool_or(p, "anchors", false)),
     };
-    apply_transform(s, "Transform", ids, m, p, anchors)
+    // Shaper's Construction mode: an original shape moved wholly outside its group's bounds leaves
+    // the group.
+    let moved = if bool_or(p, "releaseOutside", false) && !bool_or(p, "copy", false) && !anchors {
+        crate::cmd::shaper::moving_sources(s, &ids)?
+    } else {
+        vec![]
+    };
+    // Outside a drag and an undo group, the move and the removal are one undo step, named for the
+    // removal when there is one.
+    let grouped = !moved.is_empty() && s.doc()?.interaction.is_none() && s.doc()?.undo_group.is_none();
+    if grouped {
+        s.begin_named_undo_group(None);
+    }
+    let r = apply_transform(s, "Transform", ids, m, p, anchors);
+    let released = match &r {
+        Ok(_) if !moved.is_empty() => crate::cmd::shaper::release_outside(s, &moved),
+        _ => Ok(false),
+    };
+    if grouped && let Some(st) = s.active_mut() {
+        st.undo_group = None;
+        if matches!(released, Ok(true))
+            && let Some(e) = st.history.undo.last_mut()
+        {
+            e.label = "Remove from Shaper Group".into();
+        }
+    }
+    released?;
+    r
 }
 
 pub(super) fn move_cmd(s: &mut Session, p: &Value) -> Result<Value> {

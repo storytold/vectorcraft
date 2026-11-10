@@ -1,4 +1,4 @@
-use super::*;
+use super::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum LineCap {

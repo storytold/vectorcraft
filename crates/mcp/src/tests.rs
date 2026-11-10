@@ -304,7 +304,7 @@ fn headless_end_to_end() {
 
     // Resources.
     let v = rpc(&mut s, 10, "resources/list", json!({}));
-    assert_eq!(v["result"]["resources"].as_array().unwrap().len(), 3);
+    assert_eq!(v["result"]["resources"].as_array().unwrap().len(), 4);
     let v = rpc(&mut s, 11, "resources/read", json!({"uri": "vectorcraft://document"}));
     let text = v["result"]["contents"][0]["text"].as_str().unwrap();
     assert!(serde_json::from_str::<Value>(text).unwrap()["layers"].is_array());
@@ -498,6 +498,15 @@ fn headless_hover_waits_for_the_shape_builder_map() {
     assert!(!r.is_error, "{r:?}");
     assert!(!h.session.tool_waiting());
     assert!(!h.session.overlays(h.view).is_empty(), "the region under the pointer is highlighted");
+    // A click's reply comes once the merge the tool computes on another thread is applied, with
+    // the selection after it.
+    let click = json!({"events": [{"kind": "down", "x": 115, "y": 110}, {"kind": "up", "x": 115, "y": 110}]});
+    let r = crate::call_tool(&mut h, "pointer_gesture", &click);
+    assert!(!r.is_error, "{r:?}");
+    assert!(!h.session.tool_waiting() && !h.session.tool_editing());
+    let text: String = r.content.iter().filter_map(|c| c["text"].as_str()).collect();
+    let reply: Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(reply["selection"].as_array().map(Vec::len), Some(41), "the overlap and the 40 squares, two of them cut: {reply}");
 }
 
 /// inspect_document reads back the paint type's characters show, as add_text and set_paint give it.
@@ -709,6 +718,11 @@ fn errors_are_tool_results_not_crashes() {
 
 /// A fake control server: answers `document.inspect`, echoes `engine.execute`, errors otherwise.
 fn fake_app() -> (String, std::thread::JoinHandle<Vec<Value>>) {
+    fake_app_refusing_confirm(None)
+}
+
+/// [`fake_app`], answering `ui.dialog.confirm` with the error `refusal` when one is given.
+fn fake_app_refusing_confirm(refusal: Option<&'static str>) -> (String, std::thread::JoinHandle<Vec<Value>>) {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap().to_string();
     let h = std::thread::spawn(move || {
@@ -724,6 +738,7 @@ fn fake_app() -> (String, std::thread::JoinHandle<Vec<Value>>) {
                 "engine.execute" => json!({"ok": true, "result": {"echo": msg["params"]}}),
                 "ui.inspect" => json!({"ok": true, "result": {"tool": "selection"}}),
                 "ui.dialog.set" if !dialog_open => json!({"ok": false, "error": "no dialog open"}),
+                "ui.dialog.confirm" if refusal.is_some() => json!({"ok": false, "error": refusal}),
                 m if m.starts_with("ui.dialog.") => {
                     dialog_open &= m != "ui.dialog.cancel";
                     json!({"ok": true, "result": {"echo": msg["params"]}})
@@ -814,6 +829,23 @@ fn answer_dialog_does_not_confirm_when_the_app_refuses_the_set() {
     assert_eq!(seen[1]["params"], json!({"fields": set}));
 }
 
+/// The app refuses to confirm a plug-in's install approval for automation: the call is an error
+/// with the app's reason, and nothing else is sent that could install the module.
+#[test]
+fn answer_dialog_reports_that_the_app_refuses_to_approve_a_plugin_install() {
+    let refusal = "Only the person at the keyboard can approve installing a plug-in";
+    let (addr, h) = fake_app_refusing_confirm(Some(refusal));
+    let mut s = Server::new(Box::new(Remote::connect(&addr).unwrap()));
+    let set = json!([{"field": "__params", "value": {"dataBase64": "AAAA"}}]);
+    let r = call(&mut s, 1, "answer_dialog", json!({"set": set, "action": "confirm"}));
+    assert_eq!(r["isError"], true, "{r}");
+    assert!(text_of(&r).contains(refusal), "{r}");
+    drop(s);
+    let seen = h.join().unwrap();
+    let methods: Vec<&str> = seen.iter().map(|m| m["method"].as_str().unwrap()).collect();
+    assert_eq!(methods, ["ui.dialog.set", "ui.dialog.confirm"]);
+}
+
 #[test]
 fn answer_dialog_needs_the_desktop_app() {
     let mut s = server();
@@ -822,13 +854,18 @@ fn answer_dialog_needs_the_desktop_app() {
     assert!(text_of(&r).contains("needs the desktop app"), "{r}");
 }
 
+/// How long a fake app waits for [`Remote`] to connect or to send, and how long a test waits for
+/// a connection to end or a line to arrive. The wait only ends a test whose client or app never
+/// does. A machine busy with other builds can hold a thread for seconds.
+const WAIT: std::time::Duration = std::time::Duration::from_secs(20);
+
 #[test]
 fn remote_does_not_replay_when_edit_reply_is_lost() {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     listener.set_nonblocking(true).unwrap();
     let addr = listener.local_addr().unwrap().to_string();
     let h = std::thread::spawn(move || {
-        let timeout = std::time::Duration::from_secs(5);
+        let timeout = WAIT;
         let mut backend = Headless::with_document();
         let base = backend.call("document.inspect", json!({})).unwrap()["objects"].as_u64().unwrap();
         for connection in 0..2 {
@@ -988,7 +1025,7 @@ fn remote_rejects_uncorrelated_replies_without_replaying() {
         listener.set_nonblocking(true).unwrap();
         let addr = listener.local_addr().unwrap().to_string();
         let h = std::thread::spawn(move || {
-            let timeout = std::time::Duration::from_secs(5);
+            let timeout = WAIT;
             let mut seen = vec![];
             for connection in 0..2 {
                 let deadline = std::time::Instant::now() + timeout;
@@ -1043,7 +1080,7 @@ fn remote_rejects_a_reply_with_a_mismatched_id_and_reconnects() {
     let h = std::thread::spawn(move || {
         let mut seen = vec![];
         for stream in listener.incoming().flatten().take(2) {
-            stream.set_read_timeout(Some(std::time::Duration::from_secs(5))).unwrap();
+            stream.set_read_timeout(Some(WAIT)).unwrap();
             let mut out = stream.try_clone().unwrap();
             let mut reader = BufReader::new(stream);
             let mut line = String::new();
@@ -1079,12 +1116,12 @@ fn remote_reports_the_reason_of_a_refusal_without_an_id() {
     let h = std::thread::spawn(move || {
         let (mut refused, _) = listener.accept().unwrap();
         // The request is read first, so the refusal answers it and the close is orderly.
-        refused.set_read_timeout(Some(std::time::Duration::from_secs(5))).unwrap();
+        refused.set_read_timeout(Some(WAIT)).unwrap();
         let _ = BufReader::new(refused.try_clone().unwrap()).read_line(&mut String::new());
         writeln!(refused, "{}", json!({"ok": false, "error": "too many control connections"})).unwrap();
         drop(refused);
         let (stream, _) = listener.accept().unwrap();
-        stream.set_read_timeout(Some(std::time::Duration::from_secs(5))).unwrap();
+        stream.set_read_timeout(Some(WAIT)).unwrap();
         let mut out = stream.try_clone().unwrap();
         let mut line = String::new();
         BufReader::new(stream).read_line(&mut line).unwrap();
@@ -1099,6 +1136,26 @@ fn remote_reports_the_reason_of_a_refusal_without_an_id() {
     h.join().unwrap();
 }
 
+/// How long a refused connect to the app may take: longer than the 800 ms connect timeout of
+/// [`Remote`], and shorter than the 2 s a refused local connect takes on Windows without one.
+const FAILED_CONNECT: std::time::Duration = std::time::Duration::from_millis(1500);
+
+/// Runs `attempt` until one run takes less than `bound`, at most five times, and returns how long
+/// each run took. A machine busy with other builds can hold the test's thread for seconds in one
+/// run; a connect that waits longer than its own timeout is slow in every run.
+fn runs_until_faster_than(bound: std::time::Duration, mut attempt: impl FnMut()) -> Vec<std::time::Duration> {
+    let mut took = Vec::new();
+    while took.len() < 5 {
+        let start = std::time::Instant::now();
+        attempt();
+        took.push(start.elapsed());
+        if took.last() < Some(&bound) {
+            break;
+        }
+    }
+    took
+}
+
 #[test]
 fn remote_connect_fails_fast() {
     // A port this test holds, bound but not listening, so connecting to it is refused. (A port
@@ -1106,9 +1163,8 @@ fn remote_connect_fails_fast() {
     let held = socket2::Socket::new(socket2::Domain::IPV4, socket2::Type::STREAM, None).unwrap();
     held.bind(&std::net::SocketAddr::from(([127, 0, 0, 1], 0)).into()).unwrap();
     let port = held.local_addr().unwrap().as_socket().unwrap().port();
-    let start = std::time::Instant::now();
-    assert!(Remote::connect(&format!("127.0.0.1:{port}")).is_err());
-    assert!(start.elapsed() < std::time::Duration::from_secs(5), "took {:?}", start.elapsed());
+    let took = runs_until_faster_than(FAILED_CONNECT, || assert!(Remote::connect(&format!("127.0.0.1:{port}")).is_err()));
+    assert!(took.last() < Some(&FAILED_CONNECT), "took {took:?}");
     // Nothing else could listen there meanwhile.
     assert!(std::net::TcpListener::bind(format!("127.0.0.1:{port}")).is_err());
     drop(held);
@@ -1124,7 +1180,7 @@ fn reusable_listener(addr: std::net::SocketAddr) -> std::net::TcpListener {
 
 fn wait_for_remote_eof(remote: &Remote) {
     let probe = remote.connection_probe();
-    probe.set_read_timeout(Some(std::time::Duration::from_secs(2))).unwrap();
+    probe.set_read_timeout(Some(WAIT)).unwrap();
     assert_eq!(probe.peek(&mut [0]).unwrap(), 0);
 }
 
@@ -1135,7 +1191,7 @@ fn remote_edit_succeeds_once_when_app_restarts() {
     let mut remote = Remote::connect(&addr.to_string()).unwrap();
     let (old_connection, _) = listener.accept().unwrap();
     let old_handle = std::thread::spawn(move || {
-        let timeout = std::time::Duration::from_secs(2);
+        let timeout = WAIT;
         old_connection.set_read_timeout(Some(timeout)).unwrap();
         old_connection.set_write_timeout(Some(timeout)).unwrap();
         let mut reader = BufReader::new(old_connection.try_clone().unwrap());
@@ -1157,7 +1213,7 @@ fn remote_edit_succeeds_once_when_app_restarts() {
     let listener = reusable_listener(addr);
     listener.set_nonblocking(true).unwrap();
     let handle = std::thread::spawn(move || {
-        let timeout = std::time::Duration::from_secs(2);
+        let timeout = WAIT;
         let deadline = std::time::Instant::now() + timeout;
         let stream = loop {
             match listener.accept() {
@@ -1204,15 +1260,15 @@ fn remote_does_not_send_on_a_connection_with_a_stray_line() {
     let addr = listener.local_addr().unwrap().to_string();
     let mut remote = Remote::connect(&addr).unwrap();
     let (mut stale, _) = listener.accept().unwrap();
-    stale.set_read_timeout(Some(std::time::Duration::from_secs(2))).unwrap();
+    stale.set_read_timeout(Some(WAIT)).unwrap();
     writeln!(stale, "{}", json!({"ok": false, "error": "idle"})).unwrap();
     let probe = remote.connection_probe();
-    probe.set_read_timeout(Some(std::time::Duration::from_secs(2))).unwrap();
+    probe.set_read_timeout(Some(WAIT)).unwrap();
     assert_eq!(probe.peek(&mut [0]).unwrap(), 1, "the stray line arrived");
     drop(probe);
     let h = std::thread::spawn(move || {
         let (stream, _) = listener.accept().unwrap();
-        stream.set_read_timeout(Some(std::time::Duration::from_secs(5))).unwrap();
+        stream.set_read_timeout(Some(WAIT)).unwrap();
         let mut out = stream.try_clone().unwrap();
         let mut line = String::new();
         BufReader::new(stream).read_line(&mut line).unwrap();
@@ -1228,24 +1284,40 @@ fn remote_does_not_send_on_a_connection_with_a_stray_line() {
 
 #[test]
 fn remote_call_reports_nothing_sent_when_reconnect_is_refused() {
-    let listener = reusable_listener(std::net::SocketAddr::from(([127, 0, 0, 1], 0)));
-    let addr = listener.local_addr().unwrap();
-    let mut remote = Remote::connect(&addr.to_string()).unwrap();
-    let (old_connection, _) = listener.accept().unwrap();
-    drop(old_connection);
-    drop(listener);
-    wait_for_remote_eof(&remote);
-    let held = socket2::Socket::new(socket2::Domain::IPV4, socket2::Type::STREAM, None).unwrap();
-    held.set_reuse_address(true).unwrap();
-    held.bind(&addr.into()).unwrap();
+    // A remote whose connection the app closed, and the app's port bound but not listening.
+    let closed_remote = || {
+        let listener = reusable_listener(std::net::SocketAddr::from(([127, 0, 0, 1], 0)));
+        let addr = listener.local_addr().unwrap();
+        let remote = Remote::connect(&addr.to_string()).unwrap();
+        let (old_connection, _) = listener.accept().unwrap();
+        drop(old_connection);
+        drop(listener);
+        wait_for_remote_eof(&remote);
+        let held = socket2::Socket::new(socket2::Domain::IPV4, socket2::Type::STREAM, None).unwrap();
+        held.set_reuse_address(true).unwrap();
+        held.bind(&addr.into()).unwrap();
+        (remote, held)
+    };
 
-    let start = std::time::Instant::now();
-    let error = remote.call("engine.execute", json!({"command": "shape.rectangle", "params": {"width": 20, "height": 20}})).unwrap_err();
+    // Each run finds the old connection closed and connects again; only the call is timed.
+    let mut errors = Vec::new();
+    let mut took = Vec::new();
+    while took.len() < 5 {
+        let (mut remote, _held) = closed_remote();
+        let start = std::time::Instant::now();
+        errors.push(remote.call("engine.execute", json!({"command": "shape.rectangle", "params": {"width": 20, "height": 20}})).unwrap_err());
+        took.push(start.elapsed());
+        if took.last() < Some(&FAILED_CONNECT) {
+            break;
+        }
+    }
 
-    assert!(start.elapsed() < std::time::Duration::from_secs(2));
-    assert!(error.contains("not reachable"), "{error}");
-    assert!(error.contains("nothing was sent"), "{error}");
-    assert!(!error.contains("operation may have completed"), "{error}");
+    assert!(took.last() < Some(&FAILED_CONNECT), "took {took:?}");
+    for error in errors {
+        assert!(error.contains("not reachable"), "{error}");
+        assert!(error.contains("nothing was sent"), "{error}");
+        assert!(!error.contains("operation may have completed"), "{error}");
+    }
 }
 
 #[test]
@@ -1257,7 +1329,16 @@ fn headless_backend_methods() {
     assert_eq!((r["width"].as_u64(), r["height"].as_u64()), (Some(600), Some(400)));
     let cmds = h.call("engine.commands", json!({})).unwrap();
     assert!(cmds.as_array().unwrap().iter().any(|c| c["id"] == "file.export"));
-    assert!(h.call("ui.tool.list", json!({})).unwrap().is_array());
+    let listed = h.call("ui.tool.list", json!({})).unwrap();
+    let groups = listed.as_array().unwrap();
+    for tool in vectorcraft_tools::addons::GROUPS.iter().flat_map(|group| group.iter()) {
+        let matching: Vec<_> = groups.iter().flat_map(|group| group.as_array().unwrap()).filter(|entry| entry["id"] == tool.id).collect();
+        assert_eq!(matching.len(), 1, "{}", tool.id);
+        assert_eq!(matching[0]["label"], tool.label);
+        assert!(matching[0]["shortcut"].is_null());
+        let selected = h.call("ui.tool.select", json!({"tool": tool.id})).unwrap();
+        assert_eq!(selected["tool"], tool.id);
+    }
     assert!(h.call("ui.resize", json!({})).is_err());
 }
 
@@ -1358,6 +1439,58 @@ fn selection_preferences_apply_to_pointer_gestures() {
     assert_eq!(click(&mut s, 7, 250.0, json!({})), json!([front]), "the path does");
 }
 
+#[test]
+fn pointer_gesture_forwards_backquote_on_each_event() {
+    let mut s = server();
+    let made = call(&mut s, 1, "draw_shape", json!({"shape": "rectangle", "x": 100, "y": 100, "width": 50, "height": 50, "fill": "#ff0000"}));
+    let id = serde_json::from_str::<Value>(&text_of(&made)).unwrap()["id"].as_u64().unwrap();
+    let selected = call(&mut s, 2, "run_command", json!({"command": "select.set", "params": {"ids": [id]}}));
+    assert_eq!(selected["isError"], false, "{selected}");
+    let drag = call(
+        &mut s,
+        3,
+        "pointer_gesture",
+        json!({"tool": "selection", "backquote": true, "events": [
+            {"kind": "down", "x": 125, "y": 125},
+            {"kind": "drag", "x": 145, "y": 125},
+            {"kind": "up", "x": 145, "y": 125}
+        ]}),
+    );
+    assert_eq!(drag["isError"], false, "{drag}");
+    let inspected = call(&mut s, 4, "inspect_document", json!({}));
+    let doc = serde_json::from_str::<Value>(&text_of(&inspected)).unwrap();
+    let rect = doc["layers"][0]["children"].as_array().unwrap().iter().find(|n| n["id"] == id).unwrap();
+    assert_eq!(rect["bounds"]["x"], 100.0, "{doc}");
+}
+
+/// A `backquote` that is not a boolean is an error, and none of the gesture's events runs.
+#[test]
+fn pointer_gesture_rejects_a_backquote_that_is_not_a_boolean() {
+    let mut s = server();
+    let made = call(&mut s, 1, "draw_shape", json!({"shape": "rectangle", "x": 100, "y": 100, "width": 50, "height": 50, "fill": "#ff0000"}));
+    let id = serde_json::from_str::<Value>(&text_of(&made)).unwrap()["id"].as_u64().unwrap();
+    let drag = |top: Option<Value>, first: Option<Value>| {
+        let mut down = json!({"kind": "down", "x": 300, "y": 300});
+        if let Some(b) = first {
+            down["backquote"] = b;
+        }
+        let mut a = json!({"tool": "rectangle", "events": [down, {"kind": "drag", "x": 350, "y": 350}, {"kind": "up", "x": 350, "y": 350}]});
+        if let Some(b) = top {
+            a["backquote"] = b;
+        }
+        a
+    };
+    for (n, args) in [drag(Some(json!("true")), None), drag(None, Some(json!(1)))].into_iter().enumerate() {
+        let r = call(&mut s, 2 + n as u64, "pointer_gesture", args);
+        assert_eq!(r["isError"], true, "{r}");
+        assert!(text_of(&r).contains("`backquote` must be a boolean"), "{r}");
+    }
+    let inspected = call(&mut s, 4, "inspect_document", json!({}));
+    let doc = serde_json::from_str::<Value>(&text_of(&inspected)).unwrap();
+    let children = doc["layers"][0]["children"].as_array().unwrap();
+    assert_eq!(children.iter().map(|n| n["id"].as_u64()).collect::<Vec<_>>(), vec![Some(id)], "{doc}");
+}
+
 /// A Shift-drag marquee reaches agents (#483): `pointer_gesture` with `mods.shift` toggles the
 /// objects it reaches, so a selected one leaves the selection and an unselected one joins it.
 #[test]
@@ -1402,6 +1535,80 @@ fn e_during_a_marquee_gesture_selects_only_the_objects_inside() {
     assert_eq!(serde_json::from_str::<Value>(&text_of(&r)).unwrap()["selection"], json!([a]), "{r}");
     let r = call(&mut s, 6, "press_key", json!({"key": "e"}));
     assert_eq!(serde_json::from_str::<Value>(&text_of(&r)).unwrap()["handledBy"], "tool.select", "{r}");
+}
+
+/// `press_key {key: "c"}` and `{key: "f"}` while an arc is being dragged go to the Arc tool, and
+/// the release draws one arc. With nothing dragged, C is a shortcut again.
+#[test]
+fn c_and_f_during_an_arc_gesture_go_to_the_arc_tool() {
+    let mut s = server();
+    let count = |s: &mut Server, id: u64| {
+        let r = call(s, id, "inspect_document", json!({}));
+        serde_json::from_str::<Value>(&text_of(&r)).unwrap()["objects"].as_u64().unwrap()
+    };
+    let before = count(&mut s, 1);
+    let begin = json!([{"kind": "down", "x": 100, "y": 100}, {"kind": "drag", "x": 200, "y": 180}]);
+    let r = call(&mut s, 2, "pointer_gesture", json!({"tool": "arc", "events": begin}));
+    assert_eq!(r["isError"], false, "{r}");
+    for (id, key) in [(3, "c"), (4, "f")] {
+        let r = call(&mut s, id, "press_key", json!({"key": key}));
+        assert_eq!(serde_json::from_str::<Value>(&text_of(&r)).unwrap()["handledBy"], "tool", "{key}: {r}");
+    }
+    let r = call(&mut s, 5, "pointer_gesture", json!({"tool": "arc", "events": [{"kind": "up", "x": 200, "y": 180}]}));
+    assert_eq!(r["isError"], false, "{r}");
+    assert_eq!(count(&mut s, 6), before + 1);
+    let r = call(&mut s, 7, "press_key", json!({"key": "c"}));
+    assert_ne!(serde_json::from_str::<Value>(&text_of(&r)).unwrap()["handledBy"], "tool", "{r}");
+}
+
+/// `press_key` with `f`, `v`, `x` and `c` while a rectangular or polar grid is being dragged goes
+/// to the grid tool, and the release draws one grid. With nothing dragged, V is a shortcut again.
+#[test]
+fn f_v_x_and_c_during_a_grid_gesture_go_to_the_grid_tool() {
+    let count = |s: &mut Server, id: u64| {
+        let r = call(s, id, "inspect_document", json!({"depth": 0}));
+        serde_json::from_str::<Value>(&text_of(&r)).unwrap()["layers"][0]["childCount"].as_u64().unwrap()
+    };
+    for tool in ["rectangularGrid", "polarGrid"] {
+        let mut s = server();
+        let before = count(&mut s, 1);
+        let begin = json!([{"kind": "down", "x": 100, "y": 100}, {"kind": "drag", "x": 200, "y": 180}]);
+        let r = call(&mut s, 2, "pointer_gesture", json!({"tool": tool, "events": begin}));
+        assert_eq!(r["isError"], false, "{r}");
+        for (id, key) in [(3, "f"), (4, "v"), (5, "x"), (6, "c")] {
+            let r = call(&mut s, id, "press_key", json!({"key": key}));
+            assert_eq!(serde_json::from_str::<Value>(&text_of(&r)).unwrap()["handledBy"], "tool", "{tool} {key}: {r}");
+        }
+        let r = call(&mut s, 7, "pointer_gesture", json!({"tool": tool, "events": [{"kind": "up", "x": 200, "y": 180}]}));
+        assert_eq!(r["isError"], false, "{r}");
+        assert_eq!(count(&mut s, 8), before + 1, "{tool}");
+        let r = call(&mut s, 9, "press_key", json!({"key": "v"}));
+        assert_ne!(serde_json::from_str::<Value>(&text_of(&r)).unwrap()["handledBy"], "tool", "{tool}: {r}");
+    }
+}
+
+/// Grid letters with Shift reach the grid tool during a drag; with Ctrl, Cmd or Alt they do not.
+#[test]
+fn shifted_grid_letters_during_a_drag_go_to_the_grid_tool() {
+    let mut s = server();
+    let r = call(
+        &mut s,
+        1,
+        "pointer_gesture",
+        json!({"tool": "polarGrid", "events": [{"kind": "down", "x": 100, "y": 100}, {"kind": "drag", "x": 200, "y": 180}]}),
+    );
+    assert_eq!(r["isError"], false, "{r}");
+    for (id, key, mods, tool) in [
+        (2, "v", json!({"shift": true}), true),
+        (3, "f", json!({"ctrl": true}), false),
+        (4, "x", json!({"cmd": true}), false),
+        (5, "c", json!({"cmd": true}), false),
+        (6, "v", json!({"alt": true}), false),
+    ] {
+        let r = call(&mut s, id, "press_key", json!({"key": key, "mods": mods}));
+        let handled = serde_json::from_str::<Value>(&text_of(&r)).ok().is_some_and(|v| v["handledBy"] == "tool");
+        assert_eq!(handled, tool, "{key} {mods}: {r}");
+    }
 }
 
 /// A click on one of two selected objects makes it the key object: `pointer_gesture` replies

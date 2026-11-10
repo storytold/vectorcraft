@@ -1,13 +1,15 @@
 //! Paragraph panel: seven alignment buttons, Paragraph Direction (with the Indic options), the
-//! Bullets and Numbered List buttons and their presets, indents, space before/after, Hyphenate,
-//! Insert Kashidas (with the Indic options), Mojikumi Set and Kinsoku Set (with the East Asian
-//! options); the panel menu turns Roman Hanging Punctuation on and off, opens Justification… and
-//! Hyphenation… and picks the Single-line or Every-line Composer.
+//! Bullets and Numbered List buttons and their presets (More Options opens Bullets and
+//! Numbering…), indents, space before/after, Hyphenate, Insert Kashidas (with the Indic options),
+//! Mojikumi Set and Kinsoku Set (with the East Asian options); the panel menu turns Roman Hanging
+//! Punctuation on and off, opens Justification… and Hyphenation…, picks the Kinsoku Shori Type
+//! (with the East Asian options) and picks the Single-line or Every-line Composer.
 
 use egui::{Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_doc::{
-    Composer, HyphenationOptions, JustificationOptions, Justify, Kinsoku, Mojikumi, NodeKind, ParaDirection, ParaStyle, SingleWordJustify,
+    Composer, HyphenationOptions, JustificationOptions, Justify, Kinsoku, KinsokuShoriType, Mojikumi, NodeKind, ParaDirection, ParaStyle,
+    SingleWordJustify,
 };
 
 use super::character::{Metric, Shared, text_style};
@@ -50,6 +52,25 @@ pub(crate) fn align(app: &mut VectorcraftApp, justify: &str) -> Result<Value, St
     Ok(Value::Null)
 }
 
+/// `type.lineComposer` (Cmd+Alt+Shift+C): the Single-line Composer for the paragraphs the panel
+/// acts on when they all use the Every-line Composer, else the Every-line Composer. Returns the
+/// composer set.
+pub(crate) fn toggle_composer(app: &mut VectorcraftApp) -> Result<Value, String> {
+    text_style(app).ok_or("select some type first")?;
+    let id = if shared_composer(app) == Some(Composer::EveryLine) { "singleLine" } else { "everyLine" };
+    format(app, json!({ "composer": id }));
+    Ok(json!(id))
+}
+
+/// `type.hyphenate` (Cmd+Alt+Shift+H): what the Hyphenate checkbox does, on the paragraphs the
+/// panel acts on. Returns whether they now hyphenate.
+pub(crate) fn toggle_hyphenate(app: &mut VectorcraftApp) -> Result<Value, String> {
+    text_style(app).ok_or("select some type first")?;
+    let on = shared_hyphenate(app) != Some(true);
+    format(app, json!({ "hyphenate": on }));
+    Ok(json!(on))
+}
+
 fn para_cmd(app: &mut VectorcraftApp, cmd: &str, p: Value) {
     run_on_paragraphs(app, cmd, p).ok();
 }
@@ -58,9 +79,15 @@ fn para_cmd(app: &mut VectorcraftApp, cmd: &str, p: Value) {
 pub(crate) fn run_on_paragraphs(app: &mut VectorcraftApp, cmd: &str, mut p: Value) -> Result<Value, String> {
     if let Some((id, a, b)) = super::character::text_editing(app) {
         super::character::end_typing(app);
-        p["ids"] = json!([id.0]);
-        p["start"] = json!(a);
-        p["end"] = json!(b);
+        match super::character::text_story(app) {
+            // After Select All in threaded text: every paragraph of every frame.
+            Some(story) => p["ids"] = json!(story.iter().map(|f| f.0).collect::<Vec<_>>()),
+            None => {
+                p["ids"] = json!([id.0]);
+                p["start"] = json!(a);
+                p["end"] = json!(b);
+            }
+        }
     }
     app.run(cmd, p)
 }
@@ -145,9 +172,33 @@ fn collect_text_alignment(text: &vectorcraft_doc::TextObject, range: Option<(usi
     record(index, &plain, start, end) // Includes empty text and the paragraph after a final newline.
 }
 
+/// The frames of the threaded story whose whole text the Type tool has selected after Select All
+/// ([`super::character::text_story`]), in thread order.
+fn story_texts(app: &VectorcraftApp) -> Option<Vec<&vectorcraft_doc::TextObject>> {
+    let st = app.session.active()?;
+    let story = super::character::text_story(app)?;
+    Some(
+        story
+            .into_iter()
+            .filter_map(|id| match st.doc.node(id).map(|n| &n.kind) {
+                Some(NodeKind::Text(t)) => Some(t.as_ref()),
+                _ => None,
+            })
+            .collect(),
+    )
+}
+
 /// Visit every paragraph the Paragraph panel acts on.
 fn visit_paragraphs(app: &VectorcraftApp, mut f: impl FnMut(&ParaStyle)) {
     let Some(st) = app.session.active() else { return };
+    if let Some(texts) = story_texts(app) {
+        for t in texts {
+            for i in 0..t.paragraph_count() {
+                f(t.para_at(i));
+            }
+        }
+        return;
+    }
     if let Some((id, a, b)) = super::character::text_editing(app)
         && let Some(NodeKind::Text(text)) = st.doc.node(id).map(|n| &n.kind)
     {
@@ -169,7 +220,7 @@ fn visit_paragraphs(app: &VectorcraftApp, mut f: impl FnMut(&ParaStyle)) {
 }
 
 /// A distance shared by every paragraph in scope, or `None` when they differ (blank spin field).
-fn shared_para_field(app: &VectorcraftApp, field: impl Fn(&ParaStyle) -> f64) -> Option<f64> {
+pub(crate) fn shared_para_field(app: &VectorcraftApp, field: impl Fn(&ParaStyle) -> f64) -> Option<f64> {
     let mut acc = Shared::None;
     let mut any = false;
     visit_paragraphs(app, |p| {
@@ -202,7 +253,7 @@ pub(crate) fn shared_single_word_justify(app: &VectorcraftApp) -> Option<SingleW
 }
 
 /// A paragraph attribute shared by every paragraph in scope, or `None` when they differ.
-fn shared_para<T: PartialEq + Copy>(app: &VectorcraftApp, field: impl Fn(&ParaStyle) -> T) -> Option<T> {
+pub(crate) fn shared_para<T: PartialEq + Copy>(app: &VectorcraftApp, field: impl Fn(&ParaStyle) -> T) -> Option<T> {
     let mut acc = Shared::None;
     let mut any = false;
     visit_paragraphs(app, |p| {
@@ -269,6 +320,9 @@ fn selected_paragraph_direction(app: &VectorcraftApp, fallback: &ParaStyle) -> O
     let default = Some(resolved_rtl(app, fallback));
     let Some(st) = app.session.active() else { return default };
     let mut shared = None;
+    if let Some(texts) = story_texts(app) {
+        return if texts.into_iter().all(|t| collect_text_direction(t, None, &mut shared)) { shared.or(default) } else { None };
+    }
     if let Some((id, a, b)) = super::character::text_editing(app)
         && let Some(NodeKind::Text(text)) = st.doc.node(id).map(|n| &n.kind)
     {
@@ -303,6 +357,9 @@ fn selected_alignment(app: &VectorcraftApp, fallback: &ParaStyle) -> Option<Just
     let default = Some(shown_alignment(fallback.justify, fallback.direction == Some(ParaDirection::RightToLeft)));
     let Some(st) = app.session.active() else { return default };
     let mut shared = None;
+    if let Some(texts) = story_texts(app) {
+        return if texts.into_iter().all(|t| collect_text_alignment(t, None, &mut shared)) { shared.or(default) } else { None };
+    }
     if let Some((id, a, b)) = super::character::text_editing(app)
         && let Some(NodeKind::Text(text)) = st.doc.node(id).map(|n| &n.kind)
     {
@@ -325,12 +382,64 @@ fn selected_alignment(app: &VectorcraftApp, fallback: &ParaStyle) -> Option<Just
 /// The seven alignment buttons shared by Paragraph and Properties; no button is selected
 /// when the paragraphs they act on have differing displayed alignments.
 pub fn alignment_buttons(app: &mut VectorcraftApp, ui: &mut Ui, para: &ParaStyle, size: f32) {
+    first_alignment_buttons(app, ui, para, size, ALIGNMENTS.len());
+}
+
+/// The first `count` of the [`ALIGNMENTS`] buttons.
+fn first_alignment_buttons(app: &mut VectorcraftApp, ui: &mut Ui, para: &ParaStyle, size: f32, count: usize) {
     let shown = selected_alignment(app, para);
-    for (j, icon, tip, id) in ALIGNMENTS {
+    for (j, icon, tip, id) in ALIGNMENTS.into_iter().take(count) {
         if widgets::icon_button(ui, icon, tip, shown == Some(j), size).clicked() {
             para_cmd(app, "text.setStyle", json!({"justify": id}));
         }
     }
+}
+
+/// The Control bar's alignment buttons: Align left, Align center and Align right. The public
+/// documentation has the Control panel format paragraphs while type is selected, with a way to the
+/// Paragraph panel (<https://helpx.adobe.com/illustrator/using/formatting-paragraphs.html>), and
+/// its alignment buttons align text as the Paragraph panel's do
+/// (<https://helpx.adobe.com/illustrator/using/align-text.html>). The bar keeps to the three that
+/// don't justify, for its room; all seven are in the Paragraph options the link opens.
+const CONTROL_BAR_ALIGNMENTS: usize = 3;
+
+/// The spacing between the Control bar's alignment buttons, as in the Paragraph panel's row.
+const CONTROL_BAR_BUTTON_SPACING: f32 = 3.0;
+
+/// The width of the Paragraph panel in the Control bar's popover, as the Character panel's.
+const CONTROL_BAR_POPOVER_WIDTH: f32 = 260.0;
+
+/// The Control bar's Paragraph link, as it is drawn and measured.
+fn control_bar_link_text(ui: &Ui) -> egui::RichText {
+    egui::RichText::new(tl!("Paragraph:")).size(12.0).color(Tokens::get(ui.ctx()).text).underline()
+}
+
+/// The Control bar's paragraph controls while type is selected or edited (#5372), after its
+/// Character controls: the Paragraph link, which opens the Paragraph panel in a popover under it,
+/// and the Align left, Align center and Align right buttons, `size` points square as the bar's others. `reserve` gives the room the controls
+/// after them keep, asked only when type is selected: short of room, the buttons are left out,
+/// then the link too. Returns whether the link shows.
+pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui, size: f32, reserve: impl FnOnce(&Ui) -> f32) -> bool {
+    let Some((_, para)) = text_style(app) else { return false };
+    let text = control_bar_link_text(ui);
+    let link_width = widgets::text_width(ui, text.clone());
+    let room = ui.available_width() - reserve(ui);
+    let link_room = link_width + ui.spacing().item_spacing.x;
+    if room < link_room {
+        return false;
+    }
+    let link = ui.link(text).on_hover_text(tl!("Paragraph options"));
+    widgets::popover(&link, link.clicked(), |ui| {
+        ui.set_width(CONTROL_BAR_POPOVER_WIDTH);
+        show(app, ui);
+    });
+    if room >= link_room + (size + CONTROL_BAR_BUTTON_SPACING) * CONTROL_BAR_ALIGNMENTS as f32 {
+        let spacing = ui.spacing().item_spacing.x;
+        ui.spacing_mut().item_spacing.x = CONTROL_BAR_BUTTON_SPACING;
+        first_alignment_buttons(app, ui, &para, size, CONTROL_BAR_ALIGNMENTS);
+        ui.spacing_mut().item_spacing.x = spacing;
+    }
+    true
 }
 
 /// Type › Bullets and Numbering › Apply Bullets (`type.applyBullets {bullet?}`): the paragraphs of
@@ -358,6 +467,25 @@ pub(crate) fn apply_numbers(app: &mut VectorcraftApp, p: &Value) -> Result<Value
     run_on_paragraphs(app, "text.setFormat", params)
 }
 
+/// The Bullets presets, in the order they are listed: (name, `text.setFormat`'s `bullet`, bullet;
+/// None for the preset that turns the list off).
+pub(crate) fn bullet_presets() -> [(&'static str, &'static str, Option<vectorcraft_doc::text::Bullet>); 5] {
+    use vectorcraft_doc::text::Bullet;
+    [
+        (tl!("None"), "none", None),
+        (tl!("Filled Dot"), "dot", Some(Bullet::Dot)),
+        (tl!("Dash"), "dash", Some(Bullet::Dash)),
+        (tl!("Hollow Circle"), "circle", Some(Bullet::Circle)),
+        (tl!("Filled Square"), "square", Some(Bullet::Square)),
+    ]
+}
+
+/// The first `n` numbers of number style `style`, as the Numbered List presets show them ("1, 2,
+/// 3").
+pub(crate) fn number_sample(style: vectorcraft_doc::text::NumberStyle, n: u32) -> String {
+    (1..=n).map(|k| style.format(k)).collect::<Vec<_>>().join(", ")
+}
+
 /// Type › Bullets and Numbering › Convert to Text (`type.convertListToText`): the markers of the
 /// list paragraphs of the selected type, or of those the Type tool's selection touches, become
 /// characters of the text and the lists are turned off (`text.convertListToText`, which also moves
@@ -370,9 +498,9 @@ pub(crate) fn convert_list_to_text(app: &mut VectorcraftApp) -> Result<Value, St
 /// The Bullets button and the arrow beside it (Paragraph panel). The button makes the paragraphs
 /// the panel acts on a bulleted list (`text.setFormat {list: "bullet"}`) and shows pressed while
 /// they all are one. The arrow lists the presets (`{bullet}`): None turns the list off, and the
-/// one every paragraph has is checked.
+/// one every paragraph has is checked. More Options after them opens Bullets and Numbering on its
+/// Bullets tab.
 pub fn bullets_button(app: &mut VectorcraftApp, ui: &mut Ui, size: f32) {
-    use vectorcraft_doc::text::Bullet;
     let t = Tokens::get(ui.ctx());
     let shown = shared_para(app, |p| p.list.filter(|l| l.number.is_none()).map(|l| l.bullet));
     if widgets::icon_button(ui, "dc-para-bullets", tl!("Bullets"), matches!(shown, Some(Some(_))), size).clicked() {
@@ -385,31 +513,28 @@ pub fn bullets_button(app: &mut VectorcraftApp, ui: &mut Ui, size: f32) {
     crate::icons::paint(ui, "chevron-down", egui::Rect::from_center_size(rect.center(), vec2(10.0, 10.0)), t.text_dim);
     arrow.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!("Bullets")));
     let arrow = arrow.on_hover_text(tl!("Bullets"));
-    let presets = [
-        (tl!("None"), "none", None),
-        (tl!("Filled Dot"), "dot", Some(Bullet::Dot)),
-        (tl!("Dash"), "dash", Some(Bullet::Dash)),
-        (tl!("Hollow Circle"), "circle", Some(Bullet::Circle)),
-        (tl!("Filled Square"), "square", Some(Bullet::Square)),
-    ];
+    let mut more = false;
     let picked = egui::Popup::menu(&arrow).show(|ui| {
         let mut picked = None;
-        for (name, key, bullet) in presets {
+        for (name, key, bullet) in bullet_presets() {
             if bullet_row(ui, name, bullet, shown == Some(bullet)) {
                 picked = Some(key);
             }
         }
+        more = more_options_row(ui);
         picked
     });
     if let Some(key) = picked.and_then(|r| r.inner) {
         format(app, json!({ "bullet": key }));
+    }
+    if more {
+        more_options(app, "bullets");
     }
 }
 
 /// A row of the Bullets presets: a check when `checked`, the bullet drawn (a slash for None), then
 /// its name. Whether it was clicked.
 fn bullet_row(ui: &mut Ui, name: &str, bullet: Option<vectorcraft_doc::text::Bullet>, checked: bool) -> bool {
-    use vectorcraft_doc::text::Bullet;
     let t = Tokens::get(ui.ctx());
     let (rect, resp) = ui.allocate_exact_size(vec2(130.0, 22.0), egui::Sense::click());
     if resp.hovered() {
@@ -420,24 +545,53 @@ fn bullet_row(ui: &mut Ui, name: &str, bullet: Option<vectorcraft_doc::text::Bul
     if checked {
         painter.text(rect.left_center() + vec2(6.0, 0.0), egui::Align2::LEFT_CENTER, "✓", font.clone(), t.text_strong);
     }
-    let c = rect.left_center() + vec2(28.0, 0.0);
-    let stroke = egui::Stroke::new(1.5, t.text_strong);
-    match bullet {
-        None => painter.line_segment([c + vec2(-5.0, 5.0), c + vec2(5.0, -5.0)], stroke),
-        Some(Bullet::Dot) => painter.circle_filled(c, 3.0, t.text_strong),
-        Some(Bullet::Dash) => painter.line_segment([c - vec2(4.0, 0.0), c + vec2(4.0, 0.0)], stroke),
-        Some(Bullet::Circle) => painter.circle_stroke(c, 3.0, egui::Stroke::new(1.2, t.text_strong)),
-        Some(Bullet::Square) => painter.rect_filled(egui::Rect::from_center_size(c, vec2(6.0, 6.0)), 0.0, t.text_strong),
-    };
+    paint_bullet(painter, rect.left_center() + vec2(28.0, 0.0), bullet, t.text_strong);
     painter.text(rect.left_center() + vec2(42.0, 0.0), egui::Align2::LEFT_CENTER, name, font, t.text_strong);
     resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::RadioButton, ui.is_enabled(), checked, name));
     resp.clicked()
 }
 
+/// Draw `bullet` centered on `c` in `color` as the presets show it (a slash for None).
+pub(crate) fn paint_bullet(painter: &egui::Painter, c: egui::Pos2, bullet: Option<vectorcraft_doc::text::Bullet>, color: egui::Color32) {
+    use vectorcraft_doc::text::Bullet;
+    let stroke = egui::Stroke::new(1.5, color);
+    match bullet {
+        None => painter.line_segment([c + vec2(-5.0, 5.0), c + vec2(5.0, -5.0)], stroke),
+        Some(Bullet::Dot) => painter.circle_filled(c, 3.0, color),
+        Some(Bullet::Dash) => painter.line_segment([c - vec2(4.0, 0.0), c + vec2(4.0, 0.0)], stroke),
+        Some(Bullet::Circle) => painter.circle_stroke(c, 3.0, egui::Stroke::new(1.2, color)),
+        Some(Bullet::Square) => painter.rect_filled(egui::Rect::from_center_size(c, vec2(6.0, 6.0)), 0.0, color),
+    };
+}
+
+/// More Options at the end of the Bullets and Numbered List presets, under a line. Whether it was
+/// clicked.
+fn more_options_row(ui: &mut Ui) -> bool {
+    let t = Tokens::get(ui.ctx());
+    ui.separator();
+    let (rect, resp) = ui.allocate_exact_size(vec2(130.0, 22.0), egui::Sense::click());
+    if resp.hovered() {
+        ui.painter().rect_filled(rect, egui::CornerRadius::same(4), t.hover);
+    }
+    let name = tl!("More Options");
+    ui.painter().text(rect.left_center() + vec2(22.0, 0.0), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(12.5), t.text_strong);
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), name));
+    resp.clicked()
+}
+
+/// More Options: open Bullets and Numbering on `tab` (`ui.bulletsAndNumbering`), or show why it
+/// can't open.
+fn more_options(app: &mut VectorcraftApp, tab: &str) {
+    if let Err(e) = app.run("ui.bulletsAndNumbering", json!({ "tab": tab })) {
+        app.status(e);
+    }
+}
+
 /// The Numbered List button and the arrow beside it (Paragraph panel). The button makes the
 /// paragraphs the panel acts on a numbered list (`text.setFormat {list: "number"}`) and shows
 /// pressed while they all are one. The arrow lists the presets (`{number}`), each shown by its
-/// first three numbers: None turns the list off, and the one every paragraph has is checked.
+/// first three numbers: None turns the list off, and the one every paragraph has is checked. More
+/// Options after them opens Bullets and Numbering on its Numbers tab.
 pub fn numbers_button(app: &mut VectorcraftApp, ui: &mut Ui, size: f32) {
     use vectorcraft_doc::text::NumberStyle;
     let t = Tokens::get(ui.ctx());
@@ -452,21 +606,25 @@ pub fn numbers_button(app: &mut VectorcraftApp, ui: &mut Ui, size: f32) {
     crate::icons::paint(ui, "chevron-down", egui::Rect::from_center_size(rect.center(), vec2(10.0, 10.0)), t.text_dim);
     arrow.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!("Numbered List")));
     let arrow = arrow.on_hover_text(tl!("Numbered List"));
+    let mut more = false;
     let picked = egui::Popup::menu(&arrow).show(|ui| {
         let mut picked = None;
         if bullet_row(ui, tl!("None"), None, shown == Some(None)) {
             picked = Some(None);
         }
         for style in NumberStyle::ALL {
-            let sample = (1..=3).map(|n| style.format(n)).collect::<Vec<_>>().join(", ");
-            if number_row(ui, &sample, shown == Some(Some(style))) {
+            if number_row(ui, &number_sample(style, 3), shown == Some(Some(style))) {
                 picked = Some(Some(style));
             }
         }
+        more = more_options_row(ui);
         picked
     });
     if let Some(style) = picked.and_then(|r| r.inner) {
         format(app, json!({ "number": style.map_or(json!("none"), |s| json!(s)) }));
+    }
+    if more {
+        more_options(app, "numbers");
     }
 }
 
@@ -703,6 +861,22 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
             });
         });
+        // How a line keeps the kinsoku characters off its ends: the selected paragraphs' type is
+        // checked, and none is when they differ.
+        let kinsoku_type = shared_para(app, |p| p.kinsoku_type);
+        ui.add_enabled_ui(has, |ui| {
+            ui.menu_button(format!("   {}", tl!("Kinsoku Shori Type")), |ui| {
+                for (label, t, key) in [
+                    (tl!("Push In First"), KinsokuShoriType::PushInFirst, "pushInFirst"),
+                    (tl!("Push Out First"), KinsokuShoriType::PushOutFirst, "pushOutFirst"),
+                    (tl!("Push Out Only"), KinsokuShoriType::PushOutOnly, "pushOutOnly"),
+                ] {
+                    if menu_item(ui, label, true, kinsoku_type == Some(t)) {
+                        set_kinsoku_type(app, key);
+                    }
+                }
+            });
+        });
     }
     ui.separator();
     let composer = shared_composer(app);
@@ -719,13 +893,27 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
+/// Kinsoku Shori Type (`key`: `"pushInFirst"`, `"pushOutFirst"` or `"pushOutOnly"`) for the
+/// paragraphs the panel acts on ([`format`]), in one undo step.
+fn set_kinsoku_type(app: &mut VectorcraftApp, key: &str) {
+    format(app, json!({"kinsokuType": key}));
+}
+
 /// Reset Panel: the paragraphs the panel acts on ([`format`]) take Auto alignment, no list, no
 /// indents or paragraph spacing, Hyphenate off with the default Hyphenation and Justification
-/// options, Auto direction, Bottom-to-Bottom Leading, Regular burasagari, the Hard kinsoku set, the
-/// Every-line Composer, Roman Hanging Punctuation off and no kashidas.
+/// options, Auto direction, Bottom-to-Bottom Leading, the Line-end Punctuation Half Width Mojikumi
+/// Set, Regular burasagari, the Hard kinsoku set, Push Out Only, the Every-line Composer, Roman
+/// Hanging Punctuation off, no kashidas and no tab stops, as one undo step named Reset Panel (inside
+/// an undo group that is already open, as part of its step).
 fn reset_panel(app: &mut VectorcraftApp) {
     let h = HyphenationOptions::default();
     let j = vectorcraft_doc::JustificationOptions::default();
+    // The Type tool's typing session stays an undo step of its own.
+    super::character::end_typing(app);
+    let open = app.session.active().is_some_and(|st| st.undo_group.is_some());
+    if !open {
+        app.session.begin_named_undo_group(Some("Reset Panel".into()));
+    }
     para_cmd(app, "text.setStyle", json!({"justify": "auto"}));
     format(
         app,
@@ -735,10 +923,16 @@ fn reset_panel(app: &mut VectorcraftApp) {
             "hyphenLimit": h.hyphen_limit, "hyphenationZone": h.zone, "hyphenateCapitalized": h.capitalized, "kashida": "none",
             "wordSpacing": j.word_spacing, "letterSpacing": j.letter_spacing, "glyphScaling": j.glyph_scaling,
             "autoLeading": j.auto_leading, "singleWordJustification": "fullJustify",
-            "direction": "auto", "leadingModel": "romanBaseline", "burasagari": "standard", "kinsoku": "hard", "composer": "everyLine",
-            "romanHangingPunctuation": false
+            "direction": "auto", "leadingModel": "romanBaseline", "mojikumi": "lineEndHalf", "burasagari": "standard", "kinsoku": "hard",
+            "kinsokuType": "pushOutOnly", "composer": "everyLine", "romanHangingPunctuation": false
         }),
     );
+    para_cmd(app, "text.tabs.clear", json!({}));
+    // Closes the active document's undo group only, so an undo group open in another document
+    // stays open.
+    if !open && let Some(st) = app.session.active_mut() {
+        st.undo_group = None;
+    }
 }
 
 #[cfg(test)]

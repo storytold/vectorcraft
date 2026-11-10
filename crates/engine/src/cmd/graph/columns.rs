@@ -4,7 +4,10 @@ use super::edit::{regenerate, spec_of, target};
 use super::generate::generate_with;
 use super::markers::{design_frame, fit_affine};
 use super::series::{picked_series, reselect_series};
-use super::*;
+use super::{
+    Affine, Arc, ColumnDesign, ColumnType, Document, FillRule, Fractions, GraphSpec, Node, NodeKind, Point, Rect, Result, Session, TextObject, Value,
+    bad, json, refresh_bounds, shapes,
+};
 
 /// Most objects a graph's column designs may add (each column, repeated copy and legend swatch draws a copy).
 const COLUMN_BUDGET: usize = 200_000;

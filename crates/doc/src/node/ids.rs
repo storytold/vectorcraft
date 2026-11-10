@@ -1,4 +1,4 @@
-use super::*;
+use super::{Deserialize, Serialize};
 
 /// Stable per-document object id. Never reused.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]

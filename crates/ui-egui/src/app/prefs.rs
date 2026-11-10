@@ -1,4 +1,4 @@
-use super::*;
+use super::VectorcraftApp;
 
 impl VectorcraftApp {
     /// Was Preferences confirmed since the last call? The host then writes the preferences file,

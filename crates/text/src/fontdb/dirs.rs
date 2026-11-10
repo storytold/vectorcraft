@@ -1,4 +1,4 @@
-use super::*;
+use super::{Path, PathBuf};
 
 /// A font file holding `tables` (tag, data), sorted by tag as table directories are.
 #[cfg(any(test, not(target_arch = "wasm32")))]

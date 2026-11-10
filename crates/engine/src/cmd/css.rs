@@ -8,7 +8,7 @@ use vectorcraft_doc::NodeId;
 use vectorcraft_svg::{CssOptions, CssSheet, css_rules};
 
 use super::fileio::{default_name, encode_with_warnings, isolated, write_file};
-use super::*;
+use super::{CommandSpec, Result, Session, bad, cmd, has_doc, str_param, targets};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -27,7 +27,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export CSS",
             [],
             None,
-            "{path?, scope?: selection|all (default selection; ids? picks the objects), …options as css.selection, id?: object id (default: the selection)} write the CSS (css.selection, or css.generate for all) to path and, with rasterize, each picture its rules refer to next to it (PNG of the object's visual bounds, 1 px per point) → {path, bytes, rules: n, images: [path…], warnings}; no path → {data: the CSS, name: <document>.css, rules, images: [{name, dataBase64}], warnings}; warnings are css.selection's and the pictures' as document.export gives them (an image that couldn't be decoded, type in the fallback font or that doesn't fit its frame), each once",
+            "{path?, scope?: selection|all (default selection; ids? picks the objects), …options as css.selection, id?: object id (default: the selection)} write the CSS (css.selection, or css.generate for all) to path and, with rasterize, each picture its rules refer to next to it (PNG of what the object draws, with the clips, masks and effects of the groups and layers that hold it, 1 px per point) → {path, bytes, rules: n, images: [path…], warnings}; no path → {data: the CSS, name: <document>.css, rules, images: [{name, dataBase64}], warnings}; warnings are css.selection's and the pictures' as document.export gives them (an image that couldn't be decoded, type in the fallback font or that doesn't fit its frame), each once",
             has_doc,
             export
         ),

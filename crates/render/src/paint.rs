@@ -5,7 +5,7 @@ use vectorcraft_geom::{Rect, Vec2};
 use vello_cpu::RenderContext;
 use vello_cpu::peniko::{self, ColorStop};
 
-use super::*;
+use super::{BlendMode, Compose, FillRule, Mix, vello_cpu};
 use crate::Frame;
 
 /// Set the context paint (colours as frame `f` paints them). Returns false if nothing should be
@@ -20,7 +20,10 @@ pub(crate) fn set_paint(ctx: &mut RenderContext, p: &Paint, bounds: Rect, f: &Fr
         Paint::Gradient(g) if g.gradient.kind == GradientKind::Freeform => crate::freeform::set_freeform_paint(ctx, g, bounds, f.ink),
         Paint::Gradient(g) => {
             let geom = g.resolve(bounds);
-            let stops: Vec<ColorStop> = g.gradient.expanded_stops().iter().map(|(o, c, a)| ColorStop::from((*o, f.ink.color(c, *a)))).collect();
+            let adjusted = f.ink.gradient(&g.gradient);
+            let gradient = adjusted.as_ref().unwrap_or(&g.gradient);
+            let ink = if adjusted.is_some() { f.ink.base() } else { f.ink };
+            let stops: Vec<ColorStop> = gradient.expanded_stops().iter().map(|(o, c, a)| ColorStop::from((*o, ink.color(c, *a)))).collect();
             if stops.is_empty() {
                 return false;
             }
@@ -72,6 +75,8 @@ thread_local! {
     /// Images that couldn't be decoded (and so drew nothing) on this thread, counted for exports to
     /// report.
     static DECODE_FAILURES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    /// Images decoded, or tried, on this thread ([`image_decodes`]).
+    static DECODES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
 }
 
 #[cfg(test)]
@@ -111,6 +116,12 @@ pub(crate) enum Undecoded {
 /// the canvas, thumbnails) fail to decode meanwhile are not counted.
 pub fn decode_failures() -> u64 {
     DECODE_FAILURES.with(std::cell::Cell::get)
+}
+
+/// How many images [`decode_pixmap_or_why`] and [`decode_pixmap_fit`] have decoded on this thread so
+/// far, failed decodes included. Images other threads decode are not counted.
+pub fn image_decodes() -> u64 {
+    DECODES.with(std::cell::Cell::get)
 }
 
 /// [`decode_in_room`]'s image or error.
@@ -154,6 +165,12 @@ fn room_for(rgba: u64, pinned: u64) -> Result<(), Undecoded> {
     }
 }
 
+/// Whether `w`×`h` pixels may be decoded whole ([`room_for`]) beside the images paints hold now.
+pub(crate) fn within_allowance(w: u32, h: u32) -> bool {
+    let bytes = (u64::from(w) * u64::from(h)).saturating_mul(4);
+    room_for(bytes, crate::images::store().pinned_bytes() as u64).is_ok()
+}
+
 /// Whether `bytes` of decoded pixels fit beside the images paints hold, which can't be evicted from
 /// the cache: a new image is decoded only while those and it fit twice [`MAX_DECODE_ALLOC`].
 fn fits_beside_pinned(bytes: u64) -> bool {
@@ -172,8 +189,7 @@ fn fits_beside_pinned(bytes: u64) -> bool {
 /// all: an image that isn't a PNG, JPEG, GIF or WebP; an image of more pixels than the allowance
 /// has bytes (2,147,483,648 pixels, or 536,870,912 in the web app; 46,341 × 46,341 is more); and an
 /// image whose decoded samples take more than the allowance, unless it is a PNG that isn't
-/// interlaced and is at most the allowance divided by [`ROW_SCRATCH`] pixels wide (read a row at a
-/// time).
+/// interlaced whose reader's buffers ([`png_row_scratch`]) fit the allowance (read a row at a time).
 pub fn reduced_size(bytes: &[u8]) -> Option<(u32, u32)> {
     reduction(bytes, allowance()).map(|r| r.to)
 }
@@ -211,26 +227,46 @@ fn reduction(bytes: &[u8], allowance: u64) -> Option<Reduction> {
         return None;
     }
     let to = fitted_dims(w, h, allowance)?;
-    // The PNG reader's row buffers take at most `ROW_SCRATCH` bytes a column, also within the allowance.
-    let rows = format == image::ImageFormat::Png
-        && u64::from(w).saturating_mul(ROW_SCRATCH) <= allowance
-        && png_reader(bytes).is_some_and(|r| !r.info().interlaced);
-    let scratch = if rows {
-        u64::from(w) * ROW_SCRATCH
+    // A PNG that isn't interlaced is read a row at a time when the reader's buffers fit the allowance.
+    let row_scratch = if format == image::ImageFormat::Png {
+        png_reader(bytes).filter(|r| !r.info().interlaced).and_then(|r| png_row_scratch(&r)).filter(|&s| s <= allowance)
     } else {
+        None
+    };
+    let rows = row_scratch.is_some();
+    let scratch = row_scratch.unwrap_or_else(|| {
         let band = u64::from(BAND) * u64::from(w) * (u64::from(d.color_type().bytes_per_pixel()) + 4);
         d.total_bytes().saturating_add(band)
-    };
+    });
     (rows || d.total_bytes() <= allowance).then_some(Reduction { size: (w, h), to, rows, scratch })
 }
 
 /// How many rows of an image decoded whole [`reduced_pixmap`] converts to RGBA at a time.
 const BAND: u32 = 16;
 
-/// The most memory a column of a PNG read a row at a time takes in the reader's row buffers: the
-/// row as stored (up to 8 bytes a pixel and a filter byte), the row before it, and the row given
-/// out (up to 4 bytes a pixel).
-const ROW_SCRATCH: u64 = 32;
+/// The bytes of rows already read that png 0.18's reader keeps in its stream buffer, at least,
+/// before it moves the rest of the buffer back to the start.
+const PNG_KEPT_ROWS: u64 = 128 << 10;
+
+/// The deflate window png 0.18's reader keeps after the rows it has unfiltered, and the step its
+/// stream buffer grows by.
+const PNG_WINDOW_AND_STEP: u64 = (32 << 10) + (8 << 10);
+
+/// The most memory `r` takes in its buffers to read its image a row at a time: the stream buffer
+/// holds the rows already read up to [`PNG_KEPT_ROWS`] or four rows, whichever is more, the previous
+/// and current rows, and [`PNG_WINDOW_AND_STEP`]. The buffer grows by doubling its reservation,
+/// and while it grows its old reservation and the new one, up to twice the size it holds, are both
+/// allocated: three times that size at most. A copy of a stored row and the row given out come on
+/// top. `None` when a row given out doesn't fit memory.
+fn png_row_scratch(r: &png::Reader<std::io::Cursor<&[u8]>>) -> Option<u64> {
+    let info = r.info();
+    // A filter byte and the row's samples, in whole bytes.
+    let stored = 1 + (u64::from(info.width) * info.color_type.samples() as u64 * info.bit_depth as u64).div_ceil(8);
+    let out = u64::try_from(r.output_line_size(info.width)?).ok()?;
+    let kept = (stored * 4).next_multiple_of(64).max(PNG_KEPT_ROWS);
+    let stream = kept + stored * 2 + PNG_WINDOW_AND_STEP;
+    Some(stream * 3 + stored + out)
+}
 
 /// The largest size of at most `w`×`h` pixels, keeping their proportions, whose pixels take at most
 /// `allowance` bytes as RGBA, with sides of at most `u16::MAX` pixels.
@@ -394,7 +430,7 @@ pub fn decode_pixmap(bytes: &[u8]) -> Option<vello_cpu::Pixmap> {
 /// [`reduced_size`] when it has one; a failure is counted in [`decode_failures`].
 pub(crate) fn decode_pixmap_or_why(bytes: &[u8]) -> Result<vello_cpu::Pixmap, Undecoded> {
     counted(match decode_or_reduction(bytes) {
-        Ok(img) => pixmap_of(fit_pixmap(img).to_rgba8()).ok_or(Undecoded::Unreadable),
+        Ok(img) => decoded_pixmap(img).ok_or(Undecoded::Unreadable),
         Err(r) => r.and_then(|r| reduced_pixmap(bytes, &r)),
     })
 }
@@ -404,6 +440,7 @@ pub(crate) fn decode_pixmap_or_why(bytes: &[u8]) -> Result<vello_cpu::Pixmap, Un
 fn decode_or_reduction(bytes: &[u8]) -> Result<image::DynamicImage, Result<Reduction, Undecoded>> {
     #[cfg(test)]
     DECODE_ATTEMPTS.with(|n| n.set(n.get() + 1));
+    DECODES.with(|n| n.set(n.get() + 1));
     match decode_in_room(bytes) {
         Ok(img) => Ok(img),
         Err((image::ImageError::Limits(_), Undecoded::Unreadable)) => Err(reduction(bytes, allowance()).ok_or(Undecoded::Unreadable)),
@@ -466,6 +503,11 @@ fn pixmap_of(img: image::RgbaImage) -> Option<vello_cpu::Pixmap> {
         })
         .collect();
     Some(vello_cpu::Pixmap::from_parts(data, w as u16, h as u16))
+}
+
+/// Decoded image `img` as [`decode_pixmap_or_why`] makes it a pixmap.
+pub(crate) fn decoded_pixmap(img: image::DynamicImage) -> Option<vello_cpu::Pixmap> {
+    pixmap_of(fit_pixmap(img).to_rgba8())
 }
 
 /// The substitution highlights' pink: Preferences › Highlight Substituted Fonts and Highlight

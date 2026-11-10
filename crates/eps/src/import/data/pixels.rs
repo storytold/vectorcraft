@@ -1,5 +1,5 @@
 use super::ops::Source;
-use super::*;
+use super::{Affine, Obj, Res, Space, ps_err};
 
 /// An image to decode.
 pub(super) struct Spec {

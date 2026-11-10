@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-use super::*;
+use super::{CommandSpec, Result, Session, always, bad, cmd, str_param};
 use crate::Prefs;
 
 /// The most matches kept.

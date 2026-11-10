@@ -66,9 +66,14 @@ fn rules(root: &Path) -> Rules {
     Rules { home: Some(root.join("Users/me")), user_content: vec![root.to_path_buf()], refused: vec![root.join("refused")] }
 }
 
-/// The search's progress once it ended (or after 10 seconds).
+/// How long a test waits for a search to end or to read a file. The wait only ends a test whose
+/// search never ends. A machine busy with other builds can hold a walker for seconds. It is shorter than a
+/// search's default 60 s deadline, which would end a search that does not end by itself.
+const WAIT: Duration = Duration::from_secs(30);
+
+/// The search's progress once it ended (or after [`WAIT`]).
 fn wait(s: &Search) -> Progress {
-    let until = Instant::now() + Duration::from_secs(10);
+    let until = Instant::now() + WAIT;
     loop {
         let p = s.progress();
         if p.end.is_some() || Instant::now() > until {
@@ -205,14 +210,17 @@ fn the_search_ends_at_its_limits_and_when_stopped() {
 fn the_search_answers_at_its_deadline_while_a_walker_is_blocked() {
     let root = tree("blocked", &["f.ttf"]);
     let (tx, rx) = mpsc::channel();
+    let started = Instant::now();
     let s = begin(root.clone(), rules(&root), Limits { seconds: 0.2, ..Limits::default() }, 1, 1, Arc::new(Blocked(Mutex::new(rx))));
     std::thread::sleep(Duration::from_millis(300));
     let p = s.progress();
+    // The search ended when it answered, and it ran no longer than the test has waited.
+    let waited = started.elapsed().as_secs_f64();
     assert_eq!((p.state(), p.stopped()), ("stopped", Some("time")), "{p:?}");
-    assert!(p.seconds >= 0.2 && p.seconds < 5.0, "{p:?}");
+    assert!(p.seconds >= 0.2 && p.seconds <= waited, "{p:?}, {waited} s");
     let (tx2, rx2) = mpsc::channel();
     let s2 = begin(root.clone(), rules(&root), Limits::default(), 1, 1, Arc::new(Blocked(Mutex::new(rx2))));
-    let until = Instant::now() + Duration::from_secs(10);
+    let until = Instant::now() + WAIT;
     while s2.progress().read == 0 && Instant::now() < until {
         std::thread::sleep(Duration::from_millis(2));
     }
@@ -246,7 +254,7 @@ fn files_found_are_kept_as_they_are_read() {
     let root = tree("kept", &["a.ttf", "b.ttf", "c.ttf"]);
     let (tx, rx) = mpsc::channel();
     let s = begin(root.clone(), rules(&root), Limits::default(), 1, 2, Arc::new(SecondBlocks(Mutex::new((0, rx)))));
-    let until = Instant::now() + Duration::from_secs(10);
+    let until = Instant::now() + WAIT;
     while s.progress().read < 2 && Instant::now() < until {
         std::thread::sleep(Duration::from_millis(2));
     }
@@ -426,7 +434,7 @@ fn a_search_starts_with_the_threads_left_and_fails_when_none_is() {
     assert_eq!(c.err().as_deref(), Some("the search couldn't start: try again in a moment"));
     drop((tx_a, tx_b));
     assert_eq!((wait(&a).end, wait(&b).end), (Some(End::Done), Some(End::Done)));
-    let until = Instant::now() + Duration::from_secs(10);
+    let until = Instant::now() + WAIT;
     while POOL.live() > 0 && Instant::now() < until {
         std::thread::sleep(Duration::from_millis(2));
     }

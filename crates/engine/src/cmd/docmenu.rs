@@ -2,7 +2,7 @@
 //! brush strokes, Save/recall selections), View → Guides, and File → Close All / Document Color
 //! Mode / File Info.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
 
 use serde_json::{Value, json};
@@ -11,19 +11,35 @@ use vectorcraft_geom::Vec2;
 
 use super::edit::selected_roots;
 use super::pathops::Beside;
-use super::select::{selectable_ids, walk_selectable};
-use super::*;
+use super::select::{first_selectable, is_selectable, selectable_ids, walk_selectable};
+use super::{
+    CommandSpec, EngineError, Point, Result, Session, bad, bool_or, checked_ids_param, cmd, f64_or, f64_req, has_doc, has_selection, id_param, ok,
+    str_param, switch_or,
+};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
-        cmd!("select.same.symbolInstance", "Symbol Instance", ["Select", "Same"], None, "{} → {count}", has_selection, |s, _| same(
-            s,
+        cmd!(
             "select.same.symbolInstance",
-            |a, b| match (&a.kind, &b.kind) {
+            "Symbol Instance",
+            ["Select", "Same"],
+            None,
+            "{} select the instances of the symbol of the first selected object that can be selected, including a group member selected on its own; when that object is not a symbol instance, such as a group, nothing is selected; objects that are hidden or locked, inside a hidden or locked object or layer, on a template layer, on a locked artboard while nothing is isolated (new art while it stays selected excepted), or outside the isolated group or layer are passed over → {count}",
+            has_selection,
+            |s, _| same(s, "select.same.symbolInstance", |a, b| match (&a.kind, &b.kind) {
                 (NodeKind::SymbolInstance { symbol: x, .. }, NodeKind::SymbolInstance { symbol: y, .. }) => x == y,
                 _ => false,
-            }
-        )),
+            })
+        ),
+        cmd!(
+            "select.same.linkBlockSeries",
+            "Link Block Series",
+            ["Select", "Same"],
+            None,
+            "{} select every frame of the threads of the selected type objects (and of the type inside selected groups); type in no thread selects itself; type and frames that are hidden or locked, inside a hidden or locked object or layer, on a template layer, or outside the isolated group or layer neither count as selected nor are selected → {count}",
+            has_text_selection,
+            same_link_block_series
+        ),
         cmd!("select.same.fontFamily", "Font Family", ["Select", "Same"], None, "{} → {count}", has_selection, |s, _| same_text(
             s,
             "select.same.fontFamily",
@@ -54,6 +70,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "select.same.textStrokeColor",
             |a, b| a.stroke == b.stroke
         )),
+        cmd!(
+            "select.same.textFillAndStrokeColor",
+            "Text Fill & Stroke Color",
+            ["Select", "Same"],
+            None,
+            "{} select the type objects with characters whose fill and stroke both match the first character of the first selected type → {count}",
+            has_selection,
+            |s, _| same_text(s, "select.same.textFillAndStrokeColor", |a, b| a.fill == b.fill && a.stroke == b.stroke)
+        ),
         cmd!(
             "select.object.directionHandles",
             "Direction Handles",
@@ -158,7 +183,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Lock Guides",
             ["View", "Guides"],
             Some("Cmd+Alt+;"),
-            "{locked?: bool} toggle (or set) the session's guide lock; locking deselects the ruler guides and guide paths in every open document → {locked}",
+            "{locked?: bool} toggle (or set) the session's guide lock, leaving the lockGuidesByDefault preference as it is; locking deselects the ruler guides and guide paths in every open document; guide.add and a guide dragged out of a ruler still make new guides while locked → {locked}",
             has_doc,
             lock_guides
         ),
@@ -231,7 +256,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Document Color Mode",
             ["File", "Document Color Mode"],
             None,
-            "{mode: \"cmyk\"|\"rgb\", convert?: true (convert every colour of the art, symbols, pattern tiles and swatches through the colour settings; swatch links kept; Gray colours stay Gray, on the black plate), intent?, grays?: \"profile\" (default: RGB greys separate through the CMYK profile like any colour, into four-colour greys and a rich black) | \"black\" (to CMYK, RGB greys with R = G = B go on the black plate only, K = their grey value)} → {changed}",
+            "{mode: \"cmyk\"|\"rgb\", convert?: true (convert every color of the art (opacity masks, effect colors and graphs' series and label paints included), symbols, graph designs, pattern tiles, graphic styles (their effect colors included), brushes, swatches and the paints new art takes through the color settings, together in one undo step (Undo restores their original values; Redo reapplies the conversion); swatch links kept; Gray colors stay Gray, on the black plate), intent?, grays?: \"profile\" (default: RGB grays separate through the CMYK profile like any color, into light grays in cyan, magenta and yellow only, darker four-color grays and a rich black) | \"black\" (to CMYK, RGB grays with R = G = B go on the black plate only, K = their gray value)} → {changed: how many colors of the art, symbols, graph designs and pattern tiles changed; the colors of graphic styles and brushes are not counted}",
             has_doc,
             super::colormgmt::convert_mode
         ),
@@ -251,6 +276,27 @@ impl Session {
     /// View → Guides → Lock Guides state (canvas guide dragging should honour it).
     pub fn guides_locked(&self) -> bool {
         self.menu.guides_locked
+    }
+
+    /// Set View → Guides → Lock Guides. Locked guides can't stay selected, ruler guides or guide
+    /// paths, in any open document ([`Session::select`] lets those go in the active one).
+    pub(crate) fn set_guides_locked(&mut self, locked: bool) {
+        self.menu.guides_locked = locked;
+        if !locked {
+            return;
+        }
+        let guides_selected =
+            self.doc().is_ok_and(|st| !st.selection.guides.is_empty() || st.selection.objects.iter().any(|id| crate::is_guide_path(&st.doc, *id)));
+        // It fails only without a document, and then no guide is selected.
+        if guides_selected {
+            let _ = self.select(|_, sel| sel.guides.clear());
+        }
+        let active = self.active;
+        for (i, st) in self.docs.iter_mut().enumerate() {
+            if Some(i) != active && crate::deselect_hidden(&self.menu, &st.doc, &mut st.selection) {
+                st.revision += 1;
+            }
+        }
     }
 }
 
@@ -276,38 +322,123 @@ fn finish_same(s: &mut Session, cmd: &str, ids: Vec<NodeId>) -> Result<Value> {
     Ok(json!({ "count": st.selection.objects.len() }))
 }
 
+/// The objects `eq` matches with the [`first_selectable`] selected object.
 fn same(s: &mut Session, cmd: &str, eq: fn(&Node, &Node) -> bool) -> Result<Value> {
-    let st = s.doc()?;
-    let r = st.selection.objects.first().and_then(|id| st.doc.node(*id)).cloned().ok_or_else(|| bad(cmd, "nothing selected"))?;
+    let r = first_selectable(s.doc()?).cloned().ok_or_else(|| bad(cmd, "nothing selected"))?;
     let ids = candidates(s, |n| eq(n, &r))?;
     finish_same(s, cmd, ids)
 }
 
+/// The first character style of the first type object [`each_selected_text`] gives.
 fn first_text_style(s: &Session) -> Option<CharStyle> {
     let st = s.active()?;
     let mut out = None;
-    for id in &st.selection.objects {
-        st.doc.node(*id)?.walk(&mut |n| {
-            if out.is_none()
-                && let NodeKind::Text(t) = &n.kind
-            {
-                out = Some(t.first_style());
-            }
-        });
-        if out.is_some() {
-            break;
+    each_selected_text(s, |id| {
+        if let Some(NodeKind::Text(t)) = st.doc.node(id).map(|n| &n.kind) {
+            out = Some(t.first_style());
         }
-    }
+        out.is_none()
+    });
     out
 }
 
 fn same_text(s: &mut Session, cmd: &str, eq: fn(&CharStyle, &CharStyle) -> bool) -> Result<Value> {
     let r = first_text_style(s).ok_or_else(|| bad(cmd, "select a text object"))?;
     let ids = candidates(s, |n| match &n.kind {
-        NodeKind::Text(t) => t.runs.iter().any(|run| eq(&run.style, &r)),
+        NodeKind::Text(t) => t.runs.iter().any(|run| !run.text.is_empty() && eq(&run.style, &r)),
         _ => false,
     })?;
     finish_same(s, cmd, ids)
+}
+
+/// Call `f` with each type object among the selected objects and inside them, in selection order,
+/// keeping only those [`walk_selectable`] visits: none that is hidden, locked, on a hidden, locked
+/// or template layer, or outside the isolated group. A selected layer or sublayer, or a selected
+/// group that holds the isolated group, gives the type in it that passes the same test. A type
+/// object inside two selected objects is given twice. The walk stops when `f` returns false.
+fn each_selected_text(s: &Session, mut f: impl FnMut(NodeId) -> bool) {
+    fn inside(n: &Node, f: &mut impl FnMut(NodeId) -> bool) -> bool {
+        if !n.visible || n.locked || n.is_template() {
+            return true;
+        }
+        if matches!(n.kind, NodeKind::Text(_)) && !f(n.id) {
+            return false;
+        }
+        n.children().into_iter().flatten().all(|c| inside(c, f))
+    }
+    fn from(n: &Node, selectable: &impl Fn(NodeId) -> bool, holds_isolated: &[NodeId], f: &mut impl FnMut(NodeId) -> bool) -> bool {
+        if selectable(n.id) {
+            return inside(n, f);
+        }
+        if n.is_layer() || holds_isolated.contains(&n.id) {
+            return n.children().into_iter().flatten().all(|c| from(c, selectable, holds_isolated, f));
+        }
+        true
+    }
+    let Some(st) = s.active() else { return };
+    let locks = st.doc.locked_artboards();
+    let selectable = |id| is_selectable(&st.doc, st.isolation, &locks, id);
+    // The isolated group and the groups and layers that hold it.
+    let holds_isolated = st.isolation.and_then(|i| st.doc.ancestry(i)).unwrap_or_default();
+    for id in &st.selection.objects {
+        if let Some(n) = st.doc.node(*id)
+            && !from(n, &selectable, &holds_isolated, &mut f)
+        {
+            return;
+        }
+    }
+}
+
+/// The type objects [`each_selected_text`] gives, each once, in selection order.
+fn selected_text(s: &Session) -> Vec<NodeId> {
+    let (mut out, mut seen) = (vec![], HashSet::new());
+    each_selected_text(s, |id| {
+        if seen.insert(id) {
+            out.push(id);
+        }
+        true
+    });
+    out
+}
+
+/// A type object is selected, or is inside a selected object.
+fn has_text_selection(s: &Session) -> std::result::Result<(), String> {
+    has_selection(s)?;
+    let mut any = false;
+    each_selected_text(s, |_| {
+        any = true;
+        false
+    });
+    if any { Ok(()) } else { Err("select a text object".into()) }
+}
+
+/// Select › Same › Link Block Series: the frames of the threads the selected type objects are
+/// in, in thread order; a type object in no thread is its own series.
+fn same_link_block_series(s: &mut Session, _: &Value) -> Result<Value> {
+    const C: &str = "select.same.linkBlockSeries";
+    let seeds = selected_text(s);
+    if seeds.is_empty() {
+        return Err(bad(C, "select a text object"));
+    }
+    let st = s.doc()?;
+    let can = selectable_ids(&st.doc, st.isolation);
+    // Each frame's thread: the first thread that lists it.
+    let mut threads: HashMap<NodeId, &[NodeId]> = HashMap::new();
+    for t in &st.doc.text_threads {
+        for id in t {
+            threads.entry(*id).or_insert(t.as_slice());
+        }
+    }
+    let (mut ids, mut seen): (Vec<NodeId>, HashSet<NodeId>) = (vec![], HashSet::new());
+    for seed in &seeds {
+        let series = threads.get(seed).copied().unwrap_or(std::slice::from_ref(seed));
+        for id in series {
+            if can.contains(id) && seen.insert(*id) {
+                ids.push(*id);
+            }
+        }
+    }
+    finish_same(s, C, ids)
 }
 
 fn by_kind(s: &mut Session, f: impl Fn(&Node) -> bool) -> Result<Value> {
@@ -606,22 +737,8 @@ fn release_guides(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn lock_guides(s: &mut Session, p: &Value) -> Result<Value> {
-    let v = p.get("locked").and_then(Value::as_bool).unwrap_or(!s.menu.guides_locked);
-    s.menu.guides_locked = v;
-    // Locked guides can't stay selected, ruler guides or guide paths, in any open document
-    // ([`Session::select`] lets those go in the active one).
-    let st = s.doc()?;
-    if v && (!st.selection.guides.is_empty() || st.selection.objects.iter().any(|id| crate::is_guide_path(&st.doc, *id))) {
-        s.select(|_, sel| sel.guides.clear())?;
-    }
-    if v {
-        let active = s.active;
-        for (i, st) in s.docs.iter_mut().enumerate() {
-            if Some(i) != active && crate::deselect_hidden(&s.menu, &st.doc, &mut st.selection) {
-                st.revision += 1;
-            }
-        }
-    }
+    let v = switch_or(p, "locked", !s.menu.guides_locked, "view.guides.lock")?;
+    s.set_guides_locked(v);
     Ok(json!({ "locked": v }))
 }
 

@@ -11,9 +11,13 @@ use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 
 use usvg::{ImageHrefResolver, ImageKind, roxmltree};
 use vectorcraft_doc::LinkInfo;
+use vectorcraft_doc::links::missing_placeholder;
 
 use super::{Edits, depth, href};
 use crate::{ImportOptions, MAX_ELEMENT_DEPTH, MAX_SVGZ, SvgError};
+
+/// Most nested SVG images an imported SVG may decode (#3564).
+pub const MAX_NESTED_SVG_IMAGES: usize = 256;
 
 /// The files an SVG's images link to.
 #[derive(Default)]
@@ -36,6 +40,10 @@ pub(in crate::import) struct Files {
     too_deep: AtomicBool,
     /// An SVGZ image was left out for unpacking past what the SVGZ images may.
     too_big: AtomicBool,
+    /// How many nested SVG images were decoded so far.
+    svg_images: AtomicUsize,
+    /// SVG images were left out for exceeding [`MAX_NESTED_SVG_IMAGES`].
+    too_many_svg_images: AtomicBool,
 }
 
 /// How usvg holds the bytes of a raster of one format (`ImageKind::PNG`…).
@@ -53,22 +61,6 @@ pub(in crate::import) struct Linked {
     pub link: LinkInfo,
     /// The file wasn't read: the bytes are a placeholder.
     pub missing: bool,
-}
-
-/// The side of the placeholder image, in pixels.
-const MARKER: u32 = 64;
-
-/// The placeholder of a missing linked image: a light tile, crossed out (drawn here).
-fn marker() -> Option<Vec<u8>> {
-    let last = MARKER - 1;
-    let img = image::RgbaImage::from_fn(MARKER, MARKER, |x, y| {
-        let edge = x == 0 || y == 0 || x == last || y == last;
-        let cross = x.abs_diff(y) <= 1 || (x + y).abs_diff(last) <= 1;
-        image::Rgba(if edge || cross { [200, 60, 60, 255] } else { [236, 236, 236, 255] })
-    });
-    let mut png = Vec::new();
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
-    Some(png)
 }
 
 /// `s` with `%XX` escapes decoded (an href is a URL).
@@ -152,7 +144,7 @@ impl Files {
                 };
                 let source = source.or_else(|why| {
                     warnings.push(format!("linked image '{h}' {why}: a placeholder keeps its place until it is relinked"));
-                    let bytes = Arc::new(placeholder.get_or_insert_with(marker).clone().ok_or(why)?);
+                    let bytes = Arc::new(placeholder.get_or_insert_with(missing_placeholder).clone().ok_or(why)?);
                     files.links.insert(key(&bytes), Linked { link: LinkInfo::new(path), missing: true });
                     Ok::<_, &str>(Source::Raster(ImageKind::PNG, bytes))
                 });
@@ -214,6 +206,9 @@ impl Files {
         if self.too_big.load(Ordering::Relaxed) {
             notes.push(format!("SVGZ images were left out: together they unpack to more than {} MB", MAX_SVGZ >> 20));
         }
+        if self.too_many_svg_images.load(Ordering::Relaxed) {
+            notes.push(format!("SVG images were left out: more than {MAX_NESTED_SVG_IMAGES} nested SVG images"));
+        }
         notes
     }
 
@@ -268,14 +263,19 @@ impl Files {
     /// can't read, when it isn't SVG or when its elements nest deeper than the SVGs around it
     /// leave: usvg reads it while it reads them, on the same stack.
     fn svg(&self, text: &str, opts: &usvg::Options) -> Option<ImageKind> {
+        if self.svg_images.fetch_add(1, Ordering::Relaxed) >= MAX_NESTED_SVG_IMAGES {
+            return leave_out(&self.too_many_svg_images, true);
+        }
         // Measured as the SVG holding it is (`import`): the text before the XML reader.
         let used = self.depth.load(Ordering::Relaxed);
         let left = MAX_ELEMENT_DEPTH.saturating_sub(used);
         if depth::xml_deeper_than(text, left) {
             return leave_out(&self.too_deep, true);
         }
-        let height = depth::height(&super::parse(text).ok()?, left);
-        let Some(height) = height else { return leave_out(&self.too_deep, true) };
+        let xml = super::parse(text).ok()?;
+        let Some(height) = depth::height(&xml, left) else { return leave_out(&self.too_deep, true) };
+        // usvg's parser would overflow on it, as on the SVG holding it (`import`).
+        super::convolve_matrices_ok(&xml).ok()?;
         self.note_text(text);
         self.depth.store(used + height, Ordering::Relaxed);
         let tree = usvg::Tree::from_data_nested(text.as_bytes(), opts);
@@ -449,9 +449,19 @@ mod tests {
         assert_eq!(read(MAX_ELEMENT_DEPTH, 0), (false, 1));
     }
 
+    /// An SVG image with a `feConvolveMatrix` order usvg's multiply overflows is left out before
+    /// usvg reads it, as the SVG holding it would be refused.
     #[test]
-    fn the_placeholder_is_a_png() {
-        let png = marker().unwrap();
-        assert_eq!(image::load_from_memory(&png).unwrap().width(), MARKER);
+    fn svg_images_with_an_overflowing_convolve_order_are_left_out() {
+        let read = |order: &str| {
+            let svg = format!(
+                r#"<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"><filter id="f"><feConvolveMatrix order="{order}" kernelMatrix="1"/></filter><rect width="4" height="4" filter="url(#f)"/></svg>"#
+            );
+            let files = Files::default();
+            let resolver = files.resolver(1);
+            matches!((resolver.resolve_data)("image/svg+xml", Arc::new(svg.into_bytes()), &usvg::Options::default()), Some(ImageKind::SVG(_)))
+        };
+        assert!(!read("2147483647"));
+        assert!(read("1"));
     }
 }

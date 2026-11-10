@@ -91,9 +91,11 @@ pub fn scale_for_drag(r: Rect, handle: Handle, p: Point, proportional: bool, fro
     let mut sy = if ay && d0.y.abs() > 1e-9 { d1.y / d0.y } else { 1.0 };
     if proportional {
         if handle.is_corner() {
-            let s = if sx.abs() > sy.abs() { sx } else { sy };
-            sx = s.abs() * sx.signum();
-            sy = s.abs() * sy.signum();
+            // Follow the axis the pointer moved further along (a drag along one axis must still
+            // resize), and mirror both axes together when it crosses the origin.
+            let s = if (sx - 1.0).abs() >= (sy - 1.0).abs() { sx } else { sy };
+            sx = s;
+            sy = s;
         } else if ax {
             sy = sx.abs();
         } else {
@@ -149,6 +151,25 @@ mod tests {
         assert_eq!(a.transform_rect_bbox(R), Rect::new(0.0, 0.0, 200.0, 50.0));
         let a = scale_for_drag(R, Handle::BottomRight, Point::new(200.0, 50.0), true, false);
         assert_eq!(a.transform_rect_bbox(R), Rect::new(0.0, 0.0, 200.0, 100.0));
+    }
+
+    #[test]
+    fn proportional_corner_follows_a_drag_along_one_axis() {
+        let scale = |p: Point, from_center: bool| {
+            let a = scale_for_drag(R, Handle::BottomRight, p, true, from_center).as_coeffs();
+            (a[0], a[3])
+        };
+        for from_center in [false, true] {
+            let o = if from_center { R.center() } else { Point::new(0.0, 0.0) };
+            let (hx, hy) = (100.0 - o.x, 50.0 - o.y);
+            // Horizontal drag, then vertical drag: the size follows the pointer, uniformly.
+            for (t, want) in [(0.5, 0.5), (0.25, 0.25), (-0.5, -0.5), (-1.0, -1.0)] {
+                for p in [Point::new(o.x + hx * t, 50.0), Point::new(100.0, o.y + hy * t)] {
+                    let (sx, sy) = scale(p, from_center);
+                    assert!((sx - want).abs() < 1e-9 && (sy - want).abs() < 1e-9, "{p:?} center={from_center}: got ({sx}, {sy}), want {want}");
+                }
+            }
+        }
     }
 
     #[test]

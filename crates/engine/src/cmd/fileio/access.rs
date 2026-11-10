@@ -1,4 +1,6 @@
-use super::*;
+#[cfg(not(target_arch = "wasm32"))]
+use super::write_atomic;
+use super::{EngineError, Result, Session, Value, bad, json};
 
 // ---------- the file system (none on the web, where commands take and return bytes) ----------
 //
@@ -8,7 +10,7 @@ use super::*;
 
 /// `path` checked for reading against the automation roots in force.
 #[cfg(not(target_arch = "wasm32"))]
-pub(super) fn may_read(path: &str) -> Result<()> {
+pub(crate) fn may_read(path: &str) -> Result<()> {
     #[cfg(test)]
     touch(path);
     crate::file_access::check_read(path).map_err(EngineError::Other)
@@ -42,7 +44,7 @@ pub(crate) fn touched<T>(f: impl FnOnce() -> T) -> (T, Vec<String>) {
 
 /// `path` checked for writing against the automation roots in force.
 #[cfg(not(target_arch = "wasm32"))]
-pub(super) fn may_write(path: &str) -> Result<()> {
+pub(crate) fn may_write(path: &str) -> Result<()> {
     crate::file_access::check_write(path).map_err(EngineError::Other)
 }
 
@@ -167,7 +169,7 @@ pub(super) fn file_list(_: &mut Session, p: &Value) -> Result<Value> {
 /// The entries of folder `path`, sorted by name: at most `max`, and whether there were more. A
 /// link isn't followed: its target may lie outside the automation roots.
 #[cfg(not(target_arch = "wasm32"))]
-pub(super) fn list_dir(path: &str, max: usize) -> Result<(Vec<Value>, bool)> {
+pub(crate) fn list_dir(path: &str, max: usize) -> Result<(Vec<Value>, bool)> {
     may_read(path)?;
     let dir = std::fs::read_dir(path).map_err(|e| EngineError::Other(format!("{path}: {e}")))?;
     let mut entries: Vec<(String, Value)> = vec![];
@@ -193,7 +195,7 @@ pub(super) fn list_dir(path: &str, max: usize) -> Result<(Vec<Value>, bool)> {
 }
 
 #[cfg(target_arch = "wasm32")]
-pub(super) fn list_dir(_: &str, _: usize) -> Result<(Vec<Value>, bool)> {
+pub(crate) fn list_dir(_: &str, _: usize) -> Result<(Vec<Value>, bool)> {
     Err(EngineError::Other("no file system here".into()))
 }
 

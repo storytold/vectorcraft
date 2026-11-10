@@ -32,3 +32,5 @@ jobs:
     with:
       app-name: vectorcraft
       app-dir: VectorCraft
+      install-relative-path: Programs/ArtCraft/VectorCraft
+      install-scope: perUser

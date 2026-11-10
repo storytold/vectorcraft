@@ -117,6 +117,35 @@ fn add_with_apply_styles_the_selection_in_the_same_undo_step() {
     assert_eq!(doc(&s).node(id).unwrap().opacity, 0.4);
 }
 
+#[test]
+fn add_with_null_ids_and_no_selection_only_adds_style() {
+    let mut omitted = session();
+    let mut null_ids = session();
+    let params = json!({"library": "shadows-glows", "name": "Halo", "apply": true});
+    let expected = run(&mut omitted, "graphicStyle.addFromLibrary", params.clone());
+    let mut with_null = params;
+    with_null["ids"] = Value::Null;
+    let actual = run(&mut null_ids, "graphicStyle.addFromLibrary", with_null);
+    assert_eq!(actual, expected);
+    assert_eq!(names(&actual["added"]), ["Halo"]);
+    assert!(actual.get("applied").is_none());
+    assert!(doc(&null_ids).graphic_style("Halo").is_some());
+    assert_eq!(undo_len(&null_ids), undo_len(&omitted));
+}
+
+#[test]
+fn add_with_null_ids_applies_to_selection() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, 20.0, 100.0, 50.0);
+    let before = undo_len(&s);
+    let result = run(&mut s, "graphicStyle.addFromLibrary", json!({"library": "shadows-glows", "name": "Halo", "apply": true, "ids": null}));
+    assert_eq!(result["applied"], "Halo");
+    assert_eq!(undo_len(&s), before + 1);
+    let (style, linked) = s.selection_graphic_style().unwrap();
+    assert_eq!((style.name.as_str(), linked), ("Halo", true));
+    assert_eq!(doc(&s).node(id).unwrap().extras().graphic_style, Some(style.id));
+}
+
 /// A document with pattern `name` (a dot) and its swatch.
 fn add_pattern(s: &mut Session, name: &str, radius: f64) {
     s.edit("Pattern", |d, _| {
@@ -222,11 +251,16 @@ fn every_builtin_style_paints_visibly_on_a_rectangle() {
         let (_, lib) = cmd::stylelib::library(&s, b.id).unwrap();
         for g in &lib.styles {
             run(&mut s, "file.new", json!({"width": 100, "height": 100}));
+            // Art under the rectangle: a blend mode shows only against art, not the bare page.
+            let under = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+            run(&mut s, "paint.setFill", json!({"color": "#336699", "ids": [under.0]}));
+            run(&mut s, "paint.setStroke", json!({"none": true, "ids": [under.0]}));
             let id = rect(&mut s, 25.0, 30.0, 50.0, 40.0);
             run(&mut s, "graphicStyle.addFromLibrary", json!({"library": b.id, "name": g.name, "apply": true}));
             assert_eq!(doc(&s).node(id).unwrap().extras().graphic_style, doc(&s).graphic_style(&g.name).map(|x| x.id), "{}", g.name);
             let img = renderer.render_region(doc(&s), Rect::new(0.0, 0.0, 100.0, 100.0), 0.5, true);
-            let painted = img.pixels.as_chunks::<4>().0.iter().filter(|p| p[..3] != [255, 255, 255]).count();
+            let bare = img.pixel(0, 0);
+            let painted = (0..img.height).flat_map(|y| (0..img.width).map(move |x| (x, y))).filter(|&(x, y)| img.pixel(x, y) != bare).count();
             assert!(painted > 40, "{} / {} paints {painted} pixels", b.id, g.name);
         }
     }

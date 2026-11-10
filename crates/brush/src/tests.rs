@@ -1,6 +1,6 @@
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, StrokeLayer};
-use vectorcraft_geom::{BezPath, Point, Rect, shapes};
+use vectorcraft_geom::{Affine, BezPath, Point, Rect, Vec2, shapes};
 
 use super::*;
 
@@ -27,10 +27,16 @@ fn near(a: f64, b: f64, tol: f64) -> bool {
     (a - b).abs() <= tol
 }
 
+/// Points along every outline under `n`, its anchors among them. Bent art keeps its curves and
+/// long lines since #3926, so its anchors alone no longer trace it.
 fn all_points(n: &Node, out: &mut Vec<Point>) {
     n.walk(&mut |c| {
-        if let Some(p) = c.path_data() {
-            out.extend(p.anchors().map(|(_, _, a)| a.p));
+        for sp in c.path_data().into_iter().flat_map(|p| &p.subpaths) {
+            out.extend(sp.anchors.iter().map(|a| a.p));
+            for i in 0..sp.segment_count() {
+                let seg = sp.segment(i);
+                out.extend((1..32).map(|j| kurbo::ParamCurve::eval(&seg, j as f64 / 32.0)));
+            }
         }
     });
 }
@@ -185,9 +191,12 @@ fn art_brush_follows_curves() {
         }
     }
     let out = stroke_pieces(&Document::new(1.0, 1.0), &art_brush(rect_art(10.0, 4.0), ArtScale::Stretch), &bp_open, &stroke(1.0));
+    // The long edges bend as curves (#3926), where they used to be cut into some 400 chords. The
+    // path is run along in 0.05 pt chords, which the curves follow, so a few dozen remain.
+    let (anchors, curved) = anchors_and_curved(&out[0]);
+    assert!(anchors < 100 && curved > anchors / 2, "long edges bend as curves: {curved} of {anchors} anchors with handles");
     let mut pts = vec![];
     all_points(&out[0], &mut pts);
-    assert!(pts.len() > 40, "long edges are subdivided so they bend: {}", pts.len());
     for p in pts {
         let r = p.distance(Point::new(100.0, 100.0));
         assert!((r - 100.0).abs() <= 2.0 + 0.3, "point {p:?} is {r} from the centre");
@@ -273,15 +282,494 @@ fn pattern_tile_count_by_fit() {
 fn pattern_places_corner_tiles() {
     let sq = shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)).to_bezpath();
     let out = stroke_pieces(&Document::new(1.0, 1.0), &pattern_brush(PatternFit::Stretch, true), &sq, &stroke(1.0));
-    let corners = out
-        .iter()
-        .filter(
-            |n| matches!(&n.kind, NodeKind::Path { path, .. } if path.subpaths[0].anchors.len() == 4 && n.geometric_bounds().unwrap().width() < 7.0),
-        )
-        .count();
-    assert_eq!(corners, 4);
+    // The corner tile is an ellipse and the side tile a rectangle, so a kept handle tells them
+    // apart. Anchor count no longer does: the side tiles keep their own four anchors now that a
+    // straight run is not flattened (#3926), where they used to arrive as many-anchor polylines.
+    let curved = |n: &Node| {
+        matches!(&n.kind, NodeKind::Path { path, .. }
+            if path.subpaths.iter().any(|s| s.anchors.iter().any(|a| a.h_in != a.p || a.h_out != a.p)))
+    };
+    let corners = out.iter().filter(|n| curved(n)).count();
+    assert_eq!(corners, 4, "the four corner ellipses, still curves");
     // Sides lose half a corner tile at each end: 94 pt per side → 9 tiles each.
     assert_eq!(out.len() - corners, 36);
+    for n in out.iter().filter(|n| !curved(n)) {
+        let NodeKind::Path { path, .. } = &n.kind else { continue };
+        assert_eq!(path.subpaths[0].anchors.len(), 4, "a rectangle tile on a straight run stays four anchors");
+    }
+}
+
+/// A pattern brush whose corner tiles have a 4 × 4 pt frame and, as art, a 2 × 2 pt square in the
+/// top-left quarter of the frame. Corner art joins a side tile on its right to one below it, so
+/// that quarter is on the outside of the turn. `inner` and `outer` say which kinds of corner have
+/// art; `flips` are the brush's Flip Along and Flip Across.
+fn marked_corner_brush(inner: bool, outer: bool, (flip_along, flip_across): (bool, bool)) -> Brush {
+    let marker =
+        Node::path(NodeId(0), shapes::rectangle(Rect::new(0.0, -2.0, 2.0, 0.0)), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+    let mut b = pattern_brush(PatternFit::Stretch, false);
+    if let BrushKind::Pattern(p) = &mut b.kind {
+        let frame = Some(Rect::new(0.0, -2.0, 4.0, 2.0));
+        if inner {
+            (p.inner_corner, p.inner_corner_frame) = (Some(marker.clone()), frame);
+        }
+        if outer {
+            (p.outer_corner, p.outer_corner_frame) = (Some(marker), frame);
+        }
+        (p.flip_along, p.flip_across) = (flip_along, flip_across);
+    }
+    b
+}
+
+/// Each combination of corner art (both kinds, inner only, outer only) and of the two flips.
+fn marked_corner_brushes() -> Vec<(String, Brush)> {
+    let mut v = vec![];
+    for (inner, outer) in [(true, true), (true, false), (false, true)] {
+        for flips in [(false, false), (true, false), (false, true), (true, true)] {
+            v.push((format!("inner {inner}, outer {outer}, flips {flips:?}"), marked_corner_brush(inner, outer, flips)));
+        }
+    }
+    v
+}
+
+/// The bounds of the 2 × 2 pt corner markers among `out`, turned or not.
+fn marker_bounds(out: &[Node]) -> Vec<Rect> {
+    out.iter().filter_map(Node::geometric_bounds).filter(|r| r.width() < 3.0 && r.height() < 3.0).collect()
+}
+
+/// Corner tiles are square to the sides at a right angle and turn 90° with each turn of the path:
+/// on a square drawn either way round, each corner's marker fills the quarter of the band's corner
+/// outside the turn, with the brush flipped or not and with art for one kind of corner only
+/// (#6110).
+#[test]
+fn pattern_corner_tiles_are_square_to_the_sides() {
+    let doc = Document::new(1.0, 1.0);
+    let sq = shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)).to_bezpath();
+    let mut reversed = BezPath::new();
+    reversed.move_to((0.0, 0.0));
+    for (x, y) in [(0.0, 100.0), (100.0, 100.0), (100.0, 0.0)] {
+        reversed.line_to((x, y));
+    }
+    reversed.close_path();
+    // The square turns the same way at all four corners, and the reversed square the other way,
+    // so one draws only inner corner tiles and the other only outer ones.
+    for (name, brush) in marked_corner_brushes() {
+        for path in [&sq, &reversed] {
+            let out = stroke_pieces(&doc, &brush, path, &stroke(1.0));
+            let marks = marker_bounds(&out);
+            assert_eq!(marks.len(), 4, "{name}: one marker a corner");
+            for (corner, outside) in SQUARE_CORNERS {
+                let want = Rect::from_points(corner, outside);
+                assert!(
+                    marks
+                        .iter()
+                        .any(|r| near(r.x0, want.x0, 1e-6) && near(r.y0, want.y0, 1e-6) && near(r.x1, want.x1, 1e-6) && near(r.y1, want.y1, 1e-6)),
+                    "{name}: the marker at {corner:?} fills {want:?}: {marks:?}"
+                );
+            }
+        }
+    }
+}
+
+/// At a corner that is not a right angle, a corner tile splits the difference between the two
+/// sides: its marker lies on the line that halves the angle, outside the turn, for sharp and
+/// shallow turns either way. Near a hairpin the marker moves smoothly towards the line the path
+/// arrives on.
+#[test]
+fn pattern_corner_tiles_sit_on_the_corners_diagonal() {
+    let doc = Document::new(1.0, 1.0);
+    for (name, brush) in marked_corner_brushes() {
+        for turn in [-179.9_f64, -170.0, -135.0, -60.0, -45.0, 45.0, 60.0, 135.0, 170.0, 179.9] {
+            let (a, b) = (Vec2::new(1.0, 0.0), Vec2::new(turn.to_radians().cos(), turn.to_radians().sin()));
+            let mut bp = BezPath::new();
+            bp.move_to((0.0, 0.0));
+            bp.line_to((50.0, 0.0));
+            bp.line_to(Point::new(50.0, 0.0) + b * 50.0);
+            let out = stroke_pieces(&doc, &brush, &bp, &stroke(1.0));
+            let marks = marker_bounds(&out);
+            assert_eq!(marks.len(), 1, "{name}, {turn}°: one corner marker");
+            let away = a - b;
+            let want = Point::new(50.0, 0.0) + away / away.hypot() * 2.0_f64.sqrt();
+            assert!(marks[0].center().distance(want) < 1e-6, "{name}, {turn}°: the marker is at {:?}, not {want:?}", marks[0].center());
+        }
+    }
+}
+
+/// The 10 × 4 pt side tile of [`pattern_brush`] with the given corner sources and no corner art.
+fn auto_corner_brush(outer: Option<CornerSource>, inner: Option<CornerSource>) -> Brush {
+    let mut b = pattern_brush(PatternFit::Stretch, false);
+    if let BrushKind::Pattern(p) = &mut b.kind {
+        p.outer_source = outer;
+        p.inner_source = inner;
+    }
+    b
+}
+
+const AUTO: [CornerSource; 4] = [CornerSource::AutoCentered, CornerSource::AutoBetween, CornerSource::AutoSliced, CornerSource::AutoOverlap];
+
+/// Whether `n` paints a fill over `q`: inside one of its paths, and inside the mask of every
+/// clipping group it is in.
+fn covers(n: &Node, q: Point) -> bool {
+    let inside = |n: &Node| n.path_data().is_some_and(|p| kurbo::Shape::winding(&p.to_bezpath(), q) != 0);
+    match &n.kind {
+        NodeKind::Group { children, clip: true } => children.first().is_some_and(|m| inside(m)) && children.iter().skip(1).any(|c| covers(c, q)),
+        NodeKind::Path { .. } => inside(n),
+        _ => n.children().is_some_and(|c| c.iter().any(|c| covers(c, q))),
+    }
+}
+
+fn points_of(nodes: &[Node]) -> Vec<Point> {
+    let mut pts = vec![];
+    for n in nodes {
+        all_points(n, &mut pts);
+    }
+    pts
+}
+
+/// The corners of a 100 pt square and, for each, the outer corner of the 4 pt band around it.
+const SQUARE_CORNERS: [((f64, f64), (f64, f64)); 4] =
+    [((0.0, 0.0), (-2.0, -2.0)), ((100.0, 0.0), (102.0, -2.0)), ((100.0, 100.0), (102.0, 102.0)), ((0.0, 100.0), (-2.0, 102.0))];
+
+/// Whether some point of `pts` is within `tol` of `(x, y)`.
+fn reaches(pts: &[Point], (x, y): (f64, f64), tol: f64) -> bool {
+    pts.iter().any(|p| p.distance(Point::new(x, y)) <= tol)
+}
+
+/// Distance from `p` to the outline of the square (0, 0)–(100, 100).
+fn from_square_outline(p: Point) -> f64 {
+    let dx = (p.x - p.x.clamp(0.0, 100.0)).abs();
+    let dy = (p.y - p.y.clamp(0.0, 100.0)).abs();
+    if dx > 0.0 || dy > 0.0 { dx.hypot(dy) } else { p.x.min(100.0 - p.x).min(p.y).min(100.0 - p.y) }
+}
+
+#[test]
+fn pattern_auto_corners_fill_each_corner_of_a_square() {
+    let sq = shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)).to_bezpath();
+    let mut outputs = vec![];
+    for kind in AUTO {
+        let out = stroke_pieces(&Document::new(1.0, 1.0), &auto_corner_brush(Some(kind), Some(kind)), &sq, &stroke(1.0));
+        let pts = points_of(&out);
+        for (corner, outside) in SQUARE_CORNERS {
+            assert!(reaches(&pts, outside, 0.8), "{kind:?}: the art reaches the band's outer corner at {corner:?}");
+        }
+        let far = pts.iter().copied().map(from_square_outline).fold(0.0, f64::max);
+        assert!(far <= 2.0 * 2f64.sqrt() + 0.05, "{kind:?}: every point stays in the 4 pt band, {far}");
+        // The band is filled up to each corner along both of its sides.
+        let filled = |x: f64, y: f64| out.iter().any(|n| covers(n, Point::new(x, y)));
+        for ((cx, cy), _) in SQUARE_CORNERS {
+            let (sx, sy) = ((50.0 - cx).signum(), (50.0 - cy).signum());
+            for d in [0.5, 2.5, 4.5, 6.5, 8.5] {
+                assert!(filled(cx + sx * d, cy) && filled(cx, cy + sy * d), "{kind:?}: filled {d} pt from ({cx}, {cy})");
+            }
+        }
+        outputs.push(out);
+    }
+    for i in 0..outputs.len() {
+        for j in i + 1..outputs.len() {
+            assert_ne!(outputs[i], outputs[j], "{:?} and {:?} draw differently", AUTO[i], AUTO[j]);
+        }
+    }
+}
+
+/// A side tile three times as tall as it is long still fills a square's corners without a gap:
+/// the two sides meet on the corner's diagonal.
+#[test]
+fn pattern_auto_corners_of_a_tall_tile_meet_on_the_diagonal() {
+    let sq = shapes::rectangle(Rect::new(0.0, 0.0, 200.0, 200.0)).to_bezpath();
+    for kind in AUTO {
+        let mut b = auto_corner_brush(Some(kind), Some(kind));
+        if let BrushKind::Pattern(p) = &mut b.kind {
+            p.side = rect_art(10.0, 30.0);
+        }
+        let out = stroke_pieces(&Document::new(1.0, 1.0), &b, &sq, &stroke(1.0));
+        let filled = |x: f64, y: f64| out.iter().any(|n| covers(n, Point::new(x, y)));
+        for (cx, cy) in [(0.0_f64, 0.0_f64), (200.0, 0.0), (200.0, 200.0), (0.0, 200.0)] {
+            let (sx, sy) = ((100.0 - cx).signum(), (100.0 - cy).signum());
+            for d in [1.0, 5.0, 10.0, 14.0] {
+                // Along the diagonal, outside and inside the square, and along both sides.
+                assert!(filled(cx - sx * d, cy - sy * d), "{kind:?}: outside ({cx}, {cy}) by {d}");
+                assert!(filled(cx + sx * d, cy + sy * d), "{kind:?}: inside ({cx}, {cy}) by {d}");
+                assert!(filled(cx + sx * 3.0 * d, cy) && filled(cx, cy + sy * 3.0 * d), "{kind:?}: {} pt from ({cx}, {cy})", 3.0 * d);
+            }
+        }
+    }
+}
+
+/// Where a curve meets a sharp corner, the corner tile reaches the side tiles on the curve: the
+/// middle of the band is filled all the way along the path.
+#[test]
+fn pattern_auto_corners_join_a_curve_into_the_corner() {
+    // A straight run into a quarter circle of radius 10, then a sharp turn.
+    let mut bp = BezPath::new();
+    bp.move_to((-50.0, 0.0));
+    bp.line_to((10.0, 0.0));
+    bp.curve_to((15.52, 0.0), (20.0, 4.48), (20.0, 10.0));
+    bp.line_to((-80.0, 10.0));
+    let track = &crate::track::tracks(&bp, 0.05)[0];
+    let l = track.len();
+    for kind in AUTO {
+        let out = stroke_pieces(&Document::new(1.0, 1.0), &auto_corner_brush(Some(kind), Some(kind)), &bp, &stroke(1.0));
+        let mut s = 0.25;
+        while s < l - 0.25 {
+            let q = track.map(s, 0.0);
+            assert!(out.iter().any(|n| covers(n, q)), "{kind:?}: the band is filled at {s:.2} of {l:.2} ({q:?})");
+            s += 0.25;
+        }
+    }
+}
+
+/// Where a curve meets a sharp corner, the two halves of a corner tile still meet on the corner's
+/// diagonal: the band is filled across its width near the corner, and both Auto-Between halves end
+/// at the diagonal's two ends.
+#[test]
+fn pattern_auto_corners_after_a_curve_meet_across_the_band() {
+    // A quarter circle of radius 4 straight into a sharp turn.
+    let mut bp = BezPath::new();
+    bp.move_to((-50.0, 0.0));
+    bp.line_to((10.0, 0.0));
+    bp.curve_to((12.21, 0.0), (14.0, 1.79), (14.0, 4.0));
+    bp.line_to((-80.0, 4.0));
+    let track = &crate::track::tracks(&bp, 0.05)[0];
+    let corner = track.corner_positions().first().map(|c| c.1).unwrap();
+    for kind in [CornerSource::AutoCentered, CornerSource::AutoBetween] {
+        let out = stroke_pieces(&Document::new(1.0, 1.0), &auto_corner_brush(Some(kind), Some(kind)), &bp, &stroke(1.0));
+        let mut s = corner - 3.0;
+        while s < corner + 3.0 {
+            for j in -19..=19 {
+                let y = j as f64 / 10.0;
+                let q = track.map(s, y);
+                assert!(out.iter().any(|n| covers(n, q)), "{kind:?}: the band is filled at {s:.2} ({y} across, {q:?})");
+            }
+            s += 0.05;
+        }
+    }
+    // The path leaves the corner at (14, 4) heading left, so the 4 pt band's diagonal ends on the
+    // lines y = 2 and y = 6, where both Auto-Between halves end at the same point.
+    let both = auto_corner_brush(Some(CornerSource::AutoBetween), Some(CornerSource::AutoBetween));
+    let out = stroke_pieces(&Document::new(1.0, 1.0), &both, &bp, &stroke(1.0));
+    for edge in [2.0, 6.0] {
+        let on_edge: Vec<Vec<Point>> = out
+            .iter()
+            .map(|n| points_of(std::slice::from_ref(n)).into_iter().filter(|q| near(q.y, edge, 1e-6) && near(q.x, 14.0, 3.0)).collect())
+            .collect();
+        let shared = on_edge.iter().enumerate().any(|(i, a)| on_edge.iter().skip(i + 1).any(|b| a.iter().any(|p| reaches(b, (p.x, p.y), 1e-6))));
+        assert!(shared, "both halves end at the same point on y = {edge}");
+    }
+}
+
+/// On a path shorter than the side tile, a corner tile is squeezed into the path it has: it does
+/// not run past the ends, nor past half the way to the next corner.
+#[test]
+fn pattern_auto_corners_stay_within_a_short_path() {
+    let mut bp = BezPath::new();
+    bp.move_to((0.0, 0.0));
+    bp.line_to((2.0, 0.0));
+    bp.line_to((2.0, 2.0));
+    let mut zigzag = BezPath::new();
+    zigzag.move_to((0.0, 0.0));
+    for j in 1..=6 {
+        zigzag.line_to((3.0 * j as f64, if j % 2 == 1 { 3.0 } else { 0.0 }));
+    }
+    for kind in AUTO {
+        for (path, (x0, y0, x1, y1)) in [(&bp, (0.0, 0.0, 2.0, 2.0)), (&zigzag, (0.0, 0.0, 18.0, 3.0))] {
+            let out = stroke_pieces(&Document::new(1.0, 1.0), &auto_corner_brush(Some(kind), Some(kind)), path, &stroke(1.0));
+            assert!(!out.is_empty(), "{kind:?}: something is drawn");
+            // The band is 4 pt wide, and the diagonal of a sharp turn reaches further from it.
+            let reach = 2.0 * 3.0;
+            for p in points_of(&out) {
+                assert!(p.x >= x0 - reach && p.x <= x1 + reach && p.y >= y0 - reach && p.y <= y1 + reach, "{kind:?}: {p:?} is past the path's ends");
+            }
+        }
+    }
+}
+
+/// A corner squeezed into a path shorter than the band is wide still fills the band up to the
+/// corner's diagonal from both sides, with no gap between the two halves.
+#[test]
+fn pattern_auto_corners_on_a_short_path_meet_on_the_diagonal() {
+    let mut bp = BezPath::new();
+    bp.move_to((0.0, 0.0));
+    bp.line_to((1.0, 0.0));
+    bp.line_to((1.0, 1.0));
+    for kind in [CornerSource::AutoCentered, CornerSource::AutoBetween] {
+        let out = stroke_pieces(&Document::new(1.0, 1.0), &auto_corner_brush(Some(kind), Some(kind)), &bp, &stroke(1.0));
+        // The diagonal runs from the corner (1, 0) to the band's outer corner (3, -2).
+        for f in [0.25, 0.5, 0.75] {
+            let (dx, dy) = (1.0 + 2.0 * f, -2.0 * f);
+            for q in [Point::new(dx - 0.05, dy), Point::new(dx, dy - 0.05)] {
+                assert!(out.iter().any(|n| covers(n, q)), "{kind:?}: the band is filled at {q:?}");
+            }
+        }
+    }
+}
+
+#[test]
+fn pattern_without_corner_tiles_or_auto_corners_leaves_corners_empty() {
+    let sq = shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)).to_bezpath();
+    let doc = Document::new(1.0, 1.0);
+    let plain = stroke_pieces(&doc, &auto_corner_brush(None, None), &sq, &stroke(1.0));
+    assert_eq!(plain.len(), 40, "ten side tiles a side");
+    let pts = points_of(&plain);
+    for (corner, outside) in SQUARE_CORNERS {
+        assert!(!reaches(&pts, outside, 1.5), "no art at the band's outer corner at {corner:?}");
+    }
+    // A square turns the same way at every corner, so only one of the two kinds of corner tile
+    // draws on it; the other leaves the stroke as it is without automatic corners.
+    let outer = stroke_pieces(&doc, &auto_corner_brush(Some(CornerSource::AutoBetween), None), &sq, &stroke(1.0));
+    let inner = stroke_pieces(&doc, &auto_corner_brush(None, Some(CornerSource::AutoBetween)), &sq, &stroke(1.0));
+    assert!((outer == plain) != (inner == plain), "exactly one kind of corner draws on a square");
+}
+
+#[test]
+fn pattern_corner_art_wins_over_corner_sources() {
+    let sq = shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)).to_bezpath();
+    let doc = Document::new(1.0, 1.0);
+    let saved = pattern_brush(PatternFit::Stretch, true);
+    let mut with_auto = saved.clone();
+    if let BrushKind::Pattern(p) = &mut with_auto.kind {
+        p.outer_source = Some(CornerSource::AutoSliced);
+        p.inner_source = Some(CornerSource::None);
+    }
+    assert_eq!(stroke_pieces(&doc, &with_auto, &sq, &stroke(1.0)), stroke_pieces(&doc, &saved, &sq, &stroke(1.0)));
+}
+
+/// A kind of corner without art takes the other kind's art, as saved brushes draw, unless its
+/// source is None.
+#[test]
+fn pattern_corner_source_none_leaves_that_kind_of_corner_empty() {
+    let sq = shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)).to_bezpath();
+    let doc = Document::new(1.0, 1.0);
+    let draw = |b: &Brush| stroke_pieces(&doc, b, &sq, &stroke(1.0));
+    let (saved, plain) = (draw(&pattern_brush(PatternFit::Stretch, true)), draw(&auto_corner_brush(None, None)));
+    let without = |outer: bool, source: Option<CornerSource>| {
+        let mut b = pattern_brush(PatternFit::Stretch, true);
+        if let BrushKind::Pattern(p) = &mut b.kind {
+            if outer {
+                (p.outer_corner, p.outer_source) = (None, source);
+            } else {
+                (p.inner_corner, p.inner_source) = (None, source);
+            }
+        }
+        draw(&b)
+    };
+    assert!(without(true, None) == saved && without(false, None) == saved, "the other kind's art fills in");
+    let (outer, inner) = (without(true, Some(CornerSource::None)), without(false, Some(CornerSource::None)));
+    assert!((outer == plain && inner == saved) || (inner == plain && outer == saved), "only the corners set to None are empty");
+}
+
+#[test]
+fn pattern_without_start_tile_runs_side_to_path_start() {
+    let path = line(0.0, 0.0, 100.0, 0.0);
+    let doc = Document::new(1.0, 1.0);
+    let mut b = pattern_brush(PatternFit::Stretch, false);
+    if let BrushKind::Pattern(p) = &mut b.kind {
+        p.start = Some(rect_art(20.0, 4.0));
+    }
+    let with_start = stroke_pieces(&doc, &b, &path, &stroke(1.0));
+    assert_eq!(with_start[0].geometric_bounds().unwrap().width(), 20.0);
+    if let BrushKind::Pattern(p) = &mut b.kind {
+        p.start = None;
+    }
+    let without_start = stroke_pieces(&doc, &b, &path, &stroke(1.0));
+    assert_eq!(without_start.len(), 10);
+    assert!(near(without_start[0].geometric_bounds().unwrap().x0, 0.0, 1e-6));
+    assert!(near(without_start[0].geometric_bounds().unwrap().width(), 10.0, 1e-6));
+}
+
+#[test]
+fn pattern_without_end_tile_runs_side_to_path_end() {
+    let path = line(0.0, 0.0, 100.0, 0.0);
+    let doc = Document::new(1.0, 1.0);
+    let mut b = pattern_brush(PatternFit::Stretch, false);
+    if let BrushKind::Pattern(p) = &mut b.kind {
+        p.end = Some(rect_art(20.0, 4.0));
+    }
+    let with_end = stroke_pieces(&doc, &b, &path, &stroke(1.0));
+    assert!(with_end.iter().any(|n| near(n.geometric_bounds().unwrap().width(), 20.0, 1e-6)));
+    if let BrushKind::Pattern(p) = &mut b.kind {
+        p.end = None;
+    }
+    let without_end = stroke_pieces(&doc, &b, &path, &stroke(1.0));
+    assert_eq!(without_end.len(), 10);
+    assert!(near(without_end.last().unwrap().geometric_bounds().unwrap().x1, 100.0, 1e-6));
+}
+
+#[test]
+fn pattern_corner_sources_round_trip_and_stay_out_of_brushes_without_them() {
+    let saved = serde_json::to_value(pattern_brush(PatternFit::Stretch, true)).unwrap();
+    assert!(saved.get("outer_source").is_none() && saved.get("inner_source").is_none(), "{saved}");
+    let BrushKind::Pattern(p) = Brush::from_json(saved).unwrap().kind else { panic!("a pattern brush") };
+    assert_eq!((p.outer_source, p.inner_source), (None, None));
+    let v = serde_json::to_value(auto_corner_brush(Some(CornerSource::AutoCentered), Some(CornerSource::None))).unwrap();
+    assert_eq!((v["outer_source"].as_str(), v["inner_source"].as_str()), (Some("autoCentered"), Some("none")));
+    let BrushKind::Pattern(p) = Brush::from_json(v).unwrap().kind else { panic!("a pattern brush") };
+    assert_eq!((p.outer_source, p.inner_source), (Some(CornerSource::AutoCentered), Some(CornerSource::None)));
+}
+
+/// Auto-Sliced masks each side tile at the corner's diagonal instead of cutting its paths, so a
+/// tile's outline gains no stroke along the cut.
+#[test]
+fn pattern_auto_sliced_masks_stroked_tiles_at_the_diagonal() {
+    let mut b = auto_corner_brush(Some(CornerSource::AutoSliced), Some(CornerSource::AutoSliced));
+    if let BrushKind::Pattern(p) = &mut b.kind {
+        p.side.appearance = Appearance::basic(Paint::solid(Color::BLACK), Paint::solid(Color::WHITE), 0.5).into();
+    }
+    let sq = shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)).to_bezpath();
+    let out = stroke_pieces(&Document::new(1.0, 1.0), &b, &sq, &stroke(1.0));
+    let clips: Vec<&Node> = out.iter().filter(|n| matches!(n.kind, NodeKind::Group { clip: true, .. })).collect();
+    assert_eq!(clips.len(), 8, "two masked tiles at each corner");
+    for g in clips {
+        let kids = g.children().unwrap();
+        assert_eq!(kids.len(), 2);
+        assert!(kids[0].appearance.items.is_empty(), "the mask paints nothing");
+        let mask = kids[0].path_data().unwrap().to_bezpath();
+        let tile = kids[1].path_data().unwrap();
+        assert!(
+            tile.anchors().any(|(_, _, a)| kurbo::Shape::winding(&mask, a.p) == 0),
+            "the tile keeps its outline past the diagonal, where the mask hides it"
+        );
+    }
+}
+
+/// Auto-Sliced on a corner whose legs are too short for the side tile squeezes the tile along,
+/// but not its stroke: the mask still takes in the stroke past the tile's far end.
+#[test]
+fn pattern_auto_sliced_masks_keep_the_stroke_of_a_squeezed_tile() {
+    let mut b = auto_corner_brush(Some(CornerSource::AutoSliced), Some(CornerSource::AutoSliced));
+    if let BrushKind::Pattern(p) = &mut b.kind {
+        p.side.appearance = Appearance::basic(Paint::solid(Color::BLACK), Paint::solid(Color::WHITE), 4.0).into();
+    }
+    let sq = shapes::rectangle(Rect::new(0.0, 0.0, 8.0, 8.0)).to_bezpath();
+    let out = stroke_pieces(&Document::new(1.0, 1.0), &b, &sq, &stroke(1.0));
+    let clips: Vec<&Node> = out.iter().filter(|n| matches!(n.kind, NodeKind::Group { clip: true, .. })).collect();
+    assert_eq!(clips.len(), 8, "two masked tiles at each corner");
+    let center = Point::new(4.0, 4.0);
+    for g in clips {
+        let kids = g.children().unwrap();
+        let mask = kids[0].path_data().unwrap().to_bezpath();
+        let half = kids[1].appearance.stroke_width() / 2.0;
+        assert!(half > 0.0);
+        let tile = kids[1].path_data().unwrap();
+        let anchors: Vec<Point> = tile.anchors().map(|(_, _, a)| a.p).collect();
+        let mid = anchors.iter().fold(Point::ZERO, |m, a| m + a.to_vec2() / anchors.len() as f64);
+        // The tile's corner, and its diagonal through the square's center; each mask keeps one
+        // side of the diagonal.
+        let p = [(0.0, 0.0), (8.0, 0.0), (8.0, 8.0), (0.0, 8.0)]
+            .map(|(x, y)| Point::new(x, y))
+            .into_iter()
+            .min_by(|a, b| a.distance(mid).total_cmp(&b.distance(mid)))
+            .unwrap();
+        let cross = |q: Point| (q - p).cross(center - p);
+        let side = cross(mid).signum();
+        for a in &anchors {
+            // The points of the stroke round the anchor, along and across the tile's leg.
+            for d in [(1.0, 0.0), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0)] {
+                let q = *a + kurbo::Vec2::new(d.0, d.1) * half * 0.9;
+                if cross(q) * side > 0.01 && (q - p).hypot() < 7.0 {
+                    assert!(kurbo::Shape::winding(&mask, q) != 0, "the mask takes in the stroke at {q:?} (half width {half})");
+                }
+            }
+        }
+    }
 }
 
 #[test]
@@ -306,6 +794,55 @@ fn tints_colorization_uses_stroke_colour() {
     white.appearance.set_fill(Paint::solid(Color::WHITE));
     colorize(&mut white, Colorization::Tints, &Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
     assert_eq!(white.appearance.fill_paint().color().unwrap().to_rgb(), [1.0, 1.0, 1.0]);
+}
+
+/// Black ink alone is a tint by its amount: a process black stroke leaves it as it is, and another
+/// process stroke color takes that share of its inks. Tints of a process color stay process.
+#[test]
+fn tints_of_black_ink_are_its_amount_of_the_stroke_color() {
+    let tinted = |art: Color, stroke: Color| {
+        let mut n = rect_art(1.0, 1.0);
+        n.appearance.set_fill(Paint::solid(art));
+        colorize(&mut n, Colorization::Tints, &Paint::solid(stroke));
+        n.appearance.fill_paint().color().unwrap()
+    };
+    let ink = Color::cmyk(0.0, 0.0, 0.0, 0.6);
+    let close = |a: Color, b: Color| {
+        let (Color::Cmyk { c, m, y, k }, Color::Cmyk { c: c2, m: m2, y: y2, k: k2 }) = (a, b) else { panic!("{a:?} {b:?}") };
+        (c - c2).abs() < 1e-5 && (m - m2).abs() < 1e-5 && (y - y2).abs() < 1e-5 && (k - k2).abs() < 1e-5
+    };
+    assert!(close(tinted(ink, Color::cmyk(0.0, 0.0, 0.0, 1.0)), ink));
+    assert!(close(tinted(ink, Color::cmyk(0.0, 1.0, 1.0, 0.0)), Color::cmyk(0.0, 0.6, 0.6, 0.0)));
+    let [r, g, b] = tinted(ink, Color::rgb(1.0, 0.0, 0.0)).to_rgb();
+    assert!((r - 1.0).abs() < 1e-5 && (g - 0.4).abs() < 1e-5 && (b - 0.4).abs() < 1e-5, "{r} {g} {b}");
+    let Color::Gray { k } = tinted(ink, Color::gray(0.5)) else { panic!("tints of a gray stroke color stay gray") };
+    assert!((k - 0.3).abs() < 1e-5, "{k}");
+}
+
+/// Under Tints and Shades black ink stays black, however light 100% K displays, and a band of black
+/// ink is its amount: K 0.5 is the stroke color. A process or gray stroke color stays in its model.
+#[test]
+fn tints_and_shades_of_black_ink_go_by_its_amount() {
+    let mapped = |k: f32, stroke: Color| {
+        let mut n = rect_art(1.0, 1.0);
+        n.appearance.set_fill(Paint::solid(Color::cmyk(0.0, 0.0, 0.0, k)));
+        colorize(&mut n, Colorization::TintsAndShades, &Paint::solid(stroke));
+        n.appearance.fill_paint().color().unwrap()
+    };
+    let close = |a: [f32; 4], b: [f32; 4]| a.iter().zip(&b).all(|(x, y)| (x - y).abs() < 1e-5);
+    let inks = |c: Color| {
+        let Color::Cmyk { c, m, y, k } = c else { panic!("a process color: {c:?}") };
+        [c, m, y, k]
+    };
+    let orange = Color::cmyk(0.0, 0.6, 1.0, 0.0);
+    assert!(close(inks(mapped(1.0, orange)), [0.0, 0.0, 0.0, 1.0]), "black stays black");
+    assert!(close(inks(mapped(0.5, orange)), [0.0, 0.6, 1.0, 0.0]), "the stroke color");
+    assert!(close(inks(mapped(0.25, orange)), [0.0, 0.3, 0.5, 0.0]), "a tint");
+    assert!(close(inks(mapped(0.75, orange)), [0.0, 0.3, 0.5, 0.5]), "a shade");
+    let Color::Gray { k } = mapped(0.75, Color::gray(0.4)) else { panic!("a gray stroke color stays gray") };
+    assert!((k - 0.7).abs() < 1e-5, "{k}");
+    let [r, g, b] = mapped(1.0, Color::rgb(1.0, 0.0, 0.0)).to_rgb();
+    assert!(r < 1e-5 && g < 1e-5 && b < 1e-5, "black stays black: {r} {g} {b}");
 }
 
 /// Point type at (0, 0) whose characters are painted `fill` and `stroke` (1 pt wide).
@@ -369,6 +906,26 @@ fn stain_mixes_type_strokes_too() {
     let mut art = type_art(linked.clone(), linked);
     tint_node(&mut art, &blue, 1.0);
     assert_eq!(run_paints(&[art]), [(Paint::solid(blue), Paint::solid(blue))]);
+}
+
+/// An instance whose fill has an opacity of 0 does not stain its symbol's art, so the art keeps its
+/// swatch links.
+#[test]
+fn a_fill_with_no_opacity_leaves_the_symbol_art_linked() {
+    let spot = Paint::Solid { color: Color::cmyk(1.0, 0.7, 0.0, 0.4), swatch: Some("Spot".into()), tint: 1.0 };
+    let art = Node::path(NodeId(1), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::basic(spot.clone(), Paint::None, 0.0));
+    let mut inst = Node::new(NodeId(2), NodeKind::SymbolInstance { symbol: "Dot".into(), xf: Affine::IDENTITY });
+    inst.appearance = Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0).into();
+    if let Some(f) = inst.appearance.fill_mut() {
+        f.opacity = 0.0;
+    }
+    assert_eq!(stain(&inst), None);
+    assert_eq!(instance_art(&art, &inst).appearance.fill_paint(), spot);
+    // Any opacity above 0 still stains.
+    if let Some(f) = inst.appearance.fill_mut() {
+        f.opacity = 0.01;
+    }
+    assert_ne!(instance_art(&art, &inst).appearance.fill_paint(), spot);
 }
 
 #[test]
@@ -496,6 +1053,163 @@ fn pressure_varies_angle_and_roundness() {
     };
     assert!(near(wide(0.0), 0.1, 0.05), "{}", wide(0.0));
     assert!(near(wide(1.0), 10.0, 0.05), "{}", wide(1.0));
+    // The angle turns on past 180°: 170 + 40 is 210°, the nib at 30° (not stopped at 180°).
+    let turned = Calligraphic { angle: 170.0, roundness: 10.0, variation: [40.0, 0.0, 0.0], ..c([Pressure, Fixed, Fixed]) };
+    let expected = 2.0 * (25.0 * 0.25 + 0.25 * 0.75f64).sqrt();
+    let h = draw(turned, 1.0);
+    assert!(near(h, expected, 0.05), "{h} vs {expected}");
+}
+
+/// A stroke that recorded the pen's tilt (`tilt`: 0 upright to 1 flat), bearing and barrel
+/// rotation (degrees counter-clockwise), each the same all along it where given.
+fn posed(tilt: Option<f64>, bearing: Option<f64>, rotation: Option<f64>) -> StrokeLayer {
+    let flat = |v: f64| vec![(0.0, v), (1.0, v)];
+    StrokeLayer {
+        tilt: tilt.map(|t| vectorcraft_doc::PressureProfile { points: flat(t) }),
+        bearing: bearing.map(|b| vectorcraft_doc::AngleProfile { points: flat(b) }),
+        rotation: rotation.map(|r| vectorcraft_doc::AngleProfile { points: flat(r) }),
+        ..stroke(1.0)
+    }
+}
+
+/// #764: with Roundness on Tilt the nib goes from roundness − variation with the pen lying flat to
+/// roundness + variation with it upright, along the stroke as the pen leaned.
+#[test]
+fn tilt_maps_to_roundness_along_the_stroke() {
+    let c = Calligraphic {
+        roundness: 50.0,
+        size: 10.0,
+        variation: [0.0, 50.0, 0.0],
+        modes: Some([Variation::Fixed, Variation::Tilt, Variation::Fixed]),
+        ..Default::default()
+    };
+    let b = Brush { name: "t".into(), kind: BrushKind::Calligraphic(c) };
+    let upright_to_flat = StrokeLayer { tilt: Some(vectorcraft_doc::PressureProfile { points: vec![(0.0, 0.0), (1.0, 1.0)] }), ..stroke(1.0) };
+    let out = stroke_pieces(&Document::new(1.0, 1.0), &b, &line(0.0, 0.0, 100.0, 0.0), &upright_to_flat);
+    // Upright: round (half 5); half way: roundness 50 (half 2.5); flat: a hairline.
+    assert!(near(half_width(&out, 0.5, 1.5), 5.0, 0.1), "{}", half_width(&out, 0.5, 1.5));
+    assert!(near(half_width(&out, 49.5, 50.5), 2.5, 0.1), "{}", half_width(&out, 49.5, 50.5));
+    assert!(half_width(&out, 98.5, 99.5) < 0.2, "{}", half_width(&out, 98.5, 99.5));
+}
+
+/// #764: with Angle on Bearing or on Rotation and a variation of 180°, the nib turns with the way
+/// the pen leans or with its barrel.
+#[test]
+fn bearing_and_rotation_turn_the_nib() {
+    let horizontal = line(0.0, 0.0, 100.0, 0.0);
+    let height = |mode: Variation, st: &StrokeLayer| {
+        let c = Calligraphic {
+            roundness: 10.0,
+            size: 10.0,
+            variation: [180.0, 0.0, 0.0],
+            modes: Some([mode, Variation::Fixed, Variation::Fixed]),
+            ..Default::default()
+        };
+        let b = Brush { name: "b".into(), kind: BrushKind::Calligraphic(c) };
+        bounds(&stroke_pieces(&Document::new(1.0, 1.0), &b, &horizontal, st)).height()
+    };
+    // Leaning right (0°): the nib lies along the stroke (1 pt across); leaning up the page (90°)
+    // or down it (−90°), the nib stands across it (10 pt).
+    assert!(near(height(Variation::Bearing, &posed(Some(0.5), Some(0.0), None)), 1.0, 0.05));
+    assert!(near(height(Variation::Bearing, &posed(Some(0.5), Some(90.0), None)), 10.0, 0.05));
+    assert!(near(height(Variation::Bearing, &posed(Some(0.5), Some(-90.0), None)), 10.0, 0.05));
+    // The barrel turned a quarter turn stands it across the stroke too.
+    assert!(near(height(Variation::Rotation, &posed(None, None, Some(0.0))), 1.0, 0.05));
+    assert!(near(height(Variation::Rotation, &posed(None, None, Some(90.0))), 10.0, 0.05));
+    // Each reads only its own recording.
+    assert!(near(height(Variation::Rotation, &posed(None, Some(90.0), None)), 1.0, 0.05));
+    assert!(near(height(Variation::Bearing, &posed(None, None, Some(90.0))), 1.0, 0.05));
+}
+
+/// A stroke without the pen's tilt, bearing or rotation (a mouse, a pen without that input, or a
+/// path the brush was applied to) draws Tilt, Bearing and Rotation values at the brush's own value.
+#[test]
+fn pen_modes_without_a_recording_draw_the_value_itself() {
+    let horizontal = line(0.0, 0.0, 100.0, 0.0);
+    for mode in [Variation::Tilt, Variation::Bearing, Variation::Rotation] {
+        let c = Calligraphic { angle: 90.0, roundness: 50.0, size: 10.0, variation: [90.0, 50.0, 6.0], modes: Some([mode; 3]) };
+        let b = Brush { name: "n".into(), kind: BrushKind::Calligraphic(c) };
+        let h = bounds(&stroke_pieces(&Document::new(1.0, 1.0), &b, &horizontal, &stroke(1.0))).height();
+        assert!(near(h, 10.0, 0.05), "{mode:?}: {h}");
+        let sc = Scatter {
+            size: (50.0, 300.0),
+            modes: Some([mode, Variation::Fixed, Variation::Fixed, Variation::Fixed]),
+            ..scatter(&scatter_brush(100.0))
+        };
+        let s = Brush { name: "s".into(), kind: BrushKind::Scatter(sc) };
+        let heights: Vec<f64> =
+            stroke_pieces(&Document::new(1.0, 1.0), &s, &horizontal, &stroke(1.0)).iter().map(|n| n.geometric_bounds().unwrap().height()).collect();
+        assert!(!heights.is_empty() && heights.iter().all(|h| near(*h, 7.0, 1e-6)), "{mode:?}: {heights:?}");
+    }
+}
+
+/// A mouse stroke records no pressure, tilt, bearing or rotation. On it, a brush whose values are
+/// on Tilt, Bearing or Rotation draws exactly what the same brush on Pressure draws, the output a
+/// mouse stroke gave before these modes existed.
+#[test]
+fn a_mouse_stroke_draws_pen_modes_as_pressure_did() {
+    let doc = Document::new(1.0, 1.0);
+    let wavy = {
+        let mut bp = line(0.0, 0.0, 60.0, 0.0);
+        bp.curve_to((90.0, 0.0), (90.0, 40.0), (120.0, 40.0));
+        bp
+    };
+    let mouse = stroke(1.0);
+    assert!(mouse.pressure.is_none() && mouse.tilt.is_none() && mouse.bearing.is_none() && mouse.rotation.is_none());
+    let calli = |mode: Variation| {
+        let c = Calligraphic { angle: 30.0, roundness: 40.0, size: 8.0, variation: [60.0, 30.0, 4.0], modes: Some([mode; 3]) };
+        stroke_pieces(&doc, &Brush { name: "c".into(), kind: BrushKind::Calligraphic(c) }, &wavy, &mouse)
+    };
+    let scattered = |mode: Variation| {
+        let sc = Scatter {
+            size: (50.0, 300.0),
+            spacing: (80.0, 160.0),
+            scatter: (-40.0, 40.0),
+            rotation: (-90.0, 90.0),
+            modes: Some([mode; 4]),
+            ..scatter(&scatter_brush(100.0))
+        };
+        stroke_pieces(&doc, &Brush { name: "s".into(), kind: BrushKind::Scatter(sc) }, &wavy, &mouse)
+    };
+    let (calli_before, scatter_before) = (calli(Variation::Pressure), scattered(Variation::Pressure));
+    assert!(!calli_before.is_empty() && !scatter_before.is_empty());
+    for mode in [Variation::Tilt, Variation::Bearing, Variation::Rotation] {
+        assert_eq!(calli(mode), calli_before, "{mode:?}");
+        assert_eq!(scattered(mode), scatter_before, "{mode:?}");
+    }
+}
+
+/// The scatter brush of `b`.
+fn scatter(b: &Brush) -> Scatter {
+    let BrushKind::Scatter(sc) = &b.kind else { panic!("not a scatter brush") };
+    sc.clone()
+}
+
+/// #764: Scatter values on Tilt go from the first value with the pen lying flat to the second
+/// upright; on Bearing, from the first at −180° to the second at 180°.
+#[test]
+fn scatter_values_follow_tilt_and_bearing() {
+    let bp = line(0.0, 0.0, 400.0, 0.0);
+    let boxes = |b: &Brush, st: &StrokeLayer| -> Vec<Rect> {
+        stroke_pieces(&Document::new(1.0, 1.0), b, &bp, st).iter().map(|n| n.geometric_bounds().unwrap()).collect()
+    };
+    // Size on Tilt, 50 % to 300 %: upright at the start (12 pt tall), flat at the end (2 pt).
+    let upright_to_flat = StrokeLayer { tilt: Some(vectorcraft_doc::PressureProfile { points: vec![(0.0, 0.0), (1.0, 1.0)] }), ..stroke(1.0) };
+    let h: Vec<f64> = boxes(&sized_scatter(50.0, 300.0, Variation::Tilt), &upright_to_flat).iter().map(Rect::height).collect();
+    assert!(near(h[0], 12.0, 0.2) && h[h.len() - 1] < 3.0, "{h:?}");
+    assert!(h.windows(2).all(|w| w[1] <= w[0] + 1e-9), "shrinks as the pen tips over: {h:?}");
+    // Rotation on Bearing, −180° to 180°: the copies turn with the bearing, a quarter turn
+    // standing the 10 × 4 pt art on end.
+    let sc = Scatter {
+        rotation: (-180.0, 180.0),
+        modes: Some([Variation::Fixed, Variation::Fixed, Variation::Fixed, Variation::Bearing]),
+        ..scatter(&scatter_brush(100.0))
+    };
+    let turning = Brush { name: "r".into(), kind: BrushKind::Scatter(sc) };
+    for (bearing, (w, h)) in [(0.0, (10.0, 4.0)), (90.0, (4.0, 10.0)), (-90.0, (4.0, 10.0))] {
+        let b = boxes(&turning, &posed(Some(0.5), Some(bearing), None));
+        assert!(!b.is_empty() && b.iter().all(|r| near(r.width(), w, 1e-6) && near(r.height(), h, 1e-6)), "{bearing}: {b:?}");
+    }
 }
 
 /// Brushes saved before the variation modes keep their look: a variation means Random, none
@@ -527,7 +1241,7 @@ fn brushes_without_modes_vary_randomly_as_before() {
         stroke_pieces(&Document::new(1.0, 1.0), &old, &bp, &pressed(vec![(0.0, 0.0), (1.0, 1.0)]))
     );
     // Modes are saved by name.
-    assert_eq!(serde_json::to_value(Variation::ALL).unwrap(), serde_json::json!(["fixed", "random", "pressure"]));
+    assert_eq!(serde_json::to_value(Variation::ALL).unwrap(), serde_json::json!(["fixed", "random", "pressure", "tilt", "bearing", "rotation"]));
     assert!(Variation::ALL.iter().all(|v| Variation::parse(v.id()) == Some(*v)));
 }
 
@@ -741,7 +1455,7 @@ fn pieces_leave_out_what_draws_a_brushed_stroke_by_name() {
     let mut brushed = rect_art(10.0, 4.0);
     brushed.appearance.items.push(vectorcraft_doc::AppearanceItem::Stroke(StrokeLayer { brush: Some("s".into()), ..stroke(1.0) }));
     for (name, art) in [("plain", rect_art(10.0, 4.0)), ("brushed", brushed)] {
-        doc.symbols.push(Symbol { name: name.into(), art: std::sync::Arc::new(art.clone()) });
+        doc.symbols.push(Symbol { dynamic: false, name: name.into(), art: std::sync::Arc::new(art.clone()) });
         doc.patterns.push(PatternDef::new(name, vec![std::sync::Arc::new(art)]));
     }
     let instance = |symbol: &str| Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: symbol.into(), xf: vectorcraft_geom::Affine::IDENTITY });
@@ -751,6 +1465,7 @@ fn pieces_leave_out_what_draws_a_brushed_stroke_by_name() {
     };
     let art = Node::group(NodeId(0), [instance("plain"), instance("brushed"), painted("plain"), painted("brushed")].map(std::sync::Arc::new).into());
     let b = Brush { name: "s".into(), kind: BrushKind::Scatter(Scatter { art, colorization: Colorization::None, ..Default::default() }) };
+    store(&mut doc, std::slice::from_ref(&b));
     let out = stroke_pieces(&doc, &b, &line(0.0, 0.0, 100.0, 0.0), &stroke(1.0));
     assert!(!out.is_empty());
     for piece in &out {
@@ -763,6 +1478,46 @@ fn pieces_leave_out_what_draws_a_brushed_stroke_by_name() {
         let fills: Vec<Paint> =
             children.iter().filter(|c| c.path_data().is_some()).filter_map(|c| c.appearance.fill().map(|f| f.paint.clone())).collect();
         assert_eq!(fills, [Paint::Pattern { pattern: "plain".into(), xf: vectorcraft_geom::Affine::IDENTITY }, Paint::None]);
+    }
+}
+
+/// A symbol instance at the root of an opacity mask is filtered like one among the children: when
+/// its symbol draws a brushed stroke the mask goes (it would run the brush again from inside the
+/// mask, without end), and a mask whose root symbol is plain stays.
+#[test]
+fn pieces_leave_out_a_mask_whose_root_draws_a_brushed_stroke() {
+    use vectorcraft_doc::{OpacityMask, Symbol};
+    let mut doc = Document::new(100.0, 100.0);
+    let mut brushed = rect_art(10.0, 4.0);
+    brushed.appearance.items.push(vectorcraft_doc::AppearanceItem::Stroke(StrokeLayer { brush: Some("s".into()), ..stroke(1.0) }));
+    // A brush the library lacks draws a plain stroke: its mask stays.
+    let mut unresolved = rect_art(10.0, 4.0);
+    unresolved.appearance.items.push(vectorcraft_doc::AppearanceItem::Stroke(StrokeLayer { brush: Some("missing".into()), ..stroke(1.0) }));
+    for (name, art) in [("plain", rect_art(10.0, 4.0)), ("brushed", brushed), ("unresolved", unresolved)] {
+        doc.symbols.push(Symbol { dynamic: false, name: name.into(), art: std::sync::Arc::new(art) });
+    }
+    let instance = |symbol: &str| Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: symbol.into(), xf: vectorcraft_geom::Affine::IDENTITY });
+    let masked = |symbol: &str| {
+        let mut n = rect_art(10.0, 4.0);
+        n.extras_mut().mask = Some(Box::new(OpacityMask::new(instance(symbol), true)));
+        n
+    };
+    let art = Node::group(NodeId(0), [masked("plain"), masked("brushed"), masked("unresolved")].map(std::sync::Arc::new).into());
+    let b = Brush { name: "s".into(), kind: BrushKind::Scatter(Scatter { art, colorization: Colorization::None, ..Default::default() }) };
+    store(&mut doc, std::slice::from_ref(&b));
+    let out = stroke_pieces(&doc, &b, &line(0.0, 0.0, 100.0, 0.0), &stroke(1.0));
+    assert!(!out.is_empty());
+    for piece in &out {
+        let roots: Vec<Option<&str>> = piece
+            .children()
+            .unwrap()
+            .iter()
+            .map(|c| match c.extras().mask.as_ref().map(|m| &m.art.kind) {
+                Some(NodeKind::SymbolInstance { symbol, .. }) => Some(symbol.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(roots, [Some("plain"), None, Some("unresolved")], "the plain and unresolved masks stay and the brushed one goes");
     }
 }
 
@@ -800,19 +1555,22 @@ fn pattern_output_is_capped_across_subpaths_not_only_per_run() {
     let a1 = anchors(&one);
     assert!(a1 < 2_000_000, "one track stays under the total budget: {a1}");
 
-    // Sixteen tracks would be sixteen times that without a total budget.
-    // Four tracks are 4 x 320,000 anchors, still inside the budget, so nothing is cut: the
-    // budget must not bite before the per-factor caps have actually multiplied past it.
-    let four = stroke_pieces(&Document::new(1.0, 1.0), &brush, &many_long_subpaths(4), &stroke(1.0));
-    assert_eq!(four.len(), 4 * 20_000, "four tracks are under the budget and keep every piece");
-    assert_eq!(anchors(&four), 4 * a1);
+    // Two tracks are well inside the budget, so nothing is cut: it must not bite before the
+    // per-factor caps have actually multiplied past it.
+    let two = stroke_pieces(&Document::new(1.0, 1.0), &brush, &many_long_subpaths(2), &stroke(1.0));
+    assert_eq!(two.len(), 2 * 20_000, "two tracks are under the budget and keep every piece");
+    assert_eq!(anchors(&two), 2 * a1);
 
-    // Sixteen would be 5,120,000 anchors. The budget is what stops it, not the per-run caps.
-    let many = stroke_pieces(&Document::new(1.0, 1.0), &brush, &many_long_subpaths(16), &stroke(1.0));
+    // Enough tracks that the per-run caps alone would pass the budget. Derived from what one
+    // track costs rather than written down, because how many anchors a tile holds is not fixed:
+    // a tile on a straight run keeps its own anchors instead of being flattened (#3926), which
+    // moved this by a factor of four.
+    let tracks = 2_000_000 / a1 + 2;
+    let many = stroke_pieces(&Document::new(1.0, 1.0), &brush, &many_long_subpaths(tracks), &stroke(1.0));
     let an = anchors(&many);
-    assert!(an <= 2_000_000, "sixteen subpaths must not exceed the budget: {an}");
-    assert!(an > anchors(&four), "but more is drawn than four tracks' worth: {an}");
-    assert!(many.len() < 16 * 20_000, "and fewer pieces than the per-run caps alone would allow: {}", many.len());
+    assert!(an <= 2_000_000, "{tracks} subpaths must not exceed the budget: {an}");
+    assert!(an > anchors(&two), "but more is drawn than two tracks' worth: {an}");
+    assert!(many.len() < tracks * 20_000, "and fewer pieces than the per-run caps alone would allow: {}", many.len());
 }
 
 /// The same for scatter, whose per-track guard is also 20,000 copies.
@@ -842,4 +1600,110 @@ fn an_ordinary_stroke_is_unaffected_by_the_budget() {
     let out = stroke_pieces(&Document::new(1.0, 1.0), &brush, &sq, &stroke(1.0));
     assert_eq!(out.len(), 40, "ten tiles on each of the four sides, as before the budget");
     assert!(anchors(&out) < 2_000_000);
+}
+
+/// Anchors under `n`, and how many of them keep a handle (so the segment is a curve).
+fn anchors_and_curved(n: &Node) -> (usize, usize) {
+    let NodeKind::Path { path, .. } = &n.kind else { return (0, 0) };
+    let all: Vec<_> = path.subpaths.iter().flat_map(|s| s.anchors.iter()).collect();
+    (all.len(), all.iter().filter(|a| a.h_in != a.p || a.h_out != a.p).count())
+}
+
+/// #3926: a Pattern Brush on a straight path only moves, turns and scales its tile, so the
+/// tile's curves survive. They used to be flattened into chords by the bending code, which is
+/// visible in the stroke itself and leaves no handles after Expand Brush Strokes.
+#[test]
+fn a_pattern_tile_keeps_its_curves_on_a_straight_path() {
+    let circle =
+        Node::path(NodeId(0), shapes::ellipse(Rect::new(0.0, -20.0, 40.0, 20.0)), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+    let (tile_anchors, tile_curved) = anchors_and_curved(&circle);
+    assert_eq!((tile_anchors, tile_curved), (4, 4), "the tile is a 4-anchor smooth circle");
+
+    let brush = Brush {
+        name: "p".into(),
+        kind: BrushKind::Pattern(PatternBrush { side: circle, fit: PatternFit::Stretch, colorization: Colorization::None, ..Default::default() }),
+    };
+    let out = stroke_pieces(&Document::new(1.0, 1.0), &brush, &line(0.0, 0.0, 480.0, 0.0), &stroke(1.0));
+    assert!(!out.is_empty(), "the brush drew something");
+    for n in &out {
+        assert_eq!(anchors_and_curved(n), (4, 4), "each circle is still a 4-anchor curve, not a polygon");
+    }
+    // The ink is in the same place: a circle tile still covers the path it was laid along.
+    let b = bounds(&out);
+    assert!(near(b.width(), 480.0, 1.0), "the tiles still span the path: {}", b.width());
+    assert!(near(b.height(), 40.0, 1.0), "and still stand the tile's height: {}", b.height());
+}
+
+/// The other half of the same behaviour: where the path really does bend, an affine cannot
+/// reproduce the bend, so the tile is bent, and it still comes out as curves: cubics fitted to the
+/// bent art rather than the chords it used to be flattened into (#3926). Here a 4-anchor circle
+/// tile runs round a circle of radius 200, so its outline stays in the band 20 either side of it.
+#[test]
+fn a_pattern_tile_on_a_bent_path_keeps_its_curves() {
+    let circle =
+        Node::path(NodeId(0), shapes::ellipse(Rect::new(0.0, -20.0, 40.0, 20.0)), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+    let brush = Brush {
+        name: "p".into(),
+        kind: BrushKind::Pattern(PatternBrush { side: circle, fit: PatternFit::Stretch, colorization: Colorization::None, ..Default::default() }),
+    };
+    // A circle to run along: every tile sits on a curving section.
+    let round = shapes::ellipse(Rect::new(0.0, 0.0, 400.0, 400.0)).to_bezpath();
+    let out = stroke_pieces(&Document::new(1.0, 1.0), &brush, &round, &stroke(1.0));
+    assert!(out.len() > 20, "tiles all the way round: {}", out.len());
+    let (mut lo, mut hi) = (f64::MAX, f64::MIN);
+    for n in &out {
+        let (anchors, curved) = anchors_and_curved(n);
+        assert!((4..=16).contains(&anchors), "a bent circle tile is a few curves, not a polygon: {anchors} anchors");
+        assert!(curved == anchors, "every anchor keeps a handle: {curved} of {anchors}");
+        let mut pts = vec![];
+        all_points(n, &mut pts);
+        for q in pts {
+            let r = q.distance(Point::new(200.0, 200.0));
+            (lo, hi) = (lo.min(r), hi.max(r));
+        }
+    }
+    // The path is a cubic circle (0.06 out at most) run along in chords of 0.05, and the fit holds
+    // a quarter of the 0.25 flattening tolerance, so the band holds to 0.2.
+    assert!(lo > 179.8 && hi < 220.2, "the curves stay in the tile's band round the path: {lo:.3}..{hi:.3}");
+    assert!(lo < 180.2 && hi > 219.8, "and reach both edges of it: {lo:.3}..{hi:.3}");
+}
+
+/// The kind of every node in a piece of brushed art, in paint order.
+fn kinds(n: &Node) -> Vec<&'static str> {
+    let mut out = vec![match &n.kind {
+        NodeKind::Path { .. } => "path",
+        NodeKind::Group { .. } => "group",
+        NodeKind::SymbolInstance { .. } => "symbol",
+        _ => "other",
+    }];
+    for c in n.children().into_iter().flatten() {
+        out.extend(kinds(c));
+    }
+    out
+}
+
+/// The straight-run route differs from the bending route in the tile's curves and in nothing else,
+/// which includes the node kinds it keeps. A tile holding a kind neither route can map (here a
+/// symbol instance, whose art lives in the symbol and not in the node) loses it on a straight run
+/// exactly as it does on a bend: an affine is not a way for unmappable art to arrive untouched.
+#[test]
+fn a_straight_run_keeps_the_same_node_kinds_as_a_bend() {
+    let circle =
+        Node::path(NodeId(0), shapes::ellipse(Rect::new(0.0, -20.0, 40.0, 20.0)), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+    let sym = Node::new(NodeId(1), NodeKind::SymbolInstance { symbol: "s".into(), xf: Affine::IDENTITY });
+    let tile = Node::group(NodeId(2), vec![Arc::new(circle), Arc::new(sym)]);
+    let brush = Brush {
+        name: "p".into(),
+        kind: BrushKind::Pattern(PatternBrush { side: tile, fit: PatternFit::Stretch, colorization: Colorization::None, ..Default::default() }),
+    };
+    let doc = Document::new(1.0, 1.0);
+    let straight = stroke_pieces(&doc, &brush, &line(0.0, 0.0, 480.0, 0.0), &stroke(1.0));
+    let round = shapes::ellipse(Rect::new(0.0, 0.0, 400.0, 400.0)).to_bezpath();
+    let bent = stroke_pieces(&doc, &brush, &round, &stroke(1.0));
+    assert!(!straight.is_empty() && !bent.is_empty(), "both paths drew something");
+    for (what, out) in [("a straight run", &straight), ("a bend", &bent)] {
+        for n in out {
+            assert_eq!(kinds(n), ["group", "path"], "{what} keeps the path and drops the symbol instance");
+        }
+    }
 }

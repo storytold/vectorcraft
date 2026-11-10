@@ -43,7 +43,7 @@ pub fn glyph_art(document: &[u8], gid: u32, upem: f64, fill: Color, stroke: Opti
     let coloured = ["currentColor", "currentcolor", "context-fill", "context-stroke"].iter().any(|k| svg.contains(k));
     // usvg resolves `context-fill` and `context-stroke` only for markers.
     let svg = svg.replace("context-fill", &hex(fill)).replace("context-stroke", &stroke.map_or_else(|| "none".into(), hex));
-    let (doc, _) = crate::import::import(&svg, &ImportOptions::default()).ok()?;
+    let (doc, _) = crate::import::import(&svg, &ImportOptions::default(), crate::MAX_NODES).ok()?;
     let mut art = if whole {
         Node::group(NodeId(0), doc.layers.iter().map(|l| Arc::new(Node::group(NodeId(0), l.children().cloned().unwrap_or_default()))).collect())
     } else {
@@ -99,10 +99,18 @@ fn glyph(svg: &str, id: &str, color: &str) -> Option<Glyph> {
     // Edits: byte ranges to cut and what to put in their place, in order.
     let mut edits: Vec<(Range<usize>, String)> = vec![];
     // Cut with the left-out elements: images of SVG documents, as the table asks (a glyph draws no
-    // documents inside it). Their link is `href`, else `xlink:href`, as the importer reads it.
+    // documents inside it). Their link is `href`, else `xlink:href`, as the importer reads it. Any
+    // data URL not typed as a raster goes too: the importer reads an untyped one (`text/plain`) as
+    // SVG, SVGZ as well, when its bytes aren't a raster.
     let svg_image = |n: &roxmltree::Node| {
         let href = n.attribute("href").or_else(|| n.attribute(("http://www.w3.org/1999/xlink", "href")));
-        n.tag_name().name() == "image" && href.and_then(|h| h.trim_start().get(..14)).is_some_and(|v| v.eq_ignore_ascii_case("data:image/svg"))
+        let data = href.map(|h| h.trim_start()).filter(|h| h.get(..5).is_some_and(|v| v.eq_ignore_ascii_case("data:")));
+        let raster = |h: &str| {
+            ["data:image/png", "data:image/jpeg", "data:image/jpg", "data:image/gif", "data:image/webp"]
+                .iter()
+                .any(|t| h.get(..t.len()).is_some_and(|v| v.eq_ignore_ascii_case(t)) && h[t.len()..].starts_with([';', ',']))
+        };
+        n.tag_name().name() == "image" && data.is_some_and(|h| !raster(h))
     };
     for n in root.descendants().filter(|n| n.is_element() && (LEFT_OUT.contains(&n.tag_name().name()) || svg_image(n))) {
         edits.push((n.range(), String::new()));
@@ -172,13 +180,18 @@ fn edited(svg: &str, range: Range<usize>, edits: &[(Range<usize>, String)]) -> O
     Some(out)
 }
 
-/// `n` as art of its own, made from `doc` (the glyph's document): no ids (they aren't a document's),
-/// its members' neither, and its images holding the pixels `doc` keeps for them, named by their
-/// content. A linked image, or one whose pixels `doc` doesn't hold, is left out (`None` when `n`
-/// is one).
+/// `n` as art of its own, made from `doc` (the glyph's document): no ids (they aren't a document's)
+/// or links, its members' neither, and its images holding the pixels `doc` keeps for them, named
+/// by their content. A linked image, or one whose pixels `doc` doesn't hold, is left out (`None`
+/// when `n` is one).
 fn own_art(n: &Node, doc: &Document) -> Option<Node> {
     let mut n = n.clone();
     n.id = NodeId(u64::MAX);
+    // A glyph is drawn, not followed: an `<a>`'s link (a `javascript:` one too) would be written
+    // as a link again when its text is exported as outlines.
+    if n.url().is_some() {
+        n.edit_attrs(|a| a.url.clear());
+    }
     if let NodeKind::Image(im) = &mut n.kind {
         // A glyph's images are embedded: a link (to no file of the font's) shows nothing.
         let blob = doc.images.get(&im.key).filter(|b| im.link.is_none() && !b.bytes.is_empty())?;

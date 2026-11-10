@@ -1,4 +1,4 @@
-use super::*;
+use super::{BidiInfo, Level, ParaDirection, Range, SGlyph};
 
 /// The bidirectional resolution (UAX #9) of paragraph `text`, its base direction `direction` or,
 /// without one, from its first strong character. `None` for the usual paragraph with nothing right

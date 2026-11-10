@@ -33,6 +33,44 @@ fn png_chunk<'a>(file: &'a [u8], ty: &[u8; 4]) -> Option<&'a [u8]> {
 }
 
 #[test]
+fn raster_export_defaults_to_document_resolution() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 72, "height": 36, "rasterEffectsPpi": 300})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.raster_effects_ppi, 300.0);
+    for format in ["png", "psd"] {
+        for (options, size, ppi) in [
+            (json!({}), (300, 150), 300.0),
+            (json!({"scale": 1}), (72, 36), 72.0),
+            (json!({"scale": 2}), (144, 72), 144.0),
+            (json!({"ppi": 150, "scale": 2}), (150, 75), 150.0),
+        ] {
+            let mut params = options;
+            params["format"] = json!(format);
+            let bytes = b64(&s.execute("document.export", &params).unwrap());
+            assert_eq!(super::ppi::resolution(&bytes), Some((ppi, ppi)), "{params}");
+            let image = super::load::raster_image(&bytes).unwrap();
+            assert_eq!((image.width, image.height), size, "{params}");
+        }
+    }
+}
+
+#[test]
+fn raster_export_default_uses_the_sanitised_document_resolution() {
+    // A stored resolution that isn't finite or is outside 1–2400 ppi exports at the resolution the
+    // document reports (72 when not finite, else clamped), not at a zero, huge or failed size.
+    for (stored, (width, height), size) in [(f64::NAN, (72, 36), (72, 36)), (0.0, (144, 72), (2, 1)), (1e9, (36, 18), (1200, 600))] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": width, "height": height})).unwrap();
+        std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).raster_effects_ppi = stored;
+        for format in ["png", "psd"] {
+            let bytes = b64(&s.execute("document.export", &json!({"format": format})).unwrap());
+            let image = super::load::raster_image(&bytes).unwrap();
+            assert_eq!((image.width, image.height), size, "{format} with a stored {stored} ppi");
+        }
+    }
+}
+
+#[test]
 fn png_options_resolution_background_interlace_and_anti_aliasing() {
     let mut s = session(40.0, 30.0, 1);
     s.execute("paint.setStroke", &json!({"none": true})).unwrap();
@@ -179,11 +217,11 @@ fn formats_list_the_raster_options() {
     let mut s = Session::new();
     let r = s.execute("document.formats", &json!({})).unwrap();
     let opts = |id: &str| r["formats"].as_array().unwrap().iter().find(|f| f["id"] == id).unwrap()["options"].clone();
-    for k in ["ppi", "scale", "background", "antiAlias", "interlaced"] {
+    for k in ["ppi", "scale", "width", "height", "background", "antiAlias", "interlaced"] {
         assert!(opts("png").get(k).is_some(), "png lists {k}");
     }
     assert_eq!(opts("png")["antiAlias"]["default"], "art");
-    assert_eq!(opts("png")["ppi"]["default"], 72);
+    assert_eq!(opts("png")["ppi"]["default"], Value::Null);
     assert!(opts("jpg").get("quality").is_some() && opts("jpg").get("interlaced").is_none());
     assert!(opts("webp").get("antiAlias").is_some() && opts("svg").get("antiAlias").is_none());
 }
@@ -282,16 +320,10 @@ fn a_raster_export_says_nothing_of_images_another_thread_could_not_decode() {
 
 #[test]
 fn a_raster_export_says_when_an_image_could_not_be_decoded() {
-    // A PNG whose header reads (so it places at its size) but whose pixel data is cut short:
-    // the renderer can't decode it and draws nothing, which the export must say.
+    // A PNG whose header reads but whose pixel data is cut short: the renderer can't decode it
+    // and draws nothing, which the export must say.
     let mut s = session(72.0, 36.0, 1);
-    let mut png = Vec::new();
-    image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
-    let cut = png_chunk(&png, b"IDAT").map(|d| d.as_ptr() as usize - png.as_ptr() as usize).unwrap() + 4;
-    png.truncate(cut);
-    s.execute("file.place", &json!({"name": "cut.png", "dataBase64": vectorcraft_format::base64_encode(&png)})).unwrap();
+    crate::tests_menucmds::place_undecodable_png(&mut s);
     let r = s.execute("document.export", &json!({"format": "png", "background": "transparent"})).unwrap();
     let warnings = r["warnings"].as_array().cloned().unwrap_or_default();
     assert!(warnings.iter().any(|w| w.as_str().is_some_and(|w| w.contains("couldn't be decoded"))), "{r}");
@@ -333,4 +365,65 @@ fn export_rect_refuses_what_cannot_be_exported() {
     for p in bad {
         assert!(s.execute("document.export", &p).is_err(), "{p}");
     }
+}
+
+#[test]
+fn width_or_height_sets_the_pixel_size_of_a_raster_export() {
+    let mut s = session(200.0, 100.0, 1);
+    let size = |s: &mut Session, p: Value| rgba(&b64(&s.execute("document.export", &p).unwrap())).dimensions();
+    assert_eq!(size(&mut s, json!({"format": "png", "width": 512})), (512, 256));
+    assert_eq!(size(&mut s, json!({"format": "png", "height": 128})), (256, 128));
+    assert_eq!(size(&mut s, json!({"format": "png", "width": 512, "height": 50})), (512, 256), "width wins over height");
+    assert_eq!(size(&mut s, json!({"format": "png", "width": 512, "scale": 4, "ppi": 300})), (512, 256), "width wins over scale and ppi");
+    assert_eq!(size(&mut s, json!({"format": "png", "height": 50, "ppi": 300})), (100, 50), "height wins over ppi");
+    assert_eq!(size(&mut s, json!({"format": "webp", "width": 400, "height": null})), (400, 200), "a null height is no height");
+    assert_eq!(size(&mut s, json!({"format": "png", "width": 1})), (2, 1), "the scale stays at 0.01 pixels per point or more");
+}
+
+#[test]
+fn a_width_or_height_that_is_not_a_positive_number_is_refused() {
+    let mut s = session(200.0, 100.0, 1);
+    for (p, msg) in [
+        (json!({"width": 0}), "width must be a positive number, not 0"),
+        (json!({"width": -1}), "width must be a positive number, not -1"),
+        (json!({"height": -2.5}), "height must be a positive number, not -2.5"),
+        (json!({"width": -1, "height": 100}), "width must be a positive number, not -1"),
+    ] {
+        let mut p = p.clone();
+        p["format"] = json!("png");
+        let e = s.execute("document.export", &p).unwrap_err().to_string();
+        assert!(e.contains(msg), "{p}: {e}");
+    }
+}
+
+#[test]
+fn each_artboard_file_gets_its_own_scale_for_a_width() {
+    let mut s = session(200.0, 100.0, 1);
+    s.execute("artboard.new", &json!({"x": 300, "y": 0, "width": 100, "height": 400})).unwrap();
+    let r = s.execute("document.export", &json!({"format": "png", "useArtboards": true, "width": 512})).unwrap();
+    let sizes: Vec<(u32, u32)> = r["files"].as_array().unwrap().iter().map(|f| rgba(&b64(f)).dimensions()).collect();
+    assert_eq!(sizes, [(512, 256), (512, 2048)], "{r}");
+}
+
+#[test]
+fn a_file_sized_by_width_stores_the_resolution_that_results() {
+    let mut s = session(200.0, 100.0, 1);
+    // 512 px over 200 pt is 2.56 pixels per point: 184.32 ppi.
+    for format in ["jpg", "png"] {
+        let file = b64(&s.execute("document.export", &json!({"format": format, "width": 512})).unwrap());
+        let (x, y) = super::ppi::resolution(&file).unwrap();
+        assert!((x - 184.32).abs() < 0.6 && (y - 184.32).abs() < 0.6, "{format}: {x} × {y}");
+    }
+}
+
+#[test]
+fn export_for_screens_rows_keep_their_own_size() {
+    let mut s = session(200.0, 100.0, 1);
+    let r = s
+        .execute(
+            "document.exportForScreens",
+            &json!({"formats": [{"format": "png", "scale": "512w"}], "settings": {"png": {"height": 10, "width": 30}}}),
+        )
+        .unwrap();
+    assert_eq!(rgba(&b64(&r["files"][0])).dimensions(), (512, 256), "{r}");
 }

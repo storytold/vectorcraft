@@ -14,6 +14,26 @@ fn read(saved: &Value) -> ReadPreferences {
     UiState::read_preferences(&serde_json::to_vec(saved).unwrap()).unwrap()
 }
 
+#[test]
+fn legacy_help_bar_visibility_follows_each_layouts_status_bar() {
+    let prefs = read(&json!({
+        "status_bar": false,
+        "custom_workspaces": [{"name":"Hidden", "statusBar": false}, {"name":"Shown", "statusBar":true}],
+        "workspace_changes": [{"name":"Changed", "statusBar":false}]
+    }));
+    assert!(!prefs.ui.help_bar);
+    assert!(!prefs.ui.custom_workspaces[0].help_bar);
+    assert!(prefs.ui.custom_workspaces[1].help_bar);
+    assert!(!prefs.ui.workspace_changes[0].help_bar);
+    assert!(read(&json!({})).ui.help_bar);
+    for (status, help) in [(true, false), (false, true)] {
+        let prefs = read(&json!({"status_bar":status, "help_bar":help,
+            "custom_workspaces":[{"name":"Explicit", "statusBar":status, "helpBar":help}]}));
+        assert_eq!(prefs.ui.help_bar, help);
+        assert_eq!(prefs.ui.custom_workspaces[0].help_bar, help);
+    }
+}
+
 /// The dock of a layout in the current shape: the canvas beside a dock at the end edge.
 fn dock(layout: &Layout<String>) -> &[Column<String>] {
     assert!(docking::valid(layout), "{layout:?}");
@@ -75,6 +95,20 @@ fn a_layout_saved_before_the_canvas_joined_keeps_its_arrangement() {
     assert_eq!(groups(docked), [vec!["pathfinder"], vec!["transform"]], "set docked as a column");
     assert!(!docked.iconic);
 
+    floating_windows_keep_their_places(layout);
+
+    // Symbols is in the icon column, and the floating panels came from it: none keeps a
+    // place in the dock to go back to.
+    assert!(ui.docking_hidden.is_empty(), "{:?}", ui.docking_hidden);
+
+    let workspace = ui.custom_workspaces.iter().find(|w| w.name == "Migration Test").expect("custom workspace");
+    assert_eq!(workspace.docking, ui.docking);
+    assert_eq!(workspace.docking_hidden, ui.docking_hidden);
+    assert!(workspace.floating_panels.is_empty() && workspace.docking_icons.is_empty());
+}
+
+/// The three floating windows of the migrated layout.
+fn floating_windows_keep_their_places(layout: &Layout<String>) {
     assert_eq!(layout.floating.len(), 3);
     let color = &layout.floating[0];
     assert_eq!(window_groups(color), [vec!["color", "stroke"]]);
@@ -88,15 +122,6 @@ fn a_layout_saved_before_the_canvas_joined_keeps_its_arrangement() {
     assert_eq!(window_groups(align), [vec!["align"]]);
     assert!(align.minimized, "collapsed floating group");
     assert_eq!(&align.rect[..2], &[300.0, 560.0]);
-
-    // Symbols is in the icon column, and the floating panels came from it: none keeps a
-    // place in the dock to go back to.
-    assert!(ui.docking_hidden.is_empty(), "{:?}", ui.docking_hidden);
-
-    let workspace = ui.custom_workspaces.iter().find(|w| w.name == "Migration Test").expect("custom workspace");
-    assert_eq!(workspace.docking, ui.docking);
-    assert_eq!(workspace.docking_hidden, ui.docking_hidden);
-    assert!(workspace.floating_panels.is_empty() && workspace.docking_icons.is_empty());
 }
 
 #[test]

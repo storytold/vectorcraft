@@ -1,7 +1,15 @@
 use super::cid::{CidText, FontInfo, comparable, font_chars, identify_glyph, matching_face, replacement, unify_radical};
-use super::entry::{MAX_NESTED, OVERPRINT_UNREAD, OVERPRINT_ZERO_MODE, PATTERN_REUSE, TEXT_OUTLINES, UNMATCHED_GLYPHS_NOTE, UNNAMED_CHARACTERS_NOTE};
+use super::entry::{
+    MAX_NESTED, OVERPRINT_UNREAD, OVERPRINT_ZERO_MODE, PATTERN_REUSE, TEXT_OUTLINES, TOO_MANY_OBJECTS, UNMATCHED_GLYPHS_NOTE,
+    UNNAMED_CHARACTERS_NOTE, max_objects,
+};
 use super::state::{Builder, Frame, FrameKind, Saved, bounds, grouped, line_width, mean_scale, paints, round3, stroke_layer};
-use super::*;
+use super::{
+    Affine, Appearance, AppearanceItem, Arc, BezPath, BfString, BlendMode, CacheKey, Color, Colors, Families, FillLayer, FillRule, FunctionBudget,
+    FunctionPaint, HashMap, HashSet, ImageBlob, ImageObject, Knockout, Look, MaskSpec, MaskType, Native, Node, NodeId, NodeKind, OpacityMask, Paint,
+    PathData, PathDrawMode, Pattern, PatternDef, Placement, Rect, Scan, Shape, SoftMask, StrokeProps, TextAs, TextLine, TextOverprint, TilingPattern,
+    Upright, Walked, clipped, contains, fold_stop_opacity, function_paint, gradient_shape, is_rectangle, luminance, mask_spec, shading_gradient,
+};
 
 impl<'p> Builder<'p> {
     pub(super) fn new(next: u64, colors: Colors<'p>, text_as: TextAs, route: bool) -> Self {
@@ -15,9 +23,11 @@ impl<'p> Builder<'p> {
             glyphs: None,
             text: None,
             text_as,
+            actual: Default::default(),
             images: HashMap::new(),
             image_keys: HashMap::new(),
             cmyk_keys: HashSet::new(),
+            separation_paints: HashMap::new(),
             opaque: HashSet::new(),
             warnings: vec![],
             fonts: HashMap::new(),
@@ -36,16 +46,15 @@ impl<'p> Builder<'p> {
             pattern_keys: HashMap::new(),
             function_paints: HashMap::new(),
             function_budget: FunctionBudget::new(),
+            objects_left: max_objects(),
             taken: vec![],
             scan: Scan::default(),
             tag_at: 0,
-            group_at: 0,
             paint_at: 0,
             aligned: true,
             route,
             unsure: false,
             marked: vec![],
-            pending: false,
             nested: 0,
             white_images: false,
             last_fill: None,
@@ -61,6 +70,9 @@ impl<'p> Builder<'p> {
 
     /// A deep copy of `node` with fresh ids.
     fn reid(&mut self, node: &Node) -> Node {
+        // Each copy counts against the import's objects: once they are spent nothing more is
+        // drawn through a mask, so the copying stops too.
+        self.objects_left = self.objects_left.saturating_sub(1);
         let mut n = node.clone();
         n.id = self.id();
         if let Some(ch) = n.children_mut() {
@@ -91,8 +103,8 @@ impl<'p> Builder<'p> {
         self.mask = None;
         self.masked.clear();
         self.marked.clear();
-        self.pending = false;
-        (self.scan, self.tag_at, self.group_at, self.aligned, self.paint_at) = (scan, 0, 0, true, 0);
+        self.actual = Default::default();
+        (self.scan, self.tag_at, self.aligned, self.paint_at) = (scan, 0, true, 0);
         if self.scan.overprints && self.scan.zero_mode {
             self.warn(OVERPRINT_ZERO_MODE);
         }
@@ -164,8 +176,8 @@ impl<'p> Builder<'p> {
     }
 
     /// The group art drawn now belongs to (the innermost marked as one).
-    fn current_group(&self) -> Option<usize> {
-        self.marked.iter().rev().find_map(|g| *g)
+    pub(super) fn current_group(&self) -> Option<usize> {
+        self.marked.last().and_then(|(_, current)| *current)
     }
 
     /// Add `n` to the open frame; `group`: the optional content group it was drawn in, if it
@@ -186,7 +198,15 @@ impl<'p> Builder<'p> {
         }
     }
 
+    /// Add `n`, drawn now, to the art: left out (with a warning) once the import's objects are
+    /// spent ([`TOO_MANY_OBJECTS`]).
     pub(super) fn push_node(&mut self, mut n: Node) {
+        let Some(left) = self.objects_left.checked_sub(1) else {
+            self.lines.remove(&n.id);
+            self.warn(TOO_MANY_OBJECTS);
+            return;
+        };
+        self.objects_left = left;
         if self.blend != BlendMode::Normal && !n.is_container() {
             n.blend = self.blend;
         }
@@ -458,14 +478,12 @@ impl<'p> Builder<'p> {
             blend: std::mem::replace(&mut self.blend, BlendMode::Normal),
             mask: self.mask.take(),
             page: std::mem::replace(&mut self.page, page),
-            pending: std::mem::take(&mut self.pending),
         };
         self.nested += 1;
         read(self);
         let art = self.close_frames();
         self.nested -= 1;
-        (self.stack, self.root_groups, self.blend, self.mask, self.page, self.pending) =
-            (saved.stack, saved.root_groups, saved.blend, saved.mask, saved.page, saved.pending);
+        (self.stack, self.root_groups, self.blend, self.mask, self.page) = (saved.stack, saved.root_groups, saved.blend, saved.mask, saved.page);
         Some(art)
     }
 
@@ -567,8 +585,19 @@ impl<'p> Builder<'p> {
         Some(Paint::Pattern { pattern: name, xf })
     }
 
+    /// Image `st` of one ink (`w` × `h` pixels) as the paint of its ink at 100 % (a spot swatch, a
+    /// process plate or Registration, found by its colour space) and its tints as gray pixels
+    /// ([`crate::import_image::tint_gray`]). `None` for another image, an ink whose colour can't
+    /// be told, or tints that can't be read (with a warning): the image opens in RGB. The ink is
+    /// only marked used once the tints are read.
+    pub(super) fn separation_image(&mut self, st: &craft_pdf::syntax::object::Stream<'_>, w: u32, h: u32) -> Option<(Paint, Vec<u8>)> {
+        let space = self.colors.array_space(&crate::import_image::one_ink_space(st)?)?;
+        let gray = crate::import_image::tint_gray(st, w, h).map_err(|why| self.warn(why)).ok()?;
+        Some((self.colors.native(space, &[1.0])?.paint(), gray))
+    }
+
     pub(super) fn add_image(&mut self, key: u128, make: impl FnOnce() -> Option<(ImageBlob, u32, u32)>, xf: Affine) {
-        self.add_image_masked(key, make, xf, None);
+        self.add_image_masked(key, make, xf, None, None);
     }
 
     /// An image's alpha (its soft mask, stencil mask or colour key, at its own resolution) as a
@@ -611,12 +640,15 @@ impl<'p> Builder<'p> {
         Some(OpacityMask::new(art, true))
     }
 
+    /// An image of key `key` (its blob made by `make` the first time), placed by `xf`, with opacity
+    /// mask `mask` and the solid paint that colorizes it (`colorize`, for a grayscale image).
     pub(super) fn add_image_masked(
         &mut self,
         key: u128,
         make: impl FnOnce() -> Option<(ImageBlob, u32, u32)>,
         xf: Affine,
         mask: Option<OpacityMask>,
+        colorize: Option<Paint>,
     ) {
         let (k, w, h) = if let Some(v) = self.image_keys.get(&key).cloned() {
             v
@@ -637,12 +669,14 @@ impl<'p> Builder<'p> {
             NodeKind::Image(Box::new(ImageObject { key: k, width: w, height: h, xf, link: None, placement: Default::default(), pixels: None })),
         );
         n.extras_mut().mask = mask.map(Box::new);
+        n.extras_mut().colorize = colorize.map(Box::new);
         self.push_node(n);
     }
 
     /// Mesh shadings filling `region` (document space): gradient meshes, clipped to the region
-    /// when they reach past it.
-    pub(super) fn draw_meshes(&mut self, meshes: Vec<vectorcraft_doc::live::GradientMesh>, region: &BezPath, opacity: f32) {
+    /// when they reach past it, or always (`clip`: a stroke's outline, which a mesh can lie
+    /// within the box of without filling it).
+    pub(super) fn draw_meshes(&mut self, meshes: Vec<vectorcraft_doc::live::GradientMesh>, region: &BezPath, opacity: f32, clip: bool) {
         let nodes: Vec<Arc<Node>> = meshes.into_iter().map(|m| Arc::new(Node::new(self.id(), NodeKind::Mesh(m)))).collect();
         let Some(art) = bounds(&nodes) else { return };
         let mut content = match <[Arc<Node>; 1]>::try_from(nodes) {
@@ -650,7 +684,7 @@ impl<'p> Builder<'p> {
             Err(all) => Node::group(self.id(), all),
         };
         content.opacity *= opacity;
-        if !contains(region.bounding_box().inflate(0.5, 0.5), art) {
+        if clip || !contains(region.bounding_box().inflate(0.5, 0.5), art) {
             let clip = self.clip_node(region, FillRule::NonZero);
             content = clipped(clip, content, self.id());
         }
@@ -717,6 +751,7 @@ impl<'p> Builder<'p> {
         if self.text_as != TextAs::Text || self.nested > 0 {
             return false;
         }
+        let authored = self.actual.active();
         let key = o.font_cache_key();
         let glyph = o.glyph_id().to_u32();
         let (unicode, from_cid) = match o.as_unicode().filter(|u| !replacement(u)) {
@@ -741,6 +776,7 @@ impl<'p> Builder<'p> {
         let text: String = match unicode {
             Some(BfString::Char(c)) => c.to_string(),
             Some(BfString::String(s)) => s,
+            None if authored => String::new(),
             None => {
                 // Invisible text isn't kept as outlines: the caller says it was left out.
                 if paint.is_some() && o.as_unicode().is_some_and(|u| replacement(&u)) {
@@ -753,7 +789,7 @@ impl<'p> Builder<'p> {
         // Adobe's CID tables map some ideographs to their look-alike Kangxi radicals.
         let text: String = if from_cid { text.chars().map(unify_radical).collect() } else { text };
         let Some(at) = Placement::of(m) else { return false };
-        if text.is_empty() || text.chars().any(|c| c.is_control()) {
+        if !authored && (text.is_empty() || text.chars().any(|c| c.is_control())) {
             return false;
         }
         let width = o.advance_width().filter(|w| w.is_finite());
@@ -817,6 +853,9 @@ impl<'p> Builder<'p> {
             fill: if stroke.is_none() { paint } else { None },
             stroke,
         };
+        if authored {
+            return self.actual_glyph(o, m, at, look, opacity);
+        }
         let advance = width.map_or(at.size * 0.5, |w| w as f64 / 1000.0 * at.size * at.h_scale / 100.0);
         // A glyph set vertically is drawn from its origin, which the file puts the position
         // vector's vx (from the font's `W2`, else half its width from `W` or `DW`) to the left of

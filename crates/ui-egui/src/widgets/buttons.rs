@@ -1,4 +1,4 @@
-use super::*;
+use super::{Color32, CornerRadius, Rect, Response, Sense, Stroke, Tokens, Ui, Vec2, icons, pos2, theme, vec2};
 
 /// Square icon button; `selected` draws the pressed well.
 pub fn icon_button(ui: &mut Ui, icon: &str, tip: &str, selected: bool, size: f32) -> Response {
@@ -99,6 +99,13 @@ fn flat_fill(ui: &Ui, rect: Rect, resp: &Response) {
     } else if resp.hovered() {
         ui.painter().rect_filled(rect, CornerRadius::same(5), t.hover);
     }
+}
+
+/// The width [`primary_button`] and [`secondary_button`] give `text` (their label plus padding, at
+/// least 72), for centring a row of them.
+pub(crate) fn button_width(ui: &Ui, text: &str) -> f32 {
+    let galley = ui.painter().layout_no_wrap(tl!(text).to_string(), theme::semibold(12.5), Color32::PLACEHOLDER);
+    (galley.size().x + 32.0).max(72.0)
 }
 
 /// The accent call-to-action button (dialog OK/Create).

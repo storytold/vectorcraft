@@ -5,7 +5,7 @@
 //! cut into atomic regions: the faces of the planar arrangement of every fill, outlined stroke and
 //! clipping path in them ([`po::regions`]). The same paints cover each whole region, so its colour
 //! is exact: those paints composited as the renderer composites them ([`Composer`], blend modes by
-//! [`composite`]), over white (or over nothing with Preserve Alpha); in CMYK documents their inks
+//! [`composite`]), with white under the finished art (or nothing with Preserve Alpha); in CMYK documents their inks
 //! composite, plane by plane ([`cmyk_planes`]), and the colour is CMYK. Each region becomes a path
 //! filled with that flat colour. Where gradients, patterns, images, opacity masks or raster
 //! effects reach there is no single colour: those regions are rendered into one image per group,
@@ -38,7 +38,7 @@ use vectorcraft_render::effects;
 use super::edit::roots_of;
 use super::menucmds::{MAX_PIXELS, isolated_doc, unique_key};
 use super::pathops::{node_path, outline_strokes, outline_strokes_under, separate, shape_node};
-use super::*;
+use super::{CommandSpec, EngineError, Result, Session, always, bad, bool_or, cmd, has_doc, str_param, targets, unique_name};
 
 mod analysis;
 mod apply;
@@ -48,8 +48,10 @@ mod options;
 mod presets;
 mod report;
 
-pub(crate) use analysis::see_through_images;
-pub(crate) use apply::flatten_document;
+pub(crate) use analysis::{outlined_text, see_through_images};
+#[cfg(test)]
+pub(crate) use apply::with_every_region;
+pub(crate) use apply::{expand_transparent_tile_images, flatten_document, flatten_expanded, has_transparent_tile_images};
 pub use commands::specs;
 pub use options::FlattenOptions;
 pub use presets::{FlattenerPreset, PRESET_EXTS, PRESET_FORMAT};

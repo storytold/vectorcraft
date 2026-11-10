@@ -1,3 +1,5 @@
+#[cfg(not(target_arch = "wasm32"))]
+use super::PathBuf;
 use super::build::{instanced, style_distance, style_italic, style_weight};
 use super::cache::Catalog;
 use super::face::{FALLBACK_FAMILY, FontFace, MAX_LIVE_INSTANCES, Variation, VariationAxis};
@@ -8,7 +10,10 @@ use super::names::{norm, norm_chars, script_families};
 #[cfg(not(target_arch = "wasm32"))]
 use super::scan::{enumerate_faces, font_files};
 use super::traits::{Alias, FontMatch, FontTraits};
-use super::*;
+use super::{
+    Arc, BezPath, CANONICAL_CACHE_MAX, Color, ColourContent, DrawSettings, FontDb, GlyphId, GlyphImage, MetadataProvider, NEXT_ID, OUTLINE_CACHE_MAX,
+    Ordering, Size,
+};
 
 impl FontDb {
     /// The family's own name and the style for a name given in a document: any of a family's
@@ -77,8 +82,11 @@ impl FontDb {
     /// The kind of `family` (whether it sets Japanese, its class), for font menu filters: from a
     /// loaded face, else from the system font scan. Variable when any of its faces, loaded or
     /// scanned, is: a family may install static files beside a variable one. Cheap: no font file
-    /// is read, and a loaded family doesn't start the scan.
+    /// is read, and a loaded family doesn't start the scan. A composite font takes its base font's.
     pub fn family_traits(&self, family: &str) -> FontTraits {
+        if let Some((base, _)) = self.composite_base(family) {
+            return self.family_traits(&base);
+        }
         let loaded = {
             let faces = self.read_faces();
             let mut of_family = faces.iter().filter(|f| f.family.eq_ignore_ascii_case(family));
@@ -96,8 +104,11 @@ impl FontDb {
     }
 
     /// [`face`](Self::face) by any of the family's names ([`canonical`](Self::canonical)), and how
-    /// it matched.
+    /// it matched. A composite font matches as its base font does ([`Self::composite_base`]).
     pub fn resolve(&self, family: &str, style: &str) -> Option<(Arc<FontFace>, FontMatch)> {
+        if let Some((base, base_style)) = self.composite_base(family) {
+            return self.resolve(&base, &base_style);
+        }
         let (family, style) = self.canonical(family, style);
         let f = self.face(&family, &style)?;
         let m = if !f.family.eq_ignore_ascii_case(&family) {
@@ -154,8 +165,12 @@ impl FontDb {
     /// Resolve a family + style to a face, falling back to the closest style of the family, then to
     /// Source Sans 3 Regular. Installed system fonts are found by name whatever ran before. `None`
     /// only if no font at all is loaded (the bundled fonts failed to parse, or were left out with
-    /// the `bundled-fonts` feature and none was added), in which case text has no glyphs.
+    /// the `bundled-fonts` feature and none was added), in which case text has no glyphs. A
+    /// composite font gives its base font's face ([`Self::composite_base`]).
     pub fn face(&self, family: &str, style: &str) -> Option<Arc<FontFace>> {
+        if let Some((base, base_style)) = self.composite_base(family) {
+            return self.face(&base, &base_style);
+        }
         let (family, style) = self.canonical(family, style);
         let (family, style) = (family.as_str(), style.as_str());
         let found = self.find(family, style);
@@ -242,6 +257,37 @@ impl FontDb {
         Some(self.instance(&face, &st.font_axes))
     }
 
+    /// The em size characters of style `st` are set at, in `vertical` type or not: its size, or
+    /// with a font height reference other than the em box ([`vectorcraft_doc::FontHeightReference`])
+    /// the size at which its face ([`Self::style_face`]) has that height
+    /// ([`FontFace::font_height`]). The size itself when the face has no such height.
+    pub fn em_size(&self, st: &vectorcraft_doc::CharStyle, vertical: bool) -> f64 {
+        let reference = st.font_height_reference;
+        if reference == vectorcraft_doc::FontHeightReference::EmBox {
+            return st.size;
+        }
+        self.style_face(st).and_then(|f| f.font_height(reference, vertical)).map_or(st.size, |h| st.size / h)
+    }
+
+    /// `t` as layout sets it: each run takes its [`Self::em_size`] and the em box as its font
+    /// height reference; an inline graphic keeps its size. Explicit leading and baseline shift
+    /// stay in points; Auto leading, tracking and kerning follow the em size. `t` itself when every
+    /// run measures the em box.
+    pub fn font_heights_resolved<'a>(&self, t: &'a vectorcraft_doc::TextObject) -> std::borrow::Cow<'a, vectorcraft_doc::TextObject> {
+        use vectorcraft_doc::FontHeightReference;
+        if t.runs.iter().all(|r| r.style.font_height_reference == FontHeightReference::EmBox) {
+            return std::borrow::Cow::Borrowed(t);
+        }
+        let mut out = t.clone();
+        for r in &mut out.runs {
+            if r.inline.is_none() {
+                r.style.size = self.em_size(&r.style, t.vertical);
+            }
+            r.style.font_height_reference = FontHeightReference::EmBox;
+        }
+        std::borrow::Cow::Owned(out)
+    }
+
     /// `face` with the axis settings `axes` (by tag, in the axes' own units) in place of its own,
     /// each clamped to its axis's range: its outlines, metrics and advances taken there, and its
     /// file embedded instanced there. Tags the font has no axis for are left out. `face` itself
@@ -316,8 +362,16 @@ impl FontDb {
         self.family_list().iter().find(|f| norm_chars(f).eq(norm_chars(name))).cloned()
     }
 
-    /// Is `family` available (loaded, or installed on the system)?
+    /// Is `family` available (loaded, installed on the system, or a composite font)?
     pub fn has_family(&self, family: &str) -> bool {
+        if self.composite_font(family).is_some() {
+            return true;
+        }
+        self.has_installed_family(family)
+    }
+
+    /// Is `family` available as a loaded or installed font, excluding composite fonts?
+    pub fn has_installed_family(&self, family: &str) -> bool {
         let (family, _) = self.canonical(family, "");
         self.is_loaded(&family) || self.read_catalog().contains_key(&family.to_ascii_lowercase())
     }

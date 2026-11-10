@@ -5,11 +5,34 @@ fn gpu(name: &str, backend: Backend, device_type: DeviceType) -> Candidate {
 }
 
 /// #1459: a 9048 px wide window (two display scales' ratio past 8192) fits an adapter that
-/// takes 16384 px textures; an adapter with less than eframe asks for changes nothing.
+/// takes 16384 px textures.
 #[test]
 fn the_surface_may_be_as_large_as_the_adapter_allows() {
-    assert_eq!(surface_limit(8192, 16384), 16384);
-    assert_eq!(surface_limit(8192, 4096), 8192);
+    let adapter = wgpu::Limits { max_texture_dimension_2d: 16384, ..wgpu::Limits::default() };
+    let asked = wgpu::Limits { max_texture_dimension_2d: 8192, ..wgpu::Limits::default() };
+    assert_eq!(device_limits(asked, &adapter).max_texture_dimension_2d, 16384);
+}
+
+/// #2105: a GPU that offers less than eframe asks for on any limit (here a Raspberry Pi 5's V3D 7.1:
+/// 15 inter-stage variables on Vulkan, 4096 px textures on OpenGL) gets a device with what it
+/// offers, instead of failing and leaving the window to the software rasterizer. A GPU that offers
+/// more is asked for no more than before, except for the texture side.
+#[test]
+fn the_device_asks_for_no_more_than_the_adapter_offers() {
+    let asked = wgpu::Limits { max_texture_dimension_2d: 8192, ..wgpu::Limits::default() };
+    let vulkan = wgpu::Limits { max_inter_stage_shader_variables: 15, max_texture_dimension_2d: 7680, ..wgpu::Limits::default() };
+    let limits = device_limits(asked.clone(), &vulkan);
+    assert_eq!((limits.max_inter_stage_shader_variables, limits.max_texture_dimension_2d), (15, 7680));
+    assert!(limits.check_limits(&vulkan), "{limits:?}");
+    let gl = wgpu::Limits { max_texture_dimension_2d: 4096, ..wgpu::Limits::downlevel_webgl2_defaults() };
+    let webgl2 = wgpu::Limits { max_texture_dimension_2d: 8192, ..wgpu::Limits::downlevel_webgl2_defaults() };
+    let limits = device_limits(webgl2.clone(), &gl);
+    assert_eq!(limits.max_texture_dimension_2d, 4096);
+    assert!(limits.check_limits(&gl), "{limits:?}");
+    let ample = wgpu::Limits { max_texture_dimension_2d: 8192, ..wgpu::Limits::default() };
+    assert_eq!(device_limits(asked.clone(), &ample), asked);
+    let better = wgpu::Limits { max_inter_stage_shader_variables: 31, max_texture_dimension_2d: 8192, ..wgpu::Limits::default() };
+    assert_eq!(device_limits(asked.clone(), &better), asked, "never more than eframe asked for");
 }
 
 fn names(c: &[Candidate], order: &[usize]) -> Vec<String> {
@@ -219,8 +242,8 @@ fn internal_panels_are_edp_lvds_and_dsi_connectors() {
 /// PCI ids. Each GPU is listed once, the one with the panel as primary.
 #[test]
 fn linux_display_gpus_come_from_the_connected_connectors() -> std::io::Result<()> {
-    let dir = std::env::temp_dir().join(format!("vectorcraft-drm-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let temp = tempfile::Builder::new().prefix("vectorcraft-drm-").tempdir()?;
+    let dir = temp.path();
     let card = |name: &str, (vendor, device): (u32, u32)| -> std::io::Result<()> {
         std::fs::create_dir_all(dir.join(name).join("device"))?;
         std::fs::write(dir.join(name).join("device/vendor"), format!("{vendor:#06x}\n"))?;
@@ -239,11 +262,11 @@ fn linux_display_gpus_come_from_the_connected_connectors() -> std::io::Result<()
     connector("card1-DP-2", "connected")?;
     connector("card2-Virtual-1", "connected")?;
     std::fs::write(dir.join("renderD128"), "")?;
-    let mut gpus = linux_display_gpus(&dir);
+    let mut gpus = linux_display_gpus(dir);
     gpus.sort_by_key(|g| g.pci);
     assert_eq!(gpus, [primary(AMD_IGPU), monitor(NVIDIA_3090)]);
     assert!(linux_display_gpus(&dir.join("no such dir")).is_empty());
-    std::fs::remove_dir_all(&dir)
+    Ok(())
 }
 
 #[test]
@@ -343,14 +366,19 @@ fn gpus_without_pci_ids_are_told_apart_by_name() {
 fn a_first_frame_that_never_reaches_the_screen_hangs_its_adapter() {
     let s = Duration::from_secs;
     // The second frame began: the first was presented.
-    assert_eq!(first_frame(2, s(60), false), FirstFrame::Shown);
-    // Still drawing (or presenting) the first frame: waited for, then given up on (#964).
-    for frames in [0, 1] {
-        assert_eq!(first_frame(frames, s(3), false), FirstFrame::Wait);
-        assert_eq!(first_frame(frames, FIRST_FRAME_TIMEOUT, false), FirstFrame::Hung);
-    }
+    assert_eq!(first_frame(2, s(60), Some(s(1)), false), FirstFrame::Shown);
+    // The first frame built and not yet presented: waited for, then given up on (#964), counting
+    // from when its UI pass ended.
+    assert_eq!(first_frame(1, s(3), Some(s(1)), false), FirstFrame::Wait);
+    assert_eq!(first_frame(1, FIRST_FRAME_TIMEOUT, Some(FIRST_FRAME_TIMEOUT), false), FirstFrame::Hung);
+    assert_eq!(first_frame(1, s(45), Some(s(5)), false), FirstFrame::Wait, "a first frame built slowly gets its full time to show");
+    assert_eq!(first_frame(1, FIRST_FRAME_TIMEOUT, None, false), FirstFrame::Hung);
+    // The first frame still being built: the app's work, not the adapter's (#5160).
+    assert_eq!(first_frame(0, s(3), None, false), FirstFrame::Wait);
+    assert_eq!(first_frame(0, FIRST_FRAME_TIMEOUT, None, false), FirstFrame::Busy);
+    assert_eq!(first_frame(0, s(600), None, false), FirstFrame::Busy, "never a restart without an adapter");
     // A window minimized at the start may not draw again until restored.
-    assert_eq!(first_frame(1, s(60), true), FirstFrame::Shown);
+    assert_eq!(first_frame(1, s(60), Some(s(60)), true), FirstFrame::Shown);
     // A hung adapter is left out once, like one that failed.
     let skip = vec!["Dx12:10de:28a0".to_string()];
     assert_eq!(restart_without(true, 1, Some("Dx12:10de:28a0"), &skip), None);
@@ -451,13 +479,50 @@ fn a_windows_gpu_renders_through_dx12_before_vulkan() {
 #[test]
 fn windows_never_loads_vulkan_drivers_unless_asked() {
     let all = Backends::all();
-    let start = backends(all, false);
+    let start = backends(all, false, false);
+    let fallback = backends(all, false, true);
     if cfg!(windows) {
-        assert_eq!(start, Backends::DX12 | Backends::GL, "#806");
+        assert_eq!(start, Backends::DX12, "#806, and no OpenGL unless needed (#4150)");
+        assert_eq!(fallback, Backends::DX12 | Backends::GL);
     } else {
-        assert_eq!(start, all);
+        assert_eq!((start, fallback), (all, all));
     }
-    assert_eq!(backends(Backends::VULKAN, true), Backends::VULKAN, "WGPU_BACKEND=vulkan still picks it");
+    assert_eq!(backends(Backends::VULKAN, true, false), Backends::VULKAN, "WGPU_BACKEND=vulkan still picks it");
+    assert_eq!(backends(Backends::GL, true, false), Backends::GL, "WGPU_BACKEND=gl still picks it");
+}
+
+#[test]
+fn windows_lists_opengl_once_a_start_leaves_an_adapter_out() {
+    let crashed = LeftOut { adapters: vec!["Dx12:8086:3ea0".into()], ..LeftOut::default() };
+    assert!(windows_opengl(&crashed), "#2243: the next start can fall back to OpenGL");
+    let listing = LeftOut { opengl_only: true, ..LeftOut::default() };
+    assert!(windows_opengl(&listing));
+    assert_eq!(listing.backends(backends(Backends::all(), false, true)), Backends::GL);
+}
+
+/// OpenGL stays where it drew before #4150's fix: a GPU without a Direct3D 12 driver (DX12 lists
+/// WARP alone) and an adapter `WGPU_ADAPTER_NAME` names; a start with a DX12 GPU lists DX12 alone.
+#[test]
+fn windows_lists_opengl_without_a_dx12_gpu_or_with_an_adapter_named() {
+    let start = LeftOut::default();
+    let asked = std::cell::Cell::new(false);
+    let hardware = |found: bool| {
+        asked.set(true);
+        found
+    };
+    assert!(!opengl_needed(&start, false, false, || hardware(true)), "a DX12 GPU: DX12 alone (#4150)");
+    assert!(asked.replace(false));
+    assert!(opengl_needed(&start, false, false, || hardware(false)), "WARP alone: the GPU draws through OpenGL, not the CPU");
+    assert!(opengl_needed(&start, false, true, || hardware(true)), "a named adapter may be an OpenGL one");
+    assert!(opengl_needed(&start, true, false, || hardware(true)), "a restart left an adapter out");
+    let listing = LeftOut { opengl_only: true, ..LeftOut::default() };
+    asked.set(false);
+    assert!(opengl_needed(&listing, false, false, || hardware(true)));
+    assert!(!asked.get(), "DX12 isn't listed once OpenGL must be");
+    assert!(any_hardware(&[DeviceType::Cpu, DeviceType::IntegratedGpu]));
+    assert!(any_hardware(&[DeviceType::VirtualGpu]));
+    assert!(!any_hardware(&[DeviceType::Cpu]), "WARP");
+    assert!(!any_hardware(&[]), "Windows 7");
 }
 
 #[test]
@@ -548,11 +613,29 @@ fn a_normal_exit_or_another_failure_does_not_restart() {
     assert_eq!(finish(Err("a bug".into()), &startup), Err("a bug".into()));
 }
 
-/// A log folder of its own for each test.
-fn start_dir(tag: &str) -> std::path::PathBuf {
-    let d = std::env::temp_dir().join(format!("vectorcraft-gpu-start-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    d
+/// A log folder of its own for each test, and the guard that keeps other tests from starting a
+/// program while it runs: the test releases the start file's lock and takes it again, and a child
+/// starting meanwhile would keep it held (`crate::no_spawns`).
+struct TestDir(tempfile::TempDir);
+
+impl std::ops::Deref for TestDir {
+    type Target = std::path::Path;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.path()
+    }
+}
+
+impl AsRef<std::path::Path> for TestDir {
+    fn as_ref(&self) -> &std::path::Path {
+        self.0.path()
+    }
+}
+
+fn start_dir(tag: &str) -> (TestDir, std::sync::RwLockReadGuard<'static, ()>) {
+    let spawns = crate::no_spawns();
+    let dir = tempfile::Builder::new().prefix(&format!("vectorcraft-gpu-start-{tag}-")).tempdir().unwrap();
+    (TestDir(dir), spawns)
 }
 
 /// What a start in `dir` leaves out; it then ends without crashing.
@@ -578,7 +661,7 @@ fn issue_2243() -> Vec<Candidate> {
 /// it, without a status-bar note.
 #[test]
 fn a_start_that_never_showed_a_frame_leaves_its_adapter_out_of_the_next() {
-    let dir = start_dir("crash");
+    let (dir, _spawns) = start_dir("crash");
     let c = issue_2243();
     let first = Startup::default();
     assert_eq!(first.track(&dir, None, false), LeftOut::default());
@@ -602,14 +685,13 @@ fn a_start_that_never_showed_a_frame_leaves_its_adapter_out_of_the_next() {
     assert_eq!(left_out.adapters, ["Dx12:8086:3184"], "kept");
     assert_eq!(left_out.crash, None, "the note is shown once");
     third.ended();
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A start whose first frame reached the screen, or that ended without crashing (a normal exit,
 /// an error, a restart on another adapter), leaves nothing out of the next.
 #[test]
 fn a_start_that_showed_its_first_frame_or_ended_is_cleared() {
-    let dir = start_dir("shown");
+    let (dir, _spawns) = start_dir("shown");
     let c = issue_2243();
     for end in [Startup::presented as fn(&Startup), Startup::ended] {
         let first = Startup::default();
@@ -625,7 +707,6 @@ fn a_start_that_showed_its_first_frame_or_ended_is_cleared() {
     assert!(finish(Ok(Ok(())), &first).is_ok());
     drop(first);
     assert_eq!(next_start(&dir, false), LeftOut::default());
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The process ended while the adapters were being listed (wgpu's DX12 backend creates a
@@ -633,7 +714,7 @@ fn a_start_that_showed_its_first_frame_or_ended_is_cleared() {
 /// macOS, where wgpu has none.
 #[test]
 fn a_crash_while_listing_lists_opengl_alone() {
-    let dir = start_dir("listing");
+    let (dir, _spawns) = start_dir("listing");
     let first = Startup::default();
     first.track(&dir, None, false);
     drop(first);
@@ -653,14 +734,13 @@ fn a_crash_while_listing_lists_opengl_alone() {
     second.none_left();
     second.ended();
     assert_eq!(next_start(&dir, false), LeftOut::default());
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// `WGPU_BACKEND` or `WGPU_ADAPTER_NAME` choose for a start whatever crashed before; when that
 /// start shows its first frame on the adapter that crashed, the adapter counts again.
 #[test]
 fn wgpu_backend_or_adapter_name_ignores_the_crashes() {
-    let dir = start_dir("explicit");
+    let (dir, _spawns) = start_dir("explicit");
     let c = issue_2243();
     let first = Startup::default();
     first.track(&dir, None, false);
@@ -674,14 +754,13 @@ fn wgpu_backend_or_adapter_name_ignores_the_crashes() {
     explicit.picked(&c[0].key, &c[0].name, true);
     explicit.presented();
     assert_eq!(next_start(&dir, false), LeftOut::default(), "a new driver shows the window");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A damaged record, a file that can't be opened and one another starting copy of the app holds
 /// are ignored: the start goes on with nothing left out.
 #[test]
 fn a_damaged_or_unreadable_start_file_is_ignored() {
-    let dir = start_dir("damaged");
+    let (dir, _spawns) = start_dir("damaged");
     std::fs::create_dir_all(&dir).unwrap();
     let damaged: [&[u8]; 9] = [
         b"",
@@ -709,10 +788,9 @@ fn a_damaged_or_unreadable_start_file_is_ignored() {
     assert_eq!(next_start(&dir, false).adapters, ["Dx12:8086:3184"]);
 
     // A folder in the file's place.
-    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::remove_file(dir.join(START_FILE)).unwrap();
     std::fs::create_dir_all(dir.join(START_FILE)).unwrap();
     assert_eq!(next_start(&dir, false), LeftOut::default());
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -741,4 +819,11 @@ fn crashes_are_forgotten_in_another_version_or_under_another_preference() {
     }
     assert_eq!(record.crashed.len(), CRASHED_LIMIT);
     assert_eq!(record.crashed.last().map(|c| c.key.as_str()), Some("Dx12:10de:0013"));
+}
+
+/// `u32::from_str_radix` accepts a leading `+`; a device id with one is not a PCI id.
+#[test]
+fn pci_ids_reject_a_sign_in_the_hex_digits() {
+    assert_eq!(pci_ids("PCI\\VEN_+10DE&DEV_2204"), None);
+    assert_eq!(pci_ids("PCI\\VEN_10DE&DEV_+2204"), None);
 }

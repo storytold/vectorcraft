@@ -2,6 +2,7 @@
 use super::*;
 use crate::{dialogs, theme};
 use egui::{Event, Modifiers, PointerButton};
+use serde_json::Value;
 use vectorcraft_effects::revolve_options;
 use vectorcraft_engine::Session;
 
@@ -137,6 +138,10 @@ fn free_orbit_and_light_drag_update_the_canvas_and_escape_restores_only_the_gest
     assert_ne!(h.value("rotationX"), before["rotationX"].as_f64().unwrap());
     assert_ne!(h.value("rotationY"), before["rotationY"].as_f64().unwrap());
     h.frame(vec![escape()], Modifiers::NONE);
+    h.frame(
+        vec![Event::Key { key: egui::Key::Escape, physical_key: None, pressed: false, repeat: false, modifiers: Modifiers::NONE }],
+        Modifiers::NONE,
+    );
     h.release(p, Modifiers::NONE);
     assert!(h.app.ui.dialog.is_some());
     assert_eq!(super::super::form::params(h.app.ui.dialog.as_ref().unwrap()), before);
@@ -279,4 +284,95 @@ fn selected_light_gizmo_edits_only_that_light_and_escape_restores_the_list() {
     );
     h.release(p + vec2(80.0, 0.0), Modifiers::NONE);
     assert_eq!(h.app.ui.dialog.as_ref().unwrap().fields["lights"], before);
+}
+
+impl Harness {
+    /// A fresh document where `build` runs and Extrude & Bevel's dialog opens, its Preview `on`.
+    fn extrude_dialog(build: &[(&str, Value)], on: bool) -> Self {
+        let mut h = Self::new();
+        dialogs::cancel(&mut h.app);
+        h.app.run("file.new", json!({"width":300,"height":300})).unwrap();
+        for (id, p) in build {
+            h.app.run(id, p.clone()).unwrap();
+        }
+        h.app.run("effect.dialog", json!({"effect": vectorcraft_effects::EXTRUDE})).unwrap();
+        h.app.ui.dialog.as_mut().unwrap().fields.insert("preview".into(), json!(on));
+        h.settle();
+        h
+    }
+
+    fn ok_is_on(&self) -> bool {
+        let d = self.app.ui.dialog.as_ref().unwrap();
+        dialogs::spec(&d.kind).ok_enabled.is_none_or(|f| f(&self.app, d))
+    }
+
+    /// Does the next frame of the dialog draw a text holding `text`?
+    fn shows(&mut self, text: &str) -> bool {
+        let input = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1280.0, 900.0))), ..Default::default() };
+        let mut out = self.ctx.run_ui(input, |ui| dialogs::show(&mut self.app, ui.ctx()));
+        out.textures_delta.clear();
+        out.shapes.iter().any(|c| matches!(&c.shape, egui::Shape::Text(t) if t.galley.job.text.contains(text)))
+    }
+}
+
+fn clipping_group() -> Vec<(&'static str, Value)> {
+    vec![
+        ("shape.ellipse", json!({"x":20,"y":20,"width":100,"height":100})),
+        ("shape.rectangle", json!({"x":60,"y":60,"width":100,"height":100})),
+        ("select.all", json!({})),
+        ("object.clippingMask.make", json!({})),
+    ]
+}
+
+/// #6140: on an object a 3D effect can't take, the dialog says why in its own words, and OK, which
+/// could only fail, is off, where it used to look as if OK did nothing.
+#[test]
+fn a_refused_3d_effect_says_why_and_turns_ok_off() {
+    let mut h = Harness::extrude_dialog(&clipping_group(), true);
+    assert!(!h.ok_is_on());
+    assert!(h.shows("requires a path"));
+    assert!(!h.shows("effect.apply"), "the reason is written without the command's id");
+    let enter = Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE };
+    h.frame(vec![enter], Modifiers::NONE);
+    assert!(h.app.ui.dialog.is_some());
+}
+
+/// With Preview off from the start, nothing has tried the effect: the dialog still finds out,
+/// and trying it leaves no preview open.
+#[test]
+fn a_refused_3d_effect_is_found_with_preview_off() {
+    let mut h = Harness::extrude_dialog(&clipping_group(), false);
+    assert!(!h.ok_is_on());
+    assert!(h.shows("requires a path"));
+    assert!(!h.app.session.in_interaction());
+}
+
+/// With Preview off, trying the values waits for another interaction to end: trying them during
+/// one would replace its preview and cancel it.
+#[test]
+fn a_3d_effect_with_preview_off_leaves_another_interaction_alone() {
+    let mut h = Harness::extrude_dialog(&clipping_group(), false);
+    h.app.session.begin_interaction("Drag").unwrap();
+    let d = h.app.ui.dialog.as_mut().unwrap();
+    d.fields.remove("__tried");
+    d.fields.remove(dialogs::form::REFUSED);
+    h.settle();
+    assert!(h.app.session.in_interaction(), "the other interaction goes on");
+    assert!(h.ok_is_on(), "nothing has tried the values yet");
+    h.app.session.cancel_interaction().unwrap();
+    assert!(h.shows("requires a path"));
+    assert!(!h.ok_is_on());
+    assert!(!h.app.session.in_interaction());
+}
+
+/// An object the effect can take keeps OK on, with Preview on or off, and shows no reason.
+#[test]
+fn an_accepted_3d_effect_keeps_ok_on() {
+    let build = [("shape.rectangle", json!({"x":60,"y":60,"width":100,"height":100}))];
+    for on in [true, false] {
+        let mut h = Harness::extrude_dialog(&build, on);
+        assert!(h.ok_is_on(), "Preview {on}");
+        assert!(!h.shows("requires a path"), "Preview {on}");
+        assert_eq!(h.app.session.in_interaction(), on);
+    }
 }

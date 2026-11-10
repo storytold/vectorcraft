@@ -5,7 +5,8 @@
 //! pointer sample so far (and its pen pressure while Use Pressure Pen is on), so the result is a
 //! pure function of the parameters (replay reproduces it exactly). Holding the brush still with
 //! Twirl, Pucker or Bloat repeats the last sample every [`HOLD_EVERY`] seconds of [`Tool::tick`]
-//! time: one more dab there each time.
+//! time: one more dab there each time. Escape during a stroke cancels it, and Escape during an
+//! Alt-drag that sizes the brush puts the brush size back.
 //!
 //! The kernel resamples the stroke into dabs spaced a fraction of the brush apart ([`Dabber`]:
 //! more samples only add dabs, so a growing stroke can be applied as it grows). For each dab it
@@ -19,7 +20,7 @@ use vectorcraft_geom::kurbo::ParamCurveArclen;
 use vectorcraft_geom::{Anchor, AnchorKind, PathData, Point, Rect, SubPath, Vec2};
 
 use super::ellipse_path;
-use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext};
+use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LiquifyKind {
@@ -507,31 +508,46 @@ fn simplify(sp: &mut SubPath, tol: f64, region: Rect) {
     if tol <= 0.0 {
         return;
     }
+    let min = if sp.closed { 4 } else { 3 };
+    let src = std::mem::take(&mut sp.anchors);
+    let n = src.len();
+    // Compacted into `out`, each anchor moved once: removing them from the middle one by one
+    // shifts the rest every time.
+    let mut out: Vec<Anchor> = Vec::with_capacity(n);
+    let mut src = src.into_iter().peekable();
+    out.extend(src.next());
+    let last = if sp.closed { n } else { n.saturating_sub(1) };
     let mut i = 1;
-    loop {
-        let n = sp.anchors.len();
-        let min = if sp.closed { 4 } else { 3 };
-        if n < min {
-            return;
-        }
-        let last = if sp.closed { n } else { n - 1 };
-        if i >= last {
-            return;
-        }
-        let (pa, k, pb) = (sp.anchors[i - 1], sp.anchors[i], sp.anchors[(i + 1) % n]);
-        let flat = region.contains(k.p)
+    while let Some(k) = src.next() {
+        // Anchors left if `k` stays: those kept, `k`, and those not yet looked at.
+        let left = out.len() + 1 + src.len();
+        let Some(&pa) = out.last() else { break };
+        let pb = match src.peek() {
+            Some(pb) => *pb,
+            None => out[0],
+        };
+        let flat = i < last
+            && left >= min
+            && region.contains(k.p)
             && [k.p, k.h_in, k.h_out, pa.h_out, pb.h_in].iter().all(|q| dist_seg(*q, pa.p, pb.p) <= tol)
             && (k.p - pa.p).dot(pb.p - k.p) > 0.0;
-        if flat {
-            let lab = pa.p.distance(pb.p);
-            let (lak, lkb) = (pa.p.distance(k.p).max(1e-9), k.p.distance(pb.p).max(1e-9));
-            sp.anchors[i - 1].h_out = pa.p + (pa.h_out - pa.p) * (lab / lak);
-            sp.anchors[(i + 1) % n].h_in = pb.p + (pb.h_in - pb.p) * (lab / lkb);
-            sp.anchors.remove(i);
-        } else {
-            i += 1;
+        i += 1;
+        if !flat {
+            out.push(k);
+            continue;
+        }
+        let lab = pa.p.distance(pb.p);
+        let (lak, lkb) = (pa.p.distance(k.p).max(1e-9), k.p.distance(pb.p).max(1e-9));
+        if let Some(a) = out.last_mut() {
+            a.h_out = pa.p + (pa.h_out - pa.p) * (lab / lak);
+        }
+        let h_in = pb.p + (pb.h_in - pb.p) * (lab / lkb);
+        match src.peek_mut() {
+            Some(b) => b.h_in = h_in,
+            None => out[0].h_in = h_in,
         }
     }
+    sp.anchors = out;
 }
 
 /// Apply a liquify stroke (its dabs, at the brush's intensity) to `path`. `salt` decorrelates
@@ -813,6 +829,27 @@ impl Tool for LiquifyTool {
             }
         }
     }
+    /// The tool claims Escape during an Alt-drag that sizes the brush.
+    fn claims_key(&self, _cx: &ToolContext, key: ToolKey) -> bool {
+        key == ToolKey::Escape && self.sizing.is_some()
+    }
+    /// Escape during a stroke cancels it: the art goes back to how the press found it. During an
+    /// Alt-drag sizing the brush, Escape puts the brush size back.
+    fn key(&mut self, _cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
+        if key != ToolKey::Escape {
+            return vec![];
+        }
+        if let Some(s) = self.sizing.take() {
+            (self.params.width, self.params.height) = (s.width, s.height);
+            return vec![];
+        }
+        if !std::mem::take(&mut self.active) {
+            return vec![];
+        }
+        self.points.clear();
+        (self.held, self.previewed) = (0.0, 0);
+        vec![Action::Cancel]
+    }
     fn busy(&self) -> bool {
         self.active
     }
@@ -864,6 +901,21 @@ mod tests {
 
     fn prm(kind: LiquifyKind) -> LiquifyParams {
         LiquifyParams { intensity: 1.0, ..LiquifyParams::new(kind) }
+    }
+
+    #[test]
+    fn simplify_drops_flat_anchors_and_keeps_the_ends() {
+        let pts: Vec<Point> = (0..200_000).map(|i| Point::new(i as f64, 0.0)).collect();
+        let mut open = SubPath::polyline(&pts, false);
+        let start = std::time::Instant::now();
+        simplify(&mut open, 0.5, Rect::new(-1.0, -1.0, 1e6, 1.0));
+        assert!(start.elapsed() < std::time::Duration::from_secs(5), "{:?}", start.elapsed());
+        assert_eq!(open.anchors.iter().map(|a| a.p).collect::<Vec<_>>(), [pts[0], pts[199_999]]);
+        // A closed square with a flat midpoint on each side keeps its four corners.
+        let ring = [(0.0, 0.0), (5.0, 0.0), (10.0, 0.0), (10.0, 5.0), (10.0, 10.0), (5.0, 10.0), (0.0, 10.0), (0.0, 5.0)];
+        let mut closed = SubPath::polyline(&ring.map(|(x, y)| Point::new(x, y)), true);
+        simplify(&mut closed, 0.5, Rect::new(-1.0, -1.0, 11.0, 11.0));
+        assert_eq!(closed.anchors.iter().map(|a| (a.p.x, a.p.y)).collect::<Vec<_>>(), [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]);
     }
 
     #[test]
@@ -959,5 +1011,42 @@ mod tests {
         assert_eq!(p, q);
         let r = LiquifyParams::from_json(&json!({"tool": "warp", "diameter": 40, "intensity": 80})).unwrap();
         assert_eq!((r.width, r.height, r.intensity), (40.0, 40.0, 0.8));
+    }
+
+    #[test]
+    fn escape_cancels_a_stroke_or_a_brush_size_drag() {
+        use crate::testutil::{cx, doc_with_rect, paint};
+        let (d, id) = doc_with_rect();
+        let s = vectorcraft_doc::Selection { objects: vec![id], ..Default::default() };
+        let p = paint();
+        let c = cx(&d, &s, &p);
+        let alt = Mods { alt: true, ..Default::default() };
+        let ev = |kind, x, y, mods| PointerEvent::new(kind, x, y).with_mods(mods);
+        for tool in ["warp", "twirl"] {
+            let mut t = LiquifyTool::new(tool);
+            assert!(t.key(&c, ToolKey::Escape, Mods::default()).is_empty(), "{tool}: no stroke, Escape is the shortcut's");
+            assert!(!t.claims_key(&c, ToolKey::Escape), "{tool}");
+            assert!(matches!(t.pointer(&c, &ev(PointerKind::Down, 190.0, 150.0, Mods::default()))[0], Action::Begin(_)), "{tool}");
+            t.pointer(&c, &ev(PointerKind::Drag, 220.0, 150.0, Mods::default()));
+            assert!(t.busy(), "{tool}");
+            assert_eq!(t.key(&c, ToolKey::Escape, Mods::default()), vec![Action::Cancel], "{tool}");
+            assert!(!t.busy() && !t.wants_ticks(), "{tool}");
+            // The rest of the stroke does nothing.
+            assert!(t.tick(&c, 1.0).is_empty(), "{tool}");
+            assert!(t.pointer(&c, &ev(PointerKind::Drag, 240.0, 150.0, Mods::default())).is_empty(), "{tool}");
+            assert!(t.pointer(&c, &ev(PointerKind::Up, 240.0, 150.0, Mods::default())).is_empty(), "{tool}");
+            // Alt-drag sizes the brush; Escape puts the size back and the rest of that drag does nothing.
+            let size = (t.params.width, t.params.height);
+            t.pointer(&c, &ev(PointerKind::Down, 150.0, 150.0, alt));
+            t.pointer(&c, &ev(PointerKind::Drag, 180.0, 170.0, alt));
+            assert_ne!((t.params.width, t.params.height), size, "{tool}");
+            assert!(t.claims_key(&c, ToolKey::Escape), "{tool}");
+            assert!(t.key(&c, ToolKey::Escape, Mods::default()).is_empty(), "{tool}");
+            assert_eq!((t.params.width, t.params.height), size, "{tool}");
+            assert!(!t.claims_key(&c, ToolKey::Escape), "{tool}");
+            t.pointer(&c, &ev(PointerKind::Drag, 200.0, 200.0, alt));
+            assert!(t.pointer(&c, &ev(PointerKind::Up, 200.0, 200.0, alt)).is_empty(), "{tool}");
+            assert_eq!((t.params.width, t.params.height), size, "{tool}");
+        }
     }
 }

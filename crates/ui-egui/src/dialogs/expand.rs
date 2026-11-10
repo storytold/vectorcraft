@@ -4,8 +4,9 @@
 //! `object.expand` as one undo step.
 //!
 //! Fields: `object`, `fill`, `stroke`, `gradient` (`objects` | `mesh`), `steps` (1..1000), and
-//! `__object`, `__fill`, `__stroke` (that option has something to expand: `object.expand.info`) and
-//! `__gradient` (Fill has a gradient fill to expand).
+//! `__object`, `__fill`, `__stroke` (that option has something to expand: `object.expand.info`),
+//! `__gradient` (Fill has a gradient fill to expand), and `__fill_symbol`, `__stroke_symbol`,
+//! `__gradient_symbol` (only the art of symbol instances holds it, so the option needs Object on).
 
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::expand::{DEFAULT_STEPS, MAX_STEPS};
@@ -24,14 +25,28 @@ const OPTIONS: [(&str, &str); 3] = [("object", "Object"), ("fill", "Fill"), ("st
 
 pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| tl!("Expand").into(), body, confirm, min_width: 260.0, ..DialogSpec::FORM };
 
-/// Open Expand for the selection, every option on (as `object.expand {}` does).
+/// Why Object › Expand… is dimmed: the selection has appearance attributes, which Expand Appearance
+/// turns into plain art first (#3089).
+pub(crate) fn appearance_first() -> &'static str {
+    tl!("Expand Appearance first (Object › Expand Appearance)")
+}
+
+/// Open Expand for the selection, every option on (as `object.expand {}` does). A selection with
+/// appearance attributes (effects, several fills or strokes…) refuses with [`appearance_first`]:
+/// the menu item is dimmed for it.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let info = app.session.execute("object.expand.info", &json!({})).map_err(|e| e.to_string())?;
+    if info["appearance"] == json!(true) {
+        return Err(appearance_first().into());
+    }
     let mut fields = json!({"object": true, "fill": true, "stroke": true, "gradient": "objects", "steps": DEFAULT_STEPS});
     for (key, _) in OPTIONS {
         fields[format!("__{key}")] = info[key].clone();
     }
     fields["__gradient"] = info["gradient"].clone();
+    for key in ["fill", "stroke", "gradient"] {
+        fields[format!("__{key}_symbol")] = json!(info["symbolArt"][key] == json!(true));
+    }
     app.ui.dialog = Some(Dialog::new(KIND, fields));
     Ok(Value::Null)
 }
@@ -45,7 +60,7 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         let on = d.bool(key);
         ui.horizontal(|ui| {
             ui.add_space(12.0);
-            if widgets::check(ui, label, on, d.bool(&format!("__{key}"))) {
+            if widgets::check(ui, label, on, option_enabled(d, key)) {
                 set(d, key, json!(!on));
             }
         });
@@ -75,9 +90,15 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     false
 }
 
+/// Has option `key` something to expand? What only the art of symbol instances holds needs Object
+/// on.
+fn option_enabled(d: &Dialog, key: &str) -> bool {
+    d.bool(&format!("__{key}")) && (key == "object" || d.bool("object") || !d.bool(&format!("__{key}_symbol")))
+}
+
 /// Does Expand Gradient To apply? Only gradient fills that Fill expands care.
 fn gradient_to_enabled(d: &Dialog) -> bool {
-    d.bool("__gradient") && d.bool("fill")
+    option_enabled(d, "gradient") && option_enabled(d, "fill") && d.bool("fill")
 }
 
 /// `object.expand` parameters from the fields.
@@ -153,6 +174,24 @@ mod tests {
         assert!(gradient_to_enabled(app.ui.dialog.as_ref().unwrap()));
     }
 
+    /// Stroke for the stroke in a symbol instance's art is enabled only while Object is on, since
+    /// Object expands the instance.
+    #[test]
+    fn stroke_for_a_symbol_instances_art_needs_object() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 100, "height": 60})).unwrap();
+        app.run("paint.setFill", json!({"none": true})).unwrap();
+        app.run("paint.setStroke", json!({"color": "#000000"})).unwrap();
+        app.run("symbol.new", json!({"name": "Frame"})).unwrap();
+        app.run("ui.expandDialog", json!({})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        assert!(option_enabled(d, "object") && option_enabled(d, "stroke"));
+        d.fields.insert("object".into(), json!(false));
+        assert!(!option_enabled(d, "stroke"), "Stroke can't reach the art with Object off");
+        frame(&mut app);
+    }
+
     #[test]
     fn the_command_palette_opens_it_and_ui_expand_dialog_too() {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -168,5 +207,50 @@ mod tests {
         assert!(app.ui.dialog.is_none());
         let st = app.session.doc().unwrap();
         assert!(matches!(st.doc.node(st.selection.objects[0]).unwrap().kind, NodeKind::Path { live: None, .. }));
+    }
+
+    /// A line with a stroke and a Zig Zag effect is selected (#3089).
+    fn zig_zag_line(app: &mut VectorcraftApp) {
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("path.create", json!({"d": "M 20 100 L 180 100"})).unwrap();
+        app.run("paint.setFill", json!({"none": true})).unwrap();
+        app.run("paint.setStroke", json!({"color": "#000000"})).unwrap();
+        app.run("effect.apply", json!({"effect": "distort.zigZag", "params": {"size": 10, "ridges": 6, "relative": false}})).unwrap();
+    }
+
+    #[test]
+    fn expand_waits_for_expand_appearance_on_a_line_with_an_effect() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        zig_zag_line(&mut app);
+        assert!(!crate::menus::enabled(&app, "ui.expandDialog"), "Expand… is dimmed for the Zig Zag effect");
+        assert!(crate::menus::enabled(&app, "effect.expandAppearance"));
+        // A shortcut or the command palette doesn't open it either; the status bar says why.
+        let before = app.session.doc().unwrap().doc.clone();
+        crate::menus::invoke(&mut app, "object.expand", json!({}));
+        assert!(app.ui.dialog.is_none());
+        assert_eq!(app.ui.status, appearance_first());
+        assert_eq!(app.run("ui.expandDialog", json!({})).unwrap_err(), appearance_first());
+        assert_eq!(app.session.doc().unwrap().doc, before, "the line is left as it was");
+        // Expand Appearance first: the line stays a stroked line, and Expand… is available for it.
+        crate::menus::invoke(&mut app, "effect.expandAppearance", json!({}));
+        let st = app.session.doc().unwrap();
+        let line = st.doc.node(st.selection.objects[0]).unwrap();
+        assert!(line.appearance.effects.is_empty() && !line.appearance.stroke_paint().is_none());
+        assert!(crate::menus::enabled(&app, "ui.expandDialog"));
+        crate::menus::invoke(&mut app, "object.expand", json!({}));
+        assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND));
+    }
+
+    #[test]
+    fn expand_is_dimmed_for_two_fills_but_not_for_a_plain_rectangle() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 100, "height": 60})).unwrap();
+        assert!(crate::menus::enabled(&app, "ui.expandDialog"), "a basic appearance");
+        app.run("appearance.addFill", json!({})).unwrap();
+        assert!(!crate::menus::enabled(&app, "ui.expandDialog"), "two fills");
+        // Nothing selected: dimmed as before.
+        app.run("select.none", json!({})).unwrap();
+        assert!(!crate::menus::enabled(&app, "ui.expandDialog"));
     }
 }

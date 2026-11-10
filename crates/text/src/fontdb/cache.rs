@@ -1,5 +1,5 @@
 use super::traits::FontTraits;
-use super::*;
+use super::{Arc, ColourContent, GlyphImage, HashMap, IMAGE_CACHE_BYTES, IMAGE_CACHE_MAX, PathBuf};
 
 /// One installed family found by the system font scan: its name and the file of each style.
 #[derive(Debug, Default)]

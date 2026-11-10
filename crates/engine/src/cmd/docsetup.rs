@@ -7,7 +7,7 @@ use vectorcraft_doc::{Background, CharPosition, CharStyle, DocSetup, Document, E
 
 use super::flatten::{FlattenOptions, FlattenerPreset};
 
-use super::*;
+use super::{CommandSpec, Result, Session, bad, cmd, color_value, has_doc};
 
 const C: &str = "document.setup";
 
@@ -17,7 +17,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Document Setup",
         [],
         None,
-        "{units?: \"Points\"|\"Inches\"|\"Millimeters\"|…, bleed?: pt (all sides)|[top, bottom, left, right]|{top?, bottom?, left?, right?} (0–72 pt), outlineImages?: bool (show images in Outline mode), highlightSubstitutedGlyphs?: bool (Highlight Substituted Fonts is a preference: prefs.set highlightSubstitutedFonts; a highlightSubstitutedFonts key is ignored and the reply carries a warning),gridSize?: \"small\"|\"medium\"|\"large\", gridColors?: \"Light\"|\"Medium\"|\"Dark\"|\"Red\"|\"Orange\"|\"Green\"|\"Blue\"|\"Purple\"|[colour, colour] (transparency grid; the first is also the paper colour), simulatePaper?: bool, flattenerPreset?: \"High Resolution\"|\"Medium Resolution\"|\"Low Resolution\"|a saved preset (flattener.presets.list), discardWhiteOverprint?: bool, language?: \"English: USA\"|\"German\"|\"French\"|… (also picks its quotes), quotes?: {double?: \"“”\", single?: \"‘’\"} (beside a language: only if they differ from the current ones), typographersQuotes?: bool (typed straight quotes become the document's quotes), superscript?: {size?: %, position?: %}, subscript?: {size?: %, position?: %}, smallCapsSize?: %, exportText?: \"editable\"|\"appearance\" (SVG text as text or as outlines), backgroundContents?: \"transparent\"|\"white\" (white: raster exports are white behind the art), …the keys of its own reply (it can be passed back; the values it only reports are ignored)} change the document setup in one undo step; no params → the current setup",
+        "{units?: \"Points\"|\"Inches\"|\"Millimeters\"|…, bleed?: pt (all sides)|[top, bottom, left, right]|{top?, bottom?, left?, right?} (0–72 pt), outlineImages?: bool (show images in Outline mode), highlightSubstitutedGlyphs?: bool (Highlight Substituted Fonts is a preference: prefs.set highlightSubstitutedFonts; a highlightSubstitutedFonts key is ignored and the reply carries a warning),gridSize?: \"small\"|\"medium\"|\"large\", gridColors?: \"Light\"|\"Medium\"|\"Dark\"|\"Red\"|\"Orange\"|\"Green\"|\"Blue\"|\"Purple\"|[colour, colour] (transparency grid; the first is also the paper colour; #rrggbbaa and #rgba are refused), simulatePaper?: bool, flattenerPreset?: \"High Resolution\"|\"Medium Resolution\"|\"Low Resolution\"|a saved preset (flattener.presets.list), discardWhiteOverprint?: bool, language?: \"English: USA\"|\"German\"|\"French\"|… (also picks its quotes), quotes?: {double?: \"“”\", single?: \"‘’\"} (beside a language: only if they differ from the current ones), typographersQuotes?: bool (typed straight quotes become the document's quotes), superscript?: {size?: %, position?: %}, subscript?: {size?: %, position?: %}, smallCapsSize?: %, exportText?: \"editable\"|\"appearance\" (SVG text as text or as outlines), backgroundContents?: \"transparent\"|\"white\" (white: raster exports are white behind the art), …the keys of its own reply (it can be passed back; the values it only reports are ignored)} change the document setup in one undo step; no params → the current setup",
         has_doc,
         setup
     )]
@@ -127,8 +127,8 @@ fn apply(s: &mut DocSetup, units: &mut vectorcraft_doc::Unit, k: &str, v: &Value
         "discardWhiteOverprint" => s.discard_white_overprint = flag(k, v)?,
         "language" => {
             let l = v.as_str().unwrap_or("");
-            let (name, quotes) = LANGUAGES.iter().find(|(n, _)| n.eq_ignore_ascii_case(l)).ok_or_else(|| {
-                bad(C, format!("unknown language `{l}` (one of {})", LANGUAGES.iter().map(|(n, _)| *n).collect::<Vec<_>>().join(", ")))
+            let (name, _, quotes) = LANGUAGES.iter().find(|(n, _, _)| n.eq_ignore_ascii_case(l)).ok_or_else(|| {
+                bad(C, format!("unknown language `{l}` (one of {})", LANGUAGES.iter().map(|(n, _, _)| *n).collect::<Vec<_>>().join(", ")))
             })?;
             s.language = name.to_string();
             s.quotes = *quotes;

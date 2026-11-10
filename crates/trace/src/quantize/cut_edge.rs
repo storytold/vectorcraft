@@ -1,5 +1,5 @@
 use super::palette::{Bin, HistKey, Used, centers, median_cut, nearest_lab};
-use super::*;
+use super::{Quantized, Raster, TRANSPARENT, luma, oklab};
 
 /// `q` with its blend pixels settled, and the colours that leaves unused dropped.
 ///

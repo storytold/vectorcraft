@@ -409,7 +409,7 @@ fn export_selection_crops_to_the_selection() {
     assert_eq!(u32::from_be_bytes([png[16], png[17], png[18], png[19]]), (w * 2.0).round() as u32);
     let svg = s.execute("document.exportSelection", &json!({"format": "svg"})).unwrap();
     let text = String::from_utf8(vectorcraft_format::base64_decode(svg["dataBase64"].as_str().unwrap()).unwrap()).unwrap();
-    assert_eq!(text.matches("<path").count(), 1, "{text}");
+    assert_eq!(vectorcraft_testkit::svg_shapes(&text), 1, "{text}");
 }
 
 /// The crop of a selection export takes in the object's effects: a drop shadow, an outer glow and
@@ -445,6 +445,27 @@ fn export_selection_keeps_the_effects_in_the_crop() {
         let art = s.execute("document.export", &json!({"format": "png", "useArtboards": false, "background": "transparent"})).unwrap();
         assert!(png(&art) == img, "{effect}: the same image as the art's bounds");
     }
+}
+
+/// An Outer Glow at its default Screen mode on the bare page is in a PNG on white and in a JPEG,
+/// and in a transparent PNG (#6125).
+#[test]
+fn a_screen_outer_glow_is_in_raster_exports() {
+    let mut s = session();
+    s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 20, "height": 20})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "stylize.outerGlow"})).unwrap();
+    let mut pixel = |p: serde_json::Value| {
+        let v = s.execute("document.export", &p).unwrap();
+        let img = image::load_from_memory(&vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap()).unwrap().to_rgba8();
+        // 2 pt past the square's stroke, on the right.
+        *img.get_pixel(122, 110)
+    };
+    for p in [json!({"format": "png", "background": "white"}), json!({"format": "jpg"})] {
+        let px = pixel(p.clone());
+        assert!(px[0] > 235 && px[1] > 235 && px[2] < 235, "{p}: yellow on white: {px:?}");
+    }
+    let px = pixel(json!({"format": "png", "background": "transparent"}));
+    assert!(px[3] > 0 && px[0] > 235 && px[1] > 235 && px[2] < 40, "the glow is yellow in the transparent image: {px:?}");
 }
 
 /// A group's own drop shadow is inside the crop of the group's selection export too.

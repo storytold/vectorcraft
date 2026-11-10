@@ -2,17 +2,17 @@
 //! of symbols the library panel shows. A library is a document holding the symbols with the
 //! resources they use (nested symbols, patterns, swatches, brushes, graphic styles, images) and
 //! their Symbol Options; saved, it is a native `.vectorcraft` file, which File › Open also opens.
-//! The built-in library is generated here ([`BUILTIN`]); User Defined ones are the `.vectorcraft`
+//! The built-in libraries are generated here ([`BUILTIN`]); User Defined ones are the `.vectorcraft`
 //! files in the user library folder ([`Libraries`]), and Other Library… loads the symbols of any
 //! document VectorCraft opens. `symbol.addFromLibrary` copies symbols into the document;
 //! `symbol.saveLibrary` writes the document's.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, LazyLock};
 
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, Symbol};
+use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, Symbol, SymbolNineSlice};
 use vectorcraft_geom::{Affine, Point, Rect, shapes};
 
 use super::brushsym::{CURRENT_SYMBOL, natural_size, normalize, place_xf, set_natural_size};
@@ -20,7 +20,7 @@ use super::clipboard::Clipboard;
 use super::clipboard::resources::SwatchChoices;
 use super::swatch::str_list;
 use super::swatchlib::{FileData, LibraryFile, LibraryInfo, stem};
-use super::*;
+use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, number_or, str_param};
 
 /// The extension of saved symbol libraries: native documents.
 pub const SYMBOLS_EXT: &str = vectorcraft_format::EXTENSION;
@@ -104,10 +104,17 @@ impl SymbolLibrary {
     /// `name`: the symbols, the symbols they nest and every other resource they use, with their
     /// Symbol Options.
     pub fn from_document(src: &Document, names: &[String], name: String) -> std::result::Result<Self, String> {
-        if let Some(n) = names.iter().find(|n| !src.symbols.iter().any(|s| s.name == **n)) {
+        // Each name's first place in the panel, looked up rather than scanned for: scanning the
+        // symbols for each one made a library of N symbols cost N² comparisons.
+        let mut order: HashMap<&str, usize> = HashMap::new();
+        for (i, s) in src.symbols.iter().enumerate() {
+            order.entry(s.name.as_str()).or_insert(i);
+        }
+        if let Some(n) = names.iter().find(|n| !order.contains_key(n.as_str())) {
             return Err(format!("no symbol `{n}`"));
         }
-        let picked = src.symbols.iter().filter(|s| names.is_empty() || names.contains(&s.name));
+        let wanted: HashSet<&str> = names.iter().map(String::as_str).collect();
+        let picked = src.symbols.iter().filter(|s| names.is_empty() || wanted.contains(s.name.as_str()));
         let clip = Clipboard::gather(src, picked.map(|s| instance(&s.name)).collect());
         let mut doc = clip.to_document();
         for l in &mut doc.layers {
@@ -116,8 +123,7 @@ impl SymbolLibrary {
             }
         }
         // The panel order of the document they came from.
-        let order = |n: &str| src.symbols.iter().position(|s| s.name == n);
-        doc.symbols.sort_by_key(|s| order(&s.name));
+        doc.symbols.sort_by_key(|s| order.get(s.name.as_str()).copied());
         for s in &doc.symbols.clone() {
             copy_options(src, &s.name, &mut doc, &s.name);
         }
@@ -148,7 +154,10 @@ pub struct BuiltinSymbolLibrary {
 }
 
 /// The built-in symbol libraries, in menu order: original art generated in code.
-pub const BUILTIN: &[BuiltinSymbolLibrary] = &[BuiltinSymbolLibrary { id: "basic-shapes", name: "Basic Shapes", make: basic_shapes }];
+pub const BUILTIN: &[BuiltinSymbolLibrary] = &[
+    BuiltinSymbolLibrary { id: "basic-shapes", name: "Basic Shapes", make: basic_shapes },
+    BuiltinSymbolLibrary { id: "ui-frames", name: "UI Frames", make: ui_frames },
+];
 
 /// Built-in library `id`, made once.
 fn builtin_library(id: &str) -> Option<Arc<SymbolLibrary>> {
@@ -181,11 +190,35 @@ fn basic_shapes() -> SymbolLibrary {
         let id = doc.alloc_id();
         let art = Node::path(id, path, Appearance::basic(Paint::solid(fill), Paint::solid(edge), 1.0));
         let Ok((art, size, _)) = normalize(art) else { continue };
-        doc.symbols.push(Symbol { name: name.into(), art: Arc::new(art) });
+        doc.symbols.push(Symbol { dynamic: false, name: name.into(), art: Arc::new(art) });
         set_natural_size(&mut doc, name, Some(size));
     }
     doc.title = "Basic Shapes".into();
     SymbolLibrary { name: "Basic Shapes".into(), doc }
+}
+
+/// UI Frames: panel, button and bar HUD chrome with default 9-slice guides (original art).
+fn ui_frames() -> SymbolLibrary {
+    // Heights keep default 9-slice (0.25) past each corner radius so a vertical resize
+    // stretches only the flat middle, not the curves.
+    let frames = [
+        ("Panel", Rect::new(-48.0, -36.0, 48.0, 36.0), 10.0, "#2b3340", "#8aa0b8"),
+        ("Button", Rect::new(-36.0, -18.0, 36.0, 18.0), 8.0, "#3a6ea5", "#d7e6f5"),
+        ("Bar", Rect::new(-56.0, -24.0, 56.0, 24.0), 10.0, "#1f6b4a", "#b7e0c9"),
+    ];
+    let mut doc = Document::new(100.0, 100.0);
+    for (name, rect, radius, fill_hex, edge_hex) in frames {
+        let fill = Color::from_hex(fill_hex).unwrap_or(Color::BLACK);
+        let edge = Color::from_hex(edge_hex).unwrap_or(Color::BLACK);
+        let id = doc.alloc_id();
+        let art = Node::path(id, shapes::rounded_rectangle(rect, radius), Appearance::basic(Paint::solid(fill), Paint::solid(edge), 1.5));
+        let Ok((art, size, _)) = normalize(art) else { continue };
+        doc.symbols.push(Symbol { dynamic: false, name: name.into(), art: Arc::new(art) });
+        set_natural_size(&mut doc, name, Some(size));
+        doc.set_symbol_nine_slice(name, Some(SymbolNineSlice::default()));
+    }
+    doc.title = "UI Frames".into();
+    SymbolLibrary { name: "UI Frames".into(), doc }
 }
 
 /// An instance of symbol `name` (what the resource gathering follows).
@@ -343,4 +376,31 @@ fn load(s: &mut Session, p: &Value) -> Result<Value> {
         SymbolLibrary::from_document(&loaded.doc, &[], stem(file).to_string()).map_err(|e| bad(C, e))
     })?;
     Ok(json!({"library": info.id, "name": info.name, "count": lib.len()}))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A library made from thousands of symbols holds them all, once each, in the panel order of
+    /// the document they came from, a name given twice kept at its first place.
+    #[test]
+    fn many_symbols_keep_their_panel_order() {
+        let mut src = Document::new(100.0, 100.0);
+        let n = 4000;
+        // Names out of alphabetical order, so the order kept is the panel's.
+        src.symbols = (0..n)
+            .map(|i| Symbol { name: format!("s{}", (i * 7919) % n), art: Arc::new(Node::group(NodeId(i as u64 + 1), vec![])), dynamic: false })
+            .collect();
+        let lib = SymbolLibrary::from_document(&src, &[], "Many".into()).unwrap();
+        let names = |d: &Document| d.symbols.iter().map(|s| s.name.clone()).collect::<Vec<_>>();
+        assert_eq!(names(&lib.doc), names(&src));
+        let picked = ["s3".to_string(), "s1".to_string()];
+        let lib = SymbolLibrary::from_document(&src, &picked, "Two".into()).unwrap();
+        let order = |name: &str| src.symbols.iter().position(|s| s.name == name);
+        let mut want = vec!["s3", "s1"];
+        want.sort_by_key(|n| order(n));
+        assert_eq!(names(&lib.doc), want);
+        assert!(SymbolLibrary::from_document(&src, &["nope".to_string()], "None".into()).is_err());
+    }
 }

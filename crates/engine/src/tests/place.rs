@@ -378,6 +378,59 @@ fn a_linked_image_keeps_the_preview_made_when_its_file_was_read() {
     assert!(d.images["embedded"].proxy.is_none());
 }
 
+/// Keeping an image's pixels decodes nothing: a linked image read without a preview keeps none,
+/// and pixels already in the document take the preview the file was read with.
+#[test]
+fn keeping_an_image_decodes_nothing() {
+    let bytes = png(600, 300, [9, 9, 9, 255], None);
+    let mut d = vectorcraft_doc::Document::new(100.0, 100.0);
+    cmd::links::store_image(&mut d, "k", vectorcraft_doc::ImageBlob::new("image/png", bytes.clone()), true);
+    assert!(d.images["k"].proxy.is_none(), "no preview is made here");
+    let read = vectorcraft_doc::ImageBlob::new("image/png", bytes).with_proxy();
+    let made = read.proxy.clone().unwrap();
+    cmd::links::store_image(&mut d, "k", read, true);
+    assert!(d.images["k"].proxy.as_ref().is_some_and(|p| Arc::ptr_eq(p, &made)), "the preview it was read with");
+}
+
+/// `w`×`h` pixels of noise, which compress little, encoded as `format`.
+fn noise(w: u32, h: u32, format: image::ImageFormat) -> Vec<u8> {
+    let img = image::RgbImage::from_fn(w, h, |x, y| {
+        let v = x.wrapping_mul(2_654_435_761) ^ y.wrapping_mul(40_503).rotate_left(13);
+        image::Rgb([v as u8, (v >> 8) as u8, (v >> 16) as u8])
+    });
+    let mut out = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut out), format).unwrap();
+    out
+}
+
+/// A PNG cut to half its length, as a download or a sync still running leaves it, has a header
+/// but not all its pixels: placing it, embedded or linked, is an error and places nothing. A JPEG
+/// cut short still decodes, with its missing rows empty, and is placed.
+#[test]
+fn an_image_whose_pixels_cant_be_read_is_not_placed() {
+    let mut cut = noise(600, 300, image::ImageFormat::Png);
+    cut.truncate(cut.len() / 2);
+    let mut s = session();
+    let info = s.execute("file.place.info", &file("cut.png", &cut)).unwrap();
+    assert_eq!((info["pixelWidth"].as_u64(), info["pixelHeight"].as_u64()), (Some(600), Some(300)), "its header reads");
+    let dir = crate::tests_links::Folder::new("cut-png");
+    let path = dir.file("cut.png");
+    crate::tests_links::write(&path, &cut);
+    for p in [file("cut.png", &cut), json!({"path": path}), json!({"path": path, "link": false})] {
+        let (undo, journal) = (s.doc().unwrap().history.undo.len(), s.journal.len());
+        let e = s.execute("file.place", &p).unwrap_err();
+        assert_eq!(e.to_string(), "the image's pixels can't be read", "{p}");
+        assert!(s.prepare_place(&p).unwrap().read().is_err(), "{p}: read apart from the session");
+        assert!(top_children(&s).is_empty(), "{p}: nothing placed");
+        assert_eq!((s.doc().unwrap().history.undo.len(), s.journal.len()), (undo, journal), "{p}");
+    }
+    let mut jpeg = noise(600, 300, image::ImageFormat::Jpeg);
+    jpeg.truncate(jpeg.len() / 2);
+    let r = place(&mut s, "cut.jpg", &jpeg, json!({}));
+    assert_eq!(r["format"], "jpg");
+    assert_eq!(top_children(&s).len(), 1);
+}
+
 /// Type and a DXF drawing fitted to the artboard, read apart from the session while the artboard
 /// under `at` changes size, are placed against the artboard as it is when they are placed: as
 /// `file.place` places them after the change, which is what a replay of the journal does.
@@ -610,6 +663,98 @@ fn placed_art_brings_its_symbols_and_swatches_renaming_on_conflict() {
 }
 
 #[test]
+fn placed_art_brings_its_brushes_renaming_on_conflict() {
+    // The file: a path with its own brush, and one with a brush the defaults hold.
+    let mut src = session();
+    src.execute("brush.new", &json!({"type": "calligraphic", "name": "Nib", "params": {"angle": 20, "roundness": 30, "size": 8}})).unwrap();
+    src.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    src.execute("brush.apply", &json!({"name": "Nib"})).unwrap();
+    src.execute("shape.rectangle", &json!({"x": 50, "y": 10, "width": 20, "height": 20})).unwrap();
+    src.execute("brush.apply", &json!({"name": "Charcoal"})).unwrap();
+    let bytes = serialize(&mut src, "vectorcraft");
+    let brushes = |n: &Node| {
+        let mut names = vec![];
+        n.walk(&mut |c| names.extend(c.appearance.stroke().and_then(|st| st.brush.clone())));
+        names
+    };
+    // A document with a different "Nib".
+    let mut s = session();
+    s.execute("brush.new", &json!({"type": "calligraphic", "name": "Nib", "params": {"angle": 90, "roundness": 100, "size": 2}})).unwrap();
+    let before = s.execute("brush.list", &json!({})).unwrap()["brushes"].as_array().unwrap().len();
+    let r = place(&mut s, "art.vectorcraft", &bytes, json!({"crop": "bounding"}));
+    assert_eq!(brushes(&node(&s, &r["ids"][0])), ["Nib 2", "Charcoal"]);
+    assert_eq!(s.execute("brush.get", &json!({"name": "Nib"})).unwrap()["size"], json!(2.0), "its own stays");
+    assert_eq!(s.execute("brush.get", &json!({"name": "Nib 2"})).unwrap()["size"], json!(8.0));
+    assert_eq!(s.execute("brush.list", &json!({})).unwrap()["brushes"].as_array().unwrap().len(), before + 1, "the same Charcoal is shared");
+    // A document without it gets it as it is.
+    let mut fresh = session();
+    let r = place(&mut fresh, "art.vectorcraft", &bytes, json!({"crop": "bounding"}));
+    assert_eq!(brushes(&node(&fresh, &r["ids"][0])), ["Nib", "Charcoal"]);
+    assert_eq!(fresh.execute("brush.get", &json!({"name": "Nib"})).unwrap()["size"], json!(8.0));
+    // The name a conflict would take is not one the art already uses.
+    src.execute("brush.new", &json!({"type": "calligraphic", "name": "Nib 2", "params": {"angle": 40, "roundness": 50, "size": 5}})).unwrap();
+    src.execute("shape.rectangle", &json!({"x": 90, "y": 10, "width": 20, "height": 20})).unwrap();
+    src.execute("brush.apply", &json!({"name": "Nib 2"})).unwrap();
+    let bytes = serialize(&mut src, "vectorcraft");
+    let mut s = session();
+    s.execute("brush.new", &json!({"type": "calligraphic", "name": "Nib", "params": {"angle": 90, "roundness": 100, "size": 2}})).unwrap();
+    let r = place(&mut s, "art.vectorcraft", &bytes, json!({"crop": "bounding"}));
+    assert_eq!(brushes(&node(&s, &r["ids"][0])), ["Nib 3", "Charcoal", "Nib 2"]);
+    assert_eq!(s.execute("brush.get", &json!({"name": "Nib 3"})).unwrap()["size"], json!(8.0));
+    assert_eq!(s.execute("brush.get", &json!({"name": "Nib 2"})).unwrap()["size"], json!(5.0));
+}
+
+/// A placed brush whose art uses an image the document holds under the same key, with other pixels,
+/// isn't the document's brush of that name, though the two brushes read the same.
+#[test]
+fn a_placed_brush_whose_art_uses_a_renamed_image_is_copied() {
+    let file = |pixel: u8| {
+        let mut png = vec![];
+        image::GrayImage::from_pixel(2, 1, image::Luma([pixel])).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        let mut s = session();
+        s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+        s.edit("Brush", |d, _| {
+            d.images.insert("k".into(), vectorcraft_doc::ImageBlob { mime: "image/png".into(), bytes: Arc::new(png), proxy: None });
+            let im = vectorcraft_doc::ImageObject {
+                key: "k".into(),
+                width: 2,
+                height: 1,
+                xf: Default::default(),
+                link: None,
+                placement: Default::default(),
+                pixels: None,
+            };
+            let art = Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)));
+            let brush = vectorcraft_brush::Scatter { art, ..Default::default() };
+            vectorcraft_brush::store(d, &[vectorcraft_brush::Brush { name: "Speck".into(), kind: vectorcraft_brush::BrushKind::Scatter(brush) }]);
+            Ok(())
+        })
+        .unwrap();
+        s.execute("brush.apply", &json!({"name": "Speck"})).unwrap();
+        serialize(&mut s, "vectorcraft")
+    };
+    let mut s = session();
+    let first = place(&mut s, "one.vectorcraft", &file(0), json!({"crop": "bounding"}));
+    let second = place(&mut s, "two.vectorcraft", &file(255), json!({"crop": "bounding"}));
+    let brush_of = |r: &Value| {
+        let mut name = None;
+        node(&s, &r["ids"][0]).walk(&mut |c| name = name.take().or_else(|| c.appearance.stroke().and_then(|st| st.brush.clone())));
+        name
+    };
+    assert_eq!(brush_of(&first).as_deref(), Some("Speck"));
+    assert_eq!(brush_of(&second).as_deref(), Some("Speck 2"));
+    let doc = &s.doc().unwrap().doc;
+    let key = |name: &str| {
+        let Some(vectorcraft_brush::Brush { kind: vectorcraft_brush::BrushKind::Scatter(b), .. }) = vectorcraft_brush::find(doc, name) else {
+            panic!("{name}")
+        };
+        let NodeKind::Image(im) = &b.art.kind else { panic!("{name}: {:?}", b.art.kind_label()) };
+        im.key.clone()
+    };
+    assert_eq!((key("Speck"), key("Speck 2")), ("k".to_string(), "k 2".to_string()));
+}
+
+#[test]
 fn info_reports_size_resolution_colour_mode_and_link() {
     let mut s = session();
     let mut gray = vec![];
@@ -669,6 +814,39 @@ fn a_queue_of_3_with_click_drag_and_esc_places_2() {
     assert_eq!(s.doc().unwrap().history.undo.len(), 2, "one undo step per placement");
 }
 
+/// A place cursor loaded within automation roots places its files within them, even on a later
+/// click outside any roots (the person at the keyboard's): a queued file outside the roots, or
+/// one it links to, is not read then. One loaded outside any roots places as before.
+#[test]
+fn the_place_cursor_places_within_the_roots_it_was_loaded_in() {
+    let base = std::env::temp_dir().join(format!("vectorcraft-place-roots-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    std::fs::create_dir_all(base.join("in")).unwrap();
+    let outside = base.join("outside.png");
+    std::fs::write(&outside, png(40, 20, [9, 9, 9, 255], None)).unwrap();
+    let entry = json!({"params": {"path": outside.to_string_lossy()}, "name": "outside.png", "width": 40, "height": 20});
+    let roots = crate::file_access::AutomationRoots::new(&[&base.join("in")], &[]).unwrap().unwrap();
+    let view = ViewInfo::default();
+    let click = |s: &mut Session| {
+        s.pointer(&PointerEvent::new(PointerKind::Down, 10.0, 10.0), view)?;
+        s.pointer(&PointerEvent::new(PointerKind::Up, 10.0, 10.0), view)
+    };
+    let mut s = session();
+    s.select_tool("place", view).unwrap();
+    // Loaded within the roots (as a tool option, past the check tool.setOption makes of paths).
+    crate::file_access::confine(Some(&roots), || s.set_tool_option("queue", &json!({"entries": [entry]})));
+    assert!(s.place_queue_roots().is_some());
+    let placed = crate::file_access::unconfined(|| click(&mut s));
+    assert!(top_children(&s).is_empty(), "{placed:?}");
+    // Loaded outside any roots: the click places it.
+    s.select_tool("place", view).unwrap();
+    crate::file_access::unconfined(|| s.set_tool_option("queue", &json!({"entries": [entry]})));
+    assert!(s.place_queue_roots().is_none());
+    crate::file_access::unconfined(|| click(&mut s)).unwrap();
+    assert_eq!(top_children(&s).len(), 1);
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// With [`Session::place_cursor_requests`] set, a click of the place cursor asks the frontend to
 /// place its file ([`UiRequest::Place`]) and places nothing itself; the params it asks with place
 /// the file as the click places it without the flag.
@@ -722,6 +900,36 @@ fn files_read_for_the_place_cursor_apart_from_the_session_load_it_as_file_place_
     let read = c.prepare_place_queue(&none).unwrap().read().unwrap();
     assert!(c.place_queue_read(read).unwrap_err().to_string().contains("not a format"));
     assert_eq!(c.tool_id(), "selection");
+}
+
+/// A file whose pixels `file.place` can't read (a PNG cut short) is skipped by the place cursor's
+/// queue, read with the session or apart from it.
+#[test]
+fn the_place_queue_skips_an_image_whose_pixels_cant_be_read() {
+    let mut cut = noise(600, 300, image::ImageFormat::Png);
+    cut.truncate(cut.len() / 2);
+    let p = json!({"files": [file("a.png", &png(40, 20, [9, 9, 9, 255], None)), file("cut.png", &cut)], "link": false});
+    let (mut a, mut b) = (session(), session());
+    let r = a.execute("file.place.queue", &p).unwrap();
+    assert_eq!(r["count"], 1);
+    assert_eq!(r["skipped"], json!([{"name": "cut.png", "error": "the image's pixels can't be read"}]));
+    let read = b.prepare_place_queue(&p).unwrap().read().unwrap();
+    assert_eq!(b.place_queue_read(read).unwrap(), r);
+}
+
+/// The place queue's thumbnail of an image is drawn from the pixels its check decoded, so each
+/// image is decoded once.
+#[test]
+fn the_place_queue_draws_a_thumbnail_without_decoding_the_image_again() {
+    // Pixels no other test uses, since every test shares the image store.
+    let img = image::RgbImage::from_fn(320, 160, |x, y| image::Rgb([(x % 251) as u8, 23, (y % 241) as u8]));
+    let mut bytes = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut bytes), image::ImageFormat::Png).unwrap();
+    let p = json!({"files": [file("q.png", &bytes)], "link": false, "thumbnail": 64});
+    let decodes = vectorcraft_render::image_decodes();
+    let r = session().execute("file.place.queue", &p).unwrap();
+    assert!(r["files"][0]["thumbnailBase64"].as_str().is_some_and(|t| !t.is_empty()), "{r}");
+    assert_eq!(vectorcraft_render::image_decodes(), decodes, "the thumbnail is drawn without a decode");
 }
 
 #[test]

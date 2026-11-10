@@ -19,9 +19,11 @@ pub mod embed;
 mod features;
 mod fontconfig;
 mod fontdb;
+mod harakat;
 pub mod hyphen;
 mod justify;
 mod kashida;
+mod kept;
 mod layout;
 mod shape;
 #[cfg(not(target_arch = "wasm32"))]
@@ -33,21 +35,23 @@ pub mod thread;
 
 pub use bitmap::GlyphImage;
 pub use craft_fonts::{CRAFT_FONTS, CraftFont, WEB_FONTS, WebFont};
-pub use features::{EXTRA_FEATURES, LIGATURE_TRACKING_LIMITS, OtFeatures, explicit_ligatures, ligatures_suppressed_by};
+pub use features::{EXTRA_FEATURES, LIGATURE_TRACKING_LIMITS, MAX_STYLE_FEATURES, OtFeatures, explicit_ligatures, ligatures_suppressed_by};
 pub use fontdb::{
-    FALLBACK_FAMILY, FontClass, FontDb, FontFace, FontMatch, FontTraits, IcfMargins, PlatformFontFiles, WantedFont, WantedFonts, app_font_dir,
-    is_font_file, is_suitcase, set_app_font_dir, set_platform_font_files, set_user_font_dirs, set_user_font_dirs_confined, style_weight,
-    system_font_dirs, user_font_dirs,
+    CompositeCoverage, FALLBACK_FAMILY, FontClass, FontDb, FontFace, FontMatch, FontTraits, GlyphAlternate, IcfMargins, LentCompositeFonts,
+    PlatformFontFiles, StylisticSet, WantedFont, WantedFonts, app_font_dir, is_font_file, is_suitcase, set_app_font_dir, set_platform_font_files,
+    set_user_font_dirs, set_user_font_dirs_confined, style_weight, system_font_dirs, user_font_dirs,
 };
 pub use hyphen::{hyphenation_exceptions, set_hyphenation_exceptions};
+pub use layout::{envelope_ink, register_envelope_ink};
 use std::sync::Arc;
 pub use svg_glyph::{SvgGlyphReader, set_svg_glyph_reader};
 
-use kurbo::{Affine, BezPath, Point, Rect, Vec2};
-pub use layout::{decorations, fit_first_line, layout, layout_with, scaled};
+pub use kept::{KeptLayoutsFrame, LayoutStamp, keep_layout, take_kept_layout};
+use kurbo::{Affine, BezPath, Point, Rect, Shape, Vec2};
+pub use layout::{decorations, fit_first_line, fit_source_lines, layout, layout_with, scaled};
 pub use vectorcraft_doc::TextObject;
 
-pub use vectorcraft_doc::{AreaFit, FirstBaseline, VerticalAlign};
+pub use vectorcraft_doc::{AreaFit, FirstBaseline, TextFlow, VerticalAlign};
 
 /// Paragraph composer; stored per text object in [`vectorcraft_doc::ParaStyle::composer`].
 pub use vectorcraft_doc::Composer;
@@ -56,12 +60,15 @@ pub use vectorcraft_doc::Composer;
 /// composer, OpenType features). [`layout`] takes rows/columns/inset/first baseline from the object.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LayoutOptions {
-    /// Area type rows and columns (text flows down each column, then across). Layout clamps each
+    /// Area type rows and columns (text fills them in [`LayoutOptions::flow`] order). Layout clamps each
     /// count to 1..=[`vectorcraft_doc::AreaOptions::MAX_ROWS_COLUMNS`].
     pub rows: usize,
     pub columns: usize,
     /// Gutter between rows/columns in points.
     pub gutter: f64,
+    /// Gutter between rows in points when it differs from [`LayoutOptions::gutter`], which is then
+    /// the gutter between columns.
+    pub row_gutter: Option<f64>,
     /// Inset from the frame edges in points.
     pub inset: f64,
     pub first_baseline: FirstBaseline,
@@ -69,6 +76,8 @@ pub struct LayoutOptions {
     pub first_baseline_min: f64,
     /// Vertical alignment of the lines in each row/column (Area Type Options "Align").
     pub vertical_align: VerticalAlign,
+    /// Area Type Options "Text Flow": by columns (down each column, then across) or by rows.
+    pub flow: TextFlow,
     /// Area type only: Shrink Text to Fit scales overflowing text down at layout time (see
     /// [`TextLayout::fit_scale`]); the other fits are the engine's business and lay out as `None`.
     pub fit: AreaFit,
@@ -83,10 +92,12 @@ impl Default for LayoutOptions {
             rows: 1,
             columns: 1,
             gutter: 18.0,
+            row_gutter: None,
             inset: 0.0,
             first_baseline: FirstBaseline::Ascent,
             first_baseline_min: 0.0,
             vertical_align: VerticalAlign::Top,
+            flow: TextFlow::Columns,
             fit: AreaFit::None,
             composer: None,
             features: OtFeatures::default(),
@@ -136,6 +147,33 @@ pub struct PositionedGlyph {
     /// the path ([`GlyphBend`]) so it meets its neighbours, and `xf` is only the straight glyph
     /// nearest it (for the caret, hit testing and tools). `None`: the glyph is drawn through `xf`.
     pub bend: Option<GlyphBend>,
+    /// Font units → font units: `xf * unturned` places the glyph as it would be placed without
+    /// its Character Rotation. The identity for a glyph without one.
+    pub unturned: Affine,
+    /// Font units: `xf * pivot` is the point its Character Rotation turns it about, its pen
+    /// position after composition spacing adjustments, moved by its baseline shift.
+    pub pivot: Point,
+    /// A ligature (one glyph that alone stands for several characters, grapheme clusters, of the
+    /// text): the caret stop between each two of them, in logical order, as the byte offset of the
+    /// later character and how far the caret stands along the glyph's own width ([`Self::width`])
+    /// from its logical leading edge, 0 to 1. The font's ligature carets
+    /// ([`FontFace::ligature_carets`], or [`FontFace::vertical_ligature_carets`] for a glyph
+    /// standing upright in vertical type) when it lists one for each stop, else the width divided
+    /// equally among the characters. Empty for any other glyph.
+    pub carets: Vec<(usize, f64)>,
+    /// The glyph's own width along its advance in text space: its font advance at its size,
+    /// Horizontal Scale and glyph scaling, without the tracking, kerning, justification space and
+    /// kashida that [`Self::advance`] includes after it (to its right in horizontal type). The
+    /// advance itself in vertical type.
+    pub width: f64,
+    /// How far right of the left end of its advance the glyph's own width ([`Self::width`]) starts,
+    /// in text space: the font's placement of the glyph (`GPOS` x placement), less a leading space
+    /// taken off, plus the manual kerning of right-to-left text, which moves the glyph right so that
+    /// the space it adds lies on the glyph's left. 0 for a glyph standing upright or set across the
+    /// column in vertical type, and for an inline graphic. An upright glyph in vertical type on a
+    /// path stands with its top toward the path's start, and its cell starts at its top: 0.12 em
+    /// before the pen without the font's vertical metrics.
+    pub width_start: f64,
 }
 
 /// How a glyph on a path is bent along it: a point of its pen space (x along its advance from its
@@ -154,6 +192,57 @@ pub struct GlyphBend {
 }
 
 impl PositionedGlyph {
+    /// The glyph's caret stops in logical order: its first byte, its ligature carets
+    /// ([`Self::carets`]) and its end, each with how far along its own width ([`Self::width`]) from
+    /// its logical leading edge the caret stands, 0 to 1.
+    fn width_stops(&self) -> impl Iterator<Item = (usize, f64)> + '_ {
+        std::iter::once((self.byte, 0.0)).chain(self.carets.iter().copied()).chain(std::iter::once((self.byte + self.len, 1.0)))
+    }
+    /// The glyph's caret stops in logical order, each with its distance in text space from the
+    /// logical leading edge of a span `extent` long that holds the glyph (its advance, or its
+    /// cluster's): 0 at its first byte and `extent` at its end. A ligature caret stands at its place
+    /// in the glyph's own width ([`Self::width`]), which starts [`Self::width_start`] right of the
+    /// glyph's left edge; the rest of the space the advance adds lies to the right of that width,
+    /// after the last ligature caret left to right, and before the first one right to left.
+    /// Negative kerning or tracking makes the advance shorter than the width, or zero or negative,
+    /// and a ligature caret then stands past the end of the advance.
+    fn stops_along(&self, extent: f64) -> impl Iterator<Item = (usize, f64)> + '_ {
+        let (width, start) = if self.width > 0.0 && self.width.is_finite() {
+            (self.width, if self.width_start.is_finite() { self.width_start } else { 0.0 })
+        } else {
+            (extent, 0.0)
+        };
+        let ends = (self.byte, self.byte + self.len);
+        self.width_stops().map(move |(b, f)| {
+            if b == ends.0 {
+                (b, 0.0)
+            } else if b == ends.1 {
+                (b, extent)
+            } else if self.rtl {
+                (b, extent - start - (1.0 - f) * width)
+            } else {
+                (b, start + f * width)
+            }
+        })
+    }
+    /// The distance in text space from the logical leading edge of a span `extent` long that holds
+    /// the glyph (its advance, or its cluster's) to the caret for byte `byte`: 0 at its first byte,
+    /// `extent` at its end, a ligature caret's place at that caret's byte ([`Self::stops_along`],
+    /// which can lie outside 0 to `extent`), and in proportion to the bytes between two stops.
+    pub fn caret_offset(&self, byte: usize, extent: f64) -> f64 {
+        if byte <= self.byte || self.len == 0 {
+            return 0.0;
+        }
+        let mut from = (self.byte, 0.0);
+        for (b, d) in self.stops_along(extent).skip(1) {
+            if byte <= b {
+                let span = b.saturating_sub(from.0).max(1) as f64;
+                return from.1 + (d - from.1) * (byte - from.0) as f64 / span;
+            }
+            from = (b, d);
+        }
+        extent
+    }
     /// The glyph's colour bitmap, and the transform from its pixels to text space.
     pub fn placed_image(&self) -> Option<(&Arc<GlyphImage>, Affine)> {
         self.image.as_ref().map(|i| (i, self.xf * i.xf))
@@ -243,7 +332,8 @@ pub struct ListMarker {
     /// takes the text to the next tab stop.
     pub glyphs: std::ops::Range<usize>,
     /// The tab's glyph, which draws nothing: the last of [`Self::glyphs`], or the first in a
-    /// right-to-left paragraph.
+    /// right-to-left paragraph. A marker aligned right
+    /// ([`vectorcraft_doc::text::ListAlign::Right`]) has it the other way round.
     pub tab: usize,
     /// The marker's characters ("•").
     pub text: String,
@@ -338,6 +428,35 @@ impl TextLayout {
         };
         self.lines.iter().filter(|l| l.x1 > l.x0).map(line).collect()
     }
+    /// The ink of the type in text space: its glyphs (and ruby) as drawn, colour glyphs, images and
+    /// inline graphics included, without the lines' em boxes that [`Self::bounds`] also covers.
+    /// What Align to Glyph Bounds aligns. `None` when nothing draws (only spaces, or no text).
+    pub fn ink_bounds(&self) -> Option<Rect> {
+        let outlined = |g: &PositionedGlyph| (!g.outline.elements().is_empty()).then(|| g.outline.bounding_box());
+        let glyphs = self.glyphs.iter().flat_map(|g| {
+            let image = g.placed_image().map(|(image, xf)| xf.transform_rect_bbox(image.rect()));
+            let colour = g.colour.as_ref().and_then(|c| c.geometric_bounds()).map(|b| g.xf.transform_rect_bbox(b));
+            [outlined(g), image, colour]
+        });
+        // Ruby is covered by its line's ascent, but its ink can overhang sideways past the line.
+        let ruby = self.ruby.iter().map(outlined);
+        let inlines = self.inlines.iter().map(|i| Some(i.bounds));
+        glyphs.chain(ruby).chain(inlines).flatten().reduce(|a, b| a.union(b))
+    }
+    /// The box of [`Self::ink_bounds`]' ink with text space mapped by `m`: the glyph and ruby
+    /// outlines are mapped point by point, so a rotated or sheared `m` gives the outlines' own
+    /// bounds. Images, color glyphs and inline graphics count by their mapped boxes.
+    pub fn ink_bounds_in(&self, m: Affine) -> Option<Rect> {
+        let outlined = |g: &PositionedGlyph| (!g.outline.elements().is_empty()).then(|| (m * &g.outline).bounding_box());
+        let glyphs = self.glyphs.iter().flat_map(|g| {
+            let image = g.placed_image().map(|(image, xf)| (m * xf).transform_rect_bbox(image.rect()));
+            let colour = g.colour.as_ref().and_then(|c| c.geometric_bounds()).map(|b| (m * g.xf).transform_rect_bbox(b));
+            [outlined(g), image, colour]
+        });
+        let ruby = self.ruby.iter().map(outlined);
+        let inlines = self.inlines.iter().map(|i| Some(m.transform_rect_bbox(i.bounds)));
+        glyphs.chain(ruby).chain(inlines).flatten().reduce(|a, b| a.union(b))
+    }
     /// All glyph outlines combined (e.g. for Create Outlines).
     pub fn to_bezpath(&self) -> BezPath {
         let mut p = BezPath::new();
@@ -408,7 +527,8 @@ fn cluster_extent(layout: &TextLayout, glyphs: &[PositionedGlyph], i: usize) -> 
 }
 
 /// Caret for byte offset `byte`, as a (top, bottom) segment in text space. In horizontal type, a
-/// cluster drawn with several glyphs is measured whole ([`cluster_extent`]).
+/// cluster drawn with several glyphs is measured whole ([`cluster_extent`]). Inside a ligature the
+/// caret stands at its caret stops ([`PositionedGlyph::carets`]).
 pub fn caret_position(layout: &TextLayout, byte: usize) -> (Point, Point) {
     let Some(line) = layout.lines.get(layout.line_of(byte)) else {
         return (Point::ZERO, Point::ZERO);
@@ -416,12 +536,12 @@ pub fn caret_position(layout: &TextLayout, byte: usize) -> (Point, Point) {
     let glyphs = &layout.glyphs[line.glyph_start..line.glyph_end];
     let (pos, angle) = if let Some(i) = glyphs.iter().position(|g| g.byte <= byte && g.byte + g.len > byte) {
         let g = &glyphs[i];
-        let frac = if byte <= g.byte { 0.0 } else { (byte - g.byte) as f64 / g.len.max(1) as f64 };
         let (origin, advance) = match cluster_extent(layout, glyphs, i) {
             Some((left, right)) => (Point::new(left, g.origin.y), right - left),
             None => (g.origin, g.advance),
         };
-        (origin + dir(g.angle) * (advance * if g.rtl { 1.0 - frac } else { frac }), g.angle)
+        let off = g.caret_offset(byte, advance);
+        (origin + dir(g.angle) * if g.rtl { advance - off } else { off }, g.angle)
     } else if let Some(g) = glyphs.iter().max_by_key(|g| g.byte + g.len) {
         (g.origin + dir(g.angle) * if g.rtl { 0.0 } else { g.advance }, g.angle)
     } else {
@@ -436,11 +556,16 @@ pub fn caret_position(layout: &TextLayout, byte: usize) -> (Point, Point) {
 /// Byte offset nearest to the text-space point `p` (for clicking/dragging with the Type tool).
 pub fn hit_byte(layout: &TextLayout, p: Point) -> usize {
     if layout.on_path {
-        let best = layout.glyphs.iter().enumerate().min_by(|(_, a), (_, b)| {
-            let ca = a.origin + dir(a.angle) * (a.advance * 0.5);
-            let cb = b.origin + dir(b.angle) * (b.advance * 0.5);
-            (p - ca).hypot2().total_cmp(&(p - cb).hypot2())
-        });
+        // The distance from `p` to a glyph's middle, or to one of its inner ligature caret stops
+        // when that is nearer (a stop can lie past the glyph's advance).
+        let near = |g: &PositionedGlyph| {
+            let along = dir(g.angle);
+            let mid = (p - (g.origin + along * (g.advance * 0.5))).hypot2();
+            (g.stops_along(g.advance).filter(|(b, _)| *b != g.byte && *b != g.byte + g.len))
+                .map(|(_, d)| (p - (g.origin + along * if g.rtl { g.advance - d } else { d })).hypot2())
+                .fold(mid, f64::min)
+        };
+        let best = layout.glyphs.iter().enumerate().min_by(|(_, a), (_, b)| near(a).total_cmp(&near(b)));
         let Some((i, g)) = best else { return layout.lines.first().map_or(0, |l| l.start) };
         // `first` and `last` are the first and last glyphs of the cluster. A click before the middle of
         // the cluster, measured along the first glyph's direction, goes to the cluster's start.
@@ -448,6 +573,14 @@ pub fn hit_byte(layout: &TextLayout, p: Point) -> usize {
         let first = layout.glyphs[..=i].iter().rev().take_while(same).last().unwrap_or(g);
         let last = layout.glyphs[i..].iter().take_while(same).last().unwrap_or(g);
         let along = dir(first.angle);
+        if !g.carets.is_empty() {
+            // A ligature: the nearest of its caret stops, measured along it from its logical
+            // leading edge in text space, within the span its stops cover.
+            let (lo, hi) = g.stops_along(g.advance).fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), (_, d)| (lo.min(d), hi.max(d)));
+            let t = (p - g.origin).dot(along);
+            let at = (if g.rtl { g.advance - t } else { t }).max(lo).min(hi);
+            return g.stops_along(g.advance).min_by(|a, b| (a.1 - at).abs().total_cmp(&(b.1 - at).abs())).map_or(g.byte, |s| s.0);
+        }
         let span = (last.origin + dir(last.angle) * last.advance - first.origin).dot(along);
         return if ((p - first.origin).dot(along) < span * 0.5) != g.rtl { g.byte } else { g.byte + g.len };
     }
@@ -489,7 +622,8 @@ pub fn byte_in_line(layout: &TextLayout, li: usize, x: f64) -> usize {
     // a consonant and its reph) has one caret stop at each end of its glyphs taken together. The
     // tatweels of a kashida have no source length or advance and come after the glyphs of the
     // letter after the kashida in the text; they belong to that letter's cluster. A list marker's
-    // glyphs (no source length, an advance) are a cluster of their own.
+    // glyphs (no source length, an advance) are a cluster of their own. A ligature also has a stop
+    // at each of its caret stops.
     let mut clusters: Vec<(f64, f64, &PositionedGlyph)> = Vec::with_capacity(glyphs.len());
     for g in glyphs {
         let left = layout.logical_point(g.origin).x;
@@ -501,7 +635,7 @@ pub fn byte_in_line(layout: &TextLayout, li: usize, x: f64) -> usize {
     }
     let nearest = clusters
         .iter()
-        .flat_map(|&(left, right, g)| if g.rtl { [(right, g.byte), (left, g.byte + g.len)] } else { [(left, g.byte), (right, g.byte + g.len)] })
+        .flat_map(|&(left, right, g)| g.stops_along(right - left).map(move |(b, d)| (if g.rtl { right - d } else { left + d }, b)))
         .min_by(|a, b| (a.0 - x).abs().total_cmp(&(b.0 - x).abs()));
     nearest.map_or(line.start, |(_, byte)| byte)
 }
@@ -534,9 +668,9 @@ fn x_in_line(layout: &TextLayout, li: usize, byte: usize) -> f64 {
     let glyphs = &layout.glyphs[line.glyph_start..line.glyph_end];
     if let Some(i) = glyphs.iter().position(|g| g.byte <= byte && g.byte + g.len > byte) {
         let g = &glyphs[i];
-        let frac = if byte <= g.byte { 0.0 } else { (byte - g.byte) as f64 / g.len.max(1) as f64 };
         let (left, advance) = cluster_extent(layout, glyphs, i).map_or((layout.logical_point(g.origin).x, g.advance), |(l, r)| (l, r - l));
-        return left + advance * if g.rtl { 1.0 - frac } else { frac };
+        let off = g.caret_offset(byte, advance);
+        return left + if g.rtl { advance - off } else { off };
     }
     glyphs.iter().max_by_key(|g| g.byte + g.len).map_or(line.x0, |g| layout.logical_point(g.origin).x + if g.rtl { 0.0 } else { g.advance })
 }
@@ -564,13 +698,25 @@ pub fn selection_quads(layout: &TextLayout, a: usize, b: usize) -> Vec<[Point; 4
     if a == b {
         return out;
     }
+    // The part of glyph `g` that the selection covers, as distances in text space from its left
+    // (its start along a path), the smaller first: all of its advance, or the characters of a
+    // ligature that are selected. A ligature caret past a shortened advance lies outside it.
+    let covered = |g: &PositionedGlyph| {
+        if g.len == 0 {
+            return (g.advance.min(0.0), g.advance.max(0.0));
+        }
+        let (fa, fb) = (g.caret_offset(a.max(g.byte), g.advance), g.caret_offset(b.min(g.byte + g.len), g.advance));
+        let (f0, f1) = if g.rtl { (g.advance - fb, g.advance - fa) } else { (fa, fb) };
+        (f0.min(f1), f0.max(f1))
+    };
     if layout.on_path {
         // A list marker's glyphs stand for no characters.
-        for g in layout.glyphs.iter().filter(|g| g.byte >= a && g.byte < b && g.len > 0) {
+        for g in layout.glyphs.iter().filter(|g| g.byte < b && g.byte + g.len > a && g.len > 0) {
             let li = &layout.lines[0];
             let d = dir(g.angle);
             let up = Vec2::new(d.y, -d.x);
-            let (p0, p1) = (g.origin, g.origin + d * g.advance);
+            let (f0, f1) = covered(g);
+            let (p0, p1) = (g.origin + d * f0, g.origin + d * f1);
             out.push([p0 + up * li.ascent, p1 + up * li.ascent, p1 - up * li.descent, p0 - up * li.descent]);
         }
         return out;
@@ -581,7 +727,8 @@ pub fn selection_quads(layout: &TextLayout, a: usize, b: usize) -> Vec<[Point; 4
         for (_, g) in glyphs {
             let Some(l) = layout.lines.get(g.line) else { continue };
             let p = layout.logical_point(g.origin);
-            let (x0, x1) = (p.x, p.x + g.advance);
+            let (f0, f1) = covered(g);
+            let (x0, x1) = (p.x + f0, p.x + f1);
             out.push(
                 [
                     Point::new(x0, l.baseline - l.ascent),
@@ -608,6 +755,8 @@ pub fn selection_quads(layout: &TextLayout, a: usize, b: usize) -> Vec<[Point; 4
             let last = layout.glyphs[l.glyph_start..l.glyph_end].last().map_or(l.x1, |g| layout.logical_point(g.origin).x + g.advance);
             xb = last.max(l.x1) + (l.ascent + l.descent) * 0.25;
         }
+        // A ligature caret past the ligature's shortened advance stands right of the glyph's end.
+        let (xa, xb) = (xa.min(xb), xa.max(xb));
         if xb - xa <= 1e-9 {
             continue;
         }
@@ -650,7 +799,7 @@ fn caret_horizontal_filtered(layout: &TextLayout, byte: usize, right: bool, vali
         (layout.logical_point(caret_position(layout, b).0).x, if rtl { -(b as f64) } else { b as f64 })
     };
     let (x, order) = stop(byte);
-    let mut stops: Vec<_> = glyphs.iter().flat_map(|g| [g.byte, g.byte + g.len]).collect();
+    let mut stops: Vec<_> = glyphs.iter().flat_map(|g| g.width_stops().map(|(b, _)| b)).collect();
     stops.sort_unstable();
     stops.dedup();
     stops
@@ -683,6 +832,12 @@ pub fn paragraph_is_rtl(text: &str, direction: Option<vectorcraft_doc::ParaDirec
     layout::is_rtl(layout::para_bidi(text, direction).as_ref())
 }
 
+/// Is the character at byte `at` of paragraph `text` set right to left: its bidi level is odd, with
+/// the paragraph's `direction` (None: from its first strong character)?
+pub fn char_is_rtl(text: &str, direction: Option<vectorcraft_doc::ParaDirection>, at: usize) -> bool {
+    layout::para_bidi(text, direction).is_some_and(|info| info.levels.get(at).is_some_and(|level| level.is_rtl()))
+}
+
 /// Text stored in visual order (as PDF content draws it, each glyph where it is drawn), back in
 /// logical order: the order of its characters (indices into `visual.chars()`) and whether its
 /// paragraph runs right to left; laid out that way, it reads as drawn. `None` when nothing in it is
@@ -694,6 +849,16 @@ pub fn logical_order(visual: &str) -> Option<(Vec<usize>, bool)> {
     // of the visual text is its logical order.
     let levels = bidi.reordered_levels_per_char(para, para.range.clone());
     Some((unicode_bidi::BidiInfo::reorder_visual(&levels), para.level.is_rtl()))
+}
+
+/// Line metrics of the font at `index` of `data`, at its default axis settings, in font units:
+/// (units per em, ascent, descent (negative below the baseline), line gap). egui builds its text
+/// rows from these values. `None` if the font can't be read.
+pub fn line_metrics(data: &[u8], index: u32) -> Option<(f32, f32, f32, f32)> {
+    use skrifa::MetadataProvider;
+    let f = skrifa::FontRef::from_index(data, index).ok()?;
+    let m = f.metrics(skrifa::instance::Size::unscaled(), skrifa::instance::LocationRef::default());
+    Some((f32::from(m.units_per_em.max(1)), m.ascent, m.descent, m.leading))
 }
 
 #[cfg(test)]

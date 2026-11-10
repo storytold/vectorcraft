@@ -27,6 +27,7 @@ use crate::catalog::{self, FeatureId};
 use crate::directives;
 use crate::lex::{Lexer, T, Token, expr_after};
 use crate::report::{self, Acc, OutsideId};
+use sig::{COMPOUND, LineBreaks, NEWER, Read, Sig, ends_value, for_in, goes_on_after, goes_on_with, is, member_mark, newer_number, unquote, word};
 
 mod declared;
 mod features;
@@ -34,7 +35,6 @@ mod sig;
 
 pub(crate) use declared::{Declared, declarations};
 use features::platform_name;
-use sig::*;
 
 /// An `#include` line: what it names, its line, and the folders `#includepath` named at that point
 /// (one list, shared by every line it applies to).

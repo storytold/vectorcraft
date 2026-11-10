@@ -1,6 +1,6 @@
 use super::char_style::CharStyle;
 use super::tabs_lists::{ParaList, TabStop};
-use super::*;
+use super::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Justify {
@@ -228,11 +228,15 @@ pub struct ParaStyle {
     pub leading_model: LeadingModel,
     /// Hanging punctuation (Paragraph panel menu › Burasagari): a comma or full stop ending a line
     /// may stand outside the frame. New type takes [`Burasagari::Standard`]; documents from before
-    /// it and imported text keep [`Burasagari::None`].
+    /// it and imported text keep [`Burasagari::None`], except legacy `.ai` type with binding
+    /// punctuation on, which opens with [`Burasagari::Forced`].
     pub burasagari: Burasagari,
     /// Kinsoku (Paragraph panel › Kinsoku Set): which Japanese characters may not start or end a
     /// line.
     pub kinsoku: Kinsoku,
+    /// Kinsoku Shori Type (Paragraph panel menu): how a line keeps those characters off its start
+    /// and end, by pushing them in onto the line or out to the next one. No effect without kinsoku.
+    pub kinsoku_type: KinsokuShoriType,
     /// Roman Hanging Punctuation (Paragraph panel menu): quotation marks, hyphens, full stops and
     /// commas starting or ending a line hang outside the margin, and asterisks, tildes, ellipses,
     /// dashes, colons and semicolons hang by half. East Asian punctuation hangs by burasagari.
@@ -255,6 +259,12 @@ impl ParaStyle {
         for t in &mut self.tabs {
             t.position = within(t.position, 0.0, 100_000.0);
         }
+    }
+
+    /// The left indent the layout sets the paragraph at: its left indent, and for a paragraph in a
+    /// list at a level past the first, [`ParaList::level_indent`] more.
+    pub fn laid_out_left_indent(&self) -> f64 {
+        self.left_indent + self.list.map_or(0.0, |l| l.level_indent())
     }
 
     /// The leading of characters styled `st` in this paragraph, as the layout sets it: their own
@@ -315,6 +325,8 @@ struct ParaStyleFile {
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     kinsoku: Kinsoku,
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    kinsoku_type: KinsokuShoriType,
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     roman_hanging: bool,
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     kashida: Kashida,
@@ -346,6 +358,7 @@ impl From<ParaStyle> for ParaStyleFile {
             leading_model,
             burasagari,
             kinsoku,
+            kinsoku_type,
             roman_hanging,
             kashida,
             ..
@@ -370,6 +383,7 @@ impl From<ParaStyle> for ParaStyleFile {
             leading_model,
             burasagari,
             kinsoku,
+            kinsoku_type,
             roman_hanging,
             kashida,
         }
@@ -398,6 +412,7 @@ impl From<ParaStyleFile> for ParaStyle {
             leading_model,
             burasagari,
             kinsoku,
+            kinsoku_type,
             roman_hanging,
             kashida,
             ..
@@ -421,6 +436,7 @@ impl From<ParaStyleFile> for ParaStyle {
             leading_model,
             burasagari,
             kinsoku,
+            kinsoku_type,
             roman_hanging,
             kashida,
         }
@@ -483,6 +499,25 @@ pub enum Kinsoku {
     /// As Hard, except that 々, the prolonged sound mark ー and small kana may start a line
     /// (JLREQ's level 3 line-breaking rules, Appendix C.3).
     Soft,
+}
+
+/// How a line keeps the characters [`Kinsoku`] rules out of its start and end (Kinsoku Shori
+/// Type). Pushing in sets the characters that would start the next line (or that an opening
+/// bracket ending this line would pull with it) on this line, with the line's gaps next to CJK
+/// characters closed to make room, each by the same share of the em of the character before it
+/// and by at most a tenth of that em; pushing out moves the character before them to the next
+/// line.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum KinsokuShoriType {
+    /// Push in when the line can close up enough, else push out.
+    PushInFirst,
+    /// Push out, unless that would leave the line more than an em short (of the character before
+    /// the break): then push in when the line can close up enough.
+    PushOutFirst,
+    /// Always push out; never push in.
+    #[default]
+    PushOutOnly,
 }
 
 /// Hanging punctuation (burasagari): an East Asian comma or full stop ending a line (、。，．､｡)

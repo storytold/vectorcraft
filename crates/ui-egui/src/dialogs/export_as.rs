@@ -28,7 +28,7 @@ const UNAVAILABLE: [(&str, &str); 1] = [("dwg", "DWG (use DXF)")];
 
 /// The formats Export As writes: the built-in ones, then those of the installed exporter plug-ins.
 pub(super) fn formats() -> Vec<&'static Format> {
-    BUILT_IN.iter().copied().chain(fileio::plugin_formats()).collect()
+    BUILT_IN.iter().copied().chain(fileio::plugin_formats().into_iter().filter(|f| f.write)).collect()
 }
 
 /// Is `f` an exporter plug-in's format?
@@ -103,7 +103,7 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                 d.fields.insert("all".into(), json!(all));
             }
             let mut range = d.str("range");
-            if ui.add_enabled(!all, egui::TextEdit::singleline(&mut range).desired_width(90.0)).changed() {
+            if ui.add_enabled(!all, egui::TextEdit::singleline(&mut range).align(egui::Align2::LEFT_CENTER).desired_width(90.0)).changed() {
                 d.fields.insert("range".into(), json!(range));
             }
         });

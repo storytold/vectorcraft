@@ -1,6 +1,6 @@
 use super::kind::NodeKind;
 use super::live_shape::LiveShape;
-use super::*;
+use super::{Deserialize, Node, Serialize};
 
 /// Window → Attributes: an object's settings that don't change how it prints.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -27,6 +27,10 @@ pub struct ObjectAttributes {
     /// the element's event attributes; nothing in VectorCraft runs them.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub events: Vec<(String, String)>,
+    /// The CSS classes the object had in an imported SVG, written back to `class` on export
+    /// (beside the generated `cls-N` classes).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub classes: Vec<String>,
     /// Attributes in other applications' XML namespaces, in order, kept from SVG import to SVG
     /// export: what another tool notes on an object (a plotter's pen, a cutter's passes) survives
     /// a round trip through VectorCraft. Nothing in VectorCraft reads them. They are the object's,

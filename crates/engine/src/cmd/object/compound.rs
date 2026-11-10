@@ -1,4 +1,10 @@
-use super::*;
+use super::{
+    Appearance, Arc, Document, EngineError, FillRule, Node, NodeId, NodeKind, Paint, PathData, Result, Session, Value, json, ok, selected_roots,
+};
+
+/// A closed contour smaller than this (in square document units) has no usable winding direction,
+/// so Make Compound Path leaves its orientation alone rather than flipping it on noise.
+const MIN_WINDING_AREA: f64 = 1e-6;
 
 pub(super) fn compound_make(s: &mut Session, _: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
@@ -7,11 +13,15 @@ pub(super) fn compound_make(s: &mut Session, _: &Value) -> Result<Value> {
         d.node(backmost).ok_or(EngineError::NoNode(backmost))?;
         let mut units: Vec<Vec<Arc<Node>>> = vec![];
         let mut appearance = None;
+        // The compound path is pixel-aligned when any of its paths was, or any compound path whose
+        // paths it takes; its paths snap with its stroke, so they do not keep the property themselves.
+        let mut aligned = false;
         for id in &ids {
             let n = d.node(*id).ok_or(EngineError::NoNode(*id))?;
             if !matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. } | NodeKind::Group { .. }) {
                 return Err(EngineError::Other("compound paths can only contain paths".into()));
             }
+            n.walk(&mut |c| aligned |= c.extras().pixel_aligned);
             compound_members(n, &mut appearance, &mut units);
         }
         let cid = d.alloc_id();
@@ -21,7 +31,12 @@ pub(super) fn compound_make(s: &mut Session, _: &Value) -> Result<Value> {
         // The paths in front run against the backmost one, so where they overlap it they cut holes
         // under the non-zero fill rule (#1197). A compound path's paths turn together, by its
         // first: its own holes (a letter's counters) stay holes.
-        let direction = |n: &Node| n.path_data().and_then(|pd| pd.subpaths.first()).map_or(0.0, |sp| sp.signed_area().signum());
+        let direction = |n: &Node| {
+            n.path_data()
+                .and_then(|pd| pd.subpaths.first())
+                .filter(|sp| sp.closed && sp.signed_area().abs() > MIN_WINDING_AREA)
+                .map_or(0.0, |sp| sp.signed_area().signum())
+        };
         let first = |unit: &[Arc<Node>]| unit.first().map_or(0.0, |p| direction(p));
         let back = units.first().map_or(0.0, |u| first(u));
         for (i, unit) in units.into_iter().enumerate() {
@@ -29,6 +44,7 @@ pub(super) fn compound_make(s: &mut Session, _: &Value) -> Result<Value> {
             for mut p in unit {
                 let pn = Arc::make_mut(&mut p);
                 pn.appearance = Appearance::default().into();
+                pn.extras_mut().pixel_aligned = false;
                 if let NodeKind::Path { path, live, .. } = &mut pn.kind {
                     *live = None;
                     if flip {
@@ -37,6 +53,10 @@ pub(super) fn compound_make(s: &mut Session, _: &Value) -> Result<Value> {
                 }
                 ch.push(p);
             }
+        }
+        if aligned {
+            c.extras_mut().pixel_aligned = true;
+            super::pixelgrid::snap_if_aligned(&mut c);
         }
         d.wrap(&ids, |_| c)?;
         sel.set([cid]);
@@ -88,6 +108,10 @@ pub(super) fn compound_release(s: &mut Session, _: &Value) -> Result<Value> {
                     for c in children {
                         let mut c = (**c).clone();
                         c.appearance = n.appearance.clone();
+                        // Each path keeps the compound path's pixel-aligned property.
+                        if n.extras().pixel_aligned {
+                            c.extras_mut().pixel_aligned = true;
+                        }
                         out.push(c.id);
                         parts.push(c);
                     }

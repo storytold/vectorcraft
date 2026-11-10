@@ -8,6 +8,10 @@ description = "VectorCraft PDF export and import"
 [lints]
 workspace = true
 
+[features]
+# `vectorcraft_pdf::reads_of` and `imports_of` for other crates' tests (dev-dependencies only).
+read-count = []
+
 [dependencies]
 vectorcraft-geom = { workspace = true }
 vectorcraft-doc = { workspace = true }
@@ -34,6 +38,12 @@ roxmltree = "0.21"
 aes = "0.8"
 md-5 = { version = "0.10", default-features = false }
 sha2 = { version = "0.10", default-features = false }
+# The seed of the file key, salts and IVs (encrypt.rs).
+getrandom = "0.4"
+
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
+# The browser's crypto.getRandomValues.
+getrandom = { version = "0.4", features = ["wasm_js"] }
 
 [dev-dependencies]
 vectorcraft-testkit = { workspace = true }

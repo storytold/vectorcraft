@@ -1,6 +1,29 @@
 use super::*;
 use crate::theme;
 
+#[test]
+fn help_bar_toggle_is_independent_and_saved_in_workspaces() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    assert!(app.ui.help_bar);
+    assert_eq!(checked(&app, "window.helpBar", &Value::Null), Some(true));
+    assert_eq!(run_ui_command(&mut app, "window.helpBar", &Value::Null).unwrap().unwrap(), json!(false));
+    assert!(app.ui.status_bar);
+    assert_eq!(checked(&app, "window.helpBar", &Value::Null), Some(false));
+    let saved = crate::workspaces::capture(&app.ui, "No help");
+    let saved: crate::workspaces::Workspace = serde_json::from_value(serde_json::to_value(saved).unwrap()).unwrap();
+    app.ui.help_bar = true;
+    app.ui.status_bar = false;
+    crate::workspaces::apply(&mut app.ui, &saved);
+    assert!(!app.ui.help_bar && app.ui.status_bar);
+    assert_eq!(run_ui_command(&mut app, "window.helpBar", &Value::Null).unwrap().unwrap(), json!(true));
+    let legacy: crate::workspaces::Workspace = serde_json::from_value(json!({"name":"Old workspace"})).unwrap();
+    assert!(legacy.help_bar);
+    let restored: crate::state::UiState = serde_json::from_value(serde_json::to_value(&app.ui).unwrap()).unwrap();
+    assert!(restored.help_bar);
+    let (_, window) = menu_tree().into_iter().find(|(title, _)| *title == "Window").unwrap();
+    assert!(window.iter().any(|item| matches!(item, Item::Cmd("Help Bar", "window.helpBar", _))));
+}
+
 /// One headless frame of the in-window menu bar; returns its titles (left to right) as
 /// (rect, id of the title's popup).
 fn bar_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<(egui::Rect, egui::Id)> {
@@ -255,6 +278,43 @@ fn optical_margin_alignment_menu_unchecked_when_shared_flag_none() {
     assert_eq!(checked(&app, id, &Value::Null), Some(true));
 }
 
+/// Type › Orientation menu checks use `shared_text_flag`; mixed values leave both unchecked.
+#[test]
+fn type_orientation_menu_unchecked_when_shared_vertical_none() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let h = app.run("text.create", json!({"x": 10, "y": 40, "text": "H"})).unwrap()["id"].clone();
+    let v = app.run("text.create", json!({"x": 10, "y": 80, "text": "V", "vertical": true})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [h, v]})).unwrap();
+    assert_eq!(crate::panels::character::shared_text_flag(&app, |t| t.vertical), None);
+    assert_eq!(checked(&app, "type.orientation.vertical", &Value::Null), Some(false));
+    assert_eq!(checked(&app, "type.orientation.horizontal", &Value::Null), Some(false));
+    app.run("select.set", json!({"ids": [v]})).unwrap();
+    assert_eq!(checked(&app, "type.orientation.vertical", &Value::Null), Some(true));
+    assert_eq!(checked(&app, "type.orientation.horizontal", &Value::Null), Some(false));
+}
+
+#[test]
+fn type_orientation_menu_unchecked_for_three_object_mixed_selections() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let v0 = app.run("text.create", json!({"x": 10, "y": 40, "text": "v0", "vertical": true})).unwrap()["id"].clone();
+    let h1 = app.run("text.create", json!({"x": 10, "y": 80, "text": "h1"})).unwrap()["id"].clone();
+    let h2 = app.run("text.create", json!({"x": 10, "y": 120, "text": "h2"})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [v0.clone(), h1.clone(), h2.clone()]})).unwrap();
+    assert_eq!(checked(&app, "type.orientation.vertical", &Value::Null), Some(false));
+    assert_eq!(checked(&app, "type.orientation.horizontal", &Value::Null), Some(false));
+    let h0 = app.run("text.create", json!({"x": 10, "y": 160, "text": "h0"})).unwrap()["id"].clone();
+    let v1 = app.run("text.create", json!({"x": 10, "y": 200, "text": "v1", "vertical": true})).unwrap()["id"].clone();
+    let v2 = app.run("text.create", json!({"x": 10, "y": 240, "text": "v2", "vertical": true})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [h0.clone(), v1.clone(), v2.clone()]})).unwrap();
+    assert_eq!(checked(&app, "type.orientation.vertical", &Value::Null), Some(false));
+    assert_eq!(checked(&app, "type.orientation.horizontal", &Value::Null), Some(false));
+    app.run("select.set", json!({"ids": [v0.clone(), v1.clone(), v2.clone()]})).unwrap();
+    assert_eq!(checked(&app, "type.orientation.vertical", &Value::Null), Some(true));
+    assert_eq!(checked(&app, "type.orientation.horizontal", &Value::Null), Some(false));
+}
+
 #[test]
 fn panel_ids_are_case_insensitive_and_labels_work() {
     assert_eq!(normalize_panel("layers"), Some("layers"));
@@ -283,6 +343,20 @@ fn panel_ids_are_case_insensitive_and_labels_work() {
     app.ui.dock_collapsed = false;
 }
 
+/// #4542: Edit › Color Settings… and Assign Profile… show the Separations Preview panel, which
+/// isn't in an icon column, and leave it showing when it already does.
+#[test]
+fn color_settings_and_assign_profile_show_the_separations_panel() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let shown = |app: &VectorcraftApp| checked(app, "window.panel", &json!({"panel": "separations"})).unwrap();
+    assert!(!shown(&app));
+    for id in ["edit.colorSettings", "edit.colorSettings", "edit.assignProfile"] {
+        app.run(id, json!({})).unwrap();
+        assert!(shown(&app), "{id} shows the panel");
+    }
+}
+
 #[test]
 fn saved_views_store_and_restore_the_view() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
@@ -301,6 +375,22 @@ fn saved_views_store_and_restore_the_view() {
     assert_eq!((v.zoom, v.center.x, v.center.y), (3.0, 120.0, 80.0));
     // Unused slots stay out of the menu listing agents see.
     assert!(!menu_entries(&app).iter().any(|e| e.command.as_deref() == Some("view.goto2")));
+}
+
+/// Effect › 3D and Materials › 3D (Classic) › Extrude & Bevel (Classic)… opens its effect dialog,
+/// after Materials…, and nowhere else.
+#[test]
+fn classic_extrude_bevel_is_in_the_3d_classic_submenu() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let entries = menu_entries(&app);
+    let classic: Vec<_> = entries.iter().filter(|e| e.params.get("effect").and_then(Value::as_str) == Some("threeD.classicExtrude")).collect();
+    assert_eq!(classic.len(), 1, "listed once");
+    let e = classic[0];
+    assert_eq!(e.path, ["Effect", "3D and Materials", "3D (Classic)"]);
+    assert_eq!((e.label.as_str(), e.command.as_deref()), ("Extrude & Bevel (Classic)…", Some("effect.dialog")));
+    let at = |label: &str| entries.iter().position(|x| x.label == label && x.path.get(1).is_some_and(|p| p == "3D and Materials"));
+    assert!(at("Materials…").unwrap() < at("Extrude & Bevel (Classic)…").unwrap());
 }
 
 /// A document's 25 views are all listed at the bottom of the View menu, by name, and the last
@@ -457,6 +547,48 @@ fn update_selection_follows_save_selection_and_needs_a_recall() {
 }
 
 #[test]
+fn select_same_link_block_series_selects_a_thread_from_the_menu() {
+    let mut app = app_with_a_rectangle();
+    let entry = menu_entries(&app).into_iter().find(|e| e.command.as_deref() == Some("select.same.linkBlockSeries")).expect("menu entry");
+    assert_eq!((entry.path, entry.label.as_str()), (vec!["Select".to_string(), "Same".to_string()], "Link Block Series"));
+    // A rectangle selected: no type, so the item is off.
+    assert!(!enabled(&app, "select.same.linkBlockSeries"));
+    let frame = |app: &mut VectorcraftApp, x: i32| {
+        app.run("text.create", json!({"x": x, "y": 40, "text": "words ".repeat(40), "area": {"width": 60, "height": 30}})).unwrap()["id"].clone()
+    };
+    let (a, b) = (frame(&mut app, 0), frame(&mut app, 100));
+    app.run("select.set", json!({"ids": [a.clone(), b.clone()]})).unwrap();
+    app.run("text.thread.create", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [b.clone()]})).unwrap();
+    assert!(enabled(&app, "select.same.linkBlockSeries"));
+    invoke(&mut app, "select.same.linkBlockSeries", json!({}));
+    let ids: Vec<u64> = app.session.active().unwrap().selection.objects.iter().map(|i| i.0).collect();
+    assert_eq!(json!(ids), json!([a, b]));
+}
+
+#[test]
+fn select_same_text_fill_and_stroke_color_follows_text_stroke_color_in_the_menu() {
+    let mut app = app_with_a_rectangle();
+    let entries = menu_entries(&app);
+    let at = |id: &str| entries.iter().position(|e| e.command.as_deref() == Some(id));
+    let entry = at("select.same.textFillAndStrokeColor").map(|i| &entries[i]).expect("menu entry");
+    assert_eq!((entry.path.clone(), entry.label.as_str()), (vec!["Select".to_string(), "Same".to_string()], "Text Fill & Stroke Color"));
+    assert_eq!(at("select.same.textStrokeColor").map(|i| i + 1), at("select.same.textFillAndStrokeColor"));
+    let text = |app: &mut VectorcraftApp, y: i32, fill: &str, stroke: &str| {
+        let id = app.run("text.create", json!({"x": 0, "y": y, "text": "type"})).unwrap()["id"].clone();
+        app.run("text.setRangeStyle", json!({"id": id.clone(), "start": 0, "end": 4, "fill": fill, "stroke": stroke})).unwrap();
+        id
+    };
+    let a = text(&mut app, 40, "#ff0000", "#0000ff");
+    let b = text(&mut app, 80, "#ff0000", "#0000ff");
+    let _ = text(&mut app, 120, "#ff0000", "#00ff00");
+    app.run("select.set", json!({"ids": [a.clone()]})).unwrap();
+    invoke(&mut app, "select.same.textFillAndStrokeColor", json!({}));
+    let ids: Vec<u64> = app.session.active().unwrap().selection.objects.iter().map(|i| i.0).collect();
+    assert_eq!(json!(ids), json!([a, b]));
+}
+
+#[test]
 fn edit_selection_opens_its_dialog_on_the_saved_selections() {
     let mut app = app_with_a_rectangle();
     // Nothing saved yet: the item is off, and invoking it (palette, shortcut) only says so.
@@ -510,13 +642,13 @@ fn precise_cursors_command_toggles_the_preference() {
 fn precise_cursors_command_is_listed_and_assignable_in_the_shortcut_editor() {
     use crate::shortcut_editor as ed;
     let e = ed::entry("view.preciseCursors").expect("listed in the editor");
-    assert_eq!((e.label.as_str(), e.group.as_str(), e.is_tool), ("Precise Cursors", "View", false));
+    assert_eq!((e.label.as_str(), e.group.as_str(), e.is_tool), ("Use Precise Cursors", "View", false));
     assert_eq!(ed::default_of("view.preciseCursors"), None, "no default key");
     let mut overrides = craft_keymap::Overrides::new();
     assert_eq!(ed::effective_in(&overrides, "view.preciseCursors"), None);
-    assert_eq!(ed::assign(&mut overrides, "view.preciseCursors", Some("Cmd+Alt+Shift+U"), false), Ok(vec![]));
+    assert_eq!(ed::assign(&mut overrides, "view.preciseCursors", Some("Cmd+Alt+Shift+Q"), false), Ok(vec![]));
     let chord = ed::effective_in(&overrides, "view.preciseCursors").expect("assigned");
-    assert_eq!(ed::normalize(&chord), ed::normalize("Cmd+Alt+Shift+U"));
+    assert_eq!(ed::normalize(&chord), ed::normalize("Cmd+Alt+Shift+Q"));
     // A key another command holds is refused, so the new command can't take it over silently.
     assert!(ed::assign(&mut overrides, "view.preciseCursors", Some("Cmd+Alt+Shift+P"), false).is_err());
     assert_eq!(ed::assign(&mut overrides, "view.preciseCursors", None, false), Ok(vec![]));
@@ -655,6 +787,61 @@ fn expand_appearance_is_an_object_menu_item_only() {
     assert_eq!(paths, [vec!["Object".to_string()]]);
 }
 
+/// Isolation keeps the Lock and Hide actions available for selected members.
+#[test]
+fn lock_and_hide_menus_are_enabled_in_isolation_mode() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let a = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].clone();
+    let b = app.run("shape.rectangle", json!({"x": 80, "y": 10, "width": 50, "height": 50})).unwrap()["id"].clone();
+    app.run("select.none", json!({})).unwrap();
+    let lock_unselected = |app: &VectorcraftApp| crate::menus::enabled(app, "object.lock.unselected");
+    assert!(!lock_unselected(&app), "nothing selected");
+    app.run("select.set", json!({"ids": [a, b.clone()]})).unwrap();
+    assert!(lock_unselected(&app), "selection present");
+    let g = app.run("object.group", json!({})).unwrap()["id"].clone();
+    let lock_and_hide: Vec<String> = menu_entries(&app)
+        .into_iter()
+        .filter(|e| {
+            let path: Vec<&str> = e.path.iter().map(String::as_str).collect();
+            matches!(path[..], ["Object", "Lock" | "Hide"]) || path == ["Object"] && matches!(e.label.as_str(), "Unlock All" | "Show All")
+        })
+        .filter_map(|e| e.command)
+        .collect();
+    assert_eq!(
+        lock_and_hide,
+        [
+            "object.lock",
+            "object.lock.above",
+            "object.lock.otherLayers",
+            "object.unlockAll",
+            "object.hide",
+            "object.hide.above",
+            "object.hide.otherLayers",
+            "object.hide.unselected",
+            "object.showAll"
+        ]
+    );
+    let shown = |app: &VectorcraftApp| -> Vec<bool> {
+        let entries = menu_entries(app);
+        lock_and_hide
+            .iter()
+            .chain([&"object.group".to_string()])
+            .map(|id| entries.iter().any(|e| e.command.as_ref() == Some(id) && e.enabled))
+            .collect()
+    };
+    app.run("object.isolate", json!({"id": g.clone()})).unwrap();
+    app.run("select.set", json!({"ids": [b]})).unwrap();
+    assert_eq!(shown(&app), [true; 10], "in isolation mode");
+    assert!(lock_unselected(&app), "shortcut command remains enabled in isolation");
+    assert!(crate::menus::enabled(&app, "object.hide.unselected"), "Hide Unselected remains enabled in isolation");
+    let chord = crate::shortcut_editor::default_of("object.hide.unselected").expect("default Hide Unselected shortcut");
+    assert_eq!(crate::shortcut_editor::normalize(chord), crate::shortcut_editor::normalize("Cmd+Alt+Shift+3"));
+    app.run("object.exitIsolation", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [g]})).unwrap();
+    assert_eq!(shown(&app), [true; 10], "after Exit Isolation Mode");
+}
+
 #[test]
 fn menus_are_as_wide_as_their_items() {
     // Items size the popup to the widest label and shortcut instead of the widest a menu may be.
@@ -711,13 +898,146 @@ fn long_menus_scroll_inside_a_short_window() {
     assert!(tall.bottom() < 3000.0);
 }
 
-/// #3724: Window › New Window is greyed out until VectorCraft can open a second window on a
-/// document, instead of being enabled and answering with an internal milestone note.
+/// Object › Unlock All and Object › Show All clicked with Shift+Alt held run with
+/// `scope: "group"`; clicked without them, or with only one of the two, they run on the whole
+/// document as before.
 #[test]
-fn new_window_is_disabled_until_it_opens_a_window() {
+fn unlock_all_and_show_all_clicked_with_shift_alt_act_within_the_group() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
-    assert!(!enabled(&app, "window.newWindow"), "New Window is enabled but opens no window");
-    let e = app.run("window.newWindow", json!({})).unwrap_err();
-    assert!(!e.contains("M11.5"), "a user-facing message, not a milestone: {e}");
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let tree = menu_tree();
+    let (_, object) = tree.iter().find(|(t, _)| *t == "Object").unwrap();
+    let id = egui::Id::unique("test-object-menu");
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 3000.0));
+    let frame = |events: Vec<egui::Event>, modifiers: egui::Modifiers| {
+        let mut clicked = None;
+        let events = std::iter::once(egui::Event::ModifiersChanged(modifiers)).chain(events).collect();
+        let input = egui::RawInput { screen_rect: Some(screen), events, ..Default::default() };
+        let mut out = ctx.run_ui(input, |ui| {
+            egui::Area::new(id).fixed_pos(egui::pos2(0.0, 0.0)).show(ui.ctx(), |ui| {
+                egui::containers::menu::menu_style(ui.style_mut());
+                ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| menu_body(&app, ui, object, &mut clicked));
+            });
+        });
+        out.textures_delta.clear();
+        (clicked, out.shapes)
+    };
+    // Where the menu draws `label`.
+    fn find(s: &egui::Shape, label: &str) -> Option<egui::Pos2> {
+        match s {
+            egui::Shape::Text(t) if t.galley.text() == label => Some(t.pos + t.galley.rect.center().to_vec2()),
+            egui::Shape::Vec(v) => v.iter().find_map(|s| find(s, label)),
+            _ => None,
+        }
+    }
+    let click = |label: &str, modifiers: egui::Modifiers| {
+        let (_, shapes) = frame(vec![], Default::default());
+        let at = shapes.iter().find_map(|c| find(&c.shape, label)).unwrap_or_else(|| panic!("{label} is not in the Object menu"));
+        let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers };
+        frame(vec![egui::Event::PointerMoved(at)], modifiers);
+        frame(vec![button(true)], modifiers);
+        frame(vec![button(false)], modifiers).0
+    };
+    frame(vec![], Default::default());
+    let shift_alt = egui::Modifiers { shift: true, alt: true, ..Default::default() };
+    let group = json!({"scope": "group"});
+    for (label, command) in [("Unlock All", "object.unlockAll"), ("Show All", "object.showAll")] {
+        assert_eq!(click(label, shift_alt), Some((command.to_string(), group.clone())), "{label} with Shift+Alt");
+        for held in [egui::Modifiers::NONE, egui::Modifiers::SHIFT, egui::Modifiers::ALT] {
+            assert_eq!(click(label, held), Some((command.to_string(), json!({}))), "{label} with {held:?}");
+        }
+    }
+}
+
+/// #4116: Window › New Window is enabled with a document open and opens a second view of it; with
+/// no document open it is greyed out.
+#[test]
+fn new_window_opens_a_view_of_the_current_document() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    assert!(!enabled(&app, "window.newWindow"), "no document to open a window on");
+    assert_eq!(app.run("window.newWindow", json!({})).unwrap_err(), "no document open");
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    assert!(enabled(&app, "window.newWindow"));
+    assert_eq!(app.run("window.newWindow", json!({})).unwrap(), json!({"index": 0, "view": 2}));
+    assert_eq!(app.session.documents().len(), 1, "the same document, in a second window");
+}
+
+/// #4143: Window menu panels and panel submenus are listed in alphabetical order according to the
+/// active interface language (e.g. French), rather than staying frozen in English alphabetical order.
+#[test]
+fn window_menu_panels_are_sorted_alphabetically_in_active_language() {
+    use crate::i18n::{Lang, current, name_sort_key, set_current, tr, tr_id};
+
+    let prev = current();
+
+    // 1. In English: panels between separator 2 and 3 are alphabetical.
+    set_current(Lang::EN);
+    let tree = menu_tree();
+    let (_, window) = tree.iter().find(|(t, _)| *t == "Window").unwrap();
+
+    let seps: Vec<usize> = window.iter().enumerate().filter(|(_, it)| matches!(it, Item::Sep)).map(|(i, _)| i).collect();
+    assert!(seps.len() >= 3, "Window menu should have at least 3 separators");
+    let panels = &window[seps[1] + 1..seps[2]];
+
+    let item_display = |it: &Item, lang: Lang| -> String {
+        match it {
+            Item::Cmd(l, id, _) => tr_id(lang, id, l).to_string(),
+            Item::Sub(l, _) | Item::Todo(l, _) | Item::Header(l) => tr(lang, l).to_string(),
+            Item::Sep => String::new(),
+        }
+    };
+
+    let en_keys: Vec<String> = panels.iter().map(|it| name_sort_key(&item_display(it, Lang::EN))).collect();
+    assert!(en_keys.windows(2).all(|w| w[0] <= w[1]), "English panels must be alphabetical: {en_keys:?}");
+
+    // 2. In French: panels are sorted alphabetically by their French names.
+    let fr = Lang::from_code("fr").unwrap();
+    set_current(fr);
+    let tree_fr = menu_tree();
+    let (_, window_fr) = tree_fr.iter().find(|(t, _)| *t == "Window").unwrap();
+    let seps_fr: Vec<usize> = window_fr.iter().enumerate().filter(|(_, it)| matches!(it, Item::Sep)).map(|(i, _)| i).collect();
+    let panels_fr = &window_fr[seps_fr[1] + 1..seps_fr[2]];
+
+    let fr_labels: Vec<String> = panels_fr.iter().map(|it| item_display(it, fr)).collect();
+    let fr_keys: Vec<String> = fr_labels.iter().map(|l| name_sort_key(l)).collect();
+    assert!(fr_keys.windows(2).all(|w| w[0] <= w[1]), "French panels must be alphabetical: {fr_labels:?}");
+
+    // Specific French placements:
+    // Calques (Layers) is under C, Plans de travail (Artboards) is under P, Nuancier (Swatches) is under N.
+    let pos = |name: &str| fr_labels.iter().position(|l| l == name).unwrap_or_else(|| panic!("missing {name} in {fr_labels:?}"));
+    assert!(pos("Aspect") < pos("Calques"), "Aspect before Calques");
+    assert!(pos("Calques") < pos("Dégradé"), "Calques before Dégradé");
+    assert!(pos("Nuancier") < pos("Plans de travail"), "Nuancier before Plans de travail");
+    assert!(pos("Plans de travail") < pos("Texte"), "Plans de travail before Texte");
+
+    // 3. Type submenu is also alphabetical in French.
+    let type_sub = panels_fr
+        .iter()
+        .find_map(|it| match it {
+            Item::Sub(l, items) if *l == "Type" => Some(items),
+            _ => None,
+        })
+        .unwrap();
+    let type_labels: Vec<String> = type_sub.iter().map(|it| item_display(it, fr)).collect();
+    let type_keys: Vec<String> = type_labels.iter().map(|l| name_sort_key(l)).collect();
+    assert!(type_keys.windows(2).all(|w| w[0] <= w[1]), "Type submenu must be alphabetical: {type_labels:?}");
+    assert_eq!(type_labels, vec!["Caractère", "Glyphes", "OpenType", "Paragraphe", "Styles de caractère", "Styles de paragraphe", "Tabulations",]);
+
+    // 4. In Polish: Łącza (Links) folds to L and sorts before Warstwy and Zmienne.
+    let pl = Lang::from_code("pl").unwrap();
+    set_current(pl);
+    let tree_pl = menu_tree();
+    let (_, window_pl) = tree_pl.iter().find(|(t, _)| *t == "Window").unwrap();
+    let seps_pl: Vec<usize> = window_pl.iter().enumerate().filter(|(_, it)| matches!(it, Item::Sep)).map(|(i, _)| i).collect();
+    let panels_pl = &window_pl[seps_pl[1] + 1..seps_pl[2]];
+    let pl_labels: Vec<String> = panels_pl.iter().map(|it| item_display(it, pl)).collect();
+    let pl_keys: Vec<String> = pl_labels.iter().map(|l| name_sort_key(l)).collect();
+    assert!(pl_keys.windows(2).all(|w| w[0] <= w[1]), "Polish panels must be alphabetical: {pl_labels:?}");
+    let pos_pl = |name: &str| pl_labels.iter().position(|l| l == name).unwrap_or_else(|| panic!("missing {name} in {pl_labels:?}"));
+    assert!(pos_pl("Łącza") < pos_pl("Warstwy"), "Łącza before Warstwy");
+    assert!(pos_pl("Warstwy") < pos_pl("Zmienne"), "Warstwy before Zmienne");
+
+    set_current(prev);
 }

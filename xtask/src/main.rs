@@ -14,6 +14,7 @@ mod pdf_deps;
 mod pngsuite;
 mod sha256;
 mod stats;
+mod test262;
 mod version;
 mod web_fonts;
 
@@ -41,6 +42,11 @@ commands:
   ico <out.ico> <png>...
                   pack PNGs into a Windows .ico (used by packaging/icons.sh)
   stats [--exact] count tests and lines per crate (--exact: ask the test harness via `-- --list`)
+  test262         fetch the pinned ECMAScript conformance suite into corpus/test262 (sha256
+                  verified), parse its ES5 subset with vectorcraft-js and run the ES5 language
+                  and built-in tests its interpreter supports and the String, Number, RegExp
+                  and Date built-ins tests, printing the counts; then fetch json2.js into
+                  corpus/json2 (sha256 verified) and run it
   web-fonts       copy the craft-fonts faces in crates/text/web-fonts.txt into the web site (the Trunk
                   post_build hook; a no-op without CRAFT_FONTS_DIR)
 ";
@@ -64,6 +70,7 @@ fn main() -> ExitCode {
         Some("ico") => ico::run(&rest),
         Some("version") => version::run(&root(), &rest),
         Some("stats") => stats::run(&root(), rest.contains(&"--exact")),
+        Some("test262") => test262::run_suite(),
         Some("web-fonts") => web_fonts::run(&root()),
         Some("-h" | "--help" | "help") | None => {
             print!("{USAGE}");
@@ -82,7 +89,9 @@ fn main() -> ExitCode {
 
 /// Workspace root (parent of the xtask crate).
 pub fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).parent().expect("xtask has a parent dir").to_path_buf()
+    // The repository root, as a clean path (`join("..")` would print as `…/xtask/..`).
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    manifest.parent().unwrap_or(manifest).to_path_buf()
 }
 
 /// Tracked and untracked (not ignored) files that exist, relative to `root`.
@@ -292,7 +301,7 @@ fn cmd_ci() -> Result<(), String> {
         ("assets", Box::new(|| assets::run(&root()))),
         ("brands", Box::new(|| brands::run(&root()))),
         ("cursors", Box::new(|| cursors::run(&root()))),
-        ("i18n-report", Box::new(cmd_i18n_report)),
+        ("i18n-report", Box::new(cmd_ci_i18n_report)),
         ("layers", Box::new(cmd_layers)),
         ("wasm", Box::new(cmd_wasm)),
     ];
@@ -331,6 +340,11 @@ Tests that use a corpus skip cleanly when it is absent.
   corpus/raw/        raw.pixls.us samples, CC0 (optional)
   corpus/affinity/   public Affinity documents (CC0/MIT/Apache-2.0) at pinned commits, sha256
                      verified: oracles for the Affinity reader. Fetch: cargo xtask corpus --affinity
+  corpus/test262/    the ECMAScript conformance suite (BSD-3-Clause) at a pinned commit, sha256
+                     verified: the JavaScript parser's and interpreter's ES5 subsets. Fetch and run:
+                     cargo xtask test262
+  corpus/json2/      json2.js, the public-domain JSON polyfill, at a pinned commit, sha256 verified:
+                     compared with vectorcraft-js's JSON. Fetch and run: cargo xtask test262
 ",
         corpus.display()
     );
@@ -346,4 +360,14 @@ fn cmd_i18n_report() -> Result<(), String> {
     let mut c = cargo();
     c.args(["test", "-p", "vectorcraft-ui-egui", "--lib", "--", "i18n::tests::untranslated_report", "--exact", "--nocapture"]);
     run(c, "cargo test -p vectorcraft-ui-egui --lib -- i18n::tests::untranslated_report --exact --nocapture")
+}
+
+/// [`cmd_i18n_report`] in `ci`, selecting the packages and targets the test stage did so it
+/// reuses that build: with `-p vectorcraft-ui-egui --lib` alone cargo resolves features
+/// differently and recompiled for about 3.5 minutes. Every other test binary runs with no test
+/// matching the filter.
+fn cmd_ci_i18n_report() -> Result<(), String> {
+    let mut c = cargo();
+    c.args(["test", "--workspace", "--lib", "--bins", "--tests", "--", "i18n::tests::untranslated_report", "--exact", "--nocapture"]);
+    run(c, "cargo test --workspace --lib --bins --tests -- i18n::tests::untranslated_report --exact --nocapture")
 }

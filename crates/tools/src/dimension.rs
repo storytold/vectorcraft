@@ -67,7 +67,12 @@ pub struct DimensionTool {
     snap: crate::guides::DrawSnap,
     /// Where the next Linear pick lands, as last worked out for the pointer (for the overlays).
     snapped: Option<(Point, Option<PointRef>)>,
+    /// Whether the press under way began on an anchor a Linear click picks.
+    press_on_anchor: bool,
 }
+
+/// How near an anchor (screen pixels) a pick snaps to it.
+const ANCHOR_REACH: f64 = 8.0;
 
 /// `at` as a Shift click picks it: the direction from `last` snapped to 45° steps (from the
 /// constrain angle), the distance kept.
@@ -119,8 +124,43 @@ fn anchor_near(cx: &ToolContext, edge: &SegmentRef, p: Point) -> Option<(usize, 
     [edge.segment, next]
         .into_iter()
         .filter_map(|i| Some((i, sp.anchors.get(i)?.p)))
-        .filter(|(_, a)| a.distance(p) <= cx.tol(8.0))
+        .filter(|(_, a)| a.distance(p) <= cx.tol(ANCHOR_REACH))
         .min_by(|(_, a), (_, b)| a.distance(p).total_cmp(&b.distance(p)))
+}
+
+/// The anchor nearest `p` within reach, on any editable path (the topmost on a tie), as a link to
+/// its path. Bounded work, and dimension artwork is skipped, as in [`pick`].
+fn anchor_under(cx: &ToolContext, p: Point) -> Option<(Point, PointRef)> {
+    type Best = Option<(f64, Point, PointRef)>;
+    fn visit(n: &Node, p: Point, reach: f64, budget: &mut usize, best: &mut Best) {
+        if *budget == 0 || !n.visible || n.locked || n.extras().dimension.is_some() {
+            return;
+        }
+        if let Some(path) = n.path_data() {
+            for (subpath, sp) in path.subpaths.iter().enumerate() {
+                for (anchor, a) in sp.anchors.iter().enumerate() {
+                    if *budget == 0 {
+                        return;
+                    }
+                    *budget -= 1;
+                    let d = a.p.distance(p);
+                    if d <= reach && best.as_ref().is_none_or(|(nearest, ..)| d < *nearest) {
+                        *best = Some((d, a.p, PointRef { node: n.id, subpath, anchor }));
+                    }
+                }
+            }
+        }
+        if let Some(ch) = n.children() {
+            for c in ch.iter().rev() {
+                visit(c, p, reach, budget, best);
+            }
+        }
+    }
+    let (reach, mut budget, mut best) = (cx.tol(ANCHOR_REACH), 20_000usize, None);
+    for n in cx.doc.layers.iter().rev() {
+        visit(n, p, reach, &mut budget, &mut best);
+    }
+    best.map(|(_, at, r)| (at, r))
 }
 
 /// The point of `edge` closest to `p`.
@@ -138,25 +178,22 @@ fn nearest_on(cx: &ToolContext, edge: &SegmentRef, p: Point) -> Option<Point> {
 }
 
 impl DimensionTool {
-    /// Where a Linear pick at `p` lands: on an anchor of the line under the pointer, within reach
-    /// (kept as a link to its path); else where Smart Guides put it (another object's anchor or
-    /// centre, in line with one, or for the second point on a construction guide through the
-    /// first), its guides showing; else on the closest point of that line; else `p` itself.
+    /// Where a Linear pick at `p` lands: on the nearest anchor of any path, within reach (kept as
+    /// a link to its path); else where Smart Guides put it (another object's anchor or centre, in
+    /// line with one, or for the second point on a construction guide through the first), its
+    /// guides showing; else on the closest point of the line under the pointer; else `p` itself.
     fn snap_linear(&mut self, cx: &ToolContext, p: Point) -> (Point, Option<PointRef>) {
         let leave = self.points.last().map(|(first, _)| crate::guides::Leave::segment(cx, *first, false));
         let guided = self.snap.hover(cx, p, &[], leave.as_ref());
-        let edge = pick(cx, p);
-        if let Some(edge) = &edge
-            && let Some((anchor, point)) = anchor_near(cx, edge, p)
-        {
+        if let Some((point, reference)) = anchor_under(cx, p) {
             self.snap.clear();
-            return (point, Some(PointRef { node: edge.node, subpath: edge.subpath, anchor }));
+            return (point, Some(reference));
         }
         if guided.distance(p) > 1e-9 {
             return (guided, None);
         }
         // Not on an anchor or a guide: snap to the closest point of the line (#2432).
-        (edge.and_then(|e| nearest_on(cx, &e, p)).unwrap_or(p), None)
+        (pick(cx, p).and_then(|e| nearest_on(cx, &e, p)).unwrap_or(p), None)
     }
     fn target(&self, cx: &ToolContext, p: Point) -> Option<Target> {
         let edge = pick(cx, p)?;
@@ -243,6 +280,7 @@ impl DimensionTool {
     fn reset(&mut self) {
         self.pending = None;
         self.press = None;
+        self.press_on_anchor = false;
         self.points.clear();
         self.lines.clear();
         self.dragging = false;
@@ -352,16 +390,23 @@ impl Tool for DimensionTool {
             }
             PointerKind::Down => {
                 if self.pending.is_some() && !self.dragging {
-                    // The second click of a picked measurement places it.
-                    return self.place(cx, ev.pos);
+                    self.press = Some((ev.pos, None));
+                    return self.preview(cx, ev.pos);
                 }
+                // A Linear press on an anchor picks the anchor unless it drags past the anchor's
+                // reach: moving a few pixels before the release does not drag out the dimension of
+                // a segment under the pointer.
+                self.press_on_anchor = self.kind == Kind::Linear && anchor_under(cx, ev.pos).is_some();
                 self.press = Some((ev.pos, self.target(cx, ev.pos)));
                 vec![]
             }
             PointerKind::Drag => {
+                if self.pending.is_some() && !self.dragging && self.press.is_some() {
+                    return self.preview(cx, ev.pos);
+                }
                 if self.pending.is_none()
                     && let Some((start, Some(target))) = self.press.clone()
-                    && start.distance(ev.pos) > cx.tol(3.0)
+                    && start.distance(ev.pos) > cx.tol(if self.press_on_anchor { ANCHOR_REACH } else { 3.0 })
                     && self.points.is_empty()
                     && self.lines.is_empty()
                 {
@@ -374,8 +419,11 @@ impl Tool for DimensionTool {
                 if self.dragging {
                     return self.place(cx, ev.pos);
                 }
+                if self.pending.is_some() {
+                    return if self.press.take().is_some() { self.place(cx, ev.pos) } else { vec![] };
+                }
                 match self.press.take() {
-                    Some((start, target)) if self.pending.is_none() => self.click(cx, start, target, ev.mods),
+                    Some((start, target)) => self.click(cx, start, target, ev.mods),
                     _ => vec![],
                 }
             }
@@ -389,6 +437,20 @@ impl Tool for DimensionTool {
             return if cancel { vec![Action::Cancel] } else { vec![] };
         }
         vec![]
+    }
+    /// A dropped drag is canceled as by Escape. A dropped click picks nothing, and the points or
+    /// lines earlier clicks picked stay.
+    fn drop_press(&mut self, cx: &ToolContext) -> Vec<Action> {
+        if self.dragging {
+            return self.key(cx, ToolKey::Escape, Mods::default());
+        }
+        self.press = None;
+        if self.pending.is_some() && self.began {
+            self.began = false;
+            vec![Action::Cancel]
+        } else {
+            vec![]
+        }
     }
     fn deactivate(&mut self, cx: &ToolContext) -> Vec<Action> {
         self.key(cx, ToolKey::Escape, Mods::default())
@@ -463,5 +525,149 @@ impl Tool for DimensionTool {
             out.extend(self.snap.guides().iter().cloned());
         }
         out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testutil::*;
+    use vectorcraft_doc::Selection;
+
+    /// A dropped click picks nothing and keeps the point an earlier click picked. A dropped drag
+    /// out from a segment is canceled as by Escape.
+    #[test]
+    fn a_dropped_press_keeps_the_earlier_picks() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let ev = |kind, x: f64, y: f64| PointerEvent::new(kind, x, y);
+        let mut t = DimensionTool::default();
+        t.pointer(&c, &ev(PointerKind::Down, 400.0, 400.0));
+        t.pointer(&c, &ev(PointerKind::Up, 400.0, 400.0));
+        assert_eq!(t.points.len(), 1);
+        // The engine sends the release after the drop.
+        t.pointer(&c, &ev(PointerKind::Down, 450.0, 420.0));
+        assert!(t.drop_press(&c).is_empty());
+        assert!(t.pointer(&c, &ev(PointerKind::Up, 450.0, 420.0)).is_empty());
+        assert_eq!(t.points.len(), 1, "the earlier pick stays and the dropped click picks nothing");
+        assert!(t.pending.is_none() && t.busy());
+        let mut t = DimensionTool::default();
+        t.pointer(&c, &ev(PointerKind::Down, 150.0, 100.0));
+        let acts = t.pointer(&c, &ev(PointerKind::Drag, 150.0, 60.0));
+        assert!(matches!(acts.first(), Some(Action::Begin(_))), "{acts:?}");
+        assert_eq!(t.drop_press(&c), vec![Action::Cancel]);
+        assert!(!t.busy());
+        assert!(t.pointer(&c, &ev(PointerKind::Up, 150.0, 60.0)).is_empty(), "the release places nothing");
+    }
+
+    #[test]
+    fn a_dropped_placement_press_does_not_commit_the_dimension() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let ev = |kind, x: f64, y: f64| PointerEvent::new(kind, x, y);
+        let mut t = DimensionTool::default();
+        for (x, y) in [(400.0, 400.0), (450.0, 420.0)] {
+            assert!(t.pointer(&c, &ev(PointerKind::Down, x, y)).is_empty());
+            assert!(t.pointer(&c, &ev(PointerKind::Up, x, y)).is_empty());
+        }
+        assert!(t.pending.is_some());
+        assert!(matches!(t.pointer(&c, &ev(PointerKind::Move, 470.0, 450.0)).first(), Some(Action::Begin(_))));
+        assert!(matches!(t.pointer(&c, &ev(PointerKind::Down, 470.0, 450.0)).last(), Some(Action::Preview(_, _))));
+        assert_eq!(t.drop_press(&c), vec![Action::Cancel]);
+        assert!(t.pointer(&c, &ev(PointerKind::Up, 470.0, 450.0)).is_empty());
+        assert!(t.pending.is_some(), "the dimension can still be placed");
+        assert!(matches!(t.pointer(&c, &ev(PointerKind::Down, 480.0, 460.0)).last(), Some(Action::Preview(_, _))));
+        let dragged = t.pointer(&c, &ev(PointerKind::Drag, 490.0, 470.0));
+        assert!(matches!(dragged.last(), Some(Action::Preview(_, _))), "{dragged:?}");
+        let placed = t.pointer(&c, &ev(PointerKind::Up, 490.0, 470.0));
+        assert!(matches!(placed.last(), Some(Action::Commit)), "{placed:?}");
+    }
+
+    /// A Linear press on an anchor picks that anchor even when the pointer moves a few pixels
+    /// before the release: it does not drag out the dimension of a segment that ends there. Both
+    /// picks keep their links to the path, so the dimension measures between the two anchors.
+    #[test]
+    fn a_press_on_an_anchor_picks_it_when_the_pointer_moves() {
+        let (d, id) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let ev = |kind, x: f64, y: f64| PointerEvent::new(kind, x, y);
+        let mut t = DimensionTool::default();
+        for ((x, y), (dx, dy)) in [((100.0, 100.0), (3.5, 1.0)), ((200.0, 200.0), (-4.0, -2.0))] {
+            assert!(t.pointer(&c, &ev(PointerKind::Down, x, y)).is_empty());
+            assert!(t.pointer(&c, &ev(PointerKind::Drag, x + dx, y + dy)).is_empty(), "no segment dimension is dragged out");
+            assert!(t.pointer(&c, &ev(PointerKind::Up, x + dx, y + dy)).is_empty(), "nothing is committed");
+        }
+        let d = t.pending.as_ref().expect("both anchors were picked");
+        assert_eq!((d.a, d.b), (Point::new(100.0, 100.0), Point::new(200.0, 200.0)));
+        let anchor = |anchor| Some(PointRef { node: id, subpath: 0, anchor });
+        assert_eq!(d.source, Some(DimensionSource::Points { a: anchor(0), b: anchor(2), vertex: None }));
+        // Dragged past the anchor's reach, the press drags out the dimension of a segment there.
+        let mut t = DimensionTool::default();
+        t.pointer(&c, &ev(PointerKind::Down, 100.0, 100.0));
+        assert!(t.pointer(&c, &ev(PointerKind::Drag, 103.0, 106.0)).is_empty());
+        let acts = t.pointer(&c, &ev(PointerKind::Drag, 100.0, 60.0));
+        assert!(matches!(acts.first(), Some(Action::Begin(_))), "{acts:?}");
+        assert!(matches!(t.pointer(&c, &ev(PointerKind::Up, 100.0, 60.0)).last(), Some(Action::Commit)));
+    }
+
+    /// The anchors of a live rectangle are picked the same way.
+    #[test]
+    fn a_press_on_a_live_shapes_anchor_picks_it() {
+        let (d, id) = doc_with_live_rect();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let mut t = DimensionTool::default();
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 200.0, 100.0));
+        t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 197.0, 102.0));
+        t.pointer(&c, &PointerEvent::new(PointerKind::Up, 197.0, 102.0));
+        let [(at, Some(r))] = t.points.as_slice() else { panic!("{:?}", t.points) };
+        assert_eq!((*at, r.node), (Point::new(200.0, 100.0), id));
+    }
+
+    /// An anchor of a compound path inside nested groups, lying just inside another object's
+    /// edge, is picked and linked, though that edge is nearer the pointer than any of the
+    /// compound path's own segments. A press there that moves a few pixels picks it too.
+    #[test]
+    fn an_anchor_under_another_objects_edge_is_picked() {
+        use std::sync::Arc;
+        use vectorcraft_doc::{Appearance, NodeKind};
+        use vectorcraft_geom::Rect;
+        let (mut d, _) = doc_with_rect();
+        let l = d.layers[0].id;
+        let (outer, inner, compound) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+        let mut path = vectorcraft_geom::shapes::rectangle(Rect::new(20.0, 20.0, 40.0, 40.0));
+        path.subpaths.extend(vectorcraft_geom::shapes::rectangle(Rect::new(150.0, 103.0, 180.0, 130.0)).subpaths);
+        let art = Node::path(compound, path, Appearance::default_art());
+        let inner_group = Node::new(inner, NodeKind::Group { children: vec![Arc::new(art)], clip: false });
+        let group = Node::new(outer, NodeKind::Group { children: vec![Arc::new(inner_group)], clip: false });
+        d.insert(Some(l), 0, group).unwrap();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let corner = (Point::new(150.0, 103.0), Some(PointRef { node: compound, subpath: 1, anchor: 0 }));
+        let mut t = DimensionTool::default();
+        assert_eq!(t.snap_linear(&c, Point::new(151.0, 101.0)), corner);
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 151.0, 101.0));
+        assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 155.0, 100.0)).is_empty(), "no segment dimension is dragged out");
+        t.pointer(&c, &PointerEvent::new(PointerKind::Up, 155.0, 100.0));
+        assert_eq!(t.points, vec![corner]);
+    }
+
+    #[test]
+    fn placement_press_previews_without_a_prior_move() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let mut t = DimensionTool::default();
+        for (x, y) in [(400.0, 400.0), (450.0, 420.0)] {
+            assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, x, y)).is_empty());
+            assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, x, y)).is_empty());
+        }
+        assert!(t.pending.is_some());
+        let acts = t.pointer(&c, &PointerEvent::new(PointerKind::Down, 470.0, 450.0));
+        assert!(matches!(acts.first(), Some(Action::Begin(_))), "{acts:?}");
+        assert!(matches!(acts.last(), Some(Action::Preview(_, _))), "{acts:?}");
     }
 }

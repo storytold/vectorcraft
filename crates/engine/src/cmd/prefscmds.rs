@@ -5,7 +5,7 @@
 
 use serde_json::{Map, Value, json};
 
-use super::*;
+use super::{CommandSpec, EngineError, Result, Session, always, bad, cmd, str_param};
 use crate::Prefs;
 use crate::units::Measure;
 use vectorcraft_doc::{GridPrefs, Unit};
@@ -81,6 +81,16 @@ pub const UNITS: &[(&str, &str)] = &[
     ("yards", "Yards"),
     ("feet", "Feet"),
 ];
+/// What Units › East Asian Type offers, as (`Unit::key`, `Unit::label`): [`Unit::EAST_ASIAN`].
+pub const EAST_ASIAN_UNITS: &[(&str, &str)] = &{
+    let mut out = [("", ""); Unit::EAST_ASIAN.len()];
+    let mut i = 0;
+    while i < out.len() {
+        out[i] = (Unit::EAST_ASIAN[i].key(), Unit::EAST_ASIAN[i].label());
+        i += 1;
+    }
+    out
+};
 const LINE_STYLE: &[(&str, &str)] = &[("lines", "Lines"), ("dots", "Dots")];
 /// Performance › Graphics Processor (`gpuPreference`), read by the desktop app at startup. The
 /// values are WebGPU's power preferences plus `automatic`; 0.5.0's default, `powerSaving`, reads as
@@ -89,8 +99,9 @@ pub const GPU_PREFERENCES: &[(&str, &str)] =
     &[("automatic", "Automatic"), ("lowPower", "Power Saving (integrated)"), ("highPerformance", "High Performance (discrete)")];
 /// Performance › Linux Display Server (`linuxDisplayServer`), read by the desktop app at startup:
 /// `x11` opens the window through XWayland on a Wayland session, where dropped files arrive
-/// (winit 0.30 has no Wayland drag and drop, #1151); `x11WithPen` does the same only when a pen is
-/// attached as the app starts: under XWayland a drawing tablet's pen draws as a mouse (#2028).
+/// (winit 0.30 has no Wayland drag and drop, #1151); `automatic` and `x11WithPen` do the same only
+/// when a pen is attached as the app starts: under XWayland a drawing tablet's pen draws as a mouse
+/// (#2028, #4967).
 const LINUX_DISPLAY_SERVERS: &[(&str, &str)] =
     &[("automatic", "Automatic"), ("x11", "X11 (XWayland)"), ("x11WithPen", "X11 (XWayland) When a Pen Is Attached")];
 const BLACK: &[(&str, &str)] = &[("accurate", "Display All Blacks Accurately"), ("rich", "Display All Blacks as Rich Black")];
@@ -129,6 +140,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("disableAutoAddDelete", "General", "Options", "Disable Auto Add/Delete", bool),
     p!("usePreciseCursors", "General", "Options", "Use Precise Cursors", bool),
     p!("showToolTips", "General", "Options", "Show Tool Tips", bool),
+    p!("showExternalScriptWarning", "General", "Options", "Show External Script Warning", bool),
     p!("antiAliasedArtwork", "General", "Options", "Anti-aliased Artwork", bool),
     p!("selectSameTintPercent", "General", "Options", "Select Same Tint %", bool),
     p!("showHomeScreen", "General", "Options", "Show The Home Screen When No Documents Are Open", bool),
@@ -139,10 +151,19 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("scaleCorners", "General", "Options", "Scale Corners", bool),
     p!("scaleStrokes", "General", "Options", "Scale Strokes & Effects", bool),
     p!("zoomWithMouseWheel", "General", "Options", "Zoom with Mouse Wheel", bool),
+    p!("ctrlWheelScrollsSideways", "General", "Options", "Scroll Sideways with Cmd/Ctrl + Wheel", bool),
     p!("scrubNumericFields", "General", "Options", "Scrub Numeric Fields by Dragging", bool),
     p!("trackpadRotateView", "General", "Options", "Trackpad Gesture to Rotate View", bool),
+    p!("holdToolKeys", "General", "Options", "Hold a Tool Shortcut to Use the Tool Temporarily", bool),
     // Selection & Anchor Display
     p!("selectionTolerance", "Selection & Anchor Display", "Selection", "Tolerance", num(1.0, 8.0, "px")),
+    p!(
+        "marqueeSelection",
+        "Selection & Anchor Display",
+        "Selection",
+        "Marquee Selection",
+        choice(&[("touching", "Touching"), ("enclosed", "Fully Enclosed"), ("directional", "Drag Direction")])
+    ),
     p!("objectSelectionByPathOnly", "Selection & Anchor Display", "Selection", "Object Selection by Path Only", bool),
     p!("snapToPointTolerance", "Selection & Anchor Display", "Selection", "Snap to Point", num(1.0, 8.0, "px")),
     p!("ctrlClickSelectsBehind", "Selection & Anchor Display", "Selection", "Command Click to Select Objects Behind", bool),
@@ -195,17 +216,19 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("highlightAlternateGlyphs", "Type", "Options", "Highlight Alternate Glyphs", bool),
     p!("highlightSubstitutedFonts", "Type", "Options", "Highlight Substituted Fonts", bool),
     p!("placeholderText", "Type", "Options", "Fill New Type Objects With Placeholder Text", bool),
+    p!("typedLists", "Type", "Options", "Start Lists From Typed Markers", bool),
     p!("fontsFolder", "Type", "Options", "Additional Fonts Folder", text),
     // Units
     p!("unitsGeneral", "Units", "", "General", choice(UNITS)),
     p!("unitsStroke", "Units", "", "Stroke", choice(UNITS)),
     p!("unitsType", "Units", "", "Type", choice(UNITS)),
-    p!("unitsAsianType", "Units", "", "East Asian Type", choice(UNITS)),
+    p!("unitsAsianType", "Units", "", "East Asian Type", choice(EAST_ASIAN_UNITS)),
     p!("numbersWithoutUnitsArePoints", "Units", "", "Numbers Without Units Are Points", bool),
     p!("identifyObjectsBy", "Units", "", "Identify Objects By", choice(&[("objectName", "Object Name"), ("xmlId", "XML ID")])),
     // Guides & Grid
     p!("guideColor", "Guides & Grid", "Guides", "Color", color),
     p!("guideStyle", "Guides & Grid", "Guides", "Style", choice(LINE_STYLE)),
+    p!("lockGuidesByDefault", "Guides & Grid", "Guides", "Lock Guides by Default", bool),
     p!("gridColor", "Guides & Grid", "Grid", "Color", color),
     p!("gridStyle", "Guides & Grid", "Grid", "Style", choice(LINE_STYLE)),
     p!("gridlineEvery", "Guides & Grid", "Grid", "Gridline every", len(1.0, 16383.0, General)),
@@ -236,6 +259,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("measurementLabels", "Smart Guides", "Display Options", "Measurement Labels", bool),
     p!("spacingGuides", "Smart Guides", "Display Options", "Spacing Guides", bool),
     p!("distanceGuides", "Smart Guides", "Display Options", "Invoke Distance Guides", bool),
+    p!("snapToLastLocation", "Smart Guides", "Display Options", "Snap to Last Location", bool),
     p!("snappingTolerance", "Smart Guides", "", "Snapping Tolerance", num(0.0, 40.0, "pt")),
     p!("snapTangent", "Smart Guides", "Geometric Guides", "Snap to Tangent", bool),
     p!("snapPerpendicular", "Smart Guides", "Geometric Guides", "Snap to Perpendicular", bool),
@@ -249,14 +273,43 @@ pub const PREF_SPECS: &[PrefSpec] = &[
         "",
         "Default Language",
         choice(&[
-            ("English: USA", "English: USA"),
-            ("English: UK", "English: UK"),
-            ("French", "French"),
-            ("German", "German"),
-            ("Spanish", "Spanish"),
-            ("Italian", "Italian"),
-            ("Dutch", "Dutch"),
-            ("Portuguese", "Portuguese")
+            ("en-US", "English: USA"),
+            ("en-GB", "English: UK"),
+            ("de", "German"),
+            ("de-CH", "German: Swiss"),
+            ("fr", "French"),
+            ("it", "Italian"),
+            ("es", "Spanish"),
+            ("ca", "Catalan"),
+            ("pt", "Portuguese"),
+            ("nl", "Dutch"),
+            ("da", "Danish"),
+            ("sv", "Swedish"),
+            ("fi", "Finnish"),
+            ("nb", "Norwegian"),
+            ("pl", "Polish"),
+            ("cs", "Czech"),
+            ("ru", "Russian"),
+            ("bg", "Bulgarian"),
+            ("sr-Cyrl", "Serbian: Cyrillic"),
+            ("sr-Latn", "Serbian: Latin"),
+            ("hr", "Croatian"),
+            ("tr", "Turkish"),
+            ("ja", "Japanese"),
+            ("zh", "Chinese"),
+            ("hi", "Hindi"),
+            ("mr", "Marathi"),
+            ("gu", "Gujarati"),
+            ("bn", "Bengali"),
+            ("pa", "Punjabi"),
+            ("ta", "Tamil"),
+            ("te", "Telugu"),
+            ("kn", "Kannada"),
+            ("ml", "Malayalam"),
+            ("or", "Odia"),
+            ("as", "Assamese"),
+            ("sa", "Sanskrit"),
+            ("ur", "Urdu")
         ])
     ),
     p!("hyphenationExceptions", "Hyphenation", "", "Exceptions (comma separated)", text),
@@ -298,6 +351,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("openDocumentsAsTabs", "User Interface", "", "Open Documents As Tabs", bool),
     p!("largeTabs", "User Interface", "", "Large Tabs", bool),
     p!("systemTitleBar", "User Interface", "", "System Title Bar", bool),
+    p!("appTitleBar", "User Interface", "", "VectorCraft Title Bar on Every Desktop", bool),
     p!("uiScaling", "User Interface", "UI Scaling", "Scale", num(0.75, 2.0, "×")),
     p!("scaleCursorWithUi", "User Interface", "UI Scaling", "Scale Cursor Proportional to UI", bool),
     // `auto` or a language code the shell registers (`zh-hant`); the shell shows it as a dropdown.
@@ -361,6 +415,8 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("newArtBasic", "General", "Appearance Panel", "New Art Has Basic Appearance", bool),
     // File Handling (continued)
     p!("templatesFolder", "File Handling", "Files", "Templates Folder", text),
+    // Off: raster images open in PhotoCraft where it is installed (#5236).
+    p!("editOriginalSystemDefaults", "File Handling", "Files", "Use System Defaults for Edit Original", bool),
     p!("appendConverted", "File Handling", "Files", "Mark Older Files as [Converted] When Opened", bool),
     // Native saves (`document.save {compress}`)
     p!("useCompression", "File Handling", "Files", "Use Compression", bool),
@@ -377,6 +433,14 @@ pub const PREF_SPECS: &[PrefSpec] = &[
         choice(&[("default", "Default"), ("object", "Transform Object Only"), ("pattern", "Transform Pattern Only"), ("both", "Transform Both")])
     ),
     p!("useRegistrationPointForSymbol", "General", "Transform Panel", "Use Registration Point for Symbol", bool),
+    // The Align panel menu's Align to Glyph Bounds: Align and Distribute measure type by its glyphs' ink.
+    p!("alignGlyphBoundsPoint", "Type", "Align to Glyph Bounds", "Point Text", bool),
+    p!("alignGlyphBoundsArea", "Type", "Align to Glyph Bounds", "Area Text", bool),
+    // The bounding box and the Transform panel measure point type by its glyphs' ink (also in the Transform panel menu).
+    p!("typeGlyphBounds", "Type", "Glyph Bounds", "Measure Type by Glyph Bounds", bool),
+    // Artboard Options › Global: the canvas darkens the area outside the artboards while the Artboard tool is active.
+    p!("fadeRegionOutsideArtboard", "General", "Artboard Options", "Fade Region Outside Artboard", bool),
+    p!("artboardUpdateWhileDragging", "General", "Artboard Options", "Update While Dragging", bool),
 ];
 
 pub fn spec(key: &str) -> Option<&'static PrefSpec> {
@@ -385,10 +449,11 @@ pub fn spec(key: &str) -> Option<&'static PrefSpec> {
 
 /// Preferences kept as one object with a command of their own instead of [`PREF_SPECS`] rows (they
 /// aren't in the Preferences dialog): the Eyedropper Options (`eyedropper.setOptions`), the
-/// Perspective Grid Options (`perspective.widget.options`) and the Pathfinder Options
-/// (`object.pathfinder.options`). `prefs.get` and `prefs.set` take them by key (a partial object
-/// updates what it names) and `prefs.reset` without a category resets them.
-pub const PREF_GROUPS: &[&str] = &["eyedropper", "perspectiveWidget", "pathfinder"];
+/// Perspective Grid Options (`perspective.widget.options`), the Pathfinder Options
+/// (`object.pathfinder.options`) and the Snap to Glyph options (`view.snapToGlyph.options`).
+/// `prefs.get` and `prefs.set` take them by key (a partial object updates what it names) and
+/// `prefs.reset` without a category resets them.
+pub const PREF_GROUPS: &[&str] = &["eyedropper", "perspectiveWidget", "pathfinder", "glyphSnap"];
 
 /// Validate a value for preference group `key` against `current`.
 fn validate_group(key: &str, current: &Value, v: &Value) -> std::result::Result<Value, String> {
@@ -399,6 +464,10 @@ fn validate_group(key: &str, current: &Value, v: &Value) -> std::result::Result<
         }
         "pathfinder" => {
             let cur: super::PathfinderOptions = serde_json::from_value(current.clone()).unwrap_or_default();
+            cur.merged(v).map(|o| json!(o))
+        }
+        "glyphSnap" => {
+            let cur: vectorcraft_tools::GlyphSnap = serde_json::from_value(current.clone()).unwrap_or_default();
             cur.merged(v).map(|o| json!(o))
         }
         "perspectiveWidget" => {
@@ -470,6 +539,50 @@ fn in_range(key: &str, x: Option<f64>, min: f64, max: f64) -> std::result::Resul
     }
 }
 
+/// A check of a folder path: `Err` says why the folder can't be the preference's value.
+pub type FolderCheck = fn(&str) -> std::result::Result<(), String>;
+
+/// The check a folder preference with a Choose… button gives a folder before it becomes the
+/// preference's value: Data Recovery keeps its copies in its folder, and the Additional Plug-ins
+/// Folder is read for plug-ins. `None` for any other preference.
+pub fn folder_check(key: &str) -> Option<FolderCheck> {
+    match key {
+        "recoveryFolder" => Some(writable_folder),
+        "pluginsFolder" => Some(plugins_folder),
+        _ => None,
+    }
+}
+
+/// `Ok` when `path` is a folder whose contents can be listed, as the plug-ins in it are found by
+/// listing it. A folder outside the automation roots in force is refused before it is looked at.
+fn plugins_folder(path: &str) -> std::result::Result<(), String> {
+    crate::file_access::check_read(path)?;
+    let dir = std::path::Path::new(path);
+    if !dir.is_dir() {
+        return Err(format!("{path} is not a folder"));
+    }
+    std::fs::read_dir(dir).map(drop).map_err(|e| format!("Plug-ins can't be loaded from {path}: {e}"))
+}
+
+/// `Ok` when `path` is a folder that can be listed and that a folder can be created in, as the
+/// recovery store lists its folders there and makes its own: the folder is listed, and an empty
+/// folder is made there and removed. A folder that can't be removed again is an error too. A
+/// folder outside the automation roots in force is refused before it is looked at.
+fn writable_folder(path: &str) -> std::result::Result<(), String> {
+    crate::file_access::check_write(path)?;
+    crate::file_access::check_read(path)?;
+    let dir = std::path::Path::new(path);
+    if !dir.is_dir() {
+        return Err(format!("{path} is not a folder"));
+    }
+    let refused = |e: std::io::Error| format!("Data Recovery can't keep copies in {path}: {e}");
+    std::fs::read_dir(dir).map_err(refused)?;
+    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |t| t.as_nanos());
+    let check = dir.join(format!(".vectorcraft-write-check-{}-{nanos}", std::process::id()));
+    std::fs::create_dir(&check).map_err(refused)?;
+    std::fs::remove_dir(&check).map_err(refused)
+}
+
 impl Prefs {
     pub fn to_json(&self) -> Value {
         serde_json::to_value(self).unwrap_or(Value::Null)
@@ -518,6 +631,25 @@ impl Prefs {
         refused
     }
 
+    /// The [`folder_check`] of each folder preference in `values`. An empty value (the default
+    /// folder) and a folder the preference already holds are not checked. The web has no folders to
+    /// check.
+    fn check_folders(&self, values: &Map<String, Value>) -> std::result::Result<(), String> {
+        if cfg!(target_arch = "wasm32") {
+            return Ok(());
+        }
+        let saved = self.to_json();
+        for (key, v) in values {
+            let (Some(check), Some(path)) = (folder_check(key), v.as_str()) else { continue };
+            let path = path.trim();
+            if path.is_empty() || saved[key.as_str()].as_str().is_some_and(|s| s.trim() == path) {
+                continue;
+            }
+            check(path)?;
+        }
+        Ok(())
+    }
+
     /// Values of one category (`None` = all) reset to defaults.
     pub fn reset(&mut self, category: Option<&str>) {
         let d = Prefs::default().to_json();
@@ -550,13 +682,28 @@ impl Session {
         for e in self.prefs.keep_folders(&mut p) {
             log::warn!("{e}");
         }
+        // The edit the active tool computes on another thread is applied first (the Preferences
+        // dialog applies its settings here, outside a command). A failure to apply it was the
+        // edit's own, and the preferences apply all the same.
+        if self.depth == 0 {
+            let _ = self.finish_tool_edit_later();
+        }
         let grid_changed = p.gridline_every != self.prefs.gridline_every || p.grid_subdivisions != self.prefs.grid_subdivisions;
         let history_changed = p.history_states != self.prefs.history_states;
         let tile_edge_changed = p.pattern_tile_edge_color != self.prefs.pattern_tile_edge_color;
         let fonts_folder_changed = p.fonts_folder != self.prefs.fonts_folder;
         let hyphen_exceptions_changed = p.hyphenation_exceptions != self.prefs.hyphenation_exceptions;
         let corner_radius_changed = p.corner_radius != self.prefs.corner_radius;
+        let lock_guides_changed = p.lock_guides_by_default != self.prefs.lock_guides_by_default;
+        if p.trace_presets != self.prefs.trace_presets {
+            self.trace_preset_changes.replaced();
+        }
         self.prefs = p;
+        // Guides & Grid › Lock Guides by Default sets the lock when it changes, the saved value at
+        // start included. Otherwise the lock stays as View › Guides › Lock Guides left it.
+        if lock_guides_changed {
+            self.set_guides_locked(self.prefs.lock_guides_by_default);
+        }
         if corner_radius_changed {
             // General › Corner Radius is the Rounded Rectangle tool's radius (#394): a tool already
             // made (active, or lent a selection tool for a drag) takes the new value.
@@ -616,7 +763,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Set Preference",
             [],
             None,
-            "{key, value} or {values: {key: value, …}} set preferences (validated; see prefs.list; lengths in pt or strings with a unit; unitsGeneral also sets the active document's units, one undo step; the eyedropper group takes a partial object, as eyedropper.setOptions)",
+            "{key, value} or {values: {key: value, …}} set preferences (validated; see prefs.list; lengths in pt or strings with a unit; unitsGeneral also sets the active document's units, one undo step; the eyedropper group takes a partial object, as eyedropper.setOptions; a new recoveryFolder must be a folder that can be listed and written in, and a new pluginsFolder a folder that can be listed: otherwise an error, and nothing changes; an empty value is not checked)",
             always,
             set
         ),
@@ -647,6 +794,7 @@ fn set(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(e) = s.prefs.keep_folders(&mut next).into_iter().next() {
         return Err(EngineError::Other(e));
     }
+    s.prefs.check_folders(&values).map_err(EngineError::Other)?;
     s.apply_prefs(next);
     // Units ▸ General is also the open document's units (as Document Setup sets them).
     if values.contains_key("unitsGeneral") && s.active().is_some() {

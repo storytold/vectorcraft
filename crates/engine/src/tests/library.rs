@@ -111,6 +111,416 @@ fn colours_come_from_the_selection_and_paint_it() {
     assert!(s.execute("library.use", &json!({"library": lib, "kind": "fillColor", "item": "#nope"})).is_err());
 }
 
+/// The spot swatch of object `id`'s fill: its name, whether it is spot, the paint's tint.
+fn spot_of(s: &Session, id: &Value) -> (String, bool, f32) {
+    match paint_of(s, id, false) {
+        vectorcraft_color::Paint::Solid { swatch: Some(name), tint, .. } => {
+            let spot = s.doc().unwrap().doc.swatch(&name).is_some_and(|w| w.spot);
+            (name, spot, tint)
+        }
+        other => panic!("not linked to a swatch: {other:?}"),
+    }
+}
+
+/// A spot colour added to a library keeps its ink, kept in the library's file: used in a new
+/// document (or after its own was closed) it adds the spot swatch of that name and colour and
+/// links the paint to it, at its tint; one the document has already is reused (#5812).
+#[test]
+fn a_spot_colour_stays_spot_in_another_document() {
+    let dir = std::env::temp_dir().join(format!("vc-libraries-spot-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let folder = dir.to_string_lossy().to_string();
+    let mut s = session();
+    s.libraries.set_dir(Some(folder.clone()));
+    let lib = run(&mut s, "library.create", json!({"name": "Inks"}))["id"].as_str().unwrap().to_string();
+    let ink = vectorcraft_color::Color::cmyk(0.0, 1.0, 0.0, 0.0);
+    run(&mut s, "swatch.new", json!({"name": "Kiss-cut", "color": ink, "spot": true}));
+    let a = run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20}))["id"].clone();
+    run(&mut s, "paint.setFill", json!({"swatch": "Kiss-cut", "ids": [a]}));
+    run(&mut s, "select.set", json!({"ids": [a]}));
+    assert_eq!(run(&mut s, "library.add", json!({"library": lib, "kind": "fillColor"}))["name"], "Kiss-cut");
+    // A swatch dropped on the panel: its colour with its spot swatch's name and tint.
+    let r = run(&mut s, "library.add", json!({"library": lib, "kind": "fillColor", "color": ink, "swatch": "Kiss-cut", "tint": 40, "name": "Light"}));
+    assert_eq!(r["existing"], false, "a tint is another colour");
+    // The same colour as a process colour is another item.
+    run(&mut s, "paint.setFill", json!({"color": ink, "ids": [a]}));
+    assert_eq!(run(&mut s, "library.add", json!({"library": lib, "kind": "fillColor"}))["existing"], false);
+    run(&mut s, "file.close", json!({}));
+
+    // Another session reads the library's file into a new document.
+    let mut t = session();
+    t.libraries.set_dir(Some(folder));
+    let got = run(&mut t, "library.get", json!({"library": "Inks"}));
+    assert_eq!(got["colors"][0]["spot"], "Kiss-cut");
+    assert_eq!(got["colors"][2]["spot"], Value::Null);
+    let b = run(&mut t, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20}))["id"].clone();
+    run(&mut t, "select.set", json!({"ids": [b]}));
+    run(&mut t, "library.use", json!({"library": "Inks", "kind": "fillColor", "item": "Kiss-cut"}));
+    assert_eq!(spot_of(&t, &b), ("Kiss-cut".to_string(), true, 1.0));
+    let doc = &t.doc().unwrap().doc;
+    assert_eq!(doc.swatch("Kiss-cut").unwrap().paint.color(), Some(ink), "the ink keeps its values");
+    assert!(doc.spot_names().contains(&"Kiss-cut".to_string()));
+    // Its tint links to the same swatch: none is added again.
+    let swatches = doc.swatches.len();
+    run(&mut t, "library.use", json!({"library": "Inks", "kind": "fillColor", "item": "Light"}));
+    let (name, spot, tint) = spot_of(&t, &b);
+    assert_eq!((name.as_str(), spot), ("Kiss-cut", true));
+    assert!((tint - 0.4).abs() < 1e-4, "{tint}");
+    assert_eq!(t.doc().unwrap().doc.swatches.len(), swatches);
+    // One undo step takes back the new swatch along with the paint.
+    run(&mut t, "edit.undo", json!({}));
+    run(&mut t, "edit.undo", json!({}));
+    assert!(t.doc().unwrap().doc.swatch("Kiss-cut").is_none());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The fill (`stroke`: stroke) paint of object `id`.
+fn paint_of(s: &Session, id: &Value, stroke: bool) -> vectorcraft_color::Paint {
+    let n = s.doc().unwrap().doc.node(NodeId(id.as_u64().unwrap())).unwrap().clone();
+    if stroke { n.appearance.stroke().unwrap().paint.clone() } else { n.appearance.fill().unwrap().paint.clone() }
+}
+
+/// The gradient of paint `p`.
+fn gradient(p: &vectorcraft_color::Paint) -> &vectorcraft_color::GradientPaint {
+    match p {
+        vectorcraft_color::Paint::Gradient(g) => g,
+        other => panic!("not a gradient: {other:?}"),
+    }
+}
+
+/// A gradient added from a placed fill keeps its stops, kind and angle without the placement, and
+/// paints another object's fill or stroke with the same stops; a gradient swatch adds under its
+/// name.
+#[test]
+fn a_gradient_goes_into_a_library_and_paints_another_object() {
+    let mut s = session();
+    let lib = run(&mut s, "library.create", json!({}))["id"].as_str().unwrap().to_string();
+    let a = run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 40, "height": 20}))["id"].clone();
+    let stops = json!([{"offset": 0, "color": "#ff0000"}, {"offset": 0.4, "color": "#00ff00", "opacity": 0.5, "midpoint": 0.3}, {"offset": 1, "color": "#0000ff"}]);
+    let g = json!({"kind": "radial", "stops": stops, "start": [0, 0], "end": [40, 20]});
+    run(&mut s, "paint.setFill", json!({"gradient": g, "ids": [a]}));
+    run(&mut s, "select.set", json!({"ids": [a]}));
+    assert!(s.execute("library.add", &json!({"library": lib, "kind": "strokeGradient"})).is_err(), "its stroke is solid");
+    let added = run(&mut s, "library.add", json!({"library": lib, "kind": "fillGradient"}));
+    assert_eq!((added["name"].as_str(), added["existing"].as_bool()), (Some("Gradient"), Some(false)));
+    assert_eq!(run(&mut s, "library.add", json!({"library": lib, "kind": "fillGradient"}))["existing"], true);
+    let source = gradient(&paint_of(&s, &a, false)).clone();
+    // In another document: a rectangle's fill, then its stroke.
+    run(&mut s, "file.new", json!({"width": 300, "height": 300}));
+    let b = run(&mut s, "shape.rectangle", json!({"x": 100, "y": 100, "width": 80, "height": 80}))["id"].clone();
+    run(&mut s, "select.set", json!({"ids": [b]}));
+    let r = run(&mut s, "library.use", json!({"library": lib, "kind": "fillGradient", "item": "Gradient"}));
+    assert_eq!(r["kind"], "fillGradient");
+    let fill = gradient(&paint_of(&s, &b, false)).clone();
+    assert_eq!(fill.gradient, source.gradient, "the same kind and stops");
+    assert_eq!((fill.angle, fill.geom), (source.angle, None), "fitted to the object it paints");
+    run(&mut s, "library.use", json!({"library": lib, "kind": "fillGradient", "item": "Gradient", "to": "stroke"}));
+    assert_eq!(gradient(&paint_of(&s, &b, true)).gradient, source.gradient);
+    // A gradient swatch adds under its name.
+    run(
+        &mut s,
+        "swatch.new",
+        json!({"name": "Sunset", "gradient": {"stops": [{"offset": 0, "color": "#ffcc00"}, {"offset": 1, "color": "#cc3300"}]}}),
+    );
+    assert_eq!(run(&mut s, "library.add", json!({"library": lib, "kind": "fillGradient", "swatch": "Sunset"}))["name"], "Sunset");
+    assert!(s.execute("library.add", &json!({"library": lib, "kind": "fillGradient", "swatch": "White"})).is_err(), "not a gradient swatch");
+    let got = run(&mut s, "library.get", json!({"library": lib}));
+    let names: Vec<&str> = got["gradients"].as_array().unwrap().iter().map(|g| g["name"].as_str().unwrap()).collect();
+    assert_eq!(names, ["Gradient", "Sunset"]);
+    assert!(s.execute("library.use", &json!({"library": lib, "kind": "fillGradient", "item": "Nope"})).is_err());
+}
+
+/// Compound paths, groups and colorized objects add the paint their Fill proxy shows: a color by
+/// its hex, a gradient with its stops.
+#[test]
+fn colors_and_gradients_come_from_compound_paths_groups_and_colorized_objects() {
+    use std::sync::Arc;
+    use vectorcraft_color::{Color, Paint};
+    use vectorcraft_doc::{Node, NodeKind};
+    let mut s = session();
+    let lib = run(&mut s, "library.create", json!({}))["id"].as_str().unwrap().to_string();
+    let solid = run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20}))["id"].clone();
+    let graded = run(&mut s, "shape.rectangle", json!({"x": 30, "y": 0, "width": 20, "height": 20}))["id"].clone();
+    let stops = json!([{"offset": 0, "color": "#ff0000"}, {"offset": 0.5, "color": "#00ff00"}, {"offset": 1, "color": "#0000ff"}]);
+    run(&mut s, "paint.setFill", json!({"color": "#123456", "ids": [solid]}));
+    run(&mut s, "paint.setFill", json!({"gradient": {"kind": "linear", "stops": stops}, "ids": [graded]}));
+    let sources = [NodeId(solid.as_u64().unwrap()), NodeId(graded.as_u64().unwrap())];
+    // For each source: a compound path and a group painted as it is, and a gray rectangle
+    // colorized with its fill.
+    let mut made: Vec<(NodeId, bool)> = vec![];
+    s.edit("Make", |d, _| {
+        let l = d.layers[0].id;
+        for (k, src) in sources.into_iter().enumerate() {
+            let source = d.node(src).unwrap().clone();
+            let fill = source.appearance.fill().unwrap().paint.clone();
+            let gradient = matches!(fill, Paint::Gradient(_));
+            let member = |d: &mut vectorcraft_doc::Document| {
+                let mut m = source.clone();
+                (m.id, m.appearance) = (d.alloc_id(), Default::default());
+                Arc::new(m)
+            };
+            let (a, b) = (member(d), member(d));
+            let mut compound = Node::new(d.alloc_id(), NodeKind::Compound { children: vec![a], rule: Default::default() });
+            let mut group = Node::group(d.alloc_id(), vec![b]);
+            compound.appearance = source.appearance.clone();
+            group.appearance = source.appearance.clone();
+            let mut colorized = source.clone();
+            colorized.id = d.alloc_id();
+            colorized.appearance.set_fill(Paint::solid(Color::rgb8(128, 128, 128)));
+            colorized.extras_mut().colorize = Some(Box::new(fill));
+            for (j, n) in [compound, group, colorized].into_iter().enumerate() {
+                made.push((n.id, gradient));
+                d.insert(Some(l), 2 + 3 * k + j, n).unwrap();
+            }
+        }
+        Ok(())
+    })
+    .unwrap();
+    for (id, gradient) in made {
+        run(&mut s, "select.set", json!({"ids": [id.0]}));
+        if gradient {
+            run(&mut s, "library.add", json!({"library": lib, "kind": "fillGradient"}));
+            let got = run(&mut s, "library.get", json!({"library": lib}));
+            let last = &got["gradients"].as_array().unwrap().last().unwrap()["gradient"]["gradient"]["stops"];
+            assert_eq!(last.as_array().map(Vec::len), Some(3), "{id:?}: {got}");
+        } else {
+            let added = run(&mut s, "library.add", json!({"library": lib, "kind": "fillColor"}));
+            assert_eq!(added["name"], "#123456", "{id:?}");
+        }
+    }
+}
+
+/// A gradient added from an object that was rotated keeps the direction it shows there.
+#[test]
+fn a_gradient_from_rotated_art_keeps_its_direction() {
+    let mut s = session();
+    let lib = run(&mut s, "library.create", json!({}))["id"].as_str().unwrap().to_string();
+    let a = run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 40, "height": 20}))["id"].clone();
+    let stops = json!([{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]);
+    run(&mut s, "paint.setFill", json!({"gradient": {"kind": "linear", "stops": stops}, "ids": [a]}));
+    run(&mut s, "select.set", json!({"ids": [a]}));
+    run(&mut s, "object.rotate", json!({"angle": 90}));
+    let shown = gradient(&paint_of(&s, &a, false)).geom.expect("placed by the rotation").angle_deg();
+    assert!((shown.abs() - 90.0).abs() < 1e-6, "{shown}");
+    run(&mut s, "library.add", json!({"library": lib, "kind": "fillGradient"}));
+    let got = run(&mut s, "library.get", json!({"library": lib}));
+    let angle = got["gradients"][0]["gradient"]["angle"].as_f64().unwrap();
+    assert!((angle - shown).abs() < 1e-6, "{angle} vs {shown}");
+}
+
+/// Type's fill is its characters' paint: a gradient or a color on selected type is what it adds,
+/// not the default for new art.
+#[test]
+fn type_adds_the_paint_of_its_characters() {
+    let mut s = session();
+    let lib = run(&mut s, "library.create", json!({}))["id"].as_str().unwrap().to_string();
+    let t = run(&mut s, "text.create", json!({"x": 10, "y": 50, "text": "Hi"}))["id"].clone();
+    let stops = json!([{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]);
+    run(&mut s, "paint.setFill", json!({"gradient": {"kind": "linear", "stops": stops}, "ids": [t]}));
+    run(&mut s, "paint.setStroke", json!({"color": "#00ff00", "ids": [t]}));
+    // The defaults for new art differ from the type's paint.
+    run(&mut s, "select.set", json!({"ids": []}));
+    run(&mut s, "paint.setFill", json!({"color": "#123456"}));
+    run(&mut s, "paint.setStroke", json!({"color": "#654321"}));
+    run(&mut s, "select.set", json!({"ids": [t]}));
+    run(&mut s, "library.add", json!({"library": lib, "kind": "fillGradient"}));
+    run(&mut s, "library.add", json!({"library": lib, "kind": "strokeColor"}));
+    let got = run(&mut s, "library.get", json!({"library": lib}));
+    assert_eq!(got["gradients"][0]["gradient"]["gradient"]["stops"].as_array().map(Vec::len), Some(2), "{got}");
+    assert_eq!(got["colors"][0]["name"].as_str().map(str::to_lowercase).as_deref(), Some("#00ff00"), "{got}");
+    // Rotated type: the gradient keeps the direction it shows in the document.
+    run(&mut s, "object.rotate", json!({"angle": 90}));
+    let shown = s.doc().unwrap().doc.node(NodeId(t.as_u64().unwrap())).unwrap().proxy_gradient(false, None).unwrap().1.angle_deg();
+    assert!((shown.abs() - 90.0).abs() < 1e-6, "{shown}");
+    run(&mut s, "library.add", json!({"library": lib, "kind": "fillGradient"}));
+    let got = run(&mut s, "library.get", json!({"library": lib}));
+    let angle = got["gradients"].as_array().unwrap().last().unwrap()["gradient"]["angle"].as_f64().unwrap();
+    assert!((angle - shown).abs() < 1e-6, "{angle} vs {shown}");
+}
+
+/// Pattern `name` made from object `id`, in a 20-point tile.
+fn make_pattern(s: &mut Session, id: &Value, name: &str) {
+    run(s, "select.set", json!({"ids": [id]}));
+    run(s, "object.pattern.make", json!({"name": name, "width": 20, "height": 20}));
+    run(s, "object.pattern.done", json!({}));
+}
+
+/// A pattern added from a fill comes with its art; used in a new document it defines the pattern
+/// and its swatch and paints the selection in one undo step, used again it reuses that pattern,
+/// and a document whose pattern of that name differs gets it under another name.
+#[test]
+fn a_pattern_item_defines_its_pattern_in_a_new_document() {
+    let mut s = session();
+    let lib = run(&mut s, "library.create", json!({}))["id"].as_str().unwrap().to_string();
+    let dot = run(&mut s, "shape.ellipse", json!({"x": 0, "y": 0, "width": 10, "height": 10}))["id"].clone();
+    run(&mut s, "paint.setFill", json!({"color": "#cc3300", "ids": [dot]}));
+    make_pattern(&mut s, &dot, "Dots");
+    let a = run(&mut s, "shape.rectangle", json!({"x": 50, "y": 50, "width": 40, "height": 40}))["id"].clone();
+    run(&mut s, "paint.setFill", json!({"swatch": "Dots", "ids": [a]}));
+    run(&mut s, "select.set", json!({"ids": [a]}));
+    assert!(s.execute("library.add", &json!({"library": lib, "kind": "strokePattern"})).is_err(), "its stroke is solid");
+    let added = run(&mut s, "library.add", json!({"library": lib, "kind": "fillPattern"}));
+    assert_eq!((added["name"].as_str(), added["existing"].as_bool()), (Some("Dots"), Some(false)));
+    assert_eq!(run(&mut s, "library.add", json!({"library": lib, "kind": "fillPattern", "swatch": "Dots"}))["existing"], true);
+    let got = run(&mut s, "library.get", json!({"library": lib}));
+    assert!(!got["patterns"][0]["thumbnail"].as_str().unwrap().is_empty(), "a thumbnail of the pattern");
+    let art = s.doc().unwrap().doc.pattern("Dots").unwrap().art.clone();
+    // A new document has no pattern until the item is used.
+    run(&mut s, "file.new", json!({"width": 300, "height": 300}));
+    let b = run(&mut s, "shape.rectangle", json!({"x": 100, "y": 100, "width": 80, "height": 80}))["id"].clone();
+    run(&mut s, "select.set", json!({"ids": [b]}));
+    let undo = s.doc().unwrap().history.undo.len();
+    assert!(s.doc().unwrap().doc.pattern("Dots").is_none());
+    let r = run(&mut s, "library.use", json!({"library": lib, "kind": "fillPattern", "item": "Dots"}));
+    assert_eq!((r["kind"].as_str(), r["pattern"].as_str()), (Some("fillPattern"), Some("Dots")));
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.pattern("Dots").unwrap().art.len(), art.len());
+    assert!(d.swatch("Dots").is_some(), "its swatch comes along");
+    assert!(matches!(paint_of(&s, &b, false), vectorcraft_color::Paint::Pattern { ref pattern, .. } if pattern == "Dots"));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    // Used again, on the stroke: the same pattern.
+    run(&mut s, "library.use", json!({"library": lib, "kind": "fillPattern", "item": "Dots", "to": "stroke"}));
+    assert!(matches!(paint_of(&s, &b, true), vectorcraft_color::Paint::Pattern { ref pattern, .. } if pattern == "Dots"));
+    assert_eq!(s.doc().unwrap().doc.patterns.len(), 1);
+    run(&mut s, "edit.undo", json!({}));
+    run(&mut s, "edit.undo", json!({}));
+    assert!(s.doc().unwrap().doc.pattern("Dots").is_none(), "undone with the paint");
+    // Another document's own "Dots" stays; the library's comes in under another name.
+    run(&mut s, "file.new", json!({"width": 300, "height": 300}));
+    let sq = run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 6, "height": 6}))["id"].clone();
+    // Not the library's pattern, which the default fill and stroke now name.
+    run(&mut s, "paint.setFill", json!({"color": "#0044aa", "ids": [sq]}));
+    run(&mut s, "paint.setStroke", json!({"none": true, "ids": [sq]}));
+    make_pattern(&mut s, &sq, "Dots");
+    let c = run(&mut s, "shape.rectangle", json!({"x": 100, "y": 100, "width": 80, "height": 80}))["id"].clone();
+    run(&mut s, "select.set", json!({"ids": [c]}));
+    let r = run(&mut s, "library.use", json!({"library": lib, "kind": "fillPattern", "item": "Dots"}));
+    let renamed = r["pattern"].as_str().unwrap().to_string();
+    assert_ne!(renamed, "Dots");
+    assert!(matches!(paint_of(&s, &c, false), vectorcraft_color::Paint::Pattern { ref pattern, .. } if *pattern == renamed));
+    assert_eq!(s.doc().unwrap().doc.patterns.len(), 2);
+}
+
+/// A pattern used in a document that already holds it paints with the pattern even when a color
+/// swatch there has the pattern's name (an imported SVG pattern can be named `White`).
+#[test]
+fn a_pattern_item_paints_its_pattern_over_a_color_swatch_of_its_name() {
+    let mut s = session();
+    let lib = run(&mut s, "library.create", json!({}))["id"].as_str().unwrap().to_string();
+    let dot = run(&mut s, "shape.ellipse", json!({"x": 0, "y": 0, "width": 10, "height": 10}))["id"].clone();
+    run(&mut s, "paint.setFill", json!({"color": "#cc3300", "ids": [dot]}));
+    make_pattern(&mut s, &dot, "Dots");
+    let a = run(&mut s, "shape.rectangle", json!({"x": 50, "y": 50, "width": 40, "height": 40}))["id"].clone();
+    run(&mut s, "paint.setFill", json!({"swatch": "Dots", "ids": [a]}));
+    run(&mut s, "select.set", json!({"ids": [a]}));
+    run(&mut s, "library.add", json!({"library": lib, "kind": "fillPattern"}));
+    // The swatch named `Dots` becomes a solid color; the pattern of that name stays.
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    for sw in &mut doc.swatches {
+        if sw.name == "Dots" {
+            sw.paint = vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 1.0, 0.0));
+        }
+    }
+    assert!(doc.pattern("Dots").is_some());
+    let b = run(&mut s, "shape.rectangle", json!({"x": 100, "y": 100, "width": 40, "height": 40}))["id"].clone();
+    run(&mut s, "select.set", json!({"ids": [b]}));
+    let r = run(&mut s, "library.use", json!({"library": lib, "kind": "fillPattern", "item": "Dots"}));
+    let used = r["pattern"].as_str().unwrap().to_string();
+    let paint = paint_of(&s, &b, false);
+    assert!(matches!(paint, vectorcraft_color::Paint::Pattern { ref pattern, .. } if *pattern == used), "{paint:?}");
+}
+
+/// A pattern used in a document that holds it without a swatch (as an imported SVG can) gets its
+/// swatch, in the same undo step as the paint.
+#[test]
+fn a_pattern_item_adds_the_swatch_of_a_pattern_the_document_holds_without_one() {
+    let mut s = session();
+    let lib = run(&mut s, "library.create", json!({}))["id"].as_str().unwrap().to_string();
+    let dot = run(&mut s, "shape.ellipse", json!({"x": 0, "y": 0, "width": 10, "height": 10}))["id"].clone();
+    run(&mut s, "paint.setFill", json!({"color": "#cc3300", "ids": [dot]}));
+    make_pattern(&mut s, &dot, "Dots");
+    let a = run(&mut s, "shape.rectangle", json!({"x": 50, "y": 50, "width": 40, "height": 40}))["id"].clone();
+    run(&mut s, "paint.setFill", json!({"swatch": "Dots", "ids": [a]}));
+    run(&mut s, "select.set", json!({"ids": [a]}));
+    run(&mut s, "library.add", json!({"library": lib, "kind": "fillPattern"}));
+    let is_dots = |w: &vectorcraft_color::Swatch| matches!(&w.paint, vectorcraft_color::Paint::Pattern { pattern, .. } if pattern == "Dots");
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).swatches.retain(|w| !is_dots(w));
+    let b = run(&mut s, "shape.rectangle", json!({"x": 100, "y": 100, "width": 40, "height": 40}))["id"].clone();
+    run(&mut s, "select.set", json!({"ids": [b]}));
+    let undo = s.doc().unwrap().history.undo.len();
+    run(&mut s, "library.use", json!({"library": lib, "kind": "fillPattern", "item": "Dots"}));
+    assert_eq!(s.doc().unwrap().doc.patterns.len(), 1, "the pattern there is reused");
+    assert!(s.doc().unwrap().doc.swatches_iter().any(is_dots), "its swatch is added");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    run(&mut s, "edit.undo", json!({}));
+    assert!(!s.doc().unwrap().doc.swatches_iter().any(is_dots), "undone with the paint");
+}
+
+/// Gradients and patterns go out to a library file and come back; read from a file, a gradient
+/// with too few stops is dropped, one out of range is put in range, and a pattern whose data is
+/// damaged or doesn't hold its pattern fails cleanly when used.
+#[test]
+fn library_gradients_and_patterns_round_trip_and_damaged_ones_fail_cleanly() {
+    let mut s = session();
+    run(&mut s, "library.create", json!({"name": "Brand"}));
+    let a = run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10}))["id"].clone();
+    make_pattern(&mut s, &a, "Squares");
+    run(
+        &mut s,
+        "swatch.new",
+        json!({"name": "Sunset", "gradient": {"stops": [{"offset": 0, "color": "#ffcc00"}, {"offset": 1, "color": "#cc3300"}]}}),
+    );
+    run(&mut s, "library.add", json!({"kind": "fillPattern", "swatch": "Squares"}));
+    run(&mut s, "library.add", json!({"kind": "fillGradient", "swatch": "Sunset"}));
+    run(
+        &mut s,
+        "library.createGroup",
+        json!({"name": "Fills", "items": [{"kind": "gradient", "item": "Sunset"}, {"kind": "pattern", "item": "Squares"}]}),
+    );
+    let data = run(&mut s, "library.export", json!({}))["data"].as_str().unwrap().to_string();
+    let r = run(&mut s, "library.import", json!({"data": data}));
+    assert_eq!((r["gradients"].as_u64(), r["patterns"].as_u64(), r["groups"].as_u64()), (Some(1), Some(1), Some(1)));
+    let (x, y) = (run(&mut s, "library.get", json!({"library": "Brand"})), run(&mut s, "library.get", json!({"library": r["id"]})));
+    for k in ["gradients", "patterns", "groups"] {
+        assert_eq!(x[k], y[k], "{k}");
+    }
+    run(&mut s, "file.new", json!({"width": 100, "height": 100}));
+    run(&mut s, "library.use", json!({"library": r["id"], "kind": "fillPattern", "item": "Squares"}));
+    assert!(s.doc().unwrap().doc.pattern("Squares").is_some(), "an imported pattern defines itself");
+    let stop = |o: f64| json!({"offset": o, "color": {"model": "rgb", "r": 1, "g": 0, "b": 0}});
+    let paint = |stops: Vec<Value>| json!({"gradient": {"kind": "Linear", "stops": stops}, "angle": 30});
+    let doc = s.doc().unwrap().doc.clone();
+    let empty = vectorcraft_format::base64_encode(&vectorcraft_format::save(&doc, false));
+    let messy = json!({
+        "name": "Messy",
+        "gradients": [
+            {"name": "One", "gradient": paint(vec![stop(0.0)])},
+            {"name": "Wild", "gradient": paint(vec![stop(7.0), {let mut v = stop(-2.0); v["midpoint"] = json!(5); v["opacity"] = json!(-1); v}])}
+        ],
+        "patterns": [
+            {"name": "Broken", "pattern": "P", "data": "%%%"},
+            {"name": "Missing", "pattern": "Nowhere", "data": empty}
+        ],
+        "groups": [{"name": "G", "items": [{"kind": "gradient", "item": "One"}, {"kind": "gradient", "item": "Wild"}]}]
+    });
+    let r = run(&mut s, "library.import", json!({"data": messy.to_string()}));
+    assert_eq!((r["gradients"].as_u64(), r["patterns"].as_u64()), (Some(1), Some(2)));
+    let got = run(&mut s, "library.get", json!({}));
+    let wild = &got["gradients"][0]["gradient"];
+    assert_eq!(wild["gradient"]["stops"][0]["offset"], 0.0);
+    assert!((wild["gradient"]["stops"][0]["midpoint"].as_f64().unwrap() - 0.87).abs() < 1e-6, "{wild}");
+    assert_eq!(wild["gradient"]["stops"][0]["opacity"], 0.0);
+    assert_eq!(wild["gradient"]["stops"][1]["offset"], 1.0);
+    assert_eq!(got["groups"], json!([{"name": "G", "items": [{"kind": "gradient", "item": "Wild"}]}]));
+    let undo = s.doc().unwrap().history.undo.len();
+    for item in ["Broken", "Missing"] {
+        let e = s.execute("library.use", &json!({"kind": "fillPattern", "item": item})).unwrap_err().to_string();
+        assert!(e.contains("the library item is damaged"), "{item}: {e}");
+    }
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "nothing changed");
+    run(&mut s, "library.use", json!({"kind": "fillGradient", "item": "Wild"}));
+}
+
 #[test]
 fn text_styles_come_from_the_selected_type_and_apply_in_one_step() {
     let mut s = session();
@@ -394,6 +804,73 @@ fn items_and_groups_are_reordered() {
     assert_eq!(groups(&mut s)[0].1, refs(&[("color", "Green"), ("color", "Gray")]), "a group keeps its items when it moves");
 }
 
+/// Dropping art or a colour among the Libraries panel's items: the new item goes just before or
+/// after one of its kind and into a group, or into a group alone, and a bad place adds nothing.
+#[test]
+fn a_new_item_is_added_where_it_is_dropped() {
+    let mut s = session();
+    run(&mut s, "library.create", json!({"name": "Brand"}));
+    for (name, color) in [("Red", "#ff0000"), ("Green", "#00ff00")] {
+        run(&mut s, "library.add", json!({"kind": "fillColor", "color": color, "name": name}));
+    }
+    run(&mut s, "library.createGroup", json!({"name": "Cool", "items": [{"kind": "fillColor", "item": "Green"}]}));
+    // Before an ungrouped item: ungrouped too.
+    let r = run(&mut s, "library.add", json!({"kind": "fillColor", "color": "#ffff00", "name": "Yellow", "before": "Red"}));
+    assert!(r["group"].is_null());
+    assert_eq!(order(&mut s, "colors", "name"), ["Yellow", "Red", "Green"]);
+    // After an item in a group, into that group next to it.
+    let r = run(&mut s, "library.add", json!({"kind": "fillColor", "color": "#0000ff", "name": "Blue", "group": "cool", "after": "Green"}));
+    assert_eq!(r["group"], "Cool");
+    assert_eq!(order(&mut s, "colors", "name"), ["Yellow", "Red", "Green", "Blue"]);
+    assert_eq!(groups(&mut s), [("Cool".into(), refs(&[("color", "Green"), ("color", "Blue")]))]);
+    // Into a group alone: last in it, and last of its kind.
+    let shape = run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20}))["id"].clone();
+    let g = run(&mut s, "library.add", json!({"kind": "graphic", "ids": [shape], "group": "Cool"}));
+    assert_eq!(g["group"], "Cool");
+    let g = g["id"].as_str().unwrap().to_string();
+    assert_eq!(groups(&mut s)[0].1, refs(&[("color", "Green"), ("color", "Blue"), ("graphic", &g)]));
+    // One the library has stays where it is.
+    let r = run(&mut s, "library.add", json!({"kind": "fillColor", "color": "#ff0000", "before": "Yellow"}));
+    assert_eq!((r["name"].as_str(), r["existing"].as_bool()), (Some("Red"), Some(true)));
+    assert_eq!(order(&mut s, "colors", "name"), ["Yellow", "Red", "Green", "Blue"]);
+    // Bad places add nothing.
+    let other = run(&mut s, "shape.ellipse", json!({"x": 0, "y": 0, "width": 20, "height": 10}))["id"].clone();
+    for bad in [
+        json!({"kind": "fillColor", "color": "#808080", "group": "Nope"}),
+        json!({"kind": "fillColor", "color": "#808080", "before": "Nope"}),
+        json!({"kind": "fillColor", "color": "#808080", "before": "Red", "after": "Blue"}),
+        json!({"kind": "graphic", "ids": [other], "before": "Red"}),
+    ] {
+        assert!(s.execute("library.add", &bad).is_err(), "{bad}");
+    }
+    assert_eq!(order(&mut s, "colors", "name"), ["Yellow", "Red", "Green", "Blue"]);
+    assert_eq!(order(&mut s, "graphics", "id"), [g]);
+}
+
+/// With no library yet, an add that can't be placed makes no "My Library", in the session or in
+/// the library folder; one that can makes it.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn an_add_that_cannot_be_placed_makes_no_library() {
+    let folder = vectorcraft_testkit::temp_dir("library-add-unplaced").to_string_lossy().to_string();
+    let mut s = session();
+    s.libraries.set_dir(Some(folder.clone()));
+    for bad in [json!({"kind": "fillColor", "color": "#808080", "group": "Nope"}), json!({"kind": "fillColor", "color": "#808080", "after": "Nope"})]
+    {
+        assert!(s.execute("library.add", &bad).is_err(), "{bad}");
+        assert_eq!(run(&mut s, "library.list", json!({}))["libraries"], json!([]), "{bad}");
+    }
+    let mut t = session();
+    t.libraries.set_dir(Some(folder.clone()));
+    assert_eq!(run(&mut t, "library.list", json!({}))["libraries"], json!([]), "no file was written");
+    let r = run(&mut s, "library.add", json!({"kind": "fillColor", "color": "#808080"}));
+    let list = run(&mut s, "library.list", json!({}));
+    assert_eq!((list["current"].clone(), list["libraries"][0]["name"].clone()), (r["library"].clone(), json!("My Library")));
+    let mut u = session();
+    u.libraries.set_dir(Some(folder));
+    assert_eq!(run(&mut u, "library.list", json!({}))["libraries"].as_array().map(Vec::len), Some(1));
+}
+
 /// A library goes out to a file with its art and groups and comes back as a new library, numbered
 /// when its name is taken; the graphic it brings places in a document (#926).
 #[test]
@@ -465,6 +942,18 @@ fn imported_libraries_are_made_consistent() {
         got["groups"],
         json!([{"name": "One", "items": [{"kind": "color", "item": "Red 2"}]}, {"name": "one 2", "items": [{"kind": "graphic", "item": "g-2"}]}])
     );
+}
+
+/// A library of one name repeated as often as it may hold numbers the copies in one pass.
+#[test]
+fn a_library_of_one_repeated_name_imports_numbered() {
+    let mut s = session();
+    let red = json!({"name": "Red", "color": {"model": "rgb", "r": 1, "g": 0, "b": 0}});
+    let lib = json!({"name": "Many", "colors": vec![red; 10_000]});
+    run(&mut s, "library.import", json!({"data": lib.to_string()}));
+    let got = run(&mut s, "library.get", json!({}));
+    let colors = got["colors"].as_array().unwrap();
+    assert_eq!((colors.len(), colors[1]["name"].as_str(), colors[9_999]["name"].as_str()), (10_000, Some("Red 2"), Some("Red 10000")));
 }
 
 #[cfg(not(target_arch = "wasm32"))]

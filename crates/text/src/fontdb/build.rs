@@ -1,7 +1,7 @@
 use super::face::{FontBytes, FontFace, Variation};
 use super::names::{name, norm};
 use super::traits::FaceStyle;
-use super::*;
+use super::{HashMap, Location, MetadataProvider, NEXT_ID, Ordering, Size, StringId, Tag};
 
 /// `face` at the axis settings `variations` (user units), as face `id`: its names, kind, italic
 /// and file, and its weight the `wght` setting when there is one.
@@ -72,8 +72,10 @@ pub(super) fn make_face(bytes: FontBytes, index: u32, spec: FaceStyle, path: Opt
         bytes,
         index,
         path,
+        plans: std::sync::Mutex::new(Vec::new()),
         ideographic_centre: std::sync::OnceLock::new(),
         icf_margins: std::sync::OnceLock::new(),
+        path_align: std::sync::OnceLock::new(),
         colour_bitmaps,
         colour_layers,
         svg_glyphs,
@@ -136,5 +138,10 @@ pub(super) fn style_italic(style: &str) -> bool {
 /// slant. The penalty is less than the weight gap between Regular and Bold (and Bold and Black),
 /// so Bold Italic asked of a family with Bold and Italic faces only gets the Bold (#2491).
 pub(super) fn style_distance(face: &FontFace, weight: f32, italic: bool) -> f32 {
-    (face.weight - weight).abs() + if face.italic != italic { 250.0 } else { 0.0 }
+    weight_distance(face.weight, face.italic, weight, italic)
+}
+
+/// [`style_distance`] for a face known only by its weight and slant (a cataloged face).
+pub(super) fn weight_distance(face_weight: f32, face_italic: bool, weight: f32, italic: bool) -> f32 {
+    (face_weight - weight).abs() + if face_italic != italic { 250.0 } else { 0.0 }
 }

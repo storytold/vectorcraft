@@ -18,9 +18,9 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-use vectorcraft_color::Color;
 use vectorcraft_color::blend::{cmyk_planes, planes_cmyk};
 use vectorcraft_color::cms::{self, Cms, CmykLut, ProofLut, lab};
+use vectorcraft_color::{Color, Freeform, Gradient};
 use vectorcraft_doc::cmyk::Inks;
 use vectorcraft_doc::{ColorMode, Document, ImageBlob};
 use vello_cpu::Pixmap;
@@ -42,15 +42,125 @@ pub(crate) enum Ink {
     K,
     /// Screen colours, with pure CMYK black as RGB black ([`RenderOptions::rich_black`]).
     RichBlack,
+    /// Source-color adjustment before the display/ink conversion. Float bits keep cache keys exact.
+    Darkened(InkSpace, u32, bool),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(crate) enum InkSpace {
+    Display,
+    Cmy,
+    K,
+    RichBlack,
 }
 
 impl Ink {
+    pub(crate) fn base(self) -> Self {
+        match self {
+            Self::Darkened(InkSpace::Display, _, _) => Self::Display,
+            Self::Darkened(InkSpace::Cmy, _, _) => Self::Cmy,
+            Self::Darkened(InkSpace::K, _, _) => Self::K,
+            Self::Darkened(InkSpace::RichBlack, _, _) => Self::RichBlack,
+            other => other,
+        }
+    }
+
+    pub(crate) fn index(self) -> usize {
+        match self.base() {
+            Self::Cmy => 1,
+            Self::K => 2,
+            Self::RichBlack => 3,
+            _ => 0,
+        }
+    }
+
+    fn darkness(self) -> Option<f32> {
+        match self {
+            Self::Darkened(_, bits, _) => Some(f32::from_bits(bits)),
+            _ => None,
+        }
+    }
+
+    fn black_endpoint(self) -> bool {
+        matches!(self, Self::Darkened(_, _, true))
+    }
+
+    pub(crate) fn darkened(self, amount: f32) -> Self {
+        let amount = if amount.is_finite() { amount.clamp(0.0, 1.0) } else { 0.0 };
+        let black = self.black_endpoint() || amount >= 0.9999;
+        let amount = (self.darkness().unwrap_or(0.0) + amount).min(1.0);
+        if amount == 0.0 {
+            return self.base();
+        }
+        let space = match self.base() {
+            Self::Cmy => InkSpace::Cmy,
+            Self::K => InkSpace::K,
+            Self::RichBlack => InkSpace::RichBlack,
+            _ => InkSpace::Display,
+        };
+        Self::Darkened(space, amount.to_bits(), black)
+    }
+
+    /// Fixed changes use the stored color's model, before profile conversion or interpolation.
+    fn darkened_color(c: &Color, amount: f32, black: bool) -> Color {
+        if black {
+            return Color::gray(1.0);
+        }
+        match *c {
+            Color::Cmyk { c, m, y, k } => Color::cmyk(c, m, y, (k + amount).min(1.0)),
+            Color::Gray { k } => Color::gray((k + amount).min(1.0)),
+            _ => {
+                let [r, g, b] = c.to_rgb();
+                Color::rgb((r - amount).max(0.0), (g - amount).max(0.0), (b - amount).max(0.0))
+            }
+        }
+    }
+
+    /// Transform original stops before a gradient expands its midpoint/perceptual colors.
+    pub(crate) fn gradient(self, g: &Gradient) -> Option<Gradient> {
+        let amount = self.darkness()?;
+        let mut g = g.clone();
+        for stop in &mut g.stops {
+            stop.color = Self::darkened_color(&stop.color, amount, self.black_endpoint());
+        }
+        Some(g)
+    }
+
+    /// Transform original freeform points before their colors mix, as [`Self::gradient`] does for
+    /// stops.
+    pub(crate) fn freeform(self, f: &Freeform) -> Option<Freeform> {
+        let amount = self.darkness()?;
+        let mut f = f.clone();
+        for point in &mut f.points {
+            point.color = Self::darkened_color(&point.color, amount, self.black_endpoint());
+        }
+        Some(f)
+    }
+
+    /// Whether this ink paints a point of `f` as RGB black: Appearance of Black's Rich setting and
+    /// a point of pure CMYK black.
+    pub(crate) fn blacks_a_point(self, f: &Freeform) -> bool {
+        self.base() == Ink::RichBlack && f.points.iter().any(|p| matches!(p.color, Color::Cmyk { c, m, y, k } if is_pure_black([c, m, y, k])))
+    }
+
     /// The three values painted for colour `c`.
     pub(crate) fn rgb(self, c: &Color) -> [f32; 3] {
+        if let Some(amount) = self.darkness() {
+            return self.base().rgb(&Self::darkened_color(c, amount, self.black_endpoint()));
+        }
         match (self, *c) {
             (Ink::RichBlack, Color::Cmyk { c, m, y, k }) if is_pure_black([c, m, y, k]) => [0.0; 3],
             (Ink::Display | Ink::RichBlack, _) => c.to_rgb(),
             _ => self.plane(inks(c)),
+        }
+    }
+
+    /// [`Self::rgb`] for colors sampled densely (a freeform gradient's grid): on an ink plane, RGB
+    /// colors go through the separation tables placed images use.
+    pub(crate) fn rgb_sampled(self, c: &Color) -> [f32; 3] {
+        match (self, c) {
+            (Ink::Cmy | Ink::K, Color::Rgb { .. }) => separation().0[(self == Ink::K) as usize].apply(c.to_rgb()),
+            _ => self.rgb(c),
         }
     }
 
@@ -66,8 +176,8 @@ impl Ink {
         peniko::Color::from_rgba8(r, g, b, a)
     }
 
-    fn fixed8(self, [r, g, b, a]: [u8; 4]) -> [u8; 4] {
-        match self {
+    pub(crate) fn fixed8(self, [r, g, b, a]: [u8; 4]) -> [u8; 4] {
+        match self.base() {
             Ink::Display | Ink::RichBlack => [r, g, b, a],
             _ => {
                 let lab = lab::srgb_to_lab([r, g, b].map(|v| v as f32 / 255.0));
@@ -78,7 +188,7 @@ impl Ink {
     }
 
     fn plane(self, inks: [f32; 4]) -> [f32; 3] {
-        cmyk_planes(inks)[(self == Ink::K) as usize]
+        cmyk_planes(inks)[(self.base() == Ink::K) as usize]
     }
 }
 
@@ -311,6 +421,22 @@ pub(crate) fn cmyk_pixmap(blob: &ImageBlob, lut: &InkLut) -> Option<Pixmap> {
     inks_pixmap(&blob.cmyk()?, lut)
 }
 
+/// Whether image pixels `key` are a CMYK image's inks as shown (not adjusted or greyscale), so
+/// they paint those inks ([`key_inks`]).
+pub(crate) fn shows_own_inks(key: &ImageKey) -> bool {
+    key.luts.0 != 0 && key.adjust.is_none() && !key.grey
+}
+
+/// The ink amounts behind image pixels `key` when they are CMYK image `blob`'s inks as shown (not
+/// adjusted or greyscale): its own inks, halved as its pixels are to `key`'s mip
+/// ([`images::half_inks`]). `None` for other pixels.
+pub(crate) fn key_inks(key: &ImageKey, blob: Option<&ImageBlob>) -> Option<Inks> {
+    if !shows_own_inks(key) {
+        return None;
+    }
+    (0..key.mip).try_fold(blob?.cmyk()?, |inks, _| images::half_inks(&inks))
+}
+
 /// The separation tables of placed images ([`Ink::Cmy`], [`Ink::K`]) and their generation.
 fn separation() -> (Arc<[ProofLut; 2]>, u64) {
     cached(&SEPARATE, |cms| {
@@ -326,12 +452,65 @@ fn plane_key(key: &ImageKey, plane: Ink, generation: u64) -> ImageKey {
 
 /// The key [`ink_image`] gives image pixels `key` painted with `ink`.
 pub(crate) fn ink_key(key: &ImageKey, ink: Ink) -> ImageKey {
-    if matches!(ink, Ink::Display | Ink::RichBlack) { key.clone() } else { plane_key(key, ink, separation().1) }
+    if ink.darkness().is_some() {
+        let generation = if matches!(ink.base(), Ink::Display | Ink::RichBlack) { 0 } else { separation().1 };
+        plane_key(key, ink, generation)
+    } else if matches!(ink, Ink::Display | Ink::RichBlack) {
+        key.clone()
+    } else {
+        plane_key(key, ink, separation().1)
+    }
+}
+
+/// Color-adjusted image pixels, cached separately for each source adjustment and output plane.
+fn darkened_image(key: &ImageKey, pm: &Arc<Pixmap>, ink: Ink, amount: f32, blob: Option<&ImageBlob>, touch: bool) -> (ImageKey, Arc<Pixmap>) {
+    let want = ink_key(key, ink);
+    let hit = {
+        let mut s = images::store();
+        if touch { s.get(&want) } else { s.peek(&want) }
+    };
+    if let Some(p) = hit {
+        return (want, p);
+    }
+    let base = ink.base();
+    let display = matches!(base, Ink::Display | Ink::RichBlack);
+    let raw_cmyk = key_inks(key, blob).filter(|i| (i.width, i.height) == (u32::from(pm.width()), u32::from(pm.height())));
+    let sep = (!display).then(separation);
+    let shown = (display && raw_cmyk.is_some()).then(display_lut);
+    let mut out = Pixmap::new(pm.width(), pm.height());
+    for (i, (o, p)) in out.data_mut().iter_mut().zip(pm.data()).enumerate() {
+        if p.a == 0 {
+            continue;
+        }
+        let rgb = if ink.black_endpoint() {
+            base.rgb(&Color::gray(1.0))
+        } else if let Some(raw) = raw_cmyk.as_ref().and_then(|v| v.data.as_chunks::<4>().0.get(i)) {
+            let mut inks = raw.map(|v| f32::from(v) / 255.0);
+            inks[3] = (inks[3] + amount).min(1.0);
+            if base == Ink::RichBlack && is_pure_black(inks) {
+                [0.0; 3]
+            } else if let Some((lut, _)) = &shown {
+                lut.apply(inks)
+            } else {
+                base.plane(inks)
+            }
+        } else {
+            let rgb = [p.r, p.g, p.b].map(|v| (f32::from(v) / f32::from(p.a) - amount).clamp(0.0, 1.0));
+            if let Some((luts, _)) = &sep { luts[(base == Ink::K) as usize].apply(rgb) } else { rgb }
+        };
+        let [r, g, b] = rgb.map(|v| (v.clamp(0.0, 1.0) * f32::from(p.a)).round() as u8);
+        *o = PremulRgba8 { r, g, b, a: p.a };
+    }
+    let out = images::store().insert(want.clone(), Arc::new(out));
+    (want, out)
 }
 
 /// Image pixels `pm` (cached as `key`, from `blob` when it is a document's image as it is) as
 /// painted with `ink`, cached with the images, and their key.
 pub(crate) fn ink_image(key: &ImageKey, pm: &Arc<Pixmap>, ink: Ink, blob: Option<&ImageBlob>, touch: bool) -> (ImageKey, Arc<Pixmap>) {
+    if let Some(amount) = ink.darkness() {
+        return darkened_image(key, pm, ink, amount, blob, touch);
+    }
     if matches!(ink, Ink::Display | Ink::RichBlack) {
         return (key.clone(), pm.clone());
     }
@@ -347,8 +526,7 @@ pub(crate) fn ink_image(key: &ImageKey, pm: &Arc<Pixmap>, ink: Ink, blob: Option
     }
     // CMYK images (shown through the display table) paint their own inks; the others are separated.
     let size = (pm.width() as u32, pm.height() as u32);
-    let cmyk = key.luts.0 != 0 && key.adjust.is_none() && !key.grey;
-    let inks = blob.filter(|_| cmyk).and_then(ImageBlob::cmyk).filter(|i| (i.width, i.height) == size);
+    let inks = key_inks(key, blob).filter(|i| (i.width, i.height) == size);
     let planes = [Ink::Cmy, Ink::K].map(|plane| {
         let mut out = Pixmap::new(pm.width(), pm.height());
         if let Some(inks) = &inks {
@@ -382,20 +560,54 @@ mod tests {
     use super::*;
 
     #[test]
+    fn darkness_image_cache_keeps_amount_and_coverage() {
+        let key = ImageKey {
+            content: Arc::from("darkness-rgb-cache-regression"),
+            adjust: None,
+            grey: false,
+            tint: None,
+            ink: Ink::Display,
+            luts: (0, 0),
+            plates: 0,
+            mip: 0,
+            tile: None,
+        };
+        let pm =
+            Arc::new(Pixmap::from_parts(vec![PremulRgba8 { r: 204, g: 102, b: 51, a: 255 }, PremulRgba8 { r: 102, g: 51, b: 26, a: 128 }], 2, 1));
+        let (k25, p25) = ink_image(&key, &pm, Ink::Display.darkened(0.25), None, false);
+        let (k50, p50) = ink_image(&key, &pm, Ink::Display.darkened(0.5), None, false);
+        assert_ne!(k25, k50);
+        assert_eq!((p25.data()[0].r, p25.data()[0].g, p25.data()[0].b), (140, 38, 0));
+        assert_eq!((p25.data()[1].r, p25.data()[1].g, p25.data()[1].b, p25.data()[1].a), (70, 19, 0, 128));
+        assert_eq!((p50.data()[0].r, p50.data()[0].g, p50.data()[0].b), (77, 0, 0));
+        let (_, warm) = ink_image(&key, &pm, Ink::Display.darkened(0.25), None, false);
+        assert_eq!(p25.data(), warm.data());
+        assert_eq!(pm.data()[0].r, 204, "source pixels remain unchanged");
+    }
+
+    #[test]
     fn the_ink_table_matches_the_profile() {
         let cms = cms::active();
         let lut = InkLut::build(&cms);
-        let mut worst = 0.0f32;
+        let (mut worst, mut worst_dark) = (0.0f32, 0.0f32);
         // Between the grid points (where interpolation errs most) and on them.
         for i in 0..=20 {
             for j in 0..=20 {
                 let inks = [i as f32 / 20.0, j as f32 / 20.0, ((i * 7 + j * 3) % 21) as f32 / 20.0, ((i + j * 5) % 21) as f32 / 20.0];
                 let (a, b) = (lut.apply(inks), cms.cmyk_to_srgb(inks, false));
-                worst = worst.max((0..3).map(|c| (a[c] - b[c]).abs()).fold(0.0, f32::max));
+                let err = (0..3).map(|c| (a[c] - b[c]).abs()).fold(0.0, f32::max);
+                // Builds darker than the press's black point clip at 0 in one or more XYZ channels,
+                // so the grid interpolates across that clip in the darkest levels.
+                if b.iter().all(|v| *v < 0.05) {
+                    worst_dark = worst_dark.max(err);
+                } else {
+                    worst = worst.max(err);
+                }
             }
         }
         // Within two 8-bit levels: far below a visible difference.
         assert!(worst * 255.0 < 2.5, "worst error {} levels", worst * 255.0);
+        assert!(worst_dark * 255.0 < 5.0, "worst error near black {} levels", worst_dark * 255.0);
     }
 
     #[test]

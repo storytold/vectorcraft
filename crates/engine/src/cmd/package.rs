@@ -5,7 +5,6 @@
 //! Without a folder (the web, agents) the same files come back as a zip archive.
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use vectorcraft_doc::links::hash_bytes;
@@ -14,7 +13,8 @@ use vectorcraft_doc::{Document, LinkInfo};
 use serde_json::{Value, json};
 
 use super::fileio::{create_dir, write_file};
-use super::*;
+use super::links::LinkBase;
+use super::{CommandSpec, Result, Session, bad, bool_or, cmd, has_doc, str_param, unique_name};
 
 const C: &str = "file.package";
 
@@ -188,8 +188,18 @@ impl<'a> Collector<'a> {
     }
 
     /// Collects the files `doc` links. `by_name`: `doc` is a placed `.ai` file's editing data,
-    /// whose links are not rewritten, so its copy finds them by name beside it.
-    fn collect(&mut self, doc: &mut Document, source: &str, destination: &str, depth: usize, by_name: bool) -> Result<()> {
+    /// whose links are not rewritten, so its copy finds them by name beside it. `lookup`: the
+    /// document whose links (with the same paths as `doc`'s) are looked for, and where from, when
+    /// not `doc` from `source`.
+    fn collect(
+        &mut self,
+        doc: &mut Document,
+        source: &str,
+        destination: &str,
+        depth: usize,
+        by_name: bool,
+        lookup: Option<(&Document, LinkBase)>,
+    ) -> Result<()> {
         // The caller checks cycles and depth before descending; active documents have
         // a destination reserved so back-links can point at their single packaged copy.
         self.visiting.insert(source.to_string(), destination.to_string());
@@ -211,6 +221,10 @@ impl<'a> Collector<'a> {
         // The fonts of the type on the PDF and `.ai` pages placed linked.
         let mut placed_fonts = BTreeSet::new();
         let mut placed = BTreeMap::<String, PlacedPages>::new();
+        let linked_files = |doc: &Document| match lookup {
+            Some((d, base)) => super::links::linked_files(d, base),
+            None => super::links::linked_files(doc, LinkBase::file(Some(source))),
+        };
         doc.visit_placed(|_, p| {
             let page = (p.link.page.unwrap_or(1), p.bounding, p.page_box);
             let pages = placed.entry(p.link.path.clone()).or_default();
@@ -219,7 +233,7 @@ impl<'a> Collector<'a> {
             }
         });
         if self.opts.copy_fonts && !self.opts.copy_links && !placed.is_empty() {
-            for file in super::links::linked_files(doc, Some(source)) {
+            for file in linked_files(doc) {
                 if let (Some(pages), Some(bytes)) = (placed.get(&file.path), &file.bytes) {
                     placed_fonts.extend(page_fonts(&file.name, bytes, file.found_path.as_deref().unwrap_or(&file.path), pages));
                 }
@@ -227,7 +241,7 @@ impl<'a> Collector<'a> {
         }
         if self.opts.copy_links {
             heading(&mut lines, "LINKED FILES");
-            for file in super::links::linked_files(doc, Some(source)) {
+            for file in linked_files(doc) {
                 let found_path = file.found_path.as_deref().unwrap_or(&file.path);
                 if let Some(ancestor) = self.visiting.get(found_path).cloned() {
                     // The ancestor is already included (possibly the root document). A
@@ -273,7 +287,7 @@ impl<'a> Collector<'a> {
                     if depth >= vectorcraft_doc::placed_document::MAX_DEPTH {
                         self.warn(&mut lines, format!("{}: nesting limit reached; copied unchanged without collecting its own links", file.path));
                     } else {
-                        self.collect(&mut art, found_path, &destination_file, depth + 1, true)?;
+                        self.collect(&mut art, found_path, &destination_file, depth + 1, true, None)?;
                     }
                 } else if self.opts.copy_fonts
                     && let Some(pages) = pages
@@ -290,7 +304,7 @@ impl<'a> Collector<'a> {
                                 let include_linked =
                                     saved.doc.linked_only_images().iter().any(|key| saved.doc.images.get(key).is_some_and(|blob| !blob.is_proxy()));
                                 let mut nested = saved.doc;
-                                self.collect(&mut nested, found_path, &destination_file, depth + 1, false)?;
+                                self.collect(&mut nested, found_path, &destination_file, depth + 1, false, None)?;
                                 if self.opts.relink {
                                     #[cfg(test)]
                                     PARTS_READ.with(|c| c.set(c.get() + 1));
@@ -406,6 +420,8 @@ fn package(s: &mut Session, p: &Value) -> Result<Value> {
 pub struct Package {
     o: Options,
     doc_path: String,
+    /// The file the document's links' stored relative paths are taken from.
+    links_from: String,
     stem: String,
     name: String,
     root: Option<PathBuf>,
@@ -451,7 +467,8 @@ fn prepare(s: &mut Session, p: &Value) -> Result<Package> {
     let root = folder.map(|f| Path::new(f).join(&name));
     let info = if o.report { Some(super::docinfo::report(s, false)?) } else { None };
     let doc = s.doc()?.doc.clone();
-    Ok(Package { o, doc_path, stem, name, root, info, doc })
+    let links_from = s.doc()?.links_from.clone().unwrap_or_else(|| doc_path.clone());
+    Ok(Package { o, doc_path, links_from, stem, name, root, info, doc })
 }
 
 impl Package {
@@ -465,18 +482,27 @@ impl Package {
 
 /// [`Package::write`].
 fn collect_and_write(package: Package, write: &mut dyn FnMut(&str, &[u8]) -> Result<()>) -> Result<Value> {
-    let Package { o, doc_path, stem, name, root, info, doc } = package;
-    let mut doc = (*doc).clone();
+    let Package { o, doc_path, links_from, stem, name, root, info, doc: original } = package;
+    let mut doc = (*original).clone();
     let doc_name = format!("{stem}.{}", vectorcraft_format::EXTENSION);
+    let base = LinkBase { doc: Some(&doc_path), relative: Some(&links_from) };
+    // After a save in another folder, links found away from their paths take the paths where they
+    // were found, as a copy of the document has them.
+    let found = (links_from != doc_path).then(|| {
+        super::links::with_found_paths(&mut doc, base);
+        doc.clone()
+    });
+    let looked = found.as_ref().unwrap_or(&original);
     // Prepare original links for the destination *before* rebasing copied links.
     // Recalculating afterward would overwrite the portable relative paths.
     if let Some(root) = &root
-        && let Some(d) = super::links::with_relative_paths(&doc, &root.join(&doc_name).to_string_lossy())
+        && let Some(d) = super::links::with_relative_paths(&doc, base, &root.join(&doc_name).to_string_lossy())
     {
         doc = d;
     }
     let mut collector = Collector::new(&o, root.clone(), &doc_name);
-    collector.collect(&mut doc, &doc_path, &doc_name, 0, false)?;
+    // The files are looked for where the links name them before the rebasing above.
+    collector.collect(&mut doc, &doc_path, &doc_name, 0, false, Some((looked, base)))?;
     let mut entries = std::mem::take(&mut collector.entries);
     entries.insert(0, (doc_name.clone(), vectorcraft_format::save_file(&doc)));
     let mut taken = std::mem::take(&mut collector.taken);
@@ -550,53 +576,9 @@ fn dos_time() -> (u16, u16) {
 }
 
 /// A zip archive of `files` ((path with `/` separators, bytes)), each deflated, or stored when
-/// that isn't smaller.
+/// that isn't smaller, every entry dated now.
 pub(crate) fn zip(files: &[(String, &[u8])]) -> Result<Vec<u8>> {
-    let too_big = || bad(C, "too large for a zip archive: package to a folder");
-    let io = |e: std::io::Error| EngineError::Other(e.to_string());
-    let (time, date) = dos_time();
-    let (mut out, mut central) = (Vec::new(), Vec::new());
-    for (name, bytes) in files {
-        let mut crc = flate2::Crc::new();
-        crc.update(bytes);
-        let mut enc = flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::default());
-        enc.write_all(bytes).map_err(io)?;
-        let deflated = enc.finish().map_err(io)?;
-        let (method, data): (u16, &[u8]) = if deflated.len() < bytes.len() { (8, &deflated) } else { (0, bytes) };
-        let offset = u32::try_from(out.len()).map_err(|_| too_big())?;
-        let (packed, size) = (u32::try_from(data.len()).map_err(|_| too_big())?, u32::try_from(bytes.len()).map_err(|_| too_big())?);
-        let name_len = u16::try_from(name.len()).map_err(|_| too_big())?;
-        // Version 2.0, UTF-8 names, method, time, date, CRC-32, sizes, name length, no extra field.
-        let common = [&20u16.to_le_bytes()[..], &0x0800u16.to_le_bytes(), &method.to_le_bytes(), &time.to_le_bytes(), &date.to_le_bytes()].concat();
-        let sums = [crc.sum().to_le_bytes(), packed.to_le_bytes(), size.to_le_bytes()].concat();
-        out.extend_from_slice(&0x0403_4b50u32.to_le_bytes());
-        out.extend_from_slice(&common);
-        out.extend_from_slice(&sums);
-        out.extend_from_slice(&name_len.to_le_bytes());
-        out.extend_from_slice(&0u16.to_le_bytes());
-        out.extend_from_slice(name.as_bytes());
-        out.extend_from_slice(data);
-        central.extend_from_slice(&0x0201_4b50u32.to_le_bytes());
-        central.extend_from_slice(&20u16.to_le_bytes());
-        central.extend_from_slice(&common);
-        central.extend_from_slice(&sums);
-        central.extend_from_slice(&name_len.to_le_bytes());
-        // No extra field or comment, disk 0, no attributes.
-        central.extend_from_slice(&[0; 12]);
-        central.extend_from_slice(&offset.to_le_bytes());
-        central.extend_from_slice(name.as_bytes());
-    }
-    let count = u16::try_from(files.len()).map_err(|_| too_big())?;
-    let (start, len) = (u32::try_from(out.len()).map_err(|_| too_big())?, u32::try_from(central.len()).map_err(|_| too_big())?);
-    out.extend_from_slice(&central);
-    out.extend_from_slice(&0x0605_4b50u32.to_le_bytes());
-    out.extend_from_slice(&[0; 4]);
-    out.extend_from_slice(&count.to_le_bytes());
-    out.extend_from_slice(&count.to_le_bytes());
-    out.extend_from_slice(&len.to_le_bytes());
-    out.extend_from_slice(&start.to_le_bytes());
-    out.extend_from_slice(&0u16.to_le_bytes());
-    Ok(out)
+    super::fileio::zip::deflate(files, dos_time(), || false).map_err(|_| bad(C, "too large for a zip archive: package to a folder"))
 }
 
 #[cfg(test)]

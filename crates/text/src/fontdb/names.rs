@@ -1,4 +1,4 @@
-use super::*;
+use super::{MetadataProvider, StringId};
 
 #[cfg(not(target_arch = "wasm32"))]
 #[derive(Default)]
@@ -27,7 +27,7 @@ pub const THAI_FAMILIES: &[&str] = &[
 ];
 
 /// The families tried first for character `c`, in a script whose text only fonts made for it set
-/// well (Thai, Lao, Khmer, Myanmar); none for other characters.
+/// well (Thai, Lao, Khmer, Myanmar, Devanagari); none for other characters.
 pub(super) fn script_families(c: char) -> &'static [&'static str] {
     use unicode_script::{Script, UnicodeScript};
     match c.script() {
@@ -35,6 +35,15 @@ pub(super) fn script_families(c: char) -> &'static [&'static str] {
         Script::Lao => &["Lao UI", "Leelawadee UI", "Lao Sangam MN", "Noto Sans Lao", "Noto Sans Lao UI", "Phetsarath OT"],
         Script::Khmer => &["Khmer UI", "Khmer Sangam MN", "Noto Sans Khmer", "Noto Sans Khmer UI", "Khmer OS"],
         Script::Myanmar => &["Myanmar Text", "Myanmar Sangam MN", "Noto Sans Myanmar", "Noto Sans Myanmar UI", "Padauk"],
+        Script::Devanagari => &[
+            "Nirmala UI",
+            "Kohinoor Devanagari",
+            "Devanagari Sangam MN",
+            "Noto Sans Devanagari",
+            "Noto Sans Devanagari UI",
+            "Lohit Devanagari",
+            "Mangal",
+        ],
         _ => &[],
     }
 }
@@ -76,9 +85,23 @@ pub(super) fn name(font: &skrifa::FontRef<'_>, ids: &[StringId]) -> Option<Strin
 /// The most distinct legacy family (and style) names of a font used as keys.
 pub(super) const MAX_LEGACY_NAMES: usize = 64;
 
+/// Records can share their encoded bytes, so a small table names many long strings: stop at this
+/// many records or decoded bytes (real fonts have a few dozen short names per id).
+const MAX_NAME_RECORDS: usize = 1024;
+const MAX_NAME_BYTES: usize = 1 << 20;
+
 /// Every localized string of `id`, with its language.
 pub(super) fn localized(font: &skrifa::FontRef<'_>, id: StringId) -> Vec<(Option<String>, String)> {
-    font.localized_strings(id).map(|s| (s.language().map(str::to_owned), s.to_string())).filter(|(_, s)| !s.is_empty()).collect()
+    let mut bytes = 0usize;
+    font.localized_strings(id)
+        .take(MAX_NAME_RECORDS)
+        .map(|s| (s.language().map(str::to_owned), s.to_string()))
+        .take_while(|(_, s)| {
+            bytes = bytes.saturating_add(s.len());
+            bytes <= MAX_NAME_BYTES
+        })
+        .filter(|(_, s)| !s.is_empty())
+        .collect()
 }
 
 /// Whether a name-table language tag is English (Illustrator's "Show Font Names in English").
@@ -118,4 +141,26 @@ pub(super) fn norm_chars(s: &str) -> impl Iterator<Item = char> + '_ {
 
 pub(super) fn norm(s: &str) -> String {
     norm_chars(s).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Devanagari takes a font made for it, not whichever face covering it loaded first.
+    #[test]
+    fn devanagari_prefers_fonts_made_for_it() {
+        assert_eq!(script_families('ह').first(), Some(&"Nirmala UI"));
+        assert!(script_families('ह').contains(&"Noto Sans Devanagari"));
+        assert!(script_families('a').is_empty());
+    }
+
+    #[test]
+    fn a_name_table_of_many_records_is_cut_short() {
+        let many: Vec<(u16, &str)> = (0..2000).map(|_| (1, "Short")).collect();
+        let name = crate::test_fonts::name_table(&many).unwrap_or_default();
+        let font = crate::fontdb::sfnt_of(&[(b"name", &name)]).unwrap_or_default();
+        let font = skrifa::FontRef::new(&font).unwrap();
+        assert_eq!(localized(&font, StringId::FAMILY_NAME).len(), MAX_NAME_RECORDS);
+    }
 }

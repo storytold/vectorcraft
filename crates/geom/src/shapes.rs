@@ -45,6 +45,15 @@ impl CornerKind {
             CornerKind::Chamfer => CornerKind::Round,
         }
     }
+
+    /// The kind before this one (the Down arrow while dragging a corner widget).
+    pub fn previous(self) -> Self {
+        match self {
+            CornerKind::Round => CornerKind::Chamfer,
+            CornerKind::InvertedRound => CornerKind::Round,
+            CornerKind::Chamfer => CornerKind::InvertedRound,
+        }
+    }
 }
 
 /// The largest corner radius a `w` × `h` rectangle draws: half its shorter side.
@@ -94,15 +103,44 @@ pub fn ellipse(r: Rect) -> PathData {
     PathData::single(SubPath::new(anchors, true))
 }
 
+/// How an ellipse or shape arc is closed or left open when cut between start and end angles.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EllipseMode {
+    /// Closed sector through the centre (pie slice).
+    #[default]
+    Slice,
+    /// Open arc curve without closing segments.
+    Arc,
+    /// Closed arc with a straight chord connecting the end back to the start.
+    Chord,
+    /// Whole closed shape (ignores start/end cut).
+    Whole,
+}
+
 /// The ellipse inscribed in `r` cut as a pie: from `start` to `end` degrees, measured
 /// counterclockwise on screen from 3 o'clock (as Illustrator's Pie Start and End Angle are), then
 /// back through the centre. A pie spanning the whole turn (or nothing) is the whole [`ellipse`].
 /// The arc is one cubic per quarter turn at most: the centre, then the arc's anchors.
 pub fn ellipse_pie(r: Rect, start: f64, end: f64) -> PathData {
-    let span = (end - start).rem_euclid(360.0);
-    if !(start.is_finite() && end.is_finite()) || span < 1e-9 || 360.0 - span < 1e-9 {
+    ellipse_arc(r, start, end, EllipseMode::Slice)
+}
+
+/// The ellipse inscribed in `r` cut from `start` to `end` degrees according to `mode`:
+/// - [`EllipseMode::Slice`]: closed through the centre (pie chart).
+/// - [`EllipseMode::Chord`]: closed with a straight chord between the endpoints.
+/// - [`EllipseMode::Arc`]: open elliptical arc (no centre lines, `closed = false`).
+/// - [`EllipseMode::Whole`]: full closed [`ellipse`].
+pub fn ellipse_arc(r: Rect, start: f64, end: f64, mode: EllipseMode) -> PathData {
+    if mode == EllipseMode::Whole || !(start.is_finite() && end.is_finite()) {
         return ellipse(r);
     }
+    let raw_span = (end - start).rem_euclid(360.0);
+    let full = raw_span < 1e-9 || 360.0 - raw_span < 1e-9;
+    if full && mode != EllipseMode::Arc {
+        return ellipse(r);
+    }
+    let span = if full { 360.0 } else { raw_span };
     let r = r.abs();
     let c = r.center();
     let (rx, ry) = (r.width() / 2.0, r.height() / 2.0);
@@ -126,7 +164,10 @@ pub fn ellipse_pie(r: Rect, start: f64, end: f64) -> PathData {
     };
     let step = span / f64::from(pieces);
     let k = 4.0 / 3.0 * (step.to_radians() / 4.0).tan();
-    let mut anchors = vec![Anchor::corner(c)];
+    let mut anchors = Vec::with_capacity(pieces as usize + 2);
+    if mode == EllipseMode::Slice {
+        anchors.push(Anchor::corner(c));
+    }
     for i in 0..=pieces {
         let a = start + step * f64::from(i);
         let (p, d) = (at(a), tangent(a) * k);
@@ -134,6 +175,123 @@ pub fn ellipse_pie(r: Rect, start: f64, end: f64) -> PathData {
         let h_out = if i == pieces { p } else { p + d };
         let kind = if i == 0 || i == pieces { AnchorKind::Corner } else { AnchorKind::Smooth };
         anchors.push(Anchor { p, h_in, h_out, kind });
+    }
+    let closed = mode != EllipseMode::Arc;
+    PathData::single(SubPath::new(anchors, closed))
+}
+
+/// Cut or open any closed single-subpath `path` around `center` from `start_deg` to `end_deg`
+/// according to `mode` ([`EllipseMode::Slice`], [`EllipseMode::Arc`], [`EllipseMode::Chord`],
+/// [`EllipseMode::Whole`]).
+pub fn apply_shape_arc(path: PathData, center: Point, start_deg: f64, end_deg: f64, mode: EllipseMode) -> PathData {
+    use kurbo::{BezPath, ParamCurve};
+    if mode == EllipseMode::Whole || !(start_deg.is_finite() && end_deg.is_finite()) {
+        return path;
+    }
+    let Some(sp) = path.subpaths.first() else {
+        return path;
+    };
+    let n = sp.segment_count();
+    if !sp.closed || n == 0 {
+        return path;
+    }
+    let raw_span = (end_deg - start_deg).rem_euclid(360.0);
+    let full = raw_span < 1e-9 || 360.0 - raw_span < 1e-9;
+    if full {
+        if mode == EllipseMode::Arc {
+            let mut open_sp = sp.clone();
+            open_sp.closed = false;
+            return PathData::single(open_sp);
+        }
+        return path;
+    }
+    let u0 = start_deg.rem_euclid(360.0) / 360.0;
+    let du = (raw_span / 360.0).clamp(1e-6, 1.0 - 1e-6);
+    let s0 = u0 * (n as f64);
+    let s1 = (u0 + du) * (n as f64);
+    let k0 = (s0.floor() as usize).min(n.saturating_sub(1));
+    let t0 = (s0 - k0 as f64).clamp(0.0, 1.0);
+    let k1 = s1.floor() as usize;
+    let t1 = (s1 - k1 as f64).clamp(0.0, 1.0);
+    let mut cubics = Vec::new();
+    if k0 == k1 {
+        if t1 > t0 + 1e-9 {
+            cubics.push(sp.segment(k0 % n).subsegment(t0..t1));
+        }
+    } else {
+        if t0 < 1.0 - 1e-9 {
+            cubics.push(sp.segment(k0 % n).subsegment(t0..1.0));
+        }
+        for k in (k0 + 1)..k1 {
+            cubics.push(sp.segment(k % n));
+        }
+        if t1 > 1e-9 {
+            cubics.push(sp.segment(k1 % n).subsegment(0.0..t1));
+        }
+    }
+    let Some(first) = cubics.first() else {
+        return path;
+    };
+    let mut bp = BezPath::new();
+    if mode == EllipseMode::Slice {
+        bp.move_to(center);
+        bp.line_to(first.p0);
+    } else {
+        bp.move_to(first.p0);
+    }
+    for c in &cubics {
+        if c.p0.distance(c.p1) <= 1e-9 && c.p3.distance(c.p2) <= 1e-9 {
+            bp.line_to(c.p3);
+        } else {
+            bp.curve_to(c.p1, c.p2, c.p3);
+        }
+    }
+    if mode != EllipseMode::Arc {
+        bp.close_path();
+    }
+    PathData::from_bezpath(&bp)
+}
+
+/// Deterministic vertex jitter for `randomized` polygons and stars (`(dr, da)` in `[-1, 1]`).
+fn vertex_jitter(index: u32, total: u32) -> (f64, f64) {
+    let mut s = 0x9e37_79b9_7f4a_7c15_u64
+        .wrapping_add((u64::from(index) + 1).wrapping_mul(0xbf58_476d_1ce4_e5b9))
+        .wrapping_add(u64::from(total).wrapping_mul(0x94d0_49bb_1331_11eb));
+    let mut next = || {
+        s ^= s >> 12;
+        s ^= s << 25;
+        s ^= s >> 27;
+        let v = s.wrapping_mul(0x2545_f491_4f6c_dd1d);
+        ((v >> 11) as f64 / ((1u64 << 53) as f64)) * 2.0 - 1.0
+    };
+    (next(), next())
+}
+
+/// Build a closed subpath from polygon/star vertices with optional smooth bezier `rounded`
+/// tangents (`-10..=10`).
+fn contour_with_rounding(pts: &[Point], rounded: f64) -> PathData {
+    let n = pts.len();
+    if n == 0 || !rounded.is_finite() || rounded.abs() < 1e-9 {
+        return PathData::single(SubPath::polyline(pts, true));
+    }
+    let r_factor = rounded.clamp(-10.0, 10.0) * 0.4;
+    let mut anchors = Vec::with_capacity(n);
+    for i in 0..n {
+        let p_prev = pts[(i + n - 1) % n];
+        let p = pts[i];
+        let p_next = pts[(i + 1) % n];
+        let v_in = p - p_prev;
+        let v_out = p_next - p;
+        let len_in = v_in.hypot();
+        let len_out = v_out.hypot();
+        let u_in = if len_in > 1e-9 { v_in / len_in } else { Vec2::ZERO };
+        let u_out = if len_out > 1e-9 { v_out / len_out } else { Vec2::ZERO };
+        let sum = u_in + u_out;
+        let sum_len = sum.hypot();
+        let tangent = if sum_len > 1e-9 { sum / sum_len } else { Vec2::new(-u_in.y, u_in.x) };
+        let h_in = p - tangent * (len_in * r_factor);
+        let h_out = p + tangent * (len_out * r_factor);
+        anchors.push(Anchor { p, h_in, h_out, kind: AnchorKind::Smooth });
     }
     PathData::single(SubPath::new(anchors, true))
 }
@@ -151,6 +309,26 @@ pub fn polygon(center: Point, radius: f64, sides: u32, rotation_deg: f64) -> Pat
     PathData::single(SubPath::polyline(&pts, true))
 }
 
+/// Regular polygon with `sides` (≥ 3), bezier tangent `rounded` factor and deterministic
+/// `randomized` vertex jitter.
+pub fn polygon_configured(center: Point, radius: f64, sides: u32, rotation_deg: f64, rounded: f64, randomized: f64) -> PathData {
+    if (!rounded.is_finite() || rounded.abs() < 1e-9) && (!randomized.is_finite() || randomized.abs() < 1e-9) {
+        return polygon(center, radius, sides.clamp(3, 1000), rotation_deg);
+    }
+    let n = sides.clamp(3, 1000);
+    let rot = if rotation_deg.is_finite() { rotation_deg.to_radians() } else { 0.0 };
+    let rand_amt = if randomized.is_finite() { randomized.clamp(0.0, 10.0) } else { 0.0 };
+    let pts: Vec<Point> = (0..n)
+        .map(|i| {
+            let (dr, da) = if rand_amt > 1e-9 { vertex_jitter(i, n) } else { (0.0, 0.0) };
+            let r = (radius * (1.0 + rand_amt * 0.45 * dr)).max(0.01);
+            let a = -PI / 2.0 + rot + TAU * (i as f64 / n as f64) + rand_amt * (PI / n as f64) * da;
+            Point::new(center.x + r * a.cos(), center.y + r * a.sin())
+        })
+        .collect();
+    contour_with_rounding(&pts, rounded)
+}
+
 /// Star with `points` tips (≥ 2), outer radius `r1`, inner radius `r2`, first tip up.
 pub fn star(center: Point, r1: f64, r2: f64, points: u32, rotation_deg: f64) -> PathData {
     let n = points.max(2) * 2;
@@ -163,6 +341,27 @@ pub fn star(center: Point, r1: f64, r2: f64, points: u32, rotation_deg: f64) -> 
         })
         .collect();
     PathData::single(SubPath::polyline(&pts, true))
+}
+
+/// Star with `points` tips (≥ 2), outer radius `r1`, inner radius `r2`, bezier tangent `rounded`
+/// factor and deterministic `randomized` vertex jitter.
+pub fn star_configured(center: Point, r1: f64, r2: f64, points: u32, rotation_deg: f64, rounded: f64, randomized: f64) -> PathData {
+    if (!rounded.is_finite() || rounded.abs() < 1e-9) && (!randomized.is_finite() || randomized.abs() < 1e-9) {
+        return star(center, r1, r2, points.clamp(2, 1000), rotation_deg);
+    }
+    let n = points.clamp(2, 1000) * 2;
+    let rot = if rotation_deg.is_finite() { rotation_deg.to_radians() } else { 0.0 };
+    let rand_amt = if randomized.is_finite() { randomized.clamp(0.0, 10.0) } else { 0.0 };
+    let pts: Vec<Point> = (0..n)
+        .map(|i| {
+            let base_r = if i % 2 == 0 { r1 } else { r2 };
+            let (dr, da) = if rand_amt > 1e-9 { vertex_jitter(i, n) } else { (0.0, 0.0) };
+            let r = (base_r * (1.0 + rand_amt * 0.45 * dr)).max(0.01);
+            let a = -PI / 2.0 + rot + TAU * (i as f64 / n as f64) + rand_amt * (PI / n as f64) * da;
+            Point::new(center.x + r * a.cos(), center.y + r * a.sin())
+        })
+        .collect();
+    contour_with_rounding(&pts, rounded)
 }
 
 /// Inner radius of a "straight-armed" star (Illustrator's Alt-drag behaviour): shoulders aligned.
@@ -191,9 +390,12 @@ pub fn arc_segment(anchor: Point, reference: usize, length_x: f64, length_y: f64
     arc(a, b, slope, closed, base_along_x)
 }
 
-/// Quarter-ellipse arc from `a` to `b` (Arc tool default: open, x-axis base when `base_along_x`).
-/// `slope` is −100…100 (concave…convex); 0 is a straight chord.
-pub fn arc(a: Point, b: Point, slope: f64, closed: bool, base_along_x: bool) -> PathData {
+/// Quarter-ellipse arc from `a` to `b` (Arc tool default: open). `slope` is −100…100
+/// (concave…convex); 0 is a straight chord. A convex arc bulges toward the corner `(b.x, a.y)`,
+/// and a closed arc closes through the corner `(a.x, b.y)`, so a closed arc at slope 100 is the
+/// quarter-ellipse sector. The shape does not depend on `_base_along_x`: for a Y-base arc,
+/// [`arc_segment`] passes ends on the box mirrored top to bottom.
+pub fn arc(a: Point, b: Point, slope: f64, closed: bool, _base_along_x: bool) -> PathData {
     let t = slope.clamp(-100.0, 100.0) / 100.0;
     let corner = if t >= 0.0 { Point::new(b.x, a.y) } else { Point::new(a.x, b.y) };
     let k = KAPPA * t.abs();
@@ -202,34 +404,171 @@ pub fn arc(a: Point, b: Point, slope: f64, closed: bool, base_along_x: bool) -> 
     let mut anchors =
         vec![Anchor { p: a, h_in: a, h_out: h1, kind: AnchorKind::Corner }, Anchor { p: b, h_in: h2, h_out: b, kind: AnchorKind::Corner }];
     if closed {
-        let o = if base_along_x { Point::new(a.x, b.y) } else { Point::new(b.x, a.y) };
-        anchors.push(Anchor::corner(o));
+        anchors.push(Anchor::corner(Point::new(a.x, b.y)));
     }
     PathData::single(SubPath::new(anchors, closed))
 }
 
-/// Archimedean-style spiral approximating Illustrator's Spiral tool (decay-based, `segments` quarter turns).
+/// Logarithmic spiral with decay per full wind (`segments` quarter turns).
 pub fn spiral(center: Point, radius: f64, decay_percent: f64, segments: u32, clockwise: bool) -> PathData {
     let decay = (decay_percent / 100.0).clamp(0.05, 0.9999);
+    let step_decay = decay.powf(0.25);
     let dir = if clockwise { 1.0 } else { -1.0 };
+    // The radius shrinks by `decay` each full wind: r(φ) = radius · e^(kφ).
+    let k = decay.ln() / TAU;
+    // Handle lengths per unit of the derivative below, at a segment's outer and inner end: √r
+    // changes evenly with the curve's parameter along each quarter turn. Both are KAPPA when the
+    // radius does not shrink, and the curve stays within 0.8% of the spiral's radius at 20% decay.
+    let outer = 2.0 * KAPPA * (step_decay.sqrt() - 1.0) / step_decay.ln();
+    let inner = outer / step_decay.sqrt();
     let mut anchors = Vec::new();
     let mut r = radius;
     for i in 0..=segments {
         let a = dir * (i as f64) * PI / 2.0;
         let p = Point::new(center.x + r * a.cos(), center.y + r * a.sin());
-        // Tangent direction for a quarter arc of radius r.
-        let t = Vec2::new(-a.sin(), a.cos()) * dir;
-        let r_prev = r / decay;
-        let r_next = r * decay;
-        let h_in = p - t * (KAPPA * (r + r_prev) / 2.0);
-        let h_out = p + t * (KAPPA * (r + r_next) / 2.0);
+        // The spiral's derivative by the angle turned: the radius changes along the radial
+        // direction while the point turns along the circle's tangent.
+        let d = Vec2::new(a.cos(), a.sin()) * (r * k) + Vec2::new(-a.sin(), a.cos()) * (r * dir);
+        let h_in = p - d * inner;
+        let h_out = p + d * outer;
         anchors.push(Anchor { p, h_in: if i == 0 { p } else { h_in }, h_out: if i == segments { p } else { h_out }, kind: AnchorKind::Smooth });
-        r *= decay;
+        r *= step_decay;
     }
     // Illustrator spirals wind inward from the outer point; reverse so the path starts at the centre end.
     let mut sp = SubPath::new(anchors, false);
     sp.reverse();
     PathData::single(sp)
+}
+
+/// Configurable spiral with `turns` revolutions (`0.25..=50.0`), `divergence` radial growth power
+/// (`0.05..=20.0`, `1.0` = uniform Archimedean spacing) and `inner_radius` fraction (`0.0..=0.99`).
+pub fn spiral_configured(center: Point, radius: f64, turns: f64, divergence: f64, inner_radius: f64, clockwise: bool) -> PathData {
+    let turns = if turns.is_finite() { turns.clamp(0.25, 50.0) } else { 3.0 };
+    let div = if divergence.is_finite() { divergence.clamp(0.05, 20.0) } else { 1.0 };
+    let inner_frac = if inner_radius.is_finite() { inner_radius.clamp(0.0, 0.99) } else { 0.0 };
+    let r_outer = if radius.is_finite() { radius.abs().max(0.01) } else { 50.0 };
+    let r_inner = r_outer * inner_frac;
+    let steps = (turns * 4.0).round().clamp(1.0, 200.0) as usize;
+    let dir = if clockwise { 1.0 } else { -1.0 };
+    let total_angle = dir * turns * TAU;
+    let dtheta = (turns * TAU) / (steps as f64);
+    let k = if dtheta > 1e-6 { KAPPA / dtheta } else { KAPPA };
+    let mut anchors = Vec::with_capacity(steps + 1);
+    for i in 0..=steps {
+        let u = (i as f64) / (steps as f64);
+        let theta = u * total_angle;
+        let f = if u <= 0.0 { 0.0 } else { u.powf(div) };
+        let r = r_inner + (r_outer - r_inner) * f;
+        let p = Point::new(center.x + r * theta.cos(), center.y + r * theta.sin());
+        let dr_du = if u > 1e-9 {
+            (r_outer - r_inner) * div * u.powf(div - 1.0)
+        } else if (div - 1.0).abs() < 1e-9 {
+            r_outer - r_inner
+        } else {
+            0.0
+        };
+        let dx_du = dr_du * theta.cos() - r * theta.sin() * total_angle;
+        let dy_du = dr_du * theta.sin() + r * theta.cos() * total_angle;
+        let d = Vec2::new(dx_du, dy_du) * (k / (steps as f64));
+        let h_in = if i == 0 { p } else { p - d };
+        let h_out = if i == steps { p } else { p + d };
+        anchors.push(Anchor { p, h_in, h_out, kind: AnchorKind::Smooth });
+    }
+    PathData::single(SubPath::new(anchors, false))
+}
+
+/// Rotatable 3D box inscribed in `r`, rotated by `(angle_x, angle_y, angle_z)` degrees and using
+/// orthographic parallel projection per axis when `parallel_*` is true or perspective foreshortening
+/// when false. Emits the visible front-facing quad faces with clockwise winding.
+pub fn box3d(r: Rect, angle_x: f64, angle_y: f64, angle_z: f64, parallel_x: bool, parallel_y: bool, parallel_z: bool) -> PathData {
+    let r = r.abs();
+    if r.width() <= 1e-9 || r.height() <= 1e-9 {
+        return rectangle(r);
+    }
+    let rx = if angle_x.is_finite() { angle_x.to_radians() } else { 30.0_f64.to_radians() };
+    let ry = if angle_y.is_finite() { angle_y.to_radians() } else { 35.0_f64.to_radians() };
+    let rz = if angle_z.is_finite() { angle_z.to_radians() } else { 0.0 };
+    let (sx, cx) = rx.sin_cos();
+    let (sy, cy) = ry.sin_cos();
+    let (sz, cz) = rz.sin_cos();
+
+    let transform_pt = |mut x: f64, mut y: f64, mut z: f64| -> (f64, f64, f64) {
+        if !parallel_x {
+            let k = 1.0 - 0.22 * x;
+            y *= k;
+            z *= k;
+        }
+        if !parallel_y {
+            let k = 1.0 - 0.22 * y;
+            x *= k;
+            z *= k;
+        }
+        // Rotate around X
+        let (y1, z1) = (y * cx - z * sx, y * sx + z * cx);
+        // Rotate around Y
+        let (x2, z2) = (x * cy + z1 * sy, -x * sy + z1 * cy);
+        // Rotate around Z
+        let (x3, y3) = (x2 * cz - y1 * sz, x2 * sz + y1 * cz);
+        let persp = if parallel_z { 1.0 } else { 1.0 / (1.0 - 0.25 * z2).max(0.2) };
+        (x3 * persp, y3 * persp, z2)
+    };
+
+    let raw_verts: [(f64, f64, f64); 8] = [
+        transform_pt(-1.0, -1.0, -1.0),
+        transform_pt(1.0, -1.0, -1.0),
+        transform_pt(1.0, 1.0, -1.0),
+        transform_pt(-1.0, 1.0, -1.0),
+        transform_pt(-1.0, -1.0, 1.0),
+        transform_pt(1.0, -1.0, 1.0),
+        transform_pt(1.0, 1.0, 1.0),
+        transform_pt(-1.0, 1.0, 1.0),
+    ];
+
+    let mut min_x = f64::INFINITY;
+    let mut max_x = f64::NEG_INFINITY;
+    let mut min_y = f64::INFINITY;
+    let mut max_y = f64::NEG_INFINITY;
+    for &(vx, vy, _) in &raw_verts {
+        min_x = min_x.min(vx);
+        max_x = max_x.max(vx);
+        min_y = min_y.min(vy);
+        max_y = max_y.max(vy);
+    }
+    let span_x = (max_x - min_x).max(1e-6);
+    let span_y = (max_y - min_y).max(1e-6);
+    let proj = |i: usize| -> Point {
+        let (vx, vy, _) = raw_verts[i];
+        Point::new(r.x0 + (vx - min_x) / span_x * r.width(), r.y0 + (vy - min_y) / span_y * r.height())
+    };
+
+    // 6 cube faces with outward-pointing vertex order in 3D.
+    const FACES: [[usize; 4]; 6] = [
+        [4, 5, 6, 7], // +Z front
+        [1, 0, 3, 2], // -Z back
+        [0, 4, 7, 3], // -X left
+        [5, 1, 2, 6], // +X right
+        [0, 1, 5, 4], // -Y top
+        [7, 6, 2, 3], // +Y bottom
+    ];
+
+    let mut faces_with_depth: Vec<(f64, SubPath)> = Vec::new();
+    for idx in FACES {
+        let z_avg = (raw_verts[idx[0]].2 + raw_verts[idx[1]].2 + raw_verts[idx[2]].2 + raw_verts[idx[3]].2) * 0.25;
+        let mut pts = [proj(idx[0]), proj(idx[1]), proj(idx[2]), proj(idx[3])];
+        let mut sp = SubPath::polyline(&pts, true);
+        let area = sp.signed_area();
+        // Outward face in camera space has positive signed area (clockwise on screen, y down).
+        if area > 1e-4 {
+            faces_with_depth.push((z_avg, sp));
+        } else if faces_with_depth.is_empty() && area.abs() > 1e-4 {
+            pts.reverse();
+            sp = SubPath::polyline(&pts, true);
+            faces_with_depth.push((z_avg, sp));
+        }
+    }
+    faces_with_depth.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let subpaths: Vec<SubPath> = faces_with_depth.into_iter().map(|(_, sp)| sp).collect();
+    if subpaths.is_empty() { rectangle(r) } else { PathData::new(subpaths) }
 }
 
 /// The largest grid divider skew, in percent either way.
@@ -459,6 +798,43 @@ mod tests {
     }
 
     #[test]
+    fn spiral_decay_is_per_full_wind() {
+        let p = spiral(Point::ZERO, 100.0, 80.0, 8, true);
+        let radii: Vec<_> = p.subpaths[0].anchors.iter().map(|a| (a.p - Point::ZERO).hypot()).collect();
+        assert!((radii[8] - 100.0).abs() < 1e-9);
+        assert!((radii[4] - 80.0).abs() < 1e-9);
+        assert!((radii[0] - 64.0).abs() < 1e-9);
+    }
+
+    /// #3437: every segment stays on the spiral through its anchors, whose radius shrinks by
+    /// `decay` each full wind, for strong and weak decay and both directions.
+    #[test]
+    fn spiral_segments_follow_the_spiral() {
+        let center = Point::new(40.0, -25.0);
+        for decay in [20.0, 30.0, 50.0, 80.0, 95.0] {
+            for clockwise in [true, false] {
+                let p = spiral(center, 100.0, decay, 8, clockwise);
+                let anchors = &p.subpaths[0].anchors;
+                let k = (decay / 100.0_f64).ln() / TAU;
+                let mut worst = 0.0_f64;
+                for pair in anchors.windows(2) {
+                    let c = kurbo::CubicBez::new(pair[0].p, pair[0].h_out, pair[1].h_in, pair[1].p);
+                    let r0 = (pair[0].p - center).hypot();
+                    let a0 = (pair[0].p - center).atan2();
+                    for step in 1..20 {
+                        let q = kurbo::ParamCurve::eval(&c, f64::from(step) / 20.0) - center;
+                        // The angle turned from the segment's start, toward the outer end.
+                        let turned = (q.atan2() - a0 + 3.0 * PI).rem_euclid(TAU) - PI;
+                        let want = r0 * (-k * turned.abs()).exp();
+                        worst = worst.max((q.hypot() - want).abs() / want);
+                    }
+                }
+                assert!(worst < 0.008, "decay {decay} clockwise {clockwise}: radius off by {:.2}%", worst * 100.0);
+            }
+        }
+    }
+
+    #[test]
     fn grids() {
         let r = Rect::new(0.0, 0.0, 10.0, 10.0);
         assert_eq!(rectangular_grid(r, (5, 0.0), (5, 0.0), true).len(), 11);
@@ -545,11 +921,79 @@ mod tests {
         }
     }
 
+    /// An arc with Base Along Y, open or closed, convex or concave, is the arc with Base Along X in
+    /// the same box mirrored top to bottom, anchor for anchor and handle for handle.
+    #[test]
+    fn a_y_base_arc_is_the_x_base_arc_mirrored_top_to_bottom() {
+        let mirror = |p: Point| Point::new(p.x, 20.0 + 70.0 - p.y);
+        for closed in [false, true] {
+            for slope in [100.0, 50.0, -50.0, -100.0] {
+                let x = arc_segment(Point::new(10.0, 20.0), 0, 100.0, 50.0, true, slope, closed);
+                let y = arc_segment(Point::new(10.0, 20.0), 0, 100.0, 50.0, false, slope, closed);
+                let (xs, ys) = (&x.subpaths[0], &y.subpaths[0]);
+                assert_eq!(ys.closed, closed);
+                assert_eq!(xs.anchors.len(), ys.anchors.len(), "slope {slope}, closed {closed}");
+                for (i, (p, q)) in xs.anchors.iter().zip(&ys.anchors).enumerate() {
+                    for (u, v) in [(p.p, q.p), (p.h_in, q.h_in), (p.h_out, q.h_out)] {
+                        assert!(mirror(u).distance(v) < 1e-9, "slope {slope}, closed {closed}, anchor {i}: {u:?} mirrored is not {v:?}");
+                    }
+                }
+            }
+        }
+    }
+
+    /// A closed convex arc is the quarter-ellipse sector of its box with either base: its area is
+    /// a quarter of the ellipse's, π/4 of the box's.
+    #[test]
+    fn a_closed_convex_arc_is_a_quarter_ellipse_sector_with_either_base() {
+        for base_along_x in [true, false] {
+            let a = arc_segment(Point::ZERO, 0, 100.0, 50.0, base_along_x, 100.0, true).subpaths[0].signed_area().abs();
+            assert!((a / (100.0 * 50.0) - PI / 4.0).abs() < 0.01, "base along x {base_along_x}: area {a}");
+        }
+    }
+
     #[test]
     fn arc_open_and_closed() {
         assert_eq!(arc(Point::ZERO, Point::new(10.0, 10.0), 0.0, false, true).anchor_count(), 2);
         assert!(arc(Point::ZERO, Point::new(10.0, 10.0), 0.0, true, true).subpaths[0].closed);
         let seg = arc_segment(Point::ZERO, 0, 100.0, 50.0, true, 50.0, false);
         assert_eq!(seg.anchor_count(), 2);
+    }
+
+    #[test]
+    fn ellipse_arc_modes_and_configured_shapes() {
+        let r = Rect::new(0.0, 0.0, 100.0, 100.0);
+        let slice = ellipse_arc(r, 0.0, 90.0, EllipseMode::Slice);
+        assert!(slice.is_closed() && slice.anchor_count() == 3);
+        assert_eq!(slice, ellipse_pie(r, 0.0, 90.0), "ellipse_pie matches Slice mode");
+        let chord = ellipse_arc(r, 0.0, 90.0, EllipseMode::Chord);
+        assert!(chord.is_closed() && chord.anchor_count() == 2);
+        let open_arc = ellipse_arc(r, 0.0, 90.0, EllipseMode::Arc);
+        assert!(!open_arc.is_closed() && open_arc.anchor_count() == 2);
+        let whole = ellipse_arc(r, 0.0, 90.0, EllipseMode::Whole);
+        assert_eq!(whole, ellipse(r));
+
+        // Rectangle opened/cut with apply_shape_arc
+        let rect_open = apply_shape_arc(rectangle(r), r.center(), 30.0, 300.0, EllipseMode::Arc);
+        assert!(!rect_open.is_closed());
+        let rect_slice = apply_shape_arc(rectangle(r), r.center(), 30.0, 300.0, EllipseMode::Slice);
+        assert!(rect_slice.is_closed() && rect_slice.subpaths[0].anchors[0].p == r.center());
+
+        // Polygon and Star with rounded and randomized, and unconfigured parity
+        assert_eq!(polygon_configured(Point::ZERO, 50.0, 6, 0.0, 0.0, 0.0), polygon(Point::ZERO, 50.0, 6, 0.0));
+        assert_eq!(star_configured(Point::ZERO, 50.0, 25.0, 5, 0.0, 0.0, 0.0), star(Point::ZERO, 50.0, 25.0, 5, 0.0));
+        let poly_round = polygon_configured(Point::ZERO, 50.0, 6, 0.0, 0.5, 0.1);
+        assert_eq!(poly_round.anchor_count(), 6);
+        assert!(poly_round.subpaths[0].anchors.iter().all(|a| a.has_in() && a.has_out()));
+        let star_round = star_configured(Point::ZERO, 50.0, 25.0, 5, 0.0, 0.5, 0.1);
+        assert_eq!(star_round.anchor_count(), 10);
+
+        // Spiral configured
+        let sp = spiral_configured(Point::ZERO, 100.0, 3.0, 1.5, 0.25, true);
+        assert!(!sp.is_closed() && sp.anchor_count() == 13);
+
+        // 3D Box
+        let b3d = box3d(r, 30.0, 35.0, 0.0, true, true, true);
+        assert!(!b3d.subpaths.is_empty() && b3d.subpaths.iter().all(|s| s.closed && s.anchors.len() == 4));
     }
 }

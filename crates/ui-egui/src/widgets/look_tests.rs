@@ -99,6 +99,65 @@ fn a_spinner_field_reads_as_one_box_in_three_parts() {
     for pair in boxes.windows(2) {
         assert!((pair[1].min.x - pair[0].max.x + 1.0).abs() < 0.01, "neighbours share one border: {boxes:?}");
     }
+    // The number text in the numeric field is vertically centered in the row box (#900, #4567).
+    let text_shape = shapes
+        .iter()
+        .find_map(|s| match s {
+            egui::Shape::Text(t) if t.galley.text() == "4 pt" => Some(t),
+            _ => None,
+        })
+        .expect("field text shape present");
+    let text_top = text_shape.pos.y - boxes[1].min.y;
+    let text_bottom = boxes[1].max.y - (text_shape.pos.y + text_shape.galley.rect.height());
+    assert!((text_top - text_bottom).abs() <= 1.5, "text is vertically centered in its box: top gap {text_top}, bottom gap {text_bottom}");
+}
+
+// Regression test for #4567: numbers and text in input fields (numeric fields, dash/gap fields,
+// etc.) are vertically centered in their boxes, not shoved against the top edge.
+#[test]
+fn input_elements_are_vertically_centered_in_their_boxes() {
+    let ctx = themed(Default::default());
+    let mut add = |ui: &mut Ui| {
+        ui.horizontal(|ui| {
+            num_field(ui, "plain_num", Some(12.0), Unit::Points, 70.0);
+            opt_field(ui, "dash_cell", Some(12.0), Unit::Points, 40.0);
+        });
+    };
+    frame(&ctx, 0.0, vec![], &mut add);
+    let shapes = frame(&ctx, 0.1, vec![], &mut add);
+    let mut boxes: Vec<Rect> = vec![];
+    for s in &shapes {
+        if let egui::Shape::Rect(r) = s
+            && r.rect.height() > 20.0
+            && r.fill != Color32::TRANSPARENT
+            && !boxes.contains(&r.rect)
+        {
+            boxes.push(r.rect);
+        }
+    }
+    boxes.sort_by(|a, b| a.min.x.total_cmp(&b.min.x));
+    assert_eq!(boxes.len(), 2, "found both field boxes: {boxes:?}");
+
+    let mut text_shapes: Vec<&egui::epaint::TextShape> = vec![];
+    for s in &shapes {
+        if let egui::Shape::Text(t) = s
+            && (t.galley.text() == "12 pt" || t.galley.text() == "12")
+        {
+            text_shapes.push(t);
+        }
+    }
+    text_shapes.sort_by(|a, b| a.pos.x.total_cmp(&b.pos.x));
+    assert_eq!(text_shapes.len(), 2, "found both text shapes: {text_shapes:?}");
+
+    for (b, t) in boxes.iter().zip(text_shapes.iter()) {
+        let text_top = t.pos.y - b.min.y;
+        let text_bottom = b.max.y - (t.pos.y + t.galley.rect.height());
+        assert!(
+            (text_top - text_bottom).abs() <= 1.5,
+            "text '{}' is vertically centered: top gap {text_top}, bottom gap {text_bottom} in box {b:?}",
+            t.galley.text()
+        );
+    }
 }
 
 /// The colour of every glyph of the text in `shapes`: selected glyphs are drawn in the
@@ -207,8 +266,8 @@ fn a_slider_focused_by_a_click_shows_its_outline_only_after_a_key() {
     assert!(outlined(&shapes), "an arrow key shows the outline");
 }
 
-// Regression test for #2083: the rows of the panels' menus didn't light up under the pointer, as
-// the menu bar's items do.
+/// Regression test for #2083: the rows of the panels' menus didn't light up under the pointer, as
+/// the menu bar's items do.
 #[test]
 fn a_panel_menu_row_lights_up_under_the_pointer() {
     let ctx = themed(Default::default());
@@ -324,16 +383,16 @@ fn a_combos_keyboard_guard_reads_the_combos_own_button_id() {
         // `ComboBox::from_id_salt` gives the button: they must be equal, or the guard
         // reads and gives back the keyboard of nothing.
         let expected = combo_button_id(ui, &"combo-guard-test");
-        let response = egui::ComboBox::from_id_salt("combo-guard-test").selected_text("One").show_ui(ui, |_| ());
+        let response = craft_ui::ComboBox::from_id_salt("combo-guard-test").selected_text("One").show_ui(ui, |_| ());
         seen.set(expected == response.response.id);
     });
     h.run_steps(2);
     assert!(same.get(), "the guard's id is the ComboBox button's id");
 }
 
-// Regression test for #3440: the Fill/Stroke chip's popover closed on the click that ended a
-// drag between its proxies. It stays open for a click on its own anchor and while a panel
-// drag is on; a click elsewhere still closes it.
+/// Regression test for #3440: the Fill/Stroke chip's popover closed on the click that ended a
+/// drag between its proxies. It stays open for a click on its own anchor and while a panel
+/// drag is on; a click elsewhere still closes it.
 #[test]
 fn a_popover_stays_open_for_a_click_on_its_anchor_or_during_a_panel_drag() {
     let press = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
@@ -367,4 +426,101 @@ fn a_popover_stays_open_for_a_click_on_its_anchor_or_during_a_panel_drag() {
     // a panel drag released elsewhere.
     let open = [open_after_click(far, None), open_after_click(None, None), open_after_click(far, panel_drag())];
     assert_eq!(open, [false, true, true]);
+}
+
+/// #4267: a click on a spinner arrow steps once; an arrow held down steps again and again after a
+/// pause even past the click timeout (#6307), and letting go doesn't step once more.
+#[test]
+fn a_held_spinner_arrow_repeats() {
+    let ctx = themed(Default::default());
+    let value = std::cell::Cell::new(5.0);
+    let scroll = std::cell::Cell::new(0.0);
+    let spinner_rect = std::cell::Cell::new(Rect::NOTHING);
+    let mut add = |ui: &mut Ui| {
+        let area = egui::ScrollArea::vertical().max_height(100.0).scroll_source(egui::scroll_area::ScrollSource::DRAG).show(ui, |ui| {
+            ui.add_space(35.0);
+            let row = ui.horizontal(|ui| {
+                if let Some(v) = spin_plain(ui, "repeat", value.get(), "", 0, 100.0, 1.0, 0.0, &[]) {
+                    value.set(v);
+                }
+            });
+            spinner_rect.set(Rect::from_min_size(row.response.rect.min, vec2(16.0, 26.0)));
+            ui.add_space(150.0);
+        });
+        scroll.set(area.state.clamped_offset().y);
+    };
+    let shapes = frame(&ctx, 0.0, vec![], &mut add);
+    let spinner = shapes
+        .iter()
+        .filter_map(|s| match s {
+            egui::Shape::Rect(r) if r.rect.height() > 20.0 && r.fill != Color32::TRANSPARENT => Some(r.rect),
+            _ => None,
+        })
+        .min_by(|a, b| a.min.x.total_cmp(&b.min.x))
+        .expect("the spinner box");
+    let up = spinner.center_top() + vec2(0.0, 6.0);
+    let button = |pressed| egui::Event::PointerButton { pos: up, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    // A click: one step, on release.
+    frame(&ctx, 0.1, vec![egui::Event::PointerMoved(up), button(true)], &mut add);
+    frame(&ctx, 0.2, vec![button(false)], &mut add);
+    assert_eq!(value.get(), 6.0, "a click steps once");
+    // Held: nothing more until the pause is over, then a step every repeat.
+    frame(&ctx, 1.0, vec![button(true)], &mut add);
+    frame(&ctx, 1.3, vec![], &mut add);
+    assert_eq!(value.get(), 6.0, "no step before the pause");
+    for i in 0..17 {
+        let t = 1.5 + f64::from(i) * 0.1;
+        frame(&ctx, t, vec![], &mut add);
+        assert_eq!(value.get(), 7.0 + f64::from(i), "a step every repeat at {t}");
+    }
+    frame(&ctx, 3.2, vec![button(false)], &mut add);
+    frame(&ctx, 3.3, vec![], &mut add);
+    assert_eq!(value.get(), 23.0, "letting go doesn't step once more");
+
+    let down = spinner_rect.get().center_bottom() - vec2(0.0, 6.0);
+    let modifiers = egui::Modifiers::SHIFT;
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers };
+    frame(&ctx, 3.9, vec![egui::Event::PointerMoved(down)], &mut add);
+    frame(&ctx, 4.0, vec![egui::Event::ModifiersChanged(modifiers), button(down, true)], &mut add);
+    frame(&ctx, 4.5, vec![], &mut add);
+    assert_eq!(value.get(), 13.0, "Shift+down steps by ten: press {down:?}, current {:?}", spinner_rect.get());
+    frame(&ctx, 4.9, vec![], &mut add);
+    assert_eq!(value.get(), 3.0, "Shift+down repeats past the click timeout");
+
+    let outside = down - vec2(0.0, 45.0);
+    frame(&ctx, 5.0, vec![egui::Event::PointerMoved(outside)], &mut add);
+    frame(&ctx, 5.1, vec![], &mut add);
+    frame(&ctx, 5.2, vec![button(outside, false)], &mut add);
+    assert_eq!(value.get(), 3.0, "dragging away and releasing doesn't step");
+    assert!(scroll.get() > 0.0, "a drag starting on the spinner can still scroll the panel");
+}
+
+/// The Kerning field reads `(10+5)` as 15 whether it shows a manual value (`12`) or an automatic
+/// one (`(12)`), and refuses `(10+5)*2` either way.
+#[test]
+fn kerning_reads_parentheses_around_its_text_with_a_manual_value_too() {
+    let typed = |automatic: bool, text: &str| {
+        let ctx = themed(Default::default());
+        let picked = std::cell::Cell::new(None);
+        let mut add = |ui: &mut Ui| {
+            ui.horizontal(|ui| {
+                if let Some(p) = spin_kerning(ui, "kern", Some(12.0), Some(automatic), Some(false), "Optical", automatic, 100.0, &[]) {
+                    picked.set(Some(p));
+                }
+            });
+        };
+        arm_field_focus(&ctx, "kern");
+        frame(&ctx, 0.0, vec![], &mut add);
+        frame(&ctx, 0.1, vec![], &mut add);
+        let enter = |pressed| egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+        frame(&ctx, 0.2, vec![egui::Event::Text(text.into()), enter(true), enter(false)], &mut add);
+        frame(&ctx, 0.3, vec![], &mut add);
+        picked.get()
+    };
+    for automatic in [false, true] {
+        assert_eq!(typed(automatic, "(10+5)"), Some(SpinPick::Value(15.0)), "automatic: {automatic}");
+        assert_eq!(typed(automatic, "(10+5)*2"), None, "automatic: {automatic}");
+        assert_eq!(typed(automatic, "(1,000)"), None, "a thousands comma, automatic: {automatic}");
+        assert_eq!(typed(automatic, "(1,5)"), Some(SpinPick::Value(1.5)), "a decimal comma, automatic: {automatic}");
+    }
 }

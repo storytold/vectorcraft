@@ -1,5 +1,8 @@
 use super::state::{ccw_turn, turn};
-use super::*;
+use super::{
+    Affine, BezPath, Dash, FillRule, HAIRLINE, Interp, Key, MAX_GSAVE, MAX_NEST, MAX_PATH, Obj, Op, PathEl, Point, PsError, Rect, Res, Shape,
+    StrokeLayer, Vec2, deep_clips, ps_err,
+};
 
 impl Interp<'_> {
     /// User space → document space.
@@ -190,7 +193,7 @@ impl Interp<'_> {
 
     // ---------- painting ----------
 
-    pub(super) fn fill_path(&mut self, bp: BezPath, rule: FillRule) -> Res {
+    pub(in super::super) fn fill_path(&mut self, bp: BezPath, rule: FillRule) -> Res {
         if bp.elements().is_empty() || self.g.null {
             return Ok(());
         }

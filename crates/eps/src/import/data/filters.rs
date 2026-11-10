@@ -1,12 +1,19 @@
 use super::ops::MAX_DATA;
-use super::*;
+use super::{
+    DecodeSettings, Decoder, DecoderContext, DictRef, EncodingMode, ImageBlob, Key, Obj, PsError, Rc, RefCell, Res, find, hex_decode,
+    jpeg_components, ps, ps_err,
+};
 
 /// A file object: the program itself, or data a filter decoded.
 #[derive(Debug)]
 pub(crate) enum Stream {
     Current,
-    /// Filters over the program's own data, decoded when first read.
-    Pending(Vec<Filter>),
+    /// Filters over the data the program reads, decoded when first read, from the file they were
+    /// made over: a file being run (`from`), or else the program's own file.
+    Pending {
+        chain: Vec<Filter>,
+        from: Option<Rc<RefCell<Stream>>>,
+    },
     Buf {
         data: Vec<u8>,
         pos: usize,

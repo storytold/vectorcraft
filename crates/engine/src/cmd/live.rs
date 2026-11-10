@@ -19,7 +19,10 @@ use vectorcraft_geom::{Affine, Anchor, PathData, Point, Vec2};
 use super::edit::selected_roots;
 use super::expand::gradient_sampler;
 use super::pathops::Beside;
-use super::*;
+use super::{
+    CommandSpec, EngineError, Result, Session, always, bad, check_numbers, cmd, color_param, f64_or, f64_req, finite_numbers, has_doc, has_multi,
+    has_selection, id_param, named_ids, number_or, ok, str_param, switch_or, text_param,
+};
 
 mod blend;
 mod commands;

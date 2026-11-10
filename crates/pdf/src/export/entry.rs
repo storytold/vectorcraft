@@ -1,5 +1,5 @@
 use super::writer::{Sheet, Writer, date_time};
-use super::*;
+use super::{Affine, Document, ExportReport, Exporter, HashSet, PageBoxes, PdfError, PdfOptions, Rect, write};
 
 /// Export `doc` as PDF bytes: one page per artboard (or the artboards chosen in `opts`).
 pub fn export(doc: &Document, opts: &PdfOptions) -> Result<Vec<u8>, PdfError> {
@@ -9,6 +9,8 @@ pub fn export(doc: &Document, opts: &PdfOptions) -> Result<Vec<u8>, PdfError> {
 /// Like [`export`], also returning warnings: options accepted but not applied yet (see
 /// [`crate::PdfSettings::warnings`]) and features approximated or dropped.
 pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportReport, PdfError> {
+    // Type in the document's composite fonts is drawn in them, whether or not an app has the document open.
+    let _lent = vectorcraft_text::FontDb::global().lend_composite_fonts(&doc.composite_fonts);
     write::guard(|| leaving_out_undecodable(doc, |left_out| export_with_report_inner(doc, opts, left_out)))
 }
 
@@ -79,6 +81,16 @@ fn export_with_report_inner(doc: &Document, opts: &PdfOptions, left_out: &mut Ha
     // In PDF 1.6 and later files that aren't PDF/X files, a page with a side longer than
     // [`MAX_PAGE_SIDE`] is written in larger units; other files have every page in points.
     let scales = set.compatibility.has_user_unit() && !set.standard.is_pdfx();
+    // PDF/X files have no annotations over the art (ISO 15930: only printer's mark and trap
+    // network annotations, outside the bleed box): objects' URLs aren't written as links there.
+    let links = !set.standard.is_pdfx();
+    let mut linked = false;
+    for layer in doc.layers.iter().filter(|_| !links) {
+        layer.walk(&mut |n| linked |= n.url().is_some());
+    }
+    if linked {
+        warnings.push(format!("{} files have no links: the objects' URLs aren't clickable", set.standard.label()));
+    }
     let mut units = Vec::with_capacity(pages.len());
     let total = pages.len() as u64;
     for (written, (i, boxes)) in pages.into_iter().enumerate() {
@@ -102,11 +114,13 @@ fn export_with_report_inner(doc: &Document, opts: &PdfOptions, left_out: &mut Ha
             view,
             window: None,
             place: Affine::IDENTITY,
+            copies: &[],
             area: r,
             // Art reaches as far as the bleed: the marks lie outside it.
             clip: m != r,
             marks: art.as_ref(),
             negative: false,
+            links,
         };
         w.page(&mut ex, &sheet).map_err(|_| PdfError::BadArtboard(i))?;
     }

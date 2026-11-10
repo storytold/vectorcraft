@@ -28,7 +28,8 @@ const METHOD_NOT_FOUND: i64 = -32601;
 const INVALID_PARAMS: i64 = -32602;
 const INTERNAL_ERROR: i64 = -32603;
 const RESOURCE_NOT_FOUND: i64 = -32002;
-/// The engine is running a long call and this request was not run (implementation-defined range).
+/// The engine is running a long call or a script and this request was not run
+/// (implementation-defined range).
 pub(crate) const SERVER_BUSY: i64 = -32003;
 
 /// How long a call runs before a request that would have to wait behind it is refused as busy
@@ -189,6 +190,13 @@ pub(crate) fn read_line_capped(reader: &mut impl BufRead, buf: &mut Vec<u8>, max
             upto.min(max.saturating_add(1).saturating_sub(buf.len()))
         };
         if take == 0 {
+            // Exactly `max` content bytes plus the `\r` of a CRLF ending fill the bound; the line
+            // is still within the limit when the `\n` follows.
+            if buf.last() == Some(&b'\r') && reader.fill_buf()?.first() == Some(&b'\n') {
+                reader.consume(1);
+                buf.pop();
+                return Ok(true);
+            }
             // Already past the bound: the caller sees `buf.len() > max`.
             return Ok(true);
         }
@@ -428,16 +436,20 @@ impl Server {
                 if let Some(arguments) = args.as_object() {
                     crate::tools::check_tool_arguments(name, arguments).map_err(|e| (INVALID_PARAMS, e))?;
                 }
-                Ok(call_tool(self.backend.as_mut(), name, &args).to_value())
+                let result = call_tool(self.backend.as_mut(), name, &args);
+                match result.script_busy() {
+                    Some(message) => Err((SERVER_BUSY, message)),
+                    None => Ok(result.to_value()),
+                }
             }
             "resources/read" => {
                 let uri = params.get("uri").and_then(Value::as_str).ok_or((INVALID_PARAMS, "missing `uri`".to_string()))?;
-                let v = resources::read(self.backend.as_mut(), uri).map_err(|e| match e {
+                let read = resources::read_contents(self.backend.as_mut(), uri).map_err(|e| match e {
                     resources::ReadError::NotFound(uri) => (RESOURCE_NOT_FOUND, format!("resource not found: {uri}")),
                     resources::ReadError::Invalid(why) => (INVALID_PARAMS, why),
                     resources::ReadError::Backend(why) => (INTERNAL_ERROR, why),
                 })?;
-                Ok(json!({"contents": [{"uri": uri, "mimeType": "application/json", "text": serde_json::to_string_pretty(&v).unwrap_or_default()}]}))
+                Ok(json!({"contents": [{"uri": uri, "mimeType": read.mime, "text": read.text}]}))
             }
             "completion/complete" => Ok(prompts::complete(self.backend.as_mut(), params)),
             "logging/setLevel" => {
@@ -457,5 +469,31 @@ impl Server {
             }
             other => Err((METHOD_NOT_FOUND, format!("method not found: {other}"))),
         }
+    }
+}
+
+#[cfg(test)]
+mod line_reader_tests {
+    use super::read_line_capped;
+    use std::io::Cursor;
+
+    #[test]
+    fn crlf_line_of_exactly_max_bytes_is_within_the_limit() {
+        for ending in ["\n", "\r\n"] {
+            let mut input = Cursor::new(format!("{}{ending}next\n", "a".repeat(10)).into_bytes());
+            let mut buf = Vec::new();
+            assert!(read_line_capped(&mut input, &mut buf, 10).unwrap());
+            assert_eq!(buf, b"aaaaaaaaaa", "ending {ending:?}");
+            assert!(read_line_capped(&mut input, &mut buf, 10).unwrap());
+            assert_eq!(buf, b"next");
+        }
+    }
+
+    #[test]
+    fn crlf_line_over_max_is_still_overlong() {
+        let mut input = Cursor::new(format!("{}\r\n", "a".repeat(11)).into_bytes());
+        let mut buf = Vec::new();
+        assert!(read_line_capped(&mut input, &mut buf, 10).unwrap());
+        assert!(buf.len() > 10);
     }
 }

@@ -8,7 +8,7 @@ use vectorcraft_pdf::PrintSettings;
 
 use super::fileio::pdf::changed;
 use super::print::settings_over;
-use super::*;
+use super::{CommandSpec, EngineError, Result, Session, always, bad, bool_or, cmd, str_param};
 
 /// The built-in preset's name.
 pub const DEFAULT_PRESET: &str = "[Default]";
@@ -221,8 +221,12 @@ fn import(s: &mut Session, p: &Value) -> Result<Value> {
     for q in &file.presets {
         q.settings.check().map_err(|e| bad(C, format!("`{}`: {e}", q.name)))?;
     }
+    if file.presets.len() > super::MAX_IMPORTED_PRESETS {
+        return Err(bad(C, format!("a print presets file with over {} presets", super::MAX_IMPORTED_PRESETS)));
+    }
     let replace = bool_or(p, "replace", false);
     let mut imported = vec![];
+    let mut next = std::collections::HashMap::new();
     for mut preset in file.presets {
         // [Default] comes in as a saved copy ("Default 2"…): the built-in one stays.
         let name = preset.name.trim().trim_start_matches('[').trim_end_matches(']').trim();
@@ -236,7 +240,7 @@ fn import(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             }
             None => {
-                preset.name = unique_name(&base, |n| s.print_preset_taken(n, None));
+                preset.name = super::unique_name_from(&base, &mut next, |n| s.print_preset_taken(n, None));
                 imported.push(preset.name.clone());
                 s.prefs.print_presets.push(preset);
             }

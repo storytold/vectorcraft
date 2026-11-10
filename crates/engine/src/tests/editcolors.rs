@@ -70,6 +70,60 @@ fn balance_previews_and_commits_one_step() {
     assert_eq!(fill_of(&s, a).to_hex(), "#808080");
 }
 
+/// Saturate needs its intensity: a call without one, or with one that is not a number, is an error
+/// that changes nothing and records no undo step. A number outside −100..100 counts as its nearest end.
+#[test]
+fn saturate_needs_a_number_intensity() {
+    let mut s = session();
+    let a = rect(&mut s, json!("#cc6666"));
+    let undo = s.doc().unwrap().history.undo.len();
+    for p in [json!({}), json!({"intensity": "40"}), json!({"intensity": null})] {
+        let e = s.execute("edit.colors.saturate", &p).unwrap_err().to_string();
+        assert!(e.contains("missing number `intensity`"), "{p}: {e}");
+    }
+    assert_eq!(fill_of(&s, a).to_hex(), "#cc6666");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step");
+    s.execute("edit.colors.saturate", &json!({"intensity": 100})).unwrap();
+    let full = fill_of(&s, a).to_hex();
+    assert_ne!(full, "#cc6666");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.colors.saturate", &json!({"intensity": 250})).unwrap();
+    assert_eq!(fill_of(&s, a).to_hex(), full, "250 counts as 100");
+}
+
+/// Saturate at 0 leaves every color as it was: a swatch-linked fill keeps its exact color and its link.
+#[test]
+fn saturate_keeps_a_color_it_does_not_change() {
+    let mut s = session();
+    s.execute("swatch.new", &json!({"name": "Sky", "color": "#3a7bd5", "global": true})).unwrap();
+    let a = rect(&mut s, json!("#3a7bd5"));
+    s.execute("paint.setFill", &json!({"ids": [a.0], "swatch": "Sky"})).unwrap();
+    let b = rect(&mut s, json!({"c": 20, "m": 40, "y": 0, "k": 10}));
+    let paint = |s: &Session, id: NodeId| s.doc().unwrap().doc.node(id).unwrap().appearance.fill_paint().clone();
+    let (sky, cmyk) = (paint(&s, a), paint(&s, b));
+    let v = s.execute("edit.colors.saturate", &json!({"ids": [a.0, b.0], "intensity": 0})).unwrap();
+    assert_eq!(v["changed"], 0);
+    assert_eq!(paint(&s, a), sky);
+    assert_eq!(paint(&s, b), cmyk);
+}
+
+/// Adjust Color Balance refuses a channel that is not a number, which it would otherwise read as 0.
+#[test]
+fn adjust_balance_refuses_a_channel_that_is_not_a_number() {
+    let mut s = session();
+    let a = rect(&mut s, json!("#808080"));
+    let undo = s.doc().unwrap().history.undo.len();
+    for p in [json!({"mode": "rgb", "r": "40"}), json!({"c": "10"}), json!({"gray": true}), json!({"tint": "5"})] {
+        let e = s.execute("edit.colors.adjustBalance", &p).unwrap_err().to_string();
+        assert!(e.contains("must be a number"), "{p}: {e}");
+    }
+    assert_eq!(fill_of(&s, a).to_hex(), "#808080");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step");
+    // A null is read as a channel left out.
+    s.execute("edit.colors.adjustBalance", &json!({"mode": "rgb", "r": 20, "g": null})).unwrap();
+    assert_eq!(fill_of(&s, a).to_hex(), "#b38080");
+}
+
 // ---------- meshes, images and patterns ----------
 
 fn mesh_colors(s: &Session, id: NodeId) -> Vec<Color> {
@@ -133,6 +187,127 @@ fn a_clicked_mesh_point_takes_the_fill_colour() {
     assert_eq!((after[0], after[3]), (before[0], before[3]));
 }
 
+fn mesh_opacities(s: &Session, id: NodeId) -> Vec<f32> {
+    match &s.doc().unwrap().doc.node(id).unwrap().kind {
+        NodeKind::Mesh(m) => m.points.iter().map(|p| p.opacity).collect(),
+        _ => panic!("not a mesh"),
+    }
+}
+
+/// The Transparency panel's opacity on a clicked mesh point fades that point alone, not the whole
+/// object (#4206).
+#[test]
+fn a_clicked_mesh_point_takes_the_opacity() {
+    let mut s = session();
+    let m = rect(&mut s, json!("#ff0000"));
+    s.execute("object.mesh.create", &json!({"rows": 2, "cols": 2})).unwrap();
+    s.execute("select.set", &json!({"ids": [m.0]})).unwrap();
+    let v = ViewInfo::default();
+    let click = |s: &mut Session, i: usize| {
+        let NodeKind::Mesh(g) = &s.doc().unwrap().doc.node(m).unwrap().kind else { panic!("not a mesh") };
+        let q = g.points[i].p;
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(kind, q.x, q.y), v).unwrap();
+        }
+    };
+    let object_opacity = |s: &Session| s.doc().unwrap().doc.node(m).unwrap().opacity;
+    for (tool, point) in [("mesh", 4), ("directSelection", 4)] {
+        s.select_tool(tool, v).unwrap();
+        click(&mut s, point);
+        let undo = s.doc().unwrap().history.undo.len();
+        s.execute("transparency.set", &json!({"opacity": 30})).unwrap();
+        let o = mesh_opacities(&s, m);
+        assert!((o[4] - 0.3).abs() < 1e-6, "{tool}: the clicked point fades: {o:?}");
+        assert!(o.iter().enumerate().all(|(i, a)| i == 4 || *a == 1.0), "{tool}: the other points stay opaque: {o:?}");
+        assert_eq!(object_opacity(&s), 1.0, "{tool}: the object stays opaque");
+        assert_eq!(s.transparency_info().opacity, Some(30.0), "{tool}: the panel shows the point's opacity");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert!(mesh_opacities(&s, m).iter().all(|a| *a == 1.0));
+    }
+    // With no point focused the object takes the opacity.
+    s.select_tool("selection", v).unwrap();
+    s.execute("select.set", &json!({"ids": [m.0]})).unwrap();
+    s.execute("transparency.set", &json!({"opacity": 30})).unwrap();
+    assert!((object_opacity(&s) - 0.3).abs() < 1e-6);
+    assert!(mesh_opacities(&s, m).iter().all(|a| *a == 1.0));
+}
+
+/// Mesh points picked together (Shift-clicks with the Mesh tool, a Direct Selection marquee) all
+/// take a solid fill colour and the Transparency panel's opacity, and only they do; the panel
+/// shows their opacity, blank when it differs; a drag of one moves them all as one undo step
+/// (#4207, #4208, #4170).
+#[test]
+fn picked_mesh_points_take_the_fill_opacity_and_drag_together() {
+    let mut s = session();
+    let m = rect(&mut s, json!("#ff0000"));
+    s.execute("object.mesh.create", &json!({"rows": 2, "cols": 2})).unwrap();
+    s.execute("select.set", &json!({"ids": [m.0]})).unwrap();
+    let v = ViewInfo::default();
+    let point = |s: &Session, i: usize| {
+        let NodeKind::Mesh(g) = &s.doc().unwrap().doc.node(m).unwrap().kind else { panic!("not a mesh") };
+        g.points[i].p
+    };
+    let pointer = |s: &mut Session, kind: PointerKind, q: vectorcraft_geom::Point, shift: bool| {
+        let mut ev = PointerEvent::new(kind, q.x, q.y);
+        ev.mods.shift = shift;
+        s.pointer(&ev, v).unwrap();
+    };
+    let click = |s: &mut Session, i: usize, shift: bool| {
+        let q = point(s, i);
+        pointer(s, PointerKind::Down, q, shift);
+        pointer(s, PointerKind::Up, q, shift);
+    };
+    let check = |s: &Session, picked: &[usize], hex: &str, opacity: f32, what: &str| {
+        let (c, o) = (mesh_colors(s, m), mesh_opacities(s, m));
+        for i in 0..c.len() {
+            let on = picked.contains(&i);
+            assert_eq!(c[i].to_hex() == hex, on, "{what}: point {i} colour {c:?}");
+            assert_eq!((o[i] - opacity).abs() < 1e-6, on, "{what}: point {i} opacity {o:?}");
+        }
+        assert_eq!(s.doc().unwrap().doc.node(m).unwrap().opacity, 1.0, "{what}: the object stays opaque");
+    };
+    // The Mesh tool: a click, then Shift-clicks add points (and a second one takes one away).
+    s.select_tool("mesh", v).unwrap();
+    click(&mut s, 1, false);
+    for i in [4, 8, 8] {
+        click(&mut s, i, true);
+    }
+    s.execute("paint.setFill", &json!({"color": "#0000ff"})).unwrap();
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("transparency.set", &json!({"opacity": 40})).unwrap();
+    check(&s, &[1, 4], "#0000ff", 0.4, "mesh tool");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step for both points");
+    assert_eq!(s.transparency_info().opacity, Some(40.0), "the panel shows the points' opacity");
+    s.execute("object.mesh.setPointColor", &json!({"id": m.0, "index": 4, "opacity": 0.9})).unwrap();
+    assert_eq!(s.transparency_info().opacity, None, "mixed: blank");
+    // Direct Selection: a marquee over the top-left patch picks its four points.
+    s.select_tool("directSelection", v).unwrap();
+    let corner = point(&s, 0);
+    pointer(&mut s, PointerKind::Down, corner - vectorcraft_geom::Vec2::new(8.0, 8.0), false);
+    let far = point(&s, 4) + vectorcraft_geom::Vec2::new(5.0, 5.0);
+    pointer(&mut s, PointerKind::Drag, far, false);
+    pointer(&mut s, PointerKind::Up, far, false);
+    assert_eq!(s.doc().unwrap().selection.objects, [m], "the marquee selects the mesh");
+    s.execute("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
+    s.execute("transparency.set", &json!({"opacity": 20})).unwrap();
+    check(&s, &[0, 1, 3, 4], "#00ff00", 0.2, "marquee");
+    // A drag of one picked point moves all four by the same offset, in one step.
+    let before: Vec<_> = (0..9).map(|i| point(&s, i)).collect();
+    let undo = s.doc().unwrap().history.undo.len();
+    let d = vectorcraft_geom::Vec2::new(4.0, 6.0);
+    pointer(&mut s, PointerKind::Down, before[4], false);
+    pointer(&mut s, PointerKind::Drag, before[4] + d, false);
+    pointer(&mut s, PointerKind::Up, before[4] + d, false);
+    for (i, was) in before.iter().enumerate() {
+        let want = if [0, 1, 3, 4].contains(&i) { *was + d } else { *was };
+        assert!(point(&s, i).distance(want) < 1e-9, "point {i}: {:?} ≠ {want:?}", point(&s, i));
+    }
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!((0..9).map(|i| point(&s, i)).collect::<Vec<_>>(), before);
+}
+
 #[test]
 fn blend_moves_a_mesh_to_the_blended_colour() {
     let mut s = session();
@@ -167,7 +342,12 @@ fn pixels(s: &Session, id: NodeId) -> Vec<[u8; 4]> {
 
 /// A selected embedded 2×2 image.
 fn image_node(s: &mut Session) -> NodeId {
-    let bytes = png([[255, 0, 0, 255], [0, 255, 0, 255], [0, 0, 255, 255], [255, 255, 255, 128]]);
+    image_of(s, [[255, 0, 0, 255], [0, 255, 0, 255], [0, 0, 255, 255], [255, 255, 255, 128]])
+}
+
+/// A selected embedded 2×2 image of the pixels `px`.
+fn image_of(s: &mut Session, px: [[u8; 4]; 4]) -> NodeId {
+    let bytes = png(px);
     s.edit("Place", |d, sel| {
         d.images.insert("pic".into(), vectorcraft_doc::ImageBlob::png(bytes));
         let id = d.alloc_id();
@@ -206,6 +386,85 @@ fn invert_recolours_an_embedded_image() {
     // Recolor maps exact pixel colours.
     s.execute("recolor.apply", &json!({"map": {"#ff0000": "#000000"}})).unwrap();
     assert_eq!(pixels(&s, id)[..2], [[0, 0, 0, 255], [0, 255, 0, 255]]);
+}
+
+/// The key of image object `id`'s blob.
+fn image_key(s: &Session, id: NodeId) -> String {
+    let NodeKind::Image(im) = &s.doc().unwrap().doc.node(id).unwrap().kind else { panic!("not an image") };
+    im.key.clone()
+}
+
+/// Convert to Grayscale stores an image with one color channel, alpha kept (#5632).
+#[test]
+fn convert_to_grayscale_stores_an_image_as_grayscale() {
+    let mut s = session();
+    let id = image_node(&mut s);
+    let r = s.execute("edit.colors.toGrayscale", &json!({})).unwrap();
+    assert_eq!(r["changed"], 1);
+    let key = image_key(&s, id);
+    let source = s.doc().unwrap().doc.images[&key].gray_source();
+    assert!(source.is_some_and(|g| g.alpha && !g.one_bit), "a grayscale file with alpha: {source:?}");
+    let gray = |hex: &str| Color::from_hex(hex).unwrap().in_model(vectorcraft_color::cms::Model::Gray).to_rgba8(1.0)[0];
+    let (r_, g_, b_, w) = (gray("#ff0000"), gray("#00ff00"), gray("#0000ff"), gray("#ffffff"));
+    assert_eq!(pixels(&s, id), [[r_, r_, r_, 255], [g_, g_, g_, 255], [b_, b_, b_, 255], [w, w, w, 128]]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(pixels(&s, id)[0], [255, 0, 0, 255], "one undo step restores the color image");
+    s.execute("edit.redo", &json!({})).unwrap();
+    // An image that is already grayscale has nothing to convert.
+    let again = s.execute("edit.colors.toGrayscale", &json!({})).unwrap();
+    assert_eq!(again["changed"], 0);
+    assert_eq!(image_key(&s, id), key);
+}
+
+/// An RGB image whose pixels are all neutral still becomes a one-channel image (#5632).
+#[test]
+fn convert_to_grayscale_stores_a_neutral_rgb_image_as_grayscale() {
+    let mut s = session();
+    let id = image_of(&mut s, [[255, 255, 255, 255], [0, 0, 0, 255], [255, 255, 255, 255], [0, 0, 0, 255]]);
+    let r = s.execute("edit.colors.toGrayscale", &json!({})).unwrap();
+    assert_eq!(r["changed"], 1);
+    let source = s.doc().unwrap().doc.images[&image_key(&s, id)].gray_source();
+    assert!(source.is_some_and(|g| !g.alpha), "an opaque image has no alpha channel: {source:?}");
+}
+
+/// Select All leaves a hidden neutral RGB image out of Convert to Grayscale, which would change it.
+#[test]
+fn a_hidden_neutral_rgb_image_counts_as_not_converted() {
+    let mut s = session();
+    let hidden = image_of(&mut s, [[255, 255, 255, 255], [0, 0, 0, 255], [255, 255, 255, 255], [0, 0, 0, 255]]);
+    s.execute("layer.setProps", &json!({"ids": [hidden.0], "visible": false})).unwrap();
+    rect(&mut s, json!("#ff0000"));
+    s.execute("select.all", &json!({})).unwrap();
+    let r = s.execute("edit.colors.toGrayscale", &json!({})).unwrap();
+    assert_eq!(r["notChanged"], json!({"locked": 0, "hidden": 1}), "{r}");
+}
+
+/// Adjust Colors converting to gray stores an image with one channel; without Convert it keeps
+/// the image's RGB (#5632).
+#[test]
+fn adjust_colors_converting_to_gray_stores_an_image_as_grayscale() {
+    let source = |convert: bool| {
+        let mut s = session();
+        let id = image_node(&mut s);
+        s.execute("edit.colors.adjustBalance", &json!({"mode": "gray", "gray": 10, "convert": convert})).unwrap();
+        s.doc().unwrap().doc.images[&image_key(&s, id)].gray_source()
+    };
+    assert!(source(true).is_some(), "converted to gray");
+    assert!(source(false).is_none(), "the colors keep their model");
+}
+
+/// A PDF of a CMYK document writes an image Convert to Grayscale made with one channel (#5632).
+#[test]
+fn a_converted_image_is_written_to_pdf_as_gray_in_a_cmyk_document() {
+    let mut s = session();
+    s.execute("file.documentColorMode", &json!({"mode": "cmyk"})).unwrap();
+    image_of(&mut s, [[255, 0, 0, 255], [0, 255, 0, 255], [0, 0, 255, 255], [10, 200, 30, 255]]);
+    s.execute("edit.colors.toGrayscale", &json!({})).unwrap();
+    let opts = vectorcraft_pdf::PdfOptions { created: Some(0), ..vectorcraft_pdf::PdfOptions::uncompressed() };
+    let pdf = String::from_utf8_lossy(&vectorcraft_pdf::export(&s.doc().unwrap().doc, &opts).unwrap()).into_owned();
+    let image = pdf.split("/Subtype/Image").nth(1).or_else(|| pdf.split("/Subtype /Image").nth(1)).expect("an image in the PDF");
+    let image = &image[..image.find("stream").unwrap_or(image.len())];
+    assert!(image.contains("/DeviceGray") && !image.contains("/DeviceRGB"), "one color channel: {image}");
 }
 
 /// "Dots": a red square tile; a selected rectangle filled with it.
@@ -254,4 +513,48 @@ fn recolor_writes_a_new_pattern_swatch() {
     assert_eq!(fill_pattern(&s, r), "Dots");
     s.execute("edit.colors.invert", &json!({})).unwrap();
     assert_eq!((fill_pattern(&s, r), tile_fill(&s, "Dots 2")), ("Dots 2".to_string(), "#00ffff".to_string()));
+}
+
+#[test]
+fn edit_colors_of_everything_count_the_hidden_objects_left_out() {
+    let mut s = session();
+    let shown = rect(&mut s, json!("#ff0000"));
+    let hidden = rect(&mut s, json!("#ff0000"));
+    // A hidden object with no paint would not change.
+    let unpainted = rect(&mut s, json!("#ff0000"));
+    s.execute("paint.setFill", &json!({"ids": [unpainted.0], "none": true})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [unpainted.0], "none": true})).unwrap();
+    s.execute("layer.setProps", &json!({"ids": [hidden.0, unpainted.0], "visible": false})).unwrap();
+    // A locked member of a selected group is recolored with it.
+    let member = rect(&mut s, json!("#ff0000"));
+    let locked_member = rect(&mut s, json!("#ff0000"));
+    s.execute("select.set", &json!({"ids": [member.0, locked_member.0]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    s.execute("layer.setProps", &json!({"ids": [locked_member.0], "locked": true})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    let r = s.execute("edit.colors.invert", &json!({})).unwrap();
+    assert_eq!(r["notChanged"], json!({"locked": 0, "hidden": 1}), "{r}");
+    assert_eq!(r["warning"], "Recolor completed; 1 hidden object was left unchanged");
+    assert_eq!((fill_of(&s, shown).to_hex(), fill_of(&s, hidden).to_hex()), ("#00ffff".to_string(), "#ff0000".to_string()));
+    assert_eq!(fill_of(&s, locked_member).to_hex(), "#00ffff");
+    // Objects given by `ids` are the whole scope.
+    let r = s.execute("edit.colors.toGrayscale", &json!({"ids": [shown.0]})).unwrap();
+    assert_eq!(r["notChanged"], json!({"locked": 0, "hidden": 0}), "{r}");
+    assert!(r.get("warning").is_none(), "{r}");
+}
+
+#[test]
+fn edit_colors_in_isolation_mode_count_the_locked_members_left_out() {
+    let mut s = session();
+    let a = rect(&mut s, json!("#ff0000"));
+    let b = rect(&mut s, json!("#ff0000"));
+    let c = rect(&mut s, json!("#ff0000"));
+    s.execute("select.set", &json!({"ids": [a.0, b.0, c.0]})).unwrap();
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    s.execute("layer.setProps", &json!({"ids": [b.0, c.0], "locked": true})).unwrap();
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    let r = s.execute("edit.colors.saturate", &json!({"intensity": -50})).unwrap();
+    assert_eq!(r["notChanged"], json!({"locked": 2, "hidden": 0}), "{r}");
+    assert_eq!(r["warning"], "Recolor completed; 2 locked objects were left unchanged");
 }

@@ -253,28 +253,27 @@ fn sliders(ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 fn hex_field(ui: &mut egui::Ui, hex: &str) -> Option<Color> {
     let t = Tokens::get(ui.ctx());
     let id = ui.scope_id().with("swatch-hex");
-    let editing = ui.memory(|m| m.has_focus(id));
-    // As in `widgets::hex_field`: until the user types into it, the field shows `hex` as it is now
-    // (#1692).
-    let edited_id = id.with("edited");
-    let edited = editing && ui.data_mut(|m| m.get_temp::<bool>(edited_id)).unwrap_or(false);
-    let mut buf: String = if edited { ui.data_mut(|m| m.get_temp::<String>(id)).unwrap_or_else(|| hex.to_string()) } else { hex.to_string() };
-    let resp = egui::Frame::NONE
-        .fill(t.input)
-        .stroke(egui::Stroke::new(1.0, if editing { t.accent } else { t.input_border }))
-        .corner_radius(2)
-        .inner_margin(egui::Margin::symmetric(6, 4))
-        .show(ui, |ui| {
-            crate::theme::strong_selected_text(ui);
-            ui.add(egui::TextEdit::singleline(&mut buf).id(id).frame(egui::Frame::NONE).desired_width(70.0).char_limit(7))
-        })
-        .inner;
-    let focused = ui.memory(|m| m.has_focus(id));
-    ui.data_mut(|m| {
-        m.insert_temp(id, buf.clone());
-        m.insert_temp(edited_id, (edited || resp.changed()) && focused);
-    });
-    (resp.lost_focus() && buf != hex).then(|| parse_hex(&buf)).flatten()
+    widgets::hex_text(ui, id, hex, |ui, buf, editing| {
+        egui::Frame::NONE
+            .fill(t.input)
+            .stroke(egui::Stroke::new(1.0, if editing { t.accent } else { t.input_border }))
+            .corner_radius(2)
+            .inner_margin(egui::Margin::symmetric(6, 4))
+            .show(ui, |ui| {
+                crate::theme::strong_selected_text(ui);
+                ui.add(
+                    egui::TextEdit::singleline(buf)
+                        .id(id)
+                        .frame(egui::Frame::NONE)
+                        .align(egui::Align2::LEFT_CENTER)
+                        .desired_width(70.0)
+                        .char_limit(widgets::HEX_FIELD_CHARS),
+                )
+            })
+            .inner
+    })
+    .as_deref()
+    .and_then(parse_hex)
 }
 
 #[cfg(test)]

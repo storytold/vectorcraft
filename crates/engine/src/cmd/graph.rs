@@ -17,7 +17,7 @@ use vectorcraft_doc::{
 use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect, shapes};
 
 use super::typecmd::refresh_bounds;
-use super::*;
+use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, cmd, f64_or, f64_req, has_doc, has_selection, named_id, ok, str_param};
 
 mod axis;
 mod columns;
@@ -42,7 +42,10 @@ use data::{fmt_value, parse_csv, to_csv};
 use generate::generate;
 #[cfg(test)]
 use series::default_series_color;
-pub(crate) use series::{capture_label_styles, capture_series_paints, paint_targets};
+pub(crate) use series::{
+    capture_label_styles, capture_series_object_opacity, capture_series_opacity, capture_series_paints, capture_series_top_paints, paint_targets,
+    series_object_opacity_differs, shown_paint,
+};
 
 #[cfg(test)]
 mod tests;

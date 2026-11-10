@@ -2,7 +2,15 @@
 
 This initial implementation follows the scope agreed in [issue #605](https://github.com/storytold/vectorcraft/issues/605#issuecomment-6070543567).
 
-Draw an open profile with the Pen tool, select it, then choose **Effect > 3D and Materials > Revolve**.
+Select a path, compound path, type, or a group or layer of them, then choose **Effect > 3D and Materials > Revolve**.
+On a group or layer, every visible member sweeps about one axis, as [the help page](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/create-3d-objects.html)
+describes for a group. The following rules are VectorCraft's own: type stays editable and sweeps as its glyph outlines,
+the shared axis lies on the chosen edge of the members' bounds together, and each member keeps its own paint.
+The faces of all members draw in one back-to-front order. The opacity and blending mode of a member, or of a group
+inside the group, apply once to all its faces. Where a face of another member lies between its faces in that order
+and overlaps them on the page, its faces are split there, and the opacity and blending mode apply once to each part.
+Two faces overlap when the convex hulls of their outlines come within the 0.75 pt seam stroke of each other. After
+4,194,304 overlap tests on one group, each further face of such a member is drawn as a part of its own.
 The profile's horizontal distance from a vertical axis is its radius. **Axis side** chooses the left or right
 edge of the profile's bounds; **Offset** moves the axis outward. For a cylinder made from a vertical
 line, give it a nonzero offset. A vertical line at zero offset lies on the axis and has no surface.
@@ -88,13 +96,13 @@ with the standard command.
 
 - Lighting offers Standard, Diffuse, Top Left and Right, using the [shared original rigs](three-d.md#presets).
   Other effective settings show Custom; changing the view does not change the recognized lighting preset.
-- Paths and compound paths only. Type, images and groups must be converted to paths first.
+- Paths, compound paths, type, and groups or layers of them only. Images and other objects must be converted to paths first.
 - Open profiles have circular end caps by default; turning Cap off keeps them open. Partial-sweep angular cut sides remain open. Closed profile boundaries are swept as provided.
 - One Revolve per source object. Edit its options rather than applying another.
 - Object-level Revolve uses the top visible fill, falling back to a stroke. Per-item Revolve uses that item's paint.
 - Smooth diffuse shading, one to ten directional lights, no textures, cast shadows or physical materials. Smooth shading interpolates lighting in projected triangles; it does not smooth the silhouette or add specular highlights.
 - Faces use back-to-front depth sorting. Caps facing the camera cover their rim seams; caps facing away sit behind the body. Intersecting profiles can have incorrect visibility.
-- Curves use sixteen samples per segment; profiles are limited to 1,024 samples and surfaces to 32,768 faces. Smooth shaded side quads become two triangles and share that same limit. A continuous cap retains its original radial mesh cost within this limit. Projected ring curves have a 0.001-point fitting tolerance and a shared 32,768-curve limit.
+- Curves use sixteen samples per segment, and as few as four when a surface would otherwise pass its limits. Surfaces are limited to 16,384 profile points and 163,840 faces, the members of a group together. A straight segment takes one point, a curve takes at least four, and each contour takes one. Smooth shaded side quads become two triangles and share the face limit. A continuous cap retains its original radial mesh cost within this limit. Projected ring curves have a 0.001-point fitting tolerance and a shared 32,768-curve limit.
 - Axis, bounds and ordinary selection handles continue to refer to the editable 2D source profile.
 - Extrude & Bevel, Inflate and Rotate are described in [three-d.md](three-d.md). Materials remain unimplemented.
 

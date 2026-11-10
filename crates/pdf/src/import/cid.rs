@@ -1,4 +1,6 @@
-use super::*;
+use super::{
+    Affine, Arc, BezPath, ClipPath, Context, Device, Glyph, GlyphDrawMode, HashMap, Image, Page, PathDrawMode, PathEl, Rect, Shape, SoftMask,
+};
 
 /// How many paths the interpreter draws on `page` (each fill and each stroke), leaving out those
 /// of soft masks, pattern cells and type 3 glyphs, which [`Builder`] reads nested. `None` when the

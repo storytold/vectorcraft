@@ -254,7 +254,8 @@ pub enum PixelFx {
     /// Stylize › Glowing Edges: bright coloured Sobel outlines on black.
     GlowingEdges { width: f64, brightness: f64, smoothness: f64 },
     /// Pixelate › Color Halftone: each colour channel screened at its angle (`angles`° of channels
-    /// 1 to 4) into dots of up to `max_radius`, whose area follows the channel's strength.
+    /// 1 to 4) into dots of up to `max_radius` pixels of the Document Raster Effects resolution
+    /// ([`PixelSpace::line`] each), whose area follows the channel's strength.
     ColorHalftone { max_radius: f64, angles: [f64; 4] },
     /// Pixelate › Crystallize: polygons of solid colour around random points about `cell` apart.
     Crystallize { cell: f64 },
@@ -286,6 +287,8 @@ pub enum PixelFx {
     DeInterlace { even: bool, interpolate: bool },
     /// Video › NTSC Colors: colours a television signal can't carry made less saturated.
     NtscColors,
+    /// Effect › SVG Filters: an SVG `<filter>` element run on the pixels.
+    Svg(crate::svg_filter::SvgFilterFx),
 }
 
 /// What a raster's colour channels hold, for the filters that treat them apart (Color Halftone
@@ -597,6 +600,7 @@ pub(crate) fn parse(id: &str, p: &Value) -> Option<PixelFx> {
             interpolate: text(p, "create", "duplication").eq_ignore_ascii_case("interpolation"),
         },
         "video.ntscColors" => PixelFx::NtscColors,
+        crate::SVG_FILTER => PixelFx::Svg(crate::svg_filter::SvgFilterFx::parse(p)?),
         _ => return None,
     })
 }
@@ -665,12 +669,14 @@ impl PixelFx {
             PixelFx::Crystallize { cell } | PixelFx::Pointillize { cell } | PixelFx::StainedGlass { cell, .. } => 1.5 * cell,
             // A square whose centre is on the object is drawn whole.
             PixelFx::Patchwork { square, .. } => square.max(1.0),
+            PixelFx::Svg(ref f) => f.outset(bounds),
         }
     }
 
-    /// How far (document units) from a pixel the content that decides it lies; `None` when that
-    /// is anywhere in the object (Radial Blur).
-    pub fn reach(&self) -> Option<f64> {
+    /// How far (document units) from a pixel the content that decides it lies, with lines of the
+    /// raster grid `line` apart ([`PixelSpace::line`]); `None` when that is anywhere in the object
+    /// (Radial Blur).
+    pub fn reach(&self, line: f64) -> Option<f64> {
         match *self {
             PixelFx::RadialBlur { .. } => None,
             PixelFx::SmartBlur { radius, mode: SmartBlurMode::Normal, .. } => Some(radius),
@@ -703,7 +709,10 @@ impl PixelFx {
             PixelFx::Stamp { smoothness, .. } => Some(sketch_ink::stamp_reach(smoothness)),
             PixelFx::GlowingEdges { width, smoothness, .. } => Some(width.max(smoothness * 3.0)),
             // The cells around the pixel's, and the cells around theirs.
-            PixelFx::ColorHalftone { max_radius, .. } => Some(3.0 * std::f64::consts::SQRT_2 * max_radius),
+            // (Without a usable grid there are no dots: see `pixelate::color_halftone`.)
+            PixelFx::ColorHalftone { max_radius, .. } => {
+                Some(3.0 * std::f64::consts::SQRT_2 * max_radius * line).filter(|d| d.is_finite()).or(Some(0.0))
+            }
             PixelFx::Crystallize { cell } => Some(1.5 * cell),
             PixelFx::ColoredPencil { width, .. } => Some(artistic::colored_pencil_reach(width)),
             PixelFx::ChalkCharcoal { .. } => Some(sketch::CHALK_CHARCOAL_REACH),
@@ -740,12 +749,17 @@ impl PixelFx {
             // The lines above and below.
             PixelFx::DeInterlace { .. } => Some(video::MAX_LINE),
             PixelFx::NtscColors => Some(0.0),
+            // A filter's object bounding box is the whole object's.
+            PixelFx::Svg(_) => None,
         }
     }
 
     /// Run the effect on `data`, `w` × `h` premultiplied RGBA8 pixels lying in the document as
     /// `space` says. Does nothing when the sizes don't match.
     pub fn apply(&self, data: &mut [u8], w: usize, h: usize, space: &PixelSpace) {
+        if let PixelFx::Svg(f) = self {
+            return f.apply(data, w, h, space);
+        }
         let Some(px) = pixels(data, w, h) else { return };
         let to_px = |len: f64| len / space.px.max(1e-9);
         match *self {
@@ -824,6 +838,7 @@ impl PixelFx {
             }
             PixelFx::DeInterlace { even, interpolate } => video::deinterlace(px, w, h, space, even, interpolate),
             PixelFx::NtscColors => video::ntsc(px),
+            PixelFx::Svg(_) => {}
         }
     }
 }
@@ -1070,6 +1085,47 @@ pub fn gaussian_rgba(data: &mut [u8], w: usize, h: usize, sigma: f64) {
         gaussian(&mut wide, w, sigma);
         for (p, q) in px.iter_mut().zip(&wide) {
             *p = q.map(to8);
+        }
+    }
+}
+
+/// [`gaussian_rgba`] with the colours mixed in linear light: decoded from sRGB before the blur
+/// and encoded again after it (Filter Effects 1 §16, `color-interpolation-filters: linearRGB`,
+/// <https://www.w3.org/TR/filter-effects-1/#ColorInterpolationFiltersProperty>). The blur runs on
+/// 16-bit values, so dark linear tones keep their steps.
+pub fn gaussian_rgba_linear(data: &mut [u8], w: usize, h: usize, sigma: f64) {
+    use vectorcraft_doc::color::cms::lab::{linear_to_srgb, srgb_to_linear};
+    if let Some(px) = pixels(data, w, h)
+        && sigma >= 0.2
+    {
+        // Each colour is unpremultiplied, decoded (by table) and premultiplied again.
+        let decode: Vec<f32> = (0..=255u8).map(|v| srgb_to_linear(f32::from(v) / 255.0)).collect();
+        let mut wide: Vec<Px16> = px
+            .iter()
+            .map(|p| {
+                let a = f32::from(p[3]) / 255.0;
+                let lin = |v: u8| {
+                    if p[3] == 0 {
+                        return 0;
+                    }
+                    let straight = (f32::from(v) / f32::from(p[3]) * 255.0).round().clamp(0.0, 255.0) as usize;
+                    (decode.get(straight).copied().unwrap_or(0.0) * a * 65535.0).round().clamp(0.0, 65535.0) as u16
+                };
+                [lin(p[0]), lin(p[1]), lin(p[2]), u16::from(p[3]) * 257]
+            })
+            .collect();
+        gaussian(&mut wide, w, sigma);
+        for (p, q) in px.iter_mut().zip(&wide) {
+            let a = to8(q[3]);
+            let alpha = f32::from(q[3]) / 65535.0;
+            let enc = |v: u16| {
+                if alpha <= 0.0 {
+                    return 0;
+                }
+                let straight = (f32::from(v) / 65535.0 / alpha).clamp(0.0, 1.0);
+                (linear_to_srgb(straight) * f32::from(a)).round().clamp(0.0, f32::from(a)) as u8
+            };
+            *p = [enc(q[0]), enc(q[1]), enc(q[2]), a];
         }
     }
 }

@@ -1,5 +1,5 @@
 use super::dispatch::trace_views;
-use super::*;
+use super::{Backend, Map, ToolResult, Value, json};
 
 // ---------- implementation ----------
 
@@ -442,12 +442,27 @@ pub(super) fn max_side(a: &Args) -> Result<Option<u32>, String> {
     }
 }
 
+/// The longest side of a window capture that is decoded (a screen is never wider).
+const MAX_CAPTURE_SIDE: u32 = 16_384;
+
+/// `png` decoded, refused when a side is longer than `side` or the decode needs more than 256 MiB:
+/// the picture is the app's reply, and its header names the size it is decoded at.
+pub(super) fn decode_png(png: &[u8], side: u32) -> Result<image::DynamicImage, image::ImageError> {
+    let mut reader = image::ImageReader::with_format(std::io::Cursor::new(png), image::ImageFormat::Png);
+    let mut limits = image::Limits::default();
+    limits.max_image_width = Some(side);
+    limits.max_image_height = Some(side);
+    limits.max_alloc = Some(256 << 20);
+    reader.limits(limits);
+    reader.decode()
+}
+
 /// A window capture with `max_side`: scaled down when its longer side is larger, with its own size
 /// in `capturedWidth` / `capturedHeight` and the returned image's in `width` / `height`. Without
 /// `max_side` the capture and `info` stay as they are.
 fn fit_capture(png: Vec<u8>, max: Option<u32>, info: &mut Value) -> Result<Vec<u8>, String> {
     let Some(max) = max else { return Ok(png) };
-    let img = image::load_from_memory_with_format(&png, image::ImageFormat::Png).map_err(|e| format!("read capture: {e}"))?;
+    let img = decode_png(&png, MAX_CAPTURE_SIDE).map_err(|e| format!("read capture: {e}"))?;
     info["capturedWidth"] = json!(img.width());
     info["capturedHeight"] = json!(img.height());
     if img.width().max(img.height()) <= max {
@@ -470,5 +485,19 @@ pub(super) fn image_result(png: &[u8], info: Value) -> ToolResult {
             json!({"type": "text", "text": info.to_string()}),
         ],
         is_error: false,
+    }
+}
+
+#[cfg(test)]
+mod decode_tests {
+    use super::decode_png;
+
+    #[test]
+    fn a_picture_with_a_side_past_the_limit_is_not_decoded() {
+        let mut png = std::io::Cursor::new(Vec::new());
+        image::RgbaImage::new(200, 10).write_to(&mut png, image::ImageFormat::Png).unwrap();
+        let png = png.into_inner();
+        assert!(decode_png(&png, 100).is_err());
+        assert_eq!(decode_png(&png, 200).unwrap().width(), 200);
     }
 }

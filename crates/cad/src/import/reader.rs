@@ -66,7 +66,7 @@ pub(crate) fn number(s: &str) -> Option<f64> {
 /// A whole number; some writers put integers as `1.0`.
 pub(crate) fn integer(s: &str) -> Option<i64> {
     let s = s.trim();
-    s.parse::<i64>().ok().or_else(|| number(s).filter(|v| v.abs() < 9.0e15).map(|v| v as i64))
+    s.parse::<i64>().ok().or_else(|| number(s).filter(|v| v.abs() < 9.0e15 && v.fract() == 0.0).map(|v| v as i64))
 }
 
 /// One object: its type (the value of its `0` group) and the groups up to the next object.
@@ -455,4 +455,15 @@ fn layouts(objects: &[Record<'_>], block_records: &HashMap<String, String>, enti
         paper.push((1, LayoutDef { name: "Layout1".into(), block: Some(PAPER_BLOCK.into()) }));
     }
     std::iter::once(LayoutDef { name: MODEL.into(), block: None }).chain(paper.into_iter().map(|(_, l)| l)).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::integer;
+
+    #[test]
+    fn integer_rejects_fractional_float_values() {
+        assert_eq!(integer("1.0"), Some(1));
+        assert_eq!(integer("1.9"), None);
+    }
 }

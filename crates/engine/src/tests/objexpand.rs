@@ -134,6 +134,106 @@ fn white_black() -> Value {
 }
 
 #[test]
+fn a_placed_gradient_moved_by_a_transform_or_free_distort_expands_as_the_canvas_draws_it() {
+    // The object's own effect, and the fill's (the first appearance item).
+    let slant = json!({"corners": [[0.25, 0.0], [1.25, 0.0], [1.0, 1.0], [0.0, 1.0]]});
+    for (effect, params, item) in [
+        ("distort.transform", json!({"rotate": 90}), json!(null)),
+        ("distort.transform", json!({"rotate": 30, "scaleH": 60}), json!(null)),
+        ("distort.transform", json!({"rotate": 90}), json!(0)),
+        ("distort.freeDistort", slant.clone(), json!(null)),
+        ("distort.freeDistort", slant, json!(0)),
+    ] {
+        let mut s = session();
+        let id = gradient_rect(&mut s, Rect::new(40.0, 70.0, 160.0, 130.0), white_black(), false);
+        // Placed from a quarter of the way across to the right edge.
+        run(&mut s, "paint.setGradientGeom", json!({"start": [70, 100], "end": [160, 100], "stroke": false}));
+        let placed = s.doc().unwrap().doc.node(id).and_then(|n| match n.appearance.fill_paint() {
+            vectorcraft_color::Paint::Gradient(g) => g.geom,
+            _ => None,
+        });
+        assert!(placed.is_some(), "the fill's gradient is placed");
+        run(&mut s, "effect.apply", json!({"effect": effect, "params": params, "ids": [id.0], "item": item}));
+        let before = render(&s);
+        // Fill alone: the gradient becomes strips inside the outline the effect makes.
+        run(&mut s, "object.expand", json!({"object": false, "stroke": false, "steps": 64}));
+        let after = render(&s);
+        // The gradient moves with the rectangle on the canvas, and the strips follow it.
+        let diff = mean_diff(&before, &after);
+        assert!(diff < 1.0, "{effect} {params} on item {item}: mean difference {diff}");
+    }
+}
+
+/// A gradient fitted to the object turns with a Transform effect on the canvas, and Object › Expand
+/// of the fill makes strips that draw the same.
+#[test]
+fn a_fitted_gradient_turned_by_a_transform_expands_as_the_canvas_draws_it() {
+    // The gray level at (x, y).
+    let gray = |r: &vectorcraft_render::Rendered, x: usize, y: usize| r.pixels[(y * 200 + x) * 4] as i32;
+    // The object's own effect, and the fill's (the first appearance item).
+    for (params, item) in
+        [(json!({"rotate": 90}), json!(null)), (json!({"rotate": 90}), json!(0)), (json!({"rotate": 30, "scaleH": 60}), json!(null))]
+    {
+        let mut s = session();
+        let id = gradient_rect(&mut s, Rect::new(60.0, 60.0, 140.0, 140.0), white_black(), false);
+        run(&mut s, "effect.apply", json!({"effect": "distort.transform", "params": params, "ids": [id.0], "item": item}));
+        let before = render(&s);
+        if params["rotate"] == 90 {
+            // The white to black ramp runs up or down the turned square, not across it.
+            let (top, bottom) = (gray(&before, 100, 70), gray(&before, 100, 130));
+            let (left, right) = (gray(&before, 70, 100), gray(&before, 130, 100));
+            assert!((top - bottom).abs() > 100 && (left - right).abs() < 20, "{params} on item {item}: {top} {bottom} {left} {right}");
+        }
+        run(&mut s, "object.expand", json!({"object": false, "stroke": false, "steps": 64}));
+        let after = render(&s);
+        let diff = mean_diff(&before, &after);
+        assert!(diff < 1.0, "{params} on item {item}: mean difference {diff}");
+    }
+}
+
+#[test]
+fn a_placed_gradient_moved_by_a_warp_expands_as_the_canvas_draws_it() {
+    // The object's own effect, and the fill's (the first appearance item).
+    for (effect, params, item) in [
+        ("warp.arc", json!({"bend": 40}), json!(null)),
+        ("warp.bulge", json!({"bend": 40, "orientation": "vertical"}), json!(null)),
+        ("warp.inflate", json!({"bend": 40}), json!(0)),
+    ] {
+        let mut s = session();
+        let id = gradient_rect(&mut s, Rect::new(40.0, 70.0, 160.0, 130.0), white_black(), false);
+        // Placed from a quarter of the way across to the right edge.
+        run(&mut s, "paint.setGradientGeom", json!({"start": [70, 100], "end": [160, 100], "stroke": false}));
+        let placed = s.doc().unwrap().doc.node(id).and_then(|n| match n.appearance.fill_paint() {
+            vectorcraft_color::Paint::Gradient(g) => g.geom,
+            _ => None,
+        });
+        assert!(placed.is_some(), "the fill's gradient is placed");
+        run(&mut s, "effect.apply", json!({"effect": effect, "params": params, "ids": [id.0], "item": item}));
+        let before = render(&s);
+        // Fill alone: the gradient becomes strips inside the outline the warp makes.
+        run(&mut s, "object.expand", json!({"object": false, "stroke": false, "steps": 64}));
+        let after = render(&s);
+        let diff = mean_diff(&before, &after);
+        assert!(diff < 1.0, "{effect} {params} on item {item}: mean difference {diff}");
+        // The ramp's midpoint, 115 pt before the warp, moves and scales with the warped bounds.
+        let doc = &s.doc().unwrap().doc;
+        let b = doc.node(doc.layers[0].id).and_then(|l| l.geometric_bounds()).unwrap();
+        let want = b.x0 + (115.0 - 40.0) / 120.0 * b.width();
+        assert!((want - 115.0).abs() > 2.0, "{effect} {params}: the warp moves the midpoint ({b:?})");
+        let red = |x: usize| f64::from(after.pixels[(100 * 200 + x) * 4]);
+        // White turns dark once on row 100, and gradually, so the crossing is the ramp's midpoint
+        // and not an edge of the outline.
+        let crossings: Vec<usize> =
+            (b.x0.ceil() as usize + 3..b.x1.floor() as usize - 4).filter(|&x| red(x) >= 127.5 && red(x + 1) < 127.5).collect();
+        assert_eq!(crossings.len(), 1, "{effect} {params}: white turns dark once on row 100: {crossings:?}");
+        let x = crossings[0];
+        assert!(red(x - 2) - red(x + 3) < 100.0, "{effect} {params}: the ramp, not an edge: {} to {}", red(x - 2), red(x + 3));
+        let half = x as f64 + 0.5 + (red(x) - 127.5) / (red(x) - red(x + 1));
+        assert!((half - want).abs() < 1.0, "{effect} {params} on item {item}: the midpoint is at {half}, want {want}");
+    }
+}
+
+#[test]
 fn eight_strips_match_the_gradient_samples() {
     let mut s = session();
     gradient_rect(&mut s, Rect::new(20.0, 20.0, 180.0, 120.0), white_black(), false);
@@ -157,6 +257,35 @@ fn eight_strips_match_the_gradient_samples() {
     }
     run(&mut s, "edit.undo", json!({}));
     assert!(matches!(selected(&s).appearance.fill_paint(), Paint::Gradient(_)));
+}
+
+#[test]
+fn expanding_a_group_keeps_its_hidden_and_locked_members_hidden_and_locked() {
+    // A hidden stroked square with a gradient fill, a locked square with a pattern fill and a
+    // plain square, grouped.
+    let mut s = session();
+    let pat = pattern_rect(&mut s, Rect::new(20.0, 100.0, 80.0, 160.0), false);
+    let grad = gradient_rect(&mut s, Rect::new(20.0, 20.0, 80.0, 80.0), white_black(), true);
+    let plain = NodeId(run(&mut s, "shape.rectangle", json!({"x": 100, "y": 20, "width": 40, "height": 40}))["id"].as_u64().unwrap());
+    run(&mut s, "select.set", json!({"ids": [pat.0, grad.0, plain.0]}));
+    run(&mut s, "object.group", json!({}));
+    s.edit("t", |d, _| {
+        d.node_mut(grad).unwrap().visible = false;
+        d.node_mut(pat).unwrap().locked = true;
+        Ok(())
+    })
+    .unwrap();
+    run(&mut s, "object.expand", json!({}));
+    let g = selected(&s);
+    let ch = g.children().unwrap();
+    assert_eq!(ch.len(), 3);
+    assert!(!clip_parts(&ch[0]).1.is_empty() && ch[0].locked && ch[0].visible, "the pattern's tiles stay locked: {:?}", ch[0]);
+    assert!(!ch[1].visible && !ch[1].locked, "the gradient square's art stays hidden: {:?}", ch[1]);
+    assert!(ch[2].visible && !ch[2].locked);
+    // Showing or unlocking the new art shows or unlocks all of it.
+    for c in ch[..2].iter().flat_map(|c| c.children().unwrap().iter()) {
+        c.walk(&mut |n| assert!(n.visible && !n.locked, "{n:?}"));
+    }
 }
 
 #[test]
@@ -254,7 +383,10 @@ fn a_pattern_fill_becomes_its_tiles_clipped_by_the_object() {
     let mut s = session();
     pattern_rect(&mut s, Rect::new(25.0, 25.0, 85.0, 65.0), false);
     // Fill expands the pattern; Expand Gradient To has no gradient fill to apply to.
-    assert_eq!(run(&mut s, "object.expand.info", json!({})), json!({"object": true, "fill": true, "stroke": false, "gradient": false}));
+    assert_eq!(
+        run(&mut s, "object.expand.info", json!({})),
+        json!({"object": true, "fill": true, "stroke": false, "gradient": false, "appearance": false})
+    );
     let before = render(&s);
     let undo = s.doc().unwrap().history.undo.len();
     run(&mut s, "object.expand", json!({}));
@@ -276,7 +408,10 @@ fn a_pattern_fill_becomes_its_tiles_clipped_by_the_object() {
     assert_eq!(differing(&before, &render(&s), 2), 0, "looks the same");
     // The tiles are the pattern's art as it is (a stroked live rectangle that Object and Stroke can
     // expand).
-    assert_eq!(run(&mut s, "object.expand.info", json!({})), json!({"object": true, "fill": false, "stroke": true, "gradient": false}));
+    assert_eq!(
+        run(&mut s, "object.expand.info", json!({})),
+        json!({"object": true, "fill": false, "stroke": true, "gradient": false, "appearance": false})
+    );
     run(&mut s, "edit.undo", json!({}));
     assert!(matches!(selected(&s).appearance.fill_paint(), Paint::Pattern { pattern, .. } if pattern == "Dots"));
     // Fill off: the pattern stays live.
@@ -839,19 +974,48 @@ fn expanded_colours_keep_the_stops_colour_model() {
     assert!((c - 0.625).abs() < 1e-5 && (m - 0.375).abs() < 1e-5, "interpolated in CMYK: {c} {m}");
 }
 
+/// A new 200 × 200 CMYK document.
+fn cmyk_session() -> Session {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 200, "colorMode": "cmyk"})).unwrap();
+    s
+}
+
+/// The selection's freeform gradient expanded: the mesh's colors, after checking that it draws
+/// within `most` (mean channel difference) of the gradient.
+fn expanded(s: &mut Session, most: f64) -> Vec<Color> {
+    let before = render(s);
+    run(s, "object.expand", json!({}));
+    let diff = mean_diff(&before, &render(s));
+    assert!(diff < most, "looks the same: {diff}");
+    let NodeKind::Mesh(m) = selected(s).kind else { panic!("a mesh: {:?}", selected(s).kind) };
+    m.points.into_iter().map(|p| p.color).collect()
+}
+
+/// Cyan and black points mix as inks: cyan and black only, adding up to one. The gradient and the
+/// mesh both mix inks, so the two draw alike.
+fn cyan_and_black_points_expand_as_they_draw(mut s: Session) {
+    let (cyan, black) = (json!({"c": 1.0, "m": 0.0, "y": 0.0, "k": 0.0}), json!({"c": 0.0, "m": 0.0, "y": 0.0, "k": 1.0}));
+    freeform_rect(&mut s, Rect::new(20.0, 20.0, 180.0, 180.0), [cyan.clone(), cyan, black.clone(), black]);
+    for c in expanded(&mut s, 2.5) {
+        let [c, m, y, k] = inks(c);
+        assert!(m.abs() < 1e-5 && y.abs() < 1e-5 && (c + k - 1.0).abs() < 1e-5, "C{c} M{m} Y{y} K{k}");
+    }
+}
+
+#[test]
+fn cyan_and_black_freeform_points_expand_as_they_draw_in_an_rgb_document() {
+    cyan_and_black_points_expand_as_they_draw(session());
+}
+
+#[test]
+fn cyan_and_black_freeform_points_expand_as_they_draw_in_a_cmyk_document() {
+    cyan_and_black_points_expand_as_they_draw(cmyk_session());
+}
+
 #[test]
 fn a_freeform_gradient_expands_with_the_inks_of_its_points() {
     let ink = |c: f32, m: f32, y: f32, k: f32| json!({"c": c, "m": m, "y": y, "k": k});
-    // The mesh's colors, after checking that it draws within `most` (mean channel difference) of
-    // the gradient.
-    let expanded = |s: &mut Session, most: f64| {
-        let before = render(s);
-        run(s, "object.expand", json!({}));
-        let diff = mean_diff(&before, &render(s));
-        assert!(diff < most, "looks the same: {diff}");
-        let NodeKind::Mesh(m) = selected(s).kind else { panic!("a mesh: {:?}", selected(s).kind) };
-        m.points.into_iter().map(|p| p.color).collect::<Vec<_>>()
-    };
     // Points of one ink set give every mesh point that ink set.
     let mut s = session();
     let one = ink(0.5, 0.2, 0.0, 0.1);
@@ -859,18 +1023,9 @@ fn a_freeform_gradient_expands_with_the_inks_of_its_points() {
     for c in expanded(&mut s, 1.0) {
         assert!(close_inks(inks(c), [0.5, 0.2, 0.0, 0.1]), "{c:?}");
     }
-    // Cyan and black points mix as inks: cyan and black only, adding up to one.
-    let mut s = session();
-    let (cyan, black) = (ink(1.0, 0.0, 0.0, 0.0), ink(0.0, 0.0, 0.0, 1.0));
-    freeform_rect(&mut s, Rect::new(20.0, 20.0, 180.0, 180.0), [cyan.clone(), cyan.clone(), black.clone(), black]);
-    for c in expanded(&mut s, 5.0) {
-        let [c, m, y, k] = inks(c);
-        assert!(m.abs() < 1e-5 && y.abs() < 1e-5 && (c + k - 1.0).abs() < 1e-5, "C{c} M{m} Y{y} K{k}");
-    }
     // Points in different models mix in display RGB, stored in a CMYK document as CMYK.
-    let mut s = Session::new();
-    s.execute("file.new", &json!({"width": 200, "height": 200, "colorMode": "cmyk"})).unwrap();
-    let gray = json!({"gray": 0.5});
+    let (cyan, gray) = (ink(1.0, 0.0, 0.0, 0.0), json!({"gray": 0.5}));
+    let mut s = cmyk_session();
     freeform_rect(&mut s, Rect::new(20.0, 20.0, 180.0, 180.0), [cyan.clone(), cyan, gray.clone(), gray]);
     for c in expanded(&mut s, 2.5) {
         inks(c);
@@ -905,7 +1060,10 @@ fn fill_off_leaves_the_fill_live_and_stroke_off_keeps_the_stroke() {
 fn defaults_match_the_dialog_and_info_tells_what_applies() {
     let mut s = session();
     gradient_rect(&mut s, Rect::new(20.0, 20.0, 180.0, 120.0), white_black(), true);
-    assert_eq!(run(&mut s, "object.expand.info", json!({})), json!({"object": true, "fill": true, "stroke": true, "gradient": true}));
+    assert_eq!(
+        run(&mut s, "object.expand.info", json!({})),
+        json!({"object": true, "fill": true, "stroke": true, "gradient": true, "appearance": false})
+    );
     let r = run(&mut s, "object.expand", json!({}));
     assert_eq!(r["ids"].as_array().unwrap().len(), 1);
     // Object, Fill and Stroke on; 255 objects: the live rectangle, its stroke and its gradient.
@@ -916,11 +1074,101 @@ fn defaults_match_the_dialog_and_info_tells_what_applies() {
     assert_eq!(strips.len(), 255);
     assert!(children[1].appearance.stroke_paint().is_none(), "outlined stroke");
     assert_eq!(s.doc().unwrap().history.undo.last().unwrap().label, "Expand");
-    assert_eq!(run(&mut s, "object.expand.info", json!({})), json!({"object": false, "fill": false, "stroke": false, "gradient": false}));
+    assert_eq!(
+        run(&mut s, "object.expand.info", json!({})),
+        json!({"object": false, "fill": false, "stroke": false, "gradient": false, "appearance": false})
+    );
     assert!(s.execute("object.expand", &json!({})).is_err(), "nothing left to expand");
     // Bad options are refused before anything changes.
     run(&mut s, "edit.undo", json!({}));
     assert!(s.execute("object.expand", &json!({"gradient": "rings"})).is_err());
     assert!(s.execute("object.expand", &json!({"steps": 0})).is_err());
     assert!(matches!(selected(&s).kind, NodeKind::Path { live: Some(_), .. }));
+}
+
+/// A selected open line with a 2 pt black stroke, no fill and a Zig Zag effect (#3089).
+fn zig_zag_line(s: &mut Session) -> NodeId {
+    let id = NodeId(run(s, "path.create", json!({"d": "M 20 100 L 180 100"}))["id"].as_u64().unwrap());
+    run(s, "paint.setFill", json!({"none": true}));
+    run(s, "paint.setStroke", json!({"color": "#000000"}));
+    run(s, "stroke.set", json!({"weight": 2}));
+    run(s, "effect.apply", json!({"effect": "distort.zigZag", "params": {"size": 10, "ridges": 6, "relative": false}}));
+    id
+}
+
+#[test]
+fn expand_info_says_when_expand_appearance_comes_first() {
+    let mut s = session();
+    zig_zag_line(&mut s);
+    assert_eq!(run(&mut s, "object.expand.info", json!({}))["appearance"], json!(true), "Zig Zag is an appearance attribute");
+    // Expand Appearance bakes the zig-zag into the line, which keeps its stroke and gets no fill.
+    run(&mut s, "effect.expandAppearance", json!({}));
+    let line = selected(&s);
+    assert!(matches!(line.kind, NodeKind::Path { .. }), "a path: {:?}", line.kind);
+    assert!(line.path_data().unwrap().anchors().count() > 6, "the zig-zag is baked");
+    assert!(line.appearance.effects.is_empty());
+    assert!(!line.appearance.stroke_paint().is_none(), "still a stroked line");
+    assert!(line.appearance.fill().is_none_or(|f| f.paint.is_none()), "no fill");
+    assert_eq!(run(&mut s, "object.expand.info", json!({}))["appearance"], json!(false));
+    // Then Expand outlines the stroke into a filled shape.
+    run(&mut s, "object.expand", json!({}));
+    let outline = selected(&s);
+    assert!(!outline.appearance.fill_paint().is_none(), "a filled outline");
+    assert!(outline.appearance.stroke_paint().is_none());
+}
+
+/// The paths under `n` (itself included): (how many have a stroke, how many are filled black).
+fn strokes_and_black_fills(n: &Node) -> (usize, usize) {
+    let (mut stroked, mut black) = (0, 0);
+    n.walk(&mut |c| {
+        if matches!(c.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) {
+            stroked += usize::from(!c.appearance.stroke_paint().is_none());
+            black += usize::from(c.appearance.fill_paint() == Paint::solid(Color::BLACK));
+        }
+    });
+    (stroked, black)
+}
+
+#[test]
+fn object_expand_outlines_a_stroked_line_with_an_effect_in_one_step() {
+    let mut s = session();
+    zig_zag_line(&mut s);
+    let undo = s.doc().unwrap().history.undo.len();
+    run(&mut s, "object.expand", json!({}));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    let n = selected(&s);
+    assert!(n.appearance.effects.is_empty(), "the zig-zag is baked");
+    assert_eq!(strokes_and_black_fills(&n), (0, 1), "the stroke is outlined: {n:?}");
+}
+
+#[test]
+fn object_expand_outlines_the_stroke_a_groups_appearance_expands_to() {
+    // A group of two red squares without strokes; the group has a black stroke and a Transform
+    // effect of its own, so Stroke has nothing to outline until Expand Appearance has run.
+    let mut s = session();
+    let a = NodeId(run(&mut s, "shape.rectangle", json!({"x": 20, "y": 20, "width": 40, "height": 40}))["id"].as_u64().unwrap());
+    let b = NodeId(run(&mut s, "shape.rectangle", json!({"x": 100, "y": 20, "width": 40, "height": 40}))["id"].as_u64().unwrap());
+    run(&mut s, "select.set", json!({"ids": [a.0, b.0]}));
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+    run(&mut s, "paint.setStroke", json!({"none": true}));
+    run(&mut s, "object.group", json!({}));
+    run(&mut s, "appearance.addStroke", json!({}));
+    run(&mut s, "appearance.setItem", json!({"index": 0, "weight": 2, "color": "#000000"}));
+    run(&mut s, "effect.apply", json!({"effect": "distort.transform", "params": {"moveV": 50}}));
+    assert_eq!(run(&mut s, "object.expand.info", json!({}))["stroke"], json!(false), "no stroked path yet");
+    run(&mut s, "object.expand", json!({}));
+    let g = selected(&s);
+    assert!(g.appearance.items.is_empty() && g.appearance.effects.is_empty(), "the appearance is expanded");
+    let (stroked, black) = strokes_and_black_fills(&g);
+    assert_eq!(stroked, 0, "no stroke is left: {g:?}");
+    assert_eq!(black, 2, "each square's copy of the group's stroke is outlined: {g:?}");
+}
+
+#[test]
+fn expand_info_counts_two_fills_but_not_a_plain_rectangle() {
+    let mut s = session();
+    run(&mut s, "shape.rectangle", json!({"x": 20, "y": 20, "width": 100, "height": 60}));
+    assert_eq!(run(&mut s, "object.expand.info", json!({}))["appearance"], json!(false), "a basic appearance");
+    run(&mut s, "appearance.addFill", json!({}));
+    assert_eq!(run(&mut s, "object.expand.info", json!({}))["appearance"], json!(true), "two fills");
 }

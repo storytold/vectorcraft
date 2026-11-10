@@ -1,6 +1,9 @@
 use super::layout::{align_lines, fit_lines, font_style, justify, line_gap, place_cell};
 use super::nodes::affine;
-use super::*;
+use super::{
+    Affine, Appearance, AppearanceItem, Arc, BezPath, Builder, CharStyle, FillRule, FirstBaseline, Node, NodeKind, Paint, PathData, Point, Rect,
+    TextKind, TextObject, TextRun, Vec2, VerticalAlign, af, ap, shapes,
+};
 
 /// Where text goes: a rigid placement (translation and rotation) and the scale that maps node
 /// space into it (applied to the frame's geometry, not the type), plus the type's own scale.

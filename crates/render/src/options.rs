@@ -1,5 +1,5 @@
 use super::geometry::region_pixels;
-use super::*;
+use super::{Arc, NodeId, Rect, encode, proof};
 
 /// Largest raster an export may ask [`Renderer::render_region`] for, per side. The CPU rasteriser
 /// addresses at most `u16::MAX` pixels per side (and panics at that edge).
@@ -35,7 +35,7 @@ pub fn raster_size(region: Rect, scale: f64) -> Result<(u32, u32), String> {
 pub struct RenderOptions {
     /// Outline (wireframe) view: 1 px black paths, no paint.
     pub outline: bool,
-    /// Pasteboard colour behind everything (premultiplied RGBA8); `None` = transparent.
+    /// Pasteboard color behind everything (straight-alpha RGBA8); `None` = transparent.
     pub background: Option<[u8; 4]>,
     /// Draw artboards as white rectangles (screen view). Export sets this to false.
     pub artboards: bool,
@@ -111,6 +111,14 @@ pub struct RenderOptions {
     /// Screen views: an image whose pixels can't be decoded draws as a light gray box crossed
     /// from corner to corner. Off, it draws nothing (exports, which report it instead).
     pub mark_undecoded_images: bool,
+    /// Screen views that must render quickly (the canvas's low-resolution fill): an image object
+    /// draws from pixels the shared store already holds for it: the mip
+    /// [`RenderOptions::image_mips`] would draw if the store holds it, else the nearest finer one,
+    /// else the nearest coarser one. An image object the store holds no pixels of draws as a
+    /// light gray box, not crossed, unless the store notes it as undecodable: then it draws as it
+    /// does with this option off ([`RenderOptions::mark_undecoded_images`]). No image object is decoded and
+    /// no mip of one is made. Off, image objects are decoded as they are drawn.
+    pub kept_images_only: bool,
     /// Screen views while an interaction is in progress (a drag, a dialog's preview): an object
     /// whose content only moved since an earlier frame draws its cached drop shadows, outer glows
     /// and filtered content from the rasters made then, at the nearest whole pixel, without
@@ -126,6 +134,9 @@ pub struct RenderOptions {
     /// Appearance of Black's Rich Black: pure CMYK black (black ink alone at 100%) shows as RGB
     /// black. Off, it shows through the CMYK profile, a dark grey, as other colours do.
     pub rich_black: bool,
+    /// Dashed strokes draw as solid lines, without their dashes (the Navigator's Draw Dashed Lines
+    /// as Solid Lines). Off, they draw their dashes.
+    pub solid_dashes: bool,
 }
 
 /// The opacity of the art around an isolated group or layer.
@@ -207,9 +218,11 @@ impl Default for RenderOptions {
             supersample: false,
             image_mips: false,
             mark_undecoded_images: false,
+            kept_images_only: false,
             interacting: false,
             dragging: false,
             rich_black: false,
+            solid_dashes: false,
         }
     }
 }

@@ -1,6 +1,6 @@
 use super::build::segment_distance;
 use super::rings::{MAX_PLANE_POINTS, contains, left, rings, signed_area};
-use super::*;
+use super::{FillRule, PathData, Point, Rect, Vec2};
 
 /// The edges of `rings` filed in a grid of square buckets, so the nearest edge to a point is
 /// found among the buckets around it rather than among all the edges.

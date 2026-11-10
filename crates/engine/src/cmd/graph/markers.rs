@@ -1,7 +1,7 @@
 use super::designs::design_names;
 use super::edit::{regenerate, spec_of, target};
 use super::series::{picked_series, reselect_series};
-use super::*;
+use super::{Affine, Arc, Document, GraphSpec, Node, NodeKind, Rect, Result, Session, Value, bad, json};
 
 /// Most objects a graph's marker designs may add (each data point and legend swatch draws a copy of its design).
 pub(super) const MARKER_BUDGET: usize = 200_000;

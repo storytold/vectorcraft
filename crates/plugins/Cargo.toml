@@ -12,8 +12,14 @@ workspace = true
 vectorcraft-geom = { workspace = true }
 vectorcraft-color = { workspace = true }
 vectorcraft-doc = { workspace = true }
+log = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+# The pixels of a small image a filter asks to read, as RGBA in base64.
+image = { workspace = true }
+craft-vectorcraft-format = { workspace = true }
+# The SHA-256 of a module, which the install prompt shows and a grant records.
+sha2 = { version = "0.10", default-features = false }
 thiserror = { workspace = true }
 wasmi = { workspace = true }
 

@@ -25,7 +25,7 @@ use vectorcraft_geom::{Affine, Rect};
 use vectorcraft_pdf::CropTo;
 
 use super::super::fileio;
-use super::super::*;
+use super::super::{EngineError, NodeId, Result, bad};
 
 /// The largest file placed (bytes).
 pub(crate) const MAX_FILE: usize = 256 << 20;
@@ -44,15 +44,17 @@ pub(crate) fn is_pdf(name: &str, bytes: &[u8]) -> bool {
     fileio::detect(name, bytes).is_some_and(|f| matches!(f.id, "pdf" | "ai" | "ait")) && !vectorcraft_pdf::is_postscript(bytes)
 }
 
-/// The editing data of the `.ai` file `name` (`bytes`) when its PDF part is only a placeholder:
+/// The editing data of the `.ai` file `name` (`bytes`) when its PDF part is only a placeholder, or
+/// can't be read:
 /// the document its pages are read from ([`super::pdf_art`]), with the files it links. `None` for
 /// other files.
 pub(crate) fn editing_data(name: &str, bytes: &[u8]) -> Option<Document> {
     if !is_pdf(name, bytes) {
         return None;
     }
-    let read = fileio::page_document(bytes, 0, &fileio::LoadOptions::default());
-    match fileio::page_or_editing_data(name, bytes, None, read) {
+    let opts = fileio::LoadOptions::default();
+    let read = fileio::page_document(bytes, 0, &opts);
+    match fileio::page_or_editing_data(name, bytes, &opts, 0, read) {
         Ok((doc, _, true)) => Some(doc),
         _ => None,
     }
@@ -131,12 +133,13 @@ pub(crate) fn document_art(
     // A document already being read further up, or past [`MAX_NESTED_READS`] of them, has its links
     // left as stored.
     if let Some(_reading) = Reading::enter(bytes) {
-        super::super::links::resolve(&mut l.doc, path, false, false);
+        super::super::links::resolve(&mut l.doc, super::super::links::LinkBase::file(path), false, false);
     }
     l.doc.drop_edit_modes();
     let n = l.doc.artboards.len();
     let board = (page as usize).checked_sub(1).and_then(|i| l.doc.artboards.get(i)).map(|a| a.rect);
-    let board = board.ok_or_else(|| bad(cmd, format!("page {page}: `{file}` has {n} artboard(s)")))?;
+    let artboards = if n == 1 { "artboard" } else { "artboards" };
+    let board = board.ok_or_else(|| bad(cmd, format!("page {page}: `{file}` has {n} {artboards}")))?;
     let layers = std::mem::take(&mut l.doc.layers);
     let symbols = l.doc.symbol_boxes();
     let nodes = super::on_artboard(&symbols, &layers, board);
@@ -154,11 +157,11 @@ std::thread_local! {
 }
 
 /// A document's links being resolved ([`READING`]): the entry goes when this does.
-struct Reading;
+pub(super) struct Reading;
 
 impl Reading {
     /// `None` when the document of `bytes` is already being read, or [`MAX_NESTED_READS`] are.
-    fn enter(bytes: &[u8]) -> Option<Self> {
+    pub(super) fn enter(bytes: &[u8]) -> Option<Self> {
         let hash = hash_bytes(bytes);
         READING.with_borrow_mut(|r| (r.len() < MAX_NESTED_READS && !r.contains(&hash)).then(|| r.push(hash))).map(|()| Reading)
     }
@@ -329,14 +332,15 @@ pub(crate) fn node(d: &mut Document, s: &Source, link: LinkInfo, bounding: bool)
 /// `d` for output: linked images and placed documents that keep only their previews get their
 /// files back, else output as their previews, with a warning.
 pub(crate) fn full_documents(d: &Document) -> (Cow<'_, Document>, Vec<String>) {
-    let (d, mut warnings) = super::super::links::full_linked_images(d, None);
+    let (d, mut warnings) = super::super::links::full_linked_images(d, Default::default());
     let doc = match &d {
         Cow::Borrowed(doc) => doc,
         Cow::Owned(doc) => doc,
     };
     let mut need: Vec<PlacedDocument> = vec![];
+    let mut seen = std::collections::HashSet::new();
     doc.visit_placed(|_, p| {
-        if doc.images.get(&p.key).is_some_and(ImageBlob::is_proxy) && !need.iter().any(|n| n.key == p.key) {
+        if doc.images.get(&p.key).is_some_and(ImageBlob::is_proxy) && seen.insert(p.key.clone()) {
             need.push(p.clone());
         }
     });
@@ -360,10 +364,12 @@ pub(crate) fn full_documents(d: &Document) -> (Cow<'_, Document>, Vec<String>) {
         }
     }
     if !previews.is_empty() {
-        warnings.push(format!(
-            "{} placed document(s) output as their previews: their files can't be found, or changed since they were read (relink or update them)",
-            previews.len()
-        ));
+        warnings.push(match previews.len() {
+            1 => "1 placed document output as its preview: its file can't be found, or changed since it was read (relink or update it)".to_string(),
+            n => format!(
+                "{n} placed documents output as their previews: their files can't be found, or changed since they were read (relink or update them)"
+            ),
+        });
         out.placed_as_previews(&previews);
     }
     (Cow::Owned(out), warnings)

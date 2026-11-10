@@ -1,5 +1,8 @@
 use super::cid::{CidText, FontInfo};
-use super::*;
+use super::{
+    Affine, Arc, BezPath, BlendMode, Colors, Dash, Families, FillRule, FontNames, FunctionBudget, HashMap, HashSet, ImageBlob, LineCap, LineFacts,
+    LineJoin, LumaData, MaskSpec, Node, NodeId, Paint, PathEl, PatternDef, Rect, Scan, StrokeLayer, StrokeProps, TextAs, TextLine,
+};
 
 /// Decoded RGBA pixels, width, height and hayro's scale factors.
 pub(super) type Decoded = (Vec<u8>, u32, u32, (f32, f32));
@@ -66,7 +69,6 @@ pub(super) struct Saved {
     pub(super) blend: BlendMode,
     pub(super) mask: Option<Arc<MaskSpec>>,
     pub(super) page: Rect,
-    pub(super) pending: bool,
 }
 
 pub(super) struct Builder<'p> {
@@ -80,10 +82,14 @@ pub(super) struct Builder<'p> {
     pub(super) glyphs: Option<GlyphRun>,
     pub(super) text: Option<TextLine>,
     pub(super) text_as: TextAs,
+    pub(super) actual: super::actual_text::ActualText,
     pub(super) images: HashMap<String, ImageBlob>,
     pub(super) image_keys: HashMap<u128, (String, u32, u32)>,
     /// The images kept with their CMYK samples ([`crate::import_image`]).
     pub(super) cmyk_keys: HashSet<u128>,
+    /// Images in a Separation space, by key: the paint of their ink, or `None` when they open in
+    /// RGB (an ink that can't be told, tints that can't be read).
+    pub(super) separation_paints: HashMap<u128, Option<Paint>>,
     /// Mask keys of CMYK images whose mask turned out to hide nothing.
     pub(super) opaque: HashSet<u128>,
     pub(super) warnings: Vec<String>,
@@ -119,12 +125,13 @@ pub(super) struct Builder<'p> {
     pub(super) function_paints: HashMap<(u128, Option<Vec<String>>), Paint>,
     /// What is left of the import's function evaluations for those shadings.
     pub(super) function_budget: FunctionBudget,
+    /// What is left of the import's objects ([`super::entry::max_objects`]).
+    pub(super) objects_left: usize,
     /// Swatch names in use.
     pub(super) taken: Vec<String>,
     /// The page as walked by [`scan_page`], and how far the interpreter is through it.
     pub(super) scan: Scan,
     pub(super) tag_at: usize,
-    pub(super) group_at: usize,
     /// The fills and strokes of paths drawn so far ([`Scan::paints`]).
     pub(super) paint_at: usize,
     pub(super) aligned: bool,
@@ -133,10 +140,9 @@ pub(super) struct Builder<'p> {
     /// Some groups are hidden or don't print: art in marked content whose group can't be told
     /// (once the scan and the interpreter part) is [`UNSORTED`] rather than the page's.
     pub(super) unsure: bool,
-    /// The marked-content sequences open: the group each marks.
-    pub(super) marked: Vec<Option<usize>>,
-    /// A transparency group was just pushed: a form's (whose flags come next) or an image's.
-    pub(super) pending: bool,
+    /// The marked-content sequences open: the group each marks, and the innermost group marked
+    /// at or around it (kept per level, so art drawn deep in sequences finds its group at once).
+    pub(super) marked: Vec<(Option<usize>, Option<usize>)>,
     pub(super) nested: u32,
     /// Reading an alpha soft mask's art: images are read white with their own alpha, so the
     /// mask's luminance is their alpha, as whitened vector art's is (cairo, and so Inkscape,
@@ -240,16 +246,46 @@ pub(super) fn stroke_layer(paint: Paint, opacity: f32, p: &StrokeProps, scale: f
 
 /// The most entries of a dash array kept (an even count keeps it a pattern of dashes and gaps).
 const MAX_DASH_ENTRIES: usize = 64;
+/// Most dash periods [`stroke_outline`] cuts a stroke into.
+const MAX_OUTLINE_DASHES: f64 = 1e5;
+
+/// The area stroke `p` paints along `path` (in its own space, before `transform`), in the document:
+/// where a shading painting the stroke shows. Width, caps, joins and dashes as [`stroke_layer`]
+/// takes them. `None` when it paints nothing.
+pub(super) fn stroke_outline(path: &BezPath, transform: Affine, p: &StrokeProps) -> Option<BezPath> {
+    let scale = mean_scale(transform);
+    if !(scale.is_finite() && scale > 1e-9) {
+        return None;
+    }
+    let mut style =
+        kurbo::Stroke::new(line_width(p, scale) / scale).with_join(p.line_join).with_caps(p.line_cap).with_miter_limit(p.miter_limit as f64);
+    let dashes: Vec<f64> = p.dash_array.iter().take(MAX_DASH_ENTRIES).map(|v| *v as f64).collect();
+    let dash = Dash { pattern: dashes.clone(), offset: p.dash_offset as f64, align_corners: false };
+    // A dash pattern far finer than the path would cut it into countless pieces: it strokes solid.
+    let period: f64 = dashes.iter().sum();
+    if dash.is_dashed() && period > 0.0 && kurbo::Shape::perimeter(path, 1e-3) / period < MAX_OUTLINE_DASHES {
+        style = style.with_dashes(dash.offset, dashes);
+    }
+    // To a hundredth of a point in the document, within reason at extreme scales.
+    let tolerance = (0.01 / scale).clamp(1e-4, 1.0);
+    let mut out = kurbo::stroke(path.iter(), &style, &kurbo::StrokeOpts::default(), tolerance);
+    out.apply_affine(transform);
+    (!out.elements().is_empty()).then_some(out)
+}
 
 pub(crate) fn round3(v: f32) -> f32 {
     (v * 1000.0).round() / 1000.0
 }
 
-/// The paints of `nodes`' leaves, in order: what tells two readings of a pattern cell apart.
+/// The paints of `nodes`' leaves, in order, colorized images' colors included: what tells two
+/// readings of a pattern cell apart.
 pub(super) fn paints(nodes: &[Arc<Node>]) -> Vec<Paint> {
     let mut out = vec![];
     for n in nodes {
-        n.walk(&mut |c| out.extend(c.appearance.items.iter().map(|i| i.paint().clone())));
+        n.walk(&mut |c| {
+            out.extend(c.appearance.items.iter().map(|i| i.paint().clone()));
+            out.extend(c.extras().colorize.as_deref().cloned());
+        });
     }
     out
 }
@@ -266,6 +302,13 @@ pub(super) fn rgba_png(rgba: Vec<u8>, w: u32, h: u32) -> Option<Vec<u8>> {
     Some(out)
 }
 
+pub(super) fn gray_png(gray: Vec<u8>, w: u32, h: u32) -> Option<Vec<u8>> {
+    let img = image::GrayImage::from_raw(w, h, gray)?;
+    let mut out = Vec::new();
+    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).ok()?;
+    Some(out)
+}
+
 pub(super) fn resize_alpha(a: &LumaData, w: u32, h: u32) -> Vec<u8> {
     if a.width == w && a.height == h {
         return a.data.clone();
@@ -273,5 +316,24 @@ pub(super) fn resize_alpha(a: &LumaData, w: u32, h: u32) -> Vec<u8> {
     match image::GrayImage::from_raw(a.width, a.height, a.data.clone()) {
         Some(g) => image::imageops::resize(&g, w, h, image::imageops::FilterType::Triangle).into_raw(),
         None => vec![255; (w * h) as usize],
+    }
+}
+
+#[cfg(test)]
+mod stroke_outline_tests {
+    use super::*;
+
+    /// A dash pattern far finer than the path strokes it solid instead of cutting it into
+    /// millions of pieces; one in reason dashes it.
+    #[test]
+    fn a_dash_far_finer_than_the_path_strokes_solid() {
+        let mut path = BezPath::new();
+        path.move_to((0.0, 0.0));
+        path.line_to((1000.0, 0.0));
+        let props = |dash: f32| StrokeProps { line_width: 2.0, dash_array: [dash; 4].into(), ..StrokeProps::default() };
+        let solid = stroke_outline(&path, Affine::IDENTITY, &props(1e-6)).unwrap();
+        assert!(solid.elements().len() < 20, "{} elements", solid.elements().len());
+        let dashed = stroke_outline(&path, Affine::IDENTITY, &props(10.0)).unwrap();
+        assert!(dashed.elements().len() > 100, "dashed: {} elements", dashed.elements().len());
     }
 }

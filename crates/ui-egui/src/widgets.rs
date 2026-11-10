@@ -20,48 +20,62 @@ mod numeric;
 mod panel_chrome;
 mod text;
 mod toggles;
+mod wheel_stream;
 
 pub use blend::{
     TransparencyEdit, angle_dial, blend_dropdown, blend_param, blend_param_dropdown, blend_separator_before, opacity_blend, reference_point,
+    reference_point_named,
 };
 pub use buttons::{
     SPLIT_ARROW, flat_button, flat_button_fit, icon_button, icon_button_enabled, menu_item, menu_item_name, paint_icon_button, primary_button,
     primary_button_enabled, secondary_button, split_button, split_button_named, toggle_icon,
 };
-pub(crate) use buttons::{icon_button_info, primary_button_width, secondary_button_width};
+pub(crate) use buttons::{button_width, icon_button_info, primary_button_width, secondary_button_width};
 #[cfg(test)]
 use chips::gradient_chip_colors;
 pub use chips::{ProxyClicks, chip_button, chip_button_named, fill_stroke_proxy, gradient_chip, paint_chip, proxy_chip, swatch_tile};
-pub(crate) use color::pointer_phase;
 pub use color::{
-    Live, SliderValue, WheelResponse, channel_slider, channel_slider_named, channel_slider_valued, color_field, color_mesh, color_slider,
-    color_slider_named, color_slider_stepped, color_slider_valued, harmony_wheel, hex_field, hex_field_named, region_texture,
+    FieldAxis, Live, RingResponse, SliderValue, WheelResponse, channel_slider, channel_slider_named, channel_slider_valued, color_field, color_mesh,
+    color_slider, color_slider_named, color_slider_stepped, color_slider_valued, harmony_wheel, hex_field, hex_field_named, hsb32, hue_ring,
+    region_texture, ring_square, segment_color, segmented_wheel, stepped_area,
 };
-pub use drag::{PanelDrag, SwatchRows, art_drop, doc_preview, drag_source};
-pub(crate) use dropdowns::combo;
+pub(crate) use color::{HEX_FIELD_CHARS, hex_text, pointer_phase};
+pub use drag::{
+    PanelDrag, RowClick, SwatchRows, apply_row_click, art_drop, doc_preview, drag_ghost, drag_source, drop_target_outline, ghost_row, row_click,
+};
 #[cfg(test)]
 use dropdowns::combo_button_id;
+#[cfg(test)]
+pub(crate) use dropdowns::menu_floor;
+pub(crate) use dropdowns::{combo, combo_menu, combo_menu_field, combo_named, popover_is_open};
 pub use dropdowns::{
     dropdown, dropdown_named, dropdown_names, dropdown_names_named, dropdown_with, dropdown_with_named, list_scroll_style, menu_room, menu_scroll,
     panel_scroll, popover, set_menu_floor, strip_scroll,
 };
 pub use labels::{dim_label, dim_name, divider, field_label, label_row, link_label, section_header, section_toggle, section_toggle_name, subheader};
-pub(crate) use labels::{label_field, take_previous_label};
+pub(crate) use labels::{label_field, take_previous_label, text_width};
+pub(crate) use numeric::{ANY, round_to, set_bare_numbers_are_points, typed_unit};
 pub use numeric::{
-    SpinPick, mixed_field, mixed_field_named, num_field, num_field_named, opt_field, opt_field_named, range_field, range_field_named,
-    range_field_stepped, size_field, size_field_named, slider, spin_field, spin_field_auto, spin_field_auto_named, spin_field_named, spin_plain,
-    spin_plain_named,
+    SpinPick, mixed_field, mixed_field_named, num_field, num_field_live, num_field_named, num_field_within, num_field_within_empty, opt_field,
+    opt_field_named, plain_field_live, range_field, range_field_live, range_field_named, range_field_stepped, size_field, size_field_named, slider,
+    spin_field, spin_field_auto, spin_field_auto_named, spin_field_named, spin_field_stops_named, spin_kerning, spin_length_within, spin_plain,
+    spin_plain_named, spin_range,
 };
 #[cfg(test)]
-use numeric::{decimal_point, share_of, spinner_step, step_to_multiple};
-pub(crate) use numeric::{round_to, set_bare_numbers_are_points, typed_unit};
+use numeric::{decimal_point, field_number, share_of, spinner_step, step_through, step_to_multiple, within_a_millionth};
 pub use panel_chrome::{bottom_bar, layout_button, list_box, orientation_button, tab_bar};
-pub(crate) use text::{dialog_focus_flag, enter_modifiers, focus_field, own_field_shift_enter, set_dialog_open, take_dialog_focus};
+pub(crate) use text::{
+    arm_field_focus, dialog_focus_flag, dialog_reject_commit_flag, disarm_field_focus, enter_modifiers, focus_field, own_field_shift_enter,
+    reject_dialog_commit, set_dialog_open, take_dialog_focus,
+};
 pub use text::{
     exact_text_field, exact_text_field_named, plain_field, plain_field_named, search_field, text_field, text_field_named, text_presets,
     text_presets_named,
 };
-pub use toggles::{check, check_box, check_name, check_tip, check3, radio, radio_button};
+pub use toggles::{check, check_box, check_name, check_tip, check3, check3_tip, radio, radio_button};
+#[cfg(test)]
+pub(crate) use wheel_stream::WHEEL_STREAM_GAP;
+pub(crate) use wheel_stream::{ArmedWheelField, WheelStream, WheelStreamOwner, taken_from_raw_id};
 
 /// A widget id salt that needs only [`std::hash::Hash`]. egui 0.37's [`egui::AsIdSalt`] also
 /// requires `Debug` for its debug-only id-source registry; VectorCraft's public field helpers do
@@ -85,7 +99,7 @@ impl<T> std::fmt::Debug for HashOnly<T> {
 }
 
 /// `parent.with(salt)` for a salt that needs only `Hash`.
-fn id_with(parent: egui::Id, salt: impl std::hash::Hash) -> egui::Id {
+pub(crate) fn id_with(parent: egui::Id, salt: impl std::hash::Hash) -> egui::Id {
     parent.with(HashOnly(salt))
 }
 
@@ -112,6 +126,19 @@ pub(crate) mod accessibility_tests {
             nodes = out.platform_output.accesskit_update.map(|u| u.nodes.into_iter().map(|(_, n)| n).collect()).unwrap_or_default();
         }
         nodes
+    }
+
+    /// The widgets that `tabs` presses of Tab give the keyboard focus to, in order. `frame` runs
+    /// one frame of `ctx` with the events it is given.
+    pub(crate) fn tab_stops(ctx: &egui::Context, tabs: usize, mut frame: impl FnMut(Vec<egui::Event>)) -> Vec<egui::Id> {
+        let tab = egui::Event::Key { key: egui::Key::Tab, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+        let mut stops = vec![];
+        for _ in 0..tabs {
+            frame(vec![tab.clone()]);
+            frame(vec![]);
+            stops.extend(ctx.memory(|m| m.focused()));
+        }
+        stops
     }
 
     /// The node of `tree` that screen readers name `label`.
@@ -217,6 +244,121 @@ pub(crate) mod accessibility_tests {
             let chosen = if i == 4 { Toggled::True } else { Toggled::False };
             assert_eq!(role_and_state(&tree, label), (Role::RadioButton, Some(chosen)), "{label}");
         }
+        let grid = named(&tree, "Reference Point");
+        assert_eq!((grid.role(), grid.value()), (Role::RadioGroup, Some("Center")), "the grid is a radio group showing the current point");
+    }
+
+    /// Screen readers find the nine squares inside the Reference Point radio group.
+    #[test]
+    fn the_reference_point_group_holds_its_squares() {
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        theme::install_fonts(&ctx);
+        let mut nodes = vec![];
+        for time in [0.0, 0.1] {
+            let mut out = ctx.run_ui(egui::RawInput { time: Some(time), ..Default::default() }, |ui| {
+                reference_point(ui, 0);
+            });
+            out.textures_delta.clear();
+            nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+        }
+        let node = |id: &egui::accesskit::NodeId| nodes.iter().find(|(n, _)| n == id).map(|(_, n)| n);
+        let Some((group, _)) = nodes.iter().find(|(_, n)| n.label() == Some("Reference Point")) else { panic!("no Reference Point group") };
+        let mut inside = vec![];
+        let mut todo = vec![*group];
+        while let Some(id) = todo.pop() {
+            for child in node(&id).map(|n| n.children()).unwrap_or_default() {
+                inside.extend(node(child).and_then(|n| n.label()).map(str::to_owned));
+                todo.push(*child);
+            }
+        }
+        for label in ["Top Left", "Top", "Top Right", "Left", "Center", "Right", "Bottom Left", "Bottom", "Bottom Right"] {
+            assert!(inside.iter().any(|l| l == label), "{label} is in the group: {inside:?}");
+        }
+    }
+
+    /// A frame of a button, the reference point grid at `point` and another button, after `events`;
+    /// a new point from the grid replaces `point`. Returns the two buttons' ids.
+    fn grid_frame(ctx: &egui::Context, events: Vec<egui::Event>, point: &mut usize) -> (egui::Id, egui::Id) {
+        let mut ids = (egui::Id::NULL, egui::Id::NULL);
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| {
+            ids.0 = ui.button("Before").id;
+            if let Some(i) = reference_point(ui, *point) {
+                *point = i;
+            }
+            ids.1 = ui.button("After").id;
+        });
+        // No renderer takes the font atlas updates in a test; dropping them unapplied panics.
+        out.textures_delta.clear();
+        ids
+    }
+
+    /// Tab stops once on the reference point grid, not on each of its nine squares.
+    #[test]
+    fn the_reference_point_grid_is_one_tab_stop() {
+        let ctx = egui::Context::default();
+        theme::install_fonts(&ctx);
+        let mut point = 4;
+        let mut ids = (egui::Id::NULL, egui::Id::NULL);
+        let stops = tab_stops(&ctx, 3, |events| ids = grid_frame(&ctx, events, &mut point));
+        assert_eq!(stops.len(), 3, "{stops:?}");
+        assert_eq!(stops[0], ids.0, "the first Tab reaches the button before the grid");
+        let size = ctx.read_response(stops[1]).map(|r| r.rect.size());
+        assert_eq!(size, Some(egui::Vec2::splat(23.0)), "the second Tab reaches the whole grid, not one of its squares");
+        assert_eq!(stops[2], ids.1, "the third Tab leaves the grid for the button after it");
+        assert_eq!(point, 4, "Tab leaves the point as it was");
+    }
+
+    /// While the grid has the focus, the arrow keys move the point one square, stop at the edges and
+    /// keep the focus on the grid.
+    #[test]
+    fn arrow_keys_move_the_reference_point() {
+        let ctx = egui::Context::default();
+        theme::install_fonts(&ctx);
+        let mut point = 4;
+        let stops = tab_stops(&ctx, 2, |events| {
+            grid_frame(&ctx, events, &mut point);
+        });
+        let grid = stops[1];
+        let arrow = |key| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+        for (key, want) in [
+            (egui::Key::ArrowRight, 5),
+            (egui::Key::ArrowUp, 2),
+            (egui::Key::ArrowRight, 2),
+            (egui::Key::ArrowUp, 2),
+            (egui::Key::ArrowLeft, 1),
+            (egui::Key::ArrowDown, 4),
+            (egui::Key::ArrowDown, 7),
+            (egui::Key::ArrowLeft, 6),
+            (egui::Key::ArrowDown, 6),
+        ] {
+            grid_frame(&ctx, vec![arrow(key)], &mut point);
+            grid_frame(&ctx, vec![], &mut point);
+            assert_eq!(point, want, "{key:?}");
+            assert_eq!(ctx.memory(|m| m.focused()), Some(grid), "{key:?} keeps the focus on the grid");
+        }
+        // From no point, an arrow moves from the center.
+        point = 9;
+        grid_frame(&ctx, vec![arrow(egui::Key::ArrowLeft)], &mut point);
+        grid_frame(&ctx, vec![], &mut point);
+        assert_eq!(point, 3, "← from no point chose the middle of the left side");
+        assert_eq!(ctx.memory(|m| m.focused()), Some(grid), "← from no point keeps the focus on the grid");
+    }
+
+    /// A locator under another label takes that label, without its colon, as the group's name.
+    #[test]
+    fn a_named_reference_point_group_takes_its_label() {
+        // Each locator gets its own id scope, so their ids differ.
+        let tree = tree(|ui| {
+            for (point, label) in [(4, "Pivot:"), (0, "Origine :"), (8, "基準点：")] {
+                ui.push_id(label, |ui| reference_point_named(ui, point, label));
+            }
+        });
+        for (label, value) in [("Pivot", "Center"), ("Origine", "Top Left"), ("基準点", "Bottom Right")] {
+            let grid = named(&tree, label);
+            assert_eq!((grid.role(), grid.value()), (Role::RadioGroup, Some(value)), "{label}");
+        }
     }
 
     #[test]
@@ -227,7 +369,7 @@ pub(crate) mod accessibility_tests {
             angle_dial(ui, "angle", 45.0, 28.0);
             channel_slider_named(ui, "channel", "H", 0.5, vec2(22.0, 80.0), &|_| Color32::GRAY);
             harmony_wheel(ui, "wheel", 120.0, &[red], Some(0));
-            combo(ui, "font", "Regular", 120.0, true, |_| None::<usize>);
+            combo_menu(ui, "font", "Regular", 120.0, |_| None::<usize>);
         });
         let slider = |label| {
             let n = named(&tree, label);
@@ -276,17 +418,110 @@ pub(crate) mod accessibility_tests {
 mod spinner_modifier_tests {
     use super::*;
 
+    fn pt(v: f64) -> String {
+        Unit::Points.format(v)
+    }
+
     #[test]
     fn shift_steps_stroke_weight_by_ten_points() {
-        assert_eq!(spinner_step(14.0, 1.0, 0.0, true, egui::Modifiers::SHIFT), 24.0);
-        assert_eq!(spinner_step(14.0, 1.0, 0.0, false, egui::Modifiers::SHIFT), 4.0);
+        assert_eq!(spinner_step(14.0, 1.0, 0.0, true, egui::Modifiers::SHIFT, &[], &pt), 24.0);
+        assert_eq!(spinner_step(14.0, 1.0, 0.0, false, egui::Modifiers::SHIFT, &[], &pt), 4.0);
     }
 
     #[test]
     fn unmodified_and_command_steps_keep_existing_behavior() {
-        assert_eq!(spinner_step(14.0, 1.0, 0.0, true, egui::Modifiers::NONE), 15.0);
-        assert_eq!(spinner_step(14.0, 1.0, 0.0, false, egui::Modifiers::COMMAND), 13.9);
-        assert_eq!(spinner_step(0.0, 1.0, 0.0, false, egui::Modifiers::SHIFT), 0.0);
+        assert_eq!(spinner_step(14.0, 1.0, 0.0, true, egui::Modifiers::NONE, &[], &pt), 15.0);
+        assert_eq!(spinner_step(14.0, 1.0, 0.0, false, egui::Modifiers::COMMAND, &[], &pt), 13.9);
+        assert_eq!(spinner_step(0.0, 1.0, 0.0, false, egui::Modifiers::SHIFT, &[], &pt), 0.0);
+    }
+
+    #[test]
+    fn plain_and_command_steps_go_to_the_next_multiple_as_arrow_keys_do() {
+        // As ↑/↓ in the field (#2881): a plain step goes to the next whole number, Ctrl/Cmd to the
+        // next tenth, rounded to the places fields keep; Shift adds or takes ten.
+        assert_eq!(spinner_step(1.37, 1.0, 0.0, true, egui::Modifiers::NONE, &[], &pt), 2.0);
+        assert_eq!(spinner_step(1.37, 1.0, 0.0, false, egui::Modifiers::NONE, &[], &pt), 1.0);
+        assert_eq!(spinner_step(1.37, 1.0, 0.0, true, egui::Modifiers::COMMAND, &[], &pt), 1.4);
+        assert_eq!(spinner_step(1.37, 1.0, 0.0, false, egui::Modifiers::COMMAND, &[], &pt), 1.3);
+        assert_eq!(spinner_step(1.37, 1.0, 0.0, true, egui::Modifiers::SHIFT, &[], &pt), 11.37);
+        assert_eq!(spinner_step(0.37, 1.0, 0.0, false, egui::Modifiers::NONE, &[], &pt), 0.0);
+    }
+
+    /// A plain click on the spinner stops at each stop; Shift and Ctrl/Cmd steps do not.
+    #[test]
+    fn a_plain_spinner_step_stops_at_the_stops() {
+        let stops = [0.25, 0.5, 0.75, 1.0, 2.0, 10.0, 20.0];
+        let plain = egui::Modifiers::NONE;
+        assert_eq!(spinner_step(0.52, 1.0, 0.0, false, plain, &stops, &pt), 0.5);
+        assert_eq!(spinner_step(0.52, 1.0, 0.0, true, plain, &stops, &pt), 0.75);
+        assert_eq!(spinner_step(0.1, 1.0, 0.0, false, plain, &stops, &pt), 0.0);
+        assert_eq!(spinner_step(14.0, 1.0, 0.0, true, plain, &stops, &pt), 15.0);
+        assert_eq!(spinner_step(14.0, 1.0, 0.0, false, egui::Modifiers::SHIFT, &stops, &pt), 4.0);
+        assert_eq!(spinner_step(0.52, 1.0, 0.0, true, egui::Modifiers::COMMAND, &stops, &pt), 0.6);
+    }
+
+    /// A stop the spinner's text shows as the value counts as reached: 2.004 pt and the 2 pt stop
+    /// both show as `0.167 p`, so a click down goes on to 1 pt.
+    #[test]
+    fn a_spinner_stop_shown_as_the_value_is_passed() {
+        let pc = |v: f64| Unit::Picas.format(v);
+        assert_eq!(spinner_step(2.004, 1.0, 0.0, false, egui::Modifiers::NONE, &[1.0, 2.0, 3.0], &pc), 1.0);
+        assert_eq!(spinner_step(2.004, 1.0, 0.0, true, egui::Modifiers::NONE, &[1.0, 2.0, 3.0], &pc), 3.0);
+    }
+}
+
+#[cfg(test)]
+mod step_through_tests {
+    use super::*;
+
+    /// Each step goes to the nearer of the next whole step and the next stop in its direction.
+    #[test]
+    fn a_step_goes_to_the_nearer_of_the_next_multiple_and_the_next_stop() {
+        let stops = [0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 10.0, 20.0, 100.0];
+        for (v, n, want) in [
+            (0.52, -1.0, 0.5),
+            (0.51, -1.0, 0.5),
+            (0.4, -1.0, 0.25),
+            (0.52, 1.0, 0.75),
+            (0.1, 1.0, 0.25),
+            (0.1, -1.0, 0.0),
+            (0.25, -1.0, 0.0),
+            (0.75, -1.0, 0.5),
+            (1.0, -1.0, 0.75),
+            (1.0, 1.0, 2.0),
+            (1.5, -1.0, 1.0),
+            (14.0, 1.0, 15.0),
+            (14.0, -1.0, 13.0),
+            (14.5, 1.0, 15.0),
+            (0.4, -2.0, 0.0),
+            (0.4, 3.0, 1.0),
+            (100.0, 1.0, 101.0),
+            (0.52, 0.0, 0.52),
+        ] {
+            let got = step_through(v, 1.0, n, &stops, within_a_millionth(1.0));
+            assert!((got - want).abs() < 1e-9, "{v} × {n}: {got}");
+        }
+    }
+
+    /// A value a float error away from a stop moves on to the next one.
+    #[test]
+    fn a_value_next_to_a_stop_moves_past_it() {
+        assert_eq!(step_through(0.5 + 1e-9, 1.0, -1.0, &[0.25, 0.5], within_a_millionth(1.0)), 0.25);
+        assert_eq!(step_through(0.5 - 1e-9, 1.0, 1.0, &[0.5, 0.75], within_a_millionth(1.0)), 0.75);
+    }
+
+    /// A stop shown with the same text as the value moves on to the next one: 2 pt shows as
+    /// `0.167 p`. A stop shown differently is still reached: `0.016 in` goes down to `0.0156 in`.
+    #[test]
+    fn a_stop_shown_as_the_value_moves_past_it() {
+        let shown = |unit: Unit| move |a: f64, b: f64| unit.number(unit.to_pt(a)) == unit.number(unit.to_pt(b));
+        let picas = [1.0 / 12.0, 2.0 / 12.0, 3.0 / 12.0];
+        assert_eq!(step_through(0.167, 1.0, -1.0, &picas, shown(Unit::Picas)), 1.0 / 12.0);
+        assert_eq!(step_through(0.083, 1.0, 1.0, &picas, shown(Unit::Picas)), 2.0 / 12.0);
+        assert_eq!(step_through(0.016, 1.0, -1.0, &[0.0078, 0.0156], shown(Unit::Inches)), 0.0156);
+        // The next whole step shown as the value is passed too: 2.0004 pt shows as `2 pt`.
+        assert_eq!(step_through(2.0004, 1.0, -1.0, &[1.0, 2.0], shown(Unit::Points)), 1.0);
+        assert_eq!(step_through(2.0004, 1.0, -1.0, &[], shown(Unit::Points)), 1.0);
     }
 }
 
@@ -329,9 +564,9 @@ mod step_to_multiple_tests {
 mod decimal_point_tests {
     use super::*;
 
-    /// A decimal comma reads as a point, in a length, with arithmetic and in a percentage; text
-    /// with a point keeps its commas and is refused as before, and so does a thousands comma
-    /// (#3837).
+    /// A decimal comma reads as a point, in a length, with arithmetic and in a percentage, next to
+    /// numbers written with a point too (#5684); a number with both separators is refused, and so
+    /// is a thousands comma (#3837).
     #[test]
     fn a_decimal_comma_reads_as_a_point() {
         let mm = |s: &str| Unit::Millimeters.parse(&decimal_point(s)).map(|pt| Unit::Millimeters.from_pt(pt));
@@ -348,7 +583,55 @@ mod decimal_point_tests {
             let got = mm(text).unwrap_or(f64::NAN);
             assert!((got - want).abs() < 1e-9, "{text} is a decimal: {got}");
         }
-        assert_eq!(share_of(&decimal_point("12,5%"), 200.0), Some(25.0));
+        // Each number reads its own separator: a comma typed after a value shown with a point
+        // (#5684). A number with both separators is refused.
+        for (text, want) in [("100,5-20", 80.5), ("100-0,5", 99.5), ("10,5*2", 21.0), ("100.5 mm-0,5", 100.0), ("0,5+100.25", 100.75)] {
+            let got = mm(text).unwrap_or(f64::NAN);
+            assert!((got - want).abs() < 1e-9, "{text}: {got}");
+        }
+        for both in ["1.234,5", "1,234.5", "1.5,5-2"] {
+            assert_eq!(mm(both), None, "{both}: a point and a comma in one number");
+        }
+        assert_eq!(share_of("12,5%", 200.0), Some(25.0));
+        assert_eq!(share_of("1,000%", 200.0), None, "1,000% reads as thousands: refused, not 1%");
+    }
+}
+
+#[cfg(test)]
+mod field_number_tests {
+    use super::*;
+
+    /// Kerning drops one pair of parentheses around its whole text, so its automatic value `(12)`
+    /// reads as 12. Parentheses inside the text are refused rather than dropped, which would read
+    /// `(10+5)*2` as `10+5*2`, and fields without the Kerning flag refuse parentheses too.
+    #[test]
+    fn only_kerning_drops_one_pair_of_parentheses_around_the_text() {
+        assert_eq!(field_number("(12)", "", true), Some(12.0));
+        assert_eq!(field_number(" (-25) ", "", true), Some(-25.0));
+        assert_eq!(field_number("(10+5)", "", true), Some(15.0));
+        assert_eq!(field_number("12", "", true), Some(12.0));
+        for text in ["(10+5)*2", "2*(10+5)", "(10)+(5)", "((12))", "(12", "12)"] {
+            assert_eq!(field_number(text, "", true), None, "{text}");
+        }
+        for text in ["(12)", "(10+5)*2"] {
+            assert_eq!(field_number(text, "", false), None, "{text} without the Kerning flag");
+        }
+        assert_eq!(field_number("45*2°", "°", false), Some(90.0));
+        assert_eq!(field_number("50% / 2", "%", false), Some(25.0));
+    }
+
+    /// A thousands comma is refused inside Kerning's pair of parentheses and before `%` or the
+    /// suffix, as it is in plain text, rather than read as a decimal comma (`(1,000)` as 1).
+    #[test]
+    fn a_thousands_comma_is_refused_inside_parentheses_and_before_a_suffix() {
+        for text in ["(1,000)", " (-1,000) ", "(12,500)"] {
+            assert_eq!(field_number(text, "", true), None, "{text}");
+        }
+        assert_eq!(field_number("1,000%", "%", false), None);
+        assert_eq!(field_number("1,000°", "°", false), None);
+        assert_eq!(field_number("(1,5)", "", true), Some(1.5));
+        assert_eq!(field_number("(0,125)", "", true), Some(0.125));
+        assert_eq!(field_number("12,5%", "%", false), Some(12.5));
     }
 }
 
@@ -359,12 +642,43 @@ mod menu_room_tests {
     #[test]
     fn menu_stops_above_the_bottom_bars() {
         // Window 1000 pt tall, bars start at 948: a menu opening at y = 100 gets 836 pt, not 888.
-        assert_eq!(menu_room(948.0, 100.0), 836.0);
+        assert_eq!(menu_room(948.0, 100.0, 980.0), 836.0);
     }
 
     #[test]
     fn menu_keeps_a_minimum_height() {
-        assert_eq!(menu_room(300.0, 290.0), 120.0);
+        assert_eq!(menu_room(300.0, 290.0, 280.0), 120.0);
+    }
+
+    /// A native panel window can be 100 pt tall, shorter than the minimum: the list then takes the
+    /// whole window, so its last items can scroll into view.
+    #[test]
+    fn a_window_shorter_than_the_minimum_limits_the_menu() {
+        assert_eq!(menu_room(100.0, 24.0, 92.0), 92.0);
+    }
+
+    /// The floor one window records does not reach a menu in another window of the same context.
+    #[test]
+    fn the_menu_floor_applies_in_the_window_that_recorded_it() {
+        let ctx = egui::Context::default();
+        let frame = |viewport_id: egui::ViewportId, height: f32, floor: Option<f32>| {
+            let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400.0, height)));
+            let mut seen = 0.0;
+            let viewports = std::iter::once((viewport_id, egui::ViewportInfo::default())).collect();
+            let mut full = ctx.run_ui(egui::RawInput { viewport_id, viewports, screen_rect, ..Default::default() }, |ui| {
+                if let Some(y) = floor {
+                    set_menu_floor(ui.ctx(), y);
+                }
+                seen = dropdowns::menu_floor(ui.ctx());
+            });
+            full.textures_delta.clear();
+            seen
+        };
+        assert_eq!(frame(egui::ViewportId::ROOT, 1000.0, Some(948.0)), 948.0, "the main window stops at its bottom bars");
+        let panel = egui::ViewportId::from_hash_of("panel window");
+        assert_eq!(frame(panel, 240.0, None), 240.0, "a shorter panel window stops at its own bottom edge");
+        assert_eq!(frame(panel, 1400.0, None), 1400.0, "and a taller one too");
+        assert_eq!(frame(egui::ViewportId::ROOT, 1000.0, None), 948.0, "the main window keeps its floor");
     }
 }
 
@@ -399,6 +713,62 @@ mod gradient_chip_tests {
         let colors = gradient_chip_colors(&paint(GradientKind::Radial, 0.0), 20.0, 20.0, 4, 4);
         assert_eq!(colors[2 * 5 + 2], Color32::WHITE);
         assert_eq!(colors[0], Color32::BLACK);
+    }
+
+    #[test]
+    fn freeform_chip_mixes_points_in_the_model_they_share() {
+        use vectorcraft_color::{Color, Freeform, FreeformPoint};
+        use vectorcraft_geom::kurbo::Point;
+        let chip = |a: Color, b: Color| {
+            let p = |x, c| FreeformPoint::new(Point::new(x, 10.0), c);
+            let mut gp = paint(GradientKind::Freeform, 0.0);
+            gp.freeform = Some(Freeform { points: vec![p(0.0, a), p(20.0, b)], ..Default::default() });
+            gradient_chip_colors(&gp, 20.0, 20.0, 4, 4)[2 * 5 + 2]
+        };
+        let near = |got: Color32, want: [u8; 4]| [got.r(), got.g(), got.b()].iter().zip(want).all(|(g, w)| g.abs_diff(w) <= 3);
+        let got = chip(Color::cmyk(1.0, 0.0, 0.0, 0.0), Color::cmyk(0.0, 0.0, 0.0, 1.0));
+        let want = Color::cmyk(0.5, 0.0, 0.0, 0.5).to_rgba8(1.0);
+        assert!(near(got, want), "CMYK: {got:?} vs {want:?}");
+        let got = chip(Color::lab(90.0, -60.0, 40.0), Color::lab(30.0, 60.0, -40.0));
+        let want = Color::lab(60.0, 0.0, 0.0).to_rgba8(1.0);
+        assert!(near(got, want), "Lab: {got:?} vs {want:?}");
+    }
+
+    /// At a position and display scale that fall between pixels, the gradient chip covers the same
+    /// pixel rows as a colour or None chip beside it (#3826). Filled rectangles are drawn on whole
+    /// pixels, so the toolbar's Gradient button sat up to half a pixel off its neighbors.
+    #[test]
+    fn gradient_chip_lines_up_with_a_solid_chip() {
+        let ctx = egui::Context::default();
+        ctx.set_pixels_per_point(1.5);
+        // Without anti-aliasing, a filled rectangle's mesh is exactly the rectangle it fills.
+        ctx.tessellation_options_mut(|o| o.feathering = false);
+        let chip = |x: f32| Rect::from_min_size(pos2(x, 40.3), vec2(11.0, 11.0));
+        let mut shapes = Vec::new();
+        for _ in 0..2 {
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+                paint_chip(ui, chip(10.2), &Paint::solid(Color::BLACK));
+                gradient_chip(ui, chip(23.2), &paint(GradientKind::Linear, 0.0));
+            });
+            out.textures_delta.clear();
+            assert_eq!(out.pixels_per_point, 1.5);
+            shapes = out.shapes;
+        }
+        let bounds = |shape: egui::epaint::ClippedShape| {
+            let mut r = Rect::NOTHING;
+            for p in ctx.tessellate(vec![shape], 1.5) {
+                if let egui::epaint::Primitive::Mesh(m) = p.primitive {
+                    m.vertices.iter().for_each(|v| r.extend_with(v.pos));
+                }
+            }
+            r
+        };
+        let n = shapes.len();
+        assert!(n >= 2, "{n} shapes");
+        let gradient = bounds(shapes.remove(n - 1));
+        let solid = bounds(shapes.remove(n - 2));
+        assert_eq!((gradient.top(), gradient.bottom()), (solid.top(), solid.bottom()), "gradient {gradient:?}, solid {solid:?}");
+        assert_eq!(gradient, egui::emath::GuiRounding::round_to_pixels(chip(23.2), 1.5));
     }
 }
 

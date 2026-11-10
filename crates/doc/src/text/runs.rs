@@ -1,5 +1,5 @@
 use super::char_style::CharStyle;
-use super::*;
+use super::{Affine, Deserialize, PathData, Point, Rect, Serialize, Vec2, yes};
 
 /// A named character or paragraph style: the attributes it sets (a subset of [`CharStyle`] or
 /// [`ParaStyle`] fields, by their serialized names). Text using it records the name.
@@ -141,6 +141,44 @@ pub(super) fn reverse_from_end(path: &mut PathData) {
         if sp.closed && !sp.anchors.is_empty() {
             sp.anchors.rotate_right(1);
         }
+    }
+}
+
+/// The anti-aliasing method of a type object (Character panel › Anti-aliasing Method): how the
+/// edges of its characters are drawn when the type is drawn as pixels (the canvas, raster exports,
+/// rasterizing). SVG, PDF and EPS export ignore it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum TypeAntiAlias {
+    /// Hard edges: a pixel takes the type's color where the type covers at least half of it, and
+    /// nothing elsewhere.
+    None,
+    /// Each edge pixel shows the share of it the type covers.
+    #[default]
+    Sharp,
+    /// An edge pixel covered by a share `c` shows `2c - 0.5`, between 0 and 1: edges about half as
+    /// wide as Sharp's.
+    Crisp,
+    /// An edge pixel covered by a share `c` shows `2c`, at most 1: heavier type.
+    Strong,
+}
+
+impl TypeAntiAlias {
+    pub const ALL: [Self; 4] = [Self::None, Self::Sharp, Self::Crisp, Self::Strong];
+
+    /// The id used in command params and files (`none`, `sharp`, `crisp`, `strong`).
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Sharp => "sharp",
+            Self::Crisp => "crisp",
+            Self::Strong => "strong",
+        }
+    }
+
+    /// The method an id names.
+    pub fn from_id(id: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|a| a.id() == id)
     }
 }
 

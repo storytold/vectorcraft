@@ -5,14 +5,16 @@
 //! object updates live; the renderer doesn't paint the editing layer (the mask is seen through its
 //! effect, as in the reference app). Leaving the mode removes the layer, and saving or exporting
 //! never writes it ([`Document::without_edit_modes`]). Meanwhile the Transparency panel's commands
-//! act on the masked object (see `opacitymask::transparency_targets`).
+//! act on the masked object (see `opacitymask::transparency_targets`). Mask editing is not entered
+//! in isolation mode or pattern editing mode ([`can_edit_mask`]), and neither mode is entered while
+//! a mask is edited ([`outside_mask_editing`]).
 
 use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, MaskEdit, Node, NodeId, NodeKind, Selection};
 
-use super::*;
+use super::{CommandSpec, EngineError, Result, Session, bad, cmd, has_doc, object_param, switch_or};
 
 /// Name of the temporary mask-editing layer.
 pub const MASK_EDIT_LAYER: &str = "Opacity Mask Editing";
@@ -27,8 +29,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Opacity Mask",
             ["Window", "Transparency"],
             None,
-            "{id?} edit the mask art of `id` (default: the first selected object with a mask) in place, as clicking the mask thumbnail in the Transparency panel does → {layer}",
-            has_doc,
+            "{id?} edit the mask art of `id` (default: the first selected object with a mask) in place, as clicking the mask thumbnail in the Transparency panel does; refused in isolation mode and in pattern editing mode → {layer}",
+            can_enter,
             enter
         ),
         cmd!(
@@ -45,11 +47,50 @@ pub fn specs() -> Vec<CommandSpec> {
             "View Opacity Mask",
             ["Window", "Transparency"],
             None,
-            "{on?: bool (default: toggle), id?} show only the opacity mask of `id` (default: the object whose mask is edited, else the first selected object with a mask) on the canvas, as greyscale coverage, and edit it, as Alt-clicking the mask thumbnail does; off shows the artwork again (still editing) → {on, id}",
-            has_doc,
+            "{on?: bool (default: toggle), id?} show only the opacity mask of `id` (default: the object whose mask is edited, else the first selected object with a mask) on the canvas, as greyscale coverage, and edit it, as Alt-clicking the mask thumbnail does; off shows the artwork again (still editing); refused in isolation mode and in pattern editing mode → {on, id}",
+            can_edit_mask,
             view_mask
         ),
     ]
+}
+
+/// Is the document in isolation mode? Pattern editing mode and opacity mask editing isolate their
+/// art too, and do not count as isolation mode here.
+pub(crate) fn in_isolation_mode(st: &crate::DocState) -> bool {
+    st.isolation.is_some() && st.doc.pattern_edit.is_none() && st.doc.mask_edit.is_none()
+}
+
+/// Why opacity mask editing is not entered now, if it is not: in isolation mode
+/// ([`in_isolation_mode`]) and in pattern editing mode, whose tile layer the mask editing layer
+/// would replace as the isolated layer.
+pub(crate) fn mask_editing_refused(st: &crate::DocState) -> Option<&'static str> {
+    if st.doc.pattern_edit.is_some() {
+        Some("finish editing the pattern first")
+    } else if in_isolation_mode(st) {
+        Some("exit isolation mode first")
+    } else {
+        None
+    }
+}
+
+/// A document is open and opacity mask editing can be entered ([`mask_editing_refused`]).
+pub(crate) fn can_edit_mask(s: &Session) -> std::result::Result<(), String> {
+    let st = s.active().ok_or("no document open")?;
+    mask_editing_refused(st).map_or(Ok(()), |why| Err(why.into()))
+}
+
+/// Edit Opacity Mask: mask editing can be entered ([`can_edit_mask`]), and outside it no object of a
+/// dynamic symbol instance's art is selected, since its instance's mask is not edited from it.
+fn can_enter(s: &Session) -> std::result::Result<(), String> {
+    can_edit_mask(s)?;
+    if s.active().is_some_and(|st| st.doc.mask_edit.is_some()) { Ok(()) } else { super::edit::no_symbol_part(s) }
+}
+
+/// A document is open and no opacity mask is being edited: isolation mode and pattern editing mode
+/// are not entered while an opacity mask is edited.
+pub(crate) fn outside_mask_editing(s: &Session) -> std::result::Result<(), String> {
+    let st = s.active().ok_or("no document open")?;
+    if st.doc.mask_edit.is_some() { Err("stop editing the opacity mask first".into()) } else { Ok(()) }
 }
 
 /// Mask art made of `children`: a plain group, so the mask keeps one art node. Editing spreads it
@@ -83,12 +124,17 @@ fn enter(s: &mut Session, p: &Value) -> Result<Value> {
     if st.doc.mask_edit.is_some() {
         return Err(bad(C, "already editing an opacity mask"));
     }
-    let id = id_param(p, "id").or_else(|| first_masked(st)).ok_or_else(|| bad(C, "select an object with an opacity mask"))?;
+    let given = object_param(p, "id", C)?;
+    if given.is_none() {
+        super::edit::refuse_symbol_part(s)?;
+    }
+    let id = given.or_else(|| first_masked(st)).ok_or_else(|| bad(C, "select an object with an opacity mask"))?;
     let layer = start(s, id)?;
     Ok(json!({ "layer": layer.0 }))
 }
 
-/// The first selected object with an opacity mask.
+/// The first selected object with an opacity mask. Callers refuse first while an object of a
+/// dynamic symbol instance's art is selected ([`super::edit::refuse_symbol_part`]).
 fn first_masked(st: &crate::DocState) -> Option<NodeId> {
     st.selection.subjects().iter().copied().find(|i| st.doc.node(*i).is_some_and(|n| n.extras().mask.is_some()))
 }
@@ -102,15 +148,19 @@ fn start(s: &mut Session, id: NodeId) -> Result<NodeId> {
 
 fn view_mask(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "transparency.viewOpacityMask";
+    let given = object_param(p, "id", C)?;
     let st = s.doc()?;
     let editing = st.doc.mask_edit.map(|m| m.object);
-    if !p.get("on").and_then(Value::as_bool).unwrap_or(st.shown_mask().is_none()) {
+    if !switch_or(p, "on", st.shown_mask().is_none(), C)? {
         let st = s.doc_mut()?;
         let id = st.mask_view.take();
         st.revision += 1;
         return Ok(json!({ "on": false, "id": id.map(|i| i.0) }));
     }
-    let id = id_param(p, "id").or(editing).or_else(|| first_masked(st)).ok_or_else(|| bad(C, "select an object with an opacity mask"))?;
+    if given.is_none() && editing.is_none() {
+        super::edit::refuse_symbol_part(s)?;
+    }
+    let id = given.or(editing).or_else(|| first_masked(st)).ok_or_else(|| bad(C, "select an object with an opacity mask"))?;
     match editing {
         Some(e) if e != id => return Err(bad(C, "already editing another object's opacity mask")),
         Some(_) => {}
@@ -147,8 +197,11 @@ pub(crate) fn begin(d: &mut Document, sel: &mut Selection, id: NodeId) -> Result
     Ok(layer)
 }
 
-fn leave(s: &mut Session, _: &Value) -> Result<Value> {
+/// Leave mask editing in one undo step (`transparency.stopEditingOpacityMask`). `object.exitIsolation` runs it too
+/// while a mask is edited.
+pub(crate) fn leave(s: &mut Session, _: &Value) -> Result<Value> {
     let Some(me) = s.doc()?.doc.mask_edit else { return Err(bad("transparency.stopEditingOpacityMask", "not editing an opacity mask")) };
+    s.end_text_edit();
     s.edit("Stop Editing Opacity Mask", |d, sel| {
         finish(d, sel);
         Ok(())

@@ -10,9 +10,9 @@
 
 use std::f64::consts::PI;
 
-use kurbo::{BezPath, ParamCurve, ParamCurveNearest, PathEl, PathSeg, Point, Vec2};
+use kurbo::{BezPath, ParamCurve, ParamCurveNearest, PathEl, PathSeg, Point, Rect, Vec2};
 use vectorcraft_doc::{LineCap, LineJoin, StrokeLayer, WidthProfile};
-use vectorcraft_pathops::fit_cubics;
+use vectorcraft_pathops::fit_cubics_through;
 
 use super::{kink, segments, subpaths, tangent, unit};
 
@@ -22,19 +22,80 @@ pub fn width_outline(bp: &BezPath, width: f64, profile: &WidthProfile, st: &Stro
     outline_spans(bp, &[], width, profile, st, tol)
 }
 
+/// Outline only flattened segments near `near`, retaining each run's original fractions of its
+/// whole subpath for the width profile. `None` means no segments could be omitted.
+pub(super) fn width_outline_near(bp: &BezPath, width: f64, profile: &WidthProfile, st: &StrokeLayer, tol: f64, near: Rect) -> Option<BezPath> {
+    let ctx = Ctx::new(width, profile, st, tol);
+    let mut out = BezPath::new();
+    let mut cut = false;
+    for (r, closed) in subpaths(bp) {
+        if closed {
+            return None;
+        }
+        let segs = segments(&bp.elements()[r]);
+        let flat = flatten(&segs, closed, ctx.tol);
+        let n = flat.pts.len();
+        if n < 2 {
+            continue;
+        }
+        let count = n - 1;
+        let mut lengths = Vec::with_capacity(count);
+        let mut kept = Vec::with_capacity(count);
+        let mut total = 0.0;
+        for i in 0..count {
+            let (a, b) = (flat.pts[i], flat.pts[i + 1]);
+            let len = a.distance(b);
+            if !len.is_finite() {
+                return None;
+            }
+            total += len;
+            lengths.push(len);
+            kept.push(!(a.x.max(b.x) < near.x0 || a.x.min(b.x) > near.x1 || a.y.max(b.y) < near.y0 || a.y.min(b.y) > near.y1));
+        }
+        if kept.iter().all(|v| *v) {
+            ctx.subpath(&mut out, &flat, &segs, closed, (0.0, 1.0));
+            continue;
+        }
+        cut = true;
+        if total <= 1e-12 {
+            continue;
+        }
+        let mut walked = 0.0;
+        let mut run: Option<Flat> = None;
+        let mut from = 0.0;
+        for i in 0..count {
+            if kept[i] {
+                if run.is_none() {
+                    from = walked / total;
+                    run = Some(Flat { pts: vec![flat.pts[i]], corner: vec![flat.corner[i]], seg_of: vec![], param: vec![] });
+                }
+                if let Some(part) = run.as_mut() {
+                    part.pts.push(flat.pts[i + 1]);
+                    part.corner.push(flat.corner[i + 1]);
+                    part.seg_of.push(flat.seg_of[i]);
+                    part.param.push(flat.param[i]);
+                }
+            } else if let Some(part) = run.take()
+                && part.pts.len() > 1
+            {
+                ctx.subpath(&mut out, &part, &segs, false, (from, walked / total));
+            }
+            walked += lengths[i];
+        }
+        if let Some(part) = run
+            && part.pts.len() > 1
+        {
+            ctx.subpath(&mut out, &part, &segs, false, (from, walked / total));
+        }
+    }
+    cut.then_some(out)
+}
+
 /// [`width_outline`] of pieces of longer subpaths: subpath `i` of `bp` covers the fractions
 /// `spans[i]` of the subpath it was cut from (see [`Dashed::spans`](super::Dashed::spans));
 /// subpaths without a span are whole.
 pub(super) fn outline_spans(bp: &BezPath, spans: &[(f64, f64)], width: f64, profile: &WidthProfile, st: &StrokeLayer, tol: f64) -> BezPath {
-    let ctx = Ctx {
-        half: width / 2.0,
-        profile,
-        cap: st.cap,
-        join: st.join,
-        miter_limit: st.miter_limit,
-        tol: tol.max(1e-4),
-        uniform: profile.points.first().is_some_and(|f| profile.points.iter().all(|p| p.1 == f.1 && p.2 == f.2)),
-    };
+    let ctx = Ctx::new(width, profile, st, tol);
     let mut out = BezPath::new();
     for (i, (r, closed)) in subpaths(bp).into_iter().enumerate() {
         let segs = segments(&bp.elements()[r]);
@@ -329,7 +390,19 @@ struct Vertex {
     corner: bool,
 }
 
-impl Ctx<'_> {
+impl<'a> Ctx<'a> {
+    fn new(width: f64, profile: &'a WidthProfile, st: &StrokeLayer, tol: f64) -> Self {
+        Self {
+            half: width / 2.0,
+            profile,
+            cap: st.cap,
+            join: st.join,
+            miter_limit: st.miter_limit,
+            tol: tol.max(1e-4),
+            uniform: profile.points.first().is_some_and(|f| profile.points.iter().all(|p| p.1 == f.1 && p.2 == f.2)),
+        }
+    }
+
     fn subpath(&self, out: &mut BezPath, flat: &Flat, segs: &[PathSeg], closed: bool, span: (f64, f64)) {
         let (pts, corner, dirs) = densify(flat, segs, closed, self.profile, span);
         let n = pts.len();
@@ -716,8 +789,9 @@ fn smooth_run(out: &mut BezPath, run: &[Point], cyclic: bool, tol: f64) {
     };
     // Fit tighter than the flattening tolerance: the fit's error is the whole outline's error,
     // and a least-squares fit may sit on one side of the sampled edge, which would otherwise
-    // shift a profile's area visibly.
-    let cubics = fit_cubics(&pts, t0, t1, tol * 0.1);
+    // shift a profile's area visibly. The points lie on the outline's own curve, so the fit follows
+    // their curve between them rather than the chords through them.
+    let cubics = fit_cubics_through(&pts, t0, t1, tol * 0.1);
     if cubics.is_empty() {
         out.line_to(run[n - 1]);
         return;

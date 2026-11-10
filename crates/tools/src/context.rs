@@ -1,4 +1,14 @@
-use super::*;
+use super::{Document, NodeId, Paint, Point, Selection, Unit, Vec2, distort, select, xform};
+
+/// Which objects a Selection-tool marquee reaches before E reverses its rule for this drag.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum MarqueeMode {
+    #[default]
+    Touching,
+    Enclosed,
+    /// Screen-right takes enclosed objects; screen-left takes touched objects.
+    Directional,
+}
 
 /// Paint defaults for new art (the fill/stroke proxy) and the rest of the new-art template.
 #[derive(Clone, Debug, PartialEq)]
@@ -63,6 +73,50 @@ impl ScreenFrame {
     }
 }
 
+/// The Character panel's Snap to Glyph options (`view.snapToGlyph.options`): which guides View ›
+/// Snap to Glyph gives. All on by default.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct GlyphSnap {
+    /// The baseline of a single line of type.
+    pub baseline: bool,
+    /// The x-height: the top of its lowercase letters.
+    pub x_height: bool,
+    /// Glyph Bounds: each glyph's top, bottom, left and right edges.
+    pub bounds: bool,
+    /// Proximity Guides: across the baseline at both edges of each character's width.
+    pub proximity: bool,
+    /// Angular Guides: along a glyph's slanted straight segments, and every guide of rotated type
+    /// (which runs at its angle).
+    pub angular: bool,
+    /// Anchor Point: the anchor points of each glyph's outline.
+    pub anchors: bool,
+}
+
+impl Default for GlyphSnap {
+    fn default() -> Self {
+        Self { baseline: true, x_height: true, bounds: true, proximity: true, angular: true, anchors: true }
+    }
+}
+
+impl GlyphSnap {
+    /// These options with the ones `p` names (camelCase booleans), or why `p` can't set them.
+    pub fn merged(self, p: &serde_json::Value) -> Result<Self, String> {
+        let mut o = serde_json::to_value(self).map_err(|e| e.to_string())?;
+        match (p, o.as_object_mut()) {
+            (serde_json::Value::Null, _) => {}
+            (serde_json::Value::Object(given), Some(cur)) => {
+                for (k, v) in given {
+                    let slot = cur.get_mut(k).ok_or_else(|| format!("unknown Snap to Glyph option `{k}`"))?;
+                    *slot = serde_json::Value::Bool(v.as_bool().ok_or_else(|| format!("`{k}` must be true or false"))?);
+                }
+            }
+            _ => return Err("the Snap to Glyph options must be an object".into()),
+        }
+        serde_json::from_value(o).map_err(|e| e.to_string())
+    }
+}
+
 /// Read-only context a tool sees.
 pub struct ToolContext<'a> {
     pub doc: &'a Document,
@@ -76,6 +130,8 @@ pub struct ToolContext<'a> {
     pub selection: &'a Selection,
     /// Screen pixels per document point.
     pub zoom: f64,
+    /// Selection-tool marquee rule; other selection tools keep their own rules.
+    pub marquee_mode: MarqueeMode,
     pub isolation: Option<NodeId>,
     pub paint: &'a PaintDefaults,
     pub outline: bool,
@@ -96,8 +152,11 @@ pub struct ToolContext<'a> {
     pub snap_tangent: bool,
     /// View → Snapping → Snap to Perpendicular: likewise where it meets a nearby segment square.
     pub snap_perpendicular: bool,
-    /// View → Snap to Glyph: drawn points snap to live-text baselines and glyph bounds (with Smart Guides).
+    /// View → Snap to Glyph: drawn points snap to live-text glyph bounds, and on a single line of type
+    /// to its baseline, x-height, character widths and glyph anchor points (with Smart Guides).
     pub snap_to_glyph: bool,
+    /// Which of Snap to Glyph's guides there are (the Character panel's Snap to Glyph options).
+    pub glyph_snap: GlyphSnap,
     /// View → Show Corner Widget: paths show draggable Live Corners widgets in their corners.
     pub corner_widgets: bool,
     /// Which paint proxy is in front (true = Fill): the one the Gradient tool edits.
@@ -119,6 +178,10 @@ pub struct ToolContext<'a> {
     pub raster_sample: u32,
     /// General → Use Preview Bounds: the bounding box measures visual bounds (strokes included).
     pub preview_bounds: bool,
+    /// Type › Measure Type by Glyph Bounds: the bounding box measures each point type object
+    /// selected as an object (not inside a selected group) by the ink of its glyphs
+    /// ([`vectorcraft_effects::preview::Measure`]).
+    pub glyph_bounds: bool,
     /// The session's memo of the selection tools' measurements for the document as it is
     /// ([`select::PreviewMemo`]); without one they measure on every call.
     pub preview_memo: Option<&'a select::PreviewMemo>,
@@ -129,6 +192,10 @@ pub struct ToolContext<'a> {
     /// Clipboard Handling → When pasting text: Keep Plain Text. Text pasted while typing takes
     /// the style at the caret, even the text the Type tool copied with its formatting.
     pub paste_plain_text: bool,
+    /// The text given to [`crate::Tool::text_input`] was typed on the keyboard (a key or an IME
+    /// commit), not inserted from the Glyphs panel or a paste: a lone typed `”` may then take the
+    /// document's opening quote ([`vectorcraft_doc::Quotes::typed_as_straight`]).
+    pub typed_from_keyboard: bool,
     /// View → Hide Slices: the Slice Selection tool can't pick hidden slices.
     pub slices_hidden: bool,
     /// View → Lock Slices: the Slice Selection tool leaves locked slices alone.
@@ -176,6 +243,9 @@ pub struct ToolContext<'a> {
     /// Type → Fill New Type Objects With Placeholder Text: type the Type tools place starts with
     /// placeholder text, selected.
     pub placeholder_text: bool,
+    /// Type → Start Lists From Typed Markers: a list marker and a space typed at the start of a
+    /// paragraph start a list ([`crate::text::TypeTool`]).
+    pub typed_lists: bool,
     /// Smart Guides → Color: the smart guides' lines and labels (RGB).
     pub smart_guide_color: [u8; 3],
     /// Smart Guides → Alignment Guides: the lines along the edges and centres the art lines up
@@ -195,6 +265,9 @@ pub struct ToolContext<'a> {
     /// object shows how far the selection is from it, and over an empty part of an artboard how
     /// far it is from the artboard's edges ([`guides::distance_guides`]).
     pub distance_guides: bool,
+    /// Smart Guides → Snap to Last Location: a selection moved by dragging goes back to where the
+    /// move began while it is within Snapping Tolerance of it ([`guides::Targets::snap_back`]).
+    pub snap_to_last_location: bool,
     /// Smart Guides → Snapping Tolerance (screen pixels): how near a smart guide target pulls the
     /// pointer, a dragged edge or a drawn point.
     pub snapping_tolerance: f64,
@@ -206,9 +279,20 @@ pub struct ToolContext<'a> {
     pub screen: Option<ScreenFrame>,
     /// Where the Plane Switching Widget sits (Perspective Grid Options); None while it's hidden.
     pub plane_widget: Option<distort::perspective::widget::WidgetCorner>,
+    /// General › Use Precise Cursors, or Caps Lock while it is on: the drawing tools' pointers are
+    /// crosshairs ([`crate::Cursor::precise`]), and the Blob Brush and the Eraser show no tip outline.
+    pub precise_cursors: bool,
+    /// The objects of the Global Edit in progress (Select › Start Global Edit), the one it started
+    /// from first, each with its transform; empty while Global Edit is off.
+    pub global_edit: &'a [(NodeId, vectorcraft_geom::Affine)],
 }
 
 impl ToolContext<'_> {
+    /// How the bounding box measures the selection: [`Self::preview_bounds`] and
+    /// [`Self::glyph_bounds`].
+    pub fn bounds_measure(&self) -> vectorcraft_effects::preview::Measure {
+        vectorcraft_effects::preview::Measure { preview: self.preview_bounds, glyphs: self.glyph_bounds }
+    }
     /// Tolerance in document units for `px` screen pixels.
     pub fn tol(&self, px: f64) -> f64 {
         px / self.zoom.max(1e-9)
@@ -234,6 +318,20 @@ impl ToolContext<'_> {
     /// Star tool drag: outer (R1) and inner (R2) radii from the centre to the pointer.
     pub fn star_radii_label(&self, outer: f64, inner: f64) -> String {
         format!("R1: {}\nR2: {}", self.len(outer), self.len(inner))
+    }
+    /// The move an arrow key nudges by: General › Keyboard Increment (ten times with Shift),
+    /// along General › Constrain Angle's axes; `None` for other keys.
+    pub fn arrow_nudge(&self, key: crate::ToolKey, mods: crate::Mods) -> Option<Vec2> {
+        use crate::ToolKey;
+        let step = self.keyboard_increment * if mods.shift { 10.0 } else { 1.0 };
+        let d = match key {
+            ToolKey::Left => Point::new(-step, 0.0),
+            ToolKey::Right => Point::new(step, 0.0),
+            ToolKey::Up => Point::new(0.0, -step),
+            ToolKey::Down => Point::new(0.0, step),
+            _ => return None,
+        };
+        Some(vectorcraft_geom::constrain_axes(self.constrain_angle).map_or(d, |axes| axes * d).to_vec2())
     }
     /// A move label: `dX: …` over `dY: …`.
     pub fn offset_label(&self, dx: f64, dy: f64) -> String {

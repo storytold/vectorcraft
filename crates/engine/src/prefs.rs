@@ -1,4 +1,4 @@
-use super::*;
+use super::{Color, EyedropperOptions, PathfinderOptions, Value, cmd};
 
 /// Where new art goes (Illustrator's drawing modes, Shift+D cycles).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -8,6 +8,14 @@ pub enum DrawMode {
     Normal,
     Behind,
     Inside,
+}
+
+/// A saved Default Language as its tag: older preferences hold the language's name, and one the list
+/// no longer has reads as the default.
+fn language_tag<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<String, D::Error> {
+    let saved = <String as serde::Deserialize>::deserialize(d)?;
+    let tag = vectorcraft_doc::setup::char_language(&saved).ok().flatten();
+    Ok(tag.or_else(|| vectorcraft_doc::setup::LANGUAGES.first().map(|(_, t, _)| *t)).unwrap_or_default().to_string())
 }
 
 /// Application preferences (Edit → Preferences). Every field is reachable through `prefs.get` /
@@ -23,10 +31,30 @@ pub struct Prefs {
     pub disable_auto_add_delete: bool,
     pub use_precise_cursors: bool,
     pub show_tool_tips: bool,
+    /// Other Script… warns before it runs a chosen script.
+    pub show_external_script_warning: bool,
     pub anti_aliased_artwork: bool,
     pub select_same_tint_percent: bool,
     pub show_home_screen: bool,
     pub use_preview_bounds: bool,
+    /// Align panel menu › Align to Glyph Bounds › Point Text: Align and Distribute measure point
+    /// type by the ink of its glyphs instead of its em box.
+    pub align_glyph_bounds_point: bool,
+    /// Align panel menu › Align to Glyph Bounds › Area Text: the same for area type, instead of
+    /// its frame.
+    pub align_glyph_bounds_area: bool,
+    /// Preferences › Type › Glyph Bounds › Measure Type by Glyph Bounds (also in the Transform
+    /// panel menu): the bounding box, the Transform panel's, Control bar's and Properties panel's X,
+    /// Y, W and H, and `object.setBounds` measure each point type object selected as an object (not
+    /// inside a selected group) by the ink of its glyphs instead of its em box
+    /// ([`crate::Session::bounds_measure`]).
+    pub type_glyph_bounds: bool,
+    /// Artboard Options › Fade Region Outside Artboard: while the Artboard tool is active, the
+    /// canvas draws everything outside the artboards darker, the pasteboard and the art on it.
+    pub fade_region_outside_artboard: bool,
+    /// Artboard Options › Update While Dragging: the area outside the artboards stays darker while
+    /// the Artboard tool moves or resizes an artboard; off, it draws as usual until the drag ends.
+    pub artboard_update_while_dragging: bool,
     pub display_print_size: bool,
     pub double_click_to_isolate: bool,
     pub transform_pattern_tiles: bool,
@@ -34,14 +62,21 @@ pub struct Prefs {
     /// Scale Strokes & Effects.
     pub scale_strokes: bool,
     pub zoom_with_mouse_wheel: bool,
+    /// While Zoom with Mouse Wheel is off, Cmd/Ctrl-wheel scrolls sideways instead of zooming.
+    pub ctrl_wheel_scrolls_sideways: bool,
     /// A horizontal drag on a numeric field or its label steps its value (#400).
     pub scrub_numeric_fields: bool,
     /// A two-finger rotation on a Mac trackpad turns the view about the pointer once it reaches 5°.
     pub trackpad_rotate_view: bool,
+    /// A single-key tool shortcut held down chooses its tool until the key is let go, and then the
+    /// tool active before comes back; a quick press chooses the tool for good.
+    pub hold_tool_keys: bool,
     /// Offset for Paste / duplicate (Illustrator pastes to the view centre; we offset by this).
     pub paste_offset: f64,
     // Selection & Anchor Display
     pub selection_tolerance: f64,
+    /// Selection-tool marquee: touching (default), enclosed, or screen drag direction.
+    pub marquee_selection: String,
     pub object_selection_by_path_only: bool,
     pub snap_to_point_tolerance: f64,
     pub ctrl_click_selects_behind: bool,
@@ -72,6 +107,9 @@ pub struct Prefs {
     /// font is highlighted, in every document (on by default).
     pub highlight_substituted_fonts: bool,
     pub placeholder_text: bool,
+    /// Type › Start Lists From Typed Markers: a list marker and a space typed at the start of a
+    /// paragraph start a list (on by default). Off, they stay as typed text.
+    pub typed_lists: bool,
     // Units
     pub units_general: String,
     pub units_stroke: String,
@@ -84,6 +122,8 @@ pub struct Prefs {
     // Guides & Grid
     pub guide_color: String,
     pub guide_style: String,
+    /// Lock Guides by Default: the app starts with View › Guides › Lock Guides on.
+    pub lock_guides_by_default: bool,
     pub grid_color: String,
     pub grid_style: String,
     pub gridline_every: f64,
@@ -101,6 +141,7 @@ pub struct Prefs {
     pub measurement_labels: bool,
     pub spacing_guides: bool,
     pub distance_guides: bool,
+    pub snap_to_last_location: bool,
     pub snapping_tolerance: f64,
     pub snap_tangent: bool,
     pub snap_perpendicular: bool,
@@ -108,6 +149,9 @@ pub struct Prefs {
     pub show_slice_numbers: bool,
     pub slice_line_color: String,
     // Hyphenation
+    /// Default Language: the BCP 47 tag of the language new type takes when its document's language
+    /// is the default ([`vectorcraft_doc::setup::LANGUAGES`]).
+    #[serde(deserialize_with = "language_tag")]
     pub hyphenation_language: String,
     pub hyphenation_exceptions: String,
     /// Type › Options › Additional Fonts Folder: a folder (read with its subfolders) whose fonts
@@ -140,6 +184,10 @@ pub struct Prefs {
     /// acting as the title bar (tiling window managers, desktops that draw their own decorations).
     /// Read when the app starts. macOS always uses the system's.
     pub system_title_bar: bool,
+    /// Linux and the BSDs: draw the app bar as the title bar in sessions where the desktop draws
+    /// the frame (X11, Wayland compositors with server-side decorations, XWayland), as on GNOME.
+    /// Read when the app starts; System Title Bar and `VECTORCRAFT_TITLEBAR` set to `app`, `system` or `desktop` take precedence over it.
+    pub app_title_bar: bool,
     // Performance
     pub gpu_performance: bool,
     pub animated_zoom: bool,
@@ -156,9 +204,10 @@ pub struct Prefs {
     pub real_time_drawing: bool,
     /// Rasterizer worker threads; -1 = automatic.
     pub render_threads: i32,
-    /// Linux: `automatic` opens the window on the session's display server; `x11` opens it through
-    /// XWayland on a Wayland session, where dropped files arrive (#1151); `x11WithPen` opens it
-    /// through XWayland only when a pen is attached (#2028). Read when the app starts.
+    /// Linux: `automatic` opens the window on the session's display server, or through XWayland on
+    /// a Wayland session when a pen is attached (#4967); `x11` opens it through XWayland on a
+    /// Wayland session, where dropped files arrive (#1151); `x11WithPen` opens it through XWayland
+    /// only when a pen is attached (#2028). Read when the app starts.
     pub linux_display_server: String,
     // File Handling
     pub background_save: bool,
@@ -197,11 +246,24 @@ pub struct Prefs {
     /// Pathfinder panel › Pathfinder Options (`object.pathfinder.options`; a preference group, see
     /// [`cmd::prefscmds::PREF_GROUPS`]).
     pub pathfinder: PathfinderOptions,
+    /// Character panel › Show Snap to Glyph Options: which guides View › Snap to Glyph gives
+    /// (`view.snapToGlyph.options`; a preference group, see [`cmd::prefscmds::PREF_GROUPS`]).
+    pub glyph_snap: vectorcraft_tools::GlyphSnap,
     /// Edit → Transparency Flattener Presets: the user's presets (the built-in ones aren't stored).
     /// Not a `prefs.set` key or group (resetting the preferences keeps them): `flattener.presets.*`
     /// edit it.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub flattener_presets: Vec<cmd::FlattenerPreset>,
+    /// Image Trace panel › Manage Presets: the user's tracing presets (the built-in ones aren't
+    /// stored). Not a `prefs.set` key or group (resetting the preferences keeps them):
+    /// `imageTrace.presets.*` edit it.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub trace_presets: Vec<cmd::TracePreset>,
+    /// Gradient panel › Presets: the user's saved gradients (the built-in presets aren't stored).
+    /// A local library, not a Preferences dialog field: resetting the preferences keeps it;
+    /// `gradient.presets.*` edit it.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub gradient_presets: Vec<cmd::GradientPreset>,
     /// Width profiles saved to the Stroke panel's Profile list (`stroke.widthProfile.*`). Not a
     /// Preferences dialog field, so it has no [`cmd::prefscmds::PREF_SPECS`] row.
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -233,6 +295,10 @@ pub struct Prefs {
     // File Handling (continued)
     /// Where Save as Template and New from Template start ("" = `Documents/VectorCraft Templates`).
     pub templates_folder: String,
+    /// File Handling → Use System Defaults for Edit Original (#5236): Links panel › Edit Original
+    /// opens a linked file in the system's default app for it; off, in the app that made it
+    /// (PhotoCraft for a raster image, where it is installed; the system's app otherwise).
+    pub edit_original_system_defaults: bool,
     /// Open older native files as "<name> [Converted]" so Save asks for a new name.
     pub append_converted: bool,
     /// File Handling → Use Compression: native saves are gzip-compressed (`document.save
@@ -242,6 +308,12 @@ pub struct Prefs {
     /// Preferences dialog field: resetting the preferences keeps it; `webExport.presets.*` edit it.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub web_export_presets: Vec<cmd::webexport::WebPreset>,
+    /// The VectorCraft Options a native Save or Save As used last (Preview, Embed ICC Profiles,
+    /// Create PDF-Compatible File…; not the artboards it picked, nor Use Compression, which its
+    /// preference decides): `file.formatOptions` offers them for a document not yet saved as a
+    /// native file. Not a Preferences dialog field.
+    #[serde(skip_serializing_if = "serde_json::Map::is_empty")]
+    pub native_save_options: serde_json::Map<String, serde_json::Value>,
     /// Save for Web: the settings the dialog opens on (`webExport.settings`); none until set.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub web_export_settings: Option<cmd::webexport::WebSettings>,
@@ -302,20 +374,29 @@ impl Default for Prefs {
             disable_auto_add_delete: false,
             use_precise_cursors: false,
             show_tool_tips: true,
+            show_external_script_warning: true,
             anti_aliased_artwork: true,
             select_same_tint_percent: false,
             show_home_screen: true,
             use_preview_bounds: false,
+            align_glyph_bounds_point: false,
+            align_glyph_bounds_area: false,
+            type_glyph_bounds: false,
+            fade_region_outside_artboard: true,
+            artboard_update_while_dragging: true,
             display_print_size: false,
             double_click_to_isolate: true,
             transform_pattern_tiles: false,
             scale_corners: false,
             scale_strokes: false,
             zoom_with_mouse_wheel: false,
+            ctrl_wheel_scrolls_sideways: true,
             scrub_numeric_fields: true,
             trackpad_rotate_view: true,
+            hold_tool_keys: true,
             paste_offset: 10.0,
             selection_tolerance: 3.0,
+            marquee_selection: "touching".into(),
             object_selection_by_path_only: false,
             snap_to_point_tolerance: 2.0,
             ctrl_click_selects_behind: true,
@@ -343,6 +424,7 @@ impl Default for Prefs {
             highlight_alternate_glyphs: false,
             highlight_substituted_fonts: true,
             placeholder_text: true,
+            typed_lists: true,
             units_general: s("points"),
             units_stroke: s("points"),
             units_type: s("points"),
@@ -351,6 +433,7 @@ impl Default for Prefs {
             identify_objects_by: s("objectName"),
             guide_color: s("#4affff"),
             guide_style: s("lines"),
+            lock_guides_by_default: false,
             grid_color: s("#c8c8c8"),
             grid_style: s("lines"),
             gridline_every: 72.0,
@@ -367,12 +450,13 @@ impl Default for Prefs {
             measurement_labels: true,
             spacing_guides: true,
             distance_guides: true,
+            snap_to_last_location: false,
             snapping_tolerance: 4.0,
             snap_tangent: true,
             snap_perpendicular: true,
             show_slice_numbers: true,
             slice_line_color: s("#ff3f3f"),
-            hyphenation_language: s("English: USA"),
+            hyphenation_language: s("en-US"),
             hyphenation_exceptions: String::new(),
             fonts_folder: String::new(),
             plugins_folder: String::new(),
@@ -390,6 +474,7 @@ impl Default for Prefs {
             scale_cursor_with_ui: false,
             interface_language: s("auto"),
             system_title_bar: false,
+            app_title_bar: false,
             gpu_performance: true,
             animated_zoom: true,
             gpu_preference: s("automatic"),
@@ -423,7 +508,10 @@ impl Default for Prefs {
             },
             eyedropper: Default::default(),
             pathfinder: Default::default(),
+            glyph_snap: Default::default(),
             flattener_presets: vec![],
+            trace_presets: vec![],
+            gradient_presets: vec![],
             width_profiles: vec![],
             japanese_crop_marks: false,
             new_art_basic: true,
@@ -433,9 +521,11 @@ impl Default for Prefs {
             pdf_presets: vec![],
             screen_export_presets: vec![],
             templates_folder: String::new(),
+            edit_original_system_defaults: true,
             append_converted: true,
             use_compression: false,
             web_export_presets: vec![],
+            native_save_options: serde_json::Map::new(),
             web_export_settings: None,
             print_presets: vec![],
             constrain_proportions: false,

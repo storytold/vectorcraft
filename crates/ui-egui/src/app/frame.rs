@@ -1,4 +1,4 @@
-use super::*;
+use super::{GeometryStamp, InputGeneration, VectorcraftApp, canvas};
 
 impl VectorcraftApp {
     /// The host iteration count: one increment per `App::logic`/`App::ui` iteration (or a
@@ -63,7 +63,7 @@ impl VectorcraftApp {
 
     /// Identify the document, modal dialog and focused widget that the current accepted input batch
     /// belongs to.
-    pub(super) fn input_generation(&self) -> InputGeneration {
+    pub(crate) fn input_generation(&self) -> InputGeneration {
         InputGeneration {
             document: self.session.active().map_or(0, |document| document.uid),
             dialog: self.ui.dialog.as_ref().map(|dialog| egui::Id::unique(&dialog.kind)),

@@ -219,11 +219,11 @@ fn kept_tiles_stay_within_the_budget() {
     let d = doc_with_two_scales(0.25);
     let tile = |side: usize| size_of::<TileEntry>() + side * side * 4;
     let budget = tile(80) + tile(40) + tile(10);
-    CACHE.with(|c| c.borrow_mut().tiles[Ink::Display as usize] = FrameCache::new(budget, usize::MAX));
+    CACHE.with(|c| c.borrow_mut().tiles[Ink::Display.index()] = FrameCache::new(budget, usize::MAX));
     let kept = || {
         CACHE.with(|c| {
             let c = c.borrow();
-            let tiles = &c.tiles[Ink::Display as usize];
+            let tiles = &c.tiles[Ink::Display.index()];
             (tiles.len(), tiles.bytes())
         })
     };
