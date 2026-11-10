@@ -291,6 +291,12 @@ pub(super) fn add_text(b: &mut dyn Backend, a: &Args) -> Result<Value, String> {
 }
 
 pub(super) fn transform(b: &mut dyn Backend, a: &Args) -> Result<Value, String> {
+    // Reject an invalid axis before changing the selection or running an earlier step.
+    let reflect = match a.get("reflect") {
+        None => None,
+        Some(Value::String(axis)) if matches!(axis.as_str(), "vertical" | "horizontal") => Some(axis.as_str()),
+        Some(_) => return Err("reflect must be `vertical` or `horizontal`".into()),
+    };
     select_ids(b, a)?;
     // With `copy`, the first operation duplicates and the rest transform the copy (the new selection).
     let copy = std::cell::Cell::new(a.get("copy").and_then(Value::as_bool).unwrap_or(false));
@@ -317,7 +323,7 @@ pub(super) fn transform(b: &mut dyn Backend, a: &Args) -> Result<Value, String> 
         exec(b, "object.scale", with(json!({"sx": sx.unwrap_or(100.0), "sy": sy.unwrap_or(100.0)})))?;
         done.push("scale");
     }
-    if let Some(axis) = a.get("reflect").and_then(Value::as_str) {
+    if let Some(axis) = reflect {
         exec(b, "object.reflect", with(json!({"axis": axis})))?;
         done.push("reflect");
     }
