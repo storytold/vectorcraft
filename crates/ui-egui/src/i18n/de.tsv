@@ -6254,3 +6254,6 @@ breakText	Glyphs	Glyphen
 	Align to Pixel Grid	Am Pixelraster ausrichten
 @msg	only paths and compound paths can be aligned to the pixel grid	nur Pfade und zusammengesetzte Pfade können am Pixelraster ausgerichtet werden
 @msg	side is left or right, not `{s}`	side ist left oder right, nicht `{s}`
+	Ignore All	Alle ignorieren
+	Add to Dictionary	Zum Wörterbuch hinzufügen
+	No Suggestions	Keine Vorschläge

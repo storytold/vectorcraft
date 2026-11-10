@@ -6249,3 +6249,6 @@ breakText	Glyphs	글리프
 	Align to Pixel Grid	픽셀 격자에 정렬
 @msg	only paths and compound paths can be aligned to the pixel grid	패스와 컴파운드 패스만 픽셀 격자에 정렬할 수 있습니다
 @msg	side is left or right, not `{s}`	side는 left 또는 right입니다(`{s}` 아님)
+	Ignore All	모두 무시
+	Add to Dictionary	사전에 추가
+	No Suggestions	제안 없음

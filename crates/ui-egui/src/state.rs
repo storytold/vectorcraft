@@ -348,6 +348,21 @@ pub struct ReplaceFontWarning {
     pub styles: Vec<(String, String)>,
 }
 
+/// A misspelled word right-clicked on the canvas ([`UiState::context_spelling`]).
+#[derive(Clone, Debug, PartialEq)]
+pub struct ContextSpelling {
+    /// The document's `uid`.
+    pub uid: u64,
+    /// The type object.
+    pub id: vectorcraft_doc::NodeId,
+    /// The word's bytes in the object's plain text, which `text.editRange` replaces.
+    pub start: usize,
+    pub end: usize,
+    pub word: String,
+    /// What the dictionary of the word's language suggests instead, best first.
+    pub suggestions: Vec<String>,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct UiState {
@@ -415,6 +430,10 @@ pub struct UiState {
     /// while it is open ([`crate::panels::artboards::MenuFacts`]). Not saved.
     #[serde(skip)]
     pub context_artboards: Option<crate::panels::artboards::MenuFacts>,
+    /// The word with Auto Spell Check's red line under the last right-click on the canvas, for the
+    /// context menu's suggestions, Ignore All and Add to Dictionary while it is open. Not saved.
+    #[serde(skip)]
+    pub context_spelling: Option<ContextSpelling>,
     /// Which link statuses the active document's images and placed documents have, for Select ›
     /// Linked, Embedded, Missing and Modified to be on only when some do (refreshed by
     /// [`crate::addons::select::link_status::refresh`]). Not saved.
@@ -1002,6 +1021,7 @@ impl Default for UiState {
             context_locked: None,
             context_intertwine: None,
             context_artboards: None,
+            context_spelling: None,
             link_statuses: Default::default(),
             slot_tool: Default::default(),
             floating_flyouts: vec![],

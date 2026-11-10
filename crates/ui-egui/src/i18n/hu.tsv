@@ -6651,3 +6651,6 @@ breakText	Glyphs	Glifák
 	Align to Pixel Grid	Igazítás a pixelrácshoz
 @msg	only paths and compound paths can be aligned to the pixel grid	csak útvonalak és összetett útvonalak igazíthatók a pixelrácshoz
 @msg	side is left or right, not `{s}`	a side értéke left vagy right lehet, nem `{s}`
+	Ignore All	Az összes kihagyása
+	Add to Dictionary	Hozzáadás a szótárhoz
+	No Suggestions	Nincs javaslat

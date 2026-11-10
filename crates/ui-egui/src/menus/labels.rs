@@ -214,6 +214,12 @@ pub(super) fn unlock_item_label(app: &VectorcraftApp, id: &str, p: &Value, lang:
     Some(crate::panels::layers::shown_name(app, n, lang))
 }
 
+/// A context menu suggestion's label: the word it puts in (`text.editRange {insert}`), as it is,
+/// untranslated ([`super::context`]'s `spelling_items`).
+pub(super) fn spelling_item_label(id: &str, p: &Value) -> Option<String> {
+    (id == "text.editRange").then(|| p.get("insert")?.as_str().map(str::to_string)).flatten()
+}
+
 /// The shortcut a menu item shows: its command's (items without params), a panel's for the
 /// Window menu's `window.panel {panel}` items, an effect's for the Effect menu's items, or a filter
 /// plug-in's for Object › Plug-ins' `plugin.dialog {id}` items.
@@ -235,6 +241,9 @@ pub fn item_shortcut(id: &str, p: &Value) -> Option<&'static str> {
 /// Labels only the canvas context menu ([`context_items`]) shows, so the catalog tests can insist
 /// every one of them is translated (a test checks the list against the menu).
 pub const CONTEXT_LABELS: &[&str] = &[
+    "Ignore All",
+    "Add to Dictionary",
+    "No Suggestions",
     "Isolate Selected Group",
     "Exit Isolation Mode",
     "Lock Artboards",
