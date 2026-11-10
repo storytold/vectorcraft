@@ -634,6 +634,11 @@ mod portable {
         /// clipboard still holds it.
         #[cfg(target_os = "linux")]
         Source,
+        /// Every flavour, written at once by [`super::mac::write`]: the pasteboard's change
+        /// count right after, so [`SystemClipboard::holds_ours`] can tell whether another app
+        /// has copied since ([`super::mac::change_count`]).
+        #[cfg(target_os = "macos")]
+        Native(isize),
     }
 
     /// A read of arboard's clipboard.
@@ -1262,16 +1267,20 @@ mod portable {
     }
 
     /// What [`SystemClipboard::write`] puts on a platform clipboard that holds one format at a
-    /// time. Include SVG Code (on by default) writes a shape copy's SVG markup under the TEXT
-    /// mime too, so its TEXT and SVG flavours hold the exact same bytes; real object text (a
-    /// type-only copy) never matches the document's SVG. Picking between them: prefer the PNG for
-    /// a shape copy, so Paste into an app that doesn't read SVG as text (Photoshop, Mail, …) still
-    /// gets a picture instead of nothing (#2282), while a genuine text copy keeps pasting as text
-    /// everywhere.
+    /// time (the Linux fallback; macOS instead writes every flavour at once, see
+    /// `mac::write`). Include SVG Code (on by default) writes a shape copy's SVG markup under
+    /// the TEXT mime too, so its TEXT and SVG flavours hold the exact same bytes; real object
+    /// text (a type-only copy) never matches the document's SVG. Picking between them: prefer
+    /// the PNG for a shape copy, so Paste into an app that doesn't read SVG as text (Photoshop,
+    /// Mail, …) still gets a picture instead of nothing (#2282), while a genuine text copy keeps
+    /// pasting as text everywhere, and a shape copy whose PNG can't be made (too large, or the
+    /// encoder failed) keeps pasting its SVG markup as text rather than nothing.
     fn pick_one(flavours: &[Flavour]) -> (Option<String>, Option<image::RgbaImage>) {
         let text = text_of(flavours);
         let svg_as_text = text.as_deref().is_some_and(|t| flavours.iter().any(|f| f.mime == SVG && f.data == t.as_bytes()));
-        let text = if svg_as_text { None } else { text };
+        if svg_as_text && let Some(img) = flavours.iter().find(|f| f.mime == PNG).and_then(|f| decode_png(&f.data)) {
+            return (None, Some(img));
+        }
         let image = match &text {
             Some(_) => None,
             None => flavours.iter().find(|f| f.mime == PNG).and_then(|f| decode_png(&f.data)),
@@ -1283,6 +1292,11 @@ mod portable {
         /// arboard takes the text, else the PNG as a bitmap; the Wayland core protocol offers the
         /// SVG, PNG and text together ([`DataClipboard::copy`](super::wayland::DataClipboard::copy)).
         fn write(&mut self, flavours: &[Flavour]) -> Result<(), String> {
+            #[cfg(target_os = "macos")]
+            if let Some(count) = super::mac::write(flavours) {
+                self.ours = Some(Ours::Native(count));
+                return Ok(());
+            }
             let cb = self.cb(Asker::User)?;
             #[cfg(target_os = "linux")]
             if let Backend::Wayland(wl) = cb {
@@ -1316,12 +1330,18 @@ mod portable {
         }
 
         fn holds_ours(&mut self) -> bool {
+            #[cfg(target_os = "macos")]
+            if let Some(Ours::Native(count)) = &self.ours {
+                return *count == super::mac::change_count();
+            }
             let Some(cb) = self.cb.opened() else { return false };
             match &self.ours {
                 Some(Ours::Text(t)) => cb.get_text().is_ok_and(|now| now == *t),
                 Some(Ours::Image(w, h)) => cb.image_now().is_ok_and(|now| (now.width, now.height) == (*w, *h)),
                 #[cfg(target_os = "linux")]
                 Some(Ours::Source) => cb.holds_source(),
+                #[cfg(target_os = "macos")]
+                Some(Ours::Native(_)) => false,
                 None => false,
             }
         }
@@ -2900,9 +2920,9 @@ mod wayland {
 mod mac {
     use objc2::rc::autoreleasepool;
     use objc2_app_kit::NSPasteboard;
-    use objc2_foundation::{NSArray, NSString};
+    use objc2_foundation::{NSArray, NSData, NSString};
 
-    use super::{Flavour, pasteboard_types};
+    use super::{Flavour, PNG, TEXT, pasteboard_types};
 
     /// Does the pasteboard hold one of `mimes` ([`pasteboard_types`])? Asks for its types only.
     pub fn has(mimes: &[&'static str]) -> bool {
@@ -2922,6 +2942,41 @@ mod mac {
                 (!data.is_empty()).then_some(Flavour { mime, data })
             })
         })
+    }
+
+    /// Writes every flavour under all the pasteboard types apps read for its mime
+    /// ([`pasteboard_types`]), at once: NSPasteboard holds several representations together, so
+    /// (unlike arboard) a shape copy's picture and its SVG-as-text (Include SVG Code) both reach
+    /// the pasteboard, and each app takes the one it reads (#6455). `None` when nothing was
+    /// written (an empty `flavours`, or every write failed); else the new change count, for
+    /// [`change_count`] to tell later whether another app has copied since.
+    pub fn write(flavours: &[Flavour]) -> Option<isize> {
+        autoreleasepool(|_| {
+            let pasteboard = NSPasteboard::generalPasteboard();
+            pasteboard.clearContents();
+            let mut wrote = false;
+            for f in flavours {
+                if f.mime == TEXT {
+                    if let Ok(s) = std::str::from_utf8(&f.data) {
+                        wrote |= pasteboard.setString_forType(&NSString::from_str(s), &NSString::from_str("public.utf8-plain-text"));
+                    }
+                    continue;
+                }
+                // `pasteboard_types` maps the read-side BITMAP mime to both PNG and TIFF types;
+                // a write only ever has PNG bytes, so it names its own type directly instead.
+                let types: &[(&str, &str)] = if f.mime == PNG { &[("public.png", PNG)] } else { pasteboard_types(f.mime) };
+                for &(t, _) in types {
+                    wrote |= pasteboard.setData_forType(Some(&NSData::with_bytes(&f.data)), &NSString::from_str(t));
+                }
+            }
+            wrote.then(|| pasteboard.changeCount())
+        })
+    }
+
+    /// The pasteboard's current change count ([`write`]): unequal to what it returned means
+    /// another app has copied since.
+    pub fn change_count() -> isize {
+        autoreleasepool(|_| NSPasteboard::generalPasteboard().changeCount())
     }
 }
 
