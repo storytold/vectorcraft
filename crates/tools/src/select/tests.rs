@@ -79,6 +79,26 @@ fn a_press_on_a_masks_edge_selects_its_clip_group() {
     assert!(!a.iter().any(|a| matches!(a, Action::Exec(c, _) if c == "select.set")), "{a:?}");
 }
 
+/// #3748: in isolation mode a press on the art that the isolated clip group hides outside its
+/// mask selects that art, and a drag from there moves it. Outside isolation mode the same
+/// press starts a marquee.
+#[test]
+fn isolation_drags_the_art_a_clip_group_hides() {
+    let (d, g, _, art) = doc_with_masked_square();
+    let (none, p) = (Selection::default(), paint());
+    let mut picked = Selection::default();
+    picked.add(art);
+    let mut t = SelectionTool::default();
+    let a = t.pointer(&ToolContext { isolation: Some(g), ..cx(&d, &none, &p) }, &ev(PointerKind::Down, 530.0, 450.0));
+    assert_eq!(a, vec![Action::Exec("select.set".into(), json!({ "ids": [art.0] }))]);
+    let a = t.pointer(&ToolContext { isolation: Some(g), ..cx(&d, &picked, &p) }, &ev(PointerKind::Drag, 430.0, 450.0));
+    let Some(Action::Preview(c, v)) = a.get(1) else { panic!("{a:?}") };
+    assert_eq!((c.as_str(), v["matrix"][4].as_f64(), v["matrix"][5].as_f64()), ("object.transform", Some(-100.0), Some(0.0)));
+    let mut t = SelectionTool::default();
+    assert!(t.pointer(&cx(&d, &none, &p), &ev(PointerKind::Down, 530.0, 450.0)).is_empty());
+    assert!(matches!(t.state, State::Marquee { .. }), "not isolated");
+}
+
 /// The art of a selected clipped object (picked in the Layers panel), pressed where its mask
 /// hides it, is grabbed: a drag moves the selection (the art, not its clip group) and a click
 /// keeps it selected. With nothing of it selected, or with Shift, a press there starts a marquee.
@@ -2233,6 +2253,30 @@ fn the_preview_memo_measures_once_per_revision_selection_and_preview_bounds() {
     // Without a memo, every call measures.
     let c = cx(&moved, &s, &p);
     assert_eq!(selection_bounds(&c).map(|r| r.x1), Some(250.0));
+}
+
+/// With Measure Type by Glyph Bounds, the bounding box of selected point type is the ink of its
+/// glyphs; the memo measures again when only that setting changes.
+#[test]
+fn the_bounding_box_of_point_type_follows_measure_type_by_glyph_bounds() {
+    use vectorcraft_doc::{CharStyle, Document, Node, NodeKind, TextObject};
+    let mut d = Document::new(500.0, 500.0);
+    let (l, id) = (d.layers[0].id, d.alloc_id());
+    let text = TextObject::point(Point::new(100.0, 300.0), "Hg", CharStyle { size: 60.0, ..Default::default() });
+    let ink = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &text).ink_bounds().unwrap();
+    d.insert(Some(l), 0, Node::new(id, NodeKind::Text(Box::new(text.clone())))).unwrap();
+    let (mut s, p, memo) = (Selection::default(), paint(), PreviewMemo::default());
+    s.set([id]);
+    let at = |glyph_bounds| {
+        let c = ToolContext { revision: (1, 1), glyph_bounds, preview_memo: Some(&memo), ..cx(&d, &s, &p) };
+        (selection_box(&c).map(|b| b.rect), object_bounds(&c, id))
+    };
+    let em = d.node(id).and_then(|n| n.geometric_bounds());
+    assert_eq!(at(false), (em, em));
+    let glyphs = Some(text.xf.transform_rect_bbox(ink));
+    assert_eq!(at(true), (glyphs, glyphs));
+    assert_ne!(glyphs, em);
+    assert_eq!(memo.measurements(), 4, "the same revision measured again for the setting");
 }
 
 /// A double-click on a symbol instance edits its symbol in symbol editing mode (`symbol.edit`), and

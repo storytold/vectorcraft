@@ -1,8 +1,8 @@
 use super::area::{AreaOptions, PathAlign, PathEffect};
 use super::char_style::CharStyle;
 use super::para_style::ParaStyle;
-use super::runs::{RubySpan, TextKind, TextRun, move_anchors, reverse_from_end};
-use super::tabs_lists::ParaList;
+use super::runs::{RubySpan, TextKind, TextRun, TypeAntiAlias, move_anchors, reverse_from_end};
+use super::tabs_lists::{ListCounts, ParaList};
 use super::{Affine, PathData, Point, Rect, TextObject, TextStyleScale, Vec2};
 
 impl TextObject {
@@ -71,6 +71,7 @@ impl TextObject {
         self.xf *= Affine::scale_non_uniform(1.0 / sx, 1.0 / sy);
         self.cached_bounds = None;
         self.cached_baselines.clear();
+        self.cached_ink = None;
         true
     }
 
@@ -90,12 +91,24 @@ impl TextObject {
             path_spacing: 0.0,
             wrap: Vec::new(),
             optical_margin: false,
+            anti_alias: TypeAntiAlias::Sharp,
             system_layout: false,
             fractional_widths: true,
             list_count: 0,
+            list_level_counts: Vec::new(),
             cached_bounds: None,
             cached_baselines: Vec::new(),
+            cached_ink: None,
         }
+    }
+    /// The list counts the story's earlier frames carry into this frame at each level
+    /// ([`Self::list_count`] and [`Self::list_level_counts`]).
+    pub fn list_counts(&self) -> ListCounts {
+        ListCounts::from_parts(self.list_count, &self.list_level_counts)
+    }
+    /// Set the list counts the story's earlier frames carry into this frame ([`Self::list_counts`]).
+    pub fn set_list_counts(&mut self, counts: ListCounts) {
+        (self.list_count, self.list_level_counts) = counts.parts();
     }
     pub fn plain_text(&self) -> String {
         self.runs.iter().map(|r| r.text.as_str()).collect()
@@ -276,6 +289,12 @@ impl TextObject {
             TextKind::OnPath { path, .. } => path.bounds().map(|b| self.xf.transform_rect_bbox(b)),
             TextKind::Point => Some(self.xf.transform_rect_bbox(self.cached_bounds.unwrap_or_else(|| self.estimate_bounds()))),
         }
+    }
+    /// The cached ink of the glyphs in text space ([`Self::cached_ink`]): `Some(None)` when nothing
+    /// draws, and `None` when it was not measured with the current `cached_bounds`.
+    pub fn ink(&self) -> Option<Option<Rect>> {
+        let (bounds, ink) = self.cached_ink?;
+        (self.cached_bounds == Some(bounds)).then_some(ink)
     }
     /// How far the characters' strokes paint past their glyphs, in document space: they scale
     /// with the type.

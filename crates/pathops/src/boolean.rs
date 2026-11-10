@@ -5,7 +5,9 @@
 //! [`tidy_segments`] then re-joins pieces that came from the same smooth curve by refitting, so
 //! results have roughly as few anchors as the inputs.
 
-use std::collections::BTreeSet;
+use std::cell::RefCell;
+use std::cmp::Reverse;
+use std::collections::HashSet;
 
 use kurbo::{BezPath, CubicBez, PathSeg, Point, Shape as _};
 use linesweeper::topology::{ContourIdx, Contours, Topology, WindingNumber};
@@ -18,6 +20,8 @@ use crate::fit::{end_tangent, fit_single, is_straight, sample, start_tangent};
 thread_local! {
     /// The contour passes made over an arrangement on this thread, each of which walks all of it.
     pub(crate) static CONTOUR_PASSES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// The sweeps [`normalize_bez`] made on this thread.
+    static NORMALIZE_SWEEPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// Default curve-refit tolerance (document points) used to merge split curve pieces back together.
@@ -399,6 +403,9 @@ impl Arrangement {
         Ok(Self { top, rules: paths.iter().map(|p| p.1).collect(), tidy })
     }
 
+    /// A flag per input telling whether it covers a face of winding `w`: the form the tests compare
+    /// [`Self::covered`] with.
+    #[cfg(test)]
     pub(crate) fn mask(&self, w: &Multi) -> Vec<bool> {
         // A zero winding is outside under both rules, so only the non-zero ones can set a flag.
         let mut m = vec![false; self.rules.len()];
@@ -415,37 +422,62 @@ impl Arrangement {
         w.iter().filter(|&(i, k)| self.rules.get(i).is_some_and(|&r| inside(r, k))).map(|(i, _)| i)
     }
 
-    /// [`Arrangement::contours`] with the test on the windings themselves (see [`Self::covered`]).
+    /// [`Arrangement::contours_covering`] with the test on the windings themselves (see [`Self::covered`]).
     pub(crate) fn contours_where(&self, pred: impl Fn(&Multi) -> bool) -> Contours {
         #[cfg(test)]
         CONTOUR_PASSES.with(|n| n.set(n.get() + 1));
         self.top.contours(pred)
     }
 
+    /// The contours of the faces where `pred` holds for the flags of [`Self::mask`]: the form the
+    /// tests compare [`Self::contours_covering`] with.
+    #[cfg(test)]
     pub(crate) fn contours(&self, pred: impl Fn(&[bool]) -> bool) -> Contours {
         self.contours_where(|w| pred(&self.mask(w)))
     }
 
-    /// [`Self::contours`] with a panic in the sweep's contour pass turned into an error, as `new` does for the
-    /// sweep itself (native builds only: on the web a panic aborts, whatever is caught here). Used by the calls that can return an error; the rest have none to return and let the engine's
-    /// guard report it.
-    pub(crate) fn try_contours(&self, pred: impl Fn(&[bool]) -> bool) -> Result<Contours, PathOpsError> {
-        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.contours(pred))).map_err(|_| PathOpsError::Degenerate)
+    /// The contours of the faces where `pred` holds for the inputs that cover them
+    /// ([`Self::covered`], ascending). One list is refilled for each winding the pass tests, so a
+    /// test costs the size of the face's cover, not the number of inputs.
+    pub(crate) fn contours_covering(&self, pred: impl Fn(&[usize]) -> bool) -> Contours {
+        let cover = RefCell::new(Vec::new());
+        self.contours_where(|w| {
+            let mut c = cover.borrow_mut();
+            c.clear();
+            c.extend(self.covered(w));
+            pred(&c)
+        })
     }
 
-    /// All distinct non-empty coverage masks that occur next to some edge, sorted.
-    pub(crate) fn distinct_masks(&self) -> Vec<Vec<bool>> {
-        let mut set = BTreeSet::new();
+    /// [`Self::contours_covering`] with a panic in the sweep's contour pass turned into an error, as `new` does for the
+    /// sweep itself (native builds only: on the web a panic aborts, whatever is caught here). Used by the calls that can return an error; the rest have none to return and let the engine's
+    /// guard report it.
+    pub(crate) fn try_contours(&self, pred: impl Fn(&[usize]) -> bool) -> Result<Contours, PathOpsError> {
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.contours_covering(pred))).map_err(|_| PathOpsError::Degenerate)
+    }
+
+    /// All distinct non-empty coverages that occur next to some edge, each as the inputs it covers
+    /// (ascending, as [`Self::covered`] gives them), in the order of their masks ([`Self::mask`])
+    /// sorted.
+    pub(crate) fn distinct_masks(&self) -> Vec<Vec<usize>> {
+        let mut set: HashSet<Vec<usize>> = HashSet::new();
+        let mut cover = Vec::new();
         for s in self.top.segment_indices() {
             let h = s.first_half();
             for w in [self.top.winding_clockwise(h), self.top.winding_counter_clockwise(h)] {
-                let m = self.mask(w);
-                if m.iter().any(|&b| b) {
-                    set.insert(m);
+                cover.clear();
+                cover.extend(self.covered(w));
+                if !cover.is_empty() && !set.contains(cover.as_slice()) {
+                    set.insert(cover.clone());
                 }
             }
         }
-        set.into_iter().collect()
+        let mut masks: Vec<Vec<usize>> = set.into_iter().collect();
+        // Masks sort by the first input only one of them covers: the one without it comes first.
+        // That input is the smaller of the first two entries that differ, or the next entry of the
+        // longer list where the shorter one ends.
+        masks.sort_unstable_by(|a, b| a.iter().map(Reverse).cmp(b.iter().map(Reverse)));
+        masks
     }
 
     /// Vertices where three or more edges meet (true intersections / touch points).
@@ -792,6 +824,8 @@ pub fn try_normalize(path: &PathData, rule: FillRule) -> Result<PathData, PathOp
 }
 
 pub(crate) fn normalize_bez(bp: &BezPath, rule: FillRule) -> Result<Contours, PathOpsError> {
+    #[cfg(test)]
+    NORMALIZE_SWEEPS.with(|n| n.set(n.get() + 1));
     let eps = eps_for([bp])?;
     let mut bp = bp.clone();
     snap_horizontals(&mut [&mut bp], eps);
@@ -821,7 +855,7 @@ pub fn boolean(a: &PathData, a_rule: FillRule, b: &PathData, b_rule: FillRule, o
 pub fn try_boolean(a: &PathData, a_rule: FillRule, b: &PathData, b_rule: FillRule, op: BoolOp, precision: f64) -> Result<PathData, PathOpsError> {
     let (pa, pb) = (fill_bezpath(a), fill_bezpath(b));
     let arr = Arrangement::new(vec![(pa.clone(), a_rule), (pb.clone(), b_rule)])?;
-    let c = arr.try_contours(|m| op.apply(m[0], m[1]))?;
+    let c = arr.try_contours(|c| op.apply(c.contains(&0), c.contains(&1)))?;
     if !arrangement_adds_up(&arr, [&pa, &pb])
         && let Some(r) = resolved_boolean([(&pa, a_rule), (&pb, b_rule)], op, precision)
     {
@@ -909,7 +943,7 @@ fn resolved_boolean(inputs: [(&BezPath, FillRule); 2], op: BoolOp, precision: f6
     if !arrangement_adds_up(&arr, [&ra, &rb]) {
         return None;
     }
-    let c = arr.try_contours(|m| op.apply(m[0], m[1])).ok()?;
+    let c = arr.try_contours(|c| op.apply(c.contains(&0), c.contains(&1))).ok()?;
     // The refit keeps the operands' own anchors, not only those of their resolved contours.
     let tidy = Tidy::keeping(precision, [pa, pb]);
     Some(all_contours_to_path(&c, &tidy))
@@ -917,19 +951,19 @@ fn resolved_boolean(inputs: [(&BezPath, FillRule); 2], op: BoolOp, precision: f6
 
 /// [`boolean_n`] that reports a refused input ([`PathOpsError::TooComplex`], non-finite
 /// coordinates) instead of returning an empty path.
-pub fn try_boolean_n(paths: &[(&PathData, FillRule)], pred: impl Fn(&[bool]) -> bool) -> Result<PathData, PathOpsError> {
+pub fn try_boolean_n(paths: &[(&PathData, FillRule)], pred: impl Fn(&[usize]) -> bool) -> Result<PathData, PathOpsError> {
     let bps: Vec<(BezPath, FillRule)> = paths.iter().map(|(p, r)| (fill_bezpath(p), *r)).collect();
     let arr = Arrangement::new(bps)?;
     Ok(all_contours_to_path(&arr.try_contours(pred)?, &arr.tidy))
 }
 
-/// N-ary boolean: the area where `pred(inside_flags)` holds, `inside_flags[i]` telling whether a
-/// point is inside `paths[i]` under its fill rule. A refused input gives an empty path; callers that
-/// can report an error use [`try_boolean_n`].
-pub fn boolean_n(paths: &[(&PathData, FillRule)], pred: impl Fn(&[bool]) -> bool) -> PathData {
+/// N-ary boolean: the area where `pred(inside)` holds, `inside` listing the indices `i`, ascending,
+/// of the `paths[i]` a point is inside under their fill rules. A refused input gives an empty path;
+/// callers that can report an error use [`try_boolean_n`].
+pub fn boolean_n(paths: &[(&PathData, FillRule)], pred: impl Fn(&[usize]) -> bool) -> PathData {
     let bps: Vec<(BezPath, FillRule)> = paths.iter().map(|(p, r)| (fill_bezpath(p), *r)).collect();
     match Arrangement::new(bps) {
-        Ok(arr) => all_contours_to_path(&arr.contours(pred), &arr.tidy),
+        Ok(arr) => all_contours_to_path(&arr.contours_covering(pred), &arr.tidy),
         Err(_) => PathData::default(),
     }
 }
@@ -953,25 +987,21 @@ pub fn try_unite_all_with(paths: &[(&PathData, FillRule)], precision: f64) -> Re
 
 /// [`try_unite_all_with`] with the sweeps run on `paths` as they are.
 pub(crate) fn try_unite_all_upright(paths: &[(&PathData, FillRule)], precision: f64) -> Result<PathData, PathOpsError> {
-    let mut all = BezPath::new();
-    for (p, r) in paths {
-        let bp = fill_bezpath(p);
+    let bps: Vec<BezPath> = paths.iter().map(|(p, _)| fill_bezpath(p)).collect();
+    let mut parts = Vec::new();
+    for (bp, (_, r)) in bps.iter().zip(paths) {
         if bp.elements().is_empty() {
             continue;
         }
-        for ct in normalize_bez(&bp, *r)?.contours() {
-            all.extend(ct.path.iter());
-        }
+        parts.push((normalize_bez(bp, *r)?, bp.segments().count()));
     }
-    if all.elements().is_empty() {
-        return Ok(PathData::default());
-    }
-    let tidy = Tidy::keeping(precision, paths.iter().map(|(p, _)| fill_bezpath(p)).collect::<Vec<_>>().iter());
-    Ok(all_contours_to_path(&normalize_bez(&all, FillRule::NonZero)?, &tidy))
+    unite_parts(parts, bps, precision)
 }
 
 /// Union of many filled paths. Each input is first normalised on its own, then all are swept
 /// together with a single integer winding number, which keeps this fast for thousands of shapes.
+/// A single input whose own sweep split none of its segments, with no two of them within twice the
+/// sweep tolerance, is not swept a second time.
 pub fn unite_all(paths: &[(&PathData, FillRule)]) -> PathData {
     unite_all_with(paths, DEFAULT_PRECISION)
 }
@@ -989,25 +1019,180 @@ pub fn unite_all_with(paths: &[(&PathData, FillRule)], precision: f64) -> PathDa
 
 /// [`unite_all_with`] with the sweeps run on `paths` as they are.
 pub(crate) fn unite_all_upright(paths: &[(&PathData, FillRule)], precision: f64) -> PathData {
-    let mut all = BezPath::new();
-    for (p, r) in paths {
-        let bp = fill_bezpath(p);
+    let bps: Vec<BezPath> = paths.iter().map(|(p, _)| fill_bezpath(p)).collect();
+    let mut parts = Vec::new();
+    for (bp, (_, r)) in bps.iter().zip(paths) {
         if bp.elements().is_empty() {
             continue;
         }
-        let Ok(c) = normalize_bez(&bp, *r) else { continue };
+        let Ok(c) = normalize_bez(bp, *r) else { continue };
+        parts.push((c, bp.segments().count()));
+    }
+    unite_parts(parts, bps, precision).unwrap_or_default()
+}
+
+/// The union of `parts`, each the contours [`normalize_bez`] made of one input with that input's
+/// segment count, refit to `precision` keeping the anchors of `inputs`.
+///
+/// When there is one part, its sweep split none of the input's segments and none of them lies
+/// within twice the sweep tolerance of another, its contours are the union and are refit as they
+/// are. Otherwise all the contours are swept again together under NonZero, which also merges the
+/// short pieces the first sweeps leave where a path crosses itself, and contours that lie within
+/// that distance of each other.
+fn unite_parts(parts: Vec<(Contours, usize)>, inputs: Vec<BezPath>, precision: f64) -> Result<PathData, PathOpsError> {
+    if parts.is_empty() {
+        return Ok(PathData::default());
+    }
+    let tidy = Tidy::keeping(precision, inputs.iter());
+    if let [(c, input_segments)] = parts.as_slice()
+        && splits_nothing(c, *input_segments, &tidy)
+        && eps_for(inputs.iter()).is_ok_and(|eps| !comes_close(c, 2.0 * eps))
+    {
+        return Ok(all_contours_to_path(c, &tidy));
+    }
+    drop(inputs);
+    let mut all = BezPath::new();
+    for (c, _) in parts {
         for ct in c.contours() {
             all.extend(ct.path.iter());
         }
     }
     if all.elements().is_empty() {
-        return PathData::default();
+        return Ok(PathData::default());
     }
-    let tidy = Tidy::keeping(precision, paths.iter().map(|(p, _)| fill_bezpath(p)).collect::<Vec<_>>().iter());
-    match normalize_bez(&all, FillRule::NonZero) {
-        Ok(c) => all_contours_to_path(&c, &tidy),
-        Err(_) => PathData::default(),
+    Ok(all_contours_to_path(&normalize_bez(&all, FillRule::NonZero)?, &tidy))
+}
+
+/// Are the contours `c` the input's own segments: as many as `input_segments`, each starting at an
+/// anchor `tidy` keeps? A segment split where paths cross gives a piece that starts away from the
+/// anchors, and a piece dropped inside another path leaves fewer segments than the input.
+fn splits_nothing(c: &Contours, input_segments: usize, tidy: &Tidy) -> bool {
+    let mut n = 0;
+    for ct in c.contours() {
+        for s in ct.path.segments() {
+            if !tidy.is_kept(to_seg(s).c.p0) {
+                return false;
+            }
+            n += 1;
+        }
     }
+    n == input_segments
+}
+
+/// The pairs of segments [`comes_close`] compares for each segment. Past it the answer is yes.
+const MAX_CLOSE_PAIRS: usize = 512;
+
+/// One segment of a contour for [`comes_close`]: its control points' extents along and across the
+/// side the segments are sorted on, and its place in its contour.
+struct CloseSeg {
+    c: CubicBez,
+    line: bool,
+    lo: f64,
+    hi: f64,
+    across_lo: f64,
+    across_hi: f64,
+    contour: usize,
+    index: usize,
+    len: usize,
+}
+
+impl CloseSeg {
+    fn new(seg: Seg, contour: usize, index: usize, len: usize) -> Self {
+        let pts = [seg.c.p0, seg.c.p1, seg.c.p2, seg.c.p3];
+        let (lo, hi) = pts.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(l, h), p| (l.min(p.x), h.max(p.x)));
+        let (across_lo, across_hi) = pts.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(l, h), p| (l.min(p.y), h.max(p.y)));
+        Self { c: seg.c, line: seg.line, lo, hi, across_lo, across_hi, contour, index, len }
+    }
+}
+
+/// Does a segment of the contours `c` lie within `touch` of another? A sweep can join such
+/// segments or leave them apart depending on the order it meets them in, so a second sweep can
+/// answer differently from the first. Segments whose control points can't be told apart from
+/// `touch` count as close, which costs only that second sweep.
+fn comes_close(c: &Contours, touch: f64) -> bool {
+    let mut segs = Vec::new();
+    for (contour, ct) in c.contours().enumerate() {
+        let len = ct.path.segments().count();
+        for (index, s) in ct.path.segments().enumerate() {
+            segs.push(CloseSeg::new(to_seg(s), contour, index, len));
+        }
+    }
+    // Sort along the longer side of the whole, where fewer segments overlap.
+    let extent = |lo: fn(&CloseSeg) -> f64, hi: fn(&CloseSeg) -> f64| {
+        segs.iter().map(hi).fold(f64::NEG_INFINITY, f64::max) - segs.iter().map(lo).fold(f64::INFINITY, f64::min)
+    };
+    if extent(|s| s.across_lo, |s| s.across_hi) > extent(|s| s.lo, |s| s.hi) {
+        for s in &mut segs {
+            std::mem::swap(&mut s.lo, &mut s.across_lo);
+            std::mem::swap(&mut s.hi, &mut s.across_hi);
+        }
+    }
+    segs.sort_by(|a, b| a.lo.total_cmp(&b.lo));
+    let (mut pairs, budget) = (0usize, segs.len().saturating_mul(MAX_CLOSE_PAIRS));
+    for (i, a) in segs.iter().enumerate() {
+        for b in segs.iter().skip(i + 1) {
+            if b.lo > a.hi + touch {
+                break;
+            }
+            pairs += 1;
+            if pairs > budget {
+                return true;
+            }
+            if a.across_lo > b.across_hi + touch || b.across_lo > a.across_hi + touch {
+                continue;
+            }
+            let neighbors = a.contour == b.contour && ((a.index + 1) % a.len == b.index || (b.index + 1) % b.len == a.index);
+            let close = if neighbors { neighbors_run_together(a, b, touch) } else { !hulls_apart(&a.c, &b.c, touch) };
+            if close {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// The sine of the angle below which two segments leaving a shared end count as parallel.
+const PARALLEL_SINE: f64 = 1e-3;
+
+/// Do segments `a` and `b`, which share an end, run along each other within `touch`? Straight
+/// segments do when the far end of either lies within `touch` of the other. A curve does when the
+/// two leave their shared end in the same direction, or when their extents overlap by more than
+/// `touch` both ways.
+fn neighbors_run_together(a: &CloseSeg, b: &CloseSeg, touch: f64) -> bool {
+    use kurbo::ParamCurveNearest;
+    if a.line && b.line {
+        let (shared, p, q) = if a.c.p3 == b.c.p0 { (a.c.p3, a.c.p0, b.c.p3) } else { (a.c.p0, a.c.p3, b.c.p0) };
+        let near = |p: Point, q: Point| kurbo::Line::new(shared, q).nearest(p, 0.0).distance_sq.sqrt() <= touch;
+        return near(q, p) || near(p, q);
+    }
+    let (from_a, from_b) = if a.c.p3 == b.c.p0 {
+        ([a.c.p3, a.c.p2, a.c.p1, a.c.p0], [b.c.p0, b.c.p1, b.c.p2, b.c.p3])
+    } else {
+        ([a.c.p0, a.c.p1, a.c.p2, a.c.p3], [b.c.p3, b.c.p2, b.c.p1, b.c.p0])
+    };
+    let away = |pts: [Point; 4]| pts.iter().skip(1).map(|p| *p - pts[0]).find(|v| v.hypot2() > 0.0);
+    if let (Some(u), Some(v)) = (away(from_a), away(from_b))
+        && u.dot(v) > 0.0
+        && u.cross(v).abs() <= PARALLEL_SINE * u.hypot() * v.hypot()
+    {
+        return true;
+    }
+    a.hi.min(b.hi) - a.lo.max(b.lo) > touch && a.across_hi.min(b.across_hi) - a.across_lo.max(b.across_lo) > touch
+}
+
+/// Is there a direction, along or across a side of either segment's control polygon or chord, in
+/// which the control points of `a` and `b` lie more than `touch` apart?
+fn hulls_apart(a: &CubicBez, b: &CubicBez, touch: f64) -> bool {
+    let (pa, pb) = ([a.p0, a.p1, a.p2, a.p3], [b.p0, b.p1, b.p2, b.p3]);
+    let apart = |d: kurbo::Vec2| {
+        let span =
+            |pts: &[Point; 4]| pts.iter().map(|p| p.to_vec2().dot(d)).fold((f64::INFINITY, f64::NEG_INFINITY), |(l, h), v| (l.min(v), h.max(v)));
+        let ((la, ha), (lb, hb)) = (span(&pa), span(&pb));
+        let gap = touch * d.hypot();
+        gap > 0.0 && (lb - ha > gap || la - hb > gap)
+    };
+    let sides = |p: [Point; 4]| [p[3] - p[0], p[1] - p[0], p[2] - p[1], p[3] - p[2]];
+    sides(pa).into_iter().chain(sides(pb)).any(|d| apart(d) || apart(kurbo::Vec2::new(-d.y, d.x)))
 }
 
 /// [`area`] that reports a refused input instead of an area of zero.
@@ -1286,11 +1471,293 @@ mod tests {
         assert!(arrangement_adds_up(&arr, [&s, &t]));
     }
 
+    /// The union with every input swept on its own and then all their contours swept together.
+    fn unite_swept_twice(paths: &[(&PathData, FillRule)], precision: f64) -> PathData {
+        let bps: Vec<BezPath> = paths.iter().map(|(p, _)| fill_bezpath(p)).collect();
+        let mut all = BezPath::new();
+        for (bp, (_, r)) in bps.iter().zip(paths) {
+            for ct in normalize_bez(bp, *r).unwrap().contours() {
+                all.extend(ct.path.iter());
+            }
+        }
+        all_contours_to_path(&normalize_bez(&all, FillRule::NonZero).unwrap(), &Tidy::keeping(precision, bps.iter()))
+    }
+
+    /// The unions of `paths` by [`unite_all_with`] and [`try_unite_all_with`], each with the sweeps it made.
+    fn unite_counting_sweeps(paths: &[(&PathData, FillRule)]) -> [(PathData, usize); 2] {
+        let counted = |f: &dyn Fn() -> PathData| {
+            NORMALIZE_SWEEPS.with(|n| n.set(0));
+            let out = f();
+            (out, NORMALIZE_SWEEPS.with(std::cell::Cell::get))
+        };
+        [counted(&|| unite_all_with(paths, DEFAULT_PRECISION)), counted(&|| try_unite_all_with(paths, DEFAULT_PRECISION).unwrap())]
+    }
+
+    /// Disjoint rings, each a circle with a circular hole, as one even-odd compound path.
+    fn rings(n: usize) -> PathData {
+        let mut bp = BezPath::new();
+        for i in 0..n {
+            let c = Point::new((i % 10) as f64 * 30.0, (i / 10) as f64 * 30.0);
+            bp.extend(kurbo::Circle::new(c, 12.0).path_elements(0.1));
+            bp.extend(kurbo::Circle::new(c, 5.0).path_elements(0.1));
+        }
+        PathData::from_bezpath(&bp)
+    }
+
+    /// A polygon with `n` teeth of different heights along its top.
+    fn zigzag(n: usize) -> PathData {
+        let mut pts: Vec<Point> = (0..=n).map(|i| Point::new(i as f64 * 4.0, if i % 2 == 0 { 0.0 } else { -10.0 - (i * 37 % 11) as f64 })).collect();
+        pts.push(Point::new(n as f64 * 4.0, 20.0));
+        pts.push(Point::new(0.0, 20.0));
+        PathData::single(vectorcraft_geom::SubPath::polyline(&pts, true))
+    }
+
+    /// A sweep can leave segments within its tolerance apart where a second sweep joins them.
+    #[test]
+    fn a_lone_input_with_segments_within_the_tolerance_is_swept_again() {
+        use vectorcraft_geom::SubPath;
+        let triangles = |gap: f64, lift: f64| {
+            PathData::new(vec![
+                SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(10.0, 0.0), Point::new(0.0, 10.0)], true),
+                SubPath::polyline(&[Point::new(10.0 + gap, lift), Point::new(10.0 + gap, 10.0 + lift), Point::new(gap, 10.0 + lift)], true),
+            ])
+        };
+        let mut bp = BezPath::new();
+        bp.extend(kurbo::Circle::new((0.0, 0.0), 10.0).path_elements(0.1));
+        bp.extend(kurbo::Circle::new((20.000001, 0.0), 10.0).path_elements(0.1));
+        let circles = PathData::from_bezpath(&bp);
+        for (name, path, joined) in
+            [("snapped", triangles(0.99e-6, 0.99e-6), Some(1)), ("same heights", triangles(0.9e-6, 0.0), Some(1)), ("circles", circles, None)]
+        {
+            let want = unite_swept_twice(&[(&path, FillRule::NonZero)], DEFAULT_PRECISION);
+            if let Some(n) = joined {
+                assert_eq!(want.subpaths.len(), n, "{name}");
+            }
+            for (got, sweeps) in unite_counting_sweeps(&[(&path, FillRule::NonZero)]) {
+                assert_eq!(sweeps, 2, "{name}");
+                assert_eq!(got, want, "{name}");
+            }
+        }
+        // Farther apart than that, the sweep's own contours stand.
+        let apart = triangles(1e-5, 0.0);
+        let want = unite_swept_twice(&[(&apart, FillRule::NonZero)], DEFAULT_PRECISION);
+        assert_eq!(want.subpaths.len(), 2);
+        for (got, sweeps) in unite_counting_sweeps(&[(&apart, FillRule::NonZero)]) {
+            assert_eq!(sweeps, 1);
+            assert_eq!(got, want);
+        }
+    }
+
+    #[test]
+    fn a_lone_part_beside_a_refused_input_keeps_its_union() {
+        use vectorcraft_geom::SubPath;
+        let polygon = |pts: &[(f64, f64)]| PathData::single(SubPath::polyline(&pts.iter().map(|p| Point::new(p.0, p.1)).collect::<Vec<_>>(), true));
+        let square = polygon(&[(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]);
+        let refused = polygon(&[(f64::NAN, 0.0), (1.0, 1.0), (0.0, 1.0)]);
+        let want = unite_swept_twice(&[(&square, FillRule::NonZero)], DEFAULT_PRECISION);
+        assert_eq!(unite_all(&[(&square, FillRule::NonZero), (&refused, FillRule::NonZero)]), want);
+    }
+
+    #[test]
+    fn neighboring_segments_run_together_when_one_lies_along_the_other() {
+        let line = |a: (f64, f64), b: (f64, f64)| CloseSeg::new(Seg::line(a.into(), b.into()), 0, 0, 2);
+        let curve = |p: [(f64, f64); 4]| CloseSeg::new(Seg { c: CubicBez::new(p[0], p[1], p[2], p[3]), line: false }, 0, 0, 2);
+        let touch = 2e-6;
+        // The two sides of a needle's tip, and an ordinary corner.
+        assert!(neighbors_run_together(&line((10.0, 10.0), (30.0, 30.0)), &line((30.0, 30.0), (10.0, 10.000001)), touch));
+        assert!(!neighbors_run_together(&line((0.0, 0.0), (10.0, 0.0)), &line((10.0, 0.0), (10.0, 10.0)), touch));
+        // Curves that fold back over each other, and two quarters of a circle.
+        let out = curve([(0.0, 0.0), (5.0, 8.0), (10.0, 8.0), (20.0, 0.0)]);
+        assert!(neighbors_run_together(&out, &curve([(20.0, 0.0), (10.0, 6.0), (5.0, 6.0), (0.0, 1.0)]), touch));
+        // A curved hairpin that lies within the tolerance along its length.
+        let there = curve([(0.0, 0.0), (5.0, 1e-7), (15.0, 1e-7), (20.0, 0.0)]);
+        assert!(neighbors_run_together(&there, &curve([(20.0, 0.0), (15.0, 2e-7), (5.0, 2e-7), (0.0, 1e-6)]), touch));
+        let quarter = curve([(10.0, 0.0), (10.0, 5.5), (5.5, 10.0), (0.0, 10.0)]);
+        assert!(!neighbors_run_together(&quarter, &curve([(0.0, 10.0), (-5.5, 10.0), (-10.0, 5.5), (-10.0, 0.0)]), touch));
+    }
+
+    #[test]
+    fn a_lone_input_its_own_sweep_does_not_split_is_swept_once() {
+        for (name, path, rule) in [("rings", rings(40), FillRule::EvenOdd), ("zigzag", zigzag(301), FillRule::NonZero)] {
+            let want = unite_swept_twice(&[(&path, rule)], DEFAULT_PRECISION);
+            assert!(!want.is_empty(), "{name}");
+            for (got, sweeps) in unite_counting_sweeps(&[(&path, rule)]) {
+                assert_eq!(sweeps, 1, "{name}");
+                assert_eq!(got, want, "{name}");
+            }
+        }
+    }
+
+    #[test]
+    fn inputs_that_cross_or_are_several_are_swept_again_together() {
+        // Overlapping circles in one compound path: the first sweep splits them where they cross.
+        let mut bp = BezPath::new();
+        for i in 0..12 {
+            bp.extend(kurbo::Circle::new(((i % 4) as f64 * 15.0, (i / 4) as f64 * 15.0), 10.0).path_elements(0.1));
+        }
+        let overlapping = PathData::from_bezpath(&bp);
+        let want = unite_swept_twice(&[(&overlapping, FillRule::NonZero)], DEFAULT_PRECISION);
+        for (got, sweeps) in unite_counting_sweeps(&[(&overlapping, FillRule::NonZero)]) {
+            assert_eq!(sweeps, 2);
+            assert_eq!(got, want);
+        }
+        // Two overlapping squares in one compound path, each with an anchor where the other crosses it: the first sweep
+        // splits no segment and starts every piece at an anchor, but drops the pieces inside the other square.
+        let mut bp = BezPath::new();
+        for pts in [
+            [(0.0, 0.0), (10.0, 0.0), (10.0, 5.0), (10.0, 10.0), (5.0, 10.0), (0.0, 10.0)],
+            [(5.0, 5.0), (10.0, 5.0), (15.0, 5.0), (15.0, 15.0), (5.0, 15.0), (5.0, 10.0)],
+        ] {
+            bp.move_to(pts[0]);
+            for p in &pts[1..] {
+                bp.line_to(*p);
+            }
+            bp.close_path();
+        }
+        let anchored = PathData::from_bezpath(&bp);
+        let want = unite_swept_twice(&[(&anchored, FillRule::NonZero)], DEFAULT_PRECISION);
+        for (got, sweeps) in unite_counting_sweeps(&[(&anchored, FillRule::NonZero)]) {
+            assert_eq!(sweeps, 2);
+            assert_eq!(got, want);
+        }
+        // Two plain overlapping squares in one compound path: as many segments come out as go in, because the sweep drops
+        // the two pieces inside the other square and adds two where the outlines cross.
+        let mut bp = BezPath::new();
+        for (x, y) in [(0.0, 0.0), (5.0, 5.0)] {
+            bp.move_to((x, y));
+            bp.line_to((x + 10.0, y));
+            bp.line_to((x + 10.0, y + 10.0));
+            bp.line_to((x, y + 10.0));
+            bp.close_path();
+        }
+        let balanced = PathData::from_bezpath(&bp);
+        assert_eq!(
+            normalize_bez(&fill_bezpath(&balanced), FillRule::NonZero).unwrap().contours().map(|c| c.path.segments().count()).sum::<usize>(),
+            8
+        );
+        let want = unite_swept_twice(&[(&balanced, FillRule::NonZero)], DEFAULT_PRECISION);
+        for (got, sweeps) in unite_counting_sweeps(&[(&balanced, FillRule::NonZero)]) {
+            assert_eq!(sweeps, 2);
+            assert_eq!(got, want);
+        }
+        // Two inputs that do not cross each other or themselves are still swept together.
+        let (a, b) = (square(0.0, 0.0, 10.0), square(20.0, 0.0, 10.0));
+        let both = [(&a, FillRule::NonZero), (&b, FillRule::NonZero)];
+        let want = unite_swept_twice(&both, DEFAULT_PRECISION);
+        for (got, sweeps) in unite_counting_sweeps(&both) {
+            assert_eq!(sweeps, 3);
+            assert_eq!(got, want);
+        }
+    }
+
     #[test]
     #[cfg(panic = "unwind")]
     fn a_panic_in_the_contour_pass_becomes_an_error() {
         let arr = Arrangement::new(vec![(fill_bezpath(&square(0.0, 0.0, 10.0)), FillRule::NonZero)]).unwrap();
-        assert!(arr.try_contours(|m| m[0]).is_ok());
+        assert!(arr.try_contours(|c| c.contains(&0)).is_ok());
         assert_eq!(arr.try_contours(|_| panic!("simulated panic in the sweep")).err(), Some(PathOpsError::Degenerate));
+    }
+
+    /// Squares that overlap, nest, touch or lie apart, and 72 that overlap in rows, stacked in an
+    /// order other than across the page.
+    fn square_sets() -> Vec<(&'static str, Vec<PathData>)> {
+        let mut many: Vec<PathData> = (0..70)
+            .map(|i| {
+                let x = 10.0 * f64::from((i * 37) % 70);
+                square(x, 7.0 * f64::from(i % 5), 15.0)
+            })
+            .collect();
+        many.insert(20, square(100.0, -5.0, 60.0));
+        many.push(square(400.0, 10.0, 30.0));
+        vec![
+            ("overlapping", vec![square(0.0, 0.0, 100.0), square(50.0, 50.0, 100.0), square(25.0, 75.0, 100.0)]),
+            ("nested", vec![square(0.0, 0.0, 300.0), square(50.0, 50.0, 200.0), square(100.0, 100.0, 100.0), square(140.0, 140.0, 20.0)]),
+            ("touching", vec![square(0.0, 0.0, 100.0), square(100.0, 0.0, 100.0), square(0.0, 100.0, 100.0), square(100.0, 100.0, 100.0)]),
+            ("apart", vec![square(0.0, 0.0, 10.0), square(50.0, 0.0, 10.0), square(0.0, 50.0, 10.0)]),
+            ("many", many),
+        ]
+    }
+
+    /// The contours of a pass, in order, each with its path and whether it is an outer contour.
+    fn contour_list(c: &Contours) -> Vec<(BezPath, bool)> {
+        c.contours().map(|ct| (ct.path.clone(), ct.outer)).collect()
+    }
+
+    type FlagTest = Box<dyn Fn(&[bool]) -> bool>;
+    type CoverTest = Box<dyn Fn(&[usize]) -> bool>;
+
+    /// Each test of the boolean operations, Offset Path, the Pathfinder operations, compound shapes
+    /// and Intertwine finds the same contours in the same order from the inputs covering each face
+    /// as from a flag per input.
+    #[test]
+    fn contour_passes_on_the_covering_inputs_match_the_flag_tests() {
+        for (what, set) in square_sets() {
+            let n = set.len();
+            let arr = Arrangement::new(set.iter().map(|p| (fill_bezpath(p), FillRule::NonZero)).collect()).unwrap();
+            let mut tests: Vec<(String, FlagTest, CoverTest)> = vec![];
+            for op in [BoolOp::Union, BoolOp::Intersect, BoolOp::Difference, BoolOp::Xor] {
+                tests.push((
+                    format!("{op:?}"),
+                    Box::new(move |m: &[bool]| op.apply(m[0], m[1])),
+                    Box::new(move |c: &[usize]| op.apply(c.contains(&0), c.contains(&1))),
+                ));
+            }
+            // Offset Path sweeps three inputs, so there any cover is one of them.
+            tests.push((
+                "offset outward".into(),
+                Box::new(|m: &[bool]| m[0] || m[1] || m[2]),
+                Box::new(|c: &[usize]| c.first().is_some_and(|&i| i < 3)),
+            ));
+            tests.push(("offset inward".into(), Box::new(|m: &[bool]| m[0] && !m[1]), Box::new(|c: &[usize]| c.contains(&0) && !c.contains(&1))));
+            tests.push(("unite".into(), Box::new(|m: &[bool]| m.contains(&true)), Box::new(|c: &[usize]| !c.is_empty())));
+            tests.push(("intersect".into(), Box::new(|m: &[bool]| m.iter().all(|&b| b)), Box::new(move |c: &[usize]| c.len() == n)));
+            tests.push(("minus front".into(), Box::new(|m: &[bool]| m[0] && !m[1..].contains(&true)), Box::new(|c: &[usize]| c == [0])));
+            tests.push((
+                "minus back".into(),
+                Box::new(move |m: &[bool]| m[n - 1] && !m[..n - 1].contains(&true)),
+                Box::new(move |c: &[usize]| c == [n - 1]),
+            ));
+            tests.push((
+                "exclude".into(),
+                Box::new(|m: &[bool]| m.iter().filter(|&&b| b).count() % 2 == 1),
+                Box::new(|c: &[usize]| c.len() % 2 == 1),
+            ));
+            tests.push(("intertwine".into(), Box::new(|m: &[bool]| m[0] && m[1] && !m[2..].contains(&true)), Box::new(|c: &[usize]| c == [0, 1])));
+            // A compound shape whose members take two inputs each, with every shape mode in turn.
+            let modes = [BoolOp::Union, BoolOp::Difference, BoolOp::Intersect, BoolOp::Xor];
+            let compound = move |here: &dyn Fn(usize) -> bool| {
+                let mut area = false;
+                for (k, start) in (0..n).step_by(2).enumerate() {
+                    let h = here(start);
+                    area = if k == 0 { h } else { modes[k % modes.len()].apply(area, h) };
+                }
+                area
+            };
+            tests.push((
+                "compound shape".into(),
+                Box::new(move |m: &[bool]| compound(&|s| m[s..(s + 2).min(n)].contains(&true))),
+                Box::new(move |c: &[usize]| compound(&|s| c.get(c.partition_point(|&i| i < s)).is_some_and(|&i| i < s + 2))),
+            ));
+            for (op, flags, cover) in &tests {
+                let old = contour_list(&arr.contours(flags));
+                assert_eq!(contour_list(&arr.contours_covering(cover)), old, "{what}: {op}");
+                assert_eq!(contour_list(&arr.try_contours(cover).unwrap()), old, "{what}: {op}");
+            }
+        }
+    }
+
+    /// A contour pass hands its test the inputs covering each face, not a flag for every input:
+    /// with 100 squares apart, no test sees more than one.
+    #[test]
+    fn a_contour_pass_tests_only_the_inputs_covering_each_face() {
+        let set: Vec<(BezPath, FillRule)> = (0..100).map(|i| (fill_bezpath(&square(20.0 * f64::from(i), 0.0, 10.0)), FillRule::NonZero)).collect();
+        let arr = Arrangement::new(set).unwrap();
+        let widest = std::cell::Cell::new(0);
+        let c = arr.contours_covering(|c| {
+            widest.set(widest.get().max(c.len()));
+            !c.is_empty()
+        });
+        assert_eq!(widest.get(), 1);
+        assert_eq!(c.contours().count(), 100);
     }
 }

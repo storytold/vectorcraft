@@ -178,6 +178,10 @@ pub struct ToolContext<'a> {
     pub raster_sample: u32,
     /// General → Use Preview Bounds: the bounding box measures visual bounds (strokes included).
     pub preview_bounds: bool,
+    /// Type › Measure Type by Glyph Bounds: the bounding box measures each point type object
+    /// selected as an object (not inside a selected group) by the ink of its glyphs
+    /// ([`vectorcraft_effects::preview::Measure`]).
+    pub glyph_bounds: bool,
     /// The session's memo of the selection tools' measurements for the document as it is
     /// ([`select::PreviewMemo`]); without one they measure on every call.
     pub preview_memo: Option<&'a select::PreviewMemo>,
@@ -188,6 +192,10 @@ pub struct ToolContext<'a> {
     /// Clipboard Handling → When pasting text: Keep Plain Text. Text pasted while typing takes
     /// the style at the caret, even the text the Type tool copied with its formatting.
     pub paste_plain_text: bool,
+    /// The text given to [`crate::Tool::text_input`] was typed on the keyboard (a key or an IME
+    /// commit), not inserted from the Glyphs panel or a paste: a lone typed `”` may then take the
+    /// document's opening quote ([`vectorcraft_doc::Quotes::typed_as_straight`]).
+    pub typed_from_keyboard: bool,
     /// View → Hide Slices: the Slice Selection tool can't pick hidden slices.
     pub slices_hidden: bool,
     /// View → Lock Slices: the Slice Selection tool leaves locked slices alone.
@@ -280,6 +288,11 @@ pub struct ToolContext<'a> {
 }
 
 impl ToolContext<'_> {
+    /// How the bounding box measures the selection: [`Self::preview_bounds`] and
+    /// [`Self::glyph_bounds`].
+    pub fn bounds_measure(&self) -> vectorcraft_effects::preview::Measure {
+        vectorcraft_effects::preview::Measure { preview: self.preview_bounds, glyphs: self.glyph_bounds }
+    }
     /// Tolerance in document units for `px` screen pixels.
     pub fn tol(&self, px: f64) -> f64 {
         px / self.zoom.max(1e-9)

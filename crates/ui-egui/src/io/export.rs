@@ -33,6 +33,9 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
     // encoder (an exporter plug-in is told the file it writes).
     let params = &if params.is_object() { params.clone() } else { json!({}) };
     let f = fileio::writable_format(format, path.as_deref())?;
+    // A Shape Builder merge still being computed for a click is exported with the document.
+    let r = app.session.finish_tool_edit();
+    crate::canvas::apply_requests(app, r);
     // A `.ai` file names the view's active artboard.
     remember_active_artboard(app);
     let st = app.session.active().ok_or("no document")?;
@@ -244,7 +247,8 @@ pub fn export_for_screens(app: &mut VectorcraftApp, params: Value) -> Result<Val
     export_files(app, "document.exportForScreens", params)
 }
 
-/// [`export_for_screens`] through command `id` (`document.exportForScreens` or `assets.export`).
+/// [`export_for_screens`] through command `id` (`document.exportForScreens` or `assets.export`; or
+/// `assets.export3D`, whose reply takes the same form and which always runs at once).
 /// On the desktop with Background Export on, an export into a folder is checked, journaled and
 /// prepared from the document as it is now, and the files are encoded and written on the
 /// background thread ([`background`]): this returns `{background: true, status}` at once, with the
@@ -253,7 +257,8 @@ pub(crate) fn export_files(app: &mut VectorcraftApp, id: &str, params: Value) ->
     let open_location = params.get("openLocation").and_then(Value::as_bool).unwrap_or(false);
     let folder = params.get("folder").and_then(Value::as_str).unwrap_or_default().to_string();
     // Without a folder the files come back in the reply, which the caller waits for.
-    let in_background = app.session.prefs.background_export && app.services.write_shared.is_some() && !is_web(app) && !folder.is_empty();
+    let in_background =
+        app.session.prefs.background_export && app.services.write_shared.is_some() && !is_web(app) && !folder.is_empty() && id != "assets.export3D";
     if !in_background {
         // Made at once, after the exports and saves started before it.
         background::wait_all(app);

@@ -374,7 +374,7 @@ fn rgb_art_separates_with_gcr() {
         RenderOptions { proof: Some(ProofSetup { separations: Some(vec!["Black".into()]), ..Default::default() }), ..Default::default() },
     )
     .pixel(50, 50);
-    assert!(k[0] < 20, "RGB black is mostly K: {k:?}");
+    assert!((20..=30).contains(&k[0]), "RGB black carries 90% black: {k:?}");
     let c = render(
         &doc,
         RenderOptions { proof: Some(ProofSetup { separations: Some(vec!["Cyan".into()]), ..Default::default() }), ..Default::default() },

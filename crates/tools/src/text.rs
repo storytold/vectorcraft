@@ -36,7 +36,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use serde_json::{Value, json};
 use vectorcraft_doc::hit::hit_test;
-use vectorcraft_doc::{NodeId, NodeKind, TextKind, TextObject, TextRun};
+use vectorcraft_doc::{NodeId, NodeKind, Quotes, TextKind, TextObject, TextRun};
 use vectorcraft_geom::{BezPath, Point, Rect, Shape};
 use vectorcraft_text::{FontDb, TextLayout, edit};
 
@@ -160,7 +160,11 @@ fn next_edit_session() -> u64 {
 pub struct TypeTool {
     vertical: bool,
     mode: Mode,
-    /// The tool to return to on Escape (e.g. when double-clicked from a selection tool).
+    /// The tool whose double-click on type chose this tool, which Escape and Cmd+Enter return to.
+    /// The canvas sets it; choosing the Type tool another way (the toolbar) leaves it unset, and
+    /// Escape then goes to the Selection tool. Clicks that end editing or move it to other text
+    /// keep it. Choosing another tool clears it, and so does deactivating this tool when another
+    /// document or another window of the document becomes active.
     prev_tool: Option<String>,
     /// Text object being edited.
     editing: Option<NodeId>,
@@ -327,11 +331,26 @@ impl TypeTool {
             return None;
         }
         // Use Typographer's Quotes (Document Setup): a typed straight quote becomes the document's
-        // opening or closing quote, by the character before it.
+        // opening or closing quote, by the character before it. A `”` typed alone (the macOS Serbian
+        // Cyrillic layout's only double quote) becomes the opening quote where one opens, and stays
+        // `”` where one closes.
         let setup = &cx.doc.setup;
-        if setup.typographers_quotes && matches!(s.as_str(), "\"" | "'") {
-            let mut prev = self.char_before(cx, self.caret.min(self.anchor));
-            return Some(setup.quotes.apply(&s, &mut prev));
+        if setup.typographers_quotes {
+            let mut chars = s.chars();
+            if let (Some(c), None) = (chars.next(), chars.next()) {
+                if matches!(c, '"' | '\'') {
+                    let mut prev = self.char_before(cx, self.caret.min(self.anchor));
+                    return Some(setup.quotes.apply(&s, &mut prev));
+                }
+                if cx.typed_from_keyboard
+                    && let Some(q) = Quotes::typed_as_straight(c)
+                {
+                    let mut prev = self.char_before(cx, self.caret.min(self.anchor));
+                    if setup.quotes.opens_after(prev) {
+                        return Some(setup.quotes.apply(&q.to_string(), &mut prev));
+                    }
+                }
+            }
         }
         Some(s)
     }
@@ -396,8 +415,8 @@ impl TypeTool {
         out
     }
 
-    /// Stop editing and go back to the tool used before double-clicking into type (or to the
-    /// Selection tool), and leave the type selected.
+    /// Stop editing and go back to the tool whose double-click on type chose this tool (or to the
+    /// Selection tool when none did), and leave the type selected.
     fn end_editing(&mut self, cx: &ToolContext) -> Vec<Action> {
         let target = self.prev_tool.take().unwrap_or_else(|| "selection".into());
         let mut out = self.finish(cx);
@@ -458,6 +477,43 @@ impl TypeTool {
         out.push(Action::Preview("text.editRange".into(), edit_range_params(id, p, base.len() - s, runs, &ty.clear)));
         self.note_edit(fresh, id, (&base, base.len() - s), (&cur, cur.len() - s));
         out
+    }
+
+    /// Tab (`by` 1) or Shift+Tab (`by` -1) in type `t` (plain text `text`) with the selection
+    /// `a..b`: with the caret at the start of a list paragraph, the `text.setFormat` that moves the
+    /// paragraph a level down or up (none at the first or the last level: the key then does
+    /// nothing). None when the caret is anywhere else, the selection holds characters, or the
+    /// paragraph is in no list. The start of a threaded frame whose first paragraph continues from
+    /// the frame before ([`TextObject::first_para_continues`]) is not the start of a paragraph.
+    fn list_level_step(&self, t: &TextObject, text: &str, a: usize, b: usize, by: i32) -> Option<Vec<Action>> {
+        let id = self.editing?;
+        if a != b || edit::paragraph_at(text, a).start != a || (a == 0 && t.first_para_continues) {
+            return None;
+        }
+        let para = text.get(..a)?.matches('\n').count();
+        let list = t.para_at(para).list?;
+        let level = i32::try_from(list.depth()).ok()? + by;
+        let max = i32::try_from(vectorcraft_doc::text::LIST_LEVELS).ok()?;
+        if !(1..=max).contains(&level) {
+            return Some(vec![]);
+        }
+        Some(vec![Action::Exec("text.setFormat".into(), json!({"id": id.0, "start": a, "end": a, "listLevel": level}))])
+    }
+
+    /// Tab (Shift+Tab with `shift`) in type `t` (plain text `text`) with the selection `a..b`: with
+    /// the caret at the start of a list paragraph, it moves the paragraph a level down or up
+    /// ([`Self::list_level_step`]); anywhere else Tab inserts a tab.
+    fn tab(&mut self, cx: &ToolContext, t: &TextObject, text: &str, (a, b): (usize, usize), shift: bool) -> Vec<Action> {
+        match self.list_level_step(t, text, a, b, if shift { -1 } else { 1 }) {
+            // At the first or the last level the key does nothing, and the typing goes on.
+            Some(step) if step.is_empty() => step,
+            Some(step) => {
+                let mut out = self.commit();
+                out.extend(step);
+                out
+            }
+            None => self.replace(cx, "\t", None),
+        }
     }
 
     /// The other frames whose whole text is selected along with the edited frame's after Select

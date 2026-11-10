@@ -19,6 +19,77 @@ fn empty_dir(dir: std::path::PathBuf) -> std::path::PathBuf {
     dir
 }
 
+/// `run` and `mcp --headless` refuse `plugin.install` with this param unless the process was started
+/// with `--allow-plugin-grants`.
+fn approval_param_needs_the_start_up_flag(key: &str, value: Value) {
+    let module = vectorcraft_format::base64_encode(include_bytes!("../../../../crates/plugins/tests/fixtures/desaturate.wasm"));
+    let steps = tmp(&format!("{key}.json"));
+    std::fs::write(&steps, json!([{"command": "plugin.install", "params": {"dataBase64": module, key: value}}]).to_string()).unwrap();
+    let config = empty_dir(std::env::temp_dir().join(format!("vectorcraft-cli-test-{key}-{}", std::process::id())));
+    let run = |extra: &[&str]| {
+        Command::new(BIN).env("VECTORCRAFT_CONFIG_DIR", &config).args(["run", "--commands", steps.to_str().unwrap()]).args(extra).output().unwrap()
+    };
+    let out = run(&[]);
+    assert!(!out.status.success());
+    let shown = String::from_utf8_lossy(&out.stderr).into_owned() + &String::from_utf8_lossy(&out.stdout);
+    assert!(shown.contains("--allow-plugin-grants"), "{shown}");
+    let out = run(&["--allow-plugin-grants"]);
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+
+    let mcp_config = empty_dir(std::env::temp_dir().join(format!("vectorcraft-cli-test-mcp-{key}-{}", std::process::id())));
+    let mcp_install = |extra: &[&str]| -> Value {
+        let mut child = Command::new(BIN)
+            .env("VECTORCRAFT_CONFIG_DIR", &mcp_config)
+            .args(["mcp", "--headless"])
+            .args(extra)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        {
+            let mut stdin = child.stdin.take().unwrap();
+            let params = json!({"dataBase64": module, key: value});
+            for m in [
+                json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}),
+                json!({"jsonrpc":"2.0","method":"notifications/initialized"}),
+                json!({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"run_command","arguments":{"command":"plugin.install","params":params}}}),
+            ] {
+                writeln!(stdin, "{m}").unwrap();
+            }
+        }
+        let out = child.wait_with_output().unwrap();
+        assert!(out.status.success());
+        let replies: Vec<Value> = String::from_utf8(out.stdout).unwrap().lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+        replies.into_iter().find(|r| r["id"] == 2).unwrap()["result"].take()
+    };
+    let refused = mcp_install(&[]);
+    assert_eq!(refused["isError"], true, "without the flag: {refused}");
+    assert!(refused["content"][0]["text"].as_str().unwrap().contains("--allow-plugin-grants"), "{refused}");
+    let accepted = mcp_install(&["--allow-plugin-grants"]);
+    assert_eq!(accepted["isError"], false, "with the flag: {accepted}");
+}
+
+/// `run` and `mcp --headless` refuse `plugin.install`'s `grant` and `allowHeavy` unless the process was
+/// started with `--allow-plugin-grants`, which `mcp` won't take with `--connect` or the automation roots.
+#[test]
+fn plugin_grants_need_the_start_up_flag() {
+    approval_param_needs_the_start_up_flag("grant", json!(["doc.read"]));
+    approval_param_needs_the_start_up_flag("allowHeavy", json!(true));
+
+    let out = Command::new(BIN).args(["mcp", "--allow-plugin-grants", "--connect", "127.0.0.1:1"]).output().unwrap();
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("--allow-plugin-grants applies to the headless server"));
+    let root = std::env::temp_dir();
+    for flag in ["--automation-read-root", "--automation-write-root"] {
+        let out = Command::new(BIN).args(["mcp", "--allow-plugin-grants", flag, root.to_str().unwrap()]).stdin(Stdio::null()).output().unwrap();
+        assert!(!out.status.success(), "{flag}");
+        assert!(String::from_utf8_lossy(&out.stderr).contains("--allow-plugin-grants can't be used with"), "{flag}");
+    }
+    let usage = Command::new(BIN).arg("help").output().unwrap();
+    assert!(String::from_utf8_lossy(&usage.stdout).contains("--allow-plugin-grants lets plugin.install's grant and allowHeavy take effect"));
+}
+
 #[test]
 fn commands_prints_catalogue() {
     let out = Command::new(BIN).arg("commands").output().unwrap();
@@ -283,6 +354,22 @@ fn mcp_headless_over_stdio() {
     assert_eq!(replies[3]["result"]["content"][0]["type"], "image");
 }
 
+/// `--safe-mode mcp` serves a headless session without plug-ins: it refuses `--connect`, and by
+/// default it does not connect to an app listening on the default address, which loads its own
+/// plug-ins.
+#[test]
+fn safe_mode_mcp_does_not_connect_to_a_running_app() {
+    let out = Command::new(BIN).args(["--safe-mode", "mcp", "--connect", "127.0.0.1:9"]).env("VECTORCRAFT_NO_PREFS", "1").output().unwrap();
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(!out.status.success() && err.contains("--safe-mode runs a headless session"), "{err}");
+    // Something listening on the default address, as a running app does; a running app or another
+    // program already holding it serves as well.
+    let _app = std::net::TcpListener::bind(vectorcraft_mcp::DEFAULT_ADDR);
+    let out = Command::new(BIN).args(["--safe-mode", "mcp"]).env("VECTORCRAFT_NO_PREFS", "1").stdin(Stdio::null()).output().unwrap();
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(out.status.success() && err.contains("MCP server on stdio (headless)"), "{err}");
+}
+
 /// `mcp --automation-read-root` / `--automation-write-root` (#832): the flags are checked before the
 /// server starts, and the process then reads and writes only inside its roots.
 #[test]
@@ -510,7 +597,7 @@ fn exercise_mcp_core(
     assert!(r["result"]["completion"]["values"].as_array().is_some_and(|v| v.contains(&json!("svg"))), "{r}");
 
     mcp_send(stdin, json!({"jsonrpc":"2.0","id":5,"method":"resources/list","params":{}}));
-    assert!(mcp_recv(lines, notes, 5)["result"]["resources"].as_array().is_some_and(|v| v.len() == 3));
+    assert!(mcp_recv(lines, notes, 5)["result"]["resources"].as_array().is_some_and(|v| v.len() == 4));
     mcp_send(stdin, json!({"jsonrpc":"2.0","id":6,"method":"resources/templates/list","params":{}}));
     assert!(mcp_recv(lines, notes, 6)["result"]["resourceTemplates"].as_array().is_some_and(|v| v.len() >= 4));
 

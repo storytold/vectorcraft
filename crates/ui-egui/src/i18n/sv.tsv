@@ -186,6 +186,10 @@
 	Anti-Alias	Kantutjämning
 	Anti-alias Rasters	Kantutjämna rasterbilder
 	Anti-aliased Artwork	Kantutjämnad grafik
+	Anti-aliasing Method	Kantutjämningsmetod
+antiAlias	Sharp	Skarp
+	Crisp	Klar
+	Strong	Kraftig
 	Anti-aliasing:	Kantutjämning:
 	Any Kind	Alla typer
 	Font Technology	Typsnittsteknik
@@ -282,7 +286,6 @@ font-technology	Variable	Variabla
 	Update While Dragging	Uppdatera vid dragning
 	Hide Video Rulers	Dölj videolinjaler
 	Background Contents	Bakgrundsinnehåll
-	Background Contents:	Bakgrundsinnehåll:
 	Background:	Bakgrund:
 	Backspace	Backspace
 	Bar Graph Tool	Stapeldiagramverktyg
@@ -356,6 +359,13 @@ font-technology	Variable	Variabla
 	Apply Bullets	Använd punkter
 	Numbered List	Numrerad lista
 	Apply Numbers	Använd numrering
+	Bullets and Numbering…	Punkter och numrering…
+	Numbers	Nummer
+	Level:	Nivå:
+	Bullet Character:	Punkttecken:
+	Number Style:	Nummerformat:
+	Left Indent:	Vänsterindrag:
+	First Line Indent:	Indrag för första raden:
 	Convert to Text	Konvertera till text
 	Filled Dot	Fylld punkt
 	Dash	Tankstreck
@@ -542,6 +552,11 @@ font-technology	Variable	Variabla
 	Color Table ({n} colors)	Färgtabell ({n} färger)
 	Color Theme	Färgtema
 	Color Themes	Färgteman
+	Color Wheel	Färghjul
+	Hue ring	Nyansring
+	Saturation and brightness	Mättnad och ljusstyrka
+	Color field	Färgfält
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Färgtyp:
 	Color:	Färg:
 	Colorize	Färglägg
@@ -554,6 +569,7 @@ font-technology	Variable	Variabla
 	Coming soon — tracked in the parity plan	Kommer snart — följs upp i paritetsplanen
 	Command Click to Select Objects Behind	Cmd-klicka för att markera objekt bakom
 	Command Dialog	Kommandodialog
+	Command API Reference	API-referens för kommandon
 	Community	Gemenskap
 	Compatibility:	Kompatibilitet:
 	Compatible Gradient and Gradient Mesh Printing	Kompatibel utskrift av gradienter och gradientnät
@@ -640,7 +656,6 @@ font-technology	Variable	Variabla
 	Couldn't {} {name}: {e}	Det gick inte att {} {name}: {e}
 	Create	Skapa
 	Create Clipping Mask	Skapa klippmask
-	Create Document	Skapa dokument
 	Create from Guides	Skapa från stödlinjer
 	Create from Selection	Skapa från markering
 	Create From:	Skapa från:
@@ -1065,6 +1080,14 @@ font-technology	Variable	Variabla
 	Export As SVG…	Exportera som SVG…
 	Export Asset	Exportera resurs
 	Export Assets	Exportera resurser
+	Export 3D Object	Exportera 3D-objekt
+	3D Export Format	3D-exportformat
+	Export 3D Assets	Exportera 3D-resurser
+@msg	{what} can't be exported in 3D: {e}	{what} kan inte exporteras i 3D: {e}
+@msg	asset {id} isn't a 3D asset	resurs {id} är ingen 3D-resurs
+@msg	asset {id} is a 3D asset: assets.export3D writes it	resurs {id} är en 3D-resurs: assets.export3D skriver den
+@msg	no 3D assets yet: collect an object with a 3D effect first (assets.add3D)	inga 3D-resurser än: samla först ett objekt med en 3D-effekt (assets.add3D)
+@msg	select an object with a 3D effect (or give its ids)	markera ett objekt med en 3D-effekt (eller ange dess id:n)
 	Export As…	Exportera som…
 	Export CSS	Exportera CSS
 	Export CSS…	Exportera CSS…
@@ -1096,6 +1119,17 @@ font-technology	Variable	Variabla
 	Exporting {}	Exporterar {}
 	Export…	Exportera…
 	Extrude & Bevel…	Extrudera och fasa…
+	3D (Classic)	3D (klassisk)
+	Extrude & Bevel (Classic)…	Extrudera och fasa (klassisk)…
+	Surface	Yta
+	Wireframe	Trådram
+	No Shading	Ingen skuggning
+	Plastic	Plast
+	Highlight Intensity	Högdagerintensitet
+	Highlight Size	Högdagerstorlek
+	Blend Steps	Övergångssteg
+	Shading Color	Skuggningsfärg
+	Draw Hidden Faces	Rita dolda ytor
 	Eyedropper	Pipett
 	Eyedropper Applies:	Pipetten tillämpar:
 	Eyedropper Options	Pipettalternativ
@@ -1672,6 +1706,7 @@ font-technology	Variable	Variabla
 	Report copied	Rapporten har kopierats
 	Line {line}	Rad {line}
 	Line {line}: {name}: {status}	Rad {line}: {name}: {status}
+	Read Action Set File	Läs fil med åtgärdsuppsättning
 	Read Shortcut Set File	Läs fil med kortkommandon
 	Import Matches	Importera matchningar
 	Remember Import Matches	Kom ihåg importmatchningar
@@ -1801,6 +1836,7 @@ font-technology	Variable	Variabla
 	Lock (⌘2)	Lås (⌘2)
 	Lock Grid	Lås rutnät
 	Lock Guides	Lås stödlinjer
+	Lock Guides by Default	Lås stödlinjer som standard
 	Lock Others	Lås övriga
 	Lock Slices	Lås skivor
 	Lock Station Point	Lås betraktarpunkt
@@ -1906,6 +1942,10 @@ font-technology	Variable	Variabla
 	Stylistic	Stilistisk
 	Mojikumi Set	Mojikumi-uppsättning
 	Kinsoku Set	Kinsoku-uppsättning
+	Kinsoku Shori Type	Kinsoku Shori-typ
+	Push In First	Skjut in först
+	Push Out First	Skjut ut först
+	Push Out Only	Skjut endast ut
 	Hard	Hård
 	Soft	Mjuk
 	Monitor RGB	Bildskärms-RGB
@@ -2045,7 +2085,6 @@ font-technology	Variable	Variabla
 	New Color Group…	Ny färggrupp…
 	New Document Presets	Förinställningar för nytt dokument
 	New file	Ny fil
-	New from Template	Ny från mall
 	New from Template…	Ny från mall…
 	New Graphic Style	Ny grafikstil
 	New Graphic Style (Alt-click to name it)	Ny grafikstil (Alt-klicka för att namnge den)
@@ -2701,6 +2740,7 @@ digits	Malayalam	Malayalam
 	Reset Transformation	Återställ transformering
 	Replace With Font	Ersätt med typsnitt
 	Replace With Font From	Ersätt med typsnitt från
+	Find In	Sök i
 	System	System
 	Replaces the saved preset of that name.	Ersätter den sparade förinställningen med samma namn.
 	Replace…	Ersätt…
@@ -2828,6 +2868,7 @@ digits	Malayalam	Malayalam
 	Save PDF Preset	Spara PDF-förinställning
 	Save Perspective Grid Preset	Spara förinställning för perspektivrutnät
 	Save Preset	Spara förinställning
+	Save Document Preset	Spara dokumentförinställning
 	Save Preset…	Spara förinställning…
 	Save Print Preset	Spara utskriftsförinställning
 	Save Recovery Data	Spara återställningsdata
@@ -3375,6 +3416,15 @@ digits	Malayalam	Malayalam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Inställningar för Tate-chu-yoko…
 	Tate-chu-yoko Settings	Inställningar för Tate-chu-yoko
+	Composite Fonts…	Sammansatta teckensnitt…
+	Composite Fonts	Sammansatta teckensnitt
+	Export Composite Fonts	Exportera sammansatta teckensnitt
+	Import Composite Fonts	Importera sammansatta teckensnitt
+	Delete Font	Ta bort teckensnitt
+	Kanji	Kanji
+	Kana	Kana
+	Numerals	Siffror
+	Scale at Center	Skala från mitten
 	Up/Down:	Upp/ned:
 	Left/Right:	Vänster/höger:
 	Temperature	Temperatur
@@ -3382,7 +3432,6 @@ digits	Malayalam	Malayalam
 	Template	Mall
 	Templates	Mallar
 	Templates Folder	Mallmapp
-	Templates…	Mallar…
 	Text Displayed in Cell:	Text som visas i cellen:
 	Text Export Options	Alternativ för textexport
 	Text Fill & Stroke Color	Textens fyllnads- och konturfärg
@@ -3428,6 +3477,7 @@ digits	Malayalam	Malayalam
 	Tile Type:	Ruttyp:
 	tile {number}	ruta {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Rutorna numreras från vänster till höger och sedan nedåt. Lämna omfånget tomt för att få med alla rutor.
+	Copies per Sheet (as many as fit, in a grid)	Kopior per ark (så många som får plats, i ett rutnät)
 	Tint	Färgton
 	Tip extends past the end point	Spetsen sträcker sig förbi slutpunkten
 	Tip on the end point	Spetsen på slutpunkten
@@ -3887,11 +3937,11 @@ axis	Both	Båda
 	Dock to Bottom	Docka nederst
 	Dock Control Bar	Docka kontrollfältet
 	Drag to float the toolbar	Dra för att göra verktygsfältet flytande
-	Drag to the window's left edge to dock	Dra till fönstrets vänsterkant för att docka
+	Drag to the window's left or right edge to dock	Dra till fönstrets vänster- eller högerkant för att docka
 	Float Tool Group	Gör verktygsgruppen flytande
 @msg	no library `{id}`	inget bibliotek `{id}`
 @msg	select some type first	markera någon text först
-@msg	kerning must be a number, "auto", or "optical"	Kerning måste vara ett tal, ”auto” eller ”optical”
+@msg	kerning must be a number, "auto", or "optical"	kerning måste vara ett tal, ”auto” eller ”optical”
 @msg	the selection has no gradient fill	markeringen har ingen fyllnadsgradient
 @msg	the selection has no gradient stroke	markeringen har ingen konturgradient
 @msg	the selection has no pattern fill	markeringen har inget fyllnadsmönster
@@ -3927,6 +3977,28 @@ axis	Both	Båda
 @msg	Combine Slices: the slices have no bounds	Kombinera skivor: skivorna har inga gränser
 @msg	Convert to Artboards: selection has no area	Konvertera till ritytor: markeringen har ingen area
 @msg	Convert to Shape: no rectangles or ellipses selected	Konvertera till form: inga rektanglar eller ellipser är markerade
+	Run	Kör
+	Run Script	Kör skript
+	Stop Script	Stoppa skript
+	Show External Script Warning	Visa varning för externa skript
+	A Script Is Running	Ett skript körs
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Ett skript kan ändra de öppna dokumenten och skriva filer genom de kommandon det kör. Kör bara skript du litar på.
+	Do not show this warning again	Visa inte den här varningen igen
+	Stop the script and undo what it did? Then quit again.	Stoppa skriptet och ångra det det gjort? Avsluta sedan igen.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Det här skriptet har lagt till väldigt många objekt. Fortsätta, eller stoppa det och ångra det det gjort?
+@msg	Choose a .js or .jsx script	Välj ett .js- eller .jsx-skript
+@msg	Ran {name}	Körde {name}
+@msg	The script was stopped and its changes were undone	Skriptet stoppades och dess ändringar ångrades
+@msg	a script is running: stop it or wait for it to finish	ett skript körs: stoppa det eller vänta tills det är klart
+@msg	this is a compiled script, which cannot be run; use its source text	det här är ett kompilerat skript som inte kan köras; använd dess källtext
+@msg	the script is not UTF-8 text	skriptet är inte UTF-8-text
+@msg	the script is too large to run	skriptet är för stort för att köras
+@msg	a drag or an undo group is open; finish it before running a script	en dragning eller ångragrupp är öppen; avsluta den innan du kör ett skript
+@msg	the script left a document that cannot be kept	skriptet lämnade ett dokument som inte kan behållas
+@msg	the script's run is no longer available	skriptets körning är inte längre tillgänglig
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	ett misslyckat kommando ändrade ångrasteg som inte kunde återställas, så skriptet stoppades
+@msg	a recovery copy could not be written, so the script was not run	en återställningskopia kunde inte skrivas, så skriptet kördes inte
+@msg	Running a script	Kör ett skript
 @msg	Copied the script report	Kopierade skriptrapporten
 @msg	Corners edits the corners of a path	Hörn redigerar hörnen på en bana
 @msg	Couldn't copy to the system clipboard: {e}	Kunde inte kopiera till systemets urklipp: {e}
@@ -3994,6 +4066,7 @@ axis	Both	Båda
 @msg	Targa files are RGB: colorModel rgb	Targa-filer är RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Textombrytning: markera ett ombrytningsobjekt
 @msg	This shortcut file is in a form VectorCraft can't read.	Den här kortkommandofilen har ett format som VectorCraft inte kan läsa.
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` måste vara "none", "sharp", "crisp" eller "strong"
 @msg	`aspect` must be a number (%)	`aspect` måste vara ett tal (%)
 @msg	`at` must be [x, y]	`at` måste vara [x, y]
 @msg	`color` must be a colour	`color` måste vara en färg
@@ -4111,7 +4184,7 @@ axis	Both	Båda
 @msg	bad shortcut	ogiltigt kortkommando
 @msg	bad stream length	ogiltig strömlängd
 @msg	bad trailer	ogiltig trailer
-@msg	balance must be between 0 and 100	balansen måste vara mellan 0 och 100
+@msg	balance must be between 0 and 100	balance måste vara mellan 0 och 100
 @msg	batch step {_1} (`{id}`) failed: {e}	batchsteg {_1} (`{id}`) misslyckades: {e}
 @msg	brightness must be dark|mediumDark|mediumLight|light	brightness måste vara dark|mediumDark|mediumLight|light
 @msg	can't encode the document: {0}	kan inte koda dokumentet: {0}
@@ -4138,7 +4211,7 @@ axis	Both	Båda
 @msg	compound paths can only contain paths	sammansatta banor kan bara innehålla banor
 @msg	compressed (RLE) bitmaps can't be read yet	komprimerade (RLE) bitmappar kan inte läsas än
 @msg	damaged	skadad
-@msg	decimals must be {_1}–{_2} (got {_3})	decimaler måste vara {_1}–{_2} (fick {_3})
+@msg	decimals must be {_1}–{_2} (got {_3})	decimals måste vara {_1}–{_2} (fick {_3})
 @msg	divide into 1 to {MAX_PIECES} slices	dela i 1 till {MAX_PIECES} skivor
 @msg	effect {k} is `{_1}`, not `{id}`	effekt {k} är `{_1}`, inte `{id}`
 @msg	empty brush stroke	tomt penseldrag
@@ -4263,8 +4336,11 @@ axis	Both	Båda
 @msg	no such action set	åtgärdsuppsättningen finns inte
 @msg	the action sets changed; nothing was deleted	åtgärdsuppsättningarna har ändrats; inget raderades
 @msg	no action set to save	ingen åtgärdsuppsättning att spara
+@msg	the action set file can't be read in full	filen med åtgärdsuppsättning kan inte läsas helt
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Läste in ”{name}”: {n} steg utelämnades|Läste in ”{name}”: {n} steg utelämnades
 @msg	not an action set file	inte en fil med åtgärdsuppsättning
 @msg	the action set file is larger than 8 MiB	filen med åtgärdsuppsättningen är större än 8 MiB
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: referensen skulle bli större än {MAX_BYTES} byte
 @msg	the action set file holds more than 1,000 actions	filen med åtgärdsuppsättningen innehåller fler än 1 000 åtgärder
 @msg	the action set file needs a later version of VectorCraft	filen med åtgärdsuppsättningen kräver en nyare version av VectorCraft
 @msg	an action in the action set file has more than 10,000 steps	en åtgärd i filen med åtgärdsuppsättningen har fler än 10 000 steg
@@ -4337,7 +4413,7 @@ axis	Both	Båda
 @msg	replace: the object to replace was changed or deleted	replace: objektet som skulle ersättas har ändrats eller tagits bort
 @msg	pattern missing	mönster saknas
 @msg	patterns nested too deeply are filled with mid-grey	mönster som är kapslade för djupt fylls med mellangrått
-@msg	percent must be above 0 and at most 6400, not {p}	procent måste vara över 0 och högst 6400, inte {p}
+@msg	percent must be above 0 and at most 6400, not {p}	percent måste vara över 0 och högst 6400, inte {p}
 @msg	pick a colour, gradient or pattern to save as a swatch	välj en färg, gradient eller ett mönster att spara som färgruta
 @msg	plane must be left, right or ground	plane måste vara left, right eller ground
 @msg	plug-in ABI: {0}	pluginets ABI: {0}
@@ -4358,8 +4434,8 @@ axis	Both	Båda
 @msg	result would exceed the canvas (coordinates out of range)	resultatet skulle hamna utanför arbetsytan (koordinater utanför intervallet)
 @msg	objects can't be nested more than 32 deep	objekt kan inte kapslas djupare än 32 nivåer
 @msg	the SVG's elements are nested more than {0} deep	SVG-filens element är nästlade mer än {0} nivåer djupt
-@msg	scale must be a number from {_1} to {_2}, not {_3}	skala måste vara ett tal från {_1} till {_2}, inte {_3}
-@msg	scale must be a number from {_1} to {_2}, not {s}	skala måste vara ett tal från {_1} till {_2}, inte {s}
+@msg	scale must be a number from {_1} to {_2}, not {_3}	scale måste vara ett tal från {_1} till {_2}, inte {_3}
+@msg	scale must be a number from {_1} to {_2}, not {s}	scale måste vara ett tal från {_1} till {_2}, inte {s}
 @msg	select (or target) objects whose appearance isn't basic	markera (eller ange som mål) objekt vars utseende inte är grundläggande
 @msg	select a Live Paint group	markera en Live Paint-grupp
 @msg	select a blend	markera en blandning
@@ -4381,6 +4457,13 @@ axis	Both	Båda
 @msg	select an image	markera en bild
 @msg	select an object in perspective	markera ett objekt i perspektiv
 @msg	select artwork (or a colour group) to recolor	markera grafik (eller en färggrupp) att färga om
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	Omfärgning klar; utan ändring: {locked} och {hidden}
+@msg	Recolor completed; {objects} were left unchanged	Omfärgning klar; utan ändring: {objects}
+@msg	Recolor completed; {objects} was left unchanged	Omfärgning klar; utan ändring: {objects}
+@msg	1 locked object	1 låst objekt
+@msg	{n} locked objects	{n} låsta objekt
+@msg	1 hidden object	1 dolt objekt
+@msg	{n} hidden objects	{n} dolda objekt
 @msg	select at least two objects	markera minst två objekt
 @msg	exit isolation mode first	avsluta isoleringsläget först
 @msg	select objects, not layers	markera objekt, inte lager
@@ -4618,11 +4701,15 @@ axis	Both	Båda
 @msg	its objects are nested too deeply	dess objekt är för djupt kapslade
 @msg	its section ending with `%{end}` doesn't end	dess avsnitt som slutar med `%{end}` avslutas aldrig
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	penslar som VectorCraft ännu inte kan läsa utelämnades från panelen Penslar ({_1})
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objekt med flera fyllningar eller konturer, effekter eller penslar importerades som sitt ritade utseende ({_1}): deras utseende går inte att redigera än
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objekt med flera fyllningar eller konturer, konturer med variabel bredd, effekter eller penslar importerades som sitt ritade utseende ({_1}): deras utseende går inte att redigera än
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	namnet `{name}` är inte UTF-8 och lästes som {label}: om det ser fel ut, öppna filen med en annan legacyNameEncoding
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	namnet `{name}` är inte UTF-8, och delar av det är inte heller giltig {label}: öppna filen med en annan legacyNameEncoding
+@msg	more names that aren't UTF-8 were read as {label} ({count})	fler namn som inte är UTF-8 lästes som {label} ({count})
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	gradienten ”{name}” är inte definierad i filen: en enfärgad fyllning används i stället
 @msg	an image VectorCraft can't read was left out	en bild som VectorCraft inte kan läsa utelämnades
 @msg	graphs come in as plain art, without their data or settings	diagram läses in som vanlig grafik, utan sina data och inställningar
 @msg	an image whose data is cut short was left out	en bild med avkortade data utelämnades
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	en inbäddad bild på {_1} × {_2} pixlar förminskades till {_3} × {_4} pixlar för att behålla lagren
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	länkade bilder visar förhandsgranskningen med låg upplösning som sparats i filen tills deras filer hittas: länka om dem i panelen Länkar
 @msg	linked type areas past VectorCraft's limits were left out	länkade textområden utöver VectorCrafts gränser utelämnades
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	text som byter skrivriktning inuti ett textobjekt öppnas i riktningen för sitt första tecken
@@ -4702,6 +4789,7 @@ axis	Both	Båda
 @msg	object ids are non-negative integers, not {v}	objekt-id:n är icke-negativa heltal, inte {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} måste vara en array med objekt-id:n som är icke-negativa heltal
 @msg	invalid object id {value}: expected a non-negative integer	ogiltigt objekt-id {value}: ett icke-negativt heltal förväntades
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	post {index} i `{key}` är {value}, inte ett objekt-id (ett icke-negativt heltal)
 @msg	no such object id {value}	det finns inget objekt med id {value}
 @msg	id {value} is a layer, not an object	id {value} är ett lager, inte ett objekt
 @msg	id {value} is a layer, not an object; move layers with layer.move	id {value} är ett lager, inte ett objekt; flytta lager med layer.move
@@ -4737,6 +4825,10 @@ axis	Both	Båda
 @msg	the PSD file is cut short	PSD-filen är avkortad
 @msg	the PSD file's header is damaged	PSD-filens huvud är skadat
 @msg	the PSD file's image data can't be read: {e}	PSD-filens bilddata kan inte läsas: {e}
+@msg	the JPEG XL file is cut short	JPEG XL-filen är avkortad
+@msg	the JPEG XL container is too large to read	JPEG XL-behållaren är för stor för att läsas
+@msg	CMYK JPEG XL images can't be read	JPEG XL-bilder i CMYK kan inte läsas
+@msg	the JPEG XL file can't be read: {e}	JPEG XL-filen kan inte läsas: {e}
 	Video	Video
 	De-Interlace…	Avfläta…
 	De-Interlace	Avfläta
@@ -4793,6 +4885,9 @@ axis	Both	Båda
 effect	Soft	Mjuk
 	Edge	Kant
 	System Title Bar	Systemets namnlist
+	VectorCraft Title Bar on Every Desktop	VectorCrafts namnlist på alla skrivbord
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Miljövariabeln VECTORCRAFT_TITLEBAR väljer namnlisten så länge den är angiven.
+	System Title Bar takes precedence over this option while it is on.	Systemets namnlist har företräde framför det här alternativet så länge den är på.
 	Value Axis	Värdeaxel
 	On Left Side	På vänster sida
 	On Right Side	På höger sida
@@ -4838,7 +4933,7 @@ effect	Soft	Mjuk
 @msg	before must name a panel	before måste ange en panel
 @msg	docking action contains an unknown panel or an excessive split path	dockningsåtgärden innehåller en okänd panel eller en alltför djup delningssökväg
 @msg	group must be true or false	group måste vara true eller false
-@msg	panel is not in a dock group	panelen ligger inte i en dockningsgrupp
+@msg	panel is not in a dock group	panel ligger inte i en dockningsgrupp
 @msg	only a dock group above or below others collapses, not one beside another	bara en dockningsgrupp ovanför eller under andra komprimeras, inte en bredvid en annan
 @msg	icon must be true or false	icon måste vara true eller false
 @msg	icon only docks a panel in the icon column, with no anchor	icon dockar bara en panel i ikonkolumnen, utan anchor
@@ -4989,7 +5084,7 @@ lighting	Light	Ljus
 	Bevel both sides	Fasning på båda sidor
 	Presets	Förinställningar
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Ett objekt kan bara ha en 3D-effekt. Redigera alternativen för den befintliga effekten eller ta bort den först.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} kräver för närvarande en bana eller sammansatt bana. Konvertera text, bilder och grupper till banor först.
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} kräver för närvarande en bana, sammansatt bana, text eller grupp. Konvertera bilder och andra objekt till banor först.
 @msg	{label} requires a shape with at least two anchors	{label} kräver en form med minst två ankarpunkter
 @msg	The shape is too complex for a 3D effect	Formen är för komplex för en 3D-effekt
 @msg	The 3D surface is too complex; simplify the shape	3D-ytan är för komplex; förenkla formen
@@ -4997,6 +5092,11 @@ lighting	Light	Ljus
 @msg	unknown parameter `{key}`; did you mean `{near}`?	okänd parameter `{key}`; menade du `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	okänd parameter `{key}`; kommandot tar inga parametrar
 @msg	unknown parameter `{key}`; the command takes: {keys}	okänd parameter `{key}`; kommandot tar: {keys}
+@msg	the params must be an object, not {got}	parametrarna måste vara ett objekt, inte {got}
+@msg	unknown parameter `{path}`; the object takes no keys	okänd parameter `{path}`; objektet tar inga nycklar
+@msg	unknown parameter `{path}`; it takes: {keys}	okänd parameter `{path}`; den tar: {keys}
+@msg	missing `{path}`	`{path}` saknas
+@msg	`{path}` must be {expected}, not {got}	`{path}` måste vara {expected}, inte {got}
 	1 Layer	1 lager
 	1 bit	1 bit
 	16 Colors	16 färger
@@ -5752,6 +5852,11 @@ swatch	Yellow Green	Gulgrön
 	Snap to Perpendicular	Fäst mot vinkelrät
 @msg	unknown snap option `{key}` (use {options})	okänt fästalternativ `{key}` (använd {options})
 	Gap Length:	Lucklängd:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Läget Platt logotyp använder inte keepColors: det vektoriserar färgerna som anges i logoColors eller färgerna det hittar.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Ingenting vektoriserades: ingen av färgerna som vektoriseringen hittade motsvarar keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Ingenting vektoriserades: Ignorera färg utelämnar alla områden med färgerna som keepColors anger.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	Ingenting vektoriserades: färgerna som matchar keepColors ger inga banor.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: ingen av färgerna som vektoriseringen hittade motsvarar {c}, så ingenting av den vektoriseras.
 @msg	`colorGroup` needs `library: "document"`	`colorGroup` kräver `library: "document"`
 @msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` kräver `palette: "documentLibrary"`
 @msg	`colorGroup` needs `mode: "color"`	`colorGroup` kräver `mode: "color"`
@@ -5864,11 +5969,14 @@ axis	Y Axis	Y-axel
 @msg	Running “{name}”…	Kör ”{name}”…
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	en live-effekt körs medan dokumentet ritas, så den kan inte vara `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	ett exportinsticksprogram får alltid en exports budget: utelämna `budget`
-@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	”{_1}” begär en stor beräkningsbudget (varje körning upp till {minutes} minuter och {times} gånger de vanliga instruktionerna): installera det med `allowHeavy: true` när användaren har godkänt
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	”{_1}” begär en stor beräkningsbudget (varje körning upp till {minutes} minuter och {times} gånger de vanliga instruktionerna): en person måste godkänna det i skrivbordsappen, eller skicka `allowHeavy: true` i en session som startats med --allow-plugin-grants
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Installera ”{name}”, som begär dessa behörigheter?
 	ID: {id}	ID: {id}
 	Version: {version}	Version: {version}
+	Install “{name}” in place of the plug-in with the same ID?	Installera ”{name}” i stället för det plugin som har samma id?
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Den här filen är inte det plugin som tidigare installerades med detta id. Den får de inställningar och den cache som sparats för detta id.
+@msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	”{name}” är en annan modul än pluginet med id {_1} och skulle få de inställningar och den cache som sparats för det: installera det med `replace: true` när användaren har godkänt
 	File SHA-256: {hash}	Filens SHA-256: {hash}
 	Read the objects it is given	Läsa objekten den får
 	Change, add and delete objects in the document	Ändra, lägga till och ta bort objekt i dokumentet
@@ -5876,21 +5984,43 @@ axis	Y Axis	Y-axel
 	Change how the objects its effect is applied to are drawn	Ändra hur objekten som dess effekt används på ritas
 	Write the document as a file in its own format	Skriva dokumentet som en fil i sitt eget format
 	Show its progress, see Cancel and write log lines	Visa sitt förlopp, se när det avbryts och skriva loggrader
-@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	behörigheten `progress` kräver plugin-API-nivå {PROGRESS_API}: ange `api` {PROGRESS_API}
+	Keep settings of its own	Spara egna inställningar
+	Keep a cache of its own, which you can clear	Spara en egen cache, som du kan tömma
+	Clear Plug-in Cache	Töm pluginets cache
+@msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	behörigheten `{permission}` kräver plugin-API-nivå {PROGRESS_API}: ange `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	modulen importerar `env.{name}` med en annan typ än värdens: värdens typ är {signature}
-@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	modulen importerar `env.{name}`, som ett plugin bara får använda på plugin-API-nivå {PROGRESS_API} (`api` {PROGRESS_API}) och med behörigheten `progress`
-@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	modulen importerar `{from}.{name}`, som värden inte erbjuder: ett plugin får bara importera `env.vc_progress`, `env.vc_cancelled` och `env.vc_log` (plugin-API-nivå 2), och ingen WASI, inga filer eller nätverk
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	modulen importerar `env.{name}`, som ett plugin bara får använda på plugin-API-nivå {PROGRESS_API} (`api` {PROGRESS_API}) och med behörigheten `{permission}`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	modulen importerar `{from}.{name}`, som värden inte erbjuder: ett plugin får bara importera de `env.vc_*`-funktioner som docs/plugins.md listar (plugin-API-nivå 2), och ingen WASI, inga filer eller nätverk
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` är {_1}; den här värden stöder plugin-API-nivå 1 till {API_LEVEL}
+@msg	`paintOutput` may only be true	`paintOutput` får bara vara true
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` gäller bara en liveeffekt (`kind` "effect") med `api` 2
 @msg	`grant` must be a list of permission names	`grant` måste vara en lista med behörighetsnamn
 @msg	`grant` names an unknown permission `{shown}`	`grant` anger en okänd behörighet `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	ett plugin av typen `{_1}` behöver behörigheten `{_2}`
 @msg	at most {MAX_PERMISSIONS} `permissions`	högst {MAX_PERMISSIONS} `permissions`
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	behörigheten `{shown}` gäller inte ett plugin av typen `{_1}`
 @msg	permission `{shown}` is listed twice	behörigheten `{shown}` står två gånger
+@msg	only a filter declares `inputs`	bara ett filter anger `inputs`
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` anger en okänd objekttyp `{shown}`: använd type, image eller symbolInstance
+@msg	`inputs` lists `{shown}` twice	`inputs` anger `{shown}` två gånger
+@msg	`inputs` needs `api` 2 or later	`inputs` kräver `api` 2 eller senare
+@msg	`inputs` needs the permission `doc.read`	`inputs` kräver behörigheten `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	minnesbudget (objekt {_1} behöver {size} byte indata, {left} återstår)
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	objektbudget (fler än {MAX_OBJECTS} skrivskyddade objekt)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	behörigheten `{shown}` är reserverad för ett senare plugin-API; den här värden beviljar den inte
 @msg	unknown permission `{shown}`	okänd behörighet `{shown}`
-@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	”{name}” begär behörigheterna {asked}: installera det med en `grant` som listar dem när användaren har godkänt
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	”{name}” begär behörigheterna {asked}: en person måste godkänna dem i skrivbordsappen, eller skicka `grant` i en session som startats med --allow-plugin-grants
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` och `allowHeavy` gäller bara i en session som startats med --allow-plugin-grants: godkänn insticksprogrammet i skrivbordsappen
+@msg	Only the person at the keyboard can approve installing a plug-in	Bara personen vid tangentbordet kan godkänna installationen av ett insticksprogram
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	”{name}” beviljades inte `{p}`, som dess utdata behöver: ingenting ändrades
+@msg	a heavy filter runs in the background, so it can't declare `commands`	ett tungt filter körs i bakgrunden, så det kan inte deklarera `commands`
+@msg	at most {MAX_COMMANDS} `commands`	högst {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	kommandot {name} deklareras två gånger
+@msg	command {name}: `label` must be 1-64 printable characters	kommando {name}: `label` måste ha 1-64 utskrivbara tecken
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	kommando {name}: använd ett id med 1-{MAX_COMMAND_ID} tecken av a-z 0-9 _ som börjar med en bokstav
+@msg	command {name}: {e}	kommando {name}: {e}
+@msg	only a filter or a live effect declares `commands`	bara ett filter eller en live-effekt deklarerar `commands`
+@msg	“{name}” › {label}: {e}	”{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	modulen har inte den SHA-256 som `hash` anger: ingenting installerades
 # Actions panel: action sets (#3712).
 	New Set…	Ny uppsättning…
@@ -5942,6 +6072,14 @@ axis	Y Axis	Y-axel
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all eller ett intervall som 1, 3-5, inte {v}
 	Add to Symbols	Lägg till i symboler
 	Basic Shapes	Grundformer
+	Button	Knapp
+	Panel	Panel
+	UI Frames	UI-ramar
+	Map Markers	Kartmarkörer
+	Pin	Nål
+	Flag	Flagga
+	Crosshair	Hårkors
+	Checkpoint	Kontrollpunkt
 	Open Symbol Library	Öppna symbolbibliotek
 	Save Symbol Library	Spara symbolbibliotek
 	Save Symbol Library…	Spara symbolbibliotek…
@@ -6016,6 +6154,8 @@ axis	Y Axis	Y-axel
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Punkttext
 	Area Text	Områdestext
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Mät text efter glyfgränser
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Visa alternativ för fäst mot glyf
 	Hide Snap to Glyph Options	Dölj alternativ för fäst mot glyf
@@ -6458,9 +6598,20 @@ breakText	Glyphs	Glyfer
 	Reset Symbol Instance	Återställ symbolinstans
 @msg	type must be static or dynamic, not {v}	type måste vara static eller dynamic, inte {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` är en statisk symbol: ställ först in symboltypen på Dynamisk
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	För en bana, sammansatt bana eller text som är markerad i en symbolinstans kan bara fyllning, linje, opacitet och blandning ändras
 @msg	path must be a list of child indices	path måste vara en lista med underordnade index
 @msg	no object at path {shown} in the symbol's art	inget objekt vid sökvägen {shown} i symbolens bild
 @msg	give fill, stroke, opacity and/or blend	ange fill, stroke, opacity och/eller blend
+@msg	{key} cannot be set on a guide	{key} kan inte anges för en stödlinje
+@msg	{key} cannot be set on a blend	{key} kan inte anges för en blandning
+@msg	{key} cannot be set on an envelope	{key} kan inte anges för ett kuvert
+@msg	{key} cannot be set on a gradient mesh	{key} kan inte anges för ett gradientnät
+@msg	{key} cannot be set on a Repeat	{key} kan inte anges för en upprepning
+@msg	{key} cannot be set on a placed document	{key} kan inte anges för ett placerat dokument
+@msg	{key} cannot be set on an Intertwine group	{key} kan inte anges för en sammanflätad grupp
+@msg	stroke cannot be set on a symbol instance	stroke kan inte anges för en symbolinstans
+@msg	fill on a symbol instance must be a solid color or none	fill för en symbolinstans måste vara en enfärgad färg eller none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} kan inte anges för en bild utan effekten Konvertera till form eller Konvertera objekt till konturer
 @msg	pass newName, registration, exportType, nineSlice and/or type	ange newName, registration, exportType, nineSlice och/eller type
 	Text Flow	Textflöde
 	By Rows	Radvis
@@ -6494,6 +6645,7 @@ breakText	Glyphs	Glyfer
 # The strings the report listed as missing for sv.
 	Font Size:	Teckenstorlek:
 digits	Hindi	Hindi
+	Help Bar	Hjälpfält
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	Textverktyg
 	Text Tweaker…	Textjustering…
@@ -6665,7 +6817,7 @@ digits	Hindi	Hindi
 @msg	{what} points outside memory	{what} pekar utanför minnet
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} skulle skrivas ut på fler än {MAX_TILES} rutor: skala ned det
 @msg	`{_1}` can't be edited or removed	`{_1}` kan inte redigeras eller tas bort
-@msg	`{_1}` is a {_2}, not an exporter	`{_1}` är av typen {_2}, inte en exportfunktion
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` är ett plugin av typen `{_2}`, inte en exportfunktion
 @msg	`{_1}` is a live effect: apply it with effect.apply {{"effect"}"}}	`{_1}` är en live-effekt: använd den med effect.apply {{"effect"}"}}
 @msg	`{_1}` is an exporter: export with document.export {{"format"}"}}	`{_1}` är en exportfunktion: exportera med document.export {{"format"}"}}
 @msg	`{_1}` is built in and always listed	`{_1}` är inbyggd och listas alltid
@@ -7308,7 +7460,7 @@ digits	Hindi	Hindi
 @msg	margin: a {m} pt margin leaves no imageable area on the paper	margin: en marginal på {m} pt lämnar ingen tryckbar yta på papperet
 @msg	matrix must be finite and invertible, depth finite	matrix måste vara ändlig och inverterbar, depth ändligt
 @msg	matte: {e}	bakgrundsfärg: {e}
-@msg	member is for order front, forward, backward or back	member gäller ordningen front, forward, backward eller back
+@msg	member is for order front, forward, backward or back	member gäller order front, forward, backward eller back
 @msg	memory budget (the selection is too large to hand over)	minnesbudget (markeringen är för stor för att lämnas över)
 @msg	missing `{k}`	`{k}` saknas
 @msg	missing `{key}`	`{key}` saknas
@@ -7540,7 +7692,7 @@ digits	Hindi	Hindi
 @msg	offset out of range	förskjutningen ligger utanför intervallet
 @msg	Offset Path: {e}	Förskjut bana: {e}
 @msg	Offset Path: the path is too complex to offset	Förskjut bana: banan är för komplex för att förskjutas
-@msg	only an exporter declares `extensions`	endast en exportfunktion deklarerar `extensions`
+@msg	only an exporter or an importer declares `extensions`	endast en exportfunktion eller importfunktion deklarerar `extensions`
 @msg	only groups, layers, type and images have a Contents (Characters) row	endast grupper, lager, text och bilder har en rad för Innehåll (Tecken)
 @msg	only interior mesh lines can be deleted	endast inre nätlinjer kan raderas
 @msg	only solid colours can be added (not gradients or patterns)	endast enhetliga färger kan läggas till (inte gradienter eller mönster)
@@ -7577,7 +7729,7 @@ digits	Hindi	Hindi
 @msg	page art is missing image data for {key}	sidans bildmaterial saknar bilddata för {key}
 @msg	page art is missing pattern {name}	sidans bildmaterial saknar mönstret {name}
 @msg	page art is missing swatch {name}	sidans bildmaterial saknar färgrutan {name}
-@msg	page must be a whole number from 1	sidan måste vara ett heltal från och med 1
+@msg	page must be a whole number from 1	page måste vara ett heltal från och med 1
 @msg	page thumbnail: {e}	sidminiatyr: {e}
 @msg	pages must be a range such as "2-3" or a page number, not {v}	pages måste vara ett intervall som "2-3" eller ett sidnummer, inte {v}
 @msg	pages: {e}	sidor: {e}
@@ -7587,7 +7739,7 @@ digits	Hindi	Hindi
 @msg	parameters must be an object	parametrarna måste vara ett objekt
 @msg	passwords can have up to {MAX_PASSWORD} bytes	lösenord får vara högst {MAX_PASSWORD} byte
 @msg	path has no open end	banan har ingen öppen ände
-@msg	paths must be strings	sökvägar måste vara strängar
+@msg	paths must be strings	paths måste vara strängar
 @msg	PDF content is incomplete or exceeds the reader's limits; no document was imported	PDF-innehållet är ofullständigt eller överskrider läsarens gränser; inget dokument importerades
 @msg	PDF flattener: {e}	PDF-plattning: {e}
 @msg	PDF options: {e}	PDF-alternativ: {e}
@@ -7876,7 +8028,7 @@ digits	Hindi	Hindi
 @msg	thumbnail: no page {v} (the {what} has {count})	miniatyr: ingen sida {v} ({what} har {count})
 @msg	tileRange of {what}: {e}	tileRange för {what}: {e}
 @msg	time budget	tidsbudget
-@msg	title can't be empty	titeln får inte vara tom
+@msg	title can't be empty	title får inte vara tom
 @msg	to (the new name) is required	to (det nya namnet) krävs
 @msg	to must be fill or stroke	to måste vara fill eller stroke
 @msg	to must be smooth or corner	to måste vara smooth eller corner
@@ -7982,7 +8134,7 @@ digits	Hindi	Hindi
 @msg	view must be one of {_1}	view måste vara något av {_1}
 @msg	warpStyle can only edit an applied Warp effect	warpStyle kan bara redigera en tillämpad Förvräng-effekt
 @msg	width factors must be finite	breddfaktorerna måste vara ändliga
-@msg	width must be positive	bredden måste vara positiv
+@msg	width must be positive	width måste vara positiv
 @msg	width out of range	bredden ligger utanför tillåtet omfång
 @msg	width/height must be > 0	bredd/höjd måste vara > 0
 @msg	width/height must be positive and within the canvas	bredd/höjd måste vara positiva och inom arbetsytan
@@ -7990,3 +8142,45 @@ digits	Hindi	Hindi
 @msg	x and y must be given together	x och y måste anges tillsammans
 @msg	zone needs an anchor: dock beside a panel with anchor, or in a new dock column with side (Start or End)	zone behöver ett ankare: docka bredvid en panel med anchor eller i en ny dockkolumn med side (Start eller End)
 @msg	zoom must be positive	zoom måste vara positiv
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Öppna med
+	No importer plug-ins installed	Inga importplugins är installerade
+	Read files you open in its format and make documents from them	Läsa filer som du öppnar i dess format och skapa dokument av dem
+@msg	{_1} is an importer (File › Open With)	{_1} är ett importinsticksprogram (Fil › Öppna med)
+@msg	missing `importer` (see document.formats)	`importer` saknas (se document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` måste vara ett formatid för ett plugin (se document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	”{shown}” öppnar {_1}-filer, inte `{_2}`
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` är ett plugin av typen `{_2}`, inte en importfunktion
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` är en importfunktion: öppna en fil med document.open {{"importer"}"}}
+@msg	the importer returned no objects	importfunktionen returnerade inga objekt
+@msg	an importer returns `objects` and `warnings`, not `{key}`	en importfunktion returnerar `objects` och `warnings`, inte `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	filen är större än de {MAX_INPUT_BYTES} byte som en importfunktion läser
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	en importfunktion anger 1 till {MAX_EXTENSIONS} `extensions`
+@msg	an importer always gets an import's budget: leave `budget` out	en importfunktion får alltid en imports budget: utelämna `budget`
+
+# Safe Mode
+	Safe Mode…	Felsäkert läge…
+	Safe Mode	Felsäkert läge
+	Help › Safe Mode…	Hjälp › Felsäkert läge…
+	Enable on Re-launch	Aktivera vid nästa start
+	The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it.	Den senaste starten av VectorCraft stoppades medan pluginet {name} lästes in. Det är kanske inte orsaken.
+	Disable and Continue	Inaktivera och fortsätt
+	Start Normally	Starta normalt
+	Start in Safe Mode	Starta i felsäkert läge
+	VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.	VectorCraft är i felsäkert läge: inga plugins läses in eller körs förrän programmet startas normalt.
+	Disabled plug-ins	Inaktiverade plugins
+	No plug-ins are disabled.	Inga plugins är inaktiverade.
+@msg	Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally	Felsäkert läge är på: plugins läses inte in eller körs förrän VectorCraft startas normalt
+@msg	give `id` or `file` (see plugin.safeMode)	ange `id` eller `file` (se plugin.safeMode)
+@msg	that plug-in isn't disabled (see plugin.safeMode)	det pluginet är inte inaktiverat (se plugin.safeMode)
+@msg	Couldn't save the disabled plug-ins for the next launch	De inaktiverade pluginen kunde inte sparas till nästa start
+@msg	Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode	Expandera utseende: en plugin-effekt i markeringen kan inte expanderas i felsäkert läge
+
+# Align to Pixel Grid
+	Align to Pixel Grid	Justera mot pixelrutnät
+@msg	only paths and compound paths can be aligned to the pixel grid	bara banor och sammansatta banor kan justeras mot pixelrutnätet
+@msg	side is left or right, not `{s}`	side är left eller right, inte `{s}`
+	Ignore All	Ignorera alla
+	Add to Dictionary	Lägg till i ordlistan
+	No Suggestions	Inga förslag

@@ -2104,7 +2104,7 @@ fn type_menu_and_find_commands_refuse_a_param_of_the_wrong_type() {
     let switch = |k: &str| format!("`{k}` must be true or false");
     let scope = "`scope` must be one of selection, document".to_string();
     let not_a_list = "ids must be an array of non-negative integer object ids".to_string();
-    let not_an_id = "invalid object id \"x\": expected a non-negative integer".to_string();
+    let not_an_id = |entry: usize| format!("`ids` entry {entry} is \"x\", not a non-negative integer object id");
     for (cmd, p, want) in [
         ("edit.findReplace", json!({"find": "cat", "replace": 5}), string("replace")),
         ("edit.findReplace", json!({"find": 5, "replace": "dog"}), string("find")),
@@ -2112,7 +2112,8 @@ fn type_menu_and_find_commands_refuse_a_param_of_the_wrong_type() {
         ("edit.findReplace", json!({"find": "cat", "replace": "dog", "wholeWord": "yes"}), switch("wholeWord")),
         ("edit.findReplace", json!({"find": "cat", "replace": "dog", "ids": t.0}), not_a_list),
         ("edit.findReplace", json!({"find": "cat", "replace": "dog", "ids": [t.0, 999_999]}), "no such object id 999999".to_string()),
-        ("edit.findReplace", json!({"find": "cat", "replace": "dog", "ids": ["x"]}), not_an_id),
+        ("edit.findReplace", json!({"find": "cat", "replace": "dog", "ids": ["x"]}), not_an_id(0)),
+        ("edit.findReplace", json!({"find": "cat", "replace": "dog", "ids": [t.0, "x"]}), not_an_id(1)),
         ("edit.findNext", json!({"find": ["cat"]}), string("find")),
         ("edit.findNext", json!({"find": "cat", "matchCase": 1}), switch("matchCase")),
         ("edit.findNext", json!({"find": "cat", "wholeWord": "false"}), switch("wholeWord")),
@@ -3686,6 +3687,40 @@ fn ruler_guides_and_lock() {
     assert!(s.execute("guide.remove", &json!({"index": 0})).is_err());
 }
 
+/// While guides are locked, a guide dragged out of a ruler and `guide.add` still make new guides,
+/// each in one undo step and not selected. The ruler guides and guide paths in the document, the
+/// new guides included, can't be selected, moved or deleted.
+#[test]
+fn new_guides_can_be_made_while_guides_are_locked() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut s = session();
+    let path = guide_path(&mut s, 300.0);
+    s.execute("guide.add", &json!({"vertical": false, "pos": 50})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    let v = ViewInfo { smart_guides: false, ..Default::default() };
+    let n = undo_len(&s);
+    s.ruler_guide(true, &PointerEvent::new(PointerKind::Drag, 153.0, 30.0), true, v).unwrap();
+    s.ruler_guide(true, &PointerEvent::new(PointerKind::Up, 153.0, 30.0), true, v).unwrap();
+    assert_eq!(guides(&s), [(false, 50.0), (true, 153.0)]);
+    assert_eq!(undo_len(&s), n + 1);
+    assert_eq!(s.doc().unwrap().history.undo.last().unwrap().label, "New Guide");
+    assert_eq!(s.execute("guide.add", &json!({"vertical": true, "pos": 200})).unwrap()["index"], 2);
+    assert_eq!(guides(&s).len(), 3);
+    assert_eq!(selected_guides(&s), Vec::<usize>::new());
+    for (id, params) in [
+        ("guide.select", json!({"indexes": [1]})),
+        ("guide.move", json!({"index": 1, "pos": 170})),
+        ("guide.remove", json!({"index": 1})),
+        ("guide.setLayer", json!({"index": 1, "layer": s.doc().unwrap().current_layer().unwrap().0})),
+    ] {
+        assert!(matches!(s.execute(id, &params), Err(EngineError::Disabled(..))), "{id}");
+    }
+    assert_eq!(guides(&s).len(), 3);
+    sel(&mut s, &[path]);
+    assert!(selected(&s).is_empty(), "a guide path can't be selected");
+}
+
 #[test]
 fn invalid_guide_lock_parameters_keep_guides_selected() {
     let mut s = session();
@@ -4462,7 +4497,7 @@ fn k_only(c: Color) -> f32 {
 fn document_color_mode_separates_rgb_greys_through_the_profile() {
     let (mut s, ids, _, _) = greys_document();
     s.execute("file.documentColorMode", &json!({"mode": "cmyk"})).unwrap();
-    // As Illustrator converts them: four-colour greys and a rich black.
+    // Through the profile: a mid gray in four inks and a rich black.
     let Color::Cmyk { c, m, y, k } = fill_of(&s, ids[2]) else { panic!("not CMYK") };
     assert!(c > 0.05 && m > 0.05 && y > 0.05 && k > 0.0, "a four-colour mid grey: {c} {m} {y} {k}");
     let Color::Cmyk { c, k, .. } = fill_of(&s, ids[0]) else { panic!("not CMYK") };

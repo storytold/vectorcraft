@@ -225,6 +225,54 @@ fn prefs_persist_through_ui_state() {
     assert_eq!(b.session.prefs.gridline_every, 50.0);
 }
 
+/// Guides & Grid › Lock Guides by Default: shown in its category, applied by OK, saved with the
+/// UI state and read back as locked guides. A file without the key leaves guides unlocked.
+#[test]
+fn lock_guides_by_default_shows_applies_and_restores() {
+    let mut a = app();
+    a.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    open(&mut a, Some("Guides & Grid"));
+    let text = crate::tests_labels::painted_text(&mut a, |a, ui| show(a, ui.ctx()));
+    assert!(text.contains("Lock Guides by Default"), "{text}");
+    assert_eq!(a.ui.dialog.as_ref().unwrap().fields["lockGuidesByDefault"], json!(false));
+    a.ui.dialog.as_mut().unwrap().fields.insert("lockGuidesByDefault".into(), json!(true));
+    confirm(&mut a).unwrap();
+    assert!(a.session.guides_locked());
+    assert_eq!(crate::menus::dynamic_label(&a, "view.guides.lock", ""), "Unlock Guides");
+    assert_eq!(a.ui.engine_prefs["lockGuidesByDefault"], json!(true));
+
+    let saved = serde_json::to_vec(&a.ui).unwrap();
+    let mut b = app();
+    assert!(!b.session.guides_locked());
+    b.ui = serde_json::from_slice::<crate::UiState>(&saved).unwrap().sanitized();
+    restore(&mut b);
+    assert!(b.session.guides_locked());
+
+    let mut older = app();
+    older.ui.engine_prefs = json!({"gridlineEvery": 50});
+    restore(&mut older);
+    assert!(!older.session.guides_locked());
+}
+
+/// OK with the option unchanged keeps the lock from the View menu. OK after turning the option
+/// off, as Reset Preferences does in the dialog, unlocks guides.
+#[test]
+fn preferences_ok_changes_the_guide_lock_only_with_the_option() {
+    let mut a = app();
+    a.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    a.run("view.guides.lock", json!({"locked": true})).unwrap();
+    open(&mut a, Some("Guides & Grid"));
+    confirm(&mut a).unwrap();
+    assert!(a.session.guides_locked(), "the option did not change");
+    a.run("view.guides.lock", json!({"locked": false})).unwrap();
+    a.run("prefs.set", json!({"key": "lockGuidesByDefault", "value": true})).unwrap();
+    assert!(a.session.guides_locked());
+    open(&mut a, Some("Guides & Grid"));
+    a.ui.dialog.as_mut().unwrap().fields.insert("lockGuidesByDefault".into(), Prefs::default().to_json()["lockGuidesByDefault"].clone());
+    confirm(&mut a).unwrap();
+    assert!(!a.session.guides_locked(), "the option went off");
+}
+
 #[test]
 fn old_pref_files_keep_their_brightness() {
     let mut a = app();
@@ -299,6 +347,134 @@ fn system_title_bar_preference_shows_and_persists() {
     assert!(a.session.prefs.system_title_bar);
     let saved: Value = serde_json::from_slice(&serde_json::to_vec(&a.ui).unwrap()).unwrap();
     assert_eq!(saved["engine_prefs"]["systemTitleBar"], json!(true));
+}
+
+/// User Interface › VectorCraft Title Bar on Every Desktop: shown on Linux and the BSDs only, under
+/// System Title Bar with the next-launch note once, and saved under the key the desktop app reads
+/// before the window opens.
+#[test]
+fn app_title_bar_preference_shows_and_persists() {
+    fn texts(s: &egui::Shape, out: &mut Vec<String>) {
+        match s {
+            egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+            _ => {}
+        }
+    }
+    let mut a = app();
+    open(&mut a, Some("User Interface"));
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut a, ui.ctx()));
+    out.textures_delta.clear();
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut a, ui.ctx()));
+    out.textures_delta.clear();
+    let mut shown = vec![];
+    out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
+    let supported = cfg!(not(any(target_arch = "wasm32", target_os = "macos", target_os = "windows")));
+    assert_eq!(shown.iter().any(|t| t == "VectorCraft Title Bar on Every Desktop"), supported, "{shown:?}");
+    let notes = shown.iter().filter(|t| *t == "Applies the next time VectorCraft starts.").count();
+    assert_eq!(notes, usize::from(cfg!(all(not(target_arch = "wasm32"), not(target_os = "macos")))), "{shown:?}");
+    a.ui.dialog.as_mut().unwrap().fields.insert("appTitleBar".into(), json!(true));
+    confirm(&mut a).unwrap();
+    assert!(a.session.prefs.app_title_bar);
+    let saved: Value = serde_json::from_slice(&serde_json::to_vec(&a.ui).unwrap()).unwrap();
+    assert_eq!(saved["engine_prefs"]["appTitleBar"], json!(true));
+}
+
+/// VectorCraft Title Bar on Every Desktop does not take clicks while System Title Bar is on or
+/// VECTORCRAFT_TITLEBAR is set. With the variable set its note names the variable in place of the
+/// next-launch note, and with System Title Bar on and the variable unset a note says that System
+/// Title Bar takes precedence.
+#[test]
+fn app_title_bar_is_dimmed_while_something_takes_precedence() {
+    fn texts(s: &egui::Shape, out: &mut Vec<String>) {
+        match s {
+            egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+            _ => {}
+        }
+    }
+    let note = "The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.";
+    let system_note = "System Title Bar takes precedence over this option while it is on.";
+    let restart_note = "Applies the next time VectorCraft starts.";
+    let supported = cfg!(not(any(target_arch = "wasm32", target_os = "macos", target_os = "windows")));
+    for (from_env, system) in [(false, false), (true, false), (false, true), (true, true)] {
+        let mut a = app();
+        a.titlebar_from_env = from_env;
+        open(&mut a, Some("User Interface"));
+        a.ui.dialog.as_mut().unwrap().fields.insert("systemTitleBar".into(), json!(system));
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut a, ui.ctx()));
+        out.textures_delta.clear();
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut a, ui.ctx()));
+        out.textures_delta.clear();
+        let mut shown = vec![];
+        out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
+        assert_eq!(shown.iter().any(|t| t == note), supported && from_env, "{shown:?}");
+        assert_eq!(shown.iter().any(|t| t == system_note), supported && system && !from_env, "{shown:?}");
+        // The next-launch note stays under this row on Linux and the BSDs, where it also covers
+        // System Title Bar, and under System Title Bar on Windows.
+        let restart_shown = if supported { !from_env } else { cfg!(all(not(target_arch = "wasm32"), not(target_os = "macos"))) };
+        assert_eq!(shown.iter().filter(|t| *t == restart_note).count(), usize::from(restart_shown), "{shown:?}");
+        // A click on the checkbox's label turns the preference on only when nothing takes precedence.
+        let label = out.shapes.iter().find_map(|c| match &c.shape {
+            egui::Shape::Text(t) if t.galley.text() == "VectorCraft Title Bar on Every Desktop" => Some(t.visual_bounding_rect()),
+            _ => None,
+        });
+        assert_eq!(label.is_some(), supported);
+        if let Some(r) = label {
+            for pressed in [true, false] {
+                let input = egui::RawInput {
+                    events: vec![
+                        egui::Event::PointerMoved(r.center()),
+                        egui::Event::PointerButton { pos: r.center(), button: egui::PointerButton::Primary, pressed, modifiers: Default::default() },
+                    ],
+                    ..Default::default()
+                };
+                let mut out = ctx.run_ui(input, |ui| show(&mut a, ui.ctx()));
+                out.textures_delta.clear();
+            }
+            assert_eq!(a.ui.dialog.as_ref().unwrap().bool("appTitleBar"), !from_env && !system, "variable {from_env}, System Title Bar {system}");
+        }
+    }
+}
+
+/// While VECTORCRAFT_TITLEBAR chooses the frame, System Title Bar does not take clicks.
+#[test]
+fn system_title_bar_is_dimmed_while_the_environment_variable_chooses_the_frame() {
+    let supported = cfg!(all(not(target_arch = "wasm32"), not(target_os = "macos")));
+    for from_env in [false, true] {
+        let mut a = app();
+        a.titlebar_from_env = from_env;
+        open(&mut a, Some("User Interface"));
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut a, ui.ctx()));
+        out.textures_delta.clear();
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut a, ui.ctx()));
+        out.textures_delta.clear();
+        let label = out.shapes.iter().find_map(|c| match &c.shape {
+            egui::Shape::Text(t) if t.galley.text() == "System Title Bar" => Some(t.visual_bounding_rect()),
+            _ => None,
+        });
+        assert_eq!(label.is_some(), supported);
+        if let Some(r) = label {
+            for pressed in [true, false] {
+                let input = egui::RawInput {
+                    events: vec![
+                        egui::Event::PointerMoved(r.center()),
+                        egui::Event::PointerButton { pos: r.center(), button: egui::PointerButton::Primary, pressed, modifiers: Default::default() },
+                    ],
+                    ..Default::default()
+                };
+                let mut out = ctx.run_ui(input, |ui| show(&mut a, ui.ctx()));
+                out.textures_delta.clear();
+            }
+            assert_eq!(a.ui.dialog.as_ref().unwrap().bool("systemTitleBar"), !from_env, "clicked with the variable {from_env}");
+        }
+    }
 }
 
 /// Performance › Linux Display Server (#2028): on Linux it shows the drawing-tablet note, and
@@ -862,6 +1038,95 @@ fn ok_refuses_a_typed_folder_that_choose_would_refuse() {
         assert_eq!(a.session.prefs.to_json()[key], json!(missing), "{key}");
     }
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Preferences form rows associate each input with its visible label for accessibility tools.
+#[test]
+fn preference_inputs_expose_their_visible_labels() {
+    use egui_kittest::kittest::Queryable;
+    let mut app = app();
+    open(&mut app, Some("General"));
+    let mut fonts = false;
+    let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(900.0, 700.0)).with_accessibility_check(false).build_ui_state(
+        move |ui, app: &mut VectorcraftApp| {
+            if !std::mem::replace(&mut fonts, true) {
+                crate::theme::install_fonts(ui.ctx());
+                return;
+            }
+            show(app, ui.ctx());
+        },
+        app,
+    );
+    h.run_steps(3);
+    let _ = h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Keyboard Increment:");
+}
+
+/// Render the real category without the dialog's scroll viewport clipping later rows.
+fn preference_category_harness(category: &'static str) -> egui_kittest::Harness<'static, (VectorcraftApp, Dialog)> {
+    let mut app = app();
+    app.services.pick_folder = Some(Box::new(|| None));
+    open(&mut app, Some(category));
+    let dialog = app.ui.dialog.take().unwrap();
+    let mut fonts = false;
+    let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(900.0, 1400.0)).with_accessibility_check(false).build_ui_state(
+        move |ui, (app, dialog): &mut (VectorcraftApp, Dialog)| {
+            if !std::mem::replace(&mut fonts, true) {
+                crate::theme::install_fonts(ui.ctx());
+                return;
+            }
+            category_fields(ui, app, dialog, category);
+        },
+        (app, dialog),
+    );
+    h.run_steps(3);
+    h
+}
+
+#[test]
+fn preference_colour_well_exposes_its_row_label_and_value() {
+    use egui_kittest::kittest::{NodeT, Queryable};
+    let h = preference_category_harness("Guides & Grid");
+    let expected = format!("{}ff", h.state().1.str("patternTileEdgeColor").to_lowercase());
+    let colour = h.get_by_role_and_label(egui::accesskit::Role::ColorWell, "Tile Edge Color:");
+    assert_eq!(colour.accesskit_node().value().as_deref(), Some(expected.as_str()));
+}
+
+#[test]
+fn preference_scale_labels_both_controls_across_focus_changes() {
+    use egui::accesskit::Role;
+    use egui_kittest::kittest::{NodeT, Queryable};
+    let mut h = preference_category_harness("User Interface");
+    let expected = h.state().1.f64("uiScaling", 1.0);
+    for focus in [None, Some(Role::SpinButton), Some(Role::Slider)] {
+        if let Some(role) = focus {
+            h.get_by_role_and_label(role, "Scale:").focus();
+            h.run_steps(3);
+            assert!(h.get_by_role_and_label(role, "Scale:").accesskit_node().is_focused());
+        }
+        for role in [Role::Slider, Role::SpinButton] {
+            let control = h.get_by_role_and_label(role, "Scale:");
+            assert_eq!(control.accesskit_node().numeric_value(), Some(expected));
+        }
+    }
+}
+
+#[test]
+fn preference_anchor_slider_exposes_its_row_label_and_value() {
+    use egui::accesskit::Role;
+    use egui_kittest::kittest::{NodeT, Queryable};
+    let h = preference_category_harness("Selection & Anchor Display");
+    let slider = h.get_by_role_and_label(Role::Slider, "Size:");
+    assert_eq!(slider.accesskit_node().numeric_value(), Some(h.state().1.f64("anchorSize", 3.0)));
+}
+
+#[test]
+fn preference_folder_label_preserves_the_choose_action_name() {
+    use egui::accesskit::Role;
+    use egui_kittest::kittest::Queryable;
+    let h = preference_category_harness("File Handling");
+    let _ = h.get_by_role_and_label(Role::TextInput, "Folder:");
+    let _ = h.get_by_role_and_label(Role::Button, "Choose…");
+    assert!(h.query_by_role_and_label(Role::Button, "Folder:").is_none());
 }
 
 /// Under automation roots, OK refuses a typed folder outside them before it looks at the folder.

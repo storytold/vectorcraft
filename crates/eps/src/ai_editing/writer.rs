@@ -22,9 +22,9 @@ mod symbols;
 mod texts;
 mod variables;
 
+pub(super) use styles::{LARGE_CANVAS_STYLES, style_links, styled_objects};
 #[cfg(test)]
-pub(super) use styles::same_appearance;
-pub(super) use styles::{GRAPHIC_STYLES, LARGE_CANVAS_STYLES, has_graphic_styles, styled_objects};
+pub(super) use styles::{PANEL_EMPTY, PANEL_STYLES, STYLE_LINKS, same_appearance};
 
 pub(super) use images::PAYLOAD;
 #[cfg(test)]
@@ -62,6 +62,7 @@ const GROUPED_LAYER: &str =
 pub(super) const EFFECTS: &str = "live effects other than geometry effects are left out of the editing data for other apps";
 pub(super) const SWATCHES: &str = "freeform gradient swatches, gradient swatches of more than 256 stops, and pattern swatches whose patterns the data can't define, are left out of the editing data for other apps";
 pub(super) const SYMBOL_LIMIT: &str = "symbol instances past 16,000,000 objects of symbol art in all are left out of the editing data for other apps";
+pub(super) const OBJECT_LIMIT: &str = "art past 4,000,000 objects in all is left out of the editing data for other apps";
 const TEMPLATES: &str = "template layers are written as dimmed layers that don't print in the editing data for other apps";
 
 /// The transparency `mode opacity isolate knockout shape Xy` sets: the blending mode ([`blend_code`]),
@@ -117,6 +118,16 @@ fn blend_code(b: BlendMode) -> u8 {
     }
 }
 
+/// What the writer had charged when a part of the art started ([`Writer::charges`]).
+#[derive(Clone, Copy)]
+struct Charges {
+    objects: usize,
+    symbol_nodes: u64,
+    kept_objects: usize,
+    kept_symbol_nodes: u64,
+    left_out: usize,
+}
+
 pub(super) struct Writer<'a> {
     doc: &'a Document,
     /// The document → art space.
@@ -144,6 +155,18 @@ pub(super) struct Writer<'a> {
     brushes: Option<Vec<vectorcraft_brush::Brush>>,
     /// The objects of the symbol art written so far, within [`vectorcraft_doc::MAX_SYMBOL_NODES`].
     symbol_nodes: u64,
+    /// The objects written so far, counted as the reader counts the objects it reads.
+    objects: usize,
+    /// How many times art was left out for [`Self::max_objects`].
+    left_out: usize,
+    /// The objects of the pattern and symbol definitions written so far, which stay written when
+    /// the art that first used them is not ([`Self::give_back`]).
+    definition_objects: usize,
+    /// The objects of symbol art in those definitions ([`Self::symbol_nodes`]).
+    definition_symbol_nodes: u64,
+    /// The most objects written ([`Self::take_objects`]): the most the reader reads,
+    /// [`crate::import::MAX_EDITING_OBJECTS`].
+    pub(super) max_objects: usize,
     /// The document → the space gradients' matrices (`Xm`, `Bm`, `Bc`) and focal points are
     /// written in: art space, and in a pattern's definition [`Self::tile_grad_space`].
     grad_space: Affine,
@@ -286,6 +309,85 @@ impl<'a> Writer<'a> {
             styled: HashMap::new(),
             styles: styles::Styles::default(),
             in_look: false,
+            objects: 0,
+            left_out: 0,
+            definition_objects: 0,
+            definition_symbol_nodes: 0,
+            max_objects: crate::import::MAX_EDITING_OBJECTS,
+        }
+    }
+
+    /// Whether `count` more objects may be written: the objects written so far, counted as the
+    /// reader counts them ([`object_count`]), stay within [`Self::max_objects`]. Past it the art is
+    /// left out, with a warning.
+    fn take_objects(&mut self, count: usize) -> bool {
+        let total = self.objects.saturating_add(count);
+        if total > self.max_objects {
+            self.warn(OBJECT_LIMIT);
+            self.left_out += 1;
+            return false;
+        }
+        self.objects = total;
+        true
+    }
+
+    /// Start a group with `op` (`u`, or `q` for a clipping group), counted as one object
+    /// ([`Self::take_objects`]). False, writing nothing, when there is no room for it.
+    fn open_group(&mut self, op: &str) -> bool {
+        if !self.take_objects(1) {
+            return false;
+        }
+        self.line(op);
+        true
+    }
+
+    /// Whether `n`, an instance of `symbol` placed by `xf`, is written as a live instance
+    /// ([`Self::live_instance`]). The instance is one object, without the art of its definition,
+    /// and room for it is kept before the definition is written.
+    fn live_instance_in_room(&mut self, n: &Node, symbol: &str, xf: Affine) -> bool {
+        if !self.take_objects(1) {
+            return false;
+        }
+        if self.live_instance(n, symbol, xf) {
+            return true;
+        }
+        self.objects -= 1;
+        false
+    }
+
+    /// What has been charged so far, for [`Self::keep_since`] and [`Self::give_back`].
+    fn charges(&self) -> Charges {
+        Charges {
+            objects: self.objects,
+            symbol_nodes: self.symbol_nodes,
+            kept_objects: self.definition_objects,
+            kept_symbol_nodes: self.definition_symbol_nodes,
+            left_out: self.left_out,
+        }
+    }
+
+    /// Whether art was left out for [`Self::max_objects`] since `c`.
+    fn left_out_since(&self, c: Charges) -> bool {
+        self.left_out != c.left_out
+    }
+
+    /// A definition that started at `c` is written: what was charged since stays charged when the
+    /// art that first used it is given back ([`Self::give_back`]).
+    fn keep_since(&mut self, c: Charges) {
+        self.definition_objects = c.kept_objects + (self.objects - c.objects);
+        self.definition_symbol_nodes = c.kept_symbol_nodes + (self.symbol_nodes - c.symbol_nodes);
+    }
+
+    /// Art written since `c` as `lines` is not used: the objects and symbol art charged since are
+    /// given back, except those of the definitions written since, and the images `lines` marks
+    /// are emptied (the others keep their indices).
+    fn give_back(&mut self, c: Charges, lines: &str) {
+        self.objects = c.objects + (self.definition_objects - c.kept_objects);
+        self.symbol_nodes = c.symbol_nodes + (self.definition_symbol_nodes - c.kept_symbol_nodes);
+        for index in lines.split(PAYLOAD).skip(1).step_by(2) {
+            if let Some(p) = index.parse::<usize>().ok().and_then(|i| self.payloads.get_mut(i)) {
+                *p = Vec::new();
+            }
         }
     }
 
@@ -510,19 +612,22 @@ impl<'a> Writer<'a> {
             NodeKind::Layer { .. } => {}
             NodeKind::Group { children, clip: true } => self.clip_group(children, xy),
             NodeKind::Group { children, clip: false } => {
-                self.line("u");
-                for c in children {
-                    self.node(c);
+                if self.open_group("u") {
+                    for c in children {
+                        self.node(c);
+                    }
+                    self.end_group("U", xy);
                 }
-                self.end_group("U", xy);
             }
             NodeKind::Path { path, rule, guide, .. } => {
                 if *guide {
-                    // Its own transparency, not the one the object before it set.
-                    if path.subpaths.iter().any(|sp| !sp.anchors.is_empty()) {
+                    // A path for each subpath with points, with the guide's own transparency, not
+                    // the one the object before it set.
+                    let subpaths = path.subpaths.iter().filter(|sp| !sp.anchors.is_empty()).count();
+                    if subpaths > 0 && self.take_objects(subpaths) {
                         self.set_object_xy(xy.object());
+                        ai_ops::guide(&mut self.body, self.to_art, path, true);
                     }
-                    ai_ops::guide(&mut self.body, self.to_art, path, true);
                 } else {
                     self.shape(n, path, *rule, xy);
                 }
@@ -530,8 +635,11 @@ impl<'a> Writer<'a> {
             NodeKind::Compound { rule, .. } => self.shape(n, &compound_path(n), *rule, xy),
             NodeKind::Text(_) => self.text(n, xy),
             NodeKind::Image(im) => self.image(im, xy),
-            NodeKind::SymbolInstance { symbol, xf } if self.live_instance(n, symbol, *xf) => self.symbol_instance(symbol, *xf, xy),
+            NodeKind::SymbolInstance { symbol, xf } if self.live_instance_in_room(n, symbol, *xf) => self.symbol_instance(symbol, *xf, xy),
             NodeKind::SymbolInstance { symbol, xf } => {
+                if !self.open_group("u") {
+                    return;
+                }
                 // The canvas places an instance inside a symbol's art where the outer instance puts
                 // it (9-slice guides, stains and patterns included), and this art doesn't move with it.
                 self.wrote_fixed |= self.in_symbol;
@@ -541,7 +649,6 @@ impl<'a> Writer<'a> {
                 } else {
                     self.warn(symbols::MISSING_SYMBOL);
                 }
-                self.line("u");
                 if let Some(sym) = doc.symbols.iter().find(|s| &s.name == symbol)
                     && self.nest < MAX_NEST
                 {
@@ -583,8 +690,10 @@ impl<'a> Writer<'a> {
             | NodeKind::Repeat(_)
             | NodeKind::PlacedDocument(_)
             | NodeKind::Intertwine { .. } => {
+                if !self.open_group("u") {
+                    return;
+                }
                 self.warn(LIVE);
-                self.line("u");
                 if self.nest < MAX_NEST {
                     let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
                     self.nest += 1;
@@ -629,11 +738,14 @@ impl<'a> Writer<'a> {
         if name.is_none() && mask.is_none() && bound.is_empty() && entries.is_none() {
             return;
         }
+        let start = self.body.len();
+        let has_id = name.is_some() || !bound.is_empty();
+        let has_entries = entries.is_some();
         self.body.push_str("%_/ArtDictionary :\n");
         if let Some(e) = entries {
             self.body.push_str(&e);
         }
-        if name.is_some() || !bound.is_empty() {
+        if has_id {
             let id = self.take_id(name.unwrap_or("XMLID"));
             let _ = writeln!(self.body, "%_/XMLUID : {} ; (AI10_ArtUID) ,", ps::bytes(id.as_bytes()));
             if name.is_none() {
@@ -644,8 +756,13 @@ impl<'a> Writer<'a> {
                 self.bound.push((n.id, id, bound));
             }
         }
-        if let Some(m) = mask {
-            self.mask(m);
+        // A mask whose art doesn't fit is left out, and with nothing else in it the dictionary too.
+        if let Some(m) = mask
+            && !self.mask(m)
+            && !has_id
+            && !has_entries
+        {
+            return self.body.truncate(start);
         }
         self.body.push_str("%_;\n%_\n");
     }
@@ -673,10 +790,13 @@ impl<'a> Writer<'a> {
     /// An opacity mask, as an entry of its object's dictionary: `/Mask :`, `X=`, its art on `%_`
     /// lines (from the state a dictionary's art starts in: unlocked, shown, opaque), `X+`, `(Art) ,`,
     /// its options as the `/Bool` entries `Clipping`, `Inverted`, `Disabled` and `Linked`, and
-    /// `; (AI9_Mask) ,`. The art is in document coordinates, as the object's is.
-    fn mask(&mut self, m: &OpacityMask) {
+    /// `; (AI9_Mask) ,`. The art is in document coordinates, as the object's is. False, writing
+    /// nothing, when some of the art is left out for the object limit ([`Self::take_objects`]): a
+    /// mask without all its art would change what it shows.
+    fn mask(&mut self, m: &OpacityMask) -> bool {
         let outer = std::mem::take(&mut self.body);
-        let (state, clip) = (self.state, self.clip.take());
+        let (state, gs, clip) = (self.state, self.gs, self.clip.take());
+        let (charges, bound) = (self.charges(), self.bound.len());
         (self.state, self.gs) = (Some((false, false)), Some(Xy::OPAQUE));
         // The canvas draws the art's root even when it is hidden, and the reader puts a hidden object
         // in a group that doesn't draw it, so a hidden root is written shown.
@@ -709,6 +829,13 @@ impl<'a> Writer<'a> {
         self.hidden -= 1;
         self.nest -= 1;
         let lines = std::mem::replace(&mut self.body, outer);
+        if self.left_out_since(charges) {
+            // The art isn't written, nor are the variable bindings of its objects.
+            self.give_back(charges, &lines);
+            self.bound.truncate(bound);
+            (self.state, self.gs, self.clip, self.block_end) = (state, gs, clip, usize::MAX);
+            return false;
+        }
         self.body.push_str("%_/Mask :\n%_X=\n");
         hide(&lines, &mut self.body);
         self.body.push_str("%_X+\n%_(Art) ,\n");
@@ -718,6 +845,7 @@ impl<'a> Writer<'a> {
         self.body.push_str("%_; (AI9_Mask) ,\n");
         // The dictionary ends with the state before it, except the transparency its art set last.
         (self.state, self.gs, self.clip, self.block_end) = (state, None, clip, usize::MAX);
+        true
     }
 
     /// Warn that art is cut to clipping object `first` when it isn't a path or compound path (a path
@@ -739,12 +867,16 @@ impl<'a> Writer<'a> {
             if self.clip.is_some() && !children.is_empty() {
                 self.warn(CLIPPING);
             }
-            self.line("u");
-            self.clip_contents(children);
-            return self.end_group("U", xy);
+            if self.open_group("u") {
+                self.clip_contents(children);
+                self.end_group("U", xy);
+            }
+            return;
         }
         let at_q = (self.state, self.gs);
-        self.line("q");
+        if !self.open_group("q") {
+            return;
+        }
         self.clipped(children);
         (self.state, self.gs) = at_q;
         self.end_group("Q", xy);
@@ -753,7 +885,8 @@ impl<'a> Writer<'a> {
     /// The members of a clipping group or layer, the first one clipping the others: the others,
     /// then the first one as the clipping path (see [`Self::clip_group`]), its name after it. Fills
     /// and strokes the clipping path can't paint itself are paths of their own, the fills under the
-    /// others and the strokes over them.
+    /// others and the strokes over them. Without room for the clipping path, nothing is written
+    /// ([`Self::take_objects`]).
     fn clipped(&mut self, children: &[Arc<Node>]) {
         let Some((first, rest)) = children.split_first() else { return };
         let Some((path, rule)) = clip_path(first) else {
@@ -762,6 +895,12 @@ impl<'a> Writer<'a> {
         };
         let items = self.items(first, path.to_bezpath().bounding_box());
         let painted = self.plain_paint(&items);
+        // The clipping path goes after the others, so its objects are counted first.
+        let subpaths: Vec<&SubPath> = path.subpaths.iter().filter(|sp| !sp.anchors.is_empty()).collect();
+        let (fill, stroke) = painted.unwrap_or_default();
+        if !self.take_objects(clip_object_count(&subpaths, fill, stroke)) {
+            return;
+        }
         if items.iter().any(|i| i.opacity() < 1.0 || i.blend() != BlendMode::Normal) {
             self.warn(ITEM_TRANSPARENCY);
         }
@@ -779,12 +918,10 @@ impl<'a> Writer<'a> {
             self.node(c);
         }
         self.clip_paint_part(first, &path, rule, &strokes);
-        let (fill, stroke) = painted.unwrap_or_default();
         self.state(first.locked, !first.visible);
         let start = self.body.len();
         self.paint_state(fill, stroke, Xy::of(first).object(), rule);
         let op = paint_op(fill.is_some(), stroke.is_some());
-        let subpaths: Vec<&SubPath> = path.subpaths.iter().filter(|sp| !sp.anchors.is_empty()).collect();
         let several = subpaths.len() > 1;
         if several {
             self.line("*u");
@@ -817,7 +954,9 @@ impl<'a> Writer<'a> {
         if let [one] = items {
             return self.item(path, rule, one, xy);
         }
-        self.line("u");
+        if !self.open_group("u") {
+            return;
+        }
         for i in items {
             self.item(path, rule, i, Xy::PLAIN);
         }
@@ -870,11 +1009,12 @@ impl<'a> Writer<'a> {
             (Some((fill, stroke)), _) => self.path_object(path, rule, fill, stroke, xy),
             (None, [one]) => self.item(path, rule, one, xy),
             (None, items) => {
-                self.line("u");
-                for i in items {
-                    self.item(path, rule, i, Xy::PLAIN);
+                if self.open_group("u") {
+                    for i in items {
+                        self.item(path, rule, i, Xy::PLAIN);
+                    }
+                    self.end_group("U", xy);
                 }
-                self.end_group("U", xy);
             }
         }
     }
@@ -898,7 +1038,8 @@ impl<'a> Writer<'a> {
     }
 
     /// A brushed stroke `st` of `path` as a group of its brush's art, of transparency `xy`. False
-    /// when it has no brush the document knows (or brushes nest too deep).
+    /// when it has no brush the document knows (or brushes nest too deep). Without room for the
+    /// group ([`Self::take_objects`]), the stroke is left out.
     fn brush_art(&mut self, path: &PathData, st: &StrokeLayer, xy: Xy) -> bool {
         if self.nest >= MAX_NEST {
             return false;
@@ -908,8 +1049,10 @@ impl<'a> Writer<'a> {
         let Some(b) = st.brush.as_deref().and_then(|name| brushes.iter().find(|b| b.name == name)) else { return false };
         let art = vectorcraft_brush::stroke_pieces(doc, b, &path.to_bezpath(), st);
         let state = self.state;
+        if !self.open_group("u") {
+            return true;
+        }
         self.nest += 1;
-        self.line("u");
         for piece in &art {
             self.node(piece);
         }
@@ -948,13 +1091,15 @@ impl<'a> Writer<'a> {
                     let flat = FillLayer { paint: Paint::solid(Color::gray(0.5)), ..f.clone() };
                     return self.path_object(path, rule, Some(&flat), None, xy);
                 }
+                let state = self.state;
+                if !self.open_group("u") {
+                    return;
+                }
                 self.wrote_pattern = true;
                 let outer = self.clip.clone();
                 let region = self.cut(path, rule);
                 self.clip = Some(region);
                 self.nest += 1;
-                let state = self.state;
-                self.line("u");
                 for t in &tiles {
                     self.node(t);
                 }
@@ -979,8 +1124,8 @@ impl<'a> Writer<'a> {
         }
         let both = fill.is_some() && stroke.is_some();
         let own = if both { Xy::OPAQUE } else { xy.object() };
-        if both {
-            self.line("u");
+        if both && !self.open_group("u") {
+            return;
         }
         if fill.is_some() || stroke.is_none() {
             let region = self.cut(path, rule);
@@ -1026,7 +1171,7 @@ impl<'a> Writer<'a> {
     /// points and painting operator (`*u` … `*U` around several).
     fn plain_object(&mut self, path: &PathData, rule: FillRule, fill: Option<&FillLayer>, stroke: Option<&StrokeLayer>, xy: Xy) {
         let subpaths: Vec<&SubPath> = path.subpaths.iter().filter(|sp| !sp.anchors.is_empty()).collect();
-        if subpaths.is_empty() {
+        if subpaths.is_empty() || !self.take_objects(object_count(subpaths.len())) {
             return;
         }
         self.paint_state(fill, stroke, xy, rule);
@@ -1057,18 +1202,29 @@ impl<'a> Writer<'a> {
     fn text(&mut self, n: &Node, xy: Xy) {
         let NodeKind::Text(t) = &n.kind else { return };
         let doc = self.doc;
-        let placed = if self.hidden > 0 || self.clip.is_some() || self.in_symbol {
-            None
-        } else if let Some(thread) = doc.text_threads.iter().find(|th| th.contains(&n.id)) {
+        let thread = doc.text_threads.iter().find(|th| th.contains(&n.id));
+        // Type that can't be a stub is written as its outlines, which count their own objects.
+        if self.hidden > 0 || self.clip.is_some() || self.in_symbol || (thread.is_none() && !texts::holds(n, t)) {
+            return self.outlined_text(n, xy);
+        }
+        // The stub's objects ([`texts::stub_objects`], [`Self::take_objects`]); without room for
+        // them, the type is left out before its story goes into the text document.
+        let stub = texts::stub_objects(t);
+        if !self.take_objects(stub) {
+            return;
+        }
+        let placed = if let Some(thread) = thread {
             // A thread is checked for what it loses, in every frame, when its story is written.
             let placed = self.texts.thread(doc, thread, n.id, self.canvas, &|id| !cut_to_clipping_object(doc, id));
             placed.map(|p| (p, self.texts.take_lost()))
-        } else if texts::holds(n, t) {
-            self.texts.add(t, self.canvas).map(|story| ((story, 0), texts::loses(t)))
         } else {
-            None
+            self.texts.add(t, self.canvas).map(|story| ((story, 0), texts::loses(t)))
         };
-        let Some(((story, frame), lost)) = placed else { return self.outlined_text(n, xy) };
+        let Some(((story, frame), lost)) = placed else {
+            // The text document can't hold it: the outlines count their own objects.
+            self.objects -= stub;
+            return self.outlined_text(n, xy);
+        };
         self.typed = true;
         if lost {
             self.warn(texts::TYPE_ATTRIBUTES);
@@ -1088,8 +1244,10 @@ impl<'a> Writer<'a> {
     /// graphics as their symbols' art where the layout places them, as the PDF page draws them;
     /// the group has the type's transparency `xy`.
     fn outlined_text(&mut self, n: &Node, xy: Xy) {
+        if !self.open_group("u") {
+            return;
+        }
         self.warn(TYPE);
-        self.line("u");
         let doc = self.doc;
         let resolved = match &n.kind {
             NodeKind::Text(t) => Some(doc.inline_resolved(t).into_owned()),
@@ -1341,6 +1499,30 @@ fn paint_op(fill: bool, stroke: bool) -> char {
         (false, true) => 's',
         (false, false) => 'n',
     }
+}
+
+/// The objects the reader makes of a path object of `subpaths` subpaths with points: a path for
+/// each, and a compound path holding them when there are several.
+fn object_count(subpaths: usize) -> usize {
+    match subpaths {
+        0 => 0,
+        1 => 1,
+        n => n + 1,
+    }
+}
+
+/// The objects the reader counts for clipping path `subpaths` (those with points) painted with
+/// `fill` and `stroke` ([`Writer::clipped`]). Its last subpath carries a gradient fill's or
+/// stroke's gradient, so the subpaths of a filled compound clipping path with a gradient paint
+/// differently, and the reader reads their fills apart from it: a compound path of a copy of each,
+/// which counts the copy and its points ([`object_count`] for the clipping path itself).
+fn clip_object_count(subpaths: &[&SubPath], fill: Option<&FillLayer>, stroke: Option<&StrokeLayer>) -> usize {
+    let own = object_count(subpaths.len());
+    let apart = subpaths.len() > 1 && fill.is_some() && (gradient(fill.map(|f| &f.paint)).is_some() || gradient(stroke.map(|s| &s.paint)).is_some());
+    if !apart {
+        return own;
+    }
+    subpaths.iter().fold(own.saturating_add(1), |n, sp| n.saturating_add(1).saturating_add(sp.anchors.len()))
 }
 
 /// The subpaths of compound path `n`'s members, as one path.

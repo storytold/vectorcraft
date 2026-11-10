@@ -107,6 +107,32 @@ fn paragraph_mixed_kinsoku_and_mojikumi_show_blank_dropdowns() {
     assert_eq!(shared_para(&app, |p| p.mojikumi), Some(Mojikumi::LineEndHalf));
 }
 
+/// Kinsoku Shori Type: the menu's item sets the type of the paragraphs the Type tool's selection
+/// touches in one undo step, and none is checked while the selected paragraphs differ.
+#[test]
+fn kinsoku_shori_type_sets_the_selected_paragraphs_in_one_undo_step() {
+    let (mut app, id) = editing_text("あ\nい\n");
+    app.session.prefs.show_east_asian_options = true;
+    let types = |app: &VectorcraftApp| {
+        let node = app.session.active().unwrap().doc.node(NodeId(id.as_u64().unwrap())).unwrap();
+        let NodeKind::Text(text) = &node.kind else { panic!("text") };
+        (text.para_at(0).kinsoku_type, text.para_at(1).kinsoku_type)
+    };
+    select_range(&mut app, 0, 3);
+    let history = app.session.active().unwrap().history.undo.len();
+    set_kinsoku_type(&mut app, "pushInFirst");
+    assert_eq!(types(&app), (KinsokuShoriType::PushInFirst, KinsokuShoriType::PushOutOnly));
+    assert_eq!(app.session.active().unwrap().history.undo.len(), history + 1);
+    app.session.set_tool_option("selectAll", &json!(true));
+    assert_eq!(shared_para(&app, |p| p.kinsoku_type), None, "mixed: no item checked");
+    set_kinsoku_type(&mut app, "pushOutFirst");
+    assert_eq!(types(&app), (KinsokuShoriType::PushOutFirst, KinsokuShoriType::PushOutFirst));
+    assert_eq!(shared_para(&app, |p| p.kinsoku_type), Some(KinsokuShoriType::PushOutFirst));
+    app.run("edit.undo", json!({})).unwrap();
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(types(&app), (KinsokuShoriType::PushOutOnly, KinsokuShoriType::PushOutOnly));
+}
+
 #[test]
 fn paragraph_mixed_indent_fields_show_blank() {
     let (mut app, id) = editing_text("A\nB\n");
@@ -433,6 +459,36 @@ fn the_numbered_list_button_and_its_presets_set_the_list_and_reset_panel_clears_
     app.session.set_tool_option("selectAll", &json!(true));
     reset_panel(&mut app);
     assert_eq!(lists(&app), (None, None));
+}
+
+/// More Options at the end of the Bullets presets opens Bullets and Numbering on its Bullets
+/// tab, and at the end of the Numbered List presets on its Numbers tab.
+#[test]
+fn more_options_opens_bullets_and_numbering_on_its_tab() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let (mut app, _) = editing_text("One\nTwo");
+    select_range(&mut app, 0, 0);
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let numbers = std::cell::Cell::new(false);
+    let row = std::cell::Cell::new(egui::Rect::NOTHING);
+    let mut draw = |app: &mut VectorcraftApp, ui: &mut Ui| {
+        let r = ui.horizontal(|ui| if numbers.get() { numbers_button(app, ui, 28.0) } else { bullets_button(app, ui, 28.0) });
+        row.set(r.response.rect);
+    };
+    for (on_numbers, tab) in [(false, "bullets"), (true, "numbers")] {
+        numbers.set(on_numbers);
+        super::super::tests_appearance::frame_events(&ctx, &mut app, vec![], &mut draw);
+        let arrow = row.get().min + vec2(28.0 + 7.0, 14.0);
+        super::super::tests_appearance::click(&ctx, &mut app, arrow, &mut draw);
+        let texts = super::super::tests_appearance::frame_events(&ctx, &mut app, vec![], &mut draw);
+        let at = super::super::tests_appearance::text_rect(&texts, "More Options").center();
+        super::super::tests_appearance::click(&ctx, &mut app, at, &mut draw);
+        let d = app.ui.dialog.take().unwrap_or_else(|| panic!("More Options opens the dialog from the {tab} presets"));
+        assert_eq!((d.kind.as_str(), d.str("tab")), ("bulletsAndNumbering", tab.to_string()));
+    }
+    app.run("ui.bulletsAndNumbering", json!({})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("bulletsAndNumbering"));
 }
 
 /// Type › Bullets and Numbering › Convert to Text (`type.convertListToText`) acts on the

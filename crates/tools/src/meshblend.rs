@@ -153,6 +153,10 @@ impl Tool for BlendTool {
     fn busy(&self) -> bool {
         self.first.is_some()
     }
+    /// A first pick, or adding to the blend just made: Escape ends either.
+    fn ends_on_escape(&self, cx: &ToolContext) -> bool {
+        self.first(cx).is_some()
+    }
     /// Escape drops the object picked first and stops adding to the blend just made, so the next
     /// click picks a new first object. The document and the selection stay as they are.
     fn key(&mut self, _cx: &ToolContext, key: crate::ToolKey, _mods: Mods) -> Vec<Action> {
@@ -179,6 +183,11 @@ impl Tool for BlendTool {
     /// document and the selection stay as they are.
     fn chosen_again(&mut self, cx: &ToolContext) -> Vec<Action> {
         self.deactivate(cx)
+    }
+    /// An edit, Undo or Redo made outside the tool drops the object picked first and stops adding to
+    /// the blend just made, so the next click picks a new first object.
+    fn history_moved(&mut self) {
+        (self.first, self.chained) = (None, false);
     }
 }
 
@@ -520,8 +529,10 @@ mod tests {
         let c = cx(&d, &s, &p);
         let mut t = BlendTool { first: None, chained: true, ..Default::default() };
         assert!(t.first(&c).is_some());
+        assert!(!t.busy() && t.ends_on_escape(&c), "Escape has adding to the blend to end");
         assert!(t.key(&c, crate::ToolKey::Escape, Mods::default()).is_empty());
         assert!(t.first(&c).is_none(), "Escape ends adding to the blend just made");
+        assert!(!t.ends_on_escape(&c), "and then has nothing to end");
         assert_eq!(t.pointer(&c, &down(150.0, 150.0)), picks(a));
         assert!(esc(&mut BlendTool::default()).is_empty(), "nothing to drop");
     }
