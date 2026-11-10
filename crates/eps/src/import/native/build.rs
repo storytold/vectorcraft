@@ -429,11 +429,13 @@ pub(super) fn build_from(
     }
     // Area type flows around the wrap objects above it before it is compared with the page.
     resolve_text_wrap(&mut doc)?;
-    let bound_text = text_bound_slots(&doc, &bindings, &xml_ids);
+    let bound_text = bound_slots(&doc, &bindings, &xml_ids, VariableKind::Text);
+    let bound_visible = bound_slots(&doc, &bindings, &xml_ids, VariableKind::Visibility);
     // Without a page to compare the layers with, envelopes of type keep their drawn art: like the
     // other live envelopes, one opens live only where the layers with it draw as the page.
     let warped_type = warped_type.compared(frame.is_some(), &mut notes);
-    let typed = settle_warped_type(warped_type, &mut doc, &filled, &threaded_frames, &bound_text, &mut restyled, &mut notes)?;
+    let bound = [&bound_text, &bound_visible];
+    let typed = settle_warped_type(warped_type, &mut doc, &filled, &threaded_frames, bound, &mut restyled, &mut notes)?;
     // The live envelopes and what takes the place of each again, when the layers with them don't
     // draw as the page, with the note that says so.
     let envelopes_drawn: Vec<(NodeId, Vec<Node>, &str)> = envelopes_drawn
@@ -637,41 +639,52 @@ fn bind_variables(
     notes.extend(ai::bindings_note(skipped));
 }
 
-/// The text object slots of `doc` that `bindings` binds to a text variable, each named by its XML id
-/// (`ids`).
-fn text_bound_slots(doc: &Document, bindings: &[ai::BindingRef], ids: &std::collections::HashMap<String, Option<NodeId>>) -> BTreeSet<NodeId> {
+/// The objects of `doc`, text object slots among them, that `bindings` binds to a variable of
+/// `kind`, each named by its XML id (`ids`).
+fn bound_slots(
+    doc: &Document,
+    bindings: &[ai::BindingRef],
+    ids: &std::collections::HashMap<String, Option<NodeId>>,
+    kind: VariableKind,
+) -> BTreeSet<NodeId> {
     bindings
         .iter()
-        .filter(|b| doc.variables.variable(&b.variable).is_some_and(|v| v.kind == VariableKind::Text))
+        .filter(|b| doc.variables.variable(&b.variable).is_some_and(|v| v.kind == kind))
         .filter_map(|b| b.target.as_ref().and_then(|t| ids.get(t).copied().flatten()))
         .collect()
 }
 
 /// Warped type stays type where its live warp draws as its look, and where a text variable binds it
-/// (`bound_text`, by slot). Elsewhere the look takes its place, and one note says how many did.
+/// (`bound`'s first set, by slot). Elsewhere the look takes its place, and one note says how many did.
 /// `filled` says what each slot became, and the comparisons with the page leave out the boxes in
 /// `restyled`. Fails as [`resolve_text_wrap`] does when the looks give the wrap shapes too many
 /// anchors. Before that, the envelopes of type open live where they draw as their drawn art, with
 /// the type of their text slots (made type, one text object for the slot, not threaded, bound to
-/// no text variable and no wrap object); the others keep their drawn art, with a note. Returns
-/// each live envelope of type's id with what takes its place again (its hidden type, then its
-/// drawn art).
+/// no text variable and no visibility variable, `bound`'s second set, and no wrap object); the
+/// others keep their drawn art, with a note. Returns each live envelope of type's id with what
+/// takes its place again (its hidden type, then its drawn art).
 fn settle_warped_type(
     mut warped: ai::WarpedType,
     doc: &mut Document,
     filled: &std::collections::HashMap<NodeId, Filled>,
     threaded: &BTreeSet<NodeId>,
-    bound_text: &BTreeSet<NodeId>,
+    bound: [&BTreeSet<NodeId>; 2],
     restyled: &mut Vec<Rect>,
     notes: &mut Vec<String>,
 ) -> Result<Vec<(NodeId, Vec<Node>)>, String> {
+    let [bound_text, bound_visible] = bound;
     let made = |slot| match filled.get(&slot).map(|f| f.text.as_slice()).filter(|_| !bound_text.contains(&slot)) {
         Some(&[one]) => Some(one),
         _ => None,
     };
     // An envelope's type: the one text object a slot became (hidden, with nothing else), named as
-    // the slot (made type is no longer weighed against the page: the envelope draws it).
+    // the slot (made type is no longer weighed against the page: the envelope draws it). A variable
+    // binds the hidden text object a slot became, which the live envelope's type takes the place of
+    // with an id of its own: a slot bound to one keeps its type hidden, and the drawn art stays.
     let type_of = |doc: &Document, slot: NodeId| {
+        if bound_visible.contains(&slot) {
+            return None;
+        }
         let id = made(slot).filter(|id| !threaded.contains(id) && filled.get(&slot).is_some_and(|f| f.objects == [*id]))?;
         let mut text = doc.node(id).filter(|n| matches!(n.kind, NodeKind::Text(_)) && n.extras().wrap.is_none())?.clone();
         if let Some(name) = text.name.as_deref().and_then(|n| n.strip_prefix(MADE)) {
@@ -2063,7 +2076,7 @@ mod candidate_tests {
             let warped = ai::WarpedType::unchecked(vec![(id, (*look).clone())]);
             let filled = std::collections::HashMap::from([(id, Filled { text: vec![id], objects: vec![id] })]);
             let mut notes = vec![];
-            let settled = settle_warped_type(warped, &mut doc, &filled, &BTreeSet::new(), &BTreeSet::new(), &mut vec![], &mut notes);
+            let settled = settle_warped_type(warped, &mut doc, &filled, &BTreeSet::new(), [&BTreeSet::new(); 2], &mut vec![], &mut notes);
             assert_eq!(settled.is_ok(), ok, "{texts} text objects");
             assert_eq!(notes, ["warped text objects that came in as drawn art, not as editable type: 1"]);
         }

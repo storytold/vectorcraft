@@ -5296,6 +5296,12 @@ fn arc_keys(bend: f64) -> String {
 /// it: on `%_` lines the group with its mesh, its dictionary with the text object in its contents,
 /// then its drawn art `drawn` on plain lines and the plugin's `XP`.
 fn type_envelope(keys: &str, drawn: &str) -> String {
+    type_envelope_with(keys, drawn, "")
+}
+
+/// [`type_envelope`], with `after` (on plain lines, written on `%_` ones) after the text object in
+/// its contents, such as the text object's XML id.
+fn type_envelope_with(keys: &str, drawn: &str, after: &str) -> String {
     let hidden = |s: &str| -> String { s.lines().map(|l| format!("%_{l}\n")).collect() };
     let corner = |x: f64, y: f64, nx: f64, ny: f64, px: f64, py: f64| format!("[0.8 1 {x} {y} {nx} {ny} 1 {px} {py} 1] /N X#\n");
     let mesh = format!(
@@ -5309,7 +5315,7 @@ fn type_envelope(keys: &str, drawn: &str) -> String {
         "{}{}%_X=\n{}%_X+\n%_ (AIDeformArtKey) ,\n%_1 /Int (AIDeformStyle) ,\n%_;\n%_\n%_9 () XW\nu\n{drawn}U\n9 () XW\n(Adobe Deform Plugin) 1 0 0 XP\n",
         hidden(&format!("u\n{mesh}U\n")),
         hidden(&format!("/ArtDictionary :\n{keys}")),
-        hidden(&format!("u\n{}U\n9 () XW\n", text_object(0))),
+        hidden(&format!("u\n{}{after}U\n9 () XW\n", text_object(0))),
     )
 }
 
@@ -5568,6 +5574,40 @@ fn layers_with_objects_that_come_in_as_the_page_art_leave_an_envelope_of_type_it
     assert_eq!(loose, [("FLUX".to_string(), false)], "{:?}", r.warnings);
     assert_eq!(loose_type_names(&r.document), [None]);
     assert!(r.warnings.iter().any(|n| n == crate::import::ai::ENVELOPE_TYPE_DRAWN), "{:?}", r.warnings);
+}
+
+/// An envelope of type whose type a visibility variable binds keeps its drawn art, as one whose type
+/// a text variable binds does: the binding stays the hidden type's, which the live envelope would
+/// take the place of (#3179).
+#[test]
+fn an_envelope_of_type_bound_to_a_visibility_variable_keeps_its_drawn_art() {
+    use vectorcraft_testkit::ai::{XmlValue, named, variable_library_data, xml_element, xml_node};
+    let Some(family) = installed_family() else { return };
+    let doc = type_envelope_text(&family, None);
+    let (drawn, page) = drawn_envelope(&arc_envelope(&made_envelope_type(&doc), 30.0));
+    let reference = "/XMLUIDREF : (type_x5F_1) ;";
+    let attributes = [("trait", XmlValue::Str("visibility")), ("varName", XmlValue::Unicode("v_shown")), ("docRef", XmlValue::Raw(reference))];
+    let declared = [xml_node(1, "variable", XmlValue::Str(""), &attributes, &[])];
+    let set = xml_element("variableSet", &[("locked", "none")], &[xml_element("variables", &[], &declared)]);
+    let library = variable_library_data(&xml_element("variableSets", &[], &[set]));
+    // The text object's XML id, on plain lines as `type_envelope_with` takes it.
+    let id = named("type_x5F_1").replace("%_", "");
+    let envelope = type_envelope_with(&arc_keys(0.3), &drawn, &id);
+    let art = native_with_text(&(library + &layer("Art", true, &format!("{}\n{envelope}", square(10, 10)))), &doc);
+    let r = import(&eps(&format!("{}\n{page}", page_square(10, 10)), &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    let (envelopes, loose) = envelopes_and_type(&r.document);
+    assert!(envelopes.is_empty(), "{envelopes:?}");
+    assert_eq!(loose, [("FLUX".to_string(), false)], "{:?}", r.warnings);
+    let mut text = vec![];
+    r.document.walk(|n| {
+        if matches!(n.kind, NodeKind::Text(_)) {
+            text.push(n.id);
+        }
+    });
+    assert_eq!(r.document.variables.objects_of("v_shown"), text, "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|n| n == crate::import::ai::ENVELOPE_TYPE_DRAWN), "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|n| n.contains("variable bindings")), "{:?}", r.warnings);
 }
 
 /// The fill of the first run of type `n`.
