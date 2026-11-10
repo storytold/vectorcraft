@@ -612,8 +612,8 @@ fn an_export_and_rasterize_hold_the_solid_of_3d_type() {
     assert!(rasterized.width() > letters.width() + 15.0, "{letters:?} {rasterized:?}");
 }
 
-/// A symbol instance, a blend and a clipping group with Extrude & Bevel draw their solids on the
-/// canvas, in an export and in Object › Rasterize, not their flat art.
+/// A symbol instance, a blend and a clipping group with Extrude & Bevel, alone or in a group, draw
+/// their solids on the canvas, in an export and in Object › Rasterize, not their flat art.
 #[test]
 fn a_symbol_instance_a_blend_and_a_clipping_group_draw_their_solids() {
     use vectorcraft_doc::{BlendSpacing, BlendSpec, NodeId, NodeKind, Symbol};
@@ -631,12 +631,17 @@ fn a_symbol_instance_a_blend_and_a_clipping_group_draw_their_solids() {
         *clipping = true;
     }
     let spec = Box::new(BlendSpec { spacing: BlendSpacing::Steps(2), ..Default::default() });
+    let instance = NodeKind::SymbolInstance { symbol: "Box".into(), xf: Affine::translate((40.0, 40.0)) };
+    let clipped = NodeKind::Group { children: vec![Arc::new(clip), square(20.0, 20.0)], clip: true };
+    let in_group = |kind: NodeKind| NodeKind::Group { children: vec![Arc::new(Node::new(NodeId(0), kind)), square(100.0, 100.0)], clip: false };
     let kinds = [
-        NodeKind::SymbolInstance { symbol: "Box".into(), xf: Affine::translate((40.0, 40.0)) },
-        NodeKind::Blend { children: vec![square(30.0, 30.0), square(60.0, 40.0)], spec },
-        NodeKind::Group { children: vec![Arc::new(clip), square(20.0, 20.0)], clip: true },
+        ("a symbol instance", instance.clone()),
+        ("a blend", NodeKind::Blend { children: vec![square(30.0, 30.0), square(60.0, 40.0)], spec }),
+        ("a clipping group", clipped.clone()),
+        ("a group holding a symbol instance", in_group(instance)),
+        ("a group holding a clipping group", in_group(clipped)),
     ];
-    for kind in kinds {
+    for (what, kind) in kinds {
         let mut n = Node::new(d.alloc_id(), kind);
         let flat = crate::encode::art_bounds(&doc_of(&mut d.clone(), n.clone())).unwrap();
         n.appearance.effects =
@@ -645,8 +650,55 @@ fn a_symbol_instance_a_blend_and_a_clipping_group_draw_their_solids() {
         let n = &solid_doc.layers[0].children().unwrap()[0];
         let (solid, rasterized) = (crate::encode::art_bounds(&solid_doc).unwrap(), crate::drawn_bounds(&solid_doc, n).unwrap());
         let size = |r: Rect| r.width() + r.height();
-        assert!(size(solid) > size(flat) + 20.0, "{:?}: {flat:?} {solid:?}", n.kind);
-        assert!(size(rasterized) > size(flat) + 20.0, "{:?}: {flat:?} {rasterized:?}", n.kind);
+        assert!(size(solid) > size(flat) + 20.0, "{what}: {flat:?} {solid:?}");
+        assert!(size(rasterized) > size(flat) + 20.0, "{what}: {flat:?} {rasterized:?}");
+        // The renderer builds the solid from the object itself, with the document's symbols, as
+        // the effect builds it: one solid built, not the object's art drawn again with the effect.
+        let built = vectorcraft_effects::solid_art_in(Some(&solid_doc), n).and_then(|a| a.visual_bounds()).unwrap();
+        assert!((solid.x0 - built.x0).abs() < 1.0 && (solid.x1 - built.x1).abs() < 1.0, "{what}: {built:?} {solid:?}");
+        let mut r = Renderer::new();
+        r.art_bounds_on(&solid_doc, Rect::new(0.0, 0.0, 200.0, 200.0));
+        assert_eq!(r.stats.three_d_built, 1, "{what}");
+    }
+}
+
+/// A loaded file can hold a 3D effect on art past the limits commands check: a blend of more
+/// than 4,096 objects, art nested more than 64 levels deep in a clipping group. The art then draws
+/// as it does without the effect, and drawing it does not fail.
+#[test]
+fn art_past_the_three_d_limits_draws_as_without_the_effect() {
+    use vectorcraft_doc::{BlendSpacing, BlendSpec, NodeId, NodeKind};
+    let square = |x: f64| {
+        Arc::new(Node::path(
+            NodeId(0),
+            shapes::rectangle(Rect::new(x, 10.0, x + 20.0, 30.0)),
+            Appearance::basic(Paint::solid(Color::rgb(0.2, 0.5, 0.8)), Paint::None, 0.0),
+        ))
+    };
+    let mut clip = (*square(0.0)).clone();
+    if let NodeKind::Path { clipping, .. } = &mut clip.kind {
+        *clipping = true;
+    }
+    let mut deep = (*square(0.0)).clone();
+    for _ in 0..200 {
+        deep = Node::group(NodeId(0), vec![Arc::new(deep)]);
+    }
+    let spec = Box::new(BlendSpec { spacing: BlendSpacing::Steps(1000), ..Default::default() });
+    let kinds = [
+        ("a blend of 6,000 objects", NodeKind::Blend { children: (0..6).map(|i| square(30.0 * i as f64)).collect(), spec }),
+        ("art 200 levels deep in a clip", NodeKind::Group { children: vec![Arc::new(clip), Arc::new(deep)], clip: true }),
+    ];
+    let d = Document::new(200.0, 200.0);
+    for (what, kind) in kinds {
+        let mut n = Node::new(NodeId(500), kind);
+        let flat = crate::encode::art_bounds(&doc_of(&mut d.clone(), n.clone())).unwrap();
+        n.appearance.effects =
+            vec![Effect { id: "threeD.extrude".into(), params: json!({"depth": 60.0, "position": "isometricTop"}), visible: true }];
+        let loaded = doc_of(&mut d.clone(), n);
+        let n = &loaded.layers[0].children().unwrap()[0];
+        assert!(vectorcraft_effects::validate_three_d_in(Some(&loaded), n, "threeD.extrude", &json!({})).is_err(), "{what}");
+        assert_eq!(crate::encode::art_bounds(&loaded), Some(flat), "{what}");
+        assert!(crate::drawn_bounds(&loaded, n).is_some(), "{what}");
     }
 }
 

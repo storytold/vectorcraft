@@ -118,7 +118,8 @@ it, at any depth of its groups, each from its own fills and strokes as above ([F
 and they turn, twist and taper together about the center of their bounds together; with Perspective one eye sees
 them all. The members stay editable: moving or editing one reshapes the solids. Our reading:
 
-- Each member's own geometry effects shape it first; the group's geometry effects before the 3D effect reshape the
+- Each member's own geometry effects shape it first, then those of each group inside the 3D group that holds it,
+  applied to that group's members together; the 3D group's geometry effects before the 3D effect reshape the
   members, and those after it bend the result as a whole. The members' other effects, and the group's own fills and
   strokes, are not drawn. A member's opacity applies to its solids; its blending mode does not.
 - When every solid is opaque, all members' faces are drawn in one back-to-front order; otherwise each solid is drawn
@@ -144,6 +145,10 @@ solids are ([Groups](#groups)), turned about one shared axis.
 - A symbol instance builds from its symbol's art where the instance places it. Redefining the symbol reshapes the
   solid. An instance of a symbol that is not in the document, a symbol that holds an instance of itself, or art
   nested more than 64 levels deep is refused.
+- Inside a 3D group, the geometry effects of a clipping group, a blend or a symbol instance reshape the art it shows,
+  as a group's do. Inside a clipping group, a group's geometry effects reshape its members before the clip cuts them.
+- Art whose symbol instances, blends and clipping groups take more than 262,144 objects to go through (counting
+  hidden objects, and a symbol's art once for each instance that shows it) is refused.
 - The objects stay live: editing the clipping path, the blend's keys or the symbol reshapes the solid.
 - An image is refused, alone or in a group: trace it first with Object › Image Trace › Make. The help page routes
   images to 3D through Image Trace ([Create 3D vector artwork](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/create-3d-vector-artwork.html)).

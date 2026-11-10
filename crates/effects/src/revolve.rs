@@ -1166,6 +1166,38 @@ mod tests {
     }
 
     #[test]
+    fn the_art_of_symbol_instances_and_blends_shares_the_budget_of_paint_copies() {
+        use vectorcraft_doc::color::{Gradient, GradientKind, GradientPaint, GradientStop};
+        use vectorcraft_doc::{BlendSpacing, BlendSpec, Symbol};
+        let plain = member(1, 0.0);
+        let NodeKind::Path { path: profile, .. } = &plain.kind else { panic!("a path") };
+        let faces = vectorcraft_three_d::revolve(profile, profile.bounds().unwrap(), revolve_options(&json!({}))).unwrap().len();
+        let stops = MAX_PAINT_COPIES * 6 / 10 / (faces * 4) / std::mem::size_of::<GradientStop>();
+        let painted = |id: u64, x: f64| {
+            let stops = (0..stops).map(|i| GradientStop::new(i as f32 / stops as f32, Color::BLACK)).collect();
+            let paint = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+            let mut node = (*member(id, x)).clone();
+            node.appearance = Appearance::basic(paint, Paint::None, 0.0).into();
+            Arc::new(node)
+        };
+        let mut d = Document::new(500.0, 500.0);
+        d.symbols.push(Symbol { dynamic: false, name: "P".into(), art: painted(0, 0.0) });
+        let instance = |id: u64| Arc::new(Node::new(NodeId(id), NodeKind::SymbolInstance { symbol: "P".into(), xf: Affine::IDENTITY }));
+        // One instance's art fits; two in the same place, each of whose surfaces fits alone, pass
+        // the budget together, as two paths would.
+        assert_eq!(validate_revolve_in(Some(&d), &group_with(json!({}), vec![instance(1)]), &json!({})), Ok(()));
+        let two = group_with(json!({}), vec![instance(1), instance(2)]);
+        let refused = validate_revolve_in(Some(&d), &two, &json!({})).unwrap_err();
+        assert!(refused.contains("simplify the gradient"), "{refused}");
+        assert_eq!(revolve_art_in(Some(&d), &two), None, "past the budget the source draws");
+        // A blend's keys and step count together too.
+        let spec = Box::new(BlendSpec { spacing: BlendSpacing::Steps(1), ..Default::default() });
+        let blend = Arc::new(Node::new(NodeId(3), NodeKind::Blend { children: vec![painted(4, 0.0), painted(5, 0.0)], spec }));
+        let refused = validate_revolve_in(Some(&d), &group_with(json!({}), vec![blend]), &json!({})).unwrap_err();
+        assert!(refused.contains("simplify the gradient"), "{refused}");
+    }
+
+    #[test]
     fn the_fills_of_one_object_share_the_budget_of_paint_copies() {
         use vectorcraft_doc::color::{Gradient, GradientKind, GradientPaint, GradientStop};
         let source = profile_node();

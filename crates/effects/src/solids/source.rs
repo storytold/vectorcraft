@@ -11,11 +11,18 @@ use vectorcraft_doc::{Appearance, AppearanceItem, Document, FillLayer, Node, Nod
 use vectorcraft_geom::{FillRule, PathData};
 use vectorcraft_pathops as po;
 
-use super::{MAX_MEMBERS, geometry, is_container, profile, region, solid_paints};
-use crate::GeomContext;
+use super::{MAX_MEMBERS, geometry, is_container, members, profile, region, reshape_members, solid_paints};
+use crate::{GeomContext, is_geometry};
 
 /// The deepest nesting of symbol instances, blends and clipping groups resolved for one 3D effect.
 const MAX_DEPTH: usize = 64;
+
+/// The most objects resolving one 3D effect's art may visit or make: every object listed (hidden
+/// ones and guides included), every symbol instance, blend and clipping group resolved, every blend
+/// step made and every object cut to a clipping path. A symbol that holds instances of another
+/// repeats that symbol's art at every level, so art with few visible objects can still take this
+/// many steps.
+pub(super) const MAX_WORK: usize = 1 << 18;
 
 /// The error for an image a 3D effect is asked to build from.
 pub(crate) fn image_refusal(label: &str) -> String {
@@ -50,11 +57,19 @@ pub(crate) fn resolve<'a>(doc: Option<&Document>, n: &'a Node, label: &str) -> R
     if !needs(n) {
         return Ok(Cow::Borrowed(n));
     }
-    let mut r = Resolver { doc, label, leaves: 0 };
-    let children = r.content(n, 0)?;
+    let mut r = Resolver { doc, label, leaves: 0, work: 0 };
+    let children = r.content(n, 0);
+    #[cfg(test)]
+    WORK.with(|w| w.set(r.work));
     let mut out = n.clone();
-    out.kind = NodeKind::Group { children, clip: false };
+    out.kind = NodeKind::Group { children: children?, clip: false };
     Ok(Cow::Owned(out))
+}
+
+#[cfg(test)]
+thread_local! {
+    /// The objects the last [`resolve`] on this thread visited or made ([`Resolver::work`]).
+    pub(super) static WORK: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 struct Resolver<'a> {
@@ -62,21 +77,37 @@ struct Resolver<'a> {
     label: &'a str,
     /// The objects other than groups and layers kept so far, counted against [`MAX_MEMBERS`].
     leaves: usize,
+    /// The objects visited or made so far, counted against [`MAX_WORK`].
+    work: usize,
 }
 
 impl Resolver<'_> {
-    /// The art `n` shows, as the members of a plain group.
+    /// Count `steps` more objects visited or made, or an error past [`MAX_WORK`].
+    fn spend(&mut self, steps: usize) -> Result<(), String> {
+        self.work = self.work.saturating_add(steps);
+        if self.work > MAX_WORK {
+            return Err(format!(
+                "{} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects",
+                self.label
+            ));
+        }
+        Ok(())
+    }
+
+    /// The art `n`, a symbol instance, a blend, a clipping group or layer, or a group holding one,
+    /// shows, as the members of a plain group.
     fn content(&mut self, n: &Node, depth: usize) -> Result<Vec<Arc<Node>>, String> {
         let label = self.label;
         if depth > MAX_DEPTH {
             return Err(self.too_deep());
         }
+        self.spend(1)?;
         match &n.kind {
             NodeKind::SymbolInstance { symbol, .. } => {
                 let art = crate::outline_object(self.doc, n).ok_or_else(|| {
                     format!("{label} can't build a solid from the instance of symbol \"{symbol}\": the symbol's art isn't available")
                 })?;
-                self.list(kids(&art), depth + 1)
+                Ok(self.list(kids(&art), depth + 1)?.0)
             }
             NodeKind::Blend { children, spec } => {
                 // Counted before the steps are made, so a blend past the limit is never expanded.
@@ -84,13 +115,14 @@ impl Resolver<'_> {
                 if self.leaves.saturating_add(made) > MAX_MEMBERS {
                     return Err(self.too_many());
                 }
+                self.spend(made)?;
                 let steps: Vec<Arc<Node>> = crate::expand_live(self.doc, n).into_iter().map(Arc::new).collect();
-                self.list(&steps, depth + 1)
+                Ok(self.list(&steps, depth + 1)?.0)
             }
             _ if n.clips() => {
                 let Some((first, rest)) = kids(n).split_first() else { return Ok(vec![]) };
                 let clip = clip_area(first);
-                let inner = self.list(rest, depth + 1)?;
+                let (inner, _) = self.list(rest, depth + 1)?;
                 let mut out = vec![];
                 for c in &inner {
                     if let Some(c) = self.clipped(c, &clip, depth + 1)? {
@@ -99,36 +131,57 @@ impl Resolver<'_> {
                 }
                 Ok(out)
             }
-            _ => self.list(kids(n), depth + 1),
+            _ => Ok(self.list(kids(n), depth + 1)?.0),
         }
     }
 
     /// The visible members of `children` as plain art: images refused, guides left out, symbol
-    /// instances, blends and clipping groups resolved into groups with their transparency, groups
-    /// holding them rebuilt.
-    fn list(&mut self, children: &[Arc<Node>], depth: usize) -> Result<Vec<Arc<Node>>, String> {
+    /// instances, blends and clipping groups resolved into groups with their transparency and
+    /// geometry effects, groups holding them rebuilt. Also whether any member changed: a group
+    /// whose members did not is kept as it is. Each object is visited once.
+    fn list(&mut self, children: &[Arc<Node>], depth: usize) -> Result<(Vec<Arc<Node>>, bool), String> {
         let mut out = Vec::with_capacity(children.len());
+        let mut changed = false;
         for c in children {
+            self.spend(1)?;
             if !c.visible || matches!(c.kind, NodeKind::Path { guide: true, .. }) {
                 continue;
             }
             if matches!(c.kind, NodeKind::Image(_)) {
                 return Err(image_refusal(self.label));
             }
-            if needs(c) {
+            if resolves(c) {
                 let kids = self.content(c, depth)?;
-                out.push(Arc::new(wrap(c, kids)));
+                out.push(Arc::new(with_effects(wrap(c, kids), c)));
+                changed = true;
                 continue;
             }
-            if !is_container(c) {
-                self.leaves += 1;
-                if self.leaves > MAX_MEMBERS {
-                    return Err(self.too_many());
+            if is_container(c) {
+                // Past the depth limit a group is kept, and not walked further, only when nothing
+                // in it needs resolving.
+                if depth >= MAX_DEPTH {
+                    if needs(c) {
+                        return Err(self.too_deep());
+                    }
+                    out.push(c.clone());
+                    continue;
                 }
+                let (kids, inner) = self.list(kids(c), depth + 1)?;
+                if inner {
+                    out.push(Arc::new(with_effects(wrap(c, kids), c)));
+                    changed = true;
+                } else {
+                    out.push(c.clone());
+                }
+                continue;
+            }
+            self.leaves += 1;
+            if self.leaves > MAX_MEMBERS {
+                return Err(self.too_many());
             }
             out.push(c.clone());
         }
-        Ok(out)
+        Ok((out, changed))
     }
 
     fn too_complex(&self) -> String {
@@ -144,17 +197,39 @@ impl Resolver<'_> {
     }
 
     /// `n`, plain art inside a clipping group, cut to `clip`: each shape's fills as its area inside
-    /// the clip and each stroke as the part of its outline inside it, filled in the stroke's paint;
-    /// `None` when nothing of it is inside. Objects that build no solid stay as they are.
-    fn clipped(&self, n: &Node, clip: &(PathData, FillRule), depth: usize) -> Result<Option<Node>, String> {
+    /// the clip and each stroke as the part of its outline inside it, filled in the stroke's paint,
+    /// after the geometry effects of the shape and of the groups it is in; hidden objects and guides
+    /// left out. `None` when nothing of it is inside. Objects that build no solid stay as they are.
+    fn clipped(&mut self, n: &Node, clip: &(PathData, FillRule), depth: usize) -> Result<Option<Node>, String> {
         if depth > MAX_DEPTH {
             return Err(self.too_deep());
         }
+        self.spend(1)?;
         if is_container(n) {
             let mut kids = vec![];
-            for c in n.children().into_iter().flatten() {
-                if let Some(c) = self.clipped(c, clip, depth + 1)? {
-                    kids.push(Arc::new(c));
+            if n.appearance.effects.iter().any(|e| e.visible && is_geometry(&e.id)) {
+                // The group's geometry effects reshape its members together before the clip cuts
+                // them, as they are drawn: each member becomes its reshaped outline.
+                if nested_past(n, MAX_DEPTH.saturating_sub(depth)) {
+                    return Err(self.too_deep());
+                }
+                let mut shapes = members(n, self.label)?;
+                reshape_members(n, &n.appearance.effects, &mut shapes);
+                for s in shapes {
+                    let mut piece = shape(n, s.path, s.rule, s.items);
+                    piece.opacity = s.opacity;
+                    if let Some(c) = self.clipped(&piece, clip, depth + 1)? {
+                        kids.push(Arc::new(c));
+                    }
+                }
+            } else {
+                for c in n.children().into_iter().flatten() {
+                    if !c.visible || matches!(c.kind, NodeKind::Path { guide: true, .. }) {
+                        continue;
+                    }
+                    if let Some(c) = self.clipped(c, clip, depth + 1)? {
+                        kids.push(Arc::new(c));
+                    }
                 }
             }
             return Ok((!kids.is_empty()).then(|| wrap(n, kids)));
@@ -202,6 +277,20 @@ fn clip_area(first: &Node) -> (PathData, FillRule) {
     crate::clip_outline(first).map_or_else(|| (PathData::default(), FillRule::NonZero), |(bp, rule)| (PathData::from_bezpath(&bp), rule))
 }
 
+/// Does `n` hold visible groups or layers nested more than `levels` deep? Walked without recursion.
+fn nested_past(n: &Node, levels: usize) -> bool {
+    let mut stack = vec![(n, 0usize)];
+    while let Some((n, level)) = stack.pop() {
+        if level > levels {
+            return true;
+        }
+        if is_container(n) {
+            stack.extend(kids(n).iter().filter(|c| c.visible).map(|c| (&**c, level + 1)));
+        }
+    }
+    false
+}
+
 /// The members of `n`, none for an object without members.
 fn kids(n: &Node) -> &[Arc<Node>] {
     n.children().map_or(&[], Vec::as_slice)
@@ -222,5 +311,13 @@ fn wrap(n: &Node, children: Vec<Arc<Node>>) -> Node {
     g.name = n.name.clone();
     g.opacity = n.opacity;
     g.blend = n.blend;
+    g
+}
+
+/// `g`, the group `n` was resolved into, with `n`'s appearance: a 3D effect's group reshapes its
+/// members with its geometry effects ([`members`]), which read its stroke as they do when `n` is
+/// drawn. A group's own fills and strokes build no solid.
+fn with_effects(mut g: Node, n: &Node) -> Node {
+    g.appearance = n.appearance.clone();
     g
 }

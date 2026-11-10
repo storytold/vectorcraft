@@ -226,3 +226,135 @@ fn images_are_refused_alone_and_in_a_group_with_image_trace_named() {
         assert_eq!(validate_three_d_in(Some(&d), &g, id, &json!({})), Ok(()), "{id}");
     }
 }
+
+/// Symbols `L0` to `L{levels}`: `L0` holds `leaf`, each later one `fan` instances of the one
+/// before it.
+fn nested_symbols(levels: usize, fan: usize, leaf: Node) -> Document {
+    let mut d = document();
+    d.symbols.push(Symbol { dynamic: false, name: "L0".into(), art: Arc::new(Node::group(NodeId(0), vec![Arc::new(leaf)])) });
+    for level in 1..=levels {
+        let below = format!("L{}", level - 1);
+        let members = (0..fan).map(|i| Arc::new(instance(0, &below, Affine::translate((i as f64 * 2.0, 0.0))))).collect();
+        d.symbols.push(Symbol { dynamic: false, name: format!("L{level}"), art: Arc::new(Node::group(NodeId(0), members)) });
+    }
+    d
+}
+
+#[test]
+fn nested_symbol_instances_that_repeat_hidden_art_are_refused_past_the_work_limit() {
+    // Four instances at each of ten levels repeat the hidden path about a million times, with no
+    // object to count against the 4,096-object limit.
+    let mut hidden = rect(0, 0.0, 0.0, 10.0, 10.0, 0.0);
+    hidden.visible = false;
+    let d = nested_symbols(10, 4, hidden);
+    for id in TYPES {
+        let n = with(instance(30, "L10", Affine::IDENTITY), id, json!({}));
+        let err = validate_three_d_in(Some(&d), &n, id, &json!({})).unwrap_err();
+        assert!(err.contains("hold too many objects"), "{id}: {err}");
+        assert!(source::WORK.with(std::cell::Cell::get) <= source::MAX_WORK + 1, "{id}: stopped at the limit");
+        assert!(art(&d, &n, id).is_none(), "{id}");
+        assert!(three_d_meshes_in(Some(&d), &n).is_err(), "{id}");
+    }
+    // The same nesting with 1,024 visible squares stays far below the limit and builds: each
+    // square, group and instance is visited once (an instance twice: listed, then resolved).
+    let d = nested_symbols(5, 4, rect(0, 0.0, 0.0, 10.0, 10.0, 0.0));
+    let n = with(instance(30, "L5", Affine::IDENTITY), ROTATE, front());
+    assert_eq!(validate_three_d_in(Some(&d), &n, ROTATE, &json!({})), Ok(()));
+    let work = source::WORK.with(std::cell::Cell::get);
+    assert!(work <= 1024 + 1365 * 3, "{work}");
+    assert!(solid_art_in(Some(&d), &n).is_some());
+}
+
+#[test]
+fn empty_sources_and_sources_inside_sources_build_or_refuse_cleanly() {
+    let mut d = document();
+    d.symbols.push(Symbol { dynamic: false, name: "Empty".into(), art: Arc::new(Node::group(NodeId(0), vec![])) });
+    let clip = Rect::new(0.0, 0.0, 50.0, 100.0);
+    d.symbols.push(Symbol { dynamic: false, name: "Clipped".into(), art: Arc::new(clip_group(0, clip, rect(0, 0.0, 0.0, 100.0, 100.0, 0.0))) });
+    let empty_clip = Node::new(NodeId(10), NodeKind::Group { children: vec![], clip: true });
+    let empty_symbol = instance(30, "Empty", Affine::IDENTITY);
+    let no_keys = Node::new(NodeId(20), NodeKind::Blend { children: vec![], spec: Box::default() });
+    for id in TYPES {
+        // Alone, an empty clipping group, an instance of an empty symbol and a blend without keys
+        // build nothing and say so.
+        for empty in [&empty_clip, &empty_symbol, &no_keys] {
+            let n = with(empty.clone(), id, json!({}));
+            let err = validate_three_d_in(Some(&d), &n, id, &json!({})).unwrap_err();
+            assert!(err.contains("at least two anchors"), "{id} on {:?}: {err}", empty.kind);
+            assert!(art(&d, &n, id).is_none(), "{id}");
+            assert!(three_d_meshes_in(Some(&d), &n).is_err(), "{id}");
+            // In a group they add nothing, and the group's other members still build.
+            let g = with(Node::group(NodeId(90), vec![Arc::new(empty.clone()), Arc::new(rect(91, 0.0, 0.0, 50.0, 50.0, 0.0))]), id, json!({}));
+            assert_eq!(validate_three_d_in(Some(&d), &g, id, &json!({})), Ok(()), "{id} on a group holding {:?}", empty.kind);
+            assert!(art(&d, &g, id).is_some(), "{id}");
+        }
+        // A blend set to no steps draws one step, and builds from its keys and that step.
+        let n = with(blend(20, 0), id, json!({}));
+        assert_eq!(validate_three_d_in(Some(&d), &n, id, &json!({})), Ok(()), "{id}");
+    }
+    let drawn = Node::group(NodeId(20), crate::expand_live(Some(&d), &blend(20, 0)).into_iter().map(Arc::new).collect());
+    assert_eq!(drawn.children().unwrap().len(), 3);
+    let (a, b) = (solid_art_in(Some(&d), &with(blend(20, 0), ROTATE, front())).unwrap(), solid_art(&with(drawn, ROTATE, front())).unwrap());
+    assert_eq!(a.children().unwrap().len(), b.children().unwrap().len());
+    assert!(close(bounds(&a), bounds(&b), 0.01));
+    // A symbol holding a clipping group builds from the art inside the clip, where the instance
+    // places it.
+    let placed = with(instance(30, "Clipped", Affine::translate((200.0, 0.0))), ROTATE, front());
+    let cut = with(Node::group(NodeId(30), vec![Arc::new(rect(31, 200.0, 0.0, 250.0, 100.0, 0.0))]), ROTATE, front());
+    assert!(close(bounds(&solid_art_in(Some(&d), &placed).unwrap()), bounds(&solid_art(&cut).unwrap()), 0.01));
+}
+
+#[test]
+fn resolved_objects_and_groups_in_a_three_d_group_keep_their_geometry_effects() {
+    let mut d = document();
+    d.symbols.push(Symbol { dynamic: false, name: "Left".into(), art: Arc::new(rect(0, 0.0, 100.0, 50.0, 200.0, 0.0)) });
+    let moved = |n: Node| with(n, "distort.transform", json!({"moveH": 100.0}));
+    let clip = Rect::new(100.0, 100.0, 150.0, 200.0);
+    let target = rect(1, 100.0, 100.0, 150.0, 200.0, 0.0);
+    let expected = bounds(&solid_art(&with(Node::group(NodeId(90), vec![Arc::new(target.clone())]), ROTATE, front())).unwrap());
+    let left = || rect(2, 0.0, 100.0, 50.0, 200.0, 0.0);
+    let members = [
+        ("a symbol instance", moved(instance(30, "Left", Affine::IDENTITY))),
+        ("a clipping group", moved(clip_group(40, Rect::new(0.0, 100.0, 50.0, 200.0), left()))),
+        ("a plain group", moved(Node::group(NodeId(50), vec![Arc::new(left())]))),
+        ("a group in a clipping group", clip_group(60, clip, moved(Node::group(NodeId(62), vec![Arc::new(left())])))),
+    ];
+    for (what, member) in members {
+        for id in TYPES {
+            let g = with(Node::group(NodeId(90), vec![Arc::new(member.clone())]), id, json!({}));
+            assert_eq!(validate_three_d_in(Some(&d), &g, id, &json!({})), Ok(()), "{id} on a group holding {what}");
+        }
+        let g = with(Node::group(NodeId(90), vec![Arc::new(member)]), ROTATE, front());
+        assert!(close(bounds(&solid_art_in(Some(&d), &g).unwrap()), expected, 0.01), "{what} moved by its Transform effect");
+    }
+    // A blend's effect moves its keys and steps together.
+    let blended = with(Node::group(NodeId(90), vec![Arc::new(moved(blend(20, 3)))]), ROTATE, front());
+    let unmoved = with(Node::group(NodeId(90), vec![Arc::new(blend(20, 3))]), ROTATE, front());
+    let (a, b) = (bounds(&solid_art_in(Some(&d), &blended).unwrap()), bounds(&solid_art_in(Some(&d), &unmoved).unwrap()));
+    assert!(close(a, Rect::new(b.x0 + 100.0, b.y0, b.x1 + 100.0, b.y1), 0.01), "{a:?} is {b:?} moved");
+    // A geometry effect that reads the object's stroke reads the resolved object's, as a group's.
+    let stroked = |kind: NodeKind| {
+        let mut n = Node::new(NodeId(20), kind);
+        n.appearance = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 10.0).into();
+        with(n, "path.outlineStroke", json!({}))
+    };
+    let NodeKind::Blend { children, spec } = blend(20, 3).kind else { panic!("a blend") };
+    let steps = crate::expand_live(Some(&d), &blend(20, 3)).into_iter().map(Arc::new).collect();
+    let group_of = |n: Node| with(Node::group(NodeId(90), vec![Arc::new(n)]), ROTATE, front());
+    let resolved = bounds(&solid_art_in(Some(&d), &group_of(stroked(NodeKind::Blend { children, spec }))).unwrap());
+    let plain = bounds(&solid_art(&group_of(stroked(NodeKind::Group { children: steps, clip: false }))).unwrap());
+    assert!(close(resolved, plain, 0.01), "{resolved:?} {plain:?}");
+    // Groups nested past the limit under a group with geometry effects in a clipping group are
+    // refused before the effects reshape them.
+    let mut deep = left();
+    for i in 0..200 {
+        deep = Node::group(NodeId(1000 + i), vec![Arc::new(deep)]);
+    }
+    let n = with(clip_group(60, clip, moved(deep)), ROTATE, front());
+    assert!(validate_three_d_in(Some(&d), &n, ROTATE, &json!({})).is_err_and(|e| e.contains("levels deep")));
+    // Hidden members of a group inside a clipping group build nothing.
+    let mut hidden = rect(63, 100.0, 100.0, 150.0, 200.0, 0.0);
+    hidden.visible = false;
+    let n = with(clip_group(60, clip, Node::group(NodeId(62), vec![Arc::new(hidden)])), ROTATE, front());
+    assert!(validate_three_d_in(Some(&d), &n, ROTATE, &json!({})).is_err_and(|e| e.contains("at least two anchors")));
+}

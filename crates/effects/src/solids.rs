@@ -280,7 +280,8 @@ const MAX_MESH_TRIANGLES: usize = 2_000_000;
 /// The shapes a 3D effect on group or layer `n` builds its solids from: every visible path,
 /// compound path and type in it (after [`resolve`] gives it the art of its symbol instances, blends
 /// and clipping groups), at any depth of its groups, each through its own geometry
-/// effects and painted with its own fills and strokes. Like the effect on a group in the
+/// effects, then those of each group it is in (on that group's members together), and painted
+/// with its own fills and strokes. Like the effect on a group in the
 /// reference app, they turn about one shared axis (the centre of their bounds together) rather
 /// than each about its own. An error names what the group holds that can't become a solid.
 pub(crate) fn members(n: &Node, label: &str) -> Result<Vec<Profile>, String> {
@@ -302,7 +303,12 @@ pub(crate) fn members(n: &Node, label: &str) -> Result<Vec<Profile>, String> {
                 scopes.push(Scope { key: w.keys, opacity: c.opacity, blend: c.blend });
             }
             if is_container(c) {
+                let first = w.out.len();
                 walk(c, opacity, &scopes, w)?;
+                // The group's own geometry effects reshape its members together, as it is drawn.
+                if let Some(shapes) = w.out.get_mut(first..) {
+                    reshape_members(c, &c.appearance.effects, shapes);
+                }
                 continue;
             }
             let Some((path, rule)) = profile(c) else {
