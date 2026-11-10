@@ -138,3 +138,66 @@ fn a_knockout_group_with_a_brushed_stroke_keeps_its_masks() {
     let svg = export(&d, &ExportOptions::default());
     assert!(svg.contains("<mask"), "{svg}");
 }
+
+/// The `x`, `y`, `width` and `height` of each `<mask>` and `<filter>` element in `svg`.
+fn regions(svg: &str) -> Vec<[f64; 4]> {
+    let opts = resvg::usvg::roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() };
+    let xml = resvg::usvg::roxmltree::Document::parse_with_options(svg, opts).unwrap();
+    xml.descendants()
+        .filter(|n| matches!(n.tag_name().name(), "mask" | "filter"))
+        .map(|n| ["x", "y", "width", "height"].map(|a| n.attribute(a).and_then(|v| v.parse().ok()).unwrap_or(f64::NAN)))
+        .collect()
+}
+
+/// Mask and filter regions cover the art they apply to and no more: readers draw a mask into an
+/// image of its region's size, and one drawn at 200,000 units square runs out of memory.
+#[test]
+fn mask_and_filter_regions_cover_their_art() {
+    let knockout = {
+        let mut d = Document::new(40.0, 20.0);
+        let below = rect(&mut d, Rect::new(0.0, 0.0, 40.0, 20.0), [200, 0, 0]);
+        let mut top = rect(&mut d, Rect::new(5.0, 5.0, 15.0, 15.0), [0, 0, 200]);
+        top.opacity = 0.5;
+        let mut group = Node::group(d.alloc_id(), vec![below.into(), top.into()]);
+        group.knockout = vectorcraft_doc::Knockout::On;
+        add(&mut d, group);
+        d
+    };
+    for (what, d) in [("clip", masked(true, false)), ("no clip, inverted", masked(false, true)), ("knockout", knockout)] {
+        let svg = export(&d, &ExportOptions::default());
+        let found = regions(&svg);
+        assert!(!found.is_empty(), "{what}: {svg}");
+        for [x, y, w, h] in found {
+            // The art is 40 × 20, with 2 to spare on each side.
+            assert!(x >= -2.5 && y >= -2.5 && w <= 45.0 && h <= 25.0 && w >= 40.0 && h >= 20.0, "{what}: {x} {y} {w} {h} in {svg}");
+        }
+    }
+}
+
+/// A mask's region reaches as far as the masked art paints: a drop shadow of the object, or of an
+/// object in the masked group, shows past the object as on the canvas.
+#[test]
+fn a_mask_region_keeps_the_shadows_of_the_masked_art() {
+    let shadow = vectorcraft_doc::Effect {
+        id: "stylize.dropShadow".into(),
+        params: serde_json::json!({"x": 15, "y": 15, "blur": 0, "opacity": 100}),
+        visible: true,
+    };
+    for in_group in [false, true] {
+        let mut d = Document::new(60.0, 60.0);
+        let mut red = rect(&mut d, Rect::new(10.0, 10.0, 30.0, 30.0), [255, 0, 0]);
+        red.appearance.effects.push(shadow.clone());
+        let mut masked = if in_group { Node::group(d.alloc_id(), vec![red.into()]) } else { red };
+        // An unclipped mask lets the art show outside the mask art: all of the shadow shows.
+        let art = rect(&mut d, Rect::new(10.0, 10.0, 20.0, 30.0), [255, 255, 255]);
+        masked.extras_mut().mask = Some(Box::new(OpacityMask::new(art, false)));
+        add(&mut d, masked);
+        let svg = export(&d, &ExportOptions::default());
+        let (canvas, written) = (render_artboard(&d), resvg_render(&svg, 60, 60));
+        for (x, y) in [(15, 15), (40, 40), (35, 28)] {
+            let (c, w) = (canvas.over_white(x, y), written.over_white(x, y));
+            assert!(within(c, w, 3), "in a group {in_group}, at {x},{y}: canvas {c:?}, svg {w:?}\n{svg}");
+        }
+        assert!(canvas.over_white(40, 40)[0] < 100, "the shadow shows on the canvas: {:?}", canvas.over_white(40, 40));
+    }
+}
