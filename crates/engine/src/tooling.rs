@@ -1298,6 +1298,9 @@ impl Session {
         let outer = std::mem::replace(&mut self.in_tool_actions, true);
         let r = self.apply_tool_actions(acts);
         self.in_tool_actions = outer;
+        if !outer && self.depth == 0 {
+            self.trim_histories();
+        }
         r
     }
 

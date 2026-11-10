@@ -44,6 +44,8 @@ impl Session {
             fill_active: true,
             clipboard: Clipboard::default(),
             journal: Journal::default(),
+            history_budget: crate::default_history_budget(),
+            histories_seen: None,
             tool: vectorcraft_tools::create("selection"),
             lender: None,
             held_input: Default::default(),

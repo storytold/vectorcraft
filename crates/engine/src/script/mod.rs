@@ -1024,7 +1024,11 @@ impl Session {
                 self.script_key = Some(key);
                 None
             }
-            Ok(Ok(Progress::Done(_))) => Some(self.script_commit(job)),
+            Ok(Ok(Progress::Done(_))) => {
+                let r = self.script_commit(job);
+                self.trim_histories();
+                Some(r)
+            }
         }
     }
 
