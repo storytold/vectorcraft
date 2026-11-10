@@ -7379,7 +7379,7 @@ fn bindings_and_values_the_reader_cant_take_are_left_out() {
 }
 
 /// Type in a variable font's named instance names the instance's place in the font's design space
-/// (`/4`, each axis as 16.16 fixed) in its font record, so the app that opens the file doesn't take
+/// (`/4`, each axis as 16.16 fixed) and the font's version (`/5`) in its font record, so the app that opens the file doesn't take
 /// the font's default instance (#6388); a run's own Variable Font setting is a font of its own, and
 /// a static font's record has no design vector. Each comes back as the style it was set in.
 #[test]
@@ -7414,6 +7414,10 @@ fn variable_font_instances_name_their_design_space() {
     assert!(td.contains("VaritestSans-Bold) /2 1 /4 [ 42598400 ]"), "a setting of its own is a font of its own: {td}");
     let static_name = vectorcraft_text::FontDb::global().face(&style_of(12.0).font_family, "Regular").unwrap().postscript_name();
     assert!(td.contains(&format!("{static_name}) /2 1 >>")), "a static font has no design vector: {td}");
+    // Each variable font's record names the font's version (name ID 5) after its design vector.
+    // (The string is UTF-16 after a byte order mark, so the match starts after it.)
+    assert_eq!(td.matches("] /5 (").count(), 3, "{td}");
+    assert_eq!(td.matches("Version 1.000) >>").count(), 3, "{td}");
     assert_eq!(td.matches("/CoolTypeFont").count(), 5, "four fonts and the hidden characters' font");
 
     let back = read_back(&doc);

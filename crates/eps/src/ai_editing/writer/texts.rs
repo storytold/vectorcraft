@@ -569,7 +569,10 @@ impl TextDoc {
     /// The index of the font of `st` in the font set.
     fn font(&mut self, st: &CharStyle) -> i64 {
         let font = font_name(st);
-        let same = |f: &FontRecord| f.name == font.name && f.design.iter().map(|v| fixed(*v)).eq(font.design.iter().map(|v| fixed(*v)));
+        // Two installed versions of one font are two fonts, so each keeps its own `/5`.
+        let same = |f: &FontRecord| {
+            f.name == font.name && f.version == font.version && f.design.iter().map(|v| fixed(*v)).eq(font.design.iter().map(|v| fixed(*v)))
+        };
         let i = match self.fonts.iter().position(same) {
             Some(i) => i,
             None => {
