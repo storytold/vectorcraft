@@ -602,6 +602,37 @@ fn a_run_with_nobody_to_ask_ends_at_its_growth_allowance() {
 }
 
 #[test]
+fn a_document_a_run_opens_counts_toward_its_growth_allowance() {
+    TEST_GROWTH.with(|g| g.set(Some(20)));
+    let rects: String = (0..30).map(|i| format!(r#"<rect x="{i}" y="0" width="1" height="1"/>"#)).collect();
+    let svg = format!(r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">{rects}</svg>"#);
+    let data = vectorcraft_format::base64_encode(svg.as_bytes());
+    let mut s = two_docs();
+    let before = state(&s);
+    let source = format!("try {{ vc.run('document.open', {{name: 'a.svg', dataBase64: '{data}'}}); }} catch (e) {{}}");
+    let e = run(&mut s, &source).unwrap_err().to_string();
+    assert!(e.contains("objects and data"), "{e}");
+    assert_eq!(state(&s), before);
+
+    // A document whose art is all in a symbol counts it too.
+    let mut maker = Session::new();
+    maker.execute("file.new", &json!({})).unwrap();
+    for x in 0..30 {
+        maker.execute("shape.rectangle", &rect(x)).unwrap();
+    }
+    maker.execute("select.all", &json!({})).unwrap();
+    let instance = maker.execute("symbol.new", &json!({"name": "Many"})).unwrap()["id"].as_u64().unwrap();
+    maker.execute("edit.clear", &json!({"ids": [instance]})).unwrap();
+    assert_eq!(objects(&maker, 0), 0);
+    let data = maker.execute("document.serialize", &json!({})).unwrap()["dataBase64"].as_str().unwrap().to_string();
+    let source = format!("vc.run('document.open', {{name: 'b.vectorcraft', dataBase64: '{data}'}});");
+    let e = run(&mut s, &source).unwrap_err().to_string();
+    TEST_GROWTH.with(|g| g.set(None));
+    assert!(e.contains("objects and data"), "{e}");
+    assert_eq!(state(&s), before);
+}
+
+#[test]
 fn a_person_can_let_a_growing_run_go_on_or_stop_it() {
     TEST_GROWTH.with(|g| g.set(Some(20)));
     let run_to_the_question = |s: &mut Session| {

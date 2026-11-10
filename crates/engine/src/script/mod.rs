@@ -520,6 +520,14 @@ fn raise_ids(s: &mut Session) {
     s.script_high_water = marks;
 }
 
+/// Every object in `d`: the art of its layers, its symbols and its patterns, opacity masks included.
+fn all_objects(d: &crate::Document) -> u64 {
+    let layers = d.layers.iter().map(|n| n.count_with_masks());
+    let symbols = d.symbols.iter().map(|s| s.art.count_with_masks());
+    let patterns = d.patterns.iter().flat_map(|p| &p.art).map(|n| n.count_with_masks());
+    layers.chain(symbols).chain(patterns).map(|n| n as u64).sum()
+}
+
 fn note_ids(s: &mut Session) {
     for st in &s.docs {
         let mark = s.script_high_water.entry(st.uid).or_insert(0);
@@ -551,11 +559,18 @@ fn step(s: &mut Session, host: &Host, id: &str, params: &Value) -> Result<(Value
             note_ids(s);
             let (mut objects, mut bytes) = (0, 0);
             for st in &s.docs {
-                if let Some((_, d, ids)) = before.iter().find(|(uid, ..)| *uid == st.uid)
-                    && !Arc::ptr_eq(d, &st.doc)
-                {
-                    objects += st.doc.peek_next_id().saturating_sub(*ids);
-                    bytes += d.retained_bytes_each(&st.doc).1 as u64;
+                match before.iter().find(|(uid, ..)| *uid == st.uid) {
+                    Some((_, d, ids)) if !Arc::ptr_eq(d, &st.doc) => {
+                        objects += st.doc.peek_next_id().saturating_sub(*ids);
+                        bytes += d.retained_bytes_each(&st.doc).1 as u64;
+                    }
+                    Some(_) => {}
+                    // A document the command opened or made counts whole.
+                    None if mutating => {
+                        objects += all_objects(&st.doc);
+                        bytes += crate::Document::new(1.0, 1.0).retained_bytes_each(&st.doc).1 as u64;
+                    }
+                    None => {}
                 }
             }
             Ok((v, objects, bytes, save))
