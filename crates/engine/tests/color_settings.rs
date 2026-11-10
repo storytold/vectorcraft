@@ -457,6 +457,7 @@ struct ColorSettingsReset {
 }
 
 impl Drop for ColorSettingsReset {
+    /// The defaults back, the profile unregistered and the paths deleted.
     fn drop(&mut self) {
         let _ = cms::set_active(&cms::ColorSettings::default());
         if let Some(name) = self.profile {
