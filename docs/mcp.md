@@ -4478,7 +4478,8 @@ four: General (rulers, positions and sizes, the Info panel, dialog distances, ca
 (weights, dashes), Type (font size, leading, baseline shift) and East Asian Type (no field uses it yet). General is the active document's units
 (`document.inspect` → `units`): `document.setUnits {units}` (Document Setup) sets it for that document, and
 `prefs.set {key: "unitsGeneral", value}` sets it for the active document too (one undo step) and is the units
-`file.new` starts in when it gets no `units`. Stroke, Type and East Asian Type are the preferences `unitsStroke`,
+`file.new` starts in when it gets no `units`. With `documentUnits: false`, `prefs.set` sets only the preference and
+leaves the document's units as they are; Reset Preferences followed by OK in the Preferences dialog does this. Stroke, Type and East Asian Type are the preferences `unitsStroke`,
 `unitsType` and `unitsAsianType`. Only `unitsAsianType` also takes `q` (Q, `Q`) and `ha` (Ha, `Ha`), each a quarter of
 a millimetre (0.709 pt); the other preferences, `document.setUnits` and the rulers do not list them, and it is Points
 by default. A length typed with a unit
