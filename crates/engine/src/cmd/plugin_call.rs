@@ -277,7 +277,8 @@ pub(crate) fn call(s: &mut Session, run: &Calls, id: &str, args: &Value) -> std:
 /// interaction, which is kept when `f` succeeds. When `f` fails, every document goes back to how it
 /// was (its art, selection, interaction and history), and so does the session state the commands a
 /// plug-in may call change ([`Saved`]). During a preview the preview's own interaction holds the
-/// changes.
+/// changes. A trace handed in for the next Image Trace is set aside while `f` runs, so a call
+/// traces anew, and handed back after; the next Image Trace still checks it was made of its inputs.
 pub(crate) fn transaction(s: &mut Session, label: &str, f: impl FnOnce(&mut Session) -> Result<Value>) -> Result<Value> {
     if s.active().is_some() && !s.previewing {
         super::edit::settle_interaction(s)?;
@@ -289,7 +290,10 @@ pub(crate) fn transaction(s: &mut Session, label: &str, f: impl FnOnce(&mut Sess
     let saved = Saved::of(s);
     let start = s.docs.clone();
     let active = s.active;
-    match f(s) {
+    let trace = s.trace_hand_off.take();
+    let r = f(s);
+    s.trace_hand_off = trace;
+    match r {
         Ok(v) => {
             if own
                 && let Some(st) = s.active_mut()
