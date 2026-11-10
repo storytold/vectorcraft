@@ -47,7 +47,7 @@ pub use drag::{
 use dropdowns::combo_button_id;
 #[cfg(test)]
 pub(crate) use dropdowns::menu_floor;
-pub(crate) use dropdowns::{combo, combo_menu, combo_menu_field, combo_named, popover_is_open};
+pub(crate) use dropdowns::{combo, combo_menu, combo_menu_field, combo_named, field_focused_in, popover_is_open};
 pub use dropdowns::{
     dropdown, dropdown_named, dropdown_names, dropdown_names_named, dropdown_with, dropdown_with_named, list_scroll_style, menu_room, menu_scroll,
     panel_scroll, popover, set_menu_floor, strip_scroll,
