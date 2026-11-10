@@ -4189,6 +4189,203 @@ fn outline_is_per_document_and_new_documents_start_in_preview() {
     assert!(app.run("view.outline", json!({})).is_err());
 }
 
+/// One headless canvas frame → (the colors of the filled rectangles that cover the canvas, the
+/// fills of the shapes laid over an artboard, the artboards' edges drawn, the colors of the
+/// artboards' names).
+fn canvas_look(app: &mut VectorcraftApp, ctx: &egui::Context) -> (Vec<Color32>, Vec<Color32>, usize, Vec<Color32>) {
+    let s = shapes(app, ctx);
+    let canvas = app.canvas_rect.unwrap();
+    let xf = Xf::new(canvas, app.view().unwrap());
+    let quads: Vec<Vec<Pos2>> = app.session.active().unwrap().doc.artboards.iter().map(|a| xf.quad(a.rect).to_vec()).collect();
+    let on = |p: &[Pos2]| quads.iter().any(|q| q.len() == p.len() && q.iter().zip(p).all(|(a, b)| (*a - *b).length() < 0.01));
+    let covers: Vec<Color32> = s
+        .iter()
+        .filter_map(|s| match s {
+            Shape::Rect(r) if r.rect.contains_rect(canvas) => Some(r.fill),
+            _ => None,
+        })
+        .collect();
+    let papers: Vec<Color32> = s
+        .iter()
+        .filter_map(|s| match s {
+            Shape::Path(p) if p.fill != Color32::TRANSPARENT && on(&p.points) => Some(p.fill),
+            _ => None,
+        })
+        .collect();
+    let edges = s.iter().filter(|s| matches!(s, Shape::Path(p) if p.closed && p.fill == Color32::TRANSPARENT && on(&p.points))).count();
+    let names: Vec<Color32> = s
+        .iter()
+        .filter_map(|s| match s {
+            Shape::Text(t) if names_an_artboard(t.galley.text()) => Some(t.fallback_color),
+            _ => None,
+        })
+        .collect();
+    (covers, papers, edges, names)
+}
+
+/// In Outline, in every interface brightness, color scheme and User Interface › Canvas Color, the
+/// whole canvas is white, pasteboard included, so the black outlines of art on the pasteboard show.
+/// The artboards draw no paper there, only their edges, and their names draw in a dark gray. In
+/// Preview the pasteboard keeps its color and the artboards their white paper.
+#[test]
+fn outline_draws_on_a_white_canvas_with_artboards_as_edges() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
+    for brightness in crate::theme::Brightness::ALL {
+        for scheme in crate::theme::Scheme::ALL {
+            // Canvas Color: matching the brightness, Dark Gray and Medium Gray, as `prefs_dialog` sets it.
+            for canvas_color in [None, Some(Color32::from_gray(0x5a)), Some(Color32::from_gray(0x96))] {
+                let ctx = egui::Context::default();
+                crate::theme::apply_with(&ctx, brightness, Default::default(), scheme);
+                if let Some(c) = canvas_color {
+                    let mut t = Tokens::get(&ctx);
+                    t.pasteboard = c;
+                    ctx.data_mut(|d| d.insert_temp(egui::Id::NULL, t));
+                }
+                let case = format!("{brightness:?} {scheme:?} {canvas_color:?}");
+                let pasteboard = Tokens::get(&ctx).pasteboard;
+                assert_ne!(pasteboard, Color32::WHITE, "{case}");
+                app.view_mut().unwrap().outline = false;
+                let (covers, papers, edges, names) = canvas_look(&mut app, &ctx);
+                assert_eq!(covers.last(), Some(&pasteboard), "{case}: Preview keeps the pasteboard");
+                assert_eq!(papers, [Color32::WHITE; 2], "{case}: and the artboards' paper");
+                assert_eq!(edges, 2, "{case}");
+                assert_eq!(names, [Tokens::get(&ctx).text_dim; 2], "{case}");
+                app.view_mut().unwrap().outline = true;
+                let (covers, papers, edges, names) = canvas_look(&mut app, &ctx);
+                assert_eq!(covers.last(), Some(&Color32::WHITE), "{case}: the canvas is white in Outline");
+                assert!(!covers.contains(&pasteboard), "{case}: no pasteboard in Outline");
+                assert!(papers.is_empty(), "{case}: no paper over the artboards in Outline: {papers:?}");
+                assert_eq!(edges, 2, "{case}: the artboards show as their edges");
+                assert_eq!(names, [OUTLINE_DIM; 2], "{case}: names readable on white");
+            }
+        }
+    }
+}
+
+/// In Outline the canvas stays white with Simulate Colored Paper on, with an artboard's own
+/// background color, and with View › Hide Artboards, which in Preview show the paper color, the
+/// artboard's color and the paper color over the whole canvas.
+#[test]
+fn outline_draws_no_colored_paper() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
+    {
+        let doc = std::sync::Arc::make_mut(&mut app.session.active_mut().unwrap().doc);
+        doc.setup.simulate_paper = true;
+        doc.setup.grid_colors = [vectorcraft_color::Color::rgb(0.9, 0.8, 0.6), vectorcraft_color::Color::rgb(0.5, 0.5, 0.5)];
+        doc.artboards[1].color = Some(vectorcraft_color::Color::rgb(0.6, 0.8, 1.0));
+    }
+    let paper = crate::panels::c32(&app.session.active().unwrap().doc.setup.paper());
+    let ctx = egui::Context::default();
+    crate::theme::apply(&ctx, crate::theme::Brightness::Dark);
+    app.view_mut().unwrap().outline = false;
+    let (_, papers, _, _) = canvas_look(&mut app, &ctx);
+    assert_eq!(papers.len(), 2);
+    assert_eq!(papers[0], paper, "Preview: the simulated paper");
+    assert_ne!(papers[1], paper, "Preview: the artboard's own color");
+    app.view_mut().unwrap().outline = true;
+    let (covers, papers, edges, _) = canvas_look(&mut app, &ctx);
+    assert_eq!(covers.last(), Some(&Color32::WHITE));
+    assert!(papers.is_empty(), "{papers:?}");
+    assert_eq!(edges, 2);
+    app.ui.view.artboards = false;
+    app.view_mut().unwrap().outline = false;
+    let (covers, _, edges, _) = canvas_look(&mut app, &ctx);
+    assert_eq!(covers.last(), Some(&paper), "Preview with Hide Artboards: the paper over the whole canvas");
+    assert_eq!(edges, 0);
+    app.view_mut().unwrap().outline = true;
+    let (covers, papers, edges, _) = canvas_look(&mut app, &ctx);
+    assert_eq!(covers.last(), Some(&Color32::WHITE), "Outline with Hide Artboards");
+    assert!(!covers.contains(&paper));
+    assert!(papers.is_empty());
+    assert_eq!(edges, 0);
+}
+
+/// A split-view pane or floating window draws its own view's Outline, whatever the current view
+/// shows: the white canvas and dark gray artboard names in Outline, and the pasteboard and the
+/// theme's names in Preview.
+#[test]
+fn a_pane_draws_its_own_views_outline() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
+    crate::doc_windows::new_window(&mut app).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::apply(&ctx, crate::theme::Brightness::Dark);
+    let t = Tokens::get(&ctx);
+    let other = (0, 1);
+    for pane_outline in [true, false] {
+        crate::doc_windows::view_mut(&mut app, other).unwrap().outline = pane_outline;
+        app.view_mut().unwrap().outline = !pane_outline;
+        let cell = egui::Rect::from_min_size(pos2(0.0, 0.0), vec2(600.0, 400.0));
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| {
+            panes::pane(&mut app, ui, other, cell);
+        });
+        out.textures_delta.clear();
+        let mut s = vec![];
+        fn flat(s: Shape, out: &mut Vec<Shape>) {
+            match s {
+                Shape::Vec(v) => v.into_iter().for_each(|s| flat(s, out)),
+                s => out.push(s),
+            }
+        }
+        out.shapes.into_iter().for_each(|c| flat(c.shape, &mut s));
+        let fills: Vec<Color32> = s.iter().filter_map(|s| if let Shape::Rect(r) = s { Some(r.fill) } else { None }).collect();
+        let names: Vec<Color32> = s
+            .iter()
+            .filter_map(|s| if let Shape::Text(x) = s { names_an_artboard(x.galley.text()).then_some(x.fallback_color) } else { None })
+            .collect();
+        let (canvas, name) = if pane_outline { (Color32::WHITE, OUTLINE_DIM) } else { (t.pasteboard, t.text_dim) };
+        assert_eq!(fills.first(), Some(&canvas), "pane in Outline: {pane_outline}");
+        assert_eq!(names, [name; 2], "pane in Outline: {pane_outline}");
+    }
+}
+
+/// While the rulers' origin is dragged out of their corner, its crosshair draws over the canvas in
+/// the theme's dim text color in Preview, and in Outline in the dark gray that shows on the white
+/// canvas.
+#[test]
+fn the_ruler_origin_crosshair_shows_on_the_outline_canvas() {
+    use egui::Event;
+    for outline in [false, true] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app.ui.view.rulers = true;
+        app.view_mut().unwrap().outline = outline;
+        let ctx = egui::Context::default();
+        crate::theme::apply(&ctx, crate::theme::Brightness::Dark);
+        frame(&mut app, &ctx, vec![]);
+        frame(&mut app, &ctx, vec![]);
+        let rect = app.canvas_rect.unwrap();
+        let corner = pos2(rect.left() - RULER / 2.0, rect.top() - RULER / 2.0);
+        let to = rect.center();
+        let button = |pos, pressed| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(&mut app, &ctx, vec![Event::PointerMoved(corner)]);
+        frame(&mut app, &ctx, vec![button(corner, true)]);
+        frame(&mut app, &ctx, vec![Event::PointerMoved(to)]);
+        let (s, mut delta) = frame_output(&mut app, &ctx);
+        delta.clear();
+        let lines: Vec<Color32> = s
+            .iter()
+            .filter_map(|s| match s {
+                Shape::LineSegment { points, stroke }
+                    if (points[0].x - to.x).abs() < 1.5
+                        && (points[1].x - to.x).abs() < 1.5
+                        && points[0].y <= rect.top() + 1.0
+                        && points[1].y >= rect.bottom() - 1.0 =>
+                {
+                    Some(stroke.color)
+                }
+                _ => None,
+            })
+            .collect();
+        let want = if outline { OUTLINE_DIM } else { Tokens::get(&ctx).text_dim };
+        assert_eq!(lines, [want], "Outline: {outline}");
+        frame(&mut app, &ctx, vec![button(to, false)]);
+    }
+}
+
 /// #3797: a preferences file saved while View › Outline was an interface setting still loads, with
 /// its other view settings, and its Outline value does not put a document in Outline.
 #[test]
