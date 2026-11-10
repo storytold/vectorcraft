@@ -557,6 +557,9 @@ struct Reader<'a> {
     envelope_spent: super::envelope::Spent,
     /// The text objects read with a Warp ([`super::envelope::WarpedType`]).
     warped_type: Vec<super::envelope::WarpedLook>,
+    /// The envelopes of type read with their drawn art, settled once the type is laid out
+    /// ([`super::envelope::TypedEnvelope`]).
+    typed_envelopes: Vec<super::envelope::TypedEnvelope>,
     /// The live envelopes made so far and the drawn art each took the place of
     /// ([`Structure::envelopes_drawn`]).
     envelopes_drawn: Vec<(NodeId, Node)>,
@@ -769,6 +772,7 @@ impl<'a> Reader<'a> {
             envelope_checks: super::envelope::MAX_CHECKED,
             envelope_spent: super::envelope::Spent::default(),
             warped_type: Vec::new(),
+            typed_envelopes: Vec::new(),
             envelopes_drawn: Vec::new(),
             clip_fills: HashSet::new(),
             looks: HashSet::new(),
