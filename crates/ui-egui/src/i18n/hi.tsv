@@ -394,6 +394,7 @@ antiAlias	Sharp	शार्प
 	Area / Path Type	एरिया / पाथ टाइप
 	Area Graph Tool	एरिया ग्राफ़ टूल
 	Area Text	एरिया टेक्स्ट
+	Measure Type by Glyph Bounds	टाइप को ग्लिफ़ की सीमाओं से मापें
 	Area Text Objects	एरिया टेक्स्ट ऑब्जेक्ट
 	Area Type	एरिया टाइप
 	Area Type Options	एरिया टाइप ऑप्शन्स
@@ -491,7 +492,6 @@ antiAlias	Sharp	शार्प
 	Back	वापस
 	Background Color:	बैकग्राउंड रंग:
 	Background Contents	बैकग्राउंड सामग्री
-	Background Contents:	बैकग्राउंड सामग्री:
 	Background Level	बैकग्राउंड स्तर
 	Background:	बैकग्राउंड:
 	Backspace	Backspace
@@ -511,6 +511,9 @@ antiAlias	Sharp	शार्प
 	Basic Character Formats	बुनियादी कैरेक्टर फ़ॉर्मैट
 	Basic Latin	बेसिक लैटिन
 	Basic Shapes	बुनियादी शेप्स
+	Button	बटन
+	Panel	पैनल
+	UI Frames	UI फ़्रेम
 	Batch	बैच
 	Batch Trace Folder	फ़ोल्डर बैच ट्रेस करें
 	Batch…	बैच…
@@ -894,6 +897,7 @@ antiAlias	Sharp	शार्प
 	Command	कमांड
 	Command Click to Select Objects Behind	कमांड पीछे ऑब्जेक्ट्स का सिलेक्ट करने के लिए क्लिक करें
 	Command Dialog	कमान डायलॉग
+	Command API Reference	कमांड API संदर्भ
 	Comment not closed	टिप्पणी बंद नहीं
 	Commenting, filling in form fields and signing	टिप्पणी करना, फॉर्म फ़ील्ड में भरना और हस्ताक्षर करना
 	Commits	कमिट्स
@@ -1026,7 +1030,6 @@ antiAlias	Sharp	शार्प
 	Create Clipping Mask	क्लिपिंग मास्क बनाएँ
 	Create Compound Path From Ellipses	एलिप्स से कंपाउंड पाथ बनाएँ
 	Create Dimension	आयाम बनाएँ
-	Create Document	डॉक्यूमेंट बनाएं
 	Create from Guides	गाइड से बनाएँ
 	Create from Selection	सिलेक्शन से बनाएँ
 	Create From:	से बनाएँ:
@@ -2552,6 +2555,7 @@ antiAlias	Sharp	शार्प
 	Lock Artboards	लॉक आर्टबोर्ड
 	Lock Grid	लॉक ग्रिड
 	Lock Guides	गाइड्स लॉक करें
+	Lock Guides by Default	गाइड्स डिफ़ॉल्ट रूप से लॉक करें
 	Lock Others	लॉक अन्य
 	Lock Selected	लॉक सिलेक्टेड
 	Lock Slices	स्लाइस लॉक करें
@@ -2833,7 +2837,6 @@ antiAlias	Sharp	शार्प
 	New Design	नई डिजाइन
 	New Document Presets	नया डॉक्यूमेंट प्रीसेट
 	New file	नई फ़ाइल
-	New from Template	टेम्पलेट से नया
 	New from Template…	टेम्पलेट से नया…
 	New Graphic Style	नई ग्राफिक स्टाइल
 	New Graphic Style (Alt-click to name it)	नया ग्राफ़िक स्टाइल (नाम देने के लिए Alt-क्लिक करें)
@@ -3954,6 +3957,7 @@ antiAlias	Sharp	शार्प
 	Save PDF Preset	PDF प्रीसेट सेव करें
 	Save Perspective Grid Preset	सेव पर्सपेक्टिव ग्रिड प्रीसेट
 	Save Preset	प्रीसेट सेव करें
+	Save Document Preset	डॉक्यूमेंट प्रीसेट सेव करें
 	Save Preset…	प्रीसेट सेव करें…
 	Save Print Preset	सेव करें प्रिंट प्रीसेट
 	Save Recovery Data	रिकवरी डेटा सेव करें
@@ -4733,7 +4737,6 @@ antiAlias	Sharp	शार्प
 	Template literal not closed	टेम्पलेट साक्षर नहीं बंद
 	Templates	टेम्पलेट्स
 	Templates Folder	टेम्पलेट्स फ़ोल्डर
-	Templates…	टेम्पलेट्स…
 	Tetrad	टेट्राड
 	Tetrad 2	टेट्राड 2
 	Tetrad 3	टेट्राड 3
@@ -5259,7 +5262,7 @@ antiAlias	Sharp	शार्प
 	Zoom with Mouse Wheel	माउस व्हील के साथ ज़ूम
 @id	file.close	बंद करें
 @id	pathfinder.add	मिलाएँ
-@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	“{_1}” अधिक संसाधन माँगता है (हर रन में {minutes} मिनट और सामान्य से {times} गुना निर्देश): उपयोगकर्ता की सहमति मिलने पर इसे `allowHeavy: true` से इंस्टॉल करें
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}” अधिक संसाधन माँगता है (हर रन में {minutes} मिनट और सामान्य से {times} गुना निर्देश): इसे डेस्कटॉप ऐप में किसी व्यक्ति को स्वीकृत करना होगा, या --allow-plugin-grants से शुरू किए गए सत्र में `allowHeavy: true` दें
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" एक रंग नहीं है: इसे #rrggbb के रूप में लिखें
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	"{name}" स्थापित करें, जो ये अनुमतियां मांगता है?
@@ -5300,7 +5303,9 @@ antiAlias	Sharp	शार्प
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	ऑब्जेक्ट बजट ({MAX_OBJECTS} से अधिक केवल-पठन ऑब्जेक्ट)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	अनुमति `{shown}` बाद के प्लग-इन API के लिए आरक्षित है; यह होस्ट इसे नहीं देता
 @msg	unknown permission `{shown}`	अज्ञात अनुमति `{shown}`
-@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}” अनुमतियां {asked} मांगता है: उपयोगकर्ता की सहमति मिलने पर इसे उन्हें सूचीबद्ध करने वाले `grant` के साथ इंस्टॉल करें
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	“{name}” अनुमतियां {asked} मांगता है: इन्हें डेस्कटॉप ऐप में किसी व्यक्ति को स्वीकृत करना होगा, या --allow-plugin-grants से शुरू किए गए सत्र में `grant` दें
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` और `allowHeavy` केवल --allow-plugin-grants से शुरू किए गए सत्र में प्रभावी होते हैं: डेस्कटॉप ऐप में प्लग-इन स्वीकृत करें
+@msg	Only the person at the keyboard can approve installing a plug-in	प्लग-इन इंस्टॉल करने की स्वीकृति केवल कीबोर्ड पर मौजूद व्यक्ति दे सकता है
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	“{name}” को `{p}` नहीं दी गई, जो उसके आउटपुट को चाहिए: कुछ नहीं बदला
 @msg	a heavy filter runs in the background, so it can't declare `commands`	भारी फ़िल्टर पृष्ठभूमि में चलता है, इसलिए वह `commands` घोषित नहीं कर सकता
 @msg	at most {MAX_COMMANDS} `commands`	अधिकतम {MAX_COMMANDS} `commands`
@@ -5400,7 +5405,7 @@ antiAlias	Sharp	शार्प
 @msg	{key} must name a registered panel	{key} एक पंजीकृत पैनल का नाम होना चाहिए
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	{kind} फ़ाइलों में पारदर्शिता नहीं होती और इस फ़ाइल में {what} होगा: पहले इसे फ़्लैट करें (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	{kind} इमेज ओपन नहीं हो सकतीं (document.formats देखें)
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} वर्तमान में एक पाथ या यौगिक पाथ की आवश्यकता होती है। पहले पाथ के लिए प्रकार, इमेज और समूहों को परिवर्तित करें।
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} के लिए वर्तमान में एक पाथ, यौगिक पाथ, टाइप या समूह आवश्यक है। पहले इमेज और अन्य ऑब्जेक्ट को पाथ में परिवर्तित करें।
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} डॉक्यूमेंट के {n} आर्टबोर्ड में से 1 रखता है: फ़ाइल एक के साथ फिर से खुलती है। उन्हें रखने के लिए संरक्षित संपादन क्षमताओं को चालू करें।
 @msg	{label} must be a number	{label} एक नंबर होना चाहिए
 @msg	{label} must be a number above 0 and at most {max}	{label} 0 से ऊपर और सबसे {max} पर होना चाहिए
@@ -5543,7 +5548,7 @@ antiAlias	Sharp	शार्प
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` एक अंतर्निहित वर्कस्पेस है; एक और नाम चुनें
 @msg	`{name}` is a process colour: tints apply to global and spot colours	`{name}` एक प्रक्रिया रंग है: टिंट वैश्विक और स्पॉट रंगों पर लागू होते हैं
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` एक स्थिर सिंबल है: अपने सिंबल प्रकार को पहले गतिशील करने के लिए सेट करें
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	सिंबल इंस्टेंस में चुने गए पाथ, कंपाउंड पाथ या टाइप का केवल ठोस रंग वाला फ़िल और स्ट्रोक बदला जा सकता है
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	प्रतीक इंस्टेंस में चयनित पथ, संयोजित पथ या पाठ का केवल भराव, स्ट्रोक, अपारदर्शिता और ब्लेंड बदला जा सकता है
 @msg	`{name}` is a tint of `{base}`: edit `{base}` (a tint swatch only takes a new name)	`{name}` `{base}` का एक टिंट है: `{base}` संपादित करें (केवल एक टिंट swatch केवल एक नया नाम लेता है)
 @msg	`{name}` is a working space: choose another with edit.colorSettings first	`{name}` वर्किंग स्पेस है: पहले edit.colorSettings से दूसरा चुनें
 @msg	`{name}` is built in and stays	`{name}` बनाया गया है और रहता है
@@ -7387,6 +7392,7 @@ antiAlias	Sharp	शार्प
 @msg	the action has no steps	कार्रवाई में कोई कदम नहीं है
 @msg	the action set file holds more than 1,000 actions	एक्शन सेट फ़ाइल 1,000 से अधिक कार्यों को रखती है
 @msg	the action set file is larger than 8 MiB	एक्शन सेट फ़ाइल 8 MiB से बड़ा है
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: संदर्भ {MAX_BYTES} बाइट से बड़ा होगा
 @msg	the action set file needs a later version of VectorCraft	एक्शन सेट फ़ाइल को वेक्टर क्रेफ्ट के बाद के संस्करण की आवश्यकता होती है
 @msg	the action set ids are not a list	कार्रवाई सेट ids एक सूची नहीं हैं
 @msg	the action sets changed; nothing was deleted	कार्रवाई सेट बदल गया; कुछ भी नहीं हटा दिया गया था
@@ -7794,6 +7800,11 @@ antiAlias	Sharp	शार्प
 @msg	unknown parameter `{key}`; did you mean `{near}`?	अज्ञात पैरामीटर `{key}`; क्या आपको `{near}` का मतलब है?
 @msg	unknown parameter `{key}`; the command takes no parameters	अज्ञात पैरामीटर `{key}`; कमांड कोई पैरामीटर नहीं लेता है
 @msg	unknown parameter `{key}`; the command takes: {keys}	अज्ञात पैरामीटर `{key}`; कमांड लेता है: {keys}
+@msg	the params must be an object, not {got}	पैरामीटर एक ऑब्जेक्ट होने चाहिए, {got} नहीं
+@msg	unknown parameter `{path}`; the object takes no keys	अज्ञात पैरामीटर `{path}`; ऑब्जेक्ट कोई कुंजी नहीं लेता
+@msg	unknown parameter `{path}`; it takes: {keys}	अज्ञात पैरामीटर `{path}`; यह लेता है: {keys}
+@msg	missing `{path}`	लापता `{path}`
+@msg	`{path}` must be {expected}, not {got}	`{path}` {expected} होना चाहिए, {got} नहीं
 @msg	unknown PDF preset `{name}` (presets: {_1})	अज्ञात PDF प्रीसेट `{name}` (presets: {_1})
 @msg	unknown pieLegend `{v}` (none, standard or wedges)	अज्ञात pieLegend `{v}` (one, मानक या wedges)
 @msg	unknown piePosition `{v}` (even, ratio or stacked)	अज्ञात piePosition `{v}` (यहां तक कि अनुपात या स्टैक्ड)
@@ -8104,3 +8115,6 @@ theme	Appearance	अपीयरेंस
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	इंपोर्टर 1 से {MAX_EXTENSIONS} `extensions` घोषित करता है
 @msg	an importer always gets an import's budget: leave `budget` out	इंपोर्टर को हमेशा इंपोर्ट का बजट मिलता है: `budget` छोड़ दें
 @msg	side is left or right, not `{s}`	side left या right होना चाहिए, `{s}` नहीं
+	Ignore All	सभी को अनदेखा करें
+	Add to Dictionary	शब्दकोश में जोड़ें
+	No Suggestions	कोई सुझाव नहीं

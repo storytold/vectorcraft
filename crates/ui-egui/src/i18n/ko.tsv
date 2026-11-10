@@ -622,6 +622,7 @@ digits	Malayalam	말라얄람어
 	Guides	안내선
 	Hide Guides	안내선 숨기기
 	Lock Guides	안내선 잠그기
+	Lock Guides by Default	기본적으로 안내선 잠그기
 	Make Guides	안내선 만들기
 	Release Guides	안내선 해제
 	Clear Guides	안내선 지우기
@@ -1066,7 +1067,6 @@ antiAlias	Sharp	날카롭게
 	Update While Dragging	드래그하는 동안 업데이트
 	Hide Video Rulers	비디오 눈금자 숨기기
 	Background Contents	배경 내용
-	Background Contents:	배경 내용:
 	Background:	배경:
 	Bar Graph Tool	막대 그래프 도구
 	Baseline Shift	기준선 이동
@@ -1243,6 +1243,7 @@ antiAlias	Sharp	날카롭게
 	Coming soon — tracked in the parity plan	곧 제공 예정 — 기능 동등성 계획에서 관리 중
 	Command Click to Select Objects Behind	Command-클릭으로 뒤쪽 개체 선택
 	Command Dialog	명령 대화상자
+	Command API Reference	명령 API 참조
 	Community	커뮤니티
 	Compatibility:	호환성:
 	Compatible Gradient and Gradient Mesh Printing	호환 그레이디언트 및 그레이디언트 메시 인쇄
@@ -1292,7 +1293,6 @@ antiAlias	Sharp	날카롭게
 	Corners…	모퉁이…
 	Chamfer	모따기
 	Create Clipping Mask	클리핑 마스크 만들기
-	Create Document	문서 만들기
 	Create From:	만들기 기준:
 	Create Graph	그래프 만들기
 	Create New Layer	새 레이어 만들기
@@ -2352,7 +2352,6 @@ antiAlias	Sharp	날카롭게
 	New Symbol…	새 심볼…
 	New Workspace	새 작업 영역
 	New file	새 파일
-	New from Template	템플릿에서 새로 만들기
 	New theme from the current color	현재 색상으로 새 테마 만들기
 	New {kind} Style…	새 {kind} 스타일…
 	Next	다음
@@ -2894,6 +2893,7 @@ mark-style	Japanese	일본식
 	Save PDF Preset	PDF 사전 설정 저장
 	Save Perspective Grid Preset	원근 격자 사전 설정 저장
 	Save Preset	사전 설정 저장
+	Save Document Preset	문서 사전 설정 저장
 	Preset {number}	사전 설정 {number}
 	Save Preset…	사전 설정 저장…
 	Save Print Preset	인쇄 사전 설정 저장
@@ -3242,7 +3242,6 @@ mark-style	Japanese	일본식
 	Target Contents	대상 내용
 	Target:	대상:
 	Templates Folder	템플릿 폴더
-	Templates…	템플릿…
 	Text Displayed in Cell:	셀에 표시할 텍스트:
 	Text Export Options	텍스트 내보내기 옵션
 	Text Import Options	텍스트 가져오기 옵션
@@ -4730,6 +4729,7 @@ theme	Appearance	외관
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	“{name}”을(를) 불러왔습니다. 단계 {n}개를 제외했습니다
 @msg	not an action set file	액션 세트 파일이 아닙니다
 @msg	the action set file is larger than 8 MiB	액션 세트 파일이 8 MiB보다 큽니다
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: 참조가 {MAX_BYTES}바이트보다 커집니다
 @msg	the action set file holds more than 1,000 actions	액션 세트 파일의 액션이 1,000개를 넘습니다
 @msg	the action set file needs a later version of VectorCraft	이 액션 세트 파일을 열려면 최신 버전의 VectorCraft가 필요합니다
 @msg	an action in the action set file has more than 10,000 steps	액션 세트 파일에 단계가 10,000개를 넘는 액션이 있습니다
@@ -5157,7 +5157,7 @@ lighting	Light	광원
 	Bevel both sides	양면 베벨
 	Presets	사전 설정
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	오브젝트에는 3D 효과를 하나만 적용할 수 있습니다. 기존 효과의 옵션을 편집하거나 먼저 제거하십시오.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label}에는 현재 패스 또는 컴파운드 패스가 필요합니다. 문자, 이미지 및 그룹을 먼저 패스로 변환하십시오.
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label}에는 현재 패스, 컴파운드 패스, 문자 또는 그룹이 필요합니다. 이미지 및 기타 개체를 먼저 패스로 변환하십시오.
 @msg	{label} requires a shape with at least two anchors	{label}에는 고정점이 두 개 이상인 모양이 필요합니다
 @msg	The shape is too complex for a 3D effect	모양이 너무 복잡하여 3D 효과를 적용할 수 없습니다
 @msg	The 3D surface is too complex; simplify the shape	3D 표면이 너무 복잡합니다. 모양을 단순화하십시오
@@ -5165,6 +5165,11 @@ lighting	Light	광원
 @msg	unknown parameter `{key}`; did you mean `{near}`?	알 수 없는 매개변수 `{key}`: `{near}`을(를) 의미하셨습니까?
 @msg	unknown parameter `{key}`; the command takes no parameters	알 수 없는 매개변수 `{key}`: 이 명령에는 매개변수가 없습니다
 @msg	unknown parameter `{key}`; the command takes: {keys}	알 수 없는 매개변수 `{key}`: 이 명령이 받는 매개변수: {keys}
+@msg	the params must be an object, not {got}	매개변수는 객체여야 합니다({got} 사용 불가)
+@msg	unknown parameter `{path}`; the object takes no keys	알 수 없는 매개변수 `{path}`: 이 객체는 키를 받지 않습니다
+@msg	unknown parameter `{path}`; it takes: {keys}	알 수 없는 매개변수 `{path}`: 받는 매개변수: {keys}
+@msg	missing `{path}`	`{path}`이(가) 없습니다
+@msg	`{path}` must be {expected}, not {got}	`{path}`은(는) {expected}이어야 합니다({got} 사용 불가)
 	Load EPS into Clipboard	EPS를 클립보드로 불러오기
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h}픽셀 이미지는 너무 커서 그릴 수 없습니다
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: PNG, JPEG, WebP, TIFF 또는 BMP 이미지가 아닙니다
@@ -5497,7 +5502,7 @@ axis	Y Axis	Y축
 @msg	Running “{name}”…	“{name}” 실행 중…
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	라이브 효과는 문서를 그리는 동안 실행되므로 `heavy`일 수 없습니다
 @msg	an exporter always gets an export's budget: leave `budget` out	내보내기 플러그인은 항상 내보내기 예산을 받습니다. `budget`은 생략하세요
-@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	“{_1}”은(는) 큰 계산 예산을 요청합니다(실행당 최대 {minutes}분, 평소의 {times}배 명령어). 사용자가 동의하면 `allowHeavy: true`로 설치하세요
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}”은(는) 큰 계산 예산을 요청합니다(실행당 최대 {minutes}분, 평소의 {times}배 명령어). 데스크톱 앱에서 사람이 승인하거나 --allow-plugin-grants로 시작한 세션에서 `allowHeavy: true`를 전달하세요
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	이 권한을 요청하는 “{name}”을(를) 설치하시겠습니까?
 	ID: {id}	ID: {id}
@@ -5537,7 +5542,9 @@ axis	Y Axis	Y축
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	개체 예산(읽기 전용 개체 {MAX_OBJECTS}개 초과)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	`{shown}` 권한은 이후 플러그인 API용으로 예약되어 있습니다. 이 호스트는 이 권한을 부여하지 않습니다
 @msg	unknown permission `{shown}`	알 수 없는 권한 `{shown}`
-@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}”은(는) {asked} 권한을 요청합니다. 사용자가 동의하면 이를 나열한 `grant`로 설치하세요
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	“{name}”은(는) {asked} 권한을 요청합니다. 데스크톱 앱에서 사람이 승인하거나 --allow-plugin-grants로 시작한 세션에서 `grant`를 전달하세요
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant`와 `allowHeavy`는 --allow-plugin-grants로 시작한 세션에서만 적용됩니다. 데스크톱 앱에서 플러그인을 승인하세요
+@msg	Only the person at the keyboard can approve installing a plug-in	플러그인 설치는 키보드 앞에 있는 사람만 승인할 수 있습니다
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	“{name}”에 출력에 필요한 `{p}` 권한이 부여되지 않았습니다. 아무것도 변경되지 않았습니다
 @msg	a heavy filter runs in the background, so it can't declare `commands`	무거운 필터는 백그라운드에서 실행되므로 `commands`를 선언할 수 없습니다
 @msg	at most {MAX_COMMANDS} `commands`	`commands`는 최대 {MAX_COMMANDS}개입니다
@@ -5598,6 +5605,9 @@ axis	Y Axis	Y축
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all 또는 1, 3-5 같은 범위여야 합니다({v}이(가) 아님)
 	Add to Symbols	심볼에 추가
 	Basic Shapes	기본 모양
+	Button	버튼
+	Panel	패널
+	UI Frames	UI 프레임
 	Open Symbol Library	심볼 라이브러리 열기
 	Save Symbol Library	심볼 라이브러리 저장
 	Save Symbol Library…	심볼 라이브러리 저장…
@@ -5672,6 +5682,8 @@ axis	Y Axis	Y축
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	포인트 문자
 	Area Text	영역 문자
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	글리프 경계로 문자 측정
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	글리프에 스냅 옵션 표시
 	Hide Snap to Glyph Options	글리프에 스냅 옵션 숨기기
@@ -6094,7 +6106,7 @@ breakText	Glyphs	글리프
 	Reset Symbol Instance	심볼 인스턴스 재설정
 @msg	type must be static or dynamic, not {v}	type은 static 또는 dynamic이어야 합니다({v}는 안 됨)
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}`은(는) 정적 심볼입니다. 먼저 심볼 유형을 동적으로 설정하세요
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	심볼 인스턴스에서 선택한 패스, 컴파운드 패스 또는 문자는 칠과 선의 단색만 변경할 수 있습니다
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	심볼 인스턴스에서 선택한 패스, 복합 패스 또는 텍스트는 칠, 선, 불투명도, 혼합만 변경할 수 있습니다
 @msg	path must be a list of child indices	path는 자식 인덱스 목록이어야 합니다
 @msg	no object at path {shown} in the symbol's art	심볼 아트의 경로 {shown}에 개체가 없습니다
 @msg	give fill, stroke, opacity and/or blend	fill, stroke, opacity 및/또는 blend를 지정하세요
@@ -6244,3 +6256,6 @@ breakText	Glyphs	글리프
 	Align to Pixel Grid	픽셀 격자에 정렬
 @msg	only paths and compound paths can be aligned to the pixel grid	패스와 컴파운드 패스만 픽셀 격자에 정렬할 수 있습니다
 @msg	side is left or right, not `{s}`	side는 left 또는 right입니다(`{s}` 아님)
+	Ignore All	모두 무시
+	Add to Dictionary	사전에 추가
+	No Suggestions	제안 없음

@@ -642,6 +642,33 @@ fn a_modal_blocks_native_windows_and_takes_the_keyboard_from_them() {
     assert_eq!(h.app.session.tool_id(), "pen", "the window takes keys again once the modal closes");
 }
 
+/// The update prompt and the result window of a check block a floating panel's OS window as any
+/// modal does.
+#[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn the_update_dialogs_block_native_windows_and_take_the_keyboard_from_them() {
+    type Open = fn(&mut Harness);
+    let opens: [(&str, Open); 2] = [
+        ("the prompt", |h| crate::updates_ui::open_prompt_for_test(&mut h.app)),
+        ("the result window", |h| crate::updates_ui::open_result_window_for_test(&mut h.app, &h.ctx)),
+    ];
+    for (name, open) in opens {
+        let mut h = Harness::new();
+        let viewport = h.float("swatches");
+        open(&mut h);
+        h.frames(6);
+        let focus_commands = h.host.borrow().commands.iter().filter(|(id, c)| *id == ViewportId::ROOT && *c == ViewportCommand::Focus).count();
+        assert_eq!(focus_commands, 1, "{name}: the main window gets the keyboard");
+        h.key_in(viewport, Key::P);
+        assert_eq!(h.app.session.tool_id(), "selection", "{name}: a key typed in the blocked window does nothing");
+
+        crate::updates_ui::close_dialogs_for_test(&mut h.app);
+        h.frames(3);
+        h.key_in(viewport, Key::P);
+        assert_eq!(h.app.session.tool_id(), "pen", "{name}: the window takes keys again once the dialog closes");
+    }
+}
+
 /// The level and visibility a palette window takes under a dialog or a menu, and otherwise: a
 /// palette stays out of the way of anything drawn in the main window.
 #[test]
@@ -1027,8 +1054,9 @@ fn wheel_over_a_floating_character_font_field_changes_the_font() {
 
     h.host.borrow_mut().child_overlay = None;
     h.frame(vec![]);
+    h.host.borrow_mut().time += crate::widgets::WHEEL_STREAM_GAP;
     h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([
-        Event::PointerMoved(pointer),
+        Event::PointerMoved(pointer + vec2(1.0, 0.0)),
         Event::MouseWheel {
             unit: egui::MouseWheelUnit::Line,
             delta: vec2(0.0, -1.0),
@@ -1060,8 +1088,9 @@ fn wheel_over_a_floating_character_font_field_changes_the_font() {
     h.host.borrow_mut().child_transparent_overlay = None;
     h.host.borrow_mut().child_pass_through_overlay = Some((viewport, field.expand(10.0)));
     h.frames(2);
+    h.host.borrow_mut().time += crate::widgets::WHEEL_STREAM_GAP;
     h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([
-        Event::PointerMoved(pointer),
+        Event::PointerMoved(pointer + vec2(2.0, 0.0)),
         Event::MouseWheel {
             unit: egui::MouseWheelUnit::Line,
             delta: vec2(0.0, -1.0),
@@ -1424,6 +1453,75 @@ fn wheel_events_on_both_sides_of_an_overlay_are_checked_separately() {
     h.frame(vec![]);
     assert_ne!(h.app.run("text.fonts", json!({})).unwrap(), before);
     assert_eq!(h.ctx.input_for(viewport, |input| input.pointer.latest_pos()), Some(clear));
+}
+
+#[test]
+fn a_wheel_stream_that_began_outside_a_floating_font_field_stays_outside() {
+    let mut h = Harness::new();
+    h.app.run("text.create", json!({"x": 30, "y": 50, "text": "Hi", "font": "Source Sans 3"})).unwrap();
+    let viewport = h.float("character");
+    let field = h
+        .host
+        .borrow()
+        .windows
+        .get(&viewport)
+        .and_then(|w| w.texts.iter().find(|(text, _)| text == "Source Sans 3").map(|(_, rect)| *rect))
+        .expect("the Character panel's font family field");
+    let on = pos2(field.min.x + 4.0, field.center().y);
+    let off = pos2(field.min.x + 4.0, field.max.y + 60.0);
+    let turn = Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Line,
+        delta: vec2(0.0, -1.0),
+        phase: egui::TouchPhase::Move,
+        modifiers: Default::default(),
+        source: egui::MouseWheelSource::Unknown,
+    };
+    let before = h.app.run("text.fonts", json!({})).unwrap();
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([Event::PointerMoved(off), turn.clone(), Event::PointerMoved(on), turn]);
+    h.frames(3);
+    assert_eq!(h.app.run("text.fonts", json!({})).unwrap(), before);
+}
+
+#[test]
+fn a_wheel_stream_leaves_a_floating_font_field_that_an_overlay_covered_before_its_queued_turn() {
+    let mut h = Harness::new();
+    h.app.run("text.create", json!({"x": 30, "y": 50, "text": "Hi", "font": "Source Sans 3"})).unwrap();
+    let viewport = h.float("character");
+    let field = h
+        .host
+        .borrow()
+        .windows
+        .get(&viewport)
+        .and_then(|w| w.texts.iter().find(|(text, _)| text == "Source Sans 3").map(|(_, rect)| *rect))
+        .expect("the Character panel's font family field");
+    let pointer = pos2(field.min.x + 4.0, field.center().y);
+    let turn = Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Line,
+        delta: vec2(0.0, -1.0),
+        phase: egui::TouchPhase::Move,
+        modifiers: Default::default(),
+        source: egui::MouseWheelSource::Unknown,
+    };
+    h.host.borrow_mut().child_raise_overlay = Some((viewport, field.expand(10.0), false));
+    h.frames(2);
+    let field_layer = crate::font_menu::wheel_field_layer_for_test(&h.ctx, viewport, pointer).expect("the font field layer");
+    let raise_field = |h: &mut Harness| {
+        h.host.borrow_mut().child_raise_layer = Some((viewport, field_layer));
+        h.frame(vec![]);
+        h.host.borrow_mut().child_raise_layer = None;
+        h.frame(vec![]);
+    };
+    raise_field(&mut h);
+    let before = h.app.run("text.fonts", json!({})).unwrap();
+    h.host.borrow_mut().child_raise_overlay = Some((viewport, field.expand(10.0), true));
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([Event::PointerMoved(pointer), turn.clone()]);
+    h.frames(2);
+    assert_eq!(h.app.run("text.fonts", json!({})).unwrap(), before, "the overlay covered the field before its queued turn");
+    h.host.borrow_mut().child_raise_overlay = Some((viewport, field.expand(10.0), false));
+    raise_field(&mut h);
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.push(turn);
+    h.frames(2);
+    assert_eq!(h.app.run("text.fonts", json!({})).unwrap(), before, "the stream left the field when the overlay covered it");
 }
 
 #[test]

@@ -3687,6 +3687,40 @@ fn ruler_guides_and_lock() {
     assert!(s.execute("guide.remove", &json!({"index": 0})).is_err());
 }
 
+/// While guides are locked, a guide dragged out of a ruler and `guide.add` still make new guides,
+/// each in one undo step and not selected. The ruler guides and guide paths in the document, the
+/// new guides included, can't be selected, moved or deleted.
+#[test]
+fn new_guides_can_be_made_while_guides_are_locked() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut s = session();
+    let path = guide_path(&mut s, 300.0);
+    s.execute("guide.add", &json!({"vertical": false, "pos": 50})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    let v = ViewInfo { smart_guides: false, ..Default::default() };
+    let n = undo_len(&s);
+    s.ruler_guide(true, &PointerEvent::new(PointerKind::Drag, 153.0, 30.0), true, v).unwrap();
+    s.ruler_guide(true, &PointerEvent::new(PointerKind::Up, 153.0, 30.0), true, v).unwrap();
+    assert_eq!(guides(&s), [(false, 50.0), (true, 153.0)]);
+    assert_eq!(undo_len(&s), n + 1);
+    assert_eq!(s.doc().unwrap().history.undo.last().unwrap().label, "New Guide");
+    assert_eq!(s.execute("guide.add", &json!({"vertical": true, "pos": 200})).unwrap()["index"], 2);
+    assert_eq!(guides(&s).len(), 3);
+    assert_eq!(selected_guides(&s), Vec::<usize>::new());
+    for (id, params) in [
+        ("guide.select", json!({"indexes": [1]})),
+        ("guide.move", json!({"index": 1, "pos": 170})),
+        ("guide.remove", json!({"index": 1})),
+        ("guide.setLayer", json!({"index": 1, "layer": s.doc().unwrap().current_layer().unwrap().0})),
+    ] {
+        assert!(matches!(s.execute(id, &params), Err(EngineError::Disabled(..))), "{id}");
+    }
+    assert_eq!(guides(&s).len(), 3);
+    sel(&mut s, &[path]);
+    assert!(selected(&s).is_empty(), "a guide path can't be selected");
+}
+
 #[test]
 fn invalid_guide_lock_parameters_keep_guides_selected() {
     let mut s = session();

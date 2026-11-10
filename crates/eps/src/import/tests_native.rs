@@ -215,7 +215,7 @@ fn text_and_its_strokes_come_from_the_page_into_the_layer_of_its_text_object() {
     assert_eq!(kinds(&r.document.layers[0]), ["path"]);
     // The text and the path of its stroke, where the text object is (no group of their own).
     assert_eq!(kinds(&r.document.layers[1]), ["text", "path"], "{:?}", r.warnings);
-    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    assert!(super::tests::program_warnings(&r.warnings).is_empty(), "{:?}", r.warnings);
 }
 
 /// A point type object in the legacy format (`To` … `TO`), as an EPS saved for Illustrator 10
@@ -243,6 +243,25 @@ fn type_in_the_legacy_format_is_the_layers_own_and_the_page_has_text() {
     assert_eq!(names(&r.document), ["Art", "Words"], "{:?}", r.warnings);
     assert_eq!(kinds(&r.document.layers[1]), ["text", "path"], "{:?}", r.warnings);
     assert!(r.warnings.iter().any(|w| w.starts_with("1 text objects of the page are outlines on the layers")), "{:?}", r.warnings);
+}
+
+/// The warning about fonts that aren't available names the fonts of the type the document keeps,
+/// wherever it came from: type the editing copy sets in a font that isn't available is named
+/// though the page sets it in one that is, and type only the page sets in such a font is not.
+#[test]
+fn the_missing_fonts_warning_names_the_fonts_of_the_documents_type() {
+    let page = |font: &str| format!("{}\n0 0 0 1 setcmykcolor /{font} findfont 12 scalefont setfont 10 50 moveto (Hi) show", page_square(10, 10));
+    // `legacy_text` in `font`.
+    let words = |font: &str| format!("0 To\n1 0 0 1 10 50 0 Tp\nTP\n0 Tr\n0 0 0 1 k\n/_{font} 12 Tf\n(Hi) Tx\nTO");
+    for (on_page, in_copy, named) in [("Inter-Regular", "Nowhere-Bold", Some("Nowhere")), ("Nowhere-Bold", "Inter-Regular", None)] {
+        let art = native(&(layer("Art", true, &square(10, 10)) + &layer("Words", true, &words(in_copy))));
+        let r = import(&eps(&page(on_page), &art)).unwrap();
+        assert_eq!(names(&r.document), ["Art", "Words"], "{:?}", r.warnings);
+        assert_eq!(text_of(&r.document.layers[1]).len(), 1, "{:?}", r.warnings);
+        let notes: Vec<&String> = r.warnings.iter().filter(|w| w.starts_with(super::MISSING_FONTS_NOTE)).collect();
+        let want: Vec<String> = named.iter().map(|f| format!("{}: {f}", super::MISSING_FONTS_NOTE)).collect();
+        assert_eq!(notes, want.iter().collect::<Vec<_>>(), "page {on_page}, editing copy {in_copy}: {:?}", r.warnings);
+    }
 }
 
 #[test]
@@ -4661,6 +4680,22 @@ fn a_small_label_of_the_page_in_no_text_object_is_noted() {
     assert!(note.is_some_and(|w| crate::is_loss(w)), "{:?}", r.warnings);
 }
 
+/// A ligature the page shows by a glyph its font's encoding names `uniE028` (a private-use
+/// character, without the letters it stands for) is the letters of its text object: the page's type
+/// has one, and nothing is noted as left out.
+#[test]
+fn a_ligature_glyph_without_letters_is_matched_to_its_text_object() {
+    let doc = text_document(&[("Quality here\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let art = native_with_text(&layer("Art", true, &text_object(0)), &doc);
+    let page = "0 0 0 1 setcmykcolor /Helvetica findfont dup length dict copy \
+        dup /Encoding StandardEncoding 256 array copy dup 127 /uniE028 put put /Lig exch definefont \
+        14 scalefont setfont 58.5 61.5 moveto (Qual\\177y here) show";
+    let r = import(&eps(page, &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|w| w.contains("so it is left out")), "{:?}", r.warnings);
+    assert_eq!(text_of(&r.document.layers[0]).iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["Quality here"], "{:?}", r.warnings);
+}
+
 /// A line break inside a paragraph (`\x03` in the text document) stays a line break in it.
 #[test]
 fn a_soft_return_is_a_line_break_in_its_paragraph() {
@@ -5187,7 +5222,7 @@ fn envelope_options_keep_the_source_text_hidden_under_its_outlined_appearance() 
         }
     });
     assert_eq!(texts, [("CHONKYCATS".to_string(), false)], "{:?}", r.warnings);
-    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    assert!(super::tests::program_warnings(&r.warnings).is_empty(), "{:?}", r.warnings);
 }
 
 /// A live envelope that draws a little apart from its drawn art, in layers that already differ

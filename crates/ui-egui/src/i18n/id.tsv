@@ -559,6 +559,7 @@
 	Hide Guides	Sembunyikan panduan
 	Show Guides	Tampilkan panduan
 	Lock Guides	Kunci panduan
+	Lock Guides by Default	Kunci panduan secara default
 	Unlock Guides	Buka kunci panduan
 	Make Guides	Buat panduan
 	Release Guides	Lepaskan panduan
@@ -905,6 +906,7 @@ lighting	Light	Cahaya
 	Color Picker…	Pemilih warna…
 	Coming soon — tracked in the parity plan	Segera hadir — dilacak dalam rencana paritas
 	Command Dialog	Dialog perintah
+	Command API Reference	Referensi API perintah
 	Copy Selected Style	Salin gaya terpilih
 	Corners…	Sudut…
 	Define Perspective Grid…	Definisikan kisi perspektif…
@@ -2350,15 +2352,12 @@ digits	Malayalam	Malayalam
 	Selected Swatches	Swatch terpilih
 	Advanced Options	Opsi lanjutan
 	Background Contents	Konten latar belakang
-	Background Contents:	Konten latar belakang:
 	BLANK DOCUMENT PRESETS	PRESET DOKUMEN KOSONG
 	Bleed	Bleed
 	Change to Right-to-Left Layout	Ubah ke tata letak kanan ke kiri
 	Columns:	Kolom:
-	Create Document	Buat dokumen
 	Documents you create appear here.	Dokumen yang Anda buat muncul di sini.
 	More Settings	Pengaturan lainnya
-	New from Template	Baru dari templat
 	Number of Artboards:	Jumlah artboard:
 	Orientation:	Orientasi:
 	PRESET DETAILS	DETAIL PRESET
@@ -2369,7 +2368,6 @@ digits	Malayalam	Malayalam
 	RECENT	TERKINI
 	RECENT (1)	TERKINI (1)
 	SAVED	TERSIMPAN
-	Templates…	Templat…
 	Transparent (Default)	Transparan (default)
 	Save for Office Documents	Simpan untuk dokumen Office
 	Transparent Background	Latar belakang transparan
@@ -3273,6 +3271,7 @@ theme	Appearance	Tampilan
 	Arrange by Row	Susun per baris
 	Arrange by Column	Susun per kolom
 	Save Preset	Simpan preset
+	Save Document Preset	Simpan preset dokumen
 	Screen (72 ppi)	Layar (72 ppi)
 	Social Square Post 1080×1080	Postingan persegi media sosial 1080×1080
 	Distribute	Distribusikan
@@ -5848,6 +5847,9 @@ axis	Y Axis	Sumbu Y
 @plural	Result: {n}|Results: {n}	Hasil: {n}
 	Add to Symbols	Tambahkan ke simbol
 	Basic Shapes	Bentuk dasar
+	Button	Tombol
+	Panel	Panel
+	UI Frames	Bingkai UI
 	Open Symbol Library	Buka pustaka simbol
 	Save Symbol Library	Simpan pustaka simbol
 	Save Symbol Library…	Simpan pustaka simbol…
@@ -5908,6 +5910,8 @@ axis	Y Axis	Sumbu Y
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Teks titik
 	Area Text	Teks area
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Ukur teks menurut batas glif
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Tampilkan opsi snap ke glif
 	Hide Snap to Glyph Options	Sembunyikan opsi snap ke glif
@@ -6310,7 +6314,7 @@ breakText	Glyphs	Glif
 	Reset Symbol Instance	Atur ulang instans simbol
 @msg	type must be static or dynamic, not {v}	type harus static atau dynamic, bukan {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` adalah simbol statis: setel dulu jenis simbolnya ke Dinamis
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	Hanya warna solid isian dan goresan jalur, jalur majemuk, atau teks yang dipilih dalam instans simbol yang dapat diubah
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	Hanya isian, goresan, opacity, dan blend jalur, jalur majemuk, atau teks yang dipilih dalam instans simbol yang dapat diubah
 @msg	path must be a list of child indices	path harus berupa daftar indeks anak
 @msg	no object at path {shown} in the symbol's art	tidak ada objek di jalur {shown} dalam karya seni simbol
 @msg	give fill, stroke, opacity and/or blend	berikan fill, stroke, opacity dan/atau blend

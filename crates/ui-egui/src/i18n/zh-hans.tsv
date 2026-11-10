@@ -243,7 +243,6 @@ antiAlias	Sharp	锐利
 	Update While Dragging	拖动时更新
 	Hide Video Rulers	隐藏视频标尺
 	Background Contents	背景内容
-	Background Contents:	背景内容：
 	Background:	背景：
 	Backspace	Backspace
 	Bar Graph Tool	条形图工具
@@ -529,6 +528,7 @@ antiAlias	Sharp	锐利
 	Coming soon — tracked in the parity plan	即将推出 — 在对标计划中跟踪
 	Command Click to Select Objects Behind	按住 Command 单击选择后方对象
 	Command Dialog	命令对话框
+	Command API Reference	命令 API 参考
 	Community	社区
 	Compatibility:	兼容性：
 	Compatible Gradient and Gradient Mesh Printing	兼容渐变和渐变网格打印
@@ -614,7 +614,6 @@ antiAlias	Sharp	锐利
 	Couldn't {} {name}: {e}	无法{} {name}：{e}
 	Create	创建
 	Create Clipping Mask	创建剪切蒙版
-	Create Document	创建文档
 	Create from Guides	从参考线创建
 	Create from Selection	从选区创建
 	Create From:	创建自：
@@ -1806,6 +1805,7 @@ file-filter	Templates	模板
 	Lock (⌘2)	锁定 (⌘2)
 	Lock Grid	锁定网格
 	Lock Guides	锁定参考线
+	Lock Guides by Default	默认锁定参考线
 	Lock Slices	锁定切片
 	Lock Station Point	锁定基准点
 	Lossless (lossy WebP isn't available yet)	无失真 (尚未提供有失真的 WebP)
@@ -2044,7 +2044,6 @@ file-filter	Templates	模板
 	New Color Group…	新建颜色组…
 	New Document Presets	新建文档预设
 	New file	新建文件
-	New from Template	从模板新建
 	New from Template…	从模板新建…
 	New Graphic Style	新建图形样式
 	New Graphic Style (Alt-click to name it)	新建图形样式 (Alt+点击可命名)
@@ -2828,6 +2827,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Save PDF Preset	保存 PDF 预设
 	Save Perspective Grid Preset	存储透视网格预设
 	Save Preset	保存预设
+	Save Document Preset	保存文档预设
 	Preset {number}	预设 {number}
 	Save Preset…	存储预设…
 	Save Print Preset	保存打印预设
@@ -3374,7 +3374,6 @@ digits	Malayalam	马拉雅拉姆数字
 	Template	模板
 	Templates	模板
 	Templates Folder	模板文件夹
-	Templates…	模板…
 	Text Displayed in Cell:	单元格中显示的文字：
 	Text Export Options	文本导出选项
 	Text Fill & Stroke Color	文字填色和描边颜色
@@ -4510,6 +4509,7 @@ imageTrace	Outline	轮廓
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	已载入“{name}”：已略过 {n} 个步骤
 @msg	not an action set file	不是动作组文件
 @msg	the action set file is larger than 8 MiB	动作组文件大于 8 MiB
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`：参考将大于 {MAX_BYTES} 字节
 @msg	the action set file holds more than 1,000 actions	动作组文件包含超过 1,000 个动作
 @msg	the action set file needs a later version of VectorCraft	动作组文件需要更高版本的 VectorCraft
 @msg	an action in the action set file has more than 10,000 steps	动作组文件中有动作超过 10,000 个步骤
@@ -5457,7 +5457,7 @@ lighting	Light	光源
 	Bevel both sides	双面斜角
 	Presets	预设
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	一个对象只能应用一种 3D 效果。请编辑现有效果的选项，或先将其移去。
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label}目前需要路径或复合路径。请先将文字、图像和编组转换为路径。
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label}目前需要路径、复合路径、文字或编组。请先将图像和其他对象转换为路径。
 @msg	{label} requires a shape with at least two anchors	{label}需要至少有两个锚点的形状
 @msg	The shape is too complex for a 3D effect	形状过于复杂，无法应用 3D 效果
 @msg	The 3D surface is too complex; simplify the shape	3D 表面过于复杂；请简化形状
@@ -5465,6 +5465,11 @@ lighting	Light	光源
 @msg	unknown parameter `{key}`; did you mean `{near}`?	未知参数 `{key}`；您是否想输入 `{near}`？
 @msg	unknown parameter `{key}`; the command takes no parameters	未知参数 `{key}`；该命令没有参数
 @msg	unknown parameter `{key}`; the command takes: {keys}	未知参数 `{key}`；该命令接受：{keys}
+@msg	the params must be an object, not {got}	参数必须是对象，而不是 {got}
+@msg	unknown parameter `{path}`; the object takes no keys	未知参数 `{path}`；该对象不接受任何键
+@msg	unknown parameter `{path}`; it takes: {keys}	未知参数 `{path}`；它接受：{keys}
+@msg	missing `{path}`	缺少 `{path}`
+@msg	`{path}` must be {expected}, not {got}	`{path}` 必须是 {expected}，而不是 {got}
 	Load EPS into Clipboard	将 EPS 载入剪贴板
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} 像素的图像过大，无法绘制
 @msg	the JPEG XL file is cut short	JPEG XL 文件不完整
@@ -5757,7 +5762,7 @@ axis	Y Axis	Y 轴
 @msg	Running “{name}”…	正在运行“{name}”…
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	实时效果在绘制文档时运行，因此不能为 `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	导出增效工具始终使用导出的预算：请省略 `budget`
-@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	“{_1}”需要大量计算预算（每次运行最多 {minutes} 分钟，指令数为通常的 {times} 倍）：请在用户同意后使用 `allowHeavy: true` 安装
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}”需要大量计算预算（每次运行最多 {minutes} 分钟，指令数为通常的 {times} 倍）：需要有人在桌面应用中批准，或在以 --allow-plugin-grants 启动的会话中传入 `allowHeavy: true`
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	要安装需要这些权限的“{name}”吗？
 	ID: {id}	ID：{id}
@@ -5797,7 +5802,9 @@ axis	Y Axis	Y 轴
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	对象预算（超过 {MAX_OBJECTS} 个只读对象）
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	权限 `{shown}` 保留给以后的增效工具 API；此主机不授予该权限
 @msg	unknown permission `{shown}`	未知权限 `{shown}`
-@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}”需要权限 {asked}：请在用户同意后使用列出这些权限的 `grant` 安装
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	“{name}”需要权限 {asked}：需要有人在桌面应用中批准，或在以 --allow-plugin-grants 启动的会话中传入 `grant`
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` 和 `allowHeavy` 仅在以 --allow-plugin-grants 启动的会话中生效：请在桌面应用中批准此插件
+@msg	Only the person at the keyboard can approve installing a plug-in	只有键盘前的人才能批准安装插件
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	“{name}”未获授予其输出所需的 `{p}`：未作任何更改
 @msg	a heavy filter runs in the background, so it can't declare `commands`	重型滤镜在后台运行，因此不能声明 `commands`
 @msg	at most {MAX_COMMANDS} `commands`	最多 {MAX_COMMANDS} 个 `commands`
@@ -5858,6 +5865,9 @@ axis	Y Axis	Y 轴
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`：应为 all 或 1, 3-5 这样的范围，而不是 {v}
 	Add to Symbols	添加到符号
 	Basic Shapes	基本形状
+	Button	按钮
+	Panel	面板
+	UI Frames	UI 框架
 	Open Symbol Library	打开符号库
 	Save Symbol Library	保存符号库
 	Save Symbol Library…	保存符号库…
@@ -5932,6 +5942,8 @@ axis	Y Axis	Y 轴
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	点文字
 	Area Text	区域文字
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	按字形边界度量文字
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	显示靠齐字符选项
 	Hide Snap to Glyph Options	隐藏靠齐字符选项
@@ -6353,7 +6365,7 @@ breakText	Glyphs	字形
 	Reset Symbol Instance	重置符号实例
 @msg	type must be static or dynamic, not {v}	type 必须是 static 或 dynamic,而不是 {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` 是静态符号:请先将其符号类型设为动态
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	在符号实例中选中的路径、复合路径或文字只能更改填色和描边的纯色
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	在符号实例中选中的路径、复合路径或文字只能更改填色、描边、不透明度和混合模式
 @msg	path must be a list of child indices	path 必须是子项索引列表
 @msg	no object at path {shown} in the symbol's art	符号图稿中路径 {shown} 处没有对象
 @msg	give fill, stroke, opacity and/or blend	请提供 fill、stroke、opacity 和/或 blend

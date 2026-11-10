@@ -566,6 +566,7 @@
 	Hide Guides	Ukryj linie pomocnicze
 	Show Guides	Pokaż linie pomocnicze
 	Lock Guides	Zablokuj linie pomocnicze
+	Lock Guides by Default	Domyślnie blokuj linie pomocnicze
 	Unlock Guides	Odblokuj linie pomocnicze
 	Make Guides	Utwórz linie pomocnicze
 	Release Guides	Uwolnij linie pomocnicze
@@ -920,6 +921,7 @@ lighting	Light	Światło
 	Color Picker…	Próbnik kolorów…
 	Coming soon — tracked in the parity plan	Już wkrótce — ujęte w planie zgodności
 	Command Dialog	Okno polecenia
+	Command API Reference	Dokumentacja API poleceń
 	Copy Selected Style	Kopiuj zaznaczony styl
 	Corners…	Narożniki…
 	Define Perspective Grid…	Zdefiniuj siatkę perspektywy…
@@ -2476,15 +2478,12 @@ digits	Malayalam	Malajalam
 	Selected Swatches	Zaznaczone próbki
 	Advanced Options	Opcje zaawansowane
 	Background Contents	Zawartość tła
-	Background Contents:	Zawartość tła:
 	BLANK DOCUMENT PRESETS	USTAWIENIA PUSTEGO DOKUMENTU
 	Bleed	Spad
 	Change to Right-to-Left Layout	Zmień na układ od prawej do lewej
 	Columns:	Kolumny:
-	Create Document	Utwórz dokument
 	Documents you create appear here.	Tu pojawią się utworzone dokumenty.
 	More Settings	Więcej ustawień
-	New from Template	Nowy z szablonu
 	Number of Artboards:	Liczba obszarów kompozycji:
 	Orientation:	Orientacja:
 	PRESET DETAILS	SZCZEGÓŁY USTAWIENIA
@@ -2494,7 +2493,6 @@ digits	Malayalam	Malajalam
 	Preview Mode	Tryb podglądu
 	RECENT	OSTATNIE
 	SAVED	ZAPISANE
-	Templates…	Szablony…
 	Transparent (Default)	Przezroczyste (domyślnie)
 	Save for Office Documents	Zapisz dla dokumentów biurowych
 	Transparent Background	Przezroczyste tło
@@ -3415,6 +3413,7 @@ theme	Appearance	Wygląd
 	Arrange by Row	Ułóż według wierszy
 	Arrange by Column	Ułóż według kolumn
 	Save Preset	Zapisz ustawienie
+	Save Document Preset	Zapisz ustawienie dokumentu
 	Screen (72 ppi)	Ekran (72 ppi)
 	Social Square Post 1080×1080	Kwadratowy post społecznościowy 1080×1080
 	Distribute	Rozmieść
@@ -4547,6 +4546,7 @@ imageTrace	Outline	Kontur
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Wczytano „{name}”: pominięto {n} krok|Wczytano „{name}”: pominięto {n} kroki|Wczytano „{name}”: pominięto {n} kroków
 @msg	not an action set file	to nie jest plik zestawu operacji
 @msg	the action set file is larger than 8 MiB	plik zestawu operacji jest większy niż 8 MiB
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: dokumentacja byłaby większa niż {MAX_BYTES} bajtów
 @msg	the action set file holds more than 1,000 actions	plik zestawu operacji zawiera ponad 1000 operacji
 @msg	the action set file needs a later version of VectorCraft	plik zestawu operacji wymaga nowszej wersji programu VectorCraft
 @msg	an action in the action set file has more than 10,000 steps	operacja w pliku zestawu operacji ma ponad 10 000 kroków
@@ -5417,7 +5417,7 @@ mark-style	Japanese	Japońskie
 	Bevel both sides	Faza po obu stronach
 	Presets	Ustawienia
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Obiekt może mieć jeden efekt 3D. Edytuj opcje istniejącego efektu lub najpierw go usuń.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} wymaga obecnie ścieżki lub ścieżki złożonej. Najpierw przekonwertuj tekst, obrazy i grupy na ścieżki.
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} wymaga obecnie ścieżki, ścieżki złożonej, tekstu lub grupy. Najpierw przekonwertuj obrazy i inne obiekty na ścieżki.
 @msg	{label} requires a shape with at least two anchors	{label} wymaga kształtu z co najmniej dwoma punktami
 @msg	The shape is too complex for a 3D effect	Kształt jest zbyt złożony dla efektu 3D
 @msg	The 3D surface is too complex; simplify the shape	Powierzchnia 3D jest zbyt złożona; uprość kształt
@@ -5434,6 +5434,11 @@ mark-style	Japanese	Japońskie
 @msg	unknown parameter `{key}`; did you mean `{near}`?	nieznany parametr `{key}`; czy chodziło o `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	nieznany parametr `{key}`; polecenie nie przyjmuje parametrów
 @msg	unknown parameter `{key}`; the command takes: {keys}	nieznany parametr `{key}`; polecenie przyjmuje: {keys}
+@msg	the params must be an object, not {got}	parametry muszą być obiektem, a nie {got}
+@msg	unknown parameter `{path}`; the object takes no keys	nieznany parametr `{path}`; obiekt nie przyjmuje kluczy
+@msg	unknown parameter `{path}`; it takes: {keys}	nieznany parametr `{path}`; przyjmuje: {keys}
+@msg	missing `{path}`	brak `{path}`
+@msg	`{path}` must be {expected}, not {got}	`{path}` musi być {expected}, a nie {got}
 	Load EPS into Clipboard	Wczytaj EPS do schowka
 @msg	an image of {w} × {h} pixels is too large to draw	obraz o wymiarach {w} × {h} pikseli jest zbyt duży, aby go narysować
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: to nie jest obraz PNG, JPEG, WebP, TIFF ani BMP
@@ -5773,7 +5778,7 @@ axis	Y Axis	Oś Y
 @msg	Running “{name}”…	Uruchamianie „{name}”…
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	efekt na żywo działa podczas rysowania dokumentu, więc nie może być `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	wtyczka eksportu zawsze dostaje budżet eksportu: pomiń `budget`
-@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	„{_1}” prosi o duży budżet obliczeń (każde uruchomienie do {minutes} minut i {times} razy więcej instrukcji niż zwykle): zainstaluj wtyczkę z `allowHeavy: true`, gdy użytkownik się zgodzi
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	„{_1}” prosi o duży budżet obliczeń (każde uruchomienie do {minutes} minut i {times} razy więcej instrukcji niż zwykle): musi ją zatwierdzić osoba w aplikacji desktopowej albo przekaż `allowHeavy: true` w sesji uruchomionej z --allow-plugin-grants
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Zainstalować „{name}”, wtyczkę, która prosi o te uprawnienia?
 	ID: {id}	ID: {id}
@@ -5813,7 +5818,9 @@ axis	Y Axis	Oś Y
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	budżet obiektów (ponad {MAX_OBJECTS} obiektów tylko do odczytu)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	uprawnienie `{shown}` jest zarezerwowane dla późniejszego API wtyczek; ten host go nie przyznaje
 @msg	unknown permission `{shown}`	nieznane uprawnienie `{shown}`
-@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	„{name}” prosi o uprawnienia {asked}: zainstaluj ją z `grant`, który je wymienia, gdy użytkownik się zgodzi
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	„{name}” prosi o uprawnienia {asked}: musi je zatwierdzić osoba w aplikacji desktopowej albo przekaż `grant` w sesji uruchomionej z --allow-plugin-grants
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` i `allowHeavy` działają tylko w sesji uruchomionej z --allow-plugin-grants: zatwierdź wtyczkę w aplikacji desktopowej
+@msg	Only the person at the keyboard can approve installing a plug-in	Instalację wtyczki może zatwierdzić tylko osoba przy klawiaturze
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	„{name}” nie otrzymała `{p}`, którego potrzebuje jej wynik: nic nie zmieniono
 @msg	a heavy filter runs in the background, so it can't declare `commands`	ciężki filtr działa w tle, więc nie może deklarować `commands`
 @msg	at most {MAX_COMMANDS} `commands`	najwyżej {MAX_COMMANDS} `commands`
@@ -5874,6 +5881,9 @@ axis	Y Axis	Oś Y
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all lub zakres, np. 1, 3-5, a nie {v}
 	Add to Symbols	Dodaj do symboli
 	Basic Shapes	Kształty podstawowe
+	Button	Przycisk
+	Panel	Panel
+	UI Frames	Ramki UI
 	Open Symbol Library	Otwórz bibliotekę symboli
 	Save Symbol Library	Zapisz bibliotekę symboli
 	Save Symbol Library…	Zapisz bibliotekę symboli…
@@ -5948,6 +5958,8 @@ axis	Y Axis	Oś Y
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Tekst punktowy
 	Area Text	Tekst akapitowy
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Mierz tekst według granic glifów
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Pokaż opcje przyciągania do glifów
 	Hide Snap to Glyph Options	Ukryj opcje przyciągania do glifów
@@ -6368,7 +6380,7 @@ breakText	Glyphs	Glify
 	Reset Symbol Instance	Resetuj wystąpienie symbolu
 @msg	type must be static or dynamic, not {v}	type musi mieć wartość static lub dynamic, a nie {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` jest symbolem statycznym: najpierw ustaw jego typ symbolu na Dynamiczny
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	W ścieżce, ścieżce złożonej lub tekście zaznaczonym w wystąpieniu symbolu można zmienić tylko jednolity kolor wypełnienia i obrysu
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	W ścieżce, ścieżce złożonej lub tekście zaznaczonym w wystąpieniu symbolu można zmienić tylko wypełnienie, obrys, krycie i tryb mieszania
 @msg	path must be a list of child indices	path musi być listą indeksów elementów podrzędnych
 @msg	no object at path {shown} in the symbol's art	brak obiektu w ścieżce {shown} w grafice symbolu
 @msg	give fill, stroke, opacity and/or blend	podaj fill, stroke, opacity i/lub blend
@@ -6518,3 +6530,6 @@ breakText	Glyphs	Glify
 	Align to Pixel Grid	Wyrównaj do siatki pikseli
 @msg	only paths and compound paths can be aligned to the pixel grid	do siatki pikseli można wyrównać tylko ścieżki i ścieżki złożone
 @msg	side is left or right, not `{s}`	side to left lub right, a nie `{s}`
+	Ignore All	Ignoruj wszystko
+	Add to Dictionary	Dodaj do słownika
+	No Suggestions	Brak sugestii

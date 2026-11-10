@@ -216,7 +216,8 @@ the `effect` dialog (`effect.dialog {effect: "plugin.<id>"}`). An exporter plug-
 export's own parameters); `ui.dialog.confirm` writes the file. An importer plug-in with parameters opens the
 `pluginImport` dialog when `file.openWith` is given no `params`: one field per parameter, `__plugin`, and `__open`
 (`path` and `importer`); `ui.dialog.confirm` opens the file. `ui.installPlugin {path?}` installs a `.wasm` (without
-a path it asks for one); see [plugins.md](plugins.md).
+a path it asks for one); one that needs approval opens the `pluginInstall` dialog, which only a person can confirm
+(`ui.dialog.confirm` and injected input are refused); see [plugins.md](plugins.md).
 
 Overprint Black: the Edit → Edit Colors → Overprint Black… menu item opens a `command` parameter dialog for
 `edit.colors.overprintBlack` (fields `remove`, `percentage`, `fill`, `stroke`, `includeCmyBlacks`,
@@ -528,6 +529,11 @@ fields measure visual bounds.
 Align to Glyph Bounds: the Align panel flyout's Align to Glyph Bounds submenu shows and toggles the
 `alignGlyphBoundsPoint` (Point Text) and `alignGlyphBoundsArea` (Area Text) preferences (`prefs.set`), checked while on.
 
+Measure Type by Glyph Bounds: the Transform panel menu's Measure Type by Glyph Bounds item shows and toggles the
+`typeGlyphBounds` preference (`prefs.set`), checked while on; while it is on, the bounding box and the Transform
+panel, Properties and Control bar fields measure each point type object selected as an object (not inside a selected
+group) by its glyphs' ink.
+
 Align To: the Align panel's Align To choice is saved with the preferences, and `ui.inspect` reports it as
 `ui.align_to` (`"selection"` or `"artboard"`; Align to Key Object stores no choice). The align buttons of the Align
 panel, the Control bar and the Properties panel run `object.align` with `to: "artboard"` when one object is selected,
@@ -571,9 +577,15 @@ New Document: File → New… (`file.newDialog`, Cmd+N) opens the `newDocument` 
 `colorMode`, `rasterEffectsPpi`, `previewMode`) plus `category` (the tab: Recent, Saved, Mobile, Web, Print, Film &
 Video, Art & Illustration, Branding, Social), `advanced` (Advanced Options open), `bleedLinked` and `presetName`
 (Save Preset's name). Setting `preset` to a name from `file.newPresets` fills the other fields from that preset;
-changing a field afterwards makes the settings custom (`preset` becomes ""). More Settings is the `newDocumentMore`
-dialog over the same fields (its Profile is `category`). `ui.dialog.confirm` runs `file.new` with the fields (with
-`previewMode: "pixel"` the app turns Pixel Preview on); on an error the dialog stays open.
+changing a field afterwards makes the settings custom (`preset` becomes ""). The `newDocumentMore` dialog is New
+Document with the More Settings pop-up open over it, which edits `artboards` and `artboardLayout` (layout, right-to-left,
+spacing and columns). While `__saving` is true, Preset Details shows Save Document Preset with the `presetName` field,
+Cancel and Save in place of the document's name and hides Close and Create. `ui.dialog.cancel` closes the More Settings
+pop-up first, then leaves saving, and keeps the fields each time. `ui.dialog.confirm` runs `file.new` with the fields
+(with `previewMode: "pixel"` the app turns Pixel Preview on); on an error the dialog stays open. While `__saving` is
+true, `ui.dialog.confirm` saves the preset and does not create a document; after a save `presetName` is empty, and the
+next Save Preset fills it with the first `Preset N` that no saved preset has. `ui.click` on the More Settings button
+opens the `newDocumentMore` pop-up.
 
 Swatch Conflict: through the app, when the pasted objects' global or spot swatches conflict with the document's
 (see `clipboard.conflicts`) and the params have no `swatchConflict`, every Paste command opens the `swatchConflict`

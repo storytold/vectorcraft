@@ -21,6 +21,7 @@ heif = ["dep:heic-rs", "dep:rayon"]
 [dependencies]
 # Which paths stored in documents may be opened.
 craft-docpath = { workspace = true }
+craft-proof = { workspace = true }
 vectorcraft-geom = { workspace = true }
 vectorcraft-color = { workspace = true }
 vectorcraft-doc = { workspace = true }
@@ -39,6 +40,8 @@ vectorcraft-metafile = { workspace = true }
 vectorcraft-plugins = { workspace = true }
 vectorcraft-affinity = { workspace = true }
 vectorcraft-scriptcheck = { workspace = true }
+# The commands' parameter schemas (schemas.rs).
+vectorcraft-apischema = { workspace = true }
 image = { workspace = true }
 jxl-oxide = { workspace = true }
 jxl-color = { workspace = true }
@@ -85,3 +88,5 @@ zune-jpegxl = { workspace = true }
 zune-core = { workspace = true }
 # The JavaScript parser's lexer, compared with the script checker's on the same scripts.
 vectorcraft-js = { workspace = true }
+# A bundled font's own glyph boxes, for the glyph bounds tests.
+skrifa = { workspace = true }

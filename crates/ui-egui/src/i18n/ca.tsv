@@ -423,7 +423,6 @@ antiAlias	Sharp	Nítid
 	Back	Enrere
 	Background Color:	Color de fons:
 	Background Contents	Contingut del fons
-	Background Contents:	Contingut del fons:
 	Background Level	Nivell de fons
 	Background:	Fons:
 	Backspace	Retrocés
@@ -441,6 +440,9 @@ antiAlias	Sharp	Nítid
 	Basic	Bàsic
 	Basic Latin	Llatí bàsic
 	Basic Shapes	Formes bàsiques
+	Button	Botó
+	Panel	Panell
+	UI Frames	Marcs d’IU
 	Batch	Lot
 	Batch…	Lot…
 	Bearing	Orientació
@@ -792,6 +794,7 @@ antiAlias	Sharp	Nítid
 	Command	Ordre
 	Command Click to Select Objects Behind	Clic amb Ordre per seleccionar els objectes del darrere
 	Command Dialog	Diàleg d’ordres
+	Command API Reference	Referència de l’API d’ordres
 	Comment not closed	Comentari no tancat
 	Commenting, filling in form fields and signing	Comentar, emplenar camps de formulari i signar
 	Commits	Commits
@@ -914,7 +917,6 @@ antiAlias	Sharp	Nítid
 	Create Clipping Mask	Crea una màscara de retall
 	Create Compound Path From Ellipses	Crea un traçat compost a partir d’el·lipses
 	Create Dimension	Crea una dimensió
-	Create Document	Crea un document
 	Create from Guides	Crea a partir de guies
 	Create from Selection	Crea a partir de la selecció
 	Create From:	Crea a partir de:
@@ -2336,6 +2338,7 @@ digits	Malayalam	Malaiàlam
 	Lock Artboards	Bloca els taulers
 	Lock Grid	Bloca la quadrícula
 	Lock Guides	Bloca les guies
+	Lock Guides by Default	Bloca les guies per defecte
 	Lock Others	Bloca la resta
 	Lock Selected	Bloca la selecció
 	Lock Slices	Bloca els talls
@@ -2594,7 +2597,6 @@ digits	Malayalam	Malaiàlam
 	New Design	Disseny nou
 	New Document Presets	Preajustos de document nous
 	New file	Fitxer nou
-	New from Template	Nou a partir d’una plantilla
 	New from Template…	Nou a partir d’una plantilla…
 	New Graphic Style	Estil gràfic nou
 	New Graphic Style (Alt-click to name it)	Estil gràfic nou (Alt+clic per posar-hi nom)
@@ -3640,6 +3642,7 @@ digits	Malayalam	Malaiàlam
 	Save PDF Preset	Desa el preajust de PDF
 	Save Perspective Grid Preset	Desa el preajust de quadrícula en perspectiva
 	Save Preset	Desa el preajust
+	Save Document Preset	Desa el preajust de document
 	Save Preset…	Desa el preajust…
 	Save Print Preset	Desa el preajust d’impressió
 	Save Recovery Data	Desa les dades de recuperació
@@ -4366,7 +4369,6 @@ digits	Malayalam	Malaiàlam
 	Template literal not closed	El literal de plantilla no està tancat
 	Templates	Plantilles
 	Templates Folder	Carpeta de plantilles
-	Templates…	Plantilles…
 	Tetrad	Tètrada
 	Tetrad 2	Tètrada 2
 	Tetrad 3	Tètrada 3
@@ -5431,6 +5433,7 @@ digits	Malayalam	Malaiàlam
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	S’ha carregat “{name}”: s’ha omès {n} pas|S’ha carregat “{name}”: s’han omès {n} passos
 @msg	not an action set file	no és un fitxer de conjunt d’accions
 @msg	the action set file is larger than 8 MiB	el fitxer de conjunt d’accions supera els 8 MiB
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: la referència superaria els {MAX_BYTES} bytes
 @msg	the action set file holds more than 1,000 actions	el fitxer de conjunt d’accions conté més de 1.000 accions
 @msg	the action set file needs a later version of VectorCraft	el fitxer de conjunt d’accions necessita una versió més recent del VectorCraft
 @msg	an action in the action set file has more than 10,000 steps	una acció del fitxer de conjunt d’accions té més de 10.000 passos
@@ -5851,6 +5854,11 @@ digits	Malayalam	Malaiàlam
 @msg	unknown parameter `{key}`; did you mean `{near}`?	paràmetre desconegut `{key}`; volies dir `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	paràmetre desconegut `{key}`; l’ordre no admet cap paràmetre
 @msg	unknown parameter `{key}`; the command takes: {keys}	paràmetre desconegut `{key}`; l’ordre admet: {keys}
+@msg	the params must be an object, not {got}	els paràmetres han de ser un objecte, no {got}
+@msg	unknown parameter `{path}`; the object takes no keys	paràmetre desconegut `{path}`; l’objecte no admet claus
+@msg	unknown parameter `{path}`; it takes: {keys}	paràmetre desconegut `{path}`; admet: {keys}
+@msg	missing `{path}`	falta `{path}`
+@msg	`{path}` must be {expected}, not {got}	`{path}` ha de ser {expected}, no {got}
 @msg	unknown preference `{key}`	preferència desconeguda `{key}`
 @msg	unknown preset (one of {_1})	preajust desconegut (un de {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	preajust desconegut `{name}` (high, medium, low o un de desat: consulta flattener.presets.list)
@@ -5909,7 +5917,7 @@ digits	Malayalam	Malaiàlam
 @msg	{key} must be a finite coordinate	{key} ha de ser una coordenada finita
 @msg	{key} must be an array of non-negative integer object ids	{key} ha de ser una matriu d’identificadors d’objecte enters no negatius
 @msg	{key} must be Unix seconds (an integer) or null	{key} ha de ser segons Unix (un enter) o null
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} actualment requereix un traçat o un traçat compost. Converteix primer els textos, les imatges i els grups en traçats.
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} actualment requereix un traçat, un traçat compost, text o un grup. Converteix primer les imatges i altres objectes en traçats.
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} conserva 1 dels {n} taulers del document: el fitxer es reobre amb un. Activa Conserva les capacitats d’edició per conservar-los tots.
 @msg	{label} produced an empty result	{label} ha produït un resultat buit
 @msg	{label} requires a shape with at least two anchors	{label} requereix una forma amb com a mínim dos punts d’ancoratge
@@ -5927,7 +5935,7 @@ digits	Malayalam	Malaiàlam
 @msg	{path}: {e}	{path}: {e}
 @msg	{status} ({e})	{status} ({e})
 @msg	{tool} isn't in a toolbar group of several tools	{tool} no forma part d’un grup de diverses eines a la barra d’eines
-@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	«{_1}» demana un pressupost elevat (cada execució fins a {minutes} minuts i {times} vegades les instruccions habituals): instal·la’l amb `allowHeavy: true` quan l’usuari hi estigui d’acord
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	«{_1}» demana un pressupost elevat (cada execució fins a {minutes} minuts i {times} vegades les instruccions habituals): una persona l’ha d’aprovar a l’aplicació d’escriptori, o passa `allowHeavy: true` en una sessió iniciada amb --allow-plugin-grants
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Instal·la «{name}», que demana aquests permisos?
 	ID: {id}	ID: {id}
@@ -5967,7 +5975,9 @@ digits	Malayalam	Malaiàlam
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	pressupost d’objectes (més de {MAX_OBJECTS} objectes de només lectura)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	el permís `{shown}` està reservat per a una API de complements posterior; aquest amfitrió no el concedeix
 @msg	unknown permission `{shown}`	permís desconegut `{shown}`
-@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	«{name}» demana els permisos {asked}: instal·la’l amb un `grant` que els enumeri quan l’usuari hi estigui d’acord
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	«{name}» demana els permisos {asked}: una persona els ha d’aprovar a l’aplicació d’escriptori, o passa `grant` en una sessió iniciada amb --allow-plugin-grants
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` i `allowHeavy` només tenen efecte en una sessió iniciada amb --allow-plugin-grants: aprova el complement a l’aplicació d’escriptori
+@msg	Only the person at the keyboard can approve installing a plug-in	Només la persona al teclat pot aprovar la instal·lació d’un complement
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	a «{name}» no se li ha concedit `{p}`, que la seva sortida necessita: no s’ha canviat res
 @msg	a heavy filter runs in the background, so it can't declare `commands`	un filtre pesat s’executa en segon pla, de manera que no pot declarar `commands`
 @msg	at most {MAX_COMMANDS} `commands`	com a màxim {MAX_COMMANDS} `commands`
@@ -6057,6 +6067,8 @@ theme	Appearance	Aparença
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Text de punt
 	Area Text	Text d’àrea
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Mesura el text pels límits del glif
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Mostra les opcions d’ajust al glif
 	Hide Snap to Glyph Options	Amaga les opcions d’ajust al glif
@@ -6493,7 +6505,7 @@ breakText	Glyphs	Glifs
 	Reset Symbol Instance	Restableix la instància de símbol
 @msg	type must be static or dynamic, not {v}	type ha de ser static o dynamic, no {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` és un símbol estàtic: primer establiu el tipus de símbol a Dinàmic
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	D'un traçat, un traçat compost o un text seleccionat en una instància de símbol només es pot canviar el color sòlid de l'emplenament i el traç
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	En un traçat, traçat compost o text seleccionat en una instància de símbol només es poden canviar l'emplenament, el traç, l'opacitat i la fusió
 @msg	path must be a list of child indices	path ha de ser una llista d’índexs de fills
 @msg	no object at path {shown} in the symbol's art	no hi ha cap objecte al camí {shown} de l’art del símbol
 @msg	give fill, stroke, opacity and/or blend	indiqueu fill, stroke, opacity i/o blend
@@ -6643,3 +6655,6 @@ breakText	Glyphs	Glifs
 	Align to Pixel Grid	Alinea a la quadrícula de píxels
 @msg	only paths and compound paths can be aligned to the pixel grid	només els traçats i els traçats compostos es poden alinear a la quadrícula de píxels
 @msg	side is left or right, not `{s}`	side ha de ser left o right, no `{s}`
+	Ignore All	Ignora-ho tot
+	Add to Dictionary	Afegeix al diccionari
+	No Suggestions	No hi ha suggeriments

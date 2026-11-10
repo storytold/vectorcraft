@@ -439,12 +439,12 @@ impl Server {
             }
             "resources/read" => {
                 let uri = params.get("uri").and_then(Value::as_str).ok_or((INVALID_PARAMS, "missing `uri`".to_string()))?;
-                let v = resources::read(self.backend.as_mut(), uri).map_err(|e| match e {
+                let read = resources::read_contents(self.backend.as_mut(), uri).map_err(|e| match e {
                     resources::ReadError::NotFound(uri) => (RESOURCE_NOT_FOUND, format!("resource not found: {uri}")),
                     resources::ReadError::Invalid(why) => (INVALID_PARAMS, why),
                     resources::ReadError::Backend(why) => (INTERNAL_ERROR, why),
                 })?;
-                Ok(json!({"contents": [{"uri": uri, "mimeType": "application/json", "text": serde_json::to_string_pretty(&v).unwrap_or_default()}]}))
+                Ok(json!({"contents": [{"uri": uri, "mimeType": read.mime, "text": read.text}]}))
             }
             "completion/complete" => Ok(prompts::complete(self.backend.as_mut(), params)),
             "logging/setLevel" => {

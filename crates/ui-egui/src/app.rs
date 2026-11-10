@@ -81,6 +81,7 @@ impl VectorcraftApp {
                 print_tiling: None,
                 live_paint_gaps: None,
                 hidden_chars: Default::default(),
+                spelling: Default::default(),
                 selection_marks: Default::default(),
                 selection_box: None,
                 selection_bounds: None,
@@ -168,6 +169,7 @@ impl VectorcraftApp {
             scrub_scope: None,
             automation_roots: None,
             synthetic_frame: false,
+            pending_plugin_install: None,
             pen_end: Default::default(),
             host_iteration: 0,
             #[cfg(test)]

@@ -600,6 +600,7 @@
 	Hide Guides	Piilota apuviivat
 	Show Guides	Näytä apuviivat
 	Lock Guides	Lukitse apuviivat
+	Lock Guides by Default	Lukitse apuviivat oletuksena
 	Unlock Guides	Avaa apuviivojen lukitus
 	Make Guides	Luo apuviivat
 	Release Guides	Vapauta apuviivat
@@ -963,6 +964,7 @@ lighting	Light	Valo
 	Color Picker…	Värivalitsin…
 	Coming soon — tracked in the parity plan	Tulossa pian — seurataan yhdenmukaisuussuunnitelmassa
 	Command Dialog	Komentovalintaikkuna
+	Command API Reference	Komentojen API-viite
 	Copy Selected Style	Kopioi valittu tyyli
 	Corners…	Kulmat…
 	Define Perspective Grid…	Määritä perspektiiviruudukko…
@@ -2506,15 +2508,12 @@ digits	Malayalam	Malajalam
 	Selected Swatches	Valitut värimallit
 	Advanced Options	Lisäasetukset
 	Background Contents	Taustan sisältö
-	Background Contents:	Taustan sisältö:
 	BLANK DOCUMENT PRESETS	TYHJÄN ASIAKIRJAN ESIASETUKSET
 	Bleed	Leikkuuvara
 	Change to Right-to-Left Layout	Vaihda oikealta vasemmalle -asetteluun
 	Columns:	Sarakkeet:
-	Create Document	Luo asiakirja
 	Documents you create appear here.	Luomasi asiakirjat näkyvät tässä.
 	More Settings	Lisää asetuksia
-	New from Template	Uusi mallista
 	Number of Artboards:	Piirtoalustojen määrä:
 	Orientation:	Suunta:
 	PRESET DETAILS	ESIASETUKSEN TIEDOT
@@ -2525,7 +2524,6 @@ digits	Malayalam	Malajalam
 	RECENT	VIIMEISIMMÄT
 	RECENT (1)	VIIMEISIMMÄT (1)
 	SAVED	TALLENNETUT
-	Templates…	Mallit…
 	Transparent (Default)	Läpinäkyvä (oletus)
 	Save for Office Documents	Tallenna Office-asiakirjoja varten
 	Transparent Background	Läpinäkyvä tausta
@@ -3474,6 +3472,7 @@ theme	Appearance	Ulkoasu
 	Arrange by Row	Järjestä riveittäin
 	Arrange by Column	Järjestä sarakkeittain
 	Save Preset	Tallenna esiasetus
+	Save Document Preset	Tallenna asiakirjan esiasetus
 	Screen (72 ppi)	Näyttö (72 ppi)
 	Social Square Post 1080×1080	Neliömäinen somejulkaisu 1080×1080
 	Distribute	Jaa tasaisesti
@@ -4632,6 +4631,7 @@ imageTrace	Outline	Ääriviiva
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Ladattiin ”{name}”: jätettiin pois {n} vaihe|Ladattiin ”{name}”: jätettiin pois {n} vaihetta
 @msg	not an action set file	ei ole toimintosarjatiedosto
 @msg	the action set file is larger than 8 MiB	toimintosarjatiedosto on suurempi kuin 8 MiB
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: viite olisi suurempi kuin {MAX_BYTES} tavua
 @msg	the action set file holds more than 1,000 actions	toimintosarjatiedostossa on yli 1 000 toimintoa
 @msg	the action set file needs a later version of VectorCraft	toimintosarjatiedosto vaatii uudemman VectorCraft-version
 @msg	an action in the action set file has more than 10,000 steps	toimintosarjatiedoston toiminnossa on yli 10 000 vaihetta
@@ -5471,7 +5471,7 @@ mark-style	Japanese	Japanilainen
 	Bevel both sides	Viiste molemmin puolin
 	Presets	Esiasetukset
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Objektilla voi olla yksi 3D-tehoste. Muokkaa olemassa olevan tehosteen asetuksia tai poista se ensin.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} vaatii tällä hetkellä polun tai yhdistelmäpolun. Muunna teksti, kuvat ja ryhmät ensin poluiksi.
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} vaatii tällä hetkellä polun, yhdistelmäpolun, tekstin tai ryhmän. Muunna kuvat ja muut objektit ensin poluiksi.
 @msg	{label} requires a shape with at least two anchors	{label} vaatii muodon, jossa on vähintään kaksi ankkuria
 @msg	The shape is too complex for a 3D effect	Muoto on liian monimutkainen 3D-tehosteelle
 @msg	The 3D surface is too complex; simplify the shape	3D-pinta on liian monimutkainen; yksinkertaista muotoa
@@ -5479,6 +5479,11 @@ mark-style	Japanese	Japanilainen
 @msg	unknown parameter `{key}`; did you mean `{near}`?	tuntematon parametri `{key}`; tarkoititko `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	tuntematon parametri `{key}`; komento ei ota parametreja
 @msg	unknown parameter `{key}`; the command takes: {keys}	tuntematon parametri `{key}`; komennon parametrit: {keys}
+@msg	the params must be an object, not {got}	parametrien on oltava objekti, ei {got}
+@msg	unknown parameter `{path}`; the object takes no keys	tuntematon parametri `{path}`; objekti ei ota avaimia
+@msg	unknown parameter `{path}`; it takes: {keys}	tuntematon parametri `{path}`; parametrit: {keys}
+@msg	missing `{path}`	`{path}` puuttuu
+@msg	`{path}` must be {expected}, not {got}	`{path}` on oltava {expected}, ei {got}
 	Load EPS into Clipboard	Lataa EPS leikepöydälle
 @msg	an image of {w} × {h} pixels is too large to draw	kuva, jonka koko on {w} × {h} pikseliä, on liian suuri piirrettäväksi
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: ei ole PNG-, JPEG-, WebP-, TIFF- tai BMP-kuva
@@ -5949,7 +5954,7 @@ axis	Y Axis	Y-akseli
 @msg	Running “{name}”…	Suoritetaan ”{name}”…
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	live-tehoste suoritetaan asiakirjaa piirrettäessä, joten se ei voi olla `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	vientilaajennus saa aina viennin budjetin: jätä `budget` pois
-@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	”{_1}” pyytää suurta laskentabudjettia (jokainen ajo enintään {minutes} minuuttia ja {times} kertaa tavallinen määrä käskyjä): asenna se asetuksella `allowHeavy: true`, kun käyttäjä hyväksyy
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	”{_1}” pyytää suurta laskentabudjettia (jokainen ajo enintään {minutes} minuuttia ja {times} kertaa tavallinen määrä käskyjä): ihmisen on hyväksyttävä se työpöytäsovelluksessa, tai anna `allowHeavy: true` istunnossa, joka on käynnistetty valitsimella --allow-plugin-grants
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Asennetaanko ”{name}”, joka pyytää näitä käyttöoikeuksia?
 	ID: {id}	Tunnus: {id}
@@ -5989,7 +5994,9 @@ axis	Y Axis	Y-akseli
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	objektibudjetti (yli {MAX_OBJECTS} vain luku -objektia)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	käyttöoikeus `{shown}` on varattu myöhemmälle laajennus-API:lle; tämä isäntä ei myönnä sitä
 @msg	unknown permission `{shown}`	tuntematon käyttöoikeus `{shown}`
-@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	”{name}” pyytää käyttöoikeuksia {asked}: asenna se `grant`-luettelolla, jossa ne ovat, kun käyttäjä suostuu
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	”{name}” pyytää käyttöoikeuksia {asked}: ihmisen on hyväksyttävä ne työpöytäsovelluksessa, tai anna `grant` istunnossa, joka on käynnistetty valitsimella --allow-plugin-grants
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` ja `allowHeavy` toimivat vain istunnossa, joka on käynnistetty valitsimella --allow-plugin-grants: hyväksy laajennus työpöytäsovelluksessa
+@msg	Only the person at the keyboard can approve installing a plug-in	Vain näppäimistön ääressä oleva ihminen voi hyväksyä laajennuksen asennuksen
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	”{name}” ei saanut käyttöoikeutta `{p}`, jota sen tulos tarvitsee: mitään ei muutettu
 @msg	a heavy filter runs in the background, so it can't declare `commands`	raskas suodin suoritetaan taustalla, joten se ei voi määritellä `commands`-kohtaa
 @msg	at most {MAX_COMMANDS} `commands`	enintään {MAX_COMMANDS} `commands`
@@ -6050,6 +6057,9 @@ axis	Y Axis	Y-akseli
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all tai alue, kuten 1, 3-5, ei {v}
 	Add to Symbols	Lisää symboleihin
 	Basic Shapes	Perusmuodot
+	Button	Painike
+	Panel	Paneeli
+	UI Frames	UI-kehykset
 	Open Symbol Library	Avaa symbolikirjasto
 	Save Symbol Library	Tallenna symbolikirjasto
 	Save Symbol Library…	Tallenna symbolikirjasto…
@@ -6124,6 +6134,8 @@ axis	Y Axis	Y-akseli
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Pisteteksti
 	Area Text	Alueteksti
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Mittaa teksti merkin rajoista
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Näytä merkkiin kohdistuksen asetukset
 	Hide Snap to Glyph Options	Piilota merkkiin kohdistuksen asetukset
@@ -6542,7 +6554,7 @@ breakText	Glyphs	Merkit
 	Reset Symbol Instance	Palauta symboli-ilmentymä
 @msg	type must be static or dynamic, not {v}	type-arvon on oltava static tai dynamic, ei {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` on staattinen symboli: aseta ensin sen symbolin tyypiksi Dynaaminen
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	Symboli-ilmentymästä valitusta polusta, yhdistelmäpolusta tai tekstistä voi muuttaa vain täytön ja viivan yhtenäistä väriä
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	Symbolin esiintymässä valitun polun, yhdistelmäpolun tai tekstin täyttöä, viivaa, peittävyyttä ja sekoitusta voi vain muuttaa
 @msg	path must be a list of child indices	path-arvon on oltava luettelo alikohteiden indeksejä
 @msg	no object at path {shown} in the symbol's art	symbolin kuvituksessa ei ole objektia polussa {shown}
 @msg	give fill, stroke, opacity and/or blend	anna fill, stroke, opacity ja/tai blend
@@ -6697,3 +6709,6 @@ breakText	Glyphs	Merkit
 	Align to Pixel Grid	Tasaa pikseliruudukkoon
 @msg	only paths and compound paths can be aligned to the pixel grid	vain polut ja yhdistelmäpolut voi tasata pikseliruudukkoon
 @msg	side is left or right, not `{s}`	side on left tai right, ei `{s}`
+	Ignore All	Ohita kaikki
+	Add to Dictionary	Lisää sanastoon
+	No Suggestions	Ei ehdotuksia

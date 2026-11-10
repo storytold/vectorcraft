@@ -282,7 +282,6 @@ font-technology	Variable	Değişken
 	Update While Dragging	Sürüklerken Güncelle
 	Hide Video Rulers	Video Cetvellerini Gizle
 	Background Contents	Arka Plan İçeriği
-	Background Contents:	Arkaplan İçeriği:
 	Background:	Arka plan:
 	Backspace	Geri tuşu
 	Bar Graph Tool	Çubuk Grafik Aracı
@@ -564,6 +563,7 @@ font-technology	Variable	Değişken
 	Coming soon — tracked in the parity plan	Çok yakında — eşlik planında takip ediliyor
 	Command Click to Select Objects Behind	Komut Arkasındaki Nesneleri Seçmek İçin Tıklayın
 	Command Dialog	Komut İletişim Kutusu
+	Command API Reference	Komut API Başvurusu
 	Community	Topluluk
 	Compatibility:	Uyumluluk:
 	Compatible Gradient and Gradient Mesh Printing	Uyumlu Degrade ve Degrade Mesh Baskı
@@ -648,7 +648,6 @@ font-technology	Variable	Değişken
 	Couldn't {} {name}: {e}	{} yapılamadı {name}: {e}
 	Create	Oluştur
 	Create Clipping Mask	Kırpma Maskesi Oluştur
-	Create Document	Belge Oluştur
 	Create from Guides	Rehberlerden Oluştur
 	Create from Selection	Seçimden Oluştur
 	Create From:	Şuradan Oluştur:
@@ -1730,6 +1729,7 @@ font-technology	Variable	Değişken
 	Lock (⌘2)	Kilitle (⌘2)
 	Lock Grid	Izgarayı Kilitle
 	Lock Guides	Kilit Kılavuzları
+	Lock Guides by Default	Kılavuzları Varsayılan Olarak Kilitle
 	Lock Others	Diğerlerini Kilitle
 	Lock Slices	Dilimleri Kilitle
 	Lock Station Point	Kilit İstasyon Noktası
@@ -1958,7 +1958,6 @@ font-technology	Variable	Değişken
 	New Color Group…	Yeni Renk Grubu…
 	New Document Presets	Yeni Belge Ön Ayarları
 	New file	Yeni dosya
-	New from Template	Şablondan yeni
 	New from Template…	Şablondan yeni…
 	New Graphic Style	Yeni Grafik Stili
 	New Graphic Style (Alt-click to name it)	Yeni Grafik Stili (Adını vermek için Alt tuşuna basarak tıklayın)
@@ -2734,6 +2733,7 @@ digits	Malayalam	Malayalam
 	Save PDF Preset	PDF Hazır Ayarını Kaydet
 	Save Perspective Grid Preset	Perspektif Izgarası Ön Ayarını Kaydet
 	Save Preset	Ön Ayarı Kaydet
+	Save Document Preset	Belge Ön Ayarını Kaydet
 	Save Preset…	Ön Ayarı Kaydet…
 	Save Print Preset	Yazdırma Ön Ayarını Kaydet
 	Save Recovery Data	Kurtarma Verilerini Kaydet
@@ -3323,7 +3323,6 @@ digits	Malayalam	Malayalam
 	Template	Şablon
 	Templates	Şablonlar
 	Templates Folder	Şablonlar Klasörü
-	Templates…	Şablonlar…
 	Text Displayed in Cell:	Hücrede Görüntülenen Metin:
 	Text Export Options	Metin Dışa Aktarma Seçenekleri
 	Text Fill & Stroke Color	Metin Dolgu ve Kontur Rengi
@@ -4179,6 +4178,7 @@ axis	Both	Her İkisi
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	“{name}” yüklendi: {n} adım atlandı
 @msg	not an action set file	bir eylem seti dosyası değil
 @msg	the action set file is larger than 8 MiB	eylem seti dosyası 8 MiB'den büyük
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: başvuru {MAX_BYTES} bayttan büyük olur
 @msg	the action set file holds more than 1,000 actions	eylem seti dosyası 1.000'den fazla eylem içeriyor
 @msg	the action set file needs a later version of VectorCraft	eylem seti dosyası VectorCraft'ın daha yeni bir sürümünü gerektiriyor
 @msg	an action in the action set file has more than 10,000 steps	eylem seti dosyasındaki bir eylemde 10.000'den fazla adım var
@@ -4858,7 +4858,7 @@ lighting	Light	Işık
 	Bevel both sides	Her iki tarafa da eğim verin
 	Presets	Ön ayarlar
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Bir nesne bir 3D efekti alır. Mevcut efektin seçeneklerini düzenleyin veya önce onu kaldırın.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} şu anda bir yol veya bileşik yol gerektiriyor. Önce türü, görüntüleri ve grupları yollara dönüştürün.
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} şu anda bir yol, bileşik yol, yazı veya grup gerektiriyor. Önce görüntüleri ve diğer nesneleri yollara dönüştürün.
 @msg	{label} requires a shape with at least two anchors	{label} en az iki bağlantı noktasına sahip bir şekil gerektirir
 @msg	The shape is too complex for a 3D effect	Şekli 3 boyutlu bir efekt için fazla karmaşık
 @msg	The 3D surface is too complex; simplify the shape	3 boyutlu yüzey çok karmaşık; şekli basitleştir
@@ -4866,6 +4866,11 @@ lighting	Light	Işık
 @msg	unknown parameter `{key}`; did you mean `{near}`?	bilinmeyen parametre `{key}`; `{near}` mi demek istediniz?
 @msg	unknown parameter `{key}`; the command takes no parameters	bilinmeyen parametre `{key}`; komut hiçbir parametre almaz
 @msg	unknown parameter `{key}`; the command takes: {keys}	bilinmeyen parametre `{key}`; komut şunları alır: {keys}
+@msg	the params must be an object, not {got}	parametreler bir nesne olmalıdır, {got} değil
+@msg	unknown parameter `{path}`; the object takes no keys	bilinmeyen parametre `{path}`; nesne anahtar almaz
+@msg	unknown parameter `{path}`; it takes: {keys}	bilinmeyen parametre `{path}`; şunları alır: {keys}
+@msg	missing `{path}`	`{path}` eksik
+@msg	`{path}` must be {expected}, not {got}	`{path}` {expected} olmalıdır, {got} değil
 	1 Layer	1 Katman
 	1 bit	1 bit
 	16 Colors	16 Renk
@@ -5875,7 +5880,7 @@ axis	Y Axis	Y ekseni
 @msg	Running “{name}”…	“{name}” çalıştırılıyor…
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	canlı efekt belge çizilirken çalışır, bu yüzden `heavy` olamaz
 @msg	an exporter always gets an export's budget: leave `budget` out	dışa aktarma eklentisi her zaman bir dışa aktarmanın bütçesini alır: `budget` anahtarını çıkarın
-@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	“{_1}” büyük bir hesaplama bütçesi istiyor (her çalıştırma en fazla {minutes} dakika ve olağan komutların {times} katı): kullanıcı onayladıktan sonra `allowHeavy: true` ile yükleyin
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}” büyük bir hesaplama bütçesi istiyor (her çalıştırma en fazla {minutes} dakika ve olağan komutların {times} katı): masaüstü uygulamasında bir kişinin onaylaması gerekir veya --allow-plugin-grants ile başlatılan bir oturumda `allowHeavy: true` geçirin
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Bu izinleri isteyen “{name}” yüklensin mi?
 	ID: {id}	Kimlik: {id}
@@ -5915,7 +5920,9 @@ axis	Y Axis	Y ekseni
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	nesne bütçesi ({MAX_OBJECTS} adetten fazla salt okunur nesne)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	`{shown}` izni sonraki bir eklenti API’si için ayrılmıştır; bu ana bilgisayar bu izni vermez
 @msg	unknown permission `{shown}`	bilinmeyen izin `{shown}`
-@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}” {asked} izinlerini istiyor: kullanıcı onayladıktan sonra bunları listeleyen bir `grant` ile yükleyin
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	“{name}” {asked} izinlerini istiyor: masaüstü uygulamasında bir kişinin onaylaması gerekir veya --allow-plugin-grants ile başlatılan bir oturumda `grant` geçirin
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` ve `allowHeavy` yalnızca --allow-plugin-grants ile başlatılan bir oturumda etkili olur: eklentiyi masaüstü uygulamasında onaylayın
+@msg	Only the person at the keyboard can approve installing a plug-in	Bir eklentinin yüklenmesini yalnızca klavye başındaki kişi onaylayabilir
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	“{name}” öğesine çıktısının ihtiyaç duyduğu `{p}` izni verilmedi: hiçbir şey değiştirilmedi
 @msg	a heavy filter runs in the background, so it can't declare `commands`	ağır bir filtre arka planda çalışır, bu yüzden `commands` bildiremez
 @msg	at most {MAX_COMMANDS} `commands`	en fazla {MAX_COMMANDS} `commands`
@@ -5976,6 +5983,9 @@ axis	Y Axis	Y ekseni
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all ya da 1, 3-5 gibi bir aralık olmalı, {v} değil
 	Add to Symbols	Sembollere Ekle
 	Basic Shapes	Temel Şekiller
+	Button	Düğme
+	Panel	Panel
+	UI Frames	UI çerçeveleri
 	Open Symbol Library	Sembol Kitaplığını Aç
 	Save Symbol Library	Sembol Kitaplığını Kaydet
 	Save Symbol Library…	Sembol Kitaplığını Kaydet…
@@ -6050,6 +6060,8 @@ axis	Y Axis	Y ekseni
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Nokta Metni
 	Area Text	Alan Metni
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Yazıyı Glif Sınırlarına Göre Ölç
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Glif'e Yapışma Seçeneklerini Göster
 	Hide Snap to Glyph Options	Glif'e Yapışma Seçeneklerini Gizle
@@ -6468,7 +6480,7 @@ breakText	Glyphs	Glifler
 	Reset Symbol Instance	Sembol Örneğini Sıfırla
 @msg	type must be static or dynamic, not {v}	type static veya dynamic olmalıdır, {v} değil
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` statik bir semboldür: önce Sembol Türünü Dinamik olarak ayarlayın
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	Bir sembol örneğinde seçilen yolun, bileşik yolun veya yazının yalnızca dolgu ve konturunun düz rengi değiştirilebilir
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	Bir sembol örneğinde seçili yol, bileşik yol veya metnin yalnızca dolgu, kontur, opaklık ve karışımı değiştirilebilir
 @msg	path must be a list of child indices	path alt öğe dizinlerinden oluşan bir liste olmalıdır
 @msg	no object at path {shown} in the symbol's art	sembolün çiziminde {shown} yolunda nesne yok
 @msg	give fill, stroke, opacity and/or blend	fill, stroke, opacity ve/veya blend verin
@@ -6618,3 +6630,6 @@ breakText	Glyphs	Glifler
 	Align to Pixel Grid	Piksel Izgarasına Hizala
 @msg	only paths and compound paths can be aligned to the pixel grid	piksel ızgarasına yalnızca yollar ve bileşik yollar hizalanabilir
 @msg	side is left or right, not `{s}`	side left veya right olmalıdır, `{s}` değil
+	Ignore All	Tümünü Yoksay
+	Add to Dictionary	Sözlüğe Ekle
+	No Suggestions	Öneri Yok

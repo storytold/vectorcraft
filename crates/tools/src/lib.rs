@@ -536,6 +536,7 @@ pub(crate) mod testutil {
             freeform_point: None,
             raster_sample: 1,
             preview_bounds: false,
+            glyph_bounds: false,
             preview_memo: None,
             unit: Unit::Points,
             stroke_unit: Unit::Points,

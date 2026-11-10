@@ -256,7 +256,6 @@ font-technology	Variable	可變
 	Update While Dragging	拖曳時更新
 	Hide Video Rulers	隱藏視訊尺標
 	Background Contents	背景內容
-	Background Contents:	背景內容：
 	Background:	背景：
 	Backspace	Backspace
 	Bar Graph Tool	橫條圖工具
@@ -545,6 +544,7 @@ font-technology	Variable	可變
 	Coming soon — tracked in the parity plan	即將推出 — 已列入功能對等計畫
 	Command Click to Select Objects Behind	Cmd 加按一下可選取後方物件
 	Command Dialog	指令對話框
+	Command API Reference	指令 API 參考
 	Community	社群
 	Compatibility:	相容性：
 	Compatible Gradient and Gradient Mesh Printing	相容的漸層與漸層網格列印
@@ -631,7 +631,6 @@ font-technology	Variable	可變
 	Couldn't {} {name}: {e}	無法{} {name}：{e}
 	Create	建立
 	Create Clipping Mask	建立剪裁遮色片
-	Create Document	建立文件
 	Create from Guides	從參考線建立
 	Create from Selection	從選取範圍建立
 	Create From:	建立來源：
@@ -2354,6 +2353,7 @@ file-filter	Templates	範本
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	已載入「{name}」：已略過 {n} 個步驟
 @msg	not an action set file	不是動作組檔案
 @msg	the action set file is larger than 8 MiB	動作組檔案大於 8 MiB
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`：參考將大於 {MAX_BYTES} 位元組
 @msg	the action set file holds more than 1,000 actions	動作組檔案包含超過 1,000 個動作
 @msg	the action set file needs a later version of VectorCraft	動作組檔案需要較新版本的 VectorCraft
 @msg	an action in the action set file has more than 10,000 steps	動作組檔案中有動作超過 10,000 個步驟
@@ -2800,6 +2800,7 @@ file-filter	Templates	範本
 	Lock (⌘2)	鎖定 (⌘2)
 	Lock Grid	鎖定格點
 	Lock Guides	鎖定參考線
+	Lock Guides by Default	預設鎖定參考線
 	Lock Others	鎖定其他
 	Lock Slices	鎖定切片
 	Lock Station Point	鎖定基準點
@@ -3064,7 +3065,6 @@ file-filter	Templates	範本
 	New Color Group…	新增顏色群組…
 	New Document Presets	新增文件預設集
 	New file	新增檔案
-	New from Template	從範本新增
 	New from Template…	從範本新增…
 	New Graphic Style	新增繪圖樣式
 	New Graphic Style (Alt-click to name it)	新增繪圖樣式 (Alt+點擊可命名)
@@ -3861,6 +3861,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Save PDF Preset	儲存 PDF 預設集
 	Save Perspective Grid Preset	儲存透視格點預設集
 	Save Preset	儲存預設集
+	Save Document Preset	儲存文件預設集
 	Preset {number}	預設集 {number}
 	Save Preset…	儲存預設集…
 	Save Print Preset	儲存列印預設集
@@ -4438,7 +4439,6 @@ digits	Malayalam	馬來亞拉姆數字
 	Template	範本
 	Templates	範本
 	Templates Folder	範本資料夾
-	Templates…	範本…
 	Text Displayed in Cell:	儲存格中顯示的文字：
 	Text Export Options	文字匯出選項
 	Text Fill & Stroke Color	文字填色與筆畫顏色
@@ -5283,7 +5283,7 @@ lighting	Light	光源
 	Bevel both sides	雙面斜角
 	Presets	預設集
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	一個物件只能套用一種 3D 效果。請編輯現有效果的選項，或先將其移除。
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label}目前需要路徑或複合路徑。請先將文字、影像和群組轉換為路徑。
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label}目前需要路徑、複合路徑、文字或群組。請先將影像和其他物件轉換為路徑。
 @msg	{label} requires a shape with at least two anchors	{label}需要至少有兩個錨點的形狀
 @msg	The shape is too complex for a 3D effect	形狀過於複雜，無法套用 3D 效果
 @msg	The 3D surface is too complex; simplify the shape	3D 表面過於複雜；請簡化形狀
@@ -5291,6 +5291,11 @@ lighting	Light	光源
 @msg	unknown parameter `{key}`; did you mean `{near}`?	未知的參數 `{key}`；您是指 `{near}` 嗎？
 @msg	unknown parameter `{key}`; the command takes no parameters	未知的參數 `{key}`；此指令沒有參數
 @msg	unknown parameter `{key}`; the command takes: {keys}	未知的參數 `{key}`；此指令接受：{keys}
+@msg	the params must be an object, not {got}	參數必須是物件，而不是 {got}
+@msg	unknown parameter `{path}`; the object takes no keys	未知的參數 `{path}`；此物件不接受任何鍵
+@msg	unknown parameter `{path}`; it takes: {keys}	未知的參數 `{path}`；它接受：{keys}
+@msg	missing `{path}`	未提供 `{path}`
+@msg	`{path}` must be {expected}, not {got}	`{path}` 必須是 {expected}，而不是 {got}
 	Load EPS into Clipboard	將 EPS 載入剪貼簿
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} 像素的影像過大，無法繪製
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}：不是 PNG、JPEG、WebP、TIFF 或 BMP 影像
@@ -5554,7 +5559,7 @@ axis	Y Axis	Y 軸
 @msg	Running “{name}”…	正在執行「{name}」…
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	即時效果會在繪製文件時執行，因此不能是 `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	匯出增效模組一律使用匯出的預算：請移除 `budget`
-@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	「{_1}」需要大量運算預算（每次執行最多 {minutes} 分鐘，指令數為一般的 {times} 倍）：請在使用者同意後以 `allowHeavy: true` 安裝
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	「{_1}」需要大量運算預算（每次執行最多 {minutes} 分鐘，指令數為一般的 {times} 倍）：需要有人在桌面應用程式中核准，或在以 --allow-plugin-grants 啟動的工作階段中傳入 `allowHeavy: true`
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	要安裝需要這些權限的「{name}」嗎？
 	ID: {id}	ID：{id}
@@ -5594,7 +5599,9 @@ axis	Y Axis	Y 軸
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	物件預算（超過 {MAX_OBJECTS} 個唯讀物件）
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	權限 `{shown}` 保留給日後的增效模組 API；此主機不授予該權限
 @msg	unknown permission `{shown}`	未知權限 `{shown}`
-@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	「{name}」需要權限 {asked}：請在使用者同意後以列出這些權限的 `grant` 安裝
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	「{name}」需要權限 {asked}：需要有人在桌面應用程式中核准，或在以 --allow-plugin-grants 啟動的工作階段中傳入 `grant`
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` 和 `allowHeavy` 僅在以 --allow-plugin-grants 啟動的工作階段中生效：請在桌面應用程式中核准此外掛
+@msg	Only the person at the keyboard can approve installing a plug-in	只有鍵盤前的人才能核准安裝外掛
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	「{name}」未獲授予其輸出所需的 `{p}`：未做任何變更
 @msg	a heavy filter runs in the background, so it can't declare `commands`	重型濾鏡在背景執行，因此不能宣告 `commands`
 @msg	at most {MAX_COMMANDS} `commands`	最多 {MAX_COMMANDS} 個 `commands`
@@ -5655,6 +5662,9 @@ axis	Y Axis	Y 軸
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`：應為 all 或 1, 3-5 這類範圍，而不是 {v}
 	Add to Symbols	新增至符號
 	Basic Shapes	基本形狀
+	Button	按鈕
+	Panel	面板
+	UI Frames	UI 框架
 	Open Symbol Library	開啟符號資料庫
 	Save Symbol Library	儲存符號資料庫
 	Save Symbol Library…	儲存符號資料庫…
@@ -5729,6 +5739,8 @@ axis	Y Axis	Y 軸
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	點狀文字
 	Area Text	區域文字
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	依字符邊界測量文字
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	顯示靠齊字符選項
 	Hide Snap to Glyph Options	隱藏靠齊字符選項
@@ -6151,7 +6163,7 @@ breakText	Glyphs	字符
 	Reset Symbol Instance	重設符號實體
 @msg	type must be static or dynamic, not {v}	type 必須是 static 或 dynamic,而不是 {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` 是靜態符號:請先將其符號類型設為動態
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	在符號實體中選取的路徑、複合路徑或文字只能變更填色和筆畫的純色
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	在符號實體中選取的路徑、複合路徑或文字只能變更填色、筆畫、不透明度和混合模式
 @msg	path must be a list of child indices	path 必須是子項索引清單
 @msg	no object at path {shown} in the symbol's art	符號圖稿中路徑 {shown} 處沒有物件
 @msg	give fill, stroke, opacity and/or blend	請提供 fill、stroke、opacity 和/或 blend

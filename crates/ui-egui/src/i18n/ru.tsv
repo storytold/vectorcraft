@@ -295,7 +295,6 @@ font-technology	Variable	Вариативные
 	Update While Dragging	Обновлять при перетаскивании
 	Hide Video Rulers	Скрыть видео-линейки
 	Background Contents	Содержимое фона
-	Background Contents:	Содержимое фона:
 	Background:	Фон:
 	Backspace	Backspace
 	Bar Graph Tool	Инструмент «Гистограмма»
@@ -581,6 +580,7 @@ font-technology	Variable	Вариативные
 	Coming soon — tracked in the parity plan	Скоро — отслеживается в плане развития
 	Command Click to Select Objects Behind	Cmd+щелчок для выбора объектов позади
 	Command Dialog	Диалоговое окно команды
+	Command API Reference	Справочник по API команд
 	Community	Сообщество
 	Compatibility:	Совместимость:
 	Compatible Gradient and Gradient Mesh Printing	Совместимая печать градиентов и градиентных сеток
@@ -667,7 +667,6 @@ font-technology	Variable	Вариативные
 	Couldn't {} {name}: {e}	Не удалось {} {name}: {e}
 	Create	Создать
 	Create Clipping Mask	Создать маску обрезки
-	Create Document	Создать документ
 	Create from Guides	Создать из направляющих
 	Create from Selection	Создать из выделения
 	Create From:	Создать из:
@@ -1922,6 +1921,7 @@ file-filter	Templates	Шаблоны
 	Lock (⌘2)	Заблокировать (⌘2)
 	Lock Grid	Заблокировать сетку
 	Lock Guides	Заблокировать направляющие
+	Lock Guides by Default	Блокировать направляющие по умолчанию
 	Lock Others	Заблокировать остальные
 	Lock Slices	Заблокировать фрагменты
 	Lock Station Point	Заблокировать точку стояния
@@ -2170,7 +2170,6 @@ file-filter	Templates	Шаблоны
 	New Color Group…	Новая цветовая группа…
 	New Document Presets	Наборы новых документов
 	New file	Новый файл
-	New from Template	Создать из шаблона
 	New from Template…	Создать из шаблона…
 	New Graphic Style	Новый графический стиль
 	New Graphic Style (Alt-click to name it)	Новый графический стиль (Alt+щелчок, чтобы задать имя)
@@ -2962,6 +2961,7 @@ digits	Malayalam	Малаялам
 	Save PDF Preset	Сохранить набор PDF
 	Save Perspective Grid Preset	Сохранить набор сетки перспективы
 	Save Preset	Сохранить набор
+	Save Document Preset	Сохранить набор документа
 	Preset {number}	Набор {number}
 	Save Preset…	Сохранить набор…
 	Save Print Preset	Сохранить набор печати
@@ -3541,7 +3541,6 @@ digits	Malayalam	Малаялам
 	Template	Шаблон
 	Templates	Шаблоны
 	Templates Folder	Папка шаблонов
-	Templates…	Шаблоны…
 	Text Displayed in Cell:	Текст, отображаемый в ячейке:
 	Text Export Options	Параметры экспорта текста
 	Text Fill & Stroke Color	Цвет заливки и обводки текста
@@ -4451,6 +4450,7 @@ axis	Both	Оба
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Загружено «{name}»: пропущен {n} шаг|Загружено «{name}»: пропущено {n} шага|Загружено «{name}»: пропущено {n} шагов
 @msg	not an action set file	это не файл набора действий
 @msg	the action set file is larger than 8 MiB	файл набора действий больше 8 MiB
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: справочник был бы больше {MAX_BYTES} байт
 @msg	the action set file holds more than 1,000 actions	файл набора действий содержит более 1000 действий
 @msg	the action set file needs a later version of VectorCraft	для файла набора действий нужна более новая версия VectorCraft
 @msg	an action in the action set file has more than 10,000 steps	в файле набора действий есть действие более чем из 10 000 шагов
@@ -5190,7 +5190,7 @@ lighting	Light	Свет
 	Bevel both sides	Фаска с обеих сторон
 	Presets	Наборы
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	У объекта может быть только один 3D-эффект. Измените параметры существующего эффекта или сначала удалите его.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label}: пока требуется контур или составной контур. Сначала преобразуйте текст, изображения и группы в контуры.
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label}: пока требуется контур, составной контур, текст или группа. Сначала преобразуйте изображения и другие объекты в контуры.
 @msg	{label} requires a shape with at least two anchors	{label}: требуется фигура не менее чем с двумя опорными точками
 @msg	The shape is too complex for a 3D effect	Фигура слишком сложна для 3D-эффекта
 @msg	The 3D surface is too complex; simplify the shape	3D-поверхность слишком сложна; упростите фигуру
@@ -5198,6 +5198,11 @@ lighting	Light	Свет
 @msg	unknown parameter `{key}`; did you mean `{near}`?	неизвестный параметр `{key}`; возможно, имелся в виду `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	неизвестный параметр `{key}`; у команды нет параметров
 @msg	unknown parameter `{key}`; the command takes: {keys}	неизвестный параметр `{key}`; команда принимает: {keys}
+@msg	the params must be an object, not {got}	параметры должны быть объектом, а не {got}
+@msg	unknown parameter `{path}`; the object takes no keys	неизвестный параметр `{path}`; объект не принимает ключей
+@msg	unknown parameter `{path}`; it takes: {keys}	неизвестный параметр `{path}`; принимает: {keys}
+@msg	missing `{path}`	отсутствует `{path}`
+@msg	`{path}` must be {expected}, not {got}	`{path}` должно быть {expected}, а не {got}
 	Load EPS into Clipboard	Загрузить EPS в буфер обмена
 @msg	an image of {w} × {h} pixels is too large to draw	изображение размером {w} × {h} пикселей слишком велико для отрисовки
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: это не изображение PNG, JPEG, WebP, TIFF или BMP
@@ -5530,7 +5535,7 @@ axis	Y Axis	Ось Y
 @msg	Running “{name}”…	Выполняется «{name}»…
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	динамический эффект выполняется во время отрисовки документа, поэтому он не может быть `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	модуль экспорта всегда получает бюджет экспорта: не указывайте `budget`
-@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	«{_1}» запрашивает большой вычислительный бюджет (каждый запуск до {minutes} минут и в {times} раз больше инструкций, чем обычно): установите его с `allowHeavy: true`, когда пользователь согласится
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	«{_1}» запрашивает большой вычислительный бюджет (каждый запуск до {minutes} минут и в {times} раз больше инструкций, чем обычно): его должен одобрить человек в настольном приложении, либо передайте `allowHeavy: true` в сеансе, запущенном с --allow-plugin-grants
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Установить «{name}», которому нужны эти разрешения?
 	ID: {id}	ID: {id}
@@ -5570,7 +5575,9 @@ axis	Y Axis	Ось Y
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	бюджет объектов (более {MAX_OBJECTS} объектов только для чтения)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	разрешение `{shown}` зарезервировано для будущего API модулей; этот хост его не выдаёт
 @msg	unknown permission `{shown}`	неизвестное разрешение `{shown}`
-@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	«{name}» запрашивает разрешения {asked}: установите его с `grant`, где они перечислены, когда пользователь согласится
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	«{name}» запрашивает разрешения {asked}: их должен одобрить человек в настольном приложении, либо передайте `grant` в сеансе, запущенном с --allow-plugin-grants
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` и `allowHeavy` действуют только в сеансе, запущенном с --allow-plugin-grants: одобрите плагин в настольном приложении
+@msg	Only the person at the keyboard can approve installing a plug-in	Одобрить установку плагина может только человек за клавиатурой
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	«{name}» не получил разрешение `{p}`, нужное для его результата: ничего не изменено
 @msg	a heavy filter runs in the background, so it can't declare `commands`	тяжёлый фильтр выполняется в фоне, поэтому не может объявлять `commands`
 @msg	at most {MAX_COMMANDS} `commands`	не более {MAX_COMMANDS} `commands`
@@ -5631,6 +5638,9 @@ axis	Y Axis	Ось Y
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all или диапазон, например 1, 3-5, а не {v}
 	Add to Symbols	Добавить в символы
 	Basic Shapes	Базовые фигуры
+	Button	Кнопка
+	Panel	Панель
+	UI Frames	UI-рамки
 	Open Symbol Library	Открыть библиотеку символов
 	Save Symbol Library	Сохранить библиотеку символов
 	Save Symbol Library…	Сохранить библиотеку символов…
@@ -6071,6 +6081,8 @@ theme	Appearance	Оформление
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Точечный текст
 	Area Text	Текст в области
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Измерять текст по границам глифа
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Показать параметры привязки к глифу
 	Hide Snap to Glyph Options	Скрыть параметры привязки к глифу
@@ -6489,7 +6501,7 @@ breakText	Glyphs	Глифы
 	Reset Symbol Instance	Сбросить экземпляр символа
 @msg	type must be static or dynamic, not {v}	type должен быть static или dynamic, а не {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` — статический символ: сначала задайте для него тип символа «Динамический»
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	У контура, составного контура или текста, выделенного в экземпляре символа, можно изменить только сплошной цвет заливки и обводки
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	У контура, составного контура или текста, выделенного в экземпляре символа, можно изменить только заливку, обводку, непрозрачность и режим наложения
 @msg	path must be a list of child indices	path должен быть списком индексов дочерних объектов
 @msg	no object at path {shown} in the symbol's art	в графике символа нет объекта по пути {shown}
 @msg	give fill, stroke, opacity and/or blend	укажите fill, stroke, opacity и/или blend
@@ -6751,3 +6763,6 @@ shape	Open	Открытый
 	Align to Pixel Grid	Выровнять по пиксельной сетке
 @msg	only paths and compound paths can be aligned to the pixel grid	по пиксельной сетке можно выровнять только контуры и составные контуры
 @msg	side is left or right, not `{s}`	side — это left или right, а не `{s}`
+	Ignore All	Пропустить все
+	Add to Dictionary	Добавить в словарь
+	No Suggestions	Нет вариантов

@@ -573,6 +573,7 @@
 	Hide Guides	Hulplijnen verbergen
 	Show Guides	Hulplijnen tonen
 	Lock Guides	Hulplijnen vergrendelen
+	Lock Guides by Default	Hulplijnen standaard vergrendelen
 	Unlock Guides	Hulplijnen ontgrendelen
 	Make Guides	Hulplijnen maken
 	Release Guides	Hulplijnen vrijgeven
@@ -919,6 +920,7 @@ lighting	Light	Licht
 	Color Picker…	Kleurkiezer…
 	Coming soon — tracked in the parity plan	Binnenkort beschikbaar — opgenomen in het pariteitsplan
 	Command Dialog	Opdrachtdialoogvenster
+	Command API Reference	API-naslag voor opdrachten
 	Copy Selected Style	Geselecteerde stijl kopiëren
 	Corners…	Hoeken…
 	Define Perspective Grid…	Perspectiefraster definiëren…
@@ -2364,15 +2366,12 @@ digits	Malayalam	Malayalam
 	Selected Swatches	Geselecteerde stalen
 	Advanced Options	Geavanceerde opties
 	Background Contents	Achtergrondinhoud
-	Background Contents:	Achtergrondinhoud:
 	BLANK DOCUMENT PRESETS	LEGE DOCUMENTVOORINSTELLINGEN
 	Bleed	Afrulling
 	Change to Right-to-Left Layout	Omschakelen naar lay-out van rechts naar links
 	Columns:	Kolommen:
-	Create Document	Document maken
 	Documents you create appear here.	Documenten die je maakt, verschijnen hier.
 	More Settings	Meer instellingen
-	New from Template	Nieuw uit sjabloon
 	Number of Artboards:	Aantal tekenborden:
 	Orientation:	Oriëntatie:
 	PRESET DETAILS	VOORINSTELLINGSDETAILS
@@ -2383,7 +2382,6 @@ digits	Malayalam	Malayalam
 	RECENT	RECENT
 	RECENT (1)	RECENT (1)
 	SAVED	OPGESLAGEN
-	Templates…	Sjablonen…
 	Transparent (Default)	Transparant (standaard)
 	Save for Office Documents	Opslaan voor Office-documenten
 	Transparent Background	Transparante achtergrond
@@ -3287,6 +3285,7 @@ theme	Appearance	Vormgeving
 	Arrange by Row	Ordenen op rij
 	Arrange by Column	Ordenen op kolom
 	Save Preset	Voorinstelling opslaan
+	Save Document Preset	Documentvoorinstelling opslaan
 	Screen (72 ppi)	Scherm (72 ppi)
 	Social Square Post 1080×1080	Vierkante socialmediapost 1080×1080
 	Distribute	Verdelen
@@ -5899,6 +5898,9 @@ axis	Y Axis	Y-as
 @plural	Result: {n}|Results: {n}	Resultaat: {n}|Resultaten: {n}
 	Add to Symbols	Aan symbolen toevoegen
 	Basic Shapes	Basisvormen
+	Button	Knop
+	Panel	Paneel
+	UI Frames	UI-kaders
 	Open Symbol Library	Symboolbibliotheek openen
 	Save Symbol Library	Symboolbibliotheek opslaan
 	Save Symbol Library…	Symboolbibliotheek opslaan…
@@ -5959,6 +5961,8 @@ axis	Y Axis	Y-as
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Punttekst
 	Area Text	Vlaktekst
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Tekst meten op glyphbegrenzing
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Opties voor uitlijnen op glyph tonen
 	Hide Snap to Glyph Options	Opties voor uitlijnen op glyph verbergen
@@ -6361,7 +6365,7 @@ breakText	Glyphs	Glyphs
 	Reset Symbol Instance	Symboolinstantie opnieuw instellen
 @msg	type must be static or dynamic, not {v}	type moet static of dynamic zijn, niet {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` is een statisch symbool: stel eerst het symbooltype in op Dynamisch
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	Van een pad, samengesteld pad of tekst die in een symboolinstantie is geselecteerd, kan alleen de effen kleur van vulling en lijn veranderen
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	Van een pad, samengesteld pad of tekst geselecteerd in een symboolinstantie kunnen alleen de vulling, lijn, dekking en overvloeimodus worden gewijzigd
 @msg	path must be a list of child indices	path moet een lijst met onderliggende indexen zijn
 @msg	no object at path {shown} in the symbol's art	geen object op pad {shown} in de illustratie van het symbool
 @msg	give fill, stroke, opacity and/or blend	geef fill, stroke, opacity en/of blend op

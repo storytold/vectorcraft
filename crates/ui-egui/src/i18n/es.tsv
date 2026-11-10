@@ -297,7 +297,6 @@ font-technology	Variable	Variables
 	Update While Dragging	Actualizar al arrastrar
 	Hide Video Rulers	Ocultar reglas de video
 	Background Contents	Contenido de fondo
-	Background Contents:	Contenido de fondo:
 	Background:	Fondo:
 	Backspace	Retroceso
 	Bar Graph Tool	Herramienta Gráfico de barras
@@ -583,6 +582,7 @@ font-technology	Variable	Variables
 	Coming soon — tracked in the parity plan	Próximamente: incluido en el plan de paridad
 	Command Click to Select Objects Behind	Cmd+clic para seleccionar objetos de detrás
 	Command Dialog	Cuadro de diálogo de comando
+	Command API Reference	Referencia de la API de comandos
 	Community	Comunidad
 	Compatibility:	Compatibilidad:
 	Compatible Gradient and Gradient Mesh Printing	Impresión compatible de degradados y mallas de degradado
@@ -669,7 +669,6 @@ font-technology	Variable	Variables
 	Couldn't {} {name}: {e}	No se pudo {} {name}: {e}
 	Create	Crear
 	Create Clipping Mask	Crear máscara de recorte
-	Create Document	Crear documento
 	Create from Guides	Crear a partir de guías
 	Create from Selection	Crear a partir de la selección
 	Create From:	Crear a partir de:
@@ -1896,6 +1895,7 @@ font-technology	Variable	Variables
 	Lock (⌘2)	Bloquear (⌘2)
 	Lock Grid	Bloquear cuadrícula
 	Lock Guides	Bloquear guías
+	Lock Guides by Default	Bloquear guías de forma predeterminada
 	Lock Others	Bloquear otros
 	Lock Slices	Bloquear sectores
 	Lock Station Point	Bloquear punto de estación
@@ -2146,7 +2146,6 @@ font-technology	Variable	Variables
 	New Color Group…	Nuevo grupo de colores…
 	New Document Presets	Preajustes de documento nuevo
 	New file	Archivo nuevo
-	New from Template	Nuevo a partir de plantilla
 	New from Template…	Nuevo a partir de plantilla…
 	New Graphic Style	Nuevo estilo gráfico
 	New Graphic Style (Alt-click to name it)	Nuevo estilo gráfico (Alt+clic para darle nombre)
@@ -2933,6 +2932,7 @@ digits	Malayalam	Malayálam
 	Save PDF Preset	Guardar preajuste de PDF
 	Save Perspective Grid Preset	Guardar preajuste de cuadrícula de perspectiva
 	Save Preset	Guardar preajuste
+	Save Document Preset	Guardar preajuste de documento
 	Save Preset…	Guardar preajuste…
 	Save Print Preset	Guardar preajuste de impresión
 	Save Recovery Data	Guardar datos de recuperación
@@ -3510,7 +3510,6 @@ digits	Malayalam	Malayálam
 	Template	Plantilla
 	Templates	Plantillas
 	Templates Folder	Carpeta de plantillas
-	Templates…	Plantillas…
 	Text Displayed in Cell:	Texto mostrado en la celda:
 	Text Export Options	Opciones de exportación de texto
 	Text Fill & Stroke Color	Color de relleno y trazo del texto
@@ -4415,6 +4414,7 @@ axis	Both	Ambos
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Se cargó “{name}”: se omitió {n} paso|Se cargó “{name}”: se omitieron {n} pasos
 @msg	not an action set file	no es un archivo de conjunto de acciones
 @msg	the action set file is larger than 8 MiB	el archivo de conjunto de acciones supera los 8 MiB
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: la referencia superaría los {MAX_BYTES} bytes
 @msg	the action set file holds more than 1,000 actions	el archivo de conjunto de acciones contiene más de 1000 acciones
 @msg	the action set file needs a later version of VectorCraft	el archivo de conjunto de acciones necesita una versión más reciente de VectorCraft
 @msg	an action in the action set file has more than 10,000 steps	una acción del archivo de conjunto de acciones tiene más de 10 000 pasos
@@ -5528,7 +5528,7 @@ mark-style	Japanese	Japonesas
 	Bevel both sides	Bisel en ambos lados
 	Presets	Ajustes preestablecidos
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Un objeto admite un solo efecto 3D. Edite las opciones del efecto existente o quítelo primero.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} requiere por ahora un trazado o un trazado compuesto. Convierta primero el texto, las imágenes y los grupos en trazados.
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} requiere por ahora un trazado, un trazado compuesto, texto o un grupo. Convierta primero las imágenes y otros objetos en trazados.
 @msg	{label} requires a shape with at least two anchors	{label} requiere una forma con al menos dos puntos de ancla
 @msg	The shape is too complex for a 3D effect	La forma es demasiado compleja para un efecto 3D
 @msg	The 3D surface is too complex; simplify the shape	La superficie 3D es demasiado compleja; simplifique la forma
@@ -5536,6 +5536,11 @@ mark-style	Japanese	Japonesas
 @msg	unknown parameter `{key}`; did you mean `{near}`?	parámetro desconocido `{key}`; ¿quiso decir `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	parámetro desconocido `{key}`; el comando no tiene parámetros
 @msg	unknown parameter `{key}`; the command takes: {keys}	parámetro desconocido `{key}`; el comando acepta: {keys}
+@msg	the params must be an object, not {got}	los parámetros deben ser un objeto, no {got}
+@msg	unknown parameter `{path}`; the object takes no keys	parámetro desconocido `{path}`; el objeto no acepta claves
+@msg	unknown parameter `{path}`; it takes: {keys}	parámetro desconocido `{path}`; acepta: {keys}
+@msg	missing `{path}`	falta `{path}`
+@msg	`{path}` must be {expected}, not {got}	`{path}` debe ser {expected}, no {got}
 	Load EPS into Clipboard	Cargar EPS en el portapapeles
 @msg	an image of {w} × {h} pixels is too large to draw	una imagen de {w} × {h} píxeles es demasiado grande para dibujarse
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: no es una imagen PNG, JPEG, WebP, TIFF ni BMP
@@ -5861,7 +5866,7 @@ axis	Y Axis	Eje Y
 @msg	Running “{name}”…	Ejecutando “{name}”…
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	un efecto interactivo se ejecuta mientras se dibuja el documento, así que no puede ser `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	un plugin de exportación siempre recibe el presupuesto de una exportación: omite `budget`
-@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	“{_1}” pide un presupuesto de cálculo grande (cada ejecución hasta {minutes} minutos y {times} veces las instrucciones habituales): instálalo con `allowHeavy: true` cuando el usuario lo acepte
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}” pide un presupuesto de cálculo grande (cada ejecución hasta {minutes} minutos y {times} veces las instrucciones habituales): una persona debe aprobarlo en la aplicación de escritorio, o pasa `allowHeavy: true` en una sesión iniciada con --allow-plugin-grants
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	¿Instalar “{name}”, que pide estos permisos?
 	ID: {id}	ID: {id}
@@ -5901,7 +5906,9 @@ axis	Y Axis	Eje Y
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	presupuesto de objetos (más de {MAX_OBJECTS} objetos de solo lectura)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	el permiso `{shown}` está reservado para una API de plugins posterior; este host no lo concede
 @msg	unknown permission `{shown}`	permiso desconocido `{shown}`
-@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}” pide los permisos {asked}: instálalo con un `grant` que los incluya cuando el usuario lo acepte
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	“{name}” pide los permisos {asked}: una persona debe aprobarlos en la aplicación de escritorio, o pasa `grant` en una sesión iniciada con --allow-plugin-grants
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` y `allowHeavy` solo tienen efecto en una sesión iniciada con --allow-plugin-grants: aprueba el complemento en la aplicación de escritorio
+@msg	Only the person at the keyboard can approve installing a plug-in	Solo la persona que está en el teclado puede aprobar la instalación de un complemento
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	a “{name}” no se le concedió `{p}`, que su resultado necesita: no se cambió nada
 @msg	a heavy filter runs in the background, so it can't declare `commands`	un filtro pesado se ejecuta en segundo plano, así que no puede declarar `commands`
 @msg	at most {MAX_COMMANDS} `commands`	como máximo {MAX_COMMANDS} `commands`
@@ -5962,6 +5969,9 @@ axis	Y Axis	Eje Y
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all o un intervalo como 1, 3-5, no {v}
 	Add to Symbols	Agregar a símbolos
 	Basic Shapes	Formas básicas
+	Button	Botón
+	Panel	Panel
+	UI Frames	Marcos de IU
 	Open Symbol Library	Abrir biblioteca de símbolos
 	Save Symbol Library	Guardar biblioteca de símbolos
 	Save Symbol Library…	Guardar biblioteca de símbolos…
@@ -6036,6 +6046,8 @@ axis	Y Axis	Eje Y
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Texto de punto
 	Area Text	Texto de área
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Medir el texto por los límites del glifo
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Mostrar opciones de ajuste a glifo
 	Hide Snap to Glyph Options	Ocultar opciones de ajuste a glifo
@@ -6455,7 +6467,7 @@ breakText	Glyphs	Glifos
 	Reset Symbol Instance	Restablecer instancia de símbolo
 @msg	type must be static or dynamic, not {v}	type debe ser static o dynamic, no {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` es un símbolo estático: primero establezca su tipo de símbolo en Dinámico
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	De un trazado, trazado compuesto o texto seleccionado en una instancia de símbolo solo se puede cambiar el color sólido del relleno y del trazo
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	En un trazado, trazado compuesto o texto seleccionado en una instancia de símbolo solo se pueden cambiar el relleno, el trazo, la opacidad y la fusión
 @msg	path must be a list of child indices	path debe ser una lista de índices de hijos
 @msg	no object at path {shown} in the symbol's art	no hay ningún objeto en la ruta {shown} del arte del símbolo
 @msg	give fill, stroke, opacity and/or blend	indique fill, stroke, opacity y/o blend
@@ -6605,3 +6617,6 @@ breakText	Glyphs	Glifos
 	Align to Pixel Grid	Alinear con cuadrícula de píxeles
 @msg	only paths and compound paths can be aligned to the pixel grid	solo los trazados y los trazados compuestos se pueden alinear con la cuadrícula de píxeles
 @msg	side is left or right, not `{s}`	side es left o right, no `{s}`
+	Ignore All	Omitir todo
+	Add to Dictionary	Añadir al diccionario
+	No Suggestions	No hay sugerencias

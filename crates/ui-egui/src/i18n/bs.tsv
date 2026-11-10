@@ -600,6 +600,7 @@
 	Hide Guides	Sakrij vodilice
 	Show Guides	Prikaži vodilice
 	Lock Guides	Zaključaj vodilice
+	Lock Guides by Default	Zaključaj vodilice po zadanom
 	Unlock Guides	Otključaj vodilice
 	Make Guides	Napravi vodilice
 	Release Guides	Oslobodi vodilice
@@ -964,6 +965,7 @@ lighting	Light	Svjetlo
 	Color Picker…	Birač boja…
 	Coming soon — tracked in the parity plan	Uskoro — prati se u planu usklađenosti
 	Command Dialog	Dijalog naredbe
+	Command API Reference	Referenca API-ja naredbi
 	Copy Selected Style	Kopiraj odabrani stil
 	Corners…	Uglovi…
 	Define Perspective Grid…	Definiši mrežu perspektive…
@@ -2531,15 +2533,12 @@ digits	Malayalam	Malajalam
 	Selected Swatches	Odabrani uzorci boja
 	Advanced Options	Napredne opcije
 	Background Contents	Sadržaj pozadine
-	Background Contents:	Sadržaj pozadine:
 	BLANK DOCUMENT PRESETS	PREDLOŠCI PRAZNIH DOKUMENATA
 	Bleed	Napust
 	Change to Right-to-Left Layout	Prebaci na raspored s desna nalijevo
 	Columns:	Kolone:
-	Create Document	Kreiraj dokument
 	Documents you create appear here.	Dokumenti koje kreirate pojavljuju se ovdje.
 	More Settings	Više postavki
-	New from Template	Novo iz predloška
 	Number of Artboards:	Broj radnih ploča:
 	Orientation:	Orijentacija:
 	PRESET DETAILS	DETALJI PREDLOŠKA
@@ -2550,7 +2549,6 @@ digits	Malayalam	Malajalam
 	RECENT	NEDAVNO
 	RECENT (1)	NEDAVNO (1)
 	SAVED	SAČUVANO
-	Templates…	Predlošci…
 	Transparent (Default)	Prozirno (zadano)
 	Save for Office Documents	Sačuvaj za Office dokumente
 	Transparent Background	Prozirna pozadina
@@ -3486,6 +3484,7 @@ theme	Appearance	Izgled
 	Arrange by Row	Rasporedi po redu
 	Arrange by Column	Rasporedi po koloni
 	Save Preset	Sačuvaj predložak
+	Save Document Preset	Sačuvaj predložak dokumenta
 	Screen (72 ppi)	Ekran (72 ppi)
 	Social Square Post 1080×1080	Kvadratna objava za društvene mreže 1080×1080
 	Distribute	Rasporedi ravnomjerno
@@ -5792,7 +5791,7 @@ axis	Y Axis	Y osa
 @msg	Running “{name}”…	Pokretanje „{name}”…
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	živi efekat radi dok se dokument iscrtava, pa ne može biti `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	izvoznik uvijek dobija budžet izvoza: izostavite `budget`
-@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	„{_1}” traži veliki budžet (svako pokretanje do {minutes} minuta i {times} puta više uobičajenih instrukcija): instalirajte ga s `allowHeavy: true` kada korisnik pristane
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	„{_1}” traži veliki budžet (svako pokretanje do {minutes} minuta i {times} puta više uobičajenih instrukcija): osoba ga mora odobriti u desktop aplikaciji, ili proslijedite `allowHeavy: true` u sesiji pokrenutoj s --allow-plugin-grants
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Instalirati „{name}”, koji traži ove dozvole?
 	ID: {id}	ID: {id}
@@ -5823,7 +5822,9 @@ axis	Y Axis	Y osa
 @msg	permission `{shown}` is listed twice	dozvola `{shown}` navedena je dvaput
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	dozvola `{shown}` rezervisana je za kasniji API dodataka; ovaj domaćin je ne dodjeljuje
 @msg	unknown permission `{shown}`	nepoznata dozvola `{shown}`
-@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	„{name}” traži dozvole {asked}: instalirajte ga s `grant` koji ih navodi kada korisnik pristane
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	„{name}” traži dozvole {asked}: osoba ih mora odobriti u desktop aplikaciji, ili proslijedite `grant` u sesiji pokrenutoj s --allow-plugin-grants
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` i `allowHeavy` važe samo u sesiji pokrenutoj s --allow-plugin-grants: odobrite dodatak u desktop aplikaciji
+@msg	Only the person at the keyboard can approve installing a plug-in	Instalaciju dodatka može odobriti samo osoba za tastaturom
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	„{name}” nije dobio `{p}`, što je potrebno njegovom izlazu: ništa nije promijenjeno
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	modul nema SHA-256 naveden u `hash`: ništa nije instalirano
 	New Set…	Novi skup…
@@ -5875,6 +5876,9 @@ axis	Y Axis	Y osa
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all ili raspon poput 1, 3-5, a ne {v}
 	Add to Symbols	Dodaj u simbole
 	Basic Shapes	Osnovni oblici
+	Button	Dugme
+	Panel	Panel
+	UI Frames	UI okviri
 	Open Symbol Library	Otvori biblioteku simbola
 	Save Symbol Library	Sačuvaj biblioteku simbola
 	Save Symbol Library…	Sačuvaj biblioteku simbola…
@@ -5947,6 +5951,8 @@ axis	Y Axis	Y osa
 	Live preview	Pregled uživo
 	Point Text	Tačkasti tekst
 	Area Text	Tekst u oblasti
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Mjeri tekst po granicama glifa
 	Show Snap to Glyph Options	Prikaži opcije prianjanja uz glif
 	Hide Snap to Glyph Options	Sakrij opcije prianjanja uz glif
 	Snap to Glyph Options	Opcije prianjanja uz glif
@@ -6344,7 +6350,7 @@ shape	Open	Otvoren
 	Reset Symbol Instance	Vrati instancu simbola na početno
 @msg	type must be static or dynamic, not {v}	type mora biti static ili dynamic, a ne {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` je statički simbol: prvo postavite vrstu simbola na Dinamički
-@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	Putanji, složenoj putanji ili tekstu odabranom u instanci simbola mogu se mijenjati samo pune boje ispune i poteza
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	Putanji, složenoj putanji ili tekstu odabranom u instanci simbola mogu se mijenjati samo ispuna, potez, neprozirnost i mješanje
 @msg	path must be a list of child indices	path mora biti lista indeksa podređenih objekata
 @msg	no object at path {shown} in the symbol's art	nema objekta na putanji {shown} u grafici simbola
 @msg	give fill, stroke, opacity and/or blend	navedite fill, stroke, opacity i/ili blend
