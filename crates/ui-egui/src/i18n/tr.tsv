@@ -6060,6 +6060,8 @@ axis	Y Axis	Y ekseni
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Nokta Metni
 	Area Text	Alan Metni
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Yazıyı Glif Sınırlarına Göre Ölç
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Glif'e Yapışma Seçeneklerini Göster
 	Hide Snap to Glyph Options	Glif'e Yapışma Seçeneklerini Gizle

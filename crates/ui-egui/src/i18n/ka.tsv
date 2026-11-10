@@ -6100,6 +6100,8 @@ swatch	Bright Violet	კაშკაშა იისფერი
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	წერტილოვანი ტექსტი
 	Area Text	არის ტექსტი
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	ტექსტის გაზომვა გლიფის საზღვრებით
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	გლიფზე მიბმის პარამეტრების ჩვენება
 	Hide Snap to Glyph Options	გლიფზე მიბმის პარამეტრების დამალვა

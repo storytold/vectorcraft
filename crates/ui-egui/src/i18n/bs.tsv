@@ -5951,6 +5951,8 @@ axis	Y Axis	Y osa
 	Live preview	Pregled uživo
 	Point Text	Tačkasti tekst
 	Area Text	Tekst u oblasti
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Mjeri tekst po granicama glifa
 	Show Snap to Glyph Options	Prikaži opcije prianjanja uz glif
 	Hide Snap to Glyph Options	Sakrij opcije prianjanja uz glif
 	Snap to Glyph Options	Opcije prianjanja uz glif

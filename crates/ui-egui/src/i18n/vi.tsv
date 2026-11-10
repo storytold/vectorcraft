@@ -5702,6 +5702,8 @@ axis	Y Axis	Trục Y
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Chữ điểm
 	Area Text	Chữ vùng
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Đo chữ theo giới hạn glyph
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Hiện tùy chọn hút vào glyph
 	Hide Snap to Glyph Options	Ẩn tùy chọn hút vào glyph

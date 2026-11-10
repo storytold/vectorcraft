@@ -5910,6 +5910,8 @@ axis	Y Axis	Y-akse
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Punkttekst
 	Area Text	Områdetekst
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Mål tekst efter glyfafgrænsning
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Vis indstillinger for fastgørelse til tegn
 	Hide Snap to Glyph Options	Skjul indstillinger for fastgørelse til tegn

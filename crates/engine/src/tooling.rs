@@ -365,6 +365,7 @@ impl Session {
             freeform_point: self.selected_freeform_point(),
             raster_sample: self.prefs.eyedropper.sample_size,
             preview_bounds: self.prefs.use_preview_bounds,
+            glyph_bounds: self.prefs.type_glyph_bounds,
             preview_memo: Some(&self.preview_memo),
             unit,
             stroke_unit,

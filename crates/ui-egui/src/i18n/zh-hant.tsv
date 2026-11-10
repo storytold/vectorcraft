@@ -5739,6 +5739,8 @@ axis	Y Axis	Y 軸
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	點狀文字
 	Area Text	區域文字
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	依字符邊界測量文字
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	顯示靠齊字符選項
 	Hide Snap to Glyph Options	隱藏靠齊字符選項
