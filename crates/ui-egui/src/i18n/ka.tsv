@@ -5150,6 +5150,7 @@ imageTrace	Outline	კონტური
 @msg	a drag or an undo group is open; finish it before running a script	ღიაა გადათრევა ან გაუქმების ჯგუფი; დაასრულეთ სკრიპტის გაშვებამდე
 @msg	the script left a document that cannot be kept	სკრიპტმა დატოვა დოკუმენტი, რომლის შენახვა შეუძლებელია
 @msg	the script's run is no longer available	სკრიპტის გაშვება აღარ არის ხელმისაწვდომი
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	წარუმატებელმა ბრძანებამ შეცვალა გაუქმების ნაბიჯები, რომელთა აღდგენა ვერ მოხერხდა, ამიტომ სკრიპტი შეჩერდა
 @msg	a recovery copy could not be written, so the script was not run	აღდგენის ასლის ჩაწერა ვერ მოხერხდა, ამიტომ სკრიპტი არ გაეშვა
 @msg	Running a script	სკრიპტი მუშაობს
 @msg	Copied the script report	კოპირებულია სკრიპტის ანგარიში

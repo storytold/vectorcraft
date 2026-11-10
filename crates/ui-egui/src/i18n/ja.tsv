@@ -4836,6 +4836,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	a drag or an undo group is open; finish it before running a script	ドラッグまたは取り消しグループが開いています。スクリプトを実行する前に完了してください
 @msg	the script left a document that cannot be kept	スクリプトが保持できないドキュメントを残しました
 @msg	the script's run is no longer available	スクリプトの実行は利用できなくなりました
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	失敗したコマンドが元に戻せない取り消し手順を変更したため、スクリプトを停止しました
 @msg	a recovery copy could not be written, so the script was not run	復元用のコピーを書き込めなかったため、スクリプトは実行されませんでした
 @msg	Running a script	スクリプトを実行中
 @msg	Copied the script report	スクリプトのレポートをコピーしました

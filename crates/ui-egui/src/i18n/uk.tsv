@@ -4111,6 +4111,7 @@ axis	Both	Обидві
 @msg	a drag or an undo group is open; finish it before running a script	відкрито перетягування або групу скасування; завершіть їх перед запуском скрипта
 @msg	the script left a document that cannot be kept	скрипт залишив документ, який не можна зберегти
 @msg	the script's run is no longer available	виконання скрипта більше не доступне
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	невдала команда змінила кроки скасування, які не вдалося відновити, тому скрипт зупинено
 @msg	a recovery copy could not be written, so the script was not run	не вдалося записати копію для відновлення, тому скрипт не виконано
 @msg	Running a script	Виконується скрипт
 @msg	Copied the script report	Звіт про сценарій скопійовано

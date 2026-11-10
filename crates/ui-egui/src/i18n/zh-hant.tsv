@@ -2387,6 +2387,7 @@ file-filter	Templates	範本
 @msg	a drag or an undo group is open; finish it before running a script	拖曳或還原群組尚未結束；請在執行指令碼前完成
 @msg	the script left a document that cannot be kept	指令碼留下了無法保留的文件
 @msg	the script's run is no longer available	指令碼執行已無法使用
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	失敗的命令變更了無法還原的復原步驟，因此指令碼已停止
 @msg	a recovery copy could not be written, so the script was not run	無法寫入復原副本，因此未執行指令碼
 @msg	Running a script	正在執行指令碼
 @msg	Copied the script report	已複製指令碼報告

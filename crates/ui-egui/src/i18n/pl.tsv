@@ -4218,6 +4218,7 @@ imageTrace	Outline	Kontur
 @msg	a drag or an undo group is open; finish it before running a script	otwarte jest przeciąganie lub grupa cofania; zakończ je przed uruchomieniem skryptu
 @msg	the script left a document that cannot be kept	skrypt pozostawił dokument, którego nie można zachować
 @msg	the script's run is no longer available	uruchomienie skryptu nie jest już dostępne
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	nieudane polecenie zmieniło kroki cofania, których nie udało się przywrócić, więc skrypt został zatrzymany
 @msg	a recovery copy could not be written, so the script was not run	nie udało się zapisać kopii odzyskiwania, więc skrypt nie został uruchomiony
 @msg	Running a script	Uruchamianie skryptu
 @msg	Copied the script report	Skopiowano raport skryptu

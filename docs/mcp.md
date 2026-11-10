@@ -1527,8 +1527,9 @@ change anything outside the documents: `script.*` except `script.check`, `plugin
 `shortcutSet.*`, `help.*`, `print.*`, `library.*`, `importMatches.*`, `edit.undoGroup.*`, `file.recovery.*`,
 `stroke.widthProfile.*`, saving, importing or deleting a preset, `text.addFontFiles`, `text.findFontFiles`,
 `text.rescanFonts`, `links.findFiles`, `file.place.queue`, `color.loadProfile`, `color.removeProfile`, `file.print`,
-`view.proofSetup`, `view.proofColors`, `view.overprintPreview` and `view.separationsPreview`. Calling one throws an
-error. With Data Recovery off for complex documents, a run in the web build does not start while a complex document
+`view.proofSetup`, `view.proofColors`, `view.overprintPreview` and `view.separationsPreview`. It also cannot run
+`edit.clearHistory`: a run keeps each document's undo steps from before it and adds one. Calling one of these throws
+an error. With Data Recovery off for complex documents, a run in the web build does not start while a complex document
 has unsaved changes.
 
 VectorCraft sets these limits itself:

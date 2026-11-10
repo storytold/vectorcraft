@@ -5172,6 +5172,7 @@ digits	Malayalam	Malaiàlam
 @msg	a drag or an undo group is open; finish it before running a script	hi ha un arrossegament o un grup de desfer obert; acabeu-lo abans d'executar un script
 @msg	the script left a document that cannot be kept	l'script ha deixat un document que no es pot conservar
 @msg	the script's run is no longer available	l'execució de l'script ja no està disponible
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	una ordre fallida ha canviat passos de desfer que no s'han pogut restaurar, així que l'script s'ha aturat
 @msg	a recovery copy could not be written, so the script was not run	no s'ha pogut escriure una còpia de recuperació, per tant l'script no s'ha executat
 @msg	Running a script	S'està executant un script
 @msg	Copied the script report	S’ha copiat l’informe de l’script

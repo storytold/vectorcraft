@@ -78,7 +78,8 @@ pub const API_FEATURES: &[&str] = &["run", "document", "commands", "log", "args"
 pub const STEP_LABEL: &str = "Run Script";
 
 /// `id`, as `vc.run` is given it, is one a script may not run: a command that would leave the run's
-/// transaction or change something outside the documents that a rollback could not put back.
+/// transaction, change something outside the documents that a rollback could not put back, or clear
+/// the undo steps from before the run, which the run keeps.
 pub fn refused_to_scripts(id: &str) -> bool {
     const PREFIXES: &[&str] = &[
         "script.",
@@ -107,6 +108,7 @@ pub fn refused_to_scripts(id: &str) -> bool {
         "view.proofColors",
         "view.overprintPreview",
         "view.separationsPreview",
+        "edit.clearHistory",
     ];
     let saved_preset = (id.contains("resets.") || id.contains(".preset.")) && !id.ends_with(".list") && !id.ends_with(".apply");
     id != "script.check" && (saved_preset || PREFIXES.iter().any(|p| id.starts_with(p)) || IDS.contains(&id))
@@ -302,10 +304,23 @@ impl World {
 /// themselves. The clipboard can hold a great deal, so a savepoint copies it only for these.
 const CAN_FAIL_AFTER_COPYING: &[&str] = &["action.batch", "edit.cut"];
 
+/// The commands that remove a document's undo history, or the document: a savepoint keeps a whole
+/// copy of the histories for these. Any other command that removes or changes a step under the
+/// newest undo or redo step and then fails ends the run ([`HISTORY_LOST`]).
+const DROP_HISTORY: &[&str] = &["file.close", "file.closeAll", "document.close", "file.revert"];
+
+/// A document's state before a command: everything but its undo history, which `mark` gives back,
+/// or `whole` for the commands in [`DROP_HISTORY`].
+struct SavedDoc {
+    state: DocState,
+    mark: crate::history::HistoryMark,
+    whole: Option<crate::History>,
+}
+
 /// What one command may need to put back when it fails inside a run: the state of [`World`] the
 /// command can reach.
 pub(crate) struct Savepoint {
-    docs: Vec<DocState>,
+    docs: Vec<SavedDoc>,
     active: Option<usize>,
     paint: PaintDefaults,
     fill_active: bool,
@@ -323,9 +338,23 @@ pub(crate) struct Savepoint {
 }
 
 impl Savepoint {
-    pub(crate) fn take(s: &Session, id: &str) -> Self {
+    /// The state before command `id`. Until [`Savepoint::keep`] or [`Savepoint::restore`], the
+    /// documents' undo histories let no step go.
+    pub(crate) fn take(s: &mut Session, id: &str) -> Self {
+        let whole = DROP_HISTORY.contains(&id);
+        let docs = s
+            .docs
+            .iter_mut()
+            .map(|st| {
+                let history = std::mem::take(&mut st.history);
+                let state = st.clone();
+                st.history = history;
+                let whole = whole.then(|| st.history.clone());
+                SavedDoc { state, mark: st.history.mark(), whole }
+            })
+            .collect();
         Self {
-            docs: s.docs.clone(),
+            docs,
             active: s.active,
             paint: s.paint.clone(),
             fill_active: s.fill_active,
@@ -343,8 +372,39 @@ impl Savepoint {
         }
     }
 
-    pub(crate) fn restore(self, s: &mut Session) {
-        s.docs = self.docs;
+    /// Keeps what the command did: the histories' limits apply again.
+    pub(crate) fn keep(self, s: &mut Session) {
+        for saved in &self.docs {
+            if let Some(st) = s.docs.iter_mut().find(|d| d.uid == saved.state.uid) {
+                st.history.release(&saved.mark);
+            }
+        }
+    }
+
+    /// Puts back the state before the command. → `false` when an undo history could not be given
+    /// back as it was (a step under the newest one was removed or changed in place, or its
+    /// document was closed); the rest is put back all the same.
+    pub(crate) fn restore(self, s: &mut Session) -> bool {
+        let mut exact = true;
+        let mut docs = Vec::with_capacity(self.docs.len());
+        for SavedDoc { mut state, mark, whole } in self.docs {
+            let now = s.docs.iter_mut().find(|d| d.uid == state.uid).map(|d| std::mem::take(&mut d.history));
+            state.history = match (whole, now) {
+                (Some(history), _) => history,
+                (None, Some(mut history)) => {
+                    exact &= history.put_back(mark);
+                    history
+                }
+                (None, None) => {
+                    exact = false;
+                    let mut history = crate::History::default();
+                    history.put_back(mark);
+                    history
+                }
+            };
+            docs.push(state);
+        }
+        s.docs = docs;
         s.active = self.active;
         s.paint = self.paint;
         s.fill_active = self.fill_active;
@@ -361,6 +421,7 @@ impl Savepoint {
         s.pending_paint = self.pending_paint;
         self.choices.put(s);
         s.journal.truncate(self.journal);
+        exact
     }
 }
 
@@ -620,8 +681,10 @@ fn step(s: &mut Session, host: &Host, id: &str, params: &Value) -> Result<(Value
             Ok((v, objects, bytes, save))
         }
         Err(e) => {
-            if let Some(save) = save {
-                save.restore(s);
+            if let Some(save) = save
+                && !save.restore(s)
+            {
+                return Err(EngineError::Internal { cmd: id.to_string(), msg: HISTORY_LOST.to_string() });
             }
             Err(e)
         }
@@ -660,10 +723,13 @@ fn vc_run(host: &Rc<Host>, args: Vec<Data>) -> std::result::Result<Data, HostErr
         Ok(data)
     });
     // A command whose result does not reach the script is put back, like one that failed.
-    if crossed.is_err()
-        && let Some(save) = save
-    {
-        save.restore(&mut session.borrow_mut());
+    if let Some(save) = save {
+        let mut s = session.borrow_mut();
+        if crossed.is_ok() {
+            save.keep(&mut s);
+        } else if !save.restore(&mut s) {
+            return Err(HostError::Abort(HISTORY_LOST.to_string()));
+        }
     }
     crossed
 }
@@ -983,7 +1049,7 @@ impl Session {
         }
         note_ids(self);
         raise_ids(self);
-        let start = std::mem::take(&mut job.world.docs);
+        let mut start = std::mem::take(&mut job.world.docs);
         for st in &self.docs {
             let changed = start.iter().find(|b| b.uid == st.uid).is_none_or(|b| !st.same_content(&b.doc));
             if changed && (!crate::sanity::doc_sane(&st.doc, &st.selection) || st.doc.too_deep(None)) {
@@ -995,7 +1061,7 @@ impl Session {
         }
         let mut changed_names = Vec::new();
         for st in &mut self.docs {
-            let Some(b) = start.iter().find(|b| b.uid == st.uid) else {
+            let Some(b) = start.iter_mut().find(|b| b.uid == st.uid) else {
                 // A document the script opened or made starts with no undo steps.
                 st.history = crate::History { limit: st.history.limit, ..crate::History::default() };
                 st.revision += 1;
@@ -1003,7 +1069,7 @@ impl Session {
                 continue;
             };
             let changed = !st.same_content(&b.doc);
-            st.history = b.history.clone();
+            st.history = std::mem::take(&mut b.history);
             st.recovery.clone_from(&b.recovery);
             if changed {
                 st.push_undo(STEP_LABEL.to_string(), b.doc.clone(), Arc::new(b.selection.clone()));
@@ -1062,6 +1128,7 @@ impl Session {
 const OPEN_EDIT: &str = "a drag or an undo group is open; finish it before running a script";
 const INVALID_RESULT: &str = "the script left a document that cannot be kept";
 const JOB_GONE: &str = "the script's run is no longer available";
+const HISTORY_LOST: &str = "a failed command changed undo steps that could not be put back, so the script was stopped";
 // Text a script reads from the errors it catches, or that ends its run with its name and place.
 const OVER_CALLS: &str = "the script made more host calls than one run may make";
 const OVER_BRIDGE: &str = "the script passed more data to and from commands than one run may pass";

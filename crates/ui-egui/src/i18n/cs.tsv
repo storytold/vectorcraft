@@ -4395,6 +4395,7 @@ imageTrace	Outline	Obrys
 @msg	a drag or an undo group is open; finish it before running a script	je otevřené tažení nebo skupina kroků zpět; před spuštěním skriptu ji dokončete
 @msg	the script left a document that cannot be kept	skript zanechal dokument, který nelze zachovat
 @msg	the script's run is no longer available	běh skriptu již není k dispozici
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	neúspěšný příkaz změnil kroky zpět, které nebylo možné obnovit, proto byl skript zastaven
 @msg	a recovery copy could not be written, so the script was not run	záložní kopii se nepodařilo zapsat, proto skript nebyl spuštěn
 @msg	Running a script	Běží skript
 @msg	Copied the script report	Zpráva o skriptu zkopírována

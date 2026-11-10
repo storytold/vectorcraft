@@ -4074,6 +4074,7 @@ axis	Both	Les deux
 @msg	a drag or an undo group is open; finish it before running a script	un glissement ou un groupe d’annulation est ouvert ; terminez-le avant d’exécuter un script
 @msg	the script left a document that cannot be kept	le script a laissé un document qui ne peut pas être conservé
 @msg	the script's run is no longer available	l’exécution du script n’est plus disponible
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	une commande en échec a modifié des étapes d’annulation qui n’ont pas pu être rétablies, le script a donc été arrêté
 @msg	a recovery copy could not be written, so the script was not run	une copie de récupération n’a pas pu être écrite, le script n’a donc pas été exécuté
 @msg	Running a script	Exécution d’un script
 @msg	Copied the script report	Rapport du script copié

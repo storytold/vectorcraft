@@ -371,6 +371,88 @@ fn a_command_that_can_fail_after_copying_has_the_clipboard_put_back() {
 }
 
 #[test]
+fn a_commands_savepoint_copies_the_same_number_of_undo_steps_however_long_the_runs_history() {
+    let copied = |n: usize| {
+        let mut s = two_docs();
+        crate::history::ENTRY_CLONES.with(|c| c.set(0));
+        let r = run(&mut s, &format!("for (var i = 0; i < {n}; i++) vc.run('shape.rectangle', {{x:i,y:1,width:1,height:1}});")).unwrap();
+        assert_eq!(r["ok"], true);
+        assert_eq!(objects(&s, 1), n + 1);
+        crate::history::ENTRY_CLONES.with(Cell::get)
+    };
+    let (few, many) = (copied(20), copied(200));
+    // Each command copies at most its document's newest step, whatever the history holds.
+    assert!(many <= 200 + few, "{few} steps copied for 20 commands, {many} for 200");
+}
+
+#[test]
+fn undo_redo_and_a_long_redo_stack_copy_the_same_number_of_steps_per_command() {
+    let copied = |n: usize| {
+        let mut s = two_docs();
+        crate::history::ENTRY_CLONES.with(|c| c.set(0));
+        let source = format!(
+            "for (var i = 0; i < {n}; i++) vc.run('shape.rectangle', {{x:i,y:1,width:1,height:1}});\
+             for (var i = 0; i < {n}; i++) vc.run('edit.undo');\
+             for (var i = 0; i < {n}; i++) vc.run('select.none');\
+             for (var i = 0; i < {n}; i++) vc.run('edit.redo');"
+        );
+        let r = run(&mut s, &source).unwrap();
+        assert_eq!(r["ok"], true, "{r}");
+        assert_eq!(objects(&s, 1), n + 1);
+        crate::history::ENTRY_CLONES.with(Cell::get)
+    };
+    let (few, many) = (copied(20), copied(200));
+    // Ten times the commands copy about ten times the steps: each command copies its document's
+    // newest undo and redo steps, whatever the stacks hold.
+    assert!(many <= 12 * few, "{few} steps copied for 80 commands, {many} for 800");
+}
+
+#[test]
+fn a_failed_command_gives_back_the_redo_steps_and_an_undo_it_made() {
+    let mut s = two_docs();
+    for x in 1..=3 {
+        s.execute("shape.rectangle", &rect(x)).unwrap();
+    }
+    for _ in 0..2 {
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    let before = state(&s);
+    let save = script::Savepoint::take(&mut s, "shape.rectangle");
+    s.execute("shape.rectangle", &rect(9)).unwrap();
+    assert_eq!(s.documents()[1].history.redo.len(), 0);
+    assert!(save.restore(&mut s), "the redo steps the new step cleared are put back");
+    assert_eq!(state(&s), before);
+    let save = script::Savepoint::take(&mut s, "edit.undo");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.redo", &json!({})).unwrap();
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!(save.restore(&mut s));
+    assert_eq!(state(&s), before);
+    for _ in 0..2 {
+        s.execute("edit.redo", &json!({})).unwrap();
+    }
+    assert_eq!(objects(&s, 1), 4);
+}
+
+#[test]
+fn a_failed_command_at_the_history_limit_keeps_the_oldest_step() {
+    let mut s = two_docs();
+    s.docs[1].history.limit = 5;
+    let before = state(&s);
+    for x in 1..=5 {
+        s.execute("shape.rectangle", &rect(x)).unwrap();
+    }
+    let save = script::Savepoint::take(&mut s, "shape.rectangle");
+    s.execute("shape.rectangle", &rect(9)).unwrap();
+    assert!(save.restore(&mut s), "the step the limit would have let go is put back");
+    assert_eq!(objects(&s, 1), 6);
+    for _ in 0..5 {
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    assert_eq!(state(&s)["docs"][1]["art"], before["docs"][1]["art"]);
+}
+
+#[test]
 fn a_snapshot_too_large_to_cross_throws_instead_of_reading_as_no_document() {
     let mut s = two_docs();
     s.docs[1].path = Some("x".repeat(17 << 20));
@@ -434,6 +516,17 @@ fn commands_outside_the_documents_are_refused_in_a_batch_too() {
     }
     let r = run(&mut s, "var c = vc.commands; var n = 0; for (var i = 0; i < c.length; i++) if (c[i].id.indexOf('prefs.') === 0) n++; vc.log(n); vc.log(c.length > 100);").unwrap();
     assert_eq!(r["log"], json!([0, true]));
+}
+
+#[test]
+fn a_script_cannot_clear_the_undo_steps_from_before_its_run() {
+    let mut s = two_docs();
+    let steps = s.documents()[1].history.undo.len();
+    let source = "vc.run('shape.rectangle', {x:9,y:9,width:1,height:1});\
+        var m = ''; try { vc.run('edit.clearHistory'); } catch (e) { m = e.message; } vc.log(m);";
+    let r = run(&mut s, source).unwrap();
+    assert_eq!(r["log"], json!(["a script cannot run `edit.clearHistory`"]), "{r}");
+    assert_eq!(s.documents()[1].history.undo.len(), steps + 1);
 }
 
 #[test]

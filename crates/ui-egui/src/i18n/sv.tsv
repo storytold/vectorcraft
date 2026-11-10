@@ -3995,6 +3995,7 @@ axis	Both	Båda
 @msg	a drag or an undo group is open; finish it before running a script	en dragning eller ångragrupp är öppen; avsluta den innan du kör ett skript
 @msg	the script left a document that cannot be kept	skriptet lämnade ett dokument som inte kan behållas
 @msg	the script's run is no longer available	skriptets körning är inte längre tillgänglig
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	ett misslyckat kommando ändrade ångrasteg som inte kunde återställas, så skriptet stoppades
 @msg	a recovery copy could not be written, so the script was not run	en återställningskopia kunde inte skrivas, så skriptet kördes inte
 @msg	Running a script	Kör ett skript
 @msg	Copied the script report	Kopierade skriptrapporten

@@ -4000,6 +4000,7 @@ theme	Appearance	Erscheinungsbild
 @msg	a drag or an undo group is open; finish it before running a script	ein Ziehvorgang oder eine Rückgängig-Gruppe ist offen; schließen Sie sie ab, bevor Sie ein Skript ausführen
 @msg	the script left a document that cannot be kept	das Skript hat ein Dokument hinterlassen, das nicht behalten werden kann
 @msg	the script's run is no longer available	der Lauf des Skripts ist nicht mehr verfügbar
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	ein fehlgeschlagener Befehl hat Rückgängig-Schritte geändert, die nicht wiederhergestellt werden konnten, daher wurde das Skript angehalten
 @msg	a recovery copy could not be written, so the script was not run	eine Wiederherstellungskopie konnte nicht geschrieben werden, daher wurde das Skript nicht ausgeführt
 @msg	Running a script	Skript wird ausgeführt
 @msg	Copied the script report	Skriptbericht kopiert

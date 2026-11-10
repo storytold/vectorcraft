@@ -4763,6 +4763,7 @@ theme	Appearance	외관
 @msg	a drag or an undo group is open; finish it before running a script	드래그 또는 실행 취소 그룹이 열려 있습니다. 스크립트를 실행하기 전에 완료하세요
 @msg	the script left a document that cannot be kept	스크립트가 유지할 수 없는 문서를 남겼습니다
 @msg	the script's run is no longer available	스크립트 실행을 더 이상 사용할 수 없습니다
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	실패한 명령이 되돌릴 수 없는 실행 취소 단계를 변경하여 스크립트를 중지했습니다
 @msg	a recovery copy could not be written, so the script was not run	복구 사본을 쓸 수 없어 스크립트를 실행하지 않았습니다
 @msg	Running a script	스크립트 실행 중
 @msg	Copied the script report	스크립트 보고서를 복사했습니다
