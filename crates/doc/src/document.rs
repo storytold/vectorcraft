@@ -276,6 +276,11 @@ impl Document {
         self.next_id
     }
 
+    /// Makes the next id at least `id`, so ids below it are not given out again.
+    pub fn raise_next_id(&mut self, id: u64) {
+        self.next_id = self.next_id.max(id);
+    }
+
     /// Ensure `next_id` is above every id in the tree (after deserializing foreign data).
     pub fn fix_next_id(&mut self) {
         // Ids from [`MAX_NEXT_ID`] up (a damaged or hand-made file: #1718) are left out, as is a

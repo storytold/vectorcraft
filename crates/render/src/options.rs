@@ -35,7 +35,7 @@ pub fn raster_size(region: Rect, scale: f64) -> Result<(u32, u32), String> {
 pub struct RenderOptions {
     /// Outline (wireframe) view: 1 px black paths, no paint.
     pub outline: bool,
-    /// Pasteboard colour behind everything (premultiplied RGBA8); `None` = transparent.
+    /// Pasteboard color behind everything (straight-alpha RGBA8); `None` = transparent.
     pub background: Option<[u8; 4]>,
     /// Draw artboards as white rectangles (screen view). Export sets this to false.
     pub artboards: bool,

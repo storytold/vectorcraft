@@ -20,6 +20,7 @@ mod numeric;
 mod panel_chrome;
 mod text;
 mod toggles;
+mod wheel_stream;
 
 pub use blend::{
     TransparencyEdit, angle_dial, blend_dropdown, blend_param, blend_param_dropdown, blend_separator_before, opacity_blend, reference_point,
@@ -46,7 +47,7 @@ pub use drag::{
 use dropdowns::combo_button_id;
 #[cfg(test)]
 pub(crate) use dropdowns::menu_floor;
-pub(crate) use dropdowns::{combo, combo_menu, combo_menu_field, combo_named, popover_is_open};
+pub(crate) use dropdowns::{combo, combo_menu, combo_menu_field, combo_named, field_focused_in, popover_is_open};
 pub use dropdowns::{
     dropdown, dropdown_named, dropdown_names, dropdown_names_named, dropdown_with, dropdown_with_named, list_scroll_style, menu_room, menu_scroll,
     panel_scroll, popover, set_menu_floor, strip_scroll,
@@ -62,6 +63,7 @@ pub use numeric::{
 };
 #[cfg(test)]
 use numeric::{decimal_point, field_number, share_of, spinner_step, step_through, step_to_multiple, within_a_millionth};
+pub(crate) use panel_chrome::{PANEL_FOOTER, panel_footer, panel_footer_bottom, panel_footer_space, panel_list_height};
 pub use panel_chrome::{bottom_bar, layout_button, list_box, orientation_button, tab_bar};
 pub(crate) use text::{
     arm_field_focus, dialog_focus_flag, dialog_reject_commit_flag, disarm_field_focus, enter_modifiers, focus_field, own_field_shift_enter,
@@ -72,6 +74,9 @@ pub use text::{
     text_presets_named,
 };
 pub use toggles::{check, check_box, check_name, check_tip, check3, check3_tip, radio, radio_button};
+#[cfg(test)]
+pub(crate) use wheel_stream::WHEEL_STREAM_GAP;
+pub(crate) use wheel_stream::{ArmedWheelField, WheelStream, WheelStreamOwner, taken_from_raw_id};
 
 /// A widget id salt that needs only [`std::hash::Hash`]. egui 0.37's [`egui::AsIdSalt`] also
 /// requires `Debug` for its debug-only id-source registry; VectorCraft's public field helpers do

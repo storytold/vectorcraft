@@ -23,7 +23,7 @@
 //! one-patch mesh. An envelope whose parts don't read, or that doesn't come out as drawn, keeps its
 //! drawn art.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 
 use kurbo::{Affine, BezPath, Point, Rect, Vec2};
@@ -35,14 +35,23 @@ use vectorcraft_doc::{Appearance, Document, Effect, ImageBlob, LayerColor, Node,
 use vectorcraft_geom::PathData;
 
 use super::obj::Obj;
-use crate::import::native::compare::{MAX_DIFFERENCE, MAX_SOLID_DIFFERENCE, compare_scale, differ, differ_in_colour};
+use crate::import::native::compare::{MAX_DIFFERENCE, MAX_SOLID_DIFFERENCE, compare_scale, differ, differ_in_colour, differ_on_black};
 
 /// The plugin that writes envelopes.
 pub(super) const PLUGIN: &str = "Adobe Deform Plugin"; // brand-ok: the plugin name the files use
 /// The note for an envelope that keeps its drawn art.
 pub(crate) const DRAWN: &str = "an envelope VectorCraft couldn't read as a live envelope comes in as its drawn art";
+/// The note for an envelope of type, which keeps its drawn art with its type hidden (unless the
+/// text document gives the type nothing, which a note of its own then says).
+pub(crate) const TYPE_DRAWN: &str = "type in an envelope comes in as the envelope's drawn art, not as editable type";
 /// The note for warped type that keeps its drawn art, before how many.
 pub(crate) const WARPED_TYPE_DRAWN: &str = "warped text objects that came in as drawn art, not as editable type";
+
+/// The note for an envelope that keeps its drawn art: [`TYPE_DRAWN`] for an envelope of type
+/// (`typed`), else [`DRAWN`].
+pub(crate) fn drawn_note(typed: bool) -> &'static str {
+    if typed { TYPE_DRAWN } else { DRAWN }
+}
 /// The most envelopes waiting for their drawn art at once.
 pub(super) const MAX_PENDING: usize = 64;
 /// The most envelopes and warped text objects one import draws to check; more keep their drawn art.
@@ -325,9 +334,9 @@ fn alone(node: &Node, layer: NodeId, shared: &Shared<'_>) -> Document {
 }
 
 /// How `live` and `drawn`, drawn over `region` at `scale`, differ: the pixels that differ in
-/// lightness or colour, those whose neighbours all differ too (where one draws something the other
-/// doesn't, not an edge drawn a little apart), and the pixels either inks. `None` when they can't
-/// be drawn.
+/// lightness or colour, seen on white or on black (each is drawn on its own: white art shows only on
+/// black), those whose neighbours all differ too (where one draws something the other doesn't, not
+/// an edge drawn a little apart), and the pixels either inks. `None` when they can't be drawn.
 fn differing(live: &Document, drawn: &Document, region: Rect, scale: f64) -> Option<(usize, usize, usize)> {
     let x = vectorcraft_render::Renderer::new().render_region(live, region, scale, false);
     let y = vectorcraft_render::Renderer::new().render_region(drawn, region, scale, false);
@@ -336,7 +345,7 @@ fn differing(live: &Document, drawn: &Document, region: Rect, scale: f64) -> Opt
     }
     let (w, h) = (x.width as usize, x.height as usize);
     let (xs, ys) = (x.pixels.as_chunks::<4>().0, y.pixels.as_chunks::<4>().0);
-    let differs: Vec<bool> = xs.iter().zip(ys).map(|(p, q)| differ(p, q) || differ_in_colour(p, q)).collect();
+    let differs: Vec<bool> = xs.iter().zip(ys).map(|(p, q)| differ(p, q) || differ_in_colour(p, q) || differ_on_black(p, q)).collect();
     let inked = xs.iter().zip(ys).filter(|(p, q)| p[3] > 8 || q[3] > 8).count();
     let at = |i: usize, j: usize| differs.get(j * w + i).copied().unwrap_or(false);
     let any = differs.iter().filter(|d| **d).count();
@@ -368,18 +377,160 @@ pub(super) struct WarpedLook {
     pub(super) left_out: Option<Rect>,
 }
 
-/// The text objects read with a Warp, and what the import has left of the budget for checks
-/// ([`drawn_alike`]). Type is laid out after the layers are read, so these wait for that
-/// ([`Self::settle`]).
+/// An envelope of type read with its drawn art: its dictionary, the group on `%_` lines before it
+/// and the art in its `AIDeformArtKey` block, as [`live`] takes them (their text slots still
+/// empty), and the id of its drawn art in the document. Type is laid out after the layers are read,
+/// so it waits for that ([`WarpedType::settle_envelopes`]).
+#[derive(Debug)]
+pub(crate) struct TypedEnvelope {
+    pub(super) obj: Obj,
+    pub(super) before: Option<Node>,
+    pub(super) inner: Vec<Node>,
+    pub(super) drawn: NodeId,
+}
+
+/// Why an envelope of type kept its drawn art.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum TypeKept {
+    /// Its type is set in a font that isn't available: the fallback font doesn't draw as the file.
+    Font,
+    /// A text slot of it has no type of its own (none made, or type a look draws, threaded type,
+    /// type bound to a variable or a wrap object).
+    Type,
+    /// Its parts don't make a live envelope, or its drawn art is gone.
+    Read,
+    /// The import has no check left.
+    Budget,
+    /// Its live envelope doesn't draw as its drawn art.
+    Differs,
+}
+
+/// What [`WarpedType::settle_envelopes`] did.
+#[derive(Debug, Default)]
+pub(crate) struct TypedSettled {
+    /// How many envelopes of type opened live.
+    pub(crate) live: usize,
+    /// Why each of the others kept its drawn art.
+    pub(crate) kept: Vec<TypeKept>,
+    /// Each live envelope's id, with what takes its place again when the layers with it don't draw
+    /// as the page: its hidden type, then its drawn art.
+    pub(crate) put_back: Vec<(NodeId, Vec<Node>)>,
+}
+
+/// The text objects read with a Warp and the envelopes of type, and what the import has left of the
+/// budget for checks ([`drawn_alike`]). Type is laid out after the layers are read, so these wait
+/// for that ([`Self::settle`], [`Self::settle_envelopes`]).
 #[derive(Debug, Default)]
 pub struct WarpedType {
     pub(super) looks: Vec<WarpedLook>,
+    pub(super) envelopes: Vec<TypedEnvelope>,
     pub(super) checks: usize,
     pub(super) spent: Spent,
     pub(super) page: Option<Rect>,
 }
 
 impl WarpedType {
+    /// Are envelopes of type waiting for their type?
+    pub(crate) fn has_envelopes(&self) -> bool {
+        !self.envelopes.is_empty()
+    }
+
+    /// These, for layers `compared` with a page. Layers that aren't leave the envelopes of type
+    /// their drawn art and their hidden type, with the note ([`TYPE_DRAWN`]) added to `notes`: a
+    /// live envelope opens only where the page chooses it.
+    pub(crate) fn compared(mut self, compared: bool, notes: &mut Vec<String>) -> Self {
+        if !compared && !std::mem::take(&mut self.envelopes).is_empty() && !notes.iter().any(|n| n == TYPE_DRAWN) {
+            notes.push(TYPE_DRAWN.into());
+        }
+        self
+    }
+
+    /// Make each envelope of type live where it draws as its drawn art, its contents' text slots
+    /// holding their type: `type_of` gives, for a slot's id, the hidden text object it became in
+    /// `doc` and the type the contents take in its place (the slot's visibility and lock are the
+    /// type's). The live envelope takes its drawn art's place and the hidden type goes. Each check
+    /// uses one of the import's checks and, for an envelope that shows, adds to what the page check
+    /// allows ([`drawn_alike`]). Elsewhere, and where the type is set in a font that isn't
+    /// available, the drawn art and the hidden type stay.
+    pub(crate) fn settle_envelopes(&mut self, doc: &mut Document, type_of: impl Fn(&Document, NodeId) -> Option<(NodeId, Node)>) -> TypedSettled {
+        let mut settled = TypedSettled::default();
+        if self.envelopes.is_empty() {
+            return settled;
+        }
+        let mut shown = BTreeSet::new();
+        doc.layers.iter().for_each(|l| collect_shown(l, &mut shown));
+        for envelope in std::mem::take(&mut self.envelopes) {
+            match self.typed_live(doc, envelope, &type_of, &shown) {
+                Ok(put_back) => {
+                    settled.live += 1;
+                    settled.put_back.push(put_back);
+                }
+                Err(why) => settled.kept.push(why),
+            }
+        }
+        settled
+    }
+
+    /// [`Self::settle_envelopes`] for `envelope`, the shown objects of `doc` being `shown`: the live
+    /// envelope's id and what takes its place again, or why its drawn art stays.
+    fn typed_live(
+        &mut self,
+        doc: &mut Document,
+        envelope: TypedEnvelope,
+        type_of: &impl Fn(&Document, NodeId) -> Option<(NodeId, Node)>,
+        shown: &BTreeSet<NodeId>,
+    ) -> Result<(NodeId, Vec<Node>), TypeKept> {
+        let TypedEnvelope { obj, mut before, mut inner, drawn } = envelope;
+        let art = doc.node(drawn).cloned().ok_or(TypeKept::Read)?;
+        // The text slots in the contents, in the order the reader put their hidden copies in.
+        let mut slots = vec![];
+        before.iter().chain(&inner).for_each(|n| text_slots_in(n, &mut slots));
+        if slots.is_empty() {
+            return Err(TypeKept::Type);
+        }
+        let db = vectorcraft_text::FontDb::global();
+        let (mut texts, mut hidden) = (HashMap::new(), vec![]);
+        for (slot, look) in slots {
+            let (id, mut text) = type_of(doc, slot).filter(|_| !look).ok_or(TypeKept::Type)?;
+            let NodeKind::Text(t) = &text.kind else { return Err(TypeKept::Type) };
+            if t.runs.iter().any(|r| r.style.font_family.is_empty() || !db.has_family(&r.style.font_family)) {
+                return Err(TypeKept::Font);
+            }
+            text.id = doc.alloc_id();
+            texts.insert(slot, text);
+            hidden.push(id);
+        }
+        for n in before.iter_mut().chain(inner.iter_mut()) {
+            put_type(n, &texts);
+        }
+        let kind = live(&obj, before, inner).ok_or(TypeKept::Read)?;
+        if self.checks == 0 {
+            return Err(TypeKept::Budget);
+        }
+        self.checks -= 1;
+        let mut envelope = art.clone();
+        (envelope.id, envelope.kind) = (doc.alloc_id(), kind);
+        let layer = doc.alloc_id();
+        let shared = Shared { patterns: &doc.patterns, images: &doc.images };
+        let (mut live_one, mut plain) = (envelope.clone(), art.clone());
+        (live_one.visible, live_one.opacity) = (true, 1.0);
+        (plain.visible, plain.opacity) = (true, 1.0);
+        let page = self.page.filter(|_| shown.contains(&drawn));
+        if !drawn_alike(&live_one, &plain, layer, &shared, page, &mut self.spent) {
+            return Err(TypeKept::Differs);
+        }
+        if doc.node(drawn).is_none() {
+            return Err(TypeKept::Read);
+        }
+        // The type is the envelope's now: its hidden copy goes, kept for when the drawn art comes back.
+        let mut put_back: Vec<Node> = hidden.into_iter().filter_map(|id| doc.remove(id).ok()).map(Arc::unwrap_or_clone).collect();
+        let id = envelope.id;
+        let Some(slot) = doc.node_mut(drawn) else { return Err(TypeKept::Read) };
+        *slot = envelope;
+        put_back.push(art);
+        Ok((id, put_back))
+    }
+
     /// Replace each warped text object of `doc` that doesn't draw as its saved look (or that the
     /// budget has no check left for) with that look: `made` gives the text object a slot became. A
     /// frame in `threaded` stays type, since the frames of a thread share one story. A replaced
@@ -392,7 +543,7 @@ impl WarpedType {
         threaded: &BTreeSet<NodeId>,
         restyled: &mut Vec<Rect>,
     ) -> usize {
-        let Self { looks, mut checks, mut spent, page } = self;
+        let Self { looks, mut checks, mut spent, page, .. } = self;
         let mut shown_ids = BTreeSet::new();
         doc.layers.iter().for_each(|l| collect_shown(l, &mut shown_ids));
         let mut replaced = 0;
@@ -433,6 +584,29 @@ impl WarpedType {
     /// The text objects of `looks` (slot and saved look) with no check left.
     pub(crate) fn unchecked(looks: Vec<(NodeId, Node)>) -> Self {
         Self { looks: looks.into_iter().map(|(slot, look)| WarpedLook { slot, look, left_out: None }).collect(), ..Default::default() }
+    }
+}
+
+/// The ids of the text slots in `n` and its groups, in order, each with whether it is a slot of type
+/// that a look draws ([`super::is_look_slot`]).
+fn text_slots_in(n: &Node, out: &mut Vec<(NodeId, bool)>) {
+    let look = super::is_look_slot(n.name.as_deref());
+    if look || super::slot_of(n.name.as_deref()).is_some() {
+        out.push((n.id, look));
+    } else if !matches!(n.kind, NodeKind::Compound { .. }) {
+        n.children().into_iter().flatten().for_each(|c| text_slots_in(c, out));
+    }
+}
+
+/// `n` with each text slot in it or its groups replaced by its type in `texts`, by the slot's id,
+/// shown and locked as the slot is.
+fn put_type(n: &mut Node, texts: &HashMap<NodeId, Node>) {
+    if let Some(text) = texts.get(&n.id) {
+        let (visible, locked) = (n.visible, n.locked);
+        *n = text.clone();
+        (n.visible, n.locked) = (visible, locked);
+    } else if !matches!(n.kind, NodeKind::Compound { .. }) {
+        n.children_mut().into_iter().flatten().for_each(|c| put_type(Arc::make_mut(c), texts));
     }
 }
 

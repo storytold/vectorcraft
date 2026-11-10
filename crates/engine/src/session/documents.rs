@@ -44,6 +44,8 @@ impl Session {
             fill_active: true,
             clipboard: Clipboard::default(),
             journal: Journal::default(),
+            history_budget: crate::default_history_budget(),
+            histories_seen: None,
             tool: vectorcraft_tools::create("selection"),
             lender: None,
             held_input: Default::default(),
@@ -129,6 +131,13 @@ impl Session {
             link_scan: None,
             global_edit_options: Default::default(),
             keyboard_text: false,
+            script_key: None,
+            script_stop: vectorcraft_js::Interrupt::new(),
+            script_report: None,
+            script_frames: false,
+            script_high_water: Default::default(),
+            script_in_run: false,
+            script_copy_first: cfg!(target_arch = "wasm32"),
         }
     }
 

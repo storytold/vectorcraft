@@ -643,6 +643,168 @@ mod tests {
         assert!(e.p1.distance(Point::new(30.0, 0.0)) < 1e-6 && e.p2.distance(Point::new(60.0, 0.0)) < 1e-6, "{e:?}");
     }
 
+    /// The polylines of `bp` flattened to 0.01 pt.
+    fn flattened(bp: &BezPath) -> Vec<Vec<Point>> {
+        let mut out: Vec<Vec<Point>> = vec![];
+        vectorcraft_geom::kurbo::flatten(bp.iter(), 0.01, |el| match el {
+            vectorcraft_geom::PathEl::MoveTo(p) => out.push(vec![p]),
+            vectorcraft_geom::PathEl::LineTo(p) => out.last_mut().into_iter().for_each(|v| v.push(p)),
+            vectorcraft_geom::PathEl::ClosePath => out.last_mut().into_iter().for_each(|v| v.push(v[0])),
+            _ => {}
+        });
+        out
+    }
+
+    /// The distance from `p` to the nearest of `lines`.
+    fn off_lines(lines: &[Vec<Point>], p: Point) -> f64 {
+        lines
+            .iter()
+            .flat_map(|v| v.windows(2))
+            .map(|w| {
+                let d = w[1] - w[0];
+                let t = if d.hypot2() > 0.0 { ((p - w[0]).dot(d) / d.hypot2()).clamp(0.0, 1.0) } else { 0.0 };
+                p.distance(w[0] + d * t)
+            })
+            .fold(f64::INFINITY, f64::min)
+    }
+
+    /// How far apart the border of `m` and the outline of `path` are, in points: the larger of the
+    /// farthest a point of either lies from the other.
+    fn mesh_border_off_path(m: &GradientMesh, path: &PathData) -> f64 {
+        let (border, outline) = (flattened(&m.outline().to_bezpath()), flattened(&path.to_bezpath()));
+        let one = border.iter().flatten().map(|p| off_lines(&outline, *p)).fold(0.0, f64::max);
+        let other = outline.iter().flatten().map(|p| off_lines(&border, *p)).fold(0.0, f64::max);
+        one.max(other)
+    }
+
+    /// #2752: a gradient mesh keeps the exact outline of the path it is made from, sharp corners
+    /// included, whether made by Create Gradient Mesh (1×1 and 4×4) or by a Mesh tool click at a
+    /// point inside. Before, the border of each mesh was one cubic per edge between four corners
+    /// near the bounding box's: up to 49 pt off a five-point star, 54 pt off a notched rectangle.
+    #[test]
+    fn a_mesh_keeps_the_outline_of_every_shape() {
+        const OFF: f64 = 0.1;
+        let poly = |pts: &[(f64, f64)]| PathData::single(SubPath::polyline(&pts.iter().map(|&(x, y)| Point::new(x, y)).collect::<Vec<_>>(), true));
+        let curves = |start: (f64, f64), cubics: &[[(f64, f64); 3]]| {
+            let mut bp = BezPath::new();
+            bp.move_to(start);
+            for [a, b, c] in cubics {
+                bp.curve_to(*a, *b, *c);
+            }
+            bp.close_path();
+            PathData::from_bezpath(&bp)
+        };
+        let box_ = Rect::new(100.0, 100.0, 500.0, 400.0);
+        let heart = curves(
+            (300.0, 400.0),
+            &[
+                [(200.0, 320.0), (100.0, 250.0), (100.0, 170.0)],
+                [(100.0, 100.0), (180.0, 70.0), (230.0, 90.0)],
+                [(270.0, 105.0), (290.0, 130.0), (300.0, 150.0)],
+                [(310.0, 130.0), (330.0, 105.0), (370.0, 90.0)],
+                [(420.0, 70.0), (500.0, 100.0), (500.0, 170.0)],
+                [(500.0, 250.0), (400.0, 320.0), (300.0, 400.0)],
+            ],
+        );
+        let teardrop = curves(
+            (300.0, 100.0),
+            &[
+                [(350.0, 200.0), (420.0, 250.0), (420.0, 320.0)],
+                [(420.0, 386.0), (366.0, 440.0), (300.0, 440.0)],
+                [(234.0, 440.0), (180.0, 386.0), (180.0, 320.0)],
+                [(180.0, 250.0), (250.0, 200.0), (300.0, 100.0)],
+            ],
+        );
+        let shapes: [(&str, PathData, Point); 14] = [
+            ("rectangle", shapes::rectangle(box_), Point::new(260.0, 230.0)),
+            ("rotated rectangle", shapes::rectangle(box_).transformed(Affine::rotate_about(0.5, box_.center())), Point::new(280.0, 240.0)),
+            ("triangle", poly(&[(300.0, 100.0), (500.0, 400.0), (100.0, 400.0)]), Point::new(300.0, 320.0)),
+            ("five-point star", shapes::star(Point::new(300.0, 300.0), 200.0, 80.0, 5, 0.0), Point::new(300.0, 300.0)),
+            ("twelve-point star", shapes::star(Point::new(300.0, 300.0), 200.0, 140.0, 12, 0.0), Point::new(300.0, 300.0)),
+            (
+                "L-shape",
+                poly(&[(100.0, 100.0), (200.0, 100.0), (200.0, 300.0), (400.0, 300.0), (400.0, 400.0), (100.0, 400.0)]),
+                Point::new(150.0, 350.0),
+            ),
+            ("rounded rectangle", shapes::rounded_rectangle(box_, 40.0), Point::new(260.0, 230.0)),
+            ("heart", heart, Point::new(300.0, 250.0)),
+            ("teardrop", teardrop, Point::new(300.0, 330.0)),
+            ("ellipse", shapes::ellipse(box_), Point::new(200.0, 330.0)),
+            ("thin rectangle", shapes::rectangle(Rect::new(100.0, 100.0, 500.0, 110.0)), Point::new(260.0, 104.0)),
+            (
+                "notched rectangle",
+                poly(&[(100.0, 100.0), (250.0, 100.0), (300.0, 200.0), (350.0, 100.0), (500.0, 100.0), (500.0, 400.0), (100.0, 400.0)]),
+                Point::new(260.0, 300.0),
+            ),
+            // A notch shorter than the steps along the outline an edge is checked at, and deeper
+            // than the tolerance.
+            (
+                "rectangle with a tiny notch",
+                poly(&[(100.0, 100.0), (301.1, 100.0), (301.2, 100.3), (301.3, 100.0), (500.0, 100.0), (500.0, 400.0), (100.0, 400.0)]),
+                Point::new(260.0, 300.0),
+            ),
+            // An outline that crosses itself, whose two lobes' areas cancel.
+            ("bow tie", poly(&[(100.0, 100.0), (500.0, 400.0), (500.0, 100.0), (100.0, 400.0)]), Point::new(150.0, 250.0)),
+        ];
+        // Every shape and way of making the mesh is checked, and all that stray are named.
+        let mut strays = vec![];
+        for (name, path, click) in shapes {
+            for (rows, cols) in [(1, 1), (4, 4)] {
+                let m = GradientMesh::for_path(&path, rows, cols, Color::BLACK, MeshAppearance::Flat, 0.0).unwrap();
+                let off = mesh_border_off_path(&m, &path);
+                if off >= OFF {
+                    strays.push(format!("{name}, {rows}×{cols}: border {off:.2} pt off the outline"));
+                }
+            }
+            let mut m = GradientMesh::for_path(&path, 1, 1, Color::BLACK, MeshAppearance::Flat, 0.0).unwrap();
+            assert!(m.add_lines_at(click, 0.0).is_some(), "{name}: the click at {click:?} is outside the mesh");
+            let off = mesh_border_off_path(&m, &path);
+            if off >= OFF {
+                strays.push(format!("{name}, Mesh tool click: border {off:.2} pt off the outline"));
+            }
+        }
+        assert!(strays.is_empty(), "{strays:#?}");
+    }
+
+    /// The lines a mesh takes to keep a path's outline are as few as do it: a rectangle's and an
+    /// ellipse's meshes keep the rows and columns asked for, and a star's 1×1 mesh takes lines
+    /// through its points, at most one each way per anchor. Paths without an outline to follow
+    /// still give a mesh (an open path closes straight; a line there and back maps onto its box),
+    /// and a point that isn't finite gives none.
+    #[test]
+    fn a_mesh_takes_lines_only_where_the_outline_needs_them() {
+        let box_ = Rect::new(100.0, 100.0, 500.0, 400.0);
+        for path in [shapes::rectangle(box_), shapes::ellipse(box_)] {
+            for (rows, cols) in [(1, 1), (4, 4), (2, 5)] {
+                let m = GradientMesh::for_path(&path, rows, cols, Color::BLACK, MeshAppearance::Flat, 0.0).unwrap();
+                assert_eq!((m.rows, m.cols), (rows, cols));
+            }
+        }
+        let star = shapes::star(Point::new(300.0, 300.0), 200.0, 80.0, 5, 0.0);
+        let m = GradientMesh::for_path(&star, 1, 1, Color::BLACK, MeshAppearance::Flat, 0.0).unwrap();
+        assert!(m.rows > 1 && m.cols > 1 && m.rows <= 10 && m.cols <= 10 && m.is_valid(), "{}×{}", m.rows, m.cols);
+        // Every anchor of the star is a point of the mesh.
+        for a in &star.subpaths[0].anchors {
+            assert!(m.points.iter().any(|q| q.p.distance(a.p) < 1e-6), "{:?} is not a mesh point", a.p);
+        }
+        // An open path closes with a straight segment.
+        let open = PathData::single(SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(100.0, 0.0), Point::new(100.0, 80.0)], false));
+        let m = GradientMesh::for_path(&open, 2, 2, Color::BLACK, MeshAppearance::Flat, 0.0).unwrap();
+        let closed = PathData::single(SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(100.0, 0.0), Point::new(100.0, 80.0)], true));
+        assert!(mesh_border_off_path(&m, &closed) < 0.1);
+        // A line there and back.
+        let line = PathData::single(SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(100.0, 50.0)], true));
+        let m = GradientMesh::for_path(&line, 1, 1, Color::BLACK, MeshAppearance::Flat, 0.0).unwrap();
+        assert!(m.is_valid() && m.points.iter().all(|q| q.p.is_finite()));
+        let mut nan = shapes::rectangle(box_);
+        nan.subpaths[0].anchors[1].p.x = f64::NAN;
+        assert!(GradientMesh::for_path(&nan, 1, 1, Color::BLACK, MeshAppearance::Flat, 0.0).is_none());
+        // A path of many anchors stays within the line limit and keeps its outline.
+        let many = shapes::star(Point::new(300.0, 300.0), 200.0, 190.0, 400, 0.0);
+        let m = GradientMesh::for_path(&many, 1, 1, Color::BLACK, MeshAppearance::Flat, 0.0).unwrap();
+        assert!(m.is_valid() && m.rows as usize <= mesh::MAX_BORDER_LINES && m.cols as usize <= mesh::MAX_BORDER_LINES, "{}×{}", m.rows, m.cols);
+    }
+
     #[test]
     fn mesh_insert_and_remove_lines() {
         let mut m =

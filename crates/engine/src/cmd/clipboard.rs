@@ -115,7 +115,8 @@ pub(crate) fn subpath_selected_segments(
     let n = sp.anchors.len();
     let mut selected_segs = BTreeSet::new();
 
-    let has_explicit_segs = seg_refs.is_some_and(|segments| segments.iter().any(|&(s, _)| s == si));
+    // Segments picked anywhere on the path leave anchors out of it, as Clear does.
+    let has_explicit_segs = seg_refs.is_some_and(|segments| !segments.is_empty());
     if has_explicit_segs {
         if let Some(segments) = seg_refs {
             for &(s, seg) in segments {
@@ -209,6 +210,24 @@ pub(crate) fn extract_direct_selection(node: &Node, selection: &Selection) -> Op
     if pieces.is_empty() { None } else { Some(pieces) }
 }
 
+/// Does Copy take `node` unchanged under direct selection, as [`extract_direct_selection`]
+/// returning `None` means: no anchors or segments of it are picked, it is not a path, or the
+/// picked ones cover every segment?
+pub(crate) fn copied_whole(node: &Node, selection: &Selection) -> bool {
+    let seg_refs = selection.segments.get(&node.id);
+    let anchor_refs = selection.anchors.get(&node.id);
+    if seg_refs.is_none() && anchor_refs.is_none() {
+        return true;
+    }
+    let Some(path) = node.path_data() else { return true };
+    let (mut total_segs, mut total_selected) = (0, 0);
+    for (si, sp) in path.subpaths.iter().enumerate() {
+        total_segs += sp.segment_count();
+        total_selected += subpath_selected_segments(sp, si, seg_refs, anchor_refs).len();
+    }
+    total_selected == 0 || total_selected == total_segs
+}
+
 impl Clipboard {
     pub fn is_empty(&self) -> bool {
         self.nodes.is_empty() && self.artboards.is_empty() && self.guides.is_empty()
@@ -233,15 +252,35 @@ impl Clipboard {
         let d = &*st.doc;
         let mut nodes = vec![];
         let mut source_layers = vec![];
+        // Each compound's bounds, measured once however many of its members are copied.
+        let mut compound_bounds: std::collections::HashMap<NodeId, Option<vectorcraft_geom::Rect>> = std::collections::HashMap::new();
         for id in roots {
             let (Some(n), Some(anc)) = (d.node(*id), d.ancestry(*id)) else { continue };
             let layer_name = anc.iter().rev().skip(1).find_map(|a| d.node(*a).filter(|l| l.is_layer())).and_then(|l| l.name.clone());
             let compound_parent = anc.iter().rev().skip(1).find_map(|a| d.node(*a).filter(|p| matches!(p.kind, NodeKind::Compound { .. })));
+            // Gradients fitted to the compound's bounds are pinned there, as a split pins them.
+            let gradient_box = compound_parent
+                .filter(|p| p.appearance.has_unplaced_gradient())
+                .and_then(|p| *compound_bounds.entry(p.id).or_insert_with(|| p.geometric_bounds()));
+            // A compound's member or piece copied on its own takes the compound's look (its paint,
+            // transparency, opacity mask, pixel alignment and fill rule), so it pastes as it looked.
             let inherit_appearance = |mut piece: Node| {
                 if let Some(parent) = compound_parent
-                    && piece.appearance.items.is_empty()
+                    && let (NodeKind::Compound { rule: compound_rule, .. }, NodeKind::Path { rule, .. }) = (&parent.kind, &mut piece.kind)
                 {
+                    *rule = *compound_rule;
                     piece.appearance = parent.appearance.clone();
+                    if let Some(bounds) = gradient_box {
+                        piece.appearance.pin_gradients(bounds);
+                    }
+                    piece.opacity = parent.opacity;
+                    piece.blend = parent.blend;
+                    piece.isolate = parent.isolate;
+                    piece.knockout_shape = parent.knockout_shape;
+                    let (mask, pixel_aligned) = (parent.extras().mask.clone(), parent.extras().pixel_aligned);
+                    let mut extras = piece.extras_mut();
+                    extras.mask = mask;
+                    extras.pixel_aligned = pixel_aligned;
                 }
                 piece
             };

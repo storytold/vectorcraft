@@ -559,6 +559,7 @@
 	Hide Guides	Sembunyikan panduan
 	Show Guides	Tampilkan panduan
 	Lock Guides	Kunci panduan
+	Lock Guides by Default	Kunci panduan secara default
 	Unlock Guides	Buka kunci panduan
 	Make Guides	Buat panduan
 	Release Guides	Lepaskan panduan
@@ -711,6 +712,13 @@
 	Other Library…	Pustaka lain…
 	Graphic Style Libraries	Pustaka gaya grafis
 	Shadows and Glows	Bayangan dan pendar
+	Game HUD	HUD Game
+	Health Fill	Nyawa
+	Mana Glow	Mana
+	Damage Flash	Damage
+	Quest Outline	Quest
+	Coin Shine	Koin
+	Boss Alert	Boss
 	Outlines and Rules	Garis luar dan garis
 	Hand-Drawn	Gambar tangan
 	Gradient Finishes	Finishing gradien
@@ -905,6 +913,7 @@ lighting	Light	Cahaya
 	Color Picker…	Pemilih warna…
 	Coming soon — tracked in the parity plan	Segera hadir — dilacak dalam rencana paritas
 	Command Dialog	Dialog perintah
+	Command API Reference	Referensi API perintah
 	Copy Selected Style	Salin gaya terpilih
 	Corners…	Sudut…
 	Define Perspective Grid…	Definisikan kisi perspektif…
@@ -2350,15 +2359,12 @@ digits	Malayalam	Malayalam
 	Selected Swatches	Swatch terpilih
 	Advanced Options	Opsi lanjutan
 	Background Contents	Konten latar belakang
-	Background Contents:	Konten latar belakang:
 	BLANK DOCUMENT PRESETS	PRESET DOKUMEN KOSONG
 	Bleed	Bleed
 	Change to Right-to-Left Layout	Ubah ke tata letak kanan ke kiri
 	Columns:	Kolom:
-	Create Document	Buat dokumen
 	Documents you create appear here.	Dokumen yang Anda buat muncul di sini.
 	More Settings	Pengaturan lainnya
-	New from Template	Baru dari templat
 	Number of Artboards:	Jumlah artboard:
 	Orientation:	Orientasi:
 	PRESET DETAILS	DETAIL PRESET
@@ -2369,7 +2375,6 @@ digits	Malayalam	Malayalam
 	RECENT	TERKINI
 	RECENT (1)	TERKINI (1)
 	SAVED	TERSIMPAN
-	Templates…	Templat…
 	Transparent (Default)	Transparan (default)
 	Save for Office Documents	Simpan untuk dokumen Office
 	Transparent Background	Latar belakang transparan
@@ -3273,6 +3278,7 @@ theme	Appearance	Tampilan
 	Arrange by Row	Susun per baris
 	Arrange by Column	Susun per kolom
 	Save Preset	Simpan preset
+	Save Document Preset	Simpan preset dokumen
 	Screen (72 ppi)	Layar (72 ppi)
 	Social Square Post 1080×1080	Postingan persegi media sosial 1080×1080
 	Distribute	Distribusikan
@@ -4074,6 +4080,15 @@ imageTrace	Outline	Kontur
 @msg	Combine Slices: the slices have no bounds	Gabungkan irisan: irisan tidak memiliki batas
 @msg	Convert to Artboards: selection has no area	Konversi ke artboard: seleksi tidak memiliki area
 @msg	Convert to Shape: no rectangles or ellipses selected	Konversi ke bentuk: tidak ada persegi panjang atau elips yang dipilih
+	Run	Jalankan
+	Run Script	Jalankan Skrip
+	Stop Script	Hentikan Skrip
+	Show External Script Warning	Tampilkan Peringatan Skrip Eksternal
+	A Script Is Running	Skrip Sedang Berjalan
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skrip dapat mengubah dokumen yang terbuka dan menulis file melalui perintah yang dijalankannya. Jalankan hanya skrip yang Anda percayai.
+	Do not show this warning again	Jangan tampilkan peringatan ini lagi
+	Stop the script and undo what it did? Then quit again.	Hentikan skrip dan batalkan yang telah dilakukannya? Lalu keluar lagi.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Skrip ini telah menambahkan sangat banyak objek. Lanjutkan, atau hentikan dan batalkan yang telah dilakukannya?
 @msg	Copied the script report	Berhasil menyalin laporan skrip
 @msg	Corners edits the corners of a path	Corners menyunting sudut jalur
 @msg	Couldn't copy to the system clipboard: {e}	Tidak dapat menyalin ke papan klip sistem: {e}
@@ -5851,6 +5866,11 @@ axis	Y Axis	Sumbu Y
 	Button	Tombol
 	Panel	Panel
 	UI Frames	Bingkai UI
+	Map Markers	Penanda Peta
+	Pin	Pin
+	Flag	Bendera
+	Crosshair	Bidik silang
+	Checkpoint	Pos pemeriksaan
 	Open Symbol Library	Buka pustaka simbol
 	Save Symbol Library	Simpan pustaka simbol
 	Save Symbol Library…	Simpan pustaka simbol…
@@ -5899,6 +5919,11 @@ axis	Y Axis	Sumbu Y
 	User Brush Library 9	Pustaka kuas pengguna 9
 	User Brush Library 10	Pustaka kuas pengguna 10
 	Art Ribbons	Pita seni
+	Zigzag	Zigzag
+	Burst Ray	Sinar ledakan
+	Dash Trail	Jejak putus-putus
+	Speed Line	Garis kecepatan
+	Game Trails	Jejak game
 	Calligraphic Nibs	Pena kaligrafi
 	Pattern Borders	Bingkai pola
 	Scatter Shapes	Bentuk sebar
@@ -5911,6 +5936,8 @@ axis	Y Axis	Sumbu Y
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Teks titik
 	Area Text	Teks area
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Ukur teks menurut batas glif
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Tampilkan opsi snap ke glif
 	Hide Snap to Glyph Options	Sembunyikan opsi snap ke glif
@@ -6444,3 +6471,5 @@ breakText	Glyphs	Glif
 # Align to Pixel Grid
 	Align to Pixel Grid	Sejajarkan ke grid piksel
 @msg	side is left or right, not `{s}`	side adalah left atau right, bukan `{s}`
+	Edit Custom Dictionary	Edit kamus kustom
+	Entry:	Entri:

@@ -59,7 +59,8 @@ pub const VARIABLE_WIDEN: f32 = 0.25;
 /// axis (400–700, default 400, the face itself being Regular) whose maximum makes the glyphs of
 /// [`VARIABLE_CHARS`] [`VARIABLE_WIDEN`] wider (outlines and advances, through `gvar`), with the
 /// named instances Normal (the default, the face Regular), SemiBold (550) and Bold (700), plus an instance without
-/// a name and one named like another (`BOLD`), which style lists leave out. `None` when it can't
+/// a name and one named like another (`BOLD`), which style lists leave out. Its version (name ID 5) is
+/// `Version 1.000`. `None` when it can't
 /// be built.
 pub fn variable_font() -> Option<Vec<u8>> {
     const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
@@ -106,6 +107,7 @@ pub fn variable_font() -> Option<Vec<u8>> {
         (1, VARIABLE_FAMILY),
         (2, "Regular"),
         (4, "Varitest Sans Regular"),
+        (5, "Version 1.000"),
         (6, "VaritestSans-Regular"),
         (256, "Weight"),
         (257, "Normal"),

@@ -594,7 +594,7 @@ fn a_groups_transform_moves_the_gradients_placed_on_an_images_own_fills() {
     };
     for kind in [image as fn() -> NodeKind, instance] {
         assert_eq!(starts(kind(), serde_json::json!({"moveH": 30})), [30.0], "{:?}", kind());
-        assert_eq!(starts(kind(), serde_json::json!({"moveH": 30, "copies": 2})), [0.0, 30.0, 60.0], "{:?}", kind());
+        assert_eq!(starts(kind(), serde_json::json!({"moveH": 30, "copies": 2})), [60.0, 30.0, 0.0], "{:?}", kind());
     }
 }
 
@@ -677,7 +677,8 @@ fn a_transform_on_a_group_paints_each_copy_with_its_own_gradient() {
         let art = evaluate_container(None, &g).unwrap();
         let copies = art.children().unwrap()[0].children().expect("the object and its copies are objects of their own");
         assert_eq!(copies.len(), 3);
-        for (i, c) in copies.iter().enumerate() {
+        // The original is on top, after the copies below it.
+        for (i, c) in copies.iter().rev().enumerate() {
             // Each copy's own box: an unplaced gradient fits it, a placed one moved with it.
             assert!((c.geometric_bounds().unwrap().x0 - 30.0 * i as f64).abs() < 1e-6);
             match c.appearance.fill_paint() {

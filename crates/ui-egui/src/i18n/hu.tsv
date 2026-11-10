@@ -393,7 +393,6 @@ font-technology	Variable	Változó
 	Update While Dragging	Frissítés húzás közben
 	Hide Video Rulers	Videovonalzók elrejtése
 	Background Contents	Háttértartalom
-	Background Contents:	Háttértartalom:
 	Background:	Háttér:
 	Backspace	Backspace
 	Balance	Egyensúly
@@ -761,6 +760,7 @@ font-technology	Variable	Változó
 	Command	Parancs
 	Command Click to Select Objects Behind	Cmd+kattintás a mögöttes objektumok kijelöléséhez
 	Command Dialog	Parancs párbeszédablaka
+	Command API Reference	Parancsok API-referenciája
 	Commenting, filling in form fields and signing	Megjegyzések, űrlapmezők kitöltése és aláírás
 	Commits	Commitok
 	Community	Közösség
@@ -864,7 +864,6 @@ font-technology	Variable	Változó
 	Craquelure…	Repedezettség…
 	Create	Létrehozás
 	Create Clipping Mask	Vágómaszk létrehozása
-	Create Document	Dokumentum létrehozása
 	Create from Guides	Létrehozás segédvonalakból
 	Create from Selection	Létrehozás a kijelölésből
 	Create From:	Létrehozás ebből:
@@ -2377,6 +2376,7 @@ file-filter	Templates	Sablonok
 	Lock (⌘2)	Zárolás (⌘2)
 	Lock Grid	Rács zárolása
 	Lock Guides	Segédvonalak zárolása
+	Lock Guides by Default	Segédvonalak zárolása alapértelmezetten
 	Lock Others	Többi zárolása
 	Lock Slices	Szeletek zárolása
 	Lock Station Point	Nézőpont zárolása
@@ -2598,7 +2598,6 @@ file-filter	Templates	Sablonok
 	New Data Set…	Új adatkészlet…
 	New Document Presets	Új dokumentum előbeállításai
 	New file	Új fájl
-	New from Template	Új sablonból
 	New from Template…	Új sablonból…
 	New Graphic Style	Új grafikai stílus
 	New Graphic Style (Alt-click to name it)	Új grafikai stílus (Alt+kattintás: elnevezéssel)
@@ -3516,6 +3515,7 @@ mark-style	Japanese	Japán
 	Save PDF Preset	PDF-előbeállítás mentése
 	Save Perspective Grid Preset	Perspektivikus rács előbeállításának mentése
 	Save Preset	Előbeállítás mentése
+	Save Document Preset	Dokumentum-előbeállítás mentése
 	Preset {number}	Előbeállítás {number}
 	Save Preset…	Előbeállítás mentése…
 	Save Print Preset	Nyomtatási előbeállítás mentése
@@ -3753,6 +3753,13 @@ mark-style	Japanese	Japán
 	Shades of Gray	Szürkeárnyalatok
 	Shading	Árnyékolás
 	Shadows and Glows	Árnyékok és ragyogások
+	Game HUD	Játék HUD
+	Health Fill	Életerő
+	Mana Glow	Mana
+	Damage Flash	Sebzés
+	Quest Outline	Küldetés
+	Coin Shine	Érme
+	Boss Alert	Főellenség
 	Shape	Alakzat
 	Shape Builder	Alakzatépítő
 	Shape Builder Regions	Alakzatépítő területei
@@ -4164,7 +4171,6 @@ mark-style	Japanese	Japán
 	Template	Sablon
 	Templates	Sablonok
 	Templates Folder	Sablonok mappája
-	Templates…	Sablonok…
 	Tetrad	Tetrád
 	Tetrad 2	Tetrád 2
 	Tetrad 3	Tetrád 3
@@ -4863,6 +4869,28 @@ imageTrace	Outline	Körvonal
 @msg	compressed (RLE) bitmaps can't be read yet	a tömörített (RLE) bitképek még nem olvashatók
 @msg	Convert to Artboards: selection has no area	Átalakítás rajztáblákká: a kijelölésnek nincs területe
 @msg	Convert to Shape: no rectangles or ellipses selected	Átalakítás alakzattá: nincs kijelölt téglalap vagy ellipszis
+	Run	Futtatás
+	Run Script	Parancsfájl futtatása
+	Stop Script	Parancsfájl leállítása
+	Show External Script Warning	Figyelmeztetés külső parancsfájlok előtt
+	A Script Is Running	Egy parancsfájl fut
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	A parancsfájl módosíthatja a megnyitott dokumentumokat, és a futtatott parancsokkal fájlokat írhat. Csak megbízható parancsfájlokat futtasson.
+	Do not show this warning again	Ne jelenjen meg többé ez a figyelmeztetés
+	Stop the script and undo what it did? Then quit again.	Leállítja a parancsfájlt, és visszavonja a módosításait? Ezután lépjen ki újra.
+	This script has added a great many objects. Continue, or stop it and undo what it did?	Ez a parancsfájl nagyon sok objektumot adott hozzá. Folytatja, vagy leállítja és visszavonja a módosításait?
+@msg	Choose a .js or .jsx script	Válasszon .js vagy .jsx parancsfájlt
+@msg	Ran {name}	Lefutott: {name}
+@msg	The script was stopped and its changes were undone	A parancsfájl leállt, a módosításai visszavonva
+@msg	a script is running: stop it or wait for it to finish	egy parancsfájl fut: állítsa le, vagy várja meg, hogy befejeződjön
+@msg	this is a compiled script, which cannot be run; use its source text	ez lefordított parancsfájl, amely nem futtatható; használja a forrásszövegét
+@msg	the script is not UTF-8 text	a parancsfájl nem UTF-8 szöveg
+@msg	the script is too large to run	a parancsfájl túl nagy a futtatáshoz
+@msg	a drag or an undo group is open; finish it before running a script	húzás vagy visszavonási csoport van folyamatban; fejezze be a parancsfájl futtatása előtt
+@msg	the script left a document that cannot be kept	a parancsfájl olyan dokumentumot hagyott hátra, amely nem tartható meg
+@msg	the script's run is no longer available	a parancsfájl futása már nem érhető el
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	egy sikertelen parancs olyan visszavonási lépéseket módosított, amelyeket nem lehetett visszaállítani, ezért a parancsfájl leállt
+@msg	a recovery copy could not be written, so the script was not run	a helyreállítási másolatot nem sikerült kiírni, ezért a parancsfájl nem futott le
+@msg	Running a script	Parancsfájl futtatása
 @msg	Copied the script report	Szkriptjelentés másolva
 @msg	Corners edits the corners of a path	a Sarkok parancs egy útvonal sarkait szerkeszti
 @msg	could not decode image: {0}	a kép nem dekódolható: {0}
@@ -5097,6 +5125,7 @@ imageTrace	Outline	Körvonal
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	„{name}” betöltve; kihagyott lépések: {n}
 @msg	not an action set file	nem műveletkészlet-fájl
 @msg	the action set file is larger than 8 MiB	a műveletkészlet-fájl nagyobb 8 MiB-nál
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: a referencia nagyobb lenne {MAX_BYTES} bájtnál
 @msg	the action set file holds more than 1,000 actions	a műveletkészlet-fájl több mint 1000 műveletet tartalmaz
 @msg	the action set file needs a later version of VectorCraft	a műveletkészlet-fájlhoz a VectorCraft újabb verziója kell
 @msg	an action in the action set file has more than 10,000 steps	a műveletkészlet-fájl egyik műveletében több mint 10 000 lépés van
@@ -5570,7 +5599,7 @@ imageTrace	Outline	Körvonal
 	Bevel both sides	Élletörés mindkét oldalon
 	Presets	Készletek
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Egy objektumnak csak egy 3D effektusa lehet. Szerkessze a meglévő effektus beállításait, vagy előbb távolítsa el.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} egyelőre görbét vagy összetett görbét igényel. Előbb alakítsa görbévé a szöveget, a képeket és a csoportokat.
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} egyelőre görbét, összetett görbét, szöveget vagy csoportot igényel. Előbb alakítsa görbévé a képeket és az egyéb objektumokat.
 @msg	{label} requires a shape with at least two anchors	{label} legalább két szerkesztőpontos alakzatot igényel
 @msg	The shape is too complex for a 3D effect	Az alakzat túl összetett a 3D effektushoz
 @msg	The 3D surface is too complex; simplify the shape	A 3D felület túl összetett; egyszerűsítse az alakzatot
@@ -5578,6 +5607,11 @@ imageTrace	Outline	Körvonal
 @msg	unknown parameter `{key}`; did you mean `{near}`?	ismeretlen paraméter: `{key}`; erre gondolt: `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	ismeretlen paraméter: `{key}`; a parancsnak nincs paramétere
 @msg	unknown parameter `{key}`; the command takes: {keys}	ismeretlen paraméter: `{key}`; a parancs ezeket fogadja el: {keys}
+@msg	the params must be an object, not {got}	a paramétereknek objektumnak kell lenniük, nem ez: {got}
+@msg	unknown parameter `{path}`; the object takes no keys	ismeretlen paraméter: `{path}`; az objektum nem fogad el kulcsokat
+@msg	unknown parameter `{path}`; it takes: {keys}	ismeretlen paraméter: `{path}`; ezeket fogadja el: {keys}
+@msg	missing `{path}`	hiányzik: `{path}`
+@msg	`{path}` must be {expected}, not {got}	`{path}`: {expected} kell, nem ez: {got}
 	Load EPS into Clipboard	EPS betöltése a vágólapra
 @msg	an image of {w} × {h} pixels is too large to draw	egy {w} × {h} pixeles kép túl nagy a kirajzoláshoz
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: nem PNG, JPEG, WebP, TIFF vagy BMP kép
@@ -6008,6 +6042,11 @@ axis	Y Axis	Y tengely
 	Button	Gomb
 	Panel	Panel
 	UI Frames	UI keretek
+	Map Markers	Térképjelölők
+	Pin	Gombostű
+	Flag	Zászló
+	Crosshair	Célkereszt
+	Checkpoint	Ellenőrzőpont
 	Open Symbol Library	Szimbólumkönyvtár megnyitása
 	Save Symbol Library	Szimbólumkönyvtár mentése
 	Save Symbol Library…	Szimbólumkönyvtár mentése…
@@ -6062,6 +6101,11 @@ axis	Y Axis	Y tengely
 	User Brush Library 9	Felhasználói ecsetkönyvtár 9
 	User Brush Library 10	Felhasználói ecsetkönyvtár 10
 	Art Ribbons	Grafikus szalagok
+	Zigzag	Cikkcakk
+	Burst Ray	Ütéssugár
+	Dash Trail	Szaggatott nyom
+	Speed Line	Sebességvonal
+	Game Trails	Játéknyomok
 	Calligraphic Nibs	Kalligrafikus tollhegyek
 	Pattern Borders	Mintázatszegélyek
 	Scatter Shapes	Szórt alakzatok
@@ -6082,6 +6126,8 @@ axis	Y Axis	Y tengely
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Pontszöveg
 	Area Text	Területszöveg
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Szöveg mérése a glifahatárok szerint
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Glifához illesztés beállításainak megjelenítése
 	Hide Snap to Glyph Options	Glifához illesztés beállításainak elrejtése
@@ -6646,3 +6692,8 @@ breakText	Glyphs	Glifák
 	Align to Pixel Grid	Igazítás a pixelrácshoz
 @msg	only paths and compound paths can be aligned to the pixel grid	csak útvonalak és összetett útvonalak igazíthatók a pixelrácshoz
 @msg	side is left or right, not `{s}`	a side értéke left vagy right lehet, nem `{s}`
+	Ignore All	Az összes kihagyása
+	Add to Dictionary	Hozzáadás a szótárhoz
+	No Suggestions	Nincs javaslat
+	Edit Custom Dictionary	Egyéni szótár szerkesztése
+	Entry:	Bejegyzés:

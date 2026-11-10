@@ -394,6 +394,7 @@ antiAlias	Sharp	शार्प
 	Area / Path Type	एरिया / पाथ टाइप
 	Area Graph Tool	एरिया ग्राफ़ टूल
 	Area Text	एरिया टेक्स्ट
+	Measure Type by Glyph Bounds	टाइप को ग्लिफ़ की सीमाओं से मापें
 	Area Text Objects	एरिया टेक्स्ट ऑब्जेक्ट
 	Area Type	एरिया टाइप
 	Area Type Options	एरिया टाइप ऑप्शन्स
@@ -420,6 +421,11 @@ antiAlias	Sharp	शार्प
 	Art Brush Options	आर्ट ब्रश ऑप्शन्स
 	Art Optimized	आर्टवर्क के लिए अनुकूलित
 	Art Ribbons	आर्ट रिबन
+	Zigzag	ज़िगज़ैग
+	Burst Ray	बर्स्ट रे
+	Dash Trail	डैश ट्रेल
+	Speed Line	स्पीड लाइन
+	Game Trails	गेम ट्रेल्स
 	Art using a deleted global swatch keeps its colour.	हटाए गए ग्लोबल स्वॉच वाला आर्टवर्क अपना रंग बनाए रखता है।
 	Artboard	आर्टबोर्ड
 	Artboard {n} of {total}	{total} में से आर्टबोर्ड {n}
@@ -491,7 +497,6 @@ antiAlias	Sharp	शार्प
 	Back	वापस
 	Background Color:	बैकग्राउंड रंग:
 	Background Contents	बैकग्राउंड सामग्री
-	Background Contents:	बैकग्राउंड सामग्री:
 	Background Level	बैकग्राउंड स्तर
 	Background:	बैकग्राउंड:
 	Backspace	Backspace
@@ -514,6 +519,11 @@ antiAlias	Sharp	शार्प
 	Button	बटन
 	Panel	पैनल
 	UI Frames	UI फ़्रेम
+	Map Markers	मानचित्र चिह्न
+	Pin	पिन
+	Flag	झंडा
+	Crosshair	क्रॉसहेयर
+	Checkpoint	चेकपॉइंट
 	Batch	बैच
 	Batch Trace Folder	फ़ोल्डर बैच ट्रेस करें
 	Batch…	बैच…
@@ -897,6 +907,7 @@ antiAlias	Sharp	शार्प
 	Command	कमांड
 	Command Click to Select Objects Behind	कमांड पीछे ऑब्जेक्ट्स का सिलेक्ट करने के लिए क्लिक करें
 	Command Dialog	कमान डायलॉग
+	Command API Reference	कमांड API संदर्भ
 	Comment not closed	टिप्पणी बंद नहीं
 	Commenting, filling in form fields and signing	टिप्पणी करना, फॉर्म फ़ील्ड में भरना और हस्ताक्षर करना
 	Commits	कमिट्स
@@ -1029,7 +1040,6 @@ antiAlias	Sharp	शार्प
 	Create Clipping Mask	क्लिपिंग मास्क बनाएँ
 	Create Compound Path From Ellipses	एलिप्स से कंपाउंड पाथ बनाएँ
 	Create Dimension	आयाम बनाएँ
-	Create Document	डॉक्यूमेंट बनाएं
 	Create from Guides	गाइड से बनाएँ
 	Create from Selection	सिलेक्शन से बनाएँ
 	Create From:	से बनाएँ:
@@ -2555,6 +2565,7 @@ antiAlias	Sharp	शार्प
 	Lock Artboards	लॉक आर्टबोर्ड
 	Lock Grid	लॉक ग्रिड
 	Lock Guides	गाइड्स लॉक करें
+	Lock Guides by Default	गाइड्स डिफ़ॉल्ट रूप से लॉक करें
 	Lock Others	लॉक अन्य
 	Lock Selected	लॉक सिलेक्टेड
 	Lock Slices	स्लाइस लॉक करें
@@ -2836,7 +2847,6 @@ antiAlias	Sharp	शार्प
 	New Design	नई डिजाइन
 	New Document Presets	नया डॉक्यूमेंट प्रीसेट
 	New file	नई फ़ाइल
-	New from Template	टेम्पलेट से नया
 	New from Template…	टेम्पलेट से नया…
 	New Graphic Style	नई ग्राफिक स्टाइल
 	New Graphic Style (Alt-click to name it)	नया ग्राफ़िक स्टाइल (नाम देने के लिए Alt-क्लिक करें)
@@ -3957,6 +3967,7 @@ antiAlias	Sharp	शार्प
 	Save PDF Preset	PDF प्रीसेट सेव करें
 	Save Perspective Grid Preset	सेव पर्सपेक्टिव ग्रिड प्रीसेट
 	Save Preset	प्रीसेट सेव करें
+	Save Document Preset	डॉक्यूमेंट प्रीसेट सेव करें
 	Save Preset…	प्रीसेट सेव करें…
 	Save Print Preset	सेव करें प्रिंट प्रीसेट
 	Save Recovery Data	रिकवरी डेटा सेव करें
@@ -4232,6 +4243,13 @@ antiAlias	Sharp	शार्प
 	Shading	शेडिंग
 	Shadow Intensity	शैडो तीव्रता
 	Shadows and Glows	छाया और चमक
+	Game HUD	गेम HUD
+	Health Fill	स्वास्थ्य
+	Mana Glow	माना
+	Damage Flash	क्षति
+	Quest Outline	क्वेस्ट
+	Coin Shine	सिक्का
+	Boss Alert	बॉस
 	Shaft:	दस्ता:
 	Shape	शेप
 	Shape Builder	शेप बिल्डर
@@ -4736,7 +4754,6 @@ antiAlias	Sharp	शार्प
 	Template literal not closed	टेम्पलेट साक्षर नहीं बंद
 	Templates	टेम्पलेट्स
 	Templates Folder	टेम्पलेट्स फ़ोल्डर
-	Templates…	टेम्पलेट्स…
 	Tetrad	टेट्राड
 	Tetrad 2	टेट्राड 2
 	Tetrad 3	टेट्राड 3
@@ -5400,7 +5417,7 @@ antiAlias	Sharp	शार्प
 @msg	{key} must name a registered panel	{key} एक पंजीकृत पैनल का नाम होना चाहिए
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	{kind} फ़ाइलों में पारदर्शिता नहीं होती और इस फ़ाइल में {what} होगा: पहले इसे फ़्लैट करें (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	{kind} इमेज ओपन नहीं हो सकतीं (document.formats देखें)
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} वर्तमान में एक पाथ या यौगिक पाथ की आवश्यकता होती है। पहले पाथ के लिए प्रकार, इमेज और समूहों को परिवर्तित करें।
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} के लिए वर्तमान में एक पाथ, यौगिक पाथ, टाइप या समूह आवश्यक है। पहले इमेज और अन्य ऑब्जेक्ट को पाथ में परिवर्तित करें।
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} डॉक्यूमेंट के {n} आर्टबोर्ड में से 1 रखता है: फ़ाइल एक के साथ फिर से खुलती है। उन्हें रखने के लिए संरक्षित संपादन क्षमताओं को चालू करें।
 @msg	{label} must be a number	{label} एक नंबर होना चाहिए
 @msg	{label} must be a number above 0 and at most {max}	{label} 0 से ऊपर और सबसे {max} पर होना चाहिए
@@ -6129,6 +6146,28 @@ antiAlias	Sharp	शार्प
 @msg	control must be fillStroke, coloring, drawMode or screenMode	control को fillStroke, coloring, drawMode या screenMode होना चाहिए
 @msg	Convert to Artboards: selection has no area	आर्टबोर्ड में कनवर्ट करें: सिलेक्शन में कोई क्षेत्र नहीं है
 @msg	Convert to Shape: no rectangles or ellipses selected	आकार में कनवर्ट करें: कोई आयत या अंडाकार सिलेक्शन नहीं
+	Run	चलाएँ
+	Run Script	स्क्रिप्ट चलाएँ
+	Stop Script	स्क्रिप्ट रोकें
+	Show External Script Warning	बाहरी स्क्रिप्ट की चेतावनी दिखाएँ
+	A Script Is Running	एक स्क्रिप्ट चल रही है
+	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	स्क्रिप्ट खुले दस्तावेज़ बदल सकती है और अपने चलाए कमांड से फ़ाइलें लिख सकती है। केवल भरोसेमंद स्क्रिप्ट चलाएँ।
+	Do not show this warning again	यह चेतावनी फिर न दिखाएँ
+	Stop the script and undo what it did? Then quit again.	स्क्रिप्ट रोककर उसके बदलाव पूर्ववत करें? फिर दोबारा बाहर निकलें।
+	This script has added a great many objects. Continue, or stop it and undo what it did?	इस स्क्रिप्ट ने बहुत सारे ऑब्जेक्ट जोड़े हैं। जारी रखें, या इसे रोककर इसके बदलाव पूर्ववत करें?
+@msg	Choose a .js or .jsx script	.js या .jsx स्क्रिप्ट चुनें
+@msg	Ran {name}	{name} चलाई गई
+@msg	The script was stopped and its changes were undone	स्क्रिप्ट रोकी गई और उसके बदलाव पूर्ववत किए गए
+@msg	a script is running: stop it or wait for it to finish	एक स्क्रिप्ट चल रही है: उसे रोकें या पूरा होने की प्रतीक्षा करें
+@msg	this is a compiled script, which cannot be run; use its source text	यह कंपाइल की हुई स्क्रिप्ट है, जिसे चलाया नहीं जा सकता; इसका स्रोत पाठ इस्तेमाल करें
+@msg	the script is not UTF-8 text	स्क्रिप्ट UTF-8 पाठ नहीं है
+@msg	the script is too large to run	स्क्रिप्ट चलाने के लिए बहुत बड़ी है
+@msg	a drag or an undo group is open; finish it before running a script	कोई ड्रैग या पूर्ववत समूह खुला है; स्क्रिप्ट चलाने से पहले उसे पूरा करें
+@msg	the script left a document that cannot be kept	स्क्रिप्ट ने ऐसा दस्तावेज़ छोड़ा है जिसे रखा नहीं जा सकता
+@msg	the script's run is no longer available	स्क्रिप्ट का रन अब उपलब्ध नहीं है
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	एक विफल कमांड ने पूर्ववत चरण बदल दिए जिन्हें वापस नहीं रखा जा सका, इसलिए स्क्रिप्ट रोक दी गई
+@msg	a recovery copy could not be written, so the script was not run	रिकवरी प्रति नहीं लिखी जा सकी, इसलिए स्क्रिप्ट नहीं चलाई गई
+@msg	Running a script	स्क्रिप्ट चल रही है
 @msg	Copied the script report	Copied स्क्रिप्ट रिपोर्ट
 @msg	copy needs path: the file to copy into the document's folder	copy: प्रतिलिपि की जरूरत है पाथ: फ़ाइल को डॉक्यूमेंट के फ़ोल्डर में कॉपी करने के लिए
 @msg	copy takes images only: relink placed documents where their files are	copy: प्रतिलिपि केवल इमेज को लेती है: डॉक्यूमेंट्स को फिर से लिंक करें जहां उनकी फ़ाइलें हैं
@@ -7387,6 +7426,7 @@ antiAlias	Sharp	शार्प
 @msg	the action has no steps	कार्रवाई में कोई कदम नहीं है
 @msg	the action set file holds more than 1,000 actions	एक्शन सेट फ़ाइल 1,000 से अधिक कार्यों को रखती है
 @msg	the action set file is larger than 8 MiB	एक्शन सेट फ़ाइल 8 MiB से बड़ा है
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: संदर्भ {MAX_BYTES} बाइट से बड़ा होगा
 @msg	the action set file needs a later version of VectorCraft	एक्शन सेट फ़ाइल को वेक्टर क्रेफ्ट के बाद के संस्करण की आवश्यकता होती है
 @msg	the action set ids are not a list	कार्रवाई सेट ids एक सूची नहीं हैं
 @msg	the action sets changed; nothing was deleted	कार्रवाई सेट बदल गया; कुछ भी नहीं हटा दिया गया था
@@ -7794,6 +7834,11 @@ antiAlias	Sharp	शार्प
 @msg	unknown parameter `{key}`; did you mean `{near}`?	अज्ञात पैरामीटर `{key}`; क्या आपको `{near}` का मतलब है?
 @msg	unknown parameter `{key}`; the command takes no parameters	अज्ञात पैरामीटर `{key}`; कमांड कोई पैरामीटर नहीं लेता है
 @msg	unknown parameter `{key}`; the command takes: {keys}	अज्ञात पैरामीटर `{key}`; कमांड लेता है: {keys}
+@msg	the params must be an object, not {got}	पैरामीटर एक ऑब्जेक्ट होने चाहिए, {got} नहीं
+@msg	unknown parameter `{path}`; the object takes no keys	अज्ञात पैरामीटर `{path}`; ऑब्जेक्ट कोई कुंजी नहीं लेता
+@msg	unknown parameter `{path}`; it takes: {keys}	अज्ञात पैरामीटर `{path}`; यह लेता है: {keys}
+@msg	missing `{path}`	लापता `{path}`
+@msg	`{path}` must be {expected}, not {got}	`{path}` {expected} होना चाहिए, {got} नहीं
 @msg	unknown PDF preset `{name}` (presets: {_1})	अज्ञात PDF प्रीसेट `{name}` (presets: {_1})
 @msg	unknown pieLegend `{v}` (none, standard or wedges)	अज्ञात pieLegend `{v}` (one, मानक या wedges)
 @msg	unknown piePosition `{v}` (even, ratio or stacked)	अज्ञात piePosition `{v}` (यहां तक कि अनुपात या स्टैक्ड)
@@ -8104,3 +8149,8 @@ theme	Appearance	अपीयरेंस
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	इंपोर्टर 1 से {MAX_EXTENSIONS} `extensions` घोषित करता है
 @msg	an importer always gets an import's budget: leave `budget` out	इंपोर्टर को हमेशा इंपोर्ट का बजट मिलता है: `budget` छोड़ दें
 @msg	side is left or right, not `{s}`	side left या right होना चाहिए, `{s}` नहीं
+	Ignore All	सभी को अनदेखा करें
+	Add to Dictionary	शब्दकोश में जोड़ें
+	No Suggestions	कोई सुझाव नहीं
+	Edit Custom Dictionary	कस्टम शब्दकोश संपादित करें
+	Entry:	प्रविष्टि:

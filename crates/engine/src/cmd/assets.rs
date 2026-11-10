@@ -44,7 +44,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Assets",
             [],
             None,
-            "{} → {assets: [{id, name, nodes: [id…], bounds: [x, y, width, height] | null (the crop: the bounds the renderer measures for what its art draws, effects included), format3D: usda|usdz|gltf|obj | null (a 3D asset's mesh format; null for art exported as pictures)}]} the Asset Export panel's assets, in order",
+            "{} → {assets: [{id, name, nodes: [id…], bounds: [x, y, width, height] | null (the crop: the bounds the renderer measures for what its art draws, effects included, with the clips of the groups and layers that hold it), format3D: usda|usdz|gltf|obj | null (a 3D asset's mesh format; null for art exported as pictures)}]} the Asset Export panel's assets, in order",
             has_doc,
             list
         ),

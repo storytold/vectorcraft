@@ -597,7 +597,7 @@ fn exercise_mcp_core(
     assert!(r["result"]["completion"]["values"].as_array().is_some_and(|v| v.contains(&json!("svg"))), "{r}");
 
     mcp_send(stdin, json!({"jsonrpc":"2.0","id":5,"method":"resources/list","params":{}}));
-    assert!(mcp_recv(lines, notes, 5)["result"]["resources"].as_array().is_some_and(|v| v.len() == 3));
+    assert!(mcp_recv(lines, notes, 5)["result"]["resources"].as_array().is_some_and(|v| v.len() == 4));
     mcp_send(stdin, json!({"jsonrpc":"2.0","id":6,"method":"resources/templates/list","params":{}}));
     assert!(mcp_recv(lines, notes, 6)["result"]["resourceTemplates"].as_array().is_some_and(|v| v.len() >= 4));
 

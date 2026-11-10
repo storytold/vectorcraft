@@ -105,7 +105,8 @@ The rest is our reading:
 - The solids turn, twist and taper about the center of the bounds of all their shapes, Inflate's grid covers
   those bounds, and with Perspective one eye sees every solid. A stroke too narrow to hold a point of Inflate's
   grid stays flat.
-- A stroke whose outline takes more than 2,048 points is left out, and the fill's solid still draws.
+- A stroke whose outline takes more than 65,536 points, or whose solid takes more than 163,840 faces, is left out,
+  and the fill's solid still draws.
 
 ## Groups
 
@@ -232,13 +233,22 @@ out, perspective). No Adobe software, assets, presets or bevel shapes were used.
   on top can still lie a few points behind another nearby piece.
 - Extrude & Bevel and Rotate retain planar shading. Colored Inflate uses smooth vector lighting; white-light Inflate keeps its original polygon shading; bounded cell triangulation leaves a cell flat when it contains a complete hole or an unusually complex/degenerate contour. Its geometric silhouette is still a polygon approximation.
 - Paths, compound paths, type and groups or layers of them (see [Groups](#groups)); images, symbol instances,
-  clipping groups and other live objects have to be converted first. Revolve on a group is not built yet. One 3D
-  effect per object.
+  clipping groups and other live objects have to be converted first. Revolve on a group sweeps its members about
+  one axis ([revolve.md](revolve.md)). One 3D effect per object.
 - Curves are followed within 1/2000 of the shape's size (at least 0.05 pt), so a small curve takes a few points
-  and a large one up to 32. Extrude & Bevel and Inflate take up to 2,048 outline points (a stroke's outline is
-  counted on its own), Rotate (which only turns the outline) 65,536. The limit is counted on the shape as drawn and,
-  when its contours meet, again on the merged outline, which can have more points (bars crossing in a grid trace
-  every hole between them); past it, the shape is too complex for the effect.
+  and a large one up to 32. Extrude & Bevel and Inflate take up to 65,536 outline points and 163,840 faces for each
+  solid (a stroke's outline is counted on its own), and Rotate (which only turns the outline) takes 65,536 points.
+  These limits are VectorCraft's own values. Before any point is sampled, Extrude & Bevel counts the faces its walls,
+  bevels and caps need, and Inflate counts the faces of its sides; when they do not fit, every curve of the shape
+  takes fewer pieces, down to 4 (a curve that needs fewer takes fewer). A shape that does not fit at 4 pieces a
+  curve is refused because the 3D surface is too complex. Inflate counts the faces of its front and back as it
+  builds them, against the same 163,840. The point limit is counted on the shape as drawn and, when its contours
+  meet, again on the merged outline, which can have more points (bars crossing in a grid trace every hole between
+  them); past it, the shape is too complex for the effect.
+- Inflate also limits the work of filling its grid, which grows with the outline's points times the grid cells its
+  outline crosses. An outline of tens of thousands of points that crosses nearly every cell (a comb of 4,000 teeth
+  across the shape) is refused because the 3D surface is too complex; a closed path of 65,536 points round a
+  circle builds.
 - **3D (Classic)**: Extrude & Bevel (Classic) is built, with its surface types and blend steps. Revolve (Classic),
   Rotate (Classic), the track cube, map art, Turntable and 3D export are separate, unbuilt items.
 

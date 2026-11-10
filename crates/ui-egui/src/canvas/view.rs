@@ -1,6 +1,16 @@
 use super::drag::{drag_id, drop_press};
 use super::{CornerRadius, Drag, Point, Pos2, Rect, SCROLL_BAR, Sense, Stroke, Tokens, Ui, VectorcraftApp, View, Xf, pos2, vec2};
 
+/// The mouse and control-channel Rotate View gestures use the same angle and Shift snapping.
+pub(crate) fn drag_rotation(center: Pos2, point: Pos2, start_angle: f64, start_rotation: f64, snap: bool) -> f64 {
+    let angle = (point.y - center.y).atan2(point.x - center.x) as f64;
+    let mut degrees = start_rotation + (angle - start_angle).to_degrees();
+    if snap {
+        degrees = (degrees / 15.0).round() * 15.0;
+    }
+    vectorcraft_geom::normalize_deg(degrees)
+}
+
 /// Fit the view (View → Fit Artboard / Fit All / Actual Size, Arrange Tools › Zoom to Selection).
 pub fn fit(app: &mut VectorcraftApp, how: &str) {
     let Some(rect) = app.canvas_rect else {
@@ -358,7 +368,7 @@ struct ThumbDrag {
 /// the source on the Mac and reports `Unknown` elsewhere. There, point deltas (Wayland) and line
 /// deltas that are not whole notches (Windows and X11) count as a touchpad. A browser reports a
 /// mouse wheel in points, so the web build counts only line deltas that are not whole notches.
-fn fine_steps(unit: egui::MouseWheelUnit, delta: egui::Vec2, source: egui::MouseWheelSource) -> bool {
+pub(super) fn fine_steps(unit: egui::MouseWheelUnit, delta: egui::Vec2, source: egui::MouseWheelSource) -> bool {
     let notch = |d: f32| (d - d.round()).abs() < 1e-3;
     match source {
         egui::MouseWheelSource::Trackpad | egui::MouseWheelSource::Momentum => true,
@@ -483,7 +493,7 @@ pub(super) fn wheel(
     let mut scroll = pan;
     for e in &i.events {
         match e {
-            egui::Event::MouseWheel { unit, delta, modifiers, source, .. } => {
+            egui::Event::MouseWheel { unit, delta, phase, modifiers, source, .. } => {
                 let d = points(unit, *delta);
                 // The turn ends after egui's scroll timeout, as above.
                 if i.time - turn.last > 0.150 {
@@ -501,6 +511,9 @@ pub(super) fn wheel(
                 } else {
                     turn.glide += f64::from(d.y) * WHEEL_ZOOM;
                     scroll.x += d.x;
+                }
+                if matches!(phase, egui::TouchPhase::End | egui::TouchPhase::Cancel) {
+                    turn.fine = false;
                 }
             }
             egui::Event::Zoom(f) => zoom *= f64::from(*f),
