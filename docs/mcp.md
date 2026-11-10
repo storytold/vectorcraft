@@ -3607,6 +3607,22 @@ the canvas (coordinates out of range)".
 is not a whole number of 0 or more, such as 1.5, -1 or "1" ("missing integer `subpath`"); `path.split` refuses such
 an `anchor` or `segment` in the same way. The document does not change and no undo step is recorded.
 
+`path.reshape {id, x, y, dx, dy, tol?, radius?}` (a Reshape tool drag) grabs the path at `x`, `y`, adding an anchor
+there unless one lies within `tol` (3 by default), and moves that point by `dx`, `dy`.
+[Adjust path segments](https://helpx.adobe.com/illustrator/desktop/draw-shapes-and-paths/modify-paths/adjust-path-segments.html)
+has the Reshape tool stretch part of a path from the dragged point without losing the path's general form. How far
+the stretch reaches and the share of the drag each point takes are VectorCraft's own rule. An open path stretches from
+the grabbed point to its two ends: the two end anchors stay in place, and each anchor between an end and the grabbed
+point takes `u² (3 - 2u)` of the drag, where `u` is its distance from that end along the path's control polygon
+(anchor, out handle, the next in handle, the next anchor) divided by the grabbed point's distance from that end. A
+handle takes the share on the tangent line of that curve at its anchor, so the handles of a smooth anchor stay in line
+with it; a handle that is long beside the distance from the end to the grabbed point takes a share below 0 or above 1,
+and moves against the drag or farther than the grabbed point. On a closed path, or when `radius` is given, the anchors
+within `radius` of the grabbed point along the path follow with a smooth falloff and the others stay; `radius`
+defaults to half the diagonal of the subpath's bounding box, and a negative `radius` is refused ("`radius` must be 0
+or more"). A drag of no length on an anchor (`dx` and `dy` 0 or left out) leaves the path as it is and records no undo
+step.
+
 These commands refuse a string or another value that is not a number with `` `dy` must be a number, not "10" ``,
 naming the key; the document does not change and no undo step is recorded: `t`, `dx` and `dy` in
 `path.reshapeSegment` and `object.blend.spine.reshapeSegment`; `x`, `y` and `t` in `path.curvatureEdit`; `x` and `y`

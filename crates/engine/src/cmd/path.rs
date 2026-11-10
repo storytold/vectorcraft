@@ -131,7 +131,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reshape",
             [],
             None,
-            "{id, x, y, dx, dy, tol=3, radius?} Reshape tool: grab the path at (x, y) (adding an anchor there unless one is within tol) and drag it by (dx, dy); nearby anchors follow with a smooth falloff over radius, measured along the path (default: half the subpath's size)",
+            "{id, x, y, dx, dy, tol=3, radius?} Reshape tool: grab the path at (x, y) (adding an anchor there unless one is within tol) and drag it by (dx, dy). An open path stretches from the grabbed point to its two ends, which stay in place: each anchor between takes a share of the drag that falls smoothly from 1 at the grabbed point to 0 at the end, by its distance along the path's control polygon. On a closed path, or when radius is given, nearby anchors follow with a smooth falloff over radius, measured along the path (0 or more; default: half the diagonal of the subpath's bounding box)",
             has_doc,
             reshape
         ),
@@ -1410,6 +1410,57 @@ fn open_run(mut anchors: Vec<vectorcraft_geom::Anchor>) -> Option<SubPath> {
     Some(SubPath::new(anchors, false))
 }
 
+/// The share of a Reshape drag that each anchor of an open subpath takes, as `[in handle, anchor,
+/// out handle]`. The grabbed anchor takes all of it and the two end anchors take none. For an
+/// anchor between the grabbed one and an end, `u` is its distance from that end along the control
+/// polygon (anchor, out handle, the next in handle, the next anchor) divided by the grabbed
+/// anchor's distance from that end, and its share is `u² (3 - 2u)`. A handle takes the share on
+/// the tangent line of that curve at its anchor, so the two handles of a smooth anchor stay in
+/// line with it. That share is below 0 or above 1 for a handle long enough beside the span.
+fn stretch_weights(anchors: &[Anchor], grabbed: usize) -> Vec<[f64; 3]> {
+    let last = anchors.len().saturating_sub(1);
+    // Where each anchor's in handle, point and out handle lie along the control polygon. The in
+    // handle of the first anchor and the out handle of the last are not part of an open path.
+    let mut pos: Vec<[f64; 3]> = Vec::with_capacity(anchors.len());
+    let mut run = 0.0;
+    for (i, a) in anchors.iter().enumerate() {
+        if let Some(before) = i.checked_sub(1).and_then(|b| anchors.get(b)) {
+            run += before.h_out.distance(a.h_in);
+        }
+        let c_in = run;
+        if i > 0 {
+            run += a.h_in.distance(a.p);
+        }
+        let c = run;
+        if i < last {
+            run += a.p.distance(a.h_out);
+        }
+        pos.push([c_in, c, run]);
+    }
+    let at = pos.get(grabbed).map_or(0.0, |c| c[1]);
+    let length = pos.last().map_or(0.0, |c| c[1]);
+    pos.iter()
+        .enumerate()
+        .map(|(i, &[c_in, c, c_out])| {
+            if i == grabbed {
+                return [1.0; 3];
+            }
+            let end = if i < grabbed { 0.0 } else { length };
+            let span = (at - end).abs();
+            if i == 0 || i == last || span <= 0.0 || !span.is_finite() {
+                return [0.0; 3];
+            }
+            let along = |c: f64| (c - end).abs() / span;
+            let u = along(c);
+            let w = u * u * (3.0 - 2.0 * u);
+            let slope = 6.0 * u * (1.0 - u);
+            let shares = [w + slope * (along(c_in) - u), w, w + slope * (along(c_out) - u)];
+            // A coordinate that isn't finite moves nothing.
+            if shares.iter().all(|s| s.is_finite()) { shares } else { [0.0; 3] }
+        })
+        .collect()
+}
+
 fn reshape(s: &mut Session, p: &Value) -> Result<Value> {
     let id = id_param(p, "id").ok_or_else(|| bad("path.reshape", "missing id"))?;
     let at = Point::new(f64_req(p, "x", "path.reshape")?, f64_req(p, "y", "path.reshape")?);
@@ -1417,14 +1468,42 @@ fn reshape(s: &mut Session, p: &Value) -> Result<Value> {
     let delta = Vec2::new(f64_or(p, "dx", 0.0), f64_or(p, "dy", 0.0));
     let tol = f64_or(p, "tol", 3.0).max(0.0);
     let radius = p.get("radius").and_then(Value::as_f64);
+    if radius.is_some_and(|r| r < 0.0) {
+        return Err(bad("path.reshape", "`radius` must be 0 or more"));
+    }
+    // The anchor within `tol` of the grab point, if there is one.
+    let near = |sp: &SubPath| match sp.anchors.iter().enumerate().map(|(i, a)| (i, a.p.distance(at))).min_by(|a, b| a.1.total_cmp(&b.1)) {
+        Some((i, dist)) if dist <= tol => Some(i),
+        _ => None,
+    };
+    // A drag of no length on an anchor moves nothing, so it is not an edit.
+    if delta == Vec2::ZERO {
+        let st = s.doc()?;
+        let node = st.doc.node(id).ok_or(EngineError::NoNode(id))?;
+        let path = node.path_data().ok_or_else(|| EngineError::Other(format!("object {id} is not a path")))?;
+        let (si, ..) = path.nearest(at).ok_or_else(|| EngineError::Other("empty path".into()))?;
+        if path.subpaths.get(si).is_some_and(|sp| near(sp).is_some()) {
+            return ok();
+        }
+    }
     s.edit("Reshape", |d, _| {
         let path = path_mut(d, id)?;
         let (si, seg, t, _, _) = path.nearest(at).ok_or_else(|| EngineError::Other("empty path".into()))?;
         let sp = &mut path.subpaths[si];
-        let grabbed = match sp.anchors.iter().enumerate().map(|(i, a)| (i, a.p.distance(at))).min_by(|a, b| a.1.total_cmp(&b.1)) {
-            Some((i, dist)) if dist <= tol => i,
-            _ => sp.insert_anchor(seg, t),
+        let grabbed = match near(sp) {
+            Some(i) => i,
+            None => sp.insert_anchor(seg, t),
         };
+        let closed = sp.closed;
+        if radius.is_none() && !closed {
+            let weights = stretch_weights(&sp.anchors, grabbed);
+            for (a, [w_in, w, w_out]) in sp.anchors.iter_mut().zip(weights) {
+                a.p += delta * w;
+                a.h_in += delta * w_in;
+                a.h_out += delta * w_out;
+            }
+            return Ok(());
+        }
         // Each anchor's distance along the path from the grabbed one, the shorter way round a
         // closed path: the lengths are measured once, as a path can have many anchors.
         let pos = sp.anchor_arc_positions();
@@ -1437,7 +1516,6 @@ fn reshape(s: &mut Session, p: &Value) -> Result<Value> {
             (b.width().hypot(b.height()) / 2.0).max(1.0)
         });
         let from = pos.get(grabbed).copied().unwrap_or(0.0);
-        let closed = sp.closed;
         for (i, a) in sp.anchors.iter_mut().enumerate() {
             let w = if i == grabbed {
                 1.0
