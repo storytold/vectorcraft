@@ -375,6 +375,54 @@ fn a_symbol_holding_more_objects_than_the_work_limit_is_refused_before_its_art_i
     assert!(work <= 2, "refused before the symbol's art is placed and listed: {work}");
 }
 
+/// A gradient fill: a path filled with one is drawn in clip groups where it crosses 9-slice guides.
+fn gradient() -> Paint {
+    use vectorcraft_doc::color::{Gradient, GradientPaint};
+    Paint::Gradient(Box::new(GradientPaint::new(Gradient::default())))
+}
+
+/// A document whose symbol "Sliced" has 9-slice guides and holds `count` paths across all of them,
+/// each filled with `fill`, and an Extrude on an instance of it at twice its size.
+fn sliced(count: usize, fill: impl Fn() -> Paint) -> (Document, Node) {
+    let mut d = document();
+    let members = (0..count).map(|i| {
+        Arc::new(Node::path(NodeId(i as u64 + 1), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::basic(fill(), Paint::None, 0.0)))
+    });
+    d.symbols.push(Symbol { dynamic: true, name: "Sliced".into(), art: Arc::new(Node::group(NodeId(0), members.collect())) });
+    d.set_symbol_nine_slice("Sliced", Some(vectorcraft_doc::SymbolNineSlice::default()));
+    let n = with(instance(30, "Sliced", Affine::scale(2.0)), EXTRUDE, json!({}));
+    (d, n)
+}
+
+#[test]
+fn a_symbol_whose_9_slice_guides_would_place_too_many_objects_is_refused_before_its_art_is_placed() {
+    // Each gradient path becomes a group of nine clip groups, so the art placed is far past the
+    // limit while the symbol itself holds less than a tenth of it.
+    let (d, n) = sliced(source::MAX_WORK / 20, gradient);
+    assert!(d.symbols[1].art.count_with_masks() < source::MAX_WORK);
+    let err = validate_three_d_in(Some(&d), &n, EXTRUDE, &json!({})).unwrap_err();
+    assert!(err.contains("hold too many objects"), "{err}");
+    let work = source::WORK.with(std::cell::Cell::get);
+    assert!(work <= 2, "refused before the symbol's art is placed and listed: {work}");
+}
+
+#[test]
+fn a_dynamic_symbol_whose_overrides_would_place_too_many_objects_is_refused_before_its_art_is_placed() {
+    // Solid paths are cut at the guides and stay one path each; the instance's overrides fill them
+    // with a gradient, which places each in nine clip groups.
+    let (d, mut n) = sliced(source::MAX_WORK / 20, || Paint::solid(Color::BLACK));
+    n.extras_mut().symbol_overrides = (0..source::MAX_WORK / 20)
+        .map(|i| vectorcraft_doc::SymbolOverride { path: vec![i as u32], fill: Some(gradient()), ..Default::default() })
+        .collect();
+    let err = validate_three_d_in(Some(&d), &n, EXTRUDE, &json!({})).unwrap_err();
+    assert!(err.contains("hold too many objects"), "{err}");
+    let work = source::WORK.with(std::cell::Cell::get);
+    assert!(work <= 2, "refused before the instance's art is placed and listed: {work}");
+    // A few such paths build.
+    let (d, n) = sliced(4, || Paint::solid(Color::BLACK));
+    assert!(solid_art_in(Some(&d), &n).is_some());
+}
+
 #[test]
 fn empty_sources_and_sources_inside_sources_build_or_refuse_cleanly() {
     let mut d = document();
