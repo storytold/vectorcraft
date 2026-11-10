@@ -23,11 +23,13 @@ use build::{Camera, cuts, edge_distance, newell, section};
 pub(crate) use build::{Face3, extrude_faces, plane_faces};
 pub use build::{extrude, plane};
 #[cfg(test)]
+use inflate::GRID_WORK;
+#[cfg(test)]
 pub(crate) use inflate::INFLATED;
 pub(crate) use inflate::inflate_faces;
 pub use inflate::{inflate, inflate_together};
 #[cfg(test)]
-use membrane::{Edges, Membrane, cell_triangles};
+use membrane::{Edges, GRID_BUDGET, MAX_EDGE_ENTRIES, MAX_GRID_WORK, Membrane, cell_triangles};
 use rings::signed_area;
 #[cfg(test)]
 use rings::{MAX_SOLID_POINTS, rings};

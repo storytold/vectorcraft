@@ -245,6 +245,10 @@ out, perspective). No Adobe software, assets, presets or bevel shapes were used.
   builds them, against the same 163,840. The point limit is counted on the shape as drawn and, when its contours
   meet, again on the merged outline, which can have more points (bars crossing in a grid trace every hole between
   them); past it, the shape is too complex for the effect.
+- Inflate also limits the work of filling its grid, which grows with the outline's points times the grid cells its
+  outline crosses. An outline of tens of thousands of points that crosses nearly every cell (a comb of 4,000 teeth
+  across the shape) is refused because the 3D surface is too complex; a closed path of 65,536 points round a
+  circle builds.
 - **3D (Classic)**: Extrude & Bevel (Classic) is built, with its surface types and blend steps. Revolve (Classic),
   Rotate (Classic), the track cube, map art, Turntable and 3D export are separate, unbuilt items.
 

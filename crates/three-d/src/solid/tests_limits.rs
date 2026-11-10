@@ -139,3 +139,59 @@ fn many_empty_contours_and_invalid_handles_are_refused_before_sampling() {
     assert_eq!(rings::curve_pieces(&bad, 10.0, 1, 2), Err("The shape contains invalid coordinates".to_string()));
     assert_eq!(inflate(&bad, FillRule::NonZero, b, Inflate::default(), turned()), Err("The shape contains invalid coordinates".to_string()));
 }
+
+/// A comb of `teeth` teeth, 100 wide and 100 tall, on a strip along its foot: its outline
+/// crosses every cell of the grid Inflate fills.
+fn comb(teeth: usize) -> PathData {
+    let w = 100.0 / teeth as f64;
+    let mut points: Vec<Point> = (0..teeth)
+        .flat_map(|k| {
+            let x = k as f64 * w;
+            [Point::new(x, 0.0), Point::new(x, 100.0), Point::new(x + w / 2.0, 100.0), Point::new(x + w / 2.0, 0.0)]
+        })
+        .collect();
+    points.extend([Point::new(100.0, -1.0), Point::new(0.0, -1.0)]);
+    PathData::new(vec![SubPath::polyline(&points, true)])
+}
+
+/// Inflate `path` with the grid work its edge index may take set to `budget`.
+fn inflated_within(path: &PathData, budget: usize) -> Result<Vec<Facet>, String> {
+    GRID_BUDGET.with(|b| b.set(budget));
+    let out = inflate(path, FillRule::NonZero, path.bounds().unwrap(), Inflate::default(), turned());
+    GRID_BUDGET.with(|b| b.set(MAX_GRID_WORK));
+    out
+}
+
+#[test]
+fn inflate_at_its_grid_work_budget_builds_and_one_past_it_is_refused() {
+    let path = comb(200);
+    assert!(built(&inflated_within(&path, MAX_GRID_WORK).unwrap()));
+    let work = GRID_WORK.with(std::cell::Cell::get);
+    assert!(work > 0);
+    assert!(built(&inflated_within(&path, work).unwrap()));
+    assert_eq!(GRID_WORK.with(std::cell::Cell::get), work, "the same work at its budget");
+    assert_eq!(inflated_within(&path, work - 1), Err(SURFACE.to_string()));
+}
+
+#[test]
+fn the_edge_index_at_its_entry_limit_is_built_and_one_past_it_is_refused() {
+    // A diagonal across the whole grid of 64 by 64 buckets is filed in every bucket, each way.
+    let diagonal = vec![Point::new(0.0, 0.0), Point::new(64.0, 64.0)];
+    assert_eq!(MAX_EDGE_ENTRIES, 2048 * 2 * 64 * 64);
+    let mut rings = vec![diagonal; 2048];
+    assert!(Edges::new(&rings).is_ok_and(|e| e.work() == MAX_EDGE_ENTRIES));
+    // A small triangle in one bucket: three entries more.
+    rings.push(vec![Point::new(0.0, 0.0), Point::new(0.5, 0.0), Point::new(0.0, 0.5)]);
+    assert_eq!(Edges::new(&rings).err(), Some(SURFACE.to_string()));
+}
+
+#[test]
+fn a_comb_that_crosses_every_cell_is_refused_once_its_grid_work_is_spent() {
+    // Two thousand curves take a small share of the budget.
+    let curves = petals(2000, 500.0, 4.0);
+    assert!(built(&inflate(&curves, FillRule::NonZero, curves.bounds().unwrap(), Inflate::default(), turned()).unwrap()));
+    assert!(GRID_WORK.with(std::cell::Cell::get) < MAX_GRID_WORK / 16);
+    // 16,002 points, each clipped in every cell its ring meets.
+    let path = comb(4000);
+    assert_eq!(inflate(&path, FillRule::NonZero, path.bounds().unwrap(), Inflate::default(), turned()), Err(SURFACE.to_string()));
+}

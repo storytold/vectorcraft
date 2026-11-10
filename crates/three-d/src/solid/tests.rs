@@ -324,11 +324,11 @@ fn the_inflate_membrane_matches_known_solutions() {
     c.extend(vectorcraft_geom::kurbo::Shape::path_elements(&vectorcraft_geom::kurbo::Circle::new((100.0, 100.0), 50.0), 0.01));
     let (p, b) = shape(&c);
     let r = rings(&p, FillRule::EvenOdd, 100.0, MAX_SOLID_POINTS).unwrap();
-    let disc = Membrane::solve(&r, &Edges::new(&r), b.origin(), b.width() / 48.0, 49, 49);
+    let disc = Membrane::solve(&r, &Edges::new(&r).unwrap(), b.origin(), b.width() / 48.0, 49, 49);
     assert!(close(disc.peak, 50.0 * 50.0 / 4.0, 625.0 * 0.02), "{}", disc.peak);
     let (p, b) = shape(&square(0.0, 0.0, 100.0));
     let r = rings(&p, FillRule::EvenOdd, 100.0, MAX_SOLID_POINTS).unwrap();
-    let sq = Membrane::solve(&r, &Edges::new(&r), b.origin(), 100.0 / 48.0, 49, 49);
+    let sq = Membrane::solve(&r, &Edges::new(&r).unwrap(), b.origin(), 100.0 / 48.0, 49, 49);
     assert!(close(sq.peak, 0.07367 * 100.0 * 100.0, 736.7 * 0.02), "{}", sq.peak);
     // Smooth across the middle: no crease where a distance-to-the-edge height would have one
     // (the diagonals). The second difference along a diagonal stays small and even.
@@ -426,7 +426,7 @@ fn twisted_pieces_stay_within_the_facet_limit() {
 fn the_edge_index_finds_the_nearest_edge() {
     let (p, r) = bumps(200);
     let rings = rings(&p, FillRule::EvenOdd, r.width(), MAX_SOLID_POINTS).unwrap();
-    let edges = Edges::new(&rings);
+    let edges = Edges::new(&rings).unwrap();
     for k in 0..400 {
         let t = f64::from(k);
         let q = Point::new(-300.0 + (t * 37.0) % 1400.0, -50.0 + (t * 13.0) % 130.0);
@@ -442,7 +442,7 @@ fn the_edge_index_looks_along_the_side_from_outside() {
     let ring = |b: BezPath| rings(&shape(&b).0, FillRule::EvenOdd, 64.0, MAX_SOLID_POINTS).unwrap().remove(0);
     // Straight ahead of the point, a little further up its side, and the far corner (a 64 pt grid).
     let rings = vec![ring(square(2.5, 0.0, 1.0)), ring(square(0.0, 4.2, 0.8)), ring(square(63.0, 63.0, 1.0))];
-    let edges = Edges::new(&rings);
+    let edges = Edges::new(&rings).unwrap();
     let q = Point::new(-10.0, 0.5);
     let (fast, slow) = (edges.distance(q), edge_distance(&rings, q));
     assert!((fast - slow).abs() < 1e-9, "{fast} against {slow}");

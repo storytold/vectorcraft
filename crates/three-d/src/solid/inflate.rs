@@ -1,5 +1,5 @@
 use super::build::{Builder, Built, Camera, Order, Turn, check_bounds, cuts, fit, newell, outward};
-use super::membrane::{Edges, MAX_MATERIAL_SEGMENTS, Membrane, cell_triangles, clip, filled, material};
+use super::membrane::{Edges, MAX_MATERIAL_SEGMENTS, Membrane, cell_triangles, clip, crossings, filled, material};
 use super::rings::{MAX_SOLID_POINTS, TOO_COMPLEX_SURFACE, curve_pieces, signed_area, solid_rings};
 use super::{Facet, FillRule, Inflate, MAX_FACES, MAX_SOLID_FACES, PathData, Point, Rect, V3, Vec2, View};
 
@@ -43,8 +43,11 @@ fn puff(path: &PathData, rule: FillRule, bounds: Rect, o: &Inflate) -> Result<Op
     }
     let side = |len: f64| ((len / cell).ceil() as usize).clamp(1, CELLS + 1);
     let (nx, ny) = (side(bounds.width()), side(bounds.height()));
-    let edges = Edges::new(&rings);
+    let edges = Edges::new(&rings)?;
     let m = Membrane::solve(&rings, &edges, bounds.origin(), cell, nx + 1, ny + 1);
+    if edges.spent() {
+        return Err(TOO_COMPLEX_SURFACE.into());
+    }
     // A circle of radius r puffs into a half sphere of radius r at 50 % (its membrane peaks at r²/4).
     let height = 2.0 * m.peak.sqrt() * o.volume / 50.0;
     Ok(Some(Puff { rings, edges, cell, nx, ny, m, height }))
@@ -87,6 +90,8 @@ pub(crate) fn inflate_faces(
 thread_local! {
     /// How many inflated solids this thread has built, for the tests.
     pub(crate) static INFLATED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// The grid work of the last solid this thread inflated in full, for the tests.
+    pub(super) static GRID_WORK: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// The facets of one inflated shape, for a camera that allows for a puff `reach` high (or the
@@ -151,14 +156,41 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64, mesh: boo
     // builds the topology of every outline ring near its cell, so a self-crossing outline cost its
     // crossings again in every cell it spans. Past it, cells take their clipped pieces.
     let material_left = std::cell::Cell::new(MAX_MATERIAL_SEGMENTS);
-    // The shape's part of a rectangle, as rings.
+    // Every ring's bounds, and the crossings of the last few rows the cells' centres lie on (a
+    // row of cells has at most seven, at its three levels).
+    let ring_bounds: Vec<Option<Rect>> =
+        rings.iter().map(|r| Some(r.iter().skip(1).fold(Rect::from_points(*r.first()?, *r.first()?), |b, p| b.union_pt(*p)))).collect();
+    let points = rings.iter().map(Vec::len).fold(0usize, usize::saturating_add);
+    let rows: std::cell::RefCell<Vec<(u64, Vec<f64>)>> = std::cell::RefCell::new(vec![]);
+    let filled_at = |p: Point| -> bool {
+        let mut rows = rows.borrow_mut();
+        if let Some((_, xs)) = rows.iter().find(|(y, _)| *y == p.y.to_bits()) {
+            return filled(xs, p.x);
+        }
+        let xs = if edges.charge(points) { crossings(&rings, p.y) } else { vec![] };
+        let inside = filled(&xs, p.x);
+        if rows.len() >= 8 {
+            rows.remove(0);
+        }
+        rows.push((p.y.to_bits(), xs));
+        inside
+    };
+    // The shape's part of a rectangle, as rings: only the rings whose bounds meet it are clipped,
+    // each point counted as work.
     let cut = |r: Rect| -> Vec<Vec<Point>> {
         // A cell no edge crosses is wholly inside the shape or wholly outside it.
         if !edges.touch(r) {
             let corners = vec![Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x1, r.y1), Point::new(r.x0, r.y1)];
-            return if filled(&rings, r.center()) { vec![corners] } else { vec![] };
+            return if filled_at(r.center()) { vec![corners] } else { vec![] };
         }
-        let pieces: Vec<Vec<Point>> = rings.iter().map(|ring| clip(ring, r)).filter(|c| !c.is_empty()).collect();
+        let pieces: Vec<Vec<Point>> = rings
+            .iter()
+            .zip(&ring_bounds)
+            .filter(|(_, b)| b.is_some_and(|b| b.x0 <= r.x1 && r.x0 <= b.x1 && b.y0 <= r.y1 && r.y0 <= b.y1))
+            .filter(|(ring, _)| edges.charge(ring.len()))
+            .map(|(ring, _)| clip(ring, r))
+            .filter(|c| !c.is_empty())
+            .collect();
         if pieces.iter().map(|p| signed_area(p)).sum::<f64>() <= 1e-9 * r.area() {
             return vec![];
         }
@@ -193,6 +225,9 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64, mesh: boo
             }
         })
         .collect();
+    if edges.spent() {
+        return Err(TOO_COMPLEX_SURFACE.into());
+    }
     let level =
         |i: isize, j: isize| -> u32 { if i < 0 || j < 0 || i as usize >= nx || j as usize >= ny { 0 } else { levels[j as usize * nx + i as usize] } };
     for j in 0..ny {
@@ -209,6 +244,9 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64, mesh: boo
                 for sx in (bx0..bx1).step_by(step) {
                     let r = Rect::from_points(at(sx, sy), at(sx + step, sy + step));
                     let pieces = cut(r);
+                    if edges.spent() {
+                        return Err(TOO_COMPLEX_SURFACE.into());
+                    }
                     if pieces.is_empty() {
                         continue;
                     }
@@ -337,6 +375,11 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64, mesh: boo
                 b.band(&at(ring, k), &at(ring, k + 1), pieces, |i| outward(ring, i, 0.0))?;
             }
         }
+    }
+    #[cfg(test)]
+    GRID_WORK.with(|w| w.set(edges.work()));
+    if edges.spent() {
+        return Err(TOO_COMPLEX_SURFACE.into());
     }
     Ok(b.finish())
 }

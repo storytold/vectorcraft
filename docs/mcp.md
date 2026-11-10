@@ -2581,7 +2581,9 @@ the scope and what differs from the public documentation.
 `threeD.extrude` and `threeD.inflate` take up to 65,536 outline points and build up to 163,840 faces for each solid
 (VectorCraft's own limits); with more faces than that, each curve takes fewer pieces, down to 4. A shape past the
 points returns "The shape is too complex for a 3D effect", and one whose faces do not fit at 4 pieces a curve returns
-"The 3D surface is too complex; simplify the shape". `threeD.rotate` takes up to 65,536 points.
+"The 3D surface is too complex; simplify the shape". `threeD.inflate` also returns the surface error when its outline
+has so many points across so many of its grid's cells that filling the grid would pass its work limit. `threeD.rotate`
+takes up to 65,536 points.
 
 ## Extrude & Bevel (Classic)
 
