@@ -311,6 +311,15 @@ Names in the editing data that aren't UTF-8 (layers, objects, artboards, colors,
 | Affinity `.af`, `.afdesign`, `.afpub` | no | yes (beyond Illustrator) | no (#665) | 51 pinned files, [affinity-validation.md](affinity-validation.md) |
 | Clipboard: PDF, SVG, PNG, EMF, text | yes | yes | yes | copied files paste as art; cells copied from a spreadsheet (tab-separated text) paste as a table of point type over gridlines, at most 1000 rows, 256 columns and 20,000 cells (#5296) |
 
+## PDF form gradients
+
+PDF export's linear and radial gradients stay aligned inside transparency groups, opacity masks,
+PDF layers and overprinting art. The original synthetic tests in
+`crates/pdf/tests/gradient_forms.rs` check the output with macOS Quartz and an import/render
+round trip. The three Quartz checks fail on main `65adb7b21` and pass with the form-space fix;
+translated layer bounds also have a regression for the current writer's layer-box repair.
+Stop opacity on translated artboards remains outside this regression coverage.
+
 ## PDF editable imports
 
 - [x] Explicit `/ActualText` replaces covered glyph text once, including empty strings and nested spans (outer owner wins), while later glyphs retain pen geometry. Synthetic regressions in `crates/pdf/src/tests/actual_text.rs`; no added fonts/assets. UTF-16BE, BOM UTF-8 and PDFDocEncoding reuse the reader's text-string decoder.
