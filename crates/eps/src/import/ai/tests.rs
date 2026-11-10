@@ -7501,6 +7501,52 @@ fn a_mesh_envelope_opens_live_with_its_points_and_handles() {
     assert!(r.warnings.is_empty(), "{:?}", r.warnings);
 }
 
+/// A mesh envelope bent far round, its end columns leaning more than halfway over (a warp's grid
+/// bent into an arc), opens live the way it runs: its columns along the arc, as in the file.
+#[test]
+fn a_mesh_envelope_bent_far_round_opens_the_way_it_runs() {
+    use vectorcraft_doc::live::{EnvelopeKind, H_DOWN, H_LEFT, H_RIGHT, H_UP};
+    // 3 columns along an arc round (100, 0) from 160 to 20 degrees, rows at radius 60 and 90: the
+    // end columns lean 70 degrees over.
+    let at = |(i, j): (usize, usize)| {
+        let (a, r) = ((160.0 - i as f64 * 140.0 / 3.0).to_radians(), 60.0 + j as f64 * 30.0);
+        (100.0 + r * a.cos(), r * a.sin())
+    };
+    let handle = |p: (usize, usize), q: (usize, usize)| {
+        let ((x, y), (u, v)) = (at(p), at(q));
+        (x + (u - x) / 3.0, y + (v - y) / 3.0)
+    };
+    // Written with its first index across the arc and its second along it, so that the grid reads
+    // turned round and has to be turned upright.
+    let shape = mesh_text(1, 3, &|(i, j)| at((j, i)), &|p, q| handle((p.1, p.0), (q.1, q.0)), None);
+    // Row r of the envelope is row 1 - r of the file (art space has y up).
+    let doc_pt = |(x, y): (f64, f64)| Point::new(x, 100.0 - y);
+    let (mut points, mut handles) = (vec![], vec![]);
+    for r in 0..=1usize {
+        for c in 0..=3usize {
+            let g = (c, 1 - r);
+            let p = doc_pt(at(g));
+            points.push(p);
+            let towards = |q: Option<(usize, usize)>| q.filter(|q| q.0 <= 3 && q.1 <= 1).map_or(kurbo::Vec2::ZERO, |q| doc_pt(handle(g, q)) - p);
+            let mut h = [kurbo::Vec2::ZERO; 4];
+            h[H_RIGHT] = towards(Some((g.0 + 1, g.1)));
+            h[H_LEFT] = towards(g.0.checked_sub(1).map(|i| (i, g.1)));
+            h[H_UP] = towards(Some((g.0, g.1 + 1)));
+            h[H_DOWN] = towards(g.1.checked_sub(1).map(|j| (g.0, j)));
+            handles.push(h);
+        }
+    }
+    let want = EnvelopeKind::Mesh { rows: 1, cols: 3, points, handles };
+    let r = read_ok(&layer(&envelope_of(&shape, ENVELOPE_KEYS, &envelope_content(), 2, &drawn_content(&want))));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    let EnvelopeKind::Mesh { rows, cols, points: got, .. } = live_envelope(&a[0]).1 else { panic!("{a:#?}") };
+    assert_eq!((*rows, *cols), (1, 3));
+    let EnvelopeKind::Mesh { points: want, .. } = &want else { panic!("{want:?}") };
+    assert!(got.iter().zip(want).all(|(p, q)| (*p - *q).hypot() < 1e-6), "{got:?}");
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+}
+
 /// An envelope made with a top object opens as a live envelope whose top path is the edge of its
 /// one-patch mesh, an anchor on the edge included; its contents stay the rectangle.
 #[test]

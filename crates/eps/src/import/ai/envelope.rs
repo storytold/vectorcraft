@@ -189,9 +189,19 @@ fn upright(m: &GradientMesh) -> Option<(u32, u32, Vec<GridPoint>)> {
     let mut pts: Vec<GridPoint> = m.points.iter().map(|q| (q.p, q.handles)).collect();
     let at = |pts: &[GridPoint], cols: u32, r: u32, c: u32| pts.get((r * (cols + 1) + c) as usize).map_or(Point::ZERO, |q| q.0);
     let remap = |h: [Vec2; 4], slots: [usize; 4]| slots.map(|s| h.get(s).copied().unwrap_or(Vec2::ZERO));
-    // Columns that run down the page: the grid goes the other way round.
-    let along = at(&pts, cols, 0, cols) - at(&pts, cols, 0, 0);
-    if along.y.abs() > along.x.abs() {
+    // How the grid runs along its rows (its first and last rows, end to end added up) and down its
+    // columns (its first and last columns): read from both sides, a grid bent far round (its end
+    // columns leaning more than halfway over) still reads the way it runs.
+    let runs = |pts: &[GridPoint], rows: u32, cols: u32| {
+        let along = (at(pts, cols, 0, cols) - at(pts, cols, 0, 0)) + (at(pts, cols, rows, cols) - at(pts, cols, rows, 0));
+        let down = (at(pts, cols, rows, 0) - at(pts, cols, 0, 0)) + (at(pts, cols, rows, cols) - at(pts, cols, 0, cols));
+        (along, down)
+    };
+    // How much of a run is across the page.
+    let level = |v: Vec2| if v.hypot() > 0.0 { v.x.abs() / v.hypot() } else { 0.0 };
+    // Columns that run across the page more than rows do: the grid goes the other way round.
+    let (along, down) = runs(&pts, rows, cols);
+    if level(down) > level(along) {
         let mut t = Vec::with_capacity(len);
         for r in 0..=cols {
             for c in 0..=rows {
@@ -205,7 +215,7 @@ fn upright(m: &GradientMesh) -> Option<(u32, u32, Vec<GridPoint>)> {
         (rows, cols) = (cols, rows);
         pts = t;
     }
-    if (at(&pts, cols, 0, cols) - at(&pts, cols, 0, 0)).x < 0.0 {
+    if runs(&pts, rows, cols).0.x < 0.0 {
         for row in pts.chunks_mut(cols as usize + 1) {
             row.reverse();
             for (_, h) in row.iter_mut() {
@@ -213,7 +223,7 @@ fn upright(m: &GradientMesh) -> Option<(u32, u32, Vec<GridPoint>)> {
             }
         }
     }
-    if (at(&pts, cols, rows, 0) - at(&pts, cols, 0, 0)).y < 0.0 {
+    if runs(&pts, rows, cols).1.y < 0.0 {
         let mut flipped: Vec<GridPoint> = pts.chunks(cols as usize + 1).rev().flatten().copied().collect();
         for (_, h) in &mut flipped {
             h.swap(H_DOWN, H_UP);
