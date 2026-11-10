@@ -91,14 +91,19 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         divider(ui);
         section_header(ui, tl!("Pathfinder"));
         ui.horizontal(|ui| {
-            for (icon, tip, op) in [
-                ("squares-unite", tl!("Unite"), "unite"),
-                ("squares-subtract", tl!("Minus Front"), "minusFront"),
-                ("squares-intersect", tl!("Intersect"), "intersect"),
-                ("squares-exclude", tl!("Exclude"), "exclude"),
-            ] {
+            // The Pathfinder panel's Shape Modes: Alt, its Compound Shapes setting and selected
+            // compound-shape members work here too (#6333).
+            let members = !vectorcraft_engine::cmd::selected_member_modes(&app.session).is_empty();
+            use vectorcraft_doc::ShapeMode;
+            let buttons = [
+                ("squares-unite", tl!("Unite"), "unite", ShapeMode::Add),
+                ("squares-subtract", tl!("Minus Front"), "minusFront", ShapeMode::Subtract),
+                ("squares-intersect", tl!("Intersect"), "intersect", ShapeMode::Intersect),
+                ("squares-exclude", tl!("Exclude"), "exclude", ShapeMode::Exclude),
+            ];
+            for (icon, tip, op, mode) in buttons {
                 if widgets::icon_button(ui, icon, tip, false, 28.0).clicked() {
-                    app.run(&format!("object.pathfinder.{op}"), json!({})).ok();
+                    super::pathfinder::shape_mode(app, ui, op, mode, members);
                 }
             }
             if widgets::icon_button(ui, "ellipsis", tl!("More Pathfinder options"), false, 28.0).clicked() {

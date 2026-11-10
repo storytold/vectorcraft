@@ -79,8 +79,9 @@ fn button(ui: &mut Ui, icon: &str, tip: &str, selected: bool, n: usize, min: usi
 /// A Shape Mode button clicked: Alt makes a compound shape of the selection in `mode`; with
 /// members of compound shapes selected they take `mode`; otherwise operation `op` runs. With the
 /// Compound Shapes add-on's setting on, a click on the selection (not on members) makes the
-/// compound shape and Alt gives the permanent result.
-fn shape_mode(app: &mut VectorcraftApp, ui: &Ui, op: &str, mode: ShapeMode, members: bool) {
+/// compound shape and Alt gives the permanent result. Every Shape Mode button goes through here:
+/// this panel's, the Properties panel's and the Contextual Task Bar's Unite (#6333).
+pub(crate) fn shape_mode(app: &mut VectorcraftApp, ui: &Ui, op: &str, mode: ShapeMode, members: bool) {
     let alt = ui.input(|i| i.modifiers.alt);
     if members {
         if alt {
@@ -352,6 +353,11 @@ mod tests {
 
     /// Click a panel button with a modifier held across the input frames.
     fn click_button_with_modifiers(app: &mut VectorcraftApp, label: &str, modifiers: egui::Modifiers) {
+        click_button_in(app, label, modifiers, show, egui::vec2(300.0, 200.0));
+    }
+
+    /// Click the button named `label` that `draw` shows on a `size` screen, `modifiers` held.
+    fn click_button_in(app: &mut VectorcraftApp, label: &str, modifiers: egui::Modifiers, draw: fn(&mut VectorcraftApp, &mut Ui), size: egui::Vec2) {
         crate::i18n::set_current(crate::i18n::Lang::EN);
         let ctx = egui::Context::default();
         ctx.enable_accesskit();
@@ -359,11 +365,11 @@ mod tests {
         let mut time = 0.0;
         let mut frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
             time += 0.1;
-            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(300.0, 200.0));
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, size);
             let mut events = events;
             events.insert(0, egui::Event::ModifiersChanged(modifiers));
             let input = egui::RawInput { events, time: Some(time), screen_rect: Some(screen), ..Default::default() };
-            let mut out = ctx.run_ui(input, |ui| show(app, ui));
+            let mut out = ctx.run_ui(input, |ui| draw(app, ui));
             out.textures_delta.clear();
             out
         };
@@ -632,6 +638,52 @@ mod tests {
         app.run("window.pathfinder.compoundShapes", json!({})).unwrap();
         assert!(!app.ui.shape_modes_compound);
         assert_eq!(crate::menus::checked(&app, "window.pathfinder.compoundShapes", &serde_json::Value::Null), Some(false));
+    }
+
+    /// #6333: the Properties panel's Shape Mode buttons are the Pathfinder panel's. A click is
+    /// permanent and Alt makes a compound shape; with the Compound Shapes setting on it is the
+    /// other way round; selected members take the clicked mode.
+    #[test]
+    fn the_properties_panel_shape_modes_follow_alt_the_setting_and_selected_members() {
+        let click = |app: &mut VectorcraftApp, label: &str, modifiers| {
+            click_button_in(app, label, modifiers, crate::panels::properties::show, egui::vec2(300.0, 1600.0));
+        };
+        let mut app = two_squares();
+        click(&mut app, "Unite", egui::Modifiers::NONE);
+        assert_eq!((objects(&app).len(), compound_shapes(&app)), (1, 0), "a click is permanent");
+        let mut app = two_squares();
+        click(&mut app, "Unite", egui::Modifiers::ALT);
+        assert_eq!(compound_shapes(&app), 1, "Alt makes a compound shape");
+
+        let mut app = two_squares();
+        app.run("window.pathfinder.compoundShapes", json!({})).unwrap();
+        click(&mut app, "Unite", egui::Modifiers::NONE);
+        assert_eq!(compound_shapes(&app), 1, "with the setting on, a click makes a compound shape");
+        let mut app = two_squares();
+        app.run("window.pathfinder.compoundShapes", json!({})).unwrap();
+        click(&mut app, "Unite", egui::Modifiers::ALT);
+        assert_eq!((objects(&app).len(), compound_shapes(&app)), (1, 0), "with the setting on, Alt is permanent");
+
+        // Both members of a compound shape selected: they take Minus Front, no second shape.
+        let mut app = two_squares();
+        click(&mut app, "Unite", egui::Modifiers::ALT);
+        let shape = app.session.active().unwrap().selection.objects[0];
+        let members: Vec<_> = app.session.active().unwrap().doc.node(shape).unwrap().children().unwrap().iter().map(|n| n.id.0).collect();
+        app.run("select.set", json!({"ids": members})).unwrap();
+        click(&mut app, "Minus Front", egui::Modifiers::NONE);
+        assert_eq!(compound_shapes(&app), 1, "no second compound shape");
+        assert_eq!(vectorcraft_engine::cmd::selected_member_modes(&app.session), [ShapeMode::Subtract, ShapeMode::Subtract]);
+
+        // With the setting on, Alt-click on selected members makes a compound shape of them,
+        // nested in the first, instead of the permanent operation.
+        let mut app = two_squares();
+        click(&mut app, "Unite", egui::Modifiers::ALT);
+        let shape = app.session.active().unwrap().selection.objects[0];
+        let members: Vec<_> = app.session.active().unwrap().doc.node(shape).unwrap().children().unwrap().iter().map(|n| n.id.0).collect();
+        app.run("select.set", json!({"ids": members})).unwrap();
+        app.run("window.pathfinder.compoundShapes", json!({})).unwrap();
+        click(&mut app, "Unite", egui::Modifiers::ALT);
+        assert_eq!(compound_shapes(&app), 2, "a compound shape nested in the first");
     }
 
     /// Members of a compound shape that are selected take the clicked mode whatever the setting says.

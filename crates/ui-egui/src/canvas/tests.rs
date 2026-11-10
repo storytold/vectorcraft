@@ -8959,6 +8959,90 @@ fn the_task_bar_lock_button_locks_selected_art_in_isolation_mode() {
     assert!(locked(&app, &g), "the group is locked outside isolation mode");
 }
 
+/// #6333: the Contextual Task Bar's Unite is the Pathfinder panel's Shape Mode. A click unites
+/// the selection into one path; Alt-click makes a live compound shape and keeps the originals;
+/// selected members of a compound shape take Add instead of being united; the Compound Shapes
+/// setting swaps click and Alt-click.
+#[test]
+fn the_task_bar_unite_makes_a_compound_shape_on_alt_click() {
+    let two_squares = || {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let a = app.session.execute("shape.rectangle", &json!({"x": 150, "y": 100, "width": 60, "height": 60})).unwrap()["id"].clone();
+        let b = app.session.execute("shape.rectangle", &json!({"x": 180, "y": 130, "width": 60, "height": 60})).unwrap()["id"].clone();
+        app.session.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+        app.select_tool("selection");
+        app
+    };
+    let click_unite = |app: &mut VectorcraftApp, modifiers: egui::Modifiers| {
+        let ctx = egui::Context::default();
+        let labels = task_bar_labels(app, &ctx);
+        let at = labels.iter().find(|(t, _)| t == "Unite").map(|(_, r)| r.center()).expect("the task bar offers Unite");
+        let events = |pressed: Option<bool>| {
+            let mut ev = vec![egui::Event::ModifiersChanged(modifiers)];
+            ev.push(match pressed {
+                None => egui::Event::PointerMoved(at),
+                Some(pressed) => egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers },
+            });
+            ev
+        };
+        frame(app, &ctx, events(None));
+        frame(app, &ctx, events(Some(true)));
+        frame(app, &ctx, events(Some(false)));
+    };
+    let top = |app: &VectorcraftApp| {
+        let top = app.session.active().unwrap().doc.layers[0].children().unwrap();
+        (top.len(), top.iter().filter(|n| n.is_compound_shape()).count())
+    };
+    let mut app = two_squares();
+    click_unite(&mut app, egui::Modifiers::NONE);
+    assert_eq!(top(&app), (1, 0), "a click unites into one path");
+
+    let mut app = two_squares();
+    click_unite(&mut app, egui::Modifiers::ALT);
+    assert_eq!(top(&app), (1, 1), "Alt-click makes a compound shape");
+
+    // Both members selected and set to Minus Front: Unite gives them Add, keeping the shape.
+    let shape = app.session.active().unwrap().selection.objects[0];
+    let members: Vec<_> = app.session.active().unwrap().doc.node(shape).unwrap().children().unwrap().iter().map(|n| n.id.0).collect();
+    app.session.execute("select.set", &json!({"ids": members})).unwrap();
+    app.session.execute("object.compoundShape.setMode", &json!({"mode": vectorcraft_doc::ShapeMode::Subtract.name()})).unwrap();
+    assert_eq!(
+        vectorcraft_engine::cmd::selected_member_modes(&app.session),
+        [vectorcraft_doc::ShapeMode::Subtract, vectorcraft_doc::ShapeMode::Subtract]
+    );
+    click_unite(&mut app, egui::Modifiers::NONE);
+    assert_eq!(top(&app), (1, 1), "the compound shape is kept");
+    assert_eq!(
+        vectorcraft_engine::cmd::selected_member_modes(&app.session),
+        [vectorcraft_doc::ShapeMode::Add, vectorcraft_doc::ShapeMode::Add],
+        "the members take Add"
+    );
+
+    // With the Compound Shapes setting on, click and Alt-click swap.
+    let mut app = two_squares();
+    app.run("window.pathfinder.compoundShapes", json!({})).unwrap();
+    click_unite(&mut app, egui::Modifiers::NONE);
+    assert_eq!(top(&app), (1, 1), "with the setting on, a click makes a compound shape");
+    let mut app = two_squares();
+    app.run("window.pathfinder.compoundShapes", json!({})).unwrap();
+    click_unite(&mut app, egui::Modifiers::ALT);
+    assert_eq!(top(&app), (1, 0), "with the setting on, Alt-click is permanent");
+
+    // With the setting on, Alt-click on selected members makes a compound shape of them, nested
+    // in the first; `top` can't see nesting, so every compound shape in the document is counted.
+    let mut app = two_squares();
+    click_unite(&mut app, egui::Modifiers::ALT);
+    let shape = app.session.active().unwrap().selection.objects[0];
+    let members: Vec<_> = app.session.active().unwrap().doc.node(shape).unwrap().children().unwrap().iter().map(|n| n.id.0).collect();
+    app.session.execute("select.set", &json!({"ids": members})).unwrap();
+    app.run("window.pathfinder.compoundShapes", json!({})).unwrap();
+    click_unite(&mut app, egui::Modifiers::ALT);
+    let mut compound = 0;
+    app.session.active().unwrap().doc.walk(|n| compound += usize::from(n.is_compound_shape()));
+    assert_eq!(compound, 2, "a compound shape nested in the first");
+}
+
 /// The Contextual Task Bar shows Image Trace first for a selected image: it traces the image
 /// with the Default preset and leaves the Image Trace panel as it was. For the Image Trace
 /// object it made, the first button is Expand, which keeps only the traced paths.
