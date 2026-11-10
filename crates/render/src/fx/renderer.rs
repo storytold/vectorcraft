@@ -588,7 +588,7 @@ impl Renderer {
         let art = match effects::crop_marks_art(a)
             .or_else(|| crate::addons::halftone::art(doc, a))
             .or_else(|| {
-                let art = effects::revolve_art(a).or_else(|| effects::solid_art(a));
+                let art = effects::revolve_art_in(Some(doc), a).or_else(|| effects::solid_art_in(Some(doc), a));
                 self.stats.three_d_built += usize::from(art.is_some());
                 three_d |= art.is_some();
                 art

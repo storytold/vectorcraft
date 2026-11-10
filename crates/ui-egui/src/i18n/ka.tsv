@@ -4971,7 +4971,8 @@ font-technology	Variable	ცვლადი
 	Bevel both sides	წაკვეთა ორივე მხარეს
 	Presets	პრესეტები
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	ობიექტს ერთი 3D ეფექტი შეიძლება ჰქონდეს. შეცვალეთ არსებული ეფექტის პარამეტრები ან ჯერ წაშალეთ ის.
-@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label}: ამჟამად საჭიროა ტრაექტორია, შედგენილი ტრაექტორია, ტექსტი ან ჯგუფი. ჯერ გარდაქმენით გამოსახულებები და სხვა ობიექტები ტრაექტორიებად.
+@msg	{label} currently requires a path, compound path, type, group, blend or symbol instance. Expand other objects first.	{label}: ამჟამად საჭიროა ტრაექტორია, შედგენილი ტრაექტორია, ტექსტი, ჯგუფი, გადასვლა ან სიმბოლოს ეგზემპლარი. ჯერ გაშალეთ სხვა ობიექტები.
+@msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label}: გამოსახულებიდან მყარი სხეულის აგება შეუძლებელია. ჯერ მოახდინეთ მისი ვექტორიზაცია ბრძანებით ობიექტი › გამოსახულების ვექტორიზაცია › შექმნა.
 @msg	{label} requires a shape with at least two anchors	{label}: საჭიროა ფიგურა მინიმუმ ორი საყრდენი წერტილით
 @msg	The shape is too complex for a 3D effect	ფიგურა ზედმეტად რთულია 3D ეფექტისთვის
 @msg	The 3D surface is too complex; simplify the shape	3D ზედაპირი ზედმეტად რთულია; გაამარტივეთ ფიგურა

@@ -130,7 +130,8 @@ fn solid_effects_apply_save_edit_export_expand_and_undo() {
 }
 
 /// #4506: a 3D effect on a group builds a solid from each member, turned about one shared axis;
-/// the members stay editable, and a group holding what can't become a solid is refused.
+/// the members stay editable. A group holding a clipping group builds from the art it shows, and a
+/// group holding what can't become a solid is refused.
 #[test]
 fn solid_effects_apply_to_a_group_and_its_members_stay_editable() {
     for effect in effects::SOLIDS {
@@ -151,17 +152,59 @@ fn solid_effects_apply_to_a_group_and_its_members_stay_editable() {
         s.execute("effect.expandAppearance", &json!({"ids": [g.0]})).unwrap();
         assert!(!effects::has_solid(&node(&s, g)), "{effect}: expanded");
     }
-    // A clipping group in the group: refused, nothing changed.
+    // A clipping group in the group: each effect builds from the art it shows.
+    for effect in effects::SOLIDS {
+        let (mut s, _, g) = group_with_a_clipping_group();
+        s.execute("effect.apply", &json!({"effect": effect, "ids": [g.0], "item": null})).unwrap_or_else(|e| panic!("{effect}: {e}"));
+        let n = node(&s, g);
+        assert_eq!(n.children().unwrap().len(), 2, "{effect}: the members stay as they were");
+        let art = effects::solid_art_in(Some(&s.doc().unwrap().doc), &n);
+        assert!(art.is_some_and(|a| a.visual_bounds().is_some()), "{effect}: draws its solid");
+    }
+    // An image in the group: refused, nothing changed.
+    let (mut s, _, g) = group_with_an_image();
+    let before = s.doc().unwrap().doc.clone();
+    let err = s.execute("effect.apply", &json!({"effect": "threeD.extrude", "ids": [g.0], "item": null})).unwrap_err().to_string();
+    assert!(err.contains("Image Trace"), "{err}");
+    assert_eq!(s.doc().unwrap().doc, before, "nothing changed");
+}
+
+/// A group of a clipping group (a rectangle clipped by an ellipse) and a rectangle: the session,
+/// the clipping group and the group.
+fn group_with_a_clipping_group() -> (Session, NodeId, NodeId) {
     let (mut s, a) = session_with_rect();
     let b = s.execute("shape.ellipse", &json!({"x": 120, "y": 120, "width": 60, "height": 60})).unwrap()["id"].clone();
     s.execute("select.set", &json!({"ids": [a.0, b]})).unwrap();
-    let clip = s.execute("object.clippingMask.make", &json!({})).unwrap()["id"].clone();
+    let clip = NodeId(s.execute("object.clippingMask.make", &json!({})).unwrap()["id"].as_u64().unwrap());
     let c = s.execute("shape.rectangle", &json!({"x": 250, "y": 250, "width": 50, "height": 50})).unwrap()["id"].clone();
-    s.execute("select.set", &json!({"ids": [clip, c]})).unwrap();
+    s.execute("select.set", &json!({"ids": [clip.0, c]})).unwrap();
     let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
-    let err = s.execute("effect.apply", &json!({"effect": "threeD.extrude", "ids": [g.0], "item": null})).unwrap_err().to_string();
-    assert!(err.contains("clipping groups"), "{err}");
-    assert!(node(&s, g).appearance.effects.is_empty());
+    (s, clip, g)
+}
+
+/// A group of a rectangle and an image: the session, the image and the group.
+fn group_with_an_image() -> (Session, NodeId, NodeId) {
+    let (mut s, a) = session_with_rect();
+    let image = s
+        .edit("Place", |d, _| {
+            let id = d.alloc_id();
+            let img = vectorcraft_doc::ImageObject {
+                key: "k".into(),
+                width: 4,
+                height: 4,
+                xf: vectorcraft_geom::Affine::translate((250.0, 250.0)),
+                link: None,
+                placement: Default::default(),
+                pixels: None,
+            };
+            let (parent, index, _) = d.position(a).unwrap();
+            d.insert(parent, index + 1, vectorcraft_doc::Node::new(id, NodeKind::Image(Box::new(img))))?;
+            Ok(id)
+        })
+        .unwrap();
+    s.execute("select.set", &json!({"ids": [a.0, image.0]})).unwrap();
+    let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    (s, image, g)
 }
 
 /// #4715: type extrudes as its glyph outlines, painted with its characters' colour, and stays
@@ -339,21 +382,25 @@ fn revolve_on_a_group_shares_one_axis_and_members_stay_editable() {
     assert!(effects::has_revolve(&node(&s, g)));
 }
 
-/// A group holding what can't be swept is refused as a whole, and a clipping group is named.
+/// A group holding what can't be swept is refused as a whole, and an image is named. A clipping
+/// group, alone or in a group, sweeps the art it shows.
 #[test]
 fn revolve_refuses_a_group_with_a_member_it_can_not_sweep() {
-    let (mut s, a) = session_with_rect();
-    let b = s.execute("shape.ellipse", &json!({"x": 120, "y": 120, "width": 60, "height": 60})).unwrap()["id"].clone();
-    s.execute("select.set", &json!({"ids": [a.0, b]})).unwrap();
-    let clip = s.execute("object.clippingMask.make", &json!({})).unwrap()["id"].clone();
-    let err = s.execute("effect.apply", &json!({"effect": "threeD.revolve", "ids": [clip.as_u64().unwrap()], "item": null})).unwrap_err().to_string();
-    assert!(err.contains("path, compound path, type or group"), "{err}");
-    let c = s.execute("shape.rectangle", &json!({"x": 250, "y": 250, "width": 50, "height": 50})).unwrap()["id"].clone();
-    s.execute("select.set", &json!({"ids": [clip, c]})).unwrap();
-    let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
-    let err = s.execute("effect.apply", &json!({"effect": "threeD.revolve", "ids": [g.0], "item": null})).unwrap_err().to_string();
-    assert!(err.contains("Revolve on a group") && err.contains("clipping groups"), "{err}");
-    assert!(node(&s, g).appearance.effects.is_empty());
+    let (mut s, image, g) = group_with_an_image();
+    let before = s.doc().unwrap().doc.clone();
+    for target in [image, g] {
+        let err = s.execute("effect.apply", &json!({"effect": "threeD.revolve", "ids": [target.0], "item": null})).unwrap_err().to_string();
+        assert!(err.contains("Revolve") && err.contains("Image Trace"), "{err}");
+        assert_eq!(s.doc().unwrap().doc, before, "nothing changed");
+    }
+    for clipping_group_itself in [true, false] {
+        let (mut s, clip, g) = group_with_a_clipping_group();
+        let target = if clipping_group_itself { clip } else { g };
+        s.execute("effect.apply", &json!({"effect": "threeD.revolve", "ids": [target.0], "item": null}))
+            .unwrap_or_else(|e| panic!("{clipping_group_itself}: {e}"));
+        let art = effects::revolve_art_in(Some(&s.doc().unwrap().doc), &node(&s, target));
+        assert!(art.is_some_and(|a| a.visual_bounds().is_some()), "{clipping_group_itself}: draws its surface");
+    }
 }
 
 /// Scripts from before the Perspective angle give `perspective` as a 0–100 % strength: it is

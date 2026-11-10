@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use serde_json::Value;
 use vectorcraft_doc::color::{BlendMode, Paint};
-use vectorcraft_doc::{Appearance, AppearanceItem, Effect, Node, NodeKind, StrokeLayer};
+use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, Node, NodeKind, StrokeLayer};
 use vectorcraft_geom::{FillRule, PathData, Rect};
 use vectorcraft_three_d::{Bevel, BevelShape, Extrude, Facet, Inflate, Mesh, View};
 
@@ -16,6 +16,9 @@ use crate::{GeomContext, apply_geometry_with, is_geometry};
 
 mod classic;
 pub use classic::{CLASSIC_EXTRUDE, SHADING_COLORS, classic_extrude_options, classic_shading};
+
+mod source;
+pub(crate) use source::{resolve, resolve_for};
 
 pub const EXTRUDE: &str = "threeD.extrude";
 pub const INFLATE: &str = "threeD.inflate";
@@ -198,10 +201,22 @@ fn validate_solid_params(id: &str, p: &Value) -> Result<(), String> {
     Ok(())
 }
 
+/// The name an error gives 3D effect `id`.
+pub(crate) fn label_of(id: &str) -> &'static str {
+    crate::effect_info(id).map_or("This effect", |e| e.label.trim_end_matches('…'))
+}
+
 /// Validate before a command changes the document; the evaluator bounds loaded files too.
 pub fn validate_solid(n: &Node, id: &str, p: &Value) -> Result<(), String> {
+    validate_solid_in(None, n, id, p)
+}
+
+/// [`validate_solid`] with the symbols of `doc`: a symbol instance, a blend and a clipping group
+/// build from the art they show ([`resolve`]).
+pub fn validate_solid_in(doc: Option<&Document>, n: &Node, id: &str, p: &Value) -> Result<(), String> {
     validate_solid_params(id, p)?;
-    let label = crate::effect_info(id).map_or("This effect", |e| e.label.trim_end_matches('…'));
+    let label = label_of(id);
+    let n = &*source::resolve_for(doc, n, label, id == ROTATE)?;
     if is_container(n) {
         let shapes = members(n, label)?;
         let b = union_bounds(&shapes).ok_or_else(|| format!("{label} requires a group holding a shape with at least two anchors"))?;
@@ -213,14 +228,13 @@ pub fn validate_solid(n: &Node, id: &str, p: &Value) -> Result<(), String> {
 }
 
 /// [`profile`], or the error a command reports for object `n`: type with no outlines to build from
-/// (empty, or only spaces) is a shape without anchors, and any other object is the wrong kind.
+/// (empty, or only spaces) is a shape without anchors, an image is traced first, and any other
+/// object is the wrong kind.
 pub(crate) fn object_profile(n: &Node, label: &str) -> Result<(PathData, FillRule), String> {
-    profile(n).ok_or_else(|| {
-        if matches!(n.kind, NodeKind::Text(_)) {
-            format!("{label} requires a shape with at least two anchors")
-        } else {
-            format!("{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.")
-        }
+    profile(n).ok_or_else(|| match n.kind {
+        NodeKind::Text(_) => format!("{label} requires a shape with at least two anchors"),
+        NodeKind::Image(_) => source::image_refusal(label),
+        _ => format!("{label} currently requires a path, compound path, type, group, blend or symbol instance. Expand other objects first."),
     })
 }
 
@@ -264,8 +278,10 @@ const MAX_MEMBERS: usize = 4096;
 const MAX_MESH_TRIANGLES: usize = 2_000_000;
 
 /// The shapes a 3D effect on group or layer `n` builds its solids from: every visible path,
-/// compound path and type in it, at any depth of its groups, each through its own geometry
-/// effects and painted with its own fills and strokes. Like the effect on a group in the
+/// compound path and type in it (after [`resolve`] gives it the art of its symbol instances, blends
+/// and clipping groups), at any depth of its groups, each through its own geometry
+/// effects, then those of each group it is in (on that group's members together), and painted
+/// with its own fills and strokes. Like the effect on a group in the
 /// reference app, they turn about one shared axis (the centre of their bounds together) rather
 /// than each about its own. An error names what the group holds that can't become a solid.
 pub(crate) fn members(n: &Node, label: &str) -> Result<Vec<Profile>, String> {
@@ -287,18 +303,23 @@ pub(crate) fn members(n: &Node, label: &str) -> Result<Vec<Profile>, String> {
                 scopes.push(Scope { key: w.keys, opacity: c.opacity, blend: c.blend });
             }
             if is_container(c) {
+                let first = w.out.len();
                 walk(c, opacity, &scopes, w)?;
+                // The group's own geometry effects reshape its members together, as it is drawn.
+                if let Some(shapes) = w.out.get_mut(first..) {
+                    reshape_members(c, &c.appearance.effects, shapes);
+                }
                 continue;
             }
             let Some((path, rule)) = profile(c) else {
                 let what = match &c.kind {
-                    NodeKind::Group { clip: true, .. } => "clipping groups",
-                    NodeKind::Image(_) => "images",
-                    NodeKind::SymbolInstance { .. } => "symbol instances",
+                    NodeKind::Image(_) => return Err(source::image_refusal(label)),
                     NodeKind::Path { clipping: true, .. } => "clipping paths",
-                    _ => "objects other than paths, compound paths and type",
+                    _ => "other objects",
                 };
-                return Err(format!("{label} on a group needs paths, compound paths and type: release or expand its {what} first."));
+                return Err(format!(
+                    "{label} on a group needs paths, compound paths, type, groups, clipping groups, blends and symbol instances: release or expand its {what} first."
+                ));
             };
             if w.out.len() >= MAX_MEMBERS {
                 return Err(format!("{label} on a group takes at most {MAX_MEMBERS} objects"));
@@ -319,7 +340,12 @@ pub(crate) fn members(n: &Node, label: &str) -> Result<Vec<Profile>, String> {
 /// before a command changes the document: Revolve by [`crate::validate_revolve`], the others by
 /// [`validate_solid`].
 pub fn validate_three_d(n: &Node, id: &str, p: &Value) -> Result<(), String> {
-    if id == crate::REVOLVE { crate::validate_revolve(n, p) } else { validate_solid(n, id, p) }
+    validate_three_d_in(None, n, id, p)
+}
+
+/// [`validate_three_d`] with the symbols of `doc` ([`validate_solid_in`]).
+pub fn validate_three_d_in(doc: Option<&Document>, n: &Node, id: &str, p: &Value) -> Result<(), String> {
+    if id == crate::REVOLVE { crate::revolve::validate_revolve_in(doc, n, p) } else { validate_solid_in(doc, n, id, p) }
 }
 
 /// [`validate_three_d`] for an effect at `(item, index)`, index `index` of the effects of
@@ -328,10 +354,18 @@ pub fn validate_three_d(n: &Node, id: &str, p: &Value) -> Result<(), String> {
 /// item's geometry effects before it, together with the object's other items that carry a Revolve.
 /// A group's or layer's fills and strokes take no 3D effect: only the group's own effect draws.
 pub fn validate_three_d_at(n: &Node, id: &str, p: &Value, at: Option<(usize, usize)>) -> Result<(), String> {
+    validate_three_d_at_in(None, n, id, p, at)
+}
+
+/// [`validate_three_d_at`] with the symbols of `doc` ([`validate_solid_in`]). A symbol instance, a
+/// blend and a clipping group take a 3D effect as groups do: on the object itself.
+pub fn validate_three_d_at_in(doc: Option<&Document>, n: &Node, id: &str, p: &Value, at: Option<(usize, usize)>) -> Result<(), String> {
     match at {
-        Some(_) if is_container(n) => Err("A 3D effect on a group or layer goes on the group itself, not on its fill or stroke".into()),
+        Some(_) if is_container(n) || source::resolves(n) => {
+            Err("A 3D effect on a group or layer goes on the group itself, not on its fill or stroke".into())
+        }
         Some((item, index)) if id == crate::REVOLVE => crate::revolve::validate_item_revolve(n, p, item, index),
-        _ => validate_three_d(n, id, p),
+        _ => validate_three_d_in(doc, n, id, p),
     }
 }
 
@@ -535,9 +569,17 @@ fn geometry(path: &PathData, fx: &[Effect], ctx: &GeomContext) -> PathData {
 /// On a group or layer the effect builds a solid from each path, compound path and type in it,
 /// all turned about one shared axis ([`members`]).
 pub fn solid_art(n: &Node) -> Option<Node> {
+    solid_art_in(None, n)
+}
+
+/// [`solid_art`] with the symbols of `doc`: a symbol instance, a blend and a clipping group, alone
+/// or in a group, build from the art they show ([`resolve`]). `None` too when that art can't be
+/// resolved.
+pub fn solid_art_in(doc: Option<&Document>, n: &Node) -> Option<Node> {
     if !has_solid(n) {
         return None;
     }
+    let n = &*resolve(doc, n, "").ok()?;
     if is_container(n) {
         return group_solid_art(n);
     }
@@ -689,28 +731,44 @@ fn meshes_for(fx: &Effect, shapes: &[Profile], total: &mut usize, limit: usize) 
 /// such effect, its solids can't be built, none has a triangle, or together they have more than
 /// [`MAX_MESH_TRIANGLES`].
 pub fn three_d_meshes(n: &Node) -> Result<Vec<SolidMesh>, String> {
-    meshes_within(n, &mut 0, MAX_MESH_TRIANGLES)
+    three_d_meshes_in(None, n)
+}
+
+/// [`three_d_meshes`] with the symbols of `doc`: a symbol instance, a blend and a clipping group
+/// build from the art they show ([`resolve`]).
+pub fn three_d_meshes_in(doc: Option<&Document>, n: &Node) -> Result<Vec<SolidMesh>, String> {
+    meshes_within(doc, n, &mut 0, MAX_MESH_TRIANGLES)
 }
 
 /// The meshes of every object in `nodes` ([`three_d_meshes`]), in order, as one 3D asset exports
 /// them: the objects share one budget of [`MAX_MESH_TRIANGLES`].
 pub fn three_d_meshes_of<'a>(nodes: impl IntoIterator<Item = &'a Node>) -> Result<Vec<SolidMesh>, String> {
-    meshes_of_within(nodes, MAX_MESH_TRIANGLES)
+    three_d_meshes_of_in(None, nodes)
 }
 
-/// [`three_d_meshes_of`] with a budget of `limit` triangles.
-fn meshes_of_within<'a>(nodes: impl IntoIterator<Item = &'a Node>, limit: usize) -> Result<Vec<SolidMesh>, String> {
+/// [`three_d_meshes_of`] with the symbols of `doc` ([`three_d_meshes_in`]).
+pub fn three_d_meshes_of_in<'a>(doc: Option<&Document>, nodes: impl IntoIterator<Item = &'a Node>) -> Result<Vec<SolidMesh>, String> {
+    meshes_of_within(doc, nodes, MAX_MESH_TRIANGLES)
+}
+
+/// [`three_d_meshes_of_in`] with a budget of `limit` triangles.
+fn meshes_of_within<'a>(doc: Option<&Document>, nodes: impl IntoIterator<Item = &'a Node>, limit: usize) -> Result<Vec<SolidMesh>, String> {
     let mut total = 0usize;
     let mut out = vec![];
     for n in nodes {
-        out.extend(meshes_within(n, &mut total, limit)?);
+        out.extend(meshes_within(doc, n, &mut total, limit)?);
     }
     Ok(out)
 }
 
-/// [`three_d_meshes`], with the triangles of every solid added to `total` as it is built and an
+/// [`three_d_meshes_in`], with the triangles of every solid added to `total` as it is built and an
 /// error as soon as `total` passes `limit`.
-fn meshes_within(n: &Node, total: &mut usize, limit: usize) -> Result<Vec<SolidMesh>, String> {
+fn meshes_within(doc: Option<&Document>, n: &Node, total: &mut usize, limit: usize) -> Result<Vec<SolidMesh>, String> {
+    if !crate::has_revolve(n) && !has_solid(n) {
+        return Err("the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)".into());
+    }
+    let label = n.appearance.effects.iter().find(|e| e.visible && is_three_d(&e.id)).map_or("This effect", |e| label_of(&e.id));
+    let n = &*resolve(doc, n, label)?;
     let meshes = if crate::has_revolve(n) {
         crate::revolve::revolve_meshes(n, total, limit)?
     } else if !has_solid(n) {
@@ -722,7 +780,7 @@ fn meshes_within(n: &Node, total: &mut usize, limit: usize) -> Result<Vec<SolidM
         reshape_members(n, n.appearance.effects.get(..index).unwrap_or_default(), &mut shapes);
         meshes_for(fx, &shapes, total, limit)?
     } else {
-        let (path, rule) = profile(n).ok_or("3D export needs a path, compound path, type or group")?;
+        let (path, rule) = object_profile(n, label)?;
         let ctx = GeomContext::of(n);
         let paints = solid_paints(n);
         if let Some((index, fx)) = solid(&n.appearance.effects) {
@@ -759,3 +817,6 @@ mod tests;
 
 #[cfg(test)]
 mod tests_mesh;
+
+#[cfg(test)]
+mod tests_sources;
