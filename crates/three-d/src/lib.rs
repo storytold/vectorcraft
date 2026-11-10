@@ -518,77 +518,152 @@ const MAX_HOLE_GRID: usize = 256;
 /// For each segment of each subpath of `path`, whether it walls a hole under `rule`: the fill is
 /// outside its closed contour at the segment's middle and not inside. An error past
 /// [`MAX_HOLE_WORK`].
+#[cfg(test)]
 fn hole_segments(path: &PathData, rule: FillRule) -> Result<Vec<Vec<bool>>, String> {
     hole_segments_counted(path, rule).map(|(holes, _)| holes)
 }
 
-/// [`hole_segments`] and the work it did. A point is tested only against the closed contours whose
-/// bounds reach into its cell of a grid over the bounds of them all.
+/// [`hole_segments`] and the work it did.
+#[cfg(test)]
 fn hole_segments_counted(path: &PathData, rule: FillRule) -> Result<(Vec<Vec<bool>>, usize), String> {
-    let contours: Vec<(BezPath, Rect)> = path
-        .subpaths
-        .iter()
-        .map(|sp| {
-            let contour = PathData::new(vec![sp.clone()]).to_bezpath();
-            let bounds = contour.bounding_box();
-            (contour, bounds)
-        })
-        .collect();
-    let closed = |j: usize| path.subpaths.get(j).is_some_and(|sp| sp.closed);
-    let mut work = 0usize;
-    let spend = |n: usize, work: &mut usize| {
-        *work = work.saturating_add(n);
-        if *work > MAX_HOLE_WORK { Err(TOO_COMPLEX_PROFILE.to_string()) } else { Ok(()) }
-    };
-    let area = contours.iter().enumerate().filter(|(j, _)| closed(*j)).map(|(_, (_, b))| *b).reduce(|a, b| a.union(b));
-    let count = (0..contours.len()).filter(|j| closed(*j)).count();
-    let side = ((count as f64).sqrt().ceil() as usize).clamp(1, MAX_HOLE_GRID);
-    let at = |v: f64, lo: f64, hi: f64| {
-        let span = hi - lo;
-        if span > 0.0 { (((v - lo) / span * side as f64).floor().max(0.0) as usize).min(side - 1) } else { 0 }
-    };
-    let cell = |p: Point| area.map(|a| at(p.y, a.y0, a.y1) * side + at(p.x, a.x0, a.x1));
-    let mut grid: Vec<Vec<usize>> = vec![vec![]; side * side];
-    if let Some(a) = area {
-        for (j, (_, b)) in contours.iter().enumerate().filter(|(j, _)| closed(*j)) {
-            let (x0, x1) = (at(b.x0, a.x0, a.x1), at(b.x1, a.x0, a.x1));
-            let (y0, y1) = (at(b.y0, a.y0, a.y1), at(b.y1, a.y0, a.y1));
-            spend((x1 - x0 + 1).saturating_mul(y1 - y0 + 1), &mut work)?;
-            for y in y0..=y1 {
-                for x in x0..=x1 {
-                    if let Some(c) = grid.get_mut(y * side + x) {
-                        c.push(j);
-                    }
+    let mut search = HoleSearch::new(path, rule)?;
+    let mut holes = Vec::with_capacity(path.subpaths.len());
+    for (i, sp) in path.subpaths.iter().enumerate() {
+        let segments = if sp.closed { sp.anchors.len() } else { 0 };
+        holes.push((0..segments).map(|segment| search.is_hole(i, sp.segment(segment).eval(0.5))).collect::<Result<Vec<_>, _>>()?);
+    }
+    Ok((holes, search.work))
+}
+
+/// The closed contours of a profile sorted into a grid over the bounds of them all, each listed in
+/// the cells its bounds reach into, to find which parts of the profile's edges wall a hole under
+/// its fill rule. A point is tested only against the contours of its cell. Every test counts
+/// toward [`MAX_HOLE_WORK`].
+struct HoleSearch {
+    /// Each subpath's outline, its bounds, and for a closed one which way it winds.
+    contours: Vec<(BezPath, Rect, Option<i32>)>,
+    rule: FillRule,
+    area: Option<Rect>,
+    side: usize,
+    grid: Vec<Vec<usize>>,
+    work: usize,
+}
+
+impl HoleSearch {
+    fn new(path: &PathData, rule: FillRule) -> Result<Self, String> {
+        let contours: Vec<(BezPath, Rect, Option<i32>)> = path
+            .subpaths
+            .iter()
+            .map(|sp| {
+                let contour = PathData::new(vec![sp.clone()]).to_bezpath();
+                let bounds = contour.bounding_box();
+                let direction = sp.closed.then(|| if contour.area() < 0.0 { -1 } else { 1 });
+                (contour, bounds, direction)
+            })
+            .collect();
+        let closed = || contours.iter().enumerate().filter(|(_, (_, _, d))| d.is_some());
+        let area = closed().map(|(_, (_, b, _))| *b).reduce(|a, b| a.union(b));
+        let side = ((closed().count() as f64).sqrt().ceil() as usize).clamp(1, MAX_HOLE_GRID);
+        let mut search = HoleSearch { contours: vec![], rule, area, side, grid: vec![vec![]; side * side], work: 0 };
+        for (j, (_, b, _)) in closed() {
+            let cells = search.cells(*b);
+            search.spend(cells.len())?;
+            for c in cells {
+                if let Some(c) = search.grid.get_mut(c) {
+                    c.push(j);
                 }
             }
         }
+        search.contours = contours;
+        Ok(search)
     }
-    let mut holes = Vec::with_capacity(contours.len());
-    for (i, (sp, (own, _))) in path.subpaths.iter().zip(&contours).enumerate() {
-        if !sp.closed {
-            holes.push(vec![]);
-            continue;
+
+    fn spend(&mut self, n: usize) -> Result<(), String> {
+        self.work = self.work.saturating_add(n);
+        if self.work > MAX_HOLE_WORK { Err(TOO_COMPLEX_PROFILE.to_string()) } else { Ok(()) }
+    }
+
+    /// The grid cells `r` reaches into.
+    fn cells(&self, r: Rect) -> Vec<usize> {
+        let Some(a) = self.area else { return vec![] };
+        let side = self.side;
+        let at = |v: f64, lo: f64, hi: f64| {
+            let span = hi - lo;
+            if span > 0.0 { (((v - lo) / span * side as f64).floor().max(0.0) as usize).min(side - 1) } else { 0 }
+        };
+        let (x0, x1) = (at(r.x0, a.x0, a.x1), at(r.x1, a.x0, a.x1));
+        let (y0, y1) = (at(r.y0, a.y0, a.y1), at(r.y1, a.y0, a.y1));
+        (y0..=y1).flat_map(|y| (x0..=x1).map(move |x| y * side + x)).collect()
+    }
+
+    /// The closed contours other than `own` whose bounds may meet `r`, each once.
+    fn candidates(&mut self, own: usize, r: Rect) -> Result<Vec<usize>, String> {
+        let mut out = vec![];
+        for c in self.cells(r) {
+            let listed = self.grid.get(c).map_or(&[][..], Vec::as_slice);
+            out.extend(listed.iter().copied().filter(|j| *j != own));
         }
-        let direction = if own.area() < 0.0 { -1 } else { 1 };
-        let mut segments = Vec::with_capacity(sp.anchors.len());
-        for segment in 0..sp.anchors.len() {
-            let p = sp.segment(segment).eval(0.5);
-            let mut others = 0i32;
-            let candidates = cell(p).and_then(|c| grid.get(c)).map_or(&[][..], Vec::as_slice);
-            spend(candidates.len(), &mut work)?;
-            for &j in candidates {
-                let Some((contour, _)) = contours.get(j).filter(|(_, bounds)| j != i && bounds.contains(p)) else { continue };
-                spend(contour.elements().len(), &mut work)?;
-                others += contour.winding(p);
+        self.spend(out.len())?;
+        out.sort_unstable();
+        out.dedup();
+        Ok(out)
+    }
+
+    /// Whether the edge of closed subpath `own` at `p` walls a hole: the fill is outside its
+    /// contour there and not inside.
+    fn is_hole(&mut self, own: usize, p: Point) -> Result<bool, String> {
+        let Some(direction) = self.contours.get(own).and_then(|c| c.2) else { return Ok(false) };
+        let mut others = 0i32;
+        for j in self.candidates(own, Rect::from_points(p, p))? {
+            let Some((contour, bounds, Some(_))) = self.contours.get(j) else { continue };
+            if !bounds.contains(p) {
+                continue;
             }
-            segments.push(match rule {
-                FillRule::EvenOdd => others % 2 != 0,
-                FillRule::NonZero => others != 0 && others + direction == 0,
-            });
+            let (elements, winding) = (contour.elements().len(), contour.winding(p));
+            self.spend(elements)?;
+            others += winding;
         }
-        holes.push(segments);
+        Ok(match self.rule {
+            FillRule::EvenOdd => others % 2 != 0,
+            FillRule::NonZero => others != 0 && others + direction == 0,
+        })
     }
-    Ok((holes, work))
+
+    /// The line from `a` to `b` on subpath `own`, cut where it crosses another closed contour: each
+    /// part's end, the last one `b`, and whether that part walls a hole at its middle.
+    fn parts(&mut self, own: usize, a: Point, b: Point) -> Result<Vec<(Point, bool)>, String> {
+        let mut out = vec![];
+        let mut from = 0.0;
+        for t in self.crossings(own, a, b)?.into_iter().chain([1.0]) {
+            let hole = self.is_hole(own, a.lerp(b, (from + t) * 0.5))?;
+            out.push((if t < 1.0 { a.lerp(b, t) } else { b }, hole));
+            from = t;
+        }
+        Ok(out)
+    }
+
+    /// Where the line from `a` to `b` on closed subpath `own` crosses another closed contour, as
+    /// sorted fractions of the way from `a` to `b`, strictly between them.
+    fn crossings(&mut self, own: usize, a: Point, b: Point) -> Result<Vec<f64>, String> {
+        if self.contours.get(own).and_then(|c| c.2).is_none() {
+            return Ok(vec![]);
+        }
+        let line = vectorcraft_geom::kurbo::Line::new(a, b);
+        let reach = Rect::from_points(a, b);
+        let mut out = vec![];
+        for j in self.candidates(own, reach)? {
+            let Some((contour, bounds, Some(_))) = self.contours.get(j) else { continue };
+            if bounds.x0 > reach.x1 || bounds.x1 < reach.x0 || bounds.y0 > reach.y1 || bounds.y1 < reach.y0 {
+                continue;
+            }
+            let found: Vec<f64> = contour.segments().flat_map(|s| s.intersect_line(line)).map(|i| i.line_t).collect();
+            self.spend(contour.elements().len())?;
+            out.extend(found.into_iter().filter(|t| *t > 1e-9 && *t < 1.0 - 1e-9));
+        }
+        out.sort_by(f64::total_cmp);
+        out.dedup_by(|x, y| (*x - *y).abs() < 1e-9);
+        Ok(out)
+    }
 }
 
 /// [`revolve`], or with `mesh` the surface's faces before projection, kept there instead of drawn,
@@ -605,7 +680,9 @@ fn revolve_faces(
         Some(samples) => samples.clamp(1, CURVE_SAMPLES),
         None => revolve_curve_samples([path], o)?,
     };
-    let holes = if mesh.is_some() { hole_segments(path, rule)? } else { vec![] };
+    // For a mesh, each piece of a closed contour's edge is cut where it crosses another contour, so
+    // each part's normal turns toward a hole only where it walls one.
+    let mut search = if mesh.is_some() { Some(HoleSearch::new(path, rule)?) } else { None };
     // A face kept for a mesh: its normal follows from its corners.
     let keep = |mesh: &mut Vec<solid::Face3>, face: Vec<V3>, normal: V3| {
         mesh.push((vec![face], normal));
@@ -688,12 +765,19 @@ fn revolve_faces(
                     let v = d.eval(t.clamp(1e-7, 1.0 - 1e-7)).to_vec2();
                     if v.hypot2() > 1e-20 { v } else { b - a }
                 };
-                tangents.push([tangent(t0), tangent(t1)]);
-                hole_edges.push(holes.get(contour).and_then(|h| h.get(i)).copied().unwrap_or(false));
-                profile.push(b);
-                count += 1;
-                if count > MAX_PROFILE_POINTS {
-                    return Err(TOO_COMPLEX_PROFILE.into());
+                let a = profile.last().copied().unwrap_or(b);
+                let parts = match search.as_mut() {
+                    Some(search) => search.parts(contour, a, b)?,
+                    None => vec![(b, false)],
+                };
+                for (end, hole) in parts {
+                    tangents.push([tangent(t0), tangent(t1)]);
+                    hole_edges.push(hole);
+                    profile.push(end);
+                    count += 1;
+                    if count > MAX_PROFILE_POINTS {
+                        return Err(TOO_COMPLEX_PROFILE.into());
+                    }
                 }
             }
         }

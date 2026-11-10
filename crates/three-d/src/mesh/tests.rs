@@ -309,6 +309,23 @@ fn the_wall_of_a_counter_faces_into_the_hole() {
 }
 
 #[test]
+fn an_edge_that_crosses_another_contour_faces_the_hole_only_where_it_walls_it() {
+    // Two squares overlapping under the even-odd rule leave their overlap empty. The first square's
+    // right edge (110 pt from the axis) and the second's left edge (50 pt from it) each wall the
+    // overlap along part of their length and the outside along the rest.
+    let mut b = BezPath::new();
+    square(&mut b, 0.0, 0.0, 100.0, false);
+    square(&mut b, 40.0, 40.0, 100.0, false);
+    let (p, r) = shape(&b);
+    let m = revolve_mesh(&p, FillRule::EvenOdd, r, Revolve { offset: 10.0, segments: 32, ..Revolve::default() }).unwrap();
+    for radius in [110.0, 50.0] {
+        let walls = wall_directions(&m, radius);
+        assert!(walls.iter().any(|s| *s > 0.0) && walls.iter().any(|s| *s < 0.0), "both ways at {radius}");
+    }
+    assert!(wall_directions(&m, 150.0).iter().all(|s| *s > 0.0), "the second square's far edge faces out");
+}
+
+#[test]
 fn inflate_puffs_the_front_toward_the_viewer() {
     let mut b = BezPath::new();
     square(&mut b, 0.0, 0.0, 100.0, false);
