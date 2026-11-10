@@ -446,7 +446,7 @@ impl DocState {
         }
         let e = HistoryEntry::kept(label, doc, selection, &self.doc);
         self.history.undo.push(e);
-        self.history.redo.clear();
+        self.history.clear_redo();
         self.history.trim();
     }
     /// End the interaction in progress, undoing what it changed.
