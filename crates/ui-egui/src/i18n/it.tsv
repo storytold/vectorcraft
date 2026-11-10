@@ -5669,6 +5669,11 @@ axis	Y Axis	Asse Y
 	Button	Pulsante
 	Panel	Pannello
 	UI Frames	Cornici UI
+	Map Markers	Marcatori mappa
+	Pin	Spillo
+	Flag	Bandiera
+	Crosshair	Mirino
+	Checkpoint	Punto di controllo
 	Open Symbol Library	Apri libreria simboli
 	Save Symbol Library	Salva libreria simboli
 	Save Symbol Library…	Salva libreria simboli…

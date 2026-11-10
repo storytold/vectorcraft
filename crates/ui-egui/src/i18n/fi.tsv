@@ -6082,6 +6082,11 @@ axis	Y Axis	Y-akseli
 	Button	Painike
 	Panel	Paneeli
 	UI Frames	UI-kehykset
+	Map Markers	Karttamerkit
+	Pin	Nasta
+	Flag	Lippu
+	Crosshair	Tähtäin
+	Checkpoint	Tarkastuskohta
 	Open Symbol Library	Avaa symbolikirjasto
 	Save Symbol Library	Tallenna symbolikirjasto
 	Save Symbol Library…	Tallenna symbolikirjasto…

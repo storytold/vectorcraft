@@ -5910,6 +5910,11 @@ axis	Y Axis	Y-as
 	Button	Knop
 	Panel	Paneel
 	UI Frames	UI-kaders
+	Map Markers	Kaartmarkeringen
+	Pin	Speld
+	Flag	Vlag
+	Crosshair	Vizier
+	Checkpoint	Controlepunt
 	Open Symbol Library	Symboolbibliotheek openen
 	Save Symbol Library	Symboolbibliotheek opslaan
 	Save Symbol Library…	Symboolbibliotheek opslaan…

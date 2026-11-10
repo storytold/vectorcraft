@@ -5906,6 +5906,11 @@ axis	Y Axis	Oś Y
 	Button	Przycisk
 	Panel	Panel
 	UI Frames	Ramki UI
+	Map Markers	Znaczniki mapy
+	Pin	Pinezka
+	Flag	Flaga
+	Crosshair	Celownik
+	Checkpoint	Punkt kontrolny
 	Open Symbol Library	Otwórz bibliotekę symboli
 	Save Symbol Library	Zapisz bibliotekę symboli
 	Save Symbol Library…	Zapisz bibliotekę symboli…

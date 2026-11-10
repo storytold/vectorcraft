@@ -6047,6 +6047,11 @@ axis	Y Axis	Axe Y
 	Button	Bouton
 	Panel	Panneau
 	UI Frames	Cadres d’IU
+	Map Markers	Marqueurs de carte
+	Pin	Épingle
+	Flag	Drapeau
+	Crosshair	Réticule
+	Checkpoint	Point de contrôle
 	Open Symbol Library	Ouvrir une bibliothèque de symboles
 	Save Symbol Library	Enregistrer la bibliothèque de symboles
 	Save Symbol Library…	Enregistrer la bibliothèque de symboles…
