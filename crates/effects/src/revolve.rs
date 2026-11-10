@@ -4,7 +4,7 @@ use std::sync::Arc;
 use serde_json::Value;
 use vectorcraft_doc::color::{Color, Paint};
 use vectorcraft_doc::{Appearance, AppearanceItem, Effect, FillLayer, LineJoin, Node, NodeId, NodeKind, StrokeLayer};
-use vectorcraft_geom::{PathData, Rect};
+use vectorcraft_geom::{PathData, PathEl, Point, Rect, Vec2};
 use vectorcraft_three_d::{Edge, Revolve};
 
 use crate::solids::{Profile, Scope, is_container, members, object_profile, profile, reshape_members, solid_paints, union_bounds};
@@ -17,6 +17,13 @@ pub const REVOLVE: &str = "threeD.revolve";
 /// seam stroke around it gets a copy of the paint, so a gradient of many stops times tens of
 /// thousands of faces took gigabytes; past this the source path is drawn.
 const MAX_PAINT_COPIES: usize = 256 << 20;
+
+/// The most face and box tests a group's transparent members' faces take together to rejoin their
+/// members' last runs; past them each starts a run of its own.
+const MAX_OVERLAP_TESTS: usize = 1 << 22;
+
+/// The width of the stroke around each face that covers the seams between faces.
+const SEAM_WIDTH: f64 = 0.75;
 
 /// About the bytes one copy of `paint` takes.
 fn paint_bytes(paint: &Paint) -> usize {
@@ -266,7 +273,7 @@ fn surface(
                 .into_iter()
                 .flat_map(|item| {
                     let AppearanceItem::Fill(fill) = &item else { return vec![item] };
-                    let mut edge = StrokeLayer::new(fill.paint.clone(), 0.75);
+                    let mut edge = StrokeLayer::new(fill.paint.clone(), SEAM_WIDTH);
                     // Acute face corners must stay within the overlap width. Miter joins
                     // amplify this seam stroke into visible spikes along the silhouette.
                     edge.join = LineJoin::Round;
@@ -432,11 +439,11 @@ fn art(n: &Node, expand: bool) -> Option<Node> {
     Some(art)
 }
 
-/// The members' `surfaces` in order, from the [`Scope`] at `level` of each one's `Profile::scopes`
-/// inward: the surfaces of consecutive members that share a scope go in one group with its opacity
-/// and blending mode, so each applies once, to the members it holds together.
-fn scoped(id: NodeId, surfaces: Vec<(&[Scope], Node)>, level: usize) -> Vec<Arc<Node>> {
-    fn close(id: NodeId, run: &mut Vec<(&[Scope], Node)>, scope: Option<Scope>, level: usize, out: &mut Vec<Arc<Node>>) {
+/// The members' `surfaces`, or runs of their faces, in order, from the [`Scope`] at `level` of each
+/// one's `Profile::scopes` inward: consecutive surfaces that share a scope go in one group with its
+/// opacity and blending mode, so each applies once, to the faces it holds together.
+fn scoped(id: NodeId, surfaces: Vec<(&[Scope], Arc<Node>)>, level: usize) -> Vec<Arc<Node>> {
+    fn close(id: NodeId, run: &mut Vec<(&[Scope], Arc<Node>)>, scope: Option<Scope>, level: usize, out: &mut Vec<Arc<Node>>) {
         if let Some(scope) = scope {
             let mut group = Node::group(id, scoped(id, std::mem::take(run), level + 1));
             group.opacity = scope.opacity;
@@ -456,15 +463,104 @@ fn scoped(id: NodeId, surfaces: Vec<(&[Scope], Node)>, level: usize) -> Vec<Arc<
         if scope.is_some() {
             run.push((scopes, s));
         } else {
-            out.push(Arc::new(s));
+            out.push(s);
         }
     }
     close(id, &mut run, scope, level, &mut out);
     out
 }
 
+/// What a face can paint, to tell whether two faces overlap: the convex hull of the points and
+/// control points of its outline, which holds the outline, and the hull's box grown by half the
+/// seam stroke.
+struct Coverage {
+    bounds: Rect,
+    hull: Vec<Point>,
+}
+
+impl Coverage {
+    /// `None` for a face with no outline and no box.
+    fn of(face: &Node) -> Option<Coverage> {
+        let points: Vec<Point> = match face.path_data() {
+            Some(path) => path
+                .to_bezpath()
+                .elements()
+                .iter()
+                .flat_map(|e| match *e {
+                    PathEl::MoveTo(p) | PathEl::LineTo(p) => vec![p],
+                    PathEl::QuadTo(a, b) => vec![a, b],
+                    PathEl::CurveTo(a, b, c) => vec![a, b, c],
+                    PathEl::ClosePath => vec![],
+                })
+                .collect(),
+            None => {
+                let b = face.visual_bounds()?;
+                vec![Point::new(b.x0, b.y0), Point::new(b.x1, b.y0), Point::new(b.x1, b.y1), Point::new(b.x0, b.y1)]
+            }
+        };
+        let hull = convex_hull(points);
+        let first = *hull.first()?;
+        let reach = SEAM_WIDTH / 2.0;
+        let bounds = hull.iter().fold(Rect::from_points(first, first), |b, p| b.union_pt(*p)).inflate(reach, reach);
+        Some(Coverage { bounds, hull })
+    }
+
+    /// Do the two faces' hulls, each grown by half the seam stroke, overlap? A test of the
+    /// separating axes of their edges and of the page's axes: `true` whenever they overlap, and
+    /// sometimes near a corner when they don't.
+    fn meets(&self, other: &Coverage) -> bool {
+        fn normals(hull: &[Point]) -> impl Iterator<Item = Vec2> + '_ {
+            (0..hull.len()).filter_map(|i| {
+                let (a, b) = (hull.get(i)?, hull.get((i + 1) % hull.len())?);
+                Some(Vec2::new(a.y - b.y, b.x - a.x))
+            })
+        }
+        let axes = [Vec2::new(1.0, 0.0), Vec2::new(0.0, 1.0)].into_iter().chain(normals(&self.hull)).chain(normals(&other.hull));
+        let span = |hull: &[Point], axis: Vec2| {
+            hull.iter().map(|p| p.to_vec2().dot(axis)).fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), v| (lo.min(v), hi.max(v)))
+        };
+        axes.filter(|axis| axis.hypot() > 0.0).all(|axis| {
+            let ((a0, a1), (b0, b1)) = (span(&self.hull, axis), span(&other.hull, axis));
+            let gap = SEAM_WIDTH * axis.hypot();
+            b0 - a1 < gap && a0 - b1 < gap
+        })
+    }
+}
+
+/// The convex hull of `points`, counterclockwise in a y-up frame, without repeated points.
+fn convex_hull(mut points: Vec<Point>) -> Vec<Point> {
+    points.retain(|p| p.is_finite());
+    points.sort_by(|a, b| a.x.total_cmp(&b.x).then(a.y.total_cmp(&b.y)));
+    points.dedup();
+    if points.len() < 3 {
+        return points;
+    }
+    // One side of the hull from the first point to the last, without the last.
+    fn side<'a>(points: impl Iterator<Item = &'a Point>) -> Vec<Point> {
+        let mut chain: Vec<Point> = vec![];
+        for &p in points {
+            while let [.., o, a] = chain[..]
+                && (a - o).cross(p - o) <= 0.0
+            {
+                chain.pop();
+            }
+            chain.push(p);
+        }
+        chain.pop();
+        chain
+    }
+    let mut hull = side(points.iter());
+    hull.extend(side(points.iter().rev()));
+    hull
+}
+
+/// Do boxes `a` and `b` overlap with some area?
+fn overlaps(a: Rect, b: Rect) -> bool {
+    a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1
+}
+
 /// [`art`] of group or layer `n`: every member swept about one axis on the bounds of all of them,
-/// each in its own paint. Opaque members' faces are drawn in one back-to-front order. `None` when
+/// each in its own paint. Every member's faces are drawn in one back-to-front order. `None` when
 /// the effect is only on the group's own fills or strokes or when its members can't be revolved.
 fn group_art(n: &Node, expand: bool) -> Option<Node> {
     let index = n.appearance.effects.iter().position(|e| e.visible && e.id == REVOLVE)?;
@@ -491,18 +587,86 @@ fn group_art(n: &Node, expand: bool) -> Option<Node> {
         return None;
     }
     let plain = surfaces.iter().all(|(depths, s, _)| matches!(&s.kind, NodeKind::Group { children, clip: false } if children.len() == depths.len()));
-    let children = if opaque && plain {
+    let children = if !plain {
+        scoped(n.id, surfaces.into_iter().map(|(_, s, scopes)| (scopes, Arc::new(s))).collect(), 0)
+    } else {
+        let count = surfaces.len();
         let mut faces = vec![];
-        for (depths, s, _) in surfaces {
+        for (member, (depths, s, scopes)) in surfaces.into_iter().enumerate() {
+            let (opacity, blend) = (s.opacity, s.blend);
             if let NodeKind::Group { children, .. } = s.kind {
-                faces.extend(depths.into_iter().zip(children));
+                faces.extend(depths.into_iter().zip(children).map(|(depth, face)| (depth, member, opacity, blend, scopes, face)));
             }
         }
         // A stable sort: faces at the same depth keep the members' order.
         faces.sort_by(|a, b| a.0.total_cmp(&b.0));
-        vec![Arc::new(Node::group(n.id, faces.into_iter().map(|(_, face)| face).collect()))]
-    } else {
-        scoped(n.id, surfaces.into_iter().map(|(_, s, scopes)| (scopes, s)).collect(), 0)
+        if opaque {
+            vec![Arc::new(Node::group(n.id, faces.into_iter().map(|(.., face)| face).collect()))]
+        } else {
+            // An opaque member's face goes in the order on its own. The faces of a member with
+            // transparency share a run, one group with the opacity and blending mode of its fill or
+            // stroke, and its scopes group runs further. Such a face joins its member's last run
+            // unless a face drawn after that run overlaps it: only then does the member split,
+            // where one group can't be both behind and in front of another face.
+            struct Run<'a> {
+                member: Option<usize>,
+                scopes: &'a [Scope],
+                bounds: Rect,
+                faces: Vec<Arc<Node>>,
+                cover: Vec<Coverage>,
+                opacity: f32,
+                blend: vectorcraft_doc::color::BlendMode,
+            }
+            let mut runs: Vec<Run> = vec![];
+            let mut last_run = vec![None; count];
+            // Past this many tests a face starts a run of its own, which never draws out of order.
+            let mut budget = MAX_OVERLAP_TESTS;
+            for (_, member, opacity, blend, scopes, face) in faces {
+                let paints = opacity > 0.0 && scopes.iter().all(|s| s.opacity > 0.0);
+                let Some(cover) = Coverage::of(&face).filter(|_| paints) else {
+                    // A face that paints nothing goes in the order on its own and overlaps nothing.
+                    runs.push(Run { member: None, scopes, bounds: Rect::ZERO, faces: vec![face], cover: vec![], opacity, blend });
+                    continue;
+                };
+                if opacity >= 1.0 && blend == Default::default() && scopes.is_empty() {
+                    runs.push(Run { member: None, scopes, bounds: cover.bounds, faces: vec![face], cover: vec![cover], opacity, blend });
+                    continue;
+                }
+                let mut clear = |r: &Run| {
+                    budget = budget.saturating_sub(1);
+                    if !overlaps(r.bounds, cover.bounds) {
+                        return budget > 0;
+                    }
+                    budget = budget.saturating_sub(r.cover.len());
+                    budget > 0 && r.cover.iter().all(|c| !overlaps(c.bounds, cover.bounds) || !c.meets(&cover))
+                };
+                let joins =
+                    last_run.get(member).copied().flatten().filter(|&i: &usize| runs.get(i + 1..).is_some_and(|later| later.iter().all(&mut clear)));
+                match joins.and_then(|i| runs.get_mut(i)) {
+                    Some(run) => {
+                        run.bounds = run.bounds.union(cover.bounds);
+                        run.faces.push(face);
+                        run.cover.push(cover);
+                    }
+                    None => {
+                        if let Some(last) = last_run.get_mut(member) {
+                            *last = Some(runs.len());
+                        }
+                        runs.push(Run { member: Some(member), scopes, bounds: cover.bounds, faces: vec![face], cover: vec![cover], opacity, blend });
+                    }
+                }
+            }
+            let runs = runs.into_iter().filter_map(|mut r| {
+                if r.member.is_none() {
+                    return r.faces.pop().map(|face| (r.scopes, face));
+                }
+                let mut group = Node::group(n.id, r.faces);
+                group.opacity = r.opacity;
+                group.blend = r.blend;
+                Some((r.scopes, Arc::new(group)))
+            });
+            scoped(n.id, runs.collect(), 0)
+        }
     };
     let remaining =
         n.appearance.effects.iter().enumerate().filter(|(i, e)| *i != index && (!is_geometry(&e.id) || *i > index)).map(|(_, e)| e.clone()).collect();
@@ -713,18 +877,76 @@ mod tests {
     }
 
     #[test]
-    fn opaque_members_share_one_back_to_front_order_and_others_keep_their_own_surfaces() {
+    fn opaque_members_share_one_back_to_front_order() {
         let g = group_with(json!({"segments":16}), vec![member(1, 0.0), member(2, 50.0)]);
         let art = revolve_art(&g).unwrap();
         assert_eq!(art.children().unwrap().len(), 1, "one order for every face");
         assert!(art.children().unwrap()[0].children().unwrap().len() > 16);
-        let mut faded = (*member(2, 50.0)).clone();
+    }
+
+    /// The opacities and blending modes of the groups a face is drawn in, outermost first, leaving
+    /// out groups with neither.
+    type Chain = Vec<(f32, vectorcraft_doc::color::BlendMode)>;
+
+    /// The faces of `art` in drawing order, each with its [`Chain`].
+    fn faces_in_order(art: &Node) -> Vec<(Node, Chain)> {
+        fn visit(n: &Node, mut scopes: Chain, out: &mut Vec<(Node, Chain)>) {
+            match n.children() {
+                Some(children) => {
+                    if n.opacity != 1.0 || n.blend != Default::default() {
+                        scopes.push((n.opacity, n.blend));
+                    }
+                    for c in children {
+                        visit(c, scopes.clone(), out);
+                    }
+                }
+                None => out.push((n.clone(), scopes)),
+            }
+        }
+        let mut out = vec![];
+        visit(art, vec![], &mut out);
+        out
+    }
+
+    #[test]
+    fn a_transparent_member_leaves_every_face_in_one_back_to_front_order() {
+        let faces_of = |members| faces_in_order(&revolve_art(&group_with(json!({"segments":16}), members)).unwrap());
+        let alone = faces_of(vec![member(1, 0.0), member(2, 50.0)]);
+        let mut faded = (*member(3, 20.0)).clone();
         faded.opacity = 0.5;
-        let g = group_with(json!({"segments":16}), vec![member(1, 0.0), Arc::new(faded)]);
-        let art = revolve_art(&g).unwrap();
-        let surfaces = art.children().unwrap();
-        assert_eq!(surfaces.len(), 2, "a transparent member stays a surface of its own");
-        assert_eq!(surfaces[1].opacity, 0.5);
+        let faces = faces_of(vec![member(1, 0.0), member(2, 50.0), Arc::new(faded)]);
+        let opaque: Vec<_> = faces.iter().filter(|(_, s)| s.is_empty()).map(|(f, _)| f).collect();
+        assert_eq!(opaque, alone.iter().map(|(f, _)| f).collect::<Vec<_>>(), "the opaque members' faces keep their shared order");
+        assert!(faces.iter().all(|(_, s)| s.is_empty() || s == &[(0.5, Default::default())]), "the member's opacity applies once to each face");
+        let first = faces.iter().position(|(_, s)| !s.is_empty()).unwrap();
+        let last = faces.iter().rposition(|(_, s)| !s.is_empty()).unwrap();
+        assert!(first > 0 && last + 1 < faces.len(), "the ring between the others draws in front of the back ones and behind the front ones");
+        let groups = |art: &Node| {
+            let mut count = 0;
+            art.walk(&mut |n| count += usize::from(n.children().is_some() && n.opacity == 0.5));
+            count
+        };
+        // Rings one above the other: their faces alternate in the order but none overlaps the
+        // other ring, so each ring's opacity applies once, to all its faces.
+        let faded = |id, y: f64| {
+            let mut n = (*member(id, 40.0)).clone();
+            n.opacity = 0.5;
+            if let NodeKind::Path { path, .. } = &mut n.kind {
+                *path = PathData::from_bezpath(&(Affine::translate((0.0, y)) * path.to_bezpath()));
+            }
+            Arc::new(n)
+        };
+        let art = revolve_art(&group_with(json!({"segments":16}), vec![faded(1, 0.0), faded(2, 200.0)])).unwrap();
+        assert!(faces_in_order(&art).iter().all(|(_, s)| s == &[(0.5, Default::default())]));
+        assert_eq!(groups(&art), 2, "one group for each ring");
+        // A tall cylinder inside both that paints nothing splits neither.
+        let mut hidden = (*member(3, 0.0)).clone();
+        hidden.opacity = 0.0;
+        if let NodeKind::Path { path, .. } = &mut hidden.kind {
+            *path = PathData::from_bezpath(&(Affine::translate((0.0, -20.0)) * Affine::scale_non_uniform(1.0, 7.0) * path.to_bezpath()));
+        }
+        let art = revolve_art(&group_with(json!({"segments":16}), vec![faded(1, 0.0), faded(2, 200.0), Arc::new(hidden)])).unwrap();
+        assert_eq!(groups(&art), 2, "one group for each faded ring");
     }
 
     fn star(id: u64) -> Arc<Node> {
@@ -740,6 +962,33 @@ mod tests {
             PathData::new(vec![vectorcraft_geom::SubPath::new(anchors, true)]),
             Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
         ))
+    }
+
+    #[test]
+    fn faces_overlap_by_their_painted_shapes_and_seams_not_only_their_boxes() {
+        let face = |points: &[(f64, f64)]| {
+            let mut b = BezPath::new();
+            b.move_to(points[0]);
+            for &p in &points[1..] {
+                b.line_to(p);
+            }
+            b.close_path();
+            Coverage::of(&Node::path(NodeId(1), PathData::from_bezpath(&b), Appearance::default())).unwrap()
+        };
+        let a = face(&[(0.0, 0.0), (10.0, 0.0), (0.0, 10.0)]);
+        assert_eq!(a.hull.len(), 3);
+        assert_eq!(
+            face(&[(0.0, 0.0), (5.0, 0.0), (10.0, 0.0), (10.0, 10.0), (5.0, 5.0), (0.0, 10.0)]).hull.len(),
+            4,
+            "a point on an edge or inside is left out"
+        );
+        // Across the diagonal 2 / sqrt(2) apart: their boxes overlap, their shapes and seams don't.
+        let b = face(&[(10.0, 10.0), (10.0, 2.0), (2.0, 10.0)]);
+        assert!(overlaps(a.bounds, b.bounds) && !a.meets(&b) && !b.meets(&a));
+        // 1 / sqrt(2) apart, within the two half seam strokes.
+        let c = face(&[(10.0, 10.0), (10.0, 1.0), (1.0, 10.0)]);
+        assert!(a.meets(&c) && c.meets(&a));
+        assert!(a.meets(&a), "a face meets itself");
     }
 
     #[test]
@@ -764,28 +1013,37 @@ mod tests {
         let screened = blend(Arc::new(Node::group(NodeId(5), vec![member(3, 40.0), inner])), BlendMode::Screen);
         let group = group_with(json!({}), vec![blend(member(1, 0.0), BlendMode::Multiply), member(2, 20.0), screened]);
         let art = revolve_art(&group).expect("revolved");
-        let modes = |n: &Node| match &n.kind {
-            NodeKind::Group { children, .. } => children.iter().map(|c| c.blend).collect::<Vec<_>>(),
-            _ => panic!("a group"),
+        let faces = faces_in_order(&art);
+        let modes = |s: &[(f32, BlendMode)]| s.iter().map(|(_, b)| *b).collect::<Vec<_>>();
+        let chains = [vec![BlendMode::Multiply], vec![], vec![BlendMode::Screen], vec![BlendMode::Screen, BlendMode::Multiply]];
+        for chain in &chains {
+            assert!(faces.iter().any(|(_, s)| &modes(s) == chain), "faces drawn in {chain:?}");
+        }
+        assert!(faces.iter().all(|(_, s)| chains.contains(&modes(s))), "each mode applies once, to the member or group that has it");
+        // Faces of the screened group's members that come together in the drawing order share one Screen group.
+        let runs = |faces: &[(Node, Chain)], inside: &dyn Fn(&Chain) -> bool| {
+            faces.windows(2).filter(|w| inside(&w[1].1) && !inside(&w[0].1)).count() + usize::from(faces.first().is_some_and(|f| inside(&f.1)))
         };
-        assert_eq!(modes(&art), [BlendMode::Multiply, BlendMode::Normal, BlendMode::Screen], "a surface or group for each member");
-        let NodeKind::Group { children, .. } = &art.kind else { panic!("a group") };
-        let screened = &children[2];
-        assert_eq!(modes(screened), [BlendMode::Normal, BlendMode::Multiply], "the screened group's members, together, in their own modes");
-        let NodeKind::Group { children: inner, .. } = &screened.kind else { panic!("a group") };
-        assert_eq!(modes(&inner[1]).len(), 1, "the multiplied member's surface");
+        let groups = |art: &Node, pick: &dyn Fn(&Node) -> bool| {
+            let mut count = 0;
+            art.walk(&mut |n| count += usize::from(n.children().is_some() && pick(n)));
+            count
+        };
+        let screened = |s: &Chain| s.first().is_some_and(|(_, b)| *b == BlendMode::Screen);
+        assert_eq!(groups(&art, &|n| n.blend == BlendMode::Screen), runs(&faces, &screened));
         let plain = group_with(json!({}), vec![member(1, 0.0)]);
         assert_ne!(expand_revolve_art(&plain), revolve_art(&plain), "an opaque member's hidden faces are removed");
         let multiplied = group_with(json!({}), vec![blend(member(1, 0.0), BlendMode::Multiply)]);
         assert_eq!(expand_revolve_art(&multiplied), revolve_art(&multiplied), "a blended member keeps every face");
-        // A nested group's opacity applies once, to its members' surfaces together.
+        // A nested group's opacity applies once, to its members' faces that come together.
         let mut faded = Node::group(NodeId(6), vec![member(3, 40.0), member(4, 45.0)]);
         faded.opacity = 0.5;
         let art = revolve_art(&group_with(json!({}), vec![member(1, 0.0), Arc::new(faded)])).expect("revolved");
-        let NodeKind::Group { children, .. } = &art.kind else { panic!("a group") };
-        let opacities = |n: &Node| n.children().unwrap().iter().map(|c| c.opacity).collect::<Vec<_>>();
-        assert_eq!(children.iter().map(|c| c.opacity).collect::<Vec<_>>(), [1.0, 0.5]);
-        assert_eq!(opacities(&children[1]), [1.0, 1.0], "the faded group's members, together");
+        let faces = faces_in_order(&art);
+        assert!(faces.iter().all(|(_, s)| s.is_empty() || s == &[(0.5, BlendMode::Normal)]), "the faded group's opacity applies once");
+        let half = |s: &Chain| !s.is_empty();
+        assert!(faces.iter().any(|(_, s)| half(s)) && faces.iter().any(|(_, s)| !half(s)));
+        assert_eq!(groups(&art, &|n| n.opacity == 0.5), runs(&faces, &half), "the faded group's members, together");
     }
 
     #[test]

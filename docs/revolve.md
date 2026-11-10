@@ -6,6 +6,11 @@ Select a path, compound path, type, or a group or layer of them, then choose **E
 On a group or layer, every visible member sweeps about one axis, as [the help page](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/create-3d-objects.html)
 describes for a group. The following rules are VectorCraft's own: type stays editable and sweeps as its glyph outlines,
 the shared axis lies on the chosen edge of the members' bounds together, and each member keeps its own paint.
+The faces of all members draw in one back-to-front order. The opacity and blending mode of a member, or of a group
+inside the group, apply once to all its faces. Where a face of another member lies between its faces in that order
+and overlaps them on the page, its faces are split there, and the opacity and blending mode apply once to each part.
+Two faces overlap when the convex hulls of their outlines come within the 0.75 pt seam stroke of each other. After
+4,194,304 overlap tests on one group, each further face of such a member is drawn as a part of its own.
 The profile's horizontal distance from a vertical axis is its radius. **Axis side** chooses the left or right
 edge of the profile's bounds; **Offset** moves the axis outward. For a cylinder made from a vertical
 line, give it a nonzero offset. A vertical line at zero offset lies on the axis and has no surface.
