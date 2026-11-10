@@ -17,8 +17,9 @@
 //!   real egui pointer input in screen points (reaches every widget: panels, flyouts, dialogs)
 //! - `ui.set {brightness?, panel?, dockTab?, rulers?, outline?, …}`
 //! - `ui.dialog.set {field, value}` or `{fields: [{field, value}…]}` (all or none; setting a field
-//!   the dialog does not read is an error that lists its fields: [`crate::dialogs::accepts_field`]) /
-//!   `ui.dialog.confirm` / `ui.dialog.cancel`
+//!   the dialog does not read is an error that lists its fields: [`crate::dialogs::accepts_field`];
+//!   `action: confirm | cancel` then confirms or cancels that dialog in the same request and replies
+//!   `{dialog, result}`) / `ui.dialog.confirm` / `ui.dialog.cancel`
 //! - `ui.resize {width, height}`, `ui.focus`, `ui.screenshot {path?, data?}` (`data: true`: the PNG
 //!   comes back as `pngBase64` as well)
 //! - `ui.render {path?, scale?, artboard?, data?, traceViews?}`: render an artboard headlessly
@@ -85,6 +86,22 @@ fn dialog_fields(p: &Value) -> Result<Vec<(String, Value)>, String> {
             Ok((f.to_string(), item.get("value").cloned().unwrap_or(Value::Null)))
         })
         .collect()
+}
+
+/// What `ui.dialog.set {action}` does with the dialog once its fields are set.
+enum DialogAnswer {
+    Confirm,
+    Cancel,
+}
+
+/// The `action` of a `ui.dialog.set`: none, `confirm` or `cancel`. It is checked before any field is set.
+fn dialog_action(p: &Value) -> Result<Option<DialogAnswer>, String> {
+    match p.get("action") {
+        None => Ok(None),
+        Some(v) if v == "confirm" => Ok(Some(DialogAnswer::Confirm)),
+        Some(v) if v == "cancel" => Ok(Some(DialogAnswer::Cancel)),
+        Some(_) => Err("`action` must be confirm or cancel".into()),
+    }
 }
 
 fn reserve_synthetic(app: &mut VectorcraftApp, additional: usize) -> Result<(), String> {
@@ -401,6 +418,10 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
                     Ok(fields) => fields,
                     Err(e) => return err(e),
                 };
+                let action = match dialog_action(p) {
+                    Ok(action) => action,
+                    Err(e) => return err(e),
+                };
                 // Every field is checked before any is set, so a request sets all of them or none.
                 if let Some((f, _)) = fields.iter().find(|(f, _)| !crate::dialogs::accepts_field(d, f)) {
                     let names = crate::dialogs::field_names(d).join(", ");
@@ -419,7 +440,19 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
                         return err(e);
                     }
                 }
-                ok(app.ui.dialog.as_ref().and_then(|d| serde_json::to_value(d).ok()).unwrap_or_default())
+                let dialog = app.ui.dialog.as_ref().and_then(|d| serde_json::to_value(d).ok()).unwrap_or_default();
+                // `action` answers the dialog the fields were just set in, within this request.
+                match action {
+                    None => ok(dialog),
+                    Some(DialogAnswer::Confirm) => match crate::dialogs::confirm(app) {
+                        Ok(result) => ok(json!({"dialog": dialog, "result": result})),
+                        Err(e) => err(e),
+                    },
+                    Some(DialogAnswer::Cancel) => {
+                        crate::dialogs::cancel(app);
+                        ok(json!({"dialog": dialog, "result": null}))
+                    }
+                }
             }
             None => err("no dialog open"),
         },
