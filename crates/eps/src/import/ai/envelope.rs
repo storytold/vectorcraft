@@ -20,8 +20,9 @@
 //! `(AIDeformArtKey)`) and the kind (`AIDeformStyle`: 1 a warp, 2 a mesh, 3 a top object). Then the
 //! distorted art on plain lines, and the plugin's `XP`. While the contents are edited, the group
 //! holds the contents and the dictionary the mesh. A top object's outline is the edge of its
-//! one-patch mesh. An envelope whose parts don't read, or that doesn't come out as drawn, keeps its
-//! drawn art.
+//! one-patch mesh. A warp's mesh is a grid of its shape: a warp of type whose own warp doesn't come
+//! out as drawn opens as a mesh envelope on that grid where that does. An envelope whose parts don't
+//! read, or that doesn't come out as drawn, keeps its drawn art.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
@@ -269,6 +270,23 @@ fn unwrapped(mut nodes: Vec<Node>) -> Vec<Arc<Node>> {
 /// The live envelope of dictionary `o`, the group on `%_` lines before it (`before`) and the art
 /// in its `AIDeformArtKey` block (`inner`); `None` where they don't make one.
 pub(super) fn live(o: &Obj, before: Option<Node>, inner: Vec<Node>) -> Option<NodeKind> {
+    envelope_as(o, before, inner, false)
+}
+
+/// Is the envelope of dictionary `o` a warp?
+fn is_warp(o: &Obj) -> bool {
+    whole(o, "AIDeformStyle") == Some(Some(1))
+}
+
+/// [`live`] for a warp, as a mesh envelope on the grid its editing data saves (the mesh that shapes
+/// it), its points and handles as saved: it draws as that grid does, without the warp's style, bend
+/// and distortions. `None` for an envelope that isn't a warp, or whose grid doesn't read.
+fn live_on_saved_grid(o: &Obj, before: Option<Node>, inner: Vec<Node>) -> Option<NodeKind> {
+    envelope_as(o, before, inner, true)
+}
+
+/// [`live`], or with `on_grid` [`live_on_saved_grid`].
+fn envelope_as(o: &Obj, before: Option<Node>, inner: Vec<Node>, on_grid: bool) -> Option<NodeKind> {
     let editing = switch(o, "AIDeformEditModeKey")?;
     let (mut options, fidelity) = options(o)?;
     let before = before?;
@@ -290,14 +308,14 @@ pub(super) fn live(o: &Obj, before: Option<Node>, inner: Vec<Node>) -> Option<No
     if options.distort_appearance {
         options.bounds_margin = saved_margin(o, &content).unwrap_or_default();
     }
-    let kind = match whole(o, "AIDeformStyle")?? {
-        1 => warp(o)?,
-        2 => {
+    let kind = match (whole(o, "AIDeformStyle")??, on_grid) {
+        (1, false) => warp(o)?,
+        (1, true) | (2, false) => {
             let (rows, cols, pts) = upright(shape?)?;
             let (points, handles) = pts.into_iter().unzip();
             EnvelopeKind::Mesh { rows, cols, points, handles }
         }
-        3 => {
+        (3, false) => {
             let (rows, cols, pts) = upright(shape?)?;
             // The outline runs clockwise from the top left corner, one segment per grid edge.
             let corners = [0, cols, cols.checked_add(rows)?, cols.checked_mul(2)?.checked_add(rows)?];
@@ -448,10 +466,13 @@ impl WarpedType {
     /// Make each envelope of type live where it draws as its drawn art, its contents' text slots
     /// holding their type: `type_of` gives, for a slot's id, the hidden text object it became in
     /// `doc` and the type the contents take in its place (the slot's visibility and lock are the
-    /// type's). The live envelope takes its drawn art's place and the hidden type goes. Each check
-    /// uses one of the import's checks and, for an envelope that shows, adds to what the page check
-    /// allows ([`drawn_alike`]). Elsewhere, and where the type is set in a font that isn't
-    /// available, the drawn art and the hidden type stay.
+    /// type's). The live envelope takes its drawn art's place and the hidden type goes. A warp that
+    /// doesn't draw as its drawn art is checked again as a mesh envelope on the grid the file saves
+    /// for it ([`live_on_saved_grid`]), which opens in its place where it does: its type stays
+    /// editable in that shape, and the warp's style and bend are lost. Each check uses one of the
+    /// import's checks and, for an envelope that shows, adds to what the page check allows
+    /// ([`drawn_alike`]). Elsewhere, and where the type is set in a font that isn't available, the
+    /// drawn art and the hidden type stay.
     pub(crate) fn settle_envelopes(&mut self, doc: &mut Document, type_of: impl Fn(&Document, NodeId) -> Option<(NodeId, Node)>) -> TypedSettled {
         let mut settled = TypedSettled::default();
         if self.envelopes.is_empty() {
@@ -503,22 +524,34 @@ impl WarpedType {
         for n in before.iter_mut().chain(inner.iter_mut()) {
             put_type(n, &texts);
         }
-        let kind = live(&obj, before, inner).ok_or(TypeKept::Read)?;
-        if self.checks == 0 {
-            return Err(TypeKept::Budget);
+        // A warp that VectorCraft's own warp doesn't draw as its drawn art may still draw as the
+        // grid the file saves for it: then it opens as a mesh envelope on that grid.
+        let on_grid = if is_warp(&obj) { live_on_saved_grid(&obj, before.clone(), inner.clone()) } else { None };
+        let kinds: Vec<NodeKind> = live(&obj, before, inner).into_iter().chain(on_grid).collect();
+        if kinds.is_empty() {
+            return Err(TypeKept::Read);
         }
-        self.checks -= 1;
-        let mut envelope = art.clone();
-        (envelope.id, envelope.kind) = (doc.alloc_id(), kind);
-        let layer = doc.alloc_id();
-        let shared = Shared { patterns: &doc.patterns, images: &doc.images };
-        let (mut live_one, mut plain) = (envelope.clone(), art.clone());
-        (live_one.visible, live_one.opacity) = (true, 1.0);
+        let (id, layer) = (doc.alloc_id(), doc.alloc_id());
+        let mut plain = art.clone();
         (plain.visible, plain.opacity) = (true, 1.0);
         let page = self.page.filter(|_| shown.contains(&drawn));
-        if !drawn_alike(&live_one, &plain, layer, &shared, page, &mut self.spent) {
-            return Err(TypeKept::Differs);
+        let mut alike = None;
+        for kind in kinds {
+            if self.checks == 0 {
+                return Err(TypeKept::Budget);
+            }
+            self.checks -= 1;
+            let mut envelope = art.clone();
+            (envelope.id, envelope.kind) = (id, kind);
+            let shared = Shared { patterns: &doc.patterns, images: &doc.images };
+            let mut live_one = envelope.clone();
+            (live_one.visible, live_one.opacity) = (true, 1.0);
+            if drawn_alike(&live_one, &plain, layer, &shared, page, &mut self.spent) {
+                alike = Some(envelope);
+                break;
+            }
         }
+        let envelope = alike.ok_or(TypeKept::Differs)?;
         if doc.node(drawn).is_none() {
             return Err(TypeKept::Read);
         }
