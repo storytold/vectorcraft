@@ -5958,6 +5958,8 @@ axis	Y Axis	Oś Y
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Tekst punktowy
 	Area Text	Tekst akapitowy
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Mierz tekst według granic glifów
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Pokaż opcje przyciągania do glifów
 	Hide Snap to Glyph Options	Ukryj opcje przyciągania do glifów

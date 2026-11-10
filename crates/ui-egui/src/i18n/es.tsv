@@ -6046,6 +6046,8 @@ axis	Y Axis	Eje Y
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Texto de punto
 	Area Text	Texto de área
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Medir el texto por los límites del glifo
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Mostrar opciones de ajuste a glifo
 	Hide Snap to Glyph Options	Ocultar opciones de ajuste a glifo

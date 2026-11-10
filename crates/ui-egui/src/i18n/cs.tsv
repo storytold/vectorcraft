@@ -6104,6 +6104,8 @@ axis	Y Axis	osa Y
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Bodový text
 	Area Text	Text v oblasti
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Měřit text podle hranic glyfů
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Zobrazit možnosti přichytávání ke glyfům
 	Hide Snap to Glyph Options	Skrýt možnosti přichytávání ke glyfům

@@ -17,6 +17,8 @@
 //! [`Selection::anchor_bounds`] measure the objects themselves. Raster effects (shadows, glows,
 //! blurs) are not measured. In one object, the art of at most 4,096 symbol instances is measured
 //! with its geometry effects, and the other instances in it are measured without them.
+//! [`bounds_of_with`], [`oriented_bounds_with`] and [`anchor_bounds_with`] measure as these do and,
+//! with [`Measure::glyphs`], take point type by the ink of its glyphs (Measure Type by Glyph Bounds).
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -72,6 +74,111 @@ pub fn anchor_bounds(selection: &Selection, doc: &Document, preview: bool) -> Op
         return None;
     }
     union_opt(bounds_of(doc, &selection.whole(), preview), selection.anchors_box(doc))
+}
+
+/// How [`bounds_of_with`], [`oriented_bounds_with`] and [`anchor_bounds_with`] measure objects:
+/// `preview` as in [`bounds_of`], and with `glyphs` (Preferences › Type › Measure Type by Glyph
+/// Bounds), point type, horizontal or vertical, by the ink of its glyphs instead of its em box
+/// ([`text_ink_in`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Measure {
+    pub preview: bool,
+    pub glyphs: bool,
+}
+
+impl Measure {
+    /// See [`by_glyphs`].
+    fn by_glyphs(self, drawn: &Drawn, n: &Node) -> bool {
+        self.glyphs
+            && matches!(&n.kind, NodeKind::Text(t) if matches!(t.kind, vectorcraft_doc::TextKind::Point))
+            && n.projection().is_none()
+            && !(self.preview && drawn.draws_geometry(n))
+    }
+}
+
+/// Whether `m` measures `n` by the ink of its glyphs: point type, not in perspective, and with
+/// `preview` only when no geometry effect changes what it draws.
+pub fn by_glyphs(symbols: &SymbolBoxes, n: &Node, m: Measure) -> bool {
+    m.by_glyphs(&Drawn::new(symbols), n)
+}
+
+/// [`bounds_of`] measured by `m`.
+pub fn bounds_of_with(doc: &Document, ids: &[NodeId], m: Measure) -> Option<Rect> {
+    if !m.glyphs {
+        return bounds_of(doc, ids, m.preview);
+    }
+    let symbols = doc.symbol_boxes();
+    let drawn = Drawn::new(&symbols);
+    if !ids.iter().filter_map(|id| doc.node(*id)).any(|n| m.by_glyphs(&drawn, n)) {
+        return bounds_of(doc, ids, m.preview);
+    }
+    ids.iter().filter_map(|id| doc.node(*id)).fold(None, |acc, n| union_opt(acc, measured_in(&drawn, n, Affine::IDENTITY, m)))
+}
+
+/// [`oriented_bounds`] measured by `m`.
+pub fn oriented_bounds_with(doc: &Document, ids: &[NodeId], m: Measure) -> Option<OrientedBox> {
+    if !m.glyphs {
+        return oriented_bounds(doc, ids, m.preview);
+    }
+    let symbols = doc.symbol_boxes();
+    let drawn = Drawn::new(&symbols);
+    if !ids.iter().filter_map(|id| doc.node(*id)).any(|n| m.by_glyphs(&drawn, n)) {
+        return oriented_bounds(doc, ids, m.preview);
+    }
+    let angle = doc.bbox_angle(ids);
+    let to_local = if angle == 0.0 { Affine::IDENTITY } else { OrientedBox { angle, rect: Rect::ZERO }.to_doc().inverse() };
+    let rect = ids.iter().filter_map(|id| doc.node(*id)).fold(None, |acc, n| union_opt(acc, measured_in(&drawn, n, to_local, m)))?;
+    Some(OrientedBox { angle, rect })
+}
+
+/// [`anchor_bounds`] with the objects selected whole measured by `m`.
+pub fn anchor_bounds_with(selection: &Selection, doc: &Document, m: Measure) -> Option<Rect> {
+    if selection.anchors.is_empty() {
+        return None;
+    }
+    union_opt(bounds_of_with(doc, &selection.whole(), m), selection.anchors_box(doc))
+}
+
+/// The box of `n` as `a` would place it, without changing it, measured by `m`: [`bounds_in`] with
+/// `preview`, else [`Node::bounds_in`] of its geometric bounds, and point type by its glyphs as
+/// [`Measure`] says.
+pub fn bounds_in_with(symbols: &SymbolBoxes, n: &Node, a: Affine, m: Measure) -> Option<Rect> {
+    measured_in(&Drawn::new(symbols), n, a, m)
+}
+
+/// See [`bounds_in_with`].
+fn measured_in(drawn: &Drawn, n: &Node, a: Affine, m: Measure) -> Option<Rect> {
+    if m.by_glyphs(drawn, n)
+        && let NodeKind::Text(t) = &n.kind
+        && let Some(r) = text_ink_in(t, a)
+    {
+        // The fills' and characters' strokes paint around the glyphs, as in `Node::visual_bounds`.
+        let o = if m.preview { n.appearance.outset().max(t.char_stroke_outset()) } else { 0.0 };
+        return Some(r.inflate(o, o));
+    }
+    match (m.preview, a == Affine::IDENTITY) {
+        (true, _) => drawn.next().bounds_in(n, a),
+        (false, true) => n.geometric_bounds_with(drawn.symbols),
+        (false, false) => n.bounds_in(drawn.symbols, a, false),
+    }
+}
+
+/// The box of the ink of type `t`'s glyphs with its text space mapped by `a * t.xf`: the cached
+/// ink ([`vectorcraft_doc::TextObject::ink`]) when that map keeps a rectangle square, else the
+/// glyph outlines mapped point by point ([`vectorcraft_text::TextLayout::ink_bounds_in`]). `None`
+/// when nothing draws (no text, only spaces, or glyphs without outlines).
+pub fn text_ink_in(t: &vectorcraft_doc::TextObject, a: Affine) -> Option<Rect> {
+    let m = a * t.xf;
+    let [p, q, r, s, _, _] = m.as_coeffs();
+    let square = (q.abs() <= 1e-12 && r.abs() <= 1e-12) || (p.abs() <= 1e-12 && s.abs() <= 1e-12);
+    if square {
+        let ink = match t.ink() {
+            Some(ink) => ink,
+            None => vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).ink_bounds(),
+        };
+        return ink.map(|i| m.transform_rect_bbox(i));
+    }
+    vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).ink_bounds_in(m)
 }
 
 /// The visual bounds of `n` as drawn: those of its [`drawn_art`], else

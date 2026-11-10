@@ -5701,6 +5701,8 @@ axis	Y Axis	Вісь Y
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Точковий текст
 	Area Text	Текст в області
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Вимірювати текст за межами гліфа
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Показати параметри прив’язки до гліфа
 	Hide Snap to Glyph Options	Приховати параметри прив’язки до гліфа

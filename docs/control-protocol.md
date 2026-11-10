@@ -529,6 +529,10 @@ fields measure visual bounds.
 Align to Glyph Bounds: the Align panel flyout's Align to Glyph Bounds submenu shows and toggles the
 `alignGlyphBoundsPoint` (Point Text) and `alignGlyphBoundsArea` (Area Text) preferences (`prefs.set`), checked while on.
 
+Measure Type by Glyph Bounds: the Transform panel menu's Measure Type by Glyph Bounds item shows and toggles the
+`typeGlyphBounds` preference (`prefs.set`), checked while on; while it is on, the bounding box and the Transform
+panel, Properties and Control bar fields measure point type selected on its own by its glyphs' ink.
+
 Align To: the Align panel's Align To choice is saved with the preferences, and `ui.inspect` reports it as
 `ui.align_to` (`"selection"` or `"artboard"`; Align to Key Object stores no choice). The align buttons of the Align
 panel, the Control bar and the Properties panel run `object.align` with `to: "artboard"` when one object is selected,
