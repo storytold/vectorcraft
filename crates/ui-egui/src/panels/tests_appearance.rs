@@ -1994,3 +1994,31 @@ fn the_drop_buttons_light_up_while_a_row_is_dragged() {
     assert_eq!(drop_buttons_on(&ctx, &mut app, vec![]), [false, false], "dark again once it is released");
     assert_eq!(stack_items(&app).len(), 2, "released elsewhere: nothing removed");
 }
+
+/// #6429: a dash length typed into the Stroke panel that the Appearance panel's "Stroke:" row or
+/// the Properties panel's Stroke link opens sticks when a click outside closes the popup, as it
+/// does when Enter ends the edit. The popup used to close without drawing again, so the field
+/// never saw itself lose the keyboard and the value went back.
+#[test]
+fn a_dash_typed_in_a_stroke_popup_sticks_when_a_click_outside_closes_it() {
+    type Panel = fn(&mut VectorcraftApp, &mut egui::Ui);
+    let hosts: [(&str, Panel); 2] = [("Stroke:", appearance::show), ("Stroke", super::properties::show)];
+    for (link, show) in hosts {
+        let mut app = app_with_rect();
+        run(&mut app, "stroke.set", json!({"dash": [10.0]}));
+        let ctx = egui::Context::default();
+        let texts = frame_events(&ctx, &mut app, vec![], show);
+        click(&ctx, &mut app, text_rect(&texts, link).center(), show);
+        // The popup's first dash field: a click gives it the keyboard with its text selected.
+        let texts = frame_events(&ctx, &mut app, vec![], show);
+        click(&ctx, &mut app, text_rect(&texts, "10").center(), show);
+        frame_events(&ctx, &mut app, vec![egui::Event::Text("4".into())], show);
+        let dash = |app: &VectorcraftApp| current_stroke(app).and_then(|s| s.dash).map(|d| d.pattern);
+        assert_eq!(dash(&app), Some(vec![10.0]), "{link}: nothing set while typing");
+        click(&ctx, &mut app, egui::pos2(5.0, 3000.0), show);
+        frame_events(&ctx, &mut app, vec![], show);
+        assert_eq!(dash(&app).and_then(|p| p.first().copied()), Some(4.0), "{link}: the typed dash stuck: {:?}", dash(&app));
+        let texts = frame_events(&ctx, &mut app, vec![], show);
+        assert!(!texts.iter().any(|(t, _)| t == "Dashed Line"), "{link}: the popup closed");
+    }
+}
