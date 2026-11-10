@@ -84,6 +84,7 @@ impl VectorcraftApp {
                 spelling: Default::default(),
                 selection_marks: Default::default(),
                 selection_box: None,
+                selection_footprint: None,
                 selection_bounds: None,
                 content_bounds: None,
                 cursors: Default::default(),

@@ -438,15 +438,17 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 // The Transform link opens the whole Transform panel (reference point, rotate,
                 // shear, options) in a popover; X/Y/W/H follow inline while the bar has room.
                 crate::panels::transform::link(app, ui);
-                // The bounding box, rotated with rotated objects: its centre and its own sides.
+                // The bounding box, rotated with rotated objects: its centre and its own sides, or
+                // while it is rotated the footprint square to the page.
                 if let Some(b) = app.selection_box()
                     && ui.available_width() >= inline_transform_width(ui, &t)
                 {
                     let c = b.center();
+                    let (sw, sh) = crate::panels::transform::shown_size(app, &b);
                     let origin = app.ruler_origin();
                     let link = crate::panels::transform::proportional(app, ui);
                     let copy = crate::panels::transform::alt_enter_copies(app, ui);
-                    let values = [(c.x, origin.x), (c.y, origin.y), (b.rect.width(), 0.0), (b.rect.height(), 0.0)];
+                    let values = [(c.x, origin.x), (c.y, origin.y), (sw, 0.0), (sh, 0.0)];
                     // The W/H link sits between W and H, but is made after H so Tab goes from W
                     // straight to H and finds the link after it.
                     let mut link_room = None;
@@ -462,7 +464,11 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                             widgets::num_field(ui, id, shown, units, INLINE_FIELD_WIDTH)
                         };
                         if let Some(nv) = set {
-                            app.run("object.setBounds", json!({k: nv + offset, "reference": 4, "proportional": link, "copy": copy})).ok();
+                            if matches!(k, "width" | "height") {
+                                crate::panels::transform::set_size(app, &b, k, nv, 4, link, copy);
+                            } else {
+                                app.run("object.setBounds", json!({k: nv + offset, "reference": 4, "proportional": link, "copy": copy})).ok();
+                            }
                         }
                     }
                     if let Some(room) = link_room {
