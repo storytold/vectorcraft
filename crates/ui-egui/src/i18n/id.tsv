@@ -906,6 +906,7 @@ lighting	Light	Cahaya
 	Color Picker…	Pemilih warna…
 	Coming soon — tracked in the parity plan	Segera hadir — dilacak dalam rencana paritas
 	Command Dialog	Dialog perintah
+	Command API Reference	Referensi API perintah
 	Copy Selected Style	Salin gaya terpilih
 	Corners…	Sudut…
 	Define Perspective Grid…	Definisikan kisi perspektif…
@@ -5909,6 +5910,8 @@ axis	Y Axis	Sumbu Y
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Teks titik
 	Area Text	Teks area
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Ukur teks menurut batas glif
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Tampilkan opsi snap ke glif
 	Hide Snap to Glyph Options	Sembunyikan opsi snap ke glif

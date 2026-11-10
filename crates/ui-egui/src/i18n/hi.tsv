@@ -394,6 +394,7 @@ antiAlias	Sharp	शार्प
 	Area / Path Type	एरिया / पाथ टाइप
 	Area Graph Tool	एरिया ग्राफ़ टूल
 	Area Text	एरिया टेक्स्ट
+	Measure Type by Glyph Bounds	टाइप को ग्लिफ़ की सीमाओं से मापें
 	Area Text Objects	एरिया टेक्स्ट ऑब्जेक्ट
 	Area Type	एरिया टाइप
 	Area Type Options	एरिया टाइप ऑप्शन्स
@@ -896,6 +897,7 @@ antiAlias	Sharp	शार्प
 	Command	कमांड
 	Command Click to Select Objects Behind	कमांड पीछे ऑब्जेक्ट्स का सिलेक्ट करने के लिए क्लिक करें
 	Command Dialog	कमान डायलॉग
+	Command API Reference	कमांड API संदर्भ
 	Comment not closed	टिप्पणी बंद नहीं
 	Commenting, filling in form fields and signing	टिप्पणी करना, फॉर्म फ़ील्ड में भरना और हस्ताक्षर करना
 	Commits	कमिट्स
@@ -7385,6 +7387,7 @@ antiAlias	Sharp	शार्प
 @msg	the action has no steps	कार्रवाई में कोई कदम नहीं है
 @msg	the action set file holds more than 1,000 actions	एक्शन सेट फ़ाइल 1,000 से अधिक कार्यों को रखती है
 @msg	the action set file is larger than 8 MiB	एक्शन सेट फ़ाइल 8 MiB से बड़ा है
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: संदर्भ {MAX_BYTES} बाइट से बड़ा होगा
 @msg	the action set file needs a later version of VectorCraft	एक्शन सेट फ़ाइल को वेक्टर क्रेफ्ट के बाद के संस्करण की आवश्यकता होती है
 @msg	the action set ids are not a list	कार्रवाई सेट ids एक सूची नहीं हैं
 @msg	the action sets changed; nothing was deleted	कार्रवाई सेट बदल गया; कुछ भी नहीं हटा दिया गया था

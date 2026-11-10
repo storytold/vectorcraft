@@ -760,6 +760,7 @@ font-technology	Variable	Változó
 	Command	Parancs
 	Command Click to Select Objects Behind	Cmd+kattintás a mögöttes objektumok kijelöléséhez
 	Command Dialog	Parancs párbeszédablaka
+	Command API Reference	Parancsok API-referenciája
 	Commenting, filling in form fields and signing	Megjegyzések, űrlapmezők kitöltése és aláírás
 	Commits	Commitok
 	Community	Közösség
@@ -5095,6 +5096,7 @@ imageTrace	Outline	Körvonal
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	„{name}” betöltve; kihagyott lépések: {n}
 @msg	not an action set file	nem műveletkészlet-fájl
 @msg	the action set file is larger than 8 MiB	a műveletkészlet-fájl nagyobb 8 MiB-nál
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: a referencia nagyobb lenne {MAX_BYTES} bájtnál
 @msg	the action set file holds more than 1,000 actions	a műveletkészlet-fájl több mint 1000 műveletet tartalmaz
 @msg	the action set file needs a later version of VectorCraft	a műveletkészlet-fájlhoz a VectorCraft újabb verziója kell
 @msg	an action in the action set file has more than 10,000 steps	a műveletkészlet-fájl egyik műveletében több mint 10 000 lépés van
@@ -6085,6 +6087,8 @@ axis	Y Axis	Y tengely
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Pontszöveg
 	Area Text	Területszöveg
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Szöveg mérése a glifahatárok szerint
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Glifához illesztés beállításainak megjelenítése
 	Hide Snap to Glyph Options	Glifához illesztés beállításainak elrejtése

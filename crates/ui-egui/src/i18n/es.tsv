@@ -582,6 +582,7 @@ font-technology	Variable	Variables
 	Coming soon — tracked in the parity plan	Próximamente: incluido en el plan de paridad
 	Command Click to Select Objects Behind	Cmd+clic para seleccionar objetos de detrás
 	Command Dialog	Cuadro de diálogo de comando
+	Command API Reference	Referencia de la API de comandos
 	Community	Comunidad
 	Compatibility:	Compatibilidad:
 	Compatible Gradient and Gradient Mesh Printing	Impresión compatible de degradados y mallas de degradado
@@ -4413,6 +4414,7 @@ axis	Both	Ambos
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Se cargó “{name}”: se omitió {n} paso|Se cargó “{name}”: se omitieron {n} pasos
 @msg	not an action set file	no es un archivo de conjunto de acciones
 @msg	the action set file is larger than 8 MiB	el archivo de conjunto de acciones supera los 8 MiB
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: la referencia superaría los {MAX_BYTES} bytes
 @msg	the action set file holds more than 1,000 actions	el archivo de conjunto de acciones contiene más de 1000 acciones
 @msg	the action set file needs a later version of VectorCraft	el archivo de conjunto de acciones necesita una versión más reciente de VectorCraft
 @msg	an action in the action set file has more than 10,000 steps	una acción del archivo de conjunto de acciones tiene más de 10 000 pasos
@@ -6044,6 +6046,8 @@ axis	Y Axis	Eje Y
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Texto de punto
 	Area Text	Texto de área
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Medir el texto por los límites del glifo
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Mostrar opciones de ajuste a glifo
 	Hide Snap to Glyph Options	Ocultar opciones de ajuste a glifo

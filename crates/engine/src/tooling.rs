@@ -365,6 +365,7 @@ impl Session {
             freeform_point: self.selected_freeform_point(),
             raster_sample: self.prefs.eyedropper.sample_size,
             preview_bounds: self.prefs.use_preview_bounds,
+            glyph_bounds: self.prefs.type_glyph_bounds,
             preview_memo: Some(&self.preview_memo),
             unit,
             stroke_unit,
@@ -1057,6 +1058,12 @@ impl Session {
     /// Does the active tool take `key` ahead of the shortcuts bound to it (see `Tool::claims_key`)?
     pub fn tool_claims_key(&mut self, key: ToolKey, view: ViewInfo) -> bool {
         self.plane_key(key).is_some() || self.with_tool_cx(view, |t, cx| t.claims_key(cx, key))
+    }
+
+    /// Has the active tool started something that Escape ends while no button is pressed (see
+    /// `Tool::ends_on_escape`)?
+    pub fn tool_ends_on_escape(&mut self, view: ViewInfo) -> bool {
+        self.with_tool_cx(view, |t, cx| t.ends_on_escape(cx))
     }
 
     pub fn overlays(&mut self, view: ViewInfo) -> Vec<Overlay> {

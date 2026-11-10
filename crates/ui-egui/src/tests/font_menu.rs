@@ -410,7 +410,7 @@ fn wheel_events_use_the_pointer_position_when_they_occurred() {
     assert_eq!(first_style(&app, id).font_family, "Inter", "the wheel was outside the field");
     assert_eq!(app.session.active().unwrap().history.undo.len(), before);
     assert!(ctx.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::MouseWheel { .. }))), "outside wheel input is left for its owner");
-    let after_gap = |ctx: &egui::Context| Some(ctx.input(|i| i.time) + crate::font_menu::WHEEL_STREAM_GAP);
+    let after_gap = |ctx: &egui::Context| Some(ctx.input(|i| i.time) + crate::widgets::WHEEL_STREAM_GAP);
     let later = after_gap(&ctx);
     panel_frame_at(&ctx, &mut app, later, vec![wheel(line, -1.0, Default::default()), egui::Event::PointerMoved(outside)], "Inter", &draw);
     assert_ne!(first_style(&app, id).font_family, "Inter", "the wheel was over the field before the pointer left");

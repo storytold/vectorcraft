@@ -560,6 +560,7 @@ font-technology	Variable	Variabel
 	Coming soon — tracked in the parity plan	Demnächst verfügbar – im Paritätsplan vermerkt
 	Command Click to Select Objects Behind	Cmd-Klick wählt dahinterliegende Objekte aus
 	Command Dialog	Befehlsdialog
+	Command API Reference	API-Referenz der Befehle
 	Community	Community
 	Compatibility:	Kompatibilität:
 	Compatible Gradient and Gradient Mesh Printing	Kompatibles Drucken von Verläufen und Verlaufsgittern
@@ -4329,6 +4330,7 @@ theme	Appearance	Erscheinungsbild
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	„{name}“ geladen: {n} Schritt wurde ausgelassen|„{name}“ geladen: {n} Schritte wurden ausgelassen
 @msg	not an action set file	keine Aktionssatzdatei
 @msg	the action set file is larger than 8 MiB	die Aktionssatzdatei ist größer als 8 MiB
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: die Referenz wäre größer als {MAX_BYTES} Byte
 @msg	the action set file holds more than 1,000 actions	die Aktionssatzdatei enthält mehr als 1.000 Aktionen
 @msg	the action set file needs a later version of VectorCraft	die Aktionssatzdatei erfordert eine neuere Version von VectorCraft
 @msg	an action in the action set file has more than 10,000 steps	eine Aktion in der Aktionssatzdatei hat mehr als 10.000 Schritte
@@ -5685,6 +5687,8 @@ axis	Y Axis	Y-Achse
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Punkttext
 	Area Text	Flächentext
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Text an Glyphenbegrenzung messen
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Optionen für „An Glyphe ausrichten“ einblenden
 	Hide Snap to Glyph Options	Optionen für „An Glyphe ausrichten“ ausblenden

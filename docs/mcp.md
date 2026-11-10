@@ -210,8 +210,10 @@ echo '{"jsonrpc":"2.0","id":1,"method":"prompts/get","params":{"name":"poster","
 
 ### Resource templates
 
-`vectorcraft://document` (summary), `vectorcraft://document/json` (the whole model), and
-`vectorcraft://commands` (the live command catalog with enabled state) are the fixed resources. The templates read one thing at a time, which matters on a real document: the full model
+`vectorcraft://document` (summary), `vectorcraft://document/json` (the whole model),
+`vectorcraft://commands` (the live command catalog with enabled state) and `vectorcraft://commands/reference` (the
+command API reference in Markdown, `text/markdown; charset=utf-8`; see [Parameter schemas](#parameter-schemas)) are
+the fixed resources. The templates read one thing at a time, which matters on a real document: the full model
 is thousands of lines an agent pays for again on every change.
 
 | `uriTemplate` | Reads |
@@ -748,6 +750,7 @@ Fixed resources and the four templates (same as [Resource templates](#resource-t
 | `vectorcraft://document` | `document.inspect` summary (JSON) |
 | `vectorcraft://document/json` | The complete document model (JSON) |
 | `vectorcraft://commands` | Live command catalog with enabled state |
+| `vectorcraft://commands/reference` | The command API reference (`engine.apiReference`), as Markdown (`text/markdown; charset=utf-8`) |
 | `vectorcraft://object/{id}` | One layer or object (`document.node {id, summary: true}`) |
 | `vectorcraft://command/{id}` | One command's metadata and enablement |
 | `vectorcraft://effect/{id}` | One live effect with parameters and defaults |
@@ -1385,7 +1388,7 @@ vectorcraft-cli run --cmd file.new --params '{"width":600,"height":200}'   --cmd
 ### Parameter schemas
 
 Some commands have a machine-readable parameter schema: at present `view.capsLock`, `view.saved.new`,
-`view.saved.edit`, `view.saved.list`, `view.transparencyGrid` and `view.snapToGlyph.options`. The engine's
+`view.saved.edit`, `view.saved.list`, `view.transparencyGrid`, `view.snapToGlyph.options` and `engine.apiReference`. The engine's
 `engine.commands` list gives such a command a `schema` field: an object schema in the shape of JSON Schema 2020-12
 (https://json-schema.org/draft/2020-12). Its root has `$schema` (the 2020-12 dialect), `description` when the
 command has a summary, and `deprecated: true` when the command is deprecated. The schema uses `type`, `properties`, `required` and
@@ -1427,9 +1430,25 @@ path to a value inside a list or an object, and the document and its undo histor
 
 An omitted value with a `default` takes it (`rotation` 0 in `view.saved.new`); the journal keeps the params as they
 were given. Saved steps played from a journal or an action keep a key the schema does not name, unless its value nests
-more than 16 levels deep, and the values of the parameters it names are checked as in a new call. The schemas of built-in commands belong to API level 1
-(`vectorcraft_engine::schemas::API_VERSION`); a change to any of them raises the level. Commands that plug-ins add have
-no schema here.
+more than 16 levels deep, and the values of the parameters it names are checked as in a new call. The schemas of built-in commands belong to API level 2
+(`vectorcraft_engine::schemas::API_VERSION`); a change to any of them raises the level. Level 2 added
+`engine.apiReference`. Commands that plug-ins add have no schema here.
+
+`engine.apiReference {}` → `{markdown}` returns the command API reference, written from these schemas each time it
+runs; no file of it is kept. It needs no open document and changes nothing. The reference has a `##` section for each
+built-in command that has a schema, in registry order (the order `engine.commands` lists them), and leaves out every
+command without one, plug-in commands included; `engine.commands` still lists those with their params text. A section
+lists the command's label, menu path, API level, deprecation level, what it writes (`x-writes`), cost, summary and
+return, then a table of its parameters in the schema's order with the columns Parameter, Type, Range, Unit, Default,
+Required, Since, Deprecated and Description. A member of an object parameter is a row of its own after it, named with
+dots and `[]` for a list (`edits[].name`). A range says whether each end is included ("more than 0", "at most 64"); a
+default is either the JSON value the engine fills in, marked "(JSON)", or the note of a default the command works out;
+the Description says when null reads as omitted and when the engine does not refuse a value of another type (a lenient
+parameter). Text from a schema is escaped as Markdown text: each of `` \ | [ ] < > ` * _ ! & # ~ : @ `` and the `.`
+after `www` get a backslash, and line breaks, tabs and other control characters become spaces, so a description cannot
+end a table cell or make a link, an image or HTML. A reference larger than 1 MiB (1,048,576 bytes) is an error naming
+`engine.apiReference`, and no part of it is returned. MCP serves the same text as the resource
+`vectorcraft://commands/reference`.
 
 ## Checking scripts written for the reference app
 
@@ -3982,6 +4001,35 @@ an error that lists the choices of a `horizontal`, `vertical`, `to`, `axis` or `
 (`object.reflect` also takes an angle and names the value given), and one for a `spacing` that is not a number; nothing
 moves.
 
+## Glyph bounds for type
+
+The bounding box normally measures point type by its em box, which leaves room above and below the letters for
+ascenders, descenders and capitals. With the preference `typeGlyphBounds` on (`prefs.set {key: "typeGlyphBounds",
+value: true}`; also Preferences › Type › Glyph Bounds and the Transform panel menu's Measure Type by Glyph Bounds), the
+bounding box and its handles, the Transform panel's, Control bar's and Properties panel's X, Y, W and H,
+`object.setBounds`, the Scale, Rotate and Reflect tools' reference point, and Swap Objects, Replace with Top Object,
+Set Size of Each and Sort Objects measure point type, horizontal or vertical, by the ink of its glyphs: its glyph
+outlines and its underline and strikethrough bars. This applies to each point type object that is selected as an object
+(not inside a selected group), in a selection with other objects too. The option is VectorCraft's own and is off by
+default.
+
+A width or height typed with the option on scales the type until its ink has that size. The type stays live type: its
+font size changes by the scale, so `object.setBounds {height: 72}` on "H" gives the cap height 72 pt, not a 72 pt
+font. With Use Preview Bounds on, the ink takes in the characters' strokes, and type with geometry effects is
+measured as drawn. Rotated type keeps its own angle, and skewed type is measured by its glyph outlines. Type that
+draws nothing (no text, or only spaces without underline or strikethrough), area type, type on a path and type inside
+a selected group are measured as before. Arrange in Grid and Group Overlapping Objects measure visual bounds as
+before, and Align and Distribute follow Align to Glyph Bounds.
+
+When moved type snaps (Snap to Grid, Snap to Pixel, Smart Guides and ruler guides), the edges and center of its ink box
+snap, and the Distance Guides measure from that box. The other objects that it snaps to keep their usual boxes, as
+they do with Use Preview Bounds. The preference is not saved in documents.
+
+```json
+{"name":"run_command","arguments":{"command":"prefs.set","params":{"values":{"typeGlyphBounds":true}}}}
+{"name":"run_command","arguments":{"command":"object.setBounds","params":{"height":72,"proportional":true}}}
+```
+
 ## Selection preferences
 
 The Selection & Anchor Display and General preferences apply to `pointer_gesture` as they do to the mouse:
@@ -5193,7 +5241,12 @@ fallback font…), each note once; the export still writes or returns every file
 
 Batch exports (#1935):
 - **What:** `layers: [id…]` (each layer's art alone) or `selection: "one" | "each"` instead of artboards
-  (`assets`, `fullDocument` as before).
+  (`assets`, `fullDocument` as before). A selected object, a layer's object or an asset's object stays in the layers
+  and groups that hold it, so their clipping paths, opacity masks, effects, opacity and blend modes apply to it as on
+  the canvas, and the file is cropped to the bounds the renderer measures for that art (a clip group by its clip); an
+  object of a blend, envelope, repeat or intertwine is drawn on its own. Those layers are drawn even when they are
+  hidden, template or non-printing layers, and a PSD of the file names its layers after them.
+  `document.exportSelection` and the pictures of `css.export {rasterize: true}` draw the selected objects the same way.
 - **Names:** `name` is a pattern for every file: `<filename>` (the document's file name without its extension, or
   its title before it is saved; the Full Document file and the `.zip` use the same name), `<name>` (the artboard,
   asset, layer or object), `<index>`, `####` (a counter zero-padded to the run of `#`, from `counterStart`; `counterPer: "item"`

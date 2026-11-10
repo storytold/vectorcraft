@@ -567,6 +567,7 @@ font-technology	Variable	Променливи
 	Coming soon — tracked in the parity plan	Очаквайте скоро — следи се в плана за съвместимост
 	Command Click to Select Objects Behind	Щракване с Command за избор на обекти отзад
 	Command Dialog	Диалогов прозорец за команда
+	Command API Reference	Справочник за API на командите
 	Community	Общност
 	Compatibility:	Съвместимост:
 	Compatible Gradient and Gradient Mesh Printing	Съвместим печат на градиент и градиентна мрежа
@@ -5894,6 +5895,8 @@ axis	Y Axis	Y ос
 # Align panel menu › Align to Glyph Bounds (#4231).
 	Point Text	Точков текст
 	Area Text	Текст в зона
+# Transform panel menu › Measure Type by Glyph Bounds.
+	Measure Type by Glyph Bounds	Измерване на текста по границите на глифа
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Показване на опциите за прилепване към глиф
 	Hide Snap to Glyph Options	Скриване на опциите за прилепване към глиф

@@ -275,6 +275,7 @@ fn same_art(a: &NodeKind, b: &NodeKind) -> bool {
                 moved.xf = a.xf;
                 moved.cached_bounds = a.cached_bounds;
                 moved.cached_baselines.clone_from(&a.cached_baselines);
+                moved.cached_ink = a.cached_ink;
                 **a == moved
             }
         }
