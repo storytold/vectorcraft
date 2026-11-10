@@ -5975,6 +5975,11 @@ axis	Y Axis	Y ღერძი
 	Button	ღილაკი
 	Panel	პანელი
 	UI Frames	UI ჩარჩოები
+	Map Markers	რუკის ნიშნულები
+	Pin	ქინძისთავი
+	Flag	დროშა
+	Crosshair	სამიზნე
+	Checkpoint	საკონტროლო წერტილი
 	Open Symbol Library	სიმბოლოების ბიბლიოთეკის გახსნა
 	Save Symbol Library	სიმბოლოების ბიბლიოთეკის შენახვა
 	Save Symbol Library…	სიმბოლოების ბიბლიოთეკის შენახვა…

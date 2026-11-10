@@ -5649,6 +5649,11 @@ axis	Y Axis	Вісь Y
 	Button	Кнопка
 	Panel	Панель
 	UI Frames	UI-рамки
+	Map Markers	Маркери карти
+	Pin	Шпилька
+	Flag	Прапор
+	Crosshair	Приціл
+	Checkpoint	Контрольна точка
 	Open Symbol Library	Відкрити бібліотеку символів
 	Save Symbol Library	Зберегти бібліотеку символів
 	Save Symbol Library…	Зберегти бібліотеку символів…
