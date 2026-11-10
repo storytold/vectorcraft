@@ -597,6 +597,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "text.reshapePath",
     "text.setFormat",
     "text.setGlyphAlternate",
+    "text.setPathHandle",
     "text.setRangeStyle",
     "text.setStyle",
     "text.setText",
