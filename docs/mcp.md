@@ -369,10 +369,10 @@ The older names below remain listed because existing workflows use them.
 
 | Tool | Arguments and result |
 |---|---|
-| `command_list` | Optional `filter` (or `query`), `menu` (a menu path substring, levels joined with ` > `), `enabled_only`, `brief` (no `params` text); returns the command array. `list_commands` lists the same commands; it takes `enabledOnly` and returns `{count, commands}` |
+| `command_list` | Optional `filter` (or `query`), `menu` (a menu path substring, levels joined with ` > `), `enabled_only`, `brief` (no `params` text, `schema` or `inputSchema`); returns the command array. A command with a parameter schema lists `schema` and `inputSchema` (see [Parameter schemas](#parameter-schemas)). `list_commands` lists the same commands; it takes `enabledOnly` and returns `{count, commands}` |
 | `command_run` | `id`, optional `params`; runs the command through the existing backend. An unknown key in `params` is an error that names it and the nearest key the command takes (`invalid parameters for `file.new`: unknown parameter `widht`; did you mean `width`?`), so a misspelt key no longer runs the command with its default (see [Parameter keys](#parameter-keys)). `run_command` runs a command the same way and takes its id as `command` |
 | `command_batch` | `steps: [{id, params?}]` (at most 256), optional `stop_on_error` (default true), `atomic` and `label`; returns `completed`, `failed`, `results: [{ok, result\|error}]` and `created` (the ids the `draw_path` / `draw_shape` steps made, in order). A step's `id` is a command id, or `draw_path` / `draw_shape` with that tool's arguments as `params` (checked as `tools/call` checks them; the step's result is the tool's, so `"$N.id"` is the new object). Each edit has its own undo step, or with `atomic: true` the batch's edits are one undo step named `label` (else after its first edit; `edit.undoGroup.begin`/`end` underneath), and the edits made in a document that a step opens or creates (`document.open`, `file.new`) are one undo step there, named the same, also when no document was open before the batch. In a document that was open before the batch and that a step switches to (`document.activate`), each edit stays its own undo step; failures set `isError`. A param string `"$N.path"` or `"$last.path"` takes a value from an earlier step's result (see `run` below). Kept step results total at most 8 MiB; past that the batch stops with the reason. This is the MCP tool, not the engine command `command.batch` (that one takes `commands: [{command, params}]` and is what the Actions panel plays); use `command_run` with `command.batch` when replaying a recorded action |
-| `command_list` | Optional `filter` (or `query`), `menu` (a menu path substring, levels joined with ` > `), `enabled_only`, `brief` (no `params` text); returns the command array |
+| `command_list` | Optional `filter` (or `query`), `menu` (a menu path substring, levels joined with ` > `), `enabled_only`, `brief` (no `params` text, `schema` or `inputSchema`); returns the command array |
 | `command_run` | `id`, optional `params`; runs the command through the existing backend. An unknown key in `params` is an error that names it and the nearest key the command takes (`invalid parameters for `file.new`: unknown parameter `widht`; did you mean `width`?`), so a misspelt key no longer runs the command with its default (see [Parameter keys](#parameter-keys)) |
 | `doc_inspect` | Optional `depth`, `childLimit`, `ids`, `kind`, `limit`, `offset`; same summary as `inspect_document` |
 | `render_preview` | Optional `max_side` (1–4096, default 1024), `artboard` (0-based, default 0) and `traceViews`; inline PNG of that artboard without editing it, drawn as `export` draws a PNG with `background: "white"` at the scale that fits `max_side` (at most 1). With `traceViews: true`, Image Trace objects draw in the view set with `imageTrace.setView` (outlines, the source image…), as in the app's window; by default they draw their tracing result. Artboards too large to render within the allocation bound return a tool error |
@@ -446,7 +446,7 @@ opens the picker through `run_command` with the remote backend.
 
 | Tool | Arguments | Notes |
 |---|---|---|
-| `list_commands` | `{filter?, query?, menu?, enabledOnly?, brief?}` | The command catalogue: id, label, menu, shortcut, params doc (left out with `brief`), enablement. |
+| `list_commands` | `{filter?, query?, menu?, enabledOnly?, brief?}` | The command catalogue: id, label, menu, shortcut, params doc, enablement, and `schema` and `inputSchema` for a command with a parameter schema (the params doc and both schemas are left out with `brief`). |
 | `run_command` | `{command, params?}` | Runs any command. Use it for everything without a dedicated tool. |
 | `inspect_document` | `{depth?, childLimit?, ids?, kind?, limit?, offset?}` | Artboards (with `color`, `#rrggbb`, for one with a background color), layer tree (ids, kinds, bounds, paint), selection, history, tool. A type node's `fill`, `stroke` and `strokeWidth` are the paint its characters show (its first run's); fills and strokes of the type object itself come as `objectFill`, `objectStroke` and `objectStrokeWidth`. Paint comes as a label (`"#ff0000"`, `"None"`, `"G1 40% (#ff9999)"` for a swatch at a tint); `paint.proxies` gives it as an object. |
 | `inspect_ui` | `{}` | UI state. Remote mode only. |
@@ -1402,6 +1402,15 @@ refuses null params for it as a missing parameter. A number with no fractional p
 JSON Schema defines one, and the command receives `2`. An `x-lenient` parameter's schema states the documented type,
 and the engine also passes a value of another type to the command. The command's `params` text equals the text the
 schema writes, and a test checks that they are the same.
+
+The `engine.commands` list and the `command_list` and `list_commands` tools also give such a command an `inputSchema`
+field: the same schema in the form of an MCP tool's `inputSchema`
+(https://modelcontextprotocol.io/specification/2025-06-18/schema), whose root `type` is always `"object"`
+(https://modelcontextprotocol.io/specification/2026-07-28/schema). It differs from `schema` only in the root `type`,
+which is `"object"` also when no parameter is required; every other keyword, `$schema` and the `x-` fields included,
+is the same. A command without a schema lists neither field. The commands remain commands run with `command_run`
+or `run_command`: `tools/list` does not list them as tools. With `brief`, the listings leave out `schema` and
+`inputSchema` as well as the `params` text; a listing with the command's id as `filter` gives them.
 
 The engine checks the params of such a command against its schema before the command runs, for every new call: from
 the desktop app, the control channel, MCP or the CLI, and when one command runs another. The steps of `command.batch`
