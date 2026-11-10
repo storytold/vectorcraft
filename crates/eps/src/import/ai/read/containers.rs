@@ -519,6 +519,7 @@ impl<'a> Reader<'a> {
                     // An envelope of type keeps its drawn art and its type, hidden, as above: the
                     // type is filled in after reading, which the envelope can't wait for.
                     if typed {
+                        self.warn(crate::import::ai::envelope::TYPE_DRAWN);
                         return Ok(());
                     }
                     if self.envelopes.len() >= crate::import::ai::envelope::MAX_PENDING {
