@@ -193,6 +193,153 @@ fn type_extrudes_as_its_glyphs_and_stays_editable() {
     assert_ne!(effects::solid_art(&node(&s, id)).unwrap(), art, "the solid follows the edited text");
 }
 
+/// #3617: Revolve takes live type and stays type, updating when the text changes, and saves,
+/// exports, expands and undoes as one step.
+#[test]
+fn type_revolves_as_its_glyphs_and_stays_editable() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let t = s.execute("text.create", &json!({"x": 50, "y": 100, "text": "O", "size": 72})).unwrap();
+    let id = NodeId(t["id"].as_u64().unwrap());
+    s.execute("paint.setFill", &json!({"ids": [id.0], "color": "#cc2200"})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "threeD.revolve", "ids": [id.0], "item": null, "params": {"segments": 16}})).unwrap();
+    let n = node(&s, id);
+    assert!(matches!(n.kind, NodeKind::Text(_)), "still type");
+    let art = effects::revolve_art(&n).expect("a surface of the glyphs");
+    let mut tinted = false;
+    art.walk(&mut |c| {
+        if let Some([r, g, b, _]) = c.appearance.fill_paint().color().map(|c| c.to_rgba8(1.0)) {
+            tinted |= r > g && r > b;
+        }
+    });
+    assert!(tinted, "shaded from the characters' red");
+    let doc = &s.doc().unwrap().doc;
+    let restored = vectorcraft_format::load(&vectorcraft_format::save(doc, false)).unwrap();
+    assert_eq!(effects::revolve_art(restored.node(id).unwrap()).unwrap(), art, "the same art after a save");
+    let meshes = effects::three_d_meshes(&n).unwrap();
+    assert_eq!(meshes.len(), 1, "one mesh of every contour of the type");
+    s.execute("text.setText", &json!({"ids": [id.0], "text": "OO"})).unwrap();
+    assert_ne!(effects::revolve_art(&node(&s, id)).unwrap(), art, "the surface follows the edited text");
+    s.execute("effect.expandAppearance", &json!({"ids": [id.0]})).unwrap();
+    assert!(!effects::has_revolve(&node(&s, id)), "expanded");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(matches!(node(&s, id).kind, NodeKind::Text(_)));
+    assert!(effects::has_revolve(&node(&s, id)));
+    // Extrude & Bevel on type expands the same way.
+    s.execute("effect.remove", &json!({"index": 0, "ids": [id.0], "item": null})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "threeD.extrude", "ids": [id.0], "item": null})).unwrap();
+    s.execute("effect.expandAppearance", &json!({"ids": [id.0]})).unwrap();
+    assert!(!effects::has_solid(&node(&s, id)), "expanded");
+}
+
+/// Revolve refuses type with no outlines, and a group with no visible shape, without adding an
+/// effect. Extrude & Bevel gives the same reason for empty type.
+#[test]
+fn revolve_refuses_type_and_groups_without_a_shape() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    for text in ["", "   "] {
+        let t = s.execute("text.create", &json!({"x": 50, "y": 100, "text": text, "size": 72})).unwrap();
+        let id = NodeId(t["id"].as_u64().unwrap());
+        for effect in ["threeD.revolve", "threeD.extrude"] {
+            let err = s.execute("effect.apply", &json!({"effect": effect, "ids": [id.0], "item": null})).unwrap_err().to_string();
+            assert!(err.contains("at least two anchors"), "{effect}, {text:?}: {err}");
+            assert!(node(&s, id).appearance.effects.is_empty());
+        }
+    }
+    let (mut s, a) = session_with_rect();
+    let b = s.execute("shape.rectangle", &json!({"x": 300, "y": 300, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a.0, b]})).unwrap();
+    let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    for member in [a.0, b] {
+        s.execute("select.set", &json!({"ids": [member]})).unwrap();
+        s.execute("object.hide", &json!({})).unwrap();
+    }
+    let err = s.execute("effect.apply", &json!({"effect": "threeD.revolve", "ids": [g.0], "item": null})).unwrap_err().to_string();
+    assert!(err.contains("group holding a shape"), "{err}");
+    assert!(node(&s, g).appearance.effects.is_empty());
+}
+
+/// A Revolve on one fill is checked in that fill's paint, and `effect.setParams` on it as well.
+#[test]
+fn revolve_on_a_fill_is_checked_in_that_fills_paint() {
+    use vectorcraft_color::{Color, Gradient, GradientKind, GradientPaint, GradientStop, Paint};
+    use vectorcraft_doc::{AppearanceItem, FillLayer};
+    let (mut s, id) = session_with_rect();
+    // The paint copies of 100 faces reach the 256 MiB budget: 8 segments stay under, 64 pass it.
+    let count = (256 << 20) / (4 * 100 * std::mem::size_of::<GradientStop>());
+    let stops = (0..count).map(|i| GradientStop::new(i as f32 / count as f32, Color::rgb(1.0, 0.0, 0.0))).collect();
+    let ramp = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+    s.edit("fills", |d, _| {
+        let n = d.node_mut(id).unwrap();
+        n.appearance.items =
+            vec![AppearanceItem::Fill(FillLayer::new(ramp)), AppearanceItem::Fill(FillLayer::new(Paint::solid(Color::rgb(0.0, 0.0, 1.0))))];
+        Ok(())
+    })
+    .unwrap();
+    let err = s.execute("effect.apply", &json!({"effect": "threeD.revolve", "ids": [id.0], "item": 0})).unwrap_err().to_string();
+    assert!(err.contains("simplify the gradient"), "{err}");
+    assert!(node(&s, id).appearance.items[0].effects().is_empty());
+    s.execute("effect.apply", &json!({"effect": "threeD.revolve", "ids": [id.0], "item": 0, "params": {"segments": 8}})).unwrap();
+    let err = s.execute("effect.setParams", &json!({"index": 0, "ids": [id.0], "item": 0, "params": {"segments": 128}})).unwrap_err().to_string();
+    assert!(err.contains("simplify the gradient"), "{err}");
+}
+
+/// Revolve on a group sweeps every member about one axis on the left edge of their bounds, keeps
+/// each member's paint, follows an edited member, expands and undoes as one step.
+#[test]
+fn revolve_on_a_group_shares_one_axis_and_members_stay_editable() {
+    let (mut s, a) = session_with_rect();
+    s.execute("paint.setFill", &json!({"ids": [a.0], "color": "#cc2200"})).unwrap();
+    let b = s.execute("shape.rectangle", &json!({"x": 250, "y": 100, "width": 50, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    s.execute("paint.setFill", &json!({"ids": [b], "color": "#0022cc"})).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0, b]})).unwrap();
+    let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.execute("effect.apply", &json!({"effect": "threeD.revolve", "ids": [g.0], "item": null, "params": {"segments": 16, "rotationX": 90}})).unwrap();
+    assert_eq!(node(&s, g).children().unwrap().len(), 2, "the members stay as they were");
+    let art = effects::revolve_art(&node(&s, g)).expect("a surface of the members");
+    // The axis is the left edge of both members together (x = 100), so the right member's far
+    // wall sweeps out to 200 pt from it on either side: x = 300 and x = -100.
+    let bounds = art.visual_bounds().unwrap();
+    assert!((bounds.x1 - 300.0).abs() < 2.0 && (bounds.x0 + 100.0).abs() < 2.0, "{bounds:?}");
+    let (mut red, mut blue) = (false, false);
+    art.walk(&mut |c| {
+        if let Some([r, _, b, _]) = c.appearance.fill_paint().color().map(|c| c.to_rgba8(1.0)) {
+            red |= r > b;
+            blue |= b > r;
+        }
+    });
+    assert!(red && blue, "each member keeps its own paint");
+    assert_eq!(effects::three_d_meshes(&node(&s, g)).unwrap().len(), 2, "a mesh for each member");
+    let svg = s.execute("document.serialize", &json!({"format": "svg"})).unwrap();
+    let svg = svg["data"].as_str().or_else(|| svg["text"].as_str()).map(str::to_string).unwrap_or_else(|| svg.to_string());
+    assert!(vectorcraft_testkit::svg_shapes(&svg) >= 4, "both members exported as vector faces");
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("object.move", &json!({"dx": -40, "dy": 0})).unwrap();
+    assert_ne!(effects::revolve_art(&node(&s, g)).unwrap(), art, "a moved member reshapes the surface");
+    s.execute("effect.expandAppearance", &json!({"ids": [g.0]})).unwrap();
+    assert!(!effects::has_revolve(&node(&s, g)), "expanded");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(effects::has_revolve(&node(&s, g)));
+}
+
+/// A group holding what can't be swept is refused as a whole, and a clipping group is named.
+#[test]
+fn revolve_refuses_a_group_with_a_member_it_can_not_sweep() {
+    let (mut s, a) = session_with_rect();
+    let b = s.execute("shape.ellipse", &json!({"x": 120, "y": 120, "width": 60, "height": 60})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a.0, b]})).unwrap();
+    let clip = s.execute("object.clippingMask.make", &json!({})).unwrap()["id"].clone();
+    let err = s.execute("effect.apply", &json!({"effect": "threeD.revolve", "ids": [clip.as_u64().unwrap()], "item": null})).unwrap_err().to_string();
+    assert!(err.contains("path, compound path, type or group"), "{err}");
+    let c = s.execute("shape.rectangle", &json!({"x": 250, "y": 250, "width": 50, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [clip, c]})).unwrap();
+    let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let err = s.execute("effect.apply", &json!({"effect": "threeD.revolve", "ids": [g.0], "item": null})).unwrap_err().to_string();
+    assert!(err.contains("Revolve on a group") && err.contains("clipping groups"), "{err}");
+    assert!(node(&s, g).appearance.effects.is_empty());
+}
+
 /// Scripts from before the Perspective angle give `perspective` as a 0–100 % strength: it is
 /// stored as the angle that shows the same view, and a later angle replaces an earlier strength.
 #[test]

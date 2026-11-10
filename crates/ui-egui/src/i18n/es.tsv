@@ -5528,7 +5528,7 @@ mark-style	Japanese	Japonesas
 	Bevel both sides	Bisel en ambos lados
 	Presets	Ajustes preestablecidos
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Un objeto admite un solo efecto 3D. Edite las opciones del efecto existente o quítelo primero.
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} requiere por ahora un trazado o un trazado compuesto. Convierta primero el texto, las imágenes y los grupos en trazados.
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} requiere por ahora un trazado, un trazado compuesto, texto o un grupo. Convierta primero las imágenes y otros objetos en trazados.
 @msg	{label} requires a shape with at least two anchors	{label} requiere una forma con al menos dos puntos de ancla
 @msg	The shape is too complex for a 3D effect	La forma es demasiado compleja para un efecto 3D
 @msg	The 3D surface is too complex; simplify the shape	La superficie 3D es demasiado compleja; simplifique la forma

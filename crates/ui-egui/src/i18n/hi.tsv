@@ -5400,7 +5400,7 @@ antiAlias	Sharp	शार्प
 @msg	{key} must name a registered panel	{key} एक पंजीकृत पैनल का नाम होना चाहिए
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	{kind} फ़ाइलों में पारदर्शिता नहीं होती और इस फ़ाइल में {what} होगा: पहले इसे फ़्लैट करें (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	{kind} इमेज ओपन नहीं हो सकतीं (document.formats देखें)
-@msg	{label} currently requires a path or compound path. Convert type, images and groups to paths first.	{label} वर्तमान में एक पाथ या यौगिक पाथ की आवश्यकता होती है। पहले पाथ के लिए प्रकार, इमेज और समूहों को परिवर्तित करें।
+@msg	{label} currently requires a path, compound path, type or group. Convert images and other objects to paths first.	{label} के लिए वर्तमान में एक पाथ, यौगिक पाथ, टाइप या समूह आवश्यक है। पहले इमेज और अन्य ऑब्जेक्ट को पाथ में परिवर्तित करें।
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} डॉक्यूमेंट के {n} आर्टबोर्ड में से 1 रखता है: फ़ाइल एक के साथ फिर से खुलती है। उन्हें रखने के लिए संरक्षित संपादन क्षमताओं को चालू करें।
 @msg	{label} must be a number	{label} एक नंबर होना चाहिए
 @msg	{label} must be a number above 0 and at most {max}	{label} 0 से ऊपर और सबसे {max} पर होना चाहिए

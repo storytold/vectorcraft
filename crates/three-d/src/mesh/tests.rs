@@ -231,7 +231,7 @@ fn a_revolved_profile_is_a_closed_cylinder() {
     let p = PathData::from_bezpath(&b);
     let r = p.bounds().unwrap();
     let o = Revolve { offset: 10.0, edge: Edge::Left, segments: 64, ..Revolve::default() };
-    let m = revolve_mesh(&p, r, o).unwrap();
+    let m = revolve_mesh(&p, FillRule::NonZero, r, o).unwrap();
     assert!(closed(&m));
     let exact = 2.0 * std::f64::consts::PI * 10.0 * 100.0 + 2.0 * std::f64::consts::PI * 100.0;
     assert!((area(&m) - exact).abs() / exact < 0.01, "{} vs {exact}", area(&m));
@@ -246,7 +246,7 @@ fn a_partial_revolve_caps_its_ends_with_sectors() {
     let p = PathData::from_bezpath(&b);
     let r = p.bounds().unwrap();
     let o = Revolve { angle: 90.0, offset: 10.0, segments: 64, ..Revolve::default() };
-    let m = revolve_mesh(&p, r, o).unwrap();
+    let m = revolve_mesh(&p, FillRule::NonZero, r, o).unwrap();
     let exact = 0.25 * (2.0 * std::f64::consts::PI * 10.0 * 100.0 + 2.0 * std::f64::consts::PI * 100.0);
     assert!((area(&m) - exact).abs() / exact < 0.01, "{} vs {exact}", area(&m));
 }
@@ -261,12 +261,68 @@ fn a_revolved_surface_has_unit_normals_facing_out_whatever_its_length_and_direct
         let p = PathData::from_bezpath(&b);
         let r = p.bounds().unwrap();
         let o = Revolve { offset: 10.0, edge: Edge::Left, segments: 64, ..Revolve::default() };
-        let m = revolve_mesh(&p, r, o).unwrap();
+        let m = revolve_mesh(&p, FillRule::NonZero, r, o).unwrap();
         assert!(!m.is_empty(), "{from} to {to}: the revolve made no triangles");
         assert!(m.normals.iter().all(|n| (dot(*n, *n) - 1.0).abs() < 1e-9), "{from} to {to}: a normal is not unit length");
         assert!(closed(&m), "{from} to {to}");
         assert!(outward(&m), "{from} to {to}: a face turns inward");
     }
+}
+
+/// The radial direction of every triangle's normal at the wall `x` pt from the axis, each as the
+/// sign of the normal's part along the way from the axis: 1 away from it, -1 toward it.
+fn wall_directions(m: &Mesh, x: f64) -> Vec<f64> {
+    m.triangles
+        .iter()
+        .filter_map(|t| {
+            let [a, b, c] = corners(m, *t);
+            let centre = [(a[0] + b[0] + c[0]) / 3.0, 0.0, (a[2] + b[2] + c[2]) / 3.0];
+            let radius = centre[0].hypot(centre[2]);
+            let n = m.normals[t[0] as usize];
+            ((radius - x).abs() < 1.0 && n[1].abs() < 0.5).then(|| dot(n, centre).signum())
+        })
+        .collect()
+}
+
+#[test]
+fn the_wall_of_a_counter_faces_into_the_hole() {
+    // A square ring 20 pt thick, its axis at the outer square's left edge minus 10: the outer wall
+    // reaches 110 pt from the axis, and the hole's far wall 90 pt from it.
+    let ring = |hole_clockwise: bool, rule: FillRule| {
+        let mut b = BezPath::new();
+        square(&mut b, 0.0, 0.0, 100.0, false);
+        square(&mut b, 20.0, 20.0, 60.0, hole_clockwise);
+        let (p, r) = shape(&b);
+        revolve_mesh(&p, rule, r, Revolve { offset: 10.0, segments: 32, ..Revolve::default() }).unwrap()
+    };
+    for (clockwise, rule) in [(true, FillRule::NonZero), (true, FillRule::EvenOdd), (false, FillRule::EvenOdd)] {
+        let m = ring(clockwise, rule);
+        let outer = wall_directions(&m, 110.0);
+        assert!(!outer.is_empty() && outer.iter().all(|s| *s > 0.0), "outer wall, {clockwise} {rule:?}");
+        let hole = wall_directions(&m, 90.0);
+        assert!(!hole.is_empty() && hole.iter().all(|s| *s < 0.0), "the hole's far wall faces the axis, {clockwise} {rule:?}");
+    }
+    // Wound the same way under the nonzero rule, the inner square is not a hole.
+    let m = ring(false, FillRule::NonZero);
+    let inner = wall_directions(&m, 90.0);
+    assert!(!inner.is_empty() && inner.iter().all(|s| *s > 0.0));
+}
+
+#[test]
+fn an_edge_that_crosses_another_contour_faces_the_hole_only_where_it_walls_it() {
+    // Two squares overlapping under the even-odd rule leave their overlap empty. The first square's
+    // right edge (110 pt from the axis) and the second's left edge (50 pt from it) each wall the
+    // overlap along part of their length and the outside along the rest.
+    let mut b = BezPath::new();
+    square(&mut b, 0.0, 0.0, 100.0, false);
+    square(&mut b, 40.0, 40.0, 100.0, false);
+    let (p, r) = shape(&b);
+    let m = revolve_mesh(&p, FillRule::EvenOdd, r, Revolve { offset: 10.0, segments: 32, ..Revolve::default() }).unwrap();
+    for radius in [110.0, 50.0] {
+        let walls = wall_directions(&m, radius);
+        assert!(walls.iter().any(|s| *s > 0.0) && walls.iter().any(|s| *s < 0.0), "both ways at {radius}");
+    }
+    assert!(wall_directions(&m, 150.0).iter().all(|s| *s > 0.0), "the second square's far edge faces out");
 }
 
 #[test]
