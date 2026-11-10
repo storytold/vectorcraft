@@ -1,5 +1,8 @@
 //! Character classes of ECMA-262 5.1 section 7: white space, line terminators and the characters
-//! identifiers are made of.
+//! identifiers are made of. Identifiers follow the Unicode `ID_Start` and `ID_Continue` rule of
+//! later editions.
+
+use std::cmp::Ordering;
 
 use unicode_general_category::{GeneralCategory as G, get_general_category};
 
@@ -14,33 +17,96 @@ pub fn is_whitespace(c: u32) -> bool {
     matches!(c, 0x09 | 0x0B | 0x0C | 0x20 | 0xA0 | 0xFEFF | 0x1680 | 0x2000..=0x200A | 0x202F | 0x205F | 0x3000)
 }
 
-/// A character an identifier may start with: a letter (categories Lu, Ll, Lt, Lm, Lo and Nl),
-/// `$` or `_` (section 7.6). `\u` escapes are decoded before this check.
+/// A character an identifier may start with: a Unicode `ID_Start` character, `$` or `_`
+/// (the Names and Keywords clause of current ECMA-262 editions). `ID_Start` is the letters (categories Lu, Ll, Lt, Lm, Lo and Nl)
+/// and `Other_ID_Start`, less `Pattern_Syntax` and `Pattern_White_Space` (Unicode Standard Annex
+/// #31). The categories come from Unicode 16.0. `\u` escapes are decoded before this check.
 pub fn is_id_start(c: u32) -> bool {
     match c {
         0x24 | 0x5F => true,
         0x41..=0x5A | 0x61..=0x7A => true,
         0..=0x7F => false,
-        // U+2E2F VERTICAL TILDE is a letter (Lm) that Unicode leaves out of identifiers.
-        0x2E2F => false,
-        _ => category(c).is_some_and(|g| {
-            matches!(g, G::UppercaseLetter | G::LowercaseLetter | G::TitlecaseLetter | G::ModifierLetter | G::OtherLetter | G::LetterNumber)
-        }),
+        _ if is_other_id_start(c) => true,
+        _ => {
+            category(c).is_some_and(|g| {
+                matches!(g, G::UppercaseLetter | G::LowercaseLetter | G::TitlecaseLetter | G::ModifierLetter | G::OtherLetter | G::LetterNumber)
+            }) && !is_pattern_syntax(c)
+        }
     }
 }
 
-/// A character an identifier may hold after its first: those it may start with, decimal digits
-/// (Nd), combining marks (Mn, Mc), connector punctuation (Pc), and the zero width non-joiner and
-/// joiner.
+/// A character an identifier may hold after its first: a Unicode `ID_Continue` character, `$`,
+/// `_`, or the zero width non-joiner and joiner. `ID_Continue` adds to `ID_Start` the decimal
+/// digits (Nd), combining marks (Mn, Mc), connector punctuation (Pc) and `Other_ID_Continue`,
+/// less `Pattern_Syntax` and `Pattern_White_Space`.
 pub fn is_id_part(c: u32) -> bool {
     match c {
         0x30..=0x39 => true,
         0x200C | 0x200D => true,
-        0x2E2F => false,
         _ if is_id_start(c) => true,
         0..=0x7F => false,
-        _ => category(c).is_some_and(|g| matches!(g, G::NonspacingMark | G::SpacingMark | G::DecimalNumber | G::ConnectorPunctuation)),
+        _ if is_other_id_continue(c) => true,
+        _ => {
+            category(c).is_some_and(|g| matches!(g, G::NonspacingMark | G::SpacingMark | G::DecimalNumber | G::ConnectorPunctuation))
+                && !is_pattern_syntax(c)
+        }
     }
+}
+
+/// `Other_ID_Start` (Unicode PropList): characters kept in `ID_Start` though their category is
+/// not a letter.
+fn is_other_id_start(c: u32) -> bool {
+    matches!(c, 0x1885 | 0x1886 | 0x2118 | 0x212E | 0x309B | 0x309C)
+}
+
+/// `Other_ID_Continue` (Unicode PropList) outside ASCII, less the zero width non-joiner and joiner,
+/// which [`is_id_part`] takes on their own.
+fn is_other_id_continue(c: u32) -> bool {
+    matches!(c, 0xB7 | 0x387 | 0x1369..=0x1371 | 0x19DA | 0x30FB | 0xFF65)
+}
+
+/// Non-ASCII `Pattern_Syntax` ranges (Unicode PropList). Unicode does not change this set, and no
+/// identifier character belongs to it. `Pattern_White_Space` outside ASCII (U+0085, U+200E, U+200F,
+/// U+2028 and U+2029) holds no letter, mark, digit or connector, so the category checks leave it out.
+const PATTERN_SYNTAX: [(u32, u32); 23] = [
+    (0x00A1, 0x00A7),
+    (0x00A9, 0x00A9),
+    (0x00AB, 0x00AC),
+    (0x00AE, 0x00AE),
+    (0x00B0, 0x00B1),
+    (0x00B6, 0x00B6),
+    (0x00BB, 0x00BB),
+    (0x00BF, 0x00BF),
+    (0x00D7, 0x00D7),
+    (0x00F7, 0x00F7),
+    (0x2010, 0x2027),
+    (0x2030, 0x203E),
+    (0x2041, 0x2053),
+    (0x2055, 0x205E),
+    (0x2190, 0x245F),
+    (0x2500, 0x2775),
+    (0x2794, 0x2BFF),
+    (0x2E00, 0x2E7F),
+    (0x3001, 0x3003),
+    (0x3008, 0x3020),
+    (0x3030, 0x3030),
+    (0xFD3E, 0xFD3F),
+    (0xFE45, 0xFE46),
+];
+
+/// Whether a non-ASCII code point is `Pattern_Syntax`.
+fn is_pattern_syntax(c: u32) -> bool {
+    PATTERN_SYNTAX
+        .binary_search_by(|&(lo, hi)| {
+            if hi < c {
+                Ordering::Less
+            } else if lo > c {
+                Ordering::Greater
+            } else {
+                Ordering::Equal
+            }
+        })
+        .is_ok()
 }
 
 /// The Unicode general category of a code point; `None` for a lone surrogate.

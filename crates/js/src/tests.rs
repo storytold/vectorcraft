@@ -402,6 +402,74 @@ fn identifier_characters_follow_their_unicode_categories() {
 }
 
 #[test]
+fn identifiers_take_the_other_id_start_and_continue_characters() {
+    // Other_ID_Start: not letters by category, but ID_Start, so they start and continue a name.
+    for c in [0x1885, 0x1886, 0x2118, 0x212E, 0x309B, 0x309C] {
+        let ch = char::from_u32(c).unwrap_or_default();
+        for src in [format!("var {ch} = 1;"), format!("var a{ch} = 1;"), format!("var \\u{c:04X}\\u{{{c:X}}} = 1;")] {
+            let p = ok(&src);
+            let Stmt::Var(decls) = stmt(&p, p.body[0]) else { panic!("{src:?}") };
+            assert!(decls[0].name.name.contains(ch), "{src:?}");
+        }
+    }
+    // Other_ID_Continue: may follow the first character, but cannot start a name.
+    for c in [0xB7, 0x387, 0x1369, 0x1371, 0x19DA, 0x30FB, 0xFF65] {
+        let ch = char::from_u32(c).unwrap_or_default();
+        for src in [format!("var a{ch} = 1;"), format!("var a\\u{c:04X} = 1;"), format!("var a\\u{{{c:X}}} = 1;")] {
+            ok(&src);
+        }
+        assert!(err(&format!("var {ch} = 1;")).message.contains("unexpected character"), "{c:X}");
+        assert!(err(&format!("var \\u{c:04X} = 1;")).message.contains("identifier escape"), "{c:X}");
+        assert!(err(&format!("var \\u{{{c:X}}} = 1;")).message.contains("identifier escape"), "{c:X}");
+    }
+}
+
+#[test]
+fn identifiers_refuse_pattern_syntax_surrogates_and_bad_escapes() {
+    // U+2E2F is a letter by category but Pattern_Syntax; U+2010, U+00B6 and U+2190 are
+    // punctuation and symbols in Pattern_Syntax.
+    for c in [0x2E2F, 0x2010, 0xB6, 0x2190, 0x3001] {
+        let ch = char::from_u32(c).unwrap_or_default();
+        assert!(err(&format!("var {ch} = 1;")).message.contains("unexpected character"), "{c:X}");
+        assert!(err(&format!("var a{ch} = 1;")).message.contains("unexpected character"), "{c:X}");
+        assert!(err(&format!("var a\\u{c:04X} = 1;")).message.contains("identifier escape"), "{c:X}");
+        assert!(err(&format!("var \\u{{{c:X}}} = 1;")).message.contains("identifier escape"), "{c:X}");
+    }
+    for bad in [r"var \uD800 = 1;", r"var a\uDC00 = 1;", r"var a\u{D800} = 1;", r"var a\u{110000} = 1;", r"var a\u{} = 1;"] {
+        assert!(parse(bad, &Options::default()).is_err(), "{bad}");
+    }
+    // A supplementary letter is one identifier character, at the start and after a number.
+    let p = ok("var \u{10000}\u{1D7CE} = 1;");
+    let Stmt::Var(decls) = stmt(&p, p.body[0]) else { panic!() };
+    assert_eq!(decls[0].name.name, "\u{10000}\u{1D7CE}");
+    assert!(err("1\u{10000};").message.contains("immediately after numeric literal"));
+}
+
+#[test]
+fn no_pattern_syntax_or_white_space_character_is_an_identifier_character() {
+    use crate::chars::{is_id_part, is_id_start};
+    // Pattern_Syntax and Pattern_White_Space as Unicode's PropList lists them; Unicode does not
+    // change either set. `$` is Pattern_Syntax but an identifier character in scripts.
+    let pattern = "0009..000D 0020 0021..002F 003A..0040 005B..005E 0060 007B..007E 0085 00A1..00A7 00A9 00AB..00AC 00AE \
+                   00B0..00B1 00B6 00BB 00BF 00D7 00F7 200E..200F 2010..2027 2028..2029 2030..203E 2041..2053 2055..205E \
+                   2190..245F 2500..2775 2794..2BFF 2E00..2E7F 3001..3003 3008..3020 3030 FD3E..FD3F FE45..FE46";
+    let mut checked = 0;
+    for range in pattern.split_whitespace() {
+        let (lo, hi) = range.split_once("..").unwrap_or((range, range));
+        let (Ok(lo), Ok(hi)) = (u32::from_str_radix(lo, 16), u32::from_str_radix(hi, 16)) else { panic!("{range}") };
+        for c in (lo..=hi).filter(|&c| c != 0x24) {
+            assert!(!is_id_start(c) && !is_id_part(c), "U+{c:04X}");
+            checked += 1;
+        }
+    }
+    assert_eq!(checked, 2760 + 11 - 1);
+    for c in 0xD800..=0xDFFF {
+        assert!(!is_id_start(c) && !is_id_part(c), "U+{c:04X}");
+    }
+    assert!(!is_id_start(0x110000) && !is_id_part(0x110000));
+}
+
+#[test]
 fn comments_and_line_terminators() {
     let p = ok("a /* one\ntwo */ b");
     assert_eq!(p.body.len(), 2, "a comment with a line break separates statements");
