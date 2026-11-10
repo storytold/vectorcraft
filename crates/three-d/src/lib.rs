@@ -508,14 +508,23 @@ pub fn revolve_curve_samples<'a>(paths: impl IntoIterator<Item = &'a PathData>, 
     if samples < MIN_CURVE_SAMPLES { Err(TOO_COMPLEX_SURFACE.into()) } else { Ok(samples) }
 }
 
-/// Most path elements the search for holes tests a point against, each winding test counting its
-/// contour's elements.
+/// Most work the search for holes does: each winding test counts its contour's elements, and each
+/// contour placed in a cell of the grid or looked at as a candidate for a point counts one.
 const MAX_HOLE_WORK: usize = 16_000_000;
+
+/// Most cells along each side of the grid the search for holes sorts contours into.
+const MAX_HOLE_GRID: usize = 256;
 
 /// For each segment of each subpath of `path`, whether it walls a hole under `rule`: the fill is
 /// outside its closed contour at the segment's middle and not inside. An error past
 /// [`MAX_HOLE_WORK`].
 fn hole_segments(path: &PathData, rule: FillRule) -> Result<Vec<Vec<bool>>, String> {
+    hole_segments_counted(path, rule).map(|(holes, _)| holes)
+}
+
+/// [`hole_segments`] and the work it did. A point is tested only against the closed contours whose
+/// bounds reach into its cell of a grid over the bounds of them all.
+fn hole_segments_counted(path: &PathData, rule: FillRule) -> Result<(Vec<Vec<bool>>, usize), String> {
     let contours: Vec<(BezPath, Rect)> = path
         .subpaths
         .iter()
@@ -527,6 +536,33 @@ fn hole_segments(path: &PathData, rule: FillRule) -> Result<Vec<Vec<bool>>, Stri
         .collect();
     let closed = |j: usize| path.subpaths.get(j).is_some_and(|sp| sp.closed);
     let mut work = 0usize;
+    let spend = |n: usize, work: &mut usize| {
+        *work = work.saturating_add(n);
+        if *work > MAX_HOLE_WORK { Err(TOO_COMPLEX_PROFILE.to_string()) } else { Ok(()) }
+    };
+    let area = contours.iter().enumerate().filter(|(j, _)| closed(*j)).map(|(_, (_, b))| *b).reduce(|a, b| a.union(b));
+    let count = (0..contours.len()).filter(|j| closed(*j)).count();
+    let side = ((count as f64).sqrt().ceil() as usize).clamp(1, MAX_HOLE_GRID);
+    let at = |v: f64, lo: f64, hi: f64| {
+        let span = hi - lo;
+        if span > 0.0 { (((v - lo) / span * side as f64).floor().max(0.0) as usize).min(side - 1) } else { 0 }
+    };
+    let cell = |p: Point| area.map(|a| at(p.y, a.y0, a.y1) * side + at(p.x, a.x0, a.x1));
+    let mut grid: Vec<Vec<usize>> = vec![vec![]; side * side];
+    if let Some(a) = area {
+        for (j, (_, b)) in contours.iter().enumerate().filter(|(j, _)| closed(*j)) {
+            let (x0, x1) = (at(b.x0, a.x0, a.x1), at(b.x1, a.x0, a.x1));
+            let (y0, y1) = (at(b.y0, a.y0, a.y1), at(b.y1, a.y0, a.y1));
+            spend((x1 - x0 + 1).saturating_mul(y1 - y0 + 1), &mut work)?;
+            for y in y0..=y1 {
+                for x in x0..=x1 {
+                    if let Some(c) = grid.get_mut(y * side + x) {
+                        c.push(j);
+                    }
+                }
+            }
+        }
+    }
     let mut holes = Vec::with_capacity(contours.len());
     for (i, (sp, (own, _))) in path.subpaths.iter().zip(&contours).enumerate() {
         if !sp.closed {
@@ -538,11 +574,11 @@ fn hole_segments(path: &PathData, rule: FillRule) -> Result<Vec<Vec<bool>>, Stri
         for segment in 0..sp.anchors.len() {
             let p = sp.segment(segment).eval(0.5);
             let mut others = 0i32;
-            for (_, (contour, _)) in contours.iter().enumerate().filter(|(j, (_, bounds))| *j != i && closed(*j) && bounds.contains(p)) {
-                work = work.saturating_add(contour.elements().len());
-                if work > MAX_HOLE_WORK {
-                    return Err(TOO_COMPLEX_PROFILE.into());
-                }
+            let candidates = cell(p).and_then(|c| grid.get(c)).map_or(&[][..], Vec::as_slice);
+            spend(candidates.len(), &mut work)?;
+            for &j in candidates {
+                let Some((contour, _)) = contours.get(j).filter(|(_, bounds)| j != i && bounds.contains(p)) else { continue };
+                spend(contour.elements().len(), &mut work)?;
                 others += contour.winding(p);
             }
             segments.push(match rule {
@@ -552,7 +588,7 @@ fn hole_segments(path: &PathData, rule: FillRule) -> Result<Vec<Vec<bool>>, Stri
         }
         holes.push(segments);
     }
-    Ok(holes)
+    Ok((holes, work))
 }
 
 /// [`revolve`], or with `mesh` the surface's faces before projection, kept there instead of drawn,

@@ -106,6 +106,21 @@ fn deeply_nested_contours_stop_the_search_for_holes() {
 }
 
 #[test]
+fn a_point_is_tested_only_against_the_contours_near_it() {
+    // 3,000 separate squares: each segment's middle lies in the bounds of its own square only.
+    let squares = (0..3000)
+        .map(|i| {
+            let (x, y) = ((i % 60) as f64 * 20.0, (i / 60) as f64 * 20.0);
+            let corners = [(x, y), (x + 10.0, y), (x + 10.0, y + 10.0), (x, y + 10.0)];
+            SubPath::new(corners.iter().map(|(x, y)| Anchor::corner(Point::new(*x, *y))).collect(), true)
+        })
+        .collect();
+    let (holes, work) = hole_segments_counted(&PathData::new(squares), FillRule::NonZero).unwrap();
+    assert!(holes.iter().flatten().all(|hole| !hole));
+    assert!(work < 200_000, "{work}");
+}
+
+#[test]
 fn overlapping_contours_are_holes_only_where_they_overlap() {
     let square = |x: f64, y: f64, side: f64| {
         let corners = [(x, y), (x + side, y), (x + side, y + side), (x, y + side)];
