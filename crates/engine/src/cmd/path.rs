@@ -1329,7 +1329,7 @@ pub(super) fn replace_deleted_pieces(d: &mut Document, beside: &mut Beside, orig
 
 /// Remove anchors and their incident segments, keeping each surviving stretch as an open path.
 /// Only a closed path can have a surviving stretch that wraps past the last anchor.
-fn without_anchors(sp: SubPath, removed: &BTreeSet<usize>) -> Vec<SubPath> {
+pub(super) fn without_anchors(sp: SubPath, removed: &BTreeSet<usize>) -> Vec<SubPath> {
     let n = sp.anchors.len();
     let gone: BTreeSet<usize> = removed.iter().copied().filter(|&i| i < n).collect();
     if gone.is_empty() {
