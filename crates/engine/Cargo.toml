@@ -40,6 +40,8 @@ vectorcraft-metafile = { workspace = true }
 vectorcraft-plugins = { workspace = true }
 vectorcraft-affinity = { workspace = true }
 vectorcraft-scriptcheck = { workspace = true }
+# The commands' parameter schemas (schemas.rs).
+vectorcraft-apischema = { workspace = true }
 image = { workspace = true }
 jxl-oxide = { workspace = true }
 jxl-color = { workspace = true }

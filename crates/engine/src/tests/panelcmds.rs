@@ -1786,6 +1786,54 @@ fn delete_empty_artboards_check_measures_a_document_once() {
     assert_eq!(delete_empty_enabled_counted(&s), (true, 0), "after another change of the selection");
 }
 
+/// Whether Fit to Artwork Bounds has art to fit on `indices`, as a menu asks for it, with the
+/// plug-ins' and fonts' generations `outside`, and how many times asking measured a document on
+/// this thread.
+fn art_to_fit_counted(s: &Session, indices: &[usize], outside: (u64, u64)) -> (bool, usize) {
+    let measures = || crate::doc_state::ART_TO_FIT_MEASURES.with(std::cell::Cell::get);
+    let before = measures();
+    let any = s.doc().unwrap().any_art_to_fit_with(indices, outside);
+    (any, measures() - before)
+}
+
+/// A menu asks whether Fit to Artwork Bounds has art on every frame while it is open: the answer is
+/// measured once for a version of the document and the artboards asked about, kept through a change
+/// of the selection or the view, and measured again after an edit, for other artboards, and when
+/// the plug-ins or the fonts change.
+#[test]
+fn art_to_fit_is_measured_once_for_a_version_of_the_document() {
+    let mut s = row_of_artboards(2);
+    let both = [0, 1];
+    assert_eq!(art_to_fit_counted(&s, &both, (0, 0)), (false, 1), "the first frame");
+    assert_eq!(art_to_fit_counted(&s, &both, (0, 0)), (false, 0), "a later frame");
+    let art = box_at(&mut s, 10.0, 20.0);
+    assert_eq!(art_to_fit_counted(&s, &both, (0, 0)), (true, 1), "an edit puts art on artboard 1");
+    s.execute("select.set", &json!({"ids": [art.0]})).unwrap();
+    assert_eq!(art_to_fit_counted(&s, &both, (0, 0)), (true, 0), "after a change of the selection");
+    s.execute("view.transparencyGrid", &json!({})).unwrap();
+    assert_eq!(art_to_fit_counted(&s, &both, (0, 0)), (true, 0), "after a change of the view");
+    assert_eq!(art_to_fit_counted(&s, &[1], (0, 0)), (false, 1), "other artboards");
+    assert_eq!(art_to_fit_counted(&s, &[1], (1, 0)), (false, 1), "a plug-in installed or removed");
+    assert_eq!(art_to_fit_counted(&s, &[1], (1, 1)), (false, 1), "fonts installed");
+    assert_eq!(art_to_fit_counted(&s, &[1], (1, 1)), (false, 0));
+}
+
+/// A change made to the document in place (`Arc::make_mut`, with no other holder and no change
+/// of revision) is measured again: the kept answer holds the document it measured weakly, so a
+/// changed document is a new allocation, not the old address.
+#[test]
+fn art_to_fit_follows_a_change_in_place() {
+    let mut s = row_of_artboards(2);
+    box_at(&mut s, 10.0, 20.0);
+    assert_eq!(art_to_fit_counted(&s, &[0], (0, 0)), (true, 1), "art on artboard 1");
+    let st = s.doc_mut().unwrap();
+    assert_eq!(Arc::strong_count(&st.doc), 1, "the undo history holds the document before the edit");
+    let (revision, empty_spot) = (st.revision, st.doc.artboards[1].rect);
+    Arc::make_mut(&mut st.doc).artboards[0].rect = empty_spot;
+    assert_eq!(st.revision, revision);
+    assert_eq!(art_to_fit_counted(&s, &[0], (0, 0)), (false, 1), "artboard 1 moved off the art");
+}
+
 /// The enabled state follows an edit, an undo, a redo, an added and a removed artboard, a locked
 /// artboard, and each change measures the document once.
 #[test]

@@ -510,7 +510,7 @@ pub(super) fn expand_brush(s: &mut Session, p: &Value) -> Result<Value> {
 pub(super) fn brush_freehand(s: &mut Session, p: &Value) -> Result<Value> {
     let name = str_param(p, "brush").map(str::to_string).filter(|n| s.doc().is_ok_and(|st| brush::find(&st.doc, n).is_some()));
     let spec = find_command("path.freehand").ok_or_else(|| EngineError::UnknownCommand("path.freehand".into()))?;
-    let r = (spec.run)(s, p)?;
+    let r = crate::cmd::run_checked(s, spec, p)?;
     let (Some(name), Some(id)) = (name, id_param(&r, "id")) else { return Ok(r) };
     s.edit("Paintbrush", |d, _| {
         if let Some(st) = d.node_mut(id).and_then(|n| n.appearance.stroke_mut()) {

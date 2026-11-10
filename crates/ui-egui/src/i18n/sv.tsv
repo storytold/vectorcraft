@@ -5070,6 +5070,11 @@ lighting	Light	Ljus
 @msg	unknown parameter `{key}`; did you mean `{near}`?	okänd parameter `{key}`; menade du `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	okänd parameter `{key}`; kommandot tar inga parametrar
 @msg	unknown parameter `{key}`; the command takes: {keys}	okänd parameter `{key}`; kommandot tar: {keys}
+@msg	the params must be an object, not {got}	parametrarna måste vara ett objekt, inte {got}
+@msg	unknown parameter `{path}`; the object takes no keys	okänd parameter `{path}`; objektet tar inga nycklar
+@msg	unknown parameter `{path}`; it takes: {keys}	okänd parameter `{path}`; den tar: {keys}
+@msg	missing `{path}`	`{path}` saknas
+@msg	`{path}` must be {expected}, not {got}	`{path}` måste vara {expected}, inte {got}
 	1 Layer	1 lager
 	1 bit	1 bit
 	16 Colors	16 färger
