@@ -92,6 +92,10 @@ fn run(s: &mut Session, p: &Value) -> Result<Value> {
         Some(_) => Err(param(format!("`{key}` must be a string"))),
     };
     let (path, source, given_name) = (optional_str("path")?, optional_str("source")?, optional_str("name")?);
+    // Checked before anything copies or writes out `args`, which would go one call deeper per level.
+    if let Some(place) = p.get("args").and_then(script::too_deep) {
+        return Err(param(format!("`args{place}` is nested more than 64 levels deep")));
+    }
     let args = match p.get("args") {
         None => serde_json::Map::new(),
         Some(Value::Object(o)) => o.clone(),

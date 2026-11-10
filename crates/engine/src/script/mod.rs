@@ -503,6 +503,46 @@ fn to_json(d: &Data) -> Value {
     }
 }
 
+/// A step into a JSON value: a key or an index.
+enum Step<'a> {
+    Name(&'a str),
+    Index(usize),
+}
+
+/// The place in `v` that is more than [`DataLimits`]' depth levels deep, such as `.layers[2].name`,
+/// or `None`. It walks `v` with a list of its own, so any depth fits on the stack.
+pub(crate) fn too_deep(v: &Value) -> Option<String> {
+    let limit = DataLimits::default().depth;
+    // `steps[i - 1]` is the entry that holds entry `i` and the step into it; entry 0 is `v`.
+    let mut steps: Vec<(usize, Step<'_>)> = Vec::new();
+    let mut todo = vec![(v, 0usize, 0usize)];
+    while let Some((v, depth, entry)) = todo.pop() {
+        if depth > limit {
+            let mut place = Vec::new();
+            let mut at = entry;
+            while let Some((parent, step)) = at.checked_sub(1).and_then(|i| steps.get(i)) {
+                place.push(match step {
+                    Step::Name(k) => format!(".{k}"),
+                    Step::Index(i) => format!("[{i}]"),
+                });
+                at = *parent;
+            }
+            place.reverse();
+            return Some(place.concat());
+        }
+        let children: Box<dyn Iterator<Item = (Step<'_>, &Value)>> = match v {
+            Value::Array(a) => Box::new(a.iter().enumerate().map(|(i, x)| (Step::Index(i), x))),
+            Value::Object(o) => Box::new(o.iter().map(|(k, x)| (Step::Name(k.as_str()), x))),
+            _ => continue,
+        };
+        for (step, child) in children {
+            steps.push((entry, step));
+            todo.push((child, depth + 1, steps.len()));
+        }
+    }
+    None
+}
+
 /// Estimated bytes of `d`.
 fn data_size(d: &Data) -> u64 {
     match d {
@@ -527,12 +567,9 @@ fn raise_ids(s: &mut Session) {
     s.script_high_water = marks;
 }
 
-/// Every object in `d`: the art of its layers, its symbols and its patterns, opacity masks included.
+/// Every object in `d`: all its art ([`crate::Document::art_roots`]), opacity masks included.
 fn all_objects(d: &crate::Document) -> u64 {
-    let layers = d.layers.iter().map(|n| n.count_with_masks());
-    let symbols = d.symbols.iter().map(|s| s.art.count_with_masks());
-    let patterns = d.patterns.iter().flat_map(|p| &p.art).map(|n| n.count_with_masks());
-    layers.chain(symbols).chain(patterns).map(|n| n as u64).sum()
+    d.art_roots().map(|n| n.count_with_masks() as u64).sum()
 }
 
 fn note_ids(s: &mut Session) {

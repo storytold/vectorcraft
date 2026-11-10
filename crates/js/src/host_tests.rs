@@ -172,6 +172,17 @@ fn values_that_are_not_plain_data_are_refused_with_their_place() {
 }
 
 #[test]
+fn a_value_nested_ten_thousand_deep_is_refused_with_its_place() {
+    let mut r = realm(100_000_000);
+    let seen = with_take(&mut r);
+    let probe = "var v = 1; for (var i = 0; i < 10000; i++) v = {a: v}; var m = 'none'; \
+                 try { host.take({args: v}); } catch (e) { m = e.name + '|' + e.message; } m";
+    let JsValue::String(out) = r.run(probe).unwrap() else { panic!("not a string") };
+    assert!(out.starts_with("RangeError|") && out.contains(".args.a.a.a") && out.contains("nested too deep"), "{out}");
+    assert!(seen.borrow().is_empty(), "the function ran");
+}
+
+#[test]
 fn a_shared_object_is_allowed_and_sharing_cannot_multiply_the_work() {
     let mut r = realm(10_000_000);
     r.set_data_limits(DataLimits { depth: 64, bytes: 16 << 20, entries: 1_000 });

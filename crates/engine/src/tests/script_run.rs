@@ -641,6 +641,81 @@ fn a_document_a_run_opens_counts_toward_its_growth_allowance() {
 }
 
 #[test]
+fn graph_design_art_counts_toward_the_growth_allowance() {
+    TEST_GROWTH.with(|g| g.set(Some(20)));
+    let mut s = two_docs();
+    for x in 0..30 {
+        s.execute("shape.rectangle", &rect(x)).unwrap();
+    }
+    let before = state(&s);
+    let designs = |s: &Session| s.documents().iter().map(|d| d.doc.graph_designs.len()).collect::<Vec<_>>();
+    let designs_before = designs(&s);
+    // A design saved from the selection in an open document.
+    let e = run(&mut s, "vc.run('select.all'); vc.run('graph.design', {new: 'Many'});").unwrap_err().to_string();
+    assert!(e.contains("objects and data"), "{e}");
+    assert_eq!(state(&s), before);
+    assert_eq!(designs(&s), designs_before);
+
+    // A document a run opens whose art is all in a graph design.
+    let mut maker = Session::new();
+    maker.execute("file.new", &json!({})).unwrap();
+    let ids: Vec<u64> = (0..30).map(|x| maker.execute("shape.rectangle", &rect(x)).unwrap()["id"].as_u64().unwrap()).collect();
+    maker.execute("select.all", &json!({})).unwrap();
+    maker.execute("graph.design", &json!({"new": "Many"})).unwrap();
+    maker.execute("edit.clear", &json!({"ids": ids})).unwrap();
+    assert_eq!(objects(&maker, 0), 0);
+    assert_eq!(maker.documents()[0].doc.graph_designs[0].art.count_with_masks(), 31);
+    let data = maker.execute("document.serialize", &json!({})).unwrap()["dataBase64"].as_str().unwrap().to_string();
+    let source = format!("vc.run('document.open', {{name: 'g.vectorcraft', dataBase64: '{data}'}});");
+    let e = run(&mut s, &source).unwrap_err().to_string();
+    TEST_GROWTH.with(|g| g.set(None));
+    assert!(e.contains("objects and data"), "{e}");
+    assert_eq!(state(&s), before);
+}
+
+/// Drops `v` one level at a time.
+fn drop_flat(v: Value) {
+    let mut stack = vec![v];
+    while let Some(mut v) = stack.pop() {
+        match &mut v {
+            Value::Object(o) => stack.extend(std::mem::take(o).into_iter().map(|(_, x)| x)),
+            Value::Array(a) => stack.append(a),
+            _ => {}
+        }
+    }
+}
+
+#[test]
+fn args_nested_ten_thousand_deep_in_a_script_throw_a_range_error_with_their_place() {
+    let mut s = two_docs();
+    let before = state(&s);
+    let source = "var v = 1; for (var i = 0; i < 10000; i++) v = {a: v}; var m = 'none'; \
+                  try { vc.run('script.run', {source: '', args: v}); } catch (e) { m = e.name + '|' + e.message; } vc.log(m);";
+    let r = run(&mut s, source).unwrap();
+    let m = r["log"][0].as_str().unwrap_or_default();
+    assert!(m.starts_with("RangeError|") && m.contains(".args.a.a.a") && m.contains("nested too deep"), "{r}");
+    assert_eq!(state(&s), before);
+}
+
+#[test]
+fn args_nested_ten_thousand_deep_from_a_caller_are_refused_with_their_place() {
+    let mut s = two_docs();
+    let before = state(&s);
+    // Built by moving each level in: `json!` would copy the value through `to_value`, one call per level.
+    let wrap = |key: &str, v: Value| Value::Object(std::iter::once((key.to_string(), v)).collect());
+    let mut deep = json!(1);
+    for _ in 0..10_000 {
+        deep = wrap("a", deep);
+    }
+    let mut params = wrap("args", wrap("b", deep));
+    params["source"] = json!("");
+    let e = s.execute("script.run", &params).unwrap_err().to_string();
+    drop_flat(params);
+    assert!(e.contains("`args.b.a.a.a") && e.contains("nested more than 64 levels deep"), "{e}");
+    assert_eq!(state(&s), before);
+}
+
+#[test]
 fn a_person_can_let_a_growing_run_go_on_or_stop_it() {
     TEST_GROWTH.with(|g| g.set(Some(20)));
     let run_to_the_question = |s: &mut Session| {
@@ -764,4 +839,68 @@ fn a_cancel_from_the_caller_stops_a_headless_run() {
     assert!(s.execute("script.run", &json!({"source": "1", "maxFuel": 10_000})).is_ok(), "a run clears a flag left from before");
     assert!(!stop.is_set());
     assert_eq!(state(&s), before);
+}
+
+/// Script text: pieces that change documents, throw or loop, mixed with arbitrary text.
+fn source_text() -> impl proptest::strategy::Strategy<Value = String> {
+    use proptest::prelude::*;
+    let piece = prop_oneof![
+        Just("vc.run('shape.rectangle', {x:1,y:1,width:5,height:5});".to_string()),
+        Just("vc.run('select.all'); vc.run('edit.clear');".to_string()),
+        Just("vc.run('file.new', {});".to_string()),
+        Just("vc.run('document.activate', {index:0});".to_string()),
+        Just("vc.run('no.such');".to_string()),
+        Just("vc.log(vc.document);".to_string()),
+        Just("throw new Error('x');".to_string()),
+        Just("vc.run('shape.rectangle', {x:2,y:2,width:5,height:5}); throw new Error('y');".to_string()),
+        Just("while (true) {}".to_string()),
+        Just("var o = {}; o.o = o; vc.run('shape.rectangle', o);".to_string()),
+        Just("{".to_string()),
+        Just("try {".to_string()),
+        Just("} catch (e) {}".to_string()),
+        "[ -~]{0,30}",
+        "\\PC{0,10}",
+    ];
+    proptest::collection::vec(piece, 0..12).prop_map(|p| p.concat())
+}
+
+/// Every field of each open document but its next id, and the rest of what a rollback puts back.
+/// A failed run raises the next id past the ids it gave out, which [`next_ids`] reads.
+fn saved(s: &Session) -> (Value, Vec<String>) {
+    let docs = s
+        .documents()
+        .iter()
+        .map(|d| {
+            let mut doc = (*d.doc).clone();
+            doc.raise_next_id(1 << 50);
+            format!("{doc:?}")
+        })
+        .collect();
+    (state(s), docs)
+}
+
+fn next_ids(s: &Session) -> Vec<u64> {
+    s.documents().iter().map(|d| d.doc.peek_next_id()).collect()
+}
+
+proptest::proptest! {
+    #![proptest_config(proptest::prelude::ProptestConfig::with_cases(48))]
+
+    /// Any script text ends with a report or a script error, and a run that fails leaves every
+    /// document as it was.
+    #[test]
+    fn any_source_ends_with_a_report_or_a_script_error(source in source_text()) {
+        let mut s = two_docs();
+        let (before, ids) = (saved(&s), next_ids(&s));
+        match s.execute("script.run", &json!({"source": source, "maxFuel": 200_000})) {
+            Ok(r) => proptest::prop_assert_eq!(&r["ok"], &json!(true), "{}", r),
+            Err(e) => {
+                proptest::prop_assert!(matches!(e, EngineError::Other(_)), "{:?}", e);
+                let kind = s.script_report.as_ref().map(|r| r["kind"].clone());
+                proptest::prop_assert!(kind.as_ref().is_some_and(|k| k != "internal"), "{:?}: {}", kind, e);
+                proptest::prop_assert_eq!(saved(&s), before);
+                proptest::prop_assert!(next_ids(&s).iter().zip(&ids).all(|(after, was)| after >= was), "{:?} after {:?}", next_ids(&s), ids);
+            }
+        }
+    }
 }
