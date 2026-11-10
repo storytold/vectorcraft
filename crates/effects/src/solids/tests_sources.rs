@@ -41,13 +41,18 @@ fn document() -> Document {
     d
 }
 
-/// A clipping group: `art` inside a rectangular clipping path covering `clip`.
-fn clip_group(id: u64, clip: Rect, art: Node) -> Node {
-    let mut path = Node::path(NodeId(id + 1), shapes::rectangle(clip), Appearance::default());
+/// A rectangular clipping path covering `clip`.
+fn clipping_path(id: u64, clip: Rect) -> Node {
+    let mut path = Node::path(NodeId(id), shapes::rectangle(clip), Appearance::default());
     if let NodeKind::Path { clipping, .. } = &mut path.kind {
         *clipping = true;
     }
-    Node::new(NodeId(id), NodeKind::Group { children: vec![Arc::new(path), Arc::new(art)], clip: true })
+    path
+}
+
+/// A clipping group: `art` inside a rectangular clipping path covering `clip`.
+fn clip_group(id: u64, clip: Rect, art: Node) -> Node {
+    Node::new(NodeId(id), NodeKind::Group { children: vec![Arc::new(clipping_path(id + 1, clip)), Arc::new(art)], clip: true })
 }
 
 fn blend(id: u64, steps: u32) -> Node {
@@ -218,6 +223,30 @@ fn images_are_refused_alone_and_in_a_group_with_image_trace_named() {
             assert!(err.contains("Object › Image Trace › Make"), "{id}: {err}");
             assert!(art(&d, &n, id).is_none(), "{id}");
             assert!(three_d_meshes_in(Some(&d), &n).is_err_and(|e| e.contains("Image Trace")), "{id}");
+        }
+        // An image wholly outside the clip, alone or in a group, shows nothing and is left out;
+        // one the clip shows part of is refused.
+        let clip = Rect::new(100.0, 100.0, 150.0, 150.0);
+        let masked = |inside: bool| {
+            let mut img = image(63);
+            if let NodeKind::Image(i) = &mut img.kind {
+                i.xf = Affine::translate(if inside { (95.0, 95.0) } else { (300.0, 300.0) });
+            }
+            img
+        };
+        for img in [masked(false), Node::group(NodeId(64), vec![Arc::new(masked(false))])] {
+            let children = vec![Arc::new(clipping_path(61, clip)), Arc::new(rect(62, 100.0, 100.0, 200.0, 200.0, 0.0)), Arc::new(img)];
+            let n = with(Node::new(NodeId(60), NodeKind::Group { children, clip: true }), id, json!({}));
+            assert_eq!(validate_three_d_in(Some(&d), &n, id, &json!({})), Ok(()), "{id}");
+            assert!(art(&d, &n, id).is_some(), "{id}");
+        }
+        let partly = with(clip_group(60, clip, masked(true)), id, json!({}));
+        assert!(validate_three_d_in(Some(&d), &partly, id, &json!({})).is_err_and(|e| e.contains("Image Trace")), "{id}");
+        // An effect on the image, or on a group holding it, can move it into the clip: refused.
+        let moved = |n: Node| with(n, "distort.transform", json!({"moveH": -200.0, "moveV": -200.0}));
+        for img in [moved(masked(false)), moved(Node::group(NodeId(64), vec![Arc::new(masked(false))]))] {
+            let n = with(clip_group(60, clip, img), id, json!({}));
+            assert!(validate_three_d_in(Some(&d), &n, id, &json!({})).is_err_and(|e| e.contains("Image Trace")), "{id}");
         }
         // A hidden image is not drawn, so it builds nothing and refuses nothing.
         let mut hidden = image(53);

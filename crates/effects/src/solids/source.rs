@@ -8,7 +8,7 @@ use std::borrow::Cow;
 use std::sync::Arc;
 
 use vectorcraft_doc::{Appearance, AppearanceItem, Document, FillLayer, Node, NodeKind};
-use vectorcraft_geom::{FillRule, PathData};
+use vectorcraft_geom::{FillRule, PathData, Rect};
 use vectorcraft_pathops as po;
 
 use super::{MAX_MEMBERS, Scope, geometry, is_container, members, profile, region, reshape_members, solid_paints};
@@ -57,7 +57,7 @@ pub(crate) fn resolve<'a>(doc: Option<&Document>, n: &'a Node, label: &str) -> R
     if !needs(n) {
         return Ok(Cow::Borrowed(n));
     }
-    let mut r = Resolver { doc, label, leaves: 0, work: 0 };
+    let mut r = Resolver { doc, label, leaves: 0, work: 0, shown: None };
     let children = r.content(n, 0);
     #[cfg(test)]
     WORK.with(|w| w.set(r.work));
@@ -79,6 +79,8 @@ struct Resolver<'a> {
     leaves: usize,
     /// The objects visited or made so far, counted against [`MAX_WORK`].
     work: usize,
+    /// Inside clipping groups, the box of what their clipping paths show together.
+    shown: Option<Rect>,
 }
 
 impl Resolver<'_> {
@@ -92,6 +94,18 @@ impl Resolver<'_> {
             ));
         }
         Ok(())
+    }
+
+    /// `f` run on the art of `c`. The effects of an object or group can move its art into a clip,
+    /// so inside one with effects no image is left out for lying outside the clip ([`Self::shown`]).
+    fn inside<T>(&mut self, c: &Node, f: impl FnOnce(&mut Self) -> Result<T, String>) -> Result<T, String> {
+        let outer = self.shown;
+        if has_effects(c) {
+            self.shown = None;
+        }
+        let out = f(self);
+        self.shown = outer;
+        out
     }
 
     /// The art `n`, a symbol instance, a blend, a clipping group or layer, or a group holding one,
@@ -122,7 +136,13 @@ impl Resolver<'_> {
             _ if n.clips() => {
                 let Some((first, rest)) = kids(n).split_first() else { return Ok(vec![]) };
                 let clip = clip_area(first);
-                let (inner, _) = self.list(rest, depth + 1)?;
+                // An image wholly outside every clip around it shows nothing and is left out.
+                let outer = self.shown;
+                let here = clip.0.bounds().unwrap_or(Rect::ZERO);
+                self.shown = Some(outer.map_or(here, |o| o.intersect(here)));
+                let listed = self.list(rest, depth + 1);
+                self.shown = outer;
+                let (inner, _) = listed?;
                 let mut out = vec![];
                 for c in &inner {
                     if let Some(c) = self.clipped(c, &clip, depth + 1)? {
@@ -148,10 +168,18 @@ impl Resolver<'_> {
                 continue;
             }
             if matches!(c.kind, NodeKind::Image(_)) {
+                // Only an image with no effects or fills and strokes of its own is measured by its
+                // frame; any other one may draw inside the clip.
+                let plain = !has_effects(c) && c.appearance.items.iter().all(|i| !i.visible());
+                let hidden = plain && self.shown.is_some_and(|k| c.visual_bounds().is_none_or(|b| b.intersect(k).area() <= 0.0));
+                if hidden {
+                    changed = true;
+                    continue;
+                }
                 return Err(image_refusal(self.label));
             }
             if resolves(c) {
-                let kids = self.content(c, depth)?;
+                let kids = self.inside(c, |r| r.content(c, depth))?;
                 out.push(Arc::new(with_effects(wrap(c, kids), c)));
                 changed = true;
                 continue;
@@ -166,7 +194,7 @@ impl Resolver<'_> {
                     out.push(c.clone());
                     continue;
                 }
-                let (kids, inner) = self.list(kids(c), depth + 1)?;
+                let (kids, inner) = self.inside(c, |r| r.list(kids(c), depth + 1))?;
                 if inner {
                     out.push(Arc::new(with_effects(wrap(c, kids), c)));
                     changed = true;
@@ -312,6 +340,11 @@ fn nest(n: &Node, pieces: Vec<(Vec<Scope>, Node)>, level: usize) -> Vec<Arc<Node
     }
     close(&mut run, key, &mut out);
     out
+}
+
+/// Does `n` carry a visible effect?
+fn has_effects(n: &Node) -> bool {
+    n.appearance.effects.iter().any(|e| e.visible)
 }
 
 /// Does `n` hold visible groups or layers nested more than `levels` deep? Walked without recursion.
