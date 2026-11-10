@@ -180,13 +180,24 @@ pub(crate) fn names_key(text: &str, key: &str) -> bool {
     })
 }
 
-/// Does `v` name a plug-in anywhere: a string that starts with `plugin.` (a plug-in's effect, a
-/// command of one)? A call that does is refused, so a plug-in never runs another, or itself.
+/// Param keys whose value names an effect or a command (`id` is `effect.apply`'s other name for
+/// `effect`).
+const PLUGIN_KEYS: &[&str] = &["effect", "effects", "id", "command", "commands"];
+
+/// Does `v` name a plug-in anywhere: an effect or a command ([`PLUGIN_KEYS`]) whose id starts with
+/// `plugin.`, at any depth? A call that does is refused, so a plug-in never runs another, or
+/// itself. Other strings, such as text, may start with `plugin.`.
 fn names_plugin(v: &Value) -> bool {
+    names_plugin_in(v, false)
+}
+
+/// [`names_plugin`] for `v`, the value of a key in [`PLUGIN_KEYS`] (or an item of one) when
+/// `named`.
+fn names_plugin_in(v: &Value, named: bool) -> bool {
     match v {
-        Value::String(s) => s.starts_with(vectorcraft_plugins::PREFIX),
-        Value::Array(a) => a.iter().any(names_plugin),
-        Value::Object(o) => o.values().any(names_plugin),
+        Value::String(s) => named && s.starts_with(vectorcraft_plugins::PREFIX),
+        Value::Array(a) => a.iter().any(|x| names_plugin_in(x, named)),
+        Value::Object(o) => o.iter().any(|(k, x)| names_plugin_in(x, PLUGIN_KEYS.contains(&k.as_str()))),
         _ => false,
     }
 }
@@ -436,6 +447,21 @@ mod tests {
             .filter(|id| crate::cmd::find_command(id).is_none_or(|c| denied_by_rule(c).is_some()))
             .collect();
         assert!(stale.is_empty(), "reviewed commands that no command has or a rule refuses: {stale:?}");
+    }
+
+    /// Only an effect or a command naming a plug-in counts, at any depth; text that happens to
+    /// start with `plugin.` doesn't.
+    #[test]
+    fn a_plugin_is_named_only_as_an_effect_or_a_command() {
+        use serde_json::json;
+        assert!(names_plugin(&json!({"effect": "plugin.test.fx"})));
+        assert!(names_plugin(&json!({"id": "plugin.test.fx"})));
+        assert!(names_plugin(&json!({"effects": ["builtin.blur", "plugin.test.fx"]})));
+        assert!(names_plugin(&json!({"items": [{"effect": "plugin.test.fx", "params": {}}]})));
+        assert!(names_plugin(&json!({"command": "plugin.test.run"})));
+        assert!(!names_plugin(&json!({"text": "plugin.example"})));
+        assert!(!names_plugin(&json!({"name": "plugin.style", "effect": "drop-shadow"})));
+        assert!(!names_plugin(&json!({"effect": {"name": "plugin.style"}})));
     }
 
     #[test]
