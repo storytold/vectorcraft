@@ -673,6 +673,17 @@ mod tests {
         click(&mut app, "Minus Front", egui::Modifiers::NONE);
         assert_eq!(compound_shapes(&app), 1, "no second compound shape");
         assert_eq!(vectorcraft_engine::cmd::selected_member_modes(&app.session), [ShapeMode::Subtract, ShapeMode::Subtract]);
+
+        // With the setting on, Alt-click on selected members makes a compound shape of them,
+        // nested in the first, instead of the permanent operation.
+        let mut app = two_squares();
+        click(&mut app, "Unite", egui::Modifiers::ALT);
+        let shape = app.session.active().unwrap().selection.objects[0];
+        let members: Vec<_> = app.session.active().unwrap().doc.node(shape).unwrap().children().unwrap().iter().map(|n| n.id.0).collect();
+        app.run("select.set", json!({"ids": members})).unwrap();
+        app.run("window.pathfinder.compoundShapes", json!({})).unwrap();
+        click(&mut app, "Unite", egui::Modifiers::ALT);
+        assert_eq!(compound_shapes(&app), 2, "a compound shape nested in the first");
     }
 
     /// Members of a compound shape that are selected take the clicked mode whatever the setting says.

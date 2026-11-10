@@ -8961,6 +8961,19 @@ fn the_task_bar_unite_makes_a_compound_shape_on_alt_click() {
     app.run("window.pathfinder.compoundShapes", json!({})).unwrap();
     click_unite(&mut app, egui::Modifiers::ALT);
     assert_eq!(top(&app), (1, 0), "with the setting on, Alt-click is permanent");
+
+    // With the setting on, Alt-click on selected members makes a compound shape of them, nested
+    // in the first; `top` can't see nesting, so every compound shape in the document is counted.
+    let mut app = two_squares();
+    click_unite(&mut app, egui::Modifiers::ALT);
+    let shape = app.session.active().unwrap().selection.objects[0];
+    let members: Vec<_> = app.session.active().unwrap().doc.node(shape).unwrap().children().unwrap().iter().map(|n| n.id.0).collect();
+    app.session.execute("select.set", &json!({"ids": members})).unwrap();
+    app.run("window.pathfinder.compoundShapes", json!({})).unwrap();
+    click_unite(&mut app, egui::Modifiers::ALT);
+    let mut compound = 0;
+    app.session.active().unwrap().doc.walk(|n| compound += usize::from(n.is_compound_shape()));
+    assert_eq!(compound, 2, "a compound shape nested in the first");
 }
 
 /// The Contextual Task Bar shows Image Trace first for a selected image: it traces the image
