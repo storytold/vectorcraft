@@ -8871,6 +8871,39 @@ fn the_task_bar_lock_button_locks_selected_art_in_isolation_mode() {
     assert!(locked(&app, &g), "the group is locked outside isolation mode");
 }
 
+/// #6333: the Contextual Task Bar's Unite is the Pathfinder panel's Shape Mode. A click unites
+/// the selection into one path; Alt-click makes a live compound shape and keeps the originals.
+#[test]
+fn the_task_bar_unite_makes_a_compound_shape_on_alt_click() {
+    let unite = |modifiers: egui::Modifiers| {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let a = app.session.execute("shape.rectangle", &json!({"x": 150, "y": 100, "width": 60, "height": 60})).unwrap()["id"].clone();
+        let b = app.session.execute("shape.rectangle", &json!({"x": 180, "y": 130, "width": 60, "height": 60})).unwrap()["id"].clone();
+        app.session.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+        app.select_tool("selection");
+        let ctx = egui::Context::default();
+        let labels = task_bar_labels(&mut app, &ctx);
+        let at = labels.iter().find(|(t, _)| t == "Unite").map(|(_, r)| r.center()).expect("the task bar offers Unite");
+        let events = |pressed: Option<bool>| {
+            let mut ev = vec![egui::Event::ModifiersChanged(modifiers)];
+            ev.push(match pressed {
+                None => egui::Event::PointerMoved(at),
+                Some(pressed) => egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers },
+            });
+            ev
+        };
+        frame(&mut app, &ctx, events(None));
+        frame(&mut app, &ctx, events(Some(true)));
+        frame(&mut app, &ctx, events(Some(false)));
+        let st = app.session.active().unwrap();
+        let top = st.doc.layers[0].children().unwrap();
+        (top.len(), top.iter().filter(|n| n.is_compound_shape()).count())
+    };
+    assert_eq!(unite(egui::Modifiers::NONE), (1, 0), "a click unites into one path");
+    assert_eq!(unite(egui::Modifiers::ALT), (1, 1), "Alt-click makes a compound shape");
+}
+
 /// The Contextual Task Bar shows Image Trace first for a selected image: it traces the image
 /// with the Default preset and leaves the Image Trace panel as it was. For the Image Trace
 /// object it made, the first button is Expand, which keeps only the traced paths.
