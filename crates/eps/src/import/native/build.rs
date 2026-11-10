@@ -493,9 +493,14 @@ pub(super) fn build_from(
                     other => match drawn_or_trusted(&frame, &mut view, &mut doc, &envelopes_drawn, &notes, unseen, trust, why, reflow) {
                         Ok(more) => notes.extend(more),
                         // The objects that draw differently from the page come in as its art, from
-                        // the placement that draws closer to it.
+                        // the placement that draws closer to it. The layers don't draw as the page:
+                        // envelopes of type keep their drawn art and their type, hidden.
                         Err(why) => {
-                            let other = other.map(|(_, other, unseen)| (other, unseen));
+                            let typed = type_drawn(&mut doc, &envelopes_drawn);
+                            let other = other.map(|(_, mut other, unseen)| {
+                                type_drawn(&mut other, &envelopes_drawn);
+                                (other, unseen)
+                            });
                             let placements = closer_first(&frame, &mut view, (doc, unseen), other, reflow);
                             let Some((kept, unseen, kept_notes)) = placements.into_iter().find_map(|(base, unseen)| {
                                 keep_differing(&base, &frame, &mut view, &threaded_frames, &shown, reflow).map(|(kept, n)| (kept, unseen, n))
@@ -503,7 +508,8 @@ pub(super) fn build_from(
                                 return Err(why);
                             };
                             doc = kept;
-                            notes.extend(unseen_note(unseen).into_iter().chain(kept_notes));
+                            let typed = typed.then(|| ai::ENVELOPE_TYPE_DRAWN.to_string()).filter(|n| !notes.contains(n));
+                            notes.extend(typed.into_iter().chain(unseen_note(unseen)).chain(kept_notes));
                         }
                     },
                 },
@@ -1287,8 +1293,9 @@ fn slot_content(
 /// The layers `doc` don't draw as the page (`why`), `unseen` text objects of them taken out: the
 /// notes to add when `doc` with each live envelope `drawn` lists replaced by the drawn art it took
 /// the place of (see [`ai::Structure::envelopes_drawn`]) draws as the page, `doc` then being that;
-/// else, with `trust`, the notes for `doc` as it is. An error, `why`, otherwise. The envelope note
-/// is added unless `notes` has it.
+/// else, with `trust`, the notes for `doc` as it is but for its envelopes of type, which keep their
+/// drawn art ([`type_drawn`]). An error, `why`, otherwise. The envelope note is added unless
+/// `notes` has it.
 #[allow(clippy::too_many_arguments)]
 fn drawn_or_trusted(
     frame: &Frame<'_>,
@@ -1320,9 +1327,31 @@ fn drawn_or_trusted(
         }
     }
     if trust {
-        return Ok(unseen_note(unseen).into_iter().chain([format!("{why}: they come from its editing data all the same")]).collect());
+        let typed = type_drawn(doc, drawn).then(|| ai::ENVELOPE_TYPE_DRAWN.to_string()).filter(|n| !notes.contains(n));
+        let trusted = format!("{why}: they come from its editing data all the same");
+        return Ok(typed.into_iter().chain(unseen_note(unseen)).chain([trusted]).collect());
     }
     Err(why)
+}
+
+/// Put each live envelope of type in `drawn` (as [`drawn_or_trusted`] takes them) that `doc` still
+/// has back as its hidden type and its drawn art: whether one was. An envelope of type opens live
+/// only where the layers with it draw as the page, so where they don't, though they are used all
+/// the same (the editing data trusted, or the objects that differ come in as the page's art), it
+/// keeps its drawn art.
+fn type_drawn(doc: &mut Document, drawn: &[(NodeId, Vec<Node>, &str)]) -> bool {
+    let typed: Vec<(NodeId, Vec<Node>)> = drawn
+        .iter()
+        .filter(|(id, _, say)| *say == ai::ENVELOPE_TYPE_DRAWN && doc.node(*id).is_some())
+        .map(|(id, art, _)| (*id, art.clone()))
+        .collect();
+    if typed.is_empty() || doc.insert_beside(typed, true).is_err() {
+        return false;
+    }
+    // The type put back is still marked as made from the text document, which the rest no longer
+    // is once the page has weighed it ([`prune_unseen`]).
+    unmark(&mut doc.layers, true, true, &mut vec![]);
+    true
 }
 
 /// `doc` with the placed files `placed` lists at their other placement (see
