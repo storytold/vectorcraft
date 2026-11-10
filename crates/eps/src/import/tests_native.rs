@@ -5763,6 +5763,45 @@ fn a_warp_of_type_opens_as_a_mesh_on_its_saved_grid_and_keeps_its_shape_when_its
     }
 }
 
+/// A warp of stroked type with Distort Appearance whose drawn art maps the type's bounds with its
+/// strokes onto the grid the file saves (not its glyphs' bounds alone) opens live as a mesh envelope
+/// mapping from that box (#3179).
+#[test]
+fn a_warp_of_stroked_type_maps_from_its_bounds_with_strokes_where_its_drawn_art_does() {
+    use vectorcraft_doc::live::{envelope_content_boxes, envelope_stroke_margin};
+    let Some(family) = installed_family() else { return };
+    // "FLUX" stroked 4 points wide in black.
+    let stroked = "/53 << /99 /CAITextPaint /0 << /0 2 /1 [ 1.0 0.0 1.0 0.0 0.0 ] >> >> /54 << /99 /CAITextPaint /0 << /0 2 /1 [ 1.0 0.0 0.0 0.0 1.0 ] >> >> /57 true /63 4.0";
+    let doc = type_envelope_text(&family, None).replace("/53 << /99 /CAITextPaint /0 << /0 2 /1 [ 1.0 0.0 1.0 0.0 0.0 ] >> >>", stroked);
+    let mut text = made_envelope_type(&doc);
+    text.visible = true;
+    assert!(matches!(&text.kind, NodeKind::Text(t) if t.runs[0].style.stroke_width == 4.0), "{text:?}");
+    let content = vec![std::sync::Arc::new(text)];
+    let (with, without) = envelope_content_boxes(&content, kurbo::Affine::IDENTITY).unwrap();
+    let mut options = vectorcraft_doc::live::EnvelopeOptions::NEW;
+    options.bounds_margin = envelope_stroke_margin(with, without).unwrap();
+    assert!(options.bounds_margin.iter().all(|m| *m > 0.0), "{options:?}");
+    let shaped = Node::new(
+        vectorcraft_doc::NodeId(1_000_000),
+        NodeKind::Envelope { content, kind: Box::new(rising_kind()), fidelity: 50.0, editing: false, options, frame: Box::default() },
+    );
+    let (drawn, page) = drawn_envelope(&shaped);
+    let art =
+        native_with_text(&layer("Art", true, &format!("{}\n{}", square(10, 10), type_envelope_on(&arc_keys(0.3), &rising_grid(), &drawn, ""))), &doc);
+    let r = import(&eps(&format!("{}\n{page}", page_square(10, 10)), &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    let (envelopes, loose) = envelopes_and_type(&r.document);
+    assert_eq!(envelopes, [vec!["FLUX".to_string()]], "{:?}", r.warnings);
+    assert!(loose.is_empty(), "{loose:?}");
+    let mut margin = None;
+    r.document.walk(|n| {
+        if let NodeKind::Envelope { options, .. } = &n.kind {
+            margin = Some(options.bounds_margin);
+        }
+    });
+    assert_eq!(margin, Some(options.bounds_margin));
+}
+
 /// A warp of type whose editing data saves no grid it can be shaped by keeps its drawn art and its
 /// type, hidden, with the note, when its own warp draws apart from that art (#3179).
 #[test]

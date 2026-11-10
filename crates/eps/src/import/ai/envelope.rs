@@ -131,6 +131,25 @@ fn saved_margin(o: &Obj, content: &[Arc<Node>]) -> Option<[f32; 4]> {
     envelope_stroke_margin(stroked, plain)
 }
 
+/// Envelope `kind` mapping from its contents' bounds with their strokes, for an envelope with
+/// Distort Appearance whose contents have strokes it doesn't map from already; `None` otherwise.
+fn with_strokes(kind: &NodeKind) -> Option<NodeKind> {
+    let NodeKind::Envelope { content, options, .. } = kind else { return None };
+    if !options.distort_appearance {
+        return None;
+    }
+    let (stroked, plain) = envelope_content_boxes(content, Affine::IDENTITY)?;
+    let margin = envelope_stroke_margin(stroked, plain)?;
+    if margin == options.bounds_margin || margin.iter().any(|m| *m < 0.0) || margin.iter().all(|m| *m == 0.0) {
+        return None;
+    }
+    let mut kind = kind.clone();
+    if let NodeKind::Envelope { options, .. } = &mut kind {
+        options.bounds_margin = margin;
+    }
+    Some(kind)
+}
+
 /// A warp: its style, bend, distortions and orientation.
 fn warp(o: &Obj) -> Option<EnvelopeKind> {
     let style = whole(o, "DeformStyle")??;
@@ -479,10 +498,11 @@ impl WarpedType {
     /// type's). The live envelope takes its drawn art's place and the hidden type goes. A warp that
     /// doesn't draw as its drawn art is checked again as a mesh envelope on the grid the file saves
     /// for it ([`live_on_saved_grid`]), which opens in its place where it does: its type stays
-    /// editable in that shape, and the warp's style and bend are lost. Each check uses one of the
-    /// import's checks and, for an envelope that shows, adds to what the page check allows
-    /// ([`drawn_alike`]). Elsewhere, and where the type is set in a font that isn't available, the
-    /// drawn art and the hidden type stay.
+    /// editable in that shape, and the warp's style and bend are lost. With Distort Appearance, each
+    /// is also checked mapping from its contents' bounds with their strokes ([`with_strokes`]). Each
+    /// check uses one of the import's checks and, for an envelope that shows, adds to what the page
+    /// check allows ([`drawn_alike`]). Elsewhere, and where the type is set in a font that isn't
+    /// available, the drawn art and the hidden type stay.
     pub(crate) fn settle_envelopes(&mut self, doc: &mut Document, type_of: impl Fn(&Document, NodeId) -> Option<(NodeId, Node)>) -> TypedSettled {
         let mut settled = TypedSettled::default();
         if self.envelopes.is_empty() {
@@ -537,7 +557,17 @@ impl WarpedType {
         // A warp that VectorCraft's own warp doesn't draw as its drawn art may still draw as the
         // grid the file saves for it: then it opens as a mesh envelope on that grid.
         let on_grid = if is_warp(&obj) { live_on_saved_grid(&obj, before.clone(), inner.clone()) } else { None };
-        let kinds: Vec<NodeKind> = live(&obj, before, inner).into_iter().chain(on_grid).collect();
+        // With Distort Appearance, a file's envelope may map its contents from their bounds with
+        // their strokes or without them, and for type the size the file saves for that box is often
+        // out of date (not the size of the type there now): each is checked.
+        let kinds: Vec<NodeKind> = live(&obj, before, inner)
+            .into_iter()
+            .chain(on_grid)
+            .flat_map(|k| {
+                let stroked = with_strokes(&k);
+                std::iter::once(k).chain(stroked)
+            })
+            .collect();
         if kinds.is_empty() {
             return Err(TypeKept::Read);
         }
