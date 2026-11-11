@@ -89,6 +89,7 @@ mod layerclip;
 mod layers;
 mod legacy_ai;
 mod library;
+mod library_roots;
 mod link_paths;
 mod linked_stops;
 mod linkfiles;

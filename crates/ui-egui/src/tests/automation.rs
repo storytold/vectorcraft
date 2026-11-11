@@ -425,6 +425,33 @@ fn ui_inspect_leaves_out_paths_outside_the_read_root() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// Two libraries loaded from outside the read root under the same file name, only the second of them
+/// in a library panel: `ui.inspect` and `swatch.library.list` show the second under the same id, and
+/// that id finds it.
+#[test]
+fn ui_inspect_and_library_commands_show_a_hidden_library_under_one_id() {
+    let (mut app, tx, base) = confined("one-id");
+    let (x, y) = (base.join("outside/x/Kit.gpl"), base.join("outside/y/Kit.gpl"));
+    for (path, colors) in [(&x, "0 0 0 Black\n"), (&y, "0 0 0 Black\n255 255 255 White\n")] {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, format!("GIMP Palette\nName: Kit\n{colors}")).unwrap();
+        app.session.execute("swatch.library.load", &json!({"path": s(path.clone())})).unwrap();
+    }
+    let second = format!("loaded/{}", s(y.clone()));
+    app.ui.library_panels = vec![serde_json::from_value(json!({"kind": "swatches", "id": second, "path": s(y.clone())})).unwrap()];
+
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["ui"]["library_panels"][0]["id"], "loaded/Kit.gpl (2)", "{r}");
+    let r = request(&mut app, &tx, "engine.execute", json!({"command": "swatch.library.list", "params": {}}));
+    let libs = r["result"]["libraries"].as_array().unwrap_or_else(|| panic!("{r}"));
+    let loaded: Vec<&Value> = libs.iter().filter(|l| l["category"] == "loaded").map(|l| &l["id"]).collect();
+    assert_eq!(loaded, [&json!("loaded/Kit.gpl"), &json!("loaded/Kit.gpl (2)")], "{r}");
+    let r = request(&mut app, &tx, "engine.execute", json!({"command": "swatch.library.get", "params": {"library": "loaded/Kit.gpl (2)"}}));
+    assert_eq!(r["result"]["swatches"].as_array().map(Vec::len), Some(2), "the second library: {r}");
+    assert!(!r.to_string().contains("outside"), "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// A closed panel's former place, as `ui.docking_hidden` keeps it.
 fn hidden_place() -> craft_ui::docking::Location<String> {
     serde_json::from_value(json!({"floating": null, "anchor": null, "placement": {"Tab": {"before": null}}, "size": null, "stack": null})).unwrap()
