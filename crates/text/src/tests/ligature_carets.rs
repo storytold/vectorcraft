@@ -655,7 +655,7 @@ fn vertical_only_settings_keep_a_horizontal_ligature_whole() {
 }
 
 /// On a path, an upright ligature in vertical type stands with its top toward the path's start, and
-/// its cell runs from 0.12 em before the pen to 0.88 em after it, with or without the font's vertical
+/// its cell runs one em from the pen, as in vertical point type, with or without the font's vertical
 /// metrics. The inner stop lies at the middle of that cell, and the first character's selection ends
 /// there.
 #[test]
@@ -673,21 +673,21 @@ fn an_upright_ligature_on_a_path_takes_its_stop_in_its_turned_cell() {
         assert!(l.on_path);
         let Some(g) = l.glyphs.iter().find(|g| g.len == 2) else { panic!("f + i is one glyph: {:?}", l.glyphs) };
         assert_eq!(g.carets, vec![(1, 0.5)], "{family}");
-        assert!((g.width - 100.0).abs() < 1e-9 && (g.width_start + 12.0).abs() < 1e-9, "{family}: {} {}", g.width, g.width_start);
+        assert!((g.width - 100.0).abs() < 1e-9 && g.width_start.abs() < 1e-9, "{family}: {} {}", g.width, g.width_start);
         let x = |b| caret_position(&l, b).0.x - g.origin.x;
-        assert!((x(1) - 38.0).abs() < 1e-6, "{family}: {}", x(1));
+        assert!((x(1) - 50.0).abs() < 1e-6, "{family}: {}", x(1));
         let q = selection_quads(&l, 0, 1);
         assert_eq!(q.len(), 1, "{q:?}");
-        assert!(((q[0][1] - q[0][0]).hypot() - 38.0).abs() < 1e-6, "{family}: {q:?}");
-        // A baseline shift moves the turned glyph along the path, and its stop with it.
-        let ink = g.outline.bounding_box().x0;
+        assert!(((q[0][1] - q[0][0]).hypot() - 50.0).abs() < 1e-6, "{family}: {q:?}");
+        // A baseline shift moves the turned glyph across the path, and leaves its stop in place.
+        let ink = g.outline.bounding_box();
         t.runs[0].style.baseline_shift = 10.0;
         let l = layout(&db, &t);
         let Some(s) = l.glyphs.iter().find(|g| g.len == 2) else { panic!("f + i is one glyph: {:?}", l.glyphs) };
-        let moved = s.outline.bounding_box().x0 - ink;
-        assert!(moved.abs() > 1.0, "{family}: the shift moves the glyph along the path: {moved}");
+        let moved = s.outline.bounding_box().center() - ink.center();
+        assert!((moved.x.abs()) < 1e-6 && (moved.y + 10.0).abs() < 1e-6, "{family}: the shift moves the glyph to the path's left: {moved:?}");
         let stop = caret_position(&l, 1).0.x - s.origin.x;
-        assert!((stop - 38.0 - moved).abs() < 1e-6, "{family}: {stop} against {}", 38.0 + moved);
+        assert!((stop - 50.0).abs() < 1e-6, "{family}: {stop}");
         // Horizontal Scale widens the glyph across the path; its stop stays inside the glyph.
         t.runs[0].style.baseline_shift = 0.0;
         t.runs[0].style.h_scale = 200.0;

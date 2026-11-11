@@ -201,9 +201,10 @@ fn top_and_ahead(l: &TextLayout, i: usize) -> (Vec2, Vec2) {
     (unit(g.xf * Point::new(0.0, -500.0) - pen), unit(g.xf * Point::new(500.0, 0.0) - pen))
 }
 
-/// On a vertical path, an upright glyph's top faces the path's start, and a letter lying on its side
-/// is a quarter turn clockwise from it: its top faces the path's left and its baseline runs along
-/// the path. Both turn with the path when it runs the other way.
+/// On a vertical path with Rainbow, an upright glyph's top faces the path's start, and a letter lying
+/// on its side is a quarter turn clockwise from it: its top faces the path's left and its baseline
+/// runs along the path. Both turn with the path when it runs the other way. The effects that keep
+/// the glyphs' axes fixed on the page keep that relation only on a path that runs to the right.
 #[test]
 fn on_a_vertical_path_letters_lie_a_quarter_turn_clockwise_from_upright_glyphs() {
     use vectorcraft_doc::PathEffect;
@@ -217,6 +218,24 @@ fn on_a_vertical_path_letters_lie_a_quarter_turn_clockwise_from_upright_glyphs()
         // A clockwise quarter turn with y down takes (x, y) to (-y, x).
         assert!((side - Vec2::new(-upright.y, upright.x)).hypot() < 1e-6, "{to:?}: {side:?} against {upright:?}");
         assert!((side - left).hypot() < 1e-6 && (ahead - tangent).hypot() < 1e-6, "{to:?}: {side:?} {ahead:?}");
+    }
+    // Skew, 3D Ribbon and Stair Step keep axes of the glyphs fixed on the page: on a path that runs
+    // to the right the relation holds. On one that runs to the left, Skew and 3D Ribbon mirror both
+    // kinds, and Stair Step keeps letters level while upright glyphs still face the path's start, so
+    // letters are a quarter turn counterclockwise from upright glyphs there.
+    for effect in [PathEffect::Skew, PathEffect::Ribbon3d, PathEffect::StairStep] {
+        for to in [(1000.0, 0.0), (700.0, 700.0), (0.0, 1000.0), (0.0, -1000.0), (-1000.0, 0.0), (-700.0, 300.0)] {
+            // Skew and 3D Ribbon slant glyphs on a slanted path, where no turn relates them exactly.
+            if to.1 != 0.0 && effect != PathEffect::StairStep {
+                continue;
+            }
+            let l = layout(FontDb::global(), &on_vertical_path("§L", (0.0, 0.0), to, effect));
+            let (upright, _) = top_and_ahead(&l, 0);
+            let (side, _) = top_and_ahead(&l, 1);
+            let clockwise = to.0 >= 0.0;
+            let want = if clockwise { Vec2::new(-upright.y, upright.x) } else { Vec2::new(upright.y, -upright.x) };
+            assert!((side - want).hypot() < 1e-6, "{effect:?} {to:?}: {side:?} against {upright:?}");
+        }
     }
 }
 
@@ -275,6 +294,71 @@ fn on_a_vertical_path_the_column_is_centered_on_the_path() {
         let block = (across(ink(&l, 2).center()) + across(ink(&l, 3).center())) * 0.5;
         assert!(block.abs() < 1.5, "{to:?}: the block is {block} off the path");
     }
+}
+
+/// On a vertical path, the caret and the selection span the column, half its em on each side of the
+/// path, as the glyphs do.
+#[test]
+fn on_a_vertical_path_the_caret_and_selection_span_the_column() {
+    use vectorcraft_doc::PathEffect;
+    for to in [(0.0, 1000.0), (1000.0, 0.0), (-700.0, 700.0)] {
+        let l = layout(FontDb::global(), &on_vertical_path("§L§", (0.0, 0.0), to, PathEffect::Rainbow));
+        let tangent = Vec2::new(to.0, to.1) / Vec2::new(to.0, to.1).hypot();
+        let across = |p: Point| p.to_vec2().dot(Vec2::new(tangent.y, -tangent.x));
+        let (top, bottom) = caret_position(&l, "§".len());
+        assert!((across(top) - 10.0).abs() < 1e-6 && (across(bottom) + 10.0).abs() < 1e-6, "{to:?}: caret {top:?} {bottom:?}");
+        for q in selection_quads(&l, 0, "§L§".len()) {
+            let (lo, hi) = q.iter().map(|p| across(*p)).fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), a| (lo.min(a), hi.max(a)));
+            assert!((lo + 10.0).abs() < 1e-6 && (hi - 10.0).abs() < 1e-6, "{to:?}: highlight from {lo} to {hi}");
+        }
+    }
+}
+
+/// On a straight path running down from the anchor, vertical type sets every glyph where vertical
+/// point type sets it: upright glyphs with a horizontal scale stay centered on the column, a baseline
+/// shift moves an upright glyph across the column, every upright glyph keeps its own cell along the
+/// path, and a combining mark stays on its upright letter.
+#[test]
+fn on_a_downward_vertical_path_glyphs_sit_where_vertical_point_type_sets_them() {
+    use crate::test_fonts::{VERTICAL_FAMILY, vertical_font};
+    let run = |text: &str, style: CharStyle| TextRun { text: text.into(), style, inline: None };
+    let runs = |plain: CharStyle| {
+        vec![
+            run("§×", plain.clone()),
+            run("§", CharStyle { h_scale: 150.0, ..plain.clone() }),
+            run("§", CharStyle { baseline_shift: 3.0, ..plain.clone() }),
+            run("§", CharStyle { rotation: 30.0, ..plain.clone() }),
+            run("L", CharStyle { h_scale: 150.0, ..plain.clone() }),
+            run("L", CharStyle { baseline_shift: 3.0, ..plain.clone() }),
+            run("q\u{301}x", CharStyle { standard_vertical_roman: true, ..plain.clone() }),
+            run("§", plain),
+        ]
+    };
+    let compare = |db: &FontDb, point: &TextObject, name: &str| {
+        let mut on_path = point.clone();
+        on_path.kind =
+            TextKind::OnPath { path: PathData::from_bezpath(&kurbo::Line::new((0.0, 0.0), (0.0, 3000.0)).to_path(0.1)), start: 0.0, end: None };
+        let (p, v) = (layout(db, point), layout(db, &on_path));
+        assert_eq!(p.glyphs.len(), v.glyphs.len(), "{name}");
+        let apart: Vec<_> = (p.glyphs.iter().zip(&v.glyphs).enumerate())
+            .filter(|(_, (a, b))| a.xf.as_coeffs().iter().zip(b.xf.as_coeffs()).any(|(a, b)| (a - b).abs() > 1e-6))
+            .map(|(i, (a, b))| format!("glyph {i}: {:?} on the path, {:?} in point type", b.xf.as_coeffs(), a.xf.as_coeffs()))
+            .collect();
+        assert!(apart.is_empty(), "{name}: {apart:#?}");
+    };
+    let mut point = vertical("");
+    point.runs = runs(CharStyle { size: 20.0, ..CharStyle::default() });
+    compare(FontDb::global(), &point, "the bundled face");
+    // A face with vertical metrics, whose cells hang from their vertical origins.
+    let db = FontDb::with_font_dirs(vec![]);
+    db.add_font(vertical_font(true).unwrap());
+    point.runs = runs(CharStyle { size: 20.0, font_family: VERTICAL_FAMILY.into(), ..CharStyle::default() });
+    compare(&db, &point, "vertical metrics");
+    // The horizontally scaled upright glyph is wider across the column, centered where the plain one is.
+    point.kind = TextKind::OnPath { path: PathData::from_bezpath(&kurbo::Line::new((0.0, 0.0), (0.0, 3000.0)).to_path(0.1)), start: 0.0, end: None };
+    let l = layout(&db, &point);
+    let (plain, wide) = (ink(&l, 0), ink(&l, 2));
+    assert!(wide.width() > plain.width() * 1.4 && (wide.center().x - plain.center().x).abs() < 1e-6, "{plain:?} {wide:?}");
 }
 
 /// With Skew on a curved vertical path, every glyph's axis along the path follows the tangent and
