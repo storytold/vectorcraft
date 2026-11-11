@@ -44,8 +44,8 @@ const SVG_NS: &str = "http://www.w3.org/2000/svg";
 /// Most line breaks one absolutely positioned character adds before itself.
 const MAX_LINE_GAP: f64 = 10_000.0;
 
-/// Most line breaks the absolutely positioned characters of one text add in all: past it, a gap is
-/// one break as wide as the gap.
+/// Most blank lines (breaks past the first newline of each gap) the absolutely positioned
+/// characters of one text add in all: past it, a gap is one break as wide as the gap.
 const MAX_LINE_BREAKS: usize = 10_000;
 
 /// A whitespace/comma separated list.
@@ -932,8 +932,9 @@ fn lines(
             // Whole multiples of the auto leading add blank lines (not without limit: a far-off y
             // mustn't ask for billions); other spacing is one break.
             let count = (gap / lead).round().clamp(1.0, MAX_LINE_GAP);
-            let count = if (gap / count - lead).abs() <= lead * 0.05 && added + count as usize <= MAX_LINE_BREAKS { count } else { 1.0 };
-            added += count as usize;
+            // The first newline just ends the previous line: only the others are blank lines.
+            let count = if (gap / count - lead).abs() <= lead * 0.05 && added + (count as usize - 1) <= MAX_LINE_BREAKS { count } else { 1.0 };
+            added += count as usize - 1;
             breaks.push(Break { at: i, count: count as usize, leading: gap / count });
             lines.push((i, ax + dx[i]));
             (base, cur) = (ny, ny);
