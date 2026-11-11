@@ -905,9 +905,22 @@ pub fn spin_length_within(
     let label = take_previous_label(ui);
     let step = Some(unit.to_pt(1.0)).filter(|s| s.is_finite() && *s > 0.0).unwrap_or(1.0);
     let field = bounds.clone();
-    spin_generic(ui, label, value, None, None, None, None, width, step, *bounds.start(), &[], &[], &|v| unit.format(v), &mut |ui, fw, corners, label| {
-        unit_field(ui, id, label, None, value, unit, fw, false, field.clone(), &[], corners, false, "")
-    })
+    spin_generic(
+        ui,
+        label,
+        value,
+        None,
+        None,
+        None,
+        None,
+        width,
+        step,
+        *bounds.start(),
+        &[],
+        &[],
+        &|v| unit.format(v),
+        &mut |ui, fw, corners, label| unit_field(ui, id, label, None, value, unit, fw, false, field.clone(), &[], corners, false, ""),
+    )
     .and_then(SpinPick::value)
     .map(|v| within(v, &bounds))
 }
