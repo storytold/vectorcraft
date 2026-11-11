@@ -166,6 +166,17 @@ fn bad_params_and_other_type_are_refused() {
     let r = s.execute("type.dynamicText", &json!({})).unwrap();
     assert_eq!(r["ids"], json!([id]));
     assert!(text(&s, id).dynamic_text && !text(&s, point).dynamic_text);
+    // A gap with only type on a path selected is an error, and nothing changes.
+    let path = s.execute("path.create", &json!({"d": "M60 550 L340 550"})).unwrap()["id"].as_u64().unwrap();
+    let along = s.execute("text.createInPath", &json!({"path": path, "mode": "onPath", "text": "Along"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [along]})).unwrap();
+    let n = undo_len(&s);
+    for gap in [json!({"wordGap": 300}), json!({"on": false, "lineGap": 2})] {
+        let e = s.execute("type.dynamicText", &gap).unwrap_err().to_string();
+        assert!(e.contains("need area type"), "{e}");
+    }
+    assert_eq!(undo_len(&s), n);
+    assert!(!text(&s, along).dynamic_text);
 }
 
 #[test]
@@ -179,10 +190,39 @@ fn gaps_set_word_spacing_and_leading() {
     let t = text(&s, id);
     assert!(t.dynamic_text);
     assert_eq!((t.area.word_gap, t.area.line_gap), (300.0, 6.0));
-    assert_eq!(t.para_at(0).justification.word_spacing, [80.0, 300.0, 300.0]);
+    // The layout uses the gap as the Desired word spacing; the paragraph keeps its own.
+    assert_eq!(t.para_at(0).justification.word_spacing, [80.0, 100.0, 133.0]);
+    assert_eq!(t.layout_justification(t.para_at(0)).word_spacing, [80.0, 300.0, 300.0]);
     assert!(t.runs.iter().all(|r| (r.style.leading.unwrap() - r.style.size - 6.0).abs() < 1e-9), "{:?}", t.runs);
     assert_block(&t);
     assert!(size_at(&t, 0) < size_at(&plain, 0), "wider word spaces leave the letters less room");
+    // (own, used by the layout) word spacing of the first paragraph.
+    let spacing = |s: &Session| {
+        let t = text(s, id);
+        (t.para_at(0).justification.word_spacing, t.layout_justification(t.para_at(0)).word_spacing)
+    };
+    // Minimum and Maximum move out only as far as the current gap needs, and the paragraph's own
+    // values apply again when Block is off.
+    s.execute("type.dynamicText", &json!({"wordGap": 1000})).unwrap();
+    assert_eq!(spacing(&s), ([80.0, 100.0, 133.0], [80.0, 1000.0, 1000.0]));
+    s.execute("type.dynamicText", &json!({"wordGap": 100})).unwrap();
+    assert_eq!(spacing(&s), ([80.0, 100.0, 133.0], [80.0, 100.0, 133.0]));
+    s.execute("type.dynamicText", &json!({"wordGap": 0})).unwrap();
+    assert_eq!(spacing(&s), ([80.0, 100.0, 133.0], [0.0, 0.0, 133.0]));
+    s.execute("type.dynamicText", &json!({"on": false})).unwrap();
+    assert_eq!(spacing(&s), ([80.0, 100.0, 133.0], [80.0, 100.0, 133.0]));
+    // A paragraph's own values, outside the default range and equal to Desired too, stay through
+    // gap changes and refits after edits.
+    s.execute("text.setFormat", &json!({"wordSpacing": [20, 20, 150]})).unwrap();
+    s.execute("type.dynamicText", &json!({"on": true, "wordGap": 20})).unwrap();
+    assert_eq!(spacing(&s), ([20.0, 20.0, 150.0], [20.0, 20.0, 150.0]));
+    s.execute("type.dynamicText", &json!({"wordGap": 1000})).unwrap();
+    assert_eq!(spacing(&s), ([20.0, 20.0, 150.0], [20.0, 1000.0, 1000.0]));
+    s.execute("type.dynamicText", &json!({"wordGap": 100})).unwrap();
+    s.execute("text.editRange", &json!({"id": id, "start": 0, "end": 0, "insert": "a "})).unwrap();
+    assert_eq!(spacing(&s), ([20.0, 20.0, 150.0], [20.0, 100.0, 150.0]));
+    s.execute("type.dynamicText", &json!({"on": false})).unwrap();
+    assert_eq!(spacing(&s), ([20.0, 20.0, 150.0], [20.0, 20.0, 150.0]));
     // A gap alone on a frame without Block turns it on.
     let other = area(&mut s, 200.0, 200.0, "x y");
     let r = s.execute("type.dynamicText", &json!({"lineGap": -2})).unwrap();

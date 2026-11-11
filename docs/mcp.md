@@ -6514,7 +6514,8 @@ chosen artboards draw all of them. A PDF leaves out the layers that don't print 
 
 ### Dynamic Text: Block
 
-`type.dynamicText {ids?|id?, on?: bool, wordGap?, lineGap?}` (Type › Dynamic Text) turns Block on or off for the
+`type.dynamicText {ids?|id?, on?: bool, wordGap?, lineGap?}` (Type › Dynamic Text, and the Contextual Task Bar for
+area type outside a thread) turns Block on or off for the
 selected area type, as it turns Dynamic Text on or off for type on a path ([Dynamic Text](#dynamic-text)). Area Type
 Options › Block is the same setting, and the Properties panel's Paragraph section has a Dynamic Text checkbox, which
 shows Word Gap and Line Gap while it is on. The [Dynamic Text overview](https://helpx.adobe.com/photoshop/desktop/text-typography/work-with-dynamic-text/dynamic-text-overview.html)
@@ -6526,8 +6527,10 @@ lines. The rest are VectorCraft's own rules:
   left, right and first-line indents, by its font size only (tracking and scaling stay): the first character's size in
   steps of 0.1 pt within 0.1 to 1,296 pt, the line's other characters keeping their proportions to it and their
   baseline shifts following. Vertical type sets each line to the frame's height (less the gutters between rows).
-- `wordGap` is every paragraph's Desired word spacing (Justification…), and each character's leading is its size
-  plus `lineGap`.
+- The layout sets every paragraph with `wordGap` as its Desired word spacing (Justification…), and its Minimum or
+  Maximum word spacing moves out to `wordGap` when `wordGap` lies outside it. The paragraphs keep their own
+  Justification… values, which apply again when Block is off. Each character's leading is its size plus `lineGap`. A
+  gap given with no area type in the selection is an error.
 - The sizes are written into the characters, so every export and the Character panel see them. After every edit to
   the text or the frame (typing, `text.editRange`, character and paragraph changes, `text.areaOptions {width}`, a
   frame resize) the lines are fitted again, in the edit's own undo step. The lines are then measured again, in at

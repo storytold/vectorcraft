@@ -167,8 +167,9 @@ pub struct AreaOptions {
     /// How the frame and its text fit each other (Auto Size, Shrink Text to Fit).
     #[serde(skip_serializing_if = "crate::skip::is_default")]
     pub fit: AreaFit,
-    /// Dynamic Text's Block ([`super::TextObject::dynamic_text`] on area type): every paragraph's
-    /// Desired word spacing, in percent of a word space (100, the default, is left out when saved).
+    /// Dynamic Text's Block ([`super::TextObject::dynamic_text`] on area type): the Desired word
+    /// spacing the layout sets every paragraph with ([`super::TextObject::layout_justification`]), in
+    /// percent of a word space (100, the default, is left out when saved).
     #[serde(skip_serializing_if = "AreaOptions::is_default_word_gap")]
     pub word_gap: f64,
     /// Dynamic Text's Block: the points added to each character's size to give its leading (0, the

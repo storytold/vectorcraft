@@ -8,7 +8,8 @@ use vectorcraft_doc::{TextKind, TextObject, TextRun};
 /// Character panel's).
 const SIZES: (f64, f64) = (0.1, 1296.0);
 
-/// Most area layouts a refit runs to correct lines that still wrap after the first fit.
+/// Most passes a refit runs to correct lines that still wrap after the first fit; each pass measures
+/// the lines and runs at most one more area layout.
 pub(crate) const BLOCK_PASSES: usize = 4;
 
 /// One line as typed: `start..content` is its text, `content..end` the `\n` or U+2028 that ends it
@@ -73,9 +74,12 @@ fn first_sizes(runs: &[TextRun], lines: &[TypedLine]) -> Vec<f64> {
 }
 
 /// Each line's content width (trailing spaces left out) by its first byte, with `t` laid out as
-/// point type, where no line wraps.
+/// point type, where no line wraps, with the word spacing `t`'s layout uses.
 fn line_widths(db: &vectorcraft_text::FontDb, t: &TextObject) -> std::collections::HashMap<usize, f64> {
     let mut probe = t.clone();
+    for p in probe.para_styles_mut() {
+        p.justification = t.layout_justification(p);
+    }
     probe.kind = TextKind::Point;
     let laid = vectorcraft_text::layout(db, &probe);
     let mut out = std::collections::HashMap::with_capacity(laid.lines.len());
@@ -103,33 +107,24 @@ fn tenths(points: f64) -> f64 {
     ((points * 10.0 + 1e-6).floor() / 10.0).clamp(SIZES.0, SIZES.1)
 }
 
-/// Fit area type with Dynamic Text (Block) on: every paragraph's Desired word spacing becomes the word gap,
-/// then each line as typed gets the size (its first character's, in steps of 0.1 pt within 0.1 to
+/// Fit area type with Dynamic Text (Block) on: with the word gap as every paragraph's Desired word
+/// spacing ([`TextObject::layout_justification`]; the paragraphs keep their own values), each line
+/// as typed gets the size (its first character's, in steps of 0.1 pt within 0.1 to
 /// 1,296 pt, the line's other characters keeping their proportions to it) at which its width
 /// equals the frame's width less the inset, the gutters and the paragraph's indents, and each
 /// character's leading is its size plus the line gap. An empty line or one of only spaces keeps
 /// its size. Nothing changes when the frame has no width along the lines or the type's transform
 /// has no size. A line that still wraps at its first fit is made smaller, in at most
-/// [`BLOCK_PASSES`] more layouts. True when the text changed.
+/// [`BLOCK_PASSES`] more passes. True when the text changed.
 pub(crate) fn block_fit(t: &mut TextObject) -> bool {
     if !t.dynamic_text {
         return false;
     }
     let TextKind::Area { frame } = &t.kind else { return false };
-    let (word_gap, line_gap) = t.area.block_gaps();
+    let (_, line_gap) = t.area.block_gaps();
     let Some(b) = frame.bounds().filter(|b| [b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.is_finite())) else { return false };
     let Some(points) = t.style_scale().map(|s| s.points).filter(|p| p.is_finite() && *p > 1e-12) else { return false };
-    let before = (t.runs.clone(), t.para.clone(), t.paras.clone());
-
-    // The word gap first: it changes the lines' widths.
-    let mut paras = t.paragraph_styles();
-    for p in &mut paras {
-        let [min, _, max] = p.justification.word_spacing;
-        p.justification.word_spacing = [min.min(word_gap), word_gap, max.max(word_gap)];
-    }
-    if paras != t.paragraph_styles() {
-        t.set_paragraph_styles(paras);
-    }
+    let before = t.runs.clone();
 
     // The room along a line in one cell of the frame, before indents.
     let a = &t.area;
@@ -137,7 +132,7 @@ pub(crate) fn block_fit(t: &mut TextObject) -> bool {
     let cells = cells.max(1) as f64;
     let cell = (along - 2.0 * a.inset.max(0.0) - gutter.max(0.0) * (cells - 1.0)) / cells;
     if !(cell.is_finite() && cell > 1e-9) {
-        return (t.runs.clone(), t.para.clone(), t.paras.clone()) != before;
+        return t.runs != before;
     }
 
     let db = vectorcraft_text::FontDb::global();
@@ -273,7 +268,7 @@ pub(crate) fn block_fit(t: &mut TextObject) -> bool {
         }
         apply(t, &start, &fits);
     }
-    (t.runs.clone(), t.para.clone(), t.paras.clone()) != before
+    t.runs != before
 }
 
 #[cfg(test)]
