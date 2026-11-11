@@ -290,8 +290,10 @@ fn the_constructors_keep_identity_or_copy_as_specified() {
     truth("XML().nodeKind() === 'text' && XML(null) == '' && XML(undefined) == ''");
     truth("var x = <a/>; XML(x) === x && new XML(x) !== x && new XML(x) == x");
     truth("var l = <><a/></>; XML(l) === l[0]");
-    truth("var l = <><a/></>; var y = new XML(l); y !== l[0] && y == l[0] && y.parent() === null");
-    truth("var l = <><a/></>; var y = new XML(l); y.@p = '1'; y.appendChild(<b/>); l[0].@p.length() === 0 && l[0].*.length() === 0");
+    truth("var p = <p><a q='1'><c/></a></p>; var l = p.a; var y = new XML(l); y !== l[0] && y == l[0] && y.parent() === null && l[0].parent() === p");
+    truth(
+        "var p = <p><a q='1'><c/></a></p>; var l = p.a; var y = new XML(l); y.@q = '2'; y.c.@r = '3'; l[0].@q == '1' && l[0].c.@r.length() === 0 && y.c.@r == '3'",
+    );
     assert_eq!(thrown_name("XML(<><a/><b/></>)"), "TypeError");
     assert_eq!(thrown_name("XML('<a><b></a>')"), "SyntaxError");
     assert_eq!(thrown_name("XML('<a/><b/>')"), "SyntaxError");
