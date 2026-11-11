@@ -201,10 +201,10 @@ pub(crate) struct Interp {
     /// propagating.
     pub(crate) thrown_mark: Option<u32>,
     /// The marked exceptions `finally` blocks are running for, innermost last, each with its mark,
-    /// which the block's end throws it on with. A block left by `break`, `continue` or `return`
-    /// leaves its entry until the run ends, so there are at most as many as the host errors the
-    /// run's host marked.
-    pub(crate) finally_marks: Vec<(ObjId, u32)>,
+    /// which the block's end throws it on with, and the stack slot that holds it while the block
+    /// runs. An entry whose slot no longer holds its exception belongs to a block that `break`,
+    /// `continue` or `return` left, and [`Self::drop_left_finally_marks`] removes it.
+    pub(crate) finally_marks: Vec<(ObjId, u32, usize)>,
     /// The mark of the host error the last run ended with.
     pub(crate) error_mark: Option<u32>,
 }
@@ -560,12 +560,20 @@ impl Interp {
         Ok(())
     }
 
+    /// Removes the [`Self::finally_marks`] entries of `finally` blocks that `break`, `continue` or
+    /// `return` left: those whose stack slot no longer holds their exception.
+    fn drop_left_finally_marks(&mut self) {
+        let stack = &self.stack;
+        self.finally_marks.retain(|&(id, _, slot)| matches!(stack.get(slot), Some(Value::Object(o)) if *o == id));
+    }
+
     pub(crate) fn collect_garbage(&mut self) {
+        self.drop_left_finally_marks();
         let mut roots = Roots::default();
         roots.values.extend(self.stack.iter());
         roots.values.extend(self.temp_roots.iter());
         roots.values.push(&self.last_thrown);
-        roots.objects.extend(self.finally_marks.iter().map(|&(id, _)| id));
+        roots.objects.extend(self.finally_marks.iter().map(|&(id, _, _)| id));
         for f in &self.frames {
             roots.values.push(&f.this);
             roots.values.push(&f.completion);
@@ -668,8 +676,9 @@ impl Interp {
                     return internal("handler stack deeper than the stack");
                 }
                 self.stack.truncate(target_len);
+                self.drop_left_finally_marks();
                 if let (Some(mark), false, Value::Object(id)) = (self.thrown_mark.take(), caught, &v) {
-                    self.finally_marks.push((*id, mark));
+                    self.finally_marks.push((*id, mark, target_len));
                 }
                 self.stack.push(v);
                 self.throw_site = None;
@@ -859,9 +868,9 @@ impl Interp {
         if kind == 1.0 {
             let v = self.pop()?;
             if let Value::Object(o) = v
-                && let Some(i) = self.finally_marks.iter().rposition(|&(id, _)| id == o)
+                && let Some(i) = self.finally_marks.iter().rposition(|&(id, _, _)| id == o)
             {
-                self.thrown_mark = self.finally_marks.get(i).map(|&(_, mark)| mark);
+                self.thrown_mark = self.finally_marks.get(i).map(|&(_, mark, _)| mark);
                 self.finally_marks.truncate(i);
             }
             return Err(Abrupt::Throw(v));

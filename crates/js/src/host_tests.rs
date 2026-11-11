@@ -292,6 +292,27 @@ fn a_marked_host_error_keeps_its_mark_only_while_no_catch_takes_it() {
     assert_eq!(r.error_mark(), None, "a later run that ends normally has no mark");
 }
 
+/// Marked errors that `finally` blocks discard with `return`, `break` or `continue` are collected
+/// with the rest of the garbage, so a run that discards many of them stays within its heap.
+#[test]
+fn marked_errors_a_finally_block_discards_are_collected() {
+    let mut r = Realm::new();
+    r.set_limits(Limits { fuel: 200_000_000, heap_bytes: 1 << 20, ..Limits::default() });
+    let f: HostFunction = Rc::new(|_| Err(HostError::Marked { error: Box::new(HostError::Syntax("bad file".into())), mark: 7 }));
+    r.define_host_object("host", vec![("f".into(), HostItem::Function(f))]).unwrap();
+    let cases = [
+        "function d() { try { host.f(); } finally { return; } }\nfor (var i = 0; i < 20000; i++) d();",
+        "for (var i = 0; i < 20000; i++) { try { host.f(); } finally { continue; } }",
+        "for (var i = 0; i < 20000; i++) { do { try { host.f(); } finally { break; } } while (false); }",
+    ];
+    for source in cases {
+        r.run(source).unwrap_or_else(|e| panic!("{source}: {e:?}"));
+        assert_eq!(r.error_mark(), None, "{source}");
+    }
+    assert!(r.run("try { host.f(); } finally { 1; }").is_err());
+    assert_eq!(r.error_mark(), Some(7));
+}
+
 #[test]
 fn an_error_says_where_in_the_source_it_was_raised() {
     let mut r = realm(1_000_000);
