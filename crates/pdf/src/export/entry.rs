@@ -63,9 +63,11 @@ fn export_with_report_inner(doc: &Document, opts: &PdfOptions, left_out: &mut Ha
     // Preserve Editing: the native document as an embedded file (`check` refused PDF/A with it).
     let mut warnings = set.warnings();
     if raised.is_some() {
-        warnings.push(
-            "PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6".into(),
-        );
+        warnings.push(if opts.settings.compatibility == Compatibility::Pdf14 {
+            "PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6".into()
+        } else {
+            "PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6".into()
+        });
     }
     let native = opts.native.as_deref().filter(|_| set.preserve_editing);
     if let Some(native) = native {
@@ -231,10 +233,20 @@ fn for_long_pages(set: &PdfSettings, pages: &[(usize, PageBoxes)]) -> Result<Opt
     }
     let raised = (set.compatibility == Compatibility::Pdf15 && !set.standard.is_pdfx() && !set.long_pages_in_points)
         .then(|| PdfSettings { compatibility: Compatibility::Pdf16, ..set.clone() });
+    // PDF/A-2 limits page boundaries to 14,400 units (ISO 19005-2, 6.1.13), and PDF 1.4 has no
+    // `UserUnit`: a PDF/A file at PDF 1.4 is written as PDF 1.6, with the `UserUnit` whether or
+    // not `long_pages_in_points` is on.
+    let raised = raised.or_else(|| {
+        (set.standard == Standard::PdfA2b && set.compatibility == Compatibility::Pdf14).then(|| PdfSettings {
+            compatibility: Compatibility::Pdf16,
+            long_pages_in_points: false,
+            ..set.clone()
+        })
+    });
     // The writer's test for a whole number, on the `f32` it writes.
     let real = |side: f64| side > MAX_PDF14_REAL && (side as f32) as i32 as f32 != side as f32;
     if let Some((i, b)) = pages.iter().find(|(_, b)| real(b.media.width()) || real(b.media.height())) {
-        page_too_long(set, *i, b.media.width().max(b.media.height()))?;
+        page_too_long(raised.as_ref().unwrap_or(set), *i, b.media.width().max(b.media.height()))?;
     }
     Ok(raised)
 }
