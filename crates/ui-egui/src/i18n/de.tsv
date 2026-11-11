@@ -4983,9 +4983,8 @@ theme	Appearance	Erscheinungsbild
 @msg	the HEIC or HEIF file can't be read	die HEIC- oder HEIF-Datei kann nicht gelesen werden
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	die HEIC- oder HEIF-Datei enthält eine Bildart, die nicht gelesen werden kann
 @msg	HEIC and HEIF images can't be opened in this build	HEIC- und HEIF-Bilder können in diesem Build nicht geöffnet werden
-@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 5 to 13	Zeichnungen aus CDR {version} können nicht geöffnet werden: VectorCraft liest die Versionen 5 bis 13
+@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 5 to 27	Zeichnungen aus CDR {version} können nicht geöffnet werden: VectorCraft liest die Versionen 5 bis 27
 @msg	this CDR drawing can't be read ({why})	diese CDR-Zeichnung kann nicht gelesen werden ({why})
-@msg	CDR drawings saved by version 14 or later can't be opened: VectorCraft reads versions 5 to 13	Zeichnungen, die mit CDR 14 oder neuer gespeichert wurden, können nicht geöffnet werden: VectorCraft liest die Versionen 5 bis 13
 @msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	Texte, Bitmaps, Überblendungen, Konturen, Pinselstriche und andere CDR-Objekte, die VectorCraft noch nicht liest, wurden ausgelassen
 @msg	CDR fountain, pattern, texture and PostScript fills were left out	CDR-Verlaufs-, Muster-, Textur- und PostScript-Füllungen wurden ausgelassen
 @msg	colors in CDR color models VectorCraft doesn't read were opened as black	Farben in CDR-Farbmodellen, die VectorCraft nicht liest, wurden als Schwarz geöffnet

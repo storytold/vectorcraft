@@ -5475,9 +5475,8 @@ imageTrace	Outline	Körvonal
 @msg	the HEIC or HEIF file can't be read	a HEIC- vagy HEIF-fájl nem olvasható
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	a HEIC- vagy HEIF-fájl olyan képtípust tartalmaz, amely nem olvasható
 @msg	HEIC and HEIF images can't be opened in this build	a HEIC- és HEIF-képek ebben a buildben nem nyithatók meg
-@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 5 to 13	a CDR {version} rajzai nem nyithatók meg; a VectorCraft ezeket a verziókat olvassa: 5–13
+@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 5 to 27	a CDR {version} rajzai nem nyithatók meg; a VectorCraft ezeket a verziókat olvassa: 5–27
 @msg	this CDR drawing can't be read ({why})	ez a CDR-rajz nem olvasható ({why})
-@msg	CDR drawings saved by version 14 or later can't be opened: VectorCraft reads versions 5 to 13	a CDR 14-es vagy újabb verziójával mentett rajzok nem nyithatók meg; a VectorCraft ezeket a verziókat olvassa: 5–13
 @msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	kimaradtak a CDR szövegei, bitképei, összemosásai, kontúrjai, ecsetvonásai és egyéb objektumai, amelyeket a VectorCraft még nem olvas
 @msg	CDR fountain, pattern, texture and PostScript fills were left out	kimaradtak a CDR színátmenetes, mintázatos, textúrás és PostScript-kitöltései
 @msg	colors in CDR color models VectorCraft doesn't read were opened as black	a CDR olyan színmodelljeiben megadott színek, amelyeket a VectorCraft nem olvas, feketeként nyíltak meg

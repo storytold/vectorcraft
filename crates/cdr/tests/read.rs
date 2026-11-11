@@ -73,13 +73,469 @@ fn every_version_from_5_to_13_reads_its_sample() {
 }
 
 #[test]
-fn versions_outside_5_to_13_and_other_files_are_refused() {
+fn versions_outside_5_to_27_and_other_files_are_refused() {
     assert_eq!(read(&synth::riff(400, &[]), Limits::default()), Err(Error::Version(400)));
-    assert_eq!(read(&synth::riff(1400, &[]), Limits::default()), Err(Error::Version(1400)));
+    assert_eq!(read(&synth::riff(2800, &[]), Limits::default()), Err(Error::Version(2800)));
     assert_eq!(read(b"RIFF\x04\0\0\0WAVE", Limits::default()), Err(Error::NotCdr));
     assert_eq!(read(b"RIFF\x04\0\0\0CDRX", Limits::default()), Err(Error::NotCdr));
     assert!(!vectorcraft_cdr::is_cdr(b"PK\x03\x04"));
     assert!(vectorcraft_cdr::is_cdr(&synth::sample(1100, true)));
+}
+
+#[test]
+fn letters_that_count_differently_take_the_vrsn_version() {
+    // Version 27 saves the letter `U`, which counts as 29 the older way; the next letter with a
+    // `vrsn` of 2800 is refused as version 28.
+    let mut file = synth::sample(2700, false);
+    file[11] = b'U';
+    let d = read(&file, Limits::default()).unwrap();
+    check_pages(&d, 2700);
+    check_shapes(&d, 2700);
+    let mut file = synth::riff(2800, &[chunk(b"vrsn", 2800u16.to_le_bytes().to_vec())]);
+    file[11] = b'V';
+    assert_eq!(read(&file, Limits::default()), Err(Error::Version(2800)));
+}
+
+#[test]
+fn every_version_from_14_to_27_reads_its_package() {
+    for version in [1400, 1500, 1600, 1700, 1800, 2000, 2200, 2400, 2430, 2600, 2700] {
+        for compress in [false, true] {
+            let file = synth::sample_file(version, compress);
+            assert!(file.starts_with(b"PK\x03\x04") && vectorcraft_cdr::is_cdr(&file), "{version}");
+            let d = read(&file, Limits::default()).unwrap_or_else(|e| panic!("{version} {compress}: {e}"));
+            assert!(!d.warnings.contains(&Warning::Damaged), "{version} {compress}: {:?}", d.warnings);
+            check_pages(&d, version);
+            check_shapes(&d, version);
+        }
+    }
+}
+
+/// The version 17 sample's content with `extra` added after it, as a package.
+fn package17(extra: Vec<synth::Node>, members: &[synth::Member]) -> Vec<u8> {
+    let mut body = vec![chunk(b"vrsn", 1700u16.to_le_bytes().to_vec())];
+    body.extend(synth::sample_content(1700));
+    body.extend(extra);
+    synth::package16(1700, &body, true, members)
+}
+
+#[test]
+fn lists_whose_bodies_move_to_a_data_stream_read_the_same() {
+    let mut body = vec![chunk(b"vrsn", 1700u16.to_le_bytes().to_vec())];
+    body.extend(synth::sample_content(1700));
+    for moved in [*b"layr", *b"obj ", *b"page"] {
+        let file = synth::package16_with(1700, &body, true, &[], &[moved]);
+        let d = read(&file, Limits::default()).unwrap();
+        assert!(!d.warnings.contains(&Warning::Damaged), "{moved:?}: {:?}", d.warnings);
+        check_pages(&d, 1700);
+        check_shapes(&d, 1700);
+    }
+}
+
+#[test]
+fn a_data_stream_no_chunk_reads_is_not_inflated() {
+    // 32 MiB of picture data that the reader doesn't use, in a stream of its own.
+    let bitmaps = list(b"bmpt", vec![chunk(b"bmp ", vec![0; 32 << 20])]);
+    let file = package17(vec![bitmaps], &[]);
+    assert!(file.len() < 1 << 20);
+    let d = read(&file, Limits { inflated: 4 << 20, ..Limits::default() }).unwrap();
+    assert_eq!(d.warnings, vec![Warning::UnsupportedObjects]);
+    check_shapes(&d, 1700);
+}
+
+#[test]
+fn a_redirected_list_is_inflated_and_counts_toward_the_limit() {
+    // A list whose body is in a stream must be inflated to be split; past the limit it is left
+    // out with a warning, and the rest of the drawing reads.
+    let mut body = vec![chunk(b"vrsn", 1700u16.to_le_bytes().to_vec())];
+    body.extend(synth::sample_content(1700));
+    body.push(list(b"bmpt", vec![chunk(b"bmp ", vec![0; 32 << 20])]));
+    let file = synth::package16_with(1700, &body, true, &[], &[*b"bmpt"]);
+    let d = read(&file, Limits { inflated: 4 << 20, ..Limits::default() }).unwrap();
+    assert!(d.warnings.contains(&Warning::TooDeep) && !d.warnings.contains(&Warning::Damaged), "{:?}", d.warnings);
+    check_shapes(&d, 1700);
+    let d = read(&file, Limits::default()).unwrap();
+    assert!(!d.warnings.contains(&Warning::TooDeep));
+}
+
+#[test]
+fn chunks_in_a_data_stream_past_a_limit_are_not_damage() {
+    // A record and a list in a 2 MiB stream, read with a 1 MiB member limit, stored and deflated
+    // with a 1 MiB inflate limit: only the limit warning.
+    let mcfg = synth::mcfg(V(1700), 300.0, 200.0);
+    let synth::Node::Chunk(_, mcfg) = mcfg else { panic!() };
+    let n = mcfg.len() as u32;
+    let mut stream = mcfg.clone();
+    stream.resize(2 << 20, 0);
+    stream[(1 << 20)..(1 << 20) + 4].copy_from_slice(b"fntt");
+    let mut root = b"RIFF".to_vec();
+    let body = doc_of(&[redirect(b"mcfg", 0, n, 0), redirect(b"LIST", 0, 4, 1 << 20)]);
+    root.extend(((body.len() + 4) as u32).to_le_bytes());
+    root.extend(b"CDRH");
+    root.extend(body);
+    let m = |name: &str, data: Vec<u8>, deflate: bool| synth::Member { name: name.into(), data, deflate };
+    for (deflate, limits) in [(false, Limits { member: 1 << 20, ..Limits::default() }), (true, Limits { inflated: 1 << 20, ..Limits::default() })] {
+        let file = synth::zip(
+            &[
+                m("content/root.dat", root.clone(), false),
+                m("content/dataFileList.dat", b"data1.dat".to_vec(), false),
+                m("content/data/data1.dat", stream.clone(), deflate),
+            ],
+            b"",
+        );
+        let d = read(&file, limits).unwrap();
+        assert_eq!(d.warnings, vec![Warning::TooDeep], "{deflate}");
+        assert!(d.page_size.is_none());
+        let d = read(&file, Limits::default()).unwrap();
+        assert!(d.page_size.is_some() && d.warnings.is_empty(), "{deflate}: {:?}", d.warnings);
+    }
+}
+
+#[test]
+fn encrypted_data_streams_and_other_methods_are_refused() {
+    let good = synth::sample_file(1700, false);
+    assert!(read(&good, Limits::default()).is_ok());
+    // The directory entry of a data stream: its name's last place, 46 bytes after the entry start.
+    let name = b"content/data/data1.dat";
+    let entry = good.windows(name.len()).rposition(|w| w == name).unwrap() - 46;
+    assert_eq!(&good[entry..entry + 4], b"PK\x01\x02");
+    let mut encrypted = good.clone();
+    encrypted[entry + 8] |= 1;
+    assert_eq!(read(&encrypted, Limits::default()), Err(Error::Unsupported("encrypted packages")));
+    let mut other = good.clone();
+    other[entry + 10] = 12;
+    assert_eq!(read(&other, Limits::default()), Err(Error::Unsupported("package compression methods other than storing and deflate")));
+}
+
+/// A version 17 package whose `root.dat` is `root` (the RIFF body after the form type) and whose
+/// one data stream is `stream`.
+fn raw_package(root: &[u8], stream: &[u8], list: &[u8]) -> Vec<u8> {
+    let mut riff = b"RIFF".to_vec();
+    riff.extend(((root.len() + 4) as u32).to_le_bytes());
+    riff.extend(b"CDRH");
+    riff.extend(root);
+    let m = |name: &str, data: &[u8]| synth::Member { name: name.into(), data: data.to_vec(), deflate: false };
+    synth::zip(&[m("content/root.dat", &riff), m("content/dataFileList.dat", list), m("content/data/data1.dat", stream)], b"")
+}
+
+/// A chunk header for a redirect record of `stream`, `len` and `offset`.
+fn redirect(id: &[u8; 4], stream: u32, len: u32, offset: u32) -> Vec<u8> {
+    let mut out = id.to_vec();
+    out.extend(16u32.to_le_bytes());
+    for v in [stream, len, offset, 0] {
+        out.extend(v.to_le_bytes());
+    }
+    out
+}
+
+#[test]
+fn a_list_redirected_into_its_own_bytes_is_read_once() {
+    // The stream holds a `grp ` body whose children are lists redirected to that body again:
+    // the bytes are taken, so each child is damage and the list is read once.
+    for children in [1, 2] {
+        let len = 4 + 24 * children;
+        let mut stream = b"grp ".to_vec();
+        for _ in 0..children {
+            stream.extend(redirect(b"LIST", 0, len, 0));
+        }
+        let file = raw_package(&redirect(b"LIST", 0, len, 0), &stream, b"data1.dat");
+        let d = read(&file, Limits { chunks: 100, ..Limits::default() }).unwrap();
+        assert_eq!(d.warnings, vec![Warning::Damaged], "{children}");
+    }
+}
+
+/// A `doc ` list holding `records`, as `root.dat`'s body.
+fn doc_of(records: &[Vec<u8>]) -> Vec<u8> {
+    let records = records.concat();
+    let mut body = b"LIST".to_vec();
+    body.extend(((records.len() + 4) as u32).to_le_bytes());
+    body.extend(b"doc ");
+    body.extend(records);
+    body
+}
+
+#[test]
+fn records_share_bytes_within_the_member_limit() {
+    let mcfg = synth::mcfg(V(1700), 300.0, 200.0);
+    let synth::Node::Chunk(_, mcfg) = mcfg else { panic!() };
+    let n = mcfg.len() as u32;
+    let mut stream = mcfg.clone();
+    stream.extend(&mcfg);
+    // The same bytes, bytes that overlap them, bytes that only touch them, and the same bytes
+    // through a second line naming the same member: both redirects read.
+    for (second, list) in [
+        (redirect(b"mcfg", 0, n, 0), &b"data1.dat"[..]),
+        (redirect(b"mcfg", 0, n, n - 1), b"data1.dat"),
+        (redirect(b"mcfg", 0, n, n), b"data1.dat"),
+        (redirect(b"mcfg", 1, n, 0), b"data1.dat\ndata1.dat"),
+    ] {
+        let file = raw_package(&doc_of(&[redirect(b"mcfg", 0, n, 0), second.clone()]), &stream, list);
+        let d = read(&file, Limits::default()).unwrap();
+        assert!(d.page_size.is_some() && d.warnings.is_empty(), "{:?}: {:?}", &second[8..], d.warnings);
+    }
+    // Bytes read again take from the member limit: with a limit of the stream's 1,024 bytes, a
+    // record of all of them reads twice, and a third read is left out with the limit warning.
+    let mut stream = mcfg.clone();
+    stream.resize(1024, 0);
+    let limits = Limits { member: 1024, ..Limits::default() };
+    for (reads, warnings) in [(2, vec![]), (3, vec![Warning::TooDeep])] {
+        let records = vec![redirect(b"mcfg", 0, 1024, 0); reads];
+        let d = read(&raw_package(&doc_of(&records), &stream, b"data1.dat"), limits).unwrap();
+        assert!(d.page_size.is_some(), "{reads}");
+        assert_eq!(d.warnings, warnings, "{reads}");
+    }
+}
+
+#[test]
+fn a_member_two_streams_name_is_inflated_once() {
+    // One deflated member of 2 MiB named on two lines, a list read from one and the page size
+    // from the other: within a 3 MiB inflate limit it is inflated once.
+    let mcfg = synth::mcfg(V(1700), 300.0, 200.0);
+    let synth::Node::Chunk(_, mcfg) = mcfg else { panic!() };
+    let n = mcfg.len() as u32;
+    let mut stream = mcfg.clone();
+    stream.resize(2 << 20, 0);
+    stream[(1 << 20)..(1 << 20) + 4].copy_from_slice(b"fntt");
+    let mut root = b"RIFF".to_vec();
+    let body = doc_of(&[redirect(b"LIST", 1, 4, 1 << 20), redirect(b"mcfg", 0, n, 0)]);
+    root.extend(((body.len() + 4) as u32).to_le_bytes());
+    root.extend(b"CDRH");
+    root.extend(body);
+    let m = |name: &str, data: Vec<u8>, deflate: bool| synth::Member { name: name.into(), data, deflate };
+    let file = synth::zip(
+        &[
+            m("content/root.dat", root, false),
+            m("content/dataFileList.dat", b"data1.dat\ndata1.dat".to_vec(), false),
+            m("content/data/data1.dat", stream, true),
+        ],
+        b"",
+    );
+    let d = read(&file, Limits { inflated: 3 << 20, ..Limits::default() }).unwrap();
+    assert!(d.page_size.is_some() && d.warnings.is_empty(), "{:?}", d.warnings);
+}
+
+#[test]
+fn redirects_past_their_stream_or_to_a_missing_one_are_damage() {
+    let mcfg = synth::mcfg(V(1700), 300.0, 200.0);
+    let synth::Node::Chunk(_, mcfg) = mcfg else { panic!() };
+    let n = mcfg.len() as u32;
+    for (root, list, damaged) in [
+        (redirect(b"mcfg", 0, n, 0), &b"data1.dat"[..], false),
+        (redirect(b"mcfg", 0, n, 0), b"data1.dat\r\n", false),
+        (redirect(b"mcfg", 0, n + 1, 0), b"data1.dat", true),
+        (redirect(b"mcfg", 0, n, u32::MAX), b"data1.dat", true),
+        (redirect(b"mcfg", 1, n, 0), b"data1.dat", true),
+        (redirect(b"mcfg", 0, n, 0), b"gone.dat", true),
+        (redirect(b"mcfg", 0, n, 0), b"", true),
+    ] {
+        let mut body = b"LIST".to_vec();
+        body.extend(((root.len() + 4) as u32).to_le_bytes());
+        body.extend(b"doc ");
+        body.extend(&root);
+        let d = read(&raw_package(&body, &mcfg, list), Limits::default()).unwrap();
+        assert_eq!(d.warnings.contains(&Warning::Damaged), damaged, "{list:?} {:?}", &root[8..]);
+        assert_eq!(d.page_size.is_some(), !damaged);
+    }
+}
+
+#[test]
+fn a_redirect_record_holds_up_to_8_bytes_itself() {
+    let mut inline = b"vrsn".to_vec();
+    inline.extend(16u32.to_le_bytes());
+    inline.extend(u32::MAX.to_le_bytes());
+    inline.extend(2u32.to_le_bytes());
+    inline.extend(1800u16.to_le_bytes());
+    inline.extend([0; 6]);
+    let d = read(&raw_package(&inline, b"", b""), Limits::default()).unwrap();
+    assert_eq!(d.version, 1800);
+    // A length past the record's 8 bytes is damage, and the form type's version stands.
+    inline[12] = 9;
+    let d = read(&raw_package(&inline, b"", b""), Limits::default()).unwrap();
+    assert!(d.warnings.contains(&Warning::Damaged));
+    assert_eq!(d.version, 1700);
+}
+
+fn zip_of(members: &[(&str, Vec<u8>)]) -> Vec<u8> {
+    let m: Vec<_> = members.iter().map(|(n, d)| synth::Member { name: (*n).into(), data: d.clone(), deflate: false }).collect();
+    synth::zip(&m, b"")
+}
+
+/// Where the first central directory entry starts.
+fn directory(bytes: &[u8]) -> usize {
+    bytes.windows(4).position(|w| w == b"PK\x01\x02").unwrap()
+}
+
+#[test]
+fn hostile_packages_are_refused() {
+    let riff = synth::sample(1400, false);
+    let good = zip_of(&[("content/riffData.cdr", riff.clone())]);
+    assert!(read(&good, Limits::default()).is_ok());
+    // More members than a read takes.
+    let many: Vec<(String, Vec<u8>)> = (0..4097).map(|i| (format!("m{i}"), vec![])).collect();
+    let many: Vec<(&str, Vec<u8>)> = many.iter().map(|(n, d)| (n.as_str(), d.clone())).collect();
+    assert_eq!(read(&zip_of(&many), Limits::default()), Err(Error::Limit("package member count")));
+    assert_eq!(read(&zip_of(&many[..4096]), Limits::default()), Err(Error::NotCdr));
+    // A member named twice.
+    let twice = zip_of(&[("content/riffData.cdr", riff.clone()), ("content/riffData.cdr", riff.clone())]);
+    assert_eq!(read(&twice, Limits::default()), Err(Error::Damaged("package member named twice")));
+    // A member whose bytes run into the next member's header.
+    let two = zip_of(&[("a", vec![1; 10]), ("content/riffData.cdr", riff.clone())]);
+    let mut overlap = two.clone();
+    let at = directory(&two) + 20;
+    overlap[at..at + 4].copy_from_slice(&20u32.to_le_bytes());
+    assert_eq!(read(&overlap, Limits::default()), Err(Error::Damaged("package members overlap")));
+    // A central directory cut short, and an archive without its end record.
+    let mut short = good.clone();
+    let n = short.len();
+    let len_at = n - 22 + 12;
+    let len = u32::from_le_bytes(short[len_at..len_at + 4].try_into().unwrap());
+    short[len_at..len_at + 4].copy_from_slice(&(len - 10).to_le_bytes());
+    assert_eq!(read(&short, Limits::default()), Err(Error::Damaged("package directory")));
+    assert_eq!(read(&good[..directory(&good) + 30], Limits::default()), Err(Error::Damaged("package directory")));
+    // Encrypted members, ZIP64 fields and archives split across files.
+    let mut encrypted = good.clone();
+    encrypted[directory(&good) + 8] |= 1;
+    assert_eq!(read(&encrypted, Limits::default()), Err(Error::Unsupported("encrypted packages")));
+    let mut zip64 = good.clone();
+    zip64[n - 22 + 10..n - 22 + 12].copy_from_slice(&[0xff, 0xff]);
+    assert_eq!(read(&zip64, Limits::default()), Err(Error::Unsupported("ZIP64 packages")));
+    let mut split = good.clone();
+    split[n - 22 + 4] = 1;
+    assert_eq!(read(&split, Limits::default()), Err(Error::Unsupported("packages split across files")));
+}
+
+#[test]
+fn a_package_member_bomb_stops_at_its_stated_size_or_the_limit() {
+    let riff = synth::sample(1400, false);
+    let m = synth::Member { name: "content/riffData.cdr".into(), data: riff.clone(), deflate: true };
+    let good = synth::zip(std::slice::from_ref(&m), b"");
+    assert!(read(&good, Limits::default()).is_ok());
+    // A member that inflates past the size its entry states stops one byte past it.
+    let bomb = synth::zip(&[synth::Member { data: [riff.clone(), vec![0; 64 << 20]].concat(), ..m.clone() }], b"");
+    assert!(bomb.len() < 1 << 20);
+    let mut lying = bomb.clone();
+    let at = directory(&bomb) + 24;
+    lying[at..at + 4].copy_from_slice(&(riff.len() as u32).to_le_bytes());
+    assert_eq!(read(&lying, Limits::default()), Err(Error::Damaged("package member")));
+    // One that states more than a member may hold, or than is left to inflate, is not inflated.
+    assert_eq!(read(&bomb, Limits { member: 1 << 20, ..Limits::default() }), Err(Error::Limit("package member size")));
+    assert_eq!(read(&bomb, Limits { inflated: 1 << 20, ..Limits::default() }), Err(Error::Limit("inflated size")));
+}
+
+#[test]
+fn stored_package_members_take_nothing_from_the_inflate_limit() {
+    // Nothing may be inflated, and the stored members of either package layout still read, as
+    // the same drawing does as a plain RIFF file.
+    let none = Limits { inflated: 0, ..Limits::default() };
+    assert!(read(&synth::sample(1400, false), none).is_ok());
+    for version in [1400, 1700] {
+        let d = read(&synth::sample_file(version, false), none).unwrap_or_else(|e| panic!("{version}: {e}"));
+        assert!(d.warnings.iter().all(|w| *w == Warning::UnsupportedObjects), "{version}: {:?}", d.warnings);
+        check_shapes(&d, version);
+    }
+    // Deflated members do take from it.
+    assert_eq!(read(&synth::sample_file(1400, true), none), Err(Error::Limit("inflated size")));
+}
+
+#[test]
+fn redirect_records_that_lead_nowhere_count_toward_the_chunk_limit() {
+    // 3,000 redirects to a stream the package lacks: each lost record is counted.
+    let root: Vec<u8> = (0..3000).flat_map(|_| redirect(b"mcfg", 7, 4, 0)).collect();
+    let file = raw_package(&root, b"", b"data1.dat");
+    assert_eq!(read(&file, Limits { chunks: 2_000, ..Limits::default() }), Err(Error::Limit("chunk count")));
+    let d = read(&file, Limits { chunks: 4_000, ..Limits::default() }).unwrap();
+    assert!(d.warnings.contains(&Warning::Damaged), "{:?}", d.warnings);
+}
+
+#[test]
+fn rectangles_from_version_15_give_radii_as_shares_of_half_the_shorter_side() {
+    let v = V(1500);
+    let mut c = synth::V(1500).rect(100.0, 50.0, 0.0);
+    // The four shares: 0.2, 0.4, 0, and 3, which the shorter side holds to 50 pt.
+    for (k, share) in [0.2f64, 0.4, 0.0, 3.0].iter().enumerate() {
+        let at = 40 + 24 * k;
+        c[at..at + 8].copy_from_slice(&share.to_le_bytes());
+    }
+    let file =
+        synth::riff(1500, &[synth::page(false, vec![synth::layer(v, [0, 0, 0, 0x98], "L", vec![synth::object(v, 1, &[(30, c.clone())], None)])])]);
+    let d = read(&file, Limits::default()).unwrap();
+    let s = shapes(&d.pages[0].layers[0].objects);
+    let Geometry::Rect { w, h, radii } = s[0].geometry else { panic!("{:?}", s[0].geometry) };
+    assert!((w - 100.0).abs() < 1e-6 && (h - 50.0).abs() < 1e-6);
+    for (got, want) in radii.iter().zip([5.0, 10.0, 0.0, 50.0]) {
+        assert!((got - want).abs() < 1e-6, "{radii:?}");
+    }
+    // With the scale-with flag set the radii are inches, held to the shorter side as well.
+    c[32] = 1;
+    let file = synth::riff(1500, &[synth::page(false, vec![synth::layer(v, [0, 0, 0, 0x98], "L", vec![synth::object(v, 1, &[(30, c)], None)])])]);
+    let d = read(&file, Limits::default()).unwrap();
+    let s = shapes(&d.pages[0].layers[0].objects);
+    let Geometry::Rect { radii, .. } = s[0].geometry else { panic!("{:?}", s[0].geometry) };
+    for (got, want) in radii.iter().zip([14.4, 28.8, 0.0, 50.0]) {
+        assert!((got - want).abs() < 1e-6, "{radii:?}");
+    }
+}
+
+#[test]
+fn paths_of_version_16_read_their_points() {
+    let v = V(1700);
+    let mut c = vec![0; 4];
+    c.extend(2u16.to_le_bytes());
+    c.extend(1u16.to_le_bytes());
+    c.extend([0; 16]);
+    c.extend(&v.points(&[(0.0, 0.0, 0x08), (50.0, 0.0, 0x40), (50.0, 20.0, 0x48)])[4..]);
+    let objects = |version: u16| {
+        let v = V(version);
+        synth::riff(
+            version,
+            &[synth::page(false, vec![synth::layer(v, [0, 0, 0, 0x98], "L", vec![synth::object(v, 0x25, &[(30, c.clone())], None)])])],
+        )
+    };
+    let d = read(&objects(1700), Limits::default()).unwrap();
+    let s = shapes(&d.pages[0].layers[0].objects);
+    let Geometry::Path(p) = &s[0].geometry else { panic!("{:?}", s[0].geometry) };
+    assert_eq!(p.subpaths[0].segments.len(), 2);
+    assert!(d.warnings.is_empty(), "{:?}", d.warnings);
+    // Before 16 the type is not a path.
+    let d = read(&objects(1500), Limits::default()).unwrap();
+    assert!(d.pages[0].layers[0].objects.is_empty() && d.warnings.contains(&Warning::UnsupportedObjects));
+}
+
+#[test]
+fn a_template_takes_its_version_from_the_vrsn_chunk() {
+    let mut file = synth::sample(2100, false);
+    file[8..12].copy_from_slice(b"CDTQ");
+    assert!(vectorcraft_cdr::is_cdr(&file));
+    let d = read(&file, Limits::default()).unwrap();
+    assert_eq!(d.version, 2100);
+    check_shapes(&d, 2100);
+    let mut bare = synth::riff(2100, &[]);
+    bare[8..12].copy_from_slice(b"CDTQ");
+    assert_eq!(read(&bare, Limits::default()), Err(Error::NotCdr));
+    // A template of a version outside 5 to 27 is refused by its version.
+    for version in [2800u16, 400] {
+        let mut t = synth::riff(2100, &[chunk(b"vrsn", version.to_le_bytes().to_vec())]);
+        t[8..12].copy_from_slice(b"CDTQ");
+        assert_eq!(read(&t, Limits::default()), Err(Error::Version(version)));
+    }
+}
+
+#[test]
+fn master_page_layers_take_their_kind_by_byte_0_from_version_14() {
+    // Flags that mark the master page's guides and desktop layers in versions 7 to 13 mark
+    // drawing layers from 14.
+    for version in [1300, 1700] {
+        let v = V(version);
+        let rect = || synth::object(v, 1, &[(30, v.rect(10.0, 10.0, 0.0))], None);
+        let master =
+            synth::page(true, vec![synth::layer(v, [2, 1, 1, 0x98], "G", vec![rect()]), synth::layer(v, [0, 1, 1, 0x98], "D", vec![rect()])]);
+        let own = synth::page(false, vec![synth::layer(v, [0, 0, 0, 0x98], "L", vec![rect()])]);
+        let body = [chunk(b"vrsn", version.to_le_bytes().to_vec()), master, own];
+        let file = if version < 1400 { synth::riff(version, &body) } else { synth::package16(version, &body, true, &[]) };
+        let d = read(&file, Limits::default()).unwrap();
+        let kinds: Vec<_> = d.master.iter().map(|l| l.kind).collect();
+        let want = if version < 1400 { vec![LayerKind::Guides, LayerKind::Desktop] } else { vec![LayerKind::Drawing, LayerKind::Drawing] };
+        assert_eq!(kinds, want, "{version}");
+    }
 }
 
 #[test]
@@ -390,8 +846,7 @@ fn outlines_flagged_none_and_dashes_read() {
 }
 
 #[test]
-fn library_colors_of_version_13_keep_their_names_and_tints() {
-    let v = V(1300);
+fn library_colors_from_version_13_keep_their_names_and_tints() {
     // A model 21 color (blue, green, red, tint) shown at 50 %, and its library name.
     let shown = synth::color(21, [255, 191, 128, 50]);
     let mut props = vec![1];
@@ -417,22 +872,27 @@ fn library_colors_of_version_13_keep_their_names_and_tints() {
     fill.extend(1300u32.to_le_bytes());
     fill.extend((body.len() as u32).to_le_bytes());
     fill.extend(body);
-    let style =
-        vec![(20, 4u32.to_le_bytes().to_vec()), (30, [v.coord(1.0), v.coord(1.0), v.coord(0.0), v.coord(0.0), v.coord(0.0), v.coord(0.0)].concat())];
-    let file = synth::riff(
-        1300,
-        &[
-            chunk(b"vrsn", 1300u16.to_le_bytes().to_vec()),
-            list(b"filt", vec![chunk(b"fild", fill)]),
+    // The same records in a plain file of version 13 and the packages of later versions.
+    for version in [1300, 1400, 1700, 2700] {
+        let v = V(version);
+        let style = vec![(20, 4u32.to_le_bytes().to_vec()), (30, v.rect(1.0, 1.0, 0.0))];
+        let body = [
+            chunk(b"vrsn", version.to_le_bytes().to_vec()),
+            list(b"filt", vec![chunk(b"fild", fill.clone())]),
             synth::page(false, vec![synth::layer(v, [0, 0, 0, 0x98], "L", vec![synth::object(v, 1, &style, None)])]),
-        ],
-    );
-    let d = read(&file, Limits::default()).unwrap();
-    let s = shapes(&d.pages[0].layers[0].objects);
-    let Some(Color::Spot { name, tint, look: Some(look) }) = &s[0].fill else { panic!("{:?}", s[0].fill) };
-    assert_eq!((name.as_str(), *tint), ("Sky Blue", 0.5));
-    // 128/255 shown at half strength comes from about 1/255 at full strength.
-    assert!(look[0] < 0.01 && (look[2] - 1.0).abs() < 1e-6, "{look:?}");
+        ];
+        let file = match version {
+            ..1400 => synth::riff(version, &body),
+            1400..1600 => synth::package14(synth::riff(version, &body), true),
+            _ => synth::package16(version, &body, true, &[]),
+        };
+        let d = read(&file, Limits::default()).unwrap();
+        let s = shapes(&d.pages[0].layers[0].objects);
+        let Some(Color::Spot { name, tint, look: Some(look) }) = &s[0].fill else { panic!("{version}: {:?}", s[0].fill) };
+        assert_eq!((name.as_str(), *tint), ("Sky Blue", 0.5));
+        // 128/255 shown at half strength comes from about 1/255 at full strength.
+        assert!(look[0] < 0.01 && (look[2] - 1.0).abs() < 1e-6, "{version}: {look:?}");
+    }
 }
 
 /// One rectangle of version `v` that uses fill `fill` and outline `outline` (0: none).
@@ -562,5 +1022,27 @@ proptest! {
             b[at % n] = v;
         }
         let _ = read(&b, Limits::default());
+    }
+
+    #[test]
+    fn never_panics_on_mutated_packages(version in prop::sample::select(vec![1400u16, 1500, 1700, 2700]), edits in prop::collection::vec((any::<usize>(), any::<usize>(), any::<u8>()), 1..24)) {
+        // The members are edited before they are zipped, so that the edits reach the chunks and
+        // redirect records rather than stop at the CRC-32.
+        let mut body = vec![chunk(b"vrsn", version.to_le_bytes().to_vec())];
+        body.extend(synth::sample_content(version));
+        let mut members = if version < 1600 {
+            vec![synth::Member { name: "content/riffData.cdr".into(), data: synth::sample(version, false), deflate: false }]
+        } else {
+            synth::package16_members(version, &body, false, &[])
+        };
+        for (m, at, v) in edits {
+            let k = m % members.len();
+            let data = &mut members[k].data;
+            if !data.is_empty() {
+                let n = data.len();
+                data[at % n] = v;
+            }
+        }
+        let _ = read(&synth::zip(&members, b""), Limits::default());
     }
 }

@@ -4657,9 +4657,8 @@ font-technology	Variable	ცვლადი
 @msg	the HEIC or HEIF file can't be read	HEIC ან HEIF ფაილის წაკითხვა შეუძლებელია
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC ან HEIF ფაილი შეიცავს გამოსახულების ტიპს, რომლის წაკითხვაც შეუძლებელია
 @msg	HEIC and HEIF images can't be opened in this build	ამ ვერსიაში HEIC და HEIF გამოსახულებების გახსნა შეუძლებელია
-@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 5 to 13	CDR {version}-ის ნახაზების გახსნა შეუძლებელია: VectorCraft კითხულობს ვერსიებს 5-დან 13-მდე
+@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 5 to 27	CDR {version}-ის ნახაზების გახსნა შეუძლებელია: VectorCraft კითხულობს ვერსიებს 5-დან 27-მდე
 @msg	this CDR drawing can't be read ({why})	ამ CDR ნახაზის წაკითხვა შეუძლებელია ({why})
-@msg	CDR drawings saved by version 14 or later can't be opened: VectorCraft reads versions 5 to 13	CDR 14-ით ან უფრო ახალი ვერსიით შენახული ნახაზების გახსნა შეუძლებელია: VectorCraft კითხულობს ვერსიებს 5-დან 13-მდე
 @msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	CDR-ის ტექსტები, ბიტმაპები, გადასვლები, კონტურები, ფუნჯის შტრიხები და სხვა ობიექტები, რომლებსაც VectorCraft ჯერ ვერ კითხულობს, გამოტოვებულია
 @msg	CDR fountain, pattern, texture and PostScript fills were left out	CDR-ის გრადიენტული, ნიმუშის, ტექსტურის და PostScript შევსებები გამოტოვებულია
 @msg	colors in CDR color models VectorCraft doesn't read were opened as black	CDR-ის იმ ფერის მოდელების ფერები, რომლებსაც VectorCraft ვერ კითხულობს, შავად გაიხსნა

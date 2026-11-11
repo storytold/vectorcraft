@@ -5135,9 +5135,8 @@ theme	Appearance	Giao diện
 @msg	the HEIC or HEIF file can't be read	không thể đọc tệp HEIC hoặc HEIF
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	tệp HEIC hoặc HEIF chứa loại ảnh không thể đọc được
 @msg	HEIC and HEIF images can't be opened in this build	không thể mở ảnh HEIC và HEIF trong bản dựng này
-@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 5 to 13	không thể mở bản vẽ CDR {version}: VectorCraft đọc các phiên bản từ 5 đến 13
+@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 5 to 27	không thể mở bản vẽ CDR {version}: VectorCraft đọc các phiên bản từ 5 đến 27
 @msg	this CDR drawing can't be read ({why})	không thể đọc bản vẽ CDR này ({why})
-@msg	CDR drawings saved by version 14 or later can't be opened: VectorCraft reads versions 5 to 13	không thể mở bản vẽ được lưu bằng CDR 14 trở lên: VectorCraft đọc các phiên bản từ 5 đến 13
 @msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	văn bản, ảnh bitmap, hòa trộn, đường đồng mức, nét cọ và các đối tượng CDR khác mà VectorCraft chưa đọc được đã bị bỏ qua
 @msg	CDR fountain, pattern, texture and PostScript fills were left out	các kiểu tô chuyển sắc, mẫu, kết cấu và PostScript của CDR đã bị bỏ qua
 @msg	colors in CDR color models VectorCraft doesn't read were opened as black	các màu trong mô hình màu CDR mà VectorCraft không đọc được đã được mở thành màu đen

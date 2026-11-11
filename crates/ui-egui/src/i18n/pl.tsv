@@ -5066,9 +5066,8 @@ imageTrace	Outline	Kontur
 @msg	the HEIC or HEIF file can't be read	nie można odczytać pliku HEIC lub HEIF
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	plik HEIC lub HEIF zawiera rodzaj obrazu, którego nie można odczytać
 @msg	HEIC and HEIF images can't be opened in this build	obrazów HEIC i HEIF nie można otworzyć w tej wersji
-@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 5 to 13	nie można otworzyć rysunków CDR {version}: VectorCraft odczytuje wersje od 5 do 13
+@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 5 to 27	nie można otworzyć rysunków CDR {version}: VectorCraft odczytuje wersje od 5 do 27
 @msg	this CDR drawing can't be read ({why})	nie można odczytać tego rysunku CDR ({why})
-@msg	CDR drawings saved by version 14 or later can't be opened: VectorCraft reads versions 5 to 13	nie można otworzyć rysunków CDR zapisanych w wersji 14 lub nowszej: VectorCraft odczytuje wersje od 5 do 13
 @msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	pominięto teksty, mapy bitowe, przejścia, efekty konturu, pociągnięcia pędzla i inne obiekty CDR, których VectorCraft jeszcze nie odczytuje
 @msg	CDR fountain, pattern, texture and PostScript fills were left out	pominięto wypełnienia tonalne, deseniowe, teksturowe i PostScript CDR
 @msg	colors in CDR color models VectorCraft doesn't read were opened as black	kolory w modelach kolorów CDR, których VectorCraft nie odczytuje, otwarto jako czarne

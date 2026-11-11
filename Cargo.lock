@@ -6407,6 +6407,7 @@ dependencies = [
 name = "vectorcraft-cdr"
 version = "0.24.0"
 dependencies = [
+ "crc32fast",
  "flate2",
  "proptest",
  "vectorcraft-cdr",

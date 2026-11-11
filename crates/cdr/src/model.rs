@@ -175,7 +175,7 @@ pub enum Warning {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Drawing {
-    /// In hundreds, as the file stores it: 500 to 1300.
+    /// In hundreds, as the file stores it: 500 to 2799.
     pub version: u16,
     /// Page size from the document settings, in points.
     pub page_size: Option<(f64, f64)>,

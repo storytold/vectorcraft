@@ -1,6 +1,6 @@
 [package]
 name = "vectorcraft-cdr"
-description = "Bounded reader for .cdr drawings of versions 5 to 13: RIFF index, compressed lists, shapes, fills, outlines, pages and layers"
+description = "Bounded reader for .cdr drawings of versions 5 to 27: RIFF index, compressed lists, ZIP packages, shapes, fills, outlines, pages and layers"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -14,6 +14,7 @@ workspace = true
 synth = []
 
 [dependencies]
+crc32fast = { workspace = true }
 flate2 = { workspace = true }
 
 [dev-dependencies]

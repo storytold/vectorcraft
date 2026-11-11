@@ -4746,9 +4746,8 @@ imageTrace	Outline	轮廓
 @msg	the HEIC or HEIF file can't be read	无法读取 HEIC 或 HEIF 文件
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC 或 HEIF 文件包含无法读取的图像类型
 @msg	HEIC and HEIF images can't be opened in this build	此版本无法打开 HEIC 和 HEIF 图像
-@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 5 to 13	无法打开 CDR {version} 绘图：VectorCraft 读取的版本为 5 到 13
+@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 5 to 27	无法打开 CDR {version} 绘图：VectorCraft 读取的版本为 5 到 27
 @msg	this CDR drawing can't be read ({why})	无法读取此 CDR 绘图 ({why})
-@msg	CDR drawings saved by version 14 or later can't be opened: VectorCraft reads versions 5 to 13	无法打开用 CDR 14 或更高版本保存的绘图：VectorCraft 读取的版本为 5 到 13
 @msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	已略去 VectorCraft 尚不能读取的 CDR 文本、位图、调和、轮廓图、画笔描边和其他对象
 @msg	CDR fountain, pattern, texture and PostScript fills were left out	已略去 CDR 的渐变、图样、底纹和 PostScript 填充
 @msg	colors in CDR color models VectorCraft doesn't read were opened as black	VectorCraft 不能读取的 CDR 颜色模型中的颜色已作为黑色打开

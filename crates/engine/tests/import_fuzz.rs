@@ -7,8 +7,8 @@
 //! (damaged ones, hostile programs) read by the PostScript interpreter, nor the editing data of
 //! Illustrator EPS and `.ai` files (the layers they carry, damaged or hostile), nor Affinity documents
 //! (mutated object streams, archives and indexed PNG previews, hostile image dimensions), nor
-//! `.cdr` drawings (mutated and cut short, plain and compressed, opened and placed), nor the
-//! font files a folder search reads (damaged fonts, collections whose headers give any count of
+//! `.cdr` drawings (mutated and cut short, plain, compressed and packaged, opened and placed),
+//! nor the font files a folder search reads (damaged fonts, collections whose headers give any count of
 //! faces), nor scripts written for the reference app checked without running them (garbage,
 //! generated script text and mutated scripts).
 //!
@@ -286,6 +286,43 @@ proptest! {
         for (at, b) in edits { bytes[at % n] = b; }
         bytes.truncate(cut);
         survive("CDR drawing", || vectorcraft_engine::cmd::fileio::load("x.cdr", &bytes).ok().map(|l| l.doc))?;
+    }
+
+    #[test]
+    fn cdr_mutated_packages_render_and_export(
+        version in prop::sample::select(vec![1400u16, 1500, 1600, 2000, 2700]),
+        cut in prop::option::of(22usize..16384),
+        edits in prop::collection::vec((any::<usize>(), 0usize..8192, any::<u8>()), 0..24),
+    ) {
+        // The members are edited before they are zipped, so that the edits reach the drawing
+        // rather than stop at the CRC-32; the archive may then be cut short.
+        let mut members = if version < 1600 {
+            vec![vectorcraft_cdr::synth::Member { name: "content/riffData.cdr".into(), data: vectorcraft_cdr::synth::sample(version, true), deflate: false }]
+        } else {
+            let mut body = vec![vectorcraft_cdr::synth::chunk(b"vrsn", version.to_le_bytes().to_vec())];
+            body.extend(vectorcraft_cdr::synth::sample_content(version));
+            vectorcraft_cdr::synth::package16_members(version, &body, false, &[])
+        };
+        for (m, at, b) in edits {
+            let k = m % members.len();
+            let data = &mut members[k].data;
+            if !data.is_empty() {
+                let n = data.len();
+                data[at % n] = b;
+            }
+        }
+        let mut bytes = vectorcraft_cdr::synth::zip(&members, b"");
+        if let Some(cut) = cut {
+            bytes.truncate(cut);
+        }
+        survive("CDR package", || vectorcraft_engine::cmd::fileio::load("x.cdr", &bytes).ok().map(|l| l.doc))?;
+        let r = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            s.execute("file.new", &json!({"width":100,"height":100})).unwrap();
+            let p = json!({"name":"x.cdr", "dataBase64":vectorcraft_format::base64_encode(&bytes)});
+            let _ = no_panic(s.execute("file.place", &p));
+        });
+        prop_assert!(r.is_ok(), "CDR package placement panicked: {:?}", r.err());
     }
 
     #[test]

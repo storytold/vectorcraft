@@ -18,6 +18,7 @@ const ELLIPSE: u32 = 2;
 const CURVE: u32 = 3;
 const POLYGON: u32 = 0x14;
 const GUIDELINE: u32 = 0x16;
+const PATH: u32 = 0x25;
 /// Argument types (R6, R20, R21).
 const ARG_OUTLINE: u32 = 10;
 const ARG_FILL: u32 = 20;
@@ -43,6 +44,10 @@ struct Ctx<'a, 'b> {
 pub(crate) fn drawing(ix: &Index, budget: &mut Budget, warn: &mut Vec<Warning>) -> Result<Drawing, Error> {
     let root = ix.root().ok_or(Error::NotCdr)?;
     let version = version(ix, root);
+    // A template whose `vrsn` chunk doesn't name a version read (R28).
+    if version == 0 {
+        return Err(Error::NotCdr);
+    }
     let p = layout::for_version(version).ok_or(Error::Version(version))?;
     let mut found = Found::default();
     collect(ix, root, &mut found);
@@ -83,11 +88,16 @@ pub(crate) fn drawing(ix: &Index, budget: &mut Budget, warn: &mut Vec<Warning>) 
     Ok(Drawing { version, page_size, pages, master, guides, warnings: std::mem::take(cx.warn) })
 }
 
-/// The version: the `vrsn` chunk's when it names one from 5 to 13, else the form type's (R1, R2).
+/// The version: the `vrsn` chunk's when it names one from 5 to 27, else the form type's (R1, R2).
+/// A template's form type names no version, so its `vrsn` chunk decides whatever it names (R28).
+/// Letters count differently from the version 24 update on (R1), so when both name a version
+/// after 27 the `vrsn` chunk's is the one refused.
 fn version(ix: &Index, root: &Chunk) -> u16 {
     let vrsn = ix.children(root).iter().find(|c| &c.id == b"vrsn").and_then(|c| Rd::new(ix.data(c)).u16());
     match vrsn {
-        Some(v) if (500..1400).contains(&v) => v,
+        Some(v) if (500..=layout::NEWEST).contains(&v) => v,
+        Some(v) if ix.form_version == 0 => v,
+        Some(v) if v > layout::NEWEST && ix.form_version > layout::NEWEST => v,
         _ => ix.form_version,
     }
 }
@@ -254,7 +264,7 @@ impl<'a, 'b> Ctx<'a, 'b> {
 
     fn layer(&mut self, list: &Chunk) -> Layer {
         let ix = self.ix;
-        let kind = flags(ix, list).map_or(LayerKind::Drawing, |f| layer_kind(f, true));
+        let kind = flags(ix, list).map_or(LayerKind::Drawing, |f| layer_kind(f, self.p.old_master_flags));
         let name = own_loda(ix, list)
             .and_then(|c| records::loda(ix.data(c), &self.p, &self.budget.limits, self.warn))
             .and_then(|l| l.arg(ARG_NAME).map(|b| records::name(b, &self.p)))
@@ -346,6 +356,7 @@ impl<'a, 'b> Ctx<'a, 'b> {
             RECTANGLE => coords.and_then(|c| geometry::rect(c, &self.p)),
             ELLIPSE => coords.and_then(|c| geometry::ellipse(c, &self.p)),
             CURVE => coords.and_then(|c| geometry::point_list(c, &self.p, self.budget, self.warn)).map(Geometry::Path),
+            PATH if self.p.paths => coords.and_then(|c| geometry::path_record(c, &self.p, self.budget, self.warn)).map(Geometry::Path),
             POLYGON => coords
                 .and_then(|c| geometry::point_list(c, &self.p, self.budget, self.warn))
                 .zip(loda.arg(ARG_POLYGON))
@@ -426,5 +437,11 @@ mod tests {
         assert_eq!(layer_kind([0, 1, 1, 0x98], true), LayerKind::Desktop);
         assert_eq!(layer_kind([0x1a, 0, 1, 0x98], true), LayerKind::Grid);
         assert_eq!(layer_kind([0x12, 0, 1, 0x98], true), LayerKind::Grid);
+        // From version 14 the master page flags its layers by byte 0 alone.
+        assert_eq!(layer_kind([0x0a, 0, 1, 0x98], false), LayerKind::Guides);
+        assert_eq!(layer_kind([0x08, 0, 1, 0x98], false), LayerKind::Desktop);
+        assert_eq!(layer_kind([0x5a, 1, 1, 0x98], false), LayerKind::Grid);
+        assert_eq!(layer_kind([0x02, 1, 1, 0x98], false), LayerKind::Drawing);
+        assert_eq!(layer_kind([0, 1, 1, 0x98], false), LayerKind::Drawing);
     }
 }

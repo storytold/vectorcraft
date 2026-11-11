@@ -1,4 +1,4 @@
-//! `.cdr` drawings of versions 5 to 13 (`.cdr`, and `.cdt` templates): the pages, layers,
+//! `.cdr` drawings of versions 5 to 27 (`.cdr`, and `.cdt` templates): the pages, layers,
 //! guidelines, groups, curves, rectangles, ellipses, arcs and polygons with uniform fills and
 //! outlines that `vectorcraft-cdr` reads, mapped to editable VectorCraft art. Pages become
 //! artboards side by side; layers of the same name on different pages become one layer where the
@@ -65,14 +65,10 @@ pub(super) fn is_cdr(bytes: &[u8]) -> bool {
 }
 
 pub(super) fn import(bytes: &[u8]) -> Result<(Document, Vec<String>)> {
-    // Versions 14 on save a ZIP archive, not a RIFF file.
-    if bytes.starts_with(b"PK\x03\x04") {
-        return Err(err("CDR drawings saved by version 14 or later can't be opened: VectorCraft reads versions 5 to 13"));
-    }
     let d = vectorcraft_cdr::read(bytes, Limits::default()).map_err(|e| match e {
         vectorcraft_cdr::Error::Version(v) => {
             let version = v / 100;
-            err(format!("CDR {version} drawings can't be opened: VectorCraft reads versions 5 to 13"))
+            err(format!("CDR {version} drawings can't be opened: VectorCraft reads versions 5 to 27"))
         }
         why => err(format!("this CDR drawing can't be read ({why})")),
     })?;

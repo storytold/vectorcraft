@@ -132,6 +132,34 @@ impl V {
         if self.short() { (v as u16).to_le_bytes().to_vec() } else { (v as u32).to_le_bytes().to_vec() }
     }
 
+    /// Rectangle coordinates of `w` × `h` points with corners of `radius` points: coordinates
+    /// before version 15 (R15), from 15 f64 sizes and radii as shares of half the shorter side
+    /// (R29).
+    pub fn rect(self, w: f64, h: f64, radius: f64) -> Vec<u8> {
+        if self.0 < 1500 {
+            let n = if self.0 >= 900 { 4 } else { 1 };
+            let mut out = [self.coord(w), self.coord(h)].concat();
+            for _ in 0..n {
+                out.extend(self.coord(radius));
+            }
+            return out;
+        }
+        let units = |pt: f64| pt / 72.0 * 254_000.0;
+        let mut out = Vec::new();
+        for v in [units(w), units(h), 1.0, 1.0] {
+            out.extend(v.to_le_bytes());
+        }
+        out.extend([0; 8]);
+        let share = radius / (w.abs().min(h.abs()) / 2.0);
+        for k in 0..4 {
+            if k > 0 {
+                out.extend([0; 16]);
+            }
+            out.extend(share.to_le_bytes());
+        }
+        out
+    }
+
     /// A length in points as a coordinate.
     pub fn coord(self, pt: f64) -> Vec<u8> {
         if self.short() {
@@ -340,10 +368,8 @@ pub fn mcfg(v: V, w: f64, h: f64) -> Node {
     chunk(b"mcfg", b)
 }
 
-/// A drawing of `version` with one page of each kind of object this reader reads, a text object
-/// it doesn't, a master page with a guideline and a desktop object; compressed (version 7 on)
-/// when `compress`.
-pub fn sample(version: u16, compress: bool) -> Vec<u8> {
+/// The document list and pages of the [`sample`] of `version`.
+pub fn sample_content(version: u16) -> Vec<Node> {
     let v = V(version);
     let red = color(5, [0, 0, 255, 0]);
     let black = color(2, [0, 0, 0, 100]);
@@ -363,11 +389,7 @@ pub fn sample(version: u16, compress: bool) -> Vec<u8> {
     );
     let style = |fill: u32, outline: u32| vec![(20, fill.to_le_bytes().to_vec()), (10, outline.to_le_bytes().to_vec())];
     let mut rect_args = style(1, 2);
-    let mut rc = [v.coord(100.0), v.coord(50.0), v.coord(5.0)].concat();
-    if version >= 900 {
-        rc.extend([v.coord(5.0), v.coord(5.0), v.coord(5.0)].concat());
-    }
-    rect_args.push((30, rc));
+    rect_args.push((30, v.rect(100.0, 50.0, 5.0)));
     let mut ellipse_args = style(1, 3);
     ellipse_args.push((30, [v.coord(40.0), v.coord(-40.0), v.angle(0.0), v.angle(0.0), v.word(0)].concat()));
     let mut curve_args = style(0, 2);
@@ -403,26 +425,188 @@ pub fn sample(version: u16, compress: bool) -> Vec<u8> {
     guide.extend((90_000_000i32).to_le_bytes());
     guide.extend([v.coord(36.0), v.coord(0.0), v.coord(36.0), v.coord(100.0), v.coord(36.0), v.coord(0.0)].concat());
     let guides = layer(v, [0x0a, 0, 1, 0x98], "Guides", vec![object(v, 0x16, &[(16000, guide)], None)]);
-    let desktop = layer(
-        v,
-        [0x08, 0, 1, 0x98],
-        "Desktop",
-        vec![object(
-            v,
-            1,
-            &[(30, [v.coord(10.0), v.coord(10.0), v.coord(0.0), v.coord(0.0), v.coord(0.0), v.coord(0.0)].concat())],
-            Some([1.0, 0.0, 0.0, 1.0, 400.0, 0.0]),
-        )],
-    );
+    let desktop =
+        layer(v, [0x08, 0, 1, 0x98], "Desktop", vec![object(v, 1, &[(30, v.rect(10.0, 10.0, 0.0))], Some([1.0, 0.0, 0.0, 1.0, 400.0, 0.0]))]);
     let pages = vec![page(true, vec![guides, desktop]), page(false, vec![art])];
+    std::iter::once(doc).chain(pages).collect()
+}
+
+/// A drawing of `version` with one page of each kind of object this reader reads, a text object
+/// it doesn't, a master page with a guideline and a desktop object; compressed (version 7 on)
+/// when `compress`.
+pub fn sample(version: u16, compress: bool) -> Vec<u8> {
+    let content = sample_content(version);
     let mut body = vec![chunk(b"vrsn", version.to_le_bytes().to_vec())];
-    let content: Vec<Node> = std::iter::once(doc).chain(pages).collect();
     if compress {
         body.push(cmpr(&content));
     } else {
         body.extend(content);
     }
     riff(version, &body)
+}
+
+/// The sample of `version` as the program of that version saves it: a RIFF file before 14, then
+/// a package (R25, R26); `compress` compresses the RIFF stream before 16 and deflates the package
+/// members.
+pub fn sample_file(version: u16, compress: bool) -> Vec<u8> {
+    match version {
+        ..1400 => sample(version, compress),
+        1400..1600 => package14(sample(version, compress), compress),
+        _ => {
+            // The full version chunk comes first from 16; the reader doesn't use it.
+            let fver: Vec<u8> = [u32::from(version), 1, 0, u32::from(version / 100)].iter().flat_map(|v| v.to_le_bytes()).collect();
+            let mut body = vec![chunk(b"fver", fver), chunk(b"vrsn", version.to_le_bytes().to_vec())];
+            body.extend(sample_content(version));
+            package16(version, &body, compress, &[])
+        }
+    }
+}
+
+/// One member of a synthetic ZIP archive.
+#[derive(Clone, Debug)]
+pub struct Member {
+    pub name: String,
+    pub data: Vec<u8>,
+    pub deflate: bool,
+}
+
+fn deflate(data: &[u8]) -> Vec<u8> {
+    let mut e = flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::default());
+    let _ = e.write_all(data);
+    e.finish().unwrap_or_default()
+}
+
+/// A ZIP archive of `members`, stored or deflated, with `comment` after the end record (R24).
+pub fn zip(members: &[Member], comment: &[u8]) -> Vec<u8> {
+    let (mut out, mut dir) = (Vec::new(), Vec::new());
+    for m in members {
+        let packed = if m.deflate { deflate(&m.data) } else { m.data.clone() };
+        let method: u16 = if m.deflate { 8 } else { 0 };
+        // Version needed, flags, method, time, date, CRC-32, packed and full sizes, name length.
+        let mut common = Vec::new();
+        common.extend(20u16.to_le_bytes());
+        common.extend(0u16.to_le_bytes());
+        common.extend(method.to_le_bytes());
+        common.extend([0; 4]);
+        common.extend(crc32fast::hash(&m.data).to_le_bytes());
+        common.extend((packed.len() as u32).to_le_bytes());
+        common.extend((m.data.len() as u32).to_le_bytes());
+        common.extend((m.name.len() as u16).to_le_bytes());
+        let at = out.len() as u32;
+        out.extend(0x0403_4b50u32.to_le_bytes());
+        out.extend(&common);
+        out.extend(0u16.to_le_bytes());
+        out.extend(m.name.as_bytes());
+        out.extend(&packed);
+        dir.extend(0x0201_4b50u32.to_le_bytes());
+        dir.extend(20u16.to_le_bytes());
+        dir.extend(&common);
+        // Extra and comment lengths, disk, internal and external attributes, header offset.
+        dir.extend([0; 12]);
+        dir.extend(at.to_le_bytes());
+        dir.extend(m.name.as_bytes());
+    }
+    let dir_at = out.len() as u32;
+    let n = members.len() as u16;
+    out.extend(&dir);
+    out.extend(0x0605_4b50u32.to_le_bytes());
+    out.extend([0; 4]);
+    out.extend(n.to_le_bytes());
+    out.extend(n.to_le_bytes());
+    out.extend((dir.len() as u32).to_le_bytes());
+    out.extend(dir_at.to_le_bytes());
+    out.extend((comment.len() as u16).to_le_bytes());
+    out.extend(comment);
+    out
+}
+
+/// A version 14 or 15 package: the RIFF file `riff` as `content/riffData.cdr` (R25).
+pub fn package14(riff: Vec<u8>, deflate: bool) -> Vec<u8> {
+    zip(&[Member { name: "content/riffData.cdr".into(), data: riff, deflate }], b"")
+}
+
+/// A version 16+ package of a drawing of `version` holding `children` (R26, R27): the chunk tree
+/// in `content/root.dat`, each chunk body of more than 8 bytes moved to a data stream (the
+/// document's and other chunks' to `data1.dat`, each page's to `page<n>.dat`, each other list's
+/// to a stream named after its form type) behind a redirect record, and shorter bodies kept in
+/// theirs. Lists stay in the tree. `extra` members are added to the archive.
+pub fn package16(version: u16, children: &[Node], deflate: bool, extra: &[Member]) -> Vec<u8> {
+    package16_with(version, children, deflate, extra, &[])
+}
+
+/// [`package16`], moving the lists whose form types are in `moved_lists` whole into their stream.
+pub fn package16_with(version: u16, children: &[Node], deflate: bool, extra: &[Member], moved_lists: &[[u8; 4]]) -> Vec<u8> {
+    let mut members = package16_members(version, children, deflate, moved_lists);
+    members.extend(extra.iter().cloned());
+    zip(&members, b"")
+}
+
+/// The members of a [`package16_with`] archive.
+pub fn package16_members(version: u16, children: &[Node], deflate: bool, moved_lists: &[[u8; 4]]) -> Vec<Member> {
+    let mut streams: Vec<(String, Vec<u8>)> = vec![("data1.dat".into(), Vec::new())];
+    let mut body = form(version).to_vec();
+    for c in children {
+        let s = match c {
+            Node::List(f, _) if *f != *b"doc " => {
+                let name = if *f == *b"page" { format!("page{}", streams.len()) } else { String::from_utf8_lossy(f).trim().to_string() };
+                streams.push((format!("{name}.dat"), Vec::new()));
+                streams.len() - 1
+            }
+            _ => 0,
+        };
+        body.extend(redirected(c, s, &mut streams, moved_lists));
+    }
+    let mut root = b"RIFF".to_vec();
+    root.extend((body.len() as u32).to_le_bytes());
+    root.extend(body);
+    let list: Vec<String> = streams.iter().map(|(n, _)| n.clone()).collect();
+    let mut members = vec![
+        Member { name: "content/root.dat".into(), data: root, deflate },
+        Member { name: "content/dataFileList.dat".into(), data: list.join("\n").into_bytes(), deflate },
+    ];
+    members.extend(streams.into_iter().map(|(n, data)| Member { name: format!("content/data/{n}"), data, deflate }));
+    members
+}
+
+/// `n` laid out for `root.dat`, its bodies moved into stream `s`.
+fn redirected(n: &Node, s: usize, streams: &mut [(String, Vec<u8>)], moved_lists: &[[u8; 4]]) -> Vec<u8> {
+    let mut out = Vec::new();
+    match n {
+        Node::List(f, kids) if !moved_lists.contains(f) => {
+            let mut body = f.to_vec();
+            body.extend(kids.iter().flat_map(|k| redirected(k, s, streams, moved_lists)));
+            put(&mut out, b"LIST", body.len() as u32, &body, body.len());
+        }
+        _ => {
+            // A moved list's children are laid out in the stream by the same rule.
+            let (id, data) = match n {
+                Node::Chunk(id, data) => (*id, data.clone()),
+                Node::List(f, kids) => {
+                    let mut body = f.to_vec();
+                    for k in kids {
+                        body.extend(redirected(k, s, streams, moved_lists));
+                    }
+                    (*b"LIST", body)
+                }
+            };
+            let mut rec = Vec::new();
+            if data.len() <= 8 && id != *b"LIST" {
+                rec.extend(u32::MAX.to_le_bytes());
+                rec.extend((data.len() as u32).to_le_bytes());
+                rec.extend(&data);
+                rec.resize(16, 0);
+            } else {
+                let Some((_, stream)) = streams.get_mut(s) else { return out };
+                rec.extend((s as u32).to_le_bytes());
+                rec.extend((data.len() as u32).to_le_bytes());
+                rec.extend((stream.len() as u32).to_le_bytes());
+                rec.extend(0u32.to_le_bytes());
+                stream.extend(&data);
+            }
+            put(&mut out, &id, 16, &rec, 16);
+        }
+    }
+    out
 }
 
 /// The radius the base curve of a polygon lies on, 1000 mm, in points (R18).

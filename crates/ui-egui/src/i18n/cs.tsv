@@ -5240,9 +5240,8 @@ imageTrace	Outline	Obrys
 @msg	the HEIC or HEIF file can't be read	soubor HEIC nebo HEIF nelze přečíst
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	soubor HEIC nebo HEIF obsahuje druh obrázku, který nelze přečíst
 @msg	HEIC and HEIF images can't be opened in this build	obrázky HEIC a HEIF nelze v tomto sestavení otevřít
-@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 5 to 13	výkresy CDR {version} nelze otevřít: VectorCraft čte verze 5 až 13
+@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 5 to 27	výkresy CDR {version} nelze otevřít: VectorCraft čte verze 5 až 27
 @msg	this CDR drawing can't be read ({why})	tento výkres CDR nelze přečíst ({why})
-@msg	CDR drawings saved by version 14 or later can't be opened: VectorCraft reads versions 5 to 13	výkresy uložené v CDR 14 nebo novějším nelze otevřít: VectorCraft čte verze 5 až 13
 @msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	texty, bitmapy, prolnutí, kontury, tahy štětcem a další objekty CDR, které VectorCraft zatím nečte, byly vynechány
 @msg	CDR fountain, pattern, texture and PostScript fills were left out	přechodové, vzorkové, texturové a PostScriptové výplně CDR byly vynechány
 @msg	colors in CDR color models VectorCraft doesn't read were opened as black	barvy v barevných modelech CDR, které VectorCraft nečte, byly otevřeny jako černé

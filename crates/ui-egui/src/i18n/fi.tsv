@@ -5142,9 +5142,8 @@ imageTrace	Outline	Ääriviiva
 @msg	the HEIC or HEIF file can't be read	tätä HEIC- tai HEIF-tiedostoa ei voi lukea
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	tässä HEIC- tai HEIF-tiedostossa on kuvatyyppi, jota ei voi lukea
 @msg	HEIC and HEIF images can't be opened in this build	HEIC- ja HEIF-kuvia ei voi avata tässä versiossa
-@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 5 to 13	CDR {version} -piirroksia ei voi avata: VectorCraft lukee versioita 5–13
+@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 5 to 27	CDR {version} -piirroksia ei voi avata: VectorCraft lukee versioita 5–27
 @msg	this CDR drawing can't be read ({why})	tätä CDR-piirrosta ei voi lukea ({why})
-@msg	CDR drawings saved by version 14 or later can't be opened: VectorCraft reads versions 5 to 13	CDR 14:llä tai uudemmalla tallennettuja piirroksia ei voi avata: VectorCraft lukee versioita 5–13
 @msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	CDR-tekstit, bittikartat, sulautukset, kontuurit, siveltimenvedot ja muut objektit, joita VectorCraft ei vielä lue, jätettiin pois
 @msg	CDR fountain, pattern, texture and PostScript fills were left out	CDR-liukuväri-, kuvio-, pintakuvio- ja PostScript-täytöt jätettiin pois
 @msg	colors in CDR color models VectorCraft doesn't read were opened as black	värit CDR-värimalleissa, joita VectorCraft ei lue, avattiin mustina

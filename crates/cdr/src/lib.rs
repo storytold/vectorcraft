@@ -1,6 +1,7 @@
-//! Reader for `.cdr` drawings of versions 5 to 13 (`.cdr`, and `.cdt` templates): the RIFF
-//! chunk tree with its compressed lists, then pages, layers, guidelines, groups, curves,
-//! rectangles, ellipses, arcs and polygons with uniform fills and outlines.
+//! Reader for `.cdr` drawings of versions 5 to 27 (`.cdr`, and `.cdt` templates): the RIFF
+//! chunk tree with its compressed lists, the ZIP packages of versions 14 on with their data
+//! streams, then pages, layers, guidelines, groups, curves, rectangles, ellipses, arcs and polygons
+//! with uniform fills and outlines.
 //!
 //! Every record layout the reader relies on is listed in `PROVENANCE.md` with its public source
 //! and status; code cites the row ids (R1 ...). Reading is bounded by [`Limits`], never recurses and does not
@@ -16,14 +17,20 @@ mod geometry;
 mod layout;
 mod limits;
 pub mod model;
+mod package;
 mod records;
 mod riff;
 #[cfg(any(test, feature = "synth"))]
 pub mod synth;
+mod zip;
 
 pub use limits::Limits;
 pub use model::{Drawing, Warning};
-pub use riff::is_cdr_riff as is_cdr;
+
+/// Does `bytes` look like a `.cdr` drawing: a RIFF file, or a ZIP package holding one?
+pub fn is_cdr(bytes: &[u8]) -> bool {
+    riff::is_cdr_riff(bytes) || package::is_package(bytes)
+}
 
 /// Why a file can't be read.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -36,6 +43,8 @@ pub enum Error {
     Damaged(&'static str),
     /// Past one of the [`Limits`].
     Limit(&'static str),
+    /// A package this reader doesn't open (encrypted, ZIP64, split across files).
+    Unsupported(&'static str),
 }
 
 impl fmt::Display for Error {
@@ -45,6 +54,7 @@ impl fmt::Display for Error {
             Error::Version(v) => write!(f, "version {} drawings are not read", v / 100),
             Error::Damaged(what) => write!(f, "damaged {what}"),
             Error::Limit(what) => write!(f, "past the {what} limit"),
+            Error::Unsupported(what) => write!(f, "{what} are not read"),
         }
     }
 }
@@ -53,8 +63,15 @@ impl std::error::Error for Error {}
 
 /// Read a drawing within `limits`.
 pub fn read(bytes: &[u8], limits: Limits) -> Result<Drawing, Error> {
+    if bytes.len() > limits.input {
+        return Err(Error::Limit("input size"));
+    }
     let mut budget = limits::Budget::new(limits);
     let mut warnings = Vec::new();
-    let ix = riff::Index::build(bytes, &mut budget, &mut warnings)?;
-    build::drawing(&ix, &mut budget, &mut warnings)
+    // Versions 14 on save a ZIP package around the RIFF stream (R24, R25, R26).
+    let (stream, streams) = if zip::is_zip(bytes) { package::open(bytes, &mut budget)? } else { (std::borrow::Cow::Borrowed(bytes), None) };
+    let ix = riff::Index::build(&stream, streams, &mut budget, &mut warnings)?;
+    let mut drawing = build::drawing(&ix, &mut budget, &mut warnings)?;
+    ix.stream_warnings(&mut drawing.warnings);
+    Ok(drawing)
 }

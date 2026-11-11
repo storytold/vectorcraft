@@ -4874,9 +4874,8 @@ axis	Both	Båda
 @msg	the HEIC or HEIF file can't be read	HEIC- eller HEIF-filen kan inte läsas
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC- eller HEIF-filen innehåller en typ av bild som inte kan läsas
 @msg	HEIC and HEIF images can't be opened in this build	HEIC- och HEIF-bilder kan inte öppnas i den här versionen
-@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 5 to 13	teckningar från CDR {version} kan inte öppnas: VectorCraft läser version 5 till 13
+@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 5 to 27	teckningar från CDR {version} kan inte öppnas: VectorCraft läser version 5 till 27
 @msg	this CDR drawing can't be read ({why})	den här CDR-teckningen kan inte läsas ({why})
-@msg	CDR drawings saved by version 14 or later can't be opened: VectorCraft reads versions 5 to 13	teckningar som sparats med CDR 14 eller senare kan inte öppnas: VectorCraft läser version 5 till 13
 @msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	text, bitmappar, övertoningar, konturer, penseldrag och andra CDR-objekt som VectorCraft ännu inte läser utelämnades
 @msg	CDR fountain, pattern, texture and PostScript fills were left out	CDR-fyllningar med toning, mönster, struktur och PostScript utelämnades
 @msg	colors in CDR color models VectorCraft doesn't read were opened as black	färger i CDR-färgmodeller som VectorCraft inte läser öppnades som svarta

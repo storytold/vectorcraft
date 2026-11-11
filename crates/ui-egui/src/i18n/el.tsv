@@ -4919,9 +4919,8 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	the HEIC or HEIF file can't be read	δεν είναι δυνατή η ανάγνωση του αρχείου HEIC ή HEIF
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	το αρχείο HEIC ή HEIF περιέχει είδος εικόνας που δεν είναι δυνατό να διαβαστεί
 @msg	HEIC and HEIF images can't be opened in this build	οι εικόνες HEIC και HEIF δεν μπορούν να ανοίξουν σε αυτή την έκδοση
-@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 5 to 13	δεν είναι δυνατό το άνοιγμα σχεδίων του CDR {version}: το VectorCraft διαβάζει τις εκδόσεις 5 έως 13
+@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 5 to 27	δεν είναι δυνατό το άνοιγμα σχεδίων του CDR {version}: το VectorCraft διαβάζει τις εκδόσεις 5 έως 27
 @msg	this CDR drawing can't be read ({why})	δεν είναι δυνατή η ανάγνωση αυτού του σχεδίου CDR ({why})
-@msg	CDR drawings saved by version 14 or later can't be opened: VectorCraft reads versions 5 to 13	δεν είναι δυνατό το άνοιγμα σχεδίων που αποθηκεύτηκαν με το CDR 14 ή νεότερο: το VectorCraft διαβάζει τις εκδόσεις 5 έως 13
 @msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	παραλείφθηκαν κείμενα, bitmap, αναμείξεις, ομόκεντρα περιγράμματα, πινελιές και άλλα αντικείμενα του CDR που το VectorCraft δεν διαβάζει ακόμη
 @msg	CDR fountain, pattern, texture and PostScript fills were left out	παραλείφθηκαν τα διαβαθμισμένα γεμίσματα και τα γεμίσματα μοτίβου, υφής και PostScript του CDR
 @msg	colors in CDR color models VectorCraft doesn't read were opened as black	τα χρώματα σε χρωματικά μοντέλα του CDR που δεν διαβάζει το VectorCraft ανοίχτηκαν ως μαύρα

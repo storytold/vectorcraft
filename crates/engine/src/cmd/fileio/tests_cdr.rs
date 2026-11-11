@@ -24,9 +24,10 @@ fn paths(doc: &vectorcraft_doc::Document) -> Vec<Node> {
 
 #[test]
 fn every_version_opens_as_editable_art() {
-    for version in [500, 600, 700, 800, 900, 1000, 1100, 1200, 1300] {
+    // Versions 14 on are ZIP packages.
+    for version in [500, 600, 700, 800, 900, 1000, 1100, 1200, 1300, 1400, 1500, 1600, 2000, 2700] {
         let mut s = Session::new();
-        let r = open_bytes(&mut s, "drawing.cdr", &synth::sample(version, version >= 700), None).unwrap();
+        let r = open_bytes(&mut s, "drawing.cdr", &synth::sample_file(version, version >= 700), None).unwrap();
         assert_eq!(r["format"], "cdr", "{version}");
         let w: Vec<&str> = r["warnings"].as_array().unwrap().iter().filter_map(|w| w.as_str()).collect();
         assert!(w.iter().any(|w| w.contains("text, bitmaps")), "{version}: {w:?}");
@@ -126,12 +127,27 @@ fn detection_by_content_place_and_template() {
     assert_eq!(open_bytes(&mut s, "renamed.bin", &bytes, None).unwrap()["format"], "cdr");
     assert_eq!(detect("drawing.cdt", &bytes).map(|f| f.id), Some("cdt"));
     assert_eq!(detect("drawing.png", &bytes).map(|f| f.id), Some("cdr"));
+    // So is a package of version 14 or later, and other ZIP archives are not taken for one.
+    for version in [1400, 2700] {
+        let package = synth::sample_file(version, true);
+        assert_eq!(open_bytes(&mut s, "renamed.zip", &package, None).unwrap()["format"], "cdr", "{version}");
+        assert_eq!(detect("drawing.cdt", &package).map(|f| f.id), Some("cdt"));
+    }
+    let other = synth::zip(&[synth::Member { name: "content/other.dat".into(), data: vec![1, 2, 3], deflate: false }], b"");
+    assert_eq!(detect("archive.zip", &other).map(|f| f.id), None);
     let r = open_bytes(&mut s, "letter.cdt", &bytes, Some("/t/letter.cdt".into())).unwrap();
     assert_eq!(r["format"], "cdt");
     assert!(s.doc().unwrap().path.is_none(), "a template opens untitled");
     s.execute("file.new", &json!({"width":100,"height":100})).unwrap();
     s.execute("file.place", &json!({"name":"art.cdr", "dataBase64":vectorcraft_format::base64_encode(&bytes)})).unwrap();
     assert!(s.doc().unwrap().doc.layers.iter().any(|l| !l.children().unwrap().is_empty()));
+    // Packages place too.
+    for version in [1400, 2700] {
+        s.execute("file.new", &json!({"width":100,"height":100})).unwrap();
+        let package = synth::sample_file(version, true);
+        s.execute("file.place", &json!({"name":"art.cdr", "dataBase64":vectorcraft_format::base64_encode(&package)})).unwrap();
+        assert!(s.doc().unwrap().doc.layers.iter().any(|l| !l.children().unwrap().is_empty()), "{version}");
+    }
     for ext in ["cdr", "cdt"] {
         let f = format(ext).unwrap();
         assert!(f.read && !f.write);
@@ -283,9 +299,17 @@ fn other_versions_and_damaged_drawings_say_why() {
     let mut s = Session::new();
     let e = open_bytes(&mut s, "old.cdr", &synth::riff(400, &[]), None).unwrap_err().to_string();
     assert!(e.contains("CDR 4 drawings can't be opened"), "{e}");
-    // Version 14 on: a ZIP archive.
-    let e = open_bytes(&mut s, "new.cdr", b"PK\x03\x04\x14\0\0\0\0\0content/riffData.cdr", None).unwrap_err().to_string();
-    assert!(e.contains("version 14 or later can't be opened"), "{e}");
+    let e = open_bytes(&mut s, "new.cdr", &synth::riff(2800, &[]), None).unwrap_err().to_string();
+    assert!(e.contains("CDR 28 drawings can't be opened: VectorCraft reads versions 5 to 27"), "{e}");
+    // A package cut short, and one whose drawing is encrypted (flag bit 0 of its directory entry).
+    let package = synth::sample_file(1400, false);
+    let e = open_bytes(&mut s, "cut.cdr", &package[..package.len() / 2], None).unwrap_err().to_string();
+    assert!(e.contains("can't be read (damaged package directory)"), "{e}");
+    let mut encrypted = package.clone();
+    let dir = package.windows(4).position(|w| w == b"PK\x01\x02").unwrap();
+    encrypted[dir + 8] |= 1;
+    let e = open_bytes(&mut s, "locked.cdr", &encrypted, None).unwrap_err().to_string();
+    assert!(e.contains("can't be read (encrypted packages are not read)"), "{e}");
     let mut big = synth::riff(1100, &[]);
     big[4..8].copy_from_slice(&u32::MAX.to_le_bytes());
     // A declared size past the end keeps what the file holds.

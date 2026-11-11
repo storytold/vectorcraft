@@ -7603,9 +7603,8 @@ antiAlias	Sharp	शार्प
 @msg	the job would print more than {_1} pages	नौकरी {_1} पृष्ठों से अधिक प्रिंट करेगी
 @msg	the job would print more than {MAX_PAGES} pages	इस जॉब में {MAX_PAGES} से अधिक पेज प्रिंट होंगे
 @msg	the JPEG 2000 file can't be read	JPEG 2000 फ़ाइल पढ़ा नहीं जा सकता
-@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 5 to 13	CDR {version} की ड्रॉइंग नहीं खोली जा सकतीं: VectorCraft संस्करण 5 से 13 तक पढ़ता है
+@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 5 to 27	CDR {version} की ड्रॉइंग नहीं खोली जा सकतीं: VectorCraft संस्करण 5 से 27 तक पढ़ता है
 @msg	this CDR drawing can't be read ({why})	इस CDR ड्रॉइंग को पढ़ा नहीं जा सकता ({why})
-@msg	CDR drawings saved by version 14 or later can't be opened: VectorCraft reads versions 5 to 13	CDR 14 या बाद के संस्करण में सहेजी गई ड्रॉइंग नहीं खोली जा सकतीं: VectorCraft संस्करण 5 से 13 तक पढ़ता है
 @msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	CDR के टेक्स्ट, बिटमैप, ब्लेंड, कंटूर, ब्रश स्ट्रोक और अन्य ऑब्जेक्ट, जिन्हें VectorCraft अभी नहीं पढ़ता, छोड़ दिए गए
 @msg	CDR fountain, pattern, texture and PostScript fills were left out	CDR के फ़ाउंटेन, पैटर्न, टेक्सचर और PostScript फ़िल छोड़ दिए गए
 @msg	colors in CDR color models VectorCraft doesn't read were opened as black	जिन CDR रंग मॉडलों को VectorCraft नहीं पढ़ता, उनके रंग काले के रूप में खोले गए

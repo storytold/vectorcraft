@@ -7,8 +7,12 @@ use crate::Error;
 pub struct Limits {
     /// Bytes of input.
     pub input: usize,
-    /// Bytes inflated from compressed lists, all lists of one file together.
+    /// Bytes inflated from compressed lists and package members, all of one file together.
     pub inflated: usize,
+    /// Bytes of one package member.
+    pub member: usize,
+    /// Members of a package.
+    pub members: usize,
     /// Nested lists below the file's own. Deeper content is left out with a warning.
     pub depth: usize,
     /// Chunks in the index, nested ones included.
@@ -33,6 +37,8 @@ impl Default for Limits {
         Limits {
             input: 512 * MIB,
             inflated: 1024 * MIB,
+            member: 512 * MIB,
+            members: 4096,
             depth: 256,
             chunks: 2_000_000,
             objects: 1_000_000,
@@ -47,6 +53,8 @@ impl Default for Limits {
         Limits {
             input: 256 << 20,
             inflated: 512 << 20,
+            member: 256 << 20,
+            members: 4096,
             depth: 256,
             chunks: 2_000_000,
             objects: 1_000_000,

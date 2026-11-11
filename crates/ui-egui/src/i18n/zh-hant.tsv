@@ -2555,9 +2555,8 @@ file-filter	Templates	範本
 @msg	the HEIC or HEIF file can't be read	無法讀取 HEIC 或 HEIF 檔案
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC 或 HEIF 檔案包含無法讀取的影像類型
 @msg	HEIC and HEIF images can't be opened in this build	此版本無法開啟 HEIC 和 HEIF 影像
-@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 5 to 13	無法開啟 CDR {version} 繪圖：VectorCraft 讀取的版本為 5 到 13
+@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 5 to 27	無法開啟 CDR {version} 繪圖：VectorCraft 讀取的版本為 5 到 27
 @msg	this CDR drawing can't be read ({why})	無法讀取此 CDR 繪圖 ({why})
-@msg	CDR drawings saved by version 14 or later can't be opened: VectorCraft reads versions 5 to 13	無法開啟以 CDR 14 或更新版本儲存的繪圖：VectorCraft 讀取的版本為 5 到 13
 @msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	已略過 VectorCraft 尚無法讀取的 CDR 文字、點陣圖、漸變、輪廓圖、筆刷筆觸和其他物件
 @msg	CDR fountain, pattern, texture and PostScript fills were left out	已略過 CDR 的漸層、圖樣、材質和 PostScript 填色
 @msg	colors in CDR color models VectorCraft doesn't read were opened as black	VectorCraft 無法讀取的 CDR 色彩模式中的顏色已以黑色開啟

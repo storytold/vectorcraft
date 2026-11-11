@@ -1,11 +1,14 @@
 //! The chunk index: one flat table of every chunk, a list's children contiguous, built without
-//! recursion. Payloads are not copied: an entry names a range of the input or of the bytes
-//! inflated from `LIST cmpr` (layouts R1 to R4 in `PROVENANCE.md`).
+//! recursion. Payloads are not copied: an entry names a range of the RIFF stream, of the bytes
+//! inflated from `LIST cmpr`, or of a package's data stream (layouts R1 to R4, R27).
 
+use std::cell::Cell;
+use std::collections::BTreeMap;
 use std::io::Read as _;
 
 use crate::bytes::{Rd, u32_at};
 use crate::limits::Budget;
+use crate::package::Streams;
 use crate::{Error, Warning};
 
 pub(crate) const LIST: [u8; 4] = *b"LIST";
@@ -13,14 +16,18 @@ const CMPR: [u8; 4] = *b"cmpr";
 const CPNG: [u8; 4] = *b"CPng";
 /// What follows `CPng` before the zlib stream (R3).
 const CPNG_HEAD: [u8; 4] = [1, 0, 4, 0];
+/// The size of a redirect record, and the stream number of one that holds its body (R27).
+const REDIRECT: usize = 16;
+const INLINE: u32 = u32::MAX;
 
-/// One chunk: 24 bytes. `start` and `len` give the payload (after a list's form type) in the
-/// address space of the input followed by the inflated bytes.
+/// One chunk: 28 bytes. `start` and `len` give the payload (after a list's form type) in its
+/// source: 0 is the RIFF stream followed by the inflated bytes, `s + 1` is data stream `s`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct Chunk {
     pub(crate) id: [u8; 4],
     /// A list's form type; zeros for other chunks.
     pub(crate) form: [u8; 4],
+    src: u32,
     start: u32,
     len: u32,
     first: u32,
@@ -38,24 +45,50 @@ pub(crate) struct Index<'a> {
     input: &'a [u8],
     inflated: Vec<u8>,
     chunks: Vec<Chunk>,
-    /// The version the form type names: hundreds, as `vrsn` stores it (0 when unknown).
+    /// The version the form type names: hundreds, as `vrsn` stores it (0 when the `vrsn` chunk
+    /// decides).
     pub(crate) form_version: u16,
+    /// A version 16+ package's data streams; chunks of 16 bytes are redirect records then.
+    streams: Option<Streams<'a>>,
+    /// Bytes that inflating may still produce.
+    left: Cell<usize>,
+    /// The bytes redirected lists have taken: (package member, start) to end.
+    lists: Cell<BTreeMap<(usize, usize), usize>>,
+    /// The bytes other redirected chunks have taken, the same way.
+    leaves: Cell<BTreeMap<(usize, usize), usize>>,
+    /// Bytes that redirects to bytes another chunk already took may still read.
+    shared_left: Cell<usize>,
 }
 
 /// A list still to be split into its children.
 struct Pending {
     entry: usize,
+    src: u32,
     /// Its children's bytes.
     start: usize,
     end: usize,
-    /// The size pool of a compressed list's stream (`start..end` in the address space).
+    /// The size pool of a compressed list's stream (`start..end` in source 0).
     pool: Option<(usize, usize)>,
     depth: usize,
 }
 
+/// What reading one chunk header gives.
+enum Read {
+    Chunk(Chunk),
+    /// A redirect record whose body can't be found: the chunk is left out, its list read on.
+    Lost,
+    /// A redirect record into a data stream past a limit: the chunk is left out without the
+    /// damage warning.
+    PastLimit,
+    /// A redirect record to bytes another chunk took, past the shared-bytes limit: the chunk is
+    /// left out with the limit warning.
+    SharedPastLimit,
+}
+
 /// The version the RIFF form type names (R1): `CDR5`..`CDR9`, `CDRA` (10) to `CDRH` (17) with `I`
 /// unused, then `J` (18) on; `CDR ` is version 3. Some files use a lower-case `cdr`, which names
-/// the same versions except that `cdr8` is the 8.01 variant.
+/// the same versions except that `cdr8` is the 8.01 variant. Templates of version 21 have the form
+/// type `CDTQ`; for `CDT` the `vrsn` chunk names the version, so this gives 0 (R28).
 pub(crate) fn form_version(form: [u8; 4]) -> Option<u16> {
     let [a, b, c, v] = form;
     match (&[a, b, c], v) {
@@ -64,17 +97,18 @@ pub(crate) fn form_version(form: [u8; 4]) -> Option<u16> {
         (b"CDR" | b"cdr", b'1'..=b'9') => Some(100 * u16::from(v - b'0')),
         (b"CDR" | b"cdr", b'A'..=b'H') => Some(100 * u16::from(v - b'A' + 10)),
         (b"CDR" | b"cdr", b'J'..=b'W') => Some(100 * u16::from(v - b'J' + 18)),
+        (b"CDT", b'A'..=b'Z') => Some(0),
         _ => None,
     }
 }
 
 /// Does `bytes` start like a RIFF `.cdr` drawing (not the `CDRX` exchange variant)?
-pub fn is_cdr_riff(bytes: &[u8]) -> bool {
+pub(crate) fn is_cdr_riff(bytes: &[u8]) -> bool {
     bytes.get(..4) == Some(b"RIFF") && bytes.get(8..12).and_then(|f| f.try_into().ok()).and_then(form_version).is_some()
 }
 
 impl<'a> Index<'a> {
-    pub(crate) fn build(input: &'a [u8], budget: &mut Budget, warn: &mut Vec<Warning>) -> Result<Self, Error> {
+    pub(crate) fn build(input: &'a [u8], streams: Option<Streams<'a>>, budget: &mut Budget, warn: &mut Vec<Warning>) -> Result<Self, Error> {
         if input.len() > budget.limits.input {
             return Err(Error::Limit("input size"));
         }
@@ -93,17 +127,33 @@ impl<'a> Index<'a> {
                 input.len()
             }
         };
-        let mut ix = Index { input, inflated: Vec::new(), chunks: Vec::new(), form_version: version };
-        ix.chunks.push(Chunk { id: *b"RIFF", form, start: 12, len: 0, first: 0, count: 0 });
-        let mut queue = vec![Pending { entry: 0, start: 12, end, pool: None, depth: 0 }];
+        let left = Cell::new(budget.inflate_left());
+        let mut ix = Index {
+            input,
+            inflated: Vec::new(),
+            chunks: Vec::new(),
+            form_version: version,
+            streams,
+            left,
+            lists: Cell::default(),
+            leaves: Cell::default(),
+            shared_left: Cell::new(budget.limits.member),
+        };
+        ix.chunks.push(Chunk { id: *b"RIFF", form, src: 0, start: 12, len: 0, first: 0, count: 0 });
+        let mut queue = vec![Pending { entry: 0, src: 0, start: 12, end, pool: None, depth: 0 }];
         while let Some(p) = queue.pop() {
             ix.split(p, &mut queue, budget, warn)?;
         }
         Ok(ix)
     }
 
-    /// The bytes of the address range `start..end`, or `None` when it crosses the input's end.
-    fn span(&self, start: usize, end: usize) -> Option<&[u8]> {
+    /// The bytes `start..end` of source `src`, or `None` when the range crosses its end. A data
+    /// stream is read on first use.
+    fn span(&self, src: u32, start: usize, end: usize) -> Option<&[u8]> {
+        if src > 0 {
+            let s = self.streams.as_ref()?;
+            return s.get(src as usize - 1, &self.left)?.get(start..end);
+        }
         let n = self.input.len();
         if end <= n {
             self.input.get(start..end)
@@ -116,7 +166,23 @@ impl<'a> Index<'a> {
 
     pub(crate) fn data(&self, c: &Chunk) -> &[u8] {
         let start = c.start as usize;
-        self.span(start, start + c.len as usize).unwrap_or_default()
+        match self.span(c.src, start, start + c.len as usize) {
+            Some(b) => b,
+            None => {
+                if let Some(s) = &self.streams
+                    && !self.past_limit(c.src)
+                {
+                    s.note_damage();
+                }
+                &[]
+            }
+        }
+    }
+
+    /// Was source `src` a data stream left out because it is past a limit? Its chunks are then
+    /// left out with that warning alone.
+    fn past_limit(&self, src: u32) -> bool {
+        src > 0 && self.streams.as_ref().is_some_and(|s| s.past_limit(src as usize - 1))
     }
 
     pub(crate) fn children(&self, c: &Chunk) -> &[Chunk] {
@@ -128,23 +194,44 @@ impl<'a> Index<'a> {
         self.chunks.first()
     }
 
+    /// The warnings for data streams that were left out.
+    pub(crate) fn stream_warnings(&self, warn: &mut Vec<Warning>) {
+        if let Some(s) = &self.streams {
+            s.warnings(warn);
+        }
+    }
+
     /// Split list `p` into its children, appended to the table together; their lists are queued.
     fn split(&mut self, p: Pending, queue: &mut Vec<Pending>, budget: &mut Budget, warn: &mut Vec<Warning>) -> Result<(), Error> {
         let first = self.chunks.len();
         let mut at = p.start;
         let mut lists = Vec::new();
         while at < p.end {
-            let Some((chunk, next)) = self.read_chunk(at, p.end, p.pool) else {
+            let Some((read, next)) = self.read_chunk(p.src, at, p.end, p.pool) else {
                 push(warn, Warning::Damaged);
                 break;
             };
+            at = next;
+            // A redirect record whose body can't be found counts as well, so that lists redirected
+            // to again and again can't repeat such records past the limit.
             budget.take_chunk()?;
+            let chunk = match read {
+                Read::Chunk(chunk) => chunk,
+                Read::Lost => {
+                    push(warn, Warning::Damaged);
+                    continue;
+                }
+                Read::PastLimit => continue,
+                Read::SharedPastLimit => {
+                    push(warn, Warning::TooDeep);
+                    continue;
+                }
+            };
             // A `LIST stlt` holds the style tables, not chunks (R4); the reader doesn't use them.
             if chunk.id == LIST && chunk.form != *b"stlt" {
                 lists.push(self.chunks.len());
             }
             self.chunks.push(chunk);
-            at = next;
         }
         let count = (self.chunks.len() - first) as u32;
         if let Some(parent) = self.chunks.get_mut(p.entry) {
@@ -159,22 +246,23 @@ impl<'a> Index<'a> {
             }
             let (start, end) = (c.start as usize, c.start as usize + c.len as usize);
             if c.form == CMPR && p.pool.is_none() {
-                match self.inflate_cmpr(start, end, budget) {
-                    Ok((s, e, pool)) => queue.push(Pending { entry: i, start: s, end: e, pool: Some(pool), depth: p.depth + 1 }),
+                match self.inflate_cmpr(c.src, start, end) {
+                    Ok((s, e, pool)) => queue.push(Pending { entry: i, src: 0, start: s, end: e, pool: Some(pool), depth: p.depth + 1 }),
                     Err(Error::Limit(what)) => return Err(Error::Limit(what)),
                     Err(_) => push(warn, Warning::Damaged),
                 }
             } else {
-                queue.push(Pending { entry: i, start, end, pool: p.pool, depth: p.depth + 1 });
+                queue.push(Pending { entry: i, src: c.src, start, end, pool: p.pool, depth: p.depth + 1 });
             }
         }
         Ok(())
     }
 
-    /// The chunk at `at` (before `end`) and where the next one starts. In a compressed stream the
-    /// size field is an index into the size pool (R3).
-    fn read_chunk(&self, at: usize, end: usize, pool: Option<(usize, usize)>) -> Option<(Chunk, usize)> {
-        let head = self.span(at, at.checked_add(8)?.min(end))?;
+    /// The chunk at `at` (before `end`) of source `src`, and where the next one starts. In a
+    /// compressed stream the size field is an index into the size pool (R3); in a version 16+
+    /// package a chunk of 16 bytes outside one is a redirect record (R27).
+    fn read_chunk(&self, src: u32, at: usize, end: usize, pool: Option<(usize, usize)>) -> Option<(Read, usize)> {
+        let head = self.span(src, at, at.checked_add(8)?.min(end))?;
         let id: [u8; 4] = head.get(..4)?.try_into().ok()?;
         let raw = u32_at(head, 4)? as usize;
         let size = match pool {
@@ -182,26 +270,83 @@ impl<'a> Index<'a> {
             Some((ps, pe)) => {
                 let off = raw.checked_mul(4)?.checked_add(ps)?;
                 (off.checked_add(4)? <= pe).then_some(())?;
-                u32_at(self.span(off, off + 4)?, 0)? as usize
+                u32_at(self.span(0, off, off + 4)?, 0)? as usize
             }
         };
         let body = at + 8;
         let body_end = body.checked_add(size).filter(|&e| e <= end)?;
-        let next = body_end + (size & 1);
+        let next = (body_end + (size & 1)).min(end);
+        if self.streams.is_some() && pool.is_none() && size == REDIRECT {
+            let read = match self.redirect(id, src, body) {
+                Some(read) => read,
+                None if self.redirect_past_limit(src, body) => Read::PastLimit,
+                None => Read::Lost,
+            };
+            return Some((read, next));
+        }
+        Some((Read::Chunk(self.chunk(id, src, body, size)?), next))
+    }
+
+    /// Chunk `id` whose body is `len` bytes at `body` of source `src`; a list's body starts with
+    /// its form type.
+    fn chunk(&self, id: [u8; 4], src: u32, body: usize, len: usize) -> Option<Chunk> {
         let (form, start) = if id == LIST {
-            let f: [u8; 4] = self.span(body, body.checked_add(4).filter(|&e| e <= body_end)?)?.try_into().ok()?;
+            let f: [u8; 4] = self.span(src, body, body.checked_add(4).filter(|_| len >= 4)?)?.try_into().ok()?;
             (f, body + 4)
         } else {
             ([0; 4], body)
         };
-        let chunk = Chunk { id, form, start: u32::try_from(start).ok()?, len: u32::try_from(body_end - start).ok()?, first: 0, count: 0 };
-        Some((chunk, next.min(end)))
+        let len = len - (start - body);
+        Some(Chunk { id, form, src, start: u32::try_from(start).ok()?, len: u32::try_from(len).ok()?, first: 0, count: 0 })
     }
 
-    /// Inflate the two blocks of a `LIST cmpr` body at `start..end` (R3) → the chunk stream and the
-    /// size pool, as address ranges.
-    fn inflate_cmpr(&mut self, start: usize, end: usize, budget: &mut Budget) -> Result<(usize, usize, (usize, usize)), Error> {
-        let body = self.span(start, end).ok_or(Error::Damaged("compressed list"))?;
+    /// The chunk the redirect record at `body` of `src` stands for (R27): stream, length, offset
+    /// and a reserved u32. Stream `0xFFFFFFFF` holds at most 8 bytes in the record itself, after
+    /// the length. The body is not read again as a redirect record. `None` when the body can't
+    /// be found.
+    ///
+    /// A redirected list whose bytes overlap those of an earlier redirected list, in any stream of
+    /// the same package member, is left out, so that no list is split twice. Other chunks may
+    /// share bytes: each one after the first to read them takes their length from the
+    /// shared-bytes limit (the member limit), so that many redirects to one body can't decode it
+    /// without end.
+    fn redirect(&self, id: [u8; 4], src: u32, body: usize) -> Option<Read> {
+        let mut r = Rd::new(self.span(src, body, body + REDIRECT)?);
+        let stream = r.u32()?;
+        let len = r.u32()? as usize;
+        if stream == INLINE {
+            return (len <= 8).then(|| self.chunk(id, src, body + 8, len).map(Read::Chunk))?;
+        }
+        let off = r.u32()? as usize;
+        let streams = self.streams.as_ref()?;
+        let size = streams.size(stream as usize)?;
+        let end = off.checked_add(len).filter(|&e| e <= size)?;
+        let member = streams.member_of(stream as usize)?;
+        if id == LIST {
+            if !claim(&self.lists, member, off, end) {
+                return None;
+            }
+        } else if !claim(&self.leaves, member, off, end) {
+            let left = self.shared_left.get();
+            if len > left {
+                return Some(Read::SharedPastLimit);
+            }
+            self.shared_left.set(left - len);
+        }
+        // Only a list's form type is read now; other bodies are read when the mapping asks.
+        self.chunk(id, stream.checked_add(1)?, off, len).map(Read::Chunk)
+    }
+
+    /// Does the redirect record at `body` of `src` point into a data stream past a limit?
+    fn redirect_past_limit(&self, src: u32, body: usize) -> bool {
+        let stream = self.span(src, body, body + 4).and_then(|b| u32_at(b, 0));
+        stream.is_some_and(|s| s != INLINE && self.past_limit(s.saturating_add(1)))
+    }
+
+    /// Inflate the two blocks of a `LIST cmpr` body at `start..end` of `src` (R3) → the chunk
+    /// stream and the size pool, as ranges of source 0.
+    fn inflate_cmpr(&mut self, src: u32, start: usize, end: usize) -> Result<(usize, usize, (usize, usize)), Error> {
+        let body = self.span(src, start, end).ok_or(Error::Damaged("compressed list"))?;
         let mut r = Rd::new(body);
         let c1 = r.u32().ok_or(Error::Damaged("compressed list"))? as usize;
         r.skip(4).ok_or(Error::Damaged("compressed list"))?;
@@ -217,15 +362,16 @@ impl<'a> Index<'a> {
         let second_at = c1.checked_add(16).ok_or(Error::Damaged("compressed list"))?;
         let (first, second) = (block(16, c1)?.to_vec(), block(second_at, c2)?.to_vec());
         let base = self.input.len();
-        let stream = self.inflate(&first, budget)?;
-        let pool = self.inflate(&second, budget)?;
+        let stream = self.inflate(&first)?;
+        let pool = self.inflate(&second)?;
         Ok((base + stream.0, base + stream.1, (base + pool.0, base + pool.1)))
     }
 
-    /// Inflate zlib `data` onto the end of the inflated bytes, within the budget → its range there.
-    fn inflate(&mut self, data: &[u8], budget: &mut Budget) -> Result<(usize, usize), Error> {
+    /// Inflate zlib `data` onto the end of the inflated bytes, within what is left → its range
+    /// there.
+    fn inflate(&mut self, data: &[u8]) -> Result<(usize, usize), Error> {
         let at = self.inflated.len();
-        let left = budget.inflate_left();
+        let left = self.left.get();
         let reader = flate2::read::ZlibDecoder::new(data);
         // One byte past what is left tells a stream that is too long from one that just fits.
         let got = match reader.take((left as u64).saturating_add(1)).read_to_end(&mut self.inflated) {
@@ -239,12 +385,29 @@ impl<'a> Index<'a> {
             self.inflated.truncate(at);
             return Err(Error::Limit("inflated size"));
         }
-        budget.take_inflated(got)?;
+        self.left.set(left - got);
         if self.input.len().saturating_add(self.inflated.len()) > u32::MAX as usize {
             return Err(Error::Limit("inflated size"));
         }
         Ok((at, at + got))
     }
+}
+
+/// Take bytes `start..end` of package member `member` in `claimed`, or `false` when an earlier
+/// redirect there took any of them. Empty ranges take nothing.
+fn claim(claimed: &Cell<BTreeMap<(usize, usize), usize>>, member: usize, start: usize, end: usize) -> bool {
+    if start == end {
+        return true;
+    }
+    let mut taken = claimed.take();
+    let before = taken.range(..=(member, start)).next_back().is_some_and(|(&(m, _), &e)| m == member && e > start);
+    let after = taken.range((member, start)..).next().is_some_and(|(&(m, s), _)| m == member && s < end);
+    let free = !before && !after;
+    if free {
+        taken.insert((member, start), end);
+    }
+    claimed.set(taken);
+    free
 }
 
 /// Add `w` to the warnings once.

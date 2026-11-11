@@ -4997,9 +4997,8 @@ axis	Both	Оба
 @msg	the HEIC or HEIF file can't be read	не удается прочитать файл HEIC или HEIF
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	файл HEIC или HEIF содержит изображение такого типа, которое не удается прочитать
 @msg	HEIC and HEIF images can't be opened in this build	изображения HEIC и HEIF нельзя открыть в этой сборке
-@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 5 to 13	не удается открыть рисунки CDR {version}: VectorCraft читает версии с 5 по 13
+@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 5 to 27	не удается открыть рисунки CDR {version}: VectorCraft читает версии с 5 по 27
 @msg	this CDR drawing can't be read ({why})	не удается прочитать этот рисунок CDR ({why})
-@msg	CDR drawings saved by version 14 or later can't be opened: VectorCraft reads versions 5 to 13	не удается открыть рисунки, сохраненные в CDR 14 или более поздней версии: VectorCraft читает версии с 5 по 13
 @msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	текст, растровые изображения, перетекания, контуры, мазки кисти и другие объекты CDR, которые VectorCraft пока не читает, были пропущены
 @msg	CDR fountain, pattern, texture and PostScript fills were left out	градиентные, узорные, текстурные и PostScript-заливки CDR были пропущены
 @msg	colors in CDR color models VectorCraft doesn't read were opened as black	цвета в цветовых моделях CDR, которые VectorCraft не читает, открыты как черные

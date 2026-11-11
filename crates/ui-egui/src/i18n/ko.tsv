@@ -4969,9 +4969,8 @@ theme	Appearance	외관
 @msg	the HEIC or HEIF file can't be read	HEIC 또는 HEIF 파일을 읽을 수 없습니다
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC 또는 HEIF 파일에 읽을 수 없는 종류의 이미지가 있습니다
 @msg	HEIC and HEIF images can't be opened in this build	이 빌드에서는 HEIC 및 HEIF 이미지를 열 수 없습니다
-@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 5 to 13	CDR {version} 도면을 열 수 없습니다: VectorCraft는 버전 5~13을 읽습니다
+@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 5 to 27	CDR {version} 도면을 열 수 없습니다: VectorCraft는 버전 5~27을 읽습니다
 @msg	this CDR drawing can't be read ({why})	이 CDR 도면을 읽을 수 없습니다 ({why})
-@msg	CDR drawings saved by version 14 or later can't be opened: VectorCraft reads versions 5 to 13	CDR 14 이상에서 저장한 도면은 열 수 없습니다: VectorCraft는 버전 5~13을 읽습니다
 @msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	VectorCraft가 아직 읽지 못하는 CDR 텍스트, 비트맵, 블렌드, 윤곽 효과, 브러시 획 및 기타 개체는 제외했습니다
 @msg	CDR fountain, pattern, texture and PostScript fills were left out	CDR 그라디언트, 패턴, 텍스처 및 PostScript 칠은 제외했습니다
 @msg	colors in CDR color models VectorCraft doesn't read were opened as black	VectorCraft가 읽지 못하는 CDR 색상 모델의 색상은 검정으로 열었습니다

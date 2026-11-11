@@ -24,6 +24,12 @@ pub(crate) struct Profile {
     pub(crate) marker_after_dash: Option<usize>,
     /// Rectangles carry four corner radii, not one (R15).
     pub(crate) four_radii: bool,
+    /// Rectangles are f64 sizes with radii as shares of half the shorter side (R29).
+    pub(crate) f64_rect: bool,
+    /// The master page flags its guides and desktop layers the way of versions 7 to 13 (R19).
+    pub(crate) old_master_flags: bool,
+    /// Object type 0x25 is a path (R30).
+    pub(crate) paths: bool,
     /// Names are UTF-16LE, not Windows-1252 (R9).
     pub(crate) utf16_names: bool,
 }
@@ -62,9 +68,15 @@ const fn profile(from: u16) -> Profile {
             None
         },
         four_radii: from >= 900,
+        f64_rect: from >= 1500,
+        old_master_flags: from < 1400,
+        paths: from >= 1600,
         utf16_names: from >= 1200,
     }
 }
+
+/// The newest version read: 27, as the `vrsn` chunk names it (R1, R2).
+pub(crate) const NEWEST: u16 = 2799;
 
 /// The first version of each range, with its layouts. Ranges start where a field moves.
 const PROFILES: &[(u16, Profile)] = &[
@@ -76,11 +88,15 @@ const PROFILES: &[(u16, Profile)] = &[
     (1100, profile(1100)),
     (1200, profile(1200)),
     (1300, profile(1300)),
+    (1400, profile(1400)),
+    (1500, profile(1500)),
+    (1600, profile(1600)),
 ];
 
-/// The layouts of `version` (hundreds; 801 is the 8.01 variant), or `None` outside 5 to 13.
+/// The layouts of `version` (hundreds; 801 is the 8.01 variant, 2430 is 24.3), or `None` outside 5
+/// to 27.
 pub(crate) fn for_version(version: u16) -> Option<Profile> {
-    if !(500..1400).contains(&version) {
+    if !(500..=NEWEST).contains(&version) {
         return None;
     }
     PROFILES.iter().rev().find(|(from, _)| *from <= version).map(|(_, p)| *p)
@@ -103,8 +119,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn every_version_from_5_to_13_has_one_profile() {
-        assert!(for_version(499).is_none() && for_version(1400).is_none());
+    fn every_version_from_5_to_27_has_one_profile() {
+        assert!(for_version(499).is_none() && for_version(2800).is_none());
+        assert!(for_version(1300).is_some_and(|p| p.old_master_flags));
+        assert!(for_version(1400).is_some_and(|p| p.tagged && !p.f64_rect && !p.old_master_flags));
+        assert!(for_version(1500).is_some_and(|p| p.tagged && p.f64_rect && p.mcfg_skip == 12 && !p.paths));
+        assert!(for_version(2430).is_some_and(|p| p.f64_rect && p.paths && p.utf16_names));
         assert!(for_version(500).is_some_and(|p| p.short && p.mcfg_skip == 0));
         assert!(for_version(600).is_some_and(|p| !p.short && p.mcfg_skip == 28));
         assert!(for_version(801).is_some_and(|p| p.mcfg_skip == 0 && p.marker_after_dash.is_none()));

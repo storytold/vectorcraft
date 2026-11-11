@@ -6551,9 +6551,8 @@ breakText	Glyphs	Glifs
 @msg	the HEIC or HEIF file can't be read	no es pot llegir el fitxer HEIC o HEIF
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	el fitxer HEIC o HEIF conté un tipus d'imatge que no es pot llegir
 @msg	HEIC and HEIF images can't be opened in this build	les imatges HEIC i HEIF no es poden obrir en aquesta compilació
-@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 5 to 13	no es poden obrir dibuixos del CDR {version}: el VectorCraft llegeix les versions 5 a 13
+@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 5 to 27	no es poden obrir dibuixos del CDR {version}: el VectorCraft llegeix les versions 5 a 27
 @msg	this CDR drawing can't be read ({why})	no es pot llegir aquest dibuix del CDR ({why})
-@msg	CDR drawings saved by version 14 or later can't be opened: VectorCraft reads versions 5 to 13	no es poden obrir dibuixos desats amb la versió 14 o posterior del CDR: el VectorCraft llegeix les versions 5 a 13
 @msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	s’han omès els textos, els mapes de bits, les fusions, les siluetes, els traços de pinzell i altres objectes del CDR que el VectorCraft encara no llegeix
 @msg	CDR fountain, pattern, texture and PostScript fills were left out	s’han omès els emplenaments degradats, de patró, de textura i PostScript del CDR
 @msg	colors in CDR color models VectorCraft doesn't read were opened as black	els colors en models de color del CDR que el VectorCraft no llegeix s’han obert en negre
