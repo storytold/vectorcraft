@@ -88,6 +88,27 @@ fn ruler_origin_drag_uses_the_rotated_zoomed_view_and_commits_only_on_release() 
     assert_eq!(app.ruler_origin(), origin);
 }
 
+/// The origin snaps as a drawn point does: dragged next to a rectangle's corner, it is set on it.
+#[test]
+fn ruler_origin_drag_snaps_onto_the_art() {
+    let mut app = app();
+    app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    // The Hand tool shows no smart guides of its own as the pointer passes over the corner.
+    app.select_tool("hand");
+    let ctx = context();
+    frame(&mut app, &ctx, vec![], canvas::show);
+    let to = canvas::Xf::new(app.canvas_rect.unwrap(), app.view().unwrap()).to_screen(Point::new(100.4, 99.6));
+    frame(&mut app, &ctx, vec![Event::PointerMoved(to)], canvas::show);
+    assert!(app.session.overlays(app.view_info()).is_empty());
+    start_drag(&mut app, &ctx, to);
+    frame(&mut app, &ctx, vec![], canvas::show);
+    assert!(!app.session.overlays(app.view_info()).is_empty(), "the guide showing what it snapped to");
+    frame(&mut app, &ctx, vec![press(to, false)], canvas::show);
+    assert_eq!(app.ruler_origin(), Point::new(100.0, 100.0));
+    assert!(app.session.overlays(app.view_info()).is_empty());
+}
+
 #[test]
 fn ruler_origin_double_click_resets_to_the_active_artboard() {
     let mut app = app();
@@ -146,6 +167,7 @@ fn ruler_origin_cancelled_drags_do_not_modify_either_document() {
             Cancel::Outside => pos2(4.0, 4.0),
             Cancel::Escape => {
                 frame(&mut app, &ctx, vec![key(Key::Escape)], canvas::show);
+                assert!(app.session.overlays(app.view_info()).is_empty(), "the snapping guides go too");
                 to
             }
             Cancel::Focus => {

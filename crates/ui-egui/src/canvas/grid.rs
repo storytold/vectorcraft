@@ -181,8 +181,9 @@ pub(super) fn ruler_rects(full: egui::Rect) -> [egui::Rect; 3] {
 /// it makes none. A double-click on a ruler (both clicks on that ruler) makes a guide at the
 /// pointer, across the ruler's axis (a vertical one on the top ruler, a horizontal one on the
 /// left; swapped in a view turned 90°, where the rulers read the other document axis, and the
-/// nearer axis in between), unsnapped, as one `guide.add` and so one undo step. The corner drags the rulers' origin or resets it on a
-/// double-click.
+/// nearer axis in between), unsnapped, as one `guide.add` and so one undo step. The corner drags
+/// the rulers' origin, snapped as a drawn point is (`Session::ruler_origin_drag`), or resets it on
+/// a double-click.
 pub(super) fn ruler_input(app: &mut VectorcraftApp, ui: &Ui, full: egui::Rect, canvas: egui::Rect, xf: &Xf) -> Option<Point> {
     let [top, left, corner] = ruler_rects(full);
     // Right-click on a ruler or the origin box: the document units, to swap between them as
@@ -274,9 +275,18 @@ pub(super) fn ruler_input(app: &mut VectorcraftApp, ui: &Ui, full: egui::Rect, c
     let mut preview = None;
     if let Some((started_in, mut cancelled)) = ui.data(|d| d.get_temp::<(Option<u64>, bool)>(drag_id)) {
         cancelled |= started_in != uid || ui.input(|i| !i.focused || i.key_pressed(egui::Key::Escape));
-        let at = corner.interact_pointer_pos().or_else(|| ui.input(|i| i.pointer.latest_pos())).filter(|p| canvas.contains(*p)).map(|p| xf.to_doc(p));
+        let pointer =
+            corner.interact_pointer_pos().or_else(|| ui.input(|i| i.pointer.latest_pos())).filter(|p| canvas.contains(*p)).map(|p| xf.to_doc(p));
+        // The origin snaps as a drawn point does (Smart Guides, Snap to Point, pixels, the grid).
+        let at = if cancelled {
+            app.session.end_ruler_origin_drag();
+            None
+        } else {
+            app.session.ruler_origin_drag(pointer, app.view_info())
+        };
         if corner.drag_stopped_by(egui::PointerButton::Primary) {
             ui.data_mut(|d| d.remove::<(Option<u64>, bool)>(drag_id));
+            app.session.end_ruler_origin_drag();
             if !cancelled
                 && let Some(at) = at
                 && let Err(e) = app.run("document.setRulerOrigin", json!({"x": at.x, "y": at.y, "artboard": app.view().map_or(0, |v| v.artboard)}))
@@ -285,6 +295,7 @@ pub(super) fn ruler_input(app: &mut VectorcraftApp, ui: &Ui, full: egui::Rect, c
             }
         } else if !ui.input(|i| i.pointer.primary_down()) {
             ui.data_mut(|d| d.remove::<(Option<u64>, bool)>(drag_id));
+            app.session.end_ruler_origin_drag();
         } else {
             ui.data_mut(|d| d.insert_temp(drag_id, (started_in, cancelled)));
             if !cancelled {
