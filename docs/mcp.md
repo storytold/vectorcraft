@@ -7972,7 +7972,8 @@ so its point at `t` moves by (dx, dy), turning a straight spine into a curve (`p
 ```
 
 How blends interpolate: closed shapes start where they twist least unless `starts` picks the anchors; open paths
-drawn opposite ways blend each end to the nearer end of the other unless `starts` picks an end of each; strokes
+drawn opposite ways blend each end to the nearer end of the other unless `starts` picks an end of each (a path turned
+to blend turns its arrowheads and width profiles with it); strokes
 interpolate weight, dashes (a solid stroke counts as the dashed one with its gaps closed), miter limit, arrowhead scale
 and width profiles, while caps, joins, alignment, arrowheads and brushes switch halfway; gradients of one kind with
 different stop counts resample to a common set of stops. Groups pair their members in stacking order (members only

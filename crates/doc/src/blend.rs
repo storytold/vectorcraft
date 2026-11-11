@@ -22,7 +22,7 @@ use vectorcraft_color::{Color, Gradient, GradientPaint, GradientStop, Paint};
 use vectorcraft_geom::kurbo::{ParamCurve, ParamCurveArclen, ParamCurveDeriv};
 use vectorcraft_geom::{Affine, Anchor, BezPath, FillRule, PathData, Point, Rect, SubPath, Vec2};
 
-use crate::appearance::{Appearance, AppearanceItem, Dash, StrokeLayer, WidthProfile};
+use crate::appearance::{AngleProfile, Appearance, AppearanceItem, Dash, PressureProfile, StrokeLayer, WidthProfile};
 use crate::live::{BlendOrientation, BlendSpacing, BlendSpec};
 use crate::node::{Node, NodeId, NodeKind};
 use crate::text::TextObject;
@@ -391,14 +391,49 @@ fn is_end(sp: &SubPath, i: Option<usize>) -> bool {
     !sp.closed && i.is_some_and(|i| i == 0 || i + 1 == sp.anchors.len())
 }
 
-/// Whether open subpath `b` runs the other way from `a`: its ends lie nearer `a`'s opposite ends.
-/// Pairing them as drawn would fold every step through the middle (two Pencil strokes drawn one
-/// left to right and the other back).
-fn runs_against(a: &SubPath, b: &SubPath) -> bool {
-    let (Some(a0), Some(a1), Some(b0), Some(b1)) = (a.anchors.first(), a.anchors.last(), b.anchors.first(), b.anchors.last()) else {
-        return false;
-    };
-    a0.p.distance(b1.p) + a1.p.distance(b0.p) < a0.p.distance(b0.p) + a1.p.distance(b1.p)
+/// Whether a click on anchor `i` of `sp` makes it run the other way ([`start_at`]).
+fn turned_by_click(sp: &SubPath, i: Option<usize>) -> bool {
+    !sp.closed && sp.anchors.len() > 1 && i.is_some_and(|i| i + 1 == sp.anchors.len())
+}
+
+/// From an open subpath's first anchor to its last.
+fn chord(sp: &SubPath) -> Vec2 {
+    match (sp.anchors.first(), sp.anchors.last()) {
+        (Some(s), Some(e)) => e.p - s.p,
+        _ => Vec2::ZERO,
+    }
+}
+
+/// Whether the open subpaths of one path run the other way from their partners in the other
+/// (`pairs`): their first-to-last chords point apart, summed over the pairs. Pairing them as drawn
+/// would fold every step through the middle (two Pencil strokes drawn one left to right and the
+/// other back). The sum is least squares on the ends: pairing each end with the other's opposite
+/// end is nearer in squared distance exactly when the chords point apart, so two paths along one
+/// line, one drawn back, are told apart where the plain distances tie.
+fn runs_against(pairs: &[(SubPath, SubPath)]) -> bool {
+    let dot: f64 = pairs.iter().filter(|(a, b)| !a.closed && !b.closed).map(|(a, b)| chord(a).dot(chord(b))).sum();
+    dot < 0.0
+}
+
+/// `ap` with each stroke running the other way along its path, for a key whose path is turned to
+/// blend: its start and end arrowheads (and their scales) trade places, and its width, pen pressure
+/// and pen angle profiles run from the other end, so the steps near the key show them where the key
+/// does.
+fn turned_strokes(ap: &Appearance) -> Appearance {
+    let mut out = ap.clone();
+    for item in &mut out.items {
+        if let AppearanceItem::Stroke(s) = item {
+            std::mem::swap(&mut s.start_arrow, &mut s.end_arrow);
+            s.arrow_scale = (s.arrow_scale.1, s.arrow_scale.0);
+            // Left and right of the path trade sides too.
+            s.profile = s.profile.as_ref().map(|p| WidthProfile { points: p.points.iter().rev().map(|&(t, l, r)| (1.0 - t, r, l)).collect() });
+            s.pressure = s.pressure.as_ref().map(PressureProfile::reversed);
+            s.tilt = s.tilt.as_ref().map(PressureProfile::reversed);
+            s.bearing = s.bearing.as_ref().map(AngleProfile::reversed);
+            s.rotation = s.rotation.as_ref().map(AngleProfile::reversed);
+        }
+    }
+    out
 }
 
 /// Anchor positions of a subpath relative to its box, scaled to unit size.
@@ -438,18 +473,25 @@ fn best_rotation(a: &SubPath, b: &SubPath) -> usize {
 pub struct PathPair {
     a: Vec<SubPath>,
     b: Vec<SubPath>,
+    /// Whether `a`'s and `b`'s first open subpath runs the other way from the key's path (a click
+    /// on its last anchor, or turned to match the other path).
+    turned: (bool, bool),
 }
 
 impl PathPair {
     /// `starts`: the anchor of each path's first subpath its blend starts from (the Blend tool's
     /// clicks); with neither, closed subpaths start where they twist least. Open subpaths blend
-    /// end to nearer end, unless a click on an end of each sets their directions.
+    /// end to nearer end, unless a click on an end of each sets their directions: the open
+    /// subpaths of the path no click set turn together, so a filled path's holes stay holes.
     pub fn new(a: &PathData, b: &PathData, starts: (Option<usize>, Option<usize>)) -> Self {
         let n = a.subpaths.len().max(b.subpaths.len());
         let ca = a.bounds().map(|r| r.center()).unwrap_or_default();
         let cb = b.bounds().map(|r| r.center()).unwrap_or_default();
         let degenerate = |like: &SubPath, c: Point| SubPath::new(vec![Anchor::corner(c); like.anchors.len().max(1)], like.closed);
-        let (mut va, mut vb) = (Vec::with_capacity(n), Vec::with_capacity(n));
+        let mut pairs = Vec::with_capacity(n);
+        // Which first subpaths a click on one of their ends set, and which it turned.
+        let (mut set, mut turned) = ((false, false), (false, false));
+        let explicit = starts.0.is_some() || starts.1.is_some();
         for i in 0..n {
             let (mut sa, mut sb) = match (a.subpaths.get(i), b.subpaths.get(i)) {
                 (Some(x), Some(y)) => (x.clone(), y.clone()),
@@ -457,10 +499,9 @@ impl PathPair {
                 (None, Some(y)) => (degenerate(y, ca), y.clone()),
                 (None, None) => continue,
             };
-            let explicit = i == 0 && (starts.0.is_some() || starts.1.is_some());
-            // Which open subpaths a click on one of their ends turned (before `start_at` moves it).
-            let (set_a, set_b) = (i == 0 && is_end(&sa, starts.0), i == 0 && is_end(&sb, starts.1));
-            if explicit {
+            if i == 0 && explicit {
+                set = (is_end(&sa, starts.0), is_end(&sb, starts.1));
+                turned = (turned_by_click(&sa, starts.0), turned_by_click(&sb, starts.1));
                 if let Some(s) = starts.0 {
                     start_at(&mut sa, s);
                 }
@@ -472,21 +513,34 @@ impl PathPair {
             if closed && (sa.area() * sb.area()) < 0.0 {
                 reverse_closed(&mut sb);
             }
-            // Two open subpaths drawn opposite ways: turn the one no click set to match the other.
-            if !sa.closed && !sb.closed && !(set_a && set_b) && runs_against(&sa, &sb) {
-                if set_b { sa.reverse() } else { sb.reverse() }
+            pairs.push((sa, sb));
+        }
+        // Open subpaths drawn opposite ways: the path no click set turns to match the other, all
+        // its open subpaths at once, so their windings keep to each other.
+        if !(set.0 && set.1) && runs_against(&pairs) {
+            for (sa, sb) in pairs.iter_mut().filter(|(sa, sb)| !sa.closed && !sb.closed) {
+                if set.1 { sa.reverse() } else { sb.reverse() }
             }
+            if set.1 {
+                turned.0 = !turned.0;
+            } else {
+                turned.1 = !turned.1;
+            }
+        }
+        let (mut va, mut vb) = (Vec::with_capacity(n), Vec::with_capacity(n));
+        for (i, (mut sa, mut sb)) in pairs.into_iter().enumerate() {
+            let closed = sa.closed && sb.closed && sa.anchors.len() > 2 && sb.anchors.len() > 2;
             let m = sa.anchors.len().max(sb.anchors.len());
             grow(&mut sa, m);
             grow(&mut sb, m);
-            if closed && !explicit {
+            if closed && !(i == 0 && explicit) {
                 let r = best_rotation(&sa, &sb);
                 sb.anchors.rotate_left(r);
             }
             va.push(sa);
             vb.push(sb);
         }
-        Self { a: va, b: vb }
+        Self { a: va, b: vb, turned }
     }
 
     /// The path at `t` (0 = `a`, 1 = `b`).
@@ -596,7 +650,18 @@ impl Lerp {
             | (NodeKind::PlacedDocument(_), NodeKind::PlacedDocument(_)) => Shape::Placed,
             _ => match (node_path(a), node_path(b)) {
                 (Some((pa, ra, ma)), Some((pb, rb, mb))) => {
-                    Shape::Path { pair: PathPair::new(&pa, &pb, starts), rules: (ra, rb), members: ma.zip(mb) }
+                    let pair = PathPair::new(&pa, &pb, starts);
+                    // A key whose path turned to blend has its strokes turned with it, so the
+                    // steps near it show its arrowheads and profiles at the ends the key does.
+                    let turn = |n: &Node, turned: bool| {
+                        let mut n = n.clone();
+                        if turned {
+                            n.appearance = turned_strokes(&n.appearance).into();
+                        }
+                        n
+                    };
+                    let (ta, tb) = pair.turned;
+                    return Self { a: turn(a, ta), b: turn(b, tb), shape: Shape::Path { pair, rules: (ra, rb), members: ma.zip(mb) } };
                 }
                 _ => Shape::Other,
             },
@@ -1454,9 +1519,10 @@ mod tests {
         // Starting `b` at its anchor 2 (its first corner again) pairs like corners.
         let r = PathPair::new(&a, &b, (Some(0), Some(2))).at(0.5).bounds().unwrap();
         assert!((r.width() - 10.0).abs() < 1e-6 && (r.height() - 10.0).abs() < 1e-6, "{r:?}");
-        // An open path clicked at its end runs the other way.
+        // An open path clicked at its end runs the other way (the other one clicked at its start,
+        // so neither turns to match).
         let line = |x: f64| PathData::single(SubPath::polyline(&[Point::new(x, 0.0), Point::new(x + 10.0, 0.0)], false));
-        let m = PathPair::new(&line(0.0), &line(100.0), (None, Some(1))).at(0.5);
+        let m = PathPair::new(&line(0.0), &line(100.0), (Some(0), Some(1))).at(0.5);
         assert_eq!(m.subpaths[0].anchors[0].p, Point::new(55.0, 0.0));
     }
 
@@ -1499,6 +1565,63 @@ mod tests {
         let first = mid.subpaths[0].anchors[0].p;
         assert!(first.distance(Point::new(200.0, 50.0)) < 1e-6, "{first:?}");
         assert!(mid.bounds().unwrap().width() > 199.0);
+    }
+
+    #[test]
+    fn open_paths_along_one_line_drawn_opposite_ways_blend_end_to_end() {
+        // The ends are as far apart paired either way (110 + 90 = 100 + 100), yet B runs back.
+        let a = PathData::single(SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(10.0, 0.0)], false));
+        let b = PathData::single(SubPath::polyline(&[Point::new(110.0, 0.0), Point::new(100.0, 0.0)], false));
+        let mid = PathPair::new(&a, &b, (None, None)).at(0.5);
+        let r = mid.bounds().unwrap();
+        assert!((r.width() - 10.0).abs() < 1e-9, "the step halfway keeps its length: {r:?}");
+        assert_eq!(mid.subpaths[0].anchors[0].p, Point::new(50.0, 0.0));
+    }
+
+    #[test]
+    fn turning_open_subpaths_keeps_a_filled_paths_holes() {
+        // Two open triangles each, closed only by their fill: A's both run one way (no hole
+        // under nonzero), B's inner one runs back (a hole).
+        let tri = |c: Point, s: f64, back: bool| {
+            let mut pts = vec![c + Vec2::new(-s, s), c + Vec2::new(s, s), c + Vec2::new(0.0, -s)];
+            if back {
+                pts.reverse();
+            }
+            SubPath::polyline(&pts, false)
+        };
+        let a = PathData::new(vec![tri(Point::new(50.0, 50.0), 40.0, false), tri(Point::new(50.0, 50.0), 10.0, false)]);
+        let b = PathData::new(vec![tri(Point::new(250.0, 50.0), 40.0, false), tri(Point::new(250.0, 50.0), 10.0, true)]);
+        let near_b = PathPair::new(&a, &b, (None, None)).at(1.0);
+        for (got, want) in near_b.subpaths.iter().zip(&b.subpaths) {
+            assert!(got.area() * want.area() > 0.0, "each subpath keeps B's winding");
+        }
+    }
+
+    #[test]
+    fn a_turned_key_turns_its_arrowheads_and_width_profile() {
+        let stroked = |start: Option<crate::appearance::Arrowhead>, end, profile| {
+            let mut ap = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 2.0);
+            if let Some(s) = ap.stroke_mut() {
+                (s.start_arrow, s.end_arrow, s.arrow_scale, s.profile) = (start, end, (50.0, 150.0), profile);
+            }
+            ap
+        };
+        let (a, b) = crossing_waves();
+        let line = |p: PathData, ap: Appearance| Node::path(NodeId(1), p, ap);
+        // B, drawn right to left, has its end arrowhead and its thin end on the left.
+        let taper = WidthProfile { points: vec![(0.0, 1.0, 0.5), (1.0, 0.0, 0.0)] };
+        let a = line(a, stroked(None, None, None));
+        let b = line(b, stroked(None, Some(crate::appearance::Arrowhead::Triangle), Some(taper)));
+        // Near B the steps run left to right, like A: the arrowhead and the thin end stay left.
+        let step = Lerp::new(&a, &b, (None, None)).at(1.0);
+        let s = step.appearance.stroke().unwrap();
+        assert_eq!((s.start_arrow, s.end_arrow), (Some(crate::appearance::Arrowhead::Triangle), None));
+        assert_eq!(s.arrow_scale, (150.0, 50.0));
+        let p = s.profile.as_ref().unwrap();
+        assert!(p.at(0.0).0 < 1e-9 && (p.at(1.0).0 - 0.5).abs() < 1e-9 && (p.at(1.0).1 - 1.0).abs() < 1e-9, "{p:?}");
+        // Keys drawn the same way are left as they are.
+        let same = Lerp::new(&b, &b, (None, None)).at(1.0);
+        assert_eq!(same.appearance.stroke().unwrap().end_arrow, Some(crate::appearance::Arrowhead::Triangle));
     }
 
     fn key(x: f64) -> Arc<Node> {
