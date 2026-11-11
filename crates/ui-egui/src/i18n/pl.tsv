@@ -4650,6 +4650,7 @@ imageTrace	Outline	Kontur
 @msg	not a stored central record	to nie jest zapisany rekord centralny
 @msg	not a valid plug-in module: {0}	nieprawidłowy moduł wtyczki: {0}
 @msg	not an EMF or WMF file	to nie jest plik EMF ani WMF
+@msg	not an HP-GL file	to nie jest plik HP-GL
 @msg	not found	nie znaleziono
 @msg	not in pattern editing mode	nie jest w trybie edycji wzorka
 @msg	finish editing the pattern first	najpierw zakończ edycję wzorka

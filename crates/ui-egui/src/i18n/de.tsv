@@ -4434,6 +4434,7 @@ theme	Appearance	Erscheinungsbild
 @msg	not a stored central record	kein gespeicherter zentraler Eintrag
 @msg	not a valid plug-in module: {0}	kein gültiges Plug-in-Modul: {0}
 @msg	not an EMF or WMF file	keine EMF- oder WMF-Datei
+@msg	not an HP-GL file	keine HP-GL-Datei
 @msg	not found	nicht gefunden
 @msg	not in pattern editing mode	nicht im Musterbearbeitungsmodus
 @msg	finish editing the pattern first	beenden Sie zuerst die Bearbeitung des Musters

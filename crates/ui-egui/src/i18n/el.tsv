@@ -4472,6 +4472,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	not a stored central record	δεν είναι αποθηκευμένη κεντρική εγγραφή
 @msg	not a valid plug-in module: {0}	δεν είναι έγκυρη μονάδα προσθέτου: {0}
 @msg	not an EMF or WMF file	δεν είναι αρχείο EMF ή WMF
+@msg	not an HP-GL file	δεν είναι αρχείο HP-GL
 @msg	not found	δεν βρέθηκε
 @msg	not in pattern editing mode	δεν βρίσκεστε σε λειτουργία επεξεργασίας μοτίβου
 @msg	finish editing the pattern first	ολοκληρώστε πρώτα την επεξεργασία του μοτίβου

@@ -4277,6 +4277,7 @@ font-technology	Variable	ცვლადი
 @msg	not a stored central record	ეს არ არის შენახული ცენტრალური ჩანაწერი
 @msg	not a valid plug-in module: {0}	ეს არ არის პლაგინის სწორი მოდული: {0}
 @msg	not an EMF or WMF file	ეს არ არის EMF ან WMF ფაილი
+@msg	not an HP-GL file	ეს არ არის HP-GL ფაილი
 @msg	not found	ვერ მოიძებნა
 @msg	not in pattern editing mode	პატერნის რედაქტირების რეჟიმი არ არის ჩართული
 @msg	finish editing the pattern first	ჯერ დაასრულეთ პატერნის რედაქტირება

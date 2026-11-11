@@ -4344,6 +4344,7 @@ imageTrace	Outline	轮廓
 @msg	the image's pixels don't match its size	图像的像素与其尺寸不符
 @msg	{bpp}-bit bitmaps can't be read	无法读取 {bpp} 位位图
 @msg	not an EMF or WMF file	不是 EMF 或 WMF 文件
+@msg	not an HP-GL file	不是 HP-GL 文件
 @msg	its layers use {_1}, which aren't read yet	其图层使用了 {_1}，尚不能读取
 @msg	the EMF header is damaged	EMF 文件头已损坏
 @msg	damaged	已损坏

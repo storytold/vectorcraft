@@ -4352,6 +4352,7 @@ axis	Both	И двете
 @msg	not a stored central record	не е съхранен централен запис
 @msg	not a valid plug-in module: {0}	не е валиден модул за плъгин: {0}
 @msg	not an EMF or WMF file	не е EMF или WMF файл
+@msg	not an HP-GL file	не е HP-GL файл
 @msg	not found	не е открито
 @msg	not in pattern editing mode	не е в режим на редактиране на мостра
 @msg	finish editing the pattern first	първо завършете редактирането на мострата

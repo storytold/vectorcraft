@@ -4453,6 +4453,7 @@ imageTrace	Outline	Kontur
 @msg	not a stored central record	ikke en gemt central post
 @msg	not a valid plug-in module: {0}	ikke et gyldigt plug-in-modul: {0}
 @msg	not an EMF or WMF file	ikke en EMF- eller WMF-fil
+@msg	not an HP-GL file	ikke en HP-GL-fil
 @msg	not found	ikke fundet
 @msg	not in pattern editing mode	ikke i mønsterredigeringstilstand
 @msg	finish editing the pattern first	afslut først redigeringen af mønsteret

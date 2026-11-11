@@ -7048,6 +7048,7 @@ antiAlias	Sharp	शार्प
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	“{name}” लोड किया गया: {n} चरण छोड़ा गया|“{name}” लोड किया गया: {n} चरण छोड़े गए
 @msg	not an action set file	एक एक्शन सेट फ़ाइल नहीं
 @msg	not an EMF or WMF file	नहीं एक EMF या WMF फ़ाइल
+@msg	not an HP-GL file	HP-GL फ़ाइल नहीं है
 @msg	not an export presets file (format `{_1}`)	नहीं निर्यात presets फ़ाइल (format `{_1}`)
 @msg	not an export presets file: {e}	एक निर्यात प्रीसेट फ़ाइल नहीं: {e}
 @msg	not an image VectorCraft reads (see document.formats)	यह ऐसी इमेज नहीं है जिसे VectorCraft पढ़ सके (document.formats देखें)

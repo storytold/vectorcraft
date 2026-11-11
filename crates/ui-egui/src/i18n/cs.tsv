@@ -4825,6 +4825,7 @@ imageTrace	Outline	Obrys
 @msg	not a stored central record	nejde o uložený centrální záznam
 @msg	not a valid plug-in module: {0}	neplatný modul zásuvného modulu: {0}
 @msg	not an EMF or WMF file	nejde o soubor EMF ani WMF
+@msg	not an HP-GL file	nejde o soubor HP-GL
 @msg	not found	nenalezeno
 @msg	not in pattern editing mode	není aktivní režim úprav vzorku
 @msg	finish editing the pattern first	nejprve dokončete úpravy vzorku

@@ -5202,6 +5202,7 @@ imageTrace	Outline	Körvonal
 @msg	not a VectorCraft shortcut set (missing `overrides`)	nem VectorCraft-billentyűparancskészlet (hiányzik: `overrides`)
 @msg	not a blend	nem összemosás
 @msg	not an EMF or WMF file	nem EMF- vagy WMF-fájl
+@msg	not an HP-GL file	nem HP-GL-fájl
 @msg	not found	nem található
 @msg	not in pattern editing mode	nem mintázatszerkesztő módban vagy
 @msg	finish editing the pattern first	előbb fejezd be a mintázat szerkesztését

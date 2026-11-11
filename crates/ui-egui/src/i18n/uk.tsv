@@ -4544,6 +4544,7 @@ axis	Both	Обидві
 @msg	not a stored central record	не є збереженим центральним записом
 @msg	not a valid plug-in module: {0}	не є допустимим модулем: {0}
 @msg	not an EMF or WMF file	не є файлом EMF або WMF
+@msg	not an HP-GL file	не є файлом HP-GL
 @msg	not found	не знайдено
 @msg	not in pattern editing mode	не в режимі редагування візерунка
 @msg	finish editing the pattern first	спочатку завершіть редагування візерунка

@@ -4506,6 +4506,7 @@ axis	Both	Les deux
 @msg	not a stored central record	ce n’est pas un enregistrement central stocké
 @msg	not a valid plug-in module: {0}	ce n’est pas un module de plug-in valide : {0}
 @msg	not an EMF or WMF file	ce n’est pas un fichier EMF ou WMF
+@msg	not an HP-GL file	ce n’est pas un fichier HP-GL
 @msg	not found	introuvable
 @msg	not in pattern editing mode	pas en mode d’édition de motif
 @msg	finish editing the pattern first	terminez d’abord la modification du motif
