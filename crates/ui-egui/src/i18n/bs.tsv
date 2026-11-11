@@ -6572,8 +6572,14 @@ shape	Open	Otvoren
 	Ended at a limit	Završeno na ograničenju
 	Stopped	Zaustavljeno
 	Ended by an internal fault	Završeno zbog interne greške
-	{ms} ms, {calls} host calls	{ms} ms, {calls} poziva hosta
-	{dropped} earlier lines dropped, {cut} lines cut	{dropped} ranijih redova uklonjeno, {cut} redova skraćeno
+	time unavailable	vrijeme nije dostupno
+	{ms} ms	{ms} ms
+	{time}, {calls}	{time}, {calls}
+	slowest: {commands}	najsporije: {commands}
+	{dropped}, {cut}	{dropped}, {cut}
+@plural	{n} host call|{n} host calls	{n} poziv hosta|{n} poziva hosta|{n} poziva hosta
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} raniji red uklonjen|{n} ranija reda uklonjena|{n} ranijih redova uklonjeno
+@plural	{n} line cut|{n} lines cut	{n} red skraćen|{n} reda skraćena|{n} redova skraćeno
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Osvježi odgođene efekte

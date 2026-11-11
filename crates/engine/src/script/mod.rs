@@ -170,21 +170,27 @@ thread_local! {
 static NEXT_JOB: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
 /// A session's hold on its running job: while one exists the lease is held. Dropping it ends the job.
+/// It keeps the run's number and its name as console lines give it, so the run's console entry can
+/// end when the job is gone.
 #[derive(Debug)]
-pub struct JobKey(u64);
+pub struct JobKey {
+    id: u64,
+    run: u64,
+    name: Arc<str>,
+}
 
 impl Drop for JobKey {
     fn drop(&mut self) {
         let _ = JOBS.try_with(|jobs| {
             if let Ok(mut jobs) = jobs.try_borrow_mut() {
-                jobs.remove(&self.0);
+                jobs.remove(&self.id);
             }
         });
     }
 }
 
 fn with_job<T>(key: &JobKey, f: impl FnOnce(&mut Job) -> T) -> Option<T> {
-    JOBS.with(|jobs| jobs.borrow_mut().get_mut(&key.0).map(f))
+    JOBS.with(|jobs| jobs.borrow_mut().get_mut(&key.id).map(f))
 }
 
 /// The state a script changes that a rollback puts back.
@@ -1302,12 +1308,8 @@ impl Session {
     /// ([`Self::script_report`]). False with none running.
     pub fn script_abandon(&mut self) -> bool {
         let Some(key) = self.script_key.take() else { return false };
-        let Some(job) = JOBS.with(|jobs| jobs.borrow_mut().remove(&key.0)) else {
-            drop(key);
-            raise_ids(self);
-            self.script_stop.clear();
-            self.reset_tool();
-            cmd::compositefonts::sync(self);
+        let Some(job) = JOBS.with(|jobs| jobs.borrow_mut().remove(&key.id)) else {
+            self.script_gone(key, console::Ending::Stopped);
             return true;
         };
         drop(key);
@@ -1315,6 +1317,19 @@ impl Session {
         let e = RunError { kind: RunErrorKind::Limit(kind), message: format!("limit reached: {kind:?}"), line: 0, column: 0 };
         let _ = self.script_failed(job, &e);
         true
+    }
+
+    /// Ends the run whose job is no longer held: its console entry ends with `ending`, with no
+    /// report line, since its time and host calls went with the job, and the session's state is
+    /// put back as at the end of any run.
+    fn script_gone(&mut self, key: JobKey, ending: console::Ending) {
+        let line = console::ConsoleLine { run: key.run, name: key.name.clone(), entry: console::Entry::End(ending) };
+        self.script_console.push(line, false);
+        drop(key);
+        raise_ids(self);
+        self.script_stop.clear();
+        self.reset_tool();
+        cmd::compositefonts::sync(self);
     }
 
     /// A script can't start while a document holds a drag in progress or an undo group, which its
@@ -1416,10 +1431,11 @@ impl Session {
             return Err(EngineError::Other(message));
         }
         let scope = crate::file_access::ScopeHandle::capture();
+        let (run, line_name) = (host.run, host.name.clone());
         let job = Job { realm, host, world: World::working(self), start_uids: open, name: name.clone(), scope };
         let id = NEXT_JOB.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         JOBS.with(|jobs| jobs.borrow_mut().insert(id, job));
-        self.script_key = Some(JobKey(id));
+        self.script_key = Some(JobKey { id, run, name: line_name });
         Ok(name)
     }
 
@@ -1427,14 +1443,15 @@ impl Session {
     /// run has ended: its report, or the error that ended it, with the documents put back.
     pub fn script_pump(&mut self) -> Option<Result<Value>> {
         let key = self.script_key.take()?;
-        let Some(mut job) = JOBS.with(|jobs| jobs.borrow_mut().remove(&key.0)) else {
+        let Some(mut job) = JOBS.with(|jobs| jobs.borrow_mut().remove(&key.id)) else {
+            self.script_gone(key, console::Ending::Internal);
             return Some(Err(EngineError::Other(JOB_GONE.to_string())));
         };
         if let Some(e) = job.host.dialogs.take_failure() {
             return Some(self.script_failed(job, &e));
         }
         if (job.host.waiting.get() || job.host.asleep().is_some() || job.host.dialogs.is_waiting()) && !self.script_stop.is_set() {
-            JOBS.with(|jobs| jobs.borrow_mut().insert(key.0, job));
+            JOBS.with(|jobs| jobs.borrow_mut().insert(key.id, job));
             self.script_key = Some(key);
             return None;
         }
@@ -1456,7 +1473,7 @@ impl Session {
             }
             Ok(Err(e)) => Some(self.script_failed(job, &e)),
             Ok(Ok(Progress::Paused)) => {
-                JOBS.with(|jobs| jobs.borrow_mut().insert(key.0, job));
+                JOBS.with(|jobs| jobs.borrow_mut().insert(key.id, job));
                 self.script_key = Some(key);
                 None
             }
@@ -1730,6 +1747,13 @@ fn run_slice(s: &mut Session, job: &mut Job) -> std::result::Result<std::result:
     job.world.swap(s);
     s.depth = depth;
     r
+}
+
+/// Tests: removes the session's running job while the session keeps its hold on it. → whether a
+/// job was removed.
+#[cfg(test)]
+pub(crate) fn forget_job(s: &Session) -> bool {
+    s.script_key.as_ref().is_some_and(|k| JOBS.with(|jobs| jobs.borrow_mut().remove(&k.id)).is_some())
 }
 
 /// The objects a run may add before it is asked to continue or stop.

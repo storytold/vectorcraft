@@ -6,7 +6,7 @@
 use std::fmt::Write;
 
 use vectorcraft_color::{Color, Gradient};
-use vectorcraft_doc::{LineCap, LineJoin, StrokeLayer};
+use vectorcraft_doc::{LAYER_COLORS, LayerColor, LineCap, LineJoin, StrokeLayer};
 use vectorcraft_geom::{Affine, Anchor, AnchorKind, PathData, Point, SubPath};
 
 use crate::ps;
@@ -59,6 +59,43 @@ pub(crate) fn guide(s: &mut String, xf: Affine, path: &PathData, editing: bool) 
         }
         subpath(s, xf, sp);
         s.push_str(if editing && sp.closed { "(n) *\n" } else { "(N) *\n" });
+    }
+}
+
+/// The colour index an `.ai` layer's `Lb` gives preset `preset` (its position in
+/// [`LAYER_COLORS`]). The file numbers Magenta, Cyan and Yellow 4, 5 and 6, where
+/// [`LAYER_COLORS`] has Yellow, Magenta and Cyan; every other preset has its own position (#6502,
+/// from the index and RGB pairs of the `Lb` records in files users sent). A reader takes the index
+/// and ignores the RGB beside it, so the index decides the colour.
+pub(crate) fn ai_layer_index(preset: u8) -> u8 {
+    match preset {
+        4 => 6,
+        5 => 4,
+        6 => 5,
+        i => i,
+    }
+}
+
+/// The preset (position in [`LAYER_COLORS`]) of the colour index `index` in an `.ai` layer's
+/// `Lb`: the inverse of [`ai_layer_index`].
+pub(crate) fn preset_of_ai_layer_index(index: u8) -> u8 {
+    match index {
+        6 => 4,
+        4 => 5,
+        5 => 6,
+        i => i,
+    }
+}
+
+/// The colour index and RGB an `.ai` layer's `Lb` writes for `color`: a preset's index
+/// ([`ai_layer_index`]) with its RGB, or `-1` with a custom colour's RGB.
+pub(crate) fn layer_color(color: LayerColor) -> (i64, [u8; 3]) {
+    match color {
+        LayerColor::Preset(i) => match LAYER_COLORS.get(usize::from(i)) {
+            Some((_, rgb)) => (i64::from(ai_layer_index(i)), *rgb),
+            None => (-1, [79, 128, 255]),
+        },
+        LayerColor::Custom(rgb) => (-1, rgb),
     }
 }
 
