@@ -47,6 +47,7 @@ fn builtin_libraries_are_listed_with_original_styles_using_catalogued_effects() 
     assert!(libs.iter().any(|l| l["id"] == "textures" && l["name"] == "Textures" && l["count"] == 8), "{libs:?}");
     assert!(libs.iter().any(|l| l["id"] == "neon-glow" && l["name"] == "Neon & Glow" && l["count"] == 6), "{libs:?}");
     assert!(libs.iter().any(|l| l["id"] == "paper-cutouts" && l["name"] == "Paper Cutouts" && l["count"] == 6), "{libs:?}");
+    assert!(libs.iter().any(|l| l["id"] == "rarity-tiers" && l["name"] == "Rarity Tiers"), "{libs:?}");
     for l in libs {
         let id = l["id"].as_str().unwrap();
         let g = run(&mut s, "graphicStyle.library", json!({"library": id}));
@@ -307,6 +308,10 @@ fn textures_styles_apply_their_texture_effects_and_keep_their_params_through_sav
             ["sketch.waterPaper"],
         ]
     );
+
+    let rarity = run(&mut s, "graphicStyle.library", json!({"library": "rarity-tiers"}));
+    let rarity_names: Vec<&str> = rarity["styles"].as_array().unwrap().iter().map(|x| x["name"].as_str().unwrap()).collect();
+    assert_eq!(rarity_names, ["Common Fill", "Rare Glow", "Epic Edge", "Legendary Aura", "Mythic Pulse", "Unique Shine"]);
     assert_eq!(applied[1][0].1["texture"], "canvas");
     assert_eq!(applied[3][0].1["crackSpacing"], 12.0);
     for (fx, g) in applied.iter().zip(&lib.styles) {
