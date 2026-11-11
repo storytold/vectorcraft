@@ -8,6 +8,8 @@
 
 > **Flyout update:** 2026-11-06 — resizable icon-strip flyouts and bottom-aligned panel footers (#5713); scores and estimates unchanged.
 
+> Scissors snapping update (2026-11-11): with Alt released, hover and cuts use the Pen's path, alignment, intersection and anchor snaps (#6470). Scores and estimates unchanged.
+
 ## Feature submission evidence
 
 Numeric fields step on wheel hover without taking keyboard focus (#5949). Arrow keys still require focus; modifiers, units, limits, mixed values and existing rounding stay in the shared stepping path. Headless regressions in `tests/numfields.rs` cover hovered unfocused fields, focused fields, trackpad accumulation and panel scroll exclusion. Scores and estimates unchanged.
@@ -156,6 +158,7 @@ tools, never checked side by side) isn't captured row by row.
 | Pen cursors (new path ×, continue /, close o, add +, delete −, convert ^) | done | the nib is a fountain-pen nib, tip on the hotspot, with the slit widening into the breather hole and the heel clipped square to its axis; bitmap tests at 1× and 2× pin the nib and the new-path asterisk, and in-app screenshots compare the Pen with Direct Selection |
 | Node-editing cursors: Direct Selection's white arrow with a hollow or filled square over an anchor (path unselected or selected); the Reshape Segment cursor over a curved segment (Direct Selection, Anchor Point, the Pen with Alt); the Anchor Point caret for the Pen with Alt; Group Selection's plus (also Direct Selection with Alt); a filled arrow while dragging that turns hollow on a snap; a double arrowhead for an Alt-drag copy | partial | as the public manual describes them, drawn in code; no cue over handles (none documented) |
 | Anchor Point and Curvature tools' own cursors | done | the caret on the anchor it converts; the pen nib with a curve badge |
+| Scissors hover and cuts use the Pen's path, alignment, intersection and anchor snapping (#6470) | implemented | Existing Smart Guides, Snap to Point, pixel and grid options apply; Pixel Preview turns off Smart Guides. Alt still adds an anchor without cutting, and a cut still leaves one new endpoint selected. Headless regressions: `crates/tools/src/draw2/anchor/tests.rs` and `crates/engine/tests/scissors_snap.rs`. |
 | Free Transform's Cmd/Ctrl side-shear cursor | done | two arrows passing along the side (ShearH, ShearV), instead of the resize arrow across it |
 | Cursors of their own for Lasso, Magic Wand, the freehand tools, Shaper, Live Paint Bucket, Measure, Print Tiling, the symbolism tools, vertical type, Scissors (over a segment and away), Mesh and Puppet Warp | partial | each tool returns its own cursor and Use Precise Cursors turns them into the crosshair; until they're drawn they borrow the crosshair, the I-beam, the Pen's add cursor or not-allowed |
 | Blob Brush and Eraser: the tip's outline at the pointer | done | before a press and while painting, the outline of the tip (its size, angle and roundness, at the zoom) follows the pointer, black on a white halo, round a small centre dot; `[` / `]` and Tool Options change it at once; precise cursors (Caps Lock) show only the crosshair; it goes when the pointer leaves the canvas, while Cmd/Ctrl lends a selection tool and while Alt lends the Blob Brush the Smooth tool (#4977); `crates/tools/src/draw2/gesture.rs` and its tests While the button is down a round Blob Brush shows the outline of the area it will add, rounded at both ends, not a line as wide as the brush that ends square (#4343). |
@@ -511,6 +514,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-11 | minor | Scissors hover and cuts share Pen-style path/align/intersect/anchor snapping (#6470), retaining view options, Alt Add Anchor and cut endpoint selection; headless tool and Session regressions referenced. Scores and estimates unchanged. |
 | 2026-11-11 | minor | Outline view: a click on a path's outline selects it through an image or a gradient mesh in front, which Outline draws as a frame or mesh lines (#6437). |
 | 2026-11-11 | minor | A middle-click on a document tab (or its ×) closes it as the × does; closing a document's last view with unsaved changes asks to save first (#6506). VectorCraft addition; scores and estimates unchanged. |
 | 2026-11-03 | minor | A double-click on a ruler adds a guide at the pointer (#5239): a vertical one on the top ruler, a horizontal one on the left ruler; scores and estimates unchanged. |

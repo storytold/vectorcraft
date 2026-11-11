@@ -336,6 +336,12 @@ fn visible(cx: &ToolContext) -> Option<Rect> {
 }
 
 impl DrawSnap {
+    /// Whether the last hover or press still has the current targets, without gathering the art
+    /// again. A caller caching the snapped point can use this before reusing it for a cursor.
+    pub(crate) fn is_current(&self, cx: &ToolContext, exclude: &[NodeId]) -> bool {
+        self.targets.as_ref().is_some_and(|(key, _)| key.as_ref() == Some(&SnapKey::of(cx, exclude)))
+    }
+
     /// Snap the pointer hovering at `p` (the art but `exclude` as targets, the anchors of
     /// `exclude` still pulling), reusing the targets while nothing they depend on changed.
     pub fn hover(&mut self, cx: &ToolContext, p: Point, exclude: &[NodeId], from: Option<&Leave>) -> Point {

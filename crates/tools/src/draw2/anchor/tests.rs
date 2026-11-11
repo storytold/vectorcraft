@@ -301,6 +301,187 @@ fn scissors_splits_at_segment() {
     );
 }
 
+fn scissors_crossing() -> (vectorcraft_doc::Document, NodeId, Selection) {
+    let (mut d, rect) = doc_with_rect();
+    let line = d.alloc_id();
+    d.insert(
+        Some(d.layers[0].id),
+        1,
+        vectorcraft_doc::Node::path(
+            line,
+            vectorcraft_geom::shapes::line(Point::new(145.0, 90.0), Point::new(165.0, 130.0)),
+            vectorcraft_doc::Appearance::default_art(),
+        ),
+    )
+    .unwrap();
+    // The selected rectangle is the cut target even though the crossing line is above it.
+    let mut selected = Selection::default();
+    selected.set([rect]);
+    (d, rect, selected)
+}
+
+fn scissors_cut_at(d: &vectorcraft_doc::Document, id: NodeId, actions: &[Action]) -> Point {
+    let [Action::Exec(command, args)] = actions else { panic!("expected one split: {actions:?}") };
+    assert_eq!(command, "path.split");
+    assert_eq!(args["id"], id.0);
+    let si = args["subpath"].as_u64().unwrap() as usize;
+    let sp = &d.node(id).unwrap().path_data().unwrap().subpaths[si];
+    if let Some(anchor) = args["anchor"].as_u64() {
+        sp.anchors[anchor as usize].p
+    } else {
+        // A straight segment still has cubic parameters: check geometry, not a linear t.
+        sp.segment(args["segment"].as_u64().unwrap() as usize).eval(args["t"].as_f64().unwrap())
+    }
+}
+
+fn scissors_labels(tool: &AnchorTool, cx: &ToolContext) -> Vec<(String, Point)> {
+    tool.overlays(cx).into_iter().filter_map(|o| if let Overlay::Label { text, p, .. } = o { Some((text, p)) } else { None }).collect()
+}
+
+/// #6470: the hover and the cut use the drawing tools' intersection, with their existing pixel,
+/// grid and Smart Guides/Snap to Point precedence. Turning Smart Guides off restores the raw cut.
+#[test]
+fn scissors_snaps_intersections_with_the_drawing_options() {
+    let (mut d, rect, selected) = scissors_crossing();
+    d.grid = vectorcraft_doc::GridPrefs { spacing: 20.0, subdivisions: 1 };
+    let paint = paint();
+    for (smart, point, pixel, grid, x, label) in [
+        (true, true, false, false, 150.0, Some("intersect")),
+        (false, false, false, false, 152.0, None),
+        (false, true, false, false, 152.0, None),
+        (true, true, true, false, 152.0, None),
+        (true, true, false, true, 160.0, None),
+    ] {
+        let c = ToolContext { smart_guides: smart, snap_to_point: point, snap_to_pixel: pixel, snap_to_grid: grid, ..cx(&d, &selected, &paint) };
+        let mut tool = AnchorTool::new("scissors");
+        assert!(tool.pointer(&c, &PointerEvent::new(PointerKind::Move, 152.0, 101.5)).is_empty());
+        let hovered = scissors_labels(&tool, &c);
+        let actions = tool.pointer(&c, &PointerEvent::new(PointerKind::Down, 152.0, 101.5));
+        let cut = scissors_cut_at(&d, rect, &actions);
+        assert!(cut.distance(Point::new(x, 100.0)) < 1e-6, "smart={smart}, point={point}, pixel={pixel}, grid={grid}: {cut:?}");
+        assert_eq!(hovered, label.map(|s| (s.to_string(), Point::new(x, 100.0))).into_iter().collect::<Vec<_>>());
+        assert!(tool.pointer(&c, &PointerEvent::new(PointerKind::Up, 152.0, 101.5)).is_empty());
+        assert!(tool.overlays(&c).is_empty());
+    }
+}
+
+/// Path and alignment labels use the same targets as the Pen. A configured snap reach beyond the
+/// anchor's pick radius proves that snapping chooses the anchor rather than a nearby segment.
+#[test]
+fn scissors_shows_paths_alignment_and_configured_anchor_snaps() {
+    let (d, rect) = doc_with_rect();
+    let (selected, paint) = (Selection::default(), paint());
+    for (at, smart, point, reach, label, target, cuts) in [
+        ((170.0, 201.0), true, true, 4.0, Some("path"), (170.0, 200.0), true),
+        ((151.5, 431.0), true, true, 4.0, Some("align"), (150.0, 431.0), false),
+        ((201.0, 105.5), true, true, 8.0, Some("anchor"), (200.0, 100.0), true),
+        ((201.0, 105.5), true, true, 4.0, Some("path"), (200.0, 105.5), true),
+        ((201.0, 105.5), false, true, 8.0, Some("anchor"), (200.0, 100.0), true),
+        // Outside Smart Guides' reach, but inside the legacy 4.5 px anchor pick radius.
+        ((200.0, 104.25), true, true, 4.0, Some("path"), (200.0, 104.25), true),
+        ((200.0, 104.25), false, false, 4.0, None, (200.0, 100.0), true),
+    ] {
+        let c =
+            ToolContext { smart_guides: smart, snap_to_point: point, snapping_tolerance: reach, snap_tolerance: reach, ..cx(&d, &selected, &paint) };
+        let mut tool = AnchorTool::new("scissors");
+        tool.pointer(&c, &PointerEvent::new(PointerKind::Move, at.0, at.1));
+        let target = Point::from(target);
+        let labels = scissors_labels(&tool, &c);
+        if let Some(label) = label {
+            assert_eq!(labels.len(), 1, "{labels:?}");
+            assert_eq!(labels[0].0, label);
+            assert!(labels[0].1.distance(target) < 1e-6, "{labels:?}");
+        } else {
+            assert!(labels.is_empty(), "{labels:?}");
+        }
+        let actions = tool.pointer(&c, &PointerEvent::new(PointerKind::Down, at.0, at.1));
+        if cuts {
+            assert!(scissors_cut_at(&d, rect, &actions).distance(target) < 1e-6, "{actions:?}");
+            if target == Point::new(200.0, 100.0) {
+                assert!(matches!(&actions[..], [Action::Exec(_, v)] if v["anchor"] == 1));
+            }
+        } else {
+            assert!(actions.is_empty(), "a guide away from every path must not cut: {actions:?}");
+        }
+    }
+}
+
+/// A cached snap is for the same raw position, document state and drawing options only. A press
+/// gathers fresh targets, even when a previous hover's document state is reused by a caller.
+#[test]
+fn scissors_cursor_and_press_use_current_snaps() {
+    let (d, rect) = doc_with_rect();
+    let (selected, paint) = (Selection::default(), paint());
+    let mut c = cx(&d, &selected, &paint);
+    let mut tool = AnchorTool::new("scissors");
+    let at = Point::new(204.0, 140.0);
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Move, at.x, at.y));
+    assert_eq!(tool.cursor(&c, at, Mods::default()), Cursor::Scissors);
+    assert_eq!(tool.cursor(&c, Point::new(204.0, 160.0), Mods::default()), Cursor::ScissorsNotAllowed);
+    c.smart_guides = false;
+    c.snap_to_point = false;
+    assert_eq!(tool.cursor(&c, at, Mods::default()), Cursor::ScissorsNotAllowed);
+    assert!(tool.overlays(&c).is_empty());
+    c.smart_guides = true;
+    c.snap_to_point = true;
+    c.zoom = 2.0;
+    assert_eq!(tool.cursor(&c, at, Mods::default()), Cursor::ScissorsNotAllowed);
+    c.zoom = 1.0;
+    c.revision.1 += 1;
+    assert_eq!(tool.cursor(&c, at, Mods::default()), Cursor::ScissorsNotAllowed);
+
+    let (crossing, _, selected) = scissors_crossing();
+    let before = cx(&crossing, &selected, &paint);
+    let mut tool = AnchorTool::new("scissors");
+    tool.pointer(&before, &PointerEvent::new(PointerKind::Move, 152.0, 101.5));
+    let after = cx(&d, &selected, &paint);
+    let actions = tool.pointer(&after, &PointerEvent::new(PointerKind::Down, 152.0, 101.5));
+    assert!(scissors_cut_at(&d, rect, &actions).distance(Point::new(152.0, 100.0)) < 1e-6, "{actions:?}");
+}
+
+/// Ending the hover, release, Escape (including a dropped touch) and switching tools drop both the
+/// guides and the cursor's snap. Alt lends the raw Add Anchor Point tool, with no Scissors guide.
+#[test]
+fn scissors_clears_its_snap_when_the_interaction_ends_or_alt_takes_over() {
+    let (d, _) = doc_with_rect();
+    let (selected, paint) = (Selection::default(), paint());
+    let c = cx(&d, &selected, &paint);
+    for ending in 0..7 {
+        let mut tool = AnchorTool::new("scissors");
+        tool.pointer(&c, &PointerEvent::new(PointerKind::Move, 204.0, 140.0));
+        assert!(!tool.overlays(&c).is_empty());
+        match ending {
+            0 => {
+                tool.pointer(&c, &PointerEvent::new(PointerKind::Up, 204.0, 140.0));
+            }
+            1 => {
+                tool.key(&c, ToolKey::Escape, Mods::default());
+            }
+            2 => {
+                tool.drop_press(&c);
+            }
+            3 => {
+                tool.deactivate(&c);
+            }
+            4 => tool.hover_ended(&c),
+            _ => {
+                let alt = Mods { alt: true, ..Mods::default() };
+                let kind = if ending == 5 { PointerKind::Move } else { PointerKind::Down };
+                let event = PointerEvent::new(kind, 170.0, 201.0);
+                let mut add = AnchorTool::new("addAnchor");
+                let actions = tool.pointer(&c, &event.with_mods(alt));
+                assert_eq!(actions, add.pointer(&c, &event));
+                if kind == PointerKind::Down {
+                    assert!(matches!(&actions[..], [Action::Exec(command, _)] if command == "path.insertAnchor"));
+                }
+                assert_eq!(tool.cursor(&c, event.pos, alt), Cursor::PenAdd);
+            }
+        }
+        assert!(tool.overlays(&c).is_empty(), "ending {ending}");
+        assert_eq!(tool.cursor(&c, Point::new(204.0, 140.0), Mods::default()), Cursor::ScissorsNotAllowed, "ending {ending}");
+    }
+}
+
 /// With Alt held the Scissors tool acts as the Add Anchor Point tool: a click sends what the Add
 /// Anchor Point tool's click sends (an anchor inserted on a segment, nothing away from every path)
 /// and never splits, and the cursor is the Add Anchor Point tool's everywhere. Without Alt it cuts
