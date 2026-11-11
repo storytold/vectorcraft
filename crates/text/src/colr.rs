@@ -114,7 +114,7 @@ fn outline(font: &skrifa::FontRef<'_>, location: LocationRef<'_>, gid: GlyphId) 
     if let Some(g) = font.outline_glyphs().get(gid) {
         let _ = g.draw(DrawSettings::unhinted(Size::unscaled(), location), &mut pen);
     }
-    let mut path = pen.0;
+    let mut path = pen.finish();
     path.apply_affine(FLIP);
     path
 }
@@ -359,7 +359,9 @@ impl ColorPainter for Tree<'_> {
     }
 
     fn push_clip_glyph(&mut self, glyph_id: GlyphId) {
-        let mut clip = outline(self.font, self.location, glyph_id);
+        // Past the budget the glyph is drawn as its outline anyway: later layers are not drawn,
+        // only opened and closed so the callbacks stay balanced.
+        let mut clip = if self.too_large { BezPath::new() } else { outline(self.font, self.location, glyph_id) };
         clip.apply_affine(self.transform());
         self.charge(&clip);
         self.open(Open { clip: Some(clip), blend: None, children: vec![], flooded: false });
@@ -381,6 +383,9 @@ impl ColorPainter for Tree<'_> {
             self.unsupported.get_or_insert("a fill outside any glyph");
             return;
         };
+        if self.too_large {
+            return;
+        }
         let Some(clip) = self.groups.get(at).and_then(|g| g.clip.clone()) else { return };
         if at + 1 == self.groups.len()
             && let Some(g) = self.groups.last_mut()
@@ -392,6 +397,9 @@ impl ColorPainter for Tree<'_> {
 
     /// The glyph's outline filled, the brush moved by `brush_transform` (the glyph stays).
     fn fill_glyph(&mut self, glyph_id: GlyphId, brush_transform: Option<Transform>, brush: Brush<'_>) {
+        if self.too_large {
+            return;
+        }
         let mut path = outline(self.font, self.location, glyph_id);
         path.apply_affine(self.transform());
         let brush_xf = self.transform() * brush_transform.as_ref().map_or(Affine::IDENTITY, affine);

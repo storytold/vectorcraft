@@ -535,7 +535,7 @@ impl FontDb {
         {
             let _ = g.draw(DrawSettings::unhinted(Size::unscaled(), face.location()), &mut pen);
         }
-        let p = Arc::new(pen.0);
+        let p = Arc::new(pen.finish());
         let mut cache = self.outlines.lock().unwrap_or_else(|e| e.into_inner());
         if cache.len() >= OUTLINE_CACHE_MAX {
             cache.clear();
