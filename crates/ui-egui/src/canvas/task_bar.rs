@@ -158,6 +158,7 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
                     if crate::menus::enabled(app, "type.dynamicText") {
                         items.push((tl!("Dynamic Text"), "maximize-2", "type.dynamicText", none()));
                     }
+                    center_on_path_items(app, &mut items);
                 }
             }
         } else if is_image {
@@ -346,6 +347,18 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
         Some((TASK_BAR_TO_SMOOTH, _)) => crate::menus::invoke(app, "path.convertAnchors", json!({"to": "smooth"})),
         Some((c, p)) => crate::menus::invoke(app, c, p),
         None => {}
+    }
+}
+
+/// The Contextual Task Bar's Center on Top and Center on Bottom, as in the Type menu, for type on a
+/// closed path.
+fn center_on_path_items(app: &VectorcraftApp, items: &mut Vec<(&'static str, &'static str, &'static str, serde_json::Value)>) {
+    for (label, icon, id) in
+        [(tl!("Center on Top"), "dc-al-top", "type.pathCenter.top"), (tl!("Center on Bottom"), "dc-al-bottom", "type.pathCenter.bottom")]
+    {
+        if crate::menus::enabled(app, id) {
+            items.push((label, icon, id, json!({})));
+        }
     }
 }
 

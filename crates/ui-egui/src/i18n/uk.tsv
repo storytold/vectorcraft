@@ -2359,6 +2359,10 @@ file-filter	Templates	Шаблони
 	Optical Margin Alignment	Оптичне вирівнювання полів
 	Dynamic Text	Динамічний текст
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	текст за контуром у пов’язаному тексті не може використовувати динамічний текст: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	не можна центрувати вгорі чи внизу текст за незамкненим або складеним контуром: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	не можна центрувати текст за контуром без довжини або без висоти: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	не можна центрувати вгорі чи внизу текст за контуром у пов’язаному тексті: {frames}
+@msg	select type on a closed path	виділіть текст за замкненим контуром
 	Optimize for fast web view	Оптимізувати для швидкого перегляду web
 	Optimized	Оптимізовано
 	Options	Параметри
@@ -3703,6 +3707,8 @@ effect	Points	Точки
 	Type on a Path	Текст за контуром
 	Type on a Path Options	Параметри тексту за контуром
 	Type on a Path Options…	Параметри тексту за контуром…
+	Center on Top	Центрувати вгорі
+	Center on Bottom	Центрувати внизу
 	Type on a Path Tool	Інструмент «Текст за контуром»
 	Type Orientation	Орієнтація тексту
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Текст залишається текстом, і кожне обведення — лінія з її товщиною та штрихами.

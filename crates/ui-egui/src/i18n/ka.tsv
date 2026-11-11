@@ -317,6 +317,8 @@
 	Stair Step	საფეხურები
 	Gravity	გრავიტაცია
 	Type on a Path Options…	ტრაექტორიაზე ტექსტის პარამეტრები…
+	Center on Top	ზემოთ ცენტრში მოთავსება
+	Center on Bottom	ქვემოთ ცენტრში მოთავსება
 	Threaded Text	დაკავშირებული ტექსტი
 	Create	შექმნა
 	Release Selection	მონიშნულის მოხსნა
@@ -334,6 +336,10 @@
 	Optical Margin Alignment	ოპტიკური არშიის სწორება
 	Dynamic Text	დინამიკური ტექსტი
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	დაკავშირებულ ტექსტში ტრაექტორიაზე ტექსტი ვერ გამოიყენებს დინამიკურ ტექსტს: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	ღია ან შედგენილ ტრაექტორიაზე ტექსტი ვერ მოთავსდება ზემოთ ან ქვემოთ ცენტრში: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	ტექსტი ვერ მოთავსდება ცენტრში ტრაექტორიაზე, რომელსაც არ აქვს სიგრძე ან სიმაღლე: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	დაკავშირებულ ტექსტში ტრაექტორიაზე ტექსტი ვერ მოთავსდება ზემოთ ან ქვემოთ ცენტრში: {frames}
+@msg	select type on a closed path	მონიშნეთ დახურულ ტრაექტორიაზე ტექსტი
 	Fill with Placeholder Text	შემავსებელი ტექსტით შევსება
 	Insert Inline Symbol	ჩადგმული სიმბოლოს ჩასმა
 	Show Hidden Characters	დამალული სიმბოლოების ჩვენება

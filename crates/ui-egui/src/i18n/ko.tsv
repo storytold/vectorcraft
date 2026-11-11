@@ -402,6 +402,8 @@ digits	Malayalam	말라얄람어
 	Stair Step	계단
 	Gravity	중력
 	Type on a Path Options…	패스 위 문자 옵션…
+	Center on Top	위쪽에 가운데 맞춤
+	Center on Bottom	아래쪽에 가운데 맞춤
 	Threaded Text	연결된 문자
 	Create	만들기
 	Release Selection	선택 해제
@@ -429,6 +431,10 @@ digits	Malayalam	말라얄람어
 	Optical Margin Alignment	시각적 여백 정렬
 	Dynamic Text	동적 텍스트
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	연결된 문자의 패스 위 문자에는 동적 텍스트를 사용할 수 없습니다: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	열린 패스나 컴파운드 패스 위 문자는 위쪽이나 아래쪽에 가운데 맞춤할 수 없습니다: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	길이나 높이가 없는 패스 위 문자는 가운데 맞춤할 수 없습니다: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	연결된 문자의 패스 위 문자는 위쪽이나 아래쪽에 가운데 맞춤할 수 없습니다: {frames}
+@msg	select type on a closed path	닫힌 패스 위 문자를 선택하세요
 	Fill with Placeholder Text	자리 표시 문자로 채우기
 	Insert Inline Symbol	인라인 심볼 삽입
 	Show Hidden Characters	숨겨진 문자 표시
