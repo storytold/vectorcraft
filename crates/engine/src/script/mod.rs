@@ -496,15 +496,12 @@ struct Host {
     script_map: RefCell<include::SourceMap>,
     /// The same for each source `$.evalFile` gave, in order.
     eval_maps: RefCell<Vec<include::SourceMap>>,
-    /// The last error `$.evalFile` raised for a file it could not run, with the file, line and
-    /// column that error is at.
-    eval_failure: RefCell<Option<EvalFailure>>,
+    /// The file, line and column of each error `$.evalFile` raised for a file it could not run, in
+    /// order: the error's mark ([`HostError::Marked`]) is its index.
+    eval_failures: RefCell<Vec<(Arc<str>, u32, u32)>>,
     /// What the last `#strict` line of the file `$.evalFile` last gave set (`None` without one).
     eval_strict: Cell<Option<bool>>,
 }
-
-/// An error `$.evalFile` raised, as thrown, and the file, line and column it is at.
-type EvalFailure = (String, Arc<str>, u32, u32);
 
 /// A run's host calls by kind, as its report gives them in `hostCallCounts`.
 #[derive(Default)]
@@ -580,6 +577,15 @@ impl Host {
     }
     fn over(&self, limit: &str) -> HostError {
         HostError::Abort(limit.to_string())
+    }
+
+    /// `error`, marked as an error at `file`, `line` and `column`, the place [`located`] gives when
+    /// the run ends with it uncaught.
+    fn placed(&self, error: HostError, file: Arc<str>, line: u32, column: u32) -> HostError {
+        let mut places = self.eval_failures.borrow_mut();
+        let Ok(mark) = u32::try_from(places.len()) else { return error };
+        places.push((file, line, column));
+        HostError::Marked { error: Box::new(error), mark }
     }
 
     fn charge_call(&self, bytes: u64) -> std::result::Result<(), HostError> {
@@ -994,14 +1000,12 @@ fn eval_file(host: &Host, args: Vec<Data>) -> std::result::Result<Data, HostErro
     host.charge_call(path.len() as u64 + 2)?;
     let expanded = host.files.borrow_mut().eval_file(path).map_err(|f| {
         let message = if f.line > 0 { format!("{}:{}:{}: {}", f.file, f.line, f.column, f.message) } else { f.message };
-        if f.line > 0 {
-            *host.eval_failure.borrow_mut() = Some((message.clone(), f.file.clone(), f.line, f.column));
-        }
-        match f.kind {
+        let error = match f.kind {
             include::FailKind::Limit => HostError::Abort(message),
             include::FailKind::Syntax => HostError::Syntax(message),
             include::FailKind::Error => HostError::Error(message),
-        }
+        };
+        if f.line > 0 { host.placed(error, f.file, f.line, f.column) } else { error }
     })?;
     // A file without preprocessor lines is parsed here first, so its syntax error names its place.
     let options = vectorcraft_js::Options { max_source_units: include::MAX_TOTAL_BYTES, ..vectorcraft_js::Options::default() };
@@ -1009,8 +1013,7 @@ fn eval_file(host: &Host, args: Vec<Data>) -> std::result::Result<Data, HostErro
         host.files.borrow_mut().end_eval();
         let (_, file, line, column) = expanded.map.locate(e.line, e.column);
         let message = format!("{file}:{line}:{column}: {}", e.message);
-        *host.eval_failure.borrow_mut() = Some((message.clone(), file, line, column));
-        return Err(HostError::Syntax(message));
+        return Err(host.placed(HostError::Syntax(message), file, line, column));
     }
     host.eval_maps.borrow_mut().push(expanded.map);
     host.eval_strict.set(expanded.strict);
@@ -1103,18 +1106,20 @@ fn preprocessor_error(f: include::Failure) -> (RunError, Option<Arc<str>>) {
     (RunError { kind, message, line: f.line, column: f.column }, file)
 }
 
-/// `e`, which the realm raised in source `tag` ([`Realm::error_source`]), at the line and column of
-/// the file it is in, with that file's name unless it is the script's own.
-fn located(host: &Host, tag: u32, e: &RunError) -> (RunError, Option<Arc<str>>) {
+/// `e`, which the realm raised in source `tag` ([`Realm::error_source`]) with host error mark `mark`
+/// ([`Realm::error_mark`]), at the line and column of the file it is in, with that file's name
+/// unless it is the script's own.
+fn located(host: &Host, tag: u32, mark: Option<u32>, e: &RunError) -> (RunError, Option<Arc<str>>) {
     let map = |m: &include::SourceMap, own: bool| {
         let (index, file, line, column) = m.locate(e.line, e.column);
         let message = if e.kind == RunErrorKind::Syntax { relocated(&e.message, e.line, e.column, line, column) } else { e.message.clone() };
         (RunError { kind: e.kind.clone(), message, line, column }, (!own || index > 0).then_some(file))
     };
-    // An error `$.evalFile` raised for a file it could not run is at that file's place.
-    if let Some((_, file, line, column)) = host.eval_failure.borrow().as_ref().filter(|(thrown, ..)| e.message.contains(thrown.as_str())) {
-        let message = if e.kind == RunErrorKind::Syntax { relocated(&e.message, e.line, e.column, *line, *column) } else { e.message.clone() };
-        return (RunError { kind: e.kind.clone(), message, line: *line, column: *column }, Some(file.clone()));
+    // An error `$.evalFile` raised for a file it could not run, and no script caught, is at that
+    // file's place.
+    if let Some((file, line, column)) = mark.and_then(|m| host.eval_failures.borrow().get(m as usize).cloned()) {
+        let message = if e.kind == RunErrorKind::Syntax { relocated(&e.message, e.line, e.column, line, column) } else { e.message.clone() };
+        return (RunError { kind: e.kind.clone(), message, line, column }, Some(file));
     }
     if e.line == 0 {
         return (e.clone(), None);
@@ -1309,7 +1314,7 @@ impl Session {
             files: RefCell::new(files),
             script_map: RefCell::default(),
             eval_maps: RefCell::default(),
-            eval_failure: RefCell::default(),
+            eval_failures: RefCell::default(),
             eval_strict: Cell::new(None),
         });
         let args = to_data(&Value::Object(request.args), &DataLimits::default(), 0, &mut (0, 0))
@@ -1326,7 +1331,7 @@ impl Session {
                     .and_then(|()| realm.define_host_object("$", dollar_object(&host)))
                     .and_then(|()| dialogs::install(&mut realm, &host))
                     .and_then(|()| realm.start(&expanded.source))
-                    .map_err(|e| located(&host, realm.error_source(), &e))
+                    .map_err(|e| located(&host, realm.error_source(), realm.error_mark(), &e))
             }
         };
         if let Err((e, file)) = started {
@@ -1398,7 +1403,7 @@ impl Session {
     fn script_failed(&mut self, job: Job, e: &RunError) -> Result<Value> {
         job.host.dialogs.stopped();
         let fuel_left = job.realm.fuel_left();
-        let (e, file) = located(&job.host, job.realm.error_source(), e);
+        let (e, file) = located(&job.host, job.realm.error_source(), job.realm.error_mark(), e);
         let mut report = failure_report(&job.name, &e, file.as_deref(), &job.host, fuel_left, job.realm.limits().fuel.saturating_sub(fuel_left));
         close_run(self, &job.host, &mut report, ending(&e.kind));
         drop(job);
