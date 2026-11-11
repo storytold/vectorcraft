@@ -78,8 +78,11 @@
 //!   64 periods).
 //! * `<image>` files are read through [`ImportOptions`]: rasters stay linked, SVG files (and SVG
 //!   `data:` URLs) become art (without their text), missing ones a placeholder keeping the link.
-//! * Text lines after the first start at the first line's x; text in a clip path is ignored;
-//!   absolute positions inside type on a path are ignored; vertical text sets every glyph sideways.
+//! * Text lines after the first start at the first line's x; absolute positions inside type on a
+//!   path are ignored; vertical text sets every glyph sideways.
+//! * A `<text>` in a `<clipPath>`, or a `<use>` there that shows one, clips by its glyph outlines.
+//!   When a clip path holds only one text, and that text has no clip path of its own and no
+//!   even-odd clip rule, the clip group's clipping path is the text as live type that paints nothing.
 //!
 //! ## Import text
 //!

@@ -4267,6 +4267,13 @@ antiAlias	Sharp	शार्प
 	Quest Outline	क्वेस्ट
 	Coin Shine	सिक्का
 	Boss Alert	बॉस
+	Status Effects	स्थिति प्रभाव
+	Poison Tint	ज़हर
+	Freeze Edge	ठंड
+	Burn Aura	जलन
+	Stun Pulse	स्तब्ध
+	Stealth Fade	छिपना
+	Shield Buff	ढाल
 	Shaft:	दस्ता:
 	Shape	शेप
 	Shape Builder	शेप बिल्डर
@@ -6186,6 +6193,7 @@ antiAlias	Sharp	शार्प
 	Stop Script	स्क्रिप्ट रोकें
 	Show External Script Warning	बाहरी स्क्रिप्ट की चेतावनी दिखाएँ
 	A Script Is Running	एक स्क्रिप्ट चल रही है
+	Script Alert	स्क्रिप्ट सूचना
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	स्क्रिप्ट खुले दस्तावेज़ बदल सकती है और अपने चलाए कमांड से फ़ाइलें लिख सकती है। केवल भरोसेमंद स्क्रिप्ट चलाएँ।
 	Do not show this warning again	यह चेतावनी फिर न दिखाएँ
 	Stop the script and undo what it did? Then quit again.	स्क्रिप्ट रोककर उसके बदलाव पूर्ववत करें? फिर दोबारा बाहर निकलें।
