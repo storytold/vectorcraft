@@ -77,6 +77,7 @@ fn installing_a_heavy_filter_asks_first() {
     assert_eq!(pending.message, format!("Install “Test {id}”, which asks for a heavy budget?"));
     assert!(pending.detail.contains("up to 5 minutes and do 20 times the work"), "{}", pending.detail);
     assert!(registry::get(id).is_none(), "not before the user agrees");
+    super::plugins::show_approval(&mut app);
     dialogs::confirm(&mut app).unwrap();
     assert_eq!(registry::get(id).map(|p| p.manifest().name.clone()), Some(format!("Test {id}")));
     assert_eq!(app.ui.status, format!("Installed plug-in Test {id}"));
