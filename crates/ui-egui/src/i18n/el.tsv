@@ -3051,6 +3051,8 @@ theme	Appearance	Εμφάνιση
 	Open the URL in the web browser	Άνοιγμα της διεύθυνσης στο πρόγραμμα περιήγησης
 	Optical	Οπτική
 	Optical Margin Alignment	Οπτική στοίχιση περιθωρίου
+	Dynamic Text	Δυναμικό κείμενο
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	το κείμενο σε διαδρομή μέσα σε συνδεδεμένο κείμενο δεν μπορεί να χρησιμοποιήσει δυναμικό κείμενο: {frames}
 	Optimize for fast web view	Βελτιστοποίηση για γρήγορη προβολή στον ιστό
 	Options for Selection…	Επιλογές για την επιλογή…
 	or more spaces with a tab	ή περισσότερα διαστήματα με στηλοθέτη

@@ -332,6 +332,8 @@
 	Smart Punctuation…	ჭკვიანი პუნქტუაცია…
 	Create Outlines	კონტურებად გარდაქმნა
 	Optical Margin Alignment	ოპტიკური არშიის სწორება
+	Dynamic Text	დინამიკური ტექსტი
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	დაკავშირებულ ტექსტში ტრაექტორიაზე ტექსტი ვერ გამოიყენებს დინამიკურ ტექსტს: {frames}
 	Fill with Placeholder Text	შემავსებელი ტექსტით შევსება
 	Insert Inline Symbol	ჩადგმული სიმბოლოს ჩასმა
 	Show Hidden Characters	დამალული სიმბოლოების ჩვენება

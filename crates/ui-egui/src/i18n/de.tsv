@@ -2289,6 +2289,8 @@ file-filter	Templates	Vorlagen
 	Open…	Öffnen…
 	Optical	Optisch
 	Optical Margin Alignment	Optischer Randausgleich
+	Dynamic Text	Dynamischer Text
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	Pfadtext in verkettetem Text kann keinen dynamischen Text verwenden: {frames}
 	Optimize for fast web view	Für schnelle Webanzeige optimieren
 	Optimized	Optimiert
 	Options	Optionen

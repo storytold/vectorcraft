@@ -3305,6 +3305,8 @@ file-filter	Templates	範本
 	Open…	開啟…
 	Optical	視覺
 	Optical Margin Alignment	視覺邊界對齊
+	Dynamic Text	動態文字
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	串連文字中的路徑文字無法使用動態文字：{frames}
 	Optimize for fast web view	最佳化以便快速網頁檢視
 	Optimized	最佳化
 	Options	選項

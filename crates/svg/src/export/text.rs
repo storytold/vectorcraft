@@ -534,8 +534,11 @@ impl Writer<'_> {
         // The <text> element's user space is the document's; gradients span the laid-out text.
         let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
         self.note_fonts(t, &lay);
+        // The styles the layout draws the text in: Dynamic Text scales its sizes, leading and baseline shifts.
+        let fitted = (lay.fit_scale != 1.0).then(|| vectorcraft_text::scaled(t, lay.fit_scale));
+        let drawn = fitted.as_ref().unwrap_or(t);
         let space = (lay.bounds, self.xf * t.xf);
-        let base = self.char_props(&t.first_style(), space);
+        let base = self.char_props(&drawn.first_style(), space);
         let mut props = base.clone();
         let (from, to) = t.kind.path_span().unwrap_or((start, 1.0));
         // The anchor sits where the layout aligns the line within its span.
@@ -556,7 +559,7 @@ impl Writer<'_> {
         let a = self.attrs(&props);
         let offset = fmt_num(at * 100.0, 3);
         let mut s = format!("<text{id} xml:space=\"preserve\"{a}><textPath xlink:href=\"#{pid}\" startOffset=\"{offset}%\">");
-        for run in &t.runs {
+        for run in &drawn.runs {
             let mut diff = run_diff(&base, self.char_props(&run.style, space));
             diff.extend(direction_props(&run.style));
             let a = self.attrs(&diff);

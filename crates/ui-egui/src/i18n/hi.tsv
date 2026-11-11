@@ -3137,6 +3137,8 @@ antiAlias	Sharp	शार्प
 	OpenType Features	ओपन टाइप सुविधाएँ
 	Optical	ऑप्टिकल
 	Optical Margin Alignment	ऑप्टिकल मार्जिन संरेखण
+	Dynamic Text	डायनैमिक टेक्स्ट
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	थ्रेडेड टेक्स्ट में पाथ पर टाइप डायनैमिक टेक्स्ट का उपयोग नहीं कर सकता: {frames}
 	Optimize for fast web view	तेजी से वेब दृश्य के लिए ऑप्टिमाइज़
 	Optimized	ऑप्टिमाइज़्ड
 	Options	ऑप्शन्स
