@@ -1890,6 +1890,7 @@ font-technology	Variable	Variables
 	Lock Grid	Verrouiller la grille
 	Lock Guides	Verrouiller les repères
 	Lock Guides by Default	Verrouiller les repères par défaut
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Repères de plan de travail avec Cmd/Ctrl + glissement depuis la règle
 	Lock Others	Verrouiller les autres
 	Lock Slices	Verrouiller les tranches
 	Lock Station Point	Verrouiller le point d’observation

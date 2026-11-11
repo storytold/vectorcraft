@@ -4294,6 +4294,77 @@ fn guides_dragged_out_of_a_ruler_snap_and_take_the_artboard_tool_s_artboard() {
     );
 }
 
+/// With Preferences › Guides & Grid › Artboard Guides with Cmd/Ctrl + Ruler Drag on, Cmd/Ctrl held
+/// when a guide is dragged out of a ruler makes a guide of the view's active artboard (one undo
+/// step), shown and made only where it lies within that artboard; with the Artboard tool it makes
+/// a canvas guide instead. The key counts on the drag's first event only. With the preference off,
+/// Cmd/Ctrl changes nothing.
+#[test]
+fn cmd_ruler_drags_make_guides_of_the_active_artboard_when_the_preference_is_on() {
+    use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
+    let mut s = session();
+    s.execute("artboard.new", &json!({"x": 900, "y": 0, "width": 400, "height": 300})).unwrap();
+    let v = ViewInfo { artboard: 1, ..ViewInfo::default() };
+    let cmd = Mods { cmd: true, ..Mods::default() };
+    let ev = |kind, x, y, mods| PointerEvent::new(kind, x, y).with_mods(mods);
+    let owners = |s: &mut Session| -> Vec<Value> {
+        let list = s.execute("guide.list", &json!({})).unwrap();
+        list.as_array().unwrap().iter().map(|g| g.get("artboard").cloned().unwrap_or(Value::Null)).collect()
+    };
+    let drag = |s: &mut Session, view: ViewInfo, vertical: bool, at: f64, first: Mods| {
+        let (x, y) = if vertical { (at, 30.0) } else { (1000.0, at) };
+        s.ruler_guide(vertical, &ev(PointerKind::Drag, x, y, first), true, view).unwrap();
+        // Letting go of the key during the drag keeps the kind of guide.
+        s.ruler_guide(vertical, &ev(PointerKind::Up, x, y, Mods::default()), true, view).unwrap();
+    };
+
+    // Off by default: a Cmd/Ctrl drag makes a canvas guide.
+    assert!(!s.prefs.cmd_ruler_drag_artboard_guides);
+    drag(&mut s, v, true, 1010.0, cmd);
+    assert_eq!(owners(&mut s), [Value::Null]);
+
+    s.execute("prefs.set", &json!({"key": "cmdRulerDragArtboardGuides", "value": true})).unwrap();
+    let n = undo_len(&s);
+    drag(&mut s, v, true, 1020.0, cmd);
+    drag(&mut s, v, false, 120.0, cmd);
+    assert_eq!(guides(&s)[1..], [(true, 1020.0), (false, 120.0)]);
+    assert_eq!(owners(&mut s)[1..], [json!(1), json!(1)]);
+    assert_eq!(undo_len(&s), n + 2);
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(owners(&mut s)[1..], [json!(1), json!(1)], "redo keeps the artboard");
+
+    // Outside the active artboard (left of it, and below it): no preview, no guide, no undo step.
+    let n = undo_len(&s);
+    s.ruler_guide(true, &ev(PointerKind::Drag, 500.0, 30.0, cmd), true, v).unwrap();
+    assert_eq!(guides(&s).len(), 3, "no preview");
+    s.ruler_guide(true, &ev(PointerKind::Up, 500.0, 30.0, cmd), true, v).unwrap();
+    drag(&mut s, v, false, 450.0, cmd);
+    assert_eq!((guides(&s).len(), undo_len(&s)), (3, n));
+    // Dragged in and out again: the preview goes and nothing is made.
+    s.ruler_guide(true, &ev(PointerKind::Drag, 1100.0, 30.0, cmd), true, v).unwrap();
+    assert_eq!(guides(&s).len(), 4, "the preview within the artboard");
+    s.ruler_guide(true, &ev(PointerKind::Drag, 700.0, 30.0, Mods::default()), true, v).unwrap();
+    s.ruler_guide(true, &ev(PointerKind::Up, 700.0, 30.0, Mods::default()), true, v).unwrap();
+    assert_eq!((guides(&s).len(), undo_len(&s)), (3, n));
+
+    // An active artboard the document doesn't have: nothing is made.
+    drag(&mut s, ViewInfo { artboard: 7, ..v }, true, 1030.0, cmd);
+    assert_eq!((guides(&s).len(), undo_len(&s)), (3, n));
+
+    // Without the key: a canvas guide, as before.
+    drag(&mut s, v, true, 1040.0, Mods::default());
+    assert_eq!(owners(&mut s)[3], Value::Null);
+
+    // The Artboard tool: Cmd/Ctrl makes a canvas guide, and a plain drag an artboard guide.
+    s.select_tool("artboard", v).unwrap();
+    s.set_tool_option("active", &json!(1));
+    drag(&mut s, v, true, 400.0, cmd);
+    drag(&mut s, v, true, 1050.0, Mods::default());
+    assert_eq!(guides(&s)[4..], [(true, 400.0), (true, 1050.0)]);
+    assert_eq!(owners(&mut s)[4..], [Value::Null, json!(1)]);
+}
+
 /// Guides saved before guides had layers are put on a layer when the document opens.
 #[test]
 fn guides_from_older_files_are_put_on_a_layer() {

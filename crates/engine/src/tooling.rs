@@ -709,15 +709,28 @@ impl Session {
     /// release), over the canvas or not (`on_canvas`). The guide shows where the pointer is over
     /// the canvas, snapped as a moved guide is, and is made where the button is released over it
     /// (one undo step); released anywhere else, none is. With the Artboard tool it is an artboard
-    /// guide of the active artboard.
+    /// guide of the active artboard. With Preferences › Guides & Grid › Artboard Guides with
+    /// Cmd/Ctrl + Ruler Drag on, `mods.cmd` on the drag's first event swaps the two: with another
+    /// tool the guide is one of the view's active artboard (`view.artboard`), shown and made only
+    /// where it lies within that artboard, and with the Artboard tool it is a canvas guide.
     pub fn ruler_guide(&mut self, vertical: bool, ev: &PointerEvent, on_canvas: bool, view: ViewInfo) -> Result<()> {
+        use vectorcraft_tools::rulerguide::NewGuide;
         let g = match self.ruler_guide.take() {
             Some(g) => Some(g),
             None => {
                 let boards = self.active().map_or(0, |d| d.doc.artboards.len());
-                let active = (self.tool.id() == "artboard").then(|| self.tool.options()["active"].as_u64()).flatten();
+                let artboard_tool = self.tool.id() == "artboard";
+                let swap = self.prefs.cmd_ruler_drag_artboard_guides && ev.mods.cmd;
+                let active = artboard_tool.then(|| self.tool.options()["active"].as_u64()).flatten();
                 let artboard = active.and_then(|i| usize::try_from(i).ok()).filter(|i| *i < boards);
-                self.with_tool_cx(view, |_, cx| Some(vectorcraft_tools::rulerguide::NewGuide::new(cx, vertical, artboard)))
+                let view_board = view.artboard;
+                self.with_tool_cx(view, |_, cx| {
+                    Some(match (swap, artboard_tool) {
+                        (false, _) => NewGuide::new(cx, vertical, artboard),
+                        (true, true) => NewGuide::new(cx, vertical, None),
+                        (true, false) => NewGuide::within(cx, vertical, view_board),
+                    })
+                })
             }
         };
         let Some(mut g) = g else { return Ok(()) };

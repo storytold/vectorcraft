@@ -148,6 +148,36 @@ fn a_new_guide_is_made_on_release_over_the_canvas_only() {
     assert_eq!(g.pointer(&c, &ev(PointerKind::Up, -5.0, 40.0, m), false), vec![Action::Cancel]);
 }
 
+/// A guide made only within its artboard ([`NewGuide::within`]) shows and is made where its
+/// position, on the axis Alt gives it, lies within the artboard (edges included). Outside it, or
+/// with an artboard the document doesn't have, it goes as it does off the canvas.
+#[test]
+fn a_guide_within_its_artboard_is_made_only_inside_it() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let c = ToolContext { smart_guides: false, snap_to_point: false, ..cx(&d, &s, &p) };
+    let m = Mods::default();
+    let alt = Mods { alt: true, ..m };
+    let preview = |vertical: bool, pos: f64| Action::Preview("guide.add".into(), json!({"vertical": vertical, "pos": pos, "artboard": 0}));
+    let mut g = NewGuide::within(&c, true, 0);
+    // Right of the 500 pt artboard: nothing, then its right edge.
+    assert_eq!(g.pointer(&c, &ev(PointerKind::Drag, 520.0, 40.0, m), true), vec![]);
+    assert_eq!(g.pointer(&c, &ev(PointerKind::Drag, 500.0, 40.0, m), true), vec![Action::Begin("New Guide".into()), preview(true, 500.0)]);
+    // Alt makes it horizontal: y 40 is inside, y 600 is not.
+    assert_eq!(g.pointer(&c, &ev(PointerKind::Drag, 700.0, 40.0, alt), true), vec![preview(false, 40.0)]);
+    assert_eq!(g.pointer(&c, &ev(PointerKind::Drag, 300.0, 600.0, alt), true), vec![Action::Cancel]);
+    assert!(g.overlays(&c).is_empty());
+    assert_eq!(g.pointer(&c, &ev(PointerKind::Up, 300.0, 600.0, alt), true), vec![]);
+    // Released inside: made.
+    let mut g = NewGuide::within(&c, false, 0);
+    assert_eq!(g.pointer(&c, &ev(PointerKind::Drag, 900.0, 0.0, m), true), vec![Action::Begin("New Guide".into()), preview(false, 0.0)]);
+    assert_eq!(g.pointer(&c, &ev(PointerKind::Up, 900.0, 0.0, m), true), vec![Action::Commit]);
+    // No artboard 3: never shown.
+    let mut g = NewGuide::within(&c, true, 3);
+    assert_eq!(g.pointer(&c, &ev(PointerKind::Drag, 100.0, 40.0, m), true), vec![]);
+    assert_eq!(g.pointer(&c, &ev(PointerKind::Up, 100.0, 40.0, m), true), vec![]);
+}
+
 #[test]
 fn new_ruler_guide_alt_switches_axis_and_uses_the_release_position() {
     let (d, _) = doc_with_rect();

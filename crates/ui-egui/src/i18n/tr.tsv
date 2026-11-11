@@ -1730,6 +1730,7 @@ font-technology	Variable	Değişken
 	Lock Grid	Izgarayı Kilitle
 	Lock Guides	Kilit Kılavuzları
 	Lock Guides by Default	Kılavuzları Varsayılan Olarak Kilitle
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Cmd/Ctrl + Cetvelden Sürükleme ile Çalışma Yüzeyi Kılavuzları
 	Lock Others	Diğerlerini Kilitle
 	Lock Slices	Dilimleri Kilitle
 	Lock Station Point	Kilit İstasyon Noktası

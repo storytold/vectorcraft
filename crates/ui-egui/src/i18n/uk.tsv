@@ -1919,6 +1919,7 @@ file-filter	Templates	Шаблони
 	Lock Grid	Заблокувати сітку
 	Lock Guides	Заблокувати напрямні
 	Lock Guides by Default	Блокувати напрямні за замовчуванням
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Напрямні монтажної області з Cmd/Ctrl + перетягуванням з лінійки
 	Lock Others	Заблокувати решту
 	Lock Slices	Заблокувати фрагменти
 	Lock Station Point	Заблокувати точку стояння

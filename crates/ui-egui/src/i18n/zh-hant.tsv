@@ -2828,6 +2828,7 @@ file-filter	Templates	範本
 	Lock Grid	鎖定格點
 	Lock Guides	鎖定參考線
 	Lock Guides by Default	預設鎖定參考線
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	按住 Cmd/Ctrl 從尺標拖曳建立工作區域參考線
 	Lock Others	鎖定其他
 	Lock Slices	鎖定切片
 	Lock Station Point	鎖定基準點
