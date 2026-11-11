@@ -1,7 +1,7 @@
 use super::{
     Appearance, Arc, Beside, Document, EDGE_NAME, EngineError, FACE_NAME, GapOptions, GapSize, LIVE_PAINT_NAME, Node, NodeId, Paint, PathData, Point,
-    Rect, Result, SOURCES_NAME, Selection, Session, SubPath, Value, b, bad, build_children, edge_near, face_at, finite, id_param, ids_json,
-    is_live_paint, json, number_or, paint_from, po, point_param, repaint_from, replace_roots, root_ids, source_nodes, source_shapes, switch_or,
+    Rect, Result, SOURCES_NAME, Selection, Session, SubPath, Value, b, bad, build_children, edge_near, face_at, finite, ids_json, is_live_paint,
+    json, number_or, object_param, paint_from, po, point_param, repaint_from, replace_roots, root_ids, source_nodes, source_shapes, switch_or,
 };
 
 /// `options` as stored on a Live Paint group: none for the defaults.
@@ -274,7 +274,7 @@ pub(super) fn lp_fill(s: &mut Session, p: &Value) -> Result<Value> {
     let pt = point_param(p, "point").filter(|q| finite(*q)).ok_or_else(|| bad(C, "missing point [x,y]"))?;
     crate::cmd::paint::check_keep_model(p, C)?;
     let paint = paint_from(s, p)?.unwrap_or_else(|| s.paint.fill.clone());
-    let group = id_param(p, "group");
+    let group = object_param(p, "group", C)?;
     let roots = if group.is_none() { root_ids(s, p)? } else { vec![] };
     let (g, face) = s.edit("Live Paint Bucket", |d, sel| {
         let gid = match group {
@@ -312,7 +312,7 @@ pub(super) fn lp_fill(s: &mut Session, p: &Value) -> Result<Value> {
 pub(super) fn lp_stroke_edge(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "livePaint.strokeEdge";
     let pt = point_param(p, "point").filter(|q| finite(*q)).ok_or_else(|| bad(C, "missing point [x,y]"))?;
-    let g = id_param(p, "group").ok_or_else(|| bad(C, "missing group"))?;
+    let g = object_param(p, "group", C)?.ok_or_else(|| bad(C, "missing group"))?;
     crate::cmd::paint::check_keep_model(p, C)?;
     let paint = paint_from(s, p)?.unwrap_or_else(|| s.paint.stroke.clone());
     let width = number_or(p, "width", s.paint.stroke_width.max(0.0), C)?;
@@ -335,7 +335,10 @@ pub(super) fn lp_stroke_edge(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 pub(super) fn lp_info(s: &mut Session, p: &Value) -> Result<Value> {
-    let g = id_param(p, "group").or_else(|| id_param(p, "id")).ok_or_else(|| bad("livePaint.info", "missing group"))?;
+    let g = match object_param(p, "group", "livePaint.info")? {
+        Some(g) => g,
+        None => object_param(p, "id", "livePaint.info")?.ok_or_else(|| bad("livePaint.info", "missing group"))?,
+    };
     let d = &s.doc()?.doc;
     let n = d.node(g).filter(|n| is_live_paint(n)).ok_or_else(|| bad("livePaint.info", format!("{g} is not a Live Paint group")))?;
     let faces: Vec<Value> = b::faces(n)

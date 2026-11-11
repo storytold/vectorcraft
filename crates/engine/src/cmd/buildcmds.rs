@@ -29,8 +29,8 @@ use super::edit::{outermost, selected_roots};
 use super::paint::paint_from;
 use super::pathops::{Beside, shape_node};
 use super::{
-    CommandSpec, EngineError, Result, Session, always, bad, check_numbers, cmd, color_value, f64_or, finite_numbers, has_doc, id_param, named_ids,
-    number_or, point_param, str_param, switch_or,
+    CommandSpec, EngineError, Result, Session, always, bad, check_numbers, cmd, color_value, f64_or, finite_numbers, has_doc, named_ids, number_or,
+    object_param, point_param, str_param, switch_or,
 };
 
 mod live_paint;

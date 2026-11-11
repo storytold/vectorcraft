@@ -13,7 +13,7 @@ use vectorcraft_doc::{Appearance, CellAlign, CellVAlign, Document, Node, NodeKin
 use vectorcraft_geom::{Rect, shapes};
 
 use super::{
-    CommandSpec, EngineError, NodeId, Result, Session, bad, bool_or, cmd, f64_or, f64_req, has_doc, has_selection, id_param, ids_param, index,
+    CommandSpec, EngineError, NodeId, Result, Session, bad, bool_or, cmd, f64_or, f64_req, has_doc, has_selection, ids_param, index, object_param,
     switch_or, targets,
 };
 
@@ -679,7 +679,7 @@ fn create(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn set_rect(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.slice.setRect";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing `id`"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing `id`"))?;
     let r = rect_param(p, C)?;
     let d = &s.doc()?.doc;
     if d.slice(id).is_none() {

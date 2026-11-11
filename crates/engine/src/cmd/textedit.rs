@@ -11,8 +11,8 @@ use super::menucmds::whole_or;
 use super::stroke::StrokeChange;
 use super::typecmd::refresh_bounds;
 use super::{
-    CommandSpec, EngineError, Result, Session, bad, bool_or, check_numbers, check_switches, cmd, color_value, has_doc, has_selection, id_param,
-    index, number_or, point_param, str_param, switch_or, targets, text_param,
+    CommandSpec, EngineError, Result, Session, bad, bool_or, check_numbers, check_switches, cmd, color_value, has_doc, has_selection, index,
+    number_or, object_param, point_param, str_param, switch_or, targets, text_param,
 };
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -272,7 +272,7 @@ fn range_of(p: &Value, len: usize, cmd: &str) -> Result<(usize, usize)> {
 
 fn edit_range(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.editRange";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing `id`"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing `id`"))?;
     let t = text_ref(s, id)?;
     let len = edit::runs_len(&t.runs);
     let (a, b) = range_of(p, len, C)?;
@@ -337,7 +337,7 @@ fn clear_param(s: &Session, p: &Value, id: NodeId, c: &str) -> Result<Vec<NodeId
 
 fn start_list(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.startList";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing `id`"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing `id`"))?;
     let t = text_ref(s, id)?;
     let len = edit::runs_len(&t.runs);
     let at = offset_or(p, "at", len, C)?.min(len);
@@ -365,7 +365,7 @@ fn start_list(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn get_range(s: &mut Session, p: &Value) -> Result<Value> {
-    let id = id_param(p, "id").ok_or_else(|| bad("text.getRange", "missing `id`"))?;
+    let id = object_param(p, "id", "text.getRange")?.ok_or_else(|| bad("text.getRange", "missing `id`"))?;
     if switch_or(p, "story", false, "text.getRange")? {
         return get_story(s, p, id);
     }
@@ -1254,7 +1254,7 @@ fn drawn_glyph(
 
 fn set_glyph_alternate(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.setGlyphAlternate";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing `id`"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing `id`"))?;
     let gid = match p.get("gid") {
         None => return Err(bad(C, "missing `gid` (a glyph id, or null for the default glyph)")),
         Some(Value::Null) => None,
@@ -1344,7 +1344,7 @@ fn set_glyph_alternate(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn glyph_alternates(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.glyphAlternates";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing `id`"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing `id`"))?;
     let t = text_ref(s, id)?;
     let (ch, bytes, face) = glyph_target(&t, p, C)?;
     let default = face.glyph_for(ch);
@@ -1359,7 +1359,7 @@ fn glyph_alternates(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn touch_type(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.touchType";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing `id`"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing `id`"))?;
     check_numbers(p, &["start"], C)?;
     let start = byte_param(p, "start").ok_or_else(|| bad(C, "missing `start` (the byte offset of a character)"))?;
     if !["dx", "dy", "hScale", "vScale", "rotation"].iter().any(|k| p.get(*k).is_some_and(|v| !v.is_null())) {
@@ -1585,7 +1585,7 @@ fn touch_type(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn create_in_path(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.createInPath";
-    let pid = id_param(p, "path").ok_or_else(|| bad(C, "missing `path` (a path object id)"))?;
+    let pid = object_param(p, "path", C)?.ok_or_else(|| bad(C, "missing `path` (a path object id)"))?;
     let on_path = match str_param(p, "mode").unwrap_or("area") {
         "area" => false,
         "onPath" | "path" => true,
@@ -1975,7 +1975,7 @@ fn fit_headline(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn discard_empty(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.discardEmpty";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing `id`"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing `id`"))?;
     if edit::runs_len(&text_ref(s, id)?.runs) > 0 {
         return Ok(json!({"removed": false}));
     }

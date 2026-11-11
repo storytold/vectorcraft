@@ -1,7 +1,7 @@
 use super::common::{MAX_INPUT, path_kind, path_mut, point_entry, usize_opt, usize_req, within_input_bound};
 use super::{
     Anchor, BTreeSet, Beside, Color, Document, EngineError, Node, NodeId, NodeKind, Paint, PathData, Point, Result, Selection, Session, Value, Vec2,
-    add_look, bad, check_numbers, f64_or, id_param, json, number_or, ok, po, str_param, switch_or,
+    add_look, bad, check_numbers, f64_or, json, number_or, object_param, ok, po, str_param, switch_or,
 };
 
 // ---------- Curvature ----------
@@ -41,7 +41,7 @@ enum CurvatureOp {
 pub(super) fn curvature_edit(s: &mut Session, p: &Value) -> Result<Value> {
     use vectorcraft_tools::draw2::{EndCurve, curvature_close, curvature_extend, curvature_insert, curvature_move};
     const C: &str = "path.curvatureEdit";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let si = usize_opt(p, "subpath", C)?.unwrap_or(0);
     check_numbers(p, &["x", "y", "t"], C)?;
     let at = match (p.get("x").and_then(Value::as_f64), p.get("y").and_then(Value::as_f64)) {
@@ -106,7 +106,7 @@ pub(super) fn curvature_edit(s: &mut Session, p: &Value) -> Result<Value> {
 
 pub(super) fn remove_anchor(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.removeAnchor";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let si = usize_opt(p, "subpath", C)?.unwrap_or(0);
     let ai = usize_req(p, "anchor", C)?;
     let curvature = switch_or(p, "curvature", false, C)?;
@@ -220,7 +220,7 @@ fn remove_anchors_of(
 
 pub(super) fn convert_anchor(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.convertAnchor";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let si = usize_opt(p, "subpath", C)?.unwrap_or(0);
     let ai = usize_req(p, "anchor", C)?;
     let smooth = str_param(p, "to") == Some("smooth");
@@ -257,7 +257,7 @@ pub(super) fn convert_anchor(s: &mut Session, p: &Value) -> Result<Value> {
 
 pub(super) fn reshape_segment(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.reshapeSegment";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let si = usize_opt(p, "subpath", C)?.unwrap_or(0);
     let seg = usize_req(p, "segment", C)?;
     let t = number_or(p, "t", 0.5, C)?.clamp(0.05, 0.95);
