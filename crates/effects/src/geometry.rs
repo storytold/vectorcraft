@@ -26,6 +26,10 @@ pub struct GeomContext<'a> {
     /// The document that the swatches and patterns named by a live-effect plug-in that paints its
     /// pieces are looked up in. Without one, a result that names any is refused.
     pub doc: Option<&'a Document>,
+    /// The object, fill or stroke and effect index a deferred live-effect plug-in is listed by
+    /// ([`vectorcraft_plugins::deferred`]). When `None`, it is the object `seed` names, `item` and
+    /// the effect's index in the list being applied.
+    pub stage: Option<vectorcraft_plugins::deferred::Stage>,
 }
 
 impl<'a> GeomContext<'a> {
@@ -36,7 +40,17 @@ impl<'a> GeomContext<'a> {
             _ => FillRule::NonZero,
         };
         let stroke = n.appearance.stroke().filter(|s| !s.paint.is_none() && s.width > 0.0);
-        Self { stroke, rule, seed: n.id.0, appearance: Some(&n.appearance), item: None, doc: None }
+        Self { stroke, rule, seed: n.id.0, appearance: Some(&n.appearance), item: None, doc: None, stage: None }
+    }
+
+    /// The context of effect `e`, one of `list`: unless [`Self::stage`] is set, a live-effect
+    /// plug-in there is listed by `e`'s index in `list`.
+    pub(crate) fn at(self, list: &[Effect], e: &Effect) -> Self {
+        let stage = self.stage.or_else(|| {
+            let effect = list.iter().position(|x| std::ptr::eq(x, e))?;
+            Some(vectorcraft_plugins::deferred::Stage { object: self.seed, effect, item: self.item })
+        });
+        Self { stage, ..self }
     }
 
     /// The context of the effects on `item`, one of the same object's appearance items: a
@@ -335,7 +349,7 @@ pub(crate) fn apply_geometry_carrying_within(
         }
         let p = merged_params(&e.id, &e.params);
         let limit = *limit.get_or_insert_with(|| budget.at_least(Budget::of(path)));
-        if let Some(next) = apply_one(&e.id, &p, &cur, b, ctx, limit) {
+        if let Some(next) = apply_one(&e.id, &p, &cur, b, &ctx.at(effects, e), limit) {
             if let Some(c) = carry.as_deref_mut() {
                 c.push(Carry::of(&e.id, &p, b, cur.bounds(), next.bounds(), ctx.seed));
             }
@@ -377,7 +391,7 @@ fn builds_within(id: &str) -> bool {
 fn apply_unchecked(id: &str, p: &Value, path: &PathData, b: Rect, ctx: &GeomContext, max: usize) -> PathData {
     use util::{join, num};
     if let Some(plugin) = vectorcraft_plugins::effect::plugin_id(id) {
-        let paints = vectorcraft_plugins::effect::Paints { appearance: ctx.appearance, item: ctx.item };
+        let paints = vectorcraft_plugins::effect::Paints { appearance: ctx.appearance, item: ctx.item, at: ctx.stage };
         return vectorcraft_plugins::effect::apply(plugin, p, path, b, ctx.rule, paints, ctx.doc).unwrap_or_else(|| path.clone());
     }
     match id {
