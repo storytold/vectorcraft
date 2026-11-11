@@ -245,6 +245,38 @@ fn per_character_positions_with_middle_anchor() {
     assert!(close(mid(0), 50.0, 0.05) && close(mid(1), 100.0, 0.05), "{} {}", mid(0), mid(1));
 }
 
+/// `text-anchor` aligns a line's advance, which ends after its last character's letter spacing,
+/// and VectorCraft aligns a line without that tracking: the imported lines move back by their
+/// share of it and stay where a reader draws them, and a centred or right-aligned tracked line
+/// exported and read back stays where it was (export anchors lines the same way).
+#[test]
+fn anchored_letter_spaced_lines_stay_where_a_reader_draws_them() {
+    let starts = |t: &TextObject| {
+        let lay = layout(FontDb::global(), t);
+        lay.lines.iter().map(|l| (t.xf * lay.glyphs[l.glyph_start].origin).x).collect::<Vec<_>>()
+    };
+    let advances = |t: &TextObject| {
+        let lay = layout(FontDb::global(), t);
+        lay.lines.iter().map(|l| lay.glyphs[l.glyph_start..l.glyph_end].iter().map(|g| g.advance).sum::<f64>()).collect::<Vec<_>>()
+    };
+    for (anchor, share) in [("middle", 0.5), ("end", 1.0)] {
+        let d = open(&format!(r#"<text x="200" y="100" text-anchor="{anchor}" letter-spacing="8" font-size="40">WAVE</text>"#));
+        let t = only_text(&d);
+        let (start, advance) = (starts(t)[0], advances(t)[0]);
+        assert!(close(start, 200.0 - share * advance, 1e-6), "{anchor}: the line starts at {start}, not {}", 200.0 - share * advance);
+        let back = import(&vectorcraft_svg::export(&d, &vectorcraft_svg::ExportOptions::default())).unwrap();
+        let again = starts(only_text(&back))[0];
+        assert!(close(again, start, 1e-6), "{anchor}: read back, the line starts at {again}, not {start}");
+    }
+    // Lines anchored differently: each moves by its own share.
+    let d = open(
+        r#"<text y="100" font-size="20" letter-spacing="4"><tspan x="200" text-anchor="middle">Wave</tspan><tspan x="200" dy="30" text-anchor="end">Line</tspan></text>"#,
+    );
+    let t = only_text(&d);
+    let (s, a) = (starts(t), advances(t));
+    assert!(close(s[0], 200.0 - a[0] / 2.0, 1e-6) && close(s[1], 200.0 - a[1], 1e-6), "{s:?} {a:?}");
+}
+
 #[test]
 fn tspan_lines_dx_and_baseline_shift() {
     let d = open(
