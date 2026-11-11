@@ -360,6 +360,71 @@ fn recent_files_outside_the_read_root_are_not_listed_or_opened() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// `ui.inspect` leaves out the paths outside the read root that the person's work put in it: files
+/// still opening, recent files, a library panel's file and folder preferences, saved and in the
+/// Preferences dialog.
+#[test]
+fn ui_inspect_leaves_out_paths_outside_the_read_root() {
+    let (mut app, tx, base) = confined("inspect");
+    std::fs::copy(base.join("in/a.svg"), base.join("in/c.svg")).unwrap();
+    let (a, b, c) = (s(base.join("in/a.svg")), s(base.join("outside/b.svg")), s(base.join("in/c.svg")));
+    let svg = std::fs::read(&a).unwrap();
+    for path in [&a, &b, &c] {
+        assert!(crate::opening::start(&mut app, path, svg.clone()).is_ok(), "{path} opens off the UI thread");
+    }
+    app.ui.recent_files = vec![a.clone(), b.clone(), c.clone()];
+    let panel = |id: &str, path: &str| -> crate::panels::library_panel::LibraryPanel {
+        serde_json::from_value(json!({"kind": "swatches", "id": id, "path": path})).unwrap()
+    };
+    let theirs = format!("loaded/{b}");
+    app.ui.library_panels = vec![panel("mine", &a), panel(&theirs, &b)];
+    app.ui.open_panel = Some(format!("library:swatches:{theirs}"));
+    let (inside, outside) = (s(base.join("in")), s(base.join("outside")));
+    app.ui.engine_prefs = json!({
+        "fontsFolder": inside, "templatesFolder": outside, "recoveryFolder": outside, "scratchPrimary": "Startup",
+        "scratchSecondary": "../private", "pluginsFolder": "",
+    });
+    app.ui.dialog = Some(crate::state::Dialog::new("preferences", json!({"fontsFolder": inside, "templatesFolder": outside})));
+
+    // The person sees every path.
+    let ctx = egui::Context::default();
+    let person = crate::control::inspect(&app, &ctx);
+    assert_eq!(person["opening"], json!([a, b, c]));
+    assert_eq!(person["ui"]["recent_files"], json!([a, b, c]));
+    assert_eq!(person["ui"]["library_panels"][1]["path"], b);
+    assert_eq!(person["ui"]["engine_prefs"]["templatesFolder"], outside);
+
+    // The client sees the ones inside the read root, in the same order.
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let ui = &r["result"]["ui"];
+    assert_eq!(r["result"]["opening"], json!([a, c]), "{r}");
+    assert_eq!(ui["recent_files"], json!([a, c]));
+    assert_eq!(ui["library_panels"][0]["path"], a);
+    assert_eq!((ui["library_panels"][1]["id"].as_str(), ui["library_panels"][1].get("path")), (Some("loaded/b.svg"), None), "the panel stays");
+    assert_eq!(ui["open_panel"], "library:swatches:loaded/b.svg");
+    let prefs = ui["engine_prefs"].as_object().unwrap();
+    assert_eq!(
+        (prefs["fontsFolder"].as_str(), prefs["scratchPrimary"].as_str(), prefs["pluginsFolder"].as_str()),
+        (Some(inside.as_str()), Some("Startup"), Some(""))
+    );
+    assert!(["templatesFolder", "recoveryFolder", "scratchSecondary"].iter().all(|k| !prefs.contains_key(*k)), "{prefs:?}");
+    let fields = ui["dialog"]["fields"].as_object().unwrap();
+    assert_eq!((fields["fontsFolder"].as_str(), fields.get("templatesFolder")), (Some(inside.as_str()), None), "the Preferences dialog's copy too");
+    let hidden = json!(outside).to_string();
+    assert!(!r.to_string().contains(hidden.trim_matches('"')), "no path outside the root: {r}");
+    let r = request(&mut app, &tx, "ui.docking", json!({}));
+    assert_eq!(r["result"]["flyout"], "library:swatches:loaded/b.svg", "{r}");
+    assert_eq!(crate::panel_docking::inspect(&app, &ctx)["flyout"], json!(format!("library:swatches:{theirs}")), "the person's");
+    assert_eq!(app.ui.recent_files, [a.clone(), b.clone(), c.clone()], "the UI state is not changed");
+    assert_eq!(app.opening.pending.len(), 3, "and no open is canceled");
+
+    // A write root alone lets the client read none of them.
+    let write_only = AutomationRoots::new(&[], &[&base.join("out")]).unwrap();
+    let listed = vectorcraft_engine::file_access::confine(write_only.as_ref(), || crate::control::inspect(&app, &ctx));
+    assert_eq!((&listed["opening"], &listed["ui"]["recent_files"]), (&json!([]), &json!([])), "{listed}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// Hidden logic-only ticks between the injection and its UI pass must not drain another step:
 /// one step per settled pass, not per hidden tick.
 #[test]
