@@ -1826,6 +1826,7 @@ font-technology	Variable	Променливи
 	Lock Grid	Заключване на мрежата
 	Lock Guides	Заключване на водачите
 	Lock Guides by Default	Заключване на водачите по подразбиране
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Водачи за работната област с Cmd/Ctrl + плъзгане от линийка
 	Lock Others	Заключване на другите
 	Lock Slices	Заключване на фрагментите
 	Lock Station Point	Заключване на базовата точка

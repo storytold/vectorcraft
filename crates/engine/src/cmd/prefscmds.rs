@@ -229,6 +229,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("guideColor", "Guides & Grid", "Guides", "Color", color),
     p!("guideStyle", "Guides & Grid", "Guides", "Style", choice(LINE_STYLE)),
     p!("lockGuidesByDefault", "Guides & Grid", "Guides", "Lock Guides by Default", bool),
+    p!("cmdRulerDragArtboardGuides", "Guides & Grid", "Guides", "Artboard Guides with Cmd/Ctrl + Ruler Drag", bool),
     p!("gridColor", "Guides & Grid", "Grid", "Color", color),
     p!("gridStyle", "Guides & Grid", "Grid", "Style", choice(LINE_STYLE)),
     p!("gridlineEvery", "Guides & Grid", "Grid", "Gridline every", len(1.0, 16383.0, General)),

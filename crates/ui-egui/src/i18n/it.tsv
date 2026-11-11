@@ -1925,6 +1925,7 @@ file-filter	Templates	Modelli
 	Lock Grid	Blocca griglia
 	Lock Guides	Blocca guide
 	Lock Guides by Default	Blocca guide per impostazione predefinita
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Guide della tavola da disegno con Cmd/Ctrl + trascinamento dal righello
 	Lock Others	Blocca altri
 	Lock Slices	Blocca sezioni
 	Lock Station Point	Blocca punto di osservazione

@@ -1806,6 +1806,7 @@ file-filter	Templates	模板
 	Lock Grid	锁定网格
 	Lock Guides	锁定参考线
 	Lock Guides by Default	默认锁定参考线
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	按住 Cmd/Ctrl 从标尺拖动创建画板参考线
 	Lock Slices	锁定切片
 	Lock Station Point	锁定基准点
 	Lossless (lossy WebP isn't available yet)	无失真 (尚未提供有失真的 WebP)

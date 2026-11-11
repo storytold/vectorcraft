@@ -1896,6 +1896,7 @@ font-technology	Variable	Variables
 	Lock Grid	Bloquear cuadrícula
 	Lock Guides	Bloquear guías
 	Lock Guides by Default	Bloquear guías de forma predeterminada
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Guías de mesa de trabajo con Cmd/Ctrl + arrastre desde la regla
 	Lock Others	Bloquear otros
 	Lock Slices	Bloquear sectores
 	Lock Station Point	Bloquear punto de estación

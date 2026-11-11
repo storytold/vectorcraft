@@ -1837,6 +1837,7 @@ font-technology	Variable	Variabla
 	Lock Grid	Lås rutnät
 	Lock Guides	Lås stödlinjer
 	Lock Guides by Default	Lås stödlinjer som standard
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Stödlinjer för rityta med Cmd/Ctrl + dra från linjal
 	Lock Others	Lås övriga
 	Lock Slices	Lås skivor
 	Lock Station Point	Lås betraktarpunkt

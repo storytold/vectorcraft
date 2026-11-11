@@ -628,6 +628,7 @@ digits	Malayalam	マラヤーラム数字
 	Hide Guides	ガイドを隠す
 	Lock Guides	ガイドをロック
 	Lock Guides by Default	ガイドを初期設定でロック
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Cmd/Ctrl + 定規からのドラッグでアートボードガイド
 	Make Guides	ガイドを作成
 	Release Guides	ガイドを解除
 	Clear Guides	ガイドを消去

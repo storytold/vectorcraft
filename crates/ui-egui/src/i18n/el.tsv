@@ -1725,6 +1725,7 @@ font-technology	Variable	Μεταβλητές
 	Lock	Κλείδωμα
 	Lock Guides	Κλείδωμα οδηγών
 	Lock Guides by Default	Κλείδωμα οδηγών από προεπιλογή
+	Artboard Guides with Cmd/Ctrl + Ruler Drag	Οδηγοί πίνακα σχεδίασης με Cmd/Ctrl + σύρσιμο από χάρακα
 	Lock Slices	Κλείδωμα τομών
 	Low	Χαμηλή
 	Luminosity	Φωτεινότητα
