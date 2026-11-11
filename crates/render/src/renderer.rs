@@ -105,8 +105,11 @@ impl Renderer {
         }
     }
 
-    /// Render `doc` into a `width`×`height` image using `view` (document → pixel transform).
+    /// Render `doc` into a `width`×`height` image using `view` (document → pixel transform). Type
+    /// set in one of the document's composite fonts draws in the document's definition, also when
+    /// no session has registered it (a document that is not in front, or read from a file).
     pub fn render(&mut self, doc: &Document, width: u32, height: u32, view: Affine, opts: &RenderOptions) -> Rendered {
+        let _lent = vectorcraft_text::FontDb::global().lend_composite_fonts(&doc.composite_fonts);
         let _frame = vectorcraft_text::KeptLayoutsFrame::begin();
         self.render_as(doc, width, height, view, opts, false, 1)
     }
@@ -340,6 +343,7 @@ impl Renderer {
     pub fn render_region_inks(&mut self, doc: &Document, region: Rect, scale: f64, opts: &RenderOptions) -> Vec<u8> {
         let (w, h) = region_pixels(region, scale);
         let view = Affine::scale(scale) * Affine::translate((-region.x0, -region.y0));
+        let _lent = vectorcraft_text::FontDb::global().lend_composite_fonts(&doc.composite_fonts);
         let _frame = vectorcraft_text::KeptLayoutsFrame::begin();
         self.render_as(doc, w, h, view, opts, true, 1).pixels
     }
@@ -356,6 +360,7 @@ impl Renderer {
 
     /// [`Self::render_node`] with `opts` (e.g. [`RenderOptions::mark_undecoded_images`]).
     pub fn render_node_with(&mut self, doc: &Document, n: &Arc<Node>, w: u16, h: u16, view: Affine, opts: &RenderOptions) -> Option<Rendered> {
+        let _lent = vectorcraft_text::FontDb::global().lend_composite_fonts(&doc.composite_fonts);
         self.check_plugins(doc);
         self.check_symbols(doc);
         let inv = view.inverse();
@@ -395,6 +400,7 @@ impl Renderer {
         background: Option<[u8; 4]>,
         opts: &RenderOptions,
     ) -> Option<Rendered> {
+        let _lent = vectorcraft_text::FontDb::global().lend_composite_fonts(&doc.composite_fonts);
         self.check_plugins(doc);
         self.check_symbols(doc);
         let b = brush_fx::cull_bounds(&doc.symbol_boxes(), n)?;
