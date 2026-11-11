@@ -80,6 +80,20 @@ the other families load in the background and appear in the font menus as they a
   (`Cache-Control: public, max-age=31536000, immutable`); `_headers` and `.htaccess` do this.
 - Without the folder the app still runs, but Arabic text shows as boxes.
 
+## Fonts the page adds
+
+The browser has no installed fonts for the app to find, so type set in a font the build doesn't bundle is drawn in a
+stand-in. A page that embeds the app can give it the documents' fonts as files, for the session (they last until the
+page is reloaded; nothing is stored):
+
+- `vectorcraft.addFonts([{name, bytes}])` (`bytes`: a `Uint8Array` or an `ArrayBuffer`) adds them and resolves with
+  the faces added, `{added: [{family, style}], kept, skipped, families}`. Type set in them redraws at once, and the
+  font menus list them. The source's `docs/control-protocol.md` (In the browser: `window.vectorcraft`) has the details.
+- `vectorcraft.openFile(name, bytes)`, File › Open and dropping the file on the app do the same for one file.
+
+TrueType and OpenType fonts and collections (`.ttf`, `.otf`, `.ttc`, `.otc`) are read, at most 256 MB in all per call.
+WOFF and WOFF2 web fonts aren't read yet. Serve or pass only fonts your licence lets you use this way.
+
 ## Embedding in a page (iframe)
 
 ```html
