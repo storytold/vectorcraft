@@ -22,6 +22,8 @@ pub struct ViewInfo {
     /// View → Show Guides: the ruler guides show (and, unlocked, can be picked).
     pub guides: bool,
     pub snap_to_grid: bool,
+    /// View → Pixel Preview: while it is on, the tools use no Smart Guides.
+    pub pixel_preview: bool,
     pub show_bbox: bool,
     /// View → Snap to Pixel: drawing and moving land on whole pixels (points at 72 ppi).
     pub snap_to_pixel: bool,
@@ -46,6 +48,7 @@ impl Default for ViewInfo {
             smart_guides: true,
             guides: true,
             snap_to_grid: false,
+            pixel_preview: false,
             show_bbox: true,
             snap_to_pixel: false,
             snap_to_point: true,
@@ -335,6 +338,7 @@ impl Session {
     {
         let Some(st) = self.active.and_then(|i| self.docs.get(i)) else { return R::default() };
         let (unit, stroke_unit) = (self.general_unit(), self.stroke_unit());
+        let smart_guides = view.smart_guides && !view.pixel_preview;
         let cx = ToolContext {
             doc: &st.doc,
             ruler_origin: st.doc.ruler_origin_for(view.artboard),
@@ -344,7 +348,7 @@ impl Session {
             isolation: st.isolation,
             paint: &self.paint,
             outline: view.outline,
-            smart_guides: view.smart_guides,
+            smart_guides,
             guides: view.guides && !self.menu.guides_locked,
             snap_to_grid: view.snap_to_grid,
             show_bbox: view.show_bbox,
@@ -354,7 +358,7 @@ impl Session {
             snap_to_point: view.snap_to_point,
             snap_tangent: self.prefs.snap_tangent,
             snap_perpendicular: self.prefs.snap_perpendicular,
-            snap_to_glyph: view.snap_to_glyph && view.smart_guides && !view.snap_to_grid,
+            snap_to_glyph: view.snap_to_glyph && smart_guides && !view.snap_to_grid,
             glyph_snap: self.prefs.glyph_snap,
             corner_widgets: view.corner_widgets,
             fill_active: self.fill_active,
