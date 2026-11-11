@@ -5169,7 +5169,8 @@ fills or strokes carry effects is written as one piece per fill and stroke, so o
 When an image in the art can't be decoded, `object.rasterize` and `object.cropImage` (without `trim`) make their image
 without it, and their results carry the `warning` that Flatten Transparency gives. `object.rasterize` takes each frame
 of threaded text that it rasterizes out of its thread with the text it shows, as `type.createOutlines` does (see
-Threading text from the in and out ports), and the other frames keep the text they hold.
+Threading text from the in and out ports), and the other frames keep the text they hold. `object.rasterize`
+refuses an image larger than 64 million pixels or longer than 32,768 pixels a side, and the art stays as it was.
 
 ```json
 {"name":"run_command","arguments":{"command":"document.rasterEffectsSettings","params":{"resolution":"high","background":"white","addAround":36}}}
