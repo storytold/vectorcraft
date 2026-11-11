@@ -55,6 +55,8 @@
 	Scripts	Scripter
 	Check Script…	Kontrollér script…
 	Check Script	Kontrollér script
+	Some scripts were not listed	Nogle scripter blev ikke vist
+	The Scripts folder cannot be read	Mappen Scripts kan ikke læses
 	Other Script…	Andet script…
 	Document Setup…	Dokumentopsætning…
 	Switch Units	Skift enheder
@@ -2089,6 +2091,8 @@ digits	Malayalam	Malayalam
 	Green	Grøn
 	Shifts the tints of global and spot colors; other colors stay.	Flytter nuancerne af globale farver og spotfarver; andre farver forbliver uændrede.
 	Tint	Nuance
+	Fill Tint	Fyldnuance
+	Stroke Tint	Stregnuance
 	Color Guide Options	Indstillinger for farveguide
 	Less	Mindre
 	Steps:	Trin:
@@ -5327,6 +5331,7 @@ mark-style	Japanese	Japansk
 @msg	Invalid drawing scale	Ugyldig tegningsmålestok
 @msg	Invalid real scale	Ugyldig virkelig målestok
 @msg	Measured anchor no longer exists	Det målte ankerpunkt findes ikke længere
+@msg	Invalid measured point	Ugyldigt målt punkt
 @msg	Measured segment no longer exists	Det målte segment findes ikke længere
 @msg	Non-finite dimension	Ikke-endeligt mål
 @msg	Only linear dimensions are horizontal or vertical	Kun lineære mål er vandrette eller lodrette

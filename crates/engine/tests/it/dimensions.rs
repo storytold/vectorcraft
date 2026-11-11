@@ -59,9 +59,11 @@ fn dimension_length_scale_live_edit_undo_and_roundtrip() {
     run(&mut reopened, "object.scale", json!({"sx":50,"sy":100}));
     assert_eq!(text(&reopened, id), "10.00 in");
     run(&mut reopened, "edit.clear", json!({}));
-    assert!(reopened.doc().unwrap().doc.node(NodeId(id)).is_none());
+    assert_eq!(text(&reopened, id), "10.00 in", "deleting the art leaves the dimension");
+    assert!(recipe(&reopened, id).source.is_none(), "no longer linked");
     run(&mut reopened, "edit.undo", json!({}));
     assert_eq!(text(&reopened, id), "10.00 in");
+    assert!(recipe(&reopened, id).source.is_some(), "undo links it again");
 }
 
 /// Documents without dimensions skip the refresh, and lose the flag when the last goes.
@@ -567,6 +569,425 @@ fn dimension_anchor_links_and_native_file_survive_source_moves() {
     assert_eq!(text(&s, id), "100 pt");
 }
 
+/// The anchors of path `id`'s first subpath.
+fn anchors(s: &Session, id: u64) -> Vec<vectorcraft_geom::Point> {
+    let doc = &s.doc().unwrap().doc;
+    doc.node(NodeId(id)).unwrap().path_data().unwrap().subpaths[0].anchors.iter().map(|a| a.p).collect()
+}
+fn near(p: vectorcraft_geom::Point, q: vectorcraft_geom::Point) -> bool {
+    p.distance(q) < 1e-6
+}
+/// Clicks with the Dimension tool at each point in turn.
+fn clicks(s: &mut Session, points: &[(f64, f64)]) -> u64 {
+    s.select_tool("dimension", ViewInfo::default()).unwrap();
+    for &(x, y) in points {
+        ev(s, PointerKind::Move, x, y);
+        ev(s, PointerKind::Down, x, y);
+        ev(s, PointerKind::Up, x, y);
+    }
+    s.doc().unwrap().selection.objects[0].0
+}
+
+/// A dimension from an anchor to a point on a straight segment follows the art at both ends: the
+/// segment end keeps its place along the segment when the art is scaled, moved or reflected.
+#[test]
+fn a_dimension_to_a_point_on_a_segment_follows_the_art_at_both_ends() {
+    let mut s = session();
+    let rect = run(&mut s, "shape.rectangle", json!({"x":100,"y":100,"width":100,"height":100}))["id"].as_u64().unwrap();
+    let id = clicks(&mut s, &[(100.0, 100.0), (200.0, 150.0), (120.0, 90.0)]);
+    let length = recipe(&s, id).length;
+    for (command, p) in [
+        ("object.scale", json!({"sx":150,"sy":150})),
+        ("object.move", json!({"dx":40,"dy":-30})),
+        ("object.rotate", json!({"angle":30})),
+        ("object.reflect", json!({"axis":"vertical"})),
+    ] {
+        run(&mut s, "select.set", json!({"ids":[rect]}));
+        run(&mut s, command, p);
+        let (d, at) = (recipe(&s, id), anchors(&s, rect));
+        assert!(near(d.a, at[0]), "{command}: {:?} {:?}", d.a, at[0]);
+        assert!(near(d.b, at[1].midpoint(at[2])), "{command}: {:?} {:?}", d.b, at[1].midpoint(at[2]));
+        assert!(d.source.is_some(), "{command}: still linked");
+    }
+    assert!((recipe(&s, id).length - 1.5 * length).abs() < 1e-6);
+}
+
+/// A point off the art is held against the anchors of the art at the other end, and moves with it.
+#[test]
+fn a_dimension_to_a_point_off_the_art_moves_with_the_art() {
+    let mut s = session();
+    let rect = run(&mut s, "shape.rectangle", json!({"x":100,"y":100,"width":100,"height":100}))["id"].as_u64().unwrap();
+    let id = clicks(&mut s, &[(200.0, 200.0), (330.0, 260.0), (260.0, 330.0)]);
+    let before = recipe(&s, id);
+    run(&mut s, "select.set", json!({"ids":[rect]}));
+    run(&mut s, "object.move", json!({"dx":40,"dy":-30}));
+    let d = recipe(&s, id);
+    let v = vectorcraft_geom::Vec2::new(40.0, -30.0);
+    assert!(near(d.a, before.a + v) && near(d.b, before.b + v), "{before:?} → {d:?}");
+    assert!((d.length - before.length).abs() < 1e-6 && (d.offset - before.offset).abs() < 1e-6);
+    run(&mut s, "object.scale", json!({"sx":200,"sy":200}));
+    assert!((recipe(&s, id).length - 2.0 * before.length).abs() < 1e-6);
+}
+
+/// When the art it measures is deleted or gets another number of anchors, a dimension stays where
+/// it was, no longer linked: later edits of the art do not move it, and undo links it again.
+#[test]
+fn a_dimension_whose_art_changes_its_anchors_stays_where_it_was() {
+    let mut s = session();
+    let rect = run(&mut s, "shape.rectangle", json!({"x":100,"y":100,"width":100,"height":100}))["id"].as_u64().unwrap();
+    let id = clicks(&mut s, &[(100.0, 100.0), (200.0, 150.0), (120.0, 90.0)]);
+    let before = recipe(&s, id);
+    let label = text(&s, id);
+    run(&mut s, "path.insertAnchor", json!({"id":rect,"segment":3,"t":0.5}));
+    let d = recipe(&s, id);
+    assert!(d.source.is_none(), "no longer linked");
+    assert_eq!((d.a, d.b, d.offset, text(&s, id)), (before.a, before.b, before.offset, label.clone()));
+    run(&mut s, "select.set", json!({"ids":[rect]}));
+    run(&mut s, "object.scale", json!({"sx":150,"sy":150}));
+    assert_eq!((recipe(&s, id).a, recipe(&s, id).b), (before.a, before.b), "does not follow the art");
+    run(&mut s, "edit.undo", json!({}));
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(recipe(&s, id).source, before.source, "undo links it again");
+    run(&mut s, "select.set", json!({"ids":[rect]}));
+    run(&mut s, "edit.clear", json!({}));
+    assert!(s.doc().unwrap().doc.node(NodeId(rect)).is_none());
+    assert_eq!((recipe(&s, id).source, text(&s, id)), (None, label));
+}
+
+/// A linked dimension whose art is reflected has its line on the reflected side: a line above the
+/// top edge is below that edge's points after a flip top to bottom.
+#[test]
+fn a_linked_dimension_of_reflected_art_has_its_line_on_the_reflected_side() {
+    use vectorcraft_doc::dimension::Orientation;
+    for orientation in ["aligned", "horizontal"] {
+        let mut s = session();
+        let rect = run(&mut s, "shape.rectangle", json!({"x":100,"y":100,"width":100,"height":100}))["id"].as_u64().unwrap();
+        let at = anchors(&s, rect);
+        let top = |p: vectorcraft_geom::Point| (p.y - 100.0).abs() < 1e-9;
+        let (i, j) = (at.iter().position(|p| top(*p)).unwrap(), at.iter().rposition(|p| top(*p)).unwrap());
+        let anchor = |anchor: usize| json!({"node":rect,"subpath":0,"anchor":anchor});
+        let src = json!({"kind":"points","a":anchor(i),"b":anchor(j)});
+        // The line 30 pt above the top edge: the offset is along the left normal of a → b when
+        // aligned, downward when horizontal.
+        let offset = if orientation == "aligned" && at[i].x > at[j].x { 30.0 } else { -30.0 };
+        let id = run(&mut s, "dimension.create", json!({"source":src,"orientation":orientation,"offset":offset}))["id"].as_u64().unwrap();
+        let line_y = |s: &Session| recipe(s, id).line_ends().0.y;
+        assert!((line_y(&s) - 70.0).abs() < 1e-6, "{orientation}: {}", line_y(&s));
+        run(&mut s, "select.set", json!({"ids":[rect]}));
+        run(&mut s, "object.reflect", json!({"axis":"horizontal"}));
+        let d = recipe(&s, id);
+        assert!(d.source.is_some());
+        assert!(((d.a.y, d.b.y) == (200.0, 200.0)), "{orientation}: {d:?}");
+        assert!((line_y(&s) - 230.0).abs() < 1e-6, "{orientation}: line at {}", line_y(&s));
+        let want = if orientation == "aligned" { Orientation::Aligned } else { Orientation::Horizontal };
+        assert_eq!(d.orientation, want);
+        run(&mut s, "edit.undo", json!({}));
+        assert!((line_y(&s) - 70.0).abs() < 1e-6);
+    }
+}
+
+/// Reflected across the line through the two points it measures, an arch keeps those points
+/// where they were, and the dimension's line goes to the other side with the arch.
+#[test]
+fn a_dimension_of_art_reflected_across_its_points_changes_sides() {
+    let mut s = session();
+    let arch = json!([{"x":100,"y":200,"out":[100,150]},{"x":200,"y":200,"in":[200,150]}]);
+    let curve = run(&mut s, "path.create", json!({"anchors":arch,"closed":false}))["id"].as_u64().unwrap();
+    let anchor = |anchor: u64| json!({"node":curve,"subpath":0,"anchor":anchor});
+    let src = json!({"kind":"points","a":anchor(0),"b":anchor(1)});
+    let id = run(&mut s, "dimension.create", json!({"source":src,"offset":-30}))["id"].as_u64().unwrap();
+    assert!((recipe(&s, id).line_ends().0.y - 170.0).abs() < 1e-6);
+    run(&mut s, "select.set", json!({"ids":[curve]}));
+    run(&mut s, "object.reflect", json!({"axis":"horizontal","origin":[0,200]}));
+    let d = recipe(&s, id);
+    assert_eq!((d.a, d.b), (vectorcraft_geom::Point::new(100.0, 200.0), vectorcraft_geom::Point::new(200.0, 200.0)));
+    assert!((d.line_ends().0.y - 230.0).abs() < 1e-6, "below with the arch: {:?}", d.line_ends());
+    // Reflected together with the art, it ends in the same place.
+    run(&mut s, "edit.undo", json!({}));
+    run(&mut s, "select.set", json!({"ids":[curve, id]}));
+    run(&mut s, "object.reflect", json!({"axis":"horizontal","origin":[0,200]}));
+    assert!((recipe(&s, id).line_ends().0.y - 230.0).abs() < 1e-6, "{:?}", recipe(&s, id).line_ends());
+}
+
+/// A dimension between two paths that are each reflected in their own way in one edit is not
+/// mirrored by the map of one of them.
+#[test]
+fn a_dimension_between_paths_reflected_each_in_its_own_way_keeps_its_offset() {
+    let mut s = session();
+    let low = json!([{"x":100,"y":200,"out":[100,150]},{"x":200,"y":200,"in":[200,150]}]);
+    let high = json!([{"x":300,"y":200,"out":[300,100]},{"x":400,"y":200,"in":[400,100]}]);
+    let first = run(&mut s, "path.create", json!({"anchors":low,"closed":false}))["id"].as_u64().unwrap();
+    let second = run(&mut s, "path.create", json!({"anchors":high,"closed":false}))["id"].as_u64().unwrap();
+    let src = json!({"kind":"points","a":{"node":first,"subpath":0,"anchor":0},"b":{"node":second,"subpath":0,"anchor":1}});
+    let id = run(&mut s, "dimension.create", json!({"source":src,"offset":30}))["id"].as_u64().unwrap();
+    run(&mut s, "select.set", json!({"ids":[first, second]}));
+    run(&mut s, "object.transformEach", json!({"reflectY":true}));
+    let d = recipe(&s, id);
+    assert!(d.source.is_some() && (d.a.y - d.b.y).abs() > 1.0, "{d:?}");
+    assert!((d.offset - 30.0).abs() < 1e-6, "{d:?}");
+}
+
+/// A recipe's free points are checked: weights that do not add up to 1, or an end that is both an
+/// anchor and a free point, are refused without changing the document.
+#[test]
+fn dimension_free_points_are_checked() {
+    let mut s = session();
+    let rect = run(&mut s, "shape.rectangle", json!({"x":100,"y":100,"width":100,"height":100}))["id"].as_u64().unwrap();
+    let original = serde_json::to_value(&*s.doc().unwrap().doc).unwrap();
+    let w = |anchor: u64, weight: f64| json!({"subpath":0,"anchor":anchor,"weight":weight});
+    let held = |anchors: Value, across: f64| json!({"kind":"anchors","node":rect,"anchors":anchors,"across":across});
+    let on = |segment: u64, t: f64| json!({"kind":"onSegment","edge":{"node":rect,"subpath":0,"segment":segment},"t":t});
+    let anchor = json!({"node":rect,"subpath":0,"anchor":0});
+    for free in [
+        held(json!([w(1, 0.5), w(2, 0.6)]), 0.0),
+        held(json!([w(1, 1.0)]), 0.0),
+        held(json!([w(1, 1e300), w(2, -1e300)]), 0.0),
+        held(json!([w(1, 0.5), w(99, 0.5)]), 0.0),
+        held(json!([w(1, 0.5), w(2, f64::MAX)]), 0.0),
+        held(json!([w(1, 0.5), w(2, 0.5)]), 1e300),
+        held(json!([w(1, 0.5), w(2, 0.25), w(3, 0.25)]), 0.5),
+        on(1, 1.5),
+        on(1, -0.1),
+        on(99, 0.5),
+        json!({"kind":"elsewhere","node":rect}),
+    ] {
+        let p = json!({"source":{"kind":"points","a":anchor,"freeB":free}});
+        assert!(s.execute("dimension.create", &p).is_err(), "{p}");
+        assert_eq!(serde_json::to_value(&*s.doc().unwrap().doc).unwrap(), original);
+    }
+    let both = json!({"source":{"kind":"points","a":anchor,"freeA":held(json!([w(1, 0.5), w(2, 0.5)]), 0.0),"b":anchor}});
+    assert!(s.execute("dimension.create", &both).is_err());
+    let at = anchors(&s, rect);
+    for (free, want) in [(held(json!([w(1, 0.5), w(2, 0.5)]), 0.0), at[1].midpoint(at[2])), (on(1, 0.5), at[1].midpoint(at[2]))] {
+        let ok = json!({"source":{"kind":"points","a":anchor,"freeB":free}});
+        let id = run(&mut s, "dimension.create", ok)["id"].as_u64().unwrap();
+        assert!(near(recipe(&s, id).b, want), "{:?}", recipe(&s, id).b);
+    }
+}
+
+/// A point off a straight two-anchor line is held by its distance along and across the line: it
+/// moves, turns and scales with the line.
+#[test]
+fn a_dimension_to_a_point_off_a_line_follows_the_line() {
+    let mut s = session();
+    let line = run(&mut s, "shape.line", json!({"x1":100,"y1":100,"x2":200,"y2":100}))["id"].as_u64().unwrap();
+    let id = clicks(&mut s, &[(100.0, 100.0), (150.0, 160.0), (60.0, 130.0)]);
+    let d = recipe(&s, id);
+    assert!(d.source.as_ref().is_some_and(|src| src.nodes() == vec![NodeId(line), NodeId(line)]), "{:?}", d.source);
+    run(&mut s, "dimension.update", json!({"ids":[id],"orientation":"aligned"}));
+    run(&mut s, "select.set", json!({"ids":[line]}));
+    run(&mut s, "object.rotate", json!({"angle":90,"origin":[100,100]}));
+    run(&mut s, "object.scale", json!({"sx":200,"sy":200,"origin":[100,100]}));
+    run(&mut s, "object.move", json!({"dx":10,"dy":20}));
+    let at = anchors(&s, line);
+    let (o, u) = (at[0], at[1] - at[0]);
+    // 50 along the line and 60 across it before, now in the line's new frame at twice the size.
+    let want = o + u * 0.5 + vectorcraft_geom::Vec2::new(-u.y, u.x) * 0.6;
+    let d = recipe(&s, id);
+    assert!(near(d.a, o) && near(d.b, want), "{d:?} want {want:?}");
+    assert!((d.length - 2.0 * (50.0f64.hypot(60.0))).abs() < 1e-6);
+}
+
+/// A point on a straight segment stays on the segment when its handles are edited into a curve.
+#[test]
+fn a_point_on_a_segment_stays_on_it_when_the_segment_curves() {
+    let mut s = session();
+    let rect = run(&mut s, "shape.rectangle", json!({"x":100,"y":100,"width":100,"height":100}))["id"].as_u64().unwrap();
+    let id = clicks(&mut s, &[(100.0, 100.0), (200.0, 150.0), (120.0, 90.0)]);
+    let at = anchors(&s, rect);
+    assert!(near(at[1], vectorcraft_geom::Point::new(200.0, 100.0)) && near(at[2], vectorcraft_geom::Point::new(200.0, 200.0)), "{at:?}");
+    let a = |p: vectorcraft_geom::Point| json!({"x":p.x,"y":p.y});
+    let mut curved = vec![a(at[0]), a(at[1]), a(at[2]), a(at[3])];
+    curved[1]["out"] = json!([240, 110]);
+    curved[2]["in"] = json!([240, 190]);
+    run(&mut s, "path.setAnchors", json!({"id":rect,"subpaths":[{"anchors":curved,"closed":true}]}));
+    let d = recipe(&s, id);
+    assert!(d.source.is_some(), "still linked");
+    assert!(near(d.b, vectorcraft_geom::Point::new(230.0, 150.0)), "on the curve: {:?}", d.b);
+}
+
+/// The line of a linked dimension of a curved two-anchor path goes to the reflected side when the
+/// path is reflected: its handles tell a reflection from a turn.
+#[test]
+fn a_linked_dimension_of_a_reflected_curve_has_its_line_on_the_reflected_side() {
+    let mut s = session();
+    let arch = json!([{"x":100,"y":200,"out":[100,150]},{"x":200,"y":200,"in":[200,150]}]);
+    let curve = run(&mut s, "path.create", json!({"anchors":arch,"closed":false}))["id"].as_u64().unwrap();
+    let anchor = |anchor: u64| json!({"node":curve,"subpath":0,"anchor":anchor});
+    let src = json!({"kind":"points","a":anchor(0),"b":anchor(1)});
+    // The line 30 pt below the two points (the left normal of a → b points down).
+    let id = run(&mut s, "dimension.create", json!({"source":src,"offset":30}))["id"].as_u64().unwrap();
+    assert!((recipe(&s, id).line_ends().0.y - 230.0).abs() < 1e-6);
+    run(&mut s, "select.set", json!({"ids":[curve]}));
+    run(&mut s, "object.reflect", json!({"axis":"vertical"}));
+    let d = recipe(&s, id);
+    assert!((d.a.y, d.b.y) == (200.0, 200.0) && d.a.x > d.b.x, "{d:?}");
+    assert!((d.line_ends().0.y - 230.0).abs() < 1e-6, "below the points: {:?}", d.line_ends());
+    run(&mut s, "object.reflect", json!({"axis":"horizontal"}));
+    let d = recipe(&s, id);
+    assert!((d.line_ends().0.y - (d.a.y - 30.0)).abs() < 1e-6, "above the points: {d:?}");
+}
+
+/// A point off an arch, whose anchors lie on one line, is held against its anchors and handles:
+/// it is reflected with the arch, to the same side as the dimension's line.
+#[test]
+fn a_point_off_an_arch_is_reflected_with_the_arch() {
+    let mut s = session();
+    let arch = json!([{"x":100,"y":200,"out":[100,150]},{"x":200,"y":200,"in":[200,150]}]);
+    let curve = run(&mut s, "path.create", json!({"anchors":arch,"closed":false}))["id"].as_u64().unwrap();
+    let id = clicks(&mut s, &[(100.0, 200.0), (150.0, 120.0), (60.0, 120.0)]);
+    let d = recipe(&s, id);
+    assert!(d.source.as_ref().is_some_and(|src| src.nodes() == vec![NodeId(curve), NodeId(curve)]), "{:?}", d.source);
+    assert!(near(d.b, vectorcraft_geom::Point::new(150.0, 120.0)), "{:?}", d.b);
+    run(&mut s, "select.set", json!({"ids":[curve]}));
+    run(&mut s, "object.reflect", json!({"axis":"horizontal","origin":[0,200]}));
+    let d = recipe(&s, id);
+    assert!(near(d.a, vectorcraft_geom::Point::new(100.0, 200.0)), "{:?}", d.a);
+    assert!(near(d.b, vectorcraft_geom::Point::new(150.0, 280.0)), "below with the arch: {:?}", d.b);
+    run(&mut s, "edit.undo", json!({}));
+    run(&mut s, "select.set", json!({"ids":[curve]}));
+    run(&mut s, "object.reflect", json!({"axis":"vertical","origin":[150,0]}));
+    let d = recipe(&s, id);
+    assert!(near(d.a, vectorcraft_geom::Point::new(200.0, 200.0)), "{:?}", d.a);
+    assert!(near(d.b, vectorcraft_geom::Point::new(150.0, 120.0)), "above with the arch: {:?}", d.b);
+}
+
+/// A point beside a curve that is almost straight is still held against it.
+#[test]
+fn a_point_beside_an_almost_straight_curve_follows_it() {
+    let mut s = session();
+    let flat = json!([{"x":100,"y":200,"out":[100,199.999]},{"x":200,"y":200}]);
+    let curve = run(&mut s, "path.create", json!({"anchors":flat,"closed":false}))["id"].as_u64().unwrap();
+    let id = clicks(&mut s, &[(100.0, 200.0), (150.0, 150.0), (60.0, 120.0)]);
+    let d = recipe(&s, id);
+    assert!(d.source.as_ref().is_some_and(|src| src.nodes() == vec![NodeId(curve), NodeId(curve)]), "{:?}", d.source);
+    run(&mut s, "select.set", json!({"ids":[curve]}));
+    run(&mut s, "object.move", json!({"dx":40,"dy":-30}));
+    let d = recipe(&s, id);
+    assert!(near(d.b, vectorcraft_geom::Point::new(190.0, 120.0)), "{:?}", d.b);
+}
+
+/// A point off a loop whose two anchors are in one place is held against the loop's handles.
+#[test]
+fn a_point_off_a_loop_with_its_anchors_in_one_place_follows_it() {
+    let mut s = session();
+    let tear = json!([{"x":100,"y":200,"out":[60,120]},{"x":100,"y":200,"in":[140,120]}]);
+    let curve = run(&mut s, "path.create", json!({"anchors":tear,"closed":false}))["id"].as_u64().unwrap();
+    let id = clicks(&mut s, &[(100.0, 200.0), (100.0, 60.0), (30.0, 130.0)]);
+    let d = recipe(&s, id);
+    assert!(d.source.as_ref().is_some_and(|src| src.nodes() == vec![NodeId(curve), NodeId(curve)]), "{:?}", d.source);
+    run(&mut s, "select.set", json!({"ids":[curve]}));
+    run(&mut s, "object.move", json!({"dx":40,"dy":-30}));
+    let d = recipe(&s, id);
+    assert!(near(d.b, vectorcraft_geom::Point::new(140.0, 30.0)), "{:?}", d.b);
+}
+
+/// Beside a straight two-anchor line, a point is moved by a reflection as a half turn would move
+/// it: the line's positions alone do not tell the two apart.
+#[test]
+fn a_point_beside_a_reflected_line_moves_as_a_half_turn_would() {
+    let mut s = session();
+    let line = run(&mut s, "shape.line", json!({"x1":100,"y1":100,"x2":200,"y2":100}))["id"].as_u64().unwrap();
+    let id = clicks(&mut s, &[(100.0, 100.0), (150.0, 160.0), (60.0, 130.0)]);
+    run(&mut s, "select.set", json!({"ids":[line]}));
+    run(&mut s, "object.reflect", json!({"axis":"vertical","origin":[150,0]}));
+    let d = recipe(&s, id);
+    assert!(d.source.is_some());
+    assert!(near(d.a, vectorcraft_geom::Point::new(200.0, 100.0)), "{:?}", d.a);
+    assert!(near(d.b, vectorcraft_geom::Point::new(150.0, 40.0)), "{:?}", d.b);
+}
+
+/// Opening a closed path that a dimension measures leaves the dimension where it was, no longer
+/// linked, and undo links it again.
+#[test]
+fn a_dimension_whose_art_is_opened_stays_where_it_was() {
+    let mut s = session();
+    let rect = run(&mut s, "shape.rectangle", json!({"x":100,"y":100,"width":100,"height":100}))["id"].as_u64().unwrap();
+    let id = clicks(&mut s, &[(100.0, 100.0), (200.0, 150.0), (120.0, 90.0)]);
+    let before = recipe(&s, id);
+    let label = text(&s, id);
+    let a = |p: vectorcraft_geom::Point| json!({"x":p.x,"y":p.y});
+    let open: Vec<Value> = anchors(&s, rect).into_iter().map(a).collect();
+    run(&mut s, "path.setAnchors", json!({"id":rect,"subpaths":[{"anchors":open,"closed":false}]}));
+    let d = recipe(&s, id);
+    assert!(d.source.is_none(), "no longer linked");
+    assert_eq!((d.a, d.b, d.offset, text(&s, id)), (before.a, before.b, before.offset, label));
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(recipe(&s, id).source, before.source, "undo links it again");
+}
+
+/// An angle whose arm becomes a curve, and an arc radius whose arc stops being circular, stay where
+/// they were, no longer linked.
+#[test]
+fn angle_and_arc_dimensions_whose_art_no_longer_fits_stay_where_they_were() {
+    let mut s = session();
+    let first = edge(&mut s);
+    let second = run(&mut s, "shape.line", json!({"x1":100,"y1":100,"x2":100,"y2":172}))["id"].as_u64().unwrap();
+    let angle = json!({"mode":"angular","source":{"kind":"angle","first":{"node":first,"subpath":0,"segment":0},"second":{"node":second,"subpath":0,"segment":0}}});
+    let id = run(&mut s, "dimension.create", angle)["id"].as_u64().unwrap();
+    let label = text(&s, id);
+    let curved = json!([{"x":100,"y":100,"out":[140,130]},{"x":100,"y":172}]);
+    run(&mut s, "path.setAnchors", json!({"id":second,"subpaths":[{"anchors":curved,"closed":false}]}));
+    assert_eq!((recipe(&s, id).source, text(&s, id)), (None, label));
+    let circle = run(&mut s, "shape.ellipse", json!({"x":300,"y":100,"width":144,"height":144}))["id"].as_u64().unwrap();
+    let arc = json!({"mode":"radius","source":{"kind":"arc","edge":{"node":circle,"subpath":0,"segment":0}},"options":{"units":"in","precision":1}});
+    let id = run(&mut s, "dimension.create", arc)["id"].as_u64().unwrap();
+    assert_eq!(text(&s, id), "1.0 in");
+    run(&mut s, "select.set", json!({"ids":[circle]}));
+    run(&mut s, "object.scale", json!({"sx":200,"sy":100}));
+    assert_eq!((recipe(&s, id).source, text(&s, id)), (None, "1.0 in".to_string()));
+}
+
+/// Saved and opened again, a dimension to points that are not anchors still follows its art.
+#[test]
+fn free_points_survive_a_native_file() {
+    let mut s = session();
+    let rect = run(&mut s, "shape.rectangle", json!({"x":100,"y":100,"width":100,"height":100}))["id"].as_u64().unwrap();
+    let id = clicks(&mut s, &[(200.0, 150.0), (330.0, 260.0), (260.0, 330.0)]);
+    let before = recipe(&s, id);
+    let doc = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let mut reopened = Session::new();
+    reopened.add_document(doc, None);
+    assert_eq!(recipe(&reopened, id).source, before.source);
+    run(&mut reopened, "select.set", json!({"ids":[rect]}));
+    run(&mut reopened, "object.move", json!({"dx":40,"dy":-30}));
+    let d = recipe(&reopened, id);
+    let v = vectorcraft_geom::Vec2::new(40.0, -30.0);
+    assert!(near(d.a, before.a + v) && near(d.b, before.b + v), "{before:?} → {d:?}");
+}
+
+/// A linked dimension opened from a file with options it cannot be drawn with keeps its art, as a
+/// plain group, when the art it measures is deleted.
+#[test]
+fn a_dimension_that_cannot_be_drawn_again_keeps_its_art() {
+    let mut s = session();
+    let rect = run(&mut s, "shape.rectangle", json!({"x":100,"y":100,"width":100,"height":100}))["id"].as_u64().unwrap();
+    let id = clicks(&mut s, &[(100.0, 100.0), (200.0, 100.0), (150.0, 80.0)]);
+    let saved = vectorcraft_format::save(&s.doc().unwrap().doc, false);
+    let mut v: Value = serde_json::from_slice(&saved).unwrap();
+    fn bad_precision(v: &mut Value) {
+        match v {
+            Value::Object(m) => {
+                if let Some(Value::Object(o)) = m.get_mut("dimension").and_then(|d| d.get_mut("options")) {
+                    o.insert("precision".into(), json!(99));
+                }
+                m.values_mut().for_each(bad_precision);
+            }
+            Value::Array(a) => a.iter_mut().for_each(bad_precision),
+            _ => {}
+        }
+    }
+    bad_precision(&mut v);
+    let mut reopened = Session::new();
+    reopened.add_document(vectorcraft_format::load(&serde_json::to_vec(&v).unwrap()).unwrap(), None);
+    let art = reopened.doc().unwrap().doc.node(NodeId(id)).unwrap().children().unwrap().clone();
+    run(&mut reopened, "select.set", json!({"ids":[rect]}));
+    run(&mut reopened, "edit.clear", json!({}));
+    let n = reopened.doc().unwrap().doc.node(NodeId(id)).cloned().expect("the dimension's art stays");
+    assert!(n.extras().dimension.is_none(), "no longer a live dimension");
+    assert_eq!(n.children().unwrap(), &art);
+}
+
 /// A linked dimension moved on its own keeps its new place when its art changes later; moved with
 /// its art, it keeps its distance from it.
 #[test]
@@ -653,7 +1074,8 @@ fn an_expanded_dimension_stays_plain_art() {
     assert_eq!((art(&s, id), bounds(&s, id)), (plain, at));
     run(&mut s, "edit.clear", json!({}));
     assert_eq!((art(&s, id), bounds(&s, id)), (plain, at));
-    assert!(s.doc().unwrap().doc.node(NodeId(other)).is_none());
+    assert_eq!(text(&s, other), "20.00 in", "the live dimension stays, no longer linked");
+    assert!(recipe(&s, other).source.is_none());
     // Saved and opened again, it is still plain art.
     let doc = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
     let mut reopened = Session::new();
@@ -975,7 +1397,9 @@ fn dimension_linked_angle_and_circle_update_and_reject_non_circles() {
     run(&mut s, "object.scale", json!({"sx":200,"sy":200}));
     assert_eq!(text(&s, id), "4 in");
     run(&mut s, "object.scale", json!({"sx":200,"sy":100}));
-    assert!(s.doc().unwrap().doc.node(NodeId(id)).is_none());
+    // An ellipse has no single radius: the dimension stays where it was, no longer linked.
+    assert_eq!(text(&s, id), "4 in");
+    assert!(recipe(&s, id).source.is_none());
     assert!(s.execute("dimension.create", &json!({"mode":"radius","source":{"kind":"circle","node":circle}})).is_err());
 }
 

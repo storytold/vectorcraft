@@ -2085,6 +2085,8 @@ font-technology	Variable	Μεταβλητές
 	Threshold	Κατώφλι
 	Tile	Παράθεση
 	Tint	Χρωματική απόχρωση
+	Fill Tint	Χρωματική απόχρωση γεμίσματος
+	Stroke Tint	Χρωματική απόχρωση περιγράμματος
 	Tolerance	Ανοχή
 	Tolerance:	Ανοχή:
 	Tool Options…	Επιλογές εργαλείου…
@@ -2258,6 +2260,9 @@ axis	Both	Και τα δύο
 @msg	the script is too large to run	το σενάριο είναι πολύ μεγάλο για εκτέλεση
 @msg	a drag or an undo group is open; finish it before running a script	είναι ανοιχτή μια μεταφορά ή ομάδα αναίρεσης· ολοκληρώστε την πριν εκτελέσετε σενάριο
 @msg	the script left a document that cannot be kept	το σενάριο άφησε ένα έγγραφο που δεν μπορεί να διατηρηθεί
+@msg	the script is no longer in the Scripts folder	το σενάριο δεν βρίσκεται πλέον στον φάκελο Scripts
+	Some scripts were not listed	Ορισμένα σενάρια δεν εμφανίζονται στη λίστα
+	The Scripts folder cannot be read	Δεν είναι δυνατή η ανάγνωση του φακέλου Scripts
 @msg	the script's run is no longer available	η εκτέλεση του σεναρίου δεν είναι πλέον διαθέσιμη
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	μια εντολή που απέτυχε άλλαξε βήματα αναίρεσης που δεν ήταν δυνατό να επαναφερθούν, οπότε το σενάριο σταμάτησε
 @msg	a recovery copy could not be written, so the script was not run	δεν ήταν δυνατή η εγγραφή αντιγράφου ανάκτησης, οπότε το σενάριο δεν εκτελέστηκε
@@ -5692,6 +5697,7 @@ effect	Points	Σημεία
 @msg	Invalid drawing scale	Μη έγκυρη κλίμακα σχεδίου
 @msg	Invalid real scale	Μη έγκυρη πραγματική κλίμακα
 @msg	Measured anchor no longer exists	Το μετρημένο σημείο αγκύρωσης δεν υπάρχει πλέον
+@msg	Invalid measured point	Μη έγκυρο μετρημένο σημείο
 @msg	Measured segment no longer exists	Το μετρημένο τμήμα δεν υπάρχει πλέον
 @msg	Non-finite dimension	Η διάσταση δεν είναι πεπερασμένος αριθμός
 @msg	Only linear dimensions are horizontal or vertical	Μόνο οι γραμμικές διαστάσεις είναι οριζόντιες ή κατακόρυφες

@@ -2,11 +2,12 @@ use super::state::{SUBJECT_COMMANDS, enabled, has_subject, waits_for_ime};
 use super::{Value, VectorcraftApp, json};
 
 /// What a menu click runs: items whose label ends with "…" and that carry default params open a
-/// generic parameter dialog (fields = the defaults) instead of running immediately.
+/// generic parameter dialog (fields = the defaults) instead of running immediately. A script of the
+/// Scripts folder runs, whatever its name ends with.
 pub fn click_target(label: &str, id: &str, p: &Value) -> (String, Value) {
     let dialog = label.ends_with('…')
         && p.as_object().is_some_and(|o| !o.is_empty())
-        && !matches!(id, "effect.dialog" | "window.panel" | "window.brightness" | "view.screenMode" | "plugin.dialog");
+        && !matches!(id, "effect.dialog" | "window.panel" | "window.brightness" | "view.screenMode" | "plugin.dialog" | crate::scripts_menu::COMMAND);
     if dialog {
         return ("ui.paramDialog".into(), json!({"command": id, "label": label.trim_end_matches('…'), "params": p}));
     }

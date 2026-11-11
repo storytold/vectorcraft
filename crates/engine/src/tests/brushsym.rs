@@ -1358,6 +1358,34 @@ fn break_link_keeps_hidden_and_locked_instances_hidden_and_locked() {
     assert!(selected.iter().all(|id| d.node(*id).is_some_and(|n| n.visible && !n.locked)), "{selected:?}");
 }
 
+/// Break Link to Symbol on a selected group does not select the art of a shown, unlocked instance
+/// that sits in a hidden or a locked group inside it.
+#[test]
+fn break_link_leaves_art_in_hidden_or_locked_groups_unselected() {
+    let mut s = session();
+    let (shown, name, _) = make_symbol(&mut s);
+    let subgroup = |s: &mut Session, y: i64| {
+        let id = NodeId(s.execute("symbol.place", &json!({"name": name, "x": 300, "y": y})).unwrap()["id"].as_u64().unwrap());
+        select(s, &[id]);
+        NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap())
+    };
+    let hidden = subgroup(&mut s, 200);
+    let locked = subgroup(&mut s, 100);
+    select(&mut s, &[shown, hidden, locked]);
+    let group = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    doc.node_mut(hidden).unwrap().visible = false;
+    doc.node_mut(locked).unwrap().locked = true;
+    select(&mut s, &[group]);
+    let r = s.execute("symbol.breakLink", &json!({})).unwrap();
+    assert_eq!(r["ids"].as_array().unwrap().len(), 3, "{r}");
+    let d = &s.doc().unwrap().doc;
+    let selected: Vec<NodeId> = s.doc().unwrap().selection.objects.to_vec();
+    assert_eq!(selected.len(), 1, "{selected:?}");
+    let a = d.ancestry(selected[0]).unwrap();
+    assert!(!a.contains(&hidden) && !a.contains(&locked), "{a:?}");
+}
+
 /// Delete Symbol, expanding the instances, keeps a hidden instance's art hidden and a locked
 /// instance's art locked.
 #[test]
