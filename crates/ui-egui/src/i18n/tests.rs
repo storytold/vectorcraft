@@ -2966,3 +2966,70 @@ fn every_catalog_names_the_digits_menus_numeral_systems() {
     }
     assert!(missing.is_empty(), "Digits menu labels without a row:\n{}", missing.join("\n"));
 }
+
+/// Source-linked Hebrew labels for real Native Save Changes, Export As, and Import PDF dialogs.
+#[test]
+fn hebrew_native_save_export_import_dialogs_are_localized() {
+    let he = Lang::from_code("he").expect("Hebrew locale registered");
+    for (filename, labels) in [
+        (
+            "../dialogs/save_changes.rs",
+            &["Do you want to save the changes you made to “{name}”?", "Your changes will be lost if you don't save them."][..],
+        ),
+        (
+            "../dialogs/export_as.rs",
+            &[
+                "Export As",
+                "Use Artboards",
+                "The plug-in writes the whole document.",
+                "One page per artboard.",
+                "One file per artboard: <name>-<artboard>.{ext}",
+                "The bounds of the visible art.",
+            ][..],
+        ),
+        (
+            "../dialogs/import_pdf.rs",
+            &[
+                "Place PDF",
+                "Import PDF",
+                "“{file}” is protected by a password.",
+                "First Page",
+                "Previous Page",
+                "of {count}",
+                "Next Page",
+                "Last Page",
+                "Crop To",
+                "Pages",
+                "e.g. 1-3, 5",
+                "Password",
+            ][..],
+        ),
+    ] {
+        let source = match filename {
+            "../dialogs/save_changes.rs" => include_str!("../dialogs/save_changes.rs"),
+            "../dialogs/export_as.rs" => include_str!("../dialogs/export_as.rs"),
+            _ => include_str!("../dialogs/import_pdf.rs"),
+        };
+        for english in labels {
+            assert!(source.contains(&format!(r#"tl!("{english}")"#)), "{filename}: missing source key {english}");
+            assert_ne!(tr(he, english), *english, "untranslated: {english}");
+            assert_eq!(tr(Lang::EN, english), *english, "English changed: {english}");
+        }
+    }
+    for english in ["Don't Save", "Export…"] {
+        let source = if english == "Don't Save" { include_str!("../dialogs/save_changes.rs") } else { include_str!("../dialogs/export_as.rs") };
+        assert!(source.contains(&format!(r#"Some("{english}")"#)));
+        assert_ne!(tr(he, english), english);
+    }
+    for key in [
+        "Do you want to save the changes you made to “{name}”?",
+        "One file per artboard: <name>-<artboard>.{ext}",
+        "“{file}” is protected by a password.",
+        "of {count}",
+    ] {
+        assert_eq!(placeholders(key), placeholders(tr(he, key)));
+    }
+    let (rows, errors) = parse_entries(he.0.source);
+    assert!(errors.is_empty(), "{errors:?}");
+    assert!(rows.len() >= 201, "new Hebrew catalog rows absent");
+}

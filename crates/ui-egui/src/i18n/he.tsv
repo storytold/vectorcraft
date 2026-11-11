@@ -186,3 +186,25 @@
 	Enable copying of text, images and other content	אפשור העתקת טקסט, תמונות ותוכן אחר
 	Enable text access for screen readers	אפשור גישה לטקסט עבור קוראי מסך
 	Files of a PDF standard can't be password-protected.	לא ניתן להגן בסיסמה על קבצים העומדים בתקן PDF.
+	Do you want to save the changes you made to “{name}”?	האם לשמור את השינויים שביצעת במסמך „{name}”?
+	Your changes will be lost if you don't save them.	השינויים שביצעת יאבדו אם לא תשמור אותם.
+	Don't Save	אל תשמור
+	Export As	ייצוא בשם
+	Export…	ייצוא…
+	Use Artboards	שימוש במשטחי יצירה
+	The plug-in writes the whole document.	התוסף מייצא את המסמך כולו.
+	One page per artboard.	עמוד אחד לכל משטח יצירה.
+	One file per artboard: <name>-<artboard>.{ext}	קובץ אחד לכל משטח יצירה: <name>-<artboard>.{ext}
+	The bounds of the visible art.	גבולות הגרפיקה הגלויה.
+	Place PDF	הצבת PDF
+	Import PDF	ייבוא PDF
+	“{file}” is protected by a password.	הקובץ „{file}” מוגן בסיסמה.
+	First Page	העמוד הראשון
+	Previous Page	העמוד הקודם
+	of {count}	מתוך {count}
+	Next Page	העמוד הבא
+	Last Page	העמוד האחרון
+	Crop To	חיתוך לפי
+	Pages	עמודים
+	e.g. 1-3, 5	לדוגמה: 1-3, 5
+	Password	סיסמה
