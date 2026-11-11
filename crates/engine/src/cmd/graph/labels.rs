@@ -10,7 +10,7 @@ use super::{
 pub(super) struct Gen<'a> {
     pub(super) d: &'a mut Document,
     pub(super) out: Vec<Arc<Node>>,
-    /// The labels' kept character styles.
+    /// The labels' kept character styles and paragraph attributes.
     pub(super) styles: &'a vectorcraft_doc::LabelStyles,
     /// What the column designs may still add.
     pub(super) columns: Allowance,
@@ -45,6 +45,30 @@ pub(super) fn label_style(styles: &vectorcraft_doc::LabelStyles, role: Role) -> 
     st
 }
 
+/// The paragraph attributes labels of `role` are set with: the kept ones, else the defaults. The caller sets the
+/// alignment.
+pub(super) fn label_para(styles: &vectorcraft_doc::LabelStyles, role: Role) -> vectorcraft_doc::ParaStyle {
+    let kept = match role {
+        Role::Value => &styles.values_para,
+        Role::Category => &styles.categories_para,
+        Role::Legend => &styles.legend_para,
+    };
+    let mut para = kept.clone().unwrap_or_default();
+    // A file's attributes within the limits the Paragraph controls keep to (they are copied onto every label).
+    para.keep_spacing_in_range();
+    para
+}
+
+/// The anti-aliasing method labels of `role` are drawn with: the kept one, else Sharp.
+pub(super) fn label_anti_alias(styles: &vectorcraft_doc::LabelStyles, role: Role) -> vectorcraft_doc::text::TypeAntiAlias {
+    let kept = match role {
+        Role::Value => styles.values_anti_alias,
+        Role::Category => styles.categories_anti_alias,
+        Role::Legend => styles.legend_anti_alias,
+    };
+    kept.unwrap_or_default()
+}
+
 /// How big labels of `role` are set: a kept style's size, else 9 pt. The labels' spacing follows it.
 pub(super) fn label_size(styles: &vectorcraft_doc::LabelStyles, role: Role) -> f64 {
     label_style(styles, role).size
@@ -63,6 +87,8 @@ impl Gen<'_> {
     pub(super) fn text(&mut self, role: Role, at: Point, s: &str, justify: Justify) -> Arc<Node> {
         let style = label_style(self.styles, role);
         let mut t = TextObject::point(at, s, style);
+        t.para = label_para(self.styles, role);
+        t.anti_alias = label_anti_alias(self.styles, role);
         t.para.justify = justify;
         t.system_layout = self.d.setup.system_layout;
         refresh_bounds(&mut t);
@@ -162,12 +188,40 @@ pub(super) fn shadow_of(d: &mut Document, n: &Node) -> Arc<Node> {
     Arc::new(d.reid(&c))
 }
 
-/// How wide label `s` is set (its widest line), without adding it to a document.
-pub(super) fn label_width(styles: &vectorcraft_doc::LabelStyles, s: &str) -> f64 {
+/// The bounds of legend label `s` set from the origin with paragraph attributes `para`, without adding it to a document.
+fn legend_label_bounds(styles: &vectorcraft_doc::LabelStyles, s: &str, para: vectorcraft_doc::ParaStyle) -> Option<Rect> {
     let style = label_style(styles, Role::Legend);
     let mut t = TextObject::point(Point::ZERO, &s.replace('|', "\n"), style);
+    t.para = para;
+    t.para.justify = Justify::Left;
     refresh_bounds(&mut t);
-    Node::new(NodeId(0), NodeKind::Text(Box::new(t))).geometric_bounds().map_or(0.0, |b| b.width())
+    Node::new(NodeId(0), NodeKind::Text(Box::new(t))).geometric_bounds()
+}
+
+/// How far label `s` reaches right of where it starts (its widest line and any indent), after the legend moves it right
+/// by [`label_shift`], without adding it to a document.
+pub(super) fn label_width(styles: &vectorcraft_doc::LabelStyles, s: &str) -> f64 {
+    legend_label_bounds(styles, s, label_para(styles, Role::Legend)).map_or(0.0, |b| (b.x1 + label_shift(styles, s).0).max(0.0))
+}
+
+/// The bounds of legend label `s` set with its kept paragraph attributes and with the defaults, when it has kept ones.
+fn kept_and_default_bounds(styles: &vectorcraft_doc::LabelStyles, s: &str) -> Option<(Rect, Rect)> {
+    styles.legend_para.as_ref()?;
+    Some((legend_label_bounds(styles, s, label_para(styles, Role::Legend))?, legend_label_bounds(styles, s, vectorcraft_doc::ParaStyle::default())?))
+}
+
+/// How much further left and further up legend label `s` reaches with its kept paragraph attributes than with the
+/// defaults (a negative indent or negative spacing), so the legend moves it right and down by that much and it stays
+/// clear of its swatch and of the entries before it.
+pub(super) fn label_shift(styles: &vectorcraft_doc::LabelStyles, s: &str) -> (f64, f64) {
+    kept_and_default_bounds(styles, s).map_or((0.0, 0.0), |(kept, default)| ((default.x0 - kept.x0).max(0.0), (default.y0 - kept.y0).max(0.0)))
+}
+
+/// How much further down legend label `s` reaches with its kept paragraph attributes than with the defaults (more
+/// leading, or space before or after), after the legend moves it down by [`label_shift`], so the legend makes room
+/// for it.
+pub(super) fn label_extra_height(styles: &vectorcraft_doc::LabelStyles, s: &str) -> f64 {
+    kept_and_default_bounds(styles, s).map_or(0.0, |(kept, default)| (kept.y1 + (default.y0 - kept.y0).max(0.0) - default.y1).max(0.0))
 }
 
 /// A label with nothing to show (empty, or only `|` line breaks).
