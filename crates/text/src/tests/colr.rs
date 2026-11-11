@@ -411,3 +411,25 @@ fn a_colour_glyph_on_a_path_turns_with_it() {
     assert!((b.width() - upright.height()).abs() < 1.0 && (b.height() - upright.width()).abs() < 1.0, "on its side: {b:?}");
     assert!(b.y0 >= -1.0 && b.y1 <= 400.0, "along the path: {b:?}");
 }
+
+/// A layer list that reuses one run of layers many times grows the tree past its node cap: the
+/// glyph is then no colour glyph (it draws its outline), and the layers after the cap are not drawn.
+#[test]
+fn layers_repeating_a_run_of_layers_pass_the_cap() {
+    use write_fonts::tables::colr::{BaseGlyphList, BaseGlyphPaint, Colr, LayerList};
+    use write_fonts::types::GlyphId16;
+    let bytes = colr_font(false).unwrap();
+    let o = skrifa::FontRef::new(&bytes).unwrap().charmap().map(COLOUR_CHAR).unwrap().to_u32();
+    let o = GlyphId16::new(u16::try_from(o).unwrap());
+    let font = |runs: u8| {
+        // 255 glyph layers, then `runs` layers that each repeat all of them.
+        let mut layers: Vec<ColrPaint> = (0..255).map(|_| ColrPaint::glyph(solid(0), o)).collect();
+        layers.extend((0..runs).map(|_| ColrPaint::colr_layers(255, 0)));
+        let mut colr = Colr::new(0, None, None, 0);
+        colr.base_glyph_list = Some(BaseGlyphList::new(1, vec![BaseGlyphPaint::new(o, ColrPaint::colr_layers(runs, 255))])).into();
+        colr.layer_list = Some(LayerList::new(layers.len() as u32, layers)).into();
+        crate::test_fonts::colr_font_with(&format!("Colrtest Runs {runs}"), &colr).unwrap()
+    };
+    assert!(matches!(content(&font(2), COLOUR_CHAR), Some(ColourContent::Art(_))), "510 layers fit");
+    assert!(content(&font(100), COLOUR_CHAR).is_none(), "25,500 layers do not");
+}
