@@ -2844,6 +2844,12 @@ mark-style	Japanese	日本式
 	Reset OpenType Features	OpenType 機能をリセット
 	Reset Panel	パネルをリセット
 	Reset Preferences	環境設定をリセット
+	Export Preferences…	環境設定を書き出し…
+	Import Preferences…	環境設定を読み込み…
+	Save the applied preferences to a JSON file	適用中の環境設定を JSON ファイルに保存
+	Apply the preferences in a file Export Preferences saved	「環境設定を書き出し」で保存したファイルの環境設定を適用
+	Export Preferences	環境設定を書き出し
+	Import Preferences	環境設定を読み込み
 	Search Preferences	環境設定を検索
 	No settings found	設定が見つかりません
 	Reset Profiles	プロファイルをリセット
@@ -3642,6 +3648,7 @@ file-filter	Swatch libraries	スウォッチライブラリ
 file-filter	Flattener presets	分割・統合プリセット
 file-filter	PDF presets	PDF プリセット
 file-filter	Print presets	プリントプリセット
+file-filter	Preferences	環境設定
 file-filter	Export presets	書き出しプリセット
 file-filter	SVG Compressed	SVG 圧縮
 file-filter	PDF-compatible .ai	PDF 互換の .ai
@@ -4430,6 +4437,20 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` は {min} から {max} までの値にしてください (指定値: {x})
 @msg	`{key}` must be one of {_1}	`{key}` は {_1} のいずれかにしてください
 @msg	unknown preference `{key}`	`{key}` は不明な環境設定の項目です
+@msg	Preferences imported.	環境設定を読み込みました。
+@msg	not a preferences file: {e}	環境設定ファイルではありません: {e}
+@msg	not a preferences file: no JSON object	環境設定ファイルではありません: JSON オブジェクトがありません
+@msg	not a preferences file (format `{format}`)	環境設定ファイルではありません (形式 `{format}`)
+@msg	not a preferences file: no `format`	環境設定ファイルではありません: `format` がありません
+@msg	not a preferences file: no `version`	環境設定ファイルではありません: `version` がありません
+@msg	not a preferences file: no `prefs`	環境設定ファイルではありません: `prefs` がありません
+@msg	the file was saved by a newer version of VectorCraft (version {v})	ファイルは新しいバージョンの VectorCraft で保存されています (バージョン {v})
+@msg	the file holds no preferences	ファイルに環境設定がありません
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` はフォルダーを指定しますが、環境設定ファイルにはフォルダーを含めません
+@msg	the file is larger than 1 MB	ファイルが 1 MB を超えています
+@msg	give `path` or `data`	`path` または `data` を指定してください
+@msg	`{key}` must be an object	`{key}` はオブジェクトである必要があります
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` は単独で実行します。バッチのステップにはできません
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	データ復帰のコピーを保存する場所がありません: 環境設定 → ファイル管理 → データ復帰 → フォルダー (recoveryFolder) を設定してください
 @msg	Data Recovery can't keep copies in {path}: {e}	データ復帰は {path} にコピーを保存できません: {e}
 @msg	Plug-ins can't be loaded from {path}: {e}	{path} からプラグインを読み込めません: {e}

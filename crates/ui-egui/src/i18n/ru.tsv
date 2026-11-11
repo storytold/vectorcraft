@@ -1275,6 +1275,7 @@ file-filter	Swatch libraries	Библиотеки образцов
 file-filter	Flattener presets	Наборы объединения
 file-filter	PDF presets	Наборы PDF
 file-filter	Print presets	Наборы печати
+file-filter	Preferences	Настройки
 file-filter	Export presets	Наборы настроек экспорта
 file-filter	SVG Compressed	Сжатый SVG
 file-filter	PDF-compatible .ai	.ai, совместимый с PDF
@@ -2848,6 +2849,12 @@ digits	Malayalam	Малаялам
 	Reset OpenType Features	Сбросить функции OpenType
 	Reset Panel	Сбросить панель
 	Reset Preferences	Сбросить настройки
+	Export Preferences…	Экспортировать настройки…
+	Import Preferences…	Импортировать настройки…
+	Save the applied preferences to a JSON file	Сохранить применённые настройки в файл JSON
+	Apply the preferences in a file Export Preferences saved	Применить настройки из файла, сохранённого командой «Экспортировать настройки»
+	Export Preferences	Экспортировать настройки
+	Import Preferences	Импортировать настройки
 	Search Preferences	Поиск в настройках
 	No settings found	Настройки не найдены
 	Reset Profiles	Сбросить профили
@@ -4723,6 +4730,20 @@ axis	Both	Оба
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	неизвестные наложения `{o}` (preserve, simulate или discard)
 @msg	unknown panel `{raw}`	неизвестная панель `{raw}`
 @msg	unknown preference `{key}`	неизвестная настройка `{key}`
+@msg	Preferences imported.	Настройки импортированы.
+@msg	not a preferences file: {e}	не является файлом настроек: {e}
+@msg	not a preferences file: no JSON object	не является файлом настроек: нет объекта JSON
+@msg	not a preferences file (format `{format}`)	не является файлом настроек (формат `{format}`)
+@msg	not a preferences file: no `format`	не является файлом настроек: нет `format`
+@msg	not a preferences file: no `version`	не является файлом настроек: нет `version`
+@msg	not a preferences file: no `prefs`	не является файлом настроек: нет `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	файл сохранён более новой версией VectorCraft (версия {v})
+@msg	the file holds no preferences	файл не содержит настроек
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` указывает папку, а файлы настроек не содержат папок
+@msg	the file is larger than 1 MB	файл больше 1 МБ
+@msg	give `path` or `data`	укажите `path` или `data`
+@msg	`{key}` must be an object	`{key}` должен быть объектом
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` выполняется отдельно, а не как шаг пакета
 @msg	unknown preset (one of {_1})	неизвестный набор (один из: {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	неизвестный набор `{name}` (high, medium, low или сохранённый: см. flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	неизвестный набор `{name}` (см. flattener.presets.list)

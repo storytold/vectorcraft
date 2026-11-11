@@ -2625,6 +2625,12 @@ digits	Malayalam	Malayalam
 	Reset OpenType Features	OpenType Özelliklerini Sıfırla
 	Reset Panel	Paneli Sıfırla
 	Reset Preferences	Tercihleri Sıfırla
+	Export Preferences…	Tercihleri Dışa Aktar…
+	Import Preferences…	Tercihleri İçe Aktar…
+	Save the applied preferences to a JSON file	Uygulanan tercihleri bir JSON dosyasına kaydet
+	Apply the preferences in a file Export Preferences saved	Tercihleri Dışa Aktar ile kaydedilen bir dosyadaki tercihleri uygula
+	Export Preferences	Tercihleri Dışa Aktar
+	Import Preferences	Tercihleri İçe Aktar
 	Search Preferences	Tercihlerde Ara
 	No settings found	Ayar bulunamadı
 	Reset Profiles	Profilleri Sıfırla
@@ -4434,6 +4440,20 @@ axis	Both	Her İkisi
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	bilinmeyen üst baskılar `{o}` (koru, benzet veya at)
 @msg	unknown panel `{raw}`	bilinmeyen panel `{raw}`
 @msg	unknown preference `{key}`	bilinmeyen tercih `{key}`
+@msg	Preferences imported.	Tercihler içe aktarıldı.
+@msg	not a preferences file: {e}	tercih dosyası değil: {e}
+@msg	not a preferences file: no JSON object	tercih dosyası değil: JSON nesnesi yok
+@msg	not a preferences file (format `{format}`)	tercih dosyası değil (biçim `{format}`)
+@msg	not a preferences file: no `format`	tercih dosyası değil: `format` yok
+@msg	not a preferences file: no `version`	tercih dosyası değil: `version` yok
+@msg	not a preferences file: no `prefs`	tercih dosyası değil: `prefs` yok
+@msg	the file was saved by a newer version of VectorCraft (version {v})	dosya VectorCraft'ın daha yeni bir sürümüyle kaydedilmiş (sürüm {v})
+@msg	the file holds no preferences	dosyada tercih yok
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` bir klasör belirtir ve tercih dosyaları klasör içermez
+@msg	the file is larger than 1 MB	dosya 1 MB'tan büyük
+@msg	give `path` or `data`	`path` veya `data` verin
+@msg	`{key}` must be an object	`{key}` bir nesne olmalıdır
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` tek başına çalışır, toplu iş adımı olarak değil
 @msg	unknown preset (one of {_1})	bilinmeyen ön ayar ({_1}'den biri)
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	bilinmeyen ön ayar `{name}` (yüksek, orta, düşük veya kaydedilmiş bir ayar: bkz. flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	bilinmeyen ön ayar `{name}` (bkz. düzleştirici.presets.list)
@@ -5330,6 +5350,7 @@ file-filter	Flattener presets	Düzleştirici önayarları
 file-filter	PDF presets	PDF önayarları
 file-filter	PDF-compatible .ai	PDF ile uyumlu .ai
 file-filter	Print presets	Baskı önayarları
+file-filter	Preferences	Tercihler
 file-filter	SVG Compressed	Sıkıştırılmış SVG
 file-filter	Swatch libraries	Renk örneği kitaplıkları
 file-filter	Templates	Şablonlar

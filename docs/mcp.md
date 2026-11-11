@@ -3157,8 +3157,16 @@ The pattern commands (`object.pattern.make`, `object.pattern.edit`, `object.patt
 `object.repeat.options`) reject a param of the wrong type, such as `"instances": "8"`, `"edit": "false"` or
 `"tileType": 2`, and change nothing. `pattern.options` also rejects an `overlap` that is not an object, and an
 `overlap.h` other than `left` or `right` or an `overlap.v` other than `top` or `bottom`. `object.repeat.options` rejects
-a `center` that is not `[x, y]`, and `object.repeat.radial` rejects a negative `radius`. Omitting a param or giving null
-keeps its default.
+a `center` that is not `[x, y]`, and `object.repeat.radial` rejects a negative `radius`. In `object.pattern.make`,
+`object.pattern.saveCopy`, `object.repeat.radial`, `object.repeat.grid` and `object.repeat.mirror`, omitting a param or
+giving null keeps its default. In `pattern.options` and `object.repeat.options`, omitting a param or giving null keeps
+the pattern's or the repeat's current value, with two exceptions. A brick `tileType` in `pattern.options` or a brick
+`gridType` in `object.repeat.options` with `brickOffset` omitted or null sets the offset to 0.5. While `sizeTileToArt`
+is on, each `pattern.options` call sizes the tile to the art plus `hSpacing` and `vSpacing` again and ignores `width`
+and `height`, so a new `hSpacing` changes the tile's width. `pattern.options` still rejects a non-null `width` or
+`height` that is not a positive number, such as `"width": 0`, and changes nothing. Without a `name`,
+`object.pattern.edit` edits the pattern that fills or strokes a selected object, and `pattern.options` changes the
+pattern being edited; each returns an error when there is no such pattern. `pattern.delete` requires `name`.
 
 ```json
 {"name":"run_command","arguments":{"command":"pattern.options","params":{"showSwatchBounds":true}}}
@@ -4613,6 +4621,24 @@ Preferences. `prefs.reset` resets the preferences at once, without the question.
 
 ```json
 {"name":"run_command","arguments":{"command":"prefs.set","params":{"key":"unitsGeneral","value":"millimeters"}}}
+```
+
+`prefs.export {path?}` writes the preferences as a JSON file, `{"format": "vectorcraft-preferences", "version": 1,
+"prefs": {…}}`, and replies `{path, count}`; without `path` it replies `{data, count}` with the file's text. The file
+holds every preference `prefs.list` lists and the `eyedropper`, `perspectiveWidget`, `pathfinder` and `glyphSnap`
+groups. It leaves out the folder preferences (`fontsFolder`, `pluginsFolder`, `recoveryFolder`, `templatesFolder`) and
+saved presets. An export over 1 MB, the most `prefs.import` reads, is an error and writes nothing.
+`prefs.import {path | data}` applies such a file and replies `{imported}`, the number of preferences it
+set. It checks every value first, as `prefs.set` does: a file over 1 MB, malformed JSON, another `format`, a newer
+`version`, an empty `prefs`, an unknown preference, a value of the wrong type or out of range, or a folder preference
+is an error, and nothing changes. Preferences the file leaves out keep their values. An import leaves the open
+document's units as they are, records no undo step, and is saved with the other preferences. An open Preferences
+dialog shows the imported values. `prefs.import` is refused as a `command.batch` step. The dialog's Export Preferences… and Import Preferences… buttons run the two
+commands with a save or open dialog; the web build downloads the exported file and has no Import Preferences… button.
+Exporting and importing preferences is an optional VectorCraft feature.
+
+```json
+{"name":"run_command","arguments":{"command":"prefs.import","params":{"data":"{\"format\":\"vectorcraft-preferences\",\"version\":1,\"prefs\":{\"uiAccent\":\"green\"}}"}}}
 ```
 
 ## Document Setup

@@ -2820,6 +2820,12 @@ digits	Malayalam	Malayálam
 	Reset OpenType Features	Restablecer funciones OpenType
 	Reset Panel	Restablecer panel
 	Reset Preferences	Restablecer preferencias
+	Export Preferences…	Exportar preferencias…
+	Import Preferences…	Importar preferencias…
+	Save the applied preferences to a JSON file	Guardar las preferencias aplicadas en un archivo JSON
+	Apply the preferences in a file Export Preferences saved	Aplicar las preferencias de un archivo guardado con Exportar preferencias
+	Export Preferences	Exportar preferencias
+	Import Preferences	Importar preferencias
 	Search Preferences	Buscar en preferencias
 	No settings found	No se encontraron ajustes
 	Reset Profiles	Restablecer perfiles
@@ -4687,6 +4693,20 @@ axis	Both	Ambos
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	sobreimpresiones desconocidas `{o}` (preserve, simulate o discard)
 @msg	unknown panel `{raw}`	panel desconocido `{raw}`
 @msg	unknown preference `{key}`	preferencia desconocida `{key}`
+@msg	Preferences imported.	Preferencias importadas.
+@msg	not a preferences file: {e}	no es un archivo de preferencias: {e}
+@msg	not a preferences file: no JSON object	no es un archivo de preferencias: no hay ningún objeto JSON
+@msg	not a preferences file (format `{format}`)	no es un archivo de preferencias (formato `{format}`)
+@msg	not a preferences file: no `format`	no es un archivo de preferencias: falta `format`
+@msg	not a preferences file: no `version`	no es un archivo de preferencias: falta `version`
+@msg	not a preferences file: no `prefs`	no es un archivo de preferencias: falta `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	el archivo se guardó con una versión más reciente de VectorCraft (versión {v})
+@msg	the file holds no preferences	el archivo no contiene preferencias
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` indica una carpeta, y los archivos de preferencias no incluyen carpetas
+@msg	the file is larger than 1 MB	el archivo ocupa más de 1 MB
+@msg	give `path` or `data`	indique `path` o `data`
+@msg	`{key}` must be an object	`{key}` debe ser un objeto
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` se ejecuta por sí solo, no como paso de un lote
 @msg	unknown preset (one of {_1})	preajuste desconocido (uno de estos: {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	preajuste desconocido `{name}` (high, medium, low o uno guardado: consulta flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	preajuste desconocido `{name}` (consulta flattener.presets.list)
@@ -5435,6 +5455,7 @@ file-filter	Swatch libraries	Bibliotecas de muestras
 file-filter	Flattener presets	Preajustes del acoplador
 file-filter	PDF presets	Preajustes de PDF
 file-filter	Print presets	Preajustes de impresión
+file-filter	Preferences	Preferencias
 file-filter	Export presets	Ajustes de exportación
 file-filter	SVG Compressed	SVG comprimido
 file-filter	PDF-compatible .ai	.ai compatible con PDF

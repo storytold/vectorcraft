@@ -3689,6 +3689,12 @@ theme	Appearance	Ulkoasu
 	Real-time Drawing and Editing	Reaaliaikainen piirto ja muokkaus
 	Render Threads (-1 = Automatic)	Renderöintisäikeet (-1 = automaattinen)
 	Reset Preferences	Palauta asetukset
+	Export Preferences…	Vie asetukset…
+	Import Preferences…	Tuo asetukset…
+	Save the applied preferences to a JSON file	Tallenna käytössä olevat asetukset JSON-tiedostoon
+	Apply the preferences in a file Export Preferences saved	Ota käyttöön asetukset tiedostosta, jonka Vie asetukset tallensi
+	Export Preferences	Vie asetukset
+	Import Preferences	Tuo asetukset
 	Search Preferences	Hae asetuksista
 	No settings found	Asetuksia ei löytynyt
 	Scale Corners	Skaalaa kulmat
@@ -4897,6 +4903,20 @@ imageTrace	Outline	Ääriviiva
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	tuntematon päällepainatusten käsittely `{o}` (preserve, simulate tai discard)
 @msg	unknown panel `{raw}`	tuntematon paneeli `{raw}`
 @msg	unknown preference `{key}`	tuntematon asetus `{key}`
+@msg	Preferences imported.	Asetukset tuotiin.
+@msg	not a preferences file: {e}	ei ole asetustiedosto: {e}
+@msg	not a preferences file: no JSON object	ei ole asetustiedosto: ei JSON-objektia
+@msg	not a preferences file (format `{format}`)	ei ole asetustiedosto (muoto `{format}`)
+@msg	not a preferences file: no `format`	ei ole asetustiedosto: `format` puuttuu
+@msg	not a preferences file: no `version`	ei ole asetustiedosto: `version` puuttuu
+@msg	not a preferences file: no `prefs`	ei ole asetustiedosto: `prefs` puuttuu
+@msg	the file was saved by a newer version of VectorCraft (version {v})	tiedosto on tallennettu VectorCraftin uudemmalla versiolla (versio {v})
+@msg	the file holds no preferences	tiedostossa ei ole asetuksia
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` nimeää kansion, eikä asetustiedostoissa ole kansioita
+@msg	the file is larger than 1 MB	tiedosto on suurempi kuin 1 Mt
+@msg	give `path` or `data`	anna `path` tai `data`
+@msg	`{key}` must be an object	`{key}` on oltava objekti
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` ajetaan yksinään, ei erän vaiheena
 @msg	unknown preset (one of {_1})	tuntematon esiasetus (jokin seuraavista: {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	tuntematon esiasetus `{name}` (high, medium, low tai tallennettu: ks. flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	tuntematon esiasetus `{name}` (ks. flattener.presets.list)
@@ -5452,6 +5472,7 @@ file-filter	Swatch libraries	Värimallikirjastot
 file-filter	Flattener presets	Litistyksen esiasetukset
 file-filter	PDF presets	PDF-esiasetukset
 file-filter	Print presets	Tulostuksen esiasetukset
+file-filter	Preferences	Asetukset
 file-filter	Export presets	Vientiesiasetukset
 file-filter	SVG Compressed	Pakattu SVG
 file-filter	PDF-compatible .ai	PDF-yhteensopiva .ai

@@ -130,6 +130,7 @@ mod place;
 mod placed_document;
 mod plugins;
 mod prefs;
+mod prefs_file;
 mod previewbounds;
 mod print;
 mod printadvanced;

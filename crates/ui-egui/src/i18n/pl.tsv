@@ -3628,6 +3628,12 @@ theme	Appearance	Wygląd
 	Real-time Drawing and Editing	Rysowanie i edycja w czasie rzeczywistym
 	Render Threads (-1 = Automatic)	Wątki renderowania (-1 = automatycznie)
 	Reset Preferences	Resetuj preferencje
+	Export Preferences…	Eksportuj preferencje…
+	Import Preferences…	Importuj preferencje…
+	Save the applied preferences to a JSON file	Zapisz zastosowane preferencje w pliku JSON
+	Apply the preferences in a file Export Preferences saved	Zastosuj preferencje z pliku zapisanego poleceniem Eksportuj preferencje
+	Export Preferences	Eksportuj preferencje
+	Import Preferences	Importuj preferencje
 	Search Preferences	Szukaj w preferencjach
 	No settings found	Nie znaleziono ustawień
 	Scale Corners	Skaluj narożniki
@@ -4821,6 +4827,20 @@ imageTrace	Outline	Kontur
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	nieznana wartość nadruków `{o}` (preserve, simulate lub discard)
 @msg	unknown panel `{raw}`	nieznany panel `{raw}`
 @msg	unknown preference `{key}`	nieznana preferencja `{key}`
+@msg	Preferences imported.	Zaimportowano preferencje.
+@msg	not a preferences file: {e}	to nie jest plik preferencji: {e}
+@msg	not a preferences file: no JSON object	to nie jest plik preferencji: brak obiektu JSON
+@msg	not a preferences file (format `{format}`)	to nie jest plik preferencji (format `{format}`)
+@msg	not a preferences file: no `format`	to nie jest plik preferencji: brak `format`
+@msg	not a preferences file: no `version`	to nie jest plik preferencji: brak `version`
+@msg	not a preferences file: no `prefs`	to nie jest plik preferencji: brak `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	plik zapisano w nowszej wersji programu VectorCraft (wersja {v})
+@msg	the file holds no preferences	plik nie zawiera preferencji
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` wskazuje folder, a pliki preferencji nie zawierają folderów
+@msg	the file is larger than 1 MB	plik jest większy niż 1 MB
+@msg	give `path` or `data`	podaj `path` lub `data`
+@msg	`{key}` must be an object	`{key}` musi być obiektem
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` działa samodzielnie, nie jako krok wsadu
 @msg	unknown preset (one of {_1})	nieznane ustawienie (jedno z: {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	nieznane ustawienie `{name}` (high, medium, low lub zapisane: patrz flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	nieznane ustawienie `{name}` (patrz flattener.presets.list)
@@ -5399,6 +5419,7 @@ file-filter	Swatch libraries	Biblioteki próbek
 file-filter	Flattener presets	Ustawienia spłaszczania
 file-filter	PDF presets	Ustawienia PDF
 file-filter	Print presets	Ustawienia drukowania
+file-filter	Preferences	Preferencje
 file-filter	Export presets	Ustawienia eksportu
 file-filter	SVG Compressed	SVG skompresowany
 file-filter	PDF-compatible .ai	.ai zgodny z PDF

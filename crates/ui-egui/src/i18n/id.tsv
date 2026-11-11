@@ -3490,6 +3490,12 @@ theme	Appearance	Tampilan
 	Real-time Drawing and Editing	Penggambaran dan pengeditan waktu nyata
 	Render Threads (-1 = Automatic)	Utas render (-1 = Otomatis)
 	Reset Preferences	Atur ulang preferensi
+	Export Preferences…	Ekspor preferensi…
+	Import Preferences…	Impor preferensi…
+	Save the applied preferences to a JSON file	Simpan preferensi yang diterapkan ke file JSON
+	Apply the preferences in a file Export Preferences saved	Terapkan preferensi dari file yang disimpan oleh Ekspor preferensi
+	Export Preferences	Ekspor preferensi
+	Import Preferences	Impor preferensi
 	Search Preferences	Cari preferensi
 	No settings found	Tidak ada pengaturan yang ditemukan
 	Scale Corners	Skalakan sudut
@@ -4607,6 +4613,20 @@ imageTrace	Outline	Kontur
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	overprint `{o}` tidak dikenal (pertahankan, simulasikan, atau buang)
 @msg	unknown panel `{raw}`	panel `{raw}` tidak dikenal
 @msg	unknown preference `{key}`	preferensi `{key}` tidak dikenal
+@msg	Preferences imported.	Preferensi diimpor.
+@msg	not a preferences file: {e}	bukan file preferensi: {e}
+@msg	not a preferences file: no JSON object	bukan file preferensi: tidak ada objek JSON
+@msg	not a preferences file (format `{format}`)	bukan file preferensi (format `{format}`)
+@msg	not a preferences file: no `format`	bukan file preferensi: tidak ada `format`
+@msg	not a preferences file: no `version`	bukan file preferensi: tidak ada `version`
+@msg	not a preferences file: no `prefs`	bukan file preferensi: tidak ada `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	file disimpan oleh versi VectorCraft yang lebih baru (versi {v})
+@msg	the file holds no preferences	file tidak berisi preferensi
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` menunjuk folder, dan file preferensi tidak menyertakan folder
+@msg	the file is larger than 1 MB	file lebih besar dari 1 MB
+@msg	give `path` or `data`	berikan `path` atau `data`
+@msg	`{key}` must be an object	`{key}` harus berupa objek
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` dijalankan sendiri, bukan sebagai langkah batch
 @msg	unknown preset (one of {_1})	preset tidak dikenal (salah satu dari {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	preset `{name}` tidak dikenal (tinggi, sedang, rendah, atau yang tersimpan: lihat flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	preset `{name}` tidak dikenal (lihat flattener.presets.list)
@@ -5103,6 +5123,7 @@ file-filter	Swatch libraries	Pustaka swatch
 file-filter	Flattener presets	Preset perata
 file-filter	PDF presets	Preset PDF
 file-filter	Print presets	Preset cetak
+file-filter	Preferences	Preferensi
 file-filter	Export presets	Preset ekspor
 file-filter	SVG Compressed	SVG terkompresi
 file-filter	PDF-compatible .ai	.ai kompatibel PDF

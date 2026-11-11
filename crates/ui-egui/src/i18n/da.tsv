@@ -3490,6 +3490,12 @@ theme	Appearance	Udseende
 	Real-time Drawing and Editing	Tegning og redigering i realtid
 	Render Threads (-1 = Automatic)	Renderingstråde (-1 = automatisk)
 	Reset Preferences	Nulstil indstillinger
+	Export Preferences…	Eksportér præferencer…
+	Import Preferences…	Importér præferencer…
+	Save the applied preferences to a JSON file	Gem de anvendte præferencer i en JSON-fil
+	Apply the preferences in a file Export Preferences saved	Anvend præferencerne i en fil, som Eksportér præferencer har gemt
+	Export Preferences	Eksportér præferencer
+	Import Preferences	Importér præferencer
 	Search Preferences	Søg i præferencer
 	No settings found	Ingen indstillinger fundet
 	Scale Corners	Skalér hjørner
@@ -4607,6 +4613,20 @@ imageTrace	Outline	Kontur
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	ukendt overprint `{o}` (bevar, simulér eller forkast)
 @msg	unknown panel `{raw}`	ukendt panel `{raw}`
 @msg	unknown preference `{key}`	ukendt præference `{key}`
+@msg	Preferences imported.	Præferencerne er importeret.
+@msg	not a preferences file: {e}	ikke en præferencefil: {e}
+@msg	not a preferences file: no JSON object	ikke en præferencefil: intet JSON-objekt
+@msg	not a preferences file (format `{format}`)	ikke en præferencefil (format `{format}`)
+@msg	not a preferences file: no `format`	ikke en præferencefil: intet `format`
+@msg	not a preferences file: no `version`	ikke en præferencefil: ingen `version`
+@msg	not a preferences file: no `prefs`	ikke en præferencefil: ingen `prefs`
+@msg	the file was saved by a newer version of VectorCraft (version {v})	filen er gemt af en nyere version af VectorCraft (version {v})
+@msg	the file holds no preferences	filen indeholder ingen præferencer
+@msg	`{key}` names a folder, which preferences files leave out	`{key}` angiver en mappe, og præferencefiler indeholder ikke mapper
+@msg	the file is larger than 1 MB	filen er større end 1 MB
+@msg	give `path` or `data`	angiv `path` eller `data`
+@msg	`{key}` must be an object	`{key}` skal være et objekt
+@msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` køres alene, ikke som et trin i en batch
 @msg	unknown preset (one of {_1})	ukendt forudindstilling (én af {_1})
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	ukendt forudindstilling `{name}` (høj, mellem, lav eller en gemt: se flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	ukendt forudindstilling `{name}` (se flattener.presets.list)
@@ -5103,6 +5123,7 @@ file-filter	Swatch libraries	Farveprøvebiblioteker
 file-filter	Flattener presets	Flattener-forudindstillinger
 file-filter	PDF presets	PDF-forudindstillinger
 file-filter	Print presets	Printforudindstillinger
+file-filter	Preferences	Præferencer
 file-filter	Export presets	Eksportforudindstillinger
 file-filter	SVG Compressed	Komprimeret SVG
 file-filter	PDF-compatible .ai	PDF-kompatibel .ai

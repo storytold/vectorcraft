@@ -3292,6 +3292,50 @@ fn a_standard_baseline_run_keeps_standard_vertical_roman_alignment() {
 }
 
 #[test]
+fn stroked_type_keeps_its_cap_join_and_miter_limit() {
+    // GUARDS: type strokes came in with a miter join at a limit of 10 whatever the file said, so
+    // type the file strokes with round or bevel joins, or a lower limit, drew spikes at its corners.
+    // Four runs over "abcdefgh": "ab" stroked with round caps and joins at a miter limit of 4, "cd"
+    // with projecting caps and bevel joins at 2.5, "ef" stroked without the keys (the defaults), and
+    // "gh" with the keys but no stroke.
+    use vectorcraft_doc::{LineCap, LineJoin};
+    let doc = text_document(&[("abcdefgh\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let run = |n: u32, own: &str| {
+        format!(
+            "<< /0 << /0 << /0 () /5 0 /6 << /0 0 /1 14.0 {own}/53 << /99 /CAITextPaint /0 << /0 2 /1 [ 1.0 0.0 1.0 0.0 0.0 ] >> >> >> >> >> /1 {n} >>"
+        )
+    };
+    let one = run(9, "");
+    assert!(doc.contains(&one));
+    let stroke = "/54 << /99 /CAITextPaint /0 << /0 2 /1 [ 1.0 0.0 0.0 0.0 1.0 ] >> >> /57 true /63 3.0 ";
+    let runs = [
+        run(2, &format!("{stroke}/61 1 /62 1 /64 4.0 ")),
+        run(2, &format!("{stroke}/61 2 /62 2 /64 2.5 ")),
+        run(2, stroke),
+        run(3, "/61 1 /62 1 /64 4.0 "),
+    ];
+    let doc = doc.replacen(&one, &runs.join(" "), 1);
+    let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Spare", false, &text_object(0))), &doc);
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    let texts = text_of(&r.document.layers[1]);
+    assert_eq!(texts.len(), 1, "{:?}", r.warnings);
+    let strokes: Vec<(String, f64, LineCap, LineJoin, f64)> = texts[0]
+        .runs
+        .iter()
+        .map(|r| (r.text.clone(), r.style.stroke_width, r.style.stroke_cap, r.style.stroke_join, r.style.stroke_miter_limit))
+        .collect();
+    assert_eq!(
+        strokes,
+        [
+            ("ab".to_string(), 3.0, LineCap::Round, LineJoin::Round, 4.0),
+            ("cd".to_string(), 3.0, LineCap::Square, LineJoin::Bevel, 2.5),
+            ("ef".to_string(), 3.0, LineCap::Butt, LineJoin::Miter, 10.0),
+            ("gh".to_string(), 0.0, LineCap::Butt, LineJoin::Miter, 10.0),
+        ]
+    );
+}
+
+#[test]
 fn orientation_and_tate_chu_yoko_values_it_cant_use_are_ignored() {
     for bad in ["(2)", "2.5", "1e300", "-2", "1", "true", "[ 2 ]"] {
         let doc = vertical_text_document(&text_document(&[("x1\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]), 0.0)
