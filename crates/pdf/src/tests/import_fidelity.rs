@@ -474,6 +474,22 @@ fn a_composite_font_is_noted_by_its_cid_font_name() {
     assert_eq!(noted("<< /Type /Font /Subtype /Type1 /BaseFont /Vctest-Identity-H >>"), ["Vctest-Identity-H"]);
 }
 
+/// A form drawn again and again without resources of its own reads the page's font dictionary once,
+/// not at every drawing; the fonts are noted all the same.
+#[test]
+fn a_form_drawn_many_times_reads_its_font_resources_once() {
+    let form_no = first_extra(1);
+    let form = stream("/Type /XObject /Subtype /Form /BBox [0 0 100 100]", "0 0 1 rg 50 50 30 30 re f");
+    let resources = format!("/Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> /XObject << /X0 {form_no} 0 R >>");
+    let page = PdfPage { resources, ..PdfPage::new(100.0, 100.0, &format!("BT /F1 24 Tf 10 30 Td (Hi) Tj ET {}", "/X0 Do ".repeat(500))) };
+    let pdf = craft_pdf::syntax::Pdf::new(pdf_with(&[page], &[&form], None)).unwrap();
+    let mut fonts = crate::import_scan::FontNames::new();
+    let mut ocgs = crate::import_scan::Ocgs::read(&pdf);
+    let walk = crate::import_scan::walk_page(&pdf.pages()[0], &mut ocgs, false, &mut fonts, pdf.decode_limits().max_decoded_stream());
+    assert_eq!(walk.font_dicts.len(), 1);
+    assert_eq!(walk.fonts.len(), 1);
+}
+
 /// A value of the page's font dictionary that the reader can't parse (a name with a broken `#`
 /// escape, a number with a stray `-`) is left out when the page's fonts are noted, and the fonts
 /// after it are noted.
