@@ -4326,6 +4326,9 @@ imageTrace	Outline	Ääriviiva
 @msg	the script is too large to run	komentosarja on liian suuri suoritettavaksi
 @msg	a drag or an undo group is open; finish it before running a script	vetäminen tai kumousryhmä on kesken; viimeistele se ennen komentosarjan suorittamista
 @msg	the script left a document that cannot be kept	komentosarja jätti asiakirjan, jota ei voi säilyttää
+@msg	the script is no longer in the Scripts folder	komentosarja ei ole enää Scripts-kansiossa
+	Some scripts were not listed	Kaikkia komentosarjoja ei ole lueteltu
+	The Scripts folder cannot be read	Scripts-kansiota ei voi lukea
 @msg	the script's run is no longer available	komentosarjan suoritus ei ole enää käytettävissä
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	epäonnistunut komento muutti kumoamisvaiheita, joita ei voitu palauttaa, joten komentosarja pysäytettiin
 @msg	a recovery copy could not be written, so the script was not run	palautuskopiota ei voitu kirjoittaa, joten komentosarjaa ei suoritettu

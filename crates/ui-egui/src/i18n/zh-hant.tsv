@@ -2410,6 +2410,9 @@ file-filter	Templates	範本
 @msg	the script is too large to run	指令碼過大，無法執行
 @msg	a drag or an undo group is open; finish it before running a script	拖曳或還原群組尚未結束；請在執行指令碼前完成
 @msg	the script left a document that cannot be kept	指令碼留下了無法保留的文件
+@msg	the script is no longer in the Scripts folder	指令碼已不在 Scripts 資料夾中
+	Some scripts were not listed	部分指令碼未列出
+	The Scripts folder cannot be read	無法讀取 Scripts 資料夾
 @msg	the script's run is no longer available	指令碼執行已無法使用
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	失敗的命令變更了無法還原的復原步驟，因此指令碼已停止
 @msg	a recovery copy could not be written, so the script was not run	無法寫入復原副本，因此未執行指令碼

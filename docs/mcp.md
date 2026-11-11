@@ -1647,6 +1647,55 @@ at the bottom of the panel and in its menu. Output goes on while the panel is cl
 vectorcraft-cli run --cmd script.run --params '{"source": "$.writeln(\"layers: \", 3);"}'
 ```
 
+File › Scripts lists the scripts of the `Scripts` folder next to the preferences: `~/Library/Application
+Support/VectorCraft/Scripts` on macOS, `%APPDATA%\VectorCraft\Scripts` on Windows, and
+`$XDG_CONFIG_HOME/vectorcraft/Scripts` or `~/.config/vectorcraft/Scripts` on Linux and BSD. VectorCraft does not make
+the folder: create it, and put `.js` or `.jsx` files in it. Each file is a menu item named after the file without its
+extension, and each subfolder is a submenu that holds the scripts in it. The help page
+https://helpx.adobe.com/illustrator/desktop/automate-visualize-data/automate-actions/install-and-run-scripts.html and
+the page https://ai-scripting.docsforadobe.dev/introduction/executingScripts/ describe a Scripts folder listed this
+way. The listed scripts come first in the menu, above Check Script… and Other Script…. Choosing one runs the file as
+`script.run` runs a file, without the warning that Other Script… shows.
+
+The rest of this section is VectorCraft's own rules:
+
+- The folder is read when the app starts, each time its window becomes the active one, and, where the menus are in
+  the window (Windows, Linux and BSD), each time the File menu opens. A script added while VectorCraft runs is listed
+  after the next of these. A read takes names only, never a script's text, and runs off the UI thread, one read at a
+  time.
+- Each level is sorted by label without regard to case, with scripts and subfolders mixed. A script whose label
+  another row of its folder has (`Tidy.js` beside `Tidy.jsx`, or beside a subfolder `Tidy`) shows its whole file name.
+- A symbolic link or a Windows junction is never followed: a linked file or subfolder is left out, and a `Scripts`
+  folder that is itself a link is not read. Names that start with a dot, files and folders Windows marks hidden or
+  system, names that are not Unicode, names longer than 255 bytes and subfolders without a script are left out too,
+  and a listed script that is marked hidden or system, or lies in a folder marked so, by the time it is chosen does
+  not run.
+- One read looks at 2,048 folder entries at most, lists 512 scripts and reads 128 subfolders, 4 levels deep, for at
+  most 250 ms. A label longer than 128 characters is cut, and control and bidirectional formatting characters in a
+  name are shown as `\u{…}` escapes. When a read stops at a limit or cannot read a subfolder, the menu keeps what it
+  found and shows `Some scripts were not listed`. The menu also shows that note, and leaves the rows out, when a
+  read finds new names after the menus have shown 16,384 different script and folder names since VectorCraft started.
+  When the folder is there and cannot be read, the menu shows
+  `The Scripts folder cannot be read`.
+- A listed file is checked again when it is chosen. A file that is gone, is no longer a `.js` or `.jsx` file under
+  the folder, or is or lies behind a link ends with `the script is no longer in the Scripts folder`, and nothing runs.
+- The web build has no Scripts folder, and neither has a run with `VECTORCRAFT_NO_PREFS` set.
+
+`script.listInstalled {}` returns the same listing: `{folder, scripts: [{path, label, folders}], truncated,
+unreadable}`, with the scripts in menu order and `folders` the labels of the subfolders a script is in. `folder` is
+`null` without a Scripts folder. `ui.runInstalledScript {path}` runs one of them by the `path` the listing gave, as
+its menu item does. Under `--automation-read-root`, `script.listInstalled` lists the folder only when the folder lies
+inside a read root, `ui.runInstalledScript` runs a script only when the script lies inside one, and `ui.menu.list`
+leaves out the listed scripts outside the read roots.
+
+```json
+{"name":"run_command","arguments":{"command":"script.listInstalled","params":{}}}
+```
+
+```sh
+vectorcraft-cli run --cmd script.listInstalled --params '{}'
+```
+
 ## Transparency and opacity masks
 
 Transparency and opacity-mask commands take `ids` (or `id`), so they need no selection. Opacity is a percentage
