@@ -7,7 +7,10 @@ const ZH: fn() -> Lang = || Lang::from_code("zh-hant").expect("zh-hant registere
 fn hebrew_locale_file_flow_and_plural_categories() {
     let he = Lang::from_code("he").expect("Hebrew is registered");
     assert_eq!(he.name(), "עברית");
-    assert!(!he.complete_menus(), "the first catalog is intentionally partial");
+    assert!(
+        !he.complete_menus(),
+        "the first catalog is intentionally partial"
+    );
     for tag in ["he", "he-IL", "he_IL.UTF-8", "HE-il", "he-Hebr-IL"] {
         assert_eq!(lang_from_tag(tag), Some(he), "{tag}");
     }
@@ -25,8 +28,17 @@ fn hebrew_locale_file_flow_and_plural_categories() {
     ] {
         assert_eq!(tr(he, english), expected);
     }
-    assert_eq!(tr(he, "untranslated VectorCraft sentinel"), "untranslated VectorCraft sentinel");
-    assert_eq!([0, 1, 2, 3, 10, 20, 21].map(he.0.plural), [2, 0, 1, 2, 2, 2, 2]);
+    assert_eq!(
+        tr(he, "untranslated VectorCraft sentinel"),
+        "untranslated VectorCraft sentinel"
+    );
+    assert_eq!(
+        [0, 1, 2, 3, 10, 20, 21].map(he.0.plural),
+        [2, 0, 1, 2, 2, 2, 2]
+    );
+    for (n, expected) in [(0, "0 קבצים"), (1, "1 קובץ"), (2, "2 קבצים"), (21, "21 קבצים")] {
+        assert_eq!(trn(he, n, "{n} file", "{n} files"), expected);
+    }
     let (rows, errors) = parse_entries(he.0.source);
     assert!(errors.is_empty(), "{errors:?}");
     assert!(rows.len() >= 80, "expected a useful initial file/edit catalog");
