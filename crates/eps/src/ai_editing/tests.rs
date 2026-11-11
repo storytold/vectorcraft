@@ -4366,6 +4366,19 @@ fn dynamic_text_is_written_at_its_drawn_sizes() {
     assert!(!texts[0].dynamic_text);
     let k = texts[0].xf.as_coeffs()[0];
     assert_eq!(r3(texts[0].runs[0].style.size * k), r3(drawn));
+    // Type written as outlines (here on an open path whose ends meet) loses the setting too, and
+    // says so.
+    let mut doc = Document::new(600.0, 300.0);
+    let layer = doc.layers[0].id;
+    let mut t = TextObject::point(vectorcraft_geom::Point::ZERO, "Grow", style(12.0, Color::BLACK));
+    let ends_meet = [(50.0, 200.0).into(), (550.0, 200.0).into(), (300.0, 50.0).into(), (50.0, 200.0).into()];
+    t.kind = TextKind::OnPath { path: PathData::new(vec![vectorcraft_geom::SubPath::polyline(&ends_meet, false)]), start: 0.0, end: None };
+    t.xf = Affine::IDENTITY;
+    t.dynamic_text = true;
+    let node = text_node(&mut doc, t);
+    doc.insert(Some(layer), usize::MAX, node).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::TYPE) && out.warnings.iter().any(|w| w == writer::DYNAMIC_TEXT), "{:?}", out.warnings);
 }
 
 /// See-through type with the knockout shape flag comes back with the flag and writes no warning.
