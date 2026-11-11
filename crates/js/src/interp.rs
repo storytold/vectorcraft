@@ -164,6 +164,10 @@ pub(crate) struct Interp {
     pub(crate) throw_site: Option<ThrowSite>,
     /// The last exception a run did not catch.
     pub(crate) last_thrown: Value,
+    /// The last `Error` object thrown in this run, caught or not, or `null` (`$.error`).
+    pub(crate) last_error: Value,
+    /// The locale `localize` and `Object.prototype.toString` read.
+    pub(crate) localization: Rc<crate::builtins::extensions::Localization>,
     /// The state of `Math.random`'s generator.
     pub(crate) random: u64,
     /// The objects `Array.prototype.join` and `toLocaleString` are joining, innermost last: a
@@ -373,6 +377,8 @@ impl Interp {
             source_units: 0,
             throw_site: None,
             last_thrown: Value::Undefined,
+            last_error: Value::Null,
+            localization: Rc::default(),
             random: random_seed(),
             join_stack: Vec::new(),
             held_bytes: 0,
@@ -543,6 +549,7 @@ impl Interp {
         roots.values.extend(self.stack.iter());
         roots.values.extend(self.temp_roots.iter());
         roots.values.push(&self.last_thrown);
+        roots.values.push(&self.last_error);
         for f in &self.frames {
             roots.values.push(&f.this);
             roots.values.push(&f.completion);
@@ -628,6 +635,11 @@ impl Interp {
     /// boundary frame. Returns the exception when no handler takes it before the boundary frame.
     fn unwind(&mut self, v: Value) -> JsResult<()> {
         self.note_site();
+        if let Value::Object(o) = v
+            && self.heap.object(o).is_some_and(|o| matches!(o.class, Class::Error))
+        {
+            self.last_error = v.clone();
+        }
         loop {
             let Some(frame) = self.frames.last_mut() else { return Err(Abrupt::Throw(v)) };
             if let Some(h) = frame.code.handler(frame.pc.saturating_sub(1)) {
@@ -653,6 +665,12 @@ impl Interp {
                 return Err(Abrupt::Throw(v));
             }
         }
+    }
+
+    /// Each running frame of script code, outermost first: its code, the index of its next
+    /// instruction, and whether it runs a function (not global or eval code).
+    pub(crate) fn script_frames(&self) -> impl Iterator<Item = (&Rc<Code>, usize, bool)> {
+        self.frames.iter().map(|f| (&f.code, f.pc, f.callee.is_some()))
     }
 
     fn abort_to_boundary(&mut self) {

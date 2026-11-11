@@ -221,6 +221,7 @@ impl Realm {
         interp.source_units = 0;
         interp.throw_site = None;
         interp.last_thrown = Value::Undefined;
+        interp.last_error = Value::Null;
         interp.host_abort = None;
         interp.error_tag = UNKNOWN_SOURCE;
         let strict = interp.options.strict;
@@ -337,6 +338,22 @@ impl Realm {
             Ok(()) => Ok(()),
             Err(e) => self.outcome(Err(e)).map(drop),
         }
+    }
+
+    /// Adds the script extensions: the global `localize(object, ...values)`, which gives a
+    /// localization object's text for the locale of [`Realm::localization`], the global
+    /// `toSource(value)` and `Object.prototype.toSource()`, which write plain data as source text,
+    /// and the localized `Object.prototype.toString` while [`crate::Localization::enabled`].
+    pub fn add_script_extensions(&mut self) -> Result<(), RunError> {
+        match crate::builtins::extensions::install(&mut self.interp) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
+    /// The locale `localize` reads, which the host's functions may change during a run.
+    pub fn localization(&self) -> std::rc::Rc<crate::Localization> {
+        self.interp.localization.clone()
     }
 
     /// Defines the global variable `name` holding the exception the last run did not catch

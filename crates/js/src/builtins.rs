@@ -10,6 +10,7 @@
 //! run past [`crate::Limits`].
 
 mod array;
+pub(crate) mod extensions;
 mod global;
 mod json;
 mod math;
@@ -358,6 +359,13 @@ fn object_ctor(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResu
 
 /// `Object.prototype.toString` (section 15.2.4.2).
 fn object_to_string(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
+    // With `$.localize` on, a localization object gives its text for the current locale.
+    if interp.localization.enabled()
+        && let Value::Object(id) = this
+        && let Some(text) = extensions::localized_text(interp, id)?
+    {
+        return Ok(text);
+    }
     let class = match &this {
         Value::Undefined => "Undefined",
         Value::Null => "Null",
