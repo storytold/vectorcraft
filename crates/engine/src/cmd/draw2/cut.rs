@@ -1,12 +1,11 @@
 use super::common::{
-    dist_to_polyline, fill_targets, has_fill, ids_json, path_mut, path_of, points_param, poly_bounds, pressure_region, replace_with_pieces,
-    samples_param, sibling_with, size_pressure, target_paths, usize_opt,
+    dist_to_polyline, fill_targets, has_fill, has_painted_stroke, ids_json, path_mut, path_of, points_param, poly_bounds, pressure_region,
+    replace_with_pieces, samples_param, sibling_with, size_pressure, target_paths, usize_opt,
 };
 use super::{
-    Anchor, AnchorKind, Appearance, Arc, Beside, BezPath, BoolOp, Cap, Document, EngineError, FillRule, Join, Node, NodeId, NodeKind, ParamCurve,
-    PathData, Point, Result, Session, SubPath, Value, bad, eraser_area, eraser_tip, f64_or, fill_contains, id_param, json, number_or, po,
+    Anchor, AnchorKind, Beside, BezPath, BoolOp, Cap, EngineError, FillRule, Join, NodeId, NodeKind, ParamCurve, PathData, Point, Result, Session,
+    SubPath, Value, bad, eraser_area, eraser_tip, f64_or, fill_contains, id_param, json, number_or, po,
 };
-use vectorcraft_doc::AppearanceItem;
 
 /// Split a filled path into connected pieces (each outer contour with its holes).
 pub(in super::super) fn components(pd: &PathData) -> Vec<PathData> {
@@ -305,124 +304,26 @@ pub(super) fn erase_region(s: &mut Session, p: &Value) -> Result<Value> {
         Some(bp) => fill_contains(bp, FillRule::NonZero, q),
         None => dist_to_polyline(&round, squash * q) <= r,
     };
-    let mut plan = vec![];
+    let mut plan: Vec<(NodeId, Vec<PathData>)> = vec![];
     for (id, pd, rule) in fill_targets(&st.doc, &st.selection, poly_bounds(&pts, reach), true)? {
-        let closed = pd.is_closed();
-        let node = st.doc.node(id).ok_or(EngineError::NoNode(id))?;
-        let painted_stroke = node
-            .appearance
-            .items
-            .iter()
-            .any(|item| matches!(item, AppearanceItem::Stroke(stroke) if stroke.visible && !stroke.paint.is_none() && stroke.width > 0.0));
-        if !closed && has_fill(node) && painted_stroke && !needs_legacy_eraser(&st.doc, id) {
-            let fill_changed = po::area(&po::boolean(&pd, rule, &region, FillRule::NonZero, BoolOp::Intersect), FillRule::NonZero) > 1e-6;
-            let stroke = erase_outline(&pd, short / 2.0, &under);
-            if fill_changed || stroke.is_some() {
-                // Fill closes open contours implicitly; a stroke must keep only the original
-                // explicit segments. Keep every stroke subpath together so its paint is applied once.
-                let fill = po::boolean(&pd, rule, &region, FillRule::NonZero, BoolOp::Difference);
-                let stroke = stroke.map_or(pd, |pieces| PathData::new(pieces.into_iter().flat_map(|piece| piece.subpaths).collect()));
-                plan.push((id, ErasedPieces::Paint { fill, stroke, rule }));
+        // An unaggregated compound member keeps the outline route: its own appearance does not
+        // paint it. Eligible fill-only compounds were collected as one parent target above.
+        let compound_member =
+            st.doc.parent_of(id).and_then(|parent| st.doc.node(parent)).is_some_and(|parent| matches!(parent.kind, NodeKind::Compound { .. }));
+        let filled_open = !compound_member && st.doc.node(id).is_some_and(|node| has_fill(node) && !has_painted_stroke(node));
+        if pd.is_closed() || filled_open {
+            if po::area(&po::boolean(&pd, rule, &region, FillRule::NonZero, BoolOp::Intersect), FillRule::NonZero) <= 1e-6 {
+                continue;
             }
-            continue;
-        }
-        let single = pd.subpaths.len() == 1;
-        let filled = !closed && st.doc.node(id).is_some_and(has_fill) && po::area(&pd, rule) > 0.0;
-        // Fill implicitly closes an open contour. Keep zero-area open lines
-        // separate: the fill Boolean would otherwise discard their stroke geometry.
-        let (areas, lines): (Vec<_>, Vec<_>) =
-            pd.subpaths.into_iter().partition(|sp| closed || (filled && (single || po::area(&PathData::single(sp.clone()), rule) > 0.0)));
-        let (areas, lines) = (PathData::new(areas), PathData::new(lines));
-        let mut changed = false;
-        let mut pieces = vec![];
-        if !areas.is_empty() {
-            if po::area(&po::boolean(&areas, rule, &region, FillRule::NonZero, BoolOp::Intersect), FillRule::NonZero) > 1e-6 {
-                changed = true;
-                pieces.extend(components(&po::boolean(&areas, rule, &region, FillRule::NonZero, BoolOp::Difference)));
-            } else {
-                pieces.push(areas);
-            }
-        }
-        if !lines.is_empty() {
-            if let Some(rest) = erase_outline(&lines, short / 2.0, &under) {
-                changed = true;
-                // Partitioning must not turn one compound outline into independently filled objects.
-                if single {
-                    pieces.extend(rest);
-                } else if !rest.is_empty() {
-                    pieces.push(PathData::new(rest.into_iter().flat_map(|path| path.subpaths).collect()));
-                }
-            } else {
-                pieces.push(lines);
-            }
-        }
-        if changed {
-            plan.push((id, ErasedPieces::Geometry(pieces)));
+            plan.push((id, components(&po::boolean(&pd, rule, &region, FillRule::NonZero, BoolOp::Difference))));
+        } else if let Some(pieces) = erase_outline(&pd, short / 2.0, &under) {
+            plan.push((id, pieces));
         }
     }
     apply_plan(s, "Eraser", plan)
 }
 
-enum ErasedPieces {
-    Geometry(Vec<PathData>),
-    Paint { fill: PathData, stroke: PathData, rule: FillRule },
-}
-
-/// Splitting paint changes effect seeds, item indices and geometry contexts. Keep targets
-/// with visible effects of their own or on an ancestor on the existing route. Clipping-source
-/// subtrees also stay there: groups change their mask geometry and do not supply clip paint.
-fn needs_legacy_eraser(d: &Document, id: NodeId) -> bool {
-    let Some(ancestry) = d.ancestry(id) else { return true };
-    let mut parent: Option<&Node> = None;
-    for id in ancestry {
-        let Some(node) = d.node(id) else { return true };
-        if parent.is_some_and(|p| p.clips() && p.children().and_then(|children| children.first()).is_some_and(|first| first.id == id)) {
-            return true;
-        }
-        if node.appearance.effects.iter().any(|effect| effect.visible)
-            || node.appearance.items.iter().any(|item| item.effects().iter().any(|effect| effect.visible))
-        {
-            return true;
-        }
-        parent = Some(node);
-    }
-    false
-}
-
-/// Paint fill and explicit stroke geometry in the original stack order, with object-level
-/// transparency, effects and metadata on one wrapper rather than on each painted part.
-fn separate_eraser_paints(d: &mut Document, id: NodeId, fill: PathData, stroke: PathData, rule: FillRule) -> Result<Node> {
-    let mut root = d.node(id).cloned().ok_or(EngineError::NoNode(id))?;
-    // Pin before the two geometries get different bounds, so their gradients stay in place.
-    root.pin_gradients();
-    let mut runs: Vec<Vec<AppearanceItem>> = vec![];
-    for item in &root.appearance.items {
-        if let Some(run) = runs.last_mut().filter(|run| run.first().is_some_and(|first| first.is_fill() == item.is_fill())) {
-            run.push(item.clone());
-        } else {
-            runs.push(vec![item.clone()]);
-        }
-    }
-    let mut children = vec![];
-    for items in runs {
-        let is_fill = items.first().is_some_and(AppearanceItem::is_fill);
-        let path = if is_fill { &fill } else { &stroke };
-        if path.is_empty() {
-            continue;
-        }
-        let mut child = Node::path(d.alloc_id(), path.clone(), Appearance { items, ..Default::default() });
-        if let NodeKind::Path { rule: child_rule, .. } = &mut child.kind {
-            *child_rule = if is_fill { FillRule::NonZero } else { rule };
-        }
-        children.push(Arc::new(child));
-    }
-    root.kind = NodeKind::Group { children, clip: false };
-    root.appearance.items.clear();
-    root.appearance.contents_index = None;
-    Ok(root)
-}
-
-fn apply_plan(s: &mut Session, label: &str, plan: Vec<(NodeId, ErasedPieces)>) -> Result<Value> {
+fn apply_plan(s: &mut Session, label: &str, plan: Vec<(NodeId, Vec<PathData>)>) -> Result<Value> {
     if plan.is_empty() {
         return Ok(json!({ "ids": [] }));
     }
@@ -430,18 +331,7 @@ fn apply_plan(s: &mut Session, label: &str, plan: Vec<(NodeId, ErasedPieces)>) -
         let mut all = vec![];
         let mut cut = Beside::replacing(d, &plan.iter().map(|(id, _)| *id).collect::<Vec<_>>());
         for (id, pieces) in plan {
-            match pieces {
-                ErasedPieces::Geometry(pieces) => all.extend(replace_with_pieces(d, &mut cut, id, pieces)?),
-                ErasedPieces::Paint { fill, stroke, rule } => {
-                    let root = separate_eraser_paints(d, id, fill, stroke, rule)?;
-                    if root.children().is_some_and(Vec::is_empty) {
-                        cut.put(d, id, vec![])?;
-                    } else {
-                        cut.put(d, id, vec![root])?;
-                        all.push(id);
-                    }
-                }
-            }
+            all.extend(replace_with_pieces(d, &mut cut, id, pieces)?);
         }
         cut.finish(d)?;
         sel.set(all.iter().copied());
@@ -462,7 +352,7 @@ pub(super) fn erase_segments(s: &mut Session, p: &Value) -> Result<Value> {
     for id in target_paths(&st.doc, &st.selection, poly_bounds(&pts, w)) {
         let (pd, _) = path_of(&st.doc, id)?;
         if let Some(pieces) = erase_outline(&pd, w / 2.0, &|q| dist_to_polyline(&pts, q) <= w / 2.0) {
-            plan.push((id, ErasedPieces::Geometry(pieces)));
+            plan.push((id, pieces));
         }
     }
     apply_plan(s, "Path Eraser", plan)
