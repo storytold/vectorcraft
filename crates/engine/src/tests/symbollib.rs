@@ -84,7 +84,7 @@ fn the_builtin_library_is_original_art_generated_in_code() {
     let mut s = Session::new();
     let list = run(&mut s, "symbol.libraries", json!({}));
     let libs = list["libraries"].as_array().unwrap();
-    assert_eq!(libs.len(), 5, "{libs:?}");
+    assert_eq!(libs.len(), 6, "{libs:?}");
     assert_eq!((libs[0]["id"].as_str(), libs[0]["category"].as_str()), (Some("basic-shapes"), Some("builtIn")));
     assert_eq!(
         (libs[1]["id"].as_str(), libs[1]["name"].as_str(), libs[1]["category"].as_str()),
@@ -101,6 +101,10 @@ fn the_builtin_library_is_original_art_generated_in_code() {
     assert_eq!(
         (libs[4]["id"].as_str(), libs[4]["name"].as_str(), libs[4]["category"].as_str()),
         (Some("skill-icons"), Some("Skill Icons"), Some("builtIn"))
+    );
+    assert_eq!(
+        (libs[5]["id"].as_str(), libs[5]["name"].as_str(), libs[5]["category"].as_str()),
+        (Some("element-icons"), Some("Element Icons"), Some("builtIn"))
     );
     let lib = run(&mut s, "symbol.library", json!({"library": "basic shapes"}));
     let names: Vec<&str> = lib["symbols"].as_array().unwrap().iter().map(|x| x["name"].as_str().unwrap()).collect();
@@ -186,6 +190,32 @@ fn skill_icons_symbols_add_without_nine_slice() {
     assert!(matches!(
         d.node(NodeId(placed[0])).map(|n| &n.kind),
         Some(NodeKind::SymbolInstance { symbol, .. }) if symbol == "Attack"
+    ));
+}
+
+#[test]
+fn element_icons_symbols_add_without_nine_slice() {
+    let mut s = session();
+    let lib = run(&mut s, "symbol.library", json!({"library": "element-icons"}));
+    let names: Vec<&str> = lib["symbols"].as_array().unwrap().iter().map(|x| x["name"].as_str().unwrap()).collect();
+    assert_eq!(names, ["Fire", "Water", "Earth", "Air", "Light", "Dark"]);
+    let mut placed = Vec::new();
+    for (i, name) in names.iter().enumerate() {
+        let r = run(
+            &mut s,
+            "symbol.addFromLibrary",
+            json!({"library": "element-icons", "name": name, "place": true, "x": 100.0 + 80.0 * i as f64, "y": 100.0}),
+        );
+        assert_eq!(r["added"], json!([name]));
+        placed.push(r["placed"].as_u64().unwrap());
+    }
+    let d = doc(&s);
+    for name in &names {
+        assert_eq!(d.symbol_nine_slice(name), None, "{name} should not carry 9-slice guides");
+    }
+    assert!(matches!(
+        d.node(NodeId(placed[0])).map(|n| &n.kind),
+        Some(NodeKind::SymbolInstance { symbol, .. }) if symbol == "Fire"
     ));
 }
 

@@ -550,6 +550,13 @@ antiAlias	Sharp	शार्प
 	Heal	उपचार
 	Buff	बफ़
 	Ult	अल्ट
+	Element Icons	तत्व आइकन
+	Fire	अग्नि
+	Water	जल
+	Earth	पृथ्वी
+	Air	वायु
+	Light	प्रकाश
+	Dark	अंधकार
 	Sword	तलवार
 	Shield	ढाल
 	Potion	औषधि
@@ -1168,7 +1175,6 @@ antiAlias	Sharp	शार्प
 	Cyan	सियान
 	Czech	चेक
 	Danish	डैनिश
-	Dark	डार्क
 	Dark Gray	गहरा ग्रे
 	Dark Intensity	डार्क तीव्रता
 	Dark Rough	डार्क रफ़
