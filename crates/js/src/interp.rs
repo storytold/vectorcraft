@@ -232,6 +232,13 @@ pub(crate) struct Interp {
     /// runs. An entry whose slot no longer holds its exception belongs to a block that `break`,
     /// `continue` or `return` left, and [`Self::drop_left_finally_marks`] removes it.
     pub(crate) finally_marks: Vec<(ObjId, u32, usize)>,
+    /// Where the exceptions `finally` blocks are running for were raised, innermost last, each with
+    /// the stack slot that holds the exception while the block runs. The block's end throws the
+    /// exception on from that site. An entry whose slot is at or above the stack's length belongs to
+    /// a block that was left, and [`Self::drop_left_finally_sites`] removes it. [`Self::unwind`]
+    /// removes the entries at or above a handler's slot before it adds one, so the slots rise and
+    /// the list is never longer than the stack.
+    pub(crate) finally_sites: Vec<(ThrowSite, usize)>,
     /// The mark of the host error the last run ended with.
     pub(crate) error_mark: Option<u32>,
     /// [`crate::bytecode::Source::strict_writes`] for the scripts the realm runs.
@@ -443,6 +450,7 @@ impl Interp {
             error_tag: crate::realm::UNKNOWN_SOURCE,
             thrown_mark: None,
             finally_marks: Vec::new(),
+            finally_sites: Vec::new(),
             error_mark: None,
             strict_writes: false,
         };
@@ -605,8 +613,15 @@ impl Interp {
         self.finally_marks.retain(|&(id, _, slot)| matches!(stack.get(slot), Some(Value::Object(o)) if *o == id));
     }
 
+    /// Removes the [`Self::finally_sites`] entries whose stack slot is at or above `len`: those of
+    /// `finally` blocks that were left.
+    fn drop_left_finally_sites(&mut self, len: usize) {
+        self.finally_sites.retain(|&(_, slot)| slot < len);
+    }
+
     pub(crate) fn collect_garbage(&mut self) {
         self.drop_left_finally_marks();
+        self.drop_left_finally_sites(self.stack.len());
         let mut roots = Roots::default();
         roots.values.extend(self.stack.iter());
         roots.values.extend(self.temp_roots.iter());
@@ -614,6 +629,7 @@ impl Interp {
         roots.values.push(&self.last_error);
         roots.values.push(&self.passing);
         roots.objects.extend(self.finally_marks.iter().map(|&(id, _, _)| id));
+        roots.codes.extend(self.finally_sites.iter().map(|((code, _), _)| &**code));
         for f in &self.frames {
             roots.values.push(&f.this);
             roots.values.push(&f.completion);
@@ -725,11 +741,15 @@ impl Interp {
                 }
                 self.stack.truncate(target_len);
                 self.drop_left_finally_marks();
+                self.drop_left_finally_sites(target_len);
                 if let (Some(mark), false, Value::Object(id)) = (self.thrown_mark.take(), caught, &v) {
                     self.finally_marks.push((*id, mark, target_len));
                 }
                 self.stack.push(v);
-                self.throw_site = None;
+                let site = self.throw_site.take();
+                if let (false, Some(site)) = (caught, site) {
+                    self.finally_sites.push((site, target_len));
+                }
                 return Ok(());
             }
             let Some(frame) = self.frames.pop() else { return Err(Abrupt::Throw(v)) };
@@ -951,6 +971,11 @@ impl Interp {
             {
                 self.thrown_mark = self.finally_marks.get(i).map(|&(_, mark, _)| mark);
                 self.finally_marks.truncate(i);
+            }
+            let slot = self.stack.len();
+            if let Some(i) = self.finally_sites.iter().rposition(|&(_, s)| s == slot) {
+                self.throw_site = self.finally_sites.get(i).map(|(site, _)| site.clone());
+                self.finally_sites.truncate(i);
             }
             return Err(Abrupt::Throw(v));
         }

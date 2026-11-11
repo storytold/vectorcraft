@@ -563,3 +563,19 @@ fn script_eval_file_error_caught_and_thrown_again_is_at_the_new_throw() {
     }
     let _ = std::fs::remove_dir_all(base);
 }
+
+#[test]
+fn script_error_that_passes_through_a_finally_block_is_at_its_throw() {
+    let base = folder("finally");
+    let main = base.join("main/main.jsx");
+    let mut s = Session::new();
+    for text in ["try {\n  throw new Error('x');\n} finally {\n  var z=1;\n}", "try {\n  null();\n} finally {\n  var z=1;\n}"] {
+        write(&main, text);
+        assert!(s.execute("script.run", &json!({"path": main.to_string_lossy()})).is_err(), "{text}");
+        let report = s.script_report().unwrap().clone();
+        let (l, c, f, error) = place(&report);
+        assert_eq!((report["kind"].as_str(), l, c, f), (Some("thrown"), 2, 3, None), "{text}\n{report}");
+        assert!(error.contains("main.jsx:2:3: "), "{error}");
+    }
+    let _ = std::fs::remove_dir_all(base);
+}

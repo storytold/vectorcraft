@@ -235,6 +235,7 @@ impl Realm {
         interp.error_tag = UNKNOWN_SOURCE;
         interp.thrown_mark = None;
         interp.finally_marks.clear();
+        interp.finally_sites.clear();
         interp.error_mark = None;
         let strict = interp.options.strict;
         interp.source_tag = 0;
@@ -258,6 +259,7 @@ impl Realm {
         let (line, column) = site.map_or((0, 0), |(code, pc)| code.line_column(pc));
         interp.error_mark = interp.thrown_mark.take().filter(|_| matches!(result, Err(Abrupt::Throw(_) | Abrupt::Limit(LimitKind::Host))));
         interp.finally_marks.clear();
+        interp.finally_sites.clear();
         interp.stack.clear();
         interp.frames.clear();
         interp.temp_roots.clear();
