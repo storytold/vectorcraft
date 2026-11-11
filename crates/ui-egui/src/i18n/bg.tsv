@@ -6534,3 +6534,7 @@ breakText	Glyphs	Глифи
 	Ended by an internal fault	Прекратен поради вътрешна грешка
 	{ms} ms, {calls} host calls	{ms} ms, {calls} извиквания към хоста
 	{dropped} earlier lines dropped, {cut} lines cut	{dropped} по-ранни реда премахнати, {cut} реда съкратени
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Обновяване на отложените ефекти
+	Deferred Effects	Отложени ефекти

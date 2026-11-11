@@ -6445,3 +6445,9 @@ breakText	Glyphs	字符
 	{ms} ms, {calls} host calls	{ms} 毫秒，主機呼叫 {calls} 次
 	{dropped} earlier lines dropped, {cut} lines cut	已捨棄 {dropped} 行較早內容，已截斷 {cut} 行
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` 和 `last` 必須是主控台保留的行號，且 `first` 不能在 `last` 之後
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	重新整理延後的效果
+	Deferred Effects	延後的效果
+@msg	no plug-in effect is deferred	沒有延後的增效模組效果
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	開啟時延後了 {n} 個增效模組效果。效果 › 重新整理延後的效果可執行它們。

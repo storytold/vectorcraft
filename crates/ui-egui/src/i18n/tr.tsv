@@ -6765,3 +6765,9 @@ breakText	Glyphs	Glifler
 	{ms} ms, {calls} host calls	{ms} ms, {calls} ana bilgisayar çağrısı
 	{dropped} earlier lines dropped, {cut} lines cut	{dropped} eski satır atıldı, {cut} satır kesildi
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` ve `last`, konsolun tuttuğu satırların numaraları olmalı ve `first`, `last` değerinden önce gelmeli
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Ertelenen Efektleri Yenile
+	Deferred Effects	Ertelenen Efektler
+@msg	no plug-in effect is deferred	ertelenen eklenti efekti yok
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	{n} eklenti efekti ertelenerek açıldı. Efekt › Ertelenen Efektleri Yenile bunları çalıştırır.

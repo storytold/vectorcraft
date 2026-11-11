@@ -6548,3 +6548,7 @@ breakText	Glyphs	Glyffer
 	Ended by an internal fault	Afsluttet af en intern fejl
 	{ms} ms, {calls} host calls	{ms} ms, {calls} værtskald
 	{dropped} earlier lines dropped, {cut} lines cut	{dropped} tidligere linjer fjernet, {cut} linjer afkortet
+
+# Deferred plug-in effects
+	Refresh Deferred Effects	Opdatér udskudte effekter
+	Deferred Effects	Udskudte effekter
